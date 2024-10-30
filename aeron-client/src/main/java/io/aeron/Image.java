@@ -15,9 +15,16 @@
  */
 package io.aeron;
 
-import io.aeron.logbuffer.*;
+import io.aeron.logbuffer.BlockHandler;
+import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.ControlledFragmentHandler.Action;
-import org.agrona.*;
+import io.aeron.logbuffer.FragmentHandler;
+import io.aeron.logbuffer.Header;
+import io.aeron.logbuffer.LogBufferDescriptor;
+import io.aeron.logbuffer.RawBlockHandler;
+import io.aeron.logbuffer.TermBlockScanner;
+import org.agrona.BitUtil;
+import org.agrona.ErrorHandler;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.Position;
 
@@ -319,17 +326,51 @@ public final class Image
             return 0;
         }
 
-        final long position = subscriberPosition.get();
+        int fragmentsRead = 0;
+        final long initialPosition = subscriberPosition.get();
+        final int initialOffset = (int)initialPosition & termLengthMask;
+        int offset = initialOffset;
+        final UnsafeBuffer termBuffer = activeTermBuffer(initialPosition);
+        final int capacity = termBuffer.capacity();
+        final Header header = this.header;
+        header.buffer(termBuffer);
 
-        return TermReader.read(
-            activeTermBuffer(position),
-            (int)position & termLengthMask,
-            fragmentHandler,
-            fragmentLimit,
-            header,
-            errorHandler,
-            position,
-            subscriberPosition);
+        try
+        {
+            while (fragmentsRead < fragmentLimit && offset < capacity && !isClosed)
+            {
+                final int frameLength = frameLengthVolatile(termBuffer, offset);
+                if (frameLength <= 0)
+                {
+                    break;
+                }
+
+                final int frameOffset = offset;
+                offset += BitUtil.align(frameLength, FRAME_ALIGNMENT);
+
+                if (!isPaddingFrame(termBuffer, frameOffset))
+                {
+                    ++fragmentsRead;
+                    header.offset(frameOffset);
+                    fragmentHandler.onFragment(
+                        termBuffer, frameOffset + HEADER_LENGTH, frameLength - HEADER_LENGTH, header);
+                }
+            }
+        }
+        catch (final Exception ex)
+        {
+            errorHandler.onError(ex);
+        }
+        finally
+        {
+            final long newPosition = initialPosition + (offset - initialOffset);
+            if (newPosition > initialPosition)
+            {
+                subscriberPosition.setOrdered(newPosition);
+            }
+        }
+
+        return fragmentsRead;
     }
 
     /**
@@ -362,7 +403,7 @@ public final class Image
 
         try
         {
-            while (fragmentsRead < fragmentLimit && offset < capacity)
+            while (fragmentsRead < fragmentLimit && offset < capacity && !isClosed)
             {
                 final int length = frameLengthVolatile(termBuffer, offset);
                 if (length <= 0)
@@ -458,7 +499,7 @@ public final class Image
 
         try
         {
-            while (fragmentsRead < fragmentLimit && offset < limitOffset)
+            while (fragmentsRead < fragmentLimit && offset < limitOffset && !isClosed)
             {
                 final int length = frameLengthVolatile(termBuffer, offset);
                 if (length <= 0)
@@ -518,6 +559,7 @@ public final class Image
             return 0;
         }
 
+        final Position subscriberPosition = this.subscriberPosition;
         long initialPosition = subscriberPosition.get();
         if (initialPosition >= limitPosition)
         {
@@ -534,7 +576,7 @@ public final class Image
 
         try
         {
-            while (fragmentsRead < fragmentLimit && offset < limitOffset)
+            while (fragmentsRead < fragmentLimit && offset < limitOffset && !isClosed)
             {
                 final int length = frameLengthVolatile(termBuffer, offset);
                 if (length <= 0)
@@ -632,7 +674,7 @@ public final class Image
 
         try
         {
-            while (offset < limitOffset)
+            while (offset < limitOffset && !isClosed)
             {
                 final int length = frameLengthVolatile(termBuffer, offset);
                 if (length <= 0)

@@ -26,6 +26,7 @@ import org.agrona.concurrent.status.AtomicLongPosition;
 import org.agrona.concurrent.status.Position;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.AdditionalMatchers;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
 
@@ -35,6 +36,7 @@ import static java.nio.ByteBuffer.allocateDirect;
 import static org.agrona.BitUtil.align;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.*;
@@ -607,6 +609,144 @@ class ImageTest
         inOrder.verify(mockFragmentHandler).onFragment(
             any(UnsafeBuffer.class), eq(initialOffset + HEADER_LENGTH), eq(DATA.length), any(Header.class));
         inOrder.verify(position).setOrdered(TERM_BUFFER_LENGTH);
+    }
+
+    @Test
+    void shouldRejectFragment()
+    {
+        final int initialOffset = TERM_BUFFER_LENGTH - (ALIGNED_FRAME_LENGTH * 2);
+        final long initialPosition = computePosition(
+            INITIAL_TERM_ID, initialOffset, POSITION_BITS_TO_SHIFT, INITIAL_TERM_ID);
+        position.setOrdered(initialPosition);
+        final Image image = createImage();
+
+        insertDataFrame(INITIAL_TERM_ID, initialOffset);
+        insertPaddingFrame(INITIAL_TERM_ID, initialOffset + ALIGNED_FRAME_LENGTH);
+
+        assertEquals(initialPosition, image.position());
+
+        final String reason = "this is frame is to be rejected";
+        image.reject(reason);
+
+        verify(subscription).rejectImage(image.correlationId(), image.position(), reason);
+    }
+
+    @Test
+    void shouldExitPollIfImageIsClosed()
+    {
+        final long initialPosition = computePosition(INITIAL_TERM_ID, 0, POSITION_BITS_TO_SHIFT, INITIAL_TERM_ID);
+        position.setOrdered(initialPosition);
+        final Image image = createImage();
+
+        insertDataFrame(INITIAL_TERM_ID, offsetForFrame(0));
+        insertDataFrame(INITIAL_TERM_ID, offsetForFrame(1));
+        insertDataFrame(INITIAL_TERM_ID, offsetForFrame(2));
+
+        final int messages = image.poll((buffer, offset, length, header) -> image.close(), Integer.MAX_VALUE);
+        assertThat(messages, is(1));
+        assertThat(image.isClosed(), is(true));
+
+        final InOrder inOrder = Mockito.inOrder(position);
+        inOrder.verify(position).setOrdered(initialPosition);
+        inOrder.verify(position).setOrdered(initialPosition + ALIGNED_FRAME_LENGTH);
+    }
+
+    @Test
+    void shouldExitBoundedPollIfImageIsClosed()
+    {
+        final long initialPosition = computePosition(INITIAL_TERM_ID, 0, POSITION_BITS_TO_SHIFT, INITIAL_TERM_ID);
+        position.setOrdered(initialPosition);
+        final Image image = createImage();
+
+        insertDataFrame(INITIAL_TERM_ID, offsetForFrame(0));
+        insertDataFrame(INITIAL_TERM_ID, offsetForFrame(1));
+        insertDataFrame(INITIAL_TERM_ID, offsetForFrame(2));
+
+        final int messages = image.boundedPoll(
+            (buffer, offset, length, header) -> image.close(), Long.MAX_VALUE, Integer.MAX_VALUE);
+        assertThat(messages, is(1));
+        assertThat(image.isClosed(), is(true));
+
+        final InOrder inOrder = Mockito.inOrder(position);
+        inOrder.verify(position).setOrdered(initialPosition);
+        inOrder.verify(position).setOrdered(initialPosition + ALIGNED_FRAME_LENGTH);
+    }
+
+    @Test
+    void shouldExitControlledPollIfImageIsClosed()
+    {
+        final long initialPosition = computePosition(INITIAL_TERM_ID, 0, POSITION_BITS_TO_SHIFT, INITIAL_TERM_ID);
+        position.setOrdered(initialPosition);
+        final Image image = createImage();
+
+        insertDataFrame(INITIAL_TERM_ID, offsetForFrame(0));
+        insertDataFrame(INITIAL_TERM_ID, offsetForFrame(1));
+        insertDataFrame(INITIAL_TERM_ID, offsetForFrame(2));
+
+        final int messages = image.controlledPoll((buffer, offset, length, header) ->
+        {
+            image.close();
+            return Action.CONTINUE;
+        }, Integer.MAX_VALUE);
+        assertThat(messages, is(1));
+        assertThat(image.isClosed(), is(true));
+
+        final InOrder inOrder = Mockito.inOrder(position);
+        inOrder.verify(position).setOrdered(initialPosition);
+        inOrder.verify(position).setOrdered(initialPosition + ALIGNED_FRAME_LENGTH);
+    }
+
+    @Test
+    void shouldExitBoundedControlledPollIfImageIsClosed()
+    {
+        final long initialPosition = computePosition(INITIAL_TERM_ID, 0, POSITION_BITS_TO_SHIFT, INITIAL_TERM_ID);
+        position.setOrdered(initialPosition);
+        final Image image = createImage();
+
+        insertDataFrame(INITIAL_TERM_ID, offsetForFrame(0));
+        insertDataFrame(INITIAL_TERM_ID, offsetForFrame(1));
+        insertDataFrame(INITIAL_TERM_ID, offsetForFrame(2));
+
+        final int messages = image.boundedControlledPoll(
+            (buffer, offset, length, header) ->
+            {
+                image.close();
+                return Action.CONTINUE;
+            },
+            Long.MAX_VALUE,
+            Integer.MAX_VALUE);
+        assertThat(messages, is(1));
+        assertThat(image.isClosed(), is(true));
+
+        final InOrder inOrder = Mockito.inOrder(position);
+        inOrder.verify(position).setOrdered(initialPosition);
+        inOrder.verify(position).setOrdered(initialPosition + ALIGNED_FRAME_LENGTH);
+    }
+
+    @Test
+    void shouldExitControlledPeekIfImageIsClosed()
+    {
+        final long initialPosition = computePosition(INITIAL_TERM_ID, 0, POSITION_BITS_TO_SHIFT, INITIAL_TERM_ID);
+        position.setOrdered(initialPosition);
+        final Image image = createImage();
+
+        insertDataFrame(INITIAL_TERM_ID, offsetForFrame(0));
+        insertDataFrame(INITIAL_TERM_ID, offsetForFrame(1));
+        insertDataFrame(INITIAL_TERM_ID, offsetForFrame(2));
+
+        final long resultingPosition = image.controlledPeek(
+            initialPosition,
+            (buffer, offset, length, header) ->
+            {
+                image.close();
+                return Action.CONTINUE;
+            },
+            Long.MAX_VALUE);
+        assertThat(resultingPosition, is(initialPosition + offsetForFrame(1)));
+        assertThat(image.isClosed(), is(true));
+
+        verify(position).setOrdered(initialPosition);
+        verify(position, never()).setOrdered(AdditionalMatchers.not(eq(initialPosition)));
     }
 
     private Image createImage()
