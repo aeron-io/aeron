@@ -17,11 +17,13 @@
 package io.aeron.cluster;
 
 import static io.aeron.Aeron.NULL_VALUE;
+import static io.aeron.archive.codecs.SourceLocation.LOCAL;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static java.nio.file.StandardCopyOption.*;
 import static java.nio.file.StandardOpenOption.*;
 import static org.agrona.Strings.isEmpty;
+import static org.agrona.concurrent.status.CountersReader.NULL_COUNTER_ID;
 
 import java.io.File;
 import java.io.IOException;
@@ -36,6 +38,7 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.function.*;
 
+import io.aeron.archive.status.RecordingPos;
 import org.agrona.BufferUtil;
 import org.agrona.DirectBuffer;
 import org.agrona.IoUtil;
@@ -127,7 +130,14 @@ public class ClusterToolOperator
      */
     protected int recoveryPlan(final PrintStream out, final File clusterDir, final int serviceCount)
     {
-        try (AeronArchive archive = AeronArchive.connect();
+        final ClusterNodeControlProperties properties = loadControlProperties(clusterDir);
+
+        final AeronArchive.Context archiveCtx = new AeronArchive.Context()
+            .controlRequestChannel("aeron:ipc")
+            .controlResponseChannel("aeron:ipc");
+
+        try (Aeron aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(properties.aeronDirectoryName));
+            AeronArchive archive = AeronArchive.connect(archiveCtx.aeron(aeron));
             RecordingLog recordingLog = new RecordingLog(clusterDir, false))
         {
             out.println(recordingLog.createRecoveryPlan(archive, serviceCount, Aeron.NULL_VALUE));
@@ -252,6 +262,130 @@ public class ClusterToolOperator
 
             updateRecordingLog(clusterDir, truncatedEntries);
         }
+        return SUCCESS;
+    }
+
+    protected int createEmptyServiceSnapshot(final File clusterDir, final PrintStream out)
+    {
+        final RecordingLog.Entry entry = findLatestValidSnapshot(clusterDir);
+        if (null == entry)
+        {
+            out.println("Snapshot not found");
+            return FAILURE;
+        }
+
+        final ClusterNodeControlProperties properties = loadControlProperties(clusterDir);
+
+        final AeronArchive.Context archiveCtx = new AeronArchive.Context()
+            .controlRequestChannel("aeron:ipc")
+            .controlResponseChannel("aeron:ipc");
+
+        try (Aeron aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(properties.aeronDirectoryName));
+            AeronArchive archive = AeronArchive.connect(archiveCtx.aeron(aeron)))
+        {
+            if (null == archive)
+            {
+                out.println("unable to connect to Archive");
+                return FAILURE;
+            }
+
+            final int subscriptionSessionId = (int)archive.startReplay(
+                entry.recordingId, 0, AeronArchive.NULL_LENGTH, toolChannel, toolStreamId);
+
+            final String replayChannel = ChannelUri.addSessionId(toolChannel, subscriptionSessionId);
+            try (Subscription subscription = aeron.addSubscription(replayChannel, toolStreamId);
+                ExclusivePublication publication = aeron.addExclusivePublication(toolChannel, toolStreamId))
+            {
+                final int publicationSessionId = publication.sessionId();
+                final String recordingChannel = ChannelUri.addSessionId(toolChannel, publicationSessionId);
+                archive.startRecording(recordingChannel, toolStreamId, LOCAL, true);
+
+                final CountersReader counters = aeron.countersReader();
+                final long archiveId = archive.archiveId();
+                int counterId = RecordingPos.findCounterIdBySession(counters, publicationSessionId, archiveId);
+                while (NULL_COUNTER_ID == counterId)
+                {
+                    Thread.yield();
+                    archive.checkForErrorResponse();
+                    counterId = RecordingPos.findCounterIdBySession(counters, publicationSessionId, archiveId);
+                }
+                final long recordingId = RecordingPos.getRecordingId(counters, counterId);
+                out.println("New snapshot recording id: " + recordingId);
+
+                Image image;
+                while ((image = subscription.imageBySessionId(subscriptionSessionId)) == null)
+                {
+                    archive.checkForErrorResponse();
+                    Thread.yield();
+                }
+
+                final ConsensusModuleSnapshotAdapter adapter = new ConsensusModuleSnapshotAdapter(
+                    image, new ConsensusModuleSnapshotCopier(publication));
+
+                while (true)
+                {
+                    final int fragments = image.controlledPoll(adapter, 10);
+                    if (adapter.isDone())
+                    {
+                        break;
+                    }
+
+                    if (0 == fragments)
+                    {
+                        if (image.isClosed())
+                        {
+                            throw new ClusterException("snapshot ended unexpectedly: " + image);
+                        }
+
+                        archive.checkForErrorResponse();
+                        Thread.yield();
+                    }
+                }
+
+                while (counters.getCounterValue(counterId) < publication.position())
+                {
+                    Thread.yield();
+                    archive.checkForErrorResponse();
+
+                    if (!RecordingPos.isActive(counters, counterId, recordingId))
+                    {
+                        throw new ClusterException("recording stopped unexpectedly: " + recordingId);
+                    }
+                }
+            }
+        }
+
+        return SUCCESS;
+    }
+
+    protected int addServiceSnapshot(
+        final PrintStream out,
+        final File clusterDir,
+        final int recordingId)
+    {
+        try (RecordingLog recordingLog = new RecordingLog(clusterDir, false))
+        {
+            final RecordingLog.Entry entry = recordingLog.getLatestSnapshot(ConsensusModule.Configuration.SERVICE_ID);
+
+            if (null == entry)
+            {
+                out.println("Snapshot not found");
+                return FAILURE;
+            }
+
+            final int newServiceId = recordingLog.getHighServiceIdOfLatestSnapshot() + 1;
+
+            recordingLog.appendSnapshot(
+                recordingId,
+                entry.leadershipTermId,
+                entry.termBaseLogPosition,
+                entry.logPosition,
+                entry.timestamp,
+                newServiceId);
+
+            out.println("Snapshot added for serviceId=" + newServiceId + " and recordingId=" + recordingId);
+        }
+
         return SUCCESS;
     }
 
