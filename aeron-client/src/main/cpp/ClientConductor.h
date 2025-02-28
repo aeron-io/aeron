@@ -17,6 +17,7 @@
 #ifndef AERON_CLIENT_CONDUCTOR_H
 #define AERON_CLIENT_CONDUCTOR_H
 
+#include <chrono>
 #include <unordered_map>
 #include <vector>
 #include <mutex>
