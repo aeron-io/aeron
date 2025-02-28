@@ -31,7 +31,7 @@ template<typename Agent>
 class AgentInvoker
 {
 public:
-    AgentInvoker(Agent &agent, util::exception_handler_t &exceptionHandler) :
+    AgentInvoker(Agent &agent, const util::exception_handler_t &exceptionHandler) :
         m_agent(agent),
         m_exceptionHandler(exceptionHandler)
     {
@@ -140,7 +140,7 @@ public:
 
 private:
     Agent &m_agent;
-    util::exception_handler_t &m_exceptionHandler;
+    const util::exception_handler_t &m_exceptionHandler;
     bool m_isStarted = false;
     bool m_isRunning = false;
     bool m_isClosed = false;
