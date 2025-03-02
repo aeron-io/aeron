@@ -214,7 +214,7 @@ public final class ClusterMarkFile implements AutoCloseable
                     epochClock,
                     null,
                     null);
-                this.buffer = markFile.buffer();
+                this.buffer = this.markFile.buffer();
                 this.buffer.setMemory(0, headerDecoder.headerLength(), (byte)0);
             }
         }
