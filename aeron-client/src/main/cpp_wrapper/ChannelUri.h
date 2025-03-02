@@ -346,6 +346,20 @@ public:
         return channelUri->toString();
     }
 
+    inline static std::string addAliasIfAbsent(const std::string& uri, const std::string& alias)
+    {
+        if (!alias.empty())
+        {
+            std::shared_ptr<ChannelUri> channelUri = ChannelUri::parse(uri);
+            if (!channelUri->containsKey(ALIAS_PARAM_NAME))
+            {
+                channelUri->put(ALIAS_PARAM_NAME, alias);
+                return channelUri->toString();
+            }
+        }
+        return uri;
+    }
+
 private:
     std::string m_prefix;
     std::string m_media;
