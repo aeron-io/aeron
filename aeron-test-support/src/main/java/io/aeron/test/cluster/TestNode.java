@@ -354,6 +354,7 @@ public final class TestNode implements AutoCloseable
         volatile boolean wasSnapshotLoaded = false;
         volatile boolean failNextSnapshot = false;
         private int index;
+        private boolean requireFullSnapshot = true;
         private volatile boolean hasReceivedUnexpectedMessage = false;
         private volatile Cluster.Role roleChangedTo = null;
         private final AtomicInteger activeSessionCount = new AtomicInteger();
@@ -366,6 +367,12 @@ public final class TestNode implements AutoCloseable
         public TestService index(final int index)
         {
             this.index = index;
+            return this;
+        }
+
+        public TestService requireFullSnapshot(final boolean requireFullSnapshot)
+        {
+            this.requireFullSnapshot = requireFullSnapshot;
             return this;
         }
 
@@ -449,7 +456,7 @@ public final class TestNode implements AutoCloseable
                     idleStrategy.idle(fragments);
                 }
 
-                if (fragmentCount != SNAPSHOT_FRAGMENT_COUNT)
+                if (requireFullSnapshot && (fragmentCount != SNAPSHOT_FRAGMENT_COUNT))
                 {
                     throw new AgentTerminationException(
                         "unexpected snapshot length: expected=" + SNAPSHOT_FRAGMENT_COUNT + " actual=" + fragmentCount);
