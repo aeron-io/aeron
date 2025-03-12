@@ -36,14 +36,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static io.aeron.test.cluster.TestCluster.aCluster;
 import static java.nio.file.StandardOpenOption.CREATE_NEW;
 import static java.nio.file.StandardOpenOption.WRITE;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.Matchers.matchesRegex;
+import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 
@@ -110,6 +110,108 @@ class ClusterToolTest
         assertThat(
             capturingPrintStream.flushAndGetContent(),
             containsString("Snapshot: appVersion=1 timeUnit=MILLISECONDS"));
+    }
+
+    @Test
+    @InterruptAfter(5)
+    void shouldAddServiceSnapshot()
+    {
+        final TestCluster cluster = aCluster().withStaticNodes(3).start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode leader = cluster.awaitLeader();
+        assertNotNull(cluster.asyncConnectClient());
+        cluster.sendAndAwaitMessages(10);
+
+        final CapturingPrintStream capturingPrintStream = new CapturingPrintStream();
+
+        assertFalse(ClusterTool.addServiceSnapshot(
+            capturingPrintStream.resetAndGetPrintStream(),
+            leader.consensusModule().context().clusterDir(),
+            5));
+
+        assertTrue(ClusterTool.snapshot(
+            leader.consensusModule().context().clusterDir(),
+            capturingPrintStream.resetAndGetPrintStream()));
+        cluster.awaitSnapshotCount(1);
+
+        assertTrue(ClusterTool.addServiceSnapshot(
+            capturingPrintStream.resetAndGetPrintStream(),
+            leader.consensusModule().context().clusterDir(),
+            7));
+
+        assertThat(
+            capturingPrintStream.flushAndGetContent(),
+            containsString("recordingId=7"));
+
+        ClusterTool.recordingLog(
+            capturingPrintStream.resetAndGetPrintStream(),
+            leader.consensusModule().context().clusterDir());
+
+        final String log = capturingPrintStream.flushAndGetContent();
+        assertThat(log, containsString("serviceId=1"));
+        assertThat(log, containsString("recordingId=7"));
+        assertThat(log, not(containsString("recordingId=5")));
+    }
+
+    @Test
+    @InterruptAfter(5)
+    void shouldAddNewServiceAfterSnapshot()
+    {
+        final int[] recordingIds = new int[3];
+
+        final TestCluster cluster = aCluster().withStaticNodes(3).start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode initialLeader = cluster.awaitLeader();
+        assertNotNull(cluster.asyncConnectClient());
+        cluster.sendAndAwaitMessages(10);
+
+        final CapturingPrintStream capturingPrintStream = new CapturingPrintStream();
+
+        assertTrue(ClusterTool.snapshot(
+            initialLeader.consensusModule().context().clusterDir(),
+            capturingPrintStream.resetAndGetPrintStream()));
+        cluster.awaitSnapshotCount(1);
+
+        final Pattern pattern = Pattern.compile("New snapshot recording id: (\\d+)");
+
+        for (int i = 0; i <= 2; i++)
+        {
+            assertTrue(ClusterTool.createEmptyServiceSnapshot(
+                cluster.node(i).consensusModule().context().clusterDir(),
+                capturingPrintStream.resetAndGetPrintStream()));
+
+            final Matcher matcher = pattern.matcher(capturingPrintStream.flushAndGetContent());
+            assertTrue(matcher.find());
+            recordingIds[i] = Integer.parseInt(matcher.group(1));
+        }
+
+        cluster.stopAllNodes();
+
+        for (int i = 0; i <= 2; i++)
+        {
+            assertTrue(ClusterTool.addServiceSnapshot(
+                capturingPrintStream.resetAndGetPrintStream(),
+                cluster.node(i).consensusModule().context().clusterDir(),
+                recordingIds[i]));
+
+            cluster.startStaticNode(
+                i,
+                false,
+                (x) -> new TestNode.TestService[]{
+                    new TestNode.TestService().index(x),
+                    new TestNode.TestService().index(x + 3).requireFullSnapshot(false)
+                });
+        }
+
+        cluster.awaitLeader();
+
+        assertNotNull(cluster.asyncConnectClient());
+
+        cluster.sendMessages(10);
+        cluster.awaitResponseMessageCount(20); // two services, so twice the messages pinged back
+        cluster.awaitServicesMessageCount(10); // each service gets 10 messages
     }
 
     @Test
