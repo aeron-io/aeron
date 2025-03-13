@@ -140,7 +140,6 @@ int aeron_archive_async_connect(aeron_archive_async_connect_t **async, aeron_arc
 
     // Now that we've copied the original context into the _async->ctx, the original ctx no longer owns the aeron client.
     aeron_archive_context_set_owns_aeron_client(ctx, false);
-    aeron_archive_context_set_aeron(ctx, NULL);
 
     _async->aeron = aeron;
     _async->async_add_subscription = async_add_subscription;
@@ -325,7 +324,8 @@ int aeron_archive_async_connect_poll(aeron_archive_t **aeron_archive, aeron_arch
     {
         if (!aeron_archive_proxy_archive_id(
             async->archive_proxy,
-            async->correlation_id))
+            async->correlation_id,
+            async->control_session_id))
         {
             return 0;
         }
@@ -338,7 +338,8 @@ int aeron_archive_async_connect_poll(aeron_archive_t **aeron_archive, aeron_arch
         if (!aeron_archive_proxy_challenge_response(
             async->archive_proxy,
             async->encoded_credentials_from_challenge,
-            async->correlation_id))
+            async->correlation_id,
+            async->control_session_id))
         {
             return 0;
         }
@@ -366,7 +367,6 @@ int aeron_archive_async_connect_poll(aeron_archive_t **aeron_archive, aeron_arch
             poller->correlation_id == async->correlation_id)
         {
             async->control_session_id = poller->control_session_id;
-            aeron_archive_proxy_set_control_esssion_id(async->archive_proxy, poller->control_session_id);
 
             if (poller->was_challenged)
             {
@@ -382,7 +382,7 @@ int aeron_archive_async_connect_poll(aeron_archive_t **aeron_archive, aeron_arch
             {
                 if (!poller->is_code_ok)
                 {
-                    aeron_archive_proxy_close_session(async->archive_proxy);
+                    aeron_archive_proxy_close_session(async->archive_proxy, async->control_session_id);
 
                     if (poller->is_code_error)
                     {
