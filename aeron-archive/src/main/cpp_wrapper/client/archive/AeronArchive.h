@@ -24,6 +24,7 @@
 #include "ArchiveContext.h"
 #include "ReplayParams.h"
 #include "ReplicationParams.h"
+#include "concurrent/BackOffIdleStrategy.h"
 
 namespace aeron { namespace archive { namespace client
 {
@@ -384,6 +385,24 @@ public:
     }
 
     /**
+     * Create a publication and set it up to be recorded.
+     *
+     * @param channel the channel for the publication
+     * @param streamId the stream id for the publication
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     * @return a Publication that's being recorded
+     *
+     * @see #addRecordedPublication
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline std::shared_ptr<Publication> addRecordedPublication(const std::string &channel, std::int32_t streamId)
+    {
+        return addRecordedPublication(channel, streamId);
+    }
+
+    /**
      * Create an exclusive publication and set it up to be recorded.
      *
      * @param channel the channel for the exclusive publication
@@ -406,6 +425,24 @@ public:
         }
 
         return std::make_shared<ExclusivePublication>(m_archiveCtxW.aeron()->aeron(), exclusivePublication);
+    }
+
+    /**
+     * Create an exclusive publication and set it up to be recorded.
+     *
+     * @param channel the channel for the exclusive publication
+     * @param streamId the stream id for the exclusive publication
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     * @return an ExclusivePublication that's being recorded
+     *
+     * @see #addRecordedExclusivePublication
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline std::shared_ptr<ExclusivePublication> addRecordedExclusivePublication(const std::string &channel, std::int32_t streamId)
+    {
+        return addRecordedExclusivePublication(channel, streamId);
     }
 
     /**
@@ -448,6 +485,34 @@ public:
     }
 
     /**
+     * Start recording a channel/stream pairing.
+     * <p>
+     * Channels that include session id parameters are considered different than channels without session ids.
+     * If a publication matches both a session id specific channel recording and a non session id specific recording,
+     * it will be recorded twice.
+     *
+     * @param channel the channel of the publication to be recorded
+     * @param streamId the stream id of the publication to be recorded
+     * @param sourceLocation the SourceLocation of the publication to be recorded
+     * @param autoStop should the recording be automatically stopped when complete
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     * @return the recording's subscription id
+     *
+     * @see #startRecording
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline std::int64_t startRecording(
+        const std::string &channel,
+        std::int32_t streamId,
+        SourceLocation sourceLocation,
+        bool autoStop = false)
+    {
+        return startRecording(channel, streamId, sourceLocation, autoStop);
+    }
+
+    /**
      * Fetch the position recorded for the specified recording.
      *
      * @param recordingId the archive recording id
@@ -468,6 +533,23 @@ public:
         }
 
         return recording_position;
+    }
+
+    /**
+     * Fetch the position recorded for the specified recording.
+     *
+     * @param recordingId the archive recording id
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     * @return the position of the specified recording
+     *
+     * @see #getRecordingPosition
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline std::int64_t getRecordingPosition(std::int64_t recordingId)
+    {
+        return getRecordingPosition(recordingId);
     }
 
     /**
@@ -494,6 +576,23 @@ public:
     }
 
     /**
+     * Fetch the start position for the specified recording.
+     *
+     * @param recordingId the archive recording id
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     * @return the start position of the specified recording
+     *
+     * @see #getStartPosition
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline std::int64_t getStartPosition(std::int64_t recordingId)
+    {
+        return getStartPosition(recordingId);
+    }
+
+    /**
      * Fetch the stop position for the specified recording.
      *
      * @param recordingId the active recording id
@@ -514,6 +613,23 @@ public:
         }
 
         return stop_position;
+    }
+
+    /**
+     * Fetch the stop position for the specified recording.
+     *
+     * @param recordingId the active recording id
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     * @return the stop position of the specified recording
+     *
+     * @see #getStopPosition
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline std::int64_t getStopPosition(std::int64_t recordingId)
+    {
+        return getStopPosition(recordingId);
     }
 
     /**
@@ -540,6 +656,23 @@ public:
     }
 
     /**
+     * Fetch the stop or active position for the specified recording.
+     *
+     * @param recordingId the active recording id
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     * @return the max recorded position of the specified recording
+     *
+     * @see #getMaxRecordedPosition
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline std::int64_t getMaxRecordedPosition(std::int64_t recordingId)
+    {
+        return getMaxRecordedPosition(recordingId);
+    }
+
+    /**
      * Stop recording the specified subscription id.
      * This is the subscription id returned from startRecording or extendRecording.
      *
@@ -555,6 +688,23 @@ public:
         {
             ARCHIVE_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
+    }
+
+    /**
+     * Stop recording the specified subscription id.
+     * This is the subscription id returned from startRecording or extendRecording.
+     *
+     * @param subscriptionId the subscription id for the recording in the Aeron Archive
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     *
+     * @see #stopRecording
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline void stopRecording(std::int64_t subscriptionId)
+    {
+        return stopRecording(subscriptionId);
     }
 
     /**
@@ -582,6 +732,24 @@ public:
     }
 
     /**
+     * Try to stop a recording for the specified subscription id.
+     * This is the subscription id returned from startRecording or extendRecording.
+     *
+     * @param subscriptionId the subscription id for the recording in the Aeron Archive
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     * @return true if stopped, or false if the subscription is not currently active
+     *
+     * @see #tryStopRecording
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline bool tryStopRecording(std::int64_t subscriptionId)
+    {
+        return tryStopRecording(subscriptionId);
+    }
+
+    /**
      * Stop recording for the specified channel and stream.
      * <p>
      * Channels that include session id parameters are considered different than channels without session ids.
@@ -602,6 +770,27 @@ public:
         {
             ARCHIVE_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
+    }
+
+    /**
+     * Stop recording for the specified channel and stream.
+     * <p>
+     * Channels that include session id parameters are considered different than channels without session ids.
+     * Stopping a recording on a channel without a session id parameter will not stop the recording of any
+     * session id specific recordings that use the same channel and stream id.
+     *
+     * @param channel the channel of the recording to be stopped
+     * @param streamId  the stream id of the recording to be stopped
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     *
+     * @see #stopRecording
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline void stopRecording(const std::string &channel, std::int32_t streamId)
+    {
+        return stopRecording(channel, streamId);
     }
 
     /**
@@ -634,6 +823,28 @@ public:
     }
 
     /**
+     * Try to stop recording for the specified channel and stream.
+     * <p>
+     * Channels that include session id parameters are considered different than channels without session ids.
+     * Stopping a recording on a channel without a session id parameter will not stop the recording of any
+     * session id specific recordings that use the same channel and stream id.
+     *
+     * @param channel the channel of the recording to be stopped
+     * @param streamId  the stream id of the recording to be stopped
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     * @return true if stopped, or false if the subscription is not currently active
+     *
+     * @see #tryStopRecording
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline bool tryStopRecording(const std::string &channel, std::int32_t streamId)
+    {
+        return tryStopRecording(channel, streamId);
+    }
+
+    /**
      * Stop recording for the specified recording id.
      *
      * @param recordingId the id of the recording to be stopped
@@ -657,6 +868,23 @@ public:
     }
 
     /**
+     * Stop recording for the specified recording id.
+     *
+     * @param recordingId the id of the recording to be stopped
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     * @return true if stopped, or false if the subscription is not currently active
+     *
+     * @see #tryStopRecordingByIdentity
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline bool tryStopRecordingByIdentity(std::int64_t recordingId)
+    {
+        return tryStopRecordingByIdentity(recordingId);
+    }
+
+    /**
      * Stop recording a session id specific recording that pertains to the given publication.
      *
      * @param publication the Publication to stop recording
@@ -674,6 +902,22 @@ public:
     }
 
     /**
+     * Stop recording a session id specific recording that pertains to the given publication.
+     *
+     * @param publication the Publication to stop recording
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     *
+     * @see #stopRecording
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline void stopRecording(const std::shared_ptr<Publication> &publication)
+    {
+        return stopRecording(publication);
+    }
+
+    /**
      * Stop recording a session id specific recording that pertains to the given ExclusivePublication.
      *
      * @param exclusivePublication the ExclusivePublication to stop recording
@@ -688,6 +932,22 @@ public:
         {
             ARCHIVE_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
+    }
+
+    /**
+     * Stop recording a session id specific recording that pertains to the given ExclusivePublication.
+     *
+     * @param exclusivePublication the ExclusivePublication to stop recording
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     *
+     * @see #stopRecording
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline void stopRecording(const std::shared_ptr<ExclusivePublication> &exclusivePublication)
+    {
+        return stopRecording(exclusivePublication);
     }
 
     /**
@@ -724,6 +984,30 @@ public:
     }
 
     /**
+     * Find the last recording that matches the given criteria.
+     *
+     * @param minRecordingId the lowest recording id to search back to
+     * @param channelFragment for a 'contains' match on the original channel stored with the Aeron Archive
+     * @param streamId the stream id of the recording
+     * @param sessionId the session id of the recording
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     * @return the recording id that matches
+     *
+     * @see #findLastMatchingRecording
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline std::int64_t findLastMatchingRecording(
+        std::int64_t minRecordingId,
+        const std::string &channelFragment,
+        std::int32_t streamId,
+        std::int32_t sessionId)
+    {
+        return findLastMatchingRecording(minRecordingId, channelFragment, streamId, sessionId);
+    }
+
+    /**
      * List a recording descriptor for a single recording id.
      *
      * @param recordingId the id of the recording
@@ -749,6 +1033,26 @@ public:
         }
 
         return count;
+    }
+
+    /**
+     * List a recording descriptor for a single recording id.
+     *
+     * @param recordingId the id of the recording
+     * @param consumer to be called for each descriptor
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     * @return the number of descriptors found
+     *
+     * @see #listRecording
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline std::int32_t listRecording(
+        std::int64_t recordingId,
+        const recording_descriptor_consumer_t &consumer)
+    {
+        return listRecording(recordingId, consumer);
     }
 
     /**
@@ -781,6 +1085,29 @@ public:
         }
 
         return count;
+    }
+
+    /**
+     * List all recording descriptors starting at a particular recording id,
+     * with a limit of total descriptors delivered.
+     *
+     * @param fromRecordingId the id at which to begin the listing
+     * @param recordCount the limit of total descriptors to deliver
+     * @param consumer to be called for each descriptor
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     * @return the number of descriptors found
+     *
+     * @see #listRecordings
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline std::int32_t listRecordings(
+        std::int64_t fromRecordingId,
+        std::int32_t recordCount,
+        const recording_descriptor_consumer_t &consumer)
+    {
+        return listRecordings(fromRecordingId, recordCount, consumer);
     }
 
     /**
@@ -821,6 +1148,32 @@ public:
     }
 
     /**
+     * List all recording descriptors for a given channel fragment and stream id, starting at a particular recording id, with a limit of total descriptors delivered.
+     *
+     * @param fromRecordingId the id at which to begin the listing
+     * @param recordCount the limit of total descriptors to deliver
+     * @param channelFragment for a 'contains' match on the original channel stored with the Aeron Archive
+     * @param streamId the stream id of the recording
+     * @param consumer to be called for each descriptor
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     * @return the number of descriptors found
+     *
+     * @see #listRecordingsForUri
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline std::int32_t listRecordingsForUri(
+        std::int64_t fromRecordingId,
+        std::int32_t recordCount,
+        const std::string &channelFragment,
+        std::int32_t streamId,
+        const recording_descriptor_consumer_t &consumer)
+    {
+        return listRecordingsForUri(fromRecordingId, recordCount, channelFragment, streamId, consumer);
+    }
+
+    /**
      * Start a replay
      * <p>
      * The lower 32-bits of the replay session id contain the session id of the image of the received replay
@@ -858,6 +1211,34 @@ public:
     }
 
     /**
+     * Start a replay
+     * <p>
+     * The lower 32-bits of the replay session id contain the session id of the image of the received replay
+     * and can be obtained by casting the replay session id to an int32_t.
+     * All 64-bits are required to uniquely identify the replay when calling #stopReplay.
+     *
+     * @param recordingId the id of the recording
+     * @param replayChannel the channel to which the replay should be sent
+     * @param replayStreamId the stream id to which the replay should be sent
+     * @param replayParams the ReplayParams that control the behavior of the replay
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     * @return the replay session id
+     *
+     * @see #startReplay
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline std::int64_t startReplay(
+        std::int64_t recordingId,
+        const std::string &replayChannel,
+        std::int32_t replayStreamId,
+        ReplayParams &replayParams)
+    {
+        return startReplay(recordingId, replayChannel, replayStreamId, replayParams);
+    }
+
+    /**
      * Start a replay.
      *
      * @param recordingId the id of the recording
@@ -891,6 +1272,30 @@ public:
     }
 
     /**
+     * Start a replay.
+     *
+     * @param recordingId the id of the recording
+     * @param replayChannel the channel to which the replay should be sent
+     * @param replayStreamId the stream id to which the replay should be sent
+     * @param replayParams the ReplayParams that control the behavior of the replay
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     * @return the Subscription created for consuming the replay
+     *
+     * @see #replay
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline std::shared_ptr<Subscription> replay(
+        std::int64_t recordingId,
+        const std::string &replayChannel,
+        std::int32_t replayStreamId,
+        ReplayParams &replayParams)
+    {
+        return replay(recordingId, replayChannel, replayStreamId, replayParams);
+    }
+
+    /**
      * Truncate a stopped recording to the specified position.
      * The position must be less than the stopped position.
      * The position must be on a fragment boundary.
@@ -919,6 +1324,27 @@ public:
     }
 
     /**
+     * Truncate a stopped recording to the specified position.
+     * The position must be less than the stopped position.
+     * The position must be on a fragment boundary.
+     * Truncating a recording to the start position effectively deletes the recording.
+     *
+     * @param recordingId the id of the recording
+     * @param position the position to which the recording will be truncated
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     * @return the number of segments deleted
+     *
+     * @see #truncateRecording
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline std::int64_t truncateRecording(std::int64_t recordingId, std::int64_t position)
+    {
+        return truncateRecording(recordingId, position);
+    }
+
+    /**
      * Stop a replay session.
      *
      * @param replaySessionId the replay session id indicating the replay to stop
@@ -931,6 +1357,22 @@ public:
         {
             ARCHIVE_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
+    }
+
+    /**
+     * Stop a replay session.
+     *
+     * @param replaySessionId the replay session id indicating the replay to stop
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     *
+     * @see #stopReplay
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline void stopReplay(std::int64_t replaySessionId)
+    {
+        return stopReplay(replaySessionId);
     }
 
     /**
@@ -949,6 +1391,23 @@ public:
         {
             ARCHIVE_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
+    }
+
+    /**
+     * Stop all replays matching a recording id.
+     * If recordingId is aeron::NULL_VALUE then match all replays.
+     *
+     * @param recordingId the id of the recording for which all replays will be stopped
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     *
+     * @see #stopAllReplays
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline void stopAllReplays(std::int64_t recordingId)
+    {
+        return stopAllReplays(recordingId);
     }
 
     /**
@@ -994,6 +1453,36 @@ public:
     }
 
     /**
+     * List active recording subscriptions in the Aeron Archive.
+     * These are the result of calling aeron_archive_start_recording or aeron_archive_extend_recording.
+     * The subscription id in the returned descriptor can be used when calling AeronArchive:stopRecording.
+     *
+     * @param pseudoIndex the index into the active list at which to begin listing
+     * @param subscriptionCount the limit of the total descriptors to deliver
+     * @param channelFragment for a 'contains' match on the original channel stored with the Aeron Archive
+     * @param streamId the stream id of the recording
+     * @param applyStreamId whether or not the stream id should be matched
+     * @param consumer to be called for each recording subscription
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     * @return the number of matched subscriptions
+     *
+     * @see #listRecordingSubscriptions
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline std::int32_t listRecordingSubscriptions(
+        std::int32_t pseudoIndex,
+        std::int32_t subscriptionCount,
+        const std::string &channelFragment,
+        std::int32_t streamId,
+        bool applyStreamId,
+        const recording_subscription_descriptor_consumer_t &consumer)
+    {
+        return listRecordingSubscriptions(pseudoIndex, subscriptionCount, channelFragment, streamId, applyStreamId, consumer);
+    }
+
+    /**
      * Purge a stopped recording.
      * i.e. Mark the recording as INVALID at the Archive and delete the corresponding segment files.
      * The space in the Catalog will be reclaimed upon compaction.
@@ -1016,6 +1505,25 @@ public:
         }
 
         return deletedSegmentsCount;
+    }
+
+    /**
+     * Purge a stopped recording.
+     * i.e. Mark the recording as INVALID at the Archive and delete the corresponding segment files.
+     * The space in the Catalog will be reclaimed upon compaction.
+     *
+     * @param recordingId the id of the stopped recording to be purged
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     * @return the number of deleted segments
+     *
+     * @see #purgeRecording
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline std::int64_t purgeRecording(std::int64_t recordingId)
+    {
+        return purgeRecording(recordingId);
     }
 
     /**
@@ -1061,6 +1569,36 @@ public:
     }
 
     /**
+     * Extend an existing, non-active recording for a channel and stream pairing.
+     * <p>
+     * The channel must be configured with the initial position from which it will be extended.
+     * This can be done with ChannelUriStringBuilder#initialPosition.
+     * The details required to initialize can be found by calling #listRecording.
+     *
+     * @param recordingId the id of the existing recording
+     * @param channel the channel of the publication to be recorded
+     * @param streamId the stream id of the publication to be recorded
+     * @param sourceLocation the source location of the publication to be recorded
+     * @param autoStop should the recording be automatically stopped when complete
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     * @return the subscription id of the recording
+     *
+     * @see #extendRecording
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline std::int64_t extendRecording(
+        std::int64_t recordingId,
+        const std::string &channel,
+        std::int32_t streamId,
+        SourceLocation sourceLocation,
+        bool autoStop)
+    {
+        return extendRecording(recordingId, channel, streamId, sourceLocation, autoStop);
+    }
+
+    /**
      * Replicate a recording from a source Archive to a destination.
      * This can be considered a backup for a primary Archive.
      * The source recording will be replayed via the provided replay channel and use the original stream id.
@@ -1102,6 +1640,38 @@ public:
     }
 
     /**
+     * Replicate a recording from a source Archive to a destination.
+     * This can be considered a backup for a primary Archive.
+     * The source recording will be replayed via the provided replay channel and use the original stream id.
+     * The behavior of the replication will be governed by the values specified in the ReplicationParams.
+     * <p>
+     * For a source recording that is still active, the replay can merge with the live stream and then follow it directly and no longer require the replay from the source.
+     * This would require a multicast live destination.
+     * <p>
+     * Errors will be reported asynchronously and can be checked for with #checkForErrorResponse and #pollForErrorResponse
+     *
+     * @param srcRecordingId the recording id that must exist at the source archive
+     * @param srcControlStreamId remote control channel for the source archive on which to instruct the replay
+     * @param srcControlChannel remote control stream id for the source archive on which to instruct the replay
+     * @param replicationParams optional parameters to configure the behavior of the replication
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     * @return the replication id that can be used to stop the replication
+     *
+     * @see #replicate
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline std::int64_t replicate(
+        std::int64_t srcRecordingId,
+        std::int32_t srcControlStreamId,
+        const std::string &srcControlChannel,
+        ReplicationParams &replicationParams)
+    {
+        return replicate(srcRecordingId, srcControlStreamId, srcControlChannel, replicationParams);
+    }
+
+    /**
      * Stop a replication by the replication id.
      *
      * @param replicationId the replication id retrieved when calling #replicate
@@ -1114,6 +1684,22 @@ public:
         {
             ARCHIVE_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
+    }
+
+    /**
+     * Stop a replication by the replication id.
+     *
+     * @param replicationId the replication id retrieved when calling #replicate
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     *
+     * @see #stopReplication
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline void stopReplication(std::int64_t replicationId)
+    {
+        return stopReplication(replicationId);
     }
 
     /**
@@ -1140,6 +1726,23 @@ public:
     }
 
     /**
+     * Try to stop a replication by the replication id.
+     *
+     * @param replicationId the replication id retrieved when calling #replicate
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     * @return true if stopped, or false if the recording is not currently active
+     *
+     * @see #tryStopReplication
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline bool tryStopReplication(std::int64_t replicationId)
+    {
+        return tryStopReplication(replicationId);
+    }
+
+    /**
      * Detach segments from the beginning of a recording up to the provided new start position.
      * <p>
      * The new start position must be the first byte position of a segment after the existing start position.
@@ -1163,6 +1766,27 @@ public:
     }
 
     /**
+     * Detach segments from the beginning of a recording up to the provided new start position.
+     * <p>
+     * The new start position must be the first byte position of a segment after the existing start position.
+     * <p>
+     * It is not possible to detach segments which are active for recording or being replayed.
+     *
+     * @param recordingId the id of an existing recording
+     * @param newStartPosition the new starting position for the recording after the segments are detached
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     *
+     * @see #detachSegments
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline void detachSegments(std::int64_t recordingId, std::int64_t newStartPosition)
+    {
+        return detachSegments(recordingId, newStartPosition);
+    }
+
+    /**
      * Delete segments which have been previously detached from a recording.
      *
      * @param recordingId the id of an existing recording
@@ -1183,6 +1807,23 @@ public:
         }
 
         return count;
+    }
+
+    /**
+     * Delete segments which have been previously detached from a recording.
+     *
+     * @param recordingId the id of an existing recording
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     * @return the number of segments deleted
+     *
+     * @see #deleteDetachedSegments
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline std::int64_t deleteDetachedSegments(std::int64_t recordingId)
+    {
+        return deleteDetachedSegments(recordingId);
     }
 
     /**
@@ -1215,6 +1856,28 @@ public:
     }
 
     /**
+     * Purge (Detach and delete) segments from the beginning of a recording up to the provided new start position.
+     * <p>
+     * The new start position must be the first byte position of a segment after the existing start position.
+     * <p>
+     * It is not possible to detach segments which are active for recording or being replayed.
+     *
+     * @param recordingId the id of an existing recording
+     * @param newStartPosition the new starting position for the recording after the segments are detached
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     * @return the number of segments deleted
+     *
+     * @see #purgeSegments
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline std::int64_t purgeSegments(std::int64_t recordingId, std::int64_t newStartPosition)
+    {
+        return purgeSegments(recordingId, newStartPosition);
+    }
+
+    /**
      * Attach segments to the beginning of a recording to restore history that was previously detached.
      * <p>
      * Segment files must match the existing recording and join exactly to the start position of the recording they are being attached to.
@@ -1240,6 +1903,25 @@ public:
     }
 
     /**
+     * Attach segments to the beginning of a recording to restore history that was previously detached.
+     * <p>
+     * Segment files must match the existing recording and join exactly to the start position of the recording they are being attached to.
+     *
+     * @param recordingId the id of an existing recording
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     * @return the number of segments attached
+     *
+     * @see #attachSegments
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline std::int64_t attachSegments(std::int64_t recordingId)
+    {
+        return attachSegments(recordingId);
+    }
+
+    /**
      * Migrate segments from a source recording and attach them to the beginning of a destination recording.
      * <p>
      * The source recording must match the destination recording for segment length, term length, mtu length,
@@ -1251,6 +1933,8 @@ public:
      * @param srcRecordingId the id of an existing recording from which segments will be migrated
      * @param dstRecordingId the id of an exisintg recording to which segments will be migrated
      * @return the number of segments deleted
+     *
+     * @see aeron_archive_migrate_segments
      */
     inline std::int64_t migrateSegments(std::int64_t srcRecordingId, std::int64_t dstRecordingId)
     {
@@ -1266,6 +1950,30 @@ public:
         }
 
         return count;
+    }
+
+    /**
+     * Migrate segments from a source recording and attach them to the beginning of a destination recording.
+     * <p>
+     * The source recording must match the destination recording for segment length, term length, mtu length,
+     * stream id, plus the stop position and term id of the source must join with the start position of the destination
+     * and be on a segment boundary.
+     * <p>
+     * The source recording will be effectively truncated back to its start position after the migration.
+     *
+     * @param srcRecordingId the id of an existing recording from which segments will be migrated
+     * @param dstRecordingId the id of an exisintg recording to which segments will be migrated
+     * @tparam IdleStrategy to use for polling operations - ignored.
+     * @return the number of segments deleted
+     *
+     * @see migrateSegments
+     *
+     * @deprecated
+     */
+    template<typename IdleStrategy = aeron::concurrent::BackoffIdleStrategy>
+    inline std::int64_t migrateSegments(std::int64_t srcRecordingId, std::int64_t dstRecordingId)
+    {
+        return migrateSegments(srcRecordingId, dstRecordingId);
     }
 
     /**

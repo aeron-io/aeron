@@ -140,6 +140,7 @@ int aeron_archive_async_connect(aeron_archive_async_connect_t **async, aeron_arc
 
     // Now that we've copied the original context into the _async->ctx, the original ctx no longer owns the aeron client.
     aeron_archive_context_set_owns_aeron_client(ctx, false);
+    aeron_archive_context_set_aeron(ctx, NULL);
 
     _async->aeron = aeron;
     _async->async_add_subscription = async_add_subscription;
