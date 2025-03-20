@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <iterator>
 #include <stdexcept>
 
