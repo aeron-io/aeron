@@ -964,7 +964,7 @@ TEST_F(AeronCArchiveTest, shouldCallErrorHandlerOnError)
     ASSERT_EQ_ERR(0, aeron_archive_context_set_message_timeout_ns(ctx, 500000000));
     ASSERT_EQ_ERR(0, aeron_archive_connect(&archive, ctx));
 
-    EXPECT_TRUE(aeron_archive_proxy_get_start_position(archive->archive_proxy, 1000, 12345));
+    EXPECT_TRUE(aeron_archive_proxy_get_start_position(archive->archive_proxy, 1000, 12345, archive->control_session_id));
 
     int64_t found_start_position;
     EXPECT_EQ(-1, aeron_archive_poll_for_response(
