@@ -583,7 +583,7 @@ public final class PublicationImage
                 (minSubscriberPosition > (nextSmPosition + threshold)) ||
                 windowLength != nextSmReceiverWindowLength)
             {
-                cleanBufferTo(minSubscriberPosition - termBufferLength);
+                cleanBufferTo(minSubscriberPosition);
                 scheduleStatusMessage(minSubscriberPosition, windowLength);
                 workCount += 1;
             }
