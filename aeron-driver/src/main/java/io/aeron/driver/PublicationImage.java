@@ -53,7 +53,6 @@ import static io.aeron.driver.status.SystemCounterDescriptor.*;
 import static io.aeron.logbuffer.LogBufferDescriptor.*;
 import static io.aeron.logbuffer.TermGapFiller.tryFillGap;
 import static io.aeron.protocol.SetupFlyweight.SEND_RESPONSE_SETUP_FLAG;
-import static org.agrona.BitUtil.SIZE_OF_LONG;
 
 class PublicationImagePadding1
 {
@@ -166,6 +165,7 @@ public final class PublicationImage
     private final int sessionId;
     private final int streamId;
     private final int positionBitsToShift;
+    private final int termBufferLength;
     private final int termLengthMask;
     private final int initialTermId;
     private final short flags;
@@ -262,6 +262,7 @@ public final class PublicationImage
         lossDetector = new LossDetector(lossFeedbackDelayGenerator, this);
 
         final int termLength = rawLog.termLength();
+        termBufferLength = termLength;
         termLengthMask = termLength - 1;
         positionBitsToShift = LogBufferDescriptor.positionBitsToShift(termLength);
 
@@ -582,7 +583,7 @@ public final class PublicationImage
                 (minSubscriberPosition > (nextSmPosition + threshold)) ||
                 windowLength != nextSmReceiverWindowLength)
             {
-                cleanBufferTo(minSubscriberPosition - (termLengthMask + 1));
+                cleanBufferTo(minSubscriberPosition - termBufferLength);
                 scheduleStatusMessage(minSubscriberPosition, windowLength);
                 workCount += 1;
             }
@@ -625,7 +626,7 @@ public final class PublicationImage
         {
             if (isHeartbeat)
             {
-                final long potentialWindowBottom = lastSmPosition - (termLengthMask + 1);
+                final long potentialWindowBottom = lastSmPosition - termBufferLength;
                 final long publicationWindowBottom = potentialWindowBottom < 0 ? 0 : potentialWindowBottom;
 
                 if (packetPosition >= publicationWindowBottom)
@@ -755,8 +756,7 @@ public final class PublicationImage
             if (changeNumber == (long)BEGIN_SM_CHANGE_VH.getAcquire(this))
             {
                 final int termId = computeTermIdFromPosition(smPosition, positionBitsToShift, initialTermId);
-                final int termOffset = (int)smPosition & termLengthMask;
-                final int termLength = termLengthMask + 1;
+                final int termOffset = (int)(smPosition & termLengthMask);
                 final short flags = isSendingEosSm ? StatusMessageFlyweight.END_OF_STREAM_FLAG : 0;
 
                 channelEndpoint.sendStatusMessage(
@@ -765,7 +765,7 @@ public final class PublicationImage
                 statusMessagesSent.incrementRelease();
 
                 lastSmPosition = smPosition;
-                lastOverrunThreshold = smPosition + (termLength >> 1);
+                lastOverrunThreshold = smPosition + (termBufferLength >> 1);
                 lastSmChangeNumber = changeNumber;
                 nextSmDeadlineNs = nowNs + smTimeoutNs;
 
@@ -1007,13 +1007,12 @@ public final class PublicationImage
         final long cleanPosition = this.cleanPosition;
         if (position > cleanPosition)
         {
-            final int bytesForCleaning = (int)(position - cleanPosition);
             final UnsafeBuffer dirtyTermBuffer = termBuffers[indexByPosition(cleanPosition, positionBitsToShift)];
-            final int termOffset = (int)cleanPosition & termLengthMask;
-            final int length = Math.min(bytesForCleaning, dirtyTermBuffer.capacity() - termOffset);
+            final int termOffset = (int)(cleanPosition & termLengthMask);
+            final int length = Math.min((int)(position - cleanPosition), termBufferLength - termOffset);
 
-            dirtyTermBuffer.setMemory(termOffset, length - SIZE_OF_LONG, (byte)0);
-            dirtyTermBuffer.putLongRelease(termOffset + (length - SIZE_OF_LONG), 0);
+            dirtyTermBuffer.setMemory(termOffset, length, (byte)0);
+            VarHandle.storeStoreFence();
             this.cleanPosition = cleanPosition + length;
         }
     }

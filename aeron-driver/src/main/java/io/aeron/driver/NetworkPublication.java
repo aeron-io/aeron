@@ -38,6 +38,7 @@ import org.agrona.concurrent.status.AtomicCounter;
 import org.agrona.concurrent.status.Position;
 import org.agrona.concurrent.status.ReadablePosition;
 
+import java.lang.invoke.VarHandle;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -50,7 +51,6 @@ import static io.aeron.logbuffer.TermScanner.*;
 import static io.aeron.protocol.DataHeaderFlyweight.BEGIN_AND_END_FLAGS;
 import static io.aeron.protocol.DataHeaderFlyweight.BEGIN_END_AND_EOS_FLAGS;
 import static io.aeron.protocol.StatusMessageFlyweight.END_OF_STREAM_FLAG;
-import static org.agrona.BitUtil.SIZE_OF_LONG;
 
 class NetworkPublicationPadding1
 {
@@ -618,7 +618,7 @@ public final class NetworkPublication
     {
         final long senderPosition = this.senderPosition.get();
         final int activeTermId = computeTermIdFromPosition(senderPosition, positionBitsToShift, initialTermId);
-        final int termOffset = (int)senderPosition & termLengthMask;
+        final int termOffset = (int)(senderPosition & termLengthMask);
 
         if (!hasInitialConnection || isSetupElicited)
         {
@@ -905,12 +905,11 @@ public final class NetworkPublication
         if (position > cleanPosition)
         {
             final UnsafeBuffer dirtyTermBuffer = termBuffers[indexByPosition(cleanPosition, positionBitsToShift)];
-            final int bytesForCleaning = (int)(position - cleanPosition);
-            final int termOffset = (int)cleanPosition & termLengthMask;
-            final int length = Math.min(bytesForCleaning, termBufferLength - termOffset);
+            final int termOffset = (int)(cleanPosition & termLengthMask);
+            final int length = Math.min((int)(position - cleanPosition), termBufferLength - termOffset);
 
-            dirtyTermBuffer.setMemory(termOffset + SIZE_OF_LONG, length - SIZE_OF_LONG, (byte)0);
-            dirtyTermBuffer.putLongRelease(termOffset, 0);
+            dirtyTermBuffer.setMemory(termOffset, length, (byte)0);
+            VarHandle.storeStoreFence();
             this.cleanPosition = cleanPosition + length;
         }
     }

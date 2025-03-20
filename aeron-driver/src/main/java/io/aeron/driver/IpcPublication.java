@@ -28,11 +28,11 @@ import org.agrona.concurrent.status.AtomicCounter;
 import org.agrona.concurrent.status.Position;
 import org.agrona.concurrent.status.ReadablePosition;
 
+import java.lang.invoke.VarHandle;
 import java.util.ArrayList;
 
 import static io.aeron.driver.status.SystemCounterDescriptor.UNBLOCKED_PUBLICATIONS;
 import static io.aeron.logbuffer.LogBufferDescriptor.*;
-import static org.agrona.BitUtil.SIZE_OF_LONG;
 
 /**
  * Encapsulation of a stream used directly between publishers and subscribers for IPC over shared memory.
@@ -58,6 +58,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     private final int startingTermOffset;
     private final int positionBitsToShift;
     private final int termBufferLength;
+    private final int termLengthMask;
     private final int mtuLength;
     private final int termWindowLength;
     private final int initialTermId;
@@ -108,6 +109,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
 
         final int termLength = params.termLength;
         this.termBufferLength = termLength;
+        termLengthMask = termLength - 1;
         this.mtuLength = params.mtuLength;
         this.positionBitsToShift = LogBufferDescriptor.positionBitsToShift(termLength);
         this.termWindowLength = params.publicationWindowLength;
@@ -536,13 +538,11 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         if (position > cleanPosition)
         {
             final UnsafeBuffer dirtyTermBuffer = termBuffers[indexByPosition(cleanPosition, positionBitsToShift)];
-            final int bytesForCleaning = (int)(position - cleanPosition);
-            final int bufferCapacity = termBufferLength;
-            final int termOffset = (int)cleanPosition & (bufferCapacity - 1);
-            final int length = Math.min(bytesForCleaning, bufferCapacity - termOffset);
+            final int termOffset = (int)(cleanPosition & termLengthMask);
+            final int length = Math.min((int)(position - cleanPosition), termBufferLength - termOffset);
 
-            dirtyTermBuffer.setMemory(termOffset + SIZE_OF_LONG, length - SIZE_OF_LONG, (byte)0);
-            dirtyTermBuffer.putLongRelease(termOffset, 0);
+            dirtyTermBuffer.setMemory(termOffset, length, (byte)0);
+            VarHandle.storeStoreFence();
             this.cleanPosition = cleanPosition + length;
         }
     }
