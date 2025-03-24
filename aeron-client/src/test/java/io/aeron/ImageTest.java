@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2024 Real Logic Limited.
+ * Copyright 2014-2025 Real Logic Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,13 @@
  */
 package io.aeron;
 
-import io.aeron.logbuffer.*;
+import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.ControlledFragmentHandler.Action;
+import io.aeron.logbuffer.FragmentHandler;
+import io.aeron.logbuffer.FrameDescriptor;
+import io.aeron.logbuffer.Header;
+import io.aeron.logbuffer.LogBufferDescriptor;
+import io.aeron.logbuffer.TermRebuilder;
 import io.aeron.protocol.DataHeaderFlyweight;
 import io.aeron.protocol.HeaderFlyweight;
 import org.agrona.DirectBuffer;
@@ -30,16 +35,28 @@ import org.mockito.AdditionalMatchers;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
 
-import static io.aeron.logbuffer.LogBufferDescriptor.*;
+import static io.aeron.logbuffer.LogBufferDescriptor.LOG_META_DATA_LENGTH;
+import static io.aeron.logbuffer.LogBufferDescriptor.PARTITION_COUNT;
+import static io.aeron.logbuffer.LogBufferDescriptor.computePosition;
+import static io.aeron.logbuffer.LogBufferDescriptor.indexByTerm;
 import static io.aeron.protocol.DataHeaderFlyweight.HEADER_LENGTH;
 import static java.nio.ByteBuffer.allocateDirect;
 import static org.agrona.BitUtil.align;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.anyLong;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class ImageTest
 {
@@ -612,26 +629,6 @@ class ImageTest
     }
 
     @Test
-    void shouldRejectFragment()
-    {
-        final int initialOffset = TERM_BUFFER_LENGTH - (ALIGNED_FRAME_LENGTH * 2);
-        final long initialPosition = computePosition(
-            INITIAL_TERM_ID, initialOffset, POSITION_BITS_TO_SHIFT, INITIAL_TERM_ID);
-        position.setOrdered(initialPosition);
-        final Image image = createImage();
-
-        insertDataFrame(INITIAL_TERM_ID, initialOffset);
-        insertPaddingFrame(INITIAL_TERM_ID, initialOffset + ALIGNED_FRAME_LENGTH);
-
-        assertEquals(initialPosition, image.position());
-
-        final String reason = "this is frame is to be rejected";
-        image.reject(reason);
-
-        verify(subscription).rejectImage(image.correlationId(), image.position(), reason);
-    }
-
-    @Test
     void shouldExitPollIfImageIsClosed()
     {
         final long initialPosition = computePosition(INITIAL_TERM_ID, 0, POSITION_BITS_TO_SHIFT, INITIAL_TERM_ID);
@@ -647,8 +644,9 @@ class ImageTest
         assertThat(image.isClosed(), is(true));
 
         final InOrder inOrder = Mockito.inOrder(position);
-        inOrder.verify(position).setOrdered(initialPosition);
-        inOrder.verify(position).setOrdered(initialPosition + ALIGNED_FRAME_LENGTH);
+        inOrder.verify(position, times(2)).get();
+        inOrder.verify(position).getVolatile();
+        inOrder.verifyNoMoreInteractions();
     }
 
     @Test
@@ -668,8 +666,9 @@ class ImageTest
         assertThat(image.isClosed(), is(true));
 
         final InOrder inOrder = Mockito.inOrder(position);
-        inOrder.verify(position).setOrdered(initialPosition);
-        inOrder.verify(position).setOrdered(initialPosition + ALIGNED_FRAME_LENGTH);
+        inOrder.verify(position, times(2)).get();
+        inOrder.verify(position).getVolatile();
+        inOrder.verifyNoMoreInteractions();
     }
 
     @Test
@@ -692,8 +691,9 @@ class ImageTest
         assertThat(image.isClosed(), is(true));
 
         final InOrder inOrder = Mockito.inOrder(position);
-        inOrder.verify(position).setOrdered(initialPosition);
-        inOrder.verify(position).setOrdered(initialPosition + ALIGNED_FRAME_LENGTH);
+        inOrder.verify(position, times(2)).get();
+        inOrder.verify(position).getVolatile();
+        inOrder.verifyNoMoreInteractions();
     }
 
     @Test
@@ -719,8 +719,9 @@ class ImageTest
         assertThat(image.isClosed(), is(true));
 
         final InOrder inOrder = Mockito.inOrder(position);
-        inOrder.verify(position).setOrdered(initialPosition);
-        inOrder.verify(position).setOrdered(initialPosition + ALIGNED_FRAME_LENGTH);
+        inOrder.verify(position, times(2)).get();
+        inOrder.verify(position).getVolatile();
+        inOrder.verifyNoMoreInteractions();
     }
 
     @Test

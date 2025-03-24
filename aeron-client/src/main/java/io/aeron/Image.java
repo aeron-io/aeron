@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2024 Real Logic Limited.
+ * Copyright 2014-2025 Real Logic Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -364,7 +364,7 @@ public final class Image
         finally
         {
             final long newPosition = initialPosition + (offset - initialOffset);
-            if (newPosition > initialPosition)
+            if (newPosition > initialPosition && !isClosed)
             {
                 subscriberPosition.setOrdered(newPosition);
             }
@@ -442,7 +442,10 @@ public final class Image
                 {
                     initialPosition += (offset - initialOffset);
                     initialOffset = offset;
-                    subscriberPosition.setOrdered(initialPosition);
+                    if (!isClosed)
+                    {
+                        subscriberPosition.setOrdered(initialPosition);
+                    }
                 }
             }
         }
@@ -453,7 +456,7 @@ public final class Image
         finally
         {
             final long resultingPosition = initialPosition + (offset - initialOffset);
-            if (resultingPosition > initialPosition)
+            if (resultingPosition > initialPosition && !isClosed)
             {
                 subscriberPosition.setOrdered(resultingPosition);
             }
@@ -528,7 +531,7 @@ public final class Image
         finally
         {
             final long resultingPosition = initialPosition + (offset - initialOffset);
-            if (resultingPosition > initialPosition)
+            if (resultingPosition > initialPosition && !isClosed)
             {
                 subscriberPosition.setOrdered(resultingPosition);
             }
@@ -615,7 +618,10 @@ public final class Image
                 {
                     initialPosition += (offset - initialOffset);
                     initialOffset = offset;
-                    subscriberPosition.setOrdered(initialPosition);
+                    if (!isClosed)
+                    {
+                        subscriberPosition.setOrdered(initialPosition);
+                    }
                 }
             }
         }
@@ -626,7 +632,7 @@ public final class Image
         finally
         {
             final long resultingPosition = initialPosition + (offset - initialOffset);
-            if (resultingPosition > initialPosition)
+            if (resultingPosition > initialPosition && !isClosed)
             {
                 subscriberPosition.setOrdered(resultingPosition);
             }
@@ -768,7 +774,10 @@ public final class Image
             }
             finally
             {
-                subscriberPosition.setOrdered(position + length);
+                if (!isClosed)
+                {
+                    subscriberPosition.setOrdered(position + length);
+                }
             }
         }
 
@@ -823,7 +832,10 @@ public final class Image
             }
             finally
             {
-                subscriberPosition.setOrdered(position + length);
+                if (!isClosed)
+                {
+                    subscriberPosition.setOrdered(position + length);
+                }
             }
         }
 
