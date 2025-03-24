@@ -294,7 +294,7 @@ class SpySimulatedConnectionTest
 
         Thread.sleep(500);
 
-        AtomicInteger shortSendsCounterId = new AtomicInteger(0);
+        final AtomicInteger shortSendsCounterId = new AtomicInteger(0);
         driver.counters().forEach((counterId, typeId, keyBuffer, label) ->
         {
             if (AeronCounters.DRIVER_SYSTEM_COUNTER_TYPE_ID == typeId &&
