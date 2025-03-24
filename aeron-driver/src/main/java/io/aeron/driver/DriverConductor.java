@@ -2475,6 +2475,7 @@ public final class DriverConductor implements Agent
                 publisherLimit,
                 rawLog,
                 isExclusive,
+                termBufferCleanupBlockSize(params.termLength),
                 params);
 
             ipcPublications.add(publication);
@@ -2487,6 +2488,11 @@ public final class DriverConductor implements Agent
             CloseHelper.quietCloseAll(rawLog, publisherPosition, publisherLimit);
             throw ex;
         }
+    }
+
+    private int termBufferCleanupBlockSize(final int termLength)
+    {
+        return Math.min(ctx.termBufferCleanupBlockSize(), termLength >> 3);
     }
 
     private static AeronClient findClient(final ArrayList<AeronClient> clients, final long clientId)

@@ -56,14 +56,12 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     private final int streamId;
     private final int startingTermId;
     private final int startingTermOffset;
+    private final int termCleanupBlockSize;
     private final int positionBitsToShift;
     private final int termBufferLength;
-    private final int termLengthMask;
     private final int mtuLength;
     private final int termWindowLength;
     private final int initialTermId;
-    private final int tripGain;
-    private long tripLimit;
     private long consumerPosition;
     private long lastConsumerPosition;
     private long timeOfLastConsumerPositionUpdateNs;
@@ -93,6 +91,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         final Position publisherLimit,
         final RawLog rawLog,
         final boolean isExclusive,
+        final int termCleanupBlockSize,
         final PublicationParams params)
     {
         this.registrationId = registrationId;
@@ -106,14 +105,13 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         this.startingTermId = params.termId;
         this.startingTermOffset = params.termOffset;
         this.errorHandler = ctx.errorHandler();
+        this.termCleanupBlockSize = termCleanupBlockSize;
 
         final int termLength = params.termLength;
         this.termBufferLength = termLength;
-        termLengthMask = termLength - 1;
         this.mtuLength = params.mtuLength;
         this.positionBitsToShift = LogBufferDescriptor.positionBitsToShift(termLength);
         this.termWindowLength = params.publicationWindowLength;
-        this.tripGain = termWindowLength >> 3;
         this.publisherPos = publisherPos;
         this.publisherLimit = publisherLimit;
         this.rawLog = rawLog;
@@ -382,20 +380,19 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
                     consumerPosition = maxSubscriberPosition;
                 }
 
-                final long proposedLimit = minSubscriberPosition + termWindowLength;
-                if (proposedLimit > tripLimit)
+                final long cleanPosition = cleanBufferTo(minSubscriberPosition);
+                final long proposedLimit = cleanPosition + termWindowLength;
+                if (proposedLimit > publisherLimit.get())
                 {
-                    cleanBufferTo(minSubscriberPosition);
                     publisherLimit.setRelease(proposedLimit);
-                    tripLimit = proposedLimit + tripGain;
                     workCount = 1;
                 }
             }
             else if (publisherLimit.get() > consumerPosition)
             {
-                tripLimit = consumerPosition;
                 publisherLimit.setRelease(consumerPosition);
                 cleanBufferTo(consumerPosition);
+                workCount = 1;
             }
         }
 
@@ -532,18 +529,21 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         return producerPosition > consumerPosition;
     }
 
-    private void cleanBufferTo(final long position)
+    private long cleanBufferTo(final long position)
     {
         final long cleanPosition = this.cleanPosition;
-        if (position > cleanPosition)
+        if (position - cleanPosition >= termCleanupBlockSize)
         {
             final UnsafeBuffer dirtyTermBuffer = termBuffers[indexByPosition(cleanPosition, positionBitsToShift)];
-            final int termOffset = (int)(cleanPosition & termLengthMask);
-            final int length = Math.min((int)(position - cleanPosition), termBufferLength - termOffset);
+            final int termOffset = (int)(cleanPosition & (termBufferLength - 1));
+            final int length = Math.min(termCleanupBlockSize, termBufferLength - termOffset);
 
             dirtyTermBuffer.setMemory(termOffset, length, (byte)0);
             VarHandle.storeStoreFence();
-            this.cleanPosition = cleanPosition + length;
+            final long newCleanPosition = cleanPosition + length;
+            this.cleanPosition = newCleanPosition;
+            return newCleanPosition;
         }
+        return cleanPosition;
     }
 }
