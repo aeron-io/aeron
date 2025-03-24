@@ -17,6 +17,7 @@ package io.aeron;
 
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
+import io.aeron.driver.status.SystemCounterDescriptor;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.LogBufferDescriptor;
 import io.aeron.protocol.DataHeaderFlyweight;
@@ -29,6 +30,7 @@ import org.agrona.CloseHelper;
 import org.agrona.collections.MutableInteger;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -36,10 +38,10 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Arrays.asList;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 
 @ExtendWith(InterruptingTestCallback.class)
@@ -274,6 +276,35 @@ class SpySimulatedConnectionTest
         }
 
         assertEquals(messagesToSend, fragmentCountSpy.value);
+    }
+
+    @Test
+    @InterruptAfter(10)
+    void shouldNotHaveShortSendsWithMDCPublication() throws Exception
+    {
+        launch();
+
+        final String channel = "aeron:udp?control=localhost:40456|control-mode=dynamic";
+
+        spy = client.addSubscription(spyForChannel(channel), STREAM_ID);
+        publication = client.addExclusivePublication(channel + "|ssc=true", STREAM_ID);
+
+        Tests.awaitConnected(spy);
+        Tests.awaitConnected(publication);
+
+        Thread.sleep(500);
+
+        AtomicInteger shortSendsCounterId = new AtomicInteger(0);
+        driver.counters().forEach((counterId, typeId, keyBuffer, label) -> {
+            if (AeronCounters.DRIVER_SYSTEM_COUNTER_TYPE_ID == typeId &&
+                SystemCounterDescriptor.SHORT_SENDS.id() == keyBuffer.getInt(0))
+            {
+                shortSendsCounterId.set(counterId);
+            }
+        });
+
+        assertNotEquals(0, shortSendsCounterId);
+        assertEquals(0, driver.counters().getCounterValue(shortSendsCounterId.get()));
     }
 
     private void waitUntilFullConnectivity()
