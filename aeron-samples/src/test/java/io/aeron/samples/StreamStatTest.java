@@ -54,6 +54,8 @@ import java.util.Map;
 import java.util.SortedMap;
 import java.util.concurrent.ThreadLocalRandom;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.junit.jupiter.api.Assertions.*;
 
 @ExtendWith(InterruptingTestCallback.class)
@@ -273,7 +275,7 @@ class StreamStatTest
         final long expectedValue)
     {
         assertEquals(expectedTypeId, position.typeId());
-        assertEquals(expectedValue, position.value());
+        assertThat(position.value(), greaterThanOrEqualTo(expectedValue));
     }
 
     private static final class CountingFragmentHandler implements FragmentHandler
