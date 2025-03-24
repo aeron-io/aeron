@@ -120,14 +120,16 @@ public final class NetworkPublication
     private final long untetheredRestingTimeoutNs;
     private final long tag;
     private final long responseCorrelationId;
+    private final long maxCleanupToLimitGap;
     private final int positionBitsToShift;
     private final int initialTermId;
     private final int startingTermId;
     private final int startingTermOffset;
     private final int termBufferLength;
     private final int termLengthMask;
-    private final int mtuLength;
+    private final int termCleanupBlockSize;
     private final int termWindowLength;
+    private final int mtuLength;
     private final int sessionId;
     private final int streamId;
     private final boolean isExclusive;
@@ -188,7 +190,8 @@ public final class NetworkPublication
         final FlowControl flowControl,
         final RetransmitHandler retransmitHandler,
         final NetworkPublicationThreadLocals threadLocals,
-        final boolean isExclusive)
+        final boolean isExclusive,
+        final int termCleanupBlockSize)
     {
         this.registrationId = registrationId;
         this.unblockTimeoutNs = ctx.publicationUnblockTimeoutNs();
@@ -247,6 +250,8 @@ public final class NetworkPublication
         final int termLength = rawLog.termLength();
         termBufferLength = termLength;
         termLengthMask = termLength - 1;
+        this.termCleanupBlockSize = termCleanupBlockSize;
+        maxCleanupToLimitGap = (long)termLength << 1;
 
         final long nowNs = cachedNanoClock.nanoTime();
         timeOfLastDataOrHeartbeatNs = nowNs - PUBLICATION_HEARTBEAT_TIMEOUT_NS - 1;
@@ -740,13 +745,18 @@ public final class NetworkPublication
                     minConsumerPosition = Math.min(minConsumerPosition, spyPosition.getVolatile());
                 }
 
-                final long proposedPublisherLimit = minConsumerPosition + termWindowLength;
-                final long publisherLimit = this.publisherLimit.get();
-                if (proposedPublisherLimit > publisherLimit)
+                workCount += cleanBufferTo(minConsumerPosition - termBufferLength);
+                final long newLimitPosition = minConsumerPosition + termWindowLength;
+                if (newLimitPosition > publisherLimit.get())
                 {
-                    cleanBufferTo(minConsumerPosition - termBufferLength);
-                    this.publisherLimit.setRelease(proposedPublisherLimit);
-                    workCount = 1;
+                    final long cleanPosition = this.cleanPosition;
+                    final long cleanTermBasePosition = cleanPosition - (cleanPosition & termLengthMask);
+                    final long newLimitTermBasePosition = newLimitPosition - (newLimitPosition & termLengthMask);
+                    if (newLimitTermBasePosition - cleanTermBasePosition <= maxCleanupToLimitGap)
+                    {
+                        publisherLimit.setRelease(newLimitPosition);
+                        workCount++;
+                    }
                 }
             }
             else if (publisherLimit.get() > senderPosition)
@@ -899,19 +909,21 @@ public final class NetworkPublication
         return bytesSent;
     }
 
-    private void cleanBufferTo(final long position)
+    private int cleanBufferTo(final long position)
     {
         final long cleanPosition = this.cleanPosition;
-        if (position > cleanPosition)
+        if (position - cleanPosition >= termCleanupBlockSize)
         {
             final UnsafeBuffer dirtyTermBuffer = termBuffers[indexByPosition(cleanPosition, positionBitsToShift)];
             final int termOffset = (int)(cleanPosition & termLengthMask);
-            final int length = Math.min((int)(position - cleanPosition), termBufferLength - termOffset);
+            final int length = Math.min(termCleanupBlockSize, termBufferLength - termOffset);
 
             dirtyTermBuffer.setMemory(termOffset, length, (byte)0);
             VarHandle.storeStoreFence();
             this.cleanPosition = cleanPosition + length;
+            return 1;
         }
+        return 0;
     }
 
     private void checkForBlockedPublisher(final long producerPosition, final long senderPosition, final long nowNs)

@@ -1792,7 +1792,8 @@ public final class DriverConductor implements Agent
                 flowControl,
                 retransmitHandler,
                 networkPublicationThreadLocals,
-                isExclusive);
+                isExclusive,
+                termBufferCleanupBlockSize(params.termLength));
 
             channelEndpoint.incRef();
             networkPublications.add(publication);
