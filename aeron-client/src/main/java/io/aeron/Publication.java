@@ -94,6 +94,7 @@ public abstract class Publication implements AutoCloseable
     final int positionBitsToShift;
     final int termBufferLength;
     volatile boolean isClosed = false;
+    volatile boolean isRevoked = false;
 
     final ReadablePosition positionLimit;
     final UnsafeBuffer[] termBuffers;
@@ -303,6 +304,22 @@ public abstract class Publication implements AutoCloseable
     public boolean isClosed()
     {
         return isClosed;
+    }
+
+    public void revoke()
+    {
+        if (isClosed)
+        {
+            throw new AeronException("Publication is closed");
+        }
+
+        isRevoked = true;
+        close();
+    }
+
+    public boolean isRevoked()
+    {
+        return isRevoked;
     }
 
     /**

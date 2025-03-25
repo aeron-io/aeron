@@ -316,6 +316,16 @@ final class ClientCommandAdapter implements ControlledMessageHandler
                     break;
                 }
 
+                case REVOKE_PUBLICATION:
+                {
+                    removeMsgFlyweight.wrap(buffer, index);
+                    removeMsgFlyweight.validateLength(msgTypeId, length);
+
+                    correlationId = removeMsgFlyweight.correlationId();
+                    conductor.onRevokePublication(removeMsgFlyweight.registrationId(), correlationId);
+                    break;
+                }
+
                 default:
                 {
                     final ControlProtocolException ex = new ControlProtocolException(

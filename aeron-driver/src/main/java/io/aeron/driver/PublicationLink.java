@@ -58,6 +58,18 @@ final class PublicationLink implements DriverManagedResource
         }
     }
 
+    public void revoke()
+    {
+        if (publication instanceof NetworkPublication)
+        {
+            ((NetworkPublication)publication).revoke();
+        }
+        else
+        {
+            ((IpcPublication)publication).revoke();
+        }
+    }
+
     /**
      * {@inheritDoc}
      */

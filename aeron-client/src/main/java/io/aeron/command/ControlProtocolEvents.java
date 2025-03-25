@@ -110,6 +110,8 @@ public class ControlProtocolEvents
      */
     public static final int REMOVE_DESTINATION_BY_ID = 0x11;
 
+    public static final int REVOKE_PUBLICATION = 0x12;
+
     // Media Driver to Clients
 
     /**
