@@ -38,7 +38,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.*;
@@ -280,7 +279,7 @@ class SpySimulatedConnectionTest
 
     @Test
     @InterruptAfter(10)
-    void shouldNotHaveShortSendsWithMDCPublication() throws Exception
+    void shouldNotHaveShortSendsWithMDCPublication()
     {
         launch();
 
@@ -292,20 +291,7 @@ class SpySimulatedConnectionTest
         Tests.awaitConnected(spy);
         Tests.awaitConnected(publication);
 
-        Thread.sleep(500);
-
-        final AtomicInteger shortSendsCounterId = new AtomicInteger(0);
-        driver.counters().forEach((counterId, typeId, keyBuffer, label) ->
-        {
-            if (AeronCounters.DRIVER_SYSTEM_COUNTER_TYPE_ID == typeId &&
-                SystemCounterDescriptor.SHORT_SENDS.id() == keyBuffer.getInt(0))
-            {
-                shortSendsCounterId.set(counterId);
-            }
-        });
-
-        assertNotEquals(0, shortSendsCounterId);
-        assertEquals(0, driver.counters().getCounterValue(shortSendsCounterId.get()));
+        assertEquals(0, driver.counters().getCounterValue(SystemCounterDescriptor.SHORT_SENDS.id()));
     }
 
     private void waitUntilFullConnectivity()
