@@ -29,7 +29,9 @@ import static org.agrona.BitUtil.SIZE_OF_INT;
 /**
  * This class serves as a registry for all counter type IDs used by Aeron.
  * <p>
- * The following ranges are reserved:
+ * Type IDs less than 1000 are reserved for Aeron use. Any custom counters should use a typeId of 1000 or higher.
+ * <p>
+ * Aeron uses the following specific ranges:
  * <ul>
  *     <li>{@code 0 - 99}: for client/driver counters.</li>
  *     <li>{@code 100 - 199}: for archive counters.</li>

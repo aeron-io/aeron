@@ -509,6 +509,8 @@ public class Aeron implements AutoCloseable
      * Allocate a counter on the media driver and return a {@link Counter} for it.
      * <p>
      * The counter should be freed by calling {@link Counter#close()}.
+     * <p>
+     * The typeId should be 1000 or greater. Values lower than that are reserved for use by Aeron.
      *
      * @param typeId      for the counter.
      * @param keyBuffer   containing the optional key for the counter.
@@ -536,6 +538,8 @@ public class Aeron implements AutoCloseable
      * Allocate a counter on the media driver and return a {@link Counter} for it.
      * <p>
      * The counter should be freed by calling {@link Counter#close()}.
+     * <p>
+     * The typeId should be 1000 or greater. Values lower than that are reserved for use by Aeron.
      *
      * @param typeId for the counter.
      * @param label  for the counter. It should be US-ASCII.
@@ -550,11 +554,13 @@ public class Aeron implements AutoCloseable
 
     /**
      * Allocates or returns an existing static counter instance using specified {@code typeId} and
-     * {@code registrationId} pair. Such counter cannot be deleted and its lifecycle is decoupled from this
+     * {@code registrationId} pair. Such a counter cannot be deleted and its lifecycle is decoupled from this
      * {@link Aeron} instance, i.e. won't be closed when this instance is closed or times out.
      * <p>
      * <em><strong>Note:</strong> calling {@link Counter#close()} will only close the counter instance itself but will
      * not free the counter in the CnC file.</em>
+     * <p>
+     * The typeId should be 1000 or greater. Values lower than that are reserved for use by Aeron.
      *
      * @param typeId         for the counter.
      * @param keyBuffer      containing the optional key for the counter.
@@ -584,11 +590,13 @@ public class Aeron implements AutoCloseable
 
     /**
      * Allocates or returns an existing static counter instance using specified {@code typeId} and
-     * {@code registrationId} pair. Such counter cannot be deleted and its lifecycle is decoupled from this
+     * {@code registrationId} pair. Such a counter cannot be deleted and its lifecycle is decoupled from this
      * {@link Aeron} instance, i.e. won't be closed when this instance is closed or times out.
      * <p>
      * <em><strong>Note:</strong> calling {@link Counter#close()} will only close the counter instance itself but will
      * not free the counter in the CnC file.</em>
+     * <p>
+     * The typeId should be 1000 or greater. Values lower than that are reserved for use by Aeron.
      *
      * @param typeId         for the counter.
      * @param label          for the counter. It should be US-ASCII.

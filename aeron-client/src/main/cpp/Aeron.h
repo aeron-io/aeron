@@ -248,6 +248,8 @@ public:
     /**
      * Allocate a counter on the media driver and return a {@link Counter} for it.
      *
+     * The typeId should be 1000 or greater. Values lower than that are reserved for use by Aeron.
+     *
      * @param typeId      for the counter.
      * @param keyBuffer   containing the optional key for the counter.
      * @param keyLength   of the key in the keyBuffer.
