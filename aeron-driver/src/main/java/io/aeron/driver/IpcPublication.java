@@ -56,16 +56,18 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     private final int streamId;
     private final int startingTermId;
     private final int startingTermOffset;
-    private final int termCleanupBlockSize;
     private final int positionBitsToShift;
     private final int termBufferLength;
-    private final int mtuLength;
+    private final int termLengthMask;
+    private final int termCleanupBlockSize;
     private final int termWindowLength;
+    private final int mtuLength;
     private final int initialTermId;
     private long consumerPosition;
     private long lastConsumerPosition;
     private long timeOfLastConsumerPositionUpdateNs;
     private long cleanPosition;
+    private final long maxCleanupToLimitGap;
     private int refCount = 0;
     private boolean reachedEndOfLife = false;
     private final boolean isExclusive;
@@ -109,6 +111,9 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
 
         final int termLength = params.termLength;
         this.termBufferLength = termLength;
+        termLengthMask = termLength - 1;
+        maxCleanupToLimitGap = (long)termLength << 1;
+
         this.mtuLength = params.mtuLength;
         this.positionBitsToShift = LogBufferDescriptor.positionBitsToShift(termLength);
         this.termWindowLength = params.publicationWindowLength;
@@ -380,12 +385,18 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
                     consumerPosition = maxSubscriberPosition;
                 }
 
-                final long cleanPosition = cleanBufferTo(minSubscriberPosition);
-                final long proposedLimit = cleanPosition + termWindowLength;
-                if (proposedLimit > publisherLimit.get())
+                workCount += cleanBufferTo(minSubscriberPosition);
+                final long newLimitPosition = minSubscriberPosition + termWindowLength;
+                if (newLimitPosition > publisherLimit.get())
                 {
-                    publisherLimit.setRelease(proposedLimit);
-                    workCount = 1;
+                    final long cleanPosition = this.cleanPosition;
+                    final long cleanTermBasePosition = cleanPosition - (cleanPosition & termLengthMask);
+                    final long newLimitTermBasePosition = newLimitPosition - (newLimitPosition & termLengthMask);
+                    if (newLimitTermBasePosition - cleanTermBasePosition <= maxCleanupToLimitGap)
+                    {
+                        publisherLimit.setRelease(newLimitPosition);
+                        workCount++;
+                    }
                 }
             }
             else if (publisherLimit.get() > consumerPosition)
@@ -529,21 +540,20 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         return producerPosition > consumerPosition;
     }
 
-    private long cleanBufferTo(final long position)
+    private int cleanBufferTo(final long position)
     {
         final long cleanPosition = this.cleanPosition;
         if (position - cleanPosition >= termCleanupBlockSize)
         {
             final UnsafeBuffer dirtyTermBuffer = termBuffers[indexByPosition(cleanPosition, positionBitsToShift)];
-            final int termOffset = (int)(cleanPosition & (termBufferLength - 1));
+            final int termOffset = (int)(cleanPosition & termLengthMask);
             final int length = Math.min(termCleanupBlockSize, termBufferLength - termOffset);
 
             dirtyTermBuffer.setMemory(termOffset, length, (byte)0);
             VarHandle.storeStoreFence();
-            final long newCleanPosition = cleanPosition + length;
-            this.cleanPosition = newCleanPosition;
-            return newCleanPosition;
+            this.cleanPosition = cleanPosition + length;
+            return 1;
         }
-        return cleanPosition;
+        return 0;
     }
 }
