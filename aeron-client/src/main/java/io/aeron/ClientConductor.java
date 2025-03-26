@@ -236,7 +236,8 @@ final class ClientConductor implements Agent
                 subscription.internalClose(NULL_VALUE);
                 resourceByRegIdMap.remove(correlationId);
             }
-        } finally
+        }
+        finally
         {
             clientLock.unlock();
         }
