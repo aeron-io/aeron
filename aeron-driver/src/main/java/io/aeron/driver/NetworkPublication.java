@@ -127,7 +127,7 @@ public final class NetworkPublication
     private final int startingTermOffset;
     private final int termBufferLength;
     private final int termLengthMask;
-    private final int termCleanupBlockSize;
+    private final int termCleanupBlockLength;
     private final int termWindowLength;
     private final int mtuLength;
     private final int sessionId;
@@ -191,7 +191,7 @@ public final class NetworkPublication
         final RetransmitHandler retransmitHandler,
         final NetworkPublicationThreadLocals threadLocals,
         final boolean isExclusive,
-        final int termCleanupBlockSize)
+        final int termCleanupBlockLength)
     {
         this.registrationId = registrationId;
         this.unblockTimeoutNs = ctx.publicationUnblockTimeoutNs();
@@ -250,7 +250,7 @@ public final class NetworkPublication
         final int termLength = rawLog.termLength();
         termBufferLength = termLength;
         termLengthMask = termLength - 1;
-        this.termCleanupBlockSize = termCleanupBlockSize;
+        this.termCleanupBlockLength = termCleanupBlockLength;
         wrapAroundGap = termLength * 3L;
 
         final long nowNs = cachedNanoClock.nanoTime();
@@ -752,7 +752,7 @@ public final class NetworkPublication
                     final long cleanPosition = this.cleanPosition;
                     final long cleanTermBasePosition = cleanPosition - (cleanPosition & termLengthMask);
                     final long newLimitTermBasePosition = newLimitPosition - (newLimitPosition & termLengthMask);
-                    if (newLimitTermBasePosition - cleanTermBasePosition <= wrapAroundGap)
+                    if (newLimitTermBasePosition - cleanTermBasePosition < wrapAroundGap)
                     {
                         publisherLimit.setRelease(newLimitPosition);
                         workCount++;
@@ -912,11 +912,11 @@ public final class NetworkPublication
     private int cleanBufferTo(final long position)
     {
         final long cleanPosition = this.cleanPosition;
-        if (position - cleanPosition >= termCleanupBlockSize)
+        if (position - cleanPosition >= termCleanupBlockLength)
         {
             final UnsafeBuffer dirtyTermBuffer = termBuffers[indexByPosition(cleanPosition, positionBitsToShift)];
             final int termOffset = (int)(cleanPosition & termLengthMask);
-            final int length = Math.min(termCleanupBlockSize, termBufferLength - termOffset);
+            final int length = Math.min(termCleanupBlockLength, termBufferLength - termOffset);
 
             dirtyTermBuffer.setMemory(termOffset, length, (byte)0);
             VarHandle.storeStoreFence();

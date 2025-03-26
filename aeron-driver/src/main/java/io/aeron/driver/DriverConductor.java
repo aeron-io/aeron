@@ -1793,7 +1793,7 @@ public final class DriverConductor implements Agent
                 retransmitHandler,
                 networkPublicationThreadLocals,
                 isExclusive,
-                termBufferCleanupBlockSize(params.termLength));
+                termBufferCleanupBlockLength(params.termLength));
 
             channelEndpoint.incRef();
             networkPublications.add(publication);
@@ -2476,7 +2476,7 @@ public final class DriverConductor implements Agent
                 publisherLimit,
                 rawLog,
                 isExclusive,
-                termBufferCleanupBlockSize(params.termLength),
+                termBufferCleanupBlockLength(params.termLength),
                 params);
 
             ipcPublications.add(publication);
@@ -2491,9 +2491,9 @@ public final class DriverConductor implements Agent
         }
     }
 
-    private int termBufferCleanupBlockSize(final int termLength)
+    private int termBufferCleanupBlockLength(final int termLength)
     {
-        return Math.min(ctx.termBufferCleanupBlockSize(), termLength >> 3);
+        return Math.min(ctx.termBufferCleanupBlockLength(), termLength >> 3);
     }
 
     private static AeronClient findClient(final ArrayList<AeronClient> clients, final long clientId)

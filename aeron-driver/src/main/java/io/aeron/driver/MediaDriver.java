@@ -486,7 +486,7 @@ public final class MediaDriver implements AutoCloseable
         private int nakMulticastGroupSize = Configuration.nakMulticastGroupSize();
         private int publicationTermBufferLength = Configuration.termBufferLength();
         private int ipcTermBufferLength = Configuration.ipcTermBufferLength();
-        private int termBufferCleanupBlockSize = Configuration.termBufferCleanupBlockSize();
+        private int termBufferCleanupBlockLength = Configuration.termBufferCleanupBlockLength();
         private int publicationTermWindowLength = Configuration.publicationTermWindowLength();
         private int ipcPublicationTermWindowLength = Configuration.ipcPublicationTermWindowLength();
         private int initialWindowLength = Configuration.initialWindowLength();
@@ -1129,12 +1129,12 @@ public final class MediaDriver implements AutoCloseable
          * Maximal number of bytes that are cleaned per dirty term in a single duty cycle.
          *
          * @return term buffer cleanup block size.
-         * @see Configuration#TERM_BUFFER_CLEANUP_BLOCK_SIZE_PROP_NAME
+         * @see Configuration#TERM_BUFFER_CLEANUP_BLOCK_LENGTH_PROP_NAME
          */
         @Config
-        public int termBufferCleanupBlockSize()
+        public int termBufferCleanupBlockLength()
         {
-            return termBufferCleanupBlockSize;
+            return termBufferCleanupBlockLength;
         }
 
         /**
@@ -1145,11 +1145,11 @@ public final class MediaDriver implements AutoCloseable
          *
          * @param termBufferCleanupBlockSize max number of bytes cleaned per duty cycle.
          * @return this for a fluent API.
-         * @see Configuration#TERM_BUFFER_CLEANUP_BLOCK_SIZE_PROP_NAME
+         * @see Configuration#TERM_BUFFER_CLEANUP_BLOCK_LENGTH_PROP_NAME
          */
-        public Context termBufferCleanupBlockSize(final int termBufferCleanupBlockSize)
+        public Context termBufferCleanupBlockLength(final int termBufferCleanupBlockSize)
         {
-            this.termBufferCleanupBlockSize = termBufferCleanupBlockSize;
+            this.termBufferCleanupBlockLength = termBufferCleanupBlockSize;
             return this;
         }
 
@@ -4377,7 +4377,7 @@ public final class MediaDriver implements AutoCloseable
                 "\n    senderCycleThresholdNs=" + senderCycleThresholdNs +
                 "\n    receiverCycleThresholdNs=" + receiverCycleThresholdNs +
                 "\n    nameResolverThresholdNs=" + nameResolverThresholdNs +
-                "\n    termBufferCleanupBlockSize=" + termBufferCleanupBlockSize +
+                "\n    termBufferCleanupBlockSize=" + termBufferCleanupBlockLength +
                 "\n    publicationTermBufferLength=" + publicationTermBufferLength +
                 "\n    ipcTermBufferLength=" + ipcTermBufferLength +
                 "\n    publicationTermWindowLength=" + publicationTermWindowLength +

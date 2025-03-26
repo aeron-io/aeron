@@ -59,7 +59,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     private final int positionBitsToShift;
     private final int termBufferLength;
     private final int termLengthMask;
-    private final int termCleanupBlockSize;
+    private final int termCleanupBlockLength;
     private final int termWindowLength;
     private final int mtuLength;
     private final int initialTermId;
@@ -93,7 +93,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         final Position publisherLimit,
         final RawLog rawLog,
         final boolean isExclusive,
-        final int termCleanupBlockSize,
+        final int termCleanupBlockLength,
         final PublicationParams params)
     {
         this.registrationId = registrationId;
@@ -107,7 +107,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         this.startingTermId = params.termId;
         this.startingTermOffset = params.termOffset;
         this.errorHandler = ctx.errorHandler();
-        this.termCleanupBlockSize = termCleanupBlockSize;
+        this.termCleanupBlockLength = termCleanupBlockLength;
 
         final int termLength = params.termLength;
         this.termBufferLength = termLength;
@@ -543,11 +543,11 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     private int cleanBufferTo(final long position)
     {
         final long cleanPosition = this.cleanPosition;
-        if (position - cleanPosition >= termCleanupBlockSize)
+        if (position - cleanPosition >= termCleanupBlockLength)
         {
             final UnsafeBuffer dirtyTermBuffer = termBuffers[indexByPosition(cleanPosition, positionBitsToShift)];
             final int termOffset = (int)(cleanPosition & termLengthMask);
-            final int length = Math.min(termCleanupBlockSize, termBufferLength - termOffset);
+            final int length = Math.min(termCleanupBlockLength, termBufferLength - termOffset);
 
             dirtyTermBuffer.setMemory(termOffset, length, (byte)0);
             VarHandle.storeStoreFence();

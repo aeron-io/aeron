@@ -123,7 +123,7 @@ public final class Configuration
      * zeroed in a single duty cycle. The value must be a power of two withing [1KB, 1GB] range.
      */
     @Config
-    public static final String TERM_BUFFER_CLEANUP_BLOCK_SIZE_PROP_NAME = "aeron.term.buffer.cleanup.block.size";
+    public static final String TERM_BUFFER_CLEANUP_BLOCK_LENGTH_PROP_NAME = "aeron.term.buffer.cleanup.block.size";
 
     /**
      * Default term buffer cleanup block size.
@@ -1635,11 +1635,11 @@ public final class Configuration
      * <p><em>Note: </em> using large block size will increase the max pause time for the driver conductor thread.
      *
      * @return page size in bytes to align all files to.
-     * @see #TERM_BUFFER_CLEANUP_BLOCK_SIZE_PROP_NAME
+     * @see #TERM_BUFFER_CLEANUP_BLOCK_LENGTH_PROP_NAME
      */
-    public static int termBufferCleanupBlockSize()
+    public static int termBufferCleanupBlockLength()
     {
-        return getSizeAsInt(TERM_BUFFER_CLEANUP_BLOCK_SIZE_PROP_NAME, TERM_BUFFER_CLEANUP_BLOCK_SIZE_DEFAULT);
+        return getSizeAsInt(TERM_BUFFER_CLEANUP_BLOCK_LENGTH_PROP_NAME, TERM_BUFFER_CLEANUP_BLOCK_SIZE_DEFAULT);
     }
 
     /**
