@@ -65,6 +65,7 @@ class NetworkPublicationConductorFields extends NetworkPublicationPadding1
     static final ReadablePosition[] EMPTY_POSITIONS = new ReadablePosition[0];
 
     long cleanPosition;
+    long tripLimit;
     long timeOfLastActivityNs;
     long lastSenderPosition;
     int refCount = 0;
@@ -129,6 +130,7 @@ public final class NetworkPublication
     private final int termLengthMask;
     private final int termCleanupBlockLength;
     private final int termWindowLength;
+    private final int tripGain;
     private final int mtuLength;
     private final int sessionId;
     private final int streamId;
@@ -259,6 +261,7 @@ public final class NetworkPublication
 
         positionBitsToShift = LogBufferDescriptor.positionBitsToShift(termLength);
         this.termWindowLength = termWindowLength;
+        tripGain = Math.min(termLength >> 3, termWindowLength);
 
         lastSenderPosition = senderPosition.get();
         cleanPosition = lastSenderPosition;
@@ -747,7 +750,7 @@ public final class NetworkPublication
 
                 workCount += cleanBufferTo(minConsumerPosition - termBufferLength);
                 final long newLimitPosition = minConsumerPosition + termWindowLength;
-                if (newLimitPosition > publisherLimit.get())
+                if (newLimitPosition >= tripLimit)
                 {
                     final long cleanPosition = this.cleanPosition;
                     final long cleanTermBasePosition = cleanPosition - (cleanPosition & termLengthMask);
@@ -755,6 +758,7 @@ public final class NetworkPublication
                     if (newLimitTermBasePosition - cleanTermBasePosition < wrapAroundGap)
                     {
                         publisherLimit.setRelease(newLimitPosition);
+                        tripLimit = newLimitPosition + tripGain;
                         workCount++;
                     }
                 }
@@ -766,6 +770,7 @@ public final class NetworkPublication
                     LogBufferDescriptor.isConnected(metaDataBuffer, false);
                     isConnected = false;
                 }
+                tripLimit = senderPosition;
                 publisherLimit.setRelease(senderPosition);
                 cleanBufferTo(senderPosition - termBufferLength);
                 workCount = 1;

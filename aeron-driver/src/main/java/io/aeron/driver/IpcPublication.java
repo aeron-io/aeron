@@ -61,8 +61,10 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     private final int termLengthMask;
     private final int termCleanupBlockLength;
     private final int termWindowLength;
+    private final int tripGain;
     private final int mtuLength;
     private final int initialTermId;
+    private long tripLimit;
     private long consumerPosition;
     private long lastConsumerPosition;
     private long timeOfLastConsumerPositionUpdateNs;
@@ -113,10 +115,11 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         this.termBufferLength = termLength;
         termLengthMask = termLength - 1;
         wrapAroundGap = termLength * 3L;
+        termWindowLength = params.publicationWindowLength;
+        tripGain = Math.min(termLength >> 3, termWindowLength);
 
         this.mtuLength = params.mtuLength;
         this.positionBitsToShift = LogBufferDescriptor.positionBitsToShift(termLength);
-        this.termWindowLength = params.publicationWindowLength;
         this.publisherPos = publisherPos;
         this.publisherLimit = publisherLimit;
         this.rawLog = rawLog;
@@ -387,7 +390,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
 
                 workCount += cleanBufferTo(minSubscriberPosition);
                 final long newLimitPosition = minSubscriberPosition + termWindowLength;
-                if (newLimitPosition > publisherLimit.get())
+                if (newLimitPosition >= tripLimit)
                 {
                     final long cleanPosition = this.cleanPosition;
                     final long cleanTermBasePosition = cleanPosition - (cleanPosition & termLengthMask);
@@ -395,12 +398,14 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
                     if (newLimitTermBasePosition - cleanTermBasePosition < wrapAroundGap)
                     {
                         publisherLimit.setRelease(newLimitPosition);
+                        tripLimit = newLimitPosition + tripGain;
                         workCount++;
                     }
                 }
             }
             else if (publisherLimit.get() > consumerPosition)
             {
+                tripLimit = consumerPosition;
                 publisherLimit.setRelease(consumerPosition);
                 cleanBufferTo(consumerPosition);
                 workCount = 1;
