@@ -224,14 +224,21 @@ final class ClientConductor implements Agent
 
     void onError(final long correlationId, final int codeValue, final ErrorCode errorCode, final String message)
     {
-        driverException = new RegistrationException(correlationId, codeValue, errorCode, message);
-
-        final Object resource = resourceByRegIdMap.get(correlationId);
-        if (resource instanceof Subscription)
+        clientLock.lock();
+        try
         {
-            final Subscription subscription = (Subscription)resource;
-            subscription.internalClose(NULL_VALUE);
-            resourceByRegIdMap.remove(correlationId);
+            driverException = new RegistrationException(correlationId, codeValue, errorCode, message);
+
+            final Object resource = resourceByRegIdMap.get(correlationId);
+            if (resource instanceof Subscription)
+            {
+                final Subscription subscription = (Subscription)resource;
+                subscription.internalClose(NULL_VALUE);
+                resourceByRegIdMap.remove(correlationId);
+            }
+        } finally
+        {
+            clientLock.unlock();
         }
     }
 
@@ -403,18 +410,25 @@ final class ClientConductor implements Agent
 
     void onUnavailableImage(final long correlationId, final long subscriptionRegistrationId)
     {
-        final Subscription subscription = (Subscription)resourceByRegIdMap.get(subscriptionRegistrationId);
-        if (null != subscription)
+        clientLock.lock();
+        try
         {
-            final Image image = subscription.removeImage(correlationId);
-            if (null != image)
+            final Subscription subscription = (Subscription)resourceByRegIdMap.get(subscriptionRegistrationId);
+            if (null != subscription)
             {
-                final UnavailableImageHandler handler = subscription.unavailableImageHandler();
-                if (null != handler)
+                final Image image = subscription.removeImage(correlationId);
+                if (null != image)
                 {
-                    notifyImageUnavailable(handler, image);
+                    final UnavailableImageHandler handler = subscription.unavailableImageHandler();
+                    if (null != handler)
+                    {
+                        notifyImageUnavailable(handler, image);
+                    }
                 }
             }
+        }
+        finally {
+            clientLock.unlock();
         }
     }
 
@@ -1543,7 +1557,15 @@ final class ClientConductor implements Agent
     private void terminateConductor()
     {
         isTerminating = true;
-        forceCloseResources();
+        clientLock.lock();
+        try
+        {
+            forceCloseResources();
+        }
+        finally
+        {
+            clientLock.unlock();
+        }
     }
 
     private void awaitResponse(final long correlationId)
