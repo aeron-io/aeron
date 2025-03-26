@@ -428,7 +428,8 @@ final class ClientConductor implements Agent
                 }
             }
         }
-        finally {
+        finally
+        {
             clientLock.unlock();
         }
     }
