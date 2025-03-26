@@ -120,7 +120,7 @@ public final class NetworkPublication
     private final long untetheredRestingTimeoutNs;
     private final long tag;
     private final long responseCorrelationId;
-    private final long maxCleanupToLimitGap;
+    private final long wrapAroundGap;
     private final int positionBitsToShift;
     private final int initialTermId;
     private final int startingTermId;
@@ -251,7 +251,7 @@ public final class NetworkPublication
         termBufferLength = termLength;
         termLengthMask = termLength - 1;
         this.termCleanupBlockSize = termCleanupBlockSize;
-        maxCleanupToLimitGap = (long)termLength << 1;
+        wrapAroundGap = termLength * 3L;
 
         final long nowNs = cachedNanoClock.nanoTime();
         timeOfLastDataOrHeartbeatNs = nowNs - PUBLICATION_HEARTBEAT_TIMEOUT_NS - 1;
@@ -752,7 +752,7 @@ public final class NetworkPublication
                     final long cleanPosition = this.cleanPosition;
                     final long cleanTermBasePosition = cleanPosition - (cleanPosition & termLengthMask);
                     final long newLimitTermBasePosition = newLimitPosition - (newLimitPosition & termLengthMask);
-                    if (newLimitTermBasePosition - cleanTermBasePosition <= maxCleanupToLimitGap)
+                    if (newLimitTermBasePosition - cleanTermBasePosition <= wrapAroundGap)
                     {
                         publisherLimit.setRelease(newLimitPosition);
                         workCount++;

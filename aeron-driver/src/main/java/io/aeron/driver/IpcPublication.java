@@ -67,7 +67,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     private long lastConsumerPosition;
     private long timeOfLastConsumerPositionUpdateNs;
     private long cleanPosition;
-    private final long maxCleanupToLimitGap;
+    private final long wrapAroundGap;
     private int refCount = 0;
     private boolean reachedEndOfLife = false;
     private final boolean isExclusive;
@@ -112,7 +112,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         final int termLength = params.termLength;
         this.termBufferLength = termLength;
         termLengthMask = termLength - 1;
-        maxCleanupToLimitGap = (long)termLength << 1;
+        wrapAroundGap = termLength * 3L;
 
         this.mtuLength = params.mtuLength;
         this.positionBitsToShift = LogBufferDescriptor.positionBitsToShift(termLength);
@@ -392,7 +392,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
                     final long cleanPosition = this.cleanPosition;
                     final long cleanTermBasePosition = cleanPosition - (cleanPosition & termLengthMask);
                     final long newLimitTermBasePosition = newLimitPosition - (newLimitPosition & termLengthMask);
-                    if (newLimitTermBasePosition - cleanTermBasePosition <= maxCleanupToLimitGap)
+                    if (newLimitTermBasePosition - cleanTermBasePosition < wrapAroundGap)
                     {
                         publisherLimit.setRelease(newLimitPosition);
                         workCount++;
