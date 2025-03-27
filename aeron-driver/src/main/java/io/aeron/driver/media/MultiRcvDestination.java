@@ -36,10 +36,14 @@ final class MultiRcvDestination
     private ReceiveDestinationTransport[] transports = EMPTY_TRANSPORTS;
 
     private final AtomicCounter receiveChannelShortSends;
+    private final AtomicCounter receiveChannelConnectionErrors;
 
-    MultiRcvDestination(final AtomicCounter receiveChannelShortSends)
+    MultiRcvDestination(
+        final AtomicCounter receiveChannelShortSends,
+        final AtomicCounter receiveChannelConnectionErrors)
     {
         this.receiveChannelShortSends = receiveChannelShortSends;
+        this.receiveChannelConnectionErrors = receiveChannelConnectionErrors;
     }
 
     void closeTransports(final ReceiveChannelEndpoint endpoint, final DataTransportPoller poller)
@@ -171,7 +175,8 @@ final class MultiRcvDestination
                 if (null != transport && ((connection.timeOfLastActivityNs + DESTINATION_ADDRESS_TIMEOUT) - nowNs > 0))
                 {
                     buffer.position(0);
-                    minBytesSent = Math.min(minBytesSent, sendTo(transport, buffer, connection.controlAddress, receiveChannelShortSends));
+                    minBytesSent = Math.min(minBytesSent, sendTo(transport, buffer, connection.controlAddress,
+                        receiveChannelShortSends, receiveChannelConnectionErrors));
                 }
             }
         }
@@ -180,7 +185,11 @@ final class MultiRcvDestination
     }
 
     static int sendTo(
-        final UdpChannelTransport transport, final ByteBuffer buffer, final InetSocketAddress remoteAddress, final AtomicCounter receiveChannelShortSends)
+        final UdpChannelTransport transport,
+        final ByteBuffer buffer,
+        final InetSocketAddress remoteAddress,
+        final AtomicCounter receiveChannelShortSends,
+        final AtomicCounter receiveChannelConnectionErrors)
     {
         int bytesSent = 0;
         try
@@ -200,11 +209,10 @@ final class MultiRcvDestination
         }
         catch (final PortUnreachableException ignore)
         {
-            receiveChannelShortSends.incrementRelease();
+            receiveChannelConnectionErrors.incrementRelease();
         }
         catch (final IOException ex)
         {
-            receiveChannelShortSends.incrementRelease();
             onSendError(ex, remoteAddress, transport.errorHandler);
         }
 

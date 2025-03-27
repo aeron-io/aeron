@@ -126,6 +126,7 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
     private final AtomicCounter possibleTtlAsymmetry;
     private final AtomicCounter statusIndicator;
     private final AtomicCounter receiveChannelShortSends;
+    private final AtomicCounter receiveChannelConnectionErrors;
     private final Int2IntCounterMap refCountByStreamIdMap = new Int2IntCounterMap(0);
     private final Long2LongCounterMap refCountByStreamIdAndSessionIdMap = new Long2LongCounterMap(0);
     private final Int2IntCounterMap responseRefCountByStreamIdMap = new Int2IntCounterMap(0);
@@ -162,6 +163,7 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
         shortSends = context.systemCounters().get(SHORT_SENDS);
         possibleTtlAsymmetry = context.systemCounters().get(POSSIBLE_TTL_ASYMMETRY);
         receiveChannelShortSends = context.systemCounters().get(RECEIVE_CHANNEL_SHORT_SENDS);
+        receiveChannelConnectionErrors = context.systemCounters().get(RECEIVE_CHANNEL_CONNECTION_ERRORS);
 
         final ReceiveChannelEndpointThreadLocals threadLocals = context.receiveChannelEndpointThreadLocals();
         smBuffer = threadLocals.statusMessageBuffer();
@@ -180,7 +182,9 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
 
         this.groupTag = (null == udpChannel.groupTag()) ? context.receiverGroupTag() : udpChannel.groupTag();
 
-        multiRcvDestination = udpChannel.isManualControlMode() ? new MultiRcvDestination(receiveChannelShortSends) : null;
+        multiRcvDestination = udpChannel.isManualControlMode() ?
+            new MultiRcvDestination(receiveChannelShortSends, receiveChannelConnectionErrors) :
+            null;
         currentControlAddress = udpChannel.localControl();
 
         channelReceiveTimestampClock = context.channelReceiveTimestampClock();
@@ -232,11 +236,10 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
         }
         catch (final PortUnreachableException ignore)
         {
-            receiveChannelShortSends.incrementRelease();
+            receiveChannelConnectionErrors.incrementRelease();
         }
         catch (final IOException ex)
         {
-            receiveChannelShortSends.incrementRelease();
             onSendError(ex, remoteAddress, errorHandler);
         }
 
@@ -1052,7 +1055,8 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
     {
         final int bytesSent = null == multiRcvDestination ?
             sendTo(buffer, remoteAddress) :
-            MultiRcvDestination.sendTo(multiRcvDestination.transport(transportIndex), buffer, remoteAddress, receiveChannelShortSends);
+            MultiRcvDestination.sendTo(multiRcvDestination.transport(transportIndex), buffer, remoteAddress,
+                receiveChannelShortSends, receiveChannelConnectionErrors);
 
         if (length != bytesSent)
         {
