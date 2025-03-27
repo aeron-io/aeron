@@ -123,7 +123,7 @@ public final class Configuration
      * zeroed in a single duty cycle. The value must be a power of two withing [1KB, 1GB] range.
      */
     @Config
-    public static final String TERM_BUFFER_CLEANUP_BLOCK_LENGTH_PROP_NAME = "aeron.term.buffer.cleanup.block.size";
+    public static final String TERM_BUFFER_CLEANUP_BLOCK_LENGTH_PROP_NAME = "aeron.term.buffer.cleanup.block.length";
 
     /**
      * Default term buffer cleanup block size.
