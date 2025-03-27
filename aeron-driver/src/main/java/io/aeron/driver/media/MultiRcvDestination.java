@@ -18,6 +18,7 @@ package io.aeron.driver.media;
 import io.aeron.CommonContext;
 import io.aeron.driver.DriverConductorProxy;
 import org.agrona.collections.ArrayUtil;
+import org.agrona.concurrent.status.AtomicCounter;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -33,6 +34,13 @@ final class MultiRcvDestination
     private static final ReceiveDestinationTransport[] EMPTY_TRANSPORTS = new ReceiveDestinationTransport[0];
 
     private ReceiveDestinationTransport[] transports = EMPTY_TRANSPORTS;
+
+    private final AtomicCounter receiveChannelShortSends;
+
+    MultiRcvDestination(final AtomicCounter receiveChannelShortSends)
+    {
+        this.receiveChannelShortSends = receiveChannelShortSends;
+    }
 
     void closeTransports(final ReceiveChannelEndpoint endpoint, final DataTransportPoller poller)
     {
@@ -163,7 +171,7 @@ final class MultiRcvDestination
                 if (null != transport && ((connection.timeOfLastActivityNs + DESTINATION_ADDRESS_TIMEOUT) - nowNs > 0))
                 {
                     buffer.position(0);
-                    minBytesSent = Math.min(minBytesSent, sendTo(transport, buffer, connection.controlAddress));
+                    minBytesSent = Math.min(minBytesSent, sendTo(transport, buffer, connection.controlAddress, receiveChannelShortSends));
                 }
             }
         }
@@ -172,22 +180,31 @@ final class MultiRcvDestination
     }
 
     static int sendTo(
-        final UdpChannelTransport transport, final ByteBuffer buffer, final InetSocketAddress remoteAddress)
+        final UdpChannelTransport transport, final ByteBuffer buffer, final InetSocketAddress remoteAddress, final AtomicCounter receiveChannelShortSends)
     {
         int bytesSent = 0;
         try
         {
             if (null != transport && null != transport.sendDatagramChannel && transport.sendDatagramChannel.isOpen())
             {
+                final int bytesToSend = buffer.remaining();
+
                 transport.sendHook(buffer, remoteAddress);
                 bytesSent = transport.sendDatagramChannel.send(buffer, remoteAddress);
+
+                if (bytesSent < bytesToSend)
+                {
+                    receiveChannelShortSends.incrementRelease();
+                }
             }
         }
         catch (final PortUnreachableException ignore)
         {
+            receiveChannelShortSends.incrementRelease();
         }
         catch (final IOException ex)
         {
+            receiveChannelShortSends.incrementRelease();
             onSendError(ex, remoteAddress, transport.errorHandler);
         }
 

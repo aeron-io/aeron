@@ -42,8 +42,7 @@ import java.net.PortUnreachableException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.TimeUnit;
 
-import static io.aeron.driver.status.SystemCounterDescriptor.POSSIBLE_TTL_ASYMMETRY;
-import static io.aeron.driver.status.SystemCounterDescriptor.SHORT_SENDS;
+import static io.aeron.driver.status.SystemCounterDescriptor.*;
 import static io.aeron.protocol.StatusMessageFlyweight.SEND_SETUP_FLAG;
 import static io.aeron.status.ChannelEndpointStatus.status;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
@@ -126,6 +125,7 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
     private final AtomicCounter shortSends;
     private final AtomicCounter possibleTtlAsymmetry;
     private final AtomicCounter statusIndicator;
+    private final AtomicCounter receiveChannelShortSends;
     private final Int2IntCounterMap refCountByStreamIdMap = new Int2IntCounterMap(0);
     private final Long2LongCounterMap refCountByStreamIdAndSessionIdMap = new Long2LongCounterMap(0);
     private final Int2IntCounterMap responseRefCountByStreamIdMap = new Int2IntCounterMap(0);
@@ -161,6 +161,7 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
 
         shortSends = context.systemCounters().get(SHORT_SENDS);
         possibleTtlAsymmetry = context.systemCounters().get(POSSIBLE_TTL_ASYMMETRY);
+        receiveChannelShortSends = context.systemCounters().get(RECEIVE_CHANNEL_SHORT_SENDS);
 
         final ReceiveChannelEndpointThreadLocals threadLocals = context.receiveChannelEndpointThreadLocals();
         smBuffer = threadLocals.statusMessageBuffer();
@@ -179,7 +180,7 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
 
         this.groupTag = (null == udpChannel.groupTag()) ? context.receiverGroupTag() : udpChannel.groupTag();
 
-        multiRcvDestination = udpChannel.isManualControlMode() ? new MultiRcvDestination() : null;
+        multiRcvDestination = udpChannel.isManualControlMode() ? new MultiRcvDestination(receiveChannelShortSends) : null;
         currentControlAddress = udpChannel.localControl();
 
         channelReceiveTimestampClock = context.channelReceiveTimestampClock();
@@ -217,16 +218,25 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
             {
                 if (sendDatagramChannel.isOpen())
                 {
+                    final int bytesToSend = buffer.remaining();
+
                     sendHook(buffer, remoteAddress);
                     bytesSent = sendDatagramChannel.send(buffer, remoteAddress);
+
+                    if (bytesSent < bytesToSend)
+                    {
+                        receiveChannelShortSends.incrementRelease();
+                    }
                 }
             }
         }
         catch (final PortUnreachableException ignore)
         {
+            receiveChannelShortSends.incrementRelease();
         }
         catch (final IOException ex)
         {
+            receiveChannelShortSends.incrementRelease();
             onSendError(ex, remoteAddress, errorHandler);
         }
 
@@ -1042,7 +1052,7 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
     {
         final int bytesSent = null == multiRcvDestination ?
             sendTo(buffer, remoteAddress) :
-            MultiRcvDestination.sendTo(multiRcvDestination.transport(transportIndex), buffer, remoteAddress);
+            MultiRcvDestination.sendTo(multiRcvDestination.transport(transportIndex), buffer, remoteAddress, receiveChannelShortSends);
 
         if (length != bytesSent)
         {
