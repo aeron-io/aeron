@@ -160,6 +160,17 @@ public:
         return aeron_archive_context_get_control_response_stream_id(m_aeron_archive_ctx_t);
     }
 
+    inline Context &recordingEventsChannel(const std::string &channel)
+    {
+        aeron_archive_context_set_recording_events_channel(m_aeron_archive_ctx_t, channel.c_str());
+        return *this;
+    }
+
+    inline std::string recordingEventsChannel() const
+    {
+        return aeron_archive_context_get_recording_events_channel(m_aeron_archive_ctx_t);
+    }
+
     inline Context &messageTimeoutNS(const std::int64_t messageTmoNS)
     {
         aeron_archive_context_set_message_timeout_ns(m_aeron_archive_ctx_t, messageTmoNS);
