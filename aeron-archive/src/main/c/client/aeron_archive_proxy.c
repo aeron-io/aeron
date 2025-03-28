@@ -93,17 +93,7 @@ int aeron_archive_proxy_init(
 {
     archive_proxy->ctx = ctx;
     archive_proxy->exclusive_publication = exclusive_publication;
-    archive_proxy->control_session_id = AERON_NULL_VALUE;
     archive_proxy->retry_attempts = retry_attempts;
-
-    return 0;
-}
-
-int aeron_archive_proxy_set_control_esssion_id(
-    aeron_archive_proxy_t *archive_proxy,
-    int64_t control_session_id)
-{
-    archive_proxy->control_session_id = control_session_id;
 
     return 0;
 }
@@ -160,7 +150,8 @@ bool aeron_archive_proxy_try_connect(
 
 bool aeron_archive_proxy_archive_id(
     aeron_archive_proxy_t *archive_proxy,
-    int64_t correlation_id)
+    int64_t correlation_id,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_archiveIdRequest codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -171,7 +162,7 @@ bool aeron_archive_proxy_archive_id(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_archiveIdRequest_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_archiveIdRequest_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_archiveIdRequest_set_correlationId(&codec, correlation_id);
 
     return aeron_archive_proxy_offer_once(
@@ -182,7 +173,8 @@ bool aeron_archive_proxy_archive_id(
 bool aeron_archive_proxy_challenge_response(
     aeron_archive_proxy_t *archive_proxy,
     aeron_archive_encoded_credentials_t *encoded_credentials,
-    int64_t correlation_id)
+    int64_t correlation_id,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_challengeResponse codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -193,7 +185,7 @@ bool aeron_archive_proxy_challenge_response(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_challengeResponse_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_challengeResponse_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_challengeResponse_set_correlationId(&codec, correlation_id);
     aeron_archive_client_challengeResponse_put_encodedCredentials(
         &codec,
@@ -205,7 +197,9 @@ bool aeron_archive_proxy_challenge_response(
         aeron_archive_client_challengeResponse_encoded_length(&codec)) > 0;
 }
 
-bool aeron_archive_proxy_close_session(aeron_archive_proxy_t *archive_proxy)
+bool aeron_archive_proxy_close_session(
+    aeron_archive_proxy_t *archive_proxy,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_closeSessionRequest codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -216,7 +210,7 @@ bool aeron_archive_proxy_close_session(aeron_archive_proxy_t *archive_proxy)
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_closeSessionRequest_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_closeSessionRequest_set_controlSessionId(&codec, control_session_id);
 
     return aeron_archive_proxy_offer_once(
         archive_proxy,
@@ -229,7 +223,8 @@ bool aeron_archive_proxy_start_recording(
     int32_t recording_stream_id,
     bool local_source,
     bool auto_stop,
-    int64_t correlation_id)
+    int64_t correlation_id,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_startRecordingRequest2 codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -240,7 +235,7 @@ bool aeron_archive_proxy_start_recording(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_startRecordingRequest2_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_startRecordingRequest2_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_startRecordingRequest2_set_correlationId(&codec, correlation_id);
     aeron_archive_client_startRecordingRequest2_set_streamId(&codec, recording_stream_id);
     aeron_archive_client_startRecordingRequest2_set_sourceLocation(
@@ -262,7 +257,8 @@ bool aeron_archive_proxy_start_recording(
 bool aeron_archive_proxy_get_recording_position(
     aeron_archive_proxy_t *archive_proxy,
     int64_t correlation_id,
-    int64_t recording_id)
+    int64_t recording_id,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_recordingPositionRequest codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -273,7 +269,7 @@ bool aeron_archive_proxy_get_recording_position(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_recordingPositionRequest_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_recordingPositionRequest_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_recordingPositionRequest_set_correlationId(&codec, correlation_id);
     aeron_archive_client_recordingPositionRequest_set_recordingId(&codec, recording_id);
 
@@ -285,7 +281,8 @@ bool aeron_archive_proxy_get_recording_position(
 bool aeron_archive_proxy_get_start_position(
     aeron_archive_proxy_t *archive_proxy,
     int64_t correlation_id,
-    int64_t recording_id)
+    int64_t recording_id,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_startPositionRequest codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -296,7 +293,7 @@ bool aeron_archive_proxy_get_start_position(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_startPositionRequest_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_startPositionRequest_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_startPositionRequest_set_correlationId(&codec, correlation_id);
     aeron_archive_client_startPositionRequest_set_recordingId(&codec, recording_id);
 
@@ -308,7 +305,8 @@ bool aeron_archive_proxy_get_start_position(
 bool aeron_archive_proxy_get_stop_position(
     aeron_archive_proxy_t *archive_proxy,
     int64_t correlation_id,
-    int64_t recording_id)
+    int64_t recording_id,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_stopPositionRequest codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -319,7 +317,7 @@ bool aeron_archive_proxy_get_stop_position(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_stopPositionRequest_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_stopPositionRequest_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_stopPositionRequest_set_correlationId(&codec, correlation_id);
     aeron_archive_client_stopPositionRequest_set_recordingId(&codec, recording_id);
 
@@ -331,7 +329,8 @@ bool aeron_archive_proxy_get_stop_position(
 bool aeron_archive_proxy_get_max_recorded_position(
     aeron_archive_proxy_t *archive_proxy,
     int64_t correlation_id,
-    int64_t recording_id)
+    int64_t recording_id,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_maxRecordedPositionRequest codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -342,7 +341,7 @@ bool aeron_archive_proxy_get_max_recorded_position(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_maxRecordedPositionRequest_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_maxRecordedPositionRequest_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_maxRecordedPositionRequest_set_correlationId(&codec, correlation_id);
     aeron_archive_client_maxRecordedPositionRequest_set_recordingId(&codec, recording_id);
 
@@ -355,7 +354,8 @@ bool aeron_archive_proxy_stop_recording(
     aeron_archive_proxy_t *archive_proxy,
     int64_t correlation_id,
     const char *channel,
-    int32_t stream_id)
+    int32_t stream_id,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_stopRecordingRequest codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -366,7 +366,7 @@ bool aeron_archive_proxy_stop_recording(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_stopRecordingRequest_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_stopRecordingRequest_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_stopRecordingRequest_set_correlationId(&codec, correlation_id);
     aeron_archive_client_stopRecordingRequest_set_streamId(&codec, stream_id);
     aeron_archive_client_stopRecordingRequest_put_channel(
@@ -382,7 +382,8 @@ bool aeron_archive_proxy_stop_recording(
 bool aeron_archive_proxy_stop_recording_subscription(
     aeron_archive_proxy_t *archive_proxy,
     int64_t correlation_id,
-    int64_t subscription_id)
+    int64_t subscription_id,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_stopRecordingSubscriptionRequest codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -393,7 +394,7 @@ bool aeron_archive_proxy_stop_recording_subscription(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_stopRecordingSubscriptionRequest_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_stopRecordingSubscriptionRequest_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_stopRecordingSubscriptionRequest_set_correlationId(&codec, correlation_id);
     aeron_archive_client_stopRecordingSubscriptionRequest_set_subscriptionId(&codec, subscription_id);
 
@@ -405,7 +406,8 @@ bool aeron_archive_proxy_stop_recording_subscription(
 bool aeron_archive_proxy_stop_recording_by_identity(
     aeron_archive_proxy_t *archive_proxy,
     int64_t correlation_id,
-    int64_t recording_id)
+    int64_t recording_id,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_stopRecordingByIdentityRequest codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -416,7 +418,7 @@ bool aeron_archive_proxy_stop_recording_by_identity(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_stopRecordingByIdentityRequest_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_stopRecordingByIdentityRequest_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_stopRecordingByIdentityRequest_set_correlationId(&codec, correlation_id);
     aeron_archive_client_stopRecordingByIdentityRequest_set_recordingId(&codec, recording_id);
 
@@ -431,7 +433,8 @@ bool aeron_archive_proxy_find_last_matching_recording(
     int64_t min_recording_id,
     const char *channel_fragment,
     int32_t stream_id,
-    int32_t session_id)
+    int32_t session_id,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_findLastMatchingRecordingRequest codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -442,7 +445,7 @@ bool aeron_archive_proxy_find_last_matching_recording(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_findLastMatchingRecordingRequest_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_findLastMatchingRecordingRequest_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_findLastMatchingRecordingRequest_set_correlationId(&codec, correlation_id);
     aeron_archive_client_findLastMatchingRecordingRequest_set_minRecordingId(&codec, min_recording_id);
     aeron_archive_client_findLastMatchingRecordingRequest_set_sessionId(&codec, session_id);
@@ -460,7 +463,8 @@ bool aeron_archive_proxy_find_last_matching_recording(
 bool aeron_archive_proxy_list_recording(
     aeron_archive_proxy_t *archive_proxy,
     int64_t correlation_id,
-    int64_t recording_id)
+    int64_t recording_id,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_listRecordingRequest codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -471,7 +475,7 @@ bool aeron_archive_proxy_list_recording(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_listRecordingRequest_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_listRecordingRequest_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_listRecordingRequest_set_correlationId(&codec, correlation_id);
     aeron_archive_client_listRecordingRequest_set_recordingId(&codec, recording_id);
 
@@ -484,7 +488,8 @@ bool aeron_archive_proxy_list_recordings(
     aeron_archive_proxy_t *archive_proxy,
     int64_t correlation_id,
     int64_t from_recording_id,
-    int32_t record_count)
+    int32_t record_count,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_listRecordingsRequest codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -495,7 +500,7 @@ bool aeron_archive_proxy_list_recordings(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_listRecordingsRequest_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_listRecordingsRequest_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_listRecordingsRequest_set_correlationId(&codec, correlation_id);
     aeron_archive_client_listRecordingsRequest_set_fromRecordingId(&codec, from_recording_id);
     aeron_archive_client_listRecordingsRequest_set_recordCount(&codec, record_count);
@@ -511,7 +516,8 @@ bool aeron_archive_proxy_list_recordings_for_uri(
     int64_t from_recording_id,
     int32_t record_count,
     const char *channel_fragment,
-    int32_t stream_id)
+    int32_t stream_id,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_listRecordingsForUriRequest codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -522,7 +528,7 @@ bool aeron_archive_proxy_list_recordings_for_uri(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_listRecordingsForUriRequest_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_listRecordingsForUriRequest_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_listRecordingsForUriRequest_set_correlationId(&codec, correlation_id);
     aeron_archive_client_listRecordingsForUriRequest_set_fromRecordingId(&codec, from_recording_id);
     aeron_archive_client_listRecordingsForUriRequest_set_recordCount(&codec, record_count);
@@ -543,7 +549,8 @@ bool aeron_archive_proxy_replay(
     int64_t recording_id,
     const char *replay_channel,
     int32_t replay_stream_id,
-    aeron_archive_replay_params_t *params)
+    aeron_archive_replay_params_t *params,
+    int64_t control_session_id)
 {
     size_t length;
     struct aeron_archive_client_messageHeader hdr;
@@ -558,7 +565,7 @@ bool aeron_archive_proxy_replay(
             0,
             AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
             &hdr);
-        aeron_archive_client_boundedReplayRequest_set_controlSessionId(&codec, archive_proxy->control_session_id);
+        aeron_archive_client_boundedReplayRequest_set_controlSessionId(&codec, control_session_id);
         aeron_archive_client_boundedReplayRequest_set_correlationId(&codec, correlation_id);
         aeron_archive_client_boundedReplayRequest_set_recordingId(&codec, recording_id);
         aeron_archive_client_boundedReplayRequest_set_position(&codec, params->position);
@@ -584,7 +591,7 @@ bool aeron_archive_proxy_replay(
             0,
             AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
             &hdr);
-        aeron_archive_client_replayRequest_set_controlSessionId(&codec, archive_proxy->control_session_id);
+        aeron_archive_client_replayRequest_set_controlSessionId(&codec, control_session_id);
         aeron_archive_client_replayRequest_set_correlationId(&codec, correlation_id);
         aeron_archive_client_replayRequest_set_recordingId(&codec, recording_id);
         aeron_archive_client_replayRequest_set_position(&codec, params->position);
@@ -607,7 +614,8 @@ bool aeron_archive_proxy_truncate_recording(
     aeron_archive_proxy_t *archive_proxy,
     int64_t correlation_id,
     int64_t recording_id,
-    int64_t position)
+    int64_t position,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_truncateRecordingRequest codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -618,7 +626,7 @@ bool aeron_archive_proxy_truncate_recording(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_truncateRecordingRequest_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_truncateRecordingRequest_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_truncateRecordingRequest_set_correlationId(&codec, correlation_id);
     aeron_archive_client_truncateRecordingRequest_set_recordingId(&codec, recording_id);
     aeron_archive_client_truncateRecordingRequest_set_position(&codec, position);
@@ -631,7 +639,8 @@ bool aeron_archive_proxy_truncate_recording(
 bool aeron_archive_proxy_stop_replay(
     aeron_archive_proxy_t *archive_proxy,
     int64_t correlation_id,
-    int64_t replay_session_id)
+    int64_t replay_session_id,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_stopReplayRequest codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -642,7 +651,7 @@ bool aeron_archive_proxy_stop_replay(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_stopReplayRequest_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_stopReplayRequest_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_stopReplayRequest_set_correlationId(&codec, correlation_id);
     aeron_archive_client_stopReplayRequest_set_replaySessionId(&codec, replay_session_id);
 
@@ -654,7 +663,8 @@ bool aeron_archive_proxy_stop_replay(
 bool aeron_archive_proxy_stop_all_replays(
     aeron_archive_proxy_t *archive_proxy,
     int64_t correlation_id,
-    int64_t recording_id)
+    int64_t recording_id,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_stopAllReplaysRequest codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -665,7 +675,7 @@ bool aeron_archive_proxy_stop_all_replays(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_stopAllReplaysRequest_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_stopAllReplaysRequest_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_stopAllReplaysRequest_set_correlationId(&codec, correlation_id);
     aeron_archive_client_stopAllReplaysRequest_set_recordingId(&codec, recording_id);
 
@@ -681,7 +691,8 @@ bool aeron_archive_proxy_list_recording_subscriptions(
     int32_t subscription_count,
     const char *channel_fragment,
     int32_t stream_id,
-    bool apply_stream_id)
+    bool apply_stream_id,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_listRecordingSubscriptionsRequest codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -692,7 +703,7 @@ bool aeron_archive_proxy_list_recording_subscriptions(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_listRecordingSubscriptionsRequest_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_listRecordingSubscriptionsRequest_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_listRecordingSubscriptionsRequest_set_correlationId(&codec, correlation_id);
     aeron_archive_client_listRecordingSubscriptionsRequest_set_pseudoIndex(&codec, pseudo_index);
     aeron_archive_client_listRecordingSubscriptionsRequest_set_subscriptionCount(&codec, subscription_count);
@@ -713,7 +724,8 @@ bool aeron_archive_proxy_list_recording_subscriptions(
 bool aeron_archive_proxy_purge_recording(
     aeron_archive_proxy_t *archive_proxy,
     int64_t correlation_id,
-    int64_t recording_id)
+    int64_t recording_id,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_purgeRecordingRequest codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -724,7 +736,7 @@ bool aeron_archive_proxy_purge_recording(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_purgeRecordingRequest_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_purgeRecordingRequest_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_purgeRecordingRequest_set_correlationId(&codec, correlation_id);
     aeron_archive_client_purgeRecordingRequest_set_recordingId(&codec, recording_id);
 
@@ -740,7 +752,8 @@ bool aeron_archive_proxy_extend_recording(
     int32_t recording_stream_id,
     bool local_source,
     bool auto_stop,
-    int64_t correlation_id)
+    int64_t correlation_id,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_extendRecordingRequest2 codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -751,7 +764,7 @@ bool aeron_archive_proxy_extend_recording(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_extendRecordingRequest2_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_extendRecordingRequest2_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_extendRecordingRequest2_set_correlationId(&codec, correlation_id);
     aeron_archive_client_extendRecordingRequest2_set_recordingId(&codec, recording_id);
     aeron_archive_client_extendRecordingRequest2_set_streamId(&codec, recording_stream_id);
@@ -777,7 +790,8 @@ bool aeron_archive_proxy_replicate(
     int64_t src_recording_id,
     int32_t src_control_stream_id,
     const char *src_control_channel,
-    aeron_archive_replication_params_t *params)
+    aeron_archive_replication_params_t *params,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_replicateRequest2 codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -788,7 +802,7 @@ bool aeron_archive_proxy_replicate(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_replicateRequest2_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_replicateRequest2_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_replicateRequest2_set_correlationId(&codec, correlation_id);
     aeron_archive_client_replicateRequest2_set_srcRecordingId(&codec, src_recording_id);
     aeron_archive_client_replicateRequest2_set_dstRecordingId(&codec, params->dst_recording_id);
@@ -829,7 +843,8 @@ bool aeron_archive_proxy_replicate(
 bool aeron_archive_proxy_stop_replication(
     aeron_archive_proxy_t *archive_proxy,
     int64_t correlation_id,
-    int64_t replication_id)
+    int64_t replication_id,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_stopReplicationRequest codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -840,7 +855,7 @@ bool aeron_archive_proxy_stop_replication(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_stopReplicationRequest_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_stopReplicationRequest_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_stopReplicationRequest_set_correlationId(&codec, correlation_id);
     aeron_archive_client_stopReplicationRequest_set_replicationId(&codec, replication_id);
 
@@ -852,7 +867,8 @@ bool aeron_archive_proxy_stop_replication(
 bool aeron_archive_request_replay_token(
     aeron_archive_proxy_t *archive_proxy,
     int64_t correlation_id,
-    int64_t recording_id)
+    int64_t recording_id,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_replayTokenRequest codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -863,7 +879,7 @@ bool aeron_archive_request_replay_token(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_replayTokenRequest_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_replayTokenRequest_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_replayTokenRequest_set_correlationId(&codec, correlation_id);
     aeron_archive_client_replayTokenRequest_set_recordingId(&codec, recording_id);
 
@@ -876,7 +892,8 @@ bool aeron_archive_proxy_detach_segments(
     aeron_archive_proxy_t *archive_proxy,
     int64_t correlation_id,
     int64_t recording_id,
-    int64_t new_start_position)
+    int64_t new_start_position,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_detachSegmentsRequest codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -887,7 +904,7 @@ bool aeron_archive_proxy_detach_segments(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_detachSegmentsRequest_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_detachSegmentsRequest_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_detachSegmentsRequest_set_correlationId(&codec, correlation_id);
     aeron_archive_client_detachSegmentsRequest_set_recordingId(&codec, recording_id);
     aeron_archive_client_detachSegmentsRequest_set_newStartPosition(&codec, new_start_position);
@@ -900,7 +917,8 @@ bool aeron_archive_proxy_detach_segments(
 bool aeron_archive_proxy_delete_detached_segments(
     aeron_archive_proxy_t *archive_proxy,
     int64_t correlation_id,
-    int64_t recording_id)
+    int64_t recording_id,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_deleteDetachedSegmentsRequest codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -911,7 +929,7 @@ bool aeron_archive_proxy_delete_detached_segments(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_deleteDetachedSegmentsRequest_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_deleteDetachedSegmentsRequest_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_deleteDetachedSegmentsRequest_set_correlationId(&codec, correlation_id);
     aeron_archive_client_deleteDetachedSegmentsRequest_set_recordingId(&codec, recording_id);
 
@@ -924,7 +942,8 @@ bool aeron_archive_proxy_purge_segments(
     aeron_archive_proxy_t *archive_proxy,
     int64_t correlation_id,
     int64_t recording_id,
-    int64_t new_start_position)
+    int64_t new_start_position,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_purgeSegmentsRequest codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -935,7 +954,7 @@ bool aeron_archive_proxy_purge_segments(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_purgeSegmentsRequest_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_purgeSegmentsRequest_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_purgeSegmentsRequest_set_correlationId(&codec, correlation_id);
     aeron_archive_client_purgeSegmentsRequest_set_recordingId(&codec, recording_id);
     aeron_archive_client_purgeSegmentsRequest_set_newStartPosition(&codec, new_start_position);
@@ -948,7 +967,8 @@ bool aeron_archive_proxy_purge_segments(
 bool aeron_archive_proxy_attach_segments(
     aeron_archive_proxy_t *archive_proxy,
     int64_t correlation_id,
-    int64_t recording_id)
+    int64_t recording_id,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_attachSegmentsRequest codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -959,7 +979,7 @@ bool aeron_archive_proxy_attach_segments(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_attachSegmentsRequest_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_attachSegmentsRequest_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_attachSegmentsRequest_set_correlationId(&codec, correlation_id);
     aeron_archive_client_attachSegmentsRequest_set_recordingId(&codec, recording_id);
 
@@ -972,7 +992,8 @@ bool aeron_archive_proxy_migrate_segments(
     aeron_archive_proxy_t *archive_proxy,
     int64_t correlation_id,
     int64_t src_recording_id,
-    int64_t dst_recording_id)
+    int64_t dst_recording_id,
+    int64_t control_session_id)
 {
     struct aeron_archive_client_migrateSegmentsRequest codec;
     struct aeron_archive_client_messageHeader hdr;
@@ -983,7 +1004,7 @@ bool aeron_archive_proxy_migrate_segments(
         0,
         AERON_ARCHIVE_PROXY_REQUEST_BUFFER_LENGTH,
         &hdr);
-    aeron_archive_client_migrateSegmentsRequest_set_controlSessionId(&codec, archive_proxy->control_session_id);
+    aeron_archive_client_migrateSegmentsRequest_set_controlSessionId(&codec, control_session_id);
     aeron_archive_client_migrateSegmentsRequest_set_correlationId(&codec, correlation_id);
     aeron_archive_client_migrateSegmentsRequest_set_srcRecordingId(&codec, src_recording_id);
     aeron_archive_client_migrateSegmentsRequest_set_dstRecordingId(&codec, dst_recording_id);

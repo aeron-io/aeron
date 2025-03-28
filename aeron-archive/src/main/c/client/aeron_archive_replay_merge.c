@@ -485,7 +485,8 @@ static int aeron_archive_replay_merge_get_recording_position(int *work_count_p, 
                 if (aeron_archive_proxy_get_stop_position(
                     replay_merge->archive_proxy,
                     replay_merge->recording_id,
-                    correlation_id))
+                    correlation_id,
+                    replay_merge->aeron_archive->control_session_id))
                 {
                     replay_merge->time_of_last_progress_ms = now_ms;
                     replay_merge->active_correlation_id = correlation_id;
@@ -534,7 +535,8 @@ static int aeron_archive_replay_merge_replay(int *work_count_p, aeron_archive_re
             replay_merge->recording_id,
             replay_channel,
             subscription_constants.stream_id,
-            &replay_params))
+            &replay_params,
+            replay_merge->aeron_archive->control_session_id))
         {
             replay_merge->time_of_last_progress_ms = now_ms;
             replay_merge->active_correlation_id = correlation_id;
@@ -742,7 +744,8 @@ static bool aeron_archive_replay_merge_call_get_max_recorded_position(aeron_arch
     bool result = aeron_archive_proxy_get_max_recorded_position(
         replay_merge->archive_proxy,
         correlation_id,
-        replay_merge->recording_id);
+        replay_merge->recording_id,
+        replay_merge->aeron_archive->control_session_id);
 
     if (result)
     {
@@ -818,7 +821,8 @@ static void aeron_archive_replay_merge_stop_replay(aeron_archive_replay_merge_t 
     if (aeron_archive_proxy_stop_replay(
         replay_merge->archive_proxy,
         correlation_id,
-        replay_merge->replay_session_id))
+        replay_merge->replay_session_id,
+        replay_merge->aeron_archive->control_session_id))
     {
         replay_merge->is_replay_active = false;
     }
