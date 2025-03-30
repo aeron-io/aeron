@@ -167,6 +167,7 @@ public final class PublicationImage
     private final int positionBitsToShift;
     private final int termBufferLength;
     private final int termLengthMask;
+    private final int termCleanupBlockLength;
     private final int initialTermId;
     private final short flags;
     private final boolean isReliable;
@@ -214,7 +215,8 @@ public final class PublicationImage
         final Position hwmPosition,
         final Position rebuildPosition,
         final String sourceIdentity,
-        final CongestionControl congestionControl)
+        final CongestionControl congestionControl,
+        final int termCleanupBlockLength)
     {
         this.correlationId = correlationId;
         this.imageLivenessTimeoutNs = ctx.imageLivenessTimeoutNs();
@@ -265,6 +267,7 @@ public final class PublicationImage
         termBufferLength = termLength;
         termLengthMask = termLength - 1;
         positionBitsToShift = LogBufferDescriptor.positionBitsToShift(termLength);
+        this.termCleanupBlockLength = termCleanupBlockLength;
 
         nextSmReceiverWindowLength = congestionControl.initialWindowLength();
         maxReceiverWindowLength = congestionControl.maxWindowLength();
@@ -567,9 +570,12 @@ public final class PublicationImage
             final long newRebuildPosition = (rebuildPosition - rebuildTermOffset) + rebuildOffset(scanOutcome);
             this.rebuildPosition.proposeMaxRelease(newRebuildPosition);
 
+            workCount += cleanBufferTo(minSubscriberPosition);
+            final long cleanPosition = this.cleanPosition;
+
             final long ccOutcome = congestionControl.onTrackRebuild(
                 nowNs,
-                minSubscriberPosition,
+                cleanPosition,
                 nextSmPosition,
                 hwmPosition,
                 rebuildPosition,
@@ -580,12 +586,11 @@ public final class PublicationImage
             final int threshold = CongestionControl.threshold(windowLength);
 
             if (CongestionControl.shouldForceStatusMessage(ccOutcome) ||
-                (minSubscriberPosition > (nextSmPosition + threshold)) ||
+                (cleanPosition > (nextSmPosition + threshold)) ||
                 windowLength != nextSmReceiverWindowLength)
             {
-                cleanBufferTo(minSubscriberPosition);
-                scheduleStatusMessage(minSubscriberPosition, windowLength);
-                workCount += 1;
+                scheduleStatusMessage(cleanPosition, windowLength);
+                workCount++;
             }
         }
 
@@ -1002,19 +1007,21 @@ public final class PublicationImage
         return isFlowControlOverRun;
     }
 
-    private void cleanBufferTo(final long position)
+    private int cleanBufferTo(final long position)
     {
         final long cleanPosition = this.cleanPosition;
-        if (position > cleanPosition)
+        if (position - cleanPosition >= termCleanupBlockLength)
         {
             final UnsafeBuffer dirtyTermBuffer = termBuffers[indexByPosition(cleanPosition, positionBitsToShift)];
             final int termOffset = (int)(cleanPosition & termLengthMask);
-            final int length = Math.min((int)(position - cleanPosition), termBufferLength - termOffset);
+            final int length = Math.min(termCleanupBlockLength, termBufferLength - termOffset);
 
             dirtyTermBuffer.setMemory(termOffset, length, (byte)0);
             VarHandle.storeStoreFence();
             this.cleanPosition = cleanPosition + length;
+            return 1;
         }
+        return 0;
     }
 
     private ImageConnection trackConnection(

@@ -152,7 +152,8 @@ class PublicationImageTest
             hwmPosition,
             rcvPosition,
             SOURCE_IDENTITY,
-            congestionControl);
+            congestionControl,
+            TERM_LENGTH);
 
         final long position = computePosition(
             ACTIVE_TERM_ID, TERM_OFFSET, positionBitsToShift(TERM_LENGTH), INITIAL_TERM_ID);

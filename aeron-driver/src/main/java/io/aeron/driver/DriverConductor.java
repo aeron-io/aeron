@@ -354,7 +354,8 @@ public final class DriverConductor implements Agent
                     hwmPos,
                     rcvPos,
                     sourceIdentity,
-                    congestionControl);
+                    congestionControl,
+                    termBufferCleanupBlockLength(termBufferLength));
 
                 channelEndpoint.incRefImages();
                 publicationImages.add(image);
