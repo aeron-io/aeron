@@ -322,6 +322,11 @@ public abstract class Publication implements AutoCloseable
         return isRevoked;
     }
 
+    void isRevoked(final boolean isRevoked)
+    {
+        this.isRevoked = isRevoked;
+    }
+
     /**
      * Get the status of the media channel for this Publication.
      * <p>

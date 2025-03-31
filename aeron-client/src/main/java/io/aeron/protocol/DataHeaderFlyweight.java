@@ -63,6 +63,16 @@ public class DataHeaderFlyweight extends HeaderFlyweight
     public static final short BEGIN_END_AND_EOS_FLAGS = BEGIN_FLAG | END_FLAG | EOS_FLAG;
 
     /**
+     * (R) - Revoked Flag for heartbeats after the publication is revoked.
+     */
+    public static final short REVOKED_FLAG = 0x10;
+
+    /**
+     * Begin, End, EOS, and Revoked Flags.
+     */
+    public static final short BEGIN_END_EOS_AND_REVOKED_FLAGS = BEGIN_FLAG | END_FLAG | EOS_FLAG | REVOKED_FLAG;
+
+    /**
      * Default value to be placed in the reserved value field.
      */
     public static final long DEFAULT_RESERVE_VALUE = 0L;
@@ -156,7 +166,12 @@ public class DataHeaderFlyweight extends HeaderFlyweight
      */
     public static boolean isEndOfStream(final UnsafeBuffer packet)
     {
-        return BEGIN_END_AND_EOS_FLAGS == (packet.getByte(FLAGS_FIELD_OFFSET) & 0xFF);
+        return (packet.getByte(FLAGS_FIELD_OFFSET) & EOS_FLAG) != 0;
+    }
+
+    public static boolean isRevoked(final UnsafeBuffer packet)
+    {
+        return (packet.getByte(FLAGS_FIELD_OFFSET) & REVOKED_FLAG) != 0;
     }
 
     /**

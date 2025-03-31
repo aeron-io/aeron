@@ -176,4 +176,6 @@ public class ControlProtocolEvents
      * @since 1.47.0
      */
     public static final int ON_PUBLICATION_ERROR = 0x0F0C;
+
+    public static final int ON_REVOKED_PUBLICATION= 0x0F0D;
 }

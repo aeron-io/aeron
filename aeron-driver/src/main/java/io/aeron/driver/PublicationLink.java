@@ -24,6 +24,7 @@ final class PublicationLink implements DriverManagedResource
     private final Object publication;
     private final AeronClient client;
     private boolean reachedEndOfLife = false;
+    private boolean isRevoked = false;
 
     PublicationLink(final long registrationId, final AeronClient client, final NetworkPublication publication)
     {
@@ -68,6 +69,8 @@ final class PublicationLink implements DriverManagedResource
         {
             ((IpcPublication)publication).revoke();
         }
+
+        isRevoked = true;
     }
 
     /**
@@ -92,5 +95,15 @@ final class PublicationLink implements DriverManagedResource
     long registrationId()
     {
         return registrationId;
+    }
+
+    Object publication()
+    {
+        return publication;
+    }
+
+    boolean isRevoked()
+    {
+        return isRevoked;
     }
 }

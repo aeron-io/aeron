@@ -446,6 +446,16 @@ final class ClientConductor implements Agent
         }
     }
 
+    void onRevokedPublication(final long registrationId)
+    {
+        final Publication publication = (Publication)resourceByRegIdMap.get(registrationId);
+        if (null != publication)
+        {
+            publication.close();
+            publication.isRevoked(true);
+        }
+    }
+
     CountersReader countersReader()
     {
         return countersReader;

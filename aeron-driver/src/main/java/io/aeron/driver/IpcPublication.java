@@ -41,7 +41,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
 {
     enum State
     {
-        ACTIVE, DRAINING, LINGER, DONE
+        ACTIVE, REVOKED, DRAINING, LINGER, DONE
     }
 
     private static final ReadablePosition[] EMPTY_POSITIONS = new ReadablePosition[0];
@@ -70,6 +70,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     private int refCount = 0;
     private boolean reachedEndOfLife = false;
     private final boolean isExclusive;
+    private boolean isRevoked;
     private State state = State.ACTIVE;
     private final UnsafeBuffer[] termBuffers;
     private final Position publisherPos;
@@ -242,6 +243,19 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         }
     }
 
+    public void revoke()
+    {
+        System.err.println("REVOKE() called!!");
+
+        final long revokedPos = publisherPos.get();
+        publisherLimit.setRelease(revokedPos);
+        LogBufferDescriptor.endOfStreamPosition(metaDataBuffer, revokedPos);
+
+        isRevoked = true;
+
+        state = State.REVOKED;
+    }
+
     /**
      * {@inheritDoc}
      */
@@ -303,11 +317,28 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
                 break;
             }
 
+            case REVOKED:
+            {
+                conductor.transitionToRevoked(this);
+                // TODO maybe switch to DRAINING, and add 'or isRevoked' to the isDrained() call in there???
+
+                conductor.transitionToLinger(this);
+
+                // TODO I don't think we can transition directly to linger - we have to give people a chance to stop polling their IPC subscription
+                state = State.LINGER; // TODO or do we need to go through 'DRAINING' for some reason?
+                break;
+            }
+
             case DRAINING:
             {
+                if (isRevoked)
+                {
+                    // TODO need to find a way to quickly/cleanly get out of DRAINING and into LINGER
+                }
+
                 final long producerPosition = producerPosition();
                 publisherPos.setRelease(producerPosition);
-                if (isDrained(producerPosition))
+                if (isDrained(producerPosition)) // TODO ... OR isRevoked???
                 {
                     conductor.transitionToLinger(this);
                     state = State.LINGER;
@@ -347,10 +378,18 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     {
         if (0 == --refCount)
         {
-            final long producerPosition = producerPosition();
-            publisherLimit.setRelease(producerPosition);
-            LogBufferDescriptor.endOfStreamPosition(metaDataBuffer, producerPosition);
-            state = State.DRAINING;
+            if (isRevoked)
+            {
+                // TODO maybe do something different if we're already revoked?
+                // FWIW, the revoke() call already did most of what's inside the else{} below
+            }
+            else
+            {
+                final long producerPosition = producerPosition();
+                publisherLimit.setRelease(producerPosition);
+                LogBufferDescriptor.endOfStreamPosition(metaDataBuffer, producerPosition);
+                state = State.DRAINING;
+            }
         }
     }
 

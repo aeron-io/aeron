@@ -107,7 +107,7 @@ public final class PublicationImage
 {
     enum State
     {
-        INIT, ACTIVE, DRAINING, LINGER, DONE
+        INIT, ACTIVE, DRAINING, REVOKED, LINGER, DONE
     }
 
     // expected minimum number of SMs with EOS bit set sent during draining.
@@ -641,6 +641,13 @@ public final class PublicationImage
 
                         if (!this.isEndOfStream && isAllConnectedEos())
                         {
+                            if (DataHeaderFlyweight.isRevoked(buffer))
+                            {
+                                // we only care about a revoke when we're dealing with the last imageConnection that hasn't already been EOS'd
+                                System.err.println("MARK IT REVOKED!!");
+                                state(State.REVOKED);
+                            }
+
                             LogBufferDescriptor.endOfStreamPosition(rawLog.metaData(), findEosPosition());
                             this.isEndOfStream = true;
                         }
@@ -906,6 +913,26 @@ public final class PublicationImage
             case DRAINING:
                 if (isDrained() && ((timeOfLastStateChangeNs + (SM_EOS_MULTIPLE * smTimeoutNs)) - timeNs < 0))
                 {
+                    conductor.transitionToLinger(this);
+
+                    channelEndpoint.decRefImages();
+                    conductor.tryCloseReceiveChannelEndpoint(channelEndpoint);
+
+                    timeOfLastStateChangeNs = timeNs;
+                    isReceiverReleaseTriggered = true;
+                    state(State.LINGER);
+                }
+                break;
+
+            case REVOKED:
+                {
+                    System.err.println("receive side handle REVOKED");
+
+                    isRebuilding = false;
+                    isSendingEosSm = true;
+
+                    nextSmDeadlineNs = timeNs - 1;
+
                     conductor.transitionToLinger(this);
 
                     channelEndpoint.decRefImages();

@@ -844,6 +844,18 @@ public final class DriverConductor implements Agent
         }
     }
 
+    void transitionToRevoked(final Object publication)
+    {
+        for (int i = 0, size = publicationLinks.size(); i < size; i++)
+        {
+            final PublicationLink link = publicationLinks.get(i);
+            if (link.publication() == publication && !link.isRevoked())
+            {
+                clientProxy.onRevokedPublication(link.registrationId());
+            }
+        }
+    }
+
     void cleanupImage(final PublicationImage image)
     {
         for (int i = 0, size = subscriptionLinks.size(); i < size; i++)
