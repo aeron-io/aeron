@@ -31,6 +31,7 @@ import org.agrona.collections.MutableBoolean;
 import org.agrona.collections.MutableInteger;
 import org.agrona.collections.MutableLong;
 import org.agrona.concurrent.UnsafeBuffer;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -329,7 +330,7 @@ class PubAndSubTest
 
         driverContext.sendChannelEndpointSupplier(
             (udpChannel, statusIndicator, context) ->
-            new DebugSendChannelEndpoint(udpChannel, statusIndicator, context, noLossGenerator, noLossGenerator));
+                new DebugSendChannelEndpoint(udpChannel, statusIndicator, context, noLossGenerator, noLossGenerator));
 
         TestMediaDriver.enableRandomLoss(driverContext, 0.1, 0xcafebabeL, true, false);
 
@@ -375,7 +376,7 @@ class PubAndSubTest
 
         driverContext.sendChannelEndpointSupplier(
             (udpChannel, statusIndicator, context) ->
-            new DebugSendChannelEndpoint(udpChannel, statusIndicator, context, noLossGenerator, noLossGenerator));
+                new DebugSendChannelEndpoint(udpChannel, statusIndicator, context, noLossGenerator, noLossGenerator));
 
         TestMediaDriver.enableRandomLoss(driverContext, 0.1, 0xcafebabeL, true, false);
 
@@ -1298,6 +1299,44 @@ class PubAndSubTest
         }
         assertFalse(Files.exists(pubLogBuffer));
         assertFalse(Files.exists(imageLogBuffer));
+    }
+
+    @ParameterizedTest
+    @MethodSource("channels")
+    @InterruptAfter(10)
+    void shouldExchangeMessagesStartingFromANonZeroPosition(final String channel)
+    {
+        final ChannelUri uri = ChannelUri.parse(channel);
+        final long initialPosition = 1_000_000_000;
+        final int messageLength = 1024;
+        final int termLength = 128 * 1024;
+        uri.initialPosition(initialPosition, -500, termLength);
+
+        launch(uri.toString());
+
+        Tests.awaitConnected(publication);
+        Tests.awaitConnected(subscription);
+        assertEquals(initialPosition, publication.position());
+
+        final long targetPosition = initialPosition + 5 * termLength;
+        ThreadLocalRandom.current().nextBytes(buffer.byteArray());
+        while (publication.position() < targetPosition)
+        {
+            final int offset = ThreadLocalRandom.current().nextInt(0, 3000);
+            while (publication.offer(buffer, offset, messageLength) < 0)
+            {
+                Tests.yield();
+            }
+
+            pollForFragment();
+        }
+
+        assertThat(publication.position(), Matchers.greaterThan(targetPosition));
+        final Image image = subscription.imageAtIndex(0);
+        while (image.position() != publication.position())
+        {
+            pollForFragment();
+        }
     }
 
     private static void verifyFragment(
