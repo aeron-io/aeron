@@ -354,8 +354,7 @@ public final class DriverConductor implements Agent
                     hwmPos,
                     rcvPos,
                     sourceIdentity,
-                    congestionControl,
-                    termBufferCleanupBlockLength(termBufferLength));
+                    congestionControl);
 
                 channelEndpoint.incRefImages();
                 publicationImages.add(image);
@@ -1793,8 +1792,7 @@ public final class DriverConductor implements Agent
                 flowControl,
                 retransmitHandler,
                 networkPublicationThreadLocals,
-                isExclusive,
-                termBufferCleanupBlockLength(params.termLength));
+                isExclusive);
 
             channelEndpoint.incRef();
             networkPublications.add(publication);
@@ -2477,7 +2475,6 @@ public final class DriverConductor implements Agent
                 publisherLimit,
                 rawLog,
                 isExclusive,
-                termBufferCleanupBlockLength(params.termLength),
                 params);
 
             ipcPublications.add(publication);
@@ -2490,11 +2487,6 @@ public final class DriverConductor implements Agent
             CloseHelper.quietCloseAll(rawLog, publisherPosition, publisherLimit);
             throw ex;
         }
-    }
-
-    private int termBufferCleanupBlockLength(final int termLength)
-    {
-        return Math.min(ctx.termBufferCleanupBlockLength(), termLength >> 3);
     }
 
     private static AeronClient findClient(final ArrayList<AeronClient> clients, final long clientId)

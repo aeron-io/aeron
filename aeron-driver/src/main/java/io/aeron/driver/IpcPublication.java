@@ -31,6 +31,7 @@ import org.agrona.concurrent.status.ReadablePosition;
 import java.lang.invoke.VarHandle;
 import java.util.ArrayList;
 
+import static io.aeron.driver.Configuration.TERM_CLEANUP_BLOCK_LENGTH;
 import static io.aeron.driver.status.SystemCounterDescriptor.UNBLOCKED_PUBLICATIONS;
 import static io.aeron.logbuffer.LogBufferDescriptor.*;
 
@@ -59,7 +60,6 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     private final int positionBitsToShift;
     private final int termBufferLength;
     private final int termLengthMask;
-    private final int termCleanupBlockLength;
     private final int termWindowLength;
     private final int tripGain;
     private final int mtuLength;
@@ -95,7 +95,6 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         final Position publisherLimit,
         final RawLog rawLog,
         final boolean isExclusive,
-        final int termCleanupBlockLength,
         final PublicationParams params)
     {
         this.registrationId = registrationId;
@@ -109,7 +108,6 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         this.startingTermId = params.termId;
         this.startingTermOffset = params.termOffset;
         this.errorHandler = ctx.errorHandler();
-        this.termCleanupBlockLength = termCleanupBlockLength;
 
         final int termLength = params.termLength;
         this.termBufferLength = termLength;
@@ -548,11 +546,11 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     private int cleanBufferTo(final long position)
     {
         final long cleanPosition = this.cleanPosition;
-        if (position - cleanPosition >= termCleanupBlockLength)
+        if (position - cleanPosition >= TERM_CLEANUP_BLOCK_LENGTH)
         {
             final UnsafeBuffer dirtyTermBuffer = termBuffers[indexByPosition(cleanPosition, positionBitsToShift)];
             final int termOffset = (int)(cleanPosition & termLengthMask);
-            final int length = Math.min(termCleanupBlockLength, termBufferLength - termOffset);
+            final int length = Math.min(TERM_CLEANUP_BLOCK_LENGTH, termBufferLength - termOffset);
 
             dirtyTermBuffer.setMemory(termOffset, length, (byte)0);
             VarHandle.storeStoreFence();

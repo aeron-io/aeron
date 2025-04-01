@@ -119,19 +119,6 @@ public final class Configuration
     public static final int FILE_PAGE_SIZE_DEFAULT = 4 * 1024;
 
     /**
-     * Property name for term buffer cleanup block size, i.e. the max number of bytes per dirty term that will be
-     * zeroed in a single duty cycle. The value must be a power of two withing [1KB, 1GB] range.
-     */
-    @Config
-    public static final String TERM_BUFFER_CLEANUP_BLOCK_LENGTH_PROP_NAME = "aeron.term.buffer.cleanup.block.length";
-
-    /**
-     * Default term buffer cleanup block size.
-     */
-    @Config
-    public static final int TERM_BUFFER_CLEANUP_BLOCK_SIZE_DEFAULT = 64 * 1024;
-
-    /**
      * Property name for boolean value for if storage checks should be performed when allocating files.
      */
     @Config(defaultType = DefaultType.BOOLEAN, defaultBoolean = true)
@@ -1098,6 +1085,8 @@ public final class Configuration
      */
     public static final Executor CALLER_RUNS_TASK_EXECUTOR = Runnable::run;
 
+    static final int TERM_CLEANUP_BLOCK_LENGTH = 4096;
+
     /**
      * Should the high-resolution timer be used when running on Windows.
      *
@@ -1626,20 +1615,6 @@ public final class Configuration
     public static int filePageSize()
     {
         return getSizeAsInt(FILE_PAGE_SIZE_PROP_NAME, FILE_PAGE_SIZE_DEFAULT);
-    }
-
-    /**
-     * Size in bytes of the term buffer cleanup block, i.e. the max amount of bytes in a dirty term that will be zeroed
-     * per duty cycle. The value must be a power of two withing [1KB, 1GB] range.
-     *
-     * <p><em>Note: </em> using large block size will increase the max pause time for the driver conductor thread.
-     *
-     * @return page size in bytes to align all files to.
-     * @see #TERM_BUFFER_CLEANUP_BLOCK_LENGTH_PROP_NAME
-     */
-    public static int termBufferCleanupBlockLength()
-    {
-        return getSizeAsInt(TERM_BUFFER_CLEANUP_BLOCK_LENGTH_PROP_NAME, TERM_BUFFER_CLEANUP_BLOCK_SIZE_DEFAULT);
     }
 
     /**

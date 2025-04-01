@@ -155,8 +155,7 @@ class SenderTest
             flowControl,
             mockRetransmitHandler,
             new NetworkPublicationThreadLocals(),
-            false,
-            TERM_BUFFER_LENGTH >> 3);
+            false);
 
         assertTrue(senderCommandQueue.offer(() -> sender.onNewNetworkPublication(publication)));
     }

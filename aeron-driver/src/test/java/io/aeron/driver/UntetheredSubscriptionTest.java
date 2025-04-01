@@ -70,7 +70,6 @@ class UntetheredSubscriptionTest
             publisherLimit,
             rawLog,
             true,
-            TERM_WINDOW_LENGTH / 2,
             params);
     }
 

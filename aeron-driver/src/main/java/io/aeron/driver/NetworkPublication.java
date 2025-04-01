@@ -43,8 +43,7 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
-import static io.aeron.driver.Configuration.PUBLICATION_HEARTBEAT_TIMEOUT_NS;
-import static io.aeron.driver.Configuration.PUBLICATION_SETUP_TIMEOUT_NS;
+import static io.aeron.driver.Configuration.*;
 import static io.aeron.driver.status.SystemCounterDescriptor.*;
 import static io.aeron.logbuffer.LogBufferDescriptor.*;
 import static io.aeron.logbuffer.TermScanner.*;
@@ -128,7 +127,6 @@ public final class NetworkPublication
     private final int startingTermOffset;
     private final int termBufferLength;
     private final int termLengthMask;
-    private final int termCleanupBlockLength;
     private final int termWindowLength;
     private final int tripGain;
     private final int mtuLength;
@@ -192,8 +190,7 @@ public final class NetworkPublication
         final FlowControl flowControl,
         final RetransmitHandler retransmitHandler,
         final NetworkPublicationThreadLocals threadLocals,
-        final boolean isExclusive,
-        final int termCleanupBlockLength)
+        final boolean isExclusive)
     {
         this.registrationId = registrationId;
         this.unblockTimeoutNs = ctx.publicationUnblockTimeoutNs();
@@ -252,7 +249,6 @@ public final class NetworkPublication
         final int termLength = rawLog.termLength();
         termBufferLength = termLength;
         termLengthMask = termLength - 1;
-        this.termCleanupBlockLength = termCleanupBlockLength;
         wrapAroundGap = termLength * 3L;
 
         final long nowNs = cachedNanoClock.nanoTime();
@@ -917,11 +913,11 @@ public final class NetworkPublication
     private int cleanBufferTo(final long position)
     {
         final long cleanPosition = this.cleanPosition;
-        if (position - cleanPosition >= termCleanupBlockLength)
+        if (position - cleanPosition >= TERM_CLEANUP_BLOCK_LENGTH)
         {
             final UnsafeBuffer dirtyTermBuffer = termBuffers[indexByPosition(cleanPosition, positionBitsToShift)];
             final int termOffset = (int)(cleanPosition & termLengthMask);
-            final int length = Math.min(termCleanupBlockLength, termBufferLength - termOffset);
+            final int length = Math.min(TERM_CLEANUP_BLOCK_LENGTH, termBufferLength - termOffset);
 
             dirtyTermBuffer.setMemory(termOffset, length, (byte)0);
             VarHandle.storeStoreFence();

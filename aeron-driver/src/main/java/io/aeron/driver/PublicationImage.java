@@ -47,6 +47,7 @@ import java.util.ArrayList;
 import static io.aeron.CommonContext.UNTETHERED_RESTING_TIMEOUT_PARAM_NAME;
 import static io.aeron.CommonContext.UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME;
 import static io.aeron.ErrorCode.IMAGE_REJECTED;
+import static io.aeron.driver.Configuration.TERM_CLEANUP_BLOCK_LENGTH;
 import static io.aeron.driver.LossDetector.lossFound;
 import static io.aeron.driver.LossDetector.rebuildOffset;
 import static io.aeron.driver.status.SystemCounterDescriptor.*;
@@ -167,7 +168,6 @@ public final class PublicationImage
     private final int positionBitsToShift;
     private final int termBufferLength;
     private final int termLengthMask;
-    private final int termCleanupBlockLength;
     private final int initialTermId;
     private final short flags;
     private final boolean isReliable;
@@ -215,8 +215,7 @@ public final class PublicationImage
         final Position hwmPosition,
         final Position rebuildPosition,
         final String sourceIdentity,
-        final CongestionControl congestionControl,
-        final int termCleanupBlockLength)
+        final CongestionControl congestionControl)
     {
         this.correlationId = correlationId;
         this.imageLivenessTimeoutNs = ctx.imageLivenessTimeoutNs();
@@ -267,7 +266,6 @@ public final class PublicationImage
         termBufferLength = termLength;
         termLengthMask = termLength - 1;
         positionBitsToShift = LogBufferDescriptor.positionBitsToShift(termLength);
-        this.termCleanupBlockLength = termCleanupBlockLength;
 
         nextSmReceiverWindowLength = congestionControl.initialWindowLength();
         maxReceiverWindowLength = congestionControl.maxWindowLength();
@@ -1010,11 +1008,11 @@ public final class PublicationImage
     private int cleanBufferTo(final long position)
     {
         final long cleanPosition = this.cleanPosition;
-        if (position - cleanPosition >= termCleanupBlockLength)
+        if (position - cleanPosition >= TERM_CLEANUP_BLOCK_LENGTH)
         {
             final UnsafeBuffer dirtyTermBuffer = termBuffers[indexByPosition(cleanPosition, positionBitsToShift)];
             final int termOffset = (int)(cleanPosition & termLengthMask);
-            final int length = Math.min(termCleanupBlockLength, termBufferLength - termOffset);
+            final int length = Math.min(TERM_CLEANUP_BLOCK_LENGTH, termBufferLength - termOffset);
 
             dirtyTermBuffer.setMemory(termOffset, length, (byte)0);
             VarHandle.storeStoreFence();

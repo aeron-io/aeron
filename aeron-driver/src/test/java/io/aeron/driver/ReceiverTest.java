@@ -232,8 +232,7 @@ class ReceiverTest
             mockHighestReceivedPosition,
             mockRebuildPosition,
             SOURCE_IDENTITY,
-            congestionControl,
-            TERM_BUFFER_LENGTH);
+            congestionControl);
 
         final int messagesRead = drainConductorQueue(
             (e) ->
@@ -300,8 +299,7 @@ class ReceiverTest
                     mockHighestReceivedPosition,
                     mockRebuildPosition,
                     SOURCE_IDENTITY,
-                    congestionControl,
-                    TERM_BUFFER_LENGTH);
+                    congestionControl);
 
                 receiverProxy.newPublicationImage(receiveChannelEndpoint, image);
             });
@@ -367,8 +365,7 @@ class ReceiverTest
                     mockHighestReceivedPosition,
                     mockRebuildPosition,
                     SOURCE_IDENTITY,
-                    congestionControl,
-                    TERM_BUFFER_LENGTH);
+                    congestionControl);
 
                 receiverProxy.newPublicationImage(receiveChannelEndpoint, image);
             });
@@ -436,8 +433,8 @@ class ReceiverTest
                     mockHighestReceivedPosition,
                     mockRebuildPosition,
                     SOURCE_IDENTITY,
-                    congestionControl,
-                    TERM_BUFFER_LENGTH);
+                    congestionControl
+                );
 
                 receiverProxy.newPublicationImage(receiveChannelEndpoint, image);
             });
@@ -510,8 +507,7 @@ class ReceiverTest
                     mockHighestReceivedPosition,
                     mockRebuildPosition,
                     SOURCE_IDENTITY,
-                    congestionControl,
-                    TERM_BUFFER_LENGTH);
+                    congestionControl);
 
                 receiverProxy.newPublicationImage(receiveChannelEndpoint, image);
             });
