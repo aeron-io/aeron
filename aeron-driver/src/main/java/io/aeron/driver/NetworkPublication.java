@@ -643,22 +643,7 @@ public final class NetworkPublication
 
         if (0 == bytesSent)
         {
-            final short flags;
-
-            if (isRevoked)
-            {
-                flags = BEGIN_END_EOS_AND_REVOKED_FLAGS;
-            }
-            else if (signalEos && isEndOfStream)
-            {
-                flags = BEGIN_END_AND_EOS_FLAGS;
-            }
-            else
-            {
-                flags = BEGIN_AND_END_FLAGS;
-            }
-
-            bytesSent = heartbeatMessageCheck(nowNs, activeTermId, termOffset, (byte)flags);
+            bytesSent = heartbeatMessageCheck(nowNs, activeTermId, termOffset);
 
             if (spiesSimulateConnection && hasSpies && !hasReceivers)
             {
@@ -901,12 +886,27 @@ public final class NetworkPublication
     }
 
     private int heartbeatMessageCheck(
-        final long nowNs, final int activeTermId, final int termOffset, final byte flags)
+        final long nowNs, final int activeTermId, final int termOffset)
     {
         int bytesSent = 0;
 
         if (hasInitialConnection && (timeOfLastDataOrHeartbeatNs + PUBLICATION_HEARTBEAT_TIMEOUT_NS) - nowNs < 0)
         {
+            final short flags;
+
+            if (isRevoked)
+            {
+                flags = BEGIN_END_EOS_AND_REVOKED_FLAGS;
+            }
+            else if (signalEos && isEndOfStream)
+            {
+                flags = BEGIN_END_AND_EOS_FLAGS;
+            }
+            else
+            {
+                flags = BEGIN_AND_END_FLAGS;
+            }
+
             heartbeatBuffer.clear();
             heartbeatDataHeader
                 .sessionId(sessionId)
@@ -1100,6 +1100,7 @@ public final class NetworkPublication
             case REVOKED:
             {
                 conductor.transitionToRevoked(this);
+                conductor.cleanupSpies(this);
 
                 state = State.DRAINING;
                 break;

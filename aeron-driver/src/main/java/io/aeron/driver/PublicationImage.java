@@ -107,7 +107,7 @@ public final class PublicationImage
 {
     enum State
     {
-        INIT, ACTIVE, DRAINING, REVOKED, LINGER, DONE
+        INIT, ACTIVE, REVOKED, DRAINING, LINGER, DONE
     }
 
     // expected minimum number of SMs with EOS bit set sent during draining.
@@ -173,6 +173,7 @@ public final class PublicationImage
     private boolean smEnabled = true;
 
     private boolean isRebuilding = true;
+    private boolean isRevoked = true;
     private volatile boolean isReceiverReleaseTriggered = false;
     private volatile boolean hasReceiverReleased = false;
     private volatile State state = State.INIT;
@@ -610,8 +611,6 @@ public final class PublicationImage
         final int transportIndex,
         final InetSocketAddress srcAddress)
     {
-        final boolean isEndOfStream = DataHeaderFlyweight.isEndOfStream(buffer);
-
         if (null != rejectionReason)
         {
             return 0;
@@ -634,7 +633,7 @@ public final class PublicationImage
                     timeOfLastPacketNs = nowNs;
                     final ImageConnection imageConnection = trackConnection(transportIndex, srcAddress, nowNs);
 
-                    if (isEndOfStream)
+                    if (DataHeaderFlyweight.isEndOfStream(buffer))
                     {
                         imageConnection.eosPosition = packetPosition;
                         imageConnection.isEos = true;
@@ -902,26 +901,13 @@ public final class PublicationImage
     /**
      * {@inheritDoc}
      */
+    @SuppressWarnings("fallthrough")
     public void onTimeEvent(final long timeNs, final long timesMs, final DriverConductor conductor)
     {
         switch (state)
         {
             case ACTIVE:
                 checkUntetheredSubscriptions(timeNs, conductor);
-                break;
-
-            case DRAINING:
-                if (isDrained() && ((timeOfLastStateChangeNs + (SM_EOS_MULTIPLE * smTimeoutNs)) - timeNs < 0))
-                {
-                    conductor.transitionToLinger(this);
-
-                    channelEndpoint.decRefImages();
-                    conductor.tryCloseReceiveChannelEndpoint(channelEndpoint);
-
-                    timeOfLastStateChangeNs = timeNs;
-                    isReceiverReleaseTriggered = true;
-                    state(State.LINGER);
-                }
                 break;
 
             case REVOKED:
@@ -933,6 +919,18 @@ public final class PublicationImage
 
                     nextSmDeadlineNs = timeNs - 1;
 
+                    isRevoked = true;
+
+                    state(State.DRAINING);
+
+                    // DO NOT BREAK - immediately proceed to processing DRAINING state
+                }
+                /* fallthrough */
+
+            case DRAINING:
+                if ((isDrained() && ((timeOfLastStateChangeNs + (SM_EOS_MULTIPLE * smTimeoutNs)) - timeNs < 0)) ||
+                    isRevoked)
+                {
                     conductor.transitionToLinger(this);
 
                     channelEndpoint.decRefImages();

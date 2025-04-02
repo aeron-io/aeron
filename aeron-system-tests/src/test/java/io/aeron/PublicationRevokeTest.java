@@ -169,7 +169,6 @@ class PublicationRevokeTest
         System.err.println("pub two revoked? :: " + publicationTwo.isRevoked());
         System.err.println("pub two closed?  :: " + publicationTwo.isClosed());
 
-
         {
             buffer.putInt(0, 1);
 
@@ -194,6 +193,55 @@ class PublicationRevokeTest
 
         subscription = client.addSubscription(channel, STREAM_ID, availableImageHandler, unavailableImageHandler);
         publication = client.addPublication(channel, STREAM_ID);
+
+        publishMessage();
+
+        pollForFragment();
+
+        publishMessage();
+
+        Thread.sleep(300);
+
+        publication.revoke();
+        //publication.close();
+
+        buffer.putInt(0, 1);
+        assertEquals(CLOSED, publication.offer(buffer, 0, SIZE_OF_INT));
+
+        Thread.sleep(300);
+
+        if (subscription.images().isEmpty())
+        {
+            System.err.println("NO IMAGES!!!");
+        }
+        else
+        {
+            pollForFragment();
+        }
+    }
+
+    @Test
+    @InterruptAfter(10)
+    void revokeTestSpy() throws Exception
+    {
+        doAnswer(invocation ->
+        {
+            System.err.println(" -- unavailable image");
+            return null;
+        }).when(unavailableImageHandler).onUnavailableImage(any(Image.class));
+
+        doAnswer(invocation ->
+        {
+            System.err.println(" ++++ available image");
+            return null;
+        }).when(availableImageHandler).onAvailableImage(any(Image.class));
+
+        launch();
+
+        final String channel = "aeron:udp?endpoint=localhost:24325";
+
+        subscription = client.addSubscription(CommonContext.SPY_PREFIX + channel, STREAM_ID, availableImageHandler, unavailableImageHandler);
+        publication = client.addPublication(channel + "|ssc=true", STREAM_ID);
 
         publishMessage();
 
