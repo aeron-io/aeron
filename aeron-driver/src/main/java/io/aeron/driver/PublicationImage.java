@@ -173,7 +173,7 @@ public final class PublicationImage
     private boolean smEnabled = true;
 
     private boolean isRebuilding = true;
-    private boolean isRevoked = true;
+    private boolean isRevoked = false;
     private volatile boolean isReceiverReleaseTriggered = false;
     private volatile boolean hasReceiverReleased = false;
     private volatile State state = State.INIT;
@@ -642,8 +642,6 @@ public final class PublicationImage
                         {
                             if (DataHeaderFlyweight.isRevoked(buffer))
                             {
-                                // we only care about a revoke when we're dealing with the last imageConnection that hasn't already been EOS'd
-                                System.err.println("MARK IT REVOKED!!");
                                 state(State.REVOKED);
                             }
 
@@ -792,36 +790,40 @@ public final class PublicationImage
     int processPendingLoss()
     {
         int workCount = 0;
-        final long changeNumber = (long)END_LOSS_CHANGE_VH.getAcquire(this);
 
-        if (changeNumber != lastLossChangeNumber)
+        if (!isRevoked)
         {
-            final int termId = lossTermId;
-            final int termOffset = lossTermOffset;
-            final int length = lossLength;
+            final long changeNumber = (long)END_LOSS_CHANGE_VH.getAcquire(this);
 
-            VarHandle.loadLoadFence();
-
-            if (changeNumber == (long)BEGIN_LOSS_CHANGE_VH.getAcquire(this))
+            if (changeNumber != lastLossChangeNumber)
             {
-                if (isReliable)
+                final int termId = lossTermId;
+                final int termOffset = lossTermOffset;
+                final int length = lossLength;
+
+                VarHandle.loadLoadFence();
+
+                if (changeNumber == (long)BEGIN_LOSS_CHANGE_VH.getAcquire(this))
                 {
-                    channelEndpoint.sendNakMessage(imageConnections, sessionId, streamId, termId, termOffset, length);
-                    nakMessagesSent.incrementRelease();
-                }
-                else
-                {
-                    final UnsafeBuffer termBuffer = termBuffers[indexByTerm(initialTermId, termId)];
-                    if (tryFillGap(rawLog.metaData(), termBuffer, termId, termOffset, length))
+                    if (isReliable)
                     {
-                        lossGapFills.incrementRelease();
+                        channelEndpoint.sendNakMessage(imageConnections, sessionId, streamId, termId, termOffset, length);
+                        nakMessagesSent.incrementRelease();
                     }
+                    else
+                    {
+                        final UnsafeBuffer termBuffer = termBuffers[indexByTerm(initialTermId, termId)];
+                        if (tryFillGap(rawLog.metaData(), termBuffer, termId, termOffset, length))
+                        {
+                            lossGapFills.incrementRelease();
+                        }
+                    }
+
+                    lastLossChangeNumber = changeNumber;
                 }
 
-                lastLossChangeNumber = changeNumber;
+                workCount = 1;
             }
-
-            workCount = 1;
         }
 
         return workCount;
@@ -912,8 +914,6 @@ public final class PublicationImage
 
             case REVOKED:
                 {
-                    System.err.println("receive side handle REVOKED");
-
                     isRebuilding = false;
                     isSendingEosSm = true;
 
@@ -922,8 +922,6 @@ public final class PublicationImage
                     isRevoked = true;
 
                     state(State.DRAINING);
-
-                    // DO NOT BREAK - immediately proceed to processing DRAINING state
                 }
                 /* fallthrough */
 

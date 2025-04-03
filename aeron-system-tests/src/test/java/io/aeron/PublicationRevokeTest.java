@@ -23,9 +23,14 @@ import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.CloseHelper;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Stream;
 
 import static io.aeron.Publication.CLOSED;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
@@ -38,6 +43,18 @@ class PublicationRevokeTest
 {
     @RegisterExtension
     final SystemTestWatcher watcher = new SystemTestWatcher();
+
+    private static final String UDP_CHANNEL = "aeron:udp?endpoint=localhost:24325";
+    private static final String IPC_CHANNEL = "aeron:ipc";
+
+    private static Stream<Arguments> channels()
+    {
+        return Stream.of(
+            Arguments.of(UDP_CHANNEL, UDP_CHANNEL),
+            Arguments.of(IPC_CHANNEL, IPC_CHANNEL),
+            Arguments.of(CommonContext.SPY_PREFIX + UDP_CHANNEL, UDP_CHANNEL + "|ssc=true")
+        );
+    }
 
     private static final int STREAM_ID = 1001;
 
@@ -68,6 +85,8 @@ class PublicationRevokeTest
         watcher.dataCollector().add(driver.context().aeronDirectory());
 
         client = Aeron.connect(clientContext.clone());
+
+        buffer.putInt(0, 1);
     }
 
     @AfterEach
@@ -76,197 +95,93 @@ class PublicationRevokeTest
         CloseHelper.closeAll(client, driver);
     }
 
-    @Test
+    @ParameterizedTest
+    @MethodSource("channels")
     @InterruptAfter(10)
-    void revokeTest1() throws Exception
+    void revokeTestSimple(final String subscriptionChannel, final String publicationChannel)
     {
+        final AtomicInteger unavailableImages = new AtomicInteger(0);
         doAnswer(invocation ->
         {
-            System.err.println(" -- unavailable image");
+            unavailableImages.incrementAndGet();
             return null;
         }).when(unavailableImageHandler).onUnavailableImage(any(Image.class));
 
         launch();
 
-        final String channel = "aeron:udp?endpoint=localhost:24325";
+        subscription = client.addSubscription(subscriptionChannel, STREAM_ID, availableImageHandler, unavailableImageHandler);
+        publication = client.addPublication(publicationChannel, STREAM_ID);
 
-        subscription = client.addSubscription(channel, STREAM_ID, availableImageHandler, unavailableImageHandler);
-        publication = client.addPublication(channel, STREAM_ID);
-
-        publishMessage();
-
-        pollForFragment();
+        Tests.awaitConnected(subscription);
+        Tests.awaitConnected(publication);
 
         publishMessage();
+        assertEquals(1, pollForFragment());
 
-        Thread.sleep(300);
+        publishMessage();
 
         publication.revoke();
-        //publication.close();
+        assertTrue(publication.isRevoked());
 
-        buffer.putInt(0, 1);
         assertEquals(CLOSED, publication.offer(buffer, 0, SIZE_OF_INT));
 
-        Thread.sleep(300);
+        while (unavailableImages.get() == 0)
+        {
+            Tests.yield();
+        }
 
-        if (subscription.images().isEmpty())
-        {
-            System.err.println("NO IMAGES!!!");
-        }
-        else
-        {
-            pollForFragment();
-        }
+        assertTrue(subscription.hasNoImages());
     }
 
-    @Test
+    @ParameterizedTest
+    @MethodSource("channels")
     @InterruptAfter(10)
-    void revokeTestConcurrent() throws Exception
+    void revokeTestConcurrent(final String subscriptionChannel, final String publicationChannel)
     {
+        final AtomicInteger unavailableImages = new AtomicInteger(0);
         doAnswer(invocation ->
         {
-            System.err.println(" -- unavailable image");
+            unavailableImages.incrementAndGet();
             return null;
         }).when(unavailableImageHandler).onUnavailableImage(any(Image.class));
 
         launch();
 
-        final String channel = "aeron:udp?endpoint=localhost:24325";
+        subscription = client.addSubscription(subscriptionChannel, STREAM_ID, availableImageHandler, unavailableImageHandler);
+        publication = client.addPublication(publicationChannel, STREAM_ID);
 
-        subscription = client.addSubscription(channel, STREAM_ID, availableImageHandler, unavailableImageHandler);
-        publication = client.addPublication(channel, STREAM_ID);
+        Tests.awaitConnected(subscription);
+        Tests.awaitConnected(publication);
 
-        Publication publicationTwo = client.addPublication(channel, STREAM_ID);
+        Publication publicationTwo = client.addPublication(publicationChannel, STREAM_ID);
+
+        Tests.awaitConnected(publicationTwo);
 
         publishMessage();
         publishMessage(publicationTwo);
 
-        Thread.sleep(200);
-
-        pollForFragment();
+        assertEquals(2, pollForFragment());
 
         publishMessage();
-
-        Thread.sleep(300);
 
         publication.revoke();
-        //publication.close();
+        assertTrue(publication.isRevoked());
 
-        buffer.putInt(0, 1);
         assertEquals(CLOSED, publication.offer(buffer, 0, SIZE_OF_INT));
 
-        Thread.sleep(300);
-
-        if (subscription.images().isEmpty())
+        while (unavailableImages.get() == 0)
         {
-            System.err.println("NO IMAGES!!!");
-        }
-        else
-        {
-            pollForFragment();
+            Tests.yield();
         }
 
-        System.err.println("pub two revoked? :: " + publicationTwo.isRevoked());
-        System.err.println("pub two closed?  :: " + publicationTwo.isClosed());
+        assertTrue(subscription.hasNoImages());
 
+        while (!publicationTwo.isClosed())
         {
-            buffer.putInt(0, 1);
-
-            long x = publicationTwo.offer(buffer, 0, SIZE_OF_INT);
-            System.err.println("x == " + x);
+            Tests.yield();
         }
-    }
 
-    @Test
-    @InterruptAfter(10)
-    void revokeTestIPC() throws Exception
-    {
-        doAnswer(invocation ->
-        {
-            System.err.println(" -- unavailable image");
-            return null;
-        }).when(unavailableImageHandler).onUnavailableImage(any(Image.class));
-
-        launch();
-
-        final String channel = "aeron:ipc";
-
-        subscription = client.addSubscription(channel, STREAM_ID, availableImageHandler, unavailableImageHandler);
-        publication = client.addPublication(channel, STREAM_ID);
-
-        publishMessage();
-
-        pollForFragment();
-
-        publishMessage();
-
-        Thread.sleep(300);
-
-        publication.revoke();
-        //publication.close();
-
-        buffer.putInt(0, 1);
-        assertEquals(CLOSED, publication.offer(buffer, 0, SIZE_OF_INT));
-
-        Thread.sleep(300);
-
-        if (subscription.images().isEmpty())
-        {
-            System.err.println("NO IMAGES!!!");
-        }
-        else
-        {
-            pollForFragment();
-        }
-    }
-
-    @Test
-    @InterruptAfter(10)
-    void revokeTestSpy() throws Exception
-    {
-        doAnswer(invocation ->
-        {
-            System.err.println(" -- unavailable image");
-            return null;
-        }).when(unavailableImageHandler).onUnavailableImage(any(Image.class));
-
-        doAnswer(invocation ->
-        {
-            System.err.println(" ++++ available image");
-            return null;
-        }).when(availableImageHandler).onAvailableImage(any(Image.class));
-
-        launch();
-
-        final String channel = "aeron:udp?endpoint=localhost:24325";
-
-        subscription = client.addSubscription(CommonContext.SPY_PREFIX + channel, STREAM_ID, availableImageHandler, unavailableImageHandler);
-        publication = client.addPublication(channel + "|ssc=true", STREAM_ID);
-
-        publishMessage();
-
-        pollForFragment();
-
-        publishMessage();
-
-        Thread.sleep(300);
-
-        publication.revoke();
-        //publication.close();
-
-        buffer.putInt(0, 1);
-        assertEquals(CLOSED, publication.offer(buffer, 0, SIZE_OF_INT));
-
-        Thread.sleep(300);
-
-        if (subscription.images().isEmpty())
-        {
-            System.err.println("NO IMAGES!!!");
-        }
-        else
-        {
-            pollForFragment();
-        }
+        assertTrue(publicationTwo.isRevoked());
     }
 
     private void publishMessage()
@@ -276,23 +191,20 @@ class PublicationRevokeTest
 
     private void publishMessage(final Publication pub)
     {
-        buffer.putInt(0, 1);
-
         while (pub.offer(buffer, 0, SIZE_OF_INT) < 0L)
         {
             Tests.yield();
         }
     }
 
-    private void pollForFragment()
+    private int pollForFragment()
     {
         while (true)
         {
             final int fragments = subscription.poll(fragmentHandler, 10);
             if (fragments > 0)
             {
-                System.err.println("got frags :: " + fragments);
-                break;
+                return fragments;
             }
 
             Tests.yield();

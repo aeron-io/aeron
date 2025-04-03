@@ -294,11 +294,9 @@ public final class NetworkPublication
 
     public void revoke()
     {
-        System.err.println("REVOKE() called!!");
-
-        final long revokedPos = publisherPos.get();
+        final long revokedPos = producerPosition();
         publisherLimit.setRelease(revokedPos);
-        LogBufferDescriptor.endOfStreamPosition(metaDataBuffer, revokedPos);
+        endOfStreamPosition(metaDataBuffer, revokedPos);
 
         isEndOfStream = true;
         isRevoked = true;
@@ -1102,17 +1100,13 @@ public final class NetworkPublication
                 conductor.transitionToRevoked(this);
                 conductor.cleanupSpies(this);
 
-                state = State.DRAINING;
+                timeOfLastActivityNs = timeNs;
+                state = State.LINGER;
                 break;
             }
 
             case DRAINING:
             {
-                if (isRevoked)
-                {
-                    // TODO need to find a way to quickly/cleanly get out of DRAINING and into LINGER
-                }
-
                 final long producerPosition = producerPosition();
                 publisherPos.setRelease(producerPosition);
                 final long senderPosition = this.senderPosition.getVolatile();
@@ -1143,7 +1137,8 @@ public final class NetworkPublication
             }
 
             case LINGER:
-                if (hasReceivedUnicastEos || (timeOfLastActivityNs + lingerTimeoutNs) - timeNs < 0)
+                if (refCount == 0 &&
+                    ((!hasSpies && hasReceivedUnicastEos) || (timeOfLastActivityNs + lingerTimeoutNs) - timeNs < 0))
                 {
                     channelEndpoint.decRef();
                     conductor.cleanupPublication(this);
@@ -1179,12 +1174,7 @@ public final class NetworkPublication
     {
         if (0 == --refCount)
         {
-            if (isRevoked)
-            {
-                // TODO maybe do something different if we're already revoked?
-                // FWIW, the revoke() call already did most of what's inside the else{} below
-            }
-            else
+            if (!isRevoked)
             {
                 final long producerPosition = producerPosition();
                 publisherLimit.setRelease(producerPosition);
