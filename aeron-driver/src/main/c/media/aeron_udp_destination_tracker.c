@@ -109,7 +109,7 @@ int aeron_udp_destination_tracker_send(
     int result = (int)iov_length;
     int to_be_removed = 0;
 
-    *bytes_sent = 0;
+    *bytes_sent = iov->iov_len;
 
     int starting_index = tracker->round_robin_index++;
     if (starting_index >= length)
