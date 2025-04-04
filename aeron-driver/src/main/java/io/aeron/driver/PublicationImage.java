@@ -47,13 +47,14 @@ import java.util.ArrayList;
 import static io.aeron.CommonContext.UNTETHERED_RESTING_TIMEOUT_PARAM_NAME;
 import static io.aeron.CommonContext.UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME;
 import static io.aeron.ErrorCode.IMAGE_REJECTED;
+import static io.aeron.driver.TermCleaner.TERM_CLEANUP_BLOCK_LENGTH;
 import static io.aeron.driver.LossDetector.lossFound;
 import static io.aeron.driver.LossDetector.rebuildOffset;
+import static io.aeron.driver.TermCleaner.alignCleanPositionToTheStartOfTheBlock;
 import static io.aeron.driver.status.SystemCounterDescriptor.*;
 import static io.aeron.logbuffer.LogBufferDescriptor.*;
 import static io.aeron.logbuffer.TermGapFiller.tryFillGap;
 import static io.aeron.protocol.SetupFlyweight.SEND_RESPONSE_SETUP_FLAG;
-import static org.agrona.BitUtil.SIZE_OF_LONG;
 
 class PublicationImagePadding1
 {
@@ -166,6 +167,7 @@ public final class PublicationImage
     private final int sessionId;
     private final int streamId;
     private final int positionBitsToShift;
+    private final int termBufferLength;
     private final int termLengthMask;
     private final int initialTermId;
     private final short flags;
@@ -262,6 +264,7 @@ public final class PublicationImage
         lossDetector = new LossDetector(lossFeedbackDelayGenerator, this);
 
         final int termLength = rawLog.termLength();
+        termBufferLength = termLength;
         termLengthMask = termLength - 1;
         positionBitsToShift = LogBufferDescriptor.positionBitsToShift(termLength);
 
@@ -271,7 +274,7 @@ public final class PublicationImage
         nextSmPosition = position;
         lastSmPosition = position;
         lastOverrunThreshold = position + (termLength >> 1);
-        cleanPosition = position;
+        cleanPosition = alignCleanPositionToTheStartOfTheBlock(position);
 
         hwmPosition.setRelease(position);
         rebuildPosition.setRelease(position);
@@ -566,9 +569,12 @@ public final class PublicationImage
             final long newRebuildPosition = (rebuildPosition - rebuildTermOffset) + rebuildOffset(scanOutcome);
             this.rebuildPosition.proposeMaxRelease(newRebuildPosition);
 
+            workCount += cleanBufferTo(minSubscriberPosition);
+            final long cleanPosition = this.cleanPosition;
+
             final long ccOutcome = congestionControl.onTrackRebuild(
                 nowNs,
-                minSubscriberPosition,
+                cleanPosition,
                 nextSmPosition,
                 hwmPosition,
                 rebuildPosition,
@@ -579,12 +585,11 @@ public final class PublicationImage
             final int threshold = CongestionControl.threshold(windowLength);
 
             if (CongestionControl.shouldForceStatusMessage(ccOutcome) ||
-                (minSubscriberPosition > (nextSmPosition + threshold)) ||
+                (cleanPosition > (nextSmPosition + threshold)) ||
                 windowLength != nextSmReceiverWindowLength)
             {
-                cleanBufferTo(minSubscriberPosition - (termLengthMask + 1));
-                scheduleStatusMessage(minSubscriberPosition, windowLength);
-                workCount += 1;
+                scheduleStatusMessage(cleanPosition, windowLength);
+                workCount++;
             }
         }
 
@@ -625,7 +630,7 @@ public final class PublicationImage
         {
             if (isHeartbeat)
             {
-                final long potentialWindowBottom = lastSmPosition - (termLengthMask + 1);
+                final long potentialWindowBottom = lastSmPosition - termBufferLength;
                 final long publicationWindowBottom = potentialWindowBottom < 0 ? 0 : potentialWindowBottom;
 
                 if (packetPosition >= publicationWindowBottom)
@@ -755,8 +760,7 @@ public final class PublicationImage
             if (changeNumber == (long)BEGIN_SM_CHANGE_VH.getAcquire(this))
             {
                 final int termId = computeTermIdFromPosition(smPosition, positionBitsToShift, initialTermId);
-                final int termOffset = (int)smPosition & termLengthMask;
-                final int termLength = termLengthMask + 1;
+                final int termOffset = (int)(smPosition & termLengthMask);
                 final short flags = isSendingEosSm ? StatusMessageFlyweight.END_OF_STREAM_FLAG : 0;
 
                 channelEndpoint.sendStatusMessage(
@@ -765,7 +769,7 @@ public final class PublicationImage
                 statusMessagesSent.incrementRelease();
 
                 lastSmPosition = smPosition;
-                lastOverrunThreshold = smPosition + (termLength >> 1);
+                lastOverrunThreshold = smPosition + (termBufferLength >> 1);
                 lastSmChangeNumber = changeNumber;
                 nextSmDeadlineNs = nowNs + smTimeoutNs;
 
@@ -1002,20 +1006,20 @@ public final class PublicationImage
         return isFlowControlOverRun;
     }
 
-    private void cleanBufferTo(final long position)
+    private int cleanBufferTo(final long position)
     {
         final long cleanPosition = this.cleanPosition;
-        if (position > cleanPosition)
+        if (position - cleanPosition >= TERM_CLEANUP_BLOCK_LENGTH)
         {
-            final int bytesForCleaning = (int)(position - cleanPosition);
             final UnsafeBuffer dirtyTermBuffer = termBuffers[indexByPosition(cleanPosition, positionBitsToShift)];
-            final int termOffset = (int)cleanPosition & termLengthMask;
-            final int length = Math.min(bytesForCleaning, dirtyTermBuffer.capacity() - termOffset);
+            final int termOffset = (int)(cleanPosition & termLengthMask);
 
-            dirtyTermBuffer.setMemory(termOffset, length - SIZE_OF_LONG, (byte)0);
-            dirtyTermBuffer.putLongRelease(termOffset + (length - SIZE_OF_LONG), 0);
-            this.cleanPosition = cleanPosition + length;
+            dirtyTermBuffer.setMemory(termOffset, TERM_CLEANUP_BLOCK_LENGTH, (byte)0);
+            VarHandle.storeStoreFence();
+            this.cleanPosition = cleanPosition + TERM_CLEANUP_BLOCK_LENGTH;
+            return 1;
         }
+        return 0;
     }
 
     private ImageConnection trackConnection(

@@ -433,7 +433,8 @@ class ReceiverTest
                     mockHighestReceivedPosition,
                     mockRebuildPosition,
                     SOURCE_IDENTITY,
-                    congestionControl);
+                    congestionControl
+                );
 
                 receiverProxy.newPublicationImage(receiveChannelEndpoint, image);
             });
