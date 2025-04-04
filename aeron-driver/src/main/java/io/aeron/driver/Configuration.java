@@ -1085,8 +1085,6 @@ public final class Configuration
      */
     public static final Executor CALLER_RUNS_TASK_EXECUTOR = Runnable::run;
 
-    static final int TERM_CLEANUP_BLOCK_LENGTH = 4096;
-
     /**
      * Should the high-resolution timer be used when running on Windows.
      *

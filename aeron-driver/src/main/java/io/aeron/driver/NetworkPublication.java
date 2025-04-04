@@ -23,11 +23,7 @@ import io.aeron.driver.status.SystemCounters;
 import io.aeron.logbuffer.FrameDescriptor;
 import io.aeron.logbuffer.LogBufferDescriptor;
 import io.aeron.logbuffer.LogBufferUnblocker;
-import io.aeron.protocol.DataHeaderFlyweight;
-import io.aeron.protocol.ErrorFlyweight;
-import io.aeron.protocol.RttMeasurementFlyweight;
-import io.aeron.protocol.SetupFlyweight;
-import io.aeron.protocol.StatusMessageFlyweight;
+import io.aeron.protocol.*;
 import org.agrona.CloseHelper;
 import org.agrona.ErrorHandler;
 import org.agrona.collections.ArrayListUtil;
@@ -43,7 +39,10 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
-import static io.aeron.driver.Configuration.*;
+import static io.aeron.driver.Configuration.PUBLICATION_HEARTBEAT_TIMEOUT_NS;
+import static io.aeron.driver.Configuration.PUBLICATION_SETUP_TIMEOUT_NS;
+import static io.aeron.driver.TermCleaner.TERM_CLEANUP_BLOCK_LENGTH;
+import static io.aeron.driver.TermCleaner.alignCleanPositionToTheStartOfTheBlock;
 import static io.aeron.driver.status.SystemCounterDescriptor.*;
 import static io.aeron.logbuffer.LogBufferDescriptor.*;
 import static io.aeron.logbuffer.TermScanner.*;
@@ -120,7 +119,6 @@ public final class NetworkPublication
     private final long untetheredRestingTimeoutNs;
     private final long tag;
     private final long responseCorrelationId;
-    private final long wrapAroundGap;
     private final int positionBitsToShift;
     private final int initialTermId;
     private final int startingTermId;
@@ -249,7 +247,6 @@ public final class NetworkPublication
         final int termLength = rawLog.termLength();
         termBufferLength = termLength;
         termLengthMask = termLength - 1;
-        wrapAroundGap = termLength * 3L;
 
         final long nowNs = cachedNanoClock.nanoTime();
         timeOfLastDataOrHeartbeatNs = nowNs - PUBLICATION_HEARTBEAT_TIMEOUT_NS - 1;
@@ -260,7 +257,7 @@ public final class NetworkPublication
         tripGain = Math.min(termLength >> 3, termWindowLength);
 
         lastSenderPosition = senderPosition.get();
-        cleanPosition = lastSenderPosition;
+        cleanPosition = alignCleanPositionToTheStartOfTheBlock(lastSenderPosition);
         timeOfLastActivityNs = nowNs;
     }
 
@@ -748,10 +745,12 @@ public final class NetworkPublication
                 final long newLimitPosition = minConsumerPosition + termWindowLength;
                 if (newLimitPosition >= tripLimit)
                 {
+                    final long maxAllowedGap = (long)termBufferLength << 1;
+                    final long newTermBaseLimitPosition = newLimitPosition - (newLimitPosition & termLengthMask);
                     final long cleanPosition = this.cleanPosition;
-                    final long cleanTermBasePosition = cleanPosition - (cleanPosition & termLengthMask);
-                    final long newLimitTermBasePosition = newLimitPosition - (newLimitPosition & termLengthMask);
-                    if (newLimitTermBasePosition - cleanTermBasePosition < wrapAroundGap)
+                    final long wrapAroundGap = newTermBaseLimitPosition - cleanPosition;
+                    if (wrapAroundGap <= maxAllowedGap &&
+                        (wrapAroundGap < maxAllowedGap || 0 != (cleanPosition & termLengthMask)))
                     {
                         publisherLimit.setRelease(newLimitPosition);
                         tripLimit = newLimitPosition + tripGain;
@@ -768,7 +767,6 @@ public final class NetworkPublication
                 }
                 tripLimit = senderPosition;
                 publisherLimit.setRelease(senderPosition);
-                cleanBufferTo(senderPosition - termBufferLength);
                 workCount = 1;
             }
         }
@@ -917,11 +915,10 @@ public final class NetworkPublication
         {
             final UnsafeBuffer dirtyTermBuffer = termBuffers[indexByPosition(cleanPosition, positionBitsToShift)];
             final int termOffset = (int)(cleanPosition & termLengthMask);
-            final int length = Math.min(TERM_CLEANUP_BLOCK_LENGTH, termBufferLength - termOffset);
 
-            dirtyTermBuffer.setMemory(termOffset, length, (byte)0);
+            dirtyTermBuffer.setMemory(termOffset, TERM_CLEANUP_BLOCK_LENGTH, (byte)0);
             VarHandle.storeStoreFence();
-            this.cleanPosition = cleanPosition + length;
+            this.cleanPosition = cleanPosition + TERM_CLEANUP_BLOCK_LENGTH;
             return 1;
         }
         return 0;

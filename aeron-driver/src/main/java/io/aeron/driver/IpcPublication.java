@@ -31,7 +31,8 @@ import org.agrona.concurrent.status.ReadablePosition;
 import java.lang.invoke.VarHandle;
 import java.util.ArrayList;
 
-import static io.aeron.driver.Configuration.TERM_CLEANUP_BLOCK_LENGTH;
+import static io.aeron.driver.TermCleaner.TERM_CLEANUP_BLOCK_LENGTH;
+import static io.aeron.driver.TermCleaner.alignCleanPositionToTheStartOfTheBlock;
 import static io.aeron.driver.status.SystemCounterDescriptor.UNBLOCKED_PUBLICATIONS;
 import static io.aeron.logbuffer.LogBufferDescriptor.*;
 
@@ -69,7 +70,6 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     private long lastConsumerPosition;
     private long timeOfLastConsumerPositionUpdateNs;
     private long cleanPosition;
-    private final long wrapAroundGap;
     private int refCount = 0;
     private boolean reachedEndOfLife = false;
     private final boolean isExclusive;
@@ -112,7 +112,6 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         final int termLength = params.termLength;
         this.termBufferLength = termLength;
         termLengthMask = termLength - 1;
-        wrapAroundGap = termLength * 3L;
         termWindowLength = params.publicationWindowLength;
         tripGain = Math.min(termLength >> 3, termWindowLength);
 
@@ -129,7 +128,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
 
         consumerPosition = producerPosition();
         lastConsumerPosition = consumerPosition;
-        cleanPosition = consumerPosition;
+        cleanPosition = alignCleanPositionToTheStartOfTheBlock(lastConsumerPosition);
         timeOfLastConsumerPositionUpdateNs = ctx.cachedNanoClock().nanoTime();
     }
 
@@ -390,10 +389,12 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
                 final long newLimitPosition = minSubscriberPosition + termWindowLength;
                 if (newLimitPosition >= tripLimit)
                 {
+                    final long maxAllowedGap = (long)termBufferLength << 1;
+                    final long newTermBaseLimitPosition = newLimitPosition - (newLimitPosition & termLengthMask);
                     final long cleanPosition = this.cleanPosition;
-                    final long cleanTermBasePosition = cleanPosition - (cleanPosition & termLengthMask);
-                    final long newLimitTermBasePosition = newLimitPosition - (newLimitPosition & termLengthMask);
-                    if (newLimitTermBasePosition - cleanTermBasePosition < wrapAroundGap)
+                    final long wrapAroundGap = newTermBaseLimitPosition - cleanPosition;
+                    if (wrapAroundGap <= maxAllowedGap &&
+                        (wrapAroundGap < maxAllowedGap || 0 != (cleanPosition & termLengthMask)))
                     {
                         publisherLimit.setRelease(newLimitPosition);
                         tripLimit = newLimitPosition + tripGain;
@@ -405,7 +406,6 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
             {
                 tripLimit = consumerPosition;
                 publisherLimit.setRelease(consumerPosition);
-                cleanBufferTo(consumerPosition);
                 workCount = 1;
             }
         }
@@ -550,11 +550,10 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         {
             final UnsafeBuffer dirtyTermBuffer = termBuffers[indexByPosition(cleanPosition, positionBitsToShift)];
             final int termOffset = (int)(cleanPosition & termLengthMask);
-            final int length = Math.min(TERM_CLEANUP_BLOCK_LENGTH, termBufferLength - termOffset);
 
-            dirtyTermBuffer.setMemory(termOffset, length, (byte)0);
+            dirtyTermBuffer.setMemory(termOffset, TERM_CLEANUP_BLOCK_LENGTH, (byte)0);
             VarHandle.storeStoreFence();
-            this.cleanPosition = cleanPosition + length;
+            this.cleanPosition = cleanPosition + TERM_CLEANUP_BLOCK_LENGTH;
             return 1;
         }
         return 0;

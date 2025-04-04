@@ -47,9 +47,10 @@ import java.util.ArrayList;
 import static io.aeron.CommonContext.UNTETHERED_RESTING_TIMEOUT_PARAM_NAME;
 import static io.aeron.CommonContext.UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME;
 import static io.aeron.ErrorCode.IMAGE_REJECTED;
-import static io.aeron.driver.Configuration.TERM_CLEANUP_BLOCK_LENGTH;
+import static io.aeron.driver.TermCleaner.TERM_CLEANUP_BLOCK_LENGTH;
 import static io.aeron.driver.LossDetector.lossFound;
 import static io.aeron.driver.LossDetector.rebuildOffset;
+import static io.aeron.driver.TermCleaner.alignCleanPositionToTheStartOfTheBlock;
 import static io.aeron.driver.status.SystemCounterDescriptor.*;
 import static io.aeron.logbuffer.LogBufferDescriptor.*;
 import static io.aeron.logbuffer.TermGapFiller.tryFillGap;
@@ -273,7 +274,7 @@ public final class PublicationImage
         nextSmPosition = position;
         lastSmPosition = position;
         lastOverrunThreshold = position + (termLength >> 1);
-        cleanPosition = position;
+        cleanPosition = alignCleanPositionToTheStartOfTheBlock(position);
 
         hwmPosition.setRelease(position);
         rebuildPosition.setRelease(position);
@@ -1012,11 +1013,10 @@ public final class PublicationImage
         {
             final UnsafeBuffer dirtyTermBuffer = termBuffers[indexByPosition(cleanPosition, positionBitsToShift)];
             final int termOffset = (int)(cleanPosition & termLengthMask);
-            final int length = Math.min(TERM_CLEANUP_BLOCK_LENGTH, termBufferLength - termOffset);
 
-            dirtyTermBuffer.setMemory(termOffset, length, (byte)0);
+            dirtyTermBuffer.setMemory(termOffset, TERM_CLEANUP_BLOCK_LENGTH, (byte)0);
             VarHandle.storeStoreFence();
-            this.cleanPosition = cleanPosition + length;
+            this.cleanPosition = cleanPosition + TERM_CLEANUP_BLOCK_LENGTH;
             return 1;
         }
         return 0;

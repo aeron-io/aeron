@@ -36,12 +36,15 @@ import org.agrona.concurrent.status.CountersReader;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.nio.file.Path;
 import java.util.concurrent.ThreadLocalRandom;
 
 import static io.aeron.protocol.DataHeaderFlyweight.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.fail;
 
 @ExtendWith({ EventLogExtension.class, InterruptingTestCallback.class })
@@ -50,7 +53,6 @@ class CleanBufferWrapAroundTest
     private static final int TERM_LENGTH = 64 * 1024;
     private static final int PUBLICATION_WINDOW_LENGTH = TERM_LENGTH / 2;
     private static final int FRAME_LENGTH = 64;
-    private static final int NUM_MESSAGES = TERM_LENGTH / FRAME_LENGTH;
 
     @InterruptAfter(10)
     @Test
@@ -76,7 +78,7 @@ class CleanBufferWrapAroundTest
         final MediaDriver.Context driverCtx = new MediaDriver.Context()
             .aeronDirectoryName(CommonContext.generateRandomDirName())
             .spiesSimulateConnection(true)
-            .threadingMode(ThreadingMode.DEDICATED);
+            .threadingMode(ThreadingMode.SHARED_NETWORK);
         final Archive.Context archiveCtx = new Archive.Context()
             .aeronDirectoryName(driverCtx.aeronDirectoryName())
             .archiveDir(tempDir.resolve("archive").toFile())
@@ -90,7 +92,7 @@ class CleanBufferWrapAroundTest
                 .controlResponseChannel(AeronArchive.Configuration.localControlChannel())))
         {
             final long recordingId, initialPosition, finalRecordedPosition;
-            final ChannelUri uri = prepareChannelUri("aeron:ipc", 4, 1024, 324);
+            final ChannelUri uri = prepareChannelUri("aeron:ipc", -10, 4, 1024, 324);
             try (ExclusivePublication recordedPub =
                 aeronArchive.addRecordedExclusivePublication(uri.toString(), 131313))
             {
@@ -137,13 +139,13 @@ class CleanBufferWrapAroundTest
     }
 
     @InterruptAfter(10)
-    @Test
-    void shouldNotAllowReadingFromDirtyBufferIpc()
+    @ParameterizedTest
+    @CsvSource({ "5,8,1024", "0,0,0", "0,1019,65504" })
+    void shouldNotAllowReadingFromDirtyBufferIpc(final int initialTermId, final int termId, final int termOffset)
     {
-        final int termId = 9;
         final int sessionId = 42;
         final String channel = "aeron:ipc";
-        final ChannelUri uri = prepareChannelUri(channel, termId, 0, sessionId);
+        final ChannelUri uri = prepareChannelUri(channel, initialTermId, termId, termOffset, sessionId);
         final int streamId = 888;
         final UnsafeBuffer data = new UnsafeBuffer(new byte[TERM_LENGTH]);
         ThreadLocalRandom.current().nextBytes(data.byteArray());
@@ -184,29 +186,29 @@ class CleanBufferWrapAroundTest
             final long initialPosition = publication.position();
 
             long pubLimit = awaitPublicationLimit(driver, publication, initialPosition + PUBLICATION_WINDOW_LENGTH);
-            long pubPos = offerBlock(publication, headerFlyweight, data, sessionId, streamId, termId);
-            assertEquals(initialPosition + TERM_LENGTH, pubPos);
+            long pubPos = offerBlock(publication, headerFlyweight, data, sessionId, streamId, termId, termOffset);
+            assertEquals(initialPosition + TERM_LENGTH - termOffset, pubPos);
             assertEquals(pubLimit, publication.positionLimit());
 
-            long subPos = pollSubscription(image, initialPosition + TERM_LENGTH * 3 / 4, fragmentHandler);
+            long subPos = pollSubscription(image, initialPosition + TERM_LENGTH * 3 / 4 - termOffset, fragmentHandler);
 
             pubLimit = awaitPublicationLimit(driver, publication, subPos + PUBLICATION_WINDOW_LENGTH);
-            pubPos = offerBlock(publication, headerFlyweight, data, sessionId, streamId, termId + 1);
-            assertEquals(initialPosition + 2 * TERM_LENGTH, pubPos);
-            assertEquals(pubLimit, publication.positionLimit());
-
-            subPos = pollSubscription(image, subPos + TERM_LENGTH, fragmentHandler);
-
-            pubLimit = awaitPublicationLimit(driver, publication, subPos + PUBLICATION_WINDOW_LENGTH);
-            pubPos = offerBlock(publication, headerFlyweight, data, sessionId, streamId, termId + 2);
-            assertEquals(initialPosition + 3 * TERM_LENGTH, pubPos);
+            pubPos = offerBlock(publication, headerFlyweight, data, sessionId, streamId, termId + 1, 0);
+            assertEquals(initialPosition + 2 * TERM_LENGTH - termOffset, pubPos);
             assertEquals(pubLimit, publication.positionLimit());
 
             subPos = pollSubscription(image, subPos + TERM_LENGTH, fragmentHandler);
 
             pubLimit = awaitPublicationLimit(driver, publication, subPos + PUBLICATION_WINDOW_LENGTH);
-            pubPos = offerBlock(publication, headerFlyweight, data, sessionId, streamId, termId + 3);
-            assertEquals(initialPosition + 4 * TERM_LENGTH, pubPos);
+            pubPos = offerBlock(publication, headerFlyweight, data, sessionId, streamId, termId + 2, 0);
+            assertEquals(initialPosition + 3 * TERM_LENGTH - termOffset, pubPos);
+            assertEquals(pubLimit, publication.positionLimit());
+
+            subPos = pollSubscription(image, subPos + TERM_LENGTH, fragmentHandler);
+
+            pubLimit = awaitPublicationLimit(driver, publication, subPos + PUBLICATION_WINDOW_LENGTH);
+            pubPos = offerBlock(publication, headerFlyweight, data, sessionId, streamId, termId + 3, 0);
+            assertEquals(initialPosition + 4 * TERM_LENGTH - termOffset, pubPos);
             assertEquals(pubLimit, publication.positionLimit());
 
             subPos = pollSubscription(image, pubPos, fragmentHandler);
@@ -217,11 +219,11 @@ class CleanBufferWrapAroundTest
     }
 
     private static ChannelUri prepareChannelUri(
-        final String channel, final int termId, final int termOffset, final int sessionId)
+        final String channel, final int initialTermId, final int termId, final int termOffset, final int sessionId)
     {
         final ChannelUri uri = ChannelUri.parse(channel);
         uri.put(CommonContext.TERM_LENGTH_PARAM_NAME, Integer.toString(TERM_LENGTH));
-        uri.put(CommonContext.INITIAL_TERM_ID_PARAM_NAME, Integer.toString(termId));
+        uri.put(CommonContext.INITIAL_TERM_ID_PARAM_NAME, Integer.toString(initialTermId));
         uri.put(CommonContext.TERM_ID_PARAM_NAME, Integer.toString(termId));
         uri.put(CommonContext.TERM_OFFSET_PARAM_NAME, Integer.toString(termOffset));
         uri.put(CommonContext.SESSION_ID_PARAM_NAME, Integer.toString(sessionId));
@@ -237,6 +239,8 @@ class CleanBufferWrapAroundTest
         {
             if (0 == image.poll(fragmentHandler, 64))
             {
+                assertFalse(image.isClosed());
+                assertFalse(image.isEndOfStream());
                 Tests.yield();
             }
         }
@@ -257,14 +261,16 @@ class CleanBufferWrapAroundTest
         final UnsafeBuffer data,
         final int sessionId,
         final int streamId,
-        final int termId)
+        final int termId,
+        final int termOffset)
     {
-        for (int i = 0; i < NUM_MESSAGES; i++)
+        int offset = termOffset;
+        while (offset < TERM_LENGTH)
         {
-            final int offset = i * FRAME_LENGTH;
+            final int length = Math.min(TERM_LENGTH - offset, FRAME_LENGTH);
             headerFlyweight.wrap(data, offset, HEADER_LENGTH);
             headerFlyweight
-                .frameLength(FRAME_LENGTH)
+                .frameLength(length)
                 .version(CURRENT_VERSION)
                 .flags(BEGIN_AND_END_FLAGS)
                 .headerType(HDR_TYPE_DATA);
@@ -273,9 +279,10 @@ class CleanBufferWrapAroundTest
                 .sessionId(sessionId)
                 .streamId(streamId)
                 .termId(termId);
+            offset += length;
         }
 
-        while (publication.offerBlock(data, 0, data.capacity()) < 0)
+        while (publication.offerBlock(data, termOffset, offset - termOffset) < 0)
         {
             Tests.yield();
         }
