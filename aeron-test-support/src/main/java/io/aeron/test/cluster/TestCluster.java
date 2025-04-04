@@ -166,7 +166,8 @@ public final class TestCluster implements AutoCloseable
         final int appointedLeaderId,
         final IntHashSet byHostInvalidInitialResolutions,
         final IntFunction<TestNode.TestService[]> serviceSupplier,
-        final boolean useResponseChannels)
+        final boolean useResponseChannels,
+        final boolean allowNonInitializedClient)
     {
         this.serviceSupplier = requireNonNull(serviceSupplier);
         if ((staticMemberCount + 1) >= 10)
@@ -186,6 +187,15 @@ public final class TestCluster implements AutoCloseable
         this.staticMemberCount = staticMemberCount;
         this.appointedLeaderId = appointedLeaderId;
         this.byHostInvalidInitialResolutions = byHostInvalidInitialResolutions;
+
+        if (allowNonInitializedClient)
+        {
+            clientKeepAlive = new KeepAliveThatRunsAfterClientInit();
+        }
+        else
+        {
+            clientKeepAlive = new KeepAliveWhereClientShouldBeInitialized();
+        }
     }
 
     public static void awaitElectionClosed(final TestNode follower)
@@ -1368,7 +1378,7 @@ public final class TestCluster implements AutoCloseable
         awaitServiceMessagePredicate(node, service, countPredicate);
     }
 
-    private final KeepAlive clientKeepAlive = new KeepAlive();
+    private final KeepAlive clientKeepAlive;
 
     public void awaitServiceMessageCount(
         final TestNode node, final TestNode.TestService service, final int messageCount)
@@ -1984,7 +1994,12 @@ public final class TestCluster implements AutoCloseable
 
     public static Builder aCluster()
     {
-        return new Builder();
+        return aCluster(false);
+    }
+
+    public static Builder aCluster(final boolean allowNonInitializedClient)
+    {
+        return new Builder(allowNonInitializedClient);
     }
 
     public void awaitBackupNodeErrors()
@@ -2041,6 +2056,7 @@ public final class TestCluster implements AutoCloseable
 
     public static final class Builder
     {
+        private final boolean allowNonInitializedClient;
         private int nodeCount = 3;
         private int appointedLeaderId = NULL_VALUE;
         private String logChannel = LOG_CHANNEL;
@@ -2060,6 +2076,11 @@ public final class TestCluster implements AutoCloseable
         private String clusterBaseDir = System.getProperty(
             CLUSTER_BASE_DIR_PROP_NAME, CommonContext.getAeronDirectoryName());
         private boolean useResponseChannels = false;
+
+        public Builder(final boolean allowNonInitializedClient)
+        {
+            this.allowNonInitializedClient = allowNonInitializedClient;
+        }
 
         public Builder withStaticNodes(final int nodeCount)
         {
@@ -2186,7 +2207,8 @@ public final class TestCluster implements AutoCloseable
                 appointedLeaderId,
                 byHostInvalidInitialResolutions,
                 serviceSupplier,
-                useResponseChannels);
+                useResponseChannels,
+                allowNonInitializedClient);
             testCluster.logChannel(logChannel);
             testCluster.ingressChannel(ingressChannel);
             testCluster.egressChannel(egressChannel);
@@ -2324,12 +2346,53 @@ public final class TestCluster implements AutoCloseable
         }
     };
 
-    private final class KeepAlive implements Runnable
+    private interface KeepAlive extends Runnable
+    {
+        void init();
+
+        void run();
+    }
+
+    private final class KeepAliveThatRunsAfterClientInit implements KeepAlive
+    {
+        private long keepAliveDeadlineMs;
+
+        public void init()
+        {
+            if (client == null)
+            {
+                return; // no op for non-existent client
+            }
+            final EpochClock epochClock = client.context().aeron().context().epochClock();
+            final long nowMs = epochClock.time();
+            keepAliveDeadlineMs = nowMs + TimeUnit.SECONDS.toMillis(1);
+        }
+
+        public void run()
+        {
+            if (client == null)
+            {
+                return; // allow non-initialized client
+            }
+            final EpochClock epochClock = client.context().aeron().context().epochClock();
+            final long nowMs = epochClock.time();
+            if (nowMs > keepAliveDeadlineMs)
+            {
+                client.sendKeepAlive();
+                keepAliveDeadlineMs = nowMs + TimeUnit.SECONDS.toMillis(1);
+            }
+            pollClient();
+        }
+    }
+
+
+
+    private final class KeepAliveWhereClientShouldBeInitialized implements KeepAlive
     {
         private long keepAliveDeadlineMs;
         private EpochClock epochClock;
 
-        private void init()
+        public void init()
         {
             this.epochClock = requireNonNull(client, "client is not connected")
                 .context().aeron().context().epochClock();
