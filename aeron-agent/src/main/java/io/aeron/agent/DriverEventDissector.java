@@ -454,6 +454,25 @@ final class DriverEventDissector
         buffer.getStringAscii(absoluteOffset, builder);
     }
 
+    static void dissectPublicationRevoke(
+        final MutableDirectBuffer buffer,
+        final int offset,
+        final StringBuilder builder)
+    {
+        int absoluteOffset = offset;
+        absoluteOffset += dissectLogHeader(CONTEXT, PUBLICATION_REVOKE, buffer, absoluteOffset, builder);
+        builder.append(": revokedPos=").append(buffer.getLong(absoluteOffset, LITTLE_ENDIAN));
+        absoluteOffset += SIZE_OF_LONG;
+        builder.append(" publicationSide=").append(buffer.getInt(absoluteOffset, LITTLE_ENDIAN) > 0 ? "true" : "false");
+        absoluteOffset += SIZE_OF_INT;
+        builder.append(" sessionId=").append(buffer.getInt(absoluteOffset, LITTLE_ENDIAN));
+        absoluteOffset += SIZE_OF_INT;
+        builder.append(" streamId=").append(buffer.getInt(absoluteOffset, LITTLE_ENDIAN));
+        absoluteOffset += SIZE_OF_INT;
+        builder.append(" channel=");
+        buffer.getStringAscii(absoluteOffset, builder);
+    }
+
     static int frameType(final MutableDirectBuffer buffer, final int termOffset)
     {
         return buffer.getShort(FrameDescriptor.typeOffset(termOffset), LITTLE_ENDIAN) & 0xFFFF;

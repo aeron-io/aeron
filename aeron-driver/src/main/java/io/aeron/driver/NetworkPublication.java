@@ -297,11 +297,23 @@ public final class NetworkPublication
         final long revokedPos = producerPosition();
         publisherLimit.setRelease(revokedPos);
         endOfStreamPosition(metaDataBuffer, revokedPos);
+        isPublicationRevoked(metaDataBuffer, true);
 
         isEndOfStream = true;
         isRevoked = true;
 
         state = State.REVOKED;
+
+        logRevoke(revokedPos, true, sessionId(), streamId(), channel());
+    }
+
+    private static void logRevoke(
+        final long revokedPos,
+        final boolean publicationSide,
+        final int sessionId,
+        final int streamId,
+        final String channel)
+    {
     }
 
     /**

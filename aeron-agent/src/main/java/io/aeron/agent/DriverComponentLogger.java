@@ -90,6 +90,8 @@ public class DriverComponentLogger implements ComponentLogger
 
         tempBuilder = addDriverFlowControlInstrumentation(tempBuilder);
 
+        tempBuilder = addPublicationRevokeInstrumentation(tempBuilder);
+
         return tempBuilder;
     }
 
@@ -311,6 +313,33 @@ public class DriverComponentLogger implements ComponentLogger
             "AbstractMinMulticastFlowControl",
             DriverInterceptor.FlowControl.ReceiverRemoved.class,
             "receiverRemoved");
+
+        return tempBuilder;
+    }
+
+    private static AgentBuilder addPublicationRevokeInstrumentation(final AgentBuilder agentBuilder)
+    {
+        AgentBuilder tempBuilder = agentBuilder;
+        tempBuilder = addEventInstrumentation(
+            tempBuilder,
+            PUBLICATION_REVOKE,
+            "NetworkPublication",
+            DriverInterceptor.PublicationRevoke.class,
+            "logRevoke");
+
+        tempBuilder = addEventInstrumentation(
+            tempBuilder,
+            PUBLICATION_REVOKE,
+            "IpcPublication",
+            DriverInterceptor.PublicationRevoke.class,
+            "logRevoke");
+
+        tempBuilder = addEventInstrumentation(
+            tempBuilder,
+            PUBLICATION_REVOKE,
+            "PublicationImage",
+            DriverInterceptor.PublicationRevoke.class,
+            "logRevoke");
 
         return tempBuilder;
     }

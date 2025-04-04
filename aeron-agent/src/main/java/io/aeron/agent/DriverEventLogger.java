@@ -609,6 +609,41 @@ public final class DriverEventLogger
         }
     }
 
+    public void logPublicationRevoke(
+        final long revokedPos,
+        final boolean publicationSide,
+        final int sessionId,
+        final int streamId,
+        final String channel)
+    {
+        final int length = SIZE_OF_LONG + (SIZE_OF_INT * 4) + channel.length();
+        final int captureLength = captureLength(length);
+        final int encodedLength = encodedLength(captureLength);
+
+        final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
+        final int index = ringBuffer.tryClaim(toEventCodeId(PUBLICATION_REVOKE), encodedLength);
+        if (index > 0)
+        {
+            try
+            {
+                encodePublicationRevoke(
+                    (UnsafeBuffer)ringBuffer.buffer(),
+                    index,
+                    captureLength,
+                    length,
+                    revokedPos,
+                    publicationSide,
+                    sessionId,
+                    streamId,
+                    channel);
+            }
+            finally
+            {
+                ringBuffer.commit(index);
+            }
+        }
+    }
+
     static int toEventCodeId(final DriverEventCode code)
     {
         return EVENT_CODE_TYPE << 16 | (code.id() & 0xFFFF);

@@ -297,6 +297,11 @@ public final class Image
         return LogBufferDescriptor.activeTransportCount(logBuffers.metaDataBuffer());
     }
 
+    public boolean isPublicationRevoked()
+    {
+        return LogBufferDescriptor.isPublicationRevoked(logBuffers.metaDataBuffer());
+    }
+
     /**
      * The {@link FileChannel} to the raw log of the Image.
      *

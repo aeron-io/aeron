@@ -248,10 +248,22 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         final long revokedPos = producerPosition();
         publisherLimit.setRelease(revokedPos);
         LogBufferDescriptor.endOfStreamPosition(metaDataBuffer, revokedPos);
+        LogBufferDescriptor.isPublicationRevoked(metaDataBuffer, true);
 
         isRevoked = true;
 
         state = State.REVOKED;
+
+        logRevoke(revokedPos, true, sessionId(), streamId(), channel());
+    }
+
+    private static void logRevoke(
+        final long revokedPos,
+        final boolean publicationSide,
+        final int sessionId,
+        final int streamId,
+        final String channel)
+    {
     }
 
     /**

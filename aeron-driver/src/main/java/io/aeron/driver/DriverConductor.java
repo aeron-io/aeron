@@ -1996,6 +1996,7 @@ public final class DriverConductor implements Agent
         signalEos(logMetaData, signalEos);
         spiesSimulateConnection(logMetaData, spiesSimulateConnection);
         tether(logMetaData, tether);
+        isPublicationRevoked(logMetaData, false);
         group(logMetaData, group);
         isResponse(logMetaData, isResponse);
 

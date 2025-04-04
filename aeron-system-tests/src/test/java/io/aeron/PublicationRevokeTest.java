@@ -103,6 +103,9 @@ class PublicationRevokeTest
         final AtomicInteger unavailableImages = new AtomicInteger(0);
         doAnswer(invocation ->
         {
+            final Image image = invocation.getArgument(0, Image.class);
+            assertTrue(image.isPublicationRevoked());
+
             unavailableImages.incrementAndGet();
             return null;
         }).when(unavailableImageHandler).onUnavailableImage(any(Image.class));
@@ -141,6 +144,9 @@ class PublicationRevokeTest
         final AtomicInteger unavailableImages = new AtomicInteger(0);
         doAnswer(invocation ->
         {
+            final Image image = invocation.getArgument(0, Image.class);
+            assertTrue(image.isPublicationRevoked());
+
             unavailableImages.incrementAndGet();
             return null;
         }).when(unavailableImageHandler).onUnavailableImage(any(Image.class));

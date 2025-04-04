@@ -640,12 +640,17 @@ public final class PublicationImage
 
                         if (!this.isEndOfStream && isAllConnectedEos())
                         {
+                            final long eosPosition = findEosPosition();
+
                             if (DataHeaderFlyweight.isRevoked(buffer))
                             {
+                                LogBufferDescriptor.isPublicationRevoked(rawLog.metaData(), true);
                                 state(State.REVOKED);
+
+                                logRevoke(eosPosition, false, sessionId(), streamId(), channel());
                             }
 
-                            LogBufferDescriptor.endOfStreamPosition(rawLog.metaData(), findEosPosition());
+                            LogBufferDescriptor.endOfStreamPosition(rawLog.metaData(), eosPosition);
                             this.isEndOfStream = true;
                         }
                     }
@@ -676,6 +681,16 @@ public final class PublicationImage
         }
 
         return length;
+    }
+
+    private static void logRevoke(
+        final long revokedPos,
+        final boolean publicationSide,
+        final int sessionId,
+        final int streamId,
+        final String channel)
+    {
+        System.err.println("HERE");
     }
 
     /**

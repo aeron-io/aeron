@@ -89,7 +89,8 @@ class DriverLoggingAgentTest
             CMD_OUT_COUNTER_READY,
             CMD_IN_CLIENT_CLOSE,
             FLOW_CONTROL_RECEIVER_ADDED,
-            FLOW_CONTROL_RECEIVER_REMOVED));
+            FLOW_CONTROL_RECEIVER_REMOVED,
+            PUBLICATION_REVOKE));
     }
 
     @Test
@@ -108,7 +109,8 @@ class DriverLoggingAgentTest
             CMD_OUT_SUBSCRIPTION_READY,
             CMD_OUT_COUNTER_READY,
             CMD_OUT_ON_UNAVAILABLE_COUNTER,
-            CMD_IN_CLIENT_CLOSE));
+            CMD_IN_CLIENT_CLOSE,
+            PUBLICATION_REVOKE));
     }
 
     @ParameterizedTest
@@ -122,7 +124,8 @@ class DriverLoggingAgentTest
         "FRAME_IN",
         "FRAME_OUT",
         "CMD_IN_ADD_SUBSCRIPTION",
-        "CMD_OUT_AVAILABLE_IMAGE"
+        "CMD_OUT_AVAILABLE_IMAGE",
+        "PUBLICATION_REVOKE"
     })
     @InterruptAfter(10)
     void logIndividualEvents(final DriverEventCode eventCode)
@@ -168,6 +171,8 @@ class DriverLoggingAgentTest
                 }
 
                 assertEquals(counter.get(), 1);
+
+                publication.revoke();
             }
 
             final Supplier<String> errorMessage = () -> "Pending events: " + WAIT_LIST;

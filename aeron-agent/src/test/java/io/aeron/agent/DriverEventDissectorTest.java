@@ -31,6 +31,7 @@ import java.net.UnknownHostException;
 import static io.aeron.agent.CommonEventEncoder.*;
 import static io.aeron.agent.DriverEventCode.*;
 import static io.aeron.agent.DriverEventDissector.*;
+import static io.aeron.agent.DriverEventLogger.MAX_CHANNEL_URI_LENGTH;
 import static io.aeron.agent.DriverEventLogger.MAX_HOST_NAME_LENGTH;
 import static io.aeron.agent.EventConfiguration.MAX_EVENT_LENGTH;
 import static io.aeron.protocol.HeaderFlyweight.*;
@@ -756,6 +757,27 @@ class DriverEventDissectorTest
 
         assertThat(builder.toString(), endsWith(
             "DRIVER: NAME_RESOLUTION_HOST_NAME [32/32]: durationNs=32167 hostName=some.funky.host.name"));
+    }
+
+    @Test
+    void dissectPublicationRevoke()
+    {
+        final int offset = 0;
+        final long revokePos = 1234;
+        final boolean publicationSide = false;
+        final int sessionId = 4;
+        final int streamId = 99;
+        final String channel = "excellent.channel";
+
+        final int length = SIZE_OF_LONG + (SIZE_OF_INT * 3) + trailingStringLength(channel, MAX_CHANNEL_URI_LENGTH);
+
+        DriverEventEncoder.encodePublicationRevoke(
+            buffer, offset, length, length, revokePos, publicationSide, sessionId, streamId, channel);
+        final StringBuilder builder = new StringBuilder();
+        DriverEventDissector.dissectPublicationRevoke(buffer, offset, builder);
+
+        assertThat(builder.toString(), endsWith(
+            "DRIVER: PUBLICATION_REVOKE [41/41]: revokedPos=1234 publicationSide=false sessionId=4 streamId=99 channel=excellent.channel"));
     }
 
     private DirectBuffer newBuffer(final byte[] bytes)
