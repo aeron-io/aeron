@@ -220,6 +220,11 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         return mtuLength;
     }
 
+    long cleanPosition()
+    {
+        return cleanPosition;
+    }
+
     /**
      * {@inheritDoc}
      */

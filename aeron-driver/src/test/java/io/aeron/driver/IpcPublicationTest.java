@@ -17,36 +17,38 @@ package io.aeron.driver;
 
 import io.aeron.CommonContext;
 import io.aeron.DriverProxy;
+import io.aeron.driver.buffer.RawLog;
 import io.aeron.driver.buffer.TestLogFactory;
 import io.aeron.driver.status.SystemCounters;
-import io.aeron.logbuffer.LogBufferDescriptor;
 import io.aeron.test.Tests;
-import org.agrona.concurrent.CachedEpochClock;
-import org.agrona.concurrent.CachedNanoClock;
-import org.agrona.concurrent.ManyToOneConcurrentLinkedQueue;
-import org.agrona.concurrent.SystemEpochClock;
-import org.agrona.concurrent.UnsafeBuffer;
+import org.agrona.concurrent.*;
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
+import org.agrona.concurrent.status.AtomicLongPosition;
 import org.agrona.concurrent.status.CountersManager;
 import org.agrona.concurrent.status.Position;
 import org.agrona.concurrent.status.UnsafeBufferPosition;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.nio.ByteBuffer;
 
+import static io.aeron.logbuffer.LogBufferDescriptor.*;
 import static org.agrona.concurrent.status.CountersReader.METADATA_LENGTH;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class IpcPublicationTest
 {
     private static final long CLIENT_ID = 7L;
     private static final int STREAM_ID = 1010;
-    private static final int TERM_BUFFER_LENGTH = LogBufferDescriptor.TERM_MIN_LENGTH;
+    private static final int TERM_BUFFER_LENGTH = TERM_MIN_LENGTH;
     private static final int BUFFER_LENGTH = 16 * 1024;
 
     private Position publisherLimit;
@@ -54,6 +56,7 @@ class IpcPublicationTest
 
     private DriverProxy driverProxy;
     private DriverConductor driverConductor;
+    private MediaDriver.Context ctx;
 
     @BeforeEach
     void setUp()
@@ -67,7 +70,7 @@ class IpcPublicationTest
         final SenderProxy senderProxy = mock(SenderProxy.class);
         final ReceiverProxy receiverProxy = mock(ReceiverProxy.class);
 
-        final MediaDriver.Context ctx = new MediaDriver.Context()
+        ctx = new MediaDriver.Context()
             .tempBuffer(new UnsafeBuffer(new byte[METADATA_LENGTH]))
             .ipcTermBufferLength(TERM_BUFFER_LENGTH)
             .toDriverCommands(toDriverCommands)
@@ -125,5 +128,44 @@ class IpcPublicationTest
         driverConductor.doWork();
 
         assertThat(publisherLimit.get(), is(greaterThan(0L)));
+    }
+
+    @ParameterizedTest
+    @CsvSource({ "0,0", "4096,4096", "135000,131072", "1000000001111,1000000000000" })
+    void shouldAlignCleanPositionAtTheStartOfTheBlock(final long startPosition, final long expectedCleanPosition)
+    {
+        final PublicationParams params = new PublicationParams();
+        params.termLength = 128 * 1024;
+        final int positionBitsToShift = positionBitsToShift(params.termLength);
+        final int initialTermId = 876;
+        params.initialTermId = initialTermId;
+        params.termId = computeTermIdFromPosition(startPosition, positionBitsToShift, initialTermId);
+        params.publicationWindowLength = params.termLength / 2;
+        params.mtuLength = 2048;
+
+        final UnsafeBuffer metadataBuffer = new UnsafeBuffer(new byte[LOG_META_DATA_LENGTH]);
+        initialTermId(metadataBuffer, initialTermId);
+        activeTermCount(metadataBuffer, params.termId - initialTermId);
+        rawTailVolatile(
+            metadataBuffer,
+            indexByTermCount(params.termId - initialTermId),
+            packTail(params.termId, (int)(startPosition & (params.termLength - 1))));
+        final RawLog rawLog = mock(RawLog.class);
+        when(rawLog.metaData()).thenReturn(metadataBuffer);
+
+        final IpcPublication publication = new IpcPublication(
+            11111,
+            "aeron:ipc?alias=test",
+            ctx,
+            0,
+            42,
+            9,
+            new AtomicLongPosition(),
+            new AtomicLongPosition(),
+            rawLog,
+            true,
+            params);
+
+        assertEquals(expectedCleanPosition, publication.cleanPosition());
     }
 }
