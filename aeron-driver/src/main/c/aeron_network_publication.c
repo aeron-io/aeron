@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "util/aeron_netutil.h"
 #if defined(__linux__)
 #define _BSD_SOURCE
 #define _GNU_SOURCE
@@ -470,7 +471,7 @@ int aeron_network_publication_setup_message_check(
 
         if (0 <= (result = aeron_network_publication_do_send(publication, &iov, 1, &bytes_sent)))
         {
-            if (bytes_sent < (int64_t)iov.iov_len)
+            if (bytes_sent < (int64_t)iov.iov_len && !aeron_is_acceptable_socket_error())
             {
                 aeron_counter_increment(publication->short_sends_counter);
             }
@@ -526,7 +527,7 @@ int aeron_network_publication_heartbeat_message_check(
         if (0 <= (result = aeron_network_publication_do_send(publication, &iov, 1, &bytes_sent)))
         {
             result = (int)bytes_sent;
-            if (bytes_sent < (int64_t)iov.iov_len)
+            if (bytes_sent < (int64_t)iov.iov_len && !aeron_is_acceptable_socket_error())
             {
                 aeron_counter_increment(publication->short_sends_counter);
             }
@@ -602,6 +603,9 @@ int aeron_network_publication_send_data(
         else if (result >= 0)
         {
             publication->current_messages_per_send = 1;
+            if (!aeron_is_acceptable_socket_error()) {
+                aeron_counter_increment(publication->short_sends_counter, 1);
+            }
             aeron_counter_increment(publication->short_sends_counter);
         }
     }
@@ -720,7 +724,7 @@ int aeron_network_publication_resend(void *clientd, int32_t term_id, int32_t ter
             int sendmsg_result = aeron_network_publication_do_send(publication, &iov, 1, &msg_bytes_sent);
             if (0 <= sendmsg_result)
             {
-                if (msg_bytes_sent < (int64_t)iov.iov_len)
+                if (msg_bytes_sent < (int64_t)iov.iov_len && !aeron_is_acceptable_socket_error())
                 {
                     aeron_counter_increment(publication->short_sends_counter);
                     break;
@@ -924,7 +928,7 @@ void aeron_network_publication_on_rttm(
 
         if (0 <= aeron_network_publication_do_send(publication, &iov, 1, &bytes_sent))
         {
-            if (bytes_sent < (int64_t)iov.iov_len)
+            if (bytes_sent < (int64_t)iov.iov_len && !aeron_is_acceptable_socket_error())
             {
                 aeron_counter_increment(publication->short_sends_counter);
             }
