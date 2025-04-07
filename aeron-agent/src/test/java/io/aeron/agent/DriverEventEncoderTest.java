@@ -261,21 +261,41 @@ class DriverEventEncoderTest
         final int offset = 10;
         final String channel = "aeron:udp?endpoint=224.10.9.8";
         final long revokePos = 999;
-        final boolean publicationSide = true;
         final int sessionId = 42;
         final int streamId = 5;
-        final int captureLength = SIZE_OF_LONG + (4 * SIZE_OF_INT) + channel.length();
+        final int captureLength = SIZE_OF_LONG + (3 * SIZE_OF_INT) + channel.length();
 
-        encodePublicationRevoke(buffer, offset, captureLength, captureLength, revokePos, publicationSide, sessionId, streamId, channel);
+        encodePublicationRevoke(buffer, offset, captureLength, captureLength, revokePos, sessionId, streamId, channel);
 
         assertEquals(captureLength, buffer.getInt(offset, LITTLE_ENDIAN));
         assertEquals(captureLength, buffer.getInt(offset + SIZE_OF_INT, LITTLE_ENDIAN));
         assertEquals(revokePos, buffer.getLong(offset + LOG_HEADER_LENGTH, LITTLE_ENDIAN));
-        assertTrue(buffer.getInt(offset + LOG_HEADER_LENGTH + SIZE_OF_LONG, LITTLE_ENDIAN) > 0);
-        assertEquals(sessionId, buffer.getInt(offset + LOG_HEADER_LENGTH + SIZE_OF_LONG + SIZE_OF_INT, LITTLE_ENDIAN));
+        assertEquals(sessionId, buffer.getInt(offset + LOG_HEADER_LENGTH + SIZE_OF_LONG, LITTLE_ENDIAN));
         assertEquals(streamId, buffer.getInt(
-            offset + LOG_HEADER_LENGTH + SIZE_OF_LONG + (SIZE_OF_INT * 2), LITTLE_ENDIAN));
+            offset + LOG_HEADER_LENGTH + SIZE_OF_LONG + SIZE_OF_INT, LITTLE_ENDIAN));
         assertEquals(channel, buffer.getStringAscii(
-            offset + LOG_HEADER_LENGTH + SIZE_OF_LONG + (SIZE_OF_INT * 3), LITTLE_ENDIAN));
+            offset + LOG_HEADER_LENGTH + SIZE_OF_LONG + (SIZE_OF_INT * 2), LITTLE_ENDIAN));
+    }
+
+    @Test
+    void encodePublicationImageRevokeShouldWriteChannelLast()
+    {
+        final int offset = 10;
+        final String channel = "aeron:udp?endpoint=224.10.9.8";
+        final long revokePos = 999;
+        final int sessionId = 42;
+        final int streamId = 5;
+        final int captureLength = SIZE_OF_LONG + (3 * SIZE_OF_INT) + channel.length();
+
+        encodePublicationImageRevoke(buffer, offset, captureLength, captureLength, revokePos, sessionId, streamId, channel);
+
+        assertEquals(captureLength, buffer.getInt(offset, LITTLE_ENDIAN));
+        assertEquals(captureLength, buffer.getInt(offset + SIZE_OF_INT, LITTLE_ENDIAN));
+        assertEquals(revokePos, buffer.getLong(offset + LOG_HEADER_LENGTH, LITTLE_ENDIAN));
+        assertEquals(sessionId, buffer.getInt(offset + LOG_HEADER_LENGTH + SIZE_OF_LONG, LITTLE_ENDIAN));
+        assertEquals(streamId, buffer.getInt(
+            offset + LOG_HEADER_LENGTH + SIZE_OF_LONG + SIZE_OF_INT, LITTLE_ENDIAN));
+        assertEquals(channel, buffer.getStringAscii(
+            offset + LOG_HEADER_LENGTH + SIZE_OF_LONG + (SIZE_OF_INT * 2), LITTLE_ENDIAN));
     }
 }

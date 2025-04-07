@@ -168,6 +168,7 @@ public final class NetworkPublication
     private final AtomicCounter senderBpe;
     private final AtomicCounter shortSends;
     private final AtomicCounter unblockedPublications;
+    private final AtomicCounter publicationsRevoked;
     private final ReceiverLivenessTracker livenessTracker = new ReceiverLivenessTracker();
 
     NetworkPublication(
@@ -233,6 +234,7 @@ public final class NetworkPublication
         retransmittedBytes = systemCounters.get(RETRANSMITTED_BYTES);
         senderFlowControlLimits = systemCounters.get(SENDER_FLOW_CONTROL_LIMITS);
         unblockedPublications = systemCounters.get(UNBLOCKED_PUBLICATIONS);
+        publicationsRevoked = systemCounters.get(PUBLICATIONS_REVOKED);
         this.senderBpe = senderBpe;
 
         termBuffers = rawLog.termBuffers();
@@ -304,12 +306,12 @@ public final class NetworkPublication
 
         state = State.REVOKED;
 
-        logRevoke(revokedPos, true, sessionId(), streamId(), channel());
+        logRevoke(revokedPos, sessionId(), streamId(), channel());
+        publicationsRevoked.increment();
     }
 
     private static void logRevoke(
         final long revokedPos,
-        final boolean publicationSide,
         final int sessionId,
         final int streamId,
         final String channel)

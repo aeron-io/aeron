@@ -764,20 +764,39 @@ class DriverEventDissectorTest
     {
         final int offset = 0;
         final long revokePos = 1234;
-        final boolean publicationSide = false;
         final int sessionId = 4;
         final int streamId = 99;
         final String channel = "excellent.channel";
 
-        final int length = SIZE_OF_LONG + (SIZE_OF_INT * 3) + trailingStringLength(channel, MAX_CHANNEL_URI_LENGTH);
+        final int length = SIZE_OF_LONG + (SIZE_OF_INT * 2) + trailingStringLength(channel, MAX_CHANNEL_URI_LENGTH);
 
         DriverEventEncoder.encodePublicationRevoke(
-            buffer, offset, length, length, revokePos, publicationSide, sessionId, streamId, channel);
+            buffer, offset, length, length, revokePos, sessionId, streamId, channel);
         final StringBuilder builder = new StringBuilder();
         DriverEventDissector.dissectPublicationRevoke(buffer, offset, builder);
 
         assertThat(builder.toString(), endsWith(
-            "DRIVER: PUBLICATION_REVOKE [41/41]: revokedPos=1234 publicationSide=false sessionId=4 streamId=99 channel=excellent.channel"));
+            "DRIVER: PUBLICATION_REVOKE [37/37]: revokedPos=1234 sessionId=4 streamId=99 channel=excellent.channel"));
+    }
+
+    @Test
+    void dissectPublicationImageRevoke()
+    {
+        final int offset = 0;
+        final long revokePos = 1234;
+        final int sessionId = 4;
+        final int streamId = 99;
+        final String channel = "excellent.channel";
+
+        final int length = SIZE_OF_LONG + (SIZE_OF_INT * 2) + trailingStringLength(channel, MAX_CHANNEL_URI_LENGTH);
+
+        DriverEventEncoder.encodePublicationImageRevoke(
+            buffer, offset, length, length, revokePos, sessionId, streamId, channel);
+        final StringBuilder builder = new StringBuilder();
+        DriverEventDissector.dissectPublicationImageRevoke(buffer, offset, builder);
+
+        assertThat(builder.toString(), endsWith(
+            "DRIVER: PUBLICATION_IMAGE_REVOKE [37/37]: revokedPos=1234 sessionId=4 streamId=99 channel=excellent.channel"));
     }
 
     private DirectBuffer newBuffer(final byte[] bytes)

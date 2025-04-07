@@ -611,12 +611,11 @@ public final class DriverEventLogger
 
     public void logPublicationRevoke(
         final long revokedPos,
-        final boolean publicationSide,
         final int sessionId,
         final int streamId,
         final String channel)
     {
-        final int length = SIZE_OF_LONG + (SIZE_OF_INT * 4) + channel.length();
+        final int length = SIZE_OF_LONG + (SIZE_OF_INT * 3) + channel.length();
         final int captureLength = captureLength(length);
         final int encodedLength = encodedLength(captureLength);
 
@@ -632,7 +631,39 @@ public final class DriverEventLogger
                     captureLength,
                     length,
                     revokedPos,
-                    publicationSide,
+                    sessionId,
+                    streamId,
+                    channel);
+            }
+            finally
+            {
+                ringBuffer.commit(index);
+            }
+        }
+    }
+
+    public void logPublicationImageRevoke(
+        final long revokedPos,
+        final int sessionId,
+        final int streamId,
+        final String channel)
+    {
+        final int length = SIZE_OF_LONG + (SIZE_OF_INT * 3) + channel.length();
+        final int captureLength = captureLength(length);
+        final int encodedLength = encodedLength(captureLength);
+
+        final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
+        final int index = ringBuffer.tryClaim(toEventCodeId(PUBLICATION_IMAGE_REVOKE), encodedLength);
+        if (index > 0)
+        {
+            try
+            {
+                encodePublicationImageRevoke(
+                    (UnsafeBuffer)ringBuffer.buffer(),
+                    index,
+                    captureLength,
+                    length,
+                    revokedPos,
                     sessionId,
                     streamId,
                     channel);

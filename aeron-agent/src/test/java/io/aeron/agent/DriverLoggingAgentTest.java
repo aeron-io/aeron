@@ -15,9 +15,7 @@
  */
 package io.aeron.agent;
 
-import io.aeron.Aeron;
-import io.aeron.Publication;
-import io.aeron.Subscription;
+import io.aeron.*;
 import io.aeron.driver.MediaDriver;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.test.InterruptAfter;
@@ -34,6 +32,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
@@ -47,7 +46,11 @@ import static io.aeron.agent.EventConfiguration.EVENT_READER_FRAME_LIMIT;
 import static io.aeron.agent.EventConfiguration.EVENT_RING_BUFFER;
 import static java.util.Collections.synchronizedSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.params.provider.EnumSource.Mode.INCLUDE;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 
 @ExtendWith(InterruptingTestCallback.class)
 class DriverLoggingAgentTest
@@ -57,6 +60,9 @@ class DriverLoggingAgentTest
     private static final int STREAM_ID = 1777;
 
     private static final Set<DriverEventCode> WAIT_LIST = synchronizedSet(EnumSet.noneOf(DriverEventCode.class));
+
+    private final AvailableImageHandler availableImageHandler = mock(AvailableImageHandler.class);
+    private final UnavailableImageHandler unavailableImageHandler = mock(UnavailableImageHandler.class);
 
     @AfterEach
     void after()
@@ -90,7 +96,8 @@ class DriverLoggingAgentTest
             CMD_IN_CLIENT_CLOSE,
             FLOW_CONTROL_RECEIVER_ADDED,
             FLOW_CONTROL_RECEIVER_REMOVED,
-            PUBLICATION_REVOKE));
+            PUBLICATION_REVOKE,
+            PUBLICATION_IMAGE_REVOKE));
     }
 
     @Test
@@ -125,7 +132,8 @@ class DriverLoggingAgentTest
         "FRAME_OUT",
         "CMD_IN_ADD_SUBSCRIPTION",
         "CMD_OUT_AVAILABLE_IMAGE",
-        "PUBLICATION_REVOKE"
+        "PUBLICATION_REVOKE",
+        "PUBLICATION_IMAGE_REVOKE"
     })
     @InterruptAfter(10)
     void logIndividualEvents(final DriverEventCode eventCode)
@@ -147,13 +155,23 @@ class DriverLoggingAgentTest
 
         final MediaDriver.Context driverCtx = new MediaDriver.Context()
             .errorHandler(Tests::onError)
-            .publicationLingerTimeoutNs(0)
+            .publicationLingerTimeoutNs(1_000_000_000L)
             .timerIntervalNs(TimeUnit.MILLISECONDS.toNanos(1));
 
         try (MediaDriver mediaDriver = MediaDriver.launch(driverCtx))
         {
+            final AtomicInteger unavailableImages = new AtomicInteger(0);
+            doAnswer(invocation ->
+            {
+                final Image image = invocation.getArgument(0, Image.class);
+                assertTrue(image.isPublicationRevoked());
+
+                unavailableImages.incrementAndGet();
+                return null;
+            }).when(unavailableImageHandler).onUnavailableImage(any(Image.class));
+
             try (Aeron aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(mediaDriver.aeronDirectoryName()));
-                Subscription subscription = aeron.addSubscription(channel, STREAM_ID);
+                Subscription subscription = aeron.addSubscription(channel, STREAM_ID, availableImageHandler, unavailableImageHandler);
                 Publication publication = aeron.addPublication(channel, STREAM_ID))
             {
                 final UnsafeBuffer offerBuffer = new UnsafeBuffer(new byte[32]);
@@ -173,6 +191,11 @@ class DriverLoggingAgentTest
                 assertEquals(counter.get(), 1);
 
                 publication.revoke();
+
+                while (unavailableImages.get() == 0)
+                {
+                    Tests.yield();
+                }
             }
 
             final Supplier<String> errorMessage = () -> "Pending events: " + WAIT_LIST;

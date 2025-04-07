@@ -324,21 +324,21 @@ public class DriverComponentLogger implements ComponentLogger
             tempBuilder,
             PUBLICATION_REVOKE,
             "NetworkPublication",
-            DriverInterceptor.PublicationRevoke.class,
+            DriverInterceptor.Revoke.PublicationRevoke.class,
             "logRevoke");
 
         tempBuilder = addEventInstrumentation(
             tempBuilder,
             PUBLICATION_REVOKE,
             "IpcPublication",
-            DriverInterceptor.PublicationRevoke.class,
+            DriverInterceptor.Revoke.PublicationRevoke.class,
             "logRevoke");
 
         tempBuilder = addEventInstrumentation(
             tempBuilder,
-            PUBLICATION_REVOKE,
+            PUBLICATION_IMAGE_REVOKE,
             "PublicationImage",
-            DriverInterceptor.PublicationRevoke.class,
+            DriverInterceptor.Revoke.PublicationImageRevoke.class,
             "logRevoke");
 
         return tempBuilder;

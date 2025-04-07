@@ -193,6 +193,7 @@ public final class PublicationImage
     private final AtomicCounter flowControlUnderRuns;
     private final AtomicCounter flowControlOverRuns;
     private final AtomicCounter lossGapFills;
+    private final AtomicCounter publicationImagesRevoked;
     private final EpochClock epochClock;
     private final NanoClock nanoClock;
     private final RawLog rawLog;
@@ -255,6 +256,7 @@ public final class PublicationImage
         flowControlUnderRuns = systemCounters.get(FLOW_CONTROL_UNDER_RUNS);
         flowControlOverRuns = systemCounters.get(FLOW_CONTROL_OVER_RUNS);
         lossGapFills = systemCounters.get(LOSS_GAP_FILLS);
+        publicationImagesRevoked = systemCounters.get(PUBLICATION_IMAGES_REVOKED);
 
         imageConnections = ArrayUtil.ensureCapacity(imageConnections, transportIndex + 1);
         imageConnections[transportIndex] = new ImageConnection(nowNs, controlAddress);
@@ -647,7 +649,8 @@ public final class PublicationImage
                                 LogBufferDescriptor.isPublicationRevoked(rawLog.metaData(), true);
                                 state(State.REVOKED);
 
-                                logRevoke(eosPosition, false, sessionId(), streamId(), channel());
+                                logRevoke(eosPosition, sessionId(), streamId(), channel());
+                                publicationImagesRevoked.increment();
                             }
 
                             LogBufferDescriptor.endOfStreamPosition(rawLog.metaData(), eosPosition);
@@ -685,12 +688,10 @@ public final class PublicationImage
 
     private static void logRevoke(
         final long revokedPos,
-        final boolean publicationSide,
         final int sessionId,
         final int streamId,
         final String channel)
     {
-        System.err.println("HERE");
     }
 
     /**

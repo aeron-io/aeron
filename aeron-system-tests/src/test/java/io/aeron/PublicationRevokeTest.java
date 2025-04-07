@@ -17,6 +17,7 @@ package io.aeron;
 
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
+import io.aeron.driver.status.SystemCounters;
 import io.aeron.logbuffer.*;
 import io.aeron.test.*;
 import io.aeron.test.driver.TestMediaDriver;
@@ -33,6 +34,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import static io.aeron.Publication.CLOSED;
+import static io.aeron.driver.status.SystemCounterDescriptor.PUBLICATIONS_REVOKED;
+import static io.aeron.driver.status.SystemCounterDescriptor.PUBLICATION_IMAGES_REVOKED;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.agrona.BitUtil.SIZE_OF_INT;
 import static org.junit.jupiter.api.Assertions.*;
@@ -50,9 +53,9 @@ class PublicationRevokeTest
     private static Stream<Arguments> channels()
     {
         return Stream.of(
-            Arguments.of(UDP_CHANNEL, UDP_CHANNEL),
-            Arguments.of(IPC_CHANNEL, IPC_CHANNEL),
-            Arguments.of(CommonContext.SPY_PREFIX + UDP_CHANNEL, UDP_CHANNEL + "|ssc=true")
+            Arguments.of(UDP_CHANNEL, UDP_CHANNEL, 1),
+            Arguments.of(IPC_CHANNEL, IPC_CHANNEL, 0),
+            Arguments.of(CommonContext.SPY_PREFIX + UDP_CHANNEL, UDP_CHANNEL + "|ssc=true", 0)
         );
     }
 
@@ -69,6 +72,7 @@ class PublicationRevokeTest
 
     private Aeron client;
     private TestMediaDriver driver;
+    private SystemCounters systemCounters;
     private Subscription subscription;
     private Publication publication;
 
@@ -82,6 +86,7 @@ class PublicationRevokeTest
         driverContext.dirDeleteOnStart(true).threadingMode(ThreadingMode.SHARED);
 
         driver = TestMediaDriver.launch(driverContext, watcher);
+        systemCounters = driverContext.systemCounters();
         watcher.dataCollector().add(driver.context().aeronDirectory());
 
         client = Aeron.connect(clientContext.clone());
@@ -98,7 +103,10 @@ class PublicationRevokeTest
     @ParameterizedTest
     @MethodSource("channels")
     @InterruptAfter(10)
-    void revokeTestSimple(final String subscriptionChannel, final String publicationChannel)
+    void revokeTestSimple(
+        final String subscriptionChannel,
+        final String publicationChannel,
+        final long expectedPublicationImagesRevoked)
     {
         final AtomicInteger unavailableImages = new AtomicInteger(0);
         doAnswer(invocation ->
@@ -134,12 +142,18 @@ class PublicationRevokeTest
         }
 
         assertTrue(subscription.hasNoImages());
+
+        assertEquals(1, systemCounters.get(PUBLICATIONS_REVOKED).get());
+        assertEquals(expectedPublicationImagesRevoked, systemCounters.get(PUBLICATION_IMAGES_REVOKED).get());
     }
 
     @ParameterizedTest
     @MethodSource("channels")
     @InterruptAfter(10)
-    void revokeTestConcurrent(final String subscriptionChannel, final String publicationChannel)
+    void revokeTestConcurrent(
+        final String subscriptionChannel,
+        final String publicationChannel,
+        final long expectedPublicationImagesRevoked)
     {
         final AtomicInteger unavailableImages = new AtomicInteger(0);
         doAnswer(invocation ->
@@ -188,6 +202,9 @@ class PublicationRevokeTest
         }
 
         assertTrue(publicationTwo.isRevoked());
+
+        assertEquals(1, systemCounters.get(PUBLICATIONS_REVOKED).get());
+        assertEquals(expectedPublicationImagesRevoked, systemCounters.get(PUBLICATION_IMAGES_REVOKED).get());
     }
 
     private void publishMessage()

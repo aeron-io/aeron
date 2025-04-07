@@ -17,6 +17,7 @@ package io.aeron.driver;
 
 import io.aeron.CommonContext;
 import io.aeron.driver.buffer.RawLog;
+import io.aeron.driver.status.SystemCounters;
 import io.aeron.logbuffer.LogBufferDescriptor;
 import io.aeron.logbuffer.LogBufferUnblocker;
 import org.agrona.CloseHelper;
@@ -30,6 +31,7 @@ import org.agrona.concurrent.status.ReadablePosition;
 
 import java.util.ArrayList;
 
+import static io.aeron.driver.status.SystemCounterDescriptor.PUBLICATIONS_REVOKED;
 import static io.aeron.driver.status.SystemCounterDescriptor.UNBLOCKED_PUBLICATIONS;
 import static io.aeron.logbuffer.LogBufferDescriptor.*;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
@@ -80,6 +82,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     private final ArrayList<UntetheredSubscription> untetheredSubscriptions = new ArrayList<>();
     private final RawLog rawLog;
     private final AtomicCounter unblockedPublications;
+    private final AtomicCounter publicationsRevoked;
     private final ErrorHandler errorHandler;
 
     IpcPublication(
@@ -119,7 +122,11 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         this.unblockTimeoutNs = ctx.publicationUnblockTimeoutNs();
         this.untetheredWindowLimitTimeoutNs = params.untetheredWindowLimitTimeoutNs;
         this.untetheredRestingTimeoutNs = params.untetheredRestingTimeoutNs;
-        this.unblockedPublications = ctx.systemCounters().get(UNBLOCKED_PUBLICATIONS);
+
+        final SystemCounters systemCounters = ctx.systemCounters();
+        this.unblockedPublications = systemCounters.get(UNBLOCKED_PUBLICATIONS);
+        this.publicationsRevoked = systemCounters.get(PUBLICATIONS_REVOKED);
+
         this.metaDataBuffer = rawLog.metaData();
 
         consumerPosition = producerPosition();
@@ -254,12 +261,12 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
 
         state = State.REVOKED;
 
-        logRevoke(revokedPos, true, sessionId(), streamId(), channel());
+        logRevoke(revokedPos, sessionId(), streamId(), channel());
+        publicationsRevoked.increment();
     }
 
     private static void logRevoke(
         final long revokedPos,
-        final boolean publicationSide,
         final int sessionId,
         final int streamId,
         final String channel)
