@@ -806,41 +806,42 @@ public final class PublicationImage
      */
     int processPendingLoss()
     {
-        int workCount = 0;
-
-        if (!isRevoked)
+        if (isRevoked)
         {
-            final long changeNumber = (long)END_LOSS_CHANGE_VH.getAcquire(this);
+            return 0;
+        }
 
-            if (changeNumber != lastLossChangeNumber)
+        int workCount = 0;
+        final long changeNumber = (long)END_LOSS_CHANGE_VH.getAcquire(this);
+
+        if (changeNumber != lastLossChangeNumber)
+        {
+            final int termId = lossTermId;
+            final int termOffset = lossTermOffset;
+            final int length = lossLength;
+
+            VarHandle.loadLoadFence();
+
+            if (changeNumber == (long)BEGIN_LOSS_CHANGE_VH.getAcquire(this))
             {
-                final int termId = lossTermId;
-                final int termOffset = lossTermOffset;
-                final int length = lossLength;
-
-                VarHandle.loadLoadFence();
-
-                if (changeNumber == (long)BEGIN_LOSS_CHANGE_VH.getAcquire(this))
+                if (isReliable)
                 {
-                    if (isReliable)
+                    channelEndpoint.sendNakMessage(imageConnections, sessionId, streamId, termId, termOffset, length);
+                    nakMessagesSent.incrementRelease();
+                }
+                else
+                {
+                    final UnsafeBuffer termBuffer = termBuffers[indexByTerm(initialTermId, termId)];
+                    if (tryFillGap(rawLog.metaData(), termBuffer, termId, termOffset, length))
                     {
-                        channelEndpoint.sendNakMessage(imageConnections, sessionId, streamId, termId, termOffset, length);
-                        nakMessagesSent.incrementRelease();
+                        lossGapFills.incrementRelease();
                     }
-                    else
-                    {
-                        final UnsafeBuffer termBuffer = termBuffers[indexByTerm(initialTermId, termId)];
-                        if (tryFillGap(rawLog.metaData(), termBuffer, termId, termOffset, length))
-                        {
-                            lossGapFills.incrementRelease();
-                        }
-                    }
-
-                    lastLossChangeNumber = changeNumber;
                 }
 
-                workCount = 1;
+                lastLossChangeNumber = changeNumber;
             }
+
+            workCount = 1;
         }
 
         return workCount;
