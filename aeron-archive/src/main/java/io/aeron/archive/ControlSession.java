@@ -47,6 +47,7 @@ final class ControlSession implements Session
     private long sessionLivenessCheckDeadlineMs;
     private String abortReason;
 
+    @SuppressWarnings("JavadocVariable")
     enum State
     {
         INIT, CONNECTING, CONNECTED, CHALLENGED, AUTHENTICATED, ACTIVE, INACTIVE, REJECTED, DONE
@@ -56,12 +57,6 @@ final class ControlSession implements Session
     private final long connectTimeoutMs;
     private final long sessionLivenessCheckIntervalMs;
     private final long controlPublicationId;
-    private long correlationId;
-    private long resendDeadlineMs;
-    private long activityDeadlineMs;
-    private Session activeListing = null;
-    private ExclusivePublication controlPublication;
-    private byte[] encodedPrincipal;
     private final Aeron aeron;
     private final ArchiveConductor conductor;
     private final CachedEpochClock cachedEpochClock;
@@ -72,8 +67,16 @@ final class ControlSession implements Session
     private final ManyToOneConcurrentLinkedQueue<BooleanSupplier> asyncResponseQueue =
         new ManyToOneConcurrentLinkedQueue<>();
     private final ControlSessionAdapter controlSessionAdapter;
+    private final int controlPublicationStreamId;
+    private final String controlPublicationChannel;
     private final String invalidVersionMessage;
     private State state = State.INIT;
+    private long correlationId;
+    private long resendDeadlineMs;
+    private long activityDeadlineMs;
+    private Session activeListing = null;
+    private ExclusivePublication controlPublication;
+    private byte[] encodedPrincipal;
 
     ControlSession(
         final long controlSessionId,
@@ -81,6 +84,8 @@ final class ControlSession implements Session
         final long connectTimeoutMs,
         final long sessionLivenessCheckIntervalMs,
         final long controlPublicationId,
+        final String controlPublicationChannel,
+        final int controlPublicationStreamId,
         final String invalidVersionMessage,
         final ControlSessionAdapter controlSessionAdapter,
         final Aeron aeron,
@@ -94,6 +99,8 @@ final class ControlSession implements Session
         this.correlationId = correlationId;
         this.connectTimeoutMs = connectTimeoutMs;
         this.sessionLivenessCheckIntervalMs = sessionLivenessCheckIntervalMs;
+        this.controlPublicationChannel = controlPublicationChannel;
+        this.controlPublicationStreamId = controlPublicationStreamId;
         this.invalidVersionMessage = invalidVersionMessage;
         this.controlSessionAdapter = controlSessionAdapter;
         this.aeron = aeron;
@@ -157,7 +164,8 @@ final class ControlSession implements Session
         if (null != abortReason && !SESSION_CLOSED_MSG.equals(abortReason))
         {
             conductor.errorHandler.onError(new ArchiveEvent(
-                "controlSessionId=" + controlSessionId + " terminated: " + abortReason));
+                "controlSessionId=" + controlSessionId + " (responseStreamId=" + controlPublicationStreamId +
+                " responseChannel=" + controlPublicationChannel + ") terminated: " + abortReason));
         }
     }
 

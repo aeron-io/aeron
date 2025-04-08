@@ -16,8 +16,8 @@
 package io.aeron.archive;
 
 import io.aeron.Aeron;
+import io.aeron.ChannelUri;
 import io.aeron.ChannelUriStringBuilder;
-import io.aeron.CommonContext;
 import io.aeron.Counter;
 import io.aeron.Image;
 import io.aeron.Publication;
@@ -56,6 +56,7 @@ import org.agrona.concurrent.YieldingIdleStrategy;
 import org.agrona.concurrent.status.AtomicCounter;
 import org.agrona.concurrent.status.CountersReader;
 import org.hamcrest.CoreMatchers;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -80,6 +81,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.IntConsumer;
 
+import static io.aeron.CommonContext.*;
 import static io.aeron.archive.ArchiveThreadingMode.DEDICATED;
 import static io.aeron.archive.ArchiveThreadingMode.SHARED;
 import static io.aeron.archive.Catalog.MIN_CAPACITY;
@@ -227,7 +229,7 @@ class ArchiveTest
             final int initialTermId = 29;
 
             final String channel = new ChannelUriStringBuilder()
-                .media(CommonContext.IPC_MEDIA)
+                .media(IPC_MEDIA)
                 .initialPosition(initialPosition, initialTermId, termLength)
                 .build();
 
@@ -697,7 +699,7 @@ class ArchiveTest
             final IdleStrategy idleStrategy = YieldingIdleStrategy.INSTANCE;
 
             final String channel = new ChannelUriStringBuilder()
-                .media(CommonContext.IPC_MEDIA)
+                .media(IPC_MEDIA)
                 .termLength(256 * 1024)
                 .build();
 
@@ -861,6 +863,7 @@ class ArchiveTest
         return (numMaxPayloads * (maxPayloadLength + HEADER_LENGTH)) + lastFrameLength;
     }
 
+    @SuppressWarnings("MethodLength")
     @ParameterizedTest
     @CsvSource({
         "aeron:udp?endpoint=localhost:8010, aeron:udp?endpoint=localhost:0",
@@ -872,7 +875,7 @@ class ArchiveTest
         final long archiveId = -743746574;
         final ErrorHandler errorHandler = mock(ErrorHandler.class);
         try (MediaDriver driver = MediaDriver.launch(new MediaDriver.Context()
-            .aeronDirectoryName(CommonContext.generateRandomDirName())
+            .aeronDirectoryName(generateRandomDirName())
             .statusMessageTimeoutNs(TimeUnit.MILLISECONDS.toNanos(80))
             .imageLivenessTimeoutNs(TimeUnit.MILLISECONDS.toNanos(1000))
             .timerIntervalNs(TimeUnit.MILLISECONDS.toNanos(100))
@@ -893,10 +896,9 @@ class ArchiveTest
                 .aeronDirectoryName(driver.context().aeronDirectoryName())
                 .controlRequestChannel(controlRequestChannel)
                 .controlRequestStreamId(archive.context().controlStreamId())
-                .controlResponseChannel(controlResponseChannel)
-                .controlResponseStreamId(999);
-            try (AeronArchive client1 = AeronArchive.connect(ctx.clone());
-                AeronArchive client2 = AeronArchive.connect(ctx.clone()))
+                .controlResponseChannel(controlResponseChannel);
+            try (AeronArchive client1 = AeronArchive.connect(ctx.clone().controlResponseStreamId(777));
+                AeronArchive client2 = AeronArchive.connect(ctx.clone().controlResponseStreamId(999)))
             {
                 assertEquals(archiveId, client1.archiveId());
                 assertEquals(archiveId, client2.archiveId());
@@ -924,11 +926,26 @@ class ArchiveTest
                 verify(errorHandler, timeout(1000)).onError(captor.capture());
                 final ArchiveEvent event = assertInstanceOf(ArchiveEvent.class, captor.getValue());
                 assertEquals(AeronException.Category.WARN, event.category());
-                assertEquals(
-                    "WARN - controlSessionId=" + client2.controlSessionId() + " terminated: " +
-                    "failed to send response for more than connectTimeoutMs=" +
-                    TimeUnit.NANOSECONDS.toMillis(archive.context().connectTimeoutNs()),
-                    event.getMessage());
+                final ChannelUri parsedResponseChannel = ChannelUri.parse(client2.context().controlResponseChannel());
+                assertThat(event.getMessage(), allOf(
+                    Matchers.startsWith("WARN - controlSessionId=" + client2.controlSessionId() + " ("),
+                    Matchers.endsWith(") terminated: failed to send response for more than connectTimeoutMs=" +
+                    TimeUnit.NANOSECONDS.toMillis(archive.context().connectTimeoutNs())),
+                    Matchers.containsString("responseStreamId=999"),
+                    Matchers.containsString("responseChannel=aeron:" + parsedResponseChannel.media())));
+
+                if (CONTROL_MODE_RESPONSE.equals(parsedResponseChannel.get(MDC_CONTROL_MODE_PARAM_NAME)))
+                {
+                    assertThat(event.getMessage(), allOf(
+                        Matchers.containsString("control-mode=response"),
+                        Matchers.containsString("response-correlation-id=")));
+                }
+                else
+                {
+                    assertThat(
+                        event.getMessage(),
+                        Matchers.containsString("session-id=" + parsedResponseChannel.get(SESSION_ID_PARAM_NAME)));
+                }
 
                 while (client2.controlResponsePoller().subscription().isConnected())
                 {

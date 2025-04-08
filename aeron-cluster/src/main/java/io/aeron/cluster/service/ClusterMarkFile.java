@@ -441,7 +441,7 @@ public final class ClusterMarkFile implements AutoCloseable
     {
         if (!markFile.isClosed())
         {
-            markFile.timestampOrdered(nowMs);
+            markFile.timestampRelease(nowMs);
         }
     }
 

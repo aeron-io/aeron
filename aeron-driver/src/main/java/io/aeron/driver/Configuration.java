@@ -1138,7 +1138,7 @@ public final class Configuration
      */
     public static boolean termBufferSparseFile()
     {
-        return "true".equals(getProperty(TERM_BUFFER_SPARSE_FILE_PROP_NAME));
+        return "true".equals(getProperty(TERM_BUFFER_SPARSE_FILE_PROP_NAME, "true"));
     }
 
     /**

@@ -36,6 +36,7 @@ import static io.aeron.driver.DataPacketDispatcher.SessionState.*;
  */
 public final class DataPacketDispatcher
 {
+    @SuppressWarnings("JavadocVariable")
     enum SessionState
     {
         ACTIVE,

@@ -29,6 +29,9 @@ interface ToggleApplication<T extends Enum<T>>
     @SuppressWarnings("BooleanMethodIsAlwaysInverted")
     boolean isNeutral(T toggleState);
 
+    /**
+     * Cluster control toggle.
+     */
     ToggleApplication<ClusterControl.ToggleState> CLUSTER_CONTROL = new ToggleApplication<ClusterControl.ToggleState>()
     {
         public ClusterControl.ToggleState get(final AtomicCounter counter)
@@ -52,6 +55,9 @@ interface ToggleApplication<T extends Enum<T>>
         }
     };
 
+    /**
+     * Node state file control toggle.
+     */
     ToggleApplication<NodeControl.ToggleState> NODE_CONTROL = new ToggleApplication<NodeControl.ToggleState>()
     {
         public NodeControl.ToggleState get(final AtomicCounter counter)

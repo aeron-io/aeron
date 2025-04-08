@@ -28,6 +28,7 @@ import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
  */
 class RecordingSession implements Session
 {
+    @SuppressWarnings("JavadocVariable")
     enum State
     {
         INIT, RECORDING, INACTIVE, STOPPED

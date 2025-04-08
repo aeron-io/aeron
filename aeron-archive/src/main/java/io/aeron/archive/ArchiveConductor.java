@@ -396,7 +396,6 @@ abstract class ArchiveConductor
             ctx.controlTermBufferSparse() : Boolean.parseBoolean(isSparseStr);
         final boolean usingResponseChannel = CONTROL_MODE_RESPONSE.equals(channelUri.get(MDC_CONTROL_MODE_PARAM_NAME));
 
-
         final ChannelUriStringBuilder urlBuilder = strippedChannelBuilder(channelUri)
             .ttl(channelUri)
             .termLength(termLength)
@@ -423,6 +422,8 @@ abstract class ArchiveConductor
             connectTimeoutMs,
             sessionLivenessCheckIntervalMs,
             aeron.asyncAddExclusivePublication(responseChannel, streamId),
+            responseChannel,
+            streamId,
             invalidVersionMessage,
             controlSessionAdapter,
             aeron,

@@ -331,7 +331,7 @@ public class ArchiveMarkFile implements AutoCloseable
     {
         if (!markFile.isClosed())
         {
-            markFile.timestampOrdered(nowMs);
+            markFile.timestampRelease(nowMs);
         }
     }
 

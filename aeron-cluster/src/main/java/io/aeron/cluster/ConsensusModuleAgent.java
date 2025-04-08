@@ -3433,7 +3433,8 @@ final class ConsensusModuleAgent
 
     private void onUnavailableIngressImage(final Image image)
     {
-        ingressAdapter.freeSessionBuffer(image.sessionId());
+        final boolean isIpc = image.subscription().channel().startsWith(IPC_CHANNEL);
+        ingressAdapter.freeSessionBuffer(image.sessionId(), isIpc);
     }
 
     private void onUnavailableCounter(final CountersReader counters, final long registrationId, final int counterId)

@@ -62,6 +62,7 @@ import static org.agrona.BitUtil.align;
  */
 class ReplaySession implements Session, AutoCloseable
 {
+    @SuppressWarnings("JavadocVariable")
     enum State
     {
         INIT, REPLAY, INACTIVE, DONE
@@ -444,7 +445,7 @@ class ReplaySession implements Session, AutoCloseable
         }
         else if (Publication.CLOSED == position || Publication.NOT_CONNECTED == position)
         {
-            onError("stream closed before replay complete");
+            state(State.INACTIVE, "stream closed before replay complete");
         }
 
         return false;

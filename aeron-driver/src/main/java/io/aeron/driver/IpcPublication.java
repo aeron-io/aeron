@@ -41,6 +41,7 @@ import static org.agrona.BitUtil.SIZE_OF_LONG;
  */
 public final class IpcPublication implements DriverManagedResource, Subscribable
 {
+    @SuppressWarnings("JavadocVariable")
     enum State
     {
         ACTIVE, REVOKED, DRAINING, LINGER, DONE

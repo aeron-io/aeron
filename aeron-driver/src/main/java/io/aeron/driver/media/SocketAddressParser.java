@@ -24,11 +24,13 @@ import java.net.InetSocketAddress;
 
 class SocketAddressParser
 {
+    @SuppressWarnings("JavadocVariable")
     enum IpV4State
     {
         HOST, PORT
     }
 
+    @SuppressWarnings("JavadocVariable")
     enum IpV6State
     {
         START_ADDR, HOST, SCOPE, END_ADDR, PORT
