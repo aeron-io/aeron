@@ -337,7 +337,6 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
             case REVOKED:
             {
                 conductor.transitionToRevoked(this);
-                conductor.transitionToLinger(this);
 
                 state = State.DRAINING;
                 break;
