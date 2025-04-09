@@ -17,12 +17,12 @@ package io.aeron;
 
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
-import io.aeron.driver.status.SystemCounters;
 import io.aeron.logbuffer.*;
 import io.aeron.test.*;
 import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.CloseHelper;
 import org.agrona.concurrent.UnsafeBuffer;
+import org.agrona.concurrent.status.CountersReader;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -72,7 +72,7 @@ class PublicationRevokeTest
 
     private Aeron client;
     private TestMediaDriver driver;
-    private SystemCounters systemCounters;
+    private CountersReader countersReader;
     private Subscription subscription;
     private Publication publication;
 
@@ -86,10 +86,11 @@ class PublicationRevokeTest
         driverContext.dirDeleteOnStart(true).threadingMode(ThreadingMode.SHARED);
 
         driver = TestMediaDriver.launch(driverContext, watcher);
-        systemCounters = driverContext.systemCounters();
         watcher.dataCollector().add(driver.context().aeronDirectory());
 
         client = Aeron.connect(clientContext.clone());
+
+        countersReader = client.countersReader();
 
         buffer.putInt(0, 1);
     }
@@ -143,8 +144,8 @@ class PublicationRevokeTest
 
         assertTrue(subscription.hasNoImages());
 
-        assertEquals(1, systemCounters.get(PUBLICATIONS_REVOKED).get());
-        assertEquals(expectedPublicationImagesRevoked, systemCounters.get(PUBLICATION_IMAGES_REVOKED).get());
+        assertEquals(1, countersReader.getCounterValue(PUBLICATIONS_REVOKED.id()));
+        assertEquals(expectedPublicationImagesRevoked, countersReader.getCounterValue(PUBLICATION_IMAGES_REVOKED.id()));
     }
 
     @ParameterizedTest
@@ -203,8 +204,8 @@ class PublicationRevokeTest
 
         assertTrue(publicationTwo.isRevoked());
 
-        assertEquals(1, systemCounters.get(PUBLICATIONS_REVOKED).get());
-        assertEquals(expectedPublicationImagesRevoked, systemCounters.get(PUBLICATION_IMAGES_REVOKED).get());
+        assertEquals(1, countersReader.getCounterValue(PUBLICATIONS_REVOKED.id()));
+        assertEquals(expectedPublicationImagesRevoked, countersReader.getCounterValue(PUBLICATION_IMAGES_REVOKED.id()));
     }
 
     private void publishMessage()

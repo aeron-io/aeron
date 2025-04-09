@@ -338,6 +338,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
             case REVOKED:
             {
                 conductor.transitionToRevoked(this);
+                conductor.transitionToLinger(this);
 
                 state = State.DRAINING;
                 break;
@@ -349,7 +350,10 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
                 publisherPos.setRelease(producerPosition);
                 if (isDrained(producerPosition))
                 {
-                    conductor.transitionToLinger(this);
+                    if (!isRevoked)
+                    {
+                        conductor.transitionToLinger(this);
+                    }
                     state = State.LINGER;
                 }
                 else if (LogBufferUnblocker.unblock(termBuffers, metaDataBuffer, consumerPosition, termBufferLength))
