@@ -35,6 +35,9 @@ typedef struct aeron_driver_managed_resource_stct
     void *clientd;
     void (*decref)(void *);
     void (*incref)(void *);
+    // TODO rework this - maybe add a 'managed resource type' enum and use that to determine what function to call when revoking publication?
+    // Should that extend to the decref and incref pointers above?
+    void (*revoke)(void *);
 }
 aeron_driver_managed_resource_t;
 

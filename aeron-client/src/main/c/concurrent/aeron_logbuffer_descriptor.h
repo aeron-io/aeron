@@ -76,6 +76,7 @@ typedef struct aeron_logbuffer_metadata_stct
     uint8_t signal_eos;
     uint8_t spies_simulate_connection;
     uint8_t tether;
+    uint8_t is_publication_revoked;
 }
 aeron_logbuffer_metadata_t;
 #pragma pack(pop)
@@ -302,6 +303,7 @@ inline void aeron_logbuffer_metadata_init(
     log_meta_data->signal_eos = signal_eos;
     log_meta_data->spies_simulate_connection = spies_simulate_connection;
     log_meta_data->tether = tether;
+    log_meta_data->is_publication_revoked = (uint8_t)false;
 }
 
 inline void aeron_logbuffer_apply_default_header(uint8_t *log_meta_data_buffer, uint8_t *buffer)

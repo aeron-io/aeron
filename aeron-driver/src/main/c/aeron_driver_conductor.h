@@ -42,8 +42,16 @@ typedef struct aeron_publication_link_stct
 {
     aeron_driver_managed_resource_t *resource;
     int64_t registration_id;
+    bool is_revoked;
 }
 aeron_publication_link_t;
+
+#define AERON_PUBLICATION_LINK_INIT(_link, _resource, _registration_id) \
+do {                                                                    \
+    link->resource = _resource;                                         \
+    link->registration_id = registration_id;                            \
+    link->is_revoked = false;                                           \
+} while (0)
 
 typedef struct aeron_counter_link_stct
 {
@@ -382,6 +390,9 @@ void aeron_linger_resource_entry_delete(aeron_driver_conductor_t *conductor, aer
 void aeron_driver_conductor_image_transition_to_linger(
     aeron_driver_conductor_t *conductor, aeron_publication_image_t *image);
 
+void aeron_driver_conductor_publication_transition_to_revoked(
+    aeron_driver_conductor_t *conductor, aeron_driver_managed_resource_t *revoked_resource);
+
 int aeron_driver_conductor_init(aeron_driver_conductor_t *conductor, aeron_driver_context_t *context);
 
 void aeron_driver_conductor_client_transmit(
@@ -417,6 +428,8 @@ void aeron_driver_conductor_on_unavailable_counter(
     aeron_driver_conductor_t *conductor, int64_t registration_id, int32_t counter_id);
 
 void aeron_driver_conductor_on_client_timeout(aeron_driver_conductor_t *conductor, int64_t correlation_id);
+
+void aeron_driver_conductor_on_revoked_publication(aeron_driver_conductor_t *conductor, int64_t registration_id);
 
 void aeron_driver_conductor_on_static_counter(
     aeron_driver_conductor_t *conductor, int64_t correlation_id, int32_t counter_id);
@@ -460,6 +473,8 @@ int aeron_driver_conductor_on_add_network_publication(
     aeron_driver_conductor_t *conductor, aeron_publication_command_t *command, bool is_exclusive);
 
 int aeron_driver_conductor_on_remove_publication(aeron_driver_conductor_t *conductor, aeron_remove_command_t *command);
+
+int aeron_driver_conductor_on_revoke_publication(aeron_driver_conductor_t *conductor, aeron_remove_command_t *command);
 
 int aeron_driver_conductor_on_add_ipc_subscription(
     aeron_driver_conductor_t *conductor, aeron_subscription_command_t *command);

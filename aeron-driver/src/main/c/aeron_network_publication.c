@@ -277,6 +277,7 @@ int aeron_network_publication_create(
     _pub->conductor_fields.managed_resource.clientd = _pub;
     _pub->conductor_fields.managed_resource.incref = aeron_network_publication_incref;
     _pub->conductor_fields.managed_resource.decref = aeron_network_publication_decref;
+    _pub->conductor_fields.managed_resource.revoke = aeron_network_publication_revoke;
     _pub->conductor_fields.has_reached_end_of_life = false;
     _pub->conductor_fields.clean_position = 0;
     _pub->conductor_fields.state = AERON_NETWORK_PUBLICATION_STATE_ACTIVE;
@@ -323,6 +324,7 @@ int aeron_network_publication_create(
     _pub->has_spies = false;
     _pub->is_connected = false;
     _pub->is_end_of_stream = false;
+    _pub->is_revoked = false;
     _pub->track_sender_limits = false;
     _pub->has_sender_released = false;
     _pub->has_received_unicast_eos = false;
@@ -336,6 +338,8 @@ int aeron_network_publication_create(
         aeron_system_counter_addr(system_counters, AERON_SYSTEM_COUNTER_RETRANSMITTED_BYTES);
     _pub->unblocked_publications_counter = aeron_system_counter_addr(
         system_counters, AERON_SYSTEM_COUNTER_UNBLOCKED_PUBLICATIONS);
+    _pub->publications_revoked_counter = aeron_system_counter_addr(
+        system_counters, AERON_SYSTEM_COUNTER_PUBLICATIONS_REVOKED);
 
     _pub->conductor_fields.last_snd_pos = aeron_counter_get_plain(_pub->snd_pos_position.value_addr);
     _pub->conductor_fields.clean_position = _pub->conductor_fields.last_snd_pos;
@@ -492,7 +496,7 @@ int aeron_network_publication_heartbeat_message_check(
     int64_t now_ns,
     int32_t active_term_id,
     int32_t term_offset,
-    bool signal_end_of_stream)
+    bool is_end_of_stream)
 {
     int result = 0;
     int64_t bytes_sent = 0;
@@ -500,25 +504,38 @@ int aeron_network_publication_heartbeat_message_check(
     if (publication->has_initial_connection &&
         now_ns > (publication->time_of_last_data_or_heartbeat_ns + AERON_NETWORK_PUBLICATION_HEARTBEAT_TIMEOUT_NS))
     {
+        uint8_t flags;
+
+        bool is_revoked;
+        AERON_GET_ACQUIRE(is_revoked, publication->is_revoked);
+
+        if (is_revoked)
+        {
+            flags = AERON_DATA_HEADER_BEGIN_FLAG | AERON_DATA_HEADER_END_FLAG |
+                AERON_DATA_HEADER_EOS_FLAG | AERON_DATA_HEADER_REVOKED_FLAG;
+        }
+        else if (publication->signal_eos & is_end_of_stream)
+        {
+            flags = AERON_DATA_HEADER_BEGIN_FLAG | AERON_DATA_HEADER_END_FLAG | AERON_DATA_HEADER_EOS_FLAG;
+        }
+        else
+        {
+            flags = AERON_DATA_HEADER_BEGIN_FLAG | AERON_DATA_HEADER_END_FLAG;
+        }
+
         uint8_t heartbeat_buffer[sizeof(aeron_data_header_t)];
         aeron_data_header_t *data_header = (aeron_data_header_t *)heartbeat_buffer;
         struct iovec iov;
 
         data_header->frame_header.frame_length = 0;
         data_header->frame_header.version = AERON_FRAME_HEADER_VERSION;
-        data_header->frame_header.flags = AERON_DATA_HEADER_BEGIN_FLAG | AERON_DATA_HEADER_END_FLAG;
+        data_header->frame_header.flags = flags;
         data_header->frame_header.type = AERON_HDR_TYPE_DATA;
         data_header->term_offset = term_offset;
         data_header->session_id = publication->session_id;
         data_header->stream_id = publication->stream_id;
         data_header->term_id = active_term_id;
         data_header->reserved_value = 0l;
-
-        if (signal_end_of_stream)
-        {
-            data_header->frame_header.flags =
-                AERON_DATA_HEADER_BEGIN_FLAG | AERON_DATA_HEADER_END_FLAG | AERON_DATA_HEADER_EOS_FLAG;
-        }
 
         iov.iov_base = heartbeat_buffer;
         iov.iov_len = sizeof(aeron_data_header_t);
@@ -642,7 +659,7 @@ int aeron_network_publication_send(aeron_network_publication_t *publication, int
         AERON_GET_ACQUIRE(is_end_of_stream, publication->is_end_of_stream);
 
         bytes_sent = aeron_network_publication_heartbeat_message_check(
-            publication, now_ns, active_term_id, term_offset, publication->signal_eos && is_end_of_stream);
+            publication, now_ns, active_term_id, term_offset, is_end_of_stream);
         if (bytes_sent < 0)
         {
             return -1;
@@ -1045,20 +1062,42 @@ void aeron_network_publication_decref(void *clientd)
 
     if (0 == ref_count)
     {
-        const int64_t producer_position = aeron_network_publication_producer_position(publication);
-
-        publication->conductor_fields.state = AERON_NETWORK_PUBLICATION_STATE_DRAINING;
-        publication->conductor_fields.time_of_last_activity_ns = aeron_clock_cached_nano_time(
-            publication->cached_clock);
-
-        aeron_counter_set_release(publication->pub_lmt_position.value_addr, producer_position);
-        AERON_SET_RELEASE(publication->log_meta_data->end_of_stream_position, producer_position);
-
-        if (aeron_counter_get_acquire(publication->snd_pos_position.value_addr) >= producer_position)
+        if (!publication->is_revoked)
         {
-            AERON_SET_RELEASE(publication->is_end_of_stream, true);
+            const int64_t producer_position = aeron_network_publication_producer_position(publication);
+
+            publication->conductor_fields.state = AERON_NETWORK_PUBLICATION_STATE_DRAINING;
+            publication->conductor_fields.time_of_last_activity_ns = aeron_clock_cached_nano_time(
+                publication->cached_clock);
+
+            aeron_counter_set_release(publication->pub_lmt_position.value_addr, producer_position);
+            AERON_SET_RELEASE(publication->log_meta_data->end_of_stream_position, producer_position);
+
+            if (aeron_counter_get_acquire(publication->snd_pos_position.value_addr) >= producer_position)
+            {
+                AERON_SET_RELEASE(publication->is_end_of_stream, true);
+            }
         }
     }
+}
+
+void aeron_network_publication_revoke(void *clientd)
+{
+    aeron_network_publication_t *publication = (aeron_network_publication_t *)clientd;
+
+    int64_t revoked_position = aeron_network_publication_producer_position(publication);
+    aeron_counter_set_release(publication->pub_lmt_position.value_addr, revoked_position);
+    AERON_SET_RELEASE(publication->log_meta_data->end_of_stream_position, revoked_position);
+    AERON_SET_RELEASE(publication->log_meta_data->is_publication_revoked, (uint8_t)true);
+
+    AERON_SET_RELEASE(publication->is_end_of_stream, true);
+    AERON_SET_RELEASE(publication->is_revoked, true);
+
+    publication->conductor_fields.state = AERON_NETWORK_PUBLICATION_STATE_REVOKED;
+
+    // logRevoke (TODO agent equivalent)
+
+    aeron_counter_increment_release(publication->publications_revoked_counter);
 }
 
 bool aeron_network_publication_spies_finished_consuming(
@@ -1224,6 +1263,16 @@ void aeron_network_publication_on_time_event(
             break;
         }
 
+        case AERON_NETWORK_PUBLICATION_STATE_REVOKED:
+        {
+            aeron_driver_conductor_publication_transition_to_revoked(conductor, &publication->conductor_fields.managed_resource);
+            aeron_driver_conductor_cleanup_spies(conductor, publication);
+
+            publication->conductor_fields.time_of_last_activity_ns = now_ns;
+            publication->conductor_fields.state = AERON_NETWORK_PUBLICATION_STATE_LINGER;
+            break;
+        }
+
         case AERON_NETWORK_PUBLICATION_STATE_DRAINING:
         {
             const int64_t producer_position = aeron_network_publication_producer_position(publication);
@@ -1262,11 +1311,15 @@ void aeron_network_publication_on_time_event(
 
         case AERON_NETWORK_PUBLICATION_STATE_LINGER:
         {
+            bool has_spies;
+            AERON_GET_ACQUIRE(has_spies, publication->has_spies);
+
             bool has_received_unicast_eos = false;
             AERON_GET_ACQUIRE(has_received_unicast_eos, publication->has_received_unicast_eos);
 
-            if (has_received_unicast_eos ||
-                now_ns > (publication->conductor_fields.time_of_last_activity_ns + publication->linger_timeout_ns))
+            if (publication->conductor_fields.refcnt == 0 &&
+                ((!has_spies && has_received_unicast_eos) ||
+                now_ns > (publication->conductor_fields.time_of_last_activity_ns + publication->linger_timeout_ns)))
             {
                 aeron_driver_conductor_cleanup_network_publication(conductor, publication);
                 publication->conductor_fields.state = AERON_NETWORK_PUBLICATION_STATE_DONE;

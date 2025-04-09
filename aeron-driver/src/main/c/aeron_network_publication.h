@@ -29,6 +29,7 @@
 typedef enum aeron_network_publication_state_enum
 {
     AERON_NETWORK_PUBLICATION_STATE_ACTIVE,
+    AERON_NETWORK_PUBLICATION_STATE_REVOKED,
     AERON_NETWORK_PUBLICATION_STATE_DRAINING,
     AERON_NETWORK_PUBLICATION_STATE_LINGER,
     AERON_NETWORK_PUBLICATION_STATE_DONE
@@ -113,6 +114,7 @@ typedef struct aeron_network_publication_stct
     volatile bool has_spies;
     volatile bool is_connected;
     volatile bool is_end_of_stream;
+    volatile bool is_revoked;
     volatile bool has_sender_released;
     volatile bool has_received_unicast_eos;
     aeron_raw_log_close_func_t raw_log_close_func;
@@ -129,6 +131,7 @@ typedef struct aeron_network_publication_stct
     volatile int64_t *retransmits_sent_counter;
     volatile int64_t *retransmitted_bytes_counter;
     volatile int64_t *unblocked_publications_counter;
+    volatile int64_t *publications_revoked_counter;
     volatile int64_t *mapped_bytes_counter;
 
     aeron_int64_counter_map_t receiver_liveness_tracker;
@@ -161,6 +164,8 @@ bool aeron_network_publication_free(aeron_network_publication_t *publication);
 void aeron_network_publication_incref(void *clientd);
 
 void aeron_network_publication_decref(void *clientd);
+
+void aeron_network_publication_revoke(void *clientd);
 
 void aeron_network_publication_on_time_event(
     aeron_driver_conductor_t *conductor, aeron_network_publication_t *publication, int64_t now_ns, int64_t now_ms);

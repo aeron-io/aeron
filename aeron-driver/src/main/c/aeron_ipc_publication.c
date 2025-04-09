@@ -105,6 +105,8 @@ int aeron_ipc_publication_create(
     _pub->channel[channel_length] = '\0';
     _pub->channel_length = (int32_t)channel_length;
 
+    _pub->is_revoked = false;
+
     if (params->has_position)
     {
         int32_t term_id = params->term_id;
@@ -183,6 +185,7 @@ int aeron_ipc_publication_create(
     _pub->conductor_fields.managed_resource.clientd = _pub;
     _pub->conductor_fields.managed_resource.incref = aeron_ipc_publication_incref;
     _pub->conductor_fields.managed_resource.decref = aeron_ipc_publication_decref;
+    _pub->conductor_fields.managed_resource.revoke = aeron_ipc_publication_revoke;
     _pub->conductor_fields.has_reached_end_of_life = false;
     _pub->conductor_fields.trip_limit = 0;
     _pub->conductor_fields.time_of_last_consumer_position_change_ns = now_ns;
@@ -211,6 +214,8 @@ int aeron_ipc_publication_create(
 
     _pub->unblocked_publications_counter = aeron_system_counter_addr(
         system_counters, AERON_SYSTEM_COUNTER_UNBLOCKED_PUBLICATIONS);
+    _pub->publications_revoked_counter = aeron_system_counter_addr(
+        system_counters, AERON_SYSTEM_COUNTER_PUBLICATIONS_REVOKED);
 
     *publication = _pub;
 
@@ -449,6 +454,32 @@ void aeron_ipc_publication_on_time_event(
             break;
         }
 
+        case AERON_IPC_PUBLICATION_STATE_REVOKED:
+        {
+            aeron_driver_conductor_publication_transition_to_revoked(conductor, &publication->conductor_fields.managed_resource);
+
+            for (size_t i = 0, size = conductor->ipc_subscriptions.length; i < size; i++)
+            {
+                aeron_subscription_link_t *link = &conductor->ipc_subscriptions.array[i];
+
+                if (aeron_driver_conductor_is_subscribable_linked(
+                    link,
+                    &publication->conductor_fields.subscribable))
+                {
+                    aeron_driver_conductor_on_unavailable_image(
+                        conductor,
+                        publication->conductor_fields.managed_resource.registration_id,
+                        link->registration_id,
+                        publication->stream_id,
+                        AERON_IPC_CHANNEL,
+                        AERON_IPC_CHANNEL_LEN);
+                }
+            }
+
+            publication->conductor_fields.state = AERON_IPC_PUBLICATION_STATE_DRAINING;
+            break;
+        }
+
         case AERON_IPC_PUBLICATION_STATE_DRAINING:
         {
             const int64_t producer_position = aeron_ipc_publication_producer_position(publication);
@@ -459,19 +490,24 @@ void aeron_ipc_publication_on_time_event(
                 publication->conductor_fields.state = AERON_IPC_PUBLICATION_STATE_LINGER;
                 publication->conductor_fields.managed_resource.time_of_last_state_change_ns = now_ns;
 
-                for (size_t i = 0, size = conductor->ipc_subscriptions.length; i < size; i++)
+                if (!publication->is_revoked)
                 {
-                    aeron_subscription_link_t *link = &conductor->ipc_subscriptions.array[i];
-
-                    if (aeron_driver_conductor_is_subscribable_linked(link, &publication->conductor_fields.subscribable))
+                    for (size_t i = 0, size = conductor->ipc_subscriptions.length; i < size; i++)
                     {
-                        aeron_driver_conductor_on_unavailable_image(
-                            conductor,
-                            publication->conductor_fields.managed_resource.registration_id,
-                            link->registration_id,
-                            publication->stream_id,
-                            AERON_IPC_CHANNEL,
-                            AERON_IPC_CHANNEL_LEN);
+                        aeron_subscription_link_t *link = &conductor->ipc_subscriptions.array[i];
+
+                        if (aeron_driver_conductor_is_subscribable_linked(
+                            link,
+                            &publication->conductor_fields.subscribable))
+                        {
+                            aeron_driver_conductor_on_unavailable_image(
+                                conductor,
+                                publication->conductor_fields.managed_resource.registration_id,
+                                link->registration_id,
+                                publication->stream_id,
+                                AERON_IPC_CHANNEL,
+                                AERON_IPC_CHANNEL_LEN);
+                        }
                     }
                 }
             }
@@ -487,7 +523,10 @@ void aeron_ipc_publication_on_time_event(
 
         case AERON_IPC_PUBLICATION_STATE_LINGER:
         {
-            publication->conductor_fields.has_reached_end_of_life = true;
+            if (publication->conductor_fields.refcnt == 0)
+            {
+                publication->conductor_fields.has_reached_end_of_life = true;
+            }
             break;
         }
 
@@ -509,16 +548,37 @@ void aeron_ipc_publication_decref(void *clientd)
 
     if (0 == ref_count)
     {
-        int64_t producer_position = aeron_ipc_publication_producer_position(publication);
-
-        if (aeron_counter_get_plain(publication->pub_lmt_position.value_addr) > producer_position)
+        if (!publication->is_revoked)
         {
-            aeron_counter_set_release(publication->pub_lmt_position.value_addr, producer_position);
-        }
+            int64_t producer_position = aeron_ipc_publication_producer_position(publication);
 
-        AERON_SET_RELEASE(publication->log_meta_data->end_of_stream_position, producer_position);
-        publication->conductor_fields.state = AERON_IPC_PUBLICATION_STATE_DRAINING;
+            if (aeron_counter_get_plain(publication->pub_lmt_position.value_addr) > producer_position)
+            {
+                aeron_counter_set_release(publication->pub_lmt_position.value_addr, producer_position);
+            }
+
+            AERON_SET_RELEASE(publication->log_meta_data->end_of_stream_position, producer_position);
+            publication->conductor_fields.state = AERON_IPC_PUBLICATION_STATE_DRAINING;
+        }
     }
+}
+
+void aeron_ipc_publication_revoke(void *clientd)
+{
+    aeron_ipc_publication_t *publication = (aeron_ipc_publication_t *)clientd;
+
+    int64_t revoked_position = aeron_ipc_publication_producer_position(publication);
+    aeron_counter_set_release(publication->pub_lmt_position.value_addr, revoked_position);
+    AERON_SET_RELEASE(publication->log_meta_data->end_of_stream_position, revoked_position);
+    AERON_SET_RELEASE(publication->log_meta_data->is_publication_revoked, (uint8_t)true);
+
+    AERON_SET_RELEASE(publication->is_revoked, true);
+
+    publication->conductor_fields.state = AERON_IPC_PUBLICATION_STATE_REVOKED;
+
+    // logRevoke (TODO agent equivalent)
+
+    aeron_counter_increment_release(publication->publications_revoked_counter);
 }
 
 void aeron_ipc_publication_check_for_blocked_publisher(

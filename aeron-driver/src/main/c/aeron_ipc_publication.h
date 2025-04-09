@@ -26,6 +26,7 @@
 typedef enum aeron_ipc_publication_state_enum
 {
     AERON_IPC_PUBLICATION_STATE_ACTIVE,
+    AERON_IPC_PUBLICATION_STATE_REVOKED,
     AERON_IPC_PUBLICATION_STATE_DRAINING,
     AERON_IPC_PUBLICATION_STATE_LINGER,
     AERON_IPC_PUBLICATION_STATE_DONE
@@ -72,6 +73,8 @@ typedef struct aeron_ipc_publication_stct
     size_t log_file_name_length;
     char *log_file_name;
 
+    bool is_revoked;
+
     aeron_raw_log_close_func_t raw_log_close_func;
     aeron_raw_log_free_func_t raw_log_free_func;
     struct
@@ -80,6 +83,7 @@ typedef struct aeron_ipc_publication_stct
     } log;
 
     volatile int64_t *unblocked_publications_counter;
+    volatile int64_t *publications_revoked_counter;
     volatile int64_t *mapped_bytes_counter;
 }
 aeron_ipc_publication_t;
@@ -113,6 +117,8 @@ void aeron_ipc_publication_on_time_event(
 void aeron_ipc_publication_incref(void *clientd);
 
 void aeron_ipc_publication_decref(void *clientd);
+
+void aeron_ipc_publication_revoke(void *clientd);
 
 void aeron_ipc_publication_check_for_blocked_publisher(
     aeron_ipc_publication_t *publication, int64_t producer_position, int64_t now_ns);
