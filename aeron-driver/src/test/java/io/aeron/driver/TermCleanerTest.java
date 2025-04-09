@@ -20,7 +20,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 import static io.aeron.driver.TermCleaner.TERM_CLEANUP_BLOCK_LENGTH;
-import static io.aeron.driver.TermCleaner.alignCleanPositionToTheStartOfTheBlock;
+import static io.aeron.driver.TermCleaner.blockStartPosition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class TermCleanerTest
@@ -43,6 +43,6 @@ class TermCleanerTest
     })
     void shouldComputeCleanStartPosition(final long startPosition, final long expectedResult)
     {
-        assertEquals(expectedResult, alignCleanPositionToTheStartOfTheBlock(startPosition));
+        assertEquals(expectedResult, blockStartPosition(startPosition));
     }
 }

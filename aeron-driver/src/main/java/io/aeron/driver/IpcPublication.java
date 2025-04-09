@@ -32,7 +32,7 @@ import java.lang.invoke.VarHandle;
 import java.util.ArrayList;
 
 import static io.aeron.driver.TermCleaner.TERM_CLEANUP_BLOCK_LENGTH;
-import static io.aeron.driver.TermCleaner.alignCleanPositionToTheStartOfTheBlock;
+import static io.aeron.driver.TermCleaner.blockStartPosition;
 import static io.aeron.driver.status.SystemCounterDescriptor.UNBLOCKED_PUBLICATIONS;
 import static io.aeron.logbuffer.LogBufferDescriptor.*;
 
@@ -128,7 +128,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
 
         consumerPosition = producerPosition();
         lastConsumerPosition = consumerPosition;
-        cleanPosition = alignCleanPositionToTheStartOfTheBlock(lastConsumerPosition);
+        cleanPosition = blockStartPosition(lastConsumerPosition);
         timeOfLastConsumerPositionUpdateNs = ctx.cachedNanoClock().nanoTime();
     }
 

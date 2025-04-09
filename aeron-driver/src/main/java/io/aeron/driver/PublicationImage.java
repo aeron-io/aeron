@@ -50,7 +50,7 @@ import static io.aeron.ErrorCode.IMAGE_REJECTED;
 import static io.aeron.driver.TermCleaner.TERM_CLEANUP_BLOCK_LENGTH;
 import static io.aeron.driver.LossDetector.lossFound;
 import static io.aeron.driver.LossDetector.rebuildOffset;
-import static io.aeron.driver.TermCleaner.alignCleanPositionToTheStartOfTheBlock;
+import static io.aeron.driver.TermCleaner.blockStartPosition;
 import static io.aeron.driver.status.SystemCounterDescriptor.*;
 import static io.aeron.logbuffer.LogBufferDescriptor.*;
 import static io.aeron.logbuffer.TermGapFiller.tryFillGap;
@@ -274,7 +274,7 @@ public final class PublicationImage
         nextSmPosition = position;
         lastSmPosition = position;
         lastOverrunThreshold = position + (termLength >> 1);
-        cleanPosition = alignCleanPositionToTheStartOfTheBlock(position);
+        cleanPosition = blockStartPosition(position);
 
         hwmPosition.setRelease(position);
         rebuildPosition.setRelease(position);

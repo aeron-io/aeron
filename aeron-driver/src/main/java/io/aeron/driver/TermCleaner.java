@@ -15,8 +15,6 @@
  */
 package io.aeron.driver;
 
-import org.agrona.BitUtil;
-
 final class TermCleaner
 {
     static final int TERM_CLEANUP_BLOCK_LENGTH = 4096;
@@ -25,12 +23,8 @@ final class TermCleaner
     {
     }
 
-    static long alignCleanPositionToTheStartOfTheBlock(final long startPosition)
+    static long blockStartPosition(final long startPosition)
     {
-        if (BitUtil.isAligned(startPosition, TERM_CLEANUP_BLOCK_LENGTH))
-        {
-            return startPosition;
-        }
-        return BitUtil.align(startPosition, TERM_CLEANUP_BLOCK_LENGTH) - TERM_CLEANUP_BLOCK_LENGTH;
+        return startPosition - (startPosition & (TERM_CLEANUP_BLOCK_LENGTH - 1));
     }
 }

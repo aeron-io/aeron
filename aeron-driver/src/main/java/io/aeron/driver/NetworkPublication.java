@@ -42,7 +42,7 @@ import java.util.ArrayList;
 import static io.aeron.driver.Configuration.PUBLICATION_HEARTBEAT_TIMEOUT_NS;
 import static io.aeron.driver.Configuration.PUBLICATION_SETUP_TIMEOUT_NS;
 import static io.aeron.driver.TermCleaner.TERM_CLEANUP_BLOCK_LENGTH;
-import static io.aeron.driver.TermCleaner.alignCleanPositionToTheStartOfTheBlock;
+import static io.aeron.driver.TermCleaner.blockStartPosition;
 import static io.aeron.driver.status.SystemCounterDescriptor.*;
 import static io.aeron.logbuffer.LogBufferDescriptor.*;
 import static io.aeron.logbuffer.TermScanner.*;
@@ -257,7 +257,7 @@ public final class NetworkPublication
         tripGain = Math.min(termLength >> 3, termWindowLength);
 
         lastSenderPosition = senderPosition.get();
-        cleanPosition = alignCleanPositionToTheStartOfTheBlock(lastSenderPosition);
+        cleanPosition = blockStartPosition(lastSenderPosition);
         timeOfLastActivityNs = nowNs;
     }
 
