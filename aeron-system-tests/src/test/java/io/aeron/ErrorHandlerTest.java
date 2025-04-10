@@ -34,7 +34,6 @@ import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.hamcrest.CoreMatchers.allOf;
 import static org.hamcrest.CoreMatchers.containsString;
 
 @ExtendWith(InterruptingTestCallback.class)
@@ -88,9 +87,7 @@ class ErrorHandlerTest
 
         Tests.awaitCounterDelta(aeron.countersReader(), SystemCounterDescriptor.ERRORS.id(), initialErrorCount, 1);
 
-        final Matcher<String> exceptionMessageMatcher = allOf(
-            containsString("mtuLength="),
-            containsString("> initialWindowLength="));
+        final Matcher<String> exceptionMessageMatcher = containsString("rcv-wnd=1376 cannot be less than mtu=1408");
 
         Tests.await(() -> null != throwableRef.get());
         SystemTests.waitForErrorToOccur(driver.aeronDirectoryName(), exceptionMessageMatcher, Tests.SLEEP_1_MS);

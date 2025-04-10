@@ -432,6 +432,7 @@ public final class MediaDriver implements AutoCloseable
     public static final class Context extends CommonContext
     {
         private static final VarHandle IS_CLOSED_VH;
+
         static
         {
             try
@@ -663,10 +664,22 @@ public final class MediaDriver implements AutoCloseable
                     "counterValuesBufferLength");
                 validateValueRange(
                     errorBufferLength, ERROR_BUFFER_LENGTH_DEFAULT, Integer.MAX_VALUE, "errorBufferLength");
-                validateValueRange(
-                    publicationTermWindowLength, 0, TERM_MAX_LENGTH, "publicationTermWindowLength");
-                validateValueRange(
-                    ipcPublicationTermWindowLength, 0, TERM_MAX_LENGTH, "ipcPublicationTermWindowLength");
+                if (0 != publicationTermWindowLength)
+                {
+                    validatePublicationWindow(
+                        "publicationTermWindowLength",
+                        publicationTermWindowLength,
+                        mtuLength,
+                        TERM_MAX_LENGTH);
+                }
+                if (0 != ipcPublicationTermWindowLength)
+                {
+                    validatePublicationWindow(
+                        "ipcPublicationTermWindowLength",
+                        ipcPublicationTermWindowLength,
+                        ipcMtuLength,
+                        TERM_MAX_LENGTH);
+                }
 
                 validateSessionIdRange(publicationReservedSessionIdLow, publicationReservedSessionIdHigh);
 
