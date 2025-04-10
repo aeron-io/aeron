@@ -33,11 +33,13 @@
 
 #define AERON_CACHE_LINE_LENGTH (64u)
 
-#define AERON_ALIGN(value, alignment) (((value) + ((alignment) - 1u)) & ~((alignment) - 1u))
+#define AERON_IS_ALIGNED(value, alignment) (0 == ((value) & ((alignment) - 1u)))
+
+#define AERON_ALIGN(value, alignment) (((value) + ((alignment) - 1)) & ~((alignment) - 1))
 
 #define AERON_PADDED_SIZEOF(_struct) AERON_ALIGN(sizeof(_struct), sizeof(int32_t))
 
-#define AERON_IS_POWER_OF_TWO(value) ((value) > 0 && (((value) & (~(value) + 1u)) == (value)))
+#define AERON_IS_POWER_OF_TWO(value) ((value) > 0 && (((value) & (~(value) + 1)) == (value)))
 
 #define AERON_MIN(a, b) ((a) < (b) ? (a) : (b))
 
