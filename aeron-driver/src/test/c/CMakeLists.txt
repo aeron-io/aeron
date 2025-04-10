@@ -71,6 +71,7 @@ if (AERON_UNIT_TESTS)
     aeron_driver_test(data_packet_dispatcher_test aeron_data_packet_dispatcher_test.cpp)
     aeron_driver_test(publication_image_test aeron_publication_image_test.cpp)
     aeron_driver_test(port_manager_test aeron_port_manager_test.cpp)
+    aeron_driver_test(term_cleaner_test aeron_term_cleaner_test.cpp)
     set_tests_properties(publication_image_test PROPERTIES RUN_SERIAL TRUE)
 
     aeron_driver_test(c_terminate_test aeron_c_terminate_test.cpp)
