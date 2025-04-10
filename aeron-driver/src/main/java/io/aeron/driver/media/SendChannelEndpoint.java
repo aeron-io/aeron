@@ -78,6 +78,8 @@ public class SendChannelEndpoint extends UdpChannelTransport
     private final AtomicCounter nakMessagesReceived;
     private final AtomicCounter statusIndicator;
     private final AtomicCounter errorMessagesReceived;
+    private final AtomicCounter sendChannelShortSends;
+    private final AtomicCounter sendChannelConnectionErrors;
     private final boolean isChannelSendTimestampEnabled;
     private final EpochNanoClock sendTimestampClock;
     private final UnsafeBuffer bufferForTimestamping = new UnsafeBuffer();
@@ -105,16 +107,20 @@ public class SendChannelEndpoint extends UdpChannelTransport
         nakMessagesReceived = context.systemCounters().get(NAK_MESSAGES_RECEIVED);
         statusMessagesReceived = context.systemCounters().get(STATUS_MESSAGES_RECEIVED);
         errorMessagesReceived = context.systemCounters().get(ERROR_FRAMES_RECEIVED);
+        sendChannelShortSends = context.systemCounters().get(SEND_CHANNEL_SHORT_SENDS);
+        sendChannelConnectionErrors = context.systemCounters().get(SEND_CHANNEL_CONNECTION_ERRORS);
         this.statusIndicator = statusIndicator;
 
         MultiSndDestination multiSndDestination = null;
         if (udpChannel.isManualControlMode())
         {
-            multiSndDestination = new ManualSndMultiDestination(context.senderCachedNanoClock(), errorHandler);
+            multiSndDestination = new ManualSndMultiDestination(
+                context.senderCachedNanoClock(), errorHandler, sendChannelShortSends, sendChannelConnectionErrors);
         }
         else if (udpChannel.isDynamicControlMode())
         {
-            multiSndDestination = new DynamicSndMultiDestination(context.senderCachedNanoClock(), errorHandler);
+            multiSndDestination = new DynamicSndMultiDestination(
+                context.senderCachedNanoClock(), errorHandler, sendChannelShortSends, sendChannelConnectionErrors);
         }
 
         this.multiSndDestination = multiSndDestination;
@@ -283,10 +289,16 @@ public class SendChannelEndpoint extends UdpChannelTransport
                     if (sendDatagramChannel.isConnected())
                     {
                         bytesSent = sendDatagramChannel.write(buffer);
+
+                        if (bytesSent < bytesToSend)
+                        {
+                            sendChannelShortSends.incrementRelease();
+                        }
                     }
                 }
                 catch (final PortUnreachableException ignore)
                 {
+                    sendChannelConnectionErrors.incrementRelease();
                 }
                 catch (final IOException ex)
                 {
@@ -323,11 +335,19 @@ public class SendChannelEndpoint extends UdpChannelTransport
         {
             try
             {
+                final int bytesToSend = buffer.remaining();
+
                 sendHook(buffer, endpointAddress);
                 bytesSent = sendDatagramChannel.send(buffer, endpointAddress);
+
+                if (bytesSent < bytesToSend)
+                {
+                    sendChannelShortSends.incrementRelease();
+                }
             }
             catch (final PortUnreachableException ignore)
             {
+                sendChannelConnectionErrors.incrementRelease();
             }
             catch (final IOException ex)
             {
@@ -675,12 +695,20 @@ abstract class MultiSndDestination extends MultiSndDestinationRhsPadding
     Destination[] destinations = EMPTY_DESTINATIONS;
     final CachedNanoClock nanoClock;
     final ErrorHandler errorHandler;
+    final AtomicCounter sendChannelShortSends;
+    final AtomicCounter sendChannelConnectionErrors;
     AtomicCounter destinationsCounter = null;
 
-    MultiSndDestination(final CachedNanoClock nanoClock, final ErrorHandler errorHandler)
+    MultiSndDestination(
+        final CachedNanoClock nanoClock,
+        final ErrorHandler errorHandler,
+        final AtomicCounter sendChannelShortSends,
+        final AtomicCounter sendChannelConnectionErrors)
     {
         this.nanoClock = nanoClock;
         this.errorHandler = errorHandler;
+        this.sendChannelShortSends = sendChannelShortSends;
+        this.sendChannelConnectionErrors = sendChannelConnectionErrors;
     }
 
     abstract int send(DatagramChannel channel, ByteBuffer buffer, SendChannelEndpoint channelEndpoint, int bytesToSend);
@@ -720,7 +748,9 @@ abstract class MultiSndDestination extends MultiSndDestinationRhsPadding
         final int bytesToSend,
         final int position,
         final InetSocketAddress destination,
-        final ErrorHandler errorHandler)
+        final ErrorHandler errorHandler,
+        final AtomicCounter sendChannelShortSends,
+        final AtomicCounter sendChannelConnectionErrors)
     {
         int bytesSent = 0;
         try
@@ -734,10 +764,16 @@ abstract class MultiSndDestination extends MultiSndDestinationRhsPadding
                 buffer.position(position);
                 channelEndpoint.sendHook(buffer, destination);
                 bytesSent = datagramChannel.send(buffer, destination);
+
+                if (bytesSent < bytesToSend)
+                {
+                    sendChannelShortSends.incrementRelease();
+                }
             }
         }
         catch (final PortUnreachableException ignore)
         {
+            sendChannelConnectionErrors.incrementRelease();
         }
         catch (final IOException ex)
         {
@@ -755,9 +791,13 @@ abstract class MultiSndDestination extends MultiSndDestinationRhsPadding
 
 class ManualSndMultiDestination extends MultiSndDestination
 {
-    ManualSndMultiDestination(final CachedNanoClock nanoClock, final ErrorHandler errorHandler)
+    ManualSndMultiDestination(
+        final CachedNanoClock nanoClock,
+        final ErrorHandler errorHandler,
+        final AtomicCounter sendChannelShortSends,
+        final AtomicCounter sendChannelConnectionErrors)
     {
-        super(nanoClock, errorHandler);
+        super(nanoClock, errorHandler, sendChannelShortSends, sendChannelConnectionErrors);
     }
 
     void onStatusMessage(final StatusMessageFlyweight msg, final InetSocketAddress address)
@@ -787,6 +827,7 @@ class ManualSndMultiDestination extends MultiSndDestination
         final SendChannelEndpoint channelEndpoint,
         final int bytesToSend)
     {
+        if (destinations.length == 0) { return 0; }
         final int position = buffer.position();
         final int length = destinations.length;
 
@@ -802,7 +843,8 @@ class ManualSndMultiDestination extends MultiSndDestination
             final Destination destination = destinations[i];
 
             final int bytesSent = send(
-                channel, buffer, channelEndpoint, bytesToSend, position, destination.address, errorHandler);
+                channel, buffer, channelEndpoint, bytesToSend, position, destination.address,
+                errorHandler, sendChannelShortSends, sendChannelConnectionErrors);
             if (bytesSent < bytesToSend)
             {
                 result = bytesSent;
@@ -814,7 +856,8 @@ class ManualSndMultiDestination extends MultiSndDestination
             final Destination destination = destinations[i];
 
             final int bytesSent = send(
-                channel, buffer, channelEndpoint, bytesToSend, position, destination.address, errorHandler);
+                channel, buffer, channelEndpoint, bytesToSend, position, destination.address,
+                errorHandler, sendChannelShortSends, sendChannelConnectionErrors);
             if (bytesSent < bytesToSend)
             {
                 result = bytesSent;
@@ -933,9 +976,13 @@ class ManualSndMultiDestination extends MultiSndDestination
 
 class DynamicSndMultiDestination extends MultiSndDestination
 {
-    DynamicSndMultiDestination(final CachedNanoClock nanoClock, final ErrorHandler errorHandler)
+    DynamicSndMultiDestination(
+        final CachedNanoClock nanoClock,
+        final ErrorHandler errorHandler,
+        final AtomicCounter sendChannelShortSends,
+        final AtomicCounter sendChannelConnectionErrors)
     {
-        super(nanoClock, errorHandler);
+        super(nanoClock, errorHandler, sendChannelShortSends, sendChannelConnectionErrors);
     }
 
     void onStatusMessage(final StatusMessageFlyweight msg, final InetSocketAddress address)
@@ -966,6 +1013,7 @@ class DynamicSndMultiDestination extends MultiSndDestination
         final SendChannelEndpoint channelEndpoint,
         final int bytesToSend)
     {
+        if (destinations.length == 0) { return 0; }
         final long nowNs = nanoClock.nanoTime();
         final int position = buffer.position();
         final int length = destinations.length;
@@ -986,7 +1034,8 @@ class DynamicSndMultiDestination extends MultiSndDestination
             if ((destination.timeOfLastActivityNs + DESTINATION_TIMEOUT) - nowNs >= 0)
             {
                 final int bytesSent = send(
-                    channel, buffer, channelEndpoint, bytesToSend, position, destination.address, errorHandler);
+                    channel, buffer, channelEndpoint, bytesToSend, position, destination.address,
+                    errorHandler, sendChannelShortSends, sendChannelConnectionErrors);
                 if (bytesSent < bytesToSend)
                 {
                     result = bytesSent;
@@ -1005,7 +1054,8 @@ class DynamicSndMultiDestination extends MultiSndDestination
             if ((destination.timeOfLastActivityNs + DESTINATION_TIMEOUT) - nowNs >= 0)
             {
                 final int bytesSent = send(
-                    channel, buffer, channelEndpoint, bytesToSend, position, destination.address, errorHandler);
+                    channel, buffer, channelEndpoint, bytesToSend, position, destination.address,
+                    errorHandler, sendChannelShortSends, sendChannelConnectionErrors);
                 if (bytesSent < bytesToSend)
                 {
                     result = bytesSent;
