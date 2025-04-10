@@ -21,8 +21,17 @@ import io.aeron.driver.ext.DebugChannelEndpointConfiguration;
 import io.aeron.driver.ext.DebugSendChannelEndpoint;
 import io.aeron.driver.ext.LossGenerator;
 import io.aeron.exceptions.RegistrationException;
-import io.aeron.logbuffer.*;
-import io.aeron.test.*;
+import io.aeron.logbuffer.BufferClaim;
+import io.aeron.logbuffer.ControlledFragmentHandler;
+import io.aeron.logbuffer.FragmentHandler;
+import io.aeron.logbuffer.Header;
+import io.aeron.logbuffer.RawBlockHandler;
+import io.aeron.test.EventLogExtension;
+import io.aeron.test.InterruptAfter;
+import io.aeron.test.InterruptingTestCallback;
+import io.aeron.test.SlowTest;
+import io.aeron.test.SystemTestWatcher;
+import io.aeron.test.Tests;
 import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.BitUtil;
 import org.agrona.CloseHelper;
@@ -37,6 +46,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
@@ -54,6 +64,8 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
+import static io.aeron.CommonContext.MTU_LENGTH_PARAM_NAME;
+import static io.aeron.CommonContext.RECEIVER_WINDOW_LENGTH_PARAM_NAME;
 import static io.aeron.SystemTests.verifyLossOccurredForStream;
 import static io.aeron.logbuffer.FrameDescriptor.*;
 import static io.aeron.logbuffer.LogBufferDescriptor.computeFragmentedFrameLength;
@@ -68,7 +80,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.mockito.Mockito.*;
 
-@ExtendWith(InterruptingTestCallback.class)
+@ExtendWith({ InterruptingTestCallback.class, EventLogExtension.class })
 class PubAndSubTest
 {
     private static final String IPC_URI = "aeron:ipc";
@@ -80,6 +92,21 @@ class PubAndSubTest
             "aeron:udp?endpoint=localhost:24325|session=id=55555",
             "aeron:udp?endpoint=224.20.30.39:24326|interface=localhost",
             IPC_URI);
+    }
+
+    private static List<Arguments> channelsAndPositions()
+    {
+        final List<String> channels = channels();
+        final List<Arguments> arguments = new ArrayList<>(channels.size() * 2);
+        for (final String channel : channels)
+        {
+            arguments.add(Arguments.of(channel, 0));
+            arguments.add(Arguments.of(
+                channel,
+                FRAME_ALIGNMENT * ThreadLocalRandom.current().nextLong(1000, 10_000)));
+            arguments.add(Arguments.of(channel, 1_000_000_000_000L));
+        }
+        return arguments;
     }
 
     @RegisterExtension
@@ -1302,15 +1329,16 @@ class PubAndSubTest
     }
 
     @ParameterizedTest
-    @MethodSource("channels")
+    @MethodSource("channelsAndPositions")
     @InterruptAfter(10)
-    void shouldExchangeMessagesStartingFromANonZeroPosition(final String channel)
+    void shouldExchangeMessagesStartingFromANonZeroPosition(final String channel, final long initialPosition)
     {
         final ChannelUri uri = ChannelUri.parse(channel);
-        final long initialPosition = 1_000_000_000;
         final int messageLength = 1024;
         final int termLength = 128 * 1024;
         uri.initialPosition(initialPosition, -500, termLength);
+        uri.put(RECEIVER_WINDOW_LENGTH_PARAM_NAME, "8k");
+        uri.put(MTU_LENGTH_PARAM_NAME, "1600");
 
         launch(uri.toString());
 
@@ -1331,7 +1359,7 @@ class PubAndSubTest
             pollForFragment();
         }
 
-        assertThat(publication.position(), Matchers.greaterThan(targetPosition));
+        assertThat(publication.position(), Matchers.greaterThanOrEqualTo(targetPosition));
         final Image image = subscription.imageAtIndex(0);
         while (image.position() != publication.position())
         {

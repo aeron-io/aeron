@@ -185,13 +185,13 @@ class NetworkPublicationTest
         assertEquals(initialPosition + PUBLICATION_WINDOW_LENGTH, publisherLimit.get());
         assertEquals(initialCleanPosition, publication.cleanPosition);
 
-        // consumer position moved less than tripGain -> no op
+        // consumer position moved -> update limit
         senderPosition.set(initialPosition + 3072);
         publication.updatePublisherPositionAndLimit();
-        assertEquals(initialPosition + PUBLICATION_WINDOW_LENGTH, publisherLimit.get());
+        assertEquals(initialPosition + 3072 + PUBLICATION_WINDOW_LENGTH, publisherLimit.get());
         assertEquals(initialCleanPosition, publication.cleanPosition);
 
-        // consumer position moved past tripGain -> update limit
+        // consumer position moved -> update limit
         senderPosition.set(initialPosition + TERM_MIN_LENGTH / 8);
         publication.updatePublisherPositionAndLimit();
         assertEquals(initialPosition + TERM_MIN_LENGTH / 8 + PUBLICATION_WINDOW_LENGTH, publisherLimit.get());
