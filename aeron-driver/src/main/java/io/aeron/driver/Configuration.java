@@ -534,6 +534,7 @@ public final class Configuration
     public static final String UNICAST_FLOW_CONTROL_STRATEGY_PROP_NAME = "aeron.unicast.flow.control.strategy";
 
     /**
+     *
      */
     @Config
     public static final String UNICAST_FLOW_CONTROL_STRATEGY_DEFAULT = "io.aeron.driver.UnicastFlowControl";
@@ -551,6 +552,7 @@ public final class Configuration
     public static final String MULTICAST_FLOW_CONTROL_STRATEGY_PROP_NAME = "aeron.multicast.flow.control.strategy";
 
     /**
+     *
      */
     @Config
     public static final String MULTICAST_FLOW_CONTROL_STRATEGY_DEFAULT = "io.aeron.driver.MaxMulticastFlowControl";
@@ -612,6 +614,7 @@ public final class Configuration
     public static final String IPC_MTU_LENGTH_PROP_NAME = "aeron.ipc.mtu.length";
 
     /**
+     *
      */
     @Config
     public static final int IPC_MTU_LENGTH_DEFAULT = MTU_LENGTH_DEFAULT;
@@ -936,6 +939,7 @@ public final class Configuration
     public static final String FLOW_CONTROL_RECEIVER_TIMEOUT_PROP_NAME = "aeron.flow.control.receiver.timeout";
 
     /**
+     *
      */
     // TODO is this supposed to be deprecated?
     @Config(defaultType = DefaultType.LONG, defaultLong = 5_000_000_000L, hasContext = false, existsInC = false)
@@ -2160,7 +2164,7 @@ public final class Configuration
      *
      * @return configured session limit
      * @throws AsciiNumberFormatException if the property referenced by {@link #STREAM_SESSION_LIMIT_PROP_NAME} is not
-     * a valid number
+     *                                    a valid number
      */
     public static int streamSessionLimit()
     {
@@ -2185,11 +2189,7 @@ public final class Configuration
      */
     public static void validateInitialWindowLength(final int initialWindowLength, final int mtuLength)
     {
-        if (mtuLength > initialWindowLength)
-        {
-            throw new ConfigurationException(
-                "mtuLength=" + mtuLength + " > initialWindowLength=" + initialWindowLength);
-        }
+        validateReceiverWindowLength("initialWindowLength", initialWindowLength, mtuLength);
     }
 
     /**
@@ -2412,6 +2412,43 @@ public final class Configuration
         {
             throw new ConfigurationException(
                 name + " greater than max size of " + maxValue + ": " + value);
+        }
+    }
+
+    static void validatePublicationWindow(
+        final String paramName, final long publicationWindowLength, final int mtuLength, final int termLength)
+    {
+        if (publicationWindowLength < TermCleaner.TERM_CLEANUP_BLOCK_LENGTH)
+        {
+            throw new ConfigurationException(paramName + "=" + publicationWindowLength +
+                " cannot be less than buffer cleanup block (" + TermCleaner.TERM_CLEANUP_BLOCK_LENGTH + ")");
+        }
+
+        if (publicationWindowLength < mtuLength)
+        {
+            throw new ConfigurationException(paramName + "=" + publicationWindowLength + " cannot be less than " +
+                CommonContext.MTU_LENGTH_PARAM_NAME + "=" + mtuLength);
+        }
+
+        if (publicationWindowLength > (termLength >> 1))
+        {
+            throw new ConfigurationException(paramName + "=" + publicationWindowLength + " must not exceed half " +
+                CommonContext.TERM_LENGTH_PARAM_NAME + "=" + termLength);
+        }
+    }
+
+    static void validateReceiverWindowLength(
+        final String paramName, final int receiverWindowLength, final int mtuLength)
+    {
+        if (receiverWindowLength < mtuLength)
+        {
+            throw new ConfigurationException(paramName + "=" + receiverWindowLength + " cannot be less than mtu=" +
+                mtuLength);
+        }
+        if (receiverWindowLength < TermCleaner.TERM_CLEANUP_BLOCK_LENGTH)
+        {
+            throw new ConfigurationException(paramName + "=" + receiverWindowLength +
+                " cannot be less than buffer cleanup block (" + TermCleaner.TERM_CLEANUP_BLOCK_LENGTH + ")");
         }
     }
 }

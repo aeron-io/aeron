@@ -23,6 +23,7 @@
 #include "aeron_driver_conductor.h"
 #include "concurrent/aeron_term_gap_filler.h"
 #include "util/aeron_parse_util.h"
+#include "aeron_term_cleaner.h"
 
 #define AERON_PUBLICATION_RESPONSE_NULL_RESPONSE_SESSION_ID INT64_C(0xF000000000000000)
 
@@ -360,7 +361,7 @@ int aeron_publication_image_create(
     _image->time_of_last_packet_ns = now_ns;
     _image->next_sm_deadline_ns = 0;
     _image->is_sm_enabled = true;
-    _image->conductor_fields.clean_position = initial_position;
+    _image->conductor_fields.clean_position = aeron_term_cleaner_block_start_position(initial_position);
     _image->conductor_fields.time_of_last_state_change_ns = now_ns;
 
     aeron_publication_image_remove_response_session_id(_image);
@@ -424,28 +425,23 @@ bool aeron_publication_image_free(aeron_publication_image_t *image)
     return true;
 }
 
-void aeron_publication_image_clean_buffer_to(aeron_publication_image_t *image, int64_t position)
+int aeron_publication_image_clean_buffer_to(aeron_publication_image_t *image, int64_t position)
 {
     int64_t clean_position = image->conductor_fields.clean_position;
-    if (position > clean_position)
+    if (position - clean_position >= AERON_TERM_CLEANER_TERM_CLEANUP_BLOCK_LENGTH)
     {
         size_t dirty_index = aeron_logbuffer_index_by_position(clean_position, image->position_bits_to_shift);
-        size_t bytes_to_clean = (size_t)(position - clean_position);
-        size_t term_length = (size_t)image->term_length;
         size_t term_offset = (size_t)(clean_position & image->term_length_mask);
-        size_t bytes_left_in_term = term_length - term_offset;
-        size_t length = bytes_to_clean < bytes_left_in_term ? bytes_to_clean : bytes_left_in_term;
 
         memset(
-            image->mapped_raw_log.term_buffers[dirty_index].addr + term_offset + sizeof(int64_t),
+            image->mapped_raw_log.term_buffers[dirty_index].addr + term_offset,
             0,
-            length - sizeof(int64_t));
-
-        uint64_t *ptr = (uint64_t *)(image->mapped_raw_log.term_buffers[dirty_index].addr + term_offset);
-        AERON_SET_RELEASE(*ptr, (uint64_t)0);
-
-        image->conductor_fields.clean_position = clean_position + (int64_t)length;
+            AERON_TERM_CLEANER_TERM_CLEANUP_BLOCK_LENGTH);
+        aeron_release(); // ensure that memset happens before position increment
+        image->conductor_fields.clean_position = clean_position + (int64_t)AERON_TERM_CLEANER_TERM_CLEANUP_BLOCK_LENGTH;
+        return 1;
     }
+    return 0;
 }
 
 // Called from conductor via loss detector.
@@ -491,8 +487,9 @@ void aeron_publication_image_on_gap_detected(void *clientd, int32_t term_id, int
     }
 }
 
-void aeron_publication_image_track_rebuild(aeron_publication_image_t *image, int64_t now_ns)
+int aeron_publication_image_track_rebuild(aeron_publication_image_t *image, int64_t now_ns)
 {
+    int work_count = 0;
     if (aeron_driver_subscribable_has_working_positions(&image->conductor_fields.subscribable))
     {
         const int64_t hwm_position = aeron_counter_get_acquire(image->rcv_hwm_position.value_addr);
@@ -514,7 +511,7 @@ void aeron_publication_image_track_rebuild(aeron_publication_image_t *image, int
 
         if (INT64_MAX == min_sub_pos)
         {
-            return;
+            return work_count;
         }
 
         const int64_t rebuild_position = *image->rcv_pos_position.value_addr > max_sub_pos ?
@@ -538,28 +535,32 @@ void aeron_publication_image_track_rebuild(aeron_publication_image_t *image, int
 
         aeron_counter_propose_max_release(image->rcv_pos_position.value_addr, new_rebuild_position);
 
+        work_count += aeron_publication_image_clean_buffer_to(image, min_sub_pos);
+        const int64_t clean_position = image->conductor_fields.clean_position;
+
         bool should_force_send_sm = false;
         const int32_t window_length = image->congestion_control->on_track_rebuild(
             image->congestion_control->state,
             &should_force_send_sm,
             now_ns,
-            min_sub_pos,
+            clean_position,
             image->next_sm_position,
             hwm_position,
             rebuild_position,
             new_rebuild_position,
             loss_found);
 
-        const int32_t threshold = window_length / 4;
+        const int32_t threshold = window_length >> 2;
 
         if (should_force_send_sm ||
-            (min_sub_pos > (image->next_sm_position + threshold)) ||
+            (clean_position > (image->next_sm_position + threshold)) ||
             window_length != image->next_sm_receiver_window_length)
         {
-            aeron_publication_image_clean_buffer_to(image, min_sub_pos - image->term_length);
-            aeron_publication_image_schedule_status_message(image, min_sub_pos, window_length);
+            aeron_publication_image_schedule_status_message(image, clean_position, window_length);
+            work_count++;
         }
     }
+    return work_count;
 }
 
 static inline void aeron_publication_image_track_connection(
