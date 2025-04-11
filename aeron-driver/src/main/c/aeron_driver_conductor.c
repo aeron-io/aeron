@@ -3698,7 +3698,7 @@ int aeron_driver_conductor_do_work(void *clientd)
 
     for (size_t i = 0, length = conductor->publication_images.length; i < length; i++)
     {
-        aeron_publication_image_track_rebuild(conductor->publication_images.array[i].image, now_ns);
+        work_count += aeron_publication_image_track_rebuild(conductor->publication_images.array[i].image, now_ns);
     }
 
     for (size_t i = 0, length = conductor->network_publications.length; i < length; i++)
