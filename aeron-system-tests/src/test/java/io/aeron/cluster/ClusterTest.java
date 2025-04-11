@@ -18,6 +18,8 @@ package io.aeron.cluster;
 import io.aeron.Aeron;
 import io.aeron.Counter;
 import io.aeron.Publication;
+import io.aeron.Subscription;
+import io.aeron.Image;
 import io.aeron.archive.Archive;
 import io.aeron.archive.ArchiveThreadingMode;
 import io.aeron.archive.client.AeronArchive;
@@ -35,7 +37,10 @@ import io.aeron.logbuffer.BufferClaim;
 import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.Header;
 import io.aeron.protocol.DataHeaderFlyweight;
+import io.aeron.security.AuthenticationException;
+import io.aeron.security.Authenticator;
 import io.aeron.security.AuthorisationService;
+import io.aeron.security.SessionProxy;
 import io.aeron.status.HeartbeatTimestamp;
 import io.aeron.test.*;
 import io.aeron.test.cluster.ClusterTests;
@@ -51,6 +56,8 @@ import org.agrona.collections.IntHashSet;
 import org.agrona.collections.MutableBoolean;
 import org.agrona.collections.MutableInteger;
 import org.agrona.collections.MutableLong;
+import org.agrona.concurrent.BackoffIdleStrategy;
+import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.CountersReader;
 import org.hamcrest.CoreMatchers;
@@ -64,6 +71,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
@@ -73,6 +81,7 @@ import java.util.function.IntFunction;
 import java.util.function.Predicate;
 import java.util.zip.CRC32;
 
+import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
 import static io.aeron.cluster.client.AeronCluster.SESSION_HEADER_LENGTH;
 import static io.aeron.cluster.service.Cluster.Role.FOLLOWER;
 import static io.aeron.cluster.service.Cluster.Role.LEADER;
@@ -2616,6 +2625,7 @@ class ClusterTest
                     assertEquals(client1SessionId.get(), clusterSessionId);
                     clientResponsesCount1.getAndIncrement();
                 }));
+
                 AeronCluster client2 = AeronCluster.connect(new AeronCluster.Context()
                     .aeronDirectoryName(mediaDriver.aeronDirectoryName())
                     .ingressChannel("aeron:udp?term-length=128k")
@@ -2672,6 +2682,200 @@ class ClusterTest
                 assertEquals(5,
                     ((TestNode.TestService)clusteredServiceContainer2.context().clusteredService()).messageCount());
             }
+        }
+    }
+
+
+    @Test
+    @InterruptAfter(15)
+    void allNodesShouldHaveIdenticalSnapshots()
+    {
+        final MutableInteger sessionCounter = new MutableInteger(0);
+
+        cluster = aCluster()
+                .withStaticNodes(3)
+                .withAuthenticationSupplier(() -> new Authenticator()
+                {
+                    @Override
+                    public void onConnectRequest(
+                        final long sessionId, final byte[] encodedCredentials, final long nowMs)
+                    {
+                        sessionCounter.increment();
+                    }
+
+                    @Override
+                    public void onChallengeResponse(
+                        final long sessionId, final byte[] encodedCredentials, final long nowMs)
+                    {
+                    }
+
+                    @Override
+                    public void onConnectedSession(final SessionProxy sessionProxy, final long nowMs)
+                    {
+                        if (sessionCounter.get() > 1)
+                        {
+                            sessionProxy.reject();
+                        }
+                        else
+                        {
+                            sessionProxy.authenticate("admin".getBytes(StandardCharsets.US_ASCII));
+                        }
+
+                    }
+
+                    @Override
+                    public void onChallengedSession(final SessionProxy sessionProxy, final long nowMs)
+                    {
+                    }
+                })
+                .start();
+
+        systemTestWatcher.cluster(cluster);
+
+        // wait for cluster to hold election
+        final TestNode leader = cluster.awaitLeader();
+
+        // the first client is successful
+        cluster.connectClient();
+
+        // the second client fails
+        assertThrowsExactly(AuthenticationException.class, () -> cluster.connectClient());
+        assertThrowsExactly(AuthenticationException.class, () -> cluster.connectClient());
+
+
+        cluster.takeSnapshot(leader);
+        cluster.awaitSnapshotCount(1);
+
+        final MutableLong[] sessionIdsByNode = new MutableLong[3];
+
+        for (int nodeIdx = 0; nodeIdx < 3; nodeIdx++)
+        {
+            sessionIdsByNode[nodeIdx] = new MutableLong();
+            readSnapshot(cluster.node(nodeIdx), sessionIdsByNode[nodeIdx]);
+        }
+        assertEquals(sessionIdsByNode[0].get(), sessionIdsByNode[1].get());
+        assertEquals(sessionIdsByNode[1].get(), sessionIdsByNode[2].get());
+    }
+
+    private void readSnapshot(final TestNode node, final MutableLong sessionIdHolder)
+    {
+        final long recordingId;
+        try (RecordingLog recordingLog = new RecordingLog(node.consensusModule().context().clusterDir(),
+            false))
+        {
+            final RecordingLog.Entry snapshot = recordingLog.getLatestSnapshot(-1);
+            assertNotNull(snapshot);
+            recordingId = snapshot.recordingId;
+        }
+
+        final AeronArchive.Context archiveCtx = new AeronArchive.Context()
+            .controlRequestChannel(node.archive().context().localControlChannel())
+            .controlResponseChannel(node.archive().context().localControlChannel())
+            .controlRequestStreamId(node.archive().context().localControlStreamId())
+            .aeronDirectoryName(node.mediaDriver().aeronDirectoryName());
+
+        try (
+            AeronArchive archive = AeronArchive.connect(archiveCtx);
+            Subscription subscription = archive.replay(recordingId, NULL_POSITION, Long.MAX_VALUE,
+                "aeron:ipc", 12345)
+        )
+        {
+            final IdleStrategy idleStrategy = new BackoffIdleStrategy();
+
+            while (subscription.imageCount() == 0)
+            {
+                if (Thread.interrupted())
+                {
+                    fail("interrupted");
+                }
+                idleStrategy.idle();
+            }
+            idleStrategy.reset();
+            final Image image = subscription.imageAtIndex(0);
+
+            final ConsensusModuleSnapshotAdapter adapter =
+                new ConsensusModuleSnapshotAdapter(image,
+                    new MyConsensusModuleSnapshotListener(sessionIdHolder));
+
+            while (true)
+            {
+                final int fragments = adapter.poll();
+                if (adapter.isDone())
+                {
+                    break;
+                }
+                if (0 == fragments)
+                {
+                    if (image.isClosed())
+                    {
+                        throw new ClusterException("snapshot ended unexpectedly: " + image);
+                    }
+                    archive.checkForErrorResponse();
+                    Thread.yield();
+                }
+            }
+        }
+    }
+
+    private static class MyConsensusModuleSnapshotListener implements ConsensusModuleSnapshotListener
+    {
+        private final MutableLong sessionIdHolder;
+
+        MyConsensusModuleSnapshotListener(final MutableLong sessionIdHolder)
+        {
+            this.sessionIdHolder = sessionIdHolder;
+        }
+
+        @Override
+        public void onLoadBeginSnapshot(final int appVersion, final TimeUnit timeUnit,
+            final DirectBuffer buffer, final int offset, final int length)
+        {
+        }
+
+        @Override
+        public void onLoadConsensusModuleState(final long nextSessionId,
+            final long nextServiceSessionId, final long logServiceSessionId,
+            final int pendingMessageCapacity, final DirectBuffer buffer,
+            final int offset, final int length)
+        {
+            sessionIdHolder.set(nextSessionId);
+        }
+
+        @Override
+        public void onLoadPendingMessage(final long clusterSessionId, final DirectBuffer buffer,
+            final int offset, final int length)
+        {
+        }
+
+        @Override
+        public void onLoadClusterSession(final long clusterSessionId, final long correlationId,
+            final long openedLogPosition,
+            final long timeOfLastActivity,
+            final CloseReason closeReason,
+            final int responseStreamId, final String responseChannel,
+            final DirectBuffer buffer, final int offset, final int length)
+        {
+        }
+
+        @Override
+        public void onLoadTimer(final long correlationId, final long deadline, final DirectBuffer buffer,
+            final int offset, final int length)
+        {
+        }
+
+        @Override
+        public void onLoadPendingMessageTracker(final long nextServiceSessionId,
+            final long logServiceSessionId,
+            final int pendingMessageCapacity,
+            final int serviceId,
+            final DirectBuffer buffer,
+            final int offset, final int length)
+        {
+        }
+
+        @Override
+        public void onLoadEndSnapshot(final DirectBuffer buffer, final int offset, final int length)
+        {
         }
     }
 
