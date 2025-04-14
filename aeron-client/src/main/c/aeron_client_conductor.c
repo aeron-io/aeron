@@ -381,6 +381,19 @@ void aeron_client_conductor_on_driver_response(int32_t type_id, uint8_t *buffer,
             break;
         }
 
+        case AERON_RESPONSE_ON_REVOKED_PUBLICATION:
+        {
+            aeron_publication_revoked_t *response = (aeron_publication_revoked_t *)buffer;
+
+            if (length < sizeof(aeron_publication_revoked_t))
+            {
+                goto malformed_command;
+            }
+
+            result = aeron_client_conductor_on_revoked_publication(conductor, response);
+            break;
+        }
+
         default:
         {
             AERON_CLIENT_FORMAT_BUFFER(error_message, "response=%x unknown", type_id);
@@ -1617,6 +1630,19 @@ int aeron_client_conductor_async_close_publication(
         {
             return -1;
         }
+    }
+
+    return 0;
+}
+
+int aeron_client_conductor_async_revoke_publication_registration_id(
+    aeron_client_conductor_t *conductor,
+    int64_t publication_registration_id)
+{
+    if (aeron_client_conductor_offer_remove_command(
+        conductor, publication_registration_id, AERON_COMMAND_REVOKE_PUBLICATION) < 0)
+    {
+        return -1;
     }
 
     return 0;
@@ -2891,6 +2917,28 @@ int aeron_client_conductor_on_static_counter(aeron_client_conductor_t *conductor
             AERON_SET_RELEASE(resource->registration_status, AERON_CLIENT_REGISTERED_MEDIA_DRIVER);
             break;
         }
+    }
+
+    return 0;
+}
+
+int aeron_client_conductor_on_revoked_publication(aeron_client_conductor_t *conductor, aeron_publication_revoked_t *response)
+{
+    aeron_client_command_base_t *base = aeron_int64_to_ptr_hash_map_get(
+            &conductor->resource_by_id_map, response->registration_id);
+
+    // This should always be a concurrent publication:
+    // If a client is being informed by the driver that a publication was revoked, that means
+    // there was a separate publication that was tied to the same log buffer and it got revoked.
+    // The only time two publications are tied to the same log buffer is when they're both _concurrent_ publications.
+    // Ergo, whenever we're informed by the driver that a publication was revoked, that publication MUST be a concurrent publication.
+    // The only way to revoke an exclusive publication is to actually call revoke() on it.
+    if (NULL != base &&
+        AERON_CLIENT_TYPE_PUBLICATION == base->type)
+    {
+        aeron_publication_t *publication = (aeron_publication_t *)base;
+
+        AERON_SET_RELEASE(publication->is_revoked, true);
     }
 
     return 0;

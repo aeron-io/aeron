@@ -265,6 +265,10 @@ int aeron_client_conductor_async_close_publication(
     aeron_notification_t on_close_complete,
     void *on_close_complete_clientd);
 
+int aeron_client_conductor_async_revoke_publication_registration_id(
+    aeron_client_conductor_t *conductor,
+    int64_t publication_registration_id);
+
 int aeron_client_conductor_async_add_exclusive_publication(
     aeron_async_add_exclusive_publication_t **async,
     aeron_client_conductor_t *conductor,
@@ -385,6 +389,8 @@ int aeron_client_conductor_on_unavailable_counter(
     aeron_client_conductor_t *conductor, aeron_counter_update_t *response);
 
 int aeron_client_conductor_on_static_counter(aeron_client_conductor_t *conductor, aeron_static_counter_response_t *response);
+
+int aeron_client_conductor_on_revoked_publication(aeron_client_conductor_t *conductor, aeron_publication_revoked_t *response);
 
 int aeron_client_conductor_on_client_timeout(aeron_client_conductor_t *conductor, aeron_client_timeout_t *response);
 int aeron_client_conductor_on_error_frame(aeron_client_conductor_t *conductor, aeron_publication_error_t *response);

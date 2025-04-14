@@ -487,6 +487,23 @@ void aeron_exclusive_publication_force_close(aeron_exclusive_publication_t *publ
     AERON_SET_RELEASE(publication->is_closed, true);
 }
 
+// 'private' function that assumes all the necessary checks have been made
+static inline int aeron_exclusive_publication_close_internal(
+    aeron_exclusive_publication_t *publication,
+    aeron_notification_t on_close_complete,
+    void *on_close_complete_clientd)
+{
+    AERON_SET_RELEASE(publication->is_closed, true);
+
+    if (aeron_client_conductor_async_close_exclusive_publication(
+        publication->conductor, publication, on_close_complete, on_close_complete_clientd) < 0)
+    {
+        return -1;
+    }
+
+    return 0;
+}
+
 int aeron_exclusive_publication_close(
     aeron_exclusive_publication_t *publication,
     aeron_notification_t on_close_complete,
@@ -498,10 +515,41 @@ int aeron_exclusive_publication_close(
         AERON_GET_ACQUIRE(is_closed, publication->is_closed);
         if (!is_closed)
         {
-            AERON_SET_RELEASE(publication->is_closed, true);
-            if (aeron_client_conductor_async_close_exclusive_publication(
-                publication->conductor, publication, on_close_complete, on_close_complete_clientd) < 0)
+            if (aeron_exclusive_publication_close_internal(
+                publication, on_close_complete, on_close_complete_clientd) < 0)
             {
+                AERON_APPEND_ERR("%s", "");
+                return -1;
+            }
+        }
+    }
+
+    return 0;
+}
+
+int aeron_exclusive_publication_revoke(
+    aeron_exclusive_publication_t *publication, aeron_notification_t on_close_complete, void *on_close_complete_clientd)
+{
+    if (NULL != publication)
+    {
+        bool is_closed;
+
+        AERON_GET_ACQUIRE(is_closed, publication->is_closed);
+        if (!is_closed)
+        {
+            AERON_SET_RELEASE(publication->is_revoked, true);
+
+            if (aeron_client_conductor_async_revoke_publication_registration_id(
+                publication->conductor, publication->registration_id) < 0)
+            {
+                AERON_APPEND_ERR("%s", "");
+                return -1;
+            }
+
+            if (aeron_exclusive_publication_close_internal(
+                publication, on_close_complete, on_close_complete_clientd) < 0)
+            {
+                AERON_APPEND_ERR("%s", "");
                 return -1;
             }
         }
@@ -875,6 +923,18 @@ bool aeron_exclusive_publication_is_closed(aeron_exclusive_publication_t *public
     }
 
     return is_closed;
+}
+
+bool aeron_exclusive_publication_is_revoked(aeron_exclusive_publication_t *publication)
+{
+    bool is_revoked = true;
+
+    if (NULL != publication)
+    {
+        AERON_GET_ACQUIRE(is_revoked, publication->is_revoked);
+    }
+
+    return is_revoked;
 }
 
 bool aeron_exclusive_publication_is_connected(aeron_exclusive_publication_t *publication)
