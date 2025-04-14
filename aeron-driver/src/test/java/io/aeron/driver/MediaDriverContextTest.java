@@ -328,17 +328,6 @@ class MediaDriverContextTest
     }
 
     @ParameterizedTest
-    @ValueSource(ints = { -100, 1, 4095 })
-    void shouldRejectPublicationWindowLessThanTermBlockLength(final int windowLength)
-    {
-        context.publicationTermWindowLength(windowLength);
-
-        final ConfigurationException exception = assertThrowsExactly(ConfigurationException.class, context::conclude);
-        assertEquals("ERROR - publicationTermWindowLength=" + windowLength +
-            " cannot be less than buffer cleanup block (4096)", exception.getMessage());
-    }
-
-    @ParameterizedTest
     @ValueSource(ints = { 5000, 8191 })
     void shouldRejectPublicationWindowLessThanMtu(final int windowLength)
     {
@@ -358,17 +347,6 @@ class MediaDriverContextTest
         final ConfigurationException exception = assertThrowsExactly(ConfigurationException.class, context::conclude);
         assertEquals("ERROR - publicationTermWindowLength=" + windowLength +
             " must not exceed half term-length=1073741824", exception.getMessage());
-    }
-
-    @ParameterizedTest
-    @ValueSource(ints = { -100, 1, 4095 })
-    void shouldRejectIpcPublicationWindowLessThanTermBlockLength(final int windowLength)
-    {
-        context.ipcPublicationTermWindowLength(windowLength);
-
-        final ConfigurationException exception = assertThrowsExactly(ConfigurationException.class, context::conclude);
-        assertEquals("ERROR - ipcPublicationTermWindowLength=" + windowLength +
-            " cannot be less than buffer cleanup block (4096)", exception.getMessage());
     }
 
     @ParameterizedTest
@@ -402,17 +380,6 @@ class MediaDriverContextTest
         final ConfigurationException exception = assertThrowsExactly(ConfigurationException.class, context::conclude);
         assertEquals("ERROR - initialWindowLength=" + windowLength +
             " cannot be less than mtu=2048", exception.getMessage());
-    }
-
-    @ParameterizedTest
-    @ValueSource(ints = { 1500, 4095 })
-    void shouldRejectInitialReceiverWindowLessThanCleanBufferBlock(final int windowLength)
-    {
-        context.mtuLength(1408).initialWindowLength(windowLength);
-
-        final ConfigurationException exception = assertThrowsExactly(ConfigurationException.class, context::conclude);
-        assertEquals("ERROR - initialWindowLength=" + windowLength +
-            " cannot be less than buffer cleanup block (4096)", exception.getMessage());
     }
 
     private static ErrorHandler getErrorHandler(final UdpTransportPoller transportPoller) throws Exception

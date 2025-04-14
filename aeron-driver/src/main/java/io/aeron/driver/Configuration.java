@@ -2418,12 +2418,6 @@ public final class Configuration
     static void validatePublicationWindow(
         final String paramName, final long publicationWindowLength, final int mtuLength, final int termLength)
     {
-        if (publicationWindowLength < TermCleaner.TERM_CLEANUP_BLOCK_LENGTH)
-        {
-            throw new ConfigurationException(paramName + "=" + publicationWindowLength +
-                " cannot be less than buffer cleanup block (" + TermCleaner.TERM_CLEANUP_BLOCK_LENGTH + ")");
-        }
-
         if (publicationWindowLength < mtuLength)
         {
             throw new ConfigurationException(paramName + "=" + publicationWindowLength + " cannot be less than " +
@@ -2444,11 +2438,6 @@ public final class Configuration
         {
             throw new ConfigurationException(paramName + "=" + receiverWindowLength + " cannot be less than mtu=" +
                 mtuLength);
-        }
-        if (receiverWindowLength < TermCleaner.TERM_CLEANUP_BLOCK_LENGTH)
-        {
-            throw new ConfigurationException(paramName + "=" + receiverWindowLength +
-                " cannot be less than buffer cleanup block (" + TermCleaner.TERM_CLEANUP_BLOCK_LENGTH + ")");
         }
     }
 }

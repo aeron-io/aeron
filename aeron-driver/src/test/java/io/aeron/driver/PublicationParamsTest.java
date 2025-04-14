@@ -117,17 +117,6 @@ class PublicationParamsTest
     }
 
     @ParameterizedTest
-    @ValueSource(ints = { -10, 0, 1407 })
-    void shouldRejectPublicationWindowLessThanCleanupBlock(final int pubWindow)
-    {
-        final ChannelUri uri = ChannelUri.parse("aeron:udp?endpoint=localhost:8080|mtu=1408|pub-wnd=" + pubWindow);
-        final InvalidChannelException exception = assertThrowsExactly(InvalidChannelException.class,
-            () -> PublicationParams.getPublicationParams(uri, ctx, conductor, 2112, "UDP"));
-        assertEquals("io.aeron.exceptions.ConfigurationException: ERROR - pub-wnd=" + pubWindow +
-            " cannot be less than buffer cleanup block (4096)", exception.getMessage());
-    }
-
-    @ParameterizedTest
     @ValueSource(ints = { 5000, 8191 })
     void shouldRejectPublicationWindowLessThanMtu(final int pubWindow)
     {
