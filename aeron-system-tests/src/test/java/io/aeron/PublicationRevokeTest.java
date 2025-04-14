@@ -33,11 +33,14 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
+import static io.aeron.AeronCounters.DRIVER_PUBLISHER_POS_TYPE_ID;
 import static io.aeron.Publication.CLOSED;
+import static io.aeron.Publication.REVOKED;
 import static io.aeron.driver.status.SystemCounterDescriptor.PUBLICATIONS_REVOKED;
 import static io.aeron.driver.status.SystemCounterDescriptor.PUBLICATION_IMAGES_REVOKED;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.agrona.BitUtil.SIZE_OF_INT;
+import static org.agrona.concurrent.status.CountersReader.RECORD_RECLAIMED;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -64,6 +67,7 @@ class PublicationRevokeTest
     private final MediaDriver.Context driverContext = new MediaDriver.Context()
         .publicationConnectionTimeoutNs(MILLISECONDS.toNanos(300))
         .imageLivenessTimeoutNs(MILLISECONDS.toNanos(500))
+        .publicationLingerTimeoutNs(MILLISECONDS.toNanos(100))
         .timerIntervalNs(MILLISECONDS.toNanos(100));
 
     private final Aeron.Context clientContext = new Aeron.Context()
@@ -128,7 +132,8 @@ class PublicationRevokeTest
         Tests.awaitConnected(publication);
 
         publishMessage();
-        assertEquals(1, pollForFragment());
+
+        pollUntilFragments(1);
 
         publishMessage();
 
@@ -181,9 +186,17 @@ class PublicationRevokeTest
         publishMessage();
         publishMessage(publicationTwo);
 
-        assertEquals(2, pollForFragment());
+        pollUntilFragments(2);
 
         publishMessage();
+
+        AtomicInteger pubPosCounter = new AtomicInteger(0);
+        countersReader.forEach((counterId, typeId, keyBuffer, label) -> {
+            if (typeId == DRIVER_PUBLISHER_POS_TYPE_ID && label.contains(publicationChannel))
+            {
+                pubPosCounter.set(counterId);
+            }
+        });
 
         publication.revoke();
         assertTrue(publication.isRevoked());
@@ -197,16 +210,27 @@ class PublicationRevokeTest
 
         assertTrue(subscription.hasNoImages());
 
-        while (!publicationTwo.isClosed())
+        while (!publicationTwo.isRevoked())
         {
             Tests.yield();
         }
 
-        assertTrue(publicationTwo.isRevoked());
+        assertEquals(REVOKED, publicationTwo.offer(buffer, 0, SIZE_OF_INT));
+
+        subscription.close();
+        publicationTwo.close();
+
+        while (RECORD_RECLAIMED != countersReader.getCounterState(pubPosCounter.get()))
+        {
+            Tests.yield();
+        }
 
         assertEquals(1, countersReader.getCounterValue(PUBLICATIONS_REVOKED.id()));
         assertEquals(expectedPublicationImagesRevoked, countersReader.getCounterValue(PUBLICATION_IMAGES_REVOKED.id()));
     }
+
+    // TODO add some tests that spin up an exclusive publication alongside a concurrent and/or another exclusive publication
+    // Then make sure that revoke() doesn't improperly interfere when it shouldn't
 
     private void publishMessage()
     {
@@ -218,6 +242,16 @@ class PublicationRevokeTest
         while (pub.offer(buffer, 0, SIZE_OF_INT) < 0L)
         {
             Tests.yield();
+        }
+    }
+
+    private void pollUntilFragments(final int expectedFragments)
+    {
+        int totalFragments = pollForFragment();
+        while (totalFragments < expectedFragments)
+        {
+            Tests.yield();
+            totalFragments += pollForFragment();
         }
     }
 

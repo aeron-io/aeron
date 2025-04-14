@@ -451,7 +451,6 @@ final class ClientConductor implements Agent
         final Publication publication = (Publication)resourceByRegIdMap.get(registrationId);
         if (null != publication)
         {
-            publication.close();
             publication.isRevoked(true);
         }
     }
@@ -593,6 +592,11 @@ final class ClientConductor implements Agent
 
     void removePublication(final Publication publication)
     {
+        removePublication(publication, false);
+    }
+
+    void removePublication(final Publication publication, final boolean sendRevoke)
+    {
         clientLock.lock();
         try
         {
@@ -611,7 +615,7 @@ final class ClientConductor implements Agent
                     releaseLogBuffers(
                         publication.logBuffers(), publication.originalRegistrationId(), EXPLICIT_CLOSE_LINGER_NS);
 
-                    if (publication.isRevoked())
+                    if (sendRevoke)
                     {
                         asyncCommandIdSet.add(driverProxy.revokePublication(publication.registrationId()));
                     }
