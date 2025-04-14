@@ -372,14 +372,14 @@ class MediaDriverContextTest
     }
 
     @ParameterizedTest
-    @ValueSource(ints = { 1024, -2, 2047 })
+    @ValueSource(ints = { 1024, -2, 2047, 4095 })
     void shouldRejectInitialReceiverWindowLessThanMtu(final int windowLength)
     {
         context.mtuLength(2048).initialWindowLength(windowLength);
 
         final ConfigurationException exception = assertThrowsExactly(ConfigurationException.class, context::conclude);
         assertEquals("ERROR - initialWindowLength=" + windowLength +
-            " cannot be less than mtu=2048", exception.getMessage());
+            " must be at least two times larger than mtu=2048", exception.getMessage());
     }
 
     private static ErrorHandler getErrorHandler(final UdpTransportPoller transportPoller) throws Exception

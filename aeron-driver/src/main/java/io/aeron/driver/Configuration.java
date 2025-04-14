@@ -2434,10 +2434,10 @@ public final class Configuration
     static void validateReceiverWindowLength(
         final String paramName, final int receiverWindowLength, final int mtuLength)
     {
-        if (receiverWindowLength < mtuLength)
+        if (receiverWindowLength < (mtuLength << 1))
         {
-            throw new ConfigurationException(paramName + "=" + receiverWindowLength + " cannot be less than mtu=" +
-                mtuLength);
+            throw new ConfigurationException(paramName + "=" + receiverWindowLength +
+                " must be at least two times larger than mtu=" + mtuLength);
         }
     }
 }

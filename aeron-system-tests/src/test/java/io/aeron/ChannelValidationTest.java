@@ -376,7 +376,7 @@ class ChannelValidationTest
         Tests.awaitCounterDelta(aeron.countersReader(), SystemCounterDescriptor.ERRORS.id(), initialErrorCount, 1);
 
         final Matcher<String> exceptionMessageMatcher =
-            containsString("rcv-wnd=1376 cannot be less than mtu=1408");
+            containsString("rcv-wnd=1376 must be at least two times larger than mtu=1408");
 
         SystemTests.waitForErrorToOccur(driver.aeronDirectoryName(), exceptionMessageMatcher, Tests.SLEEP_1_MS);
     }
