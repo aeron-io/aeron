@@ -327,6 +327,11 @@ int aeron_archive_create(
 
 int aeron_archive_close(aeron_archive_t *aeron_archive)
 {
+    if (aeron_exclusive_publication_is_connected(aeron_archive->archive_proxy->exclusive_publication))
+    {
+        aeron_archive_proxy_close_session(aeron_archive->archive_proxy);
+    }
+
     aeron_archive_proxy_delete(aeron_archive->archive_proxy);
     aeron_archive->archive_proxy = NULL;
 
