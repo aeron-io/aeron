@@ -357,12 +357,13 @@ int aeron_publication_image_create(
     _image->max_receiver_window_length = _image->congestion_control->max_window_length(
         _image->congestion_control->state);
     _image->last_sm_position = initial_position;
-    _image->last_overrun_threshold = initial_position + (term_buffer_length / 2);
+    _image->last_overrun_threshold = initial_position + (term_buffer_length >> 1);
     _image->time_of_last_packet_ns = now_ns;
     _image->next_sm_deadline_ns = 0;
     _image->is_sm_enabled = true;
     _image->conductor_fields.clean_position = aeron_term_cleaner_block_start_position(initial_position);
-    _image->conductor_fields.max_wrap_around_gap = (int64_t)term_buffer_length * 3;
+    // take into account the overrun threshold (1/2 term) when computing wrap-around gap
+    _image->conductor_fields.max_wrap_around_gap = ((int64_t)term_buffer_length << 1) + (term_buffer_length >> 1);
     _image->conductor_fields.time_of_last_state_change_ns = now_ns;
 
     aeron_publication_image_remove_response_session_id(_image);
@@ -553,7 +554,7 @@ int aeron_publication_image_track_rebuild(aeron_publication_image_t *image, int6
 
         const int32_t threshold = window_length >> 2;
 
-        if (min_sub_pos + window_length - clean_position < image->conductor_fields.max_wrap_around_gap)
+        if (min_sub_pos - clean_position < image->conductor_fields.max_wrap_around_gap)
         {
             if (should_force_send_sm ||
                 (min_sub_pos >= (image->next_sm_position + threshold)) ||
