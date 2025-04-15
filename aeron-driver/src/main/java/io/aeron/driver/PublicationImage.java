@@ -587,7 +587,7 @@ public final class PublicationImage
             final int windowLength = CongestionControl.receiverWindowLength(ccOutcome);
             final int threshold = CongestionControl.threshold(windowLength);
 
-            if (minSubscriberPosition + windowLength - cleanPosition <= maxWrapAroundGap)
+            if (minSubscriberPosition + windowLength - cleanPosition < maxWrapAroundGap)
             {
                 if (CongestionControl.shouldForceStatusMessage(ccOutcome) ||
                     (minSubscriberPosition >= (nextSmPosition + threshold)) ||
