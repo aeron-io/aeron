@@ -362,6 +362,7 @@ int aeron_publication_image_create(
     _image->next_sm_deadline_ns = 0;
     _image->is_sm_enabled = true;
     _image->conductor_fields.clean_position = aeron_term_cleaner_block_start_position(initial_position);
+    _image->conductor_fields.max_wrap_around_gap = (int64_t)term_buffer_length * 3;
     _image->conductor_fields.time_of_last_state_change_ns = now_ns;
 
     aeron_publication_image_remove_response_session_id(_image);
@@ -543,7 +544,7 @@ int aeron_publication_image_track_rebuild(aeron_publication_image_t *image, int6
             image->congestion_control->state,
             &should_force_send_sm,
             now_ns,
-            clean_position,
+            min_sub_pos,
             image->next_sm_position,
             hwm_position,
             rebuild_position,
@@ -552,12 +553,15 @@ int aeron_publication_image_track_rebuild(aeron_publication_image_t *image, int6
 
         const int32_t threshold = window_length >> 2;
 
-        if (should_force_send_sm ||
-            (clean_position > (image->next_sm_position + threshold)) ||
-            window_length != image->next_sm_receiver_window_length)
+        if (min_sub_pos + window_length - clean_position <= image->conductor_fields.max_wrap_around_gap)
         {
-            aeron_publication_image_schedule_status_message(image, clean_position, window_length);
-            work_count++;
+            if (should_force_send_sm ||
+                (min_sub_pos >= (image->next_sm_position + threshold)) ||
+                window_length != image->next_sm_receiver_window_length)
+            {
+                aeron_publication_image_schedule_status_message(image, min_sub_pos, window_length);
+                work_count++;
+            }
         }
     }
     return work_count;
