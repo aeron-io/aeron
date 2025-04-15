@@ -277,7 +277,7 @@ public final class PublicationImage
         lastSmPosition = position;
         lastOverrunThreshold = position + (termLength >> 1);
         cleanPosition = blockStartPosition(position);
-        maxWrapAroundGap = termLength * 3L;
+        maxWrapAroundGap = ((long)termLength << 1) + (termLength >> 1); // take into account overrun threshold
 
         hwmPosition.setRelease(position);
         rebuildPosition.setRelease(position);
@@ -587,7 +587,7 @@ public final class PublicationImage
             final int windowLength = CongestionControl.receiverWindowLength(ccOutcome);
             final int threshold = CongestionControl.threshold(windowLength);
 
-            if (minSubscriberPosition + windowLength - cleanPosition < maxWrapAroundGap)
+            if (minSubscriberPosition - cleanPosition < maxWrapAroundGap)
             {
                 if (CongestionControl.shouldForceStatusMessage(ccOutcome) ||
                     (minSubscriberPosition >= (nextSmPosition + threshold)) ||
