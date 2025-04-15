@@ -66,6 +66,7 @@ class NetworkPublicationConductorFields extends NetworkPublicationPadding1
     long timeOfLastActivityNs;
     long lastSenderPosition;
     long tripLimit;
+    long maxAllowedGap;
     int refCount = 0;
     ReadablePosition[] spyPositions = EMPTY_POSITIONS;
     final ArrayList<UntetheredSubscription> untetheredSubscriptions = new ArrayList<>();
@@ -257,6 +258,7 @@ public final class NetworkPublication
 
         lastSenderPosition = senderPosition.get();
         cleanPosition = blockStartPosition(lastSenderPosition);
+        maxAllowedGap = (long)termLength << 1;
         timeOfLastActivityNs = nowNs;
     }
 
@@ -744,10 +746,10 @@ public final class NetworkPublication
                 final long newLimitPosition = minConsumerPosition + termWindowLength;
                 if (newLimitPosition >= tripLimit)
                 {
-                    final long maxAllowedGap = (long)termBufferLength << 1;
                     final long newTermBaseLimitPosition = newLimitPosition - (newLimitPosition & termLengthMask);
                     final long cleanPosition = this.cleanPosition;
                     final long wrapAroundGap = newTermBaseLimitPosition - cleanPosition;
+                    final long maxAllowedGap = this.maxAllowedGap;
                     if (wrapAroundGap <= maxAllowedGap &&
                         (wrapAroundGap < maxAllowedGap || 0 != (cleanPosition & termLengthMask)))
                     {
@@ -764,8 +766,8 @@ public final class NetworkPublication
                     LogBufferDescriptor.isConnected(metaDataBuffer, false);
                     isConnected = false;
                 }
-                tripLimit = senderPosition;
                 publisherLimit.setRelease(senderPosition);
+                tripLimit = senderPosition;
                 workCount = 1;
             }
         }

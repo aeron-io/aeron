@@ -71,6 +71,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     private long lastConsumerPosition;
     private long timeOfLastConsumerPositionUpdateNs;
     private long cleanPosition;
+    private long maxAllowedGap;
     private int refCount = 0;
     private boolean reachedEndOfLife = false;
     private final boolean isExclusive;
@@ -130,6 +131,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         consumerPosition = producerPosition();
         lastConsumerPosition = consumerPosition;
         cleanPosition = blockStartPosition(lastConsumerPosition);
+        maxAllowedGap = (long)termLength << 1;
         timeOfLastConsumerPositionUpdateNs = ctx.cachedNanoClock().nanoTime();
     }
 
@@ -395,10 +397,10 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
                 final long newLimitPosition = minSubscriberPosition + termWindowLength;
                 if (newLimitPosition >= tripLimit)
                 {
-                    final long maxAllowedGap = (long)termBufferLength << 1;
                     final long newTermBaseLimitPosition = newLimitPosition - (newLimitPosition & termLengthMask);
                     final long cleanPosition = this.cleanPosition;
                     final long wrapAroundGap = newTermBaseLimitPosition - cleanPosition;
+                    final long maxAllowedGap = this.maxAllowedGap;
                     if (wrapAroundGap <= maxAllowedGap &&
                         (wrapAroundGap < maxAllowedGap || 0 != (cleanPosition & termLengthMask)))
                     {
