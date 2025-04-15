@@ -51,6 +51,7 @@ typedef struct aeron_network_publication_stct
         aeron_driver_managed_resource_t managed_resource;
         aeron_subscribable_t subscribable;
         int64_t clean_position;
+        int64_t trip_limit;
         int64_t time_of_last_activity_ns;
         int64_t last_snd_pos;
     }

@@ -43,6 +43,8 @@
 
 #define AERON_MIN(a, b) ((a) < (b) ? (a) : (b))
 
+#define AERON_MAX(a, b) ((a) > (b) ? (a) : (b))
+
 #if defined(__GNUC__)
 #define AERON_C_COND_EXPECT(exp, c) (__builtin_expect((exp), c))
 #else

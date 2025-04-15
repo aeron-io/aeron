@@ -337,6 +337,7 @@ int aeron_network_publication_create(
     _pub->conductor_fields.last_snd_pos = aeron_counter_get_plain(_pub->snd_pos_position.value_addr);
     _pub->conductor_fields.clean_position =
         aeron_term_cleaner_block_start_position(_pub->conductor_fields.last_snd_pos);
+    _pub->conductor_fields.trip_limit = 0;
 
     _pub->endpoint_address.ss_family = AF_UNSPEC;
     _pub->is_response = AERON_UDP_CHANNEL_CONTROL_MODE_RESPONSE == endpoint->conductor_fields.udp_channel->control_mode;
@@ -984,7 +985,7 @@ int aeron_network_publication_update_pub_pos_and_lmt(aeron_network_publication_t
                 publication, min_consumer_position - (int64_t)publication->mapped_raw_log.term_length);
 
             int64_t proposed_limit = min_consumer_position + publication->term_window_length;
-            if (proposed_limit > aeron_counter_get_plain(publication->pub_lmt_position.value_addr))
+            if (proposed_limit >= publication->conductor_fields.trip_limit)
             {
                 const size_t max_allowed_gap = publication->mapped_raw_log.term_length << 1;
                 const int64_t new_term_based_limit_position = proposed_limit - (proposed_limit & publication->term_length_mask);
@@ -994,6 +995,7 @@ int aeron_network_publication_update_pub_pos_and_lmt(aeron_network_publication_t
                     (wrap_around_gap < max_allowed_gap || 0 != (clean_position & publication->term_length_mask)))
                 {
                     aeron_counter_set_release(publication->pub_lmt_position.value_addr, proposed_limit);
+                    publication->conductor_fields.trip_limit = proposed_limit + (int64_t)publication->mtu_length;
                     work_count++;
                 }
             }
@@ -1002,7 +1004,8 @@ int aeron_network_publication_update_pub_pos_and_lmt(aeron_network_publication_t
         {
             aeron_network_publication_update_connected_status(publication, false);
             aeron_counter_set_release(publication->pub_lmt_position.value_addr, snd_pos);
-            work_count++;
+            publication->conductor_fields.trip_limit = snd_pos;
+            work_count = 1;
         }
     }
 

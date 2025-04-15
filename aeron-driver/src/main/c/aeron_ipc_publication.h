@@ -46,11 +46,11 @@ typedef struct aeron_ipc_publication_stct
         int32_t refcnt;
         aeron_driver_managed_resource_t managed_resource;
         aeron_subscribable_t subscribable;
-        int64_t trip_limit;
-        int64_t trip_gain;
-        int64_t clean_position;
         int64_t consumer_position;
         int64_t last_consumer_position;
+        int64_t clean_position;
+        int64_t trip_limit;
+        int64_t trip_gain;
         int64_t time_of_last_consumer_position_change_ns;
     }
     conductor_fields;
