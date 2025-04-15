@@ -298,11 +298,11 @@ int aeron_ipc_publication_update_pub_pos_and_lmt(aeron_ipc_publication_t *public
             int64_t proposed_limit = min_sub_pos + publication->term_window_length;
             if (proposed_limit >= publication->conductor_fields.trip_limit)
             {
-                const size_t max_allowed_gap = publication->mapped_raw_log.term_length << 1;
+                const int64_t max_allowed_gap = (int64_t)publication->mapped_raw_log.term_length << 1;
                 const int64_t term_length_mask = (int64_t)publication->mapped_raw_log.term_length - 1;
                 const int64_t new_term_based_limit_position = proposed_limit - (proposed_limit & term_length_mask);
                 const int64_t clean_position = publication->conductor_fields.clean_position;
-                const size_t wrap_around_gap = new_term_based_limit_position - clean_position;
+                const int64_t wrap_around_gap = new_term_based_limit_position - clean_position;
                 if (wrap_around_gap <= max_allowed_gap &&
                     (wrap_around_gap < max_allowed_gap || 0 != (clean_position & term_length_mask)))
                 {
