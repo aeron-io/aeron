@@ -553,7 +553,7 @@ int aeron_publication_image_track_rebuild(aeron_publication_image_t *image, int6
 
         const int32_t threshold = window_length >> 2;
 
-        if (min_sub_pos + window_length - clean_position <= image->conductor_fields.max_wrap_around_gap)
+        if (min_sub_pos + window_length - clean_position < image->conductor_fields.max_wrap_around_gap)
         {
             if (should_force_send_sm ||
                 (min_sub_pos >= (image->next_sm_position + threshold)) ||
