@@ -124,7 +124,7 @@ class PublicationParamsTest
         final InvalidChannelException exception = assertThrowsExactly(InvalidChannelException.class,
             () -> PublicationParams.getPublicationParams(uri, ctx, conductor, 2112, "UDP"));
         assertEquals("io.aeron.exceptions.ConfigurationException: ERROR - pub-wnd=" + pubWindow +
-            " must be at least two times larger than mtu=8192", exception.getMessage());
+            " must be at least two times larger than the mtu=8192", exception.getMessage());
     }
 
     @ParameterizedTest
@@ -137,7 +137,7 @@ class PublicationParamsTest
             () -> PublicationParams.getPublicationParams(uri, ctx, conductor, 2112, "UDP"));
         assertEquals(
             "io.aeron.exceptions.ConfigurationException: ERROR - pub-wnd=" + pubWindow +
-            " must not exceed half term-length=65536", exception.getMessage());
+            " must not exceed half the term-length=65536", exception.getMessage());
     }
 
     @ParameterizedTest

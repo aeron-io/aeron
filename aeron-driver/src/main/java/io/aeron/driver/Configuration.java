@@ -2422,7 +2422,7 @@ public final class Configuration
 
         if (publicationWindowLength > (termLength >> 1))
         {
-            throw new ConfigurationException(paramName + "=" + publicationWindowLength + " must not exceed half " +
+            throw new ConfigurationException(paramName + "=" + publicationWindowLength + " must not exceed half the " +
                 CommonContext.TERM_LENGTH_PARAM_NAME + "=" + termLength);
         }
     }
@@ -2433,7 +2433,7 @@ public final class Configuration
         if (receiverWindowLength < ((long)mtuLength << 1))
         {
             throw new ConfigurationException(paramName + "=" + receiverWindowLength +
-                " must be at least two times larger than " + CommonContext.MTU_LENGTH_PARAM_NAME + "=" + mtuLength);
+                " must be at least two times larger than the " + CommonContext.MTU_LENGTH_PARAM_NAME + "=" + mtuLength);
         }
     }
 }

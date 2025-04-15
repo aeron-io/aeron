@@ -335,7 +335,7 @@ class MediaDriverContextTest
 
         final ConfigurationException exception = assertThrowsExactly(ConfigurationException.class, context::conclude);
         assertEquals("ERROR - publicationTermWindowLength=" + windowLength +
-            " must be at least two times larger than mtu=8192", exception.getMessage());
+            " must be at least two times larger than the mtu=8192", exception.getMessage());
     }
 
     @ParameterizedTest
@@ -346,7 +346,7 @@ class MediaDriverContextTest
 
         final ConfigurationException exception = assertThrowsExactly(ConfigurationException.class, context::conclude);
         assertEquals("ERROR - publicationTermWindowLength=" + windowLength +
-            " must not exceed half term-length=1073741824", exception.getMessage());
+            " must not exceed half the term-length=1073741824", exception.getMessage());
     }
 
     @ParameterizedTest
@@ -357,7 +357,7 @@ class MediaDriverContextTest
 
         final ConfigurationException exception = assertThrowsExactly(ConfigurationException.class, context::conclude);
         assertEquals("ERROR - ipcPublicationTermWindowLength=" + windowLength +
-            " must be at least two times larger than mtu=9600", exception.getMessage());
+            " must be at least two times larger than the mtu=9600", exception.getMessage());
     }
 
     @ParameterizedTest
@@ -368,7 +368,7 @@ class MediaDriverContextTest
 
         final ConfigurationException exception = assertThrowsExactly(ConfigurationException.class, context::conclude);
         assertEquals("ERROR - ipcPublicationTermWindowLength=" + windowLength +
-            " must not exceed half term-length=1073741824", exception.getMessage());
+            " must not exceed half the term-length=1073741824", exception.getMessage());
     }
 
     @ParameterizedTest
@@ -379,7 +379,7 @@ class MediaDriverContextTest
 
         final ConfigurationException exception = assertThrowsExactly(ConfigurationException.class, context::conclude);
         assertEquals("ERROR - initialWindowLength=" + windowLength +
-            " must be at least two times larger than mtu=2048", exception.getMessage());
+            " must be at least two times larger than the mtu=2048", exception.getMessage());
     }
 
     private static ErrorHandler getErrorHandler(final UdpTransportPoller transportPoller) throws Exception

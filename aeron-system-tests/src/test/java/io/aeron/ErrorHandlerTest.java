@@ -88,7 +88,7 @@ class ErrorHandlerTest
         Tests.awaitCounterDelta(aeron.countersReader(), SystemCounterDescriptor.ERRORS.id(), initialErrorCount, 1);
 
         final Matcher<String> exceptionMessageMatcher =
-            containsString("rcv-wnd=1376 must be at least two times larger than mtu=1408");
+            containsString("rcv-wnd=1376 must be at least two times larger than the mtu=1408");
 
         Tests.await(() -> null != throwableRef.get());
         SystemTests.waitForErrorToOccur(driver.aeronDirectoryName(), exceptionMessageMatcher, Tests.SLEEP_1_MS);
