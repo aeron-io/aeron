@@ -181,55 +181,6 @@ jobs:
           name: crash-logs-topology-${{ matrix.os }}-java-${{ matrix.java }}
           path: ${{ steps.copy_test_logs.outputs.file }}
 
-  cpp-gcc-2004-build:
-    name: C++ GCC ${{ matrix.version }} (Ubuntu 20.04)
-    runs-on: ubuntu-20.04
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        version: [ '6', '7', '8', '9', '10' ]
-    env:
-      CC: gcc-${{ matrix.version }}
-      CXX: g++-${{ matrix.version }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.sha }}
-      - name: Setup java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: ${{ env.JAVA_VERSION }}
-      - name: Setup BUILD_JAVA_HOME & BUILD_JAVA_VERSION
-        run: |
-          java -Xinternalversion
-          echo "BUILD_JAVA_HOME=${JAVA_HOME}" >> $GITHUB_ENV
-          echo "BUILD_JAVA_VERSION=${{ env.JAVA_VERSION }}" >> $GITHUB_ENV
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-      - name: Install compiler
-        run: |
-          echo 'Acquire::Retries "${INSTALL_COMPILER_RETRIES}";' | sudo tee -a /etc/apt/apt.conf.d/99retries
-          sudo add-apt-repository "deb http://archive.ubuntu.com/ubuntu/ bionic main universe"
-          sudo apt-get update
-          sudo apt-get install -y g++-${{ matrix.version }} libbsd-dev uuid-dev libidn11
-      - name: Build
-        run: cppbuild/cppbuild --c-warnings-as-errors --cxx-warnings-as-errors --cxx-hide-deprecation-message
-      - name: Copy test logs
-        id: copy_test_logs
-        if: failure()
-        run: |
-          echo "file=build/distributions/test_logs.tbz2" >> $GITHUB_OUTPUT
-          ./gradlew tarTestLogs
-      - name: Upload crash logs
-        if: always() && steps.copy_test_logs.outputs.file == 'build/distributions/test_logs.tbz2'
-        uses: actions/upload-artifact@v4
-        with:
-          name: crash-logs-gcc-2004-${{ matrix.version }}
-          path: ${{ steps.copy_test_logs.outputs.file }}
-
   cpp-gcc-2404-build:
     name: C++ GCC ${{ matrix.version }} (Ubuntu 24.04)
     runs-on: ubuntu-24.04
@@ -316,57 +267,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: crash-logs-gcc-rhel-${{ matrix.version }}
-          path: ${{ steps.copy_test_logs.outputs.file }}
-
-  cpp-clang-ubuntu-2004-build:
-    name: C++ Clang ${{ matrix.version }} (Ubuntu 20.04)
-    runs-on: ubuntu-20.04
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        version: [ '9', '10', '11', '12' ]
-    env:
-      CC: clang-${{ matrix.version }}
-      CXX: clang++-${{ matrix.version }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.sha }}
-      - name: Setup java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: ${{ env.JAVA_VERSION }}
-      - name: Setup BUILD_JAVA_HOME & BUILD_JAVA_VERSION
-        run: |
-          java -Xinternalversion
-          echo "BUILD_JAVA_HOME=${JAVA_HOME}" >> $GITHUB_ENV
-          echo "BUILD_JAVA_VERSION=${{ env.JAVA_VERSION }}" >> $GITHUB_ENV
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-      - name: Install compiler
-        run: |
-          echo 'Acquire::Retries "${INSTALL_COMPILER_RETRIES}";' | sudo tee -a /etc/apt/apt.conf.d/99retries
-          sudo mkdir -p /etc/apt/keyrings/
-          curl --retry ${INSTALL_COMPILER_RETRIES} https://apt.llvm.org/llvm-snapshot.gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/llvm-snapshot.gpg
-          echo "deb [signed-by=/etc/apt/keyrings/llvm-snapshot.gpg] https://apt.llvm.org/focal/ llvm-toolchain-focal-${{ matrix.version }} main" | sudo tee /etc/apt/sources.list.d/llvm.list
-          sudo apt-get update
-          sudo apt-get install -y clang-${{ matrix.version }} libstdc++-7-dev libbsd-dev uuid-dev libidn11
-      - name: Build
-        run: cppbuild/cppbuild --c-warnings-as-errors --cxx-warnings-as-errors --cxx-hide-deprecation-message
-      - name: Copy test logs
-        id: copy_test_logs
-        if: failure()
-        run: |
-          echo "file=build/distributions/test_logs.tbz2" >> $GITHUB_OUTPUT
-          ./gradlew tarTestLogs
-      - name: Upload crash logs
-        if: always() && steps.copy_test_logs.outputs.file == 'build/distributions/test_logs.tbz2'
-        uses: actions/upload-artifact@v4
-        with:
-          name: crash-logs-clang-2004-${{ matrix.version }}
           path: ${{ steps.copy_test_logs.outputs.file }}
 
   cpp-clang-ubuntu-2404-build:
