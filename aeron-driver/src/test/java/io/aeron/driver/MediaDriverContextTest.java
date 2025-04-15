@@ -328,14 +328,14 @@ class MediaDriverContextTest
     }
 
     @ParameterizedTest
-    @ValueSource(ints = { 5000, 8191 })
-    void shouldRejectPublicationWindowLessThanMtu(final int windowLength)
+    @ValueSource(ints = { 5000, 8192, 16383 })
+    void shouldRejectPublicationWindowLessThanTwoMtus(final int windowLength)
     {
         context.mtuLength(8192).publicationTermWindowLength(windowLength);
 
         final ConfigurationException exception = assertThrowsExactly(ConfigurationException.class, context::conclude);
         assertEquals("ERROR - publicationTermWindowLength=" + windowLength +
-            " cannot be less than mtu=8192", exception.getMessage());
+            " must be at least two times larger than mtu=8192", exception.getMessage());
     }
 
     @ParameterizedTest
@@ -350,14 +350,14 @@ class MediaDriverContextTest
     }
 
     @ParameterizedTest
-    @ValueSource(ints = { 5000, 8191 })
-    void shouldRejectIpcPublicationWindowLessThanMtu(final int windowLength)
+    @ValueSource(ints = { 5000, 8191, 9600, 19199 })
+    void shouldRejectIpcPublicationWindowLessThanTwoMtus(final int windowLength)
     {
         context.ipcMtuLength(9600).ipcPublicationTermWindowLength(windowLength);
 
         final ConfigurationException exception = assertThrowsExactly(ConfigurationException.class, context::conclude);
         assertEquals("ERROR - ipcPublicationTermWindowLength=" + windowLength +
-            " cannot be less than mtu=9600", exception.getMessage());
+            " must be at least two times larger than mtu=9600", exception.getMessage());
     }
 
     @ParameterizedTest

@@ -117,14 +117,14 @@ class PublicationParamsTest
     }
 
     @ParameterizedTest
-    @ValueSource(ints = { 5000, 8191 })
-    void shouldRejectPublicationWindowLessThanMtu(final int pubWindow)
+    @ValueSource(ints = { 5000, 8192, 15000 })
+    void shouldRejectPublicationWindowLessThanTwoMtus(final int pubWindow)
     {
         final ChannelUri uri = ChannelUri.parse("aeron:udp?endpoint=localhost:8080|mtu=8k|pub-wnd=" + pubWindow);
         final InvalidChannelException exception = assertThrowsExactly(InvalidChannelException.class,
             () -> PublicationParams.getPublicationParams(uri, ctx, conductor, 2112, "UDP"));
         assertEquals("io.aeron.exceptions.ConfigurationException: ERROR - pub-wnd=" + pubWindow +
-            " cannot be less than mtu=8192", exception.getMessage());
+            " must be at least two times larger than mtu=8192", exception.getMessage());
     }
 
     @ParameterizedTest

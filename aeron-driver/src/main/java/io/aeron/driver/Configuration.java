@@ -2418,11 +2418,7 @@ public final class Configuration
     static void validatePublicationWindow(
         final String paramName, final long publicationWindowLength, final int mtuLength, final int termLength)
     {
-        if (publicationWindowLength < mtuLength)
-        {
-            throw new ConfigurationException(paramName + "=" + publicationWindowLength + " cannot be less than " +
-                CommonContext.MTU_LENGTH_PARAM_NAME + "=" + mtuLength);
-        }
+        validateReceiverWindowLength(paramName, publicationWindowLength, mtuLength);
 
         if (publicationWindowLength > (termLength >> 1))
         {
@@ -2432,12 +2428,12 @@ public final class Configuration
     }
 
     static void validateReceiverWindowLength(
-        final String paramName, final int receiverWindowLength, final int mtuLength)
+        final String paramName, final long receiverWindowLength, final int mtuLength)
     {
-        if (receiverWindowLength < (mtuLength << 1))
+        if (receiverWindowLength < ((long)mtuLength << 1))
         {
             throw new ConfigurationException(paramName + "=" + receiverWindowLength +
-                " must be at least two times larger than mtu=" + mtuLength);
+                " must be at least two times larger than " + CommonContext.MTU_LENGTH_PARAM_NAME + "=" + mtuLength);
         }
     }
 }
