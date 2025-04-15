@@ -577,7 +577,7 @@ public final class PublicationImage
 
             final long ccOutcome = congestionControl.onTrackRebuild(
                 nowNs,
-                cleanPosition,
+                minSubscriberPosition,
                 nextSmPosition,
                 hwmPosition,
                 rebuildPosition,
