@@ -62,6 +62,7 @@ import static org.agrona.BitUtil.align;
  */
 class ReplaySession implements Session, AutoCloseable
 {
+    @SuppressWarnings("JavadocVariable")
     enum State
     {
         INIT, REPLAY, INACTIVE, DONE

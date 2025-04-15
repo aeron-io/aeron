@@ -3678,7 +3678,7 @@ final class ConsensusModuleAgent
 
         if (null != consensusModuleExtension && null != session.closeReason())
         {
-            consensusModuleExtension.onSessionClosed(sessionId);
+            consensusModuleExtension.onSessionClosed(sessionId, session.closeReason());
         }
     }
 

@@ -18,6 +18,7 @@ package io.aeron.cluster;
 import io.aeron.ExclusivePublication;
 import io.aeron.Image;
 import io.aeron.Publication;
+import io.aeron.cluster.codecs.CloseReason;
 import io.aeron.cluster.service.Cluster;
 import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.Header;
@@ -145,9 +146,10 @@ public interface ConsensusModuleExtension extends AutoCloseable
     /**
      * Callback indicating a cluster session has closed.
      *
-     * @param clusterSessionId of the opened session which is unique and not reused.
+     * @param clusterSessionId  of the opened session which is unique and not reused.
+     * @param closeReason       reason to closing session
      */
-    void onSessionClosed(long clusterSessionId);
+    void onSessionClosed(long clusterSessionId, CloseReason closeReason);
 
     /**
      * Callback when preparing for a new Raft leadership term - before election.

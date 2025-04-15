@@ -36,11 +36,13 @@ final class ClusterSession implements ClusterClientSession
     static final int MAX_ENCODED_PRINCIPAL_LENGTH = 4 * 1024;
     static final int MAX_ENCODED_MEMBERSHIP_QUERY_LENGTH = 4 * 1024;
 
+    @SuppressWarnings("JavadocVariable")
     enum State
     {
         INIT, CONNECTING, CONNECTED, CHALLENGED, AUTHENTICATED, REJECTED, OPEN, CLOSING, INVALID, CLOSED
     }
 
+    @SuppressWarnings("JavadocVariable")
     enum Action
     {
         CLIENT, BACKUP, HEARTBEAT, STANDBY_SNAPSHOT

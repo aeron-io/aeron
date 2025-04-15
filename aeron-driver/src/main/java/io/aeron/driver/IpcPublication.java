@@ -41,6 +41,7 @@ import static io.aeron.logbuffer.LogBufferDescriptor.*;
  */
 public final class IpcPublication implements DriverManagedResource, Subscribable
 {
+    @SuppressWarnings("JavadocVariable")
     enum State
     {
         ACTIVE, DRAINING, LINGER, DONE

@@ -40,6 +40,7 @@ class ReplicationSession implements Session, RecordingDescriptorConsumer
     private static final int RETRY_ATTEMPTS = 3;
     private final int replicationSessionId;
 
+    @SuppressWarnings("JavadocVariable")
     enum State
     {
         CONNECT,
