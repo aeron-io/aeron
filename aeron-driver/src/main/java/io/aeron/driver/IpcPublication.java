@@ -113,10 +113,10 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         final int termLength = params.termLength;
         this.termBufferLength = termLength;
         termLengthMask = termLength - 1;
+        mtuLength = params.mtuLength;
         termWindowLength = params.publicationWindowLength;
-        tripGain = Math.min(termLength >> 3, termWindowLength);
+        tripGain = Math.max(termWindowLength >> 2, mtuLength);
 
-        this.mtuLength = params.mtuLength;
         this.positionBitsToShift = LogBufferDescriptor.positionBitsToShift(termLength);
         this.publisherPos = publisherPos;
         this.publisherLimit = publisherLimit;
@@ -410,8 +410,8 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
             }
             else if (publisherLimit.get() > consumerPosition)
             {
-                tripLimit = consumerPosition;
                 publisherLimit.setRelease(consumerPosition);
+                tripLimit = consumerPosition;
                 workCount = 1;
             }
         }
