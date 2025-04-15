@@ -5881,6 +5881,13 @@ void aeron_driver_conductor_on_create_publication_image(void *clientd, void *ite
         goto error_cleanup;
     }
 
+    if (aeron_driver_context_validate_receiver_window_length(
+        AERON_URI_RECEIVER_WINDOW_KEY, initial_window_length, (size_t)command->mtu_length) < 0)
+    {
+        AERON_APPEND_ERR("stream_id=%d session_id=%d", command->stream_id, command->session_id);
+        goto error_cleanup;
+    }
+
     if (!aeron_driver_conductor_has_network_subscription_interest(
         conductor, endpoint, command->stream_id, command->session_id))
     {

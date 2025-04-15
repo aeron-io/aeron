@@ -354,7 +354,10 @@ int aeron_driver_validate_unblock_timeout(aeron_driver_context_t *context);
 
 int aeron_driver_validate_untethered_timeouts(aeron_driver_context_t *context);
 
-int aeron_driver_context_validate_mtu_length(uint64_t mtu_length);
+int aeron_driver_context_validate_mtu_length(size_t mtu_length);
+int aeron_driver_context_validate_receiver_window_length(const char* param, size_t window_length, size_t mtu_length);
+int aeron_driver_context_validate_publisher_window_length(
+    const char* param, size_t window_length, size_t mtu_length, size_t term_length);
 
 size_t aeron_cnc_length(aeron_driver_context_t *context);
 
