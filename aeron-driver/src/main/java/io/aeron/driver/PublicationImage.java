@@ -67,6 +67,7 @@ class PublicationImagePadding1
 class PublicationImageConductorFields extends PublicationImagePadding1
 {
     long cleanPosition;
+    long maxWrapAroundGap;
     final ArrayList<UntetheredSubscription> untetheredSubscriptions = new ArrayList<>();
     ReadablePosition[] subscriberPositions;
     LossReport lossReport;
@@ -276,6 +277,7 @@ public final class PublicationImage
         lastSmPosition = position;
         lastOverrunThreshold = position + (termLength >> 1);
         cleanPosition = blockStartPosition(position);
+        maxWrapAroundGap = termLength * 3L;
 
         hwmPosition.setRelease(position);
         rebuildPosition.setRelease(position);
@@ -585,12 +587,15 @@ public final class PublicationImage
             final int windowLength = CongestionControl.receiverWindowLength(ccOutcome);
             final int threshold = CongestionControl.threshold(windowLength);
 
-            if (CongestionControl.shouldForceStatusMessage(ccOutcome) ||
-                (cleanPosition > (nextSmPosition + threshold)) ||
-                windowLength != nextSmReceiverWindowLength)
+            if (minSubscriberPosition + windowLength - cleanPosition <= maxWrapAroundGap)
             {
-                scheduleStatusMessage(cleanPosition, windowLength);
-                workCount++;
+                if (CongestionControl.shouldForceStatusMessage(ccOutcome) ||
+                    (minSubscriberPosition >= (nextSmPosition + threshold)) ||
+                    windowLength != nextSmReceiverWindowLength)
+                {
+                    scheduleStatusMessage(minSubscriberPosition, windowLength);
+                    workCount++;
+                }
             }
         }
 

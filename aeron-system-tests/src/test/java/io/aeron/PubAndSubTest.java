@@ -15,6 +15,7 @@
  */
 package io.aeron;
 
+import io.aeron.driver.Configuration;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
 import io.aeron.driver.ext.DebugChannelEndpointConfiguration;
@@ -65,7 +66,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 import static io.aeron.CommonContext.MTU_LENGTH_PARAM_NAME;
+import static io.aeron.CommonContext.PUBLICATION_WINDOW_LENGTH_PARAM_NAME;
 import static io.aeron.CommonContext.RECEIVER_WINDOW_LENGTH_PARAM_NAME;
+import static io.aeron.CommonContext.SOCKET_RCVBUF_PARAM_NAME;
 import static io.aeron.SystemTests.verifyLossOccurredForStream;
 import static io.aeron.logbuffer.FrameDescriptor.*;
 import static io.aeron.logbuffer.LogBufferDescriptor.computeFragmentedFrameLength;
@@ -90,21 +93,38 @@ class PubAndSubTest
         return asList(
             "aeron:udp?endpoint=localhost:24325",
             "aeron:udp?endpoint=localhost:24325|session=id=55555",
-            "aeron:udp?endpoint=224.20.30.39:24326|interface=localhost",
+            "aeron:udp?endpoint=224.20.30.39:24326|interface=localhost|cc=cubic",
             IPC_URI);
     }
 
     private static List<Arguments> channelsAndPositions()
     {
         final List<String> channels = channels();
-        final List<Arguments> arguments = new ArrayList<>(channels.size() * 2);
+        final List<Arguments> arguments = new ArrayList<>(channels.size() * 3);
         for (final String channel : channels)
         {
             arguments.add(Arguments.of(channel, 0));
+            arguments.add(Arguments.of(channel, 992));
+            arguments.add(Arguments.of(channel, 4064));
             arguments.add(Arguments.of(
                 channel,
                 FRAME_ALIGNMENT * ThreadLocalRandom.current().nextLong(1000, 10_000)));
-            arguments.add(Arguments.of(channel, 1_000_000_000_000L));
+        }
+        return arguments;
+    }
+
+    private static List<Arguments> channelsAndMtuLengths()
+    {
+        final List<String> channels = channels();
+        final int[] mtu =
+            new int[]{ 64, 1024, 1408, 2048, 3200, 4096, 8192, 8896, Configuration.MAX_UDP_PAYLOAD_LENGTH };
+        final List<Arguments> arguments = new ArrayList<>(channels.size() * mtu.length);
+        for (final String channel : channels)
+        {
+            for (final int m : mtu)
+            {
+                arguments.add(Arguments.of(channel, m));
+            }
         }
         return arguments;
     }
@@ -129,7 +149,7 @@ class PubAndSubTest
     private Subscription subscription;
     private Publication publication;
 
-    private final UnsafeBuffer buffer = new UnsafeBuffer(new byte[8192]);
+    private final UnsafeBuffer buffer = new UnsafeBuffer(new byte[64 * 1024]);
     private final FragmentHandler fragmentHandler = mock(FragmentHandler.class);
     private final RawBlockHandler rawBlockHandler = mock(RawBlockHandler.class);
     private final AvailableImageHandler availableImageHandler = mock(AvailableImageHandler.class);
@@ -1340,18 +1360,77 @@ class PubAndSubTest
         uri.put(RECEIVER_WINDOW_LENGTH_PARAM_NAME, "8k");
         uri.put(MTU_LENGTH_PARAM_NAME, "1600");
 
+        testExchangeMessages(uri, initialPosition, termLength, messageLength);
+    }
+
+    @ParameterizedTest
+    @MethodSource("channelsAndMtuLengths")
+    @InterruptAfter(10)
+    void shouldExchangeMessagesUsingMinimalReceiverWindow(final String channel, final int mtu)
+    {
+        final ChannelUri uri = ChannelUri.parse(channel);
+        final int termLength = 512 * 1024;
+        final long initialPosition = termLength * 17L + 992;
+        uri.initialPosition(initialPosition, ThreadLocalRandom.current().nextInt(), termLength);
+        uri.put(MTU_LENGTH_PARAM_NAME, Integer.toString(mtu));
+        uri.put(PUBLICATION_WINDOW_LENGTH_PARAM_NAME, Integer.toString(termLength / 2));
+        uri.put(RECEIVER_WINDOW_LENGTH_PARAM_NAME, Integer.toString(mtu * 2));
+        uri.put(SOCKET_RCVBUF_PARAM_NAME, "128k");
+
+        testExchangeMessages(uri, initialPosition, termLength, mtu - HEADER_LENGTH);
+    }
+
+    @ParameterizedTest
+    @MethodSource("channelsAndMtuLengths")
+    @InterruptAfter(10)
+    void shouldExchangeMessagesUsingMinimalPublicationWindow(final String channel, final int mtu)
+    {
+        final ChannelUri uri = ChannelUri.parse(channel);
+        final int termLength = 512 * 1024;
+        final long initialPosition = termLength * 119L + 4064;
+        uri.initialPosition(initialPosition, ThreadLocalRandom.current().nextInt(), termLength);
+        uri.put(MTU_LENGTH_PARAM_NAME, Integer.toString(mtu));
+        uri.put(PUBLICATION_WINDOW_LENGTH_PARAM_NAME, Integer.toString(mtu * 2));
+        uri.put(RECEIVER_WINDOW_LENGTH_PARAM_NAME, "128k");
+        uri.put(SOCKET_RCVBUF_PARAM_NAME, "128k");
+
+        testExchangeMessages(uri, initialPosition, termLength, mtu - HEADER_LENGTH);
+    }
+
+    @ParameterizedTest
+    @MethodSource("channelsAndMtuLengths")
+    @InterruptAfter(10)
+    void shouldExchangeMessagesWhenBothPublisherAndReceiverUseMinimalWindow(final String channel, final int mtu)
+    {
+        final ChannelUri uri = ChannelUri.parse(channel);
+        final int termLength = 512 * 1024;
+        final long initialPosition = termLength * 563485374L + 2016;
+        uri.initialPosition(initialPosition, ThreadLocalRandom.current().nextInt(), termLength);
+        uri.put(MTU_LENGTH_PARAM_NAME, Integer.toString(mtu));
+        uri.put(PUBLICATION_WINDOW_LENGTH_PARAM_NAME, Integer.toString(mtu * 2));
+        uri.put(RECEIVER_WINDOW_LENGTH_PARAM_NAME, Integer.toString(mtu * 2));
+        uri.put(SOCKET_RCVBUF_PARAM_NAME, "128k");
+
+        testExchangeMessages(uri, initialPosition, termLength, mtu - HEADER_LENGTH);
+    }
+
+    private void testExchangeMessages(
+        final ChannelUri uri,
+        final long initialPosition,
+        final int termLength,
+        final int messageLength)
+    {
         launch(uri.toString());
 
         Tests.awaitConnected(publication);
         Tests.awaitConnected(subscription);
         assertEquals(initialPosition, publication.position());
 
-        final long targetPosition = initialPosition + 5 * termLength;
+        final long targetPosition = initialPosition + 5L * termLength;
         ThreadLocalRandom.current().nextBytes(buffer.byteArray());
         while (publication.position() < targetPosition)
         {
-            final int offset = ThreadLocalRandom.current().nextInt(0, 3000);
-            while (publication.offer(buffer, offset, messageLength) < 0)
+            while (publication.offer(buffer, 0, messageLength) < 0)
             {
                 Tests.yield();
             }
