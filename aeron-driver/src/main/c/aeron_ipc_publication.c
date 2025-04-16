@@ -295,19 +295,20 @@ int aeron_ipc_publication_update_pub_pos_and_lmt(aeron_ipc_publication_t *public
 
             work_count += aeron_ipc_publication_clean_buffer(publication, min_sub_pos);
 
-            int64_t proposed_limit = min_sub_pos + publication->term_window_length;
-            if (proposed_limit >= publication->conductor_fields.trip_limit)
+            int64_t new_limit_position = min_sub_pos + publication->term_window_length;
+            if (new_limit_position >= publication->conductor_fields.trip_limit)
             {
-                const int64_t max_allowed_gap = (int64_t)publication->mapped_raw_log.term_length << 1;
-                const int64_t term_length_mask = (int64_t)publication->mapped_raw_log.term_length - 1;
-                const int64_t new_term_based_limit_position = proposed_limit - (proposed_limit & term_length_mask);
+                const int32_t term_length_mask = (int32_t)(publication->mapped_raw_log.term_length - 1);
                 const int64_t clean_position = publication->conductor_fields.clean_position;
-                const int64_t wrap_around_gap = new_term_based_limit_position - clean_position;
-                if (wrap_around_gap <= max_allowed_gap &&
-                    (wrap_around_gap < max_allowed_gap || 0 != (clean_position & term_length_mask)))
+                const int32_t clean_offset = (int32_t)(clean_position & term_length_mask);
+                const int64_t term_based_clean_position = clean_position - clean_offset;
+                const int64_t term_based_new_limit_position = new_limit_position - (new_limit_position & term_length_mask);
+                const int64_t wrap_around_gap = term_based_new_limit_position - term_based_clean_position;
+                const int64_t max_wrap_around_gap = (int64_t)publication->mapped_raw_log.term_length << 1;
+                if (wrap_around_gap < max_wrap_around_gap || (wrap_around_gap == max_wrap_around_gap && 0 != clean_offset))
                 {
-                    aeron_counter_set_release(publication->pub_lmt_position.value_addr, proposed_limit);
-                    publication->conductor_fields.trip_limit = proposed_limit + publication->conductor_fields.trip_gain;
+                    aeron_counter_set_release(publication->pub_lmt_position.value_addr, new_limit_position);
+                    publication->conductor_fields.trip_limit = new_limit_position + publication->conductor_fields.trip_gain;
                     work_count++;
                 }
             }
