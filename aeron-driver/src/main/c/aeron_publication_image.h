@@ -63,7 +63,6 @@ typedef struct aeron_publication_image_stct
         int64_t untethered_window_limit_timeout_ns;
         int64_t untethered_resting_timeout_ns;
         int64_t clean_position;
-        int64_t max_wrap_around_gap;
         aeron_receive_channel_endpoint_t *endpoint;
         uint8_t flags;
     }
