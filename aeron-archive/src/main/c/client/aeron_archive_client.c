@@ -733,7 +733,8 @@ int aeron_archive_start_recording(
         recording_stream_id,
         source_location == AERON_ARCHIVE_SOURCE_LOCATION_LOCAL,
         auto_stop,
-        correlation_id))
+        correlation_id,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -765,7 +766,8 @@ int aeron_archive_get_recording_position(
     if (!aeron_archive_proxy_get_recording_position(
         aeron_archive->archive_proxy,
         correlation_id,
-        recording_id))
+        recording_id,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -797,7 +799,8 @@ int aeron_archive_get_start_position(
     if (!aeron_archive_proxy_get_start_position(
         aeron_archive->archive_proxy,
         correlation_id,
-        recording_id))
+        recording_id,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -829,7 +832,8 @@ int aeron_archive_get_stop_position(
     if (!aeron_archive_proxy_get_stop_position(
         aeron_archive->archive_proxy,
         correlation_id,
-        recording_id))
+        recording_id,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -861,7 +865,8 @@ int aeron_archive_get_max_recorded_position(
     if (!aeron_archive_proxy_get_max_recorded_position(
         aeron_archive->archive_proxy,
         correlation_id,
-        recording_id))
+        recording_id,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -892,7 +897,8 @@ int aeron_archive_stop_recording_subscription(
     if (!aeron_archive_proxy_stop_recording_subscription(
         aeron_archive->archive_proxy,
         correlation_id,
-        subscription_id))
+        subscription_id,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -924,7 +930,8 @@ int aeron_archive_try_stop_recording_subscription(
     if (!aeron_archive_proxy_stop_recording_subscription(
         aeron_archive->archive_proxy,
         correlation_id,
-        subscription_id))
+        subscription_id,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -958,7 +965,8 @@ int aeron_archive_stop_recording_channel_and_stream(
         aeron_archive->archive_proxy,
         correlation_id,
         channel,
-        stream_id))
+        stream_id,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -992,7 +1000,8 @@ int aeron_archive_try_stop_recording_channel_and_stream(
         aeron_archive->archive_proxy,
         correlation_id,
         channel,
-        stream_id))
+        stream_id,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -1025,7 +1034,8 @@ int aeron_archive_try_stop_recording_by_identity(
     if (!aeron_archive_proxy_stop_recording_by_identity(
         aeron_archive->archive_proxy,
         correlation_id,
-        recording_id))
+        recording_id,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -1122,7 +1132,8 @@ int aeron_archive_find_last_matching_recording(
         min_recording_id,
         channel_fragment,
         stream_id,
-        session_id))
+        session_id,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -1156,7 +1167,8 @@ int aeron_archive_list_recording(
     if (!aeron_archive_proxy_list_recording(
         aeron_archive->archive_proxy,
         correlation_id,
-        recording_id))
+        recording_id,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -1199,7 +1211,8 @@ int aeron_archive_list_recordings(
         aeron_archive->archive_proxy,
         correlation_id,
         from_recording_id,
-        record_count))
+        record_count,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -1246,7 +1259,8 @@ int aeron_archive_list_recordings_for_uri(
         from_recording_id,
         record_count,
         channel_fragment,
-        stream_id))
+        stream_id,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -1324,7 +1338,8 @@ static int aeron_archive_start_replay_locked(
         recording_id,
         replay_channel,
         replay_stream_id,
-        params))
+        params,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         return -1;
@@ -1410,7 +1425,8 @@ static int aeron_archive_replay_locked(
         recording_id,
         replay_channel,
         replay_stream_id,
-        params))
+        params,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         return -1;
@@ -1521,7 +1537,8 @@ int aeron_archive_truncate_recording(
         aeron_archive->archive_proxy,
         correlation_id,
         recording_id,
-        position))
+        position,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -1552,7 +1569,8 @@ int aeron_archive_stop_replay(
     if (!aeron_archive_proxy_stop_replay(
         aeron_archive->archive_proxy,
         correlation_id,
-        replay_session_id))
+        replay_session_id,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -1583,7 +1601,8 @@ int aeron_archive_stop_all_replays(
     if (!aeron_archive_proxy_stop_all_replays(
         aeron_archive->archive_proxy,
         correlation_id,
-        recording_id))
+        recording_id,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -1625,7 +1644,8 @@ int aeron_archive_list_recording_subscriptions(
         subscription_count,
         channel_fragment,
         stream_id,
-        apply_stream_id))
+        apply_stream_id,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -1664,7 +1684,8 @@ int aeron_archive_purge_recording(
     if (!aeron_archive_proxy_purge_recording(
         aeron_archive->archive_proxy,
         correlation_id,
-        recording_id))
+        recording_id,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -1704,7 +1725,8 @@ int aeron_archive_extend_recording(
         recording_stream_id,
         source_location == AERON_ARCHIVE_SOURCE_LOCATION_LOCAL,
         auto_stop,
-        correlation_id))
+        correlation_id,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -1742,7 +1764,8 @@ int aeron_archive_replicate(
         src_recording_id,
         src_control_stream_id,
         src_control_channel,
-        params))
+        params,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -1773,7 +1796,8 @@ int aeron_archive_stop_replication(
     if (!aeron_archive_proxy_stop_replication(
         aeron_archive->archive_proxy,
         correlation_id,
-        replication_id))
+        replication_id,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -1805,7 +1829,8 @@ int aeron_archive_try_stop_replication(
     if (!aeron_archive_proxy_stop_replication(
         aeron_archive->archive_proxy,
         correlation_id,
-        replication_id))
+        replication_id,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -1839,7 +1864,8 @@ int aeron_archive_detach_segments(
         aeron_archive->archive_proxy,
         correlation_id,
         recording_id,
-        new_start_position))
+        new_start_position,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -1871,7 +1897,8 @@ int aeron_archive_delete_detached_segments(
     if (!aeron_archive_proxy_delete_detached_segments(
         aeron_archive->archive_proxy,
         correlation_id,
-        recording_id))
+        recording_id,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -1905,7 +1932,8 @@ int aeron_archive_purge_segments(
         aeron_archive->archive_proxy,
         correlation_id,
         recording_id,
-        new_start_position))
+        new_start_position,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -1937,7 +1965,8 @@ int aeron_archive_attach_segments(
     if (!aeron_archive_proxy_attach_segments(
         aeron_archive->archive_proxy,
         correlation_id,
-        recording_id))
+        recording_id,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -1971,7 +2000,8 @@ int aeron_archive_migrate_segments(
         aeron_archive->archive_proxy,
         correlation_id,
         src_recording_id,
-        dst_recording_id))
+        dst_recording_id,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         rc = -1;
@@ -2374,7 +2404,8 @@ int aeron_archive_initiate_replay_via_response_channel(
     if (!aeron_archive_request_replay_token(
         aeron_archive->archive_proxy,
         correlation_id,
-        recording_id))
+        recording_id,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         goto cleanup;
@@ -2467,8 +2498,6 @@ int aeron_archive_initiate_replay_via_response_channel(
         goto cleanup;
     }
 
-    aeron_archive_proxy_set_control_esssion_id(&archive_proxy, aeron_archive->control_session_id);
-
     aeron_counters_reader_t *counters_reader = aeron_counters_reader(aeron_archive->ctx->aeron);
     int pub_limit_counter_id = aeron_counters_reader_find_by_type_id_and_registration_id(
         counters_reader,
@@ -2508,7 +2537,8 @@ int aeron_archive_initiate_replay_via_response_channel(
         recording_id,
         replay_channel,
         replay_stream_id,
-        &response_channel_replay_params))
+        &response_channel_replay_params,
+        aeron_archive->control_session_id))
     {
         AERON_APPEND_ERR("%s", "");
         goto cleanup_proxy;
