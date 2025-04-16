@@ -67,7 +67,6 @@ class PublicationImagePadding1
 class PublicationImageConductorFields extends PublicationImagePadding1
 {
     long cleanPosition;
-    long maxWrapAroundGap;
     final ArrayList<UntetheredSubscription> untetheredSubscriptions = new ArrayList<>();
     ReadablePosition[] subscriberPositions;
     LossReport lossReport;
@@ -169,8 +168,8 @@ public final class PublicationImage
     private final int sessionId;
     private final int streamId;
     private final int positionBitsToShift;
-    private final int termBufferLength;
     private final int termLengthMask;
+    private final int termBufferLength;
     private final int initialTermId;
     private final short flags;
     private final boolean isReliable;
@@ -277,7 +276,6 @@ public final class PublicationImage
         lastSmPosition = position;
         lastOverrunThreshold = position + (termLength >> 1);
         cleanPosition = blockStartPosition(position);
-        maxWrapAroundGap = ((long)termLength << 1) + (termLength >> 1); // take into account overrun threshold
 
         hwmPosition.setRelease(position);
         rebuildPosition.setRelease(position);
@@ -573,7 +571,6 @@ public final class PublicationImage
             this.rebuildPosition.proposeMaxRelease(newRebuildPosition);
 
             workCount += cleanBufferTo(minSubscriberPosition);
-            final long cleanPosition = this.cleanPosition;
 
             final long ccOutcome = congestionControl.onTrackRebuild(
                 nowNs,
@@ -587,7 +584,16 @@ public final class PublicationImage
             final int windowLength = CongestionControl.receiverWindowLength(ccOutcome);
             final int threshold = CongestionControl.threshold(windowLength);
 
-            if (minSubscriberPosition - cleanPosition < maxWrapAroundGap)
+            final long maxPacketInsertPosition = minSubscriberPosition + (termBufferLength >> 1);
+            final long termBaseMaxPacketInsertPosition =
+                maxPacketInsertPosition - (maxPacketInsertPosition & termLengthMask);
+            final long cleanPosition = this.cleanPosition;
+            final int cleanOffset = (int)(cleanPosition & termLengthMask);
+            final long termBaseCleanPosition = cleanPosition - cleanOffset;
+            final long wrapAroundGap = termBaseMaxPacketInsertPosition - termBaseCleanPosition;
+            final long maxWrapAroundGap = (long)termBufferLength << 1;
+
+            if (wrapAroundGap < maxWrapAroundGap || (wrapAroundGap == maxWrapAroundGap && 0 != cleanOffset))
             {
                 if (CongestionControl.shouldForceStatusMessage(ccOutcome) ||
                     (minSubscriberPosition >= (nextSmPosition + threshold)) ||
