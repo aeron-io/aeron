@@ -60,9 +60,9 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     private final int startingTermId;
     private final int startingTermOffset;
     private final int positionBitsToShift;
-    private final int termBufferLength;
-    private final int termLengthMask;
     private final int termWindowLength;
+    private final int termLengthMask;
+    private final int termBufferLength;
     private final int tripGain;
     private final int mtuLength;
     private final int initialTermId;
@@ -71,7 +71,6 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     private long lastConsumerPosition;
     private long timeOfLastConsumerPositionUpdateNs;
     private long cleanPosition;
-    private long maxAllowedGap;
     private int refCount = 0;
     private boolean reachedEndOfLife = false;
     private final boolean isExclusive;
@@ -131,7 +130,6 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         consumerPosition = producerPosition();
         lastConsumerPosition = consumerPosition;
         cleanPosition = blockStartPosition(lastConsumerPosition);
-        maxAllowedGap = (long)termLength << 1;
         timeOfLastConsumerPositionUpdateNs = ctx.cachedNanoClock().nanoTime();
     }
 
@@ -397,12 +395,13 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
                 final long newLimitPosition = minSubscriberPosition + termWindowLength;
                 if (newLimitPosition >= tripLimit)
                 {
-                    final long newTermBaseLimitPosition = newLimitPosition - (newLimitPosition & termLengthMask);
                     final long cleanPosition = this.cleanPosition;
-                    final long wrapAroundGap = newTermBaseLimitPosition - cleanPosition;
-                    final long maxAllowedGap = this.maxAllowedGap;
-                    if (wrapAroundGap <= maxAllowedGap &&
-                        (wrapAroundGap < maxAllowedGap || 0 != (cleanPosition & termLengthMask)))
+                    final int cleanOffset = (int)(cleanPosition & termLengthMask);
+                    final long termBaseCleanPosition = cleanPosition - cleanOffset;
+                    final long termBaseNewLimitPosition = newLimitPosition - (newLimitPosition & termLengthMask);
+                    final long wrapAroundGap = termBaseNewLimitPosition - termBaseCleanPosition;
+                    final long maxWrapAroundGap = (long)termBufferLength << 1;
+                    if (wrapAroundGap < maxWrapAroundGap || (wrapAroundGap == maxWrapAroundGap && 0 != cleanOffset))
                     {
                         publisherLimit.setRelease(newLimitPosition);
                         tripLimit = newLimitPosition + tripGain;

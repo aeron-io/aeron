@@ -66,7 +66,6 @@ class NetworkPublicationConductorFields extends NetworkPublicationPadding1
     long timeOfLastActivityNs;
     long lastSenderPosition;
     long tripLimit;
-    long maxAllowedGap;
     int refCount = 0;
     ReadablePosition[] spyPositions = EMPTY_POSITIONS;
     final ArrayList<UntetheredSubscription> untetheredSubscriptions = new ArrayList<>();
@@ -125,9 +124,9 @@ public final class NetworkPublication
     private final int initialTermId;
     private final int startingTermId;
     private final int startingTermOffset;
-    private final int termBufferLength;
-    private final int termLengthMask;
     private final int termWindowLength;
+    private final int termLengthMask;
+    private final int termBufferLength;
     private final int mtuLength;
     private final int sessionId;
     private final int streamId;
@@ -258,7 +257,6 @@ public final class NetworkPublication
 
         lastSenderPosition = senderPosition.get();
         cleanPosition = blockStartPosition(lastSenderPosition);
-        maxAllowedGap = (long)termLength << 1;
         timeOfLastActivityNs = nowNs;
     }
 
@@ -746,12 +744,13 @@ public final class NetworkPublication
                 final long newLimitPosition = minConsumerPosition + termWindowLength;
                 if (newLimitPosition >= tripLimit)
                 {
-                    final long newTermBaseLimitPosition = newLimitPosition - (newLimitPosition & termLengthMask);
                     final long cleanPosition = this.cleanPosition;
-                    final long wrapAroundGap = newTermBaseLimitPosition - cleanPosition;
-                    final long maxAllowedGap = this.maxAllowedGap;
-                    if (wrapAroundGap <= maxAllowedGap &&
-                        (wrapAroundGap < maxAllowedGap || 0 != (cleanPosition & termLengthMask)))
+                    final int cleanOffset = (int)(cleanPosition & termLengthMask);
+                    final long termBaseCleanPosition = cleanPosition - cleanOffset;
+                    final long termBaseNewLimitPosition = newLimitPosition - (newLimitPosition & termLengthMask);
+                    final long wrapAroundGap = termBaseNewLimitPosition - termBaseCleanPosition;
+                    final long maxWrapAroundGap = (long)termBufferLength << 1;
+                    if (wrapAroundGap < maxWrapAroundGap || (wrapAroundGap == maxWrapAroundGap && 0 != cleanOffset))
                     {
                         publisherLimit.setRelease(newLimitPosition);
                         tripLimit = newLimitPosition + mtuLength;
