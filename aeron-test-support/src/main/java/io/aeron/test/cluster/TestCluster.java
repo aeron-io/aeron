@@ -47,6 +47,7 @@ import io.aeron.cluster.codecs.NewLeadershipTermEventDecoder;
 import io.aeron.cluster.service.Cluster;
 import io.aeron.driver.Configuration;
 import io.aeron.driver.MediaDriver;
+import io.aeron.driver.ReceiveChannelEndpointSupplier;
 import io.aeron.driver.SendChannelEndpointSupplier;
 import io.aeron.driver.ThreadingMode;
 import io.aeron.exceptions.RegistrationException;
@@ -101,7 +102,9 @@ import java.util.stream.Stream;
 import static io.aeron.Aeron.NULL_VALUE;
 import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
 import static io.aeron.cluster.service.Cluster.Role.FOLLOWER;
-import static io.aeron.test.cluster.ClusterTests.*;
+import static io.aeron.test.cluster.ClusterTests.LARGE_MSG;
+import static io.aeron.test.cluster.ClusterTests.PAUSE;
+import static io.aeron.test.cluster.ClusterTests.errorHandler;
 import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.toList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -153,6 +156,8 @@ public final class TestCluster implements AutoCloseable
     private AuthenticatorSupplier authenticationSupplier;
     private TimerServiceSupplier timerServiceSupplier;
     private SendChannelEndpointSupplier clientSendChannelEndpointSupplier;
+    private ReceiveChannelEndpointSupplier clientReceiveChannelEndpointSupplier;
+    private long clientImageLivenessTimeoutNs = Configuration.imageLivenessTimeoutNs();
     private TestMediaDriver clientMediaDriver;
     private AeronCluster client;
     private TestBackupNode backupNode;
@@ -594,6 +599,17 @@ public final class TestCluster implements AutoCloseable
         this.clientSendChannelEndpointSupplier = clientSendChannelEndpointSupplier;
     }
 
+    public void clientReceiveChannelEndpointSupplier(
+        final ReceiveChannelEndpointSupplier clientReceiveChannelEndpointSupplier)
+    {
+        this.clientReceiveChannelEndpointSupplier = clientReceiveChannelEndpointSupplier;
+    }
+
+    public void clientImageLivenessTimeoutNs(final long clientImageLivenessTimeoutNs)
+    {
+        this.clientImageLivenessTimeoutNs = clientImageLivenessTimeoutNs;
+    }
+
     public AeronCluster client()
     {
         return client;
@@ -644,6 +660,8 @@ public final class TestCluster implements AutoCloseable
                 .senderWildcardPortRange("20700 20709")
                 .receiverWildcardPortRange("20710 20719")
                 .sendChannelEndpointSupplier(clientSendChannelEndpointSupplier)
+                .receiveChannelEndpointSupplier(clientReceiveChannelEndpointSupplier)
+                .imageLivenessTimeoutNs(clientImageLivenessTimeoutNs)
                 .enableExperimentalFeatures(useResponseChannels);
 
             clientMediaDriver = TestMediaDriver.launch(ctx, clientDriverOutputConsumer(dataCollector));
@@ -692,6 +710,8 @@ public final class TestCluster implements AutoCloseable
                 .aeronDirectoryName(aeronDirName)
                 .nameResolver(new RedirectingNameResolver(nodeNameMappings()))
                 .sendChannelEndpointSupplier(clientSendChannelEndpointSupplier)
+                .receiveChannelEndpointSupplier(clientReceiveChannelEndpointSupplier)
+                .imageLivenessTimeoutNs(clientImageLivenessTimeoutNs)
                 .enableExperimentalFeatures(useResponseChannels);
 
             clientMediaDriver = TestMediaDriver.launch(ctx, clientDriverOutputConsumer(dataCollector));

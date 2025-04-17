@@ -17,9 +17,12 @@ package io.aeron.cluster;
 
 import io.aeron.ChannelUri;
 import io.aeron.cluster.client.AeronCluster;
+import io.aeron.cluster.client.EgressListener;
 import io.aeron.cluster.codecs.CloseReason;
 import io.aeron.cluster.service.ClientSession;
+import io.aeron.driver.ReceiveChannelEndpointSupplier;
 import io.aeron.driver.SendChannelEndpointSupplier;
+import io.aeron.driver.ext.DebugReceiveChannelEndpoint;
 import io.aeron.driver.ext.DebugSendChannelEndpoint;
 import io.aeron.driver.ext.LossGenerator;
 import io.aeron.logbuffer.Header;
@@ -187,6 +190,60 @@ class ClusterSessionReliabilityTest
         assertTrue(client.isClosed());
     }
 
+    @Test
+    @InterruptAfter(10)
+    void clientShouldNotRejoinEgressImageFromTheSameNodeToPreventSilentMessageLoss()
+    {
+        TestMediaDriver.notSupportedOnCMediaDriver("uses custom channel endpoint suppliers for simulating loss");
+
+        final IntFunction<TestNode.TestService[]> serviceSupplier =
+            (index) -> new TestNode.TestService[]
+            {
+                new SequencedEgressService(index)
+            };
+        final TestCluster cluster = aCluster()
+            .withStaticNodes(1)
+            .withServiceSupplier(serviceSupplier)
+            .start();
+        systemTestWatcher.cluster(cluster);
+
+        final SequenceCheckingEgressListener egressListener = new SequenceCheckingEgressListener();
+        cluster.egressListener(egressListener);
+        final StreamIdLossGenerator clientReceiveLossGenerator = new StreamIdLossGenerator();
+        cluster.clientReceiveChannelEndpointSupplier(receiveChannelEndpointSupplier(clientReceiveLossGenerator));
+        final long imageLivenessTimeoutNs = TimeUnit.MILLISECONDS.toNanos(1000);
+        cluster.clientImageLivenessTimeoutNs(imageLivenessTimeoutNs);
+        final AeronCluster client = cluster.connectClient();
+
+        boolean lossRequested = false;
+        long now = System.nanoTime();
+        final long deadline = now + imageLivenessTimeoutNs + TimeUnit.SECONDS.toNanos(2);
+        while (true)
+        {
+            now = System.nanoTime();
+
+            if (now - deadline >= 0)
+            {
+                break;
+            }
+
+            client.pollEgress();
+
+            if (!lossRequested && egressListener.nextSequence >= 5)
+            {
+                lossRequested = true;
+                clientReceiveLossGenerator.startDropping(
+                    client.context().egressStreamId(),
+                    imageLivenessTimeoutNs + TimeUnit.MILLISECONDS.toNanos(200));
+            }
+
+            Tests.sleep(1);
+        }
+
+        assertTrue(lossRequested);
+        assertEquals(0, egressListener.outOfSequenceCount);
+    }
+
     private int endpointPort(final String channel)
     {
         final ChannelUri uri = ChannelUri.parse(channel);
@@ -198,6 +255,12 @@ class ClusterSessionReliabilityTest
     {
         return (udpChannel, statusIndicator, context) ->
         new DebugSendChannelEndpoint(udpChannel, statusIndicator, context, lossGenerator, lossGenerator);
+    }
+
+    private static ReceiveChannelEndpointSupplier receiveChannelEndpointSupplier(final LossGenerator lossGenerator)
+    {
+        return (udpChannel, dispatcher, statusIndicator, context) ->
+        new DebugReceiveChannelEndpoint(udpChannel, dispatcher, statusIndicator, context, lossGenerator, lossGenerator);
     }
 
     private static class SequenceCheckingService extends TestNode.TestService
@@ -244,6 +307,100 @@ class ClusterSessionReliabilityTest
         }
     }
 
+    private static class SequencedEgressService extends TestNode.TestService
+    {
+        private static final long TIMER_CORRELATION_ID = 1;
+
+        private final MutableDirectBuffer buffer = new UnsafeBuffer(new byte[SIZE_OF_LONG]);
+        private final Long2LongHashMap nextSequenceBySessionId = new Long2LongHashMap(-1);
+
+        SequencedEgressService(final int index)
+        {
+            index(index);
+        }
+
+        public void onSessionOpen(final ClientSession session, final long timestamp)
+        {
+            super.onSessionOpen(session, timestamp);
+            nextSequenceBySessionId.put(session.id(), 0);
+            if (nextSequenceBySessionId.size() == 1)
+            {
+                scheduleTimer();
+            }
+        }
+
+        public void onSessionClose(final ClientSession session, final long timestamp, final CloseReason closeReason)
+        {
+            super.onSessionClose(session, timestamp, closeReason);
+            nextSequenceBySessionId.remove(session.id());
+            if (nextSequenceBySessionId.isEmpty())
+            {
+                cancelTimer();
+            }
+        }
+
+        private void scheduleTimer()
+        {
+            final long deadline = cluster.time() + cluster.timeUnit().convert(10, TimeUnit.MILLISECONDS);
+
+            cluster.idleStrategy().reset();
+            while (!cluster.scheduleTimer(TIMER_CORRELATION_ID, deadline))
+            {
+                cluster.idleStrategy().idle();
+            }
+        }
+
+        private void cancelTimer()
+        {
+            cluster.idleStrategy().reset();
+            while (!cluster.cancelTimer(TIMER_CORRELATION_ID))
+            {
+                cluster.idleStrategy().idle();
+            }
+        }
+
+        public void onTimerEvent(final long correlationId, final long timestamp)
+        {
+            super.onTimerEvent(correlationId, timestamp);
+            scheduleTimer();
+            cluster.forEachClientSession(this::offerToIngress);
+        }
+
+        private void offerToIngress(final ClientSession clientSession)
+        {
+            final long sessionId = clientSession.id();
+            final long sequence = nextSequenceBySessionId.get(sessionId);
+            buffer.putLong(0, sequence);
+            if (clientSession.offer(buffer, 0, buffer.capacity()) > 0)
+            {
+                nextSequenceBySessionId.put(sessionId, sequence + 1);
+            }
+        }
+    }
+
+    private static final class SequenceCheckingEgressListener implements EgressListener
+    {
+        private long outOfSequenceCount;
+        private long nextSequence;
+
+        public void onMessage(
+            final long clusterSessionId,
+            final long timestamp,
+            final DirectBuffer buffer,
+            final int offset,
+            final int length,
+            final Header header)
+        {
+            final long sequence = buffer.getLong(offset);
+            if (sequence != nextSequence)
+            {
+                outOfSequenceCount++;
+                System.out.println("expected sequence " + nextSequence + ", but got " + sequence);
+            }
+            nextSequence = sequence + 1;
+        }
+    }
+
     private static final class PortLossGenerator implements LossGenerator
     {
         private int port;
@@ -271,6 +428,49 @@ class ClusterSessionReliabilityTest
                 }
             }
 
+            return false;
+        }
+    }
+
+    private static final class StreamIdLossGenerator implements LossGenerator
+    {
+        private int streamId;
+        private long dropUntil;
+        private volatile boolean drop;
+
+        public void startDropping(final int streamId, final long durationNs)
+        {
+            this.streamId = streamId;
+            dropUntil = System.nanoTime() + durationNs;
+            drop = true;
+        }
+
+        public boolean shouldDropFrame(
+            final InetSocketAddress address,
+            final UnsafeBuffer buffer,
+            final int streamId,
+            final int sessionId,
+            final int termId,
+            final int termOffset,
+            final int length)
+        {
+            if (drop && streamId == this.streamId)
+            {
+                if (System.nanoTime() - dropUntil < 0)
+                {
+                    return true;
+                }
+                else
+                {
+                    drop = false;
+                }
+            }
+
+            return false;
+        }
+
+        public boolean shouldDropFrame(final InetSocketAddress address, final UnsafeBuffer buffer, final int length)
+        {
             return false;
         }
     }

@@ -38,6 +38,7 @@ import java.lang.invoke.VarHandle;
 import java.util.concurrent.TimeUnit;
 
 import static io.aeron.Aeron.NULL_VALUE;
+import static io.aeron.CommonContext.REJOIN_PARAM_NAME;
 import static org.agrona.SystemUtil.getDurationInNanos;
 
 /**
@@ -1470,6 +1471,13 @@ public final class AeronCluster implements AutoCloseable
             if (Strings.isEmpty(egressChannel))
             {
                 throw new ConfigurationException("egressChannel must be specified");
+            }
+
+            final ChannelUri egressChannelUri = ChannelUri.parse(egressChannel);
+            if (egressChannelUri.isUdp() && !egressChannelUri.containsKey(REJOIN_PARAM_NAME))
+            {
+                egressChannelUri.put(REJOIN_PARAM_NAME, "false");
+                egressChannel = egressChannelUri.toString();
             }
         }
 
