@@ -30,6 +30,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.LongConsumer;
 
 import io.aeron.cluster.client.ClusterEvent;
+import io.aeron.logbuffer.Header;
 import org.agrona.collections.MutableLong;
 import org.agrona.concurrent.AgentInvoker;
 import org.agrona.concurrent.CountedErrorHandler;
@@ -75,6 +76,8 @@ class ConsensusModuleAgentTest
     private final ExclusivePublication mockExclusivePublication = mock(ExclusivePublication.class);
     private final Counter mockTimedOutClientCounter = mock(Counter.class);
     private final LongConsumer mockTimeConsumer = mock(LongConsumer.class);
+    private final Image mockImage = mock(Image.class);
+    private final Header header = new Header(0, 0, mockImage);
     private final CountersManager countersManager = Tests.newCountersManager(2 * COUNTER_LENGTH);
     private long registrationId = 20;
 
@@ -155,7 +158,8 @@ class ConsensusModuleAgentTest
         agent.state(ConsensusModule.State.ACTIVE);
         agent.role(Cluster.Role.LEADER);
         Tests.setField(agent, "appendPosition", mock(ReadableCounter.class));
-        agent.onSessionConnect(correlationIdOne, 2, PROTOCOL_SEMANTIC_VERSION, RESPONSE_CHANNEL_ONE, new byte[0]);
+        agent.onSessionConnect(
+            correlationIdOne, 2, PROTOCOL_SEMANTIC_VERSION, RESPONSE_CHANNEL_ONE, new byte[0], header);
 
         clock.update(UPDATE_INTERVAL_MS, TimeUnit.MILLISECONDS);
         agent.doWork();
@@ -164,7 +168,8 @@ class ConsensusModuleAgentTest
         verify(mockLogPublisher).appendSessionOpen(any(ClusterSession.class), anyLong(), anyLong());
 
         final long correlationIdTwo = 2L;
-        agent.onSessionConnect(correlationIdTwo, 3, PROTOCOL_SEMANTIC_VERSION, RESPONSE_CHANNEL_TWO, new byte[0]);
+        agent.onSessionConnect(
+            correlationIdTwo, 3, PROTOCOL_SEMANTIC_VERSION, RESPONSE_CHANNEL_TWO, new byte[0], header);
         clock.update(clock.time() + 10L, TimeUnit.MILLISECONDS);
         agent.doWork();
         verify(mockTimeConsumer).accept(clock.time());
@@ -189,7 +194,7 @@ class ConsensusModuleAgentTest
         agent.state(ConsensusModule.State.ACTIVE);
         agent.role(Cluster.Role.LEADER);
         Tests.setField(agent, "appendPosition", mock(ReadableCounter.class));
-        agent.onSessionConnect(correlationId, 2, PROTOCOL_SEMANTIC_VERSION, RESPONSE_CHANNEL_ONE, new byte[0]);
+        agent.onSessionConnect(correlationId, 2, PROTOCOL_SEMANTIC_VERSION, RESPONSE_CHANNEL_ONE, new byte[0], header);
 
         agent.doWork();
 
@@ -228,7 +233,7 @@ class ConsensusModuleAgentTest
         agent.state(ConsensusModule.State.ACTIVE);
         agent.role(Cluster.Role.LEADER);
         Tests.setField(agent, "appendPosition", mock(ReadableCounter.class));
-        agent.onSessionConnect(correlationId, 2, PROTOCOL_SEMANTIC_VERSION, RESPONSE_CHANNEL_ONE, new byte[0]);
+        agent.onSessionConnect(correlationId, 2, PROTOCOL_SEMANTIC_VERSION, RESPONSE_CHANNEL_ONE, new byte[0], header);
 
         agent.doWork();
 
@@ -354,7 +359,7 @@ class ConsensusModuleAgentTest
         final long correlationId = 1L;
         final int responseStreamId = 42;
         agent.onSessionConnect(
-            correlationId, responseStreamId, PROTOCOL_SEMANTIC_VERSION, responseChannel, new byte[0]);
+            correlationId, responseStreamId, PROTOCOL_SEMANTIC_VERSION, responseChannel, new byte[0], header);
 
         final ArgumentCaptor<String> channelCaptor = ArgumentCaptor.forClass(String.class);
         verify(mockAeron).asyncAddPublication(channelCaptor.capture(), eq(responseStreamId));
