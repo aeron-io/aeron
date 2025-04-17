@@ -297,6 +297,11 @@ public final class Image
         return LogBufferDescriptor.activeTransportCount(logBuffers.metaDataBuffer());
     }
 
+    /**
+     * Has the associated publication been revoked?
+     *
+     * @return true if the associated publication was revoked otherwise false.
+     */
     public boolean isPublicationRevoked()
     {
         return LogBufferDescriptor.isPublicationRevoked(logBuffers.metaDataBuffer());

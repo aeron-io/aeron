@@ -312,6 +312,17 @@ public abstract class Publication implements AutoCloseable
         return isClosed;
     }
 
+    /**
+     * Mark the publication to be revoked when close() is called.
+     */
+    public void revokeOnClose()
+    {
+        revokeOnClose = true;
+    }
+
+    /**
+     * Immediately revoke and close the publication.
+     */
     public void revoke()
     {
         if (isClosed)
@@ -323,6 +334,11 @@ public abstract class Publication implements AutoCloseable
         close();
     }
 
+    /**
+     * Has this publication been revoked/closed?
+     *
+     * @return true if the publication has been revoked/closed otherwise false.
+     */
     public boolean isRevoked()
     {
         return isRevoked;

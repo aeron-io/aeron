@@ -148,6 +148,12 @@ public final class DriverProxy
         return correlationId;
     }
 
+    /**
+     * Instruct the driver to revoke a publication by its registration id.
+     *
+     * @param registrationId for the publication to be revoked.
+     * @return the correlation id for the command.
+     */
     public long revokePublication(final long registrationId)
     {
         final long correlationId = toDriverCommandBuffer.nextCorrelationId();

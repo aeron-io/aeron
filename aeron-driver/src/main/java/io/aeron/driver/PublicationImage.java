@@ -931,16 +931,14 @@ public final class PublicationImage
                 break;
 
             case REVOKED:
-                {
-                    isRebuilding = false;
-                    isSendingEosSm = true;
+                isRebuilding = false;
+                isSendingEosSm = true;
 
-                    nextSmDeadlineNs = timeNs - 1;
+                nextSmDeadlineNs = timeNs - 1;
 
-                    isRevoked = true;
+                isRevoked = true;
 
-                    state(State.DRAINING);
-                }
+                state(State.DRAINING);
                 /* fallthrough */
 
             case DRAINING:

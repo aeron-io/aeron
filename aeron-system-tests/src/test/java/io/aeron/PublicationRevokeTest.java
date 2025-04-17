@@ -126,7 +126,8 @@ class PublicationRevokeTest
 
         launch();
 
-        subscription = client.addSubscription(subscriptionChannel, STREAM_ID, availableImageHandler, unavailableImageHandler);
+        subscription = client.addSubscription(
+            subscriptionChannel, STREAM_ID, availableImageHandler, unavailableImageHandler);
         publication = client.addPublication(publicationChannel, STREAM_ID);
 
         Tests.awaitConnected(subscription);
@@ -174,13 +175,14 @@ class PublicationRevokeTest
 
         launch();
 
-        subscription = client.addSubscription(subscriptionChannel, STREAM_ID, availableImageHandler, unavailableImageHandler);
+        subscription = client.addSubscription(
+            subscriptionChannel, STREAM_ID, availableImageHandler, unavailableImageHandler);
         publication = client.addPublication(publicationChannel, STREAM_ID);
 
         Tests.awaitConnected(subscription);
         Tests.awaitConnected(publication);
 
-        Publication publicationTwo = client.addPublication(publicationChannel, STREAM_ID);
+        final Publication publicationTwo = client.addPublication(publicationChannel, STREAM_ID);
 
         Tests.awaitConnected(publicationTwo);
 
@@ -191,8 +193,9 @@ class PublicationRevokeTest
 
         publishMessage();
 
-        AtomicInteger pubPosCounter = new AtomicInteger(0);
-        countersReader.forEach((counterId, typeId, keyBuffer, label) -> {
+        final AtomicInteger pubPosCounter = new AtomicInteger(0);
+        countersReader.forEach((counterId, typeId, keyBuffer, label) ->
+        {
             if (typeId == DRIVER_PUBLISHER_POS_TYPE_ID && label.contains(publicationChannel))
             {
                 pubPosCounter.set(counterId);
@@ -251,13 +254,14 @@ class PublicationRevokeTest
 
         launch();
 
-        subscription = client.addSubscription(subscriptionChannel, STREAM_ID, availableImageHandler, unavailableImageHandler);
+        subscription = client.addSubscription(
+            subscriptionChannel, STREAM_ID, availableImageHandler, unavailableImageHandler);
         publication = client.addPublication(publicationChannel, STREAM_ID);
 
         Tests.awaitConnected(subscription);
         Tests.awaitConnected(publication);
 
-        ExclusivePublication publicationTwo = client.addExclusivePublication(publicationChannel, STREAM_ID);
+        final ExclusivePublication publicationTwo = client.addExclusivePublication(publicationChannel, STREAM_ID);
 
         Tests.awaitConnected(publicationTwo);
 

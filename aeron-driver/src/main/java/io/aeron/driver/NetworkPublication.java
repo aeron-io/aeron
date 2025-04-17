@@ -295,6 +295,9 @@ public final class NetworkPublication
         CloseHelper.close(flowControl);
     }
 
+    /**
+     * Revoke the publication.
+     */
     public void revoke()
     {
         final long revokedPos = producerPosition();

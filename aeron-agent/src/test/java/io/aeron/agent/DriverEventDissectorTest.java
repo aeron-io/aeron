@@ -796,7 +796,8 @@ class DriverEventDissectorTest
         DriverEventDissector.dissectPublicationImageRevoke(buffer, offset, builder);
 
         assertThat(builder.toString(), endsWith(
-            "DRIVER: PUBLICATION_IMAGE_REVOKE [37/37]: revokedPos=1234 sessionId=4 streamId=99 channel=excellent.channel"));
+            "DRIVER: PUBLICATION_IMAGE_REVOKE [37/37]: " +
+            "revokedPos=1234 sessionId=4 streamId=99 channel=excellent.channel"));
     }
 
     private DirectBuffer newBuffer(final byte[] bytes)

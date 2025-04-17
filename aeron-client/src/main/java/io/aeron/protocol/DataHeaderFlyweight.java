@@ -169,6 +169,12 @@ public class DataHeaderFlyweight extends HeaderFlyweight
         return (packet.getByte(FLAGS_FIELD_OFFSET) & EOS_FLAG) != 0;
     }
 
+    /**
+     * Does the data frame in the packet have the REVOKED flag set?
+     *
+     * @param packet containing the data frame
+     * @return true if the REVOKED flag is set otherwise false.
+     */
     public static boolean isRevoked(final UnsafeBuffer packet)
     {
         return (packet.getByte(FLAGS_FIELD_OFFSET) & REVOKED_FLAG) != 0;

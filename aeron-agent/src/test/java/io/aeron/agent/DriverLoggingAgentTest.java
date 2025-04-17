@@ -171,7 +171,8 @@ class DriverLoggingAgentTest
             }).when(unavailableImageHandler).onUnavailableImage(any(Image.class));
 
             try (Aeron aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(mediaDriver.aeronDirectoryName()));
-                Subscription subscription = aeron.addSubscription(channel, STREAM_ID, availableImageHandler, unavailableImageHandler);
+                Subscription subscription =
+                    aeron.addSubscription(channel, STREAM_ID, availableImageHandler, unavailableImageHandler);
                 Publication publication = aeron.addPublication(channel, STREAM_ID))
             {
                 final UnsafeBuffer offerBuffer = new UnsafeBuffer(new byte[32]);

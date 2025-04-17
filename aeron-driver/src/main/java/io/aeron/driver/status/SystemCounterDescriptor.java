@@ -232,7 +232,15 @@ public enum SystemCounterDescriptor
      * A count of the number of error frames sent by this driver.
      */
     ERROR_FRAMES_SENT(39, "Error Frames sent"),
+
+    /**
+     * A count of the number of publications that have been revoked.
+     */
     PUBLICATIONS_REVOKED(40, "Publications Revoked"),
+
+    /**
+     * A count of the number of publication images that have been revoked.
+     */
     PUBLICATION_IMAGES_REVOKED(41, "Publication Images Revoked");
 
     /**

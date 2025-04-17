@@ -609,6 +609,14 @@ public final class DriverEventLogger
         }
     }
 
+    /**
+     * Logs a publication being revoked.
+     *
+     * @param revokedPos of the PublicationRevoke
+     * @param sessionId  of the PublicationRevoke
+     * @param streamId   of the PublicationRevoke
+     * @param channel    of the PublicationRevoke
+     */
     public void logPublicationRevoke(
         final long revokedPos,
         final int sessionId,
@@ -642,6 +650,14 @@ public final class DriverEventLogger
         }
     }
 
+    /**
+     * Logs a publication image being revoked.
+     *
+     * @param revokedPos of the PublicationImageRevoke
+     * @param sessionId  of the PublicationImageRevoke
+     * @param streamId   of the PublicationImageRevoke
+     * @param channel    of the PublicationImageRevoke
+     */
     public void logPublicationImageRevoke(
         final long revokedPos,
         final int sessionId,

@@ -287,7 +287,8 @@ class DriverEventEncoderTest
         final int streamId = 5;
         final int captureLength = SIZE_OF_LONG + (3 * SIZE_OF_INT) + channel.length();
 
-        encodePublicationImageRevoke(buffer, offset, captureLength, captureLength, revokePos, sessionId, streamId, channel);
+        encodePublicationImageRevoke(
+            buffer, offset, captureLength, captureLength, revokePos, sessionId, streamId, channel);
 
         assertEquals(captureLength, buffer.getInt(offset, LITTLE_ENDIAN));
         assertEquals(captureLength, buffer.getInt(offset + SIZE_OF_INT, LITTLE_ENDIAN));

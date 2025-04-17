@@ -251,6 +251,9 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         }
     }
 
+    /**
+     * Revoke the publication.
+     */
     public void revoke()
     {
         final long revokedPos = producerPosition();
