@@ -537,13 +537,19 @@ int aeron_exclusive_publication_revoke(
         AERON_GET_ACQUIRE(is_closed, publication->is_closed);
         if (!is_closed)
         {
-            AERON_SET_RELEASE(publication->is_revoked, true);
+            bool is_revoked;
 
-            if (aeron_client_conductor_async_revoke_publication_registration_id(
-                publication->conductor, publication->registration_id) < 0)
+            AERON_GET_ACQUIRE(is_revoked, publication->is_revoked);
+            if (!is_revoked)
             {
-                AERON_APPEND_ERR("%s", "");
-                return -1;
+                AERON_SET_RELEASE(publication->is_revoked, true);
+
+                if (aeron_client_conductor_async_revoke_publication_registration_id(
+                    publication->conductor, publication->registration_id) < 0)
+                {
+                    AERON_APPEND_ERR("%s", "");
+                    return -1;
+                }
             }
 
             if (aeron_exclusive_publication_close_internal(

@@ -225,6 +225,11 @@ public:
         return aeron_image_is_closed(m_image);
     }
 
+    inline bool isPublicationRevoked() const
+    {
+        return aeron_image_is_publication_revoked(m_image);
+    }
+
     /**
      * The position this Image has been consumed to by the subscriber.
      *
