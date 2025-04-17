@@ -1176,7 +1176,7 @@ void aeron_publication_image_on_time_event(
 
             image->conductor_fields.state = AERON_PUBLICATION_IMAGE_STATE_DRAINING;
 
-            /* fallthrough */
+            break;
         }
 
         case AERON_PUBLICATION_IMAGE_STATE_DRAINING:
