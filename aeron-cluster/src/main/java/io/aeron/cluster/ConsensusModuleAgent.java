@@ -78,7 +78,7 @@ final class ConsensusModuleAgent
     private final long leaderHeartbeatTimeoutNs;
     private long unavailableCounterHandlerRegistrationId;
     private long nextSessionId = 1;
-
+    private long nextCommittedSessionId = nextSessionId;
     private long leadershipTermId = NULL_VALUE;
     private long expectedAckPosition = 0;
     private long serviceAckId = 0;
@@ -598,6 +598,7 @@ final class ConsensusModuleAgent
         if (clusterSessionId >= nextSessionId)
         {
             nextSessionId = clusterSessionId + 1;
+            nextCommittedSessionId = nextSessionId;
         }
     }
 
@@ -611,6 +612,7 @@ final class ConsensusModuleAgent
         final int length)
     {
         this.nextSessionId = nextSessionId;
+        this.nextCommittedSessionId = nextSessionId;
         if (pendingServiceMessageTrackers.length > 0)
         {
             pendingServiceMessageTrackers[0].loadState(
@@ -1505,6 +1507,7 @@ final class ConsensusModuleAgent
         if (clusterSessionId >= nextSessionId)
         {
             nextSessionId = clusterSessionId + 1;
+            nextCommittedSessionId = nextSessionId;
         }
 
         if (null != consensusModuleExtension)
@@ -2607,6 +2610,10 @@ final class ConsensusModuleAgent
                         if (session.appendSessionToLogAndSendOpen(
                             logPublisher, egressPublisher, leadershipTermId, memberId, nowNs, clusterClock.time()))
                         {
+                            if (session.id() >= nextCommittedSessionId)
+                            {
+                                nextCommittedSessionId = session.id() + 1;
+                            }
                             ArrayListUtil.fastUnorderedRemove(pendingSessions, i, lastIndex--);
                             addSession(session);
                             workCount += 1;
@@ -3403,11 +3410,14 @@ final class ConsensusModuleAgent
         {
             final PendingServiceMessageTracker trackerOne = pendingServiceMessageTrackers[0];
             snapshotTaker.snapshotConsensusModuleState(
-                nextSessionId, trackerOne.nextServiceSessionId(), trackerOne.logServiceSessionId(), trackerOne.size());
+                nextCommittedSessionId,
+                trackerOne.nextServiceSessionId(),
+                trackerOne.logServiceSessionId(),
+                trackerOne.size());
         }
         else
         {
-            snapshotTaker.snapshotConsensusModuleState(nextSessionId, 0, 0, 0);
+            snapshotTaker.snapshotConsensusModuleState(nextCommittedSessionId, 0, 0, 0);
         }
 
         for (int i = 0, size = sessions.size(); i < size; i++)
@@ -3678,7 +3688,7 @@ final class ConsensusModuleAgent
 
         if (null != consensusModuleExtension && null != session.closeReason())
         {
-            consensusModuleExtension.onSessionClosed(sessionId);
+            consensusModuleExtension.onSessionClosed(sessionId, session.closeReason());
         }
     }
 

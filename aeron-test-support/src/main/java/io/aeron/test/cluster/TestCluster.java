@@ -186,6 +186,7 @@ public final class TestCluster implements AutoCloseable
         this.staticMemberCount = staticMemberCount;
         this.appointedLeaderId = appointedLeaderId;
         this.byHostInvalidInitialResolutions = byHostInvalidInitialResolutions;
+
     }
 
     public static void awaitElectionClosed(final TestNode follower)
