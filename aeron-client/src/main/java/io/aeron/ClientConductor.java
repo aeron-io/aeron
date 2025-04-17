@@ -451,7 +451,7 @@ final class ClientConductor implements Agent
         final Publication publication = (Publication)resourceByRegIdMap.get(registrationId);
         if (null != publication)
         {
-            publication.isRevoked(true);
+            publication.isRevoked = true;
         }
     }
 
@@ -592,11 +592,6 @@ final class ClientConductor implements Agent
 
     void removePublication(final Publication publication)
     {
-        removePublication(publication, false);
-    }
-
-    void removePublication(final Publication publication, final boolean sendRevoke)
-    {
         clientLock.lock();
         try
         {
@@ -608,6 +603,8 @@ final class ClientConductor implements Agent
             if (!publication.isClosed())
             {
                 ensureNotReentrant();
+
+                final boolean sendRevoke = publication.revokeOnClose && !publication.isRevoked;
 
                 publication.internalClose();
                 if (publication == resourceByRegIdMap.remove(publication.registrationId()))

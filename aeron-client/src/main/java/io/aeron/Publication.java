@@ -100,6 +100,7 @@ public abstract class Publication implements AutoCloseable
     final int termBufferLength;
     volatile boolean isClosed = false;
     volatile boolean isRevoked = false;
+    volatile boolean revokeOnClose = false;
 
     final ReadablePosition positionLimit;
     final UnsafeBuffer[] termBuffers;
@@ -318,18 +319,13 @@ public abstract class Publication implements AutoCloseable
             throw new AeronException("Publication is closed");
         }
 
-        isRevoked = true;
-        conductor.removePublication(this, true);
+        revokeOnClose = true;
+        close();
     }
 
     public boolean isRevoked()
     {
         return isRevoked;
-    }
-
-    void isRevoked(final boolean isRevoked)
-    {
-        this.isRevoked = isRevoked;
     }
 
     /**
@@ -695,6 +691,11 @@ public abstract class Publication implements AutoCloseable
     void internalClose()
     {
         isClosed = true;
+
+        if (revokeOnClose)
+        {
+            isRevoked = true;
+        }
     }
 
     LogBuffers logBuffers()

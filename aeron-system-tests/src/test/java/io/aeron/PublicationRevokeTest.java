@@ -30,6 +30,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
@@ -229,8 +230,71 @@ class PublicationRevokeTest
         assertEquals(expectedPublicationImagesRevoked, countersReader.getCounterValue(PUBLICATION_IMAGES_REVOKED.id()));
     }
 
-    // TODO add some tests that spin up an exclusive publication alongside a concurrent and/or another exclusive publication
-    // Then make sure that revoke() doesn't improperly interfere when it shouldn't
+    @ParameterizedTest
+    @MethodSource("channels")
+    @InterruptAfter(10)
+    void revokeTestExclusive(
+        final String subscriptionChannel,
+        final String publicationChannel,
+        final long expectedPublicationImagesRevoked)
+    {
+        final AtomicBoolean publicationShouldBeRevoked = new AtomicBoolean(true);
+        final AtomicInteger unavailableImages = new AtomicInteger(0);
+        doAnswer(invocation ->
+        {
+            final Image image = invocation.getArgument(0, Image.class);
+            assertEquals(publicationShouldBeRevoked.get(), image.isPublicationRevoked());
+
+            unavailableImages.incrementAndGet();
+            return null;
+        }).when(unavailableImageHandler).onUnavailableImage(any(Image.class));
+
+        launch();
+
+        subscription = client.addSubscription(subscriptionChannel, STREAM_ID, availableImageHandler, unavailableImageHandler);
+        publication = client.addPublication(publicationChannel, STREAM_ID);
+
+        Tests.awaitConnected(subscription);
+        Tests.awaitConnected(publication);
+
+        ExclusivePublication publicationTwo = client.addExclusivePublication(publicationChannel, STREAM_ID);
+
+        Tests.awaitConnected(publicationTwo);
+
+        publishMessage();
+        publishMessage(publicationTwo);
+
+        pollUntilFragments(2);
+
+        publishMessage();
+
+        assertEquals(2, subscription.imageCount());
+
+        publication.revoke();
+        assertTrue(publication.isRevoked());
+
+        assertEquals(CLOSED, publication.offer(buffer, 0, SIZE_OF_INT));
+
+        while (unavailableImages.get() == 0)
+        {
+            Tests.yield();
+        }
+
+        assertEquals(1, subscription.imageCount());
+
+        assertFalse(publicationTwo.isRevoked());
+
+        publishMessage(publicationTwo);
+        pollUntilFragments(1);
+
+        publicationShouldBeRevoked.set(false);
+        subscription.close();
+
+        publicationTwo.close();
+
+        assertEquals(1, countersReader.getCounterValue(PUBLICATIONS_REVOKED.id()));
+        assertEquals(expectedPublicationImagesRevoked, countersReader.getCounterValue(PUBLICATION_IMAGES_REVOKED.id()));
+    }
 
     private void publishMessage()
     {
