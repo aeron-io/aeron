@@ -45,7 +45,9 @@ import io.aeron.cluster.codecs.EventCode;
 import io.aeron.cluster.codecs.MessageHeaderDecoder;
 import io.aeron.cluster.codecs.NewLeadershipTermEventDecoder;
 import io.aeron.cluster.service.Cluster;
+import io.aeron.driver.Configuration;
 import io.aeron.driver.MediaDriver;
+import io.aeron.driver.SendChannelEndpointSupplier;
 import io.aeron.driver.ThreadingMode;
 import io.aeron.exceptions.RegistrationException;
 import io.aeron.exceptions.TimeoutException;
@@ -150,9 +152,12 @@ public final class TestCluster implements AutoCloseable
     private AuthorisationServiceSupplier authorisationServiceSupplier;
     private AuthenticatorSupplier authenticationSupplier;
     private TimerServiceSupplier timerServiceSupplier;
+    private SendChannelEndpointSupplier clientSendChannelEndpointSupplier;
     private TestMediaDriver clientMediaDriver;
     private AeronCluster client;
     private TestBackupNode backupNode;
+    private long imageLivenessTimeoutNs;
+    private long sessionTimeoutNs;
     private int archiveSegmentFileLength;
     private IntHashSet byHostInvalidInitialResolutions;
     private IntHashSet byMemberInvalidInitialResolutions;
@@ -292,6 +297,7 @@ public final class TestCluster implements AutoCloseable
             .receiverWildcardPortRange(receiverWildcardPortRanges[index])
             .dirDeleteOnShutdown(false)
             .dirDeleteOnStart(true)
+            .imageLivenessTimeoutNs(imageLivenessTimeoutNs)
             .enableExperimentalFeatures(useResponseChannels);
 
         context.archiveContext
@@ -322,7 +328,7 @@ public final class TestCluster implements AutoCloseable
                 .controlRequestChannel(context.archiveContext.localControlChannel())
                 .controlRequestStreamId(context.archiveContext.localControlStreamId())
                 .controlResponseChannel(ARCHIVE_LOCAL_CONTROL_CHANNEL))
-            .sessionTimeoutNs(TimeUnit.SECONDS.toNanos(10))
+            .sessionTimeoutNs(sessionTimeoutNs)
             .totalSnapshotDurationThresholdNs(TimeUnit.MILLISECONDS.toNanos(100))
             .authenticatorSupplier(authenticationSupplier)
             .authorisationServiceSupplier(authorisationServiceSupplier)
@@ -486,7 +492,7 @@ public final class TestCluster implements AutoCloseable
             .archiveContext(context.aeronArchiveContext.clone()
                 .controlRequestChannel(ARCHIVE_LOCAL_CONTROL_CHANNEL)
                 .controlResponseChannel(ARCHIVE_LOCAL_CONTROL_CHANNEL))
-            .sessionTimeoutNs(TimeUnit.SECONDS.toNanos(10))
+            .sessionTimeoutNs(sessionTimeoutNs)
             .authorisationServiceSupplier(authorisationServiceSupplier)
             .timerServiceSupplier(timerServiceSupplier)
             .acceptStandbySnapshots(acceptStandbySnapshots)
@@ -568,9 +574,24 @@ public final class TestCluster implements AutoCloseable
         this.authenticationSupplier = authenticationSupplier;
     }
 
+    public void imageLivenessTimeoutNs(final long imageLivenessTimeoutNs)
+    {
+        this.imageLivenessTimeoutNs = imageLivenessTimeoutNs;
+    }
+
+    public void sessionTimeoutNs(final long sessionTimeoutNs)
+    {
+        this.sessionTimeoutNs = sessionTimeoutNs;
+    }
+
     private void segmentFileLength(final int archiveSegmentFileLength)
     {
         this.archiveSegmentFileLength = archiveSegmentFileLength;
+    }
+
+    public void clientSendChannelEndpointSupplier(final SendChannelEndpointSupplier clientSendChannelEndpointSupplier)
+    {
+        this.clientSendChannelEndpointSupplier = clientSendChannelEndpointSupplier;
     }
 
     public AeronCluster client()
@@ -622,6 +643,7 @@ public final class TestCluster implements AutoCloseable
                 .nameResolver(new RedirectingNameResolver(nodeNameMappings()))
                 .senderWildcardPortRange("20700 20709")
                 .receiverWildcardPortRange("20710 20719")
+                .sendChannelEndpointSupplier(clientSendChannelEndpointSupplier)
                 .enableExperimentalFeatures(useResponseChannels);
 
             clientMediaDriver = TestMediaDriver.launch(ctx, clientDriverOutputConsumer(dataCollector));
@@ -631,8 +653,9 @@ public final class TestCluster implements AutoCloseable
             .aeronDirectoryName(aeronDirName)
             .isIngressExclusive(true)
             .egressListener(egressListener)
-            .controlledEgressListener(controlledEgressListener)
-            .ingressEndpoints(staticClusterMemberEndpoints);
+            .controlledEgressListener(controlledEgressListener);
+
+        setIngressEndpoints(clientCtx);
 
         try
         {
@@ -668,6 +691,7 @@ public final class TestCluster implements AutoCloseable
                 .dirDeleteOnShutdown(false)
                 .aeronDirectoryName(aeronDirName)
                 .nameResolver(new RedirectingNameResolver(nodeNameMappings()))
+                .sendChannelEndpointSupplier(clientSendChannelEndpointSupplier)
                 .enableExperimentalFeatures(useResponseChannels);
 
             clientMediaDriver = TestMediaDriver.launch(ctx, clientDriverOutputConsumer(dataCollector));
@@ -682,8 +706,9 @@ public final class TestCluster implements AutoCloseable
             .ownsAeronClient(true)
             .isIngressExclusive(true)
             .egressListener(egressListener)
-            .controlledEgressListener(controlledEgressListener)
-            .ingressEndpoints(staticClusterMemberEndpoints);
+            .controlledEgressListener(controlledEgressListener);
+
+        setIngressEndpoints(clientCtx);
 
         final AgentInvoker conductorAgentInvoker = aeron.conductorAgentInvoker();
         try
@@ -720,6 +745,15 @@ public final class TestCluster implements AutoCloseable
         }
 
         return client;
+    }
+
+    private void setIngressEndpoints(final AeronCluster.Context clientCtx)
+    {
+        final ChannelUri ingressChannelUri = ChannelUri.parse(ingressChannel);
+        if (!ingressChannelUri.containsKey(CommonContext.ENDPOINT_PARAM_NAME))
+        {
+            clientCtx.ingressEndpoints(staticClusterMemberEndpoints);
+        }
     }
 
     public AeronCluster connectIpcClient(final AeronCluster.Context clientCtx, final String aeronDirName)
@@ -2054,6 +2088,8 @@ public final class TestCluster implements AutoCloseable
             (i) -> new TestNode.TestService[]{ new TestNode.TestService().index(i) };
         private final IntHashSet byHostInvalidInitialResolutions = new IntHashSet();
         private final IntHashSet byMemberInvalidInitialResolutions = new IntHashSet();
+        private long imageLivenessTimeoutNs = Configuration.imageLivenessTimeoutNs();
+        private long sessionTimeoutNs = TimeUnit.SECONDS.toNanos(10);
         private int archiveSegmentFileLength = TestCluster.SEGMENT_FILE_LENGTH;
         private boolean acceptStandbySnapshots = false;
         private ClusterBackup.Configuration.ReplayStart replayStart = ClusterBackup.Configuration.ReplayStart.BEGINNING;
@@ -2139,6 +2175,18 @@ public final class TestCluster implements AutoCloseable
             return this;
         }
 
+        public Builder withImageLivenessTimeoutNs(final long imageLivenessTimeoutNs)
+        {
+            this.imageLivenessTimeoutNs = imageLivenessTimeoutNs;
+            return this;
+        }
+
+        public Builder withSessionTimeoutNs(final long sessionTimeoutNs)
+        {
+            this.sessionTimeoutNs = sessionTimeoutNs;
+            return this;
+        }
+
         public Builder withSegmentFileLength(final int archiveSegmentFileLength)
         {
             this.archiveSegmentFileLength = archiveSegmentFileLength;
@@ -2194,6 +2242,8 @@ public final class TestCluster implements AutoCloseable
             testCluster.authenticationSupplier(authenticationSupplier);
             testCluster.authorisationServiceSupplier(authorisationServiceSupplier);
             testCluster.timerServiceSupplier(timerServiceSupplier);
+            testCluster.imageLivenessTimeoutNs(imageLivenessTimeoutNs);
+            testCluster.sessionTimeoutNs(sessionTimeoutNs);
             testCluster.segmentFileLength(archiveSegmentFileLength);
             testCluster.invalidInitialResolutions(byHostInvalidInitialResolutions, byMemberInvalidInitialResolutions);
             testCluster.acceptStandbySnapshots(acceptStandbySnapshots);
