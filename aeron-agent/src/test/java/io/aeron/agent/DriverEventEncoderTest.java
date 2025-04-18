@@ -28,8 +28,7 @@ import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static java.util.Arrays.fill;
 import static org.agrona.BitUtil.SIZE_OF_INT;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.*;
 
 class DriverEventEncoderTest
 {
@@ -254,5 +253,50 @@ class DriverEventEncoderTest
             buffer.getInt(offset + LOG_HEADER_LENGTH + SIZE_OF_INT * 2 + SIZE_OF_LONG, LITTLE_ENDIAN));
         assertEquals(channel.substring(0, captureLength - SIZE_OF_LONG - SIZE_OF_INT * 4 - 3) + "...",
             buffer.getStringAscii(offset + LOG_HEADER_LENGTH + SIZE_OF_INT * 3 + SIZE_OF_LONG, LITTLE_ENDIAN));
+    }
+
+    @Test
+    void encodePublicationRevokeShouldWriteChannelLast()
+    {
+        final int offset = 10;
+        final String channel = "aeron:udp?endpoint=224.10.9.8";
+        final long revokePos = 999;
+        final int sessionId = 42;
+        final int streamId = 5;
+        final int captureLength = SIZE_OF_LONG + (3 * SIZE_OF_INT) + channel.length();
+
+        encodePublicationRevoke(buffer, offset, captureLength, captureLength, revokePos, sessionId, streamId, channel);
+
+        assertEquals(captureLength, buffer.getInt(offset, LITTLE_ENDIAN));
+        assertEquals(captureLength, buffer.getInt(offset + SIZE_OF_INT, LITTLE_ENDIAN));
+        assertEquals(revokePos, buffer.getLong(offset + LOG_HEADER_LENGTH, LITTLE_ENDIAN));
+        assertEquals(sessionId, buffer.getInt(offset + LOG_HEADER_LENGTH + SIZE_OF_LONG, LITTLE_ENDIAN));
+        assertEquals(streamId, buffer.getInt(
+            offset + LOG_HEADER_LENGTH + SIZE_OF_LONG + SIZE_OF_INT, LITTLE_ENDIAN));
+        assertEquals(channel, buffer.getStringAscii(
+            offset + LOG_HEADER_LENGTH + SIZE_OF_LONG + (SIZE_OF_INT * 2), LITTLE_ENDIAN));
+    }
+
+    @Test
+    void encodePublicationImageRevokeShouldWriteChannelLast()
+    {
+        final int offset = 10;
+        final String channel = "aeron:udp?endpoint=224.10.9.8";
+        final long revokePos = 999;
+        final int sessionId = 42;
+        final int streamId = 5;
+        final int captureLength = SIZE_OF_LONG + (3 * SIZE_OF_INT) + channel.length();
+
+        encodePublicationImageRevoke(
+            buffer, offset, captureLength, captureLength, revokePos, sessionId, streamId, channel);
+
+        assertEquals(captureLength, buffer.getInt(offset, LITTLE_ENDIAN));
+        assertEquals(captureLength, buffer.getInt(offset + SIZE_OF_INT, LITTLE_ENDIAN));
+        assertEquals(revokePos, buffer.getLong(offset + LOG_HEADER_LENGTH, LITTLE_ENDIAN));
+        assertEquals(sessionId, buffer.getInt(offset + LOG_HEADER_LENGTH + SIZE_OF_LONG, LITTLE_ENDIAN));
+        assertEquals(streamId, buffer.getInt(
+            offset + LOG_HEADER_LENGTH + SIZE_OF_LONG + SIZE_OF_INT, LITTLE_ENDIAN));
+        assertEquals(channel, buffer.getStringAscii(
+            offset + LOG_HEADER_LENGTH + SIZE_OF_LONG + (SIZE_OF_INT * 2), LITTLE_ENDIAN));
     }
 }

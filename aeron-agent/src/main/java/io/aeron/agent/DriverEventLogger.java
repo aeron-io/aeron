@@ -609,6 +609,88 @@ public final class DriverEventLogger
         }
     }
 
+    /**
+     * Logs a publication being revoked.
+     *
+     * @param revokedPos of the PublicationRevoke
+     * @param sessionId  of the PublicationRevoke
+     * @param streamId   of the PublicationRevoke
+     * @param channel    of the PublicationRevoke
+     */
+    public void logPublicationRevoke(
+        final long revokedPos,
+        final int sessionId,
+        final int streamId,
+        final String channel)
+    {
+        final int length = SIZE_OF_LONG + (SIZE_OF_INT * 3) + channel.length();
+        final int captureLength = captureLength(length);
+        final int encodedLength = encodedLength(captureLength);
+
+        final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
+        final int index = ringBuffer.tryClaim(toEventCodeId(PUBLICATION_REVOKE), encodedLength);
+        if (index > 0)
+        {
+            try
+            {
+                encodePublicationRevoke(
+                    (UnsafeBuffer)ringBuffer.buffer(),
+                    index,
+                    captureLength,
+                    length,
+                    revokedPos,
+                    sessionId,
+                    streamId,
+                    channel);
+            }
+            finally
+            {
+                ringBuffer.commit(index);
+            }
+        }
+    }
+
+    /**
+     * Logs a publication image being revoked.
+     *
+     * @param revokedPos of the PublicationImageRevoke
+     * @param sessionId  of the PublicationImageRevoke
+     * @param streamId   of the PublicationImageRevoke
+     * @param channel    of the PublicationImageRevoke
+     */
+    public void logPublicationImageRevoke(
+        final long revokedPos,
+        final int sessionId,
+        final int streamId,
+        final String channel)
+    {
+        final int length = SIZE_OF_LONG + (SIZE_OF_INT * 3) + channel.length();
+        final int captureLength = captureLength(length);
+        final int encodedLength = encodedLength(captureLength);
+
+        final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
+        final int index = ringBuffer.tryClaim(toEventCodeId(PUBLICATION_IMAGE_REVOKE), encodedLength);
+        if (index > 0)
+        {
+            try
+            {
+                encodePublicationImageRevoke(
+                    (UnsafeBuffer)ringBuffer.buffer(),
+                    index,
+                    captureLength,
+                    length,
+                    revokedPos,
+                    sessionId,
+                    streamId,
+                    channel);
+            }
+            finally
+            {
+                ringBuffer.commit(index);
+            }
+        }
+    }
+
     static int toEventCodeId(final DriverEventCode code)
     {
         return EVENT_CODE_TYPE << 16 | (code.id() & 0xFFFF);

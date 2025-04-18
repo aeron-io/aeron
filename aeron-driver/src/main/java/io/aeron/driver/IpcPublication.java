@@ -17,6 +17,7 @@ package io.aeron.driver;
 
 import io.aeron.CommonContext;
 import io.aeron.driver.buffer.RawLog;
+import io.aeron.driver.status.SystemCounters;
 import io.aeron.logbuffer.LogBufferDescriptor;
 import io.aeron.logbuffer.LogBufferUnblocker;
 import org.agrona.CloseHelper;
@@ -30,6 +31,7 @@ import org.agrona.concurrent.status.ReadablePosition;
 
 import java.util.ArrayList;
 
+import static io.aeron.driver.status.SystemCounterDescriptor.PUBLICATIONS_REVOKED;
 import static io.aeron.driver.status.SystemCounterDescriptor.UNBLOCKED_PUBLICATIONS;
 import static io.aeron.logbuffer.LogBufferDescriptor.*;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
@@ -42,7 +44,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     @SuppressWarnings("JavadocVariable")
     enum State
     {
-        ACTIVE, DRAINING, LINGER, DONE
+        ACTIVE, REVOKED, DRAINING, LINGER, DONE
     }
 
     private static final ReadablePosition[] EMPTY_POSITIONS = new ReadablePosition[0];
@@ -71,6 +73,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     private int refCount = 0;
     private boolean reachedEndOfLife = false;
     private final boolean isExclusive;
+    private boolean isRevoked;
     private State state = State.ACTIVE;
     private final UnsafeBuffer[] termBuffers;
     private final Position publisherPos;
@@ -80,6 +83,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     private final ArrayList<UntetheredSubscription> untetheredSubscriptions = new ArrayList<>();
     private final RawLog rawLog;
     private final AtomicCounter unblockedPublications;
+    private final AtomicCounter publicationsRevoked;
     private final ErrorHandler errorHandler;
 
     IpcPublication(
@@ -119,7 +123,11 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         this.unblockTimeoutNs = ctx.publicationUnblockTimeoutNs();
         this.untetheredWindowLimitTimeoutNs = params.untetheredWindowLimitTimeoutNs;
         this.untetheredRestingTimeoutNs = params.untetheredRestingTimeoutNs;
-        this.unblockedPublications = ctx.systemCounters().get(UNBLOCKED_PUBLICATIONS);
+
+        final SystemCounters systemCounters = ctx.systemCounters();
+        this.unblockedPublications = systemCounters.get(UNBLOCKED_PUBLICATIONS);
+        this.publicationsRevoked = systemCounters.get(PUBLICATIONS_REVOKED);
+
         this.metaDataBuffer = rawLog.metaData();
 
         consumerPosition = producerPosition();
@@ -244,6 +252,32 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     }
 
     /**
+     * Revoke the publication.
+     */
+    public void revoke()
+    {
+        final long revokedPos = producerPosition();
+        publisherLimit.setRelease(revokedPos);
+        LogBufferDescriptor.endOfStreamPosition(metaDataBuffer, revokedPos);
+        LogBufferDescriptor.isPublicationRevoked(metaDataBuffer, true);
+
+        isRevoked = true;
+
+        state = State.REVOKED;
+
+        logRevoke(revokedPos, sessionId(), streamId(), channel());
+        publicationsRevoked.increment();
+    }
+
+    private static void logRevoke(
+        final long revokedPos,
+        final int sessionId,
+        final int streamId,
+        final String channel)
+    {
+    }
+
+    /**
      * {@inheritDoc}
      */
     public void addSubscriber(
@@ -304,13 +338,25 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
                 break;
             }
 
+            case REVOKED:
+            {
+                conductor.transitionToRevoked(this);
+                conductor.transitionToLinger(this);
+
+                state = State.DRAINING;
+                break;
+            }
+
             case DRAINING:
             {
                 final long producerPosition = producerPosition();
                 publisherPos.setRelease(producerPosition);
                 if (isDrained(producerPosition))
                 {
-                    conductor.transitionToLinger(this);
+                    if (!isRevoked)
+                    {
+                        conductor.transitionToLinger(this);
+                    }
                     state = State.LINGER;
                 }
                 else if (LogBufferUnblocker.unblock(termBuffers, metaDataBuffer, consumerPosition, termBufferLength))
@@ -321,9 +367,12 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
             }
 
             case LINGER:
-                conductor.cleanupIpcPublication(this);
-                reachedEndOfLife = true;
-                state = State.DONE;
+                if (refCount == 0)
+                {
+                    conductor.cleanupIpcPublication(this);
+                    reachedEndOfLife = true;
+                    state = State.DONE;
+                }
                 break;
 
             case DONE:
@@ -348,10 +397,13 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     {
         if (0 == --refCount)
         {
-            final long producerPosition = producerPosition();
-            publisherLimit.setRelease(producerPosition);
-            LogBufferDescriptor.endOfStreamPosition(metaDataBuffer, producerPosition);
-            state = State.DRAINING;
+            if (!isRevoked)
+            {
+                final long producerPosition = producerPosition();
+                publisherLimit.setRelease(producerPosition);
+                LogBufferDescriptor.endOfStreamPosition(metaDataBuffer, producerPosition);
+                state = State.DRAINING;
+            }
         }
     }
 

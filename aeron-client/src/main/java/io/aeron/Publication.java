@@ -81,6 +81,11 @@ public abstract class Publication implements AutoCloseable
      */
     public static final long MAX_POSITION_EXCEEDED = -5;
 
+    /**
+     * The {@link Publication} has been revoked and should no longer be used.
+     */
+    public static final long REVOKED = -7;
+
     final long originalRegistrationId;
     final long registrationId;
     final long maxPossiblePosition;
@@ -94,6 +99,8 @@ public abstract class Publication implements AutoCloseable
     final int positionBitsToShift;
     final int termBufferLength;
     volatile boolean isClosed = false;
+    volatile boolean isRevoked = false;
+    volatile boolean revokeOnClose = false;
 
     final ReadablePosition positionLimit;
     final UnsafeBuffer[] termBuffers;
@@ -306,6 +313,38 @@ public abstract class Publication implements AutoCloseable
     }
 
     /**
+     * Mark the publication to be revoked when close() is called.
+     */
+    public void revokeOnClose()
+    {
+        revokeOnClose = true;
+    }
+
+    /**
+     * Immediately revoke and close the publication.
+     */
+    public void revoke()
+    {
+        if (isClosed)
+        {
+            throw new AeronException("Publication is closed");
+        }
+
+        revokeOnClose = true;
+        close();
+    }
+
+    /**
+     * Has this publication been revoked/closed?
+     *
+     * @return true if the publication has been revoked/closed otherwise false.
+     */
+    public boolean isRevoked()
+    {
+        return isRevoked;
+    }
+
+    /**
      * Get the status of the media channel for this Publication.
      * <p>
      * The status will be {@link io.aeron.status.ChannelEndpointStatus#ERRORED} if a socket exception occurs on setup
@@ -416,7 +455,8 @@ public abstract class Publication implements AutoCloseable
      *
      * @param buffer containing message.
      * @return The new stream position, otherwise a negative error value of {@link #NOT_CONNECTED},
-     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, or {@link #MAX_POSITION_EXCEEDED}.
+     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, {@link #MAX_POSITION_EXCEEDED},
+     * or {@link #REVOKED}.
      */
     public final long offer(final DirectBuffer buffer)
     {
@@ -430,7 +470,8 @@ public abstract class Publication implements AutoCloseable
      * @param offset offset in the buffer at which the encoded message begins.
      * @param length in bytes of the encoded message.
      * @return The new stream position, otherwise a negative error value of {@link #NOT_CONNECTED},
-     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, or {@link #MAX_POSITION_EXCEEDED}.
+     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, {@link #MAX_POSITION_EXCEEDED},
+     * or {@link #REVOKED}.
      */
     public final long offer(final DirectBuffer buffer, final int offset, final int length)
     {
@@ -445,7 +486,8 @@ public abstract class Publication implements AutoCloseable
      * @param length                in bytes of the encoded message.
      * @param reservedValueSupplier {@link ReservedValueSupplier} for the frame.
      * @return The new stream position, otherwise a negative error value of {@link #NOT_CONNECTED},
-     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, or {@link #MAX_POSITION_EXCEEDED}.
+     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, {@link #MAX_POSITION_EXCEEDED},
+     * or {@link #REVOKED}.
      */
     public abstract long offer(
         DirectBuffer buffer, int offset, int length, ReservedValueSupplier reservedValueSupplier);
@@ -460,7 +502,8 @@ public abstract class Publication implements AutoCloseable
      * @param offsetTwo at which the second part of the message begins.
      * @param lengthTwo of the second part of the message.
      * @return The new stream position, otherwise a negative error value of {@link #NOT_CONNECTED},
-     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, or {@link #MAX_POSITION_EXCEEDED}.
+     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, {@link #MAX_POSITION_EXCEEDED},
+     * or {@link #REVOKED}.
      */
     public final long offer(
         final DirectBuffer bufferOne,
@@ -484,7 +527,8 @@ public abstract class Publication implements AutoCloseable
      * @param lengthTwo             of the second part of the message.
      * @param reservedValueSupplier {@link ReservedValueSupplier} for the frame.
      * @return The new stream position, otherwise a negative error value of {@link #NOT_CONNECTED},
-     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, or {@link #MAX_POSITION_EXCEEDED}.
+     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, {@link #MAX_POSITION_EXCEEDED},
+     * or {@link #REVOKED}.
      */
     public abstract long offer(
         DirectBuffer bufferOne,
@@ -500,7 +544,8 @@ public abstract class Publication implements AutoCloseable
      *
      * @param vectors which make up the message.
      * @return The new stream position, otherwise a negative error value of {@link #NOT_CONNECTED},
-     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, or {@link #MAX_POSITION_EXCEEDED}.
+     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, {@link #MAX_POSITION_EXCEEDED},
+     * or {@link #REVOKED}.
      */
     public final long offer(final DirectBufferVector[] vectors)
     {
@@ -513,7 +558,8 @@ public abstract class Publication implements AutoCloseable
      * @param vectors               which make up the message.
      * @param reservedValueSupplier {@link ReservedValueSupplier} for the frame.
      * @return The new stream position, otherwise a negative error value of {@link #NOT_CONNECTED},
-     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, or {@link #MAX_POSITION_EXCEEDED}.
+     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, {@link #MAX_POSITION_EXCEEDED},
+     * or {@link #REVOKED}.
      */
     public abstract long offer(DirectBufferVector[] vectors, ReservedValueSupplier reservedValueSupplier);
 
@@ -548,7 +594,8 @@ public abstract class Publication implements AutoCloseable
      * @param length      of the range to claim, in bytes.
      * @param bufferClaim to be populated if the claim succeeds.
      * @return The new stream position, otherwise a negative error value of {@link #NOT_CONNECTED},
-     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, or {@link #MAX_POSITION_EXCEEDED}.
+     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, {@link #MAX_POSITION_EXCEEDED},
+     * or {@link #REVOKED}.
      * @throws IllegalArgumentException if the length is greater than {@link #maxPayloadLength()} within an MTU.
      * @see BufferClaim#commit()
      * @see BufferClaim#abort()
@@ -660,6 +707,11 @@ public abstract class Publication implements AutoCloseable
     void internalClose()
     {
         isClosed = true;
+
+        if (revokeOnClose)
+        {
+            isRevoked = true;
+        }
     }
 
     LogBuffers logBuffers()
@@ -676,6 +728,11 @@ public abstract class Publication implements AutoCloseable
 
         if (LogBufferDescriptor.isConnected(logMetaDataBuffer))
         {
+            if (isRevoked)
+            {
+                return REVOKED;
+            }
+
             return BACK_PRESSURED;
         }
 
@@ -759,6 +816,8 @@ public abstract class Publication implements AutoCloseable
                     return "CLOSED";
                 case (int)MAX_POSITION_EXCEEDED:
                     return "MAX_POSITION_EXCEEDED";
+                case (int)REVOKED:
+                    return "REVOKED";
                 default:
                     return "UNKNOWN";
             }
@@ -782,6 +841,7 @@ public abstract class Publication implements AutoCloseable
             "originalRegistrationId=" + originalRegistrationId +
             ", registrationId=" + registrationId +
             ", isClosed=" + isClosed +
+            ", isRevoked=" + isRevoked +
             ", isConnected=" + isConnected() +
             ", initialTermId=" + initialTermId +
             ", termBufferLength=" + termBufferLength +

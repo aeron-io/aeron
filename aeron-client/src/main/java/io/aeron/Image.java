@@ -298,6 +298,16 @@ public final class Image
     }
 
     /**
+     * Has the associated publication been revoked?
+     *
+     * @return true if the associated publication was revoked otherwise false.
+     */
+    public boolean isPublicationRevoked()
+    {
+        return LogBufferDescriptor.isPublicationRevoked(logBuffers.metaDataBuffer());
+    }
+
+    /**
      * The {@link FileChannel} to the raw log of the Image.
      *
      * @return the {@link FileChannel} to the raw log of the Image.

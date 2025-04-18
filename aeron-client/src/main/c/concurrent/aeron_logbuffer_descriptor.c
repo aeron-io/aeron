@@ -167,7 +167,11 @@ _Static_assert(
     "offsetof(aeron_logbuffer_metadata_t, tether) is wrong");
 
 _Static_assert(
-    sizeof(aeron_logbuffer_metadata_t) == 496,
+    offsetof(aeron_logbuffer_metadata_t, is_publication_revoked) == 496,
+    "offsetof(aeron_logbuffer_metadata_t, is_publication_revoked) is wrong");
+
+_Static_assert(
+    sizeof(aeron_logbuffer_metadata_t) == 500,
     "sizeof(aeron_logbuffer_metadata_t) is wrong");
 
 _Static_assert(

@@ -153,6 +153,11 @@ public class LogBufferDescriptor
     public static final int LOG_TETHER_OFFSET;
 
     /**
+     * Offset within the log metadata where the 'publication revoked' status is indicated.
+     */
+    public static final int LOG_IS_PUBLICATION_REVOKED;
+
+    /**
      * Offset within the log metadata where the rejoin property is stored.
      */
     public static final int LOG_REJOIN_OFFSET;
@@ -348,6 +353,8 @@ public class LogBufferDescriptor
      *  +---------------------------------------------------------------+
      *  |                          Tether                               |
      *  +---------------------------------------------------------------+
+     *  |                     Is publication revoked                    |
+     *  +---------------------------------------------------------------+
      * </pre>
      */
     public static final int LOG_META_DATA_LENGTH;
@@ -392,6 +399,7 @@ public class LogBufferDescriptor
         LOG_SIGNAL_EOS_OFFSET = LOG_SPARSE_OFFSET + SIZE_OF_BYTE;
         LOG_SPIES_SIMULATE_CONNECTION_OFFSET = LOG_SIGNAL_EOS_OFFSET + SIZE_OF_BYTE;
         LOG_TETHER_OFFSET = LOG_SPIES_SIMULATE_CONNECTION_OFFSET + SIZE_OF_BYTE;
+        LOG_IS_PUBLICATION_REVOKED = LOG_TETHER_OFFSET + SIZE_OF_BYTE;
 
         LOG_META_DATA_LENGTH = PAGE_MIN_SIZE;
     }
@@ -1097,6 +1105,28 @@ public class LogBufferDescriptor
     public static void tether(final UnsafeBuffer metadataBuffer, final boolean value)
     {
         metadataBuffer.putByte(LOG_TETHER_OFFSET, (byte)(value ? 1 : 0));
+    }
+
+    /**
+     * Get whether the log's publication was revoked.
+     *
+     * @param metadataBuffer containing the meta data.
+     * @return true if the log's publication was revoked, otherwise false.
+     */
+    public static boolean isPublicationRevoked(final UnsafeBuffer metadataBuffer)
+    {
+        return metadataBuffer.getByte(LOG_IS_PUBLICATION_REVOKED) == 1;
+    }
+
+    /**
+     * Set whether the log's publication was revoked.
+     *
+     * @param metadataBuffer containing the meta data.
+     * @param value          true if the log's publication was revoked, otherwise false.
+     */
+    public static void isPublicationRevoked(final UnsafeBuffer metadataBuffer, final boolean value)
+    {
+        metadataBuffer.putByte(LOG_IS_PUBLICATION_REVOKED, (byte)(value ? 1 : 0));
     }
 
     /**
