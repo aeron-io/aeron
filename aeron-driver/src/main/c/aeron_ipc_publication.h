@@ -80,6 +80,7 @@ typedef struct aeron_ipc_publication_stct
     struct
     {
         aeron_untethered_subscription_state_change_func_t untethered_subscription_state_change;
+        aeron_driver_publication_revoke_func_t publication_revoke;
     } log;
 
     volatile int64_t *unblocked_publications_counter;

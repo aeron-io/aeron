@@ -95,6 +95,7 @@ int aeron_ipc_publication_create(
     _pub->raw_log_close_func = context->raw_log_close_func;
     _pub->raw_log_free_func = context->raw_log_free_func;
     _pub->log.untethered_subscription_state_change = context->log.untethered_subscription_on_state_change;
+    _pub->log.publication_revoke = context->log.publication_revoke;
 
     strncpy(_pub->log_file_name, path, (size_t)path_length);
     _pub->log_file_name[path_length] = '\0';
@@ -576,7 +577,16 @@ void aeron_ipc_publication_revoke(void *clientd)
 
     publication->conductor_fields.state = AERON_IPC_PUBLICATION_STATE_REVOKED;
 
-    // logRevoke (TODO agent equivalent)
+    aeron_driver_publication_revoke_func_t publication_revoke = publication->log.publication_revoke;
+    if (NULL != publication_revoke)
+    {
+        publication_revoke(
+            revoked_position,
+            publication->session_id,
+            publication->stream_id,
+            publication->channel_length,
+            publication->channel);
+    }
 
     aeron_counter_increment_release(publication->publications_revoked_counter);
 }

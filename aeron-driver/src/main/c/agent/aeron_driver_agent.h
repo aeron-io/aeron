@@ -81,10 +81,12 @@ typedef enum aeron_driver_agent_event_enum
     AERON_DRIVER_EVENT_CMD_IN_REMOVE_DESTINATION_BY_ID = 56,
     AERON_DRIVER_EVENT_CMD_IN_REJECT_IMAGE = 57,
     AERON_DRIVER_EVENT_NAK_RECEIVED = 58,
+    AERON_DRIVER_EVENT_PUBLICATION_REVOKE = 59,
+    AERON_DRIVER_EVENT_PUBLICATION_IMAGE_REVOKE = 60,
 
     // C-specific events. Note: event IDs are dynamic to avoid gaps in the sparse arrays.
-    AERON_DRIVER_EVENT_ADD_DYNAMIC_DISSECTOR = 59,
-    AERON_DRIVER_EVENT_DYNAMIC_DISSECTOR_EVENT = 60,
+    AERON_DRIVER_EVENT_ADD_DYNAMIC_DISSECTOR = 61,
+    AERON_DRIVER_EVENT_DYNAMIC_DISSECTOR_EVENT = 62,
 }
 aeron_driver_agent_event_t;
 
@@ -192,6 +194,26 @@ typedef struct aeron_driver_agent_resend_header_stct
     int32_t channel_length;
 }
 aeron_driver_agent_resend_header_t;
+
+typedef struct aeron_driver_agent_publication_revoke_header_stct
+{
+    int64_t time_ns;
+    int64_t revoked_pos;
+    int32_t session_id;
+    int32_t stream_id;
+    int32_t channel_length;
+}
+aeron_driver_agent_publication_revoke_header_t;
+
+typedef struct aeron_driver_agent_publication_image_revoke_header_stct
+{
+    int64_t time_ns;
+    int64_t revoked_pos;
+    int32_t session_id;
+    int32_t stream_id;
+    int32_t channel_length;
+}
+aeron_driver_agent_publication_image_revoke_header_t;
 
 typedef struct aeron_driver_agent_name_resolver_resolve_log_header_stct
 {
@@ -344,6 +366,20 @@ void aeron_driver_agent_resend(
     int32_t term_id,
     int32_t term_offset,
     int32_t resend_length,
+    size_t channel_length,
+    const char *channel);
+
+void aeron_driver_agent_publication_revoke(
+    int64_t revoked_pos,
+    int32_t session_id,
+    int32_t stream_id,
+    size_t channel_length,
+    const char *channel);
+
+void aeron_driver_agent_publication_image_revoke(
+    int64_t revoked_pos,
+    int32_t session_id,
+    int32_t stream_id,
     size_t channel_length,
     const char *channel);
 

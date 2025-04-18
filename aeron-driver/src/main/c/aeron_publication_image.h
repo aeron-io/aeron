@@ -115,6 +115,7 @@ typedef struct aeron_publication_image_stct
     struct
     {
         aeron_untethered_subscription_state_change_func_t untethered_subscription_state_change;
+        aeron_driver_publication_image_revoke_func_t publication_image_revoke;
     } log;
 
     int64_t last_loss_change_number;

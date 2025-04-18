@@ -199,6 +199,7 @@ int aeron_publication_image_create(
     _image->raw_log_close_func = context->raw_log_close_func;
     _image->raw_log_free_func = context->raw_log_free_func;
     _image->log.untethered_subscription_state_change = context->log.untethered_subscription_on_state_change;
+    _image->log.publication_image_revoke = context->log.publication_image_revoke;
 
     _image->nano_clock = context->nano_clock;
     _image->epoch_clock = context->epoch_clock;
@@ -706,7 +707,16 @@ int aeron_publication_image_insert_packet(
 
                             image->conductor_fields.state = AERON_PUBLICATION_IMAGE_STATE_REVOKED;
 
-                            // log revoke TODO
+                            aeron_driver_publication_image_revoke_func_t publication_image_revoke = image->log.publication_image_revoke;
+                            if (NULL != publication_image_revoke)
+                            {
+                                publication_image_revoke(
+                                    eos_position,
+                                    image->session_id,
+                                    image->stream_id,
+                                    image->endpoint->conductor_fields.udp_channel->uri_length,
+                                    image->endpoint->conductor_fields.udp_channel->original_uri);
+                            }
 
                             aeron_counter_increment_release(image->publication_images_revoked_counter);
                         }
@@ -1176,7 +1186,12 @@ void aeron_publication_image_on_time_event(
 
             image->conductor_fields.state = AERON_PUBLICATION_IMAGE_STATE_DRAINING;
 
-            break;
+            // TODO
+            // The java driver falls through to the draining state below.
+            // GCC doesn't like case statement fallthrough.
+            // With a 'break' here, one of the revoke tests fails.
+            // Needs more investigation.
+            //break;
         }
 
         case AERON_PUBLICATION_IMAGE_STATE_DRAINING:

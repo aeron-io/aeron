@@ -123,6 +123,7 @@ typedef struct aeron_network_publication_stct
     {
         aeron_untethered_subscription_state_change_func_t untethered_subscription_state_change;
         aeron_driver_resend_func_t resend;
+        aeron_driver_publication_revoke_func_t publication_revoke;
     } log;
 
     volatile int64_t *short_sends_counter;
