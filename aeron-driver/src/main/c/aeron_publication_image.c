@@ -1193,6 +1193,7 @@ void aeron_publication_image_on_time_event(
             // Needs more investigation.
             //break;
         }
+        // fall through
 
         case AERON_PUBLICATION_IMAGE_STATE_DRAINING:
         {
