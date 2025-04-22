@@ -497,7 +497,8 @@ void aeron_publication_image_on_gap_detected(void *clientd, int32_t term_id, int
 
 void aeron_publication_image_track_rebuild(aeron_publication_image_t *image, int64_t now_ns)
 {
-    if (aeron_driver_subscribable_has_working_positions(&image->conductor_fields.subscribable))
+    if (aeron_driver_subscribable_has_working_positions(&image->conductor_fields.subscribable) &&
+        !image->is_revoked)
     {
         const int64_t hwm_position = aeron_counter_get_acquire(image->rcv_hwm_position.value_addr);
         int64_t min_sub_pos = INT64_MAX;
@@ -1175,9 +1176,6 @@ void aeron_publication_image_on_time_event(
 
         case AERON_PUBLICATION_IMAGE_STATE_REVOKED:
         {
-            // TODO
-            // isRebuilding = false ???? C doesn't have this flag...
-
             AERON_SET_RELEASE(image->is_sending_eos_sm, true);
 
             image->next_sm_deadline_ns = now_ns - 1;
@@ -1185,13 +1183,6 @@ void aeron_publication_image_on_time_event(
             image->is_revoked = true;
 
             image->conductor_fields.state = AERON_PUBLICATION_IMAGE_STATE_DRAINING;
-
-            // TODO
-            // The java driver falls through to the draining state below.
-            // GCC doesn't like case statement fallthrough.
-            // With a 'break' here, one of the revoke tests fails.
-            // Needs more investigation.
-            //break;
         }
         // fall through
 
