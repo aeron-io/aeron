@@ -504,10 +504,21 @@ public final class NetworkPublication
             positionBitsToShift,
             timeNs));
 
+        /*
         if (!isConnected && flowControl.hasRequiredReceivers())
         {
             LogBufferDescriptor.isConnected(metaDataBuffer, true);
             isConnected = true;
+        }
+         */
+
+        // TODO the code below is how things work in C
+
+        final boolean expectedStatus = hasReceivers && flowControl.hasRequiredReceivers();
+        if (isConnected != expectedStatus)
+        {
+            LogBufferDescriptor.isConnected(metaDataBuffer, expectedStatus);
+            isConnected = expectedStatus;
         }
     }
 
