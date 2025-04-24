@@ -263,6 +263,10 @@ final class ConsensusModuleAgent
                     session.close(aeron, errorHandler);
                 }
             }
+            else
+            {
+                CloseHelper.close(errorHandler, archive);
+            }
 
             state(ConsensusModule.State.CLOSED);
         }
