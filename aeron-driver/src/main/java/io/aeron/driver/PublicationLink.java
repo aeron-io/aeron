@@ -58,7 +58,11 @@ final class PublicationLink implements DriverManagedResource
         }
     }
 
-    public void reject(final long position, final String reason, final DriverConductor driverConductor, final long nowMs)
+    public void reject(
+        final long position,
+        final String reason,
+        final DriverConductor driverConductor,
+        final long nowMs)
     {
         if (publication instanceof IpcPublication)
         {

@@ -1533,7 +1533,7 @@ public final class DriverConductor implements Agent
             final ArrayList<PublicationLink> publicationLinks = this.publicationLinks;
             for (int i = 0, size = publicationLinks.size(); i < size; i++)
             {
-                PublicationLink publication = publicationLinks.get(i);
+                final PublicationLink publication = publicationLinks.get(i);
                 if (imageCorrelationId == publication.registrationId())
                 {
                     publicationLink = publication;
@@ -1544,7 +1544,7 @@ public final class DriverConductor implements Agent
             if (null == publicationLink)
             {
                 throw new ControlProtocolException(
-                    GENERIC_ERROR, "Unable to resolve image for correlationId=" + imageCorrelationId); // image OR IPC publication...
+                    GENERIC_ERROR, "Unable to resolve image for correlationId=" + imageCorrelationId);
             }
 
             publicationLink.reject(position, reason, this, cachedEpochClock.time());

@@ -73,6 +73,7 @@ public class RejectImageTest
             Arguments.of(IPC_CHANNEL)
         );
     }
+
     public static final long A_VALUE_THAT_SHOWS_WE_ARENT_SPAMMING_ERROR_MESSAGES = 1000L;
 
     @RegisterExtension

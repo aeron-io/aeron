@@ -843,9 +843,9 @@ public final class Image
     }
 
     /**
-     * TODO
-     * blocking call
-     * @param reason
+     * Reject this image.
+     *
+     * @param reason a String indicating the reason why this image is being rejected.
      */
     public void reject(final String reason)
     {

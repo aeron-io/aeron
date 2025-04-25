@@ -256,10 +256,8 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         }
     }
 
-    public void reject(final long position, final String reason, final DriverConductor conductor, final long nowMs)
+    void reject(final long position, final String reason, final DriverConductor conductor, final long nowMs)
     {
-        System.err.println("ipc pub reject");
-
         conductor.onPublicationError(
             registrationId,
             Aeron.NULL_VALUE,
@@ -535,11 +533,8 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
 
     private void checkCoolDownStatus(final long timeMs, final DriverConductor conductor)
     {
-        System.err.println("here " + timeMs);
         if (inCoolDown && coolDownExpireTimeMs < timeMs)
         {
-            System.err.println("check cooldown status while in cooldown");
-
             conductor.linkIpcSubscriptions(this);
 
             coolDownExpireTimeMs = 0;
