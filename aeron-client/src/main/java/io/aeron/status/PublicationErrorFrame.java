@@ -164,4 +164,19 @@ public class PublicationErrorFrame implements Cloneable
             throw new RuntimeException(ex);
         }
     }
+
+    public String toString()
+    {
+        return "CounterMessageFlyweight{" +
+            "registrationId=" + registrationId() +
+            ", sessionId=" + sessionId() +
+            ", streamId=" + streamId() +
+            ", receiverId=" + receiverId() +
+            ", destinationRegistrationId=" + destinationRegistrationId() +
+            ", groupTag=" + groupTag() +
+            ", errorCode=" + errorCode() +
+            ", errorMessage=" + errorMessage() +
+            ", sourceAddress=" + sourceAddress() +
+            "}";
+    }
 }

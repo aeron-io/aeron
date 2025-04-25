@@ -17,6 +17,7 @@ package io.aeron;
 
 import io.aeron.command.PublicationErrorFrameFlyweight;
 import io.aeron.exceptions.*;
+import io.aeron.protocol.ErrorFlyweight;
 import io.aeron.status.ChannelEndpointStatus;
 import io.aeron.status.HeartbeatTimestamp;
 import io.aeron.status.PublicationErrorFrame;
@@ -1441,13 +1442,17 @@ final class ClientConductor implements Agent
 
     void rejectImage(final long correlationId, final long position, final String reason)
     {
+        // TODO, check reason length??
+        if (reason.length() > ErrorFlyweight.MAX_ERROR_MESSAGE_LENGTH)
+        {
+
+        }
+
         clientLock.lock();
         try
         {
             ensureActive();
             ensureNotReentrant();
-
-            // TODO, check reason length??
 
             final long registrationId = driverProxy.rejectImage(correlationId, position, reason);
             awaitResponse(registrationId);
