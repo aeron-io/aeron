@@ -63,6 +63,27 @@ inline uint32_t aeron_get_acquire_uint32(const volatile uint32_t *src)
     return val;
 }
 
+inline int32_t aeron_get_acquire_int32(const volatile int32_t *src)
+{
+    int32_t val = *src;
+    __asm__ volatile ("" ::: "memory");
+    return val;
+}
+
+inline int aeron_get_acquire_int(const volatile int *src)
+{
+    int val = *src;
+    __asm__ volatile ("" ::: "memory");
+    return val;
+}
+
+inline bool aeron_get_acquire_bool(const volatile bool *src)
+{
+    bool val = *src;
+    __asm__ volatile ("" ::: "memory");
+    return val;
+}
+
 inline uint64_t aeron_get_acquire_uint64(const volatile uint64_t *src)
 {
     uint64_t val = *src;
@@ -76,11 +97,36 @@ inline void aeron_set_release_uint32(volatile uint32_t *dst, uint32_t src)
     *dst = src;
 }
 
+inline void aeron_set_release_int32(volatile int32_t *dst, int32_t src)
+{
+    __asm__ volatile ("" ::: "memory");
+    *dst = src;
+}
+
+inline void aeron_set_release_int(volatile int *dst, int src)
+{
+    __asm__ volatile ("" ::: "memory");
+    *dst = src;
+}
+
+inline void aeron_set_release_bool(volatile bool *dst, bool src)
+{
+    __asm__ volatile ("" ::: "memory");
+    *dst = src;
+}
+
 inline void aeron_set_release_uint64(volatile uint64_t *dst, uint64_t src)
 {
     __asm__ volatile ("" ::: "memory");
     *dst = src;
 }
+
+inline void aeron_set_release_int64(volatile int64_t *dst, int64_t src)
+{
+    __asm__ volatile ("" ::: "memory");
+    *dst = src;
+}
+
 
 inline int64_t aeron_get_and_add_int64(volatile int64_t *dst, int64_t value)
 {

@@ -18,11 +18,27 @@
 
 extern uint32_t aeron_get_acquire_uint32(const volatile uint32_t *src);
 
+extern int32_t aeron_get_acquire_int32(const volatile int32_t *src);
+
+extern int aeron_get_acquire_int(const volatile int *src);
+
+extern bool aeron_get_acquire_bool(const volatile bool *src);
+
 extern uint64_t aeron_get_acquire_uint64(const volatile uint64_t *src);
+
+extern int64_t aeron_get_acquire_int64(const volatile int64_t *src);
 
 extern void aeron_set_release_uint32(volatile uint32_t *dst, uint32_t src);
 
+extern void aeron_set_release_int32(volatile int32_t *dst, int32_t src);
+
+extern void aeron_set_release_int(volatile int *dst, int src);
+
+extern void aeron_set_release_bool(volatile bool *dst, bool src);
+
 extern void aeron_set_release_uint64(volatile uint64_t *dst, uint64_t src);
+
+extern void aeron_set_release_int64(volatile int64_t *dst, int64_t src);
 
 extern int64_t aeron_get_and_add_int64(volatile int64_t *dst, int64_t value);
 
