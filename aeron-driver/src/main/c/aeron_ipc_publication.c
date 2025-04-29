@@ -203,9 +203,10 @@ int aeron_ipc_publication_create(
     _pub->unblock_timeout_ns = (int64_t)context->publication_unblock_timeout_ns;
     _pub->untethered_window_limit_timeout_ns = (int64_t)params->untethered_window_limit_timeout_ns;
     _pub->untethered_resting_timeout_ns = (int64_t)params->untethered_resting_timeout_ns;
+    _pub->liveness_timeout_ns = (int64_t)context->image_liveness_timeout_ns;
     _pub->is_exclusive = is_exclusive;
     _pub->in_cool_down = false;
-    _pub->cool_down_expire_time_ms = 0;
+    _pub->cool_down_expire_time_ns = 0;
 
     _pub->conductor_fields.consumer_position = aeron_ipc_publication_producer_position(_pub);
     _pub->conductor_fields.last_consumer_position = _pub->conductor_fields.consumer_position;
@@ -269,7 +270,7 @@ void aeron_ipc_publication_reject(
     int32_t reason_length,
     const char *reason,
     aeron_driver_conductor_t *conductor,
-    int64_t now_ms)
+    int64_t now_ns)
 {
     {
         uint8_t buffer[AERON_COMMAND_PUBLICATION_ERROR_MAX_LENGTH];
@@ -325,7 +326,7 @@ void aeron_ipc_publication_reject(
         publication->in_cool_down = true;
     }
 
-    publication->cool_down_expire_time_ms = now_ms + 500; // TODO
+    publication->cool_down_expire_time_ns = now_ns + publication->liveness_timeout_ns;
 }
 
 int aeron_ipc_publication_update_pub_pos_and_lmt(aeron_ipc_publication_t *publication)
@@ -502,15 +503,15 @@ void aeron_ipc_publication_check_untethered_subscriptions(
 }
 
 void aeron_ipc_publication_check_cooldown_status(
-    aeron_driver_conductor_t *conductor, aeron_ipc_publication_t *publication, int64_t now_ms)
+    aeron_driver_conductor_t *conductor, aeron_ipc_publication_t *publication, int64_t now_ns)
 {
-    if (publication->in_cool_down && publication->cool_down_expire_time_ms < now_ms)
+    if (publication->in_cool_down && publication->cool_down_expire_time_ns < now_ns)
     {
+        publication->in_cool_down = false;
+
         aeron_driver_conductor_link_ipc_subscriptions(conductor, publication);
 
-        publication->cool_down_expire_time_ms = 0;
-
-        publication->in_cool_down = false;
+        publication->cool_down_expire_time_ns = 0;
     }
 }
 
@@ -530,7 +531,7 @@ void aeron_ipc_publication_on_time_event(
             }
 
             aeron_ipc_publication_check_untethered_subscriptions(conductor, publication, now_ns);
-            aeron_ipc_publication_check_cooldown_status(conductor, publication, now_ms);
+            aeron_ipc_publication_check_cooldown_status(conductor, publication, now_ns);
             break;
         }
 

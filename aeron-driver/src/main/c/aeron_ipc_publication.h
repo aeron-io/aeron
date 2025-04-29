@@ -60,10 +60,11 @@ typedef struct aeron_ipc_publication_stct
     int64_t unblock_timeout_ns;
     int64_t untethered_window_limit_timeout_ns;
     int64_t untethered_resting_timeout_ns;
+    int64_t liveness_timeout_ns;
     int32_t initial_term_id;
     bool is_exclusive;
     bool in_cool_down;
-    int64_t cool_down_expire_time_ms;
+    int64_t cool_down_expire_time_ns;
     int64_t tag;
     int32_t session_id;
     int32_t stream_id;
@@ -124,7 +125,7 @@ void aeron_ipc_publication_reject(
     int32_t reason_length,
     const char *reason,
     aeron_driver_conductor_t *conductor,
-    int64_t now_ms);
+    int64_t now_ns);
 
 void aeron_ipc_publication_check_for_blocked_publisher(
     aeron_ipc_publication_t *publication, int64_t producer_position, int64_t now_ns);

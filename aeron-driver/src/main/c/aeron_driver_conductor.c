@@ -3995,7 +3995,8 @@ int aeron_driver_conductor_link_ipc_subscriptions(
         aeron_subscription_link_t *subscription_link = &conductor->ipc_subscriptions.array[i];
 
         if (aeron_driver_conductor_subscription_link_matches_ipc_publication(subscription_link, publication) &&
-            !aeron_driver_conductor_is_subscribable_linked(subscription_link, subscribable))
+            !aeron_driver_conductor_is_subscribable_linked(subscription_link, subscribable) &&
+            aeron_ipc_publication_is_accepting_subscriptions(publication))
         {
             if (aeron_driver_conductor_link_subscribable(
                 conductor,
@@ -5884,7 +5885,7 @@ int aeron_driver_conductor_on_invalidate_image(
             command->reason_length,
             reason_text,
             conductor,
-            aeron_clock_cached_epoch_time(conductor->context->cached_clock));
+            aeron_clock_cached_nano_time(conductor->context->cached_clock));
     }
     else
     {
