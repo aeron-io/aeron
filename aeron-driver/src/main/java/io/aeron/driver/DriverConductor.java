@@ -1529,25 +1529,15 @@ public final class DriverConductor implements Agent
 
         if (null == publicationImage)
         {
-            PublicationLink publicationLink = null;
-            final ArrayList<PublicationLink> publicationLinks = this.publicationLinks;
-            for (int i = 0, size = publicationLinks.size(); i < size; i++)
-            {
-                final PublicationLink publication = publicationLinks.get(i);
-                if (imageCorrelationId == publication.registrationId())
-                {
-                    publicationLink = publication;
-                    break;
-                }
-            }
+            IpcPublication foundPublication = getIpcPublication(imageCorrelationId);
 
-            if (null == publicationLink)
+            if (null == foundPublication)
             {
                 throw new ControlProtocolException(
                     GENERIC_ERROR, "Unable to resolve image for correlationId=" + imageCorrelationId);
             }
 
-            publicationLink.reject(position, reason, this, cachedEpochClock.time());
+            foundPublication.reject(position, reason, this, cachedEpochClock.time());
         }
         else
         {
