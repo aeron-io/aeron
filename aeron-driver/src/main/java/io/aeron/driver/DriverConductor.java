@@ -1537,7 +1537,7 @@ public final class DriverConductor implements Agent
                     GENERIC_ERROR, "Unable to resolve image for correlationId=" + imageCorrelationId);
             }
 
-            foundPublication.reject(position, reason, this, cachedEpochClock.time());
+            foundPublication.reject(position, reason, this, cachedNanoClock.nanoTime());
         }
         else
         {
@@ -2289,7 +2289,9 @@ public final class DriverConductor implements Agent
         for (int i = 0, size = subscriptionLinks.size(); i < size; i++)
         {
             final SubscriptionLink subscription = subscriptionLinks.get(i);
-            if (subscription.matches(publication) && !subscription.isLinked(publication))
+            if (subscription.matches(publication) &&
+                !subscription.isLinked(publication) &&
+                publication.isAcceptingSubscriptions())
             {
                 clientProxy.onAvailableImage(
                     publication.registrationId(),

@@ -620,10 +620,11 @@ public class RejectImageTest
 
     @Test
     @InterruptAfter(10)
+    @SlowTest
     void shouldBeInCoolDownWhenSecondSubscriberJoins()
     {
         context
-            .imageLivenessTimeoutNs(TimeUnit.SECONDS.toNanos(3))
+            .imageLivenessTimeoutNs(TimeUnit.SECONDS.toNanos(2))
             .timerIntervalNs(TimeUnit.MILLISECONDS.toNanos(100));
 
         final String rejectionReason = "Reject this";
@@ -664,7 +665,7 @@ public class RejectImageTest
                 }
                 final long t1 = System.nanoTime();
 
-                assertThat(t1 - t0, greaterThanOrEqualTo(500L)); // TODO don't use 500L
+                assertThat(t1 - t0, greaterThanOrEqualTo(context.imageLivenessTimeoutNs()));
             }
 
             assertEquals(3, imageAvailable.get());
@@ -673,10 +674,11 @@ public class RejectImageTest
 
     @Test
     @InterruptAfter(10)
+    @SlowTest
     void shouldDeleteSubscriberWhileInCoolDown()
     {
         context
-            .imageLivenessTimeoutNs(TimeUnit.SECONDS.toNanos(3))
+            .imageLivenessTimeoutNs(TimeUnit.SECONDS.toNanos(2))
             .timerIntervalNs(TimeUnit.MILLISECONDS.toNanos(100));
 
         final String rejectionReason = "Reject this";
@@ -724,6 +726,124 @@ public class RejectImageTest
             }
 
             assertEquals(2, imageAvailable.get());
+        }
+    }
+
+    @Test
+    @InterruptAfter(10)
+    @SlowTest
+    void shouldSecondSubscriberJoinsImmediatelyAfterCooldownEnds()
+    {
+        context
+            .imageLivenessTimeoutNs(TimeUnit.SECONDS.toNanos(2))
+            .timerIntervalNs(TimeUnit.MILLISECONDS.toNanos(100));
+
+        final String rejectionReason = "Reject this";
+
+        final TestMediaDriver driver = launch();
+
+        final Aeron.Context ctx = new Aeron.Context()
+            .aeronDirectoryName(driver.aeronDirectoryName());
+
+        final AtomicInteger imageAvailable = new AtomicInteger();
+        final AtomicInteger imageUnavailable = new AtomicInteger();
+
+        try (Aeron aeron = Aeron.connect(ctx);
+            Publication pub = aeron.addPublication(CommonContext.IPC_CHANNEL, streamId);
+            Subscription sub = aeron.addSubscription(
+                CommonContext.IPC_CHANNEL,
+                streamId,
+                image -> imageAvailable.getAndIncrement(),
+                image -> imageUnavailable.getAndIncrement()))
+        {
+
+            Tests.awaitConnected(pub);
+            Tests.awaitConnected(sub);
+
+            sub.imageAtIndex(0).reject(rejectionReason);
+
+            while (0 == imageUnavailable.get())
+            {
+                Tests.yield();
+            }
+
+            while (!sub.isConnected())
+            {
+                Tests.yield();
+            }
+
+            try (Subscription sub2 = aeron.addSubscription(
+                CommonContext.IPC_CHANNEL,
+                streamId,
+                image -> imageAvailable.getAndIncrement(),
+                image -> imageUnavailable.getAndIncrement()))
+            {
+                while (!sub2.isConnected())
+                {
+                    Tests.yield();
+                }
+            }
+
+            assertEquals(3, imageAvailable.get());
+        }
+    }
+
+    @Test
+    @InterruptAfter(10)
+    @SlowTest
+    void shouldSecondPublisherConnectsAfterCooldown()
+    {
+        context
+            .imageLivenessTimeoutNs(TimeUnit.SECONDS.toNanos(2))
+            .timerIntervalNs(TimeUnit.MILLISECONDS.toNanos(100));
+
+        final String rejectionReason = "Reject this";
+
+        final TestMediaDriver driver = launch();
+
+        final Aeron.Context ctx = new Aeron.Context()
+            .aeronDirectoryName(driver.aeronDirectoryName());
+
+        final AtomicInteger imageAvailable = new AtomicInteger();
+        final AtomicInteger imageUnavailable = new AtomicInteger();
+
+        try (Aeron aeron = Aeron.connect(ctx);
+            Publication pub = aeron.addPublication(CommonContext.IPC_CHANNEL, streamId);
+            Subscription sub = aeron.addSubscription(
+                CommonContext.IPC_CHANNEL,
+                streamId,
+                image -> imageAvailable.getAndIncrement(),
+                image -> imageUnavailable.getAndIncrement()))
+        {
+
+            Tests.awaitConnected(pub);
+            Tests.awaitConnected(sub);
+
+            sub.imageAtIndex(0).reject(rejectionReason);
+
+            while (0 == imageUnavailable.get())
+            {
+                Tests.yield();
+            }
+
+            final long t0 = System.nanoTime();
+            try (Publication pub2 = aeron.addPublication(
+                CommonContext.IPC_CHANNEL,
+                streamId))
+            {
+                while (!pub2.isConnected())
+                {
+                    Tests.yield();
+                }
+                final long t1 = System.nanoTime();
+
+                assertThat(t1 - t0, greaterThanOrEqualTo(context.imageLivenessTimeoutNs()));
+            }
+
+            while (2 != imageAvailable.get())
+            {
+                Tests.yield();
+            }
         }
     }
 

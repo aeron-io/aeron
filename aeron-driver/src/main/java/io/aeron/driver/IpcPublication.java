@@ -58,6 +58,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     private final long unblockTimeoutNs;
     private final long untetheredWindowLimitTimeoutNs;
     private final long untetheredRestingTimeoutNs;
+    private final long imageLivenessTimeoutNs;
     private final String channel;
     private final int sessionId;
     private final int streamId;
@@ -77,7 +78,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     private int refCount = 0;
     private boolean reachedEndOfLife = false;
     private boolean inCoolDown = false;
-    private long coolDownExpireTimeMs = 0;
+    private long coolDownExpireTimeNs = 0;
     private final boolean isExclusive;
     private State state = State.ACTIVE;
     private final UnsafeBuffer[] termBuffers;
@@ -129,6 +130,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         this.unblockTimeoutNs = ctx.publicationUnblockTimeoutNs();
         this.untetheredWindowLimitTimeoutNs = params.untetheredWindowLimitTimeoutNs;
         this.untetheredRestingTimeoutNs = params.untetheredRestingTimeoutNs;
+        this.imageLivenessTimeoutNs = ctx.imageLivenessTimeoutNs();
         final SystemCounters systemCounters = ctx.systemCounters();
         this.unblockedPublications = systemCounters.get(UNBLOCKED_PUBLICATIONS);
         this.errorMessagesReceived = systemCounters.get(ERROR_FRAMES_RECEIVED);
@@ -256,7 +258,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         }
     }
 
-    void reject(final long position, final String reason, final DriverConductor conductor, final long nowMs)
+    void reject(final long position, final String reason, final DriverConductor conductor, final long nowNs)
     {
         conductor.onPublicationError(
             registrationId,
@@ -286,7 +288,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
             inCoolDown = true;
         }
 
-        coolDownExpireTimeMs = nowMs + 500; // TODO how long is the cool down?
+        coolDownExpireTimeNs = nowNs + imageLivenessTimeoutNs;
     }
 
     /**
@@ -347,7 +349,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
                     checkForBlockedPublisher(producerPosition, timeNs);
                 }
                 checkUntetheredSubscriptions(timeNs, conductor);
-                checkCoolDownStatus(timeMs, conductor);
+                checkCoolDownStatus(timeNs, conductor);
                 break;
             }
 
@@ -531,15 +533,15 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         }
     }
 
-    private void checkCoolDownStatus(final long timeMs, final DriverConductor conductor)
+    private void checkCoolDownStatus(final long timeNs, final DriverConductor conductor)
     {
-        if (inCoolDown && coolDownExpireTimeMs < timeMs)
+        if (inCoolDown && coolDownExpireTimeNs < timeNs)
         {
+            inCoolDown = false;
+
             conductor.linkIpcSubscriptions(this);
 
-            coolDownExpireTimeMs = 0;
-
-            inCoolDown = false;
+            coolDownExpireTimeNs = 0;
         }
     }
 
