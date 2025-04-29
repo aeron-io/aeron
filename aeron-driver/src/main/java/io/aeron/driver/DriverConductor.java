@@ -1529,7 +1529,7 @@ public final class DriverConductor implements Agent
 
         if (null == publicationImage)
         {
-            IpcPublication foundPublication = getIpcPublication(imageCorrelationId);
+            final IpcPublication foundPublication = getIpcPublication(imageCorrelationId);
 
             if (null == foundPublication)
             {
