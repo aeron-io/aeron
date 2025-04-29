@@ -204,6 +204,8 @@ int aeron_ipc_publication_create(
     _pub->untethered_window_limit_timeout_ns = (int64_t)params->untethered_window_limit_timeout_ns;
     _pub->untethered_resting_timeout_ns = (int64_t)params->untethered_resting_timeout_ns;
     _pub->is_exclusive = is_exclusive;
+    _pub->in_cool_down = false;
+    _pub->cool_down_expire_time_ms = 0;
 
     _pub->conductor_fields.consumer_position = aeron_ipc_publication_producer_position(_pub);
     _pub->conductor_fields.last_consumer_position = _pub->conductor_fields.consumer_position;
@@ -211,6 +213,10 @@ int aeron_ipc_publication_create(
 
     _pub->unblocked_publications_counter = aeron_system_counter_addr(
         system_counters, AERON_SYSTEM_COUNTER_UNBLOCKED_PUBLICATIONS);
+    _pub->error_messages_received_counter = aeron_system_counter_addr(
+        system_counters, AERON_SYSTEM_COUNTER_ERROR_FRAMES_RECEIVED);
+    _pub->error_messages_sent_counter = aeron_system_counter_addr(
+        system_counters, AERON_SYSTEM_COUNTER_ERROR_FRAMES_SENT);
 
     *publication = _pub;
 
@@ -255,6 +261,71 @@ bool aeron_ipc_publication_free(aeron_ipc_publication_t *publication)
     aeron_free(publication);
 
     return true;
+}
+
+void aeron_ipc_publication_reject(
+    aeron_ipc_publication_t *publication,
+    int64_t position,
+    int32_t reason_length,
+    const char *reason,
+    aeron_driver_conductor_t *conductor,
+    int64_t now_ms)
+{
+    {
+        uint8_t buffer[AERON_COMMAND_PUBLICATION_ERROR_MAX_LENGTH];
+        aeron_command_publication_error_t *error = (aeron_command_publication_error_t *)buffer;
+        int32_t error_length = reason_length <= AERON_ERROR_MAX_TEXT_LENGTH ? reason_length : AERON_ERROR_MAX_TEXT_LENGTH;
+
+        struct sockaddr_storage src_addr_storage;
+        memset(&src_addr_storage, 0, sizeof(struct sockaddr_storage));
+
+        struct sockaddr_in *src_addr_in = (struct sockaddr_in *)&src_addr_storage;
+        src_addr_in->sin_family = AF_INET;
+        src_addr_in->sin_port = 0;
+        src_addr_in->sin_addr.s_addr = INADDR_LOOPBACK;
+
+        error->registration_id = publication->conductor_fields.managed_resource.registration_id;
+        error->destination_registration_id = AERON_NULL_VALUE;
+        error->session_id = publication->session_id;
+        error->stream_id = publication->stream_id;
+        error->receiver_id = AERON_NULL_VALUE;
+        error->group_tag =  AERON_NULL_VALUE;
+        memcpy(&error->src_address, &src_addr_storage, sizeof(struct sockaddr_storage));
+        error->error_code = AERON_ERROR_CODE_IMAGE_REJECTED;
+        error->error_length = error_length;
+        memcpy(error->error_text, reason, error_length);
+        aeron_str_null_terminate(error->error_text, error_length);
+
+        aeron_driver_conductor_on_publication_error(conductor, error);
+    }
+
+    aeron_counter_increment_release(publication->error_messages_received_counter);
+    aeron_counter_increment_release(publication->error_messages_sent_counter);
+
+    if (!publication->in_cool_down)
+    {
+        AERON_SET_RELEASE(publication->log_meta_data->is_connected, 0);
+
+        aeron_driver_conductor_unlink_ipc_subscriptions(conductor, publication);
+
+        {
+            aeron_subscribable_t *subscribable = &publication->conductor_fields.subscribable;
+
+            for (size_t i = 0, length = subscribable->length; i < length; i++)
+            {
+                aeron_counters_manager_free(&conductor->counters_manager, subscribable->array[i].counter_id);
+            }
+
+            aeron_free(subscribable->array);
+            subscribable->array = NULL;
+            subscribable->length = 0;
+            subscribable->capacity = 0;
+        }
+
+        publication->in_cool_down = true;
+    }
+
+    publication->cool_down_expire_time_ms = now_ms + 500; // TODO
 }
 
 int aeron_ipc_publication_update_pub_pos_and_lmt(aeron_ipc_publication_t *publication)
@@ -430,6 +501,19 @@ void aeron_ipc_publication_check_untethered_subscriptions(
     }
 }
 
+void aeron_ipc_publication_check_cooldown_status(
+    aeron_driver_conductor_t *conductor, aeron_ipc_publication_t *publication, int64_t now_ms)
+{
+    if (publication->in_cool_down && publication->cool_down_expire_time_ms < now_ms)
+    {
+        aeron_driver_conductor_link_ipc_subscriptions(conductor, publication);
+
+        publication->cool_down_expire_time_ms = 0;
+
+        publication->in_cool_down = false;
+    }
+}
+
 void aeron_ipc_publication_on_time_event(
     aeron_driver_conductor_t *conductor, aeron_ipc_publication_t *publication, int64_t now_ns, int64_t now_ms)
 {
@@ -446,6 +530,7 @@ void aeron_ipc_publication_on_time_event(
             }
 
             aeron_ipc_publication_check_untethered_subscriptions(conductor, publication, now_ns);
+            aeron_ipc_publication_check_cooldown_status(conductor, publication, now_ms);
             break;
         }
 

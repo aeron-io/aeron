@@ -2122,6 +2122,8 @@ int aeron_image_block_poll(
 
 bool aeron_image_is_closed(aeron_image_t *image);
 
+int aeron_image_reject(aeron_image_t *image, const char *reason);
+
 /**
  * A fragment handler that sits in a chain-of-responsibility pattern that reassembles fragmented messages
  * so that the next handler in the chain only sees whole messages.

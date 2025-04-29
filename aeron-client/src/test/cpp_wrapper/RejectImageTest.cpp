@@ -25,15 +25,15 @@
 
 using namespace aeron;
 
-class RejectImageTest : public testing::TestWithParam<std::string>
+class RejectImageTestBase
 {
 public:
-    RejectImageTest()
+    RejectImageTestBase()
     {
         m_driver.start();
     }
 
-    ~RejectImageTest() override
+    ~RejectImageTestBase()
     {
         m_driver.stop();
     }
@@ -79,6 +79,14 @@ public:
 
 protected:
     EmbeddedMediaDriver m_driver;
+};
+
+class RejectImageTestSimple : public RejectImageTestBase, public testing::Test
+{
+};
+
+class RejectImageTest : public RejectImageTestBase, public testing::TestWithParam<std::string>
+{
 };
 
 INSTANTIATE_TEST_SUITE_P(
@@ -252,4 +260,37 @@ TEST_P(RejectImageTest, DISABLED_shouldOnlySeePublicationErrorFramesForPublicati
         ASSERT_EQ(0, errorFrameCount2);
         std::this_thread::sleep_for(std::chrono::duration<long, std::milli>(1));
     }
+}
+
+TEST_F(RejectImageTestSimple, basic_ipc_test)
+{
+    Context ctx;
+    ctx.useConductorAgentInvoker(true);
+
+    std::atomic<std::int32_t> errorFrameCount{0};
+
+    on_publication_error_frame_t errorFrameHandler =
+        [&](aeron::status::PublicationErrorFrame &errorFrame)
+        {
+            std::atomic_fetch_add(&errorFrameCount, 1);
+            return;
+        };
+
+    ctx.errorFrameHandler(errorFrameHandler);
+    std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
+    AgentInvoker<ClientConductor> &invoker = aeron->conductorAgentInvoker();
+    invoker.start();
+
+    std::int64_t pubId = aeron->addPublication("aeron:ipc", 10000);
+    std::int64_t subId = aeron->addSubscription("aeron:ipc", 10000);
+    invoker.invoke();
+
+    POLL_FOR_NON_NULL(pub, aeron->findPublication(pubId), invoker);
+    POLL_FOR_NON_NULL(sub, aeron->findSubscription(subId), invoker);
+    POLL_FOR(pub->isConnected() && sub->isConnected(), invoker);
+
+    const std::shared_ptr<Image> image = sub->imageByIndex(0);
+    image->reject("No Longer Valid");
+
+    invoker.invoke();
 }
