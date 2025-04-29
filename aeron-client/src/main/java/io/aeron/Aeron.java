@@ -1909,7 +1909,7 @@ public class Aeron implements AutoCloseable
         {
             while (true)
             {
-                while (!file.exists() || file.length() < CncFileDescriptor.META_DATA_LENGTH)
+                while (!file.exists() || file.length() < CncFileDescriptor.END_OF_METADATA_OFFSET)
                 {
                     if (clock.time() > deadlineMs)
                     {
@@ -1922,7 +1922,7 @@ public class Aeron implements AutoCloseable
                 try (FileChannel fileChannel = FileChannel.open(file.toPath(), READ, WRITE))
                 {
                     final long fileSize = fileChannel.size();
-                    if (fileSize < CncFileDescriptor.META_DATA_LENGTH)
+                    if (fileSize < CncFileDescriptor.END_OF_METADATA_OFFSET)
                     {
                         if (clock.time() > deadlineMs)
                         {

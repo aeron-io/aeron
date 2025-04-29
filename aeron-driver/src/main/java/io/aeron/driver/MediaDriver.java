@@ -697,7 +697,8 @@ public final class MediaDriver implements AutoCloseable
                     clientLivenessTimeoutNs,
                     errorBufferLength,
                     epochClock.time(),
-                    SystemUtil.getPid());
+                    SystemUtil.getPid(),
+                    filePageSize);
 
                 concludeCounters();
                 concludeDependantProperties();
