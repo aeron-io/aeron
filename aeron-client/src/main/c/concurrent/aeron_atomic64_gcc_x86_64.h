@@ -56,6 +56,56 @@ do \
 } \
 while (false) \
 
+inline uint32_t aeron_get_acquire_uint32(const volatile uint32_t *src)
+{
+    uint32_t val = *src;
+    __asm__ volatile ("" ::: "memory");
+    return val;
+}
+
+inline uint64_t aeron_get_acquire_uint64(const volatile uint64_t *src)
+{
+    uint64_t val = *src;
+    __asm__ volatile ("" ::: "memory");
+    return val;
+}
+
+inline void aeron_set_release_uint32(volatile uint32_t *dst, uint32_t src)
+{
+    __asm__ volatile ("" ::: "memory");
+    *dst = src;
+}
+
+inline void aeron_set_release_uint64(volatile uint64_t *dst, uint64_t src)
+{
+    __asm__ volatile ("" ::: "memory");
+    *dst = src;
+}
+
+inline int64_t aeron_get_and_add_int64(volatile int64_t *dst, int64_t value)
+{
+    int64_t original;
+    __asm__ volatile(
+        "lock; xaddq %0, %1"
+        : "=r"(original), "+m"(*dst)
+        : "0"(value)
+        : "memory"
+    );
+    return original;
+}
+
+inline int32_t aeron_get_and_add_int32(volatile int32_t *dst, int32_t value)
+{
+    int32_t original;
+    __asm__ volatile(
+        "lock; xaddl %0, %1"
+        : "=r"(original), "+m"(*dst)
+        : "0"(value)
+        : "memory"
+    );
+    return original;
+}
+
 inline bool aeron_cas_int64(volatile int64_t *dst, int64_t expected, int64_t desired)
 {
     int64_t original;

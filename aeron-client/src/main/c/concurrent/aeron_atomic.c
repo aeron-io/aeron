@@ -16,6 +16,18 @@
 
 #include "concurrent/aeron_atomic.h"
 
+extern uint32_t aeron_get_acquire_uint32(const volatile uint32_t *src);
+
+extern uint64_t aeron_get_acquire_uint64(const volatile uint64_t *src);
+
+extern void aeron_set_release_uint32(volatile uint32_t *dst, uint32_t src);
+
+extern void aeron_set_release_uint64(volatile uint64_t *dst, uint64_t src);
+
+extern int64_t aeron_get_and_add_int64(volatile int64_t *dst, int64_t value);
+
+extern int32_t aeron_get_and_add_int32(volatile int32_t *dst, int32_t value);
+
 extern bool aeron_cas_int64(volatile int64_t *dst, int64_t expected, int64_t desired);
 
 extern bool aeron_cas_uint64(volatile uint64_t *dst, uint64_t expected, uint64_t desired);

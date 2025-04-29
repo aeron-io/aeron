@@ -56,6 +56,42 @@ do \
 } \
 while (false) \
 
+inline int64_t aeron_get_and_add_int64(volatile int64_t *dst, int64_t value)
+{
+    return atomic_fetch_add((_Atomic(int64_t) *)dst, value);
+}
+
+inline int32_t aeron_get_and_add_int32(volatile int32_t *dst, int32_t value)
+{
+    return atomic_fetch_add((_Atomic(int32_t) *)dst, value);
+}
+
+inline uint32_t aeron_get_acquire_uint32(const volatile uint32_t *src)
+{
+    uint32_t val = *src;
+    atomic_thread_fence(memory_order_acquire);
+    return val;
+}
+
+inline uint64_t aeron_get_acquire_uint64(const volatile uint64_t *src)
+{
+    uint64_t val = *src;
+    atomic_thread_fence(memory_order_acquire);
+    return val;
+}
+
+inline void aeron_set_release_uint32(volatile uint32_t *dst, uint32_t src)
+{
+    atomic_thread_fence(memory_order_release);
+    *dst = src;
+}
+
+inline void aeron_set_release_uint64(volatile uint64_t *dst, uint64_t src)
+{
+    atomic_thread_fence(memory_order_release);
+    *dst = src;
+}
+
 inline bool aeron_cas_int64(volatile int64_t *dst, int64_t expected, int64_t desired)
 {
     return atomic_compare_exchange_strong((_Atomic(int64_t) *)dst, &expected, desired);
