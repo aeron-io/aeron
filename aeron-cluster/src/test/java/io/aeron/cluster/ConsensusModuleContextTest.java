@@ -954,13 +954,20 @@ class ConsensusModuleContextTest
         final Aeron.Context aeronContext = context.aeron().context();
         when(aeronContext.filePageSize()).thenReturn(filePageSize);
 
-        context.conclude();
+        try
+        {
+            context.conclude();
 
-        final File file = new File(context.markFileDir(), ClusterMarkFile.FILENAME);
-        assertTrue(file.exists());
-        assertEquals(BitUtil.align(context.errorBufferLength() + HEADER_LENGTH, filePageSize), file.length());
+            final File file = new File(context.markFileDir(), ClusterMarkFile.FILENAME);
+            assertTrue(file.exists());
+            assertEquals(BitUtil.align(context.errorBufferLength() + HEADER_LENGTH, filePageSize), file.length());
 
-        verify(aeronContext).filePageSize();
+            verify(aeronContext).filePageSize();
+        }
+        finally
+        {
+            context.close();
+        }
     }
 
     @Test
