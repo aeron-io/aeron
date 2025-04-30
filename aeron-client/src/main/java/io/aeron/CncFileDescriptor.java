@@ -155,12 +155,12 @@ public class CncFileDescriptor
     /**
      * Length of the metadata header for the CnC file.
      */
-    public static final int META_DATA_LENGTH = FILE_PAGE_SIZE_FIELD_OFFSET + SIZE_OF_INT;
+    public static final int META_DATA_LENGTH = CACHE_LINE_LENGTH * 2;
 
     /**
      * The offset of the first byte past the metadata header which is aligned on a cache-line boundary.
      */
-    public static final int END_OF_METADATA_OFFSET = align(META_DATA_LENGTH, (CACHE_LINE_LENGTH * 2));
+    public static final int END_OF_METADATA_OFFSET = META_DATA_LENGTH;
 
     /**
      * Compute the length of the cnc file and return it.
@@ -171,7 +171,7 @@ public class CncFileDescriptor
      */
     public static int computeCncFileLength(final int totalLengthOfBuffers, final int alignment)
     {
-        return align(END_OF_METADATA_OFFSET + totalLengthOfBuffers, alignment);
+        return align(META_DATA_LENGTH + totalLengthOfBuffers, alignment);
     }
 
     /**
@@ -328,7 +328,7 @@ public class CncFileDescriptor
      */
     public static UnsafeBuffer createMetaDataBuffer(final ByteBuffer buffer)
     {
-        return new UnsafeBuffer(buffer, 0, END_OF_METADATA_OFFSET);
+        return new UnsafeBuffer(buffer, 0, META_DATA_LENGTH);
     }
 
     /**
@@ -341,7 +341,7 @@ public class CncFileDescriptor
     public static UnsafeBuffer createToDriverBuffer(final ByteBuffer buffer, final DirectBuffer metaDataBuffer)
     {
         return new UnsafeBuffer(
-            buffer, END_OF_METADATA_OFFSET, metaDataBuffer.getInt(TO_DRIVER_BUFFER_LENGTH_FIELD_OFFSET));
+            buffer, META_DATA_LENGTH, metaDataBuffer.getInt(TO_DRIVER_BUFFER_LENGTH_FIELD_OFFSET));
     }
 
     /**
@@ -353,7 +353,7 @@ public class CncFileDescriptor
      */
     public static UnsafeBuffer createToClientsBuffer(final ByteBuffer buffer, final DirectBuffer metaDataBuffer)
     {
-        final int offset = END_OF_METADATA_OFFSET + metaDataBuffer.getInt(TO_DRIVER_BUFFER_LENGTH_FIELD_OFFSET);
+        final int offset = META_DATA_LENGTH + metaDataBuffer.getInt(TO_DRIVER_BUFFER_LENGTH_FIELD_OFFSET);
 
         return new UnsafeBuffer(buffer, offset, metaDataBuffer.getInt(TO_CLIENTS_BUFFER_LENGTH_FIELD_OFFSET));
     }
@@ -367,7 +367,7 @@ public class CncFileDescriptor
      */
     public static UnsafeBuffer createCountersMetaDataBuffer(final ByteBuffer buffer, final DirectBuffer metaDataBuffer)
     {
-        final int offset = END_OF_METADATA_OFFSET +
+        final int offset = META_DATA_LENGTH +
             metaDataBuffer.getInt(TO_DRIVER_BUFFER_LENGTH_FIELD_OFFSET) +
             metaDataBuffer.getInt(TO_CLIENTS_BUFFER_LENGTH_FIELD_OFFSET);
 
@@ -383,7 +383,7 @@ public class CncFileDescriptor
      */
     public static UnsafeBuffer createCountersValuesBuffer(final ByteBuffer buffer, final DirectBuffer metaDataBuffer)
     {
-        final int offset = END_OF_METADATA_OFFSET +
+        final int offset = META_DATA_LENGTH +
             metaDataBuffer.getInt(TO_DRIVER_BUFFER_LENGTH_FIELD_OFFSET) +
             metaDataBuffer.getInt(TO_CLIENTS_BUFFER_LENGTH_FIELD_OFFSET) +
             metaDataBuffer.getInt(COUNTERS_METADATA_BUFFER_LENGTH_FIELD_OFFSET);
@@ -400,7 +400,7 @@ public class CncFileDescriptor
      */
     public static UnsafeBuffer createErrorLogBuffer(final ByteBuffer buffer, final DirectBuffer metaDataBuffer)
     {
-        final int offset = END_OF_METADATA_OFFSET +
+        final int offset = META_DATA_LENGTH +
             metaDataBuffer.getInt(TO_DRIVER_BUFFER_LENGTH_FIELD_OFFSET) +
             metaDataBuffer.getInt(TO_CLIENTS_BUFFER_LENGTH_FIELD_OFFSET) +
             metaDataBuffer.getInt(COUNTERS_METADATA_BUFFER_LENGTH_FIELD_OFFSET) +
@@ -479,7 +479,7 @@ public class CncFileDescriptor
     public static boolean isCncFileLengthSufficient(final DirectBuffer metaDataBuffer, final int cncFileLength)
     {
         final int metadataRequiredLength =
-            END_OF_METADATA_OFFSET +
+            META_DATA_LENGTH +
             metaDataBuffer.getInt(TO_DRIVER_BUFFER_LENGTH_FIELD_OFFSET) +
             metaDataBuffer.getInt(TO_CLIENTS_BUFFER_LENGTH_FIELD_OFFSET) +
             metaDataBuffer.getInt(COUNTERS_METADATA_BUFFER_LENGTH_FIELD_OFFSET) +

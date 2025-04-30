@@ -916,7 +916,7 @@ public class CommonContext implements Cloneable
     {
         final File cncFile = new File(aeronDirectory, CncFileDescriptor.CNC_FILE);
 
-        if (cncFile.exists() && cncFile.length() > CncFileDescriptor.END_OF_METADATA_OFFSET)
+        if (cncFile.exists() && cncFile.length() > CncFileDescriptor.META_DATA_LENGTH)
         {
             if (null != logger)
             {
@@ -942,7 +942,7 @@ public class CommonContext implements Cloneable
     {
         final File cncFile = new File(directory, CncFileDescriptor.CNC_FILE);
 
-        if (cncFile.exists() && cncFile.length() > CncFileDescriptor.END_OF_METADATA_OFFSET)
+        if (cncFile.exists() && cncFile.length() > CncFileDescriptor.META_DATA_LENGTH)
         {
             logger.accept("INFO: Aeron CnC file exists: " + cncFile);
 
@@ -1042,7 +1042,7 @@ public class CommonContext implements Cloneable
     {
         final File cncFile = new File(directory, CncFileDescriptor.CNC_FILE);
 
-        if (cncFile.exists() && cncFile.length() > CncFileDescriptor.END_OF_METADATA_OFFSET)
+        if (cncFile.exists() && cncFile.length() > CncFileDescriptor.META_DATA_LENGTH)
         {
             final MappedByteBuffer cncByteBuffer = IoUtil.mapExistingFile(cncFile, "CnC file");
             try
@@ -1251,7 +1251,7 @@ public class CommonContext implements Cloneable
     {
         while (true)
         {
-            while (!cncFile.exists() || cncFile.length() < CncFileDescriptor.END_OF_METADATA_OFFSET)
+            while (!cncFile.exists() || cncFile.length() < CncFileDescriptor.META_DATA_LENGTH)
             {
                 if (clock.time() > deadlineMs)
                 {
@@ -1264,7 +1264,7 @@ public class CommonContext implements Cloneable
             try (FileChannel fileChannel = FileChannel.open(cncFile.toPath(), READ, WRITE))
             {
                 final long fileSize = fileChannel.size();
-                if (fileSize < CncFileDescriptor.END_OF_METADATA_OFFSET)
+                if (fileSize < CncFileDescriptor.META_DATA_LENGTH)
                 {
                     if (clock.time() > deadlineMs)
                     {
