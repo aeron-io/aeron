@@ -20,7 +20,15 @@ import io.aeron.config.DefaultType;
 import io.aeron.exceptions.AeronException;
 import io.aeron.exceptions.ConcurrentConcludeException;
 import io.aeron.exceptions.DriverTimeoutException;
-import org.agrona.*;
+import org.agrona.BufferUtil;
+import org.agrona.CloseHelper;
+import org.agrona.DirectBuffer;
+import org.agrona.ErrorHandler;
+import org.agrona.IoUtil;
+import org.agrona.LangUtil;
+import org.agrona.MarkFile;
+import org.agrona.SemanticVersion;
+import org.agrona.SystemUtil;
 import org.agrona.concurrent.AtomicBuffer;
 import org.agrona.concurrent.EpochClock;
 import org.agrona.concurrent.UnsafeBuffer;
@@ -30,7 +38,13 @@ import org.agrona.concurrent.errors.ErrorLogReader;
 import org.agrona.concurrent.errors.LoggingErrorHandler;
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
 
-import java.io.*;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.PrintStream;
+import java.io.UncheckedIOException;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.nio.ByteBuffer;
@@ -1213,13 +1227,14 @@ public class CommonContext implements Cloneable
      *
      * @param aeronDirectory where driver is running.
      * @param clock          to use.
-     * @param deadlineMs     for awaiting connection.
+     * @param timeoutMs      for awaiting connection.
      * @return file page size from running media driver.
      * @since 1.48.0
      */
-    public static int driverFilePageSize(final File aeronDirectory, final EpochClock clock, final long deadlineMs)
+    public static int driverFilePageSize(final File aeronDirectory, final EpochClock clock, final long timeoutMs)
     {
-        final UnsafeBuffer metadata = awaitCncFileCreation(new File(aeronDirectory, CNC_FILE), clock, deadlineMs);
+        final UnsafeBuffer metadata =
+            awaitCncFileCreation(new File(aeronDirectory, CNC_FILE), clock, clock.time() + timeoutMs);
         try
         {
             return CncFileDescriptor.filePageSize(metadata);
