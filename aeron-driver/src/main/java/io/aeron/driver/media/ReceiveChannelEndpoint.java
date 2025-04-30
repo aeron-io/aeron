@@ -1056,7 +1056,7 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
         final int bytesSent = null == multiRcvDestination ?
             sendTo(buffer, remoteAddress) :
             MultiRcvDestination.sendTo(multiRcvDestination.transport(transportIndex), buffer, remoteAddress,
-                receiveChannelShortSends, receiveChannelConnectionErrors);
+            receiveChannelShortSends, receiveChannelConnectionErrors);
 
         if (length != bytesSent)
         {

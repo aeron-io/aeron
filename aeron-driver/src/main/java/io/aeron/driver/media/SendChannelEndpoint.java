@@ -827,7 +827,11 @@ class ManualSndMultiDestination extends MultiSndDestination
         final SendChannelEndpoint channelEndpoint,
         final int bytesToSend)
     {
-        if (destinations.length == 0) { return 0; }
+        if (destinations.length == 0)
+        {
+            return 0;
+        }
+
         final int position = buffer.position();
         final int length = destinations.length;
 
@@ -1013,7 +1017,11 @@ class DynamicSndMultiDestination extends MultiSndDestination
         final SendChannelEndpoint channelEndpoint,
         final int bytesToSend)
     {
-        if (destinations.length == 0) { return 0; }
+        if (destinations.length == 0)
+        {
+            return 0;
+        }
+
         final long nowNs = nanoClock.nanoTime();
         final int position = buffer.position();
         final int length = destinations.length;
