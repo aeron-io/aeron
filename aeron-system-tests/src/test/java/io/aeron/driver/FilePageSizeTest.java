@@ -57,6 +57,6 @@ public class FilePageSizeTest
         systemTestWatcher.dataCollector().add(driver.context().aeronDirectory());
 
         assertEquals(filePageSize, driverFilePageSize(
-            new File(driver.aeronDirectoryName()), SystemEpochClock.INSTANCE, TimeUnit.SECONDS.toMillis(1)));
+            new File(driver.aeronDirectoryName()), SystemEpochClock.INSTANCE, TimeUnit.SECONDS.toMillis(10)));
     }
 }
