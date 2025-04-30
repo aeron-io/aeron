@@ -444,14 +444,14 @@ public class ArchiveMarkFile implements AutoCloseable
         }
 
         final int filePageSize;
-        if (null == ctx.aeron())
+        if (null != ctx.aeron())
         {
-            filePageSize = CommonContext.driverFilePageSize(
-                new File(ctx.aeronDirectoryName()), ctx.epochClock(), new CommonContext().driverTimeoutMs());
+            filePageSize = ctx.aeron().context().filePageSize();
         }
         else
         {
-            filePageSize = ctx.aeron().context().filePageSize();
+            filePageSize = CommonContext.driverFilePageSize(
+                new File(ctx.aeronDirectoryName()), ctx.epochClock(), new CommonContext().driverTimeoutMs());
         }
         return BitUtil.align(HEADER_LENGTH + ctx.errorBufferLength(), 0 != filePageSize ? filePageSize : PAGE_MIN_SIZE);
     }
