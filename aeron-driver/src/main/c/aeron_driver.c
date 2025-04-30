@@ -252,6 +252,7 @@ void aeron_driver_fill_cnc_metadata(aeron_driver_context_t *context)
     metadata->client_liveness_timeout = (int64_t)context->client_liveness_timeout_ns;
     metadata->start_timestamp = context->epoch_clock();
     metadata->pid = getpid();
+    metadata->file_page_size = (int32_t)context->file_page_size;
 
     context->to_driver_buffer = aeron_cnc_to_driver_buffer(metadata);
     context->to_clients_buffer = aeron_cnc_to_clients_buffer(metadata);

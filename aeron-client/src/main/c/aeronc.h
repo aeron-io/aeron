@@ -2523,6 +2523,7 @@ typedef struct aeron_cnc_constants_stct
     int64_t client_liveness_timeout;
     int64_t start_timestamp;
     int64_t pid;
+    int32_t file_page_size;
 }
 aeron_cnc_constants_t;
 #pragma pack(pop)
