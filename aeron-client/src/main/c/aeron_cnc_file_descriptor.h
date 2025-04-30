@@ -54,7 +54,7 @@ typedef enum aeron_cnc_load_result_stct
 }
 aeron_cnc_load_result_t;
 
-#define AERON_CNC_VERSION_AND_META_DATA_LENGTH (AERON_ALIGN(sizeof(aeron_cnc_metadata_t), AERON_CACHE_LINE_LENGTH * 2u))
+#define AERON_CNC_VERSION_AND_META_DATA_LENGTH UINT32_C(AERON_CACHE_LINE_LENGTH * 2)
 
 inline uint8_t *aeron_cnc_to_driver_buffer(aeron_cnc_metadata_t *metadata)
 {
