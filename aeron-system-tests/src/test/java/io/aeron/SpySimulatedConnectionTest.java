@@ -288,8 +288,22 @@ class SpySimulatedConnectionTest
         spy = client.addSubscription(spyForChannel(channel), STREAM_ID);
         publication = client.addExclusivePublication(channel + "|ssc=true", STREAM_ID);
 
-        Tests.awaitConnected(spy);
-        Tests.awaitConnected(publication);
+        while (!spy.isConnected() || !publication.isConnected())
+        {
+            Tests.yield();
+        }
+
+        while (publication.offer(buffer, 0, buffer.capacity()) < 0L)
+        {
+            Tests.yield();
+        }
+
+        final FragmentHandler mockFragmentHandler = mock(FragmentHandler.class);
+
+        while (spy.poll(mockFragmentHandler, 1) == 0)
+        {
+            Tests.yield();
+        }
 
         assertEquals(0, driver.counters().getCounterValue(SystemCounterDescriptor.SHORT_SENDS.id()));
     }
