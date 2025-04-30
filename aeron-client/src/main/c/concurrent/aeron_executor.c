@@ -73,12 +73,7 @@ static void *aeron_executor_dispatch(void *arg)
 {
     aeron_executor_t *executor = (aeron_executor_t *)arg;
 
-    const char *role_name = "aeron_executor";
-    aeron_thread_set_name(role_name);
-    if (executor->dispatch_thread_cpu_affinity >= 0)
-    {
-        aeron_thread_set_affinity(role_name, executor->dispatch_thread_cpu_affinity);
-    }
+    aeron_thread_set_name("aeron_executor");
 
     aeron_executor_task_t *task;
     aeron_linked_queue_node_t *node;
@@ -126,14 +121,12 @@ static void *aeron_executor_dispatch(void *arg)
 int aeron_executor_init(
     aeron_executor_t *executor,
     bool async,
-    int32_t cpu_affinity,
     aeron_executor_on_execution_complete_func_t on_execution_complete,
     void *clientd)
 {
     executor->async = async,
     executor->on_execution_complete = on_execution_complete;
     executor->clientd = clientd;
-    executor->dispatch_thread_cpu_affinity = cpu_affinity;
 
     if (async)
     {

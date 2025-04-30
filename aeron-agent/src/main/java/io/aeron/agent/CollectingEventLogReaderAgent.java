@@ -54,6 +54,7 @@ public final class CollectingEventLogReaderAgent implements Agent, CollectingEve
     private final Int2ObjectHashMap<ComponentLogger> loggers = new Int2ObjectHashMap<>();
     private String startMessage;
 
+    @SuppressWarnings("JavadocVariable")
     enum State
     {
         COLLECTING, IGNORING

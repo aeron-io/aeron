@@ -19,6 +19,7 @@ import org.agrona.concurrent.status.ReadablePosition;
 
 class UntetheredSubscription
 {
+    @SuppressWarnings("JavadocVariable")
     enum State
     {
         ACTIVE,

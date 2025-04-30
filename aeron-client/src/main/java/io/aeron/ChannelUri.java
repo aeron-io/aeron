@@ -47,6 +47,7 @@ import static java.util.Objects.requireNonNull;
  */
 public final class ChannelUri
 {
+    @SuppressWarnings("JavadocVariable")
     private enum State
     {
         MEDIA, PARAMS_KEY, PARAMS_VALUE

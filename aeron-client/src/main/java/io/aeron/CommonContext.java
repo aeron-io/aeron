@@ -493,18 +493,12 @@ public class CommonContext implements Cloneable
     public static PrintStream fallbackLogger()
     {
         final String fallbackLoggerName = getProperty(FALLBACK_LOGGER_PROP_NAME, "stderr");
-        switch (fallbackLoggerName)
+        return switch (fallbackLoggerName)
         {
-            case "stdout":
-                return System.out;
-
-            case "no_op":
-                return NO_OP_LOGGER;
-
-            case "stderr":
-            default:
-                return System.err;
-        }
+            case "stdout" -> System.out;
+            case "no_op" -> NO_OP_LOGGER;
+            default -> System.err;
+        };
     }
 
     private static final PrintStream NO_OP_LOGGER = new PrintStream(

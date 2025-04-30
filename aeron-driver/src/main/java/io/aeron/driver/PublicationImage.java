@@ -105,6 +105,7 @@ public final class PublicationImage
     extends PublicationImagePadding3
     implements LossHandler, DriverManagedResource, Subscribable
 {
+    @SuppressWarnings("JavadocVariable")
     enum State
     {
         INIT, ACTIVE, DRAINING, LINGER, DONE

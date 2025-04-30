@@ -265,6 +265,7 @@ public final class RetransmitHandler
 
     static final class RetransmitAction
     {
+        @SuppressWarnings("JavadocVariable")
         enum State
         {
             DELAYED,

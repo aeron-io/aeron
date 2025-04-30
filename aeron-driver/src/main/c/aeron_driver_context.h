@@ -126,7 +126,7 @@ typedef struct aeron_driver_context_stct
     bool dirs_delete_on_start;                              /* aeron.dir.delete.on.start = false */
     bool dirs_delete_on_shutdown;                           /* aeron.dir.delete.on.shutdown = false */
     bool warn_if_dirs_exist;                                /* aeron.dir.warn.if.exists = false */
-    bool term_buffer_sparse_file;                           /* aeron.term.buffer.sparse.file = false */
+    bool term_buffer_sparse_file;                           /* aeron.term.buffer.sparse.file = true */
     bool perform_storage_checks;                            /* aeron.perform.storage.checks = true */
     bool spies_simulate_connection;                         /* aeron.spies.simulate.connection = false */
     bool print_configuration_on_start;                      /* aeron.print.configuration = false */
@@ -183,7 +183,6 @@ typedef struct aeron_driver_context_stct
     int32_t conductor_cpu_affinity_no;                      /* aeron.conductor.cpu.affinity = -1 */
     int32_t receiver_cpu_affinity_no;                       /* aeron.receiver.cpu.affinity = -1 */
     int32_t sender_cpu_affinity_no;                         /* aeron.sender.cpu.affinity = -1 */
-    int32_t async_executor_cpu_affinity_no;                 /* aeron.driver.async.executor.cpu.affinity = -1 */
     int32_t stream_session_limit;                           /* aeron.driver.stream.session.limit = INT32_MAX */
     bool enable_experimental_features;                      /* aeron.enable.experimental.features = false */
 

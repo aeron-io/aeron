@@ -55,6 +55,8 @@ class ControlSessionTest
             CONNECT_TIMEOUT_MS,
             SESSION_LIVENESS_CHECK_INTERVAL_NS,
             CONTROL_PUBLICATION_ID,
+            "aeron:ipc?alias=test-control-response",
+            5555,
             null,
             mockDemuxer,
             mockAeron,

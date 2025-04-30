@@ -53,6 +53,7 @@ public final class ReplayMerge implements AutoCloseable
     private static final long INITIAL_GET_MAX_RECORDED_POSITION_BACKOFF_MS = 8;
     private static final long GET_MAX_RECORDED_POSITION_BACKOFF_MAX_MS = 500;
 
+    @SuppressWarnings("JavadocVariable")
     enum State
     {
         RESOLVE_REPLAY_PORT,

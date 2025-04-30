@@ -37,6 +37,7 @@ public final class SampleAuthenticator implements Authenticator
      */
     public static final String PRINCIPAL = "admin";
 
+    @SuppressWarnings("JavadocVariable")
     enum SessionState
     {
         CHALLENGE, AUTHENTICATED, REJECT

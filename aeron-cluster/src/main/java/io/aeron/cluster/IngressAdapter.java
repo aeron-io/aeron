@@ -34,7 +34,8 @@ class IngressAdapter implements AutoCloseable
     private final SessionKeepAliveDecoder sessionKeepAliveDecoder = new SessionKeepAliveDecoder();
     private final ChallengeResponseDecoder challengeResponseDecoder = new ChallengeResponseDecoder();
     private final AdminRequestDecoder adminRequestDecoder = new AdminRequestDecoder();
-    private final ControlledFragmentAssembler fragmentAssembler = new ControlledFragmentAssembler(this::onMessage);
+    private final ControlledFragmentAssembler udpFragmentAssembler = new ControlledFragmentAssembler(this::onMessage);
+    private final ControlledFragmentAssembler ipcFragmentAssembler = new ControlledFragmentAssembler(this::onMessage);
     private final ConsensusModuleAgent consensusModuleAgent;
     private Subscription subscription;
     private Subscription ipcSubscription;
@@ -63,7 +64,8 @@ class IngressAdapter implements AutoCloseable
             ipcSubscription.close();
         }
 
-        fragmentAssembler.clear();
+        udpFragmentAssembler.clear();
+        ipcFragmentAssembler.clear();
     }
 
     @SuppressWarnings("MethodLength")
@@ -210,19 +212,26 @@ class IngressAdapter implements AutoCloseable
 
         if (null != subscription)
         {
-            fragmentsRead += subscription.controlledPoll(fragmentAssembler, fragmentPollLimit);
+            fragmentsRead += subscription.controlledPoll(udpFragmentAssembler, fragmentPollLimit);
         }
 
         if (null != ipcSubscription)
         {
-            fragmentsRead += ipcSubscription.controlledPoll(fragmentAssembler, fragmentPollLimit);
+            fragmentsRead += ipcSubscription.controlledPoll(ipcFragmentAssembler, fragmentPollLimit);
         }
 
         return fragmentsRead;
     }
 
-    void freeSessionBuffer(final int imageSessionId)
+    void freeSessionBuffer(final int imageSessionId, final boolean isIpc)
     {
-        fragmentAssembler.freeSessionBuffer(imageSessionId);
+        if (isIpc)
+        {
+            ipcFragmentAssembler.freeSessionBuffer(imageSessionId);
+        }
+        else
+        {
+            udpFragmentAssembler.freeSessionBuffer(imageSessionId);
+        }
     }
 }

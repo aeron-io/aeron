@@ -29,6 +29,7 @@ interface NetworkInterfaceShim
 
     boolean isLoopback(NetworkInterface ifc) throws SocketException;
 
+    @SuppressWarnings("JavadocVariable")
     NetworkInterfaceShim DEFAULT = new NetworkInterfaceShim()
     {
         public Enumeration<NetworkInterface> getNetworkInterfaces() throws SocketException
