@@ -1442,12 +1442,6 @@ final class ClientConductor implements Agent
 
     void rejectImage(final long correlationId, final long position, final String reason)
     {
-        if (reason.length() > ErrorFlyweight.MAX_ERROR_MESSAGE_LENGTH)
-        {
-            throw new AeronException("Invalidation reason must be " +
-                ErrorFlyweight.MAX_ERROR_MESSAGE_LENGTH + " bytes or less");
-        }
-
         clientLock.lock();
         try
         {
