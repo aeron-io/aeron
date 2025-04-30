@@ -17,7 +17,6 @@ package io.aeron;
 
 import io.aeron.command.PublicationErrorFrameFlyweight;
 import io.aeron.exceptions.*;
-import io.aeron.protocol.ErrorFlyweight;
 import io.aeron.status.ChannelEndpointStatus;
 import io.aeron.status.HeartbeatTimestamp;
 import io.aeron.status.PublicationErrorFrame;
