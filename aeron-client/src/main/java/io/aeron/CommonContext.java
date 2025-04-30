@@ -1215,6 +1215,7 @@ public class CommonContext implements Cloneable
      * @param clock          to use.
      * @param deadlineMs     for awaiting connection.
      * @return file page size from running media driver.
+     * @since 1.48.0
      */
     public static int driverFilePageSize(final File aeronDirectory, final EpochClock clock, final long deadlineMs)
     {

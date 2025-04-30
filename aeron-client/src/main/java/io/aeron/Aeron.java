@@ -1771,6 +1771,7 @@ public class Aeron implements AutoCloseable
          * Get file page size from running media driver.
          *
          * @return file page size or zero (if not connected to the media driver).
+         * @since 1.48.0
          */
         public int filePageSize()
         {
