@@ -465,6 +465,12 @@ public final class DataCollector
 
                         return FileVisitResult.CONTINUE;
                     }
+
+                    public FileVisitResult visitFileFailed(final Path file, final IOException exc) throws IOException
+                    {
+                        // Ignore failure visiting file.
+                        return FileVisitResult.CONTINUE;
+                    }
                 });
         }
     }

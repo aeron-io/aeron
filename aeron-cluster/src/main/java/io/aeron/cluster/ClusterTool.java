@@ -23,7 +23,9 @@ import static org.agrona.SystemUtil.getDurationInNanos;
 import java.io.File;
 import java.io.PrintStream;
 import java.util.Map;
+import java.util.function.BiConsumer;
 
+import io.aeron.Image;
 import org.agrona.SystemUtil;
 import org.agrona.collections.Object2ObjectHashMap;
 
@@ -214,7 +216,7 @@ public class ClusterTool
         COMMANDS.put("describe-latest-cm-snapshot", new ClusterToolCommand(
             action((clusterDir, listener) -> operator.describeLatestConsensusModuleSnapshot(
             clusterDir,
-            System.out,
+            listener,
             null)),
             "prints the contents of the latest valid consensus module snapshot."));
     }
@@ -511,6 +513,22 @@ public class ClusterTool
      * @return <code>true</code> if the snapshot was successfully described <code>false</code> otherwise.
      */
     public static boolean describeLatestConsensusModuleSnapshot(final PrintStream out, final File clusterDir)
+    {
+        return BACKWARD_COMPATIBLE_OPERATIONS.describeLatestConsensusModuleSnapshot(clusterDir, out, null) == SUCCESS;
+    }
+
+    /**
+     * Print out a summary of the state captured in the latest consensus module snapshot.
+     *
+     * @param out                           to print the operation result.
+     * @param clusterDir                    where the cluster is running.
+     * @param postConsensusImageDescriber   describe the data after the snapshot used for extensions.
+     * @return <code>true</code> if the snapshot was successfully described <code>false</code> otherwise.
+     */
+    public static boolean describeLatestConsensusModuleSnapshot(
+        final PrintStream out,
+        final File clusterDir,
+        final BiConsumer<Image, Aeron> postConsensusImageDescriber)
     {
         return BACKWARD_COMPATIBLE_OPERATIONS.describeLatestConsensusModuleSnapshot(clusterDir, out, null) == SUCCESS;
     }
