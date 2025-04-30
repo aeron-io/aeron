@@ -1254,7 +1254,7 @@ public final class Archive implements AutoCloseable
                             .aeronDirectoryName(aeronDirectoryName)
                             .epochClock(epochClock)
                             .nanoClock(nanoClock)
-                            .errorHandler(RethrowingErrorHandler.INSTANCE)
+                            .errorHandler(errorHandler)
                             .driverAgentInvoker(mediaDriverAgentInvoker)
                             .useConductorAgentInvoker(true)
                             .subscriberErrorHandler(RethrowingErrorHandler.INSTANCE)
