@@ -2229,7 +2229,7 @@ public final class ConsensusModule implements AutoCloseable
          * @see Configuration#FILE_SYNC_LEVEL_PROP_NAME
          */
         @Config
-        int fileSyncLevel()
+        public int fileSyncLevel()
         {
             return fileSyncLevel;
         }
