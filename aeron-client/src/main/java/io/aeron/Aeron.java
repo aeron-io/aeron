@@ -32,15 +32,10 @@ import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.agrona.concurrent.status.CountersReader;
 
 import java.io.File;
-import java.io.IOException;
 import java.io.PrintStream;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
-import java.nio.file.AccessDeniedException;
-import java.nio.file.FileSystemException;
-import java.nio.file.NoSuchFileException;
+import java.nio.ByteBuffer;
 import java.util.Objects;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -48,9 +43,6 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static io.aeron.Aeron.Configuration.MAX_CLIENT_NAME_LENGTH;
-import static java.nio.channels.FileChannel.MapMode.READ_WRITE;
-import static java.nio.file.StandardOpenOption.READ;
-import static java.nio.file.StandardOpenOption.WRITE;
 import static org.agrona.SystemUtil.getDurationInNanos;
 import static org.agrona.SystemUtil.getProperty;
 
@@ -73,6 +65,7 @@ public class Aeron implements AutoCloseable
     public static final int NULL_VALUE = -1;
 
     private static final VarHandle IS_CLOSED_VH;
+
     static
     {
         try
@@ -950,7 +943,7 @@ public class Aeron implements AutoCloseable
         private CopyBroadcastReceiver toClientBuffer;
         private RingBuffer toDriverBuffer;
         private DriverProxy driverProxy;
-        private MappedByteBuffer cncByteBuffer;
+        private ByteBuffer cncByteBuffer;
         private AtomicBuffer cncMetaDataBuffer;
         private LogBuffersFactory logBuffersFactory;
         private ErrorHandler errorHandler;
@@ -962,10 +955,11 @@ public class Aeron implements AutoCloseable
         private PublicationErrorFrameHandler publicationErrorFrameHandler = PublicationErrorFrameHandler.NO_OP;
         private Runnable closeHandler;
         private long keepAliveIntervalNs = Configuration.KEEPALIVE_INTERVAL_NS;
-        private long interServiceTimeoutNs = 0;
+        private long interServiceTimeoutNs;
         private long idleSleepDurationNs = Configuration.idleSleepDurationNs();
         private long resourceLingerDurationNs = Configuration.resourceLingerDurationNs();
         private long closeLingerDurationNs = Configuration.closeLingerDurationNs();
+        private int filePageSize;
 
         private ThreadFactory threadFactory = Thread::new;
 
@@ -1032,10 +1026,8 @@ public class Aeron implements AutoCloseable
                 awaitingIdleStrategy = new SleepingMillisIdleStrategy(Configuration.AWAITING_IDLE_SLEEP_MS);
             }
 
-            if (cncFile() != null)
-            {
-                connectToDriver();
-            }
+            connectToDriver();
+            filePageSize = CncFileDescriptor.filePageSize(cncMetaDataBuffer);
 
             interServiceTimeoutNs = CncFileDescriptor.clientLivenessTimeoutNs(cncMetaDataBuffer);
             if (interServiceTimeoutNs <= keepAliveIntervalNs)
@@ -1776,6 +1768,16 @@ public class Aeron implements AutoCloseable
         }
 
         /**
+         * Get file page size from running media driver.
+         *
+         * @return file page size or zero (if not connected to the media driver).
+         */
+        public int filePageSize()
+        {
+            return filePageSize;
+        }
+
+        /**
          * Clean up all resources that the client uses to communicate with the Media Driver.
          */
         public void close()
@@ -1838,27 +1840,8 @@ public class Aeron implements AutoCloseable
 
             while (null == toDriverBuffer)
             {
-                cncByteBuffer = waitForFileMapping(cncFile, clock, deadlineMs);
-                cncMetaDataBuffer = CncFileDescriptor.createMetaDataBuffer(cncByteBuffer);
-
-                int cncVersion;
-                while (0 == (cncVersion = cncMetaDataBuffer.getIntVolatile(CncFileDescriptor.cncVersionOffset(0))))
-                {
-                    if (clock.time() > deadlineMs)
-                    {
-                        throw new DriverTimeoutException("CnC file is created but not initialised: " +
-                            cncFile.getAbsolutePath());
-                    }
-
-                    sleep(Configuration.AWAITING_IDLE_SLEEP_MS);
-                }
-
-                CncFileDescriptor.checkVersion(cncVersion);
-                if (SemanticVersion.minor(cncVersion) < SemanticVersion.minor(CncFileDescriptor.CNC_VERSION))
-                {
-                    throw new AeronException("driverVersion=" + SemanticVersion.toString(cncVersion) +
-                        " insufficient for clientVersion=" + SemanticVersion.toString(CncFileDescriptor.CNC_VERSION));
-                }
+                cncMetaDataBuffer = awaitCncFileCreation(cncFile, clock, deadlineMs);
+                cncByteBuffer = cncMetaDataBuffer.byteBuffer();
 
                 if (!CncFileDescriptor.isCncFileLengthSufficient(cncMetaDataBuffer, cncByteBuffer.capacity()))
                 {
@@ -1901,69 +1884,6 @@ public class Aeron implements AutoCloseable
 
                 toDriverBuffer = ringBuffer;
             }
-        }
-
-        @SuppressWarnings("try")
-        private static MappedByteBuffer waitForFileMapping(
-            final File file, final EpochClock clock, final long deadlineMs)
-        {
-            while (true)
-            {
-                while (!file.exists() || file.length() < CncFileDescriptor.END_OF_METADATA_OFFSET)
-                {
-                    if (clock.time() > deadlineMs)
-                    {
-                        throw new DriverTimeoutException("CnC file not created: " + file.getAbsolutePath());
-                    }
-
-                    sleep(Configuration.IDLE_SLEEP_DEFAULT_MS);
-                }
-
-                try (FileChannel fileChannel = FileChannel.open(file.toPath(), READ, WRITE))
-                {
-                    final long fileSize = fileChannel.size();
-                    if (fileSize < CncFileDescriptor.END_OF_METADATA_OFFSET)
-                    {
-                        if (clock.time() > deadlineMs)
-                        {
-                            throw new DriverTimeoutException(
-                                "CnC file is created but not populated: " + file.getAbsolutePath());
-                        }
-
-                        fileChannel.close();
-                        sleep(Configuration.IDLE_SLEEP_DEFAULT_MS);
-                        continue;
-                    }
-
-                    return fileChannel.map(READ_WRITE, 0, fileSize);
-                }
-                catch (final NoSuchFileException | AccessDeniedException ignore)
-                {
-                }
-                catch (final FileSystemException ex)
-                {
-                    // JDK exception translation does not handle `ERROR_SHARING_VIOLATION (32)` and returns
-                    // FileSystemException with the error "The process cannot access the file because it is being
-                    // used by another process.". Our current thinking is that matching by text is too brittle due
-                    // to error message being locale-sensitive on Windows. Therefore, we are going to retry on any
-                    // FileSystemException when running on Windows.
-                    if (SystemUtil.isWindows())
-                    {
-                        continue;
-                    }
-
-                    throw new AeronException(cncFileErrorMessage(file, ex), ex);
-                }
-                catch (final IOException ex)
-                {
-                    throw new AeronException(cncFileErrorMessage(file, ex), ex);
-                }
-            }
-        }
-
-        private static String cncFileErrorMessage(final File file, final Exception ex)
-        {
-            return "cannot open CnC file: " + file.getAbsolutePath() + " reason=" + ex;
         }
     }
 }

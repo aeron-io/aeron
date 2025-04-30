@@ -22,6 +22,7 @@ import io.aeron.exceptions.ConcurrentConcludeException;
 import io.aeron.exceptions.DriverTimeoutException;
 import org.agrona.*;
 import org.agrona.concurrent.AtomicBuffer;
+import org.agrona.concurrent.EpochClock;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.errors.DistinctErrorLog;
 import org.agrona.concurrent.errors.ErrorConsumer;
@@ -34,6 +35,10 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.file.AccessDeniedException;
+import java.nio.file.FileSystemException;
+import java.nio.file.NoSuchFileException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Map;
@@ -42,10 +47,14 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
+import static io.aeron.CncFileDescriptor.CNC_FILE;
 import static io.aeron.CncFileDescriptor.cncVersionOffset;
 import static java.lang.Long.getLong;
 import static java.lang.System.getProperty;
+import static java.nio.channels.FileChannel.MapMode.READ_WRITE;
 import static java.nio.charset.StandardCharsets.US_ASCII;
+import static java.nio.file.StandardOpenOption.READ;
+import static java.nio.file.StandardOpenOption.WRITE;
 
 /**
  * This class provides the Media Driver and client with common configuration for the Aeron directory.
@@ -444,7 +453,7 @@ public class CommonContext implements Cloneable
     public static final String STREAM_ID_PARAM_NAME = "stream-id";
 
     /**
-     *  Parameter name for the publication window length, i.e. how far ahead can publication accept offers.
+     * Parameter name for the publication window length, i.e. how far ahead can publication accept offers.
      *
      * @since 1.47.0
      */
@@ -511,6 +520,7 @@ public class CommonContext implements Cloneable
         });
     private static final Map<String, Boolean> DEBUG_FIELDS_SEEN = new ConcurrentHashMap<>();
     private static final VarHandle IS_CONCLUDED_VH;
+
     static
     {
         try
@@ -908,7 +918,7 @@ public class CommonContext implements Cloneable
     /**
      * Is a media driver active in the given directory?
      *
-     * @param directory       to check
+     * @param directory       to check.
      * @param driverTimeoutMs for the driver liveness check.
      * @param logger          for feedback as liveness checked.
      * @return true if a driver is active or false if not.
@@ -1198,6 +1208,108 @@ public class CommonContext implements Cloneable
         return setupErrorHandler(userErrorHandler, errorLog, fallbackLogger());
     }
 
+    /**
+     * Connect to the media driver and extract file page size from the C'n'C file.
+     *
+     * @param aeronDirectory where driver is running.
+     * @param clock          to use.
+     * @param deadlineMs     for awaiting connection.
+     * @return file page size from running media driver.
+     */
+    public static int driverFilePageSize(final File aeronDirectory, final EpochClock clock, final long deadlineMs)
+    {
+        final UnsafeBuffer metadata = awaitCncFileCreation(new File(aeronDirectory, CNC_FILE), clock, deadlineMs);
+        try
+        {
+            return CncFileDescriptor.filePageSize(metadata);
+        }
+        finally
+        {
+            BufferUtil.free(metadata);
+        }
+    }
+
+    @SuppressWarnings("try")
+    static UnsafeBuffer awaitCncFileCreation(
+        final File cncFile, final EpochClock clock, final long deadlineMs)
+    {
+        while (true)
+        {
+            while (!cncFile.exists() || cncFile.length() < CncFileDescriptor.END_OF_METADATA_OFFSET)
+            {
+                if (clock.time() > deadlineMs)
+                {
+                    throw new DriverTimeoutException("CnC file not created: " + cncFile.getAbsolutePath());
+                }
+
+                sleep(Aeron.Configuration.IDLE_SLEEP_DEFAULT_MS);
+            }
+
+            try (FileChannel fileChannel = FileChannel.open(cncFile.toPath(), READ, WRITE))
+            {
+                final long fileSize = fileChannel.size();
+                if (fileSize < CncFileDescriptor.END_OF_METADATA_OFFSET)
+                {
+                    if (clock.time() > deadlineMs)
+                    {
+                        throw new DriverTimeoutException(
+                            "CnC file is created but not populated: " + cncFile.getAbsolutePath());
+                    }
+
+                    fileChannel.close();
+                    sleep(Aeron.Configuration.IDLE_SLEEP_DEFAULT_MS);
+                    continue;
+                }
+
+                final UnsafeBuffer metaDataBuffer =
+                    CncFileDescriptor.createMetaDataBuffer(fileChannel.map(READ_WRITE, 0, fileSize));
+
+                int cncVersion;
+                while (0 == (cncVersion = metaDataBuffer.getIntVolatile(CncFileDescriptor.cncVersionOffset(0))))
+                {
+                    if (clock.time() > deadlineMs)
+                    {
+                        throw new DriverTimeoutException("CnC file is created but not initialised: " +
+                            cncFile.getAbsolutePath());
+                    }
+
+                    sleep(Aeron.Configuration.AWAITING_IDLE_SLEEP_MS);
+                }
+
+                CncFileDescriptor.checkVersion(cncVersion);
+                if (SemanticVersion.minor(cncVersion) < SemanticVersion.minor(CncFileDescriptor.CNC_VERSION))
+                {
+                    throw new AeronException("driverVersion=" + SemanticVersion.toString(cncVersion) +
+                        " insufficient for clientVersion=" +
+                        SemanticVersion.toString(CncFileDescriptor.CNC_VERSION));
+                }
+
+                return metaDataBuffer;
+            }
+            catch (final NoSuchFileException | AccessDeniedException ignore)
+            {
+            }
+            catch (final FileSystemException ex)
+            {
+                // JDK exception translation does not handle `ERROR_SHARING_VIOLATION (32)` and returns
+                // FileSystemException with the error "The process cannot access the file because it is being
+                // used by another process.". Our current thinking is that matching by text is too brittle due
+                // to error message being locale-sensitive on Windows. Therefore, we are going to retry on any
+                // FileSystemException when running on Windows.
+                if (SystemUtil.isWindows())
+                {
+                    continue;
+                }
+
+                throw new AeronException(cncFileErrorMessage(cncFile, ex), ex);
+            }
+            catch (final IOException ex)
+            {
+                throw new AeronException(cncFileErrorMessage(cncFile, ex), ex);
+            }
+        }
+    }
+
     static ErrorHandler setupErrorHandler(
         final ErrorHandler userErrorHandler, final DistinctErrorLog errorLog, final PrintStream fallbackErrorStream)
     {
@@ -1223,6 +1335,11 @@ public class CommonContext implements Cloneable
             Thread.currentThread().interrupt();
             throw new AeronException("unexpected interrupt", ex);
         }
+    }
+
+    private static String cncFileErrorMessage(final File file, final Exception ex)
+    {
+        return "cannot open CnC file: " + file.getAbsolutePath() + " reason=" + ex;
     }
 
     private static final class ErrorHandlerWrapper implements ErrorHandler, AutoCloseable
