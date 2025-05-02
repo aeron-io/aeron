@@ -92,4 +92,6 @@ int aeron_netutil_get_so_buf_lengths(size_t *default_so_rcvbuf, size_t *default_
 
 int aeron_sockaddr_storage_cmp(struct sockaddr_storage *a, struct sockaddr_storage *b, bool *result);
 
+bool aeron_is_acceptable_socket_error(void);
+
 #endif //AERON_NETUTIL_H
