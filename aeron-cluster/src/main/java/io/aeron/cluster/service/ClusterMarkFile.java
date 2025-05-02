@@ -173,12 +173,12 @@ public final class ClusterMarkFile implements AutoCloseable
         final long candidateTermId;
         if (markFileExists)
         {
-            final int headerOffset = headerOffset(file);
-            final MarkFile markFile = new MarkFile(
+            final int currentHeaderOffset = headerOffset(file);
+            final MarkFile existingMarkFile = new MarkFile(
                 file,
                 true,
-                headerOffset + MarkFileHeaderDecoder.versionEncodingOffset(),
-                headerOffset + MarkFileHeaderDecoder.activityTimestampEncodingOffset(),
+                currentHeaderOffset + MarkFileHeaderDecoder.versionEncodingOffset(),
+                currentHeaderOffset + MarkFileHeaderDecoder.activityTimestampEncodingOffset(),
                 totalFileLength,
                 timeoutMs,
                 epochClock,
@@ -195,25 +195,19 @@ public final class ClusterMarkFile implements AutoCloseable
                     }
                 },
                 null);
-            final UnsafeBuffer buffer = markFile.buffer();
+            final UnsafeBuffer existingBuffer = existingMarkFile.buffer();
 
-            if (buffer.capacity() != totalFileLength)
+            if (0 != currentHeaderOffset)
             {
-                throw new ClusterException(
-                    "ClusterMarkFile capacity=" + buffer.capacity() + " < expectedCapacity=" + totalFileLength);
-            }
-
-            if (0 != headerOffset)
-            {
-                headerDecoder.wrapAndApplyHeader(buffer, 0, messageHeaderDecoder);
+                headerDecoder.wrapAndApplyHeader(existingBuffer, 0, messageHeaderDecoder);
             }
             else
             {
-                headerDecoder.wrap(buffer, 0, MarkFileHeaderDecoder.BLOCK_LENGTH, MarkFileHeaderDecoder.SCHEMA_VERSION);
+                headerDecoder.wrap(
+                    existingBuffer, 0, MarkFileHeaderDecoder.BLOCK_LENGTH, MarkFileHeaderDecoder.SCHEMA_VERSION);
             }
 
             final ClusterComponentType existingType = headerDecoder.componentType();
-
             if (existingType != ClusterComponentType.UNKNOWN && existingType != type)
             {
                 if (existingType != ClusterComponentType.BACKUP || ClusterComponentType.CONSENSUS_MODULE != type)
@@ -225,23 +219,25 @@ public final class ClusterMarkFile implements AutoCloseable
 
             final int existingErrorBufferLength = headerDecoder.errorBufferLength();
             final int headerLength = headerDecoder.headerLength();
-            final UnsafeBuffer existingErrorBuffer = new UnsafeBuffer(buffer, headerLength, existingErrorBufferLength);
+            final UnsafeBuffer existingErrorBuffer =
+                new UnsafeBuffer(existingBuffer, headerLength, existingErrorBufferLength);
 
             saveExistingErrors(file, existingErrorBuffer, type, CommonContext.fallbackLogger());
             existingErrorBuffer.setMemory(0, existingErrorBufferLength, (byte)0);
 
             candidateTermId = headerDecoder.candidateTermId();
 
-            if (0 != headerOffset)
+            if (0 != currentHeaderOffset)
             {
-                this.markFile = markFile;
-                this.buffer = buffer;
+                markFile = existingMarkFile;
+                buffer = existingBuffer;
             }
             else
             {
                 headerDecoder.wrap(EMPTY_BUFFER, 0, 0, 0);
-                CloseHelper.close(markFile);
-                this.markFile = new MarkFile(
+                CloseHelper.close(existingMarkFile);
+
+                markFile = new MarkFile(
                     file,
                     false,
                     HEADER_OFFSET + MarkFileHeaderDecoder.versionEncodingOffset(),
@@ -251,8 +247,8 @@ public final class ClusterMarkFile implements AutoCloseable
                     epochClock,
                     null,
                     null);
-                this.buffer = this.markFile.buffer();
-                this.buffer.setMemory(0, headerLength, (byte)0);
+                buffer = markFile.buffer();
+                buffer.setMemory(0, headerLength, (byte)0);
             }
         }
         else
