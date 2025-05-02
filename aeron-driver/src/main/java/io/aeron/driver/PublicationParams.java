@@ -149,18 +149,14 @@ final class PublicationParams
         if (null != pubWindowParam)
         {
             final long pubWindow = SystemUtil.parseSize(PUBLICATION_WINDOW_LENGTH_PARAM_NAME, pubWindowParam);
-            if (pubWindow < mtuLength)
+            try
             {
-                throw new InvalidChannelException(
-                    PUBLICATION_WINDOW_LENGTH_PARAM_NAME + "=" + pubWindow + " cannot be less than the " +
-                    MTU_LENGTH_PARAM_NAME + "=" + mtuLength);
+                Configuration.validatePublicationWindow(
+                    PUBLICATION_WINDOW_LENGTH_PARAM_NAME, pubWindow, mtuLength, termLength);
             }
-
-            if (pubWindow > (termLength >> 1))
+            catch (final RuntimeException ex)
             {
-                throw new InvalidChannelException(
-                    PUBLICATION_WINDOW_LENGTH_PARAM_NAME + "=" + pubWindow + " must not exceed half the " +
-                    TERM_LENGTH_PARAM_NAME + "=" + termLength);
+                throw new InvalidChannelException(ex);
             }
             publicationWindowLength = (int)pubWindow;
         }

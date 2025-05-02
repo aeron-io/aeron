@@ -23,11 +23,7 @@ import io.aeron.driver.status.SystemCounters;
 import io.aeron.logbuffer.FrameDescriptor;
 import io.aeron.logbuffer.LogBufferDescriptor;
 import io.aeron.logbuffer.LogBufferUnblocker;
-import io.aeron.protocol.DataHeaderFlyweight;
-import io.aeron.protocol.ErrorFlyweight;
-import io.aeron.protocol.RttMeasurementFlyweight;
-import io.aeron.protocol.SetupFlyweight;
-import io.aeron.protocol.StatusMessageFlyweight;
+import io.aeron.protocol.*;
 import org.agrona.CloseHelper;
 import org.agrona.ErrorHandler;
 import org.agrona.collections.ArrayListUtil;
@@ -38,19 +34,21 @@ import org.agrona.concurrent.status.AtomicCounter;
 import org.agrona.concurrent.status.Position;
 import org.agrona.concurrent.status.ReadablePosition;
 
+import java.lang.invoke.VarHandle;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
 import static io.aeron.driver.Configuration.PUBLICATION_HEARTBEAT_TIMEOUT_NS;
 import static io.aeron.driver.Configuration.PUBLICATION_SETUP_TIMEOUT_NS;
+import static io.aeron.driver.TermCleaner.TERM_CLEANUP_BLOCK_LENGTH;
+import static io.aeron.driver.TermCleaner.blockStartPosition;
 import static io.aeron.driver.status.SystemCounterDescriptor.*;
 import static io.aeron.logbuffer.LogBufferDescriptor.*;
 import static io.aeron.logbuffer.TermScanner.*;
 import static io.aeron.protocol.DataHeaderFlyweight.BEGIN_AND_END_FLAGS;
 import static io.aeron.protocol.DataHeaderFlyweight.BEGIN_END_AND_EOS_FLAGS;
 import static io.aeron.protocol.StatusMessageFlyweight.END_OF_STREAM_FLAG;
-import static org.agrona.BitUtil.SIZE_OF_LONG;
 
 class NetworkPublicationPadding1
 {
@@ -67,6 +65,7 @@ class NetworkPublicationConductorFields extends NetworkPublicationPadding1
     long cleanPosition;
     long timeOfLastActivityNs;
     long lastSenderPosition;
+    long tripLimit;
     int refCount = 0;
     ReadablePosition[] spyPositions = EMPTY_POSITIONS;
     final ArrayList<UntetheredSubscription> untetheredSubscriptions = new ArrayList<>();
@@ -125,10 +124,10 @@ public final class NetworkPublication
     private final int initialTermId;
     private final int startingTermId;
     private final int startingTermOffset;
-    private final int termBufferLength;
-    private final int termLengthMask;
-    private final int mtuLength;
     private final int termWindowLength;
+    private final int termLengthMask;
+    private final int termBufferLength;
+    private final int mtuLength;
     private final int sessionId;
     private final int streamId;
     private final boolean isExclusive;
@@ -257,7 +256,7 @@ public final class NetworkPublication
         this.termWindowLength = termWindowLength;
 
         lastSenderPosition = senderPosition.get();
-        cleanPosition = lastSenderPosition;
+        cleanPosition = blockStartPosition(lastSenderPosition);
         timeOfLastActivityNs = nowNs;
     }
 
@@ -619,7 +618,7 @@ public final class NetworkPublication
     {
         final long senderPosition = this.senderPosition.get();
         final int activeTermId = computeTermIdFromPosition(senderPosition, positionBitsToShift, initialTermId);
-        final int termOffset = (int)senderPosition & termLengthMask;
+        final int termOffset = (int)(senderPosition & termLengthMask);
 
         if (!hasInitialConnection || isSetupElicited)
         {
@@ -741,13 +740,22 @@ public final class NetworkPublication
                     minConsumerPosition = Math.min(minConsumerPosition, spyPosition.getVolatile());
                 }
 
-                final long proposedPublisherLimit = minConsumerPosition + termWindowLength;
-                final long publisherLimit = this.publisherLimit.get();
-                if (proposedPublisherLimit > publisherLimit)
+                workCount += cleanBufferTo(minConsumerPosition - termBufferLength);
+                final long newLimitPosition = minConsumerPosition + termWindowLength;
+                if (newLimitPosition >= tripLimit)
                 {
-                    cleanBufferTo(minConsumerPosition - termBufferLength);
-                    this.publisherLimit.setRelease(proposedPublisherLimit);
-                    workCount = 1;
+                    final long cleanPosition = this.cleanPosition;
+                    final int cleanOffset = (int)(cleanPosition & termLengthMask);
+                    final long termBaseCleanPosition = cleanPosition - cleanOffset;
+                    final long termBaseNewLimitPosition = newLimitPosition - (newLimitPosition & termLengthMask);
+                    final long wrapAroundGap = termBaseNewLimitPosition - termBaseCleanPosition;
+                    final long maxWrapAroundGap = (long)termBufferLength << 1;
+                    if (wrapAroundGap < maxWrapAroundGap || (wrapAroundGap == maxWrapAroundGap && 0 != cleanOffset))
+                    {
+                        publisherLimit.setRelease(newLimitPosition);
+                        tripLimit = newLimitPosition + mtuLength;
+                        workCount++;
+                    }
                 }
             }
             else if (publisherLimit.get() > senderPosition)
@@ -758,7 +766,7 @@ public final class NetworkPublication
                     isConnected = false;
                 }
                 publisherLimit.setRelease(senderPosition);
-                cleanBufferTo(senderPosition - termBufferLength);
+                tripLimit = senderPosition;
                 workCount = 1;
             }
         }
@@ -900,20 +908,20 @@ public final class NetworkPublication
         return bytesSent;
     }
 
-    private void cleanBufferTo(final long position)
+    private int cleanBufferTo(final long position)
     {
         final long cleanPosition = this.cleanPosition;
-        if (position > cleanPosition)
+        if (position - cleanPosition >= TERM_CLEANUP_BLOCK_LENGTH)
         {
             final UnsafeBuffer dirtyTermBuffer = termBuffers[indexByPosition(cleanPosition, positionBitsToShift)];
-            final int bytesForCleaning = (int)(position - cleanPosition);
-            final int termOffset = (int)cleanPosition & termLengthMask;
-            final int length = Math.min(bytesForCleaning, termBufferLength - termOffset);
+            final int termOffset = (int)(cleanPosition & termLengthMask);
 
-            dirtyTermBuffer.setMemory(termOffset + SIZE_OF_LONG, length - SIZE_OF_LONG, (byte)0);
-            dirtyTermBuffer.putLongRelease(termOffset, 0);
-            this.cleanPosition = cleanPosition + length;
+            dirtyTermBuffer.setMemory(termOffset, TERM_CLEANUP_BLOCK_LENGTH, (byte)0);
+            VarHandle.storeStoreFence();
+            this.cleanPosition = cleanPosition + TERM_CLEANUP_BLOCK_LENGTH;
+            return 1;
         }
+        return 0;
     }
 
     private void checkForBlockedPublisher(final long producerPosition, final long senderPosition, final long nowNs)
