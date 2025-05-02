@@ -1034,9 +1034,7 @@ void aeron_publication_image_check_untethered_subscriptions(
     for (size_t i = 0, length = subscribable->length; i < length; i++)
     {
         aeron_tetherable_position_t *tetherable_position = &subscribable->array[i];
-
-        if (tetherable_position->is_tether)
-        {
+        if (tetherable_position->is_tether || tetherable_position->state != AERON_SUBSCRIPTION_TETHER_RESTING) {
             int64_t position = aeron_counter_get_acquire(tetherable_position->value_addr);
             max_sub_pos = position > max_sub_pos ? position : max_sub_pos;
         }
