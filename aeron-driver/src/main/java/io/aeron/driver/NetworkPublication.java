@@ -740,12 +740,20 @@ public final class NetworkPublication
                     minConsumerPosition = Math.min(minConsumerPosition, spyPosition.getVolatile());
                 }
 
-                final long proposedPublisherLimit = minConsumerPosition + termWindowLength;
-                final long publisherLimit = this.publisherLimit.get();
-                if (proposedPublisherLimit > publisherLimit)
+                final long newLimitPosition = minConsumerPosition + termWindowLength;
+                if (newLimitPosition > publisherLimit.get())
                 {
                     cleanBufferTo(minConsumerPosition - termBufferLength);
-                    this.publisherLimit.setOrdered(proposedPublisherLimit);
+                    final long cleanPosition = this.cleanPosition;
+                    final int cleanOffset = (int)(cleanPosition & termLengthMask);
+                    final long termBaseCleanPosition = cleanPosition - cleanOffset;
+                    final long termBaseNewLimitPosition = newLimitPosition - (newLimitPosition & termLengthMask);
+                    final long wrapAroundGap = termBaseNewLimitPosition - termBaseCleanPosition;
+                    final long maxWrapAroundGap = (long)termBufferLength << 1;
+                    if (wrapAroundGap < maxWrapAroundGap || (wrapAroundGap == maxWrapAroundGap && 0 != cleanOffset))
+                    {
+                        publisherLimit.setOrdered(newLimitPosition);
+                    }
                     workCount = 1;
                 }
             }
