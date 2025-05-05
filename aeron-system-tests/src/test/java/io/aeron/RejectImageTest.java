@@ -649,9 +649,9 @@ public class RejectImageTest
             Tests.awaitConnected(pub);
             Tests.awaitConnected(sub);
 
+            final long t0 = System.nanoTime();
             sub.imageAtIndex(0).reject(rejectionReason);
 
-            final long t0 = System.nanoTime();
             try (Subscription sub2 = aeron.addSubscription(
                 CommonContext.IPC_CHANNEL,
                 streamId,
@@ -819,6 +819,7 @@ public class RejectImageTest
             Tests.awaitConnected(pub);
             Tests.awaitConnected(sub);
 
+            final long t0 = System.nanoTime();
             sub.imageAtIndex(0).reject(rejectionReason);
 
             while (0 == imageUnavailable.get())
@@ -826,7 +827,6 @@ public class RejectImageTest
                 Tests.yield();
             }
 
-            final long t0 = System.nanoTime();
             try (Publication pub2 = aeron.addPublication(
                 CommonContext.IPC_CHANNEL,
                 streamId))
