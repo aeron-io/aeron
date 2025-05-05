@@ -302,6 +302,7 @@ int aeron_ipc_publication_update_pub_pos_and_lmt(aeron_ipc_publication_t *public
             aeron_counter_set_ordered(publication->pub_lmt_position.value_addr, consumer_position);
             publication->conductor_fields.trip_limit = consumer_position;
             aeron_ipc_publication_clean_buffer(publication, consumer_position);
+            work_count++;
         }
     }
 
