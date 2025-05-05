@@ -92,7 +92,7 @@ class RejectImageTest : public RejectImageTestBase, public testing::TestWithPara
 INSTANTIATE_TEST_SUITE_P(
     RejectImageTestWithParam, RejectImageTest, testing::Values("127.0.0.1", "[::1]"));
 
-TEST_P(RejectImageTest, DISABLED_shouldRejectImage)
+TEST_P(RejectImageTest, shouldRejectImage)
 {
     Context ctx;
     ctx.useConductorAgentInvoker(true);
@@ -141,7 +141,7 @@ TEST_P(RejectImageTest, DISABLED_shouldRejectImage)
     POLL_FOR(1 == sub->imageCount(), invoker);
 
     const std::shared_ptr<Image> image = sub->imageByIndex(0);
-//    image->reject("No Longer Valid");
+    image->reject("No Longer Valid");
 
     POLL_FOR(error.isValid(), invoker);
     ASSERT_EQ(pubId, error.registrationId());
@@ -152,7 +152,7 @@ TEST_P(RejectImageTest, DISABLED_shouldRejectImage)
     ASSERT_EQ(address, addressAsString(error.sourceAddressType(), error.sourceAddress()));
 }
 
-TEST_P(RejectImageTest, DISABLED_shouldRejectImageForExclusive)
+TEST_P(RejectImageTest, shouldRejectImageForExclusive)
 {
     std::string address = GetParam();
 
@@ -195,12 +195,12 @@ TEST_P(RejectImageTest, DISABLED_shouldRejectImageForExclusive)
     POLL_FOR(1 == sub->imageCount(), invoker);
 
     const std::shared_ptr<Image> image = sub->imageByIndex(0);
-//    image->reject("No Longer Valid");
+    image->reject("No Longer Valid");
 
     POLL_FOR(0 < errorFrameCount, invoker);
 }
 
-TEST_P(RejectImageTest, DISABLED_shouldOnlySeePublicationErrorFramesForPublicationsAddedToTheClient)
+TEST_P(RejectImageTest, shouldOnlySeePublicationErrorFramesForPublicationsAddedToTheClient)
 {
     const std::string address = GetParam();
     const std::string channel = "aeron:udp?endpoint=" + address + ":10000";
@@ -248,7 +248,7 @@ TEST_P(RejectImageTest, DISABLED_shouldOnlySeePublicationErrorFramesForPublicati
     POLL_FOR(1 == sub->imageCount(), invoker0);
 
     const std::shared_ptr<Image> image = sub->imageByIndex(0);
-//    image->reject("No Longer Valid");
+    image->reject("No Longer Valid");
 
     POLL_FOR(0 < errorFrameCount0, invoker0);
     POLL_FOR(0 < errorFrameCount1, invoker1);
