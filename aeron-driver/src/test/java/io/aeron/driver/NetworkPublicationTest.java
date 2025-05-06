@@ -243,7 +243,7 @@ class NetworkPublicationTest
     }
 
     @ParameterizedTest
-    @ValueSource(ints = {0, TERM_MIN_LENGTH - 1024})
+    @ValueSource(ints = {0, TERM_MIN_LENGTH - PUBLICATION_WINDOW_LENGTH})
     void pubLimitShouldNotCrossToTheDirtyTerm(final long initialPosition)
     {
         publisherPos.set(initialPosition);
@@ -275,7 +275,7 @@ class NetworkPublicationTest
         // setup initial connection
         publication.onStatusMessage(statusMessageFlyweight, inetSocketAddress, driverConductorProxy);
 
-        // new pub-lmt intersects with the clean position
+        // initial position
         senderPosition.set(initialPosition + 256);
         publication.updatePublisherPositionAndLimit();
         assertEquals(initialPosition + 256 + PUBLICATION_WINDOW_LENGTH, publisherLimit.get());
@@ -286,5 +286,10 @@ class NetworkPublicationTest
         publication.updatePublisherPositionAndLimit();
         assertEquals(initialPosition + 256 + PUBLICATION_WINDOW_LENGTH, publisherLimit.get());
         assertEquals(TERM_MIN_LENGTH, publication.cleanPosition);
+
+        // after cleanup pub-lmt can move again
+        publication.updatePublisherPositionAndLimit();
+        assertEquals(initialPosition + 2 * TERM_MIN_LENGTH + 2 * PUBLICATION_WINDOW_LENGTH, publisherLimit.get());
+        assertEquals(initialPosition + TERM_MIN_LENGTH + PUBLICATION_WINDOW_LENGTH, publication.cleanPosition);
     }
 }
