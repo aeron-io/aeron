@@ -39,6 +39,7 @@ class DriverEventsAdapter implements MessageHandler
     private final CounterUpdateFlyweight counterUpdate = new CounterUpdateFlyweight();
     private final ClientTimeoutFlyweight clientTimeout = new ClientTimeoutFlyweight();
     private final StaticCounterFlyweight staticCounter = new StaticCounterFlyweight();
+    private final PublicationRevokedFlyweight publicationRevoked = new PublicationRevokedFlyweight();
     private final CopyBroadcastReceiver receiver;
     private final ClientConductor conductor;
     private final LongHashSet asyncCommandIdSet;
@@ -270,6 +271,14 @@ class DriverEventsAdapter implements MessageHandler
                 publicationErrorFrame.wrap(buffer, index);
 
                 conductor.onPublicationError(publicationErrorFrame);
+                break;
+            }
+
+            case ON_REVOKED_PUBLICATION:
+            {
+                publicationRevoked.wrap(buffer, index);
+
+                conductor.onRevokedPublication(publicationRevoked.registrationId());
                 break;
             }
         }

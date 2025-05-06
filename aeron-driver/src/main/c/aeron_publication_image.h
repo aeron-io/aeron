@@ -26,6 +26,7 @@
 typedef enum aeron_publication_image_state_enum
 {
     AERON_PUBLICATION_IMAGE_STATE_ACTIVE,
+    AERON_PUBLICATION_IMAGE_STATE_REVOKED,
     AERON_PUBLICATION_IMAGE_STATE_DRAINING,
     AERON_PUBLICATION_IMAGE_STATE_LINGER,
     AERON_PUBLICATION_IMAGE_STATE_DONE
@@ -114,6 +115,7 @@ typedef struct aeron_publication_image_stct
     struct
     {
         aeron_untethered_subscription_state_change_func_t untethered_subscription_state_change;
+        aeron_driver_publication_image_revoke_func_t publication_image_revoke;
     } log;
 
     int64_t last_loss_change_number;
@@ -140,6 +142,8 @@ typedef struct aeron_publication_image_stct
 
     bool is_sm_enabled;
 
+    bool is_revoked;
+
     volatile int64_t response_session_id;
 
     volatile bool is_end_of_stream;
@@ -153,6 +157,7 @@ typedef struct aeron_publication_image_stct
     volatile int64_t *nak_messages_sent_counter;
     volatile int64_t *loss_gap_fills_counter;
     volatile int64_t *mapped_bytes_counter;
+    volatile int64_t *publication_images_revoked_counter;
 }
 aeron_publication_image_t;
 
@@ -231,6 +236,11 @@ inline bool aeron_publication_image_is_heartbeat(const uint8_t *buffer, size_t l
 inline bool aeron_publication_image_is_end_of_stream(const uint8_t *buffer, size_t length)
 {
     return (((aeron_frame_header_t *)buffer)->flags & AERON_DATA_HEADER_EOS_FLAG) != 0;
+}
+
+inline bool aeron_publication_image_is_revoked(const uint8_t *buffer, size_t length)
+{
+    return (((aeron_frame_header_t *)buffer)->flags & AERON_DATA_HEADER_REVOKED_FLAG) != 0;
 }
 
 inline bool aeron_publication_image_is_flow_control_under_run(aeron_publication_image_t *image, int64_t packet_position)

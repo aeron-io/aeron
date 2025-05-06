@@ -924,6 +924,11 @@ int aeron_counters_reader_free_for_reuse_deadline_ms(
 #define AERON_PUBLICATION_ERROR (-6L)
 
 /**
+ * The publication has been revoked and should no longer be used.
+ */
+#define AERON_PUBLICATION_REVOKED (-7L)
+
+/**
  * Function called when filling in the reserved value field of a message.
  *
  * @param clientd passed to the offer function.
@@ -1136,6 +1141,14 @@ int64_t aeron_publication_channel_status(aeron_publication_t *publication);
 bool aeron_publication_is_closed(aeron_publication_t *publication);
 
 /**
+ * Has the publication been revoked?
+ *
+ * @param publication to check
+ * @return true if this publication was revoked.
+ */
+bool aeron_publication_is_revoked(aeron_publication_t *publication);
+
+/**
  * Has the publication seen an active Subscriber recently?
  *
  * @param publication to check.
@@ -1268,17 +1281,34 @@ int aeron_exclusive_publication_async_remove_destination_by_id(
 int aeron_exclusive_publication_async_destination_poll(aeron_async_destination_t *async);
 
 /**
- * Asynchronously close the publication. Will callback on the on_complete notification when the subscription is closed.
+ * Asynchronously close the publication. Will callback on the on_complete notification when the publication is closed.
  * The callback is optional, use NULL for the on_complete callback if not required.
  *
  * @param publication to close
- * @param on_close_complete optional callback to execute once the subscription has been closed and freed. This may
+ * @param on_close_complete optional callback to execute once the publication has been closed and freed. This may
  * happen on a separate thread, so the caller should ensure that clientd has the appropriate lifetime.
  * @param on_close_complete_clientd parameter to pass to the on_complete callback.
  * @return 0 for success or -1 for error.
  */
 int aeron_publication_close(
-    aeron_publication_t *publication, aeron_notification_t on_close_complete, void *on_close_complete_clientd);
+    aeron_publication_t *publication,
+    aeron_notification_t on_close_complete,
+    void *on_close_complete_clientd);
+
+/**
+ * Asynchronously revoke and close the publication. Will callback on the on_complete notification when the publicaiton is closed.
+ * The callback is optional, use NULL for the on_complete callback if not required.
+ *
+ * @param publication to revoke and close
+ * @param on_close_complete optional callback to execute once the publication has been revoked, closed and freed. This may
+ * happen on a separate thread, so the caller should ensure that clientd has the appropriate lifetime.
+ * @param on_close_complete_clientd parameter to pass to the on_complete callback.
+ * @return 0 for success or -1 for error.
+ */
+int aeron_publication_revoke(
+    aeron_publication_t *publication,
+    aeron_notification_t on_close_complete,
+    void *on_close_complete_clientd);
 
 /**
  * Get the publication's channel
@@ -1449,12 +1479,31 @@ int aeron_exclusive_publication_close(
     void *on_close_complete_clientd);
 
 /**
+ * Asynchronously revoke and close the publication.
+ *
+ * @param publication to close
+ * @return 0 for success or -1 for error.
+ */
+int aeron_exclusive_publication_revoke(
+    aeron_exclusive_publication_t *publication,
+    aeron_notification_t on_close_complete,
+    void *on_close_complete_clientd);
+
+/**
  * Has the exclusive publication closed?
  *
  * @param publication to check
  * @return true if this publication is closed.
  */
 bool aeron_exclusive_publication_is_closed(aeron_exclusive_publication_t *publication);
+
+/**
+ * Has the exclusive publication been revoked?
+ *
+ * @param publication to check
+ * @return true if this publication was revoked.
+ */
+bool aeron_exclusive_publication_is_revoked(aeron_exclusive_publication_t *publication);
 
 /**
  * Has the exclusive publication seen an active Subscriber recently?
@@ -2009,6 +2058,14 @@ int64_t aeron_image_end_of_stream_position(aeron_image_t *image);
  * @return count of active transports - 0 if Image is closed, no datagrams yet, or IPC. Or -1 for error.
  */
 int aeron_image_active_transport_count(aeron_image_t *image);
+
+/**
+ * Was the associated publication revoked?
+ *
+ * @param image to check
+ * @return true if the associated publication was revoked.
+ */
+bool aeron_image_is_publication_revoked(aeron_image_t *image);
 
 /**
  * Poll for new messages in a stream. If new messages are found beyond the last consumed position then they

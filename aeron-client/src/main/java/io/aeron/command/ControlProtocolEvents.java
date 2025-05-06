@@ -110,6 +110,12 @@ public class ControlProtocolEvents
      */
     public static final int REMOVE_DESTINATION_BY_ID = 0x11;
 
+    /**
+     * Revoke a publication.
+     * @since 1.48.0
+     */
+    public static final int REVOKE_PUBLICATION = 0x12;
+
     // Media Driver to Clients
 
     /**
@@ -174,4 +180,10 @@ public class ControlProtocolEvents
      * @since 1.47.0
      */
     public static final int ON_PUBLICATION_ERROR = 0x0F0C;
+
+    /**
+     * Inform clients of a revoked publication.
+     * @since 1.48.0
+     */
+    public static final int ON_REVOKED_PUBLICATION = 0x0F0D;
 }

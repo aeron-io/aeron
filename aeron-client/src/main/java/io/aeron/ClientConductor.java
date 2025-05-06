@@ -446,6 +446,15 @@ final class ClientConductor implements Agent
         }
     }
 
+    void onRevokedPublication(final long registrationId)
+    {
+        final Publication publication = (Publication)resourceByRegIdMap.get(registrationId);
+        if (null != publication)
+        {
+            publication.isRevoked = true;
+        }
+    }
+
     CountersReader countersReader()
     {
         return countersReader;
@@ -595,11 +604,19 @@ final class ClientConductor implements Agent
             {
                 ensureNotReentrant();
 
+                final boolean sendRevoke = publication.revokeOnClose && !publication.isRevoked;
+
                 publication.internalClose();
                 if (publication == resourceByRegIdMap.remove(publication.registrationId()))
                 {
                     releaseLogBuffers(
                         publication.logBuffers(), publication.originalRegistrationId(), EXPLICIT_CLOSE_LINGER_NS);
+
+                    if (sendRevoke)
+                    {
+                        asyncCommandIdSet.add(driverProxy.revokePublication(publication.registrationId()));
+                    }
+
                     asyncCommandIdSet.add(driverProxy.removePublication(publication.registrationId()));
                 }
             }

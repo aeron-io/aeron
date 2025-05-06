@@ -47,8 +47,7 @@ import static io.aeron.driver.Configuration.PUBLICATION_SETUP_TIMEOUT_NS;
 import static io.aeron.driver.status.SystemCounterDescriptor.*;
 import static io.aeron.logbuffer.LogBufferDescriptor.*;
 import static io.aeron.logbuffer.TermScanner.*;
-import static io.aeron.protocol.DataHeaderFlyweight.BEGIN_AND_END_FLAGS;
-import static io.aeron.protocol.DataHeaderFlyweight.BEGIN_END_AND_EOS_FLAGS;
+import static io.aeron.protocol.DataHeaderFlyweight.*;
 import static io.aeron.protocol.StatusMessageFlyweight.END_OF_STREAM_FLAG;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
 
@@ -110,7 +109,7 @@ public final class NetworkPublication
     @SuppressWarnings("JavadocVariable")
     enum State
     {
-        ACTIVE, DRAINING, LINGER, DONE
+        ACTIVE, REVOKED, DRAINING, LINGER, DONE
     }
 
     private final long registrationId;
@@ -139,6 +138,7 @@ public final class NetworkPublication
     private volatile boolean hasSpies;
     private volatile boolean isConnected;
     private volatile boolean isEndOfStream;
+    private volatile boolean isRevoked;
     private volatile boolean hasSenderReleased;
     private volatile boolean hasReceivedUnicastEos;
     private State state = State.ACTIVE;
@@ -169,6 +169,7 @@ public final class NetworkPublication
     private final AtomicCounter senderBpe;
     private final AtomicCounter shortSends;
     private final AtomicCounter unblockedPublications;
+    private final AtomicCounter publicationsRevoked;
     private final ReceiverLivenessTracker livenessTracker = new ReceiverLivenessTracker();
 
     NetworkPublication(
@@ -234,6 +235,7 @@ public final class NetworkPublication
         retransmittedBytes = systemCounters.get(RETRANSMITTED_BYTES);
         senderFlowControlLimits = systemCounters.get(SENDER_FLOW_CONTROL_LIMITS);
         unblockedPublications = systemCounters.get(UNBLOCKED_PUBLICATIONS);
+        publicationsRevoked = systemCounters.get(PUBLICATIONS_REVOKED);
         this.senderBpe = senderBpe;
 
         termBuffers = rawLog.termBuffers();
@@ -291,6 +293,33 @@ public final class NetworkPublication
         }
 
         CloseHelper.close(flowControl);
+    }
+
+    /**
+     * Revoke the publication.
+     */
+    public void revoke()
+    {
+        final long revokedPos = producerPosition();
+        publisherLimit.setRelease(revokedPos);
+        endOfStreamPosition(metaDataBuffer, revokedPos);
+        isPublicationRevoked(metaDataBuffer, true);
+
+        isEndOfStream = true;
+        isRevoked = true;
+
+        state = State.REVOKED;
+
+        logRevoke(revokedPos, sessionId(), streamId(), channel());
+        publicationsRevoked.increment();
+    }
+
+    private static void logRevoke(
+        final long revokedPos,
+        final int sessionId,
+        final int streamId,
+        final String channel)
+    {
     }
 
     /**
@@ -475,10 +504,11 @@ public final class NetworkPublication
             positionBitsToShift,
             timeNs));
 
-        if (!isConnected && flowControl.hasRequiredReceivers())
+        final boolean expectedStatus = hasReceivers && flowControl.hasRequiredReceivers();
+        if (isConnected != expectedStatus)
         {
-            LogBufferDescriptor.isConnected(metaDataBuffer, true);
-            isConnected = true;
+            LogBufferDescriptor.isConnected(metaDataBuffer, expectedStatus);
+            isConnected = expectedStatus;
         }
     }
 
@@ -630,7 +660,7 @@ public final class NetworkPublication
 
         if (0 == bytesSent)
         {
-            bytesSent = heartbeatMessageCheck(nowNs, activeTermId, termOffset, signalEos && isEndOfStream);
+            bytesSent = heartbeatMessageCheck(nowNs, activeTermId, termOffset);
 
             if (spiesSimulateConnection && hasSpies && !hasReceivers)
             {
@@ -873,19 +903,34 @@ public final class NetworkPublication
     }
 
     private int heartbeatMessageCheck(
-        final long nowNs, final int activeTermId, final int termOffset, final boolean signalEos)
+        final long nowNs, final int activeTermId, final int termOffset)
     {
         int bytesSent = 0;
 
         if (hasInitialConnection && (timeOfLastDataOrHeartbeatNs + PUBLICATION_HEARTBEAT_TIMEOUT_NS) - nowNs < 0)
         {
+            final short flags;
+
+            if (isRevoked)
+            {
+                flags = BEGIN_END_EOS_AND_REVOKED_FLAGS;
+            }
+            else if (signalEos && isEndOfStream)
+            {
+                flags = BEGIN_END_AND_EOS_FLAGS;
+            }
+            else
+            {
+                flags = BEGIN_AND_END_FLAGS;
+            }
+
             heartbeatBuffer.clear();
             heartbeatDataHeader
                 .sessionId(sessionId)
                 .streamId(streamId)
                 .termId(activeTermId)
                 .termOffset(termOffset)
-                .flags((byte)(signalEos ? BEGIN_END_AND_EOS_FLAGS : BEGIN_AND_END_FLAGS));
+                .flags(flags);
 
             bytesSent = doSend(heartbeatBuffer);
             if (DataHeaderFlyweight.HEADER_LENGTH != bytesSent)
@@ -1069,6 +1114,16 @@ public final class NetworkPublication
                 break;
             }
 
+            case REVOKED:
+            {
+                conductor.transitionToRevoked(this);
+                conductor.cleanupSpies(this);
+
+                timeOfLastActivityNs = timeNs;
+                state = State.LINGER;
+                break;
+            }
+
             case DRAINING:
             {
                 final long producerPosition = producerPosition();
@@ -1101,7 +1156,8 @@ public final class NetworkPublication
             }
 
             case LINGER:
-                if (hasReceivedUnicastEos || (timeOfLastActivityNs + lingerTimeoutNs) - timeNs < 0)
+                if (refCount == 0 &&
+                    ((!hasSpies && hasReceivedUnicastEos) || (timeOfLastActivityNs + lingerTimeoutNs) - timeNs < 0))
                 {
                     channelEndpoint.decRef();
                     conductor.cleanupPublication(this);
@@ -1137,16 +1193,19 @@ public final class NetworkPublication
     {
         if (0 == --refCount)
         {
-            final long producerPosition = producerPosition();
-            publisherLimit.setRelease(producerPosition);
-            endOfStreamPosition(metaDataBuffer, producerPosition);
-
-            if (senderPosition.getVolatile() >= producerPosition)
+            if (!isRevoked)
             {
-                isEndOfStream = true;
-            }
+                final long producerPosition = producerPosition();
+                publisherLimit.setRelease(producerPosition);
+                endOfStreamPosition(metaDataBuffer, producerPosition);
 
-            state = State.DRAINING;
+                if (senderPosition.getVolatile() >= producerPosition)
+                {
+                    isEndOfStream = true;
+                }
+
+                state = State.DRAINING;
+            }
         }
     }
 
