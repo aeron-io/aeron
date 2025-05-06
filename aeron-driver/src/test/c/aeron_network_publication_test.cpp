@@ -90,7 +90,8 @@ protected:
         aeron_driver_context_close(m_context);
     }
 
-    aeron_send_channel_endpoint_t *createEndpoint(const char *uri)
+    aeron_send_channel_endpoint_t *createEndpoint(
+            const char *uri, aeron_driver_uri_publication_params_t *params, bool is_exclusive)
     {
         aeron_udp_channel_t *channel = nullptr;
         if (0 != aeron_udp_channel_parse(strlen(uri), uri, &m_resolver, &channel, false))
@@ -98,10 +99,14 @@ protected:
             return nullptr;
         }
 
-        aeron_driver_uri_publication_params_t params = {};
-        params.mtu_length = 1408;
+        aeron_driver_conductor_t conductor = {};
+        conductor.context = m_context;
+        if (aeron_diver_uri_publication_params(&channel->uri, params, &conductor, is_exclusive) < 0)
+        {
+            return nullptr;
+        }
         aeron_send_channel_endpoint_t *endpoint = nullptr;
-        if (aeron_send_channel_endpoint_create(&endpoint, channel, &params, m_context, &m_counters_manager, 1) < 0)
+        if (aeron_send_channel_endpoint_create(&endpoint, channel, params, m_context, &m_counters_manager, 1) < 0)
         {
             return nullptr;
         }
@@ -112,7 +117,16 @@ protected:
 
     aeron_network_publication_t *createPublication(const char *uri)
     {
-        aeron_send_channel_endpoint_t *endpoint = createEndpoint(uri);
+        bool is_exclusive = false;
+        aeron_driver_uri_publication_params_t params = {};
+        params.mtu_length = 1408;
+        params.has_mtu_length = true;
+        params.term_length = 65536;
+        params.has_term_length = true;
+        params.publication_window_length = (int32_t)(params.term_length >> 1);
+        params.has_publication_window_length = true;
+
+        aeron_send_channel_endpoint_t *endpoint = createEndpoint(uri, &params, is_exclusive);
         if (nullptr == endpoint)
         {
             return nullptr;
@@ -161,10 +175,22 @@ protected:
         snd_bpe_counter.value_addr = aeron_counters_manager_addr(
             &m_counters_manager, snd_bpe_counter.counter_id);
 
+        if (params.has_position)
+        {
+            const int64_t initial_position = aeron_logbuffer_compute_position(
+                    params.term_id,
+                    (int32_t)params.term_offset,
+                    (size_t)aeron_number_of_trailing_zeroes((int32_t)params.term_length),
+                    params.initial_term_id);
+
+            aeron_counter_set_ordered(pub_pos_position.value_addr, initial_position);
+            aeron_counter_set_ordered(pub_lmt_position.value_addr, initial_position);
+            aeron_counter_set_ordered(snd_pos_position.value_addr, initial_position);
+            aeron_counter_set_ordered(snd_lmt_position.value_addr, initial_position);
+        }
+
         aeron_flow_control_strategy_t *flow_control;
         aeron_unicast_flow_control_strategy_supplier(&flow_control, nullptr, nullptr, nullptr, 0, 0, 0, 0, 0);
-
-        aeron_driver_uri_publication_params_t params = {};
 
         aeron_network_publication_t *publication = nullptr;
         if (aeron_network_publication_create(
@@ -182,7 +208,7 @@ protected:
             &snd_bpe_counter,
             flow_control,
             &params,
-            false,
+            is_exclusive,
             &m_system_counters) < 0)
         {
             aeron_free(flow_control);
@@ -271,14 +297,15 @@ TEST_F(NetworkPublicationTest, shouldReturnStorageSpaceErrorIfNotEnoughStorageSp
     };
     m_context->perform_storage_checks = true;
 
-    aeron_network_publication_t *publication = createPublication("aeron:udp?endpoint=localhost:23245");
+    aeron_network_publication_t *publication = createPublication("aeron:udp?endpoint=localhost:23245|term-length=1m");
 
     ASSERT_EQ(nullptr, publication) << aeron_errmsg();
     EXPECT_EQ(-AERON_ERROR_CODE_STORAGE_SPACE, aeron_errcode());
     auto expected_error_text =
-        std::string("insufficient usable storage for new log of length=4096 usable=190 in ")
+        std::string("insufficient usable storage for new log of length=3149824 usable=190 in ")
             .append(m_context->aeron_dir);
-    EXPECT_NE(std::string::npos, std::string(aeron_errmsg()).find(expected_error_text));
+    const auto error_text = std::string(aeron_errmsg());
+    EXPECT_NE(std::string::npos, error_text.find(expected_error_text));
 }
 
 TEST_F(NetworkPublicationTest, shouldWarnIfRemainingStorageSpaceIsLow)
@@ -290,7 +317,7 @@ TEST_F(NetworkPublicationTest, shouldWarnIfRemainingStorageSpaceIsLow)
     m_context->low_file_store_warning_threshold = 4194304ULL;
     m_context->perform_storage_checks = true;
 
-    aeron_network_publication_t *publication = createPublication("aeron:udp?endpoint=localhost:23245");
+    aeron_network_publication_t *publication = createPublication("aeron:udp?endpoint=localhost:23245|term-length=128k");
 
     ASSERT_NE(nullptr, publication) << aeron_errmsg();
     EXPECT_EQ(0, aeron_errcode());
@@ -305,4 +332,174 @@ TEST_F(NetworkPublicationTest, shouldWarnIfRemainingStorageSpaceIsLow)
         std::string("WARNING: space is running low: threshold=4194304 usable=1048576 in ")
             .append(m_context->aeron_dir);
     EXPECT_NE(std::string::npos, error_text.find(expected_warning));
+}
+
+TEST_F(NetworkPublicationTest, shouldCleanDirtyTermBuffersOneTermBehindTheMinConsumerPosition)
+{
+    const int32_t term_length = 64 * 1024;
+    const int32_t publication_window_length = term_length / 2;
+    const int32_t initial_term_id = 5;
+    const int32_t term_id = 112004;
+    const int32_t term_offset = 384;
+    const int64_t initial_position = (int64_t)term_length * (term_id - initial_term_id) + term_offset;
+    const std::string uri = std::string("aeron:udp?endpoint=localhost:23245")
+            .append("|term-length=").append(std::to_string(term_length))
+            .append("|init-term-id=").append(std::to_string(initial_term_id))
+            .append("|term-id=").append(std::to_string(term_id))
+            .append("|term-offset=").append(std::to_string(term_offset));
+    aeron_network_publication_t *publication = createPublication(uri.c_str());
+    ASSERT_EQ(initial_position, aeron_counter_get(publication->pub_pos_position.value_addr));
+    ASSERT_EQ(initial_position, aeron_counter_get(publication->pub_lmt_position.value_addr));
+    ASSERT_EQ(initial_position, aeron_counter_get(publication->snd_pos_position.value_addr));
+    ASSERT_EQ(initial_position, aeron_counter_get(publication->snd_lmt_position.value_addr));
+    ASSERT_EQ(initial_position, publication->conductor_fields.clean_position);
+
+    aeron_driver_conductor_t conductor = {};
+    aeron_driver_conductor_proxy_t proxy = {};
+    proxy.conductor = &conductor;
+    proxy.threading_mode = AERON_THREADING_MODE_INVOKER;
+    AERON_DECL_ALIGNED(buffer_t data_buffer, 16) = {};
+    sockaddr_storage sockaddr = {};
+    aeron_network_publication_on_status_message(
+            publication, &proxy, data_buffer.data(), sizeof(aeron_status_message_header_t), &sockaddr);
+
+    ASSERT_TRUE(publication->has_receivers);
+
+    EXPECT_EQ(1, aeron_network_publication_update_pub_pos_and_lmt(publication));
+
+    // initial pub-lmt increase
+    aeron_network_publication_update_pub_pos_and_lmt(publication);
+    EXPECT_EQ(initial_position + publication_window_length, aeron_counter_get(publication->pub_lmt_position.value_addr));
+    EXPECT_EQ(initial_position, publication->conductor_fields.clean_position);
+
+    // snd-pos increase less than a term
+    aeron_counter_set_ordered(publication->snd_pos_position.value_addr, initial_position + 4128);
+    aeron_network_publication_update_pub_pos_and_lmt(publication);
+    EXPECT_EQ(initial_position + 4128 + publication_window_length, aeron_counter_get(publication->pub_lmt_position.value_addr));
+    EXPECT_EQ(initial_position, publication->conductor_fields.clean_position);
+
+    // snd-pos increase exactly one term
+    aeron_counter_set_ordered(publication->snd_pos_position.value_addr, initial_position + term_length);
+    aeron_network_publication_update_pub_pos_and_lmt(publication);
+    EXPECT_EQ(initial_position + term_length + publication_window_length, aeron_counter_get(publication->pub_lmt_position.value_addr));
+    EXPECT_EQ(initial_position, publication->conductor_fields.clean_position);
+
+    // snd-pos increase beyond a term
+    aeron_counter_set_ordered(publication->snd_pos_position.value_addr, initial_position + term_length + 192);
+    aeron_network_publication_update_pub_pos_and_lmt(publication);
+    EXPECT_EQ(initial_position + term_length + 192 + publication_window_length, aeron_counter_get(publication->pub_lmt_position.value_addr));
+    EXPECT_EQ(initial_position + 192, publication->conductor_fields.clean_position);
+
+    // clean the rest of the first term
+    aeron_counter_set_ordered(publication->snd_pos_position.value_addr, initial_position + 2 * term_length + 32);
+    aeron_network_publication_update_pub_pos_and_lmt(publication);
+    EXPECT_EQ(initial_position + 2 * term_length + 32 + publication_window_length, aeron_counter_get(publication->pub_lmt_position.value_addr));
+    EXPECT_EQ(initial_position - term_offset + term_length, publication->conductor_fields.clean_position);
+
+    // snd-pos didn't change => no op
+    aeron_network_publication_update_pub_pos_and_lmt(publication);
+    EXPECT_EQ(initial_position + 2 * term_length + 32 + publication_window_length, aeron_counter_get(publication->pub_lmt_position.value_addr));
+    EXPECT_EQ(initial_position - term_offset + term_length, publication->conductor_fields.clean_position);
+
+    // clean the next buffer
+    aeron_counter_set_ordered(publication->snd_pos_position.value_addr, initial_position + 2 * term_length + 8192);
+    aeron_network_publication_update_pub_pos_and_lmt(publication);
+    EXPECT_EQ(initial_position + 2 * term_length + 8192 + publication_window_length, aeron_counter_get(publication->pub_lmt_position.value_addr));
+    EXPECT_EQ(initial_position + term_length + 8192, publication->conductor_fields.clean_position);
+}
+
+TEST_F(NetworkPublicationTest, publicationLimitShouldNotCrossIntoPreviousTermIfTheEntireTermIsDirty)
+{
+    const int32_t term_length = 64 * 1024;
+    const int32_t publication_window_length = term_length / 2;
+    const int32_t initial_term_id = 5;
+    const int32_t term_id = 7;
+    const int32_t term_offset = 65280;
+    const int64_t initial_position = (int64_t)term_length * (term_id - initial_term_id) + term_offset;
+    const std::string uri = std::string("aeron:udp?endpoint=localhost:23245")
+            .append("|term-length=").append(std::to_string(term_length))
+            .append("|init-term-id=").append(std::to_string(initial_term_id))
+            .append("|term-id=").append(std::to_string(term_id))
+            .append("|term-offset=").append(std::to_string(term_offset));
+    aeron_network_publication_t *publication = createPublication(uri.c_str());
+    ASSERT_EQ(initial_position, aeron_counter_get(publication->pub_pos_position.value_addr));
+    ASSERT_EQ(initial_position, aeron_counter_get(publication->pub_lmt_position.value_addr));
+    ASSERT_EQ(initial_position, aeron_counter_get(publication->snd_pos_position.value_addr));
+    ASSERT_EQ(initial_position, aeron_counter_get(publication->snd_lmt_position.value_addr));
+    ASSERT_EQ(initial_position, publication->conductor_fields.clean_position);
+
+    aeron_driver_conductor_t conductor = {};
+    aeron_driver_conductor_proxy_t proxy = {};
+    proxy.conductor = &conductor;
+    proxy.threading_mode = AERON_THREADING_MODE_INVOKER;
+    AERON_DECL_ALIGNED(buffer_t data_buffer, 16) = {};
+    sockaddr_storage sockaddr = {};
+    aeron_network_publication_on_status_message(
+            publication, &proxy, data_buffer.data(), sizeof(aeron_status_message_header_t), &sockaddr);
+
+    ASSERT_TRUE(publication->has_receivers);
+
+    EXPECT_EQ(1, aeron_network_publication_update_pub_pos_and_lmt(publication));
+
+    // pub-lmt can be in the previous term if clean position offset is not zero
+    aeron_counter_set_ordered(publication->snd_pos_position.value_addr, initial_position + term_length);
+    aeron_network_publication_update_pub_pos_and_lmt(publication);
+    EXPECT_EQ(initial_position + term_length + publication_window_length, aeron_counter_get(publication->pub_lmt_position.value_addr));
+    EXPECT_EQ(initial_position, publication->conductor_fields.clean_position);
+
+    // pub-lmt cannot be in the previous term if clean position points to the start of the dirty buffer
+    aeron_counter_set_ordered(publication->snd_pos_position.value_addr, initial_position + 2 * term_length + 64);
+    aeron_network_publication_update_pub_pos_and_lmt(publication);
+    EXPECT_EQ(initial_position + term_length + publication_window_length, aeron_counter_get(publication->pub_lmt_position.value_addr));
+    EXPECT_EQ(initial_position - term_offset + term_length, publication->conductor_fields.clean_position);
+
+    // after cleanup the pub-lmt can move again
+    aeron_network_publication_update_pub_pos_and_lmt(publication);
+    EXPECT_EQ(initial_position + 2 * term_length + 64 + publication_window_length, aeron_counter_get(publication->pub_lmt_position.value_addr));
+    EXPECT_EQ(initial_position + term_length + 64, publication->conductor_fields.clean_position);
+}
+
+TEST_F(NetworkPublicationTest, publicationLimitShouldNotCrossIntoTheDirtyTerm)
+{
+    const int32_t term_length = 64 * 1024;
+    const int32_t publication_window_length = term_length / 2;
+    const int64_t initial_position = 0;
+    const std::string uri = std::string("aeron:udp?endpoint=localhost:23245")
+            .append("|term-length=").append(std::to_string(term_length));
+    aeron_network_publication_t *publication = createPublication(uri.c_str());
+    ASSERT_EQ(initial_position, aeron_counter_get(publication->pub_pos_position.value_addr));
+    ASSERT_EQ(initial_position, aeron_counter_get(publication->pub_lmt_position.value_addr));
+    ASSERT_EQ(initial_position, aeron_counter_get(publication->snd_pos_position.value_addr));
+    ASSERT_EQ(initial_position, aeron_counter_get(publication->snd_lmt_position.value_addr));
+    ASSERT_EQ(initial_position, publication->conductor_fields.clean_position);
+
+    aeron_driver_conductor_t conductor = {};
+    aeron_driver_conductor_proxy_t proxy = {};
+    proxy.conductor = &conductor;
+    proxy.threading_mode = AERON_THREADING_MODE_INVOKER;
+    AERON_DECL_ALIGNED(buffer_t data_buffer, 16) = {};
+    sockaddr_storage sockaddr = {};
+    aeron_network_publication_on_status_message(
+            publication, &proxy, data_buffer.data(), sizeof(aeron_status_message_header_t), &sockaddr);
+
+    ASSERT_TRUE(publication->has_receivers);
+
+    EXPECT_EQ(1, aeron_network_publication_update_pub_pos_and_lmt(publication));
+
+    // initial pub-lmt
+    aeron_counter_set_ordered(publication->snd_pos_position.value_addr, initial_position + 256);
+    aeron_network_publication_update_pub_pos_and_lmt(publication);
+    EXPECT_EQ(initial_position + 256 + publication_window_length, aeron_counter_get(publication->pub_lmt_position.value_addr));
+    EXPECT_EQ(initial_position, publication->conductor_fields.clean_position);
+
+    // new pub-lmt intersects with the clean position
+    aeron_counter_set_ordered(publication->snd_pos_position.value_addr, initial_position + 2 * term_length + 192 + publication_window_length);
+    aeron_network_publication_update_pub_pos_and_lmt(publication);
+    EXPECT_EQ(initial_position + 256 + publication_window_length, aeron_counter_get(publication->pub_lmt_position.value_addr));
+    EXPECT_EQ(initial_position + term_length, publication->conductor_fields.clean_position);
+
+    // after cleanup the pub-lmt can move again
+    aeron_network_publication_update_pub_pos_and_lmt(publication);
+    EXPECT_EQ(initial_position + 2 * term_length + 192 + 2 * publication_window_length, aeron_counter_get(publication->pub_lmt_position.value_addr));
+    EXPECT_EQ(initial_position + term_length + 192 + publication_window_length, publication->conductor_fields.clean_position);
 }
