@@ -860,6 +860,19 @@ public final class DriverConductor implements Agent
         }
     }
 
+    void unlinkIpcSubscriptions(final IpcPublication publication)
+    {
+        for (int i = 0, size = subscriptionLinks.size(); i < size; i++)
+        {
+            final SubscriptionLink link = subscriptionLinks.get(i);
+            if (link.isLinked(publication))
+            {
+                notifyUnavailableImageLink(publication.registrationId(), link);
+                link.unlink(publication);
+            }
+        }
+    }
+
     void tryCloseReceiveChannelEndpoint(final ReceiveChannelEndpoint channelEndpoint)
     {
         if (channelEndpoint.shouldBeClosed())
@@ -1516,11 +1529,21 @@ public final class DriverConductor implements Agent
 
         if (null == publicationImage)
         {
-            throw new ControlProtocolException(
-                GENERIC_ERROR, "Unable to resolve image for correlationId=" + imageCorrelationId);
+            final IpcPublication foundPublication = getIpcPublication(imageCorrelationId);
+
+            if (null == foundPublication)
+            {
+                throw new ControlProtocolException(
+                    GENERIC_ERROR, "Unable to resolve image for correlationId=" + imageCorrelationId);
+            }
+
+            foundPublication.reject(position, reason, this, cachedNanoClock.nanoTime());
+        }
+        else
+        {
+            receiverProxy.rejectImage(imageCorrelationId, position, reason);
         }
 
-        receiverProxy.rejectImage(imageCorrelationId, position, reason);
         clientProxy.operationSucceeded(correlationId);
     }
 
@@ -2261,12 +2284,14 @@ public final class DriverConductor implements Agent
         }
     }
 
-    private void linkIpcSubscriptions(final IpcPublication publication)
+    void linkIpcSubscriptions(final IpcPublication publication)
     {
         for (int i = 0, size = subscriptionLinks.size(); i < size; i++)
         {
             final SubscriptionLink subscription = subscriptionLinks.get(i);
-            if (subscription.matches(publication) && !subscription.isLinked(publication))
+            if (subscription.matches(publication) &&
+                !subscription.isLinked(publication) &&
+                publication.isAcceptingSubscriptions())
             {
                 clientProxy.onAvailableImage(
                     publication.registrationId(),

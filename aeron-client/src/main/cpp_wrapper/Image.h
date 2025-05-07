@@ -285,6 +285,14 @@ public:
         return aeron_image_end_of_stream_position(m_image);
     }
 
+    inline void reject(std::string reason)
+    {
+        if (aeron_image_reject(m_image, reason.c_str()) < 0)
+        {
+            AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
+        }
+    }
+
     /**
      * A count of observed active transports within the Image liveness timeout.
      *

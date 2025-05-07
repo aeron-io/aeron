@@ -835,6 +835,15 @@ bool aeron_image_is_closed(aeron_image_t *image)
     return is_closed;
 }
 
+int aeron_image_reject(aeron_image_t *image, const char *reason)
+{
+    return aeron_subscription_reject_image(
+        image->subscription,
+        image->key.correlation_id,
+        aeron_image_position(image),
+        reason);
+}
+
 extern int64_t aeron_image_removal_change_number(aeron_image_t *image);
 
 extern bool aeron_image_is_in_use_by_subscription(aeron_image_t *image, int64_t last_change_number);
