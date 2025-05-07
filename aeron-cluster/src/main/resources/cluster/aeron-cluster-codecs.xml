@@ -91,6 +91,7 @@
         - Followers can respond with a REDIRECT code and a list of member endpoint destinations in the
           detail that will have the leader first.
         - If a change of leader occurs mid-session then a new-leader-event will be sent from the new leader.
+          Ideally, a client should send a session-keep-alive message as the first message to the new leader.
 
     2. Ingress/Egress Messages - Session Messages which make up application protocol.
         - Messages are sent to a clustered service with a SessionMessageHeader followed by an application payload.
