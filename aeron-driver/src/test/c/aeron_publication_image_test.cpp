@@ -875,5 +875,8 @@ TEST_F(PublicationImageTest, shouldReportUniqueLoss)
         },
         nullptr));
 
+    aeron_publication_image_remove_destination(image, channel);
+    endpoint->transport_bindings->poller_remove_func(&m_receiver.poller, &dest->transport);
+    endpoint->transport_bindings->close_func(&dest->transport);
     aeron_receive_destination_delete(dest, &m_counters_manager);
 }
