@@ -992,13 +992,12 @@ int aeron_network_publication_update_pub_pos_and_lmt(aeron_network_publication_t
             {
                 aeron_network_publication_clean_buffer(publication, min_consumer_position - publication->term_buffer_length);
                 const int64_t clean_position = publication->conductor_fields.clean_position;
-                const int32_t clean_offset = (int32_t)(clean_position & publication->term_length_mask);
-                const int64_t term_based_clean_position = clean_position - clean_offset;
-                const int64_t term_based_new_limit_position =
-                        new_limit_position - (new_limit_position & publication->term_length_mask);
-                const int64_t wrap_around_gap = term_based_new_limit_position - term_based_clean_position;
-                const int64_t max_wrap_around_gap = publication->term_buffer_length << 1;
-                if (wrap_around_gap < max_wrap_around_gap || (wrap_around_gap == max_wrap_around_gap && 0 != clean_offset))
+                const int32_t dirty_term_id = aeron_logbuffer_compute_term_id_from_position(
+                    clean_position, publication->position_bits_to_shift, publication->initial_term_id);
+                const int32_t active_term_id = aeron_logbuffer_compute_term_id_from_position(
+                    new_limit_position, publication->position_bits_to_shift, publication->initial_term_id);
+                const int32_t term_gap = aeron_logbuffer_compute_term_count(active_term_id, dirty_term_id);
+                if (term_gap < 2 || (2 == term_gap && 0 != (clean_position & publication->term_length_mask)))
                 {
                     aeron_counter_set_ordered(publication->pub_lmt_position.value_addr, new_limit_position);
                 }
