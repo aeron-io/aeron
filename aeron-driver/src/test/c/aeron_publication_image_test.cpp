@@ -874,4 +874,6 @@ TEST_F(PublicationImageTest, shouldReportUniqueLoss)
             EXPECT_EQ(777, stream_id);
         },
         nullptr));
+
+    aeron_receive_destination_delete(dest, &m_counters_manager);
 }
