@@ -83,6 +83,7 @@ final class ConsensusModuleAgent
     private long expectedAckPosition = 0;
     private long serviceAckId = 0;
     private long terminationPosition = NULL_POSITION;
+    private long terminationLeadershipTermId = NULL_VALUE;
     private long notifiedCommitPosition = 0;
     private long lastAppendPosition = NULL_POSITION;
     private long timeOfLastLogUpdateNs = 0;
@@ -1113,6 +1114,7 @@ final class ConsensusModuleAgent
         if (leadershipTermId == this.leadershipTermId && Cluster.Role.FOLLOWER == role)
         {
             terminationPosition = logPosition;
+            terminationLeadershipTermId = leadershipTermId;
             timeOfLastLogUpdateNs = clusterClock.timeNanos();
         }
     }
@@ -3493,8 +3495,16 @@ final class ConsensusModuleAgent
     {
         if (null == clusterTermination)
         {
-            consensusPublisher.terminationAck(
-                leaderMember.publication(), leadershipTermId, logPosition, memberId);
+            if (terminationLeadershipTermId == leadershipTermId)
+            {
+                consensusPublisher.terminationAck(
+                    leaderMember.publication(), leadershipTermId, logPosition, memberId);
+            }
+            else
+            {
+                final String message = "termination ack not sent - different leadership term to request";
+                ctx.countedErrorHandler().onError(new ClusterEvent(message, AeronException.Category.ERROR));
+            }
             recordingLog.commitLogPosition(leadershipTermId, logPosition);
             closeAndTerminate();
         }
