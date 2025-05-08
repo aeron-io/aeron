@@ -983,6 +983,39 @@ public final class RecordingLog implements AutoCloseable
     }
 
     /**
+     * Get the high service id of the latest snapshot.
+     * If no services are found, this returns -1.
+     *
+     * @return the high service id.
+     */
+    public int getHighServiceIdOfLatestSnapshot()
+    {
+        for (int idx = entriesCache.size() - 1; idx >= 0; idx--)
+        {
+            final Entry entry = entriesCache.get(idx);
+            if (isValidSnapshot(entry) && ConsensusModule.Configuration.SERVICE_ID == entry.serviceId)
+            {
+                int highServiceId = entry.serviceId;
+
+                for (--idx; idx >= 0; idx--)
+                {
+                    final Entry svcEntry = entriesCache.get(idx);
+                    if (isValidAnySnapshot(svcEntry) && svcEntry.serviceId == highServiceId + 1)
+                    {
+                        highServiceId = svcEntry.serviceId;
+                    }
+                    else
+                    {
+                        return highServiceId;
+                    }
+                }
+            }
+        }
+
+        return ConsensusModule.Configuration.SERVICE_ID;
+    }
+
+    /**
      * Invalidate the last snapshot taken by the cluster so that on restart it can revert to the previous one.
      *
      * @return true if the latest snapshot was found and marked as invalid, so it will not be reloaded.
