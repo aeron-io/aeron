@@ -245,50 +245,74 @@ class PublicationImageTest
         // first activation => must be recorded
         epochClock.update(100);
         image.onGapDetected(termId, offset, length);
-        assertEquals(1L, PublicationImage.BEGIN_LOSS_CHANGE_VH.get(image));
-        assertEquals(1L, PublicationImage.END_LOSS_CHANGE_VH.get(image));
+        assertEquals(1L, image.beginLossChange);
+        assertEquals(termId, image.lossTermId);
+        assertEquals(offset, image.lossTermOffset);
+        assertEquals(length, image.lossLength);
+        assertEquals(1L, image.endLossChange);
 
         // same loss => no reporting
         epochClock.update(200);
         image.onGapDetected(termId, offset, length);
-        assertEquals(2L, PublicationImage.BEGIN_LOSS_CHANGE_VH.get(image));
-        assertEquals(2L, PublicationImage.END_LOSS_CHANGE_VH.get(image));
+        assertEquals(2L, image.beginLossChange);
+        assertEquals(termId, image.lossTermId);
+        assertEquals(offset, image.lossTermOffset);
+        assertEquals(length, image.lossLength);
+        assertEquals(2L, image.endLossChange);
 
         // smaller loss => no reporting
         epochClock.update(300);
         image.onGapDetected(termId, offset, 32);
-        assertEquals(3L, PublicationImage.BEGIN_LOSS_CHANGE_VH.get(image));
-        assertEquals(3L, PublicationImage.END_LOSS_CHANGE_VH.get(image));
+        assertEquals(3L, image.beginLossChange);
+        assertEquals(termId, image.lossTermId);
+        assertEquals(offset, image.lossTermOffset);
+        assertEquals(32, image.lossLength);
+        assertEquals(3L, image.endLossChange);
 
         // loss length increased => record
         epochClock.update(400);
         image.onGapDetected(termId, offset, length + 128);
-        assertEquals(4L, PublicationImage.BEGIN_LOSS_CHANGE_VH.get(image));
-        assertEquals(4L, PublicationImage.END_LOSS_CHANGE_VH.get(image));
+        assertEquals(4L, image.beginLossChange);
+        assertEquals(termId, image.lossTermId);
+        assertEquals(offset, image.lossTermOffset);
+        assertEquals(length + 128, image.lossLength);
+        assertEquals(4L, image.endLossChange);
 
         // overlapping loss => record
         epochClock.update(500);
         image.onGapDetected(termId, offset + 512, 800);
-        assertEquals(5L, PublicationImage.BEGIN_LOSS_CHANGE_VH.get(image));
-        assertEquals(5L, PublicationImage.END_LOSS_CHANGE_VH.get(image));
+        assertEquals(5L, image.beginLossChange);
+        assertEquals(termId, image.lossTermId);
+        assertEquals(offset + 512, image.lossTermOffset);
+        assertEquals(800, image.lossLength);
+        assertEquals(5L, image.endLossChange);
 
         // non-overlapping loss => record
         epochClock.update(600);
         image.onGapDetected(termId, offset + 512 + 800, 32);
-        assertEquals(6L, PublicationImage.BEGIN_LOSS_CHANGE_VH.get(image));
-        assertEquals(6L, PublicationImage.END_LOSS_CHANGE_VH.get(image));
+        assertEquals(6L, image.beginLossChange);
+        assertEquals(termId, image.lossTermId);
+        assertEquals(offset + 512 + 800, image.lossTermOffset);
+        assertEquals(32, image.lossLength);
+        assertEquals(6L, image.endLossChange);
 
         // non-overlapping loss => record
         epochClock.update(700);
         image.onGapDetected(termId, offset + 4096, 2048);
-        assertEquals(7L, PublicationImage.BEGIN_LOSS_CHANGE_VH.get(image));
-        assertEquals(7L, PublicationImage.END_LOSS_CHANGE_VH.get(image));
+        assertEquals(7L, image.beginLossChange);
+        assertEquals(termId, image.lossTermId);
+        assertEquals(offset + 4096, image.lossTermOffset);
+        assertEquals(2048, image.lossLength);
+        assertEquals(7L, image.endLossChange);
 
         // loss in different term => record
         epochClock.update(800);
         image.onGapDetected(termId + 11, 0, 256);
-        assertEquals(8L, PublicationImage.BEGIN_LOSS_CHANGE_VH.get(image));
-        assertEquals(8L, PublicationImage.END_LOSS_CHANGE_VH.get(image));
+        assertEquals(8L, image.beginLossChange);
+        assertEquals(termId + 11, image.lossTermId);
+        assertEquals(0, image.lossTermOffset);
+        assertEquals(256, image.lossLength);
+        assertEquals(8L, image.endLossChange);
 
         inOrder.verify(lossReport).createEntry(
             length, 100, SESSION_ID, STREAM_ID, receiveChannelEndpoint.originalUriString(), SOURCE_IDENTITY);

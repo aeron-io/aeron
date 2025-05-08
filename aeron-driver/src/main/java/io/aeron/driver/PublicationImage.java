@@ -118,8 +118,8 @@ public final class PublicationImage
 
     private static final VarHandle BEGIN_SM_CHANGE_VH;
     private static final VarHandle END_SM_CHANGE_VH;
-    static final VarHandle BEGIN_LOSS_CHANGE_VH;
-    static final VarHandle END_LOSS_CHANGE_VH;
+    private static final VarHandle BEGIN_LOSS_CHANGE_VH;
+    private static final VarHandle END_LOSS_CHANGE_VH;
 
     static
     {
@@ -153,11 +153,11 @@ public final class PublicationImage
     private final long smTimeoutNs;
     private final long maxReceiverWindowLength;
 
-    private volatile long beginLossChange;
-    private volatile long endLossChange;
-    private int lossTermId;
-    private int lossTermOffset;
-    private int lossLength;
+    volatile long beginLossChange;
+    volatile long endLossChange;
+    int lossTermId;
+    int lossTermOffset;
+    int lossLength;
     private long lastLossChangeNumber;
 
     private volatile long timeOfLastStateChangeNs;
