@@ -68,6 +68,9 @@ class PublicationImageConductorFields extends PublicationImagePadding1
     long cleanPosition;
     final ArrayList<UntetheredSubscription> untetheredSubscriptions = new ArrayList<>();
     ReadablePosition[] subscriberPositions;
+    int lossReportTermId;
+    int lossReportTermOffset;
+    int lossReportLength;
     LossReport lossReport;
     LossReport.ReportEntry reportEntry;
     volatile Integer responseSessionId = null;
@@ -115,8 +118,8 @@ public final class PublicationImage
 
     private static final VarHandle BEGIN_SM_CHANGE_VH;
     private static final VarHandle END_SM_CHANGE_VH;
-    private static final VarHandle BEGIN_LOSS_CHANGE_VH;
-    private static final VarHandle END_LOSS_CHANGE_VH;
+    static final VarHandle BEGIN_LOSS_CHANGE_VH;
+    static final VarHandle END_LOSS_CHANGE_VH;
 
     static
     {
@@ -411,19 +414,15 @@ public final class PublicationImage
 
         END_LOSS_CHANGE_VH.setRelease(this, changeNumber);
 
-        if (null != reportEntry)
+        final int lossReportEndOffset;
+        if (termId != lossReportTermId ||
+            termOffset >= (lossReportEndOffset = (lossReportTermOffset + lossReportLength)))
         {
-            reportEntry.recordObservation(length, epochClock.time());
+            reportLoss(termId, termOffset, length, length);
         }
-        else if (null != lossReport)
+        else if (termOffset + length > lossReportEndOffset)
         {
-            reportEntry = lossReport.createEntry(
-                length, epochClock.time(), sessionId, streamId, channel(), sourceIdentity);
-
-            if (null == reportEntry)
-            {
-                lossReport = null;
-            }
+            reportLoss(termId, termOffset, length, length - (lossReportEndOffset - termOffset));
         }
     }
 
@@ -951,6 +950,28 @@ public final class PublicationImage
         {
             smEnabled = false;
         }
+    }
+
+    private void reportLoss(final int termId, final int termOffset, final int length, final int bytesLost)
+    {
+        if (null != reportEntry)
+        {
+            reportEntry.recordObservation(bytesLost, epochClock.time());
+        }
+        else if (null != lossReport)
+        {
+            reportEntry = lossReport.createEntry(
+                bytesLost, epochClock.time(), sessionId, streamId, channel(), sourceIdentity);
+
+            if (null == reportEntry)
+            {
+                lossReport = null;
+            }
+        }
+
+        lossReportTermId = termId;
+        lossReportTermOffset = termOffset;
+        lossReportLength = length;
     }
 
     private void state(final State state)
