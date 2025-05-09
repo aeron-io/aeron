@@ -66,8 +66,8 @@ typedef struct aeron_publication_image_stct
         int32_t loss_report_term_id;
         int32_t loss_report_term_offset;
         size_t loss_report_length;
-        aeron_loss_reporter_t *loss_reporter;
-        aeron_loss_reporter_entry_offset_t loss_reporter_entry_offset;
+        aeron_loss_reporter_t *loss_report;
+        aeron_loss_reporter_entry_offset_t loss_report_entry_offset;
         aeron_receive_channel_endpoint_t *endpoint;
         uint8_t flags;
     }

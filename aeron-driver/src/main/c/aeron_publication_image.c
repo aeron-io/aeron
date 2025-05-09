@@ -109,17 +109,17 @@ static aeron_feedback_delay_generator_state_t *aeron_publication_image_acquire_d
 static void aeron_publication_image_report_loss(
     aeron_publication_image_t *image, int32_t term_id, int32_t term_offset, size_t length, size_t bytes_lost)
 {
-    if (image->conductor_fields.loss_reporter_entry_offset >= 0)
+    if (image->conductor_fields.loss_report_entry_offset >= 0)
     {
         aeron_loss_reporter_record_observation(
-            image->conductor_fields.loss_reporter, image->conductor_fields.loss_reporter_entry_offset, (int64_t)bytes_lost, image->epoch_clock());
+            image->conductor_fields.loss_report, image->conductor_fields.loss_report_entry_offset, (int64_t)bytes_lost, image->epoch_clock());
     }
-    else if (NULL != image->conductor_fields.loss_reporter)
+    else if (NULL != image->conductor_fields.loss_report)
     {
         if (NULL != image->conductor_fields.endpoint)
         {
-            image->conductor_fields.loss_reporter_entry_offset = aeron_loss_reporter_create_entry(
-                image->conductor_fields.loss_reporter,
+            image->conductor_fields.loss_report_entry_offset = aeron_loss_reporter_create_entry(
+                image->conductor_fields.loss_report,
                 (int64_t)bytes_lost,
                 image->epoch_clock(),
                 image->session_id,
@@ -130,9 +130,9 @@ static void aeron_publication_image_report_loss(
                 image->source_identity_length);
         }
 
-        if (-1 == image->conductor_fields.loss_reporter_entry_offset)
+        if (-1 == image->conductor_fields.loss_report_entry_offset)
         {
-            image->conductor_fields.loss_reporter = NULL;
+            image->conductor_fields.loss_report = NULL;
         }
     }
     image->conductor_fields.loss_report_term_id = term_id;
@@ -298,8 +298,8 @@ int aeron_publication_image_create(
     _image->conductor_fields.endpoint = endpoint;
 
     _image->congestion_control = congestion_control;
-    _image->conductor_fields.loss_reporter = loss_reporter;
-    _image->conductor_fields.loss_reporter_entry_offset = -1;
+    _image->conductor_fields.loss_report = loss_reporter;
+    _image->conductor_fields.loss_report_entry_offset = -1;
     _image->conductor_fields.loss_report_term_id = 0;
     _image->conductor_fields.loss_report_term_offset = 0;
     _image->conductor_fields.loss_report_length = 0;
