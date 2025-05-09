@@ -68,6 +68,7 @@ class ClusterBackupContextTest
         when(aeronContext.aeronDirectoryName()).thenReturn("funny");
         when(aeronContext.subscriberErrorHandler()).thenReturn(errorHandler);
         when(aeronContext.useConductorAgentInvoker()).thenReturn(true);
+        when(aeronContext.filePageSize()).thenReturn(PAGE_MIN_SIZE);
         final Aeron aeron = mock(Aeron.class);
         when(aeron.context()).thenReturn(aeronContext);
         final AtomicCounter errorCounter = mock(AtomicCounter.class);
