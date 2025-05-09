@@ -2478,6 +2478,7 @@ final class ConsensusModuleAgent
                             leadershipTermId,
                             position);
                         terminationPosition = position;
+                        terminationLeadershipTermId = leadershipTermId;
 
                         state(ConsensusModule.State.SNAPSHOT);
                         totalSnapshotDurationTracker.onSnapshotBegin(nowNs);
@@ -2497,6 +2498,7 @@ final class ConsensusModuleAgent
                     clusterTermination.terminationPosition(
                         errorHandler, consensusPublisher, activeMembers, thisMember, leadershipTermId, position);
                     terminationPosition = position;
+                    terminationLeadershipTermId = leadershipTermId;
                     if (serviceCount > 0)
                     {
                         serviceProxy.terminationPosition(terminationPosition, errorHandler);
