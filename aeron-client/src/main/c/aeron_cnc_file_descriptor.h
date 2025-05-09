@@ -23,6 +23,7 @@
 #include "util/aeron_fileutil.h"
 
 #define AERON_CNC_FILE "cnc.dat"
+#define AERON_CNC_VERSION (aeron_semantic_version_compose(0, 2, 0))
 
 #pragma pack(push)
 #pragma pack(4)
@@ -37,6 +38,7 @@ typedef struct aeron_cnc_metadata_stct
     int64_t client_liveness_timeout;
     int64_t start_timestamp;
     int64_t pid;
+    int32_t file_page_size;
 }
 aeron_cnc_metadata_t;
 #pragma pack(pop)
@@ -52,7 +54,7 @@ typedef enum aeron_cnc_load_result_stct
 }
 aeron_cnc_load_result_t;
 
-#define AERON_CNC_VERSION_AND_META_DATA_LENGTH (AERON_ALIGN(sizeof(aeron_cnc_metadata_t), AERON_CACHE_LINE_LENGTH * 2u))
+#define AERON_CNC_VERSION_AND_META_DATA_LENGTH UINT32_C(AERON_CACHE_LINE_LENGTH * 2)
 
 inline uint8_t *aeron_cnc_to_driver_buffer(aeron_cnc_metadata_t *metadata)
 {
@@ -116,7 +118,5 @@ aeron_cnc_load_result_t aeron_cnc_map_file_and_load_metadata(
     const char *dir, aeron_mapped_file_t *mapped_file, aeron_cnc_metadata_t **metadata);
 
 int aeron_cnc_resolve_filename(const char *directory, char *filename_buffer, size_t filename_buffer_length);
-
-#define AERON_CNC_VERSION (aeron_semantic_version_compose(0, 2, 0))
 
 #endif //AERON_C_CNC_FILE_DESCRIPTOR_H

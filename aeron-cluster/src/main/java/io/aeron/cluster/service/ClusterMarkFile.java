@@ -24,6 +24,8 @@ import io.aeron.cluster.codecs.mark.MarkFileHeaderEncoder;
 import io.aeron.cluster.codecs.mark.MessageHeaderDecoder;
 import io.aeron.cluster.codecs.mark.MessageHeaderEncoder;
 import io.aeron.cluster.codecs.mark.VarAsciiEncodingEncoder;
+import io.aeron.logbuffer.LogBufferDescriptor;
+import org.agrona.BitUtil;
 import org.agrona.CloseHelper;
 import org.agrona.IoUtil;
 import org.agrona.MarkFile;
@@ -40,8 +42,10 @@ import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.function.Consumer;
 
+import static io.aeron.logbuffer.LogBufferDescriptor.PAGE_MIN_SIZE;
+
 /**
- * Used to indicate if a cluster service is running and what configuration it is using. Errors encountered by
+ * Used to indicate if a cluster component is running and what configuration it is using. Errors encountered by
  * the service are recorded within this file by a {@link org.agrona.concurrent.errors.DistinctErrorLog}.
  */
 public final class ClusterMarkFile implements AutoCloseable
@@ -111,14 +115,16 @@ public final class ClusterMarkFile implements AutoCloseable
     private final int headerOffset;
 
     /**
-     * Create new {@link MarkFile} for a cluster service but check if an existing service is active.
+     * Create new {@link MarkFile} for a cluster component but check if an existing component is active.
      *
      * @param file              full qualified file to the {@link MarkFile}.
      * @param type              of cluster component the {@link MarkFile} represents.
      * @param errorBufferLength for storing the error log.
      * @param epochClock        for checking liveness against.
      * @param timeoutMs         for the activity check on an existing {@link MarkFile}.
+     * @deprecated Use {@link #ClusterMarkFile(File, ClusterComponentType, int, EpochClock, long, int)} instead.
      */
+    @Deprecated(forRemoval = true)
     public ClusterMarkFile(
         final File file,
         final ClusterComponentType type,
@@ -126,25 +132,50 @@ public final class ClusterMarkFile implements AutoCloseable
         final EpochClock epochClock,
         final long timeoutMs)
     {
+        this(file, type, errorBufferLength, epochClock, timeoutMs, PAGE_MIN_SIZE);
+    }
+
+    /**
+     * Create new {@link MarkFile} for a cluster component but check if an existing component is active.
+     *
+     * @param file              full qualified file to the {@link MarkFile}.
+     * @param type              of cluster component the {@link MarkFile} represents.
+     * @param errorBufferLength for storing the error log.
+     * @param epochClock        for checking liveness against.
+     * @param timeoutMs         for the activity check on an existing {@link MarkFile}.
+     * @param filePageSize      for aligning file length to.
+     * @since 1.48.0
+     */
+    public ClusterMarkFile(
+        final File file,
+        final ClusterComponentType type,
+        final int errorBufferLength,
+        final EpochClock epochClock,
+        final long timeoutMs,
+        final int filePageSize)
+    {
         if (errorBufferLength < ERROR_BUFFER_MIN_LENGTH || errorBufferLength > ERROR_BUFFER_MAX_LENGTH)
         {
             throw new IllegalArgumentException("Invalid errorBufferLength: " + errorBufferLength);
         }
 
+        LogBufferDescriptor.checkPageSize(filePageSize);
+
         final boolean markFileExists = file.exists();
-        final int totalFileLength = HEADER_LENGTH + errorBufferLength;
+        final int totalFileLength =
+            BitUtil.align(HEADER_LENGTH + errorBufferLength, filePageSize);
 
         final MessageHeaderDecoder messageHeaderDecoder = new MessageHeaderDecoder();
 
         final long candidateTermId;
         if (markFileExists)
         {
-            final int headerOffset = headerOffset(file);
-            final MarkFile markFile = new MarkFile(
+            final int currentHeaderOffset = headerOffset(file);
+            final MarkFile existingMarkFile = new MarkFile(
                 file,
                 true,
-                headerOffset + MarkFileHeaderDecoder.versionEncodingOffset(),
-                headerOffset + MarkFileHeaderDecoder.activityTimestampEncodingOffset(),
+                currentHeaderOffset + MarkFileHeaderDecoder.versionEncodingOffset(),
+                currentHeaderOffset + MarkFileHeaderDecoder.activityTimestampEncodingOffset(),
                 totalFileLength,
                 timeoutMs,
                 epochClock,
@@ -161,25 +192,19 @@ public final class ClusterMarkFile implements AutoCloseable
                     }
                 },
                 null);
-            final UnsafeBuffer buffer = markFile.buffer();
+            final UnsafeBuffer existingBuffer = existingMarkFile.buffer();
 
-            if (buffer.capacity() != totalFileLength)
+            if (0 != currentHeaderOffset)
             {
-                throw new ClusterException(
-                    "ClusterMarkFile capacity=" + buffer.capacity() + " < expectedCapacity=" + totalFileLength);
-            }
-
-            if (0 != headerOffset)
-            {
-                headerDecoder.wrapAndApplyHeader(buffer, 0, messageHeaderDecoder);
+                headerDecoder.wrapAndApplyHeader(existingBuffer, 0, messageHeaderDecoder);
             }
             else
             {
-                headerDecoder.wrap(buffer, 0, MarkFileHeaderDecoder.BLOCK_LENGTH, MarkFileHeaderDecoder.SCHEMA_VERSION);
+                headerDecoder.wrap(
+                    existingBuffer, 0, MarkFileHeaderDecoder.BLOCK_LENGTH, MarkFileHeaderDecoder.SCHEMA_VERSION);
             }
 
             final ClusterComponentType existingType = headerDecoder.componentType();
-
             if (existingType != ClusterComponentType.UNKNOWN && existingType != type)
             {
                 if (existingType != ClusterComponentType.BACKUP || ClusterComponentType.CONSENSUS_MODULE != type)
@@ -191,23 +216,25 @@ public final class ClusterMarkFile implements AutoCloseable
 
             final int existingErrorBufferLength = headerDecoder.errorBufferLength();
             final int headerLength = headerDecoder.headerLength();
-            final UnsafeBuffer existingErrorBuffer = new UnsafeBuffer(buffer, headerLength, existingErrorBufferLength);
+            final UnsafeBuffer existingErrorBuffer =
+                new UnsafeBuffer(existingBuffer, headerLength, existingErrorBufferLength);
 
             saveExistingErrors(file, existingErrorBuffer, type, CommonContext.fallbackLogger());
             existingErrorBuffer.setMemory(0, existingErrorBufferLength, (byte)0);
 
             candidateTermId = headerDecoder.candidateTermId();
 
-            if (0 != headerOffset)
+            if (0 != currentHeaderOffset)
             {
-                this.markFile = markFile;
-                this.buffer = buffer;
+                markFile = existingMarkFile;
+                buffer = existingBuffer;
             }
             else
             {
                 headerDecoder.wrap(EMPTY_BUFFER, 0, 0, 0);
-                CloseHelper.close(markFile);
-                this.markFile = new MarkFile(
+                CloseHelper.close(existingMarkFile);
+
+                markFile = new MarkFile(
                     file,
                     false,
                     HEADER_OFFSET + MarkFileHeaderDecoder.versionEncodingOffset(),
@@ -217,8 +244,8 @@ public final class ClusterMarkFile implements AutoCloseable
                     epochClock,
                     null,
                     null);
-                this.buffer = this.markFile.buffer();
-                this.buffer.setMemory(0, headerLength, (byte)0);
+                buffer = markFile.buffer();
+                buffer.setMemory(0, headerLength, (byte)0);
             }
         }
         else

@@ -26,6 +26,8 @@ import io.aeron.cluster.client.ClusterException;
 import io.aeron.cluster.codecs.mark.MarkFileHeaderDecoder;
 import io.aeron.cluster.service.ClusterClock;
 import io.aeron.cluster.service.ClusterMarkFile;
+import io.aeron.driver.MediaDriver;
+import io.aeron.driver.ThreadingMode;
 import io.aeron.exceptions.ConfigurationException;
 import io.aeron.security.Authenticator;
 import io.aeron.security.AuthenticatorSupplier;
@@ -36,6 +38,7 @@ import io.aeron.security.SessionProxy;
 import io.aeron.test.TestContexts;
 import io.aeron.test.Tests;
 import io.aeron.test.cluster.TestClusterClock;
+import org.agrona.BitUtil;
 import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
 import org.agrona.SystemUtil;
@@ -58,18 +61,53 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.concurrent.TimeUnit;
 
-import static io.aeron.AeronCounters.*;
-import static io.aeron.cluster.ConsensusModule.Configuration.*;
+import static io.aeron.AeronCounters.CLUSTER_ELECTION_COUNT_TYPE_ID;
+import static io.aeron.AeronCounters.CLUSTER_LEADERSHIP_TERM_ID_TYPE_ID;
+import static io.aeron.AeronCounters.NODE_CONTROL_TOGGLE_TYPE_ID;
+import static io.aeron.cluster.ConsensusModule.Configuration.ALLOW_ONLY_BACKUP_QUERIES;
+import static io.aeron.cluster.ConsensusModule.Configuration.AUTHENTICATOR_SUPPLIER_PROP_NAME;
+import static io.aeron.cluster.ConsensusModule.Configuration.AUTHORISATION_SERVICE_SUPPLIER_PROP_NAME;
+import static io.aeron.cluster.ConsensusModule.Configuration.CLUSTER_CLOCK_PROP_NAME;
+import static io.aeron.cluster.ConsensusModule.Configuration.COMMIT_POSITION_TYPE_ID;
+import static io.aeron.cluster.ConsensusModule.Configuration.CONSENSUS_MODULE_ERROR_COUNT_TYPE_ID;
+import static io.aeron.cluster.ConsensusModule.Configuration.CONSENSUS_MODULE_STATE_TYPE_ID;
+import static io.aeron.cluster.ConsensusModule.Configuration.CONTROL_TOGGLE_TYPE_ID;
+import static io.aeron.cluster.ConsensusModule.Configuration.DEFAULT_AUTHORISATION_SERVICE_SUPPLIER;
+import static io.aeron.cluster.ConsensusModule.Configuration.ELECTION_STATE_TYPE_ID;
+import static io.aeron.cluster.ConsensusModule.Configuration.SERVICE_ID;
+import static io.aeron.cluster.ConsensusModule.Configuration.SNAPSHOT_COUNTER_TYPE_ID;
+import static io.aeron.cluster.ConsensusModule.Configuration.TIMER_SERVICE_SUPPLIER_PRIORITY_HEAP;
+import static io.aeron.cluster.ConsensusModule.Configuration.TIMER_SERVICE_SUPPLIER_PROP_NAME;
+import static io.aeron.cluster.ConsensusModule.Configuration.TIMER_SERVICE_SUPPLIER_WHEEL;
 import static io.aeron.cluster.codecs.mark.ClusterComponentType.CONSENSUS_MODULE;
 import static io.aeron.cluster.service.ClusterMarkFile.ERROR_BUFFER_MIN_LENGTH;
+import static io.aeron.cluster.service.ClusterMarkFile.HEADER_LENGTH;
 import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.MARK_FILE_DIR_PROP_NAME;
+import static io.aeron.logbuffer.LogBufferDescriptor.PAGE_MIN_SIZE;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class ConsensusModuleContextTest
 {
@@ -87,6 +125,7 @@ class ConsensusModuleContextTest
         when(aeronContext.subscriberErrorHandler()).thenReturn(new RethrowingErrorHandler());
         when(aeronContext.aeronDirectoryName()).thenReturn("some aeron dir");
         when(aeronContext.useConductorAgentInvoker()).thenReturn(true);
+        when(aeronContext.filePageSize()).thenReturn(PAGE_MIN_SIZE);
         final AgentInvoker conductorInvoker = mock(AgentInvoker.class);
         final Aeron aeron = mock(Aeron.class);
         when(aeron.addCounter(
@@ -456,7 +495,8 @@ class ConsensusModuleContextTest
             CONSENSUS_MODULE,
             ERROR_BUFFER_MIN_LENGTH,
             epochClock,
-            1_000);
+            1_000,
+            PAGE_MIN_SIZE);
         final long existingCandidateTermId = 23;
 
         assertEquals(Aeron.NULL_VALUE, clusterMarkFile.candidateTermId());
@@ -580,7 +620,12 @@ class ConsensusModuleContextTest
         final @TempDir File otherDir) throws IOException
     {
         final ClusterMarkFile clusterMarkFile = new ClusterMarkFile(
-            new File(otherDir, "test.me"), CONSENSUS_MODULE, ERROR_BUFFER_MIN_LENGTH, SystemEpochClock.INSTANCE, 10);
+            new File(otherDir, "test.me"),
+            CONSENSUS_MODULE,
+            ERROR_BUFFER_MIN_LENGTH,
+            SystemEpochClock.INSTANCE,
+            10,
+            PAGE_MIN_SIZE);
         context
             .clusterDir(clusterDir)
             .markFileDir(markFileDir)
@@ -900,6 +945,63 @@ class ConsensusModuleContextTest
         finally
         {
             CloseHelper.quietClose(context::close);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = { 8192, 32 * 1024 })
+    void shouldAlignMarkFileToTheAeronClientFilePageSize(final int filePageSize)
+    {
+        final Aeron.Context aeronContext = context.aeron().context();
+        when(aeronContext.filePageSize()).thenReturn(filePageSize);
+
+        try
+        {
+            context.conclude();
+
+            final File file = new File(context.markFileDir(), ClusterMarkFile.FILENAME);
+            assertTrue(file.exists());
+            assertEquals(BitUtil.align(context.errorBufferLength() + HEADER_LENGTH, filePageSize), file.length());
+
+            verify(aeronContext).filePageSize();
+        }
+        finally
+        {
+            context.close();
+        }
+    }
+
+    @Test
+    void shouldAlignMarkFileBasedOnTheMediaDriverFilePageSize() throws IOException
+    {
+        final Path aeronDir = Paths.get(CommonContext.generateRandomDirName());
+        Files.createDirectories(aeronDir);
+
+        final int filePageSize = 1024 * 1024;
+        try (MediaDriver driver = MediaDriver.launch(new MediaDriver.Context()
+            .aeronDirectoryName(aeronDir.toString())
+            .threadingMode(ThreadingMode.SHARED)
+            .filePageSize(filePageSize)))
+        {
+            final ConsensusModule.Context ctx = TestContexts.localhostConsensusModule()
+                .clusterDir(clusterDir)
+                .aeronDirectoryName(driver.aeronDirectoryName())
+                .ingressChannel("aeron:ipc")
+                .egressChannel("aeron:udp?endpoint=localhost:0")
+                .replicationChannel("aeron:udp?endpoint=localhost:0")
+                .errorBufferLength(1919191);
+            try
+            {
+                ctx.conclude();
+
+                final File file = new File(ctx.markFileDir(), ClusterMarkFile.FILENAME);
+                assertTrue(file.exists());
+                assertEquals(BitUtil.align(context.errorBufferLength() + HEADER_LENGTH, filePageSize), file.length());
+            }
+            finally
+            {
+                ctx.close();
+            }
         }
     }
 

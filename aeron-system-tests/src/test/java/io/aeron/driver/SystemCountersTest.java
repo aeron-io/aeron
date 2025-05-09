@@ -58,7 +58,7 @@ public class SystemCountersTest
     }
 
     @Test
-    void shouldCreatePublicationUsingSparseFiles()
+    void verifySystemCounterLabels()
     {
         final CountersReader countersReader = aeron.countersReader();
         final Int2ObjectHashMap<String> idToLabel = new Int2ObjectHashMap<>();
