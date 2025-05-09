@@ -15,15 +15,6 @@
  */
 package io.aeron.test.cluster;
 
-import io.aeron.cluster.client.AeronCluster;
-import io.aeron.cluster.service.ClusterTerminationException;
-import io.aeron.exceptions.AeronException;
-import org.agrona.ErrorHandler;
-import org.agrona.ExpandableArrayBuffer;
-import org.agrona.collections.MutableInteger;
-import org.agrona.concurrent.IdleStrategy;
-import org.agrona.concurrent.YieldingIdleStrategy;
-
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.net.UnknownHostException;
@@ -31,6 +22,17 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+
+import org.agrona.ErrorHandler;
+import org.agrona.ExpandableArrayBuffer;
+import org.agrona.collections.MutableInteger;
+import org.agrona.concurrent.IdleStrategy;
+import org.agrona.concurrent.YieldingIdleStrategy;
+
+
+import io.aeron.cluster.client.AeronCluster;
+import io.aeron.cluster.service.ClusterTerminationException;
+import io.aeron.exceptions.AeronException;
 
 public class ClusterTests
 {
@@ -168,6 +170,19 @@ public class ClusterTests
         {
             System.err.println("\n*** Warning captured with interrupt ***");
             warning.printStackTrace(System.err);
+        }
+    }
+
+    public static void failOnClusterWarning()
+    {
+        final Throwable warning = WARNING.getAndSet(null);
+
+        if (warning != null)
+        {
+            System.err.println("\n*** Warning captured ***");
+            warning.printStackTrace(System.err);
+
+            throw new RuntimeException("Cluster node received warning", warning);
         }
     }
 
