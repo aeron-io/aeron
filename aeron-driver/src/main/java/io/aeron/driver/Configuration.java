@@ -943,6 +943,12 @@ public final class Configuration
         "aeron.MinMulticastFlowControl.receiverTimeout";
 
     /**
+     * Property name for default retransmit receiver window multiple used by flow control strategies.
+     */
+    @Config(defaultType = DefaultType.INT, defaultInt = 4)
+    public static final String FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE = "aeron.flow.control.rrwm";
+
+    /**
      * Property name for resolver name of the Media Driver used in name resolution.
      */
     @Config(defaultType = DefaultType.STRING, defaultString = "", skipCDefaultValidation = true)
@@ -1436,6 +1442,17 @@ public final class Configuration
         return getDurationInNanos(
             FLOW_CONTROL_RECEIVER_TIMEOUT_PROP_NAME,
             getDurationInNanos(MIN_FLOW_CONTROL_TIMEOUT_OLD_PROP_NAME, FLOW_CONTROL_RECEIVER_TIMEOUT_DEFAULT_NS));
+    }
+
+    /**
+     * Retransmit receiver window multiple used by flow control strategy to determine the maximum
+     * amount of data to retransmit.
+     *
+     * @return multiple.
+     */
+    public static int flowControlRetransmitReceiverWindowMultiple()
+    {
+        return getInteger(FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE, 4);
     }
 
     /**

@@ -473,6 +473,8 @@ public final class MediaDriver implements AutoCloseable
         private long nakUnicastRetryDelayRatio = Configuration.nakUnicastRetryDelayRatio();
         private long nakMulticastMaxBackoffNs = Configuration.nakMulticastMaxBackoffNs();
         private long flowControlReceiverTimeoutNs = Configuration.flowControlReceiverTimeoutNs();
+        private int flowControlRetransmitReceiverWindowMultiple = Configuration
+            .flowControlRetransmitReceiverWindowMultiple();
         private long reResolutionCheckIntervalNs = Configuration.reResolutionCheckIntervalNs();
         private long conductorCycleThresholdNs = Configuration.conductorCycleThresholdNs();
         private long senderCycleThresholdNs = Configuration.senderCycleThresholdNs();
@@ -2644,6 +2646,38 @@ public final class MediaDriver implements AutoCloseable
         public Context flowControlReceiverTimeoutNs(final long timeoutNs)
         {
             this.flowControlReceiverTimeoutNs = timeoutNs;
+            return this;
+        }
+
+        /**
+         * Flow control strategies may limit how much data is sent during a retransmission to
+         * avoid saturating the network and potentially causing more loss. The maximum
+         * retransmission size will be based on a multiple of the receiver window size.
+         * <p>
+         * See @{@link FlowControl#calculateRetransmissionLength(int, int, int, int)}
+         *
+         * @return window size multiple.
+         */
+        @Config
+        public int flowControlRetransmitReceiverWindowMultiple()
+        {
+            return flowControlRetransmitReceiverWindowMultiple;
+        }
+
+        /**
+         * Flow control strategies may limit how much data is sent during a retransmission to
+         * avoid saturating the network and potentially causing more loss. The maximum
+         * retransmission size will be based on a multiple of the receiver window size.
+         * <p>
+         * See @{@link FlowControl#calculateRetransmissionLength(int, int, int, int)}
+         *
+         * @param flowControlRetransmitReceiverWindowMultiple window size multiple.
+         * @return this for a fluent API.
+         */
+        public Context flowControlRetransmitReceiverWindowMultiple(
+            final int flowControlRetransmitReceiverWindowMultiple)
+        {
+            this.flowControlRetransmitReceiverWindowMultiple = flowControlRetransmitReceiverWindowMultiple;
             return this;
         }
 

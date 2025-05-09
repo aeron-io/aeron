@@ -39,14 +39,9 @@ public class MaxMulticastFlowControl implements FlowControl
     public static final String FC_PARAM_VALUE = "max";
 
     /**
-     * Singleton instance which can be used to avoid allocation.
-     */
-    public static final MaxMulticastFlowControl INSTANCE = new MaxMulticastFlowControl();
-
-    /**
      * Multiple of receiver window to allow for a retransmit action.
      */
-    private static final int RETRANSMIT_RECEIVER_WINDOW_MULTIPLE = 4;
+    private int retransmitReceiverWindowMultiple;
 
     /**
      * {@inheritDoc}
@@ -61,6 +56,7 @@ public class MaxMulticastFlowControl implements FlowControl
         final int initialTermId,
         final int termBufferLength)
     {
+        retransmitReceiverWindowMultiple = FlowControl.retransmitReceiverWindowMultiple(context, udpChannel);
     }
 
     /**
@@ -146,6 +142,6 @@ public class MaxMulticastFlowControl implements FlowControl
         final int mtuLength)
     {
         return FlowControl.calculateRetransmissionLength(
-            resendLength, termBufferLength, termOffset, RETRANSMIT_RECEIVER_WINDOW_MULTIPLE);
+            resendLength, termBufferLength, termOffset, retransmitReceiverWindowMultiple);
     }
 }

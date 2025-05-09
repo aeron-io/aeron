@@ -15,6 +15,7 @@
  */
 package io.aeron.driver;
 
+import io.aeron.CommonContext;
 import io.aeron.driver.media.UdpChannel;
 import io.aeron.protocol.ErrorFlyweight;
 import io.aeron.protocol.SetupFlyweight;
@@ -51,6 +52,37 @@ public interface FlowControl extends AutoCloseable
 
         return (lengthToEndOfTerm < estimatedRetransmitLength) ?
             Math.min(lengthToEndOfTerm, resendLength) : Math.min(estimatedRetransmitLength, resendLength);
+    }
+
+    /**
+     * Determines the retransmit receiver window multiple to use. This can be specified in the
+     * context or the channel URI. The channel URI takes precedence over the context.
+     *
+     * @param context    to allow access to media driver configuration
+     * @param udpChannel for the stream.
+     * @return receiver window multiple.
+     */
+    static int retransmitReceiverWindowMultiple(
+        MediaDriver.Context context,
+        UdpChannel udpChannel)
+    {
+        final String fcValue = udpChannel.channelUri().get(CommonContext.FLOW_CONTROL_PARAM_NAME);
+        if (fcValue != null)
+        {
+            for (final String arg : fcValue.split(","))
+            {
+                if (arg.startsWith("rrwm:"))
+                {
+                    final int rrwm = Integer.parseInt(arg.substring("rrwm:".length()));
+                    if (rrwm <= 0)
+                    {
+                        throw new IllegalArgumentException("Invalid retransmit receiver window multiple: " + rrwm);
+                    }
+                    return rrwm;
+                }
+            }
+        }
+        return context.flowControlRetransmitReceiverWindowMultiple();
     }
 
     /**
