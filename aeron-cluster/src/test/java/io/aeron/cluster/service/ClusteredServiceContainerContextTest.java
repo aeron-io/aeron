@@ -50,9 +50,23 @@ import static io.aeron.cluster.service.ClusterMarkFile.HEADER_LENGTH;
 import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.MARK_FILE_DIR_PROP_NAME;
 import static io.aeron.logbuffer.LogBufferDescriptor.PAGE_MIN_SIZE;
 import static java.nio.charset.StandardCharsets.US_ASCII;
-import static org.hamcrest.MatcherAssert.*;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class ClusteredServiceContainerContextTest
 {
@@ -68,6 +82,7 @@ class ClusteredServiceContainerContextTest
         final Aeron.Context aeronContext = mock(Aeron.Context.class);
         when(aeronContext.aeronDirectoryName()).thenReturn("funny");
         when(aeronContext.subscriberErrorHandler()).thenReturn(errorHandler);
+        when(aeronContext.filePageSize()).thenReturn(PAGE_MIN_SIZE);
         final Aeron aeron = mock(Aeron.class);
         when(aeron.addCounter(
             anyInt(), any(DirectBuffer.class), anyInt(), anyInt(), any(DirectBuffer.class), anyInt(), anyInt()))

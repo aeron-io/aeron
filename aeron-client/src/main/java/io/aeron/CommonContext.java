@@ -20,6 +20,7 @@ import io.aeron.config.DefaultType;
 import io.aeron.exceptions.AeronException;
 import io.aeron.exceptions.ConcurrentConcludeException;
 import io.aeron.exceptions.DriverTimeoutException;
+import io.aeron.logbuffer.LogBufferDescriptor;
 import org.agrona.BufferUtil;
 import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
@@ -1228,7 +1229,7 @@ public class CommonContext implements Cloneable
      * @param aeronDirectory where driver is running.
      * @param clock          to use.
      * @param timeoutMs      for awaiting connection.
-     * @return file page size from running media driver.
+     * @return file page size from running media driver or {@link LogBufferDescriptor#PAGE_MIN_SIZE} if driver is old.
      * @since 1.48.0
      */
     public static int driverFilePageSize(final File aeronDirectory, final EpochClock clock, final long timeoutMs)
@@ -1237,12 +1238,18 @@ public class CommonContext implements Cloneable
             awaitCncFileCreation(new File(aeronDirectory, CNC_FILE), clock, clock.time() + timeoutMs);
         try
         {
-            return CncFileDescriptor.filePageSize(metadata);
+            return driverFilePageSize(metadata);
         }
         finally
         {
             BufferUtil.free(metadata);
         }
+    }
+
+    static int driverFilePageSize(final DirectBuffer metadata)
+    {
+        final int pageSize = CncFileDescriptor.filePageSize(metadata);
+        return 0 != pageSize ? pageSize : LogBufferDescriptor.PAGE_MIN_SIZE;
     }
 
     @SuppressWarnings("try")

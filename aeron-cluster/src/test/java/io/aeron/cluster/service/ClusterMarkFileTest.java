@@ -684,24 +684,6 @@ class ClusterMarkFileTest
     }
 
     @Test
-    @SuppressWarnings("try")
-    void shouldAlignMarkFileLengthTo4KBIfFilePageSizeIsZero()
-    {
-        final int errorBufferLength = 2352371;
-        final File file = tempDir.resolve("test-mark.file").toFile();
-        try (ClusterMarkFile ignored = new ClusterMarkFile(
-            file,
-            ClusterComponentType.STANDBY,
-            errorBufferLength,
-            SystemEpochClock.INSTANCE,
-            100,
-            0))
-        {
-            assertEquals(BitUtil.align(HEADER_LENGTH + errorBufferLength, PAGE_MIN_SIZE), file.length());
-        }
-    }
-
-    @Test
     void shouldRejectFilePageSizeIfNotPowerOf2()
     {
         final IllegalStateException exception = assertThrowsExactly(
@@ -716,8 +698,9 @@ class ClusterMarkFileTest
         assertEquals("Page size not a power of 2: page size=4199", exception.getMessage());
     }
 
-    @Test
-    void shouldRejectFilePageSizeIfTooSmall()
+    @ParameterizedTest
+    @ValueSource(ints = { 0, -5, 4095 })
+    void shouldRejectFilePageSizeIfTooSmall(final int pageSize)
     {
         final IllegalStateException exception = assertThrowsExactly(
             IllegalStateException.class, () -> new ClusterMarkFile(
@@ -726,9 +709,9 @@ class ClusterMarkFileTest
             ERROR_BUFFER_MIN_LENGTH,
             SystemEpochClock.INSTANCE,
             100,
-            100));
+            pageSize));
 
-        assertEquals("Page size less than min size of 4096: page size=100", exception.getMessage());
+        assertEquals("Page size less than min size of 4096: page size=" + pageSize, exception.getMessage());
     }
 
     @Test

@@ -132,7 +132,7 @@ public final class ClusterMarkFile implements AutoCloseable
         final EpochClock epochClock,
         final long timeoutMs)
     {
-        this(file, type, errorBufferLength, epochClock, timeoutMs, 0);
+        this(file, type, errorBufferLength, epochClock, timeoutMs, PAGE_MIN_SIZE);
     }
 
     /**
@@ -159,14 +159,11 @@ public final class ClusterMarkFile implements AutoCloseable
             throw new IllegalArgumentException("Invalid errorBufferLength: " + errorBufferLength);
         }
 
-        if (0 != filePageSize)
-        {
-            LogBufferDescriptor.checkPageSize(filePageSize);
-        }
+        LogBufferDescriptor.checkPageSize(filePageSize);
 
         final boolean markFileExists = file.exists();
         final int totalFileLength =
-            BitUtil.align(HEADER_LENGTH + errorBufferLength, 0 != filePageSize ? filePageSize : PAGE_MIN_SIZE);
+            BitUtil.align(HEADER_LENGTH + errorBufferLength, filePageSize);
 
         final MessageHeaderDecoder messageHeaderDecoder = new MessageHeaderDecoder();
 

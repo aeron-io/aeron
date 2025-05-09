@@ -23,6 +23,7 @@ import io.aeron.archive.codecs.mark.MarkFileHeaderEncoder;
 import io.aeron.archive.codecs.mark.MessageHeaderDecoder;
 import io.aeron.archive.codecs.mark.MessageHeaderEncoder;
 import io.aeron.archive.codecs.mark.VarAsciiEncodingEncoder;
+import io.aeron.logbuffer.LogBufferDescriptor;
 import org.agrona.BitUtil;
 import org.agrona.CloseHelper;
 import org.agrona.IoUtil;
@@ -42,7 +43,6 @@ import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 
 import static io.aeron.archive.Archive.Configuration.LIVENESS_TIMEOUT_MS;
-import static io.aeron.logbuffer.LogBufferDescriptor.PAGE_MIN_SIZE;
 
 /**
  * Used to mark the presence of a running {@link Archive} in a directory to guard it.
@@ -438,17 +438,13 @@ public class ArchiveMarkFile implements AutoCloseable
                 "ArchiveMarkFile headerLength=" + headerLength + " > headerLengthCapacity=" + HEADER_LENGTH);
         }
 
-        final int filePageSize;
-        if (null != ctx.aeron())
-        {
-            filePageSize = ctx.aeron().context().filePageSize();
-        }
-        else
-        {
-            filePageSize = CommonContext.driverFilePageSize(
+        final int filePageSize = null != ctx.aeron() ? ctx.aeron().context().filePageSize() :
+            CommonContext.driverFilePageSize(
                 new File(ctx.aeronDirectoryName()), ctx.epochClock(), new CommonContext().driverTimeoutMs());
-        }
-        return BitUtil.align(HEADER_LENGTH + ctx.errorBufferLength(), 0 != filePageSize ? filePageSize : PAGE_MIN_SIZE);
+
+        LogBufferDescriptor.checkPageSize(filePageSize);
+
+        return BitUtil.align(HEADER_LENGTH + ctx.errorBufferLength(), filePageSize);
     }
 
     String aeronDirectory()

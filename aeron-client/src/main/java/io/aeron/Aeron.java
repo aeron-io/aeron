@@ -23,8 +23,25 @@ import io.aeron.exceptions.ConfigurationException;
 import io.aeron.exceptions.DriverTimeoutException;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.version.Versioned;
-import org.agrona.*;
-import org.agrona.concurrent.*;
+import org.agrona.BufferUtil;
+import org.agrona.CloseHelper;
+import org.agrona.DirectBuffer;
+import org.agrona.ErrorHandler;
+import org.agrona.ExpandableArrayBuffer;
+import org.agrona.Strings;
+import org.agrona.concurrent.AgentInvoker;
+import org.agrona.concurrent.AgentRunner;
+import org.agrona.concurrent.AtomicBuffer;
+import org.agrona.concurrent.BusySpinIdleStrategy;
+import org.agrona.concurrent.CountedErrorHandler;
+import org.agrona.concurrent.EpochClock;
+import org.agrona.concurrent.IdleStrategy;
+import org.agrona.concurrent.NanoClock;
+import org.agrona.concurrent.NoOpLock;
+import org.agrona.concurrent.SleepingMillisIdleStrategy;
+import org.agrona.concurrent.SystemEpochClock;
+import org.agrona.concurrent.SystemNanoClock;
+import org.agrona.concurrent.YieldingIdleStrategy;
 import org.agrona.concurrent.broadcast.BroadcastReceiver;
 import org.agrona.concurrent.broadcast.CopyBroadcastReceiver;
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
@@ -1027,7 +1044,7 @@ public class Aeron implements AutoCloseable
             }
 
             connectToDriver();
-            filePageSize = CncFileDescriptor.filePageSize(cncMetaDataBuffer);
+            filePageSize = driverFilePageSize(cncMetaDataBuffer);
 
             interServiceTimeoutNs = CncFileDescriptor.clientLivenessTimeoutNs(cncMetaDataBuffer);
             if (interServiceTimeoutNs <= keepAliveIntervalNs)

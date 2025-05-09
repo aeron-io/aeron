@@ -47,6 +47,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
+import static io.aeron.logbuffer.LogBufferDescriptor.PAGE_MIN_SIZE;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -75,7 +76,9 @@ class ArchiveMarkFileTest
         assertFalse(markFile.exists());
 
         final Aeron aeron = mock(Aeron.class);
-        when(aeron.context()).thenReturn(mock(Aeron.Context.class));
+        final Aeron.Context aeronCtx = mock(Aeron.Context.class);
+        when(aeronCtx.filePageSize()).thenReturn(PAGE_MIN_SIZE);
+        when(aeron.context()).thenReturn(aeronCtx);
 
         final Archive.Context context = TestContexts.localhostArchive()
             .archiveDir(archiveDir)
@@ -132,7 +135,11 @@ class ArchiveMarkFileTest
         final File archiveMarkFile = new File(markFileDir, ArchiveMarkFile.FILENAME);
 
         final Aeron aeron = mock(Aeron.class);
-        when(aeron.context()).thenReturn(new Aeron.Context().useConductorAgentInvoker(false));
+        final Aeron.Context aeronCtx = mock(Aeron.Context.class);
+        when(aeronCtx.aeronDirectoryName()).thenReturn("/dev/shm/aeron");
+        when(aeronCtx.filePageSize()).thenReturn(PAGE_MIN_SIZE);
+        when(aeronCtx.useConductorAgentInvoker()).thenReturn(false);
+        when(aeron.context()).thenReturn(aeronCtx);
 
         final MediaDriver.Context driverContext = new MediaDriver.Context()
             .aeronDirectoryName(aeronDir.getAbsolutePath())
@@ -264,7 +271,9 @@ class ArchiveMarkFileTest
         }
 
         final Aeron aeron = mock(Aeron.class);
-        when(aeron.context()).thenReturn(mock(Aeron.Context.class));
+        final Aeron.Context aeronCtx = mock(Aeron.Context.class);
+        when(aeronCtx.filePageSize()).thenReturn(PAGE_MIN_SIZE);
+        when(aeron.context()).thenReturn(aeronCtx);
 
         final Archive.Context context = new Archive.Context()
             .archiveDir(new File(tempDir, "archive"))
@@ -334,7 +343,9 @@ class ArchiveMarkFileTest
         }
 
         final Aeron aeron = mock(Aeron.class);
-        when(aeron.context()).thenReturn(mock(Aeron.Context.class));
+        final Aeron.Context aeronCtx = mock(Aeron.Context.class);
+        when(aeronCtx.filePageSize()).thenReturn(PAGE_MIN_SIZE);
+        when(aeron.context()).thenReturn(aeronCtx);
 
         final Archive.Context context = new Archive.Context()
             .archiveDir(new File(tempDir, "archive/a/long/path/to"))
@@ -492,7 +503,7 @@ class ArchiveMarkFileTest
         final Archive.Context context = new Archive.Context();
         final Aeron aeron = mock(Aeron.class);
         final Aeron.Context aeronContext = mock(Aeron.Context.class);
-        when(aeronContext.filePageSize()).thenReturn(0);
+        when(aeronContext.filePageSize()).thenReturn(PAGE_MIN_SIZE);
         when(aeronContext.aeronDirectory()).thenReturn(aeronDir.toFile());
         when(aeronContext.aeronDirectoryName()).thenReturn(aeronDir.toString());
         when(aeron.context()).thenReturn(aeronContext);

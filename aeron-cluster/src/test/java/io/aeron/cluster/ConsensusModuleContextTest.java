@@ -125,6 +125,7 @@ class ConsensusModuleContextTest
         when(aeronContext.subscriberErrorHandler()).thenReturn(new RethrowingErrorHandler());
         when(aeronContext.aeronDirectoryName()).thenReturn("some aeron dir");
         when(aeronContext.useConductorAgentInvoker()).thenReturn(true);
+        when(aeronContext.filePageSize()).thenReturn(PAGE_MIN_SIZE);
         final AgentInvoker conductorInvoker = mock(AgentInvoker.class);
         final Aeron aeron = mock(Aeron.class);
         when(aeron.addCounter(
