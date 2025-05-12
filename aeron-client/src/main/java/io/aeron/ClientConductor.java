@@ -600,7 +600,6 @@ final class ClientConductor implements Agent
                 {
                     releaseLogBuffers(
                         publication.logBuffers(), publication.originalRegistrationId(), EXPLICIT_CLOSE_LINGER_NS);
-
                     asyncCommandIdSet.add(driverProxy.removePublication(publication.registrationId()));
                 }
             }

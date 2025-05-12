@@ -1139,7 +1139,7 @@ public final class NetworkPublication
 
             case LINGER:
                 if (refCount == 0 &&
-                    ((!hasSpies && hasReceivedUnicastEos) || (timeOfLastActivityNs + lingerTimeoutNs) - timeNs < 0))
+                    (hasReceivedUnicastEos || (timeOfLastActivityNs + lingerTimeoutNs) - timeNs < 0))
                 {
                     channelEndpoint.decRef();
                     conductor.cleanupPublication(this);

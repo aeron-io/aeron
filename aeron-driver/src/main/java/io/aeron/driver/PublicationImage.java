@@ -108,7 +108,7 @@ public final class PublicationImage
     @SuppressWarnings("JavadocVariable")
     enum State
     {
-        INIT, ACTIVE, REVOKED, DRAINING, LINGER, DONE
+        INIT, ACTIVE, DRAINING, LINGER, DONE
     }
 
     // expected minimum number of SMs with EOS bit set sent during draining.
@@ -174,7 +174,6 @@ public final class PublicationImage
     private boolean smEnabled = true;
 
     private boolean isRebuilding = true;
-    private boolean isRevoked = false;
     private volatile boolean isReceiverReleaseTriggered = false;
     private volatile boolean hasReceiverReleased = false;
     private volatile State state = State.INIT;
@@ -647,8 +646,7 @@ public final class PublicationImage
 
                             if (DataHeaderFlyweight.isRevoked(buffer))
                             {
-                                LogBufferDescriptor.isPublicationRevoked(rawLog.metaData(), true);
-                                state(State.REVOKED);
+                                isPublicationRevoked(rawLog.metaData(), true);
 
                                 logRevoke(eosPosition, sessionId(), streamId(), channel());
                                 publicationImagesRevoked.increment();
@@ -806,7 +804,7 @@ public final class PublicationImage
      */
     int processPendingLoss()
     {
-        if (isRevoked)
+        if (isPublicationRevoked(rawLog.metaData()))
         {
             return 0;
         }
@@ -927,24 +925,28 @@ public final class PublicationImage
         switch (state)
         {
             case ACTIVE:
-                checkUntetheredSubscriptions(timeNs, conductor);
+                if (isPublicationRevoked(rawLog.metaData()))
+                {
+                    state(State.DRAINING);
+                }
+                else
+                {
+                    checkUntetheredSubscriptions(timeNs, conductor);
+                }
                 break;
-
-            case REVOKED:
-                isRebuilding = false;
-                isSendingEosSm = true;
-
-                nextSmDeadlineNs = timeNs - 1;
-
-                isRevoked = true;
-
-                state(State.DRAINING);
-                /* fallthrough */
 
             case DRAINING:
                 if ((isDrained() && ((timeOfLastStateChangeNs + (SM_EOS_MULTIPLE * smTimeoutNs)) - timeNs < 0)) ||
-                    isRevoked)
+                    isPublicationRevoked(rawLog.metaData()))
                 {
+                    if (isPublicationRevoked(rawLog.metaData()))
+                    {
+                        isRebuilding = false;
+                        isSendingEosSm = true;
+
+                        nextSmDeadlineNs = timeNs - 1;
+                    }
+
                     conductor.transitionToLinger(this);
 
                     channelEndpoint.decRefImages();
