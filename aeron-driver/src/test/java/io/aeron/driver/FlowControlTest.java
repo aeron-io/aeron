@@ -222,4 +222,66 @@ class FlowControlTest
             );
         }
     }
+
+    @Test
+    void usesDefaultUnicastRetransmitReceiverWindowMultipleWhenNotSetInContext()
+    {
+        final String uri = "aeron:udp?endpoint=localhost:0";
+        final int expectedRrwm = Configuration.flowControlUnicastRetransmitReceiverWindowMultiple();
+        final CountersManager countersManager = Tests.newCountersManager(COUNTERS_BUFFER_LENGTH);
+
+        try (MockedStatic<FlowControl> mockedFlowControl = mockStatic(FlowControl.class))
+        {
+            mockedFlowControl.when(
+                () -> FlowControl.retransmitReceiverWindowMultiple(any(), anyInt())
+            ).thenCallRealMethod();
+
+            mockedFlowControl.when(
+                () -> FlowControl.calculateRetransmissionLength(anyInt(), anyInt(), anyInt(), anyInt())
+            ).thenCallRealMethod();
+
+            final MediaDriver.Context context = new MediaDriver.Context()
+                .tempBuffer(new UnsafeBuffer(new byte[TERM_BUFFER_LENGTH]));
+            final UnicastFlowControl flowControl = new UnicastFlowControl();
+            flowControl.initialize(context, countersManager, UdpChannel.parse(uri), 0, 0, 0, 0, 0);
+
+            flowControl.maxRetransmissionLength(0, 32, TERM_BUFFER_LENGTH, MTU_LENGTH);
+
+            mockedFlowControl.verify(
+                () -> FlowControl.calculateRetransmissionLength(anyInt(), anyInt(), anyInt(), eq(expectedRrwm))
+            );
+        }
+    }
+
+    @Test
+    void usesUnicastRetransmitReceiverWindowMultipleFromContextWhenSet()
+    {
+        final String uri = "aeron:udp?endpoint=localhost:0";
+        final int expectedRrwm = 2;
+        final CountersManager countersManager = Tests.newCountersManager(COUNTERS_BUFFER_LENGTH);
+
+        try (MockedStatic<FlowControl> mockedFlowControl = mockStatic(FlowControl.class))
+        {
+            mockedFlowControl.when(
+                () -> FlowControl.retransmitReceiverWindowMultiple(any(), anyInt())
+            ).thenCallRealMethod();
+
+            mockedFlowControl.when(
+                () -> FlowControl.calculateRetransmissionLength(anyInt(), anyInt(), anyInt(), anyInt())
+            ).thenCallRealMethod();
+
+            final MediaDriver.Context context = new MediaDriver.Context()
+                .tempBuffer(new UnsafeBuffer(new byte[TERM_BUFFER_LENGTH]))
+                .flowControlUnicastRetransmitReceiverWindowMultiple(expectedRrwm);
+            final UnicastFlowControl flowControl = new UnicastFlowControl();
+
+            flowControl.initialize(context, countersManager, UdpChannel.parse(uri), 0, 0, 0, 0, 0);
+
+            flowControl.maxRetransmissionLength(0, 32, TERM_BUFFER_LENGTH, MTU_LENGTH);
+
+            mockedFlowControl.verify(
+                () -> FlowControl.calculateRetransmissionLength(anyInt(), anyInt(), anyInt(), eq(expectedRrwm))
+            );
+        }
+    }
 }

@@ -943,6 +943,13 @@ public final class Configuration
         "aeron.MinMulticastFlowControl.receiverTimeout";
 
     /**
+     * Property name for default retransmit receiver window multiple used by the unicast flow control strategy.
+     */
+    @Config(defaultType = DefaultType.INT, defaultInt = 16)
+    public static final String FLOW_CONTROL_UNICAST_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE_PROP_NAME =
+        "aeron.flow.control.unicast.rrwm";
+
+    /**
      * Property name for default retransmit receiver window multiple used by multicast flow control strategies.
      */
     @Config(defaultType = DefaultType.INT, defaultInt = 4)
@@ -1443,6 +1450,17 @@ public final class Configuration
         return getDurationInNanos(
             FLOW_CONTROL_RECEIVER_TIMEOUT_PROP_NAME,
             getDurationInNanos(MIN_FLOW_CONTROL_TIMEOUT_OLD_PROP_NAME, FLOW_CONTROL_RECEIVER_TIMEOUT_DEFAULT_NS));
+    }
+
+    /**
+     * Retransmit receiver window multiple used by the unicast flow control strategy to determine the maximum
+     * amount of data to retransmit.
+     *
+     * @return multiple.
+     */
+    public static int flowControlUnicastRetransmitReceiverWindowMultiple()
+    {
+        return getInteger(FLOW_CONTROL_UNICAST_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE_PROP_NAME, 16);
     }
 
     /**

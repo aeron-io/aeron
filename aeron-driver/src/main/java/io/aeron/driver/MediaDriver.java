@@ -473,6 +473,8 @@ public final class MediaDriver implements AutoCloseable
         private long nakUnicastRetryDelayRatio = Configuration.nakUnicastRetryDelayRatio();
         private long nakMulticastMaxBackoffNs = Configuration.nakMulticastMaxBackoffNs();
         private long flowControlReceiverTimeoutNs = Configuration.flowControlReceiverTimeoutNs();
+        private int flowControlUnicastRetransmitReceiverWindowMultiple = Configuration
+            .flowControlUnicastRetransmitReceiverWindowMultiple();
         private int flowControlMulticastRetransmitReceiverWindowMultiple = Configuration
             .flowControlMulticastRetransmitReceiverWindowMultiple();
         private long reResolutionCheckIntervalNs = Configuration.reResolutionCheckIntervalNs();
@@ -677,6 +679,11 @@ public final class MediaDriver implements AutoCloseable
                 validateInitialWindowLength(initialWindowLength, mtuLength);
                 validateUnblockTimeout(publicationUnblockTimeoutNs(), clientLivenessTimeoutNs(), timerIntervalNs);
                 validateUntetheredTimeouts(untetheredWindowLimitTimeoutNs, untetheredRestingTimeoutNs, timerIntervalNs);
+                validateValueRange(
+                    flowControlUnicastRetransmitReceiverWindowMultiple,
+                    1, Integer.MAX_VALUE,
+                    "flowControlUnicastRetransmitReceiverWindowMultiple"
+                );
                 validateValueRange(
                     flowControlMulticastRetransmitReceiverWindowMultiple,
                     1, Integer.MAX_VALUE,
@@ -2661,6 +2668,39 @@ public final class MediaDriver implements AutoCloseable
          * <p>
          * See @{@link FlowControl#calculateRetransmissionLength(int, int, int, int)}
          *
+         * @return window size multiple for the unicast strategy.
+         */
+        @Config
+        public int flowControlUnicastRetransmitReceiverWindowMultiple()
+        {
+            return flowControlUnicastRetransmitReceiverWindowMultiple;
+        }
+
+        /**
+         * Flow control strategies may limit how much data is sent during a retransmission to
+         * avoid saturating the network and potentially causing more loss. The maximum
+         * retransmission size will be based on a multiple of the receiver window size.
+         * <p>
+         * See @{@link FlowControl#calculateRetransmissionLength(int, int, int, int)}
+         *
+         * @param flowControlUnicastRetransmitReceiverWindowMultiple window size multiple for the unicast strategy.
+         * @return this for a fluent API.
+         */
+        public Context flowControlUnicastRetransmitReceiverWindowMultiple(
+            final int flowControlUnicastRetransmitReceiverWindowMultiple)
+        {
+            this.flowControlUnicastRetransmitReceiverWindowMultiple =
+                flowControlUnicastRetransmitReceiverWindowMultiple;
+            return this;
+        }
+
+        /**
+         * Flow control strategies may limit how much data is sent during a retransmission to
+         * avoid saturating the network and potentially causing more loss. The maximum
+         * retransmission size will be based on a multiple of the receiver window size.
+         * <p>
+         * See @{@link FlowControl#calculateRetransmissionLength(int, int, int, int)}
+         *
          * @return window size multiple for multicast strategies.
          */
         @Config
@@ -4432,6 +4472,8 @@ public final class MediaDriver implements AutoCloseable
                 "\n    flowControlGroupTag=" + flowControlGroupTag +
                 "\n    flowControlGroupMinSize=" + flowControlGroupMinSize +
                 "\n    flowControlReceiverTimeoutNs=" + flowControlReceiverTimeoutNs +
+                "\n    flowControlUnicastRetransmitReceiverWindowMultiple=" +
+                flowControlUnicastRetransmitReceiverWindowMultiple +
                 "\n    flowControlMulticastRetransmitReceiverWindowMultiple=" +
                 flowControlMulticastRetransmitReceiverWindowMultiple +
                 "\n    reResolutionCheckIntervalNs=" + reResolutionCheckIntervalNs +
