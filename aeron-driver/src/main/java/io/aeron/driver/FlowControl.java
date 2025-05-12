@@ -55,16 +55,15 @@ public interface FlowControl extends AutoCloseable
     }
 
     /**
-     * Determines the retransmit receiver window multiple to use. This can be specified in the
-     * context or the channel URI. The channel URI takes precedence over the context.
+     * Determines the retransmit receiver window multiple to use. If a value is specified in the
+     * channel URI, this will be used. Otherwise, the supplied default will be used.
      *
-     * @param context    to allow access to media driver configuration
      * @param udpChannel for the stream.
+     * @param defaultRetransmitReceiverWindowMultiple window multiple to use when one is not set in the URI.
      * @return receiver window multiple.
      */
     static int retransmitReceiverWindowMultiple(
-        MediaDriver.Context context,
-        UdpChannel udpChannel)
+        UdpChannel udpChannel, int defaultRetransmitReceiverWindowMultiple)
     {
         final String fcValue = udpChannel.channelUri().get(CommonContext.FLOW_CONTROL_PARAM_NAME);
         if (fcValue != null)
@@ -82,7 +81,7 @@ public interface FlowControl extends AutoCloseable
                 }
             }
         }
-        return context.flowControlRetransmitReceiverWindowMultiple();
+        return defaultRetransmitReceiverWindowMultiple;
     }
 
     /**

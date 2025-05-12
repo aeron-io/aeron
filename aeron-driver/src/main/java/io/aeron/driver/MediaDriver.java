@@ -473,8 +473,8 @@ public final class MediaDriver implements AutoCloseable
         private long nakUnicastRetryDelayRatio = Configuration.nakUnicastRetryDelayRatio();
         private long nakMulticastMaxBackoffNs = Configuration.nakMulticastMaxBackoffNs();
         private long flowControlReceiverTimeoutNs = Configuration.flowControlReceiverTimeoutNs();
-        private int flowControlRetransmitReceiverWindowMultiple = Configuration
-            .flowControlRetransmitReceiverWindowMultiple();
+        private int flowControlMulticastRetransmitReceiverWindowMultiple = Configuration
+            .flowControlMulticastRetransmitReceiverWindowMultiple();
         private long reResolutionCheckIntervalNs = Configuration.reResolutionCheckIntervalNs();
         private long conductorCycleThresholdNs = Configuration.conductorCycleThresholdNs();
         private long senderCycleThresholdNs = Configuration.senderCycleThresholdNs();
@@ -677,6 +677,11 @@ public final class MediaDriver implements AutoCloseable
                 validateInitialWindowLength(initialWindowLength, mtuLength);
                 validateUnblockTimeout(publicationUnblockTimeoutNs(), clientLivenessTimeoutNs(), timerIntervalNs);
                 validateUntetheredTimeouts(untetheredWindowLimitTimeoutNs, untetheredRestingTimeoutNs, timerIntervalNs);
+                validateValueRange(
+                    flowControlMulticastRetransmitReceiverWindowMultiple,
+                    1, Integer.MAX_VALUE,
+                    "flowControlMulticastRetransmitReceiverWindowMultiple"
+                );
 
                 final long cncFileLength = BitUtil.align(
                     (long)END_OF_METADATA_OFFSET +
@@ -2656,12 +2661,12 @@ public final class MediaDriver implements AutoCloseable
          * <p>
          * See @{@link FlowControl#calculateRetransmissionLength(int, int, int, int)}
          *
-         * @return window size multiple.
+         * @return window size multiple for multicast strategies.
          */
         @Config
-        public int flowControlRetransmitReceiverWindowMultiple()
+        public int flowControlMulticastRetransmitReceiverWindowMultiple()
         {
-            return flowControlRetransmitReceiverWindowMultiple;
+            return flowControlMulticastRetransmitReceiverWindowMultiple;
         }
 
         /**
@@ -2671,13 +2676,14 @@ public final class MediaDriver implements AutoCloseable
          * <p>
          * See @{@link FlowControl#calculateRetransmissionLength(int, int, int, int)}
          *
-         * @param flowControlRetransmitReceiverWindowMultiple window size multiple.
+         * @param flowControlMulticastRetransmitReceiverWindowMultiple window size multiple for multicast strategies.
          * @return this for a fluent API.
          */
-        public Context flowControlRetransmitReceiverWindowMultiple(
-            final int flowControlRetransmitReceiverWindowMultiple)
+        public Context flowControlMulticastRetransmitReceiverWindowMultiple(
+            final int flowControlMulticastRetransmitReceiverWindowMultiple)
         {
-            this.flowControlRetransmitReceiverWindowMultiple = flowControlRetransmitReceiverWindowMultiple;
+            this.flowControlMulticastRetransmitReceiverWindowMultiple =
+                flowControlMulticastRetransmitReceiverWindowMultiple;
             return this;
         }
 
@@ -4426,6 +4432,8 @@ public final class MediaDriver implements AutoCloseable
                 "\n    flowControlGroupTag=" + flowControlGroupTag +
                 "\n    flowControlGroupMinSize=" + flowControlGroupMinSize +
                 "\n    flowControlReceiverTimeoutNs=" + flowControlReceiverTimeoutNs +
+                "\n    flowControlMulticastRetransmitReceiverWindowMultiple=" +
+                flowControlMulticastRetransmitReceiverWindowMultiple +
                 "\n    reResolutionCheckIntervalNs=" + reResolutionCheckIntervalNs +
                 "\n    receiverGroupConsideration=" + receiverGroupConsideration +
                 "\n    congestionControlSupplier=" + congestionControlSupplier +

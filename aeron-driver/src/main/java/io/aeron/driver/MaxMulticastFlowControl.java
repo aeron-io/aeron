@@ -56,7 +56,10 @@ public class MaxMulticastFlowControl implements FlowControl
         final int initialTermId,
         final int termBufferLength)
     {
-        retransmitReceiverWindowMultiple = FlowControl.retransmitReceiverWindowMultiple(context, udpChannel);
+        retransmitReceiverWindowMultiple = FlowControl.retransmitReceiverWindowMultiple(
+            udpChannel,
+            context.flowControlMulticastRetransmitReceiverWindowMultiple()
+        );
     }
 
     /**
