@@ -203,8 +203,7 @@ public final class ExclusivePublication extends ExclusivePublicationValues
      * @param length                in bytes of the encoded message.
      * @param reservedValueSupplier {@link ReservedValueSupplier} for the frame.
      * @return The new stream position, otherwise a negative error value of {@link #NOT_CONNECTED},
-     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, {@link #MAX_POSITION_EXCEEDED},
-     * or {@link #REVOKED}.
+     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, or {@link #MAX_POSITION_EXCEEDED}.
      */
     public long offer(
         final DirectBuffer buffer,
@@ -259,8 +258,7 @@ public final class ExclusivePublication extends ExclusivePublicationValues
      * @param lengthTwo             of the second part of the message.
      * @param reservedValueSupplier {@link ReservedValueSupplier} for the frame.
      * @return The new stream position, otherwise a negative error value of {@link #NOT_CONNECTED},
-     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, {@link #MAX_POSITION_EXCEEDED},
-     * or {@link #REVOKED}.
+     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, or {@link #MAX_POSITION_EXCEEDED}.
      */
     public long offer(
         final DirectBuffer bufferOne,
@@ -323,8 +321,7 @@ public final class ExclusivePublication extends ExclusivePublicationValues
      * @param vectors               which make up the message.
      * @param reservedValueSupplier {@link ReservedValueSupplier} for the frame.
      * @return The new stream position, otherwise a negative error value of {@link #NOT_CONNECTED},
-     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, {@link #MAX_POSITION_EXCEEDED},
-     * or {@link #REVOKED}.
+     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, or {@link #MAX_POSITION_EXCEEDED}.
      */
     public long offer(final DirectBufferVector[] vectors, final ReservedValueSupplier reservedValueSupplier)
     {
@@ -395,8 +392,7 @@ public final class ExclusivePublication extends ExclusivePublicationValues
      * @param length      of the range to claim, in bytes.
      * @param bufferClaim to be populated if the claim succeeds.
      * @return The new stream position, otherwise a negative error value of {@link #NOT_CONNECTED},
-     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, {@link #MAX_POSITION_EXCEEDED},
-     * or {@link #REVOKED}.
+     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, or {@link #MAX_POSITION_EXCEEDED}.
      * @throws IllegalArgumentException if the length is greater than {@link #maxPayloadLength()} within an MTU.
      * @see BufferClaim#commit()
      * @see BufferClaim#abort()
@@ -433,8 +429,7 @@ public final class ExclusivePublication extends ExclusivePublicationValues
      *
      * @param length of the range to claim, in bytes.
      * @return The new stream position, otherwise a negative error value of {@link #NOT_CONNECTED},
-     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, {@link #MAX_POSITION_EXCEEDED},
-     * or {@link #REVOKED}.
+     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, or {@link #MAX_POSITION_EXCEEDED}.
      * @throws IllegalArgumentException if the length is greater than {@link #maxMessageLength() framed}.
      */
     public long appendPadding(final int length)
@@ -476,8 +471,7 @@ public final class ExclusivePublication extends ExclusivePublicationValues
      * @param offset offset in the buffer at which the first fragment begins.
      * @param length in bytes of the encoded block.
      * @return The new stream position, otherwise a negative error value of {@link #NOT_CONNECTED},
-     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, {@link #MAX_POSITION_EXCEEDED},
-     * or {@link #REVOKED}.
+     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, or {@link #MAX_POSITION_EXCEEDED}.
      * @throws IllegalArgumentException if the length is greater than remaining size of the current term.
      * @throws IllegalArgumentException if the first frame within the block is not properly formatted, i.e. if the
      *                                  {@code streamId} is not equal to the value returned by the {@link #streamId()}

@@ -109,7 +109,7 @@ public final class NetworkPublication
     @SuppressWarnings("JavadocVariable")
     enum State
     {
-        ACTIVE, REVOKED, DRAINING, LINGER, DONE
+        ACTIVE, DRAINING, LINGER, DONE
     }
 
     private final long registrationId;
@@ -138,7 +138,6 @@ public final class NetworkPublication
     private volatile boolean hasSpies;
     private volatile boolean isConnected;
     private volatile boolean isEndOfStream;
-    private volatile boolean isRevoked;
     private volatile boolean hasSenderReleased;
     private volatile boolean hasReceivedUnicastEos;
     private State state = State.ACTIVE;
@@ -293,33 +292,6 @@ public final class NetworkPublication
         }
 
         CloseHelper.close(flowControl);
-    }
-
-    /**
-     * Revoke the publication.
-     */
-    public void revoke()
-    {
-        final long revokedPos = producerPosition();
-        publisherLimit.setRelease(revokedPos);
-        endOfStreamPosition(metaDataBuffer, revokedPos);
-        isPublicationRevoked(metaDataBuffer, true);
-
-        isEndOfStream = true;
-        isRevoked = true;
-
-        state = State.REVOKED;
-
-        logRevoke(revokedPos, sessionId(), streamId(), channel());
-        publicationsRevoked.increment();
-    }
-
-    private static void logRevoke(
-        final long revokedPos,
-        final int sessionId,
-        final int streamId,
-        final String channel)
-    {
     }
 
     /**
@@ -911,7 +883,7 @@ public final class NetworkPublication
         {
             final short flags;
 
-            if (isRevoked)
+            if (isPublicationRevoked(metaDataBuffer))
             {
                 flags = BEGIN_END_EOS_AND_REVOKED_FLAGS;
             }
@@ -1103,24 +1075,34 @@ public final class NetworkPublication
         {
             case ACTIVE:
             {
-                updateConnectedStatus();
-                final long producerPosition = producerPosition();
-                publisherPos.setRelease(producerPosition);
-                if (!isExclusive)
+                if (isPublicationRevoked(metaDataBuffer))
                 {
-                    checkForBlockedPublisher(producerPosition, senderPosition.getVolatile(), timeNs);
+                    final long revokedPos = producerPosition();
+                    publisherLimit.setRelease(revokedPos);
+                    endOfStreamPosition(metaDataBuffer, revokedPos);
+                    // TODO what prevents this from getting set to true again?
+                    isConnected(metaDataBuffer, false);
+
+                    isEndOfStream = true;
+
+                    conductor.cleanupSpies(this);
+
+                    state = State.LINGER;
+
+                    logRevoke(revokedPos, sessionId(), streamId(), channel());
+                    publicationsRevoked.increment();
                 }
-                checkUntetheredSubscriptions(timeNs, conductor);
-                break;
-            }
-
-            case REVOKED:
-            {
-                conductor.transitionToRevoked(this);
-                conductor.cleanupSpies(this);
-
-                timeOfLastActivityNs = timeNs;
-                state = State.LINGER;
+                else
+                {
+                    updateConnectedStatus();
+                    final long producerPosition = producerPosition();
+                    publisherPos.setRelease(producerPosition);
+                    if (!isExclusive)
+                    {
+                        checkForBlockedPublisher(producerPosition, senderPosition.getVolatile(), timeNs);
+                    }
+                    checkUntetheredSubscriptions(timeNs, conductor);
+                }
                 break;
             }
 
@@ -1193,12 +1175,12 @@ public final class NetworkPublication
     {
         if (0 == --refCount)
         {
-            if (!isRevoked)
-            {
-                final long producerPosition = producerPosition();
-                publisherLimit.setRelease(producerPosition);
-                endOfStreamPosition(metaDataBuffer, producerPosition);
+            final long producerPosition = producerPosition();
+            publisherLimit.setRelease(producerPosition);
+            endOfStreamPosition(metaDataBuffer, producerPosition);
 
+            if (!isPublicationRevoked(metaDataBuffer))
+            {
                 if (senderPosition.getVolatile() >= producerPosition)
                 {
                     isEndOfStream = true;
@@ -1245,5 +1227,13 @@ public final class NetworkPublication
     private boolean hasGroupSemantics()
     {
         return channelEndpoint().udpChannel().hasGroupSemantics();
+    }
+
+    private static void logRevoke(
+        final long revokedPos,
+        final int sessionId,
+        final int streamId,
+        final String channel)
+    {
     }
 }

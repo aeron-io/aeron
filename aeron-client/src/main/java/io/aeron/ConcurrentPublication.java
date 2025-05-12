@@ -87,8 +87,7 @@ public final class ConcurrentPublication extends Publication
      * @param length                in bytes of the encoded message.
      * @param reservedValueSupplier {@link ReservedValueSupplier} for the frame.
      * @return The new stream position, otherwise a negative error value of {@link #NOT_CONNECTED},
-     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, {@link #MAX_POSITION_EXCEEDED},
-     * or {@link #REVOKED}.
+     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, or {@link #MAX_POSITION_EXCEEDED}.
      */
     public long offer(
         final DirectBuffer buffer,
@@ -150,8 +149,7 @@ public final class ConcurrentPublication extends Publication
      * @param lengthTwo             of the second part of the message.
      * @param reservedValueSupplier {@link ReservedValueSupplier} for the frame.
      * @return The new stream position, otherwise a negative error value of {@link #NOT_CONNECTED},
-     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, {@link #MAX_POSITION_EXCEEDED},
-     * or {@link #REVOKED}.
+     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, or {@link #MAX_POSITION_EXCEEDED}.
      */
     public long offer(
         final DirectBuffer bufferOne,
@@ -227,8 +225,7 @@ public final class ConcurrentPublication extends Publication
      * @param vectors               which make up the message.
      * @param reservedValueSupplier {@link ReservedValueSupplier} for the frame.
      * @return The new stream position, otherwise a negative error value of {@link #NOT_CONNECTED},
-     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, {@link #MAX_POSITION_EXCEEDED},
-     * or {@link #REVOKED}.
+     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, or {@link #MAX_POSITION_EXCEEDED}.
      */
     public long offer(final DirectBufferVector[] vectors, final ReservedValueSupplier reservedValueSupplier)
     {
@@ -306,8 +303,7 @@ public final class ConcurrentPublication extends Publication
      * @param length      of the range to claim, in bytes.
      * @param bufferClaim to be populated if the claim succeeds.
      * @return The new stream position, otherwise a negative error value of {@link #NOT_CONNECTED},
-     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, {@link #MAX_POSITION_EXCEEDED},
-     * or {@link #REVOKED}.
+     * {@link #BACK_PRESSURED}, {@link #ADMIN_ACTION}, {@link #CLOSED}, or {@link #MAX_POSITION_EXCEEDED}.
      * @throws IllegalArgumentException if the length is greater than {@link #maxPayloadLength()} within an MTU.
      * @see BufferClaim#commit()
      * @see BufferClaim#abort()

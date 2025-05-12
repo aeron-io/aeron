@@ -36,10 +36,11 @@ import java.util.stream.Stream;
 
 import static io.aeron.AeronCounters.DRIVER_PUBLISHER_POS_TYPE_ID;
 import static io.aeron.Publication.CLOSED;
-import static io.aeron.Publication.REVOKED;
+import static io.aeron.Publication.NOT_CONNECTED;
 import static io.aeron.driver.status.SystemCounterDescriptor.PUBLICATIONS_REVOKED;
 import static io.aeron.driver.status.SystemCounterDescriptor.PUBLICATION_IMAGES_REVOKED;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.agrona.BitUtil.SIZE_OF_INT;
 import static org.agrona.concurrent.status.CountersReader.RECORD_RECLAIMED;
 import static org.junit.jupiter.api.Assertions.*;
@@ -68,7 +69,7 @@ class PublicationRevokeTest
     private final MediaDriver.Context driverContext = new MediaDriver.Context()
         .publicationConnectionTimeoutNs(MILLISECONDS.toNanos(300))
         .imageLivenessTimeoutNs(MILLISECONDS.toNanos(500))
-        .publicationLingerTimeoutNs(MILLISECONDS.toNanos(100))
+        .publicationLingerTimeoutNs(SECONDS.toNanos(1))
         .timerIntervalNs(MILLISECONDS.toNanos(100));
 
     private final Aeron.Context clientContext = new Aeron.Context()
@@ -219,7 +220,7 @@ class PublicationRevokeTest
             Tests.yield();
         }
 
-        assertEquals(REVOKED, publicationTwo.offer(buffer, 0, SIZE_OF_INT));
+        assertEquals(NOT_CONNECTED, publicationTwo.offer(buffer, 0, SIZE_OF_INT));
 
         subscription.close();
         publicationTwo.close();

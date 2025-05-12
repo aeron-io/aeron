@@ -45,7 +45,6 @@ final class ClientProxy
     private final CounterUpdateFlyweight counterUpdate = new CounterUpdateFlyweight();
     private final ClientTimeoutFlyweight clientTimeout = new ClientTimeoutFlyweight();
     private final StaticCounterFlyweight staticCounter = new StaticCounterFlyweight();
-    private final PublicationRevokedFlyweight publicationRevoked = new PublicationRevokedFlyweight();
 
     ClientProxy(final BroadcastTransmitter transmitter)
     {
@@ -61,7 +60,6 @@ final class ClientProxy
         counterUpdate.wrap(buffer, 0);
         clientTimeout.wrap(buffer, 0);
         staticCounter.wrap(buffer, 0);
-        publicationRevoked.wrap(buffer, 0);
     }
 
     void onError(final long correlationId, final ErrorCode errorCode, final String errorMessage)
@@ -202,13 +200,6 @@ final class ClientProxy
         clientTimeout.clientId(clientId);
 
         transmit(ON_CLIENT_TIMEOUT, buffer, 0, ClientTimeoutFlyweight.LENGTH);
-    }
-
-    void onRevokedPublication(final long registrationId)
-    {
-        publicationRevoked.registrationId(registrationId);
-
-        transmit(ON_REVOKED_PUBLICATION, buffer, 0, PublicationRevokedFlyweight.LENGTH);
     }
 
     private void transmit(final int msgTypeId, final DirectBuffer buffer, final int index, final int length)

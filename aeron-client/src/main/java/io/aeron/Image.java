@@ -61,6 +61,7 @@ public final class Image
     private long eosPosition = Long.MAX_VALUE;
     private boolean isEos;
     private volatile boolean isClosed;
+    private volatile boolean isRevoked;
 
     private final Position subscriberPosition;
     private final UnsafeBuffer[] termBuffers;
@@ -304,6 +305,11 @@ public final class Image
      */
     public boolean isPublicationRevoked()
     {
+        if (isClosed)
+        {
+            return isRevoked;
+        }
+
         return LogBufferDescriptor.isPublicationRevoked(logBuffers.metaDataBuffer());
     }
 
@@ -888,6 +894,7 @@ public final class Image
         finalPosition = subscriberPosition.getVolatile();
         eosPosition = LogBufferDescriptor.endOfStreamPosition(logBuffers.metaDataBuffer());
         isEos = finalPosition >= eosPosition;
+        isRevoked = LogBufferDescriptor.isPublicationRevoked(logBuffers.metaDataBuffer());
         isClosed = true;
     }
 

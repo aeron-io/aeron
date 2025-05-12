@@ -844,18 +844,6 @@ public final class DriverConductor implements Agent
         }
     }
 
-    void transitionToRevoked(final Object publication)
-    {
-        for (int i = 0, size = publicationLinks.size(); i < size; i++)
-        {
-            final PublicationLink link = publicationLinks.get(i);
-            if (link.publication() == publication && !link.isRevoked())
-            {
-                clientProxy.onRevokedPublication(link.registrationId());
-            }
-        }
-    }
-
     void cleanupImage(final PublicationImage image)
     {
         for (int i = 0, size = subscriptionLinks.size(); i < size; i++)
@@ -967,29 +955,6 @@ public final class DriverConductor implements Agent
         }
 
         publicationLink.close();
-        clientProxy.operationSucceeded(correlationId);
-    }
-
-    void onRevokePublication(final long registrationId, final long correlationId)
-    {
-        PublicationLink publicationLink = null;
-        final ArrayList<PublicationLink> publicationLinks = this.publicationLinks;
-        for (int i = 0, size = publicationLinks.size(); i < size; i++)
-        {
-            final PublicationLink publication = publicationLinks.get(i);
-            if (registrationId == publication.registrationId())
-            {
-                publicationLink = publication;
-                publicationLink.revoke();
-                break;
-            }
-        }
-
-        if (null == publicationLink)
-        {
-            throw new ControlProtocolException(UNKNOWN_PUBLICATION, "unknown publication: " + registrationId);
-        }
-
         clientProxy.operationSucceeded(correlationId);
     }
 

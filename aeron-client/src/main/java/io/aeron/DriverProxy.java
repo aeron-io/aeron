@@ -149,32 +149,6 @@ public final class DriverProxy
     }
 
     /**
-     * Instruct the driver to revoke a publication by its registration id.
-     *
-     * @param registrationId for the publication to be revoked.
-     * @return the correlation id for the command.
-     */
-    public long revokePublication(final long registrationId)
-    {
-        final long correlationId = toDriverCommandBuffer.nextCorrelationId();
-        final int index = toDriverCommandBuffer.tryClaim(REVOKE_PUBLICATION, RemoveMessageFlyweight.length());
-        if (index < 0)
-        {
-            throw new AeronException("could not write revoke publication command");
-        }
-
-        removeMessage
-            .wrap(toDriverCommandBuffer.buffer(), index)
-            .registrationId(registrationId)
-            .clientId(clientId)
-            .correlationId(correlationId);
-
-        toDriverCommandBuffer.commit(index);
-
-        return correlationId;
-    }
-
-    /**
      * Instruct the driver to add a subscription.
      *
      * @param channel  uri in string format.

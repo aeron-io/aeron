@@ -44,7 +44,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     @SuppressWarnings("JavadocVariable")
     enum State
     {
-        ACTIVE, REVOKED, DRAINING, LINGER, DONE
+        ACTIVE, DRAINING, LINGER, DONE
     }
 
     private static final ReadablePosition[] EMPTY_POSITIONS = new ReadablePosition[0];
@@ -73,7 +73,6 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     private int refCount = 0;
     private boolean reachedEndOfLife = false;
     private final boolean isExclusive;
-    private boolean isRevoked;
     private State state = State.ACTIVE;
     private final UnsafeBuffer[] termBuffers;
     private final Position publisherPos;
@@ -252,32 +251,6 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     }
 
     /**
-     * Revoke the publication.
-     */
-    public void revoke()
-    {
-        final long revokedPos = producerPosition();
-        publisherLimit.setRelease(revokedPos);
-        LogBufferDescriptor.endOfStreamPosition(metaDataBuffer, revokedPos);
-        LogBufferDescriptor.isPublicationRevoked(metaDataBuffer, true);
-
-        isRevoked = true;
-
-        state = State.REVOKED;
-
-        logRevoke(revokedPos, sessionId(), streamId(), channel());
-        publicationsRevoked.increment();
-    }
-
-    private static void logRevoke(
-        final long revokedPos,
-        final int sessionId,
-        final int streamId,
-        final String channel)
-    {
-    }
-
-    /**
      * {@inheritDoc}
      */
     public void addSubscriber(
@@ -328,22 +301,32 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         {
             case ACTIVE:
             {
-                final long producerPosition = producerPosition();
-                publisherPos.setRelease(producerPosition);
-                if (!isExclusive)
+                if (isPublicationRevoked(metaDataBuffer))
                 {
-                    checkForBlockedPublisher(producerPosition, timeNs);
+                    final long revokedPos = producerPosition();
+                    publisherLimit.setRelease(revokedPos);
+                    LogBufferDescriptor.endOfStreamPosition(metaDataBuffer, revokedPos);
+                    LogBufferDescriptor.isPublicationRevoked(metaDataBuffer, true);
+                    // TODO what prevents this from getting set to true again?
+                    LogBufferDescriptor.isConnected(metaDataBuffer, false);
+
+                    conductor.transitionToLinger(this);
+
+                    state = State.LINGER;
+
+                    logRevoke(revokedPos, sessionId(), streamId(), channel());
+                    publicationsRevoked.increment();
                 }
-                checkUntetheredSubscriptions(timeNs, conductor);
-                break;
-            }
-
-            case REVOKED:
-            {
-                conductor.transitionToRevoked(this);
-                conductor.transitionToLinger(this);
-
-                state = State.DRAINING;
+                else
+                {
+                    final long producerPosition = producerPosition();
+                    publisherPos.setRelease(producerPosition);
+                    if (!isExclusive)
+                    {
+                        checkForBlockedPublisher(producerPosition, timeNs);
+                    }
+                    checkUntetheredSubscriptions(timeNs, conductor);
+                }
                 break;
             }
 
@@ -353,10 +336,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
                 publisherPos.setRelease(producerPosition);
                 if (isDrained(producerPosition))
                 {
-                    if (!isRevoked)
-                    {
-                        conductor.transitionToLinger(this);
-                    }
+                    conductor.transitionToLinger(this);
                     state = State.LINGER;
                 }
                 else if (LogBufferUnblocker.unblock(termBuffers, metaDataBuffer, consumerPosition, termBufferLength))
@@ -397,11 +377,12 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     {
         if (0 == --refCount)
         {
-            if (!isRevoked)
+            final long producerPosition = producerPosition();
+            publisherLimit.setRelease(producerPosition);
+            LogBufferDescriptor.endOfStreamPosition(metaDataBuffer, producerPosition);
+
+            if (!LogBufferDescriptor.isPublicationRevoked(metaDataBuffer))
             {
-                final long producerPosition = producerPosition();
-                publisherLimit.setRelease(producerPosition);
-                LogBufferDescriptor.endOfStreamPosition(metaDataBuffer, producerPosition);
                 state = State.DRAINING;
             }
         }
@@ -598,5 +579,13 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
             dirtyTermBuffer.putLongRelease(termOffset, 0);
             this.cleanPosition = cleanPosition + length;
         }
+    }
+
+    private static void logRevoke(
+        final long revokedPos,
+        final int sessionId,
+        final int streamId,
+        final String channel)
+    {
     }
 }
