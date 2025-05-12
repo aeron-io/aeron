@@ -226,6 +226,7 @@ public final class CTestMediaDriver implements TestMediaDriver
         environment.put("AERON_TERM_BUFFER_SPARSE_FILE", Boolean.toString(context.termBufferSparseFile()));
         environment.put("AERON_TERM_BUFFER_LENGTH", String.valueOf(context.publicationTermBufferLength()));
         environment.put("AERON_IPC_TERM_BUFFER_LENGTH", String.valueOf(context.ipcTermBufferLength()));
+        environment.put("AERON_FILE_PAGE_SIZE", String.valueOf(context.filePageSize()));
         environment.put(
             "AERON_PUBLICATION_UNBLOCK_TIMEOUT", String.valueOf(context.publicationUnblockTimeoutNs()));
         environment.put(

@@ -45,6 +45,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static io.aeron.ChannelUri.*;
+import static io.aeron.CommonContext.driverFilePageSize;
 import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.*;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.agrona.SystemUtil.*;
@@ -849,9 +850,15 @@ public final class ClusteredServiceContainer implements AutoCloseable
 
             if (null == markFile)
             {
+                final int filePageSize = null != aeron ? aeron.context().filePageSize() :
+                    driverFilePageSize(new File(aeronDirectoryName), epochClock, new CommonContext().driverTimeoutMs());
                 markFile = new ClusterMarkFile(
                     new File(markFileDir, ClusterMarkFile.markFilenameForService(serviceId)),
-                    ClusterComponentType.CONTAINER, errorBufferLength, epochClock, LIVENESS_TIMEOUT_MS);
+                    ClusterComponentType.CONTAINER,
+                    errorBufferLength,
+                    epochClock,
+                    LIVENESS_TIMEOUT_MS,
+                    filePageSize);
             }
 
             MarkFile.ensureMarkFileLink(
@@ -1010,7 +1017,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
                 clusteredService = Configuration.newClusteredService();
             }
 
-            abortLatch = new CountDownLatch(aeron.conductorAgentInvoker() == null ? 1 : 0);
+            abortLatch = new CountDownLatch(!aeron.context().useConductorAgentInvoker() ? 1 : 0);
             concludeMarkFile();
 
             if (CommonContext.shouldPrintConfigurationOnStart())

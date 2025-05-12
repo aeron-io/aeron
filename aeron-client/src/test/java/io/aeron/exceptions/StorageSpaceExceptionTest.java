@@ -59,6 +59,8 @@ class StorageSpaceExceptionTest
     private static List<Throwable> errors()
     {
         return Arrays.asList(
+            new StorageSpaceException("test"),
+            new AeronException(new StorageSpaceException("test2")),
             new IOException("No space left on device") /* Linux */,
             new IOException("There is not enough space on the disk") /* Windows */,
             new IOException(

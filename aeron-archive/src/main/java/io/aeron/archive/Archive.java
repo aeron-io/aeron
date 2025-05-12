@@ -1254,7 +1254,7 @@ public final class Archive implements AutoCloseable
                             .aeronDirectoryName(aeronDirectoryName)
                             .epochClock(epochClock)
                             .nanoClock(nanoClock)
-                            .errorHandler(RethrowingErrorHandler.INSTANCE)
+                            .errorHandler(errorHandler)
                             .driverAgentInvoker(mediaDriverAgentInvoker)
                             .useConductorAgentInvoker(true)
                             .subscriberErrorHandler(RethrowingErrorHandler.INSTANCE)
@@ -2456,7 +2456,7 @@ public final class Archive implements AutoCloseable
          * @see Configuration#SEGMENT_FILE_LENGTH_PROP_NAME
          */
         @Config
-        int segmentFileLength()
+        public int segmentFileLength()
         {
             return segmentFileLength;
         }
@@ -2488,7 +2488,7 @@ public final class Archive implements AutoCloseable
          * @see Configuration#FILE_SYNC_LEVEL_PROP_NAME
          */
         @Config
-        int fileSyncLevel()
+        public int fileSyncLevel()
         {
             return fileSyncLevel;
         }
@@ -2525,7 +2525,7 @@ public final class Archive implements AutoCloseable
          * @see Configuration#CATALOG_FILE_SYNC_LEVEL_PROP_NAME
          */
         @Config
-        int catalogFileSyncLevel()
+        public int catalogFileSyncLevel()
         {
             return catalogFileSyncLevel;
         }
@@ -2554,7 +2554,7 @@ public final class Archive implements AutoCloseable
          *
          * @return the {@link AgentInvoker} that should be used for the Media Driver if running in a lightweight mode.
          */
-        AgentInvoker mediaDriverAgentInvoker()
+        public AgentInvoker mediaDriverAgentInvoker()
         {
             return mediaDriverAgentInvoker;
         }

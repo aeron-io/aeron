@@ -362,7 +362,7 @@ final class ClientCommandAdapter implements ControlledMessageHandler
         {
             clientProxy.onError(correlationId, ((ControlProtocolException)error).errorCode(), error.getMessage());
         }
-        else if (error instanceof StorageSpaceException || StorageSpaceException.isStorageSpaceError(error))
+        else if (StorageSpaceException.isStorageSpaceError(error))
         {
             clientProxy.onError(correlationId, STORAGE_SPACE, error.getMessage());
         }

@@ -218,13 +218,7 @@ final class ControlSession implements Session
 
             case ACTIVE:
             {
-                if (sessionLivenessCheckDeadlineMs - nowMs < 0)
-                {
-                    sessionLivenessCheckDeadlineMs = nowMs + sessionLivenessCheckIntervalMs;
-                    sendOkResponse(Aeron.NULL_VALUE, Aeron.NULL_VALUE);
-                    workCount++;
-                }
-
+                workCount += performLivenessCheck(nowMs);
                 workCount += sendResponses(nowMs);
                 break;
             }
@@ -902,6 +896,17 @@ final class ControlSession implements Session
         }
 
         return workCount;
+    }
+
+    private int performLivenessCheck(final long nowMs)
+    {
+        if (sessionLivenessCheckDeadlineMs - nowMs < 0)
+        {
+            sessionLivenessCheckDeadlineMs = nowMs + sessionLivenessCheckIntervalMs;
+            sendOkResponse(Aeron.NULL_VALUE, Aeron.NULL_VALUE);
+            return 1;
+        }
+        return 0;
     }
 
     private int sendResponses(final long nowMs)

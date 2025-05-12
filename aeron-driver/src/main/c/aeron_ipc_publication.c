@@ -292,12 +292,12 @@ int aeron_ipc_publication_update_pub_pos_and_lmt(aeron_ipc_publication_t *public
                 }
             }
 
-            int64_t proposed_limit = min_sub_pos + publication->term_window_length;
-            if (proposed_limit > publication->conductor_fields.trip_limit)
+            int64_t new_limit_position = min_sub_pos + publication->term_window_length;
+            if (new_limit_position > publication->conductor_fields.trip_limit)
             {
                 aeron_ipc_publication_clean_buffer(publication, min_sub_pos);
-                aeron_counter_set_release(publication->pub_lmt_position.value_addr, proposed_limit);
-                publication->conductor_fields.trip_limit = proposed_limit + publication->trip_gain;
+                aeron_counter_set_release(publication->pub_lmt_position.value_addr, new_limit_position);
+                publication->conductor_fields.trip_limit = new_limit_position + publication->trip_gain;
                 work_count++;
             }
 
@@ -308,6 +308,7 @@ int aeron_ipc_publication_update_pub_pos_and_lmt(aeron_ipc_publication_t *public
             aeron_counter_set_release(publication->pub_lmt_position.value_addr, consumer_position);
             publication->conductor_fields.trip_limit = consumer_position;
             aeron_ipc_publication_clean_buffer(publication, consumer_position);
+            work_count++;
         }
     }
 

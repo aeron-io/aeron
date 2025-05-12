@@ -100,6 +100,8 @@ protected:
             &m_error_log, m_error_log_buffer.data(), m_error_log_buffer.size(), aeron_epoch_clock);
         aeron_driver_receiver_init(&m_receiver, m_context, &m_system_counters, &m_error_log);
 
+        aeron_loss_reporter_init(&m_loss_reporter, m_loss_reporter_buffer.data(), m_loss_reporter_buffer.size());
+
         m_receiver_proxy.receiver = &m_receiver;
         m_context->receiver_proxy = &m_receiver_proxy;
         m_context->error_log = &m_error_log;
@@ -226,10 +228,29 @@ protected:
         conductor.context = m_context;
 
         if (aeron_publication_image_create(
-            &image, endpoint, destination, &conductor, correlation_id, session_id, stream_id, 0, 0, 0,
-            &hwm_position, &pos_position, congestion_control_strategy,
-            &channel->remote_control, &channel->local_data,
-            TERM_BUFFER_SIZE, MTU, UINT8_C(0), nullptr, true, true, false, &m_system_counters) < 0)
+            &image,
+            endpoint,
+            destination,
+            &conductor,
+            correlation_id,
+            session_id,
+            stream_id,
+            0,
+            0,
+            0,
+            &hwm_position,
+            &pos_position,
+            congestion_control_strategy,
+            &channel->remote_control,
+            &channel->local_data,
+            TERM_BUFFER_SIZE,
+            MTU,
+            UINT8_C(0),
+            &m_loss_reporter,
+            true,
+            true,
+            false,
+            &m_system_counters) < 0)
         {
             congestion_control_strategy->fini(congestion_control_strategy);
             return nullptr;
@@ -281,6 +302,8 @@ protected:
     int64_t m_conductor_fail_counter = 0;
     aeron_driver_receiver_t m_receiver = {};
     aeron_distinct_error_log_t m_error_log = {};
+    aeron_loss_reporter_t m_loss_reporter = {};
+    AERON_DECL_ALIGNED(buffer_t m_loss_reporter_buffer, 16) = {};
     AERON_DECL_ALIGNED(buffer_t m_error_log_buffer, 16) = {};
     AERON_DECL_ALIGNED(buffer_t m_counter_value_buffer, 16) = {};
     AERON_DECL_ALIGNED(buffer_4x_t m_counter_meta_buffer, 16) = {};

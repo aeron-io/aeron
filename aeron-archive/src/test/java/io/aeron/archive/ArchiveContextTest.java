@@ -53,9 +53,23 @@ import java.nio.file.Path;
 
 import static io.aeron.Aeron.NULL_VALUE;
 import static io.aeron.AeronCounters.ARCHIVE_CONTROL_SESSIONS_TYPE_ID;
-import static io.aeron.AeronCounters.*;
-import static io.aeron.archive.Archive.Configuration.*;
+import static io.aeron.AeronCounters.ARCHIVE_RECORDER_MAX_WRITE_TIME_TYPE_ID;
+import static io.aeron.AeronCounters.ARCHIVE_RECORDER_TOTAL_WRITE_BYTES_TYPE_ID;
+import static io.aeron.AeronCounters.ARCHIVE_RECORDER_TOTAL_WRITE_TIME_TYPE_ID;
+import static io.aeron.AeronCounters.ARCHIVE_RECORDING_SESSION_COUNT_TYPE_ID;
+import static io.aeron.AeronCounters.ARCHIVE_REPLAYER_MAX_READ_TIME_TYPE_ID;
+import static io.aeron.AeronCounters.ARCHIVE_REPLAYER_TOTAL_READ_BYTES_TYPE_ID;
+import static io.aeron.AeronCounters.ARCHIVE_REPLAYER_TOTAL_READ_TIME_TYPE_ID;
+import static io.aeron.AeronCounters.ARCHIVE_REPLAY_SESSION_COUNT_TYPE_ID;
+import static io.aeron.archive.Archive.Configuration.ARCHIVE_ID_PROP_NAME;
+import static io.aeron.archive.Archive.Configuration.AUTHORISATION_SERVICE_SUPPLIER_PROP_NAME;
+import static io.aeron.archive.Archive.Configuration.CONTROL_CHANNEL_ENABLED_PROP_NAME;
+import static io.aeron.archive.Archive.Configuration.DEFAULT_AUTHORISATION_SERVICE_SUPPLIER;
+import static io.aeron.archive.Archive.Configuration.ERROR_BUFFER_LENGTH_DEFAULT;
+import static io.aeron.archive.Archive.Configuration.ERROR_BUFFER_LENGTH_PROP_NAME;
+import static io.aeron.archive.Archive.Configuration.MARK_FILE_DIR_PROP_NAME;
 import static io.aeron.driver.Configuration.MAX_UDP_PAYLOAD_LENGTH;
+import static io.aeron.logbuffer.LogBufferDescriptor.PAGE_MIN_SIZE;
 import static io.aeron.logbuffer.LogBufferDescriptor.TERM_MAX_LENGTH;
 import static io.aeron.logbuffer.LogBufferDescriptor.TERM_MIN_LENGTH;
 import static io.aeron.protocol.DataHeaderFlyweight.HEADER_LENGTH;
@@ -63,8 +77,25 @@ import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.withSettings;
 
 class ArchiveContextTest
 {
@@ -88,10 +119,11 @@ class ArchiveContextTest
                 final String label = labelBuffer.getStringWithoutLengthAscii(labelOffset, labelLength);
                 return mockCounter(countersReader, typeId, nextCounterId.getAndIncrement(), label);
             });
-        final Aeron.Context aeronContext = new Aeron.Context();
-        aeronContext.subscriberErrorHandler(RethrowingErrorHandler.INSTANCE);
-        aeronContext.useConductorAgentInvoker(true);
-        aeronContext.aeronDirectoryName("test-archive-config");
+        final Aeron.Context aeronContext = mock(Aeron.Context.class);
+        when(aeronContext.subscriberErrorHandler()).thenReturn(RethrowingErrorHandler.INSTANCE);
+        when(aeronContext.useConductorAgentInvoker()).thenReturn(true);
+        when(aeronContext.aeronDirectoryName()).thenReturn("test-archive-config");
+        when(aeronContext.filePageSize()).thenReturn(PAGE_MIN_SIZE);
         when(aeron.context()).thenReturn(aeronContext);
         when(aeron.countersReader()).thenReturn(countersReader);
 
@@ -981,7 +1013,7 @@ class ArchiveContextTest
     void shouldVerifyConductorInvokeModeOnAeronClient()
     {
         assertSame(aeron, context.aeron());
-        aeron.context().useConductorAgentInvoker(false);
+        when(aeron.context().useConductorAgentInvoker()).thenReturn(false);
 
         final ArchiveException exception = assertThrowsExactly(ArchiveException.class, context::conclude);
         assertEquals(
@@ -1006,7 +1038,7 @@ class ArchiveContextTest
     {
         context.aeronDirectoryName(null);
         final String clientDirectory = "target/dir";
-        context.aeron().context().aeronDirectoryName(clientDirectory);
+        when(context.aeron().context().aeronDirectoryName()).thenReturn(clientDirectory);
         assertNull(context.aeronDirectoryName());
 
         context.conclude();
@@ -1052,7 +1084,7 @@ class ArchiveContextTest
     void shouldNotSetClientNameOnAnExplicitlyAssignedAeronClient()
     {
         final Aeron.Context aeronContext = aeron.context();
-        aeronContext.clientName("sample");
+        when(aeronContext.clientName()).thenReturn("sample");
         context.archiveId(42);
 
         context.conclude();

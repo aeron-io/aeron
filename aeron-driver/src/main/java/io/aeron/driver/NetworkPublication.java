@@ -44,10 +44,27 @@ import java.util.ArrayList;
 
 import static io.aeron.driver.Configuration.PUBLICATION_HEARTBEAT_TIMEOUT_NS;
 import static io.aeron.driver.Configuration.PUBLICATION_SETUP_TIMEOUT_NS;
-import static io.aeron.driver.status.SystemCounterDescriptor.*;
-import static io.aeron.logbuffer.LogBufferDescriptor.*;
-import static io.aeron.logbuffer.TermScanner.*;
-import static io.aeron.protocol.DataHeaderFlyweight.*;
+import static io.aeron.driver.status.SystemCounterDescriptor.HEARTBEATS_SENT;
+import static io.aeron.driver.status.SystemCounterDescriptor.RETRANSMITS_SENT;
+import static io.aeron.driver.status.SystemCounterDescriptor.RETRANSMITTED_BYTES;
+import static io.aeron.driver.status.SystemCounterDescriptor.SENDER_FLOW_CONTROL_LIMITS;
+import static io.aeron.driver.status.SystemCounterDescriptor.SHORT_SENDS;
+import static io.aeron.driver.status.SystemCounterDescriptor.UNBLOCKED_PUBLICATIONS;
+import static io.aeron.driver.status.SystemCounterDescriptor.PUBLICATIONS_REVOKED;
+import static io.aeron.logbuffer.LogBufferDescriptor.activeTermCount;
+import static io.aeron.logbuffer.LogBufferDescriptor.computePosition;
+import static io.aeron.logbuffer.LogBufferDescriptor.computeTermIdFromPosition;
+import static io.aeron.logbuffer.LogBufferDescriptor.endOfStreamPosition;
+import static io.aeron.logbuffer.LogBufferDescriptor.indexByPosition;
+import static io.aeron.logbuffer.LogBufferDescriptor.rawTailVolatile;
+import static io.aeron.logbuffer.LogBufferDescriptor.termId;
+import static io.aeron.logbuffer.LogBufferDescriptor.termOffset;
+import static io.aeron.logbuffer.TermScanner.available;
+import static io.aeron.logbuffer.TermScanner.padding;
+import static io.aeron.logbuffer.TermScanner.scanForAvailability;
+import static io.aeron.protocol.DataHeaderFlyweight.BEGIN_AND_END_FLAGS;
+import static io.aeron.protocol.DataHeaderFlyweight.BEGIN_END_AND_EOS_FLAGS;
+import static io.aeron.protocol.DataHeaderFlyweight.BEGIN_END_EOS_AND_REVOKED_FLAGS;
 import static io.aeron.protocol.StatusMessageFlyweight.END_OF_STREAM_FLAG;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
 
@@ -743,12 +760,20 @@ public final class NetworkPublication
                     minConsumerPosition = Math.min(minConsumerPosition, spyPosition.getVolatile());
                 }
 
-                final long proposedPublisherLimit = minConsumerPosition + termWindowLength;
-                final long publisherLimit = this.publisherLimit.get();
-                if (proposedPublisherLimit > publisherLimit)
+                final long newLimitPosition = minConsumerPosition + termWindowLength;
+                if (newLimitPosition > publisherLimit.get())
                 {
                     cleanBufferTo(minConsumerPosition - termBufferLength);
-                    this.publisherLimit.setRelease(proposedPublisherLimit);
+                    final long cleanPosition = this.cleanPosition;
+                    final int dirtyTermId =
+                        computeTermIdFromPosition(cleanPosition, positionBitsToShift, initialTermId);
+                    final int activeTermId =
+                        computeTermIdFromPosition(newLimitPosition, positionBitsToShift, initialTermId);
+                    final int termGap = activeTermId - dirtyTermId;
+                    if (termGap < 2 || (2 == termGap && 0 != (int)(cleanPosition & termLengthMask)))
+                    {
+                        publisherLimit.setRelease(newLimitPosition);
+                    }
                     workCount = 1;
                 }
             }
@@ -883,7 +908,7 @@ public final class NetworkPublication
         {
             final short flags;
 
-            if (isPublicationRevoked(metaDataBuffer))
+            if (LogBufferDescriptor.isPublicationRevoked(metaDataBuffer))
             {
                 flags = BEGIN_END_EOS_AND_REVOKED_FLAGS;
             }
@@ -1075,13 +1100,13 @@ public final class NetworkPublication
         {
             case ACTIVE:
             {
-                if (isPublicationRevoked(metaDataBuffer))
+                if (LogBufferDescriptor.isPublicationRevoked(metaDataBuffer))
                 {
                     final long revokedPos = producerPosition();
                     publisherLimit.setRelease(revokedPos);
                     endOfStreamPosition(metaDataBuffer, revokedPos);
                     // TODO what prevents this from getting set to true again?
-                    isConnected(metaDataBuffer, false);
+                    LogBufferDescriptor.isConnected(metaDataBuffer, false);
 
                     isEndOfStream = true;
 
@@ -1179,7 +1204,7 @@ public final class NetworkPublication
             publisherLimit.setRelease(producerPosition);
             endOfStreamPosition(metaDataBuffer, producerPosition);
 
-            if (!isPublicationRevoked(metaDataBuffer))
+            if (!LogBufferDescriptor.isPublicationRevoked(metaDataBuffer))
             {
                 if (senderPosition.getVolatile() >= producerPosition)
                 {
