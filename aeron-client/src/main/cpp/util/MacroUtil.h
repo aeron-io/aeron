@@ -21,6 +21,7 @@
 
 #define CONCAT_SYMBOLS(x, y) x##y
 
+#include <cstdint>
 #include <string>
 
 namespace aeron { namespace util {

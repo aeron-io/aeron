@@ -37,7 +37,6 @@ public:
         if (aeron_executor_init(
             &m_executor,
             be_async(),
-            -1,
             on_execution_complete_cb(),
             this) < 0)
         {

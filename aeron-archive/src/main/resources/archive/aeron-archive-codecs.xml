@@ -2,7 +2,7 @@
 <sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
                    package="io.aeron.archive.codecs"
                    id="101"
-                   version="10"
+                   version="11"
                    semanticVersion="5.2"
                    description="Message Codecs for communicating with an Aeron Archive."
                    byteOrder="littleEndian">
@@ -629,6 +629,13 @@
         <field name="controlSessionId"     id="1" type="int64"/>
         <field name="correlationId"        id="2" type="int64"/>
         <field name="recordingId"          id="3" type="int64"/>
+    </sbe:message>
+
+    <sbe:message name="Ping"
+                 id="106"
+                 sinceVersion="11"
+                 description="Ping for heartbeat.">
+        <field name="controlSessionId"     id="1" type="int64"/>
     </sbe:message>
 
 </sbe:messageSchema>

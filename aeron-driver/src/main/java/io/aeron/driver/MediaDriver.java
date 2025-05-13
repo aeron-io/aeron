@@ -677,7 +677,7 @@ public final class MediaDriver implements AutoCloseable
                 validateUntetheredTimeouts(untetheredWindowLimitTimeoutNs, untetheredRestingTimeoutNs, timerIntervalNs);
 
                 final long cncFileLength = BitUtil.align(
-                    (long)END_OF_METADATA_OFFSET +
+                    (long)META_DATA_LENGTH +
                     conductorBufferLength +
                     toClientsBufferLength +
                     countersMetadataBufferLength(counterValuesBufferLength) +
@@ -697,7 +697,8 @@ public final class MediaDriver implements AutoCloseable
                     clientLivenessTimeoutNs,
                     errorBufferLength,
                     epochClock.time(),
-                    SystemUtil.getPid());
+                    SystemUtil.getPid(),
+                    filePageSize);
 
                 concludeCounters();
                 concludeDependantProperties();
@@ -4071,9 +4072,13 @@ public final class MediaDriver implements AutoCloseable
                 new LinkedBlockingQueue<>(),
                 (r) ->
                 {
-                    final Thread thread = new Thread(
-                        r,
-                        "async-task-executor-" + id.getAndIncrement() + " " + dirName);
+                    String threadName = "async-executor";
+                    if (threadCount > 1)
+                    {
+                        threadName += "-" + id.getAndIncrement();
+                    }
+                    threadName += " " + dirName;
+                    final Thread thread = new Thread(r, threadName);
                     thread.setDaemon(true);
                     return thread;
                 });

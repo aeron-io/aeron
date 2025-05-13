@@ -106,6 +106,40 @@ static aeron_feedback_delay_generator_state_t *aeron_publication_image_acquire_d
     return &image->feedback_delay_state;
 }
 
+static void aeron_publication_image_report_loss(
+    aeron_publication_image_t *image, int32_t term_id, int32_t term_offset, size_t length, size_t bytes_lost)
+{
+    if (image->conductor_fields.loss_report_entry_offset >= 0)
+    {
+        aeron_loss_reporter_record_observation(
+            image->conductor_fields.loss_report, image->conductor_fields.loss_report_entry_offset, (int64_t)bytes_lost, image->epoch_clock());
+    }
+    else if (NULL != image->conductor_fields.loss_report)
+    {
+        if (NULL != image->conductor_fields.endpoint)
+        {
+            image->conductor_fields.loss_report_entry_offset = aeron_loss_reporter_create_entry(
+                image->conductor_fields.loss_report,
+                (int64_t)bytes_lost,
+                image->epoch_clock(),
+                image->session_id,
+                image->stream_id,
+                image->conductor_fields.endpoint->conductor_fields.udp_channel->original_uri,
+                image->conductor_fields.endpoint->conductor_fields.udp_channel->uri_length,
+                image->source_identity,
+                image->source_identity_length);
+        }
+
+        if (-1 == image->conductor_fields.loss_report_entry_offset)
+        {
+            image->conductor_fields.loss_report = NULL;
+        }
+    }
+    image->conductor_fields.loss_report_term_id = term_id;
+    image->conductor_fields.loss_report_term_offset = term_offset;
+    image->conductor_fields.loss_report_length = length;
+}
+
 int aeron_publication_image_create(
     aeron_publication_image_t **image,
     aeron_receive_channel_endpoint_t *endpoint,
@@ -264,8 +298,11 @@ int aeron_publication_image_create(
     _image->conductor_fields.endpoint = endpoint;
 
     _image->congestion_control = congestion_control;
-    _image->loss_reporter = loss_reporter;
-    _image->loss_reporter_offset = -1;
+    _image->conductor_fields.loss_report = loss_reporter;
+    _image->conductor_fields.loss_report_entry_offset = -1;
+    _image->conductor_fields.loss_report_term_id = 0;
+    _image->conductor_fields.loss_report_term_offset = 0;
+    _image->conductor_fields.loss_report_length = 0;
     _image->conductor_fields.subscribable.correlation_id = correlation_id;
     _image->conductor_fields.subscribable.array = NULL;
     _image->conductor_fields.subscribable.length = 0;
@@ -342,14 +379,14 @@ int aeron_publication_image_create(
         active_term_id, initial_term_offset, _image->position_bits_to_shift, initial_term_id);
     const int64_t now_ns = aeron_clock_cached_nano_time(context->cached_clock);
 
-    _image->begin_loss_change = -1;
-    _image->end_loss_change = -1;
+    _image->begin_loss_change = 0;
+    _image->end_loss_change = 0;
     _image->loss_term_id = active_term_id;
     _image->loss_term_offset = initial_term_offset;
     _image->loss_length = 0;
 
-    _image->begin_sm_change = -1;
-    _image->end_sm_change = -1;
+    _image->begin_sm_change = 0;
+    _image->end_sm_change = 0;
     _image->next_sm_position = initial_position;
     _image->next_sm_receiver_window_length = _image->congestion_control->initial_window_length(
         _image->congestion_control->state);
@@ -463,31 +500,15 @@ void aeron_publication_image_on_gap_detected(void *clientd, int32_t term_id, int
 
     AERON_SET_RELEASE(image->end_loss_change, change_number);
 
-    if (image->loss_reporter_offset >= 0)
+    size_t loss_report_end_offset;
+    if (term_id != image->conductor_fields.loss_report_term_id ||
+        (size_t)term_offset >= (loss_report_end_offset = (size_t)image->conductor_fields.loss_report_term_offset + image->conductor_fields.loss_report_length))
     {
-        aeron_loss_reporter_record_observation(
-            image->loss_reporter, image->loss_reporter_offset, (int64_t)length, image->epoch_clock());
+        aeron_publication_image_report_loss(image, term_id, term_offset, length, length);
     }
-    else if (NULL != image->loss_reporter)
+    else if ((size_t)term_offset + length > loss_report_end_offset)
     {
-        if (NULL != image->conductor_fields.endpoint)
-        {
-            image->loss_reporter_offset = aeron_loss_reporter_create_entry(
-                image->loss_reporter,
-                (int64_t)length,
-                image->epoch_clock(),
-                image->session_id,
-                image->stream_id,
-                image->conductor_fields.endpoint->conductor_fields.udp_channel->original_uri,
-                image->conductor_fields.endpoint->conductor_fields.udp_channel->uri_length,
-                image->source_identity,
-                image->source_identity_length);
-        }
-
-        if (-1 == image->loss_reporter_offset)
-        {
-            image->loss_reporter = NULL;
-        }
+        aeron_publication_image_report_loss(image, term_id, term_offset, length, length - (loss_report_end_offset - (size_t)term_offset));
     }
 }
 
@@ -1034,9 +1055,7 @@ void aeron_publication_image_check_untethered_subscriptions(
     for (size_t i = 0, length = subscribable->length; i < length; i++)
     {
         aeron_tetherable_position_t *tetherable_position = &subscribable->array[i];
-
-        if (tetherable_position->is_tether)
-        {
+        if (tetherable_position->is_tether || AERON_SUBSCRIPTION_TETHER_RESTING != tetherable_position->state) {
             int64_t position = aeron_counter_get_acquire(tetherable_position->value_addr);
             max_sub_pos = position > max_sub_pos ? position : max_sub_pos;
         }

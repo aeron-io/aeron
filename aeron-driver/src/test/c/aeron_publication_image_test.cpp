@@ -36,8 +36,7 @@ static bool always_measure_rtt(void *state, int64_t now_ns)
     return true;
 }
 
-class PublicationImageTest : public ReceiverTestBase
-{
+class PublicationImageTest : public ReceiverTestBase {
 };
 
 TEST_F(PublicationImageTest, shouldAddAndRemoveDestination)
@@ -55,7 +54,13 @@ TEST_F(PublicationImageTest, shouldAddAndRemoveDestination)
     aeron_receive_destination_t *dest_1;
 
     ASSERT_LE(0, aeron_receive_destination_create(
-        &dest_1, channel_1, channel_1, m_context, &m_counters_manager, registration_id, endpoint->channel_status.counter_id));
+        &dest_1,
+        channel_1,
+        channel_1,
+        m_context,
+        &m_counters_manager,
+        registration_id,
+        endpoint->channel_status.counter_id));
     ASSERT_EQ(1, aeron_receive_channel_endpoint_add_destination(endpoint, dest_1));
 
     aeron_publication_image_t *image = createImage(endpoint, dest_1, stream_id, session_id);
@@ -64,7 +69,13 @@ TEST_F(PublicationImageTest, shouldAddAndRemoveDestination)
     aeron_receive_destination_t *dest_2;
 
     ASSERT_LE(0, aeron_receive_destination_create(
-        &dest_2, channel_2, channel_2, m_context, &m_counters_manager, registration_id, endpoint->channel_status.counter_id));
+        &dest_2,
+        channel_2,
+        channel_2,
+        m_context,
+        &m_counters_manager,
+        registration_id,
+        endpoint->channel_status.counter_id));
     ASSERT_EQ(2, aeron_receive_channel_endpoint_add_destination(endpoint, dest_2));
 
     ASSERT_EQ(2, aeron_publication_image_add_destination(image, dest_2));
@@ -88,7 +99,7 @@ TEST_F(PublicationImageTest, shouldAddAndRemoveDestination)
     ASSERT_EQ(1u, endpoint->destinations.length);
     ASSERT_EQ(0, aeron_publication_image_remove_destination(image, channel_not_added));
     ASSERT_EQ(1u, image->connections.length);
-    ASSERT_EQ((aeron_receive_destination_t *)nullptr, destination);
+    ASSERT_EQ((aeron_receive_destination_t *) nullptr, destination);
 
     aeron_udp_channel_t *remove_channel_2 = createChannel(uri_2, &m_channels_for_tear_down);
 
@@ -124,13 +135,25 @@ TEST_F(PublicationImageTest, shouldSendControlMessagesToAllDestinations)
     aeron_udp_channel_parse(strlen(uri_2), uri_2, &m_resolver, &channel_2, false);
 
     ASSERT_LE(0, aeron_receive_destination_create(
-        &dest_1, channel_1, channel_1, m_context, &m_counters_manager, registration_id, endpoint->channel_status.counter_id));
+        &dest_1,
+        channel_1,
+        channel_1,
+        m_context,
+        &m_counters_manager,
+        registration_id,
+        endpoint->channel_status.counter_id));
     ASSERT_EQ(1, aeron_receive_channel_endpoint_add_destination(endpoint, dest_1));
 
     aeron_publication_image_t *image = createImage(endpoint, dest_1, stream_id, session_id);
 
     ASSERT_LE(0, aeron_receive_destination_create(
-        &dest_2, channel_2, channel_2, m_context, &m_counters_manager, registration_id, endpoint->channel_status.counter_id));
+        &dest_2,
+        channel_2,
+        channel_2,
+        m_context,
+        &m_counters_manager,
+        registration_id,
+        endpoint->channel_status.counter_id));
     ASSERT_EQ(2, aeron_receive_channel_endpoint_add_destination(endpoint, dest_2));
 
     ASSERT_EQ(2, aeron_publication_image_add_destination(image, dest_2));
@@ -200,13 +223,25 @@ TEST_F(PublicationImageTest, shouldHandleEosAcrossDestinations)
     aeron_udp_channel_parse(strlen(uri_2), uri_2, &m_resolver, &channel_2, false);
 
     ASSERT_LE(0, aeron_receive_destination_create(
-        &dest_1, channel_1, channel_1, m_context, &m_counters_manager, registration_id, endpoint->channel_status.counter_id));
+        &dest_1,
+        channel_1,
+        channel_1,
+        m_context,
+        &m_counters_manager,
+        registration_id,
+        endpoint->channel_status.counter_id));
     ASSERT_EQ(1, aeron_receive_channel_endpoint_add_destination(endpoint, dest_1));
 
     aeron_publication_image_t *image = createImage(endpoint, dest_1, stream_id, session_id);
 
     ASSERT_LE(0, aeron_receive_destination_create(
-        &dest_2, channel_2, channel_2, m_context, &m_counters_manager, registration_id, endpoint->channel_status.counter_id));
+        &dest_2,
+        channel_2,
+        channel_2,
+        m_context,
+        &m_counters_manager,
+        registration_id,
+        endpoint->channel_status.counter_id));
     ASSERT_EQ(2, aeron_receive_channel_endpoint_add_destination(endpoint, dest_2));
 
     ASSERT_EQ(2, aeron_publication_image_add_destination(image, dest_2));
@@ -262,13 +297,25 @@ TEST_F(PublicationImageTest, shouldNotSendControlMessagesToAllDestinationThatHav
     aeron_clock_update_cached_nano_time(m_context->receiver_cached_clock, t0_ns);
 
     ASSERT_LE(0, aeron_receive_destination_create(
-        &dest_1, channel_1, channel_1, m_context, &m_counters_manager, registration_id, endpoint->channel_status.counter_id));
+        &dest_1,
+        channel_1,
+        channel_1,
+        m_context,
+        &m_counters_manager,
+        registration_id,
+        endpoint->channel_status.counter_id));
     ASSERT_EQ(1, aeron_receive_channel_endpoint_add_destination(endpoint, dest_1));
 
     aeron_publication_image_t *image = createImage(endpoint, dest_1, stream_id, session_id);
 
     ASSERT_LE(0, aeron_receive_destination_create(
-        &dest_2, channel_2, channel_2, m_context, &m_counters_manager, registration_id, endpoint->channel_status.counter_id));
+        &dest_2,
+        channel_2,
+        channel_2,
+        m_context,
+        &m_counters_manager,
+        registration_id,
+        endpoint->channel_status.counter_id));
     ASSERT_EQ(2, aeron_receive_channel_endpoint_add_destination(endpoint, dest_2));
 
     ASSERT_EQ(2, aeron_publication_image_add_destination(image, dest_2));
@@ -282,7 +329,7 @@ TEST_F(PublicationImageTest, shouldNotSendControlMessagesToAllDestinationThatHav
 
     message->stream_id = stream_id;
     message->session_id = session_id;
-    message->frame_header.frame_length = (int32_t)message_length;
+    message->frame_header.frame_length = (int32_t) message_length;
     message->term_id = 0;
     message->term_offset = 0;
 
@@ -291,7 +338,7 @@ TEST_F(PublicationImageTest, shouldNotSendControlMessagesToAllDestinationThatHav
 
     aeron_clock_update_cached_nano_time(m_context->receiver_cached_clock, t1_ns);
 
-    auto next_offset = (int32_t)message_length;
+    auto next_offset = (int32_t) message_length;
     message->term_offset = next_offset;
 
     aeron_publication_image_insert_packet(image, dest_2, 0, next_offset, data, message_length, &addr);
@@ -333,13 +380,25 @@ TEST_F(PublicationImageTest, shouldTrackActiveTransportAccountBasedOnFrames)
     aeron_clock_update_cached_nano_time(m_context->receiver_cached_clock, t0_ns);
 
     ASSERT_LE(0, aeron_receive_destination_create(
-        &dest_1, channel_1, channel_1, m_context, &m_counters_manager, registration_id, endpoint->channel_status.counter_id));
+        &dest_1,
+        channel_1,
+        channel_1,
+        m_context,
+        &m_counters_manager,
+        registration_id,
+        endpoint->channel_status.counter_id));
     ASSERT_EQ(1, aeron_receive_channel_endpoint_add_destination(endpoint, dest_1));
 
     aeron_publication_image_t *image = createImage(endpoint, dest_1, stream_id, session_id);
 
     ASSERT_LE(0, aeron_receive_destination_create(
-        &dest_2, channel_2, channel_2, m_context, &m_counters_manager, registration_id, endpoint->channel_status.counter_id));
+        &dest_2,
+        channel_2,
+        channel_2,
+        m_context,
+        &m_counters_manager,
+        registration_id,
+        endpoint->channel_status.counter_id));
     ASSERT_EQ(2, aeron_receive_channel_endpoint_add_destination(endpoint, dest_2));
 
     ASSERT_EQ(2, aeron_publication_image_add_destination(image, dest_2));
@@ -438,7 +497,7 @@ TEST_F(PublicationImageTest, shouldTrackUnderRunningTransportsWithLastSmAndRecei
 
     message->stream_id = stream_id;
     message->session_id = session_id;
-    message->frame_header.frame_length = (int32_t)message_length;
+    message->frame_header.frame_length = (int32_t) message_length;
     message->term_id = 0;
     message->term_offset = 0;
 
@@ -481,7 +540,7 @@ TEST_F(PublicationImageTest, shouldReturnStorageSpaceErrorIfNotEnoughStorageSpac
         endpoint->channel_status.counter_id));
     ASSERT_EQ(1, aeron_receive_channel_endpoint_add_destination(endpoint, dest));
 
-    m_context->usable_fs_space_func = [](const char* path) -> uint64_t
+    m_context->usable_fs_space_func = [](const char *path) -> uint64_t
     {
         return 42;
     };
@@ -518,7 +577,7 @@ TEST_F(PublicationImageTest, shouldLogWarningIfStorageSpaceIsLow)
         endpoint->channel_status.counter_id));
     ASSERT_EQ(1, aeron_receive_channel_endpoint_add_destination(endpoint, dest));
 
-    m_context->usable_fs_space_func = [](const char* path) -> uint64_t
+    m_context->usable_fs_space_func = [](const char *path) -> uint64_t
     {
         return 123456789;
     };
@@ -537,4 +596,287 @@ TEST_F(PublicationImageTest, shouldLogWarningIfStorageSpaceIsLow)
         std::string("WARNING: space is running low: threshold=987654321 usable=123456789 in ")
         .append(m_context->aeron_dir);
     EXPECT_NE(std::string::npos, error_text.find(expected_warning));
+}
+
+TEST_F(PublicationImageTest, shouldReportUniqueLoss)
+{
+    const char *uri = "aeron:udp?endpoint=localhost:9090";
+    aeron_receive_channel_endpoint_t *endpoint = createEndpoint(uri);
+    int32_t stream_id = 777;
+    int32_t session_id = 42;
+    int64_t registration_id = 0;
+
+    aeron_udp_channel_t *channel;
+    aeron_receive_destination_t *dest;
+
+    ASSERT_EQ(0, aeron_udp_channel_parse(strlen(uri), uri, &m_resolver, &channel, false));
+
+    ASSERT_LE(0, aeron_receive_destination_create(
+        &dest,
+        channel,
+        channel,
+        m_context,
+        &m_counters_manager,
+        registration_id,
+        endpoint->channel_status.counter_id));
+
+    aeron_publication_image_t *image = createImage(endpoint, dest, stream_id, session_id);
+    ASSERT_NE(nullptr, image) << aeron_errmsg();
+
+    const int32_t term_id = 111;
+    const int32_t offset = 128;
+    const size_t length = 192;
+
+    // initial loss report
+    aeron_publication_image_on_gap_detected(image, term_id, offset, length);
+    EXPECT_EQ(1, image->begin_loss_change);
+    EXPECT_EQ(term_id, image->loss_term_id);
+    EXPECT_EQ(offset, image->loss_term_offset);
+    EXPECT_EQ(length, image->loss_length);
+    EXPECT_EQ(1, image->end_loss_change);
+    EXPECT_EQ(1, aeron_loss_reporter_read(
+        m_loss_reporter_buffer.data(),
+        m_loss_reporter_buffer.size(),
+        [](
+            void *clientd,
+            int64_t observation_count,
+            int64_t total_bytes_lost,
+            int64_t first_observation_timestamp,
+            int64_t last_observation_timestamp,
+            int32_t session_id,
+            int32_t stream_id,
+            const char *channel,
+            int32_t channel_length,
+            const char *source,
+            int32_t source_length)
+        {
+            EXPECT_EQ(1, observation_count);
+            EXPECT_EQ(192, total_bytes_lost);
+            EXPECT_EQ(first_observation_timestamp, last_observation_timestamp);
+            EXPECT_EQ(42, session_id);
+            EXPECT_EQ(777, stream_id);
+        },
+        nullptr));
+
+    // same loss => no reporting
+    aeron_publication_image_on_gap_detected(image, term_id, offset, length);
+    EXPECT_EQ(2, image->begin_loss_change);
+    EXPECT_EQ(term_id, image->loss_term_id);
+    EXPECT_EQ(offset, image->loss_term_offset);
+    EXPECT_EQ(length, image->loss_length);
+    EXPECT_EQ(2, image->end_loss_change);
+    EXPECT_EQ(1, aeron_loss_reporter_read(
+        m_loss_reporter_buffer.data(),
+        m_loss_reporter_buffer.size(),
+        [](
+            void *clientd,
+            int64_t observation_count,
+            int64_t total_bytes_lost,
+            int64_t first_observation_timestamp,
+            int64_t last_observation_timestamp,
+            int32_t session_id,
+            int32_t stream_id,
+            const char *channel,
+            int32_t channel_length,
+            const char *source,
+            int32_t source_length)
+        {
+            EXPECT_EQ(1, observation_count);
+            EXPECT_EQ(192, total_bytes_lost);
+            EXPECT_EQ(first_observation_timestamp, last_observation_timestamp);
+            EXPECT_EQ(42, session_id);
+            EXPECT_EQ(777, stream_id);
+        },
+        nullptr));
+
+    // less loss => no reporting
+    aeron_publication_image_on_gap_detected(image, term_id, offset, 32);
+    EXPECT_EQ(3, image->begin_loss_change);
+    EXPECT_EQ(term_id, image->loss_term_id);
+    EXPECT_EQ(offset, image->loss_term_offset);
+    EXPECT_EQ(32, image->loss_length);
+    EXPECT_EQ(3, image->end_loss_change);
+    EXPECT_EQ(1, aeron_loss_reporter_read(
+        m_loss_reporter_buffer.data(),
+        m_loss_reporter_buffer.size(),
+        [](
+            void *clientd,
+            int64_t observation_count,
+            int64_t total_bytes_lost,
+            int64_t first_observation_timestamp,
+            int64_t last_observation_timestamp,
+            int32_t session_id,
+            int32_t stream_id,
+            const char *channel,
+            int32_t channel_length,
+            const char *source,
+            int32_t source_length)
+        {
+            EXPECT_EQ(1, observation_count);
+            EXPECT_EQ(192, total_bytes_lost);
+            EXPECT_EQ(first_observation_timestamp, last_observation_timestamp);
+            EXPECT_EQ(42, session_id);
+            EXPECT_EQ(777, stream_id);
+        },
+        nullptr));
+
+    // larger loss => report
+    aeron_publication_image_on_gap_detected(image, term_id, offset, 1500);
+    EXPECT_EQ(4, image->begin_loss_change);
+    EXPECT_EQ(term_id, image->loss_term_id);
+    EXPECT_EQ(offset, image->loss_term_offset);
+    EXPECT_EQ(1500, image->loss_length);
+    EXPECT_EQ(4, image->end_loss_change);
+    EXPECT_EQ(1, aeron_loss_reporter_read(
+        m_loss_reporter_buffer.data(),
+        m_loss_reporter_buffer.size(),
+        [](
+            void *clientd,
+            int64_t observation_count,
+            int64_t total_bytes_lost,
+            int64_t first_observation_timestamp,
+            int64_t last_observation_timestamp,
+            int32_t session_id,
+            int32_t stream_id,
+            const char *channel,
+            int32_t channel_length,
+            const char *source,
+            int32_t source_length)
+        {
+            EXPECT_EQ(2, observation_count);
+            EXPECT_EQ(1500, total_bytes_lost);
+            EXPECT_LE(first_observation_timestamp, last_observation_timestamp);
+            EXPECT_EQ(42, session_id);
+            EXPECT_EQ(777, stream_id);
+        },
+        nullptr));
+
+    // overlapping loss => report
+    aeron_publication_image_on_gap_detected(image, term_id, offset + 996, 700);
+    EXPECT_EQ(5, image->begin_loss_change);
+    EXPECT_EQ(term_id, image->loss_term_id);
+    EXPECT_EQ(offset + 996, image->loss_term_offset);
+    EXPECT_EQ(700, image->loss_length);
+    EXPECT_EQ(5, image->end_loss_change);
+    EXPECT_EQ(1, aeron_loss_reporter_read(
+        m_loss_reporter_buffer.data(),
+        m_loss_reporter_buffer.size(),
+        [](
+            void *clientd,
+            int64_t observation_count,
+            int64_t total_bytes_lost,
+            int64_t first_observation_timestamp,
+            int64_t last_observation_timestamp,
+            int32_t session_id,
+            int32_t stream_id,
+            const char *channel,
+            int32_t channel_length,
+            const char *source,
+            int32_t source_length)
+        {
+            EXPECT_EQ(3, observation_count);
+            EXPECT_EQ(1696, total_bytes_lost);
+            EXPECT_LE(first_observation_timestamp, last_observation_timestamp);
+            EXPECT_EQ(42, session_id);
+            EXPECT_EQ(777, stream_id);
+        },
+        nullptr));
+
+    // non-overlapping loss => report
+    aeron_publication_image_on_gap_detected(image, term_id, offset + 4096, 128);
+    EXPECT_EQ(6, image->begin_loss_change);
+    EXPECT_EQ(term_id, image->loss_term_id);
+    EXPECT_EQ(offset + 4096, image->loss_term_offset);
+    EXPECT_EQ(128, image->loss_length);
+    EXPECT_EQ(6, image->end_loss_change);
+    EXPECT_EQ(1, aeron_loss_reporter_read(
+        m_loss_reporter_buffer.data(),
+        m_loss_reporter_buffer.size(),
+        [](
+            void *clientd,
+            int64_t observation_count,
+            int64_t total_bytes_lost,
+            int64_t first_observation_timestamp,
+            int64_t last_observation_timestamp,
+            int32_t session_id,
+            int32_t stream_id,
+            const char *channel,
+            int32_t channel_length,
+            const char *source,
+            int32_t source_length)
+        {
+            EXPECT_EQ(4, observation_count);
+            EXPECT_EQ(1824, total_bytes_lost);
+            EXPECT_LE(first_observation_timestamp, last_observation_timestamp);
+            EXPECT_EQ(42, session_id);
+            EXPECT_EQ(777, stream_id);
+        },
+        nullptr));
+
+    // loss in another term => report
+    aeron_publication_image_on_gap_detected(image, term_id + 3, 0, 400);
+    EXPECT_EQ(7, image->begin_loss_change);
+    EXPECT_EQ(term_id + 3, image->loss_term_id);
+    EXPECT_EQ(0, image->loss_term_offset);
+    EXPECT_EQ(400, image->loss_length);
+    EXPECT_EQ(7, image->end_loss_change);
+    EXPECT_EQ(1, aeron_loss_reporter_read(
+        m_loss_reporter_buffer.data(),
+        m_loss_reporter_buffer.size(),
+        [](
+            void *clientd,
+            int64_t observation_count,
+            int64_t total_bytes_lost,
+            int64_t first_observation_timestamp,
+            int64_t last_observation_timestamp,
+            int32_t session_id,
+            int32_t stream_id,
+            const char *channel,
+            int32_t channel_length,
+            const char *source,
+            int32_t source_length)
+        {
+            EXPECT_EQ(5, observation_count);
+            EXPECT_EQ(2224, total_bytes_lost);
+            EXPECT_LE(first_observation_timestamp, last_observation_timestamp);
+            EXPECT_EQ(42, session_id);
+            EXPECT_EQ(777, stream_id);
+        },
+        nullptr));
+
+    // same loss => no report
+    aeron_publication_image_on_gap_detected(image, term_id + 3, 0, 400);
+    EXPECT_EQ(8, image->begin_loss_change);
+    EXPECT_EQ(term_id + 3, image->loss_term_id);
+    EXPECT_EQ(0, image->loss_term_offset);
+    EXPECT_EQ(400, image->loss_length);
+    EXPECT_EQ(8, image->end_loss_change);
+    EXPECT_EQ(1, aeron_loss_reporter_read(
+        m_loss_reporter_buffer.data(),
+        m_loss_reporter_buffer.size(),
+        [](
+            void *clientd,
+            int64_t observation_count,
+            int64_t total_bytes_lost,
+            int64_t first_observation_timestamp,
+            int64_t last_observation_timestamp,
+            int32_t session_id,
+            int32_t stream_id,
+            const char *channel,
+            int32_t channel_length,
+            const char *source,
+            int32_t source_length)
+        {
+            EXPECT_EQ(5, observation_count);
+            EXPECT_EQ(2224, total_bytes_lost);
+            EXPECT_LE(first_observation_timestamp, last_observation_timestamp);
+            EXPECT_EQ(42, session_id);
+            EXPECT_EQ(777, stream_id);
+        },
+        nullptr));
+
+    aeron_publication_image_remove_destination(image, channel);
+    endpoint->transport_bindings->poller_remove_func(&m_receiver.poller, &dest->transport);
+    endpoint->transport_bindings->close_func(&dest->transport);
+    aeron_receive_destination_delete(dest, &m_counters_manager);
 }

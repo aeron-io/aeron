@@ -16,6 +16,7 @@
 package io.aeron.archive;
 
 import io.aeron.Aeron;
+import io.aeron.CommonContext;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.client.ArchiveException;
 import io.aeron.archive.codecs.mark.MarkFileHeaderDecoder;
@@ -24,6 +25,7 @@ import io.aeron.archive.codecs.mark.MessageHeaderDecoder;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
 import io.aeron.test.TestContexts;
+import org.agrona.BitUtil;
 import org.agrona.IoUtil;
 import org.agrona.MarkFile;
 import org.agrona.SemanticVersion;
@@ -45,10 +47,20 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
+import static io.aeron.logbuffer.LogBufferDescriptor.PAGE_MIN_SIZE;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThan;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class ArchiveMarkFileTest
 {
@@ -57,17 +69,21 @@ class ArchiveMarkFileTest
     @Test
     void shouldUseMarkFileDirectory(final @TempDir File tempDir)
     {
-        final File aeronDir = new File(tempDir, "aeron");
         final File archiveDir = new File(tempDir, "archive_dir");
         final File markFileDir = new File(tempDir, "mark-file-home");
         final File markFile = new File(markFileDir, ArchiveMarkFile.FILENAME);
         assertTrue(markFileDir.mkdirs());
         assertFalse(markFile.exists());
 
+        final Aeron aeron = mock(Aeron.class);
+        final Aeron.Context aeronCtx = mock(Aeron.Context.class);
+        when(aeronCtx.filePageSize()).thenReturn(PAGE_MIN_SIZE);
+        when(aeron.context()).thenReturn(aeronCtx);
+
         final Archive.Context context = TestContexts.localhostArchive()
             .archiveDir(archiveDir)
             .markFileDir(markFileDir)
-            .aeronDirectoryName(aeronDir.getAbsolutePath());
+            .aeron(aeron);
         shouldEncodeMarkFileFromArchiveContext(context);
 
         assertTrue(markFile.exists());
@@ -92,8 +108,8 @@ class ArchiveMarkFileTest
             .epochClock(SystemEpochClock.INSTANCE)
             .threadingMode(ArchiveThreadingMode.SHARED);
 
-        try (MediaDriver driver = MediaDriver.launch(driverContext.clone());
-            Archive archive = Archive.launch(archiveContext.clone()))
+        try (MediaDriver ignored = MediaDriver.launch(driverContext.clone());
+            Archive ignored1 = Archive.launch(archiveContext.clone()))
         {
             assertTrue(new File(markFileDir, ArchiveMarkFile.FILENAME).exists());
             assertTrue(new File(archiveDir, ArchiveMarkFile.LINK_FILENAME).exists());
@@ -101,8 +117,8 @@ class ArchiveMarkFileTest
         }
 
         archiveContext.markFileDir(null);
-        try (MediaDriver driver = MediaDriver.launch(driverContext.clone());
-            Archive archive = Archive.launch(archiveContext.clone()))
+        try (MediaDriver ignored = MediaDriver.launch(driverContext.clone());
+            Archive ignored1 = Archive.launch(archiveContext.clone()))
         {
             assertTrue(new File(archiveDir, ArchiveMarkFile.FILENAME).exists());
             assertFalse(new File(archiveDir, ArchiveMarkFile.LINK_FILENAME).exists());
@@ -119,7 +135,11 @@ class ArchiveMarkFileTest
         final File archiveMarkFile = new File(markFileDir, ArchiveMarkFile.FILENAME);
 
         final Aeron aeron = mock(Aeron.class);
-        when(aeron.context()).thenReturn(new Aeron.Context().useConductorAgentInvoker(false));
+        final Aeron.Context aeronCtx = mock(Aeron.Context.class);
+        when(aeronCtx.aeronDirectoryName()).thenReturn("/dev/shm/aeron");
+        when(aeronCtx.filePageSize()).thenReturn(PAGE_MIN_SIZE);
+        when(aeronCtx.useConductorAgentInvoker()).thenReturn(false);
+        when(aeron.context()).thenReturn(aeronCtx);
 
         final MediaDriver.Context driverContext = new MediaDriver.Context()
             .aeronDirectoryName(aeronDir.getAbsolutePath())
@@ -132,7 +152,7 @@ class ArchiveMarkFileTest
             .epochClock(SystemEpochClock.INSTANCE)
             .aeron(aeron);
 
-        // Force an error on startup by attempting to start an archive without a media driver.
+        // Force an error on startup by attempting to use invalid Aeron client
         try (Archive ignored = Archive.launch(archiveContext.clone()))
         {
             fail("Expected archive to timeout as no media driver is running.");
@@ -250,10 +270,15 @@ class ArchiveMarkFileTest
             assertEquals(Aeron.NULL_VALUE, archiveMarkFile.archiveId());
         }
 
+        final Aeron aeron = mock(Aeron.class);
+        final Aeron.Context aeronCtx = mock(Aeron.Context.class);
+        when(aeronCtx.filePageSize()).thenReturn(PAGE_MIN_SIZE);
+        when(aeron.context()).thenReturn(aeronCtx);
+
         final Archive.Context context = new Archive.Context()
             .archiveDir(new File(tempDir, "archive"))
             .markFileDir(file.getParent().toFile())
-            .aeronDirectoryName(aeronDirectory);
+            .aeron(aeron);
         shouldEncodeMarkFileFromArchiveContext(context);
     }
 
@@ -317,10 +342,15 @@ class ArchiveMarkFileTest
             assertEquals(Aeron.NULL_VALUE, archiveMarkFile.archiveId());
         }
 
+        final Aeron aeron = mock(Aeron.class);
+        final Aeron.Context aeronCtx = mock(Aeron.Context.class);
+        when(aeronCtx.filePageSize()).thenReturn(PAGE_MIN_SIZE);
+        when(aeron.context()).thenReturn(aeronCtx);
+
         final Archive.Context context = new Archive.Context()
             .archiveDir(new File(tempDir, "archive/a/long/path/to"))
             .markFileDir(file.getParent().toFile())
-            .aeronDirectoryName(aeronDirectory)
+            .aeron(aeron)
             .errorBufferLength(errorBufferLength);
         shouldEncodeMarkFileFromArchiveContext(context);
     }
@@ -424,6 +454,103 @@ class ArchiveMarkFileTest
 
         archiveMarkFile.signalReady();
         assertTrue(archiveMarkFile.isClosed());
+    }
+
+    @Test
+    void shouldAlignMarkFileLengthToFilePageSizeFromAeronClient(final @TempDir Path tempDir) throws IOException
+    {
+        final Path aeronDir = tempDir.resolve("aeron");
+        final Path archiveDir = tempDir.resolve("archive");
+        final Path markFileDir = tempDir.resolve("mark");
+        Files.createDirectories(aeronDir);
+        Files.createDirectories(archiveDir);
+        Files.createDirectories(markFileDir);
+
+        final Archive.Context context = new Archive.Context();
+        final Aeron aeron = mock(Aeron.class);
+        final Aeron.Context aeronContext = mock(Aeron.Context.class);
+        final int filePageSize = 16 * 1024;
+        when(aeronContext.filePageSize()).thenReturn(filePageSize);
+        when(aeronContext.aeronDirectory()).thenReturn(aeronDir.toFile());
+        when(aeronContext.aeronDirectoryName()).thenReturn(aeronDir.toString());
+        when(aeron.context()).thenReturn(aeronContext);
+        context
+            .aeron(aeron)
+            .archiveDir(archiveDir.toFile())
+            .markFileDir(markFileDir.toFile())
+            .epochClock(SystemEpochClock.INSTANCE);
+
+        try (ArchiveMarkFile archiveMarkFile = new ArchiveMarkFile(context))
+        {
+            assertEquals(
+                BitUtil.align(ArchiveMarkFile.HEADER_LENGTH + context.errorBufferLength(), filePageSize),
+                archiveMarkFile.buffer().capacity());
+        }
+
+        verify(aeronContext).filePageSize();
+    }
+
+    @Test
+    void shouldAlignMarkFileLengthTo4KIfAeronClientReturnsZero(final @TempDir Path tempDir) throws IOException
+    {
+        final Path aeronDir = tempDir.resolve("aeron");
+        final Path archiveDir = tempDir.resolve("archive");
+        final Path markFileDir = tempDir.resolve("mark");
+        Files.createDirectories(aeronDir);
+        Files.createDirectories(archiveDir);
+        Files.createDirectories(markFileDir);
+
+        final Archive.Context context = new Archive.Context();
+        final Aeron aeron = mock(Aeron.class);
+        final Aeron.Context aeronContext = mock(Aeron.Context.class);
+        when(aeronContext.filePageSize()).thenReturn(PAGE_MIN_SIZE);
+        when(aeronContext.aeronDirectory()).thenReturn(aeronDir.toFile());
+        when(aeronContext.aeronDirectoryName()).thenReturn(aeronDir.toString());
+        when(aeron.context()).thenReturn(aeronContext);
+        context
+            .aeron(aeron)
+            .archiveDir(archiveDir.toFile())
+            .markFileDir(markFileDir.toFile())
+            .epochClock(SystemEpochClock.INSTANCE)
+            .errorBufferLength(1111111);
+
+        try (ArchiveMarkFile archiveMarkFile = new ArchiveMarkFile(context))
+        {
+            assertEquals(
+                BitUtil.align(ArchiveMarkFile.HEADER_LENGTH + context.errorBufferLength(), 4096),
+                archiveMarkFile.buffer().capacity());
+        }
+
+        verify(aeronContext).filePageSize();
+    }
+
+
+    @Test
+    @SuppressWarnings("try")
+    void shouldAlignMarkFileLengthToFilePageSizeFromMediaDriver(final @TempDir Path tempDir) throws IOException
+    {
+        final Path archiveDir = tempDir.resolve("archive");
+        Files.createDirectories(archiveDir);
+
+        final int filePageSize = 2 * 1024 * 1024;
+        final MediaDriver.Context mediaDriverContext = new MediaDriver.Context()
+            .aeronDirectoryName(CommonContext.generateRandomDirName())
+            .threadingMode(ThreadingMode.SHARED)
+            .filePageSize(filePageSize);
+
+        final Archive.Context context = new Archive.Context();
+        context
+            .aeronDirectoryName(mediaDriverContext.aeronDirectoryName())
+            .markFileDir(new File(mediaDriverContext.aeronDirectoryName()))
+            .archiveDir(archiveDir.toFile())
+            .epochClock(SystemEpochClock.INSTANCE)
+            .errorBufferLength(1234567);
+
+        try (MediaDriver ignored = MediaDriver.launch(mediaDriverContext);
+            ArchiveMarkFile archiveMarkFile = new ArchiveMarkFile(context))
+        {
+            assertEquals(filePageSize, archiveMarkFile.buffer().capacity());
+        }
     }
 
     private static void shouldEncodeMarkFileFromArchiveContext(final Archive.Context ctx)

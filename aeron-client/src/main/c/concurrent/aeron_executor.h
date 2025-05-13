@@ -31,14 +31,12 @@ typedef struct aeron_executor_stct
     aeron_blocking_linked_queue_t queue;
     aeron_blocking_linked_queue_t return_queue;
     aeron_thread_t dispatch_thread;
-    int32_t dispatch_thread_cpu_affinity;
 }
 aeron_executor_t;
 
 int aeron_executor_init(
     aeron_executor_t *executor,
     bool async,
-    int32_t cpu_affinity,
     aeron_executor_on_execution_complete_func_t on_execution_complete,
     void *clientd);
 

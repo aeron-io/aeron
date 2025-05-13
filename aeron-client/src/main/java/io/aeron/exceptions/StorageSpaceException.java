@@ -46,7 +46,11 @@ public class StorageSpaceException extends AeronException
         Throwable cause = error;
         while (null != cause)
         {
-            if (cause instanceof IOException)
+            if (cause instanceof StorageSpaceException)
+            {
+                return true;
+            }
+            else if (cause instanceof IOException)
             {
                 final String msg = cause.getMessage();
                 if ("No space left on device".equals(msg) || "There is not enough space on the disk".equals(msg))

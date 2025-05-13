@@ -16,9 +16,12 @@
 package io.aeron.cluster;
 
 import io.aeron.Aeron;
+import io.aeron.CommonContext;
 import io.aeron.RethrowingErrorHandler;
 import io.aeron.cluster.service.ClusterMarkFile;
-import org.agrona.concurrent.AgentInvoker;
+import io.aeron.driver.MediaDriver;
+import io.aeron.driver.ThreadingMode;
+import org.agrona.BitUtil;
 import org.agrona.concurrent.SystemEpochClock;
 import org.agrona.concurrent.status.AtomicCounter;
 import org.junit.jupiter.api.AfterEach;
@@ -32,13 +35,23 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 import static io.aeron.cluster.codecs.mark.ClusterComponentType.BACKUP;
 import static io.aeron.cluster.service.ClusterMarkFile.ERROR_BUFFER_MIN_LENGTH;
+import static io.aeron.cluster.service.ClusterMarkFile.HEADER_LENGTH;
 import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.MARK_FILE_DIR_PROP_NAME;
+import static io.aeron.logbuffer.LogBufferDescriptor.PAGE_MIN_SIZE;
 import static java.nio.charset.StandardCharsets.US_ASCII;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class ClusterBackupContextTest
@@ -54,10 +67,10 @@ class ClusterBackupContextTest
         final Aeron.Context aeronContext = mock(Aeron.Context.class);
         when(aeronContext.aeronDirectoryName()).thenReturn("funny");
         when(aeronContext.subscriberErrorHandler()).thenReturn(errorHandler);
-        final AgentInvoker conductorAgentInvoker = mock(AgentInvoker.class);
+        when(aeronContext.useConductorAgentInvoker()).thenReturn(true);
+        when(aeronContext.filePageSize()).thenReturn(PAGE_MIN_SIZE);
         final Aeron aeron = mock(Aeron.class);
         when(aeron.context()).thenReturn(aeronContext);
-        when(aeron.conductorAgentInvoker()).thenReturn(conductorAgentInvoker);
         final AtomicCounter errorCounter = mock(AtomicCounter.class);
         context = new ClusterBackup.Context()
             .aeron(aeron)
@@ -170,7 +183,11 @@ class ClusterBackupContextTest
         final @TempDir File otherDir) throws IOException
     {
         final ClusterMarkFile clusterMarkFile = new ClusterMarkFile(
-            new File(otherDir, "abc.xyz"), BACKUP, ERROR_BUFFER_MIN_LENGTH, SystemEpochClock.INSTANCE, 4);
+            new File(otherDir, "abc.xyz"),
+            BACKUP, ERROR_BUFFER_MIN_LENGTH,
+            SystemEpochClock.INSTANCE,
+            4,
+            PAGE_MIN_SIZE);
         context
             .clusterDir(clusterDir)
             .markFileDir(markFileDir)
@@ -184,5 +201,54 @@ class ClusterBackupContextTest
         final File linkFile = new File(context.clusterDir(), ClusterMarkFile.LINK_FILENAME);
         assertTrue(linkFile.exists());
         assertEquals(otherDir.getCanonicalPath(), new String(Files.readAllBytes(linkFile.toPath()), US_ASCII));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = { 4096, 16 * 1024 })
+    void shouldAlignMarkFileBasedOnTheAeronClientFilePageSize(final int filePageSize)
+    {
+        final Aeron.Context aeronContext = context.aeron().context();
+        when(aeronContext.filePageSize()).thenReturn(filePageSize);
+        context.errorBufferLength(3131311);
+
+        try
+        {
+            context.conclude();
+
+            final File file = new File(context.markFileDir(), ClusterMarkFile.FILENAME);
+            assertTrue(file.exists());
+            assertEquals(BitUtil.align(context.errorBufferLength() + HEADER_LENGTH, filePageSize), file.length());
+
+            verify(aeronContext).filePageSize();
+        }
+        finally
+        {
+            context.close();
+        }
+    }
+
+    @Test
+    void shouldAlignMarkFileBasedOnTheMediaDriverFilePageSize() throws IOException
+    {
+        final Path aeronDir = Paths.get(CommonContext.generateRandomDirName());
+        Files.createDirectories(aeronDir);
+
+        final int filePageSize = 1024 * 1024;
+        try (MediaDriver driver = MediaDriver.launch(new MediaDriver.Context()
+            .aeronDirectoryName(aeronDir.toString())
+            .threadingMode(ThreadingMode.SHARED)
+            .filePageSize(filePageSize)))
+        {
+            context
+                .aeron(null)
+                .aeronDirectoryName(driver.aeronDirectoryName())
+                .errorBufferLength(1919191);
+
+            context.conclude();
+
+            final File file = new File(context.markFileDir(), ClusterMarkFile.FILENAME);
+            assertTrue(file.exists());
+            assertEquals(BitUtil.align(context.errorBufferLength() + HEADER_LENGTH, filePageSize), file.length());
+        }
     }
 }

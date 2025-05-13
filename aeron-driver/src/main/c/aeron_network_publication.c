@@ -987,13 +987,20 @@ int aeron_network_publication_update_pub_pos_and_lmt(aeron_network_publication_t
                 }
             }
 
-            int64_t proposed_pub_lmt = min_consumer_position + publication->term_window_length;
-            int64_t publication_limit = aeron_counter_get_plain(publication->pub_lmt_position.value_addr);
-            if (proposed_pub_lmt > publication_limit)
+            int64_t new_limit_position = min_consumer_position + publication->term_window_length;
+            if (new_limit_position > aeron_counter_get_plain(publication->pub_lmt_position.value_addr))
             {
-                size_t term_length = (size_t)publication->term_length_mask + 1;
-                aeron_network_publication_clean_buffer(publication, min_consumer_position - (int64_t)term_length);
-                aeron_counter_set_release(publication->pub_lmt_position.value_addr, proposed_pub_lmt);
+                aeron_network_publication_clean_buffer(publication, min_consumer_position - publication->term_buffer_length);
+                const int64_t clean_position = publication->conductor_fields.clean_position;
+                const int32_t dirty_term_id = aeron_logbuffer_compute_term_id_from_position(
+                    clean_position, publication->position_bits_to_shift, publication->initial_term_id);
+                const int32_t active_term_id = aeron_logbuffer_compute_term_id_from_position(
+                    new_limit_position, publication->position_bits_to_shift, publication->initial_term_id);
+                const int32_t term_gap = aeron_logbuffer_compute_term_count(active_term_id, dirty_term_id);
+                if (term_gap < 2 || (2 == term_gap && 0 != (clean_position & publication->term_length_mask)))
+                {
+                    aeron_counter_set_release(publication->pub_lmt_position.value_addr, new_limit_position);
+                }
                 work_count = 1;
             }
         }
@@ -1001,8 +1008,7 @@ int aeron_network_publication_update_pub_pos_and_lmt(aeron_network_publication_t
         {
             aeron_network_publication_update_connected_status(publication, false);
             aeron_counter_set_release(publication->pub_lmt_position.value_addr, snd_pos);
-            size_t term_length = (size_t)publication->term_length_mask + 1;
-            aeron_network_publication_clean_buffer(publication, snd_pos - (int64_t)term_length);
+            aeron_network_publication_clean_buffer(publication, snd_pos - publication->term_buffer_length);
             work_count = 1;
         }
     }

@@ -23,6 +23,8 @@ import io.aeron.archive.codecs.mark.MarkFileHeaderEncoder;
 import io.aeron.archive.codecs.mark.MessageHeaderDecoder;
 import io.aeron.archive.codecs.mark.MessageHeaderEncoder;
 import io.aeron.archive.codecs.mark.VarAsciiEncodingEncoder;
+import io.aeron.logbuffer.LogBufferDescriptor;
+import org.agrona.BitUtil;
 import org.agrona.CloseHelper;
 import org.agrona.IoUtil;
 import org.agrona.MarkFile;
@@ -116,56 +118,51 @@ public class ArchiveMarkFile implements AutoCloseable
 
         if (file.exists())
         {
-            final int headerOffset = headerOffset(file);
-
-            final MarkFile markFile = new MarkFile(
+            final int currentHeaderOffset = headerOffset(file);
+            final MarkFile existingMarkFile = new MarkFile(
                 file,
                 true,
-                headerOffset + MarkFileHeaderDecoder.versionEncodingOffset(),
-                headerOffset + MarkFileHeaderDecoder.activityTimestampEncodingOffset(),
+                currentHeaderOffset + MarkFileHeaderDecoder.versionEncodingOffset(),
+                currentHeaderOffset + MarkFileHeaderDecoder.activityTimestampEncodingOffset(),
                 totalFileLength,
                 timeoutMs,
                 epochClock,
                 (version) -> validateVersion(file, version),
                 null);
 
-            final UnsafeBuffer buffer = markFile.buffer();
+            final UnsafeBuffer existingBuffer = existingMarkFile.buffer();
 
-            if (buffer.capacity() != totalFileLength)
+            if (0 != currentHeaderOffset)
             {
-                throw new ArchiveException(
-                    "ArchiveMarkFile capacity=" + buffer.capacity() + " < expectedCapacity=" + totalFileLength);
-            }
-
-            if (0 != headerOffset)
-            {
-                headerDecoder.wrapAndApplyHeader(buffer, 0, messageHeaderDecoder);
+                headerDecoder.wrapAndApplyHeader(existingBuffer, 0, messageHeaderDecoder);
             }
             else
             {
-                headerDecoder.wrap(buffer, 0, MarkFileHeaderDecoder.BLOCK_LENGTH, MarkFileHeaderDecoder.SCHEMA_VERSION);
+                headerDecoder.wrap(
+                    existingBuffer, 0, MarkFileHeaderDecoder.BLOCK_LENGTH, MarkFileHeaderDecoder.SCHEMA_VERSION);
             }
 
             final int existingErrorBufferLength = headerDecoder.errorBufferLength();
             if (existingErrorBufferLength > 0)
             {
                 final UnsafeBuffer existingErrorBuffer = new UnsafeBuffer(
-                    buffer, headerDecoder.headerLength(), existingErrorBufferLength);
+                    existingBuffer, headerDecoder.headerLength(), existingErrorBufferLength);
 
                 saveExistingErrors(file, existingErrorBuffer, CommonContext.fallbackLogger());
                 existingErrorBuffer.setMemory(0, existingErrorBufferLength, (byte)0);
             }
 
-            if (0 != headerOffset)
+            if (0 != currentHeaderOffset)
             {
-                this.markFile = markFile;
-                this.buffer = buffer;
+                markFile = existingMarkFile;
+                buffer = existingBuffer;
             }
             else
             {
                 headerDecoder.wrap(EMPTY_BUFFER, 0, 0, 0);
-                CloseHelper.close(markFile);
-                this.markFile = new MarkFile(
+                CloseHelper.close(existingMarkFile);
+
+                markFile = new MarkFile(
                     file,
                     false,
                     HEADER_OFFSET + MarkFileHeaderDecoder.versionEncodingOffset(),
@@ -175,8 +172,8 @@ public class ArchiveMarkFile implements AutoCloseable
                     epochClock,
                     null,
                     null);
-                this.buffer = this.markFile.buffer();
-                this.buffer.setMemory(0, this.buffer.capacity(), (byte)0);
+                buffer = markFile.buffer();
+                buffer.setMemory(0, buffer.capacity(), (byte)0);
             }
         }
         else
@@ -441,7 +438,13 @@ public class ArchiveMarkFile implements AutoCloseable
                 "ArchiveMarkFile headerLength=" + headerLength + " > headerLengthCapacity=" + HEADER_LENGTH);
         }
 
-        return HEADER_LENGTH + ctx.errorBufferLength();
+        final int filePageSize = null != ctx.aeron() ? ctx.aeron().context().filePageSize() :
+            CommonContext.driverFilePageSize(
+                new File(ctx.aeronDirectoryName()), ctx.epochClock(), new CommonContext().driverTimeoutMs());
+
+        LogBufferDescriptor.checkPageSize(filePageSize);
+
+        return BitUtil.align(HEADER_LENGTH + ctx.errorBufferLength(), filePageSize);
     }
 
     String aeronDirectory()

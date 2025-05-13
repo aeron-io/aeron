@@ -19,6 +19,7 @@ import io.aeron.ChannelUri;
 import io.aeron.driver.buffer.RawLog;
 import io.aeron.driver.media.ReceiveChannelEndpoint;
 import io.aeron.driver.media.UdpChannel;
+import io.aeron.driver.reports.LossReport;
 import io.aeron.driver.status.ReceiverHwm;
 import io.aeron.driver.status.ReceiverPos;
 import io.aeron.driver.status.SystemCounterDescriptor;
@@ -35,6 +36,7 @@ import org.agrona.concurrent.status.CountersManager;
 import org.agrona.concurrent.status.Position;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -46,6 +48,10 @@ import java.util.concurrent.TimeUnit;
 import static io.aeron.logbuffer.LogBufferDescriptor.*;
 import static io.aeron.protocol.DataHeaderFlyweight.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -77,6 +83,7 @@ class PublicationImageTest
         new UnsafeBuffer(ByteBuffer.allocateDirect(64 * 1024)),
         StandardCharsets.US_ASCII);
     private final DataHeaderFlyweight headerFlyweight = new DataHeaderFlyweight();
+    private final LossReport lossReport = mock(LossReport.class);
     private Position hwmPosition;
     private Position rcvPosition;
     private PublicationImage image;
@@ -94,13 +101,15 @@ class PublicationImageTest
             .untetheredWindowLimitTimeoutNs(TimeUnit.SECONDS.toNanos(1))
             .untetheredRestingTimeoutNs(TimeUnit.SECONDS.toNanos(1))
             .statusMessageTimeoutNs(TimeUnit.MILLISECONDS.toNanos(150))
-            .systemCounters(new SystemCounters(countersManager));
+            .systemCounters(new SystemCounters(countersManager))
+            .lossReport(lossReport);
 
         final String channel = "aeron:udp?endpoint=localhost:5555";
         final ChannelUri channelUri = ChannelUri.parse(channel);
         final UdpChannel udpChannel = mock(UdpChannel.class);
         when(udpChannel.channelUri()).thenReturn(channelUri);
         when(receiveChannelEndpoint.subscriptionUdpChannel()).thenReturn(udpChannel);
+        when(receiveChannelEndpoint.originalUriString()).thenReturn(channel);
 
         final SubscriptionLink subscriptionLink1 = mock(SubscriptionLink.class);
         when(subscriptionLink1.isReliable()).thenReturn(true);
@@ -219,6 +228,100 @@ class PublicationImageTest
         {
             assertEquals(0, activeTermBuffer.getByte(termOffset + i));
         }
+    }
+
+    @Test
+    void shouldOnlyRecordUniqueLoss()
+    {
+        final LossReport.ReportEntry reportEntry = mock(LossReport.ReportEntry.class);
+        when(lossReport.createEntry(anyLong(), anyLong(), anyInt(), anyInt(), anyString(), anyString()))
+            .thenReturn(reportEntry);
+        final InOrder inOrder = inOrder(lossReport, reportEntry);
+
+        final int termId = 0;
+        final int offset = 0;
+        final int length = 1024;
+
+        // first activation => must be recorded
+        epochClock.update(100);
+        image.onGapDetected(termId, offset, length);
+        assertEquals(1L, image.beginLossChange);
+        assertEquals(termId, image.lossTermId);
+        assertEquals(offset, image.lossTermOffset);
+        assertEquals(length, image.lossLength);
+        assertEquals(1L, image.endLossChange);
+
+        // same loss => no reporting
+        epochClock.update(200);
+        image.onGapDetected(termId, offset, length);
+        assertEquals(2L, image.beginLossChange);
+        assertEquals(termId, image.lossTermId);
+        assertEquals(offset, image.lossTermOffset);
+        assertEquals(length, image.lossLength);
+        assertEquals(2L, image.endLossChange);
+
+        // smaller loss => no reporting
+        epochClock.update(300);
+        image.onGapDetected(termId, offset, 32);
+        assertEquals(3L, image.beginLossChange);
+        assertEquals(termId, image.lossTermId);
+        assertEquals(offset, image.lossTermOffset);
+        assertEquals(32, image.lossLength);
+        assertEquals(3L, image.endLossChange);
+
+        // loss length increased => record
+        epochClock.update(400);
+        image.onGapDetected(termId, offset, length + 128);
+        assertEquals(4L, image.beginLossChange);
+        assertEquals(termId, image.lossTermId);
+        assertEquals(offset, image.lossTermOffset);
+        assertEquals(length + 128, image.lossLength);
+        assertEquals(4L, image.endLossChange);
+
+        // overlapping loss => record
+        epochClock.update(500);
+        image.onGapDetected(termId, offset + 512, 800);
+        assertEquals(5L, image.beginLossChange);
+        assertEquals(termId, image.lossTermId);
+        assertEquals(offset + 512, image.lossTermOffset);
+        assertEquals(800, image.lossLength);
+        assertEquals(5L, image.endLossChange);
+
+        // non-overlapping loss => record
+        epochClock.update(600);
+        image.onGapDetected(termId, offset + 512 + 800, 32);
+        assertEquals(6L, image.beginLossChange);
+        assertEquals(termId, image.lossTermId);
+        assertEquals(offset + 512 + 800, image.lossTermOffset);
+        assertEquals(32, image.lossLength);
+        assertEquals(6L, image.endLossChange);
+
+        // non-overlapping loss => record
+        epochClock.update(700);
+        image.onGapDetected(termId, offset + 4096, 2048);
+        assertEquals(7L, image.beginLossChange);
+        assertEquals(termId, image.lossTermId);
+        assertEquals(offset + 4096, image.lossTermOffset);
+        assertEquals(2048, image.lossLength);
+        assertEquals(7L, image.endLossChange);
+
+        // loss in different term => record
+        epochClock.update(800);
+        image.onGapDetected(termId + 11, 0, 256);
+        assertEquals(8L, image.beginLossChange);
+        assertEquals(termId + 11, image.lossTermId);
+        assertEquals(0, image.lossTermOffset);
+        assertEquals(256, image.lossLength);
+        assertEquals(8L, image.endLossChange);
+
+        inOrder.verify(lossReport).createEntry(
+            length, 100, SESSION_ID, STREAM_ID, receiveChannelEndpoint.originalUriString(), SOURCE_IDENTITY);
+        inOrder.verify(reportEntry).recordObservation(128, 400);
+        inOrder.verify(reportEntry).recordObservation(160, 500);
+        inOrder.verify(reportEntry).recordObservation(32, 600);
+        inOrder.verify(reportEntry).recordObservation(2048, 700);
+        inOrder.verify(reportEntry).recordObservation(256, 800);
+        inOrder.verifyNoMoreInteractions();
     }
 
     private int writeFrame(
