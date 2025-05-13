@@ -306,7 +306,6 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
                     final long revokedPos = producerPosition();
                     publisherLimit.setRelease(revokedPos);
                     LogBufferDescriptor.endOfStreamPosition(metaDataBuffer, revokedPos);
-                    // TODO what prevents this from getting set to true again?
                     LogBufferDescriptor.isConnected(metaDataBuffer, false);
 
                     conductor.transitionToLinger(this);

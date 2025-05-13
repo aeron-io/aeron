@@ -1105,7 +1105,6 @@ public final class NetworkPublication
                     final long revokedPos = producerPosition();
                     publisherLimit.setRelease(revokedPos);
                     endOfStreamPosition(metaDataBuffer, revokedPos);
-                    // TODO what prevents this from getting set to true again?
                     LogBufferDescriptor.isConnected(metaDataBuffer, false);
 
                     isEndOfStream = true;
