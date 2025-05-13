@@ -278,7 +278,6 @@ int aeron_network_publication_create(
     _pub->conductor_fields.managed_resource.clientd = _pub;
     _pub->conductor_fields.managed_resource.incref = aeron_network_publication_incref;
     _pub->conductor_fields.managed_resource.decref = aeron_network_publication_decref;
-    _pub->conductor_fields.managed_resource.revoke = aeron_network_publication_revoke;
     _pub->conductor_fields.has_reached_end_of_life = false;
     _pub->conductor_fields.clean_position = 0;
     _pub->conductor_fields.state = AERON_NETWORK_PUBLICATION_STATE_ACTIVE;
@@ -325,7 +324,6 @@ int aeron_network_publication_create(
     _pub->has_spies = false;
     _pub->is_connected = false;
     _pub->is_end_of_stream = false;
-    _pub->is_revoked = false;
     _pub->track_sender_limits = false;
     _pub->has_sender_released = false;
     _pub->has_received_unicast_eos = false;
@@ -507,10 +505,10 @@ int aeron_network_publication_heartbeat_message_check(
     {
         uint8_t flags;
 
-        bool is_revoked;
-        AERON_GET_ACQUIRE(is_revoked, publication->is_revoked);
+        uint8_t is_publication_revoked;
+        AERON_GET_ACQUIRE(is_publication_revoked, publication->log_meta_data->is_publication_revoked);
 
-        if (is_revoked)
+        if (is_publication_revoked)
         {
             flags = AERON_DATA_HEADER_BEGIN_FLAG | AERON_DATA_HEADER_END_FLAG |
                 AERON_DATA_HEADER_EOS_FLAG | AERON_DATA_HEADER_REVOKED_FLAG;
@@ -1069,51 +1067,27 @@ void aeron_network_publication_decref(void *clientd)
 
     if (0 == ref_count)
     {
-        if (!publication->is_revoked)
+        publication->conductor_fields.time_of_last_activity_ns = aeron_clock_cached_nano_time(
+            publication->cached_clock);
+
+        const int64_t producer_position = aeron_network_publication_producer_position(publication);
+        aeron_counter_set_release(publication->pub_lmt_position.value_addr, producer_position);
+        AERON_SET_RELEASE(publication->log_meta_data->end_of_stream_position, producer_position);
+
+        uint8_t is_publication_revoked;
+
+        AERON_GET_ACQUIRE(is_publication_revoked, publication->log_meta_data->is_publication_revoked);
+
+        if (!is_publication_revoked)
         {
-            const int64_t producer_position = aeron_network_publication_producer_position(publication);
-
-            publication->conductor_fields.state = AERON_NETWORK_PUBLICATION_STATE_DRAINING;
-            publication->conductor_fields.time_of_last_activity_ns = aeron_clock_cached_nano_time(
-                publication->cached_clock);
-
-            aeron_counter_set_release(publication->pub_lmt_position.value_addr, producer_position);
-            AERON_SET_RELEASE(publication->log_meta_data->end_of_stream_position, producer_position);
-
             if (aeron_counter_get_acquire(publication->snd_pos_position.value_addr) >= producer_position)
             {
                 AERON_SET_RELEASE(publication->is_end_of_stream, true);
             }
+
+            publication->conductor_fields.state = AERON_NETWORK_PUBLICATION_STATE_DRAINING;
         }
     }
-}
-
-void aeron_network_publication_revoke(void *clientd)
-{
-    aeron_network_publication_t *publication = (aeron_network_publication_t *)clientd;
-
-    int64_t revoked_position = aeron_network_publication_producer_position(publication);
-    aeron_counter_set_release(publication->pub_lmt_position.value_addr, revoked_position);
-    AERON_SET_RELEASE(publication->log_meta_data->end_of_stream_position, revoked_position);
-    AERON_SET_RELEASE(publication->log_meta_data->is_publication_revoked, (uint8_t)true);
-
-    AERON_SET_RELEASE(publication->is_end_of_stream, true);
-    AERON_SET_RELEASE(publication->is_revoked, true);
-
-    publication->conductor_fields.state = AERON_NETWORK_PUBLICATION_STATE_REVOKED;
-
-    aeron_driver_publication_revoke_func_t publication_revoke = publication->log.publication_revoke;
-    if (NULL != publication_revoke)
-    {
-        publication_revoke(
-            revoked_position,
-            publication->session_id,
-            publication->stream_id,
-            publication->endpoint->conductor_fields.udp_channel->uri_length,
-            publication->endpoint->conductor_fields.udp_channel->original_uri);
-    }
-
-    aeron_counter_increment_release(publication->publications_revoked_counter);
 }
 
 bool aeron_network_publication_spies_finished_consuming(
@@ -1257,35 +1231,59 @@ void aeron_network_publication_on_time_event(
     {
         case AERON_NETWORK_PUBLICATION_STATE_ACTIVE:
         {
-            aeron_network_publication_check_untethered_subscriptions(conductor, publication, now_ns);
+            uint8_t is_publication_revoked;
 
-            const bool current_connected_status =
-                aeron_network_publication_has_required_receivers(publication) ||
-                (publication->spies_simulate_connection &&
-                aeron_driver_subscribable_has_working_positions(&publication->conductor_fields.subscribable));
-            aeron_network_publication_update_connected_status(publication, current_connected_status);
+            AERON_GET_ACQUIRE(is_publication_revoked, publication->log_meta_data->is_publication_revoked);
 
-            const int64_t producer_position = aeron_network_publication_producer_position(publication);
-            aeron_counter_set_release(publication->pub_pos_position.value_addr, producer_position);
-
-            if (!publication->is_exclusive)
+            if (is_publication_revoked)
             {
-                aeron_network_publication_check_for_blocked_publisher(
-                    publication,
-                    now_ns,
-                    producer_position,
-                    aeron_counter_get_acquire(publication->snd_pos_position.value_addr));
+                int64_t revoked_position = aeron_network_publication_producer_position(publication);
+                aeron_counter_set_release(publication->pub_lmt_position.value_addr, revoked_position);
+                AERON_SET_RELEASE(publication->log_meta_data->end_of_stream_position, revoked_position);
+                // TODO
+                AERON_SET_RELEASE(publication->log_meta_data->is_connected, 0);
+
+                AERON_SET_RELEASE(publication->is_end_of_stream, true);
+
+                aeron_driver_conductor_cleanup_spies(conductor, publication);
+
+                publication->conductor_fields.state = AERON_NETWORK_PUBLICATION_STATE_LINGER;
+
+                aeron_driver_publication_revoke_func_t publication_revoke = publication->log.publication_revoke;
+                if (NULL != publication_revoke)
+                {
+                    publication_revoke(
+                        revoked_position,
+                        publication->session_id,
+                        publication->stream_id,
+                        publication->endpoint->conductor_fields.udp_channel->uri_length,
+                        publication->endpoint->conductor_fields.udp_channel->original_uri);
+                }
+
+                aeron_counter_increment_release(publication->publications_revoked_counter);
             }
-            break;
-        }
+            else
+            {
+                aeron_network_publication_check_untethered_subscriptions(conductor, publication, now_ns);
 
-        case AERON_NETWORK_PUBLICATION_STATE_REVOKED:
-        {
-            aeron_driver_conductor_publication_transition_to_revoked(conductor, &publication->conductor_fields.managed_resource);
-            aeron_driver_conductor_cleanup_spies(conductor, publication);
+                const bool current_connected_status =
+                    aeron_network_publication_has_required_receivers(publication) ||
+                        (publication->spies_simulate_connection &&
+                            aeron_driver_subscribable_has_working_positions(&publication->conductor_fields.subscribable));
+                aeron_network_publication_update_connected_status(publication, current_connected_status);
 
-            publication->conductor_fields.time_of_last_activity_ns = now_ns;
-            publication->conductor_fields.state = AERON_NETWORK_PUBLICATION_STATE_LINGER;
+                const int64_t producer_position = aeron_network_publication_producer_position(publication);
+                aeron_counter_set_release(publication->pub_pos_position.value_addr, producer_position);
+
+                if (!publication->is_exclusive)
+                {
+                    aeron_network_publication_check_for_blocked_publisher(
+                        publication,
+                        now_ns,
+                        producer_position,
+                        aeron_counter_get_acquire(publication->snd_pos_position.value_addr));
+                }
+            }
             break;
         }
 
@@ -1327,14 +1325,11 @@ void aeron_network_publication_on_time_event(
 
         case AERON_NETWORK_PUBLICATION_STATE_LINGER:
         {
-            bool has_spies;
-            AERON_GET_ACQUIRE(has_spies, publication->has_spies);
-
             bool has_received_unicast_eos = false;
             AERON_GET_ACQUIRE(has_received_unicast_eos, publication->has_received_unicast_eos);
 
             if (publication->conductor_fields.refcnt == 0 &&
-                ((!has_spies && has_received_unicast_eos) ||
+                (has_received_unicast_eos ||
                 now_ns > (publication->conductor_fields.time_of_last_activity_ns + publication->linger_timeout_ns)))
             {
                 aeron_driver_conductor_cleanup_network_publication(conductor, publication);

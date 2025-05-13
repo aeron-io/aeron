@@ -400,7 +400,6 @@ int aeron_publication_image_create(
     _image->time_of_last_packet_ns = now_ns;
     _image->next_sm_deadline_ns = 0;
     _image->is_sm_enabled = true;
-    _image->is_revoked = false;
     _image->conductor_fields.clean_position = initial_position;
     _image->conductor_fields.time_of_last_state_change_ns = now_ns;
 
@@ -518,8 +517,12 @@ void aeron_publication_image_on_gap_detected(void *clientd, int32_t term_id, int
 
 void aeron_publication_image_track_rebuild(aeron_publication_image_t *image, int64_t now_ns)
 {
+    uint8_t is_publication_revoked;
+
+    AERON_GET_ACQUIRE(is_publication_revoked, image->log_meta_data->is_publication_revoked);
+
     if (aeron_driver_subscribable_has_working_positions(&image->conductor_fields.subscribable) &&
-        !image->is_revoked)
+        !is_publication_revoked)
     {
         const int64_t hwm_position = aeron_counter_get_acquire(image->rcv_hwm_position.value_addr);
         int64_t min_sub_pos = INT64_MAX;
@@ -727,8 +730,6 @@ int aeron_publication_image_insert_packet(
                         {
                             AERON_SET_RELEASE(image->log_meta_data->is_publication_revoked, (uint8_t)true);
 
-                            image->conductor_fields.state = AERON_PUBLICATION_IMAGE_STATE_REVOKED;
-
                             aeron_driver_publication_image_revoke_func_t publication_image_revoke = image->log.publication_image_revoke;
                             if (NULL != publication_image_revoke)
                             {
@@ -915,7 +916,11 @@ int aeron_publication_image_send_pending_status_message(aeron_publication_image_
 // Called from receiver.
 int aeron_publication_image_send_pending_loss(aeron_publication_image_t *image)
 {
-    if (image->is_revoked)
+    uint8_t is_publication_revoked;
+
+    AERON_GET_ACQUIRE(is_publication_revoked, image->log_meta_data->is_publication_revoked);
+
+    if (is_publication_revoked)
     {
         return 0;
     }
@@ -1173,45 +1178,55 @@ void aeron_publication_image_on_time_event(
     {
         case AERON_PUBLICATION_IMAGE_STATE_ACTIVE:
         {
-            int64_t last_packet_timestamp_ns;
-            AERON_GET_ACQUIRE(last_packet_timestamp_ns, image->time_of_last_packet_ns);
-            bool is_end_of_stream;
-            AERON_GET_ACQUIRE(is_end_of_stream, image->is_end_of_stream);
+            uint8_t is_publication_revoked;
 
-            if (!aeron_driver_subscribable_has_working_positions(&image->conductor_fields.subscribable) ||
-                now_ns > (last_packet_timestamp_ns + image->conductor_fields.liveness_timeout_ns) ||
-                (is_end_of_stream &&
-                    aeron_counter_get_plain(image->rcv_pos_position.value_addr) >=
-                    aeron_counter_get_acquire(image->rcv_hwm_position.value_addr)))
+            AERON_GET_ACQUIRE(is_publication_revoked, image->log_meta_data->is_publication_revoked);
+
+            if (is_publication_revoked)
             {
                 image->conductor_fields.state = AERON_PUBLICATION_IMAGE_STATE_DRAINING;
-                image->conductor_fields.time_of_last_state_change_ns = now_ns;
-                AERON_SET_RELEASE(image->is_sending_eos_sm, true);
             }
+            else
+            {
+                int64_t last_packet_timestamp_ns;
+                AERON_GET_ACQUIRE(last_packet_timestamp_ns, image->time_of_last_packet_ns);
+                bool is_end_of_stream;
+                AERON_GET_ACQUIRE(is_end_of_stream, image->is_end_of_stream);
 
-            aeron_publication_image_check_untethered_subscriptions(conductor, image, now_ns);
+                if (!aeron_driver_subscribable_has_working_positions(&image->conductor_fields.subscribable) ||
+                    now_ns > (last_packet_timestamp_ns + image->conductor_fields.liveness_timeout_ns) ||
+                    (is_end_of_stream &&
+                        aeron_counter_get_plain(image->rcv_pos_position.value_addr) >=
+                            aeron_counter_get_acquire(image->rcv_hwm_position.value_addr)))
+                {
+                    image->conductor_fields.state = AERON_PUBLICATION_IMAGE_STATE_DRAINING;
+                    image->conductor_fields.time_of_last_state_change_ns = now_ns;
+                    AERON_SET_RELEASE(image->is_sending_eos_sm, true);
+                }
+
+                aeron_publication_image_check_untethered_subscriptions(conductor, image, now_ns);
+            }
             break;
         }
 
-        case AERON_PUBLICATION_IMAGE_STATE_REVOKED:
-        {
-            AERON_SET_RELEASE(image->is_sending_eos_sm, true);
-
-            image->next_sm_deadline_ns = now_ns - 1;
-
-            image->is_revoked = true;
-
-            image->conductor_fields.state = AERON_PUBLICATION_IMAGE_STATE_DRAINING;
-        }
-        // fall through
-
         case AERON_PUBLICATION_IMAGE_STATE_DRAINING:
         {
+            uint8_t is_publication_revoked;
+
+            AERON_GET_ACQUIRE(is_publication_revoked, image->log_meta_data->is_publication_revoked);
+
             if ((aeron_publication_image_is_drained(image) &&
                 ((image->conductor_fields.time_of_last_state_change_ns +
                 (AERON_IMAGE_SM_EOS_MULTIPLE * image->sm_timeout_ns)) - now_ns < 0)) ||
-                image->is_revoked)
+                is_publication_revoked)
             {
+                if (is_publication_revoked)
+                {
+                    AERON_SET_RELEASE(image->is_sending_eos_sm, true);
+
+                    image->next_sm_deadline_ns = now_ns - 1;
+                }
+
                 image->conductor_fields.state = AERON_PUBLICATION_IMAGE_STATE_LINGER;
                 image->conductor_fields.time_of_last_state_change_ns = now_ns;
 

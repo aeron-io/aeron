@@ -26,7 +26,6 @@
 typedef enum aeron_publication_image_state_enum
 {
     AERON_PUBLICATION_IMAGE_STATE_ACTIVE,
-    AERON_PUBLICATION_IMAGE_STATE_REVOKED,
     AERON_PUBLICATION_IMAGE_STATE_DRAINING,
     AERON_PUBLICATION_IMAGE_STATE_LINGER,
     AERON_PUBLICATION_IMAGE_STATE_DONE
@@ -143,8 +142,6 @@ typedef struct aeron_publication_image_stct
     const char *invalidation_reason;
 
     bool is_sm_enabled;
-
-    bool is_revoked;
 
     volatile int64_t response_session_id;
 

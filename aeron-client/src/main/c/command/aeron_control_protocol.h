@@ -37,7 +37,6 @@
 #define AERON_COMMAND_ADD_STATIC_COUNTER (0x0F)
 #define AERON_COMMAND_REJECT_IMAGE (0x10)
 #define AERON_COMMAND_REMOVE_DESTINATION_BY_ID (0x11)
-#define AERON_COMMAND_REVOKE_PUBLICATION (0x12)
 
 #define AERON_RESPONSE_ON_ERROR (0x0F01)
 #define AERON_RESPONSE_ON_AVAILABLE_IMAGE (0x0F02)
@@ -51,7 +50,6 @@
 #define AERON_RESPONSE_ON_CLIENT_TIMEOUT (0x0F0A)
 #define AERON_RESPONSE_ON_STATIC_COUNTER (0x0F0B)
 #define AERON_RESPONSE_ON_PUBLICATION_ERROR (0x0F0C)
-#define AERON_RESPONSE_ON_REVOKED_PUBLICATION (0x0F0D)
 
 /* error codes */
 #define AERON_ERROR_CODE_UNKNOWN_CODE_VALUE (-1)
@@ -206,12 +204,6 @@ typedef struct aeron_client_timeout_stct
     int64_t client_id;
 }
 aeron_client_timeout_t;
-
-typedef struct aeron_publication_revoked_stct
-{
-    int64_t registration_id;
-}
-aeron_publication_revoked_t;
 
 typedef struct aeron_terminate_driver_command_stct
 {

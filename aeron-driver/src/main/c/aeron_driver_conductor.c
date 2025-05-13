@@ -1818,25 +1818,6 @@ void aeron_driver_conductor_image_transition_to_linger(
     }
 }
 
-void aeron_driver_conductor_publication_transition_to_revoked(
-    aeron_driver_conductor_t *conductor, aeron_driver_managed_resource_t *revoked_resource)
-{
-    for (size_t i = 0; i < conductor->clients.length; i++)
-    {
-        aeron_client_t *client = &conductor->clients.array[i];
-
-        for (size_t j = 0; j < client->publication_links.length; j++)
-        {
-            aeron_publication_link_t *link = &client->publication_links.array[j];
-
-            if (link->resource == revoked_resource && !link->is_revoked)
-            {
-                aeron_driver_conductor_on_revoked_publication(conductor, link->registration_id);
-            }
-        }
-    }
-}
-
 void aeron_driver_conductor_add_end_of_life_resource(
     aeron_driver_conductor_t *conductor,
     void *resource,
@@ -2999,17 +2980,6 @@ void aeron_driver_conductor_on_client_timeout(aeron_driver_conductor_t *conducto
         conductor, AERON_RESPONSE_ON_CLIENT_TIMEOUT, response, sizeof(aeron_client_timeout_t));
 }
 
-void aeron_driver_conductor_on_revoked_publication(aeron_driver_conductor_t *conductor, int64_t registration_id)
-{
-    char response_buffer[sizeof(aeron_publication_revoked_t)];
-    aeron_publication_revoked_t *response = (aeron_publication_revoked_t *)response_buffer;
-
-    response->registration_id = registration_id;
-
-    aeron_driver_conductor_client_transmit(
-        conductor, AERON_RESPONSE_ON_REVOKED_PUBLICATION, response, sizeof(aeron_publication_revoked_t));
-}
-
 void on_unavailable_image(
     aeron_driver_conductor_t *conductor,
     const int64_t correlation_id,
@@ -3612,21 +3582,6 @@ aeron_rb_read_action_t aeron_driver_conductor_on_command(
             correlation_id = command->correlated.correlation_id;
 
             aeron_driver_conductor_on_remove_receive_send_destination_by_id(conductor, command);
-            break;
-        }
-
-        case AERON_COMMAND_REVOKE_PUBLICATION:
-        {
-            aeron_remove_command_t *command = (aeron_remove_command_t *)message;
-
-            if (length < sizeof(aeron_remove_command_t))
-            {
-                goto malformed_command;
-            }
-
-            correlation_id = command->correlated.correlation_id;
-
-            result = aeron_driver_conductor_on_revoke_publication(conductor, command);
             break;
         }
 
@@ -4301,40 +4256,6 @@ int aeron_driver_conductor_on_remove_publication(aeron_driver_conductor_t *condu
                 aeron_array_fast_unordered_remove(
                     (uint8_t *)client->publication_links.array, sizeof(aeron_publication_link_t), i, last_index);
                 client->publication_links.length--;
-
-                aeron_driver_conductor_on_operation_succeeded(conductor, command->correlated.correlation_id);
-                return 0;
-            }
-        }
-    }
-
-    AERON_SET_ERR(
-        -AERON_ERROR_CODE_UNKNOWN_PUBLICATION,
-        "unknown publication client_id=%" PRId64 " registration_id=%" PRId64,
-        command->correlated.client_id,
-        command->registration_id);
-
-    return -1;
-}
-
-int aeron_driver_conductor_on_revoke_publication(aeron_driver_conductor_t *conductor, aeron_remove_command_t *command)
-{
-    int index = aeron_driver_conductor_find_client(conductor, command->correlated.client_id);
-    if (index >= 0)
-    {
-        aeron_client_t *client = &conductor->clients.array[index];
-
-        for (size_t i = 0, size = client->publication_links.length; i < size; i++)
-        {
-            aeron_publication_link_t *link = &client->publication_links.array[i];
-
-            if (command->registration_id == link->registration_id)
-            {
-                aeron_driver_managed_resource_t *resource = link->resource;
-
-                resource->revoke(resource->clientd);
-
-                link->is_revoked = true;
 
                 aeron_driver_conductor_on_operation_succeeded(conductor, command->correlated.correlation_id);
                 return 0;

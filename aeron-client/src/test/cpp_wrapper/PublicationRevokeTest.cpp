@@ -196,7 +196,7 @@ TEST_P(PublicationRevokeTest, revokeTestConcurrent)
 
     POLL_FOR(pub2->isRevoked(), invoker);
 
-    ASSERT_EQ(AERON_PUBLICATION_REVOKED, pub2->offer(buffer, 0, length));
+    ASSERT_EQ(AERON_PUBLICATION_NOT_CONNECTED, pub2->offer(buffer, 0, length));
 
     pub2->close();
 

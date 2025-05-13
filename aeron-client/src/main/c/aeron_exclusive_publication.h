@@ -52,7 +52,6 @@ typedef struct aeron_exclusive_publication_stct
     void *on_close_complete_clientd;
 
     volatile bool is_closed;
-    volatile bool is_revoked;
 
     uint8_t pre_fields_padding[AERON_CACHE_LINE_LENGTH];
     int64_t term_begin_position;
@@ -126,11 +125,6 @@ inline int64_t aeron_exclusive_publication_back_pressure_status(
     AERON_GET_ACQUIRE(is_connected, publication->log_meta_data->is_connected);
     if (1 == is_connected)
     {
-        if (publication->is_revoked)
-        {
-            return AERON_PUBLICATION_REVOKED;
-        }
-
         return AERON_PUBLICATION_BACK_PRESSURED;
     }
 

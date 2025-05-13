@@ -924,11 +924,6 @@ int aeron_counters_reader_free_for_reuse_deadline_ms(
 #define AERON_PUBLICATION_ERROR (-6L)
 
 /**
- * The publication has been revoked and should no longer be used.
- */
-#define AERON_PUBLICATION_REVOKED (-7L)
-
-/**
  * Function called when filling in the reserved value field of a message.
  *
  * @param clientd passed to the offer function.
