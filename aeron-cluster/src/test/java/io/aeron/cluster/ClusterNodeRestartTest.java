@@ -47,6 +47,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.LockSupport;
+
 
 import static io.aeron.cluster.ClusterTestConstants.CLUSTER_MEMBERS;
 import static io.aeron.cluster.ClusterTestConstants.INGRESS_ENDPOINTS;
@@ -204,6 +206,33 @@ class ClusterNodeRestartTest
         Tests.await(() -> null != serviceState.get());
         assertEquals("3", serviceState.get());
 
+        ClusterTests.failOnClusterError();
+    }
+
+    @Test
+    @InterruptAfter(10)
+    void shouldShutDownServiceAfterSnapshot()
+    {
+        final AtomicLong serviceMsgCount = new AtomicLong(0);
+
+        launchService(serviceMsgCount);
+        connectClient();
+
+        sendNumberedMessageIntoCluster(0);
+        sendNumberedMessageIntoCluster(1);
+        sendNumberedMessageIntoCluster(2);
+
+        Tests.awaitValue(serviceMsgCount, 3);
+
+        final AtomicCounter controlToggle = getControlToggle();
+        assertTrue(ClusterControl.ToggleState.SHUTDOWN.toggle(controlToggle));
+
+        Tests.awaitValue(clusteredMediaDriver.consensusModule().context().snapshotCounter(), 1);
+
+        LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(2));
+        CloseHelper.closeAll(aeronCluster, clusteredMediaDriver);
+
+        ClusterTests.failOnClusterWarning();
         ClusterTests.failOnClusterError();
     }
 
