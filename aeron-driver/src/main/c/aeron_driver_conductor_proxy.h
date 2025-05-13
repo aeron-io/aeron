@@ -172,6 +172,8 @@ void aeron_driver_conductor_proxy_on_release_resource(
     void *managed_resource,
     aeron_driver_conductor_resource_type_t resource_type);
 
+#define AERON_COMMAND_PUBLICATION_ERROR_MAX_LENGTH (sizeof(aeron_command_publication_error_t) + AERON_ERROR_MAX_TEXT_LENGTH)
+
 void aeron_driver_conductor_proxy_on_publication_error(
     aeron_driver_conductor_proxy_t *conductor_proxy,
     const int64_t registration_id,
