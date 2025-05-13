@@ -450,7 +450,6 @@ void aeron_ipc_publication_on_time_event(
                 int64_t revoked_position = aeron_ipc_publication_producer_position(publication);
                 aeron_counter_set_release(publication->pub_lmt_position.value_addr, revoked_position);
                 AERON_SET_RELEASE(publication->log_meta_data->end_of_stream_position, revoked_position);
-                // TODO
                 AERON_SET_RELEASE(publication->log_meta_data->is_connected, 0);
 
                 for (size_t i = 0, size = conductor->ipc_subscriptions.length; i < size; i++)
