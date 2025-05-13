@@ -473,6 +473,10 @@ public final class MediaDriver implements AutoCloseable
         private long nakUnicastRetryDelayRatio = Configuration.nakUnicastRetryDelayRatio();
         private long nakMulticastMaxBackoffNs = Configuration.nakMulticastMaxBackoffNs();
         private long flowControlReceiverTimeoutNs = Configuration.flowControlReceiverTimeoutNs();
+        private int flowControlUnicastRetransmitReceiverWindowMultiple = Configuration
+            .flowControlUnicastRetransmitReceiverWindowMultiple();
+        private int flowControlMulticastRetransmitReceiverWindowMultiple = Configuration
+            .flowControlMulticastRetransmitReceiverWindowMultiple();
         private long reResolutionCheckIntervalNs = Configuration.reResolutionCheckIntervalNs();
         private long conductorCycleThresholdNs = Configuration.conductorCycleThresholdNs();
         private long senderCycleThresholdNs = Configuration.senderCycleThresholdNs();
@@ -675,6 +679,16 @@ public final class MediaDriver implements AutoCloseable
                 validateInitialWindowLength(initialWindowLength, mtuLength);
                 validateUnblockTimeout(publicationUnblockTimeoutNs(), clientLivenessTimeoutNs(), timerIntervalNs);
                 validateUntetheredTimeouts(untetheredWindowLimitTimeoutNs, untetheredRestingTimeoutNs, timerIntervalNs);
+                validateValueRange(
+                    flowControlUnicastRetransmitReceiverWindowMultiple,
+                    1, Integer.MAX_VALUE,
+                    "flowControlUnicastRetransmitReceiverWindowMultiple"
+                );
+                validateValueRange(
+                    flowControlMulticastRetransmitReceiverWindowMultiple,
+                    1, Integer.MAX_VALUE,
+                    "flowControlMulticastRetransmitReceiverWindowMultiple"
+                );
 
                 final long cncFileLength = BitUtil.align(
                     (long)META_DATA_LENGTH +
@@ -2649,6 +2663,72 @@ public final class MediaDriver implements AutoCloseable
         }
 
         /**
+         * Flow control strategies may limit how much data is sent during a retransmission to
+         * avoid saturating the network and potentially causing more loss. The maximum
+         * retransmission size will be based on a multiple of the receiver window size.
+         * <p>
+         * See @{@link FlowControl#calculateRetransmissionLength(int, int, int, int)}
+         *
+         * @return window size multiple for the unicast strategy.
+         */
+        @Config
+        public int flowControlUnicastRetransmitReceiverWindowMultiple()
+        {
+            return flowControlUnicastRetransmitReceiverWindowMultiple;
+        }
+
+        /**
+         * Flow control strategies may limit how much data is sent during a retransmission to
+         * avoid saturating the network and potentially causing more loss. The maximum
+         * retransmission size will be based on a multiple of the receiver window size.
+         * <p>
+         * See @{@link FlowControl#calculateRetransmissionLength(int, int, int, int)}
+         *
+         * @param flowControlUnicastRetransmitReceiverWindowMultiple window size multiple for the unicast strategy.
+         * @return this for a fluent API.
+         */
+        public Context flowControlUnicastRetransmitReceiverWindowMultiple(
+            final int flowControlUnicastRetransmitReceiverWindowMultiple)
+        {
+            this.flowControlUnicastRetransmitReceiverWindowMultiple =
+                flowControlUnicastRetransmitReceiverWindowMultiple;
+            return this;
+        }
+
+        /**
+         * Flow control strategies may limit how much data is sent during a retransmission to
+         * avoid saturating the network and potentially causing more loss. The maximum
+         * retransmission size will be based on a multiple of the receiver window size.
+         * <p>
+         * See @{@link FlowControl#calculateRetransmissionLength(int, int, int, int)}
+         *
+         * @return window size multiple for multicast strategies.
+         */
+        @Config
+        public int flowControlMulticastRetransmitReceiverWindowMultiple()
+        {
+            return flowControlMulticastRetransmitReceiverWindowMultiple;
+        }
+
+        /**
+         * Flow control strategies may limit how much data is sent during a retransmission to
+         * avoid saturating the network and potentially causing more loss. The maximum
+         * retransmission size will be based on a multiple of the receiver window size.
+         * <p>
+         * See @{@link FlowControl#calculateRetransmissionLength(int, int, int, int)}
+         *
+         * @param flowControlMulticastRetransmitReceiverWindowMultiple window size multiple for multicast strategies.
+         * @return this for a fluent API.
+         */
+        public Context flowControlMulticastRetransmitReceiverWindowMultiple(
+            final int flowControlMulticastRetransmitReceiverWindowMultiple)
+        {
+            this.flowControlMulticastRetransmitReceiverWindowMultiple =
+                flowControlMulticastRetransmitReceiverWindowMultiple;
+            return this;
+        }
+
+        /**
          * Application specific feedback used to identify a receiver group when using a
          * {@link TaggedMulticastFlowControl} strategy which is added to Status Messages (SMs).
          * <p>
@@ -4393,6 +4473,10 @@ public final class MediaDriver implements AutoCloseable
                 "\n    flowControlGroupTag=" + flowControlGroupTag +
                 "\n    flowControlGroupMinSize=" + flowControlGroupMinSize +
                 "\n    flowControlReceiverTimeoutNs=" + flowControlReceiverTimeoutNs +
+                "\n    flowControlUnicastRetransmitReceiverWindowMultiple=" +
+                flowControlUnicastRetransmitReceiverWindowMultiple +
+                "\n    flowControlMulticastRetransmitReceiverWindowMultiple=" +
+                flowControlMulticastRetransmitReceiverWindowMultiple +
                 "\n    reResolutionCheckIntervalNs=" + reResolutionCheckIntervalNs +
                 "\n    receiverGroupConsideration=" + receiverGroupConsideration +
                 "\n    congestionControlSupplier=" + congestionControlSupplier +

@@ -41,7 +41,7 @@ public class DefaultMulticastFlowControlSupplier implements FlowControlSupplier
             switch (strategyStr)
             {
                 case MaxMulticastFlowControl.FC_PARAM_VALUE:
-                    return MaxMulticastFlowControl.INSTANCE;
+                    return new MaxMulticastFlowControl();
 
                 case MinMulticastFlowControl.FC_PARAM_VALUE:
                     return new MinMulticastFlowControl();
@@ -56,7 +56,7 @@ public class DefaultMulticastFlowControlSupplier implements FlowControlSupplier
 
         if (MaxMulticastFlowControl.class.getName().equals(MULTICAST_FLOW_CONTROL_STRATEGY))
         {
-            return MaxMulticastFlowControl.INSTANCE;
+            return new MaxMulticastFlowControl();
         }
         else if (MinMulticastFlowControl.class.getName().equals(MULTICAST_FLOW_CONTROL_STRATEGY))
         {
