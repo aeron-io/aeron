@@ -24,6 +24,7 @@ import io.aeron.cluster.codecs.EventCode;
 import io.aeron.exceptions.AeronException;
 import io.aeron.exceptions.RegistrationException;
 import io.aeron.logbuffer.BufferClaim;
+import io.aeron.logbuffer.Header;
 import org.agrona.*;
 import org.agrona.collections.ArrayUtil;
 import org.agrona.concurrent.errors.DistinctErrorLog;
@@ -55,6 +56,7 @@ final class ClusterSession implements ClusterClientSession
     private long openedLogPosition = AeronArchive.NULL_POSITION;
     private long closedLogPosition = AeronArchive.NULL_POSITION;
     private transient long timeOfLastActivityNs;
+    private transient long ingressImageCorrelationId = Aeron.NULL_VALUE;
     private long responsePublicationId = Aeron.NULL_VALUE;
     private final int responseStreamId;
     private final String responseChannel;
@@ -417,6 +419,24 @@ final class ClusterSession implements ClusterClientSession
         return requestInput;
     }
 
+    void linkIngressImage(final Header header)
+    {
+        if (Aeron.NULL_VALUE == ingressImageCorrelationId)
+        {
+            ingressImageCorrelationId = ((Image)header.context()).correlationId();
+        }
+    }
+
+    void unlinkIngressImage()
+    {
+        ingressImageCorrelationId = Aeron.NULL_VALUE;
+    }
+
+    long ingressImageCorrelationId()
+    {
+        return ingressImageCorrelationId;
+    }
+
     static void checkEncodedPrincipalLength(final byte[] encodedPrincipal)
     {
         if (null != encodedPrincipal && encodedPrincipal.length > MAX_ENCODED_PRINCIPAL_LENGTH)
@@ -435,6 +455,7 @@ final class ClusterSession implements ClusterClientSession
             ", openedLogPosition=" + openedLogPosition +
             ", closedLogPosition=" + closedLogPosition +
             ", timeOfLastActivityNs=" + timeOfLastActivityNs +
+            ", ingressImageCorrelationId=" + ingressImageCorrelationId +
             ", responseStreamId=" + responseStreamId +
             ", responseChannel='" + responseChannel + '\'' +
             ", responsePublicationId=" + responsePublicationId +
