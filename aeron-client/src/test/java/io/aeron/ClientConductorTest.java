@@ -140,7 +140,7 @@ class ClientConductorTest
 
         when(driverProxy.addPublication(CHANNEL, STREAM_ID_1)).thenReturn(CORRELATION_ID);
         when(driverProxy.addPublication(CHANNEL, STREAM_ID_2)).thenReturn(CORRELATION_ID_2);
-        when(driverProxy.removePublication(CORRELATION_ID)).thenReturn(CLOSE_CORRELATION_ID);
+        when(driverProxy.removePublication(CORRELATION_ID, false)).thenReturn(CLOSE_CORRELATION_ID);
         when(driverProxy.addSubscription(anyString(), anyInt())).thenReturn(CORRELATION_ID);
         when(driverProxy.removeSubscription(CORRELATION_ID)).thenReturn(CLOSE_CORRELATION_ID);
 
@@ -247,7 +247,7 @@ class ClientConductorTest
 
         publication.close();
 
-        verify(driverProxy).removePublication(CORRELATION_ID);
+        verify(driverProxy).removePublication(CORRELATION_ID, false);
     }
 
     @Test
@@ -320,8 +320,8 @@ class ClientConductorTest
 
         publication.close();
 
-        verify(driverProxy).removePublication(CORRELATION_ID);
-        verify(driverProxy, never()).removePublication(CORRELATION_ID_2);
+        verify(driverProxy).removePublication(CORRELATION_ID, false);
+        verify(driverProxy, never()).removePublication(CORRELATION_ID_2, false);
     }
 
     @Test

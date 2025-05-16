@@ -318,12 +318,70 @@ class DriverEventDissectorTest
     }
 
     @ParameterizedTest
-    @EnumSource(value = DriverEventCode.class,
-        names = { "CMD_IN_REMOVE_PUBLICATION", "CMD_IN_REMOVE_SUBSCRIPTION", "CMD_IN_REMOVE_COUNTER" })
-    void dissectCommandRemoveEvent(final DriverEventCode eventCode)
+    @EnumSource(value = DriverEventCode.class, names = { "CMD_IN_REMOVE_COUNTER" })
+    void dissectCommandRemoveCounterEvent(final DriverEventCode eventCode)
     {
         internalEncodeLogHeader(buffer, 0, eventCode.ordinal(), 87, () -> 21_032_000_000L);
-        final RemoveMessageFlyweight flyweight = new RemoveMessageFlyweight();
+        final RemoveCounterFlyweight flyweight = new RemoveCounterFlyweight();
+        flyweight.wrap(buffer, LOG_HEADER_LENGTH);
+        flyweight.registrationId(11);
+        flyweight.clientId(eventCode.id());
+        flyweight.correlationId(16);
+
+        dissectCommand(eventCode, buffer, 0, builder);
+
+        assertEquals("[21.032000000] " + CONTEXT + ": " + eventCode.name() + " [" + eventCode.ordinal() + "/87]: " +
+            "registrationId=11 clientId=" + eventCode.id() + " correlationId=16",
+            builder.toString());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = DriverEventCode.class, names = { "CMD_IN_REMOVE_PUBLICATION" })
+    void dissectCommandRemovePublicationEvent(final DriverEventCode eventCode)
+    {
+        internalEncodeLogHeader(buffer, 0, RemovePublicationFlyweight.length(), 87, () -> 21_032_000_000L);
+        final RemovePublicationFlyweight flyweight = new RemovePublicationFlyweight();
+        flyweight.wrap(buffer, LOG_HEADER_LENGTH);
+        flyweight.registrationId(11);
+        flyweight.clientId(eventCode.id());
+        flyweight.correlationId(16);
+        flyweight.revoke(true);
+
+        dissectCommand(eventCode, buffer, 0, builder);
+
+        assertEquals("[21.032000000] " + CONTEXT + ": " + eventCode.name() + " [" +
+            RemovePublicationFlyweight.length() + "/87]: " + "registrationId=11 clientId=" +
+            eventCode.id() + " correlationId=16 revoke=true",
+            builder.toString());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = DriverEventCode.class, names = { "CMD_IN_REMOVE_PUBLICATION" })
+    void dissectOldShortCommandRemovePublicationEvent(final DriverEventCode eventCode)
+    {
+        // Remove Publication Commands from an old client will be shorter.  The won't have the flags field.
+        // The dissector should notice the shorter length and act appropriately.
+        internalEncodeLogHeader(buffer, 0, 24, 87, () -> 21_032_000_000L);
+        final RemovePublicationFlyweight flyweight = new RemovePublicationFlyweight();
+        flyweight.wrap(buffer, LOG_HEADER_LENGTH);
+        flyweight.registrationId(11);
+        flyweight.clientId(eventCode.id());
+        flyweight.correlationId(16);
+        flyweight.revoke(true);
+
+        dissectCommand(eventCode, buffer, 0, builder);
+
+        assertEquals("[21.032000000] " + CONTEXT + ": " + eventCode.name() + " [24/87]: " +
+            "registrationId=11 clientId=" + eventCode.id() + " correlationId=16",
+            builder.toString());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = DriverEventCode.class, names = { "CMD_IN_REMOVE_SUBSCRIPTION" })
+    void dissectCommandRemoveSubscriptionEvent(final DriverEventCode eventCode)
+    {
+        internalEncodeLogHeader(buffer, 0, eventCode.ordinal(), 87, () -> 21_032_000_000L);
+        final RemoveSubscriptionFlyweight flyweight = new RemoveSubscriptionFlyweight();
         flyweight.wrap(buffer, LOG_HEADER_LENGTH);
         flyweight.registrationId(11);
         flyweight.clientId(eventCode.id());

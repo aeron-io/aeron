@@ -46,7 +46,9 @@ final class DriverEventDissector
     private static final ImageBuffersReadyFlyweight IMAGE_READY = new ImageBuffersReadyFlyweight();
     private static final CorrelatedMessageFlyweight CORRELATED_MSG = new CorrelatedMessageFlyweight();
     private static final ImageMessageFlyweight IMAGE_MSG = new ImageMessageFlyweight();
-    private static final RemoveMessageFlyweight REMOVE_MSG = new RemoveMessageFlyweight();
+    private static final RemoveCounterFlyweight REMOVE_COUNTER = new RemoveCounterFlyweight();
+    private static final RemovePublicationFlyweight REMOVE_PUBLICATION = new RemovePublicationFlyweight();
+    private static final RemoveSubscriptionFlyweight REMOVE_SUBSCRIPTION = new RemoveSubscriptionFlyweight();
     private static final DestinationMessageFlyweight DESTINATION_MSG = new DestinationMessageFlyweight();
     private static final ErrorResponseFlyweight ERROR_MSG = new ErrorResponseFlyweight();
     private static final CounterMessageFlyweight COUNTER_MSG = new CounterMessageFlyweight();
@@ -144,10 +146,19 @@ final class DriverEventDissector
                 break;
 
             case CMD_IN_REMOVE_PUBLICATION:
+                REMOVE_PUBLICATION.wrap(buffer, offset + encodedLength);
+                final int captureLength = buffer.getInt(offset, LITTLE_ENDIAN);
+                dissectRemovePublicationEvent(builder, captureLength);
+                break;
+
             case CMD_IN_REMOVE_SUBSCRIPTION:
+                REMOVE_SUBSCRIPTION.wrap(buffer, offset + encodedLength);
+                dissectRemoveSubscriptionEvent(builder);
+                break;
+
             case CMD_IN_REMOVE_COUNTER:
-                REMOVE_MSG.wrap(buffer, offset + encodedLength);
-                dissectRemoveEvent(builder);
+                REMOVE_COUNTER.wrap(buffer, offset + encodedLength);
+                dissectRemoveCounterEvent(builder);
                 break;
 
             case CMD_OUT_PUBLICATION_READY:
@@ -745,12 +756,33 @@ final class DriverEventDissector
         IMAGE_MSG.appendChannel(builder);
     }
 
-    private static void dissectRemoveEvent(final StringBuilder builder)
+    private static void dissectRemoveCounterEvent(final StringBuilder builder)
     {
         builder
-            .append("registrationId=").append(REMOVE_MSG.registrationId())
-            .append(" clientId=").append(REMOVE_MSG.clientId())
-            .append(" correlationId=").append(REMOVE_MSG.correlationId());
+            .append("registrationId=").append(REMOVE_COUNTER.registrationId())
+            .append(" clientId=").append(REMOVE_COUNTER.clientId())
+            .append(" correlationId=").append(REMOVE_COUNTER.correlationId());
+    }
+
+    private static void dissectRemovePublicationEvent(final StringBuilder builder, final int captureLength)
+    {
+        builder
+            .append("registrationId=").append(REMOVE_PUBLICATION.registrationId())
+            .append(" clientId=").append(REMOVE_PUBLICATION.clientId())
+            .append(" correlationId=").append(REMOVE_PUBLICATION.correlationId());
+
+        if (REMOVE_PUBLICATION.flagsFieldIsValid(captureLength))
+        {
+            builder.append(" revoke=").append(REMOVE_PUBLICATION.revoke());
+        }
+    }
+
+    private static void dissectRemoveSubscriptionEvent(final StringBuilder builder)
+    {
+        builder
+            .append("registrationId=").append(REMOVE_SUBSCRIPTION.registrationId())
+            .append(" clientId=").append(REMOVE_SUBSCRIPTION.clientId())
+            .append(" correlationId=").append(REMOVE_SUBSCRIPTION.correlationId());
     }
 
     private static void dissectDestination(final StringBuilder builder)

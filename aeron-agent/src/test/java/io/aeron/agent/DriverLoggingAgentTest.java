@@ -95,6 +95,34 @@ class DriverLoggingAgentTest
             CMD_OUT_COUNTER_READY,
             CMD_IN_CLIENT_CLOSE,
             FLOW_CONTROL_RECEIVER_ADDED,
+            FLOW_CONTROL_RECEIVER_REMOVED));
+    }
+
+    @Test
+    @InterruptAfter(10)
+    void logAllExclusivePublicationNetworkChannel()
+    {
+        testLogExclusivePublicationMediaDriverEvents(NETWORK_CHANNEL, "all", EnumSet.of(
+            FRAME_IN,
+            FRAME_OUT,
+            CMD_IN_ADD_EXCLUSIVE_PUBLICATION,
+            CMD_IN_REMOVE_PUBLICATION,
+            CMD_IN_ADD_SUBSCRIPTION,
+            CMD_IN_REMOVE_SUBSCRIPTION,
+            CMD_OUT_EXCLUSIVE_PUBLICATION_READY,
+            CMD_OUT_AVAILABLE_IMAGE,
+            CMD_OUT_ON_OPERATION_SUCCESS,
+            REMOVE_PUBLICATION_CLEANUP,
+            REMOVE_IMAGE_CLEANUP,
+            SEND_CHANNEL_CREATION,
+            RECEIVE_CHANNEL_CREATION,
+            SEND_CHANNEL_CLOSE,
+            RECEIVE_CHANNEL_CLOSE,
+            CMD_OUT_SUBSCRIPTION_READY,
+            CMD_OUT_ON_UNAVAILABLE_COUNTER,
+            CMD_OUT_COUNTER_READY,
+            CMD_IN_CLIENT_CLOSE,
+            FLOW_CONTROL_RECEIVER_ADDED,
             FLOW_CONTROL_RECEIVER_REMOVED,
             PUBLICATION_REVOKE,
             PUBLICATION_IMAGE_REVOKE));
@@ -116,6 +144,25 @@ class DriverLoggingAgentTest
             CMD_OUT_SUBSCRIPTION_READY,
             CMD_OUT_COUNTER_READY,
             CMD_OUT_ON_UNAVAILABLE_COUNTER,
+            CMD_IN_CLIENT_CLOSE));
+    }
+
+    @Test
+    @InterruptAfter(10)
+    void logAllExclusivePublicationIpcChannel()
+    {
+        testLogExclusivePublicationMediaDriverEvents(IPC_CHANNEL, "all", EnumSet.of(
+            CMD_IN_ADD_EXCLUSIVE_PUBLICATION,
+            CMD_IN_REMOVE_PUBLICATION,
+            CMD_IN_ADD_SUBSCRIPTION,
+            CMD_IN_REMOVE_SUBSCRIPTION,
+            CMD_OUT_EXCLUSIVE_PUBLICATION_READY,
+            CMD_OUT_AVAILABLE_IMAGE,
+            CMD_OUT_ON_OPERATION_SUCCESS,
+            REMOVE_PUBLICATION_CLEANUP,
+            CMD_OUT_SUBSCRIPTION_READY,
+            CMD_OUT_COUNTER_READY,
+            CMD_OUT_ON_UNAVAILABLE_COUNTER,
             CMD_IN_CLIENT_CLOSE,
             PUBLICATION_REVOKE));
     }
@@ -131,9 +178,7 @@ class DriverLoggingAgentTest
         "FRAME_IN",
         "FRAME_OUT",
         "CMD_IN_ADD_SUBSCRIPTION",
-        "CMD_OUT_AVAILABLE_IMAGE",
-        "PUBLICATION_REVOKE",
-        "PUBLICATION_IMAGE_REVOKE"
+        "CMD_OUT_AVAILABLE_IMAGE"
     })
     @InterruptAfter(10)
     void logIndividualEvents(final DriverEventCode eventCode)
@@ -141,6 +186,24 @@ class DriverLoggingAgentTest
         try
         {
             testLogMediaDriverEvents(NETWORK_CHANNEL, eventCode.name(), EnumSet.of(eventCode));
+        }
+        finally
+        {
+            after();
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = DriverEventCode.class, mode = INCLUDE, names = {
+        "PUBLICATION_REVOKE",
+        "PUBLICATION_IMAGE_REVOKE"
+    })
+    @InterruptAfter(10)
+    void logIndividualExclusivePublicationEvents(final DriverEventCode eventCode)
+    {
+        try
+        {
+            testLogExclusivePublicationMediaDriverEvents(NETWORK_CHANNEL, eventCode.name(), EnumSet.of(eventCode));
         }
         finally
         {
@@ -160,6 +223,48 @@ class DriverLoggingAgentTest
 
         try (MediaDriver mediaDriver = MediaDriver.launch(driverCtx))
         {
+            try (Aeron aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(mediaDriver.aeronDirectoryName()));
+                Subscription subscription =
+                    aeron.addSubscription(channel, STREAM_ID, availableImageHandler, unavailableImageHandler);
+                Publication publication = aeron.addPublication(channel, STREAM_ID))
+            {
+                final UnsafeBuffer offerBuffer = new UnsafeBuffer(new byte[32]);
+                while (publication.offer(offerBuffer) < 0)
+                {
+                    Tests.yield();
+                }
+
+                final MutableInteger counter = new MutableInteger();
+                final FragmentHandler handler = (buffer, offset, length, header) -> counter.value++;
+
+                while (0 == subscription.poll(handler, 1))
+                {
+                    Tests.yield();
+                }
+
+                assertEquals(counter.get(), 1);
+            }
+
+            final Supplier<String> errorMessage = () -> "Pending events: " + WAIT_LIST;
+            while (!WAIT_LIST.isEmpty())
+            {
+                Tests.yieldingIdle(errorMessage);
+            }
+        }
+    }
+
+    private void testLogExclusivePublicationMediaDriverEvents(
+        final String channel, final String enabledEvents, final EnumSet<DriverEventCode> expectedEvents)
+    {
+        before(enabledEvents, expectedEvents);
+
+        final MediaDriver.Context driverCtx = new MediaDriver.Context()
+            .errorHandler(Tests::onError)
+            .publicationLingerTimeoutNs(3_000_000_000L)
+            .timerIntervalNs(TimeUnit.MILLISECONDS.toNanos(1));
+
+        try (MediaDriver mediaDriver = MediaDriver.launch(driverCtx))
+        {
             final AtomicInteger unavailableImages = new AtomicInteger(0);
             doAnswer(invocation ->
             {
@@ -173,7 +278,7 @@ class DriverLoggingAgentTest
             try (Aeron aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(mediaDriver.aeronDirectoryName()));
                 Subscription subscription =
                     aeron.addSubscription(channel, STREAM_ID, availableImageHandler, unavailableImageHandler);
-                Publication publication = aeron.addPublication(channel, STREAM_ID))
+                ExclusivePublication publication = aeron.addExclusivePublication(channel, STREAM_ID))
             {
                 final UnsafeBuffer offerBuffer = new UnsafeBuffer(new byte[32]);
                 while (publication.offer(offerBuffer) < 0)

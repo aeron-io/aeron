@@ -1195,6 +1195,11 @@ public final class NetworkPublication
         return responseCorrelationId;
     }
 
+    void revoke()
+    {
+        LogBufferDescriptor.isPublicationRevoked(metaDataBuffer, true);
+    }
+
     void decRef()
     {
         if (0 == --refCount)

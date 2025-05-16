@@ -94,7 +94,6 @@ public abstract class Publication implements AutoCloseable
     final int positionBitsToShift;
     final int termBufferLength;
     volatile boolean isClosed = false;
-    volatile boolean isRevoked = false;
     volatile boolean revokeOnClose = false;
 
     final ReadablePosition positionLimit;
@@ -293,11 +292,6 @@ public abstract class Publication implements AutoCloseable
     {
         if (!isClosed)
         {
-            if (revokeOnClose)
-            {
-                LogBufferDescriptor.isPublicationRevoked(logMetaDataBuffer, true);
-            }
-
             conductor.removePublication(this);
         }
     }
@@ -310,43 +304,6 @@ public abstract class Publication implements AutoCloseable
     public boolean isClosed()
     {
         return isClosed;
-    }
-
-    /**
-     * Mark the publication to be revoked when close() is called.
-     */
-    public void revokeOnClose()
-    {
-        revokeOnClose = true;
-    }
-
-    /**
-     * Immediately revoke and close the publication.
-     */
-    public void revoke()
-    {
-        if (isClosed)
-        {
-            throw new AeronException("Publication is closed");
-        }
-
-        revokeOnClose = true;
-        close();
-    }
-
-    /**
-     * Has this publication been revoked/closed?
-     *
-     * @return true if the publication has been revoked/closed otherwise false.
-     */
-    public boolean isRevoked()
-    {
-        if (isClosed)
-        {
-            return isRevoked;
-        }
-
-        return LogBufferDescriptor.isPublicationRevoked(logMetaDataBuffer);
     }
 
     /**
@@ -704,8 +661,6 @@ public abstract class Publication implements AutoCloseable
     void internalClose()
     {
         isClosed = true;
-
-        isRevoked = LogBufferDescriptor.isPublicationRevoked(logMetaDataBuffer);
     }
 
     LogBuffers logBuffers()
@@ -828,7 +783,6 @@ public abstract class Publication implements AutoCloseable
             "originalRegistrationId=" + originalRegistrationId +
             ", registrationId=" + registrationId +
             ", isClosed=" + isClosed +
-            ", isRevoked=" + isRevoked +
             ", isConnected=" + isConnected() +
             ", initialTermId=" + initialTermId +
             ", termBufferLength=" + termBufferLength +

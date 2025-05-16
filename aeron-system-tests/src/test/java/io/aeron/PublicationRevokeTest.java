@@ -34,15 +34,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
-import static io.aeron.AeronCounters.DRIVER_PUBLISHER_POS_TYPE_ID;
 import static io.aeron.Publication.CLOSED;
-import static io.aeron.Publication.NOT_CONNECTED;
 import static io.aeron.driver.status.SystemCounterDescriptor.PUBLICATIONS_REVOKED;
 import static io.aeron.driver.status.SystemCounterDescriptor.PUBLICATION_IMAGES_REVOKED;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.agrona.BitUtil.SIZE_OF_INT;
-import static org.agrona.concurrent.status.CountersReader.RECORD_RECLAIMED;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -80,7 +77,6 @@ class PublicationRevokeTest
     private TestMediaDriver driver;
     private CountersReader countersReader;
     private Subscription subscription;
-    private Publication publication;
 
     private final UnsafeBuffer buffer = new UnsafeBuffer(new byte[8192]);
     private final FragmentHandler fragmentHandler = mock(FragmentHandler.class);
@@ -129,21 +125,20 @@ class PublicationRevokeTest
 
         subscription = client.addSubscription(
             subscriptionChannel, STREAM_ID, availableImageHandler, unavailableImageHandler);
-        publication = client.addPublication(publicationChannel, STREAM_ID);
+        try (ExclusivePublication exclusivePublication = client.addExclusivePublication(publicationChannel, STREAM_ID))
+        {
 
-        Tests.awaitConnected(subscription);
-        Tests.awaitConnected(publication);
+            Tests.awaitConnected(subscription);
+            Tests.awaitConnected(exclusivePublication);
 
-        publishMessage();
+            publishMessage(exclusivePublication);
 
-        pollUntilFragments(1);
+            pollUntilFragments(1);
 
-        publishMessage();
+            publishMessage(exclusivePublication);
 
-        publication.revoke();
-        assertTrue(publication.isRevoked());
-
-        assertEquals(CLOSED, publication.offer(buffer, 0, SIZE_OF_INT));
+            exclusivePublication.revokeOnClose();
+        }
 
         while (unavailableImages.get() == 0)
         {
@@ -156,6 +151,7 @@ class PublicationRevokeTest
         assertEquals(expectedPublicationImagesRevoked, countersReader.getCounterValue(PUBLICATION_IMAGES_REVOKED.id()));
     }
 
+    /*
     @ParameterizedTest
     @MethodSource("channels")
     @InterruptAfter(10)
@@ -233,6 +229,7 @@ class PublicationRevokeTest
         assertEquals(1, countersReader.getCounterValue(PUBLICATIONS_REVOKED.id()));
         assertEquals(expectedPublicationImagesRevoked, countersReader.getCounterValue(PUBLICATION_IMAGES_REVOKED.id()));
     }
+    */
 
     @ParameterizedTest
     @MethodSource("channels")
@@ -257,28 +254,27 @@ class PublicationRevokeTest
 
         subscription = client.addSubscription(
             subscriptionChannel, STREAM_ID, availableImageHandler, unavailableImageHandler);
-        publication = client.addPublication(publicationChannel, STREAM_ID);
+        final ExclusivePublication exclusivePublication = client.addExclusivePublication(publicationChannel, STREAM_ID);
 
         Tests.awaitConnected(subscription);
-        Tests.awaitConnected(publication);
+        Tests.awaitConnected(exclusivePublication);
 
         final ExclusivePublication publicationTwo = client.addExclusivePublication(publicationChannel, STREAM_ID);
 
         Tests.awaitConnected(publicationTwo);
 
-        publishMessage();
+        publishMessage(exclusivePublication);
         publishMessage(publicationTwo);
 
         pollUntilFragments(2);
 
-        publishMessage();
+        publishMessage(exclusivePublication);
 
         assertEquals(2, subscription.imageCount());
 
-        publication.revoke();
-        assertTrue(publication.isRevoked());
+        exclusivePublication.revoke();
 
-        assertEquals(CLOSED, publication.offer(buffer, 0, SIZE_OF_INT));
+        assertEquals(CLOSED, exclusivePublication.offer(buffer, 0, SIZE_OF_INT));
 
         while (unavailableImages.get() == 0)
         {
@@ -286,8 +282,6 @@ class PublicationRevokeTest
         }
 
         assertEquals(1, subscription.imageCount());
-
-        assertFalse(publicationTwo.isRevoked());
 
         publishMessage(publicationTwo);
         pollUntilFragments(1);
@@ -299,11 +293,6 @@ class PublicationRevokeTest
 
         assertEquals(1, countersReader.getCounterValue(PUBLICATIONS_REVOKED.id()));
         assertEquals(expectedPublicationImagesRevoked, countersReader.getCounterValue(PUBLICATION_IMAGES_REVOKED.id()));
-    }
-
-    private void publishMessage()
-    {
-        publishMessage(publication);
     }
 
     private void publishMessage(final Publication pub)

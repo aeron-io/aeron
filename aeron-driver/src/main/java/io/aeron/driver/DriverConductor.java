@@ -934,7 +934,7 @@ public final class DriverConductor implements Agent
         }
     }
 
-    void onRemovePublication(final long registrationId, final long correlationId)
+    void onRemovePublication(final long registrationId, final long correlationId, final boolean revoke)
     {
         PublicationLink publicationLink = null;
         final ArrayList<PublicationLink> publicationLinks = this.publicationLinks;
@@ -954,6 +954,10 @@ public final class DriverConductor implements Agent
             throw new ControlProtocolException(UNKNOWN_PUBLICATION, "unknown publication: " + registrationId);
         }
 
+        if (revoke)
+        {
+            publicationLink.revoke();
+        }
         publicationLink.close();
         clientProxy.operationSucceeded(correlationId);
     }

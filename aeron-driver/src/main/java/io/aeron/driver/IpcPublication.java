@@ -366,6 +366,11 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         return reachedEndOfLife;
     }
 
+    void revoke()
+    {
+        LogBufferDescriptor.isPublicationRevoked(metaDataBuffer, true);
+    }
+
     void incRef()
     {
         ++refCount;

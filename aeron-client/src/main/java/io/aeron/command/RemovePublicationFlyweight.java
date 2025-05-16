@@ -15,14 +15,12 @@
  */
 package io.aeron.command;
 
-import io.aeron.exceptions.ControlProtocolException;
 import org.agrona.MutableDirectBuffer;
 
-import static io.aeron.ErrorCode.MALFORMED_COMMAND;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
 
 /**
- * Control message for removing a Publication or Subscription.
+ * Control message for removing a Publication.
  * <pre>
  *   0                   1                   2                   3
  *   0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -36,12 +34,16 @@ import static org.agrona.BitUtil.SIZE_OF_LONG;
  *  |                       Registration ID                         |
  *  |                                                               |
  *  +---------------------------------------------------------------+
+ *  |                           Flags                               |
+ *  |                                                               |
+ *  +---------------------------------------------------------------+
  * </pre>
  */
-public abstract class RemoveMessageFlyweight extends CorrelatedMessageFlyweight
+public class RemovePublicationFlyweight extends RemoveMessageFlyweight
 {
-    static final int REGISTRATION_ID_FIELD_OFFSET = CORRELATION_ID_FIELD_OFFSET + SIZE_OF_LONG;
-    private static final int MINIMUM_LENGTH = REGISTRATION_ID_FIELD_OFFSET + SIZE_OF_LONG;
+    private static final int FLAGS_FIELD_OFFSET = REGISTRATION_ID_FIELD_OFFSET + SIZE_OF_LONG;
+
+    private static final long FLAG_REVOKE = 0x1;
 
     /**
      * Wrap the buffer at a given offset for updates.
@@ -50,32 +52,9 @@ public abstract class RemoveMessageFlyweight extends CorrelatedMessageFlyweight
      * @param offset at which the message begins.
      * @return this for a fluent API.
      */
-    public RemoveMessageFlyweight wrap(final MutableDirectBuffer buffer, final int offset)
+    public RemovePublicationFlyweight wrap(final MutableDirectBuffer buffer, final int offset)
     {
         super.wrap(buffer, offset);
-
-        return this;
-    }
-
-    /**
-     * Get the registration id field.
-     *
-     * @return registration id field.
-     */
-    public long registrationId()
-    {
-        return buffer.getLong(offset + REGISTRATION_ID_FIELD_OFFSET);
-    }
-
-    /**
-     * Set registration id field.
-     *
-     * @param registrationId field value.
-     * @return this for a fluent API.
-     */
-    public RemoveMessageFlyweight registrationId(final long registrationId)
-    {
-        buffer.putLong(offset + REGISTRATION_ID_FIELD_OFFSET, registrationId);
 
         return this;
     }
@@ -87,21 +66,62 @@ public abstract class RemoveMessageFlyweight extends CorrelatedMessageFlyweight
      */
     public static int length()
     {
-        return LENGTH + SIZE_OF_LONG;
+        return RemoveMessageFlyweight.length() + SIZE_OF_LONG;
     }
 
     /**
-     * Validate buffer length is long enough for message.
+     * Whether or not the message contains the flags field.
      *
-     * @param msgTypeId type of message.
-     * @param length of message in bytes to validate.
+     * @param messageLength the length of the message.
+     * @return true if the flags field can be read.
      */
-    public void validateLength(final int msgTypeId, final int length)
+    public boolean flagsFieldIsValid(final int messageLength)
     {
-        if (length < MINIMUM_LENGTH)
+        return messageLength >= FLAGS_FIELD_OFFSET + SIZE_OF_LONG;
+    }
+
+    /**
+     * Get the value of the revoke field.
+     *
+     * @return revoked.
+     */
+    public boolean revoke()
+    {
+        return (buffer.getLong(offset + FLAGS_FIELD_OFFSET) & FLAG_REVOKE) > 0;
+    }
+
+    /**
+     * Whether or not the message contains the set revoke flag.
+     *
+     * @param messageLength the length of the message.
+     * @return true if the flags field is present AND the revoked flag is set.
+     */
+    public boolean revoke(final int messageLength)
+    {
+        return flagsFieldIsValid(messageLength) && revoke();
+    }
+
+    /**
+     * Set the value of the revoke field.
+     *
+     * @param revoke field value.
+     * @return this for a fluent API.
+     */
+    public RemovePublicationFlyweight revoke(final boolean revoke)
+    {
+        long flags = buffer.getLong(offset + FLAGS_FIELD_OFFSET);
+
+        if (revoke)
         {
-            throw new ControlProtocolException(
-                MALFORMED_COMMAND, "command=" + msgTypeId + " too short: length=" + length);
+            flags |= FLAG_REVOKE;
         }
+        else
+        {
+            flags &= ~FLAG_REVOKE;
+        }
+
+        buffer.putLong(offset + FLAGS_FIELD_OFFSET, flags);
+
+        return this;
     }
 }
