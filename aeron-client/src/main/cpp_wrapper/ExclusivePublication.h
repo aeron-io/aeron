@@ -85,6 +85,11 @@ public:
         m_publication = nullptr;
     }
 
+    inline void revokeOnClose()
+    {
+        aeron_exclusive_publication_revoke_on_close(m_publication);
+    }
+
     inline void revoke()
     {
         if (aeron_exclusive_publication_revoke(m_publication, nullptr, nullptr) < 0)
@@ -216,16 +221,6 @@ public:
     inline bool isConnected() const
     {
         return aeron_exclusive_publication_is_connected(m_publication);
-    }
-
-    /**
-     * Has this object been revoked and should no longer be used?
-     *
-     * @return true if it has been revoked otherwise false.
-     */
-    inline bool isRevoked() const
-    {
-        return aeron_exclusive_publication_is_revoked(m_publication);
     }
 
     /**

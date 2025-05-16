@@ -88,55 +88,19 @@ void aeron_publication_force_close(aeron_publication_t *publication)
     AERON_SET_RELEASE(publication->is_closed, true);
 }
 
-// 'private' function that assumes all the necessary checks have been made
-static inline int aeron_publication_close_internal(
-    aeron_publication_t *publication, aeron_notification_t on_close_complete, void *on_close_complete_clientd)
-{
-    AERON_SET_RELEASE(publication->is_closed, true);
-
-    if (aeron_client_conductor_async_close_publication(
-        publication->conductor, publication, on_close_complete, on_close_complete_clientd) < 0)
-    {
-        return -1;
-    }
-
-    return 0;
-}
-
 int aeron_publication_close(
     aeron_publication_t *publication, aeron_notification_t on_close_complete, void *on_close_complete_clientd)
 {
     if (NULL != publication)
     {
         bool is_closed;
-
         AERON_GET_ACQUIRE(is_closed, publication->is_closed);
         if (!is_closed)
         {
-            if (aeron_publication_close_internal(publication, on_close_complete, on_close_complete_clientd) < 0)
-            {
-                AERON_APPEND_ERR("%s", "");
-                return -1;
-            }
-        }
-    }
+            AERON_SET_RELEASE(publication->is_closed, true);
 
-    return 0;
-}
-
-int aeron_publication_revoke(
-    aeron_publication_t *publication, aeron_notification_t on_close_complete, void *on_close_complete_clientd)
-{
-    if (NULL != publication)
-    {
-        bool is_closed;
-
-        AERON_GET_ACQUIRE(is_closed, publication->is_closed);
-        if (!is_closed)
-        {
-            AERON_SET_RELEASE(publication->log_meta_data->is_publication_revoked, true);
-
-            if (aeron_publication_close_internal(publication, on_close_complete, on_close_complete_clientd) < 0)
+            if (aeron_client_conductor_async_close_publication(
+                publication->conductor, publication, on_close_complete, on_close_complete_clientd) < 0)
             {
                 AERON_APPEND_ERR("%s", "");
                 return -1;
@@ -743,18 +707,6 @@ bool aeron_publication_is_closed(aeron_publication_t *publication)
     }
 
     return is_closed;
-}
-
-bool aeron_publication_is_revoked(aeron_publication_t *publication)
-{
-    bool is_publication_revoked = true;
-
-    if (NULL != publication)
-    {
-        AERON_GET_ACQUIRE(is_publication_revoked, publication->log_meta_data->is_publication_revoked);
-    }
-
-    return is_publication_revoked;
 }
 
 bool aeron_publication_is_connected(aeron_publication_t *publication)

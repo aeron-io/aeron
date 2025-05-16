@@ -313,8 +313,7 @@ int aeron_publication_image_create(
     _image->conductor_fields.subscribable.clientd = NULL;
     _image->conductor_fields.managed_resource.registration_id = correlation_id;
     _image->conductor_fields.managed_resource.clientd = _image;
-    _image->conductor_fields.managed_resource.incref = NULL;
-    _image->conductor_fields.managed_resource.decref = NULL;
+    _image->conductor_fields.managed_resource.handle_event = NULL;
     _image->conductor_fields.is_reliable = is_reliable;
     _image->conductor_fields.state = AERON_PUBLICATION_IMAGE_STATE_ACTIVE;
     _image->conductor_fields.liveness_timeout_ns = (int64_t)context->image_liveness_timeout_ns;

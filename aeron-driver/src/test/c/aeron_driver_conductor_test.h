@@ -417,13 +417,14 @@ public:
 
     int removePublication(int64_t client_id, int64_t correlation_id, int64_t registration_id)
     {
-        auto *cmd = reinterpret_cast<aeron_remove_command_t *>(m_command_buffer);
+        auto *cmd = reinterpret_cast<aeron_remove_publication_command_t *>(m_command_buffer);
 
         cmd->correlated.client_id = client_id;
         cmd->correlated.correlation_id = correlation_id;
         cmd->registration_id = registration_id;
+        cmd->flags = 0;
 
-        return writeCommand(AERON_COMMAND_REMOVE_PUBLICATION, sizeof(aeron_remove_command_t));
+        return writeCommand(AERON_COMMAND_REMOVE_PUBLICATION, sizeof(aeron_remove_publication_command_t));
     }
 
     int addIpcSubscription(int64_t client_id, int64_t correlation_id, int32_t stream_id, int64_t registration_id)
@@ -460,13 +461,13 @@ public:
 
     int removeSubscription(int64_t client_id, int64_t correlation_id, int64_t registration_id)
     {
-        auto *cmd = reinterpret_cast<aeron_remove_command_t *>(m_command_buffer);
+        auto *cmd = reinterpret_cast<aeron_remove_subscription_command_t *>(m_command_buffer);
 
         cmd->correlated.client_id = client_id;
         cmd->correlated.correlation_id = correlation_id;
         cmd->registration_id = registration_id;
 
-        return writeCommand(AERON_COMMAND_REMOVE_SUBSCRIPTION, sizeof(aeron_remove_command_t));
+        return writeCommand(AERON_COMMAND_REMOVE_SUBSCRIPTION, sizeof(aeron_remove_subscription_command_t));
     }
 
     int clientKeepalive(int64_t client_id)
@@ -511,13 +512,13 @@ public:
 
     int removeCounter(int64_t client_id, int64_t correlation_id, int64_t registration_id)
     {
-        auto *cmd = reinterpret_cast<aeron_remove_command_t *>(m_command_buffer);
+        auto *cmd = reinterpret_cast<aeron_remove_counter_command_t *>(m_command_buffer);
 
         cmd->correlated.client_id = client_id;
         cmd->correlated.correlation_id = correlation_id;
         cmd->registration_id = registration_id;
 
-        return writeCommand(AERON_COMMAND_REMOVE_COUNTER, sizeof(aeron_remove_command_t));
+        return writeCommand(AERON_COMMAND_REMOVE_COUNTER, sizeof(aeron_remove_counter_command_t));
     }
 
     int addDestination(

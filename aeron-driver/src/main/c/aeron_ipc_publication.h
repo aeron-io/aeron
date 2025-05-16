@@ -112,10 +112,6 @@ void aeron_ipc_publication_clean_buffer(aeron_ipc_publication_t *publication, in
 void aeron_ipc_publication_on_time_event(
     aeron_driver_conductor_t *conductor, aeron_ipc_publication_t *publication, int64_t now_ns, int64_t now_ms);
 
-void aeron_ipc_publication_incref(void *clientd);
-
-void aeron_ipc_publication_decref(void *clientd);
-
 void aeron_ipc_publication_check_for_blocked_publisher(
     aeron_ipc_publication_t *publication, int64_t producer_position, int64_t now_ns);
 

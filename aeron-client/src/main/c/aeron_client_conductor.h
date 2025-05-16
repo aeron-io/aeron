@@ -399,8 +399,14 @@ int aeron_client_conductor_release_log_buffer(aeron_client_conductor_t *conducto
 
 int aeron_client_conductor_linger_image(aeron_client_conductor_t *conductor, aeron_image_t *image);
 
-int aeron_client_conductor_offer_remove_command(
-    aeron_client_conductor_t *conductor, int64_t registration_id, int32_t command_type);
+int aeron_client_conductor_offer_remove_counter_command(
+    aeron_client_conductor_t *conductor, int64_t registration_id);
+
+int aeron_client_conductor_offer_remove_publication_command(
+    aeron_client_conductor_t *conductor, int64_t registration_id, bool revoke);
+
+int aeron_client_conductor_offer_remove_subscription_command(
+    aeron_client_conductor_t *conductor, int64_t registration_id);
 
 int aeron_client_conductor_offer_destination_command(
     aeron_client_conductor_t *conductor,

@@ -23,6 +23,8 @@
 #include "aeron_alloc.h"
 #include "aeron_driver_conductor.h"
 
+static void aeron_ipc_publication_handle_managed_resource_event(aeron_driver_managed_resource_event_t event, void *clientd);
+
 int aeron_ipc_publication_create(
     aeron_ipc_publication_t **publication,
     aeron_driver_context_t *context,
@@ -182,8 +184,7 @@ int aeron_ipc_publication_create(
     _pub->conductor_fields.subscribable.clientd = _pub;
     _pub->conductor_fields.managed_resource.registration_id = registration_id;
     _pub->conductor_fields.managed_resource.clientd = _pub;
-    _pub->conductor_fields.managed_resource.incref = aeron_ipc_publication_incref;
-    _pub->conductor_fields.managed_resource.decref = aeron_ipc_publication_decref;
+    _pub->conductor_fields.managed_resource.handle_event = aeron_ipc_publication_handle_managed_resource_event;
     _pub->conductor_fields.has_reached_end_of_life = false;
     _pub->conductor_fields.trip_limit = 0;
     _pub->conductor_fields.time_of_last_consumer_position_change_ns = now_ns;
@@ -553,35 +554,49 @@ void aeron_ipc_publication_on_time_event(
     }
 }
 
-void aeron_ipc_publication_incref(void *clientd)
+void aeron_ipc_publication_handle_managed_resource_event(aeron_driver_managed_resource_event_t event, void *clientd)
 {
     aeron_ipc_publication_t *publication = (aeron_ipc_publication_t *)clientd;
-    publication->conductor_fields.refcnt++;
-}
 
-void aeron_ipc_publication_decref(void *clientd)
-{
-    aeron_ipc_publication_t *publication = (aeron_ipc_publication_t *)clientd;
-    int32_t ref_count = --publication->conductor_fields.refcnt;
-
-    if (0 == ref_count)
+    switch(event)
     {
-        int64_t producer_position = aeron_ipc_publication_producer_position(publication);
-
-        if (aeron_counter_get_plain(publication->pub_lmt_position.value_addr) > producer_position)
+        case AERON_DRIVER_MANAGED_RESOURCE_EVENT_INCREF:
         {
-            aeron_counter_set_release(publication->pub_lmt_position.value_addr, producer_position);
+            publication->conductor_fields.refcnt++;
+            break;
         }
 
-        AERON_SET_RELEASE(publication->log_meta_data->end_of_stream_position, producer_position);
-
-        uint8_t is_publication_revoked;
-
-        AERON_GET_ACQUIRE(is_publication_revoked, publication->log_meta_data->is_publication_revoked);
-
-        if (!is_publication_revoked)
+        case AERON_DRIVER_MANAGED_RESOURCE_EVENT_DECREF:
         {
-            publication->conductor_fields.state = AERON_IPC_PUBLICATION_STATE_DRAINING;
+            int32_t ref_count = --publication->conductor_fields.refcnt;
+
+            if (0 == ref_count)
+            {
+                int64_t producer_position = aeron_ipc_publication_producer_position(publication);
+
+                if (aeron_counter_get_plain(publication->pub_lmt_position.value_addr) > producer_position)
+                {
+                    aeron_counter_set_release(publication->pub_lmt_position.value_addr, producer_position);
+                }
+
+                AERON_SET_RELEASE(publication->log_meta_data->end_of_stream_position, producer_position);
+
+                uint8_t is_publication_revoked;
+
+                AERON_GET_ACQUIRE(is_publication_revoked, publication->log_meta_data->is_publication_revoked);
+
+                if (!is_publication_revoked)
+                {
+                    publication->conductor_fields.state = AERON_IPC_PUBLICATION_STATE_DRAINING;
+                }
+            }
+            break;
+        }
+
+        case AERON_DRIVER_MANAGED_RESOURCE_EVENT_REVOKE:
+        {
+            AERON_SET_RELEASE(publication->log_meta_data->is_publication_revoked, true);
+            break;
         }
     }
 }

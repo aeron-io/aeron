@@ -116,16 +116,6 @@ public:
         m_publication = nullptr;
     }
 
-    inline void revoke()
-    {
-        if (aeron_publication_revoke(m_publication, nullptr, nullptr) < 0)
-        {
-            AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
-        }
-
-        m_publication = nullptr;
-    }
-
     /**
      * Media address for delivery to the channel.
      *
@@ -248,16 +238,6 @@ public:
     inline bool isConnected() const
     {
         return aeron_publication_is_connected(m_publication);
-    }
-
-    /**
-     * Has this object been revoked and should no longer be used?
-     *
-     * @return true if it has been revoked otherwise false.
-     */
-    inline bool isRevoked() const
-    {
-        return aeron_publication_is_revoked(m_publication);
     }
 
     /**

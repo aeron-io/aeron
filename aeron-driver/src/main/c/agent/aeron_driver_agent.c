@@ -1556,10 +1556,52 @@ static const char *dissect_cmd_in(int64_t cmd_id, const void *message, size_t le
         }
 
         case AERON_COMMAND_REMOVE_PUBLICATION:
+        {
+            aeron_remove_publication_command_t *command = (aeron_remove_publication_command_t *)message;
+
+            if (length >= sizeof(aeron_remove_publication_command_t))
+            {
+                snprintf(
+                    buffer,
+                    sizeof(buffer) - 1,
+                    "registrationId=%" PRId64 " clientId=%" PRId64 " correlationId=%" PRId64 " revoke=%s]",
+                    command->registration_id,
+                    command->correlated.client_id,
+                    command->correlated.correlation_id,
+                    command->flags & AERON_COMMAND_REMOVE_PUBLICATION_FLAG_REVOKE ? "true" : "false");
+            }
+            else
+            {
+                snprintf(
+                    buffer,
+                    sizeof(buffer) - 1,
+                    "registrationId=%" PRId64 " clientId=%" PRId64 " correlationId=%" PRId64 "]",
+                    command->registration_id,
+                    command->correlated.client_id,
+                    command->correlated.correlation_id);
+            }
+
+            break;
+        }
+
         case AERON_COMMAND_REMOVE_SUBSCRIPTION:
+        {
+            aeron_remove_subscription_command_t *command = (aeron_remove_subscription_command_t *)message;
+
+            snprintf(
+                buffer,
+                sizeof(buffer) - 1,
+                "registrationId=%" PRId64 " clientId=%" PRId64 " correlationId=%" PRId64 "]",
+                command->registration_id,
+                command->correlated.client_id,
+                command->correlated.correlation_id);
+
+            break;
+        }
+
         case AERON_COMMAND_REMOVE_COUNTER:
         {
-            aeron_remove_command_t *command = (aeron_remove_command_t *)message;
+            aeron_remove_counter_command_t *command = (aeron_remove_counter_command_t *)message;
 
             snprintf(
                 buffer,

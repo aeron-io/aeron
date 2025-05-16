@@ -98,6 +98,8 @@ static void aeron_network_publication_update_has_receivers(
     }
 }
 
+static void aeron_network_publication_handle_managed_resource_event(aeron_driver_managed_resource_event_t event, void *clientd);
+
 int aeron_network_publication_create(
     aeron_network_publication_t **publication,
     aeron_send_channel_endpoint_t *endpoint,
@@ -276,8 +278,7 @@ int aeron_network_publication_create(
     _pub->conductor_fields.subscribable.clientd = _pub;
     _pub->conductor_fields.managed_resource.registration_id = registration_id;
     _pub->conductor_fields.managed_resource.clientd = _pub;
-    _pub->conductor_fields.managed_resource.incref = aeron_network_publication_incref;
-    _pub->conductor_fields.managed_resource.decref = aeron_network_publication_decref;
+    _pub->conductor_fields.managed_resource.handle_event = aeron_network_publication_handle_managed_resource_event;
     _pub->conductor_fields.has_reached_end_of_life = false;
     _pub->conductor_fields.clean_position = 0;
     _pub->conductor_fields.state = AERON_NETWORK_PUBLICATION_STATE_ACTIVE;
@@ -1054,38 +1055,52 @@ void aeron_network_publication_check_for_blocked_publisher(
     }
 }
 
-void aeron_network_publication_incref(void *clientd)
+void aeron_network_publication_handle_managed_resource_event(aeron_driver_managed_resource_event_t event, void *clientd)
 {
     aeron_network_publication_t *publication = (aeron_network_publication_t *)clientd;
-    publication->conductor_fields.refcnt++;
-}
 
-void aeron_network_publication_decref(void *clientd)
-{
-    aeron_network_publication_t *publication = (aeron_network_publication_t *)clientd;
-    int32_t ref_count = --publication->conductor_fields.refcnt;
-
-    if (0 == ref_count)
+    switch(event)
     {
-        publication->conductor_fields.time_of_last_activity_ns = aeron_clock_cached_nano_time(
-            publication->cached_clock);
-
-        const int64_t producer_position = aeron_network_publication_producer_position(publication);
-        aeron_counter_set_release(publication->pub_lmt_position.value_addr, producer_position);
-        AERON_SET_RELEASE(publication->log_meta_data->end_of_stream_position, producer_position);
-
-        uint8_t is_publication_revoked;
-
-        AERON_GET_ACQUIRE(is_publication_revoked, publication->log_meta_data->is_publication_revoked);
-
-        if (!is_publication_revoked)
+        case AERON_DRIVER_MANAGED_RESOURCE_EVENT_INCREF:
         {
-            if (aeron_counter_get_acquire(publication->snd_pos_position.value_addr) >= producer_position)
-            {
-                AERON_SET_RELEASE(publication->is_end_of_stream, true);
-            }
+            publication->conductor_fields.refcnt++;
+            break;
+        }
 
-            publication->conductor_fields.state = AERON_NETWORK_PUBLICATION_STATE_DRAINING;
+        case AERON_DRIVER_MANAGED_RESOURCE_EVENT_DECREF:
+        {
+            int32_t ref_count = --publication->conductor_fields.refcnt;
+
+            if (0 == ref_count)
+            {
+                publication->conductor_fields.time_of_last_activity_ns = aeron_clock_cached_nano_time(
+                    publication->cached_clock);
+
+                const int64_t producer_position = aeron_network_publication_producer_position(publication);
+                aeron_counter_set_release(publication->pub_lmt_position.value_addr, producer_position);
+                AERON_SET_RELEASE(publication->log_meta_data->end_of_stream_position, producer_position);
+
+                uint8_t is_publication_revoked;
+
+                AERON_GET_ACQUIRE(is_publication_revoked, publication->log_meta_data->is_publication_revoked);
+
+                if (!is_publication_revoked)
+                {
+                    if (aeron_counter_get_acquire(publication->snd_pos_position.value_addr) >= producer_position)
+                    {
+                        AERON_SET_RELEASE(publication->is_end_of_stream, true);
+                    }
+
+                    publication->conductor_fields.state = AERON_NETWORK_PUBLICATION_STATE_DRAINING;
+                }
+            }
+            break;
+        }
+
+        case AERON_DRIVER_MANAGED_RESOURCE_EVENT_REVOKE:
+        {
+            AERON_SET_RELEASE(publication->log_meta_data->is_publication_revoked, true);
+            break;
         }
     }
 }

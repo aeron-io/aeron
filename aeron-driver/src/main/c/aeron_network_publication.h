@@ -160,10 +160,6 @@ void aeron_network_publication_close(
 
 bool aeron_network_publication_free(aeron_network_publication_t *publication);
 
-void aeron_network_publication_incref(void *clientd);
-
-void aeron_network_publication_decref(void *clientd);
-
 void aeron_network_publication_on_time_event(
     aeron_driver_conductor_t *conductor, aeron_network_publication_t *publication, int64_t now_ns, int64_t now_ms);
 
