@@ -40,6 +40,7 @@ class UntetheredSubscriptionTest
     private static final int TERM_WINDOW_LENGTH = TERM_BUFFER_LENGTH / 2;
     private static final long TIME_NS = 1000;
     private static final long UNTETHERED_WINDOW_LIMIT_TIMEOUT_NS = Configuration.untetheredWindowLimitTimeoutNs();
+    private static final long UNTETHERED_LINGER_TIMEOUT_NS = Configuration.untetheredLingerTimeoutNs();
     private static final long UNTETHERED_RESTING_TIMEOUT_NS = Configuration.untetheredRestingTimeoutNs();
     private static final String CHANNEL = CommonContext.IPC_CHANNEL + "?term-length=" + TERM_BUFFER_LENGTH;
 
@@ -99,7 +100,7 @@ class UntetheredSubscriptionTest
         ipcPublication.updatePublisherPositionAndLimit();
         assertEquals(TERM_WINDOW_LENGTH, publisherLimit.get());
 
-        final long afterLingerTimeoutNs = windowLimitTimeoutNs + UNTETHERED_WINDOW_LIMIT_TIMEOUT_NS;
+        final long afterLingerTimeoutNs = windowLimitTimeoutNs + UNTETHERED_LINGER_TIMEOUT_NS;
         ipcPublication.onTimeEvent(afterLingerTimeoutNs, 0, conductor);
         ipcPublication.updatePublisherPositionAndLimit();
         assertEquals(tetheredPosition.get() + TERM_WINDOW_LENGTH, publisherLimit.get());

@@ -464,6 +464,7 @@ public final class MediaDriver implements AutoCloseable
         private long publicationConnectionTimeoutNs = Configuration.publicationConnectionTimeoutNs();
         private long publicationLingerTimeoutNs = Configuration.publicationLingerTimeoutNs();
         private long untetheredWindowLimitTimeoutNs = Configuration.untetheredWindowLimitTimeoutNs();
+        private long untetheredLingerTimeoutNs = Configuration.untetheredLingerTimeoutNs();
         private long untetheredRestingTimeoutNs = Configuration.untetheredRestingTimeoutNs();
         private long statusMessageTimeoutNs = Configuration.statusMessageTimeoutNs();
         private long counterFreeToReuseTimeoutNs = Configuration.counterFreeToReuseTimeoutNs();
@@ -585,6 +586,7 @@ public final class MediaDriver implements AutoCloseable
         private PortManager senderPortManager;
         private PortManager receiverPortManager;
         private int streamSessionLimit = Configuration.streamSessionLimit();
+        private boolean isUntetheredLingerTimeoutOverridden = false;
 
         /**
          * Perform a shallow copy of the object.
@@ -1224,6 +1226,37 @@ public final class MediaDriver implements AutoCloseable
         public Context untetheredWindowLimitTimeoutNs(final long timeoutNs)
         {
             this.untetheredWindowLimitTimeoutNs = timeoutNs;
+            if (!isUntetheredLingerTimeoutOverridden)
+            {
+                this.untetheredLingerTimeoutNs = timeoutNs;
+            }
+            return this;
+        }
+
+        /**
+         * The linger timeout for an untethered subscription.
+         *
+         * @return timeout that an untethered subscription will linger.
+         * @see Configuration#UNTETHERED_LINGER_TIMEOUT_PROP_NAME
+         */
+        @Config
+        public long untetheredLingerTimeoutNs()
+        {
+            return untetheredLingerTimeoutNs;
+        }
+
+        /**
+         * The timeout for when an untethered subscription that is outside the window will participate
+         * in local flow control.
+         *
+         * @param timeoutNs that an untethered subscription to linger.
+         * @return this for a fluent API.
+         * @see Configuration#UNTETHERED_LINGER_TIMEOUT_PROP_NAME
+         */
+        public Context untetheredLingerTimeoutNs(final long timeoutNs)
+        {
+            this.untetheredLingerTimeoutNs = timeoutNs;
+            isUntetheredLingerTimeoutOverridden = true;
             return this;
         }
 

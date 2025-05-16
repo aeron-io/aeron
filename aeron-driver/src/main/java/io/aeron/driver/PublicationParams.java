@@ -29,6 +29,7 @@ import static io.aeron.CommonContext.*;
 
 final class PublicationParams
 {
+    long untetheredLingerTimeoutNs;
     long lingerTimeoutNs;
     long entityTag = ChannelUri.INVALID_TAG;
     long untetheredWindowLimitTimeoutNs;
@@ -73,6 +74,7 @@ final class PublicationParams
         params.getSparse(channelUri, ctx);
         params.getSpiesSimulateConnection(channelUri, ctx);
         params.getUntetheredWindowLimitTimeout(channelUri, ctx);
+        params.getUntetheredLingerTimeout(channelUri, ctx);
         params.getUntetheredRestingTimeout(channelUri, ctx);
         params.getMaxResend(channelUri, ctx);
 
@@ -486,6 +488,28 @@ final class PublicationParams
     {
         untetheredWindowLimitTimeoutNs = getTimeoutNs(
             channelUri, UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME, ctx.untetheredWindowLimitTimeoutNs());
+    }
+
+    private void getUntetheredLingerTimeout(final ChannelUri channelUri, final MediaDriver.Context ctx)
+    {
+        final String windowLimitTimeoutString = channelUri.get(UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME);
+        final String timeoutString = channelUri.get(UNTETHERED_LINGER_TIMEOUT_PARAM_NAME);
+        if (null != timeoutString)
+        {
+            // linger timeout was explicitly set for the channel.  use the set value
+            untetheredLingerTimeoutNs = SystemUtil.parseDuration(UNTETHERED_LINGER_TIMEOUT_PARAM_NAME, timeoutString);
+        }
+        else if (null != windowLimitTimeoutString)
+        {
+            // window limit was explicitly set for the channel.  use it
+            untetheredLingerTimeoutNs = untetheredWindowLimitTimeoutNs;
+        }
+        else
+        {
+            // neither value was explicitely set for the channel.  use the context value for linger
+            // context value for linger needs similar checks to default to window timeout if not set
+            untetheredLingerTimeoutNs = ctx.untetheredLingerTimeoutNs();
+        }
     }
 
     private void getUntetheredRestingTimeout(final ChannelUri channelUri, final MediaDriver.Context ctx)

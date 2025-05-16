@@ -51,14 +51,20 @@ class UntetheredSubscriptionTest
     {
         return asList(
             "aeron:ipc?term-length=64k",
+
             "aeron:udp?endpoint=localhost:24325|term-length=64k",
             "aeron-spy:aeron:udp?endpoint=localhost:24325|term-length=64k",
 
-            "aeron:ipc?term-length=64k|untethered-window-limit-timeout=50ms|untethered-resting-timeout=50ms",
+            "aeron:ipc?term-length=64k|untethered-window-limit-timeout=50ms|" +
+            "untethered-resting-timeout=50ms|untethered-linger-timeout=50ms",
+
             "aeron:udp?endpoint=localhost:24325|term-length=64k|" +
-            "untethered-window-limit-timeout=50ms|untethered-resting-timeout=50ms",
+            "untethered-window-limit-timeout=50ms|untethered-resting-timeout=50ms|" +
+            "untethered-linger-timeout=25ms",
+
             "aeron-spy:aeron:udp?endpoint=localhost:24325|term-length=64k|" +
-            "untethered-window-limit-timeout=50ms|untethered-resting-timeout=50ms"
+            "untethered-window-limit-timeout=50ms|untethered-resting-timeout=50ms|" +
+            "untethered-linger-timeout=25ms"
         );
     }
 

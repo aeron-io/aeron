@@ -447,6 +447,13 @@ public class CommonContext implements Cloneable
     public static final String UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME = "untethered-window-limit-timeout";
 
     /**
+     * Parameter name to set explicit untethered linger timeout, e.g. {@code untethered-linger-timeout=10s}.
+     *
+     * @since 1.48.0
+     */
+    public static final String UNTETHERED_LINGER_TIMEOUT_PARAM_NAME = "untethered-linger-timeout";
+
+    /**
      * Parameter name to set explicit untethered resting timeout, e.g. {@code untethered-resting-timeout=10s}.
      *
      * @since 1.45.0
