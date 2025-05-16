@@ -15,9 +15,10 @@
  */
 package io.aeron;
 
+import io.aeron.command.RemovePublicationFlyweight;
+import io.aeron.command.RemoveSubscriptionFlyweight;
 import org.junit.jupiter.api.Test;
 import io.aeron.command.PublicationMessageFlyweight;
-import io.aeron.command.RemoveMessageFlyweight;
 import org.agrona.concurrent.MessageHandler;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
@@ -49,11 +50,11 @@ class DriverProxyTest
     @Test
     void threadSendsRemoveChannelMessage()
     {
-        conductor.removePublication(CORRELATION_ID);
+        conductor.removePublication(CORRELATION_ID, false);
         assertReadsOneMessage(
             (msgTypeId, buffer, index, length) ->
             {
-                final RemoveMessageFlyweight message = new RemoveMessageFlyweight();
+                final RemovePublicationFlyweight message = new RemovePublicationFlyweight();
                 message.wrap(buffer, index);
 
                 assertEquals(REMOVE_PUBLICATION, msgTypeId);
@@ -70,7 +71,7 @@ class DriverProxyTest
         assertReadsOneMessage(
             (msgTypeId, buffer, index, length) ->
             {
-                final RemoveMessageFlyweight removeMessage = new RemoveMessageFlyweight();
+                final RemoveSubscriptionFlyweight removeMessage = new RemoveSubscriptionFlyweight();
                 removeMessage.wrap(buffer, index);
 
                 assertEquals(REMOVE_SUBSCRIPTION, msgTypeId);

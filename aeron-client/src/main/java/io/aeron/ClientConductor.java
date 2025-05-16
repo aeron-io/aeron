@@ -600,7 +600,8 @@ final class ClientConductor implements Agent
                 {
                     releaseLogBuffers(
                         publication.logBuffers(), publication.originalRegistrationId(), EXPLICIT_CLOSE_LINGER_NS);
-                    asyncCommandIdSet.add(driverProxy.removePublication(publication.registrationId()));
+                    asyncCommandIdSet.add(
+                        driverProxy.removePublication(publication.registrationId(), publication.revokeOnClose));
                 }
             }
         }
@@ -630,17 +631,20 @@ final class ClientConductor implements Agent
             }
 
             final Publication publication = (Publication)resource;
+            boolean revokeOnClose = false;
             if (null != publication)
             {
                 resourceByRegIdMap.remove(publicationRegistrationId);
                 publication.internalClose();
                 releaseLogBuffers(
                     publication.logBuffers(), publication.originalRegistrationId(), EXPLICIT_CLOSE_LINGER_NS);
+                revokeOnClose = publication.revokeOnClose;
             }
 
             if (asyncCommandIdSet.remove(publicationRegistrationId) || null != publication)
             {
-                asyncCommandIdSet.add(driverProxy.removePublication(publicationRegistrationId));
+                asyncCommandIdSet.add(
+                    driverProxy.removePublication(publicationRegistrationId, revokeOnClose));
                 stashedChannelByRegistrationId.remove(publicationRegistrationId);
             }
         }

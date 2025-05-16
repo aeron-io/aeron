@@ -83,9 +83,6 @@ int aeron_send_channel_endpoint_create(
 int aeron_send_channel_endpoint_delete(
     aeron_counters_manager_t *counters_manager, aeron_send_channel_endpoint_t *endpoint);
 
-void aeron_send_channel_endpoint_incref(void *clientd);
-void aeron_send_channel_endpoint_decref(void *clientd);
-
 int aeron_send_channel_send(
     aeron_send_channel_endpoint_t *endpoint,
     struct iovec *iov,

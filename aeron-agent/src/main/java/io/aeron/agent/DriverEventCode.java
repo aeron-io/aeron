@@ -226,7 +226,19 @@ public enum DriverEventCode implements EventCode
     /**
      * Nak received.
      */
-    NAK_RECEIVED(58, DriverEventDissector::dissectNak);
+    NAK_RECEIVED(58, DriverEventDissector::dissectNak),
+
+    /**
+     * Publication revoked.
+     */
+    PUBLICATION_REVOKE(59,
+        (code, buffer, offset, builder) -> DriverEventDissector.dissectPublicationRevoke(buffer, offset, builder)),
+
+    /**
+     * Publication Image revoked.
+     */
+    PUBLICATION_IMAGE_REVOKE(60,
+        (code, buffer, offset, builder) -> DriverEventDissector.dissectPublicationImageRevoke(buffer, offset, builder));
 
     static final int EVENT_CODE_TYPE = EventCodeType.DRIVER.getTypeCode();
 

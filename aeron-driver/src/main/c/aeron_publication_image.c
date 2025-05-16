@@ -233,6 +233,7 @@ int aeron_publication_image_create(
     _image->raw_log_close_func = context->raw_log_close_func;
     _image->raw_log_free_func = context->raw_log_free_func;
     _image->log.untethered_subscription_state_change = context->log.untethered_subscription_on_state_change;
+    _image->log.publication_image_revoke = context->log.publication_image_revoke;
 
     _image->nano_clock = context->nano_clock;
     _image->epoch_clock = context->epoch_clock;
@@ -312,8 +313,7 @@ int aeron_publication_image_create(
     _image->conductor_fields.subscribable.clientd = NULL;
     _image->conductor_fields.managed_resource.registration_id = correlation_id;
     _image->conductor_fields.managed_resource.clientd = _image;
-    _image->conductor_fields.managed_resource.incref = NULL;
-    _image->conductor_fields.managed_resource.decref = NULL;
+    _image->conductor_fields.managed_resource.handle_event = NULL;
     _image->conductor_fields.is_reliable = is_reliable;
     _image->conductor_fields.state = AERON_PUBLICATION_IMAGE_STATE_ACTIVE;
     _image->conductor_fields.liveness_timeout_ns = (int64_t)context->image_liveness_timeout_ns;
@@ -374,6 +374,8 @@ int aeron_publication_image_create(
         system_counters, AERON_SYSTEM_COUNTER_NAK_MESSAGES_SENT);
     _image->loss_gap_fills_counter = aeron_system_counter_addr(
         system_counters, AERON_SYSTEM_COUNTER_LOSS_GAP_FILLS);
+    _image->publication_images_revoked_counter = aeron_system_counter_addr(
+        system_counters, AERON_SYSTEM_COUNTER_PUBLICATION_IMAGES_REVOKED);
 
     const int64_t initial_position = aeron_logbuffer_compute_position(
         active_term_id, initial_term_offset, _image->position_bits_to_shift, initial_term_id);
@@ -514,7 +516,12 @@ void aeron_publication_image_on_gap_detected(void *clientd, int32_t term_id, int
 
 void aeron_publication_image_track_rebuild(aeron_publication_image_t *image, int64_t now_ns)
 {
-    if (aeron_driver_subscribable_has_working_positions(&image->conductor_fields.subscribable))
+    uint8_t is_publication_revoked;
+
+    AERON_GET_ACQUIRE(is_publication_revoked, image->log_meta_data->is_publication_revoked);
+
+    if (aeron_driver_subscribable_has_working_positions(&image->conductor_fields.subscribable) &&
+        !is_publication_revoked)
     {
         const int64_t hwm_position = aeron_counter_get_acquire(image->rcv_hwm_position.value_addr);
         int64_t min_sub_pos = INT64_MAX;
@@ -716,6 +723,26 @@ int aeron_publication_image_insert_packet(
                     if (aeron_publication_image_all_eos(image, destination, packet_position))
                     {
                         const int64_t eos_position = aeron_publication_find_eos_position(image);
+
+                        const bool is_revoked = aeron_publication_image_is_revoked(buffer, length);
+                        if (is_revoked)
+                        {
+                            AERON_SET_RELEASE(image->log_meta_data->is_publication_revoked, (uint8_t)true);
+
+                            aeron_driver_publication_image_revoke_func_t publication_image_revoke = image->log.publication_image_revoke;
+                            if (NULL != publication_image_revoke)
+                            {
+                                publication_image_revoke(
+                                    eos_position,
+                                    image->session_id,
+                                    image->stream_id,
+                                    image->endpoint->conductor_fields.udp_channel->uri_length,
+                                    image->endpoint->conductor_fields.udp_channel->original_uri);
+                            }
+
+                            aeron_counter_increment_release(image->publication_images_revoked_counter);
+                        }
+
                         AERON_SET_RELEASE(image->log_meta_data->end_of_stream_position, eos_position);
                         AERON_SET_RELEASE(image->is_end_of_stream, true);
                     }
@@ -888,6 +915,15 @@ int aeron_publication_image_send_pending_status_message(aeron_publication_image_
 // Called from receiver.
 int aeron_publication_image_send_pending_loss(aeron_publication_image_t *image)
 {
+    uint8_t is_publication_revoked;
+
+    AERON_GET_ACQUIRE(is_publication_revoked, image->log_meta_data->is_publication_revoked);
+
+    if (is_publication_revoked)
+    {
+        return 0;
+    }
+
     int work_count = 0;
 
     int64_t change_number;
@@ -1141,32 +1177,55 @@ void aeron_publication_image_on_time_event(
     {
         case AERON_PUBLICATION_IMAGE_STATE_ACTIVE:
         {
-            int64_t last_packet_timestamp_ns;
-            AERON_GET_ACQUIRE(last_packet_timestamp_ns, image->time_of_last_packet_ns);
-            bool is_end_of_stream;
-            AERON_GET_ACQUIRE(is_end_of_stream, image->is_end_of_stream);
+            uint8_t is_publication_revoked;
 
-            if (!aeron_driver_subscribable_has_working_positions(&image->conductor_fields.subscribable) ||
-                now_ns > (last_packet_timestamp_ns + image->conductor_fields.liveness_timeout_ns) ||
-                (is_end_of_stream &&
-                    aeron_counter_get_plain(image->rcv_pos_position.value_addr) >=
-                    aeron_counter_get_acquire(image->rcv_hwm_position.value_addr)))
+            AERON_GET_ACQUIRE(is_publication_revoked, image->log_meta_data->is_publication_revoked);
+
+            if (is_publication_revoked)
             {
                 image->conductor_fields.state = AERON_PUBLICATION_IMAGE_STATE_DRAINING;
-                image->conductor_fields.time_of_last_state_change_ns = now_ns;
-                AERON_SET_RELEASE(image->is_sending_eos_sm, true);
             }
+            else
+            {
+                int64_t last_packet_timestamp_ns;
+                AERON_GET_ACQUIRE(last_packet_timestamp_ns, image->time_of_last_packet_ns);
+                bool is_end_of_stream;
+                AERON_GET_ACQUIRE(is_end_of_stream, image->is_end_of_stream);
 
-            aeron_publication_image_check_untethered_subscriptions(conductor, image, now_ns);
+                if (!aeron_driver_subscribable_has_working_positions(&image->conductor_fields.subscribable) ||
+                    now_ns > (last_packet_timestamp_ns + image->conductor_fields.liveness_timeout_ns) ||
+                    (is_end_of_stream &&
+                        aeron_counter_get_plain(image->rcv_pos_position.value_addr) >=
+                            aeron_counter_get_acquire(image->rcv_hwm_position.value_addr)))
+                {
+                    image->conductor_fields.state = AERON_PUBLICATION_IMAGE_STATE_DRAINING;
+                    image->conductor_fields.time_of_last_state_change_ns = now_ns;
+                    AERON_SET_RELEASE(image->is_sending_eos_sm, true);
+                }
+
+                aeron_publication_image_check_untethered_subscriptions(conductor, image, now_ns);
+            }
             break;
         }
 
         case AERON_PUBLICATION_IMAGE_STATE_DRAINING:
         {
-            if (aeron_publication_image_is_drained(image) &&
+            uint8_t is_publication_revoked;
+
+            AERON_GET_ACQUIRE(is_publication_revoked, image->log_meta_data->is_publication_revoked);
+
+            if ((aeron_publication_image_is_drained(image) &&
                 ((image->conductor_fields.time_of_last_state_change_ns +
-                (AERON_IMAGE_SM_EOS_MULTIPLE * image->sm_timeout_ns)) - now_ns < 0))
+                (AERON_IMAGE_SM_EOS_MULTIPLE * image->sm_timeout_ns)) - now_ns < 0)) ||
+                is_publication_revoked)
             {
+                if (is_publication_revoked)
+                {
+                    AERON_SET_RELEASE(image->is_sending_eos_sm, true);
+
+                    image->next_sm_deadline_ns = now_ns - 1;
+                }
+
                 image->conductor_fields.state = AERON_PUBLICATION_IMAGE_STATE_LINGER;
                 image->conductor_fields.time_of_last_state_change_ns = now_ns;
 
@@ -1222,6 +1281,8 @@ void aeron_publication_image_stop_status_messages_if_not_active(aeron_publicatio
 extern bool aeron_publication_image_is_heartbeat(const uint8_t *buffer, size_t length);
 
 extern bool aeron_publication_image_is_end_of_stream(const uint8_t *buffer, size_t length);
+
+extern bool aeron_publication_image_is_revoked(const uint8_t *buffer, size_t length);
 
 extern bool aeron_publication_image_is_flow_control_under_run(
     aeron_publication_image_t *image, int64_t packet_position);

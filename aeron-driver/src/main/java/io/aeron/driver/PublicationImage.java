@@ -196,6 +196,7 @@ public final class PublicationImage
     private final AtomicCounter flowControlUnderRuns;
     private final AtomicCounter flowControlOverRuns;
     private final AtomicCounter lossGapFills;
+    private final AtomicCounter publicationImagesRevoked;
     private final EpochClock epochClock;
     private final NanoClock nanoClock;
     private final RawLog rawLog;
@@ -258,6 +259,7 @@ public final class PublicationImage
         flowControlUnderRuns = systemCounters.get(FLOW_CONTROL_UNDER_RUNS);
         flowControlOverRuns = systemCounters.get(FLOW_CONTROL_OVER_RUNS);
         lossGapFills = systemCounters.get(LOSS_GAP_FILLS);
+        publicationImagesRevoked = systemCounters.get(PUBLICATION_IMAGES_REVOKED);
 
         imageConnections = ArrayUtil.ensureCapacity(imageConnections, transportIndex + 1);
         imageConnections[transportIndex] = new ImageConnection(nowNs, controlAddress);
@@ -610,8 +612,6 @@ public final class PublicationImage
         final int transportIndex,
         final InetSocketAddress srcAddress)
     {
-        final boolean isEndOfStream = DataHeaderFlyweight.isEndOfStream(buffer);
-
         if (null != rejectionReason)
         {
             return 0;
@@ -634,14 +634,24 @@ public final class PublicationImage
                     timeOfLastPacketNs = nowNs;
                     final ImageConnection imageConnection = trackConnection(transportIndex, srcAddress, nowNs);
 
-                    if (isEndOfStream)
+                    if (DataHeaderFlyweight.isEndOfStream(buffer))
                     {
                         imageConnection.eosPosition = packetPosition;
                         imageConnection.isEos = true;
 
                         if (!this.isEndOfStream && isAllConnectedEos())
                         {
-                            LogBufferDescriptor.endOfStreamPosition(rawLog.metaData(), findEosPosition());
+                            final long eosPosition = findEosPosition();
+
+                            if (DataHeaderFlyweight.isRevoked(buffer))
+                            {
+                                isPublicationRevoked(rawLog.metaData(), true);
+
+                                logRevoke(eosPosition, sessionId(), streamId(), channel());
+                                publicationImagesRevoked.increment();
+                            }
+
+                            LogBufferDescriptor.endOfStreamPosition(rawLog.metaData(), eosPosition);
                             this.isEndOfStream = true;
                         }
                     }
@@ -672,6 +682,14 @@ public final class PublicationImage
         }
 
         return length;
+    }
+
+    private static void logRevoke(
+        final long revokedPos,
+        final int sessionId,
+        final int streamId,
+        final String channel)
+    {
     }
 
     /**
@@ -785,6 +803,11 @@ public final class PublicationImage
      */
     int processPendingLoss()
     {
+        if (isPublicationRevoked(rawLog.metaData()))
+        {
+            return 0;
+        }
+
         int workCount = 0;
         final long changeNumber = (long)END_LOSS_CHANGE_VH.getAcquire(this);
 
@@ -895,17 +918,34 @@ public final class PublicationImage
     /**
      * {@inheritDoc}
      */
+    @SuppressWarnings("fallthrough")
     public void onTimeEvent(final long timeNs, final long timesMs, final DriverConductor conductor)
     {
         switch (state)
         {
             case ACTIVE:
-                checkUntetheredSubscriptions(timeNs, conductor);
+                if (isPublicationRevoked(rawLog.metaData()))
+                {
+                    state(State.DRAINING);
+                }
+                else
+                {
+                    checkUntetheredSubscriptions(timeNs, conductor);
+                }
                 break;
 
             case DRAINING:
-                if (isDrained() && ((timeOfLastStateChangeNs + (SM_EOS_MULTIPLE * smTimeoutNs)) - timeNs < 0))
+                if ((isDrained() && ((timeOfLastStateChangeNs + (SM_EOS_MULTIPLE * smTimeoutNs)) - timeNs < 0)) ||
+                    isPublicationRevoked(rawLog.metaData()))
                 {
+                    if (isPublicationRevoked(rawLog.metaData()))
+                    {
+                        isRebuilding = false;
+                        isSendingEosSm = true;
+
+                        nextSmDeadlineNs = timeNs - 1;
+                    }
+
                     conductor.transitionToLinger(this);
 
                     channelEndpoint.decRefImages();

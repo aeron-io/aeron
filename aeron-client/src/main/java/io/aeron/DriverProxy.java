@@ -34,7 +34,9 @@ public final class DriverProxy
     private final long clientId;
     private final PublicationMessageFlyweight publicationMessage = new PublicationMessageFlyweight();
     private final SubscriptionMessageFlyweight subscriptionMessage = new SubscriptionMessageFlyweight();
-    private final RemoveMessageFlyweight removeMessage = new RemoveMessageFlyweight();
+    private final RemoveCounterFlyweight removeCounter = new RemoveCounterFlyweight();
+    private final RemovePublicationFlyweight removePublication = new RemovePublicationFlyweight();
+    private final RemoveSubscriptionFlyweight removeSubscription = new RemoveSubscriptionFlyweight();
     private final DestinationMessageFlyweight destinationMessage = new DestinationMessageFlyweight();
     private final DestinationByIdMessageFlyweight destinationByIdMessage = new DestinationByIdMessageFlyweight();
     private final CounterMessageFlyweight counterMessage = new CounterMessageFlyweight();
@@ -126,19 +128,21 @@ public final class DriverProxy
      * Instruct the driver to remove a publication by its registration id.
      *
      * @param registrationId for the publication to be removed.
+     * @param revoke whether the publication is being revoked.
      * @return the correlation id for the command.
      */
-    public long removePublication(final long registrationId)
+    public long removePublication(final long registrationId, final boolean revoke)
     {
         final long correlationId = toDriverCommandBuffer.nextCorrelationId();
-        final int index = toDriverCommandBuffer.tryClaim(REMOVE_PUBLICATION, RemoveMessageFlyweight.length());
+        final int index = toDriverCommandBuffer.tryClaim(REMOVE_PUBLICATION, RemovePublicationFlyweight.length());
         if (index < 0)
         {
             throw new AeronException("could not write remove publication command");
         }
 
-        removeMessage
+        removePublication
             .wrap(toDriverCommandBuffer.buffer(), index)
+            .revoke(revoke)
             .registrationId(registrationId)
             .clientId(clientId)
             .correlationId(correlationId);
@@ -188,13 +192,13 @@ public final class DriverProxy
     public long removeSubscription(final long registrationId)
     {
         final long correlationId = toDriverCommandBuffer.nextCorrelationId();
-        final int index = toDriverCommandBuffer.tryClaim(REMOVE_SUBSCRIPTION, RemoveMessageFlyweight.length());
+        final int index = toDriverCommandBuffer.tryClaim(REMOVE_SUBSCRIPTION, RemoveSubscriptionFlyweight.length());
         if (index < 0)
         {
             throw new AeronException("could not write remove subscription command");
         }
 
-        removeMessage
+        removeSubscription
             .wrap(toDriverCommandBuffer.buffer(), index)
             .registrationId(registrationId)
             .clientId(clientId)
@@ -431,13 +435,13 @@ public final class DriverProxy
     public long removeCounter(final long registrationId)
     {
         final long correlationId = toDriverCommandBuffer.nextCorrelationId();
-        final int index = toDriverCommandBuffer.tryClaim(REMOVE_COUNTER, RemoveMessageFlyweight.length());
+        final int index = toDriverCommandBuffer.tryClaim(REMOVE_COUNTER, RemoveCounterFlyweight.length());
         if (index < 0)
         {
             throw new AeronException("could not write remove counter command");
         }
 
-        removeMessage
+        removeCounter
             .wrap(toDriverCommandBuffer.buffer(), index)
             .registrationId(registrationId)
             .clientId(clientId)

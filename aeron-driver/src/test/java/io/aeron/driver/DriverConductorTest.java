@@ -379,7 +379,7 @@ class DriverConductorTest
     void shouldBeAbleToRemoveSingleStream()
     {
         final long id = driverProxy.addPublication(CHANNEL_4000, STREAM_ID_1);
-        driverProxy.removePublication(id);
+        driverProxy.removePublication(id, false);
 
         doWorkUntil(() -> (CLIENT_LIVENESS_TIMEOUT_NS + PUBLICATION_LINGER_TIMEOUT_NS * 2) - nanoClock.nanoTime() < 0);
 
@@ -395,10 +395,10 @@ class DriverConductorTest
         final long id3 = driverProxy.addPublication(CHANNEL_4003, STREAM_ID_3);
         final long id4 = driverProxy.addPublication(CHANNEL_4004, STREAM_ID_4);
 
-        driverProxy.removePublication(id1);
-        driverProxy.removePublication(id2);
-        driverProxy.removePublication(id3);
-        driverProxy.removePublication(id4);
+        driverProxy.removePublication(id1, false);
+        driverProxy.removePublication(id2, false);
+        driverProxy.removePublication(id3, false);
+        driverProxy.removePublication(id4, false);
 
         doWorkUntil(
             () -> (CLIENT_LIVENESS_TIMEOUT_NS * 2 + PUBLICATION_LINGER_TIMEOUT_NS * 2) - nanoClock.nanoTime() <= 0);
@@ -478,7 +478,7 @@ class DriverConductorTest
     void shouldErrorOnRemovePublicationOnUnknownRegistrationId()
     {
         final long id = driverProxy.addPublication(CHANNEL_4000, STREAM_ID_1);
-        driverProxy.removePublication(id + 1);
+        driverProxy.removePublication(id + 1, false);
 
         driverConductor.doWork();
         driverConductor.doWork();
@@ -931,7 +931,7 @@ class DriverConductorTest
         final IpcPublication ipcPublicationOne = driverConductor.getSharedIpcPublication(STREAM_ID_1);
         assertNotNull(ipcPublicationOne);
 
-        final long idPubOneRemove = driverProxy.removePublication(idPubOne);
+        final long idPubOneRemove = driverProxy.removePublication(idPubOne, false);
         driverConductor.doWork();
 
         final long idPubTwo = driverProxy.addPublication(CHANNEL_IPC, STREAM_ID_1);
@@ -980,7 +980,7 @@ class DriverConductorTest
     void shouldBeAbleToAddAndRemoveIpcPublication()
     {
         final long idAdd = driverProxy.addPublication(CHANNEL_IPC, STREAM_ID_1);
-        driverProxy.removePublication(idAdd);
+        driverProxy.removePublication(idAdd, false);
 
         doWorkUntil(() -> nanoClock.nanoTime() >= CLIENT_LIVENESS_TIMEOUT_NS);
 
@@ -1005,14 +1005,14 @@ class DriverConductorTest
     {
         final long idAdd1 = driverProxy.addPublication(CHANNEL_IPC, STREAM_ID_1);
         final long idAdd2 = driverProxy.addPublication(CHANNEL_IPC, STREAM_ID_1);
-        driverProxy.removePublication(idAdd1);
+        driverProxy.removePublication(idAdd1, false);
 
         driverConductor.doWork();
 
         IpcPublication ipcPublication = driverConductor.getSharedIpcPublication(STREAM_ID_1);
         assertNotNull(ipcPublication);
 
-        driverProxy.removePublication(idAdd2);
+        driverProxy.removePublication(idAdd2, false);
 
         doWorkUntil(() -> CLIENT_LIVENESS_TIMEOUT_NS - nanoClock.nanoTime() <= 0);
 
@@ -1034,7 +1034,7 @@ class DriverConductorTest
         IpcPublication ipcPublication = driverConductor.getSharedIpcPublication(STREAM_ID_1);
         assertNotNull(ipcPublication);
 
-        driverProxy.removePublication(idAdd2);
+        driverProxy.removePublication(idAdd2, false);
 
         doWorkUntil(() -> CLIENT_LIVENESS_TIMEOUT_NS - nanoClock.nanoTime() <= 0);
 
@@ -1237,8 +1237,8 @@ class DriverConductorTest
     {
         final long id1 = driverProxy.addPublication(CHANNEL_4000, STREAM_ID_1);
         final long id2 = driverProxy.addPublication(CHANNEL_4000, STREAM_ID_2);
-        driverProxy.removePublication(id1);
-        driverProxy.removePublication(id2);
+        driverProxy.removePublication(id1, false);
+        driverProxy.removePublication(id2, false);
 
         doWorkUntil(() -> (PUBLICATION_LINGER_TIMEOUT_NS * 2) - nanoClock.nanoTime() <= 0);
 
@@ -1754,8 +1754,8 @@ class DriverConductorTest
         verify(senderProxy).registerSendChannelEndpoint(any());
         verify(senderProxy).newNetworkPublication(any());
 
-        driverProxy.removePublication(id1);
-        driverProxy.removePublication(id2);
+        driverProxy.removePublication(id1, false);
+        driverProxy.removePublication(id2, false);
 
         doWorkUntil(
             () -> (PUBLICATION_LINGER_TIMEOUT_NS * 2 + CLIENT_LIVENESS_TIMEOUT_NS * 2) - nanoClock.nanoTime() <= 0);
@@ -1776,8 +1776,8 @@ class DriverConductorTest
         verify(senderProxy).registerSendChannelEndpoint(any());
         verify(senderProxy, times(2)).newNetworkPublication(any());
 
-        driverProxy.removePublication(id1);
-        driverProxy.removePublication(id2);
+        driverProxy.removePublication(id1, false);
+        driverProxy.removePublication(id2, false);
 
         doWorkUntil(
             () -> (PUBLICATION_LINGER_TIMEOUT_NS * 2 + CLIENT_LIVENESS_TIMEOUT_NS * 2) - nanoClock.nanoTime() <= 0);

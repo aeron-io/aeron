@@ -150,6 +150,26 @@ public final class ExclusivePublication extends ExclusivePublicationValues
     }
 
     /**
+     * Mark the publication to be revoked when close() is called.
+     */
+    public void revokeOnClose()
+    {
+        revokeOnClose = true;
+    }
+
+    /**
+     * Immediately revoke and close the publication.
+     */
+    public void revoke()
+    {
+        if (!isClosed)
+        {
+            revokeOnClose = true;
+            close();
+        }
+    }
+
+    /**
      * {@inheritDoc}
      */
     public long position()

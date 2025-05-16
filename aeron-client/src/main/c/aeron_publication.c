@@ -94,7 +94,6 @@ int aeron_publication_close(
     if (NULL != publication)
     {
         bool is_closed;
-
         AERON_GET_ACQUIRE(is_closed, publication->is_closed);
         if (!is_closed)
         {
@@ -103,6 +102,7 @@ int aeron_publication_close(
             if (aeron_client_conductor_async_close_publication(
                 publication->conductor, publication, on_close_complete, on_close_complete_clientd) < 0)
             {
+                AERON_APPEND_ERR("%s", "");
                 return -1;
             }
         }

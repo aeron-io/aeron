@@ -255,6 +255,21 @@ int aeron_image_active_transport_count(aeron_image_t *image)
     return (int)active_transport_count;
 }
 
+bool aeron_image_is_publication_revoked(aeron_image_t *image)
+{
+    if (NULL == image)
+    {
+        AERON_SET_ERR(EINVAL, "Parameters must not be null, image: %s", AERON_NULL_STR(image));
+        return -1;
+    }
+
+    bool is_publication_revoked;
+
+    AERON_GET_ACQUIRE(is_publication_revoked, image->metadata->is_publication_revoked);
+
+    return is_publication_revoked;
+}
+
 int aeron_image_poll(aeron_image_t *image, aeron_fragment_handler_t handler, void *clientd, size_t fragment_limit)
 {
     if (NULL == image || NULL == handler)

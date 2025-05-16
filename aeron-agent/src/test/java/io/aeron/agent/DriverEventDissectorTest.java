@@ -31,6 +31,7 @@ import java.net.UnknownHostException;
 import static io.aeron.agent.CommonEventEncoder.*;
 import static io.aeron.agent.DriverEventCode.*;
 import static io.aeron.agent.DriverEventDissector.*;
+import static io.aeron.agent.DriverEventLogger.MAX_CHANNEL_URI_LENGTH;
 import static io.aeron.agent.DriverEventLogger.MAX_HOST_NAME_LENGTH;
 import static io.aeron.agent.EventConfiguration.MAX_EVENT_LENGTH;
 import static io.aeron.protocol.HeaderFlyweight.*;
@@ -317,12 +318,70 @@ class DriverEventDissectorTest
     }
 
     @ParameterizedTest
-    @EnumSource(value = DriverEventCode.class,
-        names = { "CMD_IN_REMOVE_PUBLICATION", "CMD_IN_REMOVE_SUBSCRIPTION", "CMD_IN_REMOVE_COUNTER" })
-    void dissectCommandRemoveEvent(final DriverEventCode eventCode)
+    @EnumSource(value = DriverEventCode.class, names = { "CMD_IN_REMOVE_COUNTER" })
+    void dissectCommandRemoveCounterEvent(final DriverEventCode eventCode)
     {
         internalEncodeLogHeader(buffer, 0, eventCode.ordinal(), 87, () -> 21_032_000_000L);
-        final RemoveMessageFlyweight flyweight = new RemoveMessageFlyweight();
+        final RemoveCounterFlyweight flyweight = new RemoveCounterFlyweight();
+        flyweight.wrap(buffer, LOG_HEADER_LENGTH);
+        flyweight.registrationId(11);
+        flyweight.clientId(eventCode.id());
+        flyweight.correlationId(16);
+
+        dissectCommand(eventCode, buffer, 0, builder);
+
+        assertEquals("[21.032000000] " + CONTEXT + ": " + eventCode.name() + " [" + eventCode.ordinal() + "/87]: " +
+            "registrationId=11 clientId=" + eventCode.id() + " correlationId=16",
+            builder.toString());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = DriverEventCode.class, names = { "CMD_IN_REMOVE_PUBLICATION" })
+    void dissectCommandRemovePublicationEvent(final DriverEventCode eventCode)
+    {
+        internalEncodeLogHeader(buffer, 0, RemovePublicationFlyweight.length(), 87, () -> 21_032_000_000L);
+        final RemovePublicationFlyweight flyweight = new RemovePublicationFlyweight();
+        flyweight.wrap(buffer, LOG_HEADER_LENGTH);
+        flyweight.registrationId(11);
+        flyweight.clientId(eventCode.id());
+        flyweight.correlationId(16);
+        flyweight.revoke(true);
+
+        dissectCommand(eventCode, buffer, 0, builder);
+
+        assertEquals("[21.032000000] " + CONTEXT + ": " + eventCode.name() + " [" +
+            RemovePublicationFlyweight.length() + "/87]: " + "registrationId=11 clientId=" +
+            eventCode.id() + " correlationId=16 revoke=true",
+            builder.toString());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = DriverEventCode.class, names = { "CMD_IN_REMOVE_PUBLICATION" })
+    void dissectOldShortCommandRemovePublicationEvent(final DriverEventCode eventCode)
+    {
+        // Remove Publication Commands from an old client will be shorter.  The won't have the flags field.
+        // The dissector should notice the shorter length and act appropriately.
+        internalEncodeLogHeader(buffer, 0, 24, 87, () -> 21_032_000_000L);
+        final RemovePublicationFlyweight flyweight = new RemovePublicationFlyweight();
+        flyweight.wrap(buffer, LOG_HEADER_LENGTH);
+        flyweight.registrationId(11);
+        flyweight.clientId(eventCode.id());
+        flyweight.correlationId(16);
+        flyweight.revoke(true);
+
+        dissectCommand(eventCode, buffer, 0, builder);
+
+        assertEquals("[21.032000000] " + CONTEXT + ": " + eventCode.name() + " [24/87]: " +
+            "registrationId=11 clientId=" + eventCode.id() + " correlationId=16",
+            builder.toString());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = DriverEventCode.class, names = { "CMD_IN_REMOVE_SUBSCRIPTION" })
+    void dissectCommandRemoveSubscriptionEvent(final DriverEventCode eventCode)
+    {
+        internalEncodeLogHeader(buffer, 0, eventCode.ordinal(), 87, () -> 21_032_000_000L);
+        final RemoveSubscriptionFlyweight flyweight = new RemoveSubscriptionFlyweight();
         flyweight.wrap(buffer, LOG_HEADER_LENGTH);
         flyweight.registrationId(11);
         flyweight.clientId(eventCode.id());
@@ -756,6 +815,47 @@ class DriverEventDissectorTest
 
         assertThat(builder.toString(), endsWith(
             "DRIVER: NAME_RESOLUTION_HOST_NAME [32/32]: durationNs=32167 hostName=some.funky.host.name"));
+    }
+
+    @Test
+    void dissectPublicationRevoke()
+    {
+        final int offset = 0;
+        final long revokePos = 1234;
+        final int sessionId = 4;
+        final int streamId = 99;
+        final String channel = "excellent.channel";
+
+        final int length = SIZE_OF_LONG + (SIZE_OF_INT * 2) + trailingStringLength(channel, MAX_CHANNEL_URI_LENGTH);
+
+        DriverEventEncoder.encodePublicationRevoke(
+            buffer, offset, length, length, revokePos, sessionId, streamId, channel);
+        final StringBuilder builder = new StringBuilder();
+        DriverEventDissector.dissectPublicationRevoke(buffer, offset, builder);
+
+        assertThat(builder.toString(), endsWith(
+            "DRIVER: PUBLICATION_REVOKE [37/37]: revokedPos=1234 sessionId=4 streamId=99 channel=excellent.channel"));
+    }
+
+    @Test
+    void dissectPublicationImageRevoke()
+    {
+        final int offset = 0;
+        final long revokePos = 1234;
+        final int sessionId = 4;
+        final int streamId = 99;
+        final String channel = "excellent.channel";
+
+        final int length = SIZE_OF_LONG + (SIZE_OF_INT * 2) + trailingStringLength(channel, MAX_CHANNEL_URI_LENGTH);
+
+        DriverEventEncoder.encodePublicationImageRevoke(
+            buffer, offset, length, length, revokePos, sessionId, streamId, channel);
+        final StringBuilder builder = new StringBuilder();
+        DriverEventDissector.dissectPublicationImageRevoke(buffer, offset, builder);
+
+        assertThat(builder.toString(), endsWith(
+            "DRIVER: PUBLICATION_IMAGE_REVOKE [37/37]: " +
+            "revokedPos=1234 sessionId=4 streamId=99 channel=excellent.channel"));
     }
 
     private DirectBuffer newBuffer(final byte[] bytes)

@@ -121,6 +121,7 @@ typedef struct aeron_network_publication_stct
     {
         aeron_untethered_subscription_state_change_func_t untethered_subscription_state_change;
         aeron_driver_resend_func_t resend;
+        aeron_driver_publication_revoke_func_t publication_revoke;
     } log;
 
     volatile int64_t *short_sends_counter;
@@ -129,6 +130,7 @@ typedef struct aeron_network_publication_stct
     volatile int64_t *retransmits_sent_counter;
     volatile int64_t *retransmitted_bytes_counter;
     volatile int64_t *unblocked_publications_counter;
+    volatile int64_t *publications_revoked_counter;
     volatile int64_t *mapped_bytes_counter;
 
     aeron_int64_counter_map_t receiver_liveness_tracker;
@@ -157,10 +159,6 @@ void aeron_network_publication_close(
     aeron_counters_manager_t *counters_manager, aeron_network_publication_t *publication);
 
 bool aeron_network_publication_free(aeron_network_publication_t *publication);
-
-void aeron_network_publication_incref(void *clientd);
-
-void aeron_network_publication_decref(void *clientd);
 
 void aeron_network_publication_on_time_event(
     aeron_driver_conductor_t *conductor, aeron_network_publication_t *publication, int64_t now_ns, int64_t now_ms);

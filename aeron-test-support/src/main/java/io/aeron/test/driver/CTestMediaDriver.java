@@ -231,6 +231,7 @@ public final class CTestMediaDriver implements TestMediaDriver
             "AERON_PUBLICATION_UNBLOCK_TIMEOUT", String.valueOf(context.publicationUnblockTimeoutNs()));
         environment.put(
             "AERON_PUBLICATION_CONNECTION_TIMEOUT", String.valueOf(context.publicationConnectionTimeoutNs()));
+        environment.put("AERON_PUBLICATION_LINGER_TIMEOUT", String.valueOf(context.publicationLingerTimeoutNs()));
         environment.put("AERON_SPIES_SIMULATE_CONNECTION", Boolean.toString(context.spiesSimulateConnection()));
         environment.put("AERON_PERFORM_STORAGE_CHECKS", Boolean.toString(context.performStorageChecks()));
         if (null != context.threadingMode())

@@ -75,6 +75,31 @@ public:
         aeron_exclusive_publication_close(m_publication, nullptr, nullptr);
     }
 
+    inline void close()
+    {
+        if (aeron_exclusive_publication_close(m_publication, nullptr, nullptr) < 0)
+        {
+            AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
+        }
+
+        m_publication = nullptr;
+    }
+
+    inline void revokeOnClose()
+    {
+        aeron_exclusive_publication_revoke_on_close(m_publication);
+    }
+
+    inline void revoke()
+    {
+        if (aeron_exclusive_publication_revoke(m_publication, nullptr, nullptr) < 0)
+        {
+            AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
+        }
+
+        m_publication = nullptr;
+    }
+
     /**
      * Media address for delivery to the channel.
      *
@@ -228,6 +253,11 @@ public:
         std::int64_t position = aeron_exclusive_publication_position(m_publication);
         if (AERON_PUBLICATION_ERROR == position)
         {
+            if (nullptr == m_publication)
+            {
+                return AERON_PUBLICATION_CLOSED;
+            }
+
             AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
 
@@ -246,6 +276,11 @@ public:
         std::int64_t limit = aeron_exclusive_publication_position_limit(m_publication);
         if (AERON_PUBLICATION_ERROR == limit)
         {
+            if (nullptr == m_publication)
+            {
+                return AERON_PUBLICATION_CLOSED;
+            }
+
             AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
 
@@ -353,6 +388,11 @@ public:
 
         if (AERON_PUBLICATION_ERROR == position)
         {
+            if (nullptr == m_publication)
+            {
+                return AERON_PUBLICATION_CLOSED;
+            }
+
             AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
 
@@ -375,6 +415,11 @@ public:
 
         if (AERON_PUBLICATION_ERROR == position)
         {
+            if (nullptr == m_publication)
+            {
+                return AERON_PUBLICATION_CLOSED;
+            }
+
             AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
 
@@ -429,6 +474,11 @@ public:
 
         if (AERON_PUBLICATION_ERROR == position)
         {
+            if (nullptr == m_publication)
+            {
+                return AERON_PUBLICATION_CLOSED;
+            }
+
             AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
 
@@ -491,6 +541,11 @@ public:
 
         if (AERON_PUBLICATION_ERROR == position)
         {
+            if (nullptr == m_publication)
+            {
+                return AERON_PUBLICATION_CLOSED;
+            }
+
             AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
 
@@ -538,6 +593,11 @@ public:
 
         if (AERON_PUBLICATION_ERROR == position)
         {
+            if (nullptr == m_publication)
+            {
+                return AERON_PUBLICATION_CLOSED;
+            }
+
             AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
 
@@ -555,7 +615,7 @@ public:
     AsyncDestination *addDestinationAsync(const std::string &endpointChannel)
     {
         AsyncDestination *async = nullptr;
-        if (aeron_exclusive_publication_async_add_destination(&async, m_aeron, m_publication, endpointChannel.c_str()))
+        if (aeron_exclusive_publication_async_add_destination(&async, m_aeron, m_publication, endpointChannel.c_str()) < 0)
         {
             AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
@@ -710,13 +770,6 @@ public:
 
         return findDestinationResponse(search->second);
     }
-
-    /// @cond HIDDEN_SYMBOLS
-    inline void close()
-    {
-        aeron_exclusive_publication_close(m_publication, nullptr, nullptr);
-    }
-    /// @endcond
 
     /// @cond HIDDEN_SYMBOLS
     aeron_exclusive_publication_t *publication()
