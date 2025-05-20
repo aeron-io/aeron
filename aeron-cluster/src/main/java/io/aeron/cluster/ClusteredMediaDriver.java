@@ -101,7 +101,8 @@ public class ClusteredMediaDriver implements AutoCloseable
                 .errorCounter(errorCounter));
 
             consensusModule = ConsensusModule.launch(consensusModuleCtx
-                .aeronDirectoryName(driverCtx.aeronDirectoryName()));
+                .aeronDirectoryName(driverCtx.aeronDirectoryName())
+                .mediaDriverAgentInvoker(driver.sharedAgentInvoker()));
 
             return new ClusteredMediaDriver(driver, archive, consensusModule);
         }

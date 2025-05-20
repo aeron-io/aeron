@@ -103,7 +103,8 @@ public class ClusterBackupMediaDriver implements AutoCloseable
                 .errorCounter(errorCounter));
 
             clusterBackup = ClusterBackup.launch(clusterBackupCtx
-                .aeronDirectoryName(driverCtx.aeronDirectoryName()));
+                .aeronDirectoryName(driverCtx.aeronDirectoryName())
+                .mediaDriverAgentInvoker(driver.sharedAgentInvoker()));
 
             return new ClusterBackupMediaDriver(driver, archive, clusterBackup);
         }
