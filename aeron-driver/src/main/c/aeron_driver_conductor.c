@@ -3325,7 +3325,7 @@ aeron_rb_read_action_t aeron_driver_conductor_on_command(
 
             if (length < sizeof(aeron_remove_publication_command_t))
             {
-                if (length == 24) // old aeron_remove_command_t has no flags field
+                if (length == offsetof(aeron_remove_publication_command_t, flags)) // old aeron_remove_command_t has no flags field
                 {
                     complete_command.correlated.client_id = command->correlated.client_id;
                     complete_command.correlated.correlation_id = command->correlated.correlation_id;
