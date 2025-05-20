@@ -34,6 +34,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
+import static io.aeron.Publication.BACK_PRESSURED;
 import static io.aeron.Publication.CLOSED;
 import static io.aeron.driver.status.SystemCounterDescriptor.PUBLICATIONS_REVOKED;
 import static io.aeron.driver.status.SystemCounterDescriptor.PUBLICATION_IMAGES_REVOKED;
@@ -293,6 +294,60 @@ class PublicationRevokeTest
 
         assertEquals(1, countersReader.getCounterValue(PUBLICATIONS_REVOKED.id()));
         assertEquals(expectedPublicationImagesRevoked, countersReader.getCounterValue(PUBLICATION_IMAGES_REVOKED.id()));
+    }
+
+    @ParameterizedTest
+    @MethodSource("channels")
+    @InterruptAfter(10)
+    void shouldRevokeBeforeAllMessagesConsumed(
+        final String subscriptionChannel,
+        final String publicationChannel,
+        final long expectedPublicationImagesRevoked)
+    {
+        final AtomicInteger unavailableImages = new AtomicInteger(0);
+        doAnswer(invocation ->
+        {
+            unavailableImages.incrementAndGet();
+            return null;
+        }).when(unavailableImageHandler).onUnavailableImage(any(Image.class));
+
+        launch();
+
+        subscription = client.addSubscription(
+            subscriptionChannel, STREAM_ID, availableImageHandler, unavailableImageHandler);
+        final ExclusivePublication exclusivePublication = client.addExclusivePublication(publicationChannel, STREAM_ID);
+
+        Tests.awaitConnected(subscription);
+        Tests.awaitConnected(exclusivePublication);
+
+        int messagesSent = 0;
+        long position;
+        while ((position = exclusivePublication.offer(buffer, 0, SIZE_OF_INT)) != BACK_PRESSURED)
+        {
+            if (position > 0)
+            {
+                messagesSent++;
+            }
+
+            Tests.yield();
+        }
+
+        int messagesReceived = 0;
+        while (unavailableImages.get() == 0)
+        {
+            messagesReceived += subscription.poll((buffer1, offset, length, header) -> Tests.sleep(1), 1);
+
+            if (messagesReceived == 100)
+            {
+                exclusivePublication.revoke();
+            }
+
+            Tests.yield();
+        }
+
+        assertEquals(1, countersReader.getCounterValue(PUBLICATIONS_REVOKED.id()));
+        assertEquals(expectedPublicationImagesRevoked, countersReader.getCounterValue(PUBLICATION_IMAGES_REVOKED.id()));
+        assertTrue(messagesSent > messagesReceived);
     }
 
     private void publishMessage(final Publication pub)
