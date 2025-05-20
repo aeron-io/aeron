@@ -1474,7 +1474,7 @@ public final class AeronCluster implements AutoCloseable
             }
 
             final ChannelUri egressChannelUri = ChannelUri.parse(egressChannel);
-            if (egressChannelUri.isUdp() && !egressChannelUri.containsKey(REJOIN_PARAM_NAME))
+            if (egressChannelUri.isUdp())
             {
                 egressChannelUri.put(REJOIN_PARAM_NAME, "false");
                 egressChannel = egressChannelUri.toString();

@@ -33,6 +33,8 @@ import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.Tests;
 import io.aeron.test.cluster.TestCluster;
 import io.aeron.test.cluster.TestNode;
+import io.aeron.test.driver.PortLossGenerator;
+import io.aeron.test.driver.StreamIdLossGenerator;
 import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
@@ -42,7 +44,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import java.net.InetSocketAddress;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.IntFunction;
@@ -398,80 +399,6 @@ class ClusterSessionReliabilityTest
                 System.out.println("expected sequence " + nextSequence + ", but got " + sequence);
             }
             nextSequence = sequence + 1;
-        }
-    }
-
-    private static final class PortLossGenerator implements LossGenerator
-    {
-        private int port;
-        private long dropUntil;
-        private volatile boolean drop;
-
-        public void startDropping(final int port, final long durationNs)
-        {
-            this.port = port;
-            dropUntil = System.nanoTime() + durationNs;
-            drop = true;
-        }
-
-        public boolean shouldDropFrame(final InetSocketAddress address, final UnsafeBuffer buffer, final int length)
-        {
-            if (drop && port == address.getPort())
-            {
-                if (System.nanoTime() - dropUntil < 0)
-                {
-                    return true;
-                }
-                else
-                {
-                    drop = false;
-                }
-            }
-
-            return false;
-        }
-    }
-
-    private static final class StreamIdLossGenerator implements LossGenerator
-    {
-        private int streamId;
-        private long dropUntil;
-        private volatile boolean drop;
-
-        public void startDropping(final int streamId, final long durationNs)
-        {
-            this.streamId = streamId;
-            dropUntil = System.nanoTime() + durationNs;
-            drop = true;
-        }
-
-        public boolean shouldDropFrame(
-            final InetSocketAddress address,
-            final UnsafeBuffer buffer,
-            final int streamId,
-            final int sessionId,
-            final int termId,
-            final int termOffset,
-            final int length)
-        {
-            if (drop && streamId == this.streamId)
-            {
-                if (System.nanoTime() - dropUntil < 0)
-                {
-                    return true;
-                }
-                else
-                {
-                    drop = false;
-                }
-            }
-
-            return false;
-        }
-
-        public boolean shouldDropFrame(final InetSocketAddress address, final UnsafeBuffer buffer, final int length)
-        {
-            return false;
         }
     }
 }

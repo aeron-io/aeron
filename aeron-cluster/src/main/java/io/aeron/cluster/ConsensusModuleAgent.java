@@ -3598,10 +3598,7 @@ final class ConsensusModuleAgent
             return; // don't subscribe to ingress if follower and multicast ingress
         }
 
-        if (!ingressUri.containsKey(REJOIN_PARAM_NAME))
-        {
-            ingressUri.put(REJOIN_PARAM_NAME, "false");
-        }
+        ingressUri.put(REJOIN_PARAM_NAME, "false");
 
         final Subscription subscription = aeron.addSubscription(
             ingressUri.toString(), ctx.ingressStreamId(), null, this::onUnavailableIngressImage);
