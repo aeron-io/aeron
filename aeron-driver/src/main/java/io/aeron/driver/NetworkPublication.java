@@ -1162,7 +1162,7 @@ public final class NetworkPublication
             }
 
             case LINGER:
-                if (refCount == 0 &&
+                if (0 == refCount &&
                     (hasReceivedUnicastEos || (timeOfLastActivityNs + lingerTimeoutNs) - timeNs < 0))
                 {
                     channelEndpoint.decRef();

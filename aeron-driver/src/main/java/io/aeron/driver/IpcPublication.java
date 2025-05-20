@@ -345,7 +345,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
             }
 
             case LINGER:
-                if (refCount == 0)
+                if (0 == refCount)
                 {
                     conductor.cleanupIpcPublication(this);
                     reachedEndOfLife = true;
