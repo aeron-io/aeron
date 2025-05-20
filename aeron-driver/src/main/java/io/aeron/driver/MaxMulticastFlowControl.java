@@ -58,7 +58,7 @@ public class MaxMulticastFlowControl implements FlowControl
     {
         retransmitReceiverWindowMultiple = FlowControl.retransmitReceiverWindowMultiple(
             udpChannel,
-            context.flowControlMulticastRetransmitReceiverWindowMultiple()
+            context.multicastFlowControlRetransmitReceiverWindowMultiple()
         );
     }
 

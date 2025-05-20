@@ -946,15 +946,15 @@ public final class Configuration
      * Property name for default retransmit receiver window multiple used by the unicast flow control strategy.
      */
     @Config(defaultType = DefaultType.INT, defaultInt = 16)
-    public static final String FLOW_CONTROL_UNICAST_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE_PROP_NAME =
-        "aeron.flow.control.unicast.rrwm";
+    public static final String UNICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE_PROP_NAME =
+        "aeron.unicast.flow.control.rrwm";
 
     /**
      * Property name for default retransmit receiver window multiple used by multicast flow control strategies.
      */
     @Config(defaultType = DefaultType.INT, defaultInt = 4)
-    public static final String FLOW_CONTROL_MULTICAST_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE_PROP_NAME =
-        "aeron.flow.control.multicast.rrwm";
+    public static final String MULTICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE_PROP_NAME =
+        "aeron.multicast.flow.control.rrwm";
 
     /**
      * Property name for resolver name of the Media Driver used in name resolution.
@@ -1458,9 +1458,9 @@ public final class Configuration
      *
      * @return multiple.
      */
-    public static int flowControlUnicastRetransmitReceiverWindowMultiple()
+    public static int unicastFlowControlRetransmitReceiverWindowMultiple()
     {
-        return getInteger(FLOW_CONTROL_UNICAST_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE_PROP_NAME, 16);
+        return getInteger(UNICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE_PROP_NAME, 16);
     }
 
     /**
@@ -1469,9 +1469,9 @@ public final class Configuration
      *
      * @return multiple.
      */
-    public static int flowControlMulticastRetransmitReceiverWindowMultiple()
+    public static int multicastFlowControlRetransmitReceiverWindowMultiple()
     {
-        return getInteger(FLOW_CONTROL_MULTICAST_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE_PROP_NAME, 4);
+        return getInteger(MULTICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE_PROP_NAME, 4);
     }
 
     /**

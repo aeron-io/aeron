@@ -473,10 +473,10 @@ public final class MediaDriver implements AutoCloseable
         private long nakUnicastRetryDelayRatio = Configuration.nakUnicastRetryDelayRatio();
         private long nakMulticastMaxBackoffNs = Configuration.nakMulticastMaxBackoffNs();
         private long flowControlReceiverTimeoutNs = Configuration.flowControlReceiverTimeoutNs();
-        private int flowControlUnicastRetransmitReceiverWindowMultiple = Configuration
-            .flowControlUnicastRetransmitReceiverWindowMultiple();
-        private int flowControlMulticastRetransmitReceiverWindowMultiple = Configuration
-            .flowControlMulticastRetransmitReceiverWindowMultiple();
+        private int unicastFlowControlRetransmitReceiverWindowMultiple = Configuration
+            .unicastFlowControlRetransmitReceiverWindowMultiple();
+        private int multicastFlowControlRetransmitReceiverWindowMultiple = Configuration
+            .multicastFlowControlRetransmitReceiverWindowMultiple();
         private long reResolutionCheckIntervalNs = Configuration.reResolutionCheckIntervalNs();
         private long conductorCycleThresholdNs = Configuration.conductorCycleThresholdNs();
         private long senderCycleThresholdNs = Configuration.senderCycleThresholdNs();
@@ -680,14 +680,14 @@ public final class MediaDriver implements AutoCloseable
                 validateUnblockTimeout(publicationUnblockTimeoutNs(), clientLivenessTimeoutNs(), timerIntervalNs);
                 validateUntetheredTimeouts(untetheredWindowLimitTimeoutNs, untetheredRestingTimeoutNs, timerIntervalNs);
                 validateValueRange(
-                    flowControlUnicastRetransmitReceiverWindowMultiple,
+                    unicastFlowControlRetransmitReceiverWindowMultiple,
                     1, Integer.MAX_VALUE,
-                    "flowControlUnicastRetransmitReceiverWindowMultiple"
+                    "unicastFlowControlRetransmitReceiverWindowMultiple"
                 );
                 validateValueRange(
-                    flowControlMulticastRetransmitReceiverWindowMultiple,
+                    multicastFlowControlRetransmitReceiverWindowMultiple,
                     1, Integer.MAX_VALUE,
-                    "flowControlMulticastRetransmitReceiverWindowMultiple"
+                    "multicastFControlRetransmitReceiverWindowMultiple"
                 );
 
                 final long cncFileLength = BitUtil.align(
@@ -2671,9 +2671,9 @@ public final class MediaDriver implements AutoCloseable
          * @return window size multiple for the unicast strategy.
          */
         @Config
-        public int flowControlUnicastRetransmitReceiverWindowMultiple()
+        public int unicastFlowControlRetransmitReceiverWindowMultiple()
         {
-            return flowControlUnicastRetransmitReceiverWindowMultiple;
+            return unicastFlowControlRetransmitReceiverWindowMultiple;
         }
 
         /**
@@ -2683,14 +2683,14 @@ public final class MediaDriver implements AutoCloseable
          * <p>
          * See @{@link FlowControl#calculateRetransmissionLength(int, int, int, int)}
          *
-         * @param flowControlUnicastRetransmitReceiverWindowMultiple window size multiple for the unicast strategy.
+         * @param unicastFlowControlRetransmitReceiverWindowMultiple window size multiple for the unicast strategy.
          * @return this for a fluent API.
          */
-        public Context flowControlUnicastRetransmitReceiverWindowMultiple(
-            final int flowControlUnicastRetransmitReceiverWindowMultiple)
+        public Context unicastFlowControlRetransmitReceiverWindowMultiple(
+            final int unicastFlowControlRetransmitReceiverWindowMultiple)
         {
-            this.flowControlUnicastRetransmitReceiverWindowMultiple =
-                flowControlUnicastRetransmitReceiverWindowMultiple;
+            this.unicastFlowControlRetransmitReceiverWindowMultiple =
+                unicastFlowControlRetransmitReceiverWindowMultiple;
             return this;
         }
 
@@ -2704,9 +2704,9 @@ public final class MediaDriver implements AutoCloseable
          * @return window size multiple for multicast strategies.
          */
         @Config
-        public int flowControlMulticastRetransmitReceiverWindowMultiple()
+        public int multicastFlowControlRetransmitReceiverWindowMultiple()
         {
-            return flowControlMulticastRetransmitReceiverWindowMultiple;
+            return multicastFlowControlRetransmitReceiverWindowMultiple;
         }
 
         /**
@@ -2716,14 +2716,14 @@ public final class MediaDriver implements AutoCloseable
          * <p>
          * See @{@link FlowControl#calculateRetransmissionLength(int, int, int, int)}
          *
-         * @param flowControlMulticastRetransmitReceiverWindowMultiple window size multiple for multicast strategies.
+         * @param multicastFlowControlRetransmitReceiverWindowMultiple window size multiple for multicast strategies.
          * @return this for a fluent API.
          */
-        public Context flowControlMulticastRetransmitReceiverWindowMultiple(
-            final int flowControlMulticastRetransmitReceiverWindowMultiple)
+        public Context multicastFlowControlRetransmitReceiverWindowMultiple(
+            final int multicastFlowControlRetransmitReceiverWindowMultiple)
         {
-            this.flowControlMulticastRetransmitReceiverWindowMultiple =
-                flowControlMulticastRetransmitReceiverWindowMultiple;
+            this.multicastFlowControlRetransmitReceiverWindowMultiple =
+                multicastFlowControlRetransmitReceiverWindowMultiple;
             return this;
         }
 
@@ -4472,10 +4472,10 @@ public final class MediaDriver implements AutoCloseable
                 "\n    flowControlGroupTag=" + flowControlGroupTag +
                 "\n    flowControlGroupMinSize=" + flowControlGroupMinSize +
                 "\n    flowControlReceiverTimeoutNs=" + flowControlReceiverTimeoutNs +
-                "\n    flowControlUnicastRetransmitReceiverWindowMultiple=" +
-                flowControlUnicastRetransmitReceiverWindowMultiple +
-                "\n    flowControlMulticastRetransmitReceiverWindowMultiple=" +
-                flowControlMulticastRetransmitReceiverWindowMultiple +
+                "\n    unicastFlowControlRetransmitReceiverWindowMultiple=" +
+                unicastFlowControlRetransmitReceiverWindowMultiple +
+                "\n    multicastFControlRetransmitReceiverWindowMultiple=" +
+                multicastFlowControlRetransmitReceiverWindowMultiple +
                 "\n    reResolutionCheckIntervalNs=" + reResolutionCheckIntervalNs +
                 "\n    receiverGroupConsideration=" + receiverGroupConsideration +
                 "\n    congestionControlSupplier=" + congestionControlSupplier +

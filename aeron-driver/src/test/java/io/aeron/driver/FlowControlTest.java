@@ -95,9 +95,9 @@ class FlowControlTest
 
         final int rrwm = FlowControl.retransmitReceiverWindowMultiple(
             UdpChannel.parse(uri),
-            context.flowControlMulticastRetransmitReceiverWindowMultiple()
+            context.multicastFlowControlRetransmitReceiverWindowMultiple()
         );
-        final int defaultRrwm = Configuration.flowControlMulticastRetransmitReceiverWindowMultiple();
+        final int defaultRrwm = Configuration.multicastFlowControlRetransmitReceiverWindowMultiple();
         assertEquals(defaultRrwm, rrwm);
     }
 
@@ -111,11 +111,11 @@ class FlowControlTest
     void shouldUseRetransmitReceiverWindowMultipleFromUri(final String uri)
     {
         final MediaDriver.Context context = new MediaDriver.Context()
-            .flowControlMulticastRetransmitReceiverWindowMultiple(2);
+            .multicastFlowControlRetransmitReceiverWindowMultiple(2);
 
         final int rrwm = FlowControl.retransmitReceiverWindowMultiple(
             UdpChannel.parse(uri),
-            context.flowControlMulticastRetransmitReceiverWindowMultiple()
+            context.multicastFlowControlRetransmitReceiverWindowMultiple()
         );
         assertEquals(8, rrwm);
     }
@@ -136,7 +136,7 @@ class FlowControlTest
     @MethodSource("multicastFlowControlStrategies")
     void usesDefaultMulticastRetransmitReceiverWindowMultipleWhenNotSet(final FlowControl flowControl, final String uri)
     {
-        final int expectedRrwm = Configuration.flowControlMulticastRetransmitReceiverWindowMultiple();
+        final int expectedRrwm = Configuration.multicastFlowControlRetransmitReceiverWindowMultiple();
         final CountersManager countersManager = Tests.newCountersManager(COUNTERS_BUFFER_LENGTH);
 
         try (MockedStatic<FlowControl> mockedFlowControl = mockStatic(FlowControl.class))
@@ -181,7 +181,7 @@ class FlowControlTest
 
             final MediaDriver.Context context = new MediaDriver.Context()
                 .tempBuffer(new UnsafeBuffer(new byte[TERM_BUFFER_LENGTH]))
-                .flowControlMulticastRetransmitReceiverWindowMultiple(expectedRrwm);
+                .multicastFlowControlRetransmitReceiverWindowMultiple(expectedRrwm);
             flowControl.initialize(context, countersManager, UdpChannel.parse(uri), 0, 0, 0, 0, 0);
 
             flowControl.maxRetransmissionLength(0, 32, TERM_BUFFER_LENGTH, MTU_LENGTH);
@@ -212,7 +212,7 @@ class FlowControlTest
 
             final MediaDriver.Context context = new MediaDriver.Context()
                 .tempBuffer(new UnsafeBuffer(new byte[TERM_BUFFER_LENGTH]))
-                .flowControlMulticastRetransmitReceiverWindowMultiple(expectedRrwm / 2);
+                .multicastFlowControlRetransmitReceiverWindowMultiple(expectedRrwm / 2);
             flowControl.initialize(context, countersManager, UdpChannel.parse(fullUri), 0, 0, 0, 0, 0);
 
             flowControl.maxRetransmissionLength(0, 32, TERM_BUFFER_LENGTH, MTU_LENGTH);
@@ -227,7 +227,7 @@ class FlowControlTest
     void usesDefaultUnicastRetransmitReceiverWindowMultipleWhenNotSetInContext()
     {
         final String uri = "aeron:udp?endpoint=localhost:0";
-        final int expectedRrwm = Configuration.flowControlUnicastRetransmitReceiverWindowMultiple();
+        final int expectedRrwm = Configuration.unicastFlowControlRetransmitReceiverWindowMultiple();
         final CountersManager countersManager = Tests.newCountersManager(COUNTERS_BUFFER_LENGTH);
 
         try (MockedStatic<FlowControl> mockedFlowControl = mockStatic(FlowControl.class))
@@ -272,7 +272,7 @@ class FlowControlTest
 
             final MediaDriver.Context context = new MediaDriver.Context()
                 .tempBuffer(new UnsafeBuffer(new byte[TERM_BUFFER_LENGTH]))
-                .flowControlUnicastRetransmitReceiverWindowMultiple(expectedRrwm);
+                .unicastFlowControlRetransmitReceiverWindowMultiple(expectedRrwm);
             final UnicastFlowControl flowControl = new UnicastFlowControl();
 
             flowControl.initialize(context, countersManager, UdpChannel.parse(uri), 0, 0, 0, 0, 0);

@@ -121,7 +121,7 @@ public abstract class AbstractMinMulticastFlowControl
         hasTaggedStatusMessageTriggeredSetup = false;
         retransmitReceiverWindowMultiple = FlowControl.retransmitReceiverWindowMultiple(
             udpChannel,
-            context.flowControlMulticastRetransmitReceiverWindowMultiple()
+            context.multicastFlowControlRetransmitReceiverWindowMultiple()
         );
     }
 

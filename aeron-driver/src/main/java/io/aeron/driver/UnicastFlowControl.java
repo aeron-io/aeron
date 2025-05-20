@@ -103,7 +103,7 @@ public class UnicastFlowControl implements FlowControl
     {
         retransmitReceiverWindowMultiple = FlowControl.retransmitReceiverWindowMultiple(
             udpChannel,
-            context.flowControlUnicastRetransmitReceiverWindowMultiple()
+            context.unicastFlowControlRetransmitReceiverWindowMultiple()
         );
     }
 
