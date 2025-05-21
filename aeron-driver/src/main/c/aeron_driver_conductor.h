@@ -291,6 +291,7 @@ typedef struct aeron_driver_conductor_stct
     aeron_deque_t end_of_life_queue;
 
     int64_t *errors_counter;
+    int64_t *images_rejected_counter;
     int64_t *unblocked_commands_counter;
     int64_t *client_timeouts_counter;
 
