@@ -132,6 +132,7 @@ public final class DriverConductor implements Agent
     private final MutableDirectBuffer tempBuffer;
     private final DataHeaderFlyweight defaultDataHeader = new DataHeaderFlyweight(createDefaultHeader(0, 0, 0));
     private final AtomicCounter errorCounter;
+    private final AtomicCounter imagesRejected;
     private final DutyCycleTracker dutyCycleTracker;
     private final Executor asyncTaskExecutor;
     private final boolean asyncExecutionDisabled;
@@ -155,6 +156,7 @@ public final class DriverConductor implements Agent
         clientProxy = ctx.clientProxy();
         tempBuffer = ctx.tempBuffer();
         errorCounter = ctx.systemCounters().get(ERRORS);
+        imagesRejected = ctx.systemCounters().get(IMAGES_REJECTED);
         dutyCycleTracker = ctx.conductorDutyCycleTracker();
 
         asyncTaskExecutor = ctx.asyncTaskExecutor();
@@ -1543,6 +1545,8 @@ public final class DriverConductor implements Agent
         {
             receiverProxy.rejectImage(imageCorrelationId, position, reason);
         }
+
+        imagesRejected.incrementRelease();
 
         clientProxy.operationSucceeded(correlationId);
     }

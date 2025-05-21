@@ -72,14 +72,6 @@ public class RejectImageTest
         );
     }
 
-    private static Stream<Arguments> channelsAndCounters()
-    {
-        return Stream.of(
-            Arguments.of(UDP_CHANNEL, ERROR_FRAMES_SENT.id(), ERROR_FRAMES_RECEIVED.id()),
-            Arguments.of(IPC_CHANNEL, IPC_REJECTIONS.id(), IPC_REJECTIONS.id())
-        );
-    }
-
     public static final long A_VALUE_THAT_SHOWS_WE_ARENT_SPAMMING_ERROR_MESSAGES = 1000L;
 
     @RegisterExtension
@@ -132,14 +124,11 @@ public class RejectImageTest
     }
 
     @ParameterizedTest
-    @MethodSource("channelsAndCounters")
+    @MethodSource("channels")
     @InterruptAfter(10)
     @SlowTest
     @SuppressWarnings("MethodLength")
-    void shouldRejectSubscriptionsImage(
-        final String channel,
-        final int sentCounterId,
-        final int receivedCounterId) throws IOException
+    void shouldRejectSubscriptionsImage(final String channel) throws IOException
     {
         context.imageLivenessTimeoutNs(TimeUnit.MILLISECONDS.toNanos(1234));
 
@@ -165,9 +154,10 @@ public class RejectImageTest
             Tests.awaitConnected(sub);
 
             final CountersReader countersReader = aeron.countersReader();
-            final long initialErrorFramesReceived = countersReader.getCounterValue(receivedCounterId);
-            final long initialErrorFramesSent = countersReader.getCounterValue(sentCounterId);
+            final long initialErrorFramesReceived = countersReader.getCounterValue(ERROR_FRAMES_RECEIVED.id());
+            final long initialErrorFramesSent = countersReader.getCounterValue(ERROR_FRAMES_SENT.id());
             final long initialErrors = countersReader.getCounterValue(ERRORS.id());
+            final long initialImagesRejected = countersReader.getCounterValue(IMAGES_REJECTED.id());
 
             while (pub.offer(message) < 0)
             {
@@ -194,10 +184,18 @@ public class RejectImageTest
             final long value = driver.context().publicationConnectionTimeoutNs();
             assertThat(t1 - t0, lessThan(value));
 
-            while (initialErrorFramesReceived == countersReader.getCounterValue(receivedCounterId) ||
-                initialErrorFramesSent == countersReader.getCounterValue(sentCounterId))
+            while (initialImagesRejected == countersReader.getCounterValue(IMAGES_REJECTED.id()))
             {
                 Tests.yield();
+            }
+
+            if (channel.contains(CommonContext.UDP_CHANNEL))
+            {
+                while (initialErrorFramesReceived == countersReader.getCounterValue(ERROR_FRAMES_RECEIVED.id()) ||
+                    initialErrorFramesSent == countersReader.getCounterValue(ERROR_FRAMES_SENT.id()))
+                {
+                    Tests.yield();
+                }
             }
 
             while (initialErrors == countersReader
@@ -221,8 +219,10 @@ public class RejectImageTest
             }
 
             assertThat(
-                countersReader.getCounterValue(receivedCounterId) - initialErrorFramesReceived,
+                countersReader.getCounterValue(ERROR_FRAMES_RECEIVED.id()) - initialErrorFramesReceived,
                 lessThan(A_VALUE_THAT_SHOWS_WE_ARENT_SPAMMING_ERROR_MESSAGES));
+
+            assertEquals(1, countersReader.getCounterValue(IMAGES_REJECTED.id()));
 
             assertEquals(1, countersReader.getCounterValue(ERRORS.id()) - initialErrors);
 

@@ -18,7 +18,6 @@ package io.aeron.driver;
 import io.aeron.Aeron;
 import io.aeron.CommonContext;
 import io.aeron.driver.buffer.RawLog;
-import io.aeron.driver.status.SystemCounters;
 import io.aeron.logbuffer.LogBufferDescriptor;
 import io.aeron.logbuffer.LogBufferUnblocker;
 import org.agrona.CloseHelper;
@@ -89,7 +88,6 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     private final ArrayList<UntetheredSubscription> untetheredSubscriptions = new ArrayList<>();
     private final RawLog rawLog;
     private final AtomicCounter unblockedPublications;
-    private final AtomicCounter ipcRejections;
     private final ErrorHandler errorHandler;
 
     IpcPublication(
@@ -130,9 +128,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         this.untetheredWindowLimitTimeoutNs = params.untetheredWindowLimitTimeoutNs;
         this.untetheredRestingTimeoutNs = params.untetheredRestingTimeoutNs;
         this.imageLivenessTimeoutNs = ctx.imageLivenessTimeoutNs();
-        final SystemCounters systemCounters = ctx.systemCounters();
-        this.unblockedPublications = systemCounters.get(UNBLOCKED_PUBLICATIONS);
-        this.ipcRejections = systemCounters.get(IPC_REJECTIONS);
+        this.unblockedPublications = ctx.systemCounters().get(UNBLOCKED_PUBLICATIONS);
         this.metaDataBuffer = rawLog.metaData();
 
         consumerPosition = producerPosition();
@@ -268,8 +264,6 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
             IPC_SRC_ADDRESS,
             IMAGE_REJECTED.value(),
             reason);
-
-        ipcRejections.incrementRelease();
 
         if (!inCoolDown)
         {
