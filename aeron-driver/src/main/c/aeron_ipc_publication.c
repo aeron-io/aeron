@@ -542,7 +542,7 @@ void aeron_ipc_publication_on_time_event(
 
         case AERON_IPC_PUBLICATION_STATE_LINGER:
         {
-            if (publication->conductor_fields.refcnt == 0)
+            if (publication->conductor_fields.refcnt <= 0)
             {
                 publication->conductor_fields.has_reached_end_of_life = true;
             }

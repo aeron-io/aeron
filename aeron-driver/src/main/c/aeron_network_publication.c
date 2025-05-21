@@ -504,23 +504,18 @@ int aeron_network_publication_heartbeat_message_check(
     if (publication->has_initial_connection &&
         now_ns > (publication->time_of_last_data_or_heartbeat_ns + AERON_NETWORK_PUBLICATION_HEARTBEAT_TIMEOUT_NS))
     {
-        uint8_t flags;
-
         uint8_t is_publication_revoked;
         AERON_GET_ACQUIRE(is_publication_revoked, publication->log_meta_data->is_publication_revoked);
 
+        uint8_t flags = AERON_DATA_HEADER_BEGIN_FLAG | AERON_DATA_HEADER_END_FLAG;
         if (is_publication_revoked)
         {
-            flags = AERON_DATA_HEADER_BEGIN_FLAG | AERON_DATA_HEADER_END_FLAG |
-                AERON_DATA_HEADER_EOS_FLAG | AERON_DATA_HEADER_REVOKED_FLAG;
+            flags |= AERON_DATA_HEADER_EOS_FLAG;
+            flags |= AERON_DATA_HEADER_REVOKED_FLAG;
         }
         else if (publication->signal_eos & is_end_of_stream)
         {
-            flags = AERON_DATA_HEADER_BEGIN_FLAG | AERON_DATA_HEADER_END_FLAG | AERON_DATA_HEADER_EOS_FLAG;
-        }
-        else
-        {
-            flags = AERON_DATA_HEADER_BEGIN_FLAG | AERON_DATA_HEADER_END_FLAG;
+            flags |= AERON_DATA_HEADER_EOS_FLAG;
         }
 
         uint8_t heartbeat_buffer[sizeof(aeron_data_header_t)];
@@ -1342,7 +1337,7 @@ void aeron_network_publication_on_time_event(
             bool has_received_unicast_eos = false;
             AERON_GET_ACQUIRE(has_received_unicast_eos, publication->has_received_unicast_eos);
 
-            if (publication->conductor_fields.refcnt == 0 &&
+            if (publication->conductor_fields.refcnt <= 0 &&
                 (has_received_unicast_eos ||
                 now_ns > (publication->conductor_fields.time_of_last_activity_ns + publication->linger_timeout_ns)))
             {
