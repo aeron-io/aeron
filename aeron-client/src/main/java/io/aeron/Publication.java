@@ -94,7 +94,7 @@ public abstract class Publication implements AutoCloseable
     final int positionBitsToShift;
     final int termBufferLength;
     volatile boolean isClosed = false;
-    volatile boolean revokeOnClose = false;
+    boolean revokeOnClose = false;
 
     final ReadablePosition positionLimit;
     final UnsafeBuffer[] termBuffers;
