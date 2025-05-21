@@ -214,10 +214,8 @@ int aeron_ipc_publication_create(
 
     _pub->unblocked_publications_counter = aeron_system_counter_addr(
         system_counters, AERON_SYSTEM_COUNTER_UNBLOCKED_PUBLICATIONS);
-    _pub->error_messages_received_counter = aeron_system_counter_addr(
-        system_counters, AERON_SYSTEM_COUNTER_ERROR_FRAMES_RECEIVED);
-    _pub->error_messages_sent_counter = aeron_system_counter_addr(
-        system_counters, AERON_SYSTEM_COUNTER_ERROR_FRAMES_SENT);
+    _pub->ipc_rejections_counter = aeron_system_counter_addr(
+        system_counters, AERON_SYSTEM_COUNTER_IPC_REJECTIONS);
 
     *publication = _pub;
 
@@ -300,8 +298,7 @@ void aeron_ipc_publication_reject(
         aeron_driver_conductor_on_publication_error(conductor, error);
     }
 
-    aeron_counter_increment_release(publication->error_messages_received_counter);
-    aeron_counter_increment_release(publication->error_messages_sent_counter);
+    aeron_counter_increment_release(publication->ipc_rejections_counter);
 
     if (!publication->in_cool_down)
     {

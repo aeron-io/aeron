@@ -83,8 +83,7 @@ typedef struct aeron_ipc_publication_stct
     } log;
 
     volatile int64_t *unblocked_publications_counter;
-    volatile int64_t *error_messages_received_counter;
-    volatile int64_t *error_messages_sent_counter;
+    volatile int64_t *ipc_rejections_counter;
     volatile int64_t *mapped_bytes_counter;
 }
 aeron_ipc_publication_t;
