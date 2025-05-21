@@ -89,8 +89,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     private final ArrayList<UntetheredSubscription> untetheredSubscriptions = new ArrayList<>();
     private final RawLog rawLog;
     private final AtomicCounter unblockedPublications;
-    private final AtomicCounter errorMessagesReceived;
-    private final AtomicCounter errorMessagesSent;
+    private final AtomicCounter ipcRejections;
     private final ErrorHandler errorHandler;
 
     IpcPublication(
@@ -133,8 +132,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         this.imageLivenessTimeoutNs = ctx.imageLivenessTimeoutNs();
         final SystemCounters systemCounters = ctx.systemCounters();
         this.unblockedPublications = systemCounters.get(UNBLOCKED_PUBLICATIONS);
-        this.errorMessagesReceived = systemCounters.get(ERROR_FRAMES_RECEIVED);
-        this.errorMessagesSent = systemCounters.get(ERROR_FRAMES_SENT);
+        this.ipcRejections = systemCounters.get(IPC_REJECTIONS);
         this.metaDataBuffer = rawLog.metaData();
 
         consumerPosition = producerPosition();
@@ -271,8 +269,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
             IMAGE_REJECTED.value(),
             reason);
 
-        errorMessagesReceived.incrementRelease();
-        errorMessagesSent.incrementRelease();
+        ipcRejections.incrementRelease();
 
         if (!inCoolDown)
         {
