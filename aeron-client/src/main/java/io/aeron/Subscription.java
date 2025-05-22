@@ -622,6 +622,11 @@ public final class Subscription extends SubscriptionFields implements AutoClosea
 
     void rejectImage(final long correlationId, final long position, final String reason)
     {
+        if (channel().startsWith(CommonContext.SPY_PREFIX))
+        {
+            throw new AeronException("spies can not reject images");
+        }
+
         conductor.rejectImage(correlationId, position, reason);
     }
 

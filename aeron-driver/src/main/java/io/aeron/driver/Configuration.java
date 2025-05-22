@@ -929,18 +929,22 @@ public final class Configuration
     /**
      * Property name for flow control timeout after which with no status messages the receiver is considered gone.
      */
-    @Config(
-        expectedCEnvVarFieldName = "AERON_MIN_MULTICAST_FLOW_CONTROL_RECEIVER_TIMEOUT_ENV_VAR",
-        expectedCEnvVar = "AERON_MIN_MULTICAST_FLOW_CONTROL_RECEIVER_TIMEOUT",
-        expectedCDefaultFieldName = "AERON_FLOW_CONTROL_RECEIVER_TIMEOUT_NS_DEFAULT")
+    @Config(expectedCDefaultFieldName = "AERON_FLOW_CONTROL_RECEIVER_TIMEOUT_NS_DEFAULT")
     public static final String FLOW_CONTROL_RECEIVER_TIMEOUT_PROP_NAME = "aeron.flow.control.receiver.timeout";
 
     /**
+     * Property name for default retransmit receiver window multiple used by the unicast flow control strategy.
      */
-    // TODO is this supposed to be deprecated?
-    @Config(defaultType = DefaultType.LONG, defaultLong = 5_000_000_000L, hasContext = false, existsInC = false)
-    private static final String MIN_FLOW_CONTROL_TIMEOUT_OLD_PROP_NAME =
-        "aeron.MinMulticastFlowControl.receiverTimeout";
+    @Config(defaultType = DefaultType.INT, defaultInt = 16)
+    public static final String UNICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE_PROP_NAME =
+        "aeron.unicast.flow.control.rrwm";
+
+    /**
+     * Property name for default retransmit receiver window multiple used by multicast flow control strategies.
+     */
+    @Config(defaultType = DefaultType.INT, defaultInt = 4)
+    public static final String MULTICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE_PROP_NAME =
+        "aeron.multicast.flow.control.rrwm";
 
     /**
      * Property name for resolver name of the Media Driver used in name resolution.
@@ -1433,9 +1437,29 @@ public final class Configuration
      */
     public static long flowControlReceiverTimeoutNs()
     {
-        return getDurationInNanos(
-            FLOW_CONTROL_RECEIVER_TIMEOUT_PROP_NAME,
-            getDurationInNanos(MIN_FLOW_CONTROL_TIMEOUT_OLD_PROP_NAME, FLOW_CONTROL_RECEIVER_TIMEOUT_DEFAULT_NS));
+        return getDurationInNanos(FLOW_CONTROL_RECEIVER_TIMEOUT_PROP_NAME, FLOW_CONTROL_RECEIVER_TIMEOUT_DEFAULT_NS);
+    }
+
+    /**
+     * Retransmit receiver window multiple used by the unicast flow control strategy to determine the maximum
+     * amount of data to retransmit.
+     *
+     * @return multiple.
+     */
+    public static int unicastFlowControlRetransmitReceiverWindowMultiple()
+    {
+        return getInteger(UNICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE_PROP_NAME, 16);
+    }
+
+    /**
+     * Retransmit receiver window multiple used by multicast flow control strategies to determine the maximum
+     * amount of data to retransmit.
+     *
+     * @return multiple.
+     */
+    public static int multicastFlowControlRetransmitReceiverWindowMultiple()
+    {
+        return getInteger(MULTICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE_PROP_NAME, 4);
     }
 
     /**

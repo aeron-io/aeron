@@ -3671,8 +3671,8 @@ public final class Archive implements AutoCloseable
          */
         public void close()
         {
-            CloseHelper.close(countedErrorHandler, archiveDirChannel);
             CloseHelper.close(countedErrorHandler, catalog);
+            CloseHelper.close(countedErrorHandler, archiveDirChannel);
 
             if (ownsAeronClient)
             {

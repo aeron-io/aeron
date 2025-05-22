@@ -64,7 +64,8 @@ static aeron_system_counter_t system_counters[] =
         { "Error Frames received", AERON_SYSTEM_COUNTER_ERROR_FRAMES_RECEIVED },
         { "Error Frames sent", AERON_SYSTEM_COUNTER_ERROR_FRAMES_SENT },
         { "Publications Revoked", AERON_SYSTEM_COUNTER_PUBLICATIONS_REVOKED },
-        { "Publication Images Revoked", AERON_SYSTEM_COUNTER_PUBLICATION_IMAGES_REVOKED }
+        { "Publication Images Revoked", AERON_SYSTEM_COUNTER_PUBLICATION_IMAGES_REVOKED },
+        { "Images rejected", AERON_SYSTEM_COUNTER_IMAGES_REJECTED }
     };
 
 static size_t num_system_counters = sizeof(system_counters) / sizeof(aeron_system_counter_t);

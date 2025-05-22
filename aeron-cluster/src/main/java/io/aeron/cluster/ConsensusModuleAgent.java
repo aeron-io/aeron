@@ -250,6 +250,8 @@ final class ConsensusModuleAgent
             CloseHelper.close(logAdapter.subscription());
             tryStopLogRecording();
 
+            CloseHelper.close(errorHandler, archive);
+
             if (!ctx.ownsAeronClient())
             {
                 ClusterMember.closeConsensusPublications(errorHandler, activeMembers);
@@ -257,7 +259,6 @@ final class ConsensusModuleAgent
                 CloseHelper.close(errorHandler, consensusAdapter);
                 CloseHelper.close(errorHandler, serviceProxy);
                 CloseHelper.close(errorHandler, consensusModuleAdapter);
-                CloseHelper.close(errorHandler, archive);
 
                 for (final ClusterSession session : sessionByIdMap.values())
                 {
@@ -658,7 +659,8 @@ final class ConsensusModuleAgent
         final int responseStreamId,
         final int version,
         final String responseChannel,
-        final byte[] encodedCredentials)
+        final byte[] encodedCredentials,
+        final Header header)
     {
         final long clusterSessionId = Cluster.Role.LEADER == role ? nextSessionId++ : NULL_VALUE;
         final ClusterSession session = new ClusterSession(
@@ -688,6 +690,7 @@ final class ConsensusModuleAgent
             }
             else
             {
+                session.linkIngressImage(header);
                 authenticator.onConnectRequest(session.id(), encodedCredentials, NANOSECONDS.toMillis(nowNs));
                 pendingUserSessions.add(session);
             }
@@ -791,13 +794,14 @@ final class ConsensusModuleAgent
         return ControlledFragmentHandler.Action.CONTINUE;
     }
 
-    void onSessionKeepAlive(final long leadershipTermId, final long clusterSessionId)
+    void onSessionKeepAlive(final long leadershipTermId, final long clusterSessionId, final Header header)
     {
         if (leadershipTermId == this.leadershipTermId && Cluster.Role.LEADER == role)
         {
             final ClusterSession session = sessionByIdMap.get(clusterSessionId);
             if (null != session && session.state() == ClusterSession.State.OPEN)
             {
+                session.linkIngressImage(header);
                 session.timeOfLastActivityNs(clusterClock.timeNanos());
             }
         }
@@ -1341,7 +1345,9 @@ final class ConsensusModuleAgent
             clearSessionsAfter(logPosition);
             for (int i = 0, size = sessions.size(); i < size; i++)
             {
-                sessions.get(i).disconnect(aeron, ctx.countedErrorHandler());
+                final ClusterSession session = sessions.get(i);
+                session.unlinkIngressImage();
+                session.disconnect(aeron, ctx.countedErrorHandler());
             }
 
             commitPosition.setRelease(logPosition);
@@ -3448,6 +3454,19 @@ final class ConsensusModuleAgent
 
     private void onUnavailableIngressImage(final Image image)
     {
+        if (Cluster.Role.LEADER == role && ConsensusModule.State.ACTIVE == state)
+        {
+            for (int i = 0, size = sessions.size(); i < size; i++)
+            {
+                final ClusterSession session = sessions.get(i);
+
+                if (session.ingressImageCorrelationId() == image.correlationId() && session.isOpen())
+                {
+                    session.closing(CloseReason.TIMEOUT);
+                }
+            }
+        }
+
         final boolean isIpc = image.subscription().channel().startsWith(IPC_CHANNEL);
         ingressAdapter.freeSessionBuffer(image.sessionId(), isIpc);
     }
@@ -3579,6 +3598,8 @@ final class ConsensusModuleAgent
         {
             return; // don't subscribe to ingress if follower and multicast ingress
         }
+
+        ingressUri.put(REJOIN_PARAM_NAME, "false");
 
         final Subscription subscription = aeron.addSubscription(
             ingressUri.toString(), ctx.ingressStreamId(), null, this::onUnavailableIngressImage);

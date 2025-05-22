@@ -505,7 +505,7 @@ uint64_t aeron_driver_context_get_counters_free_to_reuse_timeout_ns(aeron_driver
 /**
  * Timeout for a receiver to be tracked.
  */
-#define AERON_MIN_MULTICAST_FLOW_CONTROL_RECEIVER_TIMEOUT_ENV_VAR "AERON_MIN_MULTICAST_FLOW_CONTROL_RECEIVER_TIMEOUT"
+#define AERON_FLOW_CONTROL_RECEIVER_TIMEOUT_ENV_VAR "AERON_FLOW_CONTROL_RECEIVER_TIMEOUT"
 
 int aeron_driver_context_set_flow_control_receiver_timeout_ns(aeron_driver_context_t *context, uint64_t value);
 

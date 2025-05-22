@@ -1451,8 +1451,6 @@ final class ClientConductor implements Agent
             ensureActive();
             ensureNotReentrant();
 
-            // TODO, check reason length??
-
             final long registrationId = driverProxy.rejectImage(correlationId, position, reason);
             awaitResponse(registrationId);
         }
