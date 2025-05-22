@@ -29,6 +29,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -52,6 +53,10 @@ class PublicationRevokeTest
 
     private static final String UDP_CHANNEL = "aeron:udp?endpoint=localhost:24325";
     private static final String IPC_CHANNEL = "aeron:ipc";
+    private static final String MCAST_CHANNEL = "aeron:udp?endpoint=224.20.30.39:24326|interface=localhost";
+    private static final String PUB_MDC_MANUAL_URI = "aeron:udp?control-mode=manual";
+    private static final String SUB1_MDC_MANUAL_URI = "aeron:udp?endpoint=localhost:24326|group=true";
+    private static final String SUB2_MDC_MANUAL_URI = "aeron:udp?endpoint=localhost:24327|group=true";
 
     private static Stream<Arguments> channels()
     {
@@ -68,7 +73,9 @@ class PublicationRevokeTest
         .publicationConnectionTimeoutNs(MILLISECONDS.toNanos(300))
         .imageLivenessTimeoutNs(MILLISECONDS.toNanos(500))
         .publicationLingerTimeoutNs(SECONDS.toNanos(1))
-        .timerIntervalNs(MILLISECONDS.toNanos(100));
+        .timerIntervalNs(MILLISECONDS.toNanos(100))
+        .dirDeleteOnStart(true)
+        .threadingMode(ThreadingMode.SHARED);
 
     private final Aeron.Context clientContext = new Aeron.Context()
         .resourceLingerDurationNs(MILLISECONDS.toNanos(200))
@@ -76,8 +83,10 @@ class PublicationRevokeTest
 
     private Aeron client;
     private TestMediaDriver driver;
+    private Aeron clientB;
+    private TestMediaDriver driverB;
     private CountersReader countersReader;
-    private Subscription subscription;
+    private CountersReader countersReaderB;
 
     private final UnsafeBuffer buffer = new UnsafeBuffer(new byte[8192]);
     private final FragmentHandler fragmentHandler = mock(FragmentHandler.class);
@@ -86,8 +95,6 @@ class PublicationRevokeTest
 
     private void launch()
     {
-        driverContext.dirDeleteOnStart(true).threadingMode(ThreadingMode.SHARED);
-
         driver = TestMediaDriver.launch(driverContext, watcher);
         watcher.dataCollector().add(driver.context().aeronDirectory());
 
@@ -98,10 +105,32 @@ class PublicationRevokeTest
         buffer.putInt(0, 1);
     }
 
+    private void launch2()
+    {
+        final MediaDriver.Context driverBContext = driverContext.clone();
+        driverBContext.aeronDirectoryName(driverContext.aeronDirectoryName() + "B");
+
+        driver = TestMediaDriver.launch(driverContext, watcher);
+        watcher.dataCollector().add(driver.context().aeronDirectory());
+        driverB = TestMediaDriver.launch(driverBContext, watcher);
+        watcher.dataCollector().add(driverB.context().aeronDirectory());
+
+        final Aeron.Context clientBContext = clientContext.clone();
+        clientBContext.aeronDirectoryName(driverBContext.aeronDirectoryName());
+
+        client = Aeron.connect(clientContext.clone());
+        clientB = Aeron.connect(clientBContext);
+
+        countersReader = client.countersReader();
+        countersReaderB = clientB.countersReader();
+
+        buffer.putInt(0, 1);
+    }
+
     @AfterEach
     void after()
     {
-        CloseHelper.closeAll(client, driver);
+        CloseHelper.closeAll(client, driver, clientB, driverB);
     }
 
     @ParameterizedTest
@@ -124,7 +153,7 @@ class PublicationRevokeTest
 
         launch();
 
-        subscription = client.addSubscription(
+        final Subscription subscription = client.addSubscription(
             subscriptionChannel, STREAM_ID, availableImageHandler, unavailableImageHandler);
         try (ExclusivePublication exclusivePublication = client.addExclusivePublication(publicationChannel, STREAM_ID))
         {
@@ -134,7 +163,7 @@ class PublicationRevokeTest
 
             publishMessage(exclusivePublication);
 
-            pollUntilFragments(1);
+            pollUntilFragments(subscription, 1);
 
             publishMessage(exclusivePublication);
 
@@ -173,7 +202,7 @@ class PublicationRevokeTest
 
         launch();
 
-        subscription = client.addSubscription(
+        final Subscription subscription = client.addSubscription(
             subscriptionChannel, STREAM_ID, availableImageHandler, unavailableImageHandler);
         final ExclusivePublication exclusivePublication = client.addExclusivePublication(publicationChannel, STREAM_ID);
 
@@ -187,7 +216,7 @@ class PublicationRevokeTest
         publishMessage(exclusivePublication);
         publishMessage(publicationTwo);
 
-        pollUntilFragments(2);
+        pollUntilFragments(subscription, 2);
 
         publishMessage(exclusivePublication);
 
@@ -205,7 +234,7 @@ class PublicationRevokeTest
         assertEquals(1, subscription.imageCount());
 
         publishMessage(publicationTwo);
-        pollUntilFragments(1);
+        pollUntilFragments(subscription, 1);
 
         publicationShouldBeRevoked.set(false);
         subscription.close();
@@ -233,7 +262,7 @@ class PublicationRevokeTest
 
         launch();
 
-        subscription = client.addSubscription(
+        final Subscription subscription = client.addSubscription(
             subscriptionChannel, STREAM_ID, availableImageHandler, unavailableImageHandler);
         final ExclusivePublication exclusivePublication = client.addExclusivePublication(publicationChannel, STREAM_ID);
 
@@ -270,25 +299,98 @@ class PublicationRevokeTest
         assertTrue(messagesSent > messagesReceived);
     }
 
-    private void publishMessage(final Publication pub)
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    @InterruptAfter(10)
+    void shouldRevokeMultipleSubscribers(final boolean useMDC)
     {
-        while (pub.offer(buffer, 0, SIZE_OF_INT) < 0L)
+        final AtomicInteger unavailableImages = new AtomicInteger(0);
+        doAnswer(invocation ->
+        {
+            final Image image = invocation.getArgument(0, Image.class);
+            assertTrue(image.isPublicationRevoked());
+
+            unavailableImages.incrementAndGet();
+            return null;
+        }).when(unavailableImageHandler).onUnavailableImage(any(Image.class));
+
+        launch2();
+
+        final Subscription subscription;
+        final Subscription subscriptionB;
+        final ExclusivePublication exclusivePublication;
+
+        if (useMDC)
+        {
+            subscription = client.addSubscription(
+                SUB1_MDC_MANUAL_URI, STREAM_ID, availableImageHandler, unavailableImageHandler);
+            subscriptionB = clientB.addSubscription(
+                SUB2_MDC_MANUAL_URI, STREAM_ID, availableImageHandler, unavailableImageHandler);
+            exclusivePublication = client.addExclusivePublication(PUB_MDC_MANUAL_URI, STREAM_ID);
+            exclusivePublication.addDestination(SUB1_MDC_MANUAL_URI);
+            exclusivePublication.addDestination(SUB2_MDC_MANUAL_URI);
+        }
+        else
+        {
+            subscription = client.addSubscription(
+                MCAST_CHANNEL, STREAM_ID, availableImageHandler, unavailableImageHandler);
+            subscriptionB = clientB.addSubscription(
+                MCAST_CHANNEL, STREAM_ID, availableImageHandler, unavailableImageHandler);
+            exclusivePublication = client.addExclusivePublication(MCAST_CHANNEL, STREAM_ID);
+        }
+
+        Tests.awaitConnected(subscription);
+        Tests.awaitConnected(subscriptionB);
+        Tests.awaitConnected(exclusivePublication);
+
+        while (exclusivePublication.offer(buffer, 0, SIZE_OF_INT) != BACK_PRESSURED)
+        {
+            Tests.yield();
+        }
+
+        int messagesReceived = 0;
+        while (unavailableImages.get() == 0)
+        {
+            messagesReceived += subscription.poll((buffer1, offset, length, header) -> Tests.sleep(1), 1);
+
+            if (messagesReceived == 100)
+            {
+                exclusivePublication.revoke();
+            }
+
+            Tests.yield();
+        }
+
+        while (unavailableImages.get() != 2)
+        {
+            Tests.yield();
+        }
+
+        assertEquals(1, countersReader.getCounterValue(PUBLICATIONS_REVOKED.id()));
+        assertEquals(1, countersReader.getCounterValue(PUBLICATION_IMAGES_REVOKED.id()));
+        assertEquals(0, countersReaderB.getCounterValue(PUBLICATIONS_REVOKED.id()));
+        assertEquals(1, countersReaderB.getCounterValue(PUBLICATION_IMAGES_REVOKED.id()));
+    }
+
+    private void publishMessage(final Publication publication)
+    {
+        while (publication.offer(buffer, 0, SIZE_OF_INT) < 0L)
         {
             Tests.yield();
         }
     }
 
-    private void pollUntilFragments(final int expectedFragments)
+    private void pollUntilFragments(final Subscription subscription, final int expectedFragments)
     {
-        int totalFragments = pollForFragment();
+        int totalFragments = pollForFragment(subscription);
         while (totalFragments < expectedFragments)
         {
             Tests.yield();
-            totalFragments += pollForFragment();
+            totalFragments += pollForFragment(subscription);
         }
     }
 
-    private int pollForFragment()
+    private int pollForFragment(final Subscription subscription)
     {
         while (true)
         {
