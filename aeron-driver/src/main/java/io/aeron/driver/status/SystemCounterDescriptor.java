@@ -107,7 +107,9 @@ public enum SystemCounterDescriptor
     ERRORS(15, "Errors: " + AeronCounters.formatVersionInfo(MediaDriverVersion.VERSION, MediaDriverVersion.GIT_SHA)),
 
     /**
-     * Count of socket send operation which resulted in less than the packet length being sent.
+     * Count of send operations which resulted in less than the packet length being sent.
+     * This considers 'high level' send operations, not just socket operations.
+     * For example, an MDC send when there are no destinations will increment this counter.
      */
     SHORT_SENDS(16, "Short sends"),
 
@@ -231,7 +233,33 @@ public enum SystemCounterDescriptor
     /**
      * A count of the number of error frames sent by this driver.
      */
-    ERROR_FRAMES_SENT(39, "Error Frames sent");
+    ERROR_FRAMES_SENT(39, "Error Frames sent"),
+
+    /**
+     * Count of low level socket send operations which resulted in less than the packet length being sent.
+     * Scoped to send channels.
+     */
+    SEND_CHANNEL_SHORT_SENDS(40, "Send channel short sends"),
+
+    /**
+     * Count of low level socket send operations that resulted in a connection error.
+     * PortUnreachableException or ECONNREFUSED.
+     * Scoped to send channels.
+     */
+    SEND_CHANNEL_CONNECTION_ERRORS(41, "Send channel connection errors"),
+
+    /**
+     * Count of low level socket send operations which resulted in less than the packet length being sent.
+     * Scoped to receive channels.
+     */
+    RECEIVE_CHANNEL_SHORT_SENDS(42, "Receive channel short sends"),
+
+    /**
+     * Count of low level socket send operations that resulted in a connection error.
+     * PortUnreachableException or ECONNREFUSED.
+     * Scoped to receive channels.
+     */
+    RECEIVE_CHANNEL_CONNECTION_ERRORS(43, "Receive channel connection errors");
 
     /**
      * All system counters have the same type id, i.e. system counters are the same type. Other types can exist.
