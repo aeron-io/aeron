@@ -584,15 +584,13 @@ public final class PublicationImage
             final int threshold = CongestionControl.threshold(windowLength);
 
             final long maxPacketInsertPosition = minSubscriberPosition + (termBufferLength >> 1);
-            final long termBaseMaxPacketInsertPosition =
-                maxPacketInsertPosition - (maxPacketInsertPosition & termLengthMask);
             final long cleanPosition = this.cleanPosition;
-            final int cleanOffset = (int)(cleanPosition & termLengthMask);
-            final long termBaseCleanPosition = cleanPosition - cleanOffset;
-            final long wrapAroundGap = termBaseMaxPacketInsertPosition - termBaseCleanPosition;
-            final long maxWrapAroundGap = (long)termBufferLength << 1;
-
-            if (wrapAroundGap < maxWrapAroundGap || (wrapAroundGap == maxWrapAroundGap && 0 != cleanOffset))
+            final int dirtyTermId =
+                computeTermIdFromPosition(cleanPosition, positionBitsToShift, initialTermId);
+            final int activeTermId =
+                computeTermIdFromPosition(maxPacketInsertPosition, positionBitsToShift, initialTermId);
+            final int termGap = activeTermId - dirtyTermId;
+            if (termGap < 2 || (2 == termGap && 0 != (int)(cleanPosition & termLengthMask)))
             {
                 if (CongestionControl.shouldForceStatusMessage(ccOutcome) ||
                     (minSubscriberPosition >= (nextSmPosition + threshold)) ||
