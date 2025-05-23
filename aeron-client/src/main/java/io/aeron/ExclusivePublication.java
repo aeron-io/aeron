@@ -150,7 +150,7 @@ public final class ExclusivePublication extends ExclusivePublicationValues
     }
 
     /**
-     * Mark the publication to be revoked when close() is called.
+     * Mark the publication to be revoked when {@link #close()} is called.  See  {@link #revoke()}
      */
     public void revokeOnClose()
     {
@@ -158,7 +158,12 @@ public final class ExclusivePublication extends ExclusivePublicationValues
     }
 
     /**
-     * Immediately revoke and close the publication.
+     * Immediately revoke and {@link #close()} the publication.
+     *
+     * Revoking disposes of resources as soon as possible. On the publication side the log buffer won't linger,
+     * while on the subscription side the image will go unavailable without requiring all data to be drained.
+     * Hence, it should be used only when it's known that all subscribers have received all the data,
+     * or if it doesn't matter if they have.
      */
     public void revoke()
     {
