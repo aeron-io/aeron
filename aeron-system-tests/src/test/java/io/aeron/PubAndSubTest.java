@@ -1390,10 +1390,7 @@ class PubAndSubTest
     @InterruptAfter(10)
     void shouldExchangeMessagesUsingMinimalReceiverWindow(final String channel, final int mtu)
     {
-        assumeFalse(mtu == Configuration.MAX_UDP_PAYLOAD_LENGTH &&
-            TestMediaDriver.shouldRunCMediaDriver() &&
-            OS.MAC == OS.current(),
-            "Disabled, because C media driver on macOS does not extract SO_SNDBUF max value correctly");
+        cMediaDriverDoesNotExtactSocketMaxValuesCorrectlyOnMac(mtu);
 
         final ChannelUri uri = ChannelUri.parse(channel);
         final int termLength = 512 * 1024;
@@ -1412,6 +1409,8 @@ class PubAndSubTest
     @InterruptAfter(10)
     void shouldExchangeMessagesUsingMinimalPublicationWindow(final String channel, final int mtu)
     {
+        cMediaDriverDoesNotExtactSocketMaxValuesCorrectlyOnMac(mtu);
+
         final ChannelUri uri = ChannelUri.parse(channel);
         final int termLength = 512 * 1024;
         final long initialPosition = termLength * 119L + 4064;
@@ -1429,6 +1428,8 @@ class PubAndSubTest
     @InterruptAfter(10)
     void shouldExchangeMessagesWhenBothPublisherAndReceiverUseMinimalWindow(final String channel, final int mtu)
     {
+        cMediaDriverDoesNotExtactSocketMaxValuesCorrectlyOnMac(mtu);
+
         final ChannelUri uri = ChannelUri.parse(channel);
         final int termLength = 512 * 1024;
         final long initialPosition = termLength * 563485374L + 2016;
@@ -1439,6 +1440,14 @@ class PubAndSubTest
         uri.put(SOCKET_RCVBUF_PARAM_NAME, "128k");
 
         testExchangeMessages(uri, initialPosition, termLength, mtu - HEADER_LENGTH);
+    }
+
+    private static void cMediaDriverDoesNotExtactSocketMaxValuesCorrectlyOnMac(final int mtu)
+    {
+        assumeFalse(mtu == Configuration.MAX_UDP_PAYLOAD_LENGTH &&
+            TestMediaDriver.shouldRunCMediaDriver() &&
+            OS.MAC == OS.current(),
+            "Disabled, because C media driver on macOS does not extract SO_SNDBUF max value correctly");
     }
 
     private void testExchangeMessages(
