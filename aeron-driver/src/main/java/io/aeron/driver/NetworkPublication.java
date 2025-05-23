@@ -868,7 +868,7 @@ public final class NetworkPublication
 
             final int flags =
                 (isSendResponseSetupFlag() ? SetupFlyweight.SEND_RESPONSE_SETUP_FLAG : 0) |
-                    (hasGroupSemantics() ? SetupFlyweight.GROUP_FLAG : 0);
+                (hasGroupSemantics() ? SetupFlyweight.GROUP_FLAG : 0);
 
             setupBuffer.clear();
             setupHeader
