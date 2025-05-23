@@ -109,7 +109,7 @@ jobs:
 
       - name: Dismiss alerts
         if: github.ref == 'refs/heads/master'
-        uses: advanced-security/dismiss-alerts@v1
+        uses: advanced-security/dismiss-alerts@v2
         with:
           sarif-id: ${{ steps.upload.outputs.sarif-id }}
           sarif-file: sarif-results/${{ matrix.language }}.sarif

@@ -124,7 +124,8 @@ class IngressAdapter implements AutoCloseable
                     connectRequestDecoder.responseStreamId(),
                     connectRequestDecoder.version(),
                     responseChannel,
-                    credentials);
+                    credentials,
+                    header);
                 break;
             }
 
@@ -152,7 +153,8 @@ class IngressAdapter implements AutoCloseable
 
                 consensusModuleAgent.onSessionKeepAlive(
                     sessionKeepAliveDecoder.leadershipTermId(),
-                    sessionKeepAliveDecoder.clusterSessionId());
+                    sessionKeepAliveDecoder.clusterSessionId(),
+                    header);
                 break;
             }
 

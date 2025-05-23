@@ -1098,6 +1098,11 @@ final class Catalog implements AutoCloseable
 
     private void forceWrites(final FileChannel channel)
     {
+        fsync(channel, forceWrites, forceMetadata);
+    }
+
+    private void fsync(final FileChannel channel, final boolean forceWrites, final boolean forceMetadata)
+    {
         if (null != channel && forceWrites)
         {
             try
@@ -1248,6 +1253,7 @@ final class Catalog implements AutoCloseable
         final MappedByteBuffer buffer = this.catalogByteBuffer;
         BufferUtil.free(buffer);
         this.catalogByteBuffer = null;
+        fsync(catalogChannel, true, true);
         CloseHelper.close(catalogChannel);
     }
 

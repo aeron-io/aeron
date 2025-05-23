@@ -21,6 +21,8 @@ import org.agrona.DirectBuffer;
 import java.io.PrintStream;
 import java.util.concurrent.TimeUnit;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 class ConsensusModuleSnapshotPrinter implements ConsensusModuleSnapshotListener
 {
     private final PrintStream out;
@@ -40,6 +42,10 @@ class ConsensusModuleSnapshotPrinter implements ConsensusModuleSnapshotListener
 
     public void onLoadEndSnapshot(final DirectBuffer buffer, final int offset, final int length)
     {
+        out.println("End Snapshot, offset=" + offset + ", length=" + length);
+        final byte[] b = new byte[length];
+        buffer.getBytes(offset, b, 0, length);
+        out.println(formatHexDump(b, 0, length));
     }
 
     public void onLoadConsensusModuleState(
@@ -56,6 +62,9 @@ class ConsensusModuleSnapshotPrinter implements ConsensusModuleSnapshotListener
             " nextServiceSessionId=" + nextServiceSessionId +
             " logServiceSessionId=" + logServiceSessionId +
             " pendingMessageCapacity=" + pendingMessageCapacity);
+        final byte[] b = new byte[length];
+        buffer.getBytes(offset, b, 0, length);
+        out.println(formatHexDump(b, 0, length));
     }
 
     public void onLoadPendingMessage(
@@ -110,5 +119,41 @@ class ConsensusModuleSnapshotPrinter implements ConsensusModuleSnapshotListener
             " logServiceSessionId=" + logServiceSessionId +
             " pendingMessageCapacity=" + pendingMessageCapacity +
             " serviceId=" + serviceId);
+    }
+
+    private static String formatHexDump(final byte[] array, final int offset, final int length)
+    {
+        final int width = 16;
+
+        final StringBuilder builder = new StringBuilder();
+
+        for (int rowOffset = offset; rowOffset < offset + length; rowOffset += width)
+        {
+            builder.append(String.format("%06d:  ", rowOffset));
+
+            for (int index = 0; index < width; index++)
+            {
+                if (rowOffset + index < array.length)
+                {
+                    builder.append(String.format("%02x ", array[rowOffset + index]));
+                }
+                else
+                {
+                    builder.append("   ");
+                }
+            }
+
+            if (rowOffset < array.length)
+            {
+                final int asciiWidth = Math.min(width, array.length - rowOffset);
+                builder.append("  |  ");
+                builder.append(new String(array, rowOffset, asciiWidth, UTF_8)
+                    .replaceAll("\r\n", " ").replaceAll("\n", " "));
+            }
+
+            builder.append(String.format("%n"));
+        }
+
+        return builder.toString();
     }
 }

@@ -123,6 +123,7 @@ int aeron_cnc_constants(aeron_cnc_t *aeron_cnc, aeron_cnc_constants_t *constants
     constants->client_liveness_timeout = aeron_cnc->metadata->client_liveness_timeout;
     constants->start_timestamp = aeron_cnc->metadata->start_timestamp;
     constants->pid = aeron_cnc->metadata->pid;
+    constants->file_page_size = aeron_cnc->metadata->file_page_size;
 
     return 0;
 }

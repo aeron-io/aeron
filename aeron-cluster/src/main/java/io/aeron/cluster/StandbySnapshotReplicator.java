@@ -16,6 +16,7 @@
 package io.aeron.cluster;
 
 import io.aeron.ChannelUri;
+import io.aeron.Counter;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.client.ArchiveException;
 import io.aeron.archive.codecs.RecordingSignal;
@@ -41,6 +42,7 @@ class StandbySnapshotReplicator implements AutoCloseable
     private final int archiveControlStreamId;
     private final String replicationChannel;
     private final int fileSyncLevel;
+    private final Counter snapshotCounter;
     private final Object2ObjectHashMap<String, String> errorsByEndpoint = new Object2ObjectHashMap<>();
     private MultipleRecordingReplication recordingReplication;
     private ArrayList<SnapshotReplicationEntry> snapshotsToReplicate;
@@ -55,7 +57,8 @@ class StandbySnapshotReplicator implements AutoCloseable
         final String archiveControlChannel,
         final int archiveControlStreamId,
         final String replicationChannel,
-        final int fileSyncLevel)
+        final int fileSyncLevel,
+        final Counter snapshotCounter)
     {
         this.memberId = memberId;
         this.archive = archive;
@@ -65,6 +68,7 @@ class StandbySnapshotReplicator implements AutoCloseable
         this.archiveControlStreamId = archiveControlStreamId;
         this.replicationChannel = replicationChannel;
         this.fileSyncLevel = fileSyncLevel;
+        this.snapshotCounter = snapshotCounter;
     }
 
     static StandbySnapshotReplicator newInstance(
@@ -75,7 +79,7 @@ class StandbySnapshotReplicator implements AutoCloseable
         final String archiveControlChannel,
         final int archiveControlStreamId,
         final String replicationChannel,
-        final int fileSyncLevel)
+        final int fileSyncLevel, final Counter snapshotCounter)
     {
         final AeronArchive archive = AeronArchive.connect(archiveCtx.clone().errorHandler(null));
         final StandbySnapshotReplicator standbySnapshotReplicator = new StandbySnapshotReplicator(
@@ -86,7 +90,8 @@ class StandbySnapshotReplicator implements AutoCloseable
             archiveControlChannel,
             archiveControlStreamId,
             replicationChannel,
-            fileSyncLevel);
+            fileSyncLevel,
+            snapshotCounter);
         archive.context().recordingSignalConsumer(standbySnapshotReplicator::onSignal);
         return standbySnapshotReplicator;
     }
@@ -169,6 +174,8 @@ class StandbySnapshotReplicator implements AutoCloseable
                     entry.serviceId);
             }
             recordingLog.force(fileSyncLevel);
+
+            snapshotCounter.incrementRelease();
 
             CloseHelper.quietClose(recordingReplication);
             recordingReplication = null;

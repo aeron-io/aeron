@@ -42,7 +42,7 @@ public class DefaultUnicastFlowControlSupplier implements FlowControlSupplier
 
         if (UnicastFlowControl.class.getName().equals(UNICAST_FLOW_CONTROL_STRATEGY))
         {
-            return UnicastFlowControl.INSTANCE;
+            return new UnicastFlowControl();
         }
 
         try

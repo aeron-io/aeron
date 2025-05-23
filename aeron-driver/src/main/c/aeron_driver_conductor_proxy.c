@@ -19,8 +19,6 @@
 #include "aeron_alloc.h"
 #include "aeron_driver_conductor.h"
 
-#define AERON_COMMAND_PUBLICATION_ERROR_MAX_LENGTH (sizeof(aeron_command_publication_error_t) + AERON_ERROR_MAX_TEXT_LENGTH)
-
 void aeron_driver_conductor_proxy_offer(aeron_driver_conductor_proxy_t *conductor_proxy, void *cmd, size_t length)
 {
     aeron_rb_write_result_t result;

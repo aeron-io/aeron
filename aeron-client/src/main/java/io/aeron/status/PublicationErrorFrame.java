@@ -164,4 +164,24 @@ public class PublicationErrorFrame implements Cloneable
             throw new RuntimeException(ex);
         }
     }
+
+    /**
+     * Build a String representation of the error frame.
+     *
+     * @return a String representation of the error frame.
+     */
+    public String toString()
+    {
+        return "CounterMessageFlyweight{" +
+            "registrationId=" + registrationId() +
+            ", sessionId=" + sessionId() +
+            ", streamId=" + streamId() +
+            ", receiverId=" + receiverId() +
+            ", destinationRegistrationId=" + destinationRegistrationId() +
+            ", groupTag=" + groupTag() +
+            ", errorCode=" + errorCode() +
+            ", errorMessage=" + errorMessage() +
+            ", sourceAddress=" + sourceAddress() +
+            "}";
+    }
 }

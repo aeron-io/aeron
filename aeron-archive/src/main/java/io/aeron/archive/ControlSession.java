@@ -32,7 +32,10 @@ import java.util.ArrayDeque;
 import java.util.function.BooleanSupplier;
 
 import static io.aeron.archive.client.ArchiveException.AUTHENTICATION_REJECTED;
-import static io.aeron.archive.codecs.ControlResponseCode.*;
+import static io.aeron.archive.codecs.ControlResponseCode.ERROR;
+import static io.aeron.archive.codecs.ControlResponseCode.OK;
+import static io.aeron.archive.codecs.ControlResponseCode.RECORDING_UNKNOWN;
+import static io.aeron.archive.codecs.ControlResponseCode.SUBSCRIPTION_UNKNOWN;
 
 /**
  * Control sessions are interacted with from the {@link ArchiveConductor}. The interaction may result in pending
@@ -218,13 +221,7 @@ final class ControlSession implements Session
 
             case ACTIVE:
             {
-                if (sessionLivenessCheckDeadlineMs - nowMs < 0)
-                {
-                    sessionLivenessCheckDeadlineMs = nowMs + sessionLivenessCheckIntervalMs;
-                    sendOkResponse(Aeron.NULL_VALUE, Aeron.NULL_VALUE);
-                    workCount++;
-                }
-
+                workCount += performLivenessCheck(nowMs);
                 workCount += sendResponses(nowMs);
                 break;
             }
@@ -723,7 +720,11 @@ final class ControlSession implements Session
         assertCalledOnConductorThread();
         final boolean sent =
             controlResponseProxy.sendDescriptor(controlSessionId, correlationId, descriptorBuffer, this);
-        if (sent)
+        if (!sent)
+        {
+            updateActivityDeadline(cachedEpochClock.time());
+        }
+        else
         {
             activityDeadlineMs = Aeron.NULL_VALUE;
         }
@@ -735,7 +736,11 @@ final class ControlSession implements Session
         assertCalledOnConductorThread();
         final boolean sent =
             controlResponseProxy.sendSubscriptionDescriptor(controlSessionId, correlationId, subscription, this);
-        if (sent)
+        if (!sent)
+        {
+            updateActivityDeadline(cachedEpochClock.time());
+        }
+        else
         {
             activityDeadlineMs = Aeron.NULL_VALUE;
         }
@@ -902,6 +907,24 @@ final class ControlSession implements Session
         }
 
         return workCount;
+    }
+
+    private int performLivenessCheck(final long nowMs)
+    {
+        if (sessionLivenessCheckDeadlineMs - nowMs < 0)
+        {
+            sessionLivenessCheckDeadlineMs = nowMs + sessionLivenessCheckIntervalMs;
+            if (!controlResponseProxy.sendPing(controlSessionId, controlPublication))
+            {
+                updateActivityDeadline(nowMs);
+            }
+            else
+            {
+                activityDeadlineMs = Aeron.NULL_VALUE;
+            }
+            return 1;
+        }
+        return 0;
     }
 
     private int sendResponses(final long nowMs)

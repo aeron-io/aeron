@@ -210,7 +210,6 @@ static void aeron_driver_untethered_subscription_state_change_null(
 #define AERON_SENDER_MAX_MESSAGES_PER_SEND_DEFAULT UINT32_C(2)
 #define AERON_DRIVER_RESOURCE_FREE_LIMIT_DEFAULT UINT32_C(10)
 #define AERON_DRIVER_ASYNC_EXECUTOR_THREADS_DEFAULT UINT32_C(1)
-#define AERON_DRIVER_ASYNC_EXECUTOR_CPU_AFFINITY_DEFAULT (-1)
 #define AERON_CPU_AFFINITY_DEFAULT (-1)
 #define AERON_DRIVER_CONNECT_DEFAULT true
 #define AERON_ENABLE_EXPERIMENTAL_FEATURES_DEFAULT false
@@ -439,7 +438,6 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
     _context->network_publication_max_messages_per_send = AERON_SENDER_MAX_MESSAGES_PER_SEND_DEFAULT;
     _context->resource_free_limit = AERON_DRIVER_RESOURCE_FREE_LIMIT_DEFAULT;
     _context->async_executor_threads = AERON_DRIVER_ASYNC_EXECUTOR_THREADS_DEFAULT;
-    _context->async_executor_cpu_affinity_no = AERON_DRIVER_ASYNC_EXECUTOR_CPU_AFFINITY_DEFAULT;
     _context->connect_enabled = AERON_DRIVER_CONNECT_DEFAULT;
     _context->conductor_cpu_affinity_no = AERON_CPU_AFFINITY_DEFAULT;
     _context->sender_cpu_affinity_no = AERON_CPU_AFFINITY_DEFAULT;
@@ -675,12 +673,6 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
         _context->sender_cpu_affinity_no,
         -1,
         255);
-    _context->async_executor_cpu_affinity_no = aeron_config_parse_int32(
-        AERON_DRIVER_ASYNC_EXECUTOR_CPU_AFFINITY_ENV_VAR,
-        getenv(AERON_DRIVER_ASYNC_EXECUTOR_CPU_AFFINITY_ENV_VAR),
-        _context->async_executor_cpu_affinity_no,
-        -1,
-        255);
 
     _context->send_to_sm_poll_ratio = (uint8_t)aeron_config_parse_uint64(
         AERON_SEND_TO_STATUS_POLL_RATIO_ENV_VAR,
@@ -870,8 +862,8 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
         INT32_MAX);
 
     _context->flow_control.receiver_timeout_ns = aeron_config_parse_duration_ns(
-        AERON_MIN_MULTICAST_FLOW_CONTROL_RECEIVER_TIMEOUT_ENV_VAR,
-        getenv(AERON_MIN_MULTICAST_FLOW_CONTROL_RECEIVER_TIMEOUT_ENV_VAR),
+        AERON_FLOW_CONTROL_RECEIVER_TIMEOUT_ENV_VAR,
+        getenv(AERON_FLOW_CONTROL_RECEIVER_TIMEOUT_ENV_VAR),
         _context->flow_control.receiver_timeout_ns,
         0,
         INT64_MAX);
@@ -3224,20 +3216,4 @@ int aeron_driver_context_set_receiver_cpu_affinity(aeron_driver_context_t *conte
 int32_t aeron_driver_context_get_receiver_cpu_affinity(aeron_driver_context_t *context)
 {
     return NULL != context ? context->receiver_cpu_affinity_no :AERON_CPU_AFFINITY_DEFAULT;
-}
-
-int aeron_driver_context_set_async_executor_cpu_affinity(aeron_driver_context_t *context, int32_t value)
-{
-    if (NULL == context)
-    {
-        return -1;
-    }
-
-    context->async_executor_cpu_affinity_no = value;
-    return 0;
-}
-
-int32_t aeron_driver_context_get_async_executor_cpu_affinity(aeron_driver_context_t *context)
-{
-    return NULL != context ? context->async_executor_cpu_affinity_no : AERON_DRIVER_ASYNC_EXECUTOR_CPU_AFFINITY_DEFAULT;
 }

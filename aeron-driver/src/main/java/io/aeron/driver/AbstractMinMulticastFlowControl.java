@@ -70,10 +70,6 @@ public abstract class AbstractMinMulticastFlowControl
     extends AbstractMinMulticastFlowControlRhsPadding
     implements FlowControl
 {
-    /**
-     * Multiple of receiver window to allow for a retransmit action.
-     */
-    private static final int RETRANSMIT_RECEIVER_WINDOW_MULTIPLE = 16;
     private static final Receiver[] EMPTY_RECEIVERS = new Receiver[0];
 
     private final boolean isGroupTagAware;
@@ -85,6 +81,7 @@ public abstract class AbstractMinMulticastFlowControl
     private String channel;
     private AtomicCounter receiverCount;
     private ErrorHandler errorHandler;
+    private int retransmitReceiverWindowMultiple;
 
     /**
      * Base constructor for use by specialised implementations.
@@ -122,6 +119,10 @@ public abstract class AbstractMinMulticastFlowControl
         timeOfLastSetupNs = 0;
         lastSetupSenderLimit = -1;
         hasTaggedStatusMessageTriggeredSetup = false;
+        retransmitReceiverWindowMultiple = FlowControl.retransmitReceiverWindowMultiple(
+            udpChannel,
+            context.multicastFlowControlRetransmitReceiverWindowMultiple()
+        );
     }
 
     /**
@@ -212,7 +213,7 @@ public abstract class AbstractMinMulticastFlowControl
         final int mtuLength)
     {
         return FlowControl.calculateRetransmissionLength(
-            resendLength, termBufferLength, termOffset, RETRANSMIT_RECEIVER_WINDOW_MULTIPLE);
+            resendLength, termBufferLength, termOffset, retransmitReceiverWindowMultiple);
     }
 
     /**

@@ -15,6 +15,8 @@
  */
 package io.aeron.driver;
 
+import io.aeron.CncFileDescriptor;
+import io.aeron.CommonContext;
 import io.aeron.driver.MediaDriver.Context;
 import io.aeron.driver.media.ControlTransportPoller;
 import io.aeron.driver.media.DataTransportPoller;
@@ -22,7 +24,9 @@ import io.aeron.driver.media.UdpTransportPoller;
 import io.aeron.driver.status.SystemCounterDescriptor;
 import io.aeron.exceptions.ConfigurationException;
 import org.agrona.ErrorHandler;
+import org.agrona.collections.ObjectHashSet;
 import org.agrona.concurrent.CountedErrorHandler;
+import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.AtomicCounter;
 import org.hamcrest.CoreMatchers;
 import org.hamcrest.MatcherAssert;
@@ -37,6 +41,7 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.CyclicBarrier;
@@ -220,10 +225,13 @@ class MediaDriverContextTest
 
         assertEquals(asyncExecutorThreadCount, threads.size());
         assertEquals(asyncExecutorThreadCount, threadPoolExecutor.getPoolSize());
+
+        final ObjectHashSet<String> uniqueNames = new ObjectHashSet<>(asyncExecutorThreadCount);
         for (final Thread t : threads)
         {
-            MatcherAssert.assertThat(t.getName(), CoreMatchers.startsWith("async-task-executor-"));
+            MatcherAssert.assertThat(t.getName(), CoreMatchers.startsWith("async-executor"));
             assertTrue(t.isDaemon());
+            assertTrue(uniqueNames.add(t.getName()));
         }
     }
 
@@ -325,6 +333,20 @@ class MediaDriverContextTest
         assertNotNull(dataTransportPoller);
 
         assertSame(context.countedErrorHandler(), getErrorHandler(dataTransportPoller));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = { 4096, 2 * 1024 * 1024 })
+    void shouldAddFilePageSizeToTheCncFile(final int filePageSize) throws IOException
+    {
+        final Path dir = Paths.get(CommonContext.generateRandomDirName());
+        Files.createDirectories(dir);
+        context.aeronDirectoryName(dir.toString()).filePageSize(filePageSize);
+
+        context.conclude();
+
+        final UnsafeBuffer metaDataBuffer = CncFileDescriptor.createMetaDataBuffer(context.cncByteBuffer());
+        assertEquals(filePageSize, CncFileDescriptor.filePageSize(metaDataBuffer));
     }
 
     @ParameterizedTest

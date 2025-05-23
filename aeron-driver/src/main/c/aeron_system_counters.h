@@ -61,6 +61,7 @@ typedef enum aeron_system_counter_enum_stct
     AERON_SYSTEM_COUNTER_RETRANSMIT_OVERFLOW = 37,
     AERON_SYSTEM_COUNTER_ERROR_FRAMES_RECEIVED = 38,
     AERON_SYSTEM_COUNTER_ERROR_FRAMES_SENT = 39,
+    AERON_SYSTEM_COUNTER_IMAGES_REJECTED = 40,
 
     // Add all new counters before this one (used for a static assertion).
     AERON_SYSTEM_COUNTER_DUMMY_LAST,

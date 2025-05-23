@@ -62,7 +62,8 @@ static aeron_system_counter_t system_counters[] =
         { "Retransmitted bytes", AERON_SYSTEM_COUNTER_RETRANSMITTED_BYTES },
         { "Retransmit Pool Overflow count", AERON_SYSTEM_COUNTER_RETRANSMIT_OVERFLOW },
         { "Error Frames received", AERON_SYSTEM_COUNTER_ERROR_FRAMES_RECEIVED },
-        { "Error Frames sent", AERON_SYSTEM_COUNTER_ERROR_FRAMES_SENT }
+        { "Error Frames sent", AERON_SYSTEM_COUNTER_ERROR_FRAMES_SENT },
+        { "Images rejected", AERON_SYSTEM_COUNTER_IMAGES_REJECTED }
     };
 
 static size_t num_system_counters = sizeof(system_counters) / sizeof(aeron_system_counter_t);

@@ -1661,12 +1661,15 @@ public final class ConsensusModule implements AutoCloseable
 
             if (null == markFile)
             {
+                final int filePageSize = null != aeron ? aeron.context().filePageSize() :
+                    driverFilePageSize(new File(aeronDirectoryName), epochClock, new CommonContext().driverTimeoutMs());
                 markFile = new ClusterMarkFile(
                     new File(markFileDir, ClusterMarkFile.FILENAME),
                     ClusterComponentType.CONSENSUS_MODULE,
                     errorBufferLength,
                     epochClock,
-                    ClusteredServiceContainer.Configuration.LIVENESS_TIMEOUT_MS);
+                    ClusteredServiceContainer.Configuration.LIVENESS_TIMEOUT_MS,
+                    filePageSize);
             }
 
             MarkFile.ensureMarkFileLink(
@@ -1719,9 +1722,9 @@ public final class ConsensusModule implements AutoCloseable
                     new Aeron.Context()
                         .aeronDirectoryName(aeronDirectoryName)
                         .errorHandler(errorHandler)
+                        .subscriberErrorHandler(RethrowingErrorHandler.INSTANCE)
                         .epochClock(epochClock)
                         .useConductorAgentInvoker(true)
-                        .subscriberErrorHandler(RethrowingErrorHandler.INSTANCE)
                         .awaitingIdleStrategy(YieldingIdleStrategy.INSTANCE)
                         .clientLock(NoOpLock.INSTANCE)
                         .clientName(agentRoleName));
@@ -1757,7 +1760,7 @@ public final class ConsensusModule implements AutoCloseable
                 throw new ClusterException("Aeron client must use a RethrowingErrorHandler");
             }
 
-            if (null == aeron.conductorAgentInvoker())
+            if (!aeron.context().useConductorAgentInvoker())
             {
                 throw new ClusterException("Aeron client must use conductor agent invoker");
             }
@@ -2229,7 +2232,7 @@ public final class ConsensusModule implements AutoCloseable
          * @see Configuration#FILE_SYNC_LEVEL_PROP_NAME
          */
         @Config
-        int fileSyncLevel()
+        public int fileSyncLevel()
         {
             return fileSyncLevel;
         }

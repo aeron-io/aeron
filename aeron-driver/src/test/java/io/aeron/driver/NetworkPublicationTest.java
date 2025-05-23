@@ -29,6 +29,7 @@ import org.agrona.concurrent.status.Position;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.params.provider.CsvSource;
 
 import java.net.InetSocketAddress;
@@ -112,39 +113,10 @@ class NetworkPublicationTest
         when(flowControl.hasRequiredReceivers()).thenReturn(true);
     }
 
-    @ParameterizedTest
-    @CsvSource({ "0,0", "32, 0", "1024, 0", "4096, 4096", "20480, 20480", "20544, 20480", "13958643584, 13958639616" })
-    void shouldAlignInitialCleanPosition(final long initialPosition, final long expectedCleanPosition)
-    {
-        senderPosition.set(initialPosition);
-
-        final NetworkPublication publication = new NetworkPublication(
-            REGISTRATION_ID,
-            ctx,
-            params,
-            sendChannelEndpoint,
-            rawLog,
-            PUBLICATION_WINDOW_LENGTH,
-            publisherPos,
-            publisherLimit,
-            senderPosition,
-            senderLimit,
-            senderBpe,
-            SESSION_ID,
-            STREAM_ID,
-            INITIAL_TERM_ID,
-            flowControl,
-            retransmitHandler,
-            NETWORK_PUBLICATION_THREAD_LOCALS,
-            true);
-
-        assertEquals(expectedCleanPosition, publication.cleanPosition);
-    }
-
     @SuppressWarnings("MethodLength")
     @ParameterizedTest
-    @CsvSource({ "0,0", "512, 0", "8032, 4096", "65440, 61440" })
-    void shouldCleanLogBufferOneTermBehindMinSubPosition(final long initialPosition, final long initialCleanPosition)
+    @ValueSource(longs = { 0L, 512L, 7281770624L })
+    void shouldCleanLogBufferOneTermBehindMinSubPosition(final long initialPosition)
     {
         publisherPos.set(initialPosition);
         publisherLimit.set(initialPosition);
@@ -170,7 +142,8 @@ class NetworkPublicationTest
             retransmitHandler,
             NETWORK_PUBLICATION_THREAD_LOCALS,
             true);
-        assertEquals(initialCleanPosition, publication.cleanPosition);
+        assertEquals(initialPosition, publication.cleanPosition);
+        final long initialTermBasePosition = initialPosition - (initialPosition & (TERM_MIN_LENGTH - 1));
 
         // setup initial connection
         publication.onStatusMessage(statusMessageFlyweight, inetSocketAddress, driverConductorProxy);
@@ -178,78 +151,59 @@ class NetworkPublicationTest
         // first iteration: only pub-lmt is updated
         publication.updatePublisherPositionAndLimit();
         assertEquals(initialPosition + PUBLICATION_WINDOW_LENGTH, publisherLimit.get());
-        assertEquals(initialCleanPosition, publication.cleanPosition);
+        assertEquals(initialPosition, publication.cleanPosition);
 
         // consumer position didn't change -> no op
         publication.updatePublisherPositionAndLimit();
         assertEquals(initialPosition + PUBLICATION_WINDOW_LENGTH, publisherLimit.get());
-        assertEquals(initialCleanPosition, publication.cleanPosition);
+        assertEquals(initialPosition, publication.cleanPosition);
 
         // consumer position moved -> update limit
         senderPosition.set(initialPosition + 3072);
         publication.updatePublisherPositionAndLimit();
         assertEquals(initialPosition + 3072 + PUBLICATION_WINDOW_LENGTH, publisherLimit.get());
-        assertEquals(initialCleanPosition, publication.cleanPosition);
+        assertEquals(initialPosition, publication.cleanPosition);
 
         // consumer position moved -> update limit
         senderPosition.set(initialPosition + TERM_MIN_LENGTH / 8);
         publication.updatePublisherPositionAndLimit();
         assertEquals(initialPosition + TERM_MIN_LENGTH / 8 + PUBLICATION_WINDOW_LENGTH, publisherLimit.get());
-        assertEquals(initialCleanPosition, publication.cleanPosition);
+        assertEquals(initialPosition, publication.cleanPosition);
 
-        // consumer position moved more than 1 term but less than cleaning block
-        senderPosition.set(initialPosition + TERM_MIN_LENGTH + 64);
+        // consumer position moved by an entire term -> nothing to clean yet
+        senderPosition.set(initialPosition + TERM_MIN_LENGTH);
         publication.updatePublisherPositionAndLimit();
-        assertEquals(initialPosition + TERM_MIN_LENGTH + 64 + PUBLICATION_WINDOW_LENGTH, publisherLimit.get());
-        assertEquals(initialCleanPosition, publication.cleanPosition);
+        assertEquals(initialPosition + TERM_MIN_LENGTH + PUBLICATION_WINDOW_LENGTH, publisherLimit.get());
+        assertEquals(initialPosition, publication.cleanPosition);
 
-        // consumer position moved more than 1 term and a cleaning block forward
-        senderPosition.set(initialPosition + TERM_MIN_LENGTH + PUBLICATION_WINDOW_LENGTH);
+        // consumer position moved again => clean bytes within a first buffer
+        senderPosition.set(initialPosition + TERM_MIN_LENGTH + 128);
         publication.updatePublisherPositionAndLimit();
-        assertEquals(initialPosition + TERM_MIN_LENGTH + 2 * PUBLICATION_WINDOW_LENGTH, publisherLimit.get());
-        assertEquals(initialCleanPosition + TERM_CLEANUP_BLOCK_LENGTH, publication.cleanPosition);
+        assertEquals(initialPosition + TERM_MIN_LENGTH + 128 + PUBLICATION_WINDOW_LENGTH, publisherLimit.get());
+        assertEquals(initialPosition + 128, publication.cleanPosition);
 
-        // cleaning in blocks
+        // consumer position moved again => clean the entire first buffer
+        senderPosition.set(initialPosition + 2 * TERM_MIN_LENGTH + 192);
         publication.updatePublisherPositionAndLimit();
-        publication.updatePublisherPositionAndLimit();
-        publication.updatePublisherPositionAndLimit();
-        assertEquals(initialPosition + TERM_MIN_LENGTH + 2 * PUBLICATION_WINDOW_LENGTH, publisherLimit.get());
-        assertEquals(initialCleanPosition + 4 * TERM_CLEANUP_BLOCK_LENGTH, publication.cleanPosition);
+        assertEquals(initialPosition + 2 * TERM_MIN_LENGTH + 192 + PUBLICATION_WINDOW_LENGTH, publisherLimit.get());
+        assertEquals(initialTermBasePosition + TERM_MIN_LENGTH, publication.cleanPosition);
 
-        // consumer position moved too far
-        senderPosition.set(initialPosition + 2 * TERM_MIN_LENGTH + 3 * PUBLICATION_WINDOW_LENGTH / 4);
+        // buffer clean trails snd-pos updates by one term
+        senderPosition.set(initialPosition + 2 * TERM_MIN_LENGTH + 4096);
         publication.updatePublisherPositionAndLimit();
-        assertEquals(
-            initialPosition + 2 * TERM_MIN_LENGTH + 3 * PUBLICATION_WINDOW_LENGTH / 4 + PUBLICATION_WINDOW_LENGTH,
-            publisherLimit.get());
-        assertEquals(initialCleanPosition + 5 * TERM_CLEANUP_BLOCK_LENGTH, publication.cleanPosition);
-
-        // consumer position advanced too far -> no pub-lmt update
-        senderPosition.set(initialPosition + 3 * TERM_MIN_LENGTH);
-        publication.updatePublisherPositionAndLimit();
-        assertEquals(
-            initialPosition + 2 * TERM_MIN_LENGTH + 3 * PUBLICATION_WINDOW_LENGTH / 4 + PUBLICATION_WINDOW_LENGTH,
-            publisherLimit.get());
-        assertEquals(initialCleanPosition + 6 * TERM_CLEANUP_BLOCK_LENGTH, publication.cleanPosition);
-
-        final long newLimit = initialPosition + 3 * TERM_MIN_LENGTH + PUBLICATION_WINDOW_LENGTH;
-        final long baseLimitPosition = newLimit - (newLimit & (TERM_MIN_LENGTH - 1));
-        while (newLimit != publisherLimit.get())
-        {
-            publication.updatePublisherPositionAndLimit();
-        }
-        assertEquals(newLimit, publisherLimit.get());
-
-        final long cleanPositionTermOffset = publication.cleanPosition & (TERM_MIN_LENGTH - 1);
-        final long baseCleanPosition = publication.cleanPosition - cleanPositionTermOffset;
-        // ensure pub-lmt does not cross into a dirty term
-        assertThat(baseLimitPosition, lessThanOrEqualTo(baseCleanPosition + 2 * TERM_MIN_LENGTH));
-        assertThat(cleanPositionTermOffset, greaterThan(0L));
+        assertEquals(initialPosition + 2 * TERM_MIN_LENGTH + 4096 + PUBLICATION_WINDOW_LENGTH, publisherLimit.get());
+        assertEquals(initialPosition + TERM_MIN_LENGTH + 4096, publication.cleanPosition);
     }
 
     @Test
     void pubLimitShouldNotCrossToThePreviousTermIfAnEntireTermIsDirty()
     {
+        final long initialPosition = TERM_MIN_LENGTH - 1440;
+        publisherPos.set(initialPosition);
+        publisherLimit.set(initialPosition);
+        senderPosition.set(initialPosition);
+        senderLimit.set(initialPosition);
+
         final NetworkPublication publication = new NetworkPublication(
             REGISTRATION_ID,
             ctx,
@@ -269,29 +223,77 @@ class NetworkPublicationTest
             retransmitHandler,
             NETWORK_PUBLICATION_THREAD_LOCALS,
             true);
-        assertEquals(0, publication.cleanPosition);
+        assertEquals(initialPosition, publication.cleanPosition);
 
         // setup initial connection
         publication.onStatusMessage(statusMessageFlyweight, inetSocketAddress, driverConductorProxy);
 
-        // clean the first buffer completely
-        senderPosition.set(2 * TERM_MIN_LENGTH);
-        while (publication.cleanPosition != TERM_MIN_LENGTH - TERM_CLEANUP_BLOCK_LENGTH)
-        {
-            publication.updatePublisherPositionAndLimit();
-        }
-        assertEquals(2 * TERM_MIN_LENGTH + PUBLICATION_WINDOW_LENGTH, publisherLimit.get());
-        assertEquals(TERM_MIN_LENGTH - TERM_CLEANUP_BLOCK_LENGTH, publication.cleanPosition);
-
-        // pub-lmt cannot be changed as clean position is at the start of dirty term
-        senderPosition.set(2 * TERM_MIN_LENGTH + PUBLICATION_WINDOW_LENGTH + 1024);
+        // no buffer cleaning at first
+        senderPosition.set(initialPosition + TERM_MIN_LENGTH - 128);
         publication.updatePublisherPositionAndLimit();
-        assertEquals(2 * TERM_MIN_LENGTH + PUBLICATION_WINDOW_LENGTH, publisherLimit.get());
+        assertEquals(initialPosition + TERM_MIN_LENGTH - 128 + PUBLICATION_WINDOW_LENGTH, publisherLimit.get());
+        assertEquals(initialPosition, publication.cleanPosition);
+
+        // pub-lmt cannot be changed as clean position is at the start of a dirty term
+        senderPosition.set(initialPosition + 2 * TERM_MIN_LENGTH);
+        publication.updatePublisherPositionAndLimit();
+        assertEquals(initialPosition + TERM_MIN_LENGTH - 128 + PUBLICATION_WINDOW_LENGTH, publisherLimit.get());
         assertEquals(TERM_MIN_LENGTH, publication.cleanPosition);
 
         // pub-lmt is allowed to update after clean position moves from the start of a dirty buffer
         publication.updatePublisherPositionAndLimit();
         assertEquals(senderPosition.get() + PUBLICATION_WINDOW_LENGTH, publisherLimit.get());
-        assertEquals(TERM_MIN_LENGTH + TERM_CLEANUP_BLOCK_LENGTH, publication.cleanPosition);
+        assertEquals(initialPosition + TERM_MIN_LENGTH, publication.cleanPosition);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, TERM_MIN_LENGTH - PUBLICATION_WINDOW_LENGTH})
+    void pubLimitShouldNotCrossToTheDirtyTerm(final long initialPosition)
+    {
+        publisherPos.set(initialPosition);
+        publisherLimit.set(initialPosition);
+        senderPosition.set(initialPosition);
+        senderLimit.set(initialPosition);
+
+        final NetworkPublication publication = new NetworkPublication(
+            REGISTRATION_ID,
+            ctx,
+            params,
+            sendChannelEndpoint,
+            rawLog,
+            PUBLICATION_WINDOW_LENGTH,
+            publisherPos,
+            publisherLimit,
+            senderPosition,
+            senderLimit,
+            senderBpe,
+            SESSION_ID,
+            STREAM_ID,
+            INITIAL_TERM_ID,
+            flowControl,
+            retransmitHandler,
+            NETWORK_PUBLICATION_THREAD_LOCALS,
+            true);
+        assertEquals(initialPosition, publication.cleanPosition);
+
+        // setup initial connection
+        publication.onStatusMessage(statusMessageFlyweight, inetSocketAddress, driverConductorProxy);
+
+        // initial position
+        senderPosition.set(initialPosition + 256);
+        publication.updatePublisherPositionAndLimit();
+        assertEquals(initialPosition + 256 + PUBLICATION_WINDOW_LENGTH, publisherLimit.get());
+        assertEquals(initialPosition, publication.cleanPosition);
+
+        // new pub-lmt intersects with the clean position
+        senderPosition.set(initialPosition + 2 * TERM_MIN_LENGTH + PUBLICATION_WINDOW_LENGTH);
+        publication.updatePublisherPositionAndLimit();
+        assertEquals(initialPosition + 256 + PUBLICATION_WINDOW_LENGTH, publisherLimit.get());
+        assertEquals(TERM_MIN_LENGTH, publication.cleanPosition);
+
+        // after cleanup pub-lmt can move again
+        publication.updatePublisherPositionAndLimit();
+        assertEquals(initialPosition + 2 * TERM_MIN_LENGTH + 2 * PUBLICATION_WINDOW_LENGTH, publisherLimit.get());
+        assertEquals(initialPosition + TERM_MIN_LENGTH + PUBLICATION_WINDOW_LENGTH, publication.cleanPosition);
     }
 }

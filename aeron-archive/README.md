@@ -115,8 +115,4 @@ will also be displayed.
 
 APIs
 =====
-The C and C++ wrapper APIs are nearly complete.  They are **EXPERIMENTAL** and APIs are subject to change.
-
-Remaining work includes:
-- Exposing the `archive proxy` object directly to allow for asynchronous command execution
-- Implementation of the `recording events adaptor` and `poller`
+The synchronous C and C++ wrapper APIs are complete.  The async APIs have yet to be implemented.

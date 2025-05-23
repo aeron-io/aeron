@@ -40,7 +40,10 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @ExtendWith(InterruptingTestCallback.class)
 class ClientContextTest
@@ -204,17 +207,5 @@ class ClientContextTest
                 Tests.yield();
             }
         }
-    }
-
-    @Test
-    void shouldRejectClientNameThatIsTooLong()
-    {
-        final String name =
-            "this is a very long value that we are hoping with be reject when the value gets " +
-            "set on the the context without causing issues will labels";
-
-        final AeronException aeronException = assertThrows(
-            AeronException.class, () -> new Aeron.Context().clientName(name).conclude());
-        assertEquals("ERROR - clientName length must <= 100", aeronException.getMessage());
     }
 }

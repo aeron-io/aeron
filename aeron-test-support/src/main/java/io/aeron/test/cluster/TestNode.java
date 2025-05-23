@@ -111,6 +111,10 @@ public final class TestNode implements AutoCloseable
             for (int i = 0; i < services.length; i++)
             {
                 final ClusteredServiceContainer.Context ctx = context.serviceContainerContext.clone();
+
+                final int clusterId = context.consensusModuleContext.clusterId();
+                final int memberId = context.consensusModuleContext.clusterMemberId();
+
                 ctx.aeronDirectoryName(aeronDirectoryName)
                     .archiveContext(archiveContext.clone())
                     .terminationHook(ClusterTests.terminationHook(
@@ -119,6 +123,7 @@ public final class TestNode implements AutoCloseable
                     .markFileDir(context.consensusModuleContext.markFileDir())
                     .clusteredService(services[i])
                     .snapshotDurationThresholdNs(TimeUnit.MILLISECONDS.toNanos(100))
+                    .serviceName("clustered-service-" + clusterId + "-" + memberId + "-" + i)
                     .serviceId(i);
                 containers[i] = ClusteredServiceContainer.launch(ctx);
             }

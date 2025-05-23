@@ -252,6 +252,7 @@ void aeron_driver_fill_cnc_metadata(aeron_driver_context_t *context)
     metadata->client_liveness_timeout = (int64_t)context->client_liveness_timeout_ns;
     metadata->start_timestamp = context->epoch_clock();
     metadata->pid = getpid();
+    metadata->file_page_size = (int32_t)context->file_page_size;
 
     context->to_driver_buffer = aeron_cnc_to_driver_buffer(metadata);
     context->to_clients_buffer = aeron_cnc_to_clients_buffer(metadata);
@@ -567,7 +568,6 @@ void aeron_driver_context_print_configuration(aeron_driver_context_t *context)
         (uint64_t)context->network_publication_max_messages_per_send);
     fprintf(fpout, "\n    resource_free_limit=%" PRIu32, context->resource_free_limit);
     fprintf(fpout, "\n    async_executor_threads=%" PRIu32, context->async_executor_threads);
-    fprintf(fpout, "\n    async_executor_cpu_affinity_no=%" PRId32, context->async_executor_cpu_affinity_no);
     fprintf(fpout, "\n    conductor_cpu_affinity_no=%" PRId32, context->conductor_cpu_affinity_no);
     fprintf(fpout, "\n    receiver_cpu_affinity_no=%" PRId32, context->receiver_cpu_affinity_no);
     fprintf(fpout, "\n    sender_cpu_affinity_no=%" PRId32, context->sender_cpu_affinity_no);
@@ -1091,17 +1091,18 @@ int aeron_driver_start(aeron_driver_t *driver, bool manual_main_loop)
     }
     else
     {
-        if (NULL != driver->runners[0].on_start)
+        aeron_agent_runner_t first_runner = driver->runners[0];
+        if (NULL != first_runner.on_start)
         {
-            driver->runners[0].on_start(driver->runners[0].on_start_state, driver->runners[0].role_name);
+            first_runner.on_start(first_runner.on_start_state, first_runner.role_name);
         }
 
-        driver->runners[0].state = AERON_AGENT_STATE_MANUAL;
+        first_runner.state = AERON_AGENT_STATE_MANUAL;
     }
 
     for (int i = 1; i < AERON_AGENT_RUNNER_MAX; i++)
     {
-        if (driver->runners[i].state == AERON_AGENT_STATE_INITED)
+        if (AERON_AGENT_STATE_INITED == driver->runners[i].state)
         {
             if (aeron_agent_start(&driver->runners[i]) < 0)
             {

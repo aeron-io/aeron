@@ -63,6 +63,11 @@ typedef struct aeron_publication_image_stct
         int64_t untethered_window_limit_timeout_ns;
         int64_t untethered_resting_timeout_ns;
         int64_t clean_position;
+        int32_t loss_report_term_id;
+        int32_t loss_report_term_offset;
+        size_t loss_report_length;
+        aeron_loss_reporter_t *loss_report;
+        aeron_loss_reporter_entry_offset_t loss_report_entry_offset;
         aeron_receive_channel_endpoint_t *endpoint;
         uint8_t flags;
     }
@@ -94,9 +99,6 @@ typedef struct aeron_publication_image_stct
     aeron_clock_func_t nano_clock;
     aeron_clock_func_t epoch_clock;
     aeron_clock_cache_t *cached_clock;
-
-    aeron_loss_reporter_t *loss_reporter;
-    aeron_loss_reporter_entry_offset_t loss_reporter_offset;
 
     char *log_file_name;
     int32_t session_id;

@@ -291,6 +291,7 @@ typedef struct aeron_driver_conductor_stct
     aeron_deque_t end_of_life_queue;
 
     int64_t *errors_counter;
+    int64_t *images_rejected_counter;
     int64_t *unblocked_commands_counter;
     int64_t *client_timeouts_counter;
 
@@ -453,6 +454,9 @@ void aeron_driver_conductor_unlink_subscribable(aeron_subscription_link_t *link,
 void aeron_driver_conductor_unlink_all_subscribable(
     aeron_driver_conductor_t *conductor, aeron_subscription_link_t *link);
 
+int aeron_driver_conductor_link_ipc_subscriptions(
+    aeron_driver_conductor_t *conductor, aeron_ipc_publication_t *publication);
+
 int aeron_driver_conductor_on_add_ipc_publication(
     aeron_driver_conductor_t *conductor, aeron_publication_command_t *command, bool is_exclusive);
 
@@ -524,6 +528,9 @@ int aeron_driver_conductor_on_terminate_driver(
 
 int aeron_driver_conductor_on_invalidate_image(
     aeron_driver_conductor_t *conductor, aeron_reject_image_command_t *command);
+
+void aeron_driver_conductor_unlink_ipc_subscriptions(
+    aeron_driver_conductor_t *conductor, aeron_ipc_publication_t *publication);
 
 void aeron_driver_conductor_on_create_publication_image(void *clientd, void *item);
 

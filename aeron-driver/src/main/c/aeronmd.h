@@ -505,7 +505,7 @@ uint64_t aeron_driver_context_get_counters_free_to_reuse_timeout_ns(aeron_driver
 /**
  * Timeout for a receiver to be tracked.
  */
-#define AERON_MIN_MULTICAST_FLOW_CONTROL_RECEIVER_TIMEOUT_ENV_VAR "AERON_MIN_MULTICAST_FLOW_CONTROL_RECEIVER_TIMEOUT"
+#define AERON_FLOW_CONTROL_RECEIVER_TIMEOUT_ENV_VAR "AERON_FLOW_CONTROL_RECEIVER_TIMEOUT"
 
 int aeron_driver_context_set_flow_control_receiver_timeout_ns(aeron_driver_context_t *context, uint64_t value);
 
@@ -893,10 +893,6 @@ uint32_t aeron_driver_context_get_resource_free_limit(aeron_driver_context_t *co
 #define AERON_DRIVER_ASYNC_EXECUTOR_THREADS_ENV_VAR "AERON_DRIVER_ASYNC_EXECUTOR_THREADS"
 int aeron_driver_context_set_async_executor_threads(aeron_driver_context_t *context, uint32_t value);
 uint32_t aeron_driver_context_get_async_executor_threads(aeron_driver_context_t *context);
-
-#define AERON_DRIVER_ASYNC_EXECUTOR_CPU_AFFINITY_ENV_VAR "AERON_DRIVER_ASYNC_EXECUTOR_CPU_AFFINITY"
-int aeron_driver_context_set_async_executor_cpu_affinity(aeron_driver_context_t *context, int32_t value);
-int32_t aeron_driver_context_get_async_executor_cpu_affinity(aeron_driver_context_t *context);
 
 #define AERON_CONDUCTOR_CPU_AFFINITY_ENV_VAR "AERON_CONDUCTOR_CPU_AFFINITY"
 int aeron_driver_context_set_conductor_cpu_affinity(aeron_driver_context_t *context, int32_t value);

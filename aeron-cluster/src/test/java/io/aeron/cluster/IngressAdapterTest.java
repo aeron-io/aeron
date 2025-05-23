@@ -20,6 +20,7 @@ import static org.mockito.Mockito.*;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
+import io.aeron.logbuffer.Header;
 import org.agrona.DirectBuffer;
 import org.agrona.ExpandableArrayBuffer;
 import org.agrona.MutableDirectBuffer;
@@ -47,6 +48,7 @@ class IngressAdapterTest
 {
     private final ConsensusModuleAgent consensusModuleAgent = mock(ConsensusModuleAgent.class);
     private final ExpandableArrayBuffer buffer = new ExpandableArrayBuffer();
+    private final Header header = new Header(0, 0);
     private final IngressAdapter adapter = new IngressAdapter(0, consensusModuleAgent);
 
     @SuppressWarnings("unused") // name used for test display name
@@ -62,9 +64,9 @@ class IngressAdapterTest
 
         final int length = MessageHeaderDecoder.ENCODED_LENGTH + blockLength;
 
-        adapter.onMessage(buffer, 0, length, null);
+        adapter.onMessage(buffer, 0, length, header);
 
-        expectation.expect(verify(consensusModuleAgent), buffer);
+        expectation.expect(verify(consensusModuleAgent), buffer, header);
     }
 
     static Stream<Arguments> shouldDelegateToConsensusModuleAgent()
@@ -80,10 +82,10 @@ class IngressAdapterTest
                     .templateId(19)
                     .version(0);
             }, 0,  // no wrapping
-            (ConsensusModuleAgentExpectation)(a, buffer) ->
+            (ConsensusModuleAgentExpectation)(a, buffer, header) ->
                 a.onExtensionMessage(
                     0, 19, 17, 0, buffer, 0,
-                    MessageHeaderDecoder.ENCODED_LENGTH, null)),
+                    MessageHeaderDecoder.ENCODED_LENGTH, header)),
         Arguments.of(
             "SessionMessageHeaderDecoder",
             (Consumer<MutableDirectBuffer>)(buffer) ->
@@ -93,7 +95,7 @@ class IngressAdapterTest
                     .clusterSessionId(19)
                     .timestamp(23);
             }, SessionMessageHeaderDecoder.BLOCK_LENGTH,
-            (ConsensusModuleAgentExpectation)(a, buffer) ->
+            (ConsensusModuleAgentExpectation)(a, buffer, header) ->
                 a.onIngressMessage(17, 19,
                     buffer, MessageHeaderDecoder.ENCODED_LENGTH + SessionMessageHeaderDecoder.BLOCK_LENGTH, 0)),
         Arguments.of(
@@ -106,8 +108,8 @@ class IngressAdapterTest
                     .version(23)
                     .responseChannel("x");
             }, SessionConnectRequestDecoder.BLOCK_LENGTH,
-            (ConsensusModuleAgentExpectation)(a, buffer) ->
-                a.onSessionConnect(17, 19, 23, "x", new byte[0])),
+            (ConsensusModuleAgentExpectation)(a, buffer, header) ->
+                a.onSessionConnect(17, 19, 23, "x", new byte[0], header)),
         Arguments.of(
             "SessionCloseRequestDecoder",
             (Consumer<MutableDirectBuffer>)(buffer) ->
@@ -116,7 +118,7 @@ class IngressAdapterTest
                     .leadershipTermId(17)
                     .clusterSessionId(19);
             }, SessionCloseRequestDecoder.BLOCK_LENGTH,
-            (ConsensusModuleAgentExpectation)(a, buffer) -> a.onSessionClose(17, 19)),
+            (ConsensusModuleAgentExpectation)(a, buffer, header) -> a.onSessionClose(17, 19)),
         Arguments.of(
             "SessionKeepAliveDecoder",
             (Consumer<MutableDirectBuffer>)(buffer) ->
@@ -125,7 +127,7 @@ class IngressAdapterTest
                     .leadershipTermId(17)
                     .clusterSessionId(19);
             }, SessionKeepAliveDecoder.BLOCK_LENGTH,
-            (ConsensusModuleAgentExpectation)(a, buffer) -> a.onSessionKeepAlive(17, 19)),
+            (ConsensusModuleAgentExpectation)(a, buffer, header) -> a.onSessionKeepAlive(17, 19, header)),
         Arguments.of(
             "ChallengeResponseDecoder",
             (Consumer<MutableDirectBuffer>)(buffer) ->
@@ -136,7 +138,7 @@ class IngressAdapterTest
                     .clusterSessionId(19)
                     .putEncodedCredentials(challenge, 0, challenge.length);
             }, ChallengeResponseDecoder.BLOCK_LENGTH,
-            (ConsensusModuleAgentExpectation)(a, buffer) ->
+            (ConsensusModuleAgentExpectation)(a, buffer, header) ->
                 a.onIngressChallengeResponse(17, 19, "foo".getBytes())),
         Arguments.of(
             "AdminRequestDecoder",
@@ -149,7 +151,7 @@ class IngressAdapterTest
                     .correlationId(23)
                     .putPayload(payload, 0, payload.length);
             }, AdminRequestDecoder.BLOCK_LENGTH,
-            (ConsensusModuleAgentExpectation)(a, buffer) ->
+            (ConsensusModuleAgentExpectation)(a, buffer, header) ->
                 a.onAdminRequest(17, 19, 23,
                     AdminRequestType.SNAPSHOT, buffer,
                     AdminRequestDecoder.BLOCK_LENGTH +
@@ -160,6 +162,6 @@ class IngressAdapterTest
 
     private interface ConsensusModuleAgentExpectation
     {
-        void expect(ConsensusModuleAgent agent, DirectBuffer buffer);
+        void expect(ConsensusModuleAgent agent, DirectBuffer buffer, Header header);
     }
 }

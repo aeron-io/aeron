@@ -27,6 +27,6 @@ public class MaxMulticastFlowControlSupplier implements FlowControlSupplier
      */
     public FlowControl newInstance(final UdpChannel udpChannel, final int streamId, final long registrationId)
     {
-        return MaxMulticastFlowControl.INSTANCE;
+        return new MaxMulticastFlowControl();
     }
 }

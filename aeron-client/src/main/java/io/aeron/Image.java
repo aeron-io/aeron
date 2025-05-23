@@ -842,7 +842,12 @@ public final class Image
         return length;
     }
 
-    void reject(final String reason)
+    /**
+     * Reject this image.
+     *
+     * @param reason a String indicating the reason why this image is being rejected.
+     */
+    public void reject(final String reason)
     {
         subscription.rejectImage(correlationId, position(), reason);
     }
