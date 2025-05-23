@@ -27,6 +27,7 @@
 
 #define AERON_MIN_FLOW_CONTROL_RECEIVERS_COUNTER_NAME ("fc-receivers")
 
+#define AERON_MULTICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE (4)
 #define AERON_MAX_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE (4)
 #define AERON_UNICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE (16)
 #define AERON_MIN_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE (16)
@@ -120,6 +121,7 @@ typedef struct aeron_flow_control_tagged_options_stct
         int32_t value;
     }
     group_min_size;
+    size_t multicast_flow_control_rrwm;
 }
 aeron_flow_control_tagged_options_t;
 

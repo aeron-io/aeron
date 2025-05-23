@@ -514,6 +514,27 @@ int aeron_flow_control_parse_tagged_options(
                 }
             }
         }
+        else if (strncmp(current_option, "rrwm:", 5) == 0)
+        {
+            char *endptr;
+            errno = 0;
+            int64_t signedRrwm = strtol(current_option + 5, &endptr, 10);
+            if (0 == errno && signedRrwm > 0)
+            {
+                flow_control_options->multicast_flow_control_rrwm = (size_t)signedRrwm;
+            }
+            else
+            {
+                AERON_SET_ERR(
+                    EINVAL,
+                    "Flow control options - invalid flow control retransmit receiver window multiple, field: %.*s, options: %.*s",
+                    (int)current_option_length,
+                    current_option,
+                    (int)options_length,
+                    options);
+                return -1;
+            }
+        }
         else
         {
             AERON_SET_ERR(
