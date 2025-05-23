@@ -44,6 +44,7 @@ import org.agrona.concurrent.UnsafeBuffer;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -70,18 +71,39 @@ import static io.aeron.CommonContext.PUBLICATION_WINDOW_LENGTH_PARAM_NAME;
 import static io.aeron.CommonContext.RECEIVER_WINDOW_LENGTH_PARAM_NAME;
 import static io.aeron.CommonContext.SOCKET_RCVBUF_PARAM_NAME;
 import static io.aeron.SystemTests.verifyLossOccurredForStream;
-import static io.aeron.logbuffer.FrameDescriptor.*;
+import static io.aeron.logbuffer.FrameDescriptor.BEGIN_FRAG_FLAG;
+import static io.aeron.logbuffer.FrameDescriptor.END_FRAG_FLAG;
+import static io.aeron.logbuffer.FrameDescriptor.FRAME_ALIGNMENT;
 import static io.aeron.logbuffer.LogBufferDescriptor.computeFragmentedFrameLength;
-import static io.aeron.protocol.DataHeaderFlyweight.*;
+import static io.aeron.protocol.DataHeaderFlyweight.BEGIN_AND_END_FLAGS;
+import static io.aeron.protocol.DataHeaderFlyweight.BEGIN_END_AND_EOS_FLAGS;
+import static io.aeron.protocol.DataHeaderFlyweight.CURRENT_VERSION;
+import static io.aeron.protocol.DataHeaderFlyweight.HDR_TYPE_DATA;
+import static io.aeron.protocol.DataHeaderFlyweight.HDR_TYPE_RSP_SETUP;
+import static io.aeron.protocol.DataHeaderFlyweight.HDR_TYPE_SM;
+import static io.aeron.protocol.DataHeaderFlyweight.HEADER_LENGTH;
+import static io.aeron.protocol.DataHeaderFlyweight.VERSION_FIELD_OFFSET;
 import static java.util.Arrays.asList;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.agrona.BitUtil.SIZE_OF_INT;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.lessThan;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith({ InterruptingTestCallback.class, EventLogExtension.class })
 class PubAndSubTest
@@ -1368,6 +1390,11 @@ class PubAndSubTest
     @InterruptAfter(10)
     void shouldExchangeMessagesUsingMinimalReceiverWindow(final String channel, final int mtu)
     {
+        assumeFalse(mtu == Configuration.MAX_UDP_PAYLOAD_LENGTH &&
+            TestMediaDriver.shouldRunCMediaDriver() &&
+            OS.MAC == OS.current(),
+            "Disabled, because C media driver on macOS does not extract SO_SNDBUF max value correctly");
+
         final ChannelUri uri = ChannelUri.parse(channel);
         final int termLength = 512 * 1024;
         final long initialPosition = termLength * 17L + 992;
