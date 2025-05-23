@@ -369,7 +369,7 @@ int aeron_ipc_publication_update_pub_pos_and_lmt(aeron_ipc_publication_t *public
                 const int32_t active_term_id = aeron_logbuffer_compute_term_id_from_position(
                     new_limit_position, publication->position_bits_to_shift, publication->initial_term_id);
                 const int32_t term_gap = aeron_logbuffer_compute_term_count(active_term_id, dirty_term_id);
-                if (term_gap < 2 || (2 == term_gap && 0 != (clean_position & publication->term_length_mask)))
+                if (term_gap < 2 || (2 == term_gap && 0 != (clean_position & (publication->mapped_raw_log.term_length - 1))))
                 {
                     aeron_counter_set_release(publication->pub_lmt_position.value_addr, new_limit_position);
                     publication->conductor_fields.trip_limit = new_limit_position + publication->conductor_fields.trip_gain;
