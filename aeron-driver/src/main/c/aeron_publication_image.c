@@ -573,15 +573,13 @@ int aeron_publication_image_track_rebuild(aeron_publication_image_t *image, int6
         const int32_t threshold = window_length >> 2;
 
         const int64_t max_packet_insert_position = min_sub_pos + (image->term_length >> 1);
-        const int64_t term_base_max_packet_insert_position =
-            max_packet_insert_position - (max_packet_insert_position & image->term_length_mask);
         const int64_t clean_position = image->conductor_fields.clean_position;
-        const int32_t clean_offset = (int32_t)(clean_position & image->term_length_mask);
-        const int64_t term_base_clean_position = clean_position - clean_offset;
-        const int64_t wrap_around_gap = term_base_max_packet_insert_position - term_base_clean_position;
-        const int64_t max_wrap_around_gap = (int64_t)image->term_length << 1;
-
-        if (wrap_around_gap < max_wrap_around_gap || (wrap_around_gap == max_wrap_around_gap && 0 != clean_offset))
+        const int32_t dirty_term_id = aeron_logbuffer_compute_term_id_from_position(
+            clean_position, image->position_bits_to_shift, image->initial_term_id);
+        const int32_t active_term_id = aeron_logbuffer_compute_term_id_from_position(
+            max_packet_insert_position, image->position_bits_to_shift, image->initial_term_id);
+        const int32_t term_gap = aeron_logbuffer_compute_term_count(active_term_id, dirty_term_id);
+        if (term_gap < 2 || (2 == term_gap && 0 != (clean_position & image->term_length_mask)))
         {
             if (should_force_send_sm ||
                 (min_sub_pos >= (image->next_sm_position + threshold)) ||
