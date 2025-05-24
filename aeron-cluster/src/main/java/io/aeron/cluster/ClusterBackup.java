@@ -581,6 +581,7 @@ public final class ClusterBackup implements AutoCloseable
         private boolean ownsAeronClient = false;
         private String aeronDirectoryName = CommonContext.getAeronDirectoryName();
         private Aeron aeron;
+        private AgentInvoker mediaDriverAgentInvoker;
 
         private int clusterId = ClusteredServiceContainer.Configuration.clusterId();
         private String consensusChannel = Configuration.consensusChannel();
@@ -737,6 +738,7 @@ public final class ClusterBackup implements AutoCloseable
                         .aeronDirectoryName(aeronDirectoryName)
                         .errorHandler(errorHandler)
                         .epochClock(epochClock)
+                        .driverAgentInvoker(mediaDriverAgentInvoker)
                         .useConductorAgentInvoker(true)
                         .awaitingIdleStrategy(YieldingIdleStrategy.INSTANCE)
                         .subscriberErrorHandler(RethrowingErrorHandler.INSTANCE)
@@ -939,6 +941,28 @@ public final class ClusterBackup implements AutoCloseable
         public String aeronDirectoryName()
         {
             return aeronDirectoryName;
+        }
+
+        /**
+         * Get the {@link AgentInvoker} that should be used for the Media Driver if running in a lightweight mode.
+         *
+         * @return the {@link AgentInvoker} that should be used for the Media Driver if running in a lightweight mode.
+         */
+        AgentInvoker mediaDriverAgentInvoker()
+        {
+            return mediaDriverAgentInvoker;
+        }
+
+        /**
+         * Set the {@link AgentInvoker} that should be used for the Media Driver if running in a lightweight mode.
+         *
+         * @param mediaDriverAgentInvoker that should be used for the Media Driver if running in a lightweight mode.
+         * @return this for a fluent API.
+         */
+        public Context mediaDriverAgentInvoker(final AgentInvoker mediaDriverAgentInvoker)
+        {
+            this.mediaDriverAgentInvoker = mediaDriverAgentInvoker;
+            return this;
         }
 
         /**

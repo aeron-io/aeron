@@ -1456,6 +1456,7 @@ public final class ConsensusModule implements AutoCloseable
         private boolean ownsAeronClient = false;
         private String aeronDirectoryName = CommonContext.getAeronDirectoryName();
         private Aeron aeron;
+        private AgentInvoker mediaDriverAgentInvoker;
 
         private boolean deleteDirOnStart = false;
         private String clusterDirectoryName = ClusteredServiceContainer.Configuration.clusterDirName();
@@ -1724,6 +1725,7 @@ public final class ConsensusModule implements AutoCloseable
                         .errorHandler(errorHandler)
                         .subscriberErrorHandler(RethrowingErrorHandler.INSTANCE)
                         .epochClock(epochClock)
+                        .driverAgentInvoker(mediaDriverAgentInvoker)
                         .useConductorAgentInvoker(true)
                         .awaitingIdleStrategy(YieldingIdleStrategy.INSTANCE)
                         .clientLock(NoOpLock.INSTANCE)
@@ -3726,6 +3728,28 @@ public final class ConsensusModule implements AutoCloseable
         public Context aeronDirectoryName(final String aeronDirectoryName)
         {
             this.aeronDirectoryName = aeronDirectoryName;
+            return this;
+        }
+
+        /**
+         * Get the {@link AgentInvoker} that should be used for the Media Driver if running in a lightweight mode.
+         *
+         * @return the {@link AgentInvoker} that should be used for the Media Driver if running in a lightweight mode.
+         */
+        AgentInvoker mediaDriverAgentInvoker()
+        {
+            return mediaDriverAgentInvoker;
+        }
+
+        /**
+         * Set the {@link AgentInvoker} that should be used for the Media Driver if running in a lightweight mode.
+         *
+         * @param mediaDriverAgentInvoker that should be used for the Media Driver if running in a lightweight mode.
+         * @return this for a fluent API.
+         */
+        public Context mediaDriverAgentInvoker(final AgentInvoker mediaDriverAgentInvoker)
+        {
+            this.mediaDriverAgentInvoker = mediaDriverAgentInvoker;
             return this;
         }
 

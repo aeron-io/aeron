@@ -1005,6 +1005,55 @@ class ConsensusModuleContextTest
         }
     }
 
+    @Test
+    public void shouldCreateAeronClientAndCountersWhenMediaDriverThreadingModeInvoker() throws IOException
+    {
+        final Path aeronDir = Paths.get(CommonContext.generateRandomDirName());
+        Files.createDirectories(aeronDir);
+
+        try (MediaDriver driver = MediaDriver.launch(new MediaDriver.Context()
+            .aeronDirectoryName(aeronDir.toString())
+            .threadingMode(ThreadingMode.INVOKER)))
+        {
+            try
+            {
+                context.aeronDirectoryName(aeronDir.toString())
+                    .mediaDriverAgentInvoker(driver.sharedAgentInvoker())
+                    .aeron(null)
+                    .errorCounter(null)
+                    .moduleStateCounter(null)
+                    .electionStateCounter(null)
+                    .electionCounter(null)
+                    .leadershipTermIdCounter(null)
+                    .clusterNodeRoleCounter(null)
+                    .commitPositionCounter(null)
+                    .controlToggleCounter(null)
+                    .nodeControlToggleCounter(null)
+                    .snapshotCounter(null)
+                    .timedOutClientCounter(null);
+
+                context.conclude();
+
+                assertNotNull(context.aeron());
+                assertNotNull(context.errorCounter());
+                assertNotNull(context.moduleStateCounter());
+                assertNotNull(context.electionStateCounter());
+                assertNotNull(context.electionCounter());
+                assertNotNull(context.leadershipTermIdCounter());
+                assertNotNull(context.clusterNodeRoleCounter());
+                assertNotNull(context.commitPositionCounter());
+                assertNotNull(context.controlToggleCounter());
+                assertNotNull(context.nodeControlToggleCounter());
+                assertNotNull(context.snapshotCounter());
+                assertNotNull(context.timedOutClientCounter());
+            }
+            finally
+            {
+                context.close();
+            }
+        }
+    }
+
     public static class TestAuthorisationSupplier implements AuthorisationServiceSupplier
     {
         public AuthorisationService get()
