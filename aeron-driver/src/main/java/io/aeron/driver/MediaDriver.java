@@ -707,7 +707,7 @@ public final class MediaDriver implements AutoCloseable
                     cncMetaDataBuffer,
                     conductorBufferLength,
                     toClientsBufferLength,
-                    Configuration.countersMetadataBufferLength(counterValuesBufferLength),
+                    countersMetadataBufferLength(counterValuesBufferLength),
                     counterValuesBufferLength,
                     clientLivenessTimeoutNs,
                     errorBufferLength,

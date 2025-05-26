@@ -204,7 +204,7 @@ public final class Configuration
      * Default length of the buffer for the counters file.
      */
     @Config(expectedCDefaultFieldName = "AERON_COUNTERS_VALUES_BUFFER_LENGTH_DEFAULT")
-    public static final int COUNTERS_VALUES_BUFFER_LENGTH_DEFAULT = 1024 * 1024;
+    public static final int COUNTERS_VALUES_BUFFER_LENGTH_DEFAULT = 8 * 1024 * 1024;
 
     /**
      * Maximum length of the buffer for the counters file.
