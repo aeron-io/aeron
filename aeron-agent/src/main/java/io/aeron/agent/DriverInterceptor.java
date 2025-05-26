@@ -127,4 +127,33 @@ class DriverInterceptor
             }
         }
     }
+
+    static class Revoke
+    {
+        static class PublicationRevoke
+        {
+            @Advice.OnMethodEnter
+            static void logRevoke(
+                final long revokedPos,
+                final int sessionId,
+                final int streamId,
+                final String channel)
+            {
+                LOGGER.logPublicationRevoke(revokedPos, sessionId, streamId, channel);
+            }
+        }
+
+        static class PublicationImageRevoke
+        {
+            @Advice.OnMethodEnter
+            static void logRevoke(
+                final long revokedPos,
+                final int sessionId,
+                final int streamId,
+                final String channel)
+            {
+                LOGGER.logPublicationImageRevoke(revokedPos, sessionId, streamId, channel);
+            }
+        }
+    }
 }

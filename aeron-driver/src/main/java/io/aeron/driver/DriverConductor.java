@@ -132,6 +132,7 @@ public final class DriverConductor implements Agent
     private final MutableDirectBuffer tempBuffer;
     private final DataHeaderFlyweight defaultDataHeader = new DataHeaderFlyweight(createDefaultHeader(0, 0, 0));
     private final AtomicCounter errorCounter;
+    private final AtomicCounter imagesRejected;
     private final DutyCycleTracker dutyCycleTracker;
     private final Executor asyncTaskExecutor;
     private final boolean asyncExecutionDisabled;
@@ -155,6 +156,7 @@ public final class DriverConductor implements Agent
         clientProxy = ctx.clientProxy();
         tempBuffer = ctx.tempBuffer();
         errorCounter = ctx.systemCounters().get(ERRORS);
+        imagesRejected = ctx.systemCounters().get(IMAGES_REJECTED);
         dutyCycleTracker = ctx.conductorDutyCycleTracker();
 
         asyncTaskExecutor = ctx.asyncTaskExecutor();
@@ -860,6 +862,19 @@ public final class DriverConductor implements Agent
         }
     }
 
+    void unlinkIpcSubscriptions(final IpcPublication publication)
+    {
+        for (int i = 0, size = subscriptionLinks.size(); i < size; i++)
+        {
+            final SubscriptionLink link = subscriptionLinks.get(i);
+            if (link.isLinked(publication))
+            {
+                notifyUnavailableImageLink(publication.registrationId(), link);
+                link.unlink(publication);
+            }
+        }
+    }
+
     void tryCloseReceiveChannelEndpoint(final ReceiveChannelEndpoint channelEndpoint)
     {
         if (channelEndpoint.shouldBeClosed())
@@ -934,7 +949,7 @@ public final class DriverConductor implements Agent
         }
     }
 
-    void onRemovePublication(final long registrationId, final long correlationId)
+    void onRemovePublication(final long registrationId, final long correlationId, final boolean revoke)
     {
         PublicationLink publicationLink = null;
         final ArrayList<PublicationLink> publicationLinks = this.publicationLinks;
@@ -954,6 +969,10 @@ public final class DriverConductor implements Agent
             throw new ControlProtocolException(UNKNOWN_PUBLICATION, "unknown publication: " + registrationId);
         }
 
+        if (revoke)
+        {
+            publicationLink.revoke();
+        }
         publicationLink.close();
         clientProxy.operationSucceeded(correlationId);
     }
@@ -1516,11 +1535,23 @@ public final class DriverConductor implements Agent
 
         if (null == publicationImage)
         {
-            throw new ControlProtocolException(
-                GENERIC_ERROR, "Unable to resolve image for correlationId=" + imageCorrelationId);
+            final IpcPublication foundPublication = getIpcPublication(imageCorrelationId);
+
+            if (null == foundPublication)
+            {
+                throw new ControlProtocolException(
+                    GENERIC_ERROR, "Unable to resolve image for correlationId=" + imageCorrelationId);
+            }
+
+            foundPublication.reject(position, reason, this, cachedNanoClock.nanoTime());
+        }
+        else
+        {
+            receiverProxy.rejectImage(imageCorrelationId, position, reason);
         }
 
-        receiverProxy.rejectImage(imageCorrelationId, position, reason);
+        imagesRejected.incrementRelease();
+
         clientProxy.operationSucceeded(correlationId);
     }
 
@@ -1961,6 +1992,7 @@ public final class DriverConductor implements Agent
         signalEos(logMetaData, signalEos);
         spiesSimulateConnection(logMetaData, spiesSimulateConnection);
         tether(logMetaData, tether);
+        isPublicationRevoked(logMetaData, false);
         group(logMetaData, group);
         isResponse(logMetaData, isResponse);
 
@@ -2261,12 +2293,14 @@ public final class DriverConductor implements Agent
         }
     }
 
-    private void linkIpcSubscriptions(final IpcPublication publication)
+    void linkIpcSubscriptions(final IpcPublication publication)
     {
         for (int i = 0, size = subscriptionLinks.size(); i < size; i++)
         {
             final SubscriptionLink subscription = subscriptionLinks.get(i);
-            if (subscription.matches(publication) && !subscription.isLinked(publication))
+            if (subscription.matches(publication) &&
+                !subscription.isLinked(publication) &&
+                publication.isAcceptingSubscriptions())
             {
                 clientProxy.onAvailableImage(
                     publication.registrationId(),
@@ -2825,6 +2859,7 @@ public final class DriverConductor implements Agent
         }
     }
 
+    @SuppressWarnings({ "unused", "UnnecessaryReturnStatement" })
     private static void validateExperimentalFeatures(final boolean enableExperimentalFeatures, final UdpChannel channel)
     {
         if (enableExperimentalFeatures)
@@ -2832,13 +2867,9 @@ public final class DriverConductor implements Agent
             return;
         }
 
-        if (null != channel.channelUri().get(RESPONSE_CORRELATION_ID_PARAM_NAME) ||
-            ControlMode.RESPONSE == channel.controlMode())
-        {
-            throw new IllegalArgumentException(
-                "Response Channels is an experimental feature, and " +
-                "MediaDriver.Context.enableExperimentalFeatures is false");
-        }
+        /*
+         * Put experimental feature validation here.
+         */
     }
 
     private static FeedbackDelayGenerator resolveDelayGenerator(

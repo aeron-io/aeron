@@ -918,10 +918,42 @@ project(':aeron-cluster') {
         args = [markCodecsFileV0]
     }
 
+    tasks.register('generateTestCodecsV5', JavaExec) {
+        inputs.files(codecsFile, sbeFile)
+        outputs.dir generatedTestDir
+
+        mainClass.set('uk.co.real_logic.sbe.SbeTool')
+        classpath = configurations.codecGeneration
+        systemProperties(
+                'sbe.output.dir': generatedTestDir,
+                'sbe.target.language': 'Java',
+                'sbe.validation.xsd': sbeFile,
+                'sbe.validation.stop.on.error': 'true',
+                'sbe.target.namespace': 'io.aeron.cluster.codecs.v5',
+                'sbe.schema.transform.version': '*:5')
+        args = [codecsFile]
+    }
+
+    tasks.register('generateTestCodecsV12', JavaExec) {
+        inputs.files(codecsFile, sbeFile)
+        outputs.dir generatedTestDir
+
+        mainClass.set('uk.co.real_logic.sbe.SbeTool')
+        classpath = configurations.codecGeneration
+        systemProperties(
+                'sbe.output.dir': generatedTestDir,
+                'sbe.target.language': 'Java',
+                'sbe.validation.xsd': sbeFile,
+                'sbe.validation.stop.on.error': 'true',
+                'sbe.target.namespace': 'io.aeron.cluster.codecs.v12',
+                'sbe.schema.transform.version': '*:12')
+        args = [codecsFile]
+    }
+
     compileJava.dependsOn 'compileGeneratedJava'
     compileGeneratedJava.dependsOn 'generateCodecs'
     compileTestJava.dependsOn 'compileGeneratedTestJava'
-    compileGeneratedTestJava.dependsOn 'generateTestCodecsMarkFileV0'
+    compileGeneratedTestJava.dependsOn 'generateTestCodecsMarkFileV0', 'generateTestCodecsV5', 'generateTestCodecsV12'
 
     jar {
         from sourceSets.generated.output

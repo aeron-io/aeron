@@ -29,6 +29,7 @@ import static io.aeron.CommonContext.*;
 
 final class PublicationParams
 {
+    long untetheredLingerTimeoutNs;
     long lingerTimeoutNs;
     long entityTag = ChannelUri.INVALID_TAG;
     long untetheredWindowLimitTimeoutNs;
@@ -73,6 +74,7 @@ final class PublicationParams
         params.getSparse(channelUri, ctx);
         params.getSpiesSimulateConnection(channelUri, ctx);
         params.getUntetheredWindowLimitTimeout(channelUri, ctx);
+        params.getUntetheredLingerTimeout(channelUri, ctx);
         params.getUntetheredRestingTimeout(channelUri, ctx);
         params.getMaxResend(channelUri, ctx);
 
@@ -486,6 +488,24 @@ final class PublicationParams
     {
         untetheredWindowLimitTimeoutNs = getTimeoutNs(
             channelUri, UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME, ctx.untetheredWindowLimitTimeoutNs());
+    }
+
+    private void getUntetheredLingerTimeout(final ChannelUri channelUri, final MediaDriver.Context ctx)
+    {
+        final String timeoutString = channelUri.get(UNTETHERED_LINGER_TIMEOUT_PARAM_NAME);
+        if (null != timeoutString)
+        {
+            // Linger timeout was explicitly set for the channel.  Use the set value.
+            untetheredLingerTimeoutNs = SystemUtil.parseDuration(UNTETHERED_LINGER_TIMEOUT_PARAM_NAME, timeoutString);
+        }
+        else if (Aeron.NULL_VALUE != ctx.untetheredLingerTimeoutNs())
+        {
+            untetheredLingerTimeoutNs = ctx.untetheredLingerTimeoutNs();
+        }
+        else
+        {
+            untetheredLingerTimeoutNs = untetheredWindowLimitTimeoutNs;
+        }
     }
 
     private void getUntetheredRestingTimeout(final ChannelUri channelUri, final MediaDriver.Context ctx)

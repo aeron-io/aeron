@@ -796,10 +796,10 @@ class ArchiveContextTest
             countedErrorHandler,
             controlSessionsCounter,
             errorCounter);
-        inOrder.verify(archiveDirChannel).close();
-        inOrder.verify(countedErrorHandler).onError(fileChannelException);
         inOrder.verify(catalog).close();
         inOrder.verify(countedErrorHandler).onError(catalogException);
+        inOrder.verify(archiveDirChannel).close();
+        inOrder.verify(countedErrorHandler).onError(fileChannelException);
         inOrder.verify(aeron).close();
         inOrder.verify((AutoCloseable)errorHandler).close();
         inOrder.verify(archiveMarkFile).close();
@@ -907,10 +907,10 @@ class ArchiveContextTest
             replayerDutyCycleTrackerMaxCycleTime,
             replayerDutyCycleTrackerCycleTimeThresholdExceededCount,
             errorCounter);
-        inOrder.verify(archiveDirChannel).close();
-        inOrder.verify(countedErrorHandler).onError(fileChannelException);
         inOrder.verify(catalog).close();
         inOrder.verify(countedErrorHandler).onError(catalogException);
+        inOrder.verify(archiveDirChannel).close();
+        inOrder.verify(countedErrorHandler).onError(fileChannelException);
         inOrder.verify(controlSessionsCounter).close();
         inOrder.verify(countedErrorHandler).onError(controlSessionsCounterException);
         inOrder.verify(totalWriteBytesCounter).close();

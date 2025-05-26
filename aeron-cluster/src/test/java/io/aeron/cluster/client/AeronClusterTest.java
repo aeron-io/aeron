@@ -38,6 +38,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 import static org.agrona.BitUtil.align;
@@ -70,7 +71,8 @@ class AeronClusterTest
         .egressChannel("aeron:udp?endpoint=localhost:0")
         .ingressChannel("aeron:udp")
         .idleStrategy(NoOpIdleStrategy.INSTANCE)
-        .egressListener(egressListener));
+        .egressListener(egressListener))
+        .newLeaderTimeoutNs(TimeUnit.SECONDS.toNanos(1));
     private final ExclusivePublication ingressPublication = mock(ExclusivePublication.class);
     private final Subscription egressSubscription = mock(Subscription.class);
     private final Image egressImage = mock(Image.class);

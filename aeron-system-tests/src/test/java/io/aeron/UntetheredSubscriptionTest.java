@@ -51,14 +51,20 @@ class UntetheredSubscriptionTest
     {
         return asList(
             "aeron:ipc?term-length=64k",
+
             "aeron:udp?endpoint=localhost:24325|term-length=64k",
             "aeron-spy:aeron:udp?endpoint=localhost:24325|term-length=64k",
 
-            "aeron:ipc?term-length=64k|untethered-window-limit-timeout=50ms|untethered-resting-timeout=50ms",
+            "aeron:ipc?term-length=64k|untethered-window-limit-timeout=50ms|" +
+            "untethered-resting-timeout=50ms|untethered-linger-timeout=25ms",
+
             "aeron:udp?endpoint=localhost:24325|term-length=64k|" +
-            "untethered-window-limit-timeout=50ms|untethered-resting-timeout=50ms",
+            "untethered-window-limit-timeout=50ms|untethered-resting-timeout=50ms|" +
+            "untethered-linger-timeout=25ms",
+
             "aeron-spy:aeron:udp?endpoint=localhost:24325|term-length=64k|" +
-            "untethered-window-limit-timeout=50ms|untethered-resting-timeout=50ms"
+            "untethered-window-limit-timeout=50ms|untethered-resting-timeout=50ms|" +
+            "untethered-linger-timeout=25ms"
         );
     }
 
@@ -94,12 +100,16 @@ class UntetheredSubscriptionTest
             .threadingMode(ThreadingMode.SHARED);
 
         final ChannelUri channelUri = ChannelUri.parse(channel);
-        if (!channelUri.containsKey("untethered-window-limit-timeout"))
+        if (!channelUri.containsKey(CommonContext.UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME))
         {
             context.untetheredWindowLimitTimeoutNs(TimeUnit.MILLISECONDS.toNanos(50));
         }
+        if (!channelUri.containsKey(CommonContext.UNTETHERED_LINGER_TIMEOUT_PARAM_NAME))
+        {
+            context.untetheredWindowLimitTimeoutNs(TimeUnit.MILLISECONDS.toNanos(25));
+        }
 
-        if (!channelUri.containsKey("untethered-resting-timeout"))
+        if (!channelUri.containsKey(CommonContext.UNTETHERED_RESTING_TIMEOUT_PARAM_NAME))
         {
             context.untetheredRestingTimeoutNs(TimeUnit.MILLISECONDS.toNanos(50));
         }

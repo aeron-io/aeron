@@ -225,6 +225,11 @@ public:
         return aeron_image_is_closed(m_image);
     }
 
+    inline bool isPublicationRevoked() const
+    {
+        return aeron_image_is_publication_revoked(m_image);
+    }
+
     /**
      * The position this Image has been consumed to by the subscriber.
      *
@@ -283,6 +288,14 @@ public:
     inline std::int64_t endOfStreamPosition() const
     {
         return aeron_image_end_of_stream_position(m_image);
+    }
+
+    inline void reject(std::string reason)
+    {
+        if (aeron_image_reject(m_image, reason.c_str()) < 0)
+        {
+            AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
+        }
     }
 
     /**

@@ -1409,11 +1409,6 @@ public final class AeronCluster implements AutoCloseable
                 throw new ConcurrentConcludeException();
             }
 
-            if (NULL_VALUE == newLeaderTimeoutNs)
-            {
-                newLeaderTimeoutNs = ConsensusModule.Configuration.LEADER_HEARTBEAT_TIMEOUT_DEFAULT_NS * 2;
-            }
-
             if (null == aeron)
             {
                 aeron = Aeron.connect(
@@ -2052,6 +2047,7 @@ public final class AeronCluster implements AutoCloseable
 
         private Image egressImage;
         private final long deadlineNs;
+        private long leaderHeartbeatTimeoutNs;
         private long correlationId = NULL_VALUE;
         private long clusterSessionId;
         private long leadershipTermId;
@@ -2390,6 +2386,7 @@ public final class AeronCluster implements AutoCloseable
                         leadershipTermId = egressPoller.leadershipTermId();
                         leaderMemberId = egressPoller.leaderMemberId();
                         clusterSessionId = egressPoller.clusterSessionId();
+                        leaderHeartbeatTimeoutNs = egressPoller.leaderHeartbeatTimeoutNs();
                         egressImage = egressPoller.egressImage();
                         state(State.CONCLUDE_CONNECT);
                         break;
@@ -2457,6 +2454,12 @@ public final class AeronCluster implements AutoCloseable
 
         private AeronCluster concludeConnect()
         {
+            if (ctx.newLeaderTimeoutNs() == NULL_VALUE)
+            {
+                ctx.newLeaderTimeoutNs(2 * (leaderHeartbeatTimeoutNs != NULL_VALUE ?
+                    leaderHeartbeatTimeoutNs : ConsensusModule.Configuration.LEADER_HEARTBEAT_TIMEOUT_DEFAULT_NS));
+            }
+
             final AeronCluster aeronCluster = new AeronCluster(
                 ctx,
                 messageHeaderEncoder,

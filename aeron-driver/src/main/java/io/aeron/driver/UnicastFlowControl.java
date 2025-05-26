@@ -34,14 +34,9 @@ import static io.aeron.logbuffer.LogBufferDescriptor.computePosition;
 public class UnicastFlowControl implements FlowControl
 {
     /**
-     * Singleton instance which can be used to avoid allocation.
-     */
-    public static final UnicastFlowControl INSTANCE = new UnicastFlowControl();
-
-    /**
      * Multiple of receiver window to allow for a retransmit action.
      */
-    private static final int RETRANSMIT_RECEIVER_WINDOW_MULTIPLE = 16;
+    private int retransmitReceiverWindowMultiple;
 
     /**
      * {@inheritDoc}
@@ -106,6 +101,10 @@ public class UnicastFlowControl implements FlowControl
         final int initialTermId,
         final int termBufferLength)
     {
+        retransmitReceiverWindowMultiple = FlowControl.retransmitReceiverWindowMultiple(
+            udpChannel,
+            context.unicastFlowControlRetransmitReceiverWindowMultiple()
+        );
     }
 
     /**
@@ -141,6 +140,6 @@ public class UnicastFlowControl implements FlowControl
         final int mtuLength)
     {
         return FlowControl.calculateRetransmissionLength(
-            resendLength, termBufferLength, termOffset, RETRANSMIT_RECEIVER_WINDOW_MULTIPLE);
+            resendLength, termBufferLength, termOffset, retransmitReceiverWindowMultiple);
     }
 }

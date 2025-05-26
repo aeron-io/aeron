@@ -138,12 +138,29 @@ typedef struct aeron_error_response_stct
 }
 aeron_error_response_t;
 
-typedef struct aeron_remove_command_stct
+typedef struct aeron_remove_counter_command_stct
 {
     aeron_correlated_command_t correlated;
     int64_t registration_id;
 }
-aeron_remove_command_t;
+aeron_remove_counter_command_t;
+
+#define AERON_COMMAND_REMOVE_PUBLICATION_FLAG_REVOKE (0x1)
+
+typedef struct aeron_remove_publication_command_stct
+{
+    aeron_correlated_command_t correlated;
+    int64_t registration_id;
+    uint64_t flags;
+}
+aeron_remove_publication_command_t;
+
+typedef struct aeron_remove_subscription_command_stct
+{
+    aeron_correlated_command_t correlated;
+    int64_t registration_id;
+}
+aeron_remove_subscription_command_t;
 
 typedef struct aeron_image_message_stct
 {

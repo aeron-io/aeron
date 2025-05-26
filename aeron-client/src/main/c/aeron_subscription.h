@@ -100,6 +100,9 @@ int aeron_client_conductor_subscription_install_new_image_list(
 
 int aeron_client_conductor_subscription_prune_image_lists(aeron_subscription_t *subscription);
 
+int aeron_subscription_reject_image(
+    aeron_subscription_t *subscription, int64_t image_correlation_id, int64_t position, const char *reason);
+
 inline int aeron_subscription_find_image_index(aeron_image_list_t *volatile image_list, aeron_image_t *image)
 {
     size_t length = NULL == image_list ? 0 : image_list->length;

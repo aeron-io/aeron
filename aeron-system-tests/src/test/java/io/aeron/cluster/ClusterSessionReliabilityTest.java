@@ -255,13 +255,14 @@ class ClusterSessionReliabilityTest
     private static SendChannelEndpointSupplier sendChannelEndpointSupplier(final LossGenerator lossGenerator)
     {
         return (udpChannel, statusIndicator, context) ->
-        new DebugSendChannelEndpoint(udpChannel, statusIndicator, context, lossGenerator, lossGenerator);
+            new DebugSendChannelEndpoint(udpChannel, statusIndicator, context, lossGenerator, lossGenerator);
     }
 
     private static ReceiveChannelEndpointSupplier receiveChannelEndpointSupplier(final LossGenerator lossGenerator)
     {
         return (udpChannel, dispatcher, statusIndicator, context) ->
-        new DebugReceiveChannelEndpoint(udpChannel, dispatcher, statusIndicator, context, lossGenerator, lossGenerator);
+            new DebugReceiveChannelEndpoint(
+                udpChannel, dispatcher, statusIndicator, context, lossGenerator, lossGenerator);
     }
 
     private static class SequenceCheckingService extends TestNode.TestService

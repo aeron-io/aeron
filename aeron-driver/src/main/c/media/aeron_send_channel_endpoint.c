@@ -36,6 +36,8 @@ struct mmsghdr
 };
 #endif
 
+static void aeron_send_channel_endpoint_handle_managed_resource_event(aeron_driver_managed_resource_event_t event, void *clientd);
+
 int aeron_send_channel_endpoint_create(
     aeron_send_channel_endpoint_t **endpoint,
     aeron_udp_channel_t *channel,
@@ -80,8 +82,7 @@ int aeron_send_channel_endpoint_create(
 
     _endpoint->conductor_fields.refcnt = 0;
     _endpoint->conductor_fields.udp_channel = channel;
-    _endpoint->conductor_fields.managed_resource.incref = aeron_send_channel_endpoint_incref;
-    _endpoint->conductor_fields.managed_resource.decref = aeron_send_channel_endpoint_decref;
+    _endpoint->conductor_fields.managed_resource.handle_event = aeron_send_channel_endpoint_handle_managed_resource_event;
     _endpoint->conductor_fields.managed_resource.clientd = _endpoint;
     _endpoint->conductor_fields.managed_resource.registration_id = -1;
     _endpoint->conductor_fields.status = AERON_SEND_CHANNEL_ENDPOINT_STATUS_ACTIVE;
@@ -269,22 +270,33 @@ int aeron_send_channel_endpoint_delete(
     return 0;
 }
 
-void aeron_send_channel_endpoint_incref(void *clientd)
+void aeron_send_channel_endpoint_handle_managed_resource_event(aeron_driver_managed_resource_event_t event, void *clientd)
 {
     aeron_send_channel_endpoint_t *endpoint = (aeron_send_channel_endpoint_t *)clientd;
 
-    endpoint->conductor_fields.refcnt++;
-}
-
-void aeron_send_channel_endpoint_decref(void *clientd)
-{
-    aeron_send_channel_endpoint_t *endpoint = (aeron_send_channel_endpoint_t *)clientd;
-
-    if (0 == --endpoint->conductor_fields.refcnt)
+    switch(event)
     {
-        /* mark as CLOSING to be aware not to use again (to be receiver_released and deleted) */
-        endpoint->conductor_fields.status = AERON_SEND_CHANNEL_ENDPOINT_STATUS_CLOSING;
-        aeron_driver_sender_proxy_on_remove_endpoint(endpoint->sender_proxy, endpoint);
+        case AERON_DRIVER_MANAGED_RESOURCE_EVENT_INCREF:
+        {
+            endpoint->conductor_fields.refcnt++;
+            break;
+        }
+
+        case AERON_DRIVER_MANAGED_RESOURCE_EVENT_DECREF:
+        {
+            if (0 == --endpoint->conductor_fields.refcnt)
+            {
+                /* mark as CLOSING to be aware not to use again (to be receiver_released and deleted) */
+                endpoint->conductor_fields.status = AERON_SEND_CHANNEL_ENDPOINT_STATUS_CLOSING;
+                aeron_driver_sender_proxy_on_remove_endpoint(endpoint->sender_proxy, endpoint);
+            }
+            break;
+        }
+
+        case AERON_DRIVER_MANAGED_RESOURCE_EVENT_REVOKE:
+        {
+            break;
+        }
     }
 }
 

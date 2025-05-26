@@ -943,6 +943,30 @@ class ClusterTest
     }
 
     @Test
+    @InterruptAfter(20)
+    void shouldCloseClientAfterClusterBecomesUnavailable()
+    {
+        cluster = aCluster().withStaticNodes(3).start();
+        systemTestWatcher.cluster(cluster);
+
+        cluster.awaitLeader();
+
+        final AeronCluster client = cluster.connectClient(cluster.clientCtx().newLeaderTimeoutNs(SECONDS.toNanos(1)));
+        assertFalse(client.isClosed());
+
+        cluster.shouldErrorOnClientClose(false);
+        cluster.terminationsExpected(true);
+        cluster.stopAllNodes();
+
+        while (!client.isClosed())
+        {
+            Tests.sleep(10);
+            client.sendKeepAlive();
+            client.pollEgress();
+        }
+    }
+
+    @Test
     @InterruptAfter(40)
     void shouldRecoverWhileMessagesContinue() throws InterruptedException
     {

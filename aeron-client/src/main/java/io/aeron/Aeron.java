@@ -1008,14 +1008,21 @@ public class Aeron implements AutoCloseable
             }
             else if (clientLock instanceof NoOpLock && !useConductorAgentInvoker)
             {
-                throw new AeronException(
+                throw new ConfigurationException(
                     "Must use Aeron.Context.useConductorAgentInvoker(true) when Aeron.Context.clientLock(...) " +
                     "is using a NoOpLock");
             }
 
+            if (null != driverAgentInvoker && !useConductorAgentInvoker)
+            {
+                throw new ConfigurationException(
+                    "Must use Aeron.Context.useConductorAgentInvoker(true) when Aeron.Context.driverAgentInvoker() " +
+                    "is set");
+            }
+
             if (null != clientName && clientName.length() > MAX_CLIENT_NAME_LENGTH)
             {
-                throw new AeronException("clientName length must <= " + MAX_CLIENT_NAME_LENGTH);
+                throw new ConfigurationException("clientName length must <= " + MAX_CLIENT_NAME_LENGTH);
             }
 
             if (null == epochClock)

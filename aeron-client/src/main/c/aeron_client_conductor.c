@@ -815,6 +815,11 @@ int aeron_client_conductor_linger_or_delete_all_images(
 
         if (refcnt <= 0)
         {
+            if (NULL != subscription->on_unavailable_image)
+            {
+                subscription->on_unavailable_image(subscription->on_unavailable_image_clientd, subscription, image);
+            }
+
             aeron_client_conductor_release_log_buffer(conductor, image->log_buffer);
             aeron_image_delete(image);
         }
@@ -1136,8 +1141,7 @@ void aeron_client_conductor_on_cmd_close_counter(void *clientd, void *item)
 
     if (NULL != aeron_int64_to_ptr_hash_map_remove(&conductor->resource_by_id_map, counter->registration_id))
     {
-        if (aeron_client_conductor_offer_remove_command(
-            conductor, counter->registration_id, AERON_COMMAND_REMOVE_COUNTER) < 0)
+        if (aeron_client_conductor_offer_remove_counter_command(conductor, counter->registration_id) < 0)
         {
             return;
         }
@@ -1601,8 +1605,7 @@ int aeron_client_conductor_async_close_publication(
     publication->on_close_complete = on_close_complete;
     publication->on_close_complete_clientd = on_close_complete_clientd;
 
-    if (aeron_client_conductor_offer_remove_command(
-        conductor, publication->registration_id, AERON_COMMAND_REMOVE_PUBLICATION) < 0)
+    if (aeron_client_conductor_offer_remove_publication_command(conductor, publication->registration_id, false) < 0)
     {
         return -1;
     }
@@ -1686,8 +1689,8 @@ int aeron_client_conductor_async_close_exclusive_publication(
     publication->on_close_complete = on_close_complete;
     publication->on_close_complete_clientd = on_close_complete_clientd;
 
-    if (aeron_client_conductor_offer_remove_command(
-        conductor, publication->registration_id, AERON_COMMAND_REMOVE_PUBLICATION) < 0)
+    if (aeron_client_conductor_offer_remove_publication_command(
+        conductor, publication->registration_id, publication->revoke_on_close) < 0)
     {
         return -1;
     }
@@ -1779,8 +1782,7 @@ int aeron_client_conductor_async_close_subscription(
     subscription->on_close_complete = on_close_complete;
     subscription->on_close_complete_clientd = on_close_complete_clientd;
 
-    if (aeron_client_conductor_offer_remove_command(
-        conductor, subscription->registration_id, AERON_COMMAND_REMOVE_SUBSCRIPTION) < 0)
+    if (aeron_client_conductor_offer_remove_subscription_command(conductor, subscription->registration_id) < 0)
     {
         return -1;
     }
@@ -2911,14 +2913,48 @@ int aeron_client_conductor_on_client_timeout(aeron_client_conductor_t *conductor
     return 0;
 }
 
-int aeron_client_conductor_offer_remove_command(
-    aeron_client_conductor_t *conductor, int64_t registration_id, int32_t command_type)
+int aeron_client_conductor_offer_remove_counter_command(
+    aeron_client_conductor_t *conductor, int64_t registration_id)
 {
     int rb_offer_fail_count = 0;
 
     int32_t offset;
     while ((offset = aeron_mpsc_rb_try_claim(
-        &conductor->to_driver_buffer, command_type, sizeof(aeron_remove_command_t))) < 0)
+        &conductor->to_driver_buffer, AERON_COMMAND_REMOVE_COUNTER, sizeof(aeron_remove_counter_command_t))) < 0)
+    {
+        if (++rb_offer_fail_count > AERON_CLIENT_COMMAND_RB_FAIL_THRESHOLD)
+        {
+            char err_buffer[AERON_ERROR_MAX_TOTAL_LENGTH];
+
+            snprintf(err_buffer, sizeof(err_buffer) - 1, "remove counter command could not be sent (%s:%d)",
+                __FILE__, __LINE__);
+            conductor->error_handler(conductor->error_handler_clientd, AERON_CLIENT_ERROR_BUFFER_FULL, err_buffer);
+            AERON_SET_ERR(AERON_CLIENT_ERROR_BUFFER_FULL, "%s", err_buffer);
+            return -1;
+        }
+
+        sched_yield();
+    }
+
+    aeron_remove_counter_command_t *command = (aeron_remove_counter_command_t *)(conductor->to_driver_buffer.buffer + offset);
+
+    command->correlated.correlation_id = aeron_mpsc_rb_next_correlation_id(&conductor->to_driver_buffer);
+    command->correlated.client_id = conductor->client_id;
+    command->registration_id = registration_id;
+
+    aeron_mpsc_rb_commit(&conductor->to_driver_buffer, offset);
+
+    return 0;
+}
+
+int aeron_client_conductor_offer_remove_publication_command(
+    aeron_client_conductor_t *conductor, int64_t registration_id, bool revoke)
+{
+    int rb_offer_fail_count = 0;
+
+    int32_t offset;
+    while ((offset = aeron_mpsc_rb_try_claim(
+        &conductor->to_driver_buffer, AERON_COMMAND_REMOVE_PUBLICATION, sizeof(aeron_remove_publication_command_t))) < 0)
     {
         if (++rb_offer_fail_count > AERON_CLIENT_COMMAND_RB_FAIL_THRESHOLD)
         {
@@ -2934,7 +2970,42 @@ int aeron_client_conductor_offer_remove_command(
         sched_yield();
     }
 
-    aeron_remove_command_t *command = (aeron_remove_command_t *)(conductor->to_driver_buffer.buffer + offset);
+    aeron_remove_publication_command_t *command = (aeron_remove_publication_command_t *)(conductor->to_driver_buffer.buffer + offset);
+
+    command->correlated.correlation_id = aeron_mpsc_rb_next_correlation_id(&conductor->to_driver_buffer);
+    command->correlated.client_id = conductor->client_id;
+    command->registration_id = registration_id;
+    command->flags = revoke ? AERON_COMMAND_REMOVE_PUBLICATION_FLAG_REVOKE : 0;
+
+    aeron_mpsc_rb_commit(&conductor->to_driver_buffer, offset);
+
+    return 0;
+}
+
+int aeron_client_conductor_offer_remove_subscription_command(
+    aeron_client_conductor_t *conductor, int64_t registration_id)
+{
+    int rb_offer_fail_count = 0;
+
+    int32_t offset;
+    while ((offset = aeron_mpsc_rb_try_claim(
+        &conductor->to_driver_buffer, AERON_COMMAND_REMOVE_SUBSCRIPTION, sizeof(aeron_remove_subscription_command_t))) < 0)
+    {
+        if (++rb_offer_fail_count > AERON_CLIENT_COMMAND_RB_FAIL_THRESHOLD)
+        {
+            char err_buffer[AERON_ERROR_MAX_TOTAL_LENGTH];
+
+            snprintf(err_buffer, sizeof(err_buffer) - 1, "remove command could not be sent (%s:%d)",
+                __FILE__, __LINE__);
+            conductor->error_handler(conductor->error_handler_clientd, AERON_CLIENT_ERROR_BUFFER_FULL, err_buffer);
+            AERON_SET_ERR(AERON_CLIENT_ERROR_BUFFER_FULL, "%s", err_buffer);
+            return -1;
+        }
+
+        sched_yield();
+    }
+
+    aeron_remove_subscription_command_t *command = (aeron_remove_subscription_command_t *)(conductor->to_driver_buffer.buffer + offset);
 
     command->correlated.correlation_id = aeron_mpsc_rb_next_correlation_id(&conductor->to_driver_buffer);
     command->correlated.client_id = conductor->client_id;

@@ -370,4 +370,50 @@ final class DriverEventEncoder
         bodyLength += SIZE_OF_INT;
         encodeTrailingString(encodingBuffer, bodyOffset + bodyLength, captureLength - bodyLength, channel);
     }
+
+    static void encodePublicationRevoke(
+        final UnsafeBuffer encodingBuffer,
+        final int offset,
+        final int length,
+        final int captureLength,
+        final long revokedPos,
+        final int sessionId,
+        final int streamId,
+        final String channel)
+    {
+        final int headerLength = encodeLogHeader(encodingBuffer, offset, captureLength, length);
+        final int bodyOffset = offset + headerLength;
+
+        int bodyLength = 0;
+        encodingBuffer.putLong(bodyOffset + bodyLength, revokedPos, LITTLE_ENDIAN);
+        bodyLength += SIZE_OF_LONG;
+        encodingBuffer.putInt(bodyOffset + bodyLength, sessionId, LITTLE_ENDIAN);
+        bodyLength += SIZE_OF_INT;
+        encodingBuffer.putInt(bodyOffset + bodyLength, streamId, LITTLE_ENDIAN);
+        bodyLength += SIZE_OF_INT;
+        encodeTrailingString(encodingBuffer, bodyOffset + bodyLength, captureLength - bodyLength, channel);
+    }
+
+    static void encodePublicationImageRevoke(
+        final UnsafeBuffer encodingBuffer,
+        final int offset,
+        final int length,
+        final int captureLength,
+        final long revokedPos,
+        final int sessionId,
+        final int streamId,
+        final String channel)
+    {
+        final int headerLength = encodeLogHeader(encodingBuffer, offset, captureLength, length);
+        final int bodyOffset = offset + headerLength;
+
+        int bodyLength = 0;
+        encodingBuffer.putLong(bodyOffset + bodyLength, revokedPos, LITTLE_ENDIAN);
+        bodyLength += SIZE_OF_LONG;
+        encodingBuffer.putInt(bodyOffset + bodyLength, sessionId, LITTLE_ENDIAN);
+        bodyLength += SIZE_OF_INT;
+        encodingBuffer.putInt(bodyOffset + bodyLength, streamId, LITTLE_ENDIAN);
+        bodyLength += SIZE_OF_INT;
+        encodeTrailingString(encodingBuffer, bodyOffset + bodyLength, captureLength - bodyLength, channel);
+    }
 }

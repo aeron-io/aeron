@@ -41,6 +41,11 @@ enum EventCodeType
     STANDBY(3),
 
     /**
+     * Events related to the sequencer operations.
+     */
+    SEQUENCER(4),
+
+    /**
      * User defined events for third party usage.
      */
     USER(0xFFFF);

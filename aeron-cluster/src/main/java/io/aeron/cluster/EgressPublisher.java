@@ -34,6 +34,12 @@ class EgressPublisher
     private final ChallengeEncoder challengeEncoder = new ChallengeEncoder();
     private final NewLeaderEventEncoder newLeaderEventEncoder = new NewLeaderEventEncoder();
     private final AdminResponseEncoder adminResponseEncoder = new AdminResponseEncoder();
+    private final long leaderHeartbeatTimeoutNs;
+
+    EgressPublisher(final long leaderHeartbeatTimeoutNs)
+    {
+        this.leaderHeartbeatTimeoutNs = leaderHeartbeatTimeoutNs;
+    }
 
     boolean sendEvent(
         final ClusterSession session,
@@ -61,6 +67,7 @@ class EgressPublisher
                     .leaderMemberId(leaderMemberId)
                     .code(code)
                     .version(AeronCluster.Configuration.PROTOCOL_SEMANTIC_VERSION)
+                    .leaderHeartbeatTimeoutNs(leaderHeartbeatTimeoutNs)
                     .detail(detail);
 
                 bufferClaim.commit();

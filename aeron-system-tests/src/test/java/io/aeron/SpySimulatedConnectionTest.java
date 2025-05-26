@@ -17,6 +17,7 @@ package io.aeron;
 
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
+import io.aeron.driver.status.SystemCounterDescriptor;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.LogBufferDescriptor;
 import io.aeron.protocol.DataHeaderFlyweight;
@@ -29,6 +30,7 @@ import org.agrona.CloseHelper;
 import org.agrona.collections.MutableInteger;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -38,8 +40,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static java.util.Arrays.asList;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 
 @ExtendWith(InterruptingTestCallback.class)
@@ -274,6 +275,37 @@ class SpySimulatedConnectionTest
         }
 
         assertEquals(messagesToSend, fragmentCountSpy.value);
+    }
+
+    @Test
+    @InterruptAfter(10)
+    void shouldNotHaveShortSendsWithMDCPublication()
+    {
+        launch();
+
+        final String channel = "aeron:udp?control=localhost:40456|control-mode=dynamic";
+
+        spy = client.addSubscription(spyForChannel(channel), STREAM_ID);
+        publication = client.addExclusivePublication(channel + "|ssc=true", STREAM_ID);
+
+        while (!spy.isConnected() || !publication.isConnected())
+        {
+            Tests.yield();
+        }
+
+        while (publication.offer(buffer, 0, buffer.capacity()) < 0L)
+        {
+            Tests.yield();
+        }
+
+        final FragmentHandler mockFragmentHandler = mock(FragmentHandler.class);
+
+        while (spy.poll(mockFragmentHandler, 1) == 0)
+        {
+            Tests.yield();
+        }
+
+        assertEquals(0, driver.counters().getCounterValue(SystemCounterDescriptor.SHORT_SENDS.id()));
     }
 
     private void waitUntilFullConnectivity()

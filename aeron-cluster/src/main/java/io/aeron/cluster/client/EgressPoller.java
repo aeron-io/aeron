@@ -45,6 +45,7 @@ public final class EgressPoller implements ControlledFragmentHandler
     private int leaderMemberId = Aeron.NULL_VALUE;
     private int templateId = Aeron.NULL_VALUE;
     private int version = 0;
+    private long leaderHeartbeatTimeoutNs = Aeron.NULL_VALUE;
     private boolean isPollComplete = false;
     private EventCode eventCode;
     private String detail = "";
@@ -153,6 +154,16 @@ public final class EgressPoller implements ControlledFragmentHandler
     }
 
     /**
+     * Leader heartbeat timeout of the last polled event or {@link Aeron#NULL_VALUE} if not available.
+     *
+     * @return leader heartbeat timeout of the last polled event or {@link Aeron#NULL_VALUE} if not available.
+     */
+    public long leaderHeartbeatTimeoutNs()
+    {
+        return leaderHeartbeatTimeoutNs;
+    }
+
+    /**
      * Get the detail returned from the last session event.
      *
      * @return the detail returned from the last session event.
@@ -208,6 +219,7 @@ public final class EgressPoller implements ControlledFragmentHandler
             leaderMemberId = Aeron.NULL_VALUE;
             templateId = Aeron.NULL_VALUE;
             version = 0;
+            leaderHeartbeatTimeoutNs = Aeron.NULL_VALUE;
             eventCode = null;
             detail = "";
             encodedChallenge = null;
@@ -263,6 +275,7 @@ public final class EgressPoller implements ControlledFragmentHandler
                 leaderMemberId = sessionEventDecoder.leaderMemberId();
                 eventCode = sessionEventDecoder.code();
                 version = sessionEventDecoder.version();
+                leaderHeartbeatTimeoutNs = leaderHeartbeatTimeoutNs(sessionEventDecoder);
                 detail = sessionEventDecoder.detail();
                 isPollComplete = true;
                 egressImage = (Image)header.context();
@@ -300,5 +313,17 @@ public final class EgressPoller implements ControlledFragmentHandler
         }
 
         return Action.CONTINUE;
+    }
+
+    private static long leaderHeartbeatTimeoutNs(final SessionEventDecoder sessionEventDecoder)
+    {
+        final long leaderHeartbeatTimeoutNs = sessionEventDecoder.leaderHeartbeatTimeoutNs();
+
+        if (leaderHeartbeatTimeoutNs == SessionEventDecoder.leaderHeartbeatTimeoutNsNullValue())
+        {
+            return Aeron.NULL_VALUE;
+        }
+
+        return leaderHeartbeatTimeoutNs;
     }
 }

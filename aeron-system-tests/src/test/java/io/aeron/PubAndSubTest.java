@@ -329,7 +329,7 @@ class PubAndSubTest
 
         driverContext.sendChannelEndpointSupplier(
             (udpChannel, statusIndicator, context) ->
-            new DebugSendChannelEndpoint(udpChannel, statusIndicator, context, noLossGenerator, noLossGenerator));
+                new DebugSendChannelEndpoint(udpChannel, statusIndicator, context, noLossGenerator, noLossGenerator));
 
         TestMediaDriver.enableRandomLoss(driverContext, 0.1, 0xcafebabeL, true, false);
 
@@ -375,7 +375,7 @@ class PubAndSubTest
 
         driverContext.sendChannelEndpointSupplier(
             (udpChannel, statusIndicator, context) ->
-            new DebugSendChannelEndpoint(udpChannel, statusIndicator, context, noLossGenerator, noLossGenerator));
+                new DebugSendChannelEndpoint(udpChannel, statusIndicator, context, noLossGenerator, noLossGenerator));
 
         TestMediaDriver.enableRandomLoss(driverContext, 0.1, 0xcafebabeL, true, false);
 

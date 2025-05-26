@@ -464,6 +464,7 @@ public final class MediaDriver implements AutoCloseable
         private long publicationConnectionTimeoutNs = Configuration.publicationConnectionTimeoutNs();
         private long publicationLingerTimeoutNs = Configuration.publicationLingerTimeoutNs();
         private long untetheredWindowLimitTimeoutNs = Configuration.untetheredWindowLimitTimeoutNs();
+        private long untetheredLingerTimeoutNs = Configuration.untetheredLingerTimeoutNs();
         private long untetheredRestingTimeoutNs = Configuration.untetheredRestingTimeoutNs();
         private long statusMessageTimeoutNs = Configuration.statusMessageTimeoutNs();
         private long counterFreeToReuseTimeoutNs = Configuration.counterFreeToReuseTimeoutNs();
@@ -473,6 +474,10 @@ public final class MediaDriver implements AutoCloseable
         private long nakUnicastRetryDelayRatio = Configuration.nakUnicastRetryDelayRatio();
         private long nakMulticastMaxBackoffNs = Configuration.nakMulticastMaxBackoffNs();
         private long flowControlReceiverTimeoutNs = Configuration.flowControlReceiverTimeoutNs();
+        private int unicastFlowControlRetransmitReceiverWindowMultiple = Configuration
+            .unicastFlowControlRetransmitReceiverWindowMultiple();
+        private int multicastFlowControlRetransmitReceiverWindowMultiple = Configuration
+            .multicastFlowControlRetransmitReceiverWindowMultiple();
         private long reResolutionCheckIntervalNs = Configuration.reResolutionCheckIntervalNs();
         private long conductorCycleThresholdNs = Configuration.conductorCycleThresholdNs();
         private long senderCycleThresholdNs = Configuration.senderCycleThresholdNs();
@@ -675,6 +680,16 @@ public final class MediaDriver implements AutoCloseable
                 validateInitialWindowLength(initialWindowLength, mtuLength);
                 validateUnblockTimeout(publicationUnblockTimeoutNs(), clientLivenessTimeoutNs(), timerIntervalNs);
                 validateUntetheredTimeouts(untetheredWindowLimitTimeoutNs, untetheredRestingTimeoutNs, timerIntervalNs);
+                validateValueRange(
+                    unicastFlowControlRetransmitReceiverWindowMultiple,
+                    1, Integer.MAX_VALUE,
+                    "unicastFlowControlRetransmitReceiverWindowMultiple"
+                );
+                validateValueRange(
+                    multicastFlowControlRetransmitReceiverWindowMultiple,
+                    1, Integer.MAX_VALUE,
+                    "multicastFControlRetransmitReceiverWindowMultiple"
+                );
 
                 final long cncFileLength = BitUtil.align(
                     (long)META_DATA_LENGTH +
@@ -1224,6 +1239,33 @@ public final class MediaDriver implements AutoCloseable
         public Context untetheredWindowLimitTimeoutNs(final long timeoutNs)
         {
             this.untetheredWindowLimitTimeoutNs = timeoutNs;
+            return this;
+        }
+
+        /**
+         * The linger timeout for an untethered subscription.
+         *
+         * @return timeout that an untethered subscription will linger.
+         * @see Configuration#UNTETHERED_LINGER_TIMEOUT_PROP_NAME
+         * @since 1.48.0
+         */
+        @Config
+        public long untetheredLingerTimeoutNs()
+        {
+            return untetheredLingerTimeoutNs;
+        }
+
+        /**
+         * The timeout for when an untethered subscription that is outside the window will participate
+         * in local flow control.
+         *
+         * @param timeoutNs that an untethered subscription to linger.
+         * @return this for a fluent API.
+         * @see Configuration#UNTETHERED_LINGER_TIMEOUT_PROP_NAME
+         */
+        public Context untetheredLingerTimeoutNs(final long timeoutNs)
+        {
+            this.untetheredLingerTimeoutNs = timeoutNs;
             return this;
         }
 
@@ -2645,6 +2687,72 @@ public final class MediaDriver implements AutoCloseable
         public Context flowControlReceiverTimeoutNs(final long timeoutNs)
         {
             this.flowControlReceiverTimeoutNs = timeoutNs;
+            return this;
+        }
+
+        /**
+         * Flow control strategies may limit how much data is sent during a retransmission to
+         * avoid saturating the network and potentially causing more loss. The maximum
+         * retransmission size will be based on a multiple of the receiver window size.
+         * <p>
+         * See @{@link FlowControl#calculateRetransmissionLength(int, int, int, int)}
+         *
+         * @return window size multiple for the unicast strategy.
+         */
+        @Config
+        public int unicastFlowControlRetransmitReceiverWindowMultiple()
+        {
+            return unicastFlowControlRetransmitReceiverWindowMultiple;
+        }
+
+        /**
+         * Flow control strategies may limit how much data is sent during a retransmission to
+         * avoid saturating the network and potentially causing more loss. The maximum
+         * retransmission size will be based on a multiple of the receiver window size.
+         * <p>
+         * See @{@link FlowControl#calculateRetransmissionLength(int, int, int, int)}
+         *
+         * @param unicastFlowControlRetransmitReceiverWindowMultiple window size multiple for the unicast strategy.
+         * @return this for a fluent API.
+         */
+        public Context unicastFlowControlRetransmitReceiverWindowMultiple(
+            final int unicastFlowControlRetransmitReceiverWindowMultiple)
+        {
+            this.unicastFlowControlRetransmitReceiverWindowMultiple =
+                unicastFlowControlRetransmitReceiverWindowMultiple;
+            return this;
+        }
+
+        /**
+         * Flow control strategies may limit how much data is sent during a retransmission to
+         * avoid saturating the network and potentially causing more loss. The maximum
+         * retransmission size will be based on a multiple of the receiver window size.
+         * <p>
+         * See @{@link FlowControl#calculateRetransmissionLength(int, int, int, int)}
+         *
+         * @return window size multiple for multicast strategies.
+         */
+        @Config
+        public int multicastFlowControlRetransmitReceiverWindowMultiple()
+        {
+            return multicastFlowControlRetransmitReceiverWindowMultiple;
+        }
+
+        /**
+         * Flow control strategies may limit how much data is sent during a retransmission to
+         * avoid saturating the network and potentially causing more loss. The maximum
+         * retransmission size will be based on a multiple of the receiver window size.
+         * <p>
+         * See @{@link FlowControl#calculateRetransmissionLength(int, int, int, int)}
+         *
+         * @param multicastFlowControlRetransmitReceiverWindowMultiple window size multiple for multicast strategies.
+         * @return this for a fluent API.
+         */
+        public Context multicastFlowControlRetransmitReceiverWindowMultiple(
+            final int multicastFlowControlRetransmitReceiverWindowMultiple)
+        {
+            this.multicastFlowControlRetransmitReceiverWindowMultiple =
+                multicastFlowControlRetransmitReceiverWindowMultiple;
             return this;
         }
 
@@ -4393,6 +4501,10 @@ public final class MediaDriver implements AutoCloseable
                 "\n    flowControlGroupTag=" + flowControlGroupTag +
                 "\n    flowControlGroupMinSize=" + flowControlGroupMinSize +
                 "\n    flowControlReceiverTimeoutNs=" + flowControlReceiverTimeoutNs +
+                "\n    unicastFlowControlRetransmitReceiverWindowMultiple=" +
+                unicastFlowControlRetransmitReceiverWindowMultiple +
+                "\n    multicastFControlRetransmitReceiverWindowMultiple=" +
+                multicastFlowControlRetransmitReceiverWindowMultiple +
                 "\n    reResolutionCheckIntervalNs=" + reResolutionCheckIntervalNs +
                 "\n    receiverGroupConsideration=" + receiverGroupConsideration +
                 "\n    congestionControlSupplier=" + congestionControlSupplier +

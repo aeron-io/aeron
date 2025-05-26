@@ -23,6 +23,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 
 import static io.aeron.CommonContext.SESSION_ID_PARAM_NAME;
 import static io.aeron.CommonContext.STREAM_ID_PARAM_NAME;
@@ -439,6 +440,48 @@ class PublicationParamsTest
         final PublicationParams params =
             PublicationParams.getPublicationParams(channelUri, ctx, conductor, 1, channelUri.media());
         assertEquals(timeoutNs, params.untetheredRestingTimeoutNs);
+    }
+
+    @Test
+    void shouldHonorPrecedenceForUntetheredLingerTimeoutWithDefaultsInContext()
+    {
+
+        // context
+        final ChannelUri channelUri = ChannelUri.parse(
+            "aeron:udp?endpoint=localhost:5555|untethered-window-limit-timeout=444ms");
+        final PublicationParams params =
+            PublicationParams.getPublicationParams(channelUri, ctx, conductor, 1, channelUri.media());
+        assertEquals(TimeUnit.MILLISECONDS.toNanos(444), params.untetheredWindowLimitTimeoutNs);
+        assertEquals(TimeUnit.MILLISECONDS.toNanos(444), params.untetheredLingerTimeoutNs);
+
+    }
+
+    @Test
+    void shouldHonorPrecedenceForUntetheredLingerTimeoutWithOverriddenContext()
+    {
+        ctx.untetheredLingerTimeoutNs(TimeUnit.MILLISECONDS.toNanos(555));
+
+        // context
+        final ChannelUri channelUri = ChannelUri.parse(
+            "aeron:udp?endpoint=localhost:5555|untethered-window-limit-timeout=444ms");
+        final PublicationParams params =
+            PublicationParams.getPublicationParams(channelUri, ctx, conductor, 1, channelUri.media());
+        assertEquals(TimeUnit.MILLISECONDS.toNanos(444), params.untetheredWindowLimitTimeoutNs);
+        assertEquals(TimeUnit.MILLISECONDS.toNanos(555), params.untetheredLingerTimeoutNs);
+    }
+
+    @Test
+    void shouldHonorChannelOverrideForUntetheredLingerTimeout()
+    {
+        ctx.untetheredLingerTimeoutNs(TimeUnit.MILLISECONDS.toNanos(555));
+
+        // context
+        final ChannelUri channelUri = ChannelUri.parse(
+            "aeron:udp?endpoint=localhost:5555|untethered-window-limit-timeout=444ms|untethered-linger-timeout=333ms");
+        final PublicationParams params =
+            PublicationParams.getPublicationParams(channelUri, ctx, conductor, 1, channelUri.media());
+        assertEquals(TimeUnit.MILLISECONDS.toNanos(444), params.untetheredWindowLimitTimeoutNs);
+        assertEquals(TimeUnit.MILLISECONDS.toNanos(333), params.untetheredLingerTimeoutNs);
     }
 
 }

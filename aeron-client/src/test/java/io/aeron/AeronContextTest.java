@@ -15,11 +15,17 @@
  */
 package io.aeron;
 
+import io.aeron.exceptions.ConfigurationException;
+import org.agrona.concurrent.AgentInvoker;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
+import static org.mockito.Mockito.mock;
 
 class AeronContextTest
 {
@@ -35,12 +41,39 @@ class AeronContextTest
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"a", "gdajsdgajsd", "7326482374hdfy7dsyf8dyf9sd.-)"})
+    @ValueSource(strings = { "a", "gdajsdgajsd", "7326482374hdfy7dsyf8dyf9sd.-)" })
     void shouldAssignClientName(final String clientName)
     {
         final Aeron.Context context = new Aeron.Context();
 
         context.clientName(clientName);
         assertSame(clientName, context.clientName());
+    }
+
+    @Test
+    void shouldRejectClientNameThatIsTooLong()
+    {
+        final String name =
+            "this is a very long value that we are hoping with be reject when the value gets " +
+            "set on the the context without causing issues will labels";
+        final Aeron.Context context = new Aeron.Context().clientName(name);
+
+        final ConfigurationException exception = assertThrowsExactly(ConfigurationException.class, context::conclude);
+        assertEquals("ERROR - clientName length must <= 100", exception.getMessage());
+    }
+
+    @Test
+    void shouldRequireRunningInTheInvokerModeIfDriverInvokerIsSpecified()
+    {
+        final AgentInvoker driverAgentInvoker = mock(AgentInvoker.class);
+        final Aeron.Context context = new Aeron.Context()
+            .useConductorAgentInvoker(false)
+            .driverAgentInvoker(driverAgentInvoker);
+
+        final ConfigurationException exception = assertThrowsExactly(ConfigurationException.class, context::conclude);
+        assertEquals(
+            "ERROR - Must use Aeron.Context.useConductorAgentInvoker(true) when " +
+            "Aeron.Context.driverAgentInvoker() is set",
+            exception.getMessage());
     }
 }

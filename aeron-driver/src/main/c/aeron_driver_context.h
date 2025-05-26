@@ -100,6 +100,20 @@ typedef void (*aeron_driver_resend_func_t)(
     size_t channel_length,
     const char *channel);
 
+typedef void (*aeron_driver_publication_revoke_func_t)(
+    int64_t revoked_pos,
+    int32_t session_id,
+    int32_t stream_id,
+    size_t channel_length,
+    const char *channel);
+
+typedef void (*aeron_driver_publication_image_revoke_func_t)(
+    int64_t revoked_pos,
+    int32_t session_id,
+    int32_t stream_id,
+    size_t channel_length,
+    const char *channel);
+
 typedef void (*aeron_driver_name_resolver_on_resolve_t)(
     aeron_name_resolver_t *name_resolver,
     int64_t duration_ns,
@@ -287,6 +301,8 @@ typedef struct aeron_driver_context_stct
         aeron_driver_nak_message_func_t send_nak_message;
         aeron_driver_nak_message_func_t on_nak_message;
         aeron_driver_resend_func_t resend;
+        aeron_driver_publication_revoke_func_t publication_revoke;
+        aeron_driver_publication_image_revoke_func_t publication_image_revoke;
     } log;
 
     aeron_driver_termination_validator_func_t termination_validator_func;

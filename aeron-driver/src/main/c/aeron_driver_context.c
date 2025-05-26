@@ -862,8 +862,8 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
         INT32_MAX);
 
     _context->flow_control.receiver_timeout_ns = aeron_config_parse_duration_ns(
-        AERON_MIN_MULTICAST_FLOW_CONTROL_RECEIVER_TIMEOUT_ENV_VAR,
-        getenv(AERON_MIN_MULTICAST_FLOW_CONTROL_RECEIVER_TIMEOUT_ENV_VAR),
+        AERON_FLOW_CONTROL_RECEIVER_TIMEOUT_ENV_VAR,
+        getenv(AERON_FLOW_CONTROL_RECEIVER_TIMEOUT_ENV_VAR),
         _context->flow_control.receiver_timeout_ns,
         0,
         INT64_MAX);

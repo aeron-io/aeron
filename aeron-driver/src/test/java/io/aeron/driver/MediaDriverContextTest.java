@@ -15,6 +15,7 @@
  */
 package io.aeron.driver;
 
+import io.aeron.Aeron;
 import io.aeron.CncFileDescriptor;
 import io.aeron.CommonContext;
 import io.aeron.driver.MediaDriver.Context;
@@ -354,5 +355,88 @@ class MediaDriverContextTest
         final Field field = UdpTransportPoller.class.getDeclaredField("errorHandler");
         field.setAccessible(true);
         return (ErrorHandler)field.get(transportPoller);
+    }
+
+    @Test
+    void shouldTestDefaultUntetheredWindowLimitTimeout()
+    {
+        assertEquals(UNTETHERED_WINDOW_LIMIT_TIMEOUT_DEFAULT_NS, context.untetheredWindowLimitTimeoutNs());
+    }
+
+    @Test
+    void shouldTestDefaultUntetheredLingerTimeout()
+    {
+        assertEquals(Aeron.NULL_VALUE, context.untetheredLingerTimeoutNs());
+    }
+
+    @Test
+    void shouldHonorSystemPropertyUntetheredLingerTimeout()
+    {
+        System.setProperty(UNTETHERED_LINGER_TIMEOUT_PROP_NAME, "222ms");
+
+        final MediaDriver.Context ctx = new MediaDriver.Context();
+        try
+        {
+            assertEquals(TimeUnit.MILLISECONDS.toNanos(222), ctx.untetheredLingerTimeoutNs());
+        }
+        finally
+        {
+            System.clearProperty(UNTETHERED_LINGER_TIMEOUT_PROP_NAME);
+        }
+    }
+
+    @Test
+    void shouldHonorSystemPropertyWindowLimitTimeout()
+    {
+        System.setProperty(UNTETHERED_WINDOW_LIMIT_TIMEOUT_PROP_NAME, "444ms");
+
+        final MediaDriver.Context ctx = new MediaDriver.Context();
+
+        try
+        {
+            assertEquals(TimeUnit.MILLISECONDS.toNanos(444), ctx.untetheredWindowLimitTimeoutNs());
+        }
+        finally
+        {
+            System.clearProperty(UNTETHERED_WINDOW_LIMIT_TIMEOUT_PROP_NAME);
+        }
+    }
+
+
+    @Test
+    void shouldHonorSystemPropertyOverrideUntetheredLingerTimeoutAndWindowTimeout()
+    {
+        System.setProperty(UNTETHERED_LINGER_TIMEOUT_PROP_NAME, "222ms");
+        System.setProperty(UNTETHERED_WINDOW_LIMIT_TIMEOUT_PROP_NAME, "444ms");
+
+        final MediaDriver.Context ctx = new MediaDriver.Context();
+        try
+        {
+            assertEquals(TimeUnit.MILLISECONDS.toNanos(222), ctx.untetheredLingerTimeoutNs());
+            assertEquals(TimeUnit.MILLISECONDS.toNanos(444), ctx.untetheredWindowLimitTimeoutNs());
+        }
+        finally
+        {
+            System.clearProperty(UNTETHERED_LINGER_TIMEOUT_PROP_NAME);
+            System.clearProperty(UNTETHERED_WINDOW_LIMIT_TIMEOUT_PROP_NAME);
+        }
+    }
+
+    @Test
+    void shouldUseNullForUntetheredLingerTimeoutEvenIfWindowIsSet()
+    {
+        System.setProperty(UNTETHERED_WINDOW_LIMIT_TIMEOUT_PROP_NAME, "444ms");
+
+        final MediaDriver.Context ctx = new MediaDriver.Context();
+        try
+        {
+            assertEquals(Aeron.NULL_VALUE, ctx.untetheredLingerTimeoutNs());
+            assertEquals(TimeUnit.MILLISECONDS.toNanos(444), ctx.untetheredWindowLimitTimeoutNs());
+        }
+        finally
+        {
+            System.clearProperty(UNTETHERED_LINGER_TIMEOUT_PROP_NAME);
+            System.clearProperty(UNTETHERED_RESTING_TIMEOUT_PROP_NAME);
+        }
     }
 }

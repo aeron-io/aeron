@@ -61,6 +61,7 @@ public final class Image
     private long eosPosition = Long.MAX_VALUE;
     private boolean isEos;
     private volatile boolean isClosed;
+    private volatile boolean isRevoked;
 
     private final Position subscriberPosition;
     private final UnsafeBuffer[] termBuffers;
@@ -295,6 +296,21 @@ public final class Image
         }
 
         return LogBufferDescriptor.activeTransportCount(logBuffers.metaDataBuffer());
+    }
+
+    /**
+     * Has the associated publication been revoked?
+     *
+     * @return true if the associated publication was revoked otherwise false.
+     */
+    public boolean isPublicationRevoked()
+    {
+        if (isClosed)
+        {
+            return isRevoked;
+        }
+
+        return LogBufferDescriptor.isPublicationRevoked(logBuffers.metaDataBuffer());
     }
 
     /**
@@ -842,7 +858,12 @@ public final class Image
         return length;
     }
 
-    void reject(final String reason)
+    /**
+     * Reject this image.
+     *
+     * @param reason a String indicating the reason why this image is being rejected.
+     */
+    public void reject(final String reason)
     {
         subscription.rejectImage(correlationId, position(), reason);
     }
@@ -878,6 +899,7 @@ public final class Image
         finalPosition = subscriberPosition.getVolatile();
         eosPosition = LogBufferDescriptor.endOfStreamPosition(logBuffers.metaDataBuffer());
         isEos = finalPosition >= eosPosition;
+        isRevoked = LogBufferDescriptor.isPublicationRevoked(logBuffers.metaDataBuffer());
         isClosed = true;
     }
 

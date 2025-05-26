@@ -250,6 +250,8 @@ final class ConsensusModuleAgent
             CloseHelper.close(logAdapter.subscription());
             tryStopLogRecording();
 
+            CloseHelper.close(errorHandler, archive);
+
             if (!ctx.ownsAeronClient())
             {
                 ClusterMember.closeConsensusPublications(errorHandler, activeMembers);
@@ -257,7 +259,6 @@ final class ConsensusModuleAgent
                 CloseHelper.close(errorHandler, consensusAdapter);
                 CloseHelper.close(errorHandler, serviceProxy);
                 CloseHelper.close(errorHandler, consensusModuleAdapter);
-                CloseHelper.close(errorHandler, archive);
 
                 for (final ClusterSession session : sessionByIdMap.values())
                 {
