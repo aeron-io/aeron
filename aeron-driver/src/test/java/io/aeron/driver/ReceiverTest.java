@@ -57,12 +57,21 @@ import java.nio.channels.DatagramChannel;
 import java.util.ArrayList;
 import java.util.function.Consumer;
 
-import static io.aeron.logbuffer.LogBufferDescriptor.*;
+import static io.aeron.logbuffer.LogBufferDescriptor.TERM_MIN_LENGTH;
+import static io.aeron.logbuffer.LogBufferDescriptor.computePosition;
+import static io.aeron.logbuffer.LogBufferDescriptor.indexByTerm;
 import static org.agrona.BitUtil.align;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyBoolean;
+import static org.mockito.Mockito.anyLong;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(InterruptingTestCallback.class)
 class ReceiverTest
@@ -95,6 +104,7 @@ class ReceiverTest
     private final Position mockHighestReceivedPosition = spy(new AtomicLongPosition());
     private final Position mockRebuildPosition = spy(new AtomicLongPosition());
     private final Position mockSubscriberPosition = mock(Position.class);
+    private final AtomicCounter rcvNaksSent = mock(AtomicCounter.class);
     private final UnsafeBuffer dataBuffer = new UnsafeBuffer(new byte[2 * 1024]);
     private final UnsafeBuffer setupBuffer = new UnsafeBuffer(new byte[SetupFlyweight.HEADER_LENGTH]);
 
@@ -231,6 +241,7 @@ class ReceiverTest
             POSITIONS,
             mockHighestReceivedPosition,
             mockRebuildPosition,
+            rcvNaksSent,
             SOURCE_IDENTITY,
             congestionControl);
 
@@ -298,6 +309,7 @@ class ReceiverTest
                     POSITIONS,
                     mockHighestReceivedPosition,
                     mockRebuildPosition,
+                    rcvNaksSent,
                     SOURCE_IDENTITY,
                     congestionControl);
 
@@ -364,6 +376,7 @@ class ReceiverTest
                     POSITIONS,
                     mockHighestReceivedPosition,
                     mockRebuildPosition,
+                    rcvNaksSent,
                     SOURCE_IDENTITY,
                     congestionControl);
 
@@ -432,6 +445,7 @@ class ReceiverTest
                     POSITIONS,
                     mockHighestReceivedPosition,
                     mockRebuildPosition,
+                    rcvNaksSent,
                     SOURCE_IDENTITY,
                     congestionControl);
 
@@ -505,6 +519,7 @@ class ReceiverTest
                     POSITIONS,
                     mockHighestReceivedPosition,
                     mockRebuildPosition,
+                    rcvNaksSent,
                     SOURCE_IDENTITY,
                     congestionControl);
 

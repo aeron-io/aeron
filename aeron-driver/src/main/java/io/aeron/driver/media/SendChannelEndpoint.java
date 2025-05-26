@@ -452,8 +452,8 @@ public class SendChannelEndpoint extends UdpChannelTransport
 
         if (null != publication)
         {
-            publication.onNak(msg.termId(), msg.termOffset(), msg.length());
             nakMessagesReceived.incrementRelease();
+            publication.onNak(msg.termId(), msg.termOffset(), msg.length());
         }
     }
 

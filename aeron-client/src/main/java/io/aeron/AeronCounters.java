@@ -158,6 +158,18 @@ public final class AeronCounters
     @AeronCounter(expectedCName = "CHANNEL_NUM_DESTINATIONS")
     public static final int MDC_DESTINATIONS_COUNTER_TYPE_ID = 18;
 
+    /**
+     * The number of NAK messages received by the Sender.
+     */
+    @AeronCounter
+    public static final int DRIVER_SENDER_NAKS_RECEIVED_TYPE_ID = 19;
+
+    /**
+     * The number of NAK messages sent by the Receiver.
+     */
+    @AeronCounter
+    public static final int DRIVER_RECEIVER_NAKS_SENT_TYPE_ID = 20;
+
     // Archive counters
     /**
      * The position a recording has reached when being archived.

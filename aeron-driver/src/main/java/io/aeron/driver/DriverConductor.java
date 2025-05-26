@@ -300,6 +300,7 @@ public final class DriverConductor implements Agent
             CongestionControl congestionControl = null;
             UnsafeBufferPosition hwmPos = null;
             UnsafeBufferPosition rcvPos = null;
+            AtomicCounter rcvNaksSent = null;
 
             try
             {
@@ -335,6 +336,8 @@ public final class DriverConductor implements Agent
                 final String uri = subscription.channel();
                 hwmPos = ReceiverHwm.allocate(tempBuffer, countersManager, registrationId, sessionId, streamId, uri);
                 rcvPos = ReceiverPos.allocate(tempBuffer, countersManager, registrationId, sessionId, streamId, uri);
+                rcvNaksSent =
+                    ReceiverNaksSent.allocate(tempBuffer, countersManager, registrationId, sessionId, streamId, uri);
 
                 final String sourceIdentity = Configuration.sourceIdentity(sourceAddress);
 
@@ -355,6 +358,7 @@ public final class DriverConductor implements Agent
                     subscriberPositions,
                     hwmPos,
                     rcvPos,
+                    rcvNaksSent,
                     sourceIdentity,
                     congestionControl);
 
@@ -383,7 +387,7 @@ public final class DriverConductor implements Agent
             catch (final Exception ex)
             {
                 subscriberPositions.forEach((subscriberPosition) -> subscriberPosition.position().close());
-                CloseHelper.quietCloseAll(rawLog, congestionControl, hwmPos, rcvPos);
+                CloseHelper.quietCloseAll(rawLog, congestionControl, hwmPos, rcvPos, rcvNaksSent);
                 throw ex;
             }
         }
@@ -1770,6 +1774,7 @@ public final class DriverConductor implements Agent
         UnsafeBufferPosition senderPos = null;
         UnsafeBufferPosition senderLmt = null;
         AtomicCounter senderBpe = null;
+        AtomicCounter senderNaksReceived = null;
         try
         {
             publisherPos = PublisherPos.allocate(
@@ -1781,6 +1786,8 @@ public final class DriverConductor implements Agent
             senderLmt = SenderLimit.allocate(
                 tempBuffer, countersManager, registrationId, params.sessionId, streamId, channel);
             senderBpe = SenderBpe.allocate(
+                tempBuffer, countersManager, registrationId, params.sessionId, streamId, channel);
+            senderNaksReceived = SenderNaksReceived.allocate(
                 tempBuffer, countersManager, registrationId, params.sessionId, streamId, channel);
 
             countersManager.setCounterOwnerId(publisherLmt.id(), clientId);
@@ -1817,6 +1824,7 @@ public final class DriverConductor implements Agent
                 senderPos,
                 senderLmt,
                 senderBpe,
+                senderNaksReceived,
                 params.sessionId,
                 streamId,
                 params.initialTermId,
@@ -1834,7 +1842,8 @@ public final class DriverConductor implements Agent
         }
         catch (final Exception ex)
         {
-            CloseHelper.quietCloseAll(rawLog, publisherPos, publisherLmt, senderPos, senderLmt, senderBpe);
+            CloseHelper.quietCloseAll(
+                rawLog, publisherPos, publisherLmt, senderPos, senderLmt, senderBpe, senderNaksReceived);
             throw ex;
         }
     }

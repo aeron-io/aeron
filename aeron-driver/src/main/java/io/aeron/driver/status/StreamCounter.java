@@ -43,9 +43,6 @@ import static org.agrona.concurrent.status.CountersReader.MAX_LABEL_LENGTH;
  * <li>{@link SubscriberPos}: Consumption position on an {@link io.aeron.Image} of a stream by an individual
  *     Subscriber.</li>
  * </ul>
- * <p>
- * <b>Note:</b> All counters are real-time except {@link PublisherPos} which is sampled once per second
- * and as a result it can appear to be behind the others.
  */
 public class StreamCounter
 {
@@ -225,34 +222,19 @@ public class StreamCounter
      */
     public static String labelName(final int typeId)
     {
-        switch (typeId)
+        return switch (typeId)
         {
-            case PublisherLimit.PUBLISHER_LIMIT_TYPE_ID:
-                return PublisherLimit.NAME;
-
-            case SenderPos.SENDER_POSITION_TYPE_ID:
-                return SenderPos.NAME;
-
-            case ReceiverHwm.RECEIVER_HWM_TYPE_ID:
-                return ReceiverHwm.NAME;
-
-            case SubscriberPos.SUBSCRIBER_POSITION_TYPE_ID:
-                return SubscriberPos.NAME;
-
-            case ReceiverPos.RECEIVER_POS_TYPE_ID:
-                return ReceiverPos.NAME;
-
-            case SenderLimit.SENDER_LIMIT_TYPE_ID:
-                return SenderLimit.NAME;
-
-            case PublisherPos.PUBLISHER_POS_TYPE_ID:
-                return PublisherPos.NAME;
-
-            case SenderBpe.SENDER_BPE_TYPE_ID:
-                return SenderBpe.NAME;
-
-            default:
-                return "<unknown>";
-        }
+            case PublisherLimit.PUBLISHER_LIMIT_TYPE_ID -> PublisherLimit.NAME;
+            case SenderPos.SENDER_POSITION_TYPE_ID -> SenderPos.NAME;
+            case ReceiverHwm.RECEIVER_HWM_TYPE_ID -> ReceiverHwm.NAME;
+            case SubscriberPos.SUBSCRIBER_POSITION_TYPE_ID -> SubscriberPos.NAME;
+            case ReceiverPos.RECEIVER_POS_TYPE_ID -> ReceiverPos.NAME;
+            case SenderLimit.SENDER_LIMIT_TYPE_ID -> SenderLimit.NAME;
+            case PublisherPos.PUBLISHER_POS_TYPE_ID -> PublisherPos.NAME;
+            case SenderBpe.SENDER_BPE_TYPE_ID -> SenderBpe.NAME;
+            case SenderNaksReceived.TYPE_ID -> SenderNaksReceived.NAME;
+            case ReceiverNaksSent.TYPE_ID -> ReceiverNaksSent.NAME;
+            default -> "<unknown>";
+        };
     }
 }
