@@ -73,7 +73,7 @@ public:
             resend_length,
             term_buffer_length,
             term_offset,
-            AERON_MAX_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE);
+            AERON_MULTICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE);
     }
 
 protected:
