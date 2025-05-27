@@ -221,7 +221,7 @@ public final class Configuration
      * Default buffer length for the error buffer for the media driver.
      */
     @Config
-    public static final int ERROR_BUFFER_LENGTH_DEFAULT = 1024 * 1024;
+    public static final int ERROR_BUFFER_LENGTH_DEFAULT = 4 * 1024 * 1024;
 
     /**
      * Property name for length of the memory mapped buffer for the {@link io.aeron.driver.reports.LossReport}.
