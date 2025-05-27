@@ -152,6 +152,7 @@ typedef struct aeron_driver_context_stct
     uint64_t nak_unicast_retry_delay_ratio;                 /* aeron.nak.unicast.retry.delay.ratio = 100 */
     uint64_t nak_multicast_max_backoff_ns;                  /* aeron.nak.multicast.max.backoff = 60ms */
     size_t multicast_flow_control_rrwm;                     /* aeron.multicast.flow.control.rrwm = 4 */
+    size_t unicast_flow_control_rrwm;                       /* aeron.unicast.flow.control.rrwm = 4 */
     uint64_t re_resolution_check_interval_ns;               /* aeron.driver.reresolution.check.interval = 1s */
     uint64_t low_file_store_warning_threshold;              /* aeron.low.file.store.warning.threshold = 160MB */
     size_t to_driver_buffer_length;                         /* aeron.conductor.buffer.length = 1MB + trailer*/

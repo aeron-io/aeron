@@ -34,6 +34,12 @@ typedef struct aeron_max_flow_control_strategy_state_stct
 }
 aeron_max_flow_control_strategy_state_t;
 
+typedef struct aeron_unicast_flow_control_strategy_state_stct
+{
+    size_t retransmit_receiver_window_multiple;
+}
+aeron_unicast_flow_control_strategy_state_t;
+
 aeron_symbol_table_func_t aeron_flow_control_strategy_table[] =
     {
         {
@@ -164,11 +170,13 @@ size_t aeron_unicast_flow_control_strategy_max_retransmission_length(
     size_t term_buffer_length,
     size_t mtu_length)
 {
+    aeron_unicast_flow_control_strategy_state_t *strategy_state = (aeron_unicast_flow_control_strategy_state_t *)state;
+
     return aeron_flow_control_calculate_retransmission_length(
         resend_length,
         term_buffer_length,
         term_offset,
-        AERON_UNICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE);
+        strategy_state->retransmit_receiver_window_multiple);
 }
 
 void aeron_max_flow_control_strategy_on_trigger_send_setup(
@@ -322,12 +330,13 @@ int aeron_unicast_flow_control_strategy_supplier(
 {
     aeron_flow_control_strategy_t *_strategy;
 
-    if (aeron_alloc((void **)&_strategy, sizeof(aeron_flow_control_strategy_t)) < 0)
+    if (aeron_alloc((void **)&_strategy, sizeof(aeron_flow_control_strategy_t)) < 0 ||
+       aeron_alloc(&_strategy->state, sizeof(aeron_unicast_flow_control_strategy_state_t)) < 0)
     {
+        AERON_APPEND_ERR("%s", "");
         return -1;
     }
 
-    _strategy->state = NULL;  // Unicast does not require any state.
     _strategy->on_idle = aeron_max_flow_control_strategy_on_idle;
     _strategy->on_status_message = aeron_max_flow_control_strategy_on_sm;
     _strategy->on_setup = aeron_max_flow_control_strategy_on_setup;
@@ -336,7 +345,8 @@ int aeron_unicast_flow_control_strategy_supplier(
     _strategy->has_required_receivers = aeron_flow_control_strategy_has_required_receivers_default;
     _strategy->on_trigger_send_setup = aeron_max_flow_control_strategy_on_trigger_send_setup;
     _strategy->max_retransmission_length = aeron_unicast_flow_control_strategy_max_retransmission_length;
-
+    aeron_unicast_flow_control_strategy_state_t *state = _strategy->state;
+    state->retransmit_receiver_window_multiple = context->unicast_flow_control_rrwm;
     *strategy = _strategy;
 
     return 0;
