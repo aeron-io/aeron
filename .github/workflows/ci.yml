@@ -70,20 +70,20 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo mkdir -p /mnt/tmp_aeron_dir
-          sudo mount -t tmpfs -o size=20M,mode=777 tmpfs /mnt/tmp_aeron_dir
+          sudo mount -t tmpfs -o size=50M,mode=777 tmpfs /mnt/tmp_aeron_dir
       - name: Setup small temp file system and localhost name (MacOS)
         if: runner.os == 'macOS'
         run: |
           sudo sed -i bak "s/localhost/localhost $(hostname)/" /etc/hosts
           dscacheutil -flushcache
-          sudo diskutil eraseDisk APFS tmp_aeron_dir $(hdiutil attach -nomount ram://$((2 * 1024 * 20)))
+          sudo diskutil eraseDisk APFS tmp_aeron_dir $(hdiutil attach -nomount ram://$((2 * 1024 * 50)))
       - name: Setup small temp file system (Windows)
         if: runner.os == 'Windows'
         run: |
           $current_size = (Get-PartitionSupportedSize -DiskNumber 1 -PartitionNumber 1)
           $new_size = ($current_size.SizeMax - 100 * 1024 * 1024)
           Resize-Partition -DiskNumber 1 -PartitionNumber 1 -Size ($new_size)
-          New-Partition -DiskNumber 1 -Size 30MB -DriveLetter T | Format-Volume -FileSystem NTFS -Confirm:$false
+          New-Partition -DiskNumber 1 -Size 60MB -DriveLetter T | Format-Volume -FileSystem NTFS -Confirm:$false
           mkdir T:/tmp_aeron_dir
       - name: Enable core dumps (Linux)
         if: runner.os == 'Linux'
