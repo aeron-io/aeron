@@ -30,7 +30,6 @@ import org.agrona.concurrent.CountedErrorHandler;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.AtomicCounter;
 import org.hamcrest.CoreMatchers;
-import org.hamcrest.MatcherAssert;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -51,10 +50,30 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import static io.aeron.driver.Configuration.*;
+import static io.aeron.driver.Configuration.CALLER_RUNS_TASK_EXECUTOR;
+import static io.aeron.driver.Configuration.ERROR_BUFFER_LENGTH_DEFAULT;
+import static io.aeron.driver.Configuration.LOSS_REPORT_BUFFER_LENGTH_DEFAULT;
+import static io.aeron.driver.Configuration.NAK_MAX_BACKOFF_DEFAULT_NS;
+import static io.aeron.driver.Configuration.NAK_MULTICAST_MAX_BACKOFF_PROP_NAME;
+import static io.aeron.driver.Configuration.UNTETHERED_LINGER_TIMEOUT_PROP_NAME;
+import static io.aeron.driver.Configuration.UNTETHERED_WINDOW_LIMIT_TIMEOUT_DEFAULT_NS;
+import static io.aeron.driver.Configuration.UNTETHERED_WINDOW_LIMIT_TIMEOUT_PROP_NAME;
 import static io.aeron.logbuffer.LogBufferDescriptor.TERM_MAX_LENGTH;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 class MediaDriverContextTest
 {
@@ -145,7 +164,7 @@ class MediaDriverContextTest
         context.lossReportBufferLength(length);
 
         final ConfigurationException exception = assertThrows(ConfigurationException.class, context::conclude);
-        assertTrue(exception.getMessage().contains("lossReportBufferLength"));
+        assertThat(exception.getMessage(), containsString("lossReportBufferLength"));
     }
 
     @ParameterizedTest
@@ -155,7 +174,7 @@ class MediaDriverContextTest
         context.publicationTermWindowLength(length);
 
         final ConfigurationException exception = assertThrows(ConfigurationException.class, context::conclude);
-        assertTrue(exception.getMessage().contains("publicationTermWindowLength"));
+        assertThat(exception.getMessage(), containsString("publicationTermWindowLength"));
     }
 
     @ParameterizedTest
@@ -165,7 +184,7 @@ class MediaDriverContextTest
         context.ipcPublicationTermWindowLength(length);
 
         final ConfigurationException exception = assertThrows(ConfigurationException.class, context::conclude);
-        assertTrue(exception.getMessage().contains("ipcPublicationTermWindowLength"));
+        assertThat(exception.getMessage(), containsString("ipcPublicationTermWindowLength"));
     }
 
     @ParameterizedTest
@@ -230,7 +249,7 @@ class MediaDriverContextTest
         final ObjectHashSet<String> uniqueNames = new ObjectHashSet<>(asyncExecutorThreadCount);
         for (final Thread t : threads)
         {
-            MatcherAssert.assertThat(t.getName(), CoreMatchers.startsWith("async-executor"));
+            assertThat(t.getName(), CoreMatchers.startsWith("async-executor"));
             assertTrue(t.isDaemon());
             assertTrue(uniqueNames.add(t.getName()));
         }
@@ -373,10 +392,9 @@ class MediaDriverContextTest
     void shouldHonorSystemPropertyUntetheredLingerTimeout()
     {
         System.setProperty(UNTETHERED_LINGER_TIMEOUT_PROP_NAME, "222ms");
-
-        final MediaDriver.Context ctx = new MediaDriver.Context();
         try
         {
+            final Context ctx = new Context();
             assertEquals(TimeUnit.MILLISECONDS.toNanos(222), ctx.untetheredLingerTimeoutNs());
         }
         finally
@@ -389,11 +407,9 @@ class MediaDriverContextTest
     void shouldHonorSystemPropertyWindowLimitTimeout()
     {
         System.setProperty(UNTETHERED_WINDOW_LIMIT_TIMEOUT_PROP_NAME, "444ms");
-
-        final MediaDriver.Context ctx = new MediaDriver.Context();
-
         try
         {
+            final Context ctx = new Context();
             assertEquals(TimeUnit.MILLISECONDS.toNanos(444), ctx.untetheredWindowLimitTimeoutNs());
         }
         finally
@@ -402,16 +418,14 @@ class MediaDriverContextTest
         }
     }
 
-
     @Test
     void shouldHonorSystemPropertyOverrideUntetheredLingerTimeoutAndWindowTimeout()
     {
         System.setProperty(UNTETHERED_LINGER_TIMEOUT_PROP_NAME, "222ms");
         System.setProperty(UNTETHERED_WINDOW_LIMIT_TIMEOUT_PROP_NAME, "444ms");
-
-        final MediaDriver.Context ctx = new MediaDriver.Context();
         try
         {
+            final Context ctx = new Context();
             assertEquals(TimeUnit.MILLISECONDS.toNanos(222), ctx.untetheredLingerTimeoutNs());
             assertEquals(TimeUnit.MILLISECONDS.toNanos(444), ctx.untetheredWindowLimitTimeoutNs());
         }
@@ -425,18 +439,7 @@ class MediaDriverContextTest
     @Test
     void shouldUseNullForUntetheredLingerTimeoutEvenIfWindowIsSet()
     {
-        System.setProperty(UNTETHERED_WINDOW_LIMIT_TIMEOUT_PROP_NAME, "444ms");
-
-        final MediaDriver.Context ctx = new MediaDriver.Context();
-        try
-        {
-            assertEquals(Aeron.NULL_VALUE, ctx.untetheredLingerTimeoutNs());
-            assertEquals(TimeUnit.MILLISECONDS.toNanos(444), ctx.untetheredWindowLimitTimeoutNs());
-        }
-        finally
-        {
-            System.clearProperty(UNTETHERED_LINGER_TIMEOUT_PROP_NAME);
-            System.clearProperty(UNTETHERED_RESTING_TIMEOUT_PROP_NAME);
-        }
+        final Context ctx = new Context().untetheredWindowLimitTimeoutNs(35326745);
+        assertEquals(Aeron.NULL_VALUE, ctx.untetheredLingerTimeoutNs());
     }
 }
