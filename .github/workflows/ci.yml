@@ -76,7 +76,7 @@ jobs:
         run: |
           sudo sed -i bak "s/localhost/localhost $(hostname)/" /etc/hosts
           dscacheutil -flushcache
-          sudo diskutil eraseDisk APFS tmp_aeron_dir $(hdiutil attach -nomount ram://$((2 * 1024 * 50)))
+          sudo diskutil eraseDisk APFS tmp_aeron_dir $(hdiutil attach -nomount ram://$((2 * 1024 * 60)))
       - name: Setup small temp file system (Windows)
         if: runner.os == 'Windows'
         run: |
@@ -408,7 +408,7 @@ jobs:
         run: |
           sudo sed -i bak "s/localhost/localhost $(hostname)/" /etc/hosts
           dscacheutil -flushcache
-          sudo diskutil eraseDisk APFS tmp_aeron_dir $(hdiutil attach -nomount ram://$((2 * 1024 * 50)))
+          sudo diskutil eraseDisk APFS tmp_aeron_dir $(hdiutil attach -nomount ram://$((2 * 1024 * 60)))
       - name: Build
         run: cppbuild/cppbuild --c-warnings-as-errors --cxx-warnings-as-errors --cxx-hide-deprecation-message
       - name: Remove small temp file system
