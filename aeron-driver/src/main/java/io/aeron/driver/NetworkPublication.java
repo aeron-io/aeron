@@ -302,6 +302,7 @@ public final class NetworkPublication
         CloseHelper.close(errorHandler, senderPosition);
         CloseHelper.close(errorHandler, senderLimit);
         CloseHelper.close(errorHandler, senderBpe);
+        CloseHelper.close(errorHandler, senderNaksReceived);
         CloseHelper.closeAll(errorHandler, spyPositions);
 
         for (int i = 0, size = untetheredSubscriptions.size(); i < size; i++)

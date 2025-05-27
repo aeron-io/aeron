@@ -301,6 +301,7 @@ public final class PublicationImage
     {
         CloseHelper.close(errorHandler, hwmPosition);
         CloseHelper.close(errorHandler, rebuildPosition);
+        CloseHelper.close(errorHandler, receiverNaksSent);
         CloseHelper.closeAll(errorHandler, subscriberPositions);
 
         for (int i = 0, size = untetheredSubscriptions.size(); i < size; i++)
