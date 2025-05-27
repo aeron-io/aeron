@@ -113,6 +113,7 @@ int aeron_network_publication_create(
     aeron_position_t *snd_pos_position,
     aeron_position_t *snd_lmt_position,
     aeron_atomic_counter_t *snd_bpe_counter,
+    aeron_atomic_counter_t *snd_naks_received_counter,
     aeron_flow_control_strategy_t *flow_control_strategy,
     aeron_driver_uri_publication_params_t *params,
     bool is_exclusive,
@@ -297,6 +298,8 @@ int aeron_network_publication_create(
     _pub->snd_lmt_position.value_addr = snd_lmt_position->value_addr;
     _pub->snd_bpe_counter.counter_id = snd_bpe_counter->counter_id;
     _pub->snd_bpe_counter.value_addr = snd_bpe_counter->value_addr;
+    _pub->snd_naks_received_counter.counter_id = snd_naks_received_counter->counter_id;
+    _pub->snd_naks_received_counter.value_addr = snd_naks_received_counter->value_addr;
     _pub->tag = params->entity_tag;
     _pub->initial_term_id = initial_term_id;
     _pub->starting_term_id = params->has_position ? params->term_id : initial_term_id;
@@ -367,6 +370,7 @@ void aeron_network_publication_close(
         aeron_counters_manager_free(counters_manager, publication->snd_pos_position.counter_id);
         aeron_counters_manager_free(counters_manager, publication->snd_lmt_position.counter_id);
         aeron_counters_manager_free(counters_manager, publication->snd_bpe_counter.counter_id);
+        aeron_counters_manager_free(counters_manager, publication->snd_naks_received_counter.counter_id);
 
         for (size_t i = 0, length = subscribable->length; i < length; i++)
         {
@@ -775,6 +779,8 @@ int aeron_network_publication_resend(void *clientd, int32_t term_id, int32_t ter
 int aeron_network_publication_on_nak(
     aeron_network_publication_t *publication, int32_t term_id, int32_t term_offset, int32_t length)
 {
+    aeron_counter_increment_release(publication->snd_naks_received_counter.value_addr);
+
     int result = aeron_retransmit_handler_on_nak(
         &publication->retransmit_handler,
         term_id,

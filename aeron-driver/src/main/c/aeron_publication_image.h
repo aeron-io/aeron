@@ -92,6 +92,7 @@ typedef struct aeron_publication_image_stct
     aeron_mapped_raw_log_t mapped_raw_log;
     aeron_position_t rcv_hwm_position;
     aeron_position_t rcv_pos_position;
+    aeron_atomic_counter_t rcv_naks_sent;
     aeron_logbuffer_metadata_t *log_meta_data;
 
     aeron_receive_channel_endpoint_t *endpoint;
@@ -173,6 +174,7 @@ int aeron_publication_image_create(
     int32_t initial_term_offset,
     aeron_position_t *rcv_hwm_position,
     aeron_position_t *rcv_pos_position,
+    aeron_atomic_counter_t *rcv_naks_sent,
     aeron_congestion_control_strategy_t *congestion_control,
     struct sockaddr_storage *control_address,
     struct sockaddr_storage *source_address,

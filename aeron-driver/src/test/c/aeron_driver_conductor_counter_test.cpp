@@ -132,6 +132,7 @@ TEST_F(DriverConductorCounterTest, shouldRemoveMultipleCountersOnClientTimeout)
     ASSERT_EQ(addCounter(client_id, reg_id1, COUNTER_TYPE_ID, m_key, m_key_length, m_label), 0);
     ASSERT_EQ(addCounter(client_id, reg_id2, COUNTER_TYPE_ID, m_key, m_key_length, m_label), 0);
     doWork();
+    doWork();
 
     readAllBroadcastsFromConductor(mock_broadcast_handler);
     testing::Mock::VerifyAndClear(&m_mockCallbacks);

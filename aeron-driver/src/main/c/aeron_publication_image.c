@@ -153,6 +153,7 @@ int aeron_publication_image_create(
     int32_t initial_term_offset,
     aeron_position_t *rcv_hwm_position,
     aeron_position_t *rcv_pos_position,
+    aeron_atomic_counter_t *rcv_naks_sent,
     aeron_congestion_control_strategy_t *congestion_control,
     struct sockaddr_storage *control_address,
     struct sockaddr_storage *source_address,
@@ -339,6 +340,8 @@ int aeron_publication_image_create(
     _image->rcv_hwm_position.value_addr = rcv_hwm_position->value_addr;
     _image->rcv_pos_position.counter_id = rcv_pos_position->counter_id;
     _image->rcv_pos_position.value_addr = rcv_pos_position->value_addr;
+    _image->rcv_naks_sent.counter_id = rcv_naks_sent->counter_id;
+    _image->rcv_naks_sent.value_addr = rcv_naks_sent->value_addr;
     _image->term_length = term_buffer_length;
     _image->initial_term_id = initial_term_id;
     _image->term_length_mask = term_buffer_length - 1;
@@ -425,6 +428,7 @@ int aeron_publication_image_close(aeron_counters_manager_t *counters_manager, ae
 
         aeron_counters_manager_free(counters_manager, image->rcv_hwm_position.counter_id);
         aeron_counters_manager_free(counters_manager, image->rcv_pos_position.counter_id);
+        aeron_counters_manager_free(counters_manager, image->rcv_naks_sent.counter_id);
 
         for (size_t i = 0, length = subscribable->length; i < length; i++)
         {
@@ -970,6 +974,7 @@ int aeron_publication_image_send_pending_loss(aeron_publication_image_t *image)
 
                         work_count++;
                         aeron_counter_increment_release(image->nak_messages_sent_counter);
+                        aeron_counter_increment_release(image->rcv_naks_sent.value_addr);
                     }
                 }
             }

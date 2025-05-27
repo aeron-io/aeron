@@ -142,6 +142,7 @@ protected:
         aeron_position_t snd_pos_position;
         aeron_position_t snd_lmt_position;
         aeron_atomic_counter_t snd_bpe_counter;
+        aeron_atomic_counter_t snd_naks_received_counter;
 
         pub_pos_position.counter_id = aeron_counter_publisher_position_allocate(
             &m_counters_manager, registration_id, session_id, stream_id, uri_length, uri);
@@ -153,10 +154,12 @@ protected:
             &m_counters_manager, registration_id, session_id, stream_id, uri_length, uri);
         snd_bpe_counter.counter_id = aeron_counter_sender_bpe_allocate(
             &m_counters_manager, registration_id, session_id, stream_id, uri_length, uri);
+        snd_naks_received_counter.counter_id = aeron_counter_sender_naks_received_allocate(
+            &m_counters_manager, registration_id, session_id, stream_id, uri_length, uri);
 
         if (pub_pos_position.counter_id < 0 || pub_lmt_position.counter_id < 0 ||
             snd_pos_position.counter_id < 0 || snd_lmt_position.counter_id < 0 ||
-            snd_bpe_counter.counter_id < 0)
+            snd_bpe_counter.counter_id < 0 || snd_naks_received_counter.counter_id < 0)
         {
             return nullptr;
         }
@@ -174,6 +177,8 @@ protected:
             &m_counters_manager, snd_lmt_position.counter_id);
         snd_bpe_counter.value_addr = aeron_counters_manager_addr(
             &m_counters_manager, snd_bpe_counter.counter_id);
+        snd_naks_received_counter.value_addr = aeron_counters_manager_addr(
+            &m_counters_manager, snd_naks_received_counter.counter_id);
 
         if (params.has_position)
         {
@@ -206,6 +211,7 @@ protected:
             &snd_pos_position,
             &snd_lmt_position,
             &snd_bpe_counter,
+            &snd_naks_received_counter,
             flow_control,
             &params,
             is_exclusive,

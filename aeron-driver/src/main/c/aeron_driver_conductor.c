@@ -2250,6 +2250,7 @@ aeron_network_publication_t *aeron_driver_conductor_get_or_add_network_publicati
                 aeron_position_t snd_pos_position;
                 aeron_position_t snd_lmt_position;
                 aeron_atomic_counter_t snd_bpe_counter;
+                aeron_atomic_counter_t snd_naks_received_counter;
 
                 pub_pos_position.counter_id = aeron_counter_publisher_position_allocate(
                     &conductor->counters_manager, registration_id, session_id, stream_id, uri_length, uri);
@@ -2261,10 +2262,12 @@ aeron_network_publication_t *aeron_driver_conductor_get_or_add_network_publicati
                     &conductor->counters_manager, registration_id, session_id, stream_id, uri_length, uri);
                 snd_bpe_counter.counter_id = aeron_counter_sender_bpe_allocate(
                     &conductor->counters_manager, registration_id, session_id, stream_id, uri_length, uri);
+                snd_naks_received_counter.counter_id = aeron_counter_sender_naks_received_allocate(
+                    &conductor->counters_manager, registration_id, session_id, stream_id, uri_length, uri);
 
                 if (pub_pos_position.counter_id < 0 || pub_lmt_position.counter_id < 0 ||
                     snd_pos_position.counter_id < 0 || snd_lmt_position.counter_id < 0 ||
-                    snd_bpe_counter.counter_id < 0)
+                    snd_bpe_counter.counter_id < 0 || snd_naks_received_counter.counter_id < 0)
                 {
                     return NULL;
                 }
@@ -2282,6 +2285,8 @@ aeron_network_publication_t *aeron_driver_conductor_get_or_add_network_publicati
                     &conductor->counters_manager, snd_lmt_position.counter_id);
                 snd_bpe_counter.value_addr = aeron_counters_manager_addr(
                     &conductor->counters_manager, snd_bpe_counter.counter_id);
+                snd_naks_received_counter.value_addr = aeron_counters_manager_addr(
+                    &conductor->counters_manager, snd_naks_received_counter.counter_id);
 
                 if (params->has_position)
                 {
@@ -2311,6 +2316,7 @@ aeron_network_publication_t *aeron_driver_conductor_get_or_add_network_publicati
                         &snd_pos_position,
                         &snd_lmt_position,
                         &snd_bpe_counter,
+                        &snd_naks_received_counter,
                         flow_control_strategy,
                         params,
                         is_exclusive,
@@ -6026,10 +6032,23 @@ void aeron_driver_conductor_on_create_publication_image(void *clientd, void *ite
         goto error_cleanup;
     }
 
+    aeron_atomic_counter_t rcv_naks_sent;
+    rcv_naks_sent.counter_id = aeron_counter_receiver_naks_sent_allocate(
+        &conductor->counters_manager, registration_id, command->session_id, command->stream_id, uri_length, uri);
+    if (rcv_naks_sent.counter_id < 0)
+    {
+        aeron_counters_manager_free(&conductor->counters_manager, rcv_hwm_position.counter_id);
+        aeron_counters_manager_free(&conductor->counters_manager, rcv_pos_position.counter_id);
+        AERON_APPEND_ERR("stream_id=%d session_id=%d", command->stream_id, command->session_id);
+        goto error_cleanup;
+    }
+
     rcv_hwm_position.value_addr = aeron_counters_manager_addr(
         &conductor->counters_manager, rcv_hwm_position.counter_id);
     rcv_pos_position.value_addr = aeron_counters_manager_addr(
         &conductor->counters_manager, rcv_pos_position.counter_id);
+    rcv_naks_sent.value_addr = aeron_counters_manager_addr(
+        &conductor->counters_manager, rcv_naks_sent.counter_id);
 
     bool is_reliable = subscription_link.is_reliable;
     bool treat_as_multicast = aeron_driver_conductor_treat_image_as_multicast(
@@ -6051,6 +6070,7 @@ void aeron_driver_conductor_on_create_publication_image(void *clientd, void *ite
         command->term_offset,
         &rcv_hwm_position,
         &rcv_pos_position,
+        &rcv_naks_sent,
         congestion_control,
         &command->control_address,
         &command->src_address,

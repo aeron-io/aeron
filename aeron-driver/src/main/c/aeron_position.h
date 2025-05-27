@@ -141,4 +141,20 @@ int32_t aeron_counter_sender_bpe_allocate(
     size_t channel_length,
     const char *channel);
 
+int32_t aeron_counter_sender_naks_received_allocate(
+    aeron_counters_manager_t *counters_manager,
+    int64_t registration_id,
+    int32_t session_id,
+    int32_t stream_id,
+    size_t channel_length,
+    const char *channel);
+
+int32_t aeron_counter_receiver_naks_sent_allocate(
+    aeron_counters_manager_t *counters_manager,
+    int64_t registration_id,
+    int32_t session_id,
+    int32_t stream_id,
+    size_t channel_length,
+    const char *channel);
+
 #endif
