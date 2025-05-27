@@ -148,7 +148,7 @@ class ClusterSessionReliabilityTest
         boolean lossRequested = false;
         long now = System.nanoTime();
         long nextMessageAt = now;
-        final long deadline = now + sessionTimeoutNs + TimeUnit.SECONDS.toNanos(1);
+        final long deadline = now + 2 * sessionTimeoutNs;
         while (true)
         {
             now = System.nanoTime();

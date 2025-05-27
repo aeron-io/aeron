@@ -1,5 +1,5 @@
 [versions]
-agrona = "2.1.0"
+agrona = "2.2.0"
 asciidoctorj = "2.5.13"
 asm = "9.8"
 bnd = "7.1.0"
@@ -15,7 +15,7 @@ jgit = "6.10.0.202406032230-r"
 junit = "5.12.2"
 mockito = "5.18.0"
 plexus = "3.3.0"
-sbe = "1.34.1"
+sbe = "1.35.0"
 shadow = "8.3.6"
 versions = "0.52.0"
 
