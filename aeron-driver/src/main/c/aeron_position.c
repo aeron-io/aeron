@@ -392,13 +392,13 @@ int32_t aeron_counter_receiver_naks_sent_allocate(
     const char *channel)
 {
     return aeron_stream_counter_allocate(
-            counters_manager,
-            AERON_COUNTER_RECEIVER_NAKS_SENT_NAME,
-            AERON_COUNTER_RECEIVER_NAKS_SENT_TYPE_ID,
-            registration_id,
-            session_id,
-            stream_id,
-            channel_length,
-            channel,
-            "");
+        counters_manager,
+        AERON_COUNTER_RECEIVER_NAKS_SENT_NAME,
+        AERON_COUNTER_RECEIVER_NAKS_SENT_TYPE_ID,
+        registration_id,
+        session_id,
+        stream_id,
+        channel_length,
+        channel,
+        "");
 }
