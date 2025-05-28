@@ -211,7 +211,7 @@ protected:
             is_exclusive,
             &m_system_counters) < 0)
         {
-            aeron_free(flow_control);
+            flow_control->fini(flow_control);
             return nullptr;
         }
 
