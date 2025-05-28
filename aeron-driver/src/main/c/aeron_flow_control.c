@@ -344,7 +344,7 @@ int aeron_unicast_flow_control_strategy_supplier(
 
     if (aeron_alloc(&_strategy->state, sizeof(aeron_unicast_flow_control_strategy_state_t)) < 0)
     {
-        free(_strategy);
+        aeron_free(_strategy);
         AERON_APPEND_ERR("%s", "");
         return -1;
     }
