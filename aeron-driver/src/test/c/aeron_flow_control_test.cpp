@@ -190,7 +190,7 @@ TEST_F(MinFlowControlTest, shouldFallbackToMinStrategy)
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001,0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 1, 1000, 1));
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 2, 2000, 1));
@@ -205,7 +205,7 @@ TEST_F(MinFlowControlTest, shouldUseMinStrategy)
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 1, 1000, 1));
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 2, 2000, 1));
@@ -261,7 +261,7 @@ TEST_F(FlowControlTest, unicastStrategyShouldUseDefaultWindowMultipleWhenNotSet)
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     size_t rrwm = m_strategy->max_retransmission_length(m_strategy->state, 0, 3000000, 1024 * 1024 * 3, 1408);
     ASSERT_EQ(expected_retransmit_length, rrwm);
@@ -280,7 +280,7 @@ TEST_F(FlowControlTest, unicastStrategyShouldUseWindowMultipleFromContext)
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     size_t rrwm = m_strategy->max_retransmission_length(m_strategy->state, 0, 3000000, 1024 * 1024 * 3, 1408);
     ASSERT_EQ(expected_retransmit_length, rrwm);
@@ -298,7 +298,7 @@ TEST_F(MinFlowControlTest, minStrategyShouldUseDefaultWindowMultipleWhenNotSet)
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     size_t rrwm = m_strategy->max_retransmission_length(m_strategy->state, 0, 1000000, 1024 * 1024, 1408);
     ASSERT_EQ(expected_retransmit_length, rrwm);
@@ -318,7 +318,7 @@ TEST_F(MinFlowControlTest, minStrategyShouldUseDefaultWindowMultipleFromContext)
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     size_t rrwm = m_strategy->max_retransmission_length(m_strategy->state, 0, 1000000, 1024 * 1024, 1408);
     ASSERT_EQ(expected_retransmit_length, rrwm);
@@ -338,7 +338,7 @@ TEST_F(MinFlowControlTest, minStrategyShouldUseDefaultWindowMultipleFromUri)
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     size_t rrwm = m_strategy->max_retransmission_length(m_strategy->state, 0, 1000000, 1024 * 1024, 1408);
     ASSERT_EQ(expected_retransmit_length, rrwm);
@@ -356,7 +356,7 @@ TEST_F(TaggedFlowControlTest, taggedStrategyShouldUseDefaultWindowMultipleWhenNo
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     size_t rrwm = m_strategy->max_retransmission_length(m_strategy->state, 0, 1000000, 1024 * 1024, 1408);
     ASSERT_EQ(expected_retransmit_length, rrwm);
@@ -376,7 +376,7 @@ TEST_F(TaggedFlowControlTest, taggedStrategyShouldUseDefaultWindowMultipleFromCo
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     size_t rrwm = m_strategy->max_retransmission_length(m_strategy->state, 0, 1000000, 1024 * 1024, 1408);
     ASSERT_EQ(expected_retransmit_length, rrwm);
@@ -396,7 +396,7 @@ TEST_F(TaggedFlowControlTest, taggedStrategyShouldUseDefaultWindowMultipleFromUr
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     size_t rrwm = m_strategy->max_retransmission_length(m_strategy->state, 0, 1000000, 1024 * 1024, 1408);
     ASSERT_EQ(expected_retransmit_length, rrwm);
@@ -414,7 +414,7 @@ TEST_F(MaxFlowControlTest, maxStrategyShouldUseDefaultWindowMultipleWhenNotSet)
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     size_t rrwm = m_strategy->max_retransmission_length(m_strategy->state, 0, 1000000, 1024 * 1024, 1408);
     ASSERT_EQ(expected_retransmit_length, rrwm);
@@ -434,7 +434,7 @@ TEST_F(MaxFlowControlTest, maxStrategyShouldUseDefaultWindowMultipleFromContext)
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     size_t rrwm = m_strategy->max_retransmission_length(m_strategy->state, 0, 1000000, 1024 * 1024, 1408);
     ASSERT_EQ(expected_retransmit_length, rrwm);
@@ -454,7 +454,7 @@ TEST_F(MaxFlowControlTest, maxStrategyShouldUseDefaultWindowMultipleFromUri)
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     size_t rrwm = m_strategy->max_retransmission_length(m_strategy->state, 0, 1000000, 1024 * 1024, 1408);
     ASSERT_EQ(expected_retransmit_length, rrwm);
@@ -468,7 +468,7 @@ TEST_F(FlowControlTest, shouldUseMinStrategyAndIgnoreGroupParams)
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 1, 1000, 1));
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 2, 2000, 1));
@@ -485,7 +485,7 @@ TEST_F(MinFlowControlTest, shouldTimeoutWithMinStrategy)
     ASSERT_EQ(0, aeron_default_multicast_flow_control_strategy_supplier(
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     ASSERT_EQ(WINDOW_LENGTH + position_recv_1, apply_status_message(m_strategy, 1, position_recv_1, 0, 100 * 1000000));
     ASSERT_EQ(WINDOW_LENGTH + position_recv_1, apply_status_message(m_strategy, 2, position_recv_2, 0, 200 * 1000000));
@@ -506,7 +506,7 @@ TEST_F(MaxFlowControlTest, shouldFallbackToMaxStrategy)
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 1, 1000, 1));
     ASSERT_EQ(WINDOW_LENGTH + 2000, apply_status_message(m_strategy, 2, 2000, 1));
@@ -521,7 +521,7 @@ TEST_F(MaxFlowControlTest, shouldUseMaxStrategy)
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 1, 1000, 1));
     ASSERT_EQ(WINDOW_LENGTH + 2000, apply_status_message(m_strategy, 2, 2000, 1));
@@ -541,7 +541,7 @@ TEST_F(TaggedFlowControlTest, shouldUseFallbackToTaggedStrategy)
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 1, 1000, 1));
     ASSERT_EQ(WINDOW_LENGTH + 2000, apply_status_message(m_strategy, 2, 2000, 1));
@@ -556,7 +556,7 @@ TEST_F(TaggedFlowControlTest, shouldUseTaggedStrategy)
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 1, 1000, 123));
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 2, 2000, 123));
@@ -580,7 +580,7 @@ TEST_F(TaggedFlowControlTest, shouldUseTaggedStrategyWith8ByteTag)
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 1, 1000, 3000000000));
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 2, 2000, 3000000000));
@@ -595,7 +595,7 @@ TEST_F(TaggedFlowControlTest, shouldUseTaggedStrategyWithOldAsfValue)
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     size_t initial_observations = aeron_distinct_error_log_num_observations(&error_log);
 
@@ -612,7 +612,7 @@ TEST_F(TaggedFlowControlTest, shouldUsePositionAndWindowFromStatusMessageWhenRec
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 1, 1000, 0));
 }
@@ -641,7 +641,7 @@ TEST_F(TaggedFlowControlTest, shouldTimeout)
     ASSERT_EQ(0, aeron_default_multicast_flow_control_strategy_supplier(
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     ASSERT_EQ(position_recv_1 + WINDOW_LENGTH,
               apply_status_message(m_strategy, 1, position_recv_1, 123, 100 * 1000000));

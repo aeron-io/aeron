@@ -189,11 +189,8 @@ protected:
             aeron_counter_set_release(snd_lmt_position.value_addr, initial_position);
         }
 
-        aeron_driver_context_t *context = nullptr;
-        aeron_driver_context_init(&context);
-
         aeron_flow_control_strategy_t *flow_control;
-        aeron_unicast_flow_control_strategy_supplier(&flow_control, context, nullptr, nullptr, 0, 0, 0, 0, 0);
+        aeron_unicast_flow_control_strategy_supplier(&flow_control, m_context, nullptr, nullptr, 0, 0, 0, 0, 0);
 
         aeron_network_publication_t *publication = nullptr;
         if (aeron_network_publication_create(

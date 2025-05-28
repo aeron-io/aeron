@@ -294,9 +294,15 @@ int aeron_max_multicast_flow_control_strategy_supplier(
         return -1;
     }
 
-    if (aeron_alloc((void**)&_strategy, sizeof(aeron_flow_control_strategy_t)) < 0 ||
-        aeron_alloc(&_strategy->state, sizeof(aeron_max_flow_control_strategy_state_t)) < 0)
+    if (aeron_alloc((void**)&_strategy, sizeof(aeron_flow_control_strategy_t)) < 0)
     {
+        AERON_APPEND_ERR("%s", "");
+        return -1;
+    }
+
+    if (aeron_alloc(&_strategy->state, sizeof(aeron_max_flow_control_strategy_state_t)) < 0)
+    {
+        aeron_free(_strategy);
         AERON_APPEND_ERR("%s", "");
         return -1;
     }
@@ -330,9 +336,15 @@ int aeron_unicast_flow_control_strategy_supplier(
 {
     aeron_flow_control_strategy_t *_strategy;
 
-    if (aeron_alloc((void **)&_strategy, sizeof(aeron_flow_control_strategy_t)) < 0 ||
-       aeron_alloc(&_strategy->state, sizeof(aeron_unicast_flow_control_strategy_state_t)) < 0)
+    if (aeron_alloc((void **)&_strategy, sizeof(aeron_flow_control_strategy_t)) < 0)
     {
+        AERON_APPEND_ERR("%s", "");
+        return -1;
+    }
+
+    if (aeron_alloc(&_strategy->state, sizeof(aeron_unicast_flow_control_strategy_state_t)) < 0)
+    {
+        free(_strategy);
         AERON_APPEND_ERR("%s", "");
         return -1;
     }

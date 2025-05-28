@@ -528,9 +528,15 @@ int aeron_tagged_flow_control_strategy_supplier_init(
         return -1;
     }
 
-    if (aeron_alloc((void **)&_strategy, sizeof(aeron_flow_control_strategy_t)) < 0 ||
-        aeron_alloc(&_strategy->state, sizeof(aeron_min_flow_control_strategy_state_t)) < 0)
+    if (aeron_alloc((void**)&_strategy, sizeof(aeron_flow_control_strategy_t)) < 0)
     {
+        AERON_APPEND_ERR("%s", "");
+        return -1;
+    }
+
+    if (aeron_alloc(&_strategy->state, sizeof(aeron_min_flow_control_strategy_state_t)) < 0)
+    {
+        free(_strategy);
         AERON_APPEND_ERR("%s", "");
         return -1;
     }
