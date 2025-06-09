@@ -53,7 +53,10 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.core.Is.is;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.when;
 
 class SenderTest
 {
@@ -148,6 +151,7 @@ class SenderTest
             new AtomicLongPosition(),
             new AtomicLongPosition(),
             new AtomicLongPosition(),
+            mock(AtomicCounter.class),
             mock(AtomicCounter.class),
             SESSION_ID,
             STREAM_ID,

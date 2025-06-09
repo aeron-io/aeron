@@ -17,6 +17,7 @@ configurations.configureEach {
 dependencies {
     implementation libs.asciidoctorj
     implementation libs.jgit
+    implementation libs.json
 }
 
 tasks.withType(JavaCompile).configureEach {

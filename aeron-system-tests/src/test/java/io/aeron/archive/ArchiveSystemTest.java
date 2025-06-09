@@ -54,8 +54,8 @@ class ArchiveSystemTest
     private static Stream<Arguments> threadingModes()
     {
         return Stream.of(
-            arguments(ThreadingMode.INVOKER, ArchiveThreadingMode.SHARED),
             arguments(ThreadingMode.SHARED, ArchiveThreadingMode.SHARED),
+            arguments(ThreadingMode.SHARED_NETWORK, ArchiveThreadingMode.SHARED),
             arguments(ThreadingMode.DEDICATED, ArchiveThreadingMode.DEDICATED));
     }
 

@@ -301,6 +301,7 @@ public final class DriverConductor implements Agent
             CongestionControl congestionControl = null;
             UnsafeBufferPosition hwmPos = null;
             UnsafeBufferPosition rcvPos = null;
+            AtomicCounter rcvNaksSent = null;
 
             try
             {
@@ -336,6 +337,8 @@ public final class DriverConductor implements Agent
                 final String uri = subscription.channel();
                 hwmPos = ReceiverHwm.allocate(tempBuffer, countersManager, registrationId, sessionId, streamId, uri);
                 rcvPos = ReceiverPos.allocate(tempBuffer, countersManager, registrationId, sessionId, streamId, uri);
+                rcvNaksSent =
+                    ReceiverNaksSent.allocate(tempBuffer, countersManager, registrationId, sessionId, streamId, uri);
 
                 final String sourceIdentity = Configuration.sourceIdentity(sourceAddress);
 
@@ -352,10 +355,14 @@ public final class DriverConductor implements Agent
                     termOffset,
                     flags,
                     rawLog,
+                    subscriptionParams.untetheredWindowLimitTimeoutNs,
+                    subscriptionParams.untetheredLingerTimeoutNs,
+                    subscriptionParams.untetheredRestingTimeoutNs,
                     resolveDelayGenerator(ctx, channelEndpoint.udpChannel(), subscription.group(), flags),
                     subscriberPositions,
                     hwmPos,
                     rcvPos,
+                    rcvNaksSent,
                     sourceIdentity,
                     congestionControl);
 
@@ -384,7 +391,7 @@ public final class DriverConductor implements Agent
             catch (final Exception ex)
             {
                 subscriberPositions.forEach((subscriberPosition) -> subscriberPosition.position().close());
-                CloseHelper.quietCloseAll(rawLog, congestionControl, hwmPos, rcvPos);
+                CloseHelper.quietCloseAll(rawLog, congestionControl, hwmPos, rcvPos, rcvNaksSent);
                 throw ex;
             }
         }
@@ -950,7 +957,7 @@ public final class DriverConductor implements Agent
         }
     }
 
-    void onRemovePublication(final long registrationId, final long correlationId)
+    void onRemovePublication(final long registrationId, final long correlationId, final boolean revoke)
     {
         PublicationLink publicationLink = null;
         final ArrayList<PublicationLink> publicationLinks = this.publicationLinks;
@@ -970,6 +977,10 @@ public final class DriverConductor implements Agent
             throw new ControlProtocolException(UNKNOWN_PUBLICATION, "unknown publication: " + registrationId);
         }
 
+        if (revoke)
+        {
+            publicationLink.revoke();
+        }
         publicationLink.close();
         clientProxy.operationSucceeded(correlationId);
     }
@@ -1767,6 +1778,7 @@ public final class DriverConductor implements Agent
         UnsafeBufferPosition senderPos = null;
         UnsafeBufferPosition senderLmt = null;
         AtomicCounter senderBpe = null;
+        AtomicCounter senderNaksReceived = null;
         try
         {
             publisherPos = PublisherPos.allocate(
@@ -1778,6 +1790,8 @@ public final class DriverConductor implements Agent
             senderLmt = SenderLimit.allocate(
                 tempBuffer, countersManager, registrationId, params.sessionId, streamId, channel);
             senderBpe = SenderBpe.allocate(
+                tempBuffer, countersManager, registrationId, params.sessionId, streamId, channel);
+            senderNaksReceived = SenderNaksReceived.allocate(
                 tempBuffer, countersManager, registrationId, params.sessionId, streamId, channel);
 
             countersManager.setCounterOwnerId(publisherLmt.id(), clientId);
@@ -1814,6 +1828,7 @@ public final class DriverConductor implements Agent
                 senderPos,
                 senderLmt,
                 senderBpe,
+                senderNaksReceived,
                 params.sessionId,
                 streamId,
                 params.initialTermId,
@@ -1831,7 +1846,8 @@ public final class DriverConductor implements Agent
         }
         catch (final Exception ex)
         {
-            CloseHelper.quietCloseAll(rawLog, publisherPos, publisherLmt, senderPos, senderLmt, senderBpe);
+            CloseHelper.quietCloseAll(
+                rawLog, publisherPos, publisherLmt, senderPos, senderLmt, senderBpe, senderNaksReceived);
             throw ex;
         }
     }
@@ -1870,6 +1886,7 @@ public final class DriverConductor implements Agent
             params.isResponse,
             params.publicationWindowLength,
             params.untetheredWindowLimitTimeoutNs,
+            params.untetheredLingerTimeoutNs,
             params.untetheredRestingTimeoutNs,
             params.maxResend,
             params.lingerTimeoutNs,
@@ -1918,6 +1935,7 @@ public final class DriverConductor implements Agent
             params.isResponse,
             params.publicationWindowLength,
             params.untetheredWindowLimitTimeoutNs,
+            params.untetheredLingerTimeoutNs,
             params.untetheredRestingTimeoutNs,
             params.maxResend,
             params.lingerTimeoutNs,
@@ -1949,6 +1967,7 @@ public final class DriverConductor implements Agent
         final boolean isResponse,
         final int publicationWindowLength,
         final long untetheredWindowLimitTimeoutNs,
+        final long untetheredLingerTimeoutNs,
         final long untetheredRestingTimeoutNs,
         final int maxResend,
         final long lingerTimeoutNs,
@@ -1989,12 +2008,14 @@ public final class DriverConductor implements Agent
         signalEos(logMetaData, signalEos);
         spiesSimulateConnection(logMetaData, spiesSimulateConnection);
         tether(logMetaData, tether);
+        isPublicationRevoked(logMetaData, false);
         group(logMetaData, group);
         isResponse(logMetaData, isResponse);
 
         entityTag(logMetaData, entityTag);
         responseCorrelationId(logMetaData, responseCorrelationId);
         untetheredWindowLimitTimeoutNs(logMetaData, untetheredWindowLimitTimeoutNs);
+        untetheredLingerTimeoutNs(logMetaData, untetheredLingerTimeoutNs);
         untetheredRestingTimeoutNs(logMetaData, untetheredRestingTimeoutNs);
         lingerTimeoutNs(logMetaData, lingerTimeoutNs);
 
@@ -2051,8 +2072,6 @@ public final class DriverConductor implements Agent
         final RawLog rawLog = logFactory.newImage(correlationId, termBufferLength, isSparse);
 
         final int publicationWindowLength = 0;
-        final long untetheredWindowLimitTimeoutNs = 0;
-        final long untetheredRestingTimeoutNs = 0;
         final int maxResend = 0;
         final long lingerTimeoutNs = 0;
         final boolean signalEos = false;
@@ -2076,8 +2095,9 @@ public final class DriverConductor implements Agent
             hasGroupSemantics,
             params.isResponse,
             publicationWindowLength,
-            untetheredWindowLimitTimeoutNs,
-            untetheredRestingTimeoutNs,
+            params.untetheredWindowLimitTimeoutNs,
+            params.untetheredLingerTimeoutNs,
+            params.untetheredRestingTimeoutNs,
             maxResend,
             lingerTimeoutNs,
             signalEos,

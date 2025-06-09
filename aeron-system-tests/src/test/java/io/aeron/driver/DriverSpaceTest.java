@@ -68,7 +68,7 @@ public class DriverSpaceTest
         try
         {
             final FileStore fileStore = Files.getFileStore(tempfsDir);
-            assumeTrue(fileStore.getUsableSpace() < (32 * 1024 * 1024), "Skipping as file system is too large");
+            assumeTrue(fileStore.getUsableSpace() < (64 * 1024 * 1024), "Skipping as file system is too large");
         }
         catch (final IOException e)
         {

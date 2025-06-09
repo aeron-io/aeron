@@ -234,9 +234,19 @@ public enum SystemCounterDescriptor
     ERROR_FRAMES_SENT(39, "Error Frames sent"),
 
     /**
+     * A count of the number of publications that have been revoked.
+     */
+    PUBLICATIONS_REVOKED(40, "Publications Revoked"),
+
+    /**
+     * A count of the number of publication images that have been revoked.
+     */
+    PUBLICATION_IMAGES_REVOKED(41, "Publication Images Revoked"),
+
+    /**
      * A count of the number of images that have been rejected.
      */
-    IMAGES_REJECTED(40, "Images rejected");
+    IMAGES_REJECTED(42, "Images rejected");
 
     /**
      * All system counters have the same type id, i.e. system counters are the same type. Other types can exist.

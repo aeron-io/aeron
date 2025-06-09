@@ -146,6 +146,7 @@ class ServiceIpcIngressMessageTest
             .withServiceSupplier(serviceSupplier)
             .start();
         systemTestWatcher.cluster(cluster);
+        systemTestWatcher.ignoreErrorsMatching((error) -> error.contains("publication is not connected"));
 
         final TestNode oldLeader = cluster.awaitLeaderAndClosedElection();
         cluster.connectClient();

@@ -29,6 +29,7 @@ import io.aeron.test.TestContexts;
 import org.agrona.DirectBuffer;
 import org.agrona.ErrorHandler;
 import org.agrona.collections.MutableInteger;
+import org.agrona.concurrent.AgentInvoker;
 import org.agrona.concurrent.CountedErrorHandler;
 import org.agrona.concurrent.SystemEpochClock;
 import org.agrona.concurrent.status.AtomicCounter;
@@ -1090,6 +1091,22 @@ class ArchiveContextTest
         context.conclude();
 
         assertEquals("sample", aeronContext.clientName());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ArchiveThreadingMode.class, names = "INVOKER", mode = EnumSource.Mode.EXCLUDE)
+    void shouldRequireInvokerModeIfMediaDriverInvokerIsSpecified(final ArchiveThreadingMode threadingMode)
+    {
+        final AgentInvoker mediaDriverAgentInvoker = mock(AgentInvoker.class);
+        context
+            .mediaDriverAgentInvoker(mediaDriverAgentInvoker)
+            .threadingMode(threadingMode);
+
+        final ConfigurationException exception = assertThrowsExactly(ConfigurationException.class, context::conclude);
+        assertEquals(
+            "ERROR - Archive.Context.threadingMode(ArchiveThreadingMode.INVOKER) must be set if " +
+            "Archive.Context.mediaDriverAgentInvoker is set",
+            exception.getMessage());
     }
 
     private Counter mockArchiveCounter(

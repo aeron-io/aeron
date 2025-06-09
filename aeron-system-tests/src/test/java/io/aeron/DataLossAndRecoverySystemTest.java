@@ -17,6 +17,8 @@ package io.aeron;
 
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
+import io.aeron.driver.status.ReceiverNaksSent;
+import io.aeron.driver.status.SenderNaksReceived;
 import io.aeron.driver.status.SystemCounterDescriptor;
 import io.aeron.logbuffer.LogBufferDescriptor;
 import io.aeron.test.SystemTestWatcher;
@@ -25,6 +27,7 @@ import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.CloseHelper;
 import org.agrona.collections.MutableInteger;
 import org.agrona.concurrent.UnsafeBuffer;
+import org.agrona.concurrent.status.CountersReader;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
@@ -35,8 +38,12 @@ import java.io.File;
 import java.util.Random;
 
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.*;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.lessThanOrEqualTo;
+import static org.hamcrest.Matchers.oneOf;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 public class DataLossAndRecoverySystemTest
 {
@@ -72,21 +79,24 @@ public class DataLossAndRecoverySystemTest
     {
         launch(context);
 
-        sendAndReceive(
+        final StreamNakCounters streamCounters = sendAndReceive(
             "aeron:udp?endpoint=localhost:10000|term-length=1m|init-term-id=0|term-id=0|term-offset=0",
-            10 * 1024 * 1024
-        );
+            10 * 1024 * 1024);
 
         try (Aeron aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver.aeronDirectoryName())))
         {
-            final long retransmitCount = aeron.countersReader()
+            final CountersReader countersReader = aeron.countersReader();
+            final long retransmitCount = countersReader
                 .getCounterValue(SystemCounterDescriptor.RETRANSMITS_SENT.id());
-            final long nakCount = aeron.countersReader()
+            final long nakSent = countersReader
                 .getCounterValue(SystemCounterDescriptor.NAK_MESSAGES_SENT.id());
-            final long retransmittedBytes = aeron.countersReader()
+            final long nakReceived = countersReader
+                .getCounterValue(SystemCounterDescriptor.NAK_MESSAGES_RECEIVED.id());
+            final long retransmittedBytes = countersReader
                 .getCounterValue(SystemCounterDescriptor.RETRANSMITTED_BYTES.id());
-            assertThat(nakCount, greaterThanOrEqualTo(1L));
-            assertThat(retransmitCount, lessThanOrEqualTo(nakCount));
+            assertThat(nakSent, equalTo(streamCounters.naksSent));
+            assertThat(nakReceived, equalTo(streamCounters.naksReceived));
+            assertThat(retransmitCount, lessThanOrEqualTo(nakSent));
             assertThat(retransmittedBytes, greaterThanOrEqualTo((long)LOSS_LENGTH));
         }
     }
@@ -97,21 +107,24 @@ public class DataLossAndRecoverySystemTest
         dontCoalesceNaksOnReceiverByDefault();
         launch(context);
 
-        sendAndReceive(
+        final StreamNakCounters streamCounters = sendAndReceive(
             "aeron:udp?endpoint=localhost:10000|term-length=1m|init-term-id=0|term-id=0|term-offset=0|nak-delay=100us",
-            10 * 1024 * 1024
-        );
+            10 * 1024 * 1024);
 
         try (Aeron aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver.aeronDirectoryName())))
         {
-            final long retransmitCount = aeron.countersReader()
+            final CountersReader countersReader = aeron.countersReader();
+            final long retransmitCount = countersReader
                 .getCounterValue(SystemCounterDescriptor.RETRANSMITS_SENT.id());
-            final long nakCount = aeron.countersReader()
+            final long nakSent = countersReader
                 .getCounterValue(SystemCounterDescriptor.NAK_MESSAGES_SENT.id());
-            final long retransmittedBytes = aeron.countersReader()
+            final long nakReceived = countersReader
+                .getCounterValue(SystemCounterDescriptor.NAK_MESSAGES_RECEIVED.id());
+            final long retransmittedBytes = countersReader
                 .getCounterValue(SystemCounterDescriptor.RETRANSMITTED_BYTES.id());
-            assertThat(nakCount, greaterThanOrEqualTo(1L));
-            assertThat(retransmitCount, lessThanOrEqualTo(nakCount));
+            assertThat(nakSent, equalTo(streamCounters.naksSent));
+            assertThat(nakReceived, equalTo(streamCounters.naksReceived));
+            assertThat(retransmitCount, lessThanOrEqualTo(nakSent));
             assertThat(retransmittedBytes, greaterThanOrEqualTo((long)LOSS_LENGTH));
         }
     }
@@ -122,21 +135,24 @@ public class DataLossAndRecoverySystemTest
         dontCoalesceNaksOnReceiverByDefault();
         launch(context);
 
-        sendAndReceive(
+        final StreamNakCounters streamCounters = sendAndReceive(
             "aeron:udp?endpoint=localhost:10000|term-length=1m|init-term-id=0|term-id=0|term-offset=0",
-            10 * 1024 * 1024
-        );
+            10 * 1024 * 1024);
 
         try (Aeron aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver.aeronDirectoryName())))
         {
-            final long retransmitCount = aeron.countersReader()
+            final CountersReader countersReader = aeron.countersReader();
+            final long retransmitCount = countersReader
                 .getCounterValue(SystemCounterDescriptor.RETRANSMITS_SENT.id());
-            final long nakCount = aeron.countersReader()
+            final long nakSent = countersReader
                 .getCounterValue(SystemCounterDescriptor.NAK_MESSAGES_SENT.id());
-            final long retransmittedBytes = aeron.countersReader()
+            final long nakReceived = countersReader
+                .getCounterValue(SystemCounterDescriptor.NAK_MESSAGES_RECEIVED.id());
+            final long retransmittedBytes = countersReader
                 .getCounterValue(SystemCounterDescriptor.RETRANSMITTED_BYTES.id());
-            assertThat(nakCount, greaterThanOrEqualTo(1L));
-            assertThat(retransmitCount, lessThanOrEqualTo(nakCount));
+            assertThat(nakSent, equalTo(streamCounters.naksSent));
+            assertThat(nakReceived, equalTo(streamCounters.naksReceived));
+            assertThat(retransmitCount, lessThanOrEqualTo(nakSent));
             assertThat(retransmittedBytes, greaterThanOrEqualTo((long)LOSS_LENGTH));
         }
     }
@@ -256,8 +272,7 @@ public class DataLossAndRecoverySystemTest
 
         sendAndReceive(
             "aeron:udp?endpoint=localhost:10000|term-length=1m|init-term-id=0|term-id=0|term-offset=0",
-            1024 * 1024
-        );
+            1024 * 1024);
 
         try (Aeron aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver.aeronDirectoryName())))
         {
@@ -275,7 +290,7 @@ public class DataLossAndRecoverySystemTest
         TestMediaDriver.dontCoalesceNaksOnReceiverByDefault(context);
     }
 
-    private void sendAndReceive(final String channel, final int publicationLength)
+    private StreamNakCounters sendAndReceive(final String channel, final int publicationLength)
     {
         final int streamId = 10000;
         final byte[] input = new byte[publicationLength];
@@ -287,6 +302,7 @@ public class DataLossAndRecoverySystemTest
         int inputPosition = 0;
         final MutableInteger outputPosition = new MutableInteger(0);
 
+        final StreamNakCounters counters;
         try (Aeron aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver.aeronDirectoryName()));
             ExclusivePublication pub = aeron.addExclusivePublication(channel, streamId);
             Subscription sub = aeron.addSubscription(channel, streamId))
@@ -318,8 +334,28 @@ public class DataLossAndRecoverySystemTest
                     sub.poll(handler, 10);
                 }
             }
+
+            final CountersReader countersReader = aeron.countersReader();
+            final int receiverNaksSentCounterId = countersReader.findByTypeIdAndRegistrationId(
+                ReceiverNaksSent.TYPE_ID, sub.imageAtIndex(0).correlationId());
+            assertNotEquals(CountersReader.NULL_COUNTER_ID, receiverNaksSentCounterId);
+            final int senderNaksReceivedCounterId =
+                countersReader.findByTypeIdAndRegistrationId(SenderNaksReceived.TYPE_ID, pub.registrationId());
+            assertNotEquals(CountersReader.NULL_COUNTER_ID, senderNaksReceivedCounterId);
+
+            counters = new StreamNakCounters(
+                countersReader.getCounterValue(receiverNaksSentCounterId),
+                countersReader.getCounterValue(senderNaksReceivedCounterId));
+            assertThat(counters.naksSent, greaterThanOrEqualTo(1L));
+            assertThat(counters.naksReceived, greaterThanOrEqualTo(1L));
         }
 
         assertArrayEquals(input, output);
+
+        return counters;
+    }
+
+    private record StreamNakCounters(long naksSent, long naksReceived)
+    {
     }
 }

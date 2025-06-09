@@ -38,10 +38,10 @@ import static org.agrona.BitUtil.SIZE_OF_LONG;
  *  +---------------------------------------------------------------+
  * </pre>
  */
-public class RemoveMessageFlyweight extends CorrelatedMessageFlyweight
+public abstract class RemoveMessageFlyweight extends CorrelatedMessageFlyweight
 {
-    private static final int REGISTRATION_ID_OFFSET = CORRELATION_ID_FIELD_OFFSET + SIZE_OF_LONG;
-    private static final int MINIMUM_LENGTH = REGISTRATION_ID_OFFSET + SIZE_OF_LONG;
+    static final int REGISTRATION_ID_FIELD_OFFSET = CORRELATION_ID_FIELD_OFFSET + SIZE_OF_LONG;
+    private static final int MINIMUM_LENGTH = REGISTRATION_ID_FIELD_OFFSET + SIZE_OF_LONG;
 
     /**
      * Wrap the buffer at a given offset for updates.
@@ -64,7 +64,7 @@ public class RemoveMessageFlyweight extends CorrelatedMessageFlyweight
      */
     public long registrationId()
     {
-        return buffer.getLong(offset + REGISTRATION_ID_OFFSET);
+        return buffer.getLong(offset + REGISTRATION_ID_FIELD_OFFSET);
     }
 
     /**
@@ -75,7 +75,7 @@ public class RemoveMessageFlyweight extends CorrelatedMessageFlyweight
      */
     public RemoveMessageFlyweight registrationId(final long registrationId)
     {
-        buffer.putLong(offset + REGISTRATION_ID_OFFSET, registrationId);
+        buffer.putLong(offset + REGISTRATION_ID_FIELD_OFFSET, registrationId);
 
         return this;
     }

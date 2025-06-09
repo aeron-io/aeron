@@ -32,6 +32,7 @@ final class PublicationParams
     long lingerTimeoutNs;
     long entityTag = ChannelUri.INVALID_TAG;
     long untetheredWindowLimitTimeoutNs;
+    long untetheredLingerTimeoutNs;
     long untetheredRestingTimeoutNs;
     long responseCorrelationId = Aeron.NULL_VALUE;
     int termLength;
@@ -73,6 +74,7 @@ final class PublicationParams
         params.getSparse(channelUri, ctx);
         params.getSpiesSimulateConnection(channelUri, ctx);
         params.getUntetheredWindowLimitTimeout(channelUri, ctx);
+        params.getUntetheredLingerTimeout(channelUri, ctx);
         params.getUntetheredRestingTimeout(channelUri, ctx);
         params.getMaxResend(channelUri, ctx);
 
@@ -482,6 +484,16 @@ final class PublicationParams
     {
         untetheredWindowLimitTimeoutNs = getTimeoutNs(
             channelUri, UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME, ctx.untetheredWindowLimitTimeoutNs());
+    }
+
+    private void getUntetheredLingerTimeout(final ChannelUri channelUri, final MediaDriver.Context ctx)
+    {
+        untetheredLingerTimeoutNs =
+            getTimeoutNs(channelUri, UNTETHERED_LINGER_TIMEOUT_PARAM_NAME, ctx.untetheredLingerTimeoutNs());
+        if (Aeron.NULL_VALUE == untetheredLingerTimeoutNs)
+        {
+            untetheredLingerTimeoutNs = untetheredWindowLimitTimeoutNs;
+        }
     }
 
     private void getUntetheredRestingTimeout(final ChannelUri channelUri, final MediaDriver.Context ctx)

@@ -740,7 +740,8 @@ public final class ClusterBackup implements AutoCloseable
                         .useConductorAgentInvoker(true)
                         .awaitingIdleStrategy(YieldingIdleStrategy.INSTANCE)
                         .subscriberErrorHandler(RethrowingErrorHandler.INSTANCE)
-                        .clientLock(NoOpLock.INSTANCE));
+                        .clientLock(NoOpLock.INSTANCE)
+                        .clientName("cluster-backup clusterId=" + clusterId));
 
                 if (null == errorCounter)
                 {

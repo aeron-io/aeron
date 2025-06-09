@@ -24,7 +24,7 @@
 #include "util/Export.h"
 
 #if !defined(AERON_HIDE_DEPRECATION_MESSAGE)
-#pragma message ( "The C++ API is deprecated, please move to using the C++ Wrapper" )
+#pragma message ( "The C++ API will be removed in 1.50.0! Please move to using the C++ Wrapper API instead." )
 #endif
 
 /// Top namespace for Aeron C++ API

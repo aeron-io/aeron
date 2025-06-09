@@ -15,7 +15,15 @@
  */
 package io.aeron.archive;
 
-import io.aeron.*;
+import io.aeron.Aeron;
+import io.aeron.ChannelUri;
+import io.aeron.ChannelUriStringBuilder;
+import io.aeron.CommonContext;
+import io.aeron.Counter;
+import io.aeron.ExclusivePublication;
+import io.aeron.Image;
+import io.aeron.Publication;
+import io.aeron.Subscription;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.client.ArchiveException;
 import io.aeron.archive.client.RecordingDescriptorConsumer;
@@ -24,10 +32,17 @@ import io.aeron.archive.codecs.RecordingSignal;
 import io.aeron.archive.status.RecordingPos;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
+import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.LogBufferDescriptor;
 import io.aeron.samples.archive.RecordingDescriptor;
 import io.aeron.samples.archive.RecordingDescriptorCollector;
-import io.aeron.test.*;
+import io.aeron.test.EventLogExtension;
+import io.aeron.test.InterruptAfter;
+import io.aeron.test.InterruptingTestCallback;
+import io.aeron.test.SlowTest;
+import io.aeron.test.SystemTestWatcher;
+import io.aeron.test.TestContexts;
+import io.aeron.test.Tests;
 import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.CloseHelper;
 import org.agrona.SystemUtil;
@@ -35,8 +50,8 @@ import org.agrona.collections.Hashing;
 import org.agrona.collections.Long2LongHashMap;
 import org.agrona.collections.LongArrayList;
 import org.agrona.collections.LongHashSet;
+import org.agrona.collections.MutableInteger;
 import org.agrona.concurrent.status.CountersReader;
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -47,16 +62,34 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.LongConsumer;
 import java.util.function.Supplier;
 
 import static io.aeron.Aeron.NULL_VALUE;
-import static io.aeron.archive.ArchiveSystemTests.*;
+import static io.aeron.archive.ArchiveSystemTests.CATALOG_CAPACITY;
+import static io.aeron.archive.ArchiveSystemTests.RecordingResult;
+import static io.aeron.archive.ArchiveSystemTests.TERM_LENGTH;
+import static io.aeron.archive.ArchiveSystemTests.awaitSignal;
+import static io.aeron.archive.ArchiveSystemTests.consume;
+import static io.aeron.archive.ArchiveSystemTests.injectRecordingSignalConsumer;
+import static io.aeron.archive.ArchiveSystemTests.offer;
+import static io.aeron.archive.ArchiveSystemTests.recordData;
 import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
 import static io.aeron.archive.codecs.SourceLocation.LOCAL;
 import static org.hamcrest.CoreMatchers.endsWith;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.lessThan;
+import static org.hamcrest.Matchers.lessThanOrEqualTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 @ExtendWith({ EventLogExtension.class, InterruptingTestCallback.class })
 class BasicArchiveTest
@@ -704,7 +737,7 @@ class BasicArchiveTest
             while (System.currentTimeMillis() < halfPollDeadline)
             {
                 replaySubscription.poll((buffer, offset, length, header) -> {}, 20);
-                assertThat(replayImage.get().position(), Matchers.lessThanOrEqualTo(halfPosition));
+                assertThat(replayImage.get().position(), lessThanOrEqualTo(halfPosition));
             }
 
             boundingCounter.setRelease(tqPosition);
@@ -724,7 +757,7 @@ class BasicArchiveTest
             while (System.currentTimeMillis() < tqPollDeadline)
             {
                 replaySubscription.poll((buffer, offset, length, header) -> {}, 20);
-                assertThat(replayImage.get().position(), Matchers.lessThanOrEqualTo(tqPosition));
+                assertThat(replayImage.get().position(), lessThanOrEqualTo(tqPosition));
             }
         }
     }
@@ -781,8 +814,8 @@ class BasicArchiveTest
             Tests.yieldingIdle("Error not reported");
         }
 
-        assertThat(error, Matchers.containsString("mtuLength"));
-        assertThat(error, Matchers.containsString("fileIoMaxLength"));
+        assertThat(error, containsString("mtuLength"));
+        assertThat(error, containsString("fileIoMaxLength"));
     }
 
     @Test
@@ -823,7 +856,7 @@ class BasicArchiveTest
         assertEquals(recording1.recordingId(), collector.descriptors().get(0).recordingId());
 
         assertEquals(0, aeronArchive.listRecording(recording2.recordingId(), collector.reset()));
-        assertThat(collector.descriptors(), Matchers.hasSize(0));
+        assertThat(collector.descriptors(), hasSize(0));
 
         assertEquals(1, aeronArchive.listRecording(recording3.recordingId(), collector.reset()));
         assertEquals(recording3.recordingId(), collector.descriptors().get(0).recordingId());
@@ -939,6 +972,69 @@ class BasicArchiveTest
         {
             fail("seed=" + seed, e);
         }
+    }
+
+    @Test
+    @InterruptAfter(20)
+    void shouldStopReplayWithoutConsumingAnEntireRecording()
+    {
+        testStopReplay(aeronArchive::stopReplay);
+    }
+
+    @Test
+    @InterruptAfter(20)
+    void shouldStopAllReplaysWithoutConsumingAnEntireRecording()
+    {
+        testStopReplay((replaySessionId) -> aeronArchive.stopAllReplays(RecordingPos.NULL_RECORDING_ID));
+    }
+
+    private void testStopReplay(final LongConsumer stopCommand)
+    {
+        final long recordingId;
+        final long stopPosition;
+        try (ExclusivePublication publication =
+            aeronArchive.addRecordedExclusivePublication("aeron:ipc?term-length=64K", 555))
+        {
+            final int counterId = Tests.awaitRecordingCounterId(
+                aeron.countersReader(), publication.sessionId(), aeronArchive.archiveId());
+
+            offer(publication, 10000, "test-");
+
+            stopPosition = publication.position();
+            Tests.awaitPosition(aeron.countersReader(), counterId, stopPosition);
+            recordingId = RecordingPos.getRecordingId(aeron.countersReader(), counterId);
+        }
+
+        final String replayChannel = "aeron:udp?endpoint=localhost:17171";
+        final int replayStreamId = 777;
+        final long replaySessionId =
+            aeronArchive.startReplay(recordingId, 0, Long.MAX_VALUE, replayChannel, replayStreamId);
+        final AtomicBoolean imageUnavailable = new AtomicBoolean(false);
+        final Subscription subscription = aeron.addSubscription(
+            ChannelUri.addSessionId(replayChannel, (int)replaySessionId),
+            replayStreamId,
+            image -> {},
+            image -> imageUnavailable.set(true));
+        Tests.awaitConnected(subscription);
+        final Image image = subscription.imageAtIndex(0);
+        final MutableInteger counter = new MutableInteger();
+        final FragmentHandler fragmentHandler = (buffer, offset, length, header) -> counter.increment();
+        while (counter.get() < 5)
+        {
+            if (0 == image.poll(fragmentHandler, 1))
+            {
+                Tests.yield();
+            }
+        }
+
+        stopCommand.accept(replaySessionId);
+
+        final long startTimeNs = System.nanoTime();
+        Tests.await(imageUnavailable::get);
+        final long endTimeNs = System.nanoTime();
+        assertThat(endTimeNs - startTimeNs, lessThan(driver.context().imageLivenessTimeoutNs()));
+
+        subscription.close();
     }
 
     private static final class FailingRecordingDescriptorConsumer implements RecordingDescriptorConsumer

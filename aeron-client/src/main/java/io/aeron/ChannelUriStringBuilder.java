@@ -80,6 +80,7 @@ public final class ChannelUriStringBuilder
     private Long responseCorrelationId;
     private Long nakDelay;
     private Long untetheredWindowLimitTimeoutNs;
+    private Long untetheredLingerTimeoutNs;
     private Long untetheredRestingTimeoutNs;
     private boolean isSessionIdTagged;
 
@@ -146,6 +147,7 @@ public final class ChannelUriStringBuilder
         responseCorrelationId(channelUri);
         nakDelay(channelUri);
         untetheredWindowLimitTimeout(channelUri);
+        untetheredLingerTimeout(channelUri);
         untetheredRestingTimeout(channelUri);
         maxResend(channelUri);
         streamId(channelUri);
@@ -2136,6 +2138,57 @@ public final class ChannelUriStringBuilder
     }
 
     /**
+     * The time for an untethered subscription to linger.
+     *
+     * @param timeout specified either in nanoseconds or using a units suffix, e.g. 1ms, 1us.
+     * @return this for a fluent API.
+     * @see CommonContext#UNTETHERED_LINGER_TIMEOUT_PARAM_NAME
+     */
+    public ChannelUriStringBuilder untetheredLingerTimeout(final String timeout)
+    {
+        this.untetheredLingerTimeoutNs = null != timeout ?
+            parseDuration(UNTETHERED_LINGER_TIMEOUT_PARAM_NAME, timeout) : null;
+        return this;
+    }
+
+    /**
+     * The time for an untethered subscription to linger.
+     *
+     * @param timeout specified either in nanoseconds.
+     * @return this for a fluent API.
+     * @see CommonContext#UNTETHERED_LINGER_TIMEOUT_PARAM_NAME
+     */
+    public ChannelUriStringBuilder untetheredLingerTimeoutNs(final Long timeout)
+    {
+        this.untetheredLingerTimeoutNs = timeout;
+        return this;
+    }
+
+    /**
+     * The time for an untethered subscription to linger.
+     *
+     * @param channelUri the existing URI to extract the untetheredLingerTimeout from.
+     * @return this for a fluent API.
+     * @see CommonContext#UNTETHERED_LINGER_TIMEOUT_PARAM_NAME
+     */
+    public ChannelUriStringBuilder untetheredLingerTimeout(final ChannelUri channelUri)
+    {
+        this.untetheredLingerTimeout(channelUri.get(UNTETHERED_LINGER_TIMEOUT_PARAM_NAME));
+        return this;
+    }
+
+    /**
+     * The time for an untethered subscription to linger.
+     *
+     * @return the timeout in ns.
+     * @see CommonContext#UNTETHERED_LINGER_TIMEOUT_PARAM_NAME
+     */
+    public Long untetheredLingerTimeoutNs()
+    {
+        return untetheredLingerTimeoutNs;
+    }
+
+    /**
      * The timeout for when an untethered subscription is resting after not being able to keep up before it is allowed
      * to rejoin a stream.
      *
@@ -2401,6 +2454,7 @@ public final class ChannelUriStringBuilder
         appendParameter(sb, RESPONSE_CORRELATION_ID_PARAM_NAME, responseCorrelationId);
         appendParameter(sb, NAK_DELAY_PARAM_NAME, nakDelay);
         appendParameter(sb, UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME, untetheredWindowLimitTimeoutNs);
+        appendParameter(sb, UNTETHERED_LINGER_TIMEOUT_PARAM_NAME, untetheredLingerTimeoutNs);
         appendParameter(sb, UNTETHERED_RESTING_TIMEOUT_PARAM_NAME, untetheredRestingTimeoutNs);
         appendParameter(sb, MAX_RESEND_PARAM_NAME, maxResend);
         appendParameter(sb, STREAM_ID_PARAM_NAME, streamId);

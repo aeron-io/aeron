@@ -21,6 +21,7 @@ import io.aeron.driver.media.ReceiveChannelEndpoint;
 import io.aeron.driver.media.UdpChannel;
 import io.aeron.driver.reports.LossReport;
 import io.aeron.driver.status.ReceiverHwm;
+import io.aeron.driver.status.ReceiverNaksSent;
 import io.aeron.driver.status.ReceiverPos;
 import io.aeron.driver.status.SystemCounterDescriptor;
 import io.aeron.driver.status.SystemCounters;
@@ -45,8 +46,16 @@ import java.util.ArrayList;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
-import static io.aeron.logbuffer.LogBufferDescriptor.*;
-import static io.aeron.protocol.DataHeaderFlyweight.*;
+import static io.aeron.logbuffer.LogBufferDescriptor.LOG_META_DATA_LENGTH;
+import static io.aeron.logbuffer.LogBufferDescriptor.PARTITION_COUNT;
+import static io.aeron.logbuffer.LogBufferDescriptor.computePosition;
+import static io.aeron.logbuffer.LogBufferDescriptor.indexByPosition;
+import static io.aeron.logbuffer.LogBufferDescriptor.positionBitsToShift;
+import static io.aeron.protocol.DataHeaderFlyweight.BEGIN_AND_END_FLAGS;
+import static io.aeron.protocol.DataHeaderFlyweight.CURRENT_VERSION;
+import static io.aeron.protocol.DataHeaderFlyweight.HDR_TYPE_DATA;
+import static io.aeron.protocol.DataHeaderFlyweight.HDR_TYPE_PAD;
+import static io.aeron.protocol.DataHeaderFlyweight.HEADER_LENGTH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -86,6 +95,7 @@ class PublicationImageTest
     private final LossReport lossReport = mock(LossReport.class);
     private Position hwmPosition;
     private Position rcvPosition;
+    private AtomicCounter rcvNaksSent;
     private PublicationImage image;
 
     @BeforeEach
@@ -99,7 +109,8 @@ class PublicationImageTest
             .epochClock(epochClock)
             .imageLivenessTimeoutNs(TimeUnit.SECONDS.toNanos(10))
             .untetheredWindowLimitTimeoutNs(TimeUnit.SECONDS.toNanos(1))
-            .untetheredRestingTimeoutNs(TimeUnit.SECONDS.toNanos(1))
+            .untetheredLingerTimeoutNs(TimeUnit.MILLISECONDS.toNanos(150))
+            .untetheredRestingTimeoutNs(TimeUnit.MILLISECONDS.toNanos(800))
             .statusMessageTimeoutNs(TimeUnit.MILLISECONDS.toNanos(150))
             .systemCounters(new SystemCounters(countersManager))
             .lossReport(lossReport);
@@ -140,8 +151,10 @@ class PublicationImageTest
         final long registrationId = 73249234983274L;
         final ExpandableArrayBuffer tempBuffer = new ExpandableArrayBuffer();
         hwmPosition = ReceiverHwm.allocate(tempBuffer, countersManager, registrationId, SESSION_ID, STREAM_ID, channel);
-        rcvPosition = ReceiverPos.allocate(
-            tempBuffer, countersManager, registrationId, SESSION_ID, STREAM_ID, channel);
+        rcvPosition =
+            ReceiverPos.allocate(tempBuffer, countersManager, registrationId, SESSION_ID, STREAM_ID, channel);
+        rcvNaksSent =
+            ReceiverNaksSent.allocate(tempBuffer, countersManager, registrationId, SESSION_ID, STREAM_ID, channel);
 
         image = new PublicationImage(
             CORRELATION_ID,
@@ -156,10 +169,14 @@ class PublicationImageTest
             TERM_OFFSET,
             FLAGS,
             rawLog,
+            ctx.untetheredWindowLimitTimeoutNs(),
+            ctx.untetheredLingerTimeoutNs(),
+            ctx.untetheredRestingTimeoutNs(),
             feedbackDelayGenerator,
             subscriberPositions,
             hwmPosition,
             rcvPosition,
+            rcvNaksSent,
             SOURCE_IDENTITY,
             congestionControl);
 

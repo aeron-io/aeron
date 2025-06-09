@@ -243,9 +243,11 @@ final class ConsensusModuleAgent
         if (!aeron.isClosed())
         {
             aeron.removeUnavailableCounterHandler(unavailableCounterHandlerRegistrationId);
-            CloseHelper.close(consensusModuleExtension);
 
             final CountedErrorHandler errorHandler = ctx.countedErrorHandler();
+            CloseHelper.close(consensusModuleExtension);
+            CloseHelper.close(errorHandler, extensionArchive);
+
             logPublisher.disconnect(errorHandler);
             CloseHelper.close(logAdapter.subscription());
             tryStopLogRecording();

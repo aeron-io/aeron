@@ -1362,7 +1362,7 @@ void aeron_client_delete(aeron_driver_conductor_t *conductor, aeron_client_t *cl
     for (size_t i = 0; i < client->publication_links.length; i++)
     {
         aeron_driver_managed_resource_t *resource = client->publication_links.array[i].resource;
-        resource->decref(resource->clientd);
+        AERON_DRIVER_MANAGED_RESOURCE_DECREF(resource);
     }
 
     for (size_t i = 0; i < client->counter_links.length; i++)
@@ -1606,7 +1606,7 @@ void aeron_network_publication_entry_delete(
     aeron_network_publication_close(&conductor->counters_manager, entry->publication);
     entry->publication = NULL;
 
-    endpoint->conductor_fields.managed_resource.decref(endpoint->conductor_fields.managed_resource.clientd);
+    AERON_DRIVER_MANAGED_RESOURCE_DECREF(&(endpoint->conductor_fields.managed_resource));
 
     if (AERON_SEND_CHANNEL_ENDPOINT_STATUS_CLOSING == endpoint->conductor_fields.status)
     {
@@ -2037,8 +2037,7 @@ aeron_ipc_publication_t *aeron_driver_conductor_get_or_add_ipc_publication(
                 {
                     aeron_publication_link_t *link = &client->publication_links.array[client->publication_links.length];
 
-                    link->resource = &publication->conductor_fields.managed_resource;
-                    link->registration_id = registration_id;
+                    AERON_PUBLICATION_LINK_INIT(link, &publication->conductor_fields.managed_resource, registration_id);
                     client->publication_links.length++;
 
                     conductor->ipc_publications.array[conductor->ipc_publications.length++].publication = publication;
@@ -2051,12 +2050,10 @@ aeron_ipc_publication_t *aeron_driver_conductor_get_or_add_ipc_publication(
         {
             aeron_publication_link_t *link = &client->publication_links.array[client->publication_links.length];
 
-            link->resource = &publication->conductor_fields.managed_resource;
-            link->registration_id = registration_id;
+            AERON_PUBLICATION_LINK_INIT(link, &publication->conductor_fields.managed_resource, registration_id);
             client->publication_links.length++;
 
-            publication->conductor_fields.managed_resource.incref(
-                publication->conductor_fields.managed_resource.clientd);
+            AERON_DRIVER_MANAGED_RESOURCE_INCREF(&(publication->conductor_fields.managed_resource));
         }
     }
 
@@ -2253,6 +2250,7 @@ aeron_network_publication_t *aeron_driver_conductor_get_or_add_network_publicati
                 aeron_position_t snd_pos_position;
                 aeron_position_t snd_lmt_position;
                 aeron_atomic_counter_t snd_bpe_counter;
+                aeron_atomic_counter_t snd_naks_received_counter;
 
                 pub_pos_position.counter_id = aeron_counter_publisher_position_allocate(
                     &conductor->counters_manager, registration_id, session_id, stream_id, uri_length, uri);
@@ -2264,10 +2262,12 @@ aeron_network_publication_t *aeron_driver_conductor_get_or_add_network_publicati
                     &conductor->counters_manager, registration_id, session_id, stream_id, uri_length, uri);
                 snd_bpe_counter.counter_id = aeron_counter_sender_bpe_allocate(
                     &conductor->counters_manager, registration_id, session_id, stream_id, uri_length, uri);
+                snd_naks_received_counter.counter_id = aeron_counter_sender_naks_received_allocate(
+                    &conductor->counters_manager, registration_id, session_id, stream_id, uri_length, uri);
 
                 if (pub_pos_position.counter_id < 0 || pub_lmt_position.counter_id < 0 ||
                     snd_pos_position.counter_id < 0 || snd_lmt_position.counter_id < 0 ||
-                    snd_bpe_counter.counter_id < 0)
+                    snd_bpe_counter.counter_id < 0 || snd_naks_received_counter.counter_id < 0)
                 {
                     return NULL;
                 }
@@ -2285,6 +2285,8 @@ aeron_network_publication_t *aeron_driver_conductor_get_or_add_network_publicati
                     &conductor->counters_manager, snd_lmt_position.counter_id);
                 snd_bpe_counter.value_addr = aeron_counters_manager_addr(
                     &conductor->counters_manager, snd_bpe_counter.counter_id);
+                snd_naks_received_counter.value_addr = aeron_counters_manager_addr(
+                    &conductor->counters_manager, snd_naks_received_counter.counter_id);
 
                 if (params->has_position)
                 {
@@ -2314,19 +2316,18 @@ aeron_network_publication_t *aeron_driver_conductor_get_or_add_network_publicati
                         &snd_pos_position,
                         &snd_lmt_position,
                         &snd_bpe_counter,
+                        &snd_naks_received_counter,
                         flow_control_strategy,
                         params,
                         is_exclusive,
                         &conductor->system_counters) >= 0)
                 {
-                    endpoint->conductor_fields.managed_resource.incref(
-                        endpoint->conductor_fields.managed_resource.clientd);
+                    AERON_DRIVER_MANAGED_RESOURCE_INCREF(&(endpoint->conductor_fields.managed_resource));
                     aeron_driver_sender_proxy_on_add_publication(conductor->context->sender_proxy, publication);
 
                     aeron_publication_link_t *link = &client->publication_links.array[client->publication_links.length];
 
-                    link->resource = &publication->conductor_fields.managed_resource;
-                    link->registration_id = registration_id;
+                    AERON_PUBLICATION_LINK_INIT(link, &publication->conductor_fields.managed_resource, registration_id);
                     client->publication_links.length++;
 
                     conductor->network_publications.array[conductor->network_publications.length++].publication =
@@ -2340,12 +2341,10 @@ aeron_network_publication_t *aeron_driver_conductor_get_or_add_network_publicati
         {
             aeron_publication_link_t *link = &client->publication_links.array[client->publication_links.length];
 
-            link->resource = &publication->conductor_fields.managed_resource;
-            link->registration_id = registration_id;
+            AERON_PUBLICATION_LINK_INIT(link, &publication->conductor_fields.managed_resource, registration_id);
             client->publication_links.length++;
 
-            publication->conductor_fields.managed_resource.incref(
-                publication->conductor_fields.managed_resource.clientd);
+            AERON_DRIVER_MANAGED_RESOURCE_INCREF(&(publication->conductor_fields.managed_resource));
         }
 
         if (NULL != response_publication_image)
@@ -3317,16 +3316,35 @@ aeron_rb_read_action_t aeron_driver_conductor_on_command(
 
         case AERON_COMMAND_REMOVE_PUBLICATION:
         {
-            aeron_remove_command_t *command = (aeron_remove_command_t *)message;
+            aeron_remove_publication_command_t *command = (aeron_remove_publication_command_t *)message;
 
-            if (length < sizeof(aeron_remove_command_t))
+            aeron_remove_publication_command_t complete_command;
+            aeron_remove_publication_command_t *complete_command_p;
+
+            if (length < sizeof(aeron_remove_publication_command_t))
             {
-                goto malformed_command;
+                if (length == offsetof(aeron_remove_publication_command_t, flags)) // old aeron_remove_command_t has no flags field
+                {
+                    complete_command.correlated.client_id = command->correlated.client_id;
+                    complete_command.correlated.correlation_id = command->correlated.correlation_id;
+                    complete_command.registration_id = command->registration_id;
+                    complete_command.flags = 0;
+
+                    complete_command_p = &complete_command;
+                }
+                else
+                {
+                    goto malformed_command;
+                }
+            }
+            else
+            {
+                complete_command_p = command;
             }
 
             correlation_id = command->correlated.correlation_id;
 
-            result = aeron_driver_conductor_on_remove_publication(conductor, command);
+            result = aeron_driver_conductor_on_remove_publication(conductor, complete_command_p);
             break;
         }
 
@@ -3360,9 +3378,9 @@ aeron_rb_read_action_t aeron_driver_conductor_on_command(
 
         case AERON_COMMAND_REMOVE_SUBSCRIPTION:
         {
-            aeron_remove_command_t *command = (aeron_remove_command_t *)message;
+            aeron_remove_subscription_command_t *command = (aeron_remove_subscription_command_t *)message;
 
-            if (length < sizeof(aeron_remove_command_t))
+            if (length < sizeof(aeron_remove_subscription_command_t))
             {
                 goto malformed_command;
             }
@@ -3491,9 +3509,9 @@ aeron_rb_read_action_t aeron_driver_conductor_on_command(
 
         case AERON_COMMAND_REMOVE_COUNTER:
         {
-            aeron_remove_command_t *command = (aeron_remove_command_t *)message;
+            aeron_remove_counter_command_t *command = (aeron_remove_counter_command_t *)message;
 
-            if (length < sizeof(aeron_remove_command_t))
+            if (length < sizeof(aeron_remove_counter_command_t))
             {
                 goto malformed_command;
             }
@@ -4246,7 +4264,7 @@ error_cleanup:
     return -1;
 }
 
-int aeron_driver_conductor_on_remove_publication(aeron_driver_conductor_t *conductor, aeron_remove_command_t *command)
+int aeron_driver_conductor_on_remove_publication(aeron_driver_conductor_t *conductor, aeron_remove_publication_command_t *command)
 {
     int index = aeron_driver_conductor_find_client(conductor, command->correlated.client_id);
     if (index >= 0)
@@ -4259,7 +4277,11 @@ int aeron_driver_conductor_on_remove_publication(aeron_driver_conductor_t *condu
 
             if (command->registration_id == client->publication_links.array[i].registration_id)
             {
-                resource->decref(resource->clientd);
+                if (command->flags & AERON_COMMAND_REMOVE_PUBLICATION_FLAG_REVOKE)
+                {
+                    AERON_DRIVER_MANAGED_RESOURCE_REVOKE(resource);
+                }
+                AERON_DRIVER_MANAGED_RESOURCE_DECREF(resource);
 
                 aeron_array_fast_unordered_remove(
                     (uint8_t *)client->publication_links.array, sizeof(aeron_publication_link_t), i, last_index);
@@ -4709,7 +4731,7 @@ error_cleanup:
 }
 
 int aeron_driver_conductor_on_remove_subscription(
-    aeron_driver_conductor_t *conductor, aeron_remove_command_t *command)
+    aeron_driver_conductor_t *conductor, aeron_remove_subscription_command_t *command)
 {
     bool is_any_subscription_found = false;
 
@@ -5695,7 +5717,7 @@ int aeron_driver_conductor_on_add_counter(aeron_driver_conductor_t *conductor, a
     return -1;
 }
 
-int aeron_driver_conductor_on_remove_counter(aeron_driver_conductor_t *conductor, aeron_remove_command_t *command)
+int aeron_driver_conductor_on_remove_counter(aeron_driver_conductor_t *conductor, aeron_remove_counter_command_t *command)
 {
     int index = aeron_driver_conductor_find_client(conductor, command->correlated.client_id);
     if (index >= 0)
@@ -6017,10 +6039,23 @@ void aeron_driver_conductor_on_create_publication_image(void *clientd, void *ite
         goto error_cleanup;
     }
 
+    aeron_atomic_counter_t rcv_naks_sent;
+    rcv_naks_sent.counter_id = aeron_counter_receiver_naks_sent_allocate(
+        &conductor->counters_manager, registration_id, command->session_id, command->stream_id, uri_length, uri);
+    if (rcv_naks_sent.counter_id < 0)
+    {
+        aeron_counters_manager_free(&conductor->counters_manager, rcv_hwm_position.counter_id);
+        aeron_counters_manager_free(&conductor->counters_manager, rcv_pos_position.counter_id);
+        AERON_APPEND_ERR("stream_id=%d session_id=%d", command->stream_id, command->session_id);
+        goto error_cleanup;
+    }
+
     rcv_hwm_position.value_addr = aeron_counters_manager_addr(
         &conductor->counters_manager, rcv_hwm_position.counter_id);
     rcv_pos_position.value_addr = aeron_counters_manager_addr(
         &conductor->counters_manager, rcv_pos_position.counter_id);
+    rcv_naks_sent.value_addr = aeron_counters_manager_addr(
+        &conductor->counters_manager, rcv_naks_sent.counter_id);
 
     bool is_reliable = subscription_link.is_reliable;
     bool treat_as_multicast = aeron_driver_conductor_treat_image_as_multicast(
@@ -6042,6 +6077,7 @@ void aeron_driver_conductor_on_create_publication_image(void *clientd, void *ite
         command->term_offset,
         &rcv_hwm_position,
         &rcv_pos_position,
+        &rcv_naks_sent,
         congestion_control,
         &command->control_address,
         &command->src_address,

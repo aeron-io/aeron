@@ -30,8 +30,9 @@ bin/
 # the build
 build-local.properties
 .gradle/
-build*
+build/
 !buildSrc/
+!buildSrc/src/**/build
 cmake-build-debug/
 cmake-build-release/
 cmake-build-debug-*/

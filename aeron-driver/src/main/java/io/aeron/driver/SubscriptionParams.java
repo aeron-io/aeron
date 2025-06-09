@@ -15,11 +15,13 @@
  */
 package io.aeron.driver;
 
+import io.aeron.Aeron;
 import io.aeron.ChannelUri;
 import io.aeron.CommonContext;
 import io.aeron.driver.media.UdpChannel;
 import io.aeron.logbuffer.FrameDescriptor;
 import io.aeron.logbuffer.LogBufferDescriptor;
+import org.agrona.SystemUtil;
 
 import static io.aeron.CommonContext.*;
 
@@ -38,6 +40,9 @@ final class SubscriptionParams
     boolean isResponse = false;
     InferableBoolean group = InferableBoolean.INFER;
     int receiverWindowLength;
+    long untetheredWindowLimitTimeoutNs;
+    long untetheredLingerTimeoutNs;
+    long untetheredRestingTimeoutNs;
 
     static SubscriptionParams getSubscriptionParams(
         final ChannelUri channelUri, final MediaDriver.Context context, final int publisherTermBufferLength)
@@ -123,7 +128,38 @@ final class SubscriptionParams
 
         params.isResponse = CONTROL_MODE_RESPONSE.equals(channelUri.get(MDC_CONTROL_MODE_PARAM_NAME));
 
+        params.getUntetheredWindowLimitTimeout(channelUri, context);
+        params.getUntetheredLingerTimeout(channelUri, context);
+        params.getUntetheredRestingTimeout(channelUri, context);
         return params;
+    }
+
+    private void getUntetheredWindowLimitTimeout(final ChannelUri channelUri, final MediaDriver.Context ctx)
+    {
+        untetheredWindowLimitTimeoutNs = getTimeoutNs(
+            channelUri, UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME, ctx.untetheredWindowLimitTimeoutNs());
+    }
+
+    private void getUntetheredLingerTimeout(final ChannelUri channelUri, final MediaDriver.Context ctx)
+    {
+        untetheredLingerTimeoutNs =
+            getTimeoutNs(channelUri, UNTETHERED_LINGER_TIMEOUT_PARAM_NAME, ctx.untetheredLingerTimeoutNs());
+        if (Aeron.NULL_VALUE == untetheredLingerTimeoutNs)
+        {
+            untetheredLingerTimeoutNs = untetheredWindowLimitTimeoutNs;
+        }
+    }
+
+    private void getUntetheredRestingTimeout(final ChannelUri channelUri, final MediaDriver.Context ctx)
+    {
+        untetheredRestingTimeoutNs = getTimeoutNs(
+            channelUri, UNTETHERED_RESTING_TIMEOUT_PARAM_NAME, ctx.untetheredRestingTimeoutNs());
+    }
+
+    private static long getTimeoutNs(final ChannelUri channelUri, final String paramName, final long defaultValue)
+    {
+        final String timeoutString = channelUri.get(paramName);
+        return null != timeoutString ? SystemUtil.parseDuration(paramName, timeoutString) : defaultValue;
     }
 
     static void validateInitialWindowForRcvBuf(
@@ -149,23 +185,26 @@ final class SubscriptionParams
         }
     }
 
-    /**
-     * {@inheritDoc}
-     */
     public String toString()
     {
-        return "SubscriptionParams{" +
-            "initialTermId=" + initialTermId +
-            ", termId=" + termId +
-            ", termOffset=" + termOffset +
-            ", sessionId=" + sessionId +
-            ", hasJoinPosition=" + hasJoinPosition +
-            ", hasSessionId=" + hasSessionId +
-            ", isReliable=" + isReliable +
-            ", isRejoin=" + isRejoin +
-            ", isSparse=" + isSparse +
-            ", isTether=" + isTether +
-            ", group=" + group +
-            '}';
+        return "SubscriptionParams" +
+            "\n{" +
+            "\n    initialTermId=" + initialTermId +
+            "\n    termId=" + termId +
+            "\n    termOffset=" + termOffset +
+            "\n    sessionId=" + sessionId +
+            "\n    hasJoinPosition=" + hasJoinPosition +
+            "\n    hasSessionId=" + hasSessionId +
+            "\n    isReliable=" + isReliable +
+            "\n    isRejoin=" + isRejoin +
+            "\n    isSparse=" + isSparse +
+            "\n    isTether=" + isTether +
+            "\n    isResponse=" + isResponse +
+            "\n    group=" + group +
+            "\n    receiverWindowLength=" + receiverWindowLength +
+            "\n    untetheredWindowLimitTimeoutNs=" + untetheredWindowLimitTimeoutNs +
+            "\n    untetheredRestingTimeoutNs=" + untetheredRestingTimeoutNs +
+            "\n    untetheredLingerTimeoutNs=" + untetheredLingerTimeoutNs +
+            "\n}";
     }
 }

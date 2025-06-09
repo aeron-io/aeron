@@ -177,6 +177,11 @@ class ParameterisedFailingOptionsParsingTest :
 {
 };
 
+class RetransmitReceiverWindowMultipleParsingTest :
+    public testing::TestWithParam<std::tuple<const char *, size_t, int>>
+{
+};
+
 TEST_F(MinFlowControlTest, shouldFallbackToMinStrategy)
 {
     initialise_channel("aeron:udp?endpoint=224.20.30.39:24326|interface=localhost");
@@ -185,7 +190,7 @@ TEST_F(MinFlowControlTest, shouldFallbackToMinStrategy)
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001,0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 1, 1000, 1));
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 2, 2000, 1));
@@ -200,11 +205,259 @@ TEST_F(MinFlowControlTest, shouldUseMinStrategy)
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 1, 1000, 1));
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 2, 2000, 1));
     ASSERT_EQ(WINDOW_LENGTH + 994, apply_status_message(m_strategy, 3, 994, 2));
+}
+
+
+INSTANTIATE_TEST_SUITE_P(
+    RetransmitReceiverWindowMultipleParsingTests,
+    RetransmitReceiverWindowMultipleParsingTest,
+    testing::Values(
+        std::make_tuple("min,rrwm:2", 2, 0),
+        std::make_tuple("min,rrwm:2,t:100ms", 2, 0),
+        std::make_tuple("min,g:0,rrwm:2,t:100ms", 2, 0),
+        std::make_tuple("min,rrwm:12,t:100ms", 12, 0),
+        std::make_tuple("min,rrwm:0", 0, EINVAL),
+        std::make_tuple("min,rrwm:-1", 0, EINVAL),
+        std::make_tuple("min,rrwm:foo", 0, EINVAL),
+        std::make_tuple("min,rrwm: ", 0, EINVAL),
+        std::make_tuple("min,rrwm:,t:100ms", 0, EINVAL),
+        std::make_tuple("min,rrwm:", 0, EINVAL)
+    )
+);
+
+TEST_P(RetransmitReceiverWindowMultipleParsingTest, parsesRetransmitReceiverWindowMultipleFromUri)
+{
+    const char *fc_options = std::get<0>(GetParam());
+    const size_t expectedRrwm = std::get<1>(GetParam());
+    const int expectedErrorCode = std::get<2>(GetParam());
+    const int expectedReturnCode = expectedErrorCode == 0 ? 1 : -1;
+
+    aeron_flow_control_tagged_options_t options;
+    options.multicast_flow_control_rrwm = 0;
+    int returnCode = aeron_flow_control_parse_tagged_options(strlen(fc_options), fc_options, &options);
+
+    ASSERT_EQ(expectedReturnCode, returnCode);
+    ASSERT_EQ(expectedRrwm, options.multicast_flow_control_rrwm);
+    if (1 != expectedReturnCode)
+    {
+        ASSERT_EQ(expectedErrorCode, aeron_errcode());
+    }
+}
+
+TEST_F(FlowControlTest, unicastStrategyShouldUseDefaultWindowMultipleWhenNotSet)
+{
+    size_t expected_rrwm = AERON_UNICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE; // <-- expect default
+    size_t window_length = aeron_driver_context_get_rcv_initial_window_length(nullptr);
+    uint64_t expected_retransmit_length = window_length * expected_rrwm;
+
+    initialise_channel("aeron:udp?endpoint=localhost");
+
+    ASSERT_EQ(0, aeron_unicast_flow_control_strategy_supplier(
+        &m_strategy, context, &m_counters_manager, m_channel,
+        1001, 1001, 1001, 0, 64 * 1024));
+
+    ASSERT_NE(nullptr, m_strategy);
+
+    size_t rrwm = m_strategy->max_retransmission_length(m_strategy->state, 0, 3000000, 1024 * 1024 * 3, 1408);
+    ASSERT_EQ(expected_retransmit_length, rrwm);
+}
+
+TEST_F(FlowControlTest, unicastStrategyShouldUseWindowMultipleFromContext)
+{
+    size_t expected_rrwm = 2;
+    size_t window_length = aeron_driver_context_get_rcv_initial_window_length(nullptr);
+    uint64_t expected_retransmit_length = window_length * expected_rrwm;
+
+    initialise_channel("aeron:udp?endpoint=localhost");
+    context->unicast_flow_control_rrwm = expected_rrwm; // <-- expect context value
+
+    ASSERT_EQ(0, aeron_unicast_flow_control_strategy_supplier(
+        &m_strategy, context, &m_counters_manager, m_channel,
+        1001, 1001, 1001, 0, 64 * 1024));
+
+    ASSERT_NE(nullptr, m_strategy);
+
+    size_t rrwm = m_strategy->max_retransmission_length(m_strategy->state, 0, 3000000, 1024 * 1024 * 3, 1408);
+    ASSERT_EQ(expected_retransmit_length, rrwm);
+}
+
+TEST_F(MinFlowControlTest, minStrategyShouldUseDefaultWindowMultipleWhenNotSet)
+{
+    size_t expected_rrwm = AERON_MULTICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE; // <-- expect default
+    size_t window_length = aeron_driver_context_get_rcv_initial_window_length(nullptr);
+    uint64_t expected_retransmit_length = window_length * expected_rrwm;
+
+    initialise_channel("aeron:udp?endpoint=224.20.30.39:24326|fc=min");
+
+    ASSERT_EQ(0, aeron_min_flow_control_strategy_supplier(
+        &m_strategy, context, &m_counters_manager, m_channel,
+        1001, 1001, 1001, 0, 64 * 1024));
+
+    ASSERT_NE(nullptr, m_strategy);
+
+    size_t rrwm = m_strategy->max_retransmission_length(m_strategy->state, 0, 1000000, 1024 * 1024, 1408);
+    ASSERT_EQ(expected_retransmit_length, rrwm);
+}
+
+TEST_F(MinFlowControlTest, minStrategyShouldUseDefaultWindowMultipleFromContext)
+{
+    size_t expected_rrwm = 2;
+    size_t window_length = aeron_driver_context_get_rcv_initial_window_length(nullptr);
+    uint64_t expected_retransmit_length = window_length * expected_rrwm;
+
+    initialise_channel("aeron:udp?endpoint=224.20.30.39:24326|fc=min");
+
+    context->multicast_flow_control_rrwm = expected_rrwm; // <-- expect context value
+
+    ASSERT_EQ(0, aeron_min_flow_control_strategy_supplier(
+        &m_strategy, context, &m_counters_manager, m_channel,
+        1001, 1001, 1001, 0, 64 * 1024));
+
+    ASSERT_NE(nullptr, m_strategy);
+
+    size_t rrwm = m_strategy->max_retransmission_length(m_strategy->state, 0, 1000000, 1024 * 1024, 1408);
+    ASSERT_EQ(expected_retransmit_length, rrwm);
+}
+
+TEST_F(MinFlowControlTest, minStrategyShouldUseDefaultWindowMultipleFromUri)
+{
+    size_t expected_rrwm = 6;
+    initialise_channel("aeron:udp?endpoint=224.20.30.39:24326|fc=min,rrwm:6");  // <-- expect uri value
+
+    size_t window_length = aeron_driver_context_get_rcv_initial_window_length(nullptr);
+    uint64_t expected_retransmit_length = window_length * expected_rrwm;
+
+    context->multicast_flow_control_rrwm = 2;
+
+    ASSERT_EQ(0, aeron_min_flow_control_strategy_supplier(
+        &m_strategy, context, &m_counters_manager, m_channel,
+        1001, 1001, 1001, 0, 64 * 1024));
+
+    ASSERT_NE(nullptr, m_strategy);
+
+    size_t rrwm = m_strategy->max_retransmission_length(m_strategy->state, 0, 1000000, 1024 * 1024, 1408);
+    ASSERT_EQ(expected_retransmit_length, rrwm);
+}
+
+TEST_F(TaggedFlowControlTest, taggedStrategyShouldUseDefaultWindowMultipleWhenNotSet)
+{
+    size_t expected_rrwm = AERON_MULTICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE; // <-- expect default
+    size_t window_length = aeron_driver_context_get_rcv_initial_window_length(nullptr);
+    uint64_t expected_retransmit_length = window_length * expected_rrwm;
+
+    initialise_channel("aeron:udp?endpoint=224.20.30.39:24326|fc=tagged");
+
+    ASSERT_EQ(0, aeron_tagged_flow_control_strategy_supplier(
+        &m_strategy, context, &m_counters_manager, m_channel,
+        1001, 1001, 1001, 0, 64 * 1024));
+
+    ASSERT_NE(nullptr, m_strategy);
+
+    size_t rrwm = m_strategy->max_retransmission_length(m_strategy->state, 0, 1000000, 1024 * 1024, 1408);
+    ASSERT_EQ(expected_retransmit_length, rrwm);
+}
+
+TEST_F(TaggedFlowControlTest, taggedStrategyShouldUseDefaultWindowMultipleFromContext)
+{
+    size_t expected_rrwm = 2;
+    size_t window_length = aeron_driver_context_get_rcv_initial_window_length(nullptr);
+    uint64_t expected_retransmit_length = window_length * expected_rrwm;
+
+    initialise_channel("aeron:udp?endpoint=224.20.30.39:24326|fc=tagged");
+
+    context->multicast_flow_control_rrwm = expected_rrwm; // <-- expect context value
+
+    ASSERT_EQ(0, aeron_tagged_flow_control_strategy_supplier(
+        &m_strategy, context, &m_counters_manager, m_channel,
+        1001, 1001, 1001, 0, 64 * 1024));
+
+    ASSERT_NE(nullptr, m_strategy);
+
+    size_t rrwm = m_strategy->max_retransmission_length(m_strategy->state, 0, 1000000, 1024 * 1024, 1408);
+    ASSERT_EQ(expected_retransmit_length, rrwm);
+}
+
+TEST_F(TaggedFlowControlTest, taggedStrategyShouldUseDefaultWindowMultipleFromUri)
+{
+    size_t expected_rrwm = 6;
+    initialise_channel("aeron:udp?endpoint=224.20.30.39:24326|fc=tagged,rrwm:6");  // <-- expect uri value
+
+    size_t window_length = aeron_driver_context_get_rcv_initial_window_length(nullptr);
+    uint64_t expected_retransmit_length = window_length * expected_rrwm;
+
+    context->multicast_flow_control_rrwm = 2;
+
+    ASSERT_EQ(0, aeron_tagged_flow_control_strategy_supplier(
+        &m_strategy, context, &m_counters_manager, m_channel,
+        1001, 1001, 1001, 0, 64 * 1024));
+
+    ASSERT_NE(nullptr, m_strategy);
+
+    size_t rrwm = m_strategy->max_retransmission_length(m_strategy->state, 0, 1000000, 1024 * 1024, 1408);
+    ASSERT_EQ(expected_retransmit_length, rrwm);
+}
+
+TEST_F(MaxFlowControlTest, maxStrategyShouldUseDefaultWindowMultipleWhenNotSet)
+{
+    size_t expected_rrwm = AERON_MULTICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE; // <-- expect default
+    size_t window_length = aeron_driver_context_get_rcv_initial_window_length(nullptr);
+    uint64_t expected_retransmit_length = window_length * expected_rrwm;
+
+    initialise_channel("aeron:udp?endpoint=224.20.30.39:24326|fc=max");
+
+    ASSERT_EQ(0, aeron_default_multicast_flow_control_strategy_supplier(
+        &m_strategy, context, &m_counters_manager, m_channel,
+        1001, 1001, 1001, 0, 64 * 1024));
+
+    ASSERT_NE(nullptr, m_strategy);
+
+    size_t rrwm = m_strategy->max_retransmission_length(m_strategy->state, 0, 1000000, 1024 * 1024, 1408);
+    ASSERT_EQ(expected_retransmit_length, rrwm);
+}
+
+TEST_F(MaxFlowControlTest, maxStrategyShouldUseDefaultWindowMultipleFromContext)
+{
+    size_t expected_rrwm = 2;
+    size_t window_length = aeron_driver_context_get_rcv_initial_window_length(nullptr);
+    uint64_t expected_retransmit_length = window_length * expected_rrwm;
+
+    initialise_channel("aeron:udp?endpoint=224.20.30.39:24326|fc=max");
+
+    context->multicast_flow_control_rrwm = expected_rrwm; // <-- expect context value
+
+    ASSERT_EQ(0, aeron_default_multicast_flow_control_strategy_supplier(
+        &m_strategy, context, &m_counters_manager, m_channel,
+        1001, 1001, 1001, 0, 64 * 1024));
+
+    ASSERT_NE(nullptr, m_strategy);
+
+    size_t rrwm = m_strategy->max_retransmission_length(m_strategy->state, 0, 1000000, 1024 * 1024, 1408);
+    ASSERT_EQ(expected_retransmit_length, rrwm);
+}
+
+TEST_F(MaxFlowControlTest, maxStrategyShouldUseDefaultWindowMultipleFromUri)
+{
+    size_t expected_rrwm = 6;
+    initialise_channel("aeron:udp?endpoint=224.20.30.39:24326|fc=max,rrwm:6");  // <-- expect uri value
+
+    size_t window_length = aeron_driver_context_get_rcv_initial_window_length(nullptr);
+    uint64_t expected_retransmit_length = window_length * expected_rrwm;
+
+    context->multicast_flow_control_rrwm = 2;
+
+    ASSERT_EQ(0, aeron_default_multicast_flow_control_strategy_supplier(
+        &m_strategy, context, &m_counters_manager, m_channel,
+        1001, 1001, 1001, 0, 64 * 1024));
+
+    ASSERT_NE(nullptr, m_strategy);
+
+    size_t rrwm = m_strategy->max_retransmission_length(m_strategy->state, 0, 1000000, 1024 * 1024, 1408);
+    ASSERT_EQ(expected_retransmit_length, rrwm);
 }
 
 TEST_F(FlowControlTest, shouldUseMinStrategyAndIgnoreGroupParams)
@@ -215,7 +468,7 @@ TEST_F(FlowControlTest, shouldUseMinStrategyAndIgnoreGroupParams)
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 1, 1000, 1));
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 2, 2000, 1));
@@ -232,7 +485,7 @@ TEST_F(MinFlowControlTest, shouldTimeoutWithMinStrategy)
     ASSERT_EQ(0, aeron_default_multicast_flow_control_strategy_supplier(
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     ASSERT_EQ(WINDOW_LENGTH + position_recv_1, apply_status_message(m_strategy, 1, position_recv_1, 0, 100 * 1000000));
     ASSERT_EQ(WINDOW_LENGTH + position_recv_1, apply_status_message(m_strategy, 2, position_recv_2, 0, 200 * 1000000));
@@ -253,7 +506,7 @@ TEST_F(MaxFlowControlTest, shouldFallbackToMaxStrategy)
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 1, 1000, 1));
     ASSERT_EQ(WINDOW_LENGTH + 2000, apply_status_message(m_strategy, 2, 2000, 1));
@@ -268,7 +521,7 @@ TEST_F(MaxFlowControlTest, shouldUseMaxStrategy)
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 1, 1000, 1));
     ASSERT_EQ(WINDOW_LENGTH + 2000, apply_status_message(m_strategy, 2, 2000, 1));
@@ -288,7 +541,7 @@ TEST_F(TaggedFlowControlTest, shouldUseFallbackToTaggedStrategy)
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 1, 1000, 1));
     ASSERT_EQ(WINDOW_LENGTH + 2000, apply_status_message(m_strategy, 2, 2000, 1));
@@ -303,7 +556,7 @@ TEST_F(TaggedFlowControlTest, shouldUseTaggedStrategy)
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 1, 1000, 123));
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 2, 2000, 123));
@@ -327,7 +580,7 @@ TEST_F(TaggedFlowControlTest, shouldUseTaggedStrategyWith8ByteTag)
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 1, 1000, 3000000000));
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 2, 2000, 3000000000));
@@ -342,7 +595,7 @@ TEST_F(TaggedFlowControlTest, shouldUseTaggedStrategyWithOldAsfValue)
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     size_t initial_observations = aeron_distinct_error_log_num_observations(&error_log);
 
@@ -359,7 +612,7 @@ TEST_F(TaggedFlowControlTest, shouldUsePositionAndWindowFromStatusMessageWhenRec
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
 
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     ASSERT_EQ(WINDOW_LENGTH + 1000, apply_status_message(m_strategy, 1, 1000, 0));
 }
@@ -388,7 +641,7 @@ TEST_F(TaggedFlowControlTest, shouldTimeout)
     ASSERT_EQ(0, aeron_default_multicast_flow_control_strategy_supplier(
         &m_strategy, context, &m_counters_manager, m_channel,
         1001, 1001, 1001, 0, 64 * 1024));
-    ASSERT_FALSE(nullptr == m_strategy);
+    ASSERT_NE(nullptr, m_strategy);
 
     ASSERT_EQ(position_recv_1 + WINDOW_LENGTH,
               apply_status_message(m_strategy, 1, position_recv_1, 123, 100 * 1000000));

@@ -294,6 +294,7 @@ class AeronClusterAsyncConnectTest
             .leaderMemberId(leaderMemberId)
             .code(EventCode.OK)
             .version(ConsensusModule.Configuration.PROTOCOL_SEMANTIC_VERSION)
+            .leaderHeartbeatTimeoutNs(SessionEventEncoder.leaderHeartbeatTimeoutNsNullValue())
             .detail("you are now connected");
         final Image egressImage = mock(Image.class);
         final Header header = new Header(1, 16, egressImage);
@@ -319,6 +320,9 @@ class AeronClusterAsyncConnectTest
         assertEquals(leadershipTermId, aeronCluster.leadershipTermId());
         assertEquals(leaderMemberId, aeronCluster.leaderMemberId());
         assertEquals(clusterSessionId, aeronCluster.clusterSessionId());
+        assertEquals(
+            2 * ConsensusModule.Configuration.LEADER_HEARTBEAT_TIMEOUT_DEFAULT_NS,
+            context.newLeaderTimeoutNs());
 
         asyncConnect.close();
         verify(publication, never()).close();

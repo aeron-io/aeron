@@ -27,9 +27,8 @@
 
 #define AERON_MIN_FLOW_CONTROL_RECEIVERS_COUNTER_NAME ("fc-receivers")
 
-#define AERON_MAX_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE (4)
-#define AERON_UNICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE (16)
-#define AERON_MIN_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE (16)
+#define AERON_MULTICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE UINT32_C(4)
+#define AERON_UNICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE UINT32_C(16)
 
 typedef int64_t (*aeron_flow_control_strategy_on_idle_func_t)(
     void *state,
@@ -120,8 +119,15 @@ typedef struct aeron_flow_control_tagged_options_stct
         int32_t value;
     }
     group_min_size;
+    size_t multicast_flow_control_rrwm;
 }
 aeron_flow_control_tagged_options_t;
+
+typedef struct aeron_flow_control_max_options_stct
+{
+    size_t multicast_flow_control_rrwm;
+}
+aeron_flow_control_max_options_t;
 
 aeron_flow_control_strategy_supplier_func_t aeron_flow_control_strategy_supplier_load(const char *strategy_name);
 

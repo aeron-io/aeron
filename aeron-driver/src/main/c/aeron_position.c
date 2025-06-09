@@ -362,3 +362,43 @@ int32_t aeron_counter_sender_bpe_allocate(
         channel,
         "");
 }
+
+int32_t aeron_counter_sender_naks_received_allocate(
+    aeron_counters_manager_t *counters_manager,
+    int64_t registration_id,
+    int32_t session_id,
+    int32_t stream_id,
+    size_t channel_length,
+    const char *channel)
+{
+    return aeron_stream_counter_allocate(
+        counters_manager,
+        AERON_COUNTER_SENDER_NAKS_RECEIVED_NAME,
+        AERON_COUNTER_SENDER_NAKS_RECEIVED_TYPE_ID,
+        registration_id,
+        session_id,
+        stream_id,
+        channel_length,
+        channel,
+        "");
+}
+
+int32_t aeron_counter_receiver_naks_sent_allocate(
+    aeron_counters_manager_t *counters_manager,
+    int64_t registration_id,
+    int32_t session_id,
+    int32_t stream_id,
+    size_t channel_length,
+    const char *channel)
+{
+    return aeron_stream_counter_allocate(
+        counters_manager,
+        AERON_COUNTER_RECEIVER_NAKS_SENT_NAME,
+        AERON_COUNTER_RECEIVER_NAKS_SENT_TYPE_ID,
+        registration_id,
+        session_id,
+        stream_id,
+        channel_length,
+        channel,
+        "");
+}

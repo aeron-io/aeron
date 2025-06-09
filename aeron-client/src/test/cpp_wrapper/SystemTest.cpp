@@ -319,6 +319,8 @@ TEST_P(SystemTestParameterized, shouldFreeUnavailableImage)
         }
         while (nullptr == image);
 
+        // ref_cnt == 2 - because shared_ptr<Image>
+
         while (-1 == image_correlation_id)
         {
             std::this_thread::yield();
@@ -329,9 +331,14 @@ TEST_P(SystemTestParameterized, shouldFreeUnavailableImage)
         EXPECT_NE(image, image_by_index);
         EXPECT_EQ(image_correlation_id, image_by_index->correlationId());
 
+        // ref_cnt == 3 - because image_by_index
+
         raw_image =
             aeron_subscription_image_by_session_id(raw_subscription, publication->sessionId());
-        EXPECT_EQ(3, aeron_image_decr_refcnt(raw_image));
+        EXPECT_EQ(4, aeron_image_refcnt_acquire(raw_image));
+
+        EXPECT_EQ(0, aeron_subscription_image_release(raw_subscription, raw_image));
+        ASSERT_EQ(3, aeron_image_refcnt_acquire(raw_image));
     }
 
     EXPECT_EQ(1, aeron_image_refcnt_acquire(raw_image));

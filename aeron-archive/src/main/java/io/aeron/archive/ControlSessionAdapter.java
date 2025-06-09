@@ -1064,10 +1064,18 @@ class ControlSessionAdapter implements FragmentHandler
         }
     }
 
-    void removeControlSession(final long controlSessionId)
+    void removeControlSession(final long controlSessionId, final boolean sesionAborted, final String abortReason)
     {
-        controlSessionByIdMap.remove(controlSessionId);
+        final SessionInfo sessionInfo = controlSessionByIdMap.remove(controlSessionId);
+        if (null != sessionInfo && sesionAborted)
+        {
+            sessionInfo.image.reject(abortReason);
+        }
         conductor.removeReplayTokensForSession(controlSessionId);
+        if (!conductor.context().controlSessionsCounter().isClosed())
+        {
+            conductor.context().controlSessionsCounter().decrementRelease();
+        }
     }
 
     private ControlSession setupSessionAndChannelForReplay(

@@ -841,6 +841,18 @@ class ClusterTest
     }
 
     @Test
+    @InterruptAfter(20)
+    void shouldCallOnRoleChangeOnBecomingLeaderSingleNodeCluster()
+    {
+        cluster = aCluster().withStaticNodes(1).start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode leader = cluster.awaitLeader();
+
+        assertEquals(LEADER, leader.service().roleChangedTo());
+    }
+
+    @Test
     @InterruptAfter(40)
     void shouldLoseLeadershipWhenNoActiveQuorumOfFollowers()
     {

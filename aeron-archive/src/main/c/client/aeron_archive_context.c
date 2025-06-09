@@ -306,35 +306,6 @@ int aeron_archive_context_conclude(aeron_archive_context_t *ctx)
         goto error;
     }
 
-    if (NULL == ctx->aeron)
-    {
-        ctx->owns_aeron_client = true;
-
-        aeron_context_t *aeron_ctx;
-        if (aeron_context_init(&aeron_ctx) < 0 ||
-            aeron_context_set_dir(aeron_ctx, ctx->aeron_directory_name) < 0 ||
-            aeron_init(&ctx->aeron, aeron_ctx) < 0 ||
-            aeron_start(ctx->aeron) < 0)
-        {
-            AERON_APPEND_ERR("%s", "");
-            goto error;
-        }
-    }
-
-    if (NULL == ctx->idle_strategy_func)
-    {
-        ctx->owns_idle_strategy = true;
-        if (NULL == (ctx->idle_strategy_func = aeron_idle_strategy_load(
-            "backoff",
-            &ctx->idle_strategy_state,
-            "AERON_ARCHIVE_IDLE_STRATEGY",
-            NULL)))
-        {
-            AERON_APPEND_ERR("%s", "");
-            goto error;
-        }
-    }
-
     aeron_uri_string_builder_t request_channel;
     if (aeron_archive_apply_default_parameters(ctx, ctx->control_request_channel, &request_channel) < 0)
     {
@@ -350,12 +321,15 @@ int aeron_archive_context_conclude(aeron_archive_context_t *ctx)
         goto error;
     }
 
+    bool response_channels = true;
+    int32_t session_id = -1;
     const char* control_mode =
         aeron_uri_string_builder_get(&response_channel, AERON_UDP_CHANNEL_CONTROL_MODE_KEY);
     if (NULL == control_mode ||
         0 != strcmp(AERON_UDP_CHANNEL_CONTROL_MODE_RESPONSE_VALUE, control_mode))
     {
-        const int32_t session_id = aeron_randomised_int32();
+        response_channels = false;
+        session_id = aeron_randomised_int32();
         if (aeron_uri_string_builder_put_int32(&request_channel, AERON_URI_SESSION_ID_KEY, session_id) < 0 ||
             aeron_uri_string_builder_put_int32(&response_channel, AERON_URI_SESSION_ID_KEY, session_id) < 0)
         {
@@ -381,6 +355,62 @@ int aeron_archive_context_conclude(aeron_archive_context_t *ctx)
 
     aeron_uri_string_builder_close(&request_channel);
     aeron_uri_string_builder_close(&response_channel);
+
+    if (NULL == ctx->aeron)
+    {
+        ctx->owns_aeron_client = true;
+
+        aeron_context_t *aeron_ctx;
+        if (aeron_context_init(&aeron_ctx) < 0 ||
+            aeron_context_set_dir(aeron_ctx, ctx->aeron_directory_name) < 0)
+        {
+            AERON_APPEND_ERR("%s", "");
+            goto error;
+        }
+
+        char buff[AERON_COUNTER_MAX_CLIENT_NAME_LENGTH + 1];
+        buff[AERON_COUNTER_MAX_CLIENT_NAME_LENGTH] = 0;
+        int name_prefix_length = snprintf(buff, sizeof(buff), "archive-client ");
+
+        if (name_prefix_length >= 0 && name_prefix_length < AERON_COUNTER_MAX_CLIENT_NAME_LENGTH)
+        {
+            if (response_channels)
+            {
+                snprintf(buff + name_prefix_length, sizeof(buff) - name_prefix_length, "control-mode=response");
+            }
+            else
+            {
+                snprintf(buff + name_prefix_length, sizeof(buff) - name_prefix_length, "session-id=%" PRIi32, session_id);
+            }
+        }
+
+        if (aeron_context_set_client_name(aeron_ctx, buff) < 0)
+        {
+            AERON_APPEND_ERR("%s", "");
+            goto error;
+        }
+
+        if (aeron_init(&ctx->aeron, aeron_ctx) < 0 ||
+            aeron_start(ctx->aeron) < 0)
+        {
+            AERON_APPEND_ERR("%s", "");
+            goto error;
+        }
+    }
+
+    if (NULL == ctx->idle_strategy_func)
+    {
+        ctx->owns_idle_strategy = true;
+        if (NULL == (ctx->idle_strategy_func = aeron_idle_strategy_load(
+            "backoff",
+            &ctx->idle_strategy_state,
+            "AERON_ARCHIVE_IDLE_STRATEGY",
+            NULL)))
+        {
+            AERON_APPEND_ERR("%s", "");
+            goto error;
+        }
+    }
 
     return 0;
 

@@ -28,7 +28,6 @@ import io.aeron.protocol.RttMeasurementFlyweight;
 import io.aeron.protocol.StatusMessageFlyweight;
 import org.agrona.CloseHelper;
 import org.agrona.ErrorHandler;
-import org.agrona.SystemUtil;
 import org.agrona.collections.ArrayListUtil;
 import org.agrona.collections.ArrayUtil;
 import org.agrona.concurrent.CachedNanoClock;
@@ -44,8 +43,6 @@ import java.lang.invoke.VarHandle;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 
-import static io.aeron.CommonContext.UNTETHERED_RESTING_TIMEOUT_PARAM_NAME;
-import static io.aeron.CommonContext.UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME;
 import static io.aeron.ErrorCode.IMAGE_REJECTED;
 import static io.aeron.driver.TermCleaner.TERM_CLEANUP_BLOCK_LENGTH;
 import static io.aeron.driver.LossDetector.lossFound;
@@ -167,6 +164,7 @@ public final class PublicationImage
     private final long correlationId;
     private final long imageLivenessTimeoutNs;
     private final long untetheredWindowLimitTimeoutNs;
+    private final long untetheredLingerTimeoutNs;
     private final long untetheredRestingTimeoutNs;
     private final int sessionId;
     private final int streamId;
@@ -195,9 +193,11 @@ public final class PublicationImage
     private final AtomicCounter heartbeatsReceived;
     private final AtomicCounter statusMessagesSent;
     private final AtomicCounter nakMessagesSent;
+    private final AtomicCounter receiverNaksSent;
     private final AtomicCounter flowControlUnderRuns;
     private final AtomicCounter flowControlOverRuns;
     private final AtomicCounter lossGapFills;
+    private final AtomicCounter publicationImagesRevoked;
     private final EpochClock epochClock;
     private final NanoClock nanoClock;
     private final RawLog rawLog;
@@ -215,19 +215,23 @@ public final class PublicationImage
         final int termOffset,
         final short flags,
         final RawLog rawLog,
+        final long untetheredWindowLimitTimeoutNs,
+        final long untetheredLingerTimeoutNs,
+        final long untetheredRestingTimeoutNs,
         final FeedbackDelayGenerator lossFeedbackDelayGenerator,
         final ArrayList<SubscriberPosition> subscriberPositions,
         final Position hwmPosition,
         final Position rebuildPosition,
+        final AtomicCounter receiverNaksSent,
         final String sourceIdentity,
         final CongestionControl congestionControl)
     {
         this.correlationId = correlationId;
         this.imageLivenessTimeoutNs = ctx.imageLivenessTimeoutNs();
-        this.untetheredWindowLimitTimeoutNs = getTimeoutNsFromChannel(
-            channelEndpoint, UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME, ctx.untetheredWindowLimitTimeoutNs());
-        this.untetheredRestingTimeoutNs = getTimeoutNsFromChannel(
-            channelEndpoint, UNTETHERED_RESTING_TIMEOUT_PARAM_NAME, ctx.untetheredRestingTimeoutNs());
+        this.receiverNaksSent = receiverNaksSent;
+        this.untetheredWindowLimitTimeoutNs = untetheredWindowLimitTimeoutNs;
+        this.untetheredLingerTimeoutNs = untetheredLingerTimeoutNs;
+        this.untetheredRestingTimeoutNs = untetheredRestingTimeoutNs;
         this.smTimeoutNs = ctx.statusMessageTimeoutNs();
         this.channelEndpoint = channelEndpoint;
         this.sessionId = sessionId;
@@ -260,6 +264,7 @@ public final class PublicationImage
         flowControlUnderRuns = systemCounters.get(FLOW_CONTROL_UNDER_RUNS);
         flowControlOverRuns = systemCounters.get(FLOW_CONTROL_OVER_RUNS);
         lossGapFills = systemCounters.get(LOSS_GAP_FILLS);
+        publicationImagesRevoked = systemCounters.get(PUBLICATION_IMAGES_REVOKED);
 
         imageConnections = ArrayUtil.ensureCapacity(imageConnections, transportIndex + 1);
         imageConnections[transportIndex] = new ImageConnection(nowNs, controlAddress);
@@ -299,6 +304,7 @@ public final class PublicationImage
     {
         CloseHelper.close(errorHandler, hwmPosition);
         CloseHelper.close(errorHandler, rebuildPosition);
+        CloseHelper.close(errorHandler, receiverNaksSent);
         CloseHelper.closeAll(errorHandler, subscriberPositions);
 
         for (int i = 0, size = untetheredSubscriptions.size(); i < size; i++)
@@ -624,8 +630,6 @@ public final class PublicationImage
         final int transportIndex,
         final InetSocketAddress srcAddress)
     {
-        final boolean isEndOfStream = DataHeaderFlyweight.isEndOfStream(buffer);
-
         if (null != rejectionReason)
         {
             return 0;
@@ -648,14 +652,24 @@ public final class PublicationImage
                     timeOfLastPacketNs = nowNs;
                     final ImageConnection imageConnection = trackConnection(transportIndex, srcAddress, nowNs);
 
-                    if (isEndOfStream)
+                    if (DataHeaderFlyweight.isEndOfStream(buffer))
                     {
                         imageConnection.eosPosition = packetPosition;
                         imageConnection.isEos = true;
 
                         if (!this.isEndOfStream && isAllConnectedEos())
                         {
-                            LogBufferDescriptor.endOfStreamPosition(rawLog.metaData(), findEosPosition());
+                            final long eosPosition = findEosPosition();
+
+                            if (DataHeaderFlyweight.isRevoked(buffer))
+                            {
+                                isPublicationRevoked(rawLog.metaData(), true);
+
+                                logRevoke(eosPosition, sessionId(), streamId(), channel());
+                                publicationImagesRevoked.increment();
+                            }
+
+                            LogBufferDescriptor.endOfStreamPosition(rawLog.metaData(), eosPosition);
                             this.isEndOfStream = true;
                         }
                     }
@@ -686,6 +700,14 @@ public final class PublicationImage
         }
 
         return length;
+    }
+
+    private static void logRevoke(
+        final long revokedPos,
+        final int sessionId,
+        final int streamId,
+        final String channel)
+    {
     }
 
     /**
@@ -798,6 +820,11 @@ public final class PublicationImage
      */
     int processPendingLoss()
     {
+        if (isPublicationRevoked(rawLog.metaData()))
+        {
+            return 0;
+        }
+
         int workCount = 0;
         final long changeNumber = (long)END_LOSS_CHANGE_VH.getAcquire(this);
 
@@ -814,7 +841,9 @@ public final class PublicationImage
                 if (isReliable)
                 {
                     channelEndpoint.sendNakMessage(imageConnections, sessionId, streamId, termId, termOffset, length);
+                    // FIXME: Increment only if sent successfully
                     nakMessagesSent.incrementRelease();
+                    receiverNaksSent.incrementRelease();
                 }
                 else
                 {
@@ -908,17 +937,34 @@ public final class PublicationImage
     /**
      * {@inheritDoc}
      */
+    @SuppressWarnings("fallthrough")
     public void onTimeEvent(final long timeNs, final long timesMs, final DriverConductor conductor)
     {
         switch (state)
         {
             case ACTIVE:
-                checkUntetheredSubscriptions(timeNs, conductor);
+                if (isPublicationRevoked(rawLog.metaData()))
+                {
+                    state(State.DRAINING);
+                }
+                else
+                {
+                    checkUntetheredSubscriptions(timeNs, conductor);
+                }
                 break;
 
             case DRAINING:
-                if (isDrained() && ((timeOfLastStateChangeNs + (SM_EOS_MULTIPLE * smTimeoutNs)) - timeNs < 0))
+                if ((isDrained() && ((timeOfLastStateChangeNs + (SM_EOS_MULTIPLE * smTimeoutNs)) - timeNs < 0)) ||
+                    isPublicationRevoked(rawLog.metaData()))
                 {
+                    if (isPublicationRevoked(rawLog.metaData()))
+                    {
+                        isRebuilding = false;
+                        isSendingEosSm = true;
+
+                        nextSmDeadlineNs = timeNs - 1;
+                    }
+
                     conductor.transitionToLinger(this);
 
                     channelEndpoint.decRefImages();
@@ -1142,7 +1188,7 @@ public final class PublicationImage
                 }
                 else if (UntetheredSubscription.State.LINGER == untethered.state)
                 {
-                    if ((untethered.timeOfLastUpdateNs + untetheredWindowLimitTimeoutNs) - nowNs <= 0)
+                    if ((untethered.timeOfLastUpdateNs + untetheredLingerTimeoutNs) - nowNs <= 0)
                     {
                         subscriberPositions = ArrayUtil.remove(subscriberPositions, untethered.position);
                         untethered.state(UntetheredSubscription.State.RESTING, nowNs, streamId, sessionId);
@@ -1225,15 +1271,6 @@ public final class PublicationImage
         }
 
         return positions;
-    }
-
-    private long getTimeoutNsFromChannel(
-        final ReceiveChannelEndpoint channelEndpoint,
-        final String paramName,
-        final long defaultValueNs)
-    {
-        final String timeoutStr = channelEndpoint.subscriptionUdpChannel().channelUri().get(paramName);
-        return null != timeoutStr ? SystemUtil.parseDuration(paramName, timeoutStr) : defaultValueNs;
     }
 
     /**

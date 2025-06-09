@@ -464,6 +464,7 @@ int aeron_exclusive_publication_create(
     _publication->stream_id = stream_id;
     _publication->session_id = session_id;
     _publication->is_closed = false;
+    _publication->revoke_on_close = false;
 
     _publication->max_possible_position = ((int64_t)term_length << 31);
     _publication->max_payload_length = (size_t)(_publication->log_meta_data->mtu_length - AERON_DATA_HEADER_LENGTH);
@@ -499,12 +500,32 @@ int aeron_exclusive_publication_close(
         if (!is_closed)
         {
             AERON_SET_RELEASE(publication->is_closed, true);
+
             if (aeron_client_conductor_async_close_exclusive_publication(
                 publication->conductor, publication, on_close_complete, on_close_complete_clientd) < 0)
             {
+                AERON_APPEND_ERR("%s", "");
                 return -1;
             }
         }
+    }
+
+    return 0;
+}
+
+void aeron_exclusive_publication_revoke_on_close(aeron_exclusive_publication_t *publication)
+{
+    AERON_SET_RELEASE(publication->revoke_on_close, true);
+}
+
+int aeron_exclusive_publication_revoke(
+    aeron_exclusive_publication_t *publication, aeron_notification_t on_close_complete, void *on_close_complete_clientd)
+{
+    if (NULL != publication)
+    {
+        AERON_SET_RELEASE(publication->revoke_on_close, true);
+
+        return aeron_exclusive_publication_close(publication, on_close_complete, on_close_complete_clientd);
     }
 
     return 0;

@@ -1409,9 +1409,30 @@ public final class AeronCluster implements AutoCloseable
                 throw new ConcurrentConcludeException();
             }
 
-            if (NULL_VALUE == newLeaderTimeoutNs)
+            if (Strings.isEmpty(ingressChannel))
             {
-                newLeaderTimeoutNs = ConsensusModule.Configuration.LEADER_HEARTBEAT_TIMEOUT_DEFAULT_NS * 2;
+                throw new ConfigurationException("ingressChannel must be specified");
+            }
+
+            if (ingressChannel.startsWith(CommonContext.IPC_CHANNEL))
+            {
+                if (null != ingressEndpoints)
+                {
+                    throw new ConfigurationException(
+                        "AeronCluster.Context ingressEndpoints must be null when using IPC ingress");
+                }
+            }
+
+            if (Strings.isEmpty(egressChannel))
+            {
+                throw new ConfigurationException("egressChannel must be specified");
+            }
+
+            final ChannelUri egressChannelUri = ChannelUri.parse(egressChannel);
+            if (egressChannelUri.isUdp())
+            {
+                egressChannelUri.put(REJOIN_PARAM_NAME, "false");
+                egressChannel = egressChannelUri.toString();
             }
 
             if (null == aeron)
@@ -1419,7 +1440,8 @@ public final class AeronCluster implements AutoCloseable
                 aeron = Aeron.connect(
                     new Aeron.Context()
                         .aeronDirectoryName(aeronDirectoryName)
-                        .errorHandler(errorHandler));
+                        .errorHandler(errorHandler)
+                        .clientName("cluster-client"));
 
                 ownsAeronClient = true;
             }
@@ -1452,32 +1474,6 @@ public final class AeronCluster implements AutoCloseable
                         throw new ConfigurationException(
                             "controlledEgressListener must be specified on AeronCluster.Context");
                     };
-            }
-
-            if (Strings.isEmpty(ingressChannel))
-            {
-                throw new ConfigurationException("ingressChannel must be specified");
-            }
-
-            if (ingressChannel.startsWith(CommonContext.IPC_CHANNEL))
-            {
-                if (null != ingressEndpoints)
-                {
-                    throw new ConfigurationException(
-                        "AeronCluster.Context ingressEndpoints must be null when using IPC ingress");
-                }
-            }
-
-            if (Strings.isEmpty(egressChannel))
-            {
-                throw new ConfigurationException("egressChannel must be specified");
-            }
-
-            final ChannelUri egressChannelUri = ChannelUri.parse(egressChannel);
-            if (egressChannelUri.isUdp())
-            {
-                egressChannelUri.put(REJOIN_PARAM_NAME, "false");
-                egressChannel = egressChannelUri.toString();
             }
         }
 
@@ -2052,6 +2048,7 @@ public final class AeronCluster implements AutoCloseable
 
         private Image egressImage;
         private final long deadlineNs;
+        private long leaderHeartbeatTimeoutNs;
         private long correlationId = NULL_VALUE;
         private long clusterSessionId;
         private long leadershipTermId;
@@ -2390,6 +2387,7 @@ public final class AeronCluster implements AutoCloseable
                         leadershipTermId = egressPoller.leadershipTermId();
                         leaderMemberId = egressPoller.leaderMemberId();
                         clusterSessionId = egressPoller.clusterSessionId();
+                        leaderHeartbeatTimeoutNs = egressPoller.leaderHeartbeatTimeoutNs();
                         egressImage = egressPoller.egressImage();
                         state(State.CONCLUDE_CONNECT);
                         break;
@@ -2457,6 +2455,12 @@ public final class AeronCluster implements AutoCloseable
 
         private AeronCluster concludeConnect()
         {
+            if (ctx.newLeaderTimeoutNs() == NULL_VALUE)
+            {
+                ctx.newLeaderTimeoutNs(2 * (leaderHeartbeatTimeoutNs != NULL_VALUE ?
+                    leaderHeartbeatTimeoutNs : ConsensusModule.Configuration.LEADER_HEARTBEAT_TIMEOUT_DEFAULT_NS));
+            }
+
             final AeronCluster aeronCluster = new AeronCluster(
                 ctx,
                 messageHeaderEncoder,

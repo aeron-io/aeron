@@ -45,6 +45,12 @@ typedef struct aeron_publication_link_stct
 }
 aeron_publication_link_t;
 
+#define AERON_PUBLICATION_LINK_INIT(_link, _resource, _registration_id) \
+do {                                                                    \
+    link->resource = _resource;                                         \
+    link->registration_id = registration_id;                            \
+} while (0)
+
 typedef struct aeron_counter_link_stct
 {
     int32_t counter_id;
@@ -463,7 +469,7 @@ int aeron_driver_conductor_on_add_ipc_publication(
 int aeron_driver_conductor_on_add_network_publication(
     aeron_driver_conductor_t *conductor, aeron_publication_command_t *command, bool is_exclusive);
 
-int aeron_driver_conductor_on_remove_publication(aeron_driver_conductor_t *conductor, aeron_remove_command_t *command);
+int aeron_driver_conductor_on_remove_publication(aeron_driver_conductor_t *conductor, aeron_remove_publication_command_t *command);
 
 int aeron_driver_conductor_on_add_ipc_subscription(
     aeron_driver_conductor_t *conductor, aeron_subscription_command_t *command);
@@ -474,7 +480,7 @@ int aeron_driver_conductor_on_add_spy_subscription(
 int aeron_driver_conductor_on_add_network_subscription(
     aeron_driver_conductor_t *conductor, aeron_subscription_command_t *command);
 
-int aeron_driver_conductor_on_remove_subscription(aeron_driver_conductor_t *conductor, aeron_remove_command_t *command);
+int aeron_driver_conductor_on_remove_subscription(aeron_driver_conductor_t *conductor, aeron_remove_subscription_command_t *command);
 
 int aeron_driver_conductor_on_client_keepalive(aeron_driver_conductor_t *conductor, int64_t client_id);
 
@@ -517,7 +523,7 @@ void aeron_driver_conductor_on_delete_send_destination(void *clientd, void *cmd)
 
 int aeron_driver_conductor_on_add_counter(aeron_driver_conductor_t *conductor, aeron_counter_command_t *command);
 
-int aeron_driver_conductor_on_remove_counter(aeron_driver_conductor_t *conductor, aeron_remove_command_t *command);
+int aeron_driver_conductor_on_remove_counter(aeron_driver_conductor_t *conductor, aeron_remove_counter_command_t *command);
 
 int aeron_driver_conductor_on_add_static_counter(aeron_driver_conductor_t *conductor, aeron_static_counter_command_t *command);
 

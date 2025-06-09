@@ -155,16 +155,14 @@ final class ControlSession implements Session
         }
         else
         {
+            controlPublication.revokeOnClose();
             CloseHelper.close(conductor.context().countedErrorHandler(), controlPublication);
         }
 
-        controlSessionAdapter.removeControlSession(controlSessionId);
-        if (!conductor.context().controlSessionsCounter().isClosed())
-        {
-            conductor.context().controlSessionsCounter().decrementRelease();
-        }
+        final boolean sessionAborted = null != abortReason && !SESSION_CLOSED_MSG.equals(abortReason);
+        controlSessionAdapter.removeControlSession(controlSessionId, sessionAborted, abortReason);
 
-        if (null != abortReason && !SESSION_CLOSED_MSG.equals(abortReason))
+        if (sessionAborted)
         {
             conductor.errorHandler.onError(new ArchiveEvent(
                 "controlSessionId=" + controlSessionId + " (responseStreamId=" + controlPublicationStreamId +

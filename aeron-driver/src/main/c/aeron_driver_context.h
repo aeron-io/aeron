@@ -36,7 +36,7 @@
 
 #define AERON_COMMAND_RB_CAPACITY (128 * 1024)
 #define AERON_COMMAND_RB_RESERVE (1024)
-#define AERON_COMMAND_DRAIN_LIMIT (2)
+#define AERON_COMMAND_DRAIN_LIMIT (1)
 
 #define AERON_DRIVER_SENDER_IO_VECTOR_LENGTH_MAX (16)
 
@@ -47,9 +47,9 @@
 
 #define AERON_TO_CONDUCTOR_BUFFER_LENGTH_DEFAULT (1024 * 1024 + AERON_RB_TRAILER_LENGTH)
 #define AERON_TO_CLIENTS_BUFFER_LENGTH_DEFAULT (1024 * 1024 + AERON_BROADCAST_BUFFER_TRAILER_LENGTH)
-#define AERON_COUNTERS_VALUES_BUFFER_LENGTH_DEFAULT (1024 * 1024)
+#define AERON_COUNTERS_VALUES_BUFFER_LENGTH_DEFAULT (8 * 1024 * 1024)
 #define AERON_COUNTERS_VALUES_BUFFER_LENGTH_MAX (500 * 1024 * 1024)
-#define AERON_ERROR_BUFFER_LENGTH_DEFAULT (1024 * 1024)
+#define AERON_ERROR_BUFFER_LENGTH_DEFAULT (4 * 1024 * 1024)
 
 typedef struct aeron_driver_conductor_stct aeron_driver_conductor_t;
 
@@ -100,6 +100,20 @@ typedef void (*aeron_driver_resend_func_t)(
     size_t channel_length,
     const char *channel);
 
+typedef void (*aeron_driver_publication_revoke_func_t)(
+    int64_t revoked_pos,
+    int32_t session_id,
+    int32_t stream_id,
+    size_t channel_length,
+    const char *channel);
+
+typedef void (*aeron_driver_publication_image_revoke_func_t)(
+    int64_t revoked_pos,
+    int32_t session_id,
+    int32_t stream_id,
+    size_t channel_length,
+    const char *channel);
+
 typedef void (*aeron_driver_name_resolver_on_resolve_t)(
     aeron_name_resolver_t *name_resolver,
     int64_t duration_ns,
@@ -145,12 +159,15 @@ typedef struct aeron_driver_context_stct
     uint64_t timer_interval_ns;                             /* aeron.timer.interval = 1s */
     uint64_t counter_free_to_reuse_ns;                      /* aeron.counters.free.to.reuse.timeout = 1s */
     uint64_t untethered_window_limit_timeout_ns;            /* aeron.untethered.window.limit.timeout = 5s */
+    int64_t untethered_linger_timeout_ns;                   /* aeron.untethered.linger.timeout = -1 */
     uint64_t untethered_resting_timeout_ns;                 /* aeron.untethered.resting.timeout = 10s */
     uint64_t retransmit_unicast_delay_ns;                   /* aeron.retransmit.unicast.delay = 0 */
     uint64_t retransmit_unicast_linger_ns;                  /* aeron.retransmit.unicast.linger = 60ms */
     uint64_t nak_unicast_delay_ns;                          /* aeron.nak.unicast.delay = 60ms */
     uint64_t nak_unicast_retry_delay_ratio;                 /* aeron.nak.unicast.retry.delay.ratio = 100 */
     uint64_t nak_multicast_max_backoff_ns;                  /* aeron.nak.multicast.max.backoff = 60ms */
+    size_t unicast_flow_control_rrwm;                       /* aeron.unicast.flow.control.rrwm = 16 */
+    size_t multicast_flow_control_rrwm;                     /* aeron.multicast.flow.control.rrwm = 4 */
     uint64_t re_resolution_check_interval_ns;               /* aeron.driver.reresolution.check.interval = 1s */
     uint64_t low_file_store_warning_threshold;              /* aeron.low.file.store.warning.threshold = 160MB */
     size_t to_driver_buffer_length;                         /* aeron.conductor.buffer.length = 1MB + trailer*/
@@ -287,6 +304,8 @@ typedef struct aeron_driver_context_stct
         aeron_driver_nak_message_func_t send_nak_message;
         aeron_driver_nak_message_func_t on_nak_message;
         aeron_driver_resend_func_t resend;
+        aeron_driver_publication_revoke_func_t publication_revoke;
+        aeron_driver_publication_image_revoke_func_t publication_image_revoke;
     } log;
 
     aeron_driver_termination_validator_func_t termination_validator_func;

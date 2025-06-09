@@ -38,6 +38,7 @@ import org.agrona.concurrent.errors.ErrorConsumer;
 import org.agrona.concurrent.errors.ErrorLogReader;
 import org.agrona.concurrent.errors.LoggingErrorHandler;
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
+import org.agrona.concurrent.ringbuffer.RingBufferDescriptor;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -63,7 +64,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import static io.aeron.CncFileDescriptor.CNC_FILE;
+import static io.aeron.CncFileDescriptor.TO_DRIVER_BUFFER_LENGTH_FIELD_OFFSET;
 import static io.aeron.CncFileDescriptor.cncVersionOffset;
+import static io.aeron.CncFileDescriptor.createToDriverBuffer;
 import static java.lang.Long.getLong;
 import static java.lang.System.getProperty;
 import static java.nio.channels.FileChannel.MapMode.READ_WRITE;
@@ -445,6 +448,13 @@ public class CommonContext implements Cloneable
      * @since 1.45.0
      */
     public static final String UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME = "untethered-window-limit-timeout";
+
+    /**
+     * Parameter name to set explicit untethered linger timeout, e.g. {@code untethered-linger-timeout=10s}.
+     *
+     * @since 1.48.0
+     */
+    public static final String UNTETHERED_LINGER_TIMEOUT_PARAM_NAME = "untethered-linger-timeout";
 
     /**
      * Parameter name to set explicit untethered resting timeout, e.g. {@code untethered-resting-timeout=10s}.
@@ -1239,6 +1249,33 @@ public class CommonContext implements Cloneable
         try
         {
             return driverFilePageSize(metadata);
+        }
+        finally
+        {
+            BufferUtil.free(metadata);
+        }
+    }
+
+    /**
+     * Connect to the media driver and get the {@code nextCorrelationId}.
+     *
+     * @param aeronDirectory where driver is running.
+     * @param clock          to use.
+     * @param timeoutMs      for awaiting connection.
+     * @return next correlation id.
+     * @since 1.48.0
+     */
+    public static long nextCorrelationId(final File aeronDirectory, final EpochClock clock, final long timeoutMs)
+    {
+        final UnsafeBuffer metadata =
+            awaitCncFileCreation(new File(aeronDirectory, CNC_FILE), clock, clock.time() + timeoutMs);
+        try
+        {
+            final int correlationIdOffset =
+                metadata.getInt(TO_DRIVER_BUFFER_LENGTH_FIELD_OFFSET) - RingBufferDescriptor.TRAILER_LENGTH +
+                RingBufferDescriptor.CORRELATION_COUNTER_OFFSET;
+            final UnsafeBuffer toDriverBuffer = createToDriverBuffer(metadata.byteBuffer(), metadata);
+            return toDriverBuffer.getAndAddLong(correlationIdOffset, 1);
         }
         finally
         {

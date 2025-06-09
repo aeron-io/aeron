@@ -995,6 +995,7 @@ public final class Archive implements AutoCloseable
     public static final class Context implements Cloneable
     {
         private static final VarHandle IS_CONCLUDED_VH;
+
         static
         {
             try
@@ -1163,6 +1164,13 @@ public final class Archive implements AutoCloseable
                     "Archive.Context.recordingEventsEnabled is true");
             }
 
+            if (null != mediaDriverAgentInvoker && ArchiveThreadingMode.INVOKER != threadingMode)
+            {
+                throw new ConfigurationException(
+                    "Archive.Context.threadingMode(ArchiveThreadingMode.INVOKER) must be set if " +
+                    "Archive.Context.mediaDriverAgentInvoker is set");
+            }
+
             if (null == archiveDir)
             {
                 archiveDir = new File(archiveDirectoryName);
@@ -1222,6 +1230,8 @@ public final class Archive implements AutoCloseable
                 aeronDirectoryName = aeron.context().aeronDirectoryName();
             }
 
+            concludeArchiveId();
+
             if (null == markFile)
             {
                 if (errorBufferLength < ERROR_BUFFER_LENGTH_DEFAULT ||
@@ -1260,11 +1270,10 @@ public final class Archive implements AutoCloseable
                             .subscriberErrorHandler(RethrowingErrorHandler.INSTANCE)
                             .awaitingIdleStrategy(YieldingIdleStrategy.INSTANCE)
                             .clientLock(NoOpLock.INSTANCE)
-                            .clientName(NULL_VALUE != archiveId ? "archive-" + archiveId : "archive"));
+                            .clientName("archive archiveId=" + archiveId));
 
                     if (null == errorCounter)
                     {
-                        concludeArchiveId();
                         if (NULL_VALUE !=
                             ArchiveCounters.find(aeron.countersReader(), ARCHIVE_ERROR_COUNT_TYPE_ID, archiveId))
                         {
@@ -1278,8 +1287,6 @@ public final class Archive implements AutoCloseable
                     throw new ArchiveException(
                         "Aeron client instance must set Aeron.Context.useConductorInvoker(true)");
                 }
-
-                concludeArchiveId();
 
                 if (!(aeron.context().subscriberErrorHandler() instanceof RethrowingErrorHandler))
                 {
@@ -3716,8 +3723,15 @@ public final class Archive implements AutoCloseable
         {
             if (NULL_VALUE == archiveId)
             {
-                archiveId = aeron.clientId();
-                markFile.encoder().archiveId(archiveId);
+                if (null != aeron)
+                {
+                    archiveId = aeron.clientId();
+                }
+                else
+                {
+                    archiveId = CommonContext.nextCorrelationId(
+                        new File(aeronDirectoryName), epochClock, new CommonContext().driverTimeoutMs());
+                }
             }
         }
 

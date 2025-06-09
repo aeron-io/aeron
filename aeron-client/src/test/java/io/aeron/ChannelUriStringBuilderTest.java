@@ -17,13 +17,23 @@ package io.aeron;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 
-import static io.aeron.CommonContext.*;
-import static org.junit.jupiter.api.Assertions.*;
+import static io.aeron.CommonContext.MAX_RESEND_PARAM_NAME;
+import static io.aeron.CommonContext.PUBLICATION_WINDOW_LENGTH_PARAM_NAME;
+import static io.aeron.CommonContext.STREAM_ID_PARAM_NAME;
+import static io.aeron.CommonContext.UNTETHERED_LINGER_TIMEOUT_PARAM_NAME;
+import static io.aeron.CommonContext.UNTETHERED_RESTING_TIMEOUT_PARAM_NAME;
+import static io.aeron.CommonContext.UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ChannelUriStringBuilderTest
 {
@@ -337,5 +347,30 @@ class ChannelUriStringBuilderTest
         final ChannelUri uri = ChannelUri.parse("aeron:ipc");
         uri.put(PUBLICATION_WINDOW_LENGTH_PARAM_NAME, pubWnd);
         assertThrows(IllegalArgumentException.class, () -> new ChannelUriStringBuilder().publicationWindowLength(uri));
+    }
+
+    @ParameterizedTest
+    @CsvSource({ "1000,666,2002", "50,40,30" })
+    void shouldHandleUntetheredParameters(
+        final long untetheredWindowLimitTimeoutNs,
+        final long untetheredLingerTimeoutNs,
+        final long untetheredRestingTimeoutNs)
+    {
+        final ChannelUriStringBuilder builder = new ChannelUriStringBuilder("aeron:ipc")
+            .untetheredWindowLimitTimeoutNs(untetheredWindowLimitTimeoutNs)
+            .untetheredLingerTimeoutNs(untetheredLingerTimeoutNs)
+            .untetheredRestingTimeoutNs(untetheredRestingTimeoutNs);
+
+        assertEquals(untetheredWindowLimitTimeoutNs, builder.untetheredWindowLimitTimeoutNs());
+        assertEquals(untetheredLingerTimeoutNs, builder.untetheredLingerTimeoutNs());
+        assertEquals(untetheredRestingTimeoutNs, builder.untetheredRestingTimeoutNs());
+
+        final ChannelUri uri = ChannelUri.parse(builder.build());
+        assertEquals(
+            Long.toString(untetheredWindowLimitTimeoutNs), uri.get(UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME));
+        assertEquals(
+            Long.toString(untetheredLingerTimeoutNs), uri.get(UNTETHERED_LINGER_TIMEOUT_PARAM_NAME));
+        assertEquals(
+            Long.toString(untetheredRestingTimeoutNs), uri.get(UNTETHERED_RESTING_TIMEOUT_PARAM_NAME));
     }
 }

@@ -199,10 +199,9 @@ public final class ClusterBackupAgent implements Agent
         {
             aeron.removeUnavailableCounterHandler(unavailableCounterHandlerRegistrationId);
 
-            stopRecording();
+            CloseHelper.close(ctx.countedErrorHandler(), snapshotReplication);
             stopReplay();
-
-            CloseHelper.close(snapshotReplication);
+            stopRecording();
 
             if (!ctx.ownsAeronClient())
             {

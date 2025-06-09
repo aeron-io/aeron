@@ -76,6 +76,9 @@ typedef struct aeron_logbuffer_metadata_stct
     uint8_t signal_eos;
     uint8_t spies_simulate_connection;
     uint8_t tether;
+    uint8_t is_publication_revoked;
+    uint8_t pad3[3 * sizeof(uint8_t)];
+    int64_t untethered_linger_timeout_ns;
 }
 aeron_logbuffer_metadata_t;
 #pragma pack(pop)
@@ -255,6 +258,7 @@ inline void aeron_logbuffer_metadata_init(
     int64_t response_correlation_id,
     int64_t linger_timeout_ns,
     int64_t untethered_window_limit_timeout_ns,
+    int64_t untethered_linger_timeout_ns,
     int64_t untethered_resting_timeout_ns,
     uint8_t group,
     uint8_t is_response,
@@ -293,6 +297,7 @@ inline void aeron_logbuffer_metadata_init(
     log_meta_data->response_correlation_id = response_correlation_id;
     log_meta_data->linger_timeout_ns = linger_timeout_ns;
     log_meta_data->untethered_window_limit_timeout_ns = untethered_window_limit_timeout_ns;
+    log_meta_data->untethered_linger_timeout_ns = untethered_linger_timeout_ns;
     log_meta_data->untethered_resting_timeout_ns = untethered_resting_timeout_ns;
     log_meta_data->group = group;
     log_meta_data->is_response = is_response;
@@ -302,6 +307,7 @@ inline void aeron_logbuffer_metadata_init(
     log_meta_data->signal_eos = signal_eos;
     log_meta_data->spies_simulate_connection = spies_simulate_connection;
     log_meta_data->tether = tether;
+    log_meta_data->is_publication_revoked = (uint8_t)false;
 }
 
 inline void aeron_logbuffer_apply_default_header(uint8_t *log_meta_data_buffer, uint8_t *buffer)

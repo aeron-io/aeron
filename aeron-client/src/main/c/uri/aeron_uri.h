@@ -80,6 +80,7 @@ aeron_uri_params_t;
 #define AERON_URI_RESPONSE_CORRELATION_ID_KEY "response-correlation-id"
 #define AERON_URI_NAK_DELAY_KEY "nak-delay"
 #define AERON_URI_UNTETHERED_WINDOW_LIMIT_TIMEOUT_KEY "untethered-window-limit-timeout"
+#define AERON_URI_UNTETHERED_LINGER_TIMEOUT_KEY "untethered-linger-timeout"
 #define AERON_URI_UNTETHERED_RESTING_TIMEOUT_KEY "untethered-resting-timeout"
 #define AERON_URI_MAX_RESEND_KEY "max-resend"
 #define AERON_URI_STREAM_ID_KEY "stream-id"

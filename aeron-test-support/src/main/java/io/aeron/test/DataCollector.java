@@ -446,27 +446,39 @@ public final class DataCollector
                 new SimpleFileVisitor<>()
                 {
                     public FileVisitResult preVisitDirectory(final Path dir, final BasicFileAttributes attrs)
-                        throws IOException
                     {
-                        final Path dstDir = dst.resolve(src.relativize(dir));
-                        ensurePathExists(dstDir);
-                        Files.copy(dir, dstDir, COPY_ATTRIBUTES);
-
-                        return FileVisitResult.CONTINUE;
-                    }
-
-                    public FileVisitResult visitFile(final Path file, final BasicFileAttributes attrs)
-                        throws IOException
-                    {
-                        if (fileFilter.test(file))
+                        try
                         {
-                            Files.copy(file, dst.resolve(src.relativize(file)), COPY_ATTRIBUTES);
+                            final Path dstDir = dst.resolve(src.relativize(dir));
+                            ensurePathExists(dstDir);
+                            Files.copy(dir, dstDir, COPY_ATTRIBUTES);
+                        }
+                        catch (final IOException e)
+                        {
+                            System.err.println("Failed to copy directory " + dir + ", skipping.");
                         }
 
                         return FileVisitResult.CONTINUE;
                     }
 
-                    public FileVisitResult visitFileFailed(final Path file, final IOException exc) throws IOException
+                    public FileVisitResult visitFile(final Path file, final BasicFileAttributes attrs)
+                    {
+                        try
+                        {
+                            if (fileFilter.test(file))
+                            {
+                                Files.copy(file, dst.resolve(src.relativize(file)), COPY_ATTRIBUTES);
+                            }
+                        }
+                        catch (final IOException e)
+                        {
+                            System.err.println("Failed to copy file " + file + ", skipping.");
+                        }
+
+                        return FileVisitResult.CONTINUE;
+                    }
+
+                    public FileVisitResult visitFileFailed(final Path file, final IOException exc)
                     {
                         // Ignore failure visiting file.
                         return FileVisitResult.CONTINUE;

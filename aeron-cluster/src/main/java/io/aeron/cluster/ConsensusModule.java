@@ -1984,7 +1984,7 @@ public final class ConsensusModule implements AutoCloseable
 
             if (null == egressPublisher)
             {
-                egressPublisher = new EgressPublisher();
+                egressPublisher = new EgressPublisher(leaderHeartbeatTimeoutNs);
             }
 
             final ChannelUri channelUri = parse(logChannel());

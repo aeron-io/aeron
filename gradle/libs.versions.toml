@@ -1,21 +1,22 @@
 [versions]
-agrona = "2.1.0"
+agrona = "2.2.2"
 asciidoctorj = "2.5.13"
 asm = "9.8"
 bnd = "7.1.0"
 byteBuddy = "1.17.5"
-checkstyle = "10.23.1"
+checkstyle = "10.25.0"
 commons-codec = "1.15"
 commons-lang3 = "3.8.1"
 findbugs = "3.0.1"
 hamcrest = "3.0"
 hdrHistogram = "2.2.2"
 httpcore = "4.4.14"
-jgit = "6.10.0.202406032230-r"
-junit = "5.12.2"
+jgit = "7.2.1.202505142326-r"
+json = "20250517"
+junit = "5.13.1"
 mockito = "5.18.0"
 plexus = "3.3.0"
-sbe = "1.34.1"
+sbe = "1.35.3"
 shadow = "8.3.6"
 versions = "0.52.0"
 
@@ -36,6 +37,7 @@ hamcrest = { group = "org.hamcrest", name = "hamcrest", version.ref = "hamcrest"
 hdrHistogram = { group = "org.hdrhistogram", name = "HdrHistogram", version.ref = "hdrHistogram" }
 httpcore = { group = "org.apache.httpcomponents", name = "httpcore", version.ref = "httpcore" }
 jgit = { group = "org.eclipse.jgit", name = "org.eclipse.jgit", version.ref = "jgit" }
+json = { group = "org.json", name = "json", version.ref = "json" }
 junit-bom = { group = "org.junit", name = "junit-bom", version.ref = "junit" }
 mockito = { group = "org.mockito", name = "mockito-core", version.ref = "mockito" }
 plexus-utils = { group = "org.codehaus.plexus", name = "plexus-utils", version.ref = "plexus" }

@@ -18,6 +18,7 @@ package io.aeron;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
 import io.aeron.logbuffer.FragmentHandler;
+import io.aeron.logbuffer.LogBufferDescriptor;
 import io.aeron.protocol.DataHeaderFlyweight;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
@@ -28,6 +29,7 @@ import org.agrona.CloseHelper;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -41,6 +43,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Arrays.asList;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -51,14 +54,20 @@ class UntetheredSubscriptionTest
     {
         return asList(
             "aeron:ipc?term-length=64k",
+
             "aeron:udp?endpoint=localhost:24325|term-length=64k",
             "aeron-spy:aeron:udp?endpoint=localhost:24325|term-length=64k",
 
-            "aeron:ipc?term-length=64k|untethered-window-limit-timeout=50ms|untethered-resting-timeout=50ms",
+            "aeron:ipc?term-length=64k|untethered-window-limit-timeout=50ms|" +
+            "untethered-resting-timeout=50ms|untethered-linger-timeout=25ms",
+
             "aeron:udp?endpoint=localhost:24325|term-length=64k|" +
-            "untethered-window-limit-timeout=50ms|untethered-resting-timeout=50ms",
+            "untethered-window-limit-timeout=50ms|untethered-resting-timeout=50ms|" +
+            "untethered-linger-timeout=25ms",
+
             "aeron-spy:aeron:udp?endpoint=localhost:24325|term-length=64k|" +
-            "untethered-window-limit-timeout=50ms|untethered-resting-timeout=50ms"
+            "untethered-window-limit-timeout=50ms|untethered-resting-timeout=50ms|" +
+            "untethered-linger-timeout=25ms"
         );
     }
 
@@ -94,12 +103,16 @@ class UntetheredSubscriptionTest
             .threadingMode(ThreadingMode.SHARED);
 
         final ChannelUri channelUri = ChannelUri.parse(channel);
-        if (!channelUri.containsKey("untethered-window-limit-timeout"))
+        if (!channelUri.containsKey(CommonContext.UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME))
         {
             context.untetheredWindowLimitTimeoutNs(TimeUnit.MILLISECONDS.toNanos(50));
         }
+        if (!channelUri.containsKey(CommonContext.UNTETHERED_LINGER_TIMEOUT_PARAM_NAME))
+        {
+            context.untetheredWindowLimitTimeoutNs(TimeUnit.MILLISECONDS.toNanos(25));
+        }
 
-        if (!channelUri.containsKey("untethered-resting-timeout"))
+        if (!channelUri.containsKey(CommonContext.UNTETHERED_RESTING_TIMEOUT_PARAM_NAME))
         {
             context.untetheredRestingTimeoutNs(TimeUnit.MILLISECONDS.toNanos(50));
         }
@@ -234,6 +247,69 @@ class UntetheredSubscriptionTest
                     aeron.conductorAgentInvoker().invoke();
                 }
             }
+        }
+    }
+
+    @Test
+    @InterruptAfter(10)
+    void shouldStoreUntetheredTimeoutsInLogBufferMetadata()
+    {
+        final String channel = "aeron:udp?term-length=64k|endpoint=localhost:5555";
+        launch("aeron:ipc");
+
+        final int streamId = 1142;
+        final ChannelUriStringBuilder publicationBuilder =
+            new ChannelUriStringBuilder(channel)
+            .untetheredWindowLimitTimeoutNs(TimeUnit.MILLISECONDS.toNanos(150))
+            .untetheredLingerTimeoutNs(TimeUnit.MILLISECONDS.toNanos(68))
+            .untetheredRestingTimeoutNs(TimeUnit.MILLISECONDS.toNanos(140));
+        final ExclusivePublication publication = aeron.addExclusivePublication(publicationBuilder.build(), streamId);
+
+        final ChannelUriStringBuilder subscriptionBuilder =
+            new ChannelUriStringBuilder(channel)
+            .untetheredWindowLimitTimeoutNs(TimeUnit.SECONDS.toNanos(200))
+            .untetheredLingerTimeoutNs(TimeUnit.SECONDS.toNanos(300))
+            .untetheredRestingTimeoutNs(TimeUnit.SECONDS.toNanos(444));
+        final Subscription subscription = aeron.addSubscription(subscriptionBuilder.build(), streamId);
+        while (!subscription.isConnected())
+        {
+            aeron.conductorAgentInvoker().invoke();
+        }
+
+        assertUntetheredParametersInLogBufferMetadata(
+            "publications",
+            publication.registrationId(),
+            publicationBuilder.untetheredWindowLimitTimeoutNs(),
+            publicationBuilder.untetheredLingerTimeoutNs(),
+            publicationBuilder.untetheredRestingTimeoutNs());
+
+        assertUntetheredParametersInLogBufferMetadata(
+            "images",
+            subscription.imageAtIndex(0).correlationId(),
+            subscriptionBuilder.untetheredWindowLimitTimeoutNs(),
+            subscriptionBuilder.untetheredLingerTimeoutNs(),
+            subscriptionBuilder.untetheredRestingTimeoutNs());
+    }
+
+    private void assertUntetheredParametersInLogBufferMetadata(
+        final String directory,
+        final long registrationId,
+        final long expectedWindowLimitTimeoutNs,
+        final long expectedLingerTimeoutNs,
+        final long expectedRestingTmeoutNs)
+    {
+        try (LogBuffers logBuffers = new LogBuffers(
+            driver.aeronDirectoryName() + "/" + directory + "/" + registrationId + ".logbuffer"))
+        {
+            assertEquals(
+                expectedWindowLimitTimeoutNs,
+                LogBufferDescriptor.untetheredWindowLimitTimeoutNs(logBuffers.metaDataBuffer()));
+            assertEquals(
+                expectedLingerTimeoutNs,
+                LogBufferDescriptor.untetheredLingerTimeoutNs(logBuffers.metaDataBuffer()));
+            assertEquals(
+                expectedRestingTmeoutNs,
+                LogBufferDescriptor.untetheredRestingTimeoutNs(logBuffers.metaDataBuffer()));
         }
     }
 }

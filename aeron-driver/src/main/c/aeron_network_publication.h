@@ -66,6 +66,7 @@ typedef struct aeron_network_publication_stct
     aeron_position_t snd_pos_position;
     aeron_position_t snd_lmt_position;
     aeron_atomic_counter_t snd_bpe_counter;
+    aeron_atomic_counter_t snd_naks_received_counter;
     aeron_retransmit_handler_t retransmit_handler;
     aeron_logbuffer_metadata_t *log_meta_data;
     aeron_send_channel_endpoint_t *endpoint;
@@ -91,6 +92,7 @@ typedef struct aeron_network_publication_stct
     int64_t unblock_timeout_ns;
     int64_t connection_timeout_ns;
     int64_t untethered_window_limit_timeout_ns;
+    int64_t untethered_linger_timeout_ns;
     int64_t untethered_resting_timeout_ns;
 
     int64_t tag;
@@ -122,6 +124,7 @@ typedef struct aeron_network_publication_stct
     {
         aeron_untethered_subscription_state_change_func_t untethered_subscription_state_change;
         aeron_driver_resend_func_t resend;
+        aeron_driver_publication_revoke_func_t publication_revoke;
     } log;
 
     volatile int64_t *short_sends_counter;
@@ -130,6 +133,7 @@ typedef struct aeron_network_publication_stct
     volatile int64_t *retransmits_sent_counter;
     volatile int64_t *retransmitted_bytes_counter;
     volatile int64_t *unblocked_publications_counter;
+    volatile int64_t *publications_revoked_counter;
     volatile int64_t *mapped_bytes_counter;
 
     aeron_int64_counter_map_t receiver_liveness_tracker;
@@ -149,6 +153,7 @@ int aeron_network_publication_create(
     aeron_position_t *snd_pos_position,
     aeron_position_t *snd_lmt_position,
     aeron_atomic_counter_t *snd_bpe_counter,
+    aeron_atomic_counter_t *snd_naks_received_counter,
     aeron_flow_control_strategy_t *flow_control_strategy,
     aeron_driver_uri_publication_params_t *params,
     bool is_exclusive,
@@ -158,10 +163,6 @@ void aeron_network_publication_close(
     aeron_counters_manager_t *counters_manager, aeron_network_publication_t *publication);
 
 bool aeron_network_publication_free(aeron_network_publication_t *publication);
-
-void aeron_network_publication_incref(void *clientd);
-
-void aeron_network_publication_decref(void *clientd);
 
 void aeron_network_publication_on_time_event(
     aeron_driver_conductor_t *conductor, aeron_network_publication_t *publication, int64_t now_ns, int64_t now_ms);

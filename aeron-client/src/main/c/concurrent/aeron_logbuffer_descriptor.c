@@ -167,7 +167,15 @@ _Static_assert(
     "offsetof(aeron_logbuffer_metadata_t, tether) is wrong");
 
 _Static_assert(
-    sizeof(aeron_logbuffer_metadata_t) == 496,
+    offsetof(aeron_logbuffer_metadata_t, is_publication_revoked) == 496,
+    "offsetof(aeron_logbuffer_metadata_t, is_publication_revoked) is wrong");
+
+_Static_assert(
+    offsetof(aeron_logbuffer_metadata_t, untethered_linger_timeout_ns) == 500,
+    "offsetof(aeron_logbuffer_metadata_t, is_publication_revoked) is wrong");
+
+_Static_assert(
+    sizeof(aeron_logbuffer_metadata_t) == 508,
     "sizeof(aeron_logbuffer_metadata_t) is wrong");
 
 _Static_assert(
@@ -291,6 +299,7 @@ extern void aeron_logbuffer_metadata_init(
     int64_t response_correlation_id,
     int64_t linger_timeout_ns,
     int64_t untethered_window_limit_timeout_ns,
+    int64_t untethered_linger_timeout_ns,
     int64_t untethered_resting_timeout_ns,
     uint8_t group,
     uint8_t is_response,

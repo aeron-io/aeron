@@ -80,9 +80,11 @@ typedef struct aeron_ipc_publication_stct
     struct
     {
         aeron_untethered_subscription_state_change_func_t untethered_subscription_state_change;
+        aeron_driver_publication_revoke_func_t publication_revoke;
     } log;
 
     volatile int64_t *unblocked_publications_counter;
+    volatile int64_t *publications_revoked_counter;
     volatile int64_t *mapped_bytes_counter;
 }
 aeron_ipc_publication_t;
@@ -112,10 +114,6 @@ int aeron_ipc_publication_clean_buffer(aeron_ipc_publication_t *publication, int
 
 void aeron_ipc_publication_on_time_event(
     aeron_driver_conductor_t *conductor, aeron_ipc_publication_t *publication, int64_t now_ns, int64_t now_ms);
-
-void aeron_ipc_publication_incref(void *clientd);
-
-void aeron_ipc_publication_decref(void *clientd);
 
 void aeron_ipc_publication_reject(
     aeron_ipc_publication_t *publication,

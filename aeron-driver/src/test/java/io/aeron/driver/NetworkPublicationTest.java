@@ -83,6 +83,7 @@ class NetworkPublicationTest
     private final Position senderPosition = new AtomicLongPosition();
     private final Position senderLimit = new AtomicLongPosition();
     private final AtomicCounter senderBpe = countersManager.newCounter("snd-bpe");
+    private final AtomicCounter senderNaksReceived = countersManager.newCounter("snd-naks-received");
     private final FlowControl flowControl = mock(FlowControl.class);
     private final RetransmitHandler retransmitHandler = mock(RetransmitHandler.class);
     private final StatusMessageFlyweight statusMessageFlyweight = mock(StatusMessageFlyweight.class);
@@ -140,6 +141,7 @@ class NetworkPublicationTest
             senderPosition,
             senderLimit,
             senderBpe,
+            senderNaksReceived,
             SESSION_ID,
             STREAM_ID,
             INITIAL_TERM_ID,
@@ -232,6 +234,7 @@ class NetworkPublicationTest
             senderPosition,
             senderLimit,
             senderBpe,
+            senderNaksReceived,
             SESSION_ID,
             STREAM_ID,
             INITIAL_TERM_ID,
@@ -283,6 +286,7 @@ class NetworkPublicationTest
             senderPosition,
             senderLimit,
             senderBpe,
+            senderNaksReceived,
             SESSION_ID,
             STREAM_ID,
             INITIAL_TERM_ID,

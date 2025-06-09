@@ -220,3 +220,23 @@ TEST_F(DriverContextConfigTest, shouldReadLowFileStoreWarningThresholdFromAnEnvi
     EXPECT_EQ(default_low_storage_warning_threshold, aeron_driver_context_get_low_file_store_warning_threshold(context));
     aeron_driver_context_close(context);
 }
+
+
+TEST_F(DriverContextConfigTest, shouldHonorUntetheredLingerFromAnEnvironmentVariable)
+{
+    aeron_driver_context_t *context = nullptr;
+
+    ASSERT_EQ(0, aeron_driver_context_init(&context));
+    EXPECT_EQ(AERON_NULL_VALUE, aeron_driver_context_get_untethered_linger_timeout_ns(context));
+    aeron_driver_context_close(context);
+
+    aeron_env_set(AERON_UNTETHERED_LINGER_TIMEOUT_ENV_VAR, "5000000");
+    ASSERT_EQ(0, aeron_driver_context_init(&context));
+    EXPECT_EQ(5000000, aeron_driver_context_get_untethered_linger_timeout_ns(context));
+    aeron_driver_context_close(context);
+
+    ASSERT_EQ(0, aeron_driver_context_init(&context));
+    aeron_driver_context_set_untethered_linger_timeout_ns(context, 3000000);
+    EXPECT_EQ(3000000, aeron_driver_context_get_untethered_linger_timeout_ns(context));
+    aeron_driver_context_close(context);
+}
