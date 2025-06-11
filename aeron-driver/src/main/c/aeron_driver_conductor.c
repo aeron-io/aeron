@@ -1607,14 +1607,6 @@ void aeron_network_publication_entry_delete(
     entry->publication = NULL;
 
     AERON_DRIVER_MANAGED_RESOURCE_DECREF(&(endpoint->conductor_fields.managed_resource));
-
-    if (AERON_SEND_CHANNEL_ENDPOINT_STATUS_CLOSING == endpoint->conductor_fields.status)
-    {
-        aeron_str_to_ptr_hash_map_remove(
-            &conductor->send_channel_endpoint_by_channel_map,
-            endpoint->conductor_fields.udp_channel->canonical_form,
-            endpoint->conductor_fields.udp_channel->canonical_length);
-    }
 }
 
 static bool aeron_network_publication_free_voidp(void *publication)
@@ -1674,6 +1666,11 @@ bool aeron_send_channel_endpoint_entry_has_reached_end_of_life(
 void aeron_send_channel_endpoint_entry_delete(
     aeron_driver_conductor_t *conductor, aeron_send_channel_endpoint_entry_t *entry)
 {
+    aeron_str_to_ptr_hash_map_remove(
+        &conductor->send_channel_endpoint_by_channel_map,
+        entry->endpoint->conductor_fields.udp_channel->canonical_form,
+        entry->endpoint->conductor_fields.udp_channel->canonical_length);
+
     aeron_send_channel_endpoint_delete(&conductor->counters_manager, entry->endpoint);
 }
 
@@ -4146,9 +4143,13 @@ int aeron_driver_conductor_on_add_network_publication_complete(
     }
     udp_channel = NULL;
 
-    if (AERON_SEND_CHANNEL_ENDPOINT_STATUS_CLOSING == endpoint->conductor_fields.status)
+    if (AERON_SEND_CHANNEL_ENDPOINT_STATUS_ACTIVE != endpoint->conductor_fields.status)
     {
-        AERON_SET_ERR(EINVAL, "%s", "send_channel_endpoint found in CLOSING state");
+        AERON_SET_ERR(
+            -AERON_ERROR_CODE_RESOURCE_TEMPORARILY_UNAVAILABLE,
+            "%s",
+            "send_channel_endpoint found in CLOSING state, please retry");
+
         goto error_cleanup;
     }
 
@@ -6343,6 +6344,7 @@ void aeron_driver_conductor_on_response_connected(void *clientd, void *item)
 
 void aeron_driver_conductor_on_release_resource(void *clientd, void *item)
 {
+    aeron_driver_conductor_t *conductor = clientd;
     aeron_command_release_resource_t *cmd = item;
     void *managed_resource = cmd->base.item;
     aeron_driver_conductor_resource_type_t resource_type = cmd->resource_type;
@@ -6358,8 +6360,22 @@ void aeron_driver_conductor_on_release_resource(void *clientd, void *item)
             break;
 
         case AERON_DRIVER_CONDUCTOR_RESOURCE_TYPE_SEND_CHANNEL_ENDPOINT:
-            aeron_send_channel_endpoint_sender_release(managed_resource);
+        {
+            aeron_send_channel_endpoint_t *endpoint = (aeron_send_channel_endpoint_t *)managed_resource;
+
+            if (endpoint->conductor_fields.status == AERON_SEND_CHANNEL_ENDPOINT_STATUS_CLOSING)
+            {
+                aeron_str_to_ptr_hash_map_remove(
+                    &conductor->send_channel_endpoint_by_channel_map,
+                    endpoint->conductor_fields.udp_channel->canonical_form,
+                    endpoint->conductor_fields.udp_channel->canonical_length);
+
+                aeron_send_channel_endpoint_close(endpoint);
+                aeron_send_channel_endpoint_sender_release(managed_resource);
+            }
+
             break;
+        }
 
         case AERON_DRIVER_CONDUCTOR_RESOURCE_TYPE_PUBLICATION_IMAGE:
             aeron_publication_image_receiver_release(managed_resource);

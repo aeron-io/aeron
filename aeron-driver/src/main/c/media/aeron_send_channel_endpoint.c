@@ -252,7 +252,10 @@ int aeron_send_channel_endpoint_delete(
 
     aeron_int64_to_ptr_hash_map_delete(&endpoint->publication_dispatch_map);
     aeron_udp_channel_delete(endpoint->conductor_fields.udp_channel);
-    endpoint->transport_bindings->close_func(&endpoint->transport);
+    if (endpoint->conductor_fields.status != AERON_SEND_CHANNEL_ENDPOINT_STATUS_CLOSED)
+    {
+        endpoint->transport_bindings->close_func(&endpoint->transport);
+    }
 
     if (NULL != endpoint->port_manager)
     {
@@ -266,6 +269,14 @@ int aeron_send_channel_endpoint_delete(
     }
 
     aeron_free(endpoint);
+
+    return 0;
+}
+
+int aeron_send_channel_endpoint_close(aeron_send_channel_endpoint_t *endpoint)
+{
+    endpoint->transport_bindings->close_func(&endpoint->transport);
+    endpoint->conductor_fields.status = AERON_SEND_CHANNEL_ENDPOINT_STATUS_CLOSED;
 
     return 0;
 }
