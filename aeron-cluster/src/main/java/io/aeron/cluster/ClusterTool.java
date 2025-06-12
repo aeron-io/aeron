@@ -252,7 +252,7 @@ public class ClusterTool
         }
         else
         {
-            command.action().act(clusterDir, System.out, args);
+            System.exit(command.action().act(clusterDir, System.out, args));
         }
     }
 
