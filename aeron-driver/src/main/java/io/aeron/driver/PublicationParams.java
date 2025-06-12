@@ -29,6 +29,8 @@ import static io.aeron.CommonContext.*;
 
 final class PublicationParams
 {
+    public static final long PROTOTYPE_VALUE_CORRELATION_ID = -2L; // TODO is this the right place to store this value?
+
     long lingerTimeoutNs;
     long entityTag = ChannelUri.INVALID_TAG;
     long untetheredWindowLimitTimeoutNs;
@@ -140,7 +142,7 @@ final class PublicationParams
         }
 
         params.isResponse = CONTROL_MODE_RESPONSE.equals(channelUri.get(MDC_CONTROL_MODE_PARAM_NAME));
-        params.responseCorrelationId = Long.parseLong(channelUri.get(RESPONSE_CORRELATION_ID_PARAM_NAME, "-1"));
+        params.responseCorrelationId = parseResponseCorrelationId(channelUri);
 
         return params;
     }
@@ -533,6 +535,18 @@ final class PublicationParams
                     ", must be > 0 and <= " + Configuration.MAX_RESEND_MAX);
             }
         }
+    }
+
+    private static long parseResponseCorrelationId(final ChannelUri channelUri)
+    {
+        final String idStr = channelUri.get(RESPONSE_CORRELATION_ID_PARAM_NAME, "-1");
+
+        if (PROTOTYPE_CORRELATION_ID.equals(idStr))
+        {
+            return PROTOTYPE_VALUE_CORRELATION_ID;
+        }
+
+        return Long.parseLong(idStr);
     }
 
     private static long parseEntityTag(

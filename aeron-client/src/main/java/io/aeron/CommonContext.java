@@ -436,6 +436,11 @@ public class CommonContext implements Cloneable
     public static final String RESPONSE_CORRELATION_ID_PARAM_NAME = "response-correlation-id";
 
     /**
+     * Placeholder value to use in URIs to specify that TODO.
+     */
+    public static final String PROTOTYPE_CORRELATION_ID = "prototype";
+
+    /**
      * Parameter name to set explicit NAK delay (e.g. {@code nak-delay=200ms}).
      *
      * @since 1.44.0
