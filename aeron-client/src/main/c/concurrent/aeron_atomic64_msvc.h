@@ -53,6 +53,95 @@ do \
 } \
 while (false) \
 
+
+inline uint32_t aeron_get_acquire_uint32(const volatile uint32_t *src)
+{
+    uint32_t val = *src;
+    _ReadWriteBarrier();
+    return val;
+}
+
+inline int32_t aeron_get_acquire_int32(const volatile int32_t *src)
+{
+    int32_t val = *src;
+    _ReadWriteBarrier();
+    return val;
+}
+
+inline int aeron_get_acquire_int(const volatile int *src)
+{
+    int val = *src;
+    _ReadWriteBarrier();
+    return val;
+}
+
+inline int aeron_get_acquire_bool(const volatile bool *src)
+{
+    bool val = *src;
+    _ReadWriteBarrier();
+    return val;
+}
+
+inline uint64_t aeron_get_acquire_uint64(const volatile uint64_t *src)
+{
+    uint64_t val = *src;
+    _ReadWriteBarrier();
+    return val;
+}
+
+inline int64_t aeron_get_acquire_int64(const volatile int64_t *src)
+{
+    int64_t val = *src;
+    _ReadWriteBarrier();
+    return val;
+}
+
+inline void aeron_set_release_uint32(volatile uint32_t *dst, uint32_t src)
+{
+    _ReadWriteBarrier();
+    *dst = src;
+}
+
+inline void aeron_set_release_int32(volatile int32_t *dst, int32_t src)
+{
+    _ReadWriteBarrier();
+    *dst = src;
+}
+
+inline void aeron_set_release_int(volatile int *dst, int src)
+{
+    _ReadWriteBarrier();
+    *dst = src;
+}
+
+inline void aeron_set_release_bool(volatile bool *dst, bool src)
+{
+    _ReadWriteBarrier();
+    *dst = src;
+}
+
+inline void aeron_set_release_uint64(volatile uint64_t *dst, uint64_t src)
+{
+    _ReadWriteBarrier();
+    *dst = src;
+}
+
+inline void aeron_set_release_int64(volatile int64_t *dst, int64_t src)
+{
+    _ReadWriteBarrier();
+    *dst = src;
+}
+
+inline int64_t aeron_get_and_add_int64(volatile int64_t *current, int64_t value)
+{
+    return _InlineInterlockedAdd64((long long volatile *)current, (long long)value) - value;
+}
+
+inline int32_t aeron_get_and_add_int32(volatile int32_t *current, int32_t value)
+{
+    return _InlineInterlockedAdd((long volatile *)current, (long)value) - value;
+}
+
 inline bool aeron_cas_int64(volatile int64_t *dst, int64_t expected, int64_t desired)
 {
     int64_t original = _InterlockedCompareExchange64(
