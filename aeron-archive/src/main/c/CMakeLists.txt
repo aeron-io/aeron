@@ -201,5 +201,8 @@ if (AERON_INSTALL_TARGETS)
         RUNTIME DESTINATION lib
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib)
-    install(DIRECTORY ./ DESTINATION include/aeron FILES_MATCHING PATTERN "aeron_archive.h")
+    install(DIRECTORY ./ DESTINATION include/aeron
+        FILES_MATCHING PATTERN "aeron_archive.h"
+        PATTERN "aeron_archive_context.h"
+        PATTERN "aeron_archive_credentials_supplier.h")
 endif ()
