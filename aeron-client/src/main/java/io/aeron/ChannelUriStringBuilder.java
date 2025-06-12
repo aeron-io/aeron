@@ -54,6 +54,7 @@ public final class ChannelUriStringBuilder
     private String mediaReceiveTimestampOffset;
     private String channelReceiveTimestampOffset;
     private String channelSendTimestampOffset;
+    private String responseCorrelationId;
     private String responseEndpoint;
     private Boolean reliable;
     private Boolean sparse;
@@ -77,7 +78,6 @@ public final class ChannelUriStringBuilder
     private Long sessionId;
     private Long groupTag;
     private Long linger;
-    private Long responseCorrelationId;
     private Long nakDelay;
     private Long untetheredWindowLimitTimeoutNs;
     private Long untetheredLingerTimeoutNs;
@@ -2015,6 +2015,34 @@ public final class ChannelUriStringBuilder
      */
     public ChannelUriStringBuilder responseCorrelationId(final Long responseCorrelationId)
     {
+        this.responseCorrelationId = Long.toString(responseCorrelationId);
+        return this;
+    }
+
+    /**
+     * Set the correlation id from the image received on the response "server's" subscription to be used by a response
+     * publication.
+     *
+     * @param responseCorrelationId correlation id of an image from the response "server's" subscription.
+     * @return this for a fluent API.
+     * @see CommonContext#RESPONSE_CORRELATION_ID_PARAM_NAME
+     */
+    public ChannelUriStringBuilder responseCorrelationId(final String responseCorrelationId)
+    {
+        if (null != responseCorrelationId && !PROTOTYPE_CORRELATION_ID.equals(responseCorrelationId))
+        {
+            try
+            {
+                Long.parseLong(responseCorrelationId);
+            }
+            catch (final NumberFormatException ex)
+            {
+                throw new IllegalArgumentException(
+                    "responseCorrelationId must be a number or the value '" + PROTOTYPE_CORRELATION_ID + "' found: " +
+                    responseCorrelationId);
+            }
+        }
+
         this.responseCorrelationId = responseCorrelationId;
         return this;
     }
@@ -2033,14 +2061,7 @@ public final class ChannelUriStringBuilder
 
         if (null != responseCorrelationIdString)
         {
-            try
-            {
-                responseCorrelationId(Long.valueOf(responseCorrelationIdString));
-            }
-            catch (final NumberFormatException ex)
-            {
-                throw new IllegalArgumentException("'response-correlation-id' must be a valid long value", ex);
-            }
+            responseCorrelationId(responseCorrelationIdString);
         }
 
         return this;

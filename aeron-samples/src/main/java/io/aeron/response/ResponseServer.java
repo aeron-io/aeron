@@ -27,6 +27,8 @@ import org.agrona.concurrent.OneToOneConcurrentArrayQueue;
 import java.util.Objects;
 import java.util.function.Function;
 
+import static io.aeron.CommonContext.PROTOTYPE_CORRELATION_ID;
+
 /**
  * A basic sample response server that allows the users to specify a simple function to represent the handling of a
  * request and then return a response. This approach will be effective when request processing is very short. For
@@ -68,6 +70,7 @@ public class ResponseServer implements AutoCloseable, Agent
         this::onControlledRequestMessage);
 
     private Subscription serverSubscription;
+    private ExclusivePublication prototypeResponsePublication;
 
     /**
      * Constructs the server.
@@ -129,6 +132,11 @@ public class ResponseServer implements AutoCloseable, Agent
                 requestStreamId,
                 this::enqueueAvailableImage,
                 this::enqueueUnavailableImage);
+
+            prototypeResponsePublication = aeron.addExclusivePublication(
+                responseUriBuilder.responseCorrelationId(PROTOTYPE_CORRELATION_ID).build(),
+                responseStreamId);
+
             workCount++;
         }
 
@@ -165,7 +173,7 @@ public class ResponseServer implements AutoCloseable, Agent
      */
     public void close()
     {
-        CloseHelper.quietClose(serverSubscription);
+        CloseHelper.quietCloseAll(serverSubscription, prototypeResponsePublication);
         clientToPublicationMap.values().forEach(CloseHelper::quietClose);
     }
 

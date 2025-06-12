@@ -634,6 +634,11 @@ public final class DriverConductor implements Agent
                 "control-mode=response was specified, but no response-correlation-id set");
         }
 
+        if (PROTOTYPE_VALUE_CORRELATION_ID == params.responseCorrelationId)
+        {
+            return null;
+        }
+
         for (final PublicationImage publicationImage : publicationImages)
         {
             if (publicationImage.correlationId() == params.responseCorrelationId)
