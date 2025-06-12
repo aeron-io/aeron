@@ -32,6 +32,7 @@ import static io.aeron.CommonContext.LINGER_PARAM_NAME;
 import static io.aeron.CommonContext.MAX_RESEND_PARAM_NAME;
 import static io.aeron.CommonContext.MDC_CONTROL_MODE_PARAM_NAME;
 import static io.aeron.CommonContext.MTU_LENGTH_PARAM_NAME;
+import static io.aeron.CommonContext.PROTOTYPE_CORRELATION_ID;
 import static io.aeron.CommonContext.PUBLICATION_WINDOW_LENGTH_PARAM_NAME;
 import static io.aeron.CommonContext.RESPONSE_CORRELATION_ID_PARAM_NAME;
 import static io.aeron.CommonContext.SESSION_ID_PARAM_NAME;
@@ -47,6 +48,8 @@ import static io.aeron.CommonContext.UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME;
 
 final class PublicationParams
 {
+    public static final long PROTOTYPE_VALUE_CORRELATION_ID = -2L; // TODO is this the right place to store this value?
+
     long lingerTimeoutNs;
     long entityTag = ChannelUri.INVALID_TAG;
     long untetheredWindowLimitTimeoutNs;
@@ -158,8 +161,7 @@ final class PublicationParams
         }
 
         params.isResponse = CONTROL_MODE_RESPONSE.equals(channelUri.get(MDC_CONTROL_MODE_PARAM_NAME));
-        params.responseCorrelationId = parseLong(
-            channelUri.get(RESPONSE_CORRELATION_ID_PARAM_NAME, "-1"), RESPONSE_CORRELATION_ID_PARAM_NAME);
+        params.responseCorrelationId = parseResponseCorrelationId(channelUri);
 
         return params;
     }
@@ -561,6 +563,18 @@ final class PublicationParams
             throw new InvalidChannelException(
                 "invalid " + paramName + ", must be a number", ex);
         }
+    }
+
+    private static long parseResponseCorrelationId(final ChannelUri channelUri)
+    {
+        final String idStr = channelUri.get(RESPONSE_CORRELATION_ID_PARAM_NAME, "-1");
+
+        if (PROTOTYPE_CORRELATION_ID.equals(idStr))
+        {
+            return PROTOTYPE_VALUE_CORRELATION_ID;
+        }
+
+        return Long.parseLong(idStr);
     }
 
     private static long parseEntityTag(
