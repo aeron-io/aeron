@@ -43,7 +43,6 @@ import java.nio.channels.DatagramChannel;
 import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
 
-import static org.hamcrest.CoreMatchers.allOf;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -376,9 +375,8 @@ class ChannelValidationTest
 
         Tests.awaitCounterDelta(aeron.countersReader(), SystemCounterDescriptor.ERRORS.id(), initialErrorCount, 1);
 
-        final Matcher<String> exceptionMessageMatcher = allOf(
-            containsString("mtuLength="),
-            containsString("> initialWindowLength="));
+        final Matcher<String> exceptionMessageMatcher =
+            containsString("rcv-wnd=1376 must be at least two times larger than the mtu=1408");
 
         SystemTests.waitForErrorToOccur(driver.aeronDirectoryName(), exceptionMessageMatcher, Tests.SLEEP_1_MS);
     }

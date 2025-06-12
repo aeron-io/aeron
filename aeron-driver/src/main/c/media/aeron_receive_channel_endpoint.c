@@ -988,16 +988,6 @@ int aeron_receiver_channel_endpoint_validate_sender_mtu_length(
         return -1;
     }
 
-    if (sender_mtu_length > window_max_length)
-    {
-        AERON_SET_ERR(
-            EINVAL,
-            "mtuLength=%" PRIu64 " > initialWindowLength=%" PRIu64,
-            (uint64_t)sender_mtu_length,
-            (uint64_t)window_max_length);
-        return -1;
-    }
-
     const size_t socket_rcvbuf = aeron_udp_channel_socket_so_rcvbuf(
         endpoint->conductor_fields.udp_channel, ctx->socket_rcvbuf);
 

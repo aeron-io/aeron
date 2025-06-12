@@ -23,6 +23,7 @@
 #include "aeron_driver_conductor.h"
 #include "concurrent/aeron_term_gap_filler.h"
 #include "util/aeron_parse_util.h"
+#include "aeron_term_cleaner.h"
 
 #define AERON_PUBLICATION_RESPONSE_NULL_RESPONSE_SESSION_ID INT64_C(0xF000000000000000)
 
@@ -389,11 +390,11 @@ int aeron_publication_image_create(
     _image->max_receiver_window_length = _image->congestion_control->max_window_length(
         _image->congestion_control->state);
     _image->last_sm_position = initial_position;
-    _image->last_overrun_threshold = initial_position + (term_buffer_length / 2);
+    _image->last_overrun_threshold = initial_position + (term_buffer_length >> 1);
     _image->time_of_last_packet_ns = now_ns;
     _image->next_sm_deadline_ns = 0;
     _image->is_sm_enabled = true;
-    _image->conductor_fields.clean_position = initial_position;
+    _image->conductor_fields.clean_position = aeron_term_cleaner_block_start_position(initial_position);
     _image->conductor_fields.time_of_last_state_change_ns = now_ns;
 
     aeron_publication_image_remove_response_session_id(_image);
@@ -458,28 +459,23 @@ bool aeron_publication_image_free(aeron_publication_image_t *image)
     return true;
 }
 
-void aeron_publication_image_clean_buffer_to(aeron_publication_image_t *image, int64_t position)
+int aeron_publication_image_clean_buffer_to(aeron_publication_image_t *image, int64_t position)
 {
     int64_t clean_position = image->conductor_fields.clean_position;
-    if (position > clean_position)
+    if (position - clean_position >= AERON_TERM_CLEANER_TERM_CLEANUP_BLOCK_LENGTH)
     {
         size_t dirty_index = aeron_logbuffer_index_by_position(clean_position, image->position_bits_to_shift);
-        size_t bytes_to_clean = (size_t)(position - clean_position);
-        size_t term_length = (size_t)image->term_length;
         size_t term_offset = (size_t)(clean_position & image->term_length_mask);
-        size_t bytes_left_in_term = term_length - term_offset;
-        size_t length = bytes_to_clean < bytes_left_in_term ? bytes_to_clean : bytes_left_in_term;
 
         memset(
-            image->mapped_raw_log.term_buffers[dirty_index].addr + term_offset + sizeof(int64_t),
+            image->mapped_raw_log.term_buffers[dirty_index].addr + term_offset,
             0,
-            length - sizeof(int64_t));
-
-        uint64_t *ptr = (uint64_t *)(image->mapped_raw_log.term_buffers[dirty_index].addr + term_offset);
-        AERON_SET_RELEASE(*ptr, (uint64_t)0);
-
-        image->conductor_fields.clean_position = clean_position + (int64_t)length;
+            AERON_TERM_CLEANER_TERM_CLEANUP_BLOCK_LENGTH);
+        aeron_release(); // ensure that memset happens before position increment
+        image->conductor_fields.clean_position = clean_position + (int64_t)AERON_TERM_CLEANER_TERM_CLEANUP_BLOCK_LENGTH;
+        return 1;
     }
+    return 0;
 }
 
 // Called from conductor via loss detector.
@@ -509,8 +505,9 @@ void aeron_publication_image_on_gap_detected(void *clientd, int32_t term_id, int
     }
 }
 
-void aeron_publication_image_track_rebuild(aeron_publication_image_t *image, int64_t now_ns)
+int aeron_publication_image_track_rebuild(aeron_publication_image_t *image, int64_t now_ns)
 {
+    int work_count = 0;
     uint8_t is_publication_revoked;
 
     AERON_GET_ACQUIRE(is_publication_revoked, image->log_meta_data->is_publication_revoked);
@@ -537,7 +534,7 @@ void aeron_publication_image_track_rebuild(aeron_publication_image_t *image, int
 
         if (INT64_MAX == min_sub_pos)
         {
-            return;
+            return work_count;
         }
 
         const int64_t rebuild_position = *image->rcv_pos_position.value_addr > max_sub_pos ?
@@ -561,6 +558,8 @@ void aeron_publication_image_track_rebuild(aeron_publication_image_t *image, int
 
         aeron_counter_propose_max_release(image->rcv_pos_position.value_addr, new_rebuild_position);
 
+        work_count += aeron_publication_image_clean_buffer_to(image, min_sub_pos);
+
         bool should_force_send_sm = false;
         const int32_t window_length = image->congestion_control->on_track_rebuild(
             image->congestion_control->state,
@@ -573,16 +572,27 @@ void aeron_publication_image_track_rebuild(aeron_publication_image_t *image, int
             new_rebuild_position,
             loss_found);
 
-        const int32_t threshold = window_length / 4;
+        const int32_t threshold = window_length >> 2;
 
-        if (should_force_send_sm ||
-            (min_sub_pos > (image->next_sm_position + threshold)) ||
-            window_length != image->next_sm_receiver_window_length)
+        const int64_t max_packet_insert_position = min_sub_pos + (image->term_length >> 1);
+        const int64_t clean_position = image->conductor_fields.clean_position;
+        const int32_t dirty_term_id = aeron_logbuffer_compute_term_id_from_position(
+            clean_position, image->position_bits_to_shift, image->initial_term_id);
+        const int32_t active_term_id = aeron_logbuffer_compute_term_id_from_position(
+            max_packet_insert_position, image->position_bits_to_shift, image->initial_term_id);
+        const int32_t term_gap = aeron_logbuffer_compute_term_count(active_term_id, dirty_term_id);
+        if (term_gap < 2 || (2 == term_gap && 0 != (clean_position & image->term_length_mask)))
         {
-            aeron_publication_image_clean_buffer_to(image, min_sub_pos - image->term_length);
-            aeron_publication_image_schedule_status_message(image, min_sub_pos, window_length);
+            if (should_force_send_sm ||
+                (min_sub_pos >= (image->next_sm_position + threshold)) ||
+                window_length != image->next_sm_receiver_window_length)
+            {
+                aeron_publication_image_schedule_status_message(image, min_sub_pos, window_length);
+                work_count++;
+            }
         }
     }
+    return work_count;
 }
 
 static inline void aeron_publication_image_track_connection(
@@ -896,7 +906,7 @@ int aeron_publication_image_send_pending_status_message(aeron_publication_image_
             }
 
             image->last_sm_position = sm_position;
-            image->last_overrun_threshold = sm_position + (image->term_length / 2);
+            image->last_overrun_threshold = sm_position + (image->term_length >> 1);
             image->last_sm_change_number = change_number;
             image->next_sm_deadline_ns = now_ns + image->sm_timeout_ns;
 
