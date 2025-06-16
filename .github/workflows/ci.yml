@@ -409,6 +409,12 @@ jobs:
           sudo sed -i bak "s/localhost/localhost $(hostname)/" /etc/hosts
           dscacheutil -flushcache
           sudo diskutil eraseDisk APFS tmp_aeron_dir $(hdiutil attach -nomount ram://$((2 * 1024 * 60)))
+      - name: Configure OS params
+        run: |
+          sudo sysctl -w kern.ipc.maxsockbuf=4194304
+          sudo sysctl -w net.inet.tcp.sendspace=2097152
+          sudo sysctl -w net.inet.tcp.recvspace=2097152
+          sudo sysctl -w net.inet.udp.maxdgram=65536
       - name: Build
         run: cppbuild/cppbuild --c-warnings-as-errors --cxx-warnings-as-errors --cxx-hide-deprecation-message
       - name: Remove small temp file system

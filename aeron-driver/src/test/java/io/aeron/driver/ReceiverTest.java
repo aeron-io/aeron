@@ -461,7 +461,8 @@ class ReceiverTest
                     mockRebuildPosition,
                     rcvNaksSent,
                     SOURCE_IDENTITY,
-                    congestionControl);
+                    congestionControl
+                );
 
                 receiverProxy.newPublicationImage(receiveChannelEndpoint, image);
             });
