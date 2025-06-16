@@ -60,6 +60,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     private final long tag;
     private final long unblockTimeoutNs;
     private final long untetheredWindowLimitTimeoutNs;
+    private final long untetheredLingerTimeoutNs;
     private final long untetheredRestingTimeoutNs;
     private final long imageLivenessTimeoutNs;
     private final String channel;
@@ -133,8 +134,9 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         this.publisherLimit = publisherLimit;
         this.rawLog = rawLog;
         this.unblockTimeoutNs = ctx.publicationUnblockTimeoutNs();
-        this.untetheredWindowLimitTimeoutNs = params.untetheredWindowLimitTimeoutNs;
-        this.untetheredRestingTimeoutNs = params.untetheredRestingTimeoutNs;
+        untetheredWindowLimitTimeoutNs = params.untetheredWindowLimitTimeoutNs;
+        untetheredLingerTimeoutNs = params.untetheredLingerTimeoutNs;
+        untetheredRestingTimeoutNs = params.untetheredRestingTimeoutNs;
         this.imageLivenessTimeoutNs = ctx.imageLivenessTimeoutNs();
 
         final SystemCounters systemCounters = ctx.systemCounters();
@@ -552,7 +554,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
             }
             else if (UntetheredSubscription.State.LINGER == untethered.state)
             {
-                if ((untethered.timeOfLastUpdateNs + untetheredWindowLimitTimeoutNs) - nowNs <= 0)
+                if ((untethered.timeOfLastUpdateNs + untetheredLingerTimeoutNs) - nowNs <= 0)
                 {
                     subscriberPositions = ArrayUtil.remove(subscriberPositions, untethered.position);
                     untethered.state(UntetheredSubscription.State.RESTING, nowNs, streamId, sessionId);

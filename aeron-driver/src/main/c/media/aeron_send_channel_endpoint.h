@@ -32,7 +32,8 @@
 typedef enum aeron_send_channel_endpoint_status_enum
 {
     AERON_SEND_CHANNEL_ENDPOINT_STATUS_ACTIVE,
-    AERON_SEND_CHANNEL_ENDPOINT_STATUS_CLOSING
+    AERON_SEND_CHANNEL_ENDPOINT_STATUS_CLOSING,
+    AERON_SEND_CHANNEL_ENDPOINT_STATUS_CLOSED
 }
 aeron_send_channel_endpoint_status_t;
 
@@ -82,6 +83,8 @@ int aeron_send_channel_endpoint_create(
 
 int aeron_send_channel_endpoint_delete(
     aeron_counters_manager_t *counters_manager, aeron_send_channel_endpoint_t *endpoint);
+
+int aeron_send_channel_endpoint_close(aeron_send_channel_endpoint_t *endpoint);
 
 int aeron_send_channel_send(
     aeron_send_channel_endpoint_t *endpoint,

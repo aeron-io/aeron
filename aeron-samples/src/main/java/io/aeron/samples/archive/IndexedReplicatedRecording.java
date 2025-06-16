@@ -75,6 +75,7 @@ public class IndexedReplicatedRecording implements AutoCloseable
     private static final int LIVE_STREAM_ID = 1033;
     private static final String LIVE_CHANNEL = new ChannelUriStringBuilder()
         .media("udp")
+        .controlMode(CommonContext.MDC_CONTROL_MODE_DYNAMIC)
         .controlEndpoint("localhost:8100")
         .termLength(TERM_LENGTH)
         .build();

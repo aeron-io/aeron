@@ -22,11 +22,13 @@
 #include "util/aeron_error.h"
 #include "uri/aeron_uri_string_builder.h"
 #include "aeron_archive_client.h"
+#include "command/aeron_control_protocol.h"
 
 #define REPLAY_MERGE_LIVE_ADD_MAX_WINDOW (32 * 1024 * 1024)
 #define REPLAY_MERGE_REPLAY_REMOVE_THRESHOLD (0)
 #define REPLAY_MERGE_INITIAL_GET_MAX_RECORDED_POSITION_BACKOFF_MS (8)
 #define REPLAY_MERGE_GET_MAX_RECORDED_POSITION_BACKOFF_MAX_MS (500)
+#define REPLAY_MERGE_ARCHIVE_POLL_INTERVAL_MS (100)
 
 typedef enum aeron_archive_replay_merge_state_en
 {
@@ -65,6 +67,7 @@ struct aeron_archive_replay_merge_stct
     int64_t active_correlation_id;
     int64_t next_target_position;
     long long get_max_recorded_position_backoff_ms;
+    long long time_of_last_scheduled_archive_poll_ms;
     bool is_replay_active;
     int64_t replay_session_id;
     int64_t position_of_last_progress;
@@ -213,6 +216,7 @@ int aeron_archive_replay_merge_init(
     _replay_merge->active_correlation_id = AERON_NULL_VALUE;
     _replay_merge->next_target_position = AERON_NULL_VALUE;
     _replay_merge->get_max_recorded_position_backoff_ms = REPLAY_MERGE_INITIAL_GET_MAX_RECORDED_POSITION_BACKOFF_MS;
+    _replay_merge->time_of_last_scheduled_archive_poll_ms = 0;
     _replay_merge->is_replay_active = false;
     _replay_merge->replay_session_id = AERON_NULL_VALUE;
     _replay_merge->position_of_last_progress = AERON_NULL_VALUE;
@@ -294,6 +298,7 @@ int aeron_archive_replay_merge_do_work(int *work_count_p, aeron_archive_replay_m
     if (aeron_archive_replay_merge_handle_async_destination(replay_merge) < 0)
     {
         AERON_APPEND_ERR("%s", "");
+        aeron_archive_replay_merge_set_state(replay_merge, FAILED);
         return -1;
     }
 
@@ -337,14 +342,32 @@ int aeron_archive_replay_merge_do_work(int *work_count_p, aeron_archive_replay_m
     if (-1 == rc)
     {
         AERON_APPEND_ERR("%s", "");
+        aeron_archive_replay_merge_set_state(replay_merge, FAILED);
         return -1;
     }
 
-    if (check_progress &&
-        now_ms > (replay_merge->time_of_last_progress_ms + replay_merge->merge_progress_timeout_ms))
+    if (check_progress)
     {
-        AERON_SET_ERR(ETIMEDOUT, "replay_merge no progress: state=%i", replay_merge->state);
-        return -1;
+        if (now_ms > (replay_merge->time_of_last_progress_ms + replay_merge->merge_progress_timeout_ms))
+        {
+            AERON_SET_ERR(ETIMEDOUT, "replay_merge no progress: state=%i", replay_merge->state);
+            aeron_archive_replay_merge_set_state(replay_merge, FAILED);
+            return -1;
+        }
+
+        if (AERON_NULL_VALUE == replay_merge->active_correlation_id &&
+            (now_ms > (replay_merge->time_of_last_scheduled_archive_poll_ms + REPLAY_MERGE_ARCHIVE_POLL_INTERVAL_MS)))
+        {
+            replay_merge->time_of_last_scheduled_archive_poll_ms = now_ms;
+
+            bool ignored;
+            if (aeron_archive_replay_merge_poll_for_response(&ignored, replay_merge) < 0)
+            {
+                AERON_APPEND_ERR("%s", "");
+                aeron_archive_replay_merge_set_state(replay_merge, FAILED);
+                return -1;
+            }
+        }
     }
 
     return 0;
@@ -474,25 +497,9 @@ static int aeron_archive_replay_merge_get_recording_position(int *work_count_p, 
         if (found_response)
         {
             replay_merge->next_target_position = aeron_archive_control_response_poller(replay_merge->aeron_archive)->relevant_id;
-
             replay_merge->active_correlation_id = AERON_NULL_VALUE;
 
-            if (AERON_NULL_VALUE == replay_merge->next_target_position)
-            {
-
-                int64_t correlation_id = aeron_archive_next_correlation_id(replay_merge->aeron_archive);
-
-                if (aeron_archive_proxy_get_stop_position(
-                    replay_merge->archive_proxy,
-                    replay_merge->recording_id,
-                    correlation_id))
-                {
-                    replay_merge->time_of_last_progress_ms = now_ms;
-                    replay_merge->active_correlation_id = correlation_id;
-                    work_count += 1;
-                }
-            }
-            else
+            if (AERON_NULL_VALUE != replay_merge->next_target_position)
             {
                 replay_merge->time_of_last_progress_ms = now_ms;
                 aeron_archive_replay_merge_set_state(replay_merge, REPLAY);
@@ -763,7 +770,9 @@ static int aeron_archive_replay_merge_poll_for_response(bool *found_response_p, 
 {
     aeron_archive_control_response_poller_t *poller = aeron_archive_control_response_poller(replay_merge->aeron_archive);
 
-    if (aeron_archive_control_response_poller_poll(poller) < 0)
+    const int poll_count = aeron_archive_control_response_poller_poll(poller);
+
+    if (poll_count < 0)
     {
         AERON_APPEND_ERR("%s", "");
         return -1;
@@ -787,6 +796,12 @@ static int aeron_archive_replay_merge_poll_for_response(bool *found_response_p, 
     else
     {
         *found_response_p = false;
+
+        if (poll_count == 0 && !aeron_subscription_is_connected(poller->subscription))
+        {
+            AERON_SET_ERR(-AERON_ERROR_CODE_GENERIC_ERROR, "%s", "archive is not connected");
+            return -1;
+        }
     }
 
     return 0;

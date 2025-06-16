@@ -243,6 +243,7 @@ public class ClusterTool
             printHelp(COMMANDS, HELP_PREFIX);
             System.exit(-1);
         }
+
         final ClusterToolCommand command = COMMANDS.get(args[1]);
         if (null == command)
         {
@@ -252,7 +253,11 @@ public class ClusterTool
         }
         else
         {
-            command.action().act(clusterDir, System.out, args);
+            final int status = command.action().act(clusterDir, System.out, args);
+            if (SUCCESS != status)
+            {
+                System.exit(status);
+            }
         }
     }
 
@@ -520,9 +525,9 @@ public class ClusterTool
     /**
      * Print out a summary of the state captured in the latest consensus module snapshot.
      *
-     * @param out                           to print the operation result.
-     * @param clusterDir                    where the cluster is running.
-     * @param postConsensusImageDescriber   describe the data after the snapshot used for extensions.
+     * @param out                         to print the operation result.
+     * @param clusterDir                  where the cluster is running.
+     * @param postConsensusImageDescriber describe the data after the snapshot used for extensions.
      * @return <code>true</code> if the snapshot was successfully described <code>false</code> otherwise.
      */
     public static boolean describeLatestConsensusModuleSnapshot(

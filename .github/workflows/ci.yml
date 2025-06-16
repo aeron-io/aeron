@@ -36,7 +36,7 @@ jobs:
       fail-fast: false
       matrix:
         java: [ '17', '21', '24' ]
-        os: ['ubuntu-24.04', 'windows-latest', 'macos-latest']
+        os: ['ubuntu-24.04', 'windows-latest', 'macos-15']
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -382,7 +382,7 @@ jobs:
 
   cpp-xcode-build:
     name: C++ Xcode (macOS)
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 60
     env:
       CC: clang

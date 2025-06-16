@@ -15,8 +15,20 @@
  */
 package io.aeron.archive;
 
-import io.aeron.*;
-import io.aeron.archive.client.*;
+import io.aeron.Aeron;
+import io.aeron.ChannelUri;
+import io.aeron.ChannelUriStringBuilder;
+import io.aeron.CommonContext;
+import io.aeron.ExclusivePublication;
+import io.aeron.Image;
+import io.aeron.Subscription;
+import io.aeron.archive.client.AeronArchive;
+import io.aeron.archive.client.ArchiveException;
+import io.aeron.archive.client.ArchiveProxy;
+import io.aeron.archive.client.ControlResponsePoller;
+import io.aeron.archive.client.RecordingDescriptorConsumer;
+import io.aeron.archive.client.RecordingDescriptorPoller;
+import io.aeron.archive.client.ReplayParams;
 import io.aeron.archive.codecs.ControlResponseCode;
 import io.aeron.archive.codecs.RecordingSignal;
 import io.aeron.archive.codecs.SourceLocation;
@@ -32,12 +44,16 @@ import java.util.concurrent.TimeUnit;
 import static io.aeron.Aeron.NULL_VALUE;
 import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
 import static io.aeron.archive.client.ReplayMerge.LIVE_ADD_MAX_WINDOW;
-import static io.aeron.archive.codecs.RecordingSignal.*;
+import static io.aeron.archive.codecs.RecordingSignal.MERGE;
+import static io.aeron.archive.codecs.RecordingSignal.REPLICATE;
+import static io.aeron.archive.codecs.RecordingSignal.REPLICATE_END;
+import static io.aeron.archive.codecs.RecordingSignal.SYNC;
 
 class ReplicationSession implements Session, RecordingDescriptorConsumer
 {
     private static final int REPLAY_REMOVE_THRESHOLD = 0;
     private static final int RETRY_ATTEMPTS = 3;
+    private static final int SOURCE_ARCHIVE_POLL_INTERVAL_MS = 100;
     private final int replicationSessionId;
 
     @SuppressWarnings("JavadocVariable")
@@ -95,6 +111,7 @@ class ReplicationSession implements Session, RecordingDescriptorConsumer
     private long responsePublicationRegistrationId = NULL_VALUE;
     private ExclusivePublication responsePublication = null;
     private ArchiveProxy responseArchiveProxy = null;
+    private long timeOfLastScheduledSourceArchivePollMs;
 
     ReplicationSession(
         final long srcRecordingId,
@@ -158,7 +175,7 @@ class ReplicationSession implements Session, RecordingDescriptorConsumer
      */
     public boolean isDone()
     {
-        return state == State.DONE;
+        return State.DONE == state;
     }
 
     /**
@@ -252,6 +269,8 @@ class ReplicationSession implements Session, RecordingDescriptorConsumer
                 case DONE:
                     break;
             }
+
+            pollSourceArchiveEvents();
         }
         catch (final Exception ex)
         {
@@ -953,6 +972,24 @@ class ReplicationSession implements Session, RecordingDescriptorConsumer
         state = newState;
         activeCorrelationId = NULL_VALUE;
         timeOfLastActionMs = epochClock.time();
+    }
+
+    private void pollSourceArchiveEvents()
+    {
+        if (null != srcArchive && State.DONE != state && NULL_VALUE == activeCorrelationId)
+        {
+            final long nowMs = epochClock.time();
+            if (nowMs > (timeOfLastScheduledSourceArchivePollMs + SOURCE_ARCHIVE_POLL_INTERVAL_MS))
+            {
+                timeOfLastScheduledSourceArchivePollMs = nowMs;
+
+                final String errorMessage = srcArchive.pollForErrorResponse();
+                if (null != errorMessage)
+                {
+                    throw new ArchiveException(errorMessage);
+                }
+            }
+        }
     }
 
     @SuppressWarnings("unused")

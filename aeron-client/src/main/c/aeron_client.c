@@ -741,14 +741,14 @@ static int aeron_async_destination_poll(aeron_async_destination_t *async)
         case AERON_CLIENT_TIMEOUT_MEDIA_DRIVER:
         {
             AERON_SET_ERR(
-                AERON_CLIENT_ERROR_DRIVER_TIMEOUT, "%s", "async_add_publication no response from media driver");
+                AERON_CLIENT_ERROR_DRIVER_TIMEOUT, "%s", "async_add_destination no response from media driver");
             aeron_async_cmd_free(async);
             return -1;
         }
 
         default:
         {
-            AERON_SET_ERR(EINVAL, "async_add_counter async status %s", "unknown");
+            AERON_SET_ERR(EINVAL, "async_add_destination async status %s", "unknown");
             aeron_async_cmd_free(async);
             return -1;
         }
