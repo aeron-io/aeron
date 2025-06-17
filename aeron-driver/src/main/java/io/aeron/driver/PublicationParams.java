@@ -48,7 +48,7 @@ import static io.aeron.CommonContext.UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME;
 
 final class PublicationParams
 {
-    public static final long PROTOTYPE_VALUE_CORRELATION_ID = -2L; // TODO is this the right place to store this value?
+    static final long PROTOTYPE_VALUE_CORRELATION_ID = -2L;
 
     long lingerTimeoutNs;
     long entityTag = ChannelUri.INVALID_TAG;
@@ -574,7 +574,22 @@ final class PublicationParams
             return PROTOTYPE_VALUE_CORRELATION_ID;
         }
 
-        return Long.parseLong(idStr);
+        try
+        {
+            final long value = Long.parseLong(idStr);
+
+            if (value < -1)
+            {
+                throw new NumberFormatException("responseCorrelationId must be positive");
+            }
+
+            return value;
+        }
+        catch (final NumberFormatException ex)
+        {
+            throw new InvalidChannelException("invalid " + RESPONSE_CORRELATION_ID_PARAM_NAME +
+                ", must be a number greater than or equal to -1, or '" + PROTOTYPE_CORRELATION_ID + "'", ex);
+        }
     }
 
     private static long parseEntityTag(

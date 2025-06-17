@@ -69,6 +69,8 @@ public class ResponseServer implements AutoCloseable, Agent
     private final ControlledFragmentAssembler requestAssembler = new ControlledFragmentAssembler(
         this::onControlledRequestMessage);
 
+    private boolean usePrototype = true;
+
     private Subscription serverSubscription;
     private ExclusivePublication prototypeResponsePublication;
 
@@ -117,6 +119,16 @@ public class ResponseServer implements AutoCloseable, Agent
     }
 
     /**
+     * Indicate whether or not to create a prototype response publication.
+     *
+     * @param usePrototype true or false.
+     */
+    public void usePrototype(final boolean usePrototype)
+    {
+        this.usePrototype = usePrototype;
+    }
+
+    /**
      * Poll the server process messages and state.
      *
      * @return amount of work done.
@@ -133,9 +145,12 @@ public class ResponseServer implements AutoCloseable, Agent
                 this::enqueueAvailableImage,
                 this::enqueueUnavailableImage);
 
-            prototypeResponsePublication = aeron.addExclusivePublication(
-                responseUriBuilder.responseCorrelationId(PROTOTYPE_CORRELATION_ID).build(),
-                responseStreamId);
+            if (usePrototype)
+            {
+                prototypeResponsePublication = aeron.addExclusivePublication(
+                    responseUriBuilder.responseCorrelationId(PROTOTYPE_CORRELATION_ID).build(),
+                    responseStreamId);
+            }
 
             workCount++;
         }

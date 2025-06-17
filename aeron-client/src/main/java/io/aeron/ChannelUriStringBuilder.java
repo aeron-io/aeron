@@ -2045,13 +2045,16 @@ public final class ChannelUriStringBuilder
         {
             try
             {
-                Long.parseLong(responseCorrelationId);
+                if (Long.parseLong(responseCorrelationId) < -1)
+                {
+                    throw new NumberFormatException("responseCorrelationId must be positive");
+                }
             }
             catch (final NumberFormatException ex)
             {
                 throw new IllegalArgumentException(
-                    "responseCorrelationId must be a number or the value '" + PROTOTYPE_CORRELATION_ID + "' found: " +
-                    responseCorrelationId);
+                    "responseCorrelationId must be a number greater than or equal to -1, or the value '" +
+                        PROTOTYPE_CORRELATION_ID + "' found: " + responseCorrelationId);
             }
         }
 
