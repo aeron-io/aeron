@@ -31,7 +31,9 @@ import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
+import org.agrona.collections.MutableInteger;
 import org.agrona.collections.MutableLong;
+import org.agrona.collections.MutableReference;
 import org.agrona.concurrent.Agent;
 import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.UnsafeBuffer;
@@ -51,7 +53,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.function.Supplier;
 
+import static io.aeron.AeronCounters.DRIVER_PUBLISHER_POS_TYPE_ID;
 import static io.aeron.CommonContext.*;
+import static io.aeron.driver.status.SendChannelStatus.SEND_CHANNEL_STATUS_TYPE_ID;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -631,6 +635,127 @@ public class ResponseChannelsTest
                 "option conflicts with existing subscription: isResponse=" +
                 CONTROL_MODE_RESPONSE.equals(ChannelUri.parse(channel2).get(MDC_CONTROL_MODE_PARAM_NAME)) +
                 " existingChannel=" + channel1 + " channel=" + channel2));
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({ "what", "-2", "-3" })
+    void shouldRejectPublicationsWithBadResponseCorrelationIds(final String rci)
+    {
+        watcher.ignoreErrorsMatching(s -> s.contains(
+            "invalid response-correlation-id, must be a number greater than or equal to -1, or 'prototype'"));
+
+        final int streamId = 42;
+        try (Aeron aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver1.aeronDirectoryName())))
+        {
+            final String channel =
+                "aeron:udp?endpoint=localhost:8282|control-mode=response|response-correlation-id=" + rci;
+            assertThrows(RegistrationException.class, () -> aeron.addExclusivePublication(channel, streamId));
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({ "true", "false" })
+    @InterruptAfter(5)
+    void shouldCreateNewSendChannelWithoutProtype(final boolean usePrototype) throws Exception
+    {
+        final IdleStrategy idleStrategy = YieldingIdleStrategy.INSTANCE;
+        final List<String> responsesA = new ArrayList<>();
+        final FragmentHandler fragmentHandlerA =
+            (buffer, offset, length, header) -> responsesA.add(buffer.getStringWithoutLengthUtf8(offset, length));
+        final MutableReference<String> firstSendChannelLabel = new MutableReference<>();
+        final MutableReference<String> secondSendChannelLabel = new MutableReference<>();
+
+        try (Aeron server = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver1.aeronDirectoryName()));
+            Aeron clientA = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver1.aeronDirectoryName()));
+            Aeron clientB = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver2.aeronDirectoryName()));
+            ResponseServer responseServer = new ResponseServer(
+                server, (image) -> new EchoHandler(), REQUEST_ENDPOINT, REQUEST_STREAM_ID,
+                RESPONSE_CONTROL, RESPONSE_STREAM_ID, null, null))
+        {
+            responseServer.usePrototype(usePrototype);
+
+            {
+                final ResponseClient responseClientA = new ResponseClient(
+                    clientA, fragmentHandlerA, REQUEST_ENDPOINT,
+                    REQUEST_STREAM_ID, RESPONSE_CONTROL, RESPONSE_STREAM_ID);
+
+                final Supplier<String> msg = () -> "responseServer.sessionCount=" + responseServer.sessionCount() +
+                    " " + "clientA=" + responseClientA;
+
+                while (responseServer.sessionCount() < 1 ||
+                    !responseClientA.isConnected())
+                {
+                    idleStrategy.idle(run(responseServer, responseClientA));
+                    Tests.checkInterruptStatus(msg);
+                }
+
+                while (0 > responseClientA.offer(new UnsafeBuffer("hello from clientA".getBytes(UTF_8))))
+                {
+                    idleStrategy.idle(run(responseServer, responseClientA));
+                    Tests.checkInterruptStatus("unable to offer message to client A");
+                }
+
+                while (responsesA.isEmpty())
+                {
+                    idleStrategy.idle(run(responseServer, responseClientA));
+                    Tests.checkInterruptStatus("failed to receive responses");
+                }
+
+                idleStrategy.idle(run(responseClientA));
+
+                driver1.counters().forEach((counterId, typeId, keyBuffer, label) ->
+                {
+                    if (SEND_CHANNEL_STATUS_TYPE_ID == typeId && label.contains("control-mode=response"))
+                    {
+                        firstSendChannelLabel.set(label);
+                    }
+                });
+
+                responseClientA.close();
+            }
+
+            final MutableInteger publishers = new MutableInteger(0);
+            do
+            {
+                idleStrategy.idle(run(responseServer));
+                Tests.checkInterruptStatus("failed to detect publishers being closed");
+
+                publishers.set(0);
+                driver1.counters().forEach((counterId, typeId, keyBuffer, label) ->
+                {
+                    if (typeId == DRIVER_PUBLISHER_POS_TYPE_ID && !label.contains("prototype"))
+                    {
+                        publishers.increment();
+                    }
+                });
+
+            }
+            while (publishers.get() != 0);
+
+            try (ResponseClient responseClientB = new ResponseClient(clientB,
+                (b, o, l, h) -> {}, REQUEST_ENDPOINT, REQUEST_STREAM_ID, RESPONSE_CONTROL, RESPONSE_STREAM_ID))
+            {
+                final Supplier<String> msg = () -> "responseServer.sessionCount=" + responseServer.sessionCount() +
+                    " " + "clientB=" + responseClientB;
+
+                while (responseServer.sessionCount() < 1 ||
+                    !responseClientB.isConnected())
+                {
+                    idleStrategy.idle(run(responseServer, responseClientB));
+                    Tests.checkInterruptStatus(msg);
+                }
+
+                driver1.counters().forEach((counterId, typeId, keyBuffer, label) ->
+                {
+                    if (SEND_CHANNEL_STATUS_TYPE_ID == typeId && label.contains("control-mode=response"))
+                    {
+                        secondSendChannelLabel.set(label);
+                    }
+                });
+            }
+
+            assertEquals(usePrototype, firstSendChannelLabel.get().equals(secondSendChannelLabel.get()));
         }
     }
 
