@@ -85,7 +85,16 @@ public class ResponseChannelsTest
             .threadingMode(ThreadingMode.SHARED);
 
         driver1 = TestMediaDriver.launch(
-            context.clone().aeronDirectoryName(context.aeronDirectoryName() + "-1"), watcher);
+            context.clone()
+                .aeronDirectoryName(context.aeronDirectoryName() + "-1")
+                /*
+                For some reason, revoke() works much quicker against the java media driver.
+                There's a check in the LINGER state for having received a unicast EOS.  In java, we usually/always
+                see it more or less immediately, but in C, we don't.  So in C, we have to wait for the linger timeout.
+                Ultimately, it would be good to get this addressed in the C media driver.
+                 */
+                .publicationLingerTimeoutNs(200_000_000L),
+            watcher);
         driver2 = TestMediaDriver.launch(
             context.clone().aeronDirectoryName(context.aeronDirectoryName() + "-2"), watcher);
         watcher.dataCollector().add(driver1.context().aeronDirectory());
@@ -742,7 +751,7 @@ public class ResponseChannelsTest
     @ParameterizedTest
     @CsvSource({ "true", "false" })
     @InterruptAfter(5)
-    void shouldCreateNewSendChannelWithoutProtype(final boolean usePrototype) throws Exception
+    void shouldCreateNewSendChannelWithoutPrototype(final boolean usePrototype) throws Exception
     {
         final IdleStrategy idleStrategy = YieldingIdleStrategy.INSTANCE;
         final List<String> responsesA = new ArrayList<>();
@@ -814,7 +823,6 @@ public class ResponseChannelsTest
                         publishers.increment();
                     }
                 });
-
             }
             while (publishers.get() != 0);
 
@@ -841,6 +849,44 @@ public class ResponseChannelsTest
             }
 
             assertEquals(usePrototype, firstSendChannelLabel.get().equals(secondSendChannelLabel.get()));
+        }
+    }
+
+    @Test
+    @InterruptAfter(15)
+    void shouldUseLargerTermLengthWhenUsingPrototype()
+    {
+        try (Aeron server = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver1.aeronDirectoryName()));
+            Aeron client = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver1.aeronDirectoryName()));
+            Subscription subReq = server.addSubscription(
+                "aeron:udp?endpoint=localhost:10001", REQUEST_STREAM_ID);
+            ExclusivePublication protoRspPub = server.addExclusivePublication(
+                "aeron:udp?control-mode=response|control=localhost:10002|response-correlation-id=prototype",
+                RESPONSE_STREAM_ID);
+            Subscription subRsp = client.addSubscription(
+                "aeron:udp?control-mode=response|control=localhost:10002", RESPONSE_STREAM_ID);
+            Publication pubReq = client.addPublication(
+                "aeron:udp?endpoint=localhost:10001|response-correlation-id=" + subRsp.registrationId(),
+                REQUEST_STREAM_ID))
+        {
+            protoRspPub.revokeOnClose();
+
+            Tests.awaitConnected(subReq);
+            Tests.awaitConnected(pubReq);
+            Objects.requireNonNull(subRsp);
+
+            // TODO set different term lengths, and then verify things
+
+            final Image image = subReq.imageAtIndex(0);
+            final String url = "aeron:udp?control-mode=response|control=localhost:10002|response-correlation-id=" +
+                image.correlationId();
+
+            try (Publication pubRsp = server.addPublication(url, RESPONSE_STREAM_ID))
+            {
+                //System.err.println(" :: " + pubRsp.termBufferLength());
+                Tests.awaitConnected(subRsp);
+                Tests.awaitConnected(pubRsp);
+            }
         }
     }
 
