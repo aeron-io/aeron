@@ -2113,6 +2113,11 @@ static int aeron_driver_conductor_find_response_publication_image(
         return -1;
     }
 
+    if (AERON_URI_PROTOTYPE_VALUE_CORRELATION_ID == params->response_correlation_id)
+    {
+        return 0;
+    }
+
     for (size_t i = 0; i < conductor->publication_images.length; i++)
     {
         aeron_publication_image_t *image_entry = conductor->publication_images.array[i].image;
@@ -2257,6 +2262,12 @@ aeron_network_publication_t *aeron_driver_conductor_get_or_add_network_publicati
 
             if (ensure_capacity_result >= 0)
             {
+                if (params->is_response &&
+                    AERON_URI_PROTOTYPE_VALUE_CORRELATION_ID == params->response_correlation_id)
+                {
+                    params->term_length = AERON_LOGBUFFER_TERM_MIN_LENGTH;
+                }
+
                 if (!params->has_session_id)
                 {
                     aeron_driver_conductor_update_next_session_id(conductor, speculated_session_id);

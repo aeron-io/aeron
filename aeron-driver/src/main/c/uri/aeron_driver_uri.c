@@ -22,6 +22,8 @@
 #include "aeron_driver_context.h"
 #include "aeron_driver_conductor.h"
 
+static int aeron_driver_uri_get_response_correlation_id(aeron_uri_params_t *uri_params, int64_t *response_correlation_id);
+
 int aeron_uri_get_term_length_param(aeron_uri_params_t *uri_params, aeron_driver_uri_publication_params_t *params)
 {
     const char *value_str;
@@ -407,8 +409,7 @@ int aeron_diver_uri_publication_params(
         return -1;
     }
 
-    if (aeron_uri_get_int64(
-        uri_params, AERON_URI_RESPONSE_CORRELATION_ID_KEY, AERON_NULL_VALUE, &params->response_correlation_id) < 0)
+    if (aeron_driver_uri_get_response_correlation_id(uri_params, &params->response_correlation_id) < 0)
     {
         return -1;
     }
@@ -646,4 +647,37 @@ const char *aeron_driver_uri_get_offset_info(int32_t offset)
     }
 
     return "";
+}
+
+int aeron_driver_uri_get_response_correlation_id(aeron_uri_params_t *uri_params, int64_t *response_correlation_id)
+{
+    const char *response_correlation_id_str = aeron_uri_find_param_value(uri_params, AERON_URI_RESPONSE_CORRELATION_ID_KEY);
+
+    if (NULL == response_correlation_id_str)
+    {
+        return 0;
+    }
+
+    if (0 == strcmp(AERON_URI_RESPONSE_CORRELATION_ID_PROTOTYPE, response_correlation_id_str))
+    {
+        *response_correlation_id = AERON_URI_PROTOTYPE_VALUE_CORRELATION_ID;
+        return 0;
+    }
+
+    if (aeron_uri_get_int64(
+        uri_params, AERON_URI_RESPONSE_CORRELATION_ID_KEY, AERON_NULL_VALUE, response_correlation_id) < 0)
+    {
+        goto invalid_correlation_id;
+    }
+
+    if (*response_correlation_id < -1)
+    {
+        goto invalid_correlation_id;
+    }
+
+    return 0;
+
+invalid_correlation_id:
+    AERON_SET_ERR(EINVAL, "%s", "invalid response-correlation-id, must be a number greater than or equal to -1, or 'prototype'");
+    return -1;
 }
