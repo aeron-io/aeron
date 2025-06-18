@@ -21,6 +21,8 @@
 #include "aeron_driver_common.h"
 #include "aeronmd.h"
 
+#define AERON_URI_PROTOTYPE_VALUE_CORRELATION_ID (-2)
+
 typedef struct aeron_driver_uri_publication_params_stct
 {
     bool has_position;
