@@ -559,6 +559,7 @@ public final class Configuration
     public static final String UNICAST_FLOW_CONTROL_STRATEGY_PROP_NAME = "aeron.unicast.flow.control.strategy";
 
     /**
+     *
      */
     @Config
     public static final String UNICAST_FLOW_CONTROL_STRATEGY_DEFAULT = "io.aeron.driver.UnicastFlowControl";
@@ -576,6 +577,7 @@ public final class Configuration
     public static final String MULTICAST_FLOW_CONTROL_STRATEGY_PROP_NAME = "aeron.multicast.flow.control.strategy";
 
     /**
+     *
      */
     @Config
     public static final String MULTICAST_FLOW_CONTROL_STRATEGY_DEFAULT = "io.aeron.driver.MaxMulticastFlowControl";
@@ -637,6 +639,7 @@ public final class Configuration
     public static final String IPC_MTU_LENGTH_PROP_NAME = "aeron.ipc.mtu.length";
 
     /**
+     *
      */
     @Config(configType = Config.Type.DEFAULT)
     public static final int IPC_MTU_LENGTH_DEFAULT = MTU_LENGTH_DEFAULT;
@@ -2249,7 +2252,7 @@ public final class Configuration
      *
      * @return configured session limit
      * @throws AsciiNumberFormatException if the property referenced by {@link #STREAM_SESSION_LIMIT_PROP_NAME} is not
-     * a valid number
+     *                                    a valid number
      */
     public static int streamSessionLimit()
     {
@@ -2274,11 +2277,7 @@ public final class Configuration
      */
     public static void validateInitialWindowLength(final int initialWindowLength, final int mtuLength)
     {
-        if (mtuLength > initialWindowLength)
-        {
-            throw new ConfigurationException(
-                "mtuLength=" + mtuLength + " > initialWindowLength=" + initialWindowLength);
-        }
+        validateReceiverWindowLength("initialWindowLength", initialWindowLength, mtuLength);
     }
 
     /**
@@ -2501,6 +2500,28 @@ public final class Configuration
         {
             throw new ConfigurationException(
                 name + " greater than max size of " + maxValue + ": " + value);
+        }
+    }
+
+    static void validatePublicationWindow(
+        final String paramName, final long publicationWindowLength, final int mtuLength, final int termLength)
+    {
+        validateReceiverWindowLength(paramName, publicationWindowLength, mtuLength);
+
+        if (publicationWindowLength > (termLength >> 1))
+        {
+            throw new ConfigurationException(paramName + "=" + publicationWindowLength + " must not exceed half the " +
+                CommonContext.TERM_LENGTH_PARAM_NAME + "=" + termLength);
+        }
+    }
+
+    static void validateReceiverWindowLength(
+        final String paramName, final long receiverWindowLength, final int mtuLength)
+    {
+        if (receiverWindowLength < ((long)mtuLength << 1))
+        {
+            throw new ConfigurationException(paramName + "=" + receiverWindowLength +
+                " must be at least two times larger than the " + CommonContext.MTU_LENGTH_PARAM_NAME + "=" + mtuLength);
         }
     }
 }
