@@ -119,7 +119,7 @@ public:
             [&]()
             {
 #if defined(AERON_COMPILER_MSVC)
-#elif defined(Darwin)
+#elif defined(__APPLE__)
                 pthread_setname_np(m_name.c_str());
 #else
                 char threadName[16UL] = {};
