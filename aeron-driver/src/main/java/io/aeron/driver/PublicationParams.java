@@ -29,6 +29,8 @@ import static io.aeron.CommonContext.*;
 
 final class PublicationParams
 {
+    static final long PROTOTYPE_VALUE_CORRELATION_ID = -2L;
+
     long lingerTimeoutNs;
     long entityTag = ChannelUri.INVALID_TAG;
     long untetheredWindowLimitTimeoutNs;
@@ -140,7 +142,7 @@ final class PublicationParams
         }
 
         params.isResponse = CONTROL_MODE_RESPONSE.equals(channelUri.get(MDC_CONTROL_MODE_PARAM_NAME));
-        params.responseCorrelationId = Long.parseLong(channelUri.get(RESPONSE_CORRELATION_ID_PARAM_NAME, "-1"));
+        params.responseCorrelationId = parseResponseCorrelationId(channelUri);
 
         return params;
     }
@@ -532,6 +534,33 @@ final class PublicationParams
                     "invalid " + MAX_RESEND_PARAM_NAME + "=" + maxResend +
                     ", must be > 0 and <= " + Configuration.MAX_RESEND_MAX);
             }
+        }
+    }
+
+    private static long parseResponseCorrelationId(final ChannelUri channelUri)
+    {
+        final String idStr = channelUri.get(RESPONSE_CORRELATION_ID_PARAM_NAME, "-1");
+
+        if (PROTOTYPE_CORRELATION_ID.equals(idStr))
+        {
+            return PROTOTYPE_VALUE_CORRELATION_ID;
+        }
+
+        try
+        {
+            final long value = Long.parseLong(idStr);
+
+            if (value < -1)
+            {
+                throw new NumberFormatException("responseCorrelationId must be positive");
+            }
+
+            return value;
+        }
+        catch (final NumberFormatException ex)
+        {
+            throw new InvalidChannelException("invalid " + RESPONSE_CORRELATION_ID_PARAM_NAME +
+                ", must be a number greater than or equal to -1, or '" + PROTOTYPE_CORRELATION_ID + "'", ex);
         }
     }
 
