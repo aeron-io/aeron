@@ -287,7 +287,8 @@ public final class DriverConductor implements Agent
         final SubscriptionParams subscriptionParams =
             SubscriptionParams.getSubscriptionParams(subscriptionChannel.channelUri(), ctx, termBufferLength);
 
-        Configuration.validateInitialWindowLength(subscriptionParams.receiverWindowLength, senderMtuLength);
+        Configuration.validateReceiverWindowLength(
+            RECEIVER_WINDOW_LENGTH_PARAM_NAME, subscriptionParams.receiverWindowLength, senderMtuLength);
 
         final long joinPosition = computePosition(
             activeTermId, termOffset, LogBufferDescriptor.positionBitsToShift(termBufferLength), initialTermId);

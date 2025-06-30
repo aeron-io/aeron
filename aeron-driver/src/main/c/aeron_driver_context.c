@@ -1415,23 +1415,65 @@ int aeron_driver_validate_untethered_timeouts(aeron_driver_context_t *context)
     return 0;
 }
 
-int aeron_driver_context_validate_mtu_length(uint64_t mtu_length)
+int aeron_driver_context_validate_mtu_length(size_t mtu_length)
 {
     if (mtu_length <= AERON_DATA_HEADER_LENGTH || mtu_length > AERON_MAX_UDP_PAYLOAD_LENGTH)
     {
         AERON_SET_ERR(
             EINVAL,
             "mtuLength must be a > HEADER_LENGTH and <= MAX_UDP_PAYLOAD_LENGTH: mtuLength=%" PRIu64,
-            mtu_length);
+            (uint64_t)mtu_length);
         return -1;
     }
 
     if ((mtu_length & (AERON_LOGBUFFER_FRAME_ALIGNMENT - 1)) != 0)
     {
-        AERON_SET_ERR(EINVAL, "mtuLength must be a multiple of FRAME_ALIGNMENT: mtuLength=%" PRIu64, mtu_length);
+        AERON_SET_ERR(
+            EINVAL,
+            "mtuLength must be a multiple of FRAME_ALIGNMENT: mtuLength=%" PRIu64,
+            (uint64_t)mtu_length);
         return -1;
     }
 
+    return 0;
+}
+
+int aeron_driver_context_validate_receiver_window_length(const char* param, size_t window_length, size_t mtu_length)
+{
+    if (window_length < (mtu_length << 1))
+    {
+        AERON_SET_ERR(
+            EINVAL,
+            "%s=%" PRIu64 " must be at least two times larger than the %s=%" PRIu64,
+            param,
+            (uint64_t)window_length,
+            AERON_URI_MTU_LENGTH_KEY,
+            (uint64_t)mtu_length);
+        return -1;
+    }
+    return 0;
+}
+
+int aeron_driver_context_validate_publisher_window_length(
+    const char* param, size_t window_length, size_t mtu_length, size_t term_length)
+{
+    if (aeron_driver_context_validate_receiver_window_length(param, window_length, mtu_length) < 0)
+    {
+        AERON_APPEND_ERR("%s", "");
+        return -1;
+    }
+
+    if (window_length > (term_length >> 1))
+    {
+        AERON_SET_ERR(
+            EINVAL,
+            "%s=%" PRIu64 " must not exceed half the %s=%" PRIu64,
+            param,
+            (uint64_t)window_length,
+            AERON_URI_TERM_LENGTH_KEY,
+            (uint64_t)term_length);
+        return -1;
+    }
     return 0;
 }
 

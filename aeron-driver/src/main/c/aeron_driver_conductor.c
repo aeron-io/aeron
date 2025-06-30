@@ -3705,7 +3705,7 @@ int aeron_driver_conductor_do_work(void *clientd)
 
     for (size_t i = 0, length = conductor->publication_images.length; i < length; i++)
     {
-        aeron_publication_image_track_rebuild(conductor->publication_images.array[i].image, now_ns);
+        work_count += aeron_publication_image_track_rebuild(conductor->publication_images.array[i].image, now_ns);
     }
 
     for (size_t i = 0, length = conductor->network_publications.length; i < length; i++)
@@ -5954,6 +5954,13 @@ void aeron_driver_conductor_on_create_publication_image(void *clientd, void *ite
 
     if (aeron_receiver_channel_endpoint_validate_sender_mtu_length(
         endpoint, (size_t)command->mtu_length, initial_window_length, conductor->context) < 0)
+    {
+        AERON_APPEND_ERR("stream_id=%d session_id=%d", command->stream_id, command->session_id);
+        goto error_cleanup;
+    }
+
+    if (aeron_driver_context_validate_receiver_window_length(
+        AERON_URI_RECEIVER_WINDOW_KEY, initial_window_length, (size_t)command->mtu_length) < 0)
     {
         AERON_APPEND_ERR("stream_id=%d session_id=%d", command->stream_id, command->session_id);
         goto error_cleanup;

@@ -300,6 +300,7 @@ SET(SOURCE
     aeron_publication_image.c
     aeron_retransmit_handler.c
     aeron_system_counters.c
+    aeron_term_cleaner.c
     aeron_termination_validator.c)
 
 SET(HEADERS
@@ -344,6 +345,7 @@ SET(HEADERS
     aeron_publication_image.h
     aeron_retransmit_handler.h
     aeron_system_counters.h
+    aeron_term_cleaner.h
     aeron_termination_validator.h
     aeron_driver_version.h
     aeronmd.h)

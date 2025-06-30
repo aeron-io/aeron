@@ -22,6 +22,7 @@
 #include "aeron_ipc_publication.h"
 #include "aeron_alloc.h"
 #include "aeron_driver_conductor.h"
+#include "aeron_term_cleaner.h"
 
 static void aeron_ipc_publication_handle_managed_resource_event(aeron_driver_managed_resource_event_t event, void *clientd);
 
@@ -187,7 +188,6 @@ int aeron_ipc_publication_create(
     _pub->conductor_fields.managed_resource.clientd = _pub;
     _pub->conductor_fields.managed_resource.handle_event = aeron_ipc_publication_handle_managed_resource_event;
     _pub->conductor_fields.has_reached_end_of_life = false;
-    _pub->conductor_fields.trip_limit = 0;
     _pub->conductor_fields.time_of_last_consumer_position_change_ns = now_ns;
     _pub->conductor_fields.state = AERON_IPC_PUBLICATION_STATE_ACTIVE;
     _pub->conductor_fields.refcnt = 1;
@@ -202,7 +202,6 @@ int aeron_ipc_publication_create(
     _pub->starting_term_offset = params->has_position ? params->term_offset : 0;
     _pub->position_bits_to_shift = (size_t)aeron_number_of_trailing_zeroes((int32_t)params->term_length);
     _pub->term_window_length = params->publication_window_length;
-    _pub->trip_gain = _pub->term_window_length / 8;
     _pub->unblock_timeout_ns = (int64_t)context->publication_unblock_timeout_ns;
     _pub->untethered_window_limit_timeout_ns = (int64_t)params->untethered_window_limit_timeout_ns;
     _pub->untethered_linger_timeout_ns = params->untethered_linger_timeout_ns;
@@ -214,7 +213,10 @@ int aeron_ipc_publication_create(
 
     _pub->conductor_fields.consumer_position = aeron_ipc_publication_producer_position(_pub);
     _pub->conductor_fields.last_consumer_position = _pub->conductor_fields.consumer_position;
-    _pub->conductor_fields.clean_position = _pub->conductor_fields.consumer_position;
+    _pub->conductor_fields.clean_position =
+        aeron_term_cleaner_block_start_position(_pub->conductor_fields.consumer_position);
+    _pub->conductor_fields.trip_limit = 0;
+    _pub->conductor_fields.trip_gain = AERON_MAX(_pub->term_window_length >> 2, (int64_t)params->mtu_length);
 
     _pub->unblocked_publications_counter = aeron_system_counter_addr(
         system_counters, AERON_SYSTEM_COUNTER_UNBLOCKED_PUBLICATIONS);
@@ -357,22 +359,34 @@ int aeron_ipc_publication_update_pub_pos_and_lmt(aeron_ipc_publication_t *public
                 }
             }
 
-            int64_t new_limit_position = min_sub_pos + publication->term_window_length;
-            if (new_limit_position > publication->conductor_fields.trip_limit)
+            if (max_sub_pos > publication->conductor_fields.consumer_position)
             {
-                aeron_ipc_publication_clean_buffer(publication, min_sub_pos);
-                aeron_counter_set_release(publication->pub_lmt_position.value_addr, new_limit_position);
-                publication->conductor_fields.trip_limit = new_limit_position + publication->trip_gain;
-                work_count++;
+                publication->conductor_fields.consumer_position = max_sub_pos;
             }
 
-            publication->conductor_fields.consumer_position = max_sub_pos;
+            work_count += aeron_ipc_publication_clean_buffer(publication, min_sub_pos);
+
+            int64_t new_limit_position = min_sub_pos + publication->term_window_length;
+            if (new_limit_position >= publication->conductor_fields.trip_limit)
+            {
+                const int64_t clean_position = publication->conductor_fields.clean_position;
+                const int32_t dirty_term_id = aeron_logbuffer_compute_term_id_from_position(
+                    clean_position, publication->position_bits_to_shift, publication->initial_term_id);
+                const int32_t active_term_id = aeron_logbuffer_compute_term_id_from_position(
+                    new_limit_position, publication->position_bits_to_shift, publication->initial_term_id);
+                const int32_t term_gap = aeron_logbuffer_compute_term_count(active_term_id, dirty_term_id);
+                if (term_gap < 2 || (2 == term_gap && 0 != (clean_position & (publication->mapped_raw_log.term_length - 1))))
+                {
+                    aeron_counter_set_release(publication->pub_lmt_position.value_addr, new_limit_position);
+                    publication->conductor_fields.trip_limit = new_limit_position + publication->conductor_fields.trip_gain;
+                    work_count++;
+                }
+            }
         }
         else if (*publication->pub_lmt_position.value_addr > consumer_position)
         {
             aeron_counter_set_release(publication->pub_lmt_position.value_addr, consumer_position);
             publication->conductor_fields.trip_limit = consumer_position;
-            aeron_ipc_publication_clean_buffer(publication, consumer_position);
             work_count++;
         }
     }
@@ -380,28 +394,23 @@ int aeron_ipc_publication_update_pub_pos_and_lmt(aeron_ipc_publication_t *public
     return work_count;
 }
 
-void aeron_ipc_publication_clean_buffer(aeron_ipc_publication_t *publication, int64_t position)
+int aeron_ipc_publication_clean_buffer(aeron_ipc_publication_t *publication, int64_t position)
 {
     int64_t clean_position = publication->conductor_fields.clean_position;
-    if (position > clean_position)
+    if (position - clean_position >= AERON_TERM_CLEANER_TERM_CLEANUP_BLOCK_LENGTH)
     {
         size_t dirty_index = aeron_logbuffer_index_by_position(clean_position, publication->position_bits_to_shift);
-        size_t bytes_to_clean = (size_t)(position - clean_position);
-        size_t term_length = publication->mapped_raw_log.term_length;
-        size_t term_offset = (size_t)(clean_position & (term_length - 1));
-        size_t bytes_left_in_term = term_length - term_offset;
-        size_t length = bytes_to_clean < bytes_left_in_term ? bytes_to_clean : bytes_left_in_term;
+        size_t term_offset = (size_t)(clean_position & (publication->mapped_raw_log.term_length - 1));
 
         memset(
-            publication->mapped_raw_log.term_buffers[dirty_index].addr + term_offset + sizeof(int64_t),
+            publication->mapped_raw_log.term_buffers[dirty_index].addr + term_offset,
             0,
-            length - sizeof(int64_t));
-
-        uint64_t *ptr = (uint64_t *)(publication->mapped_raw_log.term_buffers[dirty_index].addr + term_offset);
-        AERON_SET_RELEASE(*ptr, (uint64_t)0);
-
-        publication->conductor_fields.clean_position = (int64_t)(clean_position + length);
+            AERON_TERM_CLEANER_TERM_CLEANUP_BLOCK_LENGTH);
+        aeron_release();
+        publication->conductor_fields.clean_position = clean_position + (int64_t)AERON_TERM_CLEANER_TERM_CLEANUP_BLOCK_LENGTH;
+        return 1;
     }
+    return 0;
 }
 
 void aeron_ipc_publication_check_untethered_subscriptions(

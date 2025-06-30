@@ -51,6 +51,7 @@ typedef struct aeron_network_publication_stct
         aeron_driver_managed_resource_t managed_resource;
         aeron_subscribable_t subscribable;
         int64_t clean_position;
+        int64_t trip_limit;
         int64_t time_of_last_activity_ns;
         int64_t last_snd_pos;
     }
@@ -193,7 +194,7 @@ void aeron_network_publication_on_error(
 void aeron_network_publication_on_rttm(
     aeron_network_publication_t *publication, const uint8_t *buffer, size_t length, struct sockaddr_storage *addr);
 
-void aeron_network_publication_clean_buffer(aeron_network_publication_t *publication, int64_t position);
+int aeron_network_publication_clean_buffer(aeron_network_publication_t *publication, int64_t position);
 
 int aeron_network_publication_update_pub_pos_and_lmt(aeron_network_publication_t *publication);
 

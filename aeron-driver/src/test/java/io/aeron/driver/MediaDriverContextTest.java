@@ -369,6 +369,61 @@ class MediaDriverContextTest
         assertEquals(filePageSize, CncFileDescriptor.filePageSize(metaDataBuffer));
     }
 
+    @ParameterizedTest
+    @ValueSource(ints = { 5000, 8192, 16383 })
+    void shouldRejectPublicationWindowLessThanTwoMtus(final int windowLength)
+    {
+        context.mtuLength(8192).publicationTermWindowLength(windowLength);
+
+        final ConfigurationException exception = assertThrowsExactly(ConfigurationException.class, context::conclude);
+        assertEquals("ERROR - publicationTermWindowLength=" + windowLength +
+            " must be at least two times larger than the mtu=8192", exception.getMessage());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = { 536870913, Integer.MAX_VALUE })
+    void shouldRejectPublicationWindowGreaterThanHalfAMaxTermLength(final int windowLength)
+    {
+        context.publicationTermWindowLength(windowLength);
+
+        final ConfigurationException exception = assertThrowsExactly(ConfigurationException.class, context::conclude);
+        assertEquals("ERROR - publicationTermWindowLength=" + windowLength +
+            " must not exceed half the term-length=1073741824", exception.getMessage());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = { 5000, 8191, 9600, 19199 })
+    void shouldRejectIpcPublicationWindowLessThanTwoMtus(final int windowLength)
+    {
+        context.ipcMtuLength(9600).ipcPublicationTermWindowLength(windowLength);
+
+        final ConfigurationException exception = assertThrowsExactly(ConfigurationException.class, context::conclude);
+        assertEquals("ERROR - ipcPublicationTermWindowLength=" + windowLength +
+            " must be at least two times larger than the mtu=9600", exception.getMessage());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = { 536870913, Integer.MAX_VALUE })
+    void shouldRejectIpcPublicationWindowGreaterThanHalfAMaxTermLength(final int windowLength)
+    {
+        context.ipcPublicationTermWindowLength(windowLength);
+
+        final ConfigurationException exception = assertThrowsExactly(ConfigurationException.class, context::conclude);
+        assertEquals("ERROR - ipcPublicationTermWindowLength=" + windowLength +
+            " must not exceed half the term-length=1073741824", exception.getMessage());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = { 1024, -2, 2047, 4095 })
+    void shouldRejectInitialReceiverWindowLessThanMtu(final int windowLength)
+    {
+        context.mtuLength(2048).initialWindowLength(windowLength);
+
+        final ConfigurationException exception = assertThrowsExactly(ConfigurationException.class, context::conclude);
+        assertEquals("ERROR - initialWindowLength=" + windowLength +
+            " must be at least two times larger than the mtu=2048", exception.getMessage());
+    }
+
     private static ErrorHandler getErrorHandler(final UdpTransportPoller transportPoller) throws Exception
     {
         final Field field = UdpTransportPoller.class.getDeclaredField("errorHandler");

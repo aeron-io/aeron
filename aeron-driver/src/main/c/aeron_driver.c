@@ -786,6 +786,34 @@ int aeron_driver_init(aeron_driver_t **driver, aeron_driver_context_t *context)
         goto error;
     }
 
+    if (0 != _driver->context->publication_window_length &&
+        aeron_driver_context_validate_publisher_window_length(
+            "publicationTermWindowLength",
+            _driver->context->publication_window_length,
+            _driver->context->mtu_length,
+            AERON_LOGBUFFER_TERM_MAX_LENGTH) < 0)
+    {
+        goto error;
+    }
+
+    if (0 != _driver->context->ipc_publication_window_length &&
+        aeron_driver_context_validate_publisher_window_length(
+            "ipcPublicationTermWindowLength",
+            _driver->context->ipc_publication_window_length,
+            _driver->context->ipc_mtu_length,
+            AERON_LOGBUFFER_TERM_MAX_LENGTH) < 0)
+    {
+        goto error;
+    }
+
+    if (aeron_driver_context_validate_receiver_window_length(
+        "initialWindowLength",
+            _driver->context->initial_window_length,
+            _driver->context->mtu_length) < 0)
+    {
+        goto error;
+    }
+
     if (aeron_driver_validate_value_range(
         _driver->context->to_driver_buffer_length,
         AERON_TO_CONDUCTOR_BUFFER_LENGTH_DEFAULT,

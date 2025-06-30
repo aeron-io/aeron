@@ -22,7 +22,13 @@ import io.aeron.config.Config;
 import io.aeron.driver.buffer.FileStoreLogFactory;
 import io.aeron.driver.buffer.LogFactory;
 import io.aeron.driver.exceptions.ActiveDriverException;
-import io.aeron.driver.media.*;
+import io.aeron.driver.media.ControlTransportPoller;
+import io.aeron.driver.media.DataTransportPoller;
+import io.aeron.driver.media.PortManager;
+import io.aeron.driver.media.ReceiveChannelEndpoint;
+import io.aeron.driver.media.ReceiveChannelEndpointThreadLocals;
+import io.aeron.driver.media.SendChannelEndpoint;
+import io.aeron.driver.media.WildcardPortManager;
 import io.aeron.driver.reports.LossReport;
 import io.aeron.driver.status.DutyCycleStallTracker;
 import io.aeron.driver.status.SystemCounters;
@@ -32,13 +38,44 @@ import io.aeron.exceptions.ConfigurationException;
 import io.aeron.logbuffer.BufferClaim;
 import io.aeron.logbuffer.LogBufferDescriptor;
 import io.aeron.version.Versioned;
-import org.agrona.*;
-import org.agrona.concurrent.*;
+import org.agrona.BitUtil;
+import org.agrona.BufferUtil;
+import org.agrona.CloseHelper;
+import org.agrona.ErrorHandler;
+import org.agrona.IoUtil;
+import org.agrona.LangUtil;
+import org.agrona.MutableDirectBuffer;
+import org.agrona.SemanticVersion;
+import org.agrona.Strings;
+import org.agrona.SystemUtil;
+import org.agrona.concurrent.Agent;
+import org.agrona.concurrent.AgentInvoker;
+import org.agrona.concurrent.AgentRunner;
+import org.agrona.concurrent.CachedEpochClock;
+import org.agrona.concurrent.CachedNanoClock;
+import org.agrona.concurrent.CompositeAgent;
+import org.agrona.concurrent.CountedErrorHandler;
+import org.agrona.concurrent.EpochClock;
+import org.agrona.concurrent.EpochNanoClock;
+import org.agrona.concurrent.HighResolutionTimer;
+import org.agrona.concurrent.IdleStrategy;
+import org.agrona.concurrent.ManyToOneConcurrentLinkedQueue;
+import org.agrona.concurrent.NanoClock;
+import org.agrona.concurrent.OneToOneConcurrentArrayQueue;
+import org.agrona.concurrent.ShutdownSignalBarrier;
+import org.agrona.concurrent.SystemEpochClock;
+import org.agrona.concurrent.SystemEpochNanoClock;
+import org.agrona.concurrent.SystemNanoClock;
+import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.broadcast.BroadcastTransmitter;
 import org.agrona.concurrent.errors.DistinctErrorLog;
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
-import org.agrona.concurrent.status.*;
+import org.agrona.concurrent.status.AtomicCounter;
+import org.agrona.concurrent.status.ConcurrentCountersManager;
+import org.agrona.concurrent.status.CountersManager;
+import org.agrona.concurrent.status.StatusIndicator;
+import org.agrona.concurrent.status.UnsafeBufferStatusIndicator;
 
 import java.io.ByteArrayOutputStream;
 import java.io.FileOutputStream;
@@ -53,15 +90,55 @@ import java.nio.channels.DatagramChannel;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Date;
-import java.util.concurrent.*;
+import java.util.concurrent.Executor;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
-import static io.aeron.CncFileDescriptor.*;
-import static io.aeron.driver.Configuration.*;
+import static io.aeron.CncFileDescriptor.CNC_VERSION;
+import static io.aeron.CncFileDescriptor.META_DATA_LENGTH;
+import static io.aeron.CncFileDescriptor.createCountersMetaDataBuffer;
+import static io.aeron.CncFileDescriptor.createCountersValuesBuffer;
+import static io.aeron.CncFileDescriptor.createErrorLogBuffer;
+import static io.aeron.CncFileDescriptor.createToClientsBuffer;
+import static io.aeron.CncFileDescriptor.createToDriverBuffer;
+import static io.aeron.driver.Configuration.CALLER_RUNS_TASK_EXECUTOR;
+import static io.aeron.driver.Configuration.CMD_QUEUE_CAPACITY;
+import static io.aeron.driver.Configuration.CONDUCTOR_BUFFER_LENGTH_DEFAULT;
+import static io.aeron.driver.Configuration.COUNTERS_VALUES_BUFFER_LENGTH_DEFAULT;
+import static io.aeron.driver.Configuration.COUNTERS_VALUES_BUFFER_LENGTH_MAX;
+import static io.aeron.driver.Configuration.ERROR_BUFFER_LENGTH_DEFAULT;
+import static io.aeron.driver.Configuration.LOSS_REPORT_BUFFER_LENGTH_DEFAULT;
+import static io.aeron.driver.Configuration.TO_CLIENTS_BUFFER_LENGTH_DEFAULT;
+import static io.aeron.driver.Configuration.countersMetadataBufferLength;
+import static io.aeron.driver.Configuration.validateInitialWindowLength;
+import static io.aeron.driver.Configuration.validateMtuLength;
+import static io.aeron.driver.Configuration.validatePageSize;
+import static io.aeron.driver.Configuration.validatePublicationWindow;
+import static io.aeron.driver.Configuration.validateSessionIdRange;
+import static io.aeron.driver.Configuration.validateSocketBufferLengths;
+import static io.aeron.driver.Configuration.validateUnblockTimeout;
+import static io.aeron.driver.Configuration.validateUntetheredTimeouts;
+import static io.aeron.driver.Configuration.validateValueRange;
 import static io.aeron.driver.reports.LossReportUtil.mapLossReport;
+import static io.aeron.driver.status.SystemCounterDescriptor.AERON_VERSION;
+import static io.aeron.driver.status.SystemCounterDescriptor.BYTES_CURRENTLY_MAPPED;
+import static io.aeron.driver.status.SystemCounterDescriptor.CONDUCTOR_CYCLE_TIME_THRESHOLD_EXCEEDED;
+import static io.aeron.driver.status.SystemCounterDescriptor.CONDUCTOR_MAX_CYCLE_TIME;
+import static io.aeron.driver.status.SystemCounterDescriptor.CONDUCTOR_PROXY_FAILS;
 import static io.aeron.driver.status.SystemCounterDescriptor.CONTROLLABLE_IDLE_STRATEGY;
-import static io.aeron.driver.status.SystemCounterDescriptor.*;
+import static io.aeron.driver.status.SystemCounterDescriptor.ERRORS;
+import static io.aeron.driver.status.SystemCounterDescriptor.NAME_RESOLVER_MAX_TIME;
+import static io.aeron.driver.status.SystemCounterDescriptor.NAME_RESOLVER_TIME_THRESHOLD_EXCEEDED;
+import static io.aeron.driver.status.SystemCounterDescriptor.RECEIVER_CYCLE_TIME_THRESHOLD_EXCEEDED;
+import static io.aeron.driver.status.SystemCounterDescriptor.RECEIVER_MAX_CYCLE_TIME;
+import static io.aeron.driver.status.SystemCounterDescriptor.RECEIVER_PROXY_FAILS;
+import static io.aeron.driver.status.SystemCounterDescriptor.SENDER_CYCLE_TIME_THRESHOLD_EXCEEDED;
+import static io.aeron.driver.status.SystemCounterDescriptor.SENDER_MAX_CYCLE_TIME;
+import static io.aeron.driver.status.SystemCounterDescriptor.SENDER_PROXY_FAILS;
 import static io.aeron.logbuffer.LogBufferDescriptor.TERM_MAX_LENGTH;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
@@ -432,6 +509,7 @@ public final class MediaDriver implements AutoCloseable
     public static final class Context extends CommonContext
     {
         private static final VarHandle IS_CLOSED_VH;
+
         static
         {
             try
@@ -642,6 +720,7 @@ public final class MediaDriver implements AutoCloseable
         /**
          * {@inheritDoc}
          */
+        @SuppressWarnings("MethodLength")
         public Context conclude()
         {
             super.conclude();
@@ -668,10 +747,22 @@ public final class MediaDriver implements AutoCloseable
                     "counterValuesBufferLength");
                 validateValueRange(
                     errorBufferLength, ERROR_BUFFER_LENGTH_DEFAULT, Integer.MAX_VALUE, "errorBufferLength");
-                validateValueRange(
-                    publicationTermWindowLength, 0, TERM_MAX_LENGTH, "publicationTermWindowLength");
-                validateValueRange(
-                    ipcPublicationTermWindowLength, 0, TERM_MAX_LENGTH, "ipcPublicationTermWindowLength");
+                if (0 != publicationTermWindowLength)
+                {
+                    validatePublicationWindow(
+                        "publicationTermWindowLength",
+                        publicationTermWindowLength,
+                        mtuLength,
+                        TERM_MAX_LENGTH);
+                }
+                if (0 != ipcPublicationTermWindowLength)
+                {
+                    validatePublicationWindow(
+                        "ipcPublicationTermWindowLength",
+                        ipcPublicationTermWindowLength,
+                        ipcMtuLength,
+                        TERM_MAX_LENGTH);
+                }
 
                 validateSessionIdRange(publicationReservedSessionIdLow, publicationReservedSessionIdHigh);
 

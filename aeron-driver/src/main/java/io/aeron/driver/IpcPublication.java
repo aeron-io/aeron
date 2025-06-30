@@ -32,12 +32,15 @@ import org.agrona.concurrent.status.ReadablePosition;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.util.*;
+import java.lang.invoke.VarHandle;
+import java.util.ArrayList;
 
 import static io.aeron.ErrorCode.IMAGE_REJECTED;
 import static io.aeron.driver.status.SystemCounterDescriptor.*;
+import static io.aeron.driver.TermCleaner.TERM_CLEANUP_BLOCK_LENGTH;
+import static io.aeron.driver.TermCleaner.blockStartPosition;
+import static io.aeron.driver.status.SystemCounterDescriptor.UNBLOCKED_PUBLICATIONS;
 import static io.aeron.logbuffer.LogBufferDescriptor.*;
-import static org.agrona.BitUtil.SIZE_OF_LONG;
 
 /**
  * Encapsulation of a stream used directly between publishers and subscribers for IPC over shared memory.
@@ -66,11 +69,12 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     private final int startingTermId;
     private final int startingTermOffset;
     private final int positionBitsToShift;
-    private final int termBufferLength;
-    private final int mtuLength;
     private final int termWindowLength;
-    private final int initialTermId;
+    private final int termLengthMask;
+    private final int termBufferLength;
     private final int tripGain;
+    private final int mtuLength;
+    private final int initialTermId;
     private long tripLimit;
     private long consumerPosition;
     private long lastConsumerPosition;
@@ -120,10 +124,12 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
 
         final int termLength = params.termLength;
         this.termBufferLength = termLength;
-        this.mtuLength = params.mtuLength;
+        termLengthMask = termLength - 1;
+        mtuLength = params.mtuLength;
+        termWindowLength = params.publicationWindowLength;
+        tripGain = Math.max(termWindowLength >> 2, mtuLength);
+
         this.positionBitsToShift = LogBufferDescriptor.positionBitsToShift(termLength);
-        this.termWindowLength = params.publicationWindowLength;
-        this.tripGain = termWindowLength >> 3;
         this.publisherPos = publisherPos;
         this.publisherLimit = publisherLimit;
         this.rawLog = rawLog;
@@ -141,7 +147,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
 
         consumerPosition = producerPosition();
         lastConsumerPosition = consumerPosition;
-        cleanPosition = consumerPosition;
+        cleanPosition = blockStartPosition(lastConsumerPosition);
         timeOfLastConsumerPositionUpdateNs = ctx.cachedNanoClock().nanoTime();
     }
 
@@ -231,6 +237,11 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     int mtuLength()
     {
         return mtuLength;
+    }
+
+    long cleanPosition()
+    {
+        return cleanPosition;
     }
 
     /**
@@ -458,21 +469,29 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
                     consumerPosition = maxSubscriberPosition;
                 }
 
+                workCount += cleanBufferTo(minSubscriberPosition);
                 final long newLimitPosition = minSubscriberPosition + termWindowLength;
                 if (newLimitPosition >= tripLimit)
                 {
-                    cleanBufferTo(minSubscriberPosition);
-                    publisherLimit.setRelease(newLimitPosition);
-                    tripLimit = newLimitPosition + tripGain;
-                    workCount = 1;
+                    final long cleanPosition = this.cleanPosition;
+                    final int dirtyTermId =
+                        computeTermIdFromPosition(cleanPosition, positionBitsToShift, initialTermId);
+                    final int activeTermId =
+                        computeTermIdFromPosition(newLimitPosition, positionBitsToShift, initialTermId);
+                    final int termGap = activeTermId - dirtyTermId;
+                    if (termGap < 2 || (2 == termGap && 0 != (int)(cleanPosition & termLengthMask)))
+                    {
+                        publisherLimit.setRelease(newLimitPosition);
+                        tripLimit = newLimitPosition + tripGain;
+                        workCount++;
+                    }
                 }
             }
             else if (publisherLimit.get() > consumerPosition)
             {
-                tripLimit = consumerPosition;
                 publisherLimit.setRelease(consumerPosition);
-                cleanBufferTo(consumerPosition);
-                workCount = 1;
+                tripLimit = consumerPosition;
+                workCount++;
             }
         }
 
@@ -621,21 +640,20 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         return producerPosition > consumerPosition;
     }
 
-    private void cleanBufferTo(final long position)
+    private int cleanBufferTo(final long position)
     {
         final long cleanPosition = this.cleanPosition;
-        if (position > cleanPosition)
+        if (position - cleanPosition >= TERM_CLEANUP_BLOCK_LENGTH)
         {
             final UnsafeBuffer dirtyTermBuffer = termBuffers[indexByPosition(cleanPosition, positionBitsToShift)];
-            final int bytesForCleaning = (int)(position - cleanPosition);
-            final int bufferCapacity = termBufferLength;
-            final int termOffset = (int)cleanPosition & (bufferCapacity - 1);
-            final int length = Math.min(bytesForCleaning, bufferCapacity - termOffset);
+            final int termOffset = (int)(cleanPosition & termLengthMask);
 
-            dirtyTermBuffer.setMemory(termOffset + SIZE_OF_LONG, length - SIZE_OF_LONG, (byte)0);
-            dirtyTermBuffer.putLongRelease(termOffset, 0);
-            this.cleanPosition = cleanPosition + length;
+            dirtyTermBuffer.setMemory(termOffset, TERM_CLEANUP_BLOCK_LENGTH, (byte)0);
+            VarHandle.storeStoreFence();
+            this.cleanPosition = cleanPosition + TERM_CLEANUP_BLOCK_LENGTH;
+            return 1;
         }
+        return 0;
     }
 
     private static void logRevoke(

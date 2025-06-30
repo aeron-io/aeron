@@ -383,13 +383,13 @@ TEST_F(DriverUriTest, shouldFailWithInvalidMaxRetransmits)
     EXPECT_THAT(std::string(aeron_errmsg()), ::testing::HasSubstr("could not parse max-resend"));
 }
 
-TEST_F(DriverUriTest, shouldFailWithPublicationWindowLessThanMtu)
+TEST_F(DriverUriTest, shouldFailWithPublicationWindowLessThanTwoMtus)
 {
     aeron_driver_uri_publication_params_t params;
 
-    EXPECT_EQ(AERON_URI_PARSE("aeron:udp?endpoint=224.10.9.8|pub-wnd=2048|mtu=4096", &m_uri), 0);
+    EXPECT_EQ(AERON_URI_PARSE("aeron:udp?endpoint=224.10.9.8|pub-wnd=8128|mtu=4096", &m_uri), 0);
     EXPECT_EQ(aeron_diver_uri_publication_params(&m_uri, &params, &m_conductor, false), -1);
-    EXPECT_THAT(std::string(aeron_errmsg()), ::testing::HasSubstr("pub-wnd=2048 cannot be less than the mtu=4096"));
+    EXPECT_THAT(std::string(aeron_errmsg()), ::testing::HasSubstr("pub-wnd=8128 must be at least two times larger than the mtu=4096"));
 }
 
 TEST_F(DriverUriTest, shouldFailWithPublicationWindowMoreThanHalfTermLength)

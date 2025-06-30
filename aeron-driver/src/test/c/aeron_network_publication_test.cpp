@@ -24,6 +24,7 @@ extern "C"
 #include "aeron_test_udp_bindings.h"
 #include "aeron_driver_sender.h"
 #include "aeron_position.h"
+#include "aeron_term_cleaner.h"
 
 int aeron_driver_ensure_dir_is_recreated(aeron_driver_context_t *context);
 }
@@ -358,7 +359,7 @@ TEST_F(NetworkPublicationTest, shouldCleanDirtyTermBuffersOneTermBehindTheMinCon
     ASSERT_EQ(initial_position, aeron_counter_get_plain(publication->pub_lmt_position.value_addr));
     ASSERT_EQ(initial_position, aeron_counter_get_plain(publication->snd_pos_position.value_addr));
     ASSERT_EQ(initial_position, aeron_counter_get_plain(publication->snd_lmt_position.value_addr));
-    ASSERT_EQ(initial_position, publication->conductor_fields.clean_position);
+    ASSERT_EQ(aeron_term_cleaner_block_start_position(initial_position), publication->conductor_fields.clean_position);
 
     aeron_driver_conductor_t conductor = {};
     aeron_driver_conductor_proxy_t proxy = {};
@@ -376,29 +377,38 @@ TEST_F(NetworkPublicationTest, shouldCleanDirtyTermBuffersOneTermBehindTheMinCon
     // initial pub-lmt increase
     aeron_network_publication_update_pub_pos_and_lmt(publication);
     EXPECT_EQ(initial_position + publication_window_length, aeron_counter_get_plain(publication->pub_lmt_position.value_addr));
-    EXPECT_EQ(initial_position, publication->conductor_fields.clean_position);
+    EXPECT_EQ(aeron_term_cleaner_block_start_position(initial_position), publication->conductor_fields.clean_position);
 
     // snd-pos increase less than a term
     aeron_counter_set_release(publication->snd_pos_position.value_addr, initial_position + 4128);
     aeron_network_publication_update_pub_pos_and_lmt(publication);
     EXPECT_EQ(initial_position + 4128 + publication_window_length, aeron_counter_get_plain(publication->pub_lmt_position.value_addr));
-    EXPECT_EQ(initial_position, publication->conductor_fields.clean_position);
+    EXPECT_EQ(aeron_term_cleaner_block_start_position(initial_position), publication->conductor_fields.clean_position);
 
     // snd-pos increase exactly one term
     aeron_counter_set_release(publication->snd_pos_position.value_addr, initial_position + term_length);
     aeron_network_publication_update_pub_pos_and_lmt(publication);
     EXPECT_EQ(initial_position + term_length + publication_window_length, aeron_counter_get_plain(publication->pub_lmt_position.value_addr));
-    EXPECT_EQ(initial_position, publication->conductor_fields.clean_position);
+    EXPECT_EQ(aeron_term_cleaner_block_start_position(initial_position), publication->conductor_fields.clean_position);
 
-    // snd-pos increase beyond a term
+    // snd-pos increase beyond a term but less than trip gain
     aeron_counter_set_release(publication->snd_pos_position.value_addr, initial_position + term_length + 192);
     aeron_network_publication_update_pub_pos_and_lmt(publication);
-    EXPECT_EQ(initial_position + term_length + 192 + publication_window_length, aeron_counter_get_plain(publication->pub_lmt_position.value_addr));
-    EXPECT_EQ(initial_position + 192, publication->conductor_fields.clean_position);
+    EXPECT_EQ(initial_position + term_length + publication_window_length, aeron_counter_get_plain(publication->pub_lmt_position.value_addr));
+    EXPECT_EQ(aeron_term_cleaner_block_start_position(initial_position), publication->conductor_fields.clean_position);
+
+    // snd-pos increase beyond a term and a cleanup block
+    aeron_counter_set_release(publication->snd_pos_position.value_addr, initial_position + term_length + AERON_TERM_CLEANER_TERM_CLEANUP_BLOCK_LENGTH + 384);
+    aeron_network_publication_update_pub_pos_and_lmt(publication);
+    EXPECT_EQ(initial_position + term_length + AERON_TERM_CLEANER_TERM_CLEANUP_BLOCK_LENGTH + 384 + publication_window_length, aeron_counter_get_plain(publication->pub_lmt_position.value_addr));
+    EXPECT_EQ(aeron_term_cleaner_block_start_position(initial_position) + AERON_TERM_CLEANER_TERM_CLEANUP_BLOCK_LENGTH, publication->conductor_fields.clean_position);
 
     // clean the rest of the first term
     aeron_counter_set_release(publication->snd_pos_position.value_addr, initial_position + 2 * term_length + 32);
-    aeron_network_publication_update_pub_pos_and_lmt(publication);
+    while(publication->conductor_fields.clean_position < initial_position - term_offset + term_length)
+    {
+        aeron_network_publication_update_pub_pos_and_lmt(publication);
+    }
     EXPECT_EQ(initial_position + 2 * term_length + 32 + publication_window_length, aeron_counter_get_plain(publication->pub_lmt_position.value_addr));
     EXPECT_EQ(initial_position - term_offset + term_length, publication->conductor_fields.clean_position);
 
@@ -411,7 +421,7 @@ TEST_F(NetworkPublicationTest, shouldCleanDirtyTermBuffersOneTermBehindTheMinCon
     aeron_counter_set_release(publication->snd_pos_position.value_addr, initial_position + 2 * term_length + 8192);
     aeron_network_publication_update_pub_pos_and_lmt(publication);
     EXPECT_EQ(initial_position + 2 * term_length + 8192 + publication_window_length, aeron_counter_get_plain(publication->pub_lmt_position.value_addr));
-    EXPECT_EQ(initial_position + term_length + 8192, publication->conductor_fields.clean_position);
+    EXPECT_EQ(aeron_term_cleaner_block_start_position(initial_position) + term_length + AERON_TERM_CLEANER_TERM_CLEANUP_BLOCK_LENGTH, publication->conductor_fields.clean_position);
 }
 
 TEST_F(NetworkPublicationTest, publicationLimitShouldNotCrossIntoPreviousTermIfTheEntireTermIsDirty)
@@ -432,7 +442,7 @@ TEST_F(NetworkPublicationTest, publicationLimitShouldNotCrossIntoPreviousTermIfT
     ASSERT_EQ(initial_position, aeron_counter_get_plain(publication->pub_lmt_position.value_addr));
     ASSERT_EQ(initial_position, aeron_counter_get_plain(publication->snd_pos_position.value_addr));
     ASSERT_EQ(initial_position, aeron_counter_get_plain(publication->snd_lmt_position.value_addr));
-    ASSERT_EQ(initial_position, publication->conductor_fields.clean_position);
+    ASSERT_EQ(aeron_term_cleaner_block_start_position(initial_position), publication->conductor_fields.clean_position);
 
     aeron_driver_conductor_t conductor = {};
     aeron_driver_conductor_proxy_t proxy = {};
@@ -445,13 +455,11 @@ TEST_F(NetworkPublicationTest, publicationLimitShouldNotCrossIntoPreviousTermIfT
 
     ASSERT_TRUE(publication->has_receivers);
 
-    EXPECT_EQ(1, aeron_network_publication_update_pub_pos_and_lmt(publication));
-
     // pub-lmt can be in the previous term if clean position offset is not zero
     aeron_counter_set_release(publication->snd_pos_position.value_addr, initial_position + term_length);
-    aeron_network_publication_update_pub_pos_and_lmt(publication);
+    EXPECT_EQ(1, aeron_network_publication_update_pub_pos_and_lmt(publication));
     EXPECT_EQ(initial_position + term_length + publication_window_length, aeron_counter_get_plain(publication->pub_lmt_position.value_addr));
-    EXPECT_EQ(initial_position, publication->conductor_fields.clean_position);
+    EXPECT_EQ(aeron_term_cleaner_block_start_position(initial_position), publication->conductor_fields.clean_position);
 
     // pub-lmt cannot be in the previous term if clean position points to the start of the dirty buffer
     aeron_counter_set_release(publication->snd_pos_position.value_addr, initial_position + 2 * term_length + 64);
@@ -462,7 +470,7 @@ TEST_F(NetworkPublicationTest, publicationLimitShouldNotCrossIntoPreviousTermIfT
     // after cleanup the pub-lmt can move again
     aeron_network_publication_update_pub_pos_and_lmt(publication);
     EXPECT_EQ(initial_position + 2 * term_length + 64 + publication_window_length, aeron_counter_get_plain(publication->pub_lmt_position.value_addr));
-    EXPECT_EQ(initial_position + term_length + 64, publication->conductor_fields.clean_position);
+    EXPECT_EQ(aeron_term_cleaner_block_start_position(initial_position) + 2 * AERON_TERM_CLEANER_TERM_CLEANUP_BLOCK_LENGTH, publication->conductor_fields.clean_position);
 }
 
 TEST_F(NetworkPublicationTest, publicationLimitShouldNotCrossIntoTheDirtyTerm)
@@ -490,11 +498,9 @@ TEST_F(NetworkPublicationTest, publicationLimitShouldNotCrossIntoTheDirtyTerm)
 
     ASSERT_TRUE(publication->has_receivers);
 
-    EXPECT_EQ(1, aeron_network_publication_update_pub_pos_and_lmt(publication));
-
     // initial pub-lmt
     aeron_counter_set_release(publication->snd_pos_position.value_addr, initial_position + 256);
-    aeron_network_publication_update_pub_pos_and_lmt(publication);
+    EXPECT_EQ(1, aeron_network_publication_update_pub_pos_and_lmt(publication));
     EXPECT_EQ(initial_position + 256 + publication_window_length, aeron_counter_get_plain(publication->pub_lmt_position.value_addr));
     EXPECT_EQ(initial_position, publication->conductor_fields.clean_position);
 
@@ -502,10 +508,13 @@ TEST_F(NetworkPublicationTest, publicationLimitShouldNotCrossIntoTheDirtyTerm)
     aeron_counter_set_release(publication->snd_pos_position.value_addr, initial_position + 2 * term_length + 192 + publication_window_length);
     aeron_network_publication_update_pub_pos_and_lmt(publication);
     EXPECT_EQ(initial_position + 256 + publication_window_length, aeron_counter_get_plain(publication->pub_lmt_position.value_addr));
-    EXPECT_EQ(initial_position + term_length, publication->conductor_fields.clean_position);
+    EXPECT_EQ(initial_position + AERON_TERM_CLEANER_TERM_CLEANUP_BLOCK_LENGTH, publication->conductor_fields.clean_position);
 
-    // after cleanup the pub-lmt can move again
-    aeron_network_publication_update_pub_pos_and_lmt(publication);
+    // after entrie buffer is cleaned up the pub-lmt can move again
+    while (publication->conductor_fields.clean_position <= term_length)
+    {
+        aeron_network_publication_update_pub_pos_and_lmt(publication);
+    }
     EXPECT_EQ(initial_position + 2 * term_length + 192 + 2 * publication_window_length, aeron_counter_get_plain(publication->pub_lmt_position.value_addr));
-    EXPECT_EQ(initial_position + term_length + 192 + publication_window_length, publication->conductor_fields.clean_position);
+    EXPECT_EQ(initial_position + term_length + AERON_TERM_CLEANER_TERM_CLEANUP_BLOCK_LENGTH, publication->conductor_fields.clean_position);
 }

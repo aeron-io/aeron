@@ -121,27 +121,10 @@ int aeron_uri_get_publication_window_length_param(aeron_uri_params_t *uri_params
             return -1;
         }
 
-        if (value < params->mtu_length)
+        if (aeron_driver_context_validate_publisher_window_length(
+            AERON_URI_PUBLICATION_WINDOW_KEY, value, params->mtu_length, params->term_length) < 0)
         {
-            AERON_SET_ERR(
-                EINVAL,
-                "%s=%" PRIu64 " cannot be less than the %s=%" PRIu64,
-                AERON_URI_PUBLICATION_WINDOW_KEY,
-                value,
-                AERON_URI_MTU_LENGTH_KEY,
-                params->mtu_length);
-            return -1;
-        }
-
-        if (value > (params->term_length >> 1))
-        {
-            AERON_SET_ERR(
-                EINVAL,
-                "%s=%" PRIu64 " must not exceed half the %s=%" PRIu64,
-                AERON_URI_PUBLICATION_WINDOW_KEY,
-                value,
-                AERON_URI_TERM_LENGTH_KEY,
-                params->term_length);
+            AERON_APPEND_ERR("%s", "");
             return -1;
         }
 
