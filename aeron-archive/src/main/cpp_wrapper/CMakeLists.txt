@@ -35,7 +35,7 @@ add_library(aeron::aeron_archive_wrapper ALIAS aeron_archive_wrapper)
 target_include_directories(aeron_archive_wrapper
     INTERFACE
     "$<BUILD_INTERFACE:${AERON_C_ARCHIVE_SOURCE_PATH}>"
-    "$<BUILD_INTERFACE:${AERON_CLIENT_WRAPPER_SOURCE_PATH}>"
+    "$<BUILD_INTERFACE:${AERON_ARCHIVE_WRAPPER_SOURCE_PATH}>"
     "$<INSTALL_INTERFACE:include/wrapper>"
 )
 
