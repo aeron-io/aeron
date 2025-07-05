@@ -698,6 +698,8 @@ void aeron_client_conductor_on_close(aeron_client_conductor_t *conductor)
 {
     aeron_client_conductor_notify_close_handlers(conductor);
 
+    aeron_client_conductor_on_cmd_client_close(conductor);
+
     aeron_int64_to_ptr_hash_map_for_each(
         &conductor->log_buffer_by_id_map, aeron_client_conductor_delete_log_buffer, NULL);
     aeron_int64_to_ptr_hash_map_for_each(
@@ -3097,6 +3099,33 @@ int aeron_client_conductor_reject_image(
 
     aeron_mpsc_rb_commit(&conductor->to_driver_buffer, offset);
 
+    return 0;
+}
+
+int aeron_client_conductor_on_cmd_client_close(aeron_client_conductor_t *conductor)
+{
+    int32_t command_length = sizeof(aeron_correlated_command_t);
+    int32_t offset;
+    int rb_offer_fail_count = 0;
+
+    while ((offset = aeron_mpsc_rb_try_claim(&conductor->to_driver_buffer, AERON_COMMAND_CLIENT_CLOSE, command_length)) < 0)
+    {
+        if (++rb_offer_fail_count > AERON_CLIENT_COMMAND_RB_FAIL_THRESHOLD)
+        {
+            const char *err_buffer = "client_close command could not be sent";
+            conductor->error_handler(conductor->error_handler_clientd, AERON_CLIENT_ERROR_BUFFER_FULL, err_buffer);
+            AERON_SET_ERR(AERON_CLIENT_ERROR_BUFFER_FULL, "%s", err_buffer);
+            return -1;
+        }
+        sched_yield();
+    }
+
+    uint8_t *ptr = conductor->to_driver_buffer.buffer + offset;
+    aeron_correlated_command_t *command = (aeron_correlated_command_t *)ptr;
+    command->client_id = conductor->client_id;
+    command->correlation_id = aeron_mpsc_rb_next_correlation_id(&conductor->to_driver_buffer);
+
+    aeron_mpsc_rb_commit(&conductor->to_driver_buffer, offset);
     return 0;
 }
 

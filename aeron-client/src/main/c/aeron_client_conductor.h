@@ -422,6 +422,8 @@ int aeron_client_conductor_reject_image(
     const char *reason,
     int32_t command_type);
 
+int aeron_client_conductor_on_cmd_client_close(aeron_client_conductor_t *conductor);
+
 inline int aeron_counter_heartbeat_timestamp_find_counter_id_by_registration_id(
     aeron_counters_reader_t *counters_reader, int32_t type_id, int64_t registration_id)
 {
