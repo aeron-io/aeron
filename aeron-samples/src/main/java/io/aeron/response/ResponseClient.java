@@ -17,9 +17,10 @@ package io.aeron.response;
 
 import io.aeron.Aeron;
 import io.aeron.ChannelUriStringBuilder;
-import io.aeron.Publication;
+import io.aeron.ExclusivePublication;
 import io.aeron.Subscription;
 import io.aeron.logbuffer.FragmentHandler;
+import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
 import org.agrona.concurrent.Agent;
 
@@ -38,7 +39,7 @@ public class ResponseClient implements AutoCloseable, Agent
     private final int responseStreamId;
     private final ChannelUriStringBuilder requestUriBuilder;
     private final ChannelUriStringBuilder responseUriBuilder;
-    private Publication publication;
+    private ExclusivePublication publication;
     private Subscription subscription;
 
     /**
@@ -123,7 +124,7 @@ public class ResponseClient implements AutoCloseable, Agent
 
         if (null == publication && null != subscription)
         {
-            publication = aeron.addPublication(
+            publication = aeron.addExclusivePublication(
                 requestUriBuilder.responseCorrelationId(subscription.registrationId()).build(),
                 requestStreamId);
 
@@ -151,6 +152,8 @@ public class ResponseClient implements AutoCloseable, Agent
      */
     public void close()
     {
+        publication.revokeOnClose();
+        CloseHelper.quietCloseAll(publication, subscription);
     }
 
     /**
@@ -209,7 +212,7 @@ public class ResponseClient implements AutoCloseable, Agent
      *
      * @return request publication for the client.
      */
-    public Publication publication()
+    public ExclusivePublication publication()
     {
         return publication;
     }

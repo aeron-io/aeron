@@ -634,6 +634,11 @@ public final class DriverConductor implements Agent
                 "control-mode=response was specified, but no response-correlation-id set");
         }
 
+        if (PROTOTYPE_VALUE_CORRELATION_ID == params.responseCorrelationId)
+        {
+            return null;
+        }
+
         for (final PublicationImage publicationImage : publicationImages)
         {
             if (publicationImage.correlationId() == params.responseCorrelationId)
@@ -1724,6 +1729,7 @@ public final class DriverConductor implements Agent
         return null;
     }
 
+    @SuppressWarnings("MethodLength")
     private NetworkPublication newNetworkPublication(
         final long registrationId,
         final long clientId,
@@ -1734,6 +1740,12 @@ public final class DriverConductor implements Agent
         final PublicationParams params,
         final boolean isExclusive)
     {
+        if (params.isResponse &&
+            PROTOTYPE_VALUE_CORRELATION_ID == params.responseCorrelationId)
+        {
+            params.termLength = TERM_MIN_LENGTH;
+        }
+
         final String canonicalForm = udpChannel.canonicalForm();
 
         final FlowControl flowControl = udpChannel.isMulticast() || udpChannel.isMultiDestination() ?

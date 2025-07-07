@@ -27,6 +27,8 @@ import org.agrona.concurrent.OneToOneConcurrentArrayQueue;
 import java.util.Objects;
 import java.util.function.Function;
 
+import static io.aeron.CommonContext.PROTOTYPE_CORRELATION_ID;
+
 /**
  * A basic sample response server that allows the users to specify a simple function to represent the handling of a
  * request and then return a response. This approach will be effective when request processing is very short. For
@@ -67,7 +69,10 @@ public class ResponseServer implements AutoCloseable, Agent
     private final ControlledFragmentAssembler requestAssembler = new ControlledFragmentAssembler(
         this::onControlledRequestMessage);
 
+    private boolean usePrototype = true;
+
     private Subscription serverSubscription;
+    private ExclusivePublication prototypeResponsePublication;
 
     /**
      * Constructs the server.
@@ -114,6 +119,16 @@ public class ResponseServer implements AutoCloseable, Agent
     }
 
     /**
+     * Indicate whether or not to create a prototype response publication.
+     *
+     * @param usePrototype true or false.
+     */
+    public void usePrototype(final boolean usePrototype)
+    {
+        this.usePrototype = usePrototype;
+    }
+
+    /**
      * Poll the server process messages and state.
      *
      * @return amount of work done.
@@ -129,6 +144,14 @@ public class ResponseServer implements AutoCloseable, Agent
                 requestStreamId,
                 this::enqueueAvailableImage,
                 this::enqueueUnavailableImage);
+
+            if (usePrototype)
+            {
+                prototypeResponsePublication = aeron.addExclusivePublication(
+                    responseUriBuilder.responseCorrelationId(PROTOTYPE_CORRELATION_ID).build(),
+                    responseStreamId);
+            }
+
             workCount++;
         }
 
@@ -165,7 +188,7 @@ public class ResponseServer implements AutoCloseable, Agent
      */
     public void close()
     {
-        CloseHelper.quietClose(serverSubscription);
+        CloseHelper.quietCloseAll(serverSubscription, prototypeResponsePublication);
         clientToPublicationMap.values().forEach(CloseHelper::quietClose);
     }
 

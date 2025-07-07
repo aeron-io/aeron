@@ -29,10 +29,12 @@ import static io.aeron.CommonContext.STREAM_ID_PARAM_NAME;
 import static io.aeron.CommonContext.UNTETHERED_LINGER_TIMEOUT_PARAM_NAME;
 import static io.aeron.CommonContext.UNTETHERED_RESTING_TIMEOUT_PARAM_NAME;
 import static io.aeron.CommonContext.UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME;
+import static io.aeron.CommonContext.RESPONSE_CORRELATION_ID_PARAM_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ChannelUriStringBuilderTest
@@ -372,5 +374,24 @@ class ChannelUriStringBuilderTest
             Long.toString(untetheredLingerTimeoutNs), uri.get(UNTETHERED_LINGER_TIMEOUT_PARAM_NAME));
         assertEquals(
             Long.toString(untetheredRestingTimeoutNs), uri.get(UNTETHERED_RESTING_TIMEOUT_PARAM_NAME));
+    }
+
+    @ParameterizedTest
+    @CsvSource({ "this.will.not.work", "-2" })
+    void shouldThrowAnExceptionOnInvalidResponseCorrelationId(final String responseCorrelationId)
+    {
+        final ChannelUri channelUri = ChannelUri.parse("aeron:udp?" + RESPONSE_CORRELATION_ID_PARAM_NAME +
+            "=" + responseCorrelationId);
+        assertThrows(IllegalArgumentException.class,
+            () -> new ChannelUriStringBuilder().responseCorrelationId(channelUri));
+    }
+
+    @ParameterizedTest
+    @CsvSource({ "prototype", "2" })
+    void shouldNotThrowAnExceptionOnValidResponseCorrelationId(final String responseCorrelationId)
+    {
+        final ChannelUri channelUri = ChannelUri.parse("aeron:udp?" + RESPONSE_CORRELATION_ID_PARAM_NAME +
+            "=" + responseCorrelationId);
+        assertDoesNotThrow(() -> new ChannelUriStringBuilder().responseCorrelationId(channelUri));
     }
 }
