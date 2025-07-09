@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2024 Real Logic Limited.
+ * Copyright 2014-2025 Real Logic Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,8 +33,14 @@ plugins {
 
 defaultTasks 'clean', 'build'
 
+static def rawBuildJavaVersion()
+{
+    return System.getenv('BUILD_JAVA_VERSION') ?: JavaVersion.current().getMajorVersion()
+}
+boolean isEarlyAccessJavaVersion = rawBuildJavaVersion().endsWith("-ea")
+
 static def getBuildJavaVersion() {
-    def buildJavaVersion = System.getenv('BUILD_JAVA_VERSION') ?: JavaVersion.current().getMajorVersion()
+    def buildJavaVersion = rawBuildJavaVersion()
 
     if (buildJavaVersion.indexOf('.') > 0) {
         buildJavaVersion = buildJavaVersion.substring(0, buildJavaVersion.indexOf('.'))
@@ -68,38 +74,42 @@ def findbugsAnnotationsVersion = '3.0.1'
 def hdrHistogramVersion = '2.2.2'
 def gitCommitHash = io.aeron.build.GithubUtil.currentGitHash("${projectDir}")
 
+def getConfigProperty(final String projectPropertyName, final String envVarName) {
+    String value = project.findProperty(projectPropertyName)
+    if (!value) {
+        value = System.getenv(envVarName)
+        if (!value) {
+            return null
+        }
+    }
+
+    value = value.trim()
+
+    return value ? value : null
+}
+
 ext {
     isReleaseVersion = !aeronVersion.endsWith('-SNAPSHOT')
-    releasesRepoUrl = 'https://oss.sonatype.org/service/local/staging/deploy/maven2/'
-    snapshotsRepoUrl = 'https://oss.sonatype.org/content/repositories/snapshots/'
 
-    if (!project.hasProperty('ossrhUsername')) {
-        ossrhUsername = ''
-    }
+    sonatypeCentralPortalReleasesRepoUrl = 'https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/'
+    sonatypeCentralPortalSnapshotsRepoUrl = 'https://central.sonatype.com/repository/maven-snapshots/'
+    sonatypeCentralPortalUsername = getConfigProperty('sonatypeCentralPortalUsername', 'SONATYPE_CENTRAL_PORTAL_USERNAME')
+    sonatypeCentralPortalPassword = getConfigProperty('sonatypeCentralPortalPassword', 'SONATYPE_CENTRAL_PORTAL_PASSWORD')
 
-    if (!project.hasProperty('ossrhPassword')) {
-        ossrhPassword = ''
-    }
-
-    if (!project.hasProperty('signingKey')) {
-        signingKey = null
-    }
-
-    if (!project.hasProperty('signingPassword')) {
-        signingPassword = null
-    }
+    signingKey = getConfigProperty('signingKey', 'SIGNING_GPG_SECRET_KEY')         // NOTE: ASCII armored secret key
+    signingPassword = getConfigProperty('signingPassword', 'SIGNING_GPG_PASSWORD') // NOTE: Plain text
 }
 
 def projectPom = {
     name = 'aeron'
     // optionally artifactId can be defined here
     description = 'Efficient reliable UDP unicast, UDP multicast, and IPC transport protocol.'
-    url = 'https://github.com/real-logic/aeron'
+    url = 'https://github.com/aeron-io/aeron'
 
     scm {
-        connection = 'scm:git:https://github.com/real-logic/aeron.git'
-        developerConnection = 'scm:git:https://github.com/real-logic/aeron.git'
-        url = 'https://github.com/real-logic/aeron.git'
+        connection = 'scm:git:https://github.com/aeron-io/aeron.git'
+        developerConnection = 'scm:git:https://github.com/aeron-io/aeron.git'
+        url = 'https://github.com/aeron-io/aeron.git'
     }
 
     licenses {
@@ -143,7 +153,7 @@ def projectPom = {
         developer {
             id = 'vyazelenko'
             name = 'Dmytro Vyazelenko'
-            email = 'vyazelenko@protonmail.com '
+            email = 'vyazelenko@protonmail.com'
             url = 'https://github.com/vyazelenko'
         }
     }
@@ -173,6 +183,7 @@ allprojects {
 }
 
 subprojects {
+    apply plugin: 'base'
     apply plugin: 'java-library'
     apply plugin: 'checkstyle'
 
@@ -256,6 +267,7 @@ subprojects {
             'aeron.dir.delete.on.start': 'true',
             'aeron.term.buffer.sparse.file': 'true',
             'aeron.perform.storage.checks': 'false',
+            'agrona.disable.bounds.checks': 'false',
             'agrona.strict.alignment.checks': 'true',
             'net.bytebuddy.experimental': 'true',
             'io.aeron.shadow.net.bytebuddy.experimental': 'true',
@@ -272,6 +284,8 @@ subprojects {
         javaLauncher.set(toolchainLauncher)
     }
 
+    def aeronLoggingAgent = project.file("../aeron-agent/build/libs/aeron-agent-${aeronVersion}.jar").absolutePath
+
     tasks.register('slowTest', Test) {
         group 'verification'
         dependsOn ':aeron-agent:jar'
@@ -281,11 +295,7 @@ subprojects {
             includeTags 'slow'
         }
 
-        ext.agentFilename = {
-            project.file("../aeron-agent/build/libs/aeron-agent-${aeronVersion}.jar").absolutePath
-        }
-
-        jvmArgs '-javaagent:' + agentFilename()
+        jvmArgs("-javaagent:${aeronLoggingAgent}")
         systemProperty 'aeron.event.cluster.log', 'all'
         systemProperty 'aeron.event.cluster.log.disable', 'CANVASS_POSITION,APPEND_POSITION,COMMIT_POSITION'
         systemProperty 'aeron.event.archive.log', 'all'
@@ -304,11 +314,7 @@ subprojects {
             includeTags 'bindings'
         }
 
-        ext.agentFilename = {
-            project.file("../aeron-agent/build/libs/aeron-agent-${aeronVersion}.jar").absolutePath
-        }
-
-        jvmArgs '-javaagent:' + agentFilename()
+        jvmArgs("-javaagent:${aeronLoggingAgent}")
         systemProperty 'aeron.event.cluster.log', 'all'
         systemProperty 'aeron.event.cluster.log.disable', 'CANVASS_POSITION'
         systemProperty 'aeron.debug.timeout', '3600s'
@@ -326,13 +332,13 @@ subprojects {
     javadoc {
         failOnError false
         title = '<h1>Aeron Message Transport</h1>'
-        options.bottom = '<i>Copyright &#169; 2014-2024 Real Logic Limited. All Rights Reserved.</i>'
+        options.bottom = '<i>Copyright &#169; 2014-2025 Real Logic Limited. All Rights Reserved.</i>'
         options.encoding = 'UTF-8'
         options.docEncoding = 'UTF-8'
         options.charSet = 'UTF-8'
         options.links("https://www.javadoc.io/doc/org.agrona/agrona/${agronaVersion}/")
 
-        if (buildJavaVersion > 21) { // early access JavaDoc location is different
+        if (isEarlyAccessJavaVersion) {
             options.links("https://download.java.net/java/early_access/jdk${buildJavaVersion}/docs/api/")
         }
         else if (buildJavaVersion >= 11) {
@@ -369,12 +375,15 @@ project(':aeron-annotations') {
 
     jar {
         bundle {
+            // workaround for https://github.com/bndtools/bnd/issues/6346
+            properties.put("project.group", provider({project.group}))
+            // workaround
             bnd """
                 Automatic-Module-Name:  io.aeron.annotations
                 Bundle-Name:            io.aeron.annotations
                 Bundle-SymbolicName:    io.aeron.annotations
                 Implementation-Title:   Aeron
-                Implementation-Vendor:  Real Logic Limited
+                Implementation-Vendor:  Adaptive Financial Consulting Limited
                 Implementation-Version: ${aeronVersion}
     
                 -exportcontents: io.aeron.version
@@ -401,10 +410,10 @@ project(':aeron-annotations') {
 
         repositories {
             maven {
-                url(!isReleaseVersion ? snapshotsRepoUrl : releasesRepoUrl)
+                url = !isReleaseVersion ? sonatypeCentralPortalSnapshotsRepoUrl : sonatypeCentralPortalReleasesRepoUrl
                 credentials {
-                    username = ossrhUsername
-                    password = ossrhPassword
+                    username = sonatypeCentralPortalUsername
+                    password = sonatypeCentralPortalPassword
                 }
             }
         }
@@ -438,12 +447,15 @@ project(':aeron-client') {
 
     jar {
         bundle {
+            // workaround for https://github.com/bndtools/bnd/issues/6346
+            properties.put("project.group", provider({project.group}))
+            // workaround
             bnd """
                 Automatic-Module-Name:  io.aeron.client
                 Bundle-Name:            io.aeron.client
                 Bundle-SymbolicName:    io.aeron.client
                 Implementation-Title:   Aeron
-                Implementation-Vendor:  Real Logic Limited
+                Implementation-Vendor:  Adaptive Financial Consulting Limited
                 Implementation-Version: ${aeronVersion}
     
                 -exportcontents: io.aeron, io.aeron.*
@@ -474,10 +486,10 @@ project(':aeron-client') {
 
         repositories {
             maven {
-                url(!isReleaseVersion ? snapshotsRepoUrl : releasesRepoUrl)
+                url = !isReleaseVersion ? sonatypeCentralPortalSnapshotsRepoUrl : sonatypeCentralPortalReleasesRepoUrl
                 credentials {
-                    username = ossrhUsername
-                    password = ossrhPassword
+                    username = sonatypeCentralPortalUsername
+                    password = sonatypeCentralPortalPassword
                 }
             }
         }
@@ -543,12 +555,15 @@ project(':aeron-driver') {
 
     jar {
         bundle {
+            // workaround for https://github.com/bndtools/bnd/issues/6346
+            properties.put("project.group", provider({project.group}))
+            // workaround
             bnd """
                 Automatic-Module-Name:  io.aeron.driver
                 Bundle-Name:            io.aeron.driver
                 Bundle-SymbolicName:    io.aeron.driver
                 Implementation-Title:   Aeron
-                Implementation-Vendor:  Real Logic Limited
+                Implementation-Vendor:  Adaptive Financial Consulting Limited
                 Implementation-Version: ${aeronVersion}
     
                 -exportcontents: io.aeron.driver, io.aeron.driver.*
@@ -584,10 +599,10 @@ project(':aeron-driver') {
 
         repositories {
             maven {
-                url(!isReleaseVersion ? snapshotsRepoUrl : releasesRepoUrl)
+                url = !isReleaseVersion ? sonatypeCentralPortalSnapshotsRepoUrl : sonatypeCentralPortalReleasesRepoUrl
                 credentials {
-                    username = ossrhUsername
-                    password = ossrhPassword
+                    username = sonatypeCentralPortalUsername
+                    password = sonatypeCentralPortalPassword
                 }
             }
         }
@@ -717,12 +732,15 @@ project(':aeron-archive') {
         from sourceSets.generated.output
 
         bundle {
+            // workaround for https://github.com/bndtools/bnd/issues/6346
+            properties.put("project.group", provider({project.group}))
+            // workaround
             bnd """
                 Automatic-Module-Name:  io.aeron.archive
                 Bundle-Name:            io.aeron.archive
                 Bundle-SymbolicName:    io.aeron.archive
                 Implementation-Title:   Aeron
-                Implementation-Vendor:  Real Logic Limited
+                Implementation-Vendor:  Adaptive Financial Consulting Limited
                 Implementation-Version: ${aeronVersion}
     
                 -exportcontents: io.aeron.archive, io.aeron.archive.*
@@ -765,10 +783,10 @@ project(':aeron-archive') {
 
         repositories {
             maven {
-                url(!isReleaseVersion ? snapshotsRepoUrl : releasesRepoUrl)
+                url = !isReleaseVersion ? sonatypeCentralPortalSnapshotsRepoUrl : sonatypeCentralPortalReleasesRepoUrl
                 credentials {
-                    username = ossrhUsername
-                    password = ossrhPassword
+                    username = sonatypeCentralPortalUsername
+                    password = sonatypeCentralPortalPassword
                 }
             }
         }
@@ -847,12 +865,15 @@ project(':aeron-cluster') {
         from sourceSets.generated.output
 
         bundle {
+            // workaround for https://github.com/bndtools/bnd/issues/6346
+            properties.put("project.group", provider({project.group}))
+            // workaround
             bnd """
                 Automatic-Module-Name:  io.aeron.cluster
                 Bundle-Name:            io.aeron.cluster
                 Bundle-SymbolicName:    io.aeron.cluster
                 Implementation-Title:   Aeron
-                Implementation-Vendor:  Real Logic Limited
+                Implementation-Vendor:  Adaptive Financial Consulting Limited
                 Implementation-Version: ${aeronVersion}
     
                 -exportcontents: io.aeron.cluster, io.aeron.cluster.*
@@ -897,10 +918,10 @@ project(':aeron-cluster') {
 
         repositories {
             maven {
-                url(!isReleaseVersion ? snapshotsRepoUrl : releasesRepoUrl)
+                url = !isReleaseVersion ? sonatypeCentralPortalSnapshotsRepoUrl : sonatypeCentralPortalReleasesRepoUrl
                 credentials {
-                    username = ossrhUsername
-                    password = ossrhPassword
+                    username = sonatypeCentralPortalUsername
+                    password = sonatypeCentralPortalPassword
                 }
             }
         }
@@ -951,7 +972,7 @@ project(':aeron-agent') {
         manifest.attributes(
             'Implementation-Title': 'Aeron',
             'Implementation-Version': aeronVersion,
-            'Implementation-Vendor': 'Real Logic Limited',
+            'Implementation-Vendor': 'Adaptive Financial Consulting Limited',
             "Premain-Class": "io.aeron.agent.EventLogAgent",
             "Agent-Class": "io.aeron.agent.EventLogAgent",
             "Can-Redefine-Classes": "true",
@@ -1011,10 +1032,10 @@ project(':aeron-agent') {
         }
         repositories {
             maven {
-                url(!isReleaseVersion ? snapshotsRepoUrl : releasesRepoUrl)
+                url = !isReleaseVersion ? sonatypeCentralPortalSnapshotsRepoUrl : sonatypeCentralPortalReleasesRepoUrl
                 credentials {
-                    username = ossrhUsername
-                    password = ossrhPassword
+                    username = sonatypeCentralPortalUsername
+                    password = sonatypeCentralPortalPassword
                 }
             }
         }
@@ -1053,10 +1074,10 @@ project(':aeron-samples') {
 
         repositories {
             maven {
-                url(!isReleaseVersion ? snapshotsRepoUrl : releasesRepoUrl)
+                url = !isReleaseVersion ? sonatypeCentralPortalSnapshotsRepoUrl : sonatypeCentralPortalReleasesRepoUrl
                 credentials {
-                    username = ossrhUsername
-                    password = ossrhPassword
+                    username = sonatypeCentralPortalUsername
+                    password = sonatypeCentralPortalPassword
                 }
             }
         }
@@ -1185,10 +1206,10 @@ project(':aeron-test-support') {
 
         repositories {
             maven {
-                url(!isReleaseVersion ? snapshotsRepoUrl : releasesRepoUrl)
+                url = !isReleaseVersion ? sonatypeCentralPortalSnapshotsRepoUrl : sonatypeCentralPortalReleasesRepoUrl
                 credentials {
-                    username = ossrhUsername
-                    password = ossrhPassword
+                    username = sonatypeCentralPortalUsername
+                    password = sonatypeCentralPortalPassword
                 }
             }
         }
@@ -1224,7 +1245,7 @@ project(':aeron-all') {
         manifest.attributes(
             'Implementation-Title': 'Aeron',
             'Implementation-Version': aeronVersion,
-            'Implementation-Vendor': 'Real Logic Limited',
+            'Implementation-Vendor': 'Adaptive Financial Consulting Limited',
             'Automatic-Module-Name': 'io.aeron.all')
 
         relocate 'net.bytebuddy', 'io.aeron.shadow.net.bytebuddy'
@@ -1282,10 +1303,10 @@ project(':aeron-all') {
         }
         repositories {
             maven {
-                url(!isReleaseVersion ? snapshotsRepoUrl : releasesRepoUrl)
+                url = !isReleaseVersion ? sonatypeCentralPortalSnapshotsRepoUrl : sonatypeCentralPortalReleasesRepoUrl
                 credentials {
-                    username = ossrhUsername
-                    password = ossrhPassword
+                    username = sonatypeCentralPortalUsername
+                    password = sonatypeCentralPortalPassword
                 }
             }
         }
@@ -1309,8 +1330,11 @@ tasks.register('copyTestLogs', Copy) {
     from '.'
     include '**/build/test-output/**'
     include '**/*.hprof'
+    include '**/*.mdmp'
+    include '/var/coredump/core*'
     include '**/*.log'
     include '**/*.tlog'
+    include '**/*.PML'
     include '**/build/reports/tests/**'
     include '**/build/test-results/**/*'
     include 'LICENSE'
@@ -1338,6 +1362,13 @@ tasks.named('dependencyUpdates').configure {
     rejectVersionIf {
         isNonStable(it.candidate.version)
     }
+}
+
+tasks.register('uploadArtifactsToCentralPortal', io.aeron.build.SonatypeCentralPortalUploadRepositoryTask) {
+    portalUsername.set(sonatypeCentralPortalUsername)
+    portalPassword.set(sonatypeCentralPortalPassword)
+    groupId.set(aeronGroup)
+    snapshotRelease.set(!isReleaseVersion)
 }
 
 wrapper {
