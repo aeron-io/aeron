@@ -39,6 +39,7 @@ import java.net.URI;
 import java.util.Base64;
 
 import static java.nio.charset.StandardCharsets.US_ASCII;
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * This task performs manual steps to publish artifacts to Central Portal via OSSRH Staging API.
@@ -151,7 +152,7 @@ public class SonatypeCentralPortalUploadRepositoryTask extends DefaultTask
     {
         final HttpGet request = new HttpGet(apiUri.resolve("/manual/search/repositories?ip=client"));
         request.setConfig(requestConfig);
-        request.setHeader("Authorization", "Bearer " + bearer);
+        request.addHeader("Authorization", "Bearer " + bearer);
 
         final HttpResponse response = httpClient.execute(request);
         final StatusLine status = response.getStatusLine();
@@ -165,7 +166,9 @@ public class SonatypeCentralPortalUploadRepositoryTask extends DefaultTask
         final HttpEntity entity = response.getEntity();
         entity.writeTo(outputStream);
         final ContentType contentType = ContentType.get(entity);
-        final String body = new String(outputStream.toByteArray(), contentType.getCharset());
+        final String body = new String(
+            outputStream.toByteArray(),
+            null != contentType.getCharset() ? contentType.getCharset() : UTF_8);
 
         final JSONArray repositories = new JSONObject(body).getJSONArray("repositories");
         if (repositories.isEmpty())
@@ -206,7 +209,7 @@ public class SonatypeCentralPortalUploadRepositoryTask extends DefaultTask
         final HttpPost request = new HttpPost(
             apiUri.resolve("/manual/upload/repository/" + repositoryKey + "?publishing_type=automatic"));
         request.setConfig(requestConfig);
-        request.setHeader("Authorization", "Bearer " + bearer);
+        request.addHeader("Authorization", "Bearer " + bearer);
 
         final HttpResponse response = httpClient.execute(request);
         final StatusLine status = response.getStatusLine();
@@ -227,7 +230,7 @@ public class SonatypeCentralPortalUploadRepositoryTask extends DefaultTask
     {
         final HttpDelete request = new HttpDelete(apiUri.resolve("/manual/drop/repository/" + repositoryKey));
         request.setConfig(requestConfig);
-        request.setHeader("Authorization", "Bearer " + bearer);
+        request.addHeader("Authorization", "Bearer " + bearer);
 
         final HttpResponse response = httpClient.execute(request);
         final StatusLine status = response.getStatusLine();
