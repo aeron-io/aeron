@@ -2134,6 +2134,7 @@ public final class DriverConductor implements Agent
                     params, channelEndpoint.socketSndbufLength(), ctx, udpChannel.originalUriString(), null);
 
                 channelEndpoint.openChannel(ctx.driverConductorProxy());
+                channelEndpoint.indicateActive();
 
                 senderProxy.registerSendChannelEndpoint(channelEndpoint);
                 sendChannelEndpointByChannelMap.put(udpChannel.canonicalForm(), channelEndpoint);
@@ -2402,6 +2403,7 @@ public final class DriverConductor implements Agent
                 validateInitialWindowForRcvBuf(params, channel, channelEndpoint.socketRcvbufLength(), ctx, null);
 
                 channelEndpoint.openChannel(ctx.driverConductorProxy());
+                channelEndpoint.indicateActive();
 
                 receiverProxy.registerReceiveChannelEndpoint(channelEndpoint);
                 receiveChannelEndpointByChannelMap.put(udpChannel.canonicalForm(), channelEndpoint);

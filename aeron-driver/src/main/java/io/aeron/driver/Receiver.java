@@ -228,17 +228,12 @@ public final class Receiver implements Agent
         if (!channelEndpoint.hasDestinationControl())
         {
             channelEndpoint.registerForRead(dataTransportPoller);
-            channelEndpoint.indicateActive();
 
             if (channelEndpoint.hasExplicitControl())
             {
                 addPendingSetupMessage(0, 0, 0, channelEndpoint, true, channelEndpoint.explicitControlAddress());
                 channelEndpoint.sendSetupElicitingStatusMessage(0, channelEndpoint.explicitControlAddress(), 0, 0);
             }
-        }
-        else
-        {
-            channelEndpoint.indicateActive();
         }
     }
 
