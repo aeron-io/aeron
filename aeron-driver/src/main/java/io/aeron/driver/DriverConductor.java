@@ -2133,8 +2133,10 @@ public final class DriverConductor implements Agent
                 validateMtuForSndbuf(
                     params, channelEndpoint.socketSndbufLength(), ctx, udpChannel.originalUriString(), null);
 
-                sendChannelEndpointByChannelMap.put(udpChannel.canonicalForm(), channelEndpoint);
+                channelEndpoint.openChannel(ctx.driverConductorProxy());
+
                 senderProxy.registerSendChannelEndpoint(channelEndpoint);
+                sendChannelEndpointByChannelMap.put(udpChannel.canonicalForm(), channelEndpoint);
             }
             catch (final Exception ex)
             {

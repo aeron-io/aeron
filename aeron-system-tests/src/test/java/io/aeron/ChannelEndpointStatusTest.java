@@ -19,7 +19,6 @@ import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
 import io.aeron.driver.exceptions.InvalidChannelException;
 import io.aeron.exceptions.AeronException;
-import io.aeron.exceptions.ChannelEndpointException;
 import io.aeron.exceptions.RegistrationException;
 import io.aeron.logbuffer.LogBufferDescriptor;
 import io.aeron.protocol.DataHeaderFlyweight;
@@ -38,19 +37,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.ArgumentCaptor;
 
 import java.io.File;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.instanceOf;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.timeout;
-import static org.mockito.Mockito.verify;
 
 @ExtendWith(InterruptingTestCallback.class)
 @InterruptAfter(20)
@@ -196,20 +193,14 @@ class ChannelEndpointStatusTest
 
         assertThat(publicationA.channelStatus(), is(ChannelEndpointStatus.ACTIVE));
 
-        final Publication publicationB = clientB.addPublication(URI_WITH_INTERFACE_PORT, STREAM_ID);
-
-        final ArgumentCaptor<Throwable> captor = ArgumentCaptor.forClass(Throwable.class);
-        verify(errorHandlerClientB, timeout(5000L)).onError(captor.capture());
-
-        assertThat(captor.getValue(), instanceOf(ChannelEndpointException.class));
-
-        final ChannelEndpointException channelEndpointException = (ChannelEndpointException)captor.getValue();
-        final long status = clientB.countersReader().getCounterValue(channelEndpointException.statusIndicatorId());
-
-        assertThat(status, is(ChannelEndpointStatus.ERRORED));
-        assertThat(publicationB.channelStatusId(), is(channelEndpointException.statusIndicatorId()));
-        assertThat(publicationB.channelStatus(), is(ChannelEndpointStatus.ERRORED));
-        assertThat(publicationA.channelStatus(), is(ChannelEndpointStatus.ACTIVE));
-        assertNull(testException.get());
+        try
+        {
+            clientB.addPublication(URI_WITH_INTERFACE_PORT, STREAM_ID);
+            fail("Should have thrown an exception");
+        }
+        catch (final RegistrationException ex)
+        {
+            assertThat(ex.getMessage(), containsString(URI_WITH_INTERFACE_PORT));
+        }
     }
 }

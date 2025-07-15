@@ -209,7 +209,9 @@ class DriverConductorTest
             .receiverPortManager(new WildcardPortManager(WildcardPortManager.EMPTY_PORT_RANGE, false))
             .asyncTaskExecutor(CALLER_RUNS_TASK_EXECUTOR)
             .asyncTaskExecutorThreads(0)
-            .cncByteBuffer(IoUtil.mapNewFile(dir.resolve("test.cnc").toFile(), 1024));
+            .cncByteBuffer(IoUtil.mapNewFile(dir.resolve("test.cnc").toFile(), 1024))
+            .countersMetaDataBuffer((UnsafeBuffer)spyCountersManager.metaDataBuffer())
+            .countersValuesBuffer((UnsafeBuffer)spyCountersManager.valuesBuffer());
 
         driverProxy = new DriverProxy(toDriverCommands, toDriverCommands.nextCorrelationId());
         driverConductor = new DriverConductor(ctx);

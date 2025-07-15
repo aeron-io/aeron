@@ -155,22 +155,7 @@ public class SendChannelEndpoint extends UdpChannelTransport
      */
     public void openChannel(final DriverConductorProxy conductorProxy)
     {
-        if (conductorProxy.notConcurrent())
-        {
-            openDatagramChannel(statusIndicator);
-        }
-        else
-        {
-            try
-            {
-                openDatagramChannel(statusIndicator);
-            }
-            catch (final Exception ex)
-            {
-                conductorProxy.channelEndpointError(statusIndicator.id(), ex);
-                throw ex;
-            }
-        }
+        openDatagramChannel(statusIndicator);
 
         LocalSocketAddressStatus.updateBindAddress(
             requireNonNull(localSocketAddressIndicator, "localSocketAddressIndicator not allocated"),

@@ -28,6 +28,7 @@ import org.agrona.CloseHelper;
 import org.agrona.concurrent.status.CountersReader;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -69,8 +70,8 @@ class BusySocketTest
 
     @InterruptAfter(20)
     @ParameterizedTest
-    @MethodSource("arguments")
-    void subscriptionShouldConnectToASocketOnceItIsFreed(
+    @MethodSource("subscriptionTests")
+    void subscriptionShouldConnectToASocketOnceItIsFree(
         final ThreadingMode threadingMode, final String pubChannel, final String subChannel)
     {
         driver2 = TestMediaDriver.launch(new MediaDriver.Context()
@@ -118,7 +119,6 @@ class BusySocketTest
             Tests.await(
                 () -> CountersReader.RECORD_RECLAIMED == aeron1.countersReader().getCounterState(channelStatusId));
 
-            // Once the socket is closed it is possible to create new Subscription
             final Subscription newSubscription = aeron2.addSubscription(subChannel, streamId);
             Tests.awaitConnected(newSubscription);
         }
@@ -127,7 +127,7 @@ class BusySocketTest
     @InterruptAfter(20)
     @ParameterizedTest
     @EnumSource(value = ThreadingMode.class, names = "INVOKER", mode = EnumSource.Mode.EXCLUDE)
-    void mdsSubscriptionShouldConnectToASocketOnceItIsFreed(final ThreadingMode threadingMode)
+    void mdsSubscriptionShouldConnectToASocketOnceItIsFree(final ThreadingMode threadingMode)
     {
         driver2 = TestMediaDriver.launch(new MediaDriver.Context()
             .aeronDirectoryName(CommonContext.generateRandomDirName())
@@ -174,9 +174,10 @@ class BusySocketTest
             Tests.await(
                 () -> CountersReader.RECORD_RECLAIMED == aeron1.countersReader().getCounterState(channelStatusId));
 
-            // Once the socket is closed it is possible to add a Destination
             mdsSubscription.addDestination(destination1);
             Tests.await(() -> mdsSubscription.imageCount() == 2);
+            Tests.awaitConnected(publication2);
+            Tests.awaitConnected(publication1);
             assertEquals(ChannelEndpointStatus.ACTIVE, mdsSubscription.channelStatus());
             assertThat(
                 mdsSubscription.localSocketAddresses(),
@@ -184,7 +185,106 @@ class BusySocketTest
         }
     }
 
-    static List<Arguments> arguments()
+    @InterruptAfter(20)
+    @ParameterizedTest
+    @EnumSource(value = ThreadingMode.class, names = "INVOKER", mode = EnumSource.Mode.EXCLUDE)
+    void mdcPublicationShouldConnectToASocketOnceItIsFree(final ThreadingMode threadingMode)
+    {
+        driver2 = TestMediaDriver.launch(new MediaDriver.Context()
+            .aeronDirectoryName(CommonContext.generateRandomDirName())
+            .threadingMode(threadingMode), testWatcher);
+
+
+        try (Aeron aeron1 = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver1.aeronDirectoryName()));
+            Aeron aeron2 = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver2.aeronDirectoryName())))
+        {
+            final int streamId = 10001;
+            final String channel = "aeron:udp?endpoint=localhost:8989";
+            final ExclusivePublication publication =
+                aeron1.addExclusivePublication(channel + "|term-length=64k", streamId);
+            final Subscription subscription = aeron1.addSubscription(channel, streamId);
+            Tests.awaitConnected(subscription);
+            Tests.awaitConnected(publication);
+
+            final int channelStatusId = subscription.channelStatusId();
+
+            final int mdcStreamId = 20002;
+            final String mdcChannel = "aeron:udp?control=localhost:8989|control-mode=dynamic|term-length=64k";
+            for (int i = 0; i < 5; i++)
+            {
+                try
+                {
+                    aeron2.addExclusivePublication(mdcChannel, mdcStreamId);
+                    fail("Publication should not be added");
+                }
+                catch (final RegistrationException ex)
+                {
+                    assertAddressInUseException(mdcChannel, ex);
+                }
+            }
+
+            subscription.close();
+
+            Tests.await(
+                () -> CountersReader.RECORD_RECLAIMED == aeron1.countersReader().getCounterState(channelStatusId));
+
+            final ExclusivePublication mdcPublication = aeron2.addExclusivePublication(mdcChannel, mdcStreamId);
+            final Subscription mdcSubscription =
+                aeron1.addSubscription("aeron:udp?control=localhost:8989", mdcStreamId);
+            Tests.awaitConnected(mdcSubscription);
+            Tests.awaitConnected(mdcPublication);
+        }
+    }
+
+    @InterruptAfter(20)
+    @Test
+    void publicationShouldConnectToASocketOnceItIsFree()
+    {
+        driver2 = TestMediaDriver.launch(new MediaDriver.Context()
+            .aeronDirectoryName(CommonContext.generateRandomDirName())
+            .threadingMode(ThreadingMode.DEDICATED), testWatcher);
+
+        final int streamId = 10001;
+        final String interfaceEndpoint = "interface=localhost:9090";
+        final String channel = "aeron:udp?term-length=64k";
+
+        try (Aeron aeron1 = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver1.aeronDirectoryName()));
+            Aeron aeron2 = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver2.aeronDirectoryName())))
+        {
+            final ExclusivePublication publication = aeron1.addExclusivePublication(
+                channel + "|endpoint=localhost:8888|" + interfaceEndpoint, streamId);
+
+            final int channelStatusId = publication.channelStatusId();
+            Tests.await(
+                () -> CountersReader.RECORD_ALLOCATED == aeron1.countersReader().getCounterState(channelStatusId));
+
+            final String conflictingChannel = channel + "|endpoint=localhost:7777|" + interfaceEndpoint;
+            for (int i = 0; i < 5; i++)
+            {
+                try
+                {
+                    aeron2.addExclusivePublication(conflictingChannel, streamId);
+                    fail("Publication should not be added");
+                }
+                catch (final RegistrationException ex)
+                {
+                    assertAddressInUseException(conflictingChannel, ex);
+                }
+            }
+
+            publication.close();
+
+            Tests.await(
+                () -> CountersReader.RECORD_RECLAIMED == aeron1.countersReader().getCounterState(channelStatusId));
+
+            final ExclusivePublication newPublication = aeron2.addExclusivePublication(conflictingChannel, streamId);
+            Tests.await(() ->
+                CountersReader.RECORD_ALLOCATED ==
+                aeron2.countersReader().getCounterState(newPublication.channelStatusId()));
+        }
+    }
+
+    private static List<Arguments> subscriptionTests()
     {
         final ArrayList<Arguments> arguments = new ArrayList<>();
         final String[] pubChannels = {
