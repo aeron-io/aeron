@@ -130,6 +130,8 @@ class ReceiverTest
     private Receiver receiver;
     private ReceiverProxy receiverProxy;
     private final ManyToOneConcurrentLinkedQueue<Runnable> toConductorQueue = new ManyToOneConcurrentLinkedQueue<>();
+    private final DriverConductorProxy driverConductorProxy =
+        new DriverConductorProxy(ThreadingMode.DEDICATED, toConductorQueue, mock(AtomicCounter.class));
     private final CongestionControl congestionControl = mock(CongestionControl.class);
     private final MediaDriver.Context ctx = new MediaDriver.Context()
         .systemCounters(mockSystemCounters)
@@ -159,9 +161,6 @@ class ReceiverTest
             anyLong(), anyLong(), anyLong(), anyLong(), anyLong(), anyLong(), anyBoolean()))
             .thenReturn(CongestionControl.packOutcome(INITIAL_WINDOW_LENGTH, false));
         when(congestionControl.initialWindowLength()).thenReturn(INITIAL_WINDOW_LENGTH);
-
-        final DriverConductorProxy driverConductorProxy =
-            new DriverConductorProxy(ThreadingMode.DEDICATED, toConductorQueue, mock(AtomicCounter.class));
 
         final MediaDriver.Context ctx = new MediaDriver.Context()
             .driverCommandQueue(toConductorQueue)
@@ -216,6 +215,7 @@ class ReceiverTest
     @InterruptAfter(10)
     void shouldCreateRcvTermAndSendSmOnSetup() throws IOException
     {
+        receiveChannelEndpoint.openChannel(driverConductorProxy);
         receiverProxy.registerReceiveChannelEndpoint(receiveChannelEndpoint);
         receiverProxy.addSubscription(receiveChannelEndpoint, STREAM_ID);
 
@@ -285,6 +285,7 @@ class ReceiverTest
     @Test
     void shouldInsertDataIntoLogAfterInitialExchange()
     {
+        receiveChannelEndpoint.openChannel(driverConductorProxy);
         receiverProxy.registerReceiveChannelEndpoint(receiveChannelEndpoint);
         receiverProxy.addSubscription(receiveChannelEndpoint, STREAM_ID);
 
@@ -355,6 +356,7 @@ class ReceiverTest
     @Test
     void shouldNotOverwriteDataFrameWithHeartbeat()
     {
+        receiveChannelEndpoint.openChannel(driverConductorProxy);
         receiverProxy.registerReceiveChannelEndpoint(receiveChannelEndpoint);
         receiverProxy.addSubscription(receiveChannelEndpoint, STREAM_ID);
 
@@ -428,6 +430,7 @@ class ReceiverTest
     @Test
     void shouldOverwriteHeartbeatWithDataFrame()
     {
+        receiveChannelEndpoint.openChannel(driverConductorProxy);
         receiverProxy.registerReceiveChannelEndpoint(receiveChannelEndpoint);
         receiver.doWork();
         receiverProxy.addSubscription(receiveChannelEndpoint, STREAM_ID);
@@ -504,6 +507,7 @@ class ReceiverTest
         final int alignedDataFrameLength =
             align(DataHeaderFlyweight.HEADER_LENGTH + FAKE_PAYLOAD.length, FrameDescriptor.FRAME_ALIGNMENT);
 
+        receiveChannelEndpoint.openChannel(driverConductorProxy);
         receiverProxy.registerReceiveChannelEndpoint(receiveChannelEndpoint);
         receiverProxy.addSubscription(receiveChannelEndpoint, STREAM_ID);
 
@@ -578,6 +582,7 @@ class ReceiverTest
     @Test
     void shouldRemoveImageFromDispatcherWithNoActivity()
     {
+        receiveChannelEndpoint.openChannel(driverConductorProxy);
         receiverProxy.registerReceiveChannelEndpoint(receiveChannelEndpoint);
         receiverProxy.addSubscription(receiveChannelEndpoint, STREAM_ID);
 
@@ -601,6 +606,7 @@ class ReceiverTest
     @Test
     void shouldNotRemoveImageFromDispatcherOnRemoveSubscription()
     {
+        receiveChannelEndpoint.openChannel(driverConductorProxy);
         receiverProxy.registerReceiveChannelEndpoint(receiveChannelEndpoint);
         receiverProxy.addSubscription(receiveChannelEndpoint, STREAM_ID);
 

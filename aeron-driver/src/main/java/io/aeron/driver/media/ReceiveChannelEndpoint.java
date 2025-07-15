@@ -324,22 +324,7 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
     {
         if (null == multiRcvDestination)
         {
-            if (conductorProxy.notConcurrent())
-            {
-                openDatagramChannel(statusIndicator);
-            }
-            else
-            {
-                try
-                {
-                    openDatagramChannel(statusIndicator);
-                }
-                catch (final Exception ex)
-                {
-                    conductorProxy.channelEndpointError(statusIndicator.id(), ex);
-                    throw ex;
-                }
-            }
+            openDatagramChannel(statusIndicator);
         }
     }
 
