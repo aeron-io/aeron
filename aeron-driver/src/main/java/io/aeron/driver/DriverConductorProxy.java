@@ -88,14 +88,6 @@ public final class DriverConductorProxy
      */
     public void channelEndpointError(final long statusIndicatorId, final Exception ex)
     {
-        if (notConcurrent())
-        {
-            driverConductor.onChannelEndpointError(statusIndicatorId, ex);
-        }
-        else
-        {
-            offer(() -> driverConductor.onChannelEndpointError(statusIndicatorId, ex));
-        }
     }
 
     /**

@@ -107,6 +107,7 @@ class DriverEventsAdapter implements MessageHandler
 
                 if (CHANNEL_ENDPOINT_ERROR == errorCode)
                 {
+                    // This code is left for backwards compatibility with versions prior to 1.48.5
                     notProcessed = false;
                     conductor.onChannelEndpointError(correlationId, errorResponse.errorMessage());
                 }

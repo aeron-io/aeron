@@ -398,12 +398,6 @@ public final class DriverConductor implements Agent
         }
     }
 
-    void onChannelEndpointError(final long statusIndicatorId, final Exception ex)
-    {
-        final String errorMessage = ex.getClass().getName() + " : " + ex.getMessage();
-        clientProxy.onError(statusIndicatorId, CHANNEL_ENDPOINT_ERROR, errorMessage);
-    }
-
     void onPublicationError(
         final long registrationId,
         final long destinationRegistrationId,
