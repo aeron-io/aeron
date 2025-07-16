@@ -2480,6 +2480,10 @@ aeron_send_channel_endpoint_t *aeron_driver_conductor_get_or_add_send_channel_en
             return NULL;
         }
 
+        aeron_counter_set_release(endpoint->channel_status.value_addr, AERON_COUNTER_CHANNEL_ENDPOINT_STATUS_ACTIVE);
+
+        aeron_driver_sender_proxy_on_add_endpoint(conductor->context->sender_proxy, endpoint);
+
         if (aeron_str_to_ptr_hash_map_put(
             &conductor->send_channel_endpoint_by_channel_map,
             channel->canonical_form,
@@ -2491,10 +2495,7 @@ aeron_send_channel_endpoint_t *aeron_driver_conductor_get_or_add_send_channel_en
             return NULL;
         }
 
-        aeron_driver_sender_proxy_on_add_endpoint(conductor->context->sender_proxy, endpoint);
         conductor->send_channel_endpoints.array[conductor->send_channel_endpoints.length++].endpoint = endpoint;
-
-        aeron_counter_set_release(endpoint->channel_status.value_addr, AERON_COUNTER_CHANNEL_ENDPOINT_STATUS_ACTIVE);
     }
     else
     {
@@ -2610,6 +2611,7 @@ aeron_receive_channel_endpoint_t *aeron_driver_conductor_get_or_add_receive_chan
                 status_indicator.counter_id) < 0)
             {
                 AERON_APPEND_ERR("correlation_id=%" PRId64, correlation_id);
+                aeron_counters_manager_free(&conductor->counters_manager, status_indicator.counter_id);
                 goto error_cleanup;
             }
         }
@@ -2626,6 +2628,7 @@ aeron_receive_channel_endpoint_t *aeron_driver_conductor_get_or_add_receive_chan
             {
                 aeron_receive_destination_delete(destination, &conductor->counters_manager);
             }
+            aeron_counters_manager_free(&conductor->counters_manager, status_indicator.counter_id);
             return NULL;
         }
 
@@ -2642,6 +2645,7 @@ aeron_receive_channel_endpoint_t *aeron_driver_conductor_get_or_add_receive_chan
             {
                 aeron_receive_destination_delete(destination, &conductor->counters_manager);
             }
+            aeron_counters_manager_free(&conductor->counters_manager, status_indicator.counter_id);
             return NULL;
         }
 
@@ -2661,6 +2665,9 @@ aeron_receive_channel_endpoint_t *aeron_driver_conductor_get_or_add_receive_chan
             channel->original_uri,
             bind_addr_and_port_length,
             bind_addr_and_port);
+        *status_indicator.value_addr = AERON_COUNTER_CHANNEL_ENDPOINT_STATUS_ACTIVE;
+
+        aeron_driver_receiver_proxy_on_add_endpoint(endpoint->receiver_proxy, endpoint);
 
         if (aeron_str_to_ptr_hash_map_put(
             &conductor->receive_channel_endpoint_by_channel_map,
@@ -2674,8 +2681,6 @@ aeron_receive_channel_endpoint_t *aeron_driver_conductor_get_or_add_receive_chan
         }
 
         conductor->receive_channel_endpoints.array[conductor->receive_channel_endpoints.length++].endpoint = endpoint;
-        *status_indicator.value_addr = AERON_COUNTER_CHANNEL_ENDPOINT_STATUS_ACTIVE;
-        aeron_driver_receiver_proxy_on_add_endpoint(endpoint->receiver_proxy, endpoint);
     }
     else
     {

@@ -196,7 +196,6 @@ int aeron_send_channel_endpoint_create(
             _endpoint->destination_tracker, &_endpoint->tracker_num_destinations);
     }
 
-    // TODO: Remove the update and just create in a single shot.
     aeron_channel_endpoint_status_update_label(
         counters_manager,
         _endpoint->channel_status.counter_id,
