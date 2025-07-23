@@ -33,8 +33,16 @@ import org.agrona.collections.ArrayUtil;
 import org.agrona.collections.Int2ObjectHashMap;
 import org.agrona.concurrent.*;
 
+import java.io.PrintStream;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
+import java.net.UnknownHostException;
+import java.util.Enumeration;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static io.aeron.Aeron.NULL_VALUE;
@@ -1381,6 +1389,13 @@ public final class AeronCluster implements AutoCloseable
         private EgressListener egressListener;
         private ControlledEgressListener controlledEgressListener;
         private AgentInvoker agentInvoker;
+        private PrintStream warningLogger = CommonContext.fallbackLogger();
+
+        Context warningLogger(final PrintStream stream)
+        {
+            this.warningLogger = stream;
+            return this;
+        }
 
         /**
          * Perform a shallow copy of the object.
@@ -1435,6 +1450,8 @@ public final class AeronCluster implements AutoCloseable
                 egressChannel = egressChannelUri.toString();
             }
 
+            checkEgressIngressHostMatch(egressChannelUri);
+
             if (null == aeron)
             {
                 aeron = Aeron.connect(
@@ -1474,6 +1491,67 @@ public final class AeronCluster implements AutoCloseable
                         throw new ConfigurationException(
                             "controlledEgressListener must be specified on AeronCluster.Context");
                     };
+            }
+        }
+
+        private void checkEgressIngressHostMatch(final ChannelUri egressChannelUri)
+        {
+            if (egressChannelUri.isIpc())
+            {
+                return; // don't check hostnames if ipc
+            }
+            final String endpoint = egressChannelUri.get(CommonContext.ENDPOINT_PARAM_NAME);
+
+            if (null == endpoint)
+            {
+                throw new ConfigurationException("Egress channel endpoint must be specified");
+            }
+
+            final int portSeparatorIndex = endpoint.indexOf(':');
+            final String endpointHost = endpoint.substring(0, portSeparatorIndex);
+
+            if (null == ingressEndpoints)
+            {
+                return; // other tests will deal with this
+            }
+            if (endpointHost.startsWith("127.") ||
+                endpointHost.contentEquals("localhost"))
+            {
+                // it's local.  now ensure ingress are all local as well
+                try
+                {
+                    final Set<String> localIps = getLocalIPAddresses(true);
+                    for (final String ie : ingressEndpoints.split(","))
+                    {
+                        final int i = ie.indexOf('=');
+                        if (-1 == i)
+                        {
+                            throw new ConfigurationException("ingress endpoint missing '=' separator: " +
+                                ingressEndpoints);
+                        }
+
+                        final String hostAndPort = ie.substring(i + 1);
+                        final String host = hostAndPort.substring(0, hostAndPort.indexOf(':'));
+                        try
+                        {
+                            final String ip = getIpAddressOfHostname(host);
+
+                            if (!localIps.contains(ip))
+                            {
+                                warningLogger.println("ERROR - must use network interface for local egress " +
+                                    "host when ingress is remote");
+                            }
+                        }
+                        catch (final UnknownHostException e)
+                        {
+                            warningLogger.println("ERROR - hostname for ingress endpoint is invalid: " + host);
+                        }
+                    }
+                }
+                catch (final SocketException e)
+                {
+                    warningLogger.println("Cannot iterate local ips to confirm configuration");
+                }
             }
         }
 
@@ -1983,6 +2061,53 @@ public final class AeronCluster implements AutoCloseable
                 "\n    egressListener=" + egressListener +
                 "\n    controlledEgressListener=" + controlledEgressListener +
                 "\n}";
+        }
+
+        /**
+         * @return all local ip addresses.
+         * @throws SocketException if thrown by NetworkInterface.getNetworkInterfaces()
+         * @param doIncludeLoopback whether to include loopback addresses in the returned set
+         */
+        public static Set<String> getLocalIPAddresses(final boolean doIncludeLoopback) throws SocketException
+        {
+            final HashSet<String> ipAddresses = new HashSet<>();
+
+            final Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+            while (interfaces.hasMoreElements())
+            {
+                final NetworkInterface iface = interfaces.nextElement();
+                // Skip down and loopback interfaces
+                if (!iface.isUp() || (!doIncludeLoopback && iface.isLoopback()))
+                {
+                    continue;
+                }
+                final Enumeration<InetAddress> addresses = iface.getInetAddresses();
+                while (addresses.hasMoreElements())
+                {
+                    final InetAddress addr = addresses.nextElement();
+                    if (!doIncludeLoopback)
+                    {
+                        if (addr.isLoopbackAddress() || addr.isLinkLocalAddress())
+                        {
+                            continue;
+                        }
+                    }
+                    ipAddresses.add(addr.getHostAddress());
+                }
+            }
+            return ipAddresses;
+        }
+
+        static String getIpAddressOfHostname(final String hostName) throws UnknownHostException
+        {
+            if (null == hostName)
+            {
+                return null;
+            }
+
+            final InetAddress inetAddress = InetAddress.getByName(hostName.trim());
+            return inetAddress.getHostAddress();
+
         }
     }
 

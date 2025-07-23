@@ -212,6 +212,8 @@ public class BasicAuctionClusterClient implements EgressListener
         final int customerId = Integer.parseInt(System.getProperty("aeron.cluster.tutorial.customerId"));       // <1>
         final int numOfBids = Integer.parseInt(System.getProperty("aeron.cluster.tutorial.numOfBids"));         // <2>
         final int bidIntervalMs = Integer.parseInt(System.getProperty("aeron.cluster.tutorial.bidIntervalMs")); // <3>
+        final String localIP = System.getProperty(
+            "aeron.cluster.tutorial.localIP", "127.0.0.1");
 
         final String[] hostnames = System.getProperty(
             "aeron.cluster.tutorial.hostnames", "localhost,localhost,localhost").split(",");
@@ -228,7 +230,7 @@ public class BasicAuctionClusterClient implements EgressListener
             AeronCluster aeronCluster = AeronCluster.connect(
                 new AeronCluster.Context()
                 .egressListener(client)                                                                         // <2>
-                .egressChannel("aeron:udp?endpoint=localhost:0")                                                // <3>
+                .egressChannel("aeron:udp?endpoint=" + localIP + ":0")                                          // <3>
                 .aeronDirectoryName(mediaDriver.aeronDirectoryName())
                 .ingressChannel("aeron:udp")                                                                    // <4>
                 .ingressEndpoints(ingressEndpoints)))                                                           // <5>
