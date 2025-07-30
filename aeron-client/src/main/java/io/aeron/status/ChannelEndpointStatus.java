@@ -114,9 +114,11 @@ public class ChannelEndpointStatus
         final long registrationId,
         final String channel)
     {
-        final int keyLength = tempBuffer.putStringWithoutLengthAscii(
+        final int channelLength = tempBuffer.putStringWithoutLengthAscii(
             CHANNEL_OFFSET + SIZE_OF_INT, channel, 0, MAX_CHANNEL_LENGTH);
-        tempBuffer.putInt(CHANNEL_OFFSET, keyLength);
+        tempBuffer.putInt(CHANNEL_OFFSET, channelLength);
+
+        final int keyLength = channelLength + SIZE_OF_INT;
 
         int labelLength = 0;
         labelLength += tempBuffer.putStringWithoutLengthAscii(keyLength + labelLength, name);
