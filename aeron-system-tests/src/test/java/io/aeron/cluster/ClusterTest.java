@@ -1141,6 +1141,10 @@ class ClusterTest
             s.contains("io.aeron.exceptions.RegistrationException: ERROR - " +
             "java.net.UnknownHostException: unresolved - endpoint=badhost:5555"));
 
+        systemTestWatcher.ignoreErrorsMatching(s ->
+            s.contains("(-9) unknown host"));
+
+
         final TestNode leader = cluster.awaitLeader();
 
         final AeronCluster.Context clientContext = cluster.clientCtx()
@@ -1178,6 +1182,9 @@ class ClusterTest
             s.contains("io.aeron.exceptions.RegistrationException: ERROR - " +
             "java.net.UnknownHostException: unresolved - endpoint=badhost:5555"));
 
+        systemTestWatcher.ignoreErrorsMatching(s ->
+            s.contains("(-9) unknown host"));
+
         final TestNode leader = cluster.awaitLeader();
 
         final AeronCluster.Context clientContext = cluster.clientCtx()
@@ -1214,6 +1221,9 @@ class ClusterTest
         systemTestWatcher.ignoreErrorsMatching(s ->
             s.contains("io.aeron.exceptions.RegistrationException: ERROR - " +
             "java.net.UnknownHostException: unresolved - endpoint=badhost:5555"));
+
+        systemTestWatcher.ignoreErrorsMatching(s ->
+            s.contains("(-9) unknown host"));
 
         final TestNode leader = cluster.awaitLeader();
         final int leaderIdx = leader.index();
