@@ -33,6 +33,7 @@ import io.aeron.cluster.service.ClusteredServiceContainer;
 import io.aeron.cluster.service.SnapshotDurationTracker;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
+import io.aeron.exceptions.TimeoutException;
 import io.aeron.logbuffer.BufferClaim;
 import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.Header;
@@ -46,6 +47,7 @@ import io.aeron.test.*;
 import io.aeron.test.cluster.ClusterTests;
 import io.aeron.test.cluster.TestCluster;
 import io.aeron.test.cluster.TestNode;
+import io.aeron.test.driver.RedirectingNameResolver;
 import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.BitUtil;
 import org.agrona.CloseHelper;
@@ -1124,6 +1126,146 @@ class ClusterTest
         cluster.followers(2);
         cluster.awaitServicesMessageCount(messageCount);
     }
+
+    @Test
+    @InterruptAfter(15)
+    void shouldLogErrorOnBadEgressConfiguration()
+    {
+        cluster = aCluster().withStaticNodes(3).start();
+        systemTestWatcher.cluster(cluster);
+        systemTestWatcher.ignoreErrorsMatching(s ->
+            s.contains("io.aeron.driver.exceptions.InvalidChannelException: " +
+            "java.net.UnknownHostException: unresolved - endpoint=badhost:5555"));
+
+        systemTestWatcher.ignoreErrorsMatching(s ->
+            s.contains("io.aeron.exceptions.RegistrationException: ERROR - " +
+            "java.net.UnknownHostException: unresolved - endpoint=badhost:5555"));
+
+        systemTestWatcher.ignoreErrorsMatching(s ->
+            s.contains("(-9) unknown host"));
+
+
+        final TestNode leader = cluster.awaitLeader();
+
+        final AeronCluster.Context clientContext = cluster.clientCtx()
+            .egressChannel("aeron:udp?endpoint=badhost:5555")
+            .messageTimeoutNs(500_000_000);  // .5s to be safe;
+
+        final String mappings = "badhost,localhost,localhost|node0,localhost,localhost|node1," +
+            "localhost,localhost|node2,localhost,localhost";
+        final RedirectingNameResolver nameResolver = new RedirectingNameResolver(mappings);
+
+        final TimeoutException clusterTimeoutException =
+            assertThrows(TimeoutException.class, () ->
+            {
+                cluster.connectClient(clientContext, nameResolver, true, true);
+            }
+        );
+
+        assert (clusterTimeoutException.getMessage().contains("Connected to cluster at node"));
+        assert (clusterTimeoutException.getMessage()
+            .contains("the cluster node cannot connect to you at badhost state=POLL_RESPONSE"));
+
+    }
+
+    @Test
+    @InterruptAfter(15)
+    void shouldLogErrorOnBadIngressConfiguration()
+    {
+        cluster = aCluster().withStaticNodes(3).start();
+        systemTestWatcher.cluster(cluster);
+        systemTestWatcher.ignoreErrorsMatching(s ->
+            s.contains("io.aeron.driver.exceptions.InvalidChannelException: " +
+            "java.net.UnknownHostException: unresolved - endpoint=badhost:5555"));
+
+        systemTestWatcher.ignoreErrorsMatching(s ->
+            s.contains("io.aeron.exceptions.RegistrationException: ERROR - " +
+            "java.net.UnknownHostException: unresolved - endpoint=badhost:5555"));
+
+        systemTestWatcher.ignoreErrorsMatching(s ->
+            s.contains("(-9) unknown host"));
+
+        final TestNode leader = cluster.awaitLeader();
+
+        final AeronCluster.Context clientContext = cluster.clientCtx()
+            .egressChannel("aeron:udp?endpoint=badhost:5555")
+            .ingressEndpoints("0=node0:21909,1=node1:21909,2=node2:21909")
+            .messageTimeoutNs(500_000_000);  // .5s to be safe;
+
+        final String mappings = "badhost,localhost,localhost|node0,localhost,localhost|node1," +
+            "localhost,localhost|node2,localhost,localhost";
+        final RedirectingNameResolver nameResolver = new RedirectingNameResolver(mappings);
+
+        final TimeoutException clusterTimeoutException =
+            assertThrows(TimeoutException.class, () ->
+            {
+                cluster.connectClient(clientContext, nameResolver, false, false);
+            }
+        );
+
+        assert (clusterTimeoutException.getMessage()
+        .contains("cluster connect timeout: couldn't connect to any of " +
+            "the cluster endpoints!  state=AWAIT_PUBLICATION_CONNECTED"));
+    }
+
+    @Test
+    @InterruptAfter(15)
+    void shouldLogErrorOnPartiallyBadIngressConfiguration()
+    {
+        cluster = aCluster().withStaticNodes(3).start();
+        systemTestWatcher.cluster(cluster);
+        systemTestWatcher.ignoreErrorsMatching(s ->
+            s.contains("io.aeron.driver.exceptions.InvalidChannelException: " +
+            "java.net.UnknownHostException: unresolved - endpoint=badhost:5555"));
+
+        systemTestWatcher.ignoreErrorsMatching(s ->
+            s.contains("io.aeron.exceptions.RegistrationException: ERROR - " +
+            "java.net.UnknownHostException: unresolved - endpoint=badhost:5555"));
+
+        systemTestWatcher.ignoreErrorsMatching(s ->
+            s.contains("(-9) unknown host"));
+
+        final TestNode leader = cluster.awaitLeader();
+        final int leaderIdx = leader.index();
+
+        final StringBuffer ingressBuffer = new StringBuffer();
+        final int[] ports = {20110, 20111, 20112};
+        final int badPort = 9999;
+        for (int i = 0; i < 3; i++)
+        {
+            if (i > 0)
+            {
+                ingressBuffer.append(",");
+            }
+            ingressBuffer.append(i)
+            .append("=")
+            .append("node")
+            .append(i)
+            .append(":")
+                .append(i == leaderIdx ? badPort : ports[i]);
+        }
+        final AeronCluster.Context clientContext = cluster.clientCtx()
+            .egressChannel("aeron:udp?endpoint=localhost:5555")
+            .ingressEndpoints(ingressBuffer.toString())
+            .messageTimeoutNs(500_000_000);  // .5s to be safe
+
+        final String mappings = "node0,localhost,localhost|node1," +
+            "localhost,localhost|node2,localhost,localhost";
+        final RedirectingNameResolver nameResolver = new RedirectingNameResolver(mappings);
+
+        final TimeoutException clusterTimeoutException =
+            assertThrows(TimeoutException.class, () ->
+            {
+                cluster.connectClient(clientContext, nameResolver, false, false);
+            }
+        );
+
+        assert (clusterTimeoutException.getMessage()
+            .contains("Cannot connect to cluster at node" + leaderIdx + ":9999 " +
+                "state=AWAIT_PUBLICATION_CONNECTED"));
+
+    }
+
 
     @Test
     @InterruptAfter(30)
