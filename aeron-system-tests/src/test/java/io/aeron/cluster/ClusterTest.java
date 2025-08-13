@@ -1133,17 +1133,7 @@ class ClusterTest
     {
         cluster = aCluster().withStaticNodes(3).start();
         systemTestWatcher.cluster(cluster);
-        systemTestWatcher.ignoreErrorsMatching(s ->
-            s.contains("io.aeron.driver.exceptions.InvalidChannelException: " +
-            "java.net.UnknownHostException: unresolved - endpoint=badhost:5555"));
-
-        systemTestWatcher.ignoreErrorsMatching(s ->
-            s.contains("io.aeron.exceptions.RegistrationException: ERROR - " +
-            "java.net.UnknownHostException: unresolved - endpoint=badhost:5555"));
-
-        systemTestWatcher.ignoreErrorsMatching(s ->
-            s.contains("(-9) unknown host"));
-
+        systemTestWatcher.ignoreErrorsMatching(UNKNOWN_HOST_FILTER);
 
         final TestNode leader = cluster.awaitLeader();
 
@@ -1158,7 +1148,7 @@ class ClusterTest
         final TimeoutException clusterTimeoutException =
             assertThrows(TimeoutException.class, () ->
             {
-                cluster.connectClient(clientContext, nameResolver, true, true);
+                cluster.connectClient(clientContext, nameResolver, false, true);
             }
         );
 
@@ -1174,16 +1164,7 @@ class ClusterTest
     {
         cluster = aCluster().withStaticNodes(3).start();
         systemTestWatcher.cluster(cluster);
-        systemTestWatcher.ignoreErrorsMatching(s ->
-            s.contains("io.aeron.driver.exceptions.InvalidChannelException: " +
-            "java.net.UnknownHostException: unresolved - endpoint=badhost:5555"));
-
-        systemTestWatcher.ignoreErrorsMatching(s ->
-            s.contains("io.aeron.exceptions.RegistrationException: ERROR - " +
-            "java.net.UnknownHostException: unresolved - endpoint=badhost:5555"));
-
-        systemTestWatcher.ignoreErrorsMatching(s ->
-            s.contains("(-9) unknown host"));
+        systemTestWatcher.ignoreErrorsMatching(UNKNOWN_HOST_FILTER);
 
         final TestNode leader = cluster.awaitLeader();
 
@@ -1214,16 +1195,7 @@ class ClusterTest
     {
         cluster = aCluster().withStaticNodes(3).start();
         systemTestWatcher.cluster(cluster);
-        systemTestWatcher.ignoreErrorsMatching(s ->
-            s.contains("io.aeron.driver.exceptions.InvalidChannelException: " +
-            "java.net.UnknownHostException: unresolved - endpoint=badhost:5555"));
-
-        systemTestWatcher.ignoreErrorsMatching(s ->
-            s.contains("io.aeron.exceptions.RegistrationException: ERROR - " +
-            "java.net.UnknownHostException: unresolved - endpoint=badhost:5555"));
-
-        systemTestWatcher.ignoreErrorsMatching(s ->
-            s.contains("(-9) unknown host"));
+        systemTestWatcher.ignoreErrorsMatching(UNKNOWN_HOST_FILTER);
 
         final TestNode leader = cluster.awaitLeader();
         final int leaderIdx = leader.index();
@@ -1263,7 +1235,6 @@ class ClusterTest
         assert (clusterTimeoutException.getMessage()
             .contains("Cannot connect to cluster at node" + leaderIdx + ":9999 " +
                 "state=AWAIT_PUBLICATION_CONNECTED"));
-
     }
 
 
