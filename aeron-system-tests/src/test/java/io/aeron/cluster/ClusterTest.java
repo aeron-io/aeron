@@ -1209,8 +1209,7 @@ class ClusterTest
                 ingressBuffer.append(",");
             }
             ingressBuffer.append(i)
-            .append("=")
-            .append("node")
+            .append("=node")
             .append(i)
             .append(":")
                 .append(i == leaderIdx ? badPort : ports[i]);
