@@ -1135,7 +1135,7 @@ class ClusterTest
         systemTestWatcher.cluster(cluster);
         systemTestWatcher.ignoreErrorsMatching(UNKNOWN_HOST_FILTER);
 
-        final TestNode leader = cluster.awaitLeader();
+        cluster.awaitLeader();
 
         final AeronCluster.Context clientContext = cluster.clientCtx()
             .egressChannel("aeron:udp?endpoint=badhost:5555")
@@ -1166,7 +1166,7 @@ class ClusterTest
         systemTestWatcher.cluster(cluster);
         systemTestWatcher.ignoreErrorsMatching(UNKNOWN_HOST_FILTER);
 
-        final TestNode leader = cluster.awaitLeader();
+        cluster.awaitLeader();
 
         final AeronCluster.Context clientContext = cluster.clientCtx()
             .egressChannel("aeron:udp?endpoint=badhost:5555")
@@ -1199,8 +1199,7 @@ class ClusterTest
 
         final TestNode leader = cluster.awaitLeader();
         final int leaderIdx = leader.index();
-
-        final StringBuffer ingressBuffer = new StringBuffer();
+        final StringBuilder ingressBuffer = new StringBuilder();
         final int[] ports = {20110, 20111, 20112};
         final int badPort = 9999;
         for (int i = 0; i < 3; i++)

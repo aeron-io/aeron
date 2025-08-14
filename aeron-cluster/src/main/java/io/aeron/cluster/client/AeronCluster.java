@@ -2197,7 +2197,7 @@ public final class AeronCluster implements AutoCloseable
                 final String endpointPort = null != egressSubscription ?
                     egressSubscription.tryResolveChannelEndpointPort() : "<unknown>";
 
-                final StringBuffer errorMessage = new StringBuffer("cluster connect timeout: ");
+                final StringBuilder errorMessage = new StringBuilder("cluster connect timeout: ");
                 if (state == State.AWAIT_PUBLICATION_CONNECTED)
                 {
                     if (null == ingressPublication)
@@ -2209,17 +2209,9 @@ public final class AeronCluster implements AutoCloseable
                         final String ingressChannel = ingressPublication.channel();
                         if (null != ingressChannel)
                         {
-                            final String[] channelParts = ingressChannel.split("\\?");
-                            final String[] ingressParts = channelParts[1].split("\\|");
-                            for (int endpointIndex = 0; endpointIndex < ingressParts.length; endpointIndex++)
-                            {
-                                if (ingressParts[endpointIndex].startsWith("endpoint"))
-                                {
-                                    final String[] ingressEndpointParts = ingressParts[endpointIndex].split("=");
-                                    errorMessage.append(" - Cannot connect to cluster at " + ingressEndpointParts[1]);
-                                    break;
-                                }
-                            }
+                            final ChannelUri uri = ChannelUri.parse(ingressChannel);
+                            final String ingressEndpoint = uri.get("endpoint");
+                            errorMessage.append(" - Cannot connect to cluster at " + ingressEndpoint);
                         }
                     }
                 }
@@ -2233,22 +2225,14 @@ public final class AeronCluster implements AutoCloseable
                         final String ingressChannel = ingressPublication.channel();
                         if (null != ingressChannel)
                         {
-                            final String[] channelParts = ingressChannel.split("\\?");
-                            final String[] ingressParts = channelParts[1].split("\\|");
-                            for (int endpointIndex = 0; endpointIndex < ingressParts.length; endpointIndex++)
+                            final ChannelUri uri = ChannelUri.parse(ingressChannel);
+                            final String ingressEndpoint = uri.get("endpoint");
+                            final String ingressEndpointHost = ingressEndpoint.split(":")[0];
+                            errorMessage.append(" - Connected to cluster at " + ingressEndpointHost +
+                                ", but the cluster node cannot connect to you at " + egressHost);
+                            if (endpoint.startsWith("localhost") || endpoint.startsWith("127."))
                             {
-                                if (ingressParts[endpointIndex].startsWith("endpoint"))
-                                {
-                                    final String[] ingressEndpointParts = ingressParts[endpointIndex].split("=");
-                                    final String ingressEndpointHost = ingressEndpointParts[1].split(":")[0];
-                                    errorMessage.append(" - Connected to cluster at " + ingressEndpointHost +
-                                        ", but the cluster node cannot connect to you at " + egressHost);
-                                    if (endpoint.startsWith("localhost") || endpoint.startsWith("127."))
-                                    {
-                                        errorMessage.append(".  Cannot bind to localhost if cluster nodes are remote.");
-                                    }
-                                    break;
-                                }
+                                errorMessage.append(".  Cannot bind to localhost if cluster nodes are remote.");
                             }
                         }
                     }
