@@ -48,7 +48,6 @@ import io.aeron.cluster.codecs.NewLeadershipTermEventDecoder;
 import io.aeron.cluster.service.Cluster;
 import io.aeron.driver.Configuration;
 import io.aeron.driver.MediaDriver;
-import io.aeron.driver.NameResolver;
 import io.aeron.driver.ReceiveChannelEndpointSupplier;
 import io.aeron.driver.SendChannelEndpointSupplier;
 import io.aeron.driver.ThreadingMode;
@@ -645,14 +644,7 @@ public final class TestCluster implements AutoCloseable
         return connectClient(clientCtx().credentialsSupplier(credentialsSupplier));
     }
 
-    public AeronCluster connectClient(final AeronCluster.Context clientContext)
-    {
-        return connectClient(clientContext, new RedirectingNameResolver(nodeNameMappings()),
-            true, true);
-    }
-
-    public AeronCluster connectClient(final AeronCluster.Context clientCtx, final NameResolver nameResolver,
-        final boolean keepTryingAfterError, final boolean setIngressEndpoints)
+    public AeronCluster connectClient(final AeronCluster.Context clientCtx)
     {
         if (null == clientMediaDriver)
         {
@@ -664,7 +656,7 @@ public final class TestCluster implements AutoCloseable
                 .dirDeleteOnStart(true)
                 .dirDeleteOnShutdown(true)
                 .aeronDirectoryName(aeronDirName)
-                .nameResolver(nameResolver)
+                .nameResolver(new RedirectingNameResolver(nodeNameMappings()))
                 .senderWildcardPortRange("20700 20709")
                 .receiverWildcardPortRange("20710 20719")
                 .sendChannelEndpointSupplier(clientSendChannelEndpointSupplier)
@@ -680,30 +672,19 @@ public final class TestCluster implements AutoCloseable
             .egressListener(egressListener)
             .controlledEgressListener(controlledEgressListener);
 
-        if (setIngressEndpoints)
-        {
-            setIngressEndpoints(clientCtx);
-        }
+        setIngressEndpoints(clientCtx);
 
-        if (keepTryingAfterError)
-        {
-            try
-            {
-                CloseHelper.close(client);
-                client = AeronCluster.connect(clientCtx.clone());
-            }
-            catch (final TimeoutException ex)
-            {
-                System.out.println("Warning: " + ex);
-
-                CloseHelper.close(client);
-                client = AeronCluster.connect(clientCtx);
-            }
-        }
-        else
+        try
         {
             CloseHelper.close(client);
             client = AeronCluster.connect(clientCtx.clone());
+        }
+        catch (final TimeoutException ex)
+        {
+            System.out.println("Warning: " + ex);
+
+            CloseHelper.close(client);
+            client = AeronCluster.connect(clientCtx);
         }
 
         return client;

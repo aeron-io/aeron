@@ -16,6 +16,7 @@
 package io.aeron.cluster;
 
 import io.aeron.Aeron;
+import io.aeron.CommonContext;
 import io.aeron.Counter;
 import io.aeron.Publication;
 import io.aeron.Subscription;
@@ -31,6 +32,7 @@ import io.aeron.cluster.codecs.*;
 import io.aeron.cluster.service.ClientSession;
 import io.aeron.cluster.service.ClusteredServiceContainer;
 import io.aeron.cluster.service.SnapshotDurationTracker;
+import io.aeron.driver.Configuration;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
 import io.aeron.exceptions.TimeoutException;
@@ -73,6 +75,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -1137,24 +1140,49 @@ class ClusterTest
 
         cluster.awaitLeader();
 
-        final AeronCluster.Context clientContext = cluster.clientCtx()
-            .egressChannel("aeron:udp?endpoint=badhost:5555")
-            .messageTimeoutNs(500_000_000);  // .5s to be safe;
-
         final String mappings = "badhost,localhost,localhost|node0,localhost,localhost|node1," +
             "localhost,localhost|node2,localhost,localhost";
         final RedirectingNameResolver nameResolver = new RedirectingNameResolver(mappings);
 
+        final String aeronDirName = CommonContext.generateRandomDirName();
+
+        final MediaDriver.Context ctx = new MediaDriver.Context()
+            .threadingMode(ThreadingMode.SHARED)
+            .dirDeleteOnStart(true)
+            .dirDeleteOnShutdown(true)
+            .aeronDirectoryName(aeronDirName)
+            .nameResolver(nameResolver)
+            .senderWildcardPortRange("20700 20709")
+            .receiverWildcardPortRange("20710 20719")
+            .sendChannelEndpointSupplier(null)
+            .receiveChannelEndpointSupplier(null)
+            .imageLivenessTimeoutNs(Configuration.imageLivenessTimeoutNs());
+
+        cluster.dataCollector().add(Paths.get(aeronDirName));
+
+        final TestMediaDriver clientMediaDriver = TestMediaDriver
+            .launch(ctx, clientDriverOutputConsumer(cluster.dataCollector()));
+
+        final AeronCluster.Context clientContext = cluster.clientCtx()
+            .egressChannel("aeron:udp?endpoint=badhost:5555")
+            .ingressEndpoints("0=node0:20110,1=node1:20111,2=node2:20112")
+            .messageTimeoutNs(500_000_000)  // .5s to be safe;
+            .aeronDirectoryName(clientMediaDriver.aeronDirectoryName())
+            .isIngressExclusive(true)
+            .egressListener(cluster.clientCtx().egressListener())
+            .controlledEgressListener(null);
+
         final TimeoutException clusterTimeoutException =
             assertThrows(TimeoutException.class, () ->
             {
-                cluster.connectClient(clientContext, nameResolver, false, true);
+                AeronCluster.connect(clientContext.clone());
             }
         );
 
-        assert (clusterTimeoutException.getMessage().contains("Connected to cluster at node"));
-        assert (clusterTimeoutException.getMessage()
-            .contains("the cluster node cannot connect to you at badhost state=POLL_RESPONSE"));
+        assertThat(clusterTimeoutException.getMessage(),
+            containsString("Connected to cluster at node"));
+        assertThat(clusterTimeoutException.getMessage(),
+            containsString("the cluster node cannot connect to you at badhost"));
 
     }
 
@@ -1168,24 +1196,48 @@ class ClusterTest
 
         cluster.awaitLeader();
 
-        final AeronCluster.Context clientContext = cluster.clientCtx()
-            .egressChannel("aeron:udp?endpoint=badhost:5555")
-            .ingressEndpoints("0=node0:21909,1=node1:21909,2=node2:21909")
-            .messageTimeoutNs(500_000_000);  // .5s to be safe;
 
         final String mappings = "badhost,localhost,localhost|node0,localhost,localhost|node1," +
             "localhost,localhost|node2,localhost,localhost";
         final RedirectingNameResolver nameResolver = new RedirectingNameResolver(mappings);
 
+        final String aeronDirName = CommonContext.generateRandomDirName();
+
+        final MediaDriver.Context ctx = new MediaDriver.Context()
+            .threadingMode(ThreadingMode.SHARED)
+            .dirDeleteOnStart(true)
+            .dirDeleteOnShutdown(true)
+            .aeronDirectoryName(aeronDirName)
+            .nameResolver(nameResolver)
+            .senderWildcardPortRange("20700 20709")
+            .receiverWildcardPortRange("20710 20719")
+            .sendChannelEndpointSupplier(null)
+            .receiveChannelEndpointSupplier(null)
+            .imageLivenessTimeoutNs(Configuration.imageLivenessTimeoutNs());
+
+        cluster.dataCollector().add(Paths.get(aeronDirName));
+
+        final TestMediaDriver clientMediaDriver = TestMediaDriver
+            .launch(ctx, clientDriverOutputConsumer(cluster.dataCollector()));
+
+        final AeronCluster.Context clientContext = cluster.clientCtx()
+            .egressChannel("aeron:udp?endpoint=badhost:5555")
+            .ingressEndpoints("0=node0:21909,1=node1:21909,2=node2:21909")
+            .messageTimeoutNs(500_000_000)  // .5s to be safe;
+            .aeronDirectoryName(clientMediaDriver.aeronDirectoryName())
+            .isIngressExclusive(true)
+            .egressListener(cluster.clientCtx().egressListener())
+            .controlledEgressListener(null);
+
         final TimeoutException clusterTimeoutException =
             assertThrows(TimeoutException.class, () ->
             {
-                cluster.connectClient(clientContext, nameResolver, false, false);
+                AeronCluster.connect(clientContext.clone());
             }
         );
 
-        assert (clusterTimeoutException.getMessage()
-        .contains("cluster connect timeout: couldn't connect to any of " +
+        assertThat(clusterTimeoutException.getMessage(),
+            containsString("cluster connect timeout: couldn't connect to any of " +
             "the cluster endpoints!  state=AWAIT_PUBLICATION_CONNECTED"));
     }
 
@@ -1214,25 +1266,49 @@ class ClusterTest
             .append(":")
                 .append(i == leaderIdx ? badPort : ports[i]);
         }
-        final AeronCluster.Context clientContext = cluster.clientCtx()
-            .egressChannel("aeron:udp?endpoint=localhost:5555")
-            .ingressEndpoints(ingressBuffer.toString())
-            .messageTimeoutNs(500_000_000);  // .5s to be safe
 
         final String mappings = "node0,localhost,localhost|node1," +
             "localhost,localhost|node2,localhost,localhost";
         final RedirectingNameResolver nameResolver = new RedirectingNameResolver(mappings);
 
+        final String aeronDirName = CommonContext.generateRandomDirName();
+
+        final MediaDriver.Context ctx = new MediaDriver.Context()
+            .threadingMode(ThreadingMode.SHARED)
+            .dirDeleteOnStart(true)
+            .dirDeleteOnShutdown(true)
+            .aeronDirectoryName(aeronDirName)
+            .nameResolver(nameResolver)
+            .senderWildcardPortRange("20700 20709")
+            .receiverWildcardPortRange("20710 20719")
+            .sendChannelEndpointSupplier(null)
+            .receiveChannelEndpointSupplier(null)
+            .imageLivenessTimeoutNs(Configuration.imageLivenessTimeoutNs());
+
+        cluster.dataCollector().add(Paths.get(aeronDirName));
+
+        final TestMediaDriver clientMediaDriver = TestMediaDriver
+            .launch(ctx, clientDriverOutputConsumer(cluster.dataCollector()));
+
+        final AeronCluster.Context clientContext = cluster.clientCtx()
+            .egressChannel("aeron:udp?endpoint=localhost:5555")
+            .ingressEndpoints(ingressBuffer.toString())
+            .messageTimeoutNs(500_000_000)  // .5s to be safe;
+            .aeronDirectoryName(clientMediaDriver.aeronDirectoryName())
+            .isIngressExclusive(true)
+            .egressListener(cluster.clientCtx().egressListener())
+            .controlledEgressListener(null);
+
         final TimeoutException clusterTimeoutException =
             assertThrows(TimeoutException.class, () ->
             {
-                cluster.connectClient(clientContext, nameResolver, false, false);
+                AeronCluster.connect(clientContext.clone());
             }
         );
 
-        assert (clusterTimeoutException.getMessage()
-            .contains("Cannot connect to cluster at node" + leaderIdx + ":9999 " +
-                "state=AWAIT_PUBLICATION_CONNECTED"));
+        assertThat(clusterTimeoutException.getMessage(),
+            containsString("Cannot connect to cluster at node" + leaderIdx + ":9999 " +
+            "state=AWAIT_PUBLICATION_CONNECTED"));
     }
 
 
