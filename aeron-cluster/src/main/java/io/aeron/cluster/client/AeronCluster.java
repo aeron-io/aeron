@@ -2221,7 +2221,7 @@ public final class AeronCluster implements AutoCloseable
                     if (egressChannelUri.isUdp())
                     {
                         final String egressEndpoint = egressChannelUri.get(CommonContext.ENDPOINT_PARAM_NAME);
-                        final String ingressChannel = ingressPublication.channel();
+                        final String ingressChannel = null == ingressPublication ? null : ingressPublication.channel();
                         if (null != ingressChannel)
                         {
                             final ChannelUri uri = ChannelUri.parse(ingressChannel);
