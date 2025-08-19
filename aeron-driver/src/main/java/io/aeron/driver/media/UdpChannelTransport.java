@@ -28,6 +28,7 @@ import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.AtomicCounter;
 
 import java.io.IOException;
+import java.net.BindException;
 import java.net.InetSocketAddress;
 import java.net.PortUnreachableException;
 import java.net.StandardSocketOptions;
@@ -207,7 +208,13 @@ public abstract class UdpChannelTransport implements AutoCloseable
                 }
 
                 receiveDatagramChannel.setOption(StandardSocketOptions.SO_REUSEADDR, true);
-                receiveDatagramChannel.bind(new InetSocketAddress(endPointAddress.getPort()));
+                try {
+                    receiveDatagramChannel.bind(
+                            new InetSocketAddress(endPointAddress.getAddress(), endPointAddress.getPort()));
+                } catch (final BindException e) {
+                    // some platforms like Windows don't allow binding to multicast address, fallback to 0.0.0.0
+                    receiveDatagramChannel.bind(new InetSocketAddress(endPointAddress.getPort()));
+                }
                 receiveDatagramChannel.join(endPointAddress.getAddress(), udpChannel.localInterface());
                 sendDatagramChannel.setOption(StandardSocketOptions.IP_MULTICAST_IF, udpChannel.localInterface());
 
