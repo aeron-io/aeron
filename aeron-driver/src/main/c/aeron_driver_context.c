@@ -1164,7 +1164,13 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
     _context->next_receiver_id = id_as_uint64->high ^ id_as_uint64->low;
 #else
     /* pure random id */
-    _context->next_receiver_id = aeron_randomised_int32();
+    int64_t receiver_id = 0;
+    do
+    {
+        receiver_id = (int64_t)aeron_randomised_int32() * (int64_t)aeron_randomised_int32();
+    }
+    while (0 == receiver_id);
+    _context->next_receiver_id = receiver_id;
 #endif
 
     if (aeron_netutil_get_so_buf_lengths(
