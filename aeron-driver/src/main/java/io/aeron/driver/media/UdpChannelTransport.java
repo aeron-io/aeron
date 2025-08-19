@@ -208,10 +208,13 @@ public abstract class UdpChannelTransport implements AutoCloseable
                 }
 
                 receiveDatagramChannel.setOption(StandardSocketOptions.SO_REUSEADDR, true);
-                try {
+                try
+                {
                     receiveDatagramChannel.bind(
-                            new InetSocketAddress(endPointAddress.getAddress(), endPointAddress.getPort()));
-                } catch (final BindException e) {
+                        new InetSocketAddress(endPointAddress.getAddress(), endPointAddress.getPort()));
+                }
+                catch (final BindException e)
+                {
                     // some platforms like Windows don't allow binding to multicast address, fallback to 0.0.0.0
                     receiveDatagramChannel.bind(new InetSocketAddress(endPointAddress.getPort()));
                 }
