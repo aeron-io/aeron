@@ -62,7 +62,6 @@ import static io.aeron.CommonContext.SPARSE_PARAM_NAME;
 import static io.aeron.CommonContext.TERM_LENGTH_PARAM_NAME;
 import static io.aeron.CommonContext.checkDebugTimeout;
 import static io.aeron.CommonContext.getAeronDirectoryName;
-import static io.aeron.archive.client.ArchiveProxy.DEFAULT_RETRY_ATTEMPTS;
 import static io.aeron.driver.Configuration.IDLE_MAX_PARK_NS;
 import static io.aeron.driver.Configuration.IDLE_MAX_SPINS;
 import static io.aeron.driver.Configuration.IDLE_MAX_YIELDS;
@@ -2656,6 +2655,18 @@ public final class AeronArchive implements AutoCloseable
         public static final long MESSAGE_TIMEOUT_DEFAULT_NS = TimeUnit.SECONDS.toNanos(10);
 
         /**
+         * The number of retry attempts to be made when offering requests.
+         */
+        @Config
+        public static final String MESSAGE_RETRY_ATTEMPTS_PROP_NAME = "aeron.archive.message.retryAttempts";
+
+        /**
+         * Default number of retry attempts to be made when offering requests.
+         */
+        @Config
+        public static final int MESSAGE_RETRY_ATTEMPTS_DEFAULT = 3;
+
+        /**
          * Channel for sending control messages to an archive.
          */
         @Config(defaultType = DefaultType.STRING, defaultString = "")
@@ -2821,6 +2832,17 @@ public final class AeronArchive implements AutoCloseable
         }
 
         /**
+         * The number of retry attempts to be made when offering requests.
+         *
+         * @return the number of retry attempts to be made when offering requests.
+         * @see #MESSAGE_RETRY_ATTEMPTS_PROP_NAME
+         */
+        public static int messageRetryAttempts()
+        {
+            return Integer.getInteger(MESSAGE_RETRY_ATTEMPTS_PROP_NAME, MESSAGE_RETRY_ATTEMPTS_DEFAULT);
+        }
+
+        /**
          * Should term buffer files be sparse for control request and response streams.
          *
          * @return {@code true} if term buffer files should be sparse for control request and response streams.
@@ -2983,6 +3005,7 @@ public final class AeronArchive implements AutoCloseable
 
         private volatile boolean isConcluded;
         private long messageTimeoutNs = Configuration.messageTimeoutNs();
+        private int messageRetryAttempts = Configuration.messageRetryAttempts();
         private String recordingEventsChannel = AeronArchive.Configuration.recordingEventsChannel();
         private int recordingEventsStreamId = AeronArchive.Configuration.recordingEventsStreamId();
         private String controlRequestChannel = Configuration.controlChannel();
@@ -3110,6 +3133,31 @@ public final class AeronArchive implements AutoCloseable
         public long messageTimeoutNs()
         {
             return checkDebugTimeout(messageTimeoutNs, TimeUnit.NANOSECONDS);
+        }
+
+        /**
+         * Set the number of retry attempts to be made when offering requests.
+         *
+         * @param messageRetryAttempts the number of retry attempts to be made when offering requests.
+         * @return this for a fluent API.
+         * @see Configuration#MESSAGE_RETRY_ATTEMPTS_PROP_NAME
+         */
+        public Context messageRetryAttempts(final int messageRetryAttempts)
+        {
+            this.messageRetryAttempts = messageRetryAttempts;
+            return this;
+        }
+
+        /**
+         * The number of retry attempts to be made when offering requests.
+         *
+         * @return the number of retry attempts to be made when offering requests.
+         * @see Configuration#MESSAGE_RETRY_ATTEMPTS_PROP_NAME
+         */
+        @Config
+        public int messageRetryAttempts()
+        {
+            return messageRetryAttempts;
         }
 
         /**
@@ -3804,7 +3852,7 @@ public final class AeronArchive implements AutoCloseable
                         ctx.idleStrategy(),
                         ctx.aeron().context().nanoClock(),
                         ctx.messageTimeoutNs(),
-                        DEFAULT_RETRY_ATTEMPTS,
+                        ctx.messageRetryAttempts(),
                         ctx.credentialsSupplier());
 
                     state(State.AWAIT_PUBLICATION_CONNECTED);
