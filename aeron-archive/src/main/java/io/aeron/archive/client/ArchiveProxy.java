@@ -68,6 +68,7 @@ import org.agrona.concurrent.NanoClock;
 import org.agrona.concurrent.SystemNanoClock;
 import org.agrona.concurrent.YieldingIdleStrategy;
 
+import static io.aeron.archive.client.AeronArchive.Configuration.MESSAGE_RETRY_ATTEMPTS_DEFAULT;
 import static io.aeron.archive.client.AeronArchive.Configuration.MESSAGE_TIMEOUT_DEFAULT_NS;
 
 /**
@@ -77,8 +78,10 @@ public final class ArchiveProxy
 {
     /**
      * Default number of retry attempts to be made when offering requests.
+     * @deprecated Use {@link AeronArchive.Configuration#MESSAGE_RETRY_ATTEMPTS_DEFAULT}.
      */
-    public static final int DEFAULT_RETRY_ATTEMPTS = 3;
+    @Deprecated(since = "1.48.6", forRemoval = true)
+    public static final int DEFAULT_RETRY_ATTEMPTS = MESSAGE_RETRY_ATTEMPTS_DEFAULT;
 
     private final long connectTimeoutNs;
     private final int retryAttempts;
@@ -139,7 +142,7 @@ public final class ArchiveProxy
      * <p>
      * This provides a default {@link IdleStrategy} of a {@link YieldingIdleStrategy} when offers are back pressured
      * with a defaults of {@link AeronArchive.Configuration#MESSAGE_TIMEOUT_DEFAULT_NS} and
-     * {@link #DEFAULT_RETRY_ATTEMPTS}.
+     * {@link AeronArchive.Configuration#MESSAGE_RETRY_ATTEMPTS_DEFAULT}.
      *
      * @param publication publication for sending control messages to an archive.
      * @throws ClassCastException if {@code publication} is not an instance of {@link ExclusivePublication}.
@@ -156,7 +159,7 @@ public final class ArchiveProxy
      * <p>
      * This provides a default {@link IdleStrategy} of a {@link YieldingIdleStrategy} when offers are back pressured
      * with a defaults of {@link AeronArchive.Configuration#MESSAGE_TIMEOUT_DEFAULT_NS} and
-     * {@link #DEFAULT_RETRY_ATTEMPTS}.
+     * {@link AeronArchive.Configuration#MESSAGE_RETRY_ATTEMPTS_DEFAULT}.
      *
      * @param publication publication for sending control messages to an archive.
      * @throws ClassCastException if {@code publication} is not an instance of {@link ExclusivePublication}.
@@ -168,7 +171,7 @@ public final class ArchiveProxy
             YieldingIdleStrategy.INSTANCE,
             SystemNanoClock.INSTANCE,
             MESSAGE_TIMEOUT_DEFAULT_NS,
-            DEFAULT_RETRY_ATTEMPTS,
+            MESSAGE_RETRY_ATTEMPTS_DEFAULT,
             new NullCredentialsSupplier(),
             null);
     }
