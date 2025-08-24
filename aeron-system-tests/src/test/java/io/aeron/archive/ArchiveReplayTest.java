@@ -17,10 +17,12 @@ package io.aeron.archive;
 
 import io.aeron.Aeron;
 import io.aeron.ChannelUri;
+import io.aeron.CommonContext;
 import io.aeron.Image;
 import io.aeron.Publication;
 import io.aeron.Subscription;
 import io.aeron.archive.client.AeronArchive;
+import io.aeron.archive.client.ArchiveException;
 import io.aeron.archive.client.ReplayParams;
 import io.aeron.archive.status.RecordingPos;
 import io.aeron.driver.MediaDriver;
@@ -56,6 +58,7 @@ import static io.aeron.archive.client.AeronArchive.REPLAY_ALL_AND_STOP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.fail;
 
 @ExtendWith({ InterruptingTestCallback.class, EventLogExtension.class })
 public class ArchiveReplayTest
@@ -161,38 +164,20 @@ public class ArchiveReplayTest
 
             final int replayStreamId = 10001;
 
-            final long replaySessionId = aeronArchive.startReplay(
-                recordingId,
-                IPC_CHANNEL,
-                replayStreamId,
-                new ReplayParams().position(NULL_POSITION).length(REPLAY_ALL_AND_STOP));
-
-            final String replayChannel = ChannelUri.addSessionId(IPC_CHANNEL, (int)replaySessionId);
-            final AtomicReference<Image> availableImage = new AtomicReference<>();
-            final AtomicReference<Image> unavailableImage = new AtomicReference<>();
-            final Subscription replay = aeron.addSubscription(
-                replayChannel, replayStreamId, availableImage::set, unavailableImage::set);
-
-            Image image;
-            while (null == (image = availableImage.get()))
+            try
             {
-                aeronArchive.checkForErrorResponse();
-                Tests.yield();
-            }
+                aeronArchive.startReplay(
+                    recordingId,
+                    CommonContext.IPC_CHANNEL,
+                    replayStreamId,
+                    new ReplayParams().position(AeronArchive.NULL_POSITION).length(AeronArchive.REPLAY_ALL_AND_STOP));
 
-            while (!image.isEndOfStream())
+                fail("Should have thrown exception");
+            }
+            catch (final ArchiveException ex)
             {
-                aeronArchive.checkForErrorResponse();
-                Tests.yield();
+                assertEquals(ArchiveException.EMPTY_RECORDING, ex.errorCode());
             }
-
-            while (image != unavailableImage.get())
-            {
-                Tests.yield();
-            }
-
-            CloseHelper.quietClose(replay);
-            aeronArchive.stopReplay(replaySessionId);
         }
     }
 
@@ -270,38 +255,20 @@ public class ArchiveReplayTest
 
                 final int replayStreamId = 10001;
 
-                final long replaySessionId = aeronArchive.startReplay(
-                    recordingId,
-                    IPC_CHANNEL,
-                    replayStreamId,
-                    new ReplayParams().position(NULL_POSITION).length(REPLAY_ALL_AND_STOP));
-
-                final String replayChannel = ChannelUri.addSessionId(IPC_CHANNEL, (int)replaySessionId);
-                final AtomicReference<Image> availableImage = new AtomicReference<>();
-                final AtomicReference<Image> unavailableImage = new AtomicReference<>();
-                final Subscription replay = aeron.addSubscription(
-                    replayChannel, replayStreamId, availableImage::set, unavailableImage::set);
-
-                Image image;
-                while (null == (image = availableImage.get()))
+                try
                 {
-                    aeronArchive.checkForErrorResponse();
-                    Tests.yield();
-                }
+                    aeronArchive.startReplay(
+                        recordingId,
+                        IPC_CHANNEL,
+                        replayStreamId,
+                        new ReplayParams().position(NULL_POSITION).length(REPLAY_ALL_AND_STOP));
 
-                while (!image.isEndOfStream())
+                    fail("Should have thrown exception");
+                }
+                catch (final ArchiveException ex)
                 {
-                    aeronArchive.checkForErrorResponse();
-                    Tests.yield();
+                    assertEquals(ArchiveException.EMPTY_RECORDING, ex.errorCode());
                 }
-
-                while (image != unavailableImage.get())
-                {
-                    Tests.yield();
-                }
-
-                CloseHelper.quietClose(replay);
-                aeronArchive.stopReplay(replaySessionId);
             }
         }
     }

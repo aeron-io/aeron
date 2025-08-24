@@ -737,6 +737,12 @@ abstract class ArchiveConductor
         else if (AeronArchive.REPLAY_ALL_AND_STOP == length)
         {
             replayLength = (stopPosition - replayPosition);
+            if (0 == replayLength)
+            {
+                final String msg =
+                    "When replaying and stopping the replay length must be non-zero, recordingId=" + recordingId;
+                controlSession.sendErrorResponse(correlationId, EMPTY_RECORDING, msg);
+            }
         }
         else
         {

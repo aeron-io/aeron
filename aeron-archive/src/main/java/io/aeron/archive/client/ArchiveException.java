@@ -98,6 +98,11 @@ public class ArchiveException extends AeronException
      */
     public static final int REPLICATION_CONNECTION_FAILURE = 14;
 
+    /**
+     * The recording specified for replay is empty.
+     */
+    public static final short EMPTY_RECORDING = 15;
+
     private static final long serialVersionUID = 386758252787901080L;
 
     /**
