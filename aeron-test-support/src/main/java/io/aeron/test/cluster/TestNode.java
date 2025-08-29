@@ -311,7 +311,7 @@ public final class TestNode implements AutoCloseable
 
     public int index()
     {
-        return services[0].index();
+        return 0 == services.length ? -1 : services[0].index();
     }
 
     CountersReader countersReader()

@@ -20,6 +20,8 @@ import io.aeron.ChannelUri;
 import io.aeron.ChannelUriStringBuilder;
 import io.aeron.CommonContext;
 import io.aeron.Counter;
+import io.aeron.ExclusivePublication;
+import io.aeron.Image;
 import io.aeron.Publication;
 import io.aeron.Subscription;
 import io.aeron.archive.ArchiveThreadingMode;
@@ -33,7 +35,10 @@ import io.aeron.cluster.ClusterControl;
 import io.aeron.cluster.ClusterMember;
 import io.aeron.cluster.ClusterMembership;
 import io.aeron.cluster.ClusterTool;
+import io.aeron.cluster.ConsensusControlState;
 import io.aeron.cluster.ConsensusModule;
+import io.aeron.cluster.ConsensusModuleControl;
+import io.aeron.cluster.ConsensusModuleExtension;
 import io.aeron.cluster.ElectionState;
 import io.aeron.cluster.NodeControl;
 import io.aeron.cluster.RecordingLog;
@@ -42,6 +47,7 @@ import io.aeron.cluster.client.AeronCluster;
 import io.aeron.cluster.client.ClusterException;
 import io.aeron.cluster.client.ControlledEgressListener;
 import io.aeron.cluster.client.EgressListener;
+import io.aeron.cluster.codecs.CloseReason;
 import io.aeron.cluster.codecs.EventCode;
 import io.aeron.cluster.codecs.MessageHeaderDecoder;
 import io.aeron.cluster.codecs.NewLeadershipTermEventDecoder;
@@ -53,6 +59,7 @@ import io.aeron.driver.SendChannelEndpointSupplier;
 import io.aeron.driver.ThreadingMode;
 import io.aeron.exceptions.RegistrationException;
 import io.aeron.exceptions.TimeoutException;
+import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.Header;
 import io.aeron.samples.archive.RecordingDescriptor;
@@ -172,6 +179,7 @@ public final class TestCluster implements AutoCloseable
     private String clusterBaseDir;
     private ClusterBackup.Configuration.ReplayStart replayStart;
     private List<String> hostnames;
+    private boolean useExtension = false;
 
     private TestCluster(
         final int staticMemberCount,
@@ -343,9 +351,106 @@ public final class TestCluster implements AutoCloseable
             .markFileDir(markFileDir)
             .deleteDirOnStart(cleanStart);
 
+        if (useExtension)
+        {
+            context.consensusModuleContext
+                .serviceCount(0)
+                .consensusModuleExtension(new DummyConsensusModuleExtension());
+        }
+
         nodes[index] = new TestNode(context, dataCollector);
 
         return nodes[index];
+    }
+
+    private static final class DummyConsensusModuleExtension implements ConsensusModuleExtension
+    {
+
+        public int supportedSchemaId()
+        {
+            return 0;
+        }
+
+        public void onStart(final ConsensusModuleControl consensusModuleControl, final Image snapshotImage)
+        {
+
+        }
+
+        public int doWork(final long nowNs)
+        {
+            return 0;
+        }
+
+        public int slowTickWork(final long nowNs)
+        {
+            return 0;
+        }
+
+        public int consensusWork(final long nowNs)
+        {
+            return 0;
+        }
+
+        public void onElectionComplete(final ConsensusControlState consensusControlState)
+        {
+
+        }
+
+        public void onNewLeadershipTerm(final ConsensusControlState consensusControlState)
+        {
+
+        }
+
+        public ControlledFragmentHandler.Action onIngressExtensionMessage(
+            final int actingBlockLength,
+            final int templateId,
+            final int schemaId,
+            final int actingVersion,
+            final DirectBuffer buffer,
+            final int offset,
+            final int length,
+            final Header header)
+        {
+            return ControlledFragmentHandler.Action.CONTINUE;
+        }
+
+        public ControlledFragmentHandler.Action onLogExtensionMessage(
+            final int actingBlockLength,
+            final int templateId,
+            final int schemaId,
+            final int actingVersion,
+            final DirectBuffer buffer,
+            final int offset,
+            final int length,
+            final Header header)
+        {
+            return ControlledFragmentHandler.Action.CONTINUE;
+        }
+
+        public void close()
+        {
+
+        }
+
+        public void onSessionOpened(final long clusterSessionId)
+        {
+
+        }
+
+        public void onSessionClosed(final long clusterSessionId, final CloseReason closeReason)
+        {
+
+        }
+
+        public void onPrepareForNewLeadership()
+        {
+
+        }
+
+        public void onTakeSnapshot(final ExclusivePublication snapshotPublication)
+        {
+
+        }
     }
 
     public TestBackupNode startClusterBackupNode(final boolean cleanStart)
@@ -2134,6 +2239,7 @@ public final class TestCluster implements AutoCloseable
         private String clusterBaseDir = System.getProperty(
             CLUSTER_BASE_DIR_PROP_NAME, CommonContext.generateRandomDirName());
         private boolean useResponseChannels = false;
+        private boolean useExtension = false;
         private List<String> hostnames;
 
         public Builder withStaticNodes(final int nodeCount)
@@ -2294,6 +2400,7 @@ public final class TestCluster implements AutoCloseable
             testCluster.markFileBaseDir(markFileBaseDir);
             testCluster.clusterBaseDir(clusterBaseDir);
             testCluster.replyStart(replayStart);
+            testCluster.useExtension(useExtension);
             testCluster.hostnames(hostnames);
 
             try
@@ -2321,11 +2428,22 @@ public final class TestCluster implements AutoCloseable
 
             return testCluster;
         }
+
+        public Builder withExtension(final boolean useExtension)
+        {
+            this.useExtension = useExtension;
+            return this;
+        }
     }
 
     private void replyStart(final ClusterBackup.Configuration.ReplayStart replayStart)
     {
         this.replayStart = replayStart;
+    }
+
+    private void useExtension(final boolean useExtension)
+    {
+        this.useExtension = useExtension;
     }
 
     private void hostnames(final List<String> hostnames)
