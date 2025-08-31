@@ -1897,10 +1897,11 @@ public final class TestCluster implements AutoCloseable
 
     private static String nodeNameMappings(final IntHashSet invalidInitialResolutions)
     {
-        return
-            "node0," + (invalidInitialResolutions.contains(0) ? "bad.invalid" : "localhost") + ",localhost|" +
-            "node1," + (invalidInitialResolutions.contains(1) ? "bad.invalid" : "localhost") + ",localhost|" +
-            "node2," + (invalidInitialResolutions.contains(2) ? "bad.invalid" : "localhost") + ",localhost|";
+        final String host0 = invalidInitialResolutions.contains(0) ? "bad.invalid" : "localhost";
+        final String host1 = invalidInitialResolutions.contains(1) ? "bad.invalid" : "localhost";
+        final String host2 = invalidInitialResolutions.contains(2) ? "bad.invalid" : "localhost";
+
+        return nodeNameMappings(List.of(host0, host1, host2));
     }
 
     private static String nodeNameMappings(
@@ -1914,10 +1915,20 @@ public final class TestCluster implements AutoCloseable
         final String host1 = memberInvalid || byHostInvalidInitialResolutions.contains(1) ? "bad.invalid" : "localhost";
         final String host2 = memberInvalid || byHostInvalidInitialResolutions.contains(2) ? "bad.invalid" : "localhost";
 
+        return nodeNameMappings(List.of(host0, host1, host2));
+    }
+
+    private static String nodeNameMappings(final List<String> hostnames)
+    {
+        if (hostnames.size() < 3)
+        {
+            throw new IllegalStateException("Need at least 3 hostnames, hostnames=" + hostnames);
+        }
+
         return
-            "node0," + host0 + ",localhost|" +
-            "node1," + host1 + ",localhost|" +
-            "node2," + host2 + ",localhost|";
+            "node0," + hostnames.get(0) + ",localhost|" +
+            "node1," + hostnames.get(1) + ",localhost|" +
+            "node2," + hostnames.get(2) + ",localhost|";
     }
 
     public DataCollector dataCollector()
