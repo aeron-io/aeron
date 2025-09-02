@@ -18,8 +18,8 @@ package io.aeron.cluster;
 import io.aeron.test.EventLogExtension;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
+import io.aeron.test.IpTables;
 import io.aeron.test.SystemTestWatcher;
-import io.aeron.test.Tests;
 import io.aeron.test.TopologyTest;
 import io.aeron.test.cluster.TestCluster;
 import io.aeron.test.cluster.TestNode;
@@ -31,11 +31,6 @@ import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 
@@ -54,22 +49,16 @@ class ClusterNetworkPartitionTest
 
     private TestCluster cluster = null;
 
-    private File baseDir;
-
     @BeforeEach
     void setUp()
     {
-        createChain(CHAIN_NAME);
-        flushChain(CHAIN_NAME);
-        addToInput(CHAIN_NAME);
+        IpTables.setupChain(CHAIN_NAME);
     }
 
     @AfterEach
     void tearDown()
     {
-        flushChain(CHAIN_NAME);
-        removeFromInput(CHAIN_NAME);
-        deleteChain(CHAIN_NAME);
+        IpTables.tearDownChain(CHAIN_NAME);
     }
 
     @Test
@@ -87,7 +76,7 @@ class ClusterNetworkPartitionTest
         cluster.connectClient();
         cluster.sendAndAwaitMessages(1);
 
-        makeNetworkPartition(HOSTNAMES, firstLeader.index());
+        IpTables.makeNetworkPartition(CHAIN_NAME, HOSTNAMES, firstLeader.index());
 
         cluster.sendMessages(20);
 
@@ -96,103 +85,11 @@ class ClusterNetworkPartitionTest
         final TestNode node = cluster.node(firstLeader.index());
         cluster.awaitNodeState(node, (n) -> n.electionState() == ElectionState.CANVASS);
 
-        flushChain(CHAIN_NAME);
+        IpTables.flushChain(CHAIN_NAME);
 
         cluster.awaitNodeState(node, (n) -> n.electionState() == ElectionState.CLOSED);
 
         cluster.sendMessages(10);
         cluster.awaitServicesMessageCount(11);
-    }
-
-    private void deleteChain(final String chainName)
-    {
-        runIpTablesCmd(false, "sudo", "iptables", "-X", chainName);
-    }
-
-    private void removeFromInput(final String chainName)
-    {
-        boolean isSuccess;
-        do
-        {
-            isSuccess = runIpTablesCmd(true, "sudo", "iptables", "-D", "INPUT", "-j", chainName);
-        }
-        while (isSuccess);
-    }
-
-    private void addToInput(final String chainName)
-    {
-        runIpTablesCmd(true, "sudo", "iptables", "-A", "INPUT", "-j", chainName);
-    }
-
-    private void makeNetworkPartition(final List<String> hostnames, final int toIsolateIndex)
-    {
-        final String toIsolateHostname = hostnames.get(toIsolateIndex);
-        for (int i = 0; i < hostnames.size(); i++)
-        {
-            if (i != toIsolateIndex)
-            {
-                final String otherHostname = hostnames.get(i);
-                runIpTablesCmd(
-                    false, "sudo", "iptables", "-A", CHAIN_NAME,
-                    "-d", toIsolateHostname,
-                    "-s", otherHostname,
-                    "-j", "DROP");
-                runIpTablesCmd(
-                    false, "sudo", "iptables", "-A", CHAIN_NAME,
-                    "-d", otherHostname,
-                    "-s", toIsolateHostname,
-                    "-j", "DROP");
-            }
-        }
-
-        runIpTablesCmd(false, "sudo", "iptables", "-A", CHAIN_NAME, "-j", "RETURN");
-    }
-
-    private void createChain(final String chainName)
-    {
-        runIpTablesCmd(true, "sudo", "-n", "iptables", "-N", chainName);
-    }
-
-    private void flushChain(final String chainName)
-    {
-        runIpTablesCmd(true, "sudo", "-n", "iptables", "-F", chainName);
-    }
-
-    private static boolean runIpTablesCmd(final boolean ignoreError, final String... command)
-    {
-        try
-        {
-            final Process start = new ProcessBuilder(command)
-                .redirectErrorStream(true)
-                .start();
-
-            final ByteArrayOutputStream commandOutput = new ByteArrayOutputStream();
-            try (InputStream inputStream = start.getInputStream())
-            {
-                final byte[] block = new byte[4096];
-                while (start.isAlive())
-                {
-                    final int read = inputStream.read(block);
-                    if (0 < read)
-                    {
-                        commandOutput.write(block, 0, read);
-                    }
-                    Tests.yield();
-                }
-            }
-
-            final boolean isSuccess = 0 == start.exitValue();
-            if (!isSuccess && !ignoreError)
-            {
-                final String commandMsg = commandOutput.toString(StandardCharsets.UTF_8);
-                throw new RuntimeException("Command: '" + String.join(" ", command) + "' failed - " + commandMsg);
-            }
-
-            return isSuccess;
-        }
-        catch (final IOException ex)
-        {
-            throw new RuntimeException(ex);
-        }
     }
 }
