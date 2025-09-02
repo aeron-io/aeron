@@ -654,6 +654,28 @@ public final class ChannelUri
     }
 
     /**
+     * Take an endpoint with the format <code>host:port</code> and replace the port with a wilcard (<code>0</code>).
+     *
+     * @param endpoint to replace with a wildcard.
+     * @return  the transformed value.
+     */
+    public static String replacePortWithWildcard(final String endpoint)
+    {
+        if (null == endpoint)
+        {
+            return null;
+        }
+
+        final int i = endpoint.lastIndexOf(':');
+        if (-1 == i)
+        {
+            return null;
+        }
+
+        return endpoint.substring(0, i + 1) + "0";
+    }
+
+    /**
      * Determines if the supplied channel has specified <code>control-mode=response</code>.
      *
      * @param channelUri to check if the control mode is response

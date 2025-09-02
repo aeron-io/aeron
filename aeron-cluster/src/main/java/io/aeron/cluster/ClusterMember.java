@@ -30,7 +30,9 @@ import org.agrona.collections.Int2ObjectHashMap;
 import java.util.List;
 
 import static io.aeron.Aeron.NULL_VALUE;
+import static io.aeron.ChannelUri.replacePortWithWildcard;
 import static io.aeron.CommonContext.ENDPOINT_PARAM_NAME;
+import static io.aeron.CommonContext.MDC_CONTROL_PARAM_NAME;
 import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
 
 /**
@@ -722,7 +724,7 @@ public final class ClusterMember
      * Add the publications for sending consensus messages to the other members of the cluster.
      *
      * @param members         of the cluster.
-     * @param exclude         this member when adding publications.
+     * @param thisMember      this member when adding publications.
      * @param channelTemplate for the publications.
      * @param streamId        for the publications.
      * @param aeron           to add the publications to.
@@ -730,7 +732,7 @@ public final class ClusterMember
      */
     public static void addConsensusPublications(
         final ClusterMember[] members,
-        final ClusterMember exclude,
+        final ClusterMember thisMember,
         final String channelTemplate,
         final int streamId,
         final Aeron aeron,
@@ -740,9 +742,10 @@ public final class ClusterMember
 
         for (final ClusterMember member : members)
         {
-            if (member.id != exclude.id)
+            if (member.id != thisMember.id)
             {
                 channelUri.put(ENDPOINT_PARAM_NAME, member.consensusEndpoint);
+                channelUri.put(MDC_CONTROL_PARAM_NAME, replacePortWithWildcard(thisMember.consensusEndpoint()));
                 member.consensusChannel = channelUri.toString();
                 tryAddPublication(member, streamId, aeron, errorHandler);
             }
@@ -752,27 +755,30 @@ public final class ClusterMember
     /**
      * Add an exclusive {@link Publication} for communicating to a member on the consensus channel.
      *
-     * @param member          to which the publication is addressed.
+     * @param thisMember      from which the publication is addressed.
+     * @param otherMember     to which the publication is addressed.
      * @param channelTemplate for the target member.
      * @param streamId        for the target member.
      * @param aeron           from which the publication will be created.
      * @param errorHandler    to log registration exceptions to.
      */
     public static void addConsensusPublication(
-        final ClusterMember member,
+        final ClusterMember thisMember,
+        final ClusterMember otherMember,
         final String channelTemplate,
         final int streamId,
         final Aeron aeron,
         final ErrorHandler errorHandler)
     {
-        if (null == member.consensusChannel)
+        if (null == otherMember.consensusChannel)
         {
             final ChannelUri channelUri = ChannelUri.parse(channelTemplate);
-            channelUri.put(ENDPOINT_PARAM_NAME, member.consensusEndpoint);
-            member.consensusChannel = channelUri.toString();
+            channelUri.put(ENDPOINT_PARAM_NAME, otherMember.consensusEndpoint);
+            channelUri.put(MDC_CONTROL_PARAM_NAME, replacePortWithWildcard(thisMember.consensusEndpoint()));
+            otherMember.consensusChannel = channelUri.toString();
         }
 
-        tryAddPublication(member, streamId, aeron, errorHandler);
+        tryAddPublication(otherMember, streamId, aeron, errorHandler);
     }
 
     /**
