@@ -723,18 +723,20 @@ public final class ClusterMember
     /**
      * Add the publications for sending consensus messages to the other members of the cluster.
      *
-     * @param members         of the cluster.
-     * @param thisMember      this member when adding publications.
-     * @param channelTemplate for the publications.
-     * @param streamId        for the publications.
-     * @param aeron           to add the publications to.
-     * @param errorHandler    to log registration exceptions to.
+     * @param members               of the cluster.
+     * @param thisMember            this member when adding publications.
+     * @param channelTemplate       for the publications.
+     * @param streamId              for the publications.
+     * @param bindConsensusControl  if the control endpoint should be bound for the publication.
+     * @param aeron                 to add the publications to.
+     * @param errorHandler          to log registration exceptions to.
      */
     public static void addConsensusPublications(
         final ClusterMember[] members,
         final ClusterMember thisMember,
         final String channelTemplate,
         final int streamId,
+        final boolean bindConsensusControl,
         final Aeron aeron,
         final ErrorHandler errorHandler)
     {
@@ -745,7 +747,7 @@ public final class ClusterMember
             if (member.id != thisMember.id)
             {
                 channelUri.put(ENDPOINT_PARAM_NAME, member.consensusEndpoint);
-                channelUri.put(MDC_CONTROL_PARAM_NAME, replacePortWithWildcard(thisMember.consensusEndpoint()));
+                bindControlEndpoint(channelUri, bindConsensusControl, thisMember.consensusEndpoint);
                 member.consensusChannel = channelUri.toString();
                 tryAddPublication(member, streamId, aeron, errorHandler);
             }
@@ -755,18 +757,20 @@ public final class ClusterMember
     /**
      * Add an exclusive {@link Publication} for communicating to a member on the consensus channel.
      *
-     * @param thisMember      from which the publication is addressed.
-     * @param otherMember     to which the publication is addressed.
-     * @param channelTemplate for the target member.
-     * @param streamId        for the target member.
-     * @param aeron           from which the publication will be created.
-     * @param errorHandler    to log registration exceptions to.
+     * @param thisMember            from which the publication is addressed.
+     * @param otherMember           to which the publication is addressed.
+     * @param channelTemplate       for the target member.
+     * @param streamId              for the target member.
+     * @param bindConsensusControl  if the control endpoint should be bound for the publication.
+     * @param aeron                 from which the publication will be created.
+     * @param errorHandler          to log registration exceptions to.
      */
     public static void addConsensusPublication(
         final ClusterMember thisMember,
         final ClusterMember otherMember,
         final String channelTemplate,
         final int streamId,
+        final boolean bindConsensusControl,
         final Aeron aeron,
         final ErrorHandler errorHandler)
     {
@@ -774,7 +778,7 @@ public final class ClusterMember
         {
             final ChannelUri channelUri = ChannelUri.parse(channelTemplate);
             channelUri.put(ENDPOINT_PARAM_NAME, otherMember.consensusEndpoint);
-            channelUri.put(MDC_CONTROL_PARAM_NAME, replacePortWithWildcard(thisMember.consensusEndpoint()));
+            bindControlEndpoint(channelUri, bindConsensusControl, thisMember.consensusEndpoint);
             otherMember.consensusChannel = channelUri.toString();
         }
 
@@ -1363,6 +1367,22 @@ public final class ClusterMember
         {
             clusterMember.isLeader(clusterMember.id() == leaderMemberId);
         }
+    }
+
+    static void bindControlEndpoint(final ChannelUri channelUri, final boolean shouldBind, final String endpoint)
+    {
+        if (!shouldBind)
+        {
+            return;
+        }
+
+        final String controlEndpoint = replacePortWithWildcard(endpoint);
+        if (null == controlEndpoint)
+        {
+            return;
+        }
+
+        channelUri.put(MDC_CONTROL_PARAM_NAME, controlEndpoint);
     }
 
     /**

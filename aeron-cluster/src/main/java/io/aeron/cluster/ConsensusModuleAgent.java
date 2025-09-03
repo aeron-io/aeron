@@ -89,7 +89,6 @@ import java.util.function.Function;
 import java.util.function.LongConsumer;
 
 import static io.aeron.Aeron.NULL_VALUE;
-import static io.aeron.ChannelUri.replacePortWithWildcard;
 import static io.aeron.ChannelUri.transformAlias;
 import static io.aeron.CommonContext.ALIAS_PARAM_NAME;
 import static io.aeron.CommonContext.CONTROL_MODE_RESPONSE;
@@ -376,6 +375,7 @@ final class ConsensusModuleAgent
             thisMember,
             ctx.consensusChannel(),
             ctx.consensusStreamId(),
+            ctx.bindConsensusControl(),
             aeron,
             ctx.countedErrorHandler());
 
@@ -1713,7 +1713,7 @@ final class ConsensusModuleAgent
             if (ctx.isLogMdc())
             {
                 channelUri.put(MDC_CONTROL_MODE_PARAM_NAME, MDC_CONTROL_MODE_MANUAL);
-                channelUri.put(MDC_CONTROL_PARAM_NAME, replacePortWithWildcard(thisMember.logEndpoint()));
+                ClusterMember.bindControlEndpoint(channelUri, ctx.bindLogControl(), thisMember.logEndpoint());
             }
 
             channelUri.put(SPIES_SIMULATE_CONNECTION_PARAM_NAME, Boolean.toString(activeMembers.length == 1));
@@ -3751,6 +3751,7 @@ final class ConsensusModuleAgent
                 follower,
                 ctx.consensusChannel(),
                 ctx.consensusStreamId(),
+                ctx.bindConsensusControl(),
                 aeron,
                 ctx.countedErrorHandler());
         }
