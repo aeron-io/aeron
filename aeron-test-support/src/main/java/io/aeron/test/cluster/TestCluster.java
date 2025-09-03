@@ -2281,17 +2281,6 @@ public final class TestCluster implements AutoCloseable
                     "Unable to start " + toStart + " nodes, only " + nodeCount + " available");
             }
 
-//            if (null == hostnames)
-//            {
-//                hostnames = Stream.generate(() -> "localhost").limit(nodeCount).toList();
-//            }
-//
-//            if (nodeCount != hostnames.size())
-//            {
-//                throw new IllegalArgumentException(
-//                    "number of hostnames/address=" + hostnames + " must match nodeCount=" + nodeCount);
-//            }
-
             final TestCluster testCluster = new TestCluster(
                 nodeCount,
                 appointedLeaderId,

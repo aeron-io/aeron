@@ -375,7 +375,7 @@ final class ConsensusModuleAgent
             thisMember,
             ctx.consensusChannel(),
             ctx.consensusStreamId(),
-            ctx.bindConsensusControl(),
+            ctx.enableControlOnConsensusChannel(),
             aeron,
             ctx.countedErrorHandler());
 
@@ -1713,7 +1713,7 @@ final class ConsensusModuleAgent
             if (ctx.isLogMdc())
             {
                 channelUri.put(MDC_CONTROL_MODE_PARAM_NAME, MDC_CONTROL_MODE_MANUAL);
-                ClusterMember.bindControlEndpoint(channelUri, ctx.bindLogControl(), thisMember.logEndpoint());
+                ClusterMember.setControlEndpoint(channelUri, ctx.enableControlOnLogControl(), thisMember.logEndpoint());
             }
 
             channelUri.put(SPIES_SIMULATE_CONNECTION_PARAM_NAME, Boolean.toString(activeMembers.length == 1));
@@ -3751,7 +3751,7 @@ final class ConsensusModuleAgent
                 follower,
                 ctx.consensusChannel(),
                 ctx.consensusStreamId(),
-                ctx.bindConsensusControl(),
+                ctx.enableControlOnConsensusChannel(),
                 aeron,
                 ctx.countedErrorHandler());
         }

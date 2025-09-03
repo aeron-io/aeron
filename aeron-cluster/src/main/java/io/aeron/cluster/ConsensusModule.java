@@ -938,15 +938,16 @@ public final class ConsensusModule implements AutoCloseable
          * the consensus publication to its local consensus address.
          */
         @Config(defaultType = DefaultType.BOOLEAN, defaultBoolean = true)
-        public static final String CONSENSUS_MODULE_BIND_CONSENSUS_CONTROL_PROP_NAME =
-            "aeron.cluster.consensus.bind.control";
+        public static final String CONSENSUS_MODULE_ENABLE_CONTROL_ON_CONSENSUS_CHANNEL_PROP_NAME =
+            "aeron.cluster.consensus.control.enable";
 
         /**
          * Property name of the setting to control whether the consensus module should bind the control endpoint of
          * the consensus publication to its local log address.
          */
         @Config(defaultType = DefaultType.BOOLEAN, defaultBoolean = true)
-        public static final String CONSENSUS_MODULE_BIND_LOG_CONTROL_PROP_NAME = "aeron.cluster.log.bind.control";
+        public static final String CONSENSUS_MODULE_ENABLE_CONTROL_ON_LOG_CHANNEL_PROP_NAME =
+            "aeron.cluster.log.control.enable";
 
         /**
          * The value {@link #CLUSTER_INGRESS_FRAGMENT_LIMIT_DEFAULT} or system property
@@ -1461,9 +1462,10 @@ public final class ConsensusModule implements AutoCloseable
          * @return <code>true</code> if the ConsensusModule should bind the control endpoint of the consensus
          * publication.
          */
-        public static boolean bindConsensusControl()
+        public static boolean enableControlOnConsensusChannel()
         {
-            return parseBoolean(System.getProperty(CONSENSUS_MODULE_BIND_CONSENSUS_CONTROL_PROP_NAME, "true"));
+            return parseBoolean(System.getProperty(
+                CONSENSUS_MODULE_ENABLE_CONTROL_ON_CONSENSUS_CHANNEL_PROP_NAME, "true"));
         }
 
         /**
@@ -1472,9 +1474,9 @@ public final class ConsensusModule implements AutoCloseable
          * @return <code>true</code> if the ConsensusModule should bind the log endpoint of the consensus
          * publication.
          */
-        public static boolean bindLogControl()
+        public static boolean enableControlOnLogChannel()
         {
-            return parseBoolean(System.getProperty(CONSENSUS_MODULE_BIND_LOG_CONTROL_PROP_NAME, "true"));
+            return parseBoolean(System.getProperty(CONSENSUS_MODULE_ENABLE_CONTROL_ON_LOG_CHANNEL_PROP_NAME, "true"));
         }
     }
 
@@ -1596,8 +1598,8 @@ public final class ConsensusModule implements AutoCloseable
         private boolean useAgentInvoker = false;
         private ConsensusModuleStateExport boostrapState = null;
         private boolean acceptStandbySnapshots = Configuration.acceptStandbySnapshots();
-        private boolean bindConsensusControl = Configuration.bindConsensusControl();
-        private boolean bindLogControl = Configuration.bindLogControl();
+        private boolean enableControlOnConsensusChannel = Configuration.enableControlOnConsensusChannel();
+        private boolean enableControlOnLogChannel = Configuration.enableControlOnLogChannel();
 
         /**
          * Perform a shallow copy of the object.
@@ -4264,48 +4266,48 @@ public final class ConsensusModule implements AutoCloseable
         }
 
         /**
-         * If the ConsensusModule should bind the control endpoint for the Consensus publication.
+         * If the ConsensusModule should set the control endpoint for the Consensus publication.
          *
-         * @return <code>true</code> if the control endpoint should be bound, <code>false</code> otherwise.
+         * @return <code>true</code> if the control endpoint should be set, <code>false</code> otherwise.
          */
-        public boolean bindConsensusControl()
+        public boolean enableControlOnConsensusChannel()
         {
-            return bindConsensusControl;
+            return enableControlOnConsensusChannel;
         }
 
         /**
          * If the ConsensusModule should bind the control endpoint for the Consensus publication.
          *
-         * @param bindConsensusControl <code>true</code> if the control endpoint should be bound, <code>false</code>
-         *                             otherwise.
+         * @param enableControlOnConsensusChannel <code>true</code> if the control endpoint should be set,
+         *                                        <code>false</code> otherwise.
          * @return this for fluent API.
          */
-        public Context bindConsensusControl(final boolean bindConsensusControl)
+        public Context enableControlOnConsensusChannel(final boolean enableControlOnConsensusChannel)
         {
-            this.bindConsensusControl = bindConsensusControl;
+            this.enableControlOnConsensusChannel = enableControlOnConsensusChannel;
             return this;
         }
 
         /**
-         * If the ConsensusModule should bind the control endpoint for the Consensus publication.
+         * If the ConsensusModule should set the control endpoint for the Consensus publication.
          *
          * @return <code>true</code> if the control endpoint should be bound, <code>false</code> otherwise.
          */
-        public boolean bindLogControl()
+        public boolean enableControlOnLogControl()
         {
-            return bindLogControl;
+            return enableControlOnLogChannel;
         }
 
         /**
-         * If the LogModule should bind the control endpoint for the Log publication.
+         * If the LogModule should set the control endpoint for the Log publication.
          *
-         * @param bindLogControl <code>true</code> if the control endpoint should be bound, <code>false</code>
-         *                       otherwise.
+         * @param setControlOnLogChannel <code>true</code> if the control endpoint should be set, <code>false</code>
+         *                               otherwise.
          * @return this for fluent API.
          */
-        public Context bindLogControl(final boolean bindLogControl)
+        public Context enableControlOnLogControl(final boolean setControlOnLogChannel)
         {
-            this.bindLogControl = bindLogControl;
+            this.enableControlOnLogChannel = setControlOnLogChannel;
             return this;
         }
 

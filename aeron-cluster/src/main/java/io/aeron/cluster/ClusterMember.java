@@ -747,7 +747,7 @@ public final class ClusterMember
             if (member.id != thisMember.id)
             {
                 channelUri.put(ENDPOINT_PARAM_NAME, member.consensusEndpoint);
-                bindControlEndpoint(channelUri, bindConsensusControl, thisMember.consensusEndpoint);
+                setControlEndpoint(channelUri, bindConsensusControl, thisMember.consensusEndpoint);
                 member.consensusChannel = channelUri.toString();
                 tryAddPublication(member, streamId, aeron, errorHandler);
             }
@@ -778,7 +778,7 @@ public final class ClusterMember
         {
             final ChannelUri channelUri = ChannelUri.parse(channelTemplate);
             channelUri.put(ENDPOINT_PARAM_NAME, otherMember.consensusEndpoint);
-            bindControlEndpoint(channelUri, bindConsensusControl, thisMember.consensusEndpoint);
+            setControlEndpoint(channelUri, bindConsensusControl, thisMember.consensusEndpoint);
             otherMember.consensusChannel = channelUri.toString();
         }
 
@@ -1369,7 +1369,7 @@ public final class ClusterMember
         }
     }
 
-    static void bindControlEndpoint(final ChannelUri channelUri, final boolean shouldBind, final String endpoint)
+    static void setControlEndpoint(final ChannelUri channelUri, final boolean shouldBind, final String endpoint)
     {
         if (!shouldBind)
         {
