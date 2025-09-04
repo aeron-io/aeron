@@ -463,7 +463,7 @@ int aeron_udp_channel_transport_recvmmsg(
 
             // ECONNREFUSED can sometimes occur with connected UDP sockets if ICMP traffic is able to indicate that the
             // remote end had closed on a previous send.
-            if (EINTR == err || EAGAIN == err || ECONNREFUSED == err)
+            if (aeron_is_acceptable_socket_error())
             {
                 return 0;
             }
@@ -601,7 +601,7 @@ static int aeron_udp_channel_transport_sendv(
     int num_sent = sendmmsg(transport->fd, msg, msg_i, 0);
     if (num_sent < 0)
     {
-        if (EAGAIN == errno || EWOULDBLOCK == errno || ECONNREFUSED == errno || EINTR == errno)
+        if (aeron_is_acceptable_socket_error())
         {
             return 0;
         }
