@@ -91,9 +91,21 @@ public final class ConsensusControlState
 
     /**
      * @return the local log channel (for services or extension). Only applicable for a leader.
+     *
+     * @deprecated use {@link #leaderLogSubscription()} instead.
      */
+    @Deprecated
     public String leaderLocalLogChannel()
     {
         return leaderLocalLogChannel;
+    }
+
+    /**
+     * @return a subscription to the log, joined at the log position of the election for a leader node, or null for a
+     * follower.
+     */
+    public Subscription leaderLogSubscription()
+    {
+        return leaderLogSubscription;
     }
 }
