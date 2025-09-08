@@ -90,7 +90,6 @@ import java.util.function.Function;
 import java.util.function.LongConsumer;
 
 import static io.aeron.Aeron.NULL_VALUE;
-import static io.aeron.AeronCounters.DRIVER_SENDER_POSITION_TYPE_ID;
 import static io.aeron.ChannelUri.transformAlias;
 import static io.aeron.CommonContext.ALIAS_PARAM_NAME;
 import static io.aeron.CommonContext.CONTROL_MODE_RESPONSE;
@@ -1481,6 +1480,9 @@ final class ConsensusModuleAgent
         if (null != consensusModuleExtension)
         {
             consensusModuleExtension.onPrepareForNewLeadership();
+
+            CloseHelper.quietClose(extensionLeaderSubscription);
+            extensionLeaderSubscription = null;
         }
 
         return lastAppendPosition;
@@ -1515,6 +1517,7 @@ final class ConsensusModuleAgent
         final int serviceId = PendingServiceMessageTracker.serviceIdFromServiceMessage(clusterSessionId);
         pendingServiceMessageTrackers[serviceId].enqueueMessage((MutableDirectBuffer)buffer, offset, length);
     }
+
 
     void onScheduleTimer(final long correlationId, final long deadline)
     {
@@ -1789,8 +1792,6 @@ final class ConsensusModuleAgent
             idle();
         }
 
-        validatePublicationIsAtLogPosition(logPosition);
-
         localLogChannel = isIpc ? channel : SPY_PREFIX + channel;
         awaitServicesReady(
             localLogChannel,
@@ -1814,35 +1815,15 @@ final class ConsensusModuleAgent
                 idle();
             }
 
-            if (subscription.imageAtIndex(0).joinPosition() != logPosition)
+            final long joinPosition = subscription.imageAtIndex(0).joinPosition();
+            if (joinPosition != logPosition)
             {
-                throw new RuntimeException("Position is incorrect");
+                throw new ClusterException(
+                    "Extension subscription " +
+                    "joinPosition (" + joinPosition + ") does not match logPosition (" + logPosition + ")");
             }
 
             this.extensionLeaderSubscription = subscription;
-        }
-    }
-
-    private void validatePublicationIsAtLogPosition(final long logPosition)
-    {
-        final ExclusivePublication publication = logPublisher.publication();
-
-        if (!publication.channel().startsWith(IPC_CHANNEL))
-        {
-            final int logPublisherSenderPositionCounterId = aeron.countersReader().findByTypeIdAndRegistrationId(
-                DRIVER_SENDER_POSITION_TYPE_ID, publication.registrationId());
-
-            if (NULL_VALUE != logPublisherSenderPositionCounterId)
-            {
-                while (logPosition != aeron.countersReader().getCounterValue(logPublisherSenderPositionCounterId))
-                {
-                    idle();
-                }
-            }
-            else
-            {
-                System.out.println("*** Sender Position ??? ***");
-            }
         }
     }
 
@@ -3454,9 +3435,6 @@ final class ConsensusModuleAgent
 
         logNewElection(memberId, leadershipTermId, commitPosition, appendedPosition, reason);
         ctx.countedErrorHandler().onError(new ClusterEvent(reason));
-
-        CloseHelper.quietClose(extensionLeaderSubscription);
-        extensionLeaderSubscription = null;
 
         election = new Election(
             false,
