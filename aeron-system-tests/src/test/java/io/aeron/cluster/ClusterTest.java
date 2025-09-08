@@ -242,7 +242,7 @@ class ClusterTest
     }
 
     @Test
-    @InterruptAfter(10)
+    @InterruptAfter(5)
     void shouldStartCluster()
     {
         cluster = aCluster().withStaticNodes(3)
@@ -252,6 +252,10 @@ class ClusterTest
 
         systemTestWatcher.cluster(cluster);
         cluster.awaitLeader();
+
+        cluster.node(0).validateOnElectionState(0);
+        cluster.node(1).validateOnElectionState(0);
+        cluster.node(2).validateOnElectionState(0);
     }
 
     @Test

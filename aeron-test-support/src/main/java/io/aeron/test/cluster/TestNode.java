@@ -15,6 +15,7 @@
  */
 package io.aeron.test.cluster;
 
+import io.aeron.Aeron;
 import io.aeron.Counter;
 import io.aeron.ExclusivePublication;
 import io.aeron.FragmentAssembler;
@@ -25,7 +26,10 @@ import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.status.RecordingPos;
 import io.aeron.cluster.ClusterMembership;
 import io.aeron.cluster.ClusterTool;
+import io.aeron.cluster.ConsensusControlState;
 import io.aeron.cluster.ConsensusModule;
+import io.aeron.cluster.ConsensusModuleControl;
+import io.aeron.cluster.ConsensusModuleExtension;
 import io.aeron.cluster.ElectionState;
 import io.aeron.cluster.client.ClusterException;
 import io.aeron.cluster.codecs.CloseReason;
@@ -37,6 +41,7 @@ import io.aeron.driver.MediaDriver;
 import io.aeron.exceptions.AeronException;
 import io.aeron.exceptions.TimeoutException;
 import io.aeron.logbuffer.BufferClaim;
+import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.Header;
 import io.aeron.test.DataCollector;
@@ -53,6 +58,7 @@ import org.agrona.collections.MutableInteger;
 import org.agrona.concurrent.AgentTerminationException;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.CountersReader;
+import org.junit.jupiter.api.Assertions;
 
 import java.io.File;
 import java.util.Arrays;
@@ -68,6 +74,10 @@ import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static org.agrona.BitUtil.SIZE_OF_INT;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public final class TestNode implements AutoCloseable
@@ -78,10 +88,16 @@ public final class TestNode implements AutoCloseable
     private final TestService[] services;
     private final Context context;
     private final TestMediaDriver mediaDriver;
+    private final TestConsensusModuleExtension extension;
     private boolean isClosed = false;
 
     TestNode(final Context context, final DataCollector dataCollector)
     {
+        if (0 != context.services.length && context.useExtension)
+        {
+            throw new IllegalStateException("Cannot use extension context");
+        }
+
         this.context = context;
 
         try
@@ -100,6 +116,16 @@ public final class TestNode implements AutoCloseable
                 .isIpcIngressAllowed(true)
                 .terminationHook(ClusterTests.terminationHook(
                 context.isTerminationExpected, context.hasMemberTerminated));
+
+            if (context.useExtension)
+            {
+                extension = new TestConsensusModuleExtension();
+                context.consensusModuleContext.consensusModuleExtension(extension);
+            }
+            else
+            {
+                extension = null;
+            }
 
             final AeronArchive.Context archiveContext = context.consensusModuleContext.archiveContext().clone();
 
@@ -348,6 +374,23 @@ public final class TestNode implements AutoCloseable
         }
 
         return true;
+    }
+
+    public void validateOnElectionState(final long minJoinPosition)
+    {
+        final ConsensusControlState onElectionConsensusControlState = extension.onElectionConsensusControlState;
+        assertNotNull(onElectionConsensusControlState);
+        if (onElectionConsensusControlState.isLeader())
+        {
+            assertNotNull(onElectionConsensusControlState.leaderLogSubscription());
+            assertNotEquals(0, onElectionConsensusControlState.leaderLogSubscription().imageCount());
+            final Image image = onElectionConsensusControlState.leaderLogSubscription().imageAtIndex(0);
+            assertTrue(minJoinPosition <= image.joinPosition());
+        }
+        else
+        {
+            assertNull(onElectionConsensusControlState.leaderLogSubscription());
+        }
     }
 
     public static class TestService extends StubClusteredService
@@ -803,6 +846,117 @@ public final class TestNode implements AutoCloseable
         }
     }
 
+    public static class TestConsensusModuleExtension implements ConsensusModuleExtension
+    {
+        private ConsensusControlState onElectionConsensusControlState;
+        private ConsensusControlState onNewLeadershipTermConsensusControlState;
+
+        public int supportedSchemaId()
+        {
+            return 0;
+        }
+
+        public void onStart(final ConsensusModuleControl consensusModuleControl, final Image snapshotImage)
+        {
+        }
+
+        public int doWork(final long nowNs)
+        {
+            return 0;
+        }
+
+        public int slowTickWork(final long nowNs)
+        {
+            return 0;
+        }
+
+        public int consensusWork(final long nowNs)
+        {
+            return 0;
+        }
+
+        public void onElectionComplete(final ConsensusControlState consensusControlState)
+        {
+            onElectionConsensusControlState = consensusControlState;
+        }
+
+        public void onNewLeadershipTerm(final ConsensusControlState consensusControlState)
+        {
+            onNewLeadershipTermConsensusControlState = consensusControlState;
+        }
+
+        public ControlledFragmentHandler.Action onIngressExtensionMessage(
+            final int actingBlockLength,
+            final int templateId,
+            final int schemaId,
+            final int actingVersion,
+            final DirectBuffer buffer,
+            final int offset,
+            final int length,
+            final Header header)
+        {
+            return ControlledFragmentHandler.Action.CONTINUE;
+        }
+
+        public ControlledFragmentHandler.Action onLogExtensionMessage(
+            final int actingBlockLength,
+            final int templateId,
+            final int schemaId,
+            final int actingVersion,
+            final DirectBuffer buffer,
+            final int offset,
+            final int length,
+            final Header header)
+        {
+            return ControlledFragmentHandler.Action.CONTINUE;
+        }
+
+        public void close()
+        {
+
+        }
+
+        public void onSessionOpened(final long clusterSessionId)
+        {
+
+        }
+
+        public void onSessionClosed(final long clusterSessionId, final CloseReason closeReason)
+        {
+
+        }
+
+        public void onPrepareForNewLeadership()
+        {
+
+        }
+
+        public void onTakeSnapshot(final ExclusivePublication snapshotPublication)
+        {
+
+        }
+
+        public long leaderSubscriptionJoinPosition()
+        {
+            if (null == onElectionConsensusControlState)
+            {
+                return NULL_VALUE;
+            }
+
+            if (null == onElectionConsensusControlState.leaderLogSubscription())
+            {
+                return NULL_VALUE;
+            }
+
+            if (0 == onElectionConsensusControlState.leaderLogSubscription().imageCount())
+            {
+                return NULL_VALUE;
+            }
+
+            return onNewLeadershipTermConsensusControlState.leaderLogSubscription().imageAtIndex(0).joinPosition();
+        }
+    }
+
     public static class MessageTrackingService extends TestNode.TestService
     {
         public static final int TIMER_MESSAGES_PER_INGRESS = 2;
@@ -1113,6 +1267,7 @@ public final class TestNode implements AutoCloseable
         final AtomicBoolean hasMemberTerminated = new AtomicBoolean();
         final AtomicBoolean[] hasServiceTerminated;
         final TestService[] services;
+        public boolean useExtension;
 
         Context(final TestService[] services, final String nodeMappings)
         {
