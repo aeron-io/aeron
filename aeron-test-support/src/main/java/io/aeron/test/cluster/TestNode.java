@@ -15,7 +15,6 @@
  */
 package io.aeron.test.cluster;
 
-import io.aeron.Aeron;
 import io.aeron.Counter;
 import io.aeron.ExclusivePublication;
 import io.aeron.FragmentAssembler;
@@ -58,7 +57,6 @@ import org.agrona.collections.MutableInteger;
 import org.agrona.concurrent.AgentTerminationException;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.CountersReader;
-import org.junit.jupiter.api.Assertions;
 
 import java.io.File;
 import java.util.Arrays;
