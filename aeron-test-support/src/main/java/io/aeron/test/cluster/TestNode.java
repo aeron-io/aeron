@@ -91,7 +91,7 @@ public final class TestNode implements AutoCloseable
 
     TestNode(final Context context, final DataCollector dataCollector)
     {
-        if (0 != context.services.length && context.useExtension)
+        if (0 != context.services.length && context.hasExtension)
         {
             throw new IllegalStateException("Cannot use extension context");
         }
@@ -115,7 +115,7 @@ public final class TestNode implements AutoCloseable
                 .terminationHook(ClusterTests.terminationHook(
                 context.isTerminationExpected, context.hasMemberTerminated));
 
-            if (context.useExtension)
+            if (context.hasExtension)
             {
                 extension = new TestConsensusModuleExtension();
                 context.consensusModuleContext.consensusModuleExtension(extension);
@@ -1265,7 +1265,7 @@ public final class TestNode implements AutoCloseable
         final AtomicBoolean hasMemberTerminated = new AtomicBoolean();
         final AtomicBoolean[] hasServiceTerminated;
         final TestService[] services;
-        public boolean useExtension;
+        public boolean hasExtension;
 
         Context(final TestService[] services, final String nodeMappings)
         {
