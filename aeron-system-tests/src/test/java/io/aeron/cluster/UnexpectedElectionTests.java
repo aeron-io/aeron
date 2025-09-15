@@ -56,6 +56,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static io.aeron.cluster.UnexpectedElectionTests.ClusterClient.NODE_0_INGRESS;
+import static io.aeron.cluster.client.AeronCluster.SESSION_HEADER_LENGTH;
 import static io.aeron.logbuffer.LogBufferDescriptor.computeFragmentedFrameLength;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -289,7 +290,7 @@ public class UnexpectedElectionTests
         static class TestClusteredService extends StubClusteredService
         {
             private static final UnsafeBuffer EIGHT_MEGABYTE_BUFFER =
-                new UnsafeBuffer(new byte[EIGHT_MEGABYTES - DataHeaderFlyweight.HEADER_LENGTH]);
+                new UnsafeBuffer(new byte[EIGHT_MEGABYTES - SESSION_HEADER_LENGTH]);
             private final AtomicBoolean waiting;
             int offeredMessages;
             int receivedMessages;
