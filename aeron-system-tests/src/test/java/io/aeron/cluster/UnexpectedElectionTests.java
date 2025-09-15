@@ -1,0 +1,393 @@
+/*
+ * Copyright 2014-2025 Real Logic Limited.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.aeron.cluster;
+
+import io.aeron.Aeron;
+import io.aeron.archive.Archive;
+import io.aeron.archive.ArchiveThreadingMode;
+import io.aeron.cluster.client.AeronCluster;
+import io.aeron.cluster.client.ControlledEgressListener;
+import io.aeron.cluster.codecs.CloseReason;
+import io.aeron.cluster.codecs.MessageHeaderEncoder;
+import io.aeron.cluster.codecs.NewLeadershipTermEventEncoder;
+import io.aeron.cluster.codecs.SessionCloseEventEncoder;
+import io.aeron.cluster.codecs.SessionOpenEventEncoder;
+import io.aeron.cluster.service.ClientSession;
+import io.aeron.cluster.service.Cluster;
+import io.aeron.cluster.service.ClusteredServiceContainer;
+import io.aeron.driver.Configuration;
+import io.aeron.driver.MediaDriver;
+import io.aeron.driver.ThreadingMode;
+import io.aeron.driver.status.StreamCounter;
+import io.aeron.driver.status.SubscriberPos;
+import io.aeron.logbuffer.ControlledFragmentHandler;
+import io.aeron.logbuffer.Header;
+import io.aeron.protocol.DataHeaderFlyweight;
+import io.aeron.test.EventLogExtension;
+import io.aeron.test.InterruptAfter;
+import io.aeron.test.InterruptingTestCallback;
+import io.aeron.test.Tests;
+import io.aeron.test.cluster.StubClusteredService;
+import org.agrona.CloseHelper;
+import org.agrona.DirectBuffer;
+import org.agrona.collections.MutableInteger;
+import org.agrona.concurrent.UnsafeBuffer;
+import org.agrona.concurrent.status.CountersReader;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.file.Path;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import static io.aeron.cluster.UnexpectedElectionTests.ClusterClient.NODE_0_INGRESS;
+import static io.aeron.logbuffer.LogBufferDescriptor.computeFragmentedFrameLength;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+@ExtendWith({EventLogExtension.class, InterruptingTestCallback.class})
+public class UnexpectedElectionTests
+{
+    private static final int EIGHT_MEGABYTES = 8 * 1024 * 1024;
+    private static final int DEFAULT_MTU = Configuration.mtuLength();
+    private static final int NEW_LEADERSHIP_TERM_LENGTH = computeFragmentedFrameLength(
+        MessageHeaderEncoder.ENCODED_LENGTH + NewLeadershipTermEventEncoder.BLOCK_LENGTH, DEFAULT_MTU);
+    private static final int SESSION_OPEN_LENGTH_BLOCK_LENGTH = computeFragmentedFrameLength(
+        MessageHeaderEncoder.ENCODED_LENGTH + SessionOpenEventEncoder.BLOCK_LENGTH, DEFAULT_MTU);
+    private static final int SESSION_CLOSE_LENGTH = computeFragmentedFrameLength(
+        MessageHeaderEncoder.ENCODED_LENGTH + SessionCloseEventEncoder.BLOCK_LENGTH, DEFAULT_MTU);
+
+    @TempDir
+    public Path nodeDir0;
+    @TempDir
+    public Path nodeDir1;
+    @TempDir
+    public Path nodeDir2;
+    @TempDir
+    public Path clientDir;
+
+    @Test
+    @InterruptAfter(20)
+    public void shouldElectionBetweenFragmentedServiceMessageAvoidDuplicateServiceMessage()
+    {
+        final AtomicBoolean waitingToOfferFragmentedMessage = new AtomicBoolean(true);
+        try (ClusterNode node0 = new ClusterNode(0, 0, nodeDir0, waitingToOfferFragmentedMessage);
+             ClusterNode node1 = new ClusterNode(1, 0, nodeDir1, waitingToOfferFragmentedMessage);
+             ClusterNode node2 = new ClusterNode(2, 0, nodeDir2, waitingToOfferFragmentedMessage))
+        {
+            Tests.await(() ->
+            {
+                node0.poll(); node1.poll(); node2.poll();
+                return node0.started() && node1.started() && node2.started();
+            });
+            assertTrue(node0.isLeader());
+
+            try (ClusterClient client0 = new ClusterClient(NODE_0_INGRESS, clientDir))
+            {
+                Tests.await(() ->
+                {
+                    node0.poll(); node1.poll(); node2.poll();
+                    return client0.connect();
+                });
+            }
+
+            final long expectedPositionLowerBound =
+                NEW_LEADERSHIP_TERM_LENGTH + SESSION_OPEN_LENGTH_BLOCK_LENGTH + SESSION_CLOSE_LENGTH;
+            Tests.await(() ->
+            {
+                node0.poll(); node1.poll(); node2.poll();
+                return node0.publicationPosition() > expectedPositionLowerBound &&
+                    node0.publicationPosition() == node0.commitPosition() &&
+                    node0.commitPosition() == node1.commitPosition() &&
+                    node0.commitPosition() == node2.commitPosition();
+            });
+
+            final long commitPositionBeforeFragmentedMessage = node0.commitPosition();
+            waitingToOfferFragmentedMessage.set(false);
+            Tests.await(() ->
+            {
+                node0.poll(); node1.poll(); node2.poll();
+                return node0.commitPosition() > commitPositionBeforeFragmentedMessage &&
+                    node0.commitPosition() < (commitPositionBeforeFragmentedMessage + EIGHT_MEGABYTES);
+            });
+
+            Tests.sleep(TimeUnit.NANOSECONDS.toMillis(node0.consensusModule.context().leaderHeartbeatTimeoutNs()) + 1);
+            Tests.await(() ->
+            {
+                node0.poll(); node1.poll(); node2.poll();
+                return node0.started();
+            });
+            assertTrue(node0.isLeader());
+
+            node0.poll();
+            assertTrue(node0.publicationPosition() >= EIGHT_MEGABYTES * 2);
+
+            Tests.await(() ->
+            {
+                node0.poll(); node1.poll(); node2.poll();
+                return node0.publicationPosition() == node0.commitPosition() &&
+                    node0.commitPosition() == node1.commitPosition() &&
+                    node0.commitPosition() == node2.commitPosition() &&
+                    node0.commitPosition() == node0.servicePosition() &&
+                    node1.commitPosition() == node1.servicePosition() &&
+                    node2.commitPosition() == node2.servicePosition();
+            });
+            assertEquals(1, node0.offeredServiceMessages());
+            assertEquals(1, node1.offeredServiceMessages());
+            assertEquals(1, node2.offeredServiceMessages());
+            assertEquals(1, node0.receivedServiceMessages());
+            assertEquals(1, node1.receivedServiceMessages());
+            assertEquals(1, node2.receivedServiceMessages());
+        }
+    }
+
+    static class ClusterNode implements AutoCloseable
+    {
+        private static final String MEMBERS =
+            "0,localhost:10002,localhost:10003,localhost:10004,localhost:10005,localhost:10001|" +
+            "1,localhost:10102,localhost:10103,localhost:10104,localhost:10105,localhost:10101|" +
+            "2,localhost:10202,localhost:10203,localhost:10204,localhost:10205,localhost:10201";
+        private static final Map<Integer, String> MEMBER_ARCHIVE_PORT = Map.of(0, "10001", 1, "10101", 2, "10201");
+
+        private final MediaDriver mediaDriver;
+        private final Archive archive;
+        private final ConsensusModule consensusModule;
+        private final ClusteredServiceContainer serviceContainer;
+        private final TestClusteredService clusteredService;
+
+        ClusterNode(
+            final int clusterMemberId,
+            final int appointedLeader,
+            final Path directory,
+            final AtomicBoolean waiting)
+        {
+            final MediaDriver.Context mediaDriverContext = new MediaDriver.Context()
+                .aeronDirectoryName(directory.resolve("driver").toAbsolutePath().toString())
+                .dirDeleteOnStart(true)
+                .termBufferSparseFile(true)
+                .threadingMode(ThreadingMode.SHARED);
+            mediaDriver = MediaDriver.launchEmbedded(mediaDriverContext);
+
+            final Archive.Context archiveContext = new Archive.Context()
+                .aeronDirectoryName(mediaDriverContext.aeronDirectoryName())
+                .archiveDir(directory.resolve("archive").toFile())
+                .controlChannel("aeron:udp?endpoint=localhost:" + MEMBER_ARCHIVE_PORT.get(clusterMemberId))
+                .recordingEventsEnabled(false)
+                .replicationChannel("aeron:udp?endpoint=localhost:0")
+                .threadingMode(ArchiveThreadingMode.SHARED);
+            archive = Archive.launch(archiveContext);
+
+            clusteredService = new TestClusteredService(waiting);
+            final ClusteredServiceContainer.Context clusteredCtx = new ClusteredServiceContainer.Context()
+                .controlChannel("aeron:ipc")
+                .clusterDir(directory.resolve("cluster").toFile())
+                .aeronDirectoryName(mediaDriverContext.aeronDirectoryName())
+                .clusteredService(clusteredService);
+            serviceContainer = ClusteredServiceContainer.launch(clusteredCtx);
+
+            final ConsensusModule.Context consensusCtx = new ConsensusModule.Context()
+                .appointedLeaderId(appointedLeader)
+                .aeronDirectoryName(mediaDriverContext.aeronDirectoryName())
+                .clusterDir(directory.resolve("cluster").toFile())
+                .clusterMemberId(clusterMemberId)
+                .clusterMembers(MEMBERS)
+                .ingressChannel("aeron:udp")
+                .egressChannel("aeron:udp")
+                .replicationChannel("aeron:udp?endpoint=localhost:0")
+                .serviceCount(1)
+                .useAgentInvoker(true)
+                .leaderHeartbeatTimeoutNs(TimeUnit.SECONDS.toNanos(1));
+            consensusModule = ConsensusModule.launch(consensusCtx);
+        }
+
+        public boolean started()
+        {
+            final ConsensusModule.Context context = consensusModule.context();
+            return context.moduleStateCounter().get() == ConsensusModule.State.ACTIVE.code() &&
+                context.electionStateCounter().get() == ElectionState.CLOSED.code() &&
+                (context.clusterNodeRoleCounter().get() == Cluster.Role.LEADER.code() ||
+                context.clusterNodeRoleCounter().get() == Cluster.Role.FOLLOWER.code());
+        }
+
+        public boolean isLeader()
+        {
+            return Cluster.Role.LEADER.code() == consensusModule.context().clusterNodeRoleCounter().get();
+        }
+
+        public void poll()
+        {
+            consensusModule.conductorAgentInvoker().invoke();
+        }
+
+        public long publicationPosition()
+        {
+            return consensusModule.context().logPublisher().position();
+        }
+
+        public long commitPosition()
+        {
+            return consensusModule.context().commitPositionCounter().get();
+        }
+
+        public long servicePosition()
+        {
+            final Aeron aeron = serviceContainer.context().aeron();
+            final CountersReader countersReader = aeron.countersReader();
+            final long aeronClientId = aeron.clientId();
+
+            final MutableInteger servicePositionCounterId = new MutableInteger(Aeron.NULL_VALUE);
+            countersReader.forEach((counterId, typeId, keyBuffer, label) ->
+            {
+                final int streamId = keyBuffer.getInt(StreamCounter.STREAM_ID_OFFSET);
+                if (SubscriberPos.SUBSCRIBER_POSITION_TYPE_ID == typeId &&
+                    consensusModule.context().logStreamId() == streamId)
+                {
+                    if (countersReader.getCounterOwnerId(counterId) == aeronClientId)
+                    {
+                        servicePositionCounterId.set(counterId);
+                    }
+                }
+            });
+
+            assertNotEquals(Aeron.NULL_VALUE, servicePositionCounterId.get());
+            return countersReader.getCounterValue(servicePositionCounterId.get());
+        }
+
+        public int offeredServiceMessages()
+        {
+            return clusteredService.offeredMessages();
+        }
+
+        public int receivedServiceMessages()
+        {
+            return clusteredService.receivedMessages();
+        }
+
+        @Override
+        public void close()
+        {
+            CloseHelper.closeAll(serviceContainer, consensusModule, archive, mediaDriver);
+        }
+
+
+        static class TestClusteredService extends StubClusteredService
+        {
+            private static final UnsafeBuffer EIGHT_MEGABYTE_BUFFER =
+                new UnsafeBuffer(new byte[EIGHT_MEGABYTES - DataHeaderFlyweight.HEADER_LENGTH]);
+            private final AtomicBoolean waiting;
+            int offeredMessages;
+            int receivedMessages;
+
+            TestClusteredService(final AtomicBoolean waiting)
+            {
+                this.waiting = waiting;
+            }
+
+            int offeredMessages()
+            {
+                return offeredMessages;
+            }
+
+            int receivedMessages()
+            {
+                return receivedMessages;
+            }
+
+            public void onSessionClose(final ClientSession session, final long timestamp, final CloseReason closeReason)
+            {
+                cluster.idleStrategy().reset();
+                while (waiting.get())
+                {
+                    cluster.idleStrategy().idle();
+                }
+
+                while (0 > cluster.offer(EIGHT_MEGABYTE_BUFFER, 0, EIGHT_MEGABYTE_BUFFER.capacity()))
+                {
+                    cluster.idleStrategy().idle();
+                }
+
+                ++offeredMessages;
+            }
+
+            public void onSessionMessage(
+                final ClientSession session,
+                final long timestamp,
+                final DirectBuffer buffer,
+                final int offset,
+                final int length,
+                final Header header)
+            {
+                ++receivedMessages;
+            }
+        }
+    }
+
+    static class ClusterClient implements ControlledEgressListener, AutoCloseable
+    {
+        static final String NODE_0_INGRESS = "0=localhost:10002";
+
+        private MediaDriver mediaDriver;
+        private AeronCluster.AsyncConnect asyncConnect;
+        private AeronCluster aeronCluster;
+
+        ClusterClient(final String ingressEndpoints, final Path directory)
+        {
+            final MediaDriver.Context mediaDriverContext = new MediaDriver.Context()
+                .aeronDirectoryName(directory.resolve("driver").toAbsolutePath().toString())
+                .dirDeleteOnStart(true)
+                .termBufferSparseFile(true)
+                .publicationTermBufferLength(64 * 1024)
+                .ipcPublicationTermWindowLength(64 * 1024)
+                .threadingMode(ThreadingMode.SHARED);
+            final AeronCluster.Context aeronClusterContext = new AeronCluster.Context()
+                .aeronDirectoryName(mediaDriverContext.aeronDirectoryName())
+                .ingressEndpoints(ingressEndpoints)
+                .ingressChannel("aeron:udp")
+                .egressChannel("aeron:udp?endpoint=localhost:0")
+                .controlledEgressListener(this);
+
+            mediaDriver = MediaDriver.launch(mediaDriverContext);
+            asyncConnect = AeronCluster.asyncConnect(aeronClusterContext);
+        }
+
+        @Override
+        public ControlledFragmentHandler.Action onMessage(
+                final long clusterSessionId,
+                final long timestamp,
+                final DirectBuffer buffer,
+                final int offset,
+                final int length,
+                final Header header)
+        {
+            return ControlledFragmentHandler.Action.CONTINUE;
+        }
+
+        public boolean connect()
+        {
+            aeronCluster = asyncConnect.poll();
+            return aeronCluster != null;
+        }
+
+        @Override
+        public void close()
+        {
+            CloseHelper.closeAll(aeronCluster, asyncConnect, mediaDriver);
+        }
+    }
+}
