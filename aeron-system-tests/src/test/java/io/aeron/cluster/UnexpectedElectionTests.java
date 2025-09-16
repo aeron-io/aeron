@@ -18,6 +18,7 @@ package io.aeron.cluster;
 import io.aeron.Aeron;
 import io.aeron.archive.Archive;
 import io.aeron.archive.ArchiveThreadingMode;
+import io.aeron.archive.status.RecordingPos;
 import io.aeron.cluster.client.AeronCluster;
 import io.aeron.cluster.client.ControlledEgressListener;
 import io.aeron.cluster.codecs.CloseReason;
@@ -43,7 +44,6 @@ import io.aeron.test.Tests;
 import io.aeron.test.cluster.StubClusteredService;
 import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
-import org.agrona.collections.MutableInteger;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.CountersReader;
 import org.junit.jupiter.api.Test;
@@ -66,13 +66,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class UnexpectedElectionTests
 {
     private static final int EIGHT_MEGABYTES = 8 * 1024 * 1024;
-    private static final int DEFAULT_MTU = Configuration.mtuLength();
+    private static final int FRAME_LENGTH = Configuration.mtuLength() - DataHeaderFlyweight.HEADER_LENGTH;
     private static final int NEW_LEADERSHIP_TERM_LENGTH = computeFragmentedFrameLength(
-        MessageHeaderEncoder.ENCODED_LENGTH + NewLeadershipTermEventEncoder.BLOCK_LENGTH, DEFAULT_MTU);
+        MessageHeaderEncoder.ENCODED_LENGTH + NewLeadershipTermEventEncoder.BLOCK_LENGTH, FRAME_LENGTH);
     private static final int SESSION_OPEN_LENGTH_BLOCK_LENGTH = computeFragmentedFrameLength(
-        MessageHeaderEncoder.ENCODED_LENGTH + SessionOpenEventEncoder.BLOCK_LENGTH, DEFAULT_MTU);
+        MessageHeaderEncoder.ENCODED_LENGTH + SessionOpenEventEncoder.BLOCK_LENGTH, FRAME_LENGTH);
     private static final int SESSION_CLOSE_LENGTH = computeFragmentedFrameLength(
-        MessageHeaderEncoder.ENCODED_LENGTH + SessionCloseEventEncoder.BLOCK_LENGTH, DEFAULT_MTU);
+        MessageHeaderEncoder.ENCODED_LENGTH + SessionCloseEventEncoder.BLOCK_LENGTH, FRAME_LENGTH);
+    private static final int EIGHT_MEGABYTES_LENGTH = computeFragmentedFrameLength(EIGHT_MEGABYTES, FRAME_LENGTH);
 
     @TempDir
     public Path nodeDir0;
@@ -84,7 +85,7 @@ public class UnexpectedElectionTests
     public Path clientDir;
 
     @Test
-    @InterruptAfter(20)
+    @InterruptAfter(10)
     public void shouldElectionBetweenFragmentedServiceMessageAvoidDuplicateServiceMessage()
     {
         final AtomicBoolean waitingToOfferFragmentedMessage = new AtomicBoolean(true);
@@ -98,6 +99,8 @@ public class UnexpectedElectionTests
                 return node0.started() && node1.started() && node2.started();
             });
             assertTrue(node0.isLeader());
+
+            final long initialLeadershipTermId = node0.leadershipTermId();
 
             try (ClusterClient client0 = new ClusterClient(NODE_0_INGRESS, clientDir))
             {
@@ -128,6 +131,9 @@ public class UnexpectedElectionTests
                     node0.commitPosition() < (commitPositionBeforeFragmentedMessage + EIGHT_MEGABYTES);
             });
 
+            final long expectedAppendPosition = commitPositionBeforeFragmentedMessage + EIGHT_MEGABYTES_LENGTH;
+            Tests.await(() -> node0.appendPosition() == expectedAppendPosition);
+
             Tests.sleep(TimeUnit.NANOSECONDS.toMillis(node0.consensusModule.context().leaderHeartbeatTimeoutNs()) + 1);
             Tests.await(() ->
             {
@@ -135,6 +141,7 @@ public class UnexpectedElectionTests
                 return node0.started();
             });
             assertTrue(node0.isLeader());
+            assertTrue(initialLeadershipTermId < node0.leadershipTermId());
 
             node0.poll();
             assertTrue(node0.publicationPosition() >= EIGHT_MEGABYTES * 2);
@@ -149,9 +156,11 @@ public class UnexpectedElectionTests
                     node1.commitPosition() == node1.servicePosition() &&
                     node2.commitPosition() == node2.servicePosition();
             });
+
             assertEquals(1, node0.offeredServiceMessages());
             assertEquals(1, node1.offeredServiceMessages());
             assertEquals(1, node2.offeredServiceMessages());
+
             assertEquals(1, node0.receivedServiceMessages());
             assertEquals(1, node1.receivedServiceMessages());
             assertEquals(1, node2.receivedServiceMessages());
@@ -171,6 +180,9 @@ public class UnexpectedElectionTests
         private final ConsensusModule consensusModule;
         private final ClusteredServiceContainer serviceContainer;
         private final TestClusteredService clusteredService;
+
+        private int recordingPositionCounterId = Aeron.NULL_VALUE;
+        private int serviceSubscriberPositionCounterId = Aeron.NULL_VALUE;
 
         ClusterNode(
             final int clusterMemberId,
@@ -246,28 +258,56 @@ public class UnexpectedElectionTests
             return consensusModule.context().commitPositionCounter().get();
         }
 
+        public long leadershipTermId()
+        {
+            return consensusModule.context().leadershipTermIdCounter().get();
+        }
+
+        public long appendPosition()
+        {
+            final Aeron aeron = serviceContainer.context().aeron();
+            final CountersReader countersReader = aeron.countersReader();
+
+            if (Aeron.NULL_VALUE == recordingPositionCounterId)
+            {
+                countersReader.forEach((counterId, typeId, keyBuffer, label) ->
+                {
+                    if (RecordingPos.RECORDING_POSITION_TYPE_ID == typeId &&
+                        label.contains("alias=log"))
+                    {
+                        recordingPositionCounterId = counterId;
+                    }
+                });
+            }
+
+            assertNotEquals(Aeron.NULL_VALUE, recordingPositionCounterId);
+            return countersReader.getCounterValue(recordingPositionCounterId);
+        }
+
         public long servicePosition()
         {
             final Aeron aeron = serviceContainer.context().aeron();
             final CountersReader countersReader = aeron.countersReader();
-            final long aeronClientId = aeron.clientId();
 
-            final MutableInteger servicePositionCounterId = new MutableInteger(Aeron.NULL_VALUE);
-            countersReader.forEach((counterId, typeId, keyBuffer, label) ->
+            if (Aeron.NULL_VALUE == serviceSubscriberPositionCounterId)
             {
-                final int streamId = keyBuffer.getInt(StreamCounter.STREAM_ID_OFFSET);
-                if (SubscriberPos.SUBSCRIBER_POSITION_TYPE_ID == typeId &&
-                    consensusModule.context().logStreamId() == streamId)
+                final long aeronClientId = aeron.clientId();
+                countersReader.forEach((counterId, typeId, keyBuffer, label) ->
                 {
-                    if (countersReader.getCounterOwnerId(counterId) == aeronClientId)
+                    final int streamId = keyBuffer.getInt(StreamCounter.STREAM_ID_OFFSET);
+                    if (SubscriberPos.SUBSCRIBER_POSITION_TYPE_ID == typeId &&
+                        consensusModule.context().logStreamId() == streamId)
                     {
-                        servicePositionCounterId.set(counterId);
+                        if (countersReader.getCounterOwnerId(counterId) == aeronClientId)
+                        {
+                            serviceSubscriberPositionCounterId = counterId;
+                        }
                     }
-                }
-            });
+                });
+            }
 
-            assertNotEquals(Aeron.NULL_VALUE, servicePositionCounterId.get());
-            return countersReader.getCounterValue(servicePositionCounterId.get());
+            assertNotEquals(Aeron.NULL_VALUE, serviceSubscriberPositionCounterId);
+            return countersReader.getCounterValue(serviceSubscriberPositionCounterId);
         }
 
         public int offeredServiceMessages()
@@ -286,11 +326,16 @@ public class UnexpectedElectionTests
             CloseHelper.closeAll(serviceContainer, consensusModule, archive, mediaDriver);
         }
 
-
         static class TestClusteredService extends StubClusteredService
         {
             private static final UnsafeBuffer EIGHT_MEGABYTE_BUFFER =
                 new UnsafeBuffer(new byte[EIGHT_MEGABYTES - SESSION_HEADER_LENGTH]);
+
+            static
+            {
+                EIGHT_MEGABYTE_BUFFER.setMemory(0, EIGHT_MEGABYTE_BUFFER.capacity(), (byte)'x');
+            }
+
             private final AtomicBoolean waiting;
             int offeredMessages;
             int receivedMessages;
