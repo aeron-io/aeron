@@ -234,7 +234,6 @@ final class ConsensusModuleAgent
     private String catchupLogDestination;
     private String ingressEndpoints;
     private StandbySnapshotReplicator standbySnapshotReplicator = null;
-    private String localLogChannel;
     private Subscription extensionLeaderSubscription = null;
 
     ConsensusModuleAgent(final ConsensusModule.Context ctx)
@@ -1792,7 +1791,7 @@ final class ConsensusModuleAgent
             idle();
         }
 
-        localLogChannel = isIpc ? channel : SPY_PREFIX + channel;
+        final String localLogChannel = isIpc ? channel : SPY_PREFIX + channel;
         awaitServicesReady(
             localLogChannel,
             ctx.logStreamId(),
@@ -1802,10 +1801,10 @@ final class ConsensusModuleAgent
             isStartup,
             Cluster.Role.LEADER);
 
-        connectLeaderLogSubscriptionForExtension(logPosition);
+        connectLeaderLogSubscriptionForExtension(localLogChannel, logPosition);
     }
 
-    private void connectLeaderLogSubscriptionForExtension(final long logPosition)
+    private void connectLeaderLogSubscriptionForExtension(final String localLogChannel, final long logPosition)
     {
         if (null != consensusModuleExtension)
         {
@@ -1993,7 +1992,6 @@ final class ConsensusModuleAgent
             timeOfLastLogUpdateNs = nowNs;
             timeOfLastAppendPositionUpdateNs = nowNs;
             timeOfLastAppendPositionSendNs = nowNs;
-            localLogChannel = null;
         }
         NodeControl.ToggleState.activate(nodeControlToggle);
 
