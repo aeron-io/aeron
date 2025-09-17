@@ -45,6 +45,7 @@ final class LogAdapter implements ControlledFragmentHandler
     private final TimerEventDecoder timerEventDecoder = new TimerEventDecoder();
     private final ClusterActionRequestDecoder clusterActionRequestDecoder = new ClusterActionRequestDecoder();
     private final NewLeadershipTermEventDecoder newLeadershipTermEventDecoder = new NewLeadershipTermEventDecoder();
+    private boolean isLiveLeaderMode;
 
     LogAdapter(final ConsensusModuleAgent consensusModuleAgent, final int fragmentLimit)
     {
@@ -133,6 +134,11 @@ final class LogAdapter implements ControlledFragmentHandler
         this.image = image;
     }
 
+    void isLiveLeaderMode(final boolean isLiveLeaderMode)
+    {
+        this.isLiveLeaderMode = isLiveLeaderMode;
+    }
+
     void asyncRemoveDestination(final String destination)
     {
         if (null != image && !image.subscription().isClosed())
@@ -192,6 +198,11 @@ final class LogAdapter implements ControlledFragmentHandler
     @SuppressWarnings("MethodLength")
     private Action onMessage(final DirectBuffer buffer, final int offset, final int length, final Header header)
     {
+        if (isLiveLeaderMode)
+        {
+            return Action.CONTINUE;
+        }
+
         messageHeaderDecoder.wrap(buffer, offset);
 
         final int schemaId = messageHeaderDecoder.schemaId();

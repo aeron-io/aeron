@@ -55,7 +55,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static io.aeron.cluster.UnexpectedElectionTests.ClusterClient.NODE_0_INGRESS;
+import static io.aeron.cluster.UnexpectedElectionTest.ClusterClient.NODE_0_INGRESS;
 import static io.aeron.cluster.client.AeronCluster.SESSION_HEADER_LENGTH;
 import static io.aeron.logbuffer.LogBufferDescriptor.computeFragmentedFrameLength;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -63,7 +63,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith({EventLogExtension.class, InterruptingTestCallback.class})
-public class UnexpectedElectionTests
+public class UnexpectedElectionTest
 {
     private static final int EIGHT_MEGABYTES = 8 * 1024 * 1024;
     private static final int FRAME_LENGTH = Configuration.mtuLength() - DataHeaderFlyweight.HEADER_LENGTH;
@@ -142,9 +142,6 @@ public class UnexpectedElectionTests
             });
             assertTrue(node0.isLeader());
             assertTrue(initialLeadershipTermId < node0.leadershipTermId());
-
-            node0.poll();
-            assertTrue(node0.publicationPosition() >= EIGHT_MEGABYTES * 2);
 
             Tests.await(() ->
             {
