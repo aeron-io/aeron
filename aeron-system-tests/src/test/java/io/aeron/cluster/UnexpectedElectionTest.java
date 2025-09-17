@@ -137,6 +137,17 @@ public class UnexpectedElectionTest
             Tests.await(() -> node0.appendPosition() == expectedAppendPosition);
 
             Tests.sleep(TimeUnit.NANOSECONDS.toMillis(node0.consensusModule.context().leaderHeartbeatTimeoutNs()) + 1);
+
+            assertTrue(node0.consensusModulePosition() < node0.commitPosition());
+
+            Tests.await(() ->
+            {
+                node0.poll(); node1.poll(); node2.poll();
+                return node0.electionStarted();
+            });
+
+            assertEquals(node0.commitPosition(), node0.consensusModulePosition());
+
             Tests.await(() ->
             {
                 node0.poll(); node1.poll(); node2.poll();
@@ -461,7 +472,6 @@ public class UnexpectedElectionTest
             return countersReader.getCounterValue(consensusModuleSubscriberPositionCounterId);
         }
 
-
         public int offeredServiceMessages()
         {
             return clusteredService.offeredMessages();
@@ -472,6 +482,11 @@ public class UnexpectedElectionTest
             return clusteredService.receivedMessages();
         }
 
+        public boolean electionStarted()
+        {
+            return ElectionState.CLOSED != ElectionState.get(consensusModule.context().electionStateCounter());
+        }
+
         @Override
         public void close()
         {
@@ -480,6 +495,7 @@ public class UnexpectedElectionTest
 
         static class TestClusteredService extends StubClusteredService
         {
+
             private static final UnsafeBuffer EIGHT_MEGABYTE_BUFFER =
                 new UnsafeBuffer(new byte[EIGHT_MEGABYTES - SESSION_HEADER_LENGTH]);
 
