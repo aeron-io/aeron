@@ -16,6 +16,7 @@
 package io.aeron.cluster;
 
 import io.aeron.Aeron;
+import io.aeron.Counter;
 import io.aeron.archive.Archive;
 import io.aeron.archive.ArchiveThreadingMode;
 import io.aeron.archive.status.RecordingPos;
@@ -57,6 +58,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static io.aeron.cluster.UnexpectedElectionTest.ClusterClient.NODE_0_INGRESS;
 import static io.aeron.cluster.client.AeronCluster.SESSION_HEADER_LENGTH;
+import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.LOG_FRAGMENT_LIMIT_DEFAULT;
 import static io.aeron.logbuffer.LogBufferDescriptor.computeFragmentedFrameLength;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -164,6 +166,106 @@ public class UnexpectedElectionTest
         }
     }
 
+    @Test
+    @InterruptAfter(10)
+    @SuppressWarnings("methodlength")
+    public void shouldHandleSnapshotWithFragmentedMessageInLog()
+    {
+        final AtomicBoolean waitingToOfferFragmentedMessage = new AtomicBoolean(true);
+        try (ClusterNode node0 = new ClusterNode(0, 0, nodeDir0, waitingToOfferFragmentedMessage, 1, 1000);
+            ClusterNode node1 = new ClusterNode(1, 0, nodeDir1, waitingToOfferFragmentedMessage, 1000, 1000);
+            ClusterNode node2 = new ClusterNode(2, 0, nodeDir2, waitingToOfferFragmentedMessage, 1000, 1000))
+        {
+            Tests.await(() ->
+            {
+                node0.poll();
+                node1.poll();
+                node2.poll();
+                return node0.started() && node1.started() && node2.started();
+            });
+            assertTrue(node0.isLeader());
+
+            try (ClusterClient client0 = new ClusterClient(NODE_0_INGRESS, clientDir))
+            {
+                Tests.await(() ->
+                {
+                    node0.poll();
+                    node1.poll();
+                    node2.poll();
+                    return client0.connect();
+                });
+            }
+
+            final long expectedPositionLowerBound =
+                NEW_LEADERSHIP_TERM_LENGTH + SESSION_OPEN_LENGTH_BLOCK_LENGTH + SESSION_CLOSE_LENGTH;
+            Tests.await(() ->
+            {
+                node0.poll();
+                node1.poll();
+                node2.poll();
+                return node0.publicationPosition() > expectedPositionLowerBound &&
+                    node0.publicationPosition() == node0.commitPosition() &&
+                    node0.commitPosition() == node1.commitPosition() &&
+                    node0.commitPosition() == node2.commitPosition();
+            });
+
+            final long commitPositionBeforeFragmentedMessage = node0.commitPosition();
+            waitingToOfferFragmentedMessage.set(false);
+            Tests.await(() ->
+            {
+                node0.poll();
+                node1.poll();
+                node2.poll();
+                return
+                    commitPositionBeforeFragmentedMessage < node0.commitPosition() &&
+                    node0.commitPosition() < (commitPositionBeforeFragmentedMessage + EIGHT_MEGABYTES);
+            });
+
+            final long expectedAppendPosition = commitPositionBeforeFragmentedMessage + EIGHT_MEGABYTES_LENGTH;
+            Tests.await(() -> node0.appendPosition() == expectedAppendPosition);
+
+            final Counter controlToggle = node0.consensusModule.context().controlToggleCounter();
+            controlToggle.setRelease(ClusterControl.ToggleState.SNAPSHOT.code());
+
+            Tests.await(() ->
+            {
+                node0.poll();
+                node1.poll();
+                node2.poll();
+                return ConsensusModule.State.SNAPSHOT == node0.clusterState();
+            });
+
+            Tests.await(() ->
+            {
+                node0.poll();
+                node1.poll();
+                node2.poll();
+                return ConsensusModule.State.ACTIVE == node0.clusterState();
+            });
+
+            assertEquals(1L, node0.consensusModule.context().snapshotCounter().get());
+
+            assertTrue(expectedAppendPosition < node0.servicePosition());
+            assertTrue(node0.consensusModulePosition() < expectedAppendPosition);
+
+            Tests.await(() ->
+            {
+                node0.poll();
+                node1.poll();
+                node2.poll();
+                return expectedAppendPosition < node0.consensusModulePosition();
+            });
+
+            assertEquals(1, node0.offeredServiceMessages());
+            assertEquals(1, node1.offeredServiceMessages());
+            assertEquals(1, node2.offeredServiceMessages());
+
+            assertEquals(1, node0.receivedServiceMessages());
+            assertEquals(1, node1.receivedServiceMessages());
+            assertEquals(1, node2.receivedServiceMessages());
+        }
+    }
+
     static class ClusterNode implements AutoCloseable
     {
         private static final String MEMBERS =
@@ -180,12 +282,15 @@ public class UnexpectedElectionTest
 
         private int recordingPositionCounterId = Aeron.NULL_VALUE;
         private int serviceSubscriberPositionCounterId = Aeron.NULL_VALUE;
+        private int consensusModuleSubscriberPositionCounterId = Aeron.NULL_VALUE;
 
         ClusterNode(
             final int clusterMemberId,
             final int appointedLeader,
             final Path directory,
-            final AtomicBoolean waiting)
+            final AtomicBoolean waiting,
+            final int consensusModuleFragmentLimit,
+            final int clusteredServiceFragmentLimit)
         {
             final MediaDriver.Context mediaDriverContext = new MediaDriver.Context()
                 .aeronDirectoryName(directory.resolve("driver").toAbsolutePath().toString())
@@ -208,6 +313,7 @@ public class UnexpectedElectionTest
                 .controlChannel("aeron:ipc")
                 .clusterDir(directory.resolve("cluster").toFile())
                 .aeronDirectoryName(mediaDriverContext.aeronDirectoryName())
+                .logFragmentLimit(clusteredServiceFragmentLimit)
                 .clusteredService(clusteredService);
             serviceContainer = ClusteredServiceContainer.launch(clusteredCtx);
 
@@ -221,10 +327,27 @@ public class UnexpectedElectionTest
                 .egressChannel("aeron:udp")
                 .replicationChannel("aeron:udp?endpoint=localhost:0")
                 .serviceCount(1)
+                .logFragmentLimit(consensusModuleFragmentLimit)
                 .useAgentInvoker(true)
                 .leaderHeartbeatTimeoutNs(TimeUnit.SECONDS.toNanos(1));
             consensusModule = ConsensusModule.launch(consensusCtx);
         }
+
+        ClusterNode(
+            final int clusterMemberId,
+            final int appointedLeader,
+            final Path directory,
+            final AtomicBoolean waiting)
+        {
+            this(
+                clusterMemberId,
+                appointedLeader,
+                directory,
+                waiting,
+                LOG_FRAGMENT_LIMIT_DEFAULT,
+                LOG_FRAGMENT_LIMIT_DEFAULT);
+        }
+
 
         public boolean started()
         {
@@ -258,6 +381,11 @@ public class UnexpectedElectionTest
         public long leadershipTermId()
         {
             return consensusModule.context().leadershipTermIdCounter().get();
+        }
+
+        public ConsensusModule.State clusterState()
+        {
+            return ConsensusModule.State.get(consensusModule.context().moduleStateCounter());
         }
 
         public long appendPosition()
@@ -306,6 +434,33 @@ public class UnexpectedElectionTest
             assertNotEquals(Aeron.NULL_VALUE, serviceSubscriberPositionCounterId);
             return countersReader.getCounterValue(serviceSubscriberPositionCounterId);
         }
+
+        public long consensusModulePosition()
+        {
+            final Aeron aeron = consensusModule.context().aeron();
+            final CountersReader countersReader = aeron.countersReader();
+
+            if (Aeron.NULL_VALUE == consensusModuleSubscriberPositionCounterId)
+            {
+                final long aeronClientId = aeron.clientId();
+                countersReader.forEach((counterId, typeId, keyBuffer, label) ->
+                {
+                    final int streamId = keyBuffer.getInt(StreamCounter.STREAM_ID_OFFSET);
+                    if (SubscriberPos.SUBSCRIBER_POSITION_TYPE_ID == typeId &&
+                        consensusModule.context().logStreamId() == streamId)
+                    {
+                        if (countersReader.getCounterOwnerId(counterId) == aeronClientId)
+                        {
+                            consensusModuleSubscriberPositionCounterId = counterId;
+                        }
+                    }
+                });
+            }
+
+            assertNotEquals(Aeron.NULL_VALUE, consensusModuleSubscriberPositionCounterId);
+            return countersReader.getCounterValue(consensusModuleSubscriberPositionCounterId);
+        }
+
 
         public int offeredServiceMessages()
         {
