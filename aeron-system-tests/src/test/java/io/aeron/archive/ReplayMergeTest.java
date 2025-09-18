@@ -15,7 +15,13 @@
  */
 package io.aeron.archive;
 
-import io.aeron.*;
+import io.aeron.Aeron;
+import io.aeron.ChannelUriStringBuilder;
+import io.aeron.CommonContext;
+import io.aeron.FragmentAssembler;
+import io.aeron.Image;
+import io.aeron.Publication;
+import io.aeron.Subscription;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.client.ReplayMerge;
 import io.aeron.archive.status.RecordingPos;
@@ -23,7 +29,12 @@ import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.protocol.DataHeaderFlyweight;
-import io.aeron.test.*;
+import io.aeron.test.EventLogExtension;
+import io.aeron.test.InterruptAfter;
+import io.aeron.test.InterruptingTestCallback;
+import io.aeron.test.SystemTestWatcher;
+import io.aeron.test.TestContexts;
+import io.aeron.test.Tests;
 import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.CloseHelper;
 import org.agrona.ExpandableArrayBuffer;
@@ -40,9 +51,13 @@ import java.io.File;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
-import static io.aeron.archive.ArchiveSystemTests.*;
+import static io.aeron.archive.ArchiveSystemTests.CATALOG_CAPACITY;
+import static io.aeron.archive.ArchiveSystemTests.FRAGMENT_LIMIT;
+import static io.aeron.archive.ArchiveSystemTests.TERM_LENGTH;
 import static io.aeron.archive.codecs.SourceLocation.REMOTE;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith({ EventLogExtension.class, InterruptingTestCallback.class })
 class ReplayMergeTest
@@ -185,6 +200,7 @@ class ReplayMergeTest
                 Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
             final long recordingId = RecordingPos.getRecordingId(counters, recordingCounterId);
 
+            Tests.awaitConnected(publication);
             publishMessages(publication);
             Tests.awaitPosition(counters, recordingCounterId, publication.position());
             int attempt = 1;

@@ -233,15 +233,21 @@ public final class CTestMediaDriver implements TestMediaDriver
             "AERON_PUBLICATION_CONNECTION_TIMEOUT", String.valueOf(context.publicationConnectionTimeoutNs()));
         environment.put("AERON_PUBLICATION_LINGER_TIMEOUT", String.valueOf(context.publicationLingerTimeoutNs()));
         environment.put("AERON_SPIES_SIMULATE_CONNECTION", Boolean.toString(context.spiesSimulateConnection()));
+        environment.put("AERON_RCV_STATUS_MESSAGE_TIMEOUT", String.valueOf(context.statusMessageTimeoutNs()));
         environment.put("AERON_PERFORM_STORAGE_CHECKS", Boolean.toString(context.performStorageChecks()));
         if (null != context.threadingMode())
         {
             environment.put("AERON_THREADING_MODE", context.threadingMode().name());
         }
         environment.put("AERON_TIMER_INTERVAL", String.valueOf(context.timerIntervalNs()));
-        environment.put("AERON_UNTETHERED_RESTING_TIMEOUT", String.valueOf(context.untetheredRestingTimeoutNs()));
         environment.put(
             "AERON_UNTETHERED_WINDOW_LIMIT_TIMEOUT", String.valueOf(context.untetheredWindowLimitTimeoutNs()));
+        final long untetheredLingerTimeoutNs = context.untetheredLingerTimeoutNs();
+        if (Aeron.NULL_VALUE != untetheredLingerTimeoutNs)
+        {
+            environment.put("AERON_UNTETHERED_LINGER_TIMEOUT", String.valueOf(untetheredLingerTimeoutNs));
+        }
+        environment.put("AERON_UNTETHERED_RESTING_TIMEOUT", String.valueOf(context.untetheredRestingTimeoutNs()));
 
         if (null != context.receiverGroupTag())
         {

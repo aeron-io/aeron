@@ -15,8 +15,18 @@
  */
 package io.aeron.archive;
 
-import io.aeron.*;
-import io.aeron.archive.client.*;
+import io.aeron.Aeron;
+import io.aeron.ChannelUriStringBuilder;
+import io.aeron.CommonContext;
+import io.aeron.ExclusivePublication;
+import io.aeron.Image;
+import io.aeron.Publication;
+import io.aeron.Subscription;
+import io.aeron.archive.client.AeronArchive;
+import io.aeron.archive.client.ArchiveProxy;
+import io.aeron.archive.client.ControlResponseAdapter;
+import io.aeron.archive.client.RecordingEventsAdapter;
+import io.aeron.archive.client.ReplayParams;
 import io.aeron.archive.codecs.SourceLocation;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
@@ -24,9 +34,19 @@ import io.aeron.driver.status.SystemCounterDescriptor;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.FrameDescriptor;
 import io.aeron.logbuffer.Header;
-import io.aeron.test.*;
+import io.aeron.test.EventLogExtension;
+import io.aeron.test.InterruptAfter;
+import io.aeron.test.InterruptingTestCallback;
+import io.aeron.test.SystemTestWatcher;
+import io.aeron.test.TestContexts;
+import io.aeron.test.Tests;
 import io.aeron.test.driver.TestMediaDriver;
-import org.agrona.*;
+import org.agrona.BitUtil;
+import org.agrona.CloseHelper;
+import org.agrona.DirectBuffer;
+import org.agrona.IoUtil;
+import org.agrona.LangUtil;
+import org.agrona.SystemUtil;
 import org.agrona.collections.MutableBoolean;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.YieldingIdleStrategy;
@@ -45,7 +65,11 @@ import java.util.stream.Stream;
 
 import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
 import static io.aeron.protocol.DataHeaderFlyweight.HEADER_LENGTH;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 @ExtendWith({ EventLogExtension.class, InterruptingTestCallback.class })
@@ -517,6 +541,7 @@ class ArchiveSystemTest
 
     private void publishDataToBeRecorded(final Publication publication)
     {
+        Tests.awaitConnected(publication);
         startPosition = publication.position();
 
         final UnsafeBuffer buffer = new UnsafeBuffer(new byte[4096]);

@@ -105,7 +105,8 @@ class NetworkPublicationSenderFields extends NetworkPublicationPadding2
     boolean trackSenderLimits = false;
     boolean isSetupElicited = false;
     boolean hasInitialConnection = false;
-    InetSocketAddress endpointAddress = null;
+    byte extraPaddingByteForAlignment;
+    InetSocketAddress endpointAddress;
 }
 
 class NetworkPublicationPadding3 extends NetworkPublicationSenderFields
@@ -149,17 +150,18 @@ public final class NetworkPublication
     private final int sessionId;
     private final int streamId;
     private final boolean isExclusive;
-    private final boolean spiesSimulateConnection;
     private final boolean signalEos;
     private final boolean isResponse;
-    private volatile boolean hasReceivers;
+    private final boolean spiesSimulateConnection;
     private volatile boolean hasSpies;
+    private volatile boolean hasReceivers;
     private volatile boolean isConnected;
     private volatile boolean isEndOfStream;
     private volatile boolean hasSenderReleased;
     private volatile boolean hasReceivedUnicastEos;
     private State state = State.ACTIVE;
 
+    private final FlowControl flowControl;
     private final UnsafeBuffer[] termBuffers;
     private final ByteBuffer[] sendBuffers;
     private final ErrorHandler errorHandler;
@@ -174,7 +176,6 @@ public final class NetworkPublication
     private final SetupFlyweight setupHeader;
     private final ByteBuffer rttMeasurementBuffer;
     private final RttMeasurementFlyweight rttMeasurementHeader;
-    private final FlowControl flowControl;
     private final CachedNanoClock cachedNanoClock;
     private final RetransmitHandler retransmitHandler;
     private final UnsafeBuffer metaDataBuffer;
@@ -392,8 +393,7 @@ public final class NetworkPublication
     public void addSubscriber(
         final SubscriptionLink subscriptionLink, final ReadablePosition position, final long nowNs)
     {
-        spyPositions = ArrayUtil.add(spyPositions, position);
-        hasSpies = true;
+        addSpyPosition(position);
 
         if (!subscriptionLink.isTether())
         {
@@ -402,8 +402,7 @@ public final class NetworkPublication
 
         if (spiesSimulateConnection)
         {
-            LogBufferDescriptor.isConnected(metaDataBuffer, true);
-            isConnected = true;
+            updateConnectedState(true);
         }
     }
 
@@ -412,8 +411,7 @@ public final class NetworkPublication
      */
     public void removeSubscriber(final SubscriptionLink subscriptionLink, final ReadablePosition position)
     {
-        spyPositions = ArrayUtil.remove(spyPositions, position);
-        hasSpies = spyPositions.length > 0;
+        removeSpyPosition(position);
         position.close();
 
         if (!subscriptionLink.isTether())
@@ -426,6 +424,11 @@ public final class NetworkPublication
                     break;
                 }
             }
+        }
+
+        if (spiesSimulateConnection)
+        {
+            updateConnectedState(hasSubscribers());
         }
     }
 
@@ -500,12 +503,7 @@ public final class NetworkPublication
             positionBitsToShift,
             timeNs));
 
-        final boolean expectedStatus = hasReceivers && flowControl.hasRequiredReceivers();
-        if (isConnected != expectedStatus)
-        {
-            LogBufferDescriptor.isConnected(metaDataBuffer, expectedStatus);
-            isConnected = expectedStatus;
-        }
+        updateConnectedState(hasSubscribers());
     }
 
     /**
@@ -740,7 +738,7 @@ public final class NetworkPublication
     boolean isAcceptingSubscriptions()
     {
         return State.ACTIVE == state ||
-            (State.DRAINING == state && spyPositions.length > 0 && producerPosition() > senderPosition.getVolatile());
+            (State.DRAINING == state && hasSpies && producerPosition() > senderPosition.getVolatile());
     }
 
     /**
@@ -759,7 +757,7 @@ public final class NetworkPublication
 
             publisherPos.setRelease(producerPosition);
 
-            if (hasRequiredReceivers() || (spiesSimulateConnection && spyPositions.length > 0))
+            if (hasSubscribers())
             {
                 long minConsumerPosition = senderPosition;
                 for (final ReadablePosition spyPosition : spyPositions)
@@ -786,11 +784,7 @@ public final class NetworkPublication
             }
             else if (publisherLimit.get() > senderPosition)
             {
-                if (isConnected)
-                {
-                    LogBufferDescriptor.isConnected(metaDataBuffer, false);
-                    isConnected = false;
-                }
+                updateConnectedState(false);
                 publisherLimit.setRelease(senderPosition);
                 cleanBufferTo(senderPosition - termBufferLength);
                 workCount = 1;
@@ -999,7 +993,7 @@ public final class NetworkPublication
 
     private boolean spiesFinishedConsuming(final DriverConductor conductor, final long eosPosition)
     {
-        if (spyPositions.length > 0)
+        if (hasSpies)
         {
             for (final ReadablePosition spyPosition : spyPositions)
             {
@@ -1028,21 +1022,18 @@ public final class NetworkPublication
         return position;
     }
 
-    private void updateConnectedStatus()
+    private void updateConnectedState(final boolean newConnectedState)
     {
-        final boolean currentConnectedState =
-            hasRequiredReceivers() || (spiesSimulateConnection && spyPositions.length > 0);
-
-        if (currentConnectedState != isConnected)
+        if (newConnectedState != isConnected)
         {
-            LogBufferDescriptor.isConnected(metaDataBuffer, currentConnectedState);
-            isConnected = currentConnectedState;
+            LogBufferDescriptor.isConnected(metaDataBuffer, newConnectedState);
+            isConnected = newConnectedState;
         }
     }
 
-    private boolean hasRequiredReceivers()
+    private boolean hasSubscribers()
     {
-        return hasReceivers && flowControl.hasRequiredReceivers();
+        return (spiesSimulateConnection && hasSpies) || (hasReceivers && flowControl.hasRequiredReceivers());
     }
 
     private void checkUntetheredSubscriptions(final long nowNs, final DriverConductor conductor)
@@ -1073,7 +1064,7 @@ public final class NetworkPublication
                 {
                     if ((untethered.timeOfLastUpdateNs + untetheredLingerTimeoutNs) - nowNs <= 0)
                     {
-                        spyPositions = ArrayUtil.remove(spyPositions, untethered.position);
+                        removeSpyPosition(untethered.position);
                         untethered.state(UntetheredSubscription.State.RESTING, nowNs, streamId, sessionId);
                     }
                 }
@@ -1081,7 +1072,7 @@ public final class NetworkPublication
                 {
                     if ((untethered.timeOfLastUpdateNs + untetheredRestingTimeoutNs) - nowNs <= 0)
                     {
-                        spyPositions = ArrayUtil.add(spyPositions, untethered.position);
+                        addSpyPosition(untethered.position);
                         conductor.notifyAvailableImageLink(
                             registrationId,
                             sessionId,
@@ -1091,7 +1082,6 @@ public final class NetworkPublication
                             rawLog.fileName(),
                             CommonContext.IPC_CHANNEL);
                         untethered.state(UntetheredSubscription.State.ACTIVE, nowNs, streamId, sessionId);
-                        LogBufferDescriptor.isConnected(metaDataBuffer, true);
                     }
                 }
             }
@@ -1112,7 +1102,8 @@ public final class NetworkPublication
                     final long revokedPos = producerPosition();
                     publisherLimit.setRelease(revokedPos);
                     endOfStreamPosition(metaDataBuffer, revokedPos);
-                    LogBufferDescriptor.isConnected(metaDataBuffer, false);
+                    updateConnectedState(false);
+                    isConnected = false;
 
                     isEndOfStream = true;
 
@@ -1125,14 +1116,14 @@ public final class NetworkPublication
                 }
                 else
                 {
-                    updateConnectedStatus();
+                    checkUntetheredSubscriptions(timeNs, conductor);
+                    updateConnectedState(hasSubscribers());
                     final long producerPosition = producerPosition();
                     publisherPos.setRelease(producerPosition);
                     if (!isExclusive)
                     {
                         checkForBlockedPublisher(producerPosition, senderPosition.getVolatile(), timeNs);
                     }
-                    checkUntetheredSubscriptions(timeNs, conductor);
                 }
                 break;
             }
@@ -1253,6 +1244,18 @@ public final class NetworkPublication
     long consumerPosition()
     {
         return senderPosition.getVolatile();
+    }
+
+    private void addSpyPosition(final ReadablePosition position)
+    {
+        spyPositions = ArrayUtil.add(spyPositions, position);
+        hasSpies = true;
+    }
+
+    private void removeSpyPosition(final ReadablePosition position)
+    {
+        spyPositions = ArrayUtil.remove(spyPositions, position);
+        hasSpies = 0 != spyPositions.length;
     }
 
     private boolean isSendResponseSetupFlag()

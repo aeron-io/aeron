@@ -679,7 +679,11 @@ public final class MediaDriver implements AutoCloseable
                 LogBufferDescriptor.checkTermLength(ipcTermBufferLength);
                 validateInitialWindowLength(initialWindowLength, mtuLength);
                 validateUnblockTimeout(publicationUnblockTimeoutNs(), clientLivenessTimeoutNs(), timerIntervalNs);
-                validateUntetheredTimeouts(untetheredWindowLimitTimeoutNs, untetheredRestingTimeoutNs, timerIntervalNs);
+                validateUntetheredTimeouts(
+                    untetheredWindowLimitTimeoutNs,
+                    untetheredLingerTimeoutNs,
+                    untetheredRestingTimeoutNs,
+                    timerIntervalNs);
                 validateValueRange(
                     unicastFlowControlRetransmitReceiverWindowMultiple,
                     1, Integer.MAX_VALUE,

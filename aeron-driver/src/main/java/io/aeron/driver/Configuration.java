@@ -32,7 +32,15 @@ import org.agrona.BitUtil;
 import org.agrona.LangUtil;
 import org.agrona.Strings;
 import org.agrona.collections.ArrayUtil;
-import org.agrona.concurrent.*;
+import org.agrona.concurrent.BackoffIdleStrategy;
+import org.agrona.concurrent.BusySpinIdleStrategy;
+import org.agrona.concurrent.ControllableIdleStrategy;
+import org.agrona.concurrent.IdleStrategy;
+import org.agrona.concurrent.NoOpIdleStrategy;
+import org.agrona.concurrent.SleepingIdleStrategy;
+import org.agrona.concurrent.SleepingMillisIdleStrategy;
+import org.agrona.concurrent.UnsafeBuffer;
+import org.agrona.concurrent.YieldingIdleStrategy;
 import org.agrona.concurrent.broadcast.BroadcastBufferDescriptor;
 import org.agrona.concurrent.ringbuffer.RingBufferDescriptor;
 import org.agrona.concurrent.status.CountersReader;
@@ -51,7 +59,9 @@ import static java.lang.Long.getLong;
 import static java.lang.System.getProperty;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static org.agrona.BitUtil.fromHex;
-import static org.agrona.SystemUtil.*;
+import static org.agrona.SystemUtil.getDurationInNanos;
+import static org.agrona.SystemUtil.getSizeAsInt;
+import static org.agrona.SystemUtil.getSizeAsLong;
 
 /**
  * Configuration options for the {@link MediaDriver}.
@@ -559,6 +569,7 @@ public final class Configuration
     public static final String UNICAST_FLOW_CONTROL_STRATEGY_PROP_NAME = "aeron.unicast.flow.control.strategy";
 
     /**
+     *
      */
     @Config
     public static final String UNICAST_FLOW_CONTROL_STRATEGY_DEFAULT = "io.aeron.driver.UnicastFlowControl";
@@ -576,6 +587,7 @@ public final class Configuration
     public static final String MULTICAST_FLOW_CONTROL_STRATEGY_PROP_NAME = "aeron.multicast.flow.control.strategy";
 
     /**
+     *
      */
     @Config
     public static final String MULTICAST_FLOW_CONTROL_STRATEGY_DEFAULT = "io.aeron.driver.MaxMulticastFlowControl";
@@ -637,6 +649,7 @@ public final class Configuration
     public static final String IPC_MTU_LENGTH_PROP_NAME = "aeron.ipc.mtu.length";
 
     /**
+     *
      */
     @Config(configType = Config.Type.DEFAULT)
     public static final int IPC_MTU_LENGTH_DEFAULT = MTU_LENGTH_DEFAULT;
@@ -2249,7 +2262,7 @@ public final class Configuration
      *
      * @return configured session limit
      * @throws AsciiNumberFormatException if the property referenced by {@link #STREAM_SESSION_LIMIT_PROP_NAME} is not
-     * a valid number
+     *                                    a valid number
      */
     public static int streamSessionLimit()
     {
@@ -2455,13 +2468,17 @@ public final class Configuration
     /**
      * Validate that the timeouts for untethered subscriptions are greater than timer interval.
      *
-     * @param untetheredWindowLimitTimeoutNs after which an untethered subscription will be lingered.
-     * @param untetheredRestingTimeoutNs     after which an untethered subscription that is lingered can become active.
+     * @param untetheredWindowLimitTimeoutNs after which an active untethered subscription will be lingered.
+     * @param untetheredLingerTimeoutNs      after which a lingering untethered subscription will transition to resting.
+     * @param untetheredRestingTimeoutNs     after which a resting untethered subscription will become active again.
      * @param timerIntervalNs                interval at which the driver will check timeouts.
      * @throws ConfigurationException if the values are not valid.
      */
     public static void validateUntetheredTimeouts(
-        final long untetheredWindowLimitTimeoutNs, final long untetheredRestingTimeoutNs, final long timerIntervalNs)
+        final long untetheredWindowLimitTimeoutNs,
+        final long untetheredLingerTimeoutNs,
+        final long untetheredRestingTimeoutNs,
+        final long timerIntervalNs)
     {
         if (untetheredWindowLimitTimeoutNs <= timerIntervalNs)
         {
@@ -2475,6 +2492,13 @@ public final class Configuration
             throw new ConfigurationException(
                 "untetheredRestingTimeoutNs=" + untetheredRestingTimeoutNs +
                 " <= timerIntervalNs=" + timerIntervalNs);
+        }
+
+        if (Aeron.NULL_VALUE != untetheredLingerTimeoutNs && untetheredLingerTimeoutNs <= timerIntervalNs)
+        {
+            throw new ConfigurationException(
+                "untetheredLingerTimeoutNs=" + untetheredLingerTimeoutNs +
+                    " <= timerIntervalNs=" + timerIntervalNs);
         }
     }
 
