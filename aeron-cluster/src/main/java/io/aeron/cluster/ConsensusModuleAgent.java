@@ -1726,7 +1726,7 @@ final class ConsensusModuleAgent
         if (null != consensusModuleExtension)
         {
             consensusModuleExtension.onNewLeadershipTerm(
-                new ConsensusControlState(null, null, logRecordingId, leadershipTermId));
+                new ConsensusControlState(null, logRecordingId, leadershipTermId));
         }
     }
 
@@ -2023,7 +2023,6 @@ final class ConsensusModuleAgent
         {
             consensusModuleExtension.onElectionComplete(new ConsensusControlState(
                 logPublisher.publication(),
-                leaderLogSubscription,
                 logRecordingId,
                 leadershipTermId
             ));

@@ -134,6 +134,9 @@ public final class TestCluster implements AutoCloseable
         "node0,localhost,localhost|" +
         "node1,localhost,localhost|" +
         "node2,localhost,localhost|";
+    public static final int EXTENSION_TEMPLATE_ID = 100001;
+    public static final int EXTENSION_SCHEMA_ID = 100002;
+    public static final short EXTENSION_VERSION = (short)1;
 
     private final DataCollector dataCollector = new DataCollector();
     private final ExpandableArrayBuffer msgBuffer = new ExpandableArrayBuffer();
@@ -830,7 +833,7 @@ public final class TestCluster implements AutoCloseable
         }
     }
 
-    public void sendExtensionMessages(final int i)
+    public void sendExtensionMessages(final int messageCount)
     {
         final UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
         final MessageHeaderEncoder encoder = new MessageHeaderEncoder();
@@ -838,11 +841,15 @@ public final class TestCluster implements AutoCloseable
 
         encoder.wrap(buffer, 0);
         encoder.blockLength(blockLength);
-        encoder.templateId(100001);
-        encoder.schemaId(100002);
-        encoder.version((short)1);
+        encoder.templateId(EXTENSION_TEMPLATE_ID);
+        encoder.schemaId(EXTENSION_SCHEMA_ID);
+        encoder.version(EXTENSION_VERSION);
 
-        pollUntilMessageSent(client.ingressPublication(), buffer, 0, MessageHeaderEncoder.ENCODED_LENGTH + blockLength);
+        for (int i = 0; i < messageCount; i++)
+        {
+            pollUntilMessageSent(
+                client.ingressPublication(), buffer, 0, MessageHeaderEncoder.ENCODED_LENGTH + blockLength);
+        }
     }
 
     public void sendLargeMessages(final int messageCount)
@@ -2037,7 +2044,7 @@ public final class TestCluster implements AutoCloseable
                 0,
                 recordingPosition,
                 "aeron:udp?endpoint=localhost:6666",
-                100001);
+                EXTENSION_TEMPLATE_ID);
 
             final MutableLong position = new MutableLong();
             final MessageHeaderDecoder messageHeaderDecoder = new MessageHeaderDecoder();
@@ -2321,6 +2328,11 @@ public final class TestCluster implements AutoCloseable
             {
                 throw new IllegalStateException(
                     "Unable to start " + toStart + " nodes, only " + nodeCount + " available");
+            }
+
+            if (hasExtension)
+            {
+                serviceSupplier = (index) -> new TestNode.TestService[0];
             }
 
             final TestCluster testCluster = new TestCluster(

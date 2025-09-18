@@ -269,21 +269,23 @@ class ClusterTest
     @InterruptAfter(5)
     void shouldStartClusterWithExtensionAndReceiveMessages()
     {
+        final int messageCount = 10;
         cluster = aCluster().withStaticNodes(3)
             .withExtension(true)
-            .withServiceSupplier(value -> new TestNode.TestService[0])
             .start();
 
         systemTestWatcher.cluster(cluster);
 
-        cluster.awaitLeader();
+        final TestNode leader = cluster.awaitLeader();
+        leader.index();
 
         cluster.connectClient();
-        cluster.sendExtensionMessages(1);
+        cluster.sendExtensionMessages(messageCount);
 
-        cluster.node(0).validateExtensionMessageCount(1);
-        cluster.node(1).validateExtensionMessageCount(1);
-        cluster.node(2).validateExtensionMessageCount(1);
+        leader.validateExtensionIngressMessageCount(messageCount);
+        cluster.node(0).validateExtensionLogMessageCount(messageCount);
+        cluster.node(1).validateExtensionLogMessageCount(messageCount);
+        cluster.node(2).validateExtensionLogMessageCount(messageCount);
     }
 
     @Test
