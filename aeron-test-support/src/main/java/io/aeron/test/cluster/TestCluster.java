@@ -45,6 +45,7 @@ import io.aeron.cluster.client.ControlledEgressListener;
 import io.aeron.cluster.client.EgressListener;
 import io.aeron.cluster.codecs.EventCode;
 import io.aeron.cluster.codecs.MessageHeaderDecoder;
+import io.aeron.cluster.codecs.MessageHeaderEncoder;
 import io.aeron.cluster.codecs.NewLeadershipTermEventDecoder;
 import io.aeron.cluster.service.Cluster;
 import io.aeron.driver.Configuration;
@@ -81,6 +82,7 @@ import org.agrona.collections.MutableLong;
 import org.agrona.concurrent.AgentInvoker;
 import org.agrona.concurrent.EpochClock;
 import org.agrona.concurrent.NoOpLock;
+import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.AtomicCounter;
 import org.agrona.concurrent.status.CountersReader;
 import org.mockito.internal.matchers.apachecommons.ReflectionEquals;
@@ -828,6 +830,21 @@ public final class TestCluster implements AutoCloseable
         }
     }
 
+    public void sendExtensionMessages(final int i)
+    {
+        final UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
+        final MessageHeaderEncoder encoder = new MessageHeaderEncoder();
+        final int blockLength = 64;
+
+        encoder.wrap(buffer, 0);
+        encoder.blockLength(blockLength);
+        encoder.templateId(100001);
+        encoder.schemaId(100002);
+        encoder.version((short)1);
+
+        pollUntilMessageSent(client.ingressPublication(), buffer, 0, MessageHeaderEncoder.ENCODED_LENGTH + blockLength);
+    }
+
     public void sendLargeMessages(final int messageCount)
     {
         final int messageLength = msgBuffer.putStringWithoutLengthAscii(0, LARGE_MSG);
@@ -949,6 +966,35 @@ public final class TestCluster implements AutoCloseable
             await(1);
         }
     }
+
+    public void pollUntilMessageSent(
+        final Publication pub,
+        final DirectBuffer buffer,
+        final int offset,
+        final int messageLength)
+    {
+        while (true)
+        {
+            final long position = pub.offer(buffer, offset, messageLength);
+            if (position > 0)
+            {
+                return;
+            }
+
+            if (Publication.ADMIN_ACTION == position)
+            {
+                continue;
+            }
+
+            if (Publication.MAX_POSITION_EXCEEDED == position)
+            {
+                throw new ClusterException("max position exceeded");
+            }
+
+            await(1);
+        }
+    }
+
 
     public void awaitResponseMessageCount(final int messageCount)
     {
@@ -2327,9 +2373,9 @@ public final class TestCluster implements AutoCloseable
             return testCluster;
         }
 
-        public Builder withExtensionSuppler(final Supplier<ConsensusModuleExtension> extensionSuppler)
+        public Builder withExtension(final boolean hasExtension)
         {
-            this.extensionSupplier = extensionSuppler;
+            this.hasExtension = hasExtension;
             return this;
         }
     }

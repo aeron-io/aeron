@@ -198,21 +198,22 @@ final class LogAdapter implements ControlledFragmentHandler
     @SuppressWarnings("MethodLength")
     private Action onMessage(final DirectBuffer buffer, final int offset, final int length, final Header header)
     {
-        if (isLiveLeaderMode)
-        {
-            return Action.CONTINUE;
-        }
-
         messageHeaderDecoder.wrap(buffer, offset);
 
         final int schemaId = messageHeaderDecoder.schemaId();
         final int templateId = messageHeaderDecoder.templateId();
         final int actingVersion = messageHeaderDecoder.version();
         final int actingBlockLength = messageHeaderDecoder.blockLength();
+
         if (schemaId != MessageHeaderDecoder.SCHEMA_ID)
         {
             return consensusModuleAgent.onReplayExtensionMessage(
                 actingBlockLength, templateId, schemaId, actingVersion, buffer, offset, length, header);
+        }
+
+        if (isLiveLeaderMode)
+        {
+            return Action.CONTINUE;
         }
 
         switch (templateId)

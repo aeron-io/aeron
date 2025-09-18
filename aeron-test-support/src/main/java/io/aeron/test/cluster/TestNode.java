@@ -63,6 +63,7 @@ import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.IntPredicate;
 import java.util.function.Supplier;
@@ -402,6 +403,18 @@ public final class TestNode implements AutoCloseable
         else
         {
             assertNull(onElectionConsensusControlState.leaderLogSubscription());
+        }
+    }
+
+    public void validateExtensionMessageCount(final int expectedCount)
+    {
+        final Supplier<String> msg =
+            () -> "invalid extension message count, expected=" + expectedCount +
+                " actual=" + extension.messageCount.get();
+
+        while (extension.messageCount.get() != expectedCount)
+        {
+            Tests.yieldingIdle(msg);
         }
     }
 
@@ -862,6 +875,8 @@ public final class TestNode implements AutoCloseable
     {
         private ConsensusControlState onElectionConsensusControlState;
         private ConsensusControlState onNewLeadershipTermConsensusControlState;
+        private final AtomicLong messageCount = new AtomicLong(0);
+        private ConsensusModuleControl consensusModuleControl;
 
         public int supportedSchemaId()
         {
@@ -870,6 +885,7 @@ public final class TestNode implements AutoCloseable
 
         public void onStart(final ConsensusModuleControl consensusModuleControl, final Image snapshotImage)
         {
+            this.consensusModuleControl = consensusModuleControl;
         }
 
         public int doWork(final long nowNs)
@@ -907,6 +923,13 @@ public final class TestNode implements AutoCloseable
             final int length,
             final Header header)
         {
+            final ExclusivePublication log = onElectionConsensusControlState.logPublication();
+
+            while (log.offer(buffer, offset, length) < 0)
+            {
+                Tests.yield();
+            }
+
             return ControlledFragmentHandler.Action.CONTINUE;
         }
 
@@ -920,6 +943,7 @@ public final class TestNode implements AutoCloseable
             final int length,
             final Header header)
         {
+            messageCount.incrementAndGet();
             return ControlledFragmentHandler.Action.CONTINUE;
         }
 
