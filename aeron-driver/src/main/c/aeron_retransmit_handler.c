@@ -25,7 +25,6 @@ int aeron_retransmit_handler_scan_for_available_retransmit(
     aeron_retransmit_handler_t *handler,
     int32_t term_id,
     int32_t term_offset,
-    size_t length,
     aeron_retransmit_action_t **actionp);
 
 int aeron_retransmit_handler_init(
@@ -79,9 +78,10 @@ void aeron_retransmit_handler_remove_retransmit(aeron_retransmit_handler_t *hand
     action->state = AERON_RETRANSMIT_ACTION_STATE_INACTIVE;
 }
 
-bool aeron_retransmit_handler_is_invalid(aeron_retransmit_handler_t *handler, int32_t term_offset, size_t term_length)
+bool aeron_retransmit_handler_is_invalid(aeron_retransmit_handler_t *handler, int32_t term_offset, size_t term_length, int32_t length)
 {
-    const bool is_invalid = (term_offset > ((int32_t)(term_length - AERON_DATA_HEADER_LENGTH))) || (term_offset < 0);
+    const bool is_invalid = (term_offset > ((int32_t)(term_length - AERON_DATA_HEADER_LENGTH))) || (term_offset < 0) ||
+            (length < 0);
 
     if (is_invalid)
     {
@@ -95,7 +95,7 @@ int aeron_retransmit_handler_on_nak(
     aeron_retransmit_handler_t *handler,
     int32_t term_id,
     int32_t term_offset,
-    size_t length,
+    int32_t length,
     size_t term_length,
     size_t mtu_length,
     aeron_flow_control_strategy_t *flow_control,
@@ -105,11 +105,11 @@ int aeron_retransmit_handler_on_nak(
 {
     int result = 0;
 
-    if (!aeron_retransmit_handler_is_invalid(handler, term_offset, term_length))
+    if (!aeron_retransmit_handler_is_invalid(handler, term_offset, term_length, length) && 0 != length)
     {
-        const size_t retransmit_length = flow_control->max_retransmission_length(flow_control->state, term_offset, length, term_length, mtu_length);
+        const size_t retransmit_length = flow_control->max_retransmission_length(flow_control->state, term_offset, (size_t)length, term_length, mtu_length);
         aeron_retransmit_action_t *action = NULL;
-        if (aeron_retransmit_handler_scan_for_available_retransmit(handler, term_id, term_offset, retransmit_length, &action) != 0)
+        if (aeron_retransmit_handler_scan_for_available_retransmit(handler, term_id, term_offset, &action) != 0)
         {
             AERON_APPEND_ERR("dropping nak termId=%d termOffset=%d retransmit_length=%d", term_id, term_offset, retransmit_length);
             return -1;
@@ -180,7 +180,6 @@ int aeron_retransmit_handler_scan_for_available_retransmit(
     aeron_retransmit_handler_t *handler,
     int32_t term_id,
     int32_t term_offset,
-    size_t length,
     aeron_retransmit_action_t **actionp)
 {
    if (0 == handler->active_retransmit_count)

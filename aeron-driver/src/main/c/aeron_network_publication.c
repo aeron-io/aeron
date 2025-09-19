@@ -787,7 +787,7 @@ int aeron_network_publication_on_nak(
         &publication->retransmit_handler,
         term_id,
         term_offset,
-        (size_t)length,
+        length,
         (size_t)publication->term_length_mask + 1,
         publication->mtu_length,
         publication->flow_control,

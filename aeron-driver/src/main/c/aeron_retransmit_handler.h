@@ -76,7 +76,7 @@ int aeron_retransmit_handler_on_nak(
     aeron_retransmit_handler_t *handler,
     int32_t term_id,
     int32_t term_offset,
-    size_t length,
+    int32_t length,
     size_t term_length,
     size_t mtu_length,
     aeron_flow_control_strategy_t *flow_control,
