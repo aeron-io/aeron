@@ -1565,7 +1565,7 @@ static const char *dissect_cmd_in(int64_t cmd_id, const void *message, size_t le
                 snprintf(
                     buffer,
                     sizeof(buffer) - 1,
-                    "registrationId=%" PRId64 " clientId=%" PRId64 " correlationId=%" PRId64 " revoke=%s]",
+                    "registrationId=%" PRId64 " clientId=%" PRId64 " correlationId=%" PRId64 " revoke=%s",
                     command->registration_id,
                     command->correlated.client_id,
                     command->correlated.correlation_id,
@@ -1576,7 +1576,7 @@ static const char *dissect_cmd_in(int64_t cmd_id, const void *message, size_t le
                 snprintf(
                     buffer,
                     sizeof(buffer) - 1,
-                    "registrationId=%" PRId64 " clientId=%" PRId64 " correlationId=%" PRId64 "]",
+                    "registrationId=%" PRId64 " clientId=%" PRId64 " correlationId=%" PRId64,
                     command->registration_id,
                     command->correlated.client_id,
                     command->correlated.correlation_id);
@@ -1592,7 +1592,7 @@ static const char *dissect_cmd_in(int64_t cmd_id, const void *message, size_t le
             snprintf(
                 buffer,
                 sizeof(buffer) - 1,
-                "registrationId=%" PRId64 " clientId=%" PRId64 " correlationId=%" PRId64 "]",
+                "registrationId=%" PRId64 " clientId=%" PRId64 " correlationId=%" PRId64,
                 command->registration_id,
                 command->correlated.client_id,
                 command->correlated.correlation_id);
@@ -1607,7 +1607,7 @@ static const char *dissect_cmd_in(int64_t cmd_id, const void *message, size_t le
             snprintf(
                 buffer,
                 sizeof(buffer) - 1,
-                "registrationId=%" PRId64 " clientId=%" PRId64 " correlationId=%" PRId64 "]",
+                "registrationId=%" PRId64 " clientId=%" PRId64 " correlationId=%" PRId64,
                 command->registration_id,
                 command->correlated.client_id,
                 command->correlated.correlation_id);
