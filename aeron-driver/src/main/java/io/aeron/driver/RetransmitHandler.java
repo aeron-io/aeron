@@ -16,8 +16,8 @@
 package io.aeron.driver;
 
 import io.aeron.protocol.DataHeaderFlyweight;
-import org.agrona.concurrent.status.AtomicCounter;
 import org.agrona.concurrent.NanoClock;
+import org.agrona.concurrent.status.AtomicCounter;
 
 /**
  * Tracking and handling of retransmit request, NAKs, for senders, and receivers.
@@ -96,7 +96,7 @@ public final class RetransmitHandler
         final FlowControl flowControl,
         final RetransmitSender retransmitSender)
     {
-        if (!isInvalid(termOffset, termLength))
+        if (!isInvalid(termOffset, termLength, length) && 0 != length)
         {
             final int retransmitLength = flowControl.maxRetransmissionLength(termOffset, length, termLength, mtuLength);
             final RetransmitAction action = scanForAvailableRetransmit(termId, termOffset, retransmitLength);
@@ -163,9 +163,10 @@ public final class RetransmitHandler
         }
     }
 
-    private boolean isInvalid(final int termOffset, final int termLength)
+    private boolean isInvalid(final int termOffset, final int termLength, final int length)
     {
-        final boolean isInvalid = (termOffset > (termLength - DataHeaderFlyweight.HEADER_LENGTH)) || (termOffset < 0);
+        final boolean isInvalid = (termOffset > (termLength - DataHeaderFlyweight.HEADER_LENGTH)) || (termOffset < 0) ||
+            (length < 0);
 
         if (isInvalid)
         {

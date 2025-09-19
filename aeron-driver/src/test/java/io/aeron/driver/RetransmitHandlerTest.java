@@ -24,6 +24,7 @@ import io.aeron.protocol.HeaderFlyweight;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.AtomicCounter;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InOrder;
@@ -40,7 +41,15 @@ import static io.aeron.logbuffer.FrameDescriptor.frameLengthOrdered;
 import static io.aeron.protocol.DataHeaderFlyweight.HEADER_LENGTH;
 import static java.util.Arrays.asList;
 import static org.agrona.BitUtil.align;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 class RetransmitHandlerTest
 {
@@ -341,6 +350,50 @@ class RetransmitHandlerTest
             TERM_ID, offsetOfFrame(16 * 64), ALIGNED_FRAME_LENGTH, termLength, MTU_LENGTH, fc, sender);
 
         verify(retransmitOverflow).increment();
+    }
+
+    @Test
+    void shouldDetectInvalidNaksInvalidOffset()
+    {
+        handler = newZeroDelayRetransmitHandler();
+
+        handler.onNak(
+            TERM_ID, TERM_BUFFER_LENGTH - 16, ALIGNED_FRAME_LENGTH, TERM_BUFFER_LENGTH, MTU_LENGTH, fc, sender);
+
+        verify(invalidPackets).increment();
+        verifyNoInteractions(sender);
+    }
+
+    @Test
+    void shouldDetectInvalidNaksNegativeOffset()
+    {
+        handler = newZeroDelayRetransmitHandler();
+
+        handler.onNak(TERM_ID, -128, ALIGNED_FRAME_LENGTH, TERM_BUFFER_LENGTH, MTU_LENGTH, fc, sender);
+
+        verify(invalidPackets).increment();
+        verifyNoInteractions(sender);
+    }
+
+    @Test
+    void shouldDetectInvalidNaksNegativeLength()
+    {
+        handler = newZeroDelayRetransmitHandler();
+
+        handler.onNak(TERM_ID, 0, -ALIGNED_FRAME_LENGTH, TERM_BUFFER_LENGTH, MTU_LENGTH, fc, sender);
+
+        verify(invalidPackets).increment();
+        verifyNoInteractions(sender);
+    }
+
+    @Test
+    void shouldIgnoreEmptyNak()
+    {
+        handler = newZeroDelayRetransmitHandler();
+
+        handler.onNak(TERM_ID, 0, 0, TERM_BUFFER_LENGTH, MTU_LENGTH, fc, sender);
+
+        verifyNoInteractions(sender);
     }
 
     private RetransmitHandler newZeroDelayRetransmitHandler()
