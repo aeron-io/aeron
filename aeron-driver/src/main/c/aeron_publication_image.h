@@ -121,9 +121,9 @@ typedef struct aeron_publication_image_stct
         aeron_driver_publication_image_revoke_func_t publication_image_revoke;
     } log;
 
-    int64_t last_loss_change_number;
     volatile int64_t begin_loss_change;
     volatile int64_t end_loss_change;
+    int64_t last_loss_change_number;
     int32_t loss_term_id;
     int32_t loss_term_offset;
     size_t loss_length;

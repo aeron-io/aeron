@@ -338,8 +338,6 @@ int aeron_publication_image_create(
     _image->term_length_mask = term_buffer_length - 1;
     _image->position_bits_to_shift = (size_t)aeron_number_of_trailing_zeroes((int32_t)term_buffer_length);
     _image->mtu_length = sender_mtu_length;
-    _image->last_sm_change_number = -1;
-    _image->last_loss_change_number = -1;
     _image->is_end_of_stream = false;
     _image->is_sending_eos_sm = false;
     _image->has_receiver_released = false;
@@ -377,12 +375,14 @@ int aeron_publication_image_create(
 
     _image->begin_loss_change = 0;
     _image->end_loss_change = 0;
+    _image->last_loss_change_number = 0;
     _image->loss_term_id = active_term_id;
     _image->loss_term_offset = initial_term_offset;
     _image->loss_length = 0;
 
     _image->begin_sm_change = 0;
     _image->end_sm_change = 0;
+    _image->last_sm_change_number = 0;
     _image->next_sm_position = initial_position;
     _image->next_sm_receiver_window_length = _image->congestion_control->initial_window_length(
         _image->congestion_control->state);
