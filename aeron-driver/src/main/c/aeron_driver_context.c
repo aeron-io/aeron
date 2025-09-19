@@ -768,21 +768,26 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
         AERON_UNTETHERED_WINDOW_LIMIT_TIMEOUT_ENV_VAR,
         getenv(AERON_UNTETHERED_WINDOW_LIMIT_TIMEOUT_ENV_VAR),
         _context->untethered_window_limit_timeout_ns,
-        1000,
+        0,
         INT64_MAX);
 
-    _context->untethered_linger_timeout_ns = aeron_config_parse_duration_ns(
+    const uint64_t parsed_untethered_linger_timeout_ns = aeron_config_parse_duration_ns(
         AERON_UNTETHERED_LINGER_TIMEOUT_ENV_VAR,
         getenv(AERON_UNTETHERED_LINGER_TIMEOUT_ENV_VAR),
-        _context->untethered_linger_timeout_ns,
-        1000,
+        UINT64_MAX,
+        0,
         INT64_MAX);
+
+    if (UINT64_MAX != parsed_untethered_linger_timeout_ns)
+    {
+        _context->untethered_linger_timeout_ns = (int64_t)parsed_untethered_linger_timeout_ns;
+    }
 
     _context->untethered_resting_timeout_ns = aeron_config_parse_duration_ns(
         AERON_UNTETHERED_RESTING_TIMEOUT_ENV_VAR,
         getenv(AERON_UNTETHERED_RESTING_TIMEOUT_ENV_VAR),
         _context->untethered_resting_timeout_ns,
-        1000,
+        0,
         INT64_MAX);
 
     _context->max_resend = aeron_config_parse_uint32(
@@ -1402,7 +1407,7 @@ int aeron_driver_validate_untethered_timeouts(aeron_driver_context_t *context)
         return -1;
     }
 
-    if (context->untethered_linger_timeout_ns > AERON_NULL_VALUE &&
+    if (AERON_NULL_VALUE != context->untethered_linger_timeout_ns &&
         (uint64_t)context->untethered_linger_timeout_ns <= context->timer_interval_ns)
     {
         errno = EINVAL;

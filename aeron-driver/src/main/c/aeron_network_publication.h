@@ -200,27 +200,9 @@ int aeron_network_publication_update_pub_pos_and_lmt(aeron_network_publication_t
 void aeron_network_publication_check_for_blocked_publisher(
     aeron_network_publication_t *publication, int64_t now_ns, int64_t producer_position, int64_t snd_pos);
 
-inline void aeron_network_publication_add_subscriber_hook(void *clientd, volatile int64_t *value_addr)
-{
-    aeron_network_publication_t *publication = (aeron_network_publication_t *)clientd;
+void aeron_network_publication_add_subscriber_hook(void *clientd, volatile int64_t *value_addr);
 
-    AERON_SET_RELEASE(publication->has_spies, true);
-    if (publication->spies_simulate_connection)
-    {
-        AERON_SET_RELEASE(publication->log_meta_data->is_connected, 1);
-        AERON_SET_RELEASE(publication->is_connected, true);
-    }
-}
-
-inline void aeron_network_publication_remove_subscriber_hook(void *clientd, volatile int64_t *value_addr)
-{
-    aeron_network_publication_t *publication = (aeron_network_publication_t *)clientd;
-
-    if (1 == aeron_driver_subscribable_working_position_count(&publication->conductor_fields.subscribable))
-    {
-        AERON_SET_RELEASE(publication->has_spies, false);
-    }
-}
+void aeron_network_publication_remove_subscriber_hook(void *clientd, volatile int64_t *value_addr);
 
 inline bool aeron_network_publication_is_possibly_blocked(
     aeron_network_publication_t *publication, int64_t producer_position, int64_t consumer_position)

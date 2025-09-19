@@ -298,7 +298,6 @@ class UntetheredSubscriptionTest
     @InterruptAfter(10)
     void shouldSetConnectedStatusCorrectlyWhenUntetheredSpyReconnectsAfterResting(final boolean spiesSimulateConnection)
     {
-        TestMediaDriver.notSupportedOnCMediaDriver("pending fixes");
         final String channel =
             "aeron:udp?endpoint=localhost:5596|term-length=64k|tether=false|ssc=" + spiesSimulateConnection;
         launch(channel);
