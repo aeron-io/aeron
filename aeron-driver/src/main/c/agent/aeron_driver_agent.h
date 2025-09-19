@@ -287,6 +287,7 @@ const char *aeron_driver_agent_event_name(aeron_driver_agent_event_t id);
 void aeron_driver_agent_untethered_subscription_state_change(
     aeron_tetherable_position_t *tetherable_position,
     int64_t now_ns,
+    aeron_subscription_tether_state_t old_state,
     aeron_subscription_tether_state_t new_state,
     int32_t stream_id,
     int32_t session_id);

@@ -1129,6 +1129,14 @@ void aeron_publication_image_check_untethered_subscriptions(
 
                         aeron_driver_subscribable_state(
                             subscribable, tetherable_position, AERON_SUBSCRIPTION_TETHER_LINGER, now_ns);
+
+                        image->log.untethered_subscription_state_change(
+                                tetherable_position,
+                                now_ns,
+                                AERON_SUBSCRIPTION_TETHER_ACTIVE,
+                                AERON_SUBSCRIPTION_TETHER_LINGER,
+                                image->stream_id,
+                                image->session_id);
                     }
                     break;
 
@@ -1137,6 +1145,14 @@ void aeron_publication_image_check_untethered_subscriptions(
                     {
                         aeron_driver_subscribable_state(
                             subscribable, tetherable_position, AERON_SUBSCRIPTION_TETHER_RESTING, now_ns);
+
+                        image->log.untethered_subscription_state_change(
+                                tetherable_position,
+                                now_ns,
+                                AERON_SUBSCRIPTION_TETHER_LINGER,
+                                AERON_SUBSCRIPTION_TETHER_RESTING,
+                                image->stream_id,
+                                image->session_id);
                     }
                     break;
 
@@ -1159,6 +1175,14 @@ void aeron_publication_image_check_untethered_subscriptions(
 
                         aeron_driver_subscribable_state(
                             subscribable, tetherable_position, AERON_SUBSCRIPTION_TETHER_ACTIVE, now_ns);
+
+                        image->log.untethered_subscription_state_change(
+                                tetherable_position,
+                                now_ns,
+                                AERON_SUBSCRIPTION_TETHER_RESTING,
+                                AERON_SUBSCRIPTION_TETHER_ACTIVE,
+                                image->stream_id,
+                                image->session_id);
                     }
                     break;
             }

@@ -1186,9 +1186,10 @@ void aeron_network_publication_check_untethered_subscriptions(
                         aeron_driver_subscribable_state(
                             subscribable, tetherable_position, AERON_SUBSCRIPTION_TETHER_LINGER, now_ns);
 
-                        conductor->context->log.untethered_subscription_on_state_change(
+                        publication->log.untethered_subscription_state_change(
                             tetherable_position,
                             now_ns,
+                            AERON_SUBSCRIPTION_TETHER_ACTIVE,
                             AERON_SUBSCRIPTION_TETHER_LINGER,
                             publication->stream_id,
                             publication->session_id);
@@ -1201,9 +1202,10 @@ void aeron_network_publication_check_untethered_subscriptions(
                         aeron_driver_subscribable_state(
                             subscribable, tetherable_position, AERON_SUBSCRIPTION_TETHER_RESTING, now_ns);
 
-                        conductor->context->log.untethered_subscription_on_state_change(
+                        publication->log.untethered_subscription_state_change(
                             tetherable_position,
                             now_ns,
+                            AERON_SUBSCRIPTION_TETHER_LINGER,
                             AERON_SUBSCRIPTION_TETHER_RESTING,
                             publication->stream_id,
                             publication->session_id);
@@ -1230,9 +1232,10 @@ void aeron_network_publication_check_untethered_subscriptions(
                         aeron_driver_subscribable_state(
                             subscribable, tetherable_position, AERON_SUBSCRIPTION_TETHER_ACTIVE, now_ns);
 
-                        conductor->context->log.untethered_subscription_on_state_change(
+                        publication->log.untethered_subscription_state_change(
                             tetherable_position,
                             now_ns,
+                            AERON_SUBSCRIPTION_TETHER_RESTING,
                             AERON_SUBSCRIPTION_TETHER_ACTIVE,
                             publication->stream_id,
                             publication->session_id);

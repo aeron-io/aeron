@@ -822,6 +822,7 @@ void aeron_driver_agent_incoming_msg(
 void aeron_driver_agent_untethered_subscription_state_change(
     aeron_tetherable_position_t *tetherable_position,
     int64_t now_ns,
+    aeron_subscription_tether_state_t old_state,
     aeron_subscription_tether_state_t new_state,
     int32_t stream_id,
     int32_t session_id)
@@ -841,7 +842,7 @@ void aeron_driver_agent_untethered_subscription_state_change(
         hdr->subscription_id = tetherable_position->subscription_registration_id;
         hdr->stream_id = stream_id;
         hdr->session_id = session_id;
-        hdr->old_state = tetherable_position->state;
+        hdr->old_state = old_state;
         hdr->new_state = new_state;
 
         aeron_mpsc_rb_commit(&logging_mpsc_rb, offset);

@@ -443,12 +443,13 @@ TEST_F(DriverAgentTest, shouldLogUntetheredSubscriptionStateChange)
     int32_t session_id = 21;
     int64_t subscription_id = 56;
     aeron_tetherable_position_t tetherable_position = {};
-    tetherable_position.state = old_state;
+    tetherable_position.state = AERON_SUBSCRIPTION_TETHER_LINGER;
     tetherable_position.subscription_registration_id = subscription_id;
 
     aeron_driver_agent_untethered_subscription_state_change(
         &tetherable_position,
         now_ns,
+        old_state,
         new_state,
         stream_id,
         session_id);
