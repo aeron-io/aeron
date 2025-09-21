@@ -2012,7 +2012,7 @@ public final class ChannelUriStringBuilder
      * @return correlation id of an image from the response "server's" subscription.
      * @see CommonContext#RESPONSE_CORRELATION_ID_PARAM_NAME
      */
-    public Long responseCorrelationId()
+    public String responseCorrelationId()
     {
         return responseCorrelationId;
     }

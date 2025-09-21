@@ -68,7 +68,7 @@ class ArchiveConductorTest
         sessionIdField.trySetAccessible();
         assertEquals(424242424242L, sessionIdField.get(builder));
         assertEquals("test-stripped-channel", builder.alias());
-        assertEquals(88888888881L, builder.responseCorrelationId());
+        assertEquals("88888888881", builder.responseCorrelationId());
         assertEquals("publisher:10101", builder.responseEndpoint());
         assertEquals(3, builder.ttl());
         assertEquals(-654, builder.streamId());
