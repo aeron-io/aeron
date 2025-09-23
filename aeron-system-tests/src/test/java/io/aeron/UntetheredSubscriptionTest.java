@@ -299,15 +299,15 @@ class UntetheredSubscriptionTest
     void shouldSetConnectedStatusCorrectlyWhenUntetheredSpyReconnectsAfterResting(final boolean spiesSimulateConnection)
     {
         final String channel =
-            "aeron:udp?endpoint=localhost:5596|term-length=64k|tether=false|ssc=" + spiesSimulateConnection;
+            "aeron:udp?endpoint=localhost:5596|term-length=64k|ssc=" + spiesSimulateConnection;
         launch(channel);
 
         final AtomicLong spyUnavailableImageCount = new AtomicLong();
         final AtomicLong spyAvailableImageCount = new AtomicLong();
         try (Publication publication = aeron.addExclusivePublication(channel, STREAM_ID);
-            Subscription subscription = aeron.addSubscription(channel, STREAM_ID);
+            Subscription subscription = aeron.addSubscription(channel + "|tether=true", STREAM_ID);
             Subscription spy = aeron.addSubscription(
-                CommonContext.SPY_PREFIX + channel,
+                CommonContext.SPY_PREFIX + channel + "|tether=false",
                 STREAM_ID,
                 (image) -> spyAvailableImageCount.incrementAndGet(),
                 (image) -> spyUnavailableImageCount.incrementAndGet()))
@@ -367,6 +367,78 @@ class UntetheredSubscriptionTest
                 }
                 while (System.nanoTime() < endNs);
             }
+        }
+    }
+
+    @Test
+    @SuppressWarnings("try")
+    @InterruptAfter(10)
+    void shouldSetConnectedStatusCorrectlyWhenUntetheredIpcSubscriptionReconnectsAfterResting()
+    {
+        TestMediaDriver.notSupportedOnCMediaDriver("pending fixes");
+        final String channel =
+            "aeron:ipc?endpoint=localhost:5596|term-length=64k|untethered-resting-timeout=300ms";
+        launch(channel);
+
+        final AtomicLong unavailableImageCount = new AtomicLong();
+        final AtomicLong availableImageCount = new AtomicLong();
+        try (Publication publication = aeron.addExclusivePublication(channel, STREAM_ID);
+            Subscription subscription = aeron.addSubscription(channel, STREAM_ID);
+            Subscription untetheredSubscription = aeron.addSubscription(
+                channel + "|tether=false",
+                STREAM_ID,
+                (image) -> availableImageCount.incrementAndGet(),
+                (image) -> unavailableImageCount.incrementAndGet()))
+        {
+            while (!publication.isConnected() || !subscription.isConnected() || !untetheredSubscription.isConnected())
+            {
+                Tests.yield();
+                aeron.conductorAgentInvoker().invoke();
+            }
+            assertEquals(1, availableImageCount.get());
+
+            final UnsafeBuffer data = new UnsafeBuffer(new byte[1024]);
+            ThreadLocalRandom.current().nextBytes(data.byteArray());
+            final FragmentHandler fragmentHandler = (buffer, offset, length, header) -> {};
+            while (0 == unavailableImageCount.get())
+            {
+                if (publication.offer(data) > 0)
+                {
+                    while (0 == subscription.poll(fragmentHandler, 1))
+                    {
+                        Tests.yield();
+                    }
+                }
+
+                Tests.yield();
+                aeron.conductorAgentInvoker().invoke();
+            }
+
+            final int subPosCounterId = subscription.imageBySessionId(publication.sessionId()).subscriberPositionId();
+            subscription.close();
+            final CountersReader countersReader = aeron.countersReader();
+            // await subscription close
+            while (CountersReader.RECORD_ALLOCATED == countersReader.getCounterState(subPosCounterId))
+            {
+                Tests.yield();
+                aeron.conductorAgentInvoker().invoke();
+            }
+
+            boolean publicationWasDisconnected = !publication.isConnected();
+            while (2 != availableImageCount.get()) // wait for re-connect after resting
+            {
+                Tests.yield();
+                aeron.conductorAgentInvoker().invoke();
+                if (!publication.isConnected())
+                {
+                    publicationWasDisconnected = true;
+                }
+            }
+
+            assertTrue(publicationWasDisconnected);
+            Tests.awaitConnected(publication);
+
+            assertEquals(publication.position(), untetheredSubscription.imageAtIndex(0).position());
         }
     }
 
