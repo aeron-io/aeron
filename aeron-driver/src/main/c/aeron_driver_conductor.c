@@ -6106,6 +6106,7 @@ void aeron_driver_conductor_on_create_publication_image(void *clientd, void *ite
     {
         aeron_counters_manager_free(&conductor->counters_manager, rcv_hwm_position.counter_id);
         aeron_counters_manager_free(&conductor->counters_manager, rcv_pos_position.counter_id);
+        aeron_counters_manager_free(&conductor->counters_manager, rcv_naks_sent.counter_id);
         AERON_APPEND_ERR("stream_id=%d session_id=%d", command->stream_id, command->session_id);
         goto error_cleanup;
     }
