@@ -58,7 +58,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static io.aeron.cluster.UnexpectedElectionTest.ClusterClient.NODE_0_INGRESS;
 import static io.aeron.cluster.client.AeronCluster.SESSION_HEADER_LENGTH;
-import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.LOG_FRAGMENT_LIMIT_DEFAULT;
 import static io.aeron.logbuffer.LogBufferDescriptor.computeFragmentedFrameLength;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -86,6 +85,7 @@ public class UnexpectedElectionTest
     @TempDir
     public Path clientDir;
 
+    @SuppressWarnings("MethodLength")
     @Test
     @InterruptAfter(10)
     public void shouldElectionBetweenFragmentedServiceMessageAvoidDuplicateServiceMessage()
@@ -95,13 +95,22 @@ public class UnexpectedElectionTest
              ClusterNode node1 = new ClusterNode(1, 0, nodeDir1, waitingToOfferFragmentedMessage);
              ClusterNode node2 = new ClusterNode(2, 0, nodeDir2, waitingToOfferFragmentedMessage))
         {
+            node0.consensusModuleContext.leaderHeartbeatTimeoutNs(TimeUnit.SECONDS.toNanos(1));
+            node1.consensusModuleContext.leaderHeartbeatTimeoutNs(TimeUnit.SECONDS.toNanos(1));
+            node2.consensusModuleContext.leaderHeartbeatTimeoutNs(TimeUnit.SECONDS.toNanos(1));
+
+            node0.launch();
+            node1.launch();
+            node2.launch();
+
             Tests.await(() ->
             {
-                node0.poll(); node1.poll(); node2.poll();
+                node0.poll();
+                node1.poll();
+                node2.poll();
                 return node0.started() && node1.started() && node2.started();
             });
             assertTrue(node0.isLeader());
-
             final long initialLeadershipTermId = node0.leadershipTermId();
 
             try (ClusterClient client0 = new ClusterClient(NODE_0_INGRESS, clientDir))
@@ -117,7 +126,9 @@ public class UnexpectedElectionTest
                 NEW_LEADERSHIP_TERM_LENGTH + SESSION_OPEN_LENGTH_BLOCK_LENGTH + SESSION_CLOSE_LENGTH;
             Tests.await(() ->
             {
-                node0.poll(); node1.poll(); node2.poll();
+                node0.poll();
+                node1.poll();
+                node2.poll();
                 return node0.publicationPosition() > expectedPositionLowerBound &&
                     node0.publicationPosition() == node0.commitPosition() &&
                     node0.commitPosition() == node1.commitPosition() &&
@@ -128,7 +139,9 @@ public class UnexpectedElectionTest
             waitingToOfferFragmentedMessage.set(false);
             Tests.await(() ->
             {
-                node0.poll(); node1.poll(); node2.poll();
+                node0.poll();
+                node1.poll();
+                node2.poll();
                 return node0.commitPosition() > commitPositionBeforeFragmentedMessage &&
                     node0.commitPosition() < (commitPositionBeforeFragmentedMessage + EIGHT_MEGABYTES);
             });
@@ -137,15 +150,15 @@ public class UnexpectedElectionTest
             Tests.await(() -> node0.appendPosition() == expectedAppendPosition);
 
             Tests.sleep(TimeUnit.NANOSECONDS.toMillis(node0.consensusModule.context().leaderHeartbeatTimeoutNs()) + 1);
-
             assertTrue(node0.consensusModulePosition() < node0.commitPosition());
 
             Tests.await(() ->
             {
-                node0.poll(); node1.poll(); node2.poll();
+                node0.poll();
+                node1.poll();
+                node2.poll();
                 return node0.electionStarted();
             });
-
             assertEquals(node0.commitPosition(), node0.consensusModulePosition());
 
             Tests.await(() ->
@@ -158,7 +171,9 @@ public class UnexpectedElectionTest
 
             Tests.await(() ->
             {
-                node0.poll(); node1.poll(); node2.poll();
+                node0.poll();
+                node1.poll();
+                node2.poll();
                 return node0.publicationPosition() == node0.commitPosition() &&
                     node0.commitPosition() == node1.commitPosition() &&
                     node0.commitPosition() == node2.commitPosition() &&
@@ -183,10 +198,21 @@ public class UnexpectedElectionTest
     public void shouldHandleSnapshotWithFragmentedMessageInLog()
     {
         final AtomicBoolean waitingToOfferFragmentedMessage = new AtomicBoolean(true);
-        try (ClusterNode node0 = new ClusterNode(0, 0, nodeDir0, waitingToOfferFragmentedMessage, 1, 1000);
-            ClusterNode node1 = new ClusterNode(1, 0, nodeDir1, waitingToOfferFragmentedMessage, 1000, 1000);
-            ClusterNode node2 = new ClusterNode(2, 0, nodeDir2, waitingToOfferFragmentedMessage, 1000, 1000))
+        try (ClusterNode node0 = new ClusterNode(0, 0, nodeDir0, waitingToOfferFragmentedMessage);
+            ClusterNode node1 = new ClusterNode(1, 0, nodeDir1, waitingToOfferFragmentedMessage);
+            ClusterNode node2 = new ClusterNode(2, 0, nodeDir2, waitingToOfferFragmentedMessage))
         {
+            node0.consensusModuleContext.logFragmentLimit(1);
+            node1.consensusModuleContext.logFragmentLimit(1000);
+            node2.consensusModuleContext.logFragmentLimit(1000);
+            node0.clusteredServiceContext.logFragmentLimit(1000);
+            node1.clusteredServiceContext.logFragmentLimit(1000);
+            node2.clusteredServiceContext.logFragmentLimit(1000);
+
+            node0.launch();
+            node1.launch();
+            node2.launch();
+
             Tests.await(() ->
             {
                 node0.poll();
@@ -285,50 +311,48 @@ public class UnexpectedElectionTest
             "2,localhost:10202,localhost:10203,localhost:10204,localhost:10205,localhost:10201";
         private static final Map<Integer, String> MEMBER_ARCHIVE_PORT = Map.of(0, "10001", 1, "10101", 2, "10201");
 
-        private final MediaDriver mediaDriver;
-        private final Archive archive;
-        private final ConsensusModule consensusModule;
-        private final ClusteredServiceContainer serviceContainer;
+        private final MediaDriver.Context mediaDriverContext;
+        private final Archive.Context archiveContext;
+        private final ConsensusModule.Context consensusModuleContext;
+        private final ClusteredServiceContainer.Context clusteredServiceContext;
         private final TestClusteredService clusteredService;
+
+        private MediaDriver mediaDriver;
+        private Archive archive;
+        private ConsensusModule consensusModule;
+        private ClusteredServiceContainer serviceContainer;
 
         private int recordingPositionCounterId = Aeron.NULL_VALUE;
         private int serviceSubscriberPositionCounterId = Aeron.NULL_VALUE;
         private int consensusModuleSubscriberPositionCounterId = Aeron.NULL_VALUE;
 
-        ClusterNode(
-            final int clusterMemberId,
+        ClusterNode(final int clusterMemberId,
             final int appointedLeader,
             final Path directory,
-            final AtomicBoolean waiting,
-            final int consensusModuleFragmentLimit,
-            final int clusteredServiceFragmentLimit)
+            final AtomicBoolean waiting)
         {
-            final MediaDriver.Context mediaDriverContext = new MediaDriver.Context()
+            mediaDriverContext = new MediaDriver.Context()
                 .aeronDirectoryName(directory.resolve("driver").toAbsolutePath().toString())
                 .dirDeleteOnStart(true)
                 .termBufferSparseFile(true)
                 .threadingMode(ThreadingMode.SHARED);
-            mediaDriver = MediaDriver.launchEmbedded(mediaDriverContext);
 
-            final Archive.Context archiveContext = new Archive.Context()
+            archiveContext = new Archive.Context()
                 .aeronDirectoryName(mediaDriverContext.aeronDirectoryName())
                 .archiveDir(directory.resolve("archive").toFile())
                 .controlChannel("aeron:udp?endpoint=localhost:" + MEMBER_ARCHIVE_PORT.get(clusterMemberId))
                 .recordingEventsEnabled(false)
                 .replicationChannel("aeron:udp?endpoint=localhost:0")
                 .threadingMode(ArchiveThreadingMode.SHARED);
-            archive = Archive.launch(archiveContext);
 
             clusteredService = new TestClusteredService(waiting);
-            final ClusteredServiceContainer.Context clusteredCtx = new ClusteredServiceContainer.Context()
+            clusteredServiceContext = new ClusteredServiceContainer.Context()
                 .controlChannel("aeron:ipc")
                 .clusterDir(directory.resolve("cluster").toFile())
                 .aeronDirectoryName(mediaDriverContext.aeronDirectoryName())
-                .logFragmentLimit(clusteredServiceFragmentLimit)
                 .clusteredService(clusteredService);
-            serviceContainer = ClusteredServiceContainer.launch(clusteredCtx);
 
-            final ConsensusModule.Context consensusCtx = new ConsensusModule.Context()
+            consensusModuleContext = new ConsensusModule.Context()
                 .appointedLeaderId(appointedLeader)
                 .aeronDirectoryName(mediaDriverContext.aeronDirectoryName())
                 .clusterDir(directory.resolve("cluster").toFile())
@@ -338,27 +362,16 @@ public class UnexpectedElectionTest
                 .egressChannel("aeron:udp")
                 .replicationChannel("aeron:udp?endpoint=localhost:0")
                 .serviceCount(1)
-                .logFragmentLimit(consensusModuleFragmentLimit)
-                .useAgentInvoker(true)
-                .leaderHeartbeatTimeoutNs(TimeUnit.SECONDS.toNanos(1));
-            consensusModule = ConsensusModule.launch(consensusCtx);
+                .useAgentInvoker(true);
         }
 
-        ClusterNode(
-            final int clusterMemberId,
-            final int appointedLeader,
-            final Path directory,
-            final AtomicBoolean waiting)
+        public void launch()
         {
-            this(
-                clusterMemberId,
-                appointedLeader,
-                directory,
-                waiting,
-                LOG_FRAGMENT_LIMIT_DEFAULT,
-                LOG_FRAGMENT_LIMIT_DEFAULT);
+            mediaDriver = MediaDriver.launchEmbedded(mediaDriverContext);
+            archive = Archive.launch(archiveContext);
+            serviceContainer = ClusteredServiceContainer.launch(clusteredServiceContext);
+            consensusModule = ConsensusModule.launch(consensusModuleContext);
         }
-
 
         public boolean started()
         {
