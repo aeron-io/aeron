@@ -166,7 +166,7 @@ public class UnexpectedElectionTest
                 node0.poll();
                 node1.poll();
                 node2.poll();
-                return node0.started();
+                return node0.started() && node1.started() && node2.started();
             });
             assertTrue(node0.isLeader());
             assertTrue(initialLeadershipTermId < node0.leadershipTermId());
@@ -281,9 +281,7 @@ public class UnexpectedElectionTest
                 node2.poll();
                 return ConsensusModule.State.ACTIVE == node0.clusterState();
             });
-
             assertEquals(1L, node0.consensusModule.context().snapshotCounter().get());
-
             assertTrue(expectedAppendPosition < node0.servicePosition());
             assertTrue(node0.consensusModulePosition() < expectedAppendPosition);
 
@@ -292,7 +290,13 @@ public class UnexpectedElectionTest
                 node0.poll();
                 node1.poll();
                 node2.poll();
-                return expectedAppendPosition < node0.consensusModulePosition();
+                return expectedAppendPosition < node0.consensusModulePosition() &&
+                    node0.publicationPosition() == node0.commitPosition() &&
+                    node0.commitPosition() == node1.commitPosition() &&
+                    node0.commitPosition() == node2.commitPosition() &&
+                    node0.commitPosition() == node0.servicePosition() &&
+                    node1.commitPosition() == node1.servicePosition() &&
+                    node2.commitPosition() == node2.servicePosition();
             });
 
             assertEquals(1, node0.offeredServiceMessages());
