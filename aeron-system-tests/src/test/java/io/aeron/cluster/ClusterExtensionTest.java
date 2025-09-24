@@ -23,7 +23,6 @@ import io.aeron.test.Tests;
 import io.aeron.test.cluster.TestCluster;
 import io.aeron.test.cluster.TestNode;
 import org.agrona.concurrent.UnsafeBuffer;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
@@ -48,7 +47,6 @@ public class ClusterExtensionTest
     @TempDir
     public Path clientDir;
 
-    @Disabled
     @Test
     @InterruptAfter(5)
     @SuppressWarnings("methodLength")
