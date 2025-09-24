@@ -233,8 +233,7 @@ final class ConsensusModuleAgent
     private String catchupLogDestination;
     private String ingressEndpoints;
     private StandbySnapshotReplicator standbySnapshotReplicator = null;
-    private String localLogChannel;
-    private Subscription extensionLeaderSubscription = null;
+    private Subscription leaderLogSubscription = null;
 
     ConsensusModuleAgent(final ConsensusModule.Context ctx)
     {
@@ -1480,13 +1479,15 @@ final class ConsensusModuleAgent
         {
             awaitLocalSocketsClosed(logSubscriptionRegistrationId);
         }
+
         if (null != consensusModuleExtension)
         {
             consensusModuleExtension.onPrepareForNewLeadership();
-
-            CloseHelper.quietClose(extensionLeaderSubscription);
-            extensionLeaderSubscription = null;
         }
+
+        CloseHelper.quietClose(leaderLogSubscription);
+        leaderLogSubscription = null;
+        logAdapter.isLiveLeaderMode(false);
 
         return lastAppendPosition;
     }
@@ -1728,7 +1729,7 @@ final class ConsensusModuleAgent
         if (null != consensusModuleExtension)
         {
             consensusModuleExtension.onNewLeadershipTerm(
-                new ConsensusControlState(null, null, logRecordingId, leadershipTermId));
+                new ConsensusControlState(null, logRecordingId, leadershipTermId));
         }
     }
 
@@ -1795,7 +1796,13 @@ final class ConsensusModuleAgent
             idle();
         }
 
-        localLogChannel = isIpc ? channel : SPY_PREFIX + channel;
+        final String localLogChannel = isIpc ? channel : SPY_PREFIX + channel;
+
+        connectLeaderLogSubscription(localLogChannel, logPosition);
+        final Image image = leaderLogSubscription.imageAtIndex(0);
+        logAdapter.image(image);
+        logAdapter.isLiveLeaderMode(true);
+
         awaitServicesReady(
             localLogChannel,
             ctx.logStreamId(),
@@ -1804,29 +1811,36 @@ final class ConsensusModuleAgent
             Long.MAX_VALUE,
             isStartup,
             Cluster.Role.LEADER);
-
-        connectLeaderLogSubscriptionForExtension(logPosition);
     }
 
-    private void connectLeaderLogSubscriptionForExtension(final long logPosition)
+    private void connectLeaderLogSubscription(final String localLogChannel, final long logPosition)
     {
-        if (null != consensusModuleExtension)
+        final Subscription subscription = aeron.addSubscription(localLogChannel, ctx.logStreamId());
+        while (0 == subscription.imageCount())
         {
-            final Subscription subscription = aeron.addSubscription(localLogChannel, ctx.logStreamId());
-            while (0 == subscription.imageCount())
-            {
-                idle();
-            }
+            idle();
+        }
 
-            final long joinPosition = subscription.imageAtIndex(0).joinPosition();
-            if (joinPosition != logPosition)
-            {
-                throw new ClusterException(
-                    "Extension subscription " +
-                    "joinPosition (" + joinPosition + ") does not match logPosition (" + logPosition + ")");
-            }
+        final long joinPosition = subscription.imageAtIndex(0).joinPosition();
+        if (joinPosition != logPosition)
+        {
+            throw new ClusterException(
+                "Extension subscription " +
+                "joinPosition (" + joinPosition + ") does not match logPosition (" + logPosition + ")");
+        }
 
-            this.extensionLeaderSubscription = subscription;
+        this.leaderLogSubscription = subscription;
+    }
+
+    private void drainLeaderLogAdapterToCommitPosition()
+    {
+        if (Cluster.Role.LEADER == role)
+        {
+            final long boundaryPosition = commitPosition.getWeak();
+            while (logAdapter.position() < boundaryPosition)
+            {
+                logAdapter.poll(boundaryPosition);
+            }
         }
     }
 
@@ -1996,7 +2010,6 @@ final class ConsensusModuleAgent
             timeOfLastLogUpdateNs = nowNs;
             timeOfLastAppendPositionUpdateNs = nowNs;
             timeOfLastAppendPositionSendNs = nowNs;
-            localLogChannel = null;
         }
         NodeControl.ToggleState.activate(nodeControlToggle);
 
@@ -2012,7 +2025,6 @@ final class ConsensusModuleAgent
         {
             consensusModuleExtension.onElectionComplete(new ConsensusControlState(
                 logPublisher.publication(),
-                extensionLeaderSubscription,
                 logRecordingId,
                 leadershipTermId
             ));
@@ -2544,6 +2556,10 @@ final class ConsensusModuleAgent
                     workCount += tracker.poll();
                 }
                 workCount += ingressAdapter.poll();
+            }
+            if (ConsensusModule.State.ACTIVE == state || ConsensusModule.State.SUSPENDED == state)
+            {
+                workCount += logAdapter.poll(commitPosition.getWeak());
             }
 
             workCount += updateLeaderPosition(nowNs);
@@ -3460,6 +3476,8 @@ final class ConsensusModuleAgent
         {
             throw new IllegalStateException("election in progress");
         }
+
+        drainLeaderLogAdapterToCommitPosition();
 
         role(Cluster.Role.FOLLOWER);
 
