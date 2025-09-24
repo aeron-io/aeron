@@ -1836,8 +1836,7 @@ final class ConsensusModuleAgent
             final long boundaryPosition = commitPosition.getWeak();
             while (logAdapter.position() < boundaryPosition)
             {
-                final int poll = logAdapter.poll(boundaryPosition);
-                assert poll != 0;
+                logAdapter.poll(boundaryPosition);
             }
         }
     }
