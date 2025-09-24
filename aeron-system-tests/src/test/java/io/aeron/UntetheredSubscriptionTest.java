@@ -375,7 +375,6 @@ class UntetheredSubscriptionTest
     @InterruptAfter(10)
     void shouldSetConnectedStatusCorrectlyWhenUntetheredIpcSubscriptionReconnectsAfterResting()
     {
-        TestMediaDriver.notSupportedOnCMediaDriver("pending fixes");
         final String channel =
             "aeron:ipc?endpoint=localhost:5596|term-length=64k|untethered-resting-timeout=300ms";
         launch(channel);

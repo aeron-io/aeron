@@ -568,7 +568,10 @@ void aeron_ipc_publication_on_time_event(
             }
             else
             {
-
+                aeron_ipc_publication_check_untethered_subscriptions(conductor, publication, now_ns);
+                AERON_SET_RELEASE(
+                    publication->log_meta_data->is_connected,
+                    aeron_driver_subscribable_working_position_count(&publication->conductor_fields.subscribable) > 0);
                 const int64_t producer_position = aeron_ipc_publication_producer_position(publication);
                 aeron_counter_set_release(publication->pub_pos_position.value_addr, producer_position);
 
@@ -577,7 +580,6 @@ void aeron_ipc_publication_on_time_event(
                     aeron_ipc_publication_check_for_blocked_publisher(publication, producer_position, now_ns);
                 }
 
-                aeron_ipc_publication_check_untethered_subscriptions(conductor, publication, now_ns);
                 aeron_ipc_publication_check_cooldown_status(conductor, publication, now_ns);
             }
             break;

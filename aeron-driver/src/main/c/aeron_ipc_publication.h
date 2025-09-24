@@ -137,9 +137,7 @@ inline void aeron_ipc_publication_remove_subscriber_hook(void *clientd, volatile
 {
     aeron_ipc_publication_t *publication = (aeron_ipc_publication_t *)clientd;
 
-    aeron_ipc_publication_update_pub_pos_and_lmt(publication);
-
-    if (1 == publication->conductor_fields.subscribable.length && NULL != publication->mapped_raw_log.mapped_file.addr)
+    if (1 == aeron_driver_subscribable_working_position_count(&publication->conductor_fields.subscribable))
     {
         AERON_SET_RELEASE(publication->log_meta_data->is_connected, 0);
     }
