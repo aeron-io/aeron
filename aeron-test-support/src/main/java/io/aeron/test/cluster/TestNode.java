@@ -84,7 +84,7 @@ public final class TestNode implements AutoCloseable
     private final TestService[] services;
     private final Context context;
     private final TestMediaDriver mediaDriver;
-    private final ConsensusModuleExtension extension;
+    private final TestConsensusModuleExtension extension;
     private boolean isClosed = false;
 
     TestNode(final Context context, final DataCollector dataCollector)
@@ -1270,7 +1270,7 @@ public final class TestNode implements AutoCloseable
         final AtomicBoolean[] hasServiceTerminated;
         final String hostName;
         final TestService[] services;
-        Supplier<ConsensusModuleExtension> extensionSupplier;
+        Supplier<TestConsensusModuleExtension> extensionSupplier;
 
         Context(final TestService[] services, final String hostName, final String nodeMappings)
         {

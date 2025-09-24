@@ -163,7 +163,9 @@ public class UnexpectedElectionTest
 
             Tests.await(() ->
             {
-                node0.poll(); node1.poll(); node2.poll();
+                node0.poll();
+                node1.poll();
+                node2.poll();
                 return node0.started();
             });
             assertTrue(node0.isLeader());

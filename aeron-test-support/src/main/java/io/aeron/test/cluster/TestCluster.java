@@ -34,7 +34,6 @@ import io.aeron.cluster.ClusterMember;
 import io.aeron.cluster.ClusterMembership;
 import io.aeron.cluster.ClusterTool;
 import io.aeron.cluster.ConsensusModule;
-import io.aeron.cluster.ConsensusModuleExtension;
 import io.aeron.cluster.ElectionState;
 import io.aeron.cluster.NodeControl;
 import io.aeron.cluster.RecordingLog;
@@ -179,7 +178,7 @@ public final class TestCluster implements AutoCloseable
     private String clusterBaseDir;
     private ClusterBackup.Configuration.ReplayStart replayStart;
     private List<String> hostnames;
-    private Supplier<ConsensusModuleExtension> extensionSupplier;
+    private Supplier<TestNode.TestConsensusModuleExtension> extensionSupplier;
 
     private TestCluster(
         final int clusterId,
@@ -2182,7 +2181,7 @@ public final class TestCluster implements AutoCloseable
         private String clusterBaseDir = System.getProperty(
             CLUSTER_BASE_DIR_PROP_NAME, CommonContext.generateRandomDirName());
         private boolean useResponseChannels = false;
-        private Supplier<ConsensusModuleExtension> extensionSupplier;
+        private Supplier<TestNode.TestConsensusModuleExtension> extensionSupplier;
         private List<String> hostnames;
 
         public Builder withStaticNodes(final int nodeCount)
@@ -2330,7 +2329,7 @@ public final class TestCluster implements AutoCloseable
                     "Unable to start " + toStart + " nodes, only " + nodeCount + " available");
             }
 
-            if (hasExtension)
+            if (null != extensionSupplier)
             {
                 serviceSupplier = (index) -> new TestNode.TestService[0];
             }
@@ -2385,9 +2384,9 @@ public final class TestCluster implements AutoCloseable
             return testCluster;
         }
 
-        public Builder withExtension(final boolean hasExtension)
+        public Builder withExtensionSuppler(final Supplier<TestNode.TestConsensusModuleExtension> extensionSuppler)
         {
-            this.hasExtension = hasExtension;
+            this.extensionSupplier = extensionSuppler;
             return this;
         }
     }
@@ -2397,7 +2396,7 @@ public final class TestCluster implements AutoCloseable
         this.replayStart = replayStart;
     }
 
-    private void extensionSupplier(final Supplier<ConsensusModuleExtension> extensionSupplier)
+    private void extensionSupplier(final Supplier<TestNode.TestConsensusModuleExtension> extensionSupplier)
     {
         this.extensionSupplier = extensionSupplier;
     }
