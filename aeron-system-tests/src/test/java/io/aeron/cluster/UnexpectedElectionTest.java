@@ -80,6 +80,8 @@ public class UnexpectedElectionTest
             try (ClusterExtensionTestUtil.ClusterClient client0 = new ClusterExtensionTestUtil.ClusterClient(
                 NODE_0_INGRESS, clientDir))
             {
+                client0.launch();
+
                 Tests.await(() ->
                 {
                     node0.poll(); node1.poll(); node2.poll();
@@ -199,6 +201,8 @@ public class UnexpectedElectionTest
             try (ClusterExtensionTestUtil.ClusterClient client0 = new ClusterExtensionTestUtil.ClusterClient(
                 NODE_0_INGRESS, clientDir))
             {
+                client0.launch();
+
                 Tests.await(() ->
                 {
                     node0.poll();

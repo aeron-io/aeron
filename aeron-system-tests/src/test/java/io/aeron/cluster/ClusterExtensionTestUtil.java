@@ -38,12 +38,14 @@ import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.Header;
 import io.aeron.protocol.DataHeaderFlyweight;
 import io.aeron.test.cluster.StubClusteredService;
+import io.aeron.test.cluster.TestNode;
 import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.CountersReader;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -87,7 +89,8 @@ public class ClusterExtensionTestUtil
         private int serviceSubscriberPositionCounterId = Aeron.NULL_VALUE;
         private int consensusModuleSubscriberPositionCounterId = Aeron.NULL_VALUE;
 
-        ClusterNode(final int clusterMemberId,
+        ClusterNode(
+            final int clusterMemberId,
             final int appointedLeader,
             final Path directory,
             final AtomicBoolean waiting)
@@ -130,7 +133,10 @@ public class ClusterExtensionTestUtil
         {
             mediaDriver = MediaDriver.launchEmbedded(mediaDriverContext);
             archive = Archive.launch(archiveContext);
-            serviceContainer = ClusteredServiceContainer.launch(clusteredServiceContext);
+            if (null == consensusModuleContext.consensusModuleExtension())
+            {
+                serviceContainer = ClusteredServiceContainer.launch(clusteredServiceContext);
+            }
             consensusModule = ConsensusModule.launch(consensusModuleContext);
         }
 
@@ -142,21 +148,6 @@ public class ClusterExtensionTestUtil
         public ClusteredServiceContainer.Context clusteredServiceContext()
         {
             return clusteredServiceContext;
-        }
-
-        MediaDriver mediaDriver()
-        {
-            return mediaDriver;
-        }
-
-        Archive archive()
-        {
-            return archive;
-        }
-
-        ConsensusModule consensusModule()
-        {
-            return consensusModule;
         }
 
         public boolean started()
@@ -200,7 +191,7 @@ public class ClusterExtensionTestUtil
 
         public long appendPosition()
         {
-            final Aeron aeron = serviceContainer.context().aeron();
+            final Aeron aeron = consensusModule.context().aeron();
             final CountersReader countersReader = aeron.countersReader();
 
             if (Aeron.NULL_VALUE == recordingPositionCounterId)
@@ -286,6 +277,20 @@ public class ClusterExtensionTestUtil
             return ElectionState.CLOSED != ElectionState.get(consensusModule.context().electionStateCounter());
         }
 
+        public long extensionIngressCount()
+        {
+            final TestNode.TestConsensusModuleExtension testConsensusModuleExtension =
+                (TestNode.TestConsensusModuleExtension)consensusModuleContext.consensusModuleExtension();
+            return testConsensusModuleExtension.ingressMessageCount().get();
+        }
+
+        public List<TestNode.TestExtensionSnapshot> extensionSnapshots()
+        {
+            final TestNode.TestConsensusModuleExtension testConsensusModuleExtension =
+                (TestNode.TestConsensusModuleExtension)consensusModuleContext.consensusModuleExtension();
+            return testConsensusModuleExtension.snapshots();
+        }
+
         @Override
         public void close()
         {
@@ -355,28 +360,44 @@ public class ClusterExtensionTestUtil
     {
         static final String NODE_0_INGRESS = "0=localhost:10002";
 
+        private MediaDriver.Context mediaDriverContext;
+        private AeronCluster.Context aeronClusterContext;
+
         private MediaDriver mediaDriver;
         private AeronCluster.AsyncConnect asyncConnect;
         private AeronCluster aeronCluster;
 
         ClusterClient(final String ingressEndpoints, final Path directory)
         {
-            final MediaDriver.Context mediaDriverContext = new MediaDriver.Context()
+            mediaDriverContext = new MediaDriver.Context()
                 .aeronDirectoryName(directory.resolve("driver").toAbsolutePath().toString())
                 .dirDeleteOnStart(true)
                 .termBufferSparseFile(true)
                 .publicationTermBufferLength(64 * 1024)
                 .ipcPublicationTermWindowLength(64 * 1024)
                 .threadingMode(ThreadingMode.SHARED);
-            final AeronCluster.Context aeronClusterContext = new AeronCluster.Context()
+            aeronClusterContext = new AeronCluster.Context()
                 .aeronDirectoryName(mediaDriverContext.aeronDirectoryName())
                 .ingressEndpoints(ingressEndpoints)
                 .ingressChannel("aeron:udp")
                 .egressChannel("aeron:udp?endpoint=localhost:0")
                 .controlledEgressListener(this);
+        }
 
+        public MediaDriver.Context mediaDriverContext()
+        {
+            return mediaDriverContext;
+        }
+
+        public void launch()
+        {
             mediaDriver = MediaDriver.launch(mediaDriverContext);
             asyncConnect = AeronCluster.asyncConnect(aeronClusterContext);
+        }
+
+        public AeronCluster aeronCluster()
+        {
+            return aeronCluster;
         }
 
         @Override
