@@ -34,7 +34,6 @@ import io.aeron.cluster.ClusterMember;
 import io.aeron.cluster.ClusterMembership;
 import io.aeron.cluster.ClusterTool;
 import io.aeron.cluster.ConsensusModule;
-import io.aeron.cluster.ConsensusModuleExtension;
 import io.aeron.cluster.ElectionState;
 import io.aeron.cluster.NodeControl;
 import io.aeron.cluster.RecordingLog;
@@ -45,6 +44,7 @@ import io.aeron.cluster.client.ControlledEgressListener;
 import io.aeron.cluster.client.EgressListener;
 import io.aeron.cluster.codecs.EventCode;
 import io.aeron.cluster.codecs.MessageHeaderDecoder;
+import io.aeron.cluster.codecs.MessageHeaderEncoder;
 import io.aeron.cluster.codecs.NewLeadershipTermEventDecoder;
 import io.aeron.cluster.service.Cluster;
 import io.aeron.driver.Configuration;
@@ -81,6 +81,7 @@ import org.agrona.collections.MutableLong;
 import org.agrona.concurrent.AgentInvoker;
 import org.agrona.concurrent.EpochClock;
 import org.agrona.concurrent.NoOpLock;
+import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.AtomicCounter;
 import org.agrona.concurrent.status.CountersReader;
 import org.mockito.internal.matchers.apachecommons.ReflectionEquals;
@@ -137,6 +138,9 @@ public final class TestCluster implements AutoCloseable
         "node0,localhost,localhost|" +
         "node1,localhost,localhost|" +
         "node2,localhost,localhost|";
+    public static final int EXTENSION_TEMPLATE_ID = 100001;
+    public static final int EXTENSION_SCHEMA_ID = 100002;
+    public static final short EXTENSION_VERSION = (short)1;
 
     private final DataCollector dataCollector = new DataCollector();
     private final ExpandableArrayBuffer msgBuffer = new ExpandableArrayBuffer();
@@ -182,7 +186,7 @@ public final class TestCluster implements AutoCloseable
     private List<String> hostnames;
     private Function<Aeron, Counter> errorCounterSupplier;
     private Function<Aeron, Counter> snapshotCounterSupplier;
-    private Supplier<ConsensusModuleExtension> extensionSupplier;
+    private Supplier<TestNode.TestConsensusModuleExtension> extensionSupplier;
 
     private TestCluster(
         final int clusterId,
@@ -843,6 +847,25 @@ public final class TestCluster implements AutoCloseable
         }
     }
 
+    public void sendExtensionMessages(final int messageCount)
+    {
+        final UnsafeBuffer buffer = new UnsafeBuffer(new byte[128]);
+        final MessageHeaderEncoder encoder = new MessageHeaderEncoder();
+        final int blockLength = 64;
+
+        encoder.wrap(buffer, 0);
+        encoder.blockLength(blockLength);
+        encoder.templateId(EXTENSION_TEMPLATE_ID);
+        encoder.schemaId(EXTENSION_SCHEMA_ID);
+        encoder.version(EXTENSION_VERSION);
+
+        for (int i = 0; i < messageCount; i++)
+        {
+            pollUntilMessageSent(
+                client.ingressPublication(), buffer, 0, MessageHeaderEncoder.ENCODED_LENGTH + blockLength);
+        }
+    }
+
     public void sendLargeMessages(final int messageCount)
     {
         final int messageLength = msgBuffer.putStringWithoutLengthAscii(0, LARGE_MSG);
@@ -964,6 +987,35 @@ public final class TestCluster implements AutoCloseable
             await(1);
         }
     }
+
+    public void pollUntilMessageSent(
+        final Publication pub,
+        final DirectBuffer buffer,
+        final int offset,
+        final int messageLength)
+    {
+        while (true)
+        {
+            final long position = pub.offer(buffer, offset, messageLength);
+            if (position > 0)
+            {
+                return;
+            }
+
+            if (Publication.ADMIN_ACTION == position)
+            {
+                continue;
+            }
+
+            if (Publication.MAX_POSITION_EXCEEDED == position)
+            {
+                throw new ClusterException("max position exceeded");
+            }
+
+            await(1);
+        }
+    }
+
 
     public void awaitResponseMessageCount(final int messageCount)
     {
@@ -2001,7 +2053,7 @@ public final class TestCluster implements AutoCloseable
                 0,
                 recordingPosition,
                 "aeron:udp?endpoint=localhost:6666",
-                100001);
+                EXTENSION_TEMPLATE_ID);
 
             final MutableLong position = new MutableLong();
             final MessageHeaderDecoder messageHeaderDecoder = new MessageHeaderDecoder();
@@ -2140,7 +2192,7 @@ public final class TestCluster implements AutoCloseable
             CLUSTER_BASE_DIR_PROP_NAME, CommonContext.generateRandomDirName());
         private String aeronBaseDir = CommonContext.generateRandomDirName();
         private boolean useResponseChannels = false;
-        private Supplier<ConsensusModuleExtension> extensionSupplier;
+        private Supplier<TestNode.TestConsensusModuleExtension> extensionSupplier;
         private List<String> hostnames;
         private Function<Aeron, Counter> errorCounterSupplier;
         private Function<Aeron, Counter> snapshotCounterSupplier;
@@ -2308,6 +2360,11 @@ public final class TestCluster implements AutoCloseable
                     "Unable to start " + toStart + " nodes, only " + nodeCount + " available");
             }
 
+            if (null != extensionSupplier)
+            {
+                serviceSupplier = (index) -> new TestNode.TestService[0];
+            }
+
             final TestCluster testCluster = new TestCluster(
                 clusterId,
                 nodeCount,
@@ -2361,7 +2418,7 @@ public final class TestCluster implements AutoCloseable
             return testCluster;
         }
 
-        public Builder withExtensionSuppler(final Supplier<ConsensusModuleExtension> extensionSuppler)
+        public Builder withExtensionSuppler(final Supplier<TestNode.TestConsensusModuleExtension> extensionSuppler)
         {
             this.extensionSupplier = extensionSuppler;
             return this;
@@ -2373,7 +2430,7 @@ public final class TestCluster implements AutoCloseable
         this.replayStart = replayStart;
     }
 
-    private void extensionSupplier(final Supplier<ConsensusModuleExtension> extensionSupplier)
+    private void extensionSupplier(final Supplier<TestNode.TestConsensusModuleExtension> extensionSupplier)
     {
         this.extensionSupplier = extensionSupplier;
     }

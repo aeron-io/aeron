@@ -70,6 +70,7 @@ import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Function;
 import java.util.function.IntPredicate;
@@ -98,7 +99,7 @@ public final class TestNode implements AutoCloseable
     private final TestService[] services;
     private final Context context;
     private final TestMediaDriver mediaDriver;
-    private final ConsensusModuleExtension extension;
+    private final TestConsensusModuleExtension extension;
     private boolean isClosed = false;
     private long logRecordingId = NULL_RECORDING_ID;
     private int logRecordingCounterId = NULL_COUNTER_ID;
@@ -448,22 +449,27 @@ public final class TestNode implements AutoCloseable
         return true;
     }
 
-    public void validateOnElectionState(final long minJoinPosition)
+    public void validateExtensionLogMessageCount(final int expectedCount)
     {
-        assertInstanceOf(TestConsensusModuleExtension.class, extension);
-        final ConsensusControlState onElectionConsensusControlState =
-            ((TestConsensusModuleExtension)extension).onElectionConsensusControlState;
-        assertNotNull(onElectionConsensusControlState);
-        if (onElectionConsensusControlState.isLeader())
+        final Supplier<String> msg =
+            () -> "invalid extension log message count, expected=" + expectedCount +
+                " actual=" + extension.logMessageCount.get();
+
+        while (extension.logMessageCount.get() != expectedCount)
         {
-            assertNotNull(onElectionConsensusControlState.leaderLogSubscription());
-            assertNotEquals(0, onElectionConsensusControlState.leaderLogSubscription().imageCount());
-            final Image image = onElectionConsensusControlState.leaderLogSubscription().imageAtIndex(0);
-            assertTrue(minJoinPosition <= image.joinPosition());
+            Tests.yieldingIdle(msg);
         }
-        else
+    }
+
+    public void validateExtensionIngressMessageCount(final int expectedCount)
+    {
+        final Supplier<String> msg =
+            () -> "invalid extension ingress message count, expected=" + expectedCount +
+                " actual=" + extension.logMessageCount.get();
+
+        while (extension.logMessageCount.get() != expectedCount)
         {
-            assertNull(onElectionConsensusControlState.leaderLogSubscription());
+            Tests.yieldingIdle(msg);
         }
     }
 
@@ -923,7 +929,8 @@ public final class TestNode implements AutoCloseable
     public static class TestConsensusModuleExtension implements ConsensusModuleExtension
     {
         private ConsensusControlState onElectionConsensusControlState;
-        private ConsensusControlState onNewLeadershipTermConsensusControlState;
+        private final AtomicLong logMessageCount = new AtomicLong(0);
+        private final AtomicLong ingressMessageCount = new AtomicLong(0);
 
         public int supportedSchemaId()
         {
@@ -956,7 +963,6 @@ public final class TestNode implements AutoCloseable
 
         public void onNewLeadershipTerm(final ConsensusControlState consensusControlState)
         {
-            onNewLeadershipTermConsensusControlState = consensusControlState;
         }
 
         public ControlledFragmentHandler.Action onIngressExtensionMessage(
@@ -969,6 +975,14 @@ public final class TestNode implements AutoCloseable
             final int length,
             final Header header)
         {
+            final ExclusivePublication log = onElectionConsensusControlState.logPublication();
+            ingressMessageCount.incrementAndGet();
+
+            while (log.offer(buffer, offset, length) < 0)
+            {
+                Tests.yield();
+            }
+
             return ControlledFragmentHandler.Action.CONTINUE;
         }
 
@@ -982,6 +996,7 @@ public final class TestNode implements AutoCloseable
             final int length,
             final Header header)
         {
+            logMessageCount.incrementAndGet();
             return ControlledFragmentHandler.Action.CONTINUE;
         }
 
@@ -1008,26 +1023,6 @@ public final class TestNode implements AutoCloseable
         public void onTakeSnapshot(final ExclusivePublication snapshotPublication)
         {
 
-        }
-
-        public long leaderSubscriptionJoinPosition()
-        {
-            if (null == onElectionConsensusControlState)
-            {
-                return NULL_VALUE;
-            }
-
-            if (null == onElectionConsensusControlState.leaderLogSubscription())
-            {
-                return NULL_VALUE;
-            }
-
-            if (0 == onElectionConsensusControlState.leaderLogSubscription().imageCount())
-            {
-                return NULL_VALUE;
-            }
-
-            return onNewLeadershipTermConsensusControlState.leaderLogSubscription().imageAtIndex(0).joinPosition();
         }
     }
 
@@ -1342,9 +1337,9 @@ public final class TestNode implements AutoCloseable
         final AtomicBoolean[] hasServiceTerminated;
         final String hostName;
         final TestService[] services;
-        Supplier<ConsensusModuleExtension> extensionSupplier;
         Function<Aeron, Counter> errorCounterSupplier;
         Function<Aeron, Counter> snapshotCounterSupplier;
+        Supplier<TestConsensusModuleExtension> extensionSupplier;
 
         Context(final TestService[] services, final String hostName, final String nodeMappings)
         {
