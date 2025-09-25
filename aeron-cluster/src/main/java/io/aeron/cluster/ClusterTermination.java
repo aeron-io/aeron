@@ -23,11 +23,13 @@ class ClusterTermination
 {
     private long deadlineNs;
     private boolean haveServicesTerminated;
+    private boolean extensionCanTerminate;
 
-    ClusterTermination(final long deadlineNs, final int serviceCount)
+    ClusterTermination(final long deadlineNs, final int serviceCount, final ConsensusModuleExtension extension)
     {
         this.deadlineNs = deadlineNs;
         this.haveServicesTerminated = serviceCount <= 0;
+        this.extensionCanTerminate = null == extension;
     }
 
     void deadlineNs(final long deadlineNs)
@@ -37,7 +39,7 @@ class ClusterTermination
 
     boolean canTerminate(final ClusterMember[] members, final long nowNs)
     {
-        if (haveServicesTerminated)
+        if (haveServicesTerminated && extensionCanTerminate)
         {
             boolean result = true;
 
@@ -59,6 +61,11 @@ class ClusterTermination
     void onServicesTerminated()
     {
         haveServicesTerminated = true;
+    }
+
+    void onExtensionCanTerminate()
+    {
+        extensionCanTerminate = true;
     }
 
     void terminationPosition(

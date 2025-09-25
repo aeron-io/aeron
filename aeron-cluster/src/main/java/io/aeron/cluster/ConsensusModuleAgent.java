@@ -2641,8 +2641,8 @@ final class ConsensusModuleAgent
                     if (appendAction(ClusterAction.SNAPSHOT, timestamp, CLUSTER_ACTION_FLAGS_DEFAULT))
                     {
                         final long position = logPublisher.position();
-
-                        clusterTermination = new ClusterTermination(nowNs + ctx.terminationTimeoutNs(), serviceCount);
+                        clusterTermination = new ClusterTermination(
+                            nowNs + ctx.terminationTimeoutNs(), serviceCount, consensusModuleExtension);
                         clusterTermination.terminationPosition(
                             ctx.countedErrorHandler(),
                             consensusPublisher,
@@ -2663,7 +2663,8 @@ final class ConsensusModuleAgent
                 {
                     final CountedErrorHandler errorHandler = ctx.countedErrorHandler();
                     final long position = logPublisher.position();
-                    clusterTermination = new ClusterTermination(nowNs + ctx.terminationTimeoutNs(), serviceCount);
+                    clusterTermination = new ClusterTermination(
+                        nowNs + ctx.terminationTimeoutNs(), serviceCount, consensusModuleExtension);
                     clusterTermination.terminationPosition(
                         errorHandler, consensusPublisher, activeMembers, thisMember, leadershipTermId, position);
                     terminationPosition = position;
@@ -2671,6 +2672,10 @@ final class ConsensusModuleAgent
                     if (serviceCount > 0)
                     {
                         serviceProxy.terminationPosition(terminationPosition, errorHandler);
+                    }
+                    else
+                    {
+                        clusterTermination.onExtensionCanTerminate();
                     }
                     state(ConsensusModule.State.TERMINATING);
                     break;
@@ -3509,6 +3514,10 @@ final class ConsensusModuleAgent
             if (serviceCount > 0)
             {
                 serviceProxy.terminationPosition(terminationPosition, ctx.countedErrorHandler());
+            }
+            else
+            {
+                clusterTermination.onExtensionCanTerminate();
             }
             clusterTermination.deadlineNs(clusterClock.timeNanos() + ctx.terminationTimeoutNs());
             state(ConsensusModule.State.TERMINATING);
