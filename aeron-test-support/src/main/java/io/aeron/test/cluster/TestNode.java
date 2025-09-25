@@ -67,6 +67,8 @@ import org.agrona.concurrent.status.CountersReader;
 
 import java.io.File;
 import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -910,6 +912,7 @@ public final class TestNode implements AutoCloseable
         private ConsensusControlState onElectionConsensusControlState;
         private final AtomicLong logMessageCount = new AtomicLong(0);
         private final AtomicLong ingressMessageCount = new AtomicLong(0);
+        private final List<TestExtensionSnapshot> snapshots = new CopyOnWriteArrayList<>();
 
         public int supportedSchemaId()
         {
@@ -1001,8 +1004,22 @@ public final class TestNode implements AutoCloseable
 
         public void onTakeSnapshot(final ExclusivePublication snapshotPublication)
         {
-
+            snapshots.add(new TestExtensionSnapshot(ingressMessageCount.get(), logMessageCount.get()));
         }
+
+        public AtomicLong ingressMessageCount()
+        {
+            return ingressMessageCount;
+        }
+
+        public List<TestExtensionSnapshot> snapshots()
+        {
+            return snapshots;
+        }
+    }
+
+    public record TestExtensionSnapshot(long ingressMessageCount, long logMessageCount)
+    {
     }
 
     public static class MessageTrackingService extends TestNode.TestService
