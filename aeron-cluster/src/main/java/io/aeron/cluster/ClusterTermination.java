@@ -25,11 +25,11 @@ class ClusterTermination
     private boolean haveServicesTerminated;
     private boolean extensionCanTerminate;
 
-    ClusterTermination(final long deadlineNs, final int serviceCount, final ConsensusModuleExtension extension)
+    ClusterTermination(final long deadlineNs, final int serviceCount, final boolean extensionCanTerminate)
     {
         this.deadlineNs = deadlineNs;
         this.haveServicesTerminated = serviceCount <= 0;
-        this.extensionCanTerminate = null == extension;
+        this.extensionCanTerminate = extensionCanTerminate;
     }
 
     void deadlineNs(final long deadlineNs)

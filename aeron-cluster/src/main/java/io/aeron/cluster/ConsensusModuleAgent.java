@@ -2641,8 +2641,9 @@ final class ConsensusModuleAgent
                     if (appendAction(ClusterAction.SNAPSHOT, timestamp, CLUSTER_ACTION_FLAGS_DEFAULT))
                     {
                         final long position = logPublisher.position();
+                        final boolean noExtension = null == consensusModuleExtension;
                         clusterTermination = new ClusterTermination(
-                            nowNs + ctx.terminationTimeoutNs(), serviceCount, consensusModuleExtension);
+                            nowNs + ctx.terminationTimeoutNs(), serviceCount, noExtension);
                         clusterTermination.terminationPosition(
                             ctx.countedErrorHandler(),
                             consensusPublisher,
@@ -2663,8 +2664,9 @@ final class ConsensusModuleAgent
                 {
                     final CountedErrorHandler errorHandler = ctx.countedErrorHandler();
                     final long position = logPublisher.position();
+                    final boolean noExtension = null == consensusModuleExtension;
                     clusterTermination = new ClusterTermination(
-                        nowNs + ctx.terminationTimeoutNs(), serviceCount, consensusModuleExtension);
+                        nowNs + ctx.terminationTimeoutNs(), serviceCount, noExtension);
                     clusterTermination.terminationPosition(
                         errorHandler, consensusPublisher, activeMembers, thisMember, leadershipTermId, position);
                     terminationPosition = position;
