@@ -19,36 +19,36 @@ env:
   jfVmaRepoPath: 'aeron-premium-vma-local-private/'
 
 jobs:
-  release-java:
-    name: Release java artifacts
-    permissions:
-      contents: read
-      packages: write
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.ref }}
-      - name: Setup java
-        uses: actions/setup-java@v5
-        with:
-          distribution: 'zulu'
-          java-version: ${{ env.JAVA_VERSION }}
-      - name: Setup BUILD_JAVA_HOME & BUILD_JAVA_VERSION
-        run: |
-          java -Xinternalversion
-          echo "BUILD_JAVA_HOME=${JAVA_HOME}" >> $GITHUB_ENV
-          echo "BUILD_JAVA_VERSION=${{ env.JAVA_VERSION }}" >> $GITHUB_ENV
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-      - name: Publish with Gradle
-        run: ./gradlew publish uploadArtifactsToCentralPortal
-        env:
-          SIGNING_GPG_SECRET_KEY: ${{ secrets.GPG_RSA_SIGN_KEY }}
-          SIGNING_GPG_PASSWORD: ${{ secrets.GPG_RSA_SIGN_KEYPASS }}
-          SONATYPE_CENTRAL_PORTAL_USERNAME: ${{ secrets.SONATYPE_CENTRAL_PORTAL_USERNAME }}
-          SONATYPE_CENTRAL_PORTAL_PASSWORD: ${{ secrets.SONATYPE_CENTRAL_PORTAL_PASSWORD }}
+#  release-java:
+#    name: Release java artifacts
+#    permissions:
+#      contents: read
+#      packages: write
+#    runs-on: ubuntu-24.04
+#    steps:
+#      - name: Checkout code
+#        uses: actions/checkout@v5
+#        with:
+#          ref: ${{ github.ref }}
+#      - name: Setup java
+#        uses: actions/setup-java@v5
+#        with:
+#          distribution: 'zulu'
+#          java-version: ${{ env.JAVA_VERSION }}
+#      - name: Setup BUILD_JAVA_HOME & BUILD_JAVA_VERSION
+#        run: |
+#          java -Xinternalversion
+#          echo "BUILD_JAVA_HOME=${JAVA_HOME}" >> $GITHUB_ENV
+#          echo "BUILD_JAVA_VERSION=${{ env.JAVA_VERSION }}" >> $GITHUB_ENV
+#      - name: Setup Gradle
+#        uses: gradle/actions/setup-gradle@v4
+#      - name: Publish with Gradle
+#        run: ./gradlew publish uploadArtifactsToCentralPortal
+#        env:
+#          SIGNING_GPG_SECRET_KEY: ${{ secrets.GPG_RSA_SIGN_KEY }}
+#          SIGNING_GPG_PASSWORD: ${{ secrets.GPG_RSA_SIGN_KEYPASS }}
+#          SONATYPE_CENTRAL_PORTAL_USERNAME: ${{ secrets.SONATYPE_CENTRAL_PORTAL_USERNAME }}
+#          SONATYPE_CENTRAL_PORTAL_PASSWORD: ${{ secrets.SONATYPE_CENTRAL_PORTAL_PASSWORD }}
 
   release-c:
     name: Release c artifacts
