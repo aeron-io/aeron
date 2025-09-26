@@ -29,6 +29,8 @@ import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
@@ -63,13 +65,19 @@ public class FragmentedClusterLogMessagesTest
     {
         final AtomicBoolean waitingToOfferFragmentedMessage = new AtomicBoolean(true);
         try (
-            ClusterNode node0 = new ClusterNode(0, 0, nodeDir0, waitingToOfferFragmentedMessage);
-            ClusterNode node1 = new ClusterNode(1, 0, nodeDir1, waitingToOfferFragmentedMessage);
-            ClusterNode node2 = new ClusterNode(2, 0, nodeDir2, waitingToOfferFragmentedMessage))
+            ClusterNode node0 = new ClusterNode(0, nodeDir0, waitingToOfferFragmentedMessage);
+            ClusterNode node1 = new ClusterNode(1, nodeDir1, waitingToOfferFragmentedMessage);
+            ClusterNode node2 = new ClusterNode(2, nodeDir2, waitingToOfferFragmentedMessage))
         {
-            node0.consensusModuleContext().leaderHeartbeatTimeoutNs(TimeUnit.SECONDS.toNanos(1));
-            node1.consensusModuleContext().leaderHeartbeatTimeoutNs(TimeUnit.SECONDS.toNanos(1));
-            node2.consensusModuleContext().leaderHeartbeatTimeoutNs(TimeUnit.SECONDS.toNanos(1));
+            node0.consensusModuleContext()
+                .appointedLeaderId(0)
+                .leaderHeartbeatTimeoutNs(TimeUnit.SECONDS.toNanos(1));
+            node1.consensusModuleContext()
+                .appointedLeaderId(0)
+                .leaderHeartbeatTimeoutNs(TimeUnit.SECONDS.toNanos(1));
+            node2.consensusModuleContext()
+                .appointedLeaderId(0)
+                .leaderHeartbeatTimeoutNs(TimeUnit.SECONDS.toNanos(1));
 
             node0.launch();
             node1.launch();
@@ -180,13 +188,19 @@ public class FragmentedClusterLogMessagesTest
     {
         final AtomicBoolean waitingToOfferFragmentedMessage = new AtomicBoolean(true);
         try (
-            ClusterNode node0 = new ClusterNode(0, 0, nodeDir0, waitingToOfferFragmentedMessage);
-            ClusterNode node1 = new ClusterNode(1, 0, nodeDir1, waitingToOfferFragmentedMessage);
-            ClusterNode node2 = new ClusterNode(2, 0, nodeDir2, waitingToOfferFragmentedMessage))
+            ClusterNode node0 = new ClusterNode(0, nodeDir0, waitingToOfferFragmentedMessage);
+            ClusterNode node1 = new ClusterNode(1, nodeDir1, waitingToOfferFragmentedMessage);
+            ClusterNode node2 = new ClusterNode(2, nodeDir2, waitingToOfferFragmentedMessage))
         {
-            node0.consensusModuleContext().logFragmentLimit(1);
-            node1.consensusModuleContext().logFragmentLimit(1000);
-            node2.consensusModuleContext().logFragmentLimit(1000);
+            node0.consensusModuleContext()
+                .appointedLeaderId(0)
+                .logFragmentLimit(1);
+            node1.consensusModuleContext()
+                .appointedLeaderId(0)
+                .logFragmentLimit(1000);
+            node2.consensusModuleContext()
+                .appointedLeaderId(0)
+                .logFragmentLimit(1000);
             node0.clusteredServiceContext().logFragmentLimit(1000);
             node1.clusteredServiceContext().logFragmentLimit(1000);
             node2.clusteredServiceContext().logFragmentLimit(1000);
@@ -254,17 +268,8 @@ public class FragmentedClusterLogMessagesTest
                 node0.poll();
                 node1.poll();
                 node2.poll();
-                return ConsensusModule.State.SNAPSHOT == node0.clusterState();
+                return 1L == node0.consensusModuleContext().snapshotCounter().get();
             });
-
-            Tests.await(() ->
-            {
-                node0.poll();
-                node1.poll();
-                node2.poll();
-                return ConsensusModule.State.ACTIVE == node0.clusterState();
-            });
-            assertEquals(1L, node0.consensusModuleContext().snapshotCounter().get());
             assertTrue(expectedAppendPosition < node0.servicePosition());
             assertTrue(node0.consensusModulePosition() < expectedAppendPosition);
 
@@ -293,25 +298,29 @@ public class FragmentedClusterLogMessagesTest
         }
     }
 
-    @Test
+    @ParameterizedTest
+    @EnumSource(value = ClusterControl.ToggleState.class, names = { "SNAPSHOT", "SHUTDOWN" })
     @InterruptAfter(5)
     @SuppressWarnings("methodLength")
-    public void shouldSnapshotWhenLogAdapterIsBehind()
+    public void shouldSnapshotWhenLogAdapterIsBehind(final ClusterControl.ToggleState toggleState)
     {
         try (
-            ClusterNode node0 = new ClusterNode(0, 0, nodeDir0, null);
-            ClusterNode node1 = new ClusterNode(1, 0, nodeDir1, null);
-            ClusterNode node2 = new ClusterNode(2, 0, nodeDir2, null))
+            ClusterNode node0 = new ClusterNode(0, nodeDir0, null);
+            ClusterNode node1 = new ClusterNode(1, nodeDir1, null);
+            ClusterNode node2 = new ClusterNode(2, nodeDir2, null))
         {
             node0.consensusModuleContext()
+                .appointedLeaderId(0)
                 .serviceCount(0)
                 .consensusModuleExtension(new TestNode.TestConsensusModuleExtension())
                 .logFragmentLimit(1);
             node1.consensusModuleContext()
+                .appointedLeaderId(0)
                 .serviceCount(0)
                 .consensusModuleExtension(new TestNode.TestConsensusModuleExtension())
                 .logFragmentLimit(1000);
             node2.consensusModuleContext()
+                .appointedLeaderId(0)
                 .serviceCount(0)
                 .consensusModuleExtension(new TestNode.TestConsensusModuleExtension())
                 .logFragmentLimit(1000);
@@ -377,17 +386,16 @@ public class FragmentedClusterLogMessagesTest
             });
 
             final Counter controlToggle = node0.consensusModuleContext().controlToggleCounter();
-            controlToggle.setRelease(ClusterControl.ToggleState.SNAPSHOT.code());
+            controlToggle.setRelease(toggleState.code());
 
             Tests.await(() ->
             {
                 node0.poll();
                 node1.poll();
                 node2.poll();
-                return
-                    1 == node0.extensionSnapshots().size() &&
-                        1 == node1.extensionSnapshots().size() &&
-                        1 == node2.extensionSnapshots().size();
+                return 1 == node0.extensionSnapshots().size() &&
+                    1 == node1.extensionSnapshots().size() &&
+                    1 == node2.extensionSnapshots().size();
             });
 
             final TestNode.TestExtensionSnapshot node0Snapshot = node0.extensionSnapshots().get(0);
