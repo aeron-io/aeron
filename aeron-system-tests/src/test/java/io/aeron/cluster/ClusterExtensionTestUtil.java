@@ -89,11 +89,7 @@ public class ClusterExtensionTestUtil
         private int serviceSubscriberPositionCounterId = Aeron.NULL_VALUE;
         private int consensusModuleSubscriberPositionCounterId = Aeron.NULL_VALUE;
 
-        ClusterNode(
-            final int clusterMemberId,
-            final int appointedLeader,
-            final Path directory,
-            final AtomicBoolean waiting)
+        ClusterNode(final int clusterMemberId, final Path directory, final AtomicBoolean waiting)
         {
             mediaDriverContext = new MediaDriver.Context()
                 .aeronDirectoryName(directory.resolve("driver").toAbsolutePath().toString())
@@ -117,7 +113,6 @@ public class ClusterExtensionTestUtil
                 .clusteredService(clusteredService);
 
             consensusModuleContext = new ConsensusModule.Context()
-                .appointedLeaderId(appointedLeader)
                 .aeronDirectoryName(mediaDriverContext.aeronDirectoryName())
                 .clusterDir(directory.resolve("cluster").toFile())
                 .clusterMemberId(clusterMemberId)
