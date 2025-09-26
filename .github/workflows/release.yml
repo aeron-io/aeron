@@ -13,6 +13,10 @@ concurrency:
 env:
   GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.java.installations.auto-detect=false -Dorg.gradle.warning.mode=fail'
   JAVA_VERSION: '8'
+  jfAtsRepoPath: 'aeron-premium-ats-local-private/'
+  jfDpdkRepoPath: 'aeron-premium-dpdk-local-private/'
+  jfEfViRepoPath: 'aeron-premium-efvi-local-private/'
+  jfVmaRepoPath: 'aeron-premium-vma-local-private/'
 
 jobs:
   release-java:
@@ -90,17 +94,12 @@ jobs:
           context: .
           file: ./cppbuild/${{ matrix.distro }}/Dockerfile
           pull: true
-          shm-size: 1g
-          outputs: type=local,dest=build
+          shm-size: 2g
+          outputs: build
           target: essentials-artifacts
           build-args: |
             VERSION=${{ matrix.version }}
             GCC_VERSION=${{ matrix.gcc-version }}
-      - name: Rename artifact
-        run: |
-          artifact_name=aeron-$(cat version.txt)-${{ matrix.distro }}-${{ matrix.version }}-x86_64.tar.gz
-          echo "artifact_name=$artifact_name" >> $GITHUB_ENV
-          mv ./build/*.tar.gz ./build/$artifact_name
       - name: Setup JFrog CLI
         uses: jfrog/setup-jfrog-cli@v4
         env:
@@ -109,5 +108,14 @@ jobs:
           oidc-provider-name: ${{ vars.JFROG_OIDC_PROVIDER }}
           oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
       - name: Publish Build info With JFrog CLI
-        run: jf rt u *.tar.gz ${{ vars.JFROG_AERON_OSS_REPO_NAME }}
+        run: |
+          for FILE in *; do
+            case $FILE in
+              *-src.tar.gz) ;;
+              aeron-dpdk-*) jf rt u $FILE ${{ env.jfDpdkRepoPath }} ;;
+              aeron-ef-vi-*) jf rt u $FILE ${{ env.jfEfViRepoPath }} ;;
+              aeron-transport-security-*) jf rt u $FILE ${{ env.jfAtsRepoPath }} ;;
+              aeron-vma-*) jf rt u $FILE ${{ env.jfVmaRepoPath }} ;;
+            esac
+          done
         working-directory: ./build
