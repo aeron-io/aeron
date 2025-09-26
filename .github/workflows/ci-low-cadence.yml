@@ -7,14 +7,24 @@ on:
     types: run-slow-tests
   schedule:
     - cron: '0 0,12 * * *'
+  push:
+    branches:
+      - master
+      - 'release/**'
+  pull_request:
+    types: [opened, synchronize]
+    branches:
+      - master
+      - 'release/**'
 
 concurrency:
   group: ci-low-cadence-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
 
 env:
   GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.java.installations.auto-detect=false -Dorg.gradle.warning.mode=fail'
   INSTALL_COMPILER_RETRIES: '5'
+  JAVA_VERSION: '8'
 
 permissions:
   contents: read
@@ -28,26 +38,14 @@ jobs:
       fail-fast: false
       matrix:
         java: [ '8', '17', '21' ]
-        os: [ 'ubuntu-24.04', 'windows-latest', 'macos-latest' ]
+        os: ['ubuntu-24.04', 'windows-latest', 'macos-15']
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle/caches
-          key: ${{ runner.os }}-gradle-caches-${{ hashFiles('**/*.gradle') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-caches-
-      - name: Cache Gradle wrappers
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-wrapper-${{ hashFiles('**/gradle/wrapper/gradle-wrapper.properties') }}
       - name: Setup java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
           java-version: ${{ matrix.java }}
@@ -68,11 +66,30 @@ jobs:
         run: |
           sudo sed -i bak "s/localhost/localhost $(hostname)/" /etc/hosts
           dscacheutil -flushcache
-      - name: Setup java 8 to run the Gradle script
-        uses: actions/setup-java@v4
+      - name: Setup java to run Gradle
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
-          java-version: 8
+          java-version: ${{ env.JAVA_VERSION }}
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Enable core dumps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          ulimit -c unlimited
+          sudo systemctl stop apport.service || true
+          sudo systemctl disable apport.service || true
+          sudo mkdir -p /var/coredump
+          sudo chmod a+rw /var/coredump
+          sudo sysctl -w kernel.core_pattern="/var/coredump/core_%e.%p"
+      - name: Enable core dumps (MacOS)
+        if: runner.os == 'macOS'
+        run: |
+          ulimit -c unlimited
+          sudo mkdir -p /var/coredump
+          sudo chmod a+rw /var/coredump
+          sudo sysctl -w kern.coredump=1
+          sudo sysctl -w kern.corefile="/var/coredump/core.%P"
       - name: Build and Run Slow Tests with Gradle
         run: ./gradlew slowTest
         env:
@@ -81,7 +98,7 @@ jobs:
         id: copy_test_logs
         if: failure()
         run: |
-          echo "file=build/distributions/test_logs.tbz2" >> $GITHUB_OUTPUT
+          ${{ runner.os == 'Windows' && 'echo "file=build/distributions/test_logs.tbz2" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append' || 'echo "file=build/distributions/test_logs.tbz2" >> $GITHUB_OUTPUT' }}
           ./gradlew tarTestLogs
       - name: Upload crash logs
         if: always() && steps.copy_test_logs.outputs.file == 'build/distributions/test_logs.tbz2'
@@ -93,44 +110,34 @@ jobs:
   java-javadoc:
     name: JavaDoc (JDK ${{ matrix.java }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
         java: [ '8', '17', '21' ]
-        os: [ 'ubuntu-22.04' ]
+        os: [ 'ubuntu-24.04' ]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle/caches
-          key: ${{ runner.os }}-gradle-caches-${{ hashFiles('**/*.gradle') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-caches-
-      - name: Cache Gradle wrappers
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-wrapper-${{ hashFiles('**/gradle/wrapper/gradle-wrapper.properties') }}
       - name: Setup java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
           java-version: ${{ matrix.java }}
-      - name: Setup BUILD_JAVA_HOME & BUILD_JAVA_VERSION (Linux)
-        if: runner.os == 'Linux'
+      - name: Setup BUILD_JAVA_HOME & BUILD_JAVA_VERSION
         run: |
           java -Xinternalversion
           echo "BUILD_JAVA_HOME=${JAVA_HOME}" >> $GITHUB_ENV
           echo "BUILD_JAVA_VERSION=${{ matrix.java }}" >> $GITHUB_ENV
-      - name: Setup java 8 to run the Gradle script
-        uses: actions/setup-java@v4
+      - name: Setup java to run Gradle
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
-          java-version: 8
+          java-version: ${{ env.JAVA_VERSION }}
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
       - name: Build and Run Javadoc
         run: ./gradlew javadoc
         env:
@@ -149,31 +156,21 @@ jobs:
       CXX: g++-${{ matrix.version }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle/caches
-          key: ${{ runner.os }}-gradle-caches-${{ hashFiles('**/*.gradle') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-caches-
-      - name: Cache Gradle wrappers
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-wrapper-${{ hashFiles('**/gradle/wrapper/gradle-wrapper.properties') }}
-      - name: Setup java 8 to run the Gradle script
-        uses: actions/setup-java@v4
+      - name: Setup java
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
-          java-version: 8
+          java-version: ${{ env.JAVA_VERSION }}
       - name: Setup BUILD_JAVA_HOME & BUILD_JAVA_VERSION
         run: |
           java -Xinternalversion
           echo "BUILD_JAVA_HOME=${JAVA_HOME}" >> $GITHUB_ENV
-          echo "BUILD_JAVA_VERSION=8" >> $GITHUB_ENV
+          echo "BUILD_JAVA_VERSION=${{ env.JAVA_VERSION }}" >> $GITHUB_ENV
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
       - name: Install compiler
         run: |
           echo 'Acquire::Retries "${INSTALL_COMPILER_RETRIES}";' | sudo tee -a /etc/apt/apt.conf.d/99retries
@@ -181,7 +178,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y g++-${{ matrix.version }} libbsd-dev uuid-dev
       - name: Build
-        run: cppbuild/cppbuild --c-warnings-as-errors --cxx-warnings-as-errors --slow-system-tests --no-system-tests --no-unit-tests
+        run: cppbuild/cppbuild --c-warnings-as-errors --cxx-warnings-as-errors --slow-system-tests --no-system-tests --no-unit-tests --cxx-hide-deprecation-message
       - name: Copy test logs
         id: copy_test_logs
         if: failure()
@@ -202,47 +199,37 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: [ '18' ]
+        version: [ '21' ]
     env:
       CC: clang-${{ matrix.version }}
       CXX: clang++-${{ matrix.version }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle/caches
-          key: ${{ runner.os }}-gradle-caches-${{ hashFiles('**/*.gradle') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-caches-
-      - name: Cache Gradle wrappers
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-wrapper-${{ hashFiles('**/gradle/wrapper/gradle-wrapper.properties') }}
-      - name: Setup java 8 to run the Gradle script
-        uses: actions/setup-java@v4
+      - name: Setup java
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
-          java-version: 8
+          java-version: ${{ env.JAVA_VERSION }}
       - name: Setup BUILD_JAVA_HOME & BUILD_JAVA_VERSION
         run: |
           java -Xinternalversion
           echo "BUILD_JAVA_HOME=${JAVA_HOME}" >> $GITHUB_ENV
-          echo "BUILD_JAVA_VERSION=8" >> $GITHUB_ENV
+          echo "BUILD_JAVA_VERSION=${{ env.JAVA_VERSION }}" >> $GITHUB_ENV
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
       - name: Install compiler
         run: |
           echo 'Acquire::Retries "${INSTALL_COMPILER_RETRIES}";' | sudo tee -a /etc/apt/apt.conf.d/99retries
           sudo mkdir -p /etc/apt/keyrings/
           curl --retry ${INSTALL_COMPILER_RETRIES} https://apt.llvm.org/llvm-snapshot.gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/llvm-snapshot.gpg
-          echo "deb [signed-by=/etc/apt/keyrings/llvm-snapshot.gpg] http://apt.llvm.org/jammy/ llvm-toolchain-jammy-${{ matrix.version }} main" | sudo tee /etc/apt/sources.list.d/llvm.list
+          echo "deb [signed-by=/etc/apt/keyrings/llvm-snapshot.gpg] https://apt.llvm.org/noble/ llvm-toolchain-noble-${{ matrix.version }} main" | sudo tee /etc/apt/sources.list.d/llvm.list
           sudo apt-get update
           sudo apt-get install -y clang-${{ matrix.version }} libbsd-dev uuid-dev
       - name: Build
-        run: cppbuild/cppbuild --c-warnings-as-errors --cxx-warnings-as-errors --slow-system-tests --no-system-tests --no-unit-tests
+        run: cppbuild/cppbuild --c-warnings-as-errors --cxx-warnings-as-errors --slow-system-tests --no-system-tests --no-unit-tests --cxx-hide-deprecation-message
       - name: Copy test logs
         id: copy_test_logs
         if: failure()
@@ -265,38 +252,28 @@ jobs:
       CXX: cl
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle/caches
-          key: ${{ runner.os }}-gradle-caches-${{ hashFiles('**/*.gradle') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-caches-
-      - name: Cache Gradle wrappers
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-wrapper-${{ hashFiles('**/gradle/wrapper/gradle-wrapper.properties') }}
-      - name: Setup java 8 to run the Gradle script
-        uses: actions/setup-java@v4
+      - name: Setup java
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
-          java-version: 8
+          java-version: ${{ env.JAVA_VERSION }}
       - name: Setup BUILD_JAVA_HOME & BUILD_JAVA_VERSION
         run: |
           java -Xinternalversion
-          echo "BUILD_JAVA_HOME=${JAVA_HOME}" >> $GITHUB_ENV
-          echo "BUILD_JAVA_VERSION=8" >> $GITHUB_ENV
+          echo "BUILD_JAVA_HOME=$env:JAVA_HOME" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "BUILD_JAVA_VERSION=${{ env.JAVA_VERSION }}" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
       - name: Build
-        run: cppbuild/cppbuild.ps1 --slow-system-tests --no-system-tests --no-unit-tests
+        run: cppbuild/cppbuild.ps1 --slow-system-tests --no-system-tests --no-unit-tests --cxx-hide-deprecation-message
       - name: Copy test logs
         id: copy_test_logs
         if: failure()
         run: |
-          echo "file=build/distributions/test_logs.tbz2" >> $GITHUB_OUTPUT
+          echo "file=build/distributions/test_logs.tbz2" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
           ./gradlew tarTestLogs
       - name: Upload crash logs
         if: always() && steps.copy_test_logs.outputs.file == 'build/distributions/test_logs.tbz2'
@@ -318,31 +295,21 @@ jobs:
       CXX: g++-${{ matrix.version }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle/caches
-          key: ${{ runner.os }}-gradle-caches-${{ hashFiles('**/*.gradle') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-caches-
-      - name: Cache Gradle wrappers
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-wrapper-${{ hashFiles('**/gradle/wrapper/gradle-wrapper.properties') }}
-      - name: Setup java 8 to run the Gradle script
-        uses: actions/setup-java@v4
+      - name: Setup java
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
-          java-version: 8
+          java-version: ${{ env.JAVA_VERSION }}
       - name: Setup BUILD_JAVA_HOME & BUILD_JAVA_VERSION
         run: |
           java -Xinternalversion
           echo "BUILD_JAVA_HOME=${JAVA_HOME}" >> $GITHUB_ENV
-          echo "BUILD_JAVA_VERSION=8" >> $GITHUB_ENV
+          echo "BUILD_JAVA_VERSION=${{ env.JAVA_VERSION }}" >> $GITHUB_ENV
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
       - name: Install compiler
         run: |
           echo 'Acquire::Retries "${INSTALL_COMPILER_RETRIES}";' | sudo tee -a /etc/apt/apt.conf.d/99retries
@@ -350,7 +317,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y g++-${{ matrix.version }} libbsd-dev uuid-dev
       - name: Build
-        run: cmake --version; make --version; ldd --version; g++-${{ matrix.version }} --version; cppbuild/cppbuild --relwithdebinfo-build --sanitise-build --c-warnings-as-errors --cxx-warnings-as-errors --slow-system-tests
+        run: cppbuild/cppbuild --relwithdebinfo-build --sanitise-build --c-warnings-as-errors --cxx-warnings-as-errors --slow-system-tests --cxx-hide-deprecation-message
       - name: Copy test logs
         id: copy_test_logs
         if: failure()
@@ -371,47 +338,37 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: [ '18' ]
+        version: [ '21' ]
     env:
       CC: clang-${{ matrix.version }}
       CXX: clang++-${{ matrix.version }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle/caches
-          key: ${{ runner.os }}-gradle-caches-${{ hashFiles('**/*.gradle') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-caches-
-      - name: Cache Gradle wrappers
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-wrapper-${{ hashFiles('**/gradle/wrapper/gradle-wrapper.properties') }}
-      - name: Setup java 8 to run the Gradle script
-        uses: actions/setup-java@v4
+      - name: Setup java
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
-          java-version: 8
+          java-version: ${{ env.JAVA_VERSION }}
       - name: Setup BUILD_JAVA_HOME & BUILD_JAVA_VERSION
         run: |
           java -Xinternalversion
           echo "BUILD_JAVA_HOME=${JAVA_HOME}" >> $GITHUB_ENV
-          echo "BUILD_JAVA_VERSION=8" >> $GITHUB_ENV
+          echo "BUILD_JAVA_VERSION=${{ env.JAVA_VERSION }}" >> $GITHUB_ENV
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
       - name: Install compiler
         run: |
           echo 'Acquire::Retries "${INSTALL_COMPILER_RETRIES}";' | sudo tee -a /etc/apt/apt.conf.d/99retries
           sudo mkdir -p /etc/apt/keyrings/
           curl --retry ${INSTALL_COMPILER_RETRIES} https://apt.llvm.org/llvm-snapshot.gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/llvm-snapshot.gpg
-          echo "deb [signed-by=/etc/apt/keyrings/llvm-snapshot.gpg] http://apt.llvm.org/jammy/ llvm-toolchain-jammy-${{ matrix.version }} main" | sudo tee /etc/apt/sources.list.d/llvm.list
+          echo "deb [signed-by=/etc/apt/keyrings/llvm-snapshot.gpg] https://apt.llvm.org/noble/ llvm-toolchain-noble-${{ matrix.version }} main" | sudo tee /etc/apt/sources.list.d/llvm.list
           sudo apt-get update
           sudo apt-get install -y clang-${{ matrix.version }} libbsd-dev uuid-dev
       - name: Build
-        run: cppbuild/cppbuild --relwithdebinfo-build --sanitise-build --c-warnings-as-errors --cxx-warnings-as-errors --slow-system-tests
+        run: cppbuild/cppbuild --relwithdebinfo-build --sanitise-build --c-warnings-as-errors --cxx-warnings-as-errors --slow-system-tests --cxx-hide-deprecation-message
       - name: Copy test logs
         id: copy_test_logs
         if: failure()

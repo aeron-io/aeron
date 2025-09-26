@@ -12,78 +12,39 @@ concurrency:
 
 env:
   GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.java.installations.auto-detect=false -Dorg.gradle.warning.mode=fail'
+  JAVA_VERSION: '8'
 
 jobs:
-  ci:
-    uses: ./.github/workflows/ci.yml
-    permissions:
-      contents: read
-
-  ci-low-cadence:
-    uses: ./.github/workflows/ci-low-cadence.yml
-    permissions:
-      contents: read
-
-  codeql:
-    uses: ./.github/workflows/codeql.yml
-    permissions:
-      actions: read
-      contents: read
-      security-events: write
-
-  github-release:
-    name: Create Github Release
-    permissions:
-      contents: write
-    needs: [ ci, ci-low-cadence, codeql ]
-    runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create-release.outputs.upload_url }}
-    steps:
-      - id: checkout
-        name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref }}
-      - id: create-release
-        name: Create Release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
-          draft: true
-
   release-java:
     name: Release java artifacts
     permissions:
       contents: read
       packages: write
-    needs: github-release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.ref }}
       - name: Setup java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
-          java-version: 8
+          java-version: ${{ env.JAVA_VERSION }}
       - name: Setup BUILD_JAVA_HOME & BUILD_JAVA_VERSION
         run: |
           java -Xinternalversion
           echo "BUILD_JAVA_HOME=${JAVA_HOME}" >> $GITHUB_ENV
-          echo "BUILD_JAVA_VERSION=8" >> $GITHUB_ENV
+          echo "BUILD_JAVA_VERSION=${{ env.JAVA_VERSION }}" >> $GITHUB_ENV
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
       - name: Publish with Gradle
-        run: ./gradlew publish
+        run: ./gradlew publish uploadArtifactsToCentralPortal
         env:
-          ORG_GRADLE_PROJECT_ossrhUsername: ${{ secrets.SONATYPE_CENTRAL_USERNAME }}
-          ORG_GRADLE_PROJECT_ossrhPassword: ${{ secrets.SONATYPE_CENTRAL_PASSWORD }}
-          ORG_GRADLE_PROJECT_signingKey: ${{ secrets.GPG_RSA_SIGN_KEY }}
-          ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.GPG_RSA_SIGN_KEYPASS }}
+          SIGNING_GPG_SECRET_KEY: ${{ secrets.GPG_RSA_SIGN_KEY }}
+          SIGNING_GPG_PASSWORD: ${{ secrets.GPG_RSA_SIGN_KEYPASS }}
+          SONATYPE_CENTRAL_PORTAL_USERNAME: ${{ secrets.SONATYPE_CENTRAL_PORTAL_USERNAME }}
+          SONATYPE_CENTRAL_PORTAL_PASSWORD: ${{ secrets.SONATYPE_CENTRAL_PORTAL_PASSWORD }}
 
   release-c:
     name: Release c artifacts
@@ -91,15 +52,11 @@ jobs:
       contents: write
       id-token: write
       packages: write
-    needs: github-release
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - distro: ubuntu
-            version: 20.04
-            gcc-version: default
           - distro: ubuntu
             version: 22.04
             gcc-version: default
@@ -120,7 +77,7 @@ jobs:
             gcc-version: default
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.ref }}
       - name: Set up QEMU
@@ -144,15 +101,6 @@ jobs:
           artifact_name=aeron-$(cat version.txt)-${{ matrix.distro }}-${{ matrix.version }}-x86_64.tar.gz
           echo "artifact_name=$artifact_name" >> $GITHUB_ENV
           mv ./build/*.tar.gz ./build/$artifact_name
-#      - name: Upload to Github Release
-#        uses: actions/upload-release-asset@v1
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#        with:
-#          upload_url: ${{ needs.github-release.outputs.upload_url }}
-#          asset_path: ./build/${{ env.artifact_name }}
-#          asset_name: ${{ env.artifact_name }}
-#          asset_content_type: application/gzip
       - name: Setup JFrog CLI
         uses: jfrog/setup-jfrog-cli@v4
         env:
