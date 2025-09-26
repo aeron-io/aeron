@@ -2558,7 +2558,7 @@ final class ConsensusModuleAgent
                 if (NULL_POSITION != terminationPosition && logAdapter.position() >= terminationPosition)
                 {
                     state(ConsensusModule.State.TERMINATING);
-                    if (serviceCount > 0)
+                    if (0 < serviceCount)
                     {
                         serviceProxy.terminationPosition(terminationPosition, ctx.countedErrorHandler());
                     }
@@ -2671,7 +2671,7 @@ final class ConsensusModuleAgent
                         errorHandler, consensusPublisher, activeMembers, thisMember, leadershipTermId, position);
                     terminationPosition = position;
                     terminationLeadershipTermId = leadershipTermId;
-                    if (serviceCount > 0)
+                    if (0 < serviceCount)
                     {
                         serviceProxy.terminationPosition(terminationPosition, errorHandler);
                     }
@@ -3513,7 +3513,7 @@ final class ConsensusModuleAgent
 
         if (null != clusterTermination)
         {
-            if (serviceCount > 0)
+            if (0 < serviceCount)
             {
                 serviceProxy.terminationPosition(terminationPosition, ctx.countedErrorHandler());
             }
