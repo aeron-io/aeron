@@ -13,10 +13,6 @@ concurrency:
 env:
   GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.java.installations.auto-detect=false -Dorg.gradle.warning.mode=fail'
   JAVA_VERSION: '8'
-  jfAtsRepoPath: 'aeron-premium-ats-local-private/'
-  jfDpdkRepoPath: 'aeron-premium-dpdk-local-private/'
-  jfEfViRepoPath: 'aeron-premium-efvi-local-private/'
-  jfVmaRepoPath: 'aeron-premium-vma-local-private/'
 
 jobs:
   release-java:
@@ -49,73 +45,3 @@ jobs:
           SIGNING_GPG_PASSWORD: ${{ secrets.GPG_RSA_SIGN_KEYPASS }}
           SONATYPE_CENTRAL_PORTAL_USERNAME: ${{ secrets.SONATYPE_CENTRAL_PORTAL_USERNAME }}
           SONATYPE_CENTRAL_PORTAL_PASSWORD: ${{ secrets.SONATYPE_CENTRAL_PORTAL_PASSWORD }}
-
-  release-c:
-    name: Release c artifacts
-    permissions:
-      contents: write
-      id-token: write
-      packages: write
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - distro: ubuntu
-            version: 22.04
-            gcc-version: default
-          - distro: debian
-            version: bullseye
-            gcc-version: default
-          - distro: debian
-            version: bookworm
-            gcc-version: default
-          - distro: rocky
-            version: 8.9
-            gcc-version: 10
-          - distro: rocky
-            version: 9.3
-            gcc-version: 13
-          - distro: awslinux
-            version: 2023
-            gcc-version: default
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.ref }}
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Build Artifacts Using Docker
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./cppbuild/${{ matrix.distro }}/Dockerfile
-          pull: true
-          shm-size: 2g
-          outputs: build
-          target: essentials-artifacts
-          build-args: |
-            VERSION=${{ matrix.version }}
-            GCC_VERSION=${{ matrix.gcc-version }}
-      - name: Setup JFrog CLI
-        uses: jfrog/setup-jfrog-cli@v4
-        env:
-          JF_URL: ${{ vars.JFROG_OIDC_URL }}
-        with:
-          oidc-provider-name: ${{ vars.JFROG_OIDC_PROVIDER }}
-          oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
-      - name: Publish Build info With JFrog CLI
-        run: |
-          for FILE in *; do
-            case $FILE in
-              *-src.tar.gz) ;;
-              aeron-dpdk-*) jf rt u $FILE ${{ env.jfDpdkRepoPath }} ;;
-              aeron-ef-vi-*) jf rt u $FILE ${{ env.jfEfViRepoPath }} ;;
-              aeron-transport-security-*) jf rt u $FILE ${{ env.jfAtsRepoPath }} ;;
-              aeron-vma-*) jf rt u $FILE ${{ env.jfVmaRepoPath }} ;;
-            esac
-          done
-        working-directory: ./build
