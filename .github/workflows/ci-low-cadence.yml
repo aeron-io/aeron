@@ -178,7 +178,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y g++-${{ matrix.version }} libbsd-dev uuid-dev
       - name: Build
-        run: cppbuild/cppbuild --c-warnings-as-errors --cxx-warnings-as-errors --slow-system-tests --no-system-tests --no-unit-tests --cxx-hide-deprecation-message
+        run: cppbuild/cppbuild --c-warnings-as-errors --cxx-warnings-as-errors --slow-system-tests --no-system-tests --no-unit-tests
       - name: Copy test logs
         id: copy_test_logs
         if: failure()
@@ -229,7 +229,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang-${{ matrix.version }} libbsd-dev uuid-dev
       - name: Build
-        run: cppbuild/cppbuild --c-warnings-as-errors --cxx-warnings-as-errors --slow-system-tests --no-system-tests --no-unit-tests --cxx-hide-deprecation-message
+        run: cppbuild/cppbuild --c-warnings-as-errors --cxx-warnings-as-errors --slow-system-tests --no-system-tests --no-unit-tests
       - name: Copy test logs
         id: copy_test_logs
         if: failure()
@@ -268,7 +268,7 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
       - name: Build
-        run: cppbuild/cppbuild.ps1 --slow-system-tests --no-system-tests --no-unit-tests --cxx-hide-deprecation-message
+        run: cppbuild/cppbuild.ps1 --slow-system-tests --no-system-tests --no-unit-tests
       - name: Copy test logs
         id: copy_test_logs
         if: failure()
@@ -317,7 +317,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y g++-${{ matrix.version }} libbsd-dev uuid-dev
       - name: Build
-        run: cppbuild/cppbuild --relwithdebinfo-build --sanitise-build --c-warnings-as-errors --cxx-warnings-as-errors --slow-system-tests --cxx-hide-deprecation-message
+        run: cppbuild/cppbuild --relwithdebinfo-build --sanitise-build --c-warnings-as-errors --cxx-warnings-as-errors --slow-system-tests
       - name: Copy test logs
         id: copy_test_logs
         if: failure()
@@ -368,7 +368,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang-${{ matrix.version }} libbsd-dev uuid-dev
       - name: Build
-        run: cppbuild/cppbuild --relwithdebinfo-build --sanitise-build --c-warnings-as-errors --cxx-warnings-as-errors --slow-system-tests --cxx-hide-deprecation-message
+        run: cppbuild/cppbuild --relwithdebinfo-build --sanitise-build --c-warnings-as-errors --cxx-warnings-as-errors --slow-system-tests
       - name: Copy test logs
         id: copy_test_logs
         if: failure()
