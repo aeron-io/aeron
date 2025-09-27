@@ -23,7 +23,8 @@ import org.agrona.concurrent.status.UnsafeBufferPosition;
 /**
  * The position in bytes a publication has reached appending to the log.
  * <p>
- * <b>Note:</b> This is a not a real-time value like the other and is updated one per second for monitoring purposes.
+ * <b>Note:</b> This is a not a real-time value like the other and is updated each conductor duty cycle
+ *  for monitoring purposes.
  */
 public class PublisherPos
 {
