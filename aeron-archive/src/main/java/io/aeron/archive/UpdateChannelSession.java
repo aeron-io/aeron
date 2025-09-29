@@ -94,8 +94,8 @@ class UpdateChannelSession implements Session
             final int mtuLength = recordingDescriptorDecoder.mtuLength();
             final int sessionId = recordingDescriptorDecoder.sessionId();
             final int streamId = recordingDescriptorDecoder.streamId();
-            final String ignore1 = recordingDescriptorDecoder.strippedChannel();
-            final String ignore2 = recordingDescriptorDecoder.originalChannel();
+            recordingDescriptorDecoder.skipStrippedChannel();
+            recordingDescriptorDecoder.skipOriginalChannel();
             final String sourceIdentity = recordingDescriptorDecoder.sourceIdentity();
 
             catalog.replaceRecording(

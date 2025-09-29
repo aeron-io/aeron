@@ -38,8 +38,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
 
 import static io.aeron.archive.ArchiveSystemTests.recordData;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -195,10 +193,9 @@ public class ArchiveListRecordingsTest
             assertEquals(1, collector.descriptors().size());
             final RecordingDescriptor recordingDescriptor = collector.descriptors().get(0);
 
-            final List<ArchiveSystemTests.RecordingResult> results = new ArrayList<>();
             for (int i = 0; i < 150; i++)
             {
-                results.add(recordData(aeronArchive, 1, "snapshot-id:" + (i + 1)));
+                recordData(aeronArchive, 1, "snapshot-id:" + (i + 1));
             }
 
             assertTrue(aeronArchive.archiveProxy().listRecordings(

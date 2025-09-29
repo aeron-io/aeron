@@ -744,13 +744,6 @@ final class Catalog implements AutoCloseable
         forceWrites(catalogChannel);
     }
 
-    void updateChannel(final long recordingId, final String channel)
-    {
-        final int recordingOffset = recordingDescriptorOffset(recordingId);
-
-
-    }
-
     long startPosition(final long recordingId)
     {
         final int offset = recordingDescriptorOffset(recordingId) +
