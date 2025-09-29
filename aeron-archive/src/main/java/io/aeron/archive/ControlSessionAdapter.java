@@ -1047,6 +1047,30 @@ class ControlSessionAdapter implements FragmentHandler
                     final long replayToken = conductor.generateReplayToken(controlSession, recordingId);
                     controlSession.sendOkResponse(correlationId, replayToken);
                 }
+
+                break;
+            }
+
+            case UpdateChannelRequestDecoder.TEMPLATE_ID:
+            {
+                final UpdateChannelRequestDecoder decoder = decoders.updateChannelRequestDecoder;
+                decoder.wrap(
+                    buffer,
+                    offset + MessageHeaderDecoder.ENCODED_LENGTH,
+                    headerDecoder.blockLength(),
+                    headerDecoder.version());
+
+                final long controlSessionId = decoder.controlSessionId();
+                final long correlationId = decoder.correlationId();
+                final long recordingId = decoder.recordingId();
+                final String channel = decoder.channel();
+                final ControlSession controlSession = getControlSession(correlationId, controlSessionId, templateId);
+                if (null != controlSession)
+                {
+                    conductor.updateChannel(correlationId, recordingId, channel, controlSession);
+                }
+
+                break;
             }
         }
     }

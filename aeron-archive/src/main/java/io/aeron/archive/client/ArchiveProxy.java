@@ -58,6 +58,7 @@ import io.aeron.archive.codecs.StopRecordingSubscriptionRequestEncoder;
 import io.aeron.archive.codecs.StopReplayRequestEncoder;
 import io.aeron.archive.codecs.StopReplicationRequestEncoder;
 import io.aeron.archive.codecs.TruncateRecordingRequestEncoder;
+import io.aeron.archive.codecs.UpdateChannelRequestEncoder;
 import io.aeron.security.CredentialsSupplier;
 import io.aeron.security.NullCredentialsSupplier;
 import org.agrona.ExpandableArrayBuffer;
@@ -131,6 +132,7 @@ public final class ArchiveProxy
     private final MigrateSegmentsRequestEncoder migrateSegmentsRequest = new MigrateSegmentsRequestEncoder();
     private final ArchiveIdRequestEncoder archiveIdRequestEncoder = new ArchiveIdRequestEncoder();
     private final ReplayTokenRequestEncoder replayTokenRequestEncoder = new ReplayTokenRequestEncoder();
+    private final UpdateChannelRequestEncoder updateChannelRequestEncoder = new UpdateChannelRequestEncoder();
 
     /**
      * Create a proxy with a {@link ExclusivePublication} for sending control message requests.
@@ -1433,6 +1435,30 @@ public final class ArchiveProxy
         return offer(replayTokenRequestEncoder.encodedLength());
     }
 
+    /**
+     * Update the channel for a recording.
+     *
+     * @param recordingId       the recording id to update.
+     * @param channel           the new channel to include in the catalogue.
+     * @param correlationId     for the request.
+     * @param controlSessionId  for the request.
+     * @return true if successfully offered.
+     */
+    public boolean updateChannel(
+        final long recordingId,
+        final String channel,
+        final long correlationId,
+        final long controlSessionId)
+    {
+        updateChannelRequestEncoder
+            .wrapAndApplyHeader(buffer, 0, messageHeader)
+            .controlSessionId(controlSessionId)
+            .correlationId(correlationId)
+            .recordingId(recordingId)
+            .channel(channel);
+
+        return offer(updateChannelRequestEncoder.encodedLength());
+    }
 
     private boolean offer(final int length)
     {

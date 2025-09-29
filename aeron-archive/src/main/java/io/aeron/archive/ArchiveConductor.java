@@ -634,6 +634,40 @@ abstract class ArchiveConductor
         }
     }
 
+    void updateChannel(
+        final long correlationId,
+        final long recordingId,
+        final String channel,
+        final ControlSession controlSession)
+    {
+        if (controlSession.hasActiveListing())
+        {
+            final String msg = "active listing already in progress";
+            controlSession.sendErrorResponse(correlationId, ACTIVE_LISTING, msg);
+        }
+        else if (!catalog.hasRecording(recordingId))
+        {
+            controlSession.sendRecordingUnknown(correlationId, recordingId);
+        }
+        else
+        {
+            final ChannelUri channelUri = ChannelUri.parse(channel);
+            final String strippedChannel = strippedChannelBuilder(channelUri).build();
+
+            final UpdateChannelSession updateChannelSession = new UpdateChannelSession(
+                correlationId,
+                recordingId,
+                channel,
+                strippedChannel,
+                catalog,
+                controlSession,
+                descriptorBuffer);
+
+            addSession(updateChannelSession);
+            controlSession.activeListing(updateChannelSession);
+        }
+    }
+
     void findLastMatchingRecording(
         final long correlationId,
         final long minRecordingId,

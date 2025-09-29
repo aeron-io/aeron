@@ -2324,6 +2324,37 @@ public final class AeronArchive implements AutoCloseable
         }
     }
 
+    /**
+     * Update the channel for a recording.
+     * <p>
+     * Note: this is an experimental feature and may be removed or changed in a later release.
+     *
+     * @param recordingId       the recording id to update.
+     * @param channel           the new channel to include in the catalogue.
+     */
+    public void updateChannel(final long recordingId, final String channel)
+    {
+        lock.lock();
+        try
+        {
+            ensureConnected();
+            ensureNotReentrant();
+
+            lastCorrelationId = aeron.nextCorrelationId();
+
+            if (!archiveProxy.updateChannel(recordingId, channel, lastCorrelationId, controlSessionId))
+            {
+                throw new ArchiveException("failed to send migrate segments request");
+            }
+
+            pollForResponse(lastCorrelationId);
+        }
+        finally
+        {
+            lock.unlock();
+        }
+    }
+
     private void checkDeadline(final long deadlineNs, final String errorMessage, final long correlationId)
     {
         if (deadlineNs - nanoClock.nanoTime() < 0)
