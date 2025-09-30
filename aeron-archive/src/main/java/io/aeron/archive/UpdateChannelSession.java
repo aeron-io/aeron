@@ -115,14 +115,13 @@ class UpdateChannelSession implements Session
                 sourceIdentity);
 
             controlSession.sendOkResponse(correlationId);
-            isDone = true;
         }
         else
         {
             controlSession.sendRecordingUnknown(correlationId, recordingId);
-            isDone = true;
         }
 
+        isDone = true;
         return 1;
     }
 
