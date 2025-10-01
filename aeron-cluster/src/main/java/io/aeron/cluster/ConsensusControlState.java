@@ -16,24 +16,81 @@
 package io.aeron.cluster;
 
 import io.aeron.ExclusivePublication;
+import io.aeron.Subscription;
 
 /**
  * The state needed to allow control of the consensus module.
  * <p>
  * This is a record object being passed to external entities.
  *
- * @param logPublication        publication or null.
- * @param logRecordingId        log recording id.
- * @param leadershipTermId      leadership term id.
  * @see ConsensusModuleExtension
  */
-public record ConsensusControlState(ExclusivePublication logPublication, long logRecordingId, long leadershipTermId)
+public final class ConsensusControlState
 {
+    private final ExclusivePublication logPublication;
+    private final Subscription leaderLogSubscription;
+    private final long logRecordingId;
+    private final long leadershipTermId;
+
+    /**
+     * Record constructor.
+     *
+     * @param logPublication        publication or null.
+     * @param leaderLogSubscription null if a follower, if a leader will have an image that has joined at the log
+     *                              position.
+     * @param logRecordingId        log recording id.
+     * @param leadershipTermId      leadership term id.
+     */
+    ConsensusControlState(
+        final ExclusivePublication logPublication,
+        final Subscription leaderLogSubscription,
+        final long logRecordingId,
+        final long leadershipTermId)
+    {
+        this.logPublication = logPublication;
+        this.leaderLogSubscription = leaderLogSubscription;
+        this.logRecordingId = logRecordingId;
+        this.leadershipTermId = leadershipTermId;
+    }
+
     /**
      * @return true iff we are the leader (and have the log publication).
      */
     public boolean isLeader()
     {
         return null != logPublication;
+    }
+
+    /**
+     * @return log publication or null if follower.
+     */
+    public ExclusivePublication logPublication()
+    {
+        return logPublication;
+    }
+
+    /**
+     * @return log recording id.
+     */
+    public long logRecordingId()
+    {
+        return logRecordingId;
+    }
+
+    /**
+     * @return leadership term id.
+     */
+    public long leadershipTermId()
+    {
+        return leadershipTermId;
+    }
+
+    /**
+     * @return a subscription to the log, joined at the log position of the election for a leader node, or null for a
+     * follower.
+     */
+    public Subscription leaderLogSubscription()
+    {
+        return leaderLogSubscription;
     }
 }
