@@ -2621,6 +2621,10 @@ final class ConsensusModuleAgent
                     {
                         state(ConsensusModule.State.SNAPSHOT);
                         totalSnapshotDurationTracker.onSnapshotBegin(nowNs);
+                        if (0 == serviceCount)
+                        {
+                            snapshotOnServiceAck(logPublisher.position(), timestamp, ServiceAck.EMPTY_SERVICE_ACKS);
+                        }
                     }
                     break;
                 }
@@ -2655,6 +2659,10 @@ final class ConsensusModuleAgent
 
                         state(ConsensusModule.State.SNAPSHOT);
                         totalSnapshotDurationTracker.onSnapshotBegin(nowNs);
+                        if (0 == serviceCount)
+                        {
+                            snapshotOnServiceAck(position, timestamp, ServiceAck.EMPTY_SERVICE_ACKS);
+                        }
                     }
                     break;
                 }
@@ -2681,15 +2689,6 @@ final class ConsensusModuleAgent
             }
 
             return 1;
-        }
-        else if (ConsensusModule.State.SNAPSHOT == state)
-        {
-            if (0 == serviceCount && commitPosition.getWeak() == logPublisher.position())
-            {
-                final long timestamp = clusterClock.time();
-                drainLeaderLogAdapterToCommitPosition();
-                snapshotOnServiceAck(commitPosition.getWeak(), timestamp, ServiceAck.EMPTY_SERVICE_ACKS);
-            }
         }
         else if (ConsensusModule.State.SUSPENDED == state)
         {
