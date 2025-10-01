@@ -35,8 +35,6 @@ import org.junit.jupiter.params.provider.EnumSource;
 import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Supplier;
-import java.util.function.ToLongFunction;
 
 import static io.aeron.cluster.ClusterExtensionTestUtil.ClusterClient.NODE_0_INGRESS;
 import static io.aeron.cluster.ClusterExtensionTestUtil.EIGHT_MEGABYTES;
@@ -159,25 +157,19 @@ public class FragmentedClusterLogMessagesTest
             assertTrue(node0.isLeader());
             assertTrue(initialLeadershipTermId < node0.leadershipTermId());
 
-            final Supplier<String> msg = () ->
-                " node0.publicationPosition()=" + node0.publicationPosition() +
-                " node0.commitPosition()=" + node0.commitPosition() +
-                " node1.commitPosition()=" + node1.commitPosition() +
-                " node2.commitPosition()=" + node2.commitPosition() +
-                " node0.servicePosition()=" + node0.servicePosition() +
-                " node1.servicePosition()=" + node1.servicePosition() +
-                " node2.servicePosition()=" + node2.servicePosition();
-
-            while (!(
-                positionReached(ClusterNode::commitPosition, node0.publicationPosition(), node0, node1, node2) &&
-                positionReached(ClusterNode::servicePosition, node0.publicationPosition(), node0, node1, node2)))
+            Tests.await(() ->
             {
                 node0.poll();
                 node1.poll();
                 node2.poll();
-
-                Tests.yieldingIdle(msg);
-            }
+                return
+                    node0.publicationPosition() == node0.commitPosition() &&
+                    node0.commitPosition() == node1.commitPosition() &&
+                    node0.commitPosition() == node2.commitPosition() &&
+                    node0.commitPosition() == node0.servicePosition() &&
+                    node1.commitPosition() == node1.servicePosition() &&
+                    node2.commitPosition() == node2.servicePosition();
+            });
 
             assertEquals(1, node0.offeredServiceMessages());
             assertEquals(1, node1.offeredServiceMessages());
@@ -248,7 +240,9 @@ public class FragmentedClusterLogMessagesTest
                 node2.poll();
                 return
                     node0.publicationPosition() > expectedPositionLowerBound &&
-                    positionReached(ClusterNode::commitPosition, node0.publicationPosition(), node0, node1, node2);
+                    node0.publicationPosition() == node0.commitPosition() &&
+                    node0.commitPosition() == node1.commitPosition() &&
+                    node0.commitPosition() == node2.commitPosition();
             });
 
             final long commitPositionBeforeFragmentedMessage = node0.commitPosition();
@@ -279,28 +273,20 @@ public class FragmentedClusterLogMessagesTest
             assertTrue(expectedAppendPosition < node0.servicePosition());
             assertTrue(node0.consensusModulePosition() < expectedAppendPosition);
 
-            final Supplier<String> msg = () ->
-                "expectedAppendPosition=" + expectedAppendPosition +
-                " node0.consensusModulePosition()=" + node0.consensusModulePosition() +
-                " node0.publicationPosition()=" + node0.publicationPosition() +
-                " node0.commitPosition()=" + node0.commitPosition() +
-                " node1.commitPosition()=" + node1.commitPosition() +
-                " node2.commitPosition()=" + node2.commitPosition() +
-                " node0.servicePosition()=" + node0.servicePosition() +
-                " node1.servicePosition()=" + node1.servicePosition() +
-                " node2.servicePosition()=" + node2.servicePosition();
-
-            while (!(
-                expectedAppendPosition < node0.consensusModulePosition() &&
-                positionReached(ClusterNode::commitPosition, node0.publicationPosition(), node0, node1, node2) &&
-                positionReached(ClusterNode::servicePosition, node0.publicationPosition(), node0, node1, node2)))
+            Tests.await(() ->
             {
                 node0.poll();
                 node1.poll();
                 node2.poll();
-
-                Tests.yieldingIdle(msg);
-            }
+                return
+                    expectedAppendPosition < node0.consensusModulePosition() &&
+                    node0.publicationPosition() == node0.commitPosition() &&
+                    node0.commitPosition() == node1.commitPosition() &&
+                    node0.commitPosition() == node2.commitPosition() &&
+                    node0.commitPosition() == node0.servicePosition() &&
+                    node1.commitPosition() == node1.servicePosition() &&
+                    node2.commitPosition() == node2.servicePosition();
+            });
 
             assertEquals(1, node0.offeredServiceMessages());
             assertEquals(1, node1.offeredServiceMessages());
@@ -395,8 +381,7 @@ public class FragmentedClusterLogMessagesTest
                 node0.poll();
                 node1.poll();
                 node2.poll();
-                return
-                    node0.consensusModulePosition() < node0.commitPosition() + (64 * 1024) &&
+                return node0.consensusModulePosition() < node0.commitPosition() + (64 * 1024) &&
                     node0.commitPosition() < node0.appendPosition();
             });
 
@@ -408,8 +393,7 @@ public class FragmentedClusterLogMessagesTest
                 node0.poll();
                 node1.poll();
                 node2.poll();
-                return
-                    1 == node0.extensionSnapshots().size() &&
+                return 1 == node0.extensionSnapshots().size() &&
                     1 == node1.extensionSnapshots().size() &&
                     1 == node2.extensionSnapshots().size();
             });
@@ -422,21 +406,5 @@ public class FragmentedClusterLogMessagesTest
             assertEquals(1, node2Snapshot.logMessageCount());
             assertEquals(1, node0Snapshot.logMessageCount());
         }
-    }
-
-    private static boolean positionReached(
-        final ToLongFunction<ClusterNode> position,
-        final long value,
-        final ClusterNode... nodes)
-    {
-        for (final ClusterNode node : nodes)
-        {
-            if (position.applyAsLong(node) != value)
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 }
