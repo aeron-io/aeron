@@ -67,7 +67,6 @@ import java.util.concurrent.TimeUnit;
 import static io.aeron.AeronCounters.CLUSTER_ELECTION_COUNT_TYPE_ID;
 import static io.aeron.AeronCounters.CLUSTER_LEADERSHIP_TERM_ID_TYPE_ID;
 import static io.aeron.AeronCounters.NODE_CONTROL_TOGGLE_TYPE_ID;
-import static io.aeron.cluster.ConsensusModule.Configuration.ALLOW_ONLY_BACKUP_QUERIES;
 import static io.aeron.cluster.ConsensusModule.Configuration.AUTHENTICATOR_SUPPLIER_PROP_NAME;
 import static io.aeron.cluster.ConsensusModule.Configuration.AUTHORISATION_SERVICE_SUPPLIER_PROP_NAME;
 import static io.aeron.cluster.ConsensusModule.Configuration.CLUSTER_CLOCK_PROP_NAME;
@@ -247,9 +246,9 @@ class ConsensusModuleContextTest
     }
 
     @Test
-    void defaultAuthorisationServiceSupplierReturnsADenyAllAuthorisationService()
+    void defaultAuthorisationServiceSupplierAllowsBackupAndStandby()
     {
-        assertSame(ALLOW_ONLY_BACKUP_QUERIES, DEFAULT_AUTHORISATION_SERVICE_SUPPLIER.get());
+        assertSame(AllowBackupAndStandbyAuthorisationService.INSTANCE, DEFAULT_AUTHORISATION_SERVICE_SUPPLIER.get());
     }
 
     @Test
