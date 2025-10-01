@@ -791,8 +791,9 @@ public final class ConsensusModule implements AutoCloseable
             "aeron.cluster.authorisation.service.supplier";
 
         /**
-         * Default {@link AuthorisationServiceSupplier} that returns {@link AuthorisationService} that forbids all
-         * command from being executed (i.e. {@link AuthorisationService#DENY_ALL}).
+         * Default {@link AuthorisationServiceSupplier} that returns an {@link AuthorisationService} that
+         * allows the commands necessary for Cluster Backup and Aeron Cluster Standby.
+         * ({@link AllowBackupAndStandbyAuthorisationService}).
          */
         public static final AuthorisationServiceSupplier DEFAULT_AUTHORISATION_SERVICE_SUPPLIER =
             () -> AllowBackupAndStandbyAuthorisationService.INSTANCE;
