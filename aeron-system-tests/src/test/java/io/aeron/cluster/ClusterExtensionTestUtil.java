@@ -38,7 +38,9 @@ import io.aeron.driver.status.SubscriberPos;
 import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.Header;
 import io.aeron.protocol.DataHeaderFlyweight;
+import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.cluster.StubClusteredService;
+import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
@@ -82,7 +84,7 @@ public class ClusterExtensionTestUtil
         private ClusteredService clusteredService;
         private ConsensusModuleExtension consensusModuleExtension;
 
-        private MediaDriver mediaDriver;
+        private TestMediaDriver mediaDriver;
         private Archive archive;
         private ConsensusModule consensusModule;
         private ClusteredServiceContainer serviceContainer;
@@ -135,9 +137,9 @@ public class ClusterExtensionTestUtil
             this.consensusModuleExtension = consensusModuleExtension;
         }
 
-        public void launch()
+        public void launch(final SystemTestWatcher testWatcher)
         {
-            mediaDriver = MediaDriver.launchEmbedded(mediaDriverContext);
+            mediaDriver = TestMediaDriver.launch(mediaDriverContext, testWatcher);
             archive = Archive.launch(archiveContext);
             if (null != clusteredService)
             {
