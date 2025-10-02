@@ -22,12 +22,14 @@ import io.aeron.cluster.codecs.MessageHeaderEncoder;
 import io.aeron.test.EventLogExtension;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
+import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.Tests;
 import io.aeron.test.cluster.TestCluster;
 import io.aeron.test.cluster.TestNode;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -48,6 +50,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @ExtendWith({EventLogExtension.class, InterruptingTestCallback.class})
 public class FragmentedClusterLogMessagesTest
 {
+
+    @RegisterExtension
+    final SystemTestWatcher testWatcher = new SystemTestWatcher();
 
     @TempDir
     public Path nodeDir0;
@@ -90,9 +95,9 @@ public class FragmentedClusterLogMessagesTest
             node1.withService(service1);
             node2.withService(service2);
 
-            node0.launch();
-            node1.launch();
-            node2.launch();
+            node0.launch(testWatcher);
+            node1.launch(testWatcher);
+            node2.launch(testWatcher);
 
             Tests.await(() ->
             {
@@ -227,9 +232,9 @@ public class FragmentedClusterLogMessagesTest
             node1.withService(service1);
             node2.withService(service2);
 
-            node0.launch();
-            node1.launch();
-            node2.launch();
+            node0.launch(testWatcher);
+            node1.launch(testWatcher);
+            node2.launch(testWatcher);
 
             Tests.await(() ->
             {
@@ -349,9 +354,9 @@ public class FragmentedClusterLogMessagesTest
             node1.withExtension(node1Extension);
             node2.withExtension(node2Extension);
 
-            node0.launch();
-            node1.launch();
-            node2.launch();
+            node0.launch(testWatcher);
+            node1.launch(testWatcher);
+            node2.launch(testWatcher);
 
             Tests.await(() ->
             {
