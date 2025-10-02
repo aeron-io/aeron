@@ -64,10 +64,17 @@ public class FragmentedClusterLogMessagesTest
     public void shouldElectionBetweenFragmentedServiceMessageAvoidDuplicateServiceMessage()
     {
         final AtomicBoolean waitingToOfferFragmentedMessage = new AtomicBoolean(true);
+        final ClusterExtensionTestUtil.OfferMessageOnSessionCloseService service0 =
+            new ClusterExtensionTestUtil.OfferMessageOnSessionCloseService(waitingToOfferFragmentedMessage);
+        final ClusterExtensionTestUtil.OfferMessageOnSessionCloseService service1 =
+            new ClusterExtensionTestUtil.OfferMessageOnSessionCloseService(waitingToOfferFragmentedMessage);
+        final ClusterExtensionTestUtil.OfferMessageOnSessionCloseService service2 =
+            new ClusterExtensionTestUtil.OfferMessageOnSessionCloseService(waitingToOfferFragmentedMessage);
+
         try (
-            ClusterNode node0 = new ClusterNode(0, nodeDir0, waitingToOfferFragmentedMessage);
-            ClusterNode node1 = new ClusterNode(1, nodeDir1, waitingToOfferFragmentedMessage);
-            ClusterNode node2 = new ClusterNode(2, nodeDir2, waitingToOfferFragmentedMessage))
+            ClusterNode node0 = new ClusterNode(0, nodeDir0);
+            ClusterNode node1 = new ClusterNode(1, nodeDir1);
+            ClusterNode node2 = new ClusterNode(2, nodeDir2))
         {
             node0.consensusModuleContext()
                 .appointedLeaderId(0)
@@ -78,6 +85,10 @@ public class FragmentedClusterLogMessagesTest
             node2.consensusModuleContext()
                 .appointedLeaderId(0)
                 .leaderHeartbeatTimeoutNs(TimeUnit.SECONDS.toNanos(1));
+
+            node0.withService(service0);
+            node1.withService(service1);
+            node2.withService(service2);
 
             node0.launch();
             node1.launch();
@@ -91,7 +102,7 @@ public class FragmentedClusterLogMessagesTest
                 return node0.started() && node1.started() && node2.started();
             });
             assertTrue(node0.isLeader());
-            final long initialLeadershipTermId = node0.leadershipTermId();
+            final long initialLeadershipTermId = node0.consensusModuleContext().leadershipTermIdCounter().get();
 
             try (ClusterClient client0 = new ClusterClient(
                 NODE_0_INGRESS, clientDir))
@@ -143,7 +154,7 @@ public class FragmentedClusterLogMessagesTest
                 node0.poll();
                 node1.poll();
                 node2.poll();
-                return node0.electionStarted();
+                return ElectionState.CLOSED != ElectionState.get(node0.consensusModuleContext().electionStateCounter());
             });
             assertEquals(node0.commitPosition(), node0.consensusModulePosition());
 
@@ -155,7 +166,7 @@ public class FragmentedClusterLogMessagesTest
                 return node0.started() && node1.started() && node2.started();
             });
             assertTrue(node0.isLeader());
-            assertTrue(initialLeadershipTermId < node0.leadershipTermId());
+            assertTrue(initialLeadershipTermId < node0.consensusModuleContext().leadershipTermIdCounter().get());
 
             Tests.await(() ->
             {
@@ -171,13 +182,13 @@ public class FragmentedClusterLogMessagesTest
                     node2.commitPosition() == node2.servicePosition();
             });
 
-            assertEquals(1, node0.offeredServiceMessages());
-            assertEquals(1, node1.offeredServiceMessages());
-            assertEquals(1, node2.offeredServiceMessages());
+            assertEquals(1, service0.offeredMessages());
+            assertEquals(1, service1.offeredMessages());
+            assertEquals(1, service2.offeredMessages());
 
-            assertEquals(1, node0.receivedServiceMessages());
-            assertEquals(1, node1.receivedServiceMessages());
-            assertEquals(1, node2.receivedServiceMessages());
+            assertEquals(1, service0.receivedMessages());
+            assertEquals(1, service1.receivedMessages());
+            assertEquals(1, service2.receivedMessages());
         }
     }
 
@@ -187,10 +198,17 @@ public class FragmentedClusterLogMessagesTest
     public void shouldHandleSnapshotWithFragmentedMessageInLog()
     {
         final AtomicBoolean waitingToOfferFragmentedMessage = new AtomicBoolean(true);
+        final ClusterExtensionTestUtil.OfferMessageOnSessionCloseService service0 =
+            new ClusterExtensionTestUtil.OfferMessageOnSessionCloseService(waitingToOfferFragmentedMessage);
+        final ClusterExtensionTestUtil.OfferMessageOnSessionCloseService service1 =
+            new ClusterExtensionTestUtil.OfferMessageOnSessionCloseService(waitingToOfferFragmentedMessage);
+        final ClusterExtensionTestUtil.OfferMessageOnSessionCloseService service2 =
+            new ClusterExtensionTestUtil.OfferMessageOnSessionCloseService(waitingToOfferFragmentedMessage);
+
         try (
-            ClusterNode node0 = new ClusterNode(0, nodeDir0, waitingToOfferFragmentedMessage);
-            ClusterNode node1 = new ClusterNode(1, nodeDir1, waitingToOfferFragmentedMessage);
-            ClusterNode node2 = new ClusterNode(2, nodeDir2, waitingToOfferFragmentedMessage))
+            ClusterNode node0 = new ClusterNode(0, nodeDir0);
+            ClusterNode node1 = new ClusterNode(1, nodeDir1);
+            ClusterNode node2 = new ClusterNode(2, nodeDir2))
         {
             node0.consensusModuleContext()
                 .appointedLeaderId(0)
@@ -204,6 +222,10 @@ public class FragmentedClusterLogMessagesTest
             node0.clusteredServiceContext().logFragmentLimit(1000);
             node1.clusteredServiceContext().logFragmentLimit(1000);
             node2.clusteredServiceContext().logFragmentLimit(1000);
+
+            node0.withService(service0);
+            node1.withService(service1);
+            node2.withService(service2);
 
             node0.launch();
             node1.launch();
@@ -288,13 +310,13 @@ public class FragmentedClusterLogMessagesTest
                     node2.commitPosition() == node2.servicePosition();
             });
 
-            assertEquals(1, node0.offeredServiceMessages());
-            assertEquals(1, node1.offeredServiceMessages());
-            assertEquals(1, node2.offeredServiceMessages());
+            assertEquals(1, service0.offeredMessages());
+            assertEquals(1, service1.offeredMessages());
+            assertEquals(1, service2.offeredMessages());
 
-            assertEquals(1, node0.receivedServiceMessages());
-            assertEquals(1, node1.receivedServiceMessages());
-            assertEquals(1, node2.receivedServiceMessages());
+            assertEquals(1, service0.receivedMessages());
+            assertEquals(1, service1.receivedMessages());
+            assertEquals(1, service2.receivedMessages());
         }
     }
 
@@ -304,26 +326,28 @@ public class FragmentedClusterLogMessagesTest
     @SuppressWarnings("methodLength")
     public void shouldSnapshotWhenLogAdapterIsBehind(final ClusterControl.ToggleState toggleState)
     {
+        final TestNode.TestConsensusModuleExtension node0Extension = new TestNode.TestConsensusModuleExtension();
+        final TestNode.TestConsensusModuleExtension node1Extension = new TestNode.TestConsensusModuleExtension();
+        final TestNode.TestConsensusModuleExtension node2Extension = new TestNode.TestConsensusModuleExtension();
+
         try (
-            ClusterNode node0 = new ClusterNode(0, nodeDir0, null);
-            ClusterNode node1 = new ClusterNode(1, nodeDir1, null);
-            ClusterNode node2 = new ClusterNode(2, nodeDir2, null))
+            ClusterNode node0 = new ClusterNode(0, nodeDir0);
+            ClusterNode node1 = new ClusterNode(1, nodeDir1);
+            ClusterNode node2 = new ClusterNode(2, nodeDir2))
         {
             node0.consensusModuleContext()
                 .appointedLeaderId(0)
-                .serviceCount(0)
-                .consensusModuleExtension(new TestNode.TestConsensusModuleExtension())
                 .logFragmentLimit(1);
             node1.consensusModuleContext()
                 .appointedLeaderId(0)
-                .serviceCount(0)
-                .consensusModuleExtension(new TestNode.TestConsensusModuleExtension())
                 .logFragmentLimit(1000);
             node2.consensusModuleContext()
                 .appointedLeaderId(0)
-                .serviceCount(0)
-                .consensusModuleExtension(new TestNode.TestConsensusModuleExtension())
                 .logFragmentLimit(1000);
+
+            node0.withExtension(node0Extension);
+            node1.withExtension(node1Extension);
+            node2.withExtension(node2Extension);
 
             node0.launch();
             node1.launch();
@@ -372,7 +396,7 @@ public class FragmentedClusterLogMessagesTest
                     node0.poll();
                     node1.poll();
                     node2.poll();
-                    return node0.extensionIngressCount() == 1;
+                    return 1L == node0Extension.ingressMessageCount().get();
                 });
             }
 
@@ -393,14 +417,14 @@ public class FragmentedClusterLogMessagesTest
                 node0.poll();
                 node1.poll();
                 node2.poll();
-                return 1 == node0.extensionSnapshots().size() &&
-                    1 == node1.extensionSnapshots().size() &&
-                    1 == node2.extensionSnapshots().size();
+                return 1 == node0Extension.snapshots().size() &&
+                    1 == node1Extension.snapshots().size() &&
+                    1 == node2Extension.snapshots().size();
             });
 
-            final TestNode.TestExtensionSnapshot node0Snapshot = node0.extensionSnapshots().get(0);
-            final TestNode.TestExtensionSnapshot node1Snapshot = node1.extensionSnapshots().get(0);
-            final TestNode.TestExtensionSnapshot node2Snapshot = node2.extensionSnapshots().get(0);
+            final TestNode.TestExtensionSnapshot node0Snapshot = node0Extension.snapshots().get(0);
+            final TestNode.TestExtensionSnapshot node1Snapshot = node1Extension.snapshots().get(0);
+            final TestNode.TestExtensionSnapshot node2Snapshot = node2Extension.snapshots().get(0);
 
             assertEquals(1, node1Snapshot.logMessageCount());
             assertEquals(1, node2Snapshot.logMessageCount());

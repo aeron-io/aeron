@@ -28,6 +28,7 @@ import io.aeron.cluster.codecs.SessionCloseEventEncoder;
 import io.aeron.cluster.codecs.SessionOpenEventEncoder;
 import io.aeron.cluster.service.ClientSession;
 import io.aeron.cluster.service.Cluster;
+import io.aeron.cluster.service.ClusteredService;
 import io.aeron.cluster.service.ClusteredServiceContainer;
 import io.aeron.driver.Configuration;
 import io.aeron.driver.MediaDriver;
@@ -38,16 +39,15 @@ import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.Header;
 import io.aeron.protocol.DataHeaderFlyweight;
 import io.aeron.test.cluster.StubClusteredService;
-import io.aeron.test.cluster.TestNode;
 import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.CountersReader;
 
 import java.nio.file.Path;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static io.aeron.cluster.client.AeronCluster.SESSION_HEADER_LENGTH;
 import static io.aeron.logbuffer.LogBufferDescriptor.computeFragmentedFrameLength;
@@ -78,7 +78,9 @@ public class ClusterExtensionTestUtil
         private final Archive.Context archiveContext;
         private final ConsensusModule.Context consensusModuleContext;
         private final ClusteredServiceContainer.Context clusteredServiceContext;
-        private final TestClusteredService clusteredService;
+
+        private ClusteredService clusteredService;
+        private ConsensusModuleExtension consensusModuleExtension;
 
         private MediaDriver mediaDriver;
         private Archive archive;
@@ -89,7 +91,7 @@ public class ClusterExtensionTestUtil
         private int serviceSubscriberPositionCounterId = Aeron.NULL_VALUE;
         private int consensusModuleSubscriberPositionCounterId = Aeron.NULL_VALUE;
 
-        ClusterNode(final int clusterMemberId, final Path directory, final AtomicBoolean waiting)
+        ClusterNode(final int clusterMemberId, final Path directory)
         {
             mediaDriverContext = new MediaDriver.Context()
                 .aeronDirectoryName(directory.resolve("driver").toAbsolutePath().toString())
@@ -105,7 +107,6 @@ public class ClusterExtensionTestUtil
                 .replicationChannel("aeron:udp?endpoint=localhost:0")
                 .threadingMode(ArchiveThreadingMode.SHARED);
 
-            clusteredService = new TestClusteredService(waiting);
             clusteredServiceContext = new ClusteredServiceContainer.Context()
                 .controlChannel("aeron:ipc")
                 .clusterDir(directory.resolve("cluster").toFile())
@@ -124,15 +125,42 @@ public class ClusterExtensionTestUtil
                 .useAgentInvoker(true);
         }
 
+        public void withService(final ClusteredService clusteredService)
+        {
+            this.clusteredService = clusteredService;
+        }
+
+        public void withExtension(final ConsensusModuleExtension consensusModuleExtension)
+        {
+            this.consensusModuleExtension = consensusModuleExtension;
+        }
+
         public void launch()
         {
             mediaDriver = MediaDriver.launchEmbedded(mediaDriverContext);
             archive = Archive.launch(archiveContext);
-            if (null == consensusModuleContext.consensusModuleExtension())
+            if (null != clusteredService)
             {
+                clusteredServiceContext.clusteredService(clusteredService);
+                consensusModuleContext.serviceCount(1);
                 serviceContainer = ClusteredServiceContainer.launch(clusteredServiceContext);
             }
+            if (null != consensusModuleExtension)
+            {
+                consensusModuleContext.consensusModuleExtension(consensusModuleExtension);
+                consensusModuleContext.serviceCount(0);
+            }
             consensusModule = ConsensusModule.launch(consensusModuleContext);
+        }
+
+        public MediaDriver.Context mediaDriverContext()
+        {
+            return mediaDriverContext;
+        }
+
+        public Archive.Context archiveContext()
+        {
+            return archiveContext;
         }
 
         public ConsensusModule.Context consensusModuleContext()
@@ -169,21 +197,6 @@ public class ClusterExtensionTestUtil
             return consensusModule.context().logPublisher().position();
         }
 
-        public long commitPosition()
-        {
-            return consensusModule.context().commitPositionCounter().get();
-        }
-
-        public long leadershipTermId()
-        {
-            return consensusModule.context().leadershipTermIdCounter().get();
-        }
-
-        public ConsensusModule.State clusterState()
-        {
-            return ConsensusModule.State.get(consensusModule.context().moduleStateCounter());
-        }
-
         public long appendPosition()
         {
             final Aeron aeron = consensusModule.context().aeron();
@@ -205,30 +218,9 @@ public class ClusterExtensionTestUtil
             return countersReader.getCounterValue(recordingPositionCounterId);
         }
 
-        public long servicePosition()
+        public long commitPosition()
         {
-            final Aeron aeron = serviceContainer.context().aeron();
-            final CountersReader countersReader = aeron.countersReader();
-
-            if (Aeron.NULL_VALUE == serviceSubscriberPositionCounterId)
-            {
-                final long aeronClientId = aeron.clientId();
-                countersReader.forEach((counterId, typeId, keyBuffer, label) ->
-                {
-                    final int streamId = keyBuffer.getInt(StreamCounter.STREAM_ID_OFFSET);
-                    if (SubscriberPos.SUBSCRIBER_POSITION_TYPE_ID == typeId &&
-                        consensusModule.context().logStreamId() == streamId)
-                    {
-                        if (countersReader.getCounterOwnerId(counterId) == aeronClientId)
-                        {
-                            serviceSubscriberPositionCounterId = counterId;
-                        }
-                    }
-                });
-            }
-
-            assertNotEquals(Aeron.NULL_VALUE, serviceSubscriberPositionCounterId);
-            return countersReader.getCounterValue(serviceSubscriberPositionCounterId);
+            return consensusModule.context().commitPositionCounter().get();
         }
 
         public long consensusModulePosition()
@@ -257,33 +249,30 @@ public class ClusterExtensionTestUtil
             return countersReader.getCounterValue(consensusModuleSubscriberPositionCounterId);
         }
 
-        public int offeredServiceMessages()
+        public long servicePosition()
         {
-            return clusteredService.offeredMessages();
-        }
+            final Aeron aeron = serviceContainer.context().aeron();
+            final CountersReader countersReader = aeron.countersReader();
 
-        public int receivedServiceMessages()
-        {
-            return clusteredService.receivedMessages();
-        }
+            if (Aeron.NULL_VALUE == serviceSubscriberPositionCounterId)
+            {
+                final long aeronClientId = aeron.clientId();
+                countersReader.forEach((counterId, typeId, keyBuffer, label) ->
+                {
+                    final int streamId = keyBuffer.getInt(StreamCounter.STREAM_ID_OFFSET);
+                    if (SubscriberPos.SUBSCRIBER_POSITION_TYPE_ID == typeId &&
+                        consensusModule.context().logStreamId() == streamId)
+                    {
+                        if (countersReader.getCounterOwnerId(counterId) == aeronClientId)
+                        {
+                            serviceSubscriberPositionCounterId = counterId;
+                        }
+                    }
+                });
+            }
 
-        public boolean electionStarted()
-        {
-            return ElectionState.CLOSED != ElectionState.get(consensusModule.context().electionStateCounter());
-        }
-
-        public long extensionIngressCount()
-        {
-            final TestNode.TestConsensusModuleExtension testConsensusModuleExtension =
-                (TestNode.TestConsensusModuleExtension)consensusModuleContext.consensusModuleExtension();
-            return testConsensusModuleExtension.ingressMessageCount().get();
-        }
-
-        public List<TestNode.TestExtensionSnapshot> extensionSnapshots()
-        {
-            final TestNode.TestConsensusModuleExtension testConsensusModuleExtension =
-                (TestNode.TestConsensusModuleExtension)consensusModuleContext.consensusModuleExtension();
-            return testConsensusModuleExtension.snapshots();
+            assertNotEquals(Aeron.NULL_VALUE, serviceSubscriberPositionCounterId);
+            return countersReader.getCounterValue(serviceSubscriberPositionCounterId);
         }
 
         @Override
@@ -291,63 +280,62 @@ public class ClusterExtensionTestUtil
         {
             CloseHelper.closeAll(serviceContainer, consensusModule, archive, mediaDriver);
         }
+    }
 
-        static class TestClusteredService extends StubClusteredService
+    static class OfferMessageOnSessionCloseService extends StubClusteredService
+    {
+        private static final UnsafeBuffer EIGHT_MEGABYTE_BUFFER =
+            new UnsafeBuffer(new byte[EIGHT_MEGABYTES - SESSION_HEADER_LENGTH]);
+
+        static
         {
+            EIGHT_MEGABYTE_BUFFER.setMemory(0, EIGHT_MEGABYTE_BUFFER.capacity(), (byte)'x');
+        }
 
-            private static final UnsafeBuffer EIGHT_MEGABYTE_BUFFER =
-                new UnsafeBuffer(new byte[EIGHT_MEGABYTES - SESSION_HEADER_LENGTH]);
+        private final AtomicBoolean waiting;
+        private final AtomicInteger offeredMessages = new AtomicInteger(0);
+        private final AtomicInteger receivedMessages = new AtomicInteger(0);
 
-            static
+        OfferMessageOnSessionCloseService(final AtomicBoolean waiting)
+        {
+            this.waiting = waiting;
+        }
+
+        int offeredMessages()
+        {
+            return offeredMessages.get();
+        }
+
+        int receivedMessages()
+        {
+            return receivedMessages.get();
+        }
+
+        public void onSessionClose(final ClientSession session, final long timestamp, final CloseReason closeReason)
+        {
+            cluster.idleStrategy().reset();
+            while (waiting.get())
             {
-                EIGHT_MEGABYTE_BUFFER.setMemory(0, EIGHT_MEGABYTE_BUFFER.capacity(), (byte)'x');
+                cluster.idleStrategy().idle();
             }
 
-            private final AtomicBoolean waiting;
-            int offeredMessages;
-            int receivedMessages;
-
-            TestClusteredService(final AtomicBoolean waiting)
+            while (0 > cluster.offer(EIGHT_MEGABYTE_BUFFER, 0, EIGHT_MEGABYTE_BUFFER.capacity()))
             {
-                this.waiting = waiting;
+                cluster.idleStrategy().idle();
             }
 
-            int offeredMessages()
-            {
-                return offeredMessages;
-            }
+            offeredMessages.incrementAndGet();
+        }
 
-            int receivedMessages()
-            {
-                return receivedMessages;
-            }
-
-            public void onSessionClose(final ClientSession session, final long timestamp, final CloseReason closeReason)
-            {
-                cluster.idleStrategy().reset();
-                while (waiting.get())
-                {
-                    cluster.idleStrategy().idle();
-                }
-
-                while (0 > cluster.offer(EIGHT_MEGABYTE_BUFFER, 0, EIGHT_MEGABYTE_BUFFER.capacity()))
-                {
-                    cluster.idleStrategy().idle();
-                }
-
-                ++offeredMessages;
-            }
-
-            public void onSessionMessage(
-                final ClientSession session,
-                final long timestamp,
-                final DirectBuffer buffer,
-                final int offset,
-                final int length,
-                final Header header)
-            {
-                ++receivedMessages;
-            }
+        public void onSessionMessage(
+            final ClientSession session,
+            final long timestamp,
+            final DirectBuffer buffer,
+            final int offset,
+            final int length,
+            final Header header)
+        {
+            receivedMessages.incrementAndGet();
         }
     }
 
