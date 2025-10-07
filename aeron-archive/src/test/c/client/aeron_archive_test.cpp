@@ -4213,7 +4213,6 @@ TEST_F(AeronCArchiveNoSetupTest, shouldNotHangClosingReplayMergeWhenUsingInvoker
     }
 
     const size_t initial_message_count = min_messages_per_term * 3;
-    const size_t subsequent_message_count = min_messages_per_term * 3;
 
     aeron_archive_context_t *ctx;
     aeron_archive_async_connect_t *async;
