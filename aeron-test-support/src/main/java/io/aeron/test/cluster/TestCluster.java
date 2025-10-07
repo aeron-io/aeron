@@ -753,14 +753,11 @@ public final class TestCluster implements AutoCloseable
         return client;
     }
 
-    public TestMediaDriver startClientMediaDriver()
+    public MediaDriver.Context clientMediaDriverCtx()
     {
-        if (null == clientMediaDriver)
-        {
-            final String aeronDirName = CommonContext.generateRandomDirName();
-            dataCollector.add(Paths.get(aeronDirName));
+        final String aeronDirName = CommonContext.generateRandomDirName();
 
-            final MediaDriver.Context ctx = new MediaDriver.Context()
+        final MediaDriver.Context ctx = new MediaDriver.Context()
                 .threadingMode(ThreadingMode.SHARED)
                 .dirDeleteOnStart(true)
                 .dirDeleteOnShutdown(true)
@@ -771,6 +768,16 @@ public final class TestCluster implements AutoCloseable
                 .sendChannelEndpointSupplier(clientSendChannelEndpointSupplier)
                 .receiveChannelEndpointSupplier(clientReceiveChannelEndpointSupplier)
                 .imageLivenessTimeoutNs(clientImageLivenessTimeoutNs);
+
+        return ctx;
+    }
+
+    public TestMediaDriver startClientMediaDriver()
+    {
+        if (null == clientMediaDriver)
+        {
+            final MediaDriver.Context ctx = clientMediaDriverCtx();
+            dataCollector.add(Paths.get(ctx.aeronDirectoryName()));
 
             clientMediaDriver = TestMediaDriver.launch(ctx, clientDriverOutputConsumer(dataCollector));
         }

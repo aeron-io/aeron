@@ -3071,6 +3071,123 @@ class ClusterTest
         cluster.stopAllNodes();
     }
 
+    @Test
+    @InterruptAfter(40)
+    @Disabled
+    void shouldAsyncConnectWhenMediaDriverUsesInvokerModeAndUsesImplicitAeronClient()
+    {
+        cluster = aCluster().withStaticNodes(3).start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode leader = cluster.awaitLeader();
+        assertEquals(1, leader.consensusModule().context().electionCounter().get());
+
+        final long leadershipTermId = leader.consensusModule().context().leadershipTermIdCounter().get();
+        assertNotEquals(-1, leadershipTermId);
+
+        final List<TestNode> followers = cluster.followers();
+
+        for (final TestNode follower : followers)
+        {
+            assertEquals(1, follower.consensusModule().context().electionCounter().get());
+            assertEquals(leadershipTermId, follower.consensusModule().context().leadershipTermIdCounter().get());
+        }
+
+        final MediaDriver.Context mediaDriverContext = cluster.clientMediaDriverCtx()
+                .threadingMode(ThreadingMode.INVOKER);
+
+        try (MediaDriver mediaDriver = MediaDriver.launch(mediaDriverContext))
+        {
+            final AeronCluster.Context clientContext = cluster.clientCtx();
+            clientContext.aeronDirectoryName(mediaDriver.aeronDirectoryName());
+
+            AeronCluster.AsyncConnect asyncConnect = AeronCluster.asyncConnect(clientContext.clone());
+            AeronCluster client = null;
+
+            while (client == null)
+            {
+                try
+                {
+                    client = asyncConnect.poll();
+                }
+                catch (final RuntimeException e)
+                {
+                    asyncConnect.close();
+                    asyncConnect = AeronCluster.asyncConnect(clientContext.clone());
+                }
+
+                mediaDriver.sharedAgentInvoker().invoke();
+
+                Tests.yield();
+            }
+
+            CloseHelper.quietClose(client);
+        }
+    }
+
+    @Test
+    @InterruptAfter(40)
+    void shouldAsyncConnectWhenMediaDriverUsesInvokerModeAndUsesExplicitAeronClient()
+    {
+        cluster = aCluster().withStaticNodes(3).start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode leader = cluster.awaitLeader();
+        assertEquals(1, leader.consensusModule().context().electionCounter().get());
+
+        final long leadershipTermId = leader.consensusModule().context().leadershipTermIdCounter().get();
+        assertNotEquals(-1, leadershipTermId);
+
+        final List<TestNode> followers = cluster.followers();
+
+        for (final TestNode follower : followers)
+        {
+            assertEquals(1, follower.consensusModule().context().electionCounter().get());
+            assertEquals(leadershipTermId, follower.consensusModule().context().leadershipTermIdCounter().get());
+        }
+
+        final MediaDriver.Context mediaDriverContext = cluster.clientMediaDriverCtx()
+                .threadingMode(ThreadingMode.INVOKER);
+
+        try (MediaDriver mediaDriver = MediaDriver.launch(mediaDriverContext))
+        {
+            final Aeron.Context aeronContext = new Aeron.Context();
+            aeronContext.aeronDirectoryName(mediaDriver.aeronDirectoryName());
+            aeronContext.useConductorAgentInvoker(true);
+            aeronContext.driverAgentInvoker(mediaDriver.sharedAgentInvoker());
+
+            try (Aeron aeron = Aeron.connect(aeronContext))
+            {
+                final AeronCluster.Context clientContext = cluster.clientCtx()
+                        .aeron(aeron)
+                        .ownsAeronClient(false);
+
+                AeronCluster.AsyncConnect asyncConnect = AeronCluster.asyncConnect(clientContext.clone());
+                AeronCluster client = null;
+
+                while (client == null)
+                {
+                    try
+                    {
+                        client = asyncConnect.poll();
+                    }
+                    catch (final RuntimeException e)
+                    {
+                        asyncConnect.close();
+                        asyncConnect = AeronCluster.asyncConnect(clientContext.clone());
+                    }
+
+                    mediaDriver.sharedAgentInvoker().invoke();
+                    aeron.conductorAgentInvoker().invoke();
+
+                    Tests.yield();
+                }
+
+                CloseHelper.quietClose(client);
+            }
+        }
+    }
+
     private static List<RuntimeException> terminalExceptions()
     {
         return List.of(
