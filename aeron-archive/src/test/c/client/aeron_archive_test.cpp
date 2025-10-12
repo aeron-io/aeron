@@ -15,6 +15,7 @@
  */
 
 #include "gtest/gtest.h"
+#include <gmock/gmock-matchers.h>
 
 #ifdef _MSC_VER
 #define AERON_FILE_SEP '\\'
@@ -117,7 +118,7 @@ public:
         }
     }
 
-    void DoSetUp(std::int64_t archiveId = 42)
+    void DoSetUp(std::int64_t archiveId = 42, std::int32_t maxConcurrentReplays = 100)
     {
         char aeron_dir[AERON_MAX_PATH];
         aeron_default_path(aeron_dir, sizeof(aeron_dir));
@@ -129,7 +130,8 @@ public:
             std::cout,
             "aeron:udp?endpoint=localhost:8010",
             "aeron:udp?endpoint=localhost:0",
-            archiveId);
+            archiveId,
+            maxConcurrentReplays);
     }
 
     void DoTearDown()
@@ -155,6 +157,11 @@ public:
     void idle()
     {
         aeron_idle_strategy_sleeping_idle((void *)&m_idle_duration_ns, 0);
+
+        if (m_invoke_on_idle)
+        {
+            aeron_main_do_work(m_aeron);
+        }
     }
 
     void connect(
@@ -567,6 +574,8 @@ protected:
 
     aeron_archive_context_t *m_dest_ctx = nullptr;
     aeron_archive_t *m_dest_archive = nullptr;
+
+    bool m_invoke_on_idle = false;
 };
 
 class AeronCArchiveTest : public AeronCArchiveTestBase, public testing::Test
@@ -4272,4 +4281,231 @@ TEST_F(AeronCArchiveTest, shouldRejectReentractCallsDuringCallbacks)
     // verify that lock was unlocked during the failed reentrant calls
     EXPECT_EQ(EPERM, aeron_mutex_unlock(&m_archive->lock));
 #endif
+}
+
+class AeronCArchiveNoSetupTest : public AeronCArchiveTestBase, public testing::Test
+{
+};
+
+TEST_F(AeronCArchiveNoSetupTest, shouldNotHangClosingReplayMergeWhenUsingInvoker)
+{
+    m_invoke_on_idle = true;
+
+    DoSetUp(42, 0);
+
+    const std::size_t termLength = 64 * 1024;
+    const std::string message_prefix = "Message ";
+    const std::size_t min_messages_per_term = termLength / (message_prefix.length() + AERON_DATA_HEADER_LENGTH);
+    const char *control_endpoint = "localhost:23265";
+    const char *recording_endpoint = "localhost:23266";
+    const char *live_endpoint = "localhost:23267";
+    const char *replay_endpoint = "localhost:0";
+
+    char publication_channel[AERON_URI_MAX_LENGTH];
+    char live_destination[AERON_URI_MAX_LENGTH];
+    char replay_destination[AERON_URI_MAX_LENGTH];
+    char recording_channel[AERON_URI_MAX_LENGTH];
+    char subscription_channel[AERON_URI_MAX_LENGTH];
+
+    {
+        aeron_uri_string_builder_t builder;
+
+        aeron_uri_string_builder_init_new(&builder);
+
+        aeron_uri_string_builder_put(&builder, AERON_URI_STRING_BUILDER_MEDIA_KEY, "udp");
+        aeron_uri_string_builder_put(&builder, AERON_UDP_CHANNEL_CONTROL_KEY, control_endpoint);
+        aeron_uri_string_builder_put(
+            &builder, AERON_UDP_CHANNEL_CONTROL_MODE_KEY, AERON_UDP_CHANNEL_CONTROL_MODE_DYNAMIC_VALUE);
+        aeron_uri_string_builder_put(&builder, AERON_URI_FC_KEY, "tagged,g:99901/1,t:5s");
+        aeron_uri_string_builder_put_int32(&builder, AERON_URI_TERM_LENGTH_KEY, termLength);
+
+        aeron_uri_string_builder_sprint(&builder, publication_channel, sizeof(publication_channel));
+        aeron_uri_string_builder_close(&builder);
+    }
+
+    {
+        aeron_uri_string_builder_t builder;
+
+        aeron_uri_string_builder_init_new(&builder);
+
+        aeron_uri_string_builder_put(&builder, AERON_URI_STRING_BUILDER_MEDIA_KEY, "udp");
+        aeron_uri_string_builder_put(&builder, AERON_UDP_CHANNEL_ENDPOINT_KEY, live_endpoint);
+        aeron_uri_string_builder_put(&builder, AERON_UDP_CHANNEL_CONTROL_KEY, control_endpoint);
+
+        aeron_uri_string_builder_sprint(&builder, live_destination, sizeof(live_destination));
+        aeron_uri_string_builder_close(&builder);
+    }
+
+    {
+        aeron_uri_string_builder_t builder;
+
+        aeron_uri_string_builder_init_new(&builder);
+
+        aeron_uri_string_builder_put(&builder, AERON_URI_STRING_BUILDER_MEDIA_KEY, "udp");
+        aeron_uri_string_builder_put(&builder, AERON_UDP_CHANNEL_ENDPOINT_KEY, replay_endpoint);
+
+        aeron_uri_string_builder_sprint(&builder, replay_destination, sizeof(replay_destination));
+        aeron_uri_string_builder_close(&builder);
+    }
+
+    const size_t initial_message_count = min_messages_per_term * 3;
+
+    aeron_archive_context_t *ctx;
+    aeron_archive_async_connect_t *async;
+
+    aeron_context_t *aeron_ctx;
+
+    ASSERT_EQ_ERR(0, aeron_archive_context_init(&ctx));
+    ASSERT_EQ_ERR(0, aeron_archive_context_set_control_request_channel(ctx, "aeron:udp?endpoint=localhost:8010"));
+    ASSERT_EQ_ERR(0, aeron_archive_context_set_control_response_channel(ctx, "aeron:udp?endpoint=localhost:0"));
+    ASSERT_EQ_ERR(0, aeron_archive_context_set_idle_strategy(
+        ctx, aeron_idle_strategy_sleeping_idle, (void *)&m_idle_duration_ns));
+    ASSERT_EQ_ERR(0, aeron_archive_context_set_credentials_supplier(
+        ctx,
+        encoded_credentials_supplier,
+        nullptr,
+        nullptr,
+        &default_creds_clientd));
+
+    ASSERT_EQ_ERR(0, aeron_context_init(&aeron_ctx));
+    ASSERT_EQ_ERR(0, aeron_context_set_use_conductor_agent_invoker(aeron_ctx, true));
+    ASSERT_EQ_ERR(0, aeron_context_set_dir(aeron_ctx, aeron_archive_context_get_aeron_directory_name(ctx)));
+    ASSERT_EQ_ERR(0, aeron_init(&m_aeron, aeron_ctx));
+    ASSERT_EQ_ERR(0, aeron_start(m_aeron));
+
+    ASSERT_EQ_ERR(0, aeron_archive_context_set_aeron(ctx, m_aeron));
+    ASSERT_EQ_ERR(0, aeron_archive_async_connect(&async, ctx));
+
+    // the ctx passed into async_connect gets duplicated, so it should be safe to delete it now
+    ASSERT_EQ_ERR(0, aeron_archive_context_close(ctx));
+
+    ASSERT_EQ_ERR(0, aeron_archive_async_connect_poll(&m_archive, async));
+
+    while (nullptr == m_archive)
+    {
+        idle();
+
+        ASSERT_NE(-1, aeron_archive_async_connect_poll(&m_archive, async));
+    }
+
+    ctx = aeron_archive_get_archive_context(m_archive);
+    ASSERT_FALSE(aeron_archive_context_get_owns_aeron_client(ctx));
+
+    aeron_publication_t *publication = addPublication(publication_channel, m_recordingStreamId);
+
+    int32_t session_id = aeron_publication_session_id(publication);
+
+    {
+        aeron_uri_string_builder_t builder;
+
+        aeron_uri_string_builder_init_new(&builder);
+
+        aeron_uri_string_builder_put(&builder, AERON_URI_STRING_BUILDER_MEDIA_KEY, "udp");
+        aeron_uri_string_builder_put(&builder, AERON_URI_GTAG_KEY, "99901");
+        aeron_uri_string_builder_put_int32(&builder, AERON_URI_SESSION_ID_KEY, session_id);
+        aeron_uri_string_builder_put(&builder, AERON_UDP_CHANNEL_ENDPOINT_KEY, recording_endpoint);
+        aeron_uri_string_builder_put(&builder, AERON_UDP_CHANNEL_CONTROL_KEY, control_endpoint);
+
+        aeron_uri_string_builder_sprint(&builder, recording_channel, sizeof(recording_channel));
+        aeron_uri_string_builder_close(&builder);
+    }
+
+    {
+        aeron_uri_string_builder_t builder;
+
+        aeron_uri_string_builder_init_new(&builder);
+
+        aeron_uri_string_builder_put(&builder, AERON_URI_STRING_BUILDER_MEDIA_KEY, "udp");
+        aeron_uri_string_builder_put(
+            &builder, AERON_UDP_CHANNEL_CONTROL_MODE_KEY, AERON_UDP_CHANNEL_CONTROL_MODE_MANUAL_VALUE);
+        aeron_uri_string_builder_put_int32(&builder, AERON_URI_SESSION_ID_KEY, session_id);
+
+        aeron_uri_string_builder_sprint(&builder, subscription_channel, sizeof(subscription_channel));
+        aeron_uri_string_builder_close(&builder);
+    }
+
+    ASSERT_EQ_ERR(0, aeron_archive_start_recording(
+        nullptr,
+        m_archive,
+        recording_channel,
+        m_recordingStreamId,
+        AERON_ARCHIVE_SOURCE_LOCATION_REMOTE,
+        true));
+
+    setupCounters(session_id);
+
+    bool is_active;
+    ASSERT_EQ_ERR(0, aeron_archive_recording_pos_is_active(
+        &is_active,
+        m_counters_reader,
+        m_counter_id,
+        m_recording_id_from_counter));
+    EXPECT_TRUE(is_active);
+
+    ASSERT_EQ_ERR(m_counter_id, aeron_archive_recording_pos_find_counter_id_by_recording_id(
+        m_counters_reader,
+        m_recording_id_from_counter));
+
+    {
+        size_t sib_len = AERON_COUNTER_MAX_LABEL_LENGTH;
+        const char source_identity_buffer[AERON_COUNTER_MAX_LABEL_LENGTH] = { '\0' };
+
+        ASSERT_EQ_ERR(0,
+            aeron_archive_recording_pos_get_source_identity(
+                m_counters_reader,
+                m_counter_id,
+                source_identity_buffer,
+                &sib_len));
+        EXPECT_STREQ("127.0.0.1:23265", source_identity_buffer);
+    }
+
+    offerMessages(publication, initial_message_count);
+
+    waitUntilCaughtUp(aeron_publication_position(publication));
+
+    fragment_handler_clientd_t clientd;
+    clientd.received = 0;
+    clientd.position = 0;
+
+    aeron_subscription_t *subscription = addSubscription(subscription_channel, m_recordingStreamId);
+
+    char replay_channel[AERON_URI_MAX_LENGTH];
+    {
+        aeron_uri_string_builder_t builder;
+
+        aeron_uri_string_builder_init_new(&builder);
+
+        aeron_uri_string_builder_put(&builder, AERON_URI_STRING_BUILDER_MEDIA_KEY, "udp");
+        aeron_uri_string_builder_put_int32(&builder, AERON_URI_SESSION_ID_KEY, session_id);
+
+        aeron_uri_string_builder_sprint(&builder, replay_channel, sizeof(replay_channel));
+        aeron_uri_string_builder_close(&builder);
+    }
+
+    aeron_archive_replay_merge_t *replay_merge;
+
+    ASSERT_EQ_ERR(0, aeron_archive_replay_merge_init(
+        &replay_merge,
+        subscription,
+        m_archive,
+        replay_channel,
+        replay_destination,
+        live_destination,
+        m_recording_id_from_counter,
+        clientd.position,
+        aeron_epoch_clock(),
+        REPLAY_MERGE_PROGRESS_TIMEOUT_DEFAULT_MS));
+
+    while (aeron_archive_replay_merge_poll(replay_merge, nullptr, nullptr, 123) >= 0)
+    {
+        idle();
+    }
+    ASSERT_THAT(aeron_errmsg(), testing::HasSubstr("max concurrent replays reached 0"));
+
+    ASSERT_EQ_ERR(0, aeron_archive_replay_merge_close(replay_merge));
+
+    DoTearDown();
+
+    ASSERT_EQ_ERR(0, aeron_close(m_aeron));
+    ASSERT_EQ_ERR(0, aeron_context_close(aeron_ctx));
 }

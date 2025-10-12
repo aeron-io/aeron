@@ -69,7 +69,8 @@ public:
         std::ostream &stream,
         std::string controlChannel,
         std::string replicationChannel,
-        std::int64_t archiveId)
+        std::int64_t archiveId,
+        std::int32_t maxConcurrentReplays = 100)
         : m_archiveDir(archiveDir), m_aeronDir(aeronDir), m_stream(stream)
     {
         m_stream << aeron_epoch_clock() << " [SetUp] Starting ArchivingMediaDriver..." << std::endl;
@@ -83,6 +84,7 @@ public:
         std::string replicationChannelArg = "-Daeron.archive.replication.channel=" + replicationChannel;
         std::string archiveIdArg = "-Daeron.archive.id=" + std::to_string(archiveId);
         std::string segmentLength = "-Daeron.archive.segment.file.length=" + std::to_string(SEGMENT_LENGTH);
+        std::string maxConcurrentReplaysArg = "-Daeron.archive.max.concurrent.replays=" + std::to_string(maxConcurrentReplays);
 
         const char *const argv[] =
         {
@@ -113,6 +115,7 @@ public:
             "-Daeron.archive.authenticator.supplier=io.aeron.samples.archive.SampleAuthenticatorSupplier",
             "-Daeron.enable.experimental.features=true",
             "-Daeron.spies.simulate.connection=true",
+            maxConcurrentReplaysArg.c_str(),
             segmentLength.c_str(),
             archiveIdArg.c_str(),
             controlChannelArg.c_str(),

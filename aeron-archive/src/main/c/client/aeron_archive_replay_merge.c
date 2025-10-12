@@ -18,6 +18,7 @@
 #include <inttypes.h>
 
 #include "aeron_archive.h"
+#include "aeron_archive_context.h"
 #include "aeron_alloc.h"
 #include "util/aeron_error.h"
 #include "uri/aeron_uri_string_builder.h"
@@ -241,6 +242,8 @@ int aeron_archive_replay_merge_close(aeron_archive_replay_merge_t *replay_merge)
         {
             aeron_archive_idle(replay_merge->aeron_archive);
 
+            aeron_archive_context_invoke_aeron_client(replay_merge->aeron_archive->ctx);
+
             if (aeron_archive_replay_merge_handle_async_destination(replay_merge) < 0)
             {
                 AERON_APPEND_ERR("%s", "");
@@ -269,6 +272,8 @@ int aeron_archive_replay_merge_close(aeron_archive_replay_merge_t *replay_merge)
             while (NULL != replay_merge->async_destination)
             {
                 aeron_archive_idle(replay_merge->aeron_archive);
+
+                aeron_archive_context_invoke_aeron_client(replay_merge->aeron_archive->ctx);
 
                 if (aeron_archive_replay_merge_handle_async_destination(replay_merge) < 0)
                 {

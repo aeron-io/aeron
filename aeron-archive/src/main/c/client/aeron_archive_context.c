@@ -370,6 +370,8 @@ int aeron_archive_context_conclude(aeron_archive_context_t *ctx)
         int32_t session_id;
         do
         {
+            aeron_archive_context_invoke_aeron_client(ctx);
+
             result = aeron_async_next_session_id_poll(&session_id, async);
             if (result < 0)
             {
