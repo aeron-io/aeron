@@ -22,12 +22,11 @@ import org.agrona.ErrorHandler;
 class ClusterTermination
 {
     private long deadlineNs;
-    private boolean haveServicesTerminated;
+    private boolean isTerminationReady = false;
 
-    ClusterTermination(final long deadlineNs, final int serviceCount)
+    ClusterTermination(final long deadlineNs)
     {
         this.deadlineNs = deadlineNs;
-        this.haveServicesTerminated = serviceCount <= 0;
     }
 
     void deadlineNs(final long deadlineNs)
@@ -37,7 +36,7 @@ class ClusterTermination
 
     boolean canTerminate(final ClusterMember[] members, final long nowNs)
     {
-        if (haveServicesTerminated)
+        if (isTerminationReady)
         {
             boolean result = true;
 
@@ -56,9 +55,9 @@ class ClusterTermination
         return false;
     }
 
-    void onServicesTerminated()
+    void onTerminationReady()
     {
-        haveServicesTerminated = true;
+        isTerminationReady = true;
     }
 
     void terminationPosition(

@@ -1,0 +1,317 @@
+/*
+ * Copyright 2014-2025 Real Logic Limited.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package io.aeron.cluster;
+
+import io.aeron.Counter;
+import io.aeron.cluster.ClusterExtensionTestUtil.ClusterClient;
+import io.aeron.cluster.ClusterExtensionTestUtil.ClusterNode;
+import io.aeron.test.EventLogExtension;
+import io.aeron.test.InterruptAfter;
+import io.aeron.test.InterruptingTestCallback;
+import io.aeron.test.SystemTestWatcher;
+import io.aeron.test.Tests;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.file.Path;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import static io.aeron.cluster.ClusterExtensionTestUtil.ClusterClient.NODE_0_INGRESS;
+import static io.aeron.cluster.ClusterExtensionTestUtil.EIGHT_MEGABYTES;
+import static io.aeron.cluster.ClusterExtensionTestUtil.EIGHT_MEGABYTES_LENGTH;
+import static io.aeron.cluster.ClusterExtensionTestUtil.NEW_LEADERSHIP_TERM_LENGTH;
+import static io.aeron.cluster.ClusterExtensionTestUtil.SESSION_CLOSE_LENGTH;
+import static io.aeron.cluster.ClusterExtensionTestUtil.SESSION_OPEN_LENGTH_BLOCK_LENGTH;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+@ExtendWith({EventLogExtension.class, InterruptingTestCallback.class})
+public class FragmentedClusterLogMessagesTest
+{
+
+    @RegisterExtension
+    final SystemTestWatcher testWatcher = new SystemTestWatcher();
+
+    @TempDir
+    public Path nodeDir0;
+    @TempDir
+    public Path nodeDir1;
+    @TempDir
+    public Path nodeDir2;
+    @TempDir
+    public Path clientDir;
+
+    @SuppressWarnings("MethodLength")
+    @Test
+    @InterruptAfter(10)
+    public void shouldElectionBetweenFragmentedServiceMessageAvoidDuplicateServiceMessage()
+    {
+        final AtomicBoolean waitingToOfferFragmentedMessage = new AtomicBoolean(true);
+        final ClusterExtensionTestUtil.OfferMessageOnSessionCloseService service0 =
+            new ClusterExtensionTestUtil.OfferMessageOnSessionCloseService(waitingToOfferFragmentedMessage);
+        final ClusterExtensionTestUtil.OfferMessageOnSessionCloseService service1 =
+            new ClusterExtensionTestUtil.OfferMessageOnSessionCloseService(waitingToOfferFragmentedMessage);
+        final ClusterExtensionTestUtil.OfferMessageOnSessionCloseService service2 =
+            new ClusterExtensionTestUtil.OfferMessageOnSessionCloseService(waitingToOfferFragmentedMessage);
+
+        try (
+            ClusterNode node0 = new ClusterNode(0, nodeDir0);
+            ClusterNode node1 = new ClusterNode(1, nodeDir1);
+            ClusterNode node2 = new ClusterNode(2, nodeDir2))
+        {
+            node0.consensusModuleContext()
+                .appointedLeaderId(0)
+                .leaderHeartbeatTimeoutNs(TimeUnit.SECONDS.toNanos(1));
+            node1.consensusModuleContext()
+                .appointedLeaderId(0)
+                .leaderHeartbeatTimeoutNs(TimeUnit.SECONDS.toNanos(1));
+            node2.consensusModuleContext()
+                .appointedLeaderId(0)
+                .leaderHeartbeatTimeoutNs(TimeUnit.SECONDS.toNanos(1));
+
+            node0.withService(service0);
+            node1.withService(service1);
+            node2.withService(service2);
+
+            node0.launch(testWatcher);
+            node1.launch(testWatcher);
+            node2.launch(testWatcher);
+
+            Tests.await(() ->
+            {
+                node0.poll();
+                node1.poll();
+                node2.poll();
+                return node0.started() && node1.started() && node2.started();
+            });
+            assertTrue(node0.isLeader());
+            final long initialLeadershipTermId = node0.consensusModuleContext().leadershipTermIdCounter().get();
+
+            try (ClusterClient client0 = new ClusterClient(
+                NODE_0_INGRESS, clientDir))
+            {
+                client0.launch();
+
+                Tests.await(() ->
+                {
+                    node0.poll(); node1.poll(); node2.poll();
+                    return client0.connect();
+                });
+            }
+
+            final long expectedPositionLowerBound =
+                NEW_LEADERSHIP_TERM_LENGTH + SESSION_OPEN_LENGTH_BLOCK_LENGTH + SESSION_CLOSE_LENGTH;
+            Tests.await(() ->
+            {
+                node0.poll();
+                node1.poll();
+                node2.poll();
+                return
+                    node0.publicationPosition() > expectedPositionLowerBound &&
+                    node0.publicationPosition() == node0.commitPosition() &&
+                    node0.commitPosition() == node1.commitPosition() &&
+                    node0.commitPosition() == node2.commitPosition();
+            });
+
+            final long commitPositionBeforeFragmentedMessage = node0.commitPosition();
+            waitingToOfferFragmentedMessage.set(false);
+            Tests.await(() ->
+            {
+                node0.poll();
+                node1.poll();
+                node2.poll();
+                return
+                    node0.commitPosition() > commitPositionBeforeFragmentedMessage &&
+                    node0.commitPosition() < (commitPositionBeforeFragmentedMessage + EIGHT_MEGABYTES);
+            });
+
+            final long expectedAppendPosition = commitPositionBeforeFragmentedMessage +
+                EIGHT_MEGABYTES_LENGTH;
+            Tests.await(() -> node0.appendPosition() == expectedAppendPosition);
+
+            Tests.sleep(TimeUnit.NANOSECONDS.toMillis(node0.consensusModuleContext().leaderHeartbeatTimeoutNs()) + 1);
+
+            Tests.await(() ->
+            {
+                node0.poll();
+                node1.poll();
+                node2.poll();
+                return ElectionState.CLOSED != ElectionState.get(node0.consensusModuleContext().electionStateCounter());
+            });
+
+            Tests.await(() ->
+            {
+                node0.poll();
+                node1.poll();
+                node2.poll();
+                return node0.started() && node1.started() && node2.started();
+            });
+            assertTrue(node0.isLeader());
+            assertTrue(initialLeadershipTermId < node0.consensusModuleContext().leadershipTermIdCounter().get());
+
+            Tests.await(() ->
+            {
+                node0.poll();
+                node1.poll();
+                node2.poll();
+                return
+                    node0.publicationPosition() == node0.commitPosition() &&
+                    node0.commitPosition() == node1.commitPosition() &&
+                    node0.commitPosition() == node2.commitPosition() &&
+                    node0.commitPosition() == node0.servicePosition() &&
+                    node1.commitPosition() == node1.servicePosition() &&
+                    node2.commitPosition() == node2.servicePosition();
+            });
+
+            assertEquals(1, service0.offeredMessages());
+            assertEquals(1, service1.offeredMessages());
+            assertEquals(1, service2.offeredMessages());
+
+            assertEquals(1, service0.receivedMessages());
+            assertEquals(1, service1.receivedMessages());
+            assertEquals(1, service2.receivedMessages());
+        }
+    }
+
+    @Test
+    @InterruptAfter(10)
+    @SuppressWarnings("methodlength")
+    public void shouldHandleSnapshotWithFragmentedMessageInLog()
+    {
+        final AtomicBoolean waitingToOfferFragmentedMessage = new AtomicBoolean(true);
+        final ClusterExtensionTestUtil.OfferMessageOnSessionCloseService service0 =
+            new ClusterExtensionTestUtil.OfferMessageOnSessionCloseService(waitingToOfferFragmentedMessage);
+        final ClusterExtensionTestUtil.OfferMessageOnSessionCloseService service1 =
+            new ClusterExtensionTestUtil.OfferMessageOnSessionCloseService(waitingToOfferFragmentedMessage);
+        final ClusterExtensionTestUtil.OfferMessageOnSessionCloseService service2 =
+            new ClusterExtensionTestUtil.OfferMessageOnSessionCloseService(waitingToOfferFragmentedMessage);
+
+        try (
+            ClusterNode node0 = new ClusterNode(0, nodeDir0);
+            ClusterNode node1 = new ClusterNode(1, nodeDir1);
+            ClusterNode node2 = new ClusterNode(2, nodeDir2))
+        {
+            node0.consensusModuleContext()
+                .appointedLeaderId(0)
+                .logFragmentLimit(1);
+            node1.consensusModuleContext()
+                .appointedLeaderId(0)
+                .logFragmentLimit(1000);
+            node2.consensusModuleContext()
+                .appointedLeaderId(0)
+                .logFragmentLimit(1000);
+            node0.clusteredServiceContext().logFragmentLimit(1000);
+            node1.clusteredServiceContext().logFragmentLimit(1000);
+            node2.clusteredServiceContext().logFragmentLimit(1000);
+
+            node0.withService(service0);
+            node1.withService(service1);
+            node2.withService(service2);
+
+            node0.launch(testWatcher);
+            node1.launch(testWatcher);
+            node2.launch(testWatcher);
+
+            Tests.await(() ->
+            {
+                node0.poll();
+                node1.poll();
+                node2.poll();
+                return node0.started() && node1.started() && node2.started();
+            });
+            assertTrue(node0.isLeader());
+
+            try (ClusterClient client0 = new ClusterClient(NODE_0_INGRESS, clientDir))
+            {
+                client0.launch();
+
+                Tests.await(() ->
+                {
+                    node0.poll();
+                    node1.poll();
+                    node2.poll();
+                    return client0.connect();
+                });
+            }
+
+            final long expectedPositionLowerBound =
+                NEW_LEADERSHIP_TERM_LENGTH + SESSION_OPEN_LENGTH_BLOCK_LENGTH + SESSION_CLOSE_LENGTH;
+            Tests.await(() ->
+            {
+                node0.poll();
+                node1.poll();
+                node2.poll();
+                return
+                    node0.publicationPosition() > expectedPositionLowerBound &&
+                    node0.publicationPosition() == node0.commitPosition() &&
+                    node0.commitPosition() == node1.commitPosition() &&
+                    node0.commitPosition() == node2.commitPosition();
+            });
+
+            final long commitPositionBeforeFragmentedMessage = node0.commitPosition();
+            waitingToOfferFragmentedMessage.set(false);
+            Tests.await(() ->
+            {
+                node0.poll();
+                node1.poll();
+                node2.poll();
+                return
+                    commitPositionBeforeFragmentedMessage < node0.commitPosition() &&
+                    node0.commitPosition() < (commitPositionBeforeFragmentedMessage + EIGHT_MEGABYTES);
+            });
+
+            final long expectedAppendPosition = commitPositionBeforeFragmentedMessage + EIGHT_MEGABYTES_LENGTH;
+            Tests.await(() -> node0.appendPosition() == expectedAppendPosition);
+
+            final Counter controlToggle = node0.consensusModuleContext().controlToggleCounter();
+            controlToggle.setRelease(ClusterControl.ToggleState.SNAPSHOT.code());
+
+            Tests.await(() ->
+            {
+                node0.poll();
+                node1.poll();
+                node2.poll();
+                return 1L == node0.consensusModuleContext().snapshotCounter().get();
+            });
+            assertTrue(expectedAppendPosition < node0.servicePosition());
+
+            Tests.await(() ->
+            {
+                node0.poll();
+                node1.poll();
+                node2.poll();
+                return
+                    node0.publicationPosition() == node0.commitPosition() &&
+                    node0.commitPosition() == node1.commitPosition() &&
+                    node0.commitPosition() == node2.commitPosition() &&
+                    node0.commitPosition() == node0.servicePosition() &&
+                    node1.commitPosition() == node1.servicePosition() &&
+                    node2.commitPosition() == node2.servicePosition();
+            });
+
+            assertEquals(1, service0.offeredMessages());
+            assertEquals(1, service1.offeredMessages());
+            assertEquals(1, service2.offeredMessages());
+
+            assertEquals(1, service0.receivedMessages());
+            assertEquals(1, service1.receivedMessages());
+            assertEquals(1, service2.receivedMessages());
+        }
+    }
+}
