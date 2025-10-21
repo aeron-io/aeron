@@ -758,3 +758,9 @@ int aeron_sockaddr_storage_cmp(struct sockaddr_storage *a, struct sockaddr_stora
 
     return 0;
 }
+
+bool aeron_is_acceptable_socket_error(void)
+{
+    int err = errno;
+    return EAGAIN == err || EWOULDBLOCK == err || ECONNREFUSED == err || EINTR == err;
+}
