@@ -174,18 +174,17 @@ int aeron_driver_sender_do_work(void *clientd)
             AERON_APPEND_ERR("%s", "sender poller_poll");
             aeron_driver_sender_log_error(sender);
         }
-
-        if (sender->context->re_resolution_check_interval_ns > 0 && (sender->re_resolution_deadline_ns - now_ns) < 0)
-        {
-            sender->re_resolution_deadline_ns = (int64_t)(now_ns + sender->context->re_resolution_check_interval_ns);
-            aeron_udp_transport_poller_check_send_endpoint_re_resolutions(
-                &sender->poller, now_ns, sender->context->conductor_proxy);
-        }
-
         work_count += (poll_result < 0 ? 0 : poll_result);
 
         sender->duty_cycle_counter = 0;
         sender->control_poll_timeout_ns = now_ns + sender->status_message_read_timeout_ns;
+    }
+
+    if (sender->context->re_resolution_check_interval_ns > 0 && (sender->re_resolution_deadline_ns - now_ns) < 0)
+    {
+        sender->re_resolution_deadline_ns = (int64_t)(now_ns + sender->context->re_resolution_check_interval_ns);
+        aeron_udp_transport_poller_check_send_endpoint_re_resolutions(
+                &sender->poller, now_ns, sender->context->conductor_proxy);
     }
 
     return work_count + bytes_sent + (int)bytes_received;

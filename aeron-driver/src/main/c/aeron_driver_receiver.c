@@ -252,7 +252,7 @@ int aeron_driver_receiver_do_work(void *clientd)
         }
     }
 
-    if (receiver->context->re_resolution_check_interval_ns > 0 && now_ns > receiver->re_resolution_deadline_ns)
+    if (receiver->context->re_resolution_check_interval_ns > 0 && (receiver->re_resolution_deadline_ns - now_ns) < 0)
     {
         receiver->re_resolution_deadline_ns = now_ns + (int64_t)receiver->context->re_resolution_check_interval_ns;
         aeron_udp_transport_poller_check_receive_endpoint_re_resolutions(
