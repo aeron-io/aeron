@@ -74,8 +74,7 @@ class PublicationRevokeTest
         .threadingMode(ThreadingMode.SHARED);
 
     private final Aeron.Context clientContext = new Aeron.Context()
-        .resourceLingerDurationNs(MILLISECONDS.toNanos(200))
-        .idleSleepDurationNs(MILLISECONDS.toNanos(100));
+        .resourceLingerDurationNs(MILLISECONDS.toNanos(200));
 
     private Aeron client;
     private TestMediaDriver driver;

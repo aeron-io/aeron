@@ -92,8 +92,7 @@ class PubAndSubTest
         .timerIntervalNs(MILLISECONDS.toNanos(100));
 
     private final Aeron.Context clientContext = new Aeron.Context()
-        .resourceLingerDurationNs(MILLISECONDS.toNanos(200))
-        .idleSleepDurationNs(MILLISECONDS.toNanos(100));
+        .resourceLingerDurationNs(MILLISECONDS.toNanos(200));
 
     private Aeron publishingClient;
     private Aeron subscribingClient;
