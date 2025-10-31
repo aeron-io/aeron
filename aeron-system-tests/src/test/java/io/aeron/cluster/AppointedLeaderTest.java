@@ -22,9 +22,14 @@ import io.aeron.test.InterruptingTestCallback;
 import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.cluster.TestCluster;
 import io.aeron.test.cluster.TestNode;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.file.Path;
 
 import static io.aeron.test.cluster.TestCluster.aCluster;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -38,11 +43,22 @@ class AppointedLeaderTest
 
     private static final int LEADER_ID = 1;
 
+    private String aeronDirectory;
+
+    @BeforeEach
+    void setup(@TempDir final Path tempDir)
+    {
+        aeronDirectory = tempDir.toString();
+    }
+
     @Test
     @InterruptAfter(20)
     void shouldConnectAndSendKeepAlive()
     {
-        final TestCluster cluster = aCluster().withStaticNodes(3).withAppointedLeader(LEADER_ID).start();
+        final TestCluster cluster = aCluster()
+            .withAeronBaseDir(aeronDirectory)
+            .withStaticNodes(3)
+            .withAppointedLeader(LEADER_ID).start();
         systemTestWatcher.cluster(cluster);
 
         final TestNode leader = cluster.awaitLeader();
@@ -57,7 +73,9 @@ class AppointedLeaderTest
     @InterruptAfter(20)
     void shouldEchoMessagesViaService()
     {
-        final TestCluster cluster = aCluster().withStaticNodes(3).withAppointedLeader(LEADER_ID).start();
+        final TestCluster cluster = aCluster()
+            .withAeronBaseDir(aeronDirectory)
+            .withStaticNodes(3).withAppointedLeader(LEADER_ID).start();
         systemTestWatcher.cluster(cluster);
 
         final TestNode leader = cluster.awaitLeader();

@@ -93,6 +93,7 @@ import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.IntFunction;
@@ -177,6 +178,7 @@ public final class TestCluster implements AutoCloseable
     private boolean acceptStandbySnapshots;
     private File markFileBaseDir;
     private String clusterBaseDir;
+    private String aeronBaseDir;
     private ClusterBackup.Configuration.ReplayStart replayStart;
     private List<String> hostnames;
     private Function<Aeron, Counter> errorCounterSupplier;
@@ -305,7 +307,7 @@ public final class TestCluster implements AutoCloseable
         final int index, final boolean cleanStart, final IntFunction<TestNode.TestService[]> serviceSupplier)
     {
         final String baseDirName = clusterBaseDir + "-" + index;
-        final String aeronDirName = CommonContext.generateRandomDirName();
+        final String aeronDirName = aeronBaseDir + "-" + UUID.randomUUID();
         final File markFileDir = null != markFileBaseDir ? new File(markFileBaseDir, "mark-" + index) : null;
         final TestNode.Context context = new TestNode.Context(
             serviceSupplier.apply(index), hostname(index, memberCount), nodeNameMappings());
@@ -411,7 +413,7 @@ public final class TestCluster implements AutoCloseable
     {
         final int index = memberCount;
         final String baseDirName = clusterBaseDir + "-" + index;
-        final String aeronDirName = CommonContext.generateRandomDirName();
+        final String aeronDirName = aeronBaseDir + "-" + UUID.randomUUID();
         final File markFileDir = null != markFileBaseDir ? new File(markFileBaseDir, "mark-" + index) : null;
         final TestBackupNode.Context context = new TestBackupNode.Context();
 
@@ -482,7 +484,7 @@ public final class TestCluster implements AutoCloseable
     public TestNode startStaticNodeFromBackup(final IntFunction<TestNode.TestService[]> serviceSupplier)
     {
         final String baseDirName = clusterBaseDir + "-" + backupNodeIndex;
-        final String aeronDirName = CommonContext.generateRandomDirName();
+        final String aeronDirName = aeronBaseDir + "-" + UUID.randomUUID();
         final File markFileDir = null != markFileBaseDir ? new File(markFileBaseDir, "mark-" + backupNodeIndex) : null;
         final TestNode.Context context = new TestNode.Context(
             serviceSupplier.apply(backupNodeIndex), hostname(backupNodeIndex, memberCount), nodeNameMappings());
@@ -766,7 +768,7 @@ public final class TestCluster implements AutoCloseable
     {
         if (null == clientMediaDriver)
         {
-            final String aeronDirName = CommonContext.generateRandomDirName();
+            final String aeronDirName = aeronBaseDir + "-" + UUID.randomUUID();
             dataCollector.add(Paths.get(aeronDirName));
 
             final MediaDriver.Context ctx = new MediaDriver.Context()
@@ -2137,6 +2139,7 @@ public final class TestCluster implements AutoCloseable
         private File markFileBaseDir = null;
         private String clusterBaseDir = System.getProperty(
             CLUSTER_BASE_DIR_PROP_NAME, CommonContext.generateRandomDirName());
+        private String aeronBaseDir = CommonContext.getAeronDirectoryName();
         private boolean useResponseChannels = false;
         private Supplier<ConsensusModuleExtension> extensionSupplier;
         private List<String> hostnames;
@@ -2245,6 +2248,12 @@ public final class TestCluster implements AutoCloseable
             return this;
         }
 
+        public Builder withAeronBaseDir(final String baseDir)
+        {
+            this.aeronBaseDir = baseDir;
+            return this;
+        }
+
         public Builder withClusterBaseDir(final String clusterBaseDir)
         {
             this.clusterBaseDir = clusterBaseDir;
@@ -2319,6 +2328,7 @@ public final class TestCluster implements AutoCloseable
             testCluster.invalidInitialResolutions(byHostInvalidInitialResolutions, byMemberInvalidInitialResolutions);
             testCluster.acceptStandbySnapshots(acceptStandbySnapshots);
             testCluster.markFileBaseDir(markFileBaseDir);
+            testCluster.aeronBaseDir(aeronBaseDir);
             testCluster.clusterBaseDir(clusterBaseDir);
             testCluster.replyStart(replayStart);
             testCluster.extensionSupplier(extensionSupplier);
@@ -2382,6 +2392,11 @@ public final class TestCluster implements AutoCloseable
         }
 
         return "localhost";
+    }
+
+    private void aeronBaseDir(final String aeronBaseDir)
+    {
+        this.aeronBaseDir = aeronBaseDir;
     }
 
     private void clusterBaseDir(final String clusterBaseDir)
