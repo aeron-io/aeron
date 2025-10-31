@@ -15,28 +15,52 @@
  */
 package io.aeron.driver;
 
-import io.aeron.*;
+import io.aeron.Aeron;
+import io.aeron.AeronCounters;
+import io.aeron.CommonContext;
+import io.aeron.Publication;
+import io.aeron.Subscription;
+import io.aeron.exceptions.AeronException;
 import io.aeron.logbuffer.LogBufferDescriptor;
-import io.aeron.test.*;
+import io.aeron.test.InterruptAfter;
+import io.aeron.test.InterruptingTestCallback;
+import io.aeron.test.SlowTest;
+import io.aeron.test.SystemTestWatcher;
+import io.aeron.test.Tests;
 import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.CloseHelper;
 import org.agrona.collections.MutableBoolean;
+import org.agrona.collections.MutableReference;
 import org.agrona.concurrent.AtomicBuffer;
 import org.agrona.concurrent.SleepingMillisIdleStrategy;
 import org.agrona.concurrent.status.CountersReader;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
+import java.net.BindException;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static io.aeron.Aeron.NULL_VALUE;
-import static org.agrona.concurrent.status.CountersReader.*;
+import static io.aeron.driver.DriverNameResolver.NEIGHBOR_RESOLUTION_INTERVAL_MS;
+import static org.agrona.concurrent.status.CountersReader.METADATA_LENGTH;
+import static org.agrona.concurrent.status.CountersReader.RECORD_ALLOCATED;
+import static org.agrona.concurrent.status.CountersReader.RECORD_UNUSED;
+import static org.agrona.concurrent.status.CountersReader.TYPE_ID_OFFSET;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.endsWith;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -298,11 +322,12 @@ class DriverNameResolverTest
             .resolverName("A")
             .resolverInterface("0.0.0.0:8050"), testWatcher));
 
-        addDriver(TestMediaDriver.launch(setDefaults(new MediaDriver.Context())
-            .aeronDirectoryName(baseDir + "-B")
-            .resolverName("B")
-            .resolverInterface("0.0.0.0:8051")
-            .resolverBootstrapNeighbor("just:wrong,non_existing_host:8050,localhost:8050,localhost:8051"),
+        addDriver(TestMediaDriver.launch(
+            setDefaults(new MediaDriver.Context())
+                .aeronDirectoryName(baseDir + "-B")
+                .resolverName("B")
+                .resolverInterface("0.0.0.0:8051")
+                .resolverBootstrapNeighbor("just:wrong,non_existing_host:8050,localhost:8050,localhost:8051"),
             testWatcher));
         startClients();
 
@@ -393,13 +418,76 @@ class DriverNameResolverTest
         }
     }
 
-    private void closeDriver(final String index)
+    @Test
+    @InterruptAfter(10)
+    @DisabledOnOs(OS.MAC)
+    void shouldMatchFullNameWhenPortsAreTheSameAndNamesCanBePrefixMatched()
     {
-        clients.get(index).close();
-        clients.remove(index);
-        drivers.get(index).close();
-        drivers.get(index).context().deleteDirectory();
-        drivers.remove(index);
+        addDriver(TestMediaDriver.launch(setDefaults(new MediaDriver.Context())
+            .aeronDirectoryName(baseDir + "-A")
+            .resolverName("A")
+            .resolverInterface("127.0.0.1:4809")
+            .resolverBootstrapNeighbor("127.0.0.2:4809"), testWatcher));
+
+        addDriver(TestMediaDriver.launch(setDefaults(new MediaDriver.Context())
+            .aeronDirectoryName(baseDir + "-B")
+            .resolverName("AA")
+            .resolverInterface("127.0.0.2:4809"), testWatcher));
+        startClients();
+
+        final int aNeighborsCounterId = awaitNeighborsCounterId("A");
+        final int bNeighborsCounterId = awaitNeighborsCounterId("AA");
+
+        final long deadlineNs = System.nanoTime() + 2 * TimeUnit.MILLISECONDS.toNanos(NEIGHBOR_RESOLUTION_INTERVAL_MS);
+
+        awaitCounterValue("A", aNeighborsCounterId, 1);
+        awaitCounterValue("AA", bNeighborsCounterId, 1);
+
+        // Ensure that self entry is not added to the cache if received without SELF flag
+        final CountersReader aCounters = clients.get("A").countersReader();
+        final CountersReader bCounters = clients.get("AA").countersReader();
+        do
+        {
+            assertEquals(1, aCounters.getCounterValue(aNeighborsCounterId));
+            assertEquals(1, bCounters.getCounterValue(bNeighborsCounterId));
+        }
+        while (System.nanoTime() < deadlineNs);
+    }
+
+    @Test
+    @InterruptAfter(10)
+    @SuppressWarnings("try")
+    void shouldUseActuallySpecifiedHostNamePortPairForCreatingChannelUri()
+    {
+        assumeTrue(TestMediaDriver.shouldRunJavaMediaDriver());
+
+        final String aeronDir = baseDir + "-error";
+        final MutableReference<Throwable> error = new MutableReference<>();
+        try (TestMediaDriver driver = TestMediaDriver.launch(setDefaults(new MediaDriver.Context())
+            .threadingMode(ThreadingMode.INVOKER)
+            .errorHandler(error::set)
+            .aeronDirectoryName(aeronDir)
+            .resolverName("test")
+            .resolverInterface("1.0.0.0:4809"), testWatcher))
+        {
+            final Throwable exception = error.get();
+            assertNull(exception.getCause());
+            final Throwable[] suppressed = exception.getSuppressed();
+            assertNotNull(suppressed);
+            assertEquals(1, suppressed.length);
+            final Throwable channelError = suppressed[0];
+            assertInstanceOf(AeronException.class, channelError);
+            assertThat(channelError.getMessage(), endsWith("aeron:udp?endpoint=1.0.0.0:4809"));
+            assertInstanceOf(BindException.class, channelError.getCause());
+        }
+    }
+
+    private void closeDriver(final String name)
+    {
+        clients.remove(name).close();
+        final TestMediaDriver driver = drivers.remove(name);
+        driver.close();
+        driver.context().deleteDirectory();
     }
 
     private static MediaDriver.Context setDefaults(final MediaDriver.Context context)
@@ -421,8 +509,8 @@ class DriverNameResolverTest
         while (true)
         {
             for (int offset = 0, counterId = 0, capacity = metaDataBuffer.capacity();
-                offset < capacity;
-                offset += METADATA_LENGTH, counterId++)
+                 offset < capacity;
+                 offset += METADATA_LENGTH, counterId++)
             {
                 final int recordStatus = metaDataBuffer.getIntVolatile(offset);
                 if (RECORD_ALLOCATED == recordStatus)
@@ -455,8 +543,8 @@ class DriverNameResolverTest
         while (true)
         {
             for (int offset = 0, counterId = 0, capacity = metaDataBuffer.capacity();
-                offset < capacity;
-                offset += METADATA_LENGTH, counterId++)
+                 offset < capacity;
+                 offset += METADATA_LENGTH, counterId++)
             {
                 final int recordStatus = metaDataBuffer.getIntVolatile(offset);
                 if (RECORD_ALLOCATED == recordStatus)
@@ -517,16 +605,18 @@ class DriverNameResolverTest
 
     private void startClients()
     {
-        drivers.forEach(
-            (name, driver) ->
+        for (final Map.Entry<String, TestMediaDriver> entry : drivers.entrySet())
+        {
+            final String name = entry.getKey();
+            final TestMediaDriver driver = entry.getValue();
+            if (!clients.containsKey(name))
             {
-                if (!clients.containsKey(name))
-                {
-                    clients.put(name, Aeron.connect(new Aeron.Context()
-                        .aeronDirectoryName(driver.aeronDirectoryName())
-                        .errorHandler(Tests::onError)));
-                }
-            });
+                clients.put(name, Aeron.connect(new Aeron.Context()
+                    .aeronDirectoryName(driver.aeronDirectoryName())
+                    .driverTimeoutMs(driver.context().driverTimeoutMs())
+                    .errorHandler(Tests::onError)));
+            }
+        }
     }
 
     private void addDriver(final TestMediaDriver testMediaDriver)
