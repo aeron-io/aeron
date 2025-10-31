@@ -22,7 +22,6 @@ import io.aeron.test.InterruptingTestCallback;
 import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.cluster.TestCluster;
 import io.aeron.test.cluster.TestNode;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
