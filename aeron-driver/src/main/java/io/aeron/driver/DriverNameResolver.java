@@ -133,8 +133,8 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
 
         final UdpChannel resolverChannel =
             UdpChannel.parse("aeron:udp?endpoint=" +
-                NetworkUtil.formatAddressAndPort(localSocketAddress.getAddress(), localSocketAddress.getPort()),
-                delegateResolver);
+            NetworkUtil.formatAddressAndPort(localSocketAddress.getAddress(), localSocketAddress.getPort()),
+            delegateResolver);
         transport = new UdpNameResolutionTransport(resolverChannel, localSocketAddress, unsafeBuffer, ctx);
 
         neighborsCounter = ctx.countersManager().newCounter(

@@ -324,10 +324,10 @@ class DriverNameResolverTest
 
         addDriver(TestMediaDriver.launch(
             setDefaults(new MediaDriver.Context())
-                .aeronDirectoryName(baseDir + "-B")
-                .resolverName("B")
-                .resolverInterface("0.0.0.0:8051")
-                .resolverBootstrapNeighbor("just:wrong,non_existing_host:8050,localhost:8050,localhost:8051"),
+            .aeronDirectoryName(baseDir + "-B")
+            .resolverName("B")
+            .resolverInterface("0.0.0.0:8051")
+            .resolverBootstrapNeighbor("just:wrong,non_existing_host:8050,localhost:8050,localhost:8051"),
             testWatcher));
         startClients();
 
@@ -509,8 +509,8 @@ class DriverNameResolverTest
         while (true)
         {
             for (int offset = 0, counterId = 0, capacity = metaDataBuffer.capacity();
-                 offset < capacity;
-                 offset += METADATA_LENGTH, counterId++)
+                offset < capacity;
+                offset += METADATA_LENGTH, counterId++)
             {
                 final int recordStatus = metaDataBuffer.getIntVolatile(offset);
                 if (RECORD_ALLOCATED == recordStatus)
@@ -543,8 +543,8 @@ class DriverNameResolverTest
         while (true)
         {
             for (int offset = 0, counterId = 0, capacity = metaDataBuffer.capacity();
-                 offset < capacity;
-                 offset += METADATA_LENGTH, counterId++)
+                offset < capacity;
+                offset += METADATA_LENGTH, counterId++)
             {
                 final int recordStatus = metaDataBuffer.getIntVolatile(offset);
                 if (RECORD_ALLOCATED == recordStatus)
