@@ -158,13 +158,13 @@ int main(int argc, char **argv)
     printf("Shutting down driver...\n");
 
 cleanup:
-    if (0 != aeron_driver_close(driver))
+    if (NULL != driver && 0 != aeron_driver_close(driver))
     {
         fprintf(stderr, "ERROR: driver close (%d) %s\n", aeron_errcode(), aeron_errmsg());
         AERON_SET_RELEASE(exit_status, EXIT_FAILURE);
     }
 
-    if (0 != aeron_driver_context_close(context))
+    if (NULL != context && 0 != aeron_driver_context_close(context))
     {
         fprintf(stderr, "ERROR: driver context close (%d) %s\n", aeron_errcode(), aeron_errmsg());
         AERON_SET_RELEASE(exit_status, EXIT_FAILURE);

@@ -839,30 +839,30 @@ int aeron_driver_conductor_init(aeron_driver_conductor_t *conductor, aeron_drive
 
     if (aeron_system_counters_init(&conductor->system_counters, &conductor->counters_manager) < 0)
     {
-        return -1;
+        goto error;
     }
 
     if (aeron_distinct_error_log_init(
         &conductor->error_log, context->error_buffer, context->error_buffer_length, context->epoch_clock) < 0)
     {
-        return -1;
+        goto error;
     }
 
     if (aeron_str_to_ptr_hash_map_init(
         &conductor->send_channel_endpoint_by_channel_map, 64, AERON_MAP_DEFAULT_LOAD_FACTOR) < 0)
     {
-        return -1;
+        goto error;
     }
 
     if (aeron_str_to_ptr_hash_map_init(
         &conductor->receive_channel_endpoint_by_channel_map, 64, AERON_MAP_DEFAULT_LOAD_FACTOR) < 0)
     {
-        return -1;
+        goto error;
     }
 
     if (aeron_loss_reporter_init(&conductor->loss_reporter, context->loss_report.addr, context->loss_report.length) < 0)
     {
-        return -1;
+        goto error;
     }
 
     conductor->conductor_proxy.command_queue = &context->conductor_command_queue;
@@ -873,7 +873,7 @@ int aeron_driver_conductor_init(aeron_driver_conductor_t *conductor, aeron_drive
 
     if (aeron_executor_init(&conductor->executor, context->async_executor_threads >= 1, NULL, conductor) < 0)
     {
-        return -1;
+        goto error;
     }
     conductor->async_client_command_in_flight = false;
 
@@ -950,7 +950,7 @@ int aeron_driver_conductor_init(aeron_driver_conductor_t *conductor, aeron_drive
     if (aeron_deque_init(&conductor->end_of_life_queue, 1024, sizeof(aeron_end_of_life_resource_t)))
     {
         AERON_APPEND_ERR("%s", "");
-        return -1;
+        goto error;
     }
 
     conductor->errors_counter = aeron_counters_manager_addr(&conductor->counters_manager, AERON_SYSTEM_COUNTER_ERRORS);
@@ -993,7 +993,7 @@ int aeron_driver_conductor_init(aeron_driver_conductor_t *conductor, aeron_drive
     if (aeron_alloc((void **)&time_tracking_name_resolver, sizeof(aeron_time_tracking_name_resolver_t)) < 0)
     {
         AERON_APPEND_ERR("%s", "Failed to allocate aeron_time_tracking_name_resolver_t");
-        return -1;
+        goto error;
     }
     time_tracking_name_resolver->context = context;
 
@@ -1004,7 +1004,7 @@ int aeron_driver_conductor_init(aeron_driver_conductor_t *conductor, aeron_drive
     {
         AERON_APPEND_ERR("%s", "Failed to init name resolver");
         aeron_free(time_tracking_name_resolver);
-        return -1;
+        goto error;
     }
 
     conductor->name_resolver.name = "time_tracking_name_resolver";
@@ -1098,6 +1098,16 @@ int aeron_driver_conductor_init(aeron_driver_conductor_t *conductor, aeron_drive
     conductor->context = context;
 
     return 0;
+
+error:
+    aeron_deque_close(&conductor->end_of_life_queue);
+    aeron_executor_close(&conductor->executor);
+    aeron_str_to_ptr_hash_map_delete(&conductor->receive_channel_endpoint_by_channel_map);
+    aeron_str_to_ptr_hash_map_delete(&conductor->send_channel_endpoint_by_channel_map);
+    aeron_distinct_error_log_close(&conductor->error_log);
+    aeron_system_counters_close(&conductor->system_counters);
+    aeron_counters_manager_close(&conductor->counters_manager);
+    return -1;
 }
 
 int aeron_driver_conductor_find_client(aeron_driver_conductor_t *conductor, int64_t client_id)

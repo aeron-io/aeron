@@ -171,6 +171,23 @@ static const char *aeron_driver_name_resolver_build_neighbor_counter_label(
     return buffer;
 }
 
+int aeron_driver_name_resolver_free(aeron_driver_name_resolver_t *driver_resolver)
+{
+    if (NULL != driver_resolver->transport_bindings)
+    {
+        driver_resolver->transport_bindings->poller_close_func(&driver_resolver->poller);
+        driver_resolver->transport_bindings->close_func(&driver_resolver->transport);
+    }
+    aeron_udp_channel_data_paths_delete(&driver_resolver->data_paths);
+    aeron_name_resolver_cache_close(&driver_resolver->cache);
+    aeron_free(driver_resolver->neighbors.array);
+    aeron_free(driver_resolver->saved_bootstrap_neighbor);
+    aeron_free(driver_resolver->bootstrap_neighbors);
+    aeron_free(driver_resolver);
+
+    return 0;
+}
+
 int aeron_driver_name_resolver_init(
     aeron_driver_name_resolver_t **driver_resolver,
     aeron_driver_context_t *context,
@@ -368,30 +385,14 @@ int aeron_driver_name_resolver_init(
     return 0;
 
 error_cleanup:
-    _driver_resolver->transport_bindings->poller_close_func(&_driver_resolver->poller);
-    _driver_resolver->transport_bindings->close_func(&_driver_resolver->transport);
-    aeron_udp_channel_data_paths_delete(&_driver_resolver->data_paths);
-    aeron_name_resolver_cache_close(&_driver_resolver->cache);
-    aeron_free(_driver_resolver->saved_bootstrap_neighbor);
-    aeron_free(_driver_resolver->bootstrap_neighbors);
-    aeron_free((void *)_driver_resolver);
-
+    aeron_driver_name_resolver_free(_driver_resolver);
     return -1;
 }
 
 int aeron_driver_name_resolver_close(aeron_name_resolver_t *resolver)
 {
     aeron_driver_name_resolver_t *driver_resolver = (aeron_driver_name_resolver_t *)resolver->state;
-    driver_resolver->transport_bindings->poller_close_func(&driver_resolver->poller);
-    driver_resolver->transport_bindings->close_func(&driver_resolver->transport);
-    aeron_udp_channel_data_paths_delete(&driver_resolver->data_paths);
-    aeron_name_resolver_cache_close(&driver_resolver->cache);
-    aeron_free(driver_resolver->neighbors.array);
-    aeron_free(driver_resolver->saved_bootstrap_neighbor);
-    aeron_free(driver_resolver->bootstrap_neighbors);
-    aeron_free(driver_resolver);
-
-    return 0;
+    return aeron_driver_name_resolver_free(driver_resolver);
 }
 
 static int aeron_driver_name_resolver_to_sockaddr(
