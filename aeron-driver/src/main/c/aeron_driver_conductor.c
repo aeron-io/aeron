@@ -1002,7 +1002,7 @@ int aeron_driver_conductor_init(aeron_driver_conductor_t *conductor, aeron_drive
         context->name_resolver_init_args,
         context) < 0)
     {
-        AERON_APPEND_ERR("%s", "Failed to init name resolver");
+        AERON_APPEND_ERR("%s", "failed to init name resolver");
         aeron_free(time_tracking_name_resolver);
         goto error;
     }

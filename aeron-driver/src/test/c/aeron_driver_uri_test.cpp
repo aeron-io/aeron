@@ -592,6 +592,45 @@ TEST_F(UriResolverTest, shouldResolveIpv4Interface)
     EXPECT_EQ(m_addr.ss_family, AF_INET);
     EXPECT_EQ(addr_in->sin_family, AF_INET);
     EXPECT_STREQ(inet_ntop(AF_INET, &addr_in->sin_addr, buffer, sizeof(buffer)), "0.0.0.0");
+
+    ASSERT_EQ(aeron_interface_parse_and_resolve("127.0.0.1", &m_addr, &m_prefixlen), 0) << aeron_errmsg();
+    EXPECT_EQ(m_prefixlen, 32u);
+    EXPECT_EQ(m_addr.ss_family, AF_INET);
+    EXPECT_EQ(addr_in->sin_family, AF_INET);
+    EXPECT_STREQ(inet_ntop(AF_INET, &addr_in->sin_addr, buffer, sizeof(buffer)), "127.0.0.1");
+
+    ASSERT_EQ(aeron_interface_parse_and_resolve("127.0.0.3/8", &m_addr, &m_prefixlen), 0) << aeron_errmsg();
+    EXPECT_EQ(m_prefixlen, 8u);
+    EXPECT_EQ(m_addr.ss_family, AF_INET);
+    EXPECT_EQ(addr_in->sin_family, AF_INET);
+    EXPECT_STREQ(inet_ntop(AF_INET, &addr_in->sin_addr, buffer, sizeof(buffer)), "127.0.0.3");
+}
+
+TEST_F(UriResolverTest, shouldResolveHostNameInTheInterfaceSpecification)
+{
+    char buffer[AERON_URI_MAX_LENGTH];
+
+    ASSERT_EQ(aeron_interface_parse_and_resolve("localhost:5551", &m_addr, &m_prefixlen), 0) << aeron_errmsg();
+    EXPECT_EQ(m_prefixlen, 32u);
+    EXPECT_EQ(m_addr.ss_family, AF_INET);
+    EXPECT_EQ(addr_in->sin_family, AF_INET);
+    EXPECT_EQ(addr_in->sin_port, htons(5551));
+    EXPECT_STREQ(inet_ntop(AF_INET, &addr_in->sin_addr, buffer, sizeof(buffer)), "127.0.0.1");
+
+    ASSERT_EQ(aeron_interface_parse_and_resolve("localhost:0/24", &m_addr, &m_prefixlen), 0) << aeron_errmsg();
+    EXPECT_EQ(m_prefixlen, 24u);
+    EXPECT_EQ(m_addr.ss_family, AF_INET);
+    EXPECT_EQ(addr_in->sin_family, AF_INET);
+    EXPECT_EQ(addr_in->sin_port, htons(0));
+    EXPECT_STREQ(inet_ntop(AF_INET, &addr_in->sin_addr, buffer, sizeof(buffer)), "127.0.0.1");
+
+    EXPECT_EQ(0, gethostname(buffer, sizeof(buffer)));
+    std::string host_name = std::string(buffer).append(":8989/16");
+    ASSERT_EQ(aeron_interface_parse_and_resolve(host_name.c_str(), &m_addr, &m_prefixlen), 0) << aeron_errmsg();
+    EXPECT_EQ(m_prefixlen, 16u);
+    EXPECT_EQ(m_addr.ss_family, AF_INET);
+    EXPECT_EQ(addr_in->sin_family, AF_INET);
+    EXPECT_EQ(addr_in->sin_port, htons(8989));
 }
 
 TEST_F(UriResolverTest, shouldResolveIpv6Interface)
@@ -614,6 +653,27 @@ TEST_F(UriResolverTest, shouldResolveIpv6Interface)
     ASSERT_EQ(aeron_interface_parse_and_resolve("[::1]:1234/48", &m_addr, &m_prefixlen), 0) << aeron_errmsg();
     EXPECT_EQ(m_prefixlen, 48u);
     EXPECT_EQ(addr_in6->sin6_port, htons(1234));
+
+    ASSERT_EQ(aeron_interface_parse_and_resolve("[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:1111", &m_addr, &m_prefixlen), 0) << aeron_errmsg();
+    EXPECT_EQ(m_prefixlen, 128u);
+    EXPECT_EQ(addr_in6->sin6_port, htons(1111));
+    EXPECT_STREQ(inet_ntop(AF_INET6, &addr_in6->sin6_addr, buffer, sizeof(buffer)), "2001:db8:85a3::8a2e:370:7334");
+
+    ASSERT_EQ(aeron_interface_parse_and_resolve("[fe80:3::1ff:fe23:4567:890a]/24", &m_addr, &m_prefixlen), 0) << aeron_errmsg();
+    EXPECT_EQ(m_prefixlen, 24u);
+    EXPECT_EQ(addr_in6->sin6_port, htons(0));
+    EXPECT_STREQ(inet_ntop(AF_INET6, &addr_in6->sin6_addr, buffer, sizeof(buffer)), "fe80:3::1ff:fe23:4567:890a");
+
+    ASSERT_EQ(aeron_interface_parse_and_resolve("[64:ff9b::]/96", &m_addr, &m_prefixlen), 0) << aeron_errmsg();
+    EXPECT_EQ(m_prefixlen, 96u);
+    EXPECT_EQ(addr_in6->sin6_port, htons(0));
+    EXPECT_STREQ(inet_ntop(AF_INET6, &addr_in6->sin6_addr, buffer, sizeof(buffer)), "64:ff9b::");
+
+    ASSERT_EQ(aeron_interface_parse_and_resolve("[ff01::1]:22222", &m_addr, &m_prefixlen), 0) << aeron_errmsg();
+    EXPECT_EQ(m_prefixlen, 128u);
+    EXPECT_EQ(addr_in6->sin6_port, htons(22222));
+    EXPECT_STREQ(inet_ntop(AF_INET6, &addr_in6->sin6_addr, buffer, sizeof(buffer)), "ff01::1");
+    EXPECT_TRUE(aeron_is_addr_multicast(&m_addr));
 }
 
 TEST_F(UriResolverTest, shouldMatchIpv4)
@@ -621,6 +681,10 @@ TEST_F(UriResolverTest, shouldMatchIpv4)
     EXPECT_TRUE(ipv4_match("127.0.0.0", "127.0.0.0", 24));
     EXPECT_TRUE(ipv4_match("127.0.0.0", "127.0.0.1", 24));
     EXPECT_TRUE(ipv4_match("127.0.0.0", "127.0.0.255", 24));
+    EXPECT_TRUE(ipv4_match("127.1.1.1", "127.0.0.0", 8));
+    EXPECT_TRUE(ipv4_match("127.255.1.1", "127.255.255.255", 16));
+    EXPECT_TRUE(ipv4_match("127.255.254.1", "127.255.254.255", 24));
+    EXPECT_TRUE(ipv4_match("127.255.254.16", "127.255.254.16", 32));
 }
 
 TEST_F(UriResolverTest, shouldNotMatchIpv4)
