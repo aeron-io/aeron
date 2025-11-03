@@ -23,6 +23,12 @@ if (LINK_SAMPLES_CLIENT_SHARED OR MSVC)
     add_definitions(-DCLIENT_SHARED)
 endif ()
 
+if ("${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
+    if (LIBBSD_EXISTS)
+        set(AERON_LIB_BSD_LIBS "-lbsd")
+    endif ()
+endif ()
+
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -DDISABLE_BOUNDS_CHECKS")
 
 set(HEADERS
@@ -84,27 +90,27 @@ add_dependencies(Ping hdr_histogram)
 target_include_directories(BasicPublisherW
     PUBLIC ${AERON_C_CLIENT_SOURCE_PATH} ${AERON_CLIENT_WRAPPER_SOURCE_PATH})
 target_link_libraries(BasicPublisherW
-    ${CLIENT_WRAPPER_LINK_LIB} ${C_CLIENT_LINK_LIB})
+    ${CLIENT_WRAPPER_LINK_LIB} ${C_CLIENT_LINK_LIB} ${AERON_LIB_BSD_LIBS})
 
 target_include_directories(BasicSubscriberW
     PUBLIC ${AERON_C_CLIENT_SOURCE_PATH} ${AERON_CLIENT_WRAPPER_SOURCE_PATH})
 target_link_libraries(BasicSubscriberW
-    ${CLIENT_WRAPPER_LINK_LIB} ${C_CLIENT_LINK_LIB})
+    ${CLIENT_WRAPPER_LINK_LIB} ${C_CLIENT_LINK_LIB} ${AERON_LIB_BSD_LIBS})
 
 target_include_directories(StreamingPublisherW
     PUBLIC ${AERON_C_CLIENT_SOURCE_PATH} ${AERON_CLIENT_WRAPPER_SOURCE_PATH})
 target_link_libraries(StreamingPublisherW
-    ${CLIENT_WRAPPER_LINK_LIB} ${C_CLIENT_LINK_LIB})
+    ${CLIENT_WRAPPER_LINK_LIB} ${C_CLIENT_LINK_LIB} ${AERON_LIB_BSD_LIBS})
 
 target_include_directories(RateSubscriberW
     PUBLIC ${AERON_C_CLIENT_SOURCE_PATH} ${AERON_CLIENT_WRAPPER_SOURCE_PATH})
 target_link_libraries(RateSubscriberW
-    ${CLIENT_WRAPPER_LINK_LIB} ${C_CLIENT_LINK_LIB})
+    ${CLIENT_WRAPPER_LINK_LIB} ${C_CLIENT_LINK_LIB} ${AERON_LIB_BSD_LIBS})
 
 target_include_directories(PongW
     PUBLIC ${AERON_C_CLIENT_SOURCE_PATH} ${AERON_CLIENT_WRAPPER_SOURCE_PATH})
 target_link_libraries(PongW
-    ${CLIENT_WRAPPER_LINK_LIB} ${C_CLIENT_LINK_LIB})
+    ${CLIENT_WRAPPER_LINK_LIB} ${C_CLIENT_LINK_LIB} ${AERON_LIB_BSD_LIBS})
 
 target_include_directories(PingW
     PUBLIC ${AERON_C_CLIENT_SOURCE_PATH} ${AERON_CLIENT_WRAPPER_SOURCE_PATH})
