@@ -2139,7 +2139,7 @@ public final class TestCluster implements AutoCloseable
         private File markFileBaseDir = null;
         private String clusterBaseDir = System.getProperty(
             CLUSTER_BASE_DIR_PROP_NAME, CommonContext.generateRandomDirName());
-        private String aeronBaseDir = CommonContext.getAeronDirectoryName();
+        private String aeronBaseDir = CommonContext.AERON_DIR_PROP_DEFAULT;
         private boolean useResponseChannels = false;
         private Supplier<ConsensusModuleExtension> extensionSupplier;
         private List<String> hostnames;
