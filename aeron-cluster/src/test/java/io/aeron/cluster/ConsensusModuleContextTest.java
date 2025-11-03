@@ -89,6 +89,7 @@ import static io.aeron.logbuffer.LogBufferDescriptor.PAGE_MIN_SIZE;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.startsWith;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -449,10 +450,9 @@ class ConsensusModuleContextTest
         final ConsensusModule.Context another = context.clone();
         context.conclude();
 
-        final RuntimeException exception = assertThrowsExactly(RuntimeException.class, another::conclude);
-        final Throwable cause = exception.getCause();
-        assertInstanceOf(IllegalStateException.class, cause);
-        assertEquals("active Mark file detected", cause.getMessage());
+        final IllegalStateException exception =
+            assertThrowsExactly(IllegalStateException.class, another::conclude);
+        assertThat(exception.getMessage(), startsWith("active mark file detected: "));
     }
 
     @ParameterizedTest

@@ -164,13 +164,13 @@ public class ArchiveMarkFile implements AutoCloseable
 
                 markFile = new MarkFile(
                     file,
-                    false,
+                    true,
                     HEADER_OFFSET + MarkFileHeaderDecoder.versionEncodingOffset(),
                     HEADER_OFFSET + MarkFileHeaderDecoder.activityTimestampEncodingOffset(),
                     totalFileLength,
                     timeoutMs,
                     epochClock,
-                    null,
+                    (version) -> {},
                     null);
                 buffer = markFile.buffer();
                 buffer.setMemory(0, buffer.capacity(), (byte)0);

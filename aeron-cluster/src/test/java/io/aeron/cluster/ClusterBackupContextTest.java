@@ -44,9 +44,10 @@ import static io.aeron.cluster.service.ClusterMarkFile.HEADER_LENGTH;
 import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.MARK_FILE_DIR_PROP_NAME;
 import static io.aeron.logbuffer.LogBufferDescriptor.PAGE_MIN_SIZE;
 import static java.nio.charset.StandardCharsets.US_ASCII;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.startsWith;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -93,10 +94,9 @@ class ClusterBackupContextTest
 
         context.conclude();
 
-        final RuntimeException exception = assertThrowsExactly(RuntimeException.class, other::conclude);
-        final Throwable cause = exception.getCause();
-        assertInstanceOf(IllegalStateException.class, cause);
-        assertEquals("active Mark file detected", cause.getMessage());
+        final IllegalStateException exception =
+            assertThrowsExactly(IllegalStateException.class, other::conclude);
+        assertThat(exception.getMessage(), startsWith("active mark file detected: "));
     }
 
     @Test

@@ -78,6 +78,7 @@ import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.startsWith;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -269,10 +270,9 @@ class ArchiveContextTest
             .errorHandler(context.errorHandler())
             .aeron(context.aeron());
 
-        final RuntimeException exception = assertThrowsExactly(RuntimeException.class, anotherContext::conclude);
-        final Throwable cause = exception.getCause();
-        assertInstanceOf(IllegalStateException.class, cause);
-        assertEquals("active Mark file detected", cause.getMessage());
+        final IllegalStateException exception =
+            assertThrowsExactly(IllegalStateException.class, anotherContext::conclude);
+        assertThat(exception.getMessage(), startsWith("active mark file detected: "));
     }
 
     @Test

@@ -236,13 +236,13 @@ public final class ClusterMarkFile implements AutoCloseable
 
                 markFile = new MarkFile(
                     file,
-                    false,
+                    true,
                     HEADER_OFFSET + MarkFileHeaderDecoder.versionEncodingOffset(),
                     HEADER_OFFSET + MarkFileHeaderDecoder.activityTimestampEncodingOffset(),
                     totalFileLength,
                     timeoutMs,
                     epochClock,
-                    null,
+                    (version) -> {},
                     null);
                 buffer = markFile.buffer();
                 buffer.setMemory(0, headerLength, (byte)0);
