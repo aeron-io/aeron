@@ -269,7 +269,7 @@ TEST_P(SystemTestParameterized, shouldFreeUnavailableImage)
     const int stream_id = 1000;
     Context ctx;
     ctx
-    .useConductorAgentInvoker(false)
+    .useConductorAgentInvoker(true)
     .resourceLingerTimeout(10)
     .idleSleepDuration(10)
     .aeronDir(m_driver.aeronDir());
@@ -280,7 +280,7 @@ TEST_P(SystemTestParameterized, shouldFreeUnavailableImage)
     std::shared_ptr<ExclusivePublication> publication;
     do
     {
-        std::this_thread::yield();
+        aeron->conductorAgentInvoker().invoke();
         publication = aeron->findExclusivePublication(pub_registration_id);
     }
     while (nullptr == publication);
@@ -303,7 +303,7 @@ TEST_P(SystemTestParameterized, shouldFreeUnavailableImage)
     std::shared_ptr<Subscription> subscription;
     do
     {
-        std::this_thread::yield();
+        aeron->conductorAgentInvoker().invoke();
         subscription = aeron->findSubscription(sub_registration_id);
     }
     while (nullptr == subscription);
@@ -314,7 +314,7 @@ TEST_P(SystemTestParameterized, shouldFreeUnavailableImage)
         std::shared_ptr<Image> image;
         do
         {
-            std::this_thread::yield();
+            aeron->conductorAgentInvoker().invoke();
             image = subscription->imageBySessionId(publication->sessionId());
         }
         while (nullptr == image);
@@ -323,7 +323,7 @@ TEST_P(SystemTestParameterized, shouldFreeUnavailableImage)
 
         while (-1 == image_correlation_id)
         {
-            std::this_thread::yield();
+            aeron->conductorAgentInvoker().invoke();
         }
         ASSERT_EQ(image_correlation_id, image->correlationId());
 
@@ -361,13 +361,13 @@ TEST_P(SystemTestParameterized, shouldFreeUnavailableImage)
 
     while (!image_unavailable)
     {
-        std::this_thread::yield();
+        aeron->conductorAgentInvoker().invoke();
     }
     ASSERT_TRUE(image_unavailable);
 
     while (0 != subscription->imageCount())
     {
-        std::this_thread::yield();
+        aeron->conductorAgentInvoker().invoke();
     }
 
     auto deadline_ns = std::chrono::nanoseconds(m_driver.livenessTimeoutNs());
@@ -381,6 +381,7 @@ TEST_P(SystemTestParameterized, shouldFreeUnavailableImage)
       }
       deadline_ns -= sleep_ms;
       std::this_thread::sleep_for(sleep_ms);
+      aeron->conductorAgentInvoker().invoke();
     }
     EXPECT_GT(deadline_ns, zero_ns);
 
