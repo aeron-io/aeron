@@ -61,6 +61,7 @@ class Election
     private long timeOfLastCommitPositionUpdateNs;
     private final long initialTimeOfLastUpdateNs;
     private long nominationDeadlineNs;
+    private long fragmentsBeforeLogPosition;
     private long logPosition;
     private long appendPosition;
     private long catchupJoinPosition = NULL_POSITION;
@@ -93,6 +94,7 @@ class Election
         final int gracefulClosedLeaderId,
         final long leadershipTermId,
         final long termBaseLogPosition,
+        final long fragmentsBeforeLogPosition,
         final long logPosition,
         final long appendPosition,
         final ClusterMember[] clusterMembers,
@@ -105,6 +107,7 @@ class Election
         this.isNodeStartup = isNodeStartup;
         this.isExtendedCanvass = isNodeStartup;
         this.gracefulClosedLeaderId = gracefulClosedLeaderId;
+        this.fragmentsBeforeLogPosition = fragmentsBeforeLogPosition;
         this.logPosition = logPosition;
         this.appendPosition = appendPosition;
         this.logLeadershipTermId = leadershipTermId;
@@ -789,10 +792,11 @@ class Election
         {
             if (logPosition < appendPosition)
             {
-                logReplay = consensusModuleAgent.newLogReplay(logPosition, appendPosition);
+                logReplay = consensusModuleAgent.newLogReplay(fragmentsBeforeLogPosition, logPosition, appendPosition);
             }
             else
             {
+                fragmentsBeforeLogPosition = NULL_VALUE;
                 state(LEADER_INIT, nowNs, "");
             }
 
@@ -919,10 +923,11 @@ class Election
             workCount++;
             if (logPosition < appendPosition)
             {
-                logReplay = consensusModuleAgent.newLogReplay(logPosition, appendPosition);
+                logReplay = consensusModuleAgent.newLogReplay(fragmentsBeforeLogPosition, logPosition, appendPosition);
             }
             else
             {
+                fragmentsBeforeLogPosition = NULL_VALUE;
                 state(
                     NULL_POSITION != catchupJoinPosition ? FOLLOWER_CATCHUP_INIT : FOLLOWER_LOG_INIT,
                     nowNs,
@@ -1359,6 +1364,10 @@ class Election
     {
         if (null != logReplay)
         {
+            if (NULL_VALUE != fragmentsBeforeLogPosition && logReplay.hasProcessedAllFragmentsBeforeLogPosition())
+            {
+                fragmentsBeforeLogPosition = NULL_VALUE;
+            }
             logReplay.close();
             logReplay = null;
         }

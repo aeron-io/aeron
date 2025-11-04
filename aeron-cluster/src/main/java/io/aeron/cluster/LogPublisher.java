@@ -15,6 +15,7 @@
  */
 package io.aeron.cluster;
 
+import io.aeron.Aeron;
 import io.aeron.ChannelUri;
 import io.aeron.ExclusivePublication;
 import io.aeron.Publication;
@@ -34,6 +35,7 @@ import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
 import org.agrona.ErrorHandler;
 import org.agrona.ExpandableArrayBuffer;
+import org.agrona.collections.LongArrayQueue;
 import org.agrona.concurrent.UnsafeBuffer;
 
 import java.util.concurrent.TimeUnit;
@@ -57,6 +59,7 @@ final class LogPublisher
     private final ExpandableArrayBuffer expandableArrayBuffer = new ExpandableArrayBuffer();
     private final BufferClaim bufferClaim = new BufferClaim();
 
+    private final LongArrayQueue fragmentedMessageBounds = new LongArrayQueue(Long.MAX_VALUE);
     private final String destinationChannel;
     private ExclusivePublication publication;
 
@@ -120,6 +123,8 @@ final class LogPublisher
         final int offset,
         final int length)
     {
+        final long startPosition = publication.position();
+
         sessionHeaderEncoder
             .leadershipTermId(leadershipTermId)
             .clusterSessionId(clusterSessionId)
@@ -133,6 +138,7 @@ final class LogPublisher
 
             if (position > 0)
             {
+                trackPossibleFragmentedMessage(startPosition, publication.position(), SESSION_HEADER_LENGTH, length);
                 break;
             }
 
@@ -145,6 +151,8 @@ final class LogPublisher
 
     long appendSessionOpen(final ClusterSession session, final long leadershipTermId, final long timestamp)
     {
+        final long startPosition = publication.position();
+
         long position;
         final byte[] encodedPrincipal = session.encodedPrincipal();
         final String channel = session.responseChannel();
@@ -167,6 +175,7 @@ final class LogPublisher
             position = publication.offer(expandableArrayBuffer, 0, length, null);
             if (position > 0)
             {
+                trackPossibleFragmentedMessage(startPosition, publication.position(), SESSION_HEADER_LENGTH, length);
                 break;
             }
 
@@ -330,6 +339,50 @@ final class LogPublisher
             throw new ClusterException(
                 "log publication at max position: term-length=" + publication.termBufferLength());
         }
+    }
+
+    public void trackPossibleFragmentedMessage(
+        final long startPosition,
+        final long endPosition,
+        final int headerLength,
+        final int length)
+    {
+        if (publication.maxPayloadLength() < headerLength + length)
+        {
+            fragmentedMessageBounds.offerLong(endPosition);
+            fragmentedMessageBounds.offerLong(startPosition);
+        }
+    }
+
+    void sweepUncommittedFragmentedMessageBoundsTo(final long commitPosition)
+    {
+        while (fragmentedMessageBounds.peekLong() <= commitPosition)
+        {
+            fragmentedMessageBounds.pollLong();
+            fragmentedMessageBounds.pollLong();
+        }
+    }
+
+    void clearFragmentedMessageBounds()
+    {
+        fragmentedMessageBounds.clear();
+    }
+
+    long fragmentedMessageStartPosition(final long commitPosition)
+    {
+        if (fragmentedMessageBounds.peekLong() == Long.MAX_VALUE)
+        {
+            return Aeron.NULL_VALUE;
+        }
+
+        final long endPosition = fragmentedMessageBounds.pollLong();
+        final long startPosition = fragmentedMessageBounds.pollLong();
+
+        if (startPosition < commitPosition && commitPosition < endPosition)
+        {
+            return startPosition;
+        }
+        return Aeron.NULL_VALUE;
     }
 
     /**

@@ -703,6 +703,7 @@ class ElectionTest
             NULL_VALUE,
             term0Id,
             term1BaseLogPosition,
+            NULL_VALUE,
             term1BaseLogPosition,
             term1BaseLogPosition,
             clusterMembers,
@@ -819,6 +820,7 @@ class ElectionTest
             NULL_VALUE,
             term1Id,
             term1BaseLogPosition,
+            NULL_VALUE,
             term1BaseLogPosition,
             term1BaseLogPosition,
             clusterMembers,
@@ -905,6 +907,7 @@ class ElectionTest
             NULL_VALUE,
             term1Id,
             term1BaseLogPosition,
+            NULL_VALUE,
             term1BaseLogPosition,
             term1BaseLogPosition,
             clusterMembers,
@@ -974,6 +977,7 @@ class ElectionTest
             NULL_VALUE,
             0,
             0,
+            NULL_VALUE,
             0,
             0,
             clusterMembers,
@@ -1090,6 +1094,7 @@ class ElectionTest
             NULL_VALUE,
             1,
             followerLogPosition,
+            NULL_VALUE,
             followerLogPosition,
             followerLogPosition,
             clusterMembers,
@@ -1118,7 +1123,7 @@ class ElectionTest
             true);
         verify(electionStateCounter).setRelease(ElectionState.FOLLOWER_REPLAY.code());
 
-        when(consensusModuleAgent.newLogReplay(anyLong(), anyLong())).thenReturn(logReplay);
+        when(consensusModuleAgent.newLogReplay(anyLong(), anyLong(), anyLong())).thenReturn(logReplay);
         when(logReplay.isDone()).thenReturn(true);
         election.doWork(++t1);
         election.doWork(++t1);
@@ -1149,6 +1154,7 @@ class ElectionTest
             NULL_VALUE,
             0,
             0,
+            NULL_VALUE,
             0,
             0,
             clusterMembers,
@@ -1230,6 +1236,7 @@ class ElectionTest
             NULL_VALUE,
             initialLeadershipTermId,
             initialTermBaseLogPosition,
+            NULL_VALUE,
             snapshotLogPosition,
             snapshotLogPosition,
             clusterMembers,
@@ -1307,6 +1314,7 @@ class ElectionTest
             NULL_VALUE,
             0,
             0,
+            NULL_VALUE,
             0,
             0,
             clusterMembers,
@@ -1399,6 +1407,7 @@ class ElectionTest
             NULL_VALUE,
             leadershipTermId,
             leaderLogPosition,
+            NULL_VALUE,
             leaderLogPosition,
             leaderLogPosition,
             clusterMembers,
@@ -1501,6 +1510,7 @@ class ElectionTest
             NULL_VALUE,
             logLeadershipTermId,
             logPosition,
+            NULL_VALUE,
             logPosition,
             logPosition,
             clusterMembers,
@@ -1526,6 +1536,7 @@ class ElectionTest
             NULL_VALUE,
             logLeadershipTermId,
             logPosition,
+            NULL_VALUE,
             logPosition,
             logPosition,
             clusterMembers,
