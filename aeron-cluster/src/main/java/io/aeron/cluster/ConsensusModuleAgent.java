@@ -394,6 +394,7 @@ final class ConsensusModuleAgent
             NULL_VALUE,
             lastLeadershipTermId,
             recoveryPlan.lastTermBaseLogPosition,
+            NULL_VALUE,
             commitPosition,
             appendedPosition,
             activeMembers,
@@ -1964,9 +1965,10 @@ final class ConsensusModuleAgent
         }
     }
 
-    LogReplay newLogReplay(final long logPosition, final long appendPosition)
+    LogReplay newLogReplay(final long fragmentsBeforeLogPosition, final long logPosition, final long appendPosition)
     {
-        return new LogReplay(archive, logRecordingId, logPosition, appendPosition, logAdapter, ctx);
+        return new LogReplay(
+            archive, logRecordingId, fragmentsBeforeLogPosition, logPosition, appendPosition, logAdapter, ctx);
     }
 
     int replayLogPoll(final LogAdapter logAdapter, final long stopPosition)
@@ -3515,6 +3517,8 @@ final class ConsensusModuleAgent
 
             uncommittedClosedSessions.pollFirst();
         }
+
+        logPublisher.sweepUncommittedFragmentedMessageBoundsTo(commitPosition);
     }
 
     private void restoreUncommittedEntries(final long commitPosition)
@@ -3565,6 +3569,10 @@ final class ConsensusModuleAgent
             appendPosition.get() : max(recoveryPlan.appendedLogPosition, logRecordingStopPosition);
         final long commitPosition = this.commitPosition.getPlain();
 
+        logPublisher.sweepUncommittedFragmentedMessageBoundsTo(commitPosition);
+        final long fragmentedMessageStartPosition = logPublisher.fragmentedMessageStartPosition(commitPosition);
+        logPublisher.clearFragmentedMessageBounds();
+
         logNewElection(memberId, leadershipTermId, commitPosition, appendedPosition, reason);
         ctx.countedErrorHandler().onError(new ClusterEvent(reason));
 
@@ -3573,6 +3581,7 @@ final class ConsensusModuleAgent
             isLogEndOfStream ? leaderMember.id() : NULL_VALUE,
             leadershipTermId,
             termBaseLogPosition,
+            fragmentedMessageStartPosition,
             commitPosition,
             appendedPosition,
             activeMembers,
