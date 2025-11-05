@@ -768,7 +768,7 @@ static int aeron_driver_name_resolver_do_send(
         &resolver->data_paths, &resolver->transport, neighbor_address, &iov, 1, &bytes_sent);
     if (0 <= send_result)
     {
-        if (bytes_sent < (int64_t)iov.iov_len)
+        if (bytes_sent < (int64_t)iov.iov_len && !aeron_is_acceptable_socket_error())
         {
             aeron_counter_increment(resolver->short_sends_counter);
         }
