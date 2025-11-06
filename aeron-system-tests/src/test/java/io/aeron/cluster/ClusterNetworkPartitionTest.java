@@ -116,6 +116,7 @@ class ClusterNetworkPartitionTest
 
         cluster.awaitNodeState(firstLeader, (n) -> n.electionState() == ElectionState.CLOSED);
 
+        cluster.reconnectClient();
         cluster.sendAndAwaitMessages(100, 200);
     }
 
@@ -135,7 +136,6 @@ class ClusterNetworkPartitionTest
         final List<TestNode> followers = cluster.followers();
         final TestNode fastFollower = followers.get(0);
         final TestNode[] slowFollowers = followers.subList(1, followers.size()).toArray(new TestNode[0]);
-        final long[] rankedPositions = new long[ClusterMember.quorumThreshold(CLUSTER_SIZE)];
         final ClusterMember[] clusterMembers =
             ClusterMember.parse(firstLeader.consensusModule().context().clusterMembers());
 
