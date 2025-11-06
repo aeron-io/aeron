@@ -9,6 +9,7 @@ RUN yum update -y && yum install -y https://cdn.azul.com/zulu/bin/zulu-repo-1.0.
     git \
     findutils \
     openssl-devel \
+    pgrep \
     zulu17-jdk
 
 RUN yum groupinstall 'Development Tools' -y

@@ -58,10 +58,13 @@ TEST_F(AeronmdSignalTest, shouldSupportSigTerm)
     FILE *psgrepOutput = popen("/usr/bin/pgrep -xn aeronmd", "r");
 
     char buf[1024] = {};
-    ASSERT_NE(nullptr, fgets(buf, sizeof(buf) - 1, psgrepOutput));
+    if (nullptr == fgets(buf, sizeof(buf) - 1, psgrepOutput))
+    {
+        FAIL() << "pgrep does not exist";
+    }
 
     int pid = atoi(buf);
-    ASSERT_LT(0, pid);
+    ASSERT_LT(0, pid) << "aeronmd is not running";
 
     kill(pid, SIGTERM);
 
