@@ -17,6 +17,7 @@ package io.aeron.samples;
 
 import io.aeron.CncFileDescriptor;
 import io.aeron.status.ChannelEndpointStatus;
+import org.agrona.AsciiEncoding;
 import org.agrona.DirectBuffer;
 import org.agrona.SystemUtil;
 import org.agrona.concurrent.ShutdownSignalBarrier;
@@ -211,6 +212,8 @@ public class AeronStat
         System.out.println("======================================================================");
 
         final CountersReader counters = cncFileReader.countersReader();
+        final int maxIdWidth = AsciiEncoding.digitCount(counters.maxCounterId());
+        final String formatString = "%" + maxIdWidth + "d: %,26d - %s%n";
 
         counters.forEach(
             (counterId, typeId, keyBuffer, label) ->
@@ -218,7 +221,7 @@ public class AeronStat
                 if (counterFilter.filter(typeId, keyBuffer))
                 {
                     final long value = counters.getCounterValue(counterId);
-                    System.out.format("%3d: %,20d - %s%n", counterId, value, label);
+                    System.out.format(formatString, counterId, value, label);
                 }
             }
         );
