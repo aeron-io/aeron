@@ -1908,7 +1908,7 @@ class ClusterTest
         }
 
         long time = System.nanoTime();
-        final long deadline = time + SECONDS.toNanos(2);
+        final long deadline = time + leader.consensusModule().context().leaderHeartbeatTimeoutNs();
         do
         {
             assertEquals(0, cluster.getSnapshotCount(leader));
@@ -2431,13 +2431,14 @@ class ClusterTest
     }
 
     @Test
-    @InterruptAfter(90)
+    @InterruptAfter(30)
     void shouldCatchupAndJoinAsFollowerWhileSendingBigMessages()
     {
         cluster = aCluster().withStaticNodes(3).start();
         systemTestWatcher.cluster(cluster);
 
         TestNode leader = cluster.awaitLeader();
+        final long leaderHeartbeatTimeoutNs = leader.consensusModule().context().leaderHeartbeatTimeoutNs();
         final int leaderId = leader.consensusModule().context().clusterMemberId();
         assertEquals(1, leader.consensusModule().context().electionCounter().get());
         final List<TestNode> followers = cluster.followers();
@@ -2459,15 +2460,15 @@ class ClusterTest
             follower2 = follower1;
             follower1 = tmp;
         }
-        final int follower1Id = follower1.consensusModule().context().clusterMemberId();
-        final int follower2Id = follower2.consensusModule().context().clusterMemberId();
+        final int follower1Id = follower1.memberId();
+        final int follower2Id = follower2.memberId();
         assertNotEquals(leaderId, follower1Id);
         assertNotEquals(leaderId, follower2Id);
         assertNotEquals(follower1Id, follower2Id);
 
         cluster.stopNode(follower2);
         long startNs = System.nanoTime();
-        long endNs = startNs + SECONDS.toNanos(10);
+        long endNs = startNs + leaderHeartbeatTimeoutNs;
         final int messageLength = cluster.msgBuffer().putStringWithoutLengthAscii(0, LARGE_MSG);
         while (System.nanoTime() < endNs)
         {
@@ -2479,15 +2480,15 @@ class ClusterTest
         follower2 = cluster.startStaticNode(follower2.index(), false);
         leader = cluster.awaitLeader();
         follower1 = cluster.followers().stream()
-            .filter(f -> follower1Id == f.consensusModule().context().clusterMemberId())
+            .filter(f -> follower1Id == f.memberId())
             .findFirst()
             .orElse(null);
-        assertEquals(leaderId, leader.consensusModule().context().clusterMemberId(), "leader changed");
-        assertEquals(follower2Id, follower2.consensusModule().context().clusterMemberId(), "wrong follower restarted");
-        assertNotNull(follower1, "first follower not found");
+        assertNotNull(follower1);
+        assertEquals(leaderId, leader.memberId(), "leader changed");
+        assertEquals(follower2Id, follower2.memberId(), "wrong follower restarted");
 
         startNs = System.nanoTime();
-        endNs = startNs + SECONDS.toNanos(30);
+        endNs = startNs + 3 * leaderHeartbeatTimeoutNs;
         while (System.nanoTime() < endNs)
         {
             cluster.pollUntilMessageSent(messageLength);
