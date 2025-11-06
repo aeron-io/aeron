@@ -1,14 +1,8 @@
 ARG VERSION="9"
 FROM rockylinux:${VERSION} AS builder
 
-ARG GCC_VERSION="13"
-
 RUN yum update -y && yum install -y https://cdn.azul.com/zulu/bin/zulu-repo-1.0.0-1.noarch.rpm && \
     yum update -y && yum install -y \
-    scl-utils \
-    gcc-toolset-${GCC_VERSION}-gcc \
-    gcc-toolset-${GCC_VERSION}-gcc-c++ \
-    make \
     tar \
     zlib-devel \
     libuuid-devel \
@@ -17,11 +11,12 @@ RUN yum update -y && yum install -y https://cdn.azul.com/zulu/bin/zulu-repo-1.0.
     openssl-devel \
     zulu17-jdk
 
+RUN yum groupinstall 'Development Tools' -y
+
 ENV JAVA_HOME=/usr/lib/jvm/java-17-zulu-openjdk \
     BUILD_JAVA_HOME=/usr/lib/jvm/java-17-zulu-openjdk \
     BUILD_JAVA_VERSION=17 \
-    GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.java.installations.auto-detect=false -Dorg.gradle.warning.mode=fail" \
-    GCC_VERSION=${GCC_VERSION}
+    GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.java.installations.auto-detect=false -Dorg.gradle.warning.mode=fail"
 
 ARG USER_ID="1000"
 ARG GROUP_ID="1000"
@@ -32,4 +27,4 @@ USER athena
 WORKDIR /opt/aeron
 
 FROM builder AS essentials-test
-ENTRYPOINT scl enable "gcc-toolset-${GCC_VERSION}" -- cppbuild/cppbuild --c-warnings-as-errors --cxx-warnings-as-errors --package
+ENTRYPOINT cppbuild/cppbuild --c-warnings-as-errors --cxx-warnings-as-errors --package

@@ -1,19 +1,10 @@
 #!/usr/bin/env bash
 
-if [ -z ${GCC_VERSION} ];
-then
-  echo "No GCC version provided!";
-  exit 1;
-else
-  echo "GCC_VERSION=${GCC_VERSION}"
-fi
-
 SOURCE_DIR="$(pwd)"
 
 docker build --tag rocky8-aeron \
   --build-arg USER_ID="$(id -u)" \
   --build-arg GROUP_ID="$(id -g)" \
-  --build-arg GCC_VERSION="${GCC_VERSION}" \
   --target essentials-test \
   "${SOURCE_DIR}/cppbuild/rocky"
 
