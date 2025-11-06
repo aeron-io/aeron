@@ -2,7 +2,7 @@
 
 SOURCE_DIR="$(pwd)"
 
-docker build --tag rocky8-aeron \
+docker build --tag rocky-aeron \
   --build-arg USER_ID="$(id -u)" \
   --build-arg GROUP_ID="$(id -g)" \
   --target essentials-test \
@@ -11,4 +11,4 @@ docker build --tag rocky8-aeron \
 docker run --rm --shm-size=1G --network host \
   --volume="${SOURCE_DIR}":/opt/aeron \
   --volume="$(realpath ~/.gradle)":/home/athena/.gradle \
-  rocky8-aeron
+  rocky-aeron
