@@ -107,14 +107,15 @@ class ClusterNetworkPartitionTest
         cluster.sendMessages(50); // will be sent to the old leader
         Tests.await(() -> firstLeader.appendPosition() > initialLeaderLogPosition);
 
-        final TestNode secondLeader = cluster.awaitLeaderWithoutElectionTerminationCheck(firstLeader.index());
-        assertNotEquals(firstLeader.index(), secondLeader.index());
+        final TestNode interimLeader = cluster.awaitLeaderWithoutElectionTerminationCheck(firstLeader.index());
+        assertNotEquals(firstLeader.index(), interimLeader.index());
 
         cluster.awaitNodeState(firstLeader, (n) -> n.electionState() == ElectionState.CANVASS);
 
         IpTables.flushChain(CHAIN_NAME);
 
-        cluster.awaitNodeState(firstLeader, (n) -> n.electionState() == ElectionState.CLOSED);
+        final TestNode finalLeader = cluster.awaitLeader(); // ensure no more elections
+        assertNotEquals(firstLeader.index(), finalLeader.index());
 
         cluster.reconnectClient();
         cluster.sendAndAwaitMessages(100, 200);
