@@ -27,4 +27,4 @@ USER athena
 WORKDIR /opt/aeron
 
 FROM builder AS essentials-test
-ENTRYPOINT cppbuild/cppbuild --c-warnings-as-errors --cxx-warnings-as-errors --package
+ENTRYPOINT ["cppbuild/cppbuild", "--c-warnings-as-errors", "--cxx-warnings-as-errors", "--package"]
