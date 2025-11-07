@@ -92,5 +92,6 @@ int32_t aeron_randomised_int32(void)
 extern uint8_t *aeron_cache_line_align_buffer(uint8_t *buffer);
 extern int aeron_number_of_trailing_zeroes(int32_t value);
 extern int aeron_number_of_trailing_zeroes_u64(uint64_t value);
-extern int aeron_number_of_leading_zeroes(int32_t value);
+extern int aeron_number_of_leading_zeroes(uint32_t value);
+extern int aeron_number_of_leading_zeroes_u64(uint64_t value);
 extern int32_t aeron_find_next_power_of_two(int32_t value);

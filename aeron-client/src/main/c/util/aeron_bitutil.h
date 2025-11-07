@@ -26,9 +26,8 @@
 #include <intrin.h>
 #pragma intrinsic(_BitScanForward)
 #pragma intrinsic(_BitScanReverse)
-#if defined(AERON_CPU_X64)
 #pragma intrinsic(_BitScanForward64)
-#endif
+#pragma intrinsic(_BitScanReverse64)
 #endif
 
 #define AERON_CACHE_LINE_LENGTH (64u)
@@ -56,23 +55,18 @@ inline uint8_t *aeron_cache_line_align_buffer(uint8_t *buffer)
 /* Taken from Hacker's Delight as ntz10 at http://www.hackersdelight.org/hdcodetxt/ntz.c.txt */
 inline int aeron_number_of_trailing_zeroes(int32_t value)
 {
-#if defined(__GNUC__)
     if (0 == value)
     {
         return 32;
     }
-
+#if defined(__GNUC__)
     return __builtin_ctz(value);
 #elif defined(_MSC_VER)
     unsigned long r;
-
-    if (_BitScanForward(&r, (unsigned long)value))
-    {
-        return (int)r;
-    }
-
-    return 32;
+    _BitScanForward(&r, (unsigned long)value);
+    return (int)r;
 #else
+    // Hacker's Delight. Figure 5-26.
     char table[32] =
     {
         0, 1, 2, 24, 3, 19, 6, 25,
@@ -80,11 +74,6 @@ inline int aeron_number_of_trailing_zeroes(int32_t value)
         31, 23, 18, 5, 21, 9, 15, 11,
         30, 17, 8, 14, 29, 13, 28, 27
     };
-
-    if (value == 0)
-    {
-        return 32;
-    }
 
     uint32_t index = (uint32_t)((value & -value) * 0x04D7651F);
 
@@ -94,50 +83,80 @@ inline int aeron_number_of_trailing_zeroes(int32_t value)
 
 inline int aeron_number_of_trailing_zeroes_u64(uint64_t value)
 {
-#if defined(__GNUC__)
     if (0 == value)
     {
         return 64;
     }
-
+#if defined(__GNUC__)
     return __builtin_ctzll(value);
-#elif defined(_MSC_VER) && defined(AERON_CPU_X64)
+#elif defined(_MSC_VER)
     unsigned long r;
-
-    if (_BitScanForward64(&r, (__int64)value))
-    {
-        return (int)r;
-    }
-
-    return 64;
+    _BitScanForward64(&r, (__int64)value);
+    return (int)r;
 #else
     int lower_tzc = aeron_number_of_trailing_zeroes((int32_t) (value & UINT64_C(0xFFFFFFFF)));
+    if (32 != lower_tzc)
+    {
+        return lower_tzc;
+    }
     int upper_tzc = aeron_number_of_trailing_zeroes((int32_t) ((value >> 32u) & UINT64_C(0xFFFFFFFF)));
-
-    return lower_tzc == 32 ? upper_tzc + lower_tzc : lower_tzc;
+    return lower_tzc + upper_tzc;
 #endif
 }
 
-inline int aeron_number_of_leading_zeroes(int32_t value)
+inline int aeron_number_of_leading_zeroes(uint32_t value)
 {
-#if defined(__GNUC__)
     if (0 == value)
     {
         return 32;
     }
-
+#if defined(__GNUC__)
     return __builtin_clz(value);
 #elif defined(_MSC_VER)
     unsigned long r;
-
-    if (_BitScanReverse(&r, (unsigned long)value))
-    {
-        return 31 - (int)r;
-    }
-
-    return 32;
+    _BitScanReverse(&r, (unsigned long)value);
+    return 31 - (int)r;
 #else
-#error "do not understand how to clz"
+    // Hacker's Delight. Figure 5-18.
+    char table[64] =
+    {
+        32, 20, 19, -1, -1, 18, -1, 7, 10, 17, -1, -1, 14, -1, 6, -1,
+        -1, 9, -1, 16, -1, -1, 1, 26, -1, 13, -1, -1, 24, 5, -1, -1,
+        -1, 21, -1, 8, 11, -1, 15, -1,  -1,  -1,  -1, 2, 27, 0, 25, -1,
+        22, -1, 12, -1, -1, 3, 28, -1, 23, -1, 4, 29, -1, -1, 30, 31
+    };
+
+    value = value | (value >> 1);
+    value = value | (value >> 2);
+    value = value | (value >> 4);
+    value = value | (value >> 8);
+    value = value & ~(value >> 16);
+    value = value * 0xFD7049FF;
+
+    return table[value >> 26];
+#endif
+}
+
+inline int aeron_number_of_leading_zeroes_u64(uint64_t value)
+{
+    if (0 == value)
+    {
+        return 64;
+    }
+#if defined(__GNUC__)
+    return __builtin_clzll(value);
+#elif defined(_MSC_VER)
+    unsigned long r;
+    _BitScanReverse64(&r, (__int64)value);
+    return 63 - (int)r;
+#else
+    int upper_lzc = aeron_number_of_leading_zeroes((int32_t) ((value >> 32u) & UINT64_C(0xFFFFFFFF)));
+    if (32 != upper_lzc)
+    {
+        return upper_lzc;
+    }
+    int lower_lzc = aeron_number_of_leading_zeroes((int32_t) (value & UINT64_C(0xFFFFFFFF)));
+    return upper_lzc + lower_lzc;
 #endif
 }
 
