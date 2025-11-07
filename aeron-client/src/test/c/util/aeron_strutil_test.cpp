@@ -18,6 +18,7 @@
 
 extern "C"
 {
+#include <stdint.h>
 #include "aeron_alloc.h"
 #include "util/aeron_strutil.h"
 }
@@ -181,4 +182,42 @@ TEST_F(StrUtilTest, checkStringLengthEmptyAndNull)
     length = length_initial_value;
     EXPECT_TRUE(aeron_str_length(nullptr, 5, &length));
     EXPECT_EQ(length_initial_value, length);
+}
+
+TEST_F(StrUtilTest, shouldCountNumberOfDigitsIntValue)
+{
+    EXPECT_EQ(1, aeron_digit_count(0));
+    EXPECT_EQ(1, aeron_digit_count(1));
+    EXPECT_EQ(1, aeron_digit_count(9));
+
+    EXPECT_EQ(2, aeron_digit_count(10));
+    EXPECT_EQ(2, aeron_digit_count(99));
+
+    EXPECT_EQ(3, aeron_digit_count(100));
+    EXPECT_EQ(3, aeron_digit_count(999));
+
+    EXPECT_EQ(4, aeron_digit_count(1000));
+    EXPECT_EQ(4, aeron_digit_count(9999));
+
+    EXPECT_EQ(5, aeron_digit_count(10000));
+    EXPECT_EQ(5, aeron_digit_count(99999));
+
+    EXPECT_EQ(6, aeron_digit_count(100000));
+    EXPECT_EQ(6, aeron_digit_count(999999));
+
+    EXPECT_EQ(7, aeron_digit_count(1000000));
+    EXPECT_EQ(7, aeron_digit_count(9999999));
+
+    EXPECT_EQ(8, aeron_digit_count(10000000));
+    EXPECT_EQ(8, aeron_digit_count(99999999));
+
+    EXPECT_EQ(9, aeron_digit_count(100000000));
+    EXPECT_EQ(9, aeron_digit_count(999999999));
+
+    EXPECT_EQ(10, aeron_digit_count(1000000000));
+    EXPECT_EQ(10, aeron_digit_count(UINT32_MAX));
+
+    EXPECT_EQ(10, aeron_digit_count(UINT32_MAX - 3));
+    EXPECT_EQ(3, aeron_digit_count(UINT8_MAX));
+    EXPECT_EQ(5, aeron_digit_count(UINT16_MAX));
 }

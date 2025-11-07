@@ -164,6 +164,20 @@ int aeron_tokenise(char *input, char delimiter, int max_tokens, char **tokens)
     return num_tokens;
 }
 
+int aeron_digit_count(uint32_t value)
+{
+    static uint64_t table[] = {
+        4294967296,  8589934582,  8589934582,  8589934582,  12884901788,
+        12884901788, 12884901788, 17179868184, 17179868184, 17179868184,
+        21474826480, 21474826480, 21474826480, 21474826480, 25769703776,
+        25769703776, 25769703776, 30063771072, 30063771072, 30063771072,
+        34349738368, 34349738368, 34349738368, 34349738368, 38554705664,
+        38554705664, 38554705664, 41949672960, 41949672960, 41949672960,
+        42949672960, 42949672960 };
+    int log2 = 63 - aeron_number_of_leading_zeroes_u64((uint64_t)value | 1);
+    return (int)((value + table[log2]) >> 32);
+}
+
 #if defined(AERON_COMPILER_MSVC)
 
 char *aeron_strndup(const char *value, size_t length)

@@ -20,6 +20,8 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+
+#include "aeron_bitutil.h"
 #include "util/aeron_platform.h"
 
 #define AERON_FORMAT_DATE_MAX_LENGTH (100)
@@ -128,5 +130,7 @@ inline void aeron_str_null_terminate(uint8_t *text, int index)
 {
     text[index] = '\0';
 }
+
+int aeron_digit_count(uint32_t value);
 
 #endif //AERON_STRUTIL_H
