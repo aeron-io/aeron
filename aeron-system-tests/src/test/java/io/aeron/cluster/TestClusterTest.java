@@ -15,56 +15,72 @@
  */
 package io.aeron.cluster;
 
-import io.aeron.cluster.service.Cluster;
+import io.aeron.cluster.client.AeronCluster;
 import io.aeron.test.EventLogExtension;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
+import io.aeron.test.SlowTest;
 import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.cluster.TestCluster;
 import io.aeron.test.cluster.TestNode;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.file.Path;
+import java.util.HashSet;
+import java.util.Set;
 
 import static io.aeron.test.cluster.TestCluster.aCluster;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@SlowTest
 @ExtendWith({ EventLogExtension.class, InterruptingTestCallback.class })
-class AppointedLeaderTest
+public class TestClusterTest
 {
+
     @RegisterExtension
     final SystemTestWatcher systemTestWatcher = new SystemTestWatcher();
 
-    private static final int LEADER_ID = 1;
+    private String aeronDirectory;
 
-    @Test
-    @InterruptAfter(20)
-    void shouldConnectAndSendKeepAlive()
+    @BeforeEach
+    void setup(@TempDir final Path tempDir)
     {
-        final TestCluster cluster = aCluster().withStaticNodes(3).withAppointedLeader(LEADER_ID).start();
-        systemTestWatcher.cluster(cluster);
-
-        final TestNode leader = cluster.awaitLeader();
-        assertEquals(LEADER_ID, leader.index());
-        assertEquals(Cluster.Role.LEADER, leader.role());
-
-        cluster.connectClient();
-        assertTrue(cluster.client().sendKeepAlive());
+        aeronDirectory = tempDir.toString();
     }
 
     @Test
     @InterruptAfter(20)
-    void shouldEchoMessagesViaService()
+    void testCustomAeronDirectory()
     {
-        final TestCluster cluster = aCluster().withStaticNodes(3).withAppointedLeader(LEADER_ID).start();
+        final AeronCluster.Context clientCtx = new AeronCluster.Context();
+
+        final TestCluster cluster = aCluster()
+            .withStaticNodes(3)
+            .withAeronBaseDir(aeronDirectory)
+            .start();
         systemTestWatcher.cluster(cluster);
 
         final TestNode leader = cluster.awaitLeader();
-        assertEquals(LEADER_ID, leader.index());
-        assertEquals(Cluster.Role.LEADER, leader.role());
+        assertNotNull(cluster.connectClient());
 
-        cluster.connectClient();
-        cluster.sendAndAwaitMessages(10);
+        final Set<String> seen = new HashSet<>();
+        for (int i = 0; i < cluster.memberCount(); i++)
+        {
+            final String dir = cluster.node(i).mediaDriver().context().aeronDirectoryName();
+            assertTrue(seen.add(dir), "Duplicate Aeron dir: " + dir);
+            assertFalse(dir.startsWith("/dev/shm"), "Aeron dir under /dev/shm: " + dir);
+        }
+
+        final String dir = clientCtx.aeronDirectoryName();
+        assertTrue(seen.add(dir), "Duplicate Aeron dir: " + dir);
+        assertFalse(dir.startsWith("/dev/shm"), "Aeron dir under /dev/shm: " + dir);
+
     }
+
 }

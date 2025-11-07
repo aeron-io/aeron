@@ -93,7 +93,6 @@ import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Objects;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.IntFunction;
@@ -307,7 +306,7 @@ public final class TestCluster implements AutoCloseable
         final int index, final boolean cleanStart, final IntFunction<TestNode.TestService[]> serviceSupplier)
     {
         final String baseDirName = clusterBaseDir + "-" + index;
-        final String aeronDirName = aeronBaseDir + "-" + UUID.randomUUID();
+        final String aeronDirName = aeronBaseDir + "-" + index;
         final File markFileDir = null != markFileBaseDir ? new File(markFileBaseDir, "mark-" + index) : null;
         final TestNode.Context context = new TestNode.Context(
             serviceSupplier.apply(index), hostname(index, memberCount), nodeNameMappings());
@@ -413,7 +412,7 @@ public final class TestCluster implements AutoCloseable
     {
         final int index = memberCount;
         final String baseDirName = clusterBaseDir + "-" + index;
-        final String aeronDirName = aeronBaseDir + "-" + UUID.randomUUID();
+        final String aeronDirName = aeronBaseDir + "-" + index;
         final File markFileDir = null != markFileBaseDir ? new File(markFileBaseDir, "mark-" + index) : null;
         final TestBackupNode.Context context = new TestBackupNode.Context();
 
@@ -484,7 +483,7 @@ public final class TestCluster implements AutoCloseable
     public TestNode startStaticNodeFromBackup(final IntFunction<TestNode.TestService[]> serviceSupplier)
     {
         final String baseDirName = clusterBaseDir + "-" + backupNodeIndex;
-        final String aeronDirName = aeronBaseDir + "-" + UUID.randomUUID();
+        final String aeronDirName = aeronBaseDir + "-" + backupNodeIndex;
         final File markFileDir = null != markFileBaseDir ? new File(markFileBaseDir, "mark-" + backupNodeIndex) : null;
         final TestNode.Context context = new TestNode.Context(
             serviceSupplier.apply(backupNodeIndex), hostname(backupNodeIndex, memberCount), nodeNameMappings());
@@ -768,7 +767,7 @@ public final class TestCluster implements AutoCloseable
     {
         if (null == clientMediaDriver)
         {
-            final String aeronDirName = aeronBaseDir + "-" + UUID.randomUUID();
+            final String aeronDirName = aeronBaseDir;
             dataCollector.add(Paths.get(aeronDirName));
 
             final MediaDriver.Context ctx = new MediaDriver.Context()
@@ -2139,7 +2138,7 @@ public final class TestCluster implements AutoCloseable
         private File markFileBaseDir = null;
         private String clusterBaseDir = System.getProperty(
             CLUSTER_BASE_DIR_PROP_NAME, CommonContext.generateRandomDirName());
-        private String aeronBaseDir = CommonContext.AERON_DIR_PROP_DEFAULT;
+        private String aeronBaseDir = CommonContext.generateRandomDirName();
         private boolean useResponseChannels = false;
         private Supplier<ConsensusModuleExtension> extensionSupplier;
         private List<String> hostnames;
