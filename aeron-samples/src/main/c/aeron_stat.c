@@ -72,12 +72,14 @@ static void aeron_stat_print_counter(
     size_t label_length,
     void *clientd)
 {
+    const char *format_string = (char *)clientd;
     char value_str[AERON_FORMAT_NUMBER_TO_LOCALE_STR_LEN];
     printf(
-        "%3" PRId32 " : %20s - %.*s\n",
+        format_string,
         id,
         aeron_format_number_to_locale(value, value_str, sizeof(value_str)),
-        (int)label_length, label);
+        (int)label_length,
+        label);
 }
 
 static void printStats(
@@ -97,9 +99,18 @@ static void printStats(
         cnc_version,
         (*cnc_constants).pid,
         now_ms - heartbeat_ms);
-    printf("===========================\n");
+    printf("======================================================================\n");
 
-    aeron_counters_reader_foreach_counter(counters_reader, aeron_stat_print_counter, NULL);
+    int max_id_width = aeron_digit_count(aeron_counters_reader_max_counter_id(counters_reader));
+    char counter_format_string[30];
+    snprintf(
+        counter_format_string,
+        sizeof(counter_format_string),
+        "%%%" PRId32 "%s: %%26s - %%.*s\n",
+        max_id_width,
+        PRId32);
+
+    aeron_counters_reader_foreach_counter(counters_reader, aeron_stat_print_counter, counter_format_string);
 }
 
 int main(int argc, char **argv)
