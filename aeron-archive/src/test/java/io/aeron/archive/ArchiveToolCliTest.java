@@ -66,8 +66,7 @@ public class ArchiveToolCliTest
         final SystemEpochClock clock = SystemEpochClock.INSTANCE;
         markFile = new ArchiveMarkFile(
             new File(archiveDir, ArchiveMarkFile.FILENAME), 1024 * 64, 8192, clock, 1000);
-        markFile.updateActivityTimestamp(clock.time());
-        markFile.signalReady();
+        markFile.signalReady(clock.time());
     }
 
     @AfterEach

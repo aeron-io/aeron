@@ -2027,9 +2027,7 @@ public final class ClusterBackup implements AutoCloseable
                 .serviceName(null)
                 .authenticator(null);
 
-            markFile.updateActivityTimestamp(epochClock.time());
-            markFile.signalReady();
-            markFile.force();
+            markFile.signalReady(epochClock.time());
         }
     }
 }

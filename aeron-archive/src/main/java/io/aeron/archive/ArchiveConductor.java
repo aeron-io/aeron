@@ -250,8 +250,7 @@ abstract class ArchiveConductor
             }
         }
 
-        markFile.updateActivityTimestamp(NULL_VALUE);
-        markFile.force();
+        markFile.signalTerminated();
         ctx.close();
     }
 

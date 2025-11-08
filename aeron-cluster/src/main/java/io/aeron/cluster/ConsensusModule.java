@@ -303,10 +303,10 @@ public final class ConsensusModule implements AutoCloseable
         }
         catch (final Exception ex)
         {
-            if (null != ctx.clusterMarkFile())
+            final ClusterMarkFile markFile = ctx.markFile;
+            if (null != markFile)
             {
-                ctx.clusterMarkFile().signalFailedStart();
-                ctx.clusterMarkFile().force();
+                markFile.signalFailedStart();
             }
 
             CloseHelper.quietClose(ctx::close);
@@ -4426,9 +4426,7 @@ public final class ConsensusModule implements AutoCloseable
                 .authenticator(authenticatorClassName)
                 .servicesClusterDir(clusterServicesDirectoryName);
 
-            markFile.updateActivityTimestamp(epochClock.time());
-            markFile.signalReady();
-            markFile.force();
+            markFile.signalReady(epochClock.time());
         }
 
         private TimerServiceSupplier getTimerServiceSupplierFromSystemProperty()

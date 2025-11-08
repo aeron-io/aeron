@@ -342,8 +342,7 @@ final class ConsensusModuleAgent
             state(ConsensusModule.State.CLOSED);
         }
 
-        markFile.updateActivityTimestamp(NULL_VALUE);
-        markFile.force();
+        markFile.signalTerminated();
         ctx.close();
     }
 

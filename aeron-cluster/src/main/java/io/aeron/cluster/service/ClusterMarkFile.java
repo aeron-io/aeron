@@ -42,6 +42,7 @@ import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.function.Consumer;
 
+import static io.aeron.Aeron.NULL_VALUE;
 import static io.aeron.logbuffer.LogBufferDescriptor.PAGE_MIN_SIZE;
 
 /**
@@ -258,10 +259,10 @@ public final class ClusterMarkFile implements AutoCloseable
                 totalFileLength,
                 timeoutMs,
                 epochClock,
-                null,
+                (version) -> {},
                 null);
             buffer = markFile.buffer();
-            candidateTermId = Aeron.NULL_VALUE;
+            candidateTermId = NULL_VALUE;
         }
 
         headerOffset = HEADER_OFFSET;
@@ -387,7 +388,7 @@ public final class ClusterMarkFile implements AutoCloseable
      */
     public long candidateTermId()
     {
-        return markFile.isClosed() ? Aeron.NULL_VALUE :
+        return markFile.isClosed() ? NULL_VALUE :
             buffer.getLongVolatile(headerOffset + MarkFileHeaderDecoder.candidateTermIdEncodingOffset());
     }
 
@@ -398,7 +399,7 @@ public final class ClusterMarkFile implements AutoCloseable
      */
     public int memberId()
     {
-        return markFile.isClosed() ? Aeron.NULL_VALUE : headerDecoder.memberId();
+        return markFile.isClosed() ? NULL_VALUE : headerDecoder.memberId();
     }
 
     /**
@@ -421,7 +422,7 @@ public final class ClusterMarkFile implements AutoCloseable
      */
     public int clusterId()
     {
-        return markFile.isClosed() ? Aeron.NULL_VALUE : headerDecoder.clusterId();
+        return markFile.isClosed() ? NULL_VALUE : headerDecoder.clusterId();
     }
 
     /**
@@ -439,7 +440,10 @@ public final class ClusterMarkFile implements AutoCloseable
 
     /**
      * Signal the cluster component has concluded successfully and ready to start.
+     *
+     * @deprecated Use {@link #signalReady(long)} instead.
      */
+    @Deprecated(forRemoval = true)
     public void signalReady()
     {
         if (!markFile.isClosed())
@@ -449,13 +453,32 @@ public final class ClusterMarkFile implements AutoCloseable
     }
 
     /**
+     * Signal the cluster component has concluded successfully and ready to start.
+     *
+     * @param activityTimestamp to be used.
+     */
+    public void signalReady(final long activityTimestamp)
+    {
+        signalReady(SEMANTIC_VERSION, activityTimestamp);
+    }
+
+    /**
      * Signal the cluster component has failed to conclude and cannot start.
      */
     public void signalFailedStart()
     {
+        signalReady(VERSION_FAILED, NULL_VALUE);
+    }
+
+    /**
+     * Signal the cluster component has been terminated.
+     */
+    public void signalTerminated()
+    {
         if (!markFile.isClosed())
         {
-            markFile.signalReady(VERSION_FAILED);
+            markFile.timestampRelease(NULL_VALUE);
+            force();
         }
     }
 
@@ -479,7 +502,7 @@ public final class ClusterMarkFile implements AutoCloseable
      */
     public long activityTimestampVolatile()
     {
-        return markFile.isClosed() ? Aeron.NULL_VALUE : markFile.timestampVolatile();
+        return markFile.isClosed() ? NULL_VALUE : markFile.timestampVolatile();
     }
 
     /**
@@ -547,13 +570,13 @@ public final class ClusterMarkFile implements AutoCloseable
     {
         final int length =
             HEADER_OFFSET +
-            MarkFileHeaderEncoder.BLOCK_LENGTH +
-            (5 * VarAsciiEncodingEncoder.lengthEncodingLength()) +
-            (null == aeronDirectory ? 0 : aeronDirectory.length()) +
-            (null == controlChannel ? 0 : controlChannel.length()) +
-            (null == ingressChannel ? 0 : ingressChannel.length()) +
-            (null == serviceName ? 0 : serviceName.length()) +
-            (null == authenticator ? 0 : authenticator.length());
+                MarkFileHeaderEncoder.BLOCK_LENGTH +
+                (5 * VarAsciiEncodingEncoder.lengthEncodingLength()) +
+                (null == aeronDirectory ? 0 : aeronDirectory.length()) +
+                (null == controlChannel ? 0 : controlChannel.length()) +
+                (null == ingressChannel ? 0 : ingressChannel.length()) +
+                (null == serviceName ? 0 : serviceName.length()) +
+                (null == authenticator ? 0 : authenticator.length());
 
         if (length > HEADER_LENGTH)
         {
@@ -629,6 +652,16 @@ public final class ClusterMarkFile implements AutoCloseable
             "semanticVersion=" + SemanticVersion.toString(SEMANTIC_VERSION) +
             ", markFile=" + markFile.markFile() +
             '}';
+    }
+
+    private void signalReady(final int version, final long activityTimestamp)
+    {
+        if (!markFile.isClosed())
+        {
+            markFile.timestampRelease(activityTimestamp);
+            markFile.signalReady(version);
+            force();
+        }
     }
 
     private static int headerOffset(final File file)

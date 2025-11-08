@@ -222,8 +222,7 @@ public final class ClusterBackupAgent implements Agent
             clusterArchive,
             recordingLog);
 
-        markFile.updateActivityTimestamp(NULL_VALUE);
-        markFile.force();
+        markFile.signalTerminated();
         ctx.close();
     }
 

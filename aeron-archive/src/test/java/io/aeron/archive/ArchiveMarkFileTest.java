@@ -47,6 +47,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
+import static io.aeron.Aeron.NULL_VALUE;
 import static io.aeron.logbuffer.LogBufferDescriptor.PAGE_MIN_SIZE;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThan;
@@ -160,9 +161,15 @@ class ArchiveMarkFileTest
         catch (final ArchiveException ex)
         {
             // Should be able to read the mark file and the activity timestamp should not have been set.
-            try (ArchiveMarkFile testMarkFile = new ArchiveMarkFile(archiveContext.clone()))
+            try (ArchiveMarkFile testMarkFile = new ArchiveMarkFile(
+                markFileDir,
+                ArchiveMarkFile.FILENAME,
+                SystemEpochClock.INSTANCE,
+                10_000,
+                null))
             {
-                assertEquals(0, testMarkFile.activityTimestampVolatile());
+                assertEquals(ArchiveMarkFile.SEMANTIC_VERSION, testMarkFile.decoder().version());
+                assertEquals(NULL_VALUE, testMarkFile.decoder().activityTimestamp());
             }
         }
 
@@ -267,7 +274,7 @@ class ArchiveMarkFileTest
             assertEquals(aeronDirectory, archiveMarkFile.decoder().aeronDirectory());
 
             assertEquals(aeronDirectory, archiveMarkFile.aeronDirectory());
-            assertEquals(Aeron.NULL_VALUE, archiveMarkFile.archiveId());
+            assertEquals(NULL_VALUE, archiveMarkFile.archiveId());
         }
 
         final Aeron aeron = mock(Aeron.class);
@@ -339,7 +346,7 @@ class ArchiveMarkFileTest
             assertEquals(aeronDirectory, archiveMarkFile.decoder().aeronDirectory());
 
             assertEquals(aeronDirectory, archiveMarkFile.aeronDirectory());
-            assertEquals(Aeron.NULL_VALUE, archiveMarkFile.archiveId());
+            assertEquals(NULL_VALUE, archiveMarkFile.archiveId());
         }
 
         final Aeron aeron = mock(Aeron.class);
@@ -408,7 +415,7 @@ class ArchiveMarkFileTest
         archiveMarkFile.close();
 
         archiveMarkFile.updateActivityTimestamp(1111);
-        assertEquals(Aeron.NULL_VALUE, archiveMarkFile.activityTimestampVolatile());
+        assertEquals(NULL_VALUE, archiveMarkFile.activityTimestampVolatile());
     }
 
     @Test
@@ -431,7 +438,7 @@ class ArchiveMarkFileTest
 
         archiveMarkFile.close();
 
-        assertEquals(Aeron.NULL_VALUE, archiveMarkFile.archiveId());
+        assertEquals(NULL_VALUE, archiveMarkFile.archiveId());
     }
 
     @Test
@@ -446,13 +453,14 @@ class ArchiveMarkFileTest
 
         assertEquals(0, archiveMarkFile.decoder().version());
 
-        archiveMarkFile.signalReady();
+        archiveMarkFile.signalReady(5555);
 
         assertEquals(ArchiveMarkFile.SEMANTIC_VERSION, archiveMarkFile.decoder().version());
+        assertEquals(5555, archiveMarkFile.decoder().activityTimestamp());
 
         archiveMarkFile.close();
 
-        archiveMarkFile.signalReady();
+        archiveMarkFile.signalReady(7777);
         assertTrue(archiveMarkFile.isClosed());
     }
 
@@ -570,7 +578,8 @@ class ArchiveMarkFileTest
 
         try (ArchiveMarkFile archiveMarkFile = new ArchiveMarkFile(ctx))
         {
-            archiveMarkFile.signalReady();
+            final long time = epochClock.time();
+            archiveMarkFile.signalReady(time);
 
             final MessageHeaderDecoder messageHeaderDecoder = new MessageHeaderDecoder();
             messageHeaderDecoder.wrap(archiveMarkFile.buffer(), 0);
@@ -580,7 +589,7 @@ class ArchiveMarkFileTest
             assertEquals(MarkFileHeaderDecoder.SCHEMA_VERSION, messageHeaderDecoder.version());
 
             assertEquals(ArchiveMarkFile.SEMANTIC_VERSION, archiveMarkFile.decoder().version());
-            assertEquals(epochClock.time(), archiveMarkFile.decoder().startTimestamp());
+            assertEquals(time, archiveMarkFile.decoder().startTimestamp());
             assertEquals(SystemUtil.getPid(), archiveMarkFile.decoder().pid());
             assertEquals(ctx.controlStreamId(), archiveMarkFile.decoder().controlStreamId());
             assertEquals(ctx.localControlStreamId(), archiveMarkFile.decoder().localControlStreamId());

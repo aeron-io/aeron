@@ -417,7 +417,7 @@ class ClusterToolTest
                 .serviceStreamId(222)
                 .aeronDirectory(driver.aeronDirectoryName())
                 .controlChannel("aeron:udp?endpoint=localhost:7799");
-            clusterMarkFile.signalReady();
+            clusterMarkFile.signalReady(clock.time());
 
             final ClusterMembership clusterMembership = new ClusterMembership();
             assertFalse(ClusterTool.listMembers(clusterMembership, clusterMarkFile.parentDirectory(), 1));

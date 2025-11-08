@@ -15,7 +15,6 @@
  */
 package io.aeron.archive;
 
-import io.aeron.Aeron;
 import io.aeron.CommonContext;
 import io.aeron.archive.client.ArchiveException;
 import io.aeron.archive.codecs.mark.MarkFileHeaderDecoder;
@@ -42,6 +41,7 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 
+import static io.aeron.Aeron.NULL_VALUE;
 import static io.aeron.archive.Archive.Configuration.LIVENESS_TIMEOUT_MS;
 
 /**
@@ -186,7 +186,7 @@ public class ArchiveMarkFile implements AutoCloseable
                 totalFileLength,
                 timeoutMs,
                 epochClock,
-                null,
+                (version) -> {},
                 null);
             buffer = markFile.buffer();
         }
@@ -305,18 +305,44 @@ public class ArchiveMarkFile implements AutoCloseable
      */
     public long archiveId()
     {
-        return markFile.isClosed() ? Aeron.NULL_VALUE : headerDecoder.archiveId();
+        return markFile.isClosed() ? NULL_VALUE : headerDecoder.archiveId();
     }
 
     /**
      * Signal the archive has concluded successfully and ready to start.
+     *
+     * @deprecated Use {@link #signalReady(long)} instead.
      */
+    @Deprecated(forRemoval = true)
     public void signalReady()
     {
         if (!markFile.isClosed())
         {
             markFile.signalReady(SEMANTIC_VERSION);
         }
+    }
+
+    /**
+     * Signal the archive has concluded successfully and ready to start.
+     *
+     * @param activityTimestamp to be used.
+     */
+    public void signalReady(final long activityTimestamp)
+    {
+        if (!markFile.isClosed())
+        {
+            markFile.timestampRelease(activityTimestamp);
+            markFile.signalReady(SEMANTIC_VERSION);
+            force();
+        }
+    }
+
+    /**
+     * Signal the archive has terminated cleanly.
+     */
+    public void signalTerminated()
+    {
+        signalReady(NULL_VALUE);
     }
 
     /**
@@ -339,7 +365,7 @@ public class ArchiveMarkFile implements AutoCloseable
      */
     public long activityTimestampVolatile()
     {
-        return markFile.isClosed() ? Aeron.NULL_VALUE : markFile.timestampVolatile();
+        return markFile.isClosed() ? NULL_VALUE : markFile.timestampVolatile();
     }
 
     /**

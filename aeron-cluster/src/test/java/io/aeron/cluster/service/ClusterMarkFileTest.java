@@ -72,12 +72,12 @@ class ClusterMarkFileTest
         final IllegalArgumentException exception = assertThrowsExactly(
             IllegalArgumentException.class,
             () -> new ClusterMarkFile(
-            tempDir.resolve("test.cfg").toFile(),
-            ClusterComponentType.CONSENSUS_MODULE,
-            errorBufferLength,
-            SystemEpochClock.INSTANCE,
-            10,
-            PAGE_MIN_SIZE));
+                tempDir.resolve("test.cfg").toFile(),
+                ClusterComponentType.CONSENSUS_MODULE,
+                errorBufferLength,
+                SystemEpochClock.INSTANCE,
+                10,
+                PAGE_MIN_SIZE));
         assertEquals("Invalid errorBufferLength: " + errorBufferLength, exception.getMessage());
     }
 
@@ -136,14 +136,15 @@ class ClusterMarkFileTest
             assertTrue(file.exists());
             assertEquals(HEADER_LENGTH + ERROR_BUFFER_MIN_LENGTH, file.length());
 
-            clusterMarkFile.signalReady();
+            final long startTimestamp = epochClock.time();
+            clusterMarkFile.signalReady(startTimestamp);
 
             verifyMarkFileContents(
                 clusterMarkFile,
                 ClusterMarkFile.SEMANTIC_VERSION,
                 componentType,
-                0,
-                epochClock.time(),
+                startTimestamp,
+                startTimestamp,
                 SystemUtil.getPid(),
                 Aeron.NULL_VALUE,
                 0,
@@ -195,7 +196,7 @@ class ClusterMarkFileTest
         try (ClusterMarkFile clusterMarkFile = new ClusterMarkFile(
             file, ClusterComponentType.BACKUP, ERROR_BUFFER_MIN_LENGTH, epochClock, 1000, PAGE_MIN_SIZE))
         {
-            clusterMarkFile.signalReady();
+            clusterMarkFile.signalReady(10);
 
             clusterMarkFile.encoder()
                 .activityTimestamp(activityTimestamp)
@@ -227,7 +228,7 @@ class ClusterMarkFileTest
                 clusterMarkFile,
                 ClusterMarkFile.SEMANTIC_VERSION,
                 ClusterComponentType.CONSENSUS_MODULE,
-                activityTimestamp,
+                MarkFile.ACTIVATION_IN_PROGRESS_TIMESTAMP,
                 epochClock.time(),
                 SystemUtil.getPid(),
                 candidateTermId,
@@ -342,7 +343,7 @@ class ClusterMarkFileTest
             clusterMarkFile.signalFailedStart();
             assertEquals(ClusterMarkFile.VERSION_FAILED, clusterMarkFile.decoder().version());
 
-            clusterMarkFile.signalReady();
+            clusterMarkFile.signalReady(activityTimestamp * 2);
             assertEquals(ClusterMarkFile.SEMANTIC_VERSION, clusterMarkFile.decoder().version());
 
             clusterMarkFile.memberId(42);
@@ -372,7 +373,7 @@ class ClusterMarkFileTest
                 clusterMarkFile,
                 ClusterMarkFile.SEMANTIC_VERSION,
                 currentComponentType,
-                activityTimestamp,
+                activityTimestamp * 2,
                 startTimestamp,
                 pid,
                 candidateTermId,
@@ -392,8 +393,9 @@ class ClusterMarkFileTest
                 authenticator,
                 clusterDir);
 
-            clusterMarkFile.signalReady();
+            clusterMarkFile.signalReady(activityTimestamp * 3);
             assertEquals(ClusterMarkFile.SEMANTIC_VERSION, clusterMarkFile.decoder().version());
+            assertEquals(activityTimestamp * 3, clusterMarkFile.decoder().activityTimestamp());
         }
 
         // should overwrite existing data when message header offset is being added
@@ -634,12 +636,13 @@ class ClusterMarkFileTest
 
         assertEquals(0, clusterMarkFile.decoder().version());
 
-        clusterMarkFile.signalReady();
+        clusterMarkFile.signalReady(1000);
         assertEquals(ClusterMarkFile.SEMANTIC_VERSION, clusterMarkFile.decoder().version());
+        assertEquals(1000, clusterMarkFile.decoder().activityTimestamp());
 
         clusterMarkFile.close();
 
-        clusterMarkFile.signalReady();
+        clusterMarkFile.signalReady(2000);
     }
 
     @Test
@@ -657,6 +660,7 @@ class ClusterMarkFileTest
 
         clusterMarkFile.signalFailedStart();
         assertEquals(ClusterMarkFile.VERSION_FAILED, clusterMarkFile.decoder().version());
+        assertEquals(Aeron.NULL_VALUE, clusterMarkFile.decoder().activityTimestamp());
 
         clusterMarkFile.close();
 
@@ -688,12 +692,12 @@ class ClusterMarkFileTest
     {
         final IllegalStateException exception = assertThrowsExactly(
             IllegalStateException.class, () -> new ClusterMarkFile(
-            tempDir.resolve("test-mark.file").toFile(),
-            ClusterComponentType.STANDBY,
-            ERROR_BUFFER_MIN_LENGTH,
-            SystemEpochClock.INSTANCE,
-            100,
-            4199));
+                tempDir.resolve("test-mark.file").toFile(),
+                ClusterComponentType.STANDBY,
+                ERROR_BUFFER_MIN_LENGTH,
+                SystemEpochClock.INSTANCE,
+                100,
+                4199));
 
         assertEquals("Page size not a power of 2: page size=4199", exception.getMessage());
     }
@@ -704,12 +708,12 @@ class ClusterMarkFileTest
     {
         final IllegalStateException exception = assertThrowsExactly(
             IllegalStateException.class, () -> new ClusterMarkFile(
-            tempDir.resolve("test-mark.file").toFile(),
-            ClusterComponentType.STANDBY,
-            ERROR_BUFFER_MIN_LENGTH,
-            SystemEpochClock.INSTANCE,
-            100,
-            pageSize));
+                tempDir.resolve("test-mark.file").toFile(),
+                ClusterComponentType.STANDBY,
+                ERROR_BUFFER_MIN_LENGTH,
+                SystemEpochClock.INSTANCE,
+                100,
+                pageSize));
 
         assertEquals("Page size less than min size of 4096: page size=" + pageSize, exception.getMessage());
     }
@@ -719,12 +723,12 @@ class ClusterMarkFileTest
     {
         final IllegalStateException exception = assertThrowsExactly(
             IllegalStateException.class, () -> new ClusterMarkFile(
-            tempDir.resolve("test-mark.file").toFile(),
-            ClusterComponentType.STANDBY,
-            ERROR_BUFFER_MIN_LENGTH,
-            SystemEpochClock.INSTANCE,
-            100,
-            Integer.MAX_VALUE));
+                tempDir.resolve("test-mark.file").toFile(),
+                ClusterComponentType.STANDBY,
+                ERROR_BUFFER_MIN_LENGTH,
+                SystemEpochClock.INSTANCE,
+                100,
+                Integer.MAX_VALUE));
 
         assertEquals("Page size more than max size of 1073741824: page size=2147483647", exception.getMessage());
     }

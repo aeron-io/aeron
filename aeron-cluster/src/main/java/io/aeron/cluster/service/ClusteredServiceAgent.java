@@ -241,8 +241,7 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
             }
         }
 
-        markFile.updateActivityTimestamp(NULL_VALUE);
-        markFile.force();
+        markFile.signalTerminated();
         ctx.close();
     }
 

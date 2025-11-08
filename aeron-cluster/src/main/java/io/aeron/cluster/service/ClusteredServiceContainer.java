@@ -115,10 +115,10 @@ public final class ClusteredServiceContainer implements AutoCloseable
         }
         catch (final Exception ex)
         {
-            if (null != ctx.markFile)
+            final ClusterMarkFile markFile = ctx.markFile;
+            if (null != markFile)
             {
-                ctx.markFile.signalFailedStart();
-                ctx.markFile.force();
+                markFile.signalFailedStart();
             }
 
             ctx.close();
@@ -2056,9 +2056,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
                 .serviceName(serviceName)
                 .authenticator(null);
 
-            markFile.updateActivityTimestamp(epochClock.time());
-            markFile.signalReady();
-            markFile.force();
+            markFile.signalReady(epochClock.time());
         }
 
         /**
