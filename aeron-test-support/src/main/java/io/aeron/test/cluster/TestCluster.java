@@ -767,7 +767,7 @@ public final class TestCluster implements AutoCloseable
     {
         if (null == clientMediaDriver)
         {
-            final String aeronDirName = aeronBaseDir;
+            final String aeronDirName = aeronBaseDir + "-client";
             dataCollector.add(Paths.get(aeronDirName));
 
             final MediaDriver.Context ctx = new MediaDriver.Context()
