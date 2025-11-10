@@ -22,8 +22,7 @@ import io.aeron.test.InterruptingTestCallback;
 import io.aeron.test.SlowTest;
 import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.cluster.TestCluster;
-import io.aeron.test.cluster.TestNode;
-import org.junit.jupiter.api.BeforeEach;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -34,7 +33,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 import static io.aeron.test.cluster.TestCluster.aCluster;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -46,18 +45,11 @@ public class TestClusterTest
     @RegisterExtension
     final SystemTestWatcher systemTestWatcher = new SystemTestWatcher();
 
-    private String aeronDirectory;
-
-    @BeforeEach
-    void setup(@TempDir final Path tempDir)
-    {
-        aeronDirectory = tempDir.toString();
-    }
-
     @Test
     @InterruptAfter(20)
-    void testCustomAeronDirectory()
+    void testCustomAeronDirectory(@TempDir final Path tempDir)
     {
+        final String aeronDirectory = tempDir.toString();
         final AeronCluster.Context clientCtx = new AeronCluster.Context()
             .aeronDirectoryName(aeronDirectory);
 
@@ -67,7 +59,7 @@ public class TestClusterTest
             .start();
         systemTestWatcher.cluster(cluster);
 
-        final TestNode leader = cluster.awaitLeader();
+        cluster.awaitLeader();
         assertNotNull(cluster.connectClient());
 
         final Set<String> seen = new HashSet<>();
@@ -75,13 +67,12 @@ public class TestClusterTest
         {
             final String dir = cluster.node(i).mediaDriver().context().aeronDirectoryName();
             assertTrue(seen.add(dir), "Cluster has a duplicate Aeron dir: " + dir);
-            assertFalse(dir.startsWith("/dev/shm"), "Cluster Aeron dir under /dev/shm: " + dir);
+            assertThat(dir, Matchers.startsWith(aeronDirectory));
         }
 
         final String dir = clientCtx.aeronDirectoryName();
         assertTrue(seen.add(dir), "Client has duplicate Aeron dir: " + dir);
-        assertFalse(dir.startsWith("/dev/shm"), "Client Aeron dir under /dev/shm: " + dir);
-
+        assertThat(dir, Matchers.startsWith(aeronDirectory));
     }
 
 }
