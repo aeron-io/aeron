@@ -58,7 +58,8 @@ public class TestClusterTest
     @InterruptAfter(20)
     void testCustomAeronDirectory()
     {
-        final AeronCluster.Context clientCtx = new AeronCluster.Context();
+        final AeronCluster.Context clientCtx = new AeronCluster.Context()
+            .aeronDirectoryName(aeronDirectory);
 
         final TestCluster cluster = aCluster()
             .withStaticNodes(3)
@@ -73,13 +74,13 @@ public class TestClusterTest
         for (int i = 0; i < cluster.memberCount(); i++)
         {
             final String dir = cluster.node(i).mediaDriver().context().aeronDirectoryName();
-            assertTrue(seen.add(dir), "Duplicate Aeron dir: " + dir);
-            assertFalse(dir.startsWith("/dev/shm"), "Aeron dir under /dev/shm: " + dir);
+            assertTrue(seen.add(dir), "Cluster has a duplicate Aeron dir: " + dir);
+            assertFalse(dir.startsWith("/dev/shm"), "Cluster Aeron dir under /dev/shm: " + dir);
         }
 
         final String dir = clientCtx.aeronDirectoryName();
-        assertTrue(seen.add(dir), "Duplicate Aeron dir: " + dir);
-        assertFalse(dir.startsWith("/dev/shm"), "Aeron dir under /dev/shm: " + dir);
+        assertTrue(seen.add(dir), "Client has duplicate Aeron dir: " + dir);
+        assertFalse(dir.startsWith("/dev/shm"), "Client Aeron dir under /dev/shm: " + dir);
 
     }
 
