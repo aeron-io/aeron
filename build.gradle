@@ -998,6 +998,8 @@ project(':aeron-agent') {
         implementation aeronClusterProject
         implementation libs.byteBuddy
         implementation libs.byteBuddy.agent
+        implementation project(':aeron-annotations')
+        annotationProcessor project(':aeron-annotations')
         compileOnly libs.findbugs.annotations
         testCompileOnly libs.findbugs.annotations
         testImplementation project(':aeron-test-support')

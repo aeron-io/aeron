@@ -19,23 +19,32 @@ import org.agrona.CloseHelper;
 import org.agrona.LangUtil;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.Int2ObjectHashMap;
+import org.agrona.collections.IntHashSet;
 import org.agrona.concurrent.Agent;
+import org.agrona.concurrent.EpochClock;
 import org.agrona.concurrent.MessageHandler;
+import org.agrona.concurrent.NanoClock;
+import org.agrona.concurrent.SystemEpochClock;
+import org.agrona.concurrent.SystemNanoClock;
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
 
 import java.io.IOException;
+import java.io.PrintStream;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.Objects;
 
 import static io.aeron.agent.CommonEventDissector.dissectLogStartMessage;
 import static io.aeron.agent.EventConfiguration.EVENT_READER_FRAME_LIMIT;
 import static io.aeron.agent.EventConfiguration.MAX_EVENT_LENGTH;
-import static java.lang.System.*;
+import static java.lang.System.lineSeparator;
 import static java.nio.channels.FileChannel.open;
-import static java.nio.file.StandardOpenOption.*;
+import static java.nio.file.StandardOpenOption.APPEND;
+import static java.nio.file.StandardOpenOption.CREATE;
+import static java.nio.file.StandardOpenOption.WRITE;
 import static java.time.ZoneId.systemDefault;
 import static org.agrona.BitUtil.CACHE_LINE_LENGTH;
 import static org.agrona.BufferUtil.allocateDirectAligned;
@@ -57,9 +66,24 @@ public final class EventLogReaderAgent implements Agent
     private final ByteBuffer byteBuffer;
     private final FileChannel fileChannel;
     private final Int2ObjectHashMap<ComponentLogger> loggers = new Int2ObjectHashMap<>();
+    private final PrintStream out;
+    private final NanoClock nanoClock;
+    private final EpochClock epochClock;
 
     EventLogReaderAgent(final String filename, final List<ComponentLogger> loggers)
     {
+        this(filename, System.out, SystemNanoClock.INSTANCE, SystemEpochClock.INSTANCE, loggers);
+    }
+
+    EventLogReaderAgent(
+        final String filename,
+        final PrintStream out,
+        final NanoClock nanoClock,
+        final EpochClock epochClock,
+        final List<ComponentLogger> loggers)
+    {
+        this.nanoClock = Objects.requireNonNull(nanoClock);
+        this.epochClock = Objects.requireNonNull(epochClock);
         for (final ComponentLogger componentLogger : loggers)
         {
             this.loggers.put(componentLogger.typeCode(), componentLogger);
@@ -67,6 +91,7 @@ public final class EventLogReaderAgent implements Agent
 
         if (null != filename)
         {
+            this.out = null;
             try
             {
                 fileChannel = open(Paths.get(filename), CREATE, APPEND, WRITE);
@@ -82,6 +107,7 @@ public final class EventLogReaderAgent implements Agent
         {
             fileChannel = null;
             byteBuffer = null;
+            this.out = Objects.requireNonNull(out);
         }
     }
 
@@ -90,8 +116,37 @@ public final class EventLogReaderAgent implements Agent
      */
     public void onStart()
     {
-        dissectLogStartMessage(nanoTime(), currentTimeMillis(), systemDefault(), builder);
+        final long startTimeNs = nanoClock.nanoTime();
+        final long startTimeMs = epochClock.time();
+        dissectLogStartMessage(startTimeNs, startTimeMs, systemDefault(), builder);
         builder.append(lineSeparator());
+
+        LogUtil.appendTimestamp(builder, startTimeNs);
+        builder.append("enabled loggers: {");
+
+        final EventCodeType[] eventCodeTypes = EventCodeType.values();
+        final IntHashSet visited = new IntHashSet(loggers.size());
+        String separator = "";
+        for (final EventCodeType type : eventCodeTypes)
+        {
+            visited.add(type.getTypeCode());
+            final ComponentLogger logger = loggers.get(type.getTypeCode());
+            if (null != logger)
+            {
+                builder.append(separator).append(type).append(": ").append(logger.version());
+            }
+            separator = ", ";
+        }
+
+        loggers.forEachInt((type, logger) ->
+        {
+            if (!visited.contains(type))
+            {
+                builder.append(", ").append(logger.getClass().getName()).append(": ").append(logger.version());
+            }
+        });
+
+        builder.append('}').append(lineSeparator());
 
         if (null == fileChannel)
         {

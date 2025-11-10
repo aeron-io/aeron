@@ -15,6 +15,8 @@
  */
 package io.aeron.agent;
 
+import io.aeron.AeronCounters;
+import io.aeron.version.Versioned;
 import net.bytebuddy.agent.builder.AgentBuilder;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.Object2ObjectHashMap;
@@ -33,6 +35,7 @@ import static net.bytebuddy.matcher.ElementMatchers.named;
 /**
  * Implementation of a component logger for cluster log events.
  */
+@Versioned
 public class ClusterComponentLogger implements ComponentLogger
 {
     static final EnumSet<ClusterEventCode> ENABLED_EVENTS = EnumSet.noneOf(ClusterEventCode.class);
@@ -111,6 +114,15 @@ public class ClusterComponentLogger implements ComponentLogger
     public void reset()
     {
         ENABLED_EVENTS.clear();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public String version()
+    {
+        return AeronCounters.formatVersionInfo(
+            ClusterComponentLoggerVersion.VERSION, ArchiveComponentLoggerVersion.GIT_SHA);
     }
 
     private static EnumSet<ClusterEventCode> getClusterEventCodes(final String enabledEventCodes)

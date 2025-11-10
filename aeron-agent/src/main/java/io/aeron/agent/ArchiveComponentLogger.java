@@ -15,6 +15,8 @@
  */
 package io.aeron.agent;
 
+import io.aeron.AeronCounters;
+import io.aeron.version.Versioned;
 import net.bytebuddy.agent.builder.AgentBuilder;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.Object2ObjectHashMap;
@@ -33,6 +35,7 @@ import static net.bytebuddy.matcher.ElementMatchers.named;
 /**
  * Implementation of a component logger for archive log events.
  */
+@Versioned
 public class ArchiveComponentLogger implements ComponentLogger
 {
     static final EnumSet<ArchiveEventCode> ENABLED_EVENTS = EnumSet.noneOf(ArchiveEventCode.class);
@@ -145,6 +148,15 @@ public class ArchiveComponentLogger implements ComponentLogger
     public void reset()
     {
         ENABLED_EVENTS.clear();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public String version()
+    {
+        return AeronCounters.formatVersionInfo(
+            ArchiveComponentLoggerVersion.VERSION, ArchiveComponentLoggerVersion.GIT_SHA);
     }
 
     private static EnumSet<ArchiveEventCode> getArchiveEventCodes(final String enabledEventCodes)

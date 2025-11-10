@@ -15,6 +15,8 @@
  */
 package io.aeron.agent;
 
+import io.aeron.AeronCounters;
+import io.aeron.version.Versioned;
 import net.bytebuddy.agent.builder.AgentBuilder;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.Object2ObjectHashMap;
@@ -32,6 +34,7 @@ import static net.bytebuddy.matcher.ElementMatchers.named;
 /**
  * Implementation of a component logger for media driver log events.
  */
+@Versioned
 public class DriverComponentLogger implements ComponentLogger
 {
     static final EnumSet<DriverEventCode> ENABLED_EVENTS = EnumSet.noneOf(DriverEventCode.class);
@@ -101,6 +104,15 @@ public class DriverComponentLogger implements ComponentLogger
     public void reset()
     {
         ENABLED_EVENTS.clear();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public String version()
+    {
+        return AeronCounters.formatVersionInfo(
+            DriverComponentLoggerVersion.VERSION, DriverComponentLoggerVersion.GIT_SHA);
     }
 
     private static EnumSet<DriverEventCode> getDriverEventCodes(final String enabledEventCodes)

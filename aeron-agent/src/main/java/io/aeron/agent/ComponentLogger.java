@@ -58,4 +58,12 @@ public interface ComponentLogger
      * Reset the logger and its configuration. Typically called when stopping/disabling logging.
      */
     void reset();
+
+    /**
+     * Get version information for this logger. Typically, will use version and commit info, e.g.
+     * {@code version=1.49.0 commit=4b09b14043}.
+     *
+     * @return version information, e.g. {@code version=1.49.0 commit=4b09b14043}.
+     */
+    String version();
 }
