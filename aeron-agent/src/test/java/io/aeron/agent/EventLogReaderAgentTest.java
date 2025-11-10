@@ -73,6 +73,32 @@ class EventLogReaderAgentTest
             });
     }
 
+    @Test
+    void shouldListSingleEnabledLoggerOnStart()
+    {
+        final CapturingPrintStream out = new CapturingPrintStream();
+        final CachedNanoClock nanoClock = new CachedNanoClock();
+        nanoClock.update(System.nanoTime());
+        final CachedEpochClock epochClock = new CachedEpochClock();
+        epochClock.update(System.currentTimeMillis());
+        final EventLogReaderAgent logReaderAgent = new EventLogReaderAgent(
+            null,
+            out.resetAndGetPrintStream(),
+            nanoClock,
+            epochClock,
+            List.of(new TestLogger(EventCodeType.SEQUENCER.getTypeCode(), "sequencer v0")));
+
+        logReaderAgent.onStart();
+
+        final String actual = out.flushAndGetContent();
+        final StringBuilder expected = new StringBuilder();
+        CommonEventDissector.dissectLogStartMessage(
+            nanoClock.nanoTime(), epochClock.time(), ZoneId.systemDefault(), expected);
+        expected.append(", enabled loggers: {SEQUENCER: sequencer v0}");
+        expected.append(System.lineSeparator());
+        assertThat(actual, equalTo(expected.toString()));
+    }
+
     private static void testOnStart(final String fileName, final PrintStream out, final Supplier<String> loggedMessage)
     {
         final CachedNanoClock nanoClock = new CachedNanoClock();

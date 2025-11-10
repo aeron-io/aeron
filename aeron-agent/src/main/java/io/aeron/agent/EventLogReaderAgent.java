@@ -132,8 +132,8 @@ public final class EventLogReaderAgent implements Agent
             if (null != logger)
             {
                 builder.append(separator).append(type).append(": ").append(logger.version());
+                separator = ", ";
             }
-            separator = ", ";
         }
 
         loggers.forEachInt((type, logger) ->
