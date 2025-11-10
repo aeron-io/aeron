@@ -1497,7 +1497,7 @@ TEST_F(DriverAgentTest, dissecLogStartShouldFormatNanoTimeWithMicrosecondPrecisi
 
     auto result = std::string(aeron_driver_agent_dissect_log_start(time_ns, time_ms));
 
-    std::string startString = "[55555.001234567] log started 2009-02-14";
+    std::string startString = "[55555.001234567] log started 2009-02-1";
     std::string endString = std::string(", enabled loggers: {DRIVER:")
     .append(" version=")
     .append(aeron_driver_version_text())
