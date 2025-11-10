@@ -32,6 +32,7 @@
 #include "agent/aeron_driver_agent.h"
 #include "aeron_driver_context.h"
 #include "aeron_alloc.h"
+#include "aeron_driver_version.h"
 #include "util/aeron_arrayutil.h"
 #include "util/aeron_strutil.h"
 #include "aeron_windows.h"
@@ -1517,16 +1518,18 @@ const char *aeron_driver_agent_dissect_log_header(
 
 const char *aeron_driver_agent_dissect_log_start(int64_t time_ns, int64_t time_ms)
 {
-    static char buffer[384];
-    char datestamp[256];
+    static char buffer[512];
+    static char datestamp[256];
 
     const int64_t seconds = time_ns / NANOS_PER_SECOND;
     const int64_t nanos = time_ns - seconds * NANOS_PER_SECOND;
     aeron_format_date(datestamp, sizeof(datestamp) - 1, time_ms);
-    snprintf(buffer, sizeof(buffer) - 1, "[%" PRIu64".%09" PRIu64 "] log started %s",
+    snprintf(buffer, sizeof(buffer) - 1, "[%" PRIu64".%09" PRIu64 "] log started %s, enabled loggers: {DRIVER: version=%s commit=%s}",
         seconds,
         nanos,
-        datestamp);
+        datestamp,
+        aeron_driver_version_text(),
+        aeron_driver_version_git_sha());
 
     return buffer;
 }

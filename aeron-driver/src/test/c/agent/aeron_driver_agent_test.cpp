@@ -19,6 +19,8 @@
 #include <gtest/gtest.h>
 #include <cinttypes>
 
+#include "aeron_driver_version.h"
+
 extern "C"
 {
 #include "aeron_driver_context.h"
@@ -1495,7 +1497,16 @@ TEST_F(DriverAgentTest, dissecLogStartShouldFormatNanoTimeWithMicrosecondPrecisi
 
     auto result = std::string(aeron_driver_agent_dissect_log_start(time_ns, time_ms));
 
-    ASSERT_EQ(0, result.find("[55555.001234567] log started 2009-02-1", 0));
+    std::string startString = "[55555.001234567] log started 2009-02-14";
+    std::string endString = std::string(", enabled loggers: {DRIVER:")
+    .append(" version=")
+    .append(aeron_driver_version_text())
+    .append(" commit=")
+    .append(aeron_driver_version_git_sha())
+    .append("}");
+
+    EXPECT_EQ(0, result.find(startString));
+    EXPECT_NE(std::string::npos, result.find(endString, startString.length()));
 }
 
 TEST_F(DriverAgentTest, dissecLogHeaderShouldFormatNanoTimeWithMicrosecondPrecision)
