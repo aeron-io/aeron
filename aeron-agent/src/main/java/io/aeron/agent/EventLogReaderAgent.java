@@ -119,10 +119,8 @@ public final class EventLogReaderAgent implements Agent
         final long startTimeNs = nanoClock.nanoTime();
         final long startTimeMs = epochClock.time();
         dissectLogStartMessage(startTimeNs, startTimeMs, systemDefault(), builder);
-        builder.append(lineSeparator());
 
-        LogUtil.appendTimestamp(builder, startTimeNs);
-        builder.append("enabled loggers: {");
+        builder.append(", enabled loggers: {");
 
         final EventCodeType[] eventCodeTypes = EventCodeType.values();
         final IntHashSet visited = new IntHashSet(loggers.size());

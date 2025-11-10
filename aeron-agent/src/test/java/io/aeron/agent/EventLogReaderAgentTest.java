@@ -97,9 +97,7 @@ class EventLogReaderAgentTest
         final StringBuilder expected = new StringBuilder();
         CommonEventDissector.dissectLogStartMessage(
             nanoClock.nanoTime(), epochClock.time(), ZoneId.systemDefault(), expected);
-        expected.append(System.lineSeparator());
-        LogUtil.appendTimestamp(expected, nanoClock.nanoTime());
-        expected.append("enabled loggers: {DRIVER: driver v1, STANDBY: standby version=1.49.0 commit=100, ")
+        expected.append(", enabled loggers: {DRIVER: driver v1, STANDBY: standby version=1.49.0 commit=100, ")
             .append("SEQUENCER: sequencer v0, USER: user logger, ")
             .append("io.aeron.agent.EventLogReaderAgentTest$TestLogger: logger 100}");
         expected.append(System.lineSeparator());
