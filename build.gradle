@@ -1067,6 +1067,13 @@ project(':aeron-agent') {
     shadowJar {
         archiveClassifier.set('')
 
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE // exclude duplicate files by default
+
+        mergeServiceFiles() // merge service files into a single file
+        filesMatching("META-INF/services/**") {
+            duplicatesStrategy = DuplicatesStrategy.INCLUDE // copy all services across
+        }
+
         manifest.attributes(
             'Implementation-Title': 'Aeron',
             'Implementation-Version': aeronVersion,
@@ -1082,12 +1089,6 @@ project(':aeron-agent') {
     }
 
     jar.finalizedBy shadowJar
-
-    tasks.register('dedupJar', io.aeron.build.DeduplicateTask) {
-        source = shadowJar.outputs.files.singleFile
-    }
-
-    shadowJar.finalizedBy('dedupJar')
 
     tasks.register('sourcesJar', Jar) {
         dependsOn ':aeron-archive:generateCodecs', ':aeron-cluster:generateCodecs'
@@ -1334,6 +1335,14 @@ project(':aeron-all') {
 
     shadowJar {
         archiveClassifier.set('')
+
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE // exclude duplicate files by default
+
+        mergeServiceFiles() // merge service files into a single file
+        filesMatching("META-INF/services/**") {
+            duplicatesStrategy = DuplicatesStrategy.INCLUDE // copy all services across
+        }
+
         manifest.attributes(
             'Implementation-Title': 'Aeron',
             'Implementation-Version': aeronVersion,
@@ -1345,12 +1354,6 @@ project(':aeron-all') {
     }
 
     jar.finalizedBy shadowJar
-
-    tasks.register('dedupJar', io.aeron.build.DeduplicateTask) {
-        source = shadowJar.outputs.files.singleFile
-    }
-
-    shadowJar.finalizedBy('dedupJar')
 
     tasks.register('sourcesJar', Jar) {
         dependsOn ':aeron-archive:generateCodecs', ':aeron-cluster:generateCodecs'
