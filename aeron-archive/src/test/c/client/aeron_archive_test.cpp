@@ -789,6 +789,71 @@ TEST_F(AeronCArchiveTest, shouldAsyncConnectToArchiveWithPrebuiltAeron)
     ASSERT_EQ_ERR(0, aeron_context_close(aeron_ctx));
 }
 
+TEST_F(AeronCArchiveTest, shouldHandleNullCredentialsSupplier)
+{
+    aeron_archive_context_t *ctx;
+    aeron_archive_async_connect_t *async;
+    aeron_archive_t *archive = nullptr;
+
+    ASSERT_EQ_ERR(0, aeron_archive_context_init(&ctx));
+    ASSERT_EQ_ERR(0, aeron_archive_context_set_control_request_channel(ctx, "aeron:udp?endpoint=localhost:8010"));
+    ASSERT_EQ_ERR(0, aeron_archive_context_set_control_response_channel(ctx, "aeron:udp?endpoint=localhost:0"));
+    ASSERT_EQ_ERR(0, aeron_archive_context_set_idle_strategy(
+        ctx, aeron_idle_strategy_sleeping_idle, (void *)&m_idle_duration_ns));
+    ASSERT_EQ_ERR(0, aeron_archive_context_set_credentials_supplier(
+        ctx,
+        nullptr,
+        nullptr,
+        nullptr,
+        &default_creds_clientd));
+    ASSERT_EQ_ERR(0, aeron_archive_async_connect(&async, ctx));
+
+    ASSERT_EQ_ERR(0, aeron_archive_context_close(ctx));
+
+    while (-1 != aeron_archive_async_connect_poll(&archive, async))
+    {
+        idle();
+    }
+
+    ASSERT_EQ(EINVAL, aeron_errcode());
+    auto errorMsg = std::string(aeron_errmsg());
+    ASSERT_NE(std::string::npos, errorMsg.find("authentication rejected"));
+}
+
+TEST_F(AeronCArchiveTest, shouldHandleNullDataInTheEncodedCredentials)
+{
+    aeron_archive_context_t *ctx;
+    aeron_archive_async_connect_t *async;
+    aeron_archive_t *archive = nullptr;
+
+    ASSERT_EQ_ERR(0, aeron_archive_context_init(&ctx));
+    ASSERT_EQ_ERR(0, aeron_archive_context_set_control_request_channel(ctx, "aeron:udp?endpoint=localhost:8010"));
+    ASSERT_EQ_ERR(0, aeron_archive_context_set_control_response_channel(ctx, "aeron:udp?endpoint=localhost:0"));
+    ASSERT_EQ_ERR(0, aeron_archive_context_set_idle_strategy(
+        ctx, aeron_idle_strategy_sleeping_idle, (void *)&m_idle_duration_ns));
+
+    aeron_archive_encoded_credentials_t null_creds = {nullptr, 7 /* fake value */ };
+    credentials_supplier_clientd_t credentials_clientd = { &null_creds, nullptr };
+    ASSERT_EQ_ERR(0, aeron_archive_context_set_credentials_supplier(
+        ctx,
+        encoded_credentials_supplier,
+        nullptr,
+        nullptr,
+        &credentials_clientd));
+    ASSERT_EQ_ERR(0, aeron_archive_async_connect(&async, ctx));
+
+    ASSERT_EQ_ERR(0, aeron_archive_context_close(ctx));
+
+    while (-1 != aeron_archive_async_connect_poll(&archive, async))
+    {
+        idle();
+    }
+
+    ASSERT_EQ(EINVAL, aeron_errcode());
+    auto errorMsg = std::string(aeron_errmsg());
+    ASSERT_NE(std::string::npos, errorMsg.find("authentication rejected"));
+}
+
 TEST_F(AeronCArchiveTest, shouldConnectToArchive)
 {
     aeron_archive_context_t *ctx;

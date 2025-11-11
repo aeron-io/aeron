@@ -167,8 +167,8 @@ bool aeron_archive_proxy_try_connect(
         strlen(control_response_channel));
     aeron_archive_client_authConnectRequest_put_encodedCredentials(
         &codec,
-        NULL == encoded_credentials ? "" : encoded_credentials->data,
-        NULL == encoded_credentials ? 0 : encoded_credentials->length);
+        NULL != encoded_credentials && NULL != encoded_credentials->data ? encoded_credentials->data : "",
+        NULL != encoded_credentials && NULL != encoded_credentials->data ? encoded_credentials->length : 0);
     aeron_archive_client_authConnectRequest_put_clientInfo(
         &codec,
         archive_proxy->client_info,
