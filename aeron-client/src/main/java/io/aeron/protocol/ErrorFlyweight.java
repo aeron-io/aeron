@@ -20,6 +20,8 @@ import org.agrona.concurrent.UnsafeBuffer;
 import java.nio.ByteBuffer;
 
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
+import static org.agrona.BitUtil.SIZE_OF_INT;
+import static org.agrona.BitUtil.SIZE_OF_LONG;
 
 /**
  * Flyweight for general Aeron network protocol error frame
@@ -50,45 +52,47 @@ import static java.nio.ByteOrder.LITTLE_ENDIAN;
  *    ...                                                             |
  *    +---------------------------------------------------------------+
  * </pre>
+ *
  * @since 1.47.0
  */
 public class ErrorFlyweight extends HeaderFlyweight
 {
     /**
-     * Length of the Error Header.
-     */
-    public static final int HEADER_LENGTH = 40;
-
-    /**
      * Offset in the frame at which the session-id field begins.
      */
-    public static final int SESSION_ID_FIELD_OFFSET = 8;
+    public static final int SESSION_ID_FIELD_OFFSET = MIN_HEADER_LENGTH;
 
     /**
      * Offset in the frame at which the stream-id field begins.
      */
-    public static final int STREAM_ID_FIELD_OFFSET = 12;
+    public static final int STREAM_ID_FIELD_OFFSET = SESSION_ID_FIELD_OFFSET + SIZE_OF_INT;
 
     /**
      * Offset in the frame at which the receiver-id field begins.
      */
-    public static final int RECEIVER_ID_FIELD_OFFSET = 16;
+    public static final int RECEIVER_ID_FIELD_OFFSET = STREAM_ID_FIELD_OFFSET + SIZE_OF_INT;
 
     /**
      * Offset in the frame at which the group-tag field begins.
      */
-    public static final int GROUP_TAG_FIELD_OFFSET = 24;
+    public static final int GROUP_TAG_FIELD_OFFSET = RECEIVER_ID_FIELD_OFFSET + SIZE_OF_LONG;
 
     /**
      * Offset in the frame at which the error code field begins.
      */
-    public static final int ERROR_CODE_FIELD_OFFSET = 32;
+    public static final int ERROR_CODE_FIELD_OFFSET = GROUP_TAG_FIELD_OFFSET + SIZE_OF_LONG;
 
     /**
      * Offset in the frame at which the error string field begins. Specifically this will be the length of the string
      * using the Agrona buffer standard of using 4 bytes for the length. Followed by the variable bytes for the string.
      */
-    public static final int ERROR_STRING_FIELD_OFFSET = 36;
+    public static final int ERROR_STRING_FIELD_OFFSET = ERROR_CODE_FIELD_OFFSET + SIZE_OF_INT;
+
+    /**
+     * Length of the Error Header, i.e. all fixed size fields including length of the error message string but
+     * excluding its contents.
+     */
+    public static final int HEADER_LENGTH = ERROR_STRING_FIELD_OFFSET + SIZE_OF_INT;
 
     /**
      * Maximum length that an error message can be. Can be short that this if configuration options have made the MTU
