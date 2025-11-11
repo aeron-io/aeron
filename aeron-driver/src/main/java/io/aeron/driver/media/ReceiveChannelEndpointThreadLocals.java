@@ -116,7 +116,7 @@ public final class ReceiveChannelEndpointThreadLocals
         errorFlyweight
             .version(HeaderFlyweight.CURRENT_VERSION)
             .headerType(HeaderFlyweight.HDR_TYPE_ERR)
-            .frameLength(ResponseSetupFlyweight.HEADER_LENGTH);
+            .frameLength(ErrorFlyweight.HEADER_LENGTH);
     }
 
     /**
