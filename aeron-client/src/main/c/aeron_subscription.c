@@ -369,13 +369,10 @@ int aeron_subscription_image_retain(aeron_subscription_t *subscription, aeron_im
     aeron_image_list_t *volatile image_list;
     AERON_GET_ACQUIRE(image_list, subscription->conductor_fields.image_lists_head.next_list);
 
-    if (-1 == aeron_subscription_find_image_index(image_list, image))
+    if (-1 != aeron_subscription_find_image_index(image_list, image))
     {
-        AERON_SET_ERR(EINVAL, "Image not found: correlationId=%" PRIi64, image->key.correlation_id);
-        return -1;
+        aeron_image_incr_refcnt(image);
     }
-
-    aeron_image_incr_refcnt(image);
 
     return 0;
 }
@@ -395,13 +392,10 @@ int aeron_subscription_image_release(aeron_subscription_t *subscription, aeron_i
     aeron_image_list_t *volatile image_list;
     AERON_GET_ACQUIRE(image_list, subscription->conductor_fields.image_lists_head.next_list);
 
-    if (-1 == aeron_subscription_find_image_index(image_list, image))
+    if (-1 != aeron_subscription_find_image_index(image_list, image))
     {
-        AERON_SET_ERR(EINVAL, "Image not found: correlationId=%" PRIi64, image->key.correlation_id);
-        return -1;
+        aeron_image_decr_refcnt(image);
     }
-
-    aeron_image_decr_refcnt(image);
 
     return 0;
 }
