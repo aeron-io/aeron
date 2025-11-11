@@ -33,8 +33,9 @@ import static org.agrona.BitUtil.*;
 final class DriverEventDissector
 {
     private static final DataHeaderFlyweight DATA_HEADER = new DataHeaderFlyweight();
-    private static final StatusMessageFlyweight SM_HEADER = new StatusMessageFlyweight();
     private static final NakFlyweight NAK_HEADER = new NakFlyweight();
+    private static final StatusMessageFlyweight SM_HEADER = new StatusMessageFlyweight();
+    private static final ErrorFlyweight ERROR_HEADER = new ErrorFlyweight();
     private static final SetupFlyweight SETUP_HEADER = new SetupFlyweight();
     private static final RttMeasurementFlyweight RTT_MEASUREMENT = new RttMeasurementFlyweight();
     private static final HeaderFlyweight HEADER = new HeaderFlyweight();
@@ -90,14 +91,19 @@ final class DriverEventDissector
                 dissectDataFrame(builder);
                 break;
 
+            case HeaderFlyweight.HDR_TYPE_NAK:
+                NAK_HEADER.wrap(buffer, frameOffset, buffer.capacity() - frameOffset);
+                dissectNakFrame(builder);
+                break;
+
             case HeaderFlyweight.HDR_TYPE_SM:
                 SM_HEADER.wrap(buffer, frameOffset, buffer.capacity() - frameOffset);
                 dissectStatusFrame(builder);
                 break;
 
-            case HeaderFlyweight.HDR_TYPE_NAK:
-                NAK_HEADER.wrap(buffer, frameOffset, buffer.capacity() - frameOffset);
-                dissectNakFrame(builder);
+            case HeaderFlyweight.HDR_TYPE_ERR:
+                ERROR_HEADER.wrap(buffer, frameOffset, buffer.capacity() - frameOffset);
+                dissectErrorFrame(builder);
                 break;
 
             case HeaderFlyweight.HDR_TYPE_SETUP:
@@ -566,6 +572,29 @@ final class DriverEventDissector
             .append(NAK_HEADER.termOffset())
             .append(" length=")
             .append(NAK_HEADER.length());
+    }
+
+    private static void dissectErrorFrame(final StringBuilder builder)
+    {
+        builder.append("type=ERR flags=");
+        HeaderFlyweight.appendFlagsAsChars(ERROR_HEADER.flags(), builder);
+
+        builder
+            .append(" frameLength=")
+            .append(ERROR_HEADER.frameLength())
+            .append(" sessionId=")
+            .append(ERROR_HEADER.sessionId())
+            .append(" streamId=")
+            .append(ERROR_HEADER.streamId())
+            .append(" receiverId=")
+            .append(ERROR_HEADER.receiverId())
+            .append(" groupTag=")
+            .append(ERROR_HEADER.groupTag())
+            .append(" errorCode=")
+            .append(ERROR_HEADER.errorCode())
+            .append(" errorMessage=\"")
+            .append(ERROR_HEADER.errorMessage())
+            .append('"');
     }
 
     private static void dissectSetupFrame(final StringBuilder builder)

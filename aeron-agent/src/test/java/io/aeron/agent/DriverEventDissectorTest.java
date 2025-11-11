@@ -249,6 +249,32 @@ class DriverEventDissectorTest
     }
 
     @Test
+    void dissectFrameTypeError()
+    {
+        internalEncodeLogHeader(buffer, 0, 3, 3, () -> 3_000_000_000L);
+        final int socketAddressOffset = encodeSocketAddress(
+            buffer, LOG_HEADER_LENGTH, new InetSocketAddress("localhost", 5555));
+        final ErrorFlyweight flyweight = new ErrorFlyweight();
+        flyweight.wrap(buffer, LOG_HEADER_LENGTH + socketAddressOffset, 300);
+        flyweight.headerType(HDR_TYPE_ERR);
+        flyweight.flags((short)ErrorFlyweight.HAS_GROUP_ID_FLAG);
+        flyweight.frameLength(876);
+        flyweight.sessionId(42);
+        flyweight.streamId(999);
+        flyweight.receiverId(-4723947284689L);
+        flyweight.groupTag(1_000_000_000_000_1L);
+        flyweight.errorCode(1959);
+        flyweight.errorMessage("test err msg string");
+
+        dissectFrame(FRAME_OUT, buffer, 0, builder);
+
+        assertEquals("[3.000000000] " + CONTEXT + ": " + FRAME_OUT.name() + " [3/3]: " +
+            "address=127.0.0.1:5555 type=ERR flags=00001000 frameLength=59 sessionId=42 streamId=999 " +
+            "receiverId=-4723947284689 groupTag=10000000000001 errorCode=1959 errorMessage=\"test err msg string\"",
+            builder.toString());
+    }
+
+    @Test
     void dissectFrameTypeUnknown()
     {
         internalEncodeLogHeader(buffer, 0, 3, 3, () -> 3_000_000_000L);
