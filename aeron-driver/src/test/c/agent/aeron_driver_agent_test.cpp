@@ -1633,3 +1633,24 @@ TEST_F(DriverAgentTest, shouldEnableNakSentUsingNewName)
     EXPECT_TRUE(aeron_driver_agent_is_event_enabled(AERON_DRIVER_EVENT_NAK_SENT));
     EXPECT_FALSE(aeron_driver_agent_is_event_enabled(AERON_DRIVER_EVENT_NAK_RECEIVED));
 }
+
+TEST_F(DriverAgentTest, dissecErrorFrame)
+{
+    uint8_t buff[1024];
+    std::string errorMessage = "test 61007";
+    auto *error = reinterpret_cast<aeron_error_t *>(&buff);
+    error->frame_header.type = AERON_HDR_TYPE_ERR;
+    error->frame_header.flags = AERON_ERROR_HAS_GROUP_TAG_FLAG;
+    error->frame_header.frame_length = static_cast<int32_t>(sizeof(aeron_error_t) + errorMessage.length());
+    error->session_id = -77666;
+    error->stream_id = 8888;
+    error->receiver_id = 32134164361243612ul;
+    error->group_tag = 500505;
+    error->error_code = 19;
+    error->error_length = static_cast<int32_t>(errorMessage.length());
+    memcpy((char *)buff + sizeof(aeron_error_t), errorMessage.c_str(), errorMessage.length());
+
+    EXPECT_STREQ(
+        "type=ERR flags=00001000 frameLength=50 sessionId=-77666 streamId=8888 receiverId=32134164361243612 groupTag=500505 errorCode=19 errorMessage=\"test 61007\"",
+        dissect_frame(&buff, sizeof(buff)));
+}

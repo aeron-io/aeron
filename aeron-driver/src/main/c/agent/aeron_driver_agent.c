@@ -1914,17 +1914,20 @@ static const char *dissect_frame_type(int16_t type)
 {
     switch (type)
     {
+        case AERON_HDR_TYPE_PAD:
+            return "PAD";
+
         case AERON_HDR_TYPE_DATA:
             return "DATA";
 
-        case AERON_HDR_TYPE_PAD:
-            return "PAD";
+        case AERON_HDR_TYPE_NAK:
+            return "NAK";
 
         case AERON_HDR_TYPE_SM:
             return "SM";
 
-        case AERON_HDR_TYPE_NAK:
-            return "NAK";
+        case AERON_HDR_TYPE_ERR:
+            return "ERR";
 
         case AERON_HDR_TYPE_SETUP:
             return "SETUP";
@@ -1952,7 +1955,7 @@ static const char *dissect_frame_type(int16_t type)
     }
 }
 
-static const char *dissect_frame(const void *message, size_t length)
+const char *dissect_frame(const void *message, size_t length)
 {
     static char buffer[256];
     static char dissected_flags[8] = { '0', '0', '0', '0', '0', '0', '0', '0' };
@@ -1961,8 +1964,8 @@ static const char *dissect_frame(const void *message, size_t length)
     buffer[0] = '\0';
     switch (hdr->type)
     {
-        case AERON_HDR_TYPE_DATA:
         case AERON_HDR_TYPE_PAD:
+        case AERON_HDR_TYPE_DATA:
         case AERON_HDR_TYPE_ATS_DATA:
         {
             aeron_data_header_t *data = (aeron_data_header_t *)message;
@@ -1979,6 +1982,26 @@ static const char *dissect_frame(const void *message, size_t length)
                 data->stream_id,
                 data->term_id,
                 data->term_offset);
+            break;
+        }
+
+        case AERON_HDR_TYPE_NAK:
+        {
+            aeron_nak_header_t *nak = (aeron_nak_header_t *)message;
+
+            snprintf(
+                buffer,
+                sizeof(buffer) - 1,
+                "type=%s flags=%.*s frameLength=%d sessionId=%d streamId=%d termId=%d termOffset=%d length=%d",
+                dissect_frame_type(hdr->type),
+                (int)sizeof(dissected_flags),
+                dissect_flags(hdr->flags, dissected_flags),
+                hdr->frame_length,
+                nak->session_id,
+                nak->stream_id,
+                nak->term_id,
+                nak->term_offset,
+                nak->length);
             break;
         }
 
@@ -2004,23 +2027,26 @@ static const char *dissect_frame(const void *message, size_t length)
             break;
         }
 
-        case AERON_HDR_TYPE_NAK:
+        case AERON_HDR_TYPE_ERR:
         {
-            aeron_nak_header_t *nak = (aeron_nak_header_t *)message;
+            aeron_error_t *err = (aeron_error_t *)message;
+            const char *error_msg = (const char *)message + sizeof(aeron_error_t);
 
             snprintf(
                 buffer,
                 sizeof(buffer) - 1,
-                "type=%s flags=%.*s frameLength=%d sessionId=%d streamId=%d termId=%d termOffset=%d length=%d",
+                "type=%s flags=%.*s frameLength=%d sessionId=%d streamId=%d receiverId=%" PRIi64 " groupTag=%" PRIi64 " errorCode=%d errorMessage=\"%.*s\"",
                 dissect_frame_type(hdr->type),
                 (int)sizeof(dissected_flags),
                 dissect_flags(hdr->flags, dissected_flags),
                 hdr->frame_length,
-                nak->session_id,
-                nak->stream_id,
-                nak->term_id,
-                nak->term_offset,
-                nak->length);
+                err->session_id,
+                err->stream_id,
+                err->receiver_id,
+                err->group_tag,
+                err->error_code,
+                err->error_length,
+                error_msg);
             break;
         }
 
