@@ -729,6 +729,7 @@ TEST_F(DriverAgentTest, shouldLogAgentLogFramesAndCopyUpToMaxFrameLengthMessage)
     struct iovec iov {};
 
     const int message_length = AERON_MAX_FRAME_LENGTH * 5;
+    EXPECT_EQ(AERON_MAX_FRAME_LENGTH, AERON_MAX_UDP_PAYLOAD_LENGTH);
     uint8_t buffer[message_length];
     memset(buffer, 'x', message_length);
 
