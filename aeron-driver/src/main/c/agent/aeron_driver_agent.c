@@ -1951,11 +1951,11 @@ static const char *dissect_frame_type(int16_t type)
             return "RSP_SETUP";
 
         default:
-            return "unknown command";
+            return "unknown frame type";
     }
 }
 
-const char *dissect_frame(const void *message, size_t length)
+const char *aeron_driver_agent_dissect_frame(const void *message, size_t length)
 {
     static char buffer[256];
     static char dissected_flags[8] = { '0', '0', '0', '0', '0', '0', '0', '0' };
@@ -2186,6 +2186,16 @@ const char *dissect_frame(const void *message, size_t length)
         }
 
         default:
+            snprintf(
+                buffer,
+                sizeof(buffer) - 1,
+                "type=%s (0x%x) version=0x%x flags=%.*s frameLength=%d",
+                dissect_frame_type(hdr->type),
+                hdr->type,
+                hdr->version,
+                (int)sizeof(dissected_flags),
+                dissect_flags(hdr->flags, dissected_flags),
+                hdr->frame_length);
             break;
     }
 
@@ -2234,7 +2244,7 @@ void aeron_driver_agent_log_dissector(int32_t msg_type_id, const void *message, 
                 aeron_driver_agent_dissect_log_header(hdr->time_ns, msg_type_id, length, (size_t)hdr->message_len),
                 addr_length,
                 addr_buf,
-                dissect_frame(frame, (size_t)hdr->message_len));
+                aeron_driver_agent_dissect_frame(frame, (size_t)hdr->message_len));
             break;
         }
 

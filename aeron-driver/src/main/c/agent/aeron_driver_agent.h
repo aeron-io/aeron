@@ -268,7 +268,7 @@ const char *aeron_driver_agent_dissect_log_header(
 
 const char *aeron_driver_agent_dissect_log_start(int64_t time_ns, int64_t time_ms);
 
-const char *dissect_frame(const void *message, size_t length);
+const char *aeron_driver_agent_dissect_frame(const void *message, size_t length);
 
 void aeron_driver_agent_log_dissector(int32_t msg_type_id, const void *message, size_t length, void *clientd);
 

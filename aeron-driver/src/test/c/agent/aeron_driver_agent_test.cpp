@@ -1653,5 +1653,24 @@ TEST_F(DriverAgentTest, dissecErrorFrame)
 
     EXPECT_STREQ(
         "type=ERR flags=00001000 frameLength=50 sessionId=-77666 streamId=8888 receiverId=32134164361243612 groupTag=500505 errorCode=19 errorMessage=\"test 61007\"",
-        dissect_frame(&buff, sizeof(buff)));
+        aeron_driver_agent_dissect_frame(&buff, sizeof(buff)));
+}
+
+TEST_F(DriverAgentTest, dissecUknownFrame)
+{
+    uint8_t buff[1024];
+    auto *error = reinterpret_cast<aeron_error_t *>(&buff);
+    error->frame_header.version = 0xB;
+    error->frame_header.type = 0xFE;
+    error->frame_header.flags = 0xAC;
+    error->frame_header.frame_length = 150;
+    error->session_id = -77666;
+    error->stream_id = 8888;
+    error->receiver_id = 32134164361243612ul;
+    error->group_tag = 500505;
+    error->error_code = 19;
+
+    EXPECT_STREQ(
+        "type=unknown frame type (0xfe) version=0xb flags=10101100 frameLength=150",
+        aeron_driver_agent_dissect_frame(&buff, sizeof(buff)));
 }
