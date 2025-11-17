@@ -157,6 +157,13 @@ public final class TestCluster implements AutoCloseable
     private final IntFunction<TestNode.TestService[]> serviceSupplier;
     private final boolean useResponseChannels;
 
+    private long leaderHeartbeatTimeoutNs;
+    private long leaderHeartbeatIntervalNs;
+    private long electionTimeoutNs;
+    private long electionStatusIntervalNs;
+    private long startupCanvassTimeoutNs;
+    private long terminationTimeoutNs;
+
     private String logChannel;
     private String ingressChannel;
     private String egressChannel;
@@ -349,12 +356,12 @@ public final class TestCluster implements AutoCloseable
             .clusterId(clusterId)
             .clusterMemberId(index)
             .clusterMembers(clusterMembers)
-            .startupCanvassTimeoutNs(STARTUP_CANVASS_TIMEOUT_NS)
-            .terminationTimeoutNs(TERMINATION_TIMEOUT_NS)
-            .leaderHeartbeatTimeoutNs(LEADER_HEARTBEAT_TIMEOUT_NS)
-            .leaderHeartbeatIntervalNs(LEADER_HEARTBEAT_INTERVAL_NS)
-            .electionTimeoutNs(ELECTION_TIMEOUT_NS)
-            .electionStatusIntervalNs(ELECTION_STATUS_INTERVAL_NS)
+            .startupCanvassTimeoutNs(startupCanvassTimeoutNs)
+            .terminationTimeoutNs(terminationTimeoutNs)
+            .leaderHeartbeatTimeoutNs(leaderHeartbeatTimeoutNs)
+            .leaderHeartbeatIntervalNs(leaderHeartbeatIntervalNs)
+            .electionTimeoutNs(electionTimeoutNs)
+            .electionStatusIntervalNs(electionStatusIntervalNs)
             .appointedLeaderId(appointedLeaderId)
             .clusterDir(new File(baseDirName, "consensus-module"))
             .ingressChannel(ingressChannel)
@@ -370,7 +377,7 @@ public final class TestCluster implements AutoCloseable
             .authorisationServiceSupplier(authorisationServiceSupplier)
             .timerServiceSupplier(timerServiceSupplier)
             .acceptStandbySnapshots(acceptStandbySnapshots)
-            .terminationTimeoutNs(LEADER_HEARTBEAT_TIMEOUT_NS)
+            .terminationTimeoutNs(leaderHeartbeatTimeoutNs)
             .markFileDir(markFileDir)
             .deleteDirOnStart(cleanStart);
 
@@ -539,6 +546,36 @@ public final class TestCluster implements AutoCloseable
         nodes[backupNodeIndex] = new TestNode(context, dataCollector);
 
         return nodes[backupNodeIndex];
+    }
+
+    public void leaderHeartbeatTimeoutNs(final long leaderHeartbeatTimeoutNs)
+    {
+        this.leaderHeartbeatTimeoutNs = leaderHeartbeatTimeoutNs;
+    }
+
+    public void leaderHeartbeatIntervalNs(final long leaderHeartbeatIntervalNs)
+    {
+        this.leaderHeartbeatIntervalNs = leaderHeartbeatIntervalNs;
+    }
+
+    public void electionTimeoutNs(final long electionTimeoutNs)
+    {
+        this.electionTimeoutNs = electionTimeoutNs;
+    }
+
+    public void electionStatusIntervalNs(final long electionStatusIntervalNs)
+    {
+        this.electionStatusIntervalNs = electionStatusIntervalNs;
+    }
+
+    public void startupCanvassTimeoutNs(final long startupCanvassTimeoutNs)
+    {
+        this.startupCanvassTimeoutNs = startupCanvassTimeoutNs;
+    }
+
+    public void terminationTimeoutNs(final long terminationTimeoutNs)
+    {
+        this.terminationTimeoutNs = terminationTimeoutNs;
     }
 
     public void stopNode(final TestNode testNode)
@@ -2144,6 +2181,48 @@ public final class TestCluster implements AutoCloseable
         private List<String> hostnames;
         private Function<Aeron, Counter> errorCounterSupplier;
         private Function<Aeron, Counter> snapshotCounterSupplier;
+        private long leaderHeartbeatTimeoutNs = LEADER_HEARTBEAT_TIMEOUT_NS;
+        private long leaderHeartbeatIntervalNs = LEADER_HEARTBEAT_INTERVAL_NS;
+        private long electionTimeoutNs = ELECTION_TIMEOUT_NS;
+        private long electionStatusIntervalNs = ELECTION_STATUS_INTERVAL_NS;
+        private long startupCanvassTimeoutNs = STARTUP_CANVASS_TIMEOUT_NS;
+        private long terminationTimeoutNs = TERMINATION_TIMEOUT_NS;
+
+        public Builder withLeaderHeartbeatTimeoutNs(final long leaderHeartbeatTimeoutNs)
+        {
+            this.leaderHeartbeatTimeoutNs = leaderHeartbeatTimeoutNs;
+            return this;
+        }
+
+        public Builder withLeaderHeartbeatIntervalNs(final long leaderHeartbeatIntervalNs)
+        {
+            this.leaderHeartbeatIntervalNs = leaderHeartbeatIntervalNs;
+            return this;
+        }
+
+        public Builder withElectionTimeoutNs(final long electionTimeoutNs)
+        {
+            this.electionTimeoutNs = electionTimeoutNs;
+            return this;
+        }
+
+        public Builder withElectionStatusIntervalNs(final long electionStatusIntervalNs)
+        {
+            this.electionStatusIntervalNs = electionStatusIntervalNs;
+            return this;
+        }
+
+        public Builder withStartupCanvassTimeoutNs(final long startupCanvassTimeoutNs)
+        {
+            this.startupCanvassTimeoutNs = startupCanvassTimeoutNs;
+            return this;
+        }
+
+        public Builder withTerminationTimeoutNs(final long terminationTimeoutNs)
+        {
+            this.terminationTimeoutNs = terminationTimeoutNs;
+            return this;
+        }
 
         public Builder withStaticNodes(final int nodeCount)
         {
@@ -2322,6 +2401,12 @@ public final class TestCluster implements AutoCloseable
             testCluster.authorisationServiceSupplier(authorisationServiceSupplier);
             testCluster.timerServiceSupplier(timerServiceSupplier);
             testCluster.imageLivenessTimeoutNs(imageLivenessTimeoutNs);
+            testCluster.leaderHeartbeatTimeoutNs(leaderHeartbeatTimeoutNs);
+            testCluster.leaderHeartbeatIntervalNs(leaderHeartbeatIntervalNs);
+            testCluster.electionTimeoutNs(electionTimeoutNs);
+            testCluster.electionStatusIntervalNs(electionStatusIntervalNs);
+            testCluster.startupCanvassTimeoutNs(startupCanvassTimeoutNs);
+            testCluster.terminationTimeoutNs(terminationTimeoutNs);
             testCluster.sessionTimeoutNs(sessionTimeoutNs);
             testCluster.segmentFileLength(archiveSegmentFileLength);
             testCluster.invalidInitialResolutions(byHostInvalidInitialResolutions, byMemberInvalidInitialResolutions);
