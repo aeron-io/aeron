@@ -405,13 +405,13 @@ public final class AeronCounters
     /**
      * Count of media driver neighbors for name resolution.
      */
-    @AeronCounter(existsInC = false)
+    @AeronCounter
     public static final int NAME_RESOLVER_NEIGHBORS_COUNTER_TYPE_ID = 15;
 
     /**
      * Count of entries in the name resolver cache.
      */
-    @AeronCounter(existsInC = false)
+    @AeronCounter
     public static final int NAME_RESOLVER_CACHE_ENTRIES_COUNTER_TYPE_ID = 16;
 
     /**
@@ -446,6 +446,262 @@ public final class AeronCounters
      */
     @AeronCounter
     public static final int DRIVER_RECEIVER_NAKS_SENT_TYPE_ID = 20;
+
+    // EF_VI counters
+    /**
+     * EF_VI_PORT_INFO_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int EF_VI_PORT_INFO_TYPE_ID = 50;
+
+    /**
+     * EF_VI_TRANSPORT_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int EF_VI_TRANSPORT_TYPE_ID = 51;
+
+    /**
+     * EF_VI_TX_NOBUFS_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int EF_VI_TX_NOBUFS_TYPE_ID = 52;
+
+    /**
+     * EF_VI_TX_EAGAIN_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int EF_VI_TX_EAGAIN_TYPE_ID = 53;
+
+    /**
+     * EF_VI_TX_ERROR_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int EF_VI_TX_ERROR_TYPE_ID = 54;
+
+    /**
+     * EF_VI_RX_DISCARD_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int EF_VI_RX_DISCARD_TYPE_ID = 55;
+
+    /**
+     * EF_VI_RX_INVALID_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int EF_VI_RX_INVALID_TYPE_ID = 56;
+
+    /**
+     * EF_VI_RX_PKTS_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int EF_VI_RX_PKTS_TYPE_ID = 57;
+
+    /**
+     * EF_VI_RX_BYTES_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int EF_VI_RX_BYTES_TYPE_ID = 58;
+
+    /**
+     * EF_VI_TX_PKTS_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int EF_VI_TX_PKTS_TYPE_ID = 59;
+
+    /**
+     * EF_VI_TX_BYTES_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int EF_VI_TX_BYTES_TYPE_ID = 60;
+
+    // VMA counters
+    /**
+     * VMA_TRANSPORTS_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int VMA_TRANSPORTS_TYPE_ID = 61;
+
+    /**
+     * VMA_RX_ZERO_COPY_BYTES.
+     */
+    @AeronCounter
+    public static final int VMA_RX_ZERO_COPY_BYTES = 62;
+
+    /**
+     * VMA_RX_DATA_COPY_BYTES.
+     */
+    @AeronCounter
+    public static final int VMA_RX_DATA_COPY_BYTES = 63;
+
+    // ATS counters
+    /**
+     * ATS_TRANSPORTS_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int ATS_TRANSPORTS_TYPE_ID = 65;
+
+    /**
+     * ATS_DISCARDS_NON_ATS_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int ATS_DISCARDS_NON_ATS_TYPE_ID = 66;
+
+    /**
+     * ATS_BYTES_ENCRYPTED_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int ATS_BYTES_ENCRYPTED_TYPE_ID = 67;
+
+    /**
+     * ATS_BYTES_DECRYPTED_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int ATS_BYTES_DECRYPTED_TYPE_ID = 68;
+
+    /**
+     * ATS_AEAD_ERRORS_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int ATS_AEAD_ERRORS_TYPE_ID = 69;
+
+    /**
+     * ATS_RSA_KEY_UNKNOWN_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int ATS_RSA_KEY_UNKNOWN_TYPE_ID = 70;
+
+    /**
+     * ATS_EC_KEY_SIG_ERRORS_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int ATS_EC_KEY_SIG_ERRORS_TYPE_ID = 71;
+
+    /**
+     * ATS_UNICAST_RE_KEYINGS_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int ATS_UNICAST_RE_KEYINGS_TYPE_ID = 72;
+
+    /**
+     * ATS_UNICAST_RE_KEYING_RSA_KEY_MISMATCH_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int ATS_UNICAST_RE_KEYING_RSA_KEY_MISMATCH_TYPE_ID = 73;
+
+    /**
+     * ATS_DROPPED_SM_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int ATS_DROPPED_SM_TYPE_ID = 74;
+
+    // DPDK counters
+    /**
+     * DPDK_PORT_INFO_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int DPDK_PORT_INFO_TYPE_ID = 75;
+
+    /**
+     * DPDK_TRANSPORT_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int DPDK_TRANSPORT_TYPE_ID = 76;
+
+    /**
+     * DPDK_NOBUFS_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int DPDK_NOBUFS_TYPE_ID = 77;
+
+    /**
+     * DPDK_TX_EAGAIN_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int DPDK_TX_EAGAIN_TYPE_ID = 78;
+
+    /**
+     * DPDK_ERROR_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int DPDK_ERROR_TYPE_ID = 79;
+
+    /**
+     * DPDK_PKTS_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int DPDK_PKTS_TYPE_ID = 82;
+
+    /**
+     * DPDK_BYTES_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int DPDK_BYTES_TYPE_ID = 83;
+
+    /**
+     * DPDK_MISSED_PACKETS_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int DPDK_MISSED_PACKETS_TYPE_ID = 84;
+
+    /**
+     * DPDK_ARP_MISS_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int DPDK_ARP_MISS_TYPE_ID = 85;
+
+    /**
+     * DPDK_RX_SENDER_DISCARD_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int DPDK_RX_SENDER_DISCARD_TYPE_ID = 86;
+
+    /**
+     * DPDK_POLLER_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int DPDK_POLLER_TYPE_ID = 87;
+
+    /**
+     * DPDK_QUEUE_DROP_COUNT_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int DPDK_QUEUE_DROP_COUNT_TYPE_ID = 88;
+
+    /**
+     * DPDK_CHECKSUM_FAILURE_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int DPDK_CHECKSUM_FAILURE_TYPE_ID = 89;
+
+    /**
+     * DPDK_FRAGMENTED_PACKETS_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int DPDK_FRAGMENTED_PACKETS_TYPE_ID = 90;
+
+    /**
+     * DPDK_MEMPOOL_AVAILABLE_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int DPDK_MEMPOOL_AVAILABLE_TYPE_ID = 91;
+
+    /**
+     * DPDK_EXTENDED_STATS_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int DPDK_EXTENDED_STATS_TYPE_ID = 92;
+
+    /**
+     * DPDK_RX_UNSUPPORTED_ETHERNET_TYPE_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int DPDK_RX_UNSUPPORTED_ETHERNET_TYPE_TYPE_ID = 93;
+
+    /**
+     * DPDK_RX_UNSUPPORTED_PROTOCOL_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int DPDK_RX_UNSUPPORTED_PROTOCOL_TYPE_ID = 94;
 
     // Archive counters
     /**
