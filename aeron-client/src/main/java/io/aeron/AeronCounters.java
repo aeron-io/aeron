@@ -414,13 +414,13 @@ public final class AeronCounters
     /**
      * Count of media driver neighbors for name resolution.
      */
-    @AeronCounter(existsInC = false)
+    @AeronCounter
     public static final int NAME_RESOLVER_NEIGHBORS_COUNTER_TYPE_ID = 15;
 
     /**
      * Count of entries in the name resolver cache.
      */
-    @AeronCounter(existsInC = false)
+    @AeronCounter
     public static final int NAME_RESOLVER_CACHE_ENTRIES_COUNTER_TYPE_ID = 16;
 
     /**
