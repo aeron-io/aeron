@@ -155,7 +155,7 @@ public final class UdpNameResolutionTransport extends UdpChannelTransport
     {
         try
         {
-            return InterfaceSearchAddress.parse(addressAndPort).getAddress();
+            return InterfaceSearchAddress.parse(addressAndPort).address();
         }
         catch (final UnknownHostException ex)
         {

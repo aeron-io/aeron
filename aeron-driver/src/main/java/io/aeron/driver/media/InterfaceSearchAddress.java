@@ -20,38 +20,103 @@ import org.agrona.Strings;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.NetworkInterface;
+import java.net.ProtocolFamily;
+import java.net.SocketException;
 import java.net.UnknownHostException;
 
-final class InterfaceSearchAddress
+import static io.aeron.driver.media.NetworkUtil.filterBySubnet;
+import static io.aeron.driver.media.NetworkUtil.findAddressOnInterface;
+import static java.lang.System.lineSeparator;
+import static java.util.Objects.requireNonNull;
+
+record InterfaceSearchAddress(InetSocketAddress address, int subnetPrefix) implements UnresolvedInterface
 {
     private static final InterfaceSearchAddress WILDCARD = new InterfaceSearchAddress(new InetSocketAddress(0), 0);
-    private final InetSocketAddress address;
-    private final int subnetPrefix;
 
-    InterfaceSearchAddress(final InetSocketAddress address, final int subnetPrefix)
+    InterfaceSearchAddress
     {
-        this.address = address;
-        this.subnetPrefix = subnetPrefix;
+        requireNonNull(address, "address must not be null");
     }
 
-    InetSocketAddress getAddress()
+    public ResolvedInterface resolve(final boolean multicast, final ProtocolFamily protocolFamily)
+        throws SocketException
     {
-        return address;
+        final NetworkInterface localInterface;
+        final InetSocketAddress resolvedAddress;
+
+        if (!multicast && address.getAddress().isAnyLocalAddress())
+        {
+            localInterface = null;
+            resolvedAddress = address;
+        }
+        else
+        {
+            localInterface = findInterface();
+            resolvedAddress = resolveToAddressOfInterface(localInterface);
+        }
+
+        return new ResolvedInterface(localInterface, resolvedAddress);
     }
 
-    InetAddress getInetAddress()
+    private InetSocketAddress resolveToAddressOfInterface(final NetworkInterface localInterface)
     {
-        return address.getAddress();
+        final InetAddress interfaceAddress = findAddressOnInterface(localInterface, address.getAddress(), subnetPrefix);
+
+        if (null == interfaceAddress)
+        {
+            throw new IllegalStateException("failed to find " + address.getAddress() + "/" + subnetPrefix + " in " +
+                                            localInterface.getInterfaceAddresses());
+        }
+
+        return new InetSocketAddress(interfaceAddress, address.getPort());
     }
 
-    int getSubnetPrefix()
+    private NetworkInterface findInterface() throws SocketException
     {
-        return subnetPrefix;
+        final NetworkInterface[] filteredInterfaces = filterBySubnet(address.getAddress(), subnetPrefix);
+
+        for (final NetworkInterface networkInterface : filteredInterfaces)
+        {
+            if (networkInterface.isUp() && (networkInterface.supportsMulticast() || networkInterface.isLoopback()))
+            {
+                return networkInterface;
+            }
+        }
+
+        throw new IllegalArgumentException(noMatchingInterfacesError(filteredInterfaces));
     }
 
-    int getPort()
+    private String noMatchingInterfacesError(final NetworkInterface[] filteredInterfaces) throws SocketException
     {
-        return address.getPort();
+        final StringBuilder builder = new StringBuilder()
+            .append("Unable to find multicast or loopback interface matching criteria: ")
+            .append(address.getAddress())
+            .append('/')
+            .append(subnetPrefix);
+
+        if (filteredInterfaces.length > 0)
+        {
+            builder.append(lineSeparator()).append("  Candidates:");
+
+            for (final NetworkInterface ifc : filteredInterfaces)
+            {
+                builder
+                    .append(lineSeparator())
+                    .append("  - Name: ")
+                    .append(ifc.getDisplayName())
+                    .append(", addresses: ")
+                    .append(ifc.getInterfaceAddresses())
+                    .append(", multicast: ")
+                    .append(ifc.supportsMulticast())
+                    .append(", loopback: ")
+                    .append(ifc.isLoopback())
+                    .append(", state: ")
+                    .append(ifc.isUp() ? "UP" : "DOWN");
+            }
+        }
+
+        return builder.toString();
     }
 
     static InterfaceSearchAddress wildcard()

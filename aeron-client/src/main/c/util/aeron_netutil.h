@@ -75,7 +75,8 @@ uint32_t aeron_ipv4_netmask_from_prefixlen(size_t prefixlen);
 
 size_t aeron_ipv6_netmask_to_prefixlen(struct in6_addr *netmask);
 
-int aeron_find_interface(const char *interface_str, struct sockaddr_storage *if_addr, unsigned int *if_index);
+int aeron_find_interface(
+    int family, const char *interface_str, struct sockaddr_storage *if_addr, unsigned int *if_index);
 
 int aeron_find_unicast_interface(
     int family, const char *interface_str, struct sockaddr_storage *interface_addr, unsigned int *interface_index);
@@ -91,5 +92,14 @@ int aeron_format_source_identity(char *buffer, size_t length, struct sockaddr_st
 int aeron_netutil_get_so_buf_lengths(size_t *default_so_rcvbuf, size_t *default_so_sndbuf);
 
 int aeron_sockaddr_storage_cmp(struct sockaddr_storage *a, struct sockaddr_storage *b, bool *result);
+
+typedef struct aeron_named_interface_stct
+{
+    char name[IF_NAMESIZE];
+    int port;
+}
+aeron_named_interface_t;
+
+int aeron_parse_named_interface(const char *interface_str, aeron_named_interface_t *out);
 
 #endif //AERON_NETUTIL_H

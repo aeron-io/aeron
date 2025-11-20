@@ -1,5 +1,18 @@
 = Aeron Releases
 
+== 1.50.0 (????-??-??)
+
+=== New & Noteworthy
+
+* The `interface` channel parameter now accepts network interface names in the `\{interface}` format, e.g. `interface=\{eth0}`.
++
+When used with multicast channels, it specifies the interface to join with and send on.
++
+The `interface` parameter might sometimes be used with non-multicast channels to control the local address of a socket.
+In those cases, the socket will be bound to an address of an appropriate family assigned to the named interface.
+If there are multiple matching addresses available, it's unspecified which one will be used.
+It's also possible to specify the port used with the resolved address by using the `\{interface}:port` format.
+
 == 1.49.2 (2025-11-24)
 
 * **[C]** Do not resolve `endpoint` with ephemeral port for MDS subscription. Copy original channel as-is if no
