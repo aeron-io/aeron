@@ -703,6 +703,12 @@ public final class AeronCounters
     @AeronCounter
     public static final int DPDK_RX_UNSUPPORTED_PROTOCOL_TYPE_ID = 94;
 
+    /**
+     * DPDK_RX_RECEIVER_DISCARD_TYPE_ID.
+     */
+    @AeronCounter
+    public static final int DPDK_RX_RECEIVER_DISCARD_TYPE_ID = 95;
+
     // Archive counters
     /**
      * The position a recording has reached when being archived.
