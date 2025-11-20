@@ -1312,7 +1312,6 @@ class ClusterTest
         systemTestWatcher.ignoreErrorsMatching(UNKNOWN_HOST_FILTER);
 
         final TestNode leader = cluster.awaitLeader();
-        final int leaderIdx = leader.index();
         final String ingress = "0=node0:20110,1=node1:20111,2=node2:9999";
 
         final String mappings = "node0,localhost,localhost|node1," +
@@ -1347,7 +1346,6 @@ class ClusterTest
             .egressListener(cluster.clientCtx().egressListener())
             .controlledEgressListener(null);
 
-        final AeronCluster client = null;
         AeronCluster.AsyncConnect.State lastState = null;
         final AeronCluster.AsyncConnect asyncConnect = AeronCluster.asyncConnect(clientContext.clone());
         final List<AeronCluster.AsyncConnect.State> states = new ArrayList<>();
