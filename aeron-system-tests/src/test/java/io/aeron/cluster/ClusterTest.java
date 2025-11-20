@@ -18,6 +18,7 @@ package io.aeron.cluster;
 import io.aeron.Aeron;
 import io.aeron.AeronCounters;
 import io.aeron.ChannelUri;
+import io.aeron.CommonContext;
 import io.aeron.Counter;
 import io.aeron.ExclusivePublication;
 import io.aeron.Image;
@@ -45,8 +46,10 @@ import io.aeron.cluster.service.ClusterCounters;
 import io.aeron.cluster.service.ClusterTerminationException;
 import io.aeron.cluster.service.ClusteredServiceContainer;
 import io.aeron.cluster.service.SnapshotDurationTracker;
+import io.aeron.driver.Configuration;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
+import io.aeron.exceptions.TimeoutException;
 import io.aeron.logbuffer.BufferClaim;
 import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.Header;
@@ -65,6 +68,7 @@ import io.aeron.test.Tests;
 import io.aeron.test.cluster.ClusterTests;
 import io.aeron.test.cluster.TestCluster;
 import io.aeron.test.cluster.TestNode;
+import io.aeron.test.driver.RedirectingNameResolver;
 import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.AsciiEncoding;
 import org.agrona.BitUtil;
@@ -91,6 +95,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -126,6 +132,7 @@ import static io.aeron.test.cluster.ClusterTests.startPublisherThread;
 import static io.aeron.test.cluster.TestCluster.aCluster;
 import static io.aeron.test.cluster.TestCluster.awaitElectionClosed;
 import static io.aeron.test.cluster.TestCluster.awaitElectionState;
+import static io.aeron.test.cluster.TestCluster.clientDriverOutputConsumer;
 import static io.aeron.test.cluster.TestCluster.ingressEndpoint;
 import static io.aeron.test.cluster.TestNode.atMost;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
@@ -143,6 +150,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -1179,6 +1187,187 @@ class ClusterTest
 
         cluster.followers(2);
         cluster.awaitServicesMessageCount(messageCount);
+    }
+
+    @Test
+    @InterruptAfter(20)
+    void shouldLogErrorOnBadEgressConfiguration()
+    {
+        cluster = aCluster().withStaticNodes(3).start();
+        systemTestWatcher.cluster(cluster);
+        systemTestWatcher.ignoreErrorsMatching(UNKNOWN_HOST_FILTER);
+
+        cluster.awaitLeader();
+
+        final String mappings = "badhost,localhost,localhost|node0,localhost,localhost|node1," +
+            "localhost,localhost|node2,localhost,localhost";
+        final RedirectingNameResolver nameResolver = new RedirectingNameResolver(mappings);
+
+        final String aeronDirName = CommonContext.generateRandomDirName();
+
+        final MediaDriver.Context ctx = new MediaDriver.Context()
+            .threadingMode(ThreadingMode.SHARED)
+            .dirDeleteOnStart(true)
+            .dirDeleteOnShutdown(true)
+            .aeronDirectoryName(aeronDirName)
+            .nameResolver(nameResolver)
+            .senderWildcardPortRange("20700 20709")
+            .receiverWildcardPortRange("20710 20719")
+            .sendChannelEndpointSupplier(null)
+            .receiveChannelEndpointSupplier(null)
+            .imageLivenessTimeoutNs(Configuration.imageLivenessTimeoutNs());
+
+        cluster.dataCollector().add(Paths.get(aeronDirName));
+
+        final TestMediaDriver clientMediaDriver = TestMediaDriver
+            .launch(ctx, clientDriverOutputConsumer(cluster.dataCollector()));
+
+        final AeronCluster.Context clientContext = cluster.clientCtx()
+            .egressChannel("aeron:udp?endpoint=badhost:5555")
+            .ingressEndpoints("0=node0:20110,1=node1:20111,2=node2:20112")
+            .messageTimeoutNs(500_000_000)  // .5s to be safe;
+            .aeronDirectoryName(clientMediaDriver.aeronDirectoryName())
+            .isIngressExclusive(true)
+            .egressListener(cluster.clientCtx().egressListener())
+            .controlledEgressListener(null);
+
+        final TimeoutException clusterTimeoutException =
+            assertThrows(TimeoutException.class, () ->
+            {
+                AeronCluster.connect(clientContext.clone());
+            }
+            );
+
+        assertThat(clusterTimeoutException.getMessage(),
+            containsString("Connected to cluster at node"));
+        assertThat(clusterTimeoutException.getMessage(),
+            containsString("the cluster node cannot connect to you at badhost"));
+
+        cluster.close();
+
+    }
+
+    @Test
+    @InterruptAfter(15)
+    void shouldLogErrorOnBadIngressConfiguration()
+    {
+        cluster = aCluster().withStaticNodes(3).start();
+        systemTestWatcher.cluster(cluster);
+        systemTestWatcher.ignoreErrorsMatching(UNKNOWN_HOST_FILTER);
+
+        cluster.awaitLeader();
+
+
+        final String mappings = "badhost,localhost,localhost|node0,localhost,localhost|node1," +
+            "localhost,localhost|node2,localhost,localhost";
+        final RedirectingNameResolver nameResolver = new RedirectingNameResolver(mappings);
+
+        final String aeronDirName = CommonContext.generateRandomDirName();
+
+        final MediaDriver.Context ctx = new MediaDriver.Context()
+            .threadingMode(ThreadingMode.SHARED)
+            .dirDeleteOnStart(true)
+            .dirDeleteOnShutdown(true)
+            .aeronDirectoryName(aeronDirName)
+            .nameResolver(nameResolver)
+            .senderWildcardPortRange("20700 20709")
+            .receiverWildcardPortRange("20710 20719")
+            .sendChannelEndpointSupplier(null)
+            .receiveChannelEndpointSupplier(null)
+            .imageLivenessTimeoutNs(Configuration.imageLivenessTimeoutNs());
+
+        cluster.dataCollector().add(Paths.get(aeronDirName));
+
+        final TestMediaDriver clientMediaDriver = TestMediaDriver
+            .launch(ctx, clientDriverOutputConsumer(cluster.dataCollector()));
+
+        final AeronCluster.Context clientContext = cluster.clientCtx()
+            .egressChannel("aeron:udp?endpoint=badhost:5555")
+            .ingressEndpoints("0=node0:21909,1=node1:21909,2=node2:21909")
+            .messageTimeoutNs(500_000_000)  // .5s to be safe;
+            .aeronDirectoryName(clientMediaDriver.aeronDirectoryName())
+            .isIngressExclusive(true)
+            .egressListener(cluster.clientCtx().egressListener())
+            .controlledEgressListener(null);
+
+        final TimeoutException clusterTimeoutException =
+            assertThrows(TimeoutException.class, () ->
+            {
+                AeronCluster.connect(clientContext.clone());
+            }
+            );
+
+        assertThat(clusterTimeoutException.getMessage(),
+            containsString("cluster connect timeout: couldn't connect to any of " +
+                "the cluster endpoints!  state=AWAIT_PUBLICATION_CONNECTED"));
+        cluster.close();
+    }
+
+    @Test
+    @InterruptAfter(15)
+    void shouldBounceBackToPollResponseOnPartiallyBadIngressConfiguration()
+    {
+        cluster = aCluster().withStaticNodes(3).withAppointedLeader(2).start();
+        systemTestWatcher.cluster(cluster);
+        systemTestWatcher.ignoreErrorsMatching(UNKNOWN_HOST_FILTER);
+
+        final TestNode leader = cluster.awaitLeader();
+        final int leaderIdx = leader.index();
+        final String ingress = "0=node0:20110,1=node1:20111,2=node2:9999";
+
+        final String mappings = "node0,localhost,localhost|node1," +
+            "localhost,localhost|node2,localhost,localhost";
+        final RedirectingNameResolver nameResolver = new RedirectingNameResolver(mappings);
+
+        final String aeronDirName = CommonContext.generateRandomDirName();
+
+        final MediaDriver.Context ctx = new MediaDriver.Context()
+            .threadingMode(ThreadingMode.SHARED)
+            .dirDeleteOnStart(true)
+            .dirDeleteOnShutdown(true)
+            .aeronDirectoryName(aeronDirName)
+            .nameResolver(nameResolver)
+            .senderWildcardPortRange("20700 20709")
+            .receiverWildcardPortRange("20710 20719")
+            .sendChannelEndpointSupplier(null)
+            .receiveChannelEndpointSupplier(null)
+            .imageLivenessTimeoutNs(Configuration.imageLivenessTimeoutNs());
+
+        cluster.dataCollector().add(Paths.get(aeronDirName));
+
+        final TestMediaDriver clientMediaDriver = TestMediaDriver
+            .launch(ctx, clientDriverOutputConsumer(cluster.dataCollector()));
+
+        final AeronCluster.Context clientContext = cluster.clientCtx()
+            .egressChannel("aeron:udp?endpoint=localhost:5555")
+            .ingressEndpoints(ingress)
+            .messageTimeoutNs(500_000_000)  // .5s to be safe;
+            .aeronDirectoryName(clientMediaDriver.aeronDirectoryName())
+            .isIngressExclusive(true)
+            .egressListener(cluster.clientCtx().egressListener())
+            .controlledEgressListener(null);
+
+        AeronCluster client = null;
+        AeronCluster.AsyncConnect.State lastState = null;
+        final AeronCluster.AsyncConnect asyncConnect = AeronCluster.asyncConnect(clientContext.clone());
+        final List<AeronCluster.AsyncConnect.State> states = new ArrayList<>();
+
+        while (null == asyncConnect.poll())
+        {
+            final AeronCluster.AsyncConnect.State state = asyncConnect.state();
+            if (state != lastState)
+            {
+                states.add(state);
+                lastState = state;
+            }
+        }
+
+        asyncConnect.close();
+
+        long pollResponseCount = states.stream()
+            .filter(s -> s == AeronCluster.AsyncConnect.State.POLL_RESPONSE).count();
+        assertTrue(pollResponseCount >= 2, "Expected at least two POLL_RESPONSE occurrences. States: " + states);
+
     }
 
     @Test

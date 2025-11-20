@@ -50,6 +50,9 @@ public class BasicAuctionClusterClient implements EgressListener
     private long nextCorrelationId = 0;
     private long lastBidSeen = 100;
 
+    static final String LOCAL_IP = System.getProperty(
+        "aeron.cluster.tutorial.localIP", "127.0.0.1");
+
     /**
      * Construct a new cluster client for the auction.
      *
@@ -228,7 +231,7 @@ public class BasicAuctionClusterClient implements EgressListener
             AeronCluster aeronCluster = AeronCluster.connect(
                 new AeronCluster.Context()
                 .egressListener(client)                                                                         // <2>
-                .egressChannel("aeron:udp?endpoint=localhost:0")                                                // <3>
+                .egressChannel("aeron:udp?endpoint=" + LOCAL_IP + ":0")                                         // <3>
                 .aeronDirectoryName(mediaDriver.aeronDirectoryName())
                 .ingressChannel("aeron:udp")                                                                    // <4>
                 .ingressEndpoints(ingressEndpoints)))                                                           // <5>
