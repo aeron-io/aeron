@@ -419,10 +419,16 @@ void aeron_send_channel_endpoint_dispatch(
 
     int result = 0;
 
+    if (!aeron_is_frame_valid(frame_header, length))
+    {
+        aeron_counter_increment(sender->invalid_frames_counter);
+        return;
+    }
+
     switch (frame_header->type)
     {
         case AERON_HDR_TYPE_NAK:
-            if (length >= AERON_NAK_HEADER_LENGTH)
+            if (length >= AERON_NAK_HEADER_LENGTH && length >= (size_t)frame_header->frame_length)
             {
                 result = aeron_send_channel_endpoint_on_nak(endpoint, buffer, length, addr);
                 aeron_counter_increment_release(sender->nak_messages_received_counter);
@@ -458,7 +464,7 @@ void aeron_send_channel_endpoint_dispatch(
             break;
 
         case AERON_HDR_TYPE_RTTM:
-            if (length >= AERON_RTTM_HEADER_LENGTH)
+            if (length >= AERON_RTTM_HEADER_LENGTH && length >= (size_t)frame_header->frame_length)
             {
                 aeron_send_channel_endpoint_on_rttm(endpoint, buffer, length, addr);
             }
@@ -469,7 +475,7 @@ void aeron_send_channel_endpoint_dispatch(
             break;
 
         case AERON_HDR_TYPE_RSP_SETUP:
-            if (length >= AERON_RSP_SETUP_HEADER_LENGTH)
+            if (length >= AERON_RSP_SETUP_HEADER_LENGTH && length >= (size_t)frame_header->frame_length)
             {
                 aeron_send_channel_endpoint_on_response_setup(endpoint, conductor_proxy, buffer, length, addr);
             }

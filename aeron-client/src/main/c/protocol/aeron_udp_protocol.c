@@ -43,6 +43,8 @@ int aeron_udp_protocol_group_tag(aeron_status_message_header_t *sm, int64_t *gro
     return (int)((size_t)sm->frame_header.frame_length - group_tag_offset);
 }
 
+extern bool aeron_is_frame_valid(const aeron_frame_header_t *header, size_t frame_length);
+
 extern size_t aeron_res_header_address_length(int8_t res_type);
 
 extern size_t aeron_compute_max_message_length(size_t term_length);

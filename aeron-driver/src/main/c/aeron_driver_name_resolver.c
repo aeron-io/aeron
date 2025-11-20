@@ -602,7 +602,7 @@ void aeron_driver_name_resolver_receive(
     aeron_frame_header_t *frame_header = (aeron_frame_header_t *)buffer;
     size_t remaining = length;
 
-    if ((remaining < AERON_FRAME_HEADER_LENGTH) || (frame_header->version != AERON_FRAME_HEADER_VERSION))
+    if (!aeron_is_frame_valid(frame_header, length) || length < (size_t)frame_header->frame_length)
     {
         aeron_counter_increment(resolver->invalid_packets_counter);
         return;

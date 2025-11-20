@@ -487,7 +487,7 @@ void aeron_receive_channel_endpoint_dispatch(
     aeron_receive_channel_endpoint_t *endpoint = (aeron_receive_channel_endpoint_t *)endpoint_clientd;
     aeron_receive_destination_t *destination = (aeron_receive_destination_t *)destination_clientd;
 
-    if ((length < AERON_FRAME_HEADER_LENGTH) || (frame_header->version != AERON_FRAME_HEADER_VERSION))
+    if (!aeron_is_frame_valid(frame_header, length))
     {
         aeron_counter_increment(receiver->invalid_frames_counter);
         return;
@@ -513,7 +513,7 @@ void aeron_receive_channel_endpoint_dispatch(
             break;
 
         case AERON_HDR_TYPE_SETUP:
-            if (length >= AERON_SETUP_HEADER_LENGTH)
+            if (length >= AERON_SETUP_HEADER_LENGTH && length >= (size_t)frame_header->frame_length)
             {
                 if (aeron_receive_channel_endpoint_on_setup(endpoint, destination, buffer, length, addr) < 0)
                 {
@@ -528,7 +528,7 @@ void aeron_receive_channel_endpoint_dispatch(
             break;
 
         case AERON_HDR_TYPE_RTTM:
-            if (length >= AERON_RTTM_HEADER_LENGTH)
+            if (length >= AERON_RTTM_HEADER_LENGTH && length >= (size_t)frame_header->frame_length)
             {
                 if (aeron_receive_channel_endpoint_on_rttm(endpoint, destination, buffer, length, addr) < 0)
                 {
