@@ -29,7 +29,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static io.aeron.CommonContext.*;
 import static io.aeron.driver.media.NetworkUtil.*;
-import static java.lang.System.lineSeparator;
 import static java.net.InetAddress.getByAddress;
 
 /**
@@ -196,7 +195,10 @@ public final class UdpChannel
                     ANY_IPV6 : ANY_IPV4;
             }
 
+            final ProtocolFamily protocolFamily = getProtocolFamily(endpointAddress.getAddress());
+
             final Context context = new Context()
+                .protocolFamily(protocolFamily)
                 .isMulticast(false)
                 .hasExplicitControl(false)
                 .hasMulticastTtl(false)
@@ -218,9 +220,10 @@ public final class UdpChannel
 
             if (endpointAddress.getAddress().isMulticastAddress())
             {
-                final InterfaceSearchAddress searchAddress = getInterfaceSearchAddress(channelUri);
-                final NetworkInterface localInterface = findInterface(searchAddress);
-                final InetSocketAddress resolvedAddress = resolveToAddressOfInterface(localInterface, searchAddress);
+                final UnresolvedInterface unresolvedInterface = getInterface(channelUri);
+                final ResolvedInterface resolvedInterface = unresolvedInterface.resolve(true, protocolFamily);
+                final NetworkInterface localInterface = resolvedInterface.localInterface();
+                final InetSocketAddress resolvedAddress = resolvedInterface.address();
 
                 context
                     .isMulticast(true)
@@ -229,7 +232,6 @@ public final class UdpChannel
                     .localControlAddress(resolvedAddress)
                     .localDataAddress(resolvedAddress)
                     .localInterface(localInterface)
-                    .protocolFamily(getProtocolFamily(endpointAddress.getAddress()))
                     .canonicalForm(canonicalise(null, resolvedAddress, null, endpointAddress));
 
                 final String ttlValue = channelUri.get(TTL_PARAM_NAME);
@@ -258,15 +260,13 @@ public final class UdpChannel
                     .remoteDataAddress(endpointAddress)
                     .localControlAddress(controlAddress)
                     .localDataAddress(controlAddress)
-                    .protocolFamily(getProtocolFamily(endpointAddress.getAddress()))
                     .canonicalForm(canonicalForm);
             }
             else
             {
-                final InterfaceSearchAddress searchAddress = getInterfaceSearchAddress(channelUri);
-                final InetSocketAddress localAddress = searchAddress.getInetAddress().isAnyLocalAddress() ?
-                    searchAddress.getAddress() :
-                    resolveToAddressOfInterface(findInterface(searchAddress), searchAddress);
+                final UnresolvedInterface unresolvedInterface = getInterface(channelUri);
+                final ResolvedInterface resolvedInterface = unresolvedInterface.resolve(false, protocolFamily);
+                final InetSocketAddress localAddress = resolvedInterface.address();
 
                 final String endpointVal = channelUri.get(ENDPOINT_PARAM_NAME);
                 String suffix = "";
@@ -280,7 +280,6 @@ public final class UdpChannel
                     .remoteDataAddress(endpointAddress)
                     .localControlAddress(localAddress)
                     .localDataAddress(localAddress)
-                    .protocolFamily(getProtocolFamily(endpointAddress.getAddress()))
                     .canonicalForm(canonicalise(null, localAddress, endpointVal, endpointAddress) + suffix);
             }
 
@@ -1008,12 +1007,12 @@ public final class UdpChannel
         return new InetSocketAddress(getByAddress(addressAsBytes), endpointAddress.getPort());
     }
 
-    private static InterfaceSearchAddress getInterfaceSearchAddress(final ChannelUri uri) throws UnknownHostException
+    private static UnresolvedInterface getInterface(final ChannelUri uri) throws UnknownHostException
     {
         final String interfaceValue = uri.get(INTERFACE_PARAM_NAME);
         if (null != interfaceValue)
         {
-            return InterfaceSearchAddress.parse(interfaceValue);
+            return UnresolvedInterface.parse(interfaceValue);
         }
 
         return InterfaceSearchAddress.wildcard();
@@ -1080,69 +1079,6 @@ public final class UdpChannel
         {
             throw new IllegalArgumentException("UdpChannel only supports UDP media: " + uri);
         }
-    }
-
-    private static InetSocketAddress resolveToAddressOfInterface(
-        final NetworkInterface localInterface, final InterfaceSearchAddress searchAddress)
-    {
-        final InetAddress interfaceAddress = findAddressOnInterface(
-            localInterface, searchAddress.getInetAddress(), searchAddress.getSubnetPrefix());
-
-        if (null == interfaceAddress)
-        {
-            throw new IllegalStateException();
-        }
-
-        return new InetSocketAddress(interfaceAddress, searchAddress.getPort());
-    }
-
-    private static NetworkInterface findInterface(final InterfaceSearchAddress searchAddress)
-        throws SocketException
-    {
-        final NetworkInterface[] filteredInterfaces = filterBySubnet(
-            searchAddress.getInetAddress(), searchAddress.getSubnetPrefix());
-
-        for (final NetworkInterface networkInterface : filteredInterfaces)
-        {
-            if (networkInterface.isUp() && (networkInterface.supportsMulticast() || networkInterface.isLoopback()))
-            {
-                return networkInterface;
-            }
-        }
-
-        throw new IllegalArgumentException(noMatchingInterfacesError(filteredInterfaces, searchAddress));
-    }
-
-    private static String noMatchingInterfacesError(
-        final NetworkInterface[] filteredInterfaces, final InterfaceSearchAddress address)
-        throws SocketException
-    {
-        final StringBuilder builder = new StringBuilder()
-            .append("Unable to find multicast interface matching criteria: ")
-            .append(address.getAddress())
-            .append('/')
-            .append(address.getSubnetPrefix());
-
-        if (filteredInterfaces.length > 0)
-        {
-            builder.append(lineSeparator()).append("  Candidates:");
-
-            for (final NetworkInterface ifc : filteredInterfaces)
-            {
-                builder
-                    .append(lineSeparator())
-                    .append("  - Name: ")
-                    .append(ifc.getDisplayName())
-                    .append(", addresses: ")
-                    .append(ifc.getInterfaceAddresses())
-                    .append(", multicast: ")
-                    .append(ifc.supportsMulticast())
-                    .append(", state: ")
-                    .append(ifc.isUp() ? "UP" : "DOWN");
-            }
-        }
-
-        return builder.toString();
     }
 
     static final class Context

@@ -760,7 +760,7 @@ const char *aeron_driver_context_get_resolver_name(aeron_driver_context_t *conte
 /**
 * The interface of the MediaDriver for name resolver purposes.
 *
-* The format is hostname:port and follows the URI format for the interface parameter.
+* The format is hostname:port.
 */
 #define AERON_DRIVER_RESOLVER_INTERFACE_ENV_VAR "AERON_DRIVER_RESOLVER_INTERFACE"
 

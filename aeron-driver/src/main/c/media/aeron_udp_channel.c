@@ -139,7 +139,8 @@ int aeron_find_multicast_interface(
 {
     char *wildcard_str = AF_INET6 == family ? "[0::]/0" : "0.0.0.0/0";
 
-    return aeron_find_interface(NULL == interface_str ? wildcard_str : interface_str, interface_addr, interface_index);
+    return aeron_find_interface(
+        family, NULL == interface_str ? wildcard_str : interface_str, interface_addr, interface_index);
 }
 
 static int32_t unique_canonical_form_value = 0;
