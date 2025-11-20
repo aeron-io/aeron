@@ -19,6 +19,14 @@
 #include "util/aeron_bitutil.h"
 #include "aeron_udp_protocol.h"
 
+#ifdef _MSC_VER
+#define _Static_assert static_assert
+#endif
+
+_Static_assert(
+    sizeof(aeron_data_header_as_longs_t) == sizeof(aeron_data_header_t),
+    "sizeof(aeron_data_header_as_longs_t) must match sizeof(aeron_data_header_t)");
+
 int aeron_udp_protocol_group_tag(aeron_status_message_header_t *sm, int64_t *group_tag)
 {
     const size_t group_tag_offset = sizeof(aeron_status_message_header_t) +
@@ -38,6 +46,8 @@ int aeron_udp_protocol_group_tag(aeron_status_message_header_t *sm, int64_t *gro
 
     return (int)((size_t)sm->frame_header.frame_length - group_tag_offset);
 }
+
+extern bool aeron_is_frame_valid(const aeron_frame_header_t *header, size_t frame_length);
 
 extern size_t aeron_res_header_address_length(int8_t res_type);
 
@@ -93,4 +103,3 @@ int aeron_res_header_entry_length(void *res, size_t remaining)
 
     return result;
 }
-

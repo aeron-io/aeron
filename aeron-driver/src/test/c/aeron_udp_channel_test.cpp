@@ -121,6 +121,34 @@ class UdpChannelEqualityParameterisedTest :
 };
 
 
+TEST_F(UdpChannelTest, shouldComputeMaxMessageLength)
+{
+    EXPECT_EQ(0, aeron_compute_max_message_length(0));
+    EXPECT_EQ(4, aeron_compute_max_message_length(32));
+    EXPECT_EQ(8192, aeron_compute_max_message_length(64 * 1024));
+    EXPECT_EQ(8 * 1024 * 1024, aeron_compute_max_message_length(64 * 1024 * 1024));
+    EXPECT_EQ(AERON_FRAME_MAX_MESSAGE_LENGTH, aeron_compute_max_message_length(1024 * 1024 * 1024));
+    EXPECT_EQ(16 * 1024 * 1024, aeron_compute_max_message_length(512 * 1024 * 1024));
+}
+
+TEST_F(UdpChannelTest, shouldCheckIfFrameIsValid)
+{
+    aeron_frame_header_t header = {};
+
+    EXPECT_FALSE(aeron_is_frame_valid(&header, 1)); // length below min header length
+
+    header.version = 123;
+    EXPECT_FALSE(aeron_is_frame_valid(&header, AERON_FRAME_HEADER_LENGTH)); // wrong version
+
+    header.version = AERON_FRAME_HEADER_VERSION;
+    header.frame_length = 100;
+    EXPECT_TRUE(aeron_is_frame_valid(&header, AERON_FRAME_HEADER_LENGTH + 1));
+    header.type = 123;
+    EXPECT_TRUE(aeron_is_frame_valid(&header, header.frame_length));
+    header.flags = 0xAE;
+    EXPECT_TRUE(aeron_is_frame_valid(&header, INT32_MAX));
+}
+
 TEST_F(UdpChannelTest, shouldParseExplicitLocalAddressAndPortFormat)
 {
     ASSERT_EQ(parse_udp_channel("aeron:udp?interface=localhost:40123|endpoint=localhost:40124"), 0) << aeron_errmsg();

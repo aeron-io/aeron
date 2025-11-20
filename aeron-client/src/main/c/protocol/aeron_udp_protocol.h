@@ -17,6 +17,7 @@
 #ifndef AERON_UDP_PROTOCOL_H
 #define AERON_UDP_PROTOCOL_H
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>
 
@@ -85,6 +86,12 @@ typedef struct aeron_status_message_header_stct
 }
 aeron_status_message_header_t;
 
+typedef struct aeron_status_message_optional_header_stct
+{
+    int64_t group_tag;
+}
+aeron_status_message_optional_header_t;
+
 struct aeron_error_stct
 {
     aeron_frame_header_t frame_header;
@@ -96,12 +103,6 @@ struct aeron_error_stct
     int32_t error_length;
 };
 typedef struct aeron_error_stct aeron_error_t;
-
-typedef struct aeron_status_message_optional_header_stct
-{
-    int64_t group_tag;
-}
-aeron_status_message_optional_header_t;
 
 typedef struct aeron_rttm_header_stct
 {
@@ -181,6 +182,7 @@ int aeron_udp_protocol_group_tag(aeron_status_message_header_t *sm, int64_t *gro
 #define AERON_HDR_TYPE_RSP_SETUP (INT16_C(0x0B))
 #define AERON_HDR_TYPE_EXT (INT16_C(-1))
 
+#define AERON_FRAME_HEADER_LENGTH (sizeof(aeron_frame_header_t))
 #define AERON_DATA_HEADER_LENGTH (sizeof(aeron_data_header_t))
 
 #define AERON_DATA_HEADER_BEGIN_FLAG (UINT8_C(0x80))
@@ -222,6 +224,11 @@ int aeron_udp_protocol_group_tag(aeron_status_message_header_t *sm, int64_t *gro
 #define AERON_ERROR_MAX_FRAME_LENGTH (sizeof(aeron_error_t) + AERON_ERROR_MAX_TEXT_LENGTH)
 #define AERON_ERROR_HAS_GROUP_TAG_FLAG (0x08)
 
+inline bool aeron_is_frame_valid(const aeron_frame_header_t *header, const size_t frame_length)
+{
+    return frame_length >= AERON_FRAME_HEADER_LENGTH && AERON_FRAME_HEADER_VERSION == header->version;
+}
+
 inline size_t aeron_res_header_address_length(int8_t res_type)
 {
     return AERON_RES_HEADER_TYPE_NAME_TO_IP6_MD == res_type ?
@@ -230,8 +237,7 @@ inline size_t aeron_res_header_address_length(int8_t res_type)
 
 inline size_t aeron_compute_max_message_length(size_t term_length)
 {
-    size_t max_length_for_term = term_length / 8;
-
+    size_t max_length_for_term = term_length >> 3;
     return max_length_for_term < AERON_FRAME_MAX_MESSAGE_LENGTH ? max_length_for_term : AERON_FRAME_MAX_MESSAGE_LENGTH;
 }
 
