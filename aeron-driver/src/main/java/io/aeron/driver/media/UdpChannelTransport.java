@@ -395,20 +395,14 @@ public abstract class UdpChannelTransport implements AutoCloseable
      */
     public boolean isValidFrame(final UnsafeBuffer buffer, final int length)
     {
-        boolean isFrameValid = true;
-
-        if (frameVersion(buffer, 0) != HeaderFlyweight.CURRENT_VERSION)
+        if (length >= HeaderFlyweight.MIN_HEADER_LENGTH &&
+            frameVersion(buffer, 0) == HeaderFlyweight.CURRENT_VERSION)
         {
-            isFrameValid = false;
-            invalidPackets.increment();
-        }
-        else if (length < HeaderFlyweight.MIN_HEADER_LENGTH)
-        {
-            isFrameValid = false;
-            invalidPackets.increment();
+            return true;
         }
 
-        return isFrameValid;
+        invalidPackets.increment();
+        return false;
     }
 
     /**
