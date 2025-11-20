@@ -275,7 +275,7 @@ TEST_F(NetworkPublicationTest, shouldSendHeartbeatWhileSendingPeriodicSetups)
     sockaddr_storage sockaddr = {};
 
     aeron_network_publication_on_status_message(
-        publication, &proxy, data_buffer.data(), sizeof(aeron_status_message_header_t), &sockaddr);
+        publication, &proxy, data_buffer.data(), AERON_SM_HEADER_LENGTH, &sockaddr);
     aeron_network_publication_send(publication, time_ns);
 
     ASSERT_TRUE(publication->has_receivers);
@@ -289,7 +289,7 @@ TEST_F(NetworkPublicationTest, shouldSendHeartbeatWhileSendingPeriodicSetups)
     time_ns += (AERON_NETWORK_PUBLICATION_SETUP_TIMEOUT_NS + 10);
 
     aeron_network_publication_trigger_send_setup_frame(
-        publication, data_buffer.data(), sizeof(aeron_status_message_header_t), &sockaddr);
+        publication, data_buffer.data(), AERON_SM_HEADER_LENGTH, &sockaddr);
     aeron_network_publication_send(publication, time_ns);
     ASSERT_EQ(1, test_bindings_state->setup_count);
     ASSERT_EQ(3, test_bindings_state->heartbeat_count);
@@ -367,7 +367,7 @@ TEST_F(NetworkPublicationTest, shouldCleanDirtyTermBuffersOneTermBehindTheMinCon
     AERON_DECL_ALIGNED(buffer_t data_buffer, 16) = {};
     sockaddr_storage sockaddr = {};
     aeron_network_publication_on_status_message(
-            publication, &proxy, data_buffer.data(), sizeof(aeron_status_message_header_t), &sockaddr);
+            publication, &proxy, data_buffer.data(), AERON_SM_HEADER_LENGTH, &sockaddr);
 
     ASSERT_TRUE(publication->has_receivers);
 
@@ -441,7 +441,7 @@ TEST_F(NetworkPublicationTest, publicationLimitShouldNotCrossIntoPreviousTermIfT
     AERON_DECL_ALIGNED(buffer_t data_buffer, 16) = {};
     sockaddr_storage sockaddr = {};
     aeron_network_publication_on_status_message(
-            publication, &proxy, data_buffer.data(), sizeof(aeron_status_message_header_t), &sockaddr);
+            publication, &proxy, data_buffer.data(), AERON_SM_HEADER_LENGTH, &sockaddr);
 
     ASSERT_TRUE(publication->has_receivers);
 
@@ -486,7 +486,7 @@ TEST_F(NetworkPublicationTest, publicationLimitShouldNotCrossIntoTheDirtyTerm)
     AERON_DECL_ALIGNED(buffer_t data_buffer, 16) = {};
     sockaddr_storage sockaddr = {};
     aeron_network_publication_on_status_message(
-            publication, &proxy, data_buffer.data(), sizeof(aeron_status_message_header_t), &sockaddr);
+            publication, &proxy, data_buffer.data(), AERON_SM_HEADER_LENGTH, &sockaddr);
 
     ASSERT_TRUE(publication->has_receivers);
 

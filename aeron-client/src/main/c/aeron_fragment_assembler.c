@@ -30,7 +30,7 @@ int aeron_buffer_builder_create(aeron_buffer_builder_t **buffer_builder)
     aeron_data_header_t *_frame;
 
     if (aeron_alloc((void **)&_buffer_builder, sizeof(aeron_buffer_builder_t)) < 0 ||
-        aeron_alloc((void **)&_frame, sizeof(aeron_data_header_t)) < 0)
+        aeron_alloc((void **)&_frame, AERON_DATA_HEADER_LENGTH) < 0)
     {
         AERON_APPEND_ERR("%s", "Failed to allocate buffer_builder");
         return -1;

@@ -120,6 +120,21 @@ class UdpChannelEqualityParameterisedTest :
 {
 };
 
+TEST_F(UdpChannelTest, constantSanityChecks)
+{
+    EXPECT_EQ(AERON_FRAME_HEADER_LENGTH, sizeof(aeron_frame_header_t));
+    EXPECT_EQ(AERON_DATA_HEADER_LENGTH, sizeof(aeron_data_header_t));
+    EXPECT_EQ(AERON_NAK_HEADER_LENGTH, sizeof(aeron_nak_header_t));
+    EXPECT_EQ(AERON_SM_HEADER_LENGTH, sizeof(aeron_status_message_header_t));
+    EXPECT_EQ(AERON_SM_OPTIONAL_HEADER_LENGTH, sizeof(aeron_status_message_optional_header_t));
+    EXPECT_EQ(AERON_ERROR_HEADER_LENGTH, sizeof(aeron_error_t));
+    EXPECT_EQ(AERON_SETUP_HEADER_LENGTH, sizeof(aeron_setup_header_t));
+    EXPECT_EQ(AERON_RTTM_HEADER_LENGTH, sizeof(aeron_rttm_header_t));
+    EXPECT_EQ(AERON_RES_HEADER_LENGTH, sizeof(aeron_resolution_header_t));
+    EXPECT_EQ(AERON_RES_IPV4_HEADER_LENGTH, sizeof(aeron_resolution_header_ipv4_t));
+    EXPECT_EQ(AERON_RES_IPV6_HEADER_LENGTH, sizeof(aeron_resolution_header_ipv6_t));
+    EXPECT_EQ(AERON_RSP_SETUP_HEADER_LENGTH, sizeof(aeron_response_setup_header_t));
+}
 
 TEST_F(UdpChannelTest, shouldParseExplicitLocalAddressAndPortFormat)
 {

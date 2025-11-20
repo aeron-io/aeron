@@ -422,7 +422,7 @@ void aeron_send_channel_endpoint_dispatch(
     switch (frame_header->type)
     {
         case AERON_HDR_TYPE_NAK:
-            if (length >= sizeof(aeron_nak_header_t))
+            if (length >= AERON_NAK_HEADER_LENGTH)
             {
                 result = aeron_send_channel_endpoint_on_nak(endpoint, buffer, length, addr);
                 aeron_counter_increment_release(sender->nak_messages_received_counter);
@@ -434,7 +434,7 @@ void aeron_send_channel_endpoint_dispatch(
             break;
 
         case AERON_HDR_TYPE_SM:
-            if (length >= sizeof(aeron_status_message_header_t) && length >= (size_t)frame_header->frame_length)
+            if (length >= AERON_SM_HEADER_LENGTH && length >= (size_t)frame_header->frame_length)
             {
                 result = aeron_send_channel_endpoint_on_status_message(endpoint, conductor_proxy, buffer, length, addr);
                 aeron_counter_increment_release(sender->status_messages_received_counter);
@@ -446,7 +446,7 @@ void aeron_send_channel_endpoint_dispatch(
             break;
 
         case AERON_HDR_TYPE_ERR:
-            if (length >= sizeof(aeron_error_t) && length >= (size_t)frame_header->frame_length)
+            if (length >= AERON_ERROR_HEADER_LENGTH && length >= (size_t)frame_header->frame_length)
             {
                 result = aeron_send_channel_endpoint_on_error(endpoint, conductor_proxy, buffer, length, addr);
                 aeron_counter_increment_release(sender->error_messages_received_counter);
@@ -457,10 +457,10 @@ void aeron_send_channel_endpoint_dispatch(
             }
             break;
 
-        case AERON_HDR_TYPE_RSP_SETUP:
-            if (length >= sizeof(aeron_response_setup_header_t))
+        case AERON_HDR_TYPE_RTTM:
+            if (length >= AERON_RTTM_HEADER_LENGTH)
             {
-                aeron_send_channel_endpoint_on_response_setup(endpoint, conductor_proxy, buffer, length, addr);
+                aeron_send_channel_endpoint_on_rttm(endpoint, buffer, length, addr);
             }
             else
             {
@@ -468,10 +468,10 @@ void aeron_send_channel_endpoint_dispatch(
             }
             break;
 
-        case AERON_HDR_TYPE_RTTM:
-            if (length >= sizeof(aeron_rttm_header_t))
+        case AERON_HDR_TYPE_RSP_SETUP:
+            if (length >= AERON_RSP_SETUP_HEADER_LENGTH)
             {
-                aeron_send_channel_endpoint_on_rttm(endpoint, buffer, length, addr);
+                aeron_send_channel_endpoint_on_response_setup(endpoint, conductor_proxy, buffer, length, addr);
             }
             else
             {

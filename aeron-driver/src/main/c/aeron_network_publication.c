@@ -441,7 +441,7 @@ int aeron_network_publication_setup_message_check(
 
     if (now_ns > (publication->time_of_last_setup_ns + AERON_NETWORK_PUBLICATION_SETUP_TIMEOUT_NS))
     {
-        uint8_t setup_buffer[sizeof(aeron_setup_header_t)];
+        uint8_t setup_buffer[AERON_SETUP_HEADER_LENGTH];
         aeron_setup_header_t *setup_header = (aeron_setup_header_t *)setup_buffer;
         struct iovec iov;
 
@@ -449,7 +449,7 @@ int aeron_network_publication_setup_message_check(
             AERON_SETUP_HEADER_SEND_RESPONSE_FLAG : 0;
         uint8_t group_flag = publication->retransmit_handler.has_group_semantics ? AERON_SETUP_HEADER_GROUP_FLAG : 0;
 
-        setup_header->frame_header.frame_length = sizeof(aeron_setup_header_t);
+        setup_header->frame_header.frame_length = AERON_SETUP_HEADER_LENGTH;
         setup_header->frame_header.version = AERON_FRAME_HEADER_VERSION;
         setup_header->frame_header.flags = 0;
         setup_header->frame_header.type = AERON_HDR_TYPE_SETUP;
@@ -464,14 +464,14 @@ int aeron_network_publication_setup_message_check(
         setup_header->ttl = publication->endpoint->conductor_fields.udp_channel->multicast_ttl;
 
         iov.iov_base = setup_buffer;
-        iov.iov_len = sizeof(aeron_setup_header_t);
+        iov.iov_len = AERON_SETUP_HEADER_LENGTH;
 
         if (publication->is_setup_elicited)
         {
             publication->flow_control->on_setup(
                 publication->flow_control->state,
                 setup_buffer,
-                sizeof(aeron_setup_header_t),
+                AERON_SETUP_HEADER_LENGTH,
                 now_ns,
                 *publication->snd_lmt_position.value_addr,
                 publication->position_bits_to_shift,
@@ -524,7 +524,7 @@ int aeron_network_publication_heartbeat_message_check(
             flags |= AERON_DATA_HEADER_EOS_FLAG;
         }
 
-        uint8_t heartbeat_buffer[sizeof(aeron_data_header_t)];
+        uint8_t heartbeat_buffer[AERON_DATA_HEADER_LENGTH];
         aeron_data_header_t *data_header = (aeron_data_header_t *)heartbeat_buffer;
         struct iovec iov;
 
@@ -539,7 +539,7 @@ int aeron_network_publication_heartbeat_message_check(
         data_header->reserved_value = 0l;
 
         iov.iov_base = heartbeat_buffer;
-        iov.iov_len = sizeof(aeron_data_header_t);
+        iov.iov_len = AERON_DATA_HEADER_LENGTH;
 
         if (0 <= (result = aeron_network_publication_do_send(publication, &iov, 1, &bytes_sent)))
         {
@@ -926,12 +926,12 @@ void aeron_network_publication_on_rttm(
 
     if (rttm_in_header->frame_header.flags & AERON_RTTM_HEADER_REPLY_FLAG)
     {
-        uint8_t rttm_reply_buffer[sizeof(aeron_rttm_header_t)];
+        uint8_t rttm_reply_buffer[AERON_RTTM_HEADER_LENGTH];
         aeron_rttm_header_t *rttm_out_header = (aeron_rttm_header_t *)rttm_reply_buffer;
         struct iovec iov;
         int64_t bytes_sent;
 
-        rttm_out_header->frame_header.frame_length = sizeof(aeron_rttm_header_t);
+        rttm_out_header->frame_header.frame_length = AERON_RTTM_HEADER_LENGTH;
         rttm_out_header->frame_header.version = AERON_FRAME_HEADER_VERSION;
         rttm_out_header->frame_header.flags = 0;
         rttm_out_header->frame_header.type = AERON_HDR_TYPE_RTTM;
@@ -942,7 +942,7 @@ void aeron_network_publication_on_rttm(
         rttm_out_header->receiver_id = rttm_in_header->receiver_id;
 
         iov.iov_base = rttm_reply_buffer;
-        iov.iov_len = sizeof(aeron_rttm_header_t);
+        iov.iov_len = AERON_RTTM_HEADER_LENGTH;
 
         if (0 <= aeron_network_publication_do_send(publication, &iov, 1, &bytes_sent))
         {

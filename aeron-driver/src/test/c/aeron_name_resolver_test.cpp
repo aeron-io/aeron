@@ -691,7 +691,7 @@ TEST_F(NameResolverTest, shouldHandleDissection)
     size_t frame_offset = socket_offset + log_header->sockaddr_len;
     auto *frame = reinterpret_cast<aeron_frame_header_t *>(&buffer[frame_offset]);
 
-    size_t res_offset = sizeof(aeron_frame_header_t) + frame_offset;
+    size_t res_offset = AERON_FRAME_HEADER_LENGTH + frame_offset;
     auto *res = reinterpret_cast<aeron_resolution_header_ipv6_t *>(&buffer[res_offset]);
 
     res->resolution_header.res_type = AERON_RES_HEADER_TYPE_NAME_TO_IP6_MD;
@@ -700,7 +700,7 @@ TEST_F(NameResolverTest, shouldHandleDissection)
     res->resolution_header.udp_port = 9872;
     inet_pton(AF_INET6, "::1", &res->addr);
     res->name_length = 8;
-    memcpy(&buffer[res_offset + sizeof(aeron_resolution_header_ipv6_t)], "ABCDEFHG", res->name_length);
+    memcpy(&buffer[res_offset + AERON_RES_IPV6_HEADER_LENGTH], "ABCDEFHG", res->name_length);
     res_offset += aeron_res_header_entry_length_ipv6(res);
 
     auto *res2 = reinterpret_cast<aeron_resolution_header_ipv4_t *>(&buffer[res_offset]);
@@ -711,7 +711,7 @@ TEST_F(NameResolverTest, shouldHandleDissection)
     res2->resolution_header.udp_port = 8080;
     inet_pton(AF_INET, "127.0.0.1", &res2->addr);
     res2->name_length = 4;
-    memcpy(&buffer[res_offset + sizeof(aeron_resolution_header_ipv4_t)], "test", res2->name_length);
+    memcpy(&buffer[res_offset + AERON_RES_IPV4_HEADER_LENGTH], "test", res2->name_length);
     res_offset += aeron_res_header_entry_length_ipv4(res2);
 
     frame->type = AERON_HDR_TYPE_RES;
