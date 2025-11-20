@@ -1347,7 +1347,7 @@ class ClusterTest
             .egressListener(cluster.clientCtx().egressListener())
             .controlledEgressListener(null);
 
-        AeronCluster client = null;
+        final AeronCluster client = null;
         AeronCluster.AsyncConnect.State lastState = null;
         final AeronCluster.AsyncConnect asyncConnect = AeronCluster.asyncConnect(clientContext.clone());
         final List<AeronCluster.AsyncConnect.State> states = new ArrayList<>();
@@ -1364,7 +1364,7 @@ class ClusterTest
 
         asyncConnect.close();
 
-        long pollResponseCount = states.stream()
+        final long pollResponseCount = states.stream()
             .filter(s -> s == AeronCluster.AsyncConnect.State.POLL_RESPONSE).count();
         assertTrue(pollResponseCount >= 2, "Expected at least two POLL_RESPONSE occurrences. States: " + states);
 
