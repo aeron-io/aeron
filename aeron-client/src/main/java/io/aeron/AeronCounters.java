@@ -692,8 +692,8 @@ public final class AeronCounters
     /**
      * Transition module control toggle type id.
      */
-    @AeronCounter(expectedCName = "CLUSTER_TRANSITION_MODULE_CONTROL_TOGGLE")
-    public static final int TRANSITION_MODULE_CONTROL_TOGGLE_TYPE_ID = 225;
+//    @AeronCounter(expectedCName = "CLUSTER_TRANSITION_MODULE_CONTROL_TOGGLE")
+//    public static final int TRANSITION_MODULE_CONTROL_TOGGLE_TYPE_ID = 225;
 
     /**
      * Counter type id for the transition module error count.
