@@ -100,7 +100,7 @@ inline void aeron_buffer_builder_capture_header(aeron_buffer_builder_t *buffer_b
 {
     buffer_builder->header.initial_term_id = header->initial_term_id;
     buffer_builder->header.position_bits_to_shift = header->position_bits_to_shift;
-    memcpy(buffer_builder->header.frame, header->frame, AERON_DATA_HEADER_LENGTH);
+    memcpy(buffer_builder->header.frame, header->frame, sizeof(aeron_data_header_t));
 }
 
 inline aeron_header_t* aeron_buffer_builder_complete_header(aeron_buffer_builder_t *buffer_builder, aeron_header_t *header)

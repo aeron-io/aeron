@@ -84,7 +84,7 @@ TEST_F(DataPacketDispatcherTest, shouldInsertDataInputSubscribedPublicationImage
     ASSERT_NE(nullptr, image) << aeron_errmsg();
 
     aeron_data_header_t *data_header = dataPacket(data_buffer, stream_id, session_id);
-    size_t len = AERON_DATA_HEADER_LENGTH + 8;
+    size_t len = sizeof(aeron_data_header_t) + 8;
 
     ASSERT_EQ(0, aeron_data_packet_dispatcher_add_subscription(m_dispatcher, stream_id));
     ASSERT_EQ(0, aeron_data_packet_dispatcher_add_publication_image(m_dispatcher, image));
@@ -112,7 +112,7 @@ TEST_F(DataPacketDispatcherTest, shouldNotInsertDataInputWithNoSubscription)
 
     aeron_publication_image_t *image = createImage(stream_id, session_id);
     aeron_data_header_t *data_header = dataPacket(data_buffer, stream_id, session_id);
-    size_t len = AERON_DATA_HEADER_LENGTH + 8;
+    size_t len = sizeof(aeron_data_header_t) + 8;
 
     int32_t other_stream_id = stream_id + 1;
 
@@ -144,7 +144,7 @@ TEST_F(DataPacketDispatcherTest, shouldElicitSetupMessageForSubscriptionWithoutI
     int32_t stream_id = 434523;
 
     aeron_data_header_t *data_header = dataPacket(data_buffer, stream_id, session_id);
-    size_t len = AERON_DATA_HEADER_LENGTH + 8;
+    size_t len = sizeof(aeron_data_header_t) + 8;
 
     // No publication added...
     ASSERT_EQ(0, aeron_data_packet_dispatcher_add_subscription(m_dispatcher, stream_id));
@@ -324,7 +324,7 @@ TEST_F(DataPacketDispatcherTest, shouldIgnoreDataAndSetupAfterImageRemoved)
 
 
     aeron_data_header_t *data_header = dataPacket(data_buffer, stream_id, session_id);
-    size_t len = AERON_DATA_HEADER_LENGTH + 8;
+    size_t len = sizeof(aeron_data_header_t) + 8;
     aeron_setup_header_t *setup_header = setupPacket(data_buffer, stream_id, session_id);
 
     aeron_data_packet_dispatcher_on_data(
@@ -365,7 +365,7 @@ TEST_F(DataPacketDispatcherTest, shouldNotIgnoreDataAndSetupAfterImageRemovedAnd
     aeron_data_packet_dispatcher_remove_cool_down(m_dispatcher, session_id, stream_id);
 
     aeron_data_header_t *data_header = dataPacket(data_buffer, stream_id, session_id);
-    size_t len = AERON_DATA_HEADER_LENGTH + 8;
+    size_t len = sizeof(aeron_data_header_t) + 8;
     aeron_setup_header_t *setup_header = setupPacket(data_buffer, stream_id, session_id);
 
     aeron_data_packet_dispatcher_on_data(
@@ -404,7 +404,7 @@ TEST_F(DataPacketDispatcherTest, shouldNotRemoveNewPublicationImageFromOldRemove
     aeron_publication_image_t *image2 = createImage(stream_id, session_id, 1);
 
     aeron_data_header_t *data_header = dataPacket(data_buffer, stream_id, session_id);
-    size_t len = AERON_DATA_HEADER_LENGTH + 8;
+    size_t len = sizeof(aeron_data_header_t) + 8;
 
     ASSERT_EQ(0, aeron_data_packet_dispatcher_add_subscription(m_dispatcher, stream_id));
     ASSERT_EQ(0, aeron_data_packet_dispatcher_add_publication_image(m_dispatcher, image1));
@@ -479,7 +479,7 @@ TEST_F(DataPacketDispatcherTest, shouldRemoveSessionSpecificSubscriptionAndStill
     ASSERT_NE(nullptr, image) << aeron_errmsg();
 
     aeron_data_header_t *data_header = dataPacket(data_buffer, stream_id, session_id);
-    size_t len = AERON_DATA_HEADER_LENGTH + 8;
+    size_t len = sizeof(aeron_data_header_t) + 8;
 
     ASSERT_EQ(0, aeron_data_packet_dispatcher_add_subscription(m_dispatcher, stream_id));
     ASSERT_EQ(0, aeron_data_packet_dispatcher_add_publication_image(m_dispatcher, image));
@@ -512,7 +512,7 @@ TEST_F(DataPacketDispatcherTest, shouldNotRemoveStreamInterestOnRemovalOfSession
     ASSERT_NE(nullptr, image) << aeron_errmsg();
 
     aeron_data_header_t *data_header = dataPacket(data_buffer, stream_id, session_id_2);
-    size_t len = AERON_DATA_HEADER_LENGTH + 8;
+    size_t len = sizeof(aeron_data_header_t) + 8;
 
     ASSERT_EQ(0, aeron_data_packet_dispatcher_add_subscription_by_session(m_dispatcher, stream_id, session_id_1));
     ASSERT_EQ(0, aeron_data_packet_dispatcher_add_subscription_by_session(m_dispatcher, stream_id, session_id_2));

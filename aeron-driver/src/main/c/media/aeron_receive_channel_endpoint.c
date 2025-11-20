@@ -262,16 +262,16 @@ int aeron_receive_channel_endpoint_send_sm(
     int32_t receiver_window,
     uint8_t flags)
 {
-    uint8_t buffer[AERON_SM_HEADER_LENGTH + AERON_SM_OPTIONAL_HEADER_LENGTH];
+    uint8_t buffer[sizeof(aeron_status_message_header_t) + sizeof(aeron_status_message_optional_header_t)];
     aeron_status_message_header_t *sm_header = (aeron_status_message_header_t *)buffer;
     aeron_status_message_optional_header_t *sm_optional_header =
-        (aeron_status_message_optional_header_t *)(buffer + AERON_SM_HEADER_LENGTH);
+        (aeron_status_message_optional_header_t *)(buffer + sizeof(aeron_status_message_header_t));
 
     struct iovec iov;
 
     const int32_t frame_length = endpoint->group_tag.is_present ?
-        AERON_SM_HEADER_LENGTH + AERON_SM_OPTIONAL_HEADER_LENGTH :
-        AERON_SM_HEADER_LENGTH;
+        sizeof(aeron_status_message_header_t) + sizeof(aeron_status_message_optional_header_t) :
+        sizeof(aeron_status_message_header_t);
 
     sm_header->frame_header.frame_length = frame_length;
     sm_header->frame_header.version = AERON_FRAME_HEADER_VERSION;
@@ -310,11 +310,11 @@ int aeron_receive_channel_endpoint_send_nak(
     int32_t term_offset,
     int32_t length)
 {
-    uint8_t buffer[AERON_NAK_HEADER_LENGTH];
+    uint8_t buffer[sizeof(aeron_nak_header_t)];
     aeron_nak_header_t *nak_header = (aeron_nak_header_t *)buffer;
     struct iovec iov;
 
-    nak_header->frame_header.frame_length = AERON_NAK_HEADER_LENGTH;
+    nak_header->frame_header.frame_length = sizeof(aeron_nak_header_t);
     nak_header->frame_header.version = AERON_FRAME_HEADER_VERSION;
     nak_header->frame_header.flags = 0;
     nak_header->frame_header.type = AERON_HDR_TYPE_NAK;
@@ -325,7 +325,7 @@ int aeron_receive_channel_endpoint_send_nak(
     nak_header->length = length;
 
     iov.iov_base = buffer;
-    iov.iov_len = AERON_NAK_HEADER_LENGTH;
+    iov.iov_len = sizeof(aeron_nak_header_t);
 
     int bytes_sent = aeron_receive_channel_endpoint_send(endpoint, destination, addr, &iov);
     if (bytes_sent != (int)iov.iov_len)
@@ -363,11 +363,11 @@ int aeron_receive_channel_endpoint_send_rttm(
     int64_t reception_delta,
     bool is_reply)
 {
-    uint8_t buffer[AERON_RTTM_HEADER_LENGTH];
+    uint8_t buffer[sizeof(aeron_rttm_header_t)];
     aeron_rttm_header_t *rttm_header = (aeron_rttm_header_t *)buffer;
     struct iovec iov;
 
-    rttm_header->frame_header.frame_length = AERON_RTTM_HEADER_LENGTH;
+    rttm_header->frame_header.frame_length = sizeof(aeron_rttm_header_t);
     rttm_header->frame_header.version = AERON_FRAME_HEADER_VERSION;
     rttm_header->frame_header.flags = is_reply ? AERON_RTTM_HEADER_REPLY_FLAG : (uint8_t)0;
     rttm_header->frame_header.type = AERON_HDR_TYPE_RTTM;
@@ -378,7 +378,7 @@ int aeron_receive_channel_endpoint_send_rttm(
     rttm_header->receiver_id = endpoint->receiver_id;
 
     iov.iov_base = buffer;
-    iov.iov_len = AERON_RTTM_HEADER_LENGTH;
+    iov.iov_len = sizeof(aeron_rttm_header_t);
 
     int bytes_sent = aeron_receive_channel_endpoint_send(endpoint, destination, addr, &iov);
     if (bytes_sent != (int)iov.iov_len)
@@ -400,11 +400,11 @@ int aeron_receive_channel_endpoint_send_response_setup(
     int32_t session_id,
     int32_t response_session_id)
 {
-    uint8_t buffer[AERON_RSP_SETUP_HEADER_LENGTH];
+    uint8_t buffer[sizeof(aeron_response_setup_header_t)];
     aeron_response_setup_header_t *res_setup_header = (aeron_response_setup_header_t *)buffer;
     struct iovec iov;
 
-    res_setup_header->frame_header.frame_length = AERON_RSP_SETUP_HEADER_LENGTH;
+    res_setup_header->frame_header.frame_length = sizeof(aeron_response_setup_header_t);
     res_setup_header->frame_header.version = AERON_FRAME_HEADER_VERSION;
     res_setup_header->frame_header.flags = UINT8_C(0);
     res_setup_header->frame_header.type = AERON_HDR_TYPE_RSP_SETUP;
@@ -413,7 +413,7 @@ int aeron_receive_channel_endpoint_send_response_setup(
     res_setup_header->response_session_id = response_session_id;
 
     iov.iov_base = buffer;
-    iov.iov_len = AERON_RSP_SETUP_HEADER_LENGTH;
+    iov.iov_len = sizeof(aeron_response_setup_header_t);
     int bytes_sent = aeron_receive_channel_endpoint_send(endpoint, destination, addr, &iov);
     if (bytes_sent != (int)iov.iov_len)
     {
@@ -440,7 +440,7 @@ int aeron_receiver_channel_endpoint_send_error_frame(
     struct iovec iov;
 
     const size_t error_message_length = strnlen(invalidation_reason, AERON_ERROR_MAX_TEXT_LENGTH);
-    const size_t frame_length = AERON_ERROR_HEADER_LENGTH + error_message_length;
+    const size_t frame_length = sizeof(aeron_error_t) + error_message_length;
     error->frame_header.frame_length = (int32_t)frame_length;
     error->frame_header.version = AERON_FRAME_HEADER_VERSION;
     error->frame_header.flags = channel_endpoint->group_tag.is_present ? AERON_ERROR_HAS_GROUP_TAG_FLAG : UINT8_C(0);
@@ -451,7 +451,7 @@ int aeron_receiver_channel_endpoint_send_error_frame(
     error->group_tag = channel_endpoint->group_tag.value;
     error->error_code = error_code;
     error->error_length = (int32_t)error_message_length;
-    memcpy(&buffer[AERON_ERROR_HEADER_LENGTH], invalidation_reason, error_message_length);
+    memcpy(&buffer[sizeof(aeron_error_t)], invalidation_reason, error_message_length);
 
     iov.iov_base = buffer;
     iov.iov_len = (unsigned long)frame_length;
@@ -497,7 +497,7 @@ void aeron_receive_channel_endpoint_dispatch(
     {
         case AERON_HDR_TYPE_PAD:
         case AERON_HDR_TYPE_DATA:
-            if (length >= AERON_DATA_HEADER_LENGTH)
+            if (length >= sizeof(aeron_data_header_t))
             {
                 if (aeron_receive_channel_endpoint_on_data(
                     endpoint, destination, buffer, length, addr, media_receive_timestamp) < 0)
@@ -513,7 +513,7 @@ void aeron_receive_channel_endpoint_dispatch(
             break;
 
         case AERON_HDR_TYPE_SETUP:
-            if (length >= AERON_SETUP_HEADER_LENGTH && length >= (size_t)frame_header->frame_length)
+            if (length >= sizeof(aeron_setup_header_t))
             {
                 if (aeron_receive_channel_endpoint_on_setup(endpoint, destination, buffer, length, addr) < 0)
                 {
@@ -528,7 +528,7 @@ void aeron_receive_channel_endpoint_dispatch(
             break;
 
         case AERON_HDR_TYPE_RTTM:
-            if (length >= AERON_RTTM_HEADER_LENGTH && length >= (size_t)frame_header->frame_length)
+            if (length >= sizeof(aeron_rttm_header_t))
             {
                 if (aeron_receive_channel_endpoint_on_rttm(endpoint, destination, buffer, length, addr) < 0)
                 {

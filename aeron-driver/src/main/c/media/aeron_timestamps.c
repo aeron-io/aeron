@@ -26,13 +26,13 @@ void aeron_timestamps_set_timestamp(
 {
     aeron_data_header_t *data_header = (aeron_data_header_t *)frame;
 
-    if (frame_length >= AERON_DATA_HEADER_LENGTH &&
+    if (frame_length >= sizeof(aeron_data_header_t) &&
         AERON_HDR_TYPE_DATA == data_header->frame_header.type &&
         AERON_DATA_HEADER_BEGIN_FLAG & data_header->frame_header.flags &&
         0 != data_header->frame_header.frame_length)
     {
-        size_t body_length = frame_length - AERON_DATA_HEADER_LENGTH;
-        uint8_t *body_buffer = frame + AERON_DATA_HEADER_LENGTH;
+        size_t body_length = frame_length - sizeof(aeron_data_header_t);
+        uint8_t *body_buffer = frame + sizeof(aeron_data_header_t);
         int64_t timestamp_ns = (INT64_C(1000) * 1000 * 1000 * timestamp->tv_sec) + timestamp->tv_nsec;
 
         if (AERON_UDP_CHANNEL_RESERVED_VALUE_OFFSET == offset)

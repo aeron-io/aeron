@@ -56,11 +56,11 @@ public:
     {
         uint8_t msg[1024];
         auto *sm = (aeron_status_message_header_t *)msg;
-        auto *sm_optional = (aeron_status_message_optional_header_t *)(msg + AERON_SM_HEADER_LENGTH);
+        auto *sm_optional = (aeron_status_message_optional_header_t *)(msg + sizeof(aeron_status_message_header_t));
 
         sm->frame_header.frame_length = send_gtag ?
-            AERON_SM_HEADER_LENGTH + AERON_SM_OPTIONAL_HEADER_LENGTH :
-            AERON_SM_HEADER_LENGTH;
+            sizeof(aeron_status_message_header_t) + sizeof(aeron_status_message_optional_header_t) :
+            sizeof(aeron_status_message_header_t);
         sm->frame_header.flags = 0;
         sm->consumption_term_id = 0;
         sm->consumption_term_offset = term_offset;
@@ -80,9 +80,9 @@ public:
     {
         uint8_t msg[1024];
         auto *sm = (aeron_status_message_header_t *)msg;
-        auto *asf = (int32_t *)(msg + AERON_SM_HEADER_LENGTH);
+        auto *asf = (int32_t *)(msg + sizeof(aeron_status_message_header_t));
 
-        sm->frame_header.frame_length = AERON_SM_HEADER_LENGTH + sizeof(int32_t);
+        sm->frame_header.frame_length = sizeof(aeron_status_message_header_t) + sizeof(int32_t);
         sm->frame_header.flags = 0;
         sm->consumption_term_id = 0;
         sm->consumption_term_offset = term_offset;

@@ -608,12 +608,12 @@ void aeron_driver_name_resolver_receive(
         return;
     }
 
-    remaining -= AERON_FRAME_HEADER_LENGTH;
+    remaining -= sizeof(aeron_frame_header_t);
 
     while (0 < remaining)
     {
         const size_t offset = length - remaining;
-        if (AERON_HDR_TYPE_RES != frame_header->type || remaining < AERON_RES_HEADER_LENGTH)
+        if (AERON_HDR_TYPE_RES != frame_header->type || remaining < sizeof(aeron_resolution_header_t))
         {
             aeron_counter_increment(resolver->invalid_packets_counter);
             return;
@@ -631,7 +631,7 @@ void aeron_driver_name_resolver_receive(
         if (AERON_RES_HEADER_TYPE_NAME_TO_IP4_MD == resolution_header->res_type)
         {
             aeron_resolution_header_ipv4_t *ip4_hdr = (aeron_resolution_header_ipv4_t *)resolution_header;
-            if (length < AERON_RES_IPV4_HEADER_LENGTH ||
+            if (length < sizeof(aeron_resolution_header_ipv4_t) ||
                 length < (entry_length = aeron_res_header_entry_length_ipv4(ip4_hdr)))
             {
                 aeron_counter_increment(resolver->invalid_packets_counter);
@@ -645,7 +645,7 @@ void aeron_driver_name_resolver_receive(
         else if (AERON_RES_HEADER_TYPE_NAME_TO_IP6_MD == resolution_header->res_type)
         {
             aeron_resolution_header_ipv6_t *ip6_hdr = (aeron_resolution_header_ipv6_t *)resolution_header;
-            if (length < AERON_RES_IPV6_HEADER_LENGTH ||
+            if (length < sizeof(aeron_resolution_header_ipv6_t) ||
                 length < (entry_length = aeron_res_header_entry_length_ipv6(ip6_hdr)))
             {
                 aeron_counter_increment(resolver->invalid_packets_counter);
@@ -792,7 +792,7 @@ static int aeron_driver_name_resolver_send_self_resolutions(
         return 0;
     }
 
-    const size_t entry_offset = AERON_FRAME_HEADER_LENGTH;
+    const size_t entry_offset = sizeof(aeron_frame_header_t);
     uint8_t *aligned_buffer = driver_resolver->aligned_buffer;
     aeron_frame_header_t *frame_header = (aeron_frame_header_t *)&aligned_buffer[0];
     aeron_resolution_header_t *resolution_header = (aeron_resolution_header_t *)&aligned_buffer[entry_offset];
@@ -809,7 +809,7 @@ static int aeron_driver_name_resolver_send_self_resolutions(
 
     assert(0 <= entry_length || "local_cache_addr should of been correctly constructed during init");
 
-    size_t frame_length = AERON_FRAME_HEADER_LENGTH + (size_t)entry_length;
+    size_t frame_length = sizeof(aeron_frame_header_t) + (size_t)entry_length;
 
     frame_header->type = AERON_HDR_TYPE_RES;
     frame_header->flags = UINT8_C(0);
@@ -915,7 +915,7 @@ static int aeron_driver_name_resolver_send_neighbor_resolutions(aeron_driver_nam
     int work_count = 0;
     for (i = 0; i < resolver->cache.entries.length;)
     {
-        size_t entry_offset = AERON_FRAME_HEADER_LENGTH;
+        size_t entry_offset = sizeof(aeron_frame_header_t);
 
         for (j = i; j < resolver->cache.entries.length;)
         {
@@ -1026,7 +1026,7 @@ int aeron_driver_name_resolver_set_resolution_header(
     switch (cache_addr->res_type)
     {
         case AERON_RES_HEADER_TYPE_NAME_TO_IP4_MD:
-            entry_length = AERON_ALIGN(AERON_RES_IPV4_HEADER_LENGTH + name_length, sizeof(int64_t));
+            entry_length = AERON_ALIGN(sizeof(aeron_resolution_header_ipv4_t) + name_length, sizeof(int64_t));
             if (capacity < entry_length)
             {
                 return 0;
@@ -1035,12 +1035,12 @@ int aeron_driver_name_resolver_set_resolution_header(
             aeron_resolution_header_ipv4_t *hdr_ipv4 = (aeron_resolution_header_ipv4_t *)resolution_header;
             memcpy(hdr_ipv4->addr, cache_addr->address, sizeof(hdr_ipv4->addr));
             hdr_ipv4->name_length = (int16_t)name_length;
-            name_offset = AERON_RES_IPV4_HEADER_LENGTH;
+            name_offset = sizeof(aeron_resolution_header_ipv4_t);
 
             break;
 
         case AERON_RES_HEADER_TYPE_NAME_TO_IP6_MD:
-            entry_length = AERON_ALIGN(AERON_RES_IPV6_HEADER_LENGTH + name_length, sizeof(int64_t));
+            entry_length = AERON_ALIGN(sizeof(aeron_resolution_header_ipv6_t) + name_length, sizeof(int64_t));
             if (capacity < entry_length)
             {
                 return 0;
@@ -1050,7 +1050,7 @@ int aeron_driver_name_resolver_set_resolution_header(
 
             memcpy(hdr_ipv6->addr, cache_addr->address, sizeof(hdr_ipv6->addr));
             hdr_ipv6->name_length = (int16_t)name_length;
-            name_offset = AERON_RES_IPV6_HEADER_LENGTH;
+            name_offset = sizeof(aeron_resolution_header_ipv6_t);
 
             break;
 

@@ -2027,7 +2027,7 @@ const char *aeron_driver_agent_dissect_frame(const void *message, size_t length)
         case AERON_HDR_TYPE_ERR:
         {
             aeron_error_t *err = (aeron_error_t *)message;
-            const char *error_msg = (const char *)message + AERON_ERROR_HEADER_LENGTH;
+            const char *error_msg = (const char *)message + sizeof(aeron_error_t);
 
             snprintf(
                 buffer,
@@ -2123,7 +2123,7 @@ const char *aeron_driver_agent_dissect_frame(const void *message, size_t length)
                 (int)sizeof(dissected_flags),
                 dissect_flags(hdr->flags, dissected_flags),
                 hdr->frame_length);
-            size_t message_offset = AERON_FRAME_HEADER_LENGTH;
+            size_t message_offset = sizeof(aeron_frame_header_t);
 
             while (message_offset < length && buffer_used < buffer_available)
             {
@@ -2145,7 +2145,7 @@ const char *aeron_driver_agent_dissect_frame(const void *message, size_t length)
                         aeron_resolution_header_ipv6_t *res_ipv6 = (aeron_resolution_header_ipv6_t *)res;
                         address = res_ipv6->addr;
                         name_length = res_ipv6->name_length;
-                        name = &message_bytes[message_offset + AERON_RES_IPV6_HEADER_LENGTH];
+                        name = &message_bytes[message_offset + sizeof(aeron_resolution_header_ipv6_t)];
                         break;
                     }
 
@@ -2154,7 +2154,7 @@ const char *aeron_driver_agent_dissect_frame(const void *message, size_t length)
                         aeron_resolution_header_ipv4_t *res_ipv4 = (aeron_resolution_header_ipv4_t *)res;
                         address = res_ipv4->addr;
                         name_length = res_ipv4->name_length;
-                        name = &message_bytes[message_offset + AERON_RES_IPV4_HEADER_LENGTH];
+                        name = &message_bytes[message_offset + sizeof(aeron_resolution_header_ipv4_t)];
                         break;
                     }
                 }

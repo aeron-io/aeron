@@ -32,17 +32,6 @@ typedef struct aeron_frame_header_stct
 }
 aeron_frame_header_t;
 
-typedef struct aeron_data_header_stct
-{
-    aeron_frame_header_t frame_header;
-    int32_t term_offset;
-    int32_t session_id;
-    int32_t stream_id;
-    int32_t term_id;
-    int64_t reserved_value;
-}
-aeron_data_header_t;
-
 typedef struct aeron_data_header_as_longs_stct
 {
     uint64_t hdr[4];
@@ -62,6 +51,17 @@ typedef struct aeron_setup_header_stct
     int32_t ttl;
 }
 aeron_setup_header_t;
+
+typedef struct aeron_data_header_stct
+{
+    aeron_frame_header_t frame_header;
+    int32_t term_offset;
+    int32_t session_id;
+    int32_t stream_id;
+    int32_t term_id;
+    int64_t reserved_value;
+}
+aeron_data_header_t;
 
 typedef struct aeron_nak_header_stct
 {
@@ -86,6 +86,12 @@ typedef struct aeron_status_message_header_stct
 }
 aeron_status_message_header_t;
 
+typedef struct aeron_status_message_optional_header_stct
+{
+    int64_t group_tag;
+}
+aeron_status_message_optional_header_t;
+
 struct aeron_error_stct
 {
     aeron_frame_header_t frame_header;
@@ -97,12 +103,6 @@ struct aeron_error_stct
     int32_t error_length;
 };
 typedef struct aeron_error_stct aeron_error_t;
-
-typedef struct aeron_status_message_optional_header_stct
-{
-    int64_t group_tag;
-}
-aeron_status_message_optional_header_t;
 
 typedef struct aeron_rttm_header_stct
 {
@@ -184,16 +184,6 @@ int aeron_udp_protocol_group_tag(aeron_status_message_header_t *sm, int64_t *gro
 
 #define AERON_FRAME_HEADER_LENGTH (sizeof(aeron_frame_header_t))
 #define AERON_DATA_HEADER_LENGTH (sizeof(aeron_data_header_t))
-#define AERON_NAK_HEADER_LENGTH (sizeof(aeron_nak_header_t))
-#define AERON_SM_HEADER_LENGTH (sizeof(aeron_status_message_header_t))
-#define AERON_SM_OPTIONAL_HEADER_LENGTH (sizeof(aeron_status_message_optional_header_t))
-#define AERON_ERROR_HEADER_LENGTH (sizeof(aeron_error_t))
-#define AERON_SETUP_HEADER_LENGTH (sizeof(aeron_setup_header_t))
-#define AERON_RTTM_HEADER_LENGTH (sizeof(aeron_rttm_header_t))
-#define AERON_RES_HEADER_LENGTH (sizeof(aeron_resolution_header_t))
-#define AERON_RES_IPV4_HEADER_LENGTH (sizeof(aeron_resolution_header_ipv4_t))
-#define AERON_RES_IPV6_HEADER_LENGTH (sizeof(aeron_resolution_header_ipv6_t))
-#define AERON_RSP_SETUP_HEADER_LENGTH (sizeof(aeron_response_setup_header_t))
 
 #define AERON_DATA_HEADER_BEGIN_FLAG (UINT8_C(0x80))
 #define AERON_DATA_HEADER_END_FLAG (UINT8_C(0x40))
@@ -231,7 +221,7 @@ int aeron_udp_protocol_group_tag(aeron_status_message_header_t *sm, int64_t *gro
 #define AERON_OPT_HDR_ALIGNMENT (4u)
 
 #define AERON_ERROR_MAX_TEXT_LENGTH (1023)
-#define AERON_ERROR_MAX_FRAME_LENGTH (AERON_ERROR_HEADER_LENGTH + AERON_ERROR_MAX_TEXT_LENGTH)
+#define AERON_ERROR_MAX_FRAME_LENGTH (sizeof(aeron_error_t) + AERON_ERROR_MAX_TEXT_LENGTH)
 #define AERON_ERROR_HAS_GROUP_TAG_FLAG (0x08)
 
 inline bool aeron_is_frame_valid(const aeron_frame_header_t *header, const size_t frame_length)

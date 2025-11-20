@@ -29,7 +29,7 @@ _Static_assert(
 
 int aeron_udp_protocol_group_tag(aeron_status_message_header_t *sm, int64_t *group_tag)
 {
-    const size_t group_tag_offset = AERON_SM_HEADER_LENGTH +
+    const size_t group_tag_offset = sizeof(aeron_status_message_header_t) +
         offsetof(aeron_status_message_optional_header_t, group_tag);
     const size_t group_tag_size = sizeof(*group_tag);
     const size_t frame_length_with_group_tag = group_tag_offset + group_tag_size;
@@ -55,17 +55,17 @@ extern size_t aeron_compute_max_message_length(size_t term_length);
 
 size_t aeron_res_header_entry_length_ipv4(aeron_resolution_header_ipv4_t *header)
 {
-    return AERON_ALIGN(AERON_RES_IPV4_HEADER_LENGTH + header->name_length, sizeof(int64_t));
+    return AERON_ALIGN(sizeof(aeron_resolution_header_ipv4_t) + header->name_length, sizeof(int64_t));
 }
 
 size_t aeron_res_header_entry_length_ipv6(aeron_resolution_header_ipv6_t *header)
 {
-    return AERON_ALIGN(AERON_RES_IPV6_HEADER_LENGTH + header->name_length, sizeof(int64_t));
+    return AERON_ALIGN(sizeof(aeron_resolution_header_ipv6_t) + header->name_length, sizeof(int64_t));
 }
 
 int aeron_res_header_entry_length(void *res, size_t remaining)
 {
-    if (remaining < AERON_RES_HEADER_LENGTH)
+    if (remaining < sizeof(aeron_resolution_header_t))
     {
         return -1;
     }
@@ -77,7 +77,7 @@ int aeron_res_header_entry_length(void *res, size_t remaining)
     {
         case AERON_RES_HEADER_TYPE_NAME_TO_IP6_MD:
         {
-            if (AERON_RES_IPV6_HEADER_LENGTH <= remaining)
+            if (sizeof(aeron_resolution_header_ipv6_t) <= remaining)
             {
                 aeron_resolution_header_ipv6_t *res_ipv6 = (aeron_resolution_header_ipv6_t *)res_header;
                 size_t entry_length = aeron_res_header_entry_length_ipv6(res_ipv6);
@@ -88,7 +88,7 @@ int aeron_res_header_entry_length(void *res, size_t remaining)
 
         case AERON_RES_HEADER_TYPE_NAME_TO_IP4_MD:
         {
-            if (AERON_RES_IPV4_HEADER_LENGTH <= remaining)
+            if (sizeof(aeron_resolution_header_ipv4_t) <= remaining)
             {
                 aeron_resolution_header_ipv4_t *res_ipv4 = (aeron_resolution_header_ipv4_t *)res_header;
                 size_t entry_length = aeron_res_header_entry_length_ipv4(res_ipv4);
