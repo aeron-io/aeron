@@ -310,7 +310,7 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
         }
 
         final int neighborCount = neighborList.size();
-        if (neighborsCounter.getWeak() != neighborCount)
+        if (neighborsCounter.getPlain() != neighborCount)
         {
             neighborsCounter.setRelease(neighborCount);
         }

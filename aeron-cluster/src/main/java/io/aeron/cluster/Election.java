@@ -252,7 +252,7 @@ class Election
     void handleError(final long nowNs, final Throwable ex)
     {
         ctx.countedErrorHandler().onError(ex);
-        logPosition = ctx.commitPositionCounter().getWeak();
+        logPosition = ctx.commitPositionCounter().getPlain();
         state(INIT, nowNs, ex.getMessage());
 
         if (ex instanceof AgentTerminationException || ex instanceof InterruptedException)
@@ -437,7 +437,7 @@ class Election
                         logLeadershipTermId,
                         this.leadershipTermId,
                         candidateTermId,
-                        ctx.commitPositionCounter().getWeak(),
+                        ctx.commitPositionCounter().getPlain(),
                         this.logPosition,
                         appendPosition,
                         logPosition,
@@ -1026,7 +1026,7 @@ class Election
             workCount++;
         }
 
-        final long position = ctx.commitPositionCounter().getWeak();
+        final long position = ctx.commitPositionCounter().getPlain();
         if (position >= catchupJoinPosition &&
             position >= catchupCommitPosition &&
             null == consensusModuleAgent.catchupLogDestination() &&

@@ -236,7 +236,7 @@ class PublicationImageTest
         final InetSocketAddress srcAddress = mock(InetSocketAddress.class);
         final int packetLength = HEADER_LENGTH;
         final AtomicCounter heartBeatsCounter = ctx.systemCounters().get(SystemCounterDescriptor.HEARTBEATS_RECEIVED);
-        final long oldHeartBeatCount = heartBeatsCounter.getWeak();
+        final long oldHeartBeatCount = heartBeatsCounter.getPlain();
 
         final int bytes = image.insertPacket(termId, termOffset, buffer, packetLength, TRANSPORT_INDEX, srcAddress);
 
@@ -244,7 +244,7 @@ class PublicationImageTest
         final int positionBitsToShift = positionBitsToShift(TERM_LENGTH);
         final long packetPosition = computePosition(termId, termOffset, positionBitsToShift, INITIAL_TERM_ID);
         assertEquals(packetPosition, hwmPosition.get());
-        assertEquals(oldHeartBeatCount + 1, heartBeatsCounter.getWeak());
+        assertEquals(oldHeartBeatCount + 1, heartBeatsCounter.getPlain());
         final UnsafeBuffer activeTermBuffer =
             rawLog.termBuffers()[indexByPosition(packetPosition, positionBitsToShift)];
         for (int i = 0; i < packetLength; i++)

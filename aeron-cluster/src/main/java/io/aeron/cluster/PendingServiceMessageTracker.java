@@ -256,7 +256,7 @@ final class PendingServiceMessageTracker
         final int timestampOffset = headerOffset + SessionMessageHeaderDecoder.timestampEncodingOffset();
         final long appendPosition = buffer.getLong(timestampOffset, SessionMessageHeaderDecoder.BYTE_ORDER);
 
-        if (commitPosition.getWeak() >= appendPosition)
+        if (commitPosition.getPlain() >= appendPosition)
         {
             logServiceSessionId = buffer.getLong(clusterSessionIdOffset, SessionMessageHeaderDecoder.BYTE_ORDER);
             --uncommittedMessages;

@@ -381,7 +381,7 @@ final class ConsensusModuleAgent
             ctx.countedErrorHandler());
 
         final long lastLeadershipTermId = recoveryPlan.lastLeadershipTermId;
-        final long commitPosition = this.commitPosition.getWeak();
+        final long commitPosition = this.commitPosition.getPlain();
         final long appendedPosition = recoveryPlan.appendedLogPosition;
         logNewElection(memberId, lastLeadershipTermId, commitPosition, appendedPosition, "node started");
 
@@ -1171,7 +1171,7 @@ final class ConsensusModuleAgent
                 " memberId=" + memberId +
                 " this.leadershipTermId=" + this.leadershipTermId +
                 " this.leaderMemberId=" + leaderMember.id() +
-                " this.commitPosition=" + this.commitPosition.getWeak() +
+                " this.commitPosition=" + this.commitPosition.getPlain() +
                 " this.appendPosition=" +
                 (null != appendPosition ? appendPosition.getWeak() : NULL_POSITION) +
                 " newLeadershipTermId=" + leadershipTermId +
@@ -1926,7 +1926,7 @@ final class ConsensusModuleAgent
             logAdapter.poll(stopPosition);
             final long position = logAdapter.position();
 
-            if (commitPosition.getWeak() < position)
+            if (commitPosition.getPlain() < position)
             {
                 commitPosition.setRelease(position);
                 workCount++;
@@ -2080,7 +2080,7 @@ final class ConsensusModuleAgent
             ConsensusModule.State.ACTIVE == state)
         {
             throw new ClusterEvent(
-                "no catchup progress commitPosition=" + commitPosition.getWeak() + " limitPosition=" + limitPosition +
+                "no catchup progress commitPosition=" + commitPosition.getPlain() + " limitPosition=" + limitPosition +
                 " lastAppendPosition=" + lastAppendPosition +
                 " appendPosition=" + (null != appendPosition ? appendPosition.get() : NULL_POSITION) +
                 " logPosition=" + election.logPosition());
@@ -3310,7 +3310,7 @@ final class ConsensusModuleAgent
         thisMember.logPosition(position).timeOfLastAppendPositionNs(nowNs);
         final long commitPosition = Math.min(quorumPosition(), position);
 
-        if (commitPosition > this.commitPosition.getWeak() ||
+        if (commitPosition > this.commitPosition.getPlain() ||
             nowNs >= (timeOfLastLogUpdateNs + leaderHeartbeatIntervalNs))
         {
             publishCommitPosition(commitPosition);
@@ -3474,7 +3474,7 @@ final class ConsensusModuleAgent
             termEntry.termBaseLogPosition : recoveryPlan.lastTermBaseLogPosition;
         final long appendedPosition = null != appendPosition ?
             appendPosition.get() : Math.max(recoveryPlan.appendedLogPosition, logRecordingStopPosition);
-        final long commitPosition = this.commitPosition.getWeak();
+        final long commitPosition = this.commitPosition.getPlain();
 
         logNewElection(memberId, leadershipTermId, commitPosition, appendedPosition, reason);
         ctx.countedErrorHandler().onError(new ClusterEvent(reason));

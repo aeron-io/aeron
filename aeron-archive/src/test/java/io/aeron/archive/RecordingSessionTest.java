@@ -86,7 +86,7 @@ class RecordingSessionTest
     @BeforeEach
     void before() throws Exception
     {
-        when(mockPosition.getWeak()).then((invocation) -> positionLong);
+        when(mockPosition.getPlain()).then((invocation) -> positionLong);
         when(mockPosition.get()).then((invocation) -> positionLong);
         doAnswer(
             (invocation) ->

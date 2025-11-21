@@ -145,7 +145,7 @@ class RecordingSession implements Session
 
             if (null != recordingEventsProxy)
             {
-                recordingEventsProxy.stopped(recordingId, image.joinPosition(), position.getWeak());
+                recordingEventsProxy.stopped(recordingId, image.joinPosition(), position.getPlain());
             }
         }
 
