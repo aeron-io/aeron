@@ -349,11 +349,6 @@ namespace AeronCounters
     const std::int32_t TRANSITION_MODULE_STATE_TYPE_ID = 224;
 
     /**
-     * Transition module control toggle type id
-     */
-    const std::int32_t TRANSITION_MODULE_CONTROL_TOGGLE_TYPE_ID = 225;
-
-    /**
      * The type id of the {@link Counter} used for keeping track of the max duty cycle time of the transition module.
      */
     const std::int32_t TRANSITION_MODULE_MAX_CYCLE_TIME_TYPE_ID = 229;
