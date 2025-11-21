@@ -522,16 +522,16 @@ public final class AeronCounters
     public static final int VMA_TRANSPORTS_TYPE_ID = 61;
 
     /**
-     * VMA_RX_ZERO_COPY_BYTES.
+     * VMA_RX_ZERO_COPY_BYTES_TYPE_ID.
      */
     @AeronCounter
-    public static final int VMA_RX_ZERO_COPY_BYTES = 62;
+    public static final int VMA_RX_ZERO_COPY_BYTES_TYPE_ID = 62;
 
     /**
-     * VMA_RX_DATA_COPY_BYTES.
+     * VMA_RX_DATA_COPY_BYTES_TYPE_ID.
      */
     @AeronCounter
-    public static final int VMA_RX_DATA_COPY_BYTES = 63;
+    public static final int VMA_RX_DATA_COPY_BYTES_TYPE_ID = 63;
 
     // ATS counters
     /**
