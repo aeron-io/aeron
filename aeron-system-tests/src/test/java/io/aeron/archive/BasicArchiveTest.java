@@ -484,8 +484,6 @@ class BasicArchiveTest
         try (Subscription ignore = aeronArchive.replay(
             recordingId, position, length, REPLAY_CHANNEL, REPLAY_STREAM_ID))
         {
-            Tests.await(ignore::isConnected);
-
             final ArchiveException exception = assertThrows(
                 ArchiveException.class, () -> aeronArchive.purgeRecording(recordingId));
             assertThat(exception.getMessage(),
