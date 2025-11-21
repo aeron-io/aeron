@@ -210,7 +210,7 @@ public final class Sender extends SenderRhsPadding implements Agent
         final SendChannelEndpoint channelEndpoint, final String endpoint, final InetSocketAddress newAddress)
     {
         channelEndpoint.resolutionChange(endpoint, newAddress);
-        resolutionChanges.getAndAddOrdered(1);
+        resolutionChanges.getAndAddRelease(1);
     }
 
     private int doSend(final long nowNs)
@@ -235,7 +235,7 @@ public final class Sender extends SenderRhsPadding implements Agent
             bytesSent += publications[i].send(nowNs);
         }
 
-        totalBytesSent.getAndAddOrdered(bytesSent);
+        totalBytesSent.getAndAddRelease(bytesSent);
 
         return bytesSent;
     }

@@ -320,7 +320,7 @@ public final class Receiver implements Agent
                 pending.transportIndex() == transportIndex)
             {
                 pending.controlAddress(newAddress);
-                resolutionChanges.getAndAddOrdered(1);
+                resolutionChanges.getAndAddRelease(1);
             }
         }
 
