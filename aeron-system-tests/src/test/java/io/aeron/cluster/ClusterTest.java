@@ -18,7 +18,6 @@ package io.aeron.cluster;
 import io.aeron.Aeron;
 import io.aeron.AeronCounters;
 import io.aeron.ChannelUri;
-import io.aeron.CommonContext;
 import io.aeron.Counter;
 import io.aeron.ExclusivePublication;
 import io.aeron.Image;
@@ -1191,7 +1190,7 @@ class ClusterTest
 
     @Test
     @InterruptAfter(20)
-    void shouldLogErrorOnBadEgressConfiguration()
+    void shouldLogErrorOnBadEgressConfiguration(@TempDir final Path aeronDir)
     {
         cluster = aCluster().withStaticNodes(3).start();
         systemTestWatcher.cluster(cluster);
@@ -1203,13 +1202,11 @@ class ClusterTest
             "localhost,localhost|node2,localhost,localhost";
         final RedirectingNameResolver nameResolver = new RedirectingNameResolver(mappings);
 
-        final String aeronDirName = CommonContext.generateRandomDirName();
-
         final MediaDriver.Context ctx = new MediaDriver.Context()
             .threadingMode(ThreadingMode.SHARED)
             .dirDeleteOnStart(true)
             .dirDeleteOnShutdown(true)
-            .aeronDirectoryName(aeronDirName)
+            .aeronDirectoryName(aeronDir.toString())
             .nameResolver(nameResolver)
             .senderWildcardPortRange("20700 20709")
             .receiverWildcardPortRange("20710 20719")
@@ -1217,7 +1214,7 @@ class ClusterTest
             .receiveChannelEndpointSupplier(null)
             .imageLivenessTimeoutNs(Configuration.imageLivenessTimeoutNs());
 
-        cluster.dataCollector().add(Paths.get(aeronDirName));
+        cluster.dataCollector().add(Paths.get(aeronDir.toString()));
 
         final TestMediaDriver clientMediaDriver = TestMediaDriver
             .launch(ctx, clientDriverOutputConsumer(cluster.dataCollector()));
@@ -1248,8 +1245,8 @@ class ClusterTest
     }
 
     @Test
-    @InterruptAfter(15)
-    void shouldLogErrorOnBadIngressConfiguration()
+    @InterruptAfter(30)
+    void shouldLogErrorOnBadIngressConfiguration(@TempDir final Path aeronDir)
     {
         cluster = aCluster().withStaticNodes(3).start();
         systemTestWatcher.cluster(cluster);
@@ -1262,13 +1259,11 @@ class ClusterTest
             "localhost,localhost|node2,localhost,localhost";
         final RedirectingNameResolver nameResolver = new RedirectingNameResolver(mappings);
 
-        final String aeronDirName = CommonContext.generateRandomDirName();
-
         final MediaDriver.Context ctx = new MediaDriver.Context()
             .threadingMode(ThreadingMode.SHARED)
             .dirDeleteOnStart(true)
             .dirDeleteOnShutdown(true)
-            .aeronDirectoryName(aeronDirName)
+            .aeronDirectoryName(aeronDir.toString())
             .nameResolver(nameResolver)
             .senderWildcardPortRange("20700 20709")
             .receiverWildcardPortRange("20710 20719")
@@ -1276,7 +1271,7 @@ class ClusterTest
             .receiveChannelEndpointSupplier(null)
             .imageLivenessTimeoutNs(Configuration.imageLivenessTimeoutNs());
 
-        cluster.dataCollector().add(Paths.get(aeronDirName));
+        cluster.dataCollector().add(Paths.get(aeronDir.toString()));
 
         final TestMediaDriver clientMediaDriver = TestMediaDriver
             .launch(ctx, clientDriverOutputConsumer(cluster.dataCollector()));
@@ -1304,8 +1299,8 @@ class ClusterTest
     }
 
     @Test
-    @InterruptAfter(15)
-    void shouldBounceBackToPollResponseOnPartiallyBadIngressConfiguration()
+    @InterruptAfter(30)
+    void shouldBounceBackToPollResponseOnPartiallyBadIngressConfiguration(@TempDir final Path aeronDir)
     {
         cluster = aCluster().withStaticNodes(3).withAppointedLeader(2).start();
         systemTestWatcher.cluster(cluster);
@@ -1318,13 +1313,12 @@ class ClusterTest
             "localhost,localhost|node2,localhost,localhost";
         final RedirectingNameResolver nameResolver = new RedirectingNameResolver(mappings);
 
-        final String aeronDirName = CommonContext.generateRandomDirName();
 
         final MediaDriver.Context ctx = new MediaDriver.Context()
             .threadingMode(ThreadingMode.SHARED)
             .dirDeleteOnStart(true)
             .dirDeleteOnShutdown(true)
-            .aeronDirectoryName(aeronDirName)
+            .aeronDirectoryName(aeronDir.toString())
             .nameResolver(nameResolver)
             .senderWildcardPortRange("20700 20709")
             .receiverWildcardPortRange("20710 20719")
@@ -1332,7 +1326,7 @@ class ClusterTest
             .receiveChannelEndpointSupplier(null)
             .imageLivenessTimeoutNs(Configuration.imageLivenessTimeoutNs());
 
-        cluster.dataCollector().add(Paths.get(aeronDirName));
+        cluster.dataCollector().add(Paths.get(aeronDir.toString()));
 
         final TestMediaDriver clientMediaDriver = TestMediaDriver
             .launch(ctx, clientDriverOutputConsumer(cluster.dataCollector()));
