@@ -1306,7 +1306,7 @@ class ClusterTest
         systemTestWatcher.cluster(cluster);
         systemTestWatcher.ignoreErrorsMatching(UNKNOWN_HOST_FILTER);
 
-        final TestNode leader = cluster.awaitLeader();
+        cluster.awaitLeader();
         final String ingress = "0=node0:20110,1=node1:20111,2=node2:9999";
 
         final String mappings = "node0,localhost,localhost|node1," +
