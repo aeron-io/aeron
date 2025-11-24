@@ -2023,7 +2023,7 @@ public final class Configuration
             case ControllableIdleStrategy.ALIAS:
             case CONTROLLABLE_IDLE_STRATEGY:
                 Objects.requireNonNull(controllableStatus);
-                controllableStatus.setOrdered(ControllableIdleStrategy.PARK);
+                controllableStatus.setRelease(ControllableIdleStrategy.PARK);
                 idleStrategy = new ControllableIdleStrategy(controllableStatus);
                 break;
 

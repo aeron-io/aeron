@@ -49,7 +49,7 @@ public class SetControllableIdleStrategy
             if (null != statusIndicator)
             {
                 final int status = Integer.parseInt(args[0]);
-                statusIndicator.setOrdered(status);
+                statusIndicator.setRelease(status);
                 System.out.println("Set ControllableIdleStrategy status to " + status);
             }
             else
