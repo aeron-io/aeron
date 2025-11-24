@@ -291,7 +291,7 @@ int aeron_receive_channel_endpoint_send_sm(
     int bytes_sent = aeron_receive_channel_endpoint_send(endpoint, destination, control_addr, &iov);
     if (bytes_sent != (int)iov.iov_len)
     {
-        if (bytes_sent >= 0)
+        if (bytes_sent >= 0 && !aeron_is_acceptable_socket_error())
         {
             aeron_counter_increment(endpoint->short_sends_counter);
         }
@@ -330,7 +330,7 @@ int aeron_receive_channel_endpoint_send_nak(
     int bytes_sent = aeron_receive_channel_endpoint_send(endpoint, destination, addr, &iov);
     if (bytes_sent != (int)iov.iov_len)
     {
-        if (bytes_sent >= 0)
+        if (bytes_sent >= 0 && !aeron_is_acceptable_socket_error())
         {
             aeron_counter_increment(endpoint->short_sends_counter);
         }
@@ -383,7 +383,7 @@ int aeron_receive_channel_endpoint_send_rttm(
     int bytes_sent = aeron_receive_channel_endpoint_send(endpoint, destination, addr, &iov);
     if (bytes_sent != (int)iov.iov_len)
     {
-        if (bytes_sent >= 0)
+        if (bytes_sent >= 0 && !aeron_is_acceptable_socket_error())
         {
             aeron_counter_increment(endpoint->short_sends_counter);
         }
@@ -417,7 +417,7 @@ int aeron_receive_channel_endpoint_send_response_setup(
     int bytes_sent = aeron_receive_channel_endpoint_send(endpoint, destination, addr, &iov);
     if (bytes_sent != (int)iov.iov_len)
     {
-        if (bytes_sent >= 0)
+        if (bytes_sent >= 0 && !aeron_is_acceptable_socket_error())
         {
             aeron_counter_increment(endpoint->short_sends_counter);
         }
@@ -458,7 +458,7 @@ int aeron_receiver_channel_endpoint_send_error_frame(
     int bytes_sent = aeron_receive_channel_endpoint_send(channel_endpoint, destination, control_addr, &iov);
     if (bytes_sent != (int)iov.iov_len)
     {
-        if (bytes_sent >= 0)
+        if (bytes_sent >= 0 && !aeron_is_acceptable_socket_error())
         {
             aeron_counter_increment(channel_endpoint->short_sends_counter);
         }
