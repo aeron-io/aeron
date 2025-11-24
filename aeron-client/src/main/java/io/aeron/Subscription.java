@@ -52,6 +52,9 @@ abstract class SubscriptionFields extends SubscriptionLhsPadding
     final String channel;
     final AvailableImageHandler availableImageHandler;
     final UnavailableImageHandler unavailableImageHandler;
+    ChannelUri channelUri;
+    String resolvedChannel;
+    String resolvedEndpoint;
     int channelStatusId = ChannelEndpointStatus.NO_ID_ALLOCATED;
 
     SubscriptionFields(
@@ -522,57 +525,57 @@ public final class Subscription extends SubscriptionFields implements AutoClosea
     }
 
     /**
-     * Resolve channel endpoint and replace it with the port from the ephemeral range when 0 was provided. If there are
-     * no addresses, or if there is more than one, returned from {@link #localSocketAddresses()} then the original
-     * {@link #channel()} is returned.
-     * <p>
-     * If the channel is not {@link io.aeron.status.ChannelEndpointStatus#ACTIVE}, then {@code null} will be returned.
+     * Resolve channel endpoint and replace it with the port from the ephemeral range when 0 was provided.
      *
-     * @return channel URI string with an endpoint being resolved to the allocated port.
+     * @return original channel URI string if it does not have an endpoint (IPC or response channel) or if endpoint is
+     * not using an ephemeral port, channel URI where ephemeral port is resolved to the actual bind port or
+     * {@code null} if the channel is not {@link io.aeron.status.ChannelEndpointStatus#ACTIVE}.
      * @see #channelStatus()
      * @see #localSocketAddresses()
      */
     public String tryResolveChannelEndpointPort()
     {
-        final long channelStatus = channelStatus();
-
-        if (ChannelEndpointStatus.ACTIVE == channelStatus)
+        if (null == resolvedChannel)
         {
-            final List<String> localSocketAddresses = LocalSocketAddressStatus.findAddresses(
-                conductor.countersReader(), channelStatus, channelStatusId);
-
-            if (1 == localSocketAddresses.size())
+            if (null == channelUri)
             {
                 final ChannelUri uri = ChannelUri.parse(channel);
                 final String endpoint = uri.get(CommonContext.ENDPOINT_PARAM_NAME);
-
-                if (null != endpoint && endpoint.endsWith(":0"))
+                if (null == endpoint || !endpoint.endsWith(":0"))
                 {
-                    uri.replaceEndpointWildcardPort(localSocketAddresses.get(0));
-                    return uri.toString();
+                    resolvedChannel = channel;
+                    return channel;
                 }
+                channelUri = uri;
             }
 
-            return channel;
+            final String endpoint = resolvedEndpoint();
+            if (null != endpoint)
+            {
+                channelUri.replaceEndpointWildcardPort(endpoint);
+                resolvedChannel = channelUri.toString();
+            }
         }
-
-        return null;
+        return resolvedChannel;
     }
 
     /**
-     * Find the resolved endpoint for the channel. This may be null if MDS is used and no destination is yet added.
-     * The result will similar to taking the first element returned from {@link #localSocketAddresses()}. If more than
-     * one destination is added then the first found is returned.
-     * <p>
-     * If the channel is not {@link io.aeron.status.ChannelEndpointStatus#ACTIVE}, then {@code null} will be returned.
+     * Find the resolved endpoint for the channel. This may be {@code null} if MDS is used and no destination is yet
+     * added. The result will similar to taking the first element returned from {@link #localSocketAddresses()}. If more
+     * than one destination is added then the first found is returned.
      *
-     * @return The resolved endpoint or null if not found.
+     * @return resolved endpoint or {@code null} if not found.
      * @see #channelStatus()
      * @see #localSocketAddresses()
      */
     public String resolvedEndpoint()
     {
-        return LocalSocketAddressStatus.findAddress(conductor.countersReader(), channelStatus(), channelStatusId);
+        if (null == resolvedEndpoint)
+        {
+            resolvedEndpoint =
+                LocalSocketAddressStatus.findAddress(conductor.countersReader(), channelStatus(), channelStatusId);
+        }
+        return resolvedEndpoint;
     }
 
     void channelStatusId(final int id)

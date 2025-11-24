@@ -1642,17 +1642,12 @@ final class ClientConductor implements Agent
 
     long channelStatus(final int channelStatusId)
     {
-        switch (channelStatusId)
+        return switch (channelStatusId)
         {
-            case 0:
-                return ChannelEndpointStatus.INITIALIZING;
-
-            case ChannelEndpointStatus.NO_ID_ALLOCATED:
-                return ChannelEndpointStatus.ACTIVE;
-
-            default:
-                return countersReader.getCounterValue(channelStatusId);
-        }
+            case 0 -> ChannelEndpointStatus.INITIALIZING;
+            case ChannelEndpointStatus.NO_ID_ALLOCATED -> ChannelEndpointStatus.ACTIVE;
+            default -> countersReader.getCounterValue(channelStatusId);
+        };
     }
 
     void closeImages(final Image[] images, final UnavailableImageHandler unavailableImageHandler, final long lingerNs)
