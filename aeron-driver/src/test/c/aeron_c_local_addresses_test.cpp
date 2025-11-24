@@ -253,3 +253,52 @@ TEST_F(CLocalAddressesTest, shouldGetAddressesForMultiDestinationSubscription)
         std::this_thread::yield();
     }
 }
+
+class CLocalAddressesTestParameterized : public CSystemTestBase, public testing::TestWithParam<std::string>
+{
+public:
+    CLocalAddressesTestParameterized()
+    {
+        for (int i = 0; i < NUM_BUFFERS; i++)
+        {
+            m_addrs[i].iov_base = m_buffers[i];
+            m_addrs[i].iov_len = sizeof(m_buffers[i]);
+        }
+    }
+
+protected:
+    uint8_t m_buffers[NUM_BUFFERS][AERON_CLIENT_MAX_LOCAL_ADDRESS_STR_LEN] = {};
+    aeron_iovec_t m_addrs[NUM_BUFFERS] = {};
+};
+
+INSTANTIATE_TEST_SUITE_P(
+    CLocalAddressesTestParameterized,
+    CLocalAddressesTestParameterized,
+    testing::Values("aeron:ipc?so-rcvbuf=32k|alias=test|term-length=64k|mtu=2048", "aeron:udp?endpoint=localhost:8092|alias=test", "aeron:udp?mtu=8|rcv-wnd=64k|control-mode=response", "aeron:udp?control-mode=manual|endpoint=localhost:0"));
+
+TEST_P(CLocalAddressesTestParameterized, shouldGetOriginalChannelWhenNoWildcardSubstitutionToBePerformed)
+{
+    const std::string& channel = GetParam();
+    std::atomic<bool> subscriptionClosedFlag(false);
+    aeron_async_add_subscription_t *async = nullptr;
+    aeron_subscription_t *subscription;
+
+    ASSERT_TRUE(connect());
+
+    ASSERT_EQ(aeron_async_add_subscription(
+        &async, m_aeron, channel.c_str(), STREAM_ID, nullptr, nullptr, nullptr, nullptr), 0);
+    ASSERT_TRUE((subscription = awaitSubscriptionOrError(async))) << aeron_errmsg();
+
+    char uriWithResolvedEndpoint[1024] = { 0 };
+
+    ASSERT_LT(0, aeron_subscription_try_resolve_channel_endpoint_port(
+        subscription, uriWithResolvedEndpoint, sizeof(uriWithResolvedEndpoint)));
+    ASSERT_STREQ(channel.c_str(), uriWithResolvedEndpoint);
+
+    aeron_subscription_close(subscription, setFlagOnClose, &subscriptionClosedFlag);
+
+    while (!subscriptionClosedFlag)
+    {
+        std::this_thread::yield();
+    }
+}

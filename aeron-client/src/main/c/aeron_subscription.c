@@ -664,35 +664,18 @@ int aeron_subscription_resolved_endpoint(
         1);
 }
 
-static bool aeron_subscription_uri_contains_wildcard_port(aeron_uri_t *uri)
+static bool aeron_subscription_should_replace_wildcard_port(aeron_uri_t *uri)
 {
-    if (AERON_URI_UDP != uri->type || NULL == uri->params.udp.endpoint)
+    if (AERON_URI_UDP != uri->type ||
+        NULL == uri->params.udp.endpoint ||
+        (NULL != uri->params.udp.control_mode &&
+        0 == strcmp(uri->params.udp.control_mode, AERON_UDP_CHANNEL_CONTROL_MODE_MANUAL_VALUE)))
     {
         return false;
     }
 
     char *port_suffix = strrchr(uri->params.udp.endpoint, ':');
     return 0 == strcmp(port_suffix, ":0");
-}
-
-static int aeron_subscription_update_uri_with_resolved_endpoint(
-    aeron_subscription_t *subscription,
-    aeron_uri_t *uri,
-    char *address_buffer,
-    size_t address_buffer_len)
-{
-    int result = 1;
-
-    if (aeron_subscription_uri_contains_wildcard_port(uri))
-    {
-        result = aeron_subscription_resolved_endpoint(subscription, address_buffer, address_buffer_len);
-        if (0 < result)
-        {
-            uri->params.udp.endpoint = address_buffer;
-        }
-    }
-
-    return result;
 }
 
 int aeron_subscription_try_resolve_channel_endpoint_port(
@@ -721,18 +704,25 @@ int aeron_subscription_try_resolve_channel_endpoint_port(
 
     if (aeron_uri_parse(strlen(subscription->channel), subscription->channel, &temp_uri) >= 0)
     {
-        char resolved_endpoint[AERON_CLIENT_MAX_LOCAL_ADDRESS_STR_LEN] = { 0 };
-        int resolve_result = aeron_subscription_update_uri_with_resolved_endpoint(
-            subscription, &temp_uri, resolved_endpoint, sizeof(resolved_endpoint));
-
-        if (0 < resolve_result)
+        if (aeron_subscription_should_replace_wildcard_port(&temp_uri))
         {
-            result = aeron_uri_sprint(&temp_uri, uri, uri_len);
+            char resolved_endpoint[AERON_CLIENT_MAX_LOCAL_ADDRESS_STR_LEN] = { 0 };
+            int resolve_result = aeron_subscription_resolved_endpoint(subscription, resolved_endpoint, sizeof(resolved_endpoint));
+            if (0 < resolve_result)
+            {
+                temp_uri.params.udp.endpoint = resolved_endpoint;
+                result = aeron_uri_sprint(&temp_uri, uri, uri_len);
+            }
+            else if (0 == resolve_result)
+            {
+                uri[0] = '\0';
+                result = 0;
+            }
         }
-        else if (0 == resolve_result)
+        else
         {
-            uri[0] = '\0';
-            result = 0;
+            strcpy(uri, subscription->channel);
+            result = 1;
         }
     }
 
