@@ -2152,7 +2152,6 @@ public final class AeronCluster implements AutoCloseable
 
         private Subscription egressSubscription;
         private EgressPoller egressPoller;
-        private String responseChannel;
         private long egressRegistrationId = NULL_VALUE;
         private Int2ObjectHashMap<MemberIngress> memberByIdMap;
         private long ingressRegistrationId = NULL_VALUE;
@@ -2284,8 +2283,8 @@ public final class AeronCluster implements AutoCloseable
             if (deadlineNs - nanoClock.nanoTime() < 0)
             {
                 final boolean isConnected = null != egressSubscription && egressSubscription.isConnected();
-                final String egressChannel = null != responseChannel ? responseChannel : (null != egressSubscription ?
-                    egressSubscription.tryResolveChannelEndpointPort() : "<unknown>");
+                final String egressChannel = null != egressSubscription ?
+                    egressSubscription.tryResolveChannelEndpointPort() : "<unknown>";
                 final TimeoutException ex = new TimeoutException(
                     "cluster connect timeout: state=" + state +
                     " messageTimeout=" + ctx.messageTimeoutNs() + "ns" +
@@ -2384,11 +2383,7 @@ public final class AeronCluster implements AutoCloseable
 
         private void awaitPublicationConnected()
         {
-            if (null == responseChannel)
-            {
-                responseChannel = egressSubscription.tryResolveChannelEndpointPort();
-            }
-
+            final String responseChannel = egressSubscription.tryResolveChannelEndpointPort();
             if (null != responseChannel)
             {
                 if (null == ingressPublication)
@@ -2403,19 +2398,19 @@ public final class AeronCluster implements AutoCloseable
                         if (null != member.publication && member.publication.isConnected())
                         {
                             ingressPublication = member.publication;
-                            prepareConnectRequest();
+                            prepareConnectRequest(responseChannel);
                             break;
                         }
                     }
                 }
                 else if (ingressPublication.isConnected())
                 {
-                    prepareConnectRequest();
+                    prepareConnectRequest(responseChannel);
                 }
             }
         }
 
-        private void prepareConnectRequest()
+        private void prepareConnectRequest(final String responseChannel)
         {
             correlationId = ctx.aeron().nextCorrelationId();
             final byte[] encodedCredentials = ctx.credentialsSupplier().encodedCredentials();
