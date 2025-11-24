@@ -441,7 +441,7 @@ class BasicArchiveTest
     void purgeRecordingFailsIfThereAreActiveReplays()
     {
         final String messagePrefix = "Message-Prefix-";
-        final int messageCount = 10;
+        final int messageCount = 100;
         final long stopPosition;
 
         final long subscriptionId = aeronArchive.startRecording(RECORDED_CHANNEL, RECORDED_STREAM_ID, LOCAL);

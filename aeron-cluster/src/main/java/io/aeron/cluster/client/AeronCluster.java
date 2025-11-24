@@ -2286,14 +2286,61 @@ public final class AeronCluster implements AutoCloseable
                 final boolean isConnected = null != egressSubscription && egressSubscription.isConnected();
                 final String egressChannel = null != responseChannel ? responseChannel : (null != egressSubscription ?
                     egressSubscription.tryResolveChannelEndpointPort() : "<unknown>");
+
+                final StringBuilder errorMessage = new StringBuilder("cluster connect timeout: ");
+                if (state == State.AWAIT_PUBLICATION_CONNECTED)
+                {
+                    if (null == ingressPublication)
+                    {
+                        errorMessage.append("couldn't connect to any of the cluster endpoints! ");
+                    }
+                    else
+                    {
+                        final String ingressChannel = ingressPublication.channel();
+                        if (null != ingressChannel)
+                        {
+                            final ChannelUri uri = ChannelUri.parse(ingressChannel);
+                            final String ingressEndpoint = uri.get("endpoint");
+                            errorMessage.append(" - Cannot connect to cluster at " + ingressEndpoint);
+                        }
+                    }
+                }
+                else if (state == State.POLL_RESPONSE)
+                {
+                    final ChannelUri egressChannelUri = ChannelUri.parse(ctx.egressChannel);
+                    if (egressChannelUri.isUdp())
+                    {
+                        final String egressEndpoint = egressChannelUri.get(CommonContext.ENDPOINT_PARAM_NAME);
+                        final String ingressChannel = null == ingressPublication ? null : ingressPublication.channel();
+                        if (null != ingressChannel)
+                        {
+                            final ChannelUri uri = ChannelUri.parse(ingressChannel);
+                            final String ingressEndpoint = uri.get(CommonContext.ENDPOINT_PARAM_NAME);
+                            final String ingressEndpointHost = ingressEndpoint.split(":")[0];
+                            errorMessage.append(" - Connected to cluster at " + ingressEndpointHost +
+                                ", but the cluster node cannot connect to you at " + egressEndpoint);
+                            if (egressEndpoint.startsWith("localhost") || egressEndpoint.startsWith("127."))
+                            {
+                                errorMessage.append(".  Cannot bind to localhost if cluster nodes are remote.");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        errorMessage.append(".  ");  // log something special for ipc?
+                    }
+                }
+                errorMessage.append(
+                    " state=" + state.name() +
+                        " messageTimeout=" + ctx.messageTimeoutNs() + "ns" +
+                        " ingressChannel=" + ctx.ingressChannel() +
+                        " ingressEndpoints=" + ctx.ingressEndpoints() +
+                        " ingressPublication=" + ingressPublication +
+                        " egress.isConnected=" + isConnected +
+                        " responseChannel=" + egressChannel);
+
                 final TimeoutException ex = new TimeoutException(
-                    "cluster connect timeout: state=" + state +
-                    " messageTimeout=" + ctx.messageTimeoutNs() + "ns" +
-                    " ingressChannel=" + ctx.ingressChannel() +
-                    " ingressEndpoints=" + ctx.ingressEndpoints() +
-                    " ingressPublication=" + ingressPublication +
-                    " egress.isConnected=" + isConnected +
-                    " responseChannel=" + egressChannel);
+                    errorMessage.toString());
 
                 for (final MemberIngress member : memberByIdMap.values())
                 {
