@@ -238,7 +238,9 @@ class SubscriptionTest
     @ValueSource(strings = {
         "aeron:ipc",
         "aeron:udp?control-mode=response|control=localhost:5555",
-        "aeron:udp?endpoint=locahost:8888"
+        "aeron:udp?endpoint=localhost:8888",
+        "aeron:udp?control-mode=manual|endpoint=localhost:0",
+        "aeron:udp?control-mode=dynamic|control=localhost:7777"
     })
     void tryResolveChannelEndpointPortReturnsOriginalUriIfEndpointDoesNotNeedResolving(final String channel)
     {

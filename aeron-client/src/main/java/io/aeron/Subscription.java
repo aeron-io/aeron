@@ -30,6 +30,10 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import static io.aeron.Aeron.NULL_VALUE;
+import static io.aeron.CommonContext.ENDPOINT_PARAM_NAME;
+import static io.aeron.CommonContext.MDC_CONTROL_MODE_MANUAL;
+import static io.aeron.CommonContext.MDC_CONTROL_MODE_PARAM_NAME;
+import static io.aeron.CommonContext.SPY_PREFIX;
 
 abstract class SubscriptionLhsPadding
 {
@@ -527,8 +531,8 @@ public final class Subscription extends SubscriptionFields implements AutoClosea
     /**
      * Resolve channel endpoint and replace it with the port from the ephemeral range when 0 was provided.
      *
-     * @return original channel URI string if it does not have an endpoint (IPC or response channel) or if endpoint is
-     * not using an ephemeral port, channel URI where ephemeral port is resolved to the actual bind port or
+     * @return original channel URI string if it does not have an endpoint (IPC, response channel, MDS) or if endpoint
+     * is not using an ephemeral port, channel URI where ephemeral port is resolved to the actual bind port or
      * {@code null} if the channel is not {@link io.aeron.status.ChannelEndpointStatus#ACTIVE}.
      * @see #channelStatus()
      * @see #localSocketAddresses()
@@ -540,8 +544,10 @@ public final class Subscription extends SubscriptionFields implements AutoClosea
             if (null == channelUri)
             {
                 final ChannelUri uri = ChannelUri.parse(channel);
-                final String endpoint = uri.get(CommonContext.ENDPOINT_PARAM_NAME);
-                if (null == endpoint || !endpoint.endsWith(":0"))
+                final String endpoint = uri.get(ENDPOINT_PARAM_NAME);
+                if (null == endpoint ||
+                    !endpoint.endsWith(":0") ||
+                    MDC_CONTROL_MODE_MANUAL.equals(uri.get(MDC_CONTROL_MODE_PARAM_NAME)))
                 {
                     resolvedChannel = channel;
                     return channel;
@@ -625,7 +631,7 @@ public final class Subscription extends SubscriptionFields implements AutoClosea
 
     void rejectImage(final long correlationId, final long position, final String reason)
     {
-        if (channel().startsWith(CommonContext.SPY_PREFIX))
+        if (channel().startsWith(SPY_PREFIX))
         {
             throw new AeronException("spies can not reject images");
         }
