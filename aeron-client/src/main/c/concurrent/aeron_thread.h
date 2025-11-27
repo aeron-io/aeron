@@ -37,7 +37,8 @@ typedef pthread_mutex_t aeron_mutex_t;
 
 typedef pthread_t aeron_thread_t;
 typedef pthread_attr_t aeron_thread_attr_t;
-#define aeron_mutex_init pthread_mutex_init
+
+int aeron_mutex_init(aeron_mutex_t *mutex, void *attr);
 #define aeron_mutex_lock pthread_mutex_lock
 #define aeron_mutex_unlock pthread_mutex_unlock
 #define aeron_mutex_destroy pthread_mutex_destroy
