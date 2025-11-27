@@ -40,25 +40,24 @@ int aeron_blocking_linked_queue_close(aeron_blocking_linked_queue_t *queue)
 
     if (!QUEUE_IS_EMPTY(queue))
     {
-        aeron_mutex_unlock(&queue->mutex);
-
         AERON_SET_ERR(EINVAL, "%s", "queue must be empty to be deleted");
-
-        return -1;
+        goto error;
     }
 
     if (aeron_linked_queue_close(&queue->queue) < 0)
     {
         AERON_APPEND_ERR("%s", "");
-        return -1;
+        goto error;
     }
 
     aeron_mutex_unlock(&queue->mutex);
-
     aeron_mutex_destroy(&queue->mutex);
     aeron_cond_destroy(&queue->cv);
 
     return 0;
+error:
+    aeron_mutex_unlock(&queue->mutex);
+    return -1;
 }
 
 int aeron_blocking_linked_queue_offer(aeron_blocking_linked_queue_t *queue, void *element)

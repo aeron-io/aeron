@@ -446,7 +446,9 @@ void response_server_delete(response_server_t *response_server)
     if (NULL != response_server)
     {
         aeron_subscription_close(response_server->subscription, NULL, NULL);
+        aeron_mutex_lock(&response_server->info_lock);
         aeron_int64_to_ptr_hash_map_delete(&response_server->response_channel_info_map);
+        aeron_mutex_unlock(&response_server->info_lock);
         aeron_mutex_destroy(&response_server->info_lock);
 
         aeron_free(response_server);
