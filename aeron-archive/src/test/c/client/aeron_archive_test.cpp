@@ -4136,3 +4136,75 @@ TEST_F(AeronCArchiveTest, shouldUpdateChannel)
     EXPECT_STREQ("false", aeron_uri_find_param_value(&uri.params.ipc.additional_params, AERON_URI_REJOIN_KEY));
     aeron_uri_close(&uri);
 }
+
+TEST_F(AeronCArchiveTest, shouldRejectReentractCallsDuringCallbacks)
+{
+    recording_signal_consumer_clientd_t rsc_cd;
+
+    connect(&rsc_cd);
+
+    char publication_channel[AERON_URI_MAX_LENGTH];
+    {
+        aeron_uri_string_builder_t builder;
+
+        aeron_uri_string_builder_init_new(&builder);
+
+        aeron_uri_string_builder_put(&builder, AERON_URI_STRING_BUILDER_MEDIA_KEY, "udp");
+        aeron_uri_string_builder_put(&builder, AERON_UDP_CHANNEL_ENDPOINT_KEY, "localhost:3333");
+        aeron_uri_string_builder_put_int32(&builder, AERON_URI_TERM_LENGTH_KEY, TERM_LENGTH);
+        aeron_uri_string_builder_put_int32(&builder, AERON_URI_MTU_LENGTH_KEY, MTU_LENGTH);
+
+        aeron_uri_string_builder_sprint(&builder, publication_channel, sizeof(publication_channel));
+        aeron_uri_string_builder_close(&builder);
+    }
+
+    aeron_publication_t *publication;
+    ASSERT_EQ_ERR(0, aeron_archive_add_recorded_publication(
+            &publication,
+            m_archive,
+            publication_channel,
+            m_recordingStreamId));
+
+    int32_t session_id = aeron_publication_session_id(publication);
+
+    setupCounters(session_id);
+
+    struct archive_wrapper
+    {
+        aeron_archive_t *archive;
+    };
+
+    archive_wrapper callback_client_d{};
+    callback_client_d.archive = m_archive;
+
+    int32_t count;
+    ASSERT_EQ_ERR(0, aeron_archive_list_recording(
+            &count,
+            m_archive,
+            m_recording_id_from_counter,
+            [](auto recording_descriptor, auto clientd)
+            {
+                auto *wrapper = (archive_wrapper *)clientd;
+
+                int dummy;
+                EXPECT_EQ(-1, aeron_archive_list_recording(&dummy, wrapper->archive, 0, nullptr, nullptr));
+                EXPECT_EQ(-AERON_ERROR_CODE_GENERIC_ERROR, aeron_errcode());
+                EXPECT_NE(std::string::npos, std::string(aeron_errmsg()).find("reentrant calls not permitted during callbacks"));
+
+                int64_t dummy_position;
+                EXPECT_EQ(-1, aeron_archive_get_max_recorded_position(&dummy_position, wrapper->archive, 0));
+                EXPECT_EQ(-AERON_ERROR_CODE_GENERIC_ERROR, aeron_errcode());
+                EXPECT_NE(std::string::npos, std::string(aeron_errmsg()).find("reentrant calls not permitted during callbacks"));
+
+                EXPECT_EQ(-1, aeron_archive_detach_segments(wrapper->archive, 0, 0));
+                EXPECT_EQ(-AERON_ERROR_CODE_GENERIC_ERROR, aeron_errcode());
+                EXPECT_NE(std::string::npos, std::string(aeron_errmsg()).find("reentrant calls not permitted during callbacks"));
+            },
+            &callback_client_d));
+    EXPECT_EQ(1, count);
+
+#ifndef _MSC_VER
+    // verify that lock was unlocked during the failed reentrant calls
+    EXPECT_EQ(EPERM, aeron_mutex_unlock(&m_archive->lock));
+#endif
+}
