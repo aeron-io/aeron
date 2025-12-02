@@ -251,6 +251,8 @@ int aeron_archive_context_duplicate(aeron_archive_context_t **dest_p, aeron_arch
         return -1;
     }
 
+    _ctx->owns_idle_strategy = false;
+
     *dest_p = _ctx;
 
     return 0;
@@ -429,6 +431,7 @@ error:
     if (ctx->owns_aeron_client && NULL != ctx->aeron)
     {
         aeron_close(ctx->aeron);
+        ctx->aeron = NULL;
     }
 
     return -1;
