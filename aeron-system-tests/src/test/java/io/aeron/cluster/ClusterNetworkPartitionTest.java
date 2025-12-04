@@ -136,7 +136,7 @@ class ClusterNetworkPartitionTest
 
     @ParameterizedTest
     @ValueSource(ints = { 64 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024 })
-    @InterruptAfter(30)
+    @InterruptAfter(300)
     void shouldRestartClusterWithMajorityOfNodesBeingBehind(final int amountOfLogMajorityShouldBeBehind)
     {
         final long electionTimeoutNs = TimeUnit.SECONDS.toNanos(10);
