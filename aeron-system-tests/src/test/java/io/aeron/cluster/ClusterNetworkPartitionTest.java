@@ -32,6 +32,7 @@ import io.aeron.test.IpTables;
 import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.Tests;
 import io.aeron.test.TopologyTest;
+import io.aeron.test.cluster.ClusterTests;
 import io.aeron.test.cluster.TestCluster;
 import io.aeron.test.cluster.TestNode;
 import org.agrona.collections.MutableInteger;
@@ -136,7 +137,7 @@ class ClusterNetworkPartitionTest
 
     @ParameterizedTest
     @ValueSource(ints = { 64 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024 })
-    @InterruptAfter(300)
+    @InterruptAfter(30)
     void shouldRestartClusterWithMajorityOfNodesBeingBehind(final int amountOfLogMajorityShouldBeBehind)
     {
         final long electionTimeoutNs = TimeUnit.SECONDS.toNanos(10);
@@ -176,8 +177,8 @@ class ClusterNetworkPartitionTest
             ClusterMember::logEndpoint);
 
         final int messagesReceivedByMinority = 1 + amountOfLogMajorityShouldBeBehind / align(
-            HEADER_LENGTH + SESSION_HEADER_LENGTH + SIZE_OF_INT, FRAME_ALIGNMENT);
-        cluster.sendMessages(messagesReceivedByMinority); // these messages will be only received by 2 out of 5 nodes
+            HEADER_LENGTH + SESSION_HEADER_LENGTH + ClusterTests.LARGE_MSG.length(), FRAME_ALIGNMENT);
+        cluster.sendLargeMessages(messagesReceivedByMinority);
 
         awaitLeaderLogRecording(firstLeader, committedMessageCount + messagesReceivedByMinority);
 
