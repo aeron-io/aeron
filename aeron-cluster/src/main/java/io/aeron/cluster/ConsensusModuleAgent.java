@@ -1053,13 +1053,13 @@ final class ConsensusModuleAgent
         final long leadershipTermId,
         final long termBaseLogPosition,
         final long logPosition,
+        final long commitPosition,
         final long leaderRecordingId,
         final long timestamp,
         final int leaderId,
         final int logSessionId,
         final int appVersion,
-        final boolean isStartup,
-        final long commitPosition)
+        final boolean isStartup)
     {
         logOnNewLeadershipTerm(
             memberId,
@@ -1070,6 +1070,7 @@ final class ConsensusModuleAgent
             leadershipTermId,
             termBaseLogPosition,
             logPosition,
+            commitPosition,
             leaderRecordingId,
             timestamp,
             leaderId,
@@ -1102,11 +1103,11 @@ final class ConsensusModuleAgent
                 termBaseLogPosition,
                 logPosition,
                 leaderRecordingId,
+                commitPosition,
                 timestamp,
                 leaderId,
                 logSessionId,
-                isStartup,
-                commitPosition);
+                isStartup);
         }
         else if (Cluster.Role.FOLLOWER == role &&
             leadershipTermId == this.leadershipTermId &&
@@ -2237,6 +2238,7 @@ final class ConsensusModuleAgent
         final long leadershipTermId,
         final long termBaseLogPosition,
         final long logPosition,
+        final long commitPosition,
         final long leaderRecordingId,
         final long timestamp,
         final int leaderId,

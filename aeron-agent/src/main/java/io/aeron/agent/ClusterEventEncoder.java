@@ -56,6 +56,7 @@ public final class ClusterEventEncoder
         final long leadershipTermId,
         final long termBaseLogPosition,
         final long logPosition,
+        final long commitPosition,
         final long leaderRecordingId,
         final long timestamp,
         final int leaderId,
@@ -86,6 +87,9 @@ public final class ClusterEventEncoder
         encodingBuffer.putLong(offset + encodedLength, logPosition, LITTLE_ENDIAN);
         encodedLength += SIZE_OF_LONG;
 
+        encodingBuffer.putLong(offset + encodedLength, commitPosition, LITTLE_ENDIAN);
+        encodedLength += SIZE_OF_LONG;
+
         encodingBuffer.putLong(offset + encodedLength, leaderRecordingId, LITTLE_ENDIAN);
         encodedLength += SIZE_OF_LONG;
 
@@ -112,7 +116,7 @@ public final class ClusterEventEncoder
 
     static int newLeaderShipTermLength()
     {
-        return (SIZE_OF_LONG * 9) + (SIZE_OF_INT * 4) + SIZE_OF_BYTE;
+        return (SIZE_OF_LONG * 10) + (SIZE_OF_INT * 4) + SIZE_OF_BYTE;
     }
 
     /**

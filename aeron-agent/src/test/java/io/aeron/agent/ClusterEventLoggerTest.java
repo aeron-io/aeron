@@ -100,7 +100,8 @@ class ClusterEventLoggerTest
         final long nextTermBaseLogPosition = 2562;
         final long nextLogPosition = 2563;
         final long leadershipTermId = -500;
-        final long logPosition = 43;
+        final long logPosition = 432;
+        final long commitPosition = 290;
         final long timestamp = 2;
         final int memberId = 19;
         final int leaderId = -1;
@@ -120,6 +121,7 @@ class ClusterEventLoggerTest
             leadershipTermId,
             termBaseLogPosition,
             logPosition,
+            commitPosition,
             leaderRecordingId,
             timestamp,
             leaderId,
@@ -143,6 +145,8 @@ class ClusterEventLoggerTest
         index += SIZE_OF_LONG;
         assertEquals(logPosition, logBuffer.getLong(index, LITTLE_ENDIAN));
         index += SIZE_OF_LONG;
+        assertEquals(commitPosition, logBuffer.getLong(index, LITTLE_ENDIAN));
+        index += SIZE_OF_LONG;
         assertEquals(leaderRecordingId, logBuffer.getLong(index, LITTLE_ENDIAN));
         index += SIZE_OF_LONG;
         assertEquals(timestamp, logBuffer.getLong(index, LITTLE_ENDIAN));
@@ -162,10 +166,10 @@ class ClusterEventLoggerTest
         ClusterEventDissector.dissectNewLeadershipTerm(logBuffer, encodedMsgOffset(offset), sb);
 
         final String expectedMessagePattern = "\\[[0-9]+\\.[0-9]+] CLUSTER: NEW_LEADERSHIP_TERM " +
-            "\\[89/89]: memberId=19 logLeadershipTermId=434 nextLeadershipTermId=2561 " +
+            "\\[97/97]: memberId=19 logLeadershipTermId=434 nextLeadershipTermId=2561 " +
             "nextTermBaseLogPosition=2562 nextLogPosition=2563 leadershipTermId=-500 termBaseLogPosition=982734 " +
-            "logPosition=43 leaderRecordingId=76434 timestamp=2 leaderId=-1 logSessionId=3 appVersion=0.3.9 " +
-            "isStartup=true";
+            "logPosition=432 commitPosition=290 leaderRecordingId=76434 timestamp=2 leaderId=-1 logSessionId=3 " +
+            "appVersion=0.3.9 isStartup=true";
 
         assertThat(sb.toString(), Matchers.matchesPattern(expectedMessagePattern));
     }

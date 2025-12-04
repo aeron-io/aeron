@@ -430,13 +430,13 @@ class ConsensusModuleAgentTest
             leadershipTermId,
             100,
             600,
+            4096,
             8,
             200,
             0,
             42,
             777,
-            false,
-            4096);
+            false);
 
         assertEquals(12345, consensusModuleAgent.timeOfLastLeaderUpdateNs());
     }
