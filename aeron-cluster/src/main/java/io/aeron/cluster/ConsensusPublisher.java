@@ -182,7 +182,8 @@ final class ConsensusPublisher
         final int leaderMemberId,
         final int logSessionId,
         final int appVersion,
-        final boolean isStartup)
+        final boolean isStartup,
+        final long commitPosition)
     {
         if (null == publication)
         {
@@ -216,7 +217,8 @@ final class ConsensusPublisher
                     .leaderMemberId(leaderMemberId)
                     .logSessionId(logSessionId)
                     .appVersion(appVersion)
-                    .isStartup(isStartup ? BooleanType.TRUE : BooleanType.FALSE);
+                    .isStartup(isStartup ? BooleanType.TRUE : BooleanType.FALSE)
+                    .commitPosition(commitPosition);
 
                 bufferClaim.commit();
 
