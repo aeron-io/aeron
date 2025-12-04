@@ -329,11 +329,11 @@ class ElectionTest
             logPosition,
             logPosition,
             leaderRecordingId,
+            commitPosition,
             clock.nanoTime(),
             candidateId,
             logSessionId,
-            false,
-            commitPosition);
+            false);
 
         verify(electionStateCounter).setRelease(ElectionState.FOLLOWER_REPLAY.code());
 
@@ -510,11 +510,11 @@ class ElectionTest
             logPosition,
             logPosition,
             leaderRecordingId,
+            commitPosition,
             clock.nanoTime(),
             leaderMemberId,
             0,
-            isLeaderStart,
-            commitPosition);
+            isLeaderStart);
         election.doWork(clock.nanoTime());
 
         election.doWork(clock.increment(1));
@@ -758,11 +758,11 @@ class ElectionTest
             term2BaseLogPosition,
             term2BaseLogPosition,
             RECORDING_ID,
+            term1BaseLogPosition,
             t1,
             leaderId,
             0,
-            true,
-            term1BaseLogPosition);
+            true);
 
         verify(electionStateCounter, times(2)).setRelease(ElectionState.CANVASS.code());
 
@@ -783,11 +783,11 @@ class ElectionTest
             term2BaseLogPosition,
             term2BaseLogPosition,
             RECORDING_ID,
+            term1BaseLogPosition,
             t1,
             leaderId,
             0,
-            true,
-            term1BaseLogPosition);
+            true);
 
         when(consensusModuleAgent.newLogReplication(any(), any(), anyLong(), anyLong(), anyLong()))
             .thenReturn(logReplication);
@@ -874,11 +874,11 @@ class ElectionTest
             term2BaseLogPosition,
             term2BaseLogPosition,
             RECORDING_ID,
+            term1BaseLogPosition,
             clock.nanoTime(),
             leaderId,
             0,
-            true,
-            term1BaseLogPosition);
+            true);
 
         verify(electionStateCounter).setRelease(ElectionState.FOLLOWER_LOG_REPLICATION.code());
 
@@ -962,11 +962,11 @@ class ElectionTest
             term10BaseLogPosition,
             term10BaseLogPosition,
             RECORDING_ID,
+            term10BaseLogPosition,
             t1,
             leaderId,
             0,
-            true,
-            term10BaseLogPosition);
+            true);
 
         verify(electionStateCounter).setRelease(ElectionState.FOLLOWER_LOG_REPLICATION.code());
 
@@ -1034,11 +1034,11 @@ class ElectionTest
             term10BaseLogPosition,
             term10BaseLogPosition,
             RECORDING_ID,
+            term10BaseLogPosition,
             t1,
             leaderId,
             0,
-            true,
-            term10BaseLogPosition);
+            true);
 
         verify(electionStateCounter).setRelease(ElectionState.CANVASS.code());
 
@@ -1059,11 +1059,11 @@ class ElectionTest
                 term10BaseLogPosition,
                 term10BaseLogPosition,
                 RECORDING_ID,
+                term10BaseLogPosition,
                 t1,
                 leaderId,
                 0,
-                true,
-                term10BaseLogPosition);
+                true);
 
             election.doWork(++t1);
             verify(electionStateCounter).setRelease(ElectionState.FOLLOWER_LOG_REPLICATION.code());
@@ -1086,11 +1086,11 @@ class ElectionTest
             term10BaseLogPosition,
             term10BaseLogPosition,
             RECORDING_ID,
+            term10BaseLogPosition,
             t1,
             leaderId,
             0,
-            true,
-            term10BaseLogPosition);
+            true);
 
         election.doWork(++t1);
         verify(electionStateCounter).setRelease(ElectionState.FOLLOWER_LOG_REPLICATION.code());
@@ -1148,11 +1148,11 @@ class ElectionTest
             followerLogPosition,
             leaderLogPosition,
             RECORDING_ID,
+            leaderLogPosition,
             t1,
             leaderId,
             LOG_SESSION_ID,
-            true,
-            leaderLogPosition);
+            true);
         verify(electionStateCounter).setRelease(ElectionState.FOLLOWER_REPLAY.code());
 
         when(consensusModuleAgent.newLogReplay(anyLong(), anyLong())).thenReturn(logReplay);
@@ -1208,11 +1208,11 @@ class ElectionTest
             termBaseLogPosition,
             leaderLogPosition,
             RECORDING_ID,
+            leaderLogPosition,
             t1,
             leaderId,
             0,
-            false,
-            leaderLogPosition);
+            false);
         verify(electionStateCounter).setRelease(ElectionState.FOLLOWER_LOG_REPLICATION.code());
 
         when(consensusModuleAgent.newLogReplication(any(), any(), anyLong(), anyLong(), anyLong()))
@@ -1295,11 +1295,11 @@ class ElectionTest
             leaderTermBaseLogPosition,
             leaderLogPosition,
             RECORDING_ID,
+            leaderLogPosition,
             t1,
             leaderId,
             0,
-            false,
-            leaderLogPosition);
+            false);
 
         doReturn(logReplication).when(consensusModuleAgent)
             .newLogReplication(any(), any(), anyLong(), anyLong(), anyLong());
@@ -1368,11 +1368,11 @@ class ElectionTest
             termBaseLogPosition,
             leaderLogPosition,
             RECORDING_ID,
+            leaderLogPosition,
             t1,
             leaderId,
             0,
-            false,
-            leaderLogPosition);
+            false);
         verify(electionStateCounter).setRelease(ElectionState.FOLLOWER_LOG_REPLICATION.code());
 
         when(consensusModuleAgent.newLogReplication(any(), any(), anyLong(), anyLong(), anyLong()))

@@ -154,13 +154,13 @@ class ConsensusAdapter implements FragmentHandler, AutoCloseable
                     newLeadershipTermDecoder.leadershipTermId(),
                     newLeadershipTermDecoder.termBaseLogPosition(),
                     newLeadershipTermDecoder.logPosition(),
+                    commitPosition,
                     newLeadershipTermDecoder.leaderRecordingId(),
                     newLeadershipTermDecoder.timestamp(),
                     newLeadershipTermDecoder.leaderMemberId(),
                     newLeadershipTermDecoder.logSessionId(),
                     newLeadershipTermDecoder.appVersion(),
-                    newLeadershipTermDecoder.isStartup() == BooleanType.TRUE,
-                    commitPosition);
+                    newLeadershipTermDecoder.isStartup() == BooleanType.TRUE);
                 break;
 
             case AppendPositionDecoder.TEMPLATE_ID:

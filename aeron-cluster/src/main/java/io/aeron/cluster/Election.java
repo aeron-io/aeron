@@ -412,11 +412,11 @@ class Election
         final long termBaseLogPosition,
         final long logPosition,
         final long leaderRecordingId,
+        final long commitPosition,
         final long timestamp,
         final int leaderMemberId,
         final int logSessionId,
-        final boolean isStartup,
-        final long commitPosition)
+        final boolean isStartup)
     {
         if (INIT == state)
         {
