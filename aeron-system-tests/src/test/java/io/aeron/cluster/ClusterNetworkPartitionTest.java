@@ -134,10 +134,73 @@ class ClusterNetworkPartitionTest
         cluster.sendAndAwaitMessages(100, 200);
     }
 
+    @Test
+    @InterruptAfter(30)
+    void shouldRestartClusterWithMajorityOfNodesBeingBehind()
+    {
+        final long electionTimeoutNs = TimeUnit.SECONDS.toNanos(10);
+        cluster = aCluster()
+            .withStaticNodes(CLUSTER_SIZE)
+            .withCustomAddresses(HOSTNAMES)
+            .withClusterId(7)
+            .withLogChannel("aeron:udp?term-length=512k|alias=raft")
+            .withElectionTimeoutNs(electionTimeoutNs)
+            .withStartupCanvassTimeoutNs(electionTimeoutNs * 2)
+            .start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode firstLeader = cluster.awaitLeader();
+        final List<TestNode> followers = cluster.followers();
+        final ClusterMember[] clusterMembers =
+            ClusterMember.parse(firstLeader.consensusModule().context().clusterMembers());
+
+        cluster.connectClient();
+        final int initialMessageCount = 100;
+        cluster.sendAndAwaitMessages(initialMessageCount);
+
+        cluster.takeSnapshot(firstLeader);
+        cluster.awaitSnapshotCount(1);
+
+        final int messagesAfterSnapshot = 50;
+        final int committedMessageCount = initialMessageCount + messagesAfterSnapshot;
+        cluster.sendAndAwaitMessages(messagesAfterSnapshot, committedMessageCount);
+
+        final long commitPositionBeforePartition = firstLeader.commitPosition();
+
+        blockTrafficToSpecificEndpoint(
+            List.of(clusterMembers[firstLeader.memberId()]),
+            followers.stream()
+                .map((node) -> clusterMembers[node.memberId()])
+                .toList(),
+            ClusterMember::logEndpoint);
+
+        final int messagesReceivedByMinority = 300;
+        cluster.sendMessages(messagesReceivedByMinority);
+
+        awaitLeaderLogRecording(firstLeader, committedMessageCount + messagesReceivedByMinority);
+
+        verifyUncommittedMessagesNotProcessed(commitPositionBeforePartition, committedMessageCount);
+
+        cluster.terminationsExpected(true);
+        cluster.stopAllNodes();
+
+        IpTables.flushChain(CHAIN_NAME); // remove network partition
+
+        cluster.restartAllNodes(false);
+        final TestNode newLeader = cluster.awaitLeader();
+        assertEquals(firstLeader.memberId(), newLeader.memberId());
+        cluster.reconnectClient();
+
+        final int newMessages = 200;
+        cluster.sendMessages(newMessages);
+        cluster.awaitResponseMessageCount(newMessages);
+        cluster.awaitServicesMessageCount(committedMessageCount + messagesReceivedByMinority + newMessages);
+    }
+
     @ParameterizedTest
     @ValueSource(ints = { 64 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024 })
     @InterruptAfter(30)
-    void shouldRestartClusterWithMajorityOfNodesBeingBehind(final int amountOfLogMajorityShouldBeBehind)
+    void shouldRecoverClusterWithMajorityOfNodesBeingBehind(final int amountOfLogMajorityShouldBeBehind)
     {
         final long electionTimeoutNs = TimeUnit.SECONDS.toNanos(10);
         cluster = aCluster()
@@ -183,12 +246,8 @@ class ClusterNetworkPartitionTest
 
         verifyUncommittedMessagesNotProcessed(commitPositionBeforePartition, committedMessageCount);
 
-        cluster.terminationsExpected(true);
-        cluster.stopAllNodes();
-
         IpTables.flushChain(CHAIN_NAME); // remove network partition
 
-        cluster.restartAllNodes(false);
         final TestNode newLeader = cluster.awaitLeader();
         assertEquals(firstLeader.memberId(), newLeader.memberId());
         cluster.reconnectClient();
