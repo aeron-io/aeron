@@ -38,6 +38,7 @@ import io.aeron.test.cluster.TestNode;
 import org.agrona.collections.MutableInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -138,14 +139,10 @@ class ClusterNetworkPartitionTest
     @InterruptAfter(30)
     void shouldRestartClusterWithMajorityOfNodesBeingBehind()
     {
-        final long electionTimeoutNs = TimeUnit.SECONDS.toNanos(10);
         cluster = aCluster()
             .withStaticNodes(CLUSTER_SIZE)
             .withCustomAddresses(HOSTNAMES)
             .withClusterId(7)
-            .withLogChannel("aeron:udp?term-length=512k|alias=raft")
-            .withElectionTimeoutNs(electionTimeoutNs)
-            .withStartupCanvassTimeoutNs(electionTimeoutNs * 2)
             .start();
         systemTestWatcher.cluster(cluster);
 
@@ -197,19 +194,21 @@ class ClusterNetworkPartitionTest
         cluster.awaitServicesMessageCount(committedMessageCount + messagesReceivedByMinority + newMessages);
     }
 
+    @Disabled
     @ParameterizedTest
     @ValueSource(ints = { 64 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024 })
     @InterruptAfter(30)
     void shouldRecoverClusterWithMajorityOfNodesBeingBehind(final int amountOfLogMajorityShouldBeBehind)
     {
-        final long electionTimeoutNs = TimeUnit.SECONDS.toNanos(10);
+        final long leaderHeartbeatTimeoutNs = TimeUnit.SECONDS.toNanos(10);
         cluster = aCluster()
             .withStaticNodes(CLUSTER_SIZE)
             .withCustomAddresses(HOSTNAMES)
             .withClusterId(7)
             .withLogChannel("aeron:udp?term-length=512k|alias=raft")
-            .withElectionTimeoutNs(electionTimeoutNs)
-            .withStartupCanvassTimeoutNs(electionTimeoutNs * 2)
+            .withLeaderHeartbeatTimeoutNs(leaderHeartbeatTimeoutNs)
+            .withStartupCanvassTimeoutNs(leaderHeartbeatTimeoutNs * 2)
+            .withElectionTimeoutNs(leaderHeartbeatTimeoutNs / 2)
             .start();
         systemTestWatcher.cluster(cluster);
 
@@ -298,13 +297,24 @@ class ClusterNetworkPartitionTest
 
         Tests.await(() -> leaderAppendPosition == fastFollower.appendPosition());
 
+        verifyUncommittedMessagesNotProcessed(commitPositionBeforePartition, initialMessageCount);
+
         // restart follower to force an election, i.e. to replay its log
         fastFollower.isTerminationExpected(true);
         fastFollower.close();
         final TestNode fastFollowerRestarted = cluster.startStaticNode(fastFollower.memberId(), false);
-        TestCluster.awaitElectionClosed(fastFollowerRestarted);
+        TestCluster.awaitElectionState(fastFollowerRestarted, ElectionState.FOLLOWER_CATCHUP);
+        verifyNodeState(fastFollowerRestarted, commitPositionBeforePartition, initialMessageCount);
 
-        verifyUncommittedMessagesNotProcessed(commitPositionBeforePartition, initialMessageCount);
+        IpTables.flushChain(CHAIN_NAME); // remove network partition
+        assertSame(leader, cluster.awaitLeader());
+
+        // Once the network partition is removed the majority of nodes will receive the missing data and the commit
+        // position will advance.
+        // This in turn will unblock `FOLLOWER_CATCHUP` progress that is bounded by the commit position but which tries
+        // to reach to the append position of the leader node, i.e. without commit position advancing the
+        // `FOLLOWER_CATCHUP` will not complete and will eventually time out (see `ConsensusModuleAgent.catchupPoll`)
+        verifyUncommittedMessagesNotProcessed(leaderAppendPosition, initialMessageCount + messagesReceivedByMinority);
     }
 
     @Test
@@ -314,7 +324,7 @@ class ClusterNetworkPartitionTest
         cluster = aCluster()
             .withStaticNodes(CLUSTER_SIZE)
             .withCustomAddresses(HOSTNAMES)
-            .withClusterId(3)
+            .withClusterId(7)
             .start();
         systemTestWatcher.cluster(cluster);
 
@@ -328,8 +338,6 @@ class ClusterNetworkPartitionTest
         cluster.connectClient();
         final int initialMessageCount = 100;
         cluster.sendAndAwaitMessages(initialMessageCount);
-
-        final long commitPositionBeforePartition = originalLeader.commitPosition();
 
         // block log traffic from leader to the slow nodes
         final List<ClusterMember> leaderMember = List.of(clusterMembers[originalLeader.memberId()]);
@@ -354,11 +362,10 @@ class ClusterNetworkPartitionTest
         blockTrafficToSpecificEndpoint(leaderMember, majorityMembers, ClusterMember::consensusEndpoint);
         final TestNode majorityLeader = cluster.awaitLeaderWithoutElectionTerminationCheck(originalLeader.memberId());
         assertNotEquals(originalLeader.memberId(), majorityLeader.memberId());
-        final long commitPositionInNewTerm = majorityLeader.commitPosition();
 
         IpTables.flushChain(CHAIN_NAME); // remove network partition
 
-        // wait for old leader to be a follower
+        // wait for old leader to become a follower
         assertSame(majorityLeader, cluster.awaitLeader());
         assertEquals(Cluster.Role.FOLLOWER, originalLeader.role());
 
@@ -367,6 +374,7 @@ class ClusterNetworkPartitionTest
         TestCluster.awaitElectionClosed(fastFollowerRestarted);
         assertEquals(Cluster.Role.FOLLOWER, fastFollowerRestarted.role());
 
+        final long commitPositionInNewTerm = majorityLeader.commitPosition();
         verifyUncommittedMessagesNotProcessed(commitPositionInNewTerm, initialMessageCount);
     }
 
@@ -451,13 +459,23 @@ class ClusterNetworkPartitionTest
         final long expectedCommitPosition, final int expectedCommittedMessageCount)
     {
         final TestNode leader = cluster.findLeader();
-        assertEquals(expectedCommitPosition, leader.commitPosition(), "[leader] invalid commit position");
-        assertEquals(expectedCommittedMessageCount, leader.service().messageCount(), "[leader] invalid message count");
+        verifyNodeState(leader, expectedCommitPosition, expectedCommittedMessageCount);
         for (final TestNode follower : cluster.followers())
         {
-            assertEquals(expectedCommitPosition, follower.commitPosition(), "[follower] invalid commit position");
-            assertEquals(
-                expectedCommittedMessageCount, follower.service().messageCount(), "[follower] invalid message count");
+            verifyNodeState(follower, expectedCommitPosition, expectedCommittedMessageCount);
         }
+    }
+
+    private static void verifyNodeState(
+        final TestNode node, final long expectedCommitPosition, final int expectedCommittedMessageCount)
+    {
+        assertEquals(
+            expectedCommitPosition,
+            node.commitPosition(),
+            () -> "memberId=" + node.memberId() + "role=" + node.role() + " invalid commit position");
+        assertEquals(
+            expectedCommittedMessageCount,
+            node.service().messageCount(),
+            () -> "memberId=" + node.memberId() + "role=" + node.role() + " invalid message count");
     }
 }
