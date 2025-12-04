@@ -46,7 +46,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -133,15 +135,18 @@ class ClusterNetworkPartitionTest
     }
 
     @ParameterizedTest
-    @ValueSource(ints = { 64 * 1024, 256 * 1024, 1024 * 1024 })
+    @ValueSource(ints = { 64 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024 })
     @InterruptAfter(30)
     void shouldRestartClusterWithMajorityOfNodesBeingBehind(final int amountOfLogMajorityShouldBeBehind)
     {
+        final long electionTimeoutNs = TimeUnit.SECONDS.toNanos(10);
         cluster = aCluster()
             .withStaticNodes(CLUSTER_SIZE)
             .withCustomAddresses(HOSTNAMES)
             .withClusterId(7)
             .withLogChannel("aeron:udp?term-length=512k|alias=raft")
+            .withElectionTimeoutNs(electionTimeoutNs)
+            .withStartupCanvassTimeoutNs(electionTimeoutNs * 2)
             .start();
         systemTestWatcher.cluster(cluster);
 
@@ -171,7 +176,7 @@ class ClusterNetworkPartitionTest
             ClusterMember::logEndpoint);
 
         final int messagesReceivedByMinority = 1 + amountOfLogMajorityShouldBeBehind / align(
-                HEADER_LENGTH + SESSION_HEADER_LENGTH + SIZE_OF_INT, FRAME_ALIGNMENT);
+            HEADER_LENGTH + SESSION_HEADER_LENGTH + SIZE_OF_INT, FRAME_ALIGNMENT);
         cluster.sendMessages(messagesReceivedByMinority); // these messages will be only received by 2 out of 5 nodes
 
         awaitLeaderLogRecording(firstLeader, committedMessageCount + messagesReceivedByMinority);
@@ -347,11 +352,13 @@ class ClusterNetworkPartitionTest
                 }
             };
 
+            final Supplier<String> messageSupplier = () -> "awaiting expectedMessageCount=" + expectedMessageCount +
+                ", currentMessageCount=" + messageCount.get();
             while (messageCount.get() < expectedMessageCount)
             {
                 if (0 == image.poll(fragmentHandler, 100))
                 {
-                    Tests.yield();
+                    Tests.yieldingIdle(messageSupplier);
                 }
             }
 
