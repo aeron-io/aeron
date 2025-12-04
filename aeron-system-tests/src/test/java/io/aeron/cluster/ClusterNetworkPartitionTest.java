@@ -23,6 +23,7 @@ import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.status.RecordingPos;
 import io.aeron.cluster.codecs.MessageHeaderDecoder;
 import io.aeron.cluster.codecs.SessionMessageHeaderDecoder;
+import io.aeron.cluster.service.Cluster;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.test.EventLogExtension;
 import io.aeron.test.InterruptAfter;
@@ -51,6 +52,7 @@ import static io.aeron.test.cluster.TestCluster.aCluster;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 @TopologyTest
 @ExtendWith({ EventLogExtension.class, InterruptingTestCallback.class })
@@ -154,7 +156,7 @@ class ClusterNetworkPartitionTest
 
         final long commitPositionBeforePartition = firstLeader.commitPosition();
 
-        blockTraffic(
+        blockTrafficToSpecificEndpoint(
             List.of(clusterMembers[firstLeader.memberId()]),
             Stream.of(slowFollowers)
                 .map((node) -> clusterMembers[node.memberId()])
@@ -211,7 +213,7 @@ class ClusterNetworkPartitionTest
         final long commitPositionBeforePartition = leader.commitPosition();
 
         // block log traffic from leader to the slow nodes
-        blockTraffic(
+        blockTrafficToSpecificEndpoint(
             List.of(clusterMembers[leader.memberId()]),
             Stream.of(slowFollowers)
                 .map((node) -> clusterMembers[node.memberId()])
@@ -226,13 +228,76 @@ class ClusterNetworkPartitionTest
 
         Tests.await(() -> leaderAppendPosition == fastFollower.appendPosition());
 
-        // restart follower to force an election, i.e. go through `FOLLOWER_REPLAY`
+        // restart follower to force an election, i.e. to replay its log
         fastFollower.isTerminationExpected(true);
         fastFollower.close();
         final TestNode fastFollowerRestarted = cluster.startStaticNode(fastFollower.memberId(), false);
         TestCluster.awaitElectionClosed(fastFollowerRestarted);
 
         verifyUncommittedMessagesNotProcessed(commitPositionBeforePartition, initialMessageCount);
+    }
+
+    @Test
+    @InterruptAfter(30)
+    void shouldNotAllowLogReplayBeyondCommitPositionAfterLeadershipTermChange()
+    {
+        cluster = aCluster()
+            .withStaticNodes(CLUSTER_SIZE)
+            .withCustomAddresses(HOSTNAMES)
+            .withClusterId(3)
+            .start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode originalLeader = cluster.awaitLeader();
+        final List<TestNode> followers = cluster.followers();
+        final TestNode fastFollower = followers.get(0);
+        final TestNode[] slowFollowers = followers.subList(1, followers.size()).toArray(new TestNode[0]);
+        final ClusterMember[] clusterMembers =
+            ClusterMember.parse(originalLeader.consensusModule().context().clusterMembers());
+
+        cluster.connectClient();
+        final int initialMessageCount = 100;
+        cluster.sendAndAwaitMessages(initialMessageCount);
+
+        final long commitPositionBeforePartition = originalLeader.commitPosition();
+
+        // block log traffic from leader to the slow nodes
+        final List<ClusterMember> leaderMember = List.of(clusterMembers[originalLeader.memberId()]);
+        final List<ClusterMember> majorityMembers = Stream.of(slowFollowers)
+            .map((node) -> clusterMembers[node.memberId()])
+            .toList();
+        blockTrafficToSpecificEndpoint(leaderMember, majorityMembers, ClusterMember::logEndpoint);
+
+        final int messagesReceivedByMinority = 300;
+        cluster.sendMessages(messagesReceivedByMinority); // these messages will be only received by 2 out of 5 nodes
+
+        final long leaderAppendPosition =
+            awaitLeaderLogRecording(originalLeader, initialMessageCount + messagesReceivedByMinority);
+
+        Tests.await(() -> leaderAppendPosition == fastFollower.appendPosition());
+
+        // stop fast follower
+        fastFollower.isTerminationExpected(true);
+        fastFollower.close();
+
+        // force the majority of nodes to elect a new leader
+        blockTrafficToSpecificEndpoint(leaderMember, majorityMembers, ClusterMember::consensusEndpoint);
+        final TestNode majorityLeader = cluster.awaitLeaderWithoutElectionTerminationCheck(originalLeader.memberId());
+        assertNotEquals(originalLeader.memberId(), majorityLeader.memberId());
+        final long commitPositionInNewTerm = majorityLeader.commitPosition();
+
+        IpTables.flushChain(CHAIN_NAME); // remove network partition
+
+        // wait for old leader to be a follower
+        assertSame(majorityLeader, cluster.awaitLeader());
+        assertEquals(Cluster.Role.FOLLOWER, originalLeader.role());
+
+        // restart sleeping node in new term
+        final TestNode fastFollowerRestarted = cluster.startStaticNode(fastFollower.memberId(), false);
+        TestCluster.awaitElectionClosed(fastFollowerRestarted);
+        assertEquals(Cluster.Role.FOLLOWER, fastFollowerRestarted.role());
+
+        verifyUncommittedMessagesNotProcessed(commitPositionInNewTerm, initialMessageCount);
     }
 
     private long awaitLeaderLogRecording(final TestNode leader, final int expectedMessageCount)
@@ -293,7 +358,7 @@ class ClusterNetworkPartitionTest
         }
     }
 
-    private static void blockTraffic(
+    private static void blockTrafficToSpecificEndpoint(
         final List<ClusterMember> from,
         final List<ClusterMember> to,
         final Function<ClusterMember, String> endpointFunction)
