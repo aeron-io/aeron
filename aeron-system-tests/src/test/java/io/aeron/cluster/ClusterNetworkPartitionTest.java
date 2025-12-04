@@ -42,13 +42,20 @@ import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.List;
 import java.util.function.Function;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static io.aeron.cluster.client.AeronCluster.SESSION_HEADER_LENGTH;
+import static io.aeron.logbuffer.FrameDescriptor.FRAME_ALIGNMENT;
+import static io.aeron.protocol.DataHeaderFlyweight.HEADER_LENGTH;
 import static io.aeron.test.cluster.TestCluster.aCluster;
+import static org.agrona.BitUtil.SIZE_OF_INT;
+import static org.agrona.BitUtil.align;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -125,21 +132,21 @@ class ClusterNetworkPartitionTest
         cluster.sendAndAwaitMessages(100, 200);
     }
 
-    @Test
+    @ParameterizedTest
+    @ValueSource(ints = { 64 * 1024, 256 * 1024, 1024 * 1024 })
     @InterruptAfter(30)
-    void shouldRestartClusterWithMajorityNodesBeingSlow()
+    void shouldRestartClusterWithMajorityOfNodesBeingBehind(final int amountOfLogMajorityShouldBeBehind)
     {
         cluster = aCluster()
             .withStaticNodes(CLUSTER_SIZE)
             .withCustomAddresses(HOSTNAMES)
             .withClusterId(7)
+            .withLogChannel("aeron:udp?term-length=512k|alias=raft")
             .start();
         systemTestWatcher.cluster(cluster);
 
         final TestNode firstLeader = cluster.awaitLeader();
         final List<TestNode> followers = cluster.followers();
-        final TestNode fastFollower = followers.get(0);
-        final TestNode[] slowFollowers = followers.subList(1, followers.size()).toArray(new TestNode[0]);
         final ClusterMember[] clusterMembers =
             ClusterMember.parse(firstLeader.consensusModule().context().clusterMembers());
 
@@ -158,18 +165,16 @@ class ClusterNetworkPartitionTest
 
         blockTrafficToSpecificEndpoint(
             List.of(clusterMembers[firstLeader.memberId()]),
-            Stream.of(slowFollowers)
+            followers.stream()
                 .map((node) -> clusterMembers[node.memberId()])
                 .toList(),
             ClusterMember::logEndpoint);
 
-        final int messagesReceivedByMinority = 300;
+        final int messagesReceivedByMinority = 1 + amountOfLogMajorityShouldBeBehind / align(
+                HEADER_LENGTH + SESSION_HEADER_LENGTH + SIZE_OF_INT, FRAME_ALIGNMENT);
         cluster.sendMessages(messagesReceivedByMinority); // these messages will be only received by 2 out of 5 nodes
 
-        final long leaderAppendPosition =
-            awaitLeaderLogRecording(firstLeader, committedMessageCount + messagesReceivedByMinority);
-
-        Tests.await(() -> leaderAppendPosition == fastFollower.appendPosition());
+        awaitLeaderLogRecording(firstLeader, committedMessageCount + messagesReceivedByMinority);
 
         verifyUncommittedMessagesNotProcessed(commitPositionBeforePartition, committedMessageCount);
 
@@ -179,7 +184,8 @@ class ClusterNetworkPartitionTest
         IpTables.flushChain(CHAIN_NAME); // remove network partition
 
         cluster.restartAllNodes(false);
-        cluster.awaitLeader();
+        final TestNode newLeader = cluster.awaitLeader();
+        assertEquals(firstLeader.memberId(), newLeader.memberId());
         cluster.reconnectClient();
 
         final int newMessages = 200;
