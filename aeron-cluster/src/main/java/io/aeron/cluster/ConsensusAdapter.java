@@ -17,6 +17,7 @@ package io.aeron.cluster;
 
 import io.aeron.FragmentAssembler;
 import io.aeron.Subscription;
+import io.aeron.archive.client.AeronArchive;
 import io.aeron.cluster.client.ClusterException;
 import io.aeron.cluster.codecs.*;
 import io.aeron.logbuffer.FragmentHandler;
@@ -140,6 +141,11 @@ class ConsensusAdapter implements FragmentHandler, AutoCloseable
                     messageHeaderDecoder.blockLength(),
                     messageHeaderDecoder.version());
 
+                final long rawCommitPosition = newLeadershipTermDecoder.commitPosition();
+                final long commitPosition =
+                    NewLeadershipTermDecoder.commitPositionNullValue() == rawCommitPosition ?
+                        AeronArchive.NULL_POSITION : rawCommitPosition;
+
                 consensusModuleAgent.onNewLeadershipTerm(
                     newLeadershipTermDecoder.logLeadershipTermId(),
                     newLeadershipTermDecoder.nextLeadershipTermId(),
@@ -153,7 +159,8 @@ class ConsensusAdapter implements FragmentHandler, AutoCloseable
                     newLeadershipTermDecoder.leaderMemberId(),
                     newLeadershipTermDecoder.logSessionId(),
                     newLeadershipTermDecoder.appVersion(),
-                    newLeadershipTermDecoder.isStartup() == BooleanType.TRUE);
+                    newLeadershipTermDecoder.isStartup() == BooleanType.TRUE,
+                    commitPosition);
                 break;
 
             case AppendPositionDecoder.TEMPLATE_ID:

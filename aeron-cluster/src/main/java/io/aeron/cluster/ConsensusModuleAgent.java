@@ -1006,7 +1006,8 @@ final class ConsensusModuleAgent
                     memberId,
                     logPublisher.sessionId(),
                     ctx.appVersion(),
-                    false);
+                    false,
+                    commitPosition.getPlain());
             }
         }
     }
@@ -1057,7 +1058,8 @@ final class ConsensusModuleAgent
         final int leaderId,
         final int logSessionId,
         final int appVersion,
-        final boolean isStartup)
+        final boolean isStartup,
+        final long commitPosition)
     {
         logOnNewLeadershipTerm(
             memberId,
@@ -1103,13 +1105,17 @@ final class ConsensusModuleAgent
                 timestamp,
                 leaderId,
                 logSessionId,
-                isStartup);
+                isStartup,
+                commitPosition);
         }
         else if (Cluster.Role.FOLLOWER == role &&
             leadershipTermId == this.leadershipTermId &&
             leaderId == leaderMember.id())
         {
-            notifiedCommitPosition = Math.max(notifiedCommitPosition, logPosition);
+            if (NULL_POSITION != commitPosition)
+            {
+                notifiedCommitPosition = commitPosition;
+            }
             timeOfLastLogUpdateNs = nowNs;
         }
         else if (leadershipTermId > this.leadershipTermId)
