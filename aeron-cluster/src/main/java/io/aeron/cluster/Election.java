@@ -515,10 +515,15 @@ class Election
                             " and nextLeadershipTermId=" + nextLeadershipTermId +
                             ", logLeadershipTermId=" + logLeadershipTermId +
                             ", nextTermBaseLogPosition=" + nextTermBaseLogPosition +
-                            ", nextLogPosition=" + nextLogPosition + ", leadershipTermId=" + leadershipTermId +
-                            ", termBaseLogPosition=" + termBaseLogPosition + ", logPosition=" + logPosition +
-                            ", leaderRecordingId=" + leaderRecordingId + ", leaderMemberId=" + leaderMemberId +
-                            ", logSessionId=" + logSessionId + ", isStartup=" + isStartup);
+                            ", nextLogPosition=" + nextLogPosition +
+                            ", leadershipTermId=" + leadershipTermId +
+                            ", termBaseLogPosition=" + termBaseLogPosition +
+                            ", logPosition=" + logPosition +
+                            ", commitPosition=" + commitPosition +
+                            ", leaderRecordingId=" + leaderRecordingId +
+                            ", leaderMemberId=" + leaderMemberId +
+                            ", logSessionId=" + logSessionId +
+                            ", isStartup=" + isStartup);
                     }
                 }
                 else
