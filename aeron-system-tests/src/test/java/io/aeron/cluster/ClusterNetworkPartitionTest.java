@@ -472,10 +472,10 @@ class ClusterNetworkPartitionTest
         assertEquals(
             expectedCommitPosition,
             node.commitPosition(),
-            () -> "memberId=" + node.memberId() + "role=" + node.role() + " invalid commit position");
+            () -> "memberId=" + node.memberId() + " role=" + node.role() + " invalid commit position");
         assertEquals(
             expectedCommittedMessageCount,
             node.service().messageCount(),
-            () -> "memberId=" + node.memberId() + "role=" + node.role() + " invalid message count");
+            () -> "memberId=" + node.memberId() + " role=" + node.role() + " invalid message count");
     }
 }
