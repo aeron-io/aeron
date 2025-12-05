@@ -1109,21 +1109,19 @@ final class ConsensusModuleAgent
                 logSessionId,
                 isStartup);
         }
-        else if (leadershipTermId == this.leadershipTermId)
+        else if (Cluster.Role.FOLLOWER == role &&
+            leadershipTermId == this.leadershipTermId &&
+            leaderId == leaderMember.id())
         {
-            if (Cluster.Role.FOLLOWER == role)
+            if (NULL_POSITION != commitPosition)
             {
-                if (NULL_POSITION != commitPosition)
-                {
-                    notifiedCommitPosition = commitPosition;
-                }
-                timeOfLastLogUpdateNs = nowNs;
+                notifiedCommitPosition = commitPosition;
             }
+            timeOfLastLogUpdateNs = nowNs;
         }
         else if (leadershipTermId > this.leadershipTermId)
         {
-            enterElection(false, "unexpected new leadership term event: " +
-                "this.leadershipTermId=" + this.leadershipTermId + " leadershipTermId=" + leadershipTermId);
+            enterElection(false, "unexpected new leadership term event");
         }
     }
 
@@ -1165,13 +1163,12 @@ final class ConsensusModuleAgent
         {
             election.onCommitPosition(leadershipTermId, logPosition, leaderMemberId);
         }
-        else if (leadershipTermId == this.leadershipTermId)
+        else if (leadershipTermId == this.leadershipTermId &&
+            leaderMemberId == leaderMember.id() &&
+            Cluster.Role.FOLLOWER == role)
         {
-            if (Cluster.Role.FOLLOWER == role)
-            {
-                notifiedCommitPosition = logPosition;
-                timeOfLastLogUpdateNs = nowNs;
-            }
+            notifiedCommitPosition = logPosition;
+            timeOfLastLogUpdateNs = nowNs;
         }
         else if (leadershipTermId > this.leadershipTermId)
         {
