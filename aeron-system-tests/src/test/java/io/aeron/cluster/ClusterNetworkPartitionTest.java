@@ -308,6 +308,7 @@ class ClusterNetworkPartitionTest
 
         IpTables.flushChain(CHAIN_NAME); // remove network partition
         assertSame(leader, cluster.awaitLeader());
+        TestCluster.awaitElectionClosed(fastFollowerRestarted);
 
         // Once the network partition is removed the majority of nodes will receive the missing data and the commit
         // position will advance.
@@ -469,13 +470,12 @@ class ClusterNetworkPartitionTest
     private static void verifyNodeState(
         final TestNode node, final long expectedCommitPosition, final int expectedCommittedMessageCount)
     {
-        assertEquals(
-            expectedCommitPosition,
-            node.commitPosition(),
-            () -> "memberId=" + node.memberId() + " role=" + node.role() + " invalid commit position");
-        assertEquals(
-            expectedCommittedMessageCount,
-            node.service().messageCount(),
-            () -> "memberId=" + node.memberId() + " role=" + node.role() + " invalid message count");
+        final Supplier<String> errMsg = () ->
+            "memberId=" + node.memberId() +
+            " role=" + node.role() +
+            " electionState=" + node.electionState() +
+            " electionCount=" + node.electionCount();
+        assertEquals(expectedCommitPosition, node.commitPosition(), errMsg);
+        assertEquals(expectedCommittedMessageCount, node.service().messageCount(), errMsg);
     }
 }
