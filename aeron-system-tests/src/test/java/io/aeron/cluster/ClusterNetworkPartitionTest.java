@@ -470,6 +470,8 @@ class ClusterNetworkPartitionTest
     private static void verifyNodeState(
         final TestNode node, final long expectedCommitPosition, final int expectedCommittedMessageCount)
     {
+        Tests.await(() -> node.service().messageCount() >= expectedCommittedMessageCount);
+
         final Supplier<String> errMsg = () ->
             "memberId=" + node.memberId() +
             " role=" + node.role() +
