@@ -57,7 +57,8 @@ public final class ClusterEventLogger
      * @param nextLogPosition         committed log position for next term.
      * @param leadershipTermId        new leadership term id.
      * @param termBaseLogPosition     position the log reached at base of new term.
-     * @param logPosition             position the log reached for the new term.
+     * @param logPosition             position the log reached for the new term (i.e. appendPosition of the leader node).
+     * @param commitPosition          of the Cluster, i.e. quorum log position.
      * @param leaderRecordingId       of the log in the leader archive.
      * @param timestamp               of the new term.
      * @param leaderId                member id for the new leader.
@@ -74,6 +75,7 @@ public final class ClusterEventLogger
         final long leadershipTermId,
         final long termBaseLogPosition,
         final long logPosition,
+        final long commitPosition,
         final long leaderRecordingId,
         final long timestamp,
         final int leaderId,
@@ -104,6 +106,7 @@ public final class ClusterEventLogger
                     leadershipTermId,
                     termBaseLogPosition,
                     logPosition,
+                    commitPosition,
                     leaderRecordingId,
                     timestamp,
                     leaderId,

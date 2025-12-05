@@ -72,6 +72,7 @@ class ClusterEventEncoderTest
         final long nextLogPosition = 2563;
         final long leadershipTermId = 222;
         final long logPosition = 1024;
+        final long commitPosition = 512;
         final long timestamp = 32423436;
         final int memberId = 5;
         final int leaderId = 42;
@@ -94,6 +95,7 @@ class ClusterEventEncoderTest
             leadershipTermId,
             termBaseLogPosition,
             logPosition,
+            commitPosition,
             leaderRecordingId,
             timestamp,
             leaderId,
@@ -124,6 +126,8 @@ class ClusterEventEncoderTest
         index += SIZE_OF_LONG;
         assertEquals(logPosition, buffer.getLong(index, LITTLE_ENDIAN));
         index += SIZE_OF_LONG;
+        assertEquals(commitPosition, buffer.getLong(index, LITTLE_ENDIAN));
+        index += SIZE_OF_LONG;
         assertEquals(leaderRecordingId, buffer.getLong(index, LITTLE_ENDIAN));
         index += SIZE_OF_LONG;
         assertEquals(timestamp, buffer.getLong(index, LITTLE_ENDIAN));
@@ -143,7 +147,7 @@ class ClusterEventEncoderTest
     @Test
     void testNewLeaderShipTermLength()
     {
-        assertEquals(SIZE_OF_LONG * 9 + SIZE_OF_INT * 4 + SIZE_OF_BYTE, newLeaderShipTermLength());
+        assertEquals(SIZE_OF_LONG * 10 + SIZE_OF_INT * 4 + SIZE_OF_BYTE, newLeaderShipTermLength());
     }
 
     @Test

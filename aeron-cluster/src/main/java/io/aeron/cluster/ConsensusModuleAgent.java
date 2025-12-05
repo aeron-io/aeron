@@ -1006,7 +1006,8 @@ final class ConsensusModuleAgent
                     memberId,
                     logPublisher.sessionId(),
                     ctx.appVersion(),
-                    false);
+                    false,
+                    commitPosition.getPlain());
             }
         }
     }
@@ -1052,6 +1053,7 @@ final class ConsensusModuleAgent
         final long leadershipTermId,
         final long termBaseLogPosition,
         final long logPosition,
+        final long commitPosition,
         final long leaderRecordingId,
         final long timestamp,
         final int leaderId,
@@ -1068,6 +1070,7 @@ final class ConsensusModuleAgent
             leadershipTermId,
             termBaseLogPosition,
             logPosition,
+            commitPosition,
             leaderRecordingId,
             timestamp,
             leaderId,
@@ -1100,6 +1103,7 @@ final class ConsensusModuleAgent
                 termBaseLogPosition,
                 logPosition,
                 leaderRecordingId,
+                commitPosition,
                 timestamp,
                 leaderId,
                 logSessionId,
@@ -1109,7 +1113,10 @@ final class ConsensusModuleAgent
             leadershipTermId == this.leadershipTermId &&
             leaderId == leaderMember.id())
         {
-            notifiedCommitPosition = Math.max(notifiedCommitPosition, logPosition);
+            if (NULL_POSITION != commitPosition)
+            {
+                notifiedCommitPosition = commitPosition;
+            }
             timeOfLastLogUpdateNs = nowNs;
         }
         else if (leadershipTermId > this.leadershipTermId)
@@ -2231,6 +2238,7 @@ final class ConsensusModuleAgent
         final long leadershipTermId,
         final long termBaseLogPosition,
         final long logPosition,
+        final long commitPosition,
         final long leaderRecordingId,
         final long timestamp,
         final int leaderId,
