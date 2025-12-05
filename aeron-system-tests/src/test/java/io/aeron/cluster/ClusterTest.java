@@ -1374,8 +1374,8 @@ class ClusterTest
         cluster.sendMessages(messageCount);
         cluster.awaitResponseMessageCount(messageCount * 3);
 
-        cluster.startStaticNode(originalLeader.index(), true);
-        final TestNode lateJoiningNode = cluster.node(originalLeader.index());
+        final TestNode lateJoiningNode = cluster.startStaticNode(originalLeader.index(), true);
+        TestCluster.awaitElectionClosed(lateJoiningNode);
 
         cluster.awaitServiceMessageCount(lateJoiningNode, messageCount * 3);
     }
