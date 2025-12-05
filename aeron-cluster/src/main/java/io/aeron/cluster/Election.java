@@ -532,7 +532,7 @@ class Election
             }
         }
 
-        if (state == FOLLOWER_LOG_REPLICATION && logLeadershipTermId == this.logLeadershipTermId)
+        if (state == FOLLOWER_LOG_REPLICATION && leaderMemberId == this.leaderMember.id())
         {
             replicationDeadlineNs = ctx.clusterClock().timeNanos() + ctx.leaderHeartbeatTimeoutNs();
         }
@@ -571,24 +571,24 @@ class Election
             return;
         }
 
-        if (leadershipTermId == this.leadershipTermId)
+        if (leadershipTermId == this.leadershipTermId &&
+            NULL_POSITION != catchupJoinPosition &&
+            FOLLOWER_CATCHUP == state &&
+            leaderMemberId == leaderMember.id())
         {
-            if (FOLLOWER_CATCHUP == state && NULL_POSITION != catchupJoinPosition)
-            {
-                catchupCommitPosition = max(catchupCommitPosition, logPosition);
-            }
-            else if (FOLLOWER_LOG_REPLICATION == state)
-            {
-                replicationCommitPosition = max(replicationCommitPosition, logPosition);
-                replicationDeadlineNs = ctx.clusterClock().timeNanos() + ctx.leaderHeartbeatTimeoutNs();
-            }
+            catchupCommitPosition = max(catchupCommitPosition, logPosition);
+        }
+        else if (FOLLOWER_LOG_REPLICATION == state && leaderMemberId == leaderMember.id())
+        {
+            replicationCommitPosition = max(replicationCommitPosition, logPosition);
+            replicationDeadlineNs = ctx.clusterClock().timeNanos() + ctx.leaderHeartbeatTimeoutNs();
         }
         else if (leadershipTermId > this.leadershipTermId && LEADER_READY == state)
         {
             throw new ClusterEvent("new leader detected due to commit position - " +
                 " memberId=" + thisMemberId() +
                 " this.leadershipTermId=" + this.leadershipTermId +
-                " this.leaderMemberId=" + leaderMember.id() +
+                " this.leaderMemberId=" + thisMemberId() +
                 " this.logPosition=" + this.logPosition +
                 " newLeadershipTermId=" + leadershipTermId +
                 " newLeaderMemberId=" + leaderMemberId +
