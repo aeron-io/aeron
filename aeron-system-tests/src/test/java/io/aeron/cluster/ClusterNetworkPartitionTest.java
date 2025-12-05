@@ -379,6 +379,68 @@ class ClusterNetworkPartitionTest
         verifyUncommittedMessagesNotProcessed(commitPositionInNewTerm, initialMessageCount);
     }
 
+    @Test
+    @InterruptAfter(30)
+    void shouldNotStuckInFollowerCatchup()
+    {
+        final long leaderHeartbeatTimeoutNs = TimeUnit.SECONDS.toNanos(10);
+        final List<String> hosts = HOSTNAMES.subList(0, 3);
+        cluster = aCluster()
+            .withStaticNodes(hosts.size())
+            .withCustomAddresses(hosts)
+            .withClusterId(0)
+            .withLeaderHeartbeatTimeoutNs(leaderHeartbeatTimeoutNs)
+            .withStartupCanvassTimeoutNs(leaderHeartbeatTimeoutNs * 2)
+            .withElectionTimeoutNs(leaderHeartbeatTimeoutNs / 2)
+            .start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode leader = cluster.awaitLeader();
+        final List<TestNode> followers = cluster.followers();
+        final TestNode follower1 = followers.get(0);
+        final TestNode follower2 = followers.get(1);
+        final ClusterMember[] clusterMembers =
+            ClusterMember.parse(leader.consensusModule().context().clusterMembers());
+
+        cluster.connectClient();
+        final int initialMessageCount = 100;
+        cluster.sendAndAwaitMessages(initialMessageCount);
+
+        blockTrafficToSpecificEndpoint(
+            List.of(clusterMembers[leader.memberId()]),
+            List.of(clusterMembers[follower2.memberId()]),
+            ClusterMember::logEndpoint);
+
+        // stop a follower for it to fall behind
+        follower1.isTerminationExpected(true);
+        follower1.close();
+
+        final int numMessagesAfterPartition = 111;
+        cluster.sendMessages(numMessagesAfterPartition); // only leader will receive these messages
+
+        final long leaderAppendPosition =
+            awaitLeaderLogRecording(leader, initialMessageCount + numMessagesAfterPartition);
+
+        final TestNode follower1Restarted = cluster.startStaticNode(follower1.memberId(), false);
+        TestCluster.awaitElectionState(follower1Restarted, ElectionState.FOLLOWER_CATCHUP_AWAIT);
+
+        follower2.isTerminationExpected(true);
+        follower2.close();
+
+        IpTables.flushChain(CHAIN_NAME); // remove network partition
+
+        final TestNode follower2Restarted = cluster.startStaticNode(follower2.memberId(), false);
+        TestCluster.awaitElectionState(follower2Restarted, ElectionState.FOLLOWER_CATCHUP_AWAIT);
+
+        // wait for election to be complete
+        assertSame(leader, cluster.awaitLeader());
+        assertEquals(Cluster.Role.LEADER, leader.role());
+        TestCluster.awaitElectionClosed(follower1Restarted);
+        TestCluster.awaitElectionClosed(follower2Restarted);
+
+        verifyUncommittedMessagesNotProcessed(leaderAppendPosition, initialMessageCount + numMessagesAfterPartition);
+    }
+
     private long awaitLeaderLogRecording(final TestNode leader, final int expectedMessageCount)
     {
         final long firstLeaderLogRecordingId =
