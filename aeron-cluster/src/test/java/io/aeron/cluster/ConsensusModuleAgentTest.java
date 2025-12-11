@@ -430,6 +430,7 @@ class ConsensusModuleAgentTest
             leadershipTermId,
             100,
             600,
+            4096,
             8,
             200,
             0,

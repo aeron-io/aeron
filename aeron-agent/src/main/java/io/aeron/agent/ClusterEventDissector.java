@@ -60,6 +60,9 @@ final class ClusterEventDissector
         final long logPosition = buffer.getLong(absoluteOffset, LITTLE_ENDIAN);
         absoluteOffset += SIZE_OF_LONG;
 
+        final long commitPosition = buffer.getLong(absoluteOffset, LITTLE_ENDIAN);
+        absoluteOffset += SIZE_OF_LONG;
+
         final long leaderRecordingId = buffer.getLong(absoluteOffset, LITTLE_ENDIAN);
         absoluteOffset += SIZE_OF_LONG;
 
@@ -88,6 +91,7 @@ final class ClusterEventDissector
             .append(" leadershipTermId=").append(leadershipTermId)
             .append(" termBaseLogPosition=").append(termBaseLogPosition)
             .append(" logPosition=").append(logPosition)
+            .append(" commitPosition=").append(commitPosition)
             .append(" leaderRecordingId=").append(leaderRecordingId)
             .append(" timestamp=").append(timestamp)
             .append(" leaderId=").append(leaderId)
