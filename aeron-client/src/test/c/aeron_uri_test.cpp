@@ -17,6 +17,7 @@
 #include <functional>
 
 #include <gtest/gtest.h>
+#include "gmock/gmock-matchers.h"
 #include "command/aeron_control_protocol.h"
 
 extern "C"
@@ -293,6 +294,9 @@ public:
             add_ifaddr(AF_INET6, "eth1:1", "fe80:0:0:0:0:0:0:1", "FFFF::", IFF_MULTICAST | IFF_UP);
             add_ifaddr(AF_INET6, "eth1:2", "fe80:1:0:0:0:0:0:1", "FFFF:FFFF::", IFF_MULTICAST | IFF_UP);
             add_ifaddr(AF_INET, "vlan.13", "172.18.13.5", "255.255.255.224", IFF_MULTICAST | IFF_UP);
+            add_ifaddr(AF_INET, "eth2", "10.0.1.2", "255.255.255.0", IFF_MULTICAST | IFF_UP);
+            add_ifaddr(AF_INET, "eth2", "10.0.0.2", "255.255.255.0", IFF_MULTICAST | IFF_UP);
+            add_ifaddr(AF_INET6, "eth2", "2001:db8::1", "FFFF:FFFF::", IFF_MULTICAST | IFF_UP);
         }
     }
 
@@ -317,7 +321,7 @@ TEST_F(UriLookupTest, shouldFindIpv4Loopback)
     auto *addr_in = (struct sockaddr_in *)&addr;
     unsigned int if_index;
 
-    ASSERT_EQ(aeron_find_interface("127.0.0.0/16", (struct sockaddr_storage *)&addr, &if_index), 0);
+    ASSERT_EQ(aeron_find_interface(AF_INET, "127.0.0.0/16", (struct sockaddr_storage *)&addr, &if_index), 0);
     EXPECT_EQ(addr_in->sin_family, AF_INET);
     EXPECT_STREQ(inet_ntop(AF_INET, &addr_in->sin_addr, buffer, sizeof(buffer)), "127.0.0.1");
 }
@@ -329,7 +333,7 @@ TEST_F(UriLookupTest, shouldFindIpv4LoopbackAsLocalhost)
     auto *addr_in = (struct sockaddr_in *)&addr;
     unsigned int if_index;
 
-    ASSERT_EQ(aeron_find_interface("localhost:40123", (struct sockaddr_storage *)&addr, &if_index), 0);
+    ASSERT_EQ(aeron_find_interface(AF_INET, "localhost:40123", (struct sockaddr_storage *)&addr, &if_index), 0);
     EXPECT_EQ(addr_in->sin_family, AF_INET);
     EXPECT_STREQ(inet_ntop(AF_INET, &addr_in->sin_addr, buffer, sizeof(buffer)), "127.0.0.1");
     EXPECT_EQ(addr_in->sin_port, htons(40123));
@@ -342,7 +346,7 @@ TEST_F(UriLookupTest, shouldFindIpv6)
     auto *addr_in6 = (struct sockaddr_in6 *)&addr;
     unsigned int if_index;
 
-    ASSERT_EQ(aeron_find_interface("[fe80:0:0:0:0:0:0:0]/16", (struct sockaddr_storage *)&addr, &if_index), 0);
+    ASSERT_EQ(aeron_find_interface(AF_INET6, "[fe80:0:0:0:0:0:0:0]/16", (struct sockaddr_storage *)&addr, &if_index), 0);
     EXPECT_EQ(addr_in6->sin6_family, AF_INET6);
     EXPECT_STREQ(inet_ntop(AF_INET6, &addr_in6->sin6_addr, buffer, sizeof(buffer)), "fe80:1:abcd::1");
 }
@@ -352,10 +356,10 @@ TEST_F(UriLookupTest, shouldNotFindUnknown)
     struct sockaddr_storage addr = {};
     unsigned int if_index = 0;
 
-    ASSERT_EQ(aeron_find_interface("[fe80:ffff:0:0:0:0:0:0]/32", (struct sockaddr_storage *)&addr, &if_index), -1);
-    ASSERT_EQ(aeron_find_interface("127.0.0.10/32", (struct sockaddr_storage *)&addr, &if_index), -1);
-    ASSERT_EQ(aeron_find_interface("172.116.1.20/12", (struct sockaddr_storage *)&addr, &if_index), -1);
-    ASSERT_EQ(aeron_find_interface("192.168.2.20/24", (struct sockaddr_storage *)&addr, &if_index), -1);
+    ASSERT_EQ(aeron_find_interface(AF_INET6, "[fe80:ffff:0:0:0:0:0:0]/32", (struct sockaddr_storage *)&addr, &if_index), -1);
+    ASSERT_EQ(aeron_find_interface(AF_INET, "127.0.0.10/32", (struct sockaddr_storage *)&addr, &if_index), -1);
+    ASSERT_EQ(aeron_find_interface(AF_INET, "172.116.1.20/12", (struct sockaddr_storage *)&addr, &if_index), -1);
+    ASSERT_EQ(aeron_find_interface(AF_INET, "192.168.2.20/24", (struct sockaddr_storage *)&addr, &if_index), -1);
 }
 
 TEST_F(UriLookupTest, shouldFindIPv4Multicast)
@@ -365,12 +369,63 @@ TEST_F(UriLookupTest, shouldFindIPv4Multicast)
     auto *addr_in = (struct sockaddr_in *)&addr;
     unsigned int if_index = 0;
 
-    ASSERT_EQ(aeron_find_interface("172.18.13.0/27", (struct sockaddr_storage *)&addr, &if_index), 0);
+    ASSERT_EQ(aeron_find_interface(AF_INET, "172.18.13.0/27", (struct sockaddr_storage *)&addr, &if_index), 0);
     EXPECT_STREQ(inet_ntop(AF_INET, &addr_in->sin_addr, buffer, sizeof(buffer)), "172.18.13.5");
-    ASSERT_EQ(aeron_find_interface("172.18.13.5", (struct sockaddr_storage *)&addr, &if_index), 0);
+    ASSERT_EQ(aeron_find_interface(AF_INET, "172.18.13.5", (struct sockaddr_storage *)&addr, &if_index), 0);
     EXPECT_STREQ(inet_ntop(AF_INET, &addr_in->sin_addr, buffer, sizeof(buffer)), "172.18.13.5");
-    ASSERT_EQ(aeron_find_interface("172.18.13.5/32", (struct sockaddr_storage *)&addr, &if_index), 0);
+    ASSERT_EQ(aeron_find_interface(AF_INET, "172.18.13.5/32", (struct sockaddr_storage *)&addr, &if_index), 0);
     EXPECT_STREQ(inet_ntop(AF_INET, &addr_in->sin_addr, buffer, sizeof(buffer)), "172.18.13.5");
+}
+
+TEST_F(UriLookupTest, shouldFindNamedInterface)
+{
+    char buffer[AERON_URI_MAX_LENGTH] = { 0 };
+    struct sockaddr_storage addr = {};
+    auto *addr_in = (struct sockaddr_in *)&addr;
+    unsigned int if_index = 0;
+
+    ASSERT_EQ(aeron_find_interface(AF_INET, "{lo0}", (struct sockaddr_storage *)&addr, &if_index), 0);
+    EXPECT_STREQ(inet_ntop(AF_INET, &addr_in->sin_addr, buffer, sizeof(buffer)), "127.0.0.1");
+    EXPECT_EQ(addr_in->sin_port, htons(0));
+    ASSERT_EQ(aeron_find_interface(AF_INET, "{eth0:1}:65535", (struct sockaddr_storage *)&addr, &if_index), 0);
+    EXPECT_STREQ(inet_ntop(AF_INET, &addr_in->sin_addr, buffer, sizeof(buffer)), "192.168.1.21");
+    EXPECT_EQ(addr_in->sin_port, htons(65535));
+    ASSERT_EQ(aeron_find_interface(AF_INET, "{vlan.13}", (struct sockaddr_storage *)&addr, &if_index), 0);
+    EXPECT_STREQ(inet_ntop(AF_INET, &addr_in->sin_addr, buffer, sizeof(buffer)), "172.18.13.5");
+    EXPECT_EQ(addr_in->sin_port, htons(0));
+}
+
+TEST_F(UriLookupTest, shouldNotFindUnknownNamedInterface)
+{
+    struct sockaddr_storage addr = {};
+    unsigned int if_index = 0;
+
+    ASSERT_EQ(aeron_find_interface(AF_INET, "{eth13}", (struct sockaddr_storage *)&addr, &if_index), -1);
+    ASSERT_THAT(aeron_errmsg(), testing::HasSubstr("unknown interface eth13"));
+}
+
+TEST_F(UriLookupTest, shouldFindAddressOfTheGivenFamilyOnNamedInterface)
+{
+    char buffer[AERON_URI_MAX_LENGTH] = { 0 };
+    struct sockaddr_storage addr = {};
+    auto *addr_in = (struct sockaddr_in *)&addr;
+    auto *addr_in6 = (struct sockaddr_in6 *)&addr;
+    unsigned int if_index = 0;
+
+    ASSERT_EQ(aeron_find_interface(AF_INET, "{eth2}", (struct sockaddr_storage *)&addr, &if_index), 0);
+    EXPECT_STREQ(inet_ntop(AF_INET, &addr_in->sin_addr, buffer, sizeof(buffer)), "10.0.0.2");
+
+    ASSERT_EQ(aeron_find_interface(AF_INET6, "{eth2}", (struct sockaddr_storage *)&addr, &if_index), 0);
+    EXPECT_STREQ(inet_ntop(AF_INET6, &addr_in6->sin6_addr, buffer, sizeof(buffer)), "2001:db8::1");
+}
+
+TEST_F(UriLookupTest, shouldNotFindUnavailableFamilyOnAvailableNamedInterface)
+{
+    struct sockaddr_storage addr = {};
+    unsigned int if_index = 0;
+
+    ASSERT_EQ(aeron_find_interface(AF_INET6, "{vlan.13}", (struct sockaddr_storage *)&addr, &if_index), -1);
+    ASSERT_THAT(aeron_errmsg(), testing::HasSubstr("no INET6 addresses found on interface vlan.13"));
 }
 
 class UriPrintTest : public testing::TestWithParam<const char *>

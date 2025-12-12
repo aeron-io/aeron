@@ -3317,12 +3317,10 @@ public final class MediaDriver implements AutoCloseable
         /**
          * Get the interface of the {@link MediaDriver} for name resolver purposes.
          * <p>
-         * The format is hostname:port and follows the URI format for the interface parameter. If set to null,
-         * then the name resolver will not be used.
+         * The format is {@code hostname:port}. If set to null, then the name resolver will not be used.
          *
          * @return interface of the {@link MediaDriver}.
          * @see Configuration#RESOLVER_INTERFACE_PROP_NAME
-         * @see CommonContext#INTERFACE_PARAM_NAME
          */
         @Config
         public String resolverInterface()
@@ -3333,13 +3331,11 @@ public final class MediaDriver implements AutoCloseable
         /**
          * Set the interface of the {@link MediaDriver} for name resolver purposes.
          * <p>
-         * The format is hostname:port and follows the URI format for the interface parameter. If set to null,
-         * then the name resolver will not be used.
+         * The format is {@code hostname:port}. If set to null, then the name resolver will not be used.
          *
          * @param resolverInterface to use for the name resolver.
          * @return this for fluent API.
          * @see Configuration#RESOLVER_INTERFACE_PROP_NAME
-         * @see CommonContext#INTERFACE_PARAM_NAME
          */
         public Context resolverInterface(final String resolverInterface)
         {
@@ -3350,7 +3346,7 @@ public final class MediaDriver implements AutoCloseable
         /**
          * Get the bootstrap neighbor of the {@link MediaDriver} for name resolver purposes.
          * <p>
-         * The format is comma separated list of {@code hostname:port} pairs. and follows the URI format for the
+         * The format is comma separated list of {@code hostname:port} pairs and follows the URI format for the
          * endpoint parameter.
          *
          * @return bootstrap neighbor of the {@link MediaDriver}.
@@ -3366,7 +3362,8 @@ public final class MediaDriver implements AutoCloseable
         /**
          * Set the bootstrap neighbor of the {@link MediaDriver} for name resolver purposes.
          * <p>
-         * The format is hostname:port and follows the URI format for the endpoint parameter.
+         * The format is comma separated list of {@code hostname:port} pairs and follows the URI format for the
+         * endpoint parameter.
          *
          * @param resolverBootstrapNeighbor to use for the name resolver.
          * @return this for fluent API.
