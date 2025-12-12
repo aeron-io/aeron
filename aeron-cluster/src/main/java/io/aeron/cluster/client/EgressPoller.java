@@ -23,6 +23,7 @@ import io.aeron.cluster.codecs.*;
 import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.Header;
 import org.agrona.DirectBuffer;
+import org.agrona.collections.ArrayUtil;
 
 /**
  * Poller for the egress from a cluster to capture administration message details.
@@ -244,7 +245,7 @@ public final class EgressPoller implements ControlledFragmentHandler
         final int schemaId = messageHeaderDecoder.schemaId();
         if (schemaId != MessageHeaderDecoder.SCHEMA_ID)
         {
-            throw new ClusterException("expected schemaId=" + MessageHeaderDecoder.SCHEMA_ID + ", actual=" + schemaId);
+            return Action.CONTINUE; // skip unknown schemas
         }
 
         templateId = messageHeaderDecoder.templateId();
@@ -303,8 +304,10 @@ public final class EgressPoller implements ControlledFragmentHandler
                     messageHeaderDecoder.blockLength(),
                     messageHeaderDecoder.version());
 
-                encodedChallenge = new byte[challengeDecoder.encodedChallengeLength()];
-                challengeDecoder.getEncodedChallenge(encodedChallenge, 0, challengeDecoder.encodedChallengeLength());
+                final int encodedChallengeLength = challengeDecoder.encodedChallengeLength();
+                encodedChallenge =
+                    0 == encodedChallengeLength ? ArrayUtil.EMPTY_BYTE_ARRAY : new byte[encodedChallengeLength];
+                challengeDecoder.getEncodedChallenge(encodedChallenge, 0, encodedChallengeLength);
 
                 clusterSessionId = challengeDecoder.clusterSessionId();
                 correlationId = challengeDecoder.correlationId();
