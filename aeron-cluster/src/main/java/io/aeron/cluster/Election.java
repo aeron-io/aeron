@@ -439,39 +439,19 @@ class Election
         {
             if (logLeadershipTermId == this.logLeadershipTermId)
             {
-                if (NULL_POSITION != nextTermBaseLogPosition)
+                if (NULL_POSITION != nextTermBaseLogPosition && nextTermBaseLogPosition < appendPosition)
                 {
-                    if (nextTermBaseLogPosition < appendPosition)
-                    {
-                        onTruncateLogEntry(
-                            thisMember.id(),
-                            state,
-                            logLeadershipTermId,
-                            this.leadershipTermId,
-                            candidateTermId,
-                            ctx.commitPositionCounter().getPlain(),
-                            this.logPosition,
-                            appendPosition,
-                            appendPosition,
-                            nextTermBaseLogPosition);
-                    }
-                }
-                else
-                {
-                    if (NULL_POSITION != commitPosition && appendPosition > commitPosition)
-                    {
-                        onTruncateLogEntry(
-                            thisMember.id(),
-                            state,
-                            logLeadershipTermId,
-                            this.leadershipTermId,
-                            candidateTermId,
-                            ctx.commitPositionCounter().getPlain(),
-                            this.logPosition,
-                            appendPosition,
-                            appendPosition,
-                            commitPosition);
-                    }
+                    onTruncateLogEntry(
+                        thisMember.id(),
+                        state,
+                        logLeadershipTermId,
+                        this.leadershipTermId,
+                        candidateTermId,
+                        ctx.commitPositionCounter().getPlain(),
+                        this.logPosition,
+                        appendPosition,
+                        appendPosition,
+                        nextTermBaseLogPosition);
                 }
 
                 this.leaderMember = leader;
