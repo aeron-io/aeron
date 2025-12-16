@@ -1026,7 +1026,9 @@ final class ConsensusModuleAgent
         }
         else if (candidateTermId > leadershipTermId)
         {
-            enterElection(false, "unexpected vote request");
+            enterElection(false, "unexpected vote request:" +
+                " this.leadershipTermId=" + leadershipTermId +
+                " candidateTermId=" + candidateTermId);
         }
     }
 
@@ -1102,8 +1104,8 @@ final class ConsensusModuleAgent
                 leadershipTermId,
                 termBaseLogPosition,
                 logPosition,
-                leaderRecordingId,
                 commitPosition,
+                leaderRecordingId,
                 timestamp,
                 leaderId,
                 logSessionId,
@@ -1121,7 +1123,9 @@ final class ConsensusModuleAgent
         }
         else if (leadershipTermId > this.leadershipTermId)
         {
-            enterElection(false, "unexpected new leadership term event");
+            enterElection(false, "unexpected new leadership term event:" +
+                " this.leadershipTermId=" + this.leadershipTermId +
+                " newLeadershipTermId=" + leadershipTermId);
         }
     }
 
@@ -1182,8 +1186,8 @@ final class ConsensusModuleAgent
                 " this.appendPosition=" +
                 (null != appendPosition ? appendPosition.getWeak() : NULL_POSITION) +
                 " newLeadershipTermId=" + leadershipTermId +
-                " newLogPosition=" + logPosition +
-                " newLeaderMemberId=" + leaderMemberId + ")");
+                " newLeaderMemberId=" + leaderMemberId +
+                " newCommitPosition=" + logPosition + ")");
         }
     }
 

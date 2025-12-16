@@ -49,44 +49,43 @@ import static java.lang.Math.max;
  */
 class Election
 {
-    private final boolean isNodeStartup;
-    private final long initialLogLeadershipTermId;
-    private final long initialTermBaseLogPosition;
-    private boolean isFirstInit = true;
-    private boolean isLeaderStartup;
-    private boolean isExtendedCanvass;
-    private int logSessionId = NULL_SESSION_ID;
-    private long timeOfLastStateChangeNs;
-    private long timeOfLastUpdateNs;
-    private long timeOfLastCommitPositionUpdateNs;
-    private final long initialTimeOfLastUpdateNs;
-    private long nominationDeadlineNs;
-    private long logPosition;
-    private long appendPosition;
-    private long catchupJoinPosition = NULL_POSITION;
-    private long catchupCommitPosition = 0;
-    private long replicationLeadershipTermId = NULL_VALUE;
-    private long replicationStopPosition = NULL_POSITION;
-    private long leaderRecordingId = NULL_VALUE;
-    private long leadershipTermId;
-    private long logLeadershipTermId;
-    private long candidateTermId;
-    private ClusterMember leaderMember = null;
-    private ElectionState state = INIT;
-    private Subscription logSubscription = null;
-    private LogReplay logReplay = null;
     private final ClusterMember[] clusterMembers;
     private final ClusterMember thisMember;
     private final Int2ObjectHashMap<ClusterMember> clusterMemberByIdMap;
     private final ConsensusPublisher consensusPublisher;
     private final ConsensusModule.Context ctx;
     private final ConsensusModuleAgent consensusModuleAgent;
-    private RecordingReplication logReplication = null;
-    private long replicationCommitPosition = 0;
-    private long replicationDeadlineNs = 0;
+    private final long initialLogLeadershipTermId;
+    private final long initialTimeOfLastUpdateNs;
+    private final long initialTermBaseLogPosition;
+    private final boolean isNodeStartup;
+    private long timeOfLastStateChangeNs;
+    private long timeOfLastUpdateNs;
+    private long timeOfLastCommitPositionUpdateNs;
+    private long nominationDeadlineNs;
+    private long logPosition;
+    private long appendPosition;
+    private long notifiedCommitPosition;
+    private long catchupJoinPosition = NULL_POSITION;
+    private long replicationLeadershipTermId = NULL_VALUE;
+    private long replicationStopPosition = NULL_POSITION;
+    private long replicationDeadlineNs;
     private long replicationTermBaseLogPosition;
+    private long leaderRecordingId = NULL_VALUE;
+    private long leadershipTermId;
+    private long logLeadershipTermId;
+    private long candidateTermId;
     private long lastPublishedCommitPosition;
+    private int logSessionId = NULL_SESSION_ID;
     private int gracefulClosedLeaderId;
+    private boolean isFirstInit = true;
+    private boolean isLeaderStartup;
+    private boolean isExtendedCanvass;
+    private ClusterMember leaderMember = null;
+    private ElectionState state = INIT;
+    private Subscription logSubscription = null;
+    private LogReplay logReplay = null;
+    private RecordingReplication logReplication = null;
 
     Election(
         final boolean isNodeStartup,
@@ -411,8 +410,8 @@ class Election
         final long leadershipTermId,
         final long termBaseLogPosition,
         final long logPosition,
-        final long leaderRecordingId,
         final long commitPosition,
+        final long leaderRecordingId,
         final long timestamp,
         final int leaderMemberId,
         final int logSessionId,
@@ -461,6 +460,10 @@ class Election
                 this.logSessionId = logSessionId;
                 this.leaderRecordingId = leaderRecordingId;
                 this.catchupJoinPosition = appendPosition < logPosition ? logPosition : NULL_POSITION;
+                if (NULL_POSITION != commitPosition)
+                {
+                    notifiedCommitPosition = commitPosition;
+                }
 
                 if (this.appendPosition < termBaseLogPosition)
                 {
@@ -561,11 +564,11 @@ class Election
             FOLLOWER_CATCHUP == state &&
             leaderMemberId == leaderMember.id())
         {
-            catchupCommitPosition = max(catchupCommitPosition, logPosition);
+            notifiedCommitPosition = logPosition;
         }
         else if (FOLLOWER_LOG_REPLICATION == state && leaderMemberId == leaderMember.id())
         {
-            replicationCommitPosition = max(replicationCommitPosition, logPosition);
+            notifiedCommitPosition = logPosition;
             replicationDeadlineNs = ctx.clusterClock().timeNanos() + ctx.leaderHeartbeatTimeoutNs();
         }
         else if (leadershipTermId > this.leadershipTermId && LEADER_READY == state)
@@ -573,11 +576,11 @@ class Election
             throw new ClusterEvent("new leader detected due to commit position - " +
                 " memberId=" + thisMemberId() +
                 " this.leadershipTermId=" + this.leadershipTermId +
-                " this.leaderMemberId=" + thisMemberId() +
+                " this.leaderMemberId=" + (null != leaderMember ? leaderMember.id() : NULL_VALUE) +
                 " this.logPosition=" + this.logPosition +
                 " newLeadershipTermId=" + leadershipTermId +
                 " newLeaderMemberId=" + leaderMemberId +
-                " newLogPosition=" + logPosition +
+                " newCommitPosition=" + logPosition +
                 ")");
         }
     }
@@ -655,6 +658,7 @@ class Election
             }
         }
 
+        notifiedCommitPosition = 0;
         candidateTermId = max(ctx.nodeStateFile().candidateTerm().candidateTermId(), leadershipTermId);
 
         if (clusterMembers.length == 1 && thisMember.id() == clusterMembers[0].id())
@@ -899,7 +903,7 @@ class Election
 
             if (replicationDone)
             {
-                if (replicationCommitPosition >= appendPosition)
+                if (notifiedCommitPosition >= appendPosition)
                 {
                     ConsensusModuleAgent.logReplicationEnded(
                         thisMember.id(),
@@ -1034,10 +1038,10 @@ class Election
 
     private int followerCatchup(final long nowNs)
     {
-        int workCount = consensusModuleAgent.catchupPoll(catchupCommitPosition, nowNs);
+        int workCount = consensusModuleAgent.catchupPoll(notifiedCommitPosition, nowNs);
 
         if (null == consensusModuleAgent.liveLogDestination() &&
-            consensusModuleAgent.isCatchupNearLive(max(catchupJoinPosition, catchupCommitPosition)))
+            consensusModuleAgent.isCatchupNearLive(max(catchupJoinPosition, notifiedCommitPosition)))
         {
             addLiveLogDestination();
             workCount++;
@@ -1045,7 +1049,7 @@ class Election
 
         final long position = ctx.commitPositionCounter().getPlain();
         if (position >= catchupJoinPosition &&
-            position >= catchupCommitPosition &&
+            position >= notifiedCommitPosition &&
             null == consensusModuleAgent.catchupLogDestination() &&
             ConsensusModule.State.SNAPSHOT != consensusModuleAgent.state())
         {
@@ -1367,7 +1371,6 @@ class Election
     {
         consensusModuleAgent.stopAllCatchups();
         catchupJoinPosition = NULL_POSITION;
-        catchupCommitPosition = 0;
     }
 
     private void resetMembers()
@@ -1393,7 +1396,6 @@ class Election
             logReplication.close();
             logReplication = null;
         }
-        replicationCommitPosition = 0;
         replicationDeadlineNs = 0;
         lastPublishedCommitPosition = 0;
     }
@@ -1531,8 +1533,8 @@ class Election
             ", nominationDeadlineNs=" + nominationDeadlineNs +
             ", logPosition=" + logPosition +
             ", appendPosition=" + appendPosition +
+            ", notifiedCommitPosition=" + notifiedCommitPosition +
             ", catchupJoinPosition=" + catchupJoinPosition +
-            ", catchupCommitPosition=" + catchupCommitPosition +
             ", replicationStopPosition=" + replicationStopPosition +
             ", leaderRecordingId=" + leaderRecordingId +
             ", leadershipTermId=" + leadershipTermId +
