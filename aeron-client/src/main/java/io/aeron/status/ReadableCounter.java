@@ -133,10 +133,22 @@ public final class ReadableCounter implements AutoCloseable
 
     /**
      * Get the value of the counter using weak ordering semantics. This is the same a standard read of a field.
+     * <p>
+     * This call is identical to {@link #getPlain()} and that method is preferred.
      *
      * @return the  value for the counter.
      */
     public long getWeak()
+    {
+        return getPlain();
+    }
+
+    /**
+     * Get the value of the counter using plain memory semantics. This is the same a standard read of a field.
+     *
+     * @return the value for the counter.
+     */
+    public long getPlain()
     {
         return valueBuffer.getLong(0);
     }
