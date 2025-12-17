@@ -176,7 +176,7 @@ class ClusterNetworkPartitionTest
 
         awaitLeaderLogRecording(firstLeader, committedMessageCount + messagesReceivedByMinority);
 
-        verifyUncommittedMessagesNotProcessed(commitPositionBeforePartition, committedMessageCount);
+        verifyClusterState(commitPositionBeforePartition, committedMessageCount);
 
         cluster.terminationsExpected(true);
         cluster.stopAllNodes();
@@ -243,7 +243,7 @@ class ClusterNetworkPartitionTest
 
         awaitLeaderLogRecording(firstLeader, committedMessageCount + messagesReceivedByMinority);
 
-        verifyUncommittedMessagesNotProcessed(commitPositionBeforePartition, committedMessageCount);
+        verifyClusterState(commitPositionBeforePartition, committedMessageCount);
 
         IpTables.flushChain(CHAIN_NAME); // remove network partition
 
@@ -261,10 +261,15 @@ class ClusterNetworkPartitionTest
     @InterruptAfter(30)
     void shouldNotAllowLogReplayBeyondCommitPosition()
     {
+        final long leaderHeartbeatTimeoutNs = TimeUnit.SECONDS.toNanos(10);
         cluster = aCluster()
             .withStaticNodes(CLUSTER_SIZE)
             .withCustomAddresses(HOSTNAMES)
-            .withClusterId(7)
+            .withClusterId(3)
+            .withLogChannel("aeron:udp?term-length=512k|alias=raft")
+            .withLeaderHeartbeatTimeoutNs(leaderHeartbeatTimeoutNs)
+            .withStartupCanvassTimeoutNs(leaderHeartbeatTimeoutNs * 2)
+            .withElectionTimeoutNs(leaderHeartbeatTimeoutNs / 2)
             .start();
         systemTestWatcher.cluster(cluster);
 
@@ -292,18 +297,19 @@ class ClusterNetworkPartitionTest
         final int messagesReceivedByMinority = 300;
         cluster.sendMessages(messagesReceivedByMinority); // these messages will be only received by 2 out of 5 nodes
 
+        final int expectedFinalMessageCount = initialMessageCount + messagesReceivedByMinority;
         final long leaderAppendPosition =
-            awaitLeaderLogRecording(leader, initialMessageCount + messagesReceivedByMinority);
+            awaitLeaderLogRecording(leader, expectedFinalMessageCount);
 
         Tests.await(() -> leaderAppendPosition == fastFollower.appendPosition());
 
-        verifyUncommittedMessagesNotProcessed(commitPositionBeforePartition, initialMessageCount);
+        verifyClusterState(commitPositionBeforePartition, initialMessageCount);
 
         // restart follower to force an election, i.e. to replay its log
         fastFollower.isTerminationExpected(true);
         fastFollower.close();
         final TestNode fastFollowerRestarted = cluster.startStaticNode(fastFollower.memberId(), false);
-        TestCluster.awaitElectionState(fastFollowerRestarted, ElectionState.FOLLOWER_CATCHUP);
+        TestCluster.awaitElectionState(fastFollowerRestarted, ElectionState.FOLLOWER_REPLAY);
         verifyNodeState(fastFollowerRestarted, commitPositionBeforePartition, initialMessageCount);
 
         IpTables.flushChain(CHAIN_NAME); // remove network partition
@@ -311,11 +317,8 @@ class ClusterNetworkPartitionTest
         TestCluster.awaitElectionClosed(fastFollowerRestarted);
 
         // Once the network partition is removed the majority of nodes will receive the missing data and the commit
-        // position will advance.
-        // This in turn will unblock `FOLLOWER_CATCHUP` progress that is bounded by the commit position but which tries
-        // to reach to the append position of the leader node, i.e. without commit position advancing the
-        // `FOLLOWER_CATCHUP` will not complete and will eventually time out (see `ConsensusModuleAgent.catchupPoll`)
-        verifyUncommittedMessagesNotProcessed(leaderAppendPosition, initialMessageCount + messagesReceivedByMinority);
+        // position will advance. This in turn will unblock `FOLLOWER_REPLAY` progress that is bounded by it.
+        verifyClusterState(leaderAppendPosition, expectedFinalMessageCount);
     }
 
     @Test
@@ -376,7 +379,7 @@ class ClusterNetworkPartitionTest
         assertEquals(Cluster.Role.FOLLOWER, fastFollowerRestarted.role());
 
         final long commitPositionInNewTerm = majorityLeader.commitPosition();
-        verifyUncommittedMessagesNotProcessed(commitPositionInNewTerm, initialMessageCount);
+        verifyClusterState(commitPositionInNewTerm, initialMessageCount);
     }
 
     @Test
@@ -438,7 +441,7 @@ class ClusterNetworkPartitionTest
         TestCluster.awaitElectionClosed(follower1Restarted);
         TestCluster.awaitElectionClosed(follower2Restarted);
 
-        verifyUncommittedMessagesNotProcessed(leaderAppendPosition, initialMessageCount + numMessagesAfterPartition);
+        verifyClusterState(leaderAppendPosition, initialMessageCount + numMessagesAfterPartition);
     }
 
     private long awaitLeaderLogRecording(final TestNode leader, final int expectedMessageCount)
@@ -518,7 +521,7 @@ class ClusterNetworkPartitionTest
         }
     }
 
-    private void verifyUncommittedMessagesNotProcessed(
+    private void verifyClusterState(
         final long expectedCommitPosition, final int expectedCommittedMessageCount)
     {
         final TestNode leader = cluster.findLeader();

@@ -15,16 +15,21 @@
  */
 package io.aeron.cluster;
 
-import io.aeron.*;
+import io.aeron.ChannelUri;
+import io.aeron.Image;
+import io.aeron.Subscription;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.cluster.client.ClusterException;
 import io.aeron.cluster.service.Cluster;
 import org.agrona.CloseHelper;
+import org.agrona.concurrent.CountedErrorHandler;
 
 final class LogReplay
 {
+    private final AeronArchive archive;
     private final long startPosition;
     private final long stopPosition;
+    private final long replaySessionId;
     private final int logSessionId;
     private final ConsensusModuleAgent consensusModuleAgent;
     private final ConsensusModule.Context ctx;
@@ -39,6 +44,7 @@ final class LogReplay
         final LogAdapter logAdapter,
         final ConsensusModule.Context ctx)
     {
+        this.archive = archive;
         this.startPosition = startPosition;
         this.stopPosition = stopPosition;
         this.logAdapter = logAdapter;
@@ -48,14 +54,24 @@ final class LogReplay
         final String channel = ctx.replayChannel();
         final int streamId = ctx.replayStreamId();
         final long length = stopPosition - startPosition;
-        logSessionId = (int)archive.startReplay(recordingId, startPosition, length, channel, streamId);
+        replaySessionId = archive.startReplay(recordingId, startPosition, length, channel, streamId);
+        logSessionId = (int)replaySessionId;
         logSubscription = ctx.aeron().addSubscription(ChannelUri.addSessionId(channel, logSessionId), streamId);
     }
 
     void close()
     {
-        logAdapter.disconnect(ctx.countedErrorHandler());
-        CloseHelper.close(ctx.countedErrorHandler(), logSubscription);
+        final CountedErrorHandler errorHandler = ctx.countedErrorHandler();
+        try
+        {
+            archive.stopReplay(replaySessionId);
+        }
+        catch (final RuntimeException ex)
+        {
+            errorHandler.onError(ex);
+        }
+        logAdapter.disconnect(errorHandler);
+        CloseHelper.close(errorHandler, logSubscription);
     }
 
     int doWork()
@@ -111,6 +127,7 @@ final class LogReplay
         return "LogReplay{" +
             "startPosition=" + startPosition +
             ", stopPosition=" + stopPosition +
+            ", replaySessionId=" + replaySessionId +
             ", logSessionId=" + logSessionId +
             ", logSubscription=" + logSubscription +
             ", position=" + position() +

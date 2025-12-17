@@ -1000,10 +1000,19 @@ class Election
                 logPosition = logReplay.position();
                 followerReplayNotifiedAppendPosition = NULL_POSITION;
                 stopReplay();
-                state(
-                    NULL_POSITION != catchupJoinPosition ? FOLLOWER_CATCHUP_INIT : FOLLOWER_LOG_INIT,
-                    nowNs,
-                    "log replay done");
+
+                if (logPosition >= appendPosition)
+                {
+                    appendPosition = logPosition;
+                    state(
+                        NULL_POSITION != catchupJoinPosition ? FOLLOWER_CATCHUP_INIT : FOLLOWER_LOG_INIT,
+                        nowNs,
+                        "log replay done");
+                }
+                else
+                {
+                    state(CANVASS, nowNs, "stalled log replay");
+                }
             }
         }
 
@@ -1311,7 +1320,7 @@ class Election
     private boolean sendCatchupPosition(final String catchupEndpoint)
     {
         return consensusPublisher.catchupPosition(
-            leaderMember.publication(), leadershipTermId, appendPosition, thisMember.id(), catchupEndpoint);
+            leaderMember.publication(), leadershipTermId, logPosition, thisMember.id(), catchupEndpoint);
     }
 
     private void addCatchupLogDestination()
@@ -1510,11 +1519,11 @@ class Election
 
     private void verifyLogJoinPosition(final String state, final long joinPosition)
     {
-        if (joinPosition != appendPosition)
+        if (joinPosition != logPosition)
         {
-            final String inequality = joinPosition < appendPosition ? " less " : " greater ";
+            final String inequality = joinPosition < logPosition ? " less " : " greater ";
             throw new ClusterEvent(
-                state + " - joinPosition=" + joinPosition + inequality + "than appendPosition=" + appendPosition);
+                state + " - joinPosition=" + joinPosition + inequality + "than logPosition=" + logPosition);
         }
     }
 
