@@ -1169,12 +1169,13 @@ final class ConsensusModuleAgent
         {
             election.onCommitPosition(leadershipTermId, logPosition, leaderMemberId);
         }
-        else if (leadershipTermId == this.leadershipTermId &&
-            leaderMemberId == leaderMember.id() &&
-            Cluster.Role.FOLLOWER == role)
+        else if (leadershipTermId == this.leadershipTermId)
         {
-            notifiedCommitPosition = max(notifiedCommitPosition, logPosition);
-            timeOfLastLogUpdateNs = nowNs;
+            if (leaderMember.id() == leaderMemberId && Cluster.Role.FOLLOWER == role)
+            {
+                notifiedCommitPosition = max(notifiedCommitPosition, logPosition);
+                timeOfLastLogUpdateNs = nowNs;
+            }
         }
         else if (leadershipTermId > this.leadershipTermId)
         {

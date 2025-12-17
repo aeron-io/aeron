@@ -541,7 +541,9 @@ class Election
             }
         }
 
-        if (state == FOLLOWER_LOG_REPLICATION && leaderMemberId == this.leaderMember.id())
+        if (FOLLOWER_LOG_REPLICATION == state &&
+            logLeadershipTermId == this.logLeadershipTermId &&
+            leaderMember.id() == leaderMemberId)
         {
             replicationDeadlineNs = ctx.clusterClock().timeNanos() + ctx.leaderHeartbeatTimeoutNs();
         }
@@ -581,16 +583,16 @@ class Election
             return;
         }
 
-        if (FOLLOWER_LOG_REPLICATION == state && leaderMemberId == leaderMember.id())
+        if (leadershipTermId == this.leadershipTermId)
         {
-            notifiedCommitPosition = max(notifiedCommitPosition, logPosition);
-            replicationDeadlineNs = ctx.clusterClock().timeNanos() + ctx.leaderHeartbeatTimeoutNs();
-        }
-        else if (leadershipTermId == this.leadershipTermId &&
-            null != leaderMember &&
-            leaderMemberId == leaderMember.id())
-        {
-            notifiedCommitPosition = max(notifiedCommitPosition, logPosition);
+            if (null != leaderMember && leaderMember.id() == leaderMemberId)
+            {
+                notifiedCommitPosition = max(notifiedCommitPosition, logPosition);
+                if (FOLLOWER_LOG_REPLICATION == state)
+                {
+                    replicationDeadlineNs = ctx.clusterClock().timeNanos() + ctx.leaderHeartbeatTimeoutNs();
+                }
+            }
         }
         else if (leadershipTermId > this.leadershipTermId && LEADER_READY == state)
         {
