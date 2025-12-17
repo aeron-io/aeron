@@ -269,8 +269,8 @@ class ElectionTest
             clock.nanoTime(),
             ctx.fileSyncLevel());
 
-        assertEquals(NULL_POSITION, clusterMembers[1].logPosition());
-        assertEquals(NULL_POSITION, clusterMembers[2].logPosition());
+        assertEquals(0, clusterMembers[1].logPosition());
+        assertEquals(0, clusterMembers[2].logPosition());
         assertEquals(candidateTermId, election.leadershipTermId());
 
         clock.increment(1);
