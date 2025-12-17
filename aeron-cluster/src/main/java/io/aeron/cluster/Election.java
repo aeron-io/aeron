@@ -1294,8 +1294,7 @@ class Election
                 thisMember.id(),
                 logSessionId,
                 ctx.appVersion(),
-                isLeaderStartup
-            );
+                isLeaderStartup);
         }
     }
 
