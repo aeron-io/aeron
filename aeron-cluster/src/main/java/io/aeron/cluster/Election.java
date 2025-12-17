@@ -1580,8 +1580,6 @@ class Election
             "clusterMembers=" + Arrays.toString(clusterMembers) +
             ", thisMember=" + thisMember +
             ", leaderMember=" + leaderMember +
-            ", clusterMemberByIdMap=" + clusterMemberByIdMap +
-            ", consensusPublisher=" + consensusPublisher +
             ", initialLogLeadershipTermId=" + initialLogLeadershipTermId +
             ", initialTimeOfLastUpdateNs=" + initialTimeOfLastUpdateNs +
             ", initialTermBaseLogPosition=" + initialTermBaseLogPosition +
