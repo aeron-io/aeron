@@ -52,7 +52,7 @@ typedef struct aeron_exclusive_publication_stct
     void *on_close_complete_clientd;
 
     volatile bool is_closed;
-    bool revoke_on_close;
+    volatile bool revoke_on_close;
 
     uint8_t pre_fields_padding[AERON_CACHE_LINE_LENGTH];
     int64_t term_begin_position;

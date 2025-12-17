@@ -477,7 +477,7 @@ void aeron_publication_image_clean_buffer_to(aeron_publication_image_t *image, i
             0,
             length - sizeof(int64_t));
 
-        uint64_t *ptr = (uint64_t *)(image->mapped_raw_log.term_buffers[dirty_index].addr + term_offset);
+        volatile uint64_t *ptr = (volatile uint64_t *)(image->mapped_raw_log.term_buffers[dirty_index].addr + term_offset);
         AERON_SET_RELEASE(*ptr, (uint64_t)0);
 
         image->conductor_fields.clean_position = clean_position + (int64_t)length;

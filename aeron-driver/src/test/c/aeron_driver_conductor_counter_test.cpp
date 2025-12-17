@@ -205,9 +205,9 @@ TEST_F(DriverConductorCounterTest, shouldNotRemoveCounterOnClientKeepalive)
 
 TEST_F(DriverConductorCounterTest, shouldIncrementCounterOnConductorThresholdExceeded)
 {
-    int64_t *maxCycleTimeCounter = aeron_counters_manager_addr(
+    volatile int64_t *maxCycleTimeCounter = aeron_counters_manager_addr(
         &m_conductor.m_conductor.counters_manager, AERON_SYSTEM_COUNTER_CONDUCTOR_MAX_CYCLE_TIME);
-    int64_t *thresholdExceededCounter = aeron_counters_manager_addr(
+    volatile int64_t *thresholdExceededCounter = aeron_counters_manager_addr(
         &m_conductor.m_conductor.counters_manager, AERON_SYSTEM_COUNTER_CONDUCTOR_CYCLE_TIME_THRESHOLD_EXCEEDED);
 
     nano_time = 0;

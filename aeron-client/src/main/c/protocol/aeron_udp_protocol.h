@@ -34,7 +34,7 @@ aeron_frame_header_t;
 
 typedef struct aeron_data_header_as_longs_stct
 {
-    uint64_t hdr[4];
+    volatile uint64_t hdr[4];
 }
 aeron_data_header_as_longs_t;
 

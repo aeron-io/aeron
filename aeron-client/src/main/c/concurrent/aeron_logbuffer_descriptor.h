@@ -79,7 +79,7 @@ typedef struct aeron_logbuffer_metadata_stct
     uint8_t signal_eos;
     uint8_t spies_simulate_connection;
     uint8_t tether;
-    uint8_t is_publication_revoked;
+    volatile uint8_t is_publication_revoked;
     uint8_t type;
     uint8_t pad3[2 * sizeof(uint8_t)];
     int64_t untethered_linger_timeout_ns;

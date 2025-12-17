@@ -140,7 +140,7 @@ typedef struct aeron_publication_image_stct
     int64_t next_sm_deadline_ns;
     int64_t sm_timeout_ns;
 
-    int64_t time_of_last_packet_ns;
+    volatile int64_t time_of_last_packet_ns;
     const char *invalidation_reason;
 
     bool is_sm_enabled;

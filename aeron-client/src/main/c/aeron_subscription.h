@@ -48,7 +48,7 @@ typedef struct aeron_subscription_stct
     }
     conductor_fields;
 
-    int64_t *channel_status_indicator;
+    volatile int64_t *channel_status_indicator;
 
     volatile int64_t last_image_list_change_number;
 

@@ -695,8 +695,8 @@ int aeron_remove_close_handler(aeron_t *client, aeron_on_close_client_pair_t *pa
 #pragma pack(4)
 typedef struct aeron_counter_value_descriptor_stct
 {
-    int64_t counter_value;
-    int64_t registration_id;
+    volatile int64_t counter_value;
+    volatile int64_t registration_id;
     int64_t owner_id;
     int64_t reference_id;
     uint8_t pad1[(2 * AERON_COUNTER_CACHE_LINE_LENGTH) - (4 * sizeof(int64_t))];
@@ -705,11 +705,11 @@ aeron_counter_value_descriptor_t;
 
 typedef struct aeron_counter_metadata_descriptor_stct
 {
-    int32_t state;
+    volatile int32_t state;
     int32_t type_id;
-    int64_t free_for_reuse_deadline_ms;
+    volatile int64_t free_for_reuse_deadline_ms;
     uint8_t key[(2 * AERON_COUNTER_CACHE_LINE_LENGTH) - (2 * sizeof(int32_t)) - sizeof(int64_t)];
-    int32_t label_length;
+    volatile int32_t label_length;
     uint8_t label[(6 * AERON_COUNTER_CACHE_LINE_LENGTH) - sizeof(int32_t)];
 }
 aeron_counter_metadata_descriptor_t;

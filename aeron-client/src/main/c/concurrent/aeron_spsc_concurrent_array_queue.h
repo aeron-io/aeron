@@ -40,7 +40,7 @@ typedef struct aeron_spsc_concurrent_array_queue_stct
 
     size_t capacity;
     size_t mask;
-    volatile void **buffer;
+    void * volatile *buffer;
 }
 aeron_spsc_concurrent_array_queue_t;
 

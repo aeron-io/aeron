@@ -238,7 +238,7 @@ TEST_F(CncTest, shouldGetLossReport)
         };
 
     aeron_counters_reader_t *counters = aeron_cnc_counters_reader(m_cnc);
-    int64_t *retransmitsSentCounter = aeron_counters_reader_addr(counters, AERON_SYSTEM_COUNTER_RETRANSMITS_SENT);
+    volatile int64_t *retransmitsSentCounter = aeron_counters_reader_addr(counters, AERON_SYSTEM_COUNTER_RETRANSMITS_SENT);
 
     int64_t retransmits = 0;
     for (int i = 0; i < 100 && 0 == retransmits; i++)

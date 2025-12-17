@@ -40,7 +40,7 @@ typedef struct aeron_image_stct
     aeron_log_buffer_t *log_buffer;
     aeron_logbuffer_metadata_t *metadata;
 
-    int64_t *subscriber_position;
+    volatile int64_t *subscriber_position;
 
     aeron_image_key_t key;
     int64_t removal_change_number;

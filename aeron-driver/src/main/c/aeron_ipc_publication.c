@@ -400,7 +400,7 @@ void aeron_ipc_publication_clean_buffer(aeron_ipc_publication_t *publication, in
             0,
             length - sizeof(int64_t));
 
-        uint64_t *ptr = (uint64_t *)(publication->mapped_raw_log.term_buffers[dirty_index].addr + term_offset);
+        volatile uint64_t *ptr = (volatile uint64_t *)(publication->mapped_raw_log.term_buffers[dirty_index].addr + term_offset);
         AERON_SET_RELEASE(*ptr, (uint64_t)0);
 
         publication->conductor_fields.clean_position = (int64_t)(clean_position + length);
