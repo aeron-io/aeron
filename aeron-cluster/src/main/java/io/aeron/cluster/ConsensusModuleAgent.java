@@ -1009,8 +1009,7 @@ final class ConsensusModuleAgent
                     memberId,
                     logPublisher.sessionId(),
                     ctx.appVersion(),
-                    false
-                );
+                    false);
             }
         }
     }
@@ -2087,8 +2086,8 @@ final class ConsensusModuleAgent
                     "unexpected recording stop during catchup: position=" + logAdapter.position());
             }
 
-            final long appendPos = appendPosition.get();
-            final int fragments = logAdapter.poll(min(appendPos, limitPosition));
+            final long actualAppendPosition = appendPosition.get();
+            final int fragments = logAdapter.poll(min(actualAppendPosition, limitPosition));
             workCount += fragments;
             if (0 == fragments && logAdapter.isImageClosed())
             {
@@ -2096,9 +2095,12 @@ final class ConsensusModuleAgent
                     "unexpected image close during catchup: position=" + logAdapter.position());
             }
 
-            final ExclusivePublication publication = election.leader().publication();
             workCount += updateFollowerPosition(
-                publication, nowNs, leadershipTermId, appendPos, APPEND_POSITION_FLAG_CATCHUP);
+                election.leader().publication(),
+                nowNs,
+                leadershipTermId,
+                actualAppendPosition,
+                APPEND_POSITION_FLAG_CATCHUP);
             commitPosition.proposeMaxRelease(logAdapter.position());
         }
 
@@ -2106,7 +2108,7 @@ final class ConsensusModuleAgent
             ConsensusModule.State.ACTIVE == state)
         {
             throw new ClusterEvent(
-                "no catchup progress" +
+                "no catchup progress:" +
                 " commitPosition=" + commitPosition.getPlain() +
                 " limitPosition=" + limitPosition +
                 " lastAppendPosition=" + lastAppendPosition +
@@ -3196,26 +3198,24 @@ final class ConsensusModuleAgent
         final long appendPosition,
         final short flags)
     {
-        int work = 0;
-        if (appendPosition > lastAppendPosition ||
-            (appendPosition == lastAppendPosition &&
+        final long position = Math.max(appendPosition, lastAppendPosition);
+        if ((position > lastAppendPosition ||
             nowNs >= (timeOfLastAppendPositionSendNs + leaderHeartbeatIntervalNs)))
         {
-            if (appendPosition > lastAppendPosition)
+            if (consensusPublisher.appendPosition(publication, leadershipTermId, position, memberId, flags))
             {
-                lastAppendPosition = appendPosition;
-                timeOfLastAppendPositionUpdateNs = nowNs;
-                work++;
-            }
-
-            if (consensusPublisher.appendPosition(publication, leadershipTermId, appendPosition, memberId, flags))
-            {
+                if (position > lastAppendPosition)
+                {
+                    lastAppendPosition = position;
+                    timeOfLastAppendPositionUpdateNs = nowNs;
+                }
                 timeOfLastAppendPositionSendNs = nowNs;
-                work++;
+
+                return 1;
             }
         }
 
-        return work;
+        return 0;
     }
 
     private void loadSnapshot(final RecordingLog.Snapshot snapshot, final AeronArchive archive)
