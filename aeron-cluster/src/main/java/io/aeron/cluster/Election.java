@@ -483,7 +483,7 @@ class Election
                 this.catchupJoinPosition = appendPosition < logPosition ? logPosition : NULL_POSITION;
                 if (NULL_POSITION != commitPosition)
                 {
-                    notifiedCommitPosition = commitPosition;
+                    notifiedCommitPosition = max(notifiedCommitPosition, commitPosition);
                 }
 
                 if (this.appendPosition < termBaseLogPosition)
@@ -583,14 +583,14 @@ class Election
 
         if (FOLLOWER_LOG_REPLICATION == state && leaderMemberId == leaderMember.id())
         {
-            notifiedCommitPosition = logPosition;
+            notifiedCommitPosition = max(notifiedCommitPosition, logPosition);
             replicationDeadlineNs = ctx.clusterClock().timeNanos() + ctx.leaderHeartbeatTimeoutNs();
         }
         else if (leadershipTermId == this.leadershipTermId &&
             null != leaderMember &&
             leaderMemberId == leaderMember.id())
         {
-            notifiedCommitPosition = logPosition;
+            notifiedCommitPosition = max(notifiedCommitPosition, logPosition);
         }
         else if (leadershipTermId > this.leadershipTermId && LEADER_READY == state)
         {
@@ -840,7 +840,6 @@ class Election
 
             workCount++;
             isLeaderStartup = isNodeStartup;
-            ClusterMember.resetLogPositions(clusterMembers, NULL_POSITION);
             thisMember.leadershipTermId(leadershipTermId).logPosition(appendPosition);
         }
         else

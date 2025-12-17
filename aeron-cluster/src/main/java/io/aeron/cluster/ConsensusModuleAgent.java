@@ -1120,7 +1120,7 @@ final class ConsensusModuleAgent
         {
             if (NULL_POSITION != commitPosition)
             {
-                notifiedCommitPosition = commitPosition;
+                notifiedCommitPosition = max(notifiedCommitPosition, commitPosition);
             }
             timeOfLastLogUpdateNs = nowNs;
         }
@@ -1174,7 +1174,7 @@ final class ConsensusModuleAgent
             leaderMemberId == leaderMember.id() &&
             Cluster.Role.FOLLOWER == role)
         {
-            notifiedCommitPosition = logPosition;
+            notifiedCommitPosition = max(notifiedCommitPosition, logPosition);
             timeOfLastLogUpdateNs = nowNs;
         }
         else if (leadershipTermId > this.leadershipTermId)
@@ -3341,8 +3341,10 @@ final class ConsensusModuleAgent
         thisMember.logPosition(position).timeOfLastAppendPositionNs(nowNs);
         final long commitPosition = min(quorumPosition(), position);
 
-        if (commitPosition > this.commitPosition.getPlain() ||
-            nowNs >= (timeOfLastLogUpdateNs + leaderHeartbeatIntervalNs))
+        final long leaderPosition = this.commitPosition.getPlain();
+        if (commitPosition > leaderPosition ||
+            (commitPosition == leaderPosition &&
+            nowNs >= (timeOfLastLogUpdateNs + leaderHeartbeatIntervalNs)))
         {
             publishCommitPosition(commitPosition, leadershipTermId);
 
