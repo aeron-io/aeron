@@ -177,13 +177,13 @@ final class ConsensusPublisher
         final long leadershipTermId,
         final long termBaseLogPosition,
         final long logPosition,
+        final long commitPosition,
         final long leaderRecordingId,
         final long timestamp,
         final int leaderMemberId,
         final int logSessionId,
         final int appVersion,
-        final boolean isStartup,
-        final long commitPosition)
+        final boolean isStartup)
     {
         if (null == publication)
         {

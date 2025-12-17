@@ -223,13 +223,13 @@ class ElectionTest
             candidateTermId,
             logPosition,
             logPosition,
-            RECORDING_ID,
+            commitPosition, RECORDING_ID,
             clock.nanoTime(),
             candidateMember.id(),
             LOG_SESSION_ID,
             appVersion,
-            election.isLeaderStartup(),
-            commitPosition);
+            election.isLeaderStartup()
+        );
 
         verify(consensusPublisher).newLeadershipTerm(
             clusterMembers[2].publication(),
@@ -240,13 +240,13 @@ class ElectionTest
             candidateTermId,
             logPosition,
             logPosition,
-            RECORDING_ID,
+            commitPosition, RECORDING_ID,
             clock.nanoTime(),
             candidateMember.id(),
             LOG_SESSION_ID,
             appVersion,
-            election.isLeaderStartup(),
-            commitPosition);
+            election.isLeaderStartup()
+        );
 
         when(recordingLog.isUnknown(candidateTermId)).thenReturn(Boolean.TRUE);
 
@@ -319,7 +319,7 @@ class ElectionTest
         verify(electionStateCounter).setRelease(ElectionState.FOLLOWER_BALLOT.code());
 
         final int logSessionId = -7;
-        final long commitPosition = 0;
+        final long commitPosition = 100;
         election.onNewLeadershipTerm(
             leadershipTermId,
             NULL_VALUE,
@@ -1487,13 +1487,13 @@ class ElectionTest
             candidateTermId,
             leaderLogPosition,
             leaderLogPosition,
-            RECORDING_ID,
+            followerLogPosition, RECORDING_ID,
             clock.nanoTime(),
             leaderId,
             LOG_SESSION_ID,
             appVersion,
-            election.isLeaderStartup(),
-            followerLogPosition);
+            election.isLeaderStartup()
+        );
 
         verify(consensusPublisher).newLeadershipTerm(
             clusterMembers[2].publication(),
@@ -1504,13 +1504,13 @@ class ElectionTest
             candidateTermId,
             leaderLogPosition,
             leaderLogPosition,
-            RECORDING_ID,
+            followerLogPosition, RECORDING_ID,
             clock.nanoTime(),
             leaderId,
             LOG_SESSION_ID,
             appVersion,
-            election.isLeaderStartup(),
-            followerLogPosition);
+            election.isLeaderStartup()
+        );
 
         // Begin replay once a quorum of followers has caught up.
         when(consensusModuleAgent.quorumPosition()).thenReturn(leaderLogPosition);

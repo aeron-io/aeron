@@ -132,6 +132,8 @@ import static io.aeron.cluster.ConsensusModule.Configuration.SNAPSHOT_TYPE_ID;
 import static io.aeron.cluster.client.AeronCluster.Configuration.PROTOCOL_SEMANTIC_VERSION;
 import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.MARK_FILE_UPDATE_INTERVAL_NS;
 import static io.aeron.exceptions.AeronException.Category.WARN;
+import static java.lang.Math.max;
+import static java.lang.Math.min;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
@@ -602,7 +604,7 @@ final class ConsensusModuleAgent
      */
     public int commitPositionCounterId()
     {
-        return ctx.commitPositionCounter().id();
+        return commitPosition.id();
     }
 
     /**
@@ -1001,13 +1003,14 @@ final class ConsensusModuleAgent
                     this.leadershipTermId,
                     termBaseLogPosition,
                     logPublisher.position(),
+                    commitPosition.getPlain(),
                     logRecordingId,
                     clusterClock.time(),
                     memberId,
                     logPublisher.sessionId(),
                     ctx.appVersion(),
-                    false,
-                    commitPosition.getPlain());
+                    false
+                );
             }
         }
     }
@@ -1184,7 +1187,7 @@ final class ConsensusModuleAgent
                 " this.leaderMemberId=" + leaderMember.id() +
                 " this.commitPosition=" + this.commitPosition.getPlain() +
                 " this.appendPosition=" +
-                (null != appendPosition ? appendPosition.getWeak() : NULL_POSITION) +
+                (null != appendPosition ? appendPosition.getPlain() : NULL_POSITION) +
                 " newLeadershipTermId=" + leadershipTermId +
                 " newLeaderMemberId=" + leaderMemberId +
                 " newCommitPosition=" + logPosition + ")");
@@ -1458,6 +1461,7 @@ final class ConsensusModuleAgent
         final long logSubscriptionRegistrationId = logAdapter.disconnect(ctx.countedErrorHandler());
         logPublisher.disconnect(ctx.countedErrorHandler());
         ClusterControl.ToggleState.deactivate(controlToggle);
+        final ReadableCounter appendPos = appendPosition;
         tryStopLogRecording();
 
         if (RecordingPos.NULL_RECORDING_ID != logRecordingId)
@@ -1478,11 +1482,22 @@ final class ConsensusModuleAgent
             restoreUncommittedEntries(logPosition);
 
             final CountersReader counters = ctx.aeron().countersReader();
-            final long archiveId = archive.archiveId();
-            while (CountersReader.NULL_COUNTER_ID !=
-                RecordingPos.findCounterIdByRecording(counters, logRecordingId, archiveId))
+            if (null != appendPos)
             {
-                idle();
+                while (CountersReader.RECORD_ALLOCATED == counters.getCounterState(appendPos.counterId()) &&
+                    appendPos.registrationId() == counters.getCounterRegistrationId(appendPos.counterId()))
+                {
+                    idle();
+                }
+            }
+            else
+            {
+                final long archiveId = archive.archiveId();
+                while (CountersReader.NULL_COUNTER_ID !=
+                    RecordingPos.findCounterIdByRecording(counters, logRecordingId, archiveId))
+                {
+                    idle();
+                }
             }
         }
 
@@ -1937,9 +1952,8 @@ final class ConsensusModuleAgent
             logAdapter.poll(stopPosition);
             final long position = logAdapter.position();
 
-            if (commitPosition.getPlain() < position)
+            if (commitPosition.proposeMaxRelease(position))
             {
-                commitPosition.setRelease(position);
                 workCount++;
             }
             else if (logAdapter.isImageClosed() && position < stopPosition)
@@ -2013,7 +2027,7 @@ final class ConsensusModuleAgent
         recoveryPlan = recordingLog.createRecoveryPlan(archive, serviceCount, logRecordingId);
 
         final long logPosition = election.logPosition();
-        notifiedCommitPosition = logPosition;
+        notifiedCommitPosition = max(notifiedCommitPosition, logPosition);
         commitPosition.setRelease(logPosition);
         updateMemberDetails(election.leader());
 
@@ -2073,7 +2087,8 @@ final class ConsensusModuleAgent
                     "unexpected recording stop during catchup: position=" + logAdapter.position());
             }
 
-            final int fragments = logAdapter.poll(Math.min(appendPosition.get(), limitPosition));
+            final long appendPos = appendPosition.get();
+            final int fragments = logAdapter.poll(min(appendPos, limitPosition));
             workCount += fragments;
             if (0 == fragments && logAdapter.isImageClosed())
             {
@@ -2083,7 +2098,7 @@ final class ConsensusModuleAgent
 
             final ExclusivePublication publication = election.leader().publication();
             workCount += updateFollowerPosition(
-                publication, nowNs, leadershipTermId, appendPosition.get(), APPEND_POSITION_FLAG_CATCHUP);
+                publication, nowNs, leadershipTermId, appendPos, APPEND_POSITION_FLAG_CATCHUP);
             commitPosition.proposeMaxRelease(logAdapter.position());
         }
 
@@ -2091,9 +2106,11 @@ final class ConsensusModuleAgent
             ConsensusModule.State.ACTIVE == state)
         {
             throw new ClusterEvent(
-                "no catchup progress commitPosition=" + commitPosition.getPlain() + " limitPosition=" + limitPosition +
+                "no catchup progress" +
+                " commitPosition=" + commitPosition.getPlain() +
+                " limitPosition=" + limitPosition +
                 " lastAppendPosition=" + lastAppendPosition +
-                " appendPosition=" + (null != appendPosition ? appendPosition.get() : NULL_POSITION) +
+                " appendPosition=" + (null != appendPosition ? appendPosition.getPlain() : NULL_POSITION) +
                 " logPosition=" + election.logPosition());
         }
 
@@ -2108,7 +2125,7 @@ final class ConsensusModuleAgent
         if (null != image)
         {
             final long localPosition = image.position();
-            final long window = Math.min(image.termBufferLength() >> 2, LIVE_ADD_MAX_WINDOW);
+            final long window = min(image.termBufferLength() >> 2, LIVE_ADD_MAX_WINDOW);
 
             return localPosition >= (position - window);
         }
@@ -2584,7 +2601,7 @@ final class ConsensusModuleAgent
                 else
                 {
                     final long limit = null != appendPosition ? appendPosition.get() : logRecordingStopPosition;
-                    final int count = logAdapter.poll(Math.min(notifiedCommitPosition, limit));
+                    final int count = logAdapter.poll(min(notifiedCommitPosition, limit));
                     if (0 == count && logAdapter.isImageClosed())
                     {
                         final boolean isEos = logAdapter.isLogEndOfStream();
@@ -3179,24 +3196,26 @@ final class ConsensusModuleAgent
         final long appendPosition,
         final short flags)
     {
-        final long position = Math.max(appendPosition, lastAppendPosition);
-        if ((position > lastAppendPosition ||
+        int work = 0;
+        if (appendPosition > lastAppendPosition ||
+            (appendPosition == lastAppendPosition &&
             nowNs >= (timeOfLastAppendPositionSendNs + leaderHeartbeatIntervalNs)))
         {
-            if (consensusPublisher.appendPosition(publication, leadershipTermId, position, memberId, flags))
+            if (appendPosition > lastAppendPosition)
             {
-                if (position > lastAppendPosition)
-                {
-                    lastAppendPosition = position;
-                    timeOfLastAppendPositionUpdateNs = nowNs;
-                }
-                timeOfLastAppendPositionSendNs = nowNs;
+                lastAppendPosition = appendPosition;
+                timeOfLastAppendPositionUpdateNs = nowNs;
+                work++;
+            }
 
-                return 1;
+            if (consensusPublisher.appendPosition(publication, leadershipTermId, appendPosition, memberId, flags))
+            {
+                timeOfLastAppendPositionSendNs = nowNs;
+                work++;
             }
         }
 
-        return 0;
+        return work;
     }
 
     private void loadSnapshot(final RecordingLog.Snapshot snapshot, final AeronArchive archive)
@@ -3320,12 +3339,12 @@ final class ConsensusModuleAgent
     int updateLeaderPosition(final long nowNs, final long position)
     {
         thisMember.logPosition(position).timeOfLastAppendPositionNs(nowNs);
-        final long commitPosition = Math.min(quorumPosition(), position);
+        final long commitPosition = min(quorumPosition(), position);
 
         if (commitPosition > this.commitPosition.getPlain() ||
             nowNs >= (timeOfLastLogUpdateNs + leaderHeartbeatIntervalNs))
         {
-            publishCommitPosition(commitPosition);
+            publishCommitPosition(commitPosition, leadershipTermId);
 
             this.commitPosition.setRelease(commitPosition);
             timeOfLastLogUpdateNs = nowNs;
@@ -3337,7 +3356,7 @@ final class ConsensusModuleAgent
         return 0;
     }
 
-    void publishCommitPosition(final long commitPosition)
+    void publishCommitPosition(final long commitPosition, final long leadershipTermId)
     {
         for (final ClusterMember member : activeMembers)
         {
@@ -3485,7 +3504,7 @@ final class ConsensusModuleAgent
         final long termBaseLogPosition = null != termEntry ?
             termEntry.termBaseLogPosition : recoveryPlan.lastTermBaseLogPosition;
         final long appendedPosition = null != appendPosition ?
-            appendPosition.get() : Math.max(recoveryPlan.appendedLogPosition, logRecordingStopPosition);
+            appendPosition.get() : max(recoveryPlan.appendedLogPosition, logRecordingStopPosition);
         final long commitPosition = this.commitPosition.getPlain();
 
         logNewElection(memberId, leadershipTermId, commitPosition, appendedPosition, reason);

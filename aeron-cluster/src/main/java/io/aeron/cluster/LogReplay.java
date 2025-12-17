@@ -97,9 +97,13 @@ final class LogReplay
 
     boolean isDone()
     {
-        return logAdapter.image() != null &&
-            logAdapter.position() >= stopPosition &&
+        return logAdapter.position() >= stopPosition &&
             consensusModuleAgent.state() != ConsensusModule.State.SNAPSHOT;
+    }
+
+    long position()
+    {
+        return logAdapter.position();
     }
 
     public String toString()
@@ -109,6 +113,7 @@ final class LogReplay
             ", stopPosition=" + stopPosition +
             ", logSessionId=" + logSessionId +
             ", logSubscription=" + logSubscription +
+            ", position=" + position() +
             '}';
     }
 }
