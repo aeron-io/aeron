@@ -315,7 +315,7 @@ subprojects {
 
         jvmArgs("-javaagent:${aeronLoggingAgent}")
         systemProperty 'aeron.event.cluster.log', 'all'
-        systemProperty 'aeron.event.cluster.log.disable', 'CANVASS_POSITION'
+        systemProperty 'aeron.event.cluster.log.disable', 'CANVASS_POSITION,APPEND_POSITION,COMMIT_POSITION'
         systemProperty 'aeron.debug.timeout', '3600s'
         systemProperty 'aeron.event.log.reader.classname', 'io.aeron.agent.CollectingEventLogReaderAgent'
     }
@@ -326,6 +326,12 @@ subprojects {
         useJUnitPlatform {
             includeTags 'topology'
         }
+
+        jvmArgs("-javaagent:${aeronLoggingAgent}")
+        systemProperty 'aeron.event.cluster.log', 'all'
+        systemProperty 'aeron.event.cluster.log.disable', 'CANVASS_POSITION,APPEND_POSITION,COMMIT_POSITION'
+        systemProperty 'aeron.debug.timeout', '3600s'
+        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.agent.CollectingEventLogReaderAgent'
     }
 
     javadoc {
