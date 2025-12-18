@@ -1117,10 +1117,7 @@ final class ConsensusModuleAgent
             leadershipTermId == this.leadershipTermId &&
             leaderId == leaderMember.id())
         {
-            if (NULL_POSITION != commitPosition)
-            {
-                notifiedCommitPosition = max(notifiedCommitPosition, commitPosition);
-            }
+            notifiedCommitPosition = max(notifiedCommitPosition, commitPosition);
             timeOfLastLogUpdateNs = nowNs;
         }
         else if (leadershipTermId > this.leadershipTermId)

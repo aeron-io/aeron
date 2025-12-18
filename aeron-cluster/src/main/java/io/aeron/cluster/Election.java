@@ -481,10 +481,7 @@ class Election
                 this.logSessionId = logSessionId;
                 this.leaderRecordingId = leaderRecordingId;
                 this.catchupJoinPosition = appendPosition < logPosition ? logPosition : NULL_POSITION;
-                if (NULL_POSITION != commitPosition)
-                {
-                    notifiedCommitPosition = max(notifiedCommitPosition, commitPosition);
-                }
+                notifiedCommitPosition = max(notifiedCommitPosition, commitPosition);
 
                 if (this.appendPosition < termBaseLogPosition)
                 {
