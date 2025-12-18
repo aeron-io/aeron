@@ -87,7 +87,7 @@ class Election
     private long appendPosition;
     private long notifiedCommitPosition;
     private long catchupJoinPosition = NULL_POSITION;
-    private long followerReplayNotifiedAppendPosition = NULL_POSITION;
+    private long followerReplayLastPublishedAppendPosition = NULL_POSITION;
     private long replicationLeadershipTermId = NULL_VALUE;
     private long replicationStopPosition = NULL_POSITION;
     private long replicationDeadlineNs;
@@ -684,7 +684,7 @@ class Election
         }
 
         notifiedCommitPosition = 0;
-        followerReplayNotifiedAppendPosition = NULL_POSITION;
+        followerReplayLastPublishedAppendPosition = NULL_POSITION;
         candidateTermId = max(ctx.nodeStateFile().candidateTerm().candidateTermId(), leadershipTermId);
 
         if (clusterMembers.length == 1 && thisMember.id() == clusterMembers[0].id())
@@ -966,7 +966,7 @@ class Election
             {
                 if (0 == notifiedCommitPosition)
                 {
-                    if (NULL_POSITION == followerReplayNotifiedAppendPosition ||
+                    if (NULL_POSITION == followerReplayLastPublishedAppendPosition ||
                         hasUpdateIntervalExpired(nowNs, ctx.leaderHeartbeatIntervalNs()))
                     {
                         if (consensusPublisher.appendPosition(
@@ -976,7 +976,7 @@ class Election
                             thisMember.id(),
                             APPEND_POSITION_FLAG_NONE))
                         {
-                            followerReplayNotifiedAppendPosition = appendPosition;
+                            followerReplayLastPublishedAppendPosition = appendPosition;
                             timeOfLastUpdateNs = nowNs;
                             workCount++;
                         }
@@ -1002,7 +1002,7 @@ class Election
             if (logReplay.isDone())
             {
                 logPosition = logReplay.position();
-                followerReplayNotifiedAppendPosition = NULL_POSITION;
+                followerReplayLastPublishedAppendPosition = NULL_POSITION;
                 stopReplay();
 
                 if (logPosition >= appendPosition)
