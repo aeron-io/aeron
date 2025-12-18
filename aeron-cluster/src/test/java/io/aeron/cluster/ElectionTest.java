@@ -1527,6 +1527,74 @@ class ElectionTest
         verifyNoInteractions(recordingLog);
     }
 
+    @Test
+    void shouldSendCommitPositionAndNewLeadershipTermEventsWithTheSameLeadershipTerm()
+    {
+        final long logPosition = 100;
+        final long leadershipTermId = 42;
+        final ClusterMember[] clusterMembers = prepareClusterMembers();
+        final ClusterMember leaderMember = clusterMembers[1];
+        leaderMember.isLeader(true);
+        final long quorumPosition1 = 1024 * 1024;
+        final long quorumPosition2 = 2 * quorumPosition1;
+        final int logSessionId = 5;
+        final long logRecordingId = 842384023;
+        when(consensusModuleAgent.quorumPosition()).thenReturn(quorumPosition1, quorumPosition2, Long.MIN_VALUE);
+        when(consensusModuleAgent.addLogPublication(logPosition)).thenReturn(logSessionId);
+        when(consensusModuleAgent.logRecordingId()).thenReturn(logRecordingId);
+
+        final Election election = newElection(leadershipTermId, logPosition, clusterMembers, leaderMember);
+
+        clock.update(1, clock.timeUnit());
+        election.state(ElectionState.LEADER_LOG_REPLICATION, clock.nanoTime(), "test");
+        verify(electionStateCounter).setRelease(ElectionState.LEADER_LOG_REPLICATION.code());
+        verify(consensusModuleAgent).addLogPublication(logPosition);
+
+        clock.increment(1);
+        final long replicationTimeNs = clock.nanoTime();
+        election.doWork(replicationTimeNs);
+        verify(electionStateCounter).setRelease(ElectionState.LEADER_REPLAY.code());
+        verify(consensusPublisher, times(2)).newLeadershipTerm(
+            any(),
+            eq(leadershipTermId),
+            eq(leadershipTermId),
+            eq(logPosition),
+            eq(NULL_POSITION),
+            eq(leadershipTermId),
+            eq(logPosition),
+            eq(logPosition),
+            eq(quorumPosition1),
+            eq(logRecordingId),
+            eq(replicationTimeNs),
+            eq(leaderMember.id()),
+            eq(logSessionId),
+            eq(ctx.appVersion()),
+            eq(false));
+        verify(consensusModuleAgent).publishCommitPosition(quorumPosition1, leadershipTermId);
+
+        clock.increment(1);
+        final long replayTimeNs = clock.nanoTime();
+        election.doWork(replayTimeNs);
+        verify(electionStateCounter).setRelease(ElectionState.LEADER_INIT.code());
+        verify(consensusPublisher, times(2)).newLeadershipTerm(
+            any(),
+            eq(leadershipTermId),
+            eq(leadershipTermId),
+            eq(logPosition),
+            eq(NULL_POSITION),
+            eq(leadershipTermId),
+            eq(logPosition),
+            eq(logPosition),
+            eq(quorumPosition2),
+            eq(logRecordingId),
+            eq(replayTimeNs),
+            eq(leaderMember.id()),
+            eq(logSessionId),
+            eq(ctx.appVersion()),
+            eq(true));
+        verify(consensusModuleAgent).publishCommitPosition(quorumPosition2, leadershipTermId);
+    }
+
     private Election newElection(
         final boolean isStartup,
         final long logLeadershipTermId,

@@ -1365,7 +1365,7 @@ class Election
         return aeron.addSubscription(channel, ctx.logStreamId());
     }
 
-    private void state(final ElectionState newState, final long nowNs, final String reason)
+    void state(final ElectionState newState, final long nowNs, final String reason)
     {
         if (newState != state)
         {
