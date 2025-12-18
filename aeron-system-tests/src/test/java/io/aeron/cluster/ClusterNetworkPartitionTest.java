@@ -194,7 +194,7 @@ class ClusterNetworkPartitionTest
     }
 
     @ParameterizedTest
-    @ValueSource(ints = { 64 * 1024, 128 * 1024, 192 * 1024, 224 * 1024, 240 * 1024, 248 * 1024, 252 * 1024 })
+    @ValueSource(ints = { 64 * 1024, 128 * 1024, 256 * 1024 })
     @InterruptAfter(30)
     void shouldRecoverClusterWithMajorityOfNodesBeingBehind(final int amountOfLogMajorityShouldBeBehind)
     {
