@@ -1598,7 +1598,7 @@ class ElectionTest
     }
 
     @Test
-    void notifiedCommitPositionCannotGoBackwards()
+    void notifiedCommitPositionCannotGoBackwardsUponReceivingCommitPosition()
     {
         final long logPosition = 100;
         final long leadershipTermId = 7;
@@ -1649,6 +1649,261 @@ class ElectionTest
         assertNull(Tests.getField(election, "leaderMember"));
         election.onCommitPosition(leadershipTermId, 65535, leader.id());
         assertEquals(5000, election.notifiedCommitPosition());
+    }
+
+    @Test
+    @SuppressWarnings("MethodLength")
+    void notifiedCommitPositionCannotGoBackwardsUponReceivingNewLeadershipTerm()
+    {
+        final long logPosition = 100;
+        final long leadershipTermId = 7;
+        final long logLeadershipTermId = leadershipTermId;
+        final ClusterMember[] clusterMembers = prepareClusterMembers();
+        final ClusterMember follower = clusterMembers[0];
+        final ClusterMember leader = clusterMembers[1];
+        leader.isLeader(true);
+
+        final Election election = newElection(leadershipTermId, logPosition, clusterMembers, follower);
+        election.state(ElectionState.CANVASS, 1, "");
+
+        assertEquals(0, election.notifiedCommitPosition());
+
+        election.onNewLeadershipTerm(
+            logLeadershipTermId,
+            logLeadershipTermId + 1,
+            NULL_POSITION,
+            0,
+            111,
+            logPosition,
+            1073741824,
+            333,
+            9,
+            100,
+            leader.id(),
+            42,
+            false);
+        assertEquals(333, election.notifiedCommitPosition());
+        assertEquals(111, election.leadershipTermId());
+
+        // FOLLOWER_BALLOT checks candidateTermId
+        election.state(ElectionState.FOLLOWER_BALLOT, 1, "");
+        election.onNewLeadershipTerm(
+            logLeadershipTermId,
+            logLeadershipTermId + 1,
+            NULL_POSITION,
+            0,
+            111,
+            logPosition,
+            1073741824,
+            555,
+            9,
+            100,
+            leader.id(),
+            42,
+            false);
+        assertEquals(555, election.notifiedCommitPosition());
+        assertEquals(111, election.leadershipTermId());
+
+        // whereas CANVASS does not
+        election.state(ElectionState.CANVASS, 1, "");
+        election.onNewLeadershipTerm(
+            logLeadershipTermId,
+            logLeadershipTermId + 1,
+            NULL_POSITION,
+            0,
+            2,
+            logPosition,
+            1073741824,
+            222,
+            9,
+            100,
+            leader.id(),
+            42,
+            false);
+        assertEquals(555, election.notifiedCommitPosition());
+        assertEquals(2, election.leadershipTermId());
+
+        // INIT state is a no op
+        election.state(ElectionState.INIT, 1, "");
+        election.onNewLeadershipTerm(
+            logLeadershipTermId,
+            logLeadershipTermId + 1,
+            NULL_POSITION,
+            0,
+            222,
+            logPosition,
+            1073741824,
+            777,
+            9,
+            100,
+            leader.id(),
+            42,
+            false);
+        assertEquals(555, election.notifiedCommitPosition());
+        assertEquals(2, election.leadershipTermId());
+
+        // Unknown leaderMemberId
+        election.state(ElectionState.CANVASS, 1, "");
+        election.onNewLeadershipTerm(
+            logLeadershipTermId,
+            logLeadershipTermId + 1,
+            NULL_POSITION,
+            0,
+            222,
+            logPosition,
+            1073741824,
+            777,
+            9,
+            100,
+            4343434,
+            42,
+            false);
+        assertEquals(555, election.notifiedCommitPosition());
+        assertEquals(2, election.leadershipTermId());
+
+        // Current memberId is ignored if leadershipTermId matches
+        election.state(ElectionState.CANVASS, 1, "");
+        election.onNewLeadershipTerm(
+            logLeadershipTermId,
+            logLeadershipTermId + 1,
+            NULL_POSITION,
+            0,
+            election.leadershipTermId(),
+            logPosition,
+            1073741824,
+            777,
+            9,
+            100,
+            follower.id(),
+            42,
+            false);
+        assertEquals(555, election.notifiedCommitPosition());
+        assertEquals(2, election.leadershipTermId());
+
+        // Current memberId is accepted if leadershipTermId is new
+        election.state(ElectionState.CANVASS, 1, "");
+        election.onNewLeadershipTerm(
+            logLeadershipTermId,
+            logLeadershipTermId + 1,
+            NULL_POSITION,
+            0,
+            5,
+            logPosition,
+            1073741824,
+            777,
+            9,
+            100,
+            follower.id(),
+            42,
+            false);
+        assertEquals(777, election.notifiedCommitPosition());
+        assertEquals(5, election.leadershipTermId());
+
+        // CANDIDATE_BALLOT also checks candidateTermId
+        election.state(ElectionState.CANDIDATE_BALLOT, 1, "");
+        election.onNewLeadershipTerm(
+            logLeadershipTermId,
+            logLeadershipTermId + 1,
+            NULL_POSITION,
+            0,
+            111,
+            logPosition,
+            1073741824,
+            789,
+            9,
+            100,
+            leader.id(),
+            42,
+            false);
+        assertEquals(789, election.notifiedCommitPosition());
+        assertEquals(111, election.leadershipTermId());
+
+        // Value cannot go backwards
+        election.state(ElectionState.CANVASS, 1, "");
+        election.onNewLeadershipTerm(
+            logLeadershipTermId,
+            logLeadershipTermId + 1,
+            NULL_POSITION,
+            0,
+            333,
+            logPosition,
+            1073741824,
+            500,
+            9,
+            100,
+            leader.id(),
+            42,
+            false);
+        assertEquals(789, election.notifiedCommitPosition());
+        assertEquals(333, election.leadershipTermId());
+
+        // Value cannot go backwards
+        election.state(ElectionState.CANVASS, 1, "");
+        election.onNewLeadershipTerm(
+            logLeadershipTermId,
+            logLeadershipTermId + 1,
+            NULL_POSITION,
+            0,
+            4,
+            logPosition,
+            1073741824,
+            NULL_POSITION,
+            9,
+            100,
+            leader.id(),
+            42,
+            false);
+        assertEquals(789, election.notifiedCommitPosition());
+        assertEquals(4, election.leadershipTermId());
+
+        // logLeadershipTermId does not match
+        election.state(ElectionState.CANVASS, 1, "");
+        election.onNewLeadershipTerm(
+            logLeadershipTermId - 1,
+            logLeadershipTermId,
+            NULL_POSITION,
+            0,
+            444,
+            logPosition,
+            1073741824,
+            1000,
+            9,
+            100,
+            leader.id(),
+            42,
+            false);
+        assertEquals(789, election.notifiedCommitPosition());
+        assertEquals(4, election.leadershipTermId());
+
+        // unsupported states
+        for (final ElectionState state : ElectionState.STATES)
+        {
+            if (ElectionState.INIT == state ||
+                ElectionState.CANVASS == state ||
+                ElectionState.CANDIDATE_BALLOT == state ||
+                ElectionState.FOLLOWER_BALLOT == state)
+            {
+                continue;
+            }
+
+            election.state(state, 1, "");
+            election.onNewLeadershipTerm(
+                logLeadershipTermId - 1,
+                logLeadershipTermId,
+                NULL_POSITION,
+                0,
+                555,
+                logPosition,
+                1073741824,
+                2000,
+                9,
+                100,
+                leader.id(),
+                42,
+                false);
+            assertEquals(789, election.notifiedCommitPosition());
+            assertEquals(4, election.leadershipTermId());
+        }
     }
 
     private Election newElection(

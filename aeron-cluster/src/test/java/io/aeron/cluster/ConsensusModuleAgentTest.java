@@ -15,22 +15,30 @@
  */
 package io.aeron.cluster;
 
-import static io.aeron.AeronCounters.*;
-import static io.aeron.cluster.ClusterControl.ToggleState.*;
-import static io.aeron.cluster.ConsensusModule.CLUSTER_ACTION_FLAGS_STANDBY_SNAPSHOT;
-import static io.aeron.cluster.ConsensusModule.Configuration.SESSION_LIMIT_MSG;
-import static io.aeron.cluster.ConsensusModuleAgent.SLOW_TICK_INTERVAL_NS;
-import static io.aeron.cluster.client.AeronCluster.Configuration.PROTOCOL_SEMANTIC_VERSION;
-import static java.lang.Boolean.TRUE;
-import static org.agrona.concurrent.status.CountersReader.COUNTER_LENGTH;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-
-import java.util.concurrent.TimeUnit;
-import java.util.function.LongConsumer;
-
+import io.aeron.Aeron;
+import io.aeron.ChannelUri;
+import io.aeron.ConcurrentPublication;
+import io.aeron.Counter;
+import io.aeron.ExclusivePublication;
+import io.aeron.Image;
+import io.aeron.Subscription;
+import io.aeron.UnavailableImageHandler;
+import io.aeron.archive.client.AeronArchive;
 import io.aeron.cluster.client.ClusterEvent;
+import io.aeron.cluster.codecs.CloseReason;
+import io.aeron.cluster.codecs.ClusterAction;
+import io.aeron.cluster.codecs.EventCode;
+import io.aeron.cluster.service.Cluster;
+import io.aeron.cluster.service.ClusterMarkFile;
+import io.aeron.cluster.service.ClusterTerminationException;
+import io.aeron.driver.DutyCycleTracker;
 import io.aeron.logbuffer.Header;
+import io.aeron.security.AuthorisationService;
+import io.aeron.security.DefaultAuthenticatorSupplier;
+import io.aeron.status.ReadableCounter;
+import io.aeron.test.TestContexts;
+import io.aeron.test.Tests;
+import io.aeron.test.cluster.TestClusterClock;
 import org.agrona.collections.MutableLong;
 import org.agrona.concurrent.AgentInvoker;
 import org.agrona.concurrent.CountedErrorHandler;
@@ -45,21 +53,36 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
 
-import io.aeron.*;
-import io.aeron.archive.client.AeronArchive;
-import io.aeron.cluster.codecs.CloseReason;
-import io.aeron.cluster.codecs.ClusterAction;
-import io.aeron.cluster.codecs.EventCode;
-import io.aeron.cluster.service.Cluster;
-import io.aeron.cluster.service.ClusterMarkFile;
-import io.aeron.cluster.service.ClusterTerminationException;
-import io.aeron.driver.DutyCycleTracker;
-import io.aeron.security.AuthorisationService;
-import io.aeron.security.DefaultAuthenticatorSupplier;
-import io.aeron.status.ReadableCounter;
-import io.aeron.test.TestContexts;
-import io.aeron.test.Tests;
-import io.aeron.test.cluster.TestClusterClock;
+import java.util.concurrent.TimeUnit;
+import java.util.function.LongConsumer;
+
+import static io.aeron.AeronCounters.CLUSTER_CONSENSUS_MODULE_STATE_TYPE_ID;
+import static io.aeron.AeronCounters.CLUSTER_CONTROL_TOGGLE_TYPE_ID;
+import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
+import static io.aeron.cluster.ClusterControl.ToggleState.NEUTRAL;
+import static io.aeron.cluster.ClusterControl.ToggleState.RESUME;
+import static io.aeron.cluster.ClusterControl.ToggleState.STANDBY_SNAPSHOT;
+import static io.aeron.cluster.ClusterControl.ToggleState.SUSPEND;
+import static io.aeron.cluster.ConsensusModule.CLUSTER_ACTION_FLAGS_STANDBY_SNAPSHOT;
+import static io.aeron.cluster.ConsensusModule.Configuration.SESSION_LIMIT_MSG;
+import static io.aeron.cluster.ConsensusModuleAgent.SLOW_TICK_INTERVAL_NS;
+import static io.aeron.cluster.client.AeronCluster.Configuration.PROTOCOL_SEMANTIC_VERSION;
+import static java.lang.Boolean.TRUE;
+import static org.agrona.concurrent.status.CountersReader.COUNTER_LENGTH;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.anyLong;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class ConsensusModuleAgentTest
 {
@@ -521,7 +544,7 @@ class ConsensusModuleAgentTest
     }
 
     @Test
-    void notifiedCommitPositionShouldNotGoBackwards()
+    void notifiedCommitPositionShouldNotGoBackwardsUponReceivingCommitPosition()
     {
         final TestClusterClock clock = new TestClusterClock(TimeUnit.MILLISECONDS);
         final Counter stateCounter = newCounter("state counter", CLUSTER_CONSENSUS_MODULE_STATE_TYPE_ID);
@@ -633,5 +656,182 @@ class ConsensusModuleAgentTest
         agent.electionComplete(777);
         assertEquals(logPosition, agent.notifiedCommitPosition());
         verify(election).logPosition();
+    }
+
+    @Test
+    @SuppressWarnings("MethodLength")
+    void notifiedCommitPositionShouldNotGoBackwardsUponReceivingNewLeadershipTerm()
+    {
+        final TestClusterClock clock = new TestClusterClock(TimeUnit.MILLISECONDS);
+        final Counter stateCounter = newCounter("state counter", CLUSTER_CONSENSUS_MODULE_STATE_TYPE_ID);
+        final Counter controlToggle = newCounter("control toggle", CLUSTER_CONTROL_TOGGLE_TYPE_ID);
+
+        controlToggle.set(NEUTRAL.code());
+
+        final AppVersionValidator appVersionValidator = mock(AppVersionValidator.class);
+        when(appVersionValidator.isVersionCompatible(anyInt(), anyInt())).thenReturn(true);
+        ctx.moduleStateCounter(stateCounter)
+            .controlToggleCounter(controlToggle)
+            .epochClock(clock.asEpochClock())
+            .clusterClock(clock)
+            .appVersionValidator(appVersionValidator);
+
+        final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
+        assertEquals(ConsensusModule.State.INIT.code(), stateCounter.get());
+
+        agent.state(ConsensusModule.State.ACTIVE);
+        agent.role(Cluster.Role.FOLLOWER);
+        final long leadershipTermId = 42;
+        agent.leadershipTermId(leadershipTermId);
+        final ClusterMember leader = new ClusterMember(19, "", "", "", "", "", "");
+        Tests.setField(agent, "leaderMember", leader);
+        assertSame(leader, Tests.getField(agent, "leaderMember"));
+
+        assertEquals(0, agent.notifiedCommitPosition());
+
+        clock.increment(1);
+        agent.onNewLeadershipTerm(
+            0,
+            1,
+            NULL_POSITION,
+            NULL_POSITION,
+            leadershipTermId,
+            0,
+            1024 * 1024,
+            100,
+            8,
+            clock.nanoTime(),
+            leader.id(),
+            16,
+            1,
+            false);
+        assertEquals(100, agent.notifiedCommitPosition());
+        assertEquals(clock.timeNanos(), agent.timeOfLastLogUpdateNs());
+
+        clock.increment(1);
+        agent.onNewLeadershipTerm(
+            0,
+            1,
+            NULL_POSITION,
+            NULL_POSITION,
+            leadershipTermId,
+            0,
+            1024 * 1024,
+            3000,
+            8,
+            clock.nanoTime(),
+            leader.id(),
+            16,
+            1,
+            false);
+        assertEquals(3000, agent.notifiedCommitPosition());
+        assertEquals(clock.timeNanos(), agent.timeOfLastLogUpdateNs());
+
+        clock.increment(1);
+        agent.onNewLeadershipTerm(
+            0,
+            1,
+            NULL_POSITION,
+            NULL_POSITION,
+            leadershipTermId,
+            0,
+            1024 * 1024,
+            50,
+            8,
+            clock.nanoTime(),
+            leader.id(),
+            16,
+            1,
+            false);
+        assertEquals(3000, agent.notifiedCommitPosition());
+        assertEquals(clock.timeNanos(), agent.timeOfLastLogUpdateNs());
+
+        clock.increment(1);
+        agent.onNewLeadershipTerm(
+            0,
+            1,
+            NULL_POSITION,
+            NULL_POSITION,
+            leadershipTermId,
+            0,
+            1024 * 1024,
+            NULL_POSITION,
+            8,
+            clock.nanoTime(),
+            leader.id(),
+            16,
+            1,
+            false);
+        assertEquals(3000, agent.notifiedCommitPosition());
+        assertEquals(clock.timeNanos(), agent.timeOfLastLogUpdateNs());
+
+        final long timeOfLastUpdateNs = clock.timeNanos();
+
+        // wrong leadershipTermId
+        clock.increment(1);
+        agent.onNewLeadershipTerm(
+            0,
+            1,
+            NULL_POSITION,
+            NULL_POSITION,
+            leadershipTermId - 1,
+            0,
+            1024 * 1024,
+            5000,
+            8,
+            clock.nanoTime(),
+            leader.id(),
+            16,
+            1,
+            false);
+        assertEquals(3000, agent.notifiedCommitPosition());
+        assertEquals(timeOfLastUpdateNs, agent.timeOfLastLogUpdateNs());
+
+        // wrong leaderId
+        clock.increment(1);
+        agent.onNewLeadershipTerm(
+            0,
+            1,
+            NULL_POSITION,
+            NULL_POSITION,
+            leadershipTermId,
+            0,
+            1024 * 1024,
+            7000,
+            8,
+            clock.nanoTime(),
+            999999,
+            16,
+            1,
+            false);
+        assertEquals(3000, agent.notifiedCommitPosition());
+        assertEquals(timeOfLastUpdateNs, agent.timeOfLastLogUpdateNs());
+
+        // wrong role
+        for (final Cluster.Role role : Cluster.Role.values())
+        {
+            if (Cluster.Role.FOLLOWER != role)
+            {
+                agent.role(role);
+                clock.increment(1);
+                agent.onNewLeadershipTerm(
+                    0,
+                    1,
+                    NULL_POSITION,
+                    NULL_POSITION,
+                    leadershipTermId,
+                    0,
+                    1024 * 1024,
+                    10000,
+                    8,
+                    clock.nanoTime(),
+                    leader.id(),
+                    16,
+                    1,
+                    false);
+                assertEquals(3000, agent.notifiedCommitPosition());
+                assertEquals(timeOfLastUpdateNs, agent.timeOfLastLogUpdateNs());
+            }
+        }
     }
 }
