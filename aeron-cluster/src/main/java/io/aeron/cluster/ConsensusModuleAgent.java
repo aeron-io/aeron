@@ -1458,7 +1458,7 @@ final class ConsensusModuleAgent
         final long logSubscriptionRegistrationId = logAdapter.disconnect(ctx.countedErrorHandler());
         logPublisher.disconnect(ctx.countedErrorHandler());
         ClusterControl.ToggleState.deactivate(controlToggle);
-        final ReadableCounter appendPos = appendPosition;
+        final ReadableCounter recPos = appendPosition;
         tryStopLogRecording();
 
         if (RecordingPos.NULL_RECORDING_ID != logRecordingId)
@@ -1479,10 +1479,10 @@ final class ConsensusModuleAgent
             restoreUncommittedEntries(logPosition);
 
             final CountersReader counters = ctx.aeron().countersReader();
-            if (null != appendPos)
+            if (null != recPos)
             {
-                while (CountersReader.RECORD_ALLOCATED == counters.getCounterState(appendPos.counterId()) &&
-                    appendPos.registrationId() == counters.getCounterRegistrationId(appendPos.counterId()))
+                while (CountersReader.RECORD_ALLOCATED == counters.getCounterState(recPos.counterId()) &&
+                    recPos.registrationId() == counters.getCounterRegistrationId(recPos.counterId()))
                 {
                     idle();
                 }
