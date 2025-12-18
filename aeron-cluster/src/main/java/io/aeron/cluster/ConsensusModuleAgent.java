@@ -2094,8 +2094,8 @@ final class ConsensusModuleAgent
                     "unexpected recording stop during catchup: position=" + logAdapter.position());
             }
 
-            final long actualAppendPosition = appendPosition.get();
-            final int fragments = logAdapter.poll(min(actualAppendPosition, limitPosition));
+            final long currentAppendPosition = appendPosition.get();
+            final int fragments = logAdapter.poll(min(currentAppendPosition, limitPosition));
             workCount += fragments;
             if (0 == fragments && logAdapter.isImageClosed())
             {
@@ -2107,7 +2107,7 @@ final class ConsensusModuleAgent
                 election.leader().publication(),
                 nowNs,
                 leadershipTermId,
-                actualAppendPosition,
+                currentAppendPosition,
                 APPEND_POSITION_FLAG_CATCHUP);
             commitPosition.proposeMaxRelease(logAdapter.position());
         }
