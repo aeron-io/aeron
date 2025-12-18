@@ -590,4 +590,48 @@ class ConsensusModuleAgentTest
         assertEquals(200, agent.notifiedCommitPosition());
         assertEquals(lastUpdateNs, agent.timeOfLastLogUpdateNs());
     }
+
+    @Test
+    void notifiedCommitPositionShouldNotGoBackwardsUponElectionCompletion()
+    {
+        final TestClusterClock clock = new TestClusterClock(TimeUnit.MILLISECONDS);
+        final Counter stateCounter = newCounter("state counter", CLUSTER_CONSENSUS_MODULE_STATE_TYPE_ID);
+        final Counter controlToggle = newCounter("control toggle", CLUSTER_CONTROL_TOGGLE_TYPE_ID);
+
+        controlToggle.set(NEUTRAL.code());
+
+        ctx.moduleStateCounter(stateCounter)
+            .controlToggleCounter(controlToggle)
+            .epochClock(clock.asEpochClock())
+            .clusterClock(clock)
+            .recordingLog(mock(RecordingLog.class))
+            .ingressChannel("aeron:udp");
+
+        final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
+        assertEquals(ConsensusModule.State.INIT.code(), stateCounter.get());
+
+        agent.state(ConsensusModule.State.ACTIVE);
+        agent.role(Cluster.Role.FOLLOWER);
+        final Election election = mock(Election.class);
+        final long logPosition = 200L;
+        when(election.logPosition()).thenReturn(logPosition);
+        when(election.leader()).thenReturn(mock(ClusterMember.class));
+        Tests.setField(agent, "election", election);
+        assertSame(election, Tests.getField(agent, "election"));
+
+        assertEquals(0, agent.notifiedCommitPosition());
+
+        agent.electionComplete(555);
+        assertEquals(logPosition, agent.notifiedCommitPosition());
+        verify(election).logPosition();
+
+        reset(election);
+        when(election.logPosition()).thenReturn(50L);
+        when(election.leader()).thenReturn(mock(ClusterMember.class));
+        Tests.setField(agent, "election", election);
+
+        agent.electionComplete(777);
+        assertEquals(logPosition, agent.notifiedCommitPosition());
+        verify(election).logPosition();
+    }
 }
