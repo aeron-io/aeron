@@ -654,6 +654,11 @@ class Election
             " newPosition=" + newPosition);
     }
 
+    long notifiedCommitPosition()
+    {
+        return notifiedCommitPosition;
+    }
+
     private int init(final long nowNs)
     {
         if (isFirstInit)

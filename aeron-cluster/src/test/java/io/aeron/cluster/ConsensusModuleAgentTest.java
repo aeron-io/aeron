@@ -519,4 +519,75 @@ class ConsensusModuleAgentTest
 
         agent.replayLogPoll(mockLogAdapter, 65536);
     }
+
+    @Test
+    void notifiedCommitPositionShouldNotGoBackwards()
+    {
+        final TestClusterClock clock = new TestClusterClock(TimeUnit.MILLISECONDS);
+        final Counter stateCounter = newCounter("state counter", CLUSTER_CONSENSUS_MODULE_STATE_TYPE_ID);
+        final Counter controlToggle = newCounter("control toggle", CLUSTER_CONTROL_TOGGLE_TYPE_ID);
+
+        controlToggle.set(NEUTRAL.code());
+
+        ctx.moduleStateCounter(stateCounter)
+            .controlToggleCounter(controlToggle)
+            .epochClock(clock.asEpochClock())
+            .clusterClock(clock);
+
+        final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
+        assertEquals(ConsensusModule.State.INIT.code(), stateCounter.get());
+
+        agent.state(ConsensusModule.State.ACTIVE);
+        agent.role(Cluster.Role.FOLLOWER);
+        final long leadershipTermId = 42;
+        agent.leadershipTermId(leadershipTermId);
+        final ClusterMember leader = new ClusterMember(19, "", "", "", "", "", "");
+        Tests.setField(agent, "leaderMember", leader);
+        assertSame(leader, Tests.getField(agent, "leaderMember"));
+
+        assertEquals(0, agent.notifiedCommitPosition());
+
+        clock.increment(1);
+        agent.onCommitPosition(leadershipTermId, 100, leader.id());
+        assertEquals(100, agent.notifiedCommitPosition());
+        assertEquals(clock.timeNanos(), agent.timeOfLastLogUpdateNs());
+
+        clock.increment(1);
+        agent.onCommitPosition(leadershipTermId, 200, leader.id());
+        assertEquals(200, agent.notifiedCommitPosition());
+        assertEquals(clock.timeNanos(), agent.timeOfLastLogUpdateNs());
+
+        clock.increment(1);
+        agent.onCommitPosition(leadershipTermId, 50, leader.id());
+        assertEquals(200, agent.notifiedCommitPosition());
+        assertEquals(clock.timeNanos(), agent.timeOfLastLogUpdateNs());
+
+        clock.increment(1);
+        agent.onCommitPosition(leadershipTermId, -1, leader.id());
+        assertEquals(200, agent.notifiedCommitPosition());
+        assertEquals(clock.timeNanos(), agent.timeOfLastLogUpdateNs());
+
+        final long lastUpdateNs = clock.timeNanos();
+        clock.increment(1);
+        agent.onCommitPosition(leadershipTermId - 1, 5000, leader.id());
+        assertEquals(200, agent.notifiedCommitPosition());
+        assertEquals(lastUpdateNs, agent.timeOfLastLogUpdateNs());
+
+        clock.increment(5);
+        agent.onCommitPosition(leadershipTermId, 700, -100);
+        assertEquals(200, agent.notifiedCommitPosition());
+        assertEquals(lastUpdateNs, agent.timeOfLastLogUpdateNs());
+
+        clock.increment(3);
+        agent.role(Cluster.Role.CANDIDATE);
+        agent.onCommitPosition(leadershipTermId, 555, leader.id());
+        assertEquals(200, agent.notifiedCommitPosition());
+        assertEquals(lastUpdateNs, agent.timeOfLastLogUpdateNs());
+
+        clock.increment(2);
+        agent.role(Cluster.Role.LEADER);
+        agent.onCommitPosition(leadershipTermId, 999, leader.id());
+        assertEquals(200, agent.notifiedCommitPosition());
+        assertEquals(lastUpdateNs, agent.timeOfLastLogUpdateNs());
+    }
 }

@@ -23,6 +23,7 @@ import io.aeron.Subscription;
 import io.aeron.cluster.service.Cluster;
 import io.aeron.cluster.service.ClusterMarkFile;
 import io.aeron.exceptions.TimeoutException;
+import io.aeron.test.Tests;
 import io.aeron.test.cluster.TestClusterClock;
 import org.agrona.collections.Int2ObjectHashMap;
 import org.agrona.collections.MutableLong;
@@ -41,6 +42,7 @@ import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
 import static io.aeron.cluster.ConsensusModuleAgent.APPEND_POSITION_FLAG_NONE;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyBoolean;
@@ -1593,6 +1595,60 @@ class ElectionTest
             eq(ctx.appVersion()),
             eq(true));
         verify(consensusModuleAgent).publishCommitPosition(quorumPosition2, leadershipTermId);
+    }
+
+    @Test
+    void notifiedCommitPositionCannotGoBackwards()
+    {
+        final long logPosition = 100;
+        final long leadershipTermId = 7;
+        final ClusterMember[] clusterMembers = prepareClusterMembers();
+        final ClusterMember follower = clusterMembers[0];
+        final ClusterMember leader = clusterMembers[1];
+        leader.isLeader(true);
+
+        final Election election = newElection(leadershipTermId, logPosition, clusterMembers, follower);
+        election.state(ElectionState.FOLLOWER_READY, 1, "");
+        Tests.setField(election, "leaderMember", leader);
+
+        assertEquals(0, election.notifiedCommitPosition());
+
+        election.onCommitPosition(leadershipTermId, 2048, leader.id());
+        assertEquals(2048, election.notifiedCommitPosition());
+
+        election.onCommitPosition(leadershipTermId, 5000, leader.id());
+        assertEquals(5000, election.notifiedCommitPosition());
+
+        election.onCommitPosition(leadershipTermId, 100, leader.id());
+        assertEquals(5000, election.notifiedCommitPosition());
+
+        election.onCommitPosition(leadershipTermId, 4999, leader.id());
+        assertEquals(5000, election.notifiedCommitPosition());
+
+        election.onCommitPosition(leadershipTermId, Long.MIN_VALUE, leader.id());
+        assertEquals(5000, election.notifiedCommitPosition());
+
+        // wrong state
+        election.state(ElectionState.INIT, 2, "");
+        election.onCommitPosition(leadershipTermId, Long.MAX_VALUE, leader.id());
+        assertEquals(5000, election.notifiedCommitPosition());
+
+        // wrong leadershipTermId
+        election.state(ElectionState.CANVASS, 3, "");
+        election.onCommitPosition(leadershipTermId - 5, 10000, leader.id());
+        assertEquals(5000, election.notifiedCommitPosition());
+        election.onCommitPosition(leadershipTermId + 10, 20000, leader.id());
+        assertEquals(5000, election.notifiedCommitPosition());
+
+        // Wrong leader id
+        election.onCommitPosition(leadershipTermId, 13131, leader.id() + 5);
+        assertEquals(5000, election.notifiedCommitPosition());
+
+        // Leader member not set
+        Tests.setField(election, "leaderMember", null);
+        assertNull(Tests.getField(election, "leaderMember"));
+        election.onCommitPosition(leadershipTermId, 65535, leader.id());
+        assertEquals(5000, election.notifiedCommitPosition());
     }
 
     private Election newElection(

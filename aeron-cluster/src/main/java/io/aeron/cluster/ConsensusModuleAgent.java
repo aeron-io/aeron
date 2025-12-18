@@ -1875,6 +1875,16 @@ final class ConsensusModuleAgent
         return catchupLogDestination;
     }
 
+    long notifiedCommitPosition()
+    {
+        return notifiedCommitPosition;
+    }
+
+    long timeOfLastLogUpdateNs()
+    {
+        return timeOfLastLogUpdateNs;
+    }
+
     boolean tryJoinLogAsFollower(final Image image, final boolean isLeaderStartup, final long nowNs)
     {
         final Subscription logSubscription = image.subscription();

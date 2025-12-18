@@ -25,7 +25,6 @@ import io.aeron.driver.Configuration;
 import io.aeron.exceptions.AeronException;
 import io.aeron.exceptions.RegistrationException;
 import io.aeron.exceptions.TimeoutException;
-
 import org.agrona.DirectBuffer;
 import org.agrona.LangUtil;
 import org.agrona.concurrent.IdleStrategy;
@@ -53,10 +52,17 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
-import java.util.function.*;
+import java.util.function.BooleanSupplier;
+import java.util.function.Function;
+import java.util.function.IntConsumer;
+import java.util.function.LongSupplier;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 import static io.aeron.Aeron.NULL_VALUE;
 import static org.mockito.Mockito.doAnswer;
@@ -68,6 +74,13 @@ public class Tests
 {
     public static final IdleStrategy SLEEP_1_MS = new SleepingMillisIdleStrategy(1);
     private static final String LOGGING_MBEAN_NAME = "io.aeron:type=logging";
+    private static final ClassValue<Map<String, Field>> CLASS_FIELDS = new ClassValue<>()
+    {
+        protected Map<String, Field> computeValue(final Class<?> type)
+        {
+            return new HashMap<>();
+        }
+    };
 
     /**
      * Set a private field in a class for testing.
@@ -80,13 +93,33 @@ public class Tests
     {
         try
         {
-            final Field field = instance.getClass().getDeclaredField(fieldName);
-            field.setAccessible(true);
-            field.set(instance, value);
+            resolveField(instance.getClass(), fieldName).set(instance, value);
         }
         catch (final Exception ex)
         {
             LangUtil.rethrowUnchecked(ex);
+        }
+    }
+
+    /**
+     * Get a private field in a class for testing.
+     *
+     * @param <T>       return type.
+     * @param instance  of the object to get the field value.
+     * @param fieldName to read.
+     * @return field value.
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> T getField(final Object instance, final String fieldName)
+    {
+        try
+        {
+            return (T)resolveField(instance.getClass(), fieldName).get(instance);
+        }
+        catch (final Exception ex)
+        {
+            LangUtil.rethrowUnchecked(ex);
+            return null;
         }
     }
 
@@ -392,9 +425,9 @@ public class Tests
     /**
      * Await a condition with a timeout and also check for thread interrupt.
      *
-     * @param conditionSupplier     for the condition to be awaited.
-     * @param timeoutNs             to await.
-     * @param errorMessageSupplier  supplier of error message if timeout reached
+     * @param conditionSupplier    for the condition to be awaited.
+     * @param timeoutNs            to await.
+     * @param errorMessageSupplier supplier of error message if timeout reached
      */
     public static void await(
         final BooleanSupplier conditionSupplier,
@@ -416,8 +449,8 @@ public class Tests
     /**
      * Await a condition with and check for thread interrupt.
      *
-     * @param conditionSupplier     for the condition to be awaited.
-     * @param errorMessageSupplier  supplier of error message if interrupt signalled
+     * @param conditionSupplier    for the condition to be awaited.
+     * @param errorMessageSupplier supplier of error message if interrupt signalled
      */
     public static void await(final BooleanSupplier conditionSupplier, final Supplier<String> errorMessageSupplier)
     {
@@ -430,11 +463,11 @@ public class Tests
     /**
      * Await a condition with a timeout and also check for thread interrupt.
      *
-     * @param argSupplier             argument for the condition + message.
-     * @param conditionsPredicate     for the condition to be awaited.
-     * @param timeoutNs               to await.
-     * @param errorMessageCreator     supplier of error message if timeout reached
-     * @param <T>                     type of argument to condition + message
+     * @param argSupplier         argument for the condition + message.
+     * @param conditionsPredicate for the condition to be awaited.
+     * @param timeoutNs           to await.
+     * @param errorMessageCreator supplier of error message if timeout reached
+     * @param <T>                 type of argument to condition + message
      */
     public static <T> void await(
         final Supplier<T> argSupplier,
@@ -459,10 +492,10 @@ public class Tests
     /**
      * Await a condition with and check for thread interrupt.
      *
-     * @param argSupplier             argument for the condition + message.
-     * @param conditionsPredicate     for the condition to be awaited.
-     * @param errorMessageCreator     supplier of error message if timeout reached
-     * @param <T>                     type of argument to condition + message
+     * @param argSupplier         argument for the condition + message.
+     * @param conditionsPredicate for the condition to be awaited.
+     * @param errorMessageCreator supplier of error message if timeout reached
+     * @param <T>                 type of argument to condition + message
      */
     public static <T> void await(
         final Supplier<T> argSupplier,
@@ -699,7 +732,7 @@ public class Tests
             try
             {
                 mBeanServer.invoke(
-                    loggingName, "startCollecting", new Object[] {displayName}, new String[] {"java.lang.String"});
+                    loggingName, "startCollecting", new Object[]{ displayName }, new String[]{ "java.lang.String" });
             }
             catch (final InstanceNotFoundException ignore)
             {
@@ -752,7 +785,7 @@ public class Tests
             try
             {
                 mBeanServer.invoke(
-                    loggingName, "writeToFile", new Object[] {filename}, new String[] {"java.lang.String"});
+                    loggingName, "writeToFile", new Object[]{ filename }, new String[]{ "java.lang.String" });
             }
             catch (final InstanceNotFoundException ignore)
             {
@@ -861,6 +894,26 @@ public class Tests
         {
             out.printf("%" + indent + "s", "");
         }
+    }
+
+    private static Field resolveField(final Class<?> type, final String fieldName)
+    {
+        final Map<String, Field> fields = CLASS_FIELDS.get(type);
+        Field field = fields.get(fieldName);
+        try
+        {
+            if (null == field)
+            {
+                field = type.getDeclaredField(fieldName);
+                field.setAccessible(true);
+                fields.put(fieldName, field);
+            }
+        }
+        catch (final Exception ex)
+        {
+            LangUtil.rethrowUnchecked(ex);
+        }
+        return field;
     }
 
     private static class PrintingFileVisitor implements FileVisitor<Path>
