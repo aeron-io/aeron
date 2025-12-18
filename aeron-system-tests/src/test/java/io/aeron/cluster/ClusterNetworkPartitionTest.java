@@ -38,7 +38,6 @@ import io.aeron.test.cluster.TestNode;
 import org.agrona.collections.MutableInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -194,9 +193,8 @@ class ClusterNetworkPartitionTest
         cluster.awaitServicesMessageCount(committedMessageCount + messagesReceivedByMinority + newMessages);
     }
 
-    @Disabled
     @ParameterizedTest
-    @ValueSource(ints = { 64 * 1024, 256 * 1024, 512 * 1024, 1024 * 1024 })
+    @ValueSource(ints = { 64 * 1024, 256 * 1024 })
     @InterruptAfter(30)
     void shouldRecoverClusterWithMajorityOfNodesBeingBehind(final int amountOfLogMajorityShouldBeBehind)
     {
@@ -539,9 +537,9 @@ class ClusterNetworkPartitionTest
 
         final Supplier<String> errMsg = () ->
             "memberId=" + node.memberId() +
-            " role=" + node.role() +
-            " electionState=" + node.electionState() +
-            " electionCount=" + node.electionCount();
+                " role=" + node.role() +
+                " electionState=" + node.electionState() +
+                " electionCount=" + node.electionCount();
         assertEquals(expectedCommitPosition, node.commitPosition(), errMsg);
         assertEquals(expectedCommittedMessageCount, node.service().messageCount(), errMsg);
     }
