@@ -643,10 +643,7 @@ public final class TestNode implements AutoCloseable
 
                     if (null != session)
                     {
-                        while (session.offer(buffer, offset, length) < 0)
-                        {
-                            idleStrategy.idle();
-                        }
+                        echoMessage(session, buffer, offset, length);
                     }
                     break;
             }

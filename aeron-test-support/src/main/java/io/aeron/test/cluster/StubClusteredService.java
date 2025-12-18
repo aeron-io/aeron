@@ -17,6 +17,8 @@ package io.aeron.test.cluster;
 
 import io.aeron.ExclusivePublication;
 import io.aeron.Image;
+import io.aeron.Publication;
+import io.aeron.cluster.client.ClusterException;
 import io.aeron.cluster.codecs.CloseReason;
 import io.aeron.cluster.service.ClientSession;
 import io.aeron.cluster.service.Cluster;
@@ -27,7 +29,6 @@ import org.agrona.concurrent.IdleStrategy;
 
 public class StubClusteredService implements ClusteredService
 {
-    private static final int SEND_ATTEMPTS = 3;
     protected Cluster cluster;
     protected IdleStrategy idleStrategy;
 
@@ -80,16 +81,23 @@ public class StubClusteredService implements ClusteredService
         final ClientSession session, final DirectBuffer buffer, final int offset, final int length)
     {
         idleStrategy.reset();
-        int attempts = SEND_ATTEMPTS;
-        do
+        while (true)
         {
             final long result = session.offer(buffer, offset, length);
             if (result > 0)
             {
                 return;
             }
-            idleStrategy.idle();
+
+            if (Publication.BACK_PRESSURED == result)
+            {
+                idleStrategy.idle();
+            }
+            else if (Publication.ADMIN_ACTION != result)
+            {
+                throw new ClusterException("egress publication error: result=" +
+                    Publication.errorString(result) + ", clusterSessionId=" + session.id());
+            }
         }
-        while (--attempts > 0);
     }
 }
