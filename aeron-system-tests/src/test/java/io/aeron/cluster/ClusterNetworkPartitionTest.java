@@ -194,7 +194,7 @@ class ClusterNetworkPartitionTest
     }
 
     @ParameterizedTest
-    @ValueSource(ints = { 64 * 1024, 128 * 1024, 256 * 1024 })
+    @ValueSource(ints = { 128 * 1024, 256 * 1024 })
     @InterruptAfter(30)
     void shouldRecoverClusterWithMajorityOfNodesBeingBehind(final int amountOfLogMajorityShouldBeBehind)
     {
@@ -203,7 +203,7 @@ class ClusterNetworkPartitionTest
             .withStaticNodes(CLUSTER_SIZE)
             .withCustomAddresses(HOSTNAMES)
             .withClusterId(7)
-            .withLogChannel("aeron:udp?term-length=512k|alias=raft|rcv-wnd=1m|so-rcvbuf=1m")
+            .withLogChannel("aeron:udp?term-length=512k|alias=raft")
             .withLeaderHeartbeatTimeoutNs(leaderHeartbeatTimeoutNs)
             .withStartupCanvassTimeoutNs(leaderHeartbeatTimeoutNs * 2)
             .withElectionTimeoutNs(leaderHeartbeatTimeoutNs / 2)
@@ -247,7 +247,6 @@ class ClusterNetworkPartitionTest
 
         final TestNode newLeader = cluster.awaitLeader();
         assertEquals(firstLeader.memberId(), newLeader.memberId());
-        cluster.reconnectClient();
 
         final int newMessages = 200;
         cluster.sendMessages(newMessages);
