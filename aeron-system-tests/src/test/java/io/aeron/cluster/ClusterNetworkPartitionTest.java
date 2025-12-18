@@ -203,7 +203,7 @@ class ClusterNetworkPartitionTest
             .withStaticNodes(CLUSTER_SIZE)
             .withCustomAddresses(HOSTNAMES)
             .withClusterId(7)
-            .withLogChannel("aeron:udp?term-length=8m|alias=raft|rcv-wnd=1m|so-rcvbuf=1m")
+            .withLogChannel("aeron:udp?term-length=512k|alias=raft|rcv-wnd=1m|so-rcvbuf=1m")
             .withLeaderHeartbeatTimeoutNs(leaderHeartbeatTimeoutNs)
             .withStartupCanvassTimeoutNs(leaderHeartbeatTimeoutNs * 2)
             .withElectionTimeoutNs(leaderHeartbeatTimeoutNs / 2)
