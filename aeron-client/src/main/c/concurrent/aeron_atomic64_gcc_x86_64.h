@@ -91,14 +91,11 @@ inline bool aeron_cas_int32(volatile int32_t *dst, int32_t expected, int32_t des
 
 inline void aeron_acquire(void)
 {
-    volatile int64_t *dummy;
-    __asm__ volatile("movq 0(%%rsp), %0" : "=r"(dummy) : : "memory");
+    __asm__ volatile("" ::: "memory");
 }
 
 inline void aeron_release(void)
 {
-    volatile int64_t dummy = 0;
-    (void)dummy;
     __asm__ volatile("" ::: "memory");
 }
 
