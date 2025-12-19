@@ -364,6 +364,11 @@ inline static bool scan_back_to_confirm_still_zeroed(const uint8_t *buffer, size
             break;
         }
 
+        if (i < AERON_RB_ALIGNMENT)
+        {
+            break;
+        }
+
         i -= AERON_RB_ALIGNMENT;
     }
 
