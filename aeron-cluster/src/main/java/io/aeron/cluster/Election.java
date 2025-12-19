@@ -992,7 +992,7 @@ class Election
                 state(
                     NULL_POSITION != catchupJoinPosition ? FOLLOWER_CATCHUP_INIT : FOLLOWER_LOG_INIT,
                     nowNs,
-                    "skip log replay");
+                    "nothing to replay");
                 workCount++;
             }
         }
@@ -1005,9 +1005,8 @@ class Election
                 followerReplayLastPublishedAppendPosition = NULL_POSITION;
                 stopReplay();
 
-                if (logPosition >= appendPosition)
+                if (logPosition == appendPosition)
                 {
-                    appendPosition = logPosition;
                     state(
                         NULL_POSITION != catchupJoinPosition ? FOLLOWER_CATCHUP_INIT : FOLLOWER_LOG_INIT,
                         nowNs,
@@ -1015,7 +1014,7 @@ class Election
                 }
                 else
                 {
-                    state(CANVASS, nowNs, "stalled log replay");
+                    state(CANVASS, nowNs, "log replay is incomplete");
                 }
             }
         }
