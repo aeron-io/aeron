@@ -87,7 +87,6 @@ class Election
     private long appendPosition;
     private long notifiedCommitPosition;
     private long catchupJoinPosition = NULL_POSITION;
-    private long followerReplayLastPublishedAppendPosition = NULL_POSITION;
     private long replicationLeadershipTermId = NULL_VALUE;
     private long replicationStopPosition = NULL_POSITION;
     private long replicationDeadlineNs;
@@ -97,6 +96,7 @@ class Election
     private long logLeadershipTermId;
     private long candidateTermId;
     private long lastPublishedCommitPosition;
+    private long lastPublishedAppendPosition;
     private int logSessionId = NULL_SESSION_ID;
     private int gracefulClosedLeaderId;
     private boolean isFirstInit = true;
@@ -684,7 +684,6 @@ class Election
         }
 
         notifiedCommitPosition = 0;
-        followerReplayLastPublishedAppendPosition = NULL_POSITION;
         candidateTermId = max(ctx.nodeStateFile().candidateTerm().candidateTermId(), leadershipTermId);
 
         if (clusterMembers.length == 1 && thisMember.id() == clusterMembers[0].id())
@@ -966,22 +965,7 @@ class Election
             {
                 if (0 == notifiedCommitPosition)
                 {
-                    if (NULL_POSITION == followerReplayLastPublishedAppendPosition ||
-                        hasUpdateIntervalExpired(nowNs, ctx.leaderHeartbeatIntervalNs()))
-                    {
-                        if (consensusPublisher.appendPosition(
-                            leaderMember.publication(),
-                            leadershipTermId,
-                            appendPosition,
-                            thisMember.id(),
-                            APPEND_POSITION_FLAG_NONE))
-                        {
-                            followerReplayLastPublishedAppendPosition = appendPosition;
-                            timeOfLastUpdateNs = nowNs;
-                            workCount++;
-                        }
-                    }
-                    return workCount;
+                    return publishFollowerAppendPosition(nowNs);
                 }
 
                 logReplay = consensusModuleAgent.newLogReplay(logPosition, min(appendPosition, notifiedCommitPosition));
@@ -1002,7 +986,6 @@ class Election
             if (logReplay.isDone())
             {
                 logPosition = logReplay.position();
-                followerReplayLastPublishedAppendPosition = NULL_POSITION;
                 stopReplay();
 
                 if (logPosition == appendPosition)
@@ -1014,7 +997,8 @@ class Election
                 }
                 else
                 {
-                    state(CANVASS, nowNs, "log replay is incomplete");
+                    state(CANVASS, nowNs, "incomplete log replay: logPosition=" + logPosition +
+                        " appendPosition=" + appendPosition);
                 }
             }
         }
@@ -1319,6 +1303,26 @@ class Election
         return 0;
     }
 
+    private int publishFollowerAppendPosition(final long nowNs)
+    {
+        if (lastPublishedAppendPosition != appendPosition ||
+            hasUpdateIntervalExpired(nowNs, ctx.leaderHeartbeatIntervalNs()))
+        {
+            if (consensusPublisher.appendPosition(
+                leaderMember.publication(),
+                leadershipTermId,
+                appendPosition,
+                thisMember.id(),
+                APPEND_POSITION_FLAG_NONE))
+            {
+                lastPublishedAppendPosition = appendPosition;
+                timeOfLastUpdateNs = nowNs;
+                return 1;
+            }
+        }
+        return 0;
+    }
+
     private boolean sendCatchupPosition(final String catchupEndpoint)
     {
         return consensusPublisher.catchupPosition(
@@ -1441,6 +1445,7 @@ class Election
             logReplay.close();
             logReplay = null;
         }
+        lastPublishedAppendPosition = 0;
     }
 
     private void stopLogReplication()
