@@ -580,15 +580,15 @@ class Election
             return;
         }
 
-        if (leadershipTermId == this.leadershipTermId)
+        // we do not check `leadershipTermId == this.leadershipTermId` here, because prior to fixes the leader was
+        // sending wrong `leadershipTermId` value in the `CommitPosition` message (i.e. not matching the one sent
+        // by the `NewLeadershipTerm` message).
+        if (null != leaderMember && leaderMember.id() == leaderMemberId)
         {
-            if (null != leaderMember && leaderMember.id() == leaderMemberId)
+            notifiedCommitPosition = max(notifiedCommitPosition, logPosition);
+            if (FOLLOWER_LOG_REPLICATION == state)
             {
-                notifiedCommitPosition = max(notifiedCommitPosition, logPosition);
-                if (FOLLOWER_LOG_REPLICATION == state)
-                {
-                    replicationDeadlineNs = ctx.clusterClock().timeNanos() + ctx.leaderHeartbeatTimeoutNs();
-                }
+                replicationDeadlineNs = ctx.clusterClock().timeNanos() + ctx.leaderHeartbeatTimeoutNs();
             }
         }
         else if (leadershipTermId > this.leadershipTermId && LEADER_READY == state)
@@ -1367,7 +1367,7 @@ class Election
         return aeron.addSubscription(channel, ctx.logStreamId());
     }
 
-    void state(final ElectionState newState, final long nowNs, final String reason)
+    private void state(final ElectionState newState, final long nowNs, final String reason)
     {
         if (newState != state)
         {
