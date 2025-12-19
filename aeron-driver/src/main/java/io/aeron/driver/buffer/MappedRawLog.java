@@ -42,7 +42,6 @@ import static org.agrona.BitUtil.align;
  */
 class MappedRawLog implements RawLog
 {
-    private static final int ONE_GIG = 1 << 30;
     private static final EnumSet<StandardOpenOption> FILE_OPTIONS = EnumSet.of(CREATE_NEW, READ, WRITE);
     private static final EnumSet<StandardOpenOption> SPARSE_FILE_OPTIONS = EnumSet.of(CREATE_NEW, READ, WRITE, SPARSE);
 
@@ -191,7 +190,7 @@ class MappedRawLog implements RawLog
     {
         final ByteBuffer[] terms = new ByteBuffer[PARTITION_COUNT];
 
-        if (termLength < ONE_GIG)
+        if (mappedBuffers.length == 1)
         {
             final MappedByteBuffer buffer = mappedBuffers[0];
             for (int i = 0; i < PARTITION_COUNT; i++)
