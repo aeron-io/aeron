@@ -62,7 +62,7 @@ inline bool aeron_cas_int64(volatile int64_t *dst, int64_t expected, int64_t des
     __asm__ volatile(
         "lock; cmpxchgq %2, %1"
         : "=a"(original), "+m"(*dst)
-        : "q"(desired), "0"(expected));
+        : "r"(desired), "0"(expected));
 
     return original == expected;
 }
@@ -73,7 +73,7 @@ inline bool aeron_cas_uint64(volatile uint64_t *dst, uint64_t expected, uint64_t
     __asm__ volatile(
         "lock; cmpxchgq %2, %1"
         : "=a"(original), "+m"(*dst)
-        : "q"(desired), "0"(expected));
+        : "r"(desired), "0"(expected));
 
     return original == expected;
 }
@@ -84,7 +84,7 @@ inline bool aeron_cas_int32(volatile int32_t *dst, int32_t expected, int32_t des
     __asm__ volatile(
         "lock; cmpxchgl %2, %1"
         : "=a"(original), "+m"(*dst)
-        : "q"(desired), "0"(expected));
+        : "r"(desired), "0"(expected));
 
     return original == expected;
 }
