@@ -24,14 +24,14 @@
 do \
 { \
     dst = src; \
-    __asm__ volatile("" ::: "memory"); \
+    __asm__ __volatile__("" ::: "memory"); \
 } \
 while (false) \
 
 #define AERON_SET_RELEASE(dst, src) \
 do \
 { \
-    __asm__ volatile("" ::: "memory"); \
+    __asm__ __volatile__("" ::: "memory"); \
     dst = src; \
 } \
 while (false) \
@@ -39,7 +39,7 @@ while (false) \
 #define AERON_GET_AND_ADD_INT64(original, dst, value) \
 do \
 { \
-    __asm__ volatile( \
+    __asm__ __volatile__( \
         "lock; xaddq %0, %1" \
         : "=r"(original), "+m"(dst) \
         : "0"((int64_t)value) \
@@ -51,7 +51,7 @@ while (false) \
 #define AERON_GET_AND_ADD_INT32(original, dst, value) \
 do \
 { \
-    __asm__ volatile( \
+    __asm__ __volatile__( \
         "lock; xaddl %0, %1" \
         : "=r"(original), "+m"(dst) \
         : "0"(value) \
@@ -63,10 +63,10 @@ while (false) \
 inline bool aeron_cas_int64(volatile int64_t *dst, int64_t expected, int64_t desired)
 {
     int64_t original;
-    __asm__ volatile(
+    __asm__ __volatile__(
         "lock; cmpxchgq %2, %1"
         : "=a"(original), "+m"(*dst)
-        : "q"(desired), "0"(expected)
+        : "r"(desired), "0"(expected)
         : "memory", "cc"
         );
 
@@ -76,10 +76,10 @@ inline bool aeron_cas_int64(volatile int64_t *dst, int64_t expected, int64_t des
 inline bool aeron_cas_uint64(volatile uint64_t *dst, uint64_t expected, uint64_t desired)
 {
     uint64_t original;
-    __asm__ volatile(
+    __asm__ __volatile__(
         "lock; cmpxchgq %2, %1"
         : "=a"(original), "+m"(*dst)
-        : "q"(desired), "0"(expected)
+        : "r"(desired), "0"(expected)
         : "memory", "cc"
         );
 
@@ -89,10 +89,10 @@ inline bool aeron_cas_uint64(volatile uint64_t *dst, uint64_t expected, uint64_t
 inline bool aeron_cas_int32(volatile int32_t *dst, int32_t expected, int32_t desired)
 {
     int32_t original;
-    __asm__ volatile(
+    __asm__ __volatile__(
         "lock; cmpxchgl %2, %1"
         : "=a"(original), "+m"(*dst)
-        : "q"(desired), "0"(expected)
+        : "r"(desired), "0"(expected)
         : "memory", "cc"
         );
 
@@ -101,15 +101,12 @@ inline bool aeron_cas_int32(volatile int32_t *dst, int32_t expected, int32_t des
 
 inline void aeron_acquire(void)
 {
-    volatile int64_t *dummy;
-    __asm__ volatile("movq 0(%%rsp), %0" : "=r"(dummy) : : "memory");
+    __asm__ __volatile__("" ::: "memory");
 }
 
 inline void aeron_release(void)
 {
-    volatile int64_t dummy = 0;
-    (void)dummy;
-    __asm__ volatile("" ::: "memory");
+    __asm__ __volatile__("" ::: "memory");
 }
 
 

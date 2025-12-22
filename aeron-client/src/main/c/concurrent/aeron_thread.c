@@ -373,7 +373,7 @@ int aeron_cond_signal(aeron_cond_t *cv)
 void proc_yield(void)
 {
 #if !defined(AERON_CPU_ARM)
-    __asm__ volatile("pause\n": : : "memory");
+    __asm__ __volatile__("pause\n": : : "memory");
 #endif
 }
 

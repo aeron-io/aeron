@@ -358,14 +358,15 @@ int aeron_agent_init(
     aeron_idle_strategy_func_t idle_strategy_func,
     void *idle_strategy_state)
 {
-    if (NULL == runner || NULL == do_work || NULL == idle_strategy_func)
+    if (NULL == runner || NULL == do_work || NULL == idle_strategy_func || role_name == NULL)
     {
         AERON_SET_ERR(
             EINVAL,
-            "Parameters must not be null, runner: %s, do_work: %s, idle_strategy_func: %s",
+            "Parameters must not be null, runner: %s, do_work: %s, idle_strategy_func: %s, role_name: %s",
             AERON_NULL_STR(runner),
             AERON_NULL_STR(do_work),
-            AERON_NULL_STR(idle_strategy_func));
+            AERON_NULL_STR(idle_strategy_func),
+            AERON_NULL_STR(role_name));
         return -1;
     }
 
@@ -375,8 +376,8 @@ int aeron_agent_init(
     runner->do_work = do_work;
     runner->on_close = on_close;
 
-    size_t role_name_length = strlen(role_name);
-    if (aeron_alloc((void **)&runner->role_name, role_name_length + 1) < 0)
+    size_t role_name_length = strlen(role_name) + 1;
+    if (aeron_alloc((void **)&runner->role_name, role_name_length) < 0)
     {
         AERON_APPEND_ERR("Failed to allocate role_name for runner: %s", role_name);
         return -1;
