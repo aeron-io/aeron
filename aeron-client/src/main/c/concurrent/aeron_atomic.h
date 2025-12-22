@@ -19,6 +19,45 @@
 
 #include "util/aeron_platform.h"
 
+#define AERON_ATOMIC_STR2(x) #x
+#define AERON_ATOMIC_STR(x)  AERON_ATOMIC_STR2(x)
+#define AERON_ATOMIC_LOC __FILE__ ":" AERON_ATOMIC_STR(__LINE__)
+
+#if defined(__cplusplus)
+
+#include <type_traits>
+
+/*
+ * C++ version:
+ *  - decltype((expr)) yields T& / volatile T& for lvalues
+ *  - require lvalue reference
+ *  - require volatile on the referred-to type
+ */
+#define AERON_ATOMIC_ASSERT_VOLATILE_LVALUE(expr, msg)                               \
+_Static_assert(                                                                      \
+    std::is_lvalue_reference<decltype((expr))>::value &&                             \
+    std::is_volatile<typename std::remove_reference<decltype((expr))>::type>::value, \
+    msg " violation at " AERON_ATOMIC_LOC " (expr: " #expr ")");
+
+#elif defined(AERON_COMPILER_GCC)
+
+#define AERON_ATOMIC_ASSERT_VOLATILE_LVALUE(expr, msg)                               \
+_Static_assert(                                                                      \
+    __builtin_types_compatible_p(__typeof__(&(expr)),                                \
+    volatile __typeof__(expr) *),                                                    \
+    msg " violation at " AERON_ATOMIC_LOC " (expr: " #expr ")");
+
+#else
+
+#define AERON_ATOMIC_ASSERT_VOLATILE_LVALUE(expr, msg)                               \
+do                                                                                   \
+{                                                                                    \
+    (void)(expr);                                                                    \
+}                                                                                    \
+while (false)
+
+#endif
+
 #if defined(AERON_COMPILER_GCC) && defined(AERON_CPU_X64)
     #include "concurrent/aeron_atomic64_gcc_x86_64.h"
 #elif defined(AERON_COMPILER_GCC) && defined(AERON_CPU_ARM)

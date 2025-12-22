@@ -20,49 +20,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* ------------------------------------------------------------
- * Volatile lvalue enforcement (GCC / Clang)
- * ------------------------------------------------------------ */
-#if defined(__cplusplus)
-
-#include <type_traits>
-
-#define AERON_STR2(x) #x
-#define AERON_STR(x)  AERON_STR2(x)
-
-/*
- * C++ version:
- *  - decltype((expr)) yields T& / volatile T& for lvalues
- *  - require lvalue reference
- *  - require volatile on the referred-to type
- */
-#define AERON_ASSERT_VOLATILE_LVALUE(expr, msg)                                  \
-AERON_STATIC_ASSERT(                                                             \
-std::is_lvalue_reference<decltype((expr))>::value &&                             \
-std::is_volatile<typename std::remove_reference<decltype((expr))>::type>::value, \
-msg " (expr: " #expr ")")
-
-#elif defined(__GNUC__) || defined(__clang__)
-
-/* C version (GNU extension) */
-#define AERON_STR2(x) #x
-#define AERON_STR(x)  AERON_STR2(x)
-
-#define AERON_ASSERT_VOLATILE_LVALUE(expr, msg)                               \
-AERON_STATIC_ASSERT(                                                          \
-__builtin_types_compatible_p(                                                 \
-__typeof__(&(expr)),                                                          \
-volatile __typeof__(expr) *),                                                 \
-msg " (expr: " #expr ")")
-
-#else
-#define AERON_ASSERT_VOLATILE_LVALUE(expr, msg) do { (void)(expr); } while (0)
-#endif
-
 #define AERON_GET_ACQUIRE(dst, src)                                           \
 do                                                                            \
 {                                                                             \
-    AERON_ASSERT_VOLATILE_LVALUE(                                             \
+    AERON_ATOMIC_ASSERT_VOLATILE_LVALUE(                                      \
         src,                                                                  \
         "AERON_GET_ACQUIRE: src must be a volatile lvalue");                  \
     dst = (src);                                                              \
@@ -73,7 +34,7 @@ while (false)
 #define AERON_SET_RELEASE(dst, src)                                           \
 do                                                                            \
 {                                                                             \
-    AERON_ASSERT_VOLATILE_LVALUE(                                             \
+    AERON_ATOMIC_ASSERT_VOLATILE_LVALUE(                                      \
         dst,                                                                  \
         "AERON_SET_RELEASE: dst must be a volatile lvalue");                  \
     __asm__ __volatile__("" ::: "memory");                                    \
@@ -81,29 +42,29 @@ do                                                                            \
 }                                                                             \
 while (false)
 
-#define AERON_GET_AND_ADD_INT64(original, dst, value) \
-do \
-{ \
-    __asm__ __volatile__( \
-        "lock; xaddq %0, %1" \
-        : "=r"(original), "+m"(dst) \
-        : "0"((int64_t)value) \
-        : "memory", "cc" \
-        ); \
-} \
-while (false) \
+#define AERON_GET_AND_ADD_INT64(original, dst, value)                         \
+do                                                                            \
+{                                                                             \
+    __asm__ __volatile__(                                                     \
+        "lock; xaddq %0, %1"                                                  \
+        : "=r"(original), "+m"(dst)                                           \
+        : "0"((int64_t)value)                                                 \
+        : "memory", "cc"                                                      \
+        );                                                                    \
+}                                                                             \
+while (false)
 
-#define AERON_GET_AND_ADD_INT32(original, dst, value) \
-do \
-{ \
-    __asm__ __volatile__( \
-        "lock; xaddl %0, %1" \
-        : "=r"(original), "+m"(dst) \
-        : "0"(value) \
-        : "memory", "cc" \
-        );\
-} \
-while (false) \
+#define AERON_GET_AND_ADD_INT32(original, dst, value)                         \
+do                                                                            \
+{                                                                             \
+    __asm__ __volatile__(                                                     \
+        "lock; xaddl %0, %1"                                                  \
+        : "=r"(original), "+m"(dst)                                           \
+        : "0"(value)                                                          \
+        : "memory", "cc"                                                      \
+        );                                                                    \
+}                                                                             \
+while (false)
 
 inline bool aeron_cas_int64(volatile int64_t *dst, int64_t expected, int64_t desired)
 {

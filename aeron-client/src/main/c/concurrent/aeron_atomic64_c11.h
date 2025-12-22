@@ -26,26 +26,10 @@
 #pragma clang diagnostic ignored "-Wc11-extensions"
 #endif
 
-#define AERON_STR2(x) #x
-#define AERON_STR(x)  AERON_STR2(x)
-#define AERON_LOC     __FILE__ ":" AERON_STR(__LINE__)
-
-#if defined(__GNUC__) || defined(__clang__)
-
-#define AERON_ASSERT_VOLATILE_LVALUE(expr, msg)                               \
-        _Static_assert(                                                          \
-            __builtin_types_compatible_p(                                        \
-                __typeof__(&(expr)),                                             \
-                volatile __typeof__(expr) *),                                    \
-            msg " violation at " AERON_LOC " (expr: " #expr ")")
-#else
-#define AERON_ASSERT_VOLATILE_LVALUE(expr, msg) do { (void)(expr); } while (0)
-#endif
-
 #define AERON_GET_ACQUIRE(dst, src)                                           \
 do                                                                            \
 {                                                                             \
-    AERON_ASSERT_VOLATILE_LVALUE(                                             \
+    AERON_ATOMIC_ASSERT_VOLATILE_LVALUE(                                      \
         src,                                                                  \
         "AERON_GET_ACQUIRE: src must be a volatile lvalue"); \
     dst = (src);                                                              \
@@ -56,7 +40,7 @@ while (false)
 #define AERON_SET_RELEASE(dst, src)                                           \
 do                                                                            \
 {                                                                             \
-    AERON_ASSERT_VOLATILE_LVALUE(                                             \
+    AERON_ATOMIC_ASSERT_VOLATILE_LVALUE(                                      \
         dst,                                                                  \
         "AERON_SET_RELEASE: dst must be a volatile lvalue"); \
     atomic_thread_fence(memory_order_release);                                \
@@ -64,19 +48,19 @@ do                                                                            \
 }                                                                             \
 while (false)
 
-#define AERON_GET_AND_ADD_INT64(original, dst, value) \
-do \
-{ \
-    original = atomic_fetch_add((_Atomic(int64_t) *)&dst, value); \
-} \
-while (false) \
+#define AERON_GET_AND_ADD_INT64(original, dst, value)                         \
+do                                                                            \
+{                                                                             \
+    original = atomic_fetch_add((_Atomic(int64_t) *)&dst, value);             \
+}                                                                             \
+while (false)                                                                 \
 
-#define AERON_GET_AND_ADD_INT32(original, dst, value) \
-do \
-{ \
-    original = atomic_fetch_add((_Atomic(int32_t) *)&dst, value); \
-} \
-while (false) \
+#define AERON_GET_AND_ADD_INT32(original, dst, value)                         \
+do                                                                            \
+{                                                                             \
+    original = atomic_fetch_add((_Atomic(int32_t) *)&dst, value);             \
+}                                                                             \
+while (false)                                                                 \
 
 inline bool aeron_cas_int64(volatile int64_t *dst, int64_t expected, int64_t desired)
 {
