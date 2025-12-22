@@ -22,35 +22,39 @@
  */
 
 #if defined(_MSC_VER)
-    #define AERON_COMPILER_MSVC 1
+#define AERON_COMPILER_MSVC 1
 
-    #if defined(_M_X64)
-        #define AERON_CPU_X64 1
-    #else
-        #error Unsupported CPU!
-    #endif
+#if defined(_M_X64)
+#define AERON_CPU_X64 1
+#else
+#error Unsupported CPU!
+#endif
 
-    #define _Static_assert static_assert
+#define _Static_assert static_assert
 #elif defined(__GNUC__)
-    #define AERON_COMPILER_GCC 1
+#define AERON_COMPILER_GCC 1
 
-    #if defined(__llvm__)
-        #define AERON_COMPILER_LLVM 1
-    #endif
+#if defined(__llvm__)
+#define AERON_COMPILER_LLVM 1
+#endif
 
-    #if defined(__x86_64__)
-        #define AERON_CPU_X64 1
-    #endif
+#if defined(__x86_64__)
+#define AERON_CPU_X64 1
+#endif
 
-    #if defined(__aarch64__)
-        #define AERON_CPU_ARM 1
-        #if defined(__STDC_NO_ATOMICS__)
-            #error C11 atomics are required to compile for aarch64!
-        #endif
-    #endif
+#if defined(__aarch64__)
+#define AERON_CPU_ARM 1
+#if defined(__STDC_NO_ATOMICS__)
+#error C11 atomics are required to compile for aarch64!
+#endif
+#endif
+
+#if defined(__cplusplus)
+#define _Static_assert static_assert
+#endif
 
 #else
-    #error Unsupported compiler!
+#error Unsupported compiler!
 #endif
 
 #endif
