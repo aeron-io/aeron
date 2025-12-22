@@ -19,10 +19,6 @@
 #include "util/aeron_bitutil.h"
 #include "aeron_udp_protocol.h"
 
-#ifdef _MSC_VER
-#define _Static_assert static_assert
-#endif
-
 _Static_assert(
     sizeof(aeron_data_header_as_longs_t) == sizeof(aeron_data_header_t),
     "sizeof(aeron_data_header_as_longs_t) must match sizeof(aeron_data_header_t)");

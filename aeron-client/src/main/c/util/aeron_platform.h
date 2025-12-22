@@ -30,6 +30,7 @@
         #error Unsupported CPU!
     #endif
 
+    #define _Static_assert static_assert
 #elif defined(__GNUC__)
     #define AERON_COMPILER_GCC 1
 

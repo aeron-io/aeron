@@ -3605,8 +3605,8 @@ final class ConsensusModuleAgent
 
         recordingLog.force(ctx.fileSyncLevel());
         recoveryPlan = recordingLog.createRecoveryPlan(archive, serviceCount, Aeron.NULL_VALUE);
-        ctx.snapshotCounter().incrementRelease();
         totalSnapshotDurationTracker.onSnapshotEnd(clusterClock.timeNanos());
+        ctx.snapshotCounter().incrementRelease();
     }
 
     private void awaitRecordingComplete(

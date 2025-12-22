@@ -19,8 +19,10 @@ import io.aeron.Counter;
 import io.aeron.ExclusivePublication;
 import io.aeron.Image;
 import io.aeron.archive.checksum.Checksum;
+import io.aeron.archive.checksum.Checksums;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.client.ArchiveException;
+import io.aeron.exceptions.AeronException;
 import io.aeron.logbuffer.BufferClaim;
 import io.aeron.logbuffer.Header;
 import io.aeron.logbuffer.LogBufferDescriptor;
@@ -43,18 +45,38 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.TimeUnit;
 
 import static io.aeron.Publication.BACK_PRESSURED;
-import static io.aeron.archive.checksum.Checksums.crc32;
 import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
-import static io.aeron.logbuffer.FrameDescriptor.*;
-import static io.aeron.protocol.DataHeaderFlyweight.*;
+import static io.aeron.logbuffer.FrameDescriptor.BEGIN_FRAG_FLAG;
+import static io.aeron.logbuffer.FrameDescriptor.END_FRAG_FLAG;
+import static io.aeron.logbuffer.FrameDescriptor.FRAME_ALIGNMENT;
+import static io.aeron.logbuffer.FrameDescriptor.UNFRAGMENTED;
+import static io.aeron.logbuffer.FrameDescriptor.frameFlags;
+import static io.aeron.logbuffer.FrameDescriptor.frameLength;
+import static io.aeron.logbuffer.FrameDescriptor.frameType;
+import static io.aeron.protocol.DataHeaderFlyweight.HDR_TYPE_DATA;
+import static io.aeron.protocol.DataHeaderFlyweight.HDR_TYPE_PAD;
+import static io.aeron.protocol.DataHeaderFlyweight.HEADER_LENGTH;
+import static io.aeron.protocol.DataHeaderFlyweight.RESERVED_VALUE_OFFSET;
+import static io.aeron.protocol.DataHeaderFlyweight.SESSION_ID_FIELD_OFFSET;
+import static io.aeron.protocol.DataHeaderFlyweight.STREAM_ID_FIELD_OFFSET;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
-import static java.util.Arrays.fill;
 import static org.agrona.BitUtil.align;
-import static org.agrona.BufferUtil.address;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.anyLong;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class ReplaySessionTest
 {
@@ -281,8 +303,13 @@ class ReplaySessionTest
             recordingPositionCounter,
             null);
 
-        replaySession.doWork();
-        assertEquals(ReplaySession.State.DONE, replaySession.state());
+        final ArchiveException exception = assertThrowsExactly(ArchiveException.class, replaySession::doWork);
+        assertEquals(AeronException.Category.ERROR, exception.category());
+        assertEquals(ArchiveException.GENERIC, exception.errorCode());
+        assertEquals("ERROR - replayPosition=1025 (segmentFilePosition=0, segmentOffset=0, termOffset=1025, " +
+            "frameOffset=0) does not point to a valid frame, recordingId=0," +
+            " replaySessionId=1, segmentFile=0-0.rec", exception.getMessage());
+        assertEquals(ReplaySession.State.INACTIVE, replaySession.state());
 
         replaySession.sendPendingError();
         verify(mockControlSession).sendErrorResponse(eq(correlationId), anyLong(), anyString());
@@ -331,6 +358,8 @@ class ReplaySessionTest
     {
         final long length = 1024L;
         final long correlationId = 1L;
+        final String replayChannel = "aeron:udp?endpoint=localhost:5555";
+        final int replayStreamId = 876;
         try (ReplaySession replaySession = replaySession(
             RECORDING_POSITION,
             length,
@@ -340,14 +369,25 @@ class ReplaySessionTest
             recordingPositionCounter,
             null))
         {
+            when(mockReplayPub.channel()).thenReturn(replayChannel);
+            when(mockReplayPub.streamId()).thenReturn(replayStreamId);
             when(mockReplayPub.isClosed()).thenReturn(false);
             when(mockReplayPub.isConnected()).thenReturn(false);
 
             replaySession.doWork();
 
             epochClock.update(CONNECT_TIMEOUT_MS + TIME + 1L);
-            replaySession.doWork();
-            assertTrue(replaySession.isDone());
+
+            final ArchiveException exception = assertThrowsExactly(ArchiveException.class, replaySession::doWork);
+            assertEquals(AeronException.Category.ERROR, exception.category());
+            assertEquals(ArchiveException.GENERIC, exception.errorCode());
+            assertEquals("ERROR - no connection established for" +
+                " replayChannel=" + replayChannel +
+                ", replayStreamId=" + replayStreamId +
+                ", recordingId=0" +
+                ", replaySessionId=1" +
+                ", segmentFile=0-0.rec", exception.getMessage());
+            assertEquals(ReplaySession.State.INACTIVE, replaySession.state());
         }
     }
 
@@ -442,7 +482,7 @@ class ReplaySessionTest
         final long length = 4 * FRAME_LENGTH;
         final long correlationId = 1L;
 
-        final Checksum checksum = crc32();
+        final Checksum checksum = Checksums.crc32c();
         try (ReplaySession replaySession = replaySession(
             RECORDING_POSITION + 2 * FRAME_LENGTH,
             length,
@@ -462,7 +502,10 @@ class ReplaySessionTest
 
             final ArchiveException exception = assertThrows(ArchiveException.class, replaySession::doWork);
             assertEquals(ArchiveException.GENERIC, exception.errorCode());
-            assertThat(exception.getMessage(), Matchers.startsWith("ERROR - CRC checksum mismatch at offset=0"));
+            assertThat(
+                exception.getMessage(),
+                Matchers.startsWith("ERROR - CRC checksum mismatch at position=3072 (segmentFilePosition=0, " +
+                    "segmentOffset=0, termOffset=3072, frameOffset=0)"));
             verify(mockReplayPub, never()).tryClaim(anyInt(), any(BufferClaim.class));
         }
     }
@@ -470,7 +513,7 @@ class ReplaySessionTest
     @Test
     void shouldDoCrcForEachDataFrame() throws IOException
     {
-        context.recordChecksum(crc32());
+        context.recordChecksum(Checksums.crc32c());
         context.recordChecksumBuffer(new UnsafeBuffer(ByteBuffer.allocateDirect(TERM_BUFFER_LENGTH)));
         final RecordingWriter writer = new RecordingWriter(
             RECORDING_ID,
@@ -488,11 +531,11 @@ class ReplaySessionTest
         header.buffer(buffer);
 
         recordFragment(writer, buffer, headerFwt, header, 0, FRAME_LENGTH, 10, UNFRAGMENTED,
-            HDR_TYPE_DATA, checksum(FRAME_LENGTH, 10));
+            HDR_TYPE_DATA, SESSION_ID);
         recordFragment(writer, buffer, headerFwt, header, FRAME_LENGTH, FRAME_LENGTH, 20, BEGIN_FRAG_FLAG,
-            HDR_TYPE_DATA, checksum(FRAME_LENGTH, 20));
+            HDR_TYPE_DATA, SESSION_ID);
         recordFragment(writer, buffer, headerFwt, header, FRAME_LENGTH * 2, FRAME_LENGTH, 30, END_FRAG_FLAG,
-            HDR_TYPE_DATA, checksum(FRAME_LENGTH, 30));
+            HDR_TYPE_DATA, SESSION_ID);
         recordFragment(writer, buffer, headerFwt, header, FRAME_LENGTH * 3, FRAME_LENGTH, 40, UNFRAGMENTED,
             HDR_TYPE_PAD, SESSION_ID);
 
@@ -522,7 +565,7 @@ class ReplaySessionTest
 
             when(mockReplayPub.isConnected()).thenReturn(true);
 
-            final UnsafeBuffer termBuffer = new UnsafeBuffer(ByteBuffer.allocateDirect(4096));
+            final UnsafeBuffer termBuffer = new UnsafeBuffer(new byte[4096]);
             mockPublication(mockReplayPub, termBuffer);
 
             assertNotEquals(0, replaySession.doWork());
@@ -761,16 +804,5 @@ class ReplaySessionTest
         assertEquals(streamId, buffer.getInt(offset + STREAM_ID_FIELD_OFFSET, LITTLE_ENDIAN));
         assertEquals(message, buffer.getLong(offset + RESERVED_VALUE_OFFSET));
         assertEquals(message, buffer.getByte(offset + HEADER_LENGTH));
-    }
-
-    private int checksum(final int frameLength, final int message)
-    {
-        final byte[] data = new byte[frameLength - HEADER_LENGTH];
-        fill(data, (byte)message);
-        final ByteBuffer buffer = ByteBuffer.allocateDirect(data.length);
-        final long address = address(buffer);
-        buffer.put(data).flip();
-
-        return crc32().compute(address, 0, data.length);
     }
 }

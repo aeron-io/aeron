@@ -66,7 +66,7 @@ class ElectionTest
         .aeron(aeron)
         .recordingLog(recordingLog)
         .clusterClock(clock)
-        .epochClock(clock)
+        .epochClock(clock.asEpochClock())
         .random(new Random())
         .electionStateCounter(electionStateCounter)
         .electionCounter(electionCounter)

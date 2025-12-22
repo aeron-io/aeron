@@ -75,3 +75,80 @@ TEST_F(NetutilTest, shouldConvertPrefixLengthToMask)
     EXPECT_EQ(0xFEFFFFFF, aeron_ipv4_netmask_from_prefixlen(31));
     EXPECT_EQ(0xFFFFFFFF, aeron_ipv4_netmask_from_prefixlen(32));
 }
+
+TEST_F(NetutilTest, shouldParseValidNamedInterfaces)
+{
+    aeron_named_interface_t named_interface;
+
+    ASSERT_EQ(0, aeron_parse_named_interface("{eth0}", &named_interface));
+    ASSERT_STREQ("eth0", named_interface.name);
+    ASSERT_EQ(0, named_interface.port);
+
+    ASSERT_EQ(0, aeron_parse_named_interface("{eth0}:0", &named_interface));
+    ASSERT_STREQ("eth0", named_interface.name);
+    ASSERT_EQ(0, named_interface.port);
+
+    ASSERT_EQ(0, aeron_parse_named_interface("{eth0}:1234", &named_interface));
+    ASSERT_STREQ("eth0", named_interface.name);
+    ASSERT_EQ(1234, named_interface.port);
+
+    ASSERT_EQ(0, aeron_parse_named_interface("{eth0:0}:0", &named_interface));
+    ASSERT_STREQ("eth0:0", named_interface.name);
+    ASSERT_EQ(0, named_interface.port);
+
+    ASSERT_EQ(0, aeron_parse_named_interface("{eth0:1}:2000", &named_interface));
+    ASSERT_STREQ("eth0:1", named_interface.name);
+    ASSERT_EQ(2000, named_interface.port);
+
+    ASSERT_EQ(0, aeron_parse_named_interface("{eth0.100}:80", &named_interface));
+    ASSERT_STREQ("eth0.100", named_interface.name);
+    ASSERT_EQ(80, named_interface.port);
+
+    ASSERT_EQ(0, aeron_parse_named_interface("{x}:5678", &named_interface));
+    ASSERT_STREQ("x", named_interface.name);
+    ASSERT_EQ(5678, named_interface.port);
+
+    ASSERT_EQ(0, aeron_parse_named_interface("{lo}:65535", &named_interface));
+    ASSERT_STREQ("lo", named_interface.name);
+    ASSERT_EQ(65535, named_interface.port);
+
+    ASSERT_EQ(0, aeron_parse_named_interface("{Ethernet 1}", &named_interface));
+    ASSERT_STREQ("Ethernet 1", named_interface.name);
+    ASSERT_EQ(0, named_interface.port);
+
+    ASSERT_EQ(0, aeron_parse_named_interface("{ethernet_32768}", &named_interface));
+    ASSERT_STREQ("ethernet_32768", named_interface.name);
+    ASSERT_EQ(0, named_interface.port);
+
+    ASSERT_EQ(0, aeron_parse_named_interface("{foo{bar-1234}}:9999", &named_interface));
+    ASSERT_STREQ("foo{bar-1234}", named_interface.name);
+    ASSERT_EQ(9999, named_interface.port);
+
+    auto long_name = std::string(IF_NAMESIZE - 1, 'x');
+    auto input = "{" + long_name + "}:10000";
+    ASSERT_EQ(0, aeron_parse_named_interface(input.c_str(), &named_interface));
+    ASSERT_STREQ(long_name.c_str(), named_interface.name);
+    ASSERT_EQ(10000, named_interface.port);
+}
+
+TEST_F(NetutilTest, shouldReturnErrorIfParsedNamedInterfaceIsInvalid)
+{
+    aeron_named_interface_t named_interface;
+
+    ASSERT_EQ(-1, aeron_parse_named_interface("", &named_interface));
+    ASSERT_EQ(-1, aeron_parse_named_interface(" ", &named_interface));
+    ASSERT_EQ(-1, aeron_parse_named_interface("eth0", &named_interface));
+    ASSERT_EQ(-1, aeron_parse_named_interface("eth0:0", &named_interface));
+    ASSERT_EQ(-1, aeron_parse_named_interface("{eth0", &named_interface));
+    ASSERT_EQ(-1, aeron_parse_named_interface("{eth0}:", &named_interface));
+    ASSERT_EQ(-1, aeron_parse_named_interface("{eth0}0", &named_interface));
+    ASSERT_EQ(-1, aeron_parse_named_interface("{eth0}:-1000", &named_interface));
+    ASSERT_EQ(-1, aeron_parse_named_interface("{eth0};1000", &named_interface));
+    ASSERT_EQ(-1, aeron_parse_named_interface("{eth0}:1000:2000", &named_interface));
+    ASSERT_EQ(-1, aeron_parse_named_interface("{eth0}:65536", &named_interface));
+    ASSERT_EQ(-1, aeron_parse_named_interface("{}", &named_interface));
+
+    auto too_long_name = std::string(IF_NAMESIZE, 'x');
+    auto input = "{" + too_long_name + "}";
+    ASSERT_EQ(-1, aeron_parse_named_interface(input.c_str(), &named_interface));
+}

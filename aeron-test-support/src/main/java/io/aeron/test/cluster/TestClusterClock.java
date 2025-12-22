@@ -22,7 +22,7 @@ import org.agrona.concurrent.NanoClock;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
-public class TestClusterClock implements ClusterClock, EpochClock, NanoClock
+public class TestClusterClock implements ClusterClock, NanoClock
 {
     private final AtomicLong tick = new AtomicLong();
     private final TimeUnit timeUnit;
@@ -44,7 +44,7 @@ public class TestClusterClock implements ClusterClock, EpochClock, NanoClock
 
     public long time()
     {
-        return timeUnit.toMillis(tick.get());
+        return tick.get();
     }
 
     public long nanoTime()
@@ -74,16 +74,21 @@ public class TestClusterClock implements ClusterClock, EpochClock, NanoClock
 
     public void update(final long tick, final TimeUnit tickTimeUnit)
     {
-        this.tick.set(tickTimeUnit.convert(tick, tickTimeUnit));
+        this.tick.set(timeUnit.convert(tick, tickTimeUnit));
     }
 
     public long increment(final long tick, final TimeUnit tickTimeUnit)
     {
-        return this.tick.addAndGet(tickTimeUnit.convert(tick, tickTimeUnit));
+        return this.tick.addAndGet(timeUnit.convert(tick, tickTimeUnit));
     }
 
     public long increment(final long tick)
     {
         return increment(tick, timeUnit());
+    }
+
+    public EpochClock asEpochClock()
+    {
+        return this::timeMillis;
     }
 }

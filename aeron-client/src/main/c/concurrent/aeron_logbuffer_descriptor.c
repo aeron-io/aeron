@@ -19,10 +19,6 @@
 #include "util/aeron_error.h"
 #include "concurrent/aeron_logbuffer_descriptor.h"
 
-#ifdef _MSC_VER
-#define _Static_assert static_assert
-#endif
-
 _Static_assert(
     offsetof(aeron_logbuffer_metadata_t, term_tail_counters) == 0,
     "offsetof(aeron_logbuffer_metadata_t, term_tail_counters) is wrong");

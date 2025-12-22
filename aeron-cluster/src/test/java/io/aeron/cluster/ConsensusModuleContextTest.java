@@ -488,12 +488,12 @@ class ConsensusModuleContextTest
     @Test
     void shouldUseCandidateTermIdFromClusterMarkFileIfNodeStateFileIsNew()
     {
-        final TestClusterClock epochClock = new TestClusterClock(MILLISECONDS);
+        final TestClusterClock clock = new TestClusterClock(MILLISECONDS);
         final ClusterMarkFile clusterMarkFile = new ClusterMarkFile(
             new File(clusterDir, ClusterMarkFile.FILENAME),
             CONSENSUS_MODULE,
             ERROR_BUFFER_MIN_LENGTH,
-            epochClock,
+            clock.asEpochClock(),
             1_000,
             PAGE_MIN_SIZE);
         final long existingCandidateTermId = 23;

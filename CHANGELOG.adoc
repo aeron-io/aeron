@@ -1,5 +1,90 @@
 = Aeron Releases
 
+== 1.50.0 (????-??-??)
+
+=== New & Noteworthy
+
+* The `interface` channel parameter now accepts network interface names in the `\{interface}` format, e.g. `interface=\{eth0}`.
++
+When used with multicast channels, it specifies the interface to join with and send on.
++
+The `interface` parameter might sometimes be used with non-multicast channels to control the local address of a socket.
+In those cases, the socket will be bound to an address of an appropriate family assigned to the named interface.
+If there are multiple matching addresses available, it's unspecified which one will be used.
+It's also possible to specify the port used with the resolved address by using the `\{interface}:port` format.
+
+=== Changelog
+
+* **[Cluster]** Ignore unknown schema messages (e.g. from Sequencer) in `EgressPoller`.
+* **[Archive]** Ensure that errors from `ReplaySession` are both captured in the error log and sent to the control session.
+* **[C]** fix: double free in `aeron_archive_context_t`. (https://github.com/aeron-io/aeron/pull/1897[#1897])
+* **[C]** Make `aeron_subscription_image_release` and `aeron_subscription_image_retain` no op if image is not found in the
+current image list, i.e. handle a case of `on_unavailable_image` being called and attempting to retain an image that
+was already removed (i.e. C++ Wrapper)).
+* **[C]** invoke the client when in `aeron_archive_replay_merge_close`. (https://github.com/aeron-io/aeron/pull/1873[#1873])
+* **[C]** Handle `aeron_archive_encoded_credentials_t` being `NULL` as well as `data` field being `NULL`, i.e. treat both as empty credentials.
+* **[C]** Fix race condition in `aeron_archive_client` reentrancy check, i.e. first acquire lock and then do the check. Use
+mutex to protect `aeron_archive_close` from concurrent execution.
+* **[C]** Create `aeron_mutex_t` as recursive/reentrant on POSIX systems, i.e. match behavior on Windows and the Java implementation.
+* **[C]** Fix missing mutex unlock in case of an error.
+* **[Cluster]** Optimize redirect handling in `AeronCluster`: reuse existing publication if available and use async API
+to connect to the leader otherwise.
+* **[Cluster]** Protect against NPE during follower catchup if recording is stopped, because the leader transitions to a
+follower and stops sending log.
+* **[Driver/C]** Perform sender address re-resolution checks on a fixed schedule rather than awaiting next control
+polling cycle, i.e. align behavior with the `Sender#doWork` implementation.
+* **[Driver/Java]** Perform full name and address matching in driver name resolver. Add tests to ensure partial matches
+are not allowed. Remove allocations when matching neighbors by address.
+* **[Driver/C]** Fix segfault when invalid name resolver configuration is provided. Cleanup allocated resources to avoid
+leaking memory.
+* **[Driver/C]** Use `aeron_interface_parse_and_resolve` to resolve `aeron.driver.resolver.interface` parameter, i.e.
+skip the `aeron_find_interface` checks. This aligns the implementation with the `DriverNameResolver` in Java. Fix
+filtering out of self entries, i.e. use full name matching instead of a prefix match.
+* **[C]** Do not resolve `endpoint` with ephemeral port for MDS subscription. Copy original channel as-is if no
+resolution is performed.
+* **[Java]** Fix `Subscription#tryResolveChannelEndpointPort` when no addresses exist, i.e. return `null` if active
+address is not yet available. Avoid doing any work if `endpoint` is not defined (IPC, MDS, response channel) or does not
+contain a port zero.
+* **[C]** Add `aeron_is_frame_valid` method.
+* **[C/Java]** Add all missing counter type constants for the premium components.
+* **[C]** Do not truncate frames longer than 1408 bytes when logging, i.e. allow up to `AERON_MAX_UDP_PAYLOAD_LENGTH`
+(`65504`) bytes instead.
+* **[C]** Ensure that fallback `receiverId` cannot be zero.
+* **[Java]** Improve mark file APIs: use high-level operations to signal ready/terminated, reset activity timestamp
+upon failure, update tests to reflect activity timestamp changes during startup sequence.
+* **[Java/C]** Fix formatting of large values and counter ids in `AeronStat`.
+* **[Java/C]** Add dissector for the `ERR` (`0x04`) frame type.
+* **[Java]** Add version information to `ComponentLogger` and print enabled loggers upon agent startup.
+* **[C]** Print enabled loggers upon agent startup and their versions.
+* **[C]** Add function to counter number of leading zeroes in 64 bit value (`aeron_number_of_leading_zeroes_u64`).
+* **[C]** Add ability to counter number of digits in a 32-bit number (`aeron_digit_count`).
+* **[C]** Link `aeron-client` against `libbsd`.
+* **[Java]** Delete `DeduplicateTask`, i.e. use built-in capabilities of the Shadow plugin instead.
+* **[Java]** Upgrade to https://github.com/aeron-io/agrona/releases/tag/2.3.2[Agrona 2.3.2].
+* **[Java]** Upgrade to https://github.com/aeron-io/simple-binary-encoding/releases/tag/1.36.2[SBE 1.36.2].
+* **[Java]** Upgrade to `ByteBuddy` 1.18.2.
+* **[Java]** Upgrade to `ASM` 9.9.
+* **[Java]** Upgrade to `JUnit` 6.0.1.
+* **[Java]** Upgrade to `Mockito` 5.21.0.
+* **[Java]** Upgrade to `Checkstyle` 12.3.0.
+* **[Java]** Upgrade to `Shadow` 9.3.0.
+* **[C]** Upgrade to `CMake` 4.1.3.
+
+== 1.49.3 (2025-12-15)
+
+* **[Cluster]** Ignore messages from unknown schemas (e.g. from Sequencer) in `EgressPoller`.
+* **[Archive]** Ensure that errors from `ReplaySession` are both captured in the error log and sent to the control session.
+* **[C]** fix double free in `aeron_archive_context_t`. (https://github.com/aeron-io/aeron/pull/1897[#1897])
+* **[C]** Make `aeron_subscription_image_release` and `aeron_subscription_image_retain` no op if image is not found in the
+current image list, i.e. handle a case of `on_unavailable_image` being called and attempting to retain an image that
+was already removed (i.e. C++ Wrapper)).
+* **[C]** invoke the client when in `aeron_archive_replay_merge_close`. (https://github.com/aeron-io/aeron/pull/1873[#1873])
+* **[C]** Handle `aeron_archive_encoded_credentials_t` being `NULL` as well as `data` field being `NULL`, i.e. treat both as empty credentials.
+* **[C]** Fix race condition in `aeron_archive_client` reentrancy check, i.e. first acquire lock and then do the check. Use
+mutex to protect `aeron_archive_close` from concurrent execution.
+* **[C]** Create `aeron_mutex_t` as recursive/reentrant on POSIX systems, i.e. match behavior on Windows and the Java implementation.
+* **[C]** Fix missing mutex unlock in case of an error.
+
 == 1.49.2 (2025-11-24)
 
 * **[C]** Do not resolve `endpoint` with ephemeral port for MDS subscription. Copy original channel as-is if no

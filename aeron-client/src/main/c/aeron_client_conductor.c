@@ -2702,10 +2702,6 @@ void aeron_client_conductor_forward_error(void *clientd, int64_t key, void *valu
     }
 }
 
-#ifdef _MSC_VER
-#define _Static_assert static_assert
-#endif
-
 _Static_assert(
     sizeof(aeron_publication_error_t) == sizeof(aeron_publication_error_values_t),
     "sizeof(aeron_publication_error_t) must be equal to sizeof(aeron_publication_error_values_t)");

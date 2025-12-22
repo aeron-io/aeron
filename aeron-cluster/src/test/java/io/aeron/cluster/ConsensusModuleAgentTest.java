@@ -137,7 +137,7 @@ class ConsensusModuleAgentTest
         final String expectedRoleName = "test-role-name";
         final TestClusterClock clock = new TestClusterClock(TimeUnit.MILLISECONDS);
         ctx.agentRoleName(expectedRoleName)
-            .epochClock(clock)
+            .epochClock(clock.asEpochClock())
             .clusterClock(clock);
 
         final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
@@ -149,7 +149,7 @@ class ConsensusModuleAgentTest
     {
         final TestClusterClock clock = new TestClusterClock(TimeUnit.MILLISECONDS);
         ctx.maxConcurrentSessions(1)
-            .epochClock(clock)
+            .epochClock(clock.asEpochClock())
             .clusterClock(clock);
 
         final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
@@ -185,7 +185,7 @@ class ConsensusModuleAgentTest
         final long startMs = SLOW_TICK_INTERVAL_MS;
         clock.update(startMs, TimeUnit.MILLISECONDS);
 
-        ctx.epochClock(clock)
+        ctx.epochClock(clock.asEpochClock())
             .clusterClock(clock);
 
         final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
@@ -225,7 +225,7 @@ class ConsensusModuleAgentTest
         final long startMs = SLOW_TICK_INTERVAL_MS;
         clock.update(startMs, TimeUnit.MILLISECONDS);
 
-        ctx.epochClock(clock)
+        ctx.epochClock(clock.asEpochClock())
             .clusterClock(clock);
 
         final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
@@ -270,7 +270,7 @@ class ConsensusModuleAgentTest
 
         ctx.moduleStateCounter(stateCounter)
             .controlToggleCounter(controlToggle)
-            .epochClock(clock)
+            .epochClock(clock.asEpochClock())
             .clusterClock(clock);
 
         final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
@@ -320,7 +320,7 @@ class ConsensusModuleAgentTest
 
         ctx.countedErrorHandler(countedErrorHandler)
             .moduleStateCounter(mockState)
-            .epochClock(clock)
+            .epochClock(clock.asEpochClock())
             .clusterClock(clock);
 
         final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
@@ -349,7 +349,7 @@ class ConsensusModuleAgentTest
         final String expectedResponseChannel)
     {
         final TestClusterClock clock = new TestClusterClock(TimeUnit.MILLISECONDS);
-        ctx.epochClock(clock)
+        ctx.epochClock(clock.asEpochClock())
             .clusterClock(clock)
             .egressChannel(egressChannel)
             .isIpcIngressAllowed(isIpcIngressAllowed);
@@ -380,7 +380,7 @@ class ConsensusModuleAgentTest
 
         ctx.moduleStateCounter(stateCounter)
             .controlToggleCounter(controlToggle)
-            .epochClock(clock)
+            .epochClock(clock.asEpochClock())
             .clusterClock(clock);
 
         final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
@@ -412,7 +412,7 @@ class ConsensusModuleAgentTest
     {
         final TestClusterClock clock = new TestClusterClock(TimeUnit.NANOSECONDS);
         ctx.clusterClock(clock)
-            .epochClock(clock)
+            .epochClock(clock.asEpochClock())
             .appVersionValidator(AppVersionValidator.SEMANTIC_VERSIONING_VALIDATOR);
 
         final int leadershipTermId = 2;
@@ -445,7 +445,7 @@ class ConsensusModuleAgentTest
     {
         final TestClusterClock clock = new TestClusterClock(TimeUnit.NANOSECONDS);
         ctx.clusterClock(clock)
-            .epochClock(clock);
+            .epochClock(clock.asEpochClock());
 
         final int leadershipTermId = 42;
         final ConsensusModuleAgent consensusModuleAgent = new ConsensusModuleAgent(ctx);
@@ -465,7 +465,7 @@ class ConsensusModuleAgentTest
         final ConsensusModuleExtension consensusModuleExtension = mock(ConsensusModuleExtension.class, "used adapter");
         when(consensusModuleExtension.supportedSchemaId()).thenReturn(SCHEMA_ID);
         final TestClusterClock clock = new TestClusterClock(TimeUnit.MILLISECONDS);
-        ctx.epochClock(clock)
+        ctx.epochClock(clock.asEpochClock())
             .clusterClock(clock)
             .consensusModuleExtension(consensusModuleExtension);
 
@@ -482,7 +482,7 @@ class ConsensusModuleAgentTest
         final TestClusterClock clock = new TestClusterClock(TimeUnit.MILLISECONDS);
         final CountedErrorHandler mockErrorHandler = mock(CountedErrorHandler.class);
         ctx.countedErrorHandler(mockErrorHandler)
-            .epochClock(clock)
+            .epochClock(clock.asEpochClock())
             .clusterClock(clock);
 
         final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
@@ -502,7 +502,7 @@ class ConsensusModuleAgentTest
 
         ctx.moduleStateCounter(stateCounter)
             .controlToggleCounter(controlToggle)
-            .epochClock(clock)
+            .epochClock(clock.asEpochClock())
             .clusterClock(clock);
 
         final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);

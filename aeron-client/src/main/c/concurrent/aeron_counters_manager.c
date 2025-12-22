@@ -23,10 +23,6 @@
 #include "concurrent/aeron_counters_manager.h"
 #include "util/aeron_error.h"
 
-#ifdef _MSC_VER
-#define _Static_assert static_assert
-#endif
-
 _Static_assert(
     sizeof(aeron_counters_manager_t) > sizeof(aeron_counters_reader_t),
     "sizeof(aeron_counters_manager_t) must be greater than sizeof(aeron_counters_reader_t)");

@@ -37,6 +37,7 @@ int aeron_log_buffer_create(
     if (aeron_raw_log_map_existing(&_log_buffer->mapped_raw_log, log_file, pre_touch) < 0)
     {
         AERON_APPEND_ERR("Unable to map raw log for log buffer, correlation_id: %" PRId64, correlation_id);
+        aeron_free(_log_buffer);
         return -1;
     }
 
