@@ -743,6 +743,16 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
         return offset;
     }
 
+    int maxPayloadLength(final Publication publication)
+    {
+        if (Cluster.Role.LEADER == role && null != publication)
+        {
+            return publication.maxPayloadLength() - SESSION_HEADER_LENGTH;
+        }
+
+        return headerBuffer.capacity() - SESSION_HEADER_LENGTH;
+    }
+
     private void role(final Role newRole)
     {
         if (newRole != role)

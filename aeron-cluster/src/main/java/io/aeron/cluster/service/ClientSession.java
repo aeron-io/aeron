@@ -131,4 +131,15 @@ public interface ClientSession
      * @see BufferClaim#abort()
      */
     long tryClaim(int length, BufferClaim bufferClaim);
+
+    /**
+     * Get the maximum payload length that can be sent in a single message via {@link #tryClaim(int, BufferClaim)}.
+     * <p>
+     * This allows service implementations to determine the maximum message size enabling them to choose between
+     * {@link #tryClaim(int, BufferClaim)} for small messages (zero-copy) and {@link #offer(DirectBuffer, int, int)}
+     * for larger messages (automatic fragmentation).
+     *
+     * @return the maximum payload length in bytes.
+     */
+    int maxPayloadLength();
 }

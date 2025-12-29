@@ -98,6 +98,11 @@ final class ContainerClientSession implements ClientSession
         return clusteredServiceAgent.tryClaim(id, responsePublication, length, bufferClaim);
     }
 
+    public int maxPayloadLength()
+    {
+        return clusteredServiceAgent.maxPayloadLength(responsePublication);
+    }
+
     void connect(final Aeron aeron)
     {
         try
