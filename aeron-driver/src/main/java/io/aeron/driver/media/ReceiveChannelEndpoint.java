@@ -733,7 +733,8 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
         final InetSocketAddress srcAddress,
         final int transportIndex)
     {
-        updateTimeOfLastActivityNs(cachedNanoClock.nanoTime(), transportIndex);
+        // Do not update `timeOfLastActivityNs` because it will prevent DNS
+        // re-resolution checks.
         dispatcher.onSetupMessage(this, header, srcAddress, transportIndex);
     }
 

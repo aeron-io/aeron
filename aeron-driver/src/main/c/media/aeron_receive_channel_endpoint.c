@@ -607,9 +607,8 @@ int aeron_receive_channel_endpoint_on_setup(
 {
     aeron_setup_header_t *setup_header = (aeron_setup_header_t *)buffer;
 
-    aeron_receive_destination_update_last_activity_ns(
-        destination, aeron_clock_cached_nano_time(endpoint->cached_clock));
-
+    // Do not update `destination->time_of_last_activity_ns` because it will
+    // prevent DNS re-resolution checks.
     return aeron_data_packet_dispatcher_on_setup(
         &endpoint->dispatcher, endpoint, destination, setup_header, buffer, length, addr);
 }
