@@ -35,6 +35,7 @@ import org.hamcrest.Matcher;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -625,6 +626,68 @@ class NameReResolutionTest
             Tests.awaitConnected(taggedPub1);
             Tests.awaitConnected(taggedPub2);
         }
+    }
+
+    @SlowTest
+    @Test
+    @InterruptAfter(20)
+    @Disabled
+    void shouldReResolveMdcDynamicControlWhenPublicationChangesIPAddress()
+    {
+        final long initialResolutionChanges = countersReader.getCounterValue(RESOLUTION_CHANGES.id());
+        buffer.putInt(0, 1);
+
+        subscription = client.addSubscription(SUBSCRIPTION_DYNAMIC_MDC_URI, STREAM_ID);
+        final Publication publication2 = client.addPublication(FIRST_PUBLICATION_DYNAMIC_MDC_URI, 2222);
+        publication = client.addPublication(FIRST_PUBLICATION_DYNAMIC_MDC_URI, STREAM_ID);
+
+        while (!subscription.isConnected())
+        {
+            Tests.yieldingIdle("No connect to first subscription");
+        }
+
+        while (publication.offer(buffer, 0, BitUtil.SIZE_OF_INT) < 0L)
+        {
+            Tests.yieldingIdle("No message offer to first subscription");
+        }
+
+        while (subscription.poll(handler, 1) <= 0)
+        {
+            Tests.yieldingIdle("No message received on subscription");
+        }
+
+        publication.close();
+
+        while (subscription.isConnected())
+        {
+            Tests.sleep(10);
+        }
+
+        publication = client.addPublication(SECOND_PUBLICATION_DYNAMIC_MDC_URI, STREAM_ID);
+        assertTrue(updateNameResolutionStatus(countersReader, CONTROL_NAME, USE_RE_RESOLUTION_HOST));
+
+        while (!subscription.isConnected())
+        {
+            Tests.sleep(10);
+        }
+
+        while (publication.offer(buffer, 0, BitUtil.SIZE_OF_INT) < 0L)
+        {
+            Tests.yieldingIdle("No message offer to subscription");
+        }
+
+        while (subscription.poll(handler, 1) <= 0)
+        {
+            Tests.yieldingIdle("No message received on subscription");
+        }
+
+        Tests.awaitCounterDelta(countersReader, RESOLUTION_CHANGES.id(), initialResolutionChanges, 1);
+
+        verify(handler, times(2)).onFragment(
+          any(DirectBuffer.class),
+          anyInt(),
+          eq(BitUtil.SIZE_OF_INT),
+          any(Header.class));
     }
 
     private static void assumeBindAddressAvailable(final String address)
