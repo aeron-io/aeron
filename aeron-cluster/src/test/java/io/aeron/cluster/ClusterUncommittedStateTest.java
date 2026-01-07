@@ -81,7 +81,7 @@ public class ClusterUncommittedStateTest
             testCluster.withServiceSupplier(StubClusteredService::new);
             testCluster.launch();
             testCluster.awaitStarted();
-            testCluster.offerMessages();
+            testCluster.generateUncommittedData();
 
             final TestNode leader = testCluster.leader();
             final Counter leaderToggle = leader.consensusModuleContext().controlToggleCounter();
@@ -176,7 +176,7 @@ public class ClusterUncommittedStateTest
             testCluster.withServiceSupplier(StubClusteredService::new);
             testCluster.launch();
             testCluster.awaitStarted();
-            testCluster.offerMessages();
+            testCluster.generateUncommittedData();
 
             final TestNode leader = testCluster.leader();
             final Counter leaderControlToggle = leader.consensusModuleContext().controlToggleCounter();
@@ -302,6 +302,11 @@ public class ClusterUncommittedStateTest
             }
         }
 
+        TestNode node(final int i)
+        {
+            return nodes[i];
+        }
+
         void poll()
         {
             poll(Aeron.NULL_VALUE);
@@ -316,11 +321,6 @@ public class ClusterUncommittedStateTest
                     nodes[i].poll();
                 }
             }
-        }
-
-        TestNode node(final int i)
-        {
-            return nodes[i];
         }
 
         void awaitStarted()
@@ -365,7 +365,7 @@ public class ClusterUncommittedStateTest
         }
 
         @SuppressWarnings("try")
-        void offerMessages()
+        void generateUncommittedData()
         {
             final MediaDriver.Context context = new MediaDriver.Context()
                 .aeronDirectoryName(tempDir.resolve("client").toAbsolutePath().toString())
@@ -458,8 +458,7 @@ public class ClusterUncommittedStateTest
             clusteredServiceContext = new ClusteredServiceContainer.Context()
                 .controlChannel("aeron:ipc")
                 .clusterDir(directory.resolve("cluster").toFile())
-                .aeronDirectoryName(mediaDriverContext.aeronDirectoryName())
-                .clusteredService(clusteredService);
+                .aeronDirectoryName(mediaDriverContext.aeronDirectoryName());
 
             consensusModuleContext = new ConsensusModule.Context()
                 .aeronDirectoryName(mediaDriverContext.aeronDirectoryName())
@@ -484,7 +483,6 @@ public class ClusterUncommittedStateTest
             mediaDriver = TestMediaDriver.launch(mediaDriverContext, testWatcher);
             archive = Archive.launch(archiveContext);
             clusteredServiceContext.clusteredService(clusteredService);
-            consensusModuleContext.serviceCount(1);
             serviceContainer = ClusteredServiceContainer.launch(clusteredServiceContext);
             consensusModule = ConsensusModule.launch(consensusModuleContext);
         }
