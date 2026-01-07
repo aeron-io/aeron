@@ -82,32 +82,19 @@ public class ClusterUncommittedStateTest
             testCluster.withServiceSupplier(StubClusteredService::new);
             testCluster.launch();
             testCluster.awaitStarted();
-            testCluster.generateUncommittedData();
 
             final TestNode leader = testCluster.leader();
             final Counter leaderToggle = leader.consensusModuleContext().controlToggleCounter();
             final Counter leaderStateCounter = leader.consensusModuleContext().moduleStateCounter();
-            final Counter leaderElectionCounter = leader.consensusModuleContext().electionCounter();
+
+            testCluster.generateUncommittedDataAgainstLeader(leader);
 
             leaderToggle.setRelease(ClusterControl.ToggleState.SUSPEND.code());
             Tests.sleep(SLOW_TICK_INTERVAL_MS);
             leader.poll();
             assertEquals(ConsensusModule.State.SUSPENDED, ConsensusModule.State.get(leaderStateCounter));
 
-            Tests.sleep(TimeUnit.NANOSECONDS.toMillis(leader.consensusModuleContext().leaderHeartbeatTimeoutNs()));
-            Tests.await(() ->
-            {
-                testCluster.poll(leader.consensusModuleContext().clusterMemberId());
-                return null != testCluster.leader(leader.consensusModuleContext().clusterMemberId());
-            });
-            testCluster.awaitStarted(leader.consensusModuleContext().clusterMemberId());
-
-            final long electionCount = leaderElectionCounter.get();
-            Tests.await(() ->
-            {
-                testCluster.poll();
-                return electionCount < leaderElectionCounter.get();
-            });
+            testCluster.generateNewElectionForLeader(leader);
             assertEquals(ConsensusModule.State.ACTIVE, ConsensusModule.State.get(leaderStateCounter));
         }
     }
@@ -125,7 +112,6 @@ public class ClusterUncommittedStateTest
 
             final TestNode leader = testCluster.leader();
             final Counter leaderControlToggle = leader.consensusModuleContext().controlToggleCounter();
-            final Counter leaderElectionCounter = leader.consensusModuleContext().electionCounter();
             final Counter leaderStateCounter = leader.consensusModuleContext().moduleStateCounter();
             final Counter node0StateCounter = testCluster.node(0).consensusModuleContext().moduleStateCounter();
             final Counter node1StateCounter = testCluster.node(1).consensusModuleContext().moduleStateCounter();
@@ -149,20 +135,7 @@ public class ClusterUncommittedStateTest
             leader.poll();
             assertEquals(ConsensusModule.State.ACTIVE, ConsensusModule.State.get(leaderStateCounter));
 
-            Tests.sleep(TimeUnit.NANOSECONDS.toMillis(leader.consensusModuleContext().leaderHeartbeatTimeoutNs()));
-            Tests.await(() ->
-            {
-                testCluster.poll(leader.consensusModuleContext().clusterMemberId());
-                return null != testCluster.leader(leader.consensusModuleContext().clusterMemberId());
-            });
-            testCluster.awaitStarted(leader.consensusModuleContext().clusterMemberId());
-
-            final long electionCount = leaderElectionCounter.get();
-            Tests.await(() ->
-            {
-                testCluster.poll();
-                return electionCount < leaderElectionCounter.get();
-            });
+            testCluster.generateNewElectionForLeader(leader);
             assertEquals(ConsensusModule.State.SUSPENDED, ConsensusModule.State.get(leaderStateCounter));
         }
     }
@@ -177,33 +150,22 @@ public class ClusterUncommittedStateTest
             testCluster.withServiceSupplier(StubClusteredService::new);
             testCluster.launch();
             testCluster.awaitStarted();
-            testCluster.generateUncommittedData();
 
             final TestNode leader = testCluster.leader();
             final Counter leaderControlToggle = leader.consensusModuleContext().controlToggleCounter();
-            final Counter leaderElectionCounter = leader.consensusModuleContext().electionCounter();
             final Counter leaderStateCounter = leader.consensusModuleContext().moduleStateCounter();
+            final Counter leaderSnapshotCounter = leader.consensusModuleContext().snapshotCounter();
+
+            testCluster.generateUncommittedDataAgainstLeader(leader);
 
             leaderControlToggle.setRelease(ClusterControl.ToggleState.SNAPSHOT.code());
             Tests.sleep(SLOW_TICK_INTERVAL_MS);
             leader.poll();
             assertEquals(ConsensusModule.State.SNAPSHOT, ConsensusModule.State.get(leaderStateCounter));
 
-            Tests.sleep(TimeUnit.NANOSECONDS.toMillis(leader.consensusModuleContext().leaderHeartbeatTimeoutNs()));
-            Tests.await(() ->
-            {
-                testCluster.poll(leader.consensusModuleContext().clusterMemberId());
-                return null != testCluster.leader(leader.consensusModuleContext().clusterMemberId());
-            });
-            testCluster.awaitStarted(leader.consensusModuleContext().clusterMemberId());
-
-            final long electionCount = leaderElectionCounter.get();
-            Tests.await(() ->
-            {
-                testCluster.poll();
-                return electionCount < leaderElectionCounter.get();
-            });
+            testCluster.generateNewElectionForLeader(leader);
             assertEquals(ConsensusModule.State.ACTIVE, ConsensusModule.State.get(leaderStateCounter));
+            assertEquals(0, leaderSnapshotCounter.get());
         }
     }
 
@@ -220,8 +182,8 @@ public class ClusterUncommittedStateTest
 
             final TestNode leader = testCluster.leader();
             final Counter leaderControlToggle = leader.consensusModuleContext().controlToggleCounter();
-            final Counter leaderElectionCounter = leader.consensusModuleContext().electionCounter();
             final Counter leaderStateCounter = leader.consensusModuleContext().moduleStateCounter();
+            final Counter leaderSnapshotCounter = leader.consensusModuleContext().snapshotCounter();
             final Counter node0StateCounter = testCluster.node(0).consensusModuleContext().moduleStateCounter();
             final Counter node1StateCounter = testCluster.node(1).consensusModuleContext().moduleStateCounter();
             final Counter node2StateCounter = testCluster.node(2).consensusModuleContext().moduleStateCounter();
@@ -259,21 +221,9 @@ public class ClusterUncommittedStateTest
             leader.poll();
             assertEquals(ConsensusModule.State.SNAPSHOT, ConsensusModule.State.get(leaderStateCounter));
 
-            Tests.sleep(TimeUnit.NANOSECONDS.toMillis(leader.consensusModuleContext().leaderHeartbeatTimeoutNs()));
-            Tests.await(() ->
-            {
-                testCluster.poll(leader.consensusModuleContext().clusterMemberId());
-                return null != testCluster.leader(leader.consensusModuleContext().clusterMemberId());
-            });
-            testCluster.awaitStarted(leader.consensusModuleContext().clusterMemberId());
-
-            final long electionCount = leaderElectionCounter.get();
-            Tests.await(() ->
-            {
-                testCluster.poll();
-                return electionCount < leaderElectionCounter.get();
-            });
+            testCluster.generateNewElectionForLeader(leader);
             assertEquals(ConsensusModule.State.SUSPENDED, ConsensusModule.State.get(leaderStateCounter));
+            assertEquals(0, leaderSnapshotCounter.get());
         }
     }
 
@@ -367,8 +317,10 @@ public class ClusterUncommittedStateTest
         }
 
         @SuppressWarnings("try")
-        void generateUncommittedData()
+        void generateUncommittedDataAgainstLeader(final TestNode leader)
         {
+            assertTrue(leader.isLeader());
+
             final MediaDriver.Context context = new MediaDriver.Context()
                 .aeronDirectoryName(tempDir.resolve("client").toAbsolutePath().toString())
                 .dirDeleteOnStart(true)
@@ -397,7 +349,6 @@ public class ClusterUncommittedStateTest
                     return null != aeronClusterRef.get();
                 });
 
-                final TestNode leaderNode = leader();
                 try (AeronCluster aeronCluster = aeronClusterRef.get())
                 {
                     final UnsafeBuffer unsafeBuffer = new UnsafeBuffer(new byte[CLIENT_MESSAGE_SIZE]);
@@ -405,7 +356,7 @@ public class ClusterUncommittedStateTest
                     {
                         while (aeronCluster.offer(unsafeBuffer, 0, unsafeBuffer.capacity()) < 0)
                         {
-                            leaderNode.poll();
+                            leader.poll();
                             Tests.yield();
                         }
                     }
@@ -413,16 +364,37 @@ public class ClusterUncommittedStateTest
 
                 Tests.await(() ->
                 {
-                    leaderNode.poll();
+                    leader.poll();
                     return CLIENT_MESSAGE_COUNT * CLIENT_MESSAGE_SIZE <
-                        leaderNode.consensusModuleContext().logPublisher().position();
+                        leader.consensusModuleContext().logPublisher().position();
                 });
 
-                final long logPublisherPos = leaderNode.consensusModuleContext().logPublisher().position();
-                final long commitPos = leaderNode.consensusModuleContext().commitPositionCounter().get();
+                final long logPublisherPos = leader.consensusModuleContext().logPublisher().position();
+                final long commitPos = leader.consensusModuleContext().commitPositionCounter().get();
                 assertTrue(commitPos < logPublisherPos,
                     "Commit position " + commitPos + " not less than log publisher position " + logPublisherPos);
             }
+        }
+
+        void generateNewElectionForLeader(final TestNode leader)
+        {
+            assertTrue(leader.isLeader());
+
+            Tests.sleep(TimeUnit.NANOSECONDS.toMillis(leader.consensusModuleContext().leaderHeartbeatTimeoutNs()));
+            Tests.await(() ->
+            {
+                poll(leader.consensusModuleContext().clusterMemberId());
+                return null != leader(leader.consensusModuleContext().clusterMemberId());
+            });
+            awaitStarted(leader.consensusModuleContext().clusterMemberId());
+
+            final Counter leaderElectionCounter = leader.consensusModuleContext().electionCounter();
+            final long electionCount = leaderElectionCounter.get();
+            Tests.await(() ->
+            {
+                poll();
+                return electionCount < leaderElectionCounter.get();
+            });
         }
 
         @Override
