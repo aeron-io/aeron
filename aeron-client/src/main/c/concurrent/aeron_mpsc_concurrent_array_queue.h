@@ -16,29 +16,30 @@
 #ifndef AERON_MPSC_CONCURRENT_ARRAY_QUEUE_H
 #define AERON_MPSC_CONCURRENT_ARRAY_QUEUE_H
 
+#include <stdalign.h>
 #include "util/aeron_bitutil.h"
 #include "aeron_atomic.h"
 #include "aeron_concurrent_array_queue.h"
 
 typedef struct aeron_mpsc_concurrent_array_queue_stct
 {
-    int8_t padding[AERON_CACHE_LINE_LENGTH - sizeof(uint64_t)];
+    alignas(AERON_CACHE_LINE_LENGTH)
     struct
     {
         volatile uint64_t tail;
         uint64_t head_cache;
         volatile uint64_t shared_head_cache;
-        int8_t padding[AERON_CACHE_LINE_LENGTH - (3 * sizeof(uint64_t))];
     }
     producer;
 
+    alignas(AERON_CACHE_LINE_LENGTH)
     struct
     {
         volatile uint64_t head;
-        int8_t padding[AERON_CACHE_LINE_LENGTH - sizeof(uint64_t)];
     }
     consumer;
 
+    alignas(AERON_CACHE_LINE_LENGTH)
     size_t capacity;
     size_t mask;
     void * volatile *buffer;
