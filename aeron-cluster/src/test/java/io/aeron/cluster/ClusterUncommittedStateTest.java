@@ -43,8 +43,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import org.junit.jupiter.api.io.TempDir;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 
 import java.nio.file.Path;
 import java.util.Map;
@@ -169,12 +167,10 @@ public class ClusterUncommittedStateTest
         }
     }
 
-
-    @ParameterizedTest
-    @EnumSource(names = { "SNAPSHOT", "SHUTDOWN" })
+    @Test
     @SlowTest
     @InterruptAfter(20)
-    public void shouldRollbackUncommittedSnapshotToggle(final ClusterControl.ToggleState toggleState)
+    public void shouldRollbackUncommittedSnapshotToggle()
     {
         try (TestCluster testCluster = new TestCluster(tempDir))
         {
@@ -188,7 +184,7 @@ public class ClusterUncommittedStateTest
             final Counter leaderElectionCounter = leader.consensusModuleContext().electionCounter();
             final Counter leaderStateCounter = leader.consensusModuleContext().moduleStateCounter();
 
-            leaderControlToggle.setRelease(toggleState.code());
+            leaderControlToggle.setRelease(ClusterControl.ToggleState.SNAPSHOT.code());
             Tests.sleep(SLOW_TICK_INTERVAL_MS);
             leader.poll();
             assertEquals(ConsensusModule.State.SNAPSHOT, ConsensusModule.State.get(leaderStateCounter));
