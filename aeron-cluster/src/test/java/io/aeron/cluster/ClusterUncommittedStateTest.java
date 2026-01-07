@@ -30,6 +30,7 @@ import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.test.EventLogExtension;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
+import io.aeron.test.SlowTest;
 import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.Tests;
 import io.aeron.test.cluster.StubClusteredService;
@@ -51,6 +52,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith({ EventLogExtension.class, InterruptingTestCallback.class})
 public class ClusterUncommittedStateTest
@@ -73,6 +75,7 @@ public class ClusterUncommittedStateTest
     public Path tempDir;
 
     @Test
+    @SlowTest
     @InterruptAfter(20)
     public void shouldRollbackUncommittedSuspendControlToggle()
     {
@@ -112,6 +115,7 @@ public class ClusterUncommittedStateTest
     }
 
     @Test
+    @SlowTest
     @InterruptAfter(20)
     public void shouldRollbackUncommittedResumeControlToggle()
     {
@@ -168,6 +172,7 @@ public class ClusterUncommittedStateTest
 
     @ParameterizedTest
     @EnumSource(names = { "SNAPSHOT", "SHUTDOWN" })
+    @SlowTest
     @InterruptAfter(20)
     public void shouldRollbackUncommittedSnapshotToggle(final ClusterControl.ToggleState toggleState)
     {
@@ -207,6 +212,7 @@ public class ClusterUncommittedStateTest
     }
 
     @Test
+    @SlowTest
     @InterruptAfter(20)
     public void shouldRollbackMultipleUncommittedControlToggles()
     {
@@ -415,6 +421,11 @@ public class ClusterUncommittedStateTest
                     return CLIENT_MESSAGE_COUNT * CLIENT_MESSAGE_SIZE <
                         leaderNode.consensusModuleContext().logPublisher().position();
                 });
+
+                final long logPublisherPos = leaderNode.consensusModuleContext().logPublisher().position();
+                final long commitPos = leaderNode.consensusModuleContext().commitPositionCounter().get();
+                assertTrue(commitPos < logPublisherPos,
+                    "Commit position " + commitPos + " not less than log publisher position " + logPublisherPos);
             }
         }
 
