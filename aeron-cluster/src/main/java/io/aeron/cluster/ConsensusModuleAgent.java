@@ -3579,8 +3579,6 @@ final class ConsensusModuleAgent
             }
         }
         uncommittedState.clear();
-
-        pendingClusterTermination = null;
     }
 
     private void enterElection(final boolean isLogEndOfStream, final String reason)
