@@ -16,7 +16,6 @@
 package io.aeron.cluster;
 
 import io.aeron.cluster.client.ClusterEvent;
-import io.aeron.cluster.client.ClusterException;
 import io.aeron.exceptions.AeronException;
 import org.agrona.ErrorHandler;
 
@@ -24,25 +23,11 @@ class ClusterTermination
 {
     private long deadlineNs;
     private boolean haveServicesTerminated;
-    private final long position;
-    private final long leadershipTermId;
 
-    ClusterTermination(final long deadlineNs, final int serviceCount, final long position, final long leadershipTermId)
+    ClusterTermination(final long deadlineNs, final int serviceCount)
     {
         this.deadlineNs = deadlineNs;
         this.haveServicesTerminated = serviceCount <= 0;
-        this.position = position;
-        this.leadershipTermId = leadershipTermId;
-    }
-
-    long position()
-    {
-        return position;
-    }
-
-    long leadershipTermId()
-    {
-        return leadershipTermId;
     }
 
     void deadlineNs(final long deadlineNs)
@@ -80,7 +65,9 @@ class ClusterTermination
         final ErrorHandler errorHandler,
         final ConsensusPublisher consensusPublisher,
         final ClusterMember[] members,
-        final ClusterMember thisMember)
+        final ClusterMember thisMember,
+        final long leadershipTermId,
+        final long position)
     {
         for (final ClusterMember member : members)
         {
@@ -88,21 +75,10 @@ class ClusterTermination
 
             if (member != thisMember)
             {
-                try
-                {
-                    if (!consensusPublisher.terminationPosition(member.publication(), leadershipTermId, position))
-                    {
-                        errorHandler.onError(new ClusterEvent(
-                            "failed to send termination position to member=" + member.id(),
-                            AeronException.Category.WARN));
-                    }
-                }
-                catch (final ClusterException clusterException)
+                if (!consensusPublisher.terminationPosition(member.publication(), leadershipTermId, position))
                 {
                     errorHandler.onError(new ClusterEvent(
-                        "failed to send termination position to member=" + member.id() +
-                        " because=" + clusterException.getMessage(),
-                        AeronException.Category.WARN));
+                        "failed to send termination position to member=" + member.id(), AeronException.Category.WARN));
                 }
             }
         }
