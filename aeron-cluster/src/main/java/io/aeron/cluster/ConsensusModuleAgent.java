@@ -231,7 +231,6 @@ final class ConsensusModuleAgent
     private RecordingSignalPoller recordingSignalPoller;
     private Election election;
     private ClusterTermination clusterTermination;
-    private ClusterTermination pendingClusterTermination;
     private long logSubscriptionId = NULL_VALUE;
     private long logRecordingId = NULL_VALUE;
     private long logRecordingStopPosition = 0;
@@ -2704,8 +2703,16 @@ final class ConsensusModuleAgent
                     {
                         final long position = logPublisher.position();
 
-                        pendingClusterTermination = new ClusterTermination(
-                            nowNs + ctx.terminationTimeoutNs(), serviceCount, position, leadershipTermId);
+                        clusterTermination = new ClusterTermination(nowNs + ctx.terminationTimeoutNs(), serviceCount);
+                        clusterTermination.terminationPosition(
+                            ctx.countedErrorHandler(),
+                            consensusPublisher,
+                            activeMembers,
+                            thisMember,
+                            leadershipTermId,
+                            position);
+                        terminationPosition = position;
+                        terminationLeadershipTermId = leadershipTermId;
 
                         uncommittedState.offerLong(logPublisher.position());
                         uncommittedState.offerLong(ConsensusModule.State.ACTIVE.code());
@@ -2723,9 +2730,9 @@ final class ConsensusModuleAgent
                 {
                     final CountedErrorHandler errorHandler = ctx.countedErrorHandler();
                     final long position = logPublisher.position();
-                    clusterTermination = new ClusterTermination(
-                        nowNs + ctx.terminationTimeoutNs(), serviceCount, position, leadershipTermId);
-                    clusterTermination.terminationPosition(errorHandler, consensusPublisher, activeMembers, thisMember);
+                    clusterTermination = new ClusterTermination(nowNs + ctx.terminationTimeoutNs(), serviceCount);
+                    clusterTermination.terminationPosition(
+                        errorHandler, consensusPublisher, activeMembers, thisMember, leadershipTermId, position);
                     terminationPosition = position;
                     terminationLeadershipTermId = leadershipTermId;
                     if (serviceCount > 0)
@@ -3547,8 +3554,6 @@ final class ConsensusModuleAgent
             }
         }
         uncommittedState.clear();
-
-        pendingClusterTermination = null;
     }
 
     private void enterElection(final boolean isLogEndOfStream, final String reason)
@@ -3618,16 +3623,6 @@ final class ConsensusModuleAgent
         for (int i = 0, size = sessions.size(); i < size; i++)
         {
             sessions.get(i).timeOfLastActivityNs(nowNs);
-        }
-
-        if (null != pendingClusterTermination)
-        {
-            clusterTermination = pendingClusterTermination;
-            clusterTermination.terminationPosition(
-                ctx.countedErrorHandler(), consensusPublisher, activeMembers, thisMember);
-            terminationPosition = clusterTermination.position();
-            terminationLeadershipTermId = clusterTermination.leadershipTermId();
-            pendingClusterTermination = null;
         }
 
         if (null != clusterTermination)
