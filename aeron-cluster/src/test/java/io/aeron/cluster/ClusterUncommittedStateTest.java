@@ -89,14 +89,22 @@ public class ClusterUncommittedStateTest
     @TempDir
     public Path tempDir;
 
-    @Test
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
     @SlowTest
     @InterruptAfter(20)
-    public void shouldRollbackUncommittedSuspendControlToggle()
+    public void shouldRollbackUncommittedSuspendControlToggle(final boolean hasServices)
     {
         try (TestCluster testCluster = new TestCluster(tempDir))
         {
-            testCluster.withServiceSupplier(StubClusteredService::new);
+            if (hasServices)
+            {
+                testCluster.withServiceSupplier(StubClusteredService::new);
+            }
+            else
+            {
+                testCluster.withExtensionSupplier(SnapshottingCounterExtension::new);
+            }
             testCluster.launch();
             testCluster.awaitStarted();
 
@@ -116,14 +124,22 @@ public class ClusterUncommittedStateTest
         }
     }
 
-    @Test
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
     @SlowTest
     @InterruptAfter(20)
-    public void shouldRollbackUncommittedResumeControlToggle()
+    public void shouldRollbackUncommittedResumeControlToggle(final boolean hasServices)
     {
         try (TestCluster testCluster = new TestCluster(tempDir))
         {
-            testCluster.withServiceSupplier(StubClusteredService::new);
+            if (hasServices)
+            {
+                testCluster.withServiceSupplier(StubClusteredService::new);
+            }
+            else
+            {
+                testCluster.withExtensionSupplier(SnapshottingCounterExtension::new);
+            }
             testCluster.launch();
             testCluster.awaitStarted();
 
