@@ -2617,7 +2617,7 @@ final class ConsensusModuleAgent
                     }
                     else
                     {
-                        terminateOnServiceAck(logAdapter.position());
+                        doTermination(logAdapter.position());
                     }
                 }
                 else
@@ -2678,10 +2678,6 @@ final class ConsensusModuleAgent
                         uncommittedState.offerLong(ConsensusModule.State.ACTIVE.code());
                         state(ConsensusModule.State.SNAPSHOT);
                         totalSnapshotDurationTracker.onSnapshotBegin(nowNs);
-                        if (0 == serviceCount)
-                        {
-                            snapshotOnServiceAck(logPublisher.position(), timestamp, ServiceAck.EMPTY_SERVICE_ACKS);
-                        }
                     }
                     break;
                 }
@@ -2703,7 +2699,7 @@ final class ConsensusModuleAgent
                     {
                         final long position = logPublisher.position();
 
-                        clusterTermination = new ClusterTermination(nowNs + ctx.terminationTimeoutNs(), serviceCount);
+                        clusterTermination = new ClusterTermination(nowNs + ctx.terminationTimeoutNs());
                         clusterTermination.terminationPosition(
                             ctx.countedErrorHandler(),
                             consensusPublisher,
@@ -2718,10 +2714,6 @@ final class ConsensusModuleAgent
                         uncommittedState.offerLong(ConsensusModule.State.ACTIVE.code());
                         state(ConsensusModule.State.SNAPSHOT);
                         totalSnapshotDurationTracker.onSnapshotBegin(nowNs);
-                        if (0 == serviceCount)
-                        {
-                            snapshotOnServiceAck(position, timestamp, ServiceAck.EMPTY_SERVICE_ACKS);
-                        }
                     }
                     break;
                 }
@@ -2730,7 +2722,7 @@ final class ConsensusModuleAgent
                 {
                     final CountedErrorHandler errorHandler = ctx.countedErrorHandler();
                     final long position = logPublisher.position();
-                    clusterTermination = new ClusterTermination(nowNs + ctx.terminationTimeoutNs(), serviceCount);
+                    clusterTermination = new ClusterTermination(nowNs + ctx.terminationTimeoutNs());
                     clusterTermination.terminationPosition(
                         errorHandler, consensusPublisher, activeMembers, thisMember, leadershipTermId, position);
                     terminationPosition = position;
@@ -2738,6 +2730,10 @@ final class ConsensusModuleAgent
                     if (serviceCount > 0)
                     {
                         serviceProxy.terminationPosition(terminationPosition, errorHandler);
+                    }
+                    else
+                    {
+                        clusterTermination.onTerminationReady();
                     }
                     state(ConsensusModule.State.TERMINATING);
                     break;
@@ -2748,6 +2744,14 @@ final class ConsensusModuleAgent
             }
 
             return 1;
+        }
+        else if (ConsensusModule.State.SNAPSHOT == state)
+        {
+            if (0 == serviceCount && logPublisher.position() <= commitPosition.getWeak())
+            {
+                final long timestamp = clusterClock.time();
+                snapshotOnServiceAck(commitPosition.getWeak(), timestamp, ServiceAck.EMPTY_SERVICE_ACKS);
+            }
         }
         else if (ConsensusModule.State.SUSPENDED == state)
         {
@@ -3631,6 +3635,10 @@ final class ConsensusModuleAgent
             {
                 serviceProxy.terminationPosition(terminationPosition, ctx.countedErrorHandler());
             }
+            else
+            {
+                clusterTermination.onTerminationReady();
+            }
             clusterTermination.deadlineNs(clusterClock.timeNanos() + ctx.terminationTimeoutNs());
             state(ConsensusModule.State.TERMINATING);
         }
@@ -3839,6 +3847,16 @@ final class ConsensusModuleAgent
 
     private void terminateOnServiceAck(final long logPosition)
     {
+        if (null != clusterTermination)
+        {
+            clusterTermination.onTerminationReady();
+        }
+
+        doTermination(logPosition);
+    }
+
+    private void doTermination(final long logPosition)
+    {
         if (null == clusterTermination)
         {
             if (terminationLeadershipTermId == leadershipTermId)
@@ -3856,7 +3874,6 @@ final class ConsensusModuleAgent
         }
         else
         {
-            clusterTermination.onServicesTerminated();
             if (clusterTermination.canTerminate(activeMembers, clusterClock.timeNanos()))
             {
                 recordingLog.commitLogPosition(leadershipTermId, logPosition);
