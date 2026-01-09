@@ -17,16 +17,24 @@ package io.aeron.cluster;
 
 import io.aeron.Aeron;
 import io.aeron.Counter;
+import io.aeron.ExclusivePublication;
+import io.aeron.Image;
 import io.aeron.archive.Archive;
 import io.aeron.archive.ArchiveThreadingMode;
 import io.aeron.cluster.client.AeronCluster;
 import io.aeron.cluster.client.ControlledEgressListener;
+import io.aeron.cluster.codecs.MessageHeaderDecoder;
+import io.aeron.cluster.codecs.MessageHeaderEncoder;
+import io.aeron.cluster.codecs.SessionMessageHeaderDecoder;
+import io.aeron.cluster.codecs.SessionMessageHeaderEncoder;
 import io.aeron.cluster.service.Cluster;
 import io.aeron.cluster.service.ClusteredService;
 import io.aeron.cluster.service.ClusteredServiceContainer;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
 import io.aeron.logbuffer.ControlledFragmentHandler;
+import io.aeron.logbuffer.Header;
+import io.aeron.protocol.DataHeaderFlyweight;
 import io.aeron.test.EventLogExtension;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
@@ -34,8 +42,11 @@ import io.aeron.test.SlowTest;
 import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.Tests;
 import io.aeron.test.cluster.StubClusteredService;
+import io.aeron.test.cluster.TestNode.TestConsensusModuleExtension;
 import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.CloseHelper;
+import org.agrona.DirectBuffer;
+import org.agrona.collections.LongArrayQueue;
 import org.agrona.collections.MutableReference;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.Test;
@@ -43,13 +54,18 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith({ EventLogExtension.class, InterruptingTestCallback.class})
@@ -65,6 +81,7 @@ public class ClusterUncommittedStateTest
     private static final long SLOW_TICK_INTERVAL_MS = 20;
     private static final long CLIENT_MESSAGE_COUNT = 32;
     private static final int CLIENT_MESSAGE_SIZE = 1024;
+    private static final int EXTENSION_SCHEMA = 7777;
 
     @RegisterExtension
     final SystemTestWatcher testWatcher = new SystemTestWatcher();
@@ -140,14 +157,22 @@ public class ClusterUncommittedStateTest
         }
     }
 
-    @Test
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
     @SlowTest
     @InterruptAfter(20)
-    public void shouldRollbackUncommittedSnapshotToggle()
+    public void shouldRollbackUncommittedSnapshotToggle(final boolean hasServices)
     {
         try (TestCluster testCluster = new TestCluster(tempDir))
         {
-            testCluster.withServiceSupplier(StubClusteredService::new);
+            if (hasServices)
+            {
+                testCluster.withServiceSupplier(StubClusteredService::new);
+            }
+            else
+            {
+                testCluster.withExtensionSupplier(SnapshottingCounterExtension::new);
+            }
             testCluster.launch();
             testCluster.awaitStarted();
 
@@ -169,14 +194,22 @@ public class ClusterUncommittedStateTest
         }
     }
 
-    @Test
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
     @SlowTest
     @InterruptAfter(20)
-    public void shouldRollbackMultipleUncommittedControlToggles()
+    public void shouldRollbackMultipleUncommittedControlToggles(final boolean hasServices)
     {
         try (TestCluster testCluster = new TestCluster(tempDir))
         {
-            testCluster.withServiceSupplier(StubClusteredService::new);
+            if (hasServices)
+            {
+                testCluster.withServiceSupplier(StubClusteredService::new);
+            }
+            else
+            {
+                testCluster.withExtensionSupplier(TestConsensusModuleExtension::new);
+            }
             testCluster.launch();
             testCluster.awaitStarted();
 
@@ -227,12 +260,69 @@ public class ClusterUncommittedStateTest
         }
     }
 
-    class TestCluster implements AutoCloseable
+    @Test
+    @SlowTest
+    @InterruptAfter(20)
+    public void shouldSnapshotWithNoServices()
+    {
+        try (TestCluster testCluster = new TestCluster(tempDir))
+        {
+            for (int i = 0; i < NODE_COUNT; ++i)
+            {
+                testCluster.node(i).consensusModuleContext().logFragmentLimit(1);
+            }
+            testCluster.withExtensionSupplier(SnapshottingCounterExtension::new);
+            testCluster.launch();
+            testCluster.awaitStarted();
+
+            final TestNode leader = testCluster.leader();
+            final Counter leaderControlToggle = leader.consensusModuleContext().controlToggleCounter();
+            final Counter leaderStateCounter = leader.consensusModuleContext().moduleStateCounter();
+            final Counter node0SnapshotCounter = testCluster.node(0).consensusModuleContext().snapshotCounter();
+            final Counter node1SnapshotCounter = testCluster.node(1).consensusModuleContext().snapshotCounter();
+            final Counter node2SnapshotCounter = testCluster.node(2).consensusModuleContext().snapshotCounter();
+
+            testCluster.generateUncommittedDataAgainstLeader(leader);
+
+            leaderControlToggle.setRelease(ClusterControl.ToggleState.SNAPSHOT.code());
+            Tests.sleep(SLOW_TICK_INTERVAL_MS);
+            leader.poll();
+            assertEquals(ConsensusModule.State.SNAPSHOT, ConsensusModule.State.get(leaderStateCounter));
+
+            Tests.await(() ->
+            {
+                testCluster.poll();
+                return 1L == node0SnapshotCounter.get() &&
+                    1L == node1SnapshotCounter.get() &&
+                    1L == node2SnapshotCounter.get();
+            });
+
+            final SnapshottingCounterExtension node0Extension =
+                (SnapshottingCounterExtension)testCluster.node(0).consensusModuleContext().consensusModuleExtension();
+            final SnapshottingCounterExtension node1Extension =
+                (SnapshottingCounterExtension)testCluster.node(1).consensusModuleContext().consensusModuleExtension();
+            final SnapshottingCounterExtension node2Extension =
+                (SnapshottingCounterExtension)testCluster.node(2).consensusModuleContext().consensusModuleExtension();
+            final List<Long> node0Snapshots = node0Extension.counterSnapshots();
+            final List<Long> node1Snapshots = node1Extension.counterSnapshots();
+            final List<Long> node2Snapshots = node2Extension.counterSnapshots();
+
+            assertEquals(1, node0Snapshots.size());
+            assertEquals(1, node1Snapshots.size());
+            assertEquals(1, node2Snapshots.size());
+            assertEquals(CLIENT_MESSAGE_COUNT, node0Snapshots.get(0));
+            assertEquals(CLIENT_MESSAGE_COUNT, node1Snapshots.get(0));
+            assertEquals(CLIENT_MESSAGE_COUNT, node2Snapshots.get(0));
+        }
+    }
+
+    private final class TestCluster implements AutoCloseable
     {
         TestNode[] nodes = new TestNode[NODE_COUNT];
         Supplier<ClusteredService> clusteredServiceSupplier = () -> null;
+        Supplier<ConsensusModuleExtension> consensusModuleExtensionSupplier = () -> null;
 
-        TestCluster(final Path tempDir)
+        private TestCluster(final Path tempDir)
         {
             for (int i = 0; i < NODE_COUNT; ++i)
             {
@@ -240,31 +330,47 @@ public class ClusterUncommittedStateTest
             }
         }
 
-        void withServiceSupplier(final Supplier<ClusteredService> clusteredServiceSupplier)
+        private void withServiceSupplier(final Supplier<ClusteredService> clusteredServiceSupplier)
         {
             this.clusteredServiceSupplier = clusteredServiceSupplier;
         }
 
-        void launch()
+        private void withExtensionSupplier(final Supplier<ConsensusModuleExtension> consensusModuleExtensionSupplier)
+        {
+            this.consensusModuleExtensionSupplier = consensusModuleExtensionSupplier;
+        }
+
+        private void launch()
         {
             for (final TestNode node : nodes)
             {
-                node.withService(clusteredServiceSupplier.get());
+                final ClusteredService clusteredService = clusteredServiceSupplier.get();
+                if (null != clusteredService)
+                {
+                    node.withService(clusteredService);
+                }
+
+                final ConsensusModuleExtension consensusModuleExtension = consensusModuleExtensionSupplier.get();
+                if (null != consensusModuleExtension)
+                {
+                    node.withExtension(consensusModuleExtension);
+                }
+
                 node.launch(testWatcher);
             }
         }
 
-        TestNode node(final int i)
+        private TestNode node(final int i)
         {
             return nodes[i];
         }
 
-        void poll()
+        private void poll()
         {
             poll(Aeron.NULL_VALUE);
         }
 
-        void poll(final int except)
+        private void poll(final int except)
         {
             for (int i = 0; i < nodes.length; ++i)
             {
@@ -275,12 +381,12 @@ public class ClusterUncommittedStateTest
             }
         }
 
-        void awaitStarted()
+        private void awaitStarted()
         {
             awaitStarted(Aeron.NULL_VALUE);
         }
 
-        void awaitStarted(final int except)
+        private void awaitStarted(final int except)
         {
             Tests.await(() ->
             {
@@ -297,12 +403,12 @@ public class ClusterUncommittedStateTest
             });
         }
 
-        TestNode leader()
+        private TestNode leader()
         {
             return leader(Aeron.NULL_VALUE);
         }
 
-        TestNode leader(final int except)
+        private TestNode leader(final int except)
         {
             for (int i = 0; i < nodes.length; ++i)
             {
@@ -317,7 +423,7 @@ public class ClusterUncommittedStateTest
         }
 
         @SuppressWarnings("try")
-        void generateUncommittedDataAgainstLeader(final TestNode leader)
+        private void generateUncommittedDataAgainstLeader(final TestNode leader)
         {
             assertTrue(leader.isLeader());
 
@@ -352,9 +458,24 @@ public class ClusterUncommittedStateTest
                 try (AeronCluster aeronCluster = aeronClusterRef.get())
                 {
                     final UnsafeBuffer unsafeBuffer = new UnsafeBuffer(new byte[CLIENT_MESSAGE_SIZE]);
-                    for (int i = 0; i < CLIENT_MESSAGE_COUNT; ++i)
+                    final MessageHeaderEncoder messageHeaderEncoder = new MessageHeaderEncoder();
+                    final SessionMessageHeaderEncoder sessionMessageHeaderEncoder = new SessionMessageHeaderEncoder();
+                    final int data = MessageHeaderEncoder.ENCODED_LENGTH + SessionMessageHeaderEncoder.BLOCK_LENGTH;
+
+                    sessionMessageHeaderEncoder.wrapAndApplyHeader(unsafeBuffer, 0, messageHeaderEncoder)
+                        .leadershipTermId(aeronCluster.leadershipTermId())
+                        .clusterSessionId(aeronCluster.clusterSessionId());
+
+                    if (0 == leader.consensusModuleContext().serviceCount())
                     {
-                        while (aeronCluster.offer(unsafeBuffer, 0, unsafeBuffer.capacity()) < 0)
+                        messageHeaderEncoder.schemaId(EXTENSION_SCHEMA);
+                    }
+
+                    for (int i = 1; i <= CLIENT_MESSAGE_COUNT; ++i)
+                    {
+                        unsafeBuffer.putLong(data, i);
+
+                        while (aeronCluster.ingressPublication().offer(unsafeBuffer, 0, unsafeBuffer.capacity()) < 0)
                         {
                             leader.poll();
                             Tests.yield();
@@ -365,7 +486,7 @@ public class ClusterUncommittedStateTest
                 Tests.await(() ->
                 {
                     leader.poll();
-                    return CLIENT_MESSAGE_COUNT * CLIENT_MESSAGE_SIZE <
+                    return CLIENT_MESSAGE_COUNT * (CLIENT_MESSAGE_SIZE + DataHeaderFlyweight.HEADER_LENGTH) <
                         leader.consensusModuleContext().logPublisher().position();
                 });
 
@@ -376,7 +497,7 @@ public class ClusterUncommittedStateTest
             }
         }
 
-        void generateNewElectionForLeader(final TestNode leader)
+        private void generateNewElectionForLeader(final TestNode leader)
         {
             assertTrue(leader.isLeader());
 
@@ -404,7 +525,7 @@ public class ClusterUncommittedStateTest
         }
     }
 
-    static class TestNode implements AutoCloseable
+    private static final class TestNode implements AutoCloseable
     {
         private final MediaDriver.Context mediaDriverContext;
         private final Archive.Context archiveContext;
@@ -412,13 +533,14 @@ public class ClusterUncommittedStateTest
         private final ClusteredServiceContainer.Context clusteredServiceContext;
 
         private ClusteredService clusteredService;
+        private ConsensusModuleExtension consensusModuleExtension;
 
         private TestMediaDriver mediaDriver;
         private Archive archive;
         private ConsensusModule consensusModule;
         private ClusteredServiceContainer serviceContainer;
 
-        TestNode(final int clusterMemberId, final Path directory)
+        private TestNode(final int clusterMemberId, final Path directory)
         {
             mediaDriverContext = new MediaDriver.Context()
                 .aeronDirectoryName(directory.resolve("driver").toAbsolutePath().toString())
@@ -452,41 +574,54 @@ public class ClusterUncommittedStateTest
                 .useAgentInvoker(true);
         }
 
-        public void withService(final ClusteredService clusteredService)
+        private void withService(final ClusteredService clusteredService)
         {
             this.clusteredService = clusteredService;
         }
 
-        public void launch(final SystemTestWatcher testWatcher)
+        private void withExtension(final ConsensusModuleExtension consensusModuleExtension)
+        {
+            this.consensusModuleExtension = consensusModuleExtension;
+        }
+
+        private void launch(final SystemTestWatcher testWatcher)
         {
             mediaDriver = TestMediaDriver.launch(mediaDriverContext, testWatcher);
             archive = Archive.launch(archiveContext);
-            clusteredServiceContext.clusteredService(clusteredService);
-            serviceContainer = ClusteredServiceContainer.launch(clusteredServiceContext);
+            if (null != clusteredService)
+            {
+                clusteredServiceContext.clusteredService(clusteredService);
+                serviceContainer = ClusteredServiceContainer.launch(clusteredServiceContext);
+            }
+            if (null != consensusModuleExtension)
+            {
+                consensusModuleContext.consensusModuleExtension(consensusModuleExtension);
+                consensusModuleContext.serviceCount(0);
+            }
             consensusModule = ConsensusModule.launch(consensusModuleContext);
         }
 
-        public MediaDriver.Context mediaDriverContext()
+        private MediaDriver.Context mediaDriverContext()
         {
             return mediaDriverContext;
         }
 
-        public Archive.Context archiveContext()
+        private Archive.Context archiveContext()
         {
             return archiveContext;
         }
 
-        public ConsensusModule.Context consensusModuleContext()
+        private ConsensusModule.Context consensusModuleContext()
         {
             return consensusModuleContext;
         }
 
-        public ClusteredServiceContainer.Context clusteredServiceContext()
+        private ClusteredServiceContainer.Context clusteredServiceContext()
         {
             return clusteredServiceContext;
         }
 
-        public boolean started()
+        private boolean started()
         {
             final ConsensusModule.Context context = consensusModule.context();
             return context.electionStateCounter().get() == ElectionState.CLOSED.code() &&
@@ -494,12 +629,12 @@ public class ClusterUncommittedStateTest
                     context.clusterNodeRoleCounter().get() == Cluster.Role.FOLLOWER.code());
         }
 
-        public boolean isLeader()
+        private boolean isLeader()
         {
             return Cluster.Role.LEADER.code() == consensusModule.context().clusterNodeRoleCounter().get();
         }
 
-        public void poll()
+        private void poll()
         {
             consensusModule.conductorAgentInvoker().invoke();
         }
@@ -508,6 +643,100 @@ public class ClusterUncommittedStateTest
         public void close()
         {
             CloseHelper.closeAll(serviceContainer, consensusModule, archive, mediaDriver);
+        }
+    }
+
+    private static final class SnapshottingCounterExtension extends TestConsensusModuleExtension
+    {
+        private final MessageHeaderDecoder messageHeaderDecoder = new MessageHeaderDecoder();
+        private final SessionMessageHeaderDecoder sessionMessageHeaderDecoder = new SessionMessageHeaderDecoder();
+
+        private Counter commitPosition = null;
+        private ExclusivePublication logPublication = null;
+
+        private final LongArrayQueue uncommittedCounters = new LongArrayQueue(Long.MAX_VALUE);
+        private long committedCounter = 0;
+        private final List<Long> counterSnapshots = new ArrayList<>();
+
+
+        public void onStart(final ConsensusModuleControl consensusModuleControl, final Image snapshotImage)
+        {
+            assertNull(snapshotImage);
+            commitPosition = consensusModuleControl.context().commitPositionCounter();
+        }
+
+        public void onPrepareForNewLeadership()
+        {
+            logPublication = null;
+            drainUncommitted();
+            uncommittedCounters.clear();
+        }
+
+        public void onElectionComplete(final ConsensusControlState consensusControlState)
+        {
+            logPublication = consensusControlState.logPublication();
+        }
+
+        public ControlledFragmentHandler.Action onIngressExtensionMessage(
+            final int actingBlockLength,
+            final int templateId,
+            final int schemaId,
+            final int actingVersion,
+            final DirectBuffer buffer,
+            final int offset,
+            final int length,
+            final Header header)
+        {
+            sessionMessageHeaderDecoder.wrapAndApplyHeader(buffer, offset, messageHeaderDecoder);
+            assertEquals(EXTENSION_SCHEMA, messageHeaderDecoder.schemaId());
+
+            if (logPublication.offer(buffer, offset, length) < 0)
+            {
+                return ControlledFragmentHandler.Action.ABORT;
+            }
+
+            assertTrue(uncommittedCounters.offerLong(logPublication.position()));
+            assertTrue(uncommittedCounters.offerLong(buffer.getLong(sessionMessageHeaderDecoder.limit())));
+
+            return ControlledFragmentHandler.Action.CONTINUE;
+        }
+
+        public ControlledFragmentHandler.Action onLogExtensionMessage(
+            final int actingBlockLength,
+            final int templateId,
+            final int schemaId,
+            final int actingVersion,
+            final DirectBuffer buffer,
+            final int offset,
+            final int length,
+            final Header header)
+        {
+            assertEquals(EXTENSION_SCHEMA, schemaId);
+
+            sessionMessageHeaderDecoder.wrap(buffer, offset, actingBlockLength, actingVersion);
+            committedCounter = buffer.getLong(sessionMessageHeaderDecoder.limit());
+
+            return ControlledFragmentHandler.Action.CONTINUE;
+        }
+
+        public void onTakeSnapshot(final ExclusivePublication snapshotPublication)
+        {
+            drainUncommitted();
+            counterSnapshots.add(committedCounter);
+        }
+
+        private List<Long> counterSnapshots()
+        {
+            return counterSnapshots;
+        }
+
+        private void drainUncommitted()
+        {
+            while (uncommittedCounters.peekLong() <= commitPosition.get())
+            {
+                uncommittedCounters.pollLong();
+                committedCounter = uncommittedCounters.pollLong();
+            }
         }
     }
 }
