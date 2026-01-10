@@ -15,17 +15,30 @@
  */
 package io.aeron.cluster;
 
+import io.aeron.Aeron;
+import io.aeron.ChannelUri;
+import io.aeron.Image;
+import io.aeron.Subscription;
+import io.aeron.archive.client.AeronArchive;
+import io.aeron.archive.status.RecordingPos;
+import io.aeron.cluster.codecs.MessageHeaderDecoder;
+import io.aeron.cluster.codecs.NewLeadershipTermEventEncoder;
+import io.aeron.cluster.codecs.SessionMessageHeaderDecoder;
+import io.aeron.cluster.codecs.SessionOpenEventEncoder;
 import io.aeron.cluster.service.Cluster;
 import io.aeron.test.EventLogExtension;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
 import io.aeron.test.IpTables;
+import io.aeron.test.SlowTest;
 import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.Tests;
 import io.aeron.test.TopologyTest;
 import io.aeron.test.cluster.ClusterTests;
 import io.aeron.test.cluster.TestCluster;
 import io.aeron.test.cluster.TestNode;
+import org.agrona.CloseHelper;
+import org.agrona.collections.MutableInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,6 +49,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -428,6 +442,65 @@ class ClusterNetworkPartitionTest
         awaitElectionClosed(follower2Restarted);
 
         verifyClusterState(leaderAppendPosition, initialMessageCount + numMessagesAfterPartition);
+    }
+
+    @Test
+    @SlowTest
+    @InterruptAfter(30)
+    void shouldNextCommittedSessionIdReflectOnlyCommittedSessions()
+    {
+        final List<String> hostnames = HOSTNAMES.subList(0, 3);
+
+        cluster = aCluster()
+            .withStaticNodes(hostnames.size())
+            .withCustomAddresses(hostnames)
+            .start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode firstLeader = cluster.awaitLeader();
+        final List<String> leaderHostname = List.of(hostnames.get(firstLeader.memberId()));
+        final List<String> followerHostnames = new ArrayList<>(hostnames);
+        followerHostnames.remove(firstLeader.memberId());
+
+        IpTables.makeSymmetricNetworkPartition(CHAIN_NAME, leaderHostname, followerHostnames);
+
+        CloseHelper.close(cluster.asyncConnectClient());
+        CloseHelper.close(cluster.asyncConnectClient());
+        CloseHelper.close(cluster.asyncConnectClient());
+        final long estimatedLogFixedLengthSize = (NewLeadershipTermEventEncoder.BLOCK_LENGTH + HEADER_LENGTH) +
+            (3 * (SessionOpenEventEncoder.BLOCK_LENGTH + HEADER_LENGTH));
+        Tests.await(() -> firstLeader.appendPosition() > estimatedLogFixedLengthSize);
+
+        Tests.sleep(TimeUnit.NANOSECONDS.toMillis(firstLeader.consensusModule().context().leaderHeartbeatTimeoutNs()));
+        Tests.await(() -> null != cluster.findLeader(firstLeader.memberId()));
+        Tests.await(() -> ElectionState.CANVASS == firstLeader.electionState());
+
+        IpTables.flushChain(CHAIN_NAME);
+        Tests.await(() -> ElectionState.CLOSED == firstLeader.electionState());
+
+        final TestNode newLeader = cluster.awaitLeader();
+        cluster.takeSnapshot(newLeader);
+
+        boolean snapshotTaken;
+        do
+        {
+            snapshotTaken = true;
+            for (int i = 0; i < cluster.memberCount(); ++i)
+            {
+                if (1 != cluster.getSnapshotCount(cluster.node(i)))
+                {
+                    snapshotTaken = false;
+                }
+            }
+
+            Tests.yield();
+        }
+        while (!snapshotTaken);
+
+        for (int i = 0; i < cluster.memberCount(); ++i)
+        {
+            assertEquals(1, ClusterTest.readSnapshot(cluster.node(i)));
+        }
     }
 
     private static void blockTrafficToSpecificEndpoint(
