@@ -471,7 +471,6 @@ class ClusterNetworkPartitionTest
             (3 * (SessionOpenEventEncoder.BLOCK_LENGTH + HEADER_LENGTH));
         Tests.await(() -> firstLeader.appendPosition() > estimatedLogFixedLengthSize);
 
-        Tests.sleep(TimeUnit.NANOSECONDS.toMillis(firstLeader.consensusModule().context().leaderHeartbeatTimeoutNs()));
         Tests.await(() -> null != cluster.findLeader(firstLeader.memberId()));
         Tests.await(() -> ElectionState.CANVASS == firstLeader.electionState());
 
