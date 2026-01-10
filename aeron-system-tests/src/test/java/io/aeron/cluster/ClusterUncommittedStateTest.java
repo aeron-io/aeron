@@ -188,12 +188,16 @@ public class ClusterUncommittedStateTest
 
         cluster.resumeCluster(firstLeader);
         Tests.await(() -> ConsensusModule.State.ACTIVE == firstLeader.moduleState());
+        Tests.await(() -> ClusterControl.ToggleState.NEUTRAL ==
+            ClusterControl.ToggleState.get(firstLeader.consensusModule().context().controlToggleCounter()));
 
         cluster.suspendCluster(firstLeader);
         Tests.await(() -> ConsensusModule.State.SUSPENDED == firstLeader.moduleState());
 
         cluster.resumeCluster(firstLeader);
         Tests.await(() -> ConsensusModule.State.ACTIVE == firstLeader.moduleState());
+        Tests.await(() -> ClusterControl.ToggleState.NEUTRAL ==
+            ClusterControl.ToggleState.get(firstLeader.consensusModule().context().controlToggleCounter()));
 
         cluster.takeSnapshot(firstLeader);
         Tests.await(() -> ConsensusModule.State.SNAPSHOT == firstLeader.moduleState());
