@@ -211,7 +211,6 @@ final class ConsensusModuleAgent
     private final Long2LongCounterMap expiredTimerCountByCorrelationIdMap = new Long2LongCounterMap(0);
     private final ArrayDeque<ClusterSession> uncommittedClosedSessions = new ArrayDeque<>();
     private final LongArrayQueue uncommittedTimers = new LongArrayQueue(Long.MAX_VALUE);
-    private final LongArrayQueue uncommittedState = new LongArrayQueue(Long.MAX_VALUE);
     private final PendingServiceMessageTracker[] pendingServiceMessageTrackers;
     private final ConsensusModuleExtension consensusModuleExtension;
     private final Authenticator authenticator;
@@ -2662,8 +2661,6 @@ final class ConsensusModuleAgent
                     final long timestamp = clusterClock.time();
                     if (appendAction(ClusterAction.SUSPEND, timestamp, CLUSTER_ACTION_FLAGS_DEFAULT))
                     {
-                        uncommittedState.offerLong(logPublisher.position());
-                        uncommittedState.offerLong(ConsensusModule.State.ACTIVE.code());
                         state(ConsensusModule.State.SUSPENDED);
                     }
                     break;
@@ -2674,8 +2671,6 @@ final class ConsensusModuleAgent
                     final long timestamp = clusterClock.time();
                     if (appendAction(ClusterAction.SNAPSHOT, timestamp, CLUSTER_ACTION_FLAGS_DEFAULT))
                     {
-                        uncommittedState.offerLong(logPublisher.position());
-                        uncommittedState.offerLong(ConsensusModule.State.ACTIVE.code());
                         state(ConsensusModule.State.SNAPSHOT);
                         totalSnapshotDurationTracker.onSnapshotBegin(nowNs);
                     }
@@ -2710,8 +2705,6 @@ final class ConsensusModuleAgent
                         terminationPosition = position;
                         terminationLeadershipTermId = leadershipTermId;
 
-                        uncommittedState.offerLong(logPublisher.position());
-                        uncommittedState.offerLong(ConsensusModule.State.ACTIVE.code());
                         state(ConsensusModule.State.SNAPSHOT);
                         totalSnapshotDurationTracker.onSnapshotBegin(nowNs);
                     }
@@ -2760,8 +2753,6 @@ final class ConsensusModuleAgent
                 final long timestamp = clusterClock.time();
                 if (appendAction(ClusterAction.RESUME, timestamp, CLUSTER_ACTION_FLAGS_DEFAULT))
                 {
-                    uncommittedState.offerLong(logPublisher.position());
-                    uncommittedState.offerLong(ConsensusModule.State.SUSPENDED.code());
                     state(ConsensusModule.State.ACTIVE);
                     ClusterControl.ToggleState.reset(controlToggle);
                 }
@@ -3504,12 +3495,6 @@ final class ConsensusModuleAgent
 
             uncommittedClosedSessions.pollFirst();
         }
-
-        while (uncommittedState.peekLong() <= commitPosition)
-        {
-            uncommittedState.pollLong();
-            uncommittedState.pollLong();
-        }
     }
 
     private void restoreUncommittedEntries(final long commitPosition)
@@ -3541,23 +3526,6 @@ final class ConsensusModuleAgent
                 addSession(session);
             }
         }
-
-        while (uncommittedState.peekLong() <= commitPosition)
-        {
-            uncommittedState.pollLong();
-            uncommittedState.pollLong();
-        }
-
-        if (!uncommittedState.isEmpty())
-        {
-            uncommittedState.pollLong();
-            final ConsensusModule.State committedState = ConsensusModule.State.get(uncommittedState.pollLong());
-            if (ConsensusModule.State.CLOSED != state)
-            {
-                state(committedState);
-            }
-        }
-        uncommittedState.clear();
     }
 
     private void enterElection(final boolean isLogEndOfStream, final String reason)
