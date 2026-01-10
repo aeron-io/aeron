@@ -21,6 +21,8 @@ import io.aeron.Image;
 import io.aeron.cluster.client.AeronCluster;
 import io.aeron.cluster.codecs.MessageHeaderDecoder;
 import io.aeron.cluster.codecs.MessageHeaderEncoder;
+import io.aeron.cluster.codecs.NewLeadershipTermEventEncoder;
+import io.aeron.cluster.codecs.SessionOpenEventEncoder;
 import io.aeron.driver.DataPacketDispatcher;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ReceiveChannelEndpointSupplier;
@@ -38,12 +40,14 @@ import io.aeron.protocol.DataHeaderFlyweight;
 import io.aeron.test.EventLogExtension;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
+import io.aeron.test.IpTables;
 import io.aeron.test.SlowTest;
 import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.Tests;
 import io.aeron.test.cluster.TestCluster;
 import io.aeron.test.cluster.TestNode;
 import org.agrona.BitUtil;
+import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
 import org.agrona.collections.LongArrayQueue;
 import org.agrona.concurrent.UnsafeBuffer;
@@ -61,6 +65,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static io.aeron.protocol.DataHeaderFlyweight.HEADER_LENGTH;
 import static io.aeron.test.cluster.TestCluster.aCluster;
 import static io.aeron.test.driver.TestMediaDriver.shouldRunJavaMediaDriver;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -289,6 +294,62 @@ public class ClusterUncommittedStateTest
         assertEquals(31, node0Snapshots.get(0));
         assertEquals(31, node1Snapshots.get(0));
         assertEquals(31, node2Snapshots.get(0));
+    }
+
+    @Test
+    @SlowTest
+    @InterruptAfter(20)
+    void shouldNextCommittedSessionIdReflectOnlyCommittedSessions()
+    {
+        cluster = aCluster()
+            .withStaticNodes(HOSTNAMES.size())
+            .withCustomAddresses(HOSTNAMES)
+            .start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode firstLeader = cluster.awaitLeader();
+        final List<String> leaderHostname = List.of(HOSTNAMES.get(firstLeader.memberId()));
+        final List<String> followerHostnames = new ArrayList<>(HOSTNAMES);
+        followerHostnames.remove(firstLeader.memberId());
+
+        IpTables.makeSymmetricNetworkPartition(CHAIN_NAME, leaderHostname, followerHostnames);
+
+        CloseHelper.close(cluster.asyncConnectClient());
+        CloseHelper.close(cluster.asyncConnectClient());
+        CloseHelper.close(cluster.asyncConnectClient());
+        final long estimatedLogFixedLengthSize = (NewLeadershipTermEventEncoder.BLOCK_LENGTH + HEADER_LENGTH) +
+            (3 * (SessionOpenEventEncoder.BLOCK_LENGTH + HEADER_LENGTH));
+        Tests.await(() -> firstLeader.appendPosition() > estimatedLogFixedLengthSize);
+
+        TestNode newLeader;
+        do
+        {
+            newLeader = cluster.findLeader(firstLeader.memberId());
+            Tests.yield();
+        }
+        while (null == newLeader);
+
+        cluster.takeSnapshot(newLeader);
+
+        IpTables.flushChain(CHAIN_NAME);
+
+        Tests.await(() ->
+        {
+            boolean allSnapshotsTaken = true;
+            for (int i = 0; i < cluster.memberCount(); ++i)
+            {
+                if (1 != cluster.getSnapshotCount(cluster.node(i)))
+                {
+                    allSnapshotsTaken = false;
+                }
+            }
+            return allSnapshotsTaken;
+        });
+
+        for (int i = 0; i < cluster.memberCount(); ++i)
+        {
+            assertEquals(1, ClusterTest.readSnapshot(cluster.node(i)));
+        }
     }
 
     private static final class TestCounterExtension extends TestNode.TestConsensusModuleExtension
