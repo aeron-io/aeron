@@ -3537,7 +3537,7 @@ class ClusterTest
             ClusterCounters.CLUSTER_ID_LABEL_SUFFIX + clusterId;
     }
 
-    private long readSnapshot(final TestNode node)
+    static long readSnapshot(final TestNode node)
     {
         final long recordingId;
         try (RecordingLog recordingLog = new RecordingLog(node.consensusModule().context().clusterDir(),
