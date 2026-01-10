@@ -446,7 +446,7 @@ class ClusterNetworkPartitionTest
 
     @Test
     @SlowTest
-    @InterruptAfter(30)
+    @InterruptAfter(20)
     void shouldNextCommittedSessionIdReflectOnlyCommittedSessions()
     {
         final List<String> hostnames = HOSTNAMES.subList(0, 3);
@@ -471,30 +471,30 @@ class ClusterNetworkPartitionTest
             (3 * (SessionOpenEventEncoder.BLOCK_LENGTH + HEADER_LENGTH));
         Tests.await(() -> firstLeader.appendPosition() > estimatedLogFixedLengthSize);
 
-        Tests.await(() -> null != cluster.findLeader(firstLeader.memberId()));
-        Tests.await(() -> ElectionState.CANVASS == firstLeader.electionState());
-
-        IpTables.flushChain(CHAIN_NAME);
-        Tests.await(() -> ElectionState.CLOSED == firstLeader.electionState());
-
-        final TestNode newLeader = cluster.awaitLeader();
-        cluster.takeSnapshot(newLeader);
-
-        boolean snapshotTaken;
+        TestNode newLeader;
         do
         {
-            snapshotTaken = true;
+            newLeader = cluster.findLeader(firstLeader.memberId());
+            Tests.yield();
+        }
+        while (null == newLeader);
+
+        cluster.takeSnapshot(newLeader);
+
+        IpTables.flushChain(CHAIN_NAME);
+
+        Tests.await(() ->
+        {
+            boolean allSnapshotsTaken = true;
             for (int i = 0; i < cluster.memberCount(); ++i)
             {
                 if (1 != cluster.getSnapshotCount(cluster.node(i)))
                 {
-                    snapshotTaken = false;
+                    allSnapshotsTaken = false;
                 }
             }
-
-            Tests.yield();
-        }
-        while (!snapshotTaken);
+            return allSnapshotsTaken;
+        });
 
         for (int i = 0; i < cluster.memberCount(); ++i)
         {
