@@ -38,6 +38,7 @@ import io.aeron.protocol.DataHeaderFlyweight;
 import io.aeron.test.EventLogExtension;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
+import io.aeron.test.IpTables;
 import io.aeron.test.SlowTest;
 import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.Tests;
@@ -86,6 +87,126 @@ public class ClusterUncommittedStateTest
     }
 
     @Test
+    @SlowTest
+    @InterruptAfter(20)
+    void shouldRollbackUncommittedSuspendControlToggle()
+    {
+        cluster = aCluster()
+            .withStaticNodes(HOSTNAMES.size())
+            .withCustomAddresses(HOSTNAMES)
+            .start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode firstLeader = cluster.awaitLeader();
+        final List<String> leaderHostname = List.of(HOSTNAMES.get(firstLeader.memberId()));
+        final List<String> followerHostnames = new ArrayList<>(HOSTNAMES);
+        followerHostnames.remove(firstLeader.memberId());
+
+        IpTables.makeSymmetricNetworkPartition(CHAIN_NAME, leaderHostname, followerHostnames);
+
+        cluster.suspendCluster(firstLeader);
+        Tests.await(() -> ConsensusModule.State.SUSPENDED == firstLeader.moduleState());
+
+        Tests.await(() -> null != cluster.findLeader(firstLeader.memberId()));
+
+        IpTables.flushChain(CHAIN_NAME);
+        Tests.await(() -> ConsensusModule.State.ACTIVE == firstLeader.moduleState());
+    }
+
+    @Test
+    @SlowTest
+    @InterruptAfter(20)
+    void shouldRollbackUncommittedResumeControlToggle()
+    {
+        cluster = aCluster()
+            .withStaticNodes(HOSTNAMES.size())
+            .withCustomAddresses(HOSTNAMES)
+            .start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode firstLeader = cluster.awaitLeader();
+        final List<String> leaderHostname = List.of(HOSTNAMES.get(firstLeader.memberId()));
+        final List<String> followerHostnames = new ArrayList<>(HOSTNAMES);
+        followerHostnames.remove(firstLeader.memberId());
+
+        cluster.suspendCluster(firstLeader);
+        Tests.await(() ->
+        {
+            boolean allNodesSuspended = true;
+            for (int i = 0; i < cluster.memberCount(); ++i)
+            {
+                if (ConsensusModule.State.SUSPENDED != cluster.node(i).moduleState())
+                {
+                    allNodesSuspended = false;
+                }
+            }
+            return allNodesSuspended;
+        });
+
+        IpTables.makeSymmetricNetworkPartition(CHAIN_NAME, leaderHostname, followerHostnames);
+
+        cluster.resumeCluster(firstLeader);
+        Tests.await(() -> ConsensusModule.State.ACTIVE == firstLeader.moduleState());
+
+        Tests.await(() -> null != cluster.findLeader(firstLeader.memberId()));
+
+        IpTables.flushChain(CHAIN_NAME);
+        Tests.await(() -> ConsensusModule.State.SUSPENDED == firstLeader.moduleState());
+    }
+
+    @Test
+    @SlowTest
+    @InterruptAfter(20)
+    void shouldRollbackUncommittedSnapshotToggle()
+    {
+        cluster = aCluster()
+            .withStaticNodes(HOSTNAMES.size())
+            .withCustomAddresses(HOSTNAMES)
+            .start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode firstLeader = cluster.awaitLeader();
+        final List<String> leaderHostname = List.of(HOSTNAMES.get(firstLeader.memberId()));
+        final List<String> followerHostnames = new ArrayList<>(HOSTNAMES);
+        followerHostnames.remove(firstLeader.memberId());
+
+        cluster.suspendCluster(firstLeader);
+        Tests.await(() ->
+        {
+            boolean allNodesSuspended = true;
+            for (int i = 0; i < cluster.memberCount(); ++i)
+            {
+                if (ConsensusModule.State.SUSPENDED != cluster.node(i).moduleState())
+                {
+                    allNodesSuspended = false;
+                }
+            }
+            return allNodesSuspended;
+        });
+
+        IpTables.makeSymmetricNetworkPartition(CHAIN_NAME, leaderHostname, followerHostnames);
+
+        cluster.resumeCluster(firstLeader);
+        Tests.await(() -> ConsensusModule.State.ACTIVE == firstLeader.moduleState());
+
+        cluster.suspendCluster(firstLeader);
+        Tests.await(() -> ConsensusModule.State.SUSPENDED == firstLeader.moduleState());
+
+        cluster.resumeCluster(firstLeader);
+        Tests.await(() -> ConsensusModule.State.ACTIVE == firstLeader.moduleState());
+
+        cluster.takeSnapshot(firstLeader);
+        Tests.await(() -> ConsensusModule.State.SNAPSHOT == firstLeader.moduleState());
+
+        Tests.await(() -> null != cluster.findLeader(firstLeader.memberId()));
+
+        IpTables.flushChain(CHAIN_NAME);
+        Tests.await(() -> ConsensusModule.State.SUSPENDED == firstLeader.moduleState());
+    }
+}
+
+
+@Test
     @SlowTest
     @InterruptAfter(20)
     void shouldSnapshotWithNoServicesWithUncommittedData()
