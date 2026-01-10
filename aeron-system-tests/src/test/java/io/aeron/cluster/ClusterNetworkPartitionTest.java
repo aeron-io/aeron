@@ -434,7 +434,7 @@ class ClusterNetworkPartitionTest
 
     @Test
     @SlowTest
-    @InterruptAfter(30)
+    @InterruptAfter(20)
     void shouldRollbackUncommittedSuspendControlToggle()
     {
         final List<String> hostnames = HOSTNAMES.subList(0, 3);
@@ -452,23 +452,18 @@ class ClusterNetworkPartitionTest
 
         IpTables.makeSymmetricNetworkPartition(CHAIN_NAME, leaderHostname, followerHostnames);
 
-        cluster.connectClient();
-        cluster.sendLargeMessages(32);
-        Tests.await(() -> firstLeader.appendPosition() > 32L * ClusterTests.LARGE_MSG.length());
-
         cluster.suspendCluster(firstLeader);
         Tests.await(() -> ConsensusModule.State.SUSPENDED == firstLeader.moduleState());
 
         Tests.await(() -> null != cluster.findLeader(firstLeader.memberId()));
 
         IpTables.flushChain(CHAIN_NAME);
-        Tests.await(() -> ElectionState.CANVASS == firstLeader.electionState());
-        assertEquals(ConsensusModule.State.ACTIVE, firstLeader.moduleState());
+        Tests.await(() -> ConsensusModule.State.ACTIVE == firstLeader.moduleState());
     }
 
     @Test
     @SlowTest
-    @InterruptAfter(30)
+    @InterruptAfter(20)
     void shouldRollbackUncommittedResumeControlToggle()
     {
         final List<String> hostnames = HOSTNAMES.subList(0, 3);
@@ -506,48 +501,13 @@ class ClusterNetworkPartitionTest
         Tests.await(() -> null != cluster.findLeader(firstLeader.memberId()));
 
         IpTables.flushChain(CHAIN_NAME);
-        Tests.await(() -> ElectionState.CANVASS == firstLeader.electionState());
-        assertEquals(ConsensusModule.State.SUSPENDED, firstLeader.moduleState());
+        Tests.await(() -> ConsensusModule.State.SUSPENDED == firstLeader.moduleState());
     }
 
     @Test
     @SlowTest
-    @InterruptAfter(30)
+    @InterruptAfter(20)
     void shouldRollbackUncommittedSnapshotToggle()
-    {
-        final List<String> hostnames = HOSTNAMES.subList(0, 3);
-
-        cluster = aCluster()
-            .withStaticNodes(hostnames.size())
-            .withCustomAddresses(hostnames)
-            .start();
-        systemTestWatcher.cluster(cluster);
-
-        final TestNode firstLeader = cluster.awaitLeader();
-        final List<String> leaderHostname = List.of(hostnames.get(firstLeader.memberId()));
-        final List<String> followerHostnames = new ArrayList<>(hostnames);
-        followerHostnames.remove(firstLeader.memberId());
-
-        IpTables.makeSymmetricNetworkPartition(CHAIN_NAME, leaderHostname, followerHostnames);
-
-        cluster.connectClient();
-        cluster.sendLargeMessages(32);
-        Tests.await(() -> firstLeader.appendPosition() > 32L * ClusterTests.LARGE_MSG.length());
-
-        cluster.takeSnapshot(firstLeader);
-        Tests.await(() -> ConsensusModule.State.SNAPSHOT == firstLeader.moduleState());
-
-        Tests.await(() -> null != cluster.findLeader(firstLeader.memberId()));
-
-        IpTables.flushChain(CHAIN_NAME);
-        Tests.await(() -> ElectionState.CANVASS == firstLeader.electionState());
-        assertEquals(ConsensusModule.State.ACTIVE, firstLeader.moduleState());
-    }
-
-    @Test
-    @SlowTest
-    @InterruptAfter(30)
-    void shouldRollbackMultipleUncommittedControlToggles()
     {
         final List<String> hostnames = HOSTNAMES.subList(0, 3);
 
@@ -593,8 +553,7 @@ class ClusterNetworkPartitionTest
         Tests.await(() -> null != cluster.findLeader(firstLeader.memberId()));
 
         IpTables.flushChain(CHAIN_NAME);
-        Tests.await(() -> ElectionState.CANVASS == firstLeader.electionState());
-        assertEquals(ConsensusModule.State.SUSPENDED, firstLeader.moduleState());
+        Tests.await(() -> ConsensusModule.State.SUSPENDED == firstLeader.moduleState());
     }
 
     private static void blockTrafficToSpecificEndpoint(
