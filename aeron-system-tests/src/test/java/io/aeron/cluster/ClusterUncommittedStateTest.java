@@ -330,21 +330,21 @@ public class ClusterUncommittedStateTest
         while (null == newLeader);
 
         cluster.takeSnapshot(newLeader);
-
-        IpTables.flushChain(CHAIN_NAME);
-
         Tests.await(() ->
         {
             boolean allSnapshotsTaken = true;
             for (int i = 0; i < cluster.memberCount(); ++i)
             {
-                if (1 != cluster.getSnapshotCount(cluster.node(i)))
+                if (firstLeader.memberId() != i && 1 != cluster.getSnapshotCount(cluster.node(i)))
                 {
                     allSnapshotsTaken = false;
                 }
             }
             return allSnapshotsTaken;
         });
+
+        IpTables.flushChain(CHAIN_NAME);
+        Tests.await(() -> 1 == cluster.getSnapshotCount(firstLeader));
 
         for (int i = 0; i < cluster.memberCount(); ++i)
         {
