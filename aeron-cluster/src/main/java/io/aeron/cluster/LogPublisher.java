@@ -175,7 +175,7 @@ final class LogPublisher
             position = publication.offer(expandableArrayBuffer, 0, length, null);
             if (position > 0)
             {
-                trackPossibleFragmentedMessage(startPosition, publication.position(), SESSION_HEADER_LENGTH, length);
+                trackPossibleFragmentedMessage(startPosition, publication.position(), 0, length);
                 break;
             }
 
