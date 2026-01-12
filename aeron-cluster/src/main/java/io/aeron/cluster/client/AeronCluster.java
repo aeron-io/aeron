@@ -2155,6 +2155,7 @@ public final class AeronCluster implements AutoCloseable
         private long egressRegistrationId = NULL_VALUE;
         private Int2ObjectHashMap<MemberIngress> memberByIdMap;
         private long ingressRegistrationId = NULL_VALUE;
+        private String responseChannel;
         private Publication ingressPublication;
 
         AsyncConnect(final Context ctx, final long deadlineNs)
@@ -2383,7 +2384,11 @@ public final class AeronCluster implements AutoCloseable
 
         private void awaitPublicationConnected()
         {
-            final String responseChannel = egressSubscription.tryResolveChannelEndpointPort();
+            if (null == responseChannel)
+            {
+                responseChannel = egressSubscription.tryResolveChannelEndpointPort();
+            }
+
             if (null != responseChannel)
             {
                 if (null == ingressPublication)
