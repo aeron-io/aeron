@@ -132,15 +132,14 @@ public class ClusterUncommittedStateTest
         cluster.suspendCluster(firstLeader);
         Tests.await(() ->
         {
-            boolean allNodesSuspended = true;
             for (int i = 0; i < cluster.memberCount(); ++i)
             {
                 if (ConsensusModule.State.SUSPENDED != cluster.node(i).moduleState())
                 {
-                    allNodesSuspended = false;
+                    return false;
                 }
             }
-            return allNodesSuspended;
+            return true;
         });
 
         IpTables.makeSymmetricNetworkPartition(CHAIN_NAME, leaderHostname, followerHostnames);
@@ -173,15 +172,14 @@ public class ClusterUncommittedStateTest
         cluster.suspendCluster(firstLeader);
         Tests.await(() ->
         {
-            boolean allNodesSuspended = true;
             for (int i = 0; i < cluster.memberCount(); ++i)
             {
                 if (ConsensusModule.State.SUSPENDED != cluster.node(i).moduleState())
                 {
-                    allNodesSuspended = false;
+                    return false;
                 }
             }
-            return allNodesSuspended;
+            return true;
         });
 
         IpTables.makeSymmetricNetworkPartition(CHAIN_NAME, leaderHostname, followerHostnames);
