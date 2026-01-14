@@ -688,6 +688,12 @@ final class ConsensusModuleAgent
         session.loadSnapshotState(correlationId, openedPosition, timeOfLastActivity, closeReason);
 
         addSession(session);
+
+        if (clusterSessionId >= nextSessionId)
+        {
+            nextSessionId = clusterSessionId + 1;
+            nextCommittedSessionId = nextSessionId;
+        }
     }
 
     public void onLoadConsensusModuleState(
