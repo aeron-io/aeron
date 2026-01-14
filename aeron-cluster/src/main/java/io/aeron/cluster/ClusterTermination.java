@@ -22,7 +22,7 @@ import org.agrona.ErrorHandler;
 class ClusterTermination
 {
     private long deadlineNs;
-    private boolean isTerminationReady = false;
+    private boolean isAwaitingServices = true;
 
     ClusterTermination(final long deadlineNs)
     {
@@ -36,28 +36,28 @@ class ClusterTermination
 
     boolean canTerminate(final ClusterMember[] members, final long nowNs)
     {
-        if (isTerminationReady)
+        if (isAwaitingServices)
         {
-            boolean result = true;
-
-            for (final ClusterMember member : members)
-            {
-                if (!member.isLeader() && !member.hasTerminated())
-                {
-                    result = false;
-                    break;
-                }
-            }
-
-            return result || nowNs >= deadlineNs;
+            return false;
         }
 
-        return false;
+        boolean result = true;
+
+        for (final ClusterMember member : members)
+        {
+            if (!member.isLeader() && !member.hasTerminated())
+            {
+                result = false;
+                break;
+            }
+        }
+
+        return result || nowNs >= deadlineNs;
     }
 
-    void onTerminationReady()
+    void onServicesReady()
     {
-        isTerminationReady = true;
+        isAwaitingServices = false;
     }
 
     void terminationPosition(

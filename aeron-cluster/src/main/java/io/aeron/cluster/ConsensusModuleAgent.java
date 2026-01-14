@@ -2746,7 +2746,7 @@ final class ConsensusModuleAgent
                     }
                     else
                     {
-                        clusterTermination.onTerminationReady();
+                        clusterTermination.onServicesReady();
                     }
                     state(ConsensusModule.State.TERMINATING, "ClusterControl.ABORT");
                     break;
@@ -3625,7 +3625,7 @@ final class ConsensusModuleAgent
             }
             else
             {
-                clusterTermination.onTerminationReady();
+                clusterTermination.onServicesReady();
             }
             clusterTermination.deadlineNs(clusterClock.timeNanos() + ctx.terminationTimeoutNs());
             state(ConsensusModule.State.TERMINATING, "null != clusterTermination");
@@ -3839,7 +3839,7 @@ final class ConsensusModuleAgent
     {
         if (null != clusterTermination)
         {
-            clusterTermination.onTerminationReady();
+            clusterTermination.onServicesReady();
         }
 
         doTermination(logPosition);
