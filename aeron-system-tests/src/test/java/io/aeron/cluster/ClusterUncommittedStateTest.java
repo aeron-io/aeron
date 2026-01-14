@@ -332,15 +332,14 @@ public class ClusterUncommittedStateTest
         cluster.takeSnapshot(newLeader);
         Tests.await(() ->
         {
-            boolean allSnapshotsTaken = true;
             for (int i = 0; i < cluster.memberCount(); ++i)
             {
                 if (firstLeader.memberId() != i && 1 != cluster.getSnapshotCount(cluster.node(i)))
                 {
-                    allSnapshotsTaken = false;
+                    return false;
                 }
             }
-            return allSnapshotsTaken;
+            return true;
         });
 
         IpTables.flushChain(CHAIN_NAME);
