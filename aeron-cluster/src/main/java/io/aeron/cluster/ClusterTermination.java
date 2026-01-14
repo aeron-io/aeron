@@ -55,7 +55,7 @@ class ClusterTermination
         return result || nowNs >= deadlineNs;
     }
 
-    void onServicesReady()
+    void onServicesTerminated()
     {
         isAwaitingServices = false;
     }
