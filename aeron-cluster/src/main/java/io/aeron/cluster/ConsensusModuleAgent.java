@@ -2663,7 +2663,7 @@ final class ConsensusModuleAgent
                     if (appendAction(ClusterAction.SUSPEND, timestamp, CLUSTER_ACTION_FLAGS_DEFAULT))
                     {
                         uncommittedState.offerLong(logPublisher.position());
-                        uncommittedState.offerLong(ConsensusModule.State.ACTIVE.code());
+                        uncommittedState.offerLong(state.code());
                         state(ConsensusModule.State.SUSPENDED);
                     }
                     break;
@@ -2675,7 +2675,7 @@ final class ConsensusModuleAgent
                     if (appendAction(ClusterAction.SNAPSHOT, timestamp, CLUSTER_ACTION_FLAGS_DEFAULT))
                     {
                         uncommittedState.offerLong(logPublisher.position());
-                        uncommittedState.offerLong(ConsensusModule.State.ACTIVE.code());
+                        uncommittedState.offerLong(state.code());
                         state(ConsensusModule.State.SNAPSHOT);
                         totalSnapshotDurationTracker.onSnapshotBegin(nowNs);
                         if (0 == serviceCount)
@@ -2715,7 +2715,7 @@ final class ConsensusModuleAgent
                         terminationLeadershipTermId = leadershipTermId;
 
                         uncommittedState.offerLong(logPublisher.position());
-                        uncommittedState.offerLong(ConsensusModule.State.ACTIVE.code());
+                        uncommittedState.offerLong(state.code());
                         state(ConsensusModule.State.SNAPSHOT);
                         totalSnapshotDurationTracker.onSnapshotBegin(nowNs);
                         if (0 == serviceCount)
@@ -2757,7 +2757,7 @@ final class ConsensusModuleAgent
                 if (appendAction(ClusterAction.RESUME, timestamp, CLUSTER_ACTION_FLAGS_DEFAULT))
                 {
                     uncommittedState.offerLong(logPublisher.position());
-                    uncommittedState.offerLong(ConsensusModule.State.SUSPENDED.code());
+                    uncommittedState.offerLong(state.code());
                     state(ConsensusModule.State.ACTIVE);
                     ClusterControl.ToggleState.reset(controlToggle);
                 }
