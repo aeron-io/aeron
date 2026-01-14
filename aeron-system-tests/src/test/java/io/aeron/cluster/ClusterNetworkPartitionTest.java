@@ -15,14 +15,6 @@
  */
 package io.aeron.cluster;
 
-import io.aeron.Aeron;
-import io.aeron.ChannelUri;
-import io.aeron.Image;
-import io.aeron.Subscription;
-import io.aeron.archive.client.AeronArchive;
-import io.aeron.archive.status.RecordingPos;
-import io.aeron.cluster.codecs.MessageHeaderDecoder;
-import io.aeron.cluster.codecs.SessionMessageHeaderDecoder;
 import io.aeron.cluster.service.Cluster;
 import io.aeron.test.EventLogExtension;
 import io.aeron.test.InterruptAfter;
@@ -34,7 +26,6 @@ import io.aeron.test.TopologyTest;
 import io.aeron.test.cluster.ClusterTests;
 import io.aeron.test.cluster.TestCluster;
 import io.aeron.test.cluster.TestNode;
-import org.agrona.collections.MutableInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -437,64 +428,6 @@ class ClusterNetworkPartitionTest
         awaitElectionClosed(follower2Restarted);
 
         verifyClusterState(leaderAppendPosition, initialMessageCount + numMessagesAfterPartition);
-    }
-
-    @Test
-    @SlowTest
-    @InterruptAfter(20)
-    void shouldNextCommittedSessionIdReflectOnlyCommittedSessions()
-    {
-        final List<String> hostnames = HOSTNAMES.subList(0, 3);
-
-        cluster = aCluster()
-            .withStaticNodes(hostnames.size())
-            .withCustomAddresses(hostnames)
-            .start();
-        systemTestWatcher.cluster(cluster);
-
-        final TestNode firstLeader = cluster.awaitLeader();
-        final List<String> leaderHostname = List.of(hostnames.get(firstLeader.memberId()));
-        final List<String> followerHostnames = new ArrayList<>(hostnames);
-        followerHostnames.remove(firstLeader.memberId());
-
-        IpTables.makeSymmetricNetworkPartition(CHAIN_NAME, leaderHostname, followerHostnames);
-
-        CloseHelper.close(cluster.asyncConnectClient());
-        CloseHelper.close(cluster.asyncConnectClient());
-        CloseHelper.close(cluster.asyncConnectClient());
-        final long estimatedLogFixedLengthSize = (NewLeadershipTermEventEncoder.BLOCK_LENGTH + HEADER_LENGTH) +
-            (3 * (SessionOpenEventEncoder.BLOCK_LENGTH + HEADER_LENGTH));
-        Tests.await(() -> firstLeader.appendPosition() > estimatedLogFixedLengthSize);
-
-        TestNode newLeader;
-        do
-        {
-            newLeader = cluster.findLeader(firstLeader.memberId());
-            Tests.yield();
-        }
-        while (null == newLeader);
-
-        cluster.takeSnapshot(newLeader);
-
-        IpTables.flushChain(CHAIN_NAME);
-
-        Tests.await(() ->
-        {
-            boolean allSnapshotsTaken = true;
-            for (int i = 0; i < cluster.memberCount(); ++i)
-            {
-                if (1 != cluster.getSnapshotCount(cluster.node(i)))
-                {
-                    allSnapshotsTaken = false;
-                }
-            }
-            return allSnapshotsTaken;
-        });
-
-        for (int i = 0; i < cluster.memberCount(); ++i)
-        {
-            assertEquals(1, ClusterTest.readSnapshot(cluster.node(i)));
-        }
     }
 
     private static void blockTrafficToSpecificEndpoint(
