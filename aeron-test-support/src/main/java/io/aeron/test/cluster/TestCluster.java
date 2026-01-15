@@ -47,6 +47,7 @@ import io.aeron.cluster.client.ControlledEgressListener;
 import io.aeron.cluster.client.EgressListener;
 import io.aeron.cluster.codecs.EventCode;
 import io.aeron.cluster.codecs.MessageHeaderDecoder;
+import io.aeron.cluster.codecs.MessageHeaderEncoder;
 import io.aeron.cluster.codecs.NewLeadershipTermEventDecoder;
 import io.aeron.cluster.codecs.SessionMessageHeaderDecoder;
 import io.aeron.cluster.service.Cluster;
@@ -143,8 +144,13 @@ public final class TestCluster implements AutoCloseable
         "node1,localhost,localhost|" +
         "node2,localhost,localhost|";
 
+    public static final short EXTENSION_TEMPLATE_ID = 10001;
+    public static final short EXTENSION_SCHEMA_ID = 10002;
+    public static final short EXTENSION_VERSION = (short)1;
+
     private final DataCollector dataCollector = new DataCollector();
     private final ExpandableArrayBuffer msgBuffer = new ExpandableArrayBuffer();
+    private final MessageHeaderEncoder messageHeaderEncoder = new MessageHeaderEncoder();
     private final DefaultEgressListener defaultEgressListener = new DefaultEgressListener();
     private EgressListener egressListener = defaultEgressListener;
     private ControlledEgressListener controlledEgressListener;
@@ -967,6 +973,33 @@ public final class TestCluster implements AutoCloseable
         return messageCount;
     }
 
+    public void sendExtensionMessages(final int messageCount)
+    {
+        messageHeaderEncoder.wrap(msgBuffer, 0)
+            .blockLength(BitUtil.SIZE_OF_INT)
+            .templateId(EXTENSION_TEMPLATE_ID)
+            .schemaId(EXTENSION_SCHEMA_ID)
+            .version(EXTENSION_VERSION);
+
+        for (int i = 0; i < messageCount; i++)
+        {
+            msgBuffer.putInt(MessageHeaderEncoder.ENCODED_LENGTH, i);
+            try
+            {
+                pollUntilMessageSent(
+                    client.ingressPublication(),
+                    msgBuffer,
+                    0,
+                    MessageHeaderEncoder.ENCODED_LENGTH + BitUtil.SIZE_OF_INT);
+            }
+            catch (final Exception ex)
+            {
+                final String msg = "failed to send message " + i + " of " + messageCount + " cause=" + ex.getMessage();
+                throw new ClusterException(msg, ex);
+            }
+        }
+    }
+
     public void sendLargeMessages(final int messageCount)
     {
         final int messageLength = msgBuffer.putStringWithoutLengthAscii(0, LARGE_MSG);
@@ -1071,6 +1104,34 @@ public final class TestCluster implements AutoCloseable
             requireNonNull(client, "Client is not connected").pollEgress();
 
             final long position = client.offer(msgBuffer, 0, messageLength);
+            if (position > 0)
+            {
+                return;
+            }
+
+            if (Publication.ADMIN_ACTION == position)
+            {
+                continue;
+            }
+
+            if (Publication.MAX_POSITION_EXCEEDED == position)
+            {
+                throw new ClusterException("max position exceeded");
+            }
+
+            await(1);
+        }
+    }
+
+    public void pollUntilMessageSent(
+        final Publication pub,
+        final DirectBuffer buffer,
+        final int offset,
+        final int messageLength)
+    {
+        while (true)
+        {
+            final long position = pub.offer(buffer, offset, messageLength);
             if (position > 0)
             {
                 return;
