@@ -775,9 +775,9 @@ class ReplicateRecordingTest
             replicationParams.replicationChannel("aeron:udp?endpoint=localhost:0");
         }
 
-        try (MediaDriver driver = MediaDriver.launch(new MediaDriver.Context()
+        try (TestMediaDriver driver = TestMediaDriver.launch(new MediaDriver.Context()
             .aeronDirectoryName(CommonContext.generateRandomDirName())
-            .threadingMode(ThreadingMode.SHARED));
+            .threadingMode(ThreadingMode.SHARED), systemTestWatcher);
             Archive archive = Archive.launch(srcArchiveCtx.clone()
                 .aeronDirectoryName(driver.aeronDirectoryName())
                 .archiveDir(tempDir.resolve("archive").toFile())
