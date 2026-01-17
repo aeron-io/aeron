@@ -2943,6 +2943,8 @@ class ClusterTest
     @InterruptAfter(30)
     void clientShouldHandleRedirectResponseWhenInInvokerModeUsingConnect()
     {
+        TestMediaDriver.notSupportedOnCMediaDriver("does not work with ATS enabled");
+
         cluster = aCluster().withStaticNodes(3).withClusterId(4).start();
         systemTestWatcher.cluster(cluster);
 
@@ -2987,6 +2989,8 @@ class ClusterTest
     @InterruptAfter(30)
     void clientShouldHandleRedirectResponseWhenInInvokerModeUsingAsyncConnect()
     {
+        TestMediaDriver.notSupportedOnCMediaDriver("does not work with ATS enabled");
+
         cluster = aCluster().withStaticNodes(3).withClusterId(4).start();
         systemTestWatcher.cluster(cluster);
 
@@ -3037,6 +3041,8 @@ class ClusterTest
     @InterruptAfter(30)
     void clientShouldHandleLeadershipChangeWhenInInvokerMode()
     {
+        TestMediaDriver.notSupportedOnCMediaDriver("does not work with ATS enabled");
+
         cluster = aCluster().withStaticNodes(3).withClusterId(4).start();
         systemTestWatcher.cluster(cluster);
 
