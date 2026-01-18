@@ -15,6 +15,7 @@
  */
 package io.aeron.cluster;
 
+import io.aeron.Aeron;
 import io.aeron.ChannelUri;
 import io.aeron.Image;
 import io.aeron.Subscription;
@@ -24,39 +25,48 @@ import io.aeron.cluster.service.Cluster;
 import org.agrona.CloseHelper;
 import org.agrona.concurrent.CountedErrorHandler;
 
+@SuppressWarnings("JavadocVariable")
 final class LogReplay
 {
+    private enum State
+    {
+        REBUILD_LOG_ADAPTER_INIT, REBUILD_LOG_ADAPTER, REPLAY_INIT, REPLAY
+    }
+
     private final AeronArchive archive;
+    private final long recordingId;
+    private final long logAdapterRebuildPosition;
     private final long startPosition;
     private final long stopPosition;
-    private final long replaySessionId;
-    private final int logSessionId;
     private final ConsensusModuleAgent consensusModuleAgent;
     private final ConsensusModule.Context ctx;
     private final LogAdapter logAdapter;
-    private final Subscription logSubscription;
+
+    private State state;
+    private long replaySessionId;
+    private int logSessionId;
+    private Subscription logSubscription;
 
     LogReplay(
         final AeronArchive archive,
         final long recordingId,
+        final long logAdapterRebuildPosition,
         final long startPosition,
         final long stopPosition,
         final LogAdapter logAdapter,
         final ConsensusModule.Context ctx)
     {
         this.archive = archive;
+        this.recordingId = recordingId;
+        this.logAdapterRebuildPosition = logAdapterRebuildPosition;
         this.startPosition = startPosition;
         this.stopPosition = stopPosition;
-        this.logAdapter = logAdapter;
+
         this.consensusModuleAgent = logAdapter.consensusModuleAgent();
         this.ctx = ctx;
+        this.logAdapter = logAdapter;
 
-        final String channel = ctx.replayChannel();
-        final int streamId = ctx.replayStreamId();
-        final long length = stopPosition - startPosition;
-        replaySessionId = archive.startReplay(recordingId, startPosition, length, channel, streamId);
-        logSessionId = (int)replaySessionId;
-        logSubscription = ctx.aeron().addSubscription(ChannelUri.addSessionId(channel, logSessionId), streamId);
+        state(Aeron.NULL_VALUE != logAdapterRebuildPosition ? State.REBUILD_LOG_ADAPTER_INIT : State.REPLAY_INIT);
     }
 
     void close()
@@ -64,7 +74,10 @@ final class LogReplay
         final CountedErrorHandler errorHandler = ctx.countedErrorHandler();
         try
         {
-            archive.stopReplay(replaySessionId);
+            if (Aeron.NULL_VALUE != replaySessionId)
+            {
+                archive.stopReplay(replaySessionId);
+            }
         }
         catch (final RuntimeException ex)
         {
@@ -75,6 +88,79 @@ final class LogReplay
     }
 
     int doWork()
+    {
+        return switch (state)
+        {
+            case REBUILD_LOG_ADAPTER_INIT -> rebuildLogAdapterInit();
+            case REBUILD_LOG_ADAPTER -> rebuildLogAdapter();
+            case REPLAY_INIT -> replayInit();
+            case REPLAY -> replay();
+        };
+    }
+
+    private int rebuildLogAdapterInit()
+    {
+        final String channel = ctx.replayChannel();
+        final int streamId = ctx.replayStreamId();
+        final long length = startPosition - logAdapterRebuildPosition;
+        replaySessionId = archive.startReplay(recordingId, logAdapterRebuildPosition, length, channel, streamId);
+        logSessionId = (int)replaySessionId;
+        logSubscription = ctx.aeron().addSubscription(ChannelUri.addSessionId(channel, logSessionId), streamId);
+        state(State.REBUILD_LOG_ADAPTER);
+        return 1;
+    }
+
+    private int rebuildLogAdapter()
+    {
+        int workCount = 0;
+
+        if (null == logAdapter.image())
+        {
+            final Image image = logSubscription.imageBySessionId(logSessionId);
+            if (null != image)
+            {
+                if (image.joinPosition() != logAdapterRebuildPosition)
+                {
+                    throw new ClusterException(
+                        "joinPosition=" + image.joinPosition() +
+                            " expected logAdapterRebuildPosition=" + logAdapterRebuildPosition,
+                        ClusterException.Category.WARN);
+                }
+
+                logAdapter.image(image);
+                workCount += 1;
+            }
+        }
+        else if (startPosition == logAdapter.position() && logAdapter.image().isEndOfStream())
+        {
+            replaySessionId = Aeron.NULL_VALUE;
+            logSessionId = Aeron.NULL_VALUE;
+            logAdapter.disconnect(ctx.countedErrorHandler());
+            logSubscription = null;
+            state(State.REPLAY_INIT);
+            workCount += 1;
+        }
+        else
+        {
+            workCount += consensusModuleAgent.replayLogPoll(logAdapter, startPosition);
+        }
+
+        return workCount;
+    }
+
+    private int replayInit()
+    {
+        final String channel = ctx.replayChannel();
+        final int streamId = ctx.replayStreamId();
+        final long length = stopPosition - startPosition;
+        replaySessionId = archive.startReplay(recordingId, startPosition, length, channel, streamId);
+        logSessionId = (int)replaySessionId;
+        logSubscription = ctx.aeron().addSubscription(ChannelUri.addSessionId(channel, logSessionId), streamId);
+        state(State.REPLAY);
+        return 1;
+    }
+
+    private int replay()
     {
         int workCount = 0;
 
@@ -111,9 +197,15 @@ final class LogReplay
         return workCount;
     }
 
+    private void state(final State state)
+    {
+        this.state = state;
+    }
+
     boolean isDone()
     {
-        return logAdapter.position() >= stopPosition &&
+        return state == State.REPLAY &&
+            logAdapter.position() >= stopPosition &&
             consensusModuleAgent.state() != ConsensusModule.State.SNAPSHOT;
     }
 
@@ -125,8 +217,11 @@ final class LogReplay
     public String toString()
     {
         return "LogReplay{" +
-            "startPosition=" + startPosition +
+            ", recordingId=" + recordingId +
+            ", logAdapterRebuildPosition=" + logAdapterRebuildPosition +
+            ", startPosition=" + startPosition +
             ", stopPosition=" + stopPosition +
+            ", state=" + state +
             ", replaySessionId=" + replaySessionId +
             ", logSessionId=" + logSessionId +
             ", logSubscription=" + logSubscription +
