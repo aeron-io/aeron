@@ -138,7 +138,7 @@ final class LogPublisher
 
             if (position > 0)
             {
-                trackPossibleFragmentedMessage(startPosition, publication.position(), SESSION_HEADER_LENGTH, length);
+                trackPossibleFragmentedMessage(startPosition, publication.position(), SESSION_HEADER_LENGTH + length);
                 break;
             }
 
@@ -175,7 +175,7 @@ final class LogPublisher
             position = publication.offer(expandableArrayBuffer, 0, length, null);
             if (position > 0)
             {
-                trackPossibleFragmentedMessage(startPosition, publication.position(), 0, length);
+                trackPossibleFragmentedMessage(startPosition, publication.position(), length);
                 break;
             }
 
@@ -341,13 +341,9 @@ final class LogPublisher
         }
     }
 
-    public void trackPossibleFragmentedMessage(
-        final long startPosition,
-        final long endPosition,
-        final int headerLength,
-        final int length)
+    public void trackPossibleFragmentedMessage(final long startPosition, final long endPosition, final int length)
     {
-        if (publication.maxPayloadLength() < headerLength + length)
+        if (publication.maxPayloadLength() < length)
         {
             fragmentedMessageBounds.offerLong(endPosition);
             fragmentedMessageBounds.offerLong(startPosition);

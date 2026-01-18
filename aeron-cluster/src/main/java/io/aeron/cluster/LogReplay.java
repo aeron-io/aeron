@@ -15,6 +15,7 @@
  */
 package io.aeron.cluster;
 
+import io.aeron.Aeron;
 import io.aeron.ChannelUri;
 import io.aeron.Image;
 import io.aeron.Subscription;
@@ -91,102 +92,111 @@ final class LogReplay
 
     int doWork()
     {
+        return switch (state)
+        {
+            case RECOVER_FRAGMENTS_INIT -> doRecoverFragmentsInit();
+            case RECOVER_FRAGMENTS -> doRecoverFragments();
+            case REPLAY_INIT -> doReplayInit();
+            case REPLAY -> doReplay();
+        };
+    }
+
+    private int doRecoverFragmentsInit()
+    {
+        final long length = startPosition - fragmentsBeforeStartPosition;
+        replaySessionId = archive.startReplay(
+            recordingId, fragmentsBeforeStartPosition, length, ctx.replayChannel(), ctx.replayStreamId());
+        logSessionId = (int)replaySessionId;
+
+        final String channel = ChannelUri.addSessionId(ctx.replayChannel(), logSessionId);
+        logSubscription = ctx.aeron().addSubscription(channel, ctx.replayStreamId());
+
+        state = State.RECOVER_FRAGMENTS;
+        return 1;
+    }
+
+    private int doRecoverFragments()
+    {
         int workCount = 0;
 
-        switch (state)
+        if (null == logAdapter.image())
         {
-            case RECOVER_FRAGMENTS_INIT ->
+            final Image image = logSubscription.imageBySessionId(logSessionId);
+            if (null != image)
             {
-                final long length = startPosition - fragmentsBeforeStartPosition;
-                replaySessionId = archive.startReplay(
-                    recordingId, fragmentsBeforeStartPosition, length, ctx.replayChannel(), ctx.replayStreamId());
-                logSessionId = (int)replaySessionId;
+                if (image.joinPosition() != fragmentsBeforeStartPosition)
+                {
+                    throw new ClusterException(
+                        "joinPosition=" + image.joinPosition() +
+                            " expected startPosition=" + fragmentsBeforeStartPosition,
+                        ClusterException.Category.WARN);
+                }
 
-                final String channel = ChannelUri.addSessionId(ctx.replayChannel(), logSessionId);
-                logSubscription = ctx.aeron().addSubscription(channel, ctx.replayStreamId());
-
-                state = State.RECOVER_FRAGMENTS;
+                logAdapter.image(image);
                 workCount += 1;
             }
+        }
+        else if (logAdapter.image().isEndOfStream() && logAdapter.position() == startPosition)
+        {
+            logAdapter.image(null);
+            CloseHelper.close(ctx.countedErrorHandler(), logSubscription);
+            state = State.REPLAY_INIT;
+            workCount += 1;
+        }
+        else
+        {
+            workCount += consensusModuleAgent.replayLogPoll(logAdapter, startPosition);
+        }
 
-            case RECOVER_FRAGMENTS ->
+        return workCount;
+    }
+
+    private int doReplayInit()
+    {
+        final long length = stopPosition - startPosition;
+        replaySessionId = archive.startReplay(
+            recordingId, startPosition, length, ctx.replayChannel(), ctx.replayStreamId());
+        logSessionId = (int)replaySessionId;
+
+        final String channel = ChannelUri.addSessionId(ctx.replayChannel(), logSessionId);
+        logSubscription = ctx.aeron().addSubscription(channel, ctx.replayStreamId());
+
+        state = State.REPLAY;
+        return 1;
+    }
+
+    private int doReplay()
+    {
+        int workCount = 0;
+
+        if (null == logAdapter.image())
+        {
+            final Image image = logSubscription.imageBySessionId(logSessionId);
+            if (null != image)
             {
-                if (null == logAdapter.image())
+                if (image.joinPosition() != startPosition)
                 {
-                    final Image image = logSubscription.imageBySessionId(logSessionId);
-                    if (null != image)
-                    {
-                        if (image.joinPosition() != fragmentsBeforeStartPosition)
-                        {
-                            throw new ClusterException(
-                                "joinPosition=" + image.joinPosition() +
-                                    " expected startPosition=" + fragmentsBeforeStartPosition,
-                                ClusterException.Category.WARN);
-                        }
-
-                        logAdapter.image(image);
-                        workCount += 1;
-                    }
+                    throw new ClusterException(
+                        "joinPosition=" + image.joinPosition() + " expected startPosition=" + startPosition,
+                        ClusterException.Category.WARN);
                 }
-                else if (logAdapter.image().isEndOfStream() && logAdapter.position() == startPosition)
-                {
-                    logAdapter.image(null);
-                    CloseHelper.close(ctx.countedErrorHandler(), logSubscription);
-                    state = State.REPLAY_INIT;
-                    workCount += 1;
-                }
-                else
-                {
-                    workCount += consensusModuleAgent.replayLogPoll(logAdapter, startPosition);
-                }
-            }
 
-            case REPLAY_INIT ->
-            {
-                final long length = stopPosition - startPosition;
-                replaySessionId = archive.startReplay(
-                    recordingId, startPosition, length, ctx.replayChannel(), ctx.replayStreamId());
-                logSessionId = (int)replaySessionId;
+                logAdapter.image(image);
+                consensusModuleAgent.awaitServicesReady(
+                    logSubscription.channel(),
+                    logSubscription.streamId(),
+                    logSessionId,
+                    startPosition,
+                    stopPosition,
+                    true,
+                    Cluster.Role.FOLLOWER);
 
-                final String channel = ChannelUri.addSessionId(ctx.replayChannel(), logSessionId);
-                logSubscription = ctx.aeron().addSubscription(channel, ctx.replayStreamId());
-
-                state = State.REPLAY;
                 workCount += 1;
             }
-
-            case REPLAY ->
-            {
-                if (null == logAdapter.image())
-                {
-                    final Image image = logSubscription.imageBySessionId(logSessionId);
-                    if (null != image)
-                    {
-                        if (image.joinPosition() != startPosition)
-                        {
-                            throw new ClusterException(
-                                "joinPosition=" + image.joinPosition() + " expected startPosition=" + startPosition,
-                                ClusterException.Category.WARN);
-                        }
-
-                        logAdapter.image(image);
-                        consensusModuleAgent.awaitServicesReady(
-                            logSubscription.channel(),
-                            logSubscription.streamId(),
-                            logSessionId,
-                            startPosition,
-                            stopPosition,
-                            true,
-                            Cluster.Role.FOLLOWER);
-
-                        workCount += 1;
-                    }
-                }
-                else
-                {
-                    workCount += consensusModuleAgent.replayLogPoll(logAdapter, stopPosition);
-                }
-            }
+        }
+        else
+        {
+            workCount += consensusModuleAgent.replayLogPoll(logAdapter, stopPosition);
         }
 
         return workCount;
