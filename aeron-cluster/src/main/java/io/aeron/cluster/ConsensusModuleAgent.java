@@ -1986,9 +1986,10 @@ final class ConsensusModuleAgent
         {
             logAdapter.poll(stopPosition);
             final long position = logAdapter.position();
-            logPublisherFragmentedMessageTracker.onLogReplay(position);
+            final boolean commitPositionUpdated = commitPosition.proposeMaxRelease(position);
+            logPublisherFragmentedMessageTracker.onLogReplay(position, commitPosition.getPlain());
 
-            if (commitPosition.proposeMaxRelease(position))
+            if (commitPositionUpdated)
             {
                 workCount++;
             }

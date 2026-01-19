@@ -27,7 +27,6 @@ public class LogPublisherFragmentedMessageTracker
 {
     private final LongArrayQueue fragmentedMessageBounds = new LongArrayQueue(Long.MAX_VALUE);
     private long logAdapterRebuildStartPosition = Aeron.NULL_VALUE;
-    private long logAdapterRebuildEndPosition = Aeron.NULL_VALUE;
 
     LongArrayQueue fragmentedMessageBounds()
     {
@@ -37,11 +36,6 @@ public class LogPublisherFragmentedMessageTracker
     long logAdapterRebuildStartPosition()
     {
         return logAdapterRebuildStartPosition;
-    }
-
-    long logAdapterRebuildEndPosition()
-    {
-        return logAdapterRebuildEndPosition;
     }
 
     /**
@@ -84,24 +78,23 @@ public class LogPublisherFragmentedMessageTracker
             if (fragmentedMessageStartPosition < commitPosition && commitPosition < fragmentedMessageEndPosition)
             {
                 logAdapterRebuildStartPosition = fragmentedMessageStartPosition;
-                logAdapterRebuildEndPosition = commitPosition;
             }
         }
         fragmentedMessageBounds.clear();
     }
 
-    void onLogReplay(final long replayedPosition)
+    void onLogReplay(final long replayedPosition, final long commitPosition)
     {
-        if (Aeron.NULL_VALUE != logAdapterRebuildEndPosition && Aeron.NULL_VALUE != logAdapterRebuildStartPosition)
+        if (Aeron.NULL_VALUE != logAdapterRebuildStartPosition)
         {
-            if (replayedPosition >= logAdapterRebuildEndPosition)
-            {
-                logAdapterRebuildStartPosition = Aeron.NULL_VALUE;
-                logAdapterRebuildEndPosition = Aeron.NULL_VALUE;
-            }
-            else if (replayedPosition > logAdapterRebuildStartPosition)
+            if (replayedPosition > logAdapterRebuildStartPosition)
             {
                 logAdapterRebuildStartPosition = replayedPosition;
+            }
+
+            if (logAdapterRebuildStartPosition >= commitPosition)
+            {
+                logAdapterRebuildStartPosition = Aeron.NULL_VALUE;
             }
         }
     }
@@ -109,6 +102,5 @@ public class LogPublisherFragmentedMessageTracker
     void onLogReplayComplete()
     {
         logAdapterRebuildStartPosition = Aeron.NULL_VALUE;
-        logAdapterRebuildEndPosition = Aeron.NULL_VALUE;
     }
 }
