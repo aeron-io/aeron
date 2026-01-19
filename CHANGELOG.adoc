@@ -1,7 +1,6 @@
 = Aeron Releases
 
-== 1.50.0 (????-??-??)
-
+== 1.50.0 (2026-01-16)
 === New & Noteworthy
 
 * **[Breaking]** Remove deprecated standalone C{plus}{plus} API. The C{plus}{plus} Wrapper API should be used instead.
@@ -18,10 +17,61 @@ It's also possible to specify the port used with the resolved address by using t
 
 === Changelog
 
-* **[Cluster]** Unconditionally set reliable=true on the ingress subscription to ensure that the ingress stream is
-reliable.
+* **[Archive]** Do not set `session-id` on the replay channel if response channels are used to avoid `session-id` clash.
+* **[Archive]** Default `AeronArchive.Context.Archive` instance is configured with `RethrowingErrorHandler` for Subscriptions.
+* **[Archive]** Allow asynchronously connecting to Archive using AgentInvokers.
+* **[Archive]** Format size and duration parameters when using `ChannelUriStringBuilder` to create full channel URI.
+* **[Archive]** Use the configured control term buffer length for the replication client instead of hardcoding `64k`.
+* **[Archive/Java/C/C{plus}{plus} Wrapper]** Make message retry attempts for `aeron_archive` configurable. (Java PR: https://github.com/aeron-io/aeron/pull/1885[#1885])
+* **[Archive]** Ensure that errors from `ReplaySession` are both captured in the error log and sent to the control session. Improve error messages.
+* **[Cluster]** Prevent fast follower node from consuming log ahead of the commit position when majority lags behind. (https://github.com/aeron-io/aeron/pull/1898[#1898])
+* **[Cluster]** Prevent infinite loop while awaiting service ACKs if services terminated/crashed.
+* **[Cluster]** Add reason to the `STATE_CHANGE` event. Always quote `reason` value across all events.
+* **[Cluster]** Default `AeronCluster.Context.Archive` instance is configured with `RethrowingErrorHandler` for Subscriptions.
+* **[Cluster]** Add support for `AgentInvoker`/`Aeron.conductorAgentInvoker` to `AeronCluster#asyncConnect`.
+* **[Cluster]** Add log event for `Vote` message, i.e. a response to `RequestVote`.
+* **[Cluster]** Handle quorum commit position going backwards.
+* **[Cluster]** Make default Cluster consensus channel use UDP term length of the media driver instead of assigning `term-length=64k`. With the Aeron defaults this increases the term length from `64KB` to `16MB`.
+* **[Cluster]** Unconditionally set `reliable=true` on the ingress subscription to ensure that the ingress stream is reliable.
 * **[Cluster]** Ignore unknown schema messages (e.g. from Sequencer) in `EgressPoller`.
-* **[Archive]** Ensure that errors from `ReplaySession` are both captured in the error log and sent to the control session.
+* **[Cluster]** Make `AeronCluster.asyncConnect` fully asynchronous by using `Aeron#asyncAddExclusivePublication/asyncAddPublication` API when dealing with redirect requests in case no valid existing leader publication was found.
+* **[Cluster]** Reuse existing leader ingress publication if it is still valid when receiving redirect response.
+* **[Cluster]** Only consider active members when computing `hasQuorumAtPosition`. We now always await for the active quorum of nodes o reach target position. Remove `hasVotersAtPosition` since it is no longer used.
+* **[Cluster]** Refactor `isCandidate` checks and document why we must consider all existing members when doing so. We cannot check only the "active" nodes since that breaks the nomination phase whereby the nodes will stop proposing themselves as candidates once `timeOfLastAppendPositionNs` stops advancing.
+* **[Cluster]** Only consider active Cluster members when computing the quorum position.
+* **[Cluster]** Consistently update follower position, i.e. always set `logPosition`, `leadershipTermId` and `timeOfLastAppendPositionNs` together. Add missing update of the follower info upon receiving `CanvassPosition`.
+* **[Cluster]** Increment snapshot counter after updating snapshot duration tracker to avoid a race in a test.
+* **[Java/C]** Allow to specify network interface name in the interface channel parameter. (https://github.com/aeron-io/aeron/pull/1901[#1901])
+* **[Driver]** Do not append threading mode to the name resolver cycle counters.
+* **[C]** Fix threshold formatting + format threshold info for the name resolver cycle tracker.
+* **[C]** Remove duty cycle threshold limit of 1 hour.
+* **[C]** Format duty cycle threshold before adding to the driver counters.
+* **[Java]** Use `SystemUtil#formatDuration` to format `threshold` for the duty cycle tracker counters.
+* **[C]** Set `ownerId` for each stream counter created via client command (e.g. `ADD_PUBLICATION`).
+* **[Java]** Set `ownerId` for each stream counter created via client command (e.g. `ADD_PUBLICATION`).
+* **[Java]** Add Publication type to the counters and log buffer metadata, i.e. `pub-pos` counter now has a suffix (`(concurrent)` or `(exclusive)` depending on the type) and log buffer metadata contains a new field `type` (`unit8`) at offset 497 which can have values `0` (concurrent publication), `1` (exclusive publication) or `2` (publication image).
+* **[C]** Add Publication type to the counters and log buffer metadata, i.e. `pub-pos` counter now has a suffix (`(concurrent)` or `(exclusive)` depending on the type)  and log buffer metadata contains a new field `is_exclusive_publication` (`unit8`) at offset 497.
+* **[Driver/C]** Increase sender/receiver IO vector capacity and publication max messages per send to `4` from `2`.
+* **[C]** Do not throttle sends to one per call if short sends are encountered.
+* **[Driver/C/Java]** Add `EF_VI`, `VMA`, `ATS`, `DPDK` and `Selector` counter types. Synchronize Java and C counter definitions.
+* **[C]** Add `aeron_format_duration_ns`.
+* **[C]** Add `aeron_format_size64`.
+* **[C]** Refactor duration and size parsing.
+* **[C]** Fixes data races on AERON_GET_ACQUIRE and AERON_SET_RELEASE usages. (https://github.com/aeron-io/aeron/pull/1902[#1902])
+* **[C]** Fixes broken atomic instructions. (https://github.com/aeron-io/aeron/pull/1905[#1905])
+* **[C]** Replace `__asm__ volatile` with `__asm__ __volatile__` just like in Linux kernel.
+* **[C]** aeron_atomic64_gcc_x86_64.h acquire/release fixes (https://github.com/aeron-io/aeron/pull/1904[#1904])
+* **[C]** Optimized register allocation aeron_atomic64_gcc_x86_64h (https://github.com/aeron-io/aeron/pull/1910[#1910])
+* **[C]** Fix aeron_log_buffer.c mem leak (https://github.com/aeron-io/aeron/pull/1907[#1907])
+* **[C]** Fixed aeron_agent_init role_name bugs. (https://github.com/aeron-io/aeron/pull/1908[#1908])
+* **[C]** Do not resolve `endpoint` with ephemeral port for MDS subscription. Copy original channel as-is if no resolution is performed.
+* **[Java]** Do not resolve `endpoint` with ephemeral port if MDS is used.
+* **[Java]** Parse channel lazily when `tryResolveChannelEndpointPort` is called.
+* **[Java]** Fix `Subscription#tryResolveChannelEndpointPort` when no addresses exist, i.e. return `null` if active address is not yet available. Also cache results and avoid doing any work if `endpoint` is not defined or does not contain a port zero.
+* **[Java]** Fixed StatusIndicator deprecated method usage. (https://github.com/aeron-io/aeron/pull/1895[#1895])
+* **[Java]** Replaced the AtomicCounter.getWeak usages by getPlain. (https://github.com/aeron-io/aeron/pull/1893[#1893])
+* **[Java]** Replaced Counter.getAndAddOrdered by getAndAddRelease. (https://github.com/aeron-io/aeron/pull/1894[#1894])
+* **[Java]** Add per-stream counters to `StreamStat` and extract counter name from label instead of relying on static mapping by type.
 * **[C]** fix: double free in `aeron_archive_context_t`. (https://github.com/aeron-io/aeron/pull/1897[#1897])
 * **[C]** Make `aeron_subscription_image_release` and `aeron_subscription_image_retain` no op if image is not found in the
 current image list, i.e. handle a case of `on_unavailable_image` being called and attempting to retain an image that
@@ -45,11 +95,6 @@ leaking memory.
 * **[Driver/C]** Use `aeron_interface_parse_and_resolve` to resolve `aeron.driver.resolver.interface` parameter, i.e.
 skip the `aeron_find_interface` checks. This aligns the implementation with the `DriverNameResolver` in Java. Fix
 filtering out of self entries, i.e. use full name matching instead of a prefix match.
-* **[C]** Do not resolve `endpoint` with ephemeral port for MDS subscription. Copy original channel as-is if no
-resolution is performed.
-* **[Java]** Fix `Subscription#tryResolveChannelEndpointPort` when no addresses exist, i.e. return `null` if active
-address is not yet available. Avoid doing any work if `endpoint` is not defined (IPC, MDS, response channel) or does not
-contain a port zero.
 * **[C]** Add `aeron_is_frame_valid` method.
 * **[C/Java]** Add all missing counter type constants for the premium components.
 * **[C]** Do not truncate frames longer than 1408 bytes when logging, i.e. allow up to `AERON_MAX_UDP_PAYLOAD_LENGTH`
@@ -65,14 +110,14 @@ upon failure, update tests to reflect activity timestamp changes during startup 
 * **[C]** Add ability to counter number of digits in a 32-bit number (`aeron_digit_count`).
 * **[C]** Link `aeron-client` against `libbsd`.
 * **[Java]** Delete `DeduplicateTask`, i.e. use built-in capabilities of the Shadow plugin instead.
-* **[Java]** Upgrade to https://github.com/aeron-io/agrona/releases/tag/2.3.2[Agrona 2.3.2].
-* **[Java]** Upgrade to https://github.com/aeron-io/simple-binary-encoding/releases/tag/1.36.2[SBE 1.36.2].
-* **[Java]** Upgrade to `ByteBuddy` 1.18.2.
-* **[Java]** Upgrade to `ASM` 9.9.
-* **[Java]** Upgrade to `JUnit` 6.0.1.
+* **[Java]** Upgrade to https://github.com/aeron-io/agrona/releases/tag/2.4.0[Agrona 2.4.0].
+* **[Java]** Upgrade to https://github.com/aeron-io/simple-binary-encoding/releases/tag/1.37.1[SBE 1.37.1].
+* **[Java]** Upgrade to `ByteBuddy` 1.18.3.
+* **[Java]** Upgrade to `ASM` 9.9.1.
+* **[Java]** Upgrade to `JUnit` 6.0.2.
 * **[Java]** Upgrade to `Mockito` 5.21.0.
 * **[Java]** Upgrade to `Checkstyle` 12.3.0.
-* **[Java]** Upgrade to `Shadow` 9.3.0.
+* **[Java]** Upgrade to `Shadow` 9.3.1.
 * **[C]** Upgrade to `CMake` 4.2.1.
 
 == 1.49.3 (2025-12-15)
