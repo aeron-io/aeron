@@ -1738,6 +1738,7 @@ static const char *dissect_cmd_in(int64_t cmd_id, const void *message, size_t le
                 command->position,
                 command->reason_length,
                 command->reason_text);
+            break;
         }
 
         default:
