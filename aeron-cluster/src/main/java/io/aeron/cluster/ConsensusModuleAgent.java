@@ -3575,7 +3575,7 @@ final class ConsensusModuleAgent
             final ConsensusModule.State committedState = ConsensusModule.State.get(uncommittedState.pollLong());
             if (ConsensusModule.State.CLOSED != state)
             {
-                state(committedState);
+                state(committedState, "rollback");
             }
         }
         uncommittedState.clear();

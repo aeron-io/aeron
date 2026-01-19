@@ -38,7 +38,6 @@ import io.aeron.protocol.DataHeaderFlyweight;
 import io.aeron.test.EventLogExtension;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
-import io.aeron.test.IpTables;
 import io.aeron.test.SlowTest;
 import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.Tests;
@@ -47,6 +46,8 @@ import io.aeron.test.cluster.TestNode;
 import org.agrona.BitUtil;
 import org.agrona.DirectBuffer;
 import org.agrona.collections.LongArrayQueue;
+import org.agrona.concurrent.UnsafeBuffer;
+import org.agrona.concurrent.status.AtomicCounter;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.AtomicCounter;
 import org.junit.jupiter.api.BeforeEach;
@@ -59,12 +60,17 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.net.InetSocketAddress;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static io.aeron.test.cluster.TestCluster.aCluster;
 import static io.aeron.test.driver.TestMediaDriver.shouldRunJavaMediaDriver;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
+import static io.aeron.test.driver.TestMediaDriver.shouldRunJavaMediaDriver;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 @ExtendWith({ EventLogExtension.class, InterruptingTestCallback.class })
@@ -91,25 +97,28 @@ public class ClusterUncommittedStateTest
     @InterruptAfter(20)
     void shouldRollbackUncommittedSuspendControlToggle()
     {
+        assumeTrue(shouldRunJavaMediaDriver());
+
         cluster = aCluster()
-            .withStaticNodes(HOSTNAMES.size())
-            .withCustomAddresses(HOSTNAMES)
+            .withStaticNodes(NODE_COUNT)
+            .withReceiveChannelEndpointSupplier((index) -> toggledLossControls[index])
+            .withSendChannelEndpointSupplier((index) -> toggledLossControls[index])
             .start();
         systemTestWatcher.cluster(cluster);
 
         final TestNode firstLeader = cluster.awaitLeader();
-        final List<String> leaderHostname = List.of(HOSTNAMES.get(firstLeader.memberId()));
-        final List<String> followerHostnames = new ArrayList<>(HOSTNAMES);
-        followerHostnames.remove(firstLeader.memberId());
+        final ToggledLossControl leaderLossControl = toggledLossControls[firstLeader.memberId()];
 
-        IpTables.makeSymmetricNetworkPartition(CHAIN_NAME, leaderHostname, followerHostnames);
+        leaderLossControl.toggleLoss(true);
+        Tests.await(() -> 0 < leaderLossControl.droppedOutboundFrames.get() &&
+            0 < leaderLossControl.droppedInboundFrames.get());
 
         cluster.suspendCluster(firstLeader);
         Tests.await(() -> ConsensusModule.State.SUSPENDED == firstLeader.moduleState());
 
         Tests.await(() -> null != cluster.findLeader(firstLeader.memberId()));
 
-        IpTables.flushChain(CHAIN_NAME);
+        leaderLossControl.toggleLoss(false);
         Tests.await(() -> ConsensusModule.State.ACTIVE == firstLeader.moduleState());
     }
 
@@ -118,16 +127,17 @@ public class ClusterUncommittedStateTest
     @InterruptAfter(20)
     void shouldRollbackUncommittedResumeControlToggle()
     {
+        assumeTrue(shouldRunJavaMediaDriver());
+
         cluster = aCluster()
-            .withStaticNodes(HOSTNAMES.size())
-            .withCustomAddresses(HOSTNAMES)
+            .withStaticNodes(NODE_COUNT)
+            .withReceiveChannelEndpointSupplier((index) -> toggledLossControls[index])
+            .withSendChannelEndpointSupplier((index) -> toggledLossControls[index])
             .start();
         systemTestWatcher.cluster(cluster);
 
         final TestNode firstLeader = cluster.awaitLeader();
-        final List<String> leaderHostname = List.of(HOSTNAMES.get(firstLeader.memberId()));
-        final List<String> followerHostnames = new ArrayList<>(HOSTNAMES);
-        followerHostnames.remove(firstLeader.memberId());
+        final ToggledLossControl leaderLossControl = toggledLossControls[firstLeader.memberId()];
 
         cluster.suspendCluster(firstLeader);
         Tests.await(() ->
@@ -142,14 +152,15 @@ public class ClusterUncommittedStateTest
             return true;
         });
 
-        IpTables.makeSymmetricNetworkPartition(CHAIN_NAME, leaderHostname, followerHostnames);
+        leaderLossControl.toggleLoss(true);
+        Tests.await(() -> 0 < leaderLossControl.droppedOutboundFrames.get());
 
         cluster.resumeCluster(firstLeader);
         Tests.await(() -> ConsensusModule.State.ACTIVE == firstLeader.moduleState());
 
         Tests.await(() -> null != cluster.findLeader(firstLeader.memberId()));
 
-        IpTables.flushChain(CHAIN_NAME);
+        leaderLossControl.toggleLoss(false);
         Tests.await(() -> ConsensusModule.State.SUSPENDED == firstLeader.moduleState());
     }
 
@@ -158,16 +169,17 @@ public class ClusterUncommittedStateTest
     @InterruptAfter(20)
     void shouldRollbackUncommittedSnapshotToggle()
     {
+        assumeTrue(shouldRunJavaMediaDriver());
+
         cluster = aCluster()
-            .withStaticNodes(HOSTNAMES.size())
-            .withCustomAddresses(HOSTNAMES)
+            .withStaticNodes(NODE_COUNT)
+            .withReceiveChannelEndpointSupplier((index) -> toggledLossControls[index])
+            .withSendChannelEndpointSupplier((index) -> toggledLossControls[index])
             .start();
         systemTestWatcher.cluster(cluster);
 
         final TestNode firstLeader = cluster.awaitLeader();
-        final List<String> leaderHostname = List.of(HOSTNAMES.get(firstLeader.memberId()));
-        final List<String> followerHostnames = new ArrayList<>(HOSTNAMES);
-        followerHostnames.remove(firstLeader.memberId());
+        final ToggledLossControl leaderLossControl = toggledLossControls[firstLeader.memberId()];
 
         cluster.suspendCluster(firstLeader);
         Tests.await(() ->
@@ -182,7 +194,8 @@ public class ClusterUncommittedStateTest
             return true;
         });
 
-        IpTables.makeSymmetricNetworkPartition(CHAIN_NAME, leaderHostname, followerHostnames);
+        leaderLossControl.toggleLoss(true);
+        Tests.await(() -> 0 < leaderLossControl.droppedOutboundFrames.get());
 
         cluster.resumeCluster(firstLeader);
         Tests.await(() -> ConsensusModule.State.ACTIVE == firstLeader.moduleState());
@@ -202,7 +215,7 @@ public class ClusterUncommittedStateTest
 
         Tests.await(() -> null != cluster.findLeader(firstLeader.memberId()));
 
-        IpTables.flushChain(CHAIN_NAME);
+        leaderLossControl.toggleLoss(false);
         Tests.await(() -> ConsensusModule.State.SUSPENDED == firstLeader.moduleState());
     }
 }
