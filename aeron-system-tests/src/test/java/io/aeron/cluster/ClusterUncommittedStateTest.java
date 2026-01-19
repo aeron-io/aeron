@@ -153,7 +153,8 @@ public class ClusterUncommittedStateTest
         });
 
         leaderLossControl.toggleLoss(true);
-        Tests.await(() -> 0 < leaderLossControl.droppedOutboundFrames.get());
+        Tests.await(() -> 0 < leaderLossControl.droppedOutboundFrames.get() &&
+            0 < leaderLossControl.droppedInboundFrames.get());
 
         cluster.resumeCluster(firstLeader);
         Tests.await(() -> ConsensusModule.State.ACTIVE == firstLeader.moduleState());
@@ -195,7 +196,8 @@ public class ClusterUncommittedStateTest
         });
 
         leaderLossControl.toggleLoss(true);
-        Tests.await(() -> 0 < leaderLossControl.droppedOutboundFrames.get());
+        Tests.await(() -> 0 < leaderLossControl.droppedOutboundFrames.get() &&
+            0 < leaderLossControl.droppedInboundFrames.get());
 
         cluster.resumeCluster(firstLeader);
         Tests.await(() -> ConsensusModule.State.ACTIVE == firstLeader.moduleState());
