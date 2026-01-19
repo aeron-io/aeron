@@ -1968,7 +1968,7 @@ final class ConsensusModuleAgent
 
     LogReplay newLogReplay(final long logPosition, final long appendPosition)
     {
-        final long rebuildPosition = fragmentationTracker.logAdapterRebuildPosition();
+        final long rebuildPosition = fragmentationTracker.logAdapterRebuildStartPosition();
         return new LogReplay(archive, logRecordingId, rebuildPosition, logPosition, appendPosition, logAdapter, ctx);
     }
 

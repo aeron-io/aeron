@@ -26,16 +26,22 @@ import org.agrona.collections.LongArrayQueue;
 public class LogPublisherFragmentationTracker
 {
     private final LongArrayQueue fragmentedMessageBounds = new LongArrayQueue(Long.MAX_VALUE);
-    private long logAdapterRebuildPosition = Aeron.NULL_VALUE;
+    private long logAdapterRebuildStartPosition = Aeron.NULL_VALUE;
+    private long logAdapterRebuildEndPosition = Aeron.NULL_VALUE;
 
     LongArrayQueue fragmentedMessageBounds()
     {
         return fragmentedMessageBounds;
     }
 
-    long logAdapterRebuildPosition()
+    long logAdapterRebuildStartPosition()
     {
-        return logAdapterRebuildPosition;
+        return logAdapterRebuildStartPosition;
+    }
+
+    long logAdapterRebuildEndPosition()
+    {
+        return logAdapterRebuildEndPosition;
     }
 
     /**
@@ -77,7 +83,8 @@ public class LogPublisherFragmentationTracker
             final long fragmentedMessageStartPosition = fragmentedMessageBounds.pollLong();
             if (fragmentedMessageStartPosition < commitPosition && commitPosition < fragmentedMessageEndPosition)
             {
-                logAdapterRebuildPosition = fragmentedMessageStartPosition;
+                logAdapterRebuildStartPosition = fragmentedMessageStartPosition;
+                logAdapterRebuildEndPosition = commitPosition;
             }
         }
         fragmentedMessageBounds.clear();
@@ -85,17 +92,23 @@ public class LogPublisherFragmentationTracker
 
     void onLogReplay(final long replayedPosition)
     {
-        if (Aeron.NULL_VALUE != logAdapterRebuildPosition)
+        if (Aeron.NULL_VALUE != logAdapterRebuildEndPosition && Aeron.NULL_VALUE != logAdapterRebuildStartPosition)
         {
-            if (replayedPosition > logAdapterRebuildPosition)
+            if (replayedPosition >= logAdapterRebuildEndPosition)
             {
-                logAdapterRebuildPosition = replayedPosition;
+                logAdapterRebuildStartPosition = Aeron.NULL_VALUE;
+                logAdapterRebuildEndPosition = Aeron.NULL_VALUE;
+            }
+            else if (replayedPosition > logAdapterRebuildStartPosition)
+            {
+                logAdapterRebuildStartPosition = replayedPosition;
             }
         }
     }
 
     void onLogReplayComplete()
     {
-        logAdapterRebuildPosition = Aeron.NULL_VALUE;
+        logAdapterRebuildStartPosition = Aeron.NULL_VALUE;
+        logAdapterRebuildEndPosition = Aeron.NULL_VALUE;
     }
 }
