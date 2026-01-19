@@ -28,7 +28,7 @@ import io.aeron.Subscription;
 public final class ConsensusControlState
 {
     private final ExclusivePublication logPublication;
-    private final LogPublisherFragmentationTracker fragmentationTracker;
+    private final LogPublisherFragmentedMessageTracker fragmentationTracker;
     private final Subscription leaderLogSubscription;
     private final long logRecordingId;
     private final long leadershipTermId;
@@ -45,7 +45,7 @@ public final class ConsensusControlState
      */
     ConsensusControlState(
         final ExclusivePublication logPublication,
-        final LogPublisherFragmentationTracker fragmentationTracker,
+        final LogPublisherFragmentedMessageTracker fragmentationTracker,
         final Subscription leaderLogSubscription,
         final long logRecordingId,
         final long leadershipTermId)
@@ -76,7 +76,7 @@ public final class ConsensusControlState
     /**
      * @return fragmentation tracker or null if follower.
      */
-    public LogPublisherFragmentationTracker fragmentationTracker()
+    public LogPublisherFragmentedMessageTracker fragmentationTracker()
     {
         return fragmentationTracker;
     }

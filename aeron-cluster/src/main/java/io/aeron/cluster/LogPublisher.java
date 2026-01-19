@@ -58,7 +58,7 @@ final class LogPublisher
     private final BufferClaim bufferClaim = new BufferClaim();
 
     private final String destinationChannel;
-    private LogPublisherFragmentationTracker fragmentationTracker;
+    private LogPublisherFragmentedMessageTracker fragmentedMessageTracker;
     private ExclusivePublication publication;
 
     LogPublisher(final String destinationChannel)
@@ -67,9 +67,9 @@ final class LogPublisher
         sessionHeaderEncoder.wrapAndApplyHeader(sessionHeaderBuffer, 0, new MessageHeaderEncoder());
     }
 
-    void fragmentationTracker(final LogPublisherFragmentationTracker fragmentationTracker)
+    void fragmentationTracker(final LogPublisherFragmentedMessageTracker fragmentedMessageTracker)
     {
-        this.fragmentationTracker = fragmentationTracker;
+        this.fragmentedMessageTracker = fragmentedMessageTracker;
     }
 
     void publication(final ExclusivePublication publication)
@@ -141,7 +141,7 @@ final class LogPublisher
 
             if (position > 0)
             {
-                fragmentationTracker.trackFragmentedMessage(publication.maxPayloadLength(),
+                fragmentedMessageTracker.trackFragmentedMessage(publication.maxPayloadLength(),
                     SESSION_HEADER_LENGTH + length, startPosition, publication.position());
                 break;
             }
@@ -179,7 +179,7 @@ final class LogPublisher
             position = publication.offer(expandableArrayBuffer, 0, length, null);
             if (position > 0)
             {
-                fragmentationTracker.trackFragmentedMessage(publication.maxPayloadLength(),
+                fragmentedMessageTracker.trackFragmentedMessage(publication.maxPayloadLength(),
                     length, startPosition, publication.position());
                 break;
             }

@@ -25,9 +25,9 @@ import io.aeron.cluster.service.Cluster;
 import org.agrona.CloseHelper;
 import org.agrona.concurrent.CountedErrorHandler;
 
-@SuppressWarnings("JavadocVariable")
 final class LogReplay
 {
+    @SuppressWarnings("JavadocVariable")
     private enum State
     {
         REBUILD_LOG_ADAPTER_INIT, REBUILD_LOG_ADAPTER, REPLAY_INIT, REPLAY

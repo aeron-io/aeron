@@ -22,10 +22,10 @@ import org.junit.jupiter.api.Test;
 import static io.aeron.protocol.DataHeaderFlyweight.HEADER_LENGTH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-class LogPublisherFragmentationTrackerTest
+class LogPublisherFragmentedMessageTrackerTest
 {
     private static final long MAX_PAYLOAD_LENGTH = Configuration.MTU_LENGTH_DEFAULT - HEADER_LENGTH;
-    private final LogPublisherFragmentationTracker tracker = new LogPublisherFragmentationTracker();
+    private final LogPublisherFragmentedMessageTracker tracker = new LogPublisherFragmentedMessageTracker();
 
     @Test
     void shouldNotTrackUnfragmentedMessage()

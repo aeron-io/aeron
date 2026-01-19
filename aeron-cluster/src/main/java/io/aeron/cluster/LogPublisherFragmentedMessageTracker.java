@@ -23,7 +23,7 @@ import org.agrona.collections.LongArrayQueue;
  * fragmented message, the leader will have to replay begin fragments of that fragmented message so {@link LogAdapter}
  * can reassemble the full fragmented message.
  */
-public class LogPublisherFragmentationTracker
+public class LogPublisherFragmentedMessageTracker
 {
     private final LongArrayQueue fragmentedMessageBounds = new LongArrayQueue(Long.MAX_VALUE);
     private long logAdapterRebuildStartPosition = Aeron.NULL_VALUE;
