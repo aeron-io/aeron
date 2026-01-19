@@ -259,7 +259,7 @@ final class ConsensusModuleAgent
         this.controlToggle = ctx.controlToggleCounter();
         this.nodeControlToggle = ctx.nodeControlToggleCounter();
         this.logPublisher = ctx.logPublisher();
-        this.logPublisher.fragmentationTracker(logPublisherFragmentedMessageTracker);
+        this.logPublisher.fragmentedMessageTracker(logPublisherFragmentedMessageTracker);
         this.idleStrategy = ctx.idleStrategy();
         this.activeMembers = ClusterMember.parse(ctx.clusterMembers());
         this.sessionProxy = new ClusterSessionProxy(egressPublisher);

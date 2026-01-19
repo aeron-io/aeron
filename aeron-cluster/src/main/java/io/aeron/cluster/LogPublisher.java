@@ -67,7 +67,7 @@ final class LogPublisher
         sessionHeaderEncoder.wrapAndApplyHeader(sessionHeaderBuffer, 0, new MessageHeaderEncoder());
     }
 
-    void fragmentationTracker(final LogPublisherFragmentedMessageTracker fragmentedMessageTracker)
+    void fragmentedMessageTracker(final LogPublisherFragmentedMessageTracker fragmentedMessageTracker)
     {
         this.fragmentedMessageTracker = fragmentedMessageTracker;
     }
