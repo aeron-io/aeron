@@ -28,7 +28,7 @@ import io.aeron.Subscription;
 public final class ConsensusControlState
 {
     private final ExclusivePublication logPublication;
-    private final LogPublisherFragmentedMessageTracker fragmentationTracker;
+    private final LogPublisherFragmentedMessageTracker fragmentedMessageTracker;
     private final Subscription leaderLogSubscription;
     private final long logRecordingId;
     private final long leadershipTermId;
@@ -37,7 +37,7 @@ public final class ConsensusControlState
      * Record constructor.
      *
      * @param logPublication        publication or null.
-     * @param fragmentationTracker  fragmentation tracker or null.
+     * @param fragmentedMessageTracker  fragmentation tracker or null.
      * @param leaderLogSubscription null if a follower, if a leader will have an image that has joined at the log
      *                              position.
      * @param logRecordingId        log recording id.
@@ -45,13 +45,13 @@ public final class ConsensusControlState
      */
     ConsensusControlState(
         final ExclusivePublication logPublication,
-        final LogPublisherFragmentedMessageTracker fragmentationTracker,
+        final LogPublisherFragmentedMessageTracker fragmentedMessageTracker,
         final Subscription leaderLogSubscription,
         final long logRecordingId,
         final long leadershipTermId)
     {
         this.logPublication = logPublication;
-        this.fragmentationTracker = fragmentationTracker;
+        this.fragmentedMessageTracker = fragmentedMessageTracker;
         this.leaderLogSubscription = leaderLogSubscription;
         this.logRecordingId = logRecordingId;
         this.leadershipTermId = leadershipTermId;
@@ -76,9 +76,9 @@ public final class ConsensusControlState
     /**
      * @return fragmentation tracker or null if follower.
      */
-    public LogPublisherFragmentedMessageTracker fragmentationTracker()
+    public LogPublisherFragmentedMessageTracker fragmentedMessageTracker()
     {
-        return fragmentationTracker;
+        return fragmentedMessageTracker;
     }
 
     /**
