@@ -141,6 +141,7 @@ public final class LogBuffers implements AutoCloseable
         }
         catch (final IOException ex)
         {
+            close(fileChannel, logMetaDataBuffer, mappedByteBuffers);
             LangUtil.rethrowUnchecked(ex);
         }
         catch (final IllegalStateException ex)
