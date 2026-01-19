@@ -18,8 +18,19 @@ package io.aeron.cluster;
 import io.aeron.Counter;
 import io.aeron.ExclusivePublication;
 import io.aeron.Image;
+import io.aeron.cluster.client.AeronCluster;
 import io.aeron.cluster.codecs.MessageHeaderDecoder;
 import io.aeron.cluster.codecs.MessageHeaderEncoder;
+import io.aeron.driver.DataPacketDispatcher;
+import io.aeron.driver.MediaDriver;
+import io.aeron.driver.ReceiveChannelEndpointSupplier;
+import io.aeron.driver.SendChannelEndpointSupplier;
+import io.aeron.driver.ext.DebugReceiveChannelEndpoint;
+import io.aeron.driver.ext.DebugSendChannelEndpoint;
+import io.aeron.driver.ext.LossGenerator;
+import io.aeron.driver.media.ReceiveChannelEndpoint;
+import io.aeron.driver.media.SendChannelEndpoint;
+import io.aeron.driver.media.UdpChannel;
 import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.FrameDescriptor;
 import io.aeron.logbuffer.Header;
@@ -27,7 +38,6 @@ import io.aeron.protocol.DataHeaderFlyweight;
 import io.aeron.test.EventLogExtension;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
-import io.aeron.test.IpTables;
 import io.aeron.test.SlowTest;
 import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.Tests;
@@ -36,43 +46,43 @@ import io.aeron.test.cluster.TestNode;
 import org.agrona.BitUtil;
 import org.agrona.DirectBuffer;
 import org.agrona.collections.LongArrayQueue;
-import org.junit.jupiter.api.AfterEach;
+import org.agrona.concurrent.UnsafeBuffer;
+import org.agrona.concurrent.status.AtomicCounter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledOnOs;
-import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static io.aeron.test.cluster.TestCluster.aCluster;
+import static io.aeron.test.driver.TestMediaDriver.shouldRunJavaMediaDriver;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 @ExtendWith({ EventLogExtension.class, InterruptingTestCallback.class })
-@EnabledOnOs(OS.LINUX)
 public class ClusterUncommittedStateTest
 {
-    private static final List<String> HOSTNAMES = List.of("127.2.0.0", "127.2.1.0", "127.2.2.0");
-    private static final String CHAIN_NAME = "CLUSTER-TEST";
+    private static final int NODE_COUNT = 3;
 
     @RegisterExtension
     final SystemTestWatcher systemTestWatcher = new SystemTestWatcher();
     private TestCluster cluster;
+    private final ToggledLossControl[] toggledLossControls = new ToggledLossControl[NODE_COUNT];
 
     @BeforeEach
     void setUp()
     {
-        IpTables.setupChain(CHAIN_NAME);
-    }
-
-    @AfterEach
-    void tearDown()
-    {
-        IpTables.tearDownChain(CHAIN_NAME);
+        for (int i = 0; i < NODE_COUNT; ++i)
+        {
+            toggledLossControls[i] = new ToggledLossControl();
+        }
     }
 
     @Test
@@ -80,22 +90,25 @@ public class ClusterUncommittedStateTest
     @InterruptAfter(20)
     void shouldSnapshotWithNoServicesWithUncommittedData()
     {
+        assumeTrue(shouldRunJavaMediaDriver());
+
         cluster = aCluster()
-            .withStaticNodes(HOSTNAMES.size())
-            .withCustomAddresses(HOSTNAMES)
+            .withStaticNodes(NODE_COUNT)
+            .withReceiveChannelEndpointSupplier((index) -> toggledLossControls[index])
+            .withSendChannelEndpointSupplier((index) -> toggledLossControls[index])
             .withExtensionSuppler(TestCounterExtension::new)
             .withServiceSupplier(value -> new TestNode.TestService[0])
             .start();
         systemTestWatcher.cluster(cluster);
 
         final TestNode firstLeader = cluster.awaitLeader();
-        final List<String> leaderHostname = List.of(HOSTNAMES.get(firstLeader.memberId()));
-        final List<String> followerHostnames = new ArrayList<>(HOSTNAMES);
-        followerHostnames.remove(firstLeader.memberId());
+        final ToggledLossControl leaderLossControl = toggledLossControls[firstLeader.memberId()];
 
-        IpTables.makeSymmetricNetworkPartition(CHAIN_NAME, leaderHostname, followerHostnames);
+        leaderLossControl.toggleLoss(true);
+        Tests.await(() -> 0 < leaderLossControl.droppedOutboundFrames.get() &&
+            0 < leaderLossControl.droppedInboundFrames.get());
 
-        cluster.connectClient();
+        cluster.connectIpcClient(new AeronCluster.Context(), firstLeader.mediaDriver().aeronDirectoryName());
         cluster.sendExtensionMessages(32);
         final long messageLength = BitUtil.align(
             DataHeaderFlyweight.HEADER_LENGTH + MessageHeaderEncoder.ENCODED_LENGTH + BitUtil.SIZE_OF_INT,
@@ -105,7 +118,7 @@ public class ClusterUncommittedStateTest
         cluster.takeSnapshot(firstLeader);
         Tests.await(() -> ConsensusModule.State.SNAPSHOT == firstLeader.moduleState());
 
-        IpTables.flushChain(CHAIN_NAME);
+        leaderLossControl.toggleLoss(false);
         cluster.awaitSnapshotCount(1);
 
         final TestCounterExtension node0Extension =
@@ -215,4 +228,72 @@ public class ClusterUncommittedStateTest
         }
     }
 
+    private static final class ToggledLossControl implements ReceiveChannelEndpointSupplier, SendChannelEndpointSupplier
+    {
+        final AtomicBoolean shouldDropOutboundFrames = new AtomicBoolean(false);
+        final AtomicInteger droppedOutboundFrames = new AtomicInteger(0);
+        final ToggledLossGenerator outboundLossGenerator = new ToggledLossGenerator(
+            shouldDropOutboundFrames, droppedOutboundFrames);
+
+        final AtomicBoolean shouldDropInboundFrames = new AtomicBoolean(false);
+        final AtomicInteger droppedInboundFrames = new AtomicInteger(0);
+        final ToggledLossGenerator inboundLossGenerator = new ToggledLossGenerator(
+            shouldDropInboundFrames, droppedInboundFrames);
+
+        public ReceiveChannelEndpoint newInstance(
+            final UdpChannel udpChannel,
+            final DataPacketDispatcher dispatcher,
+            final AtomicCounter statusIndicator,
+            final MediaDriver.Context context)
+        {
+            return new DebugReceiveChannelEndpoint(
+                udpChannel, dispatcher, statusIndicator, context, inboundLossGenerator, inboundLossGenerator);
+        }
+
+        public SendChannelEndpoint newInstance(
+            final UdpChannel udpChannel,
+            final AtomicCounter statusIndicator,
+            final MediaDriver.Context context)
+        {
+            return new DebugSendChannelEndpoint(
+                udpChannel, statusIndicator, context, outboundLossGenerator, outboundLossGenerator);
+        }
+
+        void toggleLoss(final boolean loss)
+        {
+            shouldDropOutboundFrames.set(loss);
+            shouldDropInboundFrames.set(loss);
+        }
+
+        private static final class ToggledLossGenerator implements LossGenerator
+        {
+            private final AtomicBoolean shouldDropFrame;
+            private final AtomicInteger droppedFrames;
+
+            private ToggledLossGenerator(final AtomicBoolean shouldDropFrame, final AtomicInteger droppedFrames)
+            {
+                this.shouldDropFrame = shouldDropFrame;
+                this.droppedFrames = droppedFrames;
+            }
+
+            public boolean shouldDropFrame(final InetSocketAddress address, final UnsafeBuffer buffer, final int length)
+            {
+                droppedFrames.incrementAndGet();
+                return shouldDropFrame.get();
+            }
+
+            public boolean shouldDropFrame(
+                final InetSocketAddress address,
+                final UnsafeBuffer buffer,
+                final int streamId,
+                final int sessionId,
+                final int termId,
+                final int termOffset,
+                final int length)
+            {
+                droppedFrames.incrementAndGet();
+                return shouldDropFrame.get();
+            }
+        }
+    }
 }
