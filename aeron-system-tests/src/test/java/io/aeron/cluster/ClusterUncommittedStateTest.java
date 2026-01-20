@@ -62,8 +62,10 @@ import java.util.function.IntFunction;
 import static io.aeron.cluster.client.AeronCluster.SESSION_HEADER_LENGTH;
 import static io.aeron.logbuffer.LogBufferDescriptor.computeFragmentedFrameLength;
 import static io.aeron.test.cluster.TestCluster.aCluster;
+import static io.aeron.test.driver.TestMediaDriver.shouldRunJavaMediaDriver;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 @ExtendWith({ EventLogExtension.class, InterruptingTestCallback.class })
 public class ClusterUncommittedStateTest
@@ -99,6 +101,8 @@ public class ClusterUncommittedStateTest
     @InterruptAfter(20)
     void shouldElectionBetweenFragmentedServiceMessageAvoidDuplicateServiceMessage()
     {
+        assumeTrue(shouldRunJavaMediaDriver());
+
         final AtomicBoolean waitingToOfferFragmentedMessage = new AtomicBoolean(true);
         final AtomicBoolean leaderBackPressureLog = new AtomicBoolean(false);
         final AtomicBoolean followerBackPressureLog = new AtomicBoolean(true);
@@ -215,7 +219,7 @@ public class ClusterUncommittedStateTest
             this.causeBackPressure = causeBackPressure;
         }
 
-        public void onSessionOpen(ClientSession session, long timestamp)
+        public void onSessionOpen(final ClientSession session, final long timestamp)
         {
         }
 
