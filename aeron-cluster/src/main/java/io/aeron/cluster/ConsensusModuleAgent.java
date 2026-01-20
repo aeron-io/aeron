@@ -171,6 +171,8 @@ final class ConsensusModuleAgent
     private final IngressAdapter ingressAdapter;
     private final EgressPublisher egressPublisher;
     private final LogPublisher logPublisher;
+    private final LogPublisherFragmentedMessageTracker logPublisherFragmentedMessageTracker =
+        new LogPublisherFragmentedMessageTracker();
     private final LogAdapter logAdapter;
     private final ConsensusAdapter consensusAdapter;
     private final ConsensusPublisher consensusPublisher = new ConsensusPublisher();
@@ -221,6 +223,7 @@ final class ConsensusModuleAgent
         this.controlToggle = ctx.controlToggleCounter();
         this.nodeControlToggle = ctx.nodeControlToggleCounter();
         this.logPublisher = ctx.logPublisher();
+        this.logPublisher.fragmentedMessageTracker(logPublisherFragmentedMessageTracker);
         this.idleStrategy = ctx.idleStrategy();
         this.activeMembers = ClusterMember.parse(ctx.clusterMembers());
         this.memberId = ctx.clusterMemberId();
@@ -1587,7 +1590,7 @@ final class ConsensusModuleAgent
         if (null != consensusModuleExtension)
         {
             consensusModuleExtension.onNewLeadershipTerm(
-                new ConsensusControlState(null, null, logRecordingId, leadershipTermId));
+                new ConsensusControlState(null, null, null, logRecordingId, leadershipTermId));
         }
     }
 
@@ -1794,7 +1797,13 @@ final class ConsensusModuleAgent
 
     LogReplay newLogReplay(final long logPosition, final long appendPosition)
     {
-        return new LogReplay(archive, logRecordingId, logPosition, appendPosition, logAdapter, ctx);
+        final long rebuildPosition = logPublisherFragmentedMessageTracker.logAdapterRebuildStartPosition();
+        return new LogReplay(archive, logRecordingId, rebuildPosition, logPosition, appendPosition, logAdapter, ctx);
+    }
+
+    void replayLogComplete()
+    {
+        logPublisherFragmentedMessageTracker.onLogReplayComplete();
     }
 
     int replayLogPoll(final LogAdapter logAdapter, final long stopPosition)
@@ -1805,8 +1814,10 @@ final class ConsensusModuleAgent
         {
             logAdapter.poll(stopPosition);
             final long position = logAdapter.position();
+            final boolean commitPositionUpdated = commitPosition.proposeMaxRelease(position);
+            logPublisherFragmentedMessageTracker.onLogReplay(position, commitPosition.getPlain());
 
-            if (commitPosition.proposeMaxRelease(position))
+            if (commitPositionUpdated)
             {
                 workCount++;
             }
@@ -1890,6 +1901,7 @@ final class ConsensusModuleAgent
         {
             consensusModuleExtension.onElectionComplete(new ConsensusControlState(
                 logPublisher.publication(),
+                logPublisherFragmentedMessageTracker,
                 extensionLeaderSubscription,
                 logRecordingId,
                 leadershipTermId
@@ -2924,6 +2936,8 @@ final class ConsensusModuleAgent
             uncommittedPreviousState.pollLong();
             uncommittedPreviousState.pollLong();
         }
+
+        logPublisherFragmentedMessageTracker.sweepCommittedEntriesTo(commitPosition);
     }
 
     private void restoreUncommittedEntries(final long commitPosition)
@@ -2981,6 +2995,7 @@ final class ConsensusModuleAgent
         final long appendedPosition = null != appendPosition ?
             appendPosition.get() : max(recoveryPlan.appendedLogPosition(), logRecordingStopPosition);
         final long commitPosition = this.commitPosition.getPlain();
+        logPublisherFragmentedMessageTracker.storePositionToRebuildLogAdapter(commitPosition);
 
         logNewElection(memberId, leadershipTermId, commitPosition, appendedPosition, reason);
         ctx.countedErrorHandler().onError(new ClusterEvent(reason));

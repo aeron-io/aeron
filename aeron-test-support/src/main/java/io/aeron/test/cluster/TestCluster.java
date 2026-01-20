@@ -55,6 +55,7 @@ import io.aeron.cluster.codecs.SessionMessageHeaderDecoder;
 import io.aeron.cluster.service.Cluster;
 import io.aeron.cluster.service.ClusterClock;
 import io.aeron.cluster.service.ClusterMarkFile;
+import io.aeron.cluster.service.ClusteredServiceContainer;
 import io.aeron.driver.Configuration;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ReceiveChannelEndpointSupplier;
@@ -191,6 +192,7 @@ public final class TestCluster implements AutoCloseable
     private String logChannel;
     private String ingressChannel;
     private String egressChannel;
+    private String controlChannel;
     private AuthorisationServiceSupplier authorisationServiceSupplier;
     private AuthenticatorSupplier authenticationSupplier;
     private TimerServiceSupplier timerServiceSupplier;
@@ -463,6 +465,7 @@ public final class TestCluster implements AutoCloseable
             .clusterDir(new File(baseDirName, "consensus-module"))
             .ingressChannel(ingressChannel)
             .logChannel(logChannel)
+            .controlChannel(controlChannel)
             .consensusChannel(CONSENSUS_CHANNEL)
             .replicationChannel(clusterReplicationChannel(index))
             .archiveContext(context.aeronArchiveContext.clone()
@@ -722,6 +725,11 @@ public final class TestCluster implements AutoCloseable
     public void egressChannel(final String egressChannel)
     {
         this.egressChannel = egressChannel;
+    }
+
+    public void controlChannel(final String controlChannel)
+    {
+        this.controlChannel = controlChannel;
     }
 
     public void egressListener(final EgressListener egressListener)
@@ -2651,6 +2659,7 @@ public final class TestCluster implements AutoCloseable
         private String logChannel = LOG_CHANNEL;
         private String ingressChannel = INGRESS_CHANNEL;
         private String egressChannel = EGRESS_CHANNEL;
+        private String controlChannel = ClusteredServiceContainer.Configuration.controlChannel();
         private AuthorisationServiceSupplier authorisationServiceSupplier;
         private AuthenticatorSupplier authenticationSupplier = new DefaultAuthenticatorSupplier();
         private TimerServiceSupplier timerServiceSupplier;
@@ -2769,6 +2778,12 @@ public final class TestCluster implements AutoCloseable
         public Builder withEgressChannel(final String egressChannel)
         {
             this.egressChannel = egressChannel;
+            return this;
+        }
+
+        public Builder withControlChannel(final String controlChannel)
+        {
+            this.controlChannel = controlChannel;
             return this;
         }
 
@@ -2911,6 +2926,7 @@ public final class TestCluster implements AutoCloseable
             testCluster.logChannel(logChannel);
             testCluster.ingressChannel(ingressChannel);
             testCluster.egressChannel(egressChannel);
+            testCluster.controlChannel(controlChannel);
             testCluster.authenticationSupplier(authenticationSupplier);
             testCluster.authorisationServiceSupplier(authorisationServiceSupplier);
             testCluster.timerServiceSupplier(timerServiceSupplier);
