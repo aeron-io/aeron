@@ -2476,7 +2476,7 @@ void aeron_driver_agent_log_dissector(int32_t msg_type_id, const void *message, 
                 addr_prefix = "[";
                 addr_suffix = "]";
 
-                inet_ntop(AF_INET, address_ptr, address_buf, sizeof(address_buf));
+                inet_ntop(AF_INET6, address_ptr, address_buf, sizeof(address_buf));
                 address_str = address_buf;
             }
 
