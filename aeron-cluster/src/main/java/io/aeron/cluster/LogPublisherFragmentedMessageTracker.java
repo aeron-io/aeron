@@ -59,7 +59,7 @@ public class LogPublisherFragmentedMessageTracker
         }
     }
 
-    void sweepCommittedEntriesTo(final long commitPosition)
+    void sweepUncommittedEntriesTo(final long commitPosition)
     {
         while (fragmentedMessageBounds.peekLong() <= commitPosition)
         {
@@ -70,7 +70,7 @@ public class LogPublisherFragmentedMessageTracker
 
     void storePositionToRebuildLogAdapter(final long commitPosition)
     {
-        sweepCommittedEntriesTo(commitPosition);
+        sweepUncommittedEntriesTo(commitPosition);
         if (!fragmentedMessageBounds.isEmpty())
         {
             final long fragmentedMessageEndPosition = fragmentedMessageBounds.pollLong();

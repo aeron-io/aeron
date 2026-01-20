@@ -2937,7 +2937,7 @@ final class ConsensusModuleAgent
             uncommittedPreviousState.pollLong();
         }
 
-        logPublisherFragmentedMessageTracker.sweepCommittedEntriesTo(commitPosition);
+        logPublisherFragmentedMessageTracker.sweepUncommittedEntriesTo(commitPosition);
     }
 
     private void restoreUncommittedEntries(final long commitPosition)
