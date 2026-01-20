@@ -36,7 +36,7 @@
 const char *aeron_strerror_r(int errcode, char *buffer, size_t length)
 {
     int result = strerror_r(errcode, buffer, length);
-    if (result < 0)
+    if (result != 0)
     {
         return AERON_ERR_DESCRIPTION_UNAVAILABLE;
     }
