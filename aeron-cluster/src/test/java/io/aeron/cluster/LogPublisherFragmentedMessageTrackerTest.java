@@ -79,27 +79,27 @@ class LogPublisherFragmentedMessageTrackerTest
         final long length = endPosition - startPosition;
 
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, length, startPosition, endPosition);
-        tracker.sweepCommittedEntriesTo(0L);
+        tracker.sweepUncommittedEntriesTo(0L);
         assertEquals(2, tracker.fragmentedMessageBounds().size());
         tracker.fragmentedMessageBounds().clear();
 
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, length, startPosition, endPosition);
-        tracker.sweepCommittedEntriesTo(startPosition);
+        tracker.sweepUncommittedEntriesTo(startPosition);
         assertEquals(2, tracker.fragmentedMessageBounds().size());
         tracker.fragmentedMessageBounds().clear();
 
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, length, startPosition, endPosition);
-        tracker.sweepCommittedEntriesTo(startPosition + MAX_PAYLOAD_LENGTH);
+        tracker.sweepUncommittedEntriesTo(startPosition + MAX_PAYLOAD_LENGTH);
         assertEquals(2, tracker.fragmentedMessageBounds().size());
         tracker.fragmentedMessageBounds().clear();
 
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, length, startPosition, endPosition);
-        tracker.sweepCommittedEntriesTo(endPosition);
+        tracker.sweepUncommittedEntriesTo(endPosition);
         assertEquals(0, tracker.fragmentedMessageBounds().size());
         tracker.fragmentedMessageBounds().clear();
 
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, length, startPosition, endPosition);
-        tracker.sweepCommittedEntriesTo(endPosition + MAX_PAYLOAD_LENGTH);
+        tracker.sweepUncommittedEntriesTo(endPosition + MAX_PAYLOAD_LENGTH);
         assertEquals(0, tracker.fragmentedMessageBounds().size());
         tracker.fragmentedMessageBounds().clear();
     }
