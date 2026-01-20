@@ -62,8 +62,9 @@ int aeron_alloc_aligned(void **ptr, size_t *offset, size_t size, size_t alignmen
 
 #ifdef HAVE_POSIX_MEMALIGN
     int rc = posix_memalign(ptr, alignment, size);
-    if (rc < 0)
+    if (rc != 0)
     {
+        // any non zero value is a failure.
         AERON_SET_ERR(rc, "Failed to allocate %" PRIu64 " bytes, alignment %" PRIu64, (uint64_t)size, (uint64_t)alignment);
         return -1;
     }
