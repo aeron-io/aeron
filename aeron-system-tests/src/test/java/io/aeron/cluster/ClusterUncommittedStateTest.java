@@ -182,7 +182,7 @@ public class ClusterUncommittedStateTest
             {
                 final OfferMessageOnSessionCloseService service =
                     (OfferMessageOnSessionCloseService)cluster.node(i).container(0).context().clusteredService();
-                if (!service.receivedSecondMessage.get())
+                if (2 != service.receivedMessage.get())
                 {
                     return false;
                 }
@@ -208,7 +208,7 @@ public class ClusterUncommittedStateTest
         private int nextSentMessage = 1;
         private final IntArrayList sentMessages = new IntArrayList(8, Aeron.NULL_VALUE);
         private final IntArrayList receivedMessages = new IntArrayList(8, Aeron.NULL_VALUE);
-        private final AtomicBoolean receivedSecondMessage = new AtomicBoolean(false);
+        private final AtomicInteger receivedMessage = new AtomicInteger(0);
 
 
         OfferMessageOnSessionCloseService(
@@ -254,11 +254,7 @@ public class ClusterUncommittedStateTest
         {
             final int receiveMessage = buffer.getInt(offset, MessageHeaderEncoder.BYTE_ORDER);
             receivedMessages.add(receiveMessage);
-
-            if (2 == receiveMessage)
-            {
-                receivedSecondMessage.set(true);
-            }
+            receivedMessage.set(receiveMessage);
         }
 
         public void onTimerEvent(final long correlationId, final long timestamp)
