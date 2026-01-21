@@ -3574,7 +3574,7 @@ final class ConsensusModuleAgent
         final long appendedPosition = null != appendPosition ?
             appendPosition.get() : max(recoveryPlan.appendedLogPosition, logRecordingStopPosition);
         final long commitPosition = this.commitPosition.getPlain();
-        logPublisherFragmentedMessageTracker.storePositionToRebuildLogAdapter(commitPosition);
+        logPublisherFragmentedMessageTracker.onNewElection(commitPosition);
 
         logNewElection(memberId, leadershipTermId, commitPosition, appendedPosition, reason);
         ctx.countedErrorHandler().onError(new ClusterEvent(reason));

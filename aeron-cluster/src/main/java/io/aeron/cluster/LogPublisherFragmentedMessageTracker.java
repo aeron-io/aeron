@@ -68,7 +68,7 @@ public class LogPublisherFragmentedMessageTracker
         }
     }
 
-    void storePositionToRebuildLogAdapter(final long commitPosition)
+    void onNewElection(final long commitPosition)
     {
         sweepUncommittedEntriesTo(commitPosition);
         if (!fragmentedMessageBounds.isEmpty())
