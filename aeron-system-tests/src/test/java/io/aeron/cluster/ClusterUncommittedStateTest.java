@@ -419,16 +419,16 @@ public class ClusterUncommittedStateTest
             if (0 == index)
             {
                 return new TestNode.TestService[]
-                    {
-                        new OfferMessageOnSessionCloseService(waitingToOfferFragmentedMessage, leaderBackPressureLog)
-                    };
+                {
+                    new OfferServiceMessageOnSessionClose(waitingToOfferFragmentedMessage, leaderBackPressureLog)
+                };
             }
             else
             {
                 return new TestNode.TestService[]
-                    {
-                        new OfferMessageOnSessionCloseService(waitingToOfferFragmentedMessage, followerBackPressureLog)
-                    };
+                {
+                    new OfferServiceMessageOnSessionClose(waitingToOfferFragmentedMessage, followerBackPressureLog)
+                };
             }
         };
 
@@ -488,9 +488,9 @@ public class ClusterUncommittedStateTest
         {
             for (int i = 0; i < cluster.memberCount(); ++i)
             {
-                final OfferMessageOnSessionCloseService service =
-                    (OfferMessageOnSessionCloseService)cluster.node(i).container(0).context().clusteredService();
-                if (2 != service.receivedMessage.get())
+                final OfferServiceMessageOnSessionClose service =
+                    (OfferServiceMessageOnSessionClose)cluster.node(i).container(0).context().clusteredService();
+                if (2 != service.lastReceivedServiceMessage.get())
                 {
                     return false;
                 }
@@ -500,26 +500,28 @@ public class ClusterUncommittedStateTest
 
         for (int i = 0; i < cluster.memberCount(); ++i)
         {
-            final OfferMessageOnSessionCloseService service =
-                (OfferMessageOnSessionCloseService)cluster.node(i).container(0).context().clusteredService();
-            assertEquals(2, service.sentMessages.size(), "Node " + i + " sent " + service.sentMessages);
-            assertEquals(2, service.receivedMessages.size(), "Node " + i + " received " + service.receivedMessages);
+            final OfferServiceMessageOnSessionClose service =
+                (OfferServiceMessageOnSessionClose)cluster.node(i).container(0).context().clusteredService();
+            final IntArrayList sentServiceMessages = service.sentServiceMessages;
+            final IntArrayList receivedServiceMessages = service.receivedServiceMessages;
+            assertEquals(2, sentServiceMessages.size(), "Node " + i + " sent " + sentServiceMessages);
+            assertEquals(2, receivedServiceMessages.size(), "Node " + i + " received " + receivedServiceMessages);
         }
     }
 
-    static class OfferMessageOnSessionCloseService extends TestNode.TestService
+    static class OfferServiceMessageOnSessionClose extends TestNode.TestService
     {
         private final AtomicBoolean waitingToOfferServiceMessage;
         private final AtomicBoolean causeBackPressure;
 
         private final UnsafeBuffer messageBuffer = new UnsafeBuffer(new byte[EIGHT_MEGABYTES - SESSION_HEADER_LENGTH]);
         private int nextSentMessage = 1;
-        private final IntArrayList sentMessages = new IntArrayList(8, Aeron.NULL_VALUE);
-        private final IntArrayList receivedMessages = new IntArrayList(8, Aeron.NULL_VALUE);
-        private final AtomicInteger receivedMessage = new AtomicInteger(0);
+        private final IntArrayList sentServiceMessages = new IntArrayList(8, Aeron.NULL_VALUE);
+        private final IntArrayList receivedServiceMessages = new IntArrayList(8, Aeron.NULL_VALUE);
+        private final AtomicInteger lastReceivedServiceMessage = new AtomicInteger(0);
 
 
-        OfferMessageOnSessionCloseService(
+        OfferServiceMessageOnSessionClose(
             final AtomicBoolean waitingToOfferServiceMessage,
             final AtomicBoolean causeBackPressure)
         {
@@ -544,7 +546,7 @@ public class ClusterUncommittedStateTest
             {
                 cluster.idleStrategy().idle();
             }
-            sentMessages.add(nextSentMessage++);
+            sentServiceMessages.add(nextSentMessage++);
 
             while (causeBackPressure.get())
             {
@@ -561,8 +563,8 @@ public class ClusterUncommittedStateTest
             final Header header)
         {
             final int receiveMessage = buffer.getInt(offset, MessageHeaderEncoder.BYTE_ORDER);
-            receivedMessages.add(receiveMessage);
-            receivedMessage.set(receiveMessage);
+            receivedServiceMessages.add(receiveMessage);
+            lastReceivedServiceMessage.set(receiveMessage);
         }
 
         public void onTimerEvent(final long correlationId, final long timestamp)
