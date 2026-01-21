@@ -1216,6 +1216,7 @@ final class ConsensusModuleAgent
                 channel.put(SESSION_ID_PARAM_NAME, Integer.toString(logPublisher.sessionId()));
                 channel.put(LINGER_PARAM_NAME, "0");
                 channel.put(EOS_PARAM_NAME, "false");
+                channel.put(ALIAS_PARAM_NAME, "catchup-followerId-" + follower.id());
 
                 follower.catchupReplaySessionId(archive.startReplay(
                     logRecordingId, logPosition, Long.MAX_VALUE, channel.toString(), ctx.logStreamId()));
