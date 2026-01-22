@@ -82,6 +82,7 @@ import org.agrona.collections.MutableInteger;
 import org.agrona.collections.MutableLong;
 import org.agrona.concurrent.AgentTerminationException;
 import org.agrona.concurrent.AtomicBuffer;
+import org.agrona.concurrent.SystemEpochClock;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.errors.ErrorConsumer;
 import org.agrona.concurrent.errors.ErrorLogReader;
@@ -993,6 +994,62 @@ class ClusterTest
         cluster.awaitNewLeadershipEvent(1);
         cluster.awaitLeader();
         cluster.followers(2);
+    }
+
+    @Test
+    @InterruptAfter(30)
+    void shouldEnterElectionWhenRecordingStopsUnexpectedlyOnLeaderOfSingleNodeCluster()
+    {
+        cluster = aCluster().withStaticNodes(1).start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode leader = cluster.awaitLeader();
+        cluster.connectClient();
+        cluster.sendAndAwaitMessages(1);
+
+        final AeronArchive.Context archiveCtx = new AeronArchive.Context()
+            .controlRequestChannel(leader.archive().context().localControlChannel())
+            .controlResponseChannel(leader.archive().context().localControlChannel())
+            .controlRequestStreamId(leader.archive().context().localControlStreamId())
+            .aeronDirectoryName(leader.mediaDriver().aeronDirectoryName());
+
+        try (AeronArchive archive = AeronArchive.connect(archiveCtx))
+        {
+            final int firstRecordingIdIsTheClusterLog = 0;
+            assertTrue(archive.tryStopRecordingByIdentity(firstRecordingIdIsTheClusterLog));
+        }
+
+        cluster.awaitNewLeadershipEvent(1);
+        cluster.awaitLeader();
+    }
+
+    @Test
+    @InterruptAfter(30)
+    void shouldEnterElectionWhenLosesQuorumUnexpectedlyOnLeaderOfSingleNodeCluster()
+    {
+        final OffsetMillisecondClusterClock clusterClock = new OffsetMillisecondClusterClock(SystemEpochClock.INSTANCE);
+        cluster = aCluster().withStaticNodes(1).withClusterClock(clusterClock).start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode leader = cluster.awaitLeader();
+        final AeronCluster client = cluster.connectClient();
+        cluster.sendAndAwaitMessages(1);
+
+        final long timeoutMs = NANOSECONDS.toMillis(Math.max(
+            leader.consensusModule().context().sessionTimeoutNs(),
+            leader.consensusModule().context().leaderHeartbeatTimeoutNs()));
+        clusterClock.addOffset(timeoutMs + 1);
+
+        cluster.shouldErrorOnClientClose(false);
+        while (!client.isClosed())
+        {
+            Tests.sleep(1);
+            client.pollEgress();
+        }
+
+        cluster.awaitLeader();
+        cluster.reconnectClient();
+        cluster.sendAndAwaitMessages(1, 2);
     }
 
     @Test

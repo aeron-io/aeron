@@ -152,6 +152,7 @@ class ElectionTest
         election.doWork(clock.nanoTime());
         election.doWork(clock.nanoTime());
         election.doWork(clock.nanoTime());
+        election.doWork(clock.nanoTime());
 
         verify(consensusModuleAgent).joinLogAsLeader(eq(newLeadershipTermId), eq(logPosition), anyInt(), eq(true));
         verify(electionStateCounter).setRelease(ElectionState.LEADER_READY.code());

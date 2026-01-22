@@ -147,15 +147,6 @@ class Election
         Objects.requireNonNull(thisMember);
         ctx.electionStateCounter().setRelease(INIT.code());
         ctx.electionCounter().incrementRelease();
-
-        if (clusterMembers.length == 1 && thisMember.id() == clusterMembers[0].id())
-        {
-            candidateTermId = max(leadershipTermId + 1, ctx.nodeStateFile().candidateTerm().candidateTermId() + 1);
-            this.leadershipTermId = candidateTermId;
-            leaderMember = thisMember;
-            ctx.nodeStateFile().updateCandidateTermId(candidateTermId, logPosition, ctx.epochClock().time());
-            state(LEADER_LOG_REPLICATION, nowNs, "");
-        }
     }
 
     ClusterMember leader()
@@ -685,7 +676,12 @@ class Election
 
         if (clusterMembers.length == 1 && thisMember.id() == clusterMembers[0].id())
         {
-            state(LEADER_LOG_REPLICATION, nowNs, "");
+            // short-circuit nominating self to a candidate and winning the ballot
+            candidateTermId += 1;
+            ctx.nodeStateFile().updateCandidateTermId(candidateTermId, logPosition, ctx.epochClock().time());
+            leaderMember = thisMember;
+            leadershipTermId = candidateTermId;
+            state(LEADER_LOG_REPLICATION, nowNs, "single-node cluster leader");
         }
         else
         {
