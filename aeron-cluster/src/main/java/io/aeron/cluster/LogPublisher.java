@@ -58,12 +58,18 @@ final class LogPublisher
     private final BufferClaim bufferClaim = new BufferClaim();
 
     private final String destinationChannel;
+    private LogPublisherFragmentedMessageTracker fragmentedMessageTracker;
     private ExclusivePublication publication;
 
     LogPublisher(final String destinationChannel)
     {
         this.destinationChannel = destinationChannel;
         sessionHeaderEncoder.wrapAndApplyHeader(sessionHeaderBuffer, 0, new MessageHeaderEncoder());
+    }
+
+    void fragmentedMessageTracker(final LogPublisherFragmentedMessageTracker fragmentedMessageTracker)
+    {
+        this.fragmentedMessageTracker = fragmentedMessageTracker;
     }
 
     void publication(final ExclusivePublication publication)
@@ -120,6 +126,8 @@ final class LogPublisher
         final int offset,
         final int length)
     {
+        final long startPosition = publication.position();
+
         sessionHeaderEncoder
             .leadershipTermId(leadershipTermId)
             .clusterSessionId(clusterSessionId)
@@ -133,6 +141,8 @@ final class LogPublisher
 
             if (position > 0)
             {
+                fragmentedMessageTracker.trackFragmentedMessage(publication.maxPayloadLength(),
+                    SESSION_HEADER_LENGTH + length, startPosition, publication.position());
                 break;
             }
 
@@ -145,6 +155,8 @@ final class LogPublisher
 
     long appendSessionOpen(final ClusterSession session, final long leadershipTermId, final long timestamp)
     {
+        final long startPosition = publication.position();
+
         long position;
         final byte[] encodedPrincipal = session.encodedPrincipal();
         final String channel = session.responseChannel();
@@ -167,6 +179,8 @@ final class LogPublisher
             position = publication.offer(expandableArrayBuffer, 0, length, null);
             if (position > 0)
             {
+                fragmentedMessageTracker.trackFragmentedMessage(publication.maxPayloadLength(),
+                    length, startPosition, publication.position());
                 break;
             }
 
