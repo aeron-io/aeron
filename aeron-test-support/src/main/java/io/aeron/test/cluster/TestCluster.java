@@ -50,6 +50,7 @@ import io.aeron.cluster.codecs.MessageHeaderDecoder;
 import io.aeron.cluster.codecs.NewLeadershipTermEventDecoder;
 import io.aeron.cluster.codecs.SessionMessageHeaderDecoder;
 import io.aeron.cluster.service.Cluster;
+import io.aeron.cluster.service.ClusterClock;
 import io.aeron.driver.Configuration;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ReceiveChannelEndpointSupplier;
@@ -197,6 +198,7 @@ public final class TestCluster implements AutoCloseable
     private Supplier<ConsensusModuleExtension> extensionSupplier;
     private IntFunction<SendChannelEndpointSupplier> sendChannelEndpointSupplier;
     private IntFunction<ReceiveChannelEndpointSupplier> receiveChannelEndpointSupplier;
+    private ClusterClock clusterClock;
 
     private TestCluster(
         final int clusterId,
@@ -448,6 +450,7 @@ public final class TestCluster implements AutoCloseable
                 .controlResponseChannel(ARCHIVE_LOCAL_CONTROL_CHANNEL))
             .sessionTimeoutNs(sessionTimeoutNs)
             .totalSnapshotDurationThresholdNs(TimeUnit.MILLISECONDS.toNanos(100))
+            .clusterClock(clusterClock)
             .authenticatorSupplier(authenticationSupplier)
             .authorisationServiceSupplier(authorisationServiceSupplier)
             .timerServiceSupplier(timerServiceSupplier)
@@ -2269,6 +2272,7 @@ public final class TestCluster implements AutoCloseable
         private List<String> hostnames;
         private Function<Aeron, Counter> errorCounterSupplier;
         private Function<Aeron, Counter> snapshotCounterSupplier;
+        private ClusterClock clusterClock;
         private long leaderHeartbeatTimeoutNs = LEADER_HEARTBEAT_TIMEOUT_NS;
         private long leaderHeartbeatIntervalNs = LEADER_HEARTBEAT_INTERVAL_NS;
         private long electionTimeoutNs = ELECTION_TIMEOUT_NS;
@@ -2478,6 +2482,12 @@ public final class TestCluster implements AutoCloseable
             return this;
         }
 
+        public Builder withClusterClock(final ClusterClock clusterClock)
+        {
+            this.clusterClock = clusterClock;
+            return this;
+        }
+
         public TestCluster start()
         {
             return start(nodeCount);
@@ -2525,6 +2535,7 @@ public final class TestCluster implements AutoCloseable
             testCluster.snapshotCounterSupplier = snapshotCounterSupplier;
             testCluster.sendChannelEndpointSupplier = sendChannelEndpointSupplier;
             testCluster.receiveChannelEndpointSupplier = receiveChannelEndpointSupplier;
+            testCluster.clusterClock = clusterClock;
 
             try
             {
