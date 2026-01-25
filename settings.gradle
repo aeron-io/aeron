@@ -6,6 +6,7 @@ include (
     'aeron-cluster',
     'aeron-agent',
     'aeron-samples',
+    'aeron-cluster-bridge',
     'aeron-system-tests',
     'aeron-test-support',
     'aeron-all')

@@ -1180,6 +1180,13 @@ project(':aeron-samples') {
     }
 }
 
+project(':aeron-cluster-bridge') {
+    dependencies {
+        api project(':aeron-archive')
+        testImplementation project(':aeron-test-support')
+    }
+}
+
 project(':aeron-system-tests') {
     apply plugin: 'com.gradleup.shadow'
 
