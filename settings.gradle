@@ -4,6 +4,7 @@ include (
     'aeron-driver',
     'aeron-archive',
     'aeron-cluster',
+    'aeron-cluster-bridge',
     'aeron-agent',
     'aeron-samples',
     'aeron-system-tests',

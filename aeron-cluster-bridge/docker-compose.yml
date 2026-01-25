@@ -1,0 +1,124 @@
+# Docker Compose for Aeron Cluster Bridge Service
+#
+# This configuration provides a local testing environment with:
+# - ME (Matching Engine) node: sender ME→RMS, receiver RMS→ME
+# - RMS (Risk Management) node: sender RMS→ME, receiver ME→RMS
+#
+# Architecture: Single-machine, multi-container testing
+#
+# Usage:
+#   Build:      docker-compose -f aeron-cluster-bridge/docker-compose.yml build
+#   Start:      docker-compose -f aeron-cluster-bridge/docker-compose.yml up
+#   Stop:       docker-compose -f aeron-cluster-bridge/docker-compose.yml down
+#   Clean:      docker-compose -f aeron-cluster-bridge/docker-compose.yml down -v
+#
+# Verification:
+#   docker-compose -f aeron-cluster-bridge/docker-compose.yml run verifier
+
+version: '3.8'
+
+services:
+  # ============================================================================
+  # ME (Matching Engine) Sender - Publishes to RMS
+  # ============================================================================
+  me-sender:
+    build:
+      context: ..
+      dockerfile: aeron-cluster-bridge/Dockerfile
+    container_name: bridge-me-sender
+    environment:
+      - BRIDGE_MODE=sender
+      - BRIDGE_DIRECTION=ME_TO_RMS
+      - BRIDGE_STREAM_ID=2001
+      - BRIDGE_MESSAGE_COUNT=100
+    volumes:
+      - me-archive:/app/archive
+      - me-checkpoints:/app/checkpoints
+    network_mode: host
+    restart: "no"
+
+  # ============================================================================
+  # ME (Matching Engine) Receiver - Receives from RMS
+  # ============================================================================
+  me-receiver:
+    build:
+      context: ..
+      dockerfile: aeron-cluster-bridge/Dockerfile
+    container_name: bridge-me-receiver
+    environment:
+      - BRIDGE_MODE=receiver
+      - BRIDGE_DIRECTION=RMS_TO_ME
+      - BRIDGE_STREAM_ID=2002
+    volumes:
+      - me-archive:/app/archive
+      - me-checkpoints:/app/checkpoints
+    network_mode: host
+    depends_on:
+      - rms-sender
+    restart: "no"
+
+  # ============================================================================
+  # RMS (Risk Management System) Sender - Publishes to ME
+  # ============================================================================
+  rms-sender:
+    build:
+      context: ..
+      dockerfile: aeron-cluster-bridge/Dockerfile
+    container_name: bridge-rms-sender
+    environment:
+      - BRIDGE_MODE=sender
+      - BRIDGE_DIRECTION=RMS_TO_ME
+      - BRIDGE_STREAM_ID=2002
+      - BRIDGE_MESSAGE_COUNT=100
+    volumes:
+      - rms-archive:/app/archive
+      - rms-checkpoints:/app/checkpoints
+    network_mode: host
+    restart: "no"
+
+  # ============================================================================
+  # RMS (Risk Management System) Receiver - Receives from ME
+  # ============================================================================
+  rms-receiver:
+    build:
+      context: ..
+      dockerfile: aeron-cluster-bridge/Dockerfile
+    container_name: bridge-rms-receiver
+    environment:
+      - BRIDGE_MODE=receiver
+      - BRIDGE_DIRECTION=ME_TO_RMS
+      - BRIDGE_STREAM_ID=2001
+    volumes:
+      - rms-archive:/app/archive
+      - rms-checkpoints:/app/checkpoints
+    network_mode: host
+    depends_on:
+      - me-sender
+    restart: "no"
+
+  # ============================================================================
+  # Verifier - Automated deterministic testing
+  # ============================================================================
+  verifier:
+    build:
+      context: ..
+      dockerfile: aeron-cluster-bridge/Dockerfile
+    container_name: bridge-verifier
+    entrypoint: ["java", "-cp", "/app/libs/*", "io.aeron.cluster.bridge.BridgeVerifier"]
+    environment:
+      - BRIDGE_DIRECTION=ME_TO_RMS
+      - BRIDGE_MESSAGE_COUNT=100
+    volumes:
+      - verifier-archive:/app/archive
+      - verifier-checkpoints:/app/checkpoints
+    network_mode: host
+    profiles:
+      - test
+
+volumes:
+  me-archive:
+  me-checkpoints:
+  rms-archive:
+  rms-checkpoints:
+  verifier-archive:
+  verifier-checkpoints:

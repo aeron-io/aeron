@@ -1180,6 +1180,74 @@ project(':aeron-samples') {
     }
 }
 
+/**
+ * Inter-cluster Bridge Service module.
+ * <p>
+ * Provides bidirectional, deterministic communication between Aeron Clusters
+ * with Archive replay support for fault-tolerant recovery.
+ * <p>
+ * Design Rationale:
+ * - Separated from aeron-samples to maintain clean module boundaries (SOLID - SRP)
+ * - Depends on aeron-cluster and aeron-archive for core functionality
+ * - Provides runnable entry points for bridge sender/receiver
+ */
+project(':aeron-cluster-bridge') {
+    dependencies {
+        api project(':aeron-cluster')
+        implementation project(':aeron-annotations')
+        annotationProcessor project(':aeron-annotations')
+        testImplementation project(':aeron-test-support')
+    }
+
+    /**
+     * Task to run the bridge sender.
+     * Usage: ./gradlew :aeron-cluster-bridge:runBridgeSender -Dbridge.direction=ME_TO_RMS
+     */
+    tasks.register('runBridgeSender', JavaExec) {
+        group = 'application'
+        description = 'Run the Bridge Sender'
+        classpath = sourceSets.main.runtimeClasspath
+        mainClass.set('io.aeron.cluster.bridge.BridgeSender')
+        systemProperties = System.properties
+    }
+
+    /**
+     * Task to run the bridge receiver.
+     * Usage: ./gradlew :aeron-cluster-bridge:runBridgeReceiver -Dbridge.direction=ME_TO_RMS
+     */
+    tasks.register('runBridgeReceiver', JavaExec) {
+        group = 'application'
+        description = 'Run the Bridge Receiver'
+        classpath = sourceSets.main.runtimeClasspath
+        mainClass.set('io.aeron.cluster.bridge.BridgeReceiver')
+        systemProperties = System.properties
+    }
+
+    /**
+     * Task to run the bridge in unified mode.
+     * Usage: ./gradlew :aeron-cluster-bridge:runClusterBridge --args="--mode=ME"
+     */
+    tasks.register('runClusterBridge', JavaExec) {
+        group = 'application'
+        description = 'Run the Cluster Bridge (unified entry point)'
+        classpath = sourceSets.main.runtimeClasspath
+        mainClass.set('io.aeron.cluster.bridge.ClusterBridgeMain')
+        systemProperties = System.properties
+    }
+
+    /**
+     * Task to run the bridge verifier.
+     * Usage: ./gradlew :aeron-cluster-bridge:runBridgeVerifier
+     */
+    tasks.register('runBridgeVerifier', JavaExec) {
+        group = 'application'
+        description = 'Run the Bridge Verifier for deterministic validation'
+        classpath = sourceSets.main.runtimeClasspath
+        mainClass.set('io.aeron.cluster.bridge.BridgeVerifier')
+        systemProperties = System.properties
+    }
+}
+
 project(':aeron-system-tests') {
     apply plugin: 'com.gradleup.shadow'
 
