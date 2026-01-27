@@ -52,6 +52,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
@@ -85,18 +87,25 @@ public class ClusterUncommittedStateTest
         }
     }
 
-    @Test
+    @ParameterizedTest(name = "ShouldRollbackUncommittedSuspendControlToggle hasService={0}")
+    @ValueSource(booleans = {true, false})
     @SlowTest
     @InterruptAfter(20)
-    void shouldRollbackUncommittedSuspendControlToggle()
+    void shouldRollbackUncommittedSuspendControlToggle(final boolean hasService)
     {
         assumeTrue(shouldRunJavaMediaDriver());
 
-        cluster = aCluster()
+        final TestCluster.Builder clusterBuilder = aCluster()
             .withStaticNodes(NODE_COUNT)
-            .withReceiveChannelEndpointSupplier((index) -> toggledLossControls[index])
-            .withSendChannelEndpointSupplier((index) -> toggledLossControls[index])
-            .start();
+            .withReceiveChannelEndpointSupplier((memberId) -> toggledLossControls[memberId])
+            .withSendChannelEndpointSupplier((memberId) -> toggledLossControls[memberId]);
+        if (!hasService)
+        {
+            clusterBuilder
+                .withExtensionSuppler(TestCounterExtension::new)
+                .withServiceSupplier(value -> new TestNode.TestService[0]);
+        }
+        cluster = clusterBuilder.start();
         systemTestWatcher.cluster(cluster);
 
         final TestNode firstLeader = cluster.awaitLeader();
@@ -115,18 +124,25 @@ public class ClusterUncommittedStateTest
         Tests.await(() -> ConsensusModule.State.ACTIVE == firstLeader.moduleState());
     }
 
-    @Test
+    @ParameterizedTest(name = "ShouldRollbackUncommittedResumeControlToggle hasService={0}")
+    @ValueSource(booleans = {true, false})
     @SlowTest
     @InterruptAfter(20)
-    void shouldRollbackUncommittedResumeControlToggle()
+    void shouldRollbackUncommittedResumeControlToggle(final boolean hasService)
     {
         assumeTrue(shouldRunJavaMediaDriver());
 
-        cluster = aCluster()
+        final TestCluster.Builder clusterBuilder = aCluster()
             .withStaticNodes(NODE_COUNT)
-            .withReceiveChannelEndpointSupplier((index) -> toggledLossControls[index])
-            .withSendChannelEndpointSupplier((index) -> toggledLossControls[index])
-            .start();
+            .withReceiveChannelEndpointSupplier((memberId) -> toggledLossControls[memberId])
+            .withSendChannelEndpointSupplier((memberId) -> toggledLossControls[memberId]);
+        if (!hasService)
+        {
+            clusterBuilder
+                .withExtensionSuppler(TestCounterExtension::new)
+                .withServiceSupplier(value -> new TestNode.TestService[0]);
+        }
+        cluster = clusterBuilder.start();
         systemTestWatcher.cluster(cluster);
 
         final TestNode firstLeader = cluster.awaitLeader();
@@ -158,18 +174,25 @@ public class ClusterUncommittedStateTest
         Tests.await(() -> ConsensusModule.State.SUSPENDED == firstLeader.moduleState());
     }
 
-    @Test
+    @ParameterizedTest(name = "ShouldRollbackUncommittedSnapshotToggle hasService={0}")
+    @ValueSource(booleans = {true, false})
     @SlowTest
     @InterruptAfter(20)
-    void shouldRollbackUncommittedSnapshotToggle()
+    void shouldRollbackUncommittedSnapshotToggle(final boolean hasService)
     {
         assumeTrue(shouldRunJavaMediaDriver());
 
-        cluster = aCluster()
+        final TestCluster.Builder clusterBuilder = aCluster()
             .withStaticNodes(NODE_COUNT)
-            .withReceiveChannelEndpointSupplier((index) -> toggledLossControls[index])
-            .withSendChannelEndpointSupplier((index) -> toggledLossControls[index])
-            .start();
+            .withReceiveChannelEndpointSupplier((memberId) -> toggledLossControls[memberId])
+            .withSendChannelEndpointSupplier((memberId) -> toggledLossControls[memberId]);
+        if (!hasService)
+        {
+            clusterBuilder
+                .withExtensionSuppler(TestCounterExtension::new)
+                .withServiceSupplier(value -> new TestNode.TestService[0]);
+        }
+        cluster = clusterBuilder.start();
         systemTestWatcher.cluster(cluster);
 
         final TestNode firstLeader = cluster.awaitLeader();
