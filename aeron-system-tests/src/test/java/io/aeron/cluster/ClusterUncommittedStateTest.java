@@ -102,7 +102,7 @@ public class ClusterUncommittedStateTest
         if (!hasService)
         {
             clusterBuilder
-                .withExtensionSuppler(TestCounterExtension::new)
+                .withExtensionSuppler(TestNode.TestConsensusModuleExtension::new)
                 .withServiceSupplier(value -> new TestNode.TestService[0]);
         }
         cluster = clusterBuilder.start();
@@ -139,7 +139,7 @@ public class ClusterUncommittedStateTest
         if (!hasService)
         {
             clusterBuilder
-                .withExtensionSuppler(TestCounterExtension::new)
+                .withExtensionSuppler(TestNode.TestConsensusModuleExtension::new)
                 .withServiceSupplier(value -> new TestNode.TestService[0]);
         }
         cluster = clusterBuilder.start();
@@ -189,7 +189,7 @@ public class ClusterUncommittedStateTest
         if (!hasService)
         {
             clusterBuilder
-                .withExtensionSuppler(TestCounterExtension::new)
+                .withExtensionSuppler(TestNode.TestConsensusModuleExtension::new)
                 .withServiceSupplier(value -> new TestNode.TestService[0]);
         }
         cluster = clusterBuilder.start();
