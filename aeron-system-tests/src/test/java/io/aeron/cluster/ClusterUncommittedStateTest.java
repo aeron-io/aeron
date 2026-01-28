@@ -21,7 +21,6 @@ import io.aeron.Image;
 import io.aeron.cluster.client.AeronCluster;
 import io.aeron.cluster.codecs.MessageHeaderDecoder;
 import io.aeron.cluster.codecs.MessageHeaderEncoder;
-import io.aeron.cluster.client.AeronCluster;
 import io.aeron.cluster.codecs.NewLeadershipTermEventEncoder;
 import io.aeron.cluster.codecs.SessionOpenEventEncoder;
 import io.aeron.driver.DataPacketDispatcher;
@@ -41,7 +40,6 @@ import io.aeron.protocol.DataHeaderFlyweight;
 import io.aeron.test.EventLogExtension;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
-import io.aeron.test.IpTables;
 import io.aeron.test.SlowTest;
 import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.Tests;
@@ -73,7 +71,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 @ExtendWith({ EventLogExtension.class, InterruptingTestCallback.class })
 public class ClusterUncommittedStateTest
@@ -244,72 +241,25 @@ public class ClusterUncommittedStateTest
         Tests.await(() -> ConsensusModule.State.SUSPENDED == firstLeader.moduleState());
     }
 
-    @Test
+    @ParameterizedTest(name = "ShouldNextCommittedSessionIdReflectOnlyCommittedSessions hasService={0}")
+    @ValueSource(booleans = {true, false})
     @SlowTest
     @InterruptAfter(20)
-    void shouldSnapshotWithNoServicesWithUncommittedData()
+    void shouldNextCommittedSessionIdReflectOnlyCommittedSessions(final boolean hasService)
     {
         assumeTrue(shouldRunJavaMediaDriver());
 
-        cluster = aCluster()
+        final TestCluster.Builder clusterBuilder = aCluster()
             .withStaticNodes(NODE_COUNT)
-            .withReceiveChannelEndpointSupplier((index) -> toggledLossControls[index])
-            .withSendChannelEndpointSupplier((index) -> toggledLossControls[index])
-            .withExtensionSuppler(TestCounterExtension::new)
-            .withServiceSupplier(value -> new TestNode.TestService[0])
-            .start();
-        systemTestWatcher.cluster(cluster);
-
-        final TestNode firstLeader = cluster.awaitLeader();
-        final ToggledLossControl leaderLossControl = toggledLossControls[firstLeader.memberId()];
-
-        leaderLossControl.toggleLoss(true);
-        Tests.await(() -> 0 < leaderLossControl.droppedOutboundFrames.get() &&
-            0 < leaderLossControl.droppedInboundFrames.get());
-
-        cluster.connectIpcClient(new AeronCluster.Context(), firstLeader.mediaDriver().aeronDirectoryName());
-        cluster.sendExtensionMessages(32);
-        final long messageLength = BitUtil.align(
-            DataHeaderFlyweight.HEADER_LENGTH + MessageHeaderEncoder.ENCODED_LENGTH + BitUtil.SIZE_OF_INT,
-            FrameDescriptor.FRAME_ALIGNMENT);
-        Tests.await(() -> firstLeader.appendPosition() > 32L * messageLength);
-
-        cluster.takeSnapshot(firstLeader);
-        Tests.await(() -> ConsensusModule.State.SNAPSHOT == firstLeader.moduleState());
-
-        leaderLossControl.toggleLoss(false);
-        cluster.awaitSnapshotCount(1);
-
-        final TestCounterExtension node0Extension =
-            (TestCounterExtension)cluster.node(0).consensusModule().context().consensusModuleExtension();
-        final TestCounterExtension node1Extension =
-            (TestCounterExtension)cluster.node(1).consensusModule().context().consensusModuleExtension();
-        final TestCounterExtension node2Extension =
-            (TestCounterExtension)cluster.node(2).consensusModule().context().consensusModuleExtension();
-        final List<Integer> node0Snapshots = node0Extension.counterSnapshots();
-        final List<Integer> node1Snapshots = node1Extension.counterSnapshots();
-        final List<Integer> node2Snapshots = node2Extension.counterSnapshots();
-
-        assertEquals(1, node0Snapshots.size());
-        assertEquals(1, node1Snapshots.size());
-        assertEquals(1, node2Snapshots.size());
-        assertEquals(31, node0Snapshots.get(0));
-        assertEquals(31, node1Snapshots.get(0));
-        assertEquals(31, node2Snapshots.get(0));
-    }
-
-    @Test
-    @SlowTest
-    @InterruptAfter(20)
-    void shouldNextCommittedSessionIdReflectOnlyCommittedSessions()
-    {
-        assumeTrue(shouldRunJavaMediaDriver());
-
-        cluster = aCluster()
-            .withStaticNodes(NODE_COUNT)
-            .withReceiveChannelEndpointSupplier((index) -> toggledLossControls[index])
-            .withSendChannelEndpointSupplier((index) -> toggledLossControls[index])
-            .start();
+            .withReceiveChannelEndpointSupplier((memberId) -> toggledLossControls[memberId])
+            .withSendChannelEndpointSupplier((memberId) -> toggledLossControls[memberId]);
+        if (!hasService)
+        {
+            clusterBuilder
+                .withExtensionSuppler(TestNode.TestConsensusModuleExtension::new)
+                .withServiceSupplier(value -> new TestNode.TestService[0]);
+        }
+        cluster = clusterBuilder.start();
         systemTestWatcher.cluster(cluster);
 
         final TestNode firstLeader = cluster.awaitLeader();
@@ -365,6 +315,60 @@ public class ClusterUncommittedStateTest
         {
             assertEquals(2, ClusterTest.readSnapshot(cluster.node(i)));
         }
+    }
+
+    @Test
+    @SlowTest
+    @InterruptAfter(20)
+    void shouldSnapshotWithNoServicesWithUncommittedData()
+    {
+        assumeTrue(shouldRunJavaMediaDriver());
+
+        cluster = aCluster()
+            .withStaticNodes(NODE_COUNT)
+            .withReceiveChannelEndpointSupplier((index) -> toggledLossControls[index])
+            .withSendChannelEndpointSupplier((index) -> toggledLossControls[index])
+            .withExtensionSuppler(TestCounterExtension::new)
+            .withServiceSupplier(value -> new TestNode.TestService[0])
+            .start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode firstLeader = cluster.awaitLeader();
+        final ToggledLossControl leaderLossControl = toggledLossControls[firstLeader.memberId()];
+
+        leaderLossControl.toggleLoss(true);
+        Tests.await(() -> 0 < leaderLossControl.droppedOutboundFrames.get() &&
+            0 < leaderLossControl.droppedInboundFrames.get());
+
+        cluster.connectIpcClient(new AeronCluster.Context(), firstLeader.mediaDriver().aeronDirectoryName());
+        cluster.sendExtensionMessages(32);
+        final long messageLength = BitUtil.align(
+            DataHeaderFlyweight.HEADER_LENGTH + MessageHeaderEncoder.ENCODED_LENGTH + BitUtil.SIZE_OF_INT,
+            FrameDescriptor.FRAME_ALIGNMENT);
+        Tests.await(() -> firstLeader.appendPosition() > 32L * messageLength);
+
+        cluster.takeSnapshot(firstLeader);
+        Tests.await(() -> ConsensusModule.State.SNAPSHOT == firstLeader.moduleState());
+
+        leaderLossControl.toggleLoss(false);
+        cluster.awaitSnapshotCount(1);
+
+        final TestCounterExtension node0Extension =
+            (TestCounterExtension)cluster.node(0).consensusModule().context().consensusModuleExtension();
+        final TestCounterExtension node1Extension =
+            (TestCounterExtension)cluster.node(1).consensusModule().context().consensusModuleExtension();
+        final TestCounterExtension node2Extension =
+            (TestCounterExtension)cluster.node(2).consensusModule().context().consensusModuleExtension();
+        final List<Integer> node0Snapshots = node0Extension.counterSnapshots();
+        final List<Integer> node1Snapshots = node1Extension.counterSnapshots();
+        final List<Integer> node2Snapshots = node2Extension.counterSnapshots();
+
+        assertEquals(1, node0Snapshots.size());
+        assertEquals(1, node1Snapshots.size());
+        assertEquals(1, node2Snapshots.size());
+        assertEquals(31, node0Snapshots.get(0));
+        assertEquals(31, node1Snapshots.get(0));
+        assertEquals(31, node2Snapshots.get(0));
     }
 
     private static final class TestCounterExtension extends TestNode.TestConsensusModuleExtension
