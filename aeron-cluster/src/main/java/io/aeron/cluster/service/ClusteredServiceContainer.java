@@ -221,7 +221,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
         /**
          * The max number of services supported by the cluster instance.
          */
-        public static final int MAX_SERVICE_COUNT = 128;
+        public static final int MAX_SERVICE_COUNT = 10;
 
         /**
          * Name for a clustered service to be the role of the {@link Agent}.

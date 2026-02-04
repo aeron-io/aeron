@@ -359,8 +359,8 @@ class ClusteredServiceContainerContextTest
     @ParameterizedTest
     @CsvSource({
         "aeron:ipc,aeron:ipc?term-length=64k|mtu=8k," +
-            "aeron:ipc?alias=sc-88-archive-ctrl-req-cluster-99," +
-            "aeron:ipc?term-length=64k|mtu=8k|alias=sc-88-archive-ctrl-resp-cluster-99",
+            "aeron:ipc?alias=sc-8-archive-ctrl-req-cluster-99," +
+            "aeron:ipc?term-length=64k|mtu=8k|alias=sc-8-archive-ctrl-resp-cluster-99",
         "aeron:ipc?alias=x,aeron:ipc?alias=y,aeron:ipc?alias=x,aeron:ipc?alias=y"
     })
     void shouldCreateAliasForControlStreamsEvenWhenArchiveContextAssignedExplicitly(
@@ -374,7 +374,7 @@ class ClusteredServiceContainerContextTest
             .controlResponseChannel(controlResponseChannel)
             .controlRequestStreamId(42)
             .controlResponseStreamId(18);
-        context.archiveContext(archiveContext).clusterId(99).serviceId(88);
+        context.archiveContext(archiveContext).clusterId(99).serviceId(8);
 
         context.conclude();
 

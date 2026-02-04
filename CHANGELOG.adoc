@@ -1,5 +1,12 @@
 = Aeron Releases
 
+== 1.51.0 (????-??-??)
+
+=== Changelog
+
+* **[Cluster]** Enforce a maximum service count of 10. This limit has always existed in Cluster
+but is now explicitly enforced via the ClusteredServiceContainer.Configuration.MAX_SERVICE_COUNT setting.
+
 == 1.50.0 (2026-01-16)
 === New & Noteworthy
 
