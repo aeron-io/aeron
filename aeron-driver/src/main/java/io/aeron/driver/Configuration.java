@@ -1070,9 +1070,9 @@ public final class Configuration
      */
     @Config(
         defaultType = DefaultType.LONG,
-        defaultLong = 1_000_000L,
+        defaultLong = 100_000_000L,
         expectedCDefaultFieldName = "AERON_DRIVER_CONDUCTOR_CYCLE_THRESHOLD_NS_DEFAULT")
-    public static final long CONDUCTOR_CYCLE_THRESHOLD_DEFAULT_NS = TimeUnit.MILLISECONDS.toNanos(1);
+    public static final long CONDUCTOR_CYCLE_THRESHOLD_DEFAULT_NS = TimeUnit.MILLISECONDS.toNanos(100);
 
     /**
      * Property name for threshold value for the sender work cycle threshold to track for being exceeded.
@@ -1085,9 +1085,9 @@ public final class Configuration
      */
     @Config(
         defaultType = DefaultType.LONG,
-        defaultLong = 1_000_000L,
+        defaultLong = 100_000_000L,
         expectedCDefaultFieldName = "AERON_DRIVER_SENDER_CYCLE_THRESHOLD_NS_DEFAULT")
-    public static final long SENDER_CYCLE_THRESHOLD_DEFAULT_NS = TimeUnit.MILLISECONDS.toNanos(1);
+    public static final long SENDER_CYCLE_THRESHOLD_DEFAULT_NS = TimeUnit.MILLISECONDS.toNanos(100);
 
     /**
      * Property name for threshold value for the receiver work cycle threshold to track for being exceeded.
@@ -1100,9 +1100,9 @@ public final class Configuration
      */
     @Config(
         defaultType = DefaultType.LONG,
-        defaultLong = 1_000_000L,
+        defaultLong = 100_000_000L,
         expectedCDefaultFieldName = "AERON_DRIVER_RECEIVER_CYCLE_THRESHOLD_NS_DEFAULT")
-    public static final long RECEIVER_CYCLE_THRESHOLD_DEFAULT_NS = TimeUnit.MILLISECONDS.toNanos(1);
+    public static final long RECEIVER_CYCLE_THRESHOLD_DEFAULT_NS = TimeUnit.MILLISECONDS.toNanos(100);
 
     /**
      * Property name for threshold value for the name resolution threshold to track for being exceeded.

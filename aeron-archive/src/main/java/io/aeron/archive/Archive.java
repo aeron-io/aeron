@@ -528,8 +528,8 @@ public final class Archive implements AutoCloseable
         /**
          * Default threshold value for the conductor work cycle threshold to track for being exceeded.
          */
-        @Config(defaultType = DefaultType.LONG, defaultLong = 1_000_000L)
-        public static final long CONDUCTOR_CYCLE_THRESHOLD_DEFAULT_NS = TimeUnit.MILLISECONDS.toNanos(1);
+        @Config(defaultType = DefaultType.LONG, defaultLong = 100_000_000L)
+        public static final long CONDUCTOR_CYCLE_THRESHOLD_DEFAULT_NS = TimeUnit.MILLISECONDS.toNanos(100);
 
         /**
          * Property name for threshold value for the recorder work cycle threshold to track for being exceeded.
@@ -540,8 +540,8 @@ public final class Archive implements AutoCloseable
         /**
          * Default threshold value for the recorder work cycle threshold to track for being exceeded.
          */
-        @Config(defaultType = DefaultType.LONG, defaultLong = 1_000_000L)
-        public static final long RECORDER_CYCLE_THRESHOLD_DEFAULT_NS = TimeUnit.MILLISECONDS.toNanos(1);
+        @Config(defaultType = DefaultType.LONG, defaultLong = 100_000_000L)
+        public static final long RECORDER_CYCLE_THRESHOLD_DEFAULT_NS = TimeUnit.MILLISECONDS.toNanos(100);
 
         /**
          * Property name for threshold value for the replayer work cycle threshold to track for being exceeded.
@@ -552,8 +552,8 @@ public final class Archive implements AutoCloseable
         /**
          * Default threshold value for the replayer work cycle threshold to track for being exceeded.
          */
-        @Config(defaultType = DefaultType.LONG, defaultLong = 1_000_000L)
-        public static final long REPLAYER_CYCLE_THRESHOLD_DEFAULT_NS = TimeUnit.MILLISECONDS.toNanos(1);
+        @Config(defaultType = DefaultType.LONG, defaultLong = 100_000_000L)
+        public static final long REPLAYER_CYCLE_THRESHOLD_DEFAULT_NS = TimeUnit.MILLISECONDS.toNanos(100);
 
         /**
          * Should the archive delete existing files on start. Default is false and should only be true for testing.
