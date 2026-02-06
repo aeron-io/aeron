@@ -212,6 +212,7 @@ final class ConsensusModuleAgent
     private final ArrayDeque<ClusterSession> uncommittedClosedSessions = new ArrayDeque<>();
     private final LongArrayQueue uncommittedTimers = new LongArrayQueue(Long.MAX_VALUE);
     private final LongArrayQueue uncommittedPreviousState = new LongArrayQueue(Long.MAX_VALUE);
+    private final LongArrayQueue uncommittedNextCommittedSessionIds = new LongArrayQueue(Long.MAX_VALUE);
     private final PendingServiceMessageTracker[] pendingServiceMessageTrackers;
     private final ConsensusModuleExtension consensusModuleExtension;
     private final Authenticator authenticator;
@@ -2887,10 +2888,10 @@ final class ConsensusModuleAgent
                                 session.openedLogPosition(),
                                 nowNs,
                                 clusterTimeUnit);
-                            if (session.id() >= nextCommittedSessionId)
-                            {
-                                nextCommittedSessionId = session.id() + 1;
-                            }
+
+                            uncommittedNextCommittedSessionIds.offerLong(logPublisher.position());
+                            uncommittedNextCommittedSessionIds.offerLong(session.id() + 1);
+
                             ArrayListUtil.fastUnorderedRemove(pendingSessions, i, lastIndex--);
                             addSession(session);
                             workCount += 1;
@@ -3533,6 +3534,12 @@ final class ConsensusModuleAgent
             uncommittedPreviousState.pollLong();
             uncommittedPreviousState.pollLong();
         }
+
+        while (uncommittedNextCommittedSessionIds.peekLong() <= commitPosition)
+        {
+            uncommittedNextCommittedSessionIds.pollLong();
+            nextCommittedSessionId = Math.max(nextCommittedSessionId, uncommittedNextCommittedSessionIds.pollLong());
+        }
     }
 
     private void restoreUncommittedEntries(final long commitPosition)
@@ -3581,6 +3588,14 @@ final class ConsensusModuleAgent
             }
         }
         uncommittedPreviousState.clear();
+
+        while (uncommittedNextCommittedSessionIds.peekLong() <= commitPosition)
+        {
+            uncommittedNextCommittedSessionIds.pollLong();
+            nextCommittedSessionId = Math.max(nextCommittedSessionId, uncommittedNextCommittedSessionIds.pollLong());
+        }
+        uncommittedNextCommittedSessionIds.clear();
+        nextSessionId = nextCommittedSessionId;
     }
 
     private void enterElection(final boolean isLogEndOfStream, final String reason)
@@ -4144,6 +4159,7 @@ final class ConsensusModuleAgent
         serviceAckId = bootstrapState.serviceAckId;
         leadershipTermId = bootstrapState.leadershipTermId;
         nextSessionId = bootstrapState.nextSessionId;
+        nextCommittedSessionId = bootstrapState.nextSessionId;
 
         for (final ConsensusModuleStateExport.TimerStateExport timer : bootstrapState.timers)
         {
