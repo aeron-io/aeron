@@ -397,10 +397,14 @@ static inline int32_t aeron_append_block(
     int32_t resulting_offset = term_offset + (int32_t)length;
     aeron_put_raw_tail_release(term_tail_counter, term_id, resulting_offset);
 
-    aeron_data_header_as_longs_t *dest_hdr_as_longs = (aeron_data_header_as_longs_t *)term_buffer->addr;
+    aeron_data_header_as_longs_t *dest_hdr_as_longs =
+        (aeron_data_header_as_longs_t *)(term_buffer->addr + term_offset);
     aeron_data_header_as_longs_t *src_hdr_as_longs = (aeron_data_header_as_longs_t *)buffer;
 
-    memcpy(term_buffer->addr + AERON_DATA_HEADER_LENGTH, buffer + AERON_DATA_HEADER_LENGTH, length - AERON_DATA_HEADER_LENGTH);
+    memcpy(
+        term_buffer->addr + term_offset + AERON_DATA_HEADER_LENGTH,
+        buffer + AERON_DATA_HEADER_LENGTH,
+        length - AERON_DATA_HEADER_LENGTH);
 
     dest_hdr_as_longs->hdr[3] = src_hdr_as_longs->hdr[3];
     dest_hdr_as_longs->hdr[2] = src_hdr_as_longs->hdr[2];
