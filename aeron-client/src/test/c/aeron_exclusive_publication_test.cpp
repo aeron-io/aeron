@@ -1155,8 +1155,8 @@ TEST_F(ExclusivePublicationTest, offerBlockUnfragmentedMessage)
     createPublication(term_count, term_offset);
 
     // Pre-format the block as caller would do
-    uint8_t block[AERON_DATA_HEADER_LENGTH + length];
-    aeron_data_header_t *header = (aeron_data_header_t *)block;
+    std::vector<uint8_t> block(AERON_DATA_HEADER_LENGTH + length);
+    aeron_data_header_t *header = (aeron_data_header_t *)block.data();
     header->frame_header.frame_length = AERON_DATA_HEADER_LENGTH + length;
     header->frame_header.type = AERON_HDR_TYPE_DATA;
     header->frame_header.version = AERON_FRAME_HEADER_VERSION;
@@ -1166,11 +1166,11 @@ TEST_F(ExclusivePublicationTest, offerBlockUnfragmentedMessage)
     header->session_id = m_publication->session_id;
     header->stream_id = m_publication->stream_id;
     header->reserved_value = 42;
-    memcpy(block + AERON_DATA_HEADER_LENGTH, payload, length);
+    memcpy(block.data() + AERON_DATA_HEADER_LENGTH, payload, length);
 
     const int64_t position = aeron_exclusive_publication_offer_block(
         m_publication,
-        block,
+        block.data(),
         AERON_DATA_HEADER_LENGTH + length);
 
     const int32_t frame_length = static_cast<int32_t>(AERON_DATA_HEADER_LENGTH + length);
@@ -1207,8 +1207,8 @@ TEST_F(ExclusivePublicationTest, offerBlockMultipleBlocksInSameTerm)
     const aeron_mapped_buffer_t *term_buffer = &m_publication->log_buffer->mapped_raw_log.term_buffers[partition_index];
 
     // === Offer first block ===
-    uint8_t block1[AERON_DATA_HEADER_LENGTH + length1];
-    aeron_data_header_t *header1 = (aeron_data_header_t *)block1;
+    std::vector<uint8_t> block1(AERON_DATA_HEADER_LENGTH + length1);
+    aeron_data_header_t *header1 = (aeron_data_header_t *)block1.data();
     header1->frame_header.frame_length = AERON_DATA_HEADER_LENGTH + length1;
     header1->frame_header.type = AERON_HDR_TYPE_DATA;
     header1->frame_header.version = AERON_FRAME_HEADER_VERSION;
@@ -1218,11 +1218,11 @@ TEST_F(ExclusivePublicationTest, offerBlockMultipleBlocksInSameTerm)
     header1->session_id = m_publication->session_id;
     header1->stream_id = m_publication->stream_id;
     header1->reserved_value = 111;
-    memcpy(block1 + AERON_DATA_HEADER_LENGTH, payload1, length1);
+    memcpy(block1.data() + AERON_DATA_HEADER_LENGTH, payload1, length1);
 
     const int64_t position1 = aeron_exclusive_publication_offer_block(
         m_publication,
-        block1,
+        block1.data(),
         AERON_DATA_HEADER_LENGTH + length1);
 
     ASSERT_GT(position1, 0);
@@ -1238,8 +1238,8 @@ TEST_F(ExclusivePublicationTest, offerBlockMultipleBlocksInSameTerm)
     // Update publication's term_offset to match second_offset for next write
     m_publication->term_offset = second_offset;
 
-    uint8_t block2[AERON_DATA_HEADER_LENGTH + length2];
-    aeron_data_header_t *header2 = (aeron_data_header_t *)block2;
+    std::vector<uint8_t> block2(AERON_DATA_HEADER_LENGTH + length2);
+    aeron_data_header_t *header2 = (aeron_data_header_t *)block2.data();
     header2->frame_header.frame_length = AERON_DATA_HEADER_LENGTH + length2;
     header2->frame_header.type = AERON_HDR_TYPE_DATA;
     header2->frame_header.version = AERON_FRAME_HEADER_VERSION;
@@ -1249,11 +1249,11 @@ TEST_F(ExclusivePublicationTest, offerBlockMultipleBlocksInSameTerm)
     header2->session_id = m_publication->session_id;
     header2->stream_id = m_publication->stream_id;
     header2->reserved_value = 222;
-    memcpy(block2 + AERON_DATA_HEADER_LENGTH, payload2, length2);
+    memcpy(block2.data() + AERON_DATA_HEADER_LENGTH, payload2, length2);
 
     const int64_t position2 = aeron_exclusive_publication_offer_block(
         m_publication,
-        block2,
+        block2.data(),
         AERON_DATA_HEADER_LENGTH + length2);
 
     ASSERT_GT(position2, position1);
@@ -1275,7 +1275,6 @@ TEST_F(ExclusivePublicationTest, offerBlockMultipleBlocksInSameTerm)
     EXPECT_EQ(0, memcmp(term_buffer->addr + second_offset + AERON_DATA_HEADER_LENGTH, payload2, length2));
 
     // Verify offset 0 still has original content (not overwritten by block2)
-    auto *header_at_zero = (aeron_data_header_t *)(term_buffer->addr);
     EXPECT_EQ(0, memcmp(term_buffer->addr + initial_offset + AERON_DATA_HEADER_LENGTH, payload1, length1));
 }
 
@@ -1293,12 +1292,12 @@ TEST_F(ExclusivePublicationTest, offerBlockErrorIfBufferIsNull)
 
 TEST_F(ExclusivePublicationTest, offerBlockErrorIfPublicationIsNull)
 {
-    uint8_t block[256];
-    memset(block, 0, sizeof(block));
+    std::vector<uint8_t> block(256);
+    memset(block.data(), 0, block.size());
 
     const int64_t position = aeron_exclusive_publication_offer_block(
         nullptr,
-        block,
+        block.data(),
         256);
 
     ASSERT_EQ(AERON_PUBLICATION_ERROR, position);
@@ -1306,8 +1305,8 @@ TEST_F(ExclusivePublicationTest, offerBlockErrorIfPublicationIsNull)
 
 TEST_F(ExclusivePublicationTest, offerBlockClosed)
 {
-    uint8_t block[256];
-    aeron_data_header_t *header = (aeron_data_header_t *)block;
+    std::vector<uint8_t> block(256);
+    aeron_data_header_t *header = (aeron_data_header_t *)block.data();
     header->frame_header.frame_length = 256;
     header->frame_header.type = AERON_HDR_TYPE_DATA;
     header->frame_header.version = AERON_FRAME_HEADER_VERSION;
@@ -1317,7 +1316,7 @@ TEST_F(ExclusivePublicationTest, offerBlockClosed)
     header->session_id = SESSION_ID;
     header->stream_id = STREAM_ID;
     header->reserved_value = 0;
-    memset(block + AERON_DATA_HEADER_LENGTH, 'X', 256 - AERON_DATA_HEADER_LENGTH);
+    memset(block.data() + AERON_DATA_HEADER_LENGTH, 'X', 256 - AERON_DATA_HEADER_LENGTH);
 
     const int32_t term_count = 2;
     createPublication(term_count, 0);
@@ -1326,7 +1325,7 @@ TEST_F(ExclusivePublicationTest, offerBlockClosed)
 
     const int64_t position = aeron_exclusive_publication_offer_block(
         m_publication,
-        block,
+        block.data(),
         256);
 
     ASSERT_EQ(AERON_PUBLICATION_CLOSED, position);
@@ -1351,8 +1350,8 @@ TEST_F(ExclusivePublicationTest, offerBlockWithVariousOffsets)
         int32_t offset = test_offsets[i];
         uint8_t data_value = test_data[i];
 
-        uint8_t block[AERON_DATA_HEADER_LENGTH + 64];
-        aeron_data_header_t *header = (aeron_data_header_t *)block;
+        std::vector<uint8_t> block(AERON_DATA_HEADER_LENGTH + 64);
+        aeron_data_header_t *header = (aeron_data_header_t *)block.data();
         header->frame_header.frame_length = AERON_DATA_HEADER_LENGTH + 64;
         header->frame_header.type = AERON_HDR_TYPE_DATA;
         header->frame_header.version = AERON_FRAME_HEADER_VERSION;
@@ -1362,11 +1361,11 @@ TEST_F(ExclusivePublicationTest, offerBlockWithVariousOffsets)
         header->session_id = m_publication->session_id;
         header->stream_id = m_publication->stream_id;
         header->reserved_value = (int64_t)data_value;
-        memset(block + AERON_DATA_HEADER_LENGTH, data_value, 64);
+        memset(block.data() + AERON_DATA_HEADER_LENGTH, data_value, 64);
 
         const int64_t position = aeron_exclusive_publication_offer_block(
             m_publication,
-            block,
+            block.data(),
             AERON_DATA_HEADER_LENGTH + 64);
 
         ASSERT_GT(position, 0) << "Failed to offer block at offset " << offset;

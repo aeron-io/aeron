@@ -817,6 +817,12 @@ int64_t aeron_exclusive_publication_offer_block(
         return AERON_PUBLICATION_ERROR;
     }
 
+    if (NULL == buffer)
+    {
+        AERON_SET_ERR(EINVAL, "%s", "aeron_exclusive_publication_offer_block buffer is NULL");
+        return AERON_PUBLICATION_ERROR;
+    }
+
     bool is_closed;
     AERON_GET_ACQUIRE(is_closed, publication->is_closed);
     if (is_closed)
