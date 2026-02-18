@@ -1,6 +1,7 @@
 package io.aeron.archive;
 
 import io.aeron.Aeron;
+import io.aeron.AeronCounters;
 import io.aeron.CommonContext;
 import io.aeron.ExclusivePublication;
 import io.aeron.Publication;
@@ -34,6 +35,9 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.LongSupplier;
 
 import static io.aeron.CommonContext.IPC_CHANNEL;
 import static io.aeron.CommonContext.UDP_CHANNEL;
@@ -41,7 +45,6 @@ import static io.aeron.archive.ArchiveSystemTests.CATALOG_CAPACITY;
 import static io.aeron.archive.ArchiveSystemTests.TERM_LENGTH;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith({ EventLogExtension.class, InterruptingTestCallback.class })
@@ -69,6 +72,7 @@ class PersistentSubscriptionTest
             .publicationTermBufferLength(TERM_LENGTH)
             .ipcTermBufferLength(TERM_LENGTH)
             .dirDeleteOnShutdown(true)
+            .imageLivenessTimeoutNs(TimeUnit.SECONDS.toNanos(3))
             .spiesSimulateConnection(true);
 
         archiveDir = new File(SystemUtil.tmpDirName(), "archive");
@@ -106,7 +110,7 @@ class PersistentSubscriptionTest
     void shouldErrorIfRecordingDoesNotExist()
     {
         try (PersistentSubscription persistentSubscription =
-            new PersistentSubscription(aeronArchive, 13, 0, IPC_CHANNEL, 1000, null))
+            new PersistentSubscription(aeronArchive, 13, 0, IPC_CHANNEL, 1000, null, driver.counters()))
         {
             persistentSubscription.controlledPoll(null, 1);
             // TODO
@@ -139,7 +143,7 @@ class PersistentSubscriptionTest
 
         final PersistentSubscriptionListenerImpl listener = new PersistentSubscriptionListenerImpl();
         try (PersistentSubscription persistentSubscription =
-            new PersistentSubscription(aeronArchive, recordingId, 0, IPC_CHANNEL, 1000, listener))
+            new PersistentSubscription(aeronArchive, recordingId, 0, IPC_CHANNEL, 1000, listener, counters))
         {
             final List<byte[]> receivedPayloads = new ArrayList<>();
 //            while (listener.onLiveCount == 0) // TODO should get the onLiveCallback
@@ -225,10 +229,13 @@ class PersistentSubscriptionTest
             }
         }
         Tests.awaitPosition(counters, counterId, offeredPosition);
+        final int liveStreamId = 1000;
+
 
         final PersistentSubscriptionListenerImpl listener = new PersistentSubscriptionListenerImpl();
+
         try (PersistentSubscription persistentSubscription =
-            new PersistentSubscription(aeronArchive, recordingId, 0, MDC_CHANNEL, 1000, listener))
+            new PersistentSubscription(aeronArchive, recordingId, 0, MDC_CHANNEL, liveStreamId, listener, counters))
         {
             final List<byte[]> receivedPayloads = new ArrayList<>();
 //            while (listener.onLiveCount == 0) // TODO should get the onLiveCallback
@@ -291,7 +298,7 @@ class PersistentSubscriptionTest
             try(MediaDriver mediaDriver = MediaDriver.launchEmbedded(); final Aeron aeron =
                 Aeron.connect(new Aeron.Context().aeronDirectoryName(mediaDriver.aeronDirectoryName())))
             {
-                final Subscription subscription = aeron.addSubscription(MDC_CHANNEL, 1000);
+                final Subscription subscription = aeron.addSubscription(MDC_CHANNEL, liveStreamId);
 
                 Tests.awaitConnected(subscription);
 

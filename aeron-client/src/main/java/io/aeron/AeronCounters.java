@@ -709,6 +709,9 @@ public final class AeronCounters
     @AeronCounter
     public static final int DPDK_RX_RECEIVER_DISCARD_TYPE_ID = 95;
 
+    @AeronCounter
+    public static final int OVERRUN_PROPOSED_POSITON_TYPE_ID = 96;
+
     // Archive counters
     /**
      * The position a recording has reached when being archived.
