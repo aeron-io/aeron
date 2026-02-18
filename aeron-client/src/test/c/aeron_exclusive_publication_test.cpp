@@ -1139,3 +1139,250 @@ TEST_F(ExclusivePublicationTest, tryClaimMaxPositionExceededAfterSuccessfulSpace
         packTail(term_id, term_offset + frame_length),
         m_publication->log_meta_data->term_tail_counters[partition_index]);
 }
+
+// Tests for aeron_exclusive_publication_offer_block
+// These tests verify the bug fix in PR #1943 where offer_block was writing
+// to offset 0 regardless of the term_offset parameter in the pre-formatted block
+
+TEST_F(ExclusivePublicationTest, offerBlockUnfragmentedMessage)
+{
+    const char *payload = "Aeron is awesome!";
+    const size_t length = strlen(payload);
+    const int32_t term_count = 10;
+    const size_t partition_index = aeron_logbuffer_index_by_term_count(term_count);
+    const int32_t term_offset = 1024;
+    const int32_t term_id = m_log_meta_data->initial_term_id + term_count;
+    createPublication(term_count, term_offset);
+
+    // Pre-format the block as caller would do
+    uint8_t block[AERON_DATA_HEADER_LENGTH + length];
+    aeron_data_header_t *header = (aeron_data_header_t *)block;
+    header->frame_header.frame_length = AERON_DATA_HEADER_LENGTH + length;
+    header->frame_header.type = AERON_HDR_TYPE_DATA;
+    header->frame_header.version = AERON_FRAME_HEADER_VERSION;
+    header->frame_header.flags = AERON_DATA_HEADER_BEGIN_FLAG | AERON_DATA_HEADER_END_FLAG;
+    header->term_offset = term_offset;
+    header->term_id = term_id;
+    header->session_id = m_publication->session_id;
+    header->stream_id = m_publication->stream_id;
+    header->reserved_value = 42;
+    memcpy(block + AERON_DATA_HEADER_LENGTH, payload, length);
+
+    const int64_t position = aeron_exclusive_publication_offer_block(
+        m_publication,
+        block,
+        AERON_DATA_HEADER_LENGTH + length);
+
+    const int32_t frame_length = static_cast<int32_t>(AERON_DATA_HEADER_LENGTH + length);
+    ASSERT_EQ(aeron_logbuffer_compute_position(
+        term_id, term_offset + frame_length, m_publication->position_bits_to_shift, m_publication->initial_term_id),
+        position);
+
+    const aeron_mapped_buffer_t *term_buffer = &m_publication->log_buffer->mapped_raw_log.term_buffers[partition_index];
+    auto *written_header = (aeron_data_header_t *)(term_buffer->addr + term_offset);
+    EXPECT_EQ(frame_length, written_header->frame_header.frame_length);
+    EXPECT_EQ(AERON_HDR_TYPE_DATA, written_header->frame_header.type);
+    EXPECT_EQ(term_offset, written_header->term_offset);
+    EXPECT_EQ(term_id, written_header->term_id);
+    EXPECT_EQ(0, memcmp(term_buffer->addr + term_offset + AERON_DATA_HEADER_LENGTH, payload, length));
+}
+
+TEST_F(ExclusivePublicationTest, offerBlockMultipleBlocksInSameTerm)
+{
+    // This test specifically verifies the PR #1943 bug fix:
+    // When offering multiple blocks in the same term with increasing offsets,
+    // they should NOT overwrite each other.
+
+    const char *payload1 = "Aeron is awesome!";
+    const char *payload2 = "Aeron is indeed awesome!";
+    const size_t length1 = strlen(payload1);
+    const size_t length2 = strlen(payload2);
+
+    const int32_t term_count = 7;
+    const size_t partition_index = aeron_logbuffer_index_by_term_count(term_count);
+    const int32_t term_id = m_log_meta_data->initial_term_id + term_count;
+    const int32_t initial_offset = 512;
+    createPublication(term_count, initial_offset);
+
+    const aeron_mapped_buffer_t *term_buffer = &m_publication->log_buffer->mapped_raw_log.term_buffers[partition_index];
+
+    // === Offer first block ===
+    uint8_t block1[AERON_DATA_HEADER_LENGTH + length1];
+    aeron_data_header_t *header1 = (aeron_data_header_t *)block1;
+    header1->frame_header.frame_length = AERON_DATA_HEADER_LENGTH + length1;
+    header1->frame_header.type = AERON_HDR_TYPE_DATA;
+    header1->frame_header.version = AERON_FRAME_HEADER_VERSION;
+    header1->frame_header.flags = AERON_DATA_HEADER_BEGIN_FLAG | AERON_DATA_HEADER_END_FLAG;
+    header1->term_offset = initial_offset;
+    header1->term_id = term_id;
+    header1->session_id = m_publication->session_id;
+    header1->stream_id = m_publication->stream_id;
+    header1->reserved_value = 111;
+    memcpy(block1 + AERON_DATA_HEADER_LENGTH, payload1, length1);
+
+    const int64_t position1 = aeron_exclusive_publication_offer_block(
+        m_publication,
+        block1,
+        AERON_DATA_HEADER_LENGTH + length1);
+
+    ASSERT_GT(position1, 0);
+
+    // Verify first block is written at correct offset
+    auto *written_header1 = (aeron_data_header_t *)(term_buffer->addr + initial_offset);
+    EXPECT_EQ(AERON_DATA_HEADER_LENGTH + length1, written_header1->frame_header.frame_length);
+    EXPECT_EQ(0, memcmp(term_buffer->addr + initial_offset + AERON_DATA_HEADER_LENGTH, payload1, length1));
+
+    // === Offer second block ===
+    int32_t second_offset = initial_offset + AERON_ALIGN(AERON_DATA_HEADER_LENGTH + length1, AERON_LOGBUFFER_FRAME_ALIGNMENT);
+
+    // Update publication's term_offset to match second_offset for next write
+    m_publication->term_offset = second_offset;
+
+    uint8_t block2[AERON_DATA_HEADER_LENGTH + length2];
+    aeron_data_header_t *header2 = (aeron_data_header_t *)block2;
+    header2->frame_header.frame_length = AERON_DATA_HEADER_LENGTH + length2;
+    header2->frame_header.type = AERON_HDR_TYPE_DATA;
+    header2->frame_header.version = AERON_FRAME_HEADER_VERSION;
+    header2->frame_header.flags = AERON_DATA_HEADER_BEGIN_FLAG | AERON_DATA_HEADER_END_FLAG;
+    header2->term_offset = second_offset;  // Different offset!
+    header2->term_id = term_id;
+    header2->session_id = m_publication->session_id;
+    header2->stream_id = m_publication->stream_id;
+    header2->reserved_value = 222;
+    memcpy(block2 + AERON_DATA_HEADER_LENGTH, payload2, length2);
+
+    const int64_t position2 = aeron_exclusive_publication_offer_block(
+        m_publication,
+        block2,
+        AERON_DATA_HEADER_LENGTH + length2);
+
+    ASSERT_GT(position2, position1);
+
+    // === Verify both blocks are intact (NOT overwritten) ===
+    // Without PR #1943 fix, block2 would be written to offset 0,
+    // overwriting block1, and block1 would be lost.
+
+    // Check first block is STILL at correct offset and NOT overwritten
+    auto *still_header1 = (aeron_data_header_t *)(term_buffer->addr + initial_offset);
+    EXPECT_EQ(AERON_DATA_HEADER_LENGTH + length1, still_header1->frame_header.frame_length);
+    EXPECT_EQ(111, still_header1->reserved_value);
+    EXPECT_EQ(0, memcmp(term_buffer->addr + initial_offset + AERON_DATA_HEADER_LENGTH, payload1, length1));
+
+    // Check second block is at correct offset (NOT at offset 0)
+    auto *written_header2 = (aeron_data_header_t *)(term_buffer->addr + second_offset);
+    EXPECT_EQ(AERON_DATA_HEADER_LENGTH + length2, written_header2->frame_header.frame_length);
+    EXPECT_EQ(222, written_header2->reserved_value);
+    EXPECT_EQ(0, memcmp(term_buffer->addr + second_offset + AERON_DATA_HEADER_LENGTH, payload2, length2));
+
+    // Verify offset 0 still has original content (not overwritten by block2)
+    auto *header_at_zero = (aeron_data_header_t *)(term_buffer->addr);
+    EXPECT_EQ(0, memcmp(term_buffer->addr + initial_offset + AERON_DATA_HEADER_LENGTH, payload1, length1));
+}
+
+TEST_F(ExclusivePublicationTest, offerBlockErrorIfBufferIsNull)
+{
+    createPublication(0, 0);
+
+    const int64_t position = aeron_exclusive_publication_offer_block(
+        m_publication,
+        nullptr,
+        256);
+
+    ASSERT_EQ(AERON_PUBLICATION_ERROR, position);
+}
+
+TEST_F(ExclusivePublicationTest, offerBlockErrorIfPublicationIsNull)
+{
+    uint8_t block[256];
+    memset(block, 0, sizeof(block));
+
+    const int64_t position = aeron_exclusive_publication_offer_block(
+        nullptr,
+        block,
+        256);
+
+    ASSERT_EQ(AERON_PUBLICATION_ERROR, position);
+}
+
+TEST_F(ExclusivePublicationTest, offerBlockClosed)
+{
+    uint8_t block[256];
+    aeron_data_header_t *header = (aeron_data_header_t *)block;
+    header->frame_header.frame_length = 256;
+    header->frame_header.type = AERON_HDR_TYPE_DATA;
+    header->frame_header.version = AERON_FRAME_HEADER_VERSION;
+    header->frame_header.flags = AERON_DATA_HEADER_BEGIN_FLAG | AERON_DATA_HEADER_END_FLAG;
+    header->term_offset = 0;
+    header->term_id = INITIAL_TERM_ID;
+    header->session_id = SESSION_ID;
+    header->stream_id = STREAM_ID;
+    header->reserved_value = 0;
+    memset(block + AERON_DATA_HEADER_LENGTH, 'X', 256 - AERON_DATA_HEADER_LENGTH);
+
+    const int32_t term_count = 2;
+    createPublication(term_count, 0);
+
+    m_publication->is_closed = true;
+
+    const int64_t position = aeron_exclusive_publication_offer_block(
+        m_publication,
+        block,
+        256);
+
+    ASSERT_EQ(AERON_PUBLICATION_CLOSED, position);
+}
+
+TEST_F(ExclusivePublicationTest, offerBlockWithVariousOffsets)
+{
+    // Test that offer_block correctly handles blocks at different offsets
+    const int32_t term_count = 3;
+    const size_t partition_index = aeron_logbuffer_index_by_term_count(term_count);
+    const int32_t term_id = m_log_meta_data->initial_term_id + term_count;
+    createPublication(term_count, 0);
+
+    const aeron_mapped_buffer_t *term_buffer = &m_publication->log_buffer->mapped_raw_log.term_buffers[partition_index];
+
+    // Test offsets: 0, 256, 512, 768
+    int32_t test_offsets[] = {0, 256, 512, 768};
+    uint8_t test_data[] = {'A', 'B', 'C', 'D'};
+
+    for (int i = 0; i < 4; i++)
+    {
+        int32_t offset = test_offsets[i];
+        uint8_t data_value = test_data[i];
+
+        uint8_t block[AERON_DATA_HEADER_LENGTH + 64];
+        aeron_data_header_t *header = (aeron_data_header_t *)block;
+        header->frame_header.frame_length = AERON_DATA_HEADER_LENGTH + 64;
+        header->frame_header.type = AERON_HDR_TYPE_DATA;
+        header->frame_header.version = AERON_FRAME_HEADER_VERSION;
+        header->frame_header.flags = AERON_DATA_HEADER_BEGIN_FLAG | AERON_DATA_HEADER_END_FLAG;
+        header->term_offset = offset;
+        header->term_id = term_id;
+        header->session_id = m_publication->session_id;
+        header->stream_id = m_publication->stream_id;
+        header->reserved_value = (int64_t)data_value;
+        memset(block + AERON_DATA_HEADER_LENGTH, data_value, 64);
+
+        const int64_t position = aeron_exclusive_publication_offer_block(
+            m_publication,
+            block,
+            AERON_DATA_HEADER_LENGTH + 64);
+
+        ASSERT_GT(position, 0) << "Failed to offer block at offset " << offset;
+
+        // Verify the block was written at the correct offset
+        auto *written_header = (aeron_data_header_t *)(term_buffer->addr + offset);
+        EXPECT_EQ(AERON_DATA_HEADER_LENGTH + 64, written_header->frame_header.frame_length)
+            << "Block at offset " << offset << " has wrong frame length";
+        EXPECT_EQ((int64_t)data_value, written_header->reserved_value)
+            << "Block at offset " << offset << " has wrong reserved value";
+
+        // Verify the payload is all the expected value
+        for (int j = 0; j < 64; j++)
+        {
+            EXPECT_EQ(data_value, *(term_buffer->addr + offset + AERON_DATA_HEADER_LENGTH + j))
+                << "Block at offset " << offset << " payload byte " << j << " is incorrect";
+        }
+    }
+}
