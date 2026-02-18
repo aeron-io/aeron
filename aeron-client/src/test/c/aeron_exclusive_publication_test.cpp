@@ -1342,7 +1342,12 @@ TEST_F(ExclusivePublicationTest, offerBlockWithVariousOffsets)
     const aeron_mapped_buffer_t *term_buffer = &m_publication->log_buffer->mapped_raw_log.term_buffers[partition_index];
 
     // Test offsets: 0, 256, 512, 768
-    int32_t test_offsets[] = {0, 256, 512, 768};
+    int32_t test_offsets[] = {
+        0,
+        AERON_DATA_HEADER_LENGTH + 64,
+        2 * (AERON_DATA_HEADER_LENGTH + 64),
+        3 * (AERON_DATA_HEADER_LENGTH + 64)
+    };
     uint8_t test_data[] = {'A', 'B', 'C', 'D'};
 
     for (int i = 0; i < 4; i++)
