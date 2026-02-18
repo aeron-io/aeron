@@ -79,6 +79,7 @@ public final class PersistentSubscription implements AutoCloseable
             case REPLAY -> replay(fragmentHandler, fragmentLimit);
             case ATTEMPT_SWITCH -> attemptSwitch(fragmentHandler, fragmentLimit);
             case LIVE -> live(fragmentHandler, fragmentLimit);
+            case FAILED -> 0;
         };
     }
 
@@ -91,7 +92,15 @@ public final class PersistentSubscription implements AutoCloseable
     {
         if (aeronArchive.listRecording(recordingId, descriptor) == 0) // TODO make async
         {
-            // TODO how to raise errors?
+            state(State.FAILED);
+            if (listener != null)
+            {
+                listener.onError(new PersistentSubscriptionException(
+                    PersistentSubscriptionException.Reason.RECORDING_NOT_FOUND,
+                    "No recording found with ID: " + recordingId)
+                );
+            }
+            return 1;
         }
 
         assert descriptor.recordingId == recordingId;
@@ -99,11 +108,27 @@ public final class PersistentSubscription implements AutoCloseable
         // TODO should we be checking those or should we just allow replay request to fail?
         if (position < descriptor.startPosition)
         {
-            // TODO
+            state(State.FAILED);
+            if (listener != null)
+            {
+                listener.onError(new PersistentSubscriptionException(
+                    PersistentSubscriptionException.Reason.INVALID_START_POSITION,
+                    "Requested position: " + position + " is lower than start position: " + descriptor.startPosition + " for recording: " + recordingId)
+                );
+            }
+            return 1;
         }
         if (descriptor.stopPosition != NULL_POSITION && position > descriptor.stopPosition)
         {
-            // TODO
+            state(State.FAILED);
+            if (listener != null)
+            {
+                listener.onError(new PersistentSubscriptionException(
+                    PersistentSubscriptionException.Reason.INVALID_START_POSITION,
+                    "Requested position: " + position + " is greater than stop position: " + descriptor.stopPosition + " for recording: " + recordingId)
+                );
+            }
+            return 1;
         }
 
         replaySubscription = aeronArchive.context().aeron()
@@ -303,12 +328,18 @@ public final class PersistentSubscription implements AutoCloseable
         }
     }
 
+    public boolean hasFailed()
+    {
+        return state == State.FAILED;
+    }
+
     private enum State
     {
         INIT,
         REPLAY,
         ATTEMPT_SWITCH,
         LIVE,
+        FAILED,
     }
 
     private static final class RecordingDescriptorConsumerImpl implements RecordingDescriptorConsumer

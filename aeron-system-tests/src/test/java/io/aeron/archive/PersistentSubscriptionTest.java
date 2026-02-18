@@ -1,13 +1,14 @@
 package io.aeron.archive;
 
 import io.aeron.Aeron;
-import io.aeron.AeronCounters;
+import io.aeron.ChannelUriStringBuilder;
 import io.aeron.CommonContext;
 import io.aeron.ExclusivePublication;
 import io.aeron.Publication;
 import io.aeron.Subscription;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.client.PersistentSubscription;
+import io.aeron.archive.client.PersistentSubscriptionException;
 import io.aeron.archive.client.PersistentSubscriptionListener;
 import io.aeron.archive.status.RecordingPos;
 import io.aeron.driver.MediaDriver;
@@ -36,10 +37,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.LongSupplier;
 
 import static io.aeron.CommonContext.IPC_CHANNEL;
+import static io.aeron.CommonContext.IPC_MEDIA;
 import static io.aeron.CommonContext.UDP_CHANNEL;
 import static io.aeron.archive.ArchiveSystemTests.CATALOG_CAPACITY;
 import static io.aeron.archive.ArchiveSystemTests.TERM_LENGTH;
@@ -102,18 +102,108 @@ class PersistentSubscriptionTest
     @AfterEach
     void tearDown()
     {
-        CloseHelper.closeAll(archive, driver, () -> IoUtil.delete(archiveDir, true));
+        CloseHelper.closeAll(aeronArchive, aeron, archive, driver, () -> IoUtil.delete(archiveDir, true));
+    }
+
+    @Test
+    @InterruptAfter(10)
+    void shouldNotRequireEventListener()
+    {
+        final PersistentSubscriptionListenerImpl listener = null; // <-- null listener
+        try (PersistentSubscription persistentSubscription =
+            new PersistentSubscription(aeronArchive, 13, 0, IPC_CHANNEL, 1000, listener, driver.counters()))
+        {
+            while (!persistentSubscription.hasFailed())
+            {
+                persistentSubscription.controlledPoll(null, 1);
+            }
+        }
     }
 
     @Test
     @InterruptAfter(10)
     void shouldErrorIfRecordingDoesNotExist()
     {
+        final PersistentSubscriptionListenerImpl listener = new PersistentSubscriptionListenerImpl();
+        final int recordingId = 13; // <-- does not exist
         try (PersistentSubscription persistentSubscription =
-            new PersistentSubscription(aeronArchive, 13, 0, IPC_CHANNEL, 1000, null, driver.counters()))
+            new PersistentSubscription(aeronArchive, recordingId, 0, IPC_CHANNEL, 1000, listener, driver.counters()))
         {
-            persistentSubscription.controlledPoll(null, 1);
-            // TODO
+            while (!persistentSubscription.hasFailed())
+            {
+                persistentSubscription.controlledPoll(null, 1);
+            }
+
+            assertEquals(1, listener.errorCount);
+            assertEquals(
+                PersistentSubscriptionException.Reason.RECORDING_NOT_FOUND,
+                ((PersistentSubscriptionException)listener.lastException).reason()
+            );
+        }
+    }
+
+    @Test
+    @InterruptAfter(10)
+    void shouldErrorIfRecordingPositionIsBeforeStartPosition()
+    {
+        final String channel = new ChannelUriStringBuilder()
+            .media(IPC_MEDIA)
+            .initialPosition(1024, 0, TERM_LENGTH) // <-- Recording starts at 1024
+            .build();
+        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(channel, 1000);
+        final CountersReader counters = aeron.countersReader();
+        final int counterId = Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
+        final long recordingId = RecordingPos.getRecordingId(counters, counterId);
+
+        final PersistentSubscriptionListenerImpl listener = new PersistentSubscriptionListenerImpl();
+        final int startPosition = 0; // <-- Trying to start from zero
+        try (PersistentSubscription persistentSubscription =
+            new PersistentSubscription(aeronArchive, recordingId, startPosition, IPC_CHANNEL, 1000, listener, driver.counters()))
+        {
+            while (!persistentSubscription.hasFailed())
+            {
+                persistentSubscription.controlledPoll(null, 1);
+            }
+
+            assertEquals(1, listener.errorCount);
+            assertEquals(
+                PersistentSubscriptionException.Reason.INVALID_START_POSITION,
+                ((PersistentSubscriptionException)listener.lastException).reason()
+            );
+        }
+    }
+
+    @Test
+    @InterruptAfter(10)
+    void shouldErrorIfRecordingPositionIsAfterStopPosition()
+    {
+        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(IPC_CHANNEL, 1000);
+        final CountersReader counters = aeron.countersReader();
+        final int counterId = Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
+        final long recordingId = RecordingPos.getRecordingId(counters, counterId);
+
+        final UnsafeBuffer buffer = new UnsafeBuffer(new byte[1024]);
+        publication.offer(buffer);
+
+        aeronArchive.stopRecording(publication);
+        final long stopPosition = aeronArchive.getStopPosition(recordingId);
+        assertTrue(stopPosition > 0);
+        final PersistentSubscriptionListenerImpl listener = new PersistentSubscriptionListenerImpl();
+        final long startPosition = stopPosition * 2; // <-- after end of recording
+
+        try (PersistentSubscription persistentSubscription =
+            new PersistentSubscription(aeronArchive, recordingId, startPosition, IPC_CHANNEL, 1000, listener, driver.counters()))
+        {
+            while (!persistentSubscription.hasFailed())
+            {
+                persistentSubscription.controlledPoll(null, 1);
+            }
+
+            assertEquals(1, listener.errorCount);
+            assertEquals(
+                PersistentSubscriptionException.Reason.INVALID_START_POSITION,
+                ((PersistentSubscriptionException)listener.lastException).reason()
+            );
         }
     }
 
@@ -295,7 +385,9 @@ class PersistentSubscriptionTest
 
             Tests.await(() -> archive.context().replaySessionCounter().get() == 0);
 
-            try(MediaDriver mediaDriver = MediaDriver.launchEmbedded(); final Aeron aeron =
+            final MediaDriver.Context ctx = new MediaDriver.Context().aeronDirectoryName(CommonContext.generateRandomDirName());
+            try (MediaDriver mediaDriver = MediaDriver.launch(ctx);
+                final Aeron aeron =
                 Aeron.connect(new Aeron.Context().aeronDirectoryName(mediaDriver.aeronDirectoryName())))
             {
                 final Subscription subscription = aeron.addSubscription(MDC_CHANNEL, liveStreamId);
@@ -345,10 +437,18 @@ class PersistentSubscriptionTest
     private static final class PersistentSubscriptionListenerImpl implements PersistentSubscriptionListener
     {
         long onLiveCount;
+        int errorCount = 0;
+        Exception lastException = null;
 
         public void onLive()
         {
             onLiveCount++;
+        }
+
+        public void onError(final Exception e)
+        {
+            errorCount++;
+            lastException = e;
         }
     }
 }
