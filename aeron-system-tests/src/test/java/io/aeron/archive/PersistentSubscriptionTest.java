@@ -133,7 +133,7 @@ class PersistentSubscriptionTest
     {
         final PersistentSubscriptionListenerImpl listener = null; // <-- null listener
         try (PersistentSubscription persistentSubscription =
-            new PersistentSubscription(aeronArchive, 13, 0, IPC_CHANNEL, 1000, listener, driver.counters()))
+            new PersistentSubscription(aeronArchive, 13, 0, IPC_CHANNEL, 1000, listener))
         {
             while (!persistentSubscription.hasFailed())
             {
@@ -149,7 +149,7 @@ class PersistentSubscriptionTest
         final PersistentSubscriptionListenerImpl listener = new PersistentSubscriptionListenerImpl();
         final int recordingId = 13; // <-- does not exist
         try (PersistentSubscription persistentSubscription =
-            new PersistentSubscription(aeronArchive, recordingId, 0, IPC_CHANNEL, 1000, listener, driver.counters()))
+            new PersistentSubscription(aeronArchive, recordingId, 0, IPC_CHANNEL, 1000, listener))
         {
             while (!persistentSubscription.hasFailed())
             {
@@ -180,7 +180,7 @@ class PersistentSubscriptionTest
         final PersistentSubscriptionListenerImpl listener = new PersistentSubscriptionListenerImpl();
         final int startPosition = 0; // <-- Trying to start from zero
         try (PersistentSubscription persistentSubscription =
-            new PersistentSubscription(aeronArchive, recordingId, startPosition, IPC_CHANNEL, 1000, listener, driver.counters()))
+            new PersistentSubscription(aeronArchive, recordingId, startPosition, IPC_CHANNEL, 1000, listener))
         {
             while (!persistentSubscription.hasFailed())
             {
@@ -214,7 +214,7 @@ class PersistentSubscriptionTest
         final long startPosition = stopPosition * 2; // <-- after end of recording
 
         try (PersistentSubscription persistentSubscription =
-            new PersistentSubscription(aeronArchive, recordingId, startPosition, IPC_CHANNEL, 1000, listener, driver.counters()))
+            new PersistentSubscription(aeronArchive, recordingId, startPosition, IPC_CHANNEL, 1000, listener))
         {
             while (!persistentSubscription.hasFailed())
             {
@@ -255,7 +255,7 @@ class PersistentSubscriptionTest
 
         final PersistentSubscriptionListenerImpl listener = new PersistentSubscriptionListenerImpl();
         try (PersistentSubscription persistentSubscription =
-            new PersistentSubscription(aeronArchive, recordingId, 0, IPC_CHANNEL, 1000, listener, counters))
+            new PersistentSubscription(aeronArchive, recordingId, 0, IPC_CHANNEL, 1000, listener))
         {
             final List<byte[]> receivedPayloads = new ArrayList<>();
 //            while (listener.onLiveCount == 0) // TODO should get the onLiveCallback
@@ -347,7 +347,7 @@ class PersistentSubscriptionTest
         final PersistentSubscriptionListenerImpl listener = new PersistentSubscriptionListenerImpl();
 
         try (PersistentSubscription persistentSubscription =
-            new PersistentSubscription(aeronArchive, recordingId, 0, MDC_CHANNEL, liveStreamId, listener, counters))
+            new PersistentSubscription(aeronArchive, recordingId, 0, MDC_CHANNEL, liveStreamId, listener))
         {
             final List<byte[]> receivedPayloads = new ArrayList<>();
 //            while (listener.onLiveCount == 0) // TODO should get the onLiveCallback
@@ -527,7 +527,7 @@ class PersistentSubscriptionTest
         LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(4));
 
         try (PersistentSubscription persistentSubscription =
-            new PersistentSubscription(aeronArchive2, recordingId, 0, subChannel, STREAM_ID, null, counters))
+            new PersistentSubscription(aeronArchive2, recordingId, 0, subChannel, STREAM_ID, null))
         {
             final MessageVerifier handler = new MessageVerifier(maxProcessingTime);
             final ControlledFragmentAssembler assembler = new ControlledFragmentAssembler(handler);

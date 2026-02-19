@@ -1,15 +1,10 @@
 package io.aeron.archive.client;
 
 import io.aeron.Aeron;
-import io.aeron.AeronCounters;
 import io.aeron.Image;
 import io.aeron.Subscription;
 import io.aeron.logbuffer.ControlledFragmentHandler;
 import org.agrona.CloseHelper;
-import org.agrona.concurrent.status.CountersReader;
-
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.LongSupplier;
 
 import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
 import static java.util.Objects.requireNonNull;
@@ -22,8 +17,6 @@ public final class PersistentSubscription implements AutoCloseable
     private final PersistentSubscriptionListener listener;
     private final String liveChannel;
     private final int streamId;
-    private final CountersReader counters;
-    private boolean probablyFallenOffFromLive = false;
 
     private State state;
     private long position;
@@ -35,7 +28,6 @@ public final class PersistentSubscription implements AutoCloseable
 
     private long nextLivePosition = Aeron.NULL_VALUE;
     private boolean live = false;
-    private LongSupplier overrunProposedPositionSupplier = null;
 
     public PersistentSubscription(
         final AeronArchive aeronArchive, // TODO passing an instance does not allow to reconnect, also, we probably need to own it?
@@ -43,12 +35,10 @@ public final class PersistentSubscription implements AutoCloseable
         final long startPosition,
         final String liveChannel,
         final int streamId, // TODO liveStreamId?
-        final PersistentSubscriptionListener listener,
-        final CountersReader counters)
+        final PersistentSubscriptionListener listener)
     {
         this.liveChannel = liveChannel;
         this.streamId = streamId;
-        this.counters = counters;
         requireNonNull(aeronArchive);
         requireNonNull(liveChannel);
 
@@ -203,31 +193,6 @@ public final class PersistentSubscription implements AutoCloseable
             return 0;
         }
 
-        if (overrunProposedPositionSupplier == null)
-        {
-            //System.out.println("Looking up overrun counter");
-
-            final AtomicInteger overrunProposedPositionCounterIdHolder = new AtomicInteger(Aeron.NULL_VALUE);
-            counters.forEach((counterId1, typeId, keyBuffer, label) -> {
-                if (typeId == AeronCounters.OVERRUN_PROPOSED_POSITON_TYPE_ID && label.equals("overruns-proposed-position stream=" + streamId))
-                {
-                    //System.out.println("Found counter: " + label + " - " + counters.getCounterValue(counterId1));
-                    overrunProposedPositionCounterIdHolder.set(counterId1);
-                }
-            });
-            final int overrunProposedPositionCounterId = overrunProposedPositionCounterIdHolder.get();
-
-            if (overrunProposedPositionCounterId > 0)
-            {
-                overrunProposedPositionSupplier = () -> counters.getCounterValue(overrunProposedPositionCounterId);
-            }
-            else
-            {
-                overrunProposedPositionSupplier = () -> -1;
-            }
-        }
-
-
         int fragments = 0;
 
         fragments += liveSubscription.controlledPoll((buffer, offset, length, header) -> {
@@ -291,26 +256,6 @@ public final class PersistentSubscription implements AutoCloseable
             return 0;
         }
 
-        final long probablyTheLivePosition = liveSubscription.imageAtIndex(0).position();
-        final long propsedOverrunPosition = overrunProposedPositionSupplier.getAsLong();
-        if (propsedOverrunPosition > probablyTheLivePosition)
-        {
-            final long currentRecordingPosition = aeronArchive.getMaxRecordedPosition(recordingId);
-            if (currentRecordingPosition > probablyTheLivePosition)
-            {
-                if (!probablyFallenOffFromLive)
-                {
-                    probablyFallenOffFromLive = true;
-//                    System.out.println("Detected an overrun at " + propsedOverrunPosition + " which is ahead of where we have read up to: " + probablyTheLivePosition + " on live. Current recording position is " + currentRecordingPosition);
-                    System.out.println("We've probably fallen off live. Current live position: " + probablyTheLivePosition + ", overrun detected at: " + propsedOverrunPosition + ", current recording position: " + currentRecordingPosition);
-                    // TODO better to continue consuming from live until there is nothing left to poll, then switch to replay.
-                    // TODO need to actually restart the replay from the right point
-                    state(State.REPLAY);
-                    live = false;
-                    return 1;
-                }
-            }
-        }
         int fragments = liveSubscription.controlledPoll((buffer, offset, length, header) -> {
             final long currentLivePosition = header.position();
             //System.out.println("Consuming at position: " + currentLivePosition + " from live");
