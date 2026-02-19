@@ -29,7 +29,7 @@ public final class PersistentSubscription implements AutoCloseable
     private long position;
     private long joinError;
     private Subscription replaySubscription;
-    private long maxRecordedPositionAtInit;
+    private long candidateSwitchPosition;
     private int replaySessionId;
     private Subscription liveSubscription;
 
@@ -135,7 +135,7 @@ public final class PersistentSubscription implements AutoCloseable
         replaySubscription = aeronArchive.context().aeron()
             .addSubscription("aeron:udp?endpoint=localhost:0", -5);
 
-        maxRecordedPositionAtInit = aeronArchive.getMaxRecordedPosition(recordingId);
+        candidateSwitchPosition = aeronArchive.getMaxRecordedPosition(recordingId);
 
         // TODO how are we supposed to use a response channel here?
         // TODO async
@@ -163,16 +163,29 @@ public final class PersistentSubscription implements AutoCloseable
 
         final int fragments = replayImage.controlledPoll(fragmentHandler, fragmentLimit);
 
-        if (replayImage.position() >= maxRecordedPositionAtInit)
+        final long replayedPosition = replayImage.position();
+        if (replayedPosition >= candidateSwitchPosition)
         {
-            // TODO recheck the max recorded position to see if we should still switch at this point.
-            liveSubscription = aeronArchive.context().aeron().addSubscription(liveChannel, streamId, i -> {}, i -> {
-                System.out.println("image unavailable: " + i);
-            });
-            state(State.ATTEMPT_SWITCH);
+            final long maxRecordedPosition = aeronArchive.getMaxRecordedPosition(recordingId);
+            if (closeEnough(replayedPosition, maxRecordedPosition))
+            {
+                liveSubscription = aeronArchive.context().aeron().addSubscription(liveChannel, streamId, i -> {}, i -> {
+                    System.out.println("image unavailable: " + i);
+                });
+                state(State.ATTEMPT_SWITCH);
+            }
+            else
+            {
+                candidateSwitchPosition = maxRecordedPosition;
+            }
         }
 
         return fragments;
+    }
+
+    private boolean closeEnough(final long replayedPosition, final long maxRecordedPosition)
+    {
+        return replayedPosition >= maxRecordedPosition - (descriptor.termBufferLength >> 2);
     }
 
     private int attemptSwitch(final ControlledFragmentHandler fragmentHandler, final int fragmentLimit)
@@ -354,6 +367,7 @@ public final class PersistentSubscription implements AutoCloseable
         long recordingId;
         long startPosition;
         long stopPosition;
+        int termBufferLength;
 
         public void onRecordingDescriptor(
             final long controlSessionId,
@@ -376,6 +390,7 @@ public final class PersistentSubscription implements AutoCloseable
             this.recordingId = recordingId;
             this.startPosition = startPosition;
             this.stopPosition = stopPosition;
+            this.termBufferLength = termBufferLength;
         }
     }
 }
