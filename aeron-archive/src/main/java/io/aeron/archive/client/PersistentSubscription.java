@@ -269,16 +269,6 @@ public final class PersistentSubscription implements AutoCloseable
         // TODO do we need to explicitly stop replay if there is one?
     }
 
-    private void onLiveAvailable(final Image image)
-    {
-
-    }
-
-    private void onLiveUnavailable(final Image image)
-    {
-
-    }
-
     private void state(final State newState)
     {
         System.out.println("State: " + state + " -> " + newState);
