@@ -3,8 +3,11 @@ package io.aeron.archive;
 import io.aeron.Aeron;
 import io.aeron.ChannelUriStringBuilder;
 import io.aeron.CommonContext;
+import io.aeron.ControlledFragmentAssembler;
 import io.aeron.ExclusivePublication;
+import io.aeron.FragmentAssembler;
 import io.aeron.Publication;
+import io.aeron.RethrowingErrorHandler;
 import io.aeron.Subscription;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.client.PersistentSubscription;
@@ -14,6 +17,7 @@ import io.aeron.archive.status.RecordingPos;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
 import io.aeron.logbuffer.ControlledFragmentHandler;
+import io.aeron.logbuffer.Header;
 import io.aeron.test.EventLogExtension;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
@@ -22,12 +26,14 @@ import io.aeron.test.TestContexts;
 import io.aeron.test.Tests;
 import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.CloseHelper;
+import org.agrona.DirectBuffer;
 import org.agrona.IoUtil;
 import org.agrona.SystemUtil;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.CountersReader;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -37,23 +43,42 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.LockSupport;
 
 import static io.aeron.CommonContext.IPC_CHANNEL;
 import static io.aeron.CommonContext.IPC_MEDIA;
 import static io.aeron.CommonContext.UDP_CHANNEL;
+import static io.aeron.Publication.BACK_PRESSURED;
 import static io.aeron.archive.ArchiveSystemTests.CATALOG_CAPACITY;
 import static io.aeron.archive.ArchiveSystemTests.TERM_LENGTH;
+import static org.agrona.BitUtil.SIZE_OF_LONG;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 @ExtendWith({ EventLogExtension.class, InterruptingTestCallback.class })
 class PersistentSubscriptionTest
 {
-    private final String MDC_CHANNEL = UDP_CHANNEL + "?control=localhost:2000";
+    private static final String MDC_CHANNEL = UDP_CHANNEL + "?control=localhost:2000";
+    private static final int STREAM_ID = 1000;
+
     @RegisterExtension
     final SystemTestWatcher systemTestWatcher = new SystemTestWatcher();
 
+    private final MediaDriver.Context driverCtxTpl = new MediaDriver.Context()
+        .termBufferSparseFile(true)
+        .threadingMode(ThreadingMode.SHARED)
+        .publicationTermBufferLength(TERM_LENGTH)
+        .ipcTermBufferLength(TERM_LENGTH)
+        .dirDeleteOnShutdown(true)
+        .imageLivenessTimeoutNs(TimeUnit.SECONDS.toNanos(3))
+        .spiesSimulateConnection(true);
+
+    private final Aeron.Context aeronCtxTpl = new Aeron.Context()
+        .subscriberErrorHandler(RethrowingErrorHandler.INSTANCE);
+
+    private final List<AutoCloseable> closeables = new ArrayList<>();
     private TestMediaDriver driver;
     private File archiveDir;
     private Archive archive;
@@ -65,15 +90,8 @@ class PersistentSubscriptionTest
     {
         final String aeronDirectoryName = CommonContext.generateRandomDirName();
 
-        final MediaDriver.Context driverCtx = new MediaDriver.Context()
-            .aeronDirectoryName(aeronDirectoryName)
-            .termBufferSparseFile(true)
-            .threadingMode(ThreadingMode.SHARED)
-            .publicationTermBufferLength(TERM_LENGTH)
-            .ipcTermBufferLength(TERM_LENGTH)
-            .dirDeleteOnShutdown(true)
-            .imageLivenessTimeoutNs(TimeUnit.SECONDS.toNanos(3))
-            .spiesSimulateConnection(true);
+        final MediaDriver.Context driverCtx = driverCtxTpl.clone()
+            .aeronDirectoryName(aeronDirectoryName);
 
         archiveDir = new File(SystemUtil.tmpDirName(), "archive");
 
@@ -90,9 +108,7 @@ class PersistentSubscriptionTest
         archive = Archive.launch(archiveCtx);
         systemTestWatcher.dataCollector().add(archiveCtx.archiveDir());
 
-        aeron = Aeron.connect(
-            new Aeron.Context()
-                .aeronDirectoryName(aeronDirectoryName));
+        aeron = Aeron.connect(aeronCtxTpl.clone().aeronDirectoryName(aeronDirectoryName));
 
         aeronArchive = AeronArchive.connect(
             TestContexts.localhostAeronArchive()
@@ -102,7 +118,13 @@ class PersistentSubscriptionTest
     @AfterEach
     void tearDown()
     {
-        CloseHelper.closeAll(aeronArchive, aeron, archive, driver, () -> IoUtil.delete(archiveDir, true));
+        CloseHelper.closeAll(
+            this::closeCloseables,
+            aeronArchive,
+            aeron,
+            archive,
+            driver,
+            () -> IoUtil.delete(archiveDir, true));
     }
 
     @Test
@@ -417,6 +439,257 @@ class PersistentSubscriptionTest
                         ControlledFragmentHandler.Action.CONTINUE, 10);
                 }
             }
+        }
+    }
+
+    @RepeatedTest(3)
+    @InterruptAfter(20)
+    void testLiveJoin() throws Exception
+    {
+        final String pubChannel = "aeron:udp?term-length=16m|control=localhost:24325|control-mode=dynamic|fc=min";
+        final String subChannel = "aeron:udp?control=localhost:24325|group=true";
+
+        final String aeronDir2 = CommonContext.generateRandomDirName();
+        final MediaDriver.Context driver2Ctx = driverCtxTpl.clone().aeronDirectoryName(aeronDir2);
+        addCloseable(TestMediaDriver.launch(driver2Ctx, systemTestWatcher));
+        systemTestWatcher.dataCollector().add(driver2Ctx.aeronDirectory());
+        final Aeron aeron2 = addCloseable(Aeron.connect(aeronCtxTpl.clone().aeronDirectoryName(aeronDir2)));
+        final AeronArchive aeronArchive2 = addCloseable(AeronArchive.connect(
+            TestContexts.localhostAeronArchive().aeron(aeron2)));
+
+        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(pubChannel, STREAM_ID);
+        final Subscription controlSubscription = aeron.addSubscription(subChannel, STREAM_ID);
+        Tests.awaitConnected(controlSubscription);
+
+        final CountersReader counters = aeron.countersReader();
+        final int counterId = Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
+        final long recordingId = RecordingPos.getRecordingId(counters, counterId);
+
+        final int maxSeconds = 20;
+        final int ratePerSecond = 10_000;
+        final long maxProcessingTime = 1_000_000_000 / ratePerSecond / 2;
+        final long t0 = System.nanoTime();
+        final PerSecondStats publisherMessagesPerSecond = new PerSecondStats(t0, maxSeconds);
+        final PerSecondStats publisherBpePerSecond = new PerSecondStats(t0, maxSeconds);
+        final PerSecondStats controlMessagesPerSecond = new PerSecondStats(t0, maxSeconds);
+
+        final Thread control = new Thread(
+            () ->
+            {
+                final FragmentAssembler handler = new FragmentAssembler(
+                    (buffer, offset, length, header) ->
+                    {
+                        controlMessagesPerSecond.record(System.nanoTime());
+                        simulateWork(maxProcessingTime);
+                    });
+                while (!Thread.currentThread().isInterrupted())
+                {
+                    controlSubscription.poll(handler, 10);
+                }
+            },
+            "testLiveJoinControl");
+        control.start();
+        addCloseable(() -> interruptAndJoin(control));
+
+        final Thread publisher = new Thread(
+            () ->
+            {
+                final ThreadLocalRandom random = ThreadLocalRandom.current();
+                final UnsafeBuffer buffer = new UnsafeBuffer(new byte[1024]); // TODO increase to test fragmentation
+                long messageId = 0;
+                long nextMessageAt = System.nanoTime() + exponentialArrivalDelay(ratePerSecond);
+                while (!Thread.currentThread().isInterrupted())
+                {
+                    final long now = System.nanoTime();
+                    if (now - nextMessageAt >= 0)
+                    {
+                        final int length = random.nextInt(2 * SIZE_OF_LONG, buffer.capacity() + 1);
+                        buffer.putLong(0, messageId);
+                        buffer.putLong(length - SIZE_OF_LONG, messageId);
+                        final long result = publication.offer(buffer, 0, length);
+                        if (result > 0)
+                        {
+                            messageId++;
+                            nextMessageAt = now + exponentialArrivalDelay(ratePerSecond);
+                            publisherMessagesPerSecond.record(now);
+                        }
+                        else if (result == BACK_PRESSURED)
+                        {
+                            publisherBpePerSecond.record(now);
+                        }
+                    }
+                }
+            },
+            "testLiveJoinPublisher");
+        publisher.start();
+        addCloseable(() -> interruptAndJoin(publisher));
+
+        LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(4));
+
+        try (PersistentSubscription persistentSubscription =
+            new PersistentSubscription(aeronArchive2, recordingId, 0, subChannel, STREAM_ID, null, counters))
+        {
+            final MessageVerifier handler = new MessageVerifier(maxProcessingTime);
+            final ControlledFragmentAssembler assembler = new ControlledFragmentAssembler(handler);
+
+            while (!persistentSubscription.isLive())
+            {
+                if (persistentSubscription.controlledPoll(assembler, 10) == 0)
+                {
+                    checkForInterrupt("failed to transition to live");
+                }
+            }
+
+            interruptAndJoin(publisher);
+            final long lastPosition = publication.position();
+
+            while (handler.position < lastPosition)
+            {
+                if (persistentSubscription.controlledPoll(assembler, 10) == 0)
+                {
+                    checkForInterrupt("failed to drain the stream");
+                }
+            }
+
+            interruptAndJoin(control);
+
+            final int elapsedSeconds = (int)((System.nanoTime() - t0 + 999_999_999) / 1_000_000_000);
+
+            System.out.println("join error = " + persistentSubscription.joinError());
+            System.out.println("expected rate per second = " + ratePerSecond);
+            System.out.println("second,published,publisherBpe,control");
+            for (int i = 0; i < elapsedSeconds; i++)
+            {
+                System.out.println(i +
+                                   "," + publisherMessagesPerSecond.get(i) +
+                                   "," + publisherBpePerSecond.get(i) +
+                                   "," + controlMessagesPerSecond.get(i));
+            }
+        }
+    }
+
+    private static void interruptAndJoin(final Thread thread) throws InterruptedException
+    {
+        thread.interrupt();
+        thread.join();
+    }
+
+    private static void checkForInterrupt(final String message)
+    {
+        if (Thread.interrupted())
+        {
+            fail(message);
+        }
+    }
+
+    private static void simulateWork(final long maxProcessingTime)
+    {
+        if (maxProcessingTime > 0)
+        {
+            LockSupport.parkNanos(ThreadLocalRandom.current().nextLong(maxProcessingTime));
+        }
+    }
+
+    private static long exponentialArrivalDelay(final long ratePerSecond)
+    {
+        final double uniform = ThreadLocalRandom.current().nextDouble();
+        final double secondFraction = -Math.log(1.0 - uniform) / ratePerSecond;
+        return (long)(secondFraction * 1e9);
+    }
+
+    private static final class MessageVerifier implements ControlledFragmentHandler
+    {
+        private final long maxProcessingTime;
+        long expectedMessageId;
+        long position;
+
+        private MessageVerifier(final long maxProcessingTime)
+        {
+            this.maxProcessingTime = maxProcessingTime;
+        }
+
+        public Action onFragment(final DirectBuffer buffer, final int offset, final int length, final Header header)
+        {
+            if (length < 2 * SIZE_OF_LONG)
+            {
+                throw new IllegalStateException("length was " + length);
+            }
+            final long messageId1 = buffer.getLong(offset);
+            final long messageId2 = buffer.getLong(offset + length - SIZE_OF_LONG);
+            if (messageId1 != messageId2)
+            {
+                throw new IllegalStateException("message had different ids " + messageId1 + " and " + messageId2);
+            }
+            if (messageId1 != expectedMessageId)
+            {
+                throw new IllegalStateException("expected id " + expectedMessageId + ", but got " + messageId1);
+            }
+            expectedMessageId = messageId1 + 1;
+            position = header.position();
+            simulateWork(maxProcessingTime);
+            return Action.CONTINUE;
+        }
+    }
+
+    private static final class PerSecondStats
+    {
+        private final long[] perSecond;
+        private final long t0;
+
+        PerSecondStats(final long t0, final int maxSeconds)
+        {
+            this.t0 = t0;
+            this.perSecond = new long[maxSeconds];
+        }
+
+        void record(final long ts)
+        {
+            final int second = (int)((ts - t0) / 1_000_000_000);
+            if (second < perSecond.length)
+            {
+                perSecond[second]++;
+            }
+        }
+
+        long get(final int second)
+        {
+            return perSecond[second];
+        }
+    }
+
+    private <T extends AutoCloseable> T addCloseable(final T closeable)
+    {
+        closeables.add(closeable);
+        return closeable;
+    }
+
+    private void closeCloseables() throws Exception
+    {
+        Exception ex = null;
+
+        for (int i = closeables.size() - 1; i >= 0; i--)
+        {
+            final AutoCloseable closeable = closeables.get(i);
+            try
+            {
+                closeable.close();
+            }
+            catch (final Exception e)
+            {
+                if (ex == null)
+                {
+                    ex = e;
+                }
+                else
+                {
+                    ex.addSuppressed(e);
+                }
+            }
+        }
+
+        if (ex != null)
+        {
+            throw ex;
         }
     }
 

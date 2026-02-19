@@ -27,6 +27,7 @@ public final class PersistentSubscription implements AutoCloseable
 
     private State state;
     private long position;
+    private long joinError;
     private Subscription replaySubscription;
     private long maxRecordedPositionAtInit;
     private int replaySessionId;
@@ -191,13 +192,13 @@ public final class PersistentSubscription implements AutoCloseable
 
         if (overrunProposedPositionSupplier == null)
         {
-            System.out.println("Looking up overrun counter");
+            //System.out.println("Looking up overrun counter");
 
             final AtomicInteger overrunProposedPositionCounterIdHolder = new AtomicInteger(Aeron.NULL_VALUE);
             counters.forEach((counterId1, typeId, keyBuffer, label) -> {
                 if (typeId == AeronCounters.OVERRUN_PROPOSED_POSITON_TYPE_ID && label.equals("overruns-proposed-position stream=" + streamId))
                 {
-                    System.out.println("Found counter: " + label + " - " + counters.getCounterValue(counterId1));
+                    //System.out.println("Found counter: " + label + " - " + counters.getCounterValue(counterId1));
                     overrunProposedPositionCounterIdHolder.set(counterId1);
                 }
             });
@@ -219,7 +220,7 @@ public final class PersistentSubscription implements AutoCloseable
         fragments += liveSubscription.controlledPoll((buffer, offset, length, header) -> {
             final long currentLivePosition = header.position();
             final long lastReplayPosition = replayImage.position();
-            System.out.println("currentLivePosition = " + currentLivePosition + ", lastReplayPosition = " + lastReplayPosition + " - " + live);
+            //System.out.println("currentLivePosition = " + currentLivePosition + ", lastReplayPosition = " + lastReplayPosition + " - " + live);
 //            if (live)
 //            {
 //                System.out.println("Consuming at position: " + currentLivePosition + " from live");
@@ -236,31 +237,33 @@ public final class PersistentSubscription implements AutoCloseable
         // Carry on with the replay for now.
         fragments += replayImage.controlledPoll((buffer, offset, length, header) -> {
                 final long currentReplayPosition = header.position();
-                System.out.println("currentReplayPosition = " + currentReplayPosition);
+                //System.out.println("currentReplayPosition = " + currentReplayPosition);
                 if (currentReplayPosition == nextLivePosition)
                 {
-                    System.out.println("Replay caught up with live at " + currentReplayPosition);
+                    //System.out.println("Replay caught up with live at " + currentReplayPosition);
                     live = true; // TODO transition to a live state.
+                    final long joinPosition = liveSubscription.imageAtIndex(0).joinPosition();
+                    joinError = currentReplayPosition - joinPosition;
                     state(State.LIVE);
                     return ControlledFragmentHandler.Action.ABORT;
                 }
-                System.out.println("Consuming at position: " + currentReplayPosition + " from replay");
+                //System.out.println("Consuming at position: " + currentReplayPosition + " from replay");
                 return fragmentHandler.onFragment(buffer, offset, length, header);
             },
 //            fragmentLimit
             1
         );
-        System.out.println("fragments (from replay) = " + fragments);
+        //System.out.println("fragments (from replay) = " + fragments);
 
         if (live && replaySubscription.isConnected())
         {
-            System.out.println("Closing replay");
+            //System.out.println("Closing replay");
             CloseHelper.close(replaySubscription);
         }
 
         // Let the live channel catch up to the point we are at in the replay (but don't overtake it).
 //        liveSubscription.images().forEach(i -> System.out.println("i = " + i.position()));
-        System.out.println("fragments (total) = " + fragments);
+        //System.out.println("fragments (total) = " + fragments);
         return fragments;
     }
 
@@ -297,8 +300,7 @@ public final class PersistentSubscription implements AutoCloseable
         }
         int fragments = liveSubscription.controlledPoll((buffer, offset, length, header) -> {
             final long currentLivePosition = header.position();
-            System.out.println("currentLivePosition = " + currentLivePosition + ".");
-            System.out.println("Consuming at position: " + currentLivePosition + " from live");
+            //System.out.println("Consuming at position: " + currentLivePosition + " from live");
             return fragmentHandler.onFragment(buffer, offset, length, header);
         }, fragmentLimit);
         return fragments;
@@ -331,6 +333,11 @@ public final class PersistentSubscription implements AutoCloseable
     public boolean hasFailed()
     {
         return state == State.FAILED;
+    }
+
+    public long joinError()
+    {
+        return joinError;
     }
 
     private enum State
