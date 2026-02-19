@@ -21,6 +21,8 @@ import io.aeron.Image;
 import io.aeron.cluster.client.AeronCluster;
 import io.aeron.cluster.codecs.MessageHeaderDecoder;
 import io.aeron.cluster.codecs.MessageHeaderEncoder;
+import io.aeron.cluster.codecs.NewLeadershipTermEventEncoder;
+import io.aeron.cluster.codecs.SessionOpenEventEncoder;
 import io.aeron.driver.DataPacketDispatcher;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ReceiveChannelEndpointSupplier;
@@ -44,6 +46,7 @@ import io.aeron.test.Tests;
 import io.aeron.test.cluster.TestCluster;
 import io.aeron.test.cluster.TestNode;
 import org.agrona.BitUtil;
+import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
 import org.agrona.collections.LongArrayQueue;
 import org.agrona.concurrent.UnsafeBuffer;
@@ -61,12 +64,13 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static io.aeron.protocol.DataHeaderFlyweight.HEADER_LENGTH;
 import static io.aeron.test.cluster.TestCluster.aCluster;
 import static io.aeron.test.driver.TestMediaDriver.shouldRunJavaMediaDriver;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 @ExtendWith({ EventLogExtension.class, InterruptingTestCallback.class })
 public class ClusterUncommittedStateTest
@@ -235,6 +239,82 @@ public class ClusterUncommittedStateTest
 
         leaderLossControl.toggleLoss(false);
         Tests.await(() -> ConsensusModule.State.SUSPENDED == firstLeader.moduleState());
+    }
+
+    @ParameterizedTest(name = "ShouldNextCommittedSessionIdReflectOnlyCommittedSessions hasService={0}")
+    @ValueSource(booleans = {true, false})
+    @SlowTest
+    @InterruptAfter(20)
+    void shouldNextCommittedSessionIdReflectOnlyCommittedSessions(final boolean hasService)
+    {
+        assumeTrue(shouldRunJavaMediaDriver());
+
+        final TestCluster.Builder clusterBuilder = aCluster()
+            .withStaticNodes(NODE_COUNT)
+            .withReceiveChannelEndpointSupplier((memberId) -> toggledLossControls[memberId])
+            .withSendChannelEndpointSupplier((memberId) -> toggledLossControls[memberId]);
+        if (!hasService)
+        {
+            clusterBuilder
+                .withExtensionSuppler(TestNode.TestConsensusModuleExtension::new)
+                .withServiceSupplier(value -> new TestNode.TestService[0]);
+        }
+        cluster = clusterBuilder.start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode firstLeader = cluster.awaitLeader();
+        final ToggledLossControl leaderLossControl = toggledLossControls[firstLeader.memberId()];
+
+        leaderLossControl.toggleLoss(true);
+        Tests.await(() -> 0 < leaderLossControl.droppedOutboundFrames.get() &&
+            0 < leaderLossControl.droppedInboundFrames.get());
+
+        CloseHelper.closeAll(
+            cluster.connectIpcClient(new AeronCluster.Context(), firstLeader.mediaDriver().aeronDirectoryName()),
+            cluster.connectIpcClient(new AeronCluster.Context(), firstLeader.mediaDriver().aeronDirectoryName()),
+            cluster.connectIpcClient(new AeronCluster.Context(), firstLeader.mediaDriver().aeronDirectoryName()));
+        final long estimatedLogFixedLengthSize = (NewLeadershipTermEventEncoder.BLOCK_LENGTH + HEADER_LENGTH) +
+            (3 * (SessionOpenEventEncoder.BLOCK_LENGTH + HEADER_LENGTH));
+        Tests.await(() -> firstLeader.appendPosition() > estimatedLogFixedLengthSize);
+
+        TestNode newLeader;
+        do
+        {
+            newLeader = cluster.findLeader(firstLeader.memberId());
+            Tests.yield();
+        }
+        while (null == newLeader);
+
+        cluster.takeSnapshot(newLeader);
+        Tests.await(() ->
+        {
+            for (int i = 0; i < cluster.memberCount(); ++i)
+            {
+                if (firstLeader.memberId() != i && 1 != cluster.getSnapshotCount(cluster.node(i)))
+                {
+                    return false;
+                }
+            }
+            return true;
+        });
+
+        leaderLossControl.toggleLoss(false);
+        Tests.await(() -> 1 == cluster.getSnapshotCount(firstLeader));
+
+        for (int i = 0; i < cluster.memberCount(); ++i)
+        {
+            assertEquals(1, ClusterTest.readSnapshot(cluster.node(i)));
+        }
+
+        final TestNode finalLeader = cluster.awaitLeader();
+        CloseHelper.close(cluster.asyncConnectClient());
+        cluster.takeSnapshot(finalLeader);
+        cluster.awaitSnapshotCount(2);
+
+        for (int i = 0; i < cluster.memberCount(); ++i)
+        {
+            assertEquals(2, ClusterTest.readSnapshot(cluster.node(i)));
+        }
     }
 
     @Test
