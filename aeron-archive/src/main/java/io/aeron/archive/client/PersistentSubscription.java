@@ -96,7 +96,6 @@ public final class PersistentSubscription implements AutoCloseable
 
         assert descriptor.recordingId == recordingId;
 
-        // TODO should we be checking those or should we just allow replay request to fail?
         if (position < descriptor.startPosition)
         {
             state(State.FAILED);
