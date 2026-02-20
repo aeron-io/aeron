@@ -1,3 +1,19 @@
+/*
+ * Copyright 2014-2025 Real Logic Limited.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.aeron.archive.client;
 
 import io.aeron.Aeron;
@@ -9,6 +25,9 @@ import org.agrona.CloseHelper;
 import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
 import static java.util.Objects.requireNonNull;
 
+/**
+ *
+ */
 public final class PersistentSubscription implements AutoCloseable
 {
     private final RecordingDescriptorConsumerImpl descriptor = new RecordingDescriptorConsumerImpl();
@@ -255,7 +274,8 @@ public final class PersistentSubscription implements AutoCloseable
             return 0;
         }
 
-        int fragments = liveSubscription.controlledPoll((buffer, offset, length, header) -> {
+        final int fragments = liveSubscription.controlledPoll((buffer, offset, length, header) ->
+        {
             final long currentLivePosition = header.position();
             //System.out.println("Consuming at position: " + currentLivePosition + " from live");
             return fragmentHandler.onFragment(buffer, offset, length, header);
@@ -263,6 +283,9 @@ public final class PersistentSubscription implements AutoCloseable
         return fragments;
     }
 
+    /**
+     * {@inheritDoc}
+     */
     public void close()
     {
         // TODO do we need to explicitly stop replay if there is one?
@@ -277,6 +300,15 @@ public final class PersistentSubscription implements AutoCloseable
         }
     }
 
+    /**
+     * Indicates if the persistent subscription failed.
+     * <p>
+     * The {@link PersistentSubscriptionListener} will be notified of any terminal errors
+     * that can cause the persistent subscription to fail.
+     *
+     * @return true if persistent subscription has failed.
+     * @see PersistentSubscriptionListener#onError(Exception)
+     */
     public boolean hasFailed()
     {
         return state == State.FAILED;
