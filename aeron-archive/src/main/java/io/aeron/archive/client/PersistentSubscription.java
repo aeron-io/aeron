@@ -52,8 +52,6 @@ public final class PersistentSubscription implements AutoCloseable
     private Subscription liveSubscription;
 
     private long nextLivePosition = Aeron.NULL_VALUE;
-    private boolean live = false;
-
 
     private PersistentSubscription(final Context ctx)
     {
@@ -89,7 +87,7 @@ public final class PersistentSubscription implements AutoCloseable
 
     public boolean isLive()
     {
-        return live;
+        return state == State.LIVE;
     }
 
     private int init()
@@ -235,7 +233,6 @@ public final class PersistentSubscription implements AutoCloseable
                 final long currentReplayPosition = header.position();
                 if (currentReplayPosition == nextLivePosition)
                 {
-                    live = true; // TODO transition to a live state.
                     final long joinPosition = liveSubscription.imageAtIndex(0).joinPosition();
                     joinError = currentReplayPosition - joinPosition;
                     state(State.LIVE);
@@ -246,7 +243,7 @@ public final class PersistentSubscription implements AutoCloseable
             1
         );
 
-        if (live && replaySubscription.isConnected())
+        if (isLive() && replaySubscription.isConnected())
         {
             CloseHelper.close(replaySubscription);
         }
@@ -261,7 +258,6 @@ public final class PersistentSubscription implements AutoCloseable
         {
             // TODO need to actually restart the replay from the right point
             state(State.REPLAY);
-            live = false;
             return 0;
         }
 
