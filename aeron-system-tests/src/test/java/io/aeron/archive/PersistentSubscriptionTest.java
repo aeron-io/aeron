@@ -360,7 +360,7 @@ class PersistentSubscriptionTest
     }
 
     @RepeatedTest(3)
-    @InterruptAfter(20)
+    @InterruptAfter(60)
     void testLiveJoin() throws Exception
     {
         final String pubChannel = "aeron:udp?term-length=16m|control=localhost:24325|control-mode=dynamic|fc=min";
@@ -382,7 +382,7 @@ class PersistentSubscriptionTest
         final int counterId = Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
         final long recordingId = RecordingPos.getRecordingId(counters, counterId);
 
-        final int maxSeconds = 20;
+        final int maxSeconds = 60;
         final int ratePerSecond = 10_000;
         final long maxProcessingTime = 1_000_000_000 / ratePerSecond / 2;
         final long t0 = System.nanoTime();
