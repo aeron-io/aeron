@@ -35,10 +35,10 @@ public final class PersistentSubscription implements AutoCloseable
     private final long recordingId;
     private final PersistentSubscriptionListener listener;
     private final String liveChannel;
-    private final int streamId;
+    private final int liveStreamId;
+    private final long startPosition;
 
     private State state;
-    private long position;
     private long joinError;
     private Subscription replaySubscription;
     private long candidateSwitchPosition;
@@ -53,11 +53,9 @@ public final class PersistentSubscription implements AutoCloseable
         final long recordingId,
         final long startPosition,
         final String liveChannel,
-        final int streamId, // TODO liveStreamId?
+        final int liveStreamId,
         final PersistentSubscriptionListener listener)
     {
-        this.liveChannel = liveChannel;
-        this.streamId = streamId;
         requireNonNull(aeronArchive);
         requireNonNull(liveChannel);
 
@@ -71,10 +69,12 @@ public final class PersistentSubscription implements AutoCloseable
             throw new IllegalArgumentException("invalid startPosition " + startPosition);
         }
 
-        this.listener = listener;
         this.aeronArchive = aeronArchive;
         this.recordingId = recordingId;
-        this.position = startPosition;
+        this.startPosition = startPosition;
+        this.liveChannel = liveChannel;
+        this.liveStreamId = liveStreamId;
+        this.listener = listener;
 
         state(State.INIT);
     }
@@ -115,39 +115,39 @@ public final class PersistentSubscription implements AutoCloseable
 
         assert descriptor.recordingId == recordingId;
 
-        if (streamId != descriptor.streamId)
+        if (liveStreamId != descriptor.streamId)
         {
             state(State.FAILED);
             if (listener != null)
             {
                 listener.onError(new PersistentSubscriptionException(
                     PersistentSubscriptionException.Reason.STREAM_ID_MISMATCH,
-                    "Requested live stream with ID: " + streamId + " does not match stream ID: " + descriptor.streamId + " for recording: " + recordingId)
+                    "Requested live stream with ID: " + liveStreamId + " does not match stream ID: " + descriptor.streamId + " for recording: " + recordingId)
                 );
             }
             return 1;
         }
 
-        if (position < descriptor.startPosition)
+        if (startPosition < descriptor.startPosition)
         {
             state(State.FAILED);
             if (listener != null)
             {
                 listener.onError(new PersistentSubscriptionException(
                     PersistentSubscriptionException.Reason.INVALID_START_POSITION,
-                    "Requested position: " + position + " is lower than start position: " + descriptor.startPosition + " for recording: " + recordingId)
+                    "Requested position: " + startPosition + " is lower than start position: " + descriptor.startPosition + " for recording: " + recordingId)
                 );
             }
             return 1;
         }
-        if (descriptor.stopPosition != NULL_POSITION && position > descriptor.stopPosition)
+        if (descriptor.stopPosition != NULL_POSITION && startPosition > descriptor.stopPosition)
         {
             state(State.FAILED);
             if (listener != null)
             {
                 listener.onError(new PersistentSubscriptionException(
                     PersistentSubscriptionException.Reason.INVALID_START_POSITION,
-                    "Requested position: " + position + " is greater than stop position: " + descriptor.stopPosition + " for recording: " + recordingId)
+                    "Requested position: " + startPosition + " is greater than stop position: " + descriptor.stopPosition + " for recording: " + recordingId)
                 );
             }
             return 1;
@@ -163,7 +163,7 @@ public final class PersistentSubscription implements AutoCloseable
         final String replayChannel = "aeron:udp?endpoint=" + replaySubscription.resolvedEndpoint();
         replaySessionId = (int)aeronArchive.startReplay(
             recordingId,
-            position,
+            startPosition,
             AeronArchive.REPLAY_ALL_AND_FOLLOW,
             replayChannel,
             replaySubscription.streamId());
@@ -190,9 +190,7 @@ public final class PersistentSubscription implements AutoCloseable
             final long maxRecordedPosition = aeronArchive.getMaxRecordedPosition(recordingId);
             if (closeEnough(replayedPosition, maxRecordedPosition))
             {
-                liveSubscription = aeronArchive.context().aeron().addSubscription(liveChannel, streamId, i -> {}, i -> {
-                    System.out.println("image unavailable: " + i);
-                });
+                liveSubscription = aeronArchive.context().aeron().addSubscription(liveChannel, liveStreamId);
                 state(State.ATTEMPT_SWITCH);
             }
             else
@@ -226,15 +224,10 @@ public final class PersistentSubscription implements AutoCloseable
 
         int fragments = 0;
 
+        // Let the live channel catch up to the point we are at in the replay (but don't overtake it).
         fragments += liveSubscription.controlledPoll((buffer, offset, length, header) -> {
             final long currentLivePosition = header.position();
             final long lastReplayPosition = replayImage.position();
-            //System.out.println("currentLivePosition = " + currentLivePosition + ", lastReplayPosition = " + lastReplayPosition + " - " + live);
-//            if (live)
-//            {
-//                System.out.println("Consuming at position: " + currentLivePosition + " from live");
-//                return fragmentHandler.onFragment(buffer, offset, length, header);
-//            }
             if (currentLivePosition <= lastReplayPosition)
             {
                 return ControlledFragmentHandler.Action.CONTINUE;
@@ -246,33 +239,24 @@ public final class PersistentSubscription implements AutoCloseable
         // Carry on with the replay for now.
         fragments += replayImage.controlledPoll((buffer, offset, length, header) -> {
                 final long currentReplayPosition = header.position();
-                //System.out.println("currentReplayPosition = " + currentReplayPosition);
                 if (currentReplayPosition == nextLivePosition)
                 {
-                    //System.out.println("Replay caught up with live at " + currentReplayPosition);
                     live = true; // TODO transition to a live state.
                     final long joinPosition = liveSubscription.imageAtIndex(0).joinPosition();
                     joinError = currentReplayPosition - joinPosition;
                     state(State.LIVE);
                     return ControlledFragmentHandler.Action.ABORT;
                 }
-                //System.out.println("Consuming at position: " + currentReplayPosition + " from replay");
                 return fragmentHandler.onFragment(buffer, offset, length, header);
             },
-//            fragmentLimit
             1
         );
-        //System.out.println("fragments (from replay) = " + fragments);
 
         if (live && replaySubscription.isConnected())
         {
-            //System.out.println("Closing replay");
             CloseHelper.close(replaySubscription);
         }
 
-        // Let the live channel catch up to the point we are at in the replay (but don't overtake it).
-//        liveSubscription.images().forEach(i -> System.out.println("i = " + i.position()));
-        //System.out.println("fragments (total) = " + fragments);
         return fragments;
     }
 
@@ -287,13 +271,7 @@ public final class PersistentSubscription implements AutoCloseable
             return 0;
         }
 
-        final int fragments = liveSubscription.controlledPoll((buffer, offset, length, header) ->
-        {
-            final long currentLivePosition = header.position();
-            //System.out.println("Consuming at position: " + currentLivePosition + " from live");
-            return fragmentHandler.onFragment(buffer, offset, length, header);
-        }, fragmentLimit);
-        return fragments;
+        return liveSubscription.controlledPoll(fragmentHandler, fragmentLimit);
     }
 
     /**
