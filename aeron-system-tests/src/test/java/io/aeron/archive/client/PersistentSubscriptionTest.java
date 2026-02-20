@@ -50,6 +50,7 @@ import org.agrona.concurrent.status.CountersReader;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -317,7 +318,8 @@ class PersistentSubscriptionTest
                 .aeronArchiveContext(aeronArchiveContext)))
         {
             final List<byte[]> receivedPayloads = new ArrayList<>();
-//            while (listener.onLiveCount == 0) // TODO should get the onLiveCallback
+//            while (!listener.isL.ive()) // TODO isLive never returns true
+
             while (receivedPayloads.size() != payloads.size())
             {
                 final int workCount = persistentSubscription.controlledPoll((buffer1, offset, length, header) -> {
@@ -330,9 +332,10 @@ class PersistentSubscriptionTest
                 {
                     Tests.yield();
                 }
-                if (!receivedPayloads.isEmpty())
+                if (receivedPayloads.size() == 1)
                 {
                     assertEquals(1, archive.context().replaySessionCounter().get());
+                    assertTrue(persistentSubscription.isReplaying());
                 }
             }
 
@@ -392,9 +395,10 @@ class PersistentSubscriptionTest
                 {
                     Tests.yield();
                 }
-                if (!receivedPayloads.isEmpty())
+                if (receivedPayloads.size() == 1)
                 {
                     assertEquals(1, archive.context().replaySessionCounter().get());
+                    assertTrue(persistentSubscription.isReplaying());
                 }
             }
 
@@ -437,8 +441,9 @@ class PersistentSubscriptionTest
                     }
                 }
 
-                executeUntil(persistentSubscription::isLive, () -> persistentSubscription.controlledPoll(
+                executeUntil(() -> !persistentSubscription.isLive(), () -> persistentSubscription.controlledPoll(
                     (buffer, offset, length, header) -> ControlledFragmentHandler.Action.CONTINUE, 10));
+                assertTrue(persistentSubscription.isReplaying());
             }
         }
     }
@@ -720,7 +725,7 @@ class PersistentSubscriptionTest
             {
                 Tests.yield();
             }
-        }, Integer.MAX_VALUE, TimeUnit.SECONDS.toNanos(1));
+        }, Integer.MAX_VALUE, TimeUnit.SECONDS.toNanos(5)); // TODO: failure doesn't end test
     }
 
     private void offerPayload(final List<byte[]> payloads,

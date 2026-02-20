@@ -85,9 +85,52 @@ public final class PersistentSubscription implements AutoCloseable
         };
     }
 
+    /**
+     * Indicates if the persistent subscription is reading from the live stream.
+     *
+     * @return true if persistent subscription is reading from the live stream.
+     */
     public boolean isLive()
     {
         return state == State.LIVE;
+    }
+
+    /**
+     * Indicates if the persistent subscription is replaying from a recording.
+     *
+     * @return true if persistent subscription is replaying from a recording.
+     */
+    public boolean isReplaying()
+    {
+        return state == State.REPLAY || state == State.ATTEMPT_SWITCH;
+    }
+
+    /**
+     * Indicates if the persistent subscription failed.
+     * <p>
+     * The {@link PersistentSubscriptionListener} will be notified of any terminal errors
+     * that can cause the persistent subscription to fail.
+     *
+     * @return true if persistent subscription has failed.
+     * @see PersistentSubscriptionListener#onError(Exception)
+     */
+    public boolean hasFailed()
+    {
+        return state == State.FAILED;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public void close()
+    {
+        // TODO do we need to explicitly stop replay if there is one?
+        CloseHelper.close(aeronArchive);
+    }
+
+    long joinError()
+    {
+        return joinError;
     }
 
     private int init()
@@ -99,7 +142,7 @@ public final class PersistentSubscription implements AutoCloseable
             {
                 listener.onError(new PersistentSubscriptionException(
                     PersistentSubscriptionException.Reason.RECORDING_NOT_FOUND,
-                    "No recording0 found with ID: " + recordingId)
+                    "No recording found with ID: " + recordingId)
                 );
             }
             return 1;
@@ -264,15 +307,6 @@ public final class PersistentSubscription implements AutoCloseable
         return liveSubscription.controlledPoll(fragmentHandler, fragmentLimit);
     }
 
-    /**
-     * {@inheritDoc}
-     */
-    public void close()
-    {
-        // TODO do we need to explicitly stop replay if there is one?
-        CloseHelper.close(aeronArchive);
-    }
-
     private void state(final State newState)
     {
         System.out.println("State: " + state + " -> " + newState);
@@ -280,25 +314,6 @@ public final class PersistentSubscription implements AutoCloseable
         {
             this.state = newState;
         }
-    }
-
-    /**
-     * Indicates if the persistent subscription failed.
-     * <p>
-     * The {@link PersistentSubscriptionListener} will be notified of any terminal errors
-     * that can cause the persistent subscription to fail.
-     *
-     * @return true if persistent subscription has failed.
-     * @see PersistentSubscriptionListener#onError(Exception)
-     */
-    public boolean hasFailed()
-    {
-        return state == State.FAILED;
-    }
-
-    long joinError()
-    {
-        return joinError;
     }
 
     private enum State
