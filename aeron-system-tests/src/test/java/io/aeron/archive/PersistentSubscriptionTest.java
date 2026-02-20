@@ -12,6 +12,7 @@ import io.aeron.Subscription;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.client.PersistentSubscription;
 import io.aeron.archive.client.PersistentSubscriptionException;
+import io.aeron.archive.client.PersistentSubscriptionException.Reason;
 import io.aeron.archive.client.PersistentSubscriptionListener;
 import io.aeron.archive.status.RecordingPos;
 import io.aeron.driver.MediaDriver;
@@ -44,6 +45,8 @@ import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
+import java.util.function.BooleanSupplier;
+import java.util.function.IntSupplier;
 
 import static io.aeron.CommonContext.IPC_CHANNEL;
 import static io.aeron.CommonContext.IPC_MEDIA;
@@ -63,7 +66,7 @@ class PersistentSubscriptionTest
     private static final String MDC_CHANNEL = UDP_CHANNEL + "?control=localhost:2000";
     private static final int STREAM_ID = 1000;
     public static final String MDC_PUBLICATION_CHANNEL = CommonContext.UDP_CHANNEL +
-        "?control=localhost:2000|++mode=dynamic|fc=max";
+        "?control=localhost:2000|control-mode=dynamic|fc=max";
 
     @RegisterExtension
     final SystemTestWatcher systemTestWatcher = new SystemTestWatcher();
@@ -140,10 +143,7 @@ class PersistentSubscriptionTest
         try (PersistentSubscription persistentSubscription =
             new PersistentSubscription(aeronArchive, 13, 0, IPC_CHANNEL, STREAM_ID, listener))
         {
-            while (!persistentSubscription.hasFailed())
-            {
-                persistentSubscription.controlledPoll(null, 1);
-            }
+            executeUntil(persistentSubscription::hasFailed, () -> persistentSubscription.controlledPoll(null, 1));
         }
     }
 
@@ -155,14 +155,11 @@ class PersistentSubscriptionTest
         try (PersistentSubscription persistentSubscription =
                  new PersistentSubscription(aeronArchive, recordingId, 0, IPC_CHANNEL, STREAM_ID, listener))
         {
-            while (!persistentSubscription.hasFailed())
-            {
-                persistentSubscription.controlledPoll(null, 1);
-            }
+            executeUntil(persistentSubscription::hasFailed, () -> persistentSubscription.controlledPoll(null, 1));
 
             assertEquals(1, listener.errorCount);
             assertEquals(
-                PersistentSubscriptionException.Reason.RECORDING_NOT_FOUND,
+                Reason.RECORDING_NOT_FOUND,
                 ((PersistentSubscriptionException)listener.lastException).reason()
             );
         }
@@ -185,14 +182,11 @@ class PersistentSubscriptionTest
         try (PersistentSubscription persistentSubscription =
             new PersistentSubscription(aeronArchive, recordingId, startPosition, IPC_CHANNEL, STREAM_ID, listener))
         {
-            while (!persistentSubscription.hasFailed())
-            {
-                persistentSubscription.controlledPoll(null, 1);
-            }
+            executeUntil(persistentSubscription::hasFailed, () -> persistentSubscription.controlledPoll(null, 1));
 
             assertEquals(1, listener.errorCount);
             assertEquals(
-                PersistentSubscriptionException.Reason.INVALID_START_POSITION,
+                Reason.INVALID_START_POSITION,
                 ((PersistentSubscriptionException)listener.lastException).reason()
             );
         }
@@ -207,8 +201,7 @@ class PersistentSubscriptionTest
         final int counterId = Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
         final long recordingId = RecordingPos.getRecordingId(counters, counterId);
 
-        final UnsafeBuffer buffer = new UnsafeBuffer(new byte[1024]);
-        publication.offer(buffer);
+        offerPayload(List.of(new byte[1024]), publication, counters, counterId);
 
         aeronArchive.stopRecording(publication);
         final long stopPosition = aeronArchive.getStopPosition(recordingId);
@@ -219,14 +212,11 @@ class PersistentSubscriptionTest
         try (PersistentSubscription persistentSubscription =
             new PersistentSubscription(aeronArchive, recordingId, startPosition, IPC_CHANNEL, STREAM_ID, listener))
         {
-            while (!persistentSubscription.hasFailed())
-            {
-                persistentSubscription.controlledPoll(null, 1);
-            }
+            executeUntil(persistentSubscription::hasFailed, () -> persistentSubscription.controlledPoll(null, 1));
 
             assertEquals(1, listener.errorCount);
             assertEquals(
-                PersistentSubscriptionException.Reason.INVALID_START_POSITION,
+                Reason.INVALID_START_POSITION,
                 ((PersistentSubscriptionException)listener.lastException).reason()
             );
         }
@@ -243,18 +233,7 @@ class PersistentSubscriptionTest
         final long recordingId = RecordingPos.getRecordingId(counters, counterId);
 
         final List<byte[]> payloads = generateRandomPayloads(5);
-        final UnsafeBuffer buffer = new UnsafeBuffer();
-
-        long offeredPosition = 0;
-        for (final byte[] payload : payloads)
-        {
-            buffer.wrap(payload);
-            while ((offeredPosition = publication.offer(buffer)) < 0)
-            {
-                Tests.yield();
-            }
-        }
-        Tests.awaitPosition(counters, counterId, offeredPosition);
+        offerPayload(payloads, publication, counters, counterId);
 
         try (PersistentSubscription persistentSubscription =
             new PersistentSubscription(aeronArchive, recordingId, 0, IPC_CHANNEL, STREAM_ID, listener))
@@ -279,38 +258,17 @@ class PersistentSubscriptionTest
                 }
             }
 
-            assertEquals(payloads.size(), receivedPayloads.size());
-            for (int i = 0; i < receivedPayloads.size(); i++)
-            {
-                assertArrayEquals(payloads.get(i), receivedPayloads.get(i));
-            }
+           assertPayloads(receivedPayloads, payloads);
 
-            // send some more message
+            // send some more messages
             final List<byte[]> payloads2 = generateRandomPayloads(5);
+            offerPayload(payloads2, publication, counters, counterId);
 
-            for (final byte[] payload : payloads2)
-            {
-                buffer.wrap(payload);
-                while ((offeredPosition = publication.offer(buffer)) < 0)
-                {
-                    Tests.yield();
-                }
-            }
-            Tests.awaitPosition(counters, counterId, offeredPosition);
-
-            while (receivedPayloads.size() < payloads.size() + payloads2.size())
-            {
-                final int workCount = persistentSubscription.controlledPoll((buffer1, offset, length, header) -> {
-                    final byte[] bytes = new byte[length];
-                    buffer1.getBytes(offset, bytes);
-                    receivedPayloads.add(bytes);
-                    return ControlledFragmentHandler.Action.CONTINUE;
-                }, 10);
-                if (workCount == 0)
-                {
-                    Tests.yield();
-                }
-            }
+            consumePayload(
+                () -> receivedPayloads.size() == payloads.size() + payloads2.size(),
+                receivedPayloads,
+                persistentSubscription
+            );
 
             assertTrue(persistentSubscription.isLive());
 
@@ -331,18 +289,7 @@ class PersistentSubscriptionTest
         final long recordingId = RecordingPos.getRecordingId(counters, counterId);
 
         final List<byte[]> payloads = generateRandomPayloads(5);
-        final UnsafeBuffer buffer = new UnsafeBuffer();
-
-        long offeredPosition = 0;
-        for (final byte[] payload : payloads)
-        {
-            buffer.wrap(payload);
-            while ((offeredPosition = publication.offer(buffer)) < 0)
-            {
-                Tests.yield();
-            }
-        }
-        Tests.awaitPosition(counters, counterId, offeredPosition);
+        offerPayload(payloads, publication, counters, counterId);;
 
         try (PersistentSubscription persistentSubscription =
             new PersistentSubscription(aeronArchive, recordingId, 0, MDC_CHANNEL, STREAM_ID, listener))
@@ -367,39 +314,19 @@ class PersistentSubscriptionTest
                 }
             }
 
-            assertEquals(payloads.size(), receivedPayloads.size());
-            for (int i = 0; i < receivedPayloads.size(); i++)
-            {
-                assertArrayEquals(payloads.get(i), receivedPayloads.get(i));
-            }
+            assertPayloads(receivedPayloads, payloads);
 
             Thread.sleep(100); // TODO
-            // send some more message
+
+            // send some more messages
             final List<byte[]> payloads2 = generateRandomPayloads(5);
+            offerPayload(payloads2, publication, counters, counterId);
 
-            for (final byte[] payload : payloads2)
-            {
-                buffer.wrap(payload);
-                while ((offeredPosition = publication.offer(buffer)) < 0)
-                {
-                    Tests.yield();
-                }
-            }
-            Tests.awaitPosition(counters, counterId, offeredPosition);
-
-            while (receivedPayloads.size() < payloads.size() + payloads2.size())
-            {
-                final int workCount = persistentSubscription.controlledPoll((buffer1, offset, length, header) -> {
-                    final byte[] bytes = new byte[length];
-                    buffer1.getBytes(offset, bytes);
-                    receivedPayloads.add(bytes);
-                    return ControlledFragmentHandler.Action.CONTINUE;
-                }, 10);
-                if (workCount == 0)
-                {
-                    Tests.yield();
-                }
-            }
+            consumePayload(
+                () -> receivedPayloads.size() == payloads.size() + payloads2.size(),
+                receivedPayloads,
+                persistentSubscription
+            );
 
             assertTrue(persistentSubscription.isLive());
 
@@ -414,14 +341,9 @@ class PersistentSubscriptionTest
 
                 Tests.awaitConnected(subscription);
 
-                offeredPosition = 0;
                 for (int i = 0; i < 64; i++)
                 {
-                    final UnsafeBuffer offerBuffer = new UnsafeBuffer(new byte[1024]);
-                    while ((offeredPosition = publication.offer(offerBuffer)) < 0)
-                    {
-                        Tests.yieldingIdle("offeredPos=" + Publication.errorString(offeredPosition));
-                    }
+                    offerPayload(List.of(new byte[1024]), publication, counters, counterId);
 
                     while (subscription.poll((buffer1, offset, length, header) ->
                     {
@@ -431,11 +353,8 @@ class PersistentSubscriptionTest
                     }
                 }
 
-                while (persistentSubscription.isLive())
-                {
-                    persistentSubscription.controlledPoll((buffer1, offset, length, header) ->
-                        ControlledFragmentHandler.Action.CONTINUE, 10);
-                }
+                executeUntil(persistentSubscription::isLive, () -> persistentSubscription.controlledPoll(
+                    (buffer, offset, length, header) -> ControlledFragmentHandler.Action.CONTINUE, 10));
             }
         }
     }
@@ -704,6 +623,58 @@ class PersistentSubscriptionTest
         }
         return randomPayloads;
     }
+
+    private static void executeUntil(final BooleanSupplier hasFailed, final IntSupplier supplier)
+    {
+        Tests.executeUntil(hasFailed, (i) -> {
+            int workCount = supplier.getAsInt();
+            if (workCount == 0)
+            {
+                Tests.yield();
+            }
+        }, Integer.MAX_VALUE, TimeUnit.SECONDS.toNanos(1));
+    }
+
+    private void offerPayload(final List<byte[]> payloads,
+                              final Publication publication,
+                              final CountersReader counters,
+                              final int counterId)
+    {
+        final UnsafeBuffer buffer = new UnsafeBuffer();
+
+        long offeredPosition = 0;
+        for (final byte[] payload : payloads)
+        {
+            buffer.wrap(payload);
+            while ((offeredPosition = publication.offer(buffer)) < 0)
+            {
+                Tests.yieldingIdle("offeredPosition = " + Publication.errorString(offeredPosition));
+            }
+        }
+        Tests.awaitPosition(counters, counterId, offeredPosition);
+    }
+
+    private void assertPayloads(final List<byte[]> receivedPayloads, final List<byte[]> payloads)
+    {
+        for (int i = 0; i < receivedPayloads.size(); i++)
+        {
+            assertArrayEquals(payloads.get(i), receivedPayloads.get(i));
+        }
+    }
+
+    private void consumePayload(final BooleanSupplier predicate,
+                                final List<byte[]> receivedPayloads,
+                                final PersistentSubscription persistentSubscription)
+    {
+        executeUntil(predicate,  () ->
+            persistentSubscription.controlledPoll((buffer, offset, length, header) -> {
+                final byte[] bytes = new byte[length];
+                buffer.getBytes(offset, bytes);
+                receivedPayloads.add(bytes);
+                return ControlledFragmentHandler.Action.CONTINUE;
+            }, 10));
+    }
+
 
     private static final class PersistentSubscriptionListenerImpl implements PersistentSubscriptionListener
     {
