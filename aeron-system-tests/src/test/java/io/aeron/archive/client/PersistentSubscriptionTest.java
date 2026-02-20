@@ -50,7 +50,6 @@ import org.agrona.concurrent.status.CountersReader;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -199,7 +198,8 @@ class PersistentSubscriptionTest
         final int liveStreamId = 1001; // <-- not the same as the recorded stream.
         final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(IPC_CHANNEL, STREAM_ID);
         final CountersReader counters = aeron.countersReader();
-        final int counterId = Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
+        final int counterId =
+            Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
         final long recordingId = RecordingPos.getRecordingId(counters, counterId);
 
         final PersistentSubscriptionListenerImpl listener = new PersistentSubscriptionListenerImpl();
@@ -236,7 +236,8 @@ class PersistentSubscriptionTest
             .build();
         final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(channel, STREAM_ID);
         final CountersReader counters = aeron.countersReader();
-        final int counterId = Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
+        final int counterId =
+            Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
         final long recordingId = RecordingPos.getRecordingId(counters, counterId);
 
         final int startPosition = 0; // <-- Trying to start from zero
@@ -265,7 +266,8 @@ class PersistentSubscriptionTest
     {
         final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(IPC_CHANNEL, STREAM_ID);
         final CountersReader counters = aeron.countersReader();
-        final int counterId = Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
+        final int counterId =
+            Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
         final long recordingId = RecordingPos.getRecordingId(counters, counterId);
 
         offerPayload(List.of(new byte[1024]), publication, counters, counterId);
@@ -302,7 +304,8 @@ class PersistentSubscriptionTest
         final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(IPC_CHANNEL, STREAM_ID);
 
         final CountersReader counters = aeron.countersReader();
-        final int counterId = Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
+        final int counterId =
+            Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
         final long recordingId = RecordingPos.getRecordingId(counters, counterId);
 
         final List<byte[]> payloads = generateRandomPayloads(5);
@@ -339,7 +342,7 @@ class PersistentSubscriptionTest
                 }
             }
 
-           assertPayloads(receivedPayloads, payloads);
+            assertPayloads(receivedPayloads, payloads);
 
             // send some more messages
             final List<byte[]> payloads2 = generateRandomPayloads(5);
@@ -365,7 +368,8 @@ class PersistentSubscriptionTest
             STREAM_ID);
 
         final CountersReader counters = aeron.countersReader();
-        final int counterId = Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
+        final int counterId =
+            Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
         final long recordingId = RecordingPos.getRecordingId(counters, counterId);
 
         final List<byte[]> payloads = generateRandomPayloads(5);
@@ -385,20 +389,21 @@ class PersistentSubscriptionTest
 //            while (listener.onLiveCount == 0) // TODO should get the onLiveCallback
             while (receivedPayloads.size() != payloads.size())
             {
-                final int workCount = persistentSubscription.controlledPoll((buffer1, offset, length, header) -> {
-                    final byte[] bytes = new byte[length];
-                    buffer1.getBytes(offset, bytes);
-                    receivedPayloads.add(bytes);
+                final int workCount = persistentSubscription.controlledPoll((buffer, offset, length, header) ->
+                {
+                    final byte[] bytes = new byte[length]; buffer.getBytes(offset, bytes); receivedPayloads.add(bytes);
                     return ControlledFragmentHandler.Action.CONTINUE;
                 }, 10);
+
                 if (workCount == 0)
                 {
                     Tests.yield();
                 }
+
                 if (receivedPayloads.size() == 1)
                 {
-                    assertEquals(1, archive.context().replaySessionCounter().get());
-                    assertTrue(persistentSubscription.isReplaying());
+                    assertEquals(1, archive.context().replaySessionCounter().get()); assertTrue(
+                    persistentSubscription.isReplaying());
                 }
             }
 
@@ -420,7 +425,8 @@ class PersistentSubscriptionTest
 
             Tests.await(() -> archive.context().replaySessionCounter().get() == 0);
 
-            final MediaDriver.Context ctx = new MediaDriver.Context().aeronDirectoryName(CommonContext.generateRandomDirName());
+            final MediaDriver.Context ctx =
+                new MediaDriver.Context().aeronDirectoryName(CommonContext.generateRandomDirName());
             try (MediaDriver mediaDriver = MediaDriver.launch(ctx);
                 final Aeron aeron =
                 Aeron.connect(new Aeron.Context().aeronDirectoryName(mediaDriver.aeronDirectoryName())))
