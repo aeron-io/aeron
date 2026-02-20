@@ -31,9 +31,13 @@ public class PersistentSubscriptionException extends RuntimeException
     public enum Reason
     {
         /**
-         * No recording exists with the specified recording ID.
+         * No recording exists with the specified recording id.
          */
         RECORDING_NOT_FOUND,
+        /**
+         * The requested live stream id does not match the stream id for the recording.
+         */
+        STREAM_ID_MISMATCH,
         /**
          * The requested start position is not available for the specified recording.
          */

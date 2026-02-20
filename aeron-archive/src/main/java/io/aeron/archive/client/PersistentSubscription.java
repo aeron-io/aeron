@@ -115,6 +115,19 @@ public final class PersistentSubscription implements AutoCloseable
 
         assert descriptor.recordingId == recordingId;
 
+        if (streamId != descriptor.streamId)
+        {
+            state(State.FAILED);
+            if (listener != null)
+            {
+                listener.onError(new PersistentSubscriptionException(
+                    PersistentSubscriptionException.Reason.STREAM_ID_MISMATCH,
+                    "Requested live stream with ID: " + streamId + " does not match stream ID: " + descriptor.streamId + " for recording: " + recordingId)
+                );
+            }
+            return 1;
+        }
+
         if (position < descriptor.startPosition)
         {
             state(State.FAILED);
@@ -334,6 +347,7 @@ public final class PersistentSubscription implements AutoCloseable
         long startPosition;
         long stopPosition;
         int termBufferLength;
+        int streamId;
 
         public void onRecordingDescriptor(
             final long controlSessionId,
@@ -357,6 +371,7 @@ public final class PersistentSubscription implements AutoCloseable
             this.startPosition = startPosition;
             this.stopPosition = stopPosition;
             this.termBufferLength = termBufferLength;
+            this.streamId = streamId;
         }
     }
 }

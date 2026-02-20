@@ -184,6 +184,34 @@ class PersistentSubscriptionTest
 
     @Test
     @InterruptAfter(10)
+    void shouldErrorIfRecordingStreamDoesNotMatchLiveStream()
+    {
+        final int liveStreamId = 1001; // <-- not the same as the recorded stream.
+        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(IPC_CHANNEL, STREAM_ID);
+        final CountersReader counters = aeron.countersReader();
+        final int counterId = Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
+        final long recordingId = RecordingPos.getRecordingId(counters, counterId);
+
+        final PersistentSubscriptionListenerImpl listener = new PersistentSubscriptionListenerImpl();
+        try (PersistentSubscription persistentSubscription =
+            new PersistentSubscription(aeronArchive, recordingId, 0, IPC_CHANNEL, liveStreamId, listener))
+        {
+            while (!persistentSubscription.hasFailed())
+            {
+                persistentSubscription.controlledPoll(null, 1);
+                Tests.yield();
+            }
+
+            assertEquals(1, listener.errorCount);
+            assertEquals(
+                PersistentSubscriptionException.Reason.STREAM_ID_MISMATCH,
+                ((PersistentSubscriptionException)listener.lastException).reason()
+            );
+        }
+    }
+
+    @Test
+    @InterruptAfter(10)
     void shouldErrorIfRecordingPositionIsBeforeStartPosition()
     {
         final String channel = new ChannelUriStringBuilder()
