@@ -7,6 +7,9 @@ import io.aeron.exceptions.ConfigurationException;
 import org.junit.jupiter.api.Test;
 
 import static io.aeron.CommonContext.IPC_CHANNEL;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class PersistentSubscriptionContextTest
@@ -65,4 +68,23 @@ class PersistentSubscriptionContextTest
         assertThrows(ConfigurationException.class, context::conclude);
     }
 
+    @Test
+    void contextCanBeCloned()
+    {
+        final PersistentSubscription.Context context = new PersistentSubscription.Context()
+            .recordingId(1)
+            .liveChannel(IPC_CHANNEL)
+            .liveStreamId(1)
+            .aeronArchiveContext(new AeronArchive.Context());
+
+        final PersistentSubscription.Context clonedCtx = context.clone();
+
+        assertNotSame(context, clonedCtx);
+        assertEquals(context.startPosition(), clonedCtx.startPosition());
+        assertEquals(context.recordingId(), clonedCtx.recordingId());
+        assertEquals(context.liveChannel(), clonedCtx.liveChannel());
+        assertEquals(context.liveStreamId(), clonedCtx.liveStreamId());
+        assertSame(context.listener(), clonedCtx.listener());
+        assertSame(context.aeronArchiveContext(), clonedCtx.aeronArchiveContext());
+    }
 }

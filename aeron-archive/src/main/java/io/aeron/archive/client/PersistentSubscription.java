@@ -19,6 +19,7 @@ package io.aeron.archive.client;
 import io.aeron.Aeron;
 import io.aeron.Image;
 import io.aeron.Subscription;
+import io.aeron.archive.Archive;
 import io.aeron.exceptions.ConcurrentConcludeException;
 import io.aeron.exceptions.ConfigurationException;
 import io.aeron.logbuffer.ControlledFragmentHandler;
@@ -347,7 +348,7 @@ public final class PersistentSubscription implements AutoCloseable
         }
     }
 
-    public static class Context
+    public static class Context implements Cloneable
     {
         private static final VarHandle IS_CONCLUDED_VH;
 
@@ -407,6 +408,42 @@ public final class PersistentSubscription implements AutoCloseable
             return this;
         }
 
+        public long recordingId()
+        {
+            return recordingId;
+        }
+
+        public long startPosition()
+        {
+            return startPosition;
+        }
+
+        public String liveChannel()
+        {
+            return liveChannel;
+        }
+
+        public int liveStreamId()
+        {
+            return liveStreamId;
+        }
+
+        public PersistentSubscriptionListener listener()
+        {
+            return listener;
+        }
+
+        public AeronArchive.Context aeronArchiveContext()
+        {
+            return aeronArchiveContext;
+        }
+
+        public boolean isConcluded()
+        {
+            return isConcluded;
+        }
+
+
         public void conclude()
         {
             if ((boolean)IS_CONCLUDED_VH.getAndSet(this, true))
@@ -447,6 +484,23 @@ public final class PersistentSubscription implements AutoCloseable
             if (startPosition < 0)
             {
                 throw new ConfigurationException("invalid startPosition " + startPosition);
+            }
+        }
+
+        /**
+         * Perform a shallow copy of the object.
+         *
+         * @return a shallow copy of the object.
+         */
+        public Context clone()
+        {
+            try
+            {
+                return (Context)super.clone();
+            }
+            catch (final CloneNotSupportedException ex)
+            {
+                throw new RuntimeException(ex);
             }
         }
     }
