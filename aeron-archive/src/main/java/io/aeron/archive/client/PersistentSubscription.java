@@ -19,8 +19,13 @@ package io.aeron.archive.client;
 import io.aeron.Aeron;
 import io.aeron.Image;
 import io.aeron.Subscription;
+import io.aeron.exceptions.ConcurrentConcludeException;
+import io.aeron.exceptions.ConfigurationException;
 import io.aeron.logbuffer.ControlledFragmentHandler;
 import org.agrona.CloseHelper;
+
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 
 import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
 import static java.util.Objects.requireNonNull;
@@ -48,16 +53,16 @@ public final class PersistentSubscription implements AutoCloseable
     private long nextLivePosition = Aeron.NULL_VALUE;
     private boolean live = false;
 
-    public PersistentSubscription(
-        final AeronArchive aeronArchive, // TODO passing an instance does not allow to reconnect, also, we probably need to own it?
-        final long recordingId,
-        final long startPosition,
-        final String liveChannel,
-        final int liveStreamId,
-        final PersistentSubscriptionListener listener)
+
+    private PersistentSubscription(final Context ctx)
     {
-        requireNonNull(aeronArchive);
-        requireNonNull(liveChannel);
+        ctx.conclude();
+        this.recordingId = ctx.recordingId;
+        this.startPosition = ctx.startPosition;
+        this.liveChannel = ctx.liveChannel;
+        this.liveStreamId = ctx.liveStreamId;
+        this.listener = ctx.listener;
+        this.aeronArchive = AeronArchive.connect(ctx.aeronArchiveContext.clone());
 
         if (recordingId < 0)
         {
@@ -69,14 +74,12 @@ public final class PersistentSubscription implements AutoCloseable
             throw new IllegalArgumentException("invalid startPosition " + startPosition);
         }
 
-        this.aeronArchive = aeronArchive;
-        this.recordingId = recordingId;
-        this.startPosition = startPosition;
-        this.liveChannel = liveChannel;
-        this.liveStreamId = liveStreamId;
-        this.listener = listener;
-
         state(State.INIT);
+    }
+
+    public static PersistentSubscription create(final Context ctx)
+    {
+        return new PersistentSubscription(ctx);
     }
 
     public int controlledPoll(final ControlledFragmentHandler fragmentHandler, final int fragmentLimit)
@@ -280,6 +283,7 @@ public final class PersistentSubscription implements AutoCloseable
     public void close()
     {
         // TODO do we need to explicitly stop replay if there is one?
+        CloseHelper.close(aeronArchive);
     }
 
     private void state(final State newState)
@@ -350,6 +354,113 @@ public final class PersistentSubscription implements AutoCloseable
             this.stopPosition = stopPosition;
             this.termBufferLength = termBufferLength;
             this.streamId = streamId;
+        }
+    }
+
+    public static class Context
+    {
+        private static final VarHandle IS_CONCLUDED_VH;
+
+        static
+        {
+            try
+            {
+                IS_CONCLUDED_VH = MethodHandles.lookup().findVarHandle(Context.class, "isConcluded", boolean.class);
+            }
+            catch (final ReflectiveOperationException ex)
+            {
+                throw new ExceptionInInitializerError(ex);
+            }
+        }
+
+        private volatile boolean isConcluded;
+        private long recordingId = Aeron.NULL_VALUE;
+        private long startPosition = 0; // TODO default to FROM_LIVE
+        private String liveChannel = null;
+        private int liveStreamId = Aeron.NULL_VALUE;
+        private PersistentSubscriptionListener listener = null;
+        private AeronArchive.Context aeronArchiveContext = null;
+
+        public Context recordingId(final long recordingId)
+        {
+            this.recordingId = recordingId;
+            return this;
+        }
+
+        public Context startPosition(final long startPosition)
+        {
+            this.startPosition = startPosition;
+            return this;
+        }
+
+        public Context liveChannel(final String liveChannel)
+        {
+            this.liveChannel = liveChannel;
+            return this;
+        }
+
+        public Context liveStreamId(final int liveStreamId)
+        {
+            this.liveStreamId = liveStreamId;
+            return this;
+        }
+
+        public Context listener(final PersistentSubscriptionListener listener)
+        {
+            this.listener = listener;
+            return this;
+        }
+
+        public Context aeronArchiveContext(final AeronArchive.Context aeronArchiveContext)
+        {
+            this.aeronArchiveContext = aeronArchiveContext;
+            return this;
+        }
+
+        public void conclude()
+        {
+            if ((boolean)IS_CONCLUDED_VH.getAndSet(this, true))
+            {
+                throw new ConcurrentConcludeException();
+            }
+
+            if (recordingId == Aeron.NULL_VALUE)
+            {
+                throw new ConfigurationException("PersistentSubscription.Context.recordingId must be set");
+            }
+
+            if (liveStreamId == Aeron.NULL_VALUE)
+            {
+                throw new ConfigurationException("PersistentSubscription.Context.liveStreamId must be set");
+            }
+
+            if (liveChannel == null)
+            {
+                throw new ConfigurationException("PersistentSubscription.Context.liveChannel must be set");
+            }
+
+            if (aeronArchiveContext == null)
+            {
+                throw new ConfigurationException("PersistentSubscription.Context.aeronArchiveContext must be set");
+            }
+
+            if (listener == null)
+            {
+                listener = new NoOpPersistentSubscriptionListener();
+            }
+        }
+    }
+
+    private static class NoOpPersistentSubscriptionListener implements PersistentSubscriptionListener
+    {
+        public void onLive()
+        {
+
+        }
+
+        public void onError(final Exception e)
+        {
+
         }
     }
 }

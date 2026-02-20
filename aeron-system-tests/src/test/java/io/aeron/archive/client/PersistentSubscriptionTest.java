@@ -105,6 +105,7 @@ class PersistentSubscriptionTest
     private Aeron aeron;
     private AeronArchive aeronArchive;
     private PersistentSubscriptionListenerImpl listener;
+    private AeronArchive.Context aeronArchiveContext;
 
     @BeforeEach
     void setUp()
@@ -131,9 +132,8 @@ class PersistentSubscriptionTest
 
         aeron = Aeron.connect(aeronCtxTpl.clone().aeronDirectoryName(aeronDirectoryName));
 
-        aeronArchive = AeronArchive.connect(
-            TestContexts.localhostAeronArchive()
-                .aeron(aeron));
+        aeronArchiveContext = TestContexts.localhostAeronArchive().aeron(aeron);
+        aeronArchive = AeronArchive.connect(aeronArchiveContext.clone());
 
         listener = new PersistentSubscriptionListenerImpl();
     }
@@ -156,7 +156,13 @@ class PersistentSubscriptionTest
     {
         final PersistentSubscriptionListenerImpl listener = null; // <-- null listener
         try (PersistentSubscription persistentSubscription =
-            new PersistentSubscription(aeronArchive, 13, 0, IPC_CHANNEL, STREAM_ID, listener))
+            PersistentSubscription.create(new PersistentSubscription.Context()
+                .recordingId(13)
+                .startPosition(0)
+                .liveChannel(IPC_CHANNEL)
+                .liveStreamId(STREAM_ID)
+                .listener(listener)
+                .aeronArchiveContext(aeronArchiveContext)))
         {
             executeUntil(persistentSubscription::hasFailed, () -> persistentSubscription.controlledPoll(null, 1));
         }
@@ -168,7 +174,13 @@ class PersistentSubscriptionTest
     {
         final int recordingId = 13; // <-- does not exist
         try (PersistentSubscription persistentSubscription =
-                 new PersistentSubscription(aeronArchive, recordingId, 0, IPC_CHANNEL, STREAM_ID, listener))
+            PersistentSubscription.create(new PersistentSubscription.Context()
+                .recordingId(recordingId)
+                .startPosition(0)
+                .liveChannel(IPC_CHANNEL)
+                .liveStreamId(STREAM_ID)
+                .listener(listener)
+                .aeronArchiveContext(aeronArchiveContext)))
         {
             executeUntil(persistentSubscription::hasFailed, () -> persistentSubscription.controlledPoll(null, 1));
 
@@ -192,7 +204,13 @@ class PersistentSubscriptionTest
 
         final PersistentSubscriptionListenerImpl listener = new PersistentSubscriptionListenerImpl();
         try (PersistentSubscription persistentSubscription =
-            new PersistentSubscription(aeronArchive, recordingId, 0, IPC_CHANNEL, liveStreamId, listener))
+            PersistentSubscription.create(new PersistentSubscription.Context()
+                .recordingId(recordingId)
+                .startPosition(0)
+                .liveChannel(IPC_CHANNEL)
+                .liveStreamId(liveStreamId)
+                .listener(listener)
+                .aeronArchiveContext(aeronArchiveContext)))
         {
             while (!persistentSubscription.hasFailed())
             {
@@ -223,7 +241,13 @@ class PersistentSubscriptionTest
 
         final int startPosition = 0; // <-- Trying to start from zero
         try (PersistentSubscription persistentSubscription =
-            new PersistentSubscription(aeronArchive, recordingId, startPosition, IPC_CHANNEL, STREAM_ID, listener))
+            PersistentSubscription.create(new PersistentSubscription.Context()
+                .recordingId(recordingId)
+                .startPosition(startPosition)
+                .liveChannel(IPC_CHANNEL)
+                .liveStreamId(STREAM_ID)
+                .listener(listener)
+                .aeronArchiveContext(aeronArchiveContext)))
         {
             executeUntil(persistentSubscription::hasFailed, () -> persistentSubscription.controlledPoll(null, 1));
 
@@ -253,7 +277,13 @@ class PersistentSubscriptionTest
         final long startPosition = stopPosition * 2; // <-- after end of recording
 
         try (PersistentSubscription persistentSubscription =
-            new PersistentSubscription(aeronArchive, recordingId, startPosition, IPC_CHANNEL, STREAM_ID, listener))
+            PersistentSubscription.create(new PersistentSubscription.Context()
+                .recordingId(recordingId)
+                .startPosition(startPosition)
+                .liveChannel(IPC_CHANNEL)
+                .liveStreamId(STREAM_ID)
+                .listener(listener)
+                .aeronArchiveContext(aeronArchiveContext)))
         {
             executeUntil(persistentSubscription::hasFailed, () -> persistentSubscription.controlledPoll(null, 1));
 
@@ -279,7 +309,13 @@ class PersistentSubscriptionTest
         offerPayload(payloads, publication, counters, counterId);
 
         try (PersistentSubscription persistentSubscription =
-            new PersistentSubscription(aeronArchive, recordingId, 0, IPC_CHANNEL, STREAM_ID, listener))
+            PersistentSubscription.create(new PersistentSubscription.Context()
+                .recordingId(recordingId)
+                .startPosition(0)
+                .liveChannel(IPC_CHANNEL)
+                .liveStreamId(STREAM_ID)
+                .listener(listener)
+                .aeronArchiveContext(aeronArchiveContext)))
         {
             final List<byte[]> receivedPayloads = new ArrayList<>();
 //            while (listener.onLiveCount == 0) // TODO should get the onLiveCallback
@@ -334,8 +370,15 @@ class PersistentSubscriptionTest
         final List<byte[]> payloads = generateRandomPayloads(5);
         offerPayload(payloads, publication, counters, counterId);;
 
-        try (PersistentSubscription persistentSubscription =
-            new PersistentSubscription(aeronArchive, recordingId, 0, MDC_CHANNEL, STREAM_ID, listener))
+        try (PersistentSubscription persistentSubscription = PersistentSubscription.create(
+            new PersistentSubscription.Context()
+                .recordingId(recordingId)
+                .startPosition(0)
+                .liveChannel(MDC_CHANNEL)
+                .liveStreamId(STREAM_ID)
+                .listener(listener)
+                .aeronArchiveContext(aeronArchiveContext))
+        )
         {
             final List<byte[]> receivedPayloads = new ArrayList<>();
 //            while (listener.onLiveCount == 0) // TODO should get the onLiveCallback
@@ -414,8 +457,6 @@ class PersistentSubscriptionTest
         addCloseable(TestMediaDriver.launch(driver2Ctx, systemTestWatcher));
         systemTestWatcher.dataCollector().add(driver2Ctx.aeronDirectory());
         final Aeron aeron2 = addCloseable(Aeron.connect(aeronCtxTpl.clone().aeronDirectoryName(aeronDir2)));
-        final AeronArchive aeronArchive2 = addCloseable(AeronArchive.connect(
-            TestContexts.localhostAeronArchive().aeron(aeron2)));
 
         final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(pubChannel, STREAM_ID);
         final Subscription controlSubscription = aeron.addSubscription(subChannel, STREAM_ID);
@@ -487,7 +528,13 @@ class PersistentSubscriptionTest
         LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(4));
 
         try (PersistentSubscription persistentSubscription =
-            new PersistentSubscription(aeronArchive2, recordingId, 0, subChannel, STREAM_ID, null))
+            PersistentSubscription.create(new PersistentSubscription.Context()
+                .recordingId(recordingId)
+                .startPosition(0)
+                .liveChannel(subChannel)
+                .liveStreamId(STREAM_ID)
+                .listener(null)
+                .aeronArchiveContext(TestContexts.localhostAeronArchive().aeron(aeron2))))
         {
             final MessageVerifier handler = new MessageVerifier(maxProcessingTime);
             final ControlledFragmentAssembler assembler = new ControlledFragmentAssembler(handler);
