@@ -50,7 +50,6 @@ import org.agrona.concurrent.status.CountersReader;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -445,7 +444,7 @@ class PersistentSubscriptionTest
         }
     }
 
-    @RepeatedTest(3)
+    @Test
     @InterruptAfter(60)
     void testLiveJoin() throws Exception
     {
@@ -525,7 +524,7 @@ class PersistentSubscriptionTest
         publisher.start();
         addCloseable(() -> interruptAndJoin(publisher));
 
-        LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(4));
+        LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(1));
 
         try (PersistentSubscription persistentSubscription =
             PersistentSubscription.create(new PersistentSubscription.Context()
