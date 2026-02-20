@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.aeron.archive;
+package io.aeron.archive.client;
 
 import io.aeron.Aeron;
 import io.aeron.ChannelUriStringBuilder;
@@ -25,16 +25,15 @@ import io.aeron.FragmentAssembler;
 import io.aeron.Publication;
 import io.aeron.RethrowingErrorHandler;
 import io.aeron.Subscription;
-import io.aeron.archive.client.AeronArchive;
-import io.aeron.archive.client.PersistentSubscription;
-import io.aeron.archive.client.PersistentSubscriptionException;
+import io.aeron.archive.Archive;
+import io.aeron.archive.ArchiveThreadingMode;
 import io.aeron.archive.client.PersistentSubscriptionException.Reason;
-import io.aeron.archive.client.PersistentSubscriptionListener;
 import io.aeron.archive.status.RecordingPos;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
 import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.Header;
+import io.aeron.logbuffer.LogBufferDescriptor;
 import io.aeron.test.EventLogExtension;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
@@ -69,8 +68,6 @@ import static io.aeron.CommonContext.IPC_CHANNEL;
 import static io.aeron.CommonContext.IPC_MEDIA;
 import static io.aeron.CommonContext.UDP_CHANNEL;
 import static io.aeron.Publication.BACK_PRESSURED;
-import static io.aeron.archive.ArchiveSystemTests.CATALOG_CAPACITY;
-import static io.aeron.archive.ArchiveSystemTests.TERM_LENGTH;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -80,6 +77,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 @ExtendWith({ EventLogExtension.class, InterruptingTestCallback.class })
 class PersistentSubscriptionTest
 {
+    private static final int TERM_LENGTH = LogBufferDescriptor.TERM_MIN_LENGTH;
     private static final String MDC_CHANNEL = UDP_CHANNEL + "?control=localhost:2000";
     private static final int STREAM_ID = 1000;
     public static final String MDC_PUBLICATION_CHANNEL = CommonContext.UDP_CHANNEL +
@@ -119,7 +117,7 @@ class PersistentSubscriptionTest
         archiveDir = new File(SystemUtil.tmpDirName(), "archive");
 
         final Archive.Context archiveCtx = TestContexts.localhostArchive()
-            .catalogCapacity(CATALOG_CAPACITY)
+            .catalogCapacity(128 * 1024)
             .segmentFileLength(TERM_LENGTH)
             .aeronDirectoryName(aeronDirectoryName)
             .deleteArchiveOnStart(true)

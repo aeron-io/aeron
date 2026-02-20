@@ -305,7 +305,7 @@ public final class PersistentSubscription implements AutoCloseable
         return state == State.FAILED;
     }
 
-    public long joinError()
+    long joinError()
     {
         return joinError;
     }
