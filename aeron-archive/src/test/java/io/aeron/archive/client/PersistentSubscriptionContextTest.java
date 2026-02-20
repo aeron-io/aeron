@@ -1,5 +1,7 @@
 package io.aeron.archive.client;
 
+import io.aeron.archive.client.AeronArchive;
+import io.aeron.archive.client.PersistentSubscription;
 import io.aeron.exceptions.ConcurrentConcludeException;
 import io.aeron.exceptions.ConfigurationException;
 import org.junit.jupiter.api.Test;

@@ -354,7 +354,6 @@ class PersistentSubscriptionTest
         }
     }
 
-
     @Test
     @InterruptAfter(15)
     void shouldDropFromLiveBackToReplay() throws InterruptedException

@@ -64,16 +64,6 @@ public final class PersistentSubscription implements AutoCloseable
         this.listener = ctx.listener;
         this.aeronArchive = AeronArchive.connect(ctx.aeronArchiveContext.clone());
 
-        if (recordingId < 0)
-        {
-            throw new IllegalArgumentException("invalid recordingId " + recordingId);
-        }
-
-        if (startPosition < 0)
-        {
-            throw new IllegalArgumentException("invalid startPosition " + startPosition);
-        }
-
         state(State.INIT);
     }
 
@@ -110,7 +100,7 @@ public final class PersistentSubscription implements AutoCloseable
             {
                 listener.onError(new PersistentSubscriptionException(
                     PersistentSubscriptionException.Reason.RECORDING_NOT_FOUND,
-                    "No recording found with ID: " + recordingId)
+                    "No recording0 found with ID: " + recordingId)
                 );
             }
             return 1;
@@ -426,27 +416,37 @@ public final class PersistentSubscription implements AutoCloseable
 
             if (recordingId == Aeron.NULL_VALUE)
             {
-                throw new ConfigurationException("PersistentSubscription.Context.recordingId must be set");
+                throw new ConfigurationException("recordingId must be set");
             }
 
             if (liveStreamId == Aeron.NULL_VALUE)
             {
-                throw new ConfigurationException("PersistentSubscription.Context.liveStreamId must be set");
+                throw new ConfigurationException("liveStreamId must be set");
             }
 
             if (liveChannel == null)
             {
-                throw new ConfigurationException("PersistentSubscription.Context.liveChannel must be set");
+                throw new ConfigurationException("liveChannel must be set");
             }
 
             if (aeronArchiveContext == null)
             {
-                throw new ConfigurationException("PersistentSubscription.Context.aeronArchiveContext must be set");
+                throw new ConfigurationException("aeronArchiveContext must be set");
             }
 
             if (listener == null)
             {
                 listener = new NoOpPersistentSubscriptionListener();
+            }
+
+            if (recordingId < 0)
+            {
+                throw new ConfigurationException("invalid recordingId " + recordingId);
+            }
+
+            if (startPosition < 0)
+            {
+                throw new ConfigurationException("invalid startPosition " + startPosition);
             }
         }
     }
