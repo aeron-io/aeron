@@ -77,9 +77,9 @@ import static org.junit.jupiter.api.Assertions.fail;
 class PersistentSubscriptionTest
 {
     private static final int TERM_LENGTH = LogBufferDescriptor.TERM_MIN_LENGTH;
-    private static final String MDC_CHANNEL = UDP_CHANNEL + "?control=localhost:2000";
     private static final int STREAM_ID = 1000;
-    public static final String MDC_PUBLICATION_CHANNEL = CommonContext.UDP_CHANNEL +
+    private static final String MDC_CHANNEL = UDP_CHANNEL + "?control=localhost:2000";
+    private static final String MDC_PUBLICATION_CHANNEL = UDP_CHANNEL +
         "?control=localhost:2000|control-mode=dynamic|fc=max";
 
     @RegisterExtension

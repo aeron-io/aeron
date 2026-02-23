@@ -19,7 +19,6 @@ package io.aeron.archive.client;
 import io.aeron.Aeron;
 import io.aeron.Image;
 import io.aeron.Subscription;
-import io.aeron.archive.Archive;
 import io.aeron.exceptions.ConcurrentConcludeException;
 import io.aeron.exceptions.ConfigurationException;
 import io.aeron.logbuffer.ControlledFragmentHandler;
@@ -29,7 +28,6 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
 import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
-import static java.util.Objects.requireNonNull;
 
 /**
  *
