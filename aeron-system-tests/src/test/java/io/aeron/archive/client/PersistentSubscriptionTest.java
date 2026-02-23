@@ -553,7 +553,7 @@ class PersistentSubscriptionTest
             {
                 System.out.println(i +
                                    "," + publisherMessagesPerSecond.get(i) +
-                                   "," + publisherBpePerSecond.get(i) +
+                                    "," + publisherBpePerSecond.get(i) +
                                    "," + controlMessagesPerSecond.get(i));
             }
         }

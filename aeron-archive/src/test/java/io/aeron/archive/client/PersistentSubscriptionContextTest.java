@@ -15,27 +15,37 @@
  */
 package io.aeron.archive.client;
 
+import io.aeron.Aeron;
 import io.aeron.exceptions.ConcurrentConcludeException;
 import io.aeron.exceptions.ConfigurationException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static io.aeron.CommonContext.IPC_CHANNEL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PersistentSubscriptionContextTest
 {
+    private PersistentSubscription.Context context;
 
-    @Test
-    void canOnlyConcludeOnce()
+    @BeforeEach
+    void setup()
     {
-        final PersistentSubscription.Context context = new PersistentSubscription.Context()
+        context = new PersistentSubscription.Context()
             .recordingId(1)
             .liveChannel(IPC_CHANNEL)
             .liveStreamId(1)
             .aeronArchiveContext(new AeronArchive.Context());
+    }
+
+    @Test
+    void canOnlyConcludeOnce()
+    {
         context.conclude();
 
         assertThrows(ConcurrentConcludeException.class, context::conclude);
@@ -44,60 +54,69 @@ class PersistentSubscriptionContextTest
     @Test
     void contextMustHaveRecordingId()
     {
-        final PersistentSubscription.Context context = new PersistentSubscription.Context()
-            .liveChannel(IPC_CHANNEL)
-            .liveStreamId(1)
-            .aeronArchiveContext(new AeronArchive.Context());
+        context.recordingId(Aeron.NULL_VALUE);
         assertThrows(ConfigurationException.class, context::conclude);
     }
 
     @Test
     void contextMustHaveLiveChannel()
     {
-        final PersistentSubscription.Context context = new PersistentSubscription.Context()
-            .recordingId(1)
-            .liveStreamId(1)
-            .aeronArchiveContext(new AeronArchive.Context());
+        context.liveChannel(null);
         assertThrows(ConfigurationException.class, context::conclude);
     }
 
     @Test
     void contextMustHaveLiveStreamId()
     {
-        final PersistentSubscription.Context context = new PersistentSubscription.Context()
-            .recordingId(1)
-            .liveChannel(IPC_CHANNEL)
-            .aeronArchiveContext(new AeronArchive.Context());
+        context.liveStreamId(Aeron.NULL_VALUE);
         assertThrows(ConfigurationException.class, context::conclude);
     }
 
     @Test
     void contextMustHaveAnArchiveContext()
     {
-        final PersistentSubscription.Context context = new PersistentSubscription.Context()
-            .recordingId(1)
-            .liveChannel(IPC_CHANNEL)
-            .liveStreamId(1);
+        context.aeronArchiveContext(null);
         assertThrows(ConfigurationException.class, context::conclude);
     }
 
     @Test
     void contextCanBeCloned()
     {
-        final PersistentSubscription.Context context = new PersistentSubscription.Context()
-            .recordingId(1)
-            .liveChannel(IPC_CHANNEL)
-            .liveStreamId(1)
-            .aeronArchiveContext(new AeronArchive.Context());
-
         final PersistentSubscription.Context clonedCtx = context.clone();
 
         assertNotSame(context, clonedCtx);
+
         assertEquals(context.startPosition(), clonedCtx.startPosition());
         assertEquals(context.recordingId(), clonedCtx.recordingId());
         assertEquals(context.liveChannel(), clonedCtx.liveChannel());
         assertEquals(context.liveStreamId(), clonedCtx.liveStreamId());
+
         assertSame(context.listener(), clonedCtx.listener());
         assertSame(context.aeronArchiveContext(), clonedCtx.aeronArchiveContext());
+    }
+
+    @Test
+    void contextThrowsIfStartPositionIsInvalid()
+    {
+        context.startPosition(Aeron.NULL_VALUE);
+        assertThrows(ConfigurationException.class, context::conclude);
+    }
+
+    @Test
+    void contextThrowsIfSttPositionIsInvalid()
+    {
+        context.recordingId(-2);
+        assertThrows(ConfigurationException.class, context::conclude);
+    }
+
+    @Test
+    void contextShouldCreateListenerIfNoneProvided()
+    {
+        final PersistentSubscriptionListener nullListener = null;
+        context.listener(nullListener);
+        context.conclude();
+
+        assertNotSame(nullListener, context.listener());
+        assertNotNull(context.listener());
     }
 }
