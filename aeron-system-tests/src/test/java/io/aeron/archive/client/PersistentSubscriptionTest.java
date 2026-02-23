@@ -50,11 +50,11 @@ import org.agrona.concurrent.status.CountersReader;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ArgumentsSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
@@ -150,7 +150,7 @@ class PersistentSubscriptionTest
             .listener(listener)
             .aeronArchiveContext(aeronArchiveContext);
 
-        fragmentHandler =new BufferingFragmentHandler();
+        fragmentHandler = new BufferingFragmentHandler();
     }
 
     @AfterEach
@@ -290,7 +290,7 @@ class PersistentSubscriptionTest
     }
 
     @ParameterizedTest
-    @ValueSource(ints = {1, 10})
+    @ValueSource(ints = { 1, 10 })
     @InterruptAfter(5)
     void shouldReplayExistingRecording(int fragmentLimit)
     {
@@ -310,7 +310,7 @@ class PersistentSubscriptionTest
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
         {
             executeUntil(() -> fragmentHandler.hasReceivedPayloads(1),
-                ()-> persistentSubscription.controlledPoll(fragmentHandler, 1));
+                () -> persistentSubscription.controlledPoll(fragmentHandler, 1));
 
             assertEquals(1, archive.context().replaySessionCounter().get());
             assertTrue(persistentSubscription.isReplaying());
@@ -365,7 +365,7 @@ class PersistentSubscriptionTest
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
         {
             executeUntil(() -> fragmentHandler.hasReceivedPayloads(1),
-                ()-> persistentSubscription.controlledPoll(fragmentHandler, 1));
+                () -> persistentSubscription.controlledPoll(fragmentHandler, 1));
 
             assertEquals(1, archive.context().replaySessionCounter().get());
             assertTrue(persistentSubscription.isReplaying());
@@ -389,7 +389,7 @@ class PersistentSubscriptionTest
     }
 
     @ParameterizedTest
-    @ValueSource(ints = {1, 10})
+    @ValueSource(ints = { 1, 10 })
     @InterruptAfter(5)
     void shouldCatchupOnReplayBeforeSwitchingToLive(final int fragmentLimit)
     {
@@ -409,7 +409,7 @@ class PersistentSubscriptionTest
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
         {
             executeUntil(() -> fragmentHandler.hasReceivedPayloads(1),
-                ()-> persistentSubscription.controlledPoll(fragmentHandler, 1));
+                () -> persistentSubscription.controlledPoll(fragmentHandler, 1));
 
             assertEquals(1, archive.context().replaySessionCounter().get());
             assertTrue(persistentSubscription.isReplaying());
@@ -451,6 +451,77 @@ class PersistentSubscriptionTest
             assertPayloads(fragmentHandler.receivedPayloads, allPayloads);
 
             Tests.await(() -> archive.context().replaySessionCounter().get() == 0);
+        }
+    }
+
+    @Test
+    @Disabled("Unexpected behaviour from liveSubscription regarding joinPosition")
+    @InterruptAfter(5)
+    void shouldHandleReplayBeingAheadOfLive()
+    {
+        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(
+            UDP_CHANNEL +
+                "?control=localhost:2000|control-mode=dynamic|fc=min",
+            STREAM_ID);
+
+        final CountersReader counters = aeron.countersReader();
+        final int counterId =
+            Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
+        final long recordingId = RecordingPos.getRecordingId(counters, counterId);
+        persistentSubscriptionCtx
+            .recordingId(recordingId)
+            .liveChannel(MDC_CHANNEL);
+
+        final MediaDriver.Context ctx =
+            new MediaDriver.Context().aeronDirectoryName(CommonContext.generateRandomDirName());
+        final MediaDriver.Context ctx3 =
+            new MediaDriver.Context().aeronDirectoryName(CommonContext.generateRandomDirName());
+        try (MediaDriver mediaDriver = MediaDriver.launch(ctx);
+            Aeron aeron2 = Aeron.connect(
+                new Aeron.Context().aeronDirectoryName(mediaDriver.aeronDirectoryName()));
+            MediaDriver mediaDriver3 = MediaDriver.launch(ctx3);
+            Aeron aeron3 = Aeron.connect(
+                new Aeron.Context().aeronDirectoryName(mediaDriver3.aeronDirectoryName())))
+        {
+            final Subscription subscription = aeron2.addSubscription(MDC_CHANNEL + "|rcv-wnd=4k", STREAM_ID);
+
+            Tests.awaitConnected(subscription);
+
+            System.out.println("=== slow subscriber");
+            aeron2.printCounters(System.out);
+            System.out.println();
+
+            for (int i = 0; i < 32; i++)
+            {
+                offerPayload(List.of(new byte[1024]), publication, counters, counterId);
+            }
+
+            System.out.println(
+                "aeronArchive.getRecordingPosition(recordingId) = " + aeronArchive.getRecordingPosition(recordingId));
+
+            persistentSubscriptionCtx
+                .liveChannel(MDC_CHANNEL  + "|rcv-wnd=4k")
+                .aeronArchiveContext().aeron(aeron3);
+
+            System.out.println("=== PUBLISHER");
+            aeron.printCounters(System.out);
+            System.out.println();
+
+            try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
+            {
+                executeUntil(() -> fragmentHandler.hasReceivedPayloads(32),
+                    () -> persistentSubscription.controlledPoll(fragmentHandler, 10));
+
+                executeUntil(persistentSubscription::isLive,
+                    () -> {
+                        persistentSubscription.controlledPoll(fragmentHandler, 10);
+                        subscription.poll((b, o, l, h) -> {}, 10);
+                    });
+
+                System.out.println("=== PUBLISHER");
+                aeron.printCounters(System.out);
+                System.out.println();
+            }
         }
     }
 
@@ -656,9 +727,9 @@ class PersistentSubscriptionTest
             for (int i = 0; i < elapsedSeconds; i++)
             {
                 System.out.println(i +
-                                   "," + publisherMessagesPerSecond.get(i) +
-                                   "," + publisherBpePerSecond.get(i) +
-                                   "," + controlMessagesPerSecond.get(i));
+                    "," + publisherMessagesPerSecond.get(i) +
+                    "," + publisherBpePerSecond.get(i) +
+                    "," + controlMessagesPerSecond.get(i));
             }
         }
     }
@@ -812,9 +883,9 @@ class PersistentSubscriptionTest
     }
 
     private void offerPayload(final List<byte[]> payloads,
-                              final Publication publication,
-                              final CountersReader counters,
-                              final int counterId)
+        final Publication publication,
+        final CountersReader counters,
+        final int counterId)
     {
         final UnsafeBuffer buffer = new UnsafeBuffer();
 
