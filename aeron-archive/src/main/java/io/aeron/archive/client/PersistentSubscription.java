@@ -257,32 +257,42 @@ public final class PersistentSubscription implements AutoCloseable
 
         int fragments = 0;
 
-        // Let the live channel catch up to the point we are at in the replay (but don't overtake it).
-        fragments += liveSubscription.controlledPoll((buffer, offset, length, header) -> {
-            final long currentLivePosition = header.position();
-            final long lastReplayPosition = replayImage.position();
-            if (currentLivePosition <= lastReplayPosition)
-            {
-                return ControlledFragmentHandler.Action.CONTINUE;
-            }
-            nextLivePosition = currentLivePosition;
-            return ControlledFragmentHandler.Action.ABORT;
-        }, fragmentLimit);
+        final long joinPosition = liveSubscription.imageAtIndex(0).joinPosition();
+        final long replayPosition = replayImage.position();
 
-        // Carry on with the replay for now.
-        fragments += replayImage.controlledPoll((buffer, offset, length, header) -> {
-                final long currentReplayPosition = header.position();
-                if (currentReplayPosition == nextLivePosition)
+        if (replayPosition == joinPosition)
+        {
+            state(State.LIVE);
+            joinError = 0;
+        }
+        else
+        {
+            // Let the live channel catch up to the point we are at in the replay (but don't overtake it).
+            fragments += liveSubscription.controlledPoll((buffer, offset, length, header) -> {
+                final long currentLivePosition = header.position();
+                final long lastReplayPosition = replayImage.position();
+                if (currentLivePosition <= lastReplayPosition)
                 {
-                    final long joinPosition = liveSubscription.imageAtIndex(0).joinPosition();
-                    joinError = currentReplayPosition - joinPosition;
-                    state(State.LIVE);
-                    return ControlledFragmentHandler.Action.ABORT;
+                    return ControlledFragmentHandler.Action.CONTINUE;
                 }
-                return fragmentHandler.onFragment(buffer, offset, length, header);
-            },
-            1
-        );
+                nextLivePosition = currentLivePosition;
+                return ControlledFragmentHandler.Action.ABORT;
+            }, fragmentLimit);
+
+            // Carry on with the replay for now.
+            fragments += replayImage.controlledPoll((buffer, offset, length, header) -> {
+                    final long currentReplayPosition = header.position();
+                    if (currentReplayPosition == nextLivePosition)
+                    {
+                        joinError = currentReplayPosition - joinPosition;
+                        state(State.LIVE);
+                        return ControlledFragmentHandler.Action.ABORT;
+                    }
+                    return fragmentHandler.onFragment(buffer, offset, length, header);
+                },
+                1
+            );
+        }
 
         if (isLive() && replaySubscription.isConnected())
         {
