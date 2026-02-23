@@ -53,13 +53,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ArgumentsSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.BooleanSupplier;
 
@@ -287,9 +289,10 @@ class PersistentSubscriptionTest
         }
     }
 
-    @Test
+    @ParameterizedTest
+    @ValueSource(ints = {1, 10})
     @InterruptAfter(5)
-    void shouldReplayExistingRecording()
+    void shouldReplayExistingRecording(int fragmentLimit)
     {
         final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(IPC_CHANNEL, STREAM_ID);
 
@@ -313,12 +316,12 @@ class PersistentSubscriptionTest
             assertTrue(persistentSubscription.isReplaying());
 
             executeUntil(() -> fragmentHandler.hasReceivedPayloads(payloads.size()), () ->
-                persistentSubscription.controlledPoll(fragmentHandler, 10));
+                persistentSubscription.controlledPoll(fragmentHandler, fragmentLimit));
 
             assertPayloads(fragmentHandler.receivedPayloads, payloads);
 
             executeUntil(persistentSubscription::isLive,
-                () -> persistentSubscription.controlledPoll(fragmentHandler, 10));
+                () -> persistentSubscription.controlledPoll(fragmentHandler, fragmentLimit));
 
             assertEquals(payloads.size(), fragmentHandler.receivedPayloads.size());
 
@@ -329,7 +332,7 @@ class PersistentSubscriptionTest
             executeUntil(() -> fragmentHandler.hasReceivedPayloads(payloads.size() + payloads2.size()),
                 () ->
                 {
-                    persistentSubscription.controlledPoll(fragmentHandler, 10);
+                    persistentSubscription.controlledPoll(fragmentHandler, fragmentLimit);
 
                     // expect remaining messages to be consumed on live channel
                     assertTrue(persistentSubscription.isLive());
@@ -341,8 +344,6 @@ class PersistentSubscriptionTest
             Tests.await(() -> archive.context().replaySessionCounter().get() == 0);
         }
     }
-
-
 
     @Test
     @InterruptAfter(5)
@@ -382,6 +383,71 @@ class PersistentSubscriptionTest
                 () -> persistentSubscription.controlledPoll(fragmentHandler, 10));
 
             assertFalse(persistentSubscription.isReplaying());
+
+            Tests.await(() -> archive.context().replaySessionCounter().get() == 0);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 10})
+    @InterruptAfter(5)
+    void shouldCatchupOnReplayBeforeSwitchingToLive(final int fragmentLimit)
+    {
+        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(IPC_CHANNEL, STREAM_ID);
+
+        final CountersReader counters = aeron.countersReader();
+        final int counterId =
+            Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
+        final long recordingId = RecordingPos.getRecordingId(counters, counterId);
+
+        final List<byte[]> payloads = generateRandomPayloads(5);
+        offerPayload(payloads, publication, counters, counterId);
+
+        persistentSubscriptionCtx
+            .recordingId(recordingId);
+
+        try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
+        {
+            executeUntil(() -> fragmentHandler.hasReceivedPayloads(1),
+                ()-> persistentSubscription.controlledPoll(fragmentHandler, 1));
+
+            assertEquals(1, archive.context().replaySessionCounter().get());
+            assertTrue(persistentSubscription.isReplaying());
+
+            final List<byte[]> payloads2 = generateRandomPayloads(5);
+            offerPayload(payloads2, publication, counters, counterId);
+
+            executeUntil(() -> fragmentHandler.hasReceivedPayloads(payloads.size() + payloads2.size()),
+                () -> persistentSubscription.controlledPoll(fragmentHandler, fragmentLimit));
+
+            executeUntil(persistentSubscription::isLive,
+                () -> persistentSubscription.controlledPoll(fragmentHandler, fragmentLimit));
+
+            assertEquals(payloads.size() + payloads2.size(), fragmentHandler.receivedPayloads.size());
+
+            // send some more messages
+            final List<byte[]> payloads3 = generateRandomPayloads(5);
+            offerPayload(payloads3, publication, counters, counterId);
+
+            executeUntil(
+                () -> fragmentHandler.hasReceivedPayloads(payloads.size() + payloads2.size() + payloads3.size()),
+                () ->
+                {
+                    persistentSubscription.controlledPoll(fragmentHandler, fragmentLimit);
+
+                    // expect remaining messages to be consumed on live channel
+                    assertTrue(persistentSubscription.isLive());
+                });
+
+            assertTrue(persistentSubscription.isLive());
+            assertFalse(persistentSubscription.isReplaying());
+
+            final List<byte[]> allPayloads = new ArrayList<>();
+            allPayloads.addAll(payloads);
+            allPayloads.addAll(payloads2);
+            allPayloads.addAll(payloads3);
+
+            assertPayloads(fragmentHandler.receivedPayloads, allPayloads);
 
             Tests.await(() -> archive.context().replaySessionCounter().get() == 0);
         }
