@@ -211,15 +211,11 @@ class PersistentSubscriptionTest
                 .listener(listener)
                 .aeronArchiveContext(aeronArchiveContext)))
         {
-            while (!persistentSubscription.hasFailed())
-            {
-                persistentSubscription.controlledPoll(null, 1);
-                Tests.yield();
-            }
+            executeUntil(persistentSubscription::hasFailed, () -> persistentSubscription.controlledPoll(null, 1));
 
             assertEquals(1, listener.errorCount);
             assertEquals(
-                PersistentSubscriptionException.Reason.STREAM_ID_MISMATCH,
+                Reason.STREAM_ID_MISMATCH,
                 ((PersistentSubscriptionException)listener.lastException).reason()
             );
         }
