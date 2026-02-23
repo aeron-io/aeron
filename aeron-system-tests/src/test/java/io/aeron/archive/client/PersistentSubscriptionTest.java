@@ -323,24 +323,16 @@ class PersistentSubscriptionTest
             final List<byte[]> receivedPayloads = new ArrayList<>();
 //            while (!listener.isL.ive()) // TODO isLive never returns true
 
-            while (receivedPayloads.size() != payloads.size())
+            executeUntil(() -> receivedPayloads.size() == payloads.size(), () ->
             {
-                final int workCount = persistentSubscription.controlledPoll((buffer1, offset, length, header) -> {
-                    final byte[] bytes = new byte[length];
-                    buffer1.getBytes(offset, bytes);
-                    receivedPayloads.add(bytes);
-                    return ControlledFragmentHandler.Action.CONTINUE;
-                }, 10);
-                if (workCount == 0)
-                {
-                    Tests.yield();
-                }
+                consumePayload(receivedPayloads, persistentSubscription);
+
                 if (receivedPayloads.size() == 1)
                 {
                     assertEquals(1, archive.context().replaySessionCounter().get());
                     assertTrue(persistentSubscription.isReplaying());
                 }
-            }
+            });
 
             assertPayloads(receivedPayloads, payloads);
 
@@ -348,11 +340,9 @@ class PersistentSubscriptionTest
             final List<byte[]> payloads2 = generateRandomPayloads(5);
             offerPayload(payloads2, publication, counters, counterId);
 
-            consumePayload(
+            executeUntil(
                 () -> receivedPayloads.size() == payloads.size() + payloads2.size(),
-                receivedPayloads,
-                persistentSubscription
-            );
+                () -> consumePayload(receivedPayloads, persistentSubscription));
 
             assertTrue(persistentSubscription.isLive());
 
@@ -387,25 +377,15 @@ class PersistentSubscriptionTest
         {
             final List<byte[]> receivedPayloads = new ArrayList<>();
 //            while (listener.onLiveCount == 0) // TODO should get the onLiveCallback
-            while (receivedPayloads.size() != payloads.size())
+            executeUntil(() -> receivedPayloads.size() == payloads.size(), () ->
             {
-                final int workCount = persistentSubscription.controlledPoll((buffer, offset, length, header) ->
-                {
-                    final byte[] bytes = new byte[length]; buffer.getBytes(offset, bytes); receivedPayloads.add(bytes);
-                    return ControlledFragmentHandler.Action.CONTINUE;
-                }, 10);
-
-                if (workCount == 0)
-                {
-                    Tests.yield();
-                }
-
+                consumePayload(receivedPayloads, persistentSubscription);
                 if (receivedPayloads.size() == 1)
                 {
                     assertEquals(1, archive.context().replaySessionCounter().get()); assertTrue(
                     persistentSubscription.isReplaying());
                 }
-            }
+            });
 
             assertPayloads(receivedPayloads, payloads);
 
@@ -415,10 +395,9 @@ class PersistentSubscriptionTest
             final List<byte[]> payloads2 = generateRandomPayloads(5);
             offerPayload(payloads2, publication, counters, counterId);
 
-            consumePayload(
+            executeUntil(
                 () -> receivedPayloads.size() == payloads.size() + payloads2.size(),
-                receivedPayloads,
-                persistentSubscription
+                () -> consumePayload(receivedPayloads, persistentSubscription)
             );
 
             assertTrue(persistentSubscription.isLive());
@@ -723,11 +702,11 @@ class PersistentSubscriptionTest
         return randomPayloads;
     }
 
-    private static void executeUntil(final BooleanSupplier predicate, final IntSupplier supplier)
+    private static void executeUntil(final BooleanSupplier predicate, final Runnable runnable)
     {
         Tests.await(() ->
         {
-            supplier.getAsInt();
+            runnable.run();
             return predicate.getAsBoolean();
         });
     }
@@ -745,7 +724,7 @@ class PersistentSubscriptionTest
             buffer.wrap(payload);
             while ((offeredPosition = publication.offer(buffer)) < 0)
             {
-                Tests.yieldingIdle("offeredPosition = " + Publication.errorString(offeredPosition));
+                Tests.yieldingIdle("failed to offer. offerPosition = " + Publication.errorString(offeredPosition));
             }
         }
         Tests.awaitPosition(counters, counterId, offeredPosition);
@@ -759,19 +738,16 @@ class PersistentSubscriptionTest
         }
     }
 
-    private void consumePayload(final BooleanSupplier predicate,
-                                final List<byte[]> receivedPayloads,
-                                final PersistentSubscription persistentSubscription)
+    private void consumePayload(final List<byte[]> receivedPayloads,
+        final PersistentSubscription persistentSubscription)
     {
-        executeUntil(predicate,  () ->
-            persistentSubscription.controlledPoll((buffer, offset, length, header) -> {
-                final byte[] bytes = new byte[length];
-                buffer.getBytes(offset, bytes);
-                receivedPayloads.add(bytes);
-                return ControlledFragmentHandler.Action.CONTINUE;
-            }, 10));
+        persistentSubscription.controlledPoll((buffer, offset, length, header) -> {
+            final byte[] bytes = new byte[length];
+            buffer.getBytes(offset, bytes);
+            receivedPayloads.add(bytes);
+            return ControlledFragmentHandler.Action.CONTINUE;
+        }, 10);
     }
-
 
     private static final class PersistentSubscriptionListenerImpl implements PersistentSubscriptionListener
     {
