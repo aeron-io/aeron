@@ -441,6 +441,7 @@ class PersistentSubscriptionTest
 
             assertTrue(persistentSubscription.isLive());
             assertFalse(persistentSubscription.isReplaying());
+            assertTrue(persistentSubscription.joinError() > 0);
 
             final List<byte[]> allPayloads = new ArrayList<>();
             allPayloads.addAll(payloads);

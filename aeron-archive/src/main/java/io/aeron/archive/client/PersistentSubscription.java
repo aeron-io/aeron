@@ -202,6 +202,7 @@ public final class PersistentSubscription implements AutoCloseable
             replaySubscription.streamId());
 
         state(State.REPLAY);
+        joinError = Long.MIN_VALUE;
 
         return 1;
     }
@@ -260,10 +261,14 @@ public final class PersistentSubscription implements AutoCloseable
         final long joinPosition = liveSubscription.imageAtIndex(0).joinPosition();
         final long replayPosition = replayImage.position();
 
+        if (joinError == Long.MIN_VALUE)
+        {
+            joinError = joinPosition - replayPosition;
+        }
+
         if (replayPosition == joinPosition)
         {
             state(State.LIVE);
-            joinError = 0;
         }
         else
         {
@@ -284,7 +289,6 @@ public final class PersistentSubscription implements AutoCloseable
                     final long currentReplayPosition = header.position();
                     if (currentReplayPosition == nextLivePosition)
                     {
-                        joinError = currentReplayPosition - joinPosition;
                         state(State.LIVE);
                         return ControlledFragmentHandler.Action.ABORT;
                     }
@@ -309,6 +313,7 @@ public final class PersistentSubscription implements AutoCloseable
         {
             // TODO need to actually restart the replay from the right point
             state(State.REPLAY);
+            joinError = Long.MIN_VALUE;
             return 0;
         }
 
