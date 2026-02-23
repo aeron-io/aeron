@@ -723,15 +723,13 @@ class PersistentSubscriptionTest
         return randomPayloads;
     }
 
-    private static void executeUntil(final BooleanSupplier hasFailed, final IntSupplier supplier)
+    private static void executeUntil(final BooleanSupplier predicate, final IntSupplier supplier)
     {
-        Tests.executeUntil(hasFailed, (i) -> {
-            int workCount = supplier.getAsInt();
-            if (workCount == 0)
-            {
-                Tests.yield();
-            }
-        }, Integer.MAX_VALUE, TimeUnit.SECONDS.toNanos(5)); // TODO: failure doesn't end test
+        Tests.await(() ->
+        {
+            supplier.getAsInt();
+            return predicate.getAsBoolean();
+        });
     }
 
     private void offerPayload(final List<byte[]> payloads,
