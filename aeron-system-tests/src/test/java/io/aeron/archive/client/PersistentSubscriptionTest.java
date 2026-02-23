@@ -61,7 +61,6 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.BooleanSupplier;
-import java.util.function.IntSupplier;
 
 import static io.aeron.CommonContext.IPC_CHANNEL;
 import static io.aeron.CommonContext.IPC_MEDIA;
@@ -363,7 +362,7 @@ class PersistentSubscriptionTest
         final long recordingId = RecordingPos.getRecordingId(counters, counterId);
 
         final List<byte[]> payloads = generateRandomPayloads(5);
-        offerPayload(payloads, publication, counters, counterId);;
+        offerPayload(payloads, publication, counters, counterId);
 
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(
             new PersistentSubscription.Context()
@@ -382,8 +381,8 @@ class PersistentSubscriptionTest
                 consumePayload(receivedPayloads, persistentSubscription);
                 if (receivedPayloads.size() == 1)
                 {
-                    assertEquals(1, archive.context().replaySessionCounter().get()); assertTrue(
-                    persistentSubscription.isReplaying());
+                    assertEquals(1, archive.context().replaySessionCounter().get());
+                    assertTrue(persistentSubscription.isReplaying());
                 }
             });
 
@@ -407,8 +406,8 @@ class PersistentSubscriptionTest
             final MediaDriver.Context ctx =
                 new MediaDriver.Context().aeronDirectoryName(CommonContext.generateRandomDirName());
             try (MediaDriver mediaDriver = MediaDriver.launch(ctx);
-                final Aeron aeron =
-                Aeron.connect(new Aeron.Context().aeronDirectoryName(mediaDriver.aeronDirectoryName())))
+                Aeron aeron = Aeron.connect(
+                    new Aeron.Context().aeronDirectoryName(mediaDriver.aeronDirectoryName())))
             {
                 final Subscription subscription = aeron.addSubscription(MDC_CHANNEL, STREAM_ID);
 
@@ -451,7 +450,8 @@ class PersistentSubscriptionTest
         Tests.awaitConnected(controlSubscription);
 
         final CountersReader counters = aeron.countersReader();
-        final int counterId = Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
+        final int counterId =
+            Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
         final long recordingId = RecordingPos.getRecordingId(counters, counterId);
 
         final int maxSeconds = 60;
@@ -694,7 +694,7 @@ class PersistentSubscriptionTest
         final List<byte[]> randomPayloads = new ArrayList<>(count);
         for (int i = 0; i < count; i++)
         {
-            final int length = random.nextInt(1024);// TODO increase later to add fragmentation
+            final int length = random.nextInt(1024); // TODO increase later to add fragmentation
             final byte[] bytes = new byte[length];
             random.nextBytes(bytes);
             randomPayloads.add(bytes);
@@ -741,7 +741,8 @@ class PersistentSubscriptionTest
     private void consumePayload(final List<byte[]> receivedPayloads,
         final PersistentSubscription persistentSubscription)
     {
-        persistentSubscription.controlledPoll((buffer, offset, length, header) -> {
+        persistentSubscription.controlledPoll((buffer, offset, length, header) ->
+        {
             final byte[] bytes = new byte[length];
             buffer.getBytes(offset, bytes);
             receivedPayloads.add(bytes);
