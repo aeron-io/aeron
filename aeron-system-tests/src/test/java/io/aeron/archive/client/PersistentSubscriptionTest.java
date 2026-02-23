@@ -106,6 +106,7 @@ class PersistentSubscriptionTest
     private AeronArchive aeronArchive;
     private PersistentSubscriptionListenerImpl listener;
     private AeronArchive.Context aeronArchiveContext;
+    private BufferingFragmentHandler fragmentHandler;
 
     @BeforeEach
     void setUp()
@@ -144,6 +145,8 @@ class PersistentSubscriptionTest
             .liveStreamId(STREAM_ID)
             .listener(listener)
             .aeronArchiveContext(aeronArchiveContext);
+
+        fragmentHandler =new BufferingFragmentHandler();
     }
 
     @AfterEach
@@ -305,29 +308,30 @@ class PersistentSubscriptionTest
                 .listener(listener)
                 .aeronArchiveContext(aeronArchiveContext)))
         {
-            final List<byte[]> receivedPayloads = new ArrayList<>();
 //            while (!listener.isL.ive()) // TODO isLive never returns true
 
-            executeUntil(() -> receivedPayloads.size() == payloads.size(), () ->
+            executeUntil(() -> fragmentHandler.hasReceivedPayloads(payloads.size()), () ->
             {
-                consumePayload(receivedPayloads, persistentSubscription);
+                persistentSubscription.controlledPoll(fragmentHandler, 10);
+                persistentSubscription.controlledPoll(fragmentHandler, 10);
 
-                if (receivedPayloads.size() == 1)
+                if (fragmentHandler.receivedPayloads.size() == 1)
                 {
                     assertEquals(1, archive.context().replaySessionCounter().get());
                     assertTrue(persistentSubscription.isReplaying());
                 }
             });
 
-            assertPayloads(receivedPayloads, payloads);
+            assertPayloads(fragmentHandler.receivedPayloads, payloads);
 
             // send some more messages
             final List<byte[]> payloads2 = generateRandomPayloads(5);
             offerPayload(payloads2, publication, counters, counterId);
 
             executeUntil(
-                () -> receivedPayloads.size() == payloads.size() + payloads2.size(),
-                () -> consumePayload(receivedPayloads, persistentSubscription));
+                () -> fragmentHandler.hasReceivedPayloads(payloads.size() + payloads2.size()),
+                () -> persistentSubscription.controlledPoll(fragmentHandler, 10)
+            );
 
             assertTrue(persistentSubscription.isLive());
 
@@ -356,19 +360,18 @@ class PersistentSubscriptionTest
 
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
         {
-            final List<byte[]> receivedPayloads = new ArrayList<>();
-//            while (listener.onLiveCount == 0) // TODO should get the onLiveCallback
-            executeUntil(() -> receivedPayloads.size() == payloads.size(), () ->
+            //            while (listener.onLiveCount == 0) // TODO should get the onLiveCallback
+            executeUntil(() -> fragmentHandler.hasReceivedPayloads(payloads.size()), () ->
             {
-                consumePayload(receivedPayloads, persistentSubscription);
-                if (receivedPayloads.size() == 1)
+                persistentSubscription.controlledPoll(fragmentHandler, 10);
+                if (fragmentHandler.receivedPayloads.size() == 1)
                 {
                     assertEquals(1, archive.context().replaySessionCounter().get());
                     assertTrue(persistentSubscription.isReplaying());
                 }
             });
 
-            assertPayloads(receivedPayloads, payloads);
+            assertPayloads(fragmentHandler.receivedPayloads, payloads);
 
             Thread.sleep(100); // TODO
 
@@ -377,8 +380,8 @@ class PersistentSubscriptionTest
             offerPayload(payloads2, publication, counters, counterId);
 
             executeUntil(
-                () -> receivedPayloads.size() == payloads.size() + payloads2.size(),
-                () -> consumePayload(receivedPayloads, persistentSubscription)
+                () -> fragmentHandler.hasReceivedPayloads(payloads.size() + payloads2.size()),
+                () -> persistentSubscription.controlledPoll(fragmentHandler, 10)
             );
 
             assertTrue(persistentSubscription.isLive());
@@ -720,16 +723,22 @@ class PersistentSubscriptionTest
         }
     }
 
-    private void consumePayload(final List<byte[]> receivedPayloads,
-        final PersistentSubscription persistentSubscription)
+    private static final class BufferingFragmentHandler implements ControlledFragmentHandler
     {
-        persistentSubscription.controlledPoll((buffer, offset, length, header) ->
+        private final List<byte[]> receivedPayloads = new ArrayList<>();
+
+        public Action onFragment(final DirectBuffer buffer, final int offset, final int length, final Header header)
         {
             final byte[] bytes = new byte[length];
             buffer.getBytes(offset, bytes);
             receivedPayloads.add(bytes);
-            return ControlledFragmentHandler.Action.CONTINUE;
-        }, 10);
+            return Action.CONTINUE;
+        }
+
+        boolean hasReceivedPayloads(final int numberOfPayloads)
+        {
+            return receivedPayloads.size() >= numberOfPayloads;
+        }
     }
 
     private static final class PersistentSubscriptionListenerImpl implements PersistentSubscriptionListener
