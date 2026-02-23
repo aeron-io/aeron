@@ -20,6 +20,11 @@ package io.aeron.driver;
  */
 public final class StaticDelayGenerator implements FeedbackDelayGenerator
 {
+    /**
+     * {@link StaticDelayGenerator} instance with zero delay.
+     */
+    public static final StaticDelayGenerator ZERO_DELAY_GENERATOR = new StaticDelayGenerator(0);
+
     private final long delayInNs;
     private final long retryDelayNs;
 

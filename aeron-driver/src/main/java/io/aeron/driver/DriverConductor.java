@@ -391,6 +391,11 @@ public final class DriverConductor implements Agent
             try
             {
                 final long registrationId = toDriverCommands.nextCorrelationId();
+                final SubscriptionLink subscription = subscriberPositions.get(0).subscription();
+                final boolean isMulticastSemantics =
+                    isMulticastSemantics(subscriptionChannel, subscription.group(), flags);
+                final boolean isReliable = subscription.isReliable();
+
                 rawLog = newPublicationImageLog(
                     sessionId,
                     streamId,
@@ -403,7 +408,7 @@ public final class DriverConductor implements Agent
                     termOffset,
                     subscriptionParams,
                     registrationId,
-                    isMulticastSemantics(subscriptionChannel, subscriptionParams.group, flags));
+                    isMulticastSemantics);
 
                 congestionControl = ctx.congestionControlSupplier().newInstance(
                     registrationId,
@@ -418,7 +423,6 @@ public final class DriverConductor implements Agent
                     ctx,
                     countersManager);
 
-                final SubscriptionLink subscription = subscriberPositions.get(0).subscription();
                 final String uri = subscription.channel();
                 final long clientId = subscription.aeronClient().clientId();
                 hwmPos = ReceiverHwm.allocate(
@@ -442,11 +446,12 @@ public final class DriverConductor implements Agent
                     activeTermId,
                     termOffset,
                     flags,
-                    rawLog,
+                    isReliable,
                     subscriptionParams.untetheredWindowLimitTimeoutNs,
                     subscriptionParams.untetheredLingerTimeoutNs,
                     subscriptionParams.untetheredRestingTimeoutNs,
-                    resolveDelayGenerator(ctx, channelEndpoint.udpChannel(), subscription.group(), flags),
+                    rawLog,
+                    resolveDelayGenerator(ctx, subscriptionChannel, isMulticastSemantics, isReliable),
                     subscriberPositions,
                     hwmPos,
                     rcvPos,
@@ -3066,11 +3071,17 @@ public final class DriverConductor implements Agent
          */
     }
 
-    private static FeedbackDelayGenerator resolveDelayGenerator(
+    static FeedbackDelayGenerator resolveDelayGenerator(
         final Context ctx,
         final UdpChannel channel,
-        final boolean isMulticastSemantics)
+        final boolean isMulticastSemantics,
+        final boolean isReliable)
     {
+        if (!isReliable)
+        {
+            return StaticDelayGenerator.ZERO_DELAY_GENERATOR;
+        }
+
         if (isMulticastSemantics)
         {
             return ctx.multicastFeedbackDelayGenerator();
@@ -3087,15 +3098,6 @@ public final class DriverConductor implements Agent
         {
             return ctx.unicastFeedbackDelayGenerator();
         }
-    }
-
-    static FeedbackDelayGenerator resolveDelayGenerator(
-        final Context ctx,
-        final UdpChannel channel,
-        final InferableBoolean receiverGroupConsideration,
-        final short flags)
-    {
-        return resolveDelayGenerator(ctx, channel, isMulticastSemantics(channel, receiverGroupConsideration, flags));
     }
 
     static boolean isMulticastSemantics(

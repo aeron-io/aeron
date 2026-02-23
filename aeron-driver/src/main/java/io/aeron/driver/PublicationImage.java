@@ -224,10 +224,11 @@ public final class PublicationImage
         final int activeTermId,
         final int termOffset,
         final short flags,
-        final RawLog rawLog,
+        final boolean isReliable,
         final long untetheredWindowLimitTimeoutNs,
         final long untetheredLingerTimeoutNs,
         final long untetheredRestingTimeoutNs,
+        final RawLog rawLog,
         final FeedbackDelayGenerator lossFeedbackDelayGenerator,
         final ArrayList<SubscriberPosition> subscriberPositions,
         final Position hwmPosition,
@@ -265,7 +266,7 @@ public final class PublicationImage
         this.timeOfLastPacketNs = nowNs;
 
         this.subscriberPositions = positionArray(subscriberPositions, nowNs);
-        this.isReliable = subscriberPositions.get(0).subscription().isReliable();
+        this.isReliable = isReliable;
 
         final SystemCounters systemCounters = ctx.systemCounters();
         heartbeatsReceived = systemCounters.get(HEARTBEATS_RECEIVED);

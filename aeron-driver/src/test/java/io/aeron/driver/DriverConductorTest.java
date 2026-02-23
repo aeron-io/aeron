@@ -54,6 +54,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.stubbing.Answer;
@@ -2095,10 +2097,9 @@ class DriverConductorTest
             .unicastFeedbackDelayGenerator(new StaticDelayGenerator(10));
         final UdpChannel udpChannel = UdpChannel.parse("aeron:udp?endpoint=224.20.30.39:24326");
 
-        final FeedbackDelayGenerator feedbackDelayGenerator = DriverConductor.resolveDelayGenerator(
-            context, udpChannel, InferableBoolean.INFER, (short)0);
-
-        assertSame(context.multicastFeedbackDelayGenerator(), feedbackDelayGenerator);
+        assertTrue(DriverConductor.isMulticastSemantics(udpChannel, InferableBoolean.INFER, (short)0));
+        assertSame(context.multicastFeedbackDelayGenerator(), DriverConductor.resolveDelayGenerator(
+            context, udpChannel, true, true));
     }
 
     @Test
@@ -2109,10 +2110,9 @@ class DriverConductorTest
             .unicastFeedbackDelayGenerator(new StaticDelayGenerator(10));
         final UdpChannel udpChannel = UdpChannel.parse("aeron:udp?endpoint=192.168.0.1:24326");
 
-        final FeedbackDelayGenerator feedbackDelayGenerator = DriverConductor.resolveDelayGenerator(
-            context, udpChannel, InferableBoolean.INFER, (short)0);
-
-        assertSame(context.unicastFeedbackDelayGenerator(), feedbackDelayGenerator);
+        assertFalse(DriverConductor.isMulticastSemantics(udpChannel, InferableBoolean.INFER, (short)0));
+        assertSame(context.unicastFeedbackDelayGenerator(), DriverConductor.resolveDelayGenerator(
+            context, udpChannel, false, true));
     }
 
     @Test
@@ -2123,10 +2123,9 @@ class DriverConductorTest
             .unicastFeedbackDelayGenerator(new StaticDelayGenerator(10));
         final UdpChannel udpChannel = UdpChannel.parse("aeron:udp?endpoint=192.168.0.1:24326");
 
-        final FeedbackDelayGenerator feedbackDelayGenerator = DriverConductor.resolveDelayGenerator(
-            context, udpChannel, InferableBoolean.FORCE_TRUE, (short)0);
-
-        assertSame(context.multicastFeedbackDelayGenerator(), feedbackDelayGenerator);
+        assertTrue(DriverConductor.isMulticastSemantics(udpChannel, InferableBoolean.FORCE_TRUE, (short)0));
+        assertSame(context.multicastFeedbackDelayGenerator(), DriverConductor.resolveDelayGenerator(
+            context, udpChannel, true, true));
     }
 
     @Test
@@ -2137,10 +2136,9 @@ class DriverConductorTest
             .unicastFeedbackDelayGenerator(new StaticDelayGenerator(10));
         final UdpChannel udpChannel = UdpChannel.parse("aeron:udp?endpoint=192.168.0.1:24326");
 
-        final FeedbackDelayGenerator feedbackDelayGenerator = DriverConductor.resolveDelayGenerator(
-            context, udpChannel, InferableBoolean.FORCE_FALSE, (short)0);
-
-        assertSame(context.unicastFeedbackDelayGenerator(), feedbackDelayGenerator);
+        assertFalse(DriverConductor.isMulticastSemantics(udpChannel, InferableBoolean.FORCE_FALSE, (short)0));
+        assertSame(context.unicastFeedbackDelayGenerator(), DriverConductor.resolveDelayGenerator(
+            context, udpChannel, false, true));
     }
 
     @Test
@@ -2151,9 +2149,48 @@ class DriverConductorTest
             .unicastFeedbackDelayGenerator(new StaticDelayGenerator(10));
         final UdpChannel udpChannel = UdpChannel.parse("aeron:udp?endpoint=192.168.0.1:24326");
 
-        final FeedbackDelayGenerator feedbackDelayGenerator = DriverConductor.resolveDelayGenerator(
-            context, udpChannel, InferableBoolean.INFER, SetupFlyweight.GROUP_FLAG);
+        assertTrue(DriverConductor.isMulticastSemantics(udpChannel, InferableBoolean.INFER, SetupFlyweight.GROUP_FLAG));
+        assertSame(context.multicastFeedbackDelayGenerator(), DriverConductor.resolveDelayGenerator(
+            context, udpChannel, true, true));
+    }
 
-        assertSame(context.multicastFeedbackDelayGenerator(), feedbackDelayGenerator);
+    @Test
+    void shouldCreateFeedbackGeneratorFromManualNakDelayConfiguration()
+    {
+        final MediaDriver.Context context = new MediaDriver.Context()
+            .multicastFeedbackDelayGenerator(new OptimalMulticastDelayGenerator(10, 10))
+            .unicastFeedbackDelayGenerator(new StaticDelayGenerator(10))
+            .nakUnicastRetryDelayRatio(55);
+        final UdpChannel udpChannel = UdpChannel.parse("aeron:udp?endpoint=192.168.0.1:24326|nak-delay=14ms");
+
+        final FeedbackDelayGenerator feedbackDelayGenerator = DriverConductor.resolveDelayGenerator(
+            context, udpChannel, false, true);
+        assertNotNull(feedbackDelayGenerator);
+        assertInstanceOf(StaticDelayGenerator.class, feedbackDelayGenerator);
+        assertEquals(MILLISECONDS.toNanos(14), feedbackDelayGenerator.generateDelayNs());
+        assertEquals(MILLISECONDS.toNanos(14 * 55), feedbackDelayGenerator.retryDelayNs());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "aeron:udp?endpoint=192.168.0.1:24326",
+        "aeron:udp?endpoint=224.20.30.39:5555",
+        "aeron:udp?endpoint=192.168.0.1:10000|nak-delay=14ms"
+    })
+    void shouldUseZeroDelayFeedbackGeneratorIfSubscriptionIsUnreliable(final String uri)
+    {
+        final MediaDriver.Context context = new MediaDriver.Context()
+            .multicastFeedbackDelayGenerator(new OptimalMulticastDelayGenerator(123, 10))
+            .unicastFeedbackDelayGenerator(new StaticDelayGenerator(321, 456));
+        final UdpChannel udpChannel = UdpChannel.parse(uri);
+        final boolean isMulticastSemantics =
+            DriverConductor.isMulticastSemantics(udpChannel, InferableBoolean.INFER, (short)0);
+
+        final FeedbackDelayGenerator feedbackDelayGenerator = DriverConductor.resolveDelayGenerator(
+            context, udpChannel, isMulticastSemantics, false);
+
+        assertSame(StaticDelayGenerator.ZERO_DELAY_GENERATOR, feedbackDelayGenerator);
+        assertEquals(0, feedbackDelayGenerator.generateDelayNs());
+        assertEquals(0, feedbackDelayGenerator.retryDelayNs());
     }
 }
