@@ -50,7 +50,6 @@ import org.agrona.concurrent.status.CountersReader;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -59,20 +58,27 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.BooleanSupplier;
 
+import static io.aeron.AeronCounters.FLOW_CONTROL_RECEIVERS_COUNTER_TYPE_ID;
 import static io.aeron.CommonContext.IPC_CHANNEL;
 import static io.aeron.CommonContext.IPC_MEDIA;
 import static io.aeron.CommonContext.UDP_CHANNEL;
 import static io.aeron.Publication.BACK_PRESSURED;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
+import static org.agrona.concurrent.status.CountersReader.NULL_COUNTER_ID;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -455,73 +461,55 @@ class PersistentSubscriptionTest
     }
 
     @Test
-    @Disabled("Unexpected behaviour from liveSubscription regarding joinPosition")
     @InterruptAfter(5)
     void shouldHandleReplayBeingAheadOfLive()
     {
-        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(
-            UDP_CHANNEL +
-                "?control=localhost:2000|control-mode=dynamic|fc=min",
-            STREAM_ID);
+        final String pubChannel = "aeron:udp?control=localhost:2000|control-mode=dynamic|fc=min";
+        final String subChannel = "aeron:udp?control=localhost:2000|rcv-wnd=4k";
+
+        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(pubChannel, STREAM_ID);
 
         final CountersReader counters = aeron.countersReader();
         final int counterId =
             Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
         final long recordingId = RecordingPos.getRecordingId(counters, counterId);
+
+        final int receiversCounterId = counters.findByTypeIdAndRegistrationId(
+            FLOW_CONTROL_RECEIVERS_COUNTER_TYPE_ID, publication.registrationId());
+        assertNotEquals(NULL_COUNTER_ID, receiversCounterId);
+
+        final String aeronDir2 = CommonContext.generateRandomDirName();
+        final MediaDriver.Context driver2Ctx = driverCtxTpl.clone().aeronDirectoryName(aeronDir2);
+        addCloseable(TestMediaDriver.launch(driver2Ctx, systemTestWatcher));
+        systemTestWatcher.dataCollector().add(driver2Ctx.aeronDirectory());
+        final Aeron aeron2 = addCloseable(Aeron.connect(aeronCtxTpl.clone().aeronDirectoryName(aeronDir2)));
+
+        final Subscription subscription = aeron2.addSubscription(subChannel, STREAM_ID);
+        Tests.awaitConnected(subscription);
+
+        final byte[][] payloads = new byte[32][];
+        Arrays.fill(payloads, new byte[1024]);
+        offerPayload(Arrays.asList(payloads), publication, counters, counterId);
+
         persistentSubscriptionCtx
             .recordingId(recordingId)
-            .liveChannel(MDC_CHANNEL);
+            .liveChannel(subChannel);
 
-        final MediaDriver.Context ctx =
-            new MediaDriver.Context().aeronDirectoryName(CommonContext.generateRandomDirName());
-        final MediaDriver.Context ctx3 =
-            new MediaDriver.Context().aeronDirectoryName(CommonContext.generateRandomDirName());
-        try (MediaDriver mediaDriver = MediaDriver.launch(ctx);
-            Aeron aeron2 = Aeron.connect(
-                new Aeron.Context().aeronDirectoryName(mediaDriver.aeronDirectoryName()));
-            MediaDriver mediaDriver3 = MediaDriver.launch(ctx3);
-            Aeron aeron3 = Aeron.connect(
-                new Aeron.Context().aeronDirectoryName(mediaDriver3.aeronDirectoryName())))
+        try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
         {
-            final Subscription subscription = aeron2.addSubscription(MDC_CHANNEL + "|rcv-wnd=4k", STREAM_ID);
+            executeUntil(() -> fragmentHandler.hasReceivedPayloads(32),
+                () -> persistentSubscription.controlledPoll(fragmentHandler, 10));
 
-            Tests.awaitConnected(subscription);
+            awaitCounterValueEq(counters, receiversCounterId, 2);
 
-            System.out.println("=== slow subscriber");
-            aeron2.printCounters(System.out);
-            System.out.println();
+            executeUntil(persistentSubscription::isLive,
+                () ->
+                {
+                    persistentSubscription.controlledPoll(fragmentHandler, 10);
+                    subscription.poll((b, o, l, h) -> {}, 10);
+                });
 
-            for (int i = 0; i < 32; i++)
-            {
-                offerPayload(List.of(new byte[1024]), publication, counters, counterId);
-            }
-
-            System.out.println(
-                "aeronArchive.getRecordingPosition(recordingId) = " + aeronArchive.getRecordingPosition(recordingId));
-
-            persistentSubscriptionCtx
-                .liveChannel(MDC_CHANNEL  + "|rcv-wnd=4k")
-                .aeronArchiveContext().aeron(aeron3);
-
-            System.out.println("=== PUBLISHER");
-            aeron.printCounters(System.out);
-            System.out.println();
-
-            try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
-            {
-                executeUntil(() -> fragmentHandler.hasReceivedPayloads(32),
-                    () -> persistentSubscription.controlledPoll(fragmentHandler, 10));
-
-                executeUntil(persistentSubscription::isLive,
-                    () -> {
-                        persistentSubscription.controlledPoll(fragmentHandler, 10);
-                        subscription.poll((b, o, l, h) -> {}, 10);
-                    });
-
-                System.out.println("=== PUBLISHER");
-                aeron.printCounters(System.out);
-                System.out.println();
-            }
+            assertThat(persistentSubscription.joinError(), is(lessThanOrEqualTo(28 * 1024L)));
         }
     }
 
@@ -871,6 +859,27 @@ class PersistentSubscriptionTest
             randomPayloads.add(bytes);
         }
         return randomPayloads;
+    }
+
+    private static void awaitCounterValueEq(
+        final CountersReader countersReader,
+        final int counterId,
+        final long expectedValue)
+    {
+        while (true)
+        {
+            final long counterValue = countersReader.getCounterValue(counterId);
+            if (counterValue == expectedValue)
+            {
+                break;
+            }
+            if (Thread.interrupted())
+            {
+                fail("timed out waiting for counter " + counterId + " to become equal to " + expectedValue +
+                     ", last value was " + counterValue);
+            }
+            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(10));
+        }
     }
 
     private static void executeUntil(final BooleanSupplier predicate, final Runnable runnable)

@@ -216,10 +216,7 @@ public final class PersistentSubscription implements AutoCloseable
             return 0;
         }
 
-        final int fragments = replayImage.controlledPoll((b,o,l,h) -> {
-            System.out.println("Consuming from replay at position = " + h.position() + ", message length = " + l);
-            return fragmentHandler.onFragment(b,o,l,h);
-        }, fragmentLimit);
+        final int fragments = replayImage.controlledPoll(fragmentHandler, fragmentLimit);
 
         final long replayedPosition = replayImage.position();
         if (replayedPosition >= candidateSwitchPosition)
@@ -261,19 +258,15 @@ public final class PersistentSubscription implements AutoCloseable
 
         int fragments = 0;
 
-        final long joinPosition = liveSubscription.imageAtIndex(0).joinPosition();
+        final long livePosition = liveSubscription.imageAtIndex(0).position();
         final long replayPosition = replayImage.position();
 
         if (joinError == Long.MIN_VALUE)
         {
-            joinError = joinPosition - replayPosition;
-
-            System.out.println("=== PERSISTENT_SUBSCRIPTION");
-            System.out.println("joinPosition = " + joinPosition);
-            aeronArchive.context().aeron().printCounters(System.out);
+            joinError = livePosition - replayPosition;
         }
 
-        if (replayPosition == joinPosition)
+        if (replayPosition == livePosition)
         {
             state(State.LIVE);
         }
@@ -285,7 +278,6 @@ public final class PersistentSubscription implements AutoCloseable
                 final long lastReplayPosition = replayImage.position();
                 if (currentLivePosition <= lastReplayPosition)
                 {
-                    System.out.println("Skipping from live at position = " + header.position());
                     return ControlledFragmentHandler.Action.CONTINUE;
                 }
                 nextLivePosition = currentLivePosition;
@@ -300,7 +292,6 @@ public final class PersistentSubscription implements AutoCloseable
                         state(State.LIVE);
                         return ControlledFragmentHandler.Action.ABORT;
                     }
-                    System.out.println("Consuming from replay at position = " + header.position());
                     return fragmentHandler.onFragment(buffer, offset, length, header);
                 },
                 1
@@ -326,10 +317,7 @@ public final class PersistentSubscription implements AutoCloseable
             return 0;
         }
 
-        return liveSubscription.controlledPoll((b,o,l,h) -> {
-            System.out.println("Consuming from live at position = " + h.position());
-            return fragmentHandler.onFragment(b,o,l,h);
-            }, fragmentLimit);
+        return liveSubscription.controlledPoll(fragmentHandler, fragmentLimit);
     }
 
     private void state(final State newState)
