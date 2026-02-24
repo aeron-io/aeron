@@ -2562,7 +2562,8 @@ final class ConsensusModuleAgent
                     workCount += processPendingSessions(pendingBackupSessions, rejectedBackupSessions, nowNs);
                     workCount += checkSessions(sessions, nowNs);
 
-                    if (!ClusterMember.hasActiveQuorum(activeMembers, nowNs, leaderHeartbeatTimeoutNs))
+                    if (activeMembers.length > 1 &&
+                        !ClusterMember.hasActiveQuorum(activeMembers, nowNs, leaderHeartbeatTimeoutNs))
                     {
                         enterElection(false, "inactive follower quorum");
                         workCount += 1;

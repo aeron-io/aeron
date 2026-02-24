@@ -29,6 +29,7 @@ import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.TestContexts;
 import io.aeron.test.cluster.TestCluster;
 import io.aeron.test.cluster.TestNode;
+import org.agrona.concurrent.SystemEpochClock;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -37,6 +38,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import static io.aeron.Aeron.Configuration.PRE_TOUCH_MAPPED_MEMORY_PROP_NAME;
 import static io.aeron.test.cluster.TestCluster.aCluster;
@@ -62,6 +64,29 @@ class SingleNodeTest
 
         assertEquals(0, leader.index());
         assertEquals(Cluster.Role.LEADER, leader.role());
+    }
+
+    @Test
+    @InterruptAfter(20)
+    void shouldNotConsiderItselfInactiveAndEnterAnElection()
+    {
+        final OffsetMillisecondClusterClock clusterClock = new OffsetMillisecondClusterClock(SystemEpochClock.INSTANCE);
+        final TestCluster cluster = aCluster()
+            .withClusterClock(clusterClock)
+            .withStaticNodes(1)
+            .start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode leader = cluster.awaitLeader();
+        assertEquals(0, leader.index());
+        assertEquals(Cluster.Role.LEADER, leader.role());
+
+        final long heartbeatTimeOutNs = leader.consensusModule().context().leaderHeartbeatTimeoutNs();
+        clusterClock.addOffset(TimeUnit.NANOSECONDS.toMillis(heartbeatTimeOutNs) * 2);
+
+        final ClusterMembership clusterMembership = leader.clusterMembership();
+        assertEquals(1, clusterMembership.activeMembers.size());
+        assertEquals(0, clusterMembership.activeMembers.get(0).leadershipTermId());
     }
 
     @ParameterizedTest
