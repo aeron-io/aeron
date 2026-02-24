@@ -16,6 +16,7 @@
 package io.aeron.cluster;
 
 import io.aeron.Aeron;
+import io.aeron.Counter;
 import io.aeron.cluster.codecs.BackupQueryDecoder;
 import io.aeron.cluster.codecs.EventCode;
 import io.aeron.cluster.codecs.HeartbeatRequestDecoder;
@@ -25,8 +26,9 @@ import io.aeron.cluster.service.ClusterClock;
 import io.aeron.security.Authenticator;
 import io.aeron.security.AuthorisationService;
 import org.agrona.collections.ArrayListUtil;
-import org.agrona.collections.Int2ObjectHashMap;
 import org.agrona.collections.Long2ObjectHashMap;
+import org.agrona.concurrent.CountedErrorHandler;
+import org.agrona.concurrent.errors.DistinctErrorLog;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -43,23 +45,63 @@ import static io.aeron.cluster.ConsensusModuleAgent.logAppendSessionOpen;
 
 class SessionManager
 {
-    final Long2ObjectHashMap<ClusterSession> sessionByIdMap = new Long2ObjectHashMap<>();
-    final ArrayList<ClusterSession> sessions = new ArrayList<>();
-    final ArrayList<ClusterSession> pendingUserSessions = new ArrayList<>();
-    final ArrayList<ClusterSession> rejectedUserSessions = new ArrayList<>();
-    final ArrayList<ClusterSession> redirectUserSessions = new ArrayList<>();
+    private final Long2ObjectHashMap<ClusterSession> sessionByIdMap = new Long2ObjectHashMap<>();
+    private final ArrayList<ClusterSession> sessions = new ArrayList<>();
+    private final ArrayList<ClusterSession> pendingUserSessions = new ArrayList<>();
+    private final ArrayList<ClusterSession> rejectedUserSessions = new ArrayList<>();
+    private final ArrayList<ClusterSession> redirectUserSessions = new ArrayList<>();
 
-    final ArrayList<ClusterSession> pendingBackupSessions = new ArrayList<>();
-    final ArrayList<ClusterSession> rejectedBackupSessions = new ArrayList<>();
+    private final ArrayList<ClusterSession> pendingBackupSessions = new ArrayList<>();
+    private final ArrayList<ClusterSession> rejectedBackupSessions = new ArrayList<>();
 
-    final Int2ObjectHashMap<ClusterMember> clusterMemberByIdMap = new Int2ObjectHashMap<>();
+    private final int memberId;
+    private final ClusterClock clusterClock;
+    private final ClusterMember[] activeMembers;
+    private final ClusterSessionProxy sessionProxy;
+    private final EgressPublisher egressPublisher;
+    private final TimeUnit clusterTimeUnit;
+    private final Aeron aeron;
+    private final long sessionTimeoutNs;
+    private final CountedErrorHandler errorHandler;
+    private final Counter timedOutCounter;
+    private final DistinctErrorLog errorLog;
+    private final Counter standbySnapshotCounter;
+    private final Authenticator authenticator;
+    private final AuthorisationService authorisationService;
+    private final RecordingLog recordingLog;
+    private final LogPublisher logPublisher;
+    private final ConsensusPublisher consensusPublisher;
+    private final ConsensusModuleExtension consensusModuleExtension;
+    private final int commitPositionCounterId;
 
     long nextSessionId = 1;
     long nextCommittedSessionId = nextSessionId;
 
-    Int2ObjectHashMap<ClusterMember> clusterMemberByIdMap()
+    SessionManager(
+        final ConsensusModule.Context ctx,
+        final ClusterMember[] activeMembers,
+        final ClusterSessionProxy sessionProxy,
+        final ConsensusPublisher consensusPublisher)
     {
-        return clusterMemberByIdMap;
+        this.memberId = ctx.clusterMemberId();
+        this.clusterClock = ctx.clusterClock();
+        this.activeMembers = activeMembers;
+        this.sessionProxy = sessionProxy;
+        this.egressPublisher = ctx.egressPublisher();
+        this.logPublisher = ctx.logPublisher();
+        this.consensusPublisher = consensusPublisher;
+        this.clusterTimeUnit = clusterClock.timeUnit();
+        this.aeron = ctx.aeron();
+        this.sessionTimeoutNs = ctx.sessionTimeoutNs();
+        this.errorHandler = ctx.countedErrorHandler();
+        this.timedOutCounter = ctx.timedOutClientCounter();
+        this.errorLog = ctx.errorLog();
+        this.standbySnapshotCounter = ctx.standbySnapshotCounter();
+        this.authenticator = ctx.authenticatorSupplier().get();
+        this.authorisationService = ctx.authorisationServiceSupplier().get();
+        this.recordingLog = ctx.recordingLog();
+        this.consensusModuleExtension = ctx.consensusModuleExtension();
+        this.commitPositionCounterId = ctx.commitPositionCounter().id();
     }
 
     ArrayList<ClusterSession> pendingBackupSessions()
@@ -97,6 +139,16 @@ class SessionManager
         return sessions;
     }
 
+    public Authenticator authenticator()
+    {
+        return authenticator;
+    }
+
+    public AuthorisationService authorisationService()
+    {
+        return authorisationService;
+    }
+
     void addSession(final ClusterSession session)
     {
         sessionByIdMap.put(session.id(), session);
@@ -127,27 +179,10 @@ class SessionManager
         final ArrayList<ClusterSession> pendingSessions,
         final ArrayList<ClusterSession> rejectedSessions,
         final long nowNs,
-        final int memberId,
         final int leaderMemberId,
         final long leadershipTermId,
-        final int commitPositionCounterId,
-        final ClusterMember[] activeMembers,
-        final ClusterSessionProxy sessionProxy,
-        final RecordingLog recordingLog,
-        final LogPublisher logPublisher,
-        final EgressPublisher egressPublisher,
-        final ConsensusModuleExtension consensusModuleExtension,
-        final ConsensusPublisher consensusPublisher,
-        final RecordingLog.RecoveryPlan recoveryPlan,
-        final Authenticator authenticator,
-        final AuthorisationService authorisationService,
-        final ConsensusModule.Context ctx)
+        final RecordingLog.RecoveryPlan recoveryPlan)
     {
-        final ClusterClock clusterClock = ctx.clusterClock();
-        final TimeUnit clusterTimeUnit = clusterClock.timeUnit();
-        final Aeron aeron = ctx.aeron();
-        final long sessionTimeoutNs = ctx.sessionTimeoutNs();
-
         int workCount = 0;
 
         for (int lastIndex = pendingSessions.size() - 1, i = lastIndex; i >= 0; i--)
@@ -157,15 +192,15 @@ class SessionManager
             if (session.state() == INVALID)
             {
                 ArrayListUtil.fastUnorderedRemove(pendingSessions, i, lastIndex--);
-                session.close(aeron, ctx.countedErrorHandler(), "invalid session");
+                session.close(aeron, errorHandler, "invalid session");
                 continue;
             }
 
             if (nowNs > (session.timeOfLastActivityNs() + sessionTimeoutNs) && session.state() != INIT)
             {
                 ArrayListUtil.fastUnorderedRemove(pendingSessions, i, lastIndex--);
-                session.close(aeron, ctx.countedErrorHandler(), "session timed out");
-                ctx.timedOutClientCounter().incrementRelease();
+                session.close(aeron, errorHandler, "session timed out");
+                timedOutCounter.incrementRelease();
                 continue;
             }
 
@@ -228,7 +263,7 @@ class SessionManager
                             session.reject(
                                 EventCode.AUTHENTICATION_REJECTED,
                                 "Not authorised for BackupQuery",
-                                ctx.errorLog());
+                                errorLog);
                             break;
                         }
 
@@ -243,7 +278,7 @@ class SessionManager
                             ClusterMember.encodeAsString(activeMembers)))
                         {
                             ArrayListUtil.fastUnorderedRemove(pendingSessions, i, lastIndex--);
-                            session.close(aeron, ctx.countedErrorHandler(), "done");
+                            session.close(aeron, errorHandler, "done");
                             workCount += 1;
                         }
                         break;
@@ -260,14 +295,14 @@ class SessionManager
                             session.reject(
                                 EventCode.AUTHENTICATION_REJECTED,
                                 "Not authorised for Heartbeat",
-                                ctx.errorLog());
+                                errorLog);
                             break;
                         }
 
                         if (consensusPublisher.heartbeatResponse(session))
                         {
                             ArrayListUtil.fastUnorderedRemove(pendingSessions, i, lastIndex--);
-                            session.close(aeron, ctx.countedErrorHandler(), "done");
+                            session.close(aeron, errorHandler, "done");
                             workCount += 1;
                         }
                         break;
@@ -284,7 +319,7 @@ class SessionManager
                             session.reject(
                                 EventCode.AUTHENTICATION_REJECTED,
                                 "Not authorised for StandbySnapshot",
-                                ctx.errorLog());
+                                errorLog);
                             break;
                         }
 
@@ -301,7 +336,7 @@ class SessionManager
                                 standbySnapshotEntry.termBaseLogPosition(),
                                 standbySnapshotEntry.logPosition(),
                                 standbySnapshotEntry.timestamp(),
-                                ctx.clusterClock().timeUnit(),
+                                clusterTimeUnit,
                                 standbySnapshotEntry.serviceId(),
                                 standbySnapshotEntry.archiveEndpoint());
 
@@ -315,9 +350,9 @@ class SessionManager
                                 standbySnapshotEntry.archiveEndpoint());
                         }
 
-                        ctx.standbySnapshotCounter().increment();
+                        standbySnapshotCounter.increment();
                         ArrayListUtil.fastUnorderedRemove(pendingSessions, i, lastIndex--);
-                        session.close(aeron, ctx.countedErrorHandler(), "done");
+                        session.close(aeron, errorHandler, "done");
                         workCount += 1;
                     }
                 }
@@ -331,5 +366,4 @@ class SessionManager
 
         return workCount;
     }
-
 }
