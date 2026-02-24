@@ -564,7 +564,7 @@ class PersistentSubscriptionTest
 
     @Test
     @InterruptAfter(15)
-    void shouldDropFromLiveBackToReplay()
+    void shouldDropFromLiveBackToReplayThenJoinLiveAgain()
     {
         final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(MDC_PUBLICATION_CHANNEL,
             STREAM_ID);
@@ -683,6 +683,55 @@ class PersistentSubscriptionTest
             );
 
             Tests.await(() -> archive.context().replaySessionCounter().get() == 0);
+        }
+    }
+
+    @Test
+    @InterruptAfter(15)
+    void anUntetheredPersistentSubscriptionCanFallBehindATetheredSubscription()
+    {
+        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(MDC_PUBLICATION_CHANNEL,
+            STREAM_ID);
+
+        final CountersReader counters = aeron.countersReader();
+        final int counterId =
+            Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
+        final long recordingId = RecordingPos.getRecordingId(counters, counterId);
+
+        persistentSubscriptionCtx
+            .recordingId(recordingId)
+            .liveChannel(MDC_CHANNEL +  "|tether=false"); // <-- persistentSubscription is untethered
+
+        try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx);
+            Subscription subscription = aeron.addSubscription(MDC_CHANNEL + "|tether=true", STREAM_ID))
+        {
+            Tests.awaitConnected(subscription);
+
+            executeUntil(
+                persistentSubscription::isLive,
+                () -> persistentSubscription.controlledPoll(fragmentHandler, 10)
+            );
+
+            offerPayloads(generateFixedPayloads(64, ONE_K_MESSAGE_SIZE), publication, counters, counterId);
+
+            final AtomicInteger fragments = new AtomicInteger(0);
+            // TODO: Add MessageCountingFragmentHandler
+            executeUntil(
+                () -> fragments.get() >= 64,
+                () -> subscription.poll((b, o, l, h) -> fragments.incrementAndGet(), 10)
+            );
+
+            executeUntil(
+                () -> fragmentHandler.hasReceivedPayloads(64),
+                () -> persistentSubscription.controlledPoll(fragmentHandler, 1)
+            );
+
+            assertTrue(persistentSubscription.isReplaying());
+
+            executeUntil(
+                persistentSubscription::isLive,
+                () -> persistentSubscription.controlledPoll(fragmentHandler, 1)
+            );
         }
     }
 
