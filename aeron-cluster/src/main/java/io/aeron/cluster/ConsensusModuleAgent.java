@@ -191,7 +191,6 @@ final class ConsensusModuleAgent
     private final Int2ObjectHashMap<ClusterMember> clusterMemberByIdMap = new Int2ObjectHashMap<>();
     private final SessionManager sessionManager;
     private final Long2LongCounterMap expiredTimerCountByCorrelationIdMap = new Long2LongCounterMap(0);
-    private final ArrayDeque<ClusterSession> uncommittedClosedSessions = new ArrayDeque<>();
     private final LongArrayQueue uncommittedTimers = new LongArrayQueue(Long.MAX_VALUE);
     private final LongArrayQueue uncommittedPreviousState = new LongArrayQueue(Long.MAX_VALUE);
     private final PendingServiceMessageTracker[] pendingServiceMessageTrackers;
@@ -784,22 +783,7 @@ final class ConsensusModuleAgent
     {
         if (leadershipTermId == this.leadershipTermId && Cluster.Role.LEADER == role)
         {
-            final ClusterSession session = sessionManager.sessionByIdMap().get(clusterSessionId);
-            if (null != session && session.isOpen())
-            {
-                session.closing(CloseReason.CLIENT_ACTION);
-                session.disconnect(aeron, ctx.countedErrorHandler());
-
-                final long timestamp = clusterClock.time();
-                if (logPublisher.appendSessionClose(memberId, session, leadershipTermId, timestamp, clusterTimeUnit))
-                {
-                    logAppendSessionClose(
-                        memberId, session.id(), session.closeReason(), leadershipTermId, timestamp, clusterTimeUnit);
-                    session.closedLogPosition(logPublisher.position());
-                    uncommittedClosedSessions.addLast(session);
-                    closeSession(session);
-                }
-            }
+            sessionManager.onSessionClose(leadershipTermId, clusterSessionId);
         }
     }
 
@@ -1538,8 +1522,8 @@ final class ConsensusModuleAgent
                     final String msg = CloseReason.SERVICE_ACTION.name();
                     egressPublisher.sendEvent(session, leadershipTermId, memberId, EventCode.CLOSED, msg);
                     session.closedLogPosition(logPublisher.position());
-                    uncommittedClosedSessions.addLast(session);
-                    closeSession(session);
+                    sessionManager.uncommittedClosedSessions.addLast(session);
+                    sessionManager.closeSession(session);
                 }
             }
         }
@@ -1682,7 +1666,7 @@ final class ConsensusModuleAgent
         if (null != session)
         {
             session.closing(closeReason);
-            closeSession(session);
+            sessionManager.closeSession(session);
         }
     }
 
@@ -2309,7 +2293,7 @@ final class ConsensusModuleAgent
     {
     }
 
-    private static void logAppendSessionClose(
+    static void logAppendSessionClose(
         final int memberId,
         final long id,
         final CloseReason closeReason,
@@ -2908,7 +2892,7 @@ final class ConsensusModuleAgent
         return workCount;
     }
 
-    private int checkSessions(final ArrayList<ClusterSession> sessions, final long nowNs)
+    int checkSessions(final ArrayList<ClusterSession> sessions, final long nowNs)
     {
         int workCount = 0;
 
@@ -2938,9 +2922,9 @@ final class ConsensusModuleAgent
                             final String msg = session.closeReason().name();
                             egressPublisher.sendEvent(session, leadershipTermId, memberId, EventCode.CLOSED, msg);
                             session.closedLogPosition(logPublisher.position());
-                            uncommittedClosedSessions.addLast(session);
+                            sessionManager.uncommittedClosedSessions.addLast(session);
                             ctx.timedOutClientCounter().incrementRelease();
-                            closeSession(session);
+                            sessionManager.closeSession(session);
                         }
                         workCount++;
                         break;
@@ -2962,12 +2946,12 @@ final class ConsensusModuleAgent
                             final String msg = session.closeReason().name();
                             egressPublisher.sendEvent(session, leadershipTermId, memberId, EventCode.CLOSED, msg);
                             session.closedLogPosition(logPublisher.position());
-                            uncommittedClosedSessions.addLast(session);
+                            sessionManager.uncommittedClosedSessions.addLast(session);
                             if (session.closeReason() == CloseReason.TIMEOUT)
                             {
                                 ctx.timedOutClientCounter().incrementRelease();
                             }
-                            closeSession(session);
+                            sessionManager.closeSession(session);
                             workCount++;
                         }
                         break;
@@ -2975,7 +2959,7 @@ final class ConsensusModuleAgent
 
                     default:
                     {
-                        closeSession(session);
+                        sessionManager.closeSession(session);
                         workCount++;
                         break;
                     }
@@ -3295,7 +3279,7 @@ final class ConsensusModuleAgent
             if (session.openedLogPosition() > logPosition)
             {
                 egressPublisher.sendEvent(session, leadershipTermId, memberId, EventCode.CLOSED, "election");
-                closeSession(session);
+                sessionManager.closeSession(session);
             }
         }
 
@@ -3323,13 +3307,13 @@ final class ConsensusModuleAgent
 
         while (true)
         {
-            final ClusterSession clusterSession = uncommittedClosedSessions.peekFirst();
+            final ClusterSession clusterSession = sessionManager.uncommittedClosedSessions.peekFirst();
             if (null == clusterSession || clusterSession.closedLogPosition() > commitPosition)
             {
                 break;
             }
 
-            uncommittedClosedSessions.pollFirst();
+            sessionManager.uncommittedClosedSessions.pollFirst();
         }
 
         while (uncommittedPreviousState.peekLong() <= commitPosition)
@@ -3359,7 +3343,7 @@ final class ConsensusModuleAgent
         }
 
         ClusterSession session;
-        while (null != (session = uncommittedClosedSessions.pollFirst()))
+        while (null != (session = sessionManager.uncommittedClosedSessions.pollFirst()))
         {
             if (session.closedLogPosition() > commitPosition)
             {
@@ -3843,28 +3827,6 @@ final class ConsensusModuleAgent
     private static boolean isCatchupAppendPosition(final short flags)
     {
         return 0 != (APPEND_POSITION_FLAG_CATCHUP & flags);
-    }
-
-    private void closeSession(final ClusterSession session)
-    {
-        final long sessionId = session.id();
-
-        sessionManager.sessionByIdMap().remove(sessionId);
-        for (int i = sessionManager.sessions().size() - 1; i >= 0; i--)
-        {
-            if (sessionManager.sessions().get(i).id() == sessionId)
-            {
-                sessionManager.sessions().remove(i);
-                break;
-            }
-        }
-
-        session.close(aeron, ctx.countedErrorHandler(), "closed");
-
-        if (null != consensusModuleExtension && null != session.closeReason())
-        {
-            consensusModuleExtension.onSessionClosed(sessionId, session.closeReason());
-        }
     }
 
     @SuppressWarnings("try")

@@ -18,6 +18,7 @@ package io.aeron.cluster;
 import io.aeron.Aeron;
 import io.aeron.Counter;
 import io.aeron.cluster.codecs.BackupQueryDecoder;
+import io.aeron.cluster.codecs.CloseReason;
 import io.aeron.cluster.codecs.EventCode;
 import io.aeron.cluster.codecs.HeartbeatRequestDecoder;
 import io.aeron.cluster.codecs.MessageHeaderDecoder;
@@ -30,6 +31,7 @@ import org.agrona.collections.Long2ObjectHashMap;
 import org.agrona.concurrent.CountedErrorHandler;
 import org.agrona.concurrent.errors.DistinctErrorLog;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -41,18 +43,22 @@ import static io.aeron.cluster.ClusterSession.State.CONNECTING;
 import static io.aeron.cluster.ClusterSession.State.INIT;
 import static io.aeron.cluster.ClusterSession.State.INVALID;
 import static io.aeron.cluster.ClusterSession.State.REJECTED;
+import static io.aeron.cluster.ConsensusModuleAgent.logAppendSessionClose;
 import static io.aeron.cluster.ConsensusModuleAgent.logAppendSessionOpen;
 
 class SessionManager
 {
     private final Long2ObjectHashMap<ClusterSession> sessionByIdMap = new Long2ObjectHashMap<>();
     private final ArrayList<ClusterSession> sessions = new ArrayList<>();
+
     private final ArrayList<ClusterSession> pendingUserSessions = new ArrayList<>();
     private final ArrayList<ClusterSession> rejectedUserSessions = new ArrayList<>();
     private final ArrayList<ClusterSession> redirectUserSessions = new ArrayList<>();
 
     private final ArrayList<ClusterSession> pendingBackupSessions = new ArrayList<>();
     private final ArrayList<ClusterSession> rejectedBackupSessions = new ArrayList<>();
+
+    final ArrayDeque<ClusterSession> uncommittedClosedSessions = new ArrayDeque<>();
 
     private final int memberId;
     private final ClusterClock clusterClock;
@@ -173,6 +179,49 @@ class SessionManager
             sessions.add(addIndex, session);
         }
     }
+
+    void closeSession(final ClusterSession session)
+    {
+        final long sessionId = session.id();
+
+        sessionByIdMap().remove(sessionId);
+        for (int i = sessions().size() - 1; i >= 0; i--)
+        {
+            if (sessions().get(i).id() == sessionId)
+            {
+                sessions().remove(i);
+                break;
+            }
+        }
+
+        session.close(aeron, errorHandler, "closed");
+
+        if (null != consensusModuleExtension && null != session.closeReason())
+        {
+            consensusModuleExtension.onSessionClosed(sessionId, session.closeReason());
+        }
+    }
+
+    void onSessionClose(final long leadershipTermId, final long clusterSessionId)
+    {
+        final ClusterSession session = sessionByIdMap().get(clusterSessionId);
+        if (null != session && session.isOpen())
+        {
+            session.closing(CloseReason.CLIENT_ACTION);
+            session.disconnect(aeron, errorHandler);
+
+            final long timestamp = clusterClock.time();
+            if (logPublisher.appendSessionClose(memberId, session, leadershipTermId, timestamp, clusterTimeUnit))
+            {
+                logAppendSessionClose(
+                    memberId, session.id(), session.closeReason(), leadershipTermId, timestamp, clusterTimeUnit);
+                session.closedLogPosition(logPublisher.position());
+                uncommittedClosedSessions.addLast(session);
+                closeSession(session);
+            }
+        }
+    }
+
 
     @SuppressWarnings("checkstyle:methodlength")
     int processPendingSessions(
