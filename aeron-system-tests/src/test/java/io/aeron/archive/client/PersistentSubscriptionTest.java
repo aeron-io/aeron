@@ -34,6 +34,7 @@ import io.aeron.driver.ThreadingMode;
 import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.Header;
 import io.aeron.logbuffer.LogBufferDescriptor;
+import io.aeron.protocol.DataHeaderFlyweight;
 import io.aeron.test.EventLogExtension;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
@@ -71,9 +72,6 @@ import static io.aeron.CommonContext.UDP_CHANNEL;
 import static io.aeron.Publication.BACK_PRESSURED;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
 import static org.agrona.concurrent.status.CountersReader.NULL_COUNTER_ID;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -486,7 +484,7 @@ class PersistentSubscriptionTest
         final Subscription subscription = aeron2.addSubscription(subChannel, STREAM_ID);
         Tests.awaitConnected(subscription);
 
-        offerPayloads(generateFixedPayloads(32, 1024), publication, counters, counterId);
+        offerPayloads(generateFixedPayloads(32, 1024 - DataHeaderFlyweight.HEADER_LENGTH), publication, counters, counterId);
 
         persistentSubscriptionCtx
             .recordingId(recordingId)
@@ -506,7 +504,7 @@ class PersistentSubscriptionTest
                     subscription.poll((b, o, l, h) -> {}, 10);
                 });
 
-            assertThat(persistentSubscription.joinError(), is(lessThanOrEqualTo(28 * 1024L)));
+            assertEquals(-28 * 1024L, persistentSubscription.joinError());
         }
     }
 
