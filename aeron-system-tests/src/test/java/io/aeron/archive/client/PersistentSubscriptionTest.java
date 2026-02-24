@@ -272,7 +272,7 @@ class PersistentSubscriptionTest
             Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
         final long recordingId = RecordingPos.getRecordingId(counters, counterId);
 
-        offerPayload(List.of(new byte[1024]), publication, counters, counterId);
+        offerPayloads(List.of(new byte[1024]), publication, counters, counterId);
 
         aeronArchive.stopRecording(publication);
         final long stopPosition = aeronArchive.getStopPosition(recordingId);
@@ -308,7 +308,7 @@ class PersistentSubscriptionTest
         final long recordingId = RecordingPos.getRecordingId(counters, counterId);
 
         final List<byte[]> payloads = generateRandomPayloads(5);
-        offerPayload(payloads, publication, counters, counterId);
+        offerPayloads(payloads, publication, counters, counterId);
 
         persistentSubscriptionCtx
             .recordingId(recordingId);
@@ -333,7 +333,7 @@ class PersistentSubscriptionTest
 
             // send some more messages
             final List<byte[]> payloads2 = generateRandomPayloads(5);
-            offerPayload(payloads2, publication, counters, counterId);
+            offerPayloads(payloads2, publication, counters, counterId);
 
             executeUntil(() -> fragmentHandler.hasReceivedPayloads(payloads.size() + payloads2.size()),
                 () ->
@@ -363,7 +363,7 @@ class PersistentSubscriptionTest
         final long recordingId = RecordingPos.getRecordingId(counters, counterId);
 
         final List<byte[]> payloads = generateRandomPayloads(5);
-        offerPayload(payloads, publication, counters, counterId);
+        offerPayloads(payloads, publication, counters, counterId);
 
         persistentSubscriptionCtx
             .recordingId(recordingId);
@@ -383,7 +383,7 @@ class PersistentSubscriptionTest
 
             // send some more messages
             final List<byte[]> payloads2 = generateRandomPayloads(1);
-            offerPayload(payloads2, publication, counters, counterId);
+            offerPayloads(payloads2, publication, counters, counterId);
 
             executeUntil(persistentSubscription::isLive,
                 () -> persistentSubscription.controlledPoll(fragmentHandler, 10));
@@ -407,7 +407,7 @@ class PersistentSubscriptionTest
         final long recordingId = RecordingPos.getRecordingId(counters, counterId);
 
         final List<byte[]> payloads = generateRandomPayloads(5);
-        offerPayload(payloads, publication, counters, counterId);
+        offerPayloads(payloads, publication, counters, counterId);
 
         persistentSubscriptionCtx
             .recordingId(recordingId);
@@ -421,7 +421,7 @@ class PersistentSubscriptionTest
             assertTrue(persistentSubscription.isReplaying());
 
             final List<byte[]> payloads2 = generateRandomPayloads(5);
-            offerPayload(payloads2, publication, counters, counterId);
+            offerPayloads(payloads2, publication, counters, counterId);
 
             executeUntil(() -> fragmentHandler.hasReceivedPayloads(payloads.size() + payloads2.size()),
                 () -> persistentSubscription.controlledPoll(fragmentHandler, fragmentLimit));
@@ -433,7 +433,7 @@ class PersistentSubscriptionTest
 
             // send some more messages
             final List<byte[]> payloads3 = generateRandomPayloads(5);
-            offerPayload(payloads3, publication, counters, counterId);
+            offerPayloads(payloads3, publication, counters, counterId);
 
             executeUntil(
                 () -> fragmentHandler.hasReceivedPayloads(payloads.size() + payloads2.size() + payloads3.size()),
@@ -487,9 +487,7 @@ class PersistentSubscriptionTest
         final Subscription subscription = aeron2.addSubscription(subChannel, STREAM_ID);
         Tests.awaitConnected(subscription);
 
-        final byte[][] payloads = new byte[32][];
-        Arrays.fill(payloads, new byte[1024]);
-        offerPayload(Arrays.asList(payloads), publication, counters, counterId);
+        offerPayloads(generateFixedPayloads(32, 1024), publication, counters, counterId);
 
         persistentSubscriptionCtx
             .recordingId(recordingId)
@@ -526,7 +524,7 @@ class PersistentSubscriptionTest
         final long recordingId = RecordingPos.getRecordingId(counters, counterId);
 
         final List<byte[]> payloads = generateRandomPayloads(5);
-        offerPayload(payloads, publication, counters, counterId);
+        offerPayloads(payloads, publication, counters, counterId);
 
         persistentSubscriptionCtx
             .recordingId(recordingId)
@@ -551,7 +549,7 @@ class PersistentSubscriptionTest
 
             // send some more messages
             final List<byte[]> payloads2 = generateRandomPayloads(5);
-            offerPayload(payloads2, publication, counters, counterId);
+            offerPayloads(payloads2, publication, counters, counterId);
 
             executeUntil(
                 () -> fragmentHandler.hasReceivedPayloads(payloads.size() + payloads2.size()),
@@ -574,7 +572,7 @@ class PersistentSubscriptionTest
 
                 for (int i = 0; i < 64; i++)
                 {
-                    offerPayload(List.of(new byte[1024]), publication, counters, counterId);
+                    offerPayloads(List.of(new byte[1024]), publication, counters, counterId);
 
                     while (subscription.poll((buffer1, offset, length, header) ->
                     {
@@ -847,6 +845,17 @@ class PersistentSubscriptionTest
         }
     }
 
+    private List<byte[]> generateFixedPayloads(final int count, final int size)
+    {
+        final byte[] payload = new byte[size];
+        final List<byte[]> payloads = new ArrayList<>(count);
+        for (int i = 0; i < count; i++)
+        {
+            payloads.add(payload);
+        }
+        return payloads;
+    }
+
     private List<byte[]> generateRandomPayloads(final int count)
     {
         final ThreadLocalRandom random = ThreadLocalRandom.current();
@@ -891,7 +900,8 @@ class PersistentSubscriptionTest
         });
     }
 
-    private void offerPayload(final List<byte[]> payloads,
+    private void offerPayloads(
+        final List<byte[]> payloads,
         final Publication publication,
         final CountersReader counters,
         final int counterId)
