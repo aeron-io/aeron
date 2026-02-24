@@ -738,45 +738,16 @@ final class ConsensusModuleAgent
         final String clientInfo,
         final Header header)
     {
-        final long clusterSessionId = Cluster.Role.LEADER == role ? sessionManager.nextSessionId++ : NULL_VALUE;
-        final ClusterSession session = new ClusterSession(
-            memberId,
-            clusterSessionId,
+        sessionManager.onSessionConnect(
+            correlationId,
             responseStreamId,
+            version,
             refineResponseChannel(responseChannel),
-            sessionInfo(clientInfo, header));
-
-        session.asyncConnect(aeron, tempBuffer, ctx.clusterId());
-        final long nowNs = clusterClock.timeNanos();
-        session.lastActivityNs(nowNs, correlationId);
-
-        if (Cluster.Role.LEADER != role)
-        {
-            sessionManager.redirectUserSessions().add(session);
-        }
-        else
-        {
-            if (AeronCluster.Configuration.PROTOCOL_MAJOR_VERSION != SemanticVersion.major(version))
-            {
-                final String detail = SESSION_INVALID_VERSION_MSG + " " + SemanticVersion.toString(version) +
-                    ", cluster is " + SemanticVersion.toString(PROTOCOL_SEMANTIC_VERSION);
-                session.reject(EventCode.ERROR, detail, ctx.errorLog());
-                sessionManager.rejectedUserSessions().add(session);
-            }
-            else if (
-                sessionManager.pendingUserSessions().size() + sessionManager.sessions().size() >=
-                    ctx.maxConcurrentSessions())
-            {
-                session.reject(EventCode.ERROR, SESSION_LIMIT_MSG, ctx.errorLog());
-                sessionManager.rejectedUserSessions().add(session);
-            }
-            else
-            {
-                session.linkIngressImage(header);
-                authenticator.onConnectRequest(session.id(), encodedCredentials, NANOSECONDS.toMillis(nowNs));
-                sessionManager.pendingUserSessions().add(session);
-            }
-        }
+            encodedCredentials,
+            clientInfo,
+            header,
+            role,
+            tempBuffer);
     }
 
     void onSessionClose(final long leadershipTermId, final long clusterSessionId)
@@ -3998,7 +3969,7 @@ final class ConsensusModuleAgent
         return workCount;
     }
 
-    private static String sessionInfo(final String clientInfo, final Header header)
+    static String sessionInfo(final String clientInfo, final Header header)
     {
         final Image image = (Image)header.context();
         final String imageInfo = "sourceIdentity=" + image.sourceIdentity() + " sessionId=" + image.sessionId();

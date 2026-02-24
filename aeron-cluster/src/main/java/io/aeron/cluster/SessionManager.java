@@ -17,15 +17,20 @@ package io.aeron.cluster;
 
 import io.aeron.Aeron;
 import io.aeron.Counter;
+import io.aeron.cluster.client.AeronCluster;
 import io.aeron.cluster.codecs.BackupQueryDecoder;
 import io.aeron.cluster.codecs.CloseReason;
 import io.aeron.cluster.codecs.EventCode;
 import io.aeron.cluster.codecs.HeartbeatRequestDecoder;
 import io.aeron.cluster.codecs.MessageHeaderDecoder;
 import io.aeron.cluster.codecs.StandbySnapshotDecoder;
+import io.aeron.cluster.service.Cluster;
 import io.aeron.cluster.service.ClusterClock;
+import io.aeron.logbuffer.Header;
 import io.aeron.security.Authenticator;
 import io.aeron.security.AuthorisationService;
+import org.agrona.MutableDirectBuffer;
+import org.agrona.SemanticVersion;
 import org.agrona.collections.ArrayListUtil;
 import org.agrona.collections.Long2ObjectHashMap;
 import org.agrona.concurrent.CountedErrorHandler;
@@ -36,6 +41,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import static io.aeron.Aeron.NULL_VALUE;
 import static io.aeron.cluster.ClusterSession.State.AUTHENTICATED;
 import static io.aeron.cluster.ClusterSession.State.CHALLENGED;
 import static io.aeron.cluster.ClusterSession.State.CONNECTED;
@@ -43,8 +49,12 @@ import static io.aeron.cluster.ClusterSession.State.CONNECTING;
 import static io.aeron.cluster.ClusterSession.State.INIT;
 import static io.aeron.cluster.ClusterSession.State.INVALID;
 import static io.aeron.cluster.ClusterSession.State.REJECTED;
+import static io.aeron.cluster.ConsensusModule.Configuration.SESSION_INVALID_VERSION_MSG;
+import static io.aeron.cluster.ConsensusModule.Configuration.SESSION_LIMIT_MSG;
 import static io.aeron.cluster.ConsensusModuleAgent.logAppendSessionClose;
 import static io.aeron.cluster.ConsensusModuleAgent.logAppendSessionOpen;
+import static io.aeron.cluster.client.AeronCluster.Configuration.PROTOCOL_SEMANTIC_VERSION;
+import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 class SessionManager
 {
@@ -79,6 +89,8 @@ class SessionManager
     private final ConsensusPublisher consensusPublisher;
     private final ConsensusModuleExtension consensusModuleExtension;
     private final int commitPositionCounterId;
+    private final int clusterId;
+    private final int maxConcurrentSessions;
 
     long nextSessionId = 1;
     long nextCommittedSessionId = nextSessionId;
@@ -108,6 +120,8 @@ class SessionManager
         this.recordingLog = ctx.recordingLog();
         this.consensusModuleExtension = ctx.consensusModuleExtension();
         this.commitPositionCounterId = ctx.commitPositionCounter().id();
+        this.clusterId = ctx.clusterId();
+        this.maxConcurrentSessions = ctx.maxConcurrentSessions();
     }
 
     ArrayList<ClusterSession> pendingBackupSessions()
@@ -199,6 +213,56 @@ class SessionManager
         if (null != consensusModuleExtension && null != session.closeReason())
         {
             consensusModuleExtension.onSessionClosed(sessionId, session.closeReason());
+        }
+    }
+
+    public void onSessionConnect(
+        final long correlationId,
+        final int responseStreamId,
+        final int version,
+        final String responseChannel,
+        final byte[] encodedCredentials,
+        final String clientInfo,
+        final Header header,
+        final Cluster.Role role,
+        final MutableDirectBuffer tempBuffer)
+    {
+        final long clusterSessionId = Cluster.Role.LEADER == role ? nextSessionId++ : NULL_VALUE;
+        final ClusterSession session = new ClusterSession(
+            memberId,
+            clusterSessionId,
+            responseStreamId,
+            responseChannel,
+            ConsensusModuleAgent.sessionInfo(clientInfo, header));
+
+        session.asyncConnect(aeron, tempBuffer, clusterId);
+        final long nowNs = clusterClock.timeNanos();
+        session.lastActivityNs(nowNs, correlationId);
+
+        if (Cluster.Role.LEADER != role)
+        {
+            redirectUserSessions().add(session);
+        }
+        else
+        {
+            if (AeronCluster.Configuration.PROTOCOL_MAJOR_VERSION != SemanticVersion.major(version))
+            {
+                final String detail = SESSION_INVALID_VERSION_MSG + " " + SemanticVersion.toString(version) +
+                    ", cluster is " + SemanticVersion.toString(PROTOCOL_SEMANTIC_VERSION);
+                session.reject(EventCode.ERROR, detail, errorLog);
+                rejectedUserSessions().add(session);
+            }
+            else if (pendingUserSessions().size() + sessions().size() >= maxConcurrentSessions)
+            {
+                session.reject(EventCode.ERROR, SESSION_LIMIT_MSG, errorLog);
+                rejectedUserSessions().add(session);
+            }
+            else
+            {
+                session.linkIngressImage(header);
+                authenticator.onConnectRequest(session.id(), encodedCredentials, NANOSECONDS.toMillis(nowNs));
+                pendingUserSessions().add(session);
+            }
         }
     }
 
