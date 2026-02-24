@@ -50,6 +50,7 @@ public final class PersistentSubscription implements AutoCloseable
     private Subscription liveSubscription;
 
     private long nextLivePosition = Aeron.NULL_VALUE;
+    private long lastConsumedLivePosition = Aeron.NULL_VALUE;
 
     private PersistentSubscription(final Context ctx)
     {
@@ -186,20 +187,7 @@ public final class PersistentSubscription implements AutoCloseable
             return 1;
         }
 
-        replaySubscription = aeronArchive.context().aeron()
-            .addSubscription("aeron:udp?endpoint=localhost:0", -5);
-
-        candidateSwitchPosition = aeronArchive.getMaxRecordedPosition(recordingId);
-
-        // TODO how are we supposed to use a response channel here?
-        // TODO async
-        final String replayChannel = "aeron:udp?endpoint=" + replaySubscription.resolvedEndpoint();
-        replaySessionId = (int)aeronArchive.startReplay(
-            recordingId,
-            startPosition,
-            AeronArchive.REPLAY_ALL_AND_FOLLOW,
-            replayChannel,
-            replaySubscription.streamId());
+        subscribeToReplay(startPosition);
 
         state(State.REPLAY);
         joinError = Long.MIN_VALUE;
@@ -306,18 +294,43 @@ public final class PersistentSubscription implements AutoCloseable
         return fragments;
     }
 
-
     private int live(final ControlledFragmentHandler fragmentHandler, final int fragmentLimit)
     {
-        if (!liveSubscription.isConnected())
+        if (liveSubscription.isConnected())
         {
-            // TODO need to actually restart the replay from the right point
+            liveSubscription.controlledPoll(fragmentHandler, fragmentLimit);
+            lastConsumedLivePosition = liveSubscription.imageAtIndex(0).position();
+        }
+        else
+        {
             state(State.REPLAY);
             joinError = Long.MIN_VALUE;
-            return 0;
-        }
 
-        return liveSubscription.controlledPoll(fragmentHandler, fragmentLimit);
+            CloseHelper.close(liveSubscription);
+
+            subscribeToReplay(lastConsumedLivePosition);
+        }
+        return 1;
+    }
+
+    private void subscribeToReplay(final long startPosition)
+    {
+        // TODO: Don't hardcode localhost and streamId
+        replaySubscription = aeronArchive.context().aeron()
+            .addSubscription("aeron:udp?endpoint=localhost:0", -5);
+
+        candidateSwitchPosition = aeronArchive.getMaxRecordedPosition(recordingId);
+
+        // TODO how are we supposed to use a response channel here?
+        // TODO async
+        final String replayChannel = "aeron:udp?endpoint=" + replaySubscription.resolvedEndpoint();
+
+        replaySessionId = (int)aeronArchive.startReplay(
+            recordingId,
+            startPosition,
+            AeronArchive.REPLAY_ALL_AND_FOLLOW,
+            replayChannel,
+            replaySubscription.streamId());
     }
 
     private void state(final State newState)

@@ -62,6 +62,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.BooleanSupplier;
 
@@ -504,13 +505,7 @@ class PersistentSubscriptionTest
             assertTrue(persistentSubscription.isLive());
             assertFalse(persistentSubscription.isReplaying());
             assertTrue(persistentSubscription.joinError() > 0);
-
-            final List<byte[]> allPayloads = new ArrayList<>();
-            allPayloads.addAll(payloads);
-            allPayloads.addAll(payloads2);
-            allPayloads.addAll(payloads3);
-
-            assertPayloads(fragmentHandler.receivedPayloads, allPayloads);
+            assertPayloads(fragmentHandler.receivedPayloads, payloads, payloads2, payloads3);
 
             Tests.await(() -> archive.context().replaySessionCounter().get() == 0);
         }
@@ -579,7 +574,7 @@ class PersistentSubscriptionTest
             Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
         final long recordingId = RecordingPos.getRecordingId(counters, counterId);
 
-        final List<byte[]> payloads = generateRandomPayloads(5);
+        final List<byte[]> payloads = generateFixedPayloads(5, ONE_K_MESSAGE_SIZE);
         offerPayloads(payloads, publication, counters, counterId);
 
         persistentSubscriptionCtx
@@ -603,7 +598,7 @@ class PersistentSubscriptionTest
             assertEquals(payloads.size(), fragmentHandler.receivedPayloads.size());
 
             // send some more messages
-            final List<byte[]> payloads2 = generateRandomPayloads(5);
+            final List<byte[]> payloads2 = generateFixedPayloads(5, ONE_K_MESSAGE_SIZE);
             offerPayloads(payloads2, publication, counters, counterId);
 
             executeUntil(
@@ -625,21 +620,32 @@ class PersistentSubscriptionTest
 
                 Tests.awaitConnected(subscription);
 
-                for (int i = 0; i < 64; i++)
-                {
-                    offerPayloads(List.of(new byte[1024]), publication, counters, counterId);
+                final List<byte[]> payloads3 = generateFixedPayloads(64, ONE_K_MESSAGE_SIZE);
+                offerPayloads(payloads3, publication, counters, counterId);
 
-                    while (subscription.poll((buffer1, offset, length, header) ->
-                    {
-                    }, 1) < 1)
-                    {
-                        Tests.yield();
-                    }
-                }
+                final AtomicInteger fragments = new AtomicInteger(0);
+                executeUntil(
+                    () -> fragments.get() >= 64,
+                    () -> subscription.poll((buffer1, offset, length, header) ->
+                        fragments.incrementAndGet(), 1)
+                );
 
-                executeUntil(() -> !persistentSubscription.isLive(), () -> persistentSubscription.controlledPoll(
-                    (buffer, offset, length, header) -> ControlledFragmentHandler.Action.CONTINUE, 10));
+                executeUntil(
+                    persistentSubscription::isReplaying,
+                    () -> persistentSubscription.controlledPoll(fragmentHandler, 10)
+                );
                 assertTrue(persistentSubscription.isReplaying());
+
+                final List<byte[]> payloads4 = generateFixedPayloads(5, ONE_K_MESSAGE_SIZE);
+                offerPayloads(payloads4, publication, counters, counterId);
+
+                int expectedMessageCount = payloads.size() + payloads2.size() + payloads3.size() + payloads4.size();
+
+                executeUntil(
+                    () -> fragmentHandler.hasReceivedPayloads(expectedMessageCount) && persistentSubscription.isLive(),
+                    () -> persistentSubscription.controlledPoll(fragmentHandler, 10));
+
+                assertPayloads(fragmentHandler.receivedPayloads, payloads, payloads2, payloads3, payloads4);
             }
         }
     }
@@ -938,10 +944,12 @@ class PersistentSubscriptionTest
 
     private List<byte[]> generateFixedPayloads(final int count, final int size)
     {
-        final byte[] payload = new byte[size];
+        final ThreadLocalRandom random = ThreadLocalRandom.current();
         final List<byte[]> payloads = new ArrayList<>(count);
         for (int i = 0; i < count; i++)
         {
+            final byte[] payload = new byte[size];
+            random.nextBytes(payload);
             payloads.add(payload);
         }
         return payloads;
@@ -1017,6 +1025,18 @@ class PersistentSubscriptionTest
         {
             assertArrayEquals(payloads.get(i), receivedPayloads.get(i));
         }
+    }
+
+    @SafeVarargs
+    private void assertPayloads(final List<byte[]> receivedPayloads, final List<byte[]>... payloads)
+    {
+        final List<byte[]> allPayloads = new ArrayList<>();
+        for (final List<byte[]> payload : payloads)
+        {
+            allPayloads.addAll(payload);
+        }
+
+        assertPayloads(receivedPayloads, allPayloads);
     }
 
     private static final class BufferingFragmentHandler implements ControlledFragmentHandler
