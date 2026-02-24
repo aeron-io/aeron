@@ -68,6 +68,7 @@ import java.util.function.BooleanSupplier;
 import static io.aeron.AeronCounters.FLOW_CONTROL_RECEIVERS_COUNTER_TYPE_ID;
 import static io.aeron.CommonContext.IPC_CHANNEL;
 import static io.aeron.CommonContext.IPC_MEDIA;
+import static io.aeron.CommonContext.SPY_PREFIX;
 import static io.aeron.CommonContext.UDP_CHANNEL;
 import static io.aeron.Publication.BACK_PRESSURED;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
@@ -87,6 +88,7 @@ class PersistentSubscriptionTest
     private static final String MDC_CHANNEL = UDP_CHANNEL + "?control=localhost:2000";
     private static final String MDC_PUBLICATION_CHANNEL = UDP_CHANNEL +
         "?control=localhost:2000|control-mode=dynamic|fc=max";
+    public static final int ONE_K_MESSAGE_SIZE = 1024 - DataHeaderFlyweight.HEADER_LENGTH;
 
     @RegisterExtension
     final SystemTestWatcher systemTestWatcher = new SystemTestWatcher();
@@ -295,7 +297,7 @@ class PersistentSubscriptionTest
     @ParameterizedTest
     @ValueSource(ints = { 1, 10 })
     @InterruptAfter(5)
-    void shouldReplayExistingRecording(int fragmentLimit)
+    void shouldReplayExistingRecordingThenJoinLive(int fragmentLimit)
     {
         final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(IPC_CHANNEL, STREAM_ID);
 
@@ -330,6 +332,63 @@ class PersistentSubscriptionTest
 
             // send some more messages
             final List<byte[]> payloads2 = generateRandomPayloads(5);
+            offerPayloads(payloads2, publication, counters, counterId);
+
+            executeUntil(() -> fragmentHandler.hasReceivedPayloads(payloads.size() + payloads2.size()),
+                () ->
+                {
+                    persistentSubscription.controlledPoll(fragmentHandler, fragmentLimit);
+
+                    // expect remaining messages to be consumed on live channel
+                    assertTrue(persistentSubscription.isLive());
+                });
+
+            assertTrue(persistentSubscription.isLive());
+            assertFalse(persistentSubscription.isReplaying());
+
+            Tests.await(() -> archive.context().replaySessionCounter().get() == 0);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = { 1, 10 })
+    @InterruptAfter(5)
+    void shouldReplayExistingRecordingThenSpyOnLive(int fragmentLimit)
+    {
+        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(MDC_PUBLICATION_CHANNEL, STREAM_ID);
+
+        final CountersReader counters = aeron.countersReader();
+        final int counterId =
+            Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
+        final long recordingId = RecordingPos.getRecordingId(counters, counterId);
+
+        final List<byte[]> payloads = generateFixedPayloads(8, 1024 - DataHeaderFlyweight.HEADER_LENGTH);
+        offerPayloads(payloads, publication, counters, counterId);
+
+        persistentSubscriptionCtx
+            .liveChannel(SPY_PREFIX + "aeron:udp?control=localhost:2000")
+            .recordingId(recordingId);
+
+        try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
+        {
+            executeUntil(() -> fragmentHandler.hasReceivedPayloads(8),
+                () -> persistentSubscription.controlledPoll(fragmentHandler, 1));
+
+            assertEquals(1, archive.context().replaySessionCounter().get());
+            assertTrue(persistentSubscription.isReplaying());
+
+            executeUntil(() -> fragmentHandler.hasReceivedPayloads(payloads.size()), () ->
+                persistentSubscription.controlledPoll(fragmentHandler, fragmentLimit));
+
+            assertPayloads(fragmentHandler.receivedPayloads, payloads);
+
+            executeUntil(persistentSubscription::isLive,
+                () -> persistentSubscription.controlledPoll(fragmentHandler, fragmentLimit));
+
+            assertEquals(payloads.size(), fragmentHandler.receivedPayloads.size());
+
+            // send some more messages
+            final List<byte[]> payloads2 = generateFixedPayloads(16, ONE_K_MESSAGE_SIZE);
             offerPayloads(payloads2, publication, counters, counterId);
 
             executeUntil(() -> fragmentHandler.hasReceivedPayloads(payloads.size() + payloads2.size()),
