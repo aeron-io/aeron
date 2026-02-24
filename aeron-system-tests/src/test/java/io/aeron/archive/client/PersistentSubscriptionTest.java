@@ -569,7 +569,7 @@ class PersistentSubscriptionTest
 
     @Test
     @InterruptAfter(15)
-    void shouldDropFromLiveBackToReplay() throws InterruptedException
+    void shouldDropFromLiveBackToReplay()
     {
         final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(MDC_PUBLICATION_CHANNEL,
             STREAM_ID);
@@ -588,20 +588,19 @@ class PersistentSubscriptionTest
 
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
         {
-            //            while (listener.onLiveCount == 0) // TODO should get the onLiveCallback
+            executeUntil(() -> fragmentHandler.hasReceivedPayloads(1),
+                () -> persistentSubscription.controlledPoll(fragmentHandler, 1));
+
+            assertEquals(1, archive.context().replaySessionCounter().get());
+            assertTrue(persistentSubscription.isReplaying());
+
             executeUntil(() -> fragmentHandler.hasReceivedPayloads(payloads.size()), () ->
-            {
-                persistentSubscription.controlledPoll(fragmentHandler, 10);
-                if (fragmentHandler.receivedPayloads.size() == 1)
-                {
-                    assertEquals(1, archive.context().replaySessionCounter().get());
-                    assertTrue(persistentSubscription.isReplaying());
-                }
-            });
+                persistentSubscription.controlledPoll(fragmentHandler, 10));
 
-            assertPayloads(fragmentHandler.receivedPayloads, payloads);
+            executeUntil(persistentSubscription::isLive,
+                () -> persistentSubscription.controlledPoll(fragmentHandler, 10));
 
-            Thread.sleep(100); // TODO
+            assertEquals(payloads.size(), fragmentHandler.receivedPayloads.size());
 
             // send some more messages
             final List<byte[]> payloads2 = generateRandomPayloads(5);
@@ -642,6 +641,42 @@ class PersistentSubscriptionTest
                     (buffer, offset, length, header) -> ControlledFragmentHandler.Action.CONTINUE, 10));
                 assertTrue(persistentSubscription.isReplaying());
             }
+        }
+    }
+
+    @Test
+    @InterruptAfter(15)
+    void shouldStartFromLiveWhenThereIsNoDataToReplay()
+    {
+        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(MDC_PUBLICATION_CHANNEL,
+            STREAM_ID);
+
+        final CountersReader counters = aeron.countersReader();
+        final int counterId =
+            Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
+        final long recordingId = RecordingPos.getRecordingId(counters, counterId);
+
+        persistentSubscriptionCtx
+            .recordingId(recordingId)
+            .liveChannel(MDC_CHANNEL);
+
+        try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
+        {
+            executeUntil(persistentSubscription::isLive,
+                () -> persistentSubscription.controlledPoll(fragmentHandler, 10));
+
+            assertEquals(0, fragmentHandler.receivedPayloads.size());
+
+            // send some messages
+            final List<byte[]> payloads = generateRandomPayloads(5);
+            offerPayloads(payloads, publication, counters, counterId);
+
+            executeUntil(
+                () -> fragmentHandler.hasReceivedPayloads(payloads.size()),
+                () -> persistentSubscription.controlledPoll(fragmentHandler, 10)
+            );
+
+            Tests.await(() -> archive.context().replaySessionCounter().get() == 0);
         }
     }
 
