@@ -276,7 +276,7 @@ public class SubscriberEndOfStreamTest
         final int streamId = 10000;
         final String subscriptionChannel1 = "aeron:udp?endpoint=localhost:10000";
         final String pubChannel1 =
-            "aeron:udp?endpoint=localhost:10000|control=localhost:10001|linger=" + lingerTimeoutMs + "ms";
+            "aeron:udp?endpoint=localhost:10000|control=localhost:10001|linger=" + lingerTimeoutMs + "ms|eos=true";
 
         final Aeron.Context ctx = new Aeron.Context()
             .aeronDirectoryName(driver.aeronDirectoryName());

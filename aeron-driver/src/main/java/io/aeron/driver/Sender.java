@@ -154,12 +154,13 @@ public final class Sender extends SenderRhsPadding implements Agent
 
     void onRegisterSendChannelEndpoint(final SendChannelEndpoint channelEndpoint)
     {
-        channelEndpoint.registerForRead(controlTransportPoller);
+        controlTransportPoller.registerForRead(channelEndpoint);
     }
 
     void onCloseSendChannelEndpoint(final SendChannelEndpoint channelEndpoint)
     {
-        channelEndpoint.close();
+        controlTransportPoller.cancelRead(channelEndpoint);
+        conductorProxy.sendChannelEndpointClosed(channelEndpoint);
     }
 
     void onNewNetworkPublication(final NetworkPublication publication)

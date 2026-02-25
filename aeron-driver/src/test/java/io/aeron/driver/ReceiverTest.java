@@ -216,7 +216,7 @@ class ReceiverTest
     @InterruptAfter(10)
     void shouldCreateRcvTermAndSendSmOnSetup() throws IOException
     {
-        receiveChannelEndpoint.openChannel(driverConductorProxy);
+        receiveChannelEndpoint.openChannel();
         receiverProxy.registerReceiveChannelEndpoint(receiveChannelEndpoint);
         receiverProxy.addSubscription(receiveChannelEndpoint, STREAM_ID);
 
@@ -287,7 +287,7 @@ class ReceiverTest
     @Test
     void shouldInsertDataIntoLogAfterInitialExchange()
     {
-        receiveChannelEndpoint.openChannel(driverConductorProxy);
+        receiveChannelEndpoint.openChannel();
         receiverProxy.registerReceiveChannelEndpoint(receiveChannelEndpoint);
         receiverProxy.addSubscription(receiveChannelEndpoint, STREAM_ID);
 
@@ -359,7 +359,7 @@ class ReceiverTest
     @Test
     void shouldNotOverwriteDataFrameWithHeartbeat()
     {
-        receiveChannelEndpoint.openChannel(driverConductorProxy);
+        receiveChannelEndpoint.openChannel();
         receiverProxy.registerReceiveChannelEndpoint(receiveChannelEndpoint);
         receiverProxy.addSubscription(receiveChannelEndpoint, STREAM_ID);
 
@@ -434,7 +434,7 @@ class ReceiverTest
     @Test
     void shouldOverwriteHeartbeatWithDataFrame()
     {
-        receiveChannelEndpoint.openChannel(driverConductorProxy);
+        receiveChannelEndpoint.openChannel();
         receiverProxy.registerReceiveChannelEndpoint(receiveChannelEndpoint);
         receiver.doWork();
         receiverProxy.addSubscription(receiveChannelEndpoint, STREAM_ID);
@@ -512,7 +512,7 @@ class ReceiverTest
         final int alignedDataFrameLength =
             align(DataHeaderFlyweight.HEADER_LENGTH + FAKE_PAYLOAD.length, FrameDescriptor.FRAME_ALIGNMENT);
 
-        receiveChannelEndpoint.openChannel(driverConductorProxy);
+        receiveChannelEndpoint.openChannel();
         receiverProxy.registerReceiveChannelEndpoint(receiveChannelEndpoint);
         receiverProxy.addSubscription(receiveChannelEndpoint, STREAM_ID);
 
@@ -588,7 +588,7 @@ class ReceiverTest
     @Test
     void shouldRemoveImageFromDispatcherWithNoActivity()
     {
-        receiveChannelEndpoint.openChannel(driverConductorProxy);
+        receiveChannelEndpoint.openChannel();
         receiverProxy.registerReceiveChannelEndpoint(receiveChannelEndpoint);
         receiverProxy.addSubscription(receiveChannelEndpoint, STREAM_ID);
 
@@ -612,7 +612,7 @@ class ReceiverTest
     @Test
     void shouldNotRemoveImageFromDispatcherOnRemoveSubscription()
     {
-        receiveChannelEndpoint.openChannel(driverConductorProxy);
+        receiveChannelEndpoint.openChannel();
         receiverProxy.registerReceiveChannelEndpoint(receiveChannelEndpoint);
         receiverProxy.addSubscription(receiveChannelEndpoint, STREAM_ID);
 

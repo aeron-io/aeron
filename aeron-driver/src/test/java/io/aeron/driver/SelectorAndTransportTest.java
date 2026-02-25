@@ -15,7 +15,14 @@
  */
 package io.aeron.driver;
 
-import io.aeron.driver.media.*;
+import io.aeron.driver.media.ControlTransportPoller;
+import io.aeron.driver.media.DataTransportPoller;
+import io.aeron.driver.media.ReceiveChannelEndpoint;
+import io.aeron.driver.media.ReceiveChannelEndpointThreadLocals;
+import io.aeron.driver.media.SendChannelEndpoint;
+import io.aeron.driver.media.UdpChannel;
+import io.aeron.driver.media.UdpTransportPoller;
+import io.aeron.driver.media.WildcardPortManager;
 import io.aeron.driver.status.SystemCounters;
 import io.aeron.logbuffer.FrameDescriptor;
 import io.aeron.protocol.DataHeaderFlyweight;
@@ -44,7 +51,14 @@ import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(InterruptingTestCallback.class)
 class SelectorAndTransportTest
@@ -124,7 +138,7 @@ class SelectorAndTransportTest
         }
         catch (final Exception ex)
         {
-            ex.printStackTrace();
+            throw ex;
         }
     }
 
@@ -137,9 +151,9 @@ class SelectorAndTransportTest
         sendChannelEndpoint = new SendChannelEndpoint(SRC_DST, mockSendStatusIndicator, context);
 
         receiveChannelEndpoint.openDatagramChannel(mockReceiveStatusIndicator);
-        receiveChannelEndpoint.registerForRead(dataTransportPoller);
+        dataTransportPoller.registerForRead(receiveChannelEndpoint, receiveChannelEndpoint, 0);
         sendChannelEndpoint.openDatagramChannel(mockSendStatusIndicator);
-        sendChannelEndpoint.registerForRead(controlTransportPoller);
+        controlTransportPoller.registerForRead(sendChannelEndpoint);
 
         processLoop(dataTransportPoller, 5);
     }
@@ -194,21 +208,21 @@ class SelectorAndTransportTest
                 return null;
             })
             .when(mockDispatcher).onDataPacket(
-            any(ReceiveChannelEndpoint.class),
-            any(DataHeaderFlyweight.class),
-            any(UnsafeBuffer.class),
-            anyInt(),
-            any(InetSocketAddress.class),
-            anyInt());
+                any(ReceiveChannelEndpoint.class),
+                any(DataHeaderFlyweight.class),
+                any(UnsafeBuffer.class),
+                anyInt(),
+                any(InetSocketAddress.class),
+                anyInt());
 
         receiveChannelEndpoint = new ReceiveChannelEndpoint(
             RCV_DST, mockDispatcher, mockReceiveStatusIndicator, context);
         sendChannelEndpoint = new SendChannelEndpoint(SRC_DST, mockSendStatusIndicator, context);
 
         receiveChannelEndpoint.openDatagramChannel(mockReceiveStatusIndicator);
-        receiveChannelEndpoint.registerForRead(dataTransportPoller);
+        dataTransportPoller.registerForRead(receiveChannelEndpoint, receiveChannelEndpoint, 0);
         sendChannelEndpoint.openDatagramChannel(mockSendStatusIndicator);
-        sendChannelEndpoint.registerForRead(controlTransportPoller);
+        controlTransportPoller.registerForRead(sendChannelEndpoint);
 
         encodeDataHeader.wrap(buffer);
         encodeDataHeader
@@ -245,21 +259,21 @@ class SelectorAndTransportTest
                 return null;
             })
             .when(mockDispatcher).onDataPacket(
-            any(ReceiveChannelEndpoint.class),
-            any(DataHeaderFlyweight.class),
-            any(UnsafeBuffer.class),
-            anyInt(),
-            any(InetSocketAddress.class),
-            anyInt());
+                any(ReceiveChannelEndpoint.class),
+                any(DataHeaderFlyweight.class),
+                any(UnsafeBuffer.class),
+                anyInt(),
+                any(InetSocketAddress.class),
+                anyInt());
 
         receiveChannelEndpoint = new ReceiveChannelEndpoint(
             RCV_DST, mockDispatcher, mockReceiveStatusIndicator, context);
         sendChannelEndpoint = new SendChannelEndpoint(SRC_DST, mockSendStatusIndicator, context);
 
         receiveChannelEndpoint.openDatagramChannel(mockReceiveStatusIndicator);
-        receiveChannelEndpoint.registerForRead(dataTransportPoller);
+        dataTransportPoller.registerForRead(receiveChannelEndpoint, receiveChannelEndpoint, 0);
         sendChannelEndpoint.openDatagramChannel(mockSendStatusIndicator);
-        sendChannelEndpoint.registerForRead(controlTransportPoller);
+        controlTransportPoller.registerForRead(sendChannelEndpoint);
 
         encodeDataHeader.wrap(buffer);
         encodeDataHeader
@@ -316,9 +330,9 @@ class SelectorAndTransportTest
         sendChannelEndpoint.registerForSend(mockPublication);
 
         receiveChannelEndpoint.openDatagramChannel(mockReceiveStatusIndicator);
-        receiveChannelEndpoint.registerForRead(dataTransportPoller);
+        dataTransportPoller.registerForRead(receiveChannelEndpoint, receiveChannelEndpoint, 0);
         sendChannelEndpoint.openDatagramChannel(mockSendStatusIndicator);
-        sendChannelEndpoint.registerForRead(controlTransportPoller);
+        controlTransportPoller.registerForRead(sendChannelEndpoint);
 
         statusMessage.wrap(buffer);
         statusMessage

@@ -135,19 +135,19 @@ public final class DriverConductorProxy
     }
 
     /**
-     * Close a receive destination indicators.
+     * Close a receive destination.
      *
      * @param destinationTransport to have its indicators closed.
      */
-    public void closeReceiveDestinationIndicators(final ReceiveDestinationTransport destinationTransport)
+    public void closeReceiveDestination(final ReceiveDestinationTransport destinationTransport)
     {
         if (notConcurrent())
         {
-            driverConductor.closeReceiveDestinationIndicators(destinationTransport);
+            driverConductor.closeReceiveDestination(destinationTransport);
         }
         else
         {
-            offer(() -> driverConductor.closeReceiveDestinationIndicators(destinationTransport));
+            offer(() -> driverConductor.closeReceiveDestination(destinationTransport));
         }
     }
 
@@ -183,6 +183,30 @@ public final class DriverConductorProxy
         else
         {
             offer(() -> driverConductor.responseConnected(responseCorrelationId));
+        }
+    }
+
+    void receiveChannelEndpointClosed(final ReceiveChannelEndpoint channelEndpoint)
+    {
+        if (notConcurrent())
+        {
+            driverConductor.receiveChannelEndpointClosed(channelEndpoint);
+        }
+        else
+        {
+            offer(() -> driverConductor.receiveChannelEndpointClosed(channelEndpoint));
+        }
+    }
+
+    void sendChannelEndpointClosed(final SendChannelEndpoint channelEndpoint)
+    {
+        if (notConcurrent())
+        {
+            driverConductor.sendChannelEndpointClosed(channelEndpoint);
+        }
+        else
+        {
+            offer(() -> driverConductor.sendChannelEndpointClosed(channelEndpoint));
         }
     }
 

@@ -33,7 +33,6 @@ import java.net.PortUnreachableException;
 import java.net.StandardSocketOptions;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
-import java.nio.channels.SelectionKey;
 
 import static io.aeron.logbuffer.FrameDescriptor.frameVersion;
 import static java.net.StandardSocketOptions.SO_RCVBUF;
@@ -74,21 +73,11 @@ public abstract class UdpChannelTransport implements AutoCloseable
      */
     protected InetSocketAddress connectAddress;
 
-    /**
-     * To be used when polling the transport.
-     */
-    protected SelectionKey selectionKey;
-
-    private UdpTransportPoller transportPoller;
     private InetSocketAddress bindAddress;
     private final InetSocketAddress endPointAddress;
     private final AtomicCounter invalidPackets;
     private final PortManager portManager;
 
-    /**
-     * Can be used to check if the transport is closed so an operation does not proceed.
-     */
-    protected boolean isClosed = false;
     private int multicastTtl = 0;
     private final int socketSndbufLength;
     private final int socketRcvbufLength;
@@ -270,14 +259,16 @@ public abstract class UdpChannelTransport implements AutoCloseable
     }
 
     /**
-     * Register this transport for reading from a {@link UdpTransportPoller}.
-     *
-     * @param transportPoller to register for read with.
+     * {@inheritDoc}
      */
-    public void registerForRead(final UdpTransportPoller transportPoller)
+    public void close()
     {
-        this.transportPoller = transportPoller;
-        selectionKey = transportPoller.registerForRead(this);
+        CloseHelper.close(errorHandler, sendDatagramChannel);
+        if (receiveDatagramChannel != sendDatagramChannel)
+        {
+            CloseHelper.close(errorHandler, receiveDatagramChannel);
+        }
+        portManager.freeManagedPort(bindAddress);
     }
 
     /**
@@ -332,47 +323,6 @@ public abstract class UdpChannelTransport implements AutoCloseable
         }
 
         return "";
-    }
-
-    /**
-     * Close transport, canceling any pending read operations and closing channel.
-     */
-    public void close()
-    {
-        if (!isClosed)
-        {
-            isClosed = true;
-            if (null != selectionKey)
-            {
-                selectionKey.cancel();
-            }
-
-            if (null != transportPoller)
-            {
-                transportPoller.cancelRead(this);
-                transportPoller.selectNowWithoutProcessing();
-            }
-
-            CloseHelper.close(errorHandler, sendDatagramChannel);
-            CloseHelper.close(errorHandler, receiveDatagramChannel);
-
-            if (null != transportPoller)
-            {
-                transportPoller.selectNowWithoutProcessing();
-            }
-
-            portManager.freeManagedPort(bindAddress);
-        }
-    }
-
-    /**
-     * Has the channel been closed by calling {@link #close()}.
-     *
-     * @return true if the channel has been closed.
-     */
-    public boolean isClosed()
-    {
-        return isClosed;
     }
 
     /**

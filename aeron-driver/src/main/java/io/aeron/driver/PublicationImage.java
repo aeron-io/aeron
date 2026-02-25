@@ -717,9 +717,7 @@ public final class PublicationImage
      */
     boolean isConnected(final long nowNs)
     {
-        return ((timeOfLastPacketNs + imageLivenessTimeoutNs) - nowNs >= 0) &&
-            !channelEndpoint.isClosed() &&
-            (!isEndOfStream || !isReceiverReleaseTriggered);
+        return ((timeOfLastPacketNs + imageLivenessTimeoutNs) - nowNs >= 0) && !isReceiverReleaseTriggered;
     }
 
     boolean isEndOfStream()
@@ -967,11 +965,11 @@ public final class PublicationImage
 
                     conductor.transitionToLinger(this);
 
+                    isReceiverReleaseTriggered = true;
                     channelEndpoint.decRefImages();
                     conductor.tryCloseReceiveChannelEndpoint(channelEndpoint);
 
                     timeOfLastStateChangeNs = timeNs;
-                    isReceiverReleaseTriggered = true;
                     state(State.LINGER);
                 }
                 break;

@@ -28,7 +28,6 @@ import org.agrona.concurrent.OneToOneConcurrentArrayQueue;
 import org.agrona.concurrent.status.AtomicCounter;
 
 import java.net.InetSocketAddress;
-import java.nio.channels.SelectionKey;
 import java.util.ArrayList;
 
 import static io.aeron.driver.Configuration.PENDING_SETUPS_TIMEOUT_NS;
@@ -216,7 +215,7 @@ public final class Receiver implements Agent
     {
         if (!channelEndpoint.hasDestinationControl())
         {
-            channelEndpoint.registerForRead(dataTransportPoller);
+            dataTransportPoller.registerForRead(channelEndpoint, channelEndpoint, 0);
 
             if (channelEndpoint.hasExplicitControl())
             {
@@ -228,6 +227,8 @@ public final class Receiver implements Agent
 
     void onCloseReceiveChannelEndpoint(final ReceiveChannelEndpoint channelEndpoint)
     {
+        dataTransportPoller.cancelReadForAllTransports(channelEndpoint);
+
         final ArrayList<PendingSetupMessageFromSource> pendingSetupMessages = this.pendingSetupMessages;
         for (int lastIndex = pendingSetupMessages.size() - 1, i = lastIndex; i >= 0; i--)
         {
@@ -240,9 +241,7 @@ public final class Receiver implements Agent
             }
         }
 
-        channelEndpoint.closeMultiRcvDestinationTransports(dataTransportPoller);
-        channelEndpoint.close();
-        channelEndpoint.closeMultiRcvDestinationIndicators(conductorProxy);
+        conductorProxy.receiveChannelEndpointClosed(channelEndpoint);
     }
 
     void onRemoveCoolDown(final ReceiveChannelEndpoint channelEndpoint, final int sessionId, final int streamId)
@@ -253,8 +252,7 @@ public final class Receiver implements Agent
     void onAddDestination(final ReceiveChannelEndpoint channelEndpoint, final ReceiveDestinationTransport transport)
     {
         final int transportIndex = channelEndpoint.addDestination(transport);
-        final SelectionKey key = dataTransportPoller.registerForRead(channelEndpoint, transport, transportIndex);
-        transport.selectionKey(key);
+        dataTransportPoller.registerForRead(channelEndpoint, transport, transportIndex);
 
         if (transport.hasExplicitControl())
         {
@@ -280,8 +278,6 @@ public final class Receiver implements Agent
 
             dataTransportPoller.cancelRead(channelEndpoint, transport);
             channelEndpoint.removeDestination(transportIndex);
-            transport.closeTransport();
-            dataTransportPoller.selectNowWithoutProcessing();
 
             for (final PublicationImage image : publicationImages)
             {
@@ -291,7 +287,7 @@ public final class Receiver implements Agent
                 }
             }
 
-            conductorProxy.closeReceiveDestinationIndicators(transport);
+            conductorProxy.closeReceiveDestination(transport);
         }
     }
 

@@ -267,7 +267,8 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
         final long currentStatus = statusIndicator.get();
         if (currentStatus != ChannelEndpointStatus.INITIALIZING)
         {
-            throw new AeronException("channel cannot be registered unless INITIALIZING: status=" +
+            throw new AeronException(
+                "channel cannot be registered unless INITIALIZING: status=" +
                 ChannelEndpointStatus.status(currentStatus));
         }
 

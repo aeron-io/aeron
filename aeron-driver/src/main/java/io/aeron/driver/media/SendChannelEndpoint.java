@@ -54,7 +54,9 @@ import java.util.concurrent.TimeUnit;
 
 import static io.aeron.driver.media.SendChannelEndpoint.DESTINATION_TIMEOUT;
 import static io.aeron.driver.media.UdpChannelTransport.onSendError;
-import static io.aeron.driver.status.SystemCounterDescriptor.*;
+import static io.aeron.driver.status.SystemCounterDescriptor.ERROR_FRAMES_RECEIVED;
+import static io.aeron.driver.status.SystemCounterDescriptor.NAK_MESSAGES_RECEIVED;
+import static io.aeron.driver.status.SystemCounterDescriptor.STATUS_MESSAGES_RECEIVED;
 import static io.aeron.protocol.StatusMessageFlyweight.SEND_SETUP_FLAG;
 import static io.aeron.status.ChannelEndpointStatus.status;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
@@ -150,10 +152,8 @@ public class SendChannelEndpoint extends UdpChannelTransport
 
     /**
      * Open the underlying sockets for the channel.
-     *
-     * @param conductorProxy for notifying potential channel errors.
      */
-    public void openChannel(final DriverConductorProxy conductorProxy)
+    public void openChannel()
     {
         openDatagramChannel(statusIndicator);
 
@@ -201,13 +201,14 @@ public class SendChannelEndpoint extends UdpChannelTransport
     }
 
     /**
-     * Close the counters used to indicate channel status.
+     * {@inheritDoc}
      */
-    public void closeIndicators()
+    public void close()
     {
-        CloseHelper.close(statusIndicator);
-        CloseHelper.close(localSocketAddressIndicator);
-        CloseHelper.close(mdcDestinationsCounter);
+        super.close();
+        CloseHelper.close(errorHandler, statusIndicator);
+        CloseHelper.close(errorHandler, localSocketAddressIndicator);
+        CloseHelper.close(errorHandler, mdcDestinationsCounter);
     }
 
     /**
@@ -291,7 +292,7 @@ public class SendChannelEndpoint extends UdpChannelTransport
      * Send contents of a {@link ByteBuffer} to connected address.
      * This is used on the sender side for performance over send(ByteBuffer, SocketAddress).
      *
-     * @param buffer to send
+     * @param buffer          to send
      * @param endpointAddress to send data to.
      * @return number of bytes sent
      */
@@ -510,8 +511,8 @@ public class SendChannelEndpoint extends UdpChannelTransport
     /**
      * Add a destination for an MDC channel.
      *
-     * @param channelUri for the destination to be added.
-     * @param address    of the destination to be added.
+     * @param channelUri     for the destination to be added.
+     * @param address        of the destination to be added.
      * @param registrationId of the destination.
      */
     public void addDestination(final ChannelUri channelUri, final InetSocketAddress address, final long registrationId)
@@ -1113,7 +1114,7 @@ final class Destination extends DestinationRhsPadding
     {
         return
             (isReceiverIdValid && receiverId == this.receiverId && address.getPort() == this.port) ||
-            (!isReceiverIdValid &&
-                address.getPort() == this.port && address.getAddress().equals(this.address.getAddress()));
+                (!isReceiverIdValid &&
+                    address.getPort() == this.port && address.getAddress().equals(this.address.getAddress()));
     }
 }

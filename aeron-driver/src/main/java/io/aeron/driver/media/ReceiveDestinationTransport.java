@@ -15,7 +15,6 @@
  */
 package io.aeron.driver.media;
 
-import io.aeron.driver.DriverConductorProxy;
 import io.aeron.driver.MediaDriver;
 import io.aeron.status.ChannelEndpointStatus;
 import io.aeron.status.LocalSocketAddressStatus;
@@ -23,7 +22,6 @@ import org.agrona.CloseHelper;
 import org.agrona.concurrent.status.AtomicCounter;
 
 import java.net.InetSocketAddress;
-import java.nio.channels.SelectionKey;
 
 abstract class ReceiveDestinationTransportLhsPadding extends UdpChannelTransport
 {
@@ -125,10 +123,9 @@ public final class ReceiveDestinationTransport extends ReceiveDestinationTranspo
     /**
      * Open the channel by the receiver.
      *
-     * @param conductorProxy  for sending instructions by to the driver conductor.
      * @param statusIndicator for the channel.
      */
-    public void openChannel(final DriverConductorProxy conductorProxy, final AtomicCounter statusIndicator)
+    public void openChannel(final AtomicCounter statusIndicator)
     {
         openDatagramChannel(statusIndicator);
 
@@ -138,19 +135,12 @@ public final class ReceiveDestinationTransport extends ReceiveDestinationTranspo
     }
 
     /**
-     * Close the networking elements of the ReceiveChannelEndpoint, but leave other components (e.g. counters) in place.
+     * {@inheritDoc}
      */
-    public void closeTransport()
+    public void close()
     {
         super.close();
-    }
-
-    /**
-     * Close indicator counters associated with the transport.
-     */
-    public void closeIndicators()
-    {
-        CloseHelper.close(localSocketAddressIndicator);
+        CloseHelper.close(errorHandler, localSocketAddressIndicator);
     }
 
     /**
@@ -171,16 +161,6 @@ public final class ReceiveDestinationTransport extends ReceiveDestinationTranspo
     public InetSocketAddress explicitControlAddress()
     {
         return udpChannel.hasExplicitControl() ? currentControlAddress : null;
-    }
-
-    /**
-     * Store the {@link SelectionKey} for the registered transport.
-     *
-     * @param key the {@link SelectionKey} for the registered transport.
-     */
-    public void selectionKey(final SelectionKey key)
-    {
-        selectionKey = key;
     }
 
     /**
