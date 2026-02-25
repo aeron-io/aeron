@@ -122,7 +122,6 @@ class PersistentSubscriptionTest
     private Aeron aeron;
     private AeronArchive aeronArchive;
     private PersistentSubscriptionListenerImpl listener;
-    private AeronArchive.Context aeronArchiveContext;
     private BufferingFragmentHandler fragmentHandler;
 
     @BeforeEach
@@ -150,7 +149,7 @@ class PersistentSubscriptionTest
 
         aeron = Aeron.connect(aeronCtxTpl.clone().aeronDirectoryName(aeronDirectoryName));
 
-        aeronArchiveContext = TestContexts.localhostAeronArchive().aeron(aeron);
+        final AeronArchive.Context aeronArchiveContext = TestContexts.localhostAeronArchive().aeron(aeron);
         aeronArchive = AeronArchive.connect(aeronArchiveContext.clone());
 
         listener = new PersistentSubscriptionListenerImpl();
@@ -305,7 +304,7 @@ class PersistentSubscriptionTest
     @ParameterizedTest
     @ValueSource(ints = { 1, 10 })
     @InterruptAfter(5)
-    void shouldReplayExistingRecordingThenJoinLive(int fragmentLimit)
+    void shouldReplayExistingRecordingThenJoinLive(final int fragmentLimit)
     {
         final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(IPC_CHANNEL, STREAM_ID);
 
@@ -358,11 +357,10 @@ class PersistentSubscriptionTest
         }
     }
 
-
     @ParameterizedTest
     @ValueSource(ints = { 1, 10 })
     @InterruptAfter(5)
-    void shouldReplayExistingRecordingThenJoinLiveMulticastStream(int fragmentLimit)
+    void shouldReplayExistingRecordingThenJoinLiveMulticastStream(final int fragmentLimit)
     {
         final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(MULTICAST_CHANNEL, STREAM_ID);
 
@@ -419,7 +417,7 @@ class PersistentSubscriptionTest
     @ParameterizedTest
     @ValueSource(ints = { 1, 10 })
     @InterruptAfter(5)
-    void shouldReplayExistingRecordingThenSpyOnLive(int fragmentLimit)
+    void shouldReplayExistingRecordingThenSpyOnLive(final int fragmentLimit)
     {
         final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(MDC_PUBLICATION_CHANNEL, STREAM_ID);
 
@@ -603,7 +601,7 @@ class PersistentSubscriptionTest
         final Subscription subscription = aeron2.addSubscription(subChannel, STREAM_ID);
         Tests.awaitConnected(subscription);
 
-        offerPayloads(generateFixedPayloads(32, 1024 - DataHeaderFlyweight.HEADER_LENGTH), publication, counters, counterId);
+        offerPayloads(generateFixedPayloads(32, ONE_K_MESSAGE_SIZE), publication, counters, counterId);
 
         persistentSubscriptionCtx
             .recordingId(recordingId)
