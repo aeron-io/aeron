@@ -23,6 +23,8 @@ import org.agrona.concurrent.status.AtomicCounter;
 
 import java.net.InetSocketAddress;
 
+import static io.aeron.status.ChannelEndpointStatus.status;
+
 abstract class ReceiveDestinationTransportLhsPadding extends UdpChannelTransport
 {
     byte p000, p001, p002, p003, p004, p005, p006, p007, p008, p009, p010, p011, p012, p013, p014, p015;
@@ -91,6 +93,7 @@ public final class ReceiveDestinationTransport extends ReceiveDestinationTranspo
 {
     private InetSocketAddress currentControlAddress;
     private final AtomicCounter localSocketAddressIndicator;
+    private final ReceiveChannelEndpoint receiveChannelEndpoint;
 
     /**
      * Construct transport for a receiving destination.
@@ -118,6 +121,7 @@ public final class ReceiveDestinationTransport extends ReceiveDestinationTranspo
         this.timeOfLastActivityNs = context.receiverCachedNanoClock().nanoTime();
         this.currentControlAddress = udpChannel.hasExplicitControl() ? udpChannel.localControl() : null;
         this.localSocketAddressIndicator = localSocketAddressIndicator;
+        this.receiveChannelEndpoint = receiveChannelEndpoint;
     }
 
     /**
@@ -128,6 +132,19 @@ public final class ReceiveDestinationTransport extends ReceiveDestinationTranspo
     public void openChannel(final AtomicCounter statusIndicator)
     {
         openDatagramChannel(statusIndicator);
+    }
+
+    /**
+     * Indicate that the transport is active after successfully opening it.
+     */
+    public void indicateActive()
+    {
+        final long currentStatus = localSocketAddressIndicator.getPlain();
+        if (currentStatus != ChannelEndpointStatus.INITIALIZING)
+        {
+            throw new IllegalStateException(
+                "channel cannot be registered unless INITIALIZING: status=" + status(currentStatus));
+        }
 
         LocalSocketAddressStatus.updateBindAddress(
             localSocketAddressIndicator, bindAddressAndPort(), context.countersMetaDataBuffer());
@@ -220,7 +237,8 @@ public final class ReceiveDestinationTransport extends ReceiveDestinationTranspo
     {
         return "ReceiveDestinationTransport{" +
             "currentControlAddress=" + currentControlAddress +
-            ", localSocketAddressIndicator=" + localSocketAddressIndicator +
+            ", localSocketAddress=" + localSocketAddressIndicator.label() +
+            ", statusIndicator=" + localSocketAddressIndicator.getPlain() +
             '}';
     }
 }

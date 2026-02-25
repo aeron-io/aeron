@@ -192,7 +192,7 @@ public class SendChannelEndpoint extends UdpChannelTransport
      */
     public void indicateActive()
     {
-        final long currentStatus = statusIndicator.get();
+        final long currentStatus = statusIndicator.getPlain();
         if (currentStatus != ChannelEndpointStatus.INITIALIZING)
         {
             throw new IllegalStateException(
@@ -201,6 +201,24 @@ public class SendChannelEndpoint extends UdpChannelTransport
 
         statusIndicator.appendToLabel(bindAddressAndPort());
         statusIndicator.setRelease(ChannelEndpointStatus.ACTIVE);
+    }
+
+    /**
+     * Indicate that the channel is closing and should not be used for new publications.
+     */
+    public void indicateClosing()
+    {
+        statusIndicator.setRelease(ChannelEndpointStatus.CLOSING);
+    }
+
+    /**
+     * Returns whether the channel is active and can be used for new publications.
+     *
+     * @return whether the channel is active and can be used for new publications.
+     */
+    public boolean isActive()
+    {
+        return !statusIndicator.isClosed() && statusIndicator.getAcquire() == ChannelEndpointStatus.ACTIVE;
     }
 
     /**
@@ -221,7 +239,9 @@ public class SendChannelEndpoint extends UdpChannelTransport
      */
     public boolean shouldBeClosed()
     {
-        return 0 == refCount && !statusIndicator.isClosed();
+        return 0 == refCount &&
+            !statusIndicator.isClosed() &&
+            statusIndicator.get() != ChannelEndpointStatus.CLOSING;
     }
 
     /**

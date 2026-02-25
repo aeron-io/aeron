@@ -264,7 +264,7 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
      */
     public void indicateActive()
     {
-        final long currentStatus = statusIndicator.get();
+        final long currentStatus = statusIndicator.getPlain();
         if (currentStatus != ChannelEndpointStatus.INITIALIZING)
         {
             throw new AeronException("channel cannot be registered unless INITIALIZING: status=" +
@@ -459,6 +459,7 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
             refCountByStreamIdAndSessionIdMap.isEmpty() &&
             responseRefCountByStreamIdMap.isEmpty() &&
             !statusIndicator.isClosed() &&
+            statusIndicator.get() != ChannelEndpointStatus.CLOSING &&
             imageRefCount <= 0;
     }
 
@@ -1119,6 +1120,7 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
             ", udpChannel=" + udpChannel +
             ", connectAddress=" + connectAddress +
             ", multiRcvDestination=" + multiRcvDestination +
+            ", statusIndicator=" + statusIndicator.getPlain() +
             '}';
     }
 }
