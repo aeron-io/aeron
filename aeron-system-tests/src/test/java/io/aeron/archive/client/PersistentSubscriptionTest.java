@@ -19,7 +19,6 @@ package io.aeron.archive.client;
 import io.aeron.Aeron;
 import io.aeron.ChannelUriStringBuilder;
 import io.aeron.CommonContext;
-import io.aeron.ControlledFragmentAssembler;
 import io.aeron.ExclusivePublication;
 import io.aeron.FragmentAssembler;
 import io.aeron.Publication;
@@ -39,6 +38,7 @@ import io.aeron.protocol.DataHeaderFlyweight;
 import io.aeron.test.EventLogExtension;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
+import io.aeron.test.RandomWatcher;
 import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.TestContexts;
 import io.aeron.test.Tests;
@@ -61,6 +61,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
@@ -91,10 +92,13 @@ class PersistentSubscriptionTest
     private static final String MDC_PUBLICATION_CHANNEL = UDP_CHANNEL +
         "?control=localhost:2000|control-mode=dynamic|fc=max";
     private static final String MULTICAST_CHANNEL = "aeron:udp?endpoint=224.0.1.1:40456|interface=localhost";
-    public static final int ONE_K_MESSAGE_SIZE = 1024 - DataHeaderFlyweight.HEADER_LENGTH;
+    private static final int ONE_K_MESSAGE_SIZE = 1024 - DataHeaderFlyweight.HEADER_LENGTH;
 
     @RegisterExtension
     final SystemTestWatcher systemTestWatcher = new SystemTestWatcher();
+
+    @RegisterExtension
+    final RandomWatcher randomWatcher = new RandomWatcher();
 
     private final MediaDriver.Context driverCtxTpl = new MediaDriver.Context()
         .termBufferSparseFile(true)
@@ -372,7 +376,6 @@ class PersistentSubscriptionTest
 
         persistentSubscriptionCtx
             .recordingId(recordingId)
-            .liveChannel(MULTICAST_CHANNEL);
             .liveChannel(MULTICAST_CHANNEL);
 
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
@@ -833,6 +836,42 @@ class PersistentSubscriptionTest
     }
 
     @Test
+    @InterruptAfter(5)
+    void shouldAssembleMessages()
+    {
+        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(IPC_CHANNEL, STREAM_ID);
+
+        final CountersReader counters = aeron.countersReader();
+        final int counterId =
+            Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
+        final long recordingId = RecordingPos.getRecordingId(counters, counterId);
+
+        final int sizeRequiringFragmentation = publication.maxPayloadLength() + 1;
+        final byte[] payload0 = new byte[sizeRequiringFragmentation];
+        ThreadLocalRandom.current().nextBytes(payload0);
+        final byte[] payload1 = new byte[sizeRequiringFragmentation];
+        ThreadLocalRandom.current().nextBytes(payload1);
+
+        offerPayloads(List.of(payload0), publication, counters, counterId);
+
+        persistentSubscriptionCtx
+            .recordingId(recordingId);
+
+        try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
+        {
+            executeUntil(persistentSubscription::isLive,
+                () -> persistentSubscription.controlledPoll(fragmentHandler, 1));
+
+            offerPayloads(List.of(payload1), publication, counters, counterId);
+
+            executeUntil(() -> fragmentHandler.hasReceivedPayloads(2),
+                () -> persistentSubscription.controlledPoll(fragmentHandler, 1));
+
+            assertPayloads(fragmentHandler.receivedPayloads, List.of(payload0, payload1));
+        }
+    }
+
+    @Test
     @InterruptAfter(60)
     void testLiveJoin() throws Exception
     {
@@ -884,7 +923,7 @@ class PersistentSubscriptionTest
             () ->
             {
                 final ThreadLocalRandom random = ThreadLocalRandom.current();
-                final UnsafeBuffer buffer = new UnsafeBuffer(new byte[1024]); // TODO increase to test fragmentation
+                final UnsafeBuffer buffer = new UnsafeBuffer(new byte[2048]);
                 long messageId = 0;
                 long nextMessageAt = System.nanoTime() + exponentialArrivalDelay(ratePerSecond);
                 while (!Thread.currentThread().isInterrupted())
@@ -925,11 +964,10 @@ class PersistentSubscriptionTest
                 .aeronArchiveContext(TestContexts.localhostAeronArchive().aeron(aeron2))))
         {
             final MessageVerifier handler = new MessageVerifier(maxProcessingTime);
-            final ControlledFragmentAssembler assembler = new ControlledFragmentAssembler(handler);
 
             while (!persistentSubscription.isLive())
             {
-                if (persistentSubscription.controlledPoll(assembler, 10) == 0)
+                if (persistentSubscription.controlledPoll(handler, 10) == 0)
                 {
                     checkForInterrupt("failed to transition to live");
                 }
@@ -940,7 +978,7 @@ class PersistentSubscriptionTest
 
             while (handler.position < lastPosition)
             {
-                if (persistentSubscription.controlledPoll(assembler, 10) == 0)
+                if (persistentSubscription.controlledPoll(handler, 10) == 0)
                 {
                     checkForInterrupt("failed to drain the stream");
                 }
@@ -1103,11 +1141,11 @@ class PersistentSubscriptionTest
 
     private List<byte[]> generateRandomPayloads(final int count)
     {
-        final ThreadLocalRandom random = ThreadLocalRandom.current();
+        final Random random = randomWatcher.random();
         final List<byte[]> randomPayloads = new ArrayList<>(count);
         for (int i = 0; i < count; i++)
         {
-            final int length = random.nextInt(1024); // TODO increase later to add fragmentation
+            final int length = random.nextInt(2048);
             final byte[] bytes = new byte[length];
             random.nextBytes(bytes);
             randomPayloads.add(bytes);
@@ -1167,6 +1205,7 @@ class PersistentSubscriptionTest
 
     private void assertPayloads(final List<byte[]> receivedPayloads, final List<byte[]> payloads)
     {
+        assertEquals(payloads.size(), receivedPayloads.size());
         for (int i = 0; i < receivedPayloads.size(); i++)
         {
             assertArrayEquals(payloads.get(i), receivedPayloads.get(i));

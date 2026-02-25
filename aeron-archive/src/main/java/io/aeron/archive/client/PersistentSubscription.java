@@ -18,11 +18,14 @@ package io.aeron.archive.client;
 
 import io.aeron.Aeron;
 import io.aeron.Image;
+import io.aeron.ImageControlledFragmentAssembler;
 import io.aeron.Subscription;
 import io.aeron.exceptions.ConcurrentConcludeException;
 import io.aeron.exceptions.ConfigurationException;
 import io.aeron.logbuffer.ControlledFragmentHandler;
+import io.aeron.logbuffer.Header;
 import org.agrona.CloseHelper;
+import org.agrona.DirectBuffer;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -34,6 +37,7 @@ import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
  */
 public final class PersistentSubscription implements AutoCloseable
 {
+    private final ImageControlledFragmentAssembler assembler = new ImageControlledFragmentAssembler(this::onFragment);
     private final RecordingDescriptorConsumerImpl descriptor = new RecordingDescriptorConsumerImpl();
     private final AeronArchive aeronArchive;
     private final long recordingId;
@@ -48,6 +52,9 @@ public final class PersistentSubscription implements AutoCloseable
     private long candidateSwitchPosition;
     private int replaySessionId;
     private Subscription liveSubscription;
+    private ControlledFragmentHandler controlledFragmentHandler;
+    private Image replayImage;
+    private Image liveImage;
 
     private long nextLivePosition = Aeron.NULL_VALUE;
     private long lastConsumedLivePosition = Aeron.NULL_VALUE;
@@ -197,14 +204,21 @@ public final class PersistentSubscription implements AutoCloseable
 
     private int replay(final ControlledFragmentHandler fragmentHandler, final int fragmentLimit)
     {
-        final Image replayImage = replaySubscription.imageBySessionId(replaySessionId);
+        Image replayImage = this.replayImage;
 
         if (replayImage == null)
         {
-            return 0;
+            replayImage = replaySubscription.imageBySessionId(replaySessionId);
+
+            if (replayImage == null)
+            {
+                return 0;
+            }
+
+            this.replayImage = replayImage;
         }
 
-        final int fragments = replayImage.controlledPoll(fragmentHandler, fragmentLimit);
+        final int fragments = controlledPoll(replayImage, fragmentHandler, fragmentLimit);
 
         final long replayedPosition = replayImage.position();
         if (replayedPosition >= candidateSwitchPosition)
@@ -212,6 +226,7 @@ public final class PersistentSubscription implements AutoCloseable
             final long maxRecordedPosition = aeronArchive.getMaxRecordedPosition(recordingId);
             if (closeEnough(replayedPosition, maxRecordedPosition))
             {
+                liveImage = null;
                 liveSubscription = aeronArchive.context().aeron().addSubscription(liveChannel, liveStreamId);
                 state(State.ATTEMPT_SWITCH);
             }
@@ -231,22 +246,22 @@ public final class PersistentSubscription implements AutoCloseable
 
     private int attemptSwitch(final ControlledFragmentHandler fragmentHandler, final int fragmentLimit)
     {
-        if (!liveSubscription.isConnected())
-        {
-            // hacky way of waiting for the subscription to connect.
-            return 0;
-        }
+        Image liveImage = this.liveImage;
 
-        final Image replayImage = replaySubscription.imageBySessionId(replaySessionId);
-
-        if (replayImage == null)
+        if (liveImage == null)
         {
-            return 0;
+            if (liveSubscription.hasNoImages())
+            {
+                // hacky way of waiting for the subscription to connect.
+                return 0;
+            }
+
+            this.liveImage = liveImage = liveSubscription.imageAtIndex(0);
         }
 
         int fragments = 0;
 
-        final long livePosition = liveSubscription.imageAtIndex(0).position();
+        final long livePosition = liveImage.position();
         final long replayPosition = replayImage.position();
 
         if (joinError == Long.MIN_VALUE)
@@ -261,7 +276,7 @@ public final class PersistentSubscription implements AutoCloseable
         else
         {
             // Let the live channel catch up to the point we are at in the replay (but don't overtake it).
-            fragments += liveSubscription.controlledPoll((buffer, offset, length, header) -> {
+            fragments += liveImage.controlledPoll((buffer, offset, length, header) -> {
                 final long currentLivePosition = header.position();
                 final long lastReplayPosition = replayImage.position();
                 if (currentLivePosition <= lastReplayPosition)
@@ -273,21 +288,30 @@ public final class PersistentSubscription implements AutoCloseable
             }, fragmentLimit);
 
             // Carry on with the replay for now.
-            fragments += replayImage.controlledPoll((buffer, offset, length, header) -> {
-                    final long currentReplayPosition = header.position();
-                    if (currentReplayPosition == nextLivePosition)
-                    {
-                        state(State.LIVE);
-                        return ControlledFragmentHandler.Action.ABORT;
-                    }
-                    return fragmentHandler.onFragment(buffer, offset, length, header);
-                },
-                1
-            );
+            controlledFragmentHandler = fragmentHandler;
+            try
+            {
+                fragments += replayImage.controlledPoll((buffer, offset, length, header) -> {
+                        final long currentReplayPosition = header.position();
+                        if (currentReplayPosition == nextLivePosition)
+                        {
+                            state(State.LIVE);
+                            return ControlledFragmentHandler.Action.ABORT;
+                        }
+                        return assembler.onFragment(buffer, offset, length, header);
+                    },
+                    1
+                );
+            }
+            finally
+            {
+                controlledFragmentHandler = null;
+            }
         }
 
         if (isLive() && replaySubscription.isConnected())
         {
+            replayImage = null;
             CloseHelper.close(replaySubscription);
         }
 
@@ -296,25 +320,34 @@ public final class PersistentSubscription implements AutoCloseable
 
     private int live(final ControlledFragmentHandler fragmentHandler, final int fragmentLimit)
     {
-        if (liveSubscription.isConnected())
+        int workCount = 0;
+
+        final Image image = liveImage;
+        if (!image.isClosed())
         {
-            liveSubscription.controlledPoll(fragmentHandler, fragmentLimit);
-            lastConsumedLivePosition = liveSubscription.imageAtIndex(0).position();
+            workCount += controlledPoll(image, fragmentHandler, fragmentLimit);
+            lastConsumedLivePosition = image.position();
         }
         else
         {
             state(State.REPLAY);
             joinError = Long.MIN_VALUE;
 
+            liveImage = null;
             CloseHelper.close(liveSubscription);
 
             subscribeToReplay(lastConsumedLivePosition);
+
+            workCount++;
         }
-        return 1;
+
+        return workCount;
     }
 
     private void subscribeToReplay(final long startPosition)
     {
+        replayImage = null;
+
         // TODO: Don't hardcode localhost and streamId
         replaySubscription = aeronArchive.context().aeron()
             .addSubscription("aeron:udp?endpoint=localhost:0", -5);
@@ -340,6 +373,31 @@ public final class PersistentSubscription implements AutoCloseable
         {
             this.state = newState;
         }
+    }
+
+    private int controlledPoll(
+        final Image image,
+        final ControlledFragmentHandler fragmentHandler,
+        final int fragmentLimit)
+    {
+        controlledFragmentHandler = fragmentHandler;
+        try
+        {
+            return image.controlledPoll(assembler, fragmentLimit);
+        }
+        finally
+        {
+            controlledFragmentHandler = null;
+        }
+    }
+
+    private ControlledFragmentHandler.Action onFragment(
+        final DirectBuffer buffer,
+        final int offset,
+        final int length,
+        final Header header)
+    {
+        return controlledFragmentHandler.onFragment(buffer, offset, length, header);
     }
 
     private enum State
