@@ -735,6 +735,44 @@ class PersistentSubscriptionTest
     }
 
     @Test
+    @InterruptAfter(15)
+    void anTetheredPersistentSubscriptionDoesNotFallBehindAnUntetheredSubscription()
+    {
+        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(UDP_PUBLICATION_CHANNEL,
+            STREAM_ID);
+
+        final CountersReader counters = aeron.countersReader();
+        final int counterId =
+            Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
+        final long recordingId = RecordingPos.getRecordingId(counters, counterId);
+
+        persistentSubscriptionCtx
+            .recordingId(recordingId)
+            .liveChannel(UDP_PUBLICATION_CHANNEL +  "|tether=true"); // <-- persistentSubscription is tethered
+        try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx);
+            Subscription subscription = aeron.addSubscription(UDP_PUBLICATION_CHANNEL + "|tether=false", STREAM_ID))
+        {
+            Tests.awaitConnected(subscription);
+
+            executeUntil(
+                persistentSubscription::isLive,
+                () -> persistentSubscription.controlledPoll(fragmentHandler, 10)
+            );
+
+            offerPayloads(generateFixedPayloads(64, ONE_K_MESSAGE_SIZE), publication, counters, counterId);
+
+            executeUntil(
+                () -> fragmentHandler.hasReceivedPayloads(64),
+                () -> persistentSubscription.controlledPoll(fragmentHandler, 1)
+            );
+
+            assertTrue(persistentSubscription.isLive());
+
+            Tests.await(() -> !subscription.isConnected());
+        }
+    }
+
+    @Test
     @InterruptAfter(60)
     void testLiveJoin() throws Exception
     {
