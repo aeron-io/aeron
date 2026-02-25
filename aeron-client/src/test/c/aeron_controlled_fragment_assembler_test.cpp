@@ -412,3 +412,39 @@ TEST_F(ControlledFragmentAssemblerTest, shouldAbortReassembly)
     EXPECT_EQ(AERON_ACTION_ABORT, handle_fragment(handler, fragmentLength));
     EXPECT_TRUE(isCalled);
 }
+
+TEST_F(ControlledFragmentAssemblerTest, testHeaderAfterAbortingFragmentedMessage)
+{
+    m_header.initial_term_id = INITIAL_TERM_ID;
+    m_header.position_bits_to_shift = POSITION_BITS_TO_SHIFT;
+
+    uint64_t callCount = 0;
+    size_t fragmentLength = MTU_LENGTH - AERON_DATA_HEADER_LENGTH;
+    auto handler = [&](const uint8_t *buffer, size_t length, aeron_header_t *header)
+    {
+        callCount++;
+        EXPECT_EQ(length, fragmentLength * 2);
+        aeron_header_values_t header_values;
+        EXPECT_EQ(0, aeron_header_values(header, &header_values));
+        EXPECT_EQ(ACTIVE_TERM_ID, header_values.frame.term_id);
+        EXPECT_EQ(0, header_values.frame.term_offset);
+        EXPECT_EQ(INITIAL_TERM_ID, header->initial_term_id);
+        EXPECT_EQ(POSITION_BITS_TO_SHIFT, header->position_bits_to_shift);
+        EXPECT_EQ(AERON_DATA_HEADER_LENGTH + 2 * fragmentLength, header_values.frame.frame_length);
+        EXPECT_EQ(((ACTIVE_TERM_ID - INITIAL_TERM_ID) * TERM_LENGTH) + 2 * MTU_LENGTH, aeron_header_position(header));
+        EXPECT_EQ(SESSION_ID, header_values.frame.session_id);
+        EXPECT_EQ(AERON_DATA_HEADER_UNFRAGMENTED, header_values.frame.flags & AERON_DATA_HEADER_UNFRAGMENTED);
+        return AERON_ACTION_ABORT;
+    };
+
+    int32_t termOffset = 0;
+    fillFrame(AERON_DATA_HEADER_BEGIN_FLAG, termOffset, fragmentLength, 0);
+    EXPECT_EQ(AERON_ACTION_CONTINUE, handle_fragment(handler, fragmentLength));
+
+    termOffset += MTU_LENGTH;
+    fillFrame(AERON_DATA_HEADER_END_FLAG, termOffset, fragmentLength, fragmentLength % 256);
+    EXPECT_EQ(AERON_ACTION_ABORT, handle_fragment(handler, fragmentLength));
+    EXPECT_EQ(AERON_ACTION_ABORT, handle_fragment(handler, fragmentLength));
+
+    EXPECT_EQ(2, callCount);
+}
