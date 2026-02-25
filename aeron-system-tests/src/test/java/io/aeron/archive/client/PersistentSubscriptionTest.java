@@ -87,6 +87,7 @@ class PersistentSubscriptionTest
     private static final int TERM_LENGTH = LogBufferDescriptor.TERM_MIN_LENGTH;
     private static final int STREAM_ID = 1000;
     private static final String MDC_CHANNEL = UDP_CHANNEL + "?control=localhost:2000";
+    private static final String UDP_PUBLICATION_CHANNEL = UDP_CHANNEL + "?endpoint=localhost:2000";
     private static final String MDC_PUBLICATION_CHANNEL = UDP_CHANNEL +
         "?control=localhost:2000|control-mode=dynamic|fc=max";
     public static final int ONE_K_MESSAGE_SIZE = 1024 - DataHeaderFlyweight.HEADER_LENGTH;
@@ -690,7 +691,7 @@ class PersistentSubscriptionTest
     @InterruptAfter(15)
     void anUntetheredPersistentSubscriptionCanFallBehindATetheredSubscription()
     {
-        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(MDC_PUBLICATION_CHANNEL,
+        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(UDP_PUBLICATION_CHANNEL,
             STREAM_ID);
 
         final CountersReader counters = aeron.countersReader();
@@ -700,10 +701,10 @@ class PersistentSubscriptionTest
 
         persistentSubscriptionCtx
             .recordingId(recordingId)
-            .liveChannel(MDC_CHANNEL +  "|tether=false"); // <-- persistentSubscription is untethered
+            .liveChannel(UDP_PUBLICATION_CHANNEL +  "|tether=false"); // <-- persistentSubscription is untethered
         final CountingFragmentHandler fastSubscriptionFragmentHandler = new CountingFragmentHandler();
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx);
-            Subscription subscription = aeron.addSubscription(MDC_CHANNEL + "|tether=true", STREAM_ID))
+            Subscription subscription = aeron.addSubscription(UDP_PUBLICATION_CHANNEL + "|tether=true", STREAM_ID))
         {
             Tests.awaitConnected(subscription);
 
