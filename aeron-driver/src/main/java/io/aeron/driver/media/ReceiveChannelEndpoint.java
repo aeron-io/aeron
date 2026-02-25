@@ -265,7 +265,7 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
      */
     public void indicateActive()
     {
-        final long currentStatus = statusIndicator.get();
+        final long currentStatus = statusIndicator.getPlain();
         if (currentStatus != ChannelEndpointStatus.INITIALIZING)
         {
             throw new AeronException(
@@ -280,6 +280,24 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
         }
 
         statusIndicator.setRelease(ChannelEndpointStatus.ACTIVE);
+    }
+
+    /**
+     * Indicate that the channel is closing and should not be used for new subscriptions.
+     */
+    public void indicateClosing()
+    {
+        statusIndicator.setRelease(ChannelEndpointStatus.CLOSING);
+    }
+
+    /**
+     * Returns whether the channel is active and can be used for new subscriptions.
+     *
+     * @return whether the channel is active and can be used for new subscriptions.
+     */
+    public boolean isActive()
+    {
+        return !statusIndicator.isClosed() && statusIndicator.getAcquire() == ChannelEndpointStatus.ACTIVE;
     }
 
     /**
@@ -440,6 +458,7 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
             refCountByStreamIdAndSessionIdMap.isEmpty() &&
             responseRefCountByStreamIdMap.isEmpty() &&
             !statusIndicator.isClosed() &&
+            statusIndicator.get() != ChannelEndpointStatus.CLOSING &&
             imageRefCount <= 0;
     }
 
@@ -1100,6 +1119,7 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
             ", udpChannel=" + udpChannel +
             ", connectAddress=" + connectAddress +
             ", multiRcvDestination=" + multiRcvDestination +
+            ", statusIndicator=" + statusIndicator.getPlain() +
             '}';
     }
 }

@@ -48,7 +48,6 @@ import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.agrona.concurrent.status.AtomicCounter;
 import org.agrona.concurrent.status.CountersManager;
 import org.agrona.concurrent.status.CountersReader;
-import org.hamcrest.CoreMatchers;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -69,12 +68,28 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import java.util.function.LongConsumer;
 
-import static io.aeron.CommonContext.*;
-import static io.aeron.ErrorCode.*;
-import static io.aeron.driver.Configuration.*;
+import static io.aeron.CommonContext.CONTROL_MODE_RESPONSE;
+import static io.aeron.CommonContext.InferableBoolean;
+import static io.aeron.CommonContext.MDC_CONTROL_MODE_PARAM_NAME;
+import static io.aeron.CommonContext.RESPONSE_CORRELATION_ID_PARAM_NAME;
+import static io.aeron.ErrorCode.GENERIC_ERROR;
+import static io.aeron.ErrorCode.INVALID_CHANNEL;
+import static io.aeron.ErrorCode.UNKNOWN_PUBLICATION;
+import static io.aeron.ErrorCode.UNKNOWN_SUBSCRIPTION;
+import static io.aeron.driver.Configuration.CALLER_RUNS_TASK_EXECUTOR;
+import static io.aeron.driver.Configuration.CLIENT_LIVENESS_TIMEOUT_DEFAULT_NS;
+import static io.aeron.driver.Configuration.CONDUCTOR_BUFFER_LENGTH_DEFAULT;
+import static io.aeron.driver.Configuration.DEFAULT_TIMER_INTERVAL_NS;
+import static io.aeron.driver.Configuration.MTU_LENGTH_DEFAULT;
+import static io.aeron.driver.Configuration.PUBLICATION_LINGER_DEFAULT_NS;
+import static io.aeron.driver.Configuration.imageLivenessTimeoutNs;
+import static io.aeron.driver.Configuration.publicationConnectionTimeoutNs;
 import static io.aeron.driver.DriverConductor.EXECUTOR_SHUTDOWN_TIMEOUT_SECONDS;
 import static io.aeron.driver.status.ClientHeartbeatTimestamp.HEARTBEAT_TYPE_ID;
-import static io.aeron.driver.status.SystemCounterDescriptor.*;
+import static io.aeron.driver.status.SystemCounterDescriptor.CONDUCTOR_CYCLE_TIME_THRESHOLD_EXCEEDED;
+import static io.aeron.driver.status.SystemCounterDescriptor.CONDUCTOR_MAX_CYCLE_TIME;
+import static io.aeron.driver.status.SystemCounterDescriptor.NAME_RESOLVER_MAX_TIME;
+import static io.aeron.driver.status.SystemCounterDescriptor.NAME_RESOLVER_TIME_THRESHOLD_EXCEEDED;
 import static io.aeron.logbuffer.FrameDescriptor.FRAME_ALIGNMENT;
 import static io.aeron.logbuffer.FrameDescriptor.frameLengthOrdered;
 import static io.aeron.protocol.DataHeaderFlyweight.HEADER_LENGTH;
@@ -82,13 +97,37 @@ import static io.aeron.protocol.DataHeaderFlyweight.createDefaultHeader;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.agrona.BitUtil.align;
-import static org.agrona.concurrent.status.CountersReader.*;
+import static org.agrona.concurrent.status.CountersReader.METADATA_LENGTH;
+import static org.agrona.concurrent.status.CountersReader.RECORD_ALLOCATED;
+import static org.agrona.concurrent.status.CountersReader.RECORD_UNUSED;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.instanceOf;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.startsWith;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.anyLong;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.argThat;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class DriverConductorTest
 {
@@ -1912,26 +1951,26 @@ class DriverConductorTest
     @Test
     void shouldThrowExceptionWhenRcvDestinationHasControlModeResponseSet()
     {
-        final Exception exception = assertThrowsExactly(InvalidChannelException.class,
-            () -> driverConductor.onAddRcvDestination(5, "aeron:udp?control-mode=response", 7)
+        driverConductor.onAddRcvDestination(5, "aeron:udp?control-mode=response", 7);
+        driverConductor.doWork();
+        verify(mockClientProxy).onError(
+            eq(7L),
+            eq(INVALID_CHANNEL),
+            startsWith("ERROR - destinations may not specify " +
+                MDC_CONTROL_MODE_PARAM_NAME + "=" + CONTROL_MODE_RESPONSE)
         );
-
-        assertEquals(
-            "ERROR - destinations may not specify " + MDC_CONTROL_MODE_PARAM_NAME + "=" + CONTROL_MODE_RESPONSE,
-            exception.getMessage());
     }
 
     @Test
     void shouldThrowExceptionWhenRcvDestinationHasResponseCorrelationIdSet()
     {
-        final Exception exception = assertThrowsExactly(InvalidChannelException.class,
-            () -> driverConductor.onAddRcvDestination(
-            42, "aeron:udp?endpoint=localhost:8080|response-correlation-id=1234", 1)
+        driverConductor.onAddRcvDestination(42, "aeron:udp?endpoint=localhost:8080|response-correlation-id=1234", 1L);
+        driverConductor.doWork();
+        verify(mockClientProxy).onError(
+            eq(1L),
+            eq(INVALID_CHANNEL),
+            startsWith("ERROR - destinations must not contain the key: response-correlation-id")
         );
-
-        assertThat(
-            exception.getMessage(),
-            CoreMatchers.startsWith("ERROR - destinations must not contain the key: response-correlation-id"));
     }
 
     @Test
