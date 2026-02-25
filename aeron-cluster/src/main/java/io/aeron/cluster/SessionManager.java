@@ -479,4 +479,110 @@ class SessionManager
 
         return workCount;
     }
+
+    int checkSessions(
+        final ArrayList<ClusterSession> sessions,
+        final long nowNs,
+        final long leadershipTermId,
+        final int leaderMemberId,
+        final String ingressEndpoints)
+    {
+        int workCount = 0;
+
+        for (int i = sessions.size() - 1; i >= 0; i--)
+        {
+            final ClusterSession session = sessions.get(i);
+
+            if (nowNs > (session.timeOfLastActivityNs() + sessionTimeoutNs))
+            {
+                switch (session.state())
+                {
+                    case OPEN:
+                    {
+                        session.closing(CloseReason.TIMEOUT);
+
+                        final long timestamp = clusterClock.time();
+                        if (logPublisher.appendSessionClose(
+                            memberId, session, leadershipTermId, timestamp, clusterTimeUnit))
+                        {
+                            logAppendSessionClose(
+                                memberId,
+                                session.id(),
+                                session.closeReason(),
+                                leadershipTermId,
+                                timestamp,
+                                clusterTimeUnit);
+                            final String msg = session.closeReason().name();
+                            egressPublisher.sendEvent(session, leadershipTermId, memberId, EventCode.CLOSED, msg);
+                            session.closedLogPosition(logPublisher.position());
+                            uncommittedClosedSessions.addLast(session);
+                            timedOutCounter.incrementRelease();
+                            closeSession(session);
+                        }
+                        workCount++;
+                        break;
+                    }
+
+                    case CLOSING:
+                    {
+                        final long timestamp = clusterClock.time();
+                        if (logPublisher.appendSessionClose(
+                            memberId, session, leadershipTermId, timestamp, clusterTimeUnit))
+                        {
+                            logAppendSessionClose(
+                                memberId,
+                                session.id(),
+                                session.closeReason(),
+                                leadershipTermId,
+                                timestamp,
+                                clusterTimeUnit);
+                            final String msg = session.closeReason().name();
+                            egressPublisher.sendEvent(session, leadershipTermId, memberId, EventCode.CLOSED, msg);
+                            session.closedLogPosition(logPublisher.position());
+                            uncommittedClosedSessions.addLast(session);
+                            if (session.closeReason() == CloseReason.TIMEOUT)
+                            {
+                                timedOutCounter.incrementRelease();
+                            }
+                            closeSession(session);
+                            workCount++;
+                        }
+                        break;
+                    }
+
+                    default:
+                    {
+                        closeSession(session);
+                        workCount++;
+                        break;
+                    }
+                }
+            }
+            else if (session.hasOpenEventPending())
+            {
+                workCount += session.sendSessionOpenEvent(egressPublisher, leadershipTermId, memberId);
+            }
+            else if (session.hasNewLeaderEventPending())
+            {
+                workCount += sendNewLeaderEvent(session, leadershipTermId, leaderMemberId, ingressEndpoints);
+            }
+        }
+
+        return workCount;
+    }
+
+    private int sendNewLeaderEvent(
+        final ClusterSession session,
+        final long leadershipTermId,
+        final int leaderMemberId,
+        final String ingressEndpoints)
+    {
+        if (egressPublisher.newLeader(session, leadershipTermId, leaderMemberId, ingressEndpoints))
+        {
+            session.hasNewLeaderEventPending(false);
+            return 1;
+        }
+
+        return 0;
+    }
 }

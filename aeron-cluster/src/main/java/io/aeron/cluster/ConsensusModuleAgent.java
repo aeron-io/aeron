@@ -119,7 +119,6 @@ import static io.aeron.cluster.ConsensusModule.CLUSTER_ACTION_FLAGS_DEFAULT;
 import static io.aeron.cluster.ConsensusModule.CLUSTER_ACTION_FLAGS_STANDBY_SNAPSHOT;
 import static io.aeron.cluster.ConsensusModule.Configuration.SERVICE_ID;
 import static io.aeron.cluster.ConsensusModule.Configuration.SESSION_INVALID_VERSION_MSG;
-import static io.aeron.cluster.ConsensusModule.Configuration.SESSION_LIMIT_MSG;
 import static io.aeron.cluster.ConsensusModule.Configuration.SNAPSHOT_TYPE_ID;
 import static io.aeron.cluster.ServiceAck.pollServiceAcks;
 import static io.aeron.cluster.client.AeronCluster.Configuration.PROTOCOL_SEMANTIC_VERSION;
@@ -2518,7 +2517,8 @@ final class ConsensusModuleAgent
                         leadershipTermId,
                         recoveryPlan
                     );
-                    workCount += checkSessions(sessionManager.sessions(), nowNs);
+                    workCount += sessionManager.checkSessions(
+                        sessionManager.sessions(), nowNs, leadershipTermId, leaderMember.id(), ingressEndpoints);
 
                     if (!ClusterMember.hasActiveQuorum(activeMembers, nowNs, leaderHeartbeatTimeoutNs))
                     {
@@ -2863,92 +2863,6 @@ final class ConsensusModuleAgent
         return workCount;
     }
 
-    int checkSessions(final ArrayList<ClusterSession> sessions, final long nowNs)
-    {
-        int workCount = 0;
-
-        for (int i = sessions.size() - 1; i >= 0; i--)
-        {
-            final ClusterSession session = sessions.get(i);
-
-            if (nowNs > (session.timeOfLastActivityNs() + sessionTimeoutNs))
-            {
-                switch (session.state())
-                {
-                    case OPEN:
-                    {
-                        session.closing(CloseReason.TIMEOUT);
-
-                        final long timestamp = clusterClock.time();
-                        if (logPublisher.appendSessionClose(
-                            memberId, session, leadershipTermId, timestamp, clusterTimeUnit))
-                        {
-                            logAppendSessionClose(
-                                memberId,
-                                session.id(),
-                                session.closeReason(),
-                                leadershipTermId,
-                                timestamp,
-                                clusterTimeUnit);
-                            final String msg = session.closeReason().name();
-                            egressPublisher.sendEvent(session, leadershipTermId, memberId, EventCode.CLOSED, msg);
-                            session.closedLogPosition(logPublisher.position());
-                            sessionManager.uncommittedClosedSessions.addLast(session);
-                            ctx.timedOutClientCounter().incrementRelease();
-                            sessionManager.closeSession(session);
-                        }
-                        workCount++;
-                        break;
-                    }
-
-                    case CLOSING:
-                    {
-                        final long timestamp = clusterClock.time();
-                        if (logPublisher.appendSessionClose(
-                            memberId, session, leadershipTermId, timestamp, clusterTimeUnit))
-                        {
-                            logAppendSessionClose(
-                                memberId,
-                                session.id(),
-                                session.closeReason(),
-                                leadershipTermId,
-                                timestamp,
-                                clusterTimeUnit);
-                            final String msg = session.closeReason().name();
-                            egressPublisher.sendEvent(session, leadershipTermId, memberId, EventCode.CLOSED, msg);
-                            session.closedLogPosition(logPublisher.position());
-                            sessionManager.uncommittedClosedSessions.addLast(session);
-                            if (session.closeReason() == CloseReason.TIMEOUT)
-                            {
-                                ctx.timedOutClientCounter().incrementRelease();
-                            }
-                            sessionManager.closeSession(session);
-                            workCount++;
-                        }
-                        break;
-                    }
-
-                    default:
-                    {
-                        sessionManager.closeSession(session);
-                        workCount++;
-                        break;
-                    }
-                }
-            }
-            else if (session.hasOpenEventPending())
-            {
-                workCount += session.sendSessionOpenEvent(egressPublisher, leadershipTermId, memberId);
-            }
-            else if (session.hasNewLeaderEventPending())
-            {
-                workCount += sendNewLeaderEvent(session);
-            }
-        }
-
-        return workCount;
-    }
-
     private void captureServiceAck(final long logPosition, final long ackId, final long relevantId, final int serviceId)
     {
         if (0 == ackId && NULL_VALUE != serviceClientIds[serviceId])
@@ -2958,17 +2872,6 @@ final class ConsensusModuleAgent
         }
 
         serviceAckQueues[serviceId].offerLast(new ServiceAck(ackId, logPosition, relevantId));
-    }
-
-    private int sendNewLeaderEvent(final ClusterSession session)
-    {
-        if (egressPublisher.newLeader(session, leadershipTermId, leaderMember.id(), ingressEndpoints))
-        {
-            session.hasNewLeaderEventPending(false);
-            return 1;
-        }
-
-        return 0;
     }
 
     private boolean tryCreateAppendPosition(final int logSessionId)
