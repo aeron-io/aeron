@@ -30,6 +30,7 @@ import io.aeron.archive.client.PersistentSubscriptionException.Reason;
 import io.aeron.archive.status.RecordingPos;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
+import io.aeron.driver.status.SubscriberPos;
 import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.Header;
@@ -47,6 +48,7 @@ import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
 import org.agrona.IoUtil;
 import org.agrona.SystemUtil;
+import org.agrona.collections.MutableLong;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.CountersReader;
 import org.junit.jupiter.api.AfterEach;
@@ -56,6 +58,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
@@ -66,6 +70,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.BooleanSupplier;
+import java.util.stream.Stream;
 
 import static io.aeron.AeronCounters.FLOW_CONTROL_RECEIVERS_COUNTER_TYPE_ID;
 import static io.aeron.CommonContext.IPC_CHANNEL;
@@ -73,6 +78,7 @@ import static io.aeron.CommonContext.IPC_MEDIA;
 import static io.aeron.CommonContext.SPY_PREFIX;
 import static io.aeron.CommonContext.UDP_CHANNEL;
 import static io.aeron.Publication.BACK_PRESSURED;
+import static io.aeron.driver.status.StreamCounter.STREAM_ID_OFFSET;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
 import static org.agrona.concurrent.status.CountersReader.NULL_COUNTER_ID;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -81,6 +87,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 @ExtendWith({ EventLogExtension.class, InterruptingTestCallback.class })
 class PersistentSubscriptionTest
@@ -159,6 +166,8 @@ class PersistentSubscriptionTest
             .startPosition(0)
             .liveChannel(IPC_CHANNEL)
             .liveStreamId(STREAM_ID)
+            .replayChannel("aeron:udp?endpoint=localhost:0")
+            .replayStreamId(-5)
             .listener(listener)
             .aeronArchiveContext(aeronArchiveContext);
 
@@ -411,6 +420,64 @@ class PersistentSubscriptionTest
             assertFalse(persistentSubscription.isReplaying());
 
             Tests.await(() -> archive.context().replaySessionCounter().get() == 0);
+        }
+    }
+
+    static Stream<Arguments> replayChannelsAndStreams()
+    {
+        return Stream.of(
+            arguments("aeron:udp?endpoint=localhost:0", -10),
+            arguments("aeron:udp?endpoint=localhost:10001", -11),
+            arguments("aeron:ipc", -12)
+            // TODO add response channel
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("replayChannelsAndStreams")
+    @InterruptAfter(5)
+    void shouldReplayOverConfiguredChannel(final String replayChannel, final int replayStreamId)
+    {
+        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(IPC_CHANNEL, STREAM_ID);
+
+        final CountersReader counters = aeron.countersReader();
+        final int counterId =
+            Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
+        final long recordingId = RecordingPos.getRecordingId(counters, counterId);
+
+        final List<byte[]> payloads = generateRandomPayloads(5);
+        offerPayloads(payloads, publication, counters, counterId);
+
+        persistentSubscriptionCtx
+            .recordingId(recordingId)
+            .replayChannel(replayChannel)
+            .replayStreamId(replayStreamId);
+
+        try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
+        {
+            executeUntil(() -> fragmentHandler.hasReceivedPayloads(1),
+                () -> persistentSubscription.controlledPoll(fragmentHandler, 1));
+
+            assertTrue(persistentSubscription.isReplaying());
+
+            final MutableLong replaySubPos = new MutableLong(-1);
+            counters.forEach((counterId1, typeId, keyBuffer, label) ->
+            {
+                if (typeId == SubscriberPos.SUBSCRIBER_POSITION_TYPE_ID)
+                {
+                    final int streamId = keyBuffer.getInt(STREAM_ID_OFFSET);
+                    if (streamId == replayStreamId)
+                    {
+                        replaySubPos.set(counters.getCounterValue(counterId1));
+                    }
+                }
+            });
+            assertEquals(fragmentHandler.position, replaySubPos.get());
+
+            executeUntil(persistentSubscription::isLive,
+                () -> persistentSubscription.controlledPoll(fragmentHandler, 10));
+
+            assertPayloads(fragmentHandler.receivedPayloads, payloads);
         }
     }
 
@@ -959,6 +1026,8 @@ class PersistentSubscriptionTest
                 .liveChannel(subChannel)
                 .liveStreamId(STREAM_ID)
                 .listener(null)
+                .replayChannel("aeron:udp?endpoint=localhost:0")
+                .replayStreamId(-5)
                 .aeronArchiveContext(TestContexts.localhostAeronArchive().aeron(aeron2))))
         {
             final MessageVerifier handler = new MessageVerifier(maxProcessingTime);
@@ -1225,9 +1294,11 @@ class PersistentSubscriptionTest
     private static final class BufferingFragmentHandler implements ControlledFragmentHandler
     {
         private final List<byte[]> receivedPayloads = new ArrayList<>();
+        private long position;
 
         public Action onFragment(final DirectBuffer buffer, final int offset, final int length, final Header header)
         {
+            position = header.position();
             final byte[] bytes = new byte[length];
             buffer.getBytes(offset, bytes);
             receivedPayloads.add(bytes);

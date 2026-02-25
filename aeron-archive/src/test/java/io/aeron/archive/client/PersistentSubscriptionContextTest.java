@@ -39,6 +39,8 @@ class PersistentSubscriptionContextTest
             .recordingId(1)
             .liveChannel(IPC_CHANNEL)
             .liveStreamId(1)
+            .replayChannel(IPC_CHANNEL)
+            .replayStreamId(2)
             .aeronArchiveContext(new AeronArchive.Context());
     }
 
@@ -68,6 +70,20 @@ class PersistentSubscriptionContextTest
     void contextMustHaveLiveStreamId()
     {
         context.liveStreamId(Aeron.NULL_VALUE);
+        assertThrows(ConfigurationException.class, context::conclude);
+    }
+
+    @Test
+    void contextMustHaveReplayChannel()
+    {
+        context.replayChannel(null);
+        assertThrows(ConfigurationException.class, context::conclude);
+    }
+
+    @Test
+    void contextMustHaveReplayStreamId()
+    {
+        context.replayStreamId(Aeron.NULL_VALUE);
         assertThrows(ConfigurationException.class, context::conclude);
     }
 

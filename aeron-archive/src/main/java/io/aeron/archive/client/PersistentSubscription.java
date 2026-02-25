@@ -17,6 +17,7 @@
 package io.aeron.archive.client;
 
 import io.aeron.Aeron;
+import io.aeron.ChannelUri;
 import io.aeron.Image;
 import io.aeron.ImageControlledFragmentAssembler;
 import io.aeron.Subscription;
@@ -30,6 +31,7 @@ import org.agrona.DirectBuffer;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
+import static io.aeron.CommonContext.ENDPOINT_PARAM_NAME;
 import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
 
 /**
@@ -44,6 +46,8 @@ public final class PersistentSubscription implements AutoCloseable
     private final PersistentSubscriptionListener listener;
     private final String liveChannel;
     private final int liveStreamId;
+    private final String replayChannel;
+    private final int replayStreamId;
     private final long startPosition;
 
     private State state;
@@ -66,6 +70,8 @@ public final class PersistentSubscription implements AutoCloseable
         this.startPosition = ctx.startPosition;
         this.liveChannel = ctx.liveChannel;
         this.liveStreamId = ctx.liveStreamId;
+        this.replayChannel = ctx.replayChannel;
+        this.replayStreamId = ctx.replayStreamId;
         this.listener = ctx.listener;
         this.aeronArchive = AeronArchive.connect(ctx.aeronArchiveContext.clone());
 
@@ -348,21 +354,23 @@ public final class PersistentSubscription implements AutoCloseable
     {
         replayImage = null;
 
-        // TODO: Don't hardcode localhost and streamId
-        replaySubscription = aeronArchive.context().aeron()
-            .addSubscription("aeron:udp?endpoint=localhost:0", -5);
+        replaySubscription = aeronArchive.context().aeron().addSubscription(replayChannel, replayStreamId);
 
         candidateSwitchPosition = aeronArchive.getMaxRecordedPosition(recordingId);
 
-        // TODO how are we supposed to use a response channel here?
         // TODO async
-        final String replayChannel = "aeron:udp?endpoint=" + replaySubscription.resolvedEndpoint();
+
+        final ChannelUri replayChannelUri = ChannelUri.parse(replayChannel);
+        if (replayChannelUri.isUdp())
+        {
+            replayChannelUri.put(ENDPOINT_PARAM_NAME, replaySubscription.resolvedEndpoint());
+        }
 
         replaySessionId = (int)aeronArchive.startReplay(
             recordingId,
             startPosition,
             AeronArchive.REPLAY_ALL_AND_FOLLOW,
-            replayChannel,
+            replayChannelUri.toString(),
             replaySubscription.streamId());
     }
 
@@ -464,6 +472,8 @@ public final class PersistentSubscription implements AutoCloseable
         private long startPosition = 0; // TODO default to FROM_LIVE
         private String liveChannel = null;
         private int liveStreamId = Aeron.NULL_VALUE;
+        private String replayChannel = null;
+        private int replayStreamId = Aeron.NULL_VALUE;
         private PersistentSubscriptionListener listener = null;
         private AeronArchive.Context aeronArchiveContext = null;
 
@@ -488,6 +498,18 @@ public final class PersistentSubscription implements AutoCloseable
         public Context liveStreamId(final int liveStreamId)
         {
             this.liveStreamId = liveStreamId;
+            return this;
+        }
+
+        public Context replayChannel(final String replayChannel)
+        {
+            this.replayChannel = replayChannel;
+            return this;
+        }
+
+        public Context replayStreamId(final int replayStreamId)
+        {
+            this.replayStreamId = replayStreamId;
             return this;
         }
 
@@ -523,6 +545,16 @@ public final class PersistentSubscription implements AutoCloseable
             return liveStreamId;
         }
 
+        public String replayChannel()
+        {
+            return replayChannel;
+        }
+
+        public int replayStreamId()
+        {
+            return replayStreamId;
+        }
+
         public PersistentSubscriptionListener listener()
         {
             return listener;
@@ -537,7 +569,6 @@ public final class PersistentSubscription implements AutoCloseable
         {
             return isConcluded;
         }
-
 
         public void conclude()
         {
@@ -559,6 +590,16 @@ public final class PersistentSubscription implements AutoCloseable
             if (liveChannel == null)
             {
                 throw new ConfigurationException("liveChannel must be set");
+            }
+
+            if (replayChannel == null)
+            {
+                throw new ConfigurationException("replayChannel must be set");
+            }
+
+            if (replayStreamId == Aeron.NULL_VALUE)
+            {
+                throw new ConfigurationException("replayStreamId must be set");
             }
 
             if (aeronArchiveContext == null)
