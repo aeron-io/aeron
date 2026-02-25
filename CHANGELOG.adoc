@@ -4,6 +4,7 @@
 
 === Changelog
 
+* Fixed a bug in the controlled fragment assemblers where their handler after aborting on a fragmented message would receive on subsequent calls for that message a header with invalid position and fragmented frame length.
 * **[Cluster]** Enforce a maximum service count of 10. This limit has always existed in Cluster
 but is now explicitly enforced via the ClusteredServiceContainer.Configuration.MAX_SERVICE_COUNT setting.
 * **[Cluster]** Fix single-node cluster leader re-election which could happen after a stall or a time jump.

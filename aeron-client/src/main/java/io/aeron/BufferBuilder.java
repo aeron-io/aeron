@@ -46,6 +46,7 @@ public final class BufferBuilder
     private final boolean isDirect;
     private int limit;
     private int nextTermOffset = NULL_VALUE;
+    private int firstFrameLength;
     private final UnsafeBuffer buffer = new UnsafeBuffer();
     final UnsafeBuffer headerBuffer = new UnsafeBuffer();
     final Header completeHeader = new Header(0, 0);
@@ -230,6 +231,8 @@ public final class BufferBuilder
             .offset(0)
             .buffer(headerBuffer);
 
+        firstFrameLength = header.frameLength();
+
         headerBuffer.putBytes(0, header.buffer(), header.offset(), HEADER_LENGTH);
         return this;
     }
@@ -243,7 +246,7 @@ public final class BufferBuilder
      */
     public Header completeHeader(final Header header)
     {
-        final int firstFrameLength = headerBuffer.getInt(FRAME_LENGTH_FIELD_OFFSET, LITTLE_ENDIAN);
+        // compute the `fragmented frame length` of the complete message
         final int fragmentedFrameLength = computeFragmentedFrameLength(limit, firstFrameLength - HEADER_LENGTH);
         completeHeader
             .context(header.context())
@@ -252,7 +255,6 @@ public final class BufferBuilder
         headerBuffer.putInt(FRAME_LENGTH_FIELD_OFFSET, HEADER_LENGTH + limit, LITTLE_ENDIAN);
         // compute complete flags
         headerBuffer.putByte(FLAGS_OFFSET, (byte)(headerBuffer.getByte(FLAGS_OFFSET) | header.flags()));
-        // compute the `fragmented frame length` of the complete message
 
         return completeHeader;
     }
