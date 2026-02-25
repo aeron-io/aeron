@@ -32,6 +32,7 @@ import io.aeron.archive.status.RecordingPos;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
 import io.aeron.logbuffer.ControlledFragmentHandler;
+import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.Header;
 import io.aeron.logbuffer.LogBufferDescriptor;
 import io.aeron.protocol.DataHeaderFlyweight;
@@ -62,7 +63,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.BooleanSupplier;
 
@@ -616,6 +616,7 @@ class PersistentSubscriptionTest
                 Aeron aeron = Aeron.connect(
                     new Aeron.Context().aeronDirectoryName(mediaDriver.aeronDirectoryName())))
             {
+                final CountingFragmentHandler fastSubscriptionFragmentHandler = new CountingFragmentHandler();
                 final Subscription subscription = aeron.addSubscription(MDC_CHANNEL, STREAM_ID);
 
                 Tests.awaitConnected(subscription);
@@ -623,11 +624,9 @@ class PersistentSubscriptionTest
                 final List<byte[]> payloads3 = generateFixedPayloads(64, ONE_K_MESSAGE_SIZE);
                 offerPayloads(payloads3, publication, counters, counterId);
 
-                final AtomicInteger fragments = new AtomicInteger(0);
                 executeUntil(
-                    () -> fragments.get() >= 64,
-                    () -> subscription.poll((buffer1, offset, length, header) ->
-                        fragments.incrementAndGet(), 1)
+                    () -> fastSubscriptionFragmentHandler.hasReceivedPayloads(64),
+                    () -> subscription.poll(fastSubscriptionFragmentHandler, 1)
                 );
 
                 executeUntil(
@@ -701,7 +700,7 @@ class PersistentSubscriptionTest
         persistentSubscriptionCtx
             .recordingId(recordingId)
             .liveChannel(MDC_CHANNEL +  "|tether=false"); // <-- persistentSubscription is untethered
-
+        final CountingFragmentHandler fastSubscriptionFragmentHandler = new CountingFragmentHandler();
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx);
             Subscription subscription = aeron.addSubscription(MDC_CHANNEL + "|tether=true", STREAM_ID))
         {
@@ -714,11 +713,9 @@ class PersistentSubscriptionTest
 
             offerPayloads(generateFixedPayloads(64, ONE_K_MESSAGE_SIZE), publication, counters, counterId);
 
-            final AtomicInteger fragments = new AtomicInteger(0);
-            // TODO: Add MessageCountingFragmentHandler
             executeUntil(
-                () -> fragments.get() >= 64,
-                () -> subscription.poll((b, o, l, h) -> fragments.incrementAndGet(), 10)
+                () -> fastSubscriptionFragmentHandler.hasReceivedPayloads(64),
+                () -> subscription.poll(fastSubscriptionFragmentHandler, 10)
             );
 
             executeUntil(
@@ -1103,6 +1100,21 @@ class PersistentSubscriptionTest
         boolean hasReceivedPayloads(final int numberOfPayloads)
         {
             return receivedPayloads.size() >= numberOfPayloads;
+        }
+    }
+
+    private static final class CountingFragmentHandler implements FragmentHandler
+    {
+        private long receivedFragments = 0;
+
+        public void onFragment(final DirectBuffer buffer, final int offset, final int length, final Header header)
+        {
+            receivedFragments++;
+        }
+
+        boolean hasReceivedPayloads(final int numberOfPayloads)
+        {
+            return receivedFragments >= numberOfPayloads;
         }
     }
 
