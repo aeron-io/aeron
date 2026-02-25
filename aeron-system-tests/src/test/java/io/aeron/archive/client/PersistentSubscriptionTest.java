@@ -101,6 +101,7 @@ class PersistentSubscriptionTest
         .ipcTermBufferLength(TERM_LENGTH)
         .dirDeleteOnShutdown(true)
         .imageLivenessTimeoutNs(TimeUnit.SECONDS.toNanos(3))
+        .untetheredWindowLimitTimeoutNs(TimeUnit.SECONDS.toNanos(2))
         .spiesSimulateConnection(true);
 
     private final Aeron.Context aeronCtxTpl = new Aeron.Context()
