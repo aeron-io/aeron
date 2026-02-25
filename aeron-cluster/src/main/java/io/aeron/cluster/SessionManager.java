@@ -286,6 +286,46 @@ class SessionManager
         }
     }
 
+    int processAllPendingSessions(
+        final long nowNs,
+        final int leaderMemberId,
+        final long leadershipTermId,
+        final RecordingLog.RecoveryPlan recoveryPlan)
+    {
+        int workCount = 0;
+        workCount += processPendingSessions(
+            pendingUserSessions(),
+            rejectedUserSessions(),
+            nowNs,
+            leaderMemberId,
+            leadershipTermId,
+            recoveryPlan);
+
+        workCount += processPendingSessions(
+            pendingBackupSessions(),
+            rejectedBackupSessions(),
+            nowNs,
+            leaderMemberId,
+            leadershipTermId,
+            recoveryPlan);
+
+        return workCount;
+    }
+
+    int processPendingBackupSessions(
+        final long nowNs,
+        final int leaderMemberId,
+        final long leadershipTermId,
+        final RecordingLog.RecoveryPlan recoveryPlan)
+    {
+        return processPendingSessions(
+            pendingBackupSessions(),
+            rejectedBackupSessions(),
+            nowNs,
+            leaderMemberId,
+            leadershipTermId,
+            recoveryPlan);
+    }
 
     @SuppressWarnings("checkstyle:methodlength")
     int processPendingSessions(
@@ -481,12 +521,12 @@ class SessionManager
     }
 
     int checkSessions(
-        final ArrayList<ClusterSession> sessions,
         final long nowNs,
         final long leadershipTermId,
         final int leaderMemberId,
         final String ingressEndpoints)
     {
+        final ArrayList<ClusterSession> sessions = this.sessions;
         int workCount = 0;
 
         for (int i = sessions.size() - 1; i >= 0; i--)
@@ -569,6 +609,127 @@ class SessionManager
         }
 
         return workCount;
+    }
+
+    int sendRedirects(
+        final long leadershipTermId,
+        final int leaderMemberId,
+        final String ingressEndpoints,
+        final long nowNs)
+    {
+        return sendRedirects(redirectUserSessions, leadershipTermId, leaderMemberId, ingressEndpoints, nowNs);
+    }
+
+    private int sendRedirects(
+        final ArrayList<ClusterSession> redirectSessions,
+        final long leadershipTermId,
+        final int leaderMemberId,
+        final String ingressEndpoints,
+        final long nowNs)
+    {
+        int workCount = 0;
+
+        for (int lastIndex = redirectSessions.size() - 1, i = lastIndex; i >= 0; i--)
+        {
+            final ClusterSession session = redirectSessions.get(i);
+            final EventCode eventCode = EventCode.REDIRECT;
+
+            if (session.isResponsePublicationConnected(aeron, nowNs) &&
+                egressPublisher.sendEvent(session, leadershipTermId, leaderMemberId, eventCode, ingressEndpoints))
+            {
+                ArrayListUtil.fastUnorderedRemove(redirectSessions, i, lastIndex--);
+                session.close(aeron, errorHandler, eventCode.name());
+                workCount++;
+            }
+            else if (session.state() != ClusterSession.State.INIT &&
+                nowNs > (session.timeOfLastActivityNs() + sessionTimeoutNs))
+            {
+                ArrayListUtil.fastUnorderedRemove(redirectSessions, i, lastIndex--);
+                session.close(aeron, errorHandler, "session timed out");
+                workCount++;
+            }
+            else if (session.state() == INVALID)
+            {
+                ArrayListUtil.fastUnorderedRemove(redirectSessions, i, lastIndex--);
+                session.close(aeron, errorHandler, "invalid");
+                workCount++;
+            }
+        }
+
+        return workCount;
+    }
+
+    int sendRejections(
+        final long leadershipTermId,
+        final int leaderMemberId,
+        final long nowNs)
+    {
+        int workCount = 0;
+
+        workCount += sendRejections(rejectedUserSessions, leadershipTermId, leaderMemberId, nowNs);
+        workCount += sendRejections(rejectedBackupSessions, leadershipTermId, leaderMemberId, nowNs);
+
+        return workCount;
+    }
+
+    private int sendRejections(
+        final ArrayList<ClusterSession> rejectedSessions,
+        final long leadershipTermId,
+        final int leaderMemberId,
+        final long nowNs)
+    {
+        int workCount = 0;
+
+        for (int lastIndex = rejectedSessions.size() - 1, i = lastIndex; i >= 0; i--)
+        {
+            final ClusterSession session = rejectedSessions.get(i);
+            final String detail = session.responseDetail();
+            final EventCode eventCode = session.eventCode();
+
+            if (session.isResponsePublicationConnected(aeron, nowNs) &&
+                egressPublisher.sendEvent(session, leadershipTermId, leaderMemberId, eventCode, detail))
+            {
+                ArrayListUtil.fastUnorderedRemove(rejectedSessions, i, lastIndex--);
+                session.close(aeron, errorHandler, eventCode.name());
+                workCount++;
+            }
+            else if (session.state() != ClusterSession.State.INIT &&
+                nowNs > (session.timeOfLastActivityNs() + sessionTimeoutNs))
+            {
+                ArrayListUtil.fastUnorderedRemove(rejectedSessions, i, lastIndex--);
+                session.close(aeron, errorHandler, "session timed out");
+                workCount++;
+            }
+            else if (session.state() == INVALID)
+            {
+                ArrayListUtil.fastUnorderedRemove(rejectedSessions, i, lastIndex--);
+                session.close(aeron, errorHandler, "invalid");
+                workCount++;
+            }
+        }
+
+        return workCount;
+    }
+
+    void clearSessionsAfter(final long logPosition, final long leadershipTermId)
+    {
+        for (int i = sessions().size() - 1; i >= 0; i--)
+        {
+            final ClusterSession session = sessions().get(i);
+            if (session.openedLogPosition() > logPosition)
+            {
+                egressPublisher.sendEvent(session, leadershipTermId, memberId, EventCode.CLOSED, "election");
+                closeSession(session);
+            }
+        }
+
+        for (final ClusterSession session : pendingUserSessions())
+        {
+            egressPublisher.sendEvent(session, leadershipTermId, memberId, EventCode.CLOSED, "election");
+            session.close(aeron, errorHandler, "election");
+        }
+
+        pendingUserSessions().clear();
     }
 
     private int sendNewLeaderEvent(
