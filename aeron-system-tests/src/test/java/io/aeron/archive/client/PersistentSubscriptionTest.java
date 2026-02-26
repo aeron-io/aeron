@@ -78,6 +78,7 @@ import static io.aeron.CommonContext.IPC_MEDIA;
 import static io.aeron.CommonContext.SPY_PREFIX;
 import static io.aeron.CommonContext.UDP_CHANNEL;
 import static io.aeron.Publication.BACK_PRESSURED;
+import static io.aeron.driver.status.StreamCounter.CHANNEL_OFFSET;
 import static io.aeron.driver.status.StreamCounter.STREAM_ID_OFFSET;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
 import static org.agrona.concurrent.status.CountersReader.NULL_COUNTER_ID;
@@ -130,7 +131,6 @@ class PersistentSubscriptionTest
     private AeronArchive aeronArchive;
     private PersistentSubscriptionListenerImpl listener;
     private BufferingFragmentHandler fragmentHandler;
-    private CountersReader counters;
 
     @BeforeEach
     void setUp()
@@ -156,7 +156,6 @@ class PersistentSubscriptionTest
         systemTestWatcher.dataCollector().add(archiveCtx.archiveDir());
 
         aeron = Aeron.connect(aeronCtxTpl.clone().aeronDirectoryName(aeronDirectoryName));
-        counters = aeron.countersReader();
 
         final AeronArchive.Context aeronArchiveContext = TestContexts.localhostAeronArchive().aeron(aeron);
         aeronArchive = AeronArchive.connect(aeronArchiveContext.clone());
@@ -225,12 +224,12 @@ class PersistentSubscriptionTest
     void shouldErrorIfRecordingStreamDoesNotMatchLiveStream()
     {
         final int liveStreamId = 1001; // <-- not the same as the recorded stream.
-        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(IPC_CHANNEL, STREAM_ID);
-        final int counterId = getCounterId(publication);
-        final long recordingId = RecordingPos.getRecordingId(counters, counterId);
+
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, IPC_CHANNEL, STREAM_ID);
 
         persistentSubscriptionCtx
-            .recordingId(recordingId)
+            .recordingId(persistentPublication.recordingId())
             .liveStreamId(liveStreamId);
 
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
@@ -253,14 +252,14 @@ class PersistentSubscriptionTest
             .media(IPC_MEDIA)
             .initialPosition(1024, 0, TERM_LENGTH) // <-- Recording starts at 1024
             .build();
-        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(channel, STREAM_ID);
-        final int counterId = getCounterId(publication);
-        final long recordingId = RecordingPos.getRecordingId(counters, counterId);
+
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, channel, STREAM_ID);
 
         final int startPosition = 0; // <-- Trying to start from zero
 
         persistentSubscriptionCtx
-            .recordingId(recordingId)
+            .recordingId(persistentPublication.recordingId())
             .startPosition(startPosition);
 
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
@@ -279,19 +278,17 @@ class PersistentSubscriptionTest
     @InterruptAfter(10)
     void shouldErrorIfRecordingPositionIsAfterStopPosition()
     {
-        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(IPC_CHANNEL, STREAM_ID);
-        final int counterId = getCounterId(publication);
-        final long recordingId = RecordingPos.getRecordingId(counters, counterId);
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, IPC_CHANNEL, STREAM_ID);
 
-        offerPayloads(List.of(new byte[1024]), publication, counterId);
+        persistentPublication.persist(List.of(new byte[1024]));
 
-        aeronArchive.stopRecording(publication);
-        final long stopPosition = aeronArchive.getStopPosition(recordingId);
+        final long stopPosition = persistentPublication.stop();
         assertTrue(stopPosition > 0);
 
         final long startPosition = stopPosition * 2; // <-- after end of recording
         persistentSubscriptionCtx
-            .recordingId(recordingId)
+            .recordingId(persistentPublication.recordingId())
             .startPosition(startPosition);
 
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
@@ -311,18 +308,15 @@ class PersistentSubscriptionTest
     @InterruptAfter(5)
     void shouldReplayExistingRecordingThenJoinLive(final int fragmentLimit, final String channel)
     {
-        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(channel, STREAM_ID);
-
-        final CountersReader counters = aeron.countersReader();
-        final int counterId = getCounterId(publication);
-        final long recordingId = RecordingPos.getRecordingId(counters, counterId);
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, channel, STREAM_ID);
 
         persistentSubscriptionCtx
-            .recordingId(recordingId)
+            .recordingId(persistentPublication.recordingId())
             .liveChannel(channel);
 
         final List<byte[]> payloads = generateRandomPayloads(5);
-        offerPayloads(payloads, publication, counterId);
+        persistentPublication.persist(payloads);
 
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
         {
@@ -344,7 +338,7 @@ class PersistentSubscriptionTest
 
             // send some more messages
             final List<byte[]> payloads2 = generateRandomPayloads(5);
-            offerPayloads(payloads2, publication, counterId);
+            persistentPublication.persist(payloads2);
 
             executeUntil(() -> fragmentHandler.hasReceivedPayloads(payloads.size() + payloads2.size()),
                 () ->
@@ -367,17 +361,16 @@ class PersistentSubscriptionTest
     @InterruptAfter(5)
     void shouldReplayOverConfiguredChannel(final String replayChannel, final int replayStreamId)
     {
-        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(IPC_CHANNEL, STREAM_ID);
-        final int counterId = getCounterId(publication);
-        final long recordingId = RecordingPos.getRecordingId(counters, counterId);
-
-        persistentSubscriptionCtx
-            .recordingId(recordingId)
-            .replayChannel(replayChannel)
-            .replayStreamId(replayStreamId);
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, IPC_CHANNEL, STREAM_ID);
 
         final List<byte[]> payloads = generateRandomPayloads(5);
-        offerPayloads(payloads, publication, counterId);
+        persistentPublication.persist(payloads);
+
+        persistentSubscriptionCtx
+            .recordingId(persistentPublication.recordingId())
+            .replayChannel(replayChannel)
+            .replayStreamId(replayStreamId);
 
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
         {
@@ -387,6 +380,7 @@ class PersistentSubscriptionTest
             assertTrue(persistentSubscription.isReplaying());
 
             final MutableLong replaySubPos = new MutableLong(-1);
+            final CountersReader counters = aeron.countersReader();
             counters.forEach((counterId1, typeId, keyBuffer, label) ->
             {
                 if (typeId == SubscriberPos.SUBSCRIBER_POSITION_TYPE_ID)
@@ -394,6 +388,7 @@ class PersistentSubscriptionTest
                     final int streamId = keyBuffer.getInt(STREAM_ID_OFFSET);
                     if (streamId == replayStreamId)
                     {
+                        assertEquals(replayChannel, keyBuffer.getStringAscii(CHANNEL_OFFSET));
                         replaySubPos.set(counters.getCounterValue(counterId1));
                     }
                 }
@@ -412,18 +407,15 @@ class PersistentSubscriptionTest
     @InterruptAfter(5)
     void shouldReplayExistingRecordingThenSpyOnLive(final int fragmentLimit)
     {
-        final ExclusivePublication publication =
-            aeronArchive.addRecordedExclusivePublication(MDC_PUBLICATION_CHANNEL, STREAM_ID);
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID);
 
-        final int counterId = getCounterId(publication);
-        final long recordingId = RecordingPos.getRecordingId(counters, counterId);
+        final List<byte[]> payloads = generateFixedPayloads(8, ONE_K_MESSAGE_SIZE);
+        persistentPublication.persist(payloads);
 
         persistentSubscriptionCtx
             .liveChannel(SPY_PREFIX + "aeron:udp?control=localhost:2000")
-            .recordingId(recordingId);
-
-        final List<byte[]> payloads = generateFixedPayloads(8, 1024 - DataHeaderFlyweight.HEADER_LENGTH);
-        offerPayloads(payloads, publication, counterId);
+            .recordingId(persistentPublication.recordingId());
 
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
         {
@@ -445,7 +437,7 @@ class PersistentSubscriptionTest
 
             // send some more messages
             final List<byte[]> payloads2 = generateFixedPayloads(16, ONE_K_MESSAGE_SIZE);
-            offerPayloads(payloads2, publication, counterId);
+            persistentPublication.persist(payloads2);
 
             executeUntil(() -> fragmentHandler.hasReceivedPayloads(payloads.size() + payloads2.size()),
                 () ->
@@ -467,16 +459,14 @@ class PersistentSubscriptionTest
     @InterruptAfter(5)
     void shouldTransitionFromReplayToLiveWhileLiveIsAdvancing()
     {
-        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(IPC_CHANNEL, STREAM_ID);
-
-        final int counterId = getCounterId(publication);
-        final long recordingId = RecordingPos.getRecordingId(counters, counterId);
-
-        persistentSubscriptionCtx
-            .recordingId(recordingId);
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, IPC_CHANNEL, STREAM_ID);
 
         final List<byte[]> payloads = generateRandomPayloads(5);
-        offerPayloads(payloads, publication, counterId);
+        persistentPublication.persist(payloads);
+
+        persistentSubscriptionCtx
+            .recordingId(persistentPublication.recordingId());
 
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
         {
@@ -493,7 +483,7 @@ class PersistentSubscriptionTest
 
             // send some more messages
             final List<byte[]> payloads2 = generateRandomPayloads(1);
-            offerPayloads(payloads2, publication, counterId);
+            persistentPublication.persist(payloads2);
 
             executeUntil(persistentSubscription::isLive,
                 () -> persistentSubscription.controlledPoll(fragmentHandler, 10));
@@ -509,16 +499,14 @@ class PersistentSubscriptionTest
     @InterruptAfter(5)
     void shouldCatchupOnReplayBeforeSwitchingToLive(final int fragmentLimit)
     {
-        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(IPC_CHANNEL, STREAM_ID);
-
-        final int counterId = getCounterId(publication);
-        final long recordingId = RecordingPos.getRecordingId(counters, counterId);
-
-        persistentSubscriptionCtx
-            .recordingId(recordingId);
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, IPC_CHANNEL, STREAM_ID);
 
         final List<byte[]> payloads = generateRandomPayloads(5);
-        offerPayloads(payloads, publication, counterId);
+        persistentPublication.persist(payloads);
+
+        persistentSubscriptionCtx
+            .recordingId(persistentPublication.recordingId());
 
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
         {
@@ -529,7 +517,7 @@ class PersistentSubscriptionTest
             assertTrue(persistentSubscription.isReplaying());
 
             final List<byte[]> payloads2 = generateRandomPayloads(5);
-            offerPayloads(payloads2, publication, counterId);
+            persistentPublication.persist(payloads2);
 
             executeUntil(() -> fragmentHandler.hasReceivedPayloads(payloads.size() + payloads2.size()),
                 () -> persistentSubscription.controlledPoll(fragmentHandler, fragmentLimit));
@@ -541,7 +529,7 @@ class PersistentSubscriptionTest
 
             // send some more messages
             final List<byte[]> payloads3 = generateRandomPayloads(5);
-            offerPayloads(payloads3, publication, counterId);
+            persistentPublication.persist(payloads3);
 
             executeUntil(
                 () -> fragmentHandler.hasReceivedPayloads(payloads.size() + payloads2.size() + payloads3.size()),
@@ -569,18 +557,8 @@ class PersistentSubscriptionTest
         final String pubChannel = "aeron:udp?control=localhost:2000|control-mode=dynamic|fc=min";
         final String subChannel = "aeron:udp?control=localhost:2000|rcv-wnd=4k";
 
-        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(pubChannel, STREAM_ID);
-
-        final int counterId = getCounterId(publication);
-        final long recordingId = RecordingPos.getRecordingId(counters, counterId);
-
-        persistentSubscriptionCtx
-            .recordingId(recordingId)
-            .liveChannel(subChannel);
-
-        final int receiversCounterId = counters.findByTypeIdAndRegistrationId(
-            FLOW_CONTROL_RECEIVERS_COUNTER_TYPE_ID, publication.registrationId());
-        assertNotEquals(NULL_COUNTER_ID, receiversCounterId);
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, pubChannel, STREAM_ID);
 
         final String aeronDir2 = CommonContext.generateRandomDirName();
         final MediaDriver.Context driver2Ctx = driverCtxTpl.clone().aeronDirectoryName(aeronDir2);
@@ -591,14 +569,18 @@ class PersistentSubscriptionTest
         final Subscription subscription = aeron2.addSubscription(subChannel, STREAM_ID);
         Tests.awaitConnected(subscription);
 
-        offerPayloads(generateFixedPayloads(32, ONE_K_MESSAGE_SIZE), publication, counterId);
+        persistentPublication.persist(generateFixedPayloads(32, ONE_K_MESSAGE_SIZE));
+
+        persistentSubscriptionCtx
+            .recordingId(persistentPublication.recordingId())
+            .liveChannel(subChannel);
 
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
         {
             executeUntil(() -> fragmentHandler.hasReceivedPayloads(32),
                 () -> persistentSubscription.controlledPoll(fragmentHandler, 10));
 
-            awaitCounterValueEq(counters, receiversCounterId, 2);
+            persistentPublication.awaitReceiverCountEq(2);
 
             executeUntil(persistentSubscription::isLive,
                 () ->
@@ -615,18 +597,15 @@ class PersistentSubscriptionTest
     @InterruptAfter(15)
     void shouldDropFromLiveBackToReplayThenJoinLiveAgain()
     {
-        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(MDC_PUBLICATION_CHANNEL,
-            STREAM_ID);
-
-        final int counterId = getCounterId(publication);
-        final long recordingId = RecordingPos.getRecordingId(counters, counterId);
-
-        persistentSubscriptionCtx
-            .recordingId(recordingId)
-            .liveChannel(MDC_CHANNEL);
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID);
 
         final List<byte[]> payloads = generateFixedPayloads(5, ONE_K_MESSAGE_SIZE);
-        offerPayloads(payloads, publication, counterId);
+        persistentPublication.persist(payloads);
+
+        persistentSubscriptionCtx
+            .recordingId(persistentPublication.recordingId())
+            .liveChannel(MDC_CHANNEL);
 
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
         {
@@ -646,7 +625,7 @@ class PersistentSubscriptionTest
 
             // send some more messages
             final List<byte[]> payloads2 = generateFixedPayloads(5, ONE_K_MESSAGE_SIZE);
-            offerPayloads(payloads2, publication, counterId);
+            persistentPublication.persist(payloads2);
 
             executeUntil(
                 () -> fragmentHandler.hasReceivedPayloads(payloads.size() + payloads2.size()),
@@ -669,7 +648,7 @@ class PersistentSubscriptionTest
                 Tests.awaitConnected(subscription);
 
                 final List<byte[]> payloads3 = generateFixedPayloads(64, ONE_K_MESSAGE_SIZE);
-                offerPayloads(payloads3, publication, counterId);
+                persistentPublication.persist(payloads3);
 
                 executeUntil(
                     () -> fastSubscriptionFragmentHandler.hasReceivedPayloads(64),
@@ -683,7 +662,7 @@ class PersistentSubscriptionTest
                 assertTrue(persistentSubscription.isReplaying());
 
                 final List<byte[]> payloads4 = generateFixedPayloads(5, ONE_K_MESSAGE_SIZE);
-                offerPayloads(payloads4, publication, counterId);
+                persistentPublication.persist(payloads4);
 
                 final int expectedMessageCount =
                     payloads.size() + payloads2.size() + payloads3.size() + payloads4.size();
@@ -701,14 +680,11 @@ class PersistentSubscriptionTest
     @InterruptAfter(15)
     void shouldStartFromLiveWhenThereIsNoDataToReplay()
     {
-        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(MDC_PUBLICATION_CHANNEL,
-            STREAM_ID);
-
-        final int counterId = getCounterId(publication);
-        final long recordingId = RecordingPos.getRecordingId(counters, counterId);
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID);
 
         persistentSubscriptionCtx
-            .recordingId(recordingId)
+            .recordingId(persistentPublication.recordingId())
             .liveChannel(MDC_CHANNEL);
 
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
@@ -720,7 +696,7 @@ class PersistentSubscriptionTest
 
             // send some messages
             final List<byte[]> payloads = generateRandomPayloads(5);
-            offerPayloads(payloads, publication, counterId);
+            persistentPublication.persist(payloads);
 
             executeUntil(
                 () -> fragmentHandler.hasReceivedPayloads(payloads.size()),
@@ -735,14 +711,11 @@ class PersistentSubscriptionTest
     @InterruptAfter(15)
     void anUntetheredPersistentSubscriptionCanFallBehindATetheredSubscription()
     {
-        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(UDP_PUBLICATION_CHANNEL,
-            STREAM_ID);
-
-        final int counterId = getCounterId(publication);
-        final long recordingId = RecordingPos.getRecordingId(counters, counterId);
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, UDP_PUBLICATION_CHANNEL, STREAM_ID);
 
         persistentSubscriptionCtx
-            .recordingId(recordingId)
+            .recordingId(persistentPublication.recordingId())
             .liveChannel(UDP_PUBLICATION_CHANNEL + "|tether=false"); // <-- persistentSubscription is untethered
 
         final CountingFragmentHandler fastSubscriptionFragmentHandler = new CountingFragmentHandler();
@@ -756,7 +729,7 @@ class PersistentSubscriptionTest
                 () -> persistentSubscription.controlledPoll(fragmentHandler, 10)
             );
 
-            offerPayloads(generateFixedPayloads(64, ONE_K_MESSAGE_SIZE), publication, counterId);
+            persistentPublication.persist(generateFixedPayloads(64, ONE_K_MESSAGE_SIZE));
 
             executeUntil(
                 () -> fastSubscriptionFragmentHandler.hasReceivedPayloads(64),
@@ -781,14 +754,11 @@ class PersistentSubscriptionTest
     @InterruptAfter(15)
     void anTetheredPersistentSubscriptionDoesNotFallBehindAnUntetheredSubscription()
     {
-        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(UDP_PUBLICATION_CHANNEL,
-            STREAM_ID);
-
-        final int counterId = getCounterId(publication);
-        final long recordingId = RecordingPos.getRecordingId(counters, counterId);
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, UDP_PUBLICATION_CHANNEL, STREAM_ID);
 
         persistentSubscriptionCtx
-            .recordingId(recordingId)
+            .recordingId(persistentPublication.recordingId())
             .liveChannel(UDP_PUBLICATION_CHANNEL + "|tether=true"); // <-- persistentSubscription is tethered
 
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx);
@@ -801,7 +771,7 @@ class PersistentSubscriptionTest
                 () -> persistentSubscription.controlledPoll(fragmentHandler, 10)
             );
 
-            offerPayloads(generateFixedPayloads(64, ONE_K_MESSAGE_SIZE), publication, counterId);
+            persistentPublication.persist(generateFixedPayloads(64, ONE_K_MESSAGE_SIZE));
 
             executeUntil(
                 () -> fragmentHandler.hasReceivedPayloads(64),
@@ -818,28 +788,26 @@ class PersistentSubscriptionTest
     @InterruptAfter(5)
     void shouldAssembleMessages()
     {
-        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(IPC_CHANNEL, STREAM_ID);
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, IPC_CHANNEL, STREAM_ID);
 
-        final int counterId = getCounterId(publication);
-        final long recordingId = RecordingPos.getRecordingId(counters, counterId);
-
-        persistentSubscriptionCtx
-            .recordingId(recordingId);
-
-        final int sizeRequiringFragmentation = publication.maxPayloadLength() + 1;
+        final int sizeRequiringFragmentation = persistentPublication.maxPayloadLength() + 1;
         final byte[] payload0 = new byte[sizeRequiringFragmentation];
         ThreadLocalRandom.current().nextBytes(payload0);
         final byte[] payload1 = new byte[sizeRequiringFragmentation];
         ThreadLocalRandom.current().nextBytes(payload1);
 
-        offerPayloads(List.of(payload0), publication, counterId);
+        persistentPublication.persist(List.of(payload0));
+
+        persistentSubscriptionCtx
+            .recordingId(persistentPublication.recordingId());
 
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
         {
             executeUntil(persistentSubscription::isLive,
                 () -> persistentSubscription.controlledPoll(fragmentHandler, 1));
 
-            offerPayloads(List.of(payload1), publication, counterId);
+            persistentPublication.persist(List.of(payload1));
 
             executeUntil(() -> fragmentHandler.hasReceivedPayloads(2),
                 () -> persistentSubscription.controlledPoll(fragmentHandler, 1));
@@ -861,15 +829,13 @@ class PersistentSubscriptionTest
         systemTestWatcher.dataCollector().add(driver2Ctx.aeronDirectory());
         final Aeron aeron2 = addCloseable(Aeron.connect(aeronCtxTpl.clone().aeronDirectoryName(aeronDir2)));
 
-        final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(pubChannel, STREAM_ID);
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, pubChannel, STREAM_ID);
         final Subscription controlSubscription = aeron.addSubscription(subChannel, STREAM_ID);
         Tests.awaitConnected(controlSubscription);
 
-        final int counterId = getCounterId(publication);
-        final long recordingId = RecordingPos.getRecordingId(counters, counterId);
-
         persistentSubscriptionCtx
-            .recordingId(recordingId)
+            .recordingId(persistentPublication.recordingId())
             .liveChannel(subChannel)
             .listener(null)
             .aeronArchiveContext(TestContexts.localhostAeronArchive().aeron(aeron2));
@@ -915,7 +881,7 @@ class PersistentSubscriptionTest
                         final int length = random.nextInt(2 * SIZE_OF_LONG, buffer.capacity() + 1);
                         buffer.putLong(0, messageId);
                         buffer.putLong(length - SIZE_OF_LONG, messageId);
-                        final long result = publication.offer(buffer, 0, length);
+                        final long result = persistentPublication.offer(buffer, 0, length);
                         if (result > 0)
                         {
                             messageId++;
@@ -948,7 +914,7 @@ class PersistentSubscriptionTest
             }
 
             interruptAndJoin(publisher);
-            final long lastPosition = publication.position();
+            final long lastPosition = persistentPublication.position();
 
             while (handler.position < lastPosition)
             {
@@ -1169,25 +1135,6 @@ class PersistentSubscriptionTest
         });
     }
 
-    private void offerPayloads(
-        final List<byte[]> payloads,
-        final Publication publication,
-        final int counterId)
-    {
-        final UnsafeBuffer buffer = new UnsafeBuffer();
-
-        long offeredPosition = 0;
-        for (final byte[] payload : payloads)
-        {
-            buffer.wrap(payload);
-            while ((offeredPosition = publication.offer(buffer)) < 0)
-            {
-                Tests.yieldingIdle("failed to offer. offerPosition = " + Publication.errorString(offeredPosition));
-            }
-        }
-        Tests.awaitPosition(counters, counterId, offeredPosition);
-    }
-
     private void assertPayloads(final List<byte[]> receivedPayloads, final List<byte[]> payloads)
     {
         assertEquals(payloads.size(), receivedPayloads.size());
@@ -1227,11 +1174,6 @@ class PersistentSubscriptionTest
             arguments("aeron:ipc", -12)
             // TODO add response channel
         );
-    }
-
-    private int getCounterId(final ExclusivePublication publication)
-    {
-        return Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
     }
 
     private static final class BufferingFragmentHandler implements ControlledFragmentHandler
@@ -1284,6 +1226,99 @@ class PersistentSubscriptionTest
         {
             errorCount++;
             lastException = e;
+        }
+    }
+
+    private static final class PersistentPublication
+    {
+        private final AeronArchive aeronArchive;
+        private final ExclusivePublication publication;
+        private final long recordingId;
+        private final CountersReader countersReader;
+        private final int recordingCounterId;
+
+        static PersistentPublication create(
+            final AeronArchive aeronArchive,
+            final String channel,
+            final int streamId)
+        {
+            final ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(channel, streamId);
+            final CountersReader countersReader = aeronArchive.context().aeron().countersReader();
+            final int recordingCounterId =
+                Tests.awaitRecordingCounterId(countersReader, publication.sessionId(), aeronArchive.archiveId());
+            final long recordingId = RecordingPos.getRecordingId(countersReader, recordingCounterId);
+
+            return new PersistentPublication(
+                aeronArchive,
+                publication,
+                recordingId,
+                countersReader,
+                recordingCounterId);
+        }
+
+        private PersistentPublication(
+            final AeronArchive aeronArchive,
+            final ExclusivePublication publication,
+            final long recordingId,
+            final CountersReader countersReader,
+            final int recordingCounterId)
+        {
+            this.aeronArchive = aeronArchive;
+            this.publication = publication;
+            this.recordingId = recordingId;
+            this.countersReader = countersReader;
+            this.recordingCounterId = recordingCounterId;
+        }
+
+        long offer(final DirectBuffer buffer, final int offset, final int length)
+        {
+            return publication.offer(buffer, offset, length);
+        }
+
+        void persist(final List<byte[]> messages)
+        {
+            final UnsafeBuffer wrapper = new UnsafeBuffer();
+
+            long position = 0;
+            for (final byte[] message : messages)
+            {
+                wrapper.wrap(message);
+                while ((position = publication.offer(wrapper)) < 0)
+                {
+                    Tests.yieldingIdle("failed to offer due to " + Publication.errorString(position));
+                }
+            }
+
+            Tests.awaitPosition(countersReader, recordingCounterId, position);
+        }
+
+        long stop()
+        {
+            aeronArchive.stopRecording(publication);
+            return aeronArchive.getStopPosition(recordingId);
+        }
+
+        void awaitReceiverCountEq(final long expectedReceiverCount)
+        {
+            final int receiversCounterId = countersReader.findByTypeIdAndRegistrationId(
+                FLOW_CONTROL_RECEIVERS_COUNTER_TYPE_ID, publication.registrationId());
+            assertNotEquals(NULL_COUNTER_ID, receiversCounterId);
+            awaitCounterValueEq(countersReader, receiversCounterId, expectedReceiverCount);
+        }
+
+        long recordingId()
+        {
+            return recordingId;
+        }
+
+        int maxPayloadLength()
+        {
+            return publication.maxPayloadLength();
+        }
+
+        long position()
+        {
+            return publication.position();
         }
     }
 }
