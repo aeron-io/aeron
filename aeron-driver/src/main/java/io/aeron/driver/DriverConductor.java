@@ -396,13 +396,15 @@ public final class DriverConductor implements Agent
                 final boolean isMulticastSemantics =
                     isMulticastSemantics(subscriptionChannel, subscription.group(), flags);
                 final boolean isReliable = subscription.isReliable();
+                final boolean isSparse = isOldestSubscriptionSparse(subscriberPositions);
 
                 rawLog = newPublicationImageLog(
                     sessionId,
                     streamId,
                     initialTermId,
                     termBufferLength,
-                    isOldestSubscriptionSparse(subscriberPositions),
+                    isReliable,
+                    isSparse,
                     senderMtuLength,
                     channelEndpoint.socketRcvbufLength(),
                     channelEndpoint.socketSndbufLength(),
@@ -2213,6 +2215,7 @@ public final class DriverConductor implements Agent
         final int streamId,
         final int initialTermId,
         final int termBufferLength,
+        final boolean isReliable,
         final boolean isSparse,
         final int senderMtuLength,
         final int socketRcvBufLength,
@@ -2244,8 +2247,8 @@ public final class DriverConductor implements Agent
             params.receiverWindowLength,
             params.isTether,
             params.isRejoin,
-            params.isReliable,
-            params.isSparse,
+            isReliable,
+            isSparse,
             hasGroupSemantics,
             params.isResponse,
             publicationWindowLength,
