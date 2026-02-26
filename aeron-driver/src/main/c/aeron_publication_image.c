@@ -64,12 +64,35 @@ static bool aeron_publication_image_check_and_get_response_session_id(
     return ((int64_t)INT32_MIN) <= _response_session_id && _response_session_id <= ((int64_t)INT32_MAX);
 }
 
+static aeron_feedback_delay_generator_state_t *aeron_publication_image_create_static_delay_generator_state(
+    aeron_publication_image_t *image, int64_t nak_delay_ns, int64_t retry_delay_ns)
+{
+    if (aeron_feedback_delay_state_init(
+     &image->feedback_delay_state,
+    aeron_loss_detector_nak_unicast_delay_generator,
+    nak_delay_ns,
+    retry_delay_ns,
+    1) < 0)
+    {
+        AERON_APPEND_ERR("%s", "Could not init publication image feedback_delay_state");
+        return NULL;
+    }
+
+    return &image->feedback_delay_state;
+}
+
 static aeron_feedback_delay_generator_state_t *aeron_publication_image_acquire_delay_generator_state(
+    bool is_reliable,
     bool treat_as_multicast,
     aeron_driver_context_t *context,
     aeron_receive_channel_endpoint_t *endpoint,
     aeron_publication_image_t *image)
 {
+    if (!is_reliable)
+    {
+        return aeron_publication_image_create_static_delay_generator_state(image, 0, 0);
+    }
+
     if (treat_as_multicast)
     {
         return &context->multicast_delay_feedback_generator;
@@ -92,18 +115,8 @@ static aeron_feedback_delay_generator_state_t *aeron_publication_image_acquire_d
         return NULL;
     }
 
-    if (aeron_feedback_delay_state_init(
-         &image->feedback_delay_state,
-        aeron_loss_detector_nak_unicast_delay_generator,
-        (int64_t)nak_delay_ns,
-        (int64_t)nak_delay_ns * (int64_t)context->nak_unicast_retry_delay_ratio,
-        1) < 0)
-    {
-        AERON_APPEND_ERR("%s", "Could not init publication image feedback_delay_state");
-        return NULL;
-    }
-
-    return &image->feedback_delay_state;
+    return aeron_publication_image_create_static_delay_generator_state(
+        image, (int64_t)nak_delay_ns, (int64_t)nak_delay_ns * (int64_t)context->nak_unicast_retry_delay_ratio);
 }
 
 static void aeron_publication_image_report_loss(
@@ -203,7 +216,7 @@ int aeron_publication_image_create(
     }
 
     aeron_feedback_delay_generator_state_t *feedback_delay_state;
-    feedback_delay_state = aeron_publication_image_acquire_delay_generator_state(treat_as_multicast, context, endpoint, _image);
+    feedback_delay_state = aeron_publication_image_acquire_delay_generator_state(is_reliable, treat_as_multicast, context, endpoint, _image);
     if (NULL == feedback_delay_state)
     {
         AERON_APPEND_ERR("%s", "");
@@ -291,8 +304,8 @@ int aeron_publication_image_create(
         (uint8_t)treat_as_multicast,
         (uint8_t)params.is_response,
         (uint8_t)params.is_rejoin,
-        (uint8_t)params.is_reliable,
-        (uint8_t)params.is_sparse,
+        (uint8_t)is_reliable,
+        (uint8_t)is_sparse,
         (uint8_t)false,
         (uint8_t)false,
         (uint8_t)params.is_tether,

@@ -48,7 +48,7 @@ void verify_conductor_cmd_function(int32_t msg_type_id, const void *item, size_t
     ASSERT_EQ(clientd, (void *)cmd->func);
 }
 
-class ReceiverTestBase : public testing::Test
+class ReceiverTestBase
 {
 public:
     ReceiverTestBase() :
@@ -59,7 +59,7 @@ public:
     }
 
 protected:
-    void SetUp() override
+    void DoSetUp()
     {
         aeron_test_udp_bindings_load(&m_transport_bindings);
         aeron_driver_context_init(&m_context);
@@ -109,7 +109,7 @@ protected:
         m_context->error_buffer_length = m_error_log_buffer.size();
     }
 
-    void TearDown() override
+    void DoTearDown()
     {
         for (auto image : m_images)
         {
@@ -197,7 +197,9 @@ protected:
         aeron_receive_destination_t *destination,
         int32_t stream_id,
         int32_t session_id,
-        int64_t correlation_id = 0)
+        int64_t correlation_id = 0,
+        bool is_reliable = true,
+        bool treat_as_multicast = false)
     {
         aeron_publication_image_t *image;
         aeron_congestion_control_strategy_t *congestion_control_strategy;
@@ -255,9 +257,9 @@ protected:
             MTU,
             UINT8_C(0),
             &m_loss_reporter,
+            is_reliable,
             true,
-            true,
-            false,
+            treat_as_multicast,
             &m_system_counters) < 0)
         {
             congestion_control_strategy->fini(congestion_control_strategy);

@@ -41,12 +41,12 @@ void *get_on_publication_image_fptr()
     return aeron_dlsym(RTLD_DEFAULT, "aeron_driver_conductor_on_create_publication_image");
 }
 
-class DataPacketDispatcherTest : public ReceiverTestBase
+class DataPacketDispatcherTest : public ReceiverTestBase, public ::testing::Test
 {
 protected:
-    void SetUp() override
+    void SetUp() final
     {
-        ReceiverTestBase::SetUp();
+        DoSetUp();
         aeron_driver_context_set_stream_session_limit(m_context, STREAM_SESSION_LIMIT);
 
         m_receive_endpoint = createEndpoint("aeron:udp?endpoint=localhost:9090");
@@ -55,6 +55,11 @@ protected:
         m_dispatcher = &m_receive_endpoint->dispatcher;
         m_test_bindings_state =
             static_cast<aeron_test_udp_bindings_state_t *>(m_destination->transport.bindings_clientd);
+    }
+
+    void TearDown() final
+    {
+        DoTearDown();
     }
 
     aeron_publication_image_t *createImage(int32_t stream_id, int32_t session_id, int64_t correlation_id = 0)

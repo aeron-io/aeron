@@ -36,8 +36,79 @@ static bool always_measure_rtt(void *state, int64_t now_ns)
     return true;
 }
 
-class PublicationImageTest : public ReceiverTestBase {
+class PublicationImageTest : public ReceiverTestBase, public testing::Test
+{
+public:
+    void SetUp() final
+    {
+        DoSetUp();
+    }
+
+    void TearDown() final
+    {
+        DoTearDown();
+    }
 };
+
+
+class ZeroDelayFeedbackGeneratorTest : public ReceiverTestBase, public testing::TestWithParam<bool>
+{
+public:
+    void SetUp() final
+    {
+        DoSetUp();
+    }
+
+    void TearDown() final
+    {
+        DoTearDown();
+    }
+};
+
+INSTANTIATE_TEST_SUITE_P(
+    ZeroDelayFeedbackGeneratorTests,
+    ZeroDelayFeedbackGeneratorTest,
+    testing::Values(true, false)
+);
+
+TEST_P(ZeroDelayFeedbackGeneratorTest, shouldConfiguredZeroDelayFeedbackGeneratorIfSubscriptionIsUnreliable)
+{
+    bool treat_as_multicast = GetParam();
+
+    const char *uri = "aeron:udp?endpoint=localhost:9090|nak-delay=5ms";
+    aeron_receive_channel_endpoint_t *endpoint = createEndpoint(uri);
+    int32_t stream_id = 777;
+    int32_t session_id = 42;
+    int64_t registration_id = 0;
+
+    aeron_udp_channel_t *channel;
+    aeron_receive_destination_t *dest;
+
+    ASSERT_EQ(0, aeron_udp_channel_parse(strlen(uri), uri, &m_resolver, &channel, false));
+
+    ASSERT_LE(0, aeron_receive_destination_create(
+        &dest,
+        channel,
+        channel,
+        m_context,
+        &m_counters_manager,
+        registration_id,
+        endpoint->channel_status.counter_id));
+
+    aeron_publication_image_t *image = createImage(endpoint, dest, stream_id, session_id, 111, false, treat_as_multicast);
+    ASSERT_NE(nullptr, image) << aeron_errmsg();
+
+    auto delay_generator_state = image->loss_detector.feedback_delay_state;
+    EXPECT_EQ(0, delay_generator_state->static_delay.delay_ns);
+    EXPECT_EQ(0, delay_generator_state->static_delay.retry_ns);
+    EXPECT_NE(&m_context->multicast_delay_feedback_generator, delay_generator_state);
+    EXPECT_NE(&m_context->unicast_delay_feedback_generator, delay_generator_state);
+
+    aeron_publication_image_remove_destination(image, endpoint->conductor_fields.udp_channel);
+    endpoint->transport_bindings->poller_remove_func(&m_receiver.poller, &dest->transport);
+    endpoint->transport_bindings->close_func(&dest->transport);
+    aeron_receive_destination_delete(dest, &m_counters_manager);
+}
 
 TEST_F(PublicationImageTest, shouldAddAndRemoveDestination)
 {
