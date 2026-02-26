@@ -751,7 +751,7 @@ class PersistentSubscriptionTest
 
     @Test
     @InterruptAfter(15)
-    void anTetheredPersistentSubscriptionDoesNotFallBehindAnUntetheredSubscription()
+    void aTetheredPersistentSubscriptionDoesNotFallBehindAnUntetheredSubscription()
     {
         final PersistentPublication persistentPublication =
             PersistentPublication.create(aeronArchive, UNICAST_CHANNEL, STREAM_ID);
@@ -841,7 +841,7 @@ class PersistentSubscriptionTest
 
         final int maxSeconds = 60;
         final int ratePerSecond = 10_000;
-        final long maxProcessingTime = 1_000_000_000 / ratePerSecond / 2;
+        final long maxProcessingTime = 1_000_000_000 / ratePerSecond / 4;
         final long t0 = System.nanoTime();
         final PerSecondStats publisherMessagesPerSecond = new PerSecondStats(t0, maxSeconds);
         final PerSecondStats publisherBpePerSecond = new PerSecondStats(t0, maxSeconds);

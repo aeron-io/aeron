@@ -21,12 +21,16 @@ import io.aeron.ChannelUri;
 import io.aeron.Image;
 import io.aeron.ImageControlledFragmentAssembler;
 import io.aeron.Subscription;
+import io.aeron.exceptions.AeronException;
 import io.aeron.exceptions.ConcurrentConcludeException;
 import io.aeron.exceptions.ConfigurationException;
+import io.aeron.exceptions.TimeoutException;
 import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.Header;
 import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
+import org.agrona.SystemUtil;
+import org.agrona.concurrent.NanoClock;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -41,7 +45,6 @@ public final class PersistentSubscription implements AutoCloseable
 {
     private final ImageControlledFragmentAssembler assembler = new ImageControlledFragmentAssembler(this::onFragment);
     private final RecordingDescriptorConsumerImpl descriptor = new RecordingDescriptorConsumerImpl();
-    private final AeronArchive aeronArchive;
     private final long recordingId;
     private final PersistentSubscriptionListener listener;
     private final String liveChannel;
@@ -49,6 +52,10 @@ public final class PersistentSubscription implements AutoCloseable
     private final String replayChannel;
     private final int replayStreamId;
     private final long startPosition;
+    private final AeronArchive.AsyncConnect asyncConnect;
+    private final NanoClock nanoClock;
+    private final long messageTimeoutNs;
+    private AeronArchive aeronArchive;
 
     private State state;
     private long joinError;
@@ -62,6 +69,9 @@ public final class PersistentSubscription implements AutoCloseable
 
     private long nextLivePosition = Aeron.NULL_VALUE;
     private long lastConsumedLivePosition = Aeron.NULL_VALUE;
+    private long lastCorrelationId;
+    private RecordingDescriptorPoller recordingDescriptorPoller;
+    private long deadlineNs;
 
     private PersistentSubscription(final Context ctx)
     {
@@ -73,9 +83,11 @@ public final class PersistentSubscription implements AutoCloseable
         this.replayChannel = ctx.replayChannel;
         this.replayStreamId = ctx.replayStreamId;
         this.listener = ctx.listener;
-        this.aeronArchive = AeronArchive.connect(ctx.aeronArchiveContext.clone());
+        this.asyncConnect = AeronArchive.asyncConnect(ctx.aeronArchiveContext.clone());
+        this.nanoClock = asyncConnect.context().aeron().context().nanoClock();
+        this.messageTimeoutNs = asyncConnect.context().messageTimeoutNs();
 
-        state(State.INIT);
+        state(State.CONNECTING_TO_ARCHIVE);
     }
 
     public static PersistentSubscription create(final Context ctx)
@@ -89,6 +101,8 @@ public final class PersistentSubscription implements AutoCloseable
 
         return switch (state)
         {
+            case CONNECTING_TO_ARCHIVE -> connectToArchive();
+            case WAIT_FOR_RECORDING_DESCRIPTOR -> waitForRecordingDescriptor();
             case INIT -> init();
             case REPLAY -> replay(fragmentHandler, fragmentLimit);
             case ATTEMPT_SWITCH -> attemptSwitch(fragmentHandler, fragmentLimit);
@@ -145,21 +159,62 @@ public final class PersistentSubscription implements AutoCloseable
         return joinError;
     }
 
-    private int init()
+    private int connectToArchive()
     {
-        if (aeronArchive.listRecording(recordingId, descriptor) == 0) // TODO make async
+        final int stepBeforePoll = asyncConnect.step();
+        aeronArchive = asyncConnect.poll();
+        if (aeronArchive != null)
         {
-            state(State.FAILED);
-            if (listener != null)
+            final ArchiveProxy archiveProxy = aeronArchive.archiveProxy();
+            final long controlSessionId = aeronArchive.controlSessionId();
+            lastCorrelationId = aeronArchive.context().aeron().nextCorrelationId();
+            if (!archiveProxy.listRecording(recordingId, lastCorrelationId, controlSessionId))
             {
-                listener.onError(new PersistentSubscriptionException(
-                    PersistentSubscriptionException.Reason.RECORDING_NOT_FOUND,
-                    "No recording found with ID: " + recordingId)
-                );
+                throw new ArchiveException("failed to send list recording request");
             }
+
+            recordingDescriptorPoller = aeronArchive.recordingDescriptorPoller();
+            recordingDescriptorPoller.reset(lastCorrelationId, 1, descriptor);
+            deadlineNs = nanoClock.nanoTime() + messageTimeoutNs;
+            state(State.WAIT_FOR_RECORDING_DESCRIPTOR);
             return 1;
         }
+        return asyncConnect.step() - stepBeforePoll;
+    }
 
+    private int waitForRecordingDescriptor()
+    {
+        final int fragments = recordingDescriptorPoller.poll();
+
+        if (recordingDescriptorPoller.isDispatchComplete())
+        {
+            if (recordingDescriptorPoller.remainingRecordCount() == 0)
+            {
+                state(State.INIT);
+                return 1;
+            }
+            else
+            {
+                state(State.FAILED);
+                if (listener != null)
+                {
+                    listener.onError(new PersistentSubscriptionException(
+                        PersistentSubscriptionException.Reason.RECORDING_NOT_FOUND,
+                        "No recording found with ID: " + recordingId)
+                    );
+                }
+                return 1;
+            }
+        }
+
+        checkForDisconnect(recordingDescriptorPoller.subscription());
+        checkDeadline(deadlineNs, "awaiting recording descriptor", lastCorrelationId);
+
+        return fragments;
+    }
+
+    private int init()
+    {
         assert descriptor.recordingId == recordingId;
 
         if (liveStreamId != descriptor.streamId)
@@ -383,6 +438,34 @@ public final class PersistentSubscription implements AutoCloseable
         }
     }
 
+    private void checkDeadline(final long deadlineNs, final String errorMessage, final long correlationId)
+    {
+        if (deadlineNs - nanoClock.nanoTime() < 0)
+        {
+            throw new TimeoutException(
+                errorMessage + " - correlationId=" + correlationId + " messageTimeout=" +
+                    SystemUtil.formatDuration(messageTimeoutNs));
+        }
+
+        if (Thread.currentThread().isInterrupted())
+        {
+            throw new AeronException("unexpected interrupt");
+        }
+    }
+
+    private void checkForDisconnect(final Subscription subscription)
+    {
+        if (!subscription.isConnected())
+        {
+            state(State.FAILED); // TODO recover
+            throw new ArchiveException(
+                "response channel from archive is not connected, " +
+                    "channel=" + subscription.channel() +
+                    ", streamId=" + subscription.streamId() +
+                    ", imageCount=" + subscription.imageCount());
+        }
+    }
+
     private int controlledPoll(
         final Image image,
         final ControlledFragmentHandler fragmentHandler,
@@ -410,6 +493,8 @@ public final class PersistentSubscription implements AutoCloseable
 
     private enum State
     {
+        CONNECTING_TO_ARCHIVE,
+        WAIT_FOR_RECORDING_DESCRIPTOR,
         INIT,
         REPLAY,
         ATTEMPT_SWITCH,
