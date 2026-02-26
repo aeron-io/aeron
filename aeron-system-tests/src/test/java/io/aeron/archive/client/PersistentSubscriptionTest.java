@@ -76,7 +76,6 @@ import static io.aeron.AeronCounters.FLOW_CONTROL_RECEIVERS_COUNTER_TYPE_ID;
 import static io.aeron.CommonContext.IPC_CHANNEL;
 import static io.aeron.CommonContext.IPC_MEDIA;
 import static io.aeron.CommonContext.SPY_PREFIX;
-import static io.aeron.CommonContext.UDP_CHANNEL;
 import static io.aeron.Publication.BACK_PRESSURED;
 import static io.aeron.driver.status.StreamCounter.CHANNEL_OFFSET;
 import static io.aeron.driver.status.StreamCounter.STREAM_ID_OFFSET;
@@ -93,14 +92,14 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 @ExtendWith({ EventLogExtension.class, InterruptingTestCallback.class })
 class PersistentSubscriptionTest
 {
+    private static final int ONE_KB_MESSAGE_SIZE = 1024 - DataHeaderFlyweight.HEADER_LENGTH;
     private static final int TERM_LENGTH = LogBufferDescriptor.TERM_MIN_LENGTH;
     private static final int STREAM_ID = 1000;
-    private static final String MDC_CHANNEL = UDP_CHANNEL + "?control=localhost:2000";
-    private static final String UDP_PUBLICATION_CHANNEL = UDP_CHANNEL + "?endpoint=localhost:2000";
-    private static final String MDC_PUBLICATION_CHANNEL = UDP_CHANNEL +
-        "?control=localhost:2000|control-mode=dynamic|fc=max";
+    private static final String MDC_SUBSCRIPTION_CHANNEL = "aeron:udp?control=localhost:2000";
+    private static final String MDC_PUBLICATION_CHANNEL =
+        "aeron:udp?control=localhost:2000|control-mode=dynamic|fc=max";
+    private static final String UNICAST_CHANNEL = "aeron:udp?endpoint=localhost:2000";
     private static final String MULTICAST_CHANNEL = "aeron:udp?endpoint=224.0.1.1:40456|interface=localhost";
-    private static final int ONE_K_MESSAGE_SIZE = 1024 - DataHeaderFlyweight.HEADER_LENGTH;
 
     @RegisterExtension
     final SystemTestWatcher systemTestWatcher = new SystemTestWatcher();
@@ -410,7 +409,7 @@ class PersistentSubscriptionTest
         final PersistentPublication persistentPublication =
             PersistentPublication.create(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID);
 
-        final List<byte[]> payloads = generateFixedPayloads(8, ONE_K_MESSAGE_SIZE);
+        final List<byte[]> payloads = generateFixedPayloads(8, ONE_KB_MESSAGE_SIZE);
         persistentPublication.persist(payloads);
 
         persistentSubscriptionCtx
@@ -436,7 +435,7 @@ class PersistentSubscriptionTest
             assertEquals(payloads.size(), fragmentHandler.receivedPayloads.size());
 
             // send some more messages
-            final List<byte[]> payloads2 = generateFixedPayloads(16, ONE_K_MESSAGE_SIZE);
+            final List<byte[]> payloads2 = generateFixedPayloads(16, ONE_KB_MESSAGE_SIZE);
             persistentPublication.persist(payloads2);
 
             executeUntil(() -> fragmentHandler.hasReceivedPayloads(payloads.size() + payloads2.size()),
@@ -569,7 +568,7 @@ class PersistentSubscriptionTest
         final Subscription subscription = aeron2.addSubscription(subChannel, STREAM_ID);
         Tests.awaitConnected(subscription);
 
-        persistentPublication.persist(generateFixedPayloads(32, ONE_K_MESSAGE_SIZE));
+        persistentPublication.persist(generateFixedPayloads(32, ONE_KB_MESSAGE_SIZE));
 
         persistentSubscriptionCtx
             .recordingId(persistentPublication.recordingId())
@@ -600,12 +599,12 @@ class PersistentSubscriptionTest
         final PersistentPublication persistentPublication =
             PersistentPublication.create(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID);
 
-        final List<byte[]> payloads = generateFixedPayloads(5, ONE_K_MESSAGE_SIZE);
+        final List<byte[]> payloads = generateFixedPayloads(5, ONE_KB_MESSAGE_SIZE);
         persistentPublication.persist(payloads);
 
         persistentSubscriptionCtx
             .recordingId(persistentPublication.recordingId())
-            .liveChannel(MDC_CHANNEL);
+            .liveChannel(MDC_SUBSCRIPTION_CHANNEL);
 
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
         {
@@ -624,7 +623,7 @@ class PersistentSubscriptionTest
             assertEquals(payloads.size(), fragmentHandler.receivedPayloads.size());
 
             // send some more messages
-            final List<byte[]> payloads2 = generateFixedPayloads(5, ONE_K_MESSAGE_SIZE);
+            final List<byte[]> payloads2 = generateFixedPayloads(5, ONE_KB_MESSAGE_SIZE);
             persistentPublication.persist(payloads2);
 
             executeUntil(
@@ -643,11 +642,11 @@ class PersistentSubscriptionTest
                     new Aeron.Context().aeronDirectoryName(mediaDriver.aeronDirectoryName())))
             {
                 final CountingFragmentHandler fastSubscriptionFragmentHandler = new CountingFragmentHandler();
-                final Subscription subscription = aeron.addSubscription(MDC_CHANNEL, STREAM_ID);
+                final Subscription subscription = aeron.addSubscription(MDC_SUBSCRIPTION_CHANNEL, STREAM_ID);
 
                 Tests.awaitConnected(subscription);
 
-                final List<byte[]> payloads3 = generateFixedPayloads(64, ONE_K_MESSAGE_SIZE);
+                final List<byte[]> payloads3 = generateFixedPayloads(64, ONE_KB_MESSAGE_SIZE);
                 persistentPublication.persist(payloads3);
 
                 executeUntil(
@@ -661,7 +660,7 @@ class PersistentSubscriptionTest
                 );
                 assertTrue(persistentSubscription.isReplaying());
 
-                final List<byte[]> payloads4 = generateFixedPayloads(5, ONE_K_MESSAGE_SIZE);
+                final List<byte[]> payloads4 = generateFixedPayloads(5, ONE_KB_MESSAGE_SIZE);
                 persistentPublication.persist(payloads4);
 
                 final int expectedMessageCount =
@@ -685,7 +684,7 @@ class PersistentSubscriptionTest
 
         persistentSubscriptionCtx
             .recordingId(persistentPublication.recordingId())
-            .liveChannel(MDC_CHANNEL);
+            .liveChannel(MDC_SUBSCRIPTION_CHANNEL);
 
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
         {
@@ -712,15 +711,15 @@ class PersistentSubscriptionTest
     void anUntetheredPersistentSubscriptionCanFallBehindATetheredSubscription()
     {
         final PersistentPublication persistentPublication =
-            PersistentPublication.create(aeronArchive, UDP_PUBLICATION_CHANNEL, STREAM_ID);
+            PersistentPublication.create(aeronArchive, UNICAST_CHANNEL, STREAM_ID);
 
         persistentSubscriptionCtx
             .recordingId(persistentPublication.recordingId())
-            .liveChannel(UDP_PUBLICATION_CHANNEL + "|tether=false"); // <-- persistentSubscription is untethered
+            .liveChannel(UNICAST_CHANNEL + "|tether=false"); // <-- persistentSubscription is untethered
 
         final CountingFragmentHandler fastSubscriptionFragmentHandler = new CountingFragmentHandler();
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx);
-            Subscription subscription = aeron.addSubscription(UDP_PUBLICATION_CHANNEL + "|tether=true", STREAM_ID))
+            Subscription subscription = aeron.addSubscription(UNICAST_CHANNEL + "|tether=true", STREAM_ID))
         {
             Tests.awaitConnected(subscription);
 
@@ -729,7 +728,7 @@ class PersistentSubscriptionTest
                 () -> persistentSubscription.controlledPoll(fragmentHandler, 10)
             );
 
-            persistentPublication.persist(generateFixedPayloads(64, ONE_K_MESSAGE_SIZE));
+            persistentPublication.persist(generateFixedPayloads(64, ONE_KB_MESSAGE_SIZE));
 
             executeUntil(
                 () -> fastSubscriptionFragmentHandler.hasReceivedPayloads(64),
@@ -755,14 +754,14 @@ class PersistentSubscriptionTest
     void anTetheredPersistentSubscriptionDoesNotFallBehindAnUntetheredSubscription()
     {
         final PersistentPublication persistentPublication =
-            PersistentPublication.create(aeronArchive, UDP_PUBLICATION_CHANNEL, STREAM_ID);
+            PersistentPublication.create(aeronArchive, UNICAST_CHANNEL, STREAM_ID);
 
         persistentSubscriptionCtx
             .recordingId(persistentPublication.recordingId())
-            .liveChannel(UDP_PUBLICATION_CHANNEL + "|tether=true"); // <-- persistentSubscription is tethered
+            .liveChannel(UNICAST_CHANNEL + "|tether=true"); // <-- persistentSubscription is tethered
 
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx);
-            Subscription subscription = aeron.addSubscription(UDP_PUBLICATION_CHANNEL + "|tether=false", STREAM_ID))
+            Subscription subscription = aeron.addSubscription(UNICAST_CHANNEL + "|tether=false", STREAM_ID))
         {
             Tests.awaitConnected(subscription);
 
@@ -771,7 +770,7 @@ class PersistentSubscriptionTest
                 () -> persistentSubscription.controlledPoll(fragmentHandler, 10)
             );
 
-            persistentPublication.persist(generateFixedPayloads(64, ONE_K_MESSAGE_SIZE));
+            persistentPublication.persist(generateFixedPayloads(64, ONE_KB_MESSAGE_SIZE));
 
             executeUntil(
                 () -> fragmentHandler.hasReceivedPayloads(64),
