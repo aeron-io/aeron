@@ -365,7 +365,7 @@ int aeron_archive_async_connect_poll(aeron_archive_t **aeron_archive, aeron_arch
             poller->correlation_id == async->correlation_id)
         {
             async->control_session_id = poller->control_session_id;
-            aeron_archive_proxy_set_control_esssion_id(async->archive_proxy, poller->control_session_id);
+            aeron_archive_proxy_set_control_session_id(async->archive_proxy, poller->control_session_id);
 
             if (poller->was_challenged)
             {
