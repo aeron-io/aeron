@@ -36,6 +36,7 @@ import org.agrona.SemanticVersion;
 import org.agrona.Strings;
 import org.agrona.collections.ArrayListUtil;
 import org.agrona.collections.Long2ObjectHashMap;
+import org.agrona.collections.LongArrayQueue;
 import org.agrona.concurrent.CountedErrorHandler;
 import org.agrona.concurrent.errors.DistinctErrorLog;
 
@@ -78,6 +79,7 @@ class SessionManager
     private final ArrayDeque<List<StandbySnapshotEntry>> pendingStandbySnapshotNotifications = new ArrayDeque<>();
     private final ArrayDeque<DelayedStandbySnapshotNotification> delayedStandbySnapshotNotifications =
         new ArrayDeque<>();
+    private final LongArrayQueue uncommittedNextCommittedSessionIds = new LongArrayQueue(Long.MAX_VALUE);
 
     private final int memberId;
     private final ClusterClock clusterClock;
@@ -636,10 +638,10 @@ class SessionManager
                                 session.openedLogPosition(),
                                 nowNs,
                                 clusterTimeUnit);
-                            if (session.id() >= nextCommittedSessionId)
-                            {
-                                nextCommittedSessionId = session.id() + 1;
-                            }
+
+                            uncommittedNextCommittedSessionIds.offerLong(logPublisher.position());
+                            uncommittedNextCommittedSessionIds.offerLong(session.id() + 1);
+
                             ArrayListUtil.fastUnorderedRemove(pendingSessions, i, lastIndex--);
                             addSession(session);
                             workCount += 1;
@@ -1061,6 +1063,12 @@ class SessionManager
 
             uncommittedClosedSessions.pollFirst();
         }
+
+        while (uncommittedNextCommittedSessionIds.peekLong() <= commitPosition)
+        {
+            uncommittedNextCommittedSessionIds.pollLong();
+            nextCommittedSessionId = Math.max(nextCommittedSessionId, uncommittedNextCommittedSessionIds.pollLong());
+        }
     }
 
     void restoreUncommittedSessions(final long commitPosition)
@@ -1075,6 +1083,14 @@ class SessionManager
                 addSession(session);
             }
         }
+
+        while (uncommittedNextCommittedSessionIds.peekLong() <= commitPosition)
+        {
+            uncommittedNextCommittedSessionIds.pollLong();
+            nextCommittedSessionId = Math.max(nextCommittedSessionId, uncommittedNextCommittedSessionIds.pollLong());
+        }
+        uncommittedNextCommittedSessionIds.clear();
+        nextSessionId = nextCommittedSessionId;
     }
 
     void updateTimeOfLastActivity()
