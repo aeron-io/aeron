@@ -52,7 +52,6 @@ import io.aeron.driver.media.UdpChannel;
 import io.aeron.exceptions.AeronException;
 import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.Header;
-import io.aeron.security.Authenticator;
 import io.aeron.security.AuthorisationService;
 import io.aeron.status.LocalSocketAddressStatus;
 import io.aeron.status.ReadableCounter;
@@ -184,7 +183,6 @@ final class ConsensusModuleAgent
     private final LongArrayQueue uncommittedPreviousState = new LongArrayQueue(Long.MAX_VALUE);
     private final PendingServiceMessageTracker[] pendingServiceMessageTrackers;
     private final ConsensusModuleExtension consensusModuleExtension;
-    private final Authenticator authenticator;
     private final AuthorisationService authorisationService;
     private final Aeron aeron;
     private final ConsensusModule.Context ctx;
@@ -267,7 +265,6 @@ final class ConsensusModuleAgent
             aeron.addSubscription(ctx.controlChannel(), ctx.consensusModuleStreamId()), this);
         serviceProxy = new ServiceProxy(aeron.addPublication(ctx.controlChannel(), ctx.serviceStreamId()));
 
-        authenticator = sessionManager.authenticator();
         authorisationService = sessionManager.authorisationService();
 
         pendingServiceMessageTrackers = new PendingServiceMessageTracker[ctx.serviceCount()];
@@ -647,18 +644,14 @@ final class ConsensusModuleAgent
         final int offset,
         final int length)
     {
-        final ClusterSession session = new ClusterSession(
-            memberId, clusterSessionId, responseStreamId, responseChannel, responseChannel);
-
-        session.loadSnapshotState(correlationId, openedPosition, timeOfLastActivity, closeReason);
-
-        sessionManager.addSession(session);
-
-        if (clusterSessionId >= sessionManager.nextSessionId)
-        {
-            sessionManager.nextSessionId = clusterSessionId + 1;
-            sessionManager.nextCommittedSessionId = sessionManager.nextSessionId;
-        }
+        sessionManager.onLoadClusterSession(
+            clusterSessionId,
+            correlationId,
+            openedPosition,
+            timeOfLastActivity,
+            closeReason,
+            responseStreamId,
+            responseChannel);
     }
 
     public void onLoadConsensusModuleState(
@@ -670,8 +663,7 @@ final class ConsensusModuleAgent
         final int offset,
         final int length)
     {
-        sessionManager.nextSessionId = nextSessionId;
-        sessionManager.nextCommittedSessionId = nextSessionId;
+        sessionManager.loadNextSessionId(nextSessionId);
 
         if (pendingServiceMessageTrackers.length > 0)
         {
@@ -3135,14 +3127,14 @@ final class ConsensusModuleAgent
         {
             final PendingServiceMessageTracker trackerOne = pendingServiceMessageTrackers[0];
             snapshotTaker.snapshotConsensusModuleState(
-                sessionManager.nextCommittedSessionId,
+                sessionManager.nextCommittedSessionId(),
                 trackerOne.nextServiceSessionId(),
                 trackerOne.logServiceSessionId(),
                 trackerOne.size());
         }
         else
         {
-            snapshotTaker.snapshotConsensusModuleState(sessionManager.nextCommittedSessionId, 0, 0, 0);
+            snapshotTaker.snapshotConsensusModuleState(sessionManager.nextCommittedSessionId(), 0, 0, 0);
         }
 
         sessionManager.snapshotSessions(snapshotTaker);
@@ -3437,7 +3429,7 @@ final class ConsensusModuleAgent
         expectedAckPosition = bootstrapState.expectedAckPosition;
         serviceAckId = bootstrapState.serviceAckId;
         leadershipTermId = bootstrapState.leadershipTermId;
-        sessionManager.nextSessionId = bootstrapState.nextSessionId;
+        sessionManager.loadNextSessionId(bootstrapState.nextSessionId);
 
         for (final ConsensusModuleStateExport.TimerStateExport timer : bootstrapState.timers)
         {

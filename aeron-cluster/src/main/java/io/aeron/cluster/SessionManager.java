@@ -73,7 +73,7 @@ class SessionManager
     private final ArrayList<ClusterSession> pendingBackupSessions = new ArrayList<>();
     private final ArrayList<ClusterSession> rejectedBackupSessions = new ArrayList<>();
 
-    final ArrayDeque<ClusterSession> uncommittedClosedSessions = new ArrayDeque<>();
+    private final ArrayDeque<ClusterSession> uncommittedClosedSessions = new ArrayDeque<>();
 
     private final int memberId;
     private final ClusterClock clusterClock;
@@ -98,8 +98,8 @@ class SessionManager
     private final int maxConcurrentSessions;
     private final MutableDirectBuffer tempBuffer = new ExpandableArrayBuffer();
 
-    long nextSessionId = 1;
-    long nextCommittedSessionId = nextSessionId;
+    private long nextSessionId = 1;
+    private long nextCommittedSessionId = nextSessionId;
 
     SessionManager(
         final ConsensusModule.Context ctx,
@@ -134,14 +134,14 @@ class SessionManager
         return sessionByIdMap.get(clusterSessionId);
     }
 
-    Authenticator authenticator()
-    {
-        return authenticator;
-    }
-
     AuthorisationService authorisationService()
     {
         return authorisationService;
+    }
+
+    long nextCommittedSessionId()
+    {
+        return nextCommittedSessionId;
     }
 
     void addSession(final ClusterSession session)
@@ -485,6 +485,35 @@ class SessionManager
             recoveryPlan);
 
         return workCount;
+    }
+
+    void onLoadClusterSession(
+        final long clusterSessionId,
+        final long correlationId,
+        final long openedPosition,
+        final long timeOfLastActivity,
+        final CloseReason closeReason,
+        final int responseStreamId,
+        final String responseChannel)
+    {
+        final ClusterSession session = new ClusterSession(
+            memberId, clusterSessionId, responseStreamId, responseChannel, responseChannel);
+
+        session.loadSnapshotState(correlationId, openedPosition, timeOfLastActivity, closeReason);
+
+        addSession(session);
+
+        if (clusterSessionId >= nextSessionId)
+        {
+            nextSessionId = clusterSessionId + 1;
+            nextCommittedSessionId = nextSessionId;
+        }
+    }
+
+    void loadNextSessionId(final long nextSessionId)
+    {
+        this.nextSessionId = nextSessionId;
+        this.nextCommittedSessionId = nextSessionId;
     }
 
     int processPendingBackupSessions(
