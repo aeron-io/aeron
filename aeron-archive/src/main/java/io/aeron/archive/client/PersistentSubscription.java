@@ -21,6 +21,7 @@ import io.aeron.ChannelUri;
 import io.aeron.Image;
 import io.aeron.ImageControlledFragmentAssembler;
 import io.aeron.Subscription;
+import io.aeron.archive.codecs.ControlResponseCode;
 import io.aeron.exceptions.AeronException;
 import io.aeron.exceptions.ConcurrentConcludeException;
 import io.aeron.exceptions.ConfigurationException;
@@ -45,6 +46,7 @@ public final class PersistentSubscription implements AutoCloseable
 {
     private final ImageControlledFragmentAssembler assembler = new ImageControlledFragmentAssembler(this::onFragment);
     private final RecordingDescriptorConsumerImpl descriptor = new RecordingDescriptorConsumerImpl();
+    private final SwitchDecisionThing switchDecisionThing = new SwitchDecisionThing();
     private final long recordingId;
     private final PersistentSubscriptionListener listener;
     private final String liveChannel;
@@ -60,7 +62,7 @@ public final class PersistentSubscription implements AutoCloseable
     private State state;
     private long joinError;
     private Subscription replaySubscription;
-    private long candidateSwitchPosition;
+    //    private long candidateSwitchPosition;
     private int replaySessionId;
     private Subscription liveSubscription;
     private ControlledFragmentHandler controlledFragmentHandler;
@@ -282,20 +284,26 @@ public final class PersistentSubscription implements AutoCloseable
         final int fragments = controlledPoll(replayImage, fragmentHandler, fragmentLimit);
 
         final long replayedPosition = replayImage.position();
-        if (replayedPosition >= candidateSwitchPosition)
+        if (switchDecisionThing.shouldSwitch(replayedPosition))
         {
-            final long maxRecordedPosition = aeronArchive.getMaxRecordedPosition(recordingId);
-            if (closeEnough(replayedPosition, maxRecordedPosition))
-            {
-                liveImage = null;
-                liveSubscription = aeronArchive.context().aeron().addSubscription(liveChannel, liveStreamId);
-                state(State.ATTEMPT_SWITCH);
-            }
-            else
-            {
-                candidateSwitchPosition = maxRecordedPosition;
-            }
+            liveImage = null;
+            liveSubscription = aeronArchive.context().aeron().addSubscription(liveChannel, liveStreamId);
+            state(State.ATTEMPT_SWITCH);
         }
+//        if (replayedPosition >= candidateSwitchPosition)
+//        {
+//            final long maxRecordedPosition = aeronArchive.getMaxRecordedPosition(recordingId);
+//            if (closeEnough(replayedPosition, maxRecordedPosition))
+//            {
+//                liveImage = null;
+//                liveSubscription = aeronArchive.context().aeron().addSubscription(liveChannel, liveStreamId);
+//                state(State.ATTEMPT_SWITCH);
+//            }
+//            else
+//            {
+//                candidateSwitchPosition = maxRecordedPosition;
+//            }
+//        }
 
         return fragments;
     }
@@ -411,7 +419,7 @@ public final class PersistentSubscription implements AutoCloseable
 
         replaySubscription = aeronArchive.context().aeron().addSubscription(replayChannel, replayStreamId);
 
-        candidateSwitchPosition = aeronArchive.getMaxRecordedPosition(recordingId);
+        switchDecisionThing.reset(recordingId, descriptor.termBufferLength >> 2);
 
         // TODO async
 
@@ -736,6 +744,122 @@ public final class PersistentSubscription implements AutoCloseable
         public void onError(final Exception e)
         {
 
+        }
+    }
+
+    private class SwitchDecisionThing
+    {
+        private long maxRecordedPosition = Long.MAX_VALUE;
+        private boolean recheckRequired = true;
+        private boolean waitingForMaxPosition = false;
+        private boolean sentRequestForMaxPosition = false;
+        private int closeEnoughThreshold;
+        private long maxPositionCorrelationId;
+        private long deadlineNs;
+        private long recordingId;
+
+        public void reset(final long recordingId, final int closeEnoughThreshold)
+        {
+            this.recordingId = recordingId;
+            this.closeEnoughThreshold = closeEnoughThreshold;
+            this.waitingForMaxPosition = true;
+        }
+
+        public boolean shouldSwitch(final long replayedPosition)
+        {
+            if (waitingForMaxPosition)
+            {
+                pollForMaxPosition();
+                return false;
+            }
+
+            if (recheckRequired)
+            {
+                if (replayedPosition >= maxRecordedPosition)
+                {
+                    startMaxPositionReload();
+                    recheckRequired = false;
+                }
+                return false;
+            }
+
+            if (closeEnough(replayedPosition, maxRecordedPosition))
+            {
+                return true;
+            }
+            else
+            {
+                recheckRequired = true;
+                return false;
+            }
+        }
+
+        private void startMaxPositionReload()
+        {
+            maxPositionCorrelationId = aeronArchive.context().aeron().nextCorrelationId();
+            deadlineNs = nanoClock.nanoTime() + messageTimeoutNs;
+
+            if (!aeronArchive.archiveProxy()
+                .getMaxRecordedPosition(recordingId, maxPositionCorrelationId, aeronArchive.controlSessionId()))
+            {
+                throw new ArchiveException("failed to send get max recorded position request");
+            }
+            sentRequestForMaxPosition = true;
+            waitingForMaxPosition = true;
+        }
+
+        private void pollForMaxPosition()
+        {
+            if (!sentRequestForMaxPosition)
+            {
+                startMaxPositionReload();
+            }
+
+            final ControlResponsePoller poller = aeronArchive.controlResponsePoller();
+            final int fragments = poller.poll();
+
+            if (poller.isPollComplete() && fragments != 0)
+            {
+                final ControlResponseCode code = poller.code();
+                if (ControlResponseCode.ERROR == code)
+                {
+                    final ArchiveException ex = new ArchiveException(
+                        "response for correlationId=" + poller.correlationId() + ", error: " + poller.errorMessage(),
+                        (int)poller.relevantId(),
+                        poller.correlationId());
+
+                    if (poller.correlationId() == maxPositionCorrelationId)
+                    {
+                        listener.onError(ex);
+                        state(State.FAILED);
+                    }
+                    else if (aeronArchive.context().errorHandler() != null)
+                    {
+                        aeronArchive.context().errorHandler().onError(ex);
+                    }
+                }
+                else if (poller.correlationId() == maxPositionCorrelationId)
+                {
+                    if (ControlResponseCode.OK != code)
+                    {
+                        throw new ArchiveException("unexpected response code: " + code);
+                    }
+
+                    maxRecordedPosition = poller.relevantId();
+                    waitingForMaxPosition = false;
+                    sentRequestForMaxPosition = false;
+                }
+            }
+            else
+            {
+                checkForDisconnect(poller.subscription());
+                checkDeadline(deadlineNs, "awaiting response", maxPositionCorrelationId);
+            }
+        }
+
+        private boolean closeEnough(final long replayedPosition, final long maxRecordedPosition)
+        {
+            return replayedPosition >= maxRecordedPosition - closeEnoughThreshold;
         }
     }
 }
