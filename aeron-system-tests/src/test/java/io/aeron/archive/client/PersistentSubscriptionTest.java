@@ -162,6 +162,7 @@ class PersistentSubscriptionTest
         listener = new PersistentSubscriptionListenerImpl();
 
         persistentSubscriptionCtx = new PersistentSubscription.Context()
+            .aeron(aeron)
             .recordingId(13)
             .startPosition(0)
             .liveChannel(IPC_CHANNEL)
@@ -837,10 +838,10 @@ class PersistentSubscriptionTest
         Tests.awaitConnected(controlSubscription);
 
         persistentSubscriptionCtx
+            .aeron(aeron2)
             .recordingId(persistentPublication.recordingId())
             .liveChannel(subChannel)
-            .listener(null)
-            .aeronArchiveContext(TestContexts.localhostAeronArchive().aeron(aeron2));
+            .listener(null);
 
         final int maxSeconds = 60;
         final int ratePerSecond = 10_000;

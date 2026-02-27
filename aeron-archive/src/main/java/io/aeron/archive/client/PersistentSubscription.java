@@ -22,7 +22,6 @@ import io.aeron.Image;
 import io.aeron.ImageControlledFragmentAssembler;
 import io.aeron.Subscription;
 import io.aeron.archive.codecs.ControlResponseCode;
-import io.aeron.exceptions.AeronException;
 import io.aeron.exceptions.ConcurrentConcludeException;
 import io.aeron.exceptions.ConfigurationException;
 import io.aeron.exceptions.TimeoutException;
@@ -38,6 +37,8 @@ import java.lang.invoke.VarHandle;
 
 import static io.aeron.CommonContext.ENDPOINT_PARAM_NAME;
 import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
+import static io.aeron.archive.codecs.ControlResponseCode.OK;
+import static io.aeron.archive.codecs.ControlResponseCode.RECORDING_UNKNOWN;
 
 /**
  *
@@ -47,6 +48,8 @@ public final class PersistentSubscription implements AutoCloseable
     private final ImageControlledFragmentAssembler assembler = new ImageControlledFragmentAssembler(this::onFragment);
     private final RecordingDescriptorConsumerImpl descriptor = new RecordingDescriptorConsumerImpl();
     private final SwitchDecisionThing switchDecisionThing = new SwitchDecisionThing();
+    private final AsyncArchiveOp replayRequest = new AsyncArchiveOp();
+    private final Context ctx;
     private final long recordingId;
     private final PersistentSubscriptionListener listener;
     private final String liveChannel;
@@ -54,40 +57,39 @@ public final class PersistentSubscription implements AutoCloseable
     private final String replayChannel;
     private final int replayStreamId;
     private final long startPosition;
-    private final AeronArchive.AsyncConnect asyncConnect;
+    private final Aeron aeron;
     private final NanoClock nanoClock;
+    private final AsyncAeronArchive asyncAeronArchive;
     private final long messageTimeoutNs;
-    private AeronArchive aeronArchive;
+    private boolean awaitingReplayResponse;
 
     private State state;
-    private long joinError;
     private Subscription replaySubscription;
-    //    private long candidateSwitchPosition;
-    private int replaySessionId;
     private Subscription liveSubscription;
-    private ControlledFragmentHandler controlledFragmentHandler;
     private Image replayImage;
     private Image liveImage;
+    private ControlledFragmentHandler controlledFragmentHandler;
+    private long joinError;
 
     private long nextLivePosition = Aeron.NULL_VALUE;
     private long lastConsumedLivePosition = Aeron.NULL_VALUE;
-    private long lastCorrelationId;
-    private RecordingDescriptorPoller recordingDescriptorPoller;
-    private long deadlineNs;
 
     private PersistentSubscription(final Context ctx)
     {
         ctx.conclude();
-        this.recordingId = ctx.recordingId;
-        this.startPosition = ctx.startPosition;
-        this.liveChannel = ctx.liveChannel;
-        this.liveStreamId = ctx.liveStreamId;
-        this.replayChannel = ctx.replayChannel;
-        this.replayStreamId = ctx.replayStreamId;
-        this.listener = ctx.listener;
-        this.asyncConnect = AeronArchive.asyncConnect(ctx.aeronArchiveContext.clone());
-        this.nanoClock = asyncConnect.context().aeron().context().nanoClock();
-        this.messageTimeoutNs = asyncConnect.context().messageTimeoutNs();
+
+        this.ctx = ctx;
+        recordingId = ctx.recordingId;
+        startPosition = ctx.startPosition;
+        liveChannel = ctx.liveChannel;
+        liveStreamId = ctx.liveStreamId;
+        replayChannel = ctx.replayChannel;
+        replayStreamId = ctx.replayStreamId;
+        listener = ctx.listener;
+        aeron = ctx.aeron;
+        nanoClock = aeron.context().nanoClock();
+        asyncAeronArchive = new AsyncAeronArchive(ctx.aeronArchiveContext().aeron(aeron), new ArchiveListener());
+        messageTimeoutNs = ctx.aeronArchiveContext().messageTimeoutNs();
 
         state(State.CONNECTING_TO_ARCHIVE);
     }
@@ -99,9 +101,9 @@ public final class PersistentSubscription implements AutoCloseable
 
     public int controlledPoll(final ControlledFragmentHandler fragmentHandler, final int fragmentLimit)
     {
-        // TODO handle ArchiveException if we use blocking API
+        int workCount = asyncAeronArchive.poll();
 
-        return switch (state)
+        workCount += switch (state)
         {
             case CONNECTING_TO_ARCHIVE -> connectToArchive();
             case WAIT_FOR_RECORDING_DESCRIPTOR -> waitForRecordingDescriptor();
@@ -111,6 +113,8 @@ public final class PersistentSubscription implements AutoCloseable
             case LIVE -> live(fragmentHandler, fragmentLimit);
             case FAILED -> 0;
         };
+
+        return workCount;
     }
 
     /**
@@ -153,7 +157,7 @@ public final class PersistentSubscription implements AutoCloseable
     public void close()
     {
         // TODO do we need to explicitly stop replay if there is one?
-        CloseHelper.close(aeronArchive);
+        CloseHelper.closeAll(asyncAeronArchive, ctx::close);
     }
 
     long joinError()
@@ -163,56 +167,48 @@ public final class PersistentSubscription implements AutoCloseable
 
     private int connectToArchive()
     {
-        final int stepBeforePoll = asyncConnect.step();
-        aeronArchive = asyncConnect.poll();
-        if (aeronArchive != null)
+        if (asyncAeronArchive.isConnected())
         {
-            final ArchiveProxy archiveProxy = aeronArchive.archiveProxy();
-            final long controlSessionId = aeronArchive.controlSessionId();
-            lastCorrelationId = aeronArchive.context().aeron().nextCorrelationId();
-            if (!archiveProxy.listRecording(recordingId, lastCorrelationId, controlSessionId))
+            final long correlationId = aeron.nextCorrelationId();
+            if (!asyncAeronArchive.trySendListRecordingRequest(correlationId, recordingId))
             {
-                throw new ArchiveException("failed to send list recording request");
+                throw new ArchiveException("failed to send list recording request"); // TODO
             }
-
-            recordingDescriptorPoller = aeronArchive.recordingDescriptorPoller();
-            recordingDescriptorPoller.reset(lastCorrelationId, 1, descriptor);
-            deadlineNs = nanoClock.nanoTime() + messageTimeoutNs;
+            descriptor.init(correlationId, nanoClock.nanoTime() + messageTimeoutNs);
+            descriptor.remaining = 1;
             state(State.WAIT_FOR_RECORDING_DESCRIPTOR);
             return 1;
         }
-        return asyncConnect.step() - stepBeforePoll;
+
+        return 0;
     }
 
     private int waitForRecordingDescriptor()
     {
-        final int fragments = recordingDescriptorPoller.poll();
-
-        if (recordingDescriptorPoller.isDispatchComplete())
+        if (!descriptor.responseReceived)
         {
-            if (recordingDescriptorPoller.remainingRecordCount() == 0)
+            checkDeadline(descriptor.deadlineNs, "awaiting recording descriptor", descriptor.correlationId);
+            return 0;
+        }
+
+        if (descriptor.remaining == 0)
+        {
+            state(State.INIT);
+        }
+        else
+        {
+            assert descriptor.code == RECORDING_UNKNOWN && descriptor.relevantId == recordingId;
+            state(State.FAILED);
+            if (listener != null)
             {
-                state(State.INIT);
-                return 1;
-            }
-            else
-            {
-                state(State.FAILED);
-                if (listener != null)
-                {
-                    listener.onError(new PersistentSubscriptionException(
-                        PersistentSubscriptionException.Reason.RECORDING_NOT_FOUND,
-                        "No recording found with ID: " + recordingId)
-                    );
-                }
-                return 1;
+                listener.onError(new PersistentSubscriptionException(
+                    PersistentSubscriptionException.Reason.RECORDING_NOT_FOUND,
+                    "No recording found with ID: " + recordingId)
+                );
             }
         }
 
-        checkForDisconnect(recordingDescriptorPoller.subscription());
-        checkDeadline(deadlineNs, "awaiting recording descriptor", lastCorrelationId);
-
-        return fragments;
+        return 1;
     }
 
     private int init()
@@ -267,11 +263,28 @@ public final class PersistentSubscription implements AutoCloseable
 
     private int replay(final ControlledFragmentHandler fragmentHandler, final int fragmentLimit)
     {
+        if (awaitingReplayResponse)
+        {
+            if (replayRequest.responseReceived)
+            {
+                awaitingReplayResponse = false;
+            }
+            else
+            {
+                checkDeadline(replayRequest.deadlineNs, "awaiting response", replayRequest.correlationId);
+            }
+
+            if (awaitingReplayResponse)
+            {
+                return 0;
+            }
+        }
+
         Image replayImage = this.replayImage;
 
         if (replayImage == null)
         {
-            replayImage = replaySubscription.imageBySessionId(replaySessionId);
+            replayImage = replaySubscription.imageBySessionId((int)replayRequest.relevantId);
 
             if (replayImage == null)
             {
@@ -287,30 +300,11 @@ public final class PersistentSubscription implements AutoCloseable
         if (switchDecisionThing.shouldSwitch(replayedPosition))
         {
             liveImage = null;
-            liveSubscription = aeronArchive.context().aeron().addSubscription(liveChannel, liveStreamId);
+            liveSubscription = aeron.addSubscription(liveChannel, liveStreamId);
             state(State.ATTEMPT_SWITCH);
         }
-//        if (replayedPosition >= candidateSwitchPosition)
-//        {
-//            final long maxRecordedPosition = aeronArchive.getMaxRecordedPosition(recordingId);
-//            if (closeEnough(replayedPosition, maxRecordedPosition))
-//            {
-//                liveImage = null;
-//                liveSubscription = aeronArchive.context().aeron().addSubscription(liveChannel, liveStreamId);
-//                state(State.ATTEMPT_SWITCH);
-//            }
-//            else
-//            {
-//                candidateSwitchPosition = maxRecordedPosition;
-//            }
-//        }
 
         return fragments;
-    }
-
-    private boolean closeEnough(final long replayedPosition, final long maxRecordedPosition)
-    {
-        return replayedPosition >= maxRecordedPosition - (descriptor.termBufferLength >> 2);
     }
 
     private int attemptSwitch(final ControlledFragmentHandler fragmentHandler, final int fragmentLimit)
@@ -417,11 +411,8 @@ public final class PersistentSubscription implements AutoCloseable
     {
         replayImage = null;
 
-        replaySubscription = aeronArchive.context().aeron().addSubscription(replayChannel, replayStreamId);
-
-        switchDecisionThing.reset(recordingId, descriptor.termBufferLength >> 2);
-
         // TODO async
+        replaySubscription = aeron.addSubscription(replayChannel, replayStreamId);
 
         final ChannelUri replayChannelUri = ChannelUri.parse(replayChannel);
         if (replayChannelUri.isUdp())
@@ -429,12 +420,21 @@ public final class PersistentSubscription implements AutoCloseable
             replayChannelUri.put(ENDPOINT_PARAM_NAME, replaySubscription.resolvedEndpoint());
         }
 
-        replaySessionId = (int)aeronArchive.startReplay(
+        final long correlationId = aeron.nextCorrelationId();
+        if (!asyncAeronArchive.trySendReplayRequest(
+            correlationId,
             recordingId,
             startPosition,
             AeronArchive.REPLAY_ALL_AND_FOLLOW,
-            replayChannelUri.toString(),
-            replaySubscription.streamId());
+            replaySubscription.streamId(),
+            replayChannelUri.toString()))
+        {
+            throw new ArchiveException("failed to send replay request"); // TODO
+        }
+        replayRequest.init(correlationId, nanoClock.nanoTime() + messageTimeoutNs);
+        awaitingReplayResponse = true;
+
+        switchDecisionThing.reset(recordingId, descriptor.termBufferLength >> 2);
     }
 
     private void state(final State newState)
@@ -453,24 +453,6 @@ public final class PersistentSubscription implements AutoCloseable
             throw new TimeoutException(
                 errorMessage + " - correlationId=" + correlationId + " messageTimeout=" +
                     SystemUtil.formatDuration(messageTimeoutNs));
-        }
-
-        if (Thread.currentThread().isInterrupted())
-        {
-            throw new AeronException("unexpected interrupt");
-        }
-    }
-
-    private void checkForDisconnect(final Subscription subscription)
-    {
-        if (!subscription.isConnected())
-        {
-            state(State.FAILED); // TODO recover
-            throw new ArchiveException(
-                "response channel from archive is not connected, " +
-                    "channel=" + subscription.channel() +
-                    ", streamId=" + subscription.streamId() +
-                    ", imageCount=" + subscription.imageCount());
         }
     }
 
@@ -510,8 +492,41 @@ public final class PersistentSubscription implements AutoCloseable
         FAILED,
     }
 
-    private static final class RecordingDescriptorConsumerImpl implements RecordingDescriptorConsumer
+    private static class AsyncArchiveOp
     {
+        protected long correlationId;
+        protected long deadlineNs;
+
+        protected long relevantId;
+        protected ControlResponseCode code;
+        protected String errorMessage;
+
+        protected boolean responseReceived;
+
+        void init(final long correlationId, final long deadlineNs)
+        {
+            this.correlationId = correlationId;
+            this.deadlineNs = deadlineNs;
+
+            responseReceived = false;
+        }
+
+        void onControlResponse(final long relevantId, final ControlResponseCode code, final String errorMessage)
+        {
+            this.relevantId = relevantId;
+            this.code = code;
+            this.errorMessage = errorMessage;
+
+            responseReceived = true;
+        }
+    }
+
+    private static final class RecordingDescriptorConsumerImpl
+        extends AsyncArchiveOp
+        implements RecordingDescriptorConsumer
+    {
+        int remaining;
+
         long recordingId;
         long startPosition;
         long stopPosition;
@@ -541,6 +556,11 @@ public final class PersistentSubscription implements AutoCloseable
             this.stopPosition = stopPosition;
             this.termBufferLength = termBufferLength;
             this.streamId = streamId;
+
+            if (--remaining == 0)
+            {
+                responseReceived = true;
+            }
         }
     }
 
@@ -561,6 +581,9 @@ public final class PersistentSubscription implements AutoCloseable
         }
 
         private volatile boolean isConcluded;
+        private Aeron aeron;
+        private boolean ownsAeronClient;
+        private String aeronDirectoryName;
         private long recordingId = Aeron.NULL_VALUE;
         private long startPosition = 0; // TODO default to FROM_LIVE
         private String liveChannel = null;
@@ -569,6 +592,39 @@ public final class PersistentSubscription implements AutoCloseable
         private int replayStreamId = Aeron.NULL_VALUE;
         private PersistentSubscriptionListener listener = null;
         private AeronArchive.Context aeronArchiveContext = null;
+
+        public Context aeron(final Aeron aeron)
+        {
+            this.aeron = aeron;
+            return this;
+        }
+
+        public Aeron aeron()
+        {
+            return aeron;
+        }
+
+        public boolean ownsAeronClient()
+        {
+            return ownsAeronClient;
+        }
+
+        public Context ownsAeronClient(final boolean ownsAeronClient)
+        {
+            this.ownsAeronClient = ownsAeronClient;
+            return this;
+        }
+
+        public String aeronDirectoryName()
+        {
+            return aeronDirectoryName;
+        }
+
+        public Context aeronDirectoryName(final String aeronDirectoryName)
+        {
+            this.aeronDirectoryName = aeronDirectoryName;
+            return this;
+        }
 
         public Context recordingId(final long recordingId)
         {
@@ -714,6 +770,18 @@ public final class PersistentSubscription implements AutoCloseable
             {
                 throw new ConfigurationException("invalid startPosition " + startPosition);
             }
+
+            if (aeron == null)
+            {
+                final Aeron.Context aeronCtx = new Aeron.Context()
+                    .clientName("PersistentSubscription");
+                if (aeronDirectoryName != null)
+                {
+                    aeronCtx.aeronDirectoryName(aeronDirectoryName);
+                }
+                aeron = Aeron.connect(aeronCtx);
+                ownsAeronClient = true;
+            }
         }
 
         /**
@@ -732,6 +800,14 @@ public final class PersistentSubscription implements AutoCloseable
                 throw new RuntimeException(ex);
             }
         }
+
+        public void close()
+        {
+            if (ownsAeronClient)
+            {
+                CloseHelper.close(aeron);
+            }
+        }
     }
 
     private static class NoOpPersistentSubscriptionListener implements PersistentSubscriptionListener
@@ -747,15 +823,13 @@ public final class PersistentSubscription implements AutoCloseable
         }
     }
 
-    private class SwitchDecisionThing
+    private class SwitchDecisionThing extends AsyncArchiveOp
     {
         private long maxRecordedPosition = Long.MAX_VALUE;
         private boolean recheckRequired = true;
         private boolean waitingForMaxPosition = false;
         private boolean sentRequestForMaxPosition = false;
         private int closeEnoughThreshold;
-        private long maxPositionCorrelationId;
-        private long deadlineNs;
         private long recordingId;
 
         public void reset(final long recordingId, final int closeEnoughThreshold)
@@ -796,14 +870,12 @@ public final class PersistentSubscription implements AutoCloseable
 
         private void startMaxPositionReload()
         {
-            maxPositionCorrelationId = aeronArchive.context().aeron().nextCorrelationId();
-            deadlineNs = nanoClock.nanoTime() + messageTimeoutNs;
-
-            if (!aeronArchive.archiveProxy()
-                .getMaxRecordedPosition(recordingId, maxPositionCorrelationId, aeronArchive.controlSessionId()))
+            final long correlationId = aeron.nextCorrelationId();
+            if (!asyncAeronArchive.trySendMaxRecordedPositionRequest(correlationId, recordingId))
             {
                 throw new ArchiveException("failed to send get max recorded position request");
             }
+            init(correlationId, nanoClock.nanoTime() + messageTimeoutNs);
             sentRequestForMaxPosition = true;
             waitingForMaxPosition = true;
         }
@@ -815,51 +887,116 @@ public final class PersistentSubscription implements AutoCloseable
                 startMaxPositionReload();
             }
 
-            final ControlResponsePoller poller = aeronArchive.controlResponsePoller();
-            final int fragments = poller.poll();
-
-            if (poller.isPollComplete() && fragments != 0)
+            if (responseReceived)
             {
-                final ControlResponseCode code = poller.code();
-                if (ControlResponseCode.ERROR == code)
+                waitingForMaxPosition = false;
+                sentRequestForMaxPosition = false;
+                if (code == OK)
                 {
-                    final ArchiveException ex = new ArchiveException(
-                        "response for correlationId=" + poller.correlationId() + ", error: " + poller.errorMessage(),
-                        (int)poller.relevantId(),
-                        poller.correlationId());
-
-                    if (poller.correlationId() == maxPositionCorrelationId)
-                    {
-                        listener.onError(ex);
-                        state(State.FAILED);
-                    }
-                    else if (aeronArchive.context().errorHandler() != null)
-                    {
-                        aeronArchive.context().errorHandler().onError(ex);
-                    }
+                    maxRecordedPosition = relevantId;
                 }
-                else if (poller.correlationId() == maxPositionCorrelationId)
+                else
                 {
-                    if (ControlResponseCode.OK != code)
-                    {
-                        throw new ArchiveException("unexpected response code: " + code);
-                    }
-
-                    maxRecordedPosition = poller.relevantId();
-                    waitingForMaxPosition = false;
-                    sentRequestForMaxPosition = false;
+                    // TODO
+                    throw new ArchiveException("get max position request failed code=" + code +
+                                               " relevantId=" + relevantId +
+                                               " errorMessage='" + errorMessage + "'");
                 }
             }
             else
             {
-                checkForDisconnect(poller.subscription());
-                checkDeadline(deadlineNs, "awaiting response", maxPositionCorrelationId);
+                checkDeadline(deadlineNs, "awaiting response", correlationId);
             }
         }
 
         private boolean closeEnough(final long replayedPosition, final long maxRecordedPosition)
         {
             return replayedPosition >= maxRecordedPosition - closeEnoughThreshold;
+        }
+    }
+
+    private class ArchiveListener implements AsyncAeronArchiveListener
+    {
+        public void onConnected()
+        {
+        }
+
+        public void onDisconnected()
+        {
+            state(State.FAILED); // TODO recover
+        }
+
+        public void onControlResponse(
+            final long correlationId,
+            final long relevantId,
+            final ControlResponseCode code,
+            final String errorMessage)
+        {
+            if (correlationId == switchDecisionThing.correlationId)
+            {
+                switchDecisionThing.onControlResponse(relevantId, code, errorMessage);
+            }
+            else if (correlationId == descriptor.correlationId)
+            {
+                descriptor.onControlResponse(relevantId, code, errorMessage);
+            }
+            else if (correlationId == replayRequest.correlationId)
+            {
+                replayRequest.onControlResponse(relevantId, code, errorMessage);
+            }
+        }
+
+        public void onError(final Exception error)
+        {
+            error.printStackTrace(); // TODO
+            if (asyncAeronArchive.isClosed())
+            {
+                state(State.FAILED);
+                if (listener != null)
+                {
+                    listener.onError(error);
+                }
+            }
+        }
+
+        public void onRecordingDescriptor(
+            final long controlSessionId,
+            final long correlationId,
+            final long recordingId,
+            final long startTimestamp,
+            final long stopTimestamp,
+            final long startPosition,
+            final long stopPosition,
+            final int initialTermId,
+            final int segmentFileLength,
+            final int termBufferLength,
+            final int mtuLength,
+            final int sessionId,
+            final int streamId,
+            final String strippedChannel,
+            final String originalChannel,
+            final String sourceIdentity)
+        {
+            if (correlationId == descriptor.correlationId)
+            {
+                descriptor.onRecordingDescriptor(
+                    controlSessionId,
+                    correlationId,
+                    recordingId,
+                    startTimestamp,
+                    stopTimestamp,
+                    startPosition,
+                    stopPosition,
+                    initialTermId,
+                    segmentFileLength,
+                    termBufferLength,
+                    mtuLength,
+                    sessionId,
+                    streamId,
+                    strippedChannel,
+                    originalChannel,
+                    sourceIdentity);
+            }
         }
     }
 }

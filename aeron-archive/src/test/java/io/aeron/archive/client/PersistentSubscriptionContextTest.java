@@ -27,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
 
 class PersistentSubscriptionContextTest
 {
@@ -35,12 +36,15 @@ class PersistentSubscriptionContextTest
     @BeforeEach
     void setup()
     {
+        final Aeron aeron = mock(Aeron.class);
+
         context = new PersistentSubscription.Context()
             .recordingId(1)
             .liveChannel(IPC_CHANNEL)
             .liveStreamId(1)
             .replayChannel(IPC_CHANNEL)
             .replayStreamId(2)
+            .aeron(aeron)
             .aeronArchiveContext(new AeronArchive.Context());
     }
 
