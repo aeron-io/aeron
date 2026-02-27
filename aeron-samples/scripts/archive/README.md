@@ -68,4 +68,34 @@ It is worth playing with different messages lengths and threading configurations
 ```
     $ error-stat
 ```
- 
+
+## ReplayMerge
+
+1. Start the archiving media driver in its own terminal.
+
+```
+./archiving-media-driver
+```
+
+2. Start the MDC publisher with its recorded publication in another terminal.
+
+```
+export JVM_OPTS="-Daeron.sample.channel=aeron:udp?control=localhost:20550|control-mode=dynamic"
+
+./recorded-basic-publisher
+```
+
+3. Start a basic subscriber so that the publication connects and can record. Make sure `aeron.sample.channel` matches the publication channel.
+```
+export JVM_OPTS="-Daeron.sample.channel=aeron:udp?control=localhost:20550"
+
+../basic-subscriber
+```
+
+4. Wait a moment, then start a ReplayMerge subscriber, setting `aeron.sample.channel` to the same channel as the publication.
+
+```
+export JVM_OPTS="-Daeron.sample.channel=aeron:udp?control=localhost:20550"
+
+./replay-merge-subscriber
+```
