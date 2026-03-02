@@ -28,7 +28,7 @@ int aeron_blocking_linked_queue_init(aeron_blocking_linked_queue_t *queue)
         return -1;
     }
 
-    aeron_mutex_init(&queue->mutex, NULL);
+    aeron_mutex_init(&queue->mutex);
     aeron_cond_init(&queue->cv, NULL);
 
     return 0;

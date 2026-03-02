@@ -306,7 +306,7 @@ int aeron_archive_create(
     _aeron_archive->owns_ctx = true;
     _aeron_archive->ctx = ctx;
 
-    aeron_mutex_init(&_aeron_archive->lock, NULL);
+    aeron_mutex_init(&_aeron_archive->lock);
 
     _aeron_archive->archive_proxy = archive_proxy;
     _aeron_archive->owns_control_response_subscription = true;

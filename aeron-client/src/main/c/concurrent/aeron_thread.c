@@ -124,10 +124,8 @@ void aeron_thread_set_name(const char *role_name)
 #endif
 }
 
-int aeron_mutex_init(aeron_mutex_t *mutex, void *attr)
+int aeron_mutex_init(aeron_mutex_t *mutex)
 {
-    assert(NULL == attr && "user-defined mutex attributes are not supported");
-
     pthread_mutexattr_t mutex_attr;
     int rc = pthread_mutexattr_init(&mutex_attr);
     if (0 != rc)
@@ -158,6 +156,21 @@ error:
     return -1;
 }
 
+int aeron_mutex_destroy(aeron_mutex_t *mutex)
+{
+    return pthread_mutex_destroy(mutex);
+}
+
+int aeron_mutex_lock(aeron_mutex_t *mutex)
+{
+    return pthread_mutex_lock(mutex);
+}
+
+int aeron_mutex_unlock(aeron_mutex_t *mutex)
+{
+    return pthread_mutex_unlock(mutex);
+}
+
 #elif defined(AERON_COMPILER_MSVC)
 
 static BOOL WINAPI aeron_thread_once_callback(PINIT_ONCE init_once, void (*callback)(void), void **context)
@@ -171,7 +184,7 @@ void aeron_thread_once(AERON_INIT_ONCE *s_init_once, void *callback)
     InitOnceExecuteOnce((PINIT_ONCE)s_init_once, (PINIT_ONCE_FN)aeron_thread_once_callback, callback, NULL);
 }
 
-int aeron_mutex_init(aeron_mutex_t *mutex, void *attr)
+int aeron_mutex_init(aeron_mutex_t *mutex)
 {
     InitializeCriticalSection(mutex);
     return 0;

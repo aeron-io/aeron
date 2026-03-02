@@ -401,7 +401,7 @@ int response_server_create(
         goto cleanup;
     }
 
-    aeron_mutex_init(&response_server->info_lock, NULL);
+    aeron_mutex_init(&response_server->info_lock);
 
     if (aeron_async_add_subscription(
         &async,

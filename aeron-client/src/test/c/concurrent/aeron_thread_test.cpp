@@ -24,7 +24,7 @@ extern "C"
 TEST(AeronThreadTest, shouldCreateReentrantMutex)
 {
     aeron_mutex_t mutex;
-    ASSERT_EQ(0, aeron_mutex_init(&mutex, nullptr));
+    ASSERT_EQ(0, aeron_mutex_init(&mutex));
 
     EXPECT_EQ(0, aeron_mutex_lock(&mutex));
     EXPECT_EQ(0, aeron_mutex_lock(&mutex));

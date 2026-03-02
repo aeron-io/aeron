@@ -52,7 +52,7 @@ int aeron_distinct_error_log_init(
     log->next_offset = 0;
     log->observation_list->num_observations = 0;
     log->observation_list->observations = NULL;
-    aeron_mutex_init(&log->mutex, NULL);
+    aeron_mutex_init(&log->mutex);
 
     return 0;
 }
