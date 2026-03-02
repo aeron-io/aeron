@@ -17,6 +17,7 @@
 package io.aeron.archive.client;
 
 import io.aeron.Aeron;
+import io.aeron.ChannelUri;
 import io.aeron.ChannelUriStringBuilder;
 import io.aeron.CommonContext;
 import io.aeron.ExclusivePublication;
@@ -75,6 +76,7 @@ import java.util.stream.Stream;
 import static io.aeron.AeronCounters.FLOW_CONTROL_RECEIVERS_COUNTER_TYPE_ID;
 import static io.aeron.CommonContext.IPC_CHANNEL;
 import static io.aeron.CommonContext.IPC_MEDIA;
+import static io.aeron.CommonContext.SESSION_ID_PARAM_NAME;
 import static io.aeron.CommonContext.SPY_PREFIX;
 import static io.aeron.Publication.BACK_PRESSURED;
 import static io.aeron.driver.status.StreamCounter.CHANNEL_OFFSET;
@@ -388,7 +390,7 @@ class PersistentSubscriptionTest
                     final int streamId = keyBuffer.getInt(STREAM_ID_OFFSET);
                     if (streamId == replayStreamId)
                     {
-                        assertEquals(replayChannel, keyBuffer.getStringAscii(CHANNEL_OFFSET));
+                        assertEquals(replayChannel, removeSessionId(keyBuffer.getStringAscii(CHANNEL_OFFSET)));
                         replaySubPos.set(counters.getCounterValue(counterId1));
                     }
                 }
@@ -1177,6 +1179,13 @@ class PersistentSubscriptionTest
             arguments("aeron:ipc", -12)
             // TODO add response channel
         );
+    }
+
+    private static String removeSessionId(final String channel)
+    {
+        final ChannelUri uri = ChannelUri.parse(channel);
+        uri.remove(SESSION_ID_PARAM_NAME);
+        return uri.toString();
     }
 
     private static final class BufferingFragmentHandler implements ControlledFragmentHandler

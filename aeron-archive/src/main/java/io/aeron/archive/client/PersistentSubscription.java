@@ -18,12 +18,15 @@ package io.aeron.archive.client;
 
 import io.aeron.Aeron;
 import io.aeron.ChannelUri;
+import io.aeron.CommonContext;
+import io.aeron.ErrorCode;
 import io.aeron.Image;
 import io.aeron.ImageControlledFragmentAssembler;
 import io.aeron.Subscription;
 import io.aeron.archive.codecs.ControlResponseCode;
 import io.aeron.exceptions.ConcurrentConcludeException;
 import io.aeron.exceptions.ConfigurationException;
+import io.aeron.exceptions.RegistrationException;
 import io.aeron.exceptions.TimeoutException;
 import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.Header;
@@ -37,6 +40,7 @@ import java.lang.invoke.VarHandle;
 
 import static io.aeron.CommonContext.ENDPOINT_PARAM_NAME;
 import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
+import static io.aeron.archive.client.AeronArchive.REPLAY_ALL_AND_FOLLOW;
 import static io.aeron.archive.codecs.ControlResponseCode.OK;
 import static io.aeron.archive.codecs.ControlResponseCode.RECORDING_UNKNOWN;
 
@@ -55,13 +59,14 @@ public final class PersistentSubscription implements AutoCloseable
     private final String liveChannel;
     private final int liveStreamId;
     private final String replayChannel;
+    private final ChannelUri replayChannelUri;
+    private final ReplayChannelType replayChannelType;
     private final int replayStreamId;
     private final long startPosition;
     private final Aeron aeron;
     private final NanoClock nanoClock;
     private final AsyncAeronArchive asyncAeronArchive;
     private final long messageTimeoutNs;
-    private boolean awaitingReplayResponse;
 
     private State state;
     private Subscription replaySubscription;
@@ -69,8 +74,9 @@ public final class PersistentSubscription implements AutoCloseable
     private Image replayImage;
     private Image liveImage;
     private ControlledFragmentHandler controlledFragmentHandler;
+    private long replayStartPosition;
+    private long replaySubscriptionId = Aeron.NULL_VALUE;
     private long joinError;
-
     private long nextLivePosition = Aeron.NULL_VALUE;
     private long lastConsumedLivePosition = Aeron.NULL_VALUE;
 
@@ -84,6 +90,8 @@ public final class PersistentSubscription implements AutoCloseable
         liveChannel = ctx.liveChannel;
         liveStreamId = ctx.liveStreamId;
         replayChannel = ctx.replayChannel;
+        replayChannelUri = ChannelUri.parse(replayChannel);
+        replayChannelType = ReplayChannelType.of(replayChannelUri);
         replayStreamId = ctx.replayStreamId;
         listener = ctx.listener;
         aeron = ctx.aeron;
@@ -108,6 +116,11 @@ public final class PersistentSubscription implements AutoCloseable
             case AWAIT_ARCHIVE_CONNECTION -> awaitArchiveConnection();
             case SEND_LIST_RECORDING_REQUEST -> sendListRecordingRequest();
             case AWAIT_LIST_RECORDING_RESPONSE -> awaitListRecordingResponse();
+            case SEND_REPLAY_REQUEST -> sendReplayRequest();
+            case AWAIT_REPLAY_RESPONSE -> awaitReplayResponse();
+            case ADD_REPLAY_SUBSCRIPTION -> addReplaySubscription();
+            case AWAIT_REPLAY_SUBSCRIPTION -> awaitReplaySubscription();
+            case AWAIT_REPLAY_CHANNEL_ENDPOINT -> awaitReplayChannelEndpoint();
             case REPLAY -> replay(fragmentHandler, fragmentLimit);
             case ATTEMPT_SWITCH -> attemptSwitch(fragmentHandler, fragmentLimit);
             case LIVE -> live(fragmentHandler, fragmentLimit);
@@ -157,7 +170,23 @@ public final class PersistentSubscription implements AutoCloseable
     public void close()
     {
         // TODO do we need to explicitly stop replay if there is one?
-        CloseHelper.closeAll(asyncAeronArchive, ctx::close);
+        CloseHelper.closeAll(this::closeReplay, asyncAeronArchive, ctx::close);
+    }
+
+    private void closeReplay()
+    {
+        if (!ctx.ownsAeronClient())
+        {
+            if (replaySubscriptionId != Aeron.NULL_VALUE)
+            {
+                aeron.asyncRemoveSubscription(replaySubscriptionId);
+            }
+
+            if (replaySubscription != null)
+            {
+                replaySubscription.close();
+            }
+        }
     }
 
     long joinError()
@@ -232,9 +261,7 @@ public final class PersistentSubscription implements AutoCloseable
         }
         else
         {
-            subscribeToReplay(startPosition);
-
-            state(State.REPLAY);
+            setUpReplay(startPosition);
         }
 
         return 1;
@@ -284,25 +311,208 @@ public final class PersistentSubscription implements AutoCloseable
         return null;
     }
 
-    private int replay(final ControlledFragmentHandler fragmentHandler, final int fragmentLimit)
+    private void setUpReplay(final long startPosition)
     {
-        if (awaitingReplayResponse)
-        {
-            if (replayRequest.responseReceived)
-            {
-                awaitingReplayResponse = false;
-            }
-            else
-            {
-                checkDeadline(replayRequest.deadlineNs, "awaiting response", replayRequest.correlationId);
-            }
+        replayStartPosition = startPosition;
+        replayImage = null;
+        joinError = Long.MIN_VALUE;
+        switchDecisionThing.reset(recordingId, listRecordingRequest.termBufferLength >> 2);
 
-            if (awaitingReplayResponse)
+        state(switch (replayChannelType)
+        {
+            case SESSION_SPECIFIC -> State.SEND_REPLAY_REQUEST;
+            case DYNAMIC_PORT -> State.ADD_REPLAY_SUBSCRIPTION;
+        });
+    }
+
+    private void onReplaySetupFailed()
+    {
+        if (replaySubscription != null)
+        {
+            aeron.asyncRemoveSubscription(replaySubscription.registrationId());
+
+            replaySubscription = null;
+        }
+    }
+
+    private int sendReplayRequest()
+    {
+        final long correlationId = aeron.nextCorrelationId();
+
+        final String channel = switch (replayChannelType)
+        {
+            case SESSION_SPECIFIC -> replayChannel;
+            case DYNAMIC_PORT -> replayChannelUri.toString();
+        };
+
+        if (!asyncAeronArchive.trySendReplayRequest(
+            correlationId,
+            recordingId,
+            replayStartPosition,
+            REPLAY_ALL_AND_FOLLOW,
+            replayStreamId,
+            channel))
+        {
+            if (asyncAeronArchive.isConnected())
             {
                 return 0;
             }
+            else
+            {
+                onReplaySetupFailed();
+
+                state(State.AWAIT_ARCHIVE_CONNECTION);
+
+                return 1;
+            }
         }
 
+        replayRequest.init(correlationId, nanoClock.nanoTime() + messageTimeoutNs);
+
+        state(State.AWAIT_REPLAY_RESPONSE);
+
+        return 1;
+    }
+
+    private int awaitReplayResponse()
+    {
+        if (!replayRequest.responseReceived)
+        {
+            if (nanoClock.nanoTime() - replayRequest.deadlineNs >= 0)
+            {
+                if (asyncAeronArchive.isConnected())
+                {
+                    onReplaySetupFailed();
+
+                    setUpReplay(replayStartPosition);
+                }
+                else
+                {
+                    state(State.AWAIT_ARCHIVE_CONNECTION);
+                }
+
+                return 1;
+            }
+
+            return 0;
+        }
+
+        if (replayRequest.code != OK)
+        {
+            state(State.FAILED);
+
+            onReplaySetupFailed();
+
+            if (listener != null)
+            {
+                // TODO translate those to PersistentSubscriptionException whenever we can to make errors consistent?
+                listener.onError(new ArchiveException(
+                    "replay request failed: " + replayRequest.errorMessage,
+                    (int)replayRequest.relevantId,
+                    replayRequest.correlationId));
+            }
+
+            return 1;
+        }
+
+        return switch (replayChannelType)
+        {
+            case SESSION_SPECIFIC ->
+            {
+                final int sessionId = (int)replayRequest.relevantId;
+                replayChannelUri.put(CommonContext.SESSION_ID_PARAM_NAME, Integer.toString(sessionId));
+
+                state(State.ADD_REPLAY_SUBSCRIPTION);
+
+                yield 1;
+            }
+            case DYNAMIC_PORT ->
+            {
+                state(State.REPLAY);
+
+                yield 1;
+            }
+        };
+    }
+
+    private int addReplaySubscription()
+    {
+        final String channel = switch (replayChannelType)
+        {
+            case SESSION_SPECIFIC -> replayChannelUri.toString();
+            case DYNAMIC_PORT -> replayChannel;
+        };
+
+        replaySubscriptionId = aeron.asyncAddSubscription(channel, replayStreamId);
+
+        state(State.AWAIT_REPLAY_SUBSCRIPTION);
+
+        return 1;
+    }
+
+    private int awaitReplaySubscription()
+    {
+        final Subscription subscription;
+        try
+        {
+            subscription = aeron.getSubscription(replaySubscriptionId);
+        }
+        catch (final RegistrationException e)
+        {
+            replaySubscriptionId = Aeron.NULL_VALUE;
+
+            if (e.errorCode() == ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE)
+            {
+                setUpReplay(replayStartPosition);
+            }
+            else
+            {
+                state(State.FAILED);
+            }
+
+            if (listener != null)
+            {
+                listener.onError(e);
+            }
+
+            return 1;
+        }
+
+        if (subscription == null)
+        {
+            return 0;
+        }
+
+        replaySubscriptionId = Aeron.NULL_VALUE;
+        replaySubscription = subscription;
+
+        state(switch (replayChannelType)
+        {
+            case SESSION_SPECIFIC -> State.REPLAY;
+            case DYNAMIC_PORT -> State.AWAIT_REPLAY_CHANNEL_ENDPOINT;
+        });
+
+        return 1;
+    }
+
+    private int awaitReplayChannelEndpoint()
+    {
+        final String endpoint = replaySubscription.resolvedEndpoint();
+
+        if (endpoint == null)
+        {
+            return 0;
+        }
+
+        replayChannelUri.put(ENDPOINT_PARAM_NAME, endpoint);
+
+        state(State.SEND_REPLAY_REQUEST);
+
+        return 1;
+    }
+
+    private int replay(final ControlledFragmentHandler fragmentHandler, final int fragmentLimit)
+    {
         Image replayImage = this.replayImage;
 
         if (replayImage == null)
@@ -416,48 +626,15 @@ public final class PersistentSubscription implements AutoCloseable
         }
         else
         {
-            state(State.REPLAY);
-
             liveImage = null;
             CloseHelper.close(liveSubscription);
 
-            subscribeToReplay(lastConsumedLivePosition);
+            setUpReplay(lastConsumedLivePosition);
 
             workCount++;
         }
 
         return workCount;
-    }
-
-    private void subscribeToReplay(final long startPosition)
-    {
-        replayImage = null;
-        joinError = Long.MIN_VALUE;
-
-        // TODO async
-        replaySubscription = aeron.addSubscription(replayChannel, replayStreamId);
-
-        final ChannelUri replayChannelUri = ChannelUri.parse(replayChannel);
-        if (replayChannelUri.isUdp())
-        {
-            replayChannelUri.put(ENDPOINT_PARAM_NAME, replaySubscription.resolvedEndpoint());
-        }
-
-        final long correlationId = aeron.nextCorrelationId();
-        if (!asyncAeronArchive.trySendReplayRequest(
-            correlationId,
-            recordingId,
-            startPosition,
-            AeronArchive.REPLAY_ALL_AND_FOLLOW,
-            replaySubscription.streamId(),
-            replayChannelUri.toString()))
-        {
-            throw new ArchiveException("failed to send replay request"); // TODO
-        }
-        replayRequest.init(correlationId, nanoClock.nanoTime() + messageTimeoutNs);
-        awaitingReplayResponse = true;
-
-        switchDecisionThing.reset(recordingId, listRecordingRequest.termBufferLength >> 2);
     }
 
     private void state(final State newState)
@@ -504,11 +681,35 @@ public final class PersistentSubscription implements AutoCloseable
         return controlledFragmentHandler.onFragment(buffer, offset, length, header);
     }
 
+    private enum ReplayChannelType
+    {
+        SESSION_SPECIFIC,
+        DYNAMIC_PORT;
+
+        static ReplayChannelType of(final ChannelUri channelUri)
+        {
+            if (channelUri.isUdp())
+            {
+                final String endpoint = channelUri.get(ENDPOINT_PARAM_NAME);
+                if (endpoint != null && endpoint.endsWith(":0"))
+                {
+                    return DYNAMIC_PORT;
+                }
+            }
+            return SESSION_SPECIFIC;
+        }
+    }
+
     private enum State
     {
         AWAIT_ARCHIVE_CONNECTION,
         SEND_LIST_RECORDING_REQUEST,
         AWAIT_LIST_RECORDING_RESPONSE,
+        SEND_REPLAY_REQUEST,
+        AWAIT_REPLAY_RESPONSE,
+        ADD_REPLAY_SUBSCRIPTION,
+        AWAIT_REPLAY_SUBSCRIPTION,
+        AWAIT_REPLAY_CHANNEL_ENDPOINT,
         REPLAY,
         ATTEMPT_SWITCH,
         LIVE,
