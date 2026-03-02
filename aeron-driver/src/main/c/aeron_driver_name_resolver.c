@@ -807,7 +807,7 @@ static int aeron_driver_name_resolver_send_self_resolutions(
         driver_resolver->name,
         name_length);
 
-    assert(0 <= entry_length || "local_cache_addr should of been correctly constructed during init");
+    assert(0 <= entry_length && "local_cache_addr should have been correctly constructed during init");
 
     size_t frame_length = sizeof(aeron_frame_header_t) + (size_t)entry_length;
 
