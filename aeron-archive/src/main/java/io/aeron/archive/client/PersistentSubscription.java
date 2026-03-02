@@ -326,7 +326,7 @@ public final class PersistentSubscription implements AutoCloseable
         });
     }
 
-    private void onReplaySetupFailed()
+    private void cleanupReplaySubscription()
     {
         if (replaySubscription != null)
         {
@@ -360,7 +360,7 @@ public final class PersistentSubscription implements AutoCloseable
             }
             else
             {
-                onReplaySetupFailed();
+                cleanupReplaySubscription();
 
                 state(State.AWAIT_ARCHIVE_CONNECTION);
 
@@ -383,7 +383,7 @@ public final class PersistentSubscription implements AutoCloseable
             {
                 if (asyncAeronArchive.isConnected())
                 {
-                    onReplaySetupFailed();
+                    cleanupReplaySubscription();
 
                     setUpReplay(replayStartPosition);
                 }
@@ -402,7 +402,7 @@ public final class PersistentSubscription implements AutoCloseable
         {
             state(State.FAILED);
 
-            onReplaySetupFailed();
+            cleanupReplaySubscription();
 
             if (listener != null)
             {
@@ -530,7 +530,27 @@ public final class PersistentSubscription implements AutoCloseable
 
         if (liveSubscription == null && liveSubscriptionId != Aeron.NULL_VALUE)
         {
-            liveSubscription = aeron.getSubscription(liveSubscriptionId);
+            try
+            {
+                liveSubscription = aeron.getSubscription(liveSubscriptionId);
+            }
+            catch (final RegistrationException e)
+            {
+                liveSubscriptionId = Aeron.NULL_VALUE;
+
+                if (e.errorCode() != ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE)
+                {
+                    cleanupReplaySubscription();
+                    state(State.FAILED);
+                }
+
+                if (listener != null)
+                {
+                    listener.onError(e);
+                }
+
+                return 1;
+            }
         }
 
         if (liveSubscription != null && !liveSubscription.hasNoImages())
