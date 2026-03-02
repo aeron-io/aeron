@@ -1101,6 +1101,7 @@ public final class PersistentSubscription implements AutoCloseable
             this.recordingId = recordingId;
             this.closeEnoughThreshold = closeEnoughThreshold;
             this.waitingForMaxPosition = true;
+            this.sentRequestForMaxPosition = false;
         }
 
         public boolean shouldSwitch(final long replayedPosition)
@@ -1135,13 +1136,12 @@ public final class PersistentSubscription implements AutoCloseable
         private void startMaxPositionReload()
         {
             final long correlationId = aeron.nextCorrelationId();
-            if (!asyncAeronArchive.trySendMaxRecordedPositionRequest(correlationId, recordingId))
+            if (asyncAeronArchive.trySendMaxRecordedPositionRequest(correlationId, recordingId))
             {
-                throw new ArchiveException("failed to send get max recorded position request");
+                init(correlationId, nanoClock.nanoTime() + messageTimeoutNs);
+                sentRequestForMaxPosition = true;
+                waitingForMaxPosition = true;
             }
-            init(correlationId, nanoClock.nanoTime() + messageTimeoutNs);
-            sentRequestForMaxPosition = true;
-            waitingForMaxPosition = true;
         }
 
         private void pollForMaxPosition()
