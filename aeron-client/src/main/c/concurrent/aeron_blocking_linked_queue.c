@@ -50,9 +50,9 @@ int aeron_blocking_linked_queue_close(aeron_blocking_linked_queue_t *queue)
         goto error;
     }
 
+    aeron_cond_destroy(&queue->cv);
     aeron_mutex_unlock(&queue->mutex);
     aeron_mutex_destroy(&queue->mutex);
-    aeron_cond_destroy(&queue->cv);
 
     return 0;
 error:
