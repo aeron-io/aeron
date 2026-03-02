@@ -46,7 +46,7 @@ import static io.aeron.archive.codecs.ControlResponseCode.RECORDING_UNKNOWN;
 public final class PersistentSubscription implements AutoCloseable
 {
     private final ImageControlledFragmentAssembler assembler = new ImageControlledFragmentAssembler(this::onFragment);
-    private final RecordingDescriptorConsumerImpl descriptor = new RecordingDescriptorConsumerImpl();
+    private final ListRecordingRequest listRecordingRequest = new ListRecordingRequest();
     private final SwitchDecisionThing switchDecisionThing = new SwitchDecisionThing();
     private final AsyncArchiveOp replayRequest = new AsyncArchiveOp();
     private final Context ctx;
@@ -91,7 +91,7 @@ public final class PersistentSubscription implements AutoCloseable
         asyncAeronArchive = new AsyncAeronArchive(ctx.aeronArchiveContext().aeron(aeron), new ArchiveListener());
         messageTimeoutNs = ctx.aeronArchiveContext().messageTimeoutNs();
 
-        state(State.CONNECTING_TO_ARCHIVE);
+        state(State.AWAIT_ARCHIVE_CONNECTION);
     }
 
     public static PersistentSubscription create(final Context ctx)
@@ -105,9 +105,9 @@ public final class PersistentSubscription implements AutoCloseable
 
         workCount += switch (state)
         {
-            case CONNECTING_TO_ARCHIVE -> connectToArchive();
-            case WAIT_FOR_RECORDING_DESCRIPTOR -> waitForRecordingDescriptor();
-            case INIT -> init();
+            case AWAIT_ARCHIVE_CONNECTION -> awaitArchiveConnection();
+            case SEND_LIST_RECORDING_REQUEST -> sendListRecordingRequest();
+            case AWAIT_LIST_RECORDING_RESPONSE -> awaitListRecordingResponse();
             case REPLAY -> replay(fragmentHandler, fragmentLimit);
             case ATTEMPT_SWITCH -> attemptSwitch(fragmentHandler, fragmentLimit);
             case LIVE -> live(fragmentHandler, fragmentLimit);
@@ -165,100 +165,123 @@ public final class PersistentSubscription implements AutoCloseable
         return joinError;
     }
 
-    private int connectToArchive()
+    private int awaitArchiveConnection()
     {
-        if (asyncAeronArchive.isConnected())
+        if (!asyncAeronArchive.isConnected())
         {
-            final long correlationId = aeron.nextCorrelationId();
-            if (!asyncAeronArchive.trySendListRecordingRequest(correlationId, recordingId))
-            {
-                throw new ArchiveException("failed to send list recording request"); // TODO
-            }
-            descriptor.init(correlationId, nanoClock.nanoTime() + messageTimeoutNs);
-            descriptor.remaining = 1;
-            state(State.WAIT_FOR_RECORDING_DESCRIPTOR);
-            return 1;
-        }
-
-        return 0;
-    }
-
-    private int waitForRecordingDescriptor()
-    {
-        if (!descriptor.responseReceived)
-        {
-            checkDeadline(descriptor.deadlineNs, "awaiting recording descriptor", descriptor.correlationId);
             return 0;
         }
 
-        if (descriptor.remaining == 0)
+        state(State.SEND_LIST_RECORDING_REQUEST);
+
+        return 1;
+    }
+
+    private int sendListRecordingRequest()
+    {
+        final long correlationId = aeron.nextCorrelationId();
+
+        if (!asyncAeronArchive.trySendListRecordingRequest(correlationId, recordingId))
         {
-            state(State.INIT);
+            if (asyncAeronArchive.isConnected())
+            {
+                return 0;
+            }
+            else
+            {
+                state(State.AWAIT_ARCHIVE_CONNECTION);
+
+                return 1;
+            }
+        }
+
+        listRecordingRequest.init(correlationId, nanoClock.nanoTime() + messageTimeoutNs);
+        listRecordingRequest.remaining = 1;
+
+        state(State.AWAIT_LIST_RECORDING_RESPONSE);
+
+        return 1;
+    }
+
+    private int awaitListRecordingResponse()
+    {
+        if (!listRecordingRequest.responseReceived)
+        {
+            if (nanoClock.nanoTime() - listRecordingRequest.deadlineNs >= 0)
+            {
+                state(asyncAeronArchive.isConnected() ?
+                    State.SEND_LIST_RECORDING_REQUEST :
+                    State.AWAIT_ARCHIVE_CONNECTION);
+
+                return 1;
+            }
+
+            return 0;
+        }
+
+        final PersistentSubscriptionException error = validateDescriptor();
+
+        if (error != null)
+        {
+            state(State.FAILED);
+
+            if (listener != null)
+            {
+                listener.onError(error);
+            }
         }
         else
         {
-            assert descriptor.code == RECORDING_UNKNOWN && descriptor.relevantId == recordingId;
-            state(State.FAILED);
-            if (listener != null)
-            {
-                listener.onError(new PersistentSubscriptionException(
-                    PersistentSubscriptionException.Reason.RECORDING_NOT_FOUND,
-                    "No recording found with ID: " + recordingId)
-                );
-            }
+            subscribeToReplay(startPosition);
+
+            state(State.REPLAY);
         }
 
         return 1;
     }
 
-    private int init()
+    private PersistentSubscriptionException validateDescriptor()
     {
-        assert descriptor.recordingId == recordingId;
-
-        if (liveStreamId != descriptor.streamId)
+        if (listRecordingRequest.remaining == 0)
         {
-            state(State.FAILED);
-            if (listener != null)
+            assert listRecordingRequest.recordingId == recordingId : listRecordingRequest.toString();
+
+            if (liveStreamId != listRecordingRequest.streamId)
             {
-                listener.onError(new PersistentSubscriptionException(
+                return new PersistentSubscriptionException(
                     PersistentSubscriptionException.Reason.STREAM_ID_MISMATCH,
-                    "Requested live stream with ID: " + liveStreamId + " does not match stream ID: " + descriptor.streamId + " for recording: " + recordingId)
-                );
+                    "Requested live stream with ID: " + liveStreamId + " does not match stream ID: " +
+                    listRecordingRequest.streamId + " for recording: " + recordingId);
             }
-            return 1;
-        }
 
-        if (startPosition < descriptor.startPosition)
-        {
-            state(State.FAILED);
-            if (listener != null)
+            if (startPosition < listRecordingRequest.startPosition)
             {
-                listener.onError(new PersistentSubscriptionException(
+                return new PersistentSubscriptionException(
                     PersistentSubscriptionException.Reason.INVALID_START_POSITION,
-                    "Requested position: " + startPosition + " is lower than start position: " + descriptor.startPosition + " for recording: " + recordingId)
-                );
+                    "Requested position: " + startPosition + " is lower than start position: " +
+                    listRecordingRequest.startPosition + " for recording: " + recordingId);
             }
-            return 1;
-        }
-        if (descriptor.stopPosition != NULL_POSITION && startPosition > descriptor.stopPosition)
-        {
-            state(State.FAILED);
-            if (listener != null)
+
+            if (listRecordingRequest.stopPosition != NULL_POSITION && startPosition > listRecordingRequest.stopPosition)
             {
-                listener.onError(new PersistentSubscriptionException(
+                return new PersistentSubscriptionException(
                     PersistentSubscriptionException.Reason.INVALID_START_POSITION,
-                    "Requested position: " + startPosition + " is greater than stop position: " + descriptor.stopPosition + " for recording: " + recordingId)
-                );
+                    "Requested position: " + startPosition + " is greater than stop position: " +
+                    listRecordingRequest.stopPosition + " for recording: " + recordingId);
             }
-            return 1;
+        }
+        else
+        {
+            assert listRecordingRequest.remaining == 1 &&
+                   listRecordingRequest.code == RECORDING_UNKNOWN &&
+                   listRecordingRequest.relevantId == recordingId : listRecordingRequest.toString();
+
+            return new PersistentSubscriptionException(
+                PersistentSubscriptionException.Reason.RECORDING_NOT_FOUND,
+                "No recording found with ID: " + recordingId);
         }
 
-        subscribeToReplay(startPosition);
-
-        state(State.REPLAY);
-        joinError = Long.MIN_VALUE;
-
-        return 1;
+        return null;
     }
 
     private int replay(final ControlledFragmentHandler fragmentHandler, final int fragmentLimit)
@@ -394,7 +417,6 @@ public final class PersistentSubscription implements AutoCloseable
         else
         {
             state(State.REPLAY);
-            joinError = Long.MIN_VALUE;
 
             liveImage = null;
             CloseHelper.close(liveSubscription);
@@ -410,6 +432,7 @@ public final class PersistentSubscription implements AutoCloseable
     private void subscribeToReplay(final long startPosition)
     {
         replayImage = null;
+        joinError = Long.MIN_VALUE;
 
         // TODO async
         replaySubscription = aeron.addSubscription(replayChannel, replayStreamId);
@@ -434,7 +457,7 @@ public final class PersistentSubscription implements AutoCloseable
         replayRequest.init(correlationId, nanoClock.nanoTime() + messageTimeoutNs);
         awaitingReplayResponse = true;
 
-        switchDecisionThing.reset(recordingId, descriptor.termBufferLength >> 2);
+        switchDecisionThing.reset(recordingId, listRecordingRequest.termBufferLength >> 2);
     }
 
     private void state(final State newState)
@@ -483,9 +506,9 @@ public final class PersistentSubscription implements AutoCloseable
 
     private enum State
     {
-        CONNECTING_TO_ARCHIVE,
-        WAIT_FOR_RECORDING_DESCRIPTOR,
-        INIT,
+        AWAIT_ARCHIVE_CONNECTION,
+        SEND_LIST_RECORDING_REQUEST,
+        AWAIT_LIST_RECORDING_RESPONSE,
         REPLAY,
         ATTEMPT_SWITCH,
         LIVE,
@@ -521,7 +544,7 @@ public final class PersistentSubscription implements AutoCloseable
         }
     }
 
-    private static final class RecordingDescriptorConsumerImpl
+    private static final class ListRecordingRequest
         extends AsyncArchiveOp
         implements RecordingDescriptorConsumer
     {
@@ -561,6 +584,24 @@ public final class PersistentSubscription implements AutoCloseable
             {
                 responseReceived = true;
             }
+        }
+
+        public String toString()
+        {
+            return "ListRecordingRequest{" +
+                   "remaining=" + remaining +
+                   ", recordingId=" + recordingId +
+                   ", startPosition=" + startPosition +
+                   ", stopPosition=" + stopPosition +
+                   ", termBufferLength=" + termBufferLength +
+                   ", streamId=" + streamId +
+                   ", correlationId=" + correlationId +
+                   ", deadlineNs=" + deadlineNs +
+                   ", relevantId=" + relevantId +
+                   ", code=" + code +
+                   ", errorMessage='" + errorMessage + '\'' +
+                   ", responseReceived=" + responseReceived +
+                   '}';
         }
     }
 
@@ -936,9 +977,9 @@ public final class PersistentSubscription implements AutoCloseable
             {
                 switchDecisionThing.onControlResponse(relevantId, code, errorMessage);
             }
-            else if (correlationId == descriptor.correlationId)
+            else if (correlationId == listRecordingRequest.correlationId)
             {
-                descriptor.onControlResponse(relevantId, code, errorMessage);
+                listRecordingRequest.onControlResponse(relevantId, code, errorMessage);
             }
             else if (correlationId == replayRequest.correlationId)
             {
@@ -977,9 +1018,9 @@ public final class PersistentSubscription implements AutoCloseable
             final String originalChannel,
             final String sourceIdentity)
         {
-            if (correlationId == descriptor.correlationId)
+            if (correlationId == listRecordingRequest.correlationId)
             {
-                descriptor.onRecordingDescriptor(
+                listRecordingRequest.onRecordingDescriptor(
                     controlSessionId,
                     correlationId,
                     recordingId,
