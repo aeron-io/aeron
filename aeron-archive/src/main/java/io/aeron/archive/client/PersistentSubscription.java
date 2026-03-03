@@ -68,13 +68,13 @@ public final class PersistentSubscription implements AutoCloseable
     private final long messageTimeoutNs;
 
     private State state;
+    private long replaySubscriptionId = Aeron.NULL_VALUE;
     private Subscription replaySubscription;
+    private Image replayImage;
     private long liveSubscriptionId = Aeron.NULL_VALUE;
     private Subscription liveSubscription;
-    private Image replayImage;
     private Image liveImage;
     private ControlledFragmentHandler controlledFragmentHandler;
-    private long replaySubscriptionId = Aeron.NULL_VALUE;
     private long joinError;
     private long nextLivePosition = Aeron.NULL_VALUE;
     private long position;
