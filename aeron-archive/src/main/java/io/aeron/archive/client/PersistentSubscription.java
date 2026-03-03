@@ -325,24 +325,36 @@ public final class PersistentSubscription implements AutoCloseable
 
     private void cleanUpReplaySubscription()
     {
+        if (replaySubscriptionId != Aeron.NULL_VALUE)
+        {
+            aeron.asyncRemoveSubscription(replaySubscriptionId);
+        }
+
         if (replaySubscription != null)
         {
             aeron.asyncRemoveSubscription(replaySubscription.registrationId());
-
-            replaySubscription = null;
-            replayImage = null;
         }
+
+        replaySubscriptionId = Aeron.NULL_VALUE;
+        replaySubscription = null;
+        replayImage = null;
     }
 
     private void cleanUpLiveSubscription()
     {
+        if (liveSubscriptionId != Aeron.NULL_VALUE)
+        {
+            aeron.asyncRemoveSubscription(liveSubscriptionId);
+        }
+
         if (liveSubscription != null)
         {
             aeron.asyncRemoveSubscription(liveSubscription.registrationId());
-
-            liveSubscription = null;
-            liveImage = null;
         }
+
+        liveSubscriptionId = Aeron.NULL_VALUE;
+        liveSubscription = null;
+        liveImage = null;
     }
 
     private int sendReplayRequest()
@@ -659,7 +671,7 @@ public final class PersistentSubscription implements AutoCloseable
                         }
                         return assembler.onFragment(buffer, offset, length, header);
                     },
-                    1
+                    1 // TODO why 1?
                 );
                 position = replayImage.position();
             }
@@ -1225,7 +1237,18 @@ public final class PersistentSubscription implements AutoCloseable
 
         public void onDisconnected()
         {
-            state(State.FAILED); // TODO recover
+            if (state == State.AWAIT_ARCHIVE_CONNECTION ||
+                state == State.ATTEMPT_SWITCH ||
+                state == State.LIVE ||
+                state == State.FAILED)
+            {
+                return;
+            }
+
+            cleanUpLiveSubscription();
+            cleanUpReplaySubscription();
+
+            state(State.AWAIT_ARCHIVE_CONNECTION);
         }
 
         public void onControlResponse(
