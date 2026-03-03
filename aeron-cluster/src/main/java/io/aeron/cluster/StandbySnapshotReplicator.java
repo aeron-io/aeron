@@ -43,6 +43,7 @@ class StandbySnapshotReplicator implements AutoCloseable
     private final String replicationChannel;
     private final int fileSyncLevel;
     private final Counter snapshotCounter;
+    private final long logPosition;
     private final Object2ObjectHashMap<String, String> errorsByEndpoint = new Object2ObjectHashMap<>();
     private MultipleRecordingReplication recordingReplication;
     private ArrayList<SnapshotReplicationEntry> snapshotsToReplicate;
@@ -58,7 +59,8 @@ class StandbySnapshotReplicator implements AutoCloseable
         final int archiveControlStreamId,
         final String replicationChannel,
         final int fileSyncLevel,
-        final Counter snapshotCounter)
+        final Counter snapshotCounter,
+        final long logPosition)
     {
         this.memberId = memberId;
         this.archive = archive;
@@ -69,6 +71,7 @@ class StandbySnapshotReplicator implements AutoCloseable
         this.replicationChannel = replicationChannel;
         this.fileSyncLevel = fileSyncLevel;
         this.snapshotCounter = snapshotCounter;
+        this.logPosition = logPosition;
     }
 
     static StandbySnapshotReplicator newInstance(
@@ -79,7 +82,9 @@ class StandbySnapshotReplicator implements AutoCloseable
         final String archiveControlChannel,
         final int archiveControlStreamId,
         final String replicationChannel,
-        final int fileSyncLevel, final Counter snapshotCounter)
+        final int fileSyncLevel,
+        final Counter snapshotCounter,
+        final long logPosition)
     {
         final AeronArchive archive = AeronArchive.connect(archiveCtx.clone().errorHandler(null));
         final StandbySnapshotReplicator standbySnapshotReplicator = new StandbySnapshotReplicator(
@@ -91,7 +96,8 @@ class StandbySnapshotReplicator implements AutoCloseable
             archiveControlStreamId,
             replicationChannel,
             fileSyncLevel,
-            snapshotCounter);
+            snapshotCounter,
+            logPosition);
         archive.context().recordingSignalConsumer(standbySnapshotReplicator::onSignal);
         return standbySnapshotReplicator;
     }
@@ -188,7 +194,7 @@ class StandbySnapshotReplicator implements AutoCloseable
     private ArrayList<SnapshotReplicationEntry> computeSnapshotsToReplicate()
     {
         final Map<String, List<RecordingLog.Entry>> snapshotsByEndpoint = filterByExistingRecordingLogEntries(
-            recordingLog.latestStandbySnapshots(serviceCount));
+            recordingLog.latestStandbySnapshotsBefore(serviceCount, logPosition));
 
         final ArrayList<SnapshotReplicationEntry> orderedSnapshotToReplicate;
         if (snapshotsByEndpoint.isEmpty())

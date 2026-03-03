@@ -2597,7 +2597,8 @@ final class ConsensusModuleAgent
                     ctx.archiveContext().controlRequestStreamId(),
                     ctx.replicationChannel(),
                     ctx.fileSyncLevel(),
-                    ctx.snapshotCounter());
+                    ctx.snapshotCounter(),
+                    commitPosition.getPlain());
             }
 
             NodeControl.ToggleState.reset(nodeControlToggle);
@@ -3501,6 +3502,12 @@ final class ConsensusModuleAgent
 
     private void replicateStandbySnapshotsForStartup()
     {
+        final RecordingLog.RecoveryPlan recoveryPlan =
+            recordingLog.createRecoveryPlan(archive, serviceCount, NULL_VALUE);
+        final long logRecordingId = null == recoveryPlan.log ? NULL_VALUE : recoveryPlan.log.recordingId;
+        final long recordedPosition =
+            NULL_VALUE == logRecordingId ? NULL_VALUE : archive.getMaxRecordedPosition(logRecordingId);
+
         try (StandbySnapshotReplicator standbySnapshotReplicator = StandbySnapshotReplicator.newInstance(
             memberId,
             ctx.archiveContext(),
@@ -3510,7 +3517,8 @@ final class ConsensusModuleAgent
             ctx.archiveContext().controlRequestStreamId(),
             ctx.replicationChannel(),
             ctx.fileSyncLevel(),
-            ctx.snapshotCounter()))
+            ctx.snapshotCounter(),
+            recordedPosition))
         {
             while (!standbySnapshotReplicator.isComplete())
             {

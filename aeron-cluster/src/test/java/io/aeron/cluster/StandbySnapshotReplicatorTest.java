@@ -47,8 +47,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 class StandbySnapshotReplicatorTest
@@ -125,7 +127,8 @@ class StandbySnapshotReplicatorTest
                     archiveControlStreamId,
                     replicationChannel,
                     fileSyncLevel,
-                    snapshotCounter);
+                    snapshotCounter,
+                    logPositionNewest);
 
                 when(mockMultipleRecordingReplication0.isComplete()).thenReturn(true);
 
@@ -190,7 +193,8 @@ class StandbySnapshotReplicatorTest
                 archiveControlStreamId,
                 replicationChannel,
                 fileSyncLevel,
-                snapshotCounter);
+                snapshotCounter,
+                1000);
 
             standbySnapshotReplicator.poll(0);
             verify(mockArchive).pollForRecordingSignals();
@@ -223,7 +227,9 @@ class StandbySnapshotReplicatorTest
                 archiveControlChannel,
                 archiveControlStreamId,
                 replicationChannel,
-                fileSyncLevel, snapshotCounter);
+                fileSyncLevel,
+                snapshotCounter,
+                0);
 
             standbySnapshotReplicator.poll(0);
             assertTrue(standbySnapshotReplicator.isComplete());
@@ -278,7 +284,8 @@ class StandbySnapshotReplicatorTest
                 archiveControlStreamId,
                 replicationChannel,
                 fileSyncLevel,
-                snapshotCounter);
+                snapshotCounter,
+                standbySnapshotLogPosition);
 
             when(mockMultipleRecordingReplication0.poll(anyLong())).thenThrow(new ClusterException("fail"));
             when(mockMultipleRecordingReplication1.isComplete()).thenReturn(true);
@@ -342,7 +349,8 @@ class StandbySnapshotReplicatorTest
                 archiveControlStreamId,
                 replicationChannel,
                 fileSyncLevel,
-                snapshotCounter);
+                snapshotCounter,
+                standbySnapshotLogPosition);
 
             when(mockMultipleRecordingReplication1.isComplete()).thenReturn(true);
 
@@ -407,7 +415,8 @@ class StandbySnapshotReplicatorTest
                 archiveControlStreamId,
                 replicationChannel,
                 fileSyncLevel,
-                snapshotCounter);
+                snapshotCounter,
+                standbySnapshotLogPosition);
 
             standbySnapshotReplicator.poll(nowNs);
             standbySnapshotReplicator.poll(nowNs);
@@ -467,7 +476,8 @@ class StandbySnapshotReplicatorTest
                 archiveControlStreamId,
                 replicationChannel,
                 fileSyncLevel,
-                snapshotCounter);
+                snapshotCounter,
+                standbySnapshotLogPosition);
 
             standbySnapshotReplicator.poll(nowNs);
             standbySnapshotReplicator.poll(nowNs);
@@ -515,7 +525,8 @@ class StandbySnapshotReplicatorTest
                 archiveControlStreamId,
                 replicationChannel,
                 fileSyncLevel,
-                snapshotCounter);
+                snapshotCounter,
+                logPosition);
 
             standbySnapshotReplicator.poll(nowNs);
             standbySnapshotReplicator.poll(nowNs);
@@ -524,4 +535,65 @@ class StandbySnapshotReplicatorTest
             verifyNoInteractions(snapshotCounter);
         }
     }
+
+    @Test
+    void shouldNotReplicateStandbySnapshotsAheadOfAppendPosition()
+    {
+        final long standbySnapshotPosition = 5000L;
+        final long currentLogPosition = 2500L;
+        final int serviceCount = 1;
+        final Long2LongHashMap dstRecordingIds = new Long2LongHashMap(Aeron.NULL_VALUE);
+        dstRecordingIds.put(1, 11);
+        dstRecordingIds.put(2, 12);
+
+        when(mockMultipleRecordingReplication0.completedDstRecordingId(anyLong())).thenAnswer(
+            (invocation) -> dstRecordingIds.get(invocation.<Long>getArgument(0)));
+
+        try (RecordingLog recordingLog = spy(new RecordingLog(clusterDir, true)))
+        {
+            recordingLog.appendTerm(0, 0, 0, 0);
+            recordingLog.appendStandbySnapshot(1, 0, 0, standbySnapshotPosition, 1_000_000_000L, SERVICE_ID, endpoint0);
+            recordingLog.appendStandbySnapshot(2, 0, 0, standbySnapshotPosition, 1_000_000_000L, 0, endpoint0);
+
+            final long nowNs = 2_000_000_000L;
+
+            try (MockedStatic<MultipleRecordingReplication> staticMockReplication = mockStatic(
+                MultipleRecordingReplication.class);
+                MockedStatic<AeronArchive> staticMockArchive = mockStatic(AeronArchive.class))
+            {
+                staticMockReplication
+                    .when(() -> MultipleRecordingReplication.newInstance(
+                        any(), anyInt(), any(), any(), anyLong(), anyLong()))
+                    .thenReturn(mockMultipleRecordingReplication0);
+                staticMockArchive.when(() -> AeronArchive.connect(any())).thenReturn(mockArchive);
+
+                final StandbySnapshotReplicator standbySnapshotReplicator = StandbySnapshotReplicator.newInstance(
+                    memberId,
+                    ctx,
+                    recordingLog,
+                    serviceCount,
+                    archiveControlChannel,
+                    archiveControlStreamId,
+                    replicationChannel,
+                    fileSyncLevel,
+                    snapshotCounter,
+                    currentLogPosition);
+
+                when(mockMultipleRecordingReplication0.isComplete()).thenReturn(true);
+
+                assertEquals(1, standbySnapshotReplicator.poll(nowNs));
+                assertTrue(standbySnapshotReplicator.isComplete());
+
+                verify(mockArchive).context();
+                verifyNoMoreInteractions(mockArchive);
+                verifyNoInteractions(mockMultipleRecordingReplication0);
+                verify(recordingLog, times(0))
+                    .appendSnapshot(anyLong(), anyLong(), anyLong(), anyLong(), anyLong(), anyInt());
+                verifyNoInteractions(snapshotCounter);
+
+                assertEquals(3, recordingLog.entries().size());
+            }
+        }
+    }
+
 }

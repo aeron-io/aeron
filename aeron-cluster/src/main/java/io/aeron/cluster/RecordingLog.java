@@ -1344,6 +1344,11 @@ public final class RecordingLog implements AutoCloseable
      */
     public Map<String, List<Entry>> latestStandbySnapshots(final int serviceCount)
     {
+        return latestStandbySnapshotsBefore(serviceCount, Long.MAX_VALUE);
+    }
+
+    Map<String, List<Entry>> latestStandbySnapshotsBefore(final int serviceCount, final long position)
+    {
         final Map<String, List<Entry>> latestStandbySnapshots = new Object2ObjectHashMap<>();
         final Map<String, NavigableMap<Long, List<Entry>>> standbySnapshots = new Object2ObjectHashMap<>();
 
@@ -1358,14 +1363,19 @@ public final class RecordingLog implements AutoCloseable
             }
         }
 
+        final int snapshotCount = serviceCount + 1;
         standbySnapshots.forEach(
             (k, v) ->
             {
                 while (!v.isEmpty())
                 {
                     final Map.Entry<Long, List<Entry>> lastEntry = v.lastEntry();
-                    final int snapshotCount = serviceCount + 1;
-                    if (lastEntry.getValue().size() == snapshotCount)
+                    final long snapshotPosition = lastEntry.getKey();
+
+                    final boolean aheadOfPosition = NULL_VALUE == position || position < snapshotPosition;
+                    final boolean hasRequiredSnapshotCount = lastEntry.getValue().size() == snapshotCount;
+
+                    if (!aheadOfPosition && hasRequiredSnapshotCount)
                     {
                         latestStandbySnapshots.put(k, lastEntry.getValue());
                         break;
