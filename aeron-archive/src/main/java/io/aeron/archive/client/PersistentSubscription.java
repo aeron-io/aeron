@@ -62,7 +62,6 @@ public final class PersistentSubscription implements AutoCloseable
     private final ChannelUri replayChannelUri;
     private final ReplayChannelType replayChannelType;
     private final int replayStreamId;
-    private final long startPosition;
     private final Aeron aeron;
     private final NanoClock nanoClock;
     private final AsyncAeronArchive asyncAeronArchive;
@@ -75,11 +74,10 @@ public final class PersistentSubscription implements AutoCloseable
     private Image replayImage;
     private Image liveImage;
     private ControlledFragmentHandler controlledFragmentHandler;
-    private long replayStartPosition;
     private long replaySubscriptionId = Aeron.NULL_VALUE;
     private long joinError;
     private long nextLivePosition = Aeron.NULL_VALUE;
-    private long lastConsumedLivePosition = Aeron.NULL_VALUE;
+    private long position;
 
     private PersistentSubscription(final Context ctx)
     {
@@ -87,7 +85,6 @@ public final class PersistentSubscription implements AutoCloseable
 
         this.ctx = ctx;
         recordingId = ctx.recordingId;
-        startPosition = ctx.startPosition;
         liveChannel = ctx.liveChannel;
         liveStreamId = ctx.liveStreamId;
         replayChannel = ctx.replayChannel;
@@ -99,6 +96,7 @@ public final class PersistentSubscription implements AutoCloseable
         nanoClock = aeron.context().nanoClock();
         asyncAeronArchive = new AsyncAeronArchive(ctx.aeronArchiveContext().aeron(aeron), new ArchiveListener());
         messageTimeoutNs = ctx.aeronArchiveContext().messageTimeoutNs();
+        position = ctx.startPosition;
 
         state(State.AWAIT_ARCHIVE_CONNECTION);
     }
@@ -262,7 +260,7 @@ public final class PersistentSubscription implements AutoCloseable
         }
         else
         {
-            setUpReplay(startPosition);
+            setUpReplay();
         }
 
         return 1;
@@ -282,19 +280,19 @@ public final class PersistentSubscription implements AutoCloseable
                     listRecordingRequest.streamId + " for recording: " + recordingId);
             }
 
-            if (startPosition < listRecordingRequest.startPosition)
+            if (position < listRecordingRequest.startPosition)
             {
                 return new PersistentSubscriptionException(
                     PersistentSubscriptionException.Reason.INVALID_START_POSITION,
-                    "Requested position: " + startPosition + " is lower than start position: " +
+                    "Requested position: " + position + " is lower than start position: " +
                     listRecordingRequest.startPosition + " for recording: " + recordingId);
             }
 
-            if (listRecordingRequest.stopPosition != NULL_POSITION && startPosition > listRecordingRequest.stopPosition)
+            if (listRecordingRequest.stopPosition != NULL_POSITION && position > listRecordingRequest.stopPosition)
             {
                 return new PersistentSubscriptionException(
                     PersistentSubscriptionException.Reason.INVALID_START_POSITION,
-                    "Requested position: " + startPosition + " is greater than stop position: " +
+                    "Requested position: " + position + " is greater than stop position: " +
                     listRecordingRequest.stopPosition + " for recording: " + recordingId);
             }
         }
@@ -312,9 +310,8 @@ public final class PersistentSubscription implements AutoCloseable
         return null;
     }
 
-    private void setUpReplay(final long startPosition)
+    private void setUpReplay()
     {
-        replayStartPosition = startPosition;
         replayImage = null;
         joinError = Long.MIN_VALUE;
         switchDecisionThing.reset(recordingId, listRecordingRequest.termBufferLength >> 2);
@@ -326,13 +323,25 @@ public final class PersistentSubscription implements AutoCloseable
         });
     }
 
-    private void cleanupReplaySubscription()
+    private void cleanUpReplaySubscription()
     {
         if (replaySubscription != null)
         {
             aeron.asyncRemoveSubscription(replaySubscription.registrationId());
 
             replaySubscription = null;
+            replayImage = null;
+        }
+    }
+
+    private void cleanUpLiveSubscription()
+    {
+        if (liveSubscription != null)
+        {
+            aeron.asyncRemoveSubscription(liveSubscription.registrationId());
+
+            liveSubscription = null;
+            liveImage = null;
         }
     }
 
@@ -349,7 +358,7 @@ public final class PersistentSubscription implements AutoCloseable
         if (!asyncAeronArchive.trySendReplayRequest(
             correlationId,
             recordingId,
-            replayStartPosition,
+            position,
             REPLAY_ALL_AND_FOLLOW,
             replayStreamId,
             channel))
@@ -360,7 +369,7 @@ public final class PersistentSubscription implements AutoCloseable
             }
             else
             {
-                cleanupReplaySubscription();
+                cleanUpReplaySubscription();
 
                 state(State.AWAIT_ARCHIVE_CONNECTION);
 
@@ -383,9 +392,9 @@ public final class PersistentSubscription implements AutoCloseable
             {
                 if (asyncAeronArchive.isConnected())
                 {
-                    cleanupReplaySubscription();
+                    cleanUpReplaySubscription();
 
-                    setUpReplay(replayStartPosition);
+                    setUpReplay();
                 }
                 else
                 {
@@ -402,7 +411,7 @@ public final class PersistentSubscription implements AutoCloseable
         {
             state(State.FAILED);
 
-            cleanupReplaySubscription();
+            cleanUpReplaySubscription();
 
             if (listener != null)
             {
@@ -464,7 +473,7 @@ public final class PersistentSubscription implements AutoCloseable
 
             if (e.errorCode() == ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE)
             {
-                setUpReplay(replayStartPosition);
+                setUpReplay();
             }
             else
             {
@@ -522,10 +531,21 @@ public final class PersistentSubscription implements AutoCloseable
 
             if (replayImage == null)
             {
+                // TODO timeout for image?
+
                 return 0;
             }
 
             this.replayImage = replayImage;
+        }
+
+        if (replayImage.isClosed())
+        {
+            cleanUpLiveSubscription();
+            cleanUpReplaySubscription();
+            setUpReplay();
+
+            return 1;
         }
 
         if (liveSubscription == null && liveSubscriptionId != Aeron.NULL_VALUE)
@@ -540,7 +560,7 @@ public final class PersistentSubscription implements AutoCloseable
 
                 if (e.errorCode() != ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE)
                 {
-                    cleanupReplaySubscription();
+                    cleanUpReplaySubscription();
                     state(State.FAILED);
                 }
 
@@ -555,6 +575,7 @@ public final class PersistentSubscription implements AutoCloseable
 
         if (liveSubscription != null && !liveSubscription.hasNoImages())
         {
+            // TODO timeout for image?
             this.liveImage = liveSubscription.imageAtIndex(0);
             final long livePosition = liveImage.position();
             final long replayPosition = replayImage.position();
@@ -567,8 +588,9 @@ public final class PersistentSubscription implements AutoCloseable
 
         final int fragments = controlledPoll(replayImage, fragmentHandler, fragmentLimit);
 
-        final long replayedPosition = replayImage.position();
-        if (liveSubscriptionId == Aeron.NULL_VALUE && switchDecisionThing.shouldSwitch(replayedPosition))
+        position = replayImage.position();
+
+        if (liveSubscriptionId == Aeron.NULL_VALUE && switchDecisionThing.shouldSwitch(position))
         {
             liveImage = null;
             liveSubscription = null;
@@ -591,6 +613,27 @@ public final class PersistentSubscription implements AutoCloseable
         }
         else
         {
+            if (replayImage.isClosed())
+            {
+                cleanUpLiveSubscription();
+                cleanUpReplaySubscription();
+                setUpReplay();
+
+                return 1;
+            }
+
+            if (liveImage.isClosed())
+            {
+                cleanUpLiveSubscription();
+
+                joinError = Long.MIN_VALUE;
+                switchDecisionThing.reset(recordingId, listRecordingRequest.termBufferLength >> 2);
+
+                state(State.REPLAY);
+
+                return 1;
+            }
+
             // Let the live channel catch up to the point we are at in the replay (but don't overtake it).
             fragments += liveImage.controlledPoll((buffer, offset, length, header) -> {
                 final long currentLivePosition = header.position();
@@ -618,6 +661,7 @@ public final class PersistentSubscription implements AutoCloseable
                     },
                     1
                 );
+                position = replayImage.position();
             }
             finally
             {
@@ -627,9 +671,7 @@ public final class PersistentSubscription implements AutoCloseable
 
         if (isLive())
         {
-            replayImage = null;
-            aeron.asyncRemoveSubscription(replaySubscription.registrationId());
-            replaySubscription = null;
+            cleanUpReplaySubscription();
         }
 
         return fragments;
@@ -643,16 +685,12 @@ public final class PersistentSubscription implements AutoCloseable
         if (!image.isClosed())
         {
             workCount += controlledPoll(image, fragmentHandler, fragmentLimit);
-            lastConsumedLivePosition = image.position();
+            position = image.position(); // TODO what about updating after handler throws?
         }
         else
         {
-            liveImage = null;
-            aeron.asyncRemoveSubscription(liveSubscription.registrationId());
-            liveSubscription = null;
-
-            setUpReplay(lastConsumedLivePosition);
-
+            cleanUpLiveSubscription();
+            setUpReplay();
             workCount++;
         }
 

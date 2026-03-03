@@ -30,7 +30,10 @@ import io.aeron.archive.ArchiveThreadingMode;
 import io.aeron.archive.client.PersistentSubscriptionException.Reason;
 import io.aeron.archive.status.RecordingPos;
 import io.aeron.driver.MediaDriver;
+import io.aeron.driver.ReceiveChannelEndpointSupplier;
 import io.aeron.driver.ThreadingMode;
+import io.aeron.driver.ext.DebugReceiveChannelEndpoint;
+import io.aeron.driver.ext.LossGenerator;
 import io.aeron.driver.status.SubscriberPos;
 import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.FragmentHandler;
@@ -44,6 +47,7 @@ import io.aeron.test.RandomWatcher;
 import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.TestContexts;
 import io.aeron.test.Tests;
+import io.aeron.test.driver.StreamIdLossGenerator;
 import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
@@ -83,6 +87,8 @@ import static io.aeron.driver.status.StreamCounter.CHANNEL_OFFSET;
 import static io.aeron.driver.status.StreamCounter.STREAM_ID_OFFSET;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
 import static org.agrona.concurrent.status.CountersReader.NULL_COUNTER_ID;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -934,6 +940,185 @@ class PersistentSubscriptionTest
             printResults(t0, persistentSubscription, ratePerSecond, publisherMessagesPerSecond,
                 publisherBpePerSecond, controlMessagesPerSecond);
         }
+    }
+
+    @Test
+    @InterruptAfter(20)
+    void shouldRecoverFromReplayChannelNetworkProblems() throws Exception
+    {
+        shouldRecoverFromNetworkProblems(NetworkFlow.REPLAY);
+    }
+
+    @Test
+    @InterruptAfter(20)
+    void shouldRecoverFromLiveChannelNetworkProblems() throws Exception
+    {
+        shouldRecoverFromNetworkProblems(NetworkFlow.LIVE);
+    }
+
+    private enum NetworkFlow
+    {
+        REPLAY,
+        LIVE,
+    }
+
+    private void shouldRecoverFromNetworkProblems(final NetworkFlow victimFlow) throws Exception
+    {
+        TestMediaDriver.notSupportedOnCMediaDriver("loss generator");
+
+        final String pubChannel = "aeron:udp?term-length=16m|control=localhost:24325|control-mode=dynamic|fc=min";
+        final String subChannel = "aeron:udp?control=localhost:24325|group=true";
+
+        final StreamIdLossGenerator lossGenerator = new StreamIdLossGenerator();
+        final String aeronDir2 = CommonContext.generateRandomDirName();
+        final MediaDriver.Context driver2Ctx = driverCtxTpl.clone().aeronDirectoryName(aeronDir2)
+            .receiveChannelEndpointSupplier(receiveChannelEndpointSupplier(lossGenerator));
+        addCloseable(TestMediaDriver.launch(driver2Ctx, systemTestWatcher));
+        systemTestWatcher.dataCollector().add(driver2Ctx.aeronDirectory());
+        final Aeron aeron2 = addCloseable(Aeron.connect(aeronCtxTpl.clone().aeronDirectoryName(aeronDir2)));
+
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, pubChannel, STREAM_ID);
+
+        persistentSubscriptionCtx
+            .aeron(aeron2)
+            .recordingId(persistentPublication.recordingId())
+            .liveChannel(subChannel);
+
+        final int ratePerSecond = 10_000;
+        final long maxProcessingTime = 1_000_000_000 / ratePerSecond / 8;
+
+        final Thread publisher = new Thread(
+            () ->
+            {
+                final ThreadLocalRandom random = ThreadLocalRandom.current();
+                final UnsafeBuffer buffer = new UnsafeBuffer(new byte[2048]);
+                long messageId = 0;
+                long nextMessageAt = System.nanoTime() + exponentialArrivalDelay(ratePerSecond);
+                while (!Thread.currentThread().isInterrupted())
+                {
+                    final long now = System.nanoTime();
+                    if (now - nextMessageAt >= 0)
+                    {
+                        final int length = random.nextInt(2 * SIZE_OF_LONG, buffer.capacity() + 1);
+                        buffer.putLong(0, messageId);
+                        buffer.putLong(length - SIZE_OF_LONG, messageId);
+                        final long result = persistentPublication.offer(buffer, 0, length);
+                        if (result > 0)
+                        {
+                            messageId++;
+                            nextMessageAt = now + exponentialArrivalDelay(ratePerSecond);
+                        }
+                    }
+                }
+            },
+            "shouldRecoverFromNetworkProblemsPublisher");
+        publisher.start();
+        addCloseable(() -> interruptAndJoin(publisher));
+
+        final long startTime = System.nanoTime();
+
+        LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(1));
+
+        try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
+        {
+            final MessageVerifier handler = new MessageVerifier(maxProcessingTime);
+
+            enum LossState
+            {
+                NOT_STARTED,
+                WAITING_TO_START,
+                IN_PROGRESS,
+                FINISHED,
+            }
+
+            LossState lossState = LossState.NOT_STARTED;
+            long deadline = 0;
+
+            while (!persistentSubscription.isLive())
+            {
+                if (persistentSubscription.controlledPoll(handler, 10) == 0)
+                {
+                    checkForInterrupt("failed to transition to live");
+                }
+
+                if (victimFlow == NetworkFlow.REPLAY)
+                {
+                    if (lossState == LossState.NOT_STARTED && persistentSubscription.isReplaying())
+                    {
+                        lossState = LossState.WAITING_TO_START;
+                        deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(500);
+                    }
+
+                    if (lossState == LossState.WAITING_TO_START && System.nanoTime() - deadline >= 0)
+                    {
+                        lossState = LossState.IN_PROGRESS;
+                        deadline = System.nanoTime() +
+                                   driver2Ctx.imageLivenessTimeoutNs() + TimeUnit.MILLISECONDS.toNanos(200);
+                        lossGenerator.enable(persistentSubscriptionCtx.replayStreamId());
+                    }
+
+                    if (lossState == LossState.IN_PROGRESS && System.nanoTime() - deadline >= 0)
+                    {
+                        lossState = LossState.FINISHED;
+                        lossGenerator.disable();
+                    }
+                }
+            }
+
+            if (victimFlow == NetworkFlow.LIVE)
+            {
+                lossState = LossState.WAITING_TO_START;
+                deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(500);
+
+                while (true)
+                {
+                    if (persistentSubscription.controlledPoll(handler, 10) == 0)
+                    {
+                        checkForInterrupt("interrupted while simulating live channel network problems");
+                    }
+
+                    if (lossState == LossState.WAITING_TO_START && System.nanoTime() - deadline >= 0)
+                    {
+                        lossState = LossState.IN_PROGRESS;
+                        lossGenerator.enable(persistentSubscriptionCtx.liveStreamId());
+                    }
+
+                    if (lossState == LossState.IN_PROGRESS && !persistentSubscription.isLive())
+                    {
+                        lossState = LossState.FINISHED;
+                        lossGenerator.disable();
+                    }
+
+                    if (lossState == LossState.FINISHED && persistentSubscription.isLive())
+                    {
+                        break;
+                    }
+                }
+            }
+
+            interruptAndJoin(publisher);
+
+            final long durationNs = System.nanoTime() - startTime;
+            final long minExpectedPosition = TimeUnit.NANOSECONDS.toSeconds(durationNs) * ratePerSecond * 64L;
+            final long lastPosition = persistentPublication.position();
+            assertThat(lastPosition, greaterThanOrEqualTo(minExpectedPosition));
+
+            while (handler.position < lastPosition)
+            {
+                if (persistentSubscription.controlledPoll(handler, 10) == 0)
+                {
+                    checkForInterrupt("failed to drain the stream");
+                }
+            }
+        }
+    }
+
+    private static ReceiveChannelEndpointSupplier receiveChannelEndpointSupplier(final LossGenerator lossGenerator)
+    {
+        return (udpChannel, dispatcher, statusIndicator, context) ->
+            new DebugReceiveChannelEndpoint(
+                udpChannel, dispatcher, statusIndicator, context, lossGenerator, lossGenerator);
     }
 
     private static void interruptAndJoin(final Thread thread) throws InterruptedException
