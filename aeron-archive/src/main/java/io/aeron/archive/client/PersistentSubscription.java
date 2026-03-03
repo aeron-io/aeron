@@ -27,12 +27,10 @@ import io.aeron.archive.codecs.ControlResponseCode;
 import io.aeron.exceptions.ConcurrentConcludeException;
 import io.aeron.exceptions.ConfigurationException;
 import io.aeron.exceptions.RegistrationException;
-import io.aeron.exceptions.TimeoutException;
 import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.Header;
 import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
-import org.agrona.SystemUtil;
 import org.agrona.concurrent.NanoClock;
 
 import java.lang.invoke.MethodHandles;
@@ -51,7 +49,7 @@ public final class PersistentSubscription implements AutoCloseable
 {
     private final ImageControlledFragmentAssembler assembler = new ImageControlledFragmentAssembler(this::onFragment);
     private final ListRecordingRequest listRecordingRequest = new ListRecordingRequest();
-    private final SwitchDecisionThing switchDecisionThing = new SwitchDecisionThing();
+    private final MaxRecordedPosition maxRecordedPosition = new MaxRecordedPosition();
     private final AsyncArchiveOp replayRequest = new AsyncArchiveOp();
     private final Context ctx;
     private final long recordingId;
@@ -314,7 +312,7 @@ public final class PersistentSubscription implements AutoCloseable
     {
         replayImage = null;
         joinError = Long.MIN_VALUE;
-        switchDecisionThing.reset(recordingId, listRecordingRequest.termBufferLength >> 2);
+        maxRecordedPosition.reset(listRecordingRequest.termBufferLength >> 2);
 
         state(switch (replayChannelType)
         {
@@ -602,7 +600,7 @@ public final class PersistentSubscription implements AutoCloseable
 
         position = replayImage.position();
 
-        if (liveSubscriptionId == Aeron.NULL_VALUE && switchDecisionThing.shouldSwitch(position))
+        if (liveSubscriptionId == Aeron.NULL_VALUE && maxRecordedPosition.caughtUp(position))
         {
             liveImage = null;
             liveSubscription = null;
@@ -639,7 +637,7 @@ public final class PersistentSubscription implements AutoCloseable
                 cleanUpLiveSubscription();
 
                 joinError = Long.MIN_VALUE;
-                switchDecisionThing.reset(recordingId, listRecordingRequest.termBufferLength >> 2);
+                maxRecordedPosition.reset(listRecordingRequest.termBufferLength >> 2);
 
                 state(State.REPLAY);
 
@@ -715,16 +713,6 @@ public final class PersistentSubscription implements AutoCloseable
         if (newState != this.state)
         {
             this.state = newState;
-        }
-    }
-
-    private void checkDeadline(final long deadlineNs, final String errorMessage, final long correlationId)
-    {
-        if (deadlineNs - nanoClock.nanoTime() < 0)
-        {
-            throw new TimeoutException(
-                errorMessage + " - correlationId=" + correlationId + " messageTimeout=" +
-                    SystemUtil.formatDuration(messageTimeoutNs));
         }
     }
 
@@ -1137,95 +1125,100 @@ public final class PersistentSubscription implements AutoCloseable
         }
     }
 
-    private class SwitchDecisionThing extends AsyncArchiveOp
+    private class MaxRecordedPosition extends AsyncArchiveOp
     {
-        private long maxRecordedPosition = Long.MAX_VALUE;
-        private boolean recheckRequired = true;
-        private boolean waitingForMaxPosition = false;
-        private boolean sentRequestForMaxPosition = false;
+        private enum MaxRecordedPositionState
+        {
+            REQUEST_MAX_POSITION,
+            AWAIT_MAX_POSITION,
+            RECHECK_REQUIRED
+        }
+
+        private MaxRecordedPositionState state = MaxRecordedPositionState.REQUEST_MAX_POSITION;
+        private long maxRecordedPosition;
         private int closeEnoughThreshold;
-        private long recordingId;
 
-        public void reset(final long recordingId, final int closeEnoughThreshold)
+        public void reset(final int closeEnoughThreshold)
         {
-            this.recordingId = recordingId;
             this.closeEnoughThreshold = closeEnoughThreshold;
-            this.waitingForMaxPosition = true;
-            this.sentRequestForMaxPosition = false;
+            this.state = MaxRecordedPositionState.REQUEST_MAX_POSITION;
         }
 
-        public boolean shouldSwitch(final long replayedPosition)
+        public boolean caughtUp(final long replayedPosition)
         {
-            if (waitingForMaxPosition)
+            return switch (state)
             {
-                pollForMaxPosition();
-                return false;
-            }
-
-            if (recheckRequired)
-            {
-                if (replayedPosition >= maxRecordedPosition)
-                {
-                    startMaxPositionReload();
-                    recheckRequired = false;
-                }
-                return false;
-            }
-
-            if (closeEnough(replayedPosition, maxRecordedPosition))
-            {
-                return true;
-            }
-            else
-            {
-                recheckRequired = true;
-                return false;
-            }
+                case REQUEST_MAX_POSITION -> requestMaxPosition();
+                case AWAIT_MAX_POSITION -> awaitMaxPosition(replayedPosition);
+                case RECHECK_REQUIRED -> recheckRequired(replayedPosition);
+            };
         }
 
-        private void startMaxPositionReload()
+        private boolean requestMaxPosition()
         {
             final long correlationId = aeron.nextCorrelationId();
             if (asyncAeronArchive.trySendMaxRecordedPositionRequest(correlationId, recordingId))
             {
                 init(correlationId, nanoClock.nanoTime() + messageTimeoutNs);
-                sentRequestForMaxPosition = true;
-                waitingForMaxPosition = true;
+                state = MaxRecordedPositionState.AWAIT_MAX_POSITION;
             }
+            return false;
         }
 
-        private void pollForMaxPosition()
+        private boolean awaitMaxPosition(final long replayedPosition)
         {
-            if (!sentRequestForMaxPosition)
-            {
-                startMaxPositionReload();
-            }
-
             if (responseReceived)
             {
-                waitingForMaxPosition = false;
-                sentRequestForMaxPosition = false;
                 if (code == OK)
                 {
                     maxRecordedPosition = relevantId;
+                    if (closeEnoughToSwitch(replayedPosition, maxRecordedPosition))
+                    {
+                        return true;
+                    }
+                    else
+                    {
+                        state = MaxRecordedPositionState.RECHECK_REQUIRED;
+                        return false;
+                    }
                 }
                 else
                 {
-                    // TODO
-                    throw new ArchiveException("get max position request failed code=" + code +
-                                               " relevantId=" + relevantId +
-                                               " errorMessage='" + errorMessage + "'");
+                    // An error here is not recoverable, so fail the Persistent Subscription.
+                    final ArchiveException archiveException = new ArchiveException("get max position request failed code=" + code +
+                        " relevantId=" + relevantId +
+                        " errorMessage='" + errorMessage + "'");
+                    listener.onError(archiveException);
+                    state(State.FAILED);
                 }
             }
             else
             {
-                checkDeadline(deadlineNs, "awaiting response", correlationId);
+                if (deadlineNs - nanoClock.nanoTime() < 0)
+                {
+                    state = MaxRecordedPositionState.REQUEST_MAX_POSITION;
+                }
             }
+            return false;
         }
 
-        private boolean closeEnough(final long replayedPosition, final long maxRecordedPosition)
+        private boolean recheckRequired(final long replayedPosition)
+        {
+            if (closeEnoughToReCheck(replayedPosition))
+            {
+                state = MaxRecordedPositionState.REQUEST_MAX_POSITION;
+            }
+            return false;
+        }
+
+        private boolean closeEnoughToSwitch(final long replayedPosition, final long maxRecordedPosition)
         {
             return replayedPosition >= maxRecordedPosition - closeEnoughThreshold;
+        }
+
+        private boolean closeEnoughToReCheck(final long replayedPosition)
+        {
+            return replayedPosition >= maxRecordedPosition;
         }
     }
 
@@ -1257,9 +1250,9 @@ public final class PersistentSubscription implements AutoCloseable
             final ControlResponseCode code,
             final String errorMessage)
         {
-            if (correlationId == switchDecisionThing.correlationId)
+            if (correlationId == maxRecordedPosition.correlationId)
             {
-                switchDecisionThing.onControlResponse(relevantId, code, errorMessage);
+                maxRecordedPosition.onControlResponse(relevantId, code, errorMessage);
             }
             else if (correlationId == listRecordingRequest.correlationId)
             {
