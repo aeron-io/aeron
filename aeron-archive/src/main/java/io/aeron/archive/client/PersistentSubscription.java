@@ -70,6 +70,7 @@ public final class PersistentSubscription implements AutoCloseable
     private State state;
     private long replaySubscriptionId = Aeron.NULL_VALUE;
     private Subscription replaySubscription;
+    private long replayImageDeadline;
     private Image replayImage;
     private long liveSubscriptionId = Aeron.NULL_VALUE;
     private Subscription liveSubscription;
@@ -459,6 +460,8 @@ public final class PersistentSubscription implements AutoCloseable
             }
             case DYNAMIC_PORT ->
             {
+                replayImageDeadline = nanoClock.nanoTime() + messageTimeoutNs;
+
                 state(State.REPLAY);
 
                 yield 1;
@@ -517,6 +520,11 @@ public final class PersistentSubscription implements AutoCloseable
         replaySubscriptionId = Aeron.NULL_VALUE;
         replaySubscription = subscription;
 
+        if (replayChannelType == ReplayChannelType.SESSION_SPECIFIC)
+        {
+            replayImageDeadline = nanoClock.nanoTime() + messageTimeoutNs;
+        }
+
         state(switch (replayChannelType)
         {
             case SESSION_SPECIFIC -> State.REPLAY;
@@ -552,7 +560,13 @@ public final class PersistentSubscription implements AutoCloseable
 
             if (replayImage == null)
             {
-                // TODO timeout for image?
+                if (nanoClock.nanoTime() - replayImageDeadline >= 0)
+                {
+                    cleanUpReplaySubscription();
+                    setUpReplay();
+
+                    return 1;
+                }
 
                 return 0;
             }
