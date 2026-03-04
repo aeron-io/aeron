@@ -1205,6 +1205,64 @@ class PersistentSubscriptionTest
         }
     }
 
+    @Test
+    @InterruptAfter(10)
+    void shouldRejoinLiveEvenIfNoFragmentsHaveBeenConsumedAfterJoiningFromLive()
+    {
+        TestMediaDriver.notSupportedOnCMediaDriver("loss generator");
+
+        final String pubChannel = "aeron:udp?term-length=16m|control=localhost:24325|control-mode=dynamic|fc=min";
+        final String subChannel = "aeron:udp?control=localhost:24325|group=true";
+
+        final StreamIdLossGenerator lossGenerator = new StreamIdLossGenerator();
+        final String aeronDir2 = CommonContext.generateRandomDirName();
+        final MediaDriver.Context driver2Ctx = driverCtxTpl.clone().aeronDirectoryName(aeronDir2)
+            .receiveChannelEndpointSupplier(receiveChannelEndpointSupplier(lossGenerator));
+        addCloseable(TestMediaDriver.launch(driver2Ctx, systemTestWatcher));
+        systemTestWatcher.dataCollector().add(driver2Ctx.aeronDirectory());
+        final Aeron aeron2 = addCloseable(Aeron.connect(aeronCtxTpl.clone().aeronDirectoryName(aeronDir2)));
+
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, pubChannel, STREAM_ID);
+
+        persistentSubscriptionCtx
+            .aeron(aeron2)
+            .recordingId(persistentPublication.recordingId())
+            .liveChannel(subChannel)
+            .startPosition(FROM_LIVE);
+
+        try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
+        {
+            final Runnable pollSubscription = () -> persistentSubscription.controlledPoll(fragmentHandler, 10);
+
+            executeUntil(persistentSubscription::isLive, pollSubscription);
+
+            assertEquals(1, listener.liveJoinedCount);
+            assertEquals(0, listener.liveLeftCount);
+
+            lossGenerator.enable(persistentSubscriptionCtx.liveStreamId());
+
+            executeUntil(() -> !persistentSubscription.isLive(), pollSubscription);
+
+            assertEquals(1, listener.liveJoinedCount);
+            assertEquals(1, listener.liveLeftCount);
+
+            lossGenerator.disable();
+
+            executeUntil(persistentSubscription::isLive, pollSubscription);
+
+            assertEquals(2, listener.liveJoinedCount);
+            assertEquals(1, listener.liveLeftCount);
+
+            final List<byte[]> payloads = generateRandomPayloads(3);
+            persistentPublication.persist(payloads);
+
+            executeUntil(() -> fragmentHandler.hasReceivedPayloads(payloads.size()), pollSubscription);
+
+            assertPayloads(fragmentHandler.receivedPayloads, payloads);
+        }
+    }
+
     private static ReceiveChannelEndpointSupplier receiveChannelEndpointSupplier(final LossGenerator lossGenerator)
     {
         return (udpChannel, dispatcher, statusIndicator, context) ->
