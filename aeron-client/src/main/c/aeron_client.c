@@ -44,23 +44,6 @@ static void aeron_on_close(void *clientd)
     aeron_client_conductor_on_close(&client->conductor);
 }
 
-static void aeron_async_cmd_free(aeron_client_registering_resource_t *async)
-{
-    if (NULL != async)
-    {
-        aeron_free(async->error_message);
-        aeron_free(async->uri);
-
-        if (AERON_CLIENT_MANAGED_RESOURCE_TYPE_COUNTER == async->type)
-        {
-            aeron_free((void *)async->counter.key_buffer);
-            aeron_free((void *)async->counter.label_buffer);
-        }
-
-        aeron_free(async);
-    }
-}
-
 static const char* aeron_client_managed_resource_type_to_string(
     const aeron_client_managed_resource_type_t resource_type)
 {
@@ -1003,4 +986,21 @@ int aeron_remove_close_handler(aeron_t *client, aeron_on_close_client_pair_t *pa
     }
 
     return aeron_client_handler_cmd_await_processed(&cmd, aeron_context_get_driver_timeout_ms(client->context));
+}
+
+void aeron_async_cmd_free(aeron_client_registering_resource_t *async)
+{
+    if (NULL != async)
+    {
+        aeron_free(async->error_message);
+        aeron_free(async->uri);
+
+        if (AERON_CLIENT_MANAGED_RESOURCE_TYPE_COUNTER == async->type)
+        {
+            aeron_free((void *)async->counter.key_buffer);
+            aeron_free((void *)async->counter.label_buffer);
+        }
+
+        aeron_free(async);
+    }
 }

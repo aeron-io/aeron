@@ -597,6 +597,15 @@ int aeron_async_add_static_counter(
     size_t label_buffer_length,
     int64_t registration_id);
 
+/**
+ * Free async command object that was used for polling asynchronously added resource. This method is invoked at the end
+ * of the poll when resource reached the terminal state (e.g. error, success). However, if polling is aborted early and
+ * <code>aeron_client</code> instance is closed the unpolled async instances must be manually freed.
+ *
+ * @param async object to free.
+ */
+void aeron_async_cmd_free(struct aeron_client_registering_resource_stct *async);
+
 typedef struct aeron_on_available_counter_pair_stct
 {
     aeron_on_available_counter_t handler;

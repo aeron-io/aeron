@@ -1260,7 +1260,7 @@ TEST_F(ClientConductorTest, shouldReturnRandomSessionIdIfControlProtolVersionNot
     ASSERT_NE(nextSessionId, nextSessionId2);
 }
 
-TEST_F(ClientConductorTest, asyncResourceMustBeExplicitlyFreedIfPollAbandonedBeforeCompletion)
+TEST_F(ClientConductorTest, asyncPublicationResourceMustBeExplicitlyFreedIfPollAbandonedBeforeCompletion)
 {
     aeron_async_add_publication_t *async = nullptr;
     aeron_publication_t *publication = nullptr;
@@ -1271,7 +1271,49 @@ TEST_F(ClientConductorTest, asyncResourceMustBeExplicitlyFreedIfPollAbandonedBef
     EXPECT_EQ(aeron_async_add_publication_poll(&publication, async), 0) << aeron_errmsg();
     EXPECT_EQ(nullptr, publication);
 
-    aeron_free(async);
+    aeron_async_cmd_free(async);
+}
+
+TEST_F(ClientConductorTest, asyncExclusivePublicationResourceMustBeExplicitlyFreedIfPollAbandonedBeforeCompletion)
+{
+    aeron_async_add_exclusive_publication_t *async = nullptr;
+    aeron_exclusive_publication_t *publication = nullptr;
+
+    EXPECT_EQ(aeron_client_conductor_async_add_exclusive_publication(&async, &m_conductor, URI_RESERVED, STREAM_ID), 0);
+    doWork();
+
+    EXPECT_EQ(aeron_async_add_exclusive_publication_poll(&publication, async), 0) << aeron_errmsg();
+    EXPECT_EQ(nullptr, publication);
+
+    aeron_async_cmd_free(async);
+}
+
+TEST_F(ClientConductorTest, asyncSubscriptionResourceMustBeExplicitlyFreedIfPollAbandonedBeforeCompletion)
+{
+    aeron_async_add_subscription_t *async = nullptr;
+    aeron_subscription_t *subscription = nullptr;
+
+    EXPECT_EQ(aeron_client_conductor_async_add_subscription(&async, &m_conductor, URI_RESERVED, STREAM_ID, nullptr, nullptr, nullptr, nullptr), 0);
+    doWork();
+
+    EXPECT_EQ(aeron_async_add_subscription_poll(&subscription, async), 0) << aeron_errmsg();
+    EXPECT_EQ(nullptr, subscription);
+
+    aeron_async_cmd_free(async);
+}
+
+TEST_F(ClientConductorTest, asyncCounterResourceMustBeExplicitlyFreedIfPollAbandonedBeforeCompletion)
+{
+    aeron_async_add_counter_t *async = nullptr;
+    aeron_counter_t *counter = nullptr;
+
+    EXPECT_EQ(aeron_client_conductor_async_add_counter(&async, &m_conductor, 1000, nullptr, 0, "test", strlen("test")), 0);
+    doWork();
+
+    EXPECT_EQ(aeron_async_add_counter_poll(&counter, async), 0) << aeron_errmsg();
+    EXPECT_EQ(nullptr, counter);
+
+    aeron_async_cmd_free(async);
 }
 
 class ClientConductorIsLengthSufficientTest : public testing::TestWithParam<std::tuple<aeron_mapped_file_t*, bool>>
