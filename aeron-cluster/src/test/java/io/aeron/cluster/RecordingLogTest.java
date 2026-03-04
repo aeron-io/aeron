@@ -20,7 +20,6 @@ import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.client.RecordingDescriptorConsumer;
 import io.aeron.cluster.client.ClusterException;
 import io.aeron.test.Tests;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -484,7 +483,6 @@ class RecordingLogTest
     }
 
     @Test
-    @Disabled("incomplete")
     void shouldFindSnapshotAtOrBeforeOrLowest()
     {
         try (RecordingLog recordingLog = new RecordingLog(tempDir, true))
