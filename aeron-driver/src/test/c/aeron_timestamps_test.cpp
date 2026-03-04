@@ -345,12 +345,12 @@ TEST_F(TimestampsTest, shouldPutTimestampInMessagesReservedValueWithMergedMds)
     ASSERT_TRUE(awaitDestinationOrError(asyncDestB));
 
     ASSERT_EQ(aeron_async_add_exclusive_publication(&asyncPubA, m_aeron, destinationA.c_str(), STREAM_ID), 0);
-    aeron_publication_t *publicationA = awaitPublicationOrError(asyncPubA);
+    aeron_exclusive_publication_t *publicationA = awaitExclusivePublicationOrError(asyncPubA);
     ASSERT_TRUE(publicationA) << aeron_errmsg();
 
     aeron_publication_constants_t pubAConstants;
-    aeron_publication_constants(publicationA, &pubAConstants);
-    int64_t pubAPosition = aeron_publication_position(publicationA);
+    aeron_exclusive_publication_constants(publicationA, &pubAConstants);
+    int64_t pubAPosition = aeron_exclusive_publication_position(publicationA);
 
     int32_t termId = aeron_logbuffer_compute_term_id_from_position(
         pubAPosition,
@@ -367,7 +367,7 @@ TEST_F(TimestampsTest, shouldPutTimestampInMessagesReservedValueWithMergedMds)
     std::string destB = publicationBStream.str();
 
     ASSERT_EQ(aeron_async_add_exclusive_publication(&asyncPubB, m_aeron, destB.c_str(), STREAM_ID), 0);
-    aeron_publication_t *publicationB = awaitPublicationOrError(asyncPubB);
+    aeron_exclusive_publication_t *publicationB = awaitExclusivePublicationOrError(asyncPubB);
     ASSERT_TRUE(publicationB) << aeron_errmsg();
 
     awaitConnected(subscription);
@@ -386,7 +386,7 @@ TEST_F(TimestampsTest, shouldPutTimestampInMessagesReservedValueWithMergedMds)
         called++;
     };
 
-    while (aeron_publication_offer(
+    while (aeron_exclusive_publication_offer(
         publicationA, (const uint8_t *)&message, sizeof(message), null_reserved_value, nullptr) < 0)
     {
         std::this_thread::yield();
@@ -399,7 +399,7 @@ TEST_F(TimestampsTest, shouldPutTimestampInMessagesReservedValueWithMergedMds)
     EXPECT_EQ(poll_result, 1) << aeron_errmsg();
     EXPECT_EQ(1, called);
 
-    while (aeron_publication_offer(
+    while (aeron_exclusive_publication_offer(
         publicationB, (const uint8_t *)&message, sizeof(message), null_reserved_value, nullptr) < 0)
     {
         std::this_thread::yield();
@@ -412,7 +412,7 @@ TEST_F(TimestampsTest, shouldPutTimestampInMessagesReservedValueWithMergedMds)
         ASSERT_EQ(0, poll(subscription, handler, 1));
     }
 
-    while (aeron_publication_offer(
+    while (aeron_exclusive_publication_offer(
         publicationB, (const uint8_t *)&message, sizeof(message), null_reserved_value, nullptr) < 0)
     {
         std::this_thread::yield();
@@ -425,7 +425,8 @@ TEST_F(TimestampsTest, shouldPutTimestampInMessagesReservedValueWithMergedMds)
     EXPECT_EQ(poll_result, 1) << aeron_errmsg();
     EXPECT_EQ(2, called);
 
-    EXPECT_EQ(aeron_publication_close(publicationA, nullptr, nullptr), 0);
+    EXPECT_EQ(aeron_exclusive_publication_close(publicationA, nullptr, nullptr), 0);
+    EXPECT_EQ(aeron_exclusive_publication_close(publicationB, nullptr, nullptr), 0);
     EXPECT_EQ(aeron_subscription_close(subscription, nullptr, nullptr), 0);
 }
 
