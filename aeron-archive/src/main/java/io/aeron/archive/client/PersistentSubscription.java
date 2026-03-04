@@ -840,7 +840,7 @@ public final class PersistentSubscription implements AutoCloseable
         int workCount = 0;
 
         final Image image = liveImage;
-        if (!image.isClosed()) // TODO only check after poll if work count was 0
+        if (!image.isClosed())
         {
             workCount += controlledPoll(image, fragmentHandler, fragmentLimit);
             position = image.position(); // TODO what about updating after handler throws? can we query the right image position when we subscribe?
