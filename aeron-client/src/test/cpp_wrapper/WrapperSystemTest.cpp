@@ -124,3 +124,151 @@ TEST_F(WrapperSystemTest, shouldRejectClientNameThatIsTooLong)
         ASSERT_NE(nullptr, string) << ex.what();
     }
 }
+
+TEST_F(WrapperSystemTest, shouldRemovePendingAsyncPublicationUponError)
+{
+    Context ctx;
+    ctx.useConductorAgentInvoker(true);
+
+    std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
+    AgentInvoker<ClientConductor> &invoker = aeron->conductorAgentInvoker();
+    invoker.start();
+
+    auto channel = "aeron:udp?control=localhost:99999";
+    int stream_id = 1000;
+    int64_t registration_id = aeron->addPublication(channel, stream_id);
+
+    try
+    {
+        POLL_FOR_NON_NULL(publication2, aeron->findPublication(registration_id), invoker);
+        FAIL();
+    }
+    catch( const AeronException& e )
+    {
+        auto errorMsg = std::string(e.what());
+        EXPECT_NE(std::string::npos, errorMsg.find("port out of range: 99999", 0));
+    }
+
+    try
+    {
+        POLL_FOR_NON_NULL(publication2, aeron->findPublication(registration_id), invoker);
+        FAIL();
+    }
+    catch( const IllegalArgumentException& e )
+    {
+        auto errorMsg = std::string(e.what());
+        EXPECT_NE(std::string::npos, errorMsg.find(std::string("Unknown registration id: ").append(std::to_string(registration_id)), 0));
+    }
+}
+
+TEST_F(WrapperSystemTest, shouldRemovePendingAsyncExclusivePublicationUponError)
+{
+    Context ctx;
+    ctx.useConductorAgentInvoker(true);
+
+    std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
+    AgentInvoker<ClientConductor> &invoker = aeron->conductorAgentInvoker();
+    invoker.start();
+
+    auto channel = "aeron:ipc?session-id=42";
+    int stream_id = 1000;
+    int64_t registration_id = aeron->addExclusivePublication(channel, stream_id);
+    POLL_FOR_NON_NULL(publication, aeron->findExclusivePublication(registration_id), invoker);
+
+    int64_t registration_id2 = aeron->addExclusivePublication(channel, stream_id);
+    try
+    {
+        POLL_FOR_NON_NULL(publication2, aeron->findExclusivePublication(registration_id2), invoker);
+        FAIL();
+    }
+    catch( const AeronException& e )
+    {
+        auto errorMsg = std::string(e.what());
+        EXPECT_NE(std::string::npos, errorMsg.find("session-id is already in exclusive use for channel", 0));
+    }
+
+    try
+    {
+        POLL_FOR_NON_NULL(publication2, aeron->findExclusivePublication(registration_id2), invoker);
+        FAIL();
+    }
+    catch( const IllegalArgumentException& e )
+    {
+        auto errorMsg = std::string(e.what());
+        EXPECT_NE(std::string::npos, errorMsg.find(std::string("Unknown registration id: ").append(std::to_string(registration_id2)), 0));
+    }
+}
+
+TEST_F(WrapperSystemTest, shouldRemovePendingAsyncSubscriptionUponError)
+{
+    Context ctx;
+    ctx.useConductorAgentInvoker(true);
+
+    std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
+    AgentInvoker<ClientConductor> &invoker = aeron->conductorAgentInvoker();
+    invoker.start();
+
+    auto channel = "aeron:udp?endpoint=localhost:99999";
+    int stream_id = 1000;
+    int64_t registration_id = aeron->addSubscription(channel, stream_id);
+
+    try
+    {
+        POLL_FOR_NON_NULL(subscription, aeron->findSubscription(registration_id), invoker);
+        FAIL();
+    }
+    catch( const AeronException& e )
+    {
+        auto errorMsg = std::string(e.what());
+        EXPECT_NE(std::string::npos, errorMsg.find("port out of range: 99999", 0));
+    }
+
+    try
+    {
+        POLL_FOR_NON_NULL(subscription, aeron->findSubscription(registration_id), invoker);
+        FAIL();
+    }
+    catch( const IllegalArgumentException& e )
+    {
+        auto errorMsg = std::string(e.what());
+        EXPECT_NE(std::string::npos, errorMsg.find(std::string("Unknown registration id: ").append(std::to_string(registration_id)), 0));
+    }
+}
+
+TEST_F(WrapperSystemTest, shouldRemovePendingAsyncCounterUponError)
+{
+    Context ctx;
+    ctx.useConductorAgentInvoker(true);
+
+    std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
+    AgentInvoker<ClientConductor> &invoker = aeron->conductorAgentInvoker();
+    invoker.start();
+
+    int32_t typeId = 1000;
+    int64_t registration_id = aeron->addCounter(typeId, nullptr, 0, "test");
+    POLL_FOR_NON_NULL(counter, aeron->findCounter(registration_id), invoker);
+
+    int64_t registration_id2 = aeron->addStaticCounter(typeId, nullptr, 0, "my static counter", registration_id);
+    try
+    {
+        POLL_FOR_NON_NULL(staticCounter, aeron->findCounter(registration_id2), invoker);
+        FAIL();
+    }
+    catch( const AeronException& e )
+    {
+        auto errorMsg = std::string(e.what());
+        EXPECT_NE(std::string::npos, errorMsg.find("cannot add static counter, because a non-static counter exists", 0));
+    }
+
+    try
+    {
+        POLL_FOR_NON_NULL(staticCounter, aeron->findCounter(registration_id2), invoker);
+        FAIL();
+    }
+    catch( const IllegalArgumentException& e )
+    {
+        auto errorMsg = std::string(e.what());
+        EXPECT_NE(std::string::npos, errorMsg.find(std::string("Unknown registration id: ").append(std::to_string(registration_id2)), 0));
+    }
+}
+
