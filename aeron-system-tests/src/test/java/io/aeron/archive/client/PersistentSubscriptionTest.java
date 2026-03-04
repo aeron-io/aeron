@@ -1386,27 +1386,6 @@ class PersistentSubscriptionTest
         return randomPayloads;
     }
 
-    private static void awaitCounterValueEq(
-        final CountersReader countersReader,
-        final int counterId,
-        final long expectedValue)
-    {
-        while (true)
-        {
-            final long counterValue = countersReader.getCounterValue(counterId);
-            if (counterValue == expectedValue)
-            {
-                break;
-            }
-            if (Thread.interrupted())
-            {
-                fail("timed out waiting for counter " + counterId + " to become equal to " + expectedValue +
-                     ", last value was " + counterValue);
-            }
-            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(10));
-        }
-    }
-
     private static void executeUntil(final BooleanSupplier predicate, final Runnable runnable)
     {
         Tests.await(() ->
