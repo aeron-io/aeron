@@ -1225,6 +1225,9 @@ class PersistentSubscriptionTest
         final PersistentPublication persistentPublication =
             PersistentPublication.create(aeronArchive, pubChannel, STREAM_ID);
 
+        final List<byte[]> oldMessages = generateRandomPayloads(2);
+        persistentPublication.persist(oldMessages);
+
         persistentSubscriptionCtx
             .aeron(aeron2)
             .recordingId(persistentPublication.recordingId())
