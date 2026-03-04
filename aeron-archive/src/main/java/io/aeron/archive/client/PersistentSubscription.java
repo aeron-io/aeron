@@ -691,7 +691,6 @@ public final class PersistentSubscription implements AutoCloseable
         if (replayPosition == livePosition)
         {
             state(State.LIVE);
-            listener.onLiveJoined();
         }
         else
         {
@@ -735,6 +734,7 @@ public final class PersistentSubscription implements AutoCloseable
         if (isLive())
         {
             cleanUpReplaySubscription();
+            listener.onLiveJoined();
         }
 
         return fragments;
@@ -766,7 +766,6 @@ public final class PersistentSubscription implements AutoCloseable
         if (currentReplayPosition == nextLivePosition)
         {
             state(State.LIVE);
-            listener.onLiveJoined(); // TODO is it OK we're calling this from a fragment handler?
             return ControlledFragmentHandler.Action.ABORT;
         }
         return assembler.onFragment(buffer, offset, length, header);
