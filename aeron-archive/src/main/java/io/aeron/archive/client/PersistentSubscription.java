@@ -267,10 +267,7 @@ public final class PersistentSubscription implements AutoCloseable
         {
             state(State.FAILED);
 
-            if (listener != null)
-            {
-                listener.onError(error);
-            }
+            listener.onError(error);
         }
         else
         {
@@ -458,14 +455,11 @@ public final class PersistentSubscription implements AutoCloseable
 
             cleanUpReplaySubscription();
 
-            if (listener != null)
-            {
-                // TODO translate those to PersistentSubscriptionException whenever we can to make errors consistent?
-                listener.onError(new ArchiveException(
-                    "replay request failed: " + replayRequest.errorMessage,
-                    (int)replayRequest.relevantId,
-                    replayRequest.correlationId));
-            }
+            // TODO translate those to PersistentSubscriptionException whenever we can to make errors consistent?
+            listener.onError(new ArchiveException(
+                "replay request failed: " + replayRequest.errorMessage,
+                (int)replayRequest.relevantId,
+                replayRequest.correlationId));
 
             return 1;
         }
@@ -527,10 +521,7 @@ public final class PersistentSubscription implements AutoCloseable
                 state(State.FAILED);
             }
 
-            if (listener != null)
-            {
-                listener.onError(e);
-            }
+            listener.onError(e);
 
             return 1;
         }
@@ -628,10 +619,7 @@ public final class PersistentSubscription implements AutoCloseable
                     state(State.FAILED);
                 }
 
-                if (listener != null)
-                {
-                    listener.onError(e);
-                }
+                listener.onError(e);
 
                 return 1;
             }
@@ -818,10 +806,7 @@ public final class PersistentSubscription implements AutoCloseable
                     state(State.FAILED);
                 }
 
-                if (listener != null)
-                {
-                    listener.onError(e);
-                }
+                listener.onError(e);
 
                 return 1;
             }
@@ -1439,10 +1424,7 @@ public final class PersistentSubscription implements AutoCloseable
             if (asyncAeronArchive.isClosed())
             {
                 state(State.FAILED);
-                if (listener != null)
-                {
-                    listener.onError(error);
-                }
+                listener.onError(error);
             }
         }
 
