@@ -88,11 +88,6 @@ void aeron_loss_reporter_record_observation(
     {
         uint8_t *ptr = reporter->buffer + offset;
         aeron_loss_reporter_entry_t *entry = (aeron_loss_reporter_entry_t *)ptr;
-#if defined(__clang__) && defined(AERON_CPU_ARM)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunused-but-set-variable"
-#endif
-        int64_t dest;
 
         AERON_SET_RELEASE(entry->last_observation_timestamp, timestamp_ms);
 
@@ -101,16 +96,15 @@ void aeron_loss_reporter_record_observation(
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Watomic-alignment"
 #endif
+        int64_t dest;
         AERON_GET_AND_ADD_INT64(dest, entry->total_bytes_lost, bytes_lost);
         AERON_GET_AND_ADD_INT64(dest, entry->observation_count, INT64_C(1));
+        (void)dest; // silence variable 'dest' set but not used
 #if defined(__clang__) && defined(AERON_CPU_ARM)
 #pragma clang diagnostic pop
 #endif
     }
 }
-#if defined(__clang__) && defined(AERON_CPU_ARM)
-#pragma clang diagnostic pop
-#endif
 
 int aeron_loss_reporter_resolve_filename(const char *directory, char *filename_buffer, size_t filename_buffer_length)
 {

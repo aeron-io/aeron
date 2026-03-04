@@ -125,7 +125,7 @@ static aeron_distinct_observation_t *aeron_distinct_error_log_new_observation(
     aeron_error_log_entry_t *entry = (aeron_error_log_entry_t *)(log->buffer + offset);
 
     if ((offset + length) > log->buffer_capacity ||
-        aeron_distinct_error_log_observation_list_alloc(&new_list, num_observations + 1) ||
+        aeron_distinct_error_log_observation_list_alloc(&new_list, num_observations + 1) < 0 ||
         aeron_alloc((void **)&new_description, description_length + 1) < 0)
     {
         return NULL;
@@ -195,19 +195,13 @@ int aeron_distinct_error_log_record(aeron_distinct_error_log_t *log, int error_c
     aeron_mutex_unlock(&log->mutex);
 
     aeron_error_log_entry_t *entry = (aeron_error_log_entry_t *)(log->buffer + entry_offset);
-#if defined(__clang__) && defined(AERON_CPU_ARM)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunused-but-set-variable"
-#endif
+
     int32_t dest;
     AERON_GET_AND_ADD_INT32(dest, entry->observation_count, 1);
     AERON_SET_RELEASE(entry->last_observation_timestamp, timestamp);
-
+    (void)dest; // silence variable 'dest' set but not used
     return 0;
 }
-#if defined(__clang__) && defined(AERON_CPU_ARM)
-#pragma clang diagnostic pop
-#endif
 
 bool aeron_error_log_exists(const uint8_t *buffer, size_t buffer_size)
 {
