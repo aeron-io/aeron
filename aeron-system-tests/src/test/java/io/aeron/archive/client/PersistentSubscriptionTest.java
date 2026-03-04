@@ -329,8 +329,12 @@ class PersistentSubscriptionTest
 
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
         {
+            assertEquals(0, listener.liveJoinedCount);
+
             executeUntil(persistentSubscription::isLive,
                 () -> persistentSubscription.controlledPoll(fragmentHandler, 10));
+
+            assertEquals(1, listener.liveJoinedCount);
 
             assertEquals(0, fragmentHandler.receivedPayloads.size());
 
@@ -395,6 +399,8 @@ class PersistentSubscriptionTest
 
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
         {
+            assertEquals(0, listener.liveJoinedCount);
+
             executeUntil(() -> fragmentHandler.hasReceivedPayloads(1),
                 () -> persistentSubscription.controlledPoll(fragmentHandler, 1));
 
@@ -408,6 +414,8 @@ class PersistentSubscriptionTest
 
             executeUntil(persistentSubscription::isLive,
                 () -> persistentSubscription.controlledPoll(fragmentHandler, fragmentLimit));
+
+            assertEquals(1, listener.liveJoinedCount);
 
             assertEquals(payloads.size(), fragmentHandler.receivedPayloads.size());
 
@@ -600,6 +608,8 @@ class PersistentSubscriptionTest
             executeUntil(persistentSubscription::isLive,
                 () -> persistentSubscription.controlledPoll(fragmentHandler, fragmentLimit));
 
+            assertEquals(1, listener.liveJoinedCount);
+
             assertEquals(payloads.size() + payloads2.size(), fragmentHandler.receivedPayloads.size());
 
             // send some more messages
@@ -687,6 +697,8 @@ class PersistentSubscriptionTest
 
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
         {
+            assertEquals(0, listener.liveJoinedCount);
+
             executeUntil(() -> fragmentHandler.hasReceivedPayloads(1),
                 () -> persistentSubscription.controlledPoll(fragmentHandler, 1));
 
@@ -698,6 +710,9 @@ class PersistentSubscriptionTest
 
             executeUntil(persistentSubscription::isLive,
                 () -> persistentSubscription.controlledPoll(fragmentHandler, 10));
+
+            assertEquals(1, listener.liveJoinedCount);
+            assertEquals(0, listener.liveLeftCount);
 
             assertEquals(payloads.size(), fragmentHandler.receivedPayloads.size());
 
@@ -739,6 +754,8 @@ class PersistentSubscriptionTest
                 );
                 assertTrue(persistentSubscription.isReplaying());
 
+                assertEquals(1, listener.liveLeftCount);
+
                 final List<byte[]> payloads4 = generateFixedPayloads(5, ONE_KB_MESSAGE_SIZE);
                 persistentPublication.persist(payloads4);
 
@@ -748,6 +765,8 @@ class PersistentSubscriptionTest
                 executeUntil(
                     () -> fragmentHandler.hasReceivedPayloads(expectedMessageCount) && persistentSubscription.isLive(),
                     () -> persistentSubscription.controlledPoll(fragmentHandler, 10));
+
+                assertEquals(2, listener.liveJoinedCount);
 
                 assertPayloads(fragmentHandler.receivedPayloads, payloads, payloads2, payloads3, payloads4);
             }
@@ -1133,6 +1152,9 @@ class PersistentSubscriptionTest
                 }
             }
 
+            assertEquals(1, listener.liveJoinedCount);
+            assertEquals(0, listener.liveLeftCount);
+
             if (victimFlow == NetworkFlow.LIVE)
             {
                 lossState = LossState.WAITING_TO_START;
@@ -1153,12 +1175,14 @@ class PersistentSubscriptionTest
 
                     if (lossState == LossState.IN_PROGRESS && !persistentSubscription.isLive())
                     {
+                        assertEquals(1, listener.liveLeftCount);
                         lossState = LossState.FINISHED;
                         lossGenerator.disable();
                     }
 
                     if (lossState == LossState.FINISHED && persistentSubscription.isLive())
                     {
+                        assertEquals(2, listener.liveJoinedCount);
                         break;
                     }
                 }
@@ -1477,13 +1501,19 @@ class PersistentSubscriptionTest
 
     private static final class PersistentSubscriptionListenerImpl implements PersistentSubscriptionListener
     {
-        long onLiveCount;
-        int errorCount = 0;
-        Exception lastException = null;
+        long liveJoinedCount;
+        long liveLeftCount;
+        int errorCount;
+        Exception lastException;
 
-        public void onLive()
+        public void onLiveJoined()
         {
-            onLiveCount++;
+            liveJoinedCount++;
+        }
+
+        public void onLiveLeft()
+        {
+            liveLeftCount++;
         }
 
         public void onError(final Exception e)

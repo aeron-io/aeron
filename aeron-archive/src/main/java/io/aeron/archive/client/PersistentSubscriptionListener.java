@@ -24,7 +24,12 @@ public interface PersistentSubscriptionListener
     /**
      * Called when the {@link PersistentSubscription} transitions to consuming from the live channel.
      */
-    void onLive(); // TODO either remove or invoke and test this
+    void onLiveJoined();
+
+    /**
+     * Called when the {@link PersistentSubscription} stops consuming from the live channel.
+     */
+    void onLiveLeft();
 
     /**
      * Called when the {@link PersistentSubscription} encounters an error.
