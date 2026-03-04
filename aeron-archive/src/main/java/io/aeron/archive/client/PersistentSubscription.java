@@ -24,6 +24,7 @@ import io.aeron.Image;
 import io.aeron.ImageControlledFragmentAssembler;
 import io.aeron.Subscription;
 import io.aeron.archive.codecs.ControlResponseCode;
+import io.aeron.exceptions.AeronEvent;
 import io.aeron.exceptions.ConcurrentConcludeException;
 import io.aeron.exceptions.ConfigurationException;
 import io.aeron.exceptions.RegistrationException;
@@ -31,6 +32,7 @@ import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.Header;
 import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
+import org.agrona.SystemUtil;
 import org.agrona.concurrent.NanoClock;
 
 import java.lang.invoke.MethodHandles;
@@ -77,6 +79,8 @@ public final class PersistentSubscription implements AutoCloseable
     private Image replayImage;
     private long liveSubscriptionId = Aeron.NULL_VALUE;
     private Subscription liveSubscription;
+    private long liveImageDeadline;
+    private boolean liveImageDeadlineBreached;
     private Image liveImage;
     private ControlledFragmentHandler controlledFragmentHandler;
     private long joinError;
@@ -607,6 +611,12 @@ public final class PersistentSubscription implements AutoCloseable
             try
             {
                 liveSubscription = aeron.getSubscription(liveSubscriptionId);
+
+                if (liveSubscription != null)
+                {
+                    liveSubscriptionId = Aeron.NULL_VALUE;
+                    setLiveImageDeadline();
+                }
             }
             catch (final RegistrationException e)
             {
@@ -627,24 +637,33 @@ public final class PersistentSubscription implements AutoCloseable
             }
         }
 
-        if (liveSubscription != null && !liveSubscription.hasNoImages())
+        if (liveSubscription != null)
         {
-            // TODO timeout for image? yes, log a warning, stay in this state
-            this.liveImage = liveSubscription.imageAtIndex(0);
-            final long livePosition = liveImage.position();
-            final long replayPosition = replayImage.position();
-            joinError = livePosition - replayPosition;
-            liveSubscriptionId = Aeron.NULL_VALUE;
+            if (liveSubscription.imageCount() > 0)
+            {
+                liveImage = liveSubscription.imageAtIndex(0);
 
-            state(State.ATTEMPT_SWITCH);
-            return 1;
+                final long livePosition = liveImage.position();
+                final long replayPosition = replayImage.position();
+                joinError = livePosition - replayPosition;
+
+                state(State.ATTEMPT_SWITCH);
+
+                return 1;
+            }
+            else if (!liveImageDeadlineBreached && nanoClock.nanoTime() - liveImageDeadline >= 0)
+            {
+                onLiveImageDeadlineBreached();
+            }
         }
 
         final int fragments = controlledPoll(replayImage, fragmentHandler, fragmentLimit);
 
         position = replayImage.position();
 
-        if (liveSubscriptionId == Aeron.NULL_VALUE && maxRecordedPosition.caughtUp(position))
+        if (liveSubscriptionId == Aeron.NULL_VALUE &&
+            liveSubscription == null &&
+            maxRecordedPosition.caughtUp(position))
         {
             doAddLiveSubscription();
         }
@@ -657,6 +676,21 @@ public final class PersistentSubscription implements AutoCloseable
         liveImage = null;
         liveSubscription = null;
         liveSubscriptionId = aeron.asyncAddSubscription(liveChannel, liveStreamId);
+    }
+
+    private void setLiveImageDeadline()
+    {
+        liveImageDeadline = nanoClock.nanoTime() + messageTimeoutNs;
+        liveImageDeadlineBreached = false;
+    }
+
+    private void onLiveImageDeadlineBreached()
+    {
+        liveImageDeadlineBreached = true;
+        listener.onError(new AeronEvent("No image became available on the live subscription within " +
+                                        SystemUtil.formatDuration(messageTimeoutNs) + ". This could be " +
+                                        "caused by the publisher being down, or by a misconfiguration of the " +
+                                        "subscriber or a firewall between them."));
     }
 
     private int attemptSwitch(final ControlledFragmentHandler fragmentHandler, final int fragmentLimit)
@@ -770,6 +804,7 @@ public final class PersistentSubscription implements AutoCloseable
                 if (liveSubscription != null)
                 {
                     liveSubscriptionId = Aeron.NULL_VALUE;
+                    setLiveImageDeadline();
                 }
             }
             catch (final RegistrationException e)
@@ -792,16 +827,22 @@ public final class PersistentSubscription implements AutoCloseable
             }
         }
 
-        if (liveSubscription != null && liveSubscription.imageCount() > 0)
+        if (liveSubscription != null)
         {
-            // TODO timeout for image? yes, log a warning, stay in this state
-            liveImage = liveSubscription.imageAtIndex(0);
-            position = liveImage.position();
-            joinError = 0;
+            if (liveSubscription.imageCount() > 0)
+            {
+                liveImage = liveSubscription.imageAtIndex(0);
+                position = liveImage.position();
+                joinError = 0;
 
-            state(State.LIVE);
+                state(State.LIVE);
 
-            return 1;
+                return 1;
+            }
+            else if (!liveImageDeadlineBreached && nanoClock.nanoTime() - liveImageDeadline >= 0)
+            {
+                onLiveImageDeadlineBreached();
+            }
         }
 
         return 0;
