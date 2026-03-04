@@ -83,6 +83,8 @@ import static io.aeron.CommonContext.IPC_MEDIA;
 import static io.aeron.CommonContext.SESSION_ID_PARAM_NAME;
 import static io.aeron.CommonContext.SPY_PREFIX;
 import static io.aeron.Publication.BACK_PRESSURED;
+import static io.aeron.archive.client.PersistentSubscription.FROM_LIVE;
+import static io.aeron.archive.client.PersistentSubscription.FROM_START;
 import static io.aeron.driver.status.StreamCounter.CHANNEL_OFFSET;
 import static io.aeron.driver.status.StreamCounter.STREAM_ID_OFFSET;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
@@ -308,6 +310,71 @@ class PersistentSubscriptionTest
                 Reason.INVALID_START_POSITION,
                 ((PersistentSubscriptionException)listener.lastException).reason()
             );
+        }
+    }
+
+    @Test
+    @InterruptAfter(10)
+    void shouldNotReplayOldMessagesWhenStartingFromLive()
+    {
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, IPC_CHANNEL, STREAM_ID);
+
+        final List<byte[]> oldMessages = generateRandomPayloads(5);
+        persistentPublication.persist(oldMessages);
+
+        persistentSubscriptionCtx
+            .recordingId(persistentPublication.recordingId())
+            .startPosition(FROM_LIVE);
+
+        try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
+        {
+            executeUntil(persistentSubscription::isLive,
+                () -> persistentSubscription.controlledPoll(fragmentHandler, 10));
+
+            assertEquals(0, fragmentHandler.receivedPayloads.size());
+
+            final List<byte[]> newMessages = generateRandomPayloads(3);
+            persistentPublication.persist(newMessages);
+
+            executeUntil(() -> fragmentHandler.hasReceivedPayloads(newMessages.size()),
+                () -> persistentSubscription.controlledPoll(fragmentHandler, 10));
+
+            assertPayloads(fragmentHandler.receivedPayloads, newMessages);
+        }
+    }
+
+    @Test
+    @InterruptAfter(10)
+    void shouldReplayFromRecordingStartPositionWhenStartingFromStart()
+    {
+        final String channel = new ChannelUriStringBuilder()
+            .media(IPC_MEDIA)
+            .initialPosition(1024, 0, TERM_LENGTH) // <-- Recording starts at 1024
+            .build();
+
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, channel, STREAM_ID);
+
+        final List<byte[]> oldMessages = generateRandomPayloads(5);
+        persistentPublication.persist(oldMessages);
+
+        persistentSubscriptionCtx
+            .recordingId(persistentPublication.recordingId())
+            .startPosition(FROM_START);
+
+        try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
+        {
+            executeUntil(persistentSubscription::isLive,
+                () -> persistentSubscription.controlledPoll(fragmentHandler, 10));
+
+            final List<byte[]> newMessages = generateRandomPayloads(3);
+            persistentPublication.persist(newMessages);
+
+            executeUntil(() -> fragmentHandler.hasReceivedPayloads(oldMessages.size() + newMessages.size()),
+                () -> persistentSubscription.controlledPoll(fragmentHandler, 10));
+
+            assertPayloads(fragmentHandler.receivedPayloads, oldMessages, newMessages);
         }
     }
 

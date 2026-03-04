@@ -47,6 +47,9 @@ import static io.aeron.archive.codecs.ControlResponseCode.RECORDING_UNKNOWN;
  */
 public final class PersistentSubscription implements AutoCloseable
 {
+    public static final long FROM_START = NULL_POSITION;
+    public static final long FROM_LIVE = -2;
+
     private final ImageControlledFragmentAssembler assembler = new ImageControlledFragmentAssembler(this::onFragment);
     private final ControlledFragmentHandler liveCatchupFragmentHandler = this::onLiveCatchupFragment;
     private final ControlledFragmentHandler replayCatchupFragmentHandler = this::onReplayCatchupFragment;
@@ -123,6 +126,8 @@ public final class PersistentSubscription implements AutoCloseable
             case AWAIT_REPLAY_CHANNEL_ENDPOINT -> awaitReplayChannelEndpoint();
             case REPLAY -> replay(fragmentHandler, fragmentLimit);
             case ATTEMPT_SWITCH -> attemptSwitch(fragmentHandler, fragmentLimit);
+            case ADD_LIVE_SUBSCRIPTION -> addLiveSubscription();
+            case AWAIT_LIVE -> awaitLive();
             case LIVE -> live(fragmentHandler, fragmentLimit);
             case FAILED -> 0;
         };
@@ -265,7 +270,14 @@ public final class PersistentSubscription implements AutoCloseable
         }
         else
         {
-            setUpReplay();
+            if (position == FROM_LIVE)
+            {
+                state(State.ADD_LIVE_SUBSCRIPTION);
+            }
+            else
+            {
+                setUpReplay();
+            }
         }
 
         return 1;
@@ -285,20 +297,27 @@ public final class PersistentSubscription implements AutoCloseable
                     listRecordingRequest.streamId + " for recording: " + recordingId);
             }
 
-            if (position < listRecordingRequest.startPosition)
+            if (position >= 0)
             {
-                return new PersistentSubscriptionException(
-                    PersistentSubscriptionException.Reason.INVALID_START_POSITION,
-                    "Requested position: " + position + " is lower than start position: " +
-                    listRecordingRequest.startPosition + " for recording: " + recordingId);
-            }
+                if (position < listRecordingRequest.startPosition)
+                {
+                    return new PersistentSubscriptionException(
+                        PersistentSubscriptionException.Reason.INVALID_START_POSITION,
+                        "Requested position: " + position + " is lower than start position: " +
+                        listRecordingRequest.startPosition + " for recording: " + recordingId);
+                }
 
-            if (listRecordingRequest.stopPosition != NULL_POSITION && position > listRecordingRequest.stopPosition)
+                if (listRecordingRequest.stopPosition != NULL_POSITION && position > listRecordingRequest.stopPosition)
+                {
+                    return new PersistentSubscriptionException(
+                        PersistentSubscriptionException.Reason.INVALID_START_POSITION,
+                        "Requested position: " + position + " is greater than stop position: " +
+                        listRecordingRequest.stopPosition + " for recording: " + recordingId);
+                }
+            }
+            else if (position == FROM_START)
             {
-                return new PersistentSubscriptionException(
-                    PersistentSubscriptionException.Reason.INVALID_START_POSITION,
-                    "Requested position: " + position + " is greater than stop position: " +
-                    listRecordingRequest.stopPosition + " for recording: " + recordingId);
+                position = listRecordingRequest.startPosition;
             }
         }
         else
@@ -627,12 +646,17 @@ public final class PersistentSubscription implements AutoCloseable
 
         if (liveSubscriptionId == Aeron.NULL_VALUE && maxRecordedPosition.caughtUp(position))
         {
-            liveImage = null;
-            liveSubscription = null;
-            liveSubscriptionId = aeron.asyncAddSubscription(liveChannel, liveStreamId);
+            doAddLiveSubscription();
         }
 
         return fragments;
+    }
+
+    private void doAddLiveSubscription()
+    {
+        liveImage = null;
+        liveSubscription = null;
+        liveSubscriptionId = aeron.asyncAddSubscription(liveChannel, liveStreamId);
     }
 
     private int attemptSwitch(final ControlledFragmentHandler fragmentHandler, final int fragmentLimit)
@@ -724,6 +748,65 @@ public final class PersistentSubscription implements AutoCloseable
         return assembler.onFragment(buffer, offset, length, header);
     }
 
+    private int addLiveSubscription()
+    {
+        doAddLiveSubscription();
+
+        state(State.AWAIT_LIVE);
+
+        return 1;
+    }
+
+    private int awaitLive()
+    {
+        // awaiting live subscription or its image before going directly to live (no replay or switch)
+
+        if (liveSubscription == null)
+        {
+            try
+            {
+                liveSubscription = aeron.getSubscription(liveSubscriptionId);
+
+                if (liveSubscription != null)
+                {
+                    liveSubscriptionId = Aeron.NULL_VALUE;
+                }
+            }
+            catch (final RegistrationException e)
+            {
+                if (e.errorCode() == ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE)
+                {
+                    state(State.ADD_LIVE_SUBSCRIPTION);
+                }
+                else
+                {
+                    state(State.FAILED);
+                }
+
+                if (listener != null)
+                {
+                    listener.onError(e);
+                }
+
+                return 1;
+            }
+        }
+
+        if (liveSubscription != null && liveSubscription.imageCount() > 0)
+        {
+            // TODO timeout for image? yes, log a warning, stay in this state
+            liveImage = liveSubscription.imageAtIndex(0);
+            position = liveImage.position();
+            joinError = 0;
+
+            state(State.LIVE);
+
+            return 1;
+        }
+
+        return 0;
+    }
+
     private int live(final ControlledFragmentHandler fragmentHandler, final int fragmentLimit)
     {
         int workCount = 0;
@@ -809,6 +892,8 @@ public final class PersistentSubscription implements AutoCloseable
         AWAIT_REPLAY_CHANNEL_ENDPOINT,
         REPLAY,
         ATTEMPT_SWITCH,
+        ADD_LIVE_SUBSCRIPTION,
+        AWAIT_LIVE,
         LIVE,
         FAILED,
     }
@@ -924,7 +1009,7 @@ public final class PersistentSubscription implements AutoCloseable
         private boolean ownsAeronClient;
         private String aeronDirectoryName;
         private long recordingId = Aeron.NULL_VALUE;
-        private long startPosition = 0; // TODO default to FROM_LIVE
+        private long startPosition = FROM_LIVE;
         private String liveChannel = null;
         private int liveStreamId = Aeron.NULL_VALUE;
         private String replayChannel = null;
@@ -971,6 +1056,12 @@ public final class PersistentSubscription implements AutoCloseable
             return this;
         }
 
+        /**
+         * The position to start consuming from or {@link #FROM_START} or {@link #FROM_LIVE}.
+         *
+         * @param startPosition
+         * @return
+         */
         public Context startPosition(final long startPosition)
         {
             this.startPosition = startPosition;
@@ -1105,7 +1196,7 @@ public final class PersistentSubscription implements AutoCloseable
                 throw new ConfigurationException("invalid recordingId " + recordingId);
             }
 
-            if (startPosition < 0)
+            if (startPosition < FROM_LIVE)
             {
                 throw new ConfigurationException("invalid startPosition " + startPosition);
             }

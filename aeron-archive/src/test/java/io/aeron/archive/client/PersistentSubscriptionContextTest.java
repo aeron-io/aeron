@@ -117,7 +117,7 @@ class PersistentSubscriptionContextTest
     @Test
     void contextThrowsIfStartPositionIsInvalid()
     {
-        context.startPosition(Aeron.NULL_VALUE);
+        context.startPosition(-3);
         assertThrows(ConfigurationException.class, context::conclude);
     }
 
