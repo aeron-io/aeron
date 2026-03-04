@@ -1188,7 +1188,7 @@ public final class RecordingLog implements AutoCloseable
         return latestStandbySnapshots;
     }
 
-    List<Entry> findSnapshotAtOrBeforeOrLowest(final long logPosition, final int serviceCount)
+    List<Snapshot> findSnapshotAtOrBeforeOrLowest(final long logPosition, final int serviceCount)
     {
         entriesCache.sort(ENTRY_COMPARATOR);
 
@@ -1204,7 +1204,7 @@ public final class RecordingLog implements AutoCloseable
 
                 if (validateSnapshotEntries(entriesCache, serviceCount, i, entry))
                 {
-                    return new ArrayList<>(entriesCache.subList(i - serviceCount, i + 1));
+                    return convertEntryListToSnapshotList(entriesCache.subList(i - serviceCount, i + 1));
                 }
             }
         }
@@ -1216,12 +1216,31 @@ public final class RecordingLog implements AutoCloseable
             {
                 if (validateSnapshotEntries(entriesCache, serviceCount, i, entry))
                 {
-                    return new ArrayList<>(entriesCache.subList(i - serviceCount, i + 1));
+                    return convertEntryListToSnapshotList(entriesCache.subList(i - serviceCount, i + 1));
                 }
             }
         }
 
         return null;
+    }
+
+    static List<Snapshot> convertEntryListToSnapshotList(final List<Entry> entries)
+    {
+        final List<Snapshot> snapshots = new ArrayList<>(entries.size());
+
+        for (int i = 0; i < entries.size(); i++)
+        {
+            final Entry entry = entries.get(i);
+            snapshots.add(new Snapshot(
+                entry.recordingId,
+                entry.leadershipTermId,
+                entry.termBaseLogPosition,
+                entry.logPosition,
+                entry.timestamp,
+                entry.serviceId));
+        }
+
+        return snapshots;
     }
 
     static boolean validateSnapshotEntries(

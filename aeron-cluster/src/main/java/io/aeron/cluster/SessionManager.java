@@ -96,6 +96,7 @@ class SessionManager
     private final int commitPositionCounterId;
     private final int clusterId;
     private final int maxConcurrentSessions;
+    private final int serviceCount;
     private final MutableDirectBuffer tempBuffer = new ExpandableArrayBuffer();
 
     private long nextSessionId = 1;
@@ -120,7 +121,8 @@ class SessionManager
         final ConsensusModuleExtension consensusModuleExtension,
         final int commitPositionCounterId,
         final int clusterId,
-        final int maxConcurrentSessions)
+        final int maxConcurrentSessions,
+        final int serviceCount)
     {
         this.activeMembers = activeMembers;
         this.memberId = memberId;
@@ -143,6 +145,7 @@ class SessionManager
         this.commitPositionCounterId = commitPositionCounterId;
         this.clusterId = clusterId;
         this.maxConcurrentSessions = maxConcurrentSessions;
+        this.serviceCount = serviceCount;
     }
 
     SessionManager(
@@ -169,7 +172,8 @@ class SessionManager
             ctx.consensusModuleExtension(),
             ctx.commitPositionCounter().id(),
             ctx.clusterId(),
-            ctx.maxConcurrentSessions());
+            ctx.maxConcurrentSessions(),
+            ctx.serviceCount());
     }
 
     ClusterSession findBySessionId(final long clusterSessionId)
@@ -314,13 +318,14 @@ class SessionManager
         final long correlationId,
         final int responseStreamId,
         final int version,
+        final long logPosition,
         final String responseChannel,
         final byte[] encodedCredentials,
         final Header header)
     {
         onBackupAction(
             ClusterSession.Action.BACKUP,
-            null,
+            NULL_VALUE == logPosition ? null : logPosition,
             correlationId,
             responseStreamId,
             version,
@@ -655,6 +660,10 @@ class SessionManager
                             break;
                         }
 
+                        final Long logPosition = (Long)session.requestInput();
+                        final List<RecordingLog.Snapshot> snapshots = null == logPosition ?
+                            recoveryPlan.snapshots() :
+                            recordingLog.findSnapshotAtOrBeforeOrLowest(logPosition, serviceCount);
                         final RecordingLog.Entry entry = recordingLog.findLastTerm();
                         if (null != entry && consensusPublisher.backupResponse(
                             session,
@@ -663,7 +672,8 @@ class SessionManager
                             memberId,
                             entry,
                             recoveryPlan,
-                            ClusterMember.encodeAsString(activeMembers)))
+                            ClusterMember.encodeAsString(activeMembers),
+                            snapshots))
                         {
                             ArrayListUtil.fastUnorderedRemove(pendingSessions, i, lastIndex--);
                             session.close(aeron, errorHandler, "done");

@@ -519,17 +519,13 @@ class RecordingLogTest
     }
 
     private static void assertSnapshot(
-        final List<Entry> snapshot,
+        final List<Snapshot> snapshot,
         final int serviceCount,
         final long logPosition)
     {
         assertNotNull(snapshot);
         assertEquals(serviceCount + 1, snapshot.size());
-        snapshot.forEach((e) ->
-        {
-            assertEquals(logPosition, e.logPosition);
-            assertEquals(ENTRY_TYPE_SNAPSHOT, e.type);
-        });
+        snapshot.forEach((s) -> assertEquals(logPosition, s.logPosition()));
     }
 
     @Test

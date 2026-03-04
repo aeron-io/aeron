@@ -1173,6 +1173,7 @@ final class ConsensusModuleAgent
         final long correlationId,
         final int responseStreamId,
         final int version,
+        final long logPosition,
         final String responseChannel,
         final byte[] encodedCredentials,
         final Header header)
@@ -1187,6 +1188,7 @@ final class ConsensusModuleAgent
                     correlationId,
                     responseStreamId,
                     version,
+                    logPosition,
                     refineResponseChannel(responseChannel),
                     encodedCredentials,
                     header);

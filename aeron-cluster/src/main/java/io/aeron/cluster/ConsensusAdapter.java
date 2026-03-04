@@ -15,6 +15,7 @@
  */
 package io.aeron.cluster;
 
+import io.aeron.Aeron;
 import io.aeron.FragmentAssembler;
 import io.aeron.Subscription;
 import io.aeron.archive.client.AeronArchive;
@@ -254,6 +255,14 @@ class ConsensusAdapter implements FragmentHandler, AutoCloseable
                     messageHeaderDecoder.blockLength(),
                     messageHeaderDecoder.version());
 
+                final long correlationId = backupQueryDecoder.correlationId();
+                final int responseStreamId = backupQueryDecoder.responseStreamId();
+                final int version = backupQueryDecoder.version();
+                final long logPosition =
+                    backupQueryDecoder.logPosition() == BackupQueryDecoder.logPositionNullValue() ?
+                        Aeron.NULL_VALUE :
+                        backupQueryDecoder.logPosition();
+
                 final String responseChannel = backupQueryDecoder.responseChannel();
                 final int credentialsLength = backupQueryDecoder.encodedCredentialsLength();
                 final byte[] credentials;
@@ -268,9 +277,10 @@ class ConsensusAdapter implements FragmentHandler, AutoCloseable
                 }
 
                 consensusModuleAgent.onBackupQuery(
-                    backupQueryDecoder.correlationId(),
-                    backupQueryDecoder.responseStreamId(),
-                    backupQueryDecoder.version(),
+                    correlationId,
+                    responseStreamId,
+                    version,
+                    logPosition,
                     responseChannel,
                     credentials,
                     header);
