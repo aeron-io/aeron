@@ -112,6 +112,23 @@ final class AsyncAeronArchive implements AutoCloseable
         return false;
     }
 
+    boolean trySendStopReplayRequest(final long correlationId, final long replaySessionId)
+    {
+        if (state == State.CONNECTED)
+        {
+            try
+            {
+                return archiveProxy.stopReplay(replaySessionId, correlationId, controlSessionId);
+            }
+            catch (final ArchiveException e)
+            {
+                state = State.DISCONNECTED;
+            }
+        }
+
+        return false;
+    }
+
     int poll()
     {
         return switch (state)

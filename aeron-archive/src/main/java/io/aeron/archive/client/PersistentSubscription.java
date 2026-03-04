@@ -168,12 +168,16 @@ public final class PersistentSubscription implements AutoCloseable
      */
     public void close()
     {
-        // TODO do we need to explicitly stop replay if there is one?
         CloseHelper.closeAll(this::closeReplay, asyncAeronArchive, ctx::close);
     }
 
     private void closeReplay()
     {
+        if (replaySubscriptionId != Aeron.NULL_VALUE || replaySubscription != null)
+        {
+            asyncAeronArchive.trySendStopReplayRequest(aeron.nextCorrelationId(), replayRequest.relevantId);
+        }
+
         if (!ctx.ownsAeronClient())
         {
             if (replaySubscriptionId != Aeron.NULL_VALUE)
@@ -325,6 +329,11 @@ public final class PersistentSubscription implements AutoCloseable
 
     private void cleanUpReplaySubscription()
     {
+        if (replaySubscriptionId != Aeron.NULL_VALUE || replaySubscription != null)
+        {
+            asyncAeronArchive.trySendStopReplayRequest(aeron.nextCorrelationId(), replayRequest.relevantId);
+        }
+
         if (replaySubscriptionId != Aeron.NULL_VALUE)
         {
             aeron.asyncRemoveSubscription(replaySubscriptionId);

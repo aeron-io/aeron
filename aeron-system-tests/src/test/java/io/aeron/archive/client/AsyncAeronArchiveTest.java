@@ -53,6 +53,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static io.aeron.CommonContext.IPC_CHANNEL;
+import static io.aeron.archive.client.AeronArchive.REPLAY_ALL_AND_FOLLOW;
 import static io.aeron.archive.client.AeronArchive.REPLAY_ALL_AND_STOP;
 import static io.aeron.archive.client.ArchiveException.UNKNOWN_RECORDING;
 import static io.aeron.archive.codecs.ControlResponseCode.ERROR;
@@ -241,6 +242,38 @@ class AsyncAeronArchiveTest
     }
 
     @Test
+    @InterruptAfter(10)
+    @SuppressWarnings("try")
+    void shouldAllowToStopReplay()
+    {
+        final TestListener listener = new TestListener();
+        asyncAeronArchive = new AsyncAeronArchive(aeronArchiveCtx, listener);
+
+        pollUntil(asyncAeronArchive::isConnected, equalTo(true));
+
+        try (ExclusivePublication publication = aeronArchive.addRecordedExclusivePublication(IPC_CHANNEL, 5000);
+            Subscription subscription = aeronArchive.context().aeron().addSubscription(IPC_CHANNEL, 6000))
+        {
+            assertTrue(asyncAeronArchive.trySendReplayRequest(
+                1, 0, 0, REPLAY_ALL_AND_FOLLOW, subscription.streamId(), subscription.channel()));
+            final ControlResponse replayResponse = pollUntil(
+                () -> listener.controlResponseFor(1), notNullValue(ControlResponse.class));
+            assertEquals(OK, replayResponse.code());
+
+            final int sessionId = (int)replayResponse.relevantId;
+            final Image image = pollUntil(() -> subscription.imageBySessionId(sessionId), notNullValue(Image.class));
+
+            assertTrue(asyncAeronArchive.trySendStopReplayRequest(2, replayResponse.relevantId));
+            final ControlResponse stopReplayResponse = pollUntil(
+                () -> listener.controlResponseFor(2), notNullValue(ControlResponse.class));
+            assertEquals(OK, stopReplayResponse.code());
+
+            pollUntil(image::isEndOfStream, equalTo(true));
+        }
+    }
+
+    @Test
+    @InterruptAfter(10)
     void shouldCloseItselfIfErrorIsTerminal()
     {
         final TestListener listener = new TestListener();
