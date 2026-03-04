@@ -1428,12 +1428,11 @@ public final class PersistentSubscription implements AutoCloseable
 
         public void onError(final Exception error)
         {
-            error.printStackTrace(); // TODO
             if (asyncAeronArchive.isClosed())
             {
                 state(State.FAILED);
-                listener.onError(error);
             }
+            listener.onError(error);
         }
 
         public void onRecordingDescriptor(
