@@ -610,7 +610,7 @@ public final class PersistentSubscription implements AutoCloseable
 
         if (liveSubscription != null && !liveSubscription.hasNoImages())
         {
-            // TODO timeout for image?
+            // TODO timeout for image? yes, log a warning, stay in this state
             this.liveImage = liveSubscription.imageAtIndex(0);
             final long livePosition = liveImage.position();
             final long replayPosition = replayImage.position();
@@ -724,16 +724,15 @@ public final class PersistentSubscription implements AutoCloseable
         return assembler.onFragment(buffer, offset, length, header);
     }
 
-
     private int live(final ControlledFragmentHandler fragmentHandler, final int fragmentLimit)
     {
         int workCount = 0;
 
         final Image image = liveImage;
-        if (!image.isClosed())
+        if (!image.isClosed()) // TODO only check after poll if work count was 0
         {
             workCount += controlledPoll(image, fragmentHandler, fragmentLimit);
-            position = image.position(); // TODO what about updating after handler throws?
+            position = image.position(); // TODO what about updating after handler throws? can we query the right image position when we subscribe?
         }
         else
         {
