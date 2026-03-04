@@ -74,7 +74,7 @@ int aeron_image_create(
         return -1;
     }
 
-    _image->command_base.type = AERON_CLIENT_TYPE_IMAGE;
+    _image->command_base.type = AERON_CLIENT_MANAGED_RESOURCE_TYPE_IMAGE;
 
     memcpy(_image->source_identity, source_identity, source_identity_length);
     _image->source_identity[source_identity_length] = '\0';

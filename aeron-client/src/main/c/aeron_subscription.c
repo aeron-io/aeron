@@ -43,7 +43,7 @@ int aeron_subscription_create(
         return -1;
     }
 
-    _subscription->command_base.type = AERON_CLIENT_TYPE_SUBSCRIPTION;
+    _subscription->command_base.type = AERON_CLIENT_MANAGED_RESOURCE_TYPE_SUBSCRIPTION;
 
     _subscription->conductor_fields.image_lists_head.next_list = NULL;
     _subscription->conductor_fields.next_change_number = 0;
@@ -108,11 +108,8 @@ int aeron_subscription_close(
         if (!is_closed)
         {
             AERON_SET_RELEASE(subscription->is_closed, true);
-            if (aeron_client_conductor_async_close_subscription(
-                subscription->conductor, subscription, on_close_complete, on_close_complete_clientd) < 0)
-            {
-                return -1;
-            }
+            return aeron_client_conductor_async_close_subscription(
+                subscription->conductor, subscription, on_close_complete, on_close_complete_clientd);
         }
     }
 
@@ -729,7 +726,7 @@ int aeron_subscription_reject_image(
     aeron_subscription_t *subscription, int64_t image_correlation_id, int64_t position, const char *reason)
 {
     if (aeron_client_conductor_reject_image(
-        subscription->conductor, image_correlation_id, position, reason, AERON_COMMAND_REJECT_IMAGE) < 0)
+        subscription->conductor, image_correlation_id, position, reason) < 0)
     {
         AERON_APPEND_ERR("%s", "");
         return -1;

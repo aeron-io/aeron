@@ -45,7 +45,7 @@ int aeron_publication_create(
         return -1;
     }
 
-    _publication->command_base.type = AERON_CLIENT_TYPE_PUBLICATION;
+    _publication->command_base.type = AERON_CLIENT_MANAGED_RESOURCE_TYPE_PUBLICATION;
 
     _publication->log_buffer = log_buffer;
     _publication->log_meta_data = (aeron_logbuffer_metadata_t *)log_buffer->mapped_raw_log.log_meta_data.addr;
@@ -98,13 +98,8 @@ int aeron_publication_close(
         if (!is_closed)
         {
             AERON_SET_RELEASE(publication->is_closed, true);
-
-            if (aeron_client_conductor_async_close_publication(
-                publication->conductor, publication, on_close_complete, on_close_complete_clientd) < 0)
-            {
-                AERON_APPEND_ERR("%s", "");
-                return -1;
-            }
+            return aeron_client_conductor_async_close_publication(
+                publication->conductor, publication, on_close_complete, on_close_complete_clientd);
         }
     }
 

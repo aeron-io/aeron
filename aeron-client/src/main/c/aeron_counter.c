@@ -32,7 +32,7 @@ int aeron_counter_create(
         return -1;
     }
 
-    _counter->command_base.type = AERON_CLIENT_TYPE_COUNTER;
+    _counter->command_base.type = AERON_CLIENT_MANAGED_RESOURCE_TYPE_COUNTER;
 
     _counter->counter_addr = counter_addr;
 
@@ -90,11 +90,8 @@ int aeron_counter_close(
         if (!is_closed)
         {
             AERON_SET_RELEASE(counter->is_closed, true);
-            if (aeron_client_conductor_async_close_counter(
-                counter->conductor, counter, on_close_complete, on_close_complete_clientd) < 0)
-            {
-                return -1;
-            }
+            return aeron_client_conductor_async_close_counter(
+                counter->conductor, counter, on_close_complete, on_close_complete_clientd);
         }
     }
 

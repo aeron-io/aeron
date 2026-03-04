@@ -32,17 +32,154 @@
 #include "aeronc.h"
 #include "aeron_client.h"
 
-inline static int aeron_do_work(void *clientd)
+static int aeron_do_work(void *clientd)
 {
     aeron_t *client = (aeron_t *)clientd;
     return aeron_client_conductor_do_work(&client->conductor);
 }
 
-inline static void aeron_on_close(void *clientd)
+static void aeron_on_close(void *clientd)
 {
     aeron_t *client = (aeron_t *)clientd;
-
     aeron_client_conductor_on_close(&client->conductor);
+}
+
+static void aeron_async_cmd_free(aeron_client_registering_resource_t *async)
+{
+    if (NULL != async)
+    {
+        aeron_free(async->error_message);
+        aeron_free(async->uri);
+
+        if (AERON_CLIENT_MANAGED_RESOURCE_TYPE_COUNTER == async->type)
+        {
+            aeron_free((void *)async->counter.key_buffer);
+            aeron_free((void *)async->counter.label_buffer);
+        }
+
+        aeron_free(async);
+    }
+}
+
+static const char* aeron_client_managed_resource_type_to_string(
+    const aeron_client_managed_resource_type_t resource_type)
+{
+    switch (resource_type)
+    {
+        case AERON_CLIENT_MANAGED_RESOURCE_TYPE_PUBLICATION:
+            return "publication";
+        case AERON_CLIENT_MANAGED_RESOURCE_TYPE_EXCLUSIVE_PUBLICATION:
+            return "exclusive_publication";
+        case AERON_CLIENT_MANAGED_RESOURCE_TYPE_SUBSCRIPTION:
+            return "subscription";
+        case AERON_CLIENT_MANAGED_RESOURCE_TYPE_COUNTER:
+            return "counter";
+        case AERON_CLIENT_MANAGED_RESOURCE_TYPE_DESTINATION:
+            return "destination";
+        default:
+            return "unknown";
+    }
+}
+
+static int aeron_async_resource_poll(
+    void **resource,
+    const aeron_client_managed_resource_type_t resource_type,
+    aeron_client_registering_resource_t *async)
+{
+    if (NULL == resource || NULL == async)
+    {
+        AERON_SET_ERR(
+            EINVAL,
+            "Parameters must not be null, resource: %s, async: %s",
+            AERON_NULL_STR(resource),
+            AERON_NULL_STR(async));
+        return -1;
+    }
+
+    *resource = NULL;
+
+    if (resource_type != async->type)
+    {
+        AERON_SET_ERR(
+            EINVAL,
+            "Parameters must be valid, async->type: %d (expected: %d)",
+            (int)(async->type),
+            (int)resource_type);
+        return -1;
+    }
+
+    aeron_client_registration_status_t registration_status;
+    AERON_GET_ACQUIRE(registration_status, async->registration_status);
+
+    switch (registration_status)
+    {
+        case AERON_CLIENT_REGISTRATION_STATUS_AWAITING:
+        {
+            return 0;
+        }
+
+        case AERON_CLIENT_REGISTRATION_STATUS_ERRORED:
+        {
+            AERON_SET_ERR(
+                -async->error_code,
+                "async_add_%s registration error\n%.*s",
+                aeron_client_managed_resource_type_to_string(resource_type),
+                (int)async->error_message_length,
+                async->error_message);
+            aeron_async_cmd_free(async);
+            return -1;
+        }
+
+        case AERON_CLIENT_REGISTRATION_STATUS_REGISTERED:
+        {
+            switch (resource_type)
+            {
+                case AERON_CLIENT_MANAGED_RESOURCE_TYPE_PUBLICATION:
+                    *resource = async->resource.publication;
+                    break;
+                case AERON_CLIENT_MANAGED_RESOURCE_TYPE_EXCLUSIVE_PUBLICATION:
+                    *resource = async->resource.exclusive_publication;
+                    break;
+                case AERON_CLIENT_MANAGED_RESOURCE_TYPE_SUBSCRIPTION:
+                    *resource = async->resource.subscription;
+                    break;
+                case AERON_CLIENT_MANAGED_RESOURCE_TYPE_COUNTER:
+                    *resource = async->resource.counter;
+                    break;
+                default:
+                    break;
+            }
+            aeron_async_cmd_free(async);
+            return 1;
+        }
+
+        case AERON_CLIENT_REGISTRATION_STATUS_TIMED_OUT:
+        {
+            AERON_SET_ERR(
+                AERON_CLIENT_ERROR_DRIVER_TIMEOUT,
+                "async_add_%s no response from media driver",
+                aeron_client_managed_resource_type_to_string(resource_type));
+            aeron_async_cmd_free(async);
+            return -1;
+        }
+
+        default:
+        {
+            AERON_SET_ERR(
+                EINVAL,
+                "async_add_%s unknown registration_status: %d",
+                 aeron_client_managed_resource_type_to_string(resource_type),
+                 registration_status);
+            aeron_async_cmd_free(async);
+            return -1;
+        }
+    }
+}
+
+static int aeron_async_destination_poll(aeron_async_destination_t *async)
+{
+    void *tmp;
+    return aeron_async_resource_poll(&tmp, AERON_CLIENT_MANAGED_RESOURCE_TYPE_DESTINATION, async);
 }
 
 int aeron_init(aeron_t **client, aeron_context_t *context)
@@ -98,13 +235,11 @@ int aeron_init(aeron_t **client, aeron_context_t *context)
     *client = _client;
     return 0;
 
-    error:
-
+error:
     if (NULL != _client)
     {
         aeron_free(_client);
     }
-
     return -1;
 }
 
@@ -269,23 +404,6 @@ aeron_counters_reader_t *aeron_counters_reader(aeron_t *client)
     return &client->conductor.counters_reader;
 }
 
-inline static void aeron_async_cmd_free(aeron_client_registering_resource_t *async)
-{
-    if (NULL != async)
-    {
-        aeron_free(async->error_message);
-        aeron_free(async->uri);
-
-        if (AERON_CLIENT_TYPE_COUNTER == async->type)
-        {
-            aeron_free((void *)async->counter.key_buffer);
-            aeron_free((void *)async->counter.label_buffer);
-        }
-
-        aeron_free(async);
-    }
-}
-
 int64_t aeron_async_add_counter_get_registration_id(aeron_async_add_counter_t *add_counter)
 {
     return add_counter->registration_id;
@@ -337,69 +455,7 @@ int aeron_async_add_publication(
 
 int aeron_async_add_publication_poll(aeron_publication_t **publication, aeron_async_add_publication_t *async)
 {
-    if (NULL == publication || NULL == async)
-    {
-        AERON_SET_ERR(
-            EINVAL,
-            "Parameters must not be null, publication: %s, async: %s",
-            AERON_NULL_STR(publication),
-            AERON_NULL_STR(async));
-        return -1;
-    }
-    if (AERON_CLIENT_TYPE_PUBLICATION != async->type)
-    {
-        AERON_SET_ERR(
-            EINVAL,
-            "Parameters must be valid, async->type: %d (expected: %d)",
-            (int)(async->type),
-            (int)AERON_CLIENT_TYPE_COUNTER);
-    }
-
-    *publication = NULL;
-
-    aeron_client_registration_status_t registration_status;
-    AERON_GET_ACQUIRE(registration_status, async->registration_status);
-
-    switch (registration_status)
-    {
-        case AERON_CLIENT_AWAITING_MEDIA_DRIVER:
-        {
-            return 0;
-        }
-
-        case AERON_CLIENT_ERRORED_MEDIA_DRIVER:
-        {
-            AERON_SET_ERR(
-                -async->error_code,
-                "async_add_publication registration\n== Driver Error ==\n%.*s",
-                (int)async->error_message_length,
-                async->error_message);
-            aeron_async_cmd_free(async);
-            return -1;
-        }
-
-        case AERON_CLIENT_REGISTERED_MEDIA_DRIVER:
-        {
-            *publication = async->resource.publication;
-            aeron_async_cmd_free(async);
-            return 1;
-        }
-
-        case AERON_CLIENT_TIMEOUT_MEDIA_DRIVER:
-        {
-            AERON_SET_ERR(
-                AERON_CLIENT_ERROR_DRIVER_TIMEOUT, "%s", "async_add_publication no response from media driver");
-            aeron_async_cmd_free(async);
-            return -1;
-        }
-
-        default:
-        {
-            AERON_SET_ERR(EINVAL, "async_add_publication async status %s", "unknown");
-            aeron_async_cmd_free(async);
-            return -1;
-        }
-    }
+    return aeron_async_resource_poll((void **)publication, AERON_CLIENT_MANAGED_RESOURCE_TYPE_PUBLICATION, async);
 }
 
 int aeron_async_add_exclusive_publication(
@@ -417,57 +473,7 @@ int aeron_async_add_exclusive_publication(
 int aeron_async_add_exclusive_publication_poll(
     aeron_exclusive_publication_t **publication, aeron_async_add_exclusive_publication_t *async)
 {
-    if (NULL == publication || NULL == async || AERON_CLIENT_TYPE_EXCLUSIVE_PUBLICATION != async->type)
-    {
-        AERON_SET_ERR(EINVAL, "aeron_async_add_exclusive_publication_poll: %s", strerror(EINVAL));
-        return -1;
-    }
-
-    *publication = NULL;
-
-    aeron_client_registration_status_t registration_status;
-    AERON_GET_ACQUIRE(registration_status, async->registration_status);
-
-    switch (registration_status)
-    {
-        case AERON_CLIENT_AWAITING_MEDIA_DRIVER:
-        {
-            return 0;
-        }
-
-        case AERON_CLIENT_ERRORED_MEDIA_DRIVER:
-        {
-            AERON_SET_ERR(
-                -async->error_code,
-                "async_add_exclusive_publication registration\n== Driver Error ==\n%.*s",
-                (int)async->error_message_length,
-                async->error_message);
-            aeron_async_cmd_free(async);
-            return -1;
-        }
-
-        case AERON_CLIENT_REGISTERED_MEDIA_DRIVER:
-        {
-            *publication = async->resource.exclusive_publication;
-            aeron_async_cmd_free(async);
-            return 1;
-        }
-
-        case AERON_CLIENT_TIMEOUT_MEDIA_DRIVER:
-        {
-            AERON_SET_ERR(
-                AERON_CLIENT_ERROR_DRIVER_TIMEOUT, "%s", "async_add_exclusive_publication no response from media driver");
-            aeron_async_cmd_free(async);
-            return -1;
-        }
-
-        default:
-        {
-            AERON_SET_ERR(EINVAL, "async_add_exclusive_publication async status %s", "unknown");
-            aeron_async_cmd_free(async);
-            return -1;
-        }
-    }
+    return aeron_async_resource_poll((void **)publication, AERON_CLIENT_MANAGED_RESOURCE_TYPE_EXCLUSIVE_PUBLICATION, async);
 }
 
 int aeron_async_add_subscription(
@@ -504,70 +510,7 @@ int aeron_async_add_subscription(
 
 int aeron_async_add_subscription_poll(aeron_subscription_t **subscription, aeron_async_add_subscription_t *async)
 {
-    if (NULL == subscription || NULL == async)
-    {
-        AERON_SET_ERR(
-            EINVAL,
-            "Parameters must not be null, subscription: %s, async: %s",
-            AERON_NULL_STR(subscription),
-            AERON_NULL_STR(async));
-        return -1;
-    }
-    if (AERON_CLIENT_TYPE_SUBSCRIPTION != async->type)
-    {
-        AERON_SET_ERR(
-            EINVAL,
-            "Parameters must be valid, async->type: %d (expected: %d)",
-            (int)async->type,
-            (int)AERON_CLIENT_TYPE_COUNTER);
-        return -1;
-    }
-
-    *subscription = NULL;
-
-    aeron_client_registration_status_t registration_status;
-    AERON_GET_ACQUIRE(registration_status, async->registration_status);
-
-    switch (registration_status)
-    {
-        case AERON_CLIENT_AWAITING_MEDIA_DRIVER:
-        {
-            return 0;
-        }
-
-        case AERON_CLIENT_ERRORED_MEDIA_DRIVER:
-        {
-            AERON_SET_ERR(
-                -async->error_code,
-                "async_add_subscription registration\n== Driver Error ==\n%.*s",
-                (int)async->error_message_length,
-                async->error_message);
-            aeron_async_cmd_free(async);
-            return -1;
-        }
-
-        case AERON_CLIENT_REGISTERED_MEDIA_DRIVER:
-        {
-            *subscription = async->resource.subscription;
-            aeron_async_cmd_free(async);
-            return 1;
-        }
-
-        case AERON_CLIENT_TIMEOUT_MEDIA_DRIVER:
-        {
-            AERON_SET_ERR(
-                AERON_CLIENT_ERROR_DRIVER_TIMEOUT, "%s", "async_add_subscription no response from media driver");
-            aeron_async_cmd_free(async);
-            return -1;
-        }
-
-        default:
-        {
-            AERON_SET_ERR(EINVAL, "async_add_subscription async status %s", "unknown");
-            aeron_async_cmd_free(async);
-            return -1;
-        }
-    }
+    return aeron_async_resource_poll((void **)subscription, AERON_CLIENT_MANAGED_RESOURCE_TYPE_SUBSCRIPTION, async);
 }
 
 int aeron_async_next_session_id(aeron_async_get_next_available_session_id_t **async, aeron_t *client, int32_t stream_id)
@@ -597,13 +540,13 @@ int aeron_async_next_session_id_poll(int32_t *next_session_id, aeron_async_get_n
         return -1;
     }
 
-    if (AERON_CLIENT_TYPE_NEXT_AVAILABLE_SESSION_ID != async->type)
+    if (AERON_CLIENT_MANAGED_RESOURCE_TYPE_NEXT_AVAILABLE_SESSION_ID != async->type)
     {
         AERON_SET_ERR(
             EINVAL,
             "Parameters must be valid, async->type: %d (expected: %d)",
             (int)async->type,
-            (int)AERON_CLIENT_TYPE_NEXT_AVAILABLE_SESSION_ID);
+            (int)AERON_CLIENT_MANAGED_RESOURCE_TYPE_NEXT_AVAILABLE_SESSION_ID);
         return -1;
     }
 
@@ -612,12 +555,12 @@ int aeron_async_next_session_id_poll(int32_t *next_session_id, aeron_async_get_n
 
     switch (registration_status)
     {
-        case AERON_CLIENT_AWAITING_MEDIA_DRIVER:
+        case AERON_CLIENT_REGISTRATION_STATUS_AWAITING:
         {
             return 0;
         }
 
-        case AERON_CLIENT_ERRORED_MEDIA_DRIVER:
+        case AERON_CLIENT_REGISTRATION_STATUS_ERRORED:
         {
             AERON_SET_ERR(
                 -async->error_code,
@@ -628,14 +571,14 @@ int aeron_async_next_session_id_poll(int32_t *next_session_id, aeron_async_get_n
             return -1;
         }
 
-        case AERON_CLIENT_REGISTERED_MEDIA_DRIVER:
+        case AERON_CLIENT_REGISTRATION_STATUS_REGISTERED:
         {
             *next_session_id = async->resource.next_session_id;
             aeron_async_cmd_free(async);
             return 1;
         }
 
-        case AERON_CLIENT_TIMEOUT_MEDIA_DRIVER:
+        case AERON_CLIENT_REGISTRATION_STATUS_TIMED_OUT:
         {
             AERON_SET_ERR(
                 AERON_CLIENT_ERROR_DRIVER_TIMEOUT, "%s", "aeron_async_next_session_id no response from media driver");
@@ -683,70 +626,7 @@ int aeron_async_add_counter(
 
 int aeron_async_add_counter_poll(aeron_counter_t **counter, aeron_async_add_counter_t *async)
 {
-    if (NULL == counter || NULL == async)
-    {
-        AERON_SET_ERR(
-            EINVAL,
-            "Parameters must not be null, counter: %s, async: %s",
-            AERON_NULL_STR(counter),
-            AERON_NULL_STR(async));
-        return -1;
-    }
-    if (AERON_CLIENT_TYPE_COUNTER != async->type)
-    {
-        AERON_SET_ERR(
-            EINVAL,
-            "Parameters must be valid, async->type: %d (expected: %d)",
-            (int)async->type,
-            (int)AERON_CLIENT_TYPE_COUNTER);
-        return -1;
-    }
-
-    *counter = NULL;
-
-    aeron_client_registration_status_t registration_status;
-    AERON_GET_ACQUIRE(registration_status, async->registration_status);
-
-    switch (registration_status)
-    {
-        case AERON_CLIENT_AWAITING_MEDIA_DRIVER:
-        {
-            return 0;
-        }
-
-        case AERON_CLIENT_ERRORED_MEDIA_DRIVER:
-        {
-            AERON_SET_ERR(
-                -async->error_code,
-                "async_add_counter registration\n== Driver Error ==\n%.*s",
-                (int)async->error_message_length,
-                async->error_message);
-            aeron_async_cmd_free(async);
-            return -1;
-        }
-
-        case AERON_CLIENT_REGISTERED_MEDIA_DRIVER:
-        {
-            *counter = async->resource.counter;
-            aeron_async_cmd_free(async);
-            return 1;
-        }
-
-        case AERON_CLIENT_TIMEOUT_MEDIA_DRIVER:
-        {
-            AERON_SET_ERR(
-                AERON_CLIENT_ERROR_DRIVER_TIMEOUT, "%s", "async_add_counter no response from media driver");
-            aeron_async_cmd_free(async);
-            return -1;
-        }
-
-        default:
-        {
-            AERON_SET_ERR(EINVAL, "async_add_counter async status %s", "unknown");
-            aeron_async_cmd_free(async);
-            return -1;
-        }
-    }
+    return aeron_async_resource_poll((void **)counter, AERON_CLIENT_MANAGED_RESOURCE_TYPE_COUNTER, async);
 }
 
 int aeron_async_add_static_counter(
@@ -778,70 +658,6 @@ int aeron_async_add_static_counter(
         label_buffer,
         label_buffer_length,
         registration_id);
-}
-
-static int aeron_async_destination_poll(aeron_async_destination_t *async)
-{
-    if (NULL == async)
-    {
-        AERON_SET_ERR(
-            EINVAL,
-            "Parameters must not be null, async: %s",
-            AERON_NULL_STR(async));
-        return -1;
-    }
-    if (AERON_CLIENT_TYPE_DESTINATION != async->type)
-    {
-        AERON_SET_ERR(
-            EINVAL,
-            "Parameters must be valid, async->type: %d (expected: %d)",
-            (int)async->type,
-            (int)AERON_CLIENT_TYPE_COUNTER);
-        return -1;
-    }
-
-    aeron_client_registration_status_t registration_status;
-    AERON_GET_ACQUIRE(registration_status, async->registration_status);
-
-    switch (registration_status)
-    {
-        case AERON_CLIENT_AWAITING_MEDIA_DRIVER:
-        {
-            return 0;
-        }
-
-        case AERON_CLIENT_ERRORED_MEDIA_DRIVER:
-        {
-            AERON_SET_ERR(
-                -async->error_code,
-                "async_add_destination registration\n== Driver Error ==\n%.*s",
-                (int)async->error_message_length,
-                async->error_message);
-            aeron_async_cmd_free(async);
-            return -1;
-        }
-
-        case AERON_CLIENT_REGISTERED_MEDIA_DRIVER:
-        {
-            aeron_async_cmd_free(async);
-            return 1;
-        }
-
-        case AERON_CLIENT_TIMEOUT_MEDIA_DRIVER:
-        {
-            AERON_SET_ERR(
-                AERON_CLIENT_ERROR_DRIVER_TIMEOUT, "%s", "async_add_destination no response from media driver");
-            aeron_async_cmd_free(async);
-            return -1;
-        }
-
-        default:
-        {
-            AERON_SET_ERR(EINVAL, "async_add_destination async status %s", "unknown");
-            aeron_async_cmd_free(async);
-            return -1;
-        }
-    }
 }
 
 int aeron_publication_async_add_destination(

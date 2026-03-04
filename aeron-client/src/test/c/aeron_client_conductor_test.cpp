@@ -879,7 +879,7 @@ TEST_F(ClientConductorTest, shouldHandlePublicationAddRemoveDestination)
 
     transmitOnOperationSuccess(async_add_dest);
     doWork();
-    ASSERT_EQ(async_add_dest->registration_status, AERON_CLIENT_REGISTERED_MEDIA_DRIVER);
+    ASSERT_EQ(async_add_dest->registration_status, AERON_CLIENT_REGISTRATION_STATUS_REGISTERED);
     ASSERT_EQ(async_add_dest->resource.publication->registration_id, publication->registration_id);
     ASSERT_GT(aeron_publication_async_destination_poll(async_add_dest), 0) << aeron_errmsg();
 
@@ -919,7 +919,7 @@ TEST_F(ClientConductorTest, shouldHandlePublicationAddRemoveDestinationMaxMessag
 
     transmitOnOperationSuccess(async_add_dest);
     doWork();
-    ASSERT_EQ(async_add_dest->registration_status, AERON_CLIENT_REGISTERED_MEDIA_DRIVER);
+    ASSERT_EQ(async_add_dest->registration_status, AERON_CLIENT_REGISTRATION_STATUS_REGISTERED);
     ASSERT_EQ(async_add_dest->resource.publication->registration_id, publication->registration_id);
     ASSERT_GT(aeron_publication_async_destination_poll(async_add_dest), 0) << aeron_errmsg();
 
@@ -958,7 +958,7 @@ TEST_F(ClientConductorTest, shouldHandleExclusivePublicationAddDestination)
 
     transmitOnOperationSuccess(async_dest);
     doWork();
-    ASSERT_EQ(async_dest->registration_status, AERON_CLIENT_REGISTERED_MEDIA_DRIVER);
+    ASSERT_EQ(async_dest->registration_status, AERON_CLIENT_REGISTRATION_STATUS_REGISTERED);
     ASSERT_EQ(async_dest->resource.publication->registration_id, publication->registration_id);
     ASSERT_GT(aeron_exclusive_publication_async_destination_poll(async_dest), 0) << aeron_errmsg();
 
@@ -998,7 +998,7 @@ TEST_F(ClientConductorTest, shouldHandleExclusivePublicationAddDestinationMaxMes
 
     transmitOnOperationSuccess(async_dest);
     doWork();
-    ASSERT_EQ(async_dest->registration_status, AERON_CLIENT_REGISTERED_MEDIA_DRIVER);
+    ASSERT_EQ(async_dest->registration_status, AERON_CLIENT_REGISTRATION_STATUS_REGISTERED);
     ASSERT_EQ(async_dest->resource.publication->registration_id, publication->registration_id);
     ASSERT_GT(aeron_exclusive_publication_async_destination_poll(async_dest), 0) << aeron_errmsg();
 
@@ -1040,7 +1040,7 @@ TEST_F(ClientConductorTest, shouldHandleSubscriptionAddDestination)
 
     transmitOnOperationSuccess(async_dest);
     doWork();
-    ASSERT_EQ(async_dest->registration_status, AERON_CLIENT_REGISTERED_MEDIA_DRIVER);
+    ASSERT_EQ(async_dest->registration_status, AERON_CLIENT_REGISTRATION_STATUS_REGISTERED);
     ASSERT_EQ(async_dest->resource.subscription->registration_id, subscription->registration_id);
     ASSERT_GT(aeron_subscription_async_destination_poll(async_dest), 0) << aeron_errmsg();
 
@@ -1082,7 +1082,7 @@ TEST_F(ClientConductorTest, shouldHandleSubscriptionAddDestinationMaxMessageSize
 
     transmitOnOperationSuccess(async_dest);
     doWork();
-    ASSERT_EQ(async_dest->registration_status, AERON_CLIENT_REGISTERED_MEDIA_DRIVER);
+    ASSERT_EQ(async_dest->registration_status, AERON_CLIENT_REGISTRATION_STATUS_REGISTERED);
     ASSERT_EQ(async_dest->resource.subscription->registration_id, subscription->registration_id);
     ASSERT_GT(aeron_subscription_async_destination_poll(async_dest), 0) << aeron_errmsg();
 
@@ -1244,7 +1244,7 @@ TEST_F(ClientConductorTest, shouldReturnRandomSessionIdIfControlProtolVersionNot
     const int32_t streamId = 43;
     ASSERT_EQ(aeron_client_conductor_async_get_next_available_session_id(&async, &m_conductor, streamId), 0);
     ASSERT_EQ(streamId, async->stream_id);
-    ASSERT_EQ(AERON_CLIENT_REGISTERED_MEDIA_DRIVER, async->registration_status);
+    ASSERT_EQ(AERON_CLIENT_REGISTRATION_STATUS_REGISTERED, async->registration_status);
     int32_t nextSessionId = async->resource.next_session_id;
 
     int32_t sessionId;
@@ -1253,11 +1253,25 @@ TEST_F(ClientConductorTest, shouldReturnRandomSessionIdIfControlProtolVersionNot
 
     ASSERT_EQ(aeron_client_conductor_async_get_next_available_session_id(&async, &m_conductor, streamId), 0);
     ASSERT_EQ(streamId, async->stream_id);
-    ASSERT_EQ(AERON_CLIENT_REGISTERED_MEDIA_DRIVER, async->registration_status);
+    ASSERT_EQ(AERON_CLIENT_REGISTRATION_STATUS_REGISTERED, async->registration_status);
     int32_t nextSessionId2 = async->resource.next_session_id;
     ASSERT_EQ(aeron_async_next_session_id_poll(&sessionId, async), 1) << aeron_errmsg();
 
     ASSERT_NE(nextSessionId, nextSessionId2);
+}
+
+TEST_F(ClientConductorTest, asyncResourceMustBeExplicitlyFreedIfPollAbandonedBeforeCompletion)
+{
+    aeron_async_add_publication_t *async = nullptr;
+    aeron_publication_t *publication = nullptr;
+
+    EXPECT_EQ(aeron_client_conductor_async_add_publication(&async, &m_conductor, URI_RESERVED, STREAM_ID), 0);
+    doWork();
+
+    EXPECT_EQ(aeron_async_add_publication_poll(&publication, async), 0) << aeron_errmsg();
+    EXPECT_EQ(nullptr, publication);
+
+    aeron_free(async);
 }
 
 class ClientConductorIsLengthSufficientTest : public testing::TestWithParam<std::tuple<aeron_mapped_file_t*, bool>>
