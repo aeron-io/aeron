@@ -2,7 +2,7 @@
 agrona = "2.4.0"
 asciidoctorj = "2.5.13"
 asm = "9.9.1"
-byteBuddy = "1.18.5"
+byteBuddy = "1.18.7"
 checkstyle = "12.3.1"
 commons-codec = "1.15"
 commons-lang3 = "3.8.1"
