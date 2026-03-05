@@ -540,29 +540,34 @@ public:
         const on_available_image_t &onAvailableImageHandler,
         const on_unavailable_image_t &onUnavailableImageHandler)
     {
-        auto uri = channel.c_str(); // implicit null check
-
         auto *addSubscription = new AsyncAddSubscription(onAvailableImageHandler, onUnavailableImageHandler);
-        void *availableClientd =
-            const_cast<void *>(reinterpret_cast<const void *>(&addSubscription->m_onAvailableImage));
-        void *unavailableClientd =
-            const_cast<void *>(reinterpret_cast<const void *>(&addSubscription->m_onUnavailableImage));
+        try
+        {
+            void *availableClientd =
+                const_cast<void *>(reinterpret_cast<const void *>(&addSubscription->m_onAvailableImage));
+            void *unavailableClientd =
+                const_cast<void *>(reinterpret_cast<const void *>(&addSubscription->m_onUnavailableImage));
 
-        if (aeron_async_add_subscription(
-            &addSubscription->m_async,
-            m_aeron,
-            uri,
-            streamId,
-            onAvailableImageCallback,
-            availableClientd,
-            onUnavailableImageCallback,
-            unavailableClientd) < 0)
+            if (aeron_async_add_subscription(
+                &addSubscription->m_async,
+                m_aeron,
+                channel.c_str(),
+                streamId,
+                onAvailableImageCallback,
+                availableClientd,
+                onUnavailableImageCallback,
+                unavailableClientd) < 0)
+            {
+                AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
+            }
+
+            return addSubscription;
+        }
+        catch (...)
         {
             delete addSubscription;
-            AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
+            throw;
         }
-
-        return addSubscription;
     }
 
     /**

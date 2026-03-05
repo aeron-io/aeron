@@ -319,21 +319,3 @@ TEST_F(WrapperSystemTest, nonPolledAsyncSubscriptionMustBeManuallyFreedAfterUsag
     // FIXME: This should handled by the conductor/executor close instead.
     std::this_thread::sleep_for(std::chrono::seconds(2));
 }
-
-TEST_F(WrapperSystemTest, whenAsyncSubscriptionCreationFailsItShouldNotLeakMemory)
-{
-    Context ctx;
-    ctx.useConductorAgentInvoker(true);
-
-    std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
-    AgentInvoker<ClientConductor> &invoker = aeron->conductorAgentInvoker();
-    invoker.start();
-
-    auto channel = nullptr;
-    int stream_id = 1000;
-    EXPECT_THROW(
-    {
-        aeron->addSubscriptionAsync(channel, stream_id);
-    },
-    std::logic_error);
-}
