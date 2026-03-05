@@ -73,6 +73,7 @@ public final class PersistentSubscription implements AutoCloseable
     private final long messageTimeoutNs;
 
     private State state;
+    private long replaySessionId = Aeron.NULL_VALUE;
     private long replaySubscriptionId = Aeron.NULL_VALUE;
     private Subscription replaySubscription;
     private long replayImageDeadline;
@@ -183,10 +184,7 @@ public final class PersistentSubscription implements AutoCloseable
 
     private void closeReplay()
     {
-        if (replaySubscriptionId != Aeron.NULL_VALUE || replaySubscription != null)
-        {
-            asyncAeronArchive.trySendStopReplayRequest(aeron.nextCorrelationId(), replayRequest.relevantId);
-        }
+        cleanUpReplay();
 
         if (!ctx.ownsAeronClient())
         {
@@ -337,7 +335,6 @@ public final class PersistentSubscription implements AutoCloseable
 
     private void setUpReplay()
     {
-        replayImage = null;
         joinError = Long.MIN_VALUE;
         maxRecordedPosition.reset(listRecordingRequest.termBufferLength >> 2);
 
@@ -348,13 +345,18 @@ public final class PersistentSubscription implements AutoCloseable
         });
     }
 
+    private void cleanUpReplay()
+    {
+        if (replaySessionId != Aeron.NULL_VALUE)
+        {
+            asyncAeronArchive.trySendStopReplayRequest(aeron.nextCorrelationId(), replaySessionId);
+
+            replaySessionId = Aeron.NULL_VALUE;
+        }
+    }
+
     private void cleanUpReplaySubscription()
     {
-        if (replaySubscriptionId != Aeron.NULL_VALUE || replaySubscription != null)
-        {
-            asyncAeronArchive.trySendStopReplayRequest(aeron.nextCorrelationId(), replayRequest.relevantId);
-        }
-
         if (replaySubscriptionId != Aeron.NULL_VALUE)
         {
             aeron.asyncRemoveSubscription(replaySubscriptionId);
@@ -464,12 +466,13 @@ public final class PersistentSubscription implements AutoCloseable
             return 1;
         }
 
+        replaySessionId = replayRequest.relevantId;
+
         return switch (replayChannelType)
         {
             case SESSION_SPECIFIC ->
             {
-                final int sessionId = (int)replayRequest.relevantId;
-                replayChannelUri.put(CommonContext.SESSION_ID_PARAM_NAME, Integer.toString(sessionId));
+                replayChannelUri.put(CommonContext.SESSION_ID_PARAM_NAME, Integer.toString((int)replaySessionId));
 
                 state(State.ADD_REPLAY_SUBSCRIPTION);
 
@@ -511,6 +514,8 @@ public final class PersistentSubscription implements AutoCloseable
         catch (final RegistrationException e)
         {
             replaySubscriptionId = Aeron.NULL_VALUE;
+
+            cleanUpReplay();
 
             if (e.errorCode() == ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE)
             {
@@ -570,12 +575,13 @@ public final class PersistentSubscription implements AutoCloseable
 
         if (replayImage == null)
         {
-            replayImage = replaySubscription.imageBySessionId((int)replayRequest.relevantId);
+            replayImage = replaySubscription.imageBySessionId((int)replaySessionId);
 
             if (replayImage == null)
             {
                 if (nanoClock.nanoTime() - replayImageDeadline >= 0)
                 {
+                    cleanUpReplay();
                     cleanUpReplaySubscription();
                     setUpReplay();
 
@@ -591,6 +597,7 @@ public final class PersistentSubscription implements AutoCloseable
         if (replayImage.isClosed())
         {
             cleanUpLiveSubscription();
+            cleanUpReplay();
             cleanUpReplaySubscription();
             setUpReplay();
 
@@ -615,6 +622,7 @@ public final class PersistentSubscription implements AutoCloseable
 
                 if (e.errorCode() != ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE)
                 {
+                    cleanUpReplay();
                     cleanUpReplaySubscription();
                     state(State.FAILED);
                 }
@@ -697,6 +705,7 @@ public final class PersistentSubscription implements AutoCloseable
             if (replayImage.isClosed())
             {
                 cleanUpLiveSubscription();
+                cleanUpReplay();
                 cleanUpReplaySubscription();
                 setUpReplay();
 
@@ -733,6 +742,7 @@ public final class PersistentSubscription implements AutoCloseable
 
         if (isLive())
         {
+            cleanUpReplay();
             cleanUpReplaySubscription();
             listener.onLiveJoined();
         }
@@ -798,6 +808,8 @@ public final class PersistentSubscription implements AutoCloseable
             }
             catch (final RegistrationException e)
             {
+                liveSubscriptionId = Aeron.NULL_VALUE;
+
                 if (e.errorCode() == ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE)
                 {
                     state(State.ADD_LIVE_SUBSCRIPTION);
@@ -1401,6 +1413,7 @@ public final class PersistentSubscription implements AutoCloseable
             }
 
             cleanUpLiveSubscription();
+            cleanUpReplay();
             cleanUpReplaySubscription();
 
             state(State.AWAIT_ARCHIVE_CONNECTION);
