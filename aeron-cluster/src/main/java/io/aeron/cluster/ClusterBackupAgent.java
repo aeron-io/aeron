@@ -686,7 +686,8 @@ public final class ClusterBackupAgent implements Agent
                 ctx.consensusStreamId(),
                 AeronCluster.Configuration.PROTOCOL_SEMANTIC_VERSION,
                 ctx.consensusChannel(),
-                ctx.credentialsSupplier().encodedCredentials()))
+                ctx.credentialsSupplier().encodedCredentials(),
+                NULL_VALUE))
             {
                 timeOfLastBackupQueryMs = nowMs;
                 this.correlationId = correlationId;

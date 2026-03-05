@@ -2459,6 +2459,19 @@ public final class TestCluster implements AutoCloseable
         }
     }
 
+    public List<SnapshotRecord> snapshotsIncludingServices(final TestNode testNode)
+    {
+        final File file = testNode.consensusModule().context().clusterDir();
+        try (RecordingLog recordingLog = new RecordingLog(file, false))
+        {
+            return recordingLog.entries().stream()
+                .filter((entry) -> RecordingLog.ENTRY_TYPE_SNAPSHOT == entry.type)
+                .map(entry -> new SnapshotRecord(entry.recordingId, entry.logPosition))
+                .sorted(Comparator.comparingLong(SnapshotRecord::logPosition))
+                .toList();
+        }
+    }
+
     public static final class Builder
     {
         private int clusterId;
