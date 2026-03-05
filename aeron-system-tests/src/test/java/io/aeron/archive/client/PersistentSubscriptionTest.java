@@ -1225,7 +1225,7 @@ class PersistentSubscriptionTest
         final PersistentPublication persistentPublication =
             PersistentPublication.create(aeronArchive, pubChannel, STREAM_ID);
 
-        final List<byte[]> oldMessages = generateRandomPayloads(2);
+        final List<byte[]> oldMessages = generateRandomPayloads(randomWatcher.random().nextInt(3));
         persistentPublication.persist(oldMessages);
 
         persistentSubscriptionCtx
@@ -1611,6 +1611,11 @@ class PersistentSubscriptionTest
 
         void persist(final List<byte[]> messages)
         {
+            if (messages.isEmpty())
+            {
+                return;
+            }
+
             final UnsafeBuffer wrapper = new UnsafeBuffer();
 
             long position = 0;
