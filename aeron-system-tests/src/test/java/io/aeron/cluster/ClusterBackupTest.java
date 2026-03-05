@@ -41,6 +41,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.List;
+//import java.util.function.IntFunction;
 
 import static io.aeron.cluster.ClusterBackup.Configuration.ReplayStart.LATEST_SNAPSHOT;
 import static io.aeron.test.SystemTestWatcher.UNKNOWN_HOST_FILTER;
@@ -663,6 +664,22 @@ class ClusterBackupTest
         cluster.awaitBackupState(ClusterBackup.State.BACKING_UP);
         cluster.awaitBackupLiveLogPosition(cluster.findLeader().service().cluster().logPosition());
     }
+
+//    @Test
+//    @InterruptAfter(5)
+//    void shouldQueryForSnapshotsWithLogPositionAndGetServiceEntries()
+//    {
+//        final IntFunction<TestNode.TestService[]> serviceSupplier =
+//            (index) -> new TestNode.TestService[]
+//                {
+//                    new TestNode.TestService()
+//                };
+//        final TestCluster cluster = aCluster().withStaticNodes(3).withServiceSupplier(serviceSupplier).start();
+//        systemTestWatcher.cluster(cluster);
+//        final TestNode leader = cluster.awaitLeader();
+//
+//        cluster.connectClient();
+//    }
 
     @Test
     @InterruptAfter(5)
