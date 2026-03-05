@@ -704,6 +704,7 @@ public final class PersistentSubscription implements AutoCloseable
         {
             if (replayImage.isClosed())
             {
+                position = replayPosition;
                 cleanUpLiveSubscription();
                 cleanUpReplay();
                 cleanUpReplaySubscription();
@@ -732,7 +733,6 @@ public final class PersistentSubscription implements AutoCloseable
             try
             {
                 fragments += replayImage.controlledPoll(replayCatchupFragmentHandler, fragmentLimit);
-                position = replayImage.position();
             }
             finally
             {
@@ -849,23 +849,17 @@ public final class PersistentSubscription implements AutoCloseable
 
     private int live(final ControlledFragmentHandler fragmentHandler, final int fragmentLimit)
     {
-        int workCount = 0;
-
         final Image image = liveImage;
-        if (!image.isClosed())
+        final int fragments = controlledPoll(image, fragmentHandler, fragmentLimit);
+        if (fragments == 0 && image.isClosed())
         {
-            workCount += controlledPoll(image, fragmentHandler, fragmentLimit);
-            position = image.position(); // TODO what about updating after handler throws? can we query the right image position when we subscribe?
-        }
-        else
-        {
+            position = image.position();
             cleanUpLiveSubscription();
             setUpReplay();
             listener.onLiveLeft();
-            workCount++;
+            return 1;
         }
-
-        return workCount;
+        return fragments;
     }
 
     private void state(final State newState)
