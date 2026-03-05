@@ -58,6 +58,11 @@ private:
     const on_unavailable_image_t m_onUnavailableImage;
 
 public:
+    ~AsyncAddSubscription() noexcept
+    {
+        aeron_async_cmd_free(m_async);
+    }
+
     void static remove(void *clientd)
     {
         auto *addSubscription = static_cast<AsyncAddSubscription *>(clientd);
@@ -70,11 +75,11 @@ public:
  * Subscribers are created via an {@link Aeron} object, and received messages are delivered
  * to the {@link fragment_handler_t}.
  * <p>
- * By default fragmented messages are not reassembled before delivery. If an application must
+ * By default, fragmented messages are not reassembled before delivery. If an application must
  * receive whole messages, whether or not they were fragmented, then the Subscriber
  * should be created with a {@link FragmentAssembler} or a custom implementation.
  * <p>
- * It is an applications responsibility to {@link #poll} the Subscriber for new messages.
+ * It is an applications responsibility to {@link Subscription#poll} the Subscriber for new messages.
  * <p>
  * Subscriptions are not threadsafe and should not be shared between subscribers.
  *

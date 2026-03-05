@@ -61,6 +61,12 @@ TEST_F(SystemTest, shouldReclaimAsyncResourcesOnShutdown)
     aeron->addExclusivePublication("aeron:ipc", 3000);
     aeron->addCounter(1818, nullptr, 0, "label");
     aeron->addCounter(8888, nullptr, 0, "another");
+
+    // FIXME: the sleep is to ensure that all allocated `aeron_driver_async_client_command_t` commands were freed by
+    // FIXME: allowing driver conductor to process all requests to completion.
+    // FIXME: Without the sleep the conductor might be closed earlier thus leaking memory.
+    // FIXME: This should handled by the conductor/executor close instead.
+    std::this_thread::sleep_for(std::chrono::seconds(2));
 }
 
 TEST_F(SystemTest, shouldGetDefaultPath)

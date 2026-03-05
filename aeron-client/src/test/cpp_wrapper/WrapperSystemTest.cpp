@@ -272,3 +272,68 @@ TEST_F(WrapperSystemTest, shouldRemovePendingAsyncCounterUponError)
     }
 }
 
+TEST_F(WrapperSystemTest, asyncSubscriptionMustBeManuallyFreedAfterUsage)
+{
+    Context ctx;
+    ctx.useConductorAgentInvoker(true);
+
+    std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
+    AgentInvoker<ClientConductor> &invoker = aeron->conductorAgentInvoker();
+    invoker.start();
+
+    auto channel = "aeron:udp?endpoint=localhost:99999";
+    int stream_id = 1000;
+    auto async = aeron->addSubscriptionAsync(channel, stream_id);
+
+    try
+    {
+        POLL_FOR_NON_NULL(subscription, aeron->findSubscription(async), invoker);
+        FAIL();
+    }
+    catch( const AeronException& e )
+    {
+        auto errorMsg = std::string(e.what());
+        EXPECT_NE(std::string::npos, errorMsg.find("port out of range: 99999", 0));
+    }
+
+    delete async;
+}
+
+TEST_F(WrapperSystemTest, nonPolledAsyncSubscriptionMustBeManuallyFreedAfterUsage)
+{
+    Context ctx;
+    ctx.useConductorAgentInvoker(true);
+
+    std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
+    AgentInvoker<ClientConductor> &invoker = aeron->conductorAgentInvoker();
+    invoker.start();
+
+    auto channel = "aeron:udp?endpoint=localhost:99999";
+    int stream_id = 1000;
+    auto async = aeron->addSubscriptionAsync(channel, stream_id);
+    delete async;
+
+    // FIXME: the sleep is to ensure that the `aeron_driver_async_client_command_t` was freed by allowing driver
+    // FIXME: conductor to process `addSubscription` request to completion.
+    // FIXME: Without the sleep the conductor might be closed earlier thus leaking memory.
+    // FIXME: This should handled by the conductor/executor close instead.
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+}
+
+TEST_F(WrapperSystemTest, whenAsyncSubscriptionCreationFailsItShouldNotLeakMemory)
+{
+    Context ctx;
+    ctx.useConductorAgentInvoker(true);
+
+    std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
+    AgentInvoker<ClientConductor> &invoker = aeron->conductorAgentInvoker();
+    invoker.start();
+
+    auto channel = nullptr;
+    int stream_id = 1000;
+    EXPECT_THROW(
+    {
+        aeron->addSubscriptionAsync(channel, stream_id);
+    },
+    std::logic_error);
+}

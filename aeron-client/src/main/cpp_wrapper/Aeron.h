@@ -505,9 +505,10 @@ public:
                 std::string("Unknown registration id: ").append(std::to_string(registrationId)), SOURCEINFO);
         }
 
+        AsyncAddSubscription* addSubscription = search->second;
         try
         {
-            std::shared_ptr<Subscription> subscription = findSubscription(search->second);
+            std::shared_ptr<Subscription> subscription = findSubscription(addSubscription);
             if (nullptr != subscription)
             {
                 m_pendingSubscriptions.erase(registrationId);
@@ -517,6 +518,7 @@ public:
         catch (...)
         {
             m_pendingSubscriptions.erase(registrationId);
+            delete addSubscription;
             throw;
         }
     }
@@ -538,6 +540,8 @@ public:
         const on_available_image_t &onAvailableImageHandler,
         const on_unavailable_image_t &onUnavailableImageHandler)
     {
+        auto uri = channel.c_str(); // implicit null check
+
         auto *addSubscription = new AsyncAddSubscription(onAvailableImageHandler, onUnavailableImageHandler);
         void *availableClientd =
             const_cast<void *>(reinterpret_cast<const void *>(&addSubscription->m_onAvailableImage));
@@ -547,13 +551,14 @@ public:
         if (aeron_async_add_subscription(
             &addSubscription->m_async,
             m_aeron,
-            channel.c_str(),
+            uri,
             streamId,
             onAvailableImageCallback,
             availableClientd,
             onUnavailableImageCallback,
             unavailableClientd) < 0)
         {
+            delete addSubscription;
             AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
 
@@ -598,6 +603,7 @@ public:
         int result = aeron_async_add_subscription_poll(&subscription, addSubscription->m_async);
         if (result < 0)
         {
+            addSubscription->m_async = nullptr;
             AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
         else if (0 == result)
