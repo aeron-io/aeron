@@ -22,6 +22,7 @@
 #include "aeron_congestion_control.h"
 #include "aeron_loss_detector.h"
 #include "reports/aeron_loss_reporter.h"
+#include "concurrent/aeron_spsc_concurrent_array_queue_elem.h"
 
 typedef enum aeron_publication_image_state_enum
 {
@@ -47,6 +48,13 @@ typedef struct aeron_publication_image_connection_stct
     uint8_t padding_after[AERON_CACHE_LINE_LENGTH];
 }
 aeron_publication_image_connection_t;
+
+typedef struct aeron_publication_image_pending_loss_stct
+{
+    int32_t term_id;
+    int32_t term_offset;
+    size_t length;
+} aeron_publication_image_pending_loss_t;
 
 typedef struct aeron_publication_image_stct
 {
@@ -121,12 +129,7 @@ typedef struct aeron_publication_image_stct
         aeron_driver_publication_image_revoke_func_t publication_image_revoke;
     } log;
 
-    volatile int64_t begin_loss_change;
-    volatile int64_t end_loss_change;
-    int64_t last_loss_change_number;
-    int32_t loss_term_id;
-    int32_t loss_term_offset;
-    size_t loss_length;
+    aeron_spsc_concurrent_array_queue_elem_t pending_losses;
 
     volatile int64_t begin_sm_change;
     volatile int64_t end_sm_change;

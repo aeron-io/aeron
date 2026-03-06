@@ -120,6 +120,7 @@ set(SOURCE
     concurrent/aeron_mpsc_concurrent_array_queue.c
     concurrent/aeron_mpsc_rb.c
     concurrent/aeron_spsc_concurrent_array_queue.c
+    concurrent/aeron_spsc_concurrent_array_queue_elem.c
     concurrent/aeron_spsc_rb.c
     concurrent/aeron_term_gap_filler.c
     concurrent/aeron_term_gap_scanner.c

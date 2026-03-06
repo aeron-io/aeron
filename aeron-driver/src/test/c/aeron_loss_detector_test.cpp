@@ -37,8 +37,7 @@ typedef std::array<std::uint8_t, CAPACITY> buffer_t;
 class TermGapScannerTest : public testing::Test
 {
 public:
-    TermGapScannerTest() :
-        m_ptr(m_buffer.data())
+    TermGapScannerTest() : m_ptr(m_buffer.data())
     {
         m_buffer.fill(0);
     }
@@ -64,20 +63,10 @@ TEST_F(TermGapScannerTest, shouldReportGapAtBeginningOfBuffer)
 
     hdr->frame_length = AERON_DATA_HEADER_LENGTH;
 
-    bool on_gap_detected_called = false;
-    m_on_gap_detected =
-        [&](int32_t term_id, int32_t term_offset, size_t length)
-        {
-            EXPECT_EQ(term_id, TERM_ID);
-            EXPECT_EQ(term_offset, 0);
-            EXPECT_EQ(length, (size_t)frame_offset);
-            on_gap_detected_called = true;
-        };
+    int32_t gap_length;
 
-    ASSERT_EQ(aeron_term_gap_scanner_scan_for_gap(
-        m_ptr, TERM_ID, 0, high_water_mark, TermGapScannerTest::on_gap_detected, this), 0);
-
-    EXPECT_TRUE(on_gap_detected_called);
+    ASSERT_EQ(aeron_term_gap_scanner_scan_for_gap(m_ptr, 0, high_water_mark, &gap_length), 0);
+    EXPECT_EQ(gap_length, (size_t)frame_offset);
 }
 
 TEST_F(TermGapScannerTest, shouldReportSingleGapWhenBufferNotFull)
@@ -96,20 +85,10 @@ TEST_F(TermGapScannerTest, shouldReportSingleGapWhenBufferNotFull)
     hdr = (aeron_frame_header_t *)(m_ptr + high_water_mark - (AERON_ALIGN(AERON_DATA_HEADER_LENGTH, AERON_LOGBUFFER_FRAME_ALIGNMENT)));
     hdr->frame_length = AERON_DATA_HEADER_LENGTH;
 
-    bool on_gap_detected_called = false;
-    m_on_gap_detected =
-        [&](int32_t term_id, int32_t term_offset, size_t length)
-        {
-            EXPECT_EQ(term_id, TERM_ID);
-            EXPECT_EQ(term_offset, tail);
-            EXPECT_EQ(length, (size_t)AERON_ALIGN(AERON_DATA_HEADER_LENGTH, AERON_LOGBUFFER_FRAME_ALIGNMENT));
-            on_gap_detected_called = true;
-        };
+    int32_t gap_length;
 
-    ASSERT_EQ(aeron_term_gap_scanner_scan_for_gap(
-        m_ptr, TERM_ID, tail, high_water_mark, TermGapScannerTest::on_gap_detected, this), tail);
-
-    EXPECT_TRUE(on_gap_detected_called);
+    ASSERT_EQ(aeron_term_gap_scanner_scan_for_gap(m_ptr, tail, high_water_mark, &gap_length), tail);
+    EXPECT_EQ(gap_length, (size_t)AERON_ALIGN(AERON_DATA_HEADER_LENGTH, AERON_LOGBUFFER_FRAME_ALIGNMENT));
 }
 
 TEST_F(TermGapScannerTest, shouldReportSingleGapWhenBufferIsFull)
@@ -128,20 +107,10 @@ TEST_F(TermGapScannerTest, shouldReportSingleGapWhenBufferIsFull)
     hdr = (aeron_frame_header_t *)(m_ptr + high_water_mark - (AERON_ALIGN(AERON_DATA_HEADER_LENGTH, AERON_LOGBUFFER_FRAME_ALIGNMENT)));
     hdr->frame_length = AERON_DATA_HEADER_LENGTH;
 
-    bool on_gap_detected_called = false;
-    m_on_gap_detected =
-        [&](int32_t term_id, int32_t term_offset, size_t length)
-        {
-            EXPECT_EQ(term_id, TERM_ID);
-            EXPECT_EQ(term_offset, tail);
-            EXPECT_EQ(length, (size_t)AERON_ALIGN(AERON_DATA_HEADER_LENGTH, AERON_LOGBUFFER_FRAME_ALIGNMENT));
-            on_gap_detected_called = true;
-        };
+    int32_t gap_length;
 
-    ASSERT_EQ(aeron_term_gap_scanner_scan_for_gap(
-        m_ptr, TERM_ID, tail, high_water_mark, TermGapScannerTest::on_gap_detected, this), tail);
-
-    EXPECT_TRUE(on_gap_detected_called);
+    ASSERT_EQ(aeron_term_gap_scanner_scan_for_gap(m_ptr, tail, high_water_mark, &gap_length), tail);
+    EXPECT_EQ(gap_length, (size_t)AERON_ALIGN(AERON_DATA_HEADER_LENGTH, AERON_LOGBUFFER_FRAME_ALIGNMENT));
 }
 
 TEST_F(TermGapScannerTest, shouldReportNoGapWhenHwmIsInPadding)
@@ -158,17 +127,9 @@ TEST_F(TermGapScannerTest, shouldReportNoGapWhenHwmIsInPadding)
     hdr = (aeron_frame_header_t *)(m_ptr + tail + AERON_DATA_HEADER_LENGTH);
     hdr->frame_length = 0;
 
-    bool on_gap_detected_called = false;
-    m_on_gap_detected =
-        [&](int32_t term_id, int32_t term_offset, size_t length)
-        {
-            on_gap_detected_called = true;
-        };
+    int32_t gap_length;
 
-    ASSERT_EQ(aeron_term_gap_scanner_scan_for_gap(
-        m_ptr, TERM_ID, tail, high_water_mark, TermGapScannerTest::on_gap_detected, this), CAPACITY);
-
-    EXPECT_FALSE(on_gap_detected_called);
+    ASSERT_EQ(aeron_term_gap_scanner_scan_for_gap(m_ptr, tail, high_water_mark, &gap_length), CAPACITY);
 }
 
 #define DATA_LENGTH (36)
@@ -178,9 +139,9 @@ TEST_F(TermGapScannerTest, shouldReportNoGapWhenHwmIsInPadding)
 class LossDetectorTest : public testing::Test
 {
 public:
-    LossDetectorTest() :
-        m_ptr(m_buffer.data()),
-        m_time(0)
+    LossDetectorTest() : m_ptr(m_buffer.data()),
+                         m_next_ptr(m_next_buffer.data()),
+                         m_time(0)
     {
         m_buffer.fill(0);
     }
@@ -216,7 +177,9 @@ public:
 
 protected:
     buffer_t m_buffer = {};
+    buffer_t m_next_buffer = {};
     uint8_t *m_ptr = nullptr;
+    uint8_t *m_next_ptr = nullptr;
     int64_t m_time = 0;
     aeron_loss_detector_t m_detector = {};
     aeron_feedback_delay_generator_state_t m_delay_generator_state = {};
@@ -231,23 +194,24 @@ TEST_F(LossDetectorTest, shouldNotSendNakWhenBufferIsEmpty)
 
     ASSERT_EQ(feedback_delay_state_init(true), 0);
     ASSERT_EQ(aeron_loss_detector_init(
-        &m_detector, &m_delay_generator_state, LossDetectorTest::on_gap_detected, this), 0);
+                  &m_detector, &m_delay_generator_state, LossDetectorTest::on_gap_detected, this),
+              0);
 
     m_on_gap_detected =
         [](int32_t term_id, int32_t term_offset, size_t length)
-        {
-            FAIL();
-        };
+    {
+        FAIL();
+    };
 
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        hwm_position);
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              hwm_position);
     EXPECT_FALSE(loss_found);
 
     m_time = 100 * 1000 * 1000L;
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        hwm_position);
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              hwm_position);
     EXPECT_FALSE(loss_found);
 }
 
@@ -263,23 +227,24 @@ TEST_F(LossDetectorTest, shouldNotNakIfNoMissingData)
 
     ASSERT_EQ(feedback_delay_state_init(true), 0);
     ASSERT_EQ(aeron_loss_detector_init(
-        &m_detector, &m_delay_generator_state, LossDetectorTest::on_gap_detected, this), 0);
+                  &m_detector, &m_delay_generator_state, LossDetectorTest::on_gap_detected, this),
+              0);
 
     m_on_gap_detected =
         [](int32_t term_id, int32_t term_offset, size_t length)
-        {
-            FAIL();
-        };
+    {
+        FAIL();
+    };
 
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        hwm_position);
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              hwm_position);
     EXPECT_FALSE(loss_found);
 
     m_time = 40 * 1000 * 1000L;
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        hwm_position);
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              hwm_position);
     EXPECT_FALSE(loss_found);
 }
 
@@ -295,27 +260,28 @@ TEST_F(LossDetectorTest, shouldNakMissingData)
 
     ASSERT_EQ(feedback_delay_state_init(false), 0);
     ASSERT_EQ(aeron_loss_detector_init(
-        &m_detector, &m_delay_generator_state, LossDetectorTest::on_gap_detected, this), 0);
+                  &m_detector, &m_delay_generator_state, LossDetectorTest::on_gap_detected, this),
+              0);
 
     m_on_gap_detected =
         [&](int32_t term_id, int32_t term_offset, size_t length)
-        {
-            EXPECT_EQ(term_id, TERM_ID);
-            EXPECT_EQ(term_offset, offset_of_message(1));
-            EXPECT_EQ(length, ALIGNED_FRAME_LENGTH);
-            called++;
-        };
+    {
+        EXPECT_EQ(term_id, TERM_ID);
+        EXPECT_EQ(term_offset, offset_of_message(1));
+        EXPECT_EQ(length, ALIGNED_FRAME_LENGTH);
+        called++;
+    };
 
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        offset_of_message(1));
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              offset_of_message(1));
     EXPECT_EQ(called, 0);
     EXPECT_TRUE(loss_found);
 
     m_time = 40 * 1000 * 1000L;
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        offset_of_message(1));
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              offset_of_message(1));
     EXPECT_EQ(called, 1);
     EXPECT_FALSE(loss_found);
 }
@@ -332,34 +298,35 @@ TEST_F(LossDetectorTest, shouldRetransmitNakForMissingData)
 
     ASSERT_EQ(feedback_delay_state_init(false), 0);
     ASSERT_EQ(aeron_loss_detector_init(
-        &m_detector, &m_delay_generator_state, LossDetectorTest::on_gap_detected, this), 0);
+                  &m_detector, &m_delay_generator_state, LossDetectorTest::on_gap_detected, this),
+              0);
 
     m_on_gap_detected =
         [&](int32_t term_id, int32_t term_offset, size_t length)
-        {
-            EXPECT_EQ(term_id, TERM_ID);
-            EXPECT_EQ(term_offset, offset_of_message(1));
-            EXPECT_EQ(length, ALIGNED_FRAME_LENGTH);
-            called++;
-        };
+    {
+        EXPECT_EQ(term_id, TERM_ID);
+        EXPECT_EQ(term_offset, offset_of_message(1));
+        EXPECT_EQ(length, ALIGNED_FRAME_LENGTH);
+        called++;
+    };
 
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        offset_of_message(1));
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              offset_of_message(1));
     EXPECT_EQ(called, 0);
     EXPECT_TRUE(loss_found);
 
     m_time = 30 * 1000 * 1000L;
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        offset_of_message(1));
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              offset_of_message(1));
     EXPECT_EQ(called, 1);
     EXPECT_FALSE(loss_found);
 
     m_time = 60 * 1000 * 1000L;
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        offset_of_message(1));
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              offset_of_message(1));
     EXPECT_EQ(called, 2);
     EXPECT_FALSE(loss_found);
 }
@@ -376,20 +343,21 @@ TEST_F(LossDetectorTest, shouldStopNakOnReceivingData)
 
     ASSERT_EQ(feedback_delay_state_init(false), 0);
     ASSERT_EQ(aeron_loss_detector_init(
-        &m_detector, &m_delay_generator_state, LossDetectorTest::on_gap_detected, this), 0);
+                  &m_detector, &m_delay_generator_state, LossDetectorTest::on_gap_detected, this),
+              0);
 
     m_on_gap_detected =
         [&](int32_t term_id, int32_t term_offset, size_t length)
-        {
-            EXPECT_EQ(term_id, TERM_ID);
-            EXPECT_EQ(term_offset, offset_of_message(1));
-            EXPECT_EQ(length, ALIGNED_FRAME_LENGTH);
-            called++;
-        };
+    {
+        EXPECT_EQ(term_id, TERM_ID);
+        EXPECT_EQ(term_offset, offset_of_message(1));
+        EXPECT_EQ(length, ALIGNED_FRAME_LENGTH);
+        called++;
+    };
 
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        offset_of_message(1));
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              offset_of_message(1));
     EXPECT_EQ(called, 0);
     EXPECT_TRUE(loss_found);
 
@@ -398,15 +366,15 @@ TEST_F(LossDetectorTest, shouldStopNakOnReceivingData)
     rebuild_position += (3 * ALIGNED_FRAME_LENGTH);
 
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        hwm_position);
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              hwm_position);
     EXPECT_EQ(called, 0);
     EXPECT_FALSE(loss_found);
 
     m_time = 100 * 1000 * 1000L;
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        hwm_position);
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              hwm_position);
     EXPECT_EQ(called, 0);
     EXPECT_FALSE(loss_found);
 }
@@ -425,52 +393,58 @@ TEST_F(LossDetectorTest, shouldHandleMoreThan2Gaps)
 
     ASSERT_EQ(feedback_delay_state_init(false), 0);
     ASSERT_EQ(aeron_loss_detector_init(
-        &m_detector, &m_delay_generator_state, LossDetectorTest::on_gap_detected, this), 0);
+                  &m_detector, &m_delay_generator_state, LossDetectorTest::on_gap_detected, this),
+              0);
 
     m_on_gap_detected =
         [&](int32_t term_id, int32_t term_offset, size_t length)
-        {
-            EXPECT_EQ(term_id, TERM_ID);
-            EXPECT_EQ(length, ALIGNED_FRAME_LENGTH);
-            called++;
+    {
+        EXPECT_EQ(term_id, TERM_ID);
+        EXPECT_EQ(length, ALIGNED_FRAME_LENGTH);
+        called++;
 
-            if (1 == called)
-            {
-                EXPECT_EQ(term_offset, offset_of_message(1));
-            }
-            else if (2 == called)
-            {
-                EXPECT_EQ(term_offset, offset_of_message(3));
-            }
-        };
+        if (1 == called)
+        {
+            EXPECT_EQ(term_offset, offset_of_message(1));
+        }
+        else if (2 == called)
+        {
+            EXPECT_EQ(term_offset, offset_of_message(3));
+        }
+        else if (3 == called)
+        {
+            EXPECT_EQ(term_offset, offset_of_message(5));
+        }
+    };
 
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        offset_of_message(1));
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              offset_of_message(1));
     EXPECT_EQ(called, 0);
     EXPECT_TRUE(loss_found);
 
     m_time = 40 * 1000 * 1000L;
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        offset_of_message(1));
-    EXPECT_EQ(called, 1);
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              offset_of_message(1));
+    EXPECT_EQ(called, 3);
     EXPECT_FALSE(loss_found);
 
     insert_frame(offset_of_message(1));
     rebuild_position += (3 * ALIGNED_FRAME_LENGTH);
 
+    called = 1;
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        offset_of_message(3));
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              offset_of_message(3));
     EXPECT_EQ(called, 1);
     EXPECT_TRUE(loss_found);
 
     m_time = 80 * 1000 * 1000L;
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        offset_of_message(3));
-    EXPECT_EQ(called, 2);
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              offset_of_message(3));
+    EXPECT_EQ(called, 3);
     EXPECT_FALSE(loss_found);
 }
 
@@ -486,27 +460,28 @@ TEST_F(LossDetectorTest, shouldReplaceOldNakWithNewNak)
 
     ASSERT_EQ(feedback_delay_state_init(false), 0);
     ASSERT_EQ(aeron_loss_detector_init(
-        &m_detector, &m_delay_generator_state, LossDetectorTest::on_gap_detected, this), 0);
+                  &m_detector, &m_delay_generator_state, LossDetectorTest::on_gap_detected, this),
+              0);
 
     m_on_gap_detected =
         [&](int32_t term_id, int32_t term_offset, size_t length)
-        {
-            EXPECT_EQ(term_id, TERM_ID);
-            EXPECT_EQ(length, ALIGNED_FRAME_LENGTH);
-            EXPECT_EQ(term_offset, offset_of_message(3));
-            called++;
-        };
+    {
+        EXPECT_EQ(term_id, TERM_ID);
+        EXPECT_EQ(length, ALIGNED_FRAME_LENGTH);
+        EXPECT_EQ(term_offset, offset_of_message(3));
+        called++;
+    };
 
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        offset_of_message(1));
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              offset_of_message(1));
     EXPECT_EQ(called, 0);
     EXPECT_TRUE(loss_found);
 
     m_time = 10 * 1000 * 1000L;
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        offset_of_message(1));
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              offset_of_message(1));
     EXPECT_EQ(called, 0);
     EXPECT_FALSE(loss_found);
 
@@ -516,15 +491,15 @@ TEST_F(LossDetectorTest, shouldReplaceOldNakWithNewNak)
     hwm_position = (ALIGNED_FRAME_LENGTH * 5);
 
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        offset_of_message(3));
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              offset_of_message(3));
     EXPECT_EQ(called, 0);
     EXPECT_TRUE(loss_found);
 
     m_time = 100 * 1000 * 1000L;
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        offset_of_message(3));
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              offset_of_message(3));
     EXPECT_EQ(called, 1);
     EXPECT_FALSE(loss_found);
 }
@@ -541,20 +516,21 @@ TEST_F(LossDetectorTest, shouldHandleImmediateNak)
 
     ASSERT_EQ(feedback_delay_state_init(true), 0);
     ASSERT_EQ(aeron_loss_detector_init(
-        &m_detector, &m_delay_generator_state, LossDetectorTest::on_gap_detected, this), 0);
+                  &m_detector, &m_delay_generator_state, LossDetectorTest::on_gap_detected, this),
+              0);
 
     m_on_gap_detected =
         [&](int32_t term_id, int32_t term_offset, size_t length)
-        {
-            EXPECT_EQ(term_id, TERM_ID);
-            EXPECT_EQ(term_offset, offset_of_message(1));
-            EXPECT_EQ(length, ALIGNED_FRAME_LENGTH);
-            called++;
-        };
+    {
+        EXPECT_EQ(term_id, TERM_ID);
+        EXPECT_EQ(term_offset, offset_of_message(1));
+        EXPECT_EQ(length, ALIGNED_FRAME_LENGTH);
+        called++;
+    };
 
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        offset_of_message(1));
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              offset_of_message(1));
     EXPECT_EQ(called, 1);
     EXPECT_TRUE(loss_found);
 }
@@ -571,20 +547,21 @@ TEST_F(LossDetectorTest, shouldNotNakImmediatelyByDefault)
 
     ASSERT_EQ(feedback_delay_state_init(false), 0);
     ASSERT_EQ(aeron_loss_detector_init(
-        &m_detector, &m_delay_generator_state, LossDetectorTest::on_gap_detected, this), 0);
+                  &m_detector, &m_delay_generator_state, LossDetectorTest::on_gap_detected, this),
+              0);
 
     m_on_gap_detected =
         [&](int32_t term_id, int32_t term_offset, size_t length)
-        {
-            EXPECT_EQ(term_id, TERM_ID);
-            EXPECT_EQ(term_offset, offset_of_message(1));
-            EXPECT_EQ(length, ALIGNED_FRAME_LENGTH);
-            called++;
-        };
+    {
+        EXPECT_EQ(term_id, TERM_ID);
+        EXPECT_EQ(term_offset, offset_of_message(1));
+        EXPECT_EQ(length, ALIGNED_FRAME_LENGTH);
+        called++;
+    };
 
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        offset_of_message(1));
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              offset_of_message(1));
     EXPECT_EQ(called, 0);
     EXPECT_TRUE(loss_found);
 }
@@ -601,25 +578,26 @@ TEST_F(LossDetectorTest, shouldOnlySendNaksOnceOnMultipleScans)
 
     ASSERT_EQ(feedback_delay_state_init(true), 0);
     ASSERT_EQ(aeron_loss_detector_init(
-        &m_detector, &m_delay_generator_state, LossDetectorTest::on_gap_detected, this), 0);
+                  &m_detector, &m_delay_generator_state, LossDetectorTest::on_gap_detected, this),
+              0);
 
     m_on_gap_detected =
         [&](int32_t term_id, int32_t term_offset, size_t length)
-        {
-            EXPECT_EQ(term_id, TERM_ID);
-            EXPECT_EQ(term_offset, offset_of_message(1));
-            EXPECT_EQ(length, ALIGNED_FRAME_LENGTH);
-            called++;
-        };
+    {
+        EXPECT_EQ(term_id, TERM_ID);
+        EXPECT_EQ(term_offset, offset_of_message(1));
+        EXPECT_EQ(length, ALIGNED_FRAME_LENGTH);
+        called++;
+    };
 
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        offset_of_message(1));
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              offset_of_message(1));
     EXPECT_EQ(called, 1);
     EXPECT_TRUE(loss_found);
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        offset_of_message(1));
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              offset_of_message(1));
     EXPECT_EQ(called, 1);
     EXPECT_FALSE(loss_found);
 }
@@ -636,21 +614,33 @@ TEST_F(LossDetectorTest, shouldHandleHwmGreaterThanCompletedBuffer)
 
     ASSERT_EQ(feedback_delay_state_init(true), 0);
     ASSERT_EQ(aeron_loss_detector_init(
-        &m_detector, &m_delay_generator_state, LossDetectorTest::on_gap_detected, this), 0);
+                  &m_detector, &m_delay_generator_state, LossDetectorTest::on_gap_detected, this),
+              0);
 
     m_on_gap_detected =
         [&](int32_t term_id, int32_t term_offset, size_t length)
+    {
+        called++;
+
+        if (called == 1)
         {
             EXPECT_EQ(term_id, TERM_ID);
             EXPECT_EQ(term_offset, offset_of_message(1));
             EXPECT_EQ(length, CAPACITY - (size_t)rebuild_position);
-            called++;
-        };
+        }
+
+        if (called == 2)
+        {
+            EXPECT_EQ(term_id, TERM_ID + 1);
+            EXPECT_EQ(term_offset, 0);
+            EXPECT_EQ(length, hwm_position - CAPACITY);
+        }
+    };
 
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        offset_of_message(1));
-    EXPECT_EQ(called, 1);
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              offset_of_message(1));
+    EXPECT_EQ(called, 2);
     EXPECT_TRUE(loss_found);
 }
 
@@ -666,20 +656,21 @@ TEST_F(LossDetectorTest, shouldHandleNonZeroInitialTermOffset)
 
     ASSERT_EQ(feedback_delay_state_init(true), 0);
     ASSERT_EQ(aeron_loss_detector_init(
-        &m_detector, &m_delay_generator_state, LossDetectorTest::on_gap_detected, this), 0);
+                  &m_detector, &m_delay_generator_state, LossDetectorTest::on_gap_detected, this),
+              0);
 
     m_on_gap_detected =
         [&](int32_t term_id, int32_t term_offset, size_t length)
-        {
-            EXPECT_EQ(term_id, TERM_ID);
-            EXPECT_EQ(term_offset, offset_of_message(3));
-            EXPECT_EQ(length, ALIGNED_FRAME_LENGTH);
-            called++;
-        };
+    {
+        EXPECT_EQ(term_id, TERM_ID);
+        EXPECT_EQ(term_offset, offset_of_message(3));
+        EXPECT_EQ(length, ALIGNED_FRAME_LENGTH);
+        called++;
+    };
 
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        offset_of_message(3));
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, hwm_position, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              offset_of_message(3));
     EXPECT_EQ(called, 1);
     EXPECT_TRUE(loss_found);
 }
@@ -688,83 +679,101 @@ TEST_F(LossDetectorTest, shouldDetectChangesInTheGapLength)
 {
     const int64_t rebuild_position = ALIGNED_FRAME_LENGTH * 3;
     bool loss_found;
-    bool called = false;
+    int32_t called = 0;
 
     insert_frame(offset_of_message(2));
     insert_frame(offset_of_message(5));
 
     ASSERT_EQ(feedback_delay_state_init(true), 0);
     ASSERT_EQ(aeron_loss_detector_init(
-        &m_detector, &m_delay_generator_state, LossDetectorTest::on_gap_detected, this), 0);
+                  &m_detector, &m_delay_generator_state, LossDetectorTest::on_gap_detected, this),
+              0);
 
     m_on_gap_detected =
         [&](int32_t term_id, int32_t term_offset, size_t length)
-        {
-            EXPECT_EQ(term_id, TERM_ID);
-            EXPECT_EQ(term_offset, offset_of_message(3));
-            EXPECT_EQ(length, 32);
-            called = true;
-        };
+    {
+        EXPECT_EQ(term_id, TERM_ID);
+        EXPECT_EQ(term_offset, offset_of_message(3));
+        EXPECT_EQ(length, 32);
+        called++;
+    };
 
-    called = false;
+    called = 0;
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, rebuild_position + 32, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        offset_of_message(3));
-    EXPECT_TRUE(called);
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, rebuild_position + 32, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              offset_of_message(3));
+    EXPECT_EQ(called, 1);
     EXPECT_TRUE(loss_found);
 
     m_on_gap_detected =
         [&](int32_t term_id, int32_t term_offset, size_t length)
-        {
-            EXPECT_EQ(term_id, TERM_ID);
-            EXPECT_EQ(term_offset, offset_of_message(3));
-            EXPECT_EQ(length, 64);
-            called = true;
-        };
+    {
+        EXPECT_EQ(term_id, TERM_ID);
+        EXPECT_EQ(term_offset, offset_of_message(3));
+        EXPECT_EQ(length, 64);
+        called++;
+    };
 
-    called = false;
+    called = 0;
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, rebuild_position + 64, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        offset_of_message(3));
-    EXPECT_TRUE(called);
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, rebuild_position + 64, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              offset_of_message(3));
+    EXPECT_EQ(called, 1);
     EXPECT_TRUE(loss_found);
 
-    called = false;
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, rebuild_position + 64, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        offset_of_message(3));
-    EXPECT_FALSE(called);
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, rebuild_position + 64, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              offset_of_message(3));
+    EXPECT_EQ(called, 1);
     EXPECT_FALSE(loss_found);
 
     m_on_gap_detected =
         [&](int32_t term_id, int32_t term_offset, size_t length)
-        {
-            EXPECT_EQ(term_id, TERM_ID);
-            EXPECT_EQ(term_offset, offset_of_message(3));
-            EXPECT_EQ(length, 32);
-            called = true;
-        };
+    {
+        EXPECT_EQ(term_id, TERM_ID);
+        EXPECT_EQ(term_offset, offset_of_message(3));
+        EXPECT_EQ(length, 32);
+        called++;
+    };
 
-    called = false;
+    called = 0;
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, rebuild_position + 32, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        offset_of_message(3));
-    EXPECT_TRUE(called);
-    EXPECT_TRUE(loss_found);
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, rebuild_position + 32, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              offset_of_message(3));
+    EXPECT_EQ(called, 0);
+    EXPECT_FALSE(loss_found);
 
     m_on_gap_detected =
         [&](int32_t term_id, int32_t term_offset, size_t length)
+    {
+        called++;
+
+        if (called == 1)
         {
             EXPECT_EQ(term_id, TERM_ID);
             EXPECT_EQ(term_offset, offset_of_message(3));
             EXPECT_EQ(length, ALIGNED_FRAME_LENGTH * 2);
-            called = true;
-        };
+        }
 
-    called = false;
+        if (called == 2)
+        {
+            EXPECT_EQ(term_id, TERM_ID);
+            EXPECT_EQ(term_offset, offset_of_message(6));
+            EXPECT_EQ(length, CAPACITY - offset_of_message(6));
+        }
+
+        if (called == 3)
+        {
+            EXPECT_EQ(term_id, TERM_ID + 1);
+            EXPECT_EQ(term_offset, 0);
+            EXPECT_EQ(length, rebuild_position);
+        }
+    };
+
+    called = 0;
     ASSERT_EQ(aeron_loss_detector_scan(
-        &m_detector, &loss_found, m_ptr, rebuild_position, rebuild_position + CAPACITY, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
-        offset_of_message(3));
-    EXPECT_TRUE(called);
+                  &m_detector, &loss_found, m_ptr, m_next_ptr, rebuild_position, rebuild_position + CAPACITY, m_time, MASK, POSITION_BITS_TO_SHIFT, TERM_ID),
+              offset_of_message(3));
+    EXPECT_EQ(called, 3);
     EXPECT_TRUE(loss_found);
 }

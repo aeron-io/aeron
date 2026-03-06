@@ -18,8 +18,6 @@
 
 extern int32_t aeron_term_gap_scanner_scan_for_gap(
     const uint8_t *buffer,
-    int32_t term_id,
-    int32_t term_offset,
+    int32_t offset,
     int32_t limit_offset,
-    aeron_term_gap_scanner_on_gap_detected_func_t on_gap_detected,
-    void *clientd);
+    int32_t *gap_length);

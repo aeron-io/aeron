@@ -24,33 +24,38 @@ typedef struct aeron_loss_detector_gap_stct
 {
     int32_t term_id;
     int32_t term_offset;
-    size_t length;
-}
-aeron_loss_detector_gap_t;
+    int32_t length;
+    int64_t expiry_ns;
+} aeron_loss_detector_gap_t;
 
 #define AERON_LOSS_DETECTOR_TIMER_INACTIVE (-1)
+#define AERON_LOSS_DETECTOR_MAX_LOSSES (4096)
+
+typedef void (*aeron_loss_detector_on_gap_detected_func_t)(void *clientd, int32_t term_id, int32_t term_offset, size_t length);
 
 typedef struct aeron_loss_detector_stct
 {
-    aeron_term_gap_scanner_on_gap_detected_func_t on_gap_detected;
+    aeron_loss_detector_on_gap_detected_func_t on_gap_detected;
     aeron_feedback_delay_generator_state_t *feedback_delay_state;
     void *on_gap_detected_clientd;
-    aeron_loss_detector_gap_t scanned_gap;
-    aeron_loss_detector_gap_t active_gap;
-    int64_t expiry_ns;
-}
-aeron_loss_detector_t;
+    aeron_loss_detector_gap_t *gaps;
+    aeron_loss_detector_gap_t *tmp_gaps;
+    int32_t gaps_count;
+} aeron_loss_detector_t;
 
 int aeron_loss_detector_init(
     aeron_loss_detector_t *detector,
     aeron_feedback_delay_generator_state_t *feedback_delay_state,
-    aeron_term_gap_scanner_on_gap_detected_func_t on_gap_detected,
+    aeron_loss_detector_on_gap_detected_func_t on_gap_detected,
     void *on_gap_detected_clientd);
 
-int32_t aeron_loss_detector_scan(
+void aeron_loss_detector_close(aeron_loss_detector_t *detector);
+
+int64_t aeron_loss_detector_scan(
     aeron_loss_detector_t *detector,
     bool *loss_found,
     const uint8_t *buffer,
+    const uint8_t *next_buffer,
     int64_t rebuild_position,
     int64_t hwm_position,
     int64_t now_ns,
@@ -84,42 +89,4 @@ int aeron_feedback_delay_state_init(
 
 int64_t aeron_loss_detector_nak_multicast_delay_generator(aeron_feedback_delay_generator_state_t *state, bool retry);
 
-inline void aeron_loss_detector_on_gap(void *clientd, int32_t term_id, int32_t term_offset, size_t length)
-{
-    aeron_loss_detector_t *detector = (aeron_loss_detector_t *)clientd;
-
-    detector->scanned_gap.term_id = term_id;
-    detector->scanned_gap.term_offset = term_offset;
-    detector->scanned_gap.length = length;
-}
-
-inline bool aeron_loss_detector_gaps_match(aeron_loss_detector_t *detector)
-{
-    return detector->active_gap.term_id == detector->scanned_gap.term_id &&
-        detector->active_gap.term_offset == detector->scanned_gap.term_offset &&
-        detector->active_gap.length == detector->scanned_gap.length;
-}
-
-inline void aeron_loss_detector_activate_gap(aeron_loss_detector_t *detector, int64_t now_ns)
-{
-    detector->active_gap.term_id = detector->scanned_gap.term_id;
-    detector->active_gap.term_offset = detector->scanned_gap.term_offset;
-    detector->active_gap.length = detector->scanned_gap.length;
-
-    detector->expiry_ns = now_ns + detector->feedback_delay_state->delay_generator(detector->feedback_delay_state, false);
-}
-
-inline void aeron_loss_detector_check_timer_expiry(aeron_loss_detector_t *detector, int64_t now_ns)
-{
-    if (now_ns >= detector->expiry_ns)
-    {
-        detector->on_gap_detected(
-            detector->on_gap_detected_clientd,
-            detector->active_gap.term_id,
-            detector->active_gap.term_offset,
-            detector->active_gap.length);
-        detector->expiry_ns = now_ns + detector->feedback_delay_state->delay_generator(detector->feedback_delay_state, true);
-    }
-}
-
-#endif //AERON_LOSS_DETECTOR_H
+#endif // AERON_LOSS_DETECTOR_H
