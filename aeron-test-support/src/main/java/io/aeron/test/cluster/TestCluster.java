@@ -1529,15 +1529,13 @@ public final class TestCluster implements AutoCloseable
         clientKeepAlive.init();
         awaitCounter(node,
             value,
-            requireNonNull(
-            node.consensusModule().context().standbySnapshotCounter(), "node not configured for standby snapshots"),
+            node.consensusModule().context().standbySnapshotCounter(),
             clientKeepAlive);
     }
 
     public long getStandbySnapshotCount(final TestNode node)
     {
-        final Counter snapshotCounter = requireNonNull(
-            node.consensusModule().context().standbySnapshotCounter(), "node not configured for standby snapshots");
+        final Counter snapshotCounter = node.consensusModule().context().standbySnapshotCounter();
 
         if (snapshotCounter.isClosed())
         {

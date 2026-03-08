@@ -86,6 +86,7 @@ class SessionManager
     private final CountedErrorHandler errorHandler;
     private final Counter timedOutCounter;
     private final DistinctErrorLog errorLog;
+    private final boolean acceptStandbySnapshots;
     private final Counter standbySnapshotCounter;
     private final Authenticator authenticator;
     private final AuthorisationService authorisationService;
@@ -112,6 +113,7 @@ class SessionManager
         final CountedErrorHandler errorHandler,
         final Counter timedOutCounter,
         final DistinctErrorLog errorLog,
+        final boolean acceptStandbySnapshots,
         final Counter standbySnapshotCounter,
         final Authenticator authenticator,
         final AuthorisationService authorisationService,
@@ -135,6 +137,7 @@ class SessionManager
         this.errorHandler = errorHandler;
         this.timedOutCounter = timedOutCounter;
         this.errorLog = errorLog;
+        this.acceptStandbySnapshots = acceptStandbySnapshots;
         this.standbySnapshotCounter = standbySnapshotCounter;
         this.authenticator = authenticator;
         this.authorisationService = authorisationService;
@@ -163,6 +166,7 @@ class SessionManager
             ctx.countedErrorHandler(),
             ctx.timedOutClientCounter(),
             ctx.errorLog(),
+            ctx.acceptStandbySnapshots(),
             ctx.standbySnapshotCounter(),
             ctx.authenticatorSupplier().get(),
             ctx.authorisationServiceSupplier().get(),
@@ -706,6 +710,15 @@ class SessionManager
 
                     case STANDBY_SNAPSHOT:
                     {
+                        if (!acceptStandbySnapshots)
+                        {
+                            session.reject(
+                                EventCode.ERROR,
+                                "Not configured to accept StandbySnapshot",
+                                errorLog);
+                            break;
+                        }
+
                         if (!authorisationService.isAuthorised(
                             MessageHeaderDecoder.SCHEMA_ID,
                             StandbySnapshotDecoder.TEMPLATE_ID,
