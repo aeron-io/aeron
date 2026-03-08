@@ -1947,16 +1947,20 @@ public final class ConsensusModule implements AutoCloseable
             }
             validateCounterTypeId(aeron, timedOutClientCounter, CLUSTER_CLIENT_TIMEOUT_COUNT_TYPE_ID);
 
-            if (null == standbySnapshotCounter)
+            // TODO: Disable with configuration... (Mike)
+            if (acceptStandbySnapshots)
             {
-                standbySnapshotCounter = ClusterCounters.allocate(
-                    aeron,
-                    buffer,
-                    "Cluster standby snapshots received",
-                    CLUSTER_STANDBY_SNAPSHOT_COUNTER_TYPE_ID,
-                    clusterId);
+                if (null == standbySnapshotCounter)
+                {
+                    standbySnapshotCounter = ClusterCounters.allocate(
+                        aeron,
+                        buffer,
+                        "Cluster standby snapshots received",
+                        CLUSTER_STANDBY_SNAPSHOT_COUNTER_TYPE_ID,
+                        clusterId);
+                }
+                validateCounterTypeId(aeron, standbySnapshotCounter, CLUSTER_STANDBY_SNAPSHOT_COUNTER_TYPE_ID);
             }
-            validateCounterTypeId(aeron, standbySnapshotCounter, CLUSTER_STANDBY_SNAPSHOT_COUNTER_TYPE_ID);
 
             if (null == dutyCycleTracker)
             {
