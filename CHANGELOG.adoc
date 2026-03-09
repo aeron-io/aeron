@@ -4,6 +4,7 @@
 
 === Changelog
 
+* **[Java Samples]** Added a sample for ReplayMerge.
 * **[Java]** Avoid bind conflicts when removing and adding a subscription to the same channel.
 (https://github.com/aeron-io/aeron/pull/1955[#1955])
 * **[Driver/Java]** Close sockets on the conductor thread just like the C driver.
