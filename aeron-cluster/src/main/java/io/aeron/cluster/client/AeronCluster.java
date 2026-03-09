@@ -21,6 +21,7 @@ import io.aeron.ChannelUri;
 import io.aeron.CommonContext;
 import io.aeron.ControlledFragmentAssembler;
 import io.aeron.DirectBufferVector;
+import io.aeron.ErrorCode;
 import io.aeron.FragmentAssembler;
 import io.aeron.Image;
 import io.aeron.Publication;
@@ -2327,7 +2328,20 @@ public final class AeronCluster implements AutoCloseable
                 egressRegistrationId = ctx.aeron().asyncAddSubscription(ctx.egressChannel(), ctx.egressStreamId());
             }
 
-            egressSubscription = ctx.aeron().getSubscription(egressRegistrationId);
+            try
+            {
+                egressSubscription = ctx.aeron().getSubscription(egressRegistrationId);
+            }
+            catch (final RegistrationException ex)
+            {
+                egressRegistrationId = NULL_VALUE;
+
+                if (ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE != ex.errorCode())
+                {
+                    throw ex;
+                }
+            }
+
             if (null != egressSubscription)
             {
                 egressPoller = new EgressPoller(egressSubscription, FRAGMENT_LIMIT);

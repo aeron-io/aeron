@@ -23,10 +23,17 @@ import io.aeron.driver.MediaDriver;
 import io.aeron.driver.status.SystemCounterDescriptor;
 import io.aeron.exceptions.AeronException;
 import io.aeron.exceptions.ControlProtocolException;
-import io.aeron.protocol.*;
+import io.aeron.protocol.DataHeaderFlyweight;
+import io.aeron.protocol.ErrorFlyweight;
+import io.aeron.protocol.NakFlyweight;
+import io.aeron.protocol.ResponseSetupFlyweight;
+import io.aeron.protocol.RttMeasurementFlyweight;
+import io.aeron.protocol.SetupFlyweight;
+import io.aeron.protocol.StatusMessageFlyweight;
 import io.aeron.status.ChannelEndpointStatus;
 import io.aeron.status.LocalSocketAddressStatus;
 import org.agrona.BitUtil;
+import org.agrona.CloseHelper;
 import org.agrona.collections.ArrayUtil;
 import org.agrona.collections.Hashing;
 import org.agrona.collections.Int2IntCounterMap;
@@ -45,7 +52,6 @@ import java.util.concurrent.TimeUnit;
 import static io.aeron.driver.status.SystemCounterDescriptor.POSSIBLE_TTL_ASYMMETRY;
 import static io.aeron.driver.status.SystemCounterDescriptor.SHORT_SENDS;
 import static io.aeron.protocol.StatusMessageFlyweight.SEND_SETUP_FLAG;
-import static io.aeron.status.ChannelEndpointStatus.status;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 
 abstract class ReceiveChannelEndpointLhsPadding extends UdpChannelTransport
@@ -261,8 +267,8 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
         final long currentStatus = statusIndicator.get();
         if (currentStatus != ChannelEndpointStatus.INITIALIZING)
         {
-            throw new AeronException(
-                "channel cannot be registered unless INITIALIZING: status=" + status(currentStatus));
+            throw new AeronException("channel cannot be registered unless INITIALIZING: status=" +
+                ChannelEndpointStatus.status(currentStatus));
         }
 
         if (null == multiRcvDestination)
@@ -276,55 +282,48 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
     }
 
     /**
-     * Close the counters used to indicate channel status.
+     * Indicate that the channel is closing and should not be used for new subscriptions.
      */
-    public void closeIndicators()
+    public void indicateClosing()
     {
-        statusIndicator.close();
-
-        if (null != localSocketAddressIndicator)
-        {
-            localSocketAddressIndicator.close();
-        }
+        statusIndicator.setRelease(ChannelEndpointStatus.CLOSING);
     }
 
     /**
-     * Close transports for {@link MultiRcvDestination} if present.
+     * The {@link ChannelEndpointStatus} value for the channel.
      *
-     * @param poller associated with the {@link MultiRcvDestination} if present to be used for selecting without
-     *              processing.
-     */
-    public void closeMultiRcvDestinationTransports(final DataTransportPoller poller)
-    {
-        if (null != multiRcvDestination)
-        {
-            multiRcvDestination.closeTransports(this, poller);
-        }
-    }
-
-    /**
-     * Close the {@link MultiRcvDestination} indicators.
+     * <p>Must not be called after calling {@link #close()}, as it accesses a counter.</p>
      *
-     * @param conductorProxy for sending back counters to be closed.
+     * @return the {@link ChannelEndpointStatus} value for the channel.
      */
-    public void closeMultiRcvDestinationIndicators(final DriverConductorProxy conductorProxy)
+    public long status()
     {
-        if (null != multiRcvDestination)
-        {
-            multiRcvDestination.closeIndicators(conductorProxy);
-        }
+        return statusIndicator.getAcquire();
     }
 
     /**
      * Open the underlying sockets for the channel.
-     *
-     * @param conductorProxy for notifying potential channel errors.
      */
-    public void openChannel(final DriverConductorProxy conductorProxy)
+    public void openChannel()
     {
         if (null == multiRcvDestination)
         {
             openDatagramChannel(statusIndicator);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public void close()
+    {
+        super.close();
+
+        CloseHelper.close(errorHandler, statusIndicator);
+        CloseHelper.close(errorHandler, localSocketAddressIndicator);
+        if (null != multiRcvDestination)
+        {
+            multiRcvDestination.close(errorHandler);
         }
     }
 
@@ -822,13 +821,13 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
     /**
      * Send a Status Message back to a sources.
      *
-     * @param controlAddresses  of the sources.
-     * @param sessionId         of the image.
-     * @param streamId          of the image.
-     * @param termId            of the image to indicate position.
-     * @param termOffset        of the image to indicate position.
-     * @param windowLength      for available buffer from the position.
-     * @param flags             for the header.
+     * @param controlAddresses of the sources.
+     * @param sessionId        of the image.
+     * @param streamId         of the image.
+     * @param termId           of the image to indicate position.
+     * @param termOffset       of the image to indicate position.
+     * @param windowLength     for available buffer from the position.
+     * @param flags            for the header.
      */
     public void sendStatusMessage(
         final ImageConnection[] controlAddresses,
@@ -939,11 +938,11 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
     /**
      * Send an error frame back to the source publications to indicate this image has errored.
      *
-     * @param controlAddresses  of the sources.
-     * @param sessionId         for the image.
-     * @param streamId          for the image.
-     * @param errorCode         for the error being sent.
-     * @param errorMessage      to be sent back to the publication.
+     * @param controlAddresses of the sources.
+     * @param sessionId        for the image.
+     * @param streamId         for the image.
+     * @param errorCode        for the error being sent.
+     * @param errorMessage     to be sent back to the publication.
      */
     public void sendErrorFrame(
         final ImageConnection[] controlAddresses,
@@ -1119,7 +1118,6 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
             ", imageRefCount=" + imageRefCount +
             ", udpChannel=" + udpChannel +
             ", connectAddress=" + connectAddress +
-            ", isClosed=" + isClosed +
             ", multiRcvDestination=" + multiRcvDestination +
             '}';
     }

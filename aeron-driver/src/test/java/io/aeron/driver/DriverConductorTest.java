@@ -361,6 +361,36 @@ class DriverConductorTest
     }
 
     @Test
+    void shouldEventuallyAddSubscriptionMatchingAClosedSubscriptionChannel()
+    {
+        final long id1 = driverProxy.addSubscription(CHANNEL_4000, STREAM_ID_1);
+        driverProxy.removeSubscription(id1);
+
+        driverConductor.doWork();
+        driverConductor.doWork();
+
+        verify(receiverProxy).registerReceiveChannelEndpoint(any());
+        final ArgumentCaptor<ReceiveChannelEndpoint> captor = ArgumentCaptor.forClass(ReceiveChannelEndpoint.class);
+        verify(receiverProxy).closeReceiveChannelEndpoint(captor.capture());
+
+        final long id2 = driverProxy.addSubscription(CHANNEL_4000, STREAM_ID_1);
+
+        driverConductor.doWork();
+        driverConductor.doWork();
+
+        verify(mockClientProxy, times(1)).onError(id2, ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE,
+            "ReceiveChannelEndpoint found in CLOSING state, please retry");
+
+        driverConductor.receiveChannelEndpointClosed(captor.getValue());
+
+        final long id3 = driverProxy.addSubscription(CHANNEL_4000, STREAM_ID_1);
+
+        driverConductor.doWork();
+
+        verify(mockClientProxy, times(1)).onSubscriptionReady(eq(id3), anyInt());
+    }
+
+    @Test
     void shouldBeAbleToAddMultipleStreams()
     {
         driverProxy.addPublication(CHANNEL_4001, STREAM_ID_1);
