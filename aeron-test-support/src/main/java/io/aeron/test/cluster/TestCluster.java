@@ -192,6 +192,7 @@ public final class TestCluster implements AutoCloseable
     private SendChannelEndpointSupplier clientSendChannelEndpointSupplier;
     private ReceiveChannelEndpointSupplier clientReceiveChannelEndpointSupplier;
     private long clientImageLivenessTimeoutNs = Configuration.imageLivenessTimeoutNs();
+    private ThreadingMode clientThreadingMode = ThreadingMode.SHARED;
     private TestMediaDriver clientMediaDriver;
     private AeronCluster client;
     private TestBackupNode backupNode;
@@ -774,6 +775,11 @@ public final class TestCluster implements AutoCloseable
         this.clientImageLivenessTimeoutNs = clientImageLivenessTimeoutNs;
     }
 
+    public void clientThreadingMode(final ThreadingMode threadingMode)
+    {
+        this.clientThreadingMode = threadingMode;
+    }
+
     public AeronCluster client()
     {
         return client;
@@ -914,7 +920,7 @@ public final class TestCluster implements AutoCloseable
         dataCollector.add(Paths.get(aeronDirName));
 
         return new MediaDriver.Context()
-            .threadingMode(ThreadingMode.SHARED)
+            .threadingMode(clientThreadingMode)
             .dirDeleteOnStart(true)
             .dirDeleteOnShutdown(true)
             .aeronDirectoryName(aeronDirName)

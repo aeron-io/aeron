@@ -9,6 +9,8 @@ message would receive on subsequent calls for that message a header with invalid
 * **[Driver/C]** Fix data corruption resulting from `aeron_append_block` ignoring `term_offset`.  (https://github.com/aeron-io/aeron/issues/1944[#1944])
 * **[Driver]** Process pending loss without delays in case of an unreliable subscriber (`reliable=false`), i.e. do not
 apply NAK delay if no recovery will be attempted. (https://github.com/aeron-io/aeron/issues/1946[#1946])
+* **[Driver/Java]** Now replies with a `RESOURCE_TEMPORARILY_UNAVAILABLE` error when the endpoint is mid-closing (as in the C driver) when reuse would be unsafe and new endpoint/socket creation would lead to a bind error.
+* **[Cluster Client/Java]** Now retries when a `RESOURCE_TEMPORARILY_UNAVAILABLE` error is encountered when creating an egress subscription.
 * **[Cluster]** Enforce a maximum service count of 10. This limit has always existed in Cluster
 but is now explicitly enforced via the ClusteredServiceContainer.Configuration.MAX_SERVICE_COUNT setting.
 * **[Cluster]** Restores old behaviour around single-node cluster liveness timeouts. (https://github.com/aeron-io/aeron/pull/1947[#1947])

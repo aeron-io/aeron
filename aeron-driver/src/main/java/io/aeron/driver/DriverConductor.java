@@ -16,6 +16,7 @@
 package io.aeron.driver;
 
 import io.aeron.ChannelUri;
+import io.aeron.ErrorCode;
 import io.aeron.driver.MediaDriver.Context;
 import io.aeron.driver.buffer.LogFactory;
 import io.aeron.driver.buffer.RawLog;
@@ -968,6 +969,7 @@ public final class DriverConductor implements Agent
     {
         if (channelEndpoint.shouldBeClosed())
         {
+            channelEndpoint.indicateClosing();
             receiverProxy.closeReceiveChannelEndpoint(channelEndpoint);
         }
     }
@@ -1179,6 +1181,16 @@ public final class DriverConductor implements Agent
 
                 final ReceiveChannelEndpoint channelEndpoint = getOrCreateReceiveChannelEndpoint(
                     params, udpChannel, registrationId);
+
+                if (ChannelEndpointStatus.CLOSING == channelEndpoint.status())
+                {
+                    clientProxy.onError(
+                        registrationId,
+                        ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE,
+                        "ReceiveChannelEndpoint found in CLOSING state, please retry"
+                    );
+                    return;
+                }
 
                 final NetworkSubscriptionLink subscription = new NetworkSubscriptionLink(
                     registrationId, channelEndpoint, streamId, channel, getOrAddClient(clientId), params);

@@ -52,7 +52,6 @@ import java.util.concurrent.TimeUnit;
 import static io.aeron.driver.status.SystemCounterDescriptor.POSSIBLE_TTL_ASYMMETRY;
 import static io.aeron.driver.status.SystemCounterDescriptor.SHORT_SENDS;
 import static io.aeron.protocol.StatusMessageFlyweight.SEND_SETUP_FLAG;
-import static io.aeron.status.ChannelEndpointStatus.status;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 
 abstract class ReceiveChannelEndpointLhsPadding extends UdpChannelTransport
@@ -268,8 +267,8 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
         final long currentStatus = statusIndicator.get();
         if (currentStatus != ChannelEndpointStatus.INITIALIZING)
         {
-            throw new AeronException(
-                "channel cannot be registered unless INITIALIZING: status=" + status(currentStatus));
+            throw new AeronException("channel cannot be registered unless INITIALIZING: status=" +
+                ChannelEndpointStatus.status(currentStatus));
         }
 
         if (null == multiRcvDestination)
@@ -280,6 +279,26 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
         }
 
         statusIndicator.setRelease(ChannelEndpointStatus.ACTIVE);
+    }
+
+    /**
+     * Indicate that the channel is closing and should not be used for new subscriptions.
+     */
+    public void indicateClosing()
+    {
+        statusIndicator.setRelease(ChannelEndpointStatus.CLOSING);
+    }
+
+    /**
+     * The {@link ChannelEndpointStatus} value for the channel.
+     *
+     * <p>Must not be called after calling {@link #close()}, as it accesses a counter.</p>
+     *
+     * @return the {@link ChannelEndpointStatus} value for the channel.
+     */
+    public long status()
+    {
+        return statusIndicator.getAcquire();
     }
 
     /**
