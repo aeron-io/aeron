@@ -187,7 +187,7 @@ int aeron_init(aeron_t **client, aeron_context_t *context)
 
     _client->context = context;
 
-    _client->runner.agent_state = AERON_AGENT_STATE_UNUSED;
+    _client->runner.state = AERON_AGENT_STATE_UNUSED;
     _client->runner.role_name = NULL;
     _client->runner.on_close = NULL;
 
