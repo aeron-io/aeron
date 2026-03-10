@@ -313,7 +313,14 @@ public class ClusterUncommittedStateTest
 
         for (int i = 0; i < cluster.memberCount(); ++i)
         {
-            assertEquals(2, ClusterTest.readSnapshot(cluster.node(i)));
+            if (firstLeader.memberId() == finalLeader.memberId())
+            {
+                assertEquals(5, ClusterTest.readSnapshot(cluster.node(i)));
+            }
+            else
+            {
+                assertEquals(2, ClusterTest.readSnapshot(cluster.node(i)));
+            }
         }
     }
 

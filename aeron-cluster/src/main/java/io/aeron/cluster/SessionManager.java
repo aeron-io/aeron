@@ -484,7 +484,10 @@ class SessionManager
         if (clusterSessionId >= nextSessionId)
         {
             nextSessionId = clusterSessionId + 1;
-            nextCommittedSessionId = nextSessionId;
+        }
+        if (clusterSessionId >= nextCommittedSessionId)
+        {
+            nextCommittedSessionId = clusterSessionId + 1;
         }
 
         if (null != consensusModuleExtension)
@@ -1033,7 +1036,6 @@ class SessionManager
             nextCommittedSessionId = Math.max(nextCommittedSessionId, uncommittedNextCommittedSessionIds.pollLong());
         }
         uncommittedNextCommittedSessionIds.clear();
-        nextSessionId = nextCommittedSessionId;
     }
 
     void updateTimeOfLastActivity()
