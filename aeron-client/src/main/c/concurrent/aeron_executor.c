@@ -19,26 +19,11 @@
 #include "util/aeron_error.h"
 #include "aeron_atomic.h"
 
-struct aeron_executor_task_stct
-{
-    aeron_executor_t *executor;
-    aeron_executor_task_on_execute_func_t on_execute;
-    aeron_executor_task_on_complete_func_t on_complete;
-    void *clientd;
-    int result;
-    volatile bool shutdown;
-    int errcode;
-    char errmsg[AERON_ERROR_MAX_TOTAL_LENGTH];
-};
-
-#define USE_RETURN_QUEUE(_e) (NULL == (_e)->on_execution_complete)
-
-aeron_executor_task_t *aeron_executor_task_acquire(
+static aeron_executor_task_t *aeron_executor_task_allocate(
     aeron_executor_t *executor,
     aeron_executor_task_on_execute_func_t on_execute,
     aeron_executor_task_on_complete_func_t on_complete,
-    void *clientd,
-    bool shutdown)
+    void *clientd)
 {
     aeron_executor_task_t *task;
 
@@ -53,17 +38,8 @@ aeron_executor_task_t *aeron_executor_task_acquire(
     task->on_complete = on_complete;
     task->clientd = clientd;
     task->result = -1;
-    task->shutdown = shutdown;
 
     return task;
-}
-
-void aeron_executor_task_release(aeron_executor_task_t *task)
-{
-    if (NULL != task)
-    {
-        aeron_free(task);
-    }
 }
 
 static int aeron_executor_dispatch(void *state)
@@ -85,20 +61,20 @@ static int aeron_executor_dispatch(void *state)
         aeron_err_clear();
     }
 
-    if (USE_RETURN_QUEUE(executor))
+    if (NULL == executor->on_execution_complete)
     {
         aeron_blocking_linked_queue_offer(&executor->return_queue, task);
     }
     else
     {
         executor->on_execution_complete(task, executor->clientd);
-        // FIXME: Free task here...
+        aeron_free(task);
     }
 
     return 1;
 }
 
-static int aeron_executor_drain_and_close_queue(aeron_blocking_linked_queue_t *queue)
+static void aeron_executor_drain_and_close_queue(aeron_blocking_linked_queue_t *queue)
 {
     while (true)
     {
@@ -107,16 +83,10 @@ static int aeron_executor_drain_and_close_queue(aeron_blocking_linked_queue_t *q
         {
             break;
         }
-        aeron_executor_task_release(task);
+        aeron_free(task);
     }
 
-    if (aeron_blocking_linked_queue_close(queue) < 0)
-    {
-        AERON_APPEND_ERR("%s", "failed to close queue");
-        return -1;
-    }
-
-    return 0;
+    aeron_blocking_linked_queue_close(queue); // queue is empty at this point
 }
 
 static void aeron_executor_drain_and_close_submit_queue(void *state)
@@ -144,7 +114,7 @@ int aeron_executor_init(
 
     if (async)
     {
-        if (USE_RETURN_QUEUE(executor))
+        if (NULL == executor->on_execution_complete)
         {
             if (aeron_blocking_linked_queue_init(&executor->return_queue) < 0)
             {
@@ -212,16 +182,9 @@ int aeron_executor_close(aeron_executor_t *executor)
 
         aeron_free(executor->idle_strategy_state);
 
-        if (!USE_RETURN_QUEUE(executor))
+        if (NULL == executor->on_execution_complete)
         {
-            // we're done
-            return 0;
-        }
-
-        if (aeron_executor_drain_and_close_queue(&executor->return_queue) < 0)
-        {
-            AERON_APPEND_ERR("%s", "");
-            return -1;
+            aeron_executor_drain_and_close_queue(&executor->return_queue);
         }
     }
     return 0;
@@ -237,7 +200,7 @@ int aeron_executor_submit(
     {
         aeron_executor_task_t *task;
 
-        task = aeron_executor_task_acquire(executor, on_execute, on_complete, clientd, false);
+        task = aeron_executor_task_allocate(executor, on_execute, on_complete, clientd);
         if (NULL == task)
         {
             AERON_APPEND_ERR("%s", "");
@@ -266,7 +229,7 @@ int aeron_executor_process_completions(aeron_executor_t *executor, int limit)
     aeron_executor_task_t *task;
     int count = 0;
 
-    if (!executor->async || !USE_RETURN_QUEUE(executor))
+    if (!executor->async || NULL != executor->on_execution_complete)
     {
         return 0;
     }
@@ -274,26 +237,20 @@ int aeron_executor_process_completions(aeron_executor_t *executor, int limit)
     for (; count < limit; count++)
     {
         task = aeron_blocking_linked_queue_poll(&executor->return_queue);
-
         if (NULL == task)
         {
             break;
         }
 
-        aeron_executor_task_do_complete(task);
+        task->on_complete(
+            task->result,
+            task->errcode,
+            task->errmsg,
+            task->clientd,
+            task->executor->clientd);
+
+        aeron_free(task);
     }
 
     return count;
-}
-
-void aeron_executor_task_do_complete(aeron_executor_task_t *task)
-{
-    task->on_complete(
-        task->result,
-        task->errcode,
-        task->errmsg,
-        task->clientd,
-        task->executor->clientd);
-
-    aeron_executor_task_release(task);
 }

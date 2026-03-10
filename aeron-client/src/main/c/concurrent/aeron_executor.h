@@ -19,6 +19,7 @@
 
 #include "aeron_agent.h"
 #include "concurrent/aeron_blocking_linked_queue.h"
+#include "util/aeron_error.h"
 
 typedef struct aeron_executor_task_stct aeron_executor_task_t;
 
@@ -37,6 +38,23 @@ typedef struct aeron_executor_stct
 }
 aeron_executor_t;
 
+typedef int (*aeron_executor_task_on_execute_func_t)(void *task_clientd, void *executor_clientd);
+
+/* void return type means error handling must complete inside this function */
+typedef void (*aeron_executor_task_on_complete_func_t)(int execution_result, int errcode, const char *errmsg, void *task_clientd, void *executor_clientd);
+
+typedef struct aeron_executor_task_stct
+{
+    aeron_executor_t *executor;
+    aeron_executor_task_on_execute_func_t on_execute;
+    aeron_executor_task_on_complete_func_t on_complete;
+    void *clientd;
+    int result;
+    int errcode;
+    char errmsg[AERON_ERROR_MAX_TOTAL_LENGTH];
+}
+aeron_executor_task_t;
+
 int aeron_executor_init(
     aeron_executor_t *executor,
     bool async,
@@ -44,11 +62,6 @@ int aeron_executor_init(
     void *clientd);
 
 int aeron_executor_close(aeron_executor_t *executor);
-
-typedef int (*aeron_executor_task_on_execute_func_t)(void *task_clientd, void *executor_clientd);
-
-/* void return type means error handling must complete inside this function */
-typedef void (*aeron_executor_task_on_complete_func_t)(int execution_result, int errcode, const char *errmsg, void *task_clientd, void *executor_clientd);
 
 int aeron_executor_submit(
     aeron_executor_t *executor,

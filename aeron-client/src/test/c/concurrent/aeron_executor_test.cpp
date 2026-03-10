@@ -59,19 +59,15 @@ public:
     static int on_execute(void *task_clientd, void *executor_clientd)
     {
         auto *e = (ExecutorTest *)executor_clientd;
-
         e->m_on_execute_count++;
-
         return e->m_on_execute(task_clientd, e);
     }
 
     static void on_complete(int result, int errcode, const char *errmsg, void *task_clientd, void *executor_clientd)
     {
         auto *e = (ExecutorTest *)executor_clientd;
-
-        e->m_on_complete_count++;
-
         e->m_on_complete(result, task_clientd, e);
+        e->m_on_complete_count++;
     }
 
 protected:
@@ -196,14 +192,19 @@ public:
     {
         auto e = ((AsyncNoReturnQueueExecutorTest *)executor_clientd);
 
-        e->tasks.push(task);
+        task->on_complete(
+            task->result,
+            task->errcode,
+            task->errmsg,
+            task->clientd,
+            task->executor->clientd);
+
         e->m_on_execution_complete_count++;
 
         return 0;
     }
 
 protected:
-    std::queue<aeron_executor_task_t *> tasks;
     int m_on_execution_complete_count = 0;
 };
 
@@ -245,15 +246,6 @@ TEST_F(AsyncNoReturnQueueExecutorTest, shouldExecuteAsynchronously)
         sched_yield();
     }
 
-    ASSERT_EQ(tasks.size(), TOTAL_TASKS);
-
-    while (!tasks.empty())
-    {
-        aeron_executor_task_do_complete(tasks.front());
-        tasks.pop();
-    }
-
-    ASSERT_EQ(tasks.size(), 0);
     ASSERT_EQ(m_on_execution_complete_count, TOTAL_TASKS);
     ASSERT_EQ(m_on_execute_count, TOTAL_TASKS);
     ASSERT_EQ(m_on_complete_count, TOTAL_TASKS);
