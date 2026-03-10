@@ -21,4 +21,6 @@
 
 uint8_t aeron_archive_async_connect_step(aeron_archive_async_connect_t *async);
 
+int aeron_archive_async_connect_delete(aeron_archive_async_connect_t *async);
+
 #endif //AERON_ARCHIVE_ASYNC_CONNECT_H

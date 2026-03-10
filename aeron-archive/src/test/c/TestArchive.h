@@ -24,9 +24,19 @@ extern "C"
 {
 #include <atomic>
 #include <signal.h>
+#include "aeronc.h"
+#include "concurrent/aeron_logbuffer_descriptor.h"
+#include "concurrent/aeron_thread.h"
+#include "util/aeron_fileutil.h"
 }
 
 #include <thread>
+
+#ifdef _MSC_VER
+#define AERON_FILE_SEP '\\'
+#else
+#define AERON_FILE_SEP '/'
+#endif
 
 #define TERM_LENGTH AERON_LOGBUFFER_TERM_MIN_LENGTH
 #define SEGMENT_LENGTH (TERM_LENGTH * 2)

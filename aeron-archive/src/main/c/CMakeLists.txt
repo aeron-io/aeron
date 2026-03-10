@@ -128,6 +128,7 @@ add_custom_command(OUTPUT ${GENERATED_C_CODECS}
 add_custom_target(c_codecs DEPENDS ${GENERATED_C_CODECS})
 
 SET(SOURCE
+    client/aeron_archive_async_client.c
     client/aeron_archive_async_connect.c
     client/aeron_archive_client.c
     client/aeron_archive_client_version.c
@@ -135,6 +136,7 @@ SET(SOURCE
     client/aeron_archive_context.c
     client/aeron_archive_control_response_poller.c
     client/aeron_archive_credentials_supplier.c
+    client/aeron_archive_persistent_subscription.c
     client/aeron_archive_proxy.c
     client/aeron_archive_recording_descriptor_poller.c
     client/aeron_archive_recording_pos.c
@@ -147,6 +149,7 @@ SET(SOURCE
 
 SET(HEADERS
     client/aeron_archive.h
+    client/aeron_archive_async_client.h
     client/aeron_archive_async_connect.h
     client/aeron_archive_client.h
     client/aeron_archive_client_version.h
@@ -154,6 +157,7 @@ SET(HEADERS
     client/aeron_archive_context.h
     client/aeron_archive_control_response_poller.h
     client/aeron_archive_credentials_supplier.h
+    client/aeron_archive_persistent_subscription.h
     client/aeron_archive_proxy.h
     client/aeron_archive_recording_descriptor_poller.h
     client/aeron_archive_recording_signal.h

@@ -17,12 +17,6 @@
 #include "gtest/gtest.h"
 #include <gmock/gmock-matchers.h>
 
-#ifdef _MSC_VER
-#define AERON_FILE_SEP '\\'
-#else
-#define AERON_FILE_SEP '/'
-#endif
-
 extern "C"
 {
 #include <inttypes.h>

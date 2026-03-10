@@ -23,17 +23,24 @@ add_definitions(-DARCHIVE_DIR="${CMAKE_CURRENT_BINARY_DIR}/archive")
 add_definitions(-DJAVA_MAJOR_VERSION=${Java_VERSION_MAJOR})
 add_definitions(-DJAVA_MINOR_VERSION=${Java_VERSION_MINOR})
 
+set(TEST_HEADERS
+    EmbeddedMediaDriver.h
+    TestArchive.h
+    client/ArchiveClientTestUtils.h)
+
 function(aeron_c_archive_test name file)
-        add_executable(${name} "TestArchive.h" ${file} ${SOURCE} ${HEADERS})
+        add_executable(${name} ${TEST_HEADERS} ${file} ${SOURCE} ${HEADERS})
         add_dependencies(${name} gmock aeron-all-jar aeron_archive_c_client)
         target_include_directories(${name} PUBLIC ${AERON_C_ARCHIVE_SOURCE_PATH})
         target_include_directories(${name} PUBLIC ${ARCHIVE_C_CODEC_TARGET_DIR})
-        target_link_libraries(${name} aeron aeron_archive_c_client gmock_main ${CMAKE_THREAD_LIBS_INIT})
+        target_link_libraries(${name} aeron aeron_driver aeron_archive_c_client gmock_main ${CMAKE_THREAD_LIBS_INIT})
         add_test(NAME ${name} COMMAND ${name})
         set_tests_properties(${name} PROPERTIES TIMEOUT 300)
         set_tests_properties(${name} PROPERTIES RUN_SERIAL TRUE)
 endfunction()
 
 if (AERON_UNIT_TESTS)
+    aeron_c_archive_test(aeron_archive_async_client_test client/aeron_archive_async_client_test.cpp)
+    aeron_c_archive_test(aeron_archive_persistent_subscription_test client/aeron_archive_persistent_subscription_test.cpp)
     aeron_c_archive_test(aeron_archive_test client/aeron_archive_test.cpp)
 endif ()
