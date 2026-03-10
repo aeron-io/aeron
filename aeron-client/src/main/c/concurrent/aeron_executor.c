@@ -26,7 +26,6 @@ struct aeron_executor_task_stct
     aeron_executor_task_on_complete_func_t on_complete;
     void *clientd;
     int result;
-    aeron_linked_queue_node_t *queue_node;
     volatile bool shutdown;
     int errcode;
     char errmsg[AERON_ERROR_MAX_TOTAL_LENGTH];
@@ -54,7 +53,6 @@ aeron_executor_task_t *aeron_executor_task_acquire(
     task->on_complete = on_complete;
     task->clientd = clientd;
     task->result = -1;
-    task->queue_node = NULL;
     task->shutdown = shutdown;
 
     return task;
@@ -64,7 +62,6 @@ void aeron_executor_task_release(aeron_executor_task_t *task)
 {
     if (NULL != task)
     {
-        aeron_linked_queue_node_delete(task->queue_node);
         aeron_free(task);
     }
 }
@@ -72,15 +69,13 @@ void aeron_executor_task_release(aeron_executor_task_t *task)
 static int aeron_executor_dispatch(void *state)
 {
     aeron_executor_t *executor = (aeron_executor_t *)state;
-    aeron_linked_queue_node_t *node;
-    aeron_executor_task_t *task = (aeron_executor_task_t *)aeron_blocking_linked_queue_poll_ex(&executor->queue, &node);
+    aeron_executor_task_t *task = (aeron_executor_task_t *)aeron_blocking_linked_queue_poll(&executor->queue);
 
     if (NULL == task)
     {
         return 0;
     }
 
-    task->queue_node = node;
     task->result = (NULL == task->on_execute) ? 0 : task->on_execute(task->clientd, executor->clientd);
 
     if (task->result < 0)
@@ -92,7 +87,7 @@ static int aeron_executor_dispatch(void *state)
 
     if (USE_RETURN_QUEUE(executor))
     {
-        aeron_blocking_linked_queue_offer_ex(&executor->return_queue, task, node);
+        aeron_blocking_linked_queue_offer(&executor->return_queue, task);
     }
     else
     {
@@ -269,7 +264,6 @@ int aeron_executor_submit(
 int aeron_executor_process_completions(aeron_executor_t *executor, int limit)
 {
     aeron_executor_task_t *task;
-    aeron_linked_queue_node_t *node;
     int count = 0;
 
     if (!executor->async || !USE_RETURN_QUEUE(executor))
@@ -279,7 +273,7 @@ int aeron_executor_process_completions(aeron_executor_t *executor, int limit)
 
     for (; count < limit; count++)
     {
-        task = aeron_blocking_linked_queue_poll_ex(&executor->return_queue, &node);
+        task = aeron_blocking_linked_queue_poll(&executor->return_queue);
 
         if (NULL == task)
         {

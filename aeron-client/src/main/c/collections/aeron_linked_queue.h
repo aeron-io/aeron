@@ -15,6 +15,7 @@
  */
 #ifndef AERON_LINKED_QUEUE_H
 #define AERON_LINKED_QUEUE_H
+#include <stdbool.h>
 
 typedef struct aeron_linked_queue_node_stct aeron_linked_queue_node_t;
 
@@ -32,15 +33,10 @@ int aeron_linked_queue_close(aeron_linked_queue_t *queue);
 
 int aeron_linked_queue_offer(aeron_linked_queue_t *queue, void *element);
 
-int aeron_linked_queue_offer_ex(aeron_linked_queue_t *queue, void *element, aeron_linked_queue_node_t *node);
-
 void *aeron_linked_queue_peek(aeron_linked_queue_t *queue);
 
 void *aeron_linked_queue_poll(aeron_linked_queue_t *queue);
 
-// set out_nodep to retrieve the underlying aeron_linked_queue_node_t for subsequent deletion
-void *aeron_linked_queue_poll_ex(aeron_linked_queue_t *queue, aeron_linked_queue_node_t **out_nodep);
-
-int aeron_linked_queue_node_delete(aeron_linked_queue_node_t *node);
+bool aeron_linked_queue_is_empty(aeron_linked_queue_t *queue);
 
 #endif //AERON_LINKED_QUEUE_H
