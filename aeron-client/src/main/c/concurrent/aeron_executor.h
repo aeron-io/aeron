@@ -17,6 +17,7 @@
 #ifndef AERON_EXECUTOR_H
 #define AERON_EXECUTOR_H
 
+#include "aeron_agent.h"
 #include "concurrent/aeron_blocking_linked_queue.h"
 
 typedef struct aeron_executor_task_stct aeron_executor_task_t;
@@ -30,7 +31,9 @@ typedef struct aeron_executor_stct
     void *clientd;
     aeron_blocking_linked_queue_t queue;
     aeron_blocking_linked_queue_t return_queue;
-    aeron_thread_t dispatch_thread;
+    aeron_agent_runner_t runner;
+    aeron_idle_strategy_func_t idle_strategy_func;
+    void *idle_strategy_state;
 }
 aeron_executor_t;
 

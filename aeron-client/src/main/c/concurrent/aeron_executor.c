@@ -69,53 +69,65 @@ void aeron_executor_task_release(aeron_executor_task_t *task)
     }
 }
 
-static void *aeron_executor_dispatch(void *arg)
+static int aeron_executor_dispatch(void *state)
 {
-    aeron_executor_t *executor = (aeron_executor_t *)arg;
-
-    aeron_thread_set_name("async-executor");
-
-    aeron_executor_task_t *task;
+    aeron_executor_t *executor = (aeron_executor_t *)state;
     aeron_linked_queue_node_t *node;
-    bool shutdown = false;
+    aeron_executor_task_t *task = (aeron_executor_task_t *)aeron_blocking_linked_queue_poll_ex(&executor->queue, &node);
 
-    do
+    if (NULL == task)
     {
-        task = (aeron_executor_task_t *)aeron_blocking_linked_queue_take_ex(&executor->queue, &node);
+        return 0;
+    }
 
+    task->queue_node = node;
+    task->result = (NULL == task->on_execute) ? 0 : task->on_execute(task->clientd, executor->clientd);
+
+    if (task->result < 0)
+    {
+        task->errcode = aeron_errcode();
+        memcpy(task->errmsg, aeron_errmsg(), strlen(aeron_errmsg()));
+        aeron_err_clear();
+    }
+
+    if (USE_RETURN_QUEUE(executor))
+    {
+        aeron_blocking_linked_queue_offer_ex(&executor->return_queue, task, node);
+    }
+    else
+    {
+        executor->on_execution_complete(task, executor->clientd);
+        // FIXME: Free task here...
+    }
+
+    return 1;
+}
+
+static int aeron_executor_drain_and_close_queue(aeron_blocking_linked_queue_t *queue)
+{
+    while (true)
+    {
+        aeron_executor_task_t *task = aeron_blocking_linked_queue_poll(queue);
         if (NULL == task)
         {
-            continue;
+            break;
         }
-
-        shutdown = task->shutdown;
-
-        task->queue_node = node;
-        task->result = (NULL == task->on_execute) ? 0 : task->on_execute(task->clientd, executor->clientd);
-
-        if (task->result < 0)
-        {
-            task->errcode = aeron_errcode();
-            memcpy(task->errmsg, aeron_errmsg(), strlen(aeron_errmsg()));
-            aeron_err_clear();
-        }
-
-        if (USE_RETURN_QUEUE(executor))
-        {
-            aeron_blocking_linked_queue_offer_ex(&executor->return_queue, task, node);
-        }
-        else if (shutdown)
-        {
-            aeron_executor_task_release(task);
-        }
-        else
-        {
-            executor->on_execution_complete(task, executor->clientd);
-        }
+        aeron_executor_task_release(task);
     }
-    while (false == shutdown);
 
-    return NULL;
+    if (aeron_blocking_linked_queue_close(queue) < 0)
+    {
+        AERON_APPEND_ERR("%s", "failed to close queue");
+        return -1;
+    }
+
+    return 0;
+}
+
+static void aeron_executor_drain_and_close_submit_queue(void *state)
+{
+    aeron_executor_t *executor = (aeron_executor_t *)state;
+    aeron_executor_drain_and_close_queue(&executor->queue);
 }
 
 int aeron_executor_init(
@@ -125,8 +137,15 @@ int aeron_executor_init(
     void *clientd)
 {
     executor->async = async,
-    executor->on_execution_complete = on_execution_complete;
+        executor->on_execution_complete = on_execution_complete;
     executor->clientd = clientd;
+
+    executor->runner.state = AERON_AGENT_STATE_UNUSED;
+    executor->runner.role_name = NULL;
+    executor->runner.on_close = NULL;
+
+    executor->idle_strategy_func = NULL;
+    executor->idle_strategy_state = NULL;
 
     if (async)
     {
@@ -145,20 +164,36 @@ int aeron_executor_init(
             return -1;
         }
 
-        aeron_thread_attr_t attr;
-        int result;
-        if ((result = aeron_thread_attr_init(&attr)) != 0)
+        if ((executor->idle_strategy_func = aeron_idle_strategy_load(
+            "sleep-ns",
+            &executor->idle_strategy_state,
+            "AERON_EXECUTOR_IDLE_STRATEGY",
+            "1ms")) == NULL)
         {
-            AERON_SET_ERR(result, "%s", "aeron_thread_attr_init failed");
+            AERON_APPEND_ERR("%s", "failed to load idle strategy");
             return -1;
         }
 
-        if ((result = aeron_thread_create(&executor->dispatch_thread, &attr, aeron_executor_dispatch, executor)) != 0)
+        if (aeron_agent_init(
+            &executor->runner,
+            "async-executor",
+            executor,
+            NULL,
+            NULL,
+            aeron_executor_dispatch,
+            aeron_executor_drain_and_close_submit_queue,
+            executor->idle_strategy_func,
+            executor->idle_strategy_state) < 0)
         {
-            AERON_SET_ERR(result, "%s", "aeron_thread_create failed");
+            AERON_APPEND_ERR("%s", "failed to init agent runner");
             return -1;
         }
 
+        if (aeron_agent_start(&executor->runner) < 0)
+        {
+            AERON_APPEND_ERR("%s", "failed to start agent runner");
+            return -1;
+        }
     }
 
     return 0;
@@ -166,73 +201,34 @@ int aeron_executor_init(
 
 int aeron_executor_close(aeron_executor_t *executor)
 {
-    if (!executor->async)
+    if (executor->async)
     {
-        return 0;
-    }
-
-    aeron_executor_task_t *task;
-
-    // enqueue a task with shutdown = true
-    task = aeron_executor_task_acquire(executor, NULL, NULL, NULL, true);
-    if (NULL == task)
-    {
-        AERON_APPEND_ERR("%s", "");
-        return -1;
-    }
-
-    if (aeron_blocking_linked_queue_offer(&executor->queue, task) < 0)
-    {
-        AERON_APPEND_ERR("%s", "");
-        return -1;
-    }
-
-    int result = aeron_thread_join(executor->dispatch_thread, NULL);
-    if (0 != result)
-    {
-        AERON_SET_ERR(result, "aeron_thread_join: %s", strerror(result));
-        return -1;
-    }
-
-    if (aeron_blocking_linked_queue_close(&executor->queue) < 0)
-    {
-        AERON_APPEND_ERR("%s", "");
-        return -1;
-    }
-
-    if (!USE_RETURN_QUEUE(executor))
-    {
-        // we're done
-        return 0;
-    }
-
-    // at this point, the executor thread has already been joined, so the shutdown task must already be on the return queue
-    aeron_linked_queue_node_t *node;
-    bool shutdown = false;
-
-    // theoretically, if the executor was empty when _close was called, we should only go through this loop one time
-    do
-    {
-        // retrieve the node so that it can be deleted when the task is released
-        task = aeron_blocking_linked_queue_poll_ex(&executor->return_queue, &node);
-
-        if (NULL == task)
+        if (aeron_agent_stop(&executor->runner))
         {
-            continue;
+            AERON_APPEND_ERR("%s", "failed to stop agent runner");
+            return -1;
         }
 
-        shutdown = task->shutdown;
+        if (aeron_agent_close(&executor->runner))
+        {
+            AERON_APPEND_ERR("%s", "failed to close agent runner");
+            return -1;
+        }
 
-        aeron_executor_task_release(task);
+        aeron_free(executor->idle_strategy_state);
+
+        if (!USE_RETURN_QUEUE(executor))
+        {
+            // we're done
+            return 0;
+        }
+
+        if (aeron_executor_drain_and_close_queue(&executor->return_queue) < 0)
+        {
+            AERON_APPEND_ERR("%s", "");
+            return -1;
+        }
     }
-    while (shutdown == false);
-
-    if (aeron_blocking_linked_queue_close(&executor->return_queue) < 0)
-    {
-        AERON_APPEND_ERR("%s", "");
-        return -1;
-    }
-
     return 0;
 }
 
@@ -242,7 +238,6 @@ int aeron_executor_submit(
     aeron_executor_task_on_complete_func_t on_complete,
     void *clientd)
 {
-
     if (executor->async)
     {
         aeron_executor_task_t *task;
