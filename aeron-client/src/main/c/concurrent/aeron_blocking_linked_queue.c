@@ -38,12 +38,6 @@ int aeron_blocking_linked_queue_close(aeron_blocking_linked_queue_t *queue)
 {
     aeron_mutex_lock(&queue->mutex);
 
-    if (!QUEUE_IS_EMPTY(queue))
-    {
-        AERON_SET_ERR(EINVAL, "%s", "queue must be empty to be deleted");
-        goto error;
-    }
-
     if (aeron_linked_queue_close(&queue->queue) < 0)
     {
         AERON_APPEND_ERR("%s", "");
