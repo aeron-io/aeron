@@ -3517,7 +3517,7 @@ final class ConsensusModuleAgent
             {
                 try
                 {
-                    ctx.idleStrategy().idle(standbySnapshotReplicator.poll(ctx.clusterClock().timeNanos()));
+                    idleStrategy.idle(standbySnapshotReplicator.poll(ctx.clusterClock().timeNanos()));
                 }
                 catch (final ClusterException ex)
                 {
