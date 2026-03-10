@@ -39,15 +39,16 @@ typedef struct aeron_executor_stct
 aeron_executor_t;
 
 typedef int (*aeron_executor_task_on_execute_func_t)(void *task_clientd, void *executor_clientd);
-
-/* void return type means error handling must complete inside this function */
-typedef void (*aeron_executor_task_on_complete_func_t)(int execution_result, int errcode, const char *errmsg, void *task_clientd, void *executor_clientd);
+typedef void (*aeron_executor_task_on_cancel_func_t)(void *task_clientd, void *executor_clientd);
+typedef void (*aeron_executor_task_on_complete_func_t)(
+    int execution_result, int errcode, const char *errmsg, void *task_clientd, void *executor_clientd);
 
 typedef struct aeron_executor_task_stct
 {
     aeron_executor_t *executor;
     aeron_executor_task_on_execute_func_t on_execute;
     aeron_executor_task_on_complete_func_t on_complete;
+    aeron_executor_task_on_cancel_func_t on_cancel;
     void *clientd;
     int result;
     int errcode;
@@ -67,6 +68,7 @@ int aeron_executor_submit(
     aeron_executor_t *executor,
     aeron_executor_task_on_execute_func_t on_execute,
     aeron_executor_task_on_complete_func_t on_complete,
+    aeron_executor_task_on_cancel_func_t on_cancel,
     void *clientd);
 
 int aeron_executor_process_completions(aeron_executor_t *executor, int limit);

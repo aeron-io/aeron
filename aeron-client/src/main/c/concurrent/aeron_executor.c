@@ -23,6 +23,7 @@ static aeron_executor_task_t *aeron_executor_task_allocate(
     aeron_executor_t *executor,
     aeron_executor_task_on_execute_func_t on_execute,
     aeron_executor_task_on_complete_func_t on_complete,
+    aeron_executor_task_on_cancel_func_t on_cancel,
     void *clientd)
 {
     aeron_executor_task_t *task;
@@ -36,6 +37,7 @@ static aeron_executor_task_t *aeron_executor_task_allocate(
     task->executor = executor;
     task->on_execute = on_execute;
     task->on_complete = on_complete;
+    task->on_cancel = on_cancel;
     task->clientd = clientd;
     task->result = -1;
 
@@ -74,7 +76,7 @@ static int aeron_executor_dispatch(void *state)
     return 1;
 }
 
-static void aeron_executor_drain_and_close_queue(aeron_blocking_linked_queue_t *queue)
+static void aeron_executor_cancel_all_tasks_and_close_queue(aeron_blocking_linked_queue_t *queue)
 {
     while (true)
     {
@@ -83,6 +85,7 @@ static void aeron_executor_drain_and_close_queue(aeron_blocking_linked_queue_t *
         {
             break;
         }
+        task->on_cancel(task->clientd, task->executor->clientd);
         aeron_free(task);
     }
 
@@ -92,7 +95,7 @@ static void aeron_executor_drain_and_close_queue(aeron_blocking_linked_queue_t *
 static void aeron_executor_drain_and_close_submit_queue(void *state)
 {
     aeron_executor_t *executor = (aeron_executor_t *)state;
-    aeron_executor_drain_and_close_queue(&executor->queue);
+    aeron_executor_cancel_all_tasks_and_close_queue(&executor->queue);
 }
 
 int aeron_executor_init(
@@ -184,7 +187,7 @@ int aeron_executor_close(aeron_executor_t *executor)
 
         if (NULL == executor->on_execution_complete)
         {
-            aeron_executor_drain_and_close_queue(&executor->return_queue);
+            aeron_executor_cancel_all_tasks_and_close_queue(&executor->return_queue);
         }
     }
     return 0;
@@ -194,13 +197,14 @@ int aeron_executor_submit(
     aeron_executor_t *executor,
     aeron_executor_task_on_execute_func_t on_execute,
     aeron_executor_task_on_complete_func_t on_complete,
+    aeron_executor_task_on_cancel_func_t on_cancel,
     void *clientd)
 {
     if (executor->async)
     {
         aeron_executor_task_t *task;
 
-        task = aeron_executor_task_allocate(executor, on_execute, on_complete, clientd);
+        task = aeron_executor_task_allocate(executor, on_execute, on_complete, on_cancel, clientd);
         if (NULL == task)
         {
             AERON_APPEND_ERR("%s", "");
@@ -226,14 +230,13 @@ int aeron_executor_submit(
 
 int aeron_executor_process_completions(aeron_executor_t *executor, int limit)
 {
-    aeron_executor_task_t *task;
-    int count = 0;
-
     if (!executor->async || NULL != executor->on_execution_complete)
     {
         return 0;
     }
 
+    aeron_executor_task_t *task;
+    int count = 0;
     for (; count < limit; count++)
     {
         task = aeron_blocking_linked_queue_poll(&executor->return_queue);

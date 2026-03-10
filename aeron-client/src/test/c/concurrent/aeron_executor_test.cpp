@@ -70,6 +70,10 @@ public:
         e->m_on_complete_count++;
     }
 
+    static void on_cancel(void *task_clientd, void *executor_clientd)
+    {
+    }
+
 protected:
     aeron_executor_t m_executor = {};
     std::function<int(void *, void *)> m_on_execute;
@@ -113,6 +117,7 @@ TEST_F(SyncExecutorTest, shouldExecuteSynchronously)
         &m_executor,
         SyncExecutorTest::on_execute,
         SyncExecutorTest::on_complete,
+        SyncExecutorTest::on_cancel,
         &tcd);
 
     ASSERT_EQ(result, 0);
@@ -162,6 +167,7 @@ TEST_F(AsyncExecutorTest, shouldExecuteAsynchronously)
             &m_executor,
             SyncExecutorTest::on_execute,
             SyncExecutorTest::on_complete,
+            SyncExecutorTest::on_cancel,
             &tcd);
         ASSERT_EQ(result, 0);
     }
@@ -237,6 +243,7 @@ TEST_F(AsyncNoReturnQueueExecutorTest, shouldExecuteAsynchronously)
             &m_executor,
             SyncExecutorTest::on_execute,
             SyncExecutorTest::on_complete,
+            SyncExecutorTest::on_cancel,
             &tcd);
         ASSERT_EQ(result, 0);
     }
