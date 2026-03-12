@@ -80,7 +80,7 @@ It is worth playing with different messages lengths and threading configurations
 2. Start the MDC publisher with its recorded publication in another terminal.
 
 ```
-export JVM_OPTS="-Daeron.sample.channel=aeron:udp?control=localhost:20550|control-mode=dynamic"
+export JVM_OPTS="-Daeron.sample.channel=aeron:udp?control=localhost:20550|control-mode=dynamic|alias=replay-merge-sample"
 
 ./recorded-basic-publisher
 ```

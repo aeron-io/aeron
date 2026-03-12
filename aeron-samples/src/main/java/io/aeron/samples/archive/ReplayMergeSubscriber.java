@@ -17,15 +17,19 @@ package io.aeron.samples.archive;
 
 import io.aeron.Aeron;
 import io.aeron.CommonContext;
+import io.aeron.FragmentAssembler;
 import io.aeron.Subscription;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.client.ReplayMerge;
 import io.aeron.driver.MediaDriver;
+import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.Header;
 import io.aeron.samples.SampleConfiguration;
 import io.aeron.samples.SamplesUtil;
 import org.agrona.DirectBuffer;
+import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.ShutdownSignalBarrier;
+import org.agrona.concurrent.YieldingIdleStrategy;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -62,6 +66,10 @@ public class ReplayMergeSubscriber
                 " on stream id " + STREAM_ID);
 
         final AtomicBoolean running = new AtomicBoolean(true);
+        final AtomicBoolean isLive = new AtomicBoolean(false);
+        final IdleStrategy idleStrategy = new YieldingIdleStrategy();
+        final FragmentHandler fragmentHandler = new FragmentAssembler(fragmentHandler(isLive));
+
         try (ShutdownSignalBarrier barrier = new ShutdownSignalBarrier(() -> running.set(false));
             MediaDriver driver = EMBEDDED_MEDIA_DRIVER ?
                 MediaDriver.launchEmbedded(new MediaDriver.Context().terminationHook(barrier::signalAll)) : null)
@@ -82,6 +90,12 @@ public class ReplayMergeSubscriber
                 AeronArchive aeronArchive = AeronArchive.connect(aeronArchiveCtx.aeron(aeron)))
             {
                 final RecordingDescriptor descriptor = getLastDescriptor(aeronArchive);
+
+                if (descriptor == null)
+                {
+                    System.out.println("No recordings found for channel " + LIVE_DESTINATION);
+                    return;
+                }
                 final String replayChannel = CommonContext.UDP_CHANNEL + "?session-id=" + descriptor.sessionId();
                 final String subscriptionChannel = MDS_CHANNEL + "|session-id=" + descriptor.sessionId();
 
@@ -95,16 +109,13 @@ public class ReplayMergeSubscriber
                         REPLAY_DESTINATION,
                         LIVE_DESTINATION,
                         descriptor.recordingId(),
-                        0))
+                        descriptor.startPosition()))
                 {
-                    final AtomicBoolean isLive = new AtomicBoolean(false);
-
                     while (running.get())
                     {
                         if (replayMerge.hasFailed())
                         {
-                            System.out.println("ReplayMerge has failed, " + replayMerge);
-                            throw new RuntimeException();
+                            throw new IllegalStateException("ReplayMerge has failed, " + replayMerge);
                         }
 
                         if (replayMerge.isMerged() && !isLive.get())
@@ -115,15 +126,9 @@ public class ReplayMergeSubscriber
                             isLive.set(true);
                         }
 
-                        replayMerge.poll(
-                            (final DirectBuffer buffer, final int offset, final int length, final Header header) ->
-                            {
-                                final String msg = buffer.getStringWithoutLengthAscii(offset, length);
-                                final String streamState = replayMerge.isMerged() ? "live" : "replay";
+                        final int fragments = replayMerge.poll(fragmentHandler, FRAGMENT_COUNT_LIMIT);
 
-                                System.out.printf("Message to %s stream %d from session %d (%d@%d) <<%s>>%n",
-                                    streamState, STREAM_ID, header.sessionId(), length, offset, msg);
-                            }, FRAGMENT_COUNT_LIMIT);
+                        idleStrategy.idle(fragments);
                     }
                     System.out.println("Shutting down...");
                 }
@@ -131,12 +136,25 @@ public class ReplayMergeSubscriber
         }
     }
 
+    private static FragmentHandler fragmentHandler(final AtomicBoolean isLive)
+    {
+        return (final DirectBuffer buffer, final int offset, final int length, final Header header) ->
+        {
+            final String msg = buffer.getStringWithoutLengthAscii(offset, length);
+            final String streamState = isLive.get() ? "live" : "replay";
+
+            System.out.printf("Message to %s stream %d from session %d (%d@%d) <<%s>>%n",
+                streamState, STREAM_ID, header.sessionId(), length, offset, msg);
+        };
+    }
+
     private static RecordingDescriptor getLastDescriptor(final AeronArchive aeronArchive)
     {
         final AtomicReference<RecordingDescriptor> descriptorRef = new AtomicReference<>(null);
         final RecordingDescriptorCollector collector = new RecordingDescriptorCollector(Integer.MAX_VALUE);
 
-        aeronArchive.listRecordings(0, collector.poolSize(), collector.reset());
+        aeronArchive.listRecordingsForUri(0, collector.poolSize(), "alias=replay-merge-sample", STREAM_ID,
+            collector.reset());
         collector.descriptors().forEach(descriptorRef::set);
 
         return descriptorRef.get();
