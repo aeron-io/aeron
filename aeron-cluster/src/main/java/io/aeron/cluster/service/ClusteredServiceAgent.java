@@ -768,6 +768,8 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
         final long leadershipTermId = RecoveryState.getLeadershipTermId(counters, recoveryCounterId);
         sessionMessageHeaderEncoder.leadershipTermId(leadershipTermId);
 
+        Exception exception = null;
+
         activeLifecycleCallback = LIFECYCLE_CALLBACK_ON_START;
         try
         {
@@ -780,15 +782,25 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
                 service.onStart(this, null);
             }
         }
+        catch (final Exception ex)
+        {
+            exception = ex;
+        }
         finally
         {
             activeLifecycleCallback = LIFECYCLE_CALLBACK_NONE;
         }
 
         final long id = ackId++;
-        while (!consensusModuleProxy.ack(logPosition, clusterTime, id, aeron.clientId(), serviceId))
+        final long relevantId = (null == exception) ? aeron.clientId() : NULL_VALUE;
+        while (!consensusModuleProxy.ack(logPosition, clusterTime, id, relevantId, serviceId))
         {
             idle();
+        }
+
+        if (null != exception)
+        {
+            LangUtil.rethrowUnchecked(exception);
         }
     }
 

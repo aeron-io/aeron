@@ -86,6 +86,23 @@ final class ServiceAck
         }
     }
 
+    static ServiceAck[] pollServiceAcks(final ArrayDeque<ServiceAck>[] serviceAckQueues)
+    {
+        final ServiceAck[] serviceAcks = new ServiceAck[serviceAckQueues.length];
+        for (int id = 0, length = serviceAckQueues.length; id < length; id++)
+        {
+            final ServiceAck serviceAck = serviceAckQueues[id].pollFirst();
+            if (null == serviceAck)
+            {
+                throw new ClusterException("invalid ack for serviceId=" + id);
+            }
+
+            serviceAcks[id] = serviceAck;
+        }
+
+        return serviceAcks;
+    }
+
     static ServiceAck[] pollServiceAcks(
         final long logPosition,
         final int serviceId,
