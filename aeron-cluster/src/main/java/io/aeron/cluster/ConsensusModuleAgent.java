@@ -74,7 +74,6 @@ import org.agrona.concurrent.status.CountersReader;
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.LongConsumer;
@@ -2784,12 +2783,11 @@ final class ConsensusModuleAgent
         return RecoveryState.allocate(aeron, leadershipTermId, 0, 0, ctx.clusterId());
     }
 
-    private void captureServiceClientIds()
+    private void captureServiceClientIds(final ServiceAck[] serviceAcks)
     {
-        for (int i = 0, length = serviceClientIds.length; i < length; i++)
+        for (int i = 0, length = serviceAcks.length; i < length; i++)
         {
-            final ServiceAck serviceAck = serviceAckQueues[i].pollFirst();
-            serviceClientIds[i] = Objects.requireNonNull(serviceAck).relevantId();
+            serviceClientIds[i] = serviceAcks[i].relevantId();
         }
     }
 
@@ -3431,7 +3429,13 @@ final class ConsensusModuleAgent
                 idle(consensusModuleAdapter.poll());
             }
 
-            captureServiceClientIds();
+            final ServiceAck[] serviceAcks = ServiceAck.pollServiceAcks(serviceAckQueues);
+            if (!ServiceAck.areAllRelevantIdsNonNull("failed to start clustered service", serviceAcks, ctx.errorLog()))
+            {
+                throw new AgentTerminationException("failed to start clustered service(s)");
+            }
+
+            captureServiceClientIds(serviceAcks);
             ++serviceAckId;
         }
 
@@ -3506,7 +3510,9 @@ final class ConsensusModuleAgent
             idle(consensusModuleAdapter.poll());
         }
 
-        captureServiceClientIds();
+        final ServiceAck[] serviceAcks = ServiceAck.pollServiceAcks(serviceAckQueues);
+
+        captureServiceClientIds(serviceAcks);
         ++serviceAckId;
 
         return recoveryPlan;

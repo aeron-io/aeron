@@ -42,6 +42,7 @@ import io.aeron.cluster.codecs.MessageHeaderDecoder;
 import io.aeron.cluster.codecs.MessageHeaderEncoder;
 import io.aeron.cluster.codecs.SessionMessageHeaderDecoder;
 import io.aeron.cluster.service.ClientSession;
+import io.aeron.cluster.service.Cluster;
 import io.aeron.cluster.service.ClusterCounters;
 import io.aeron.cluster.service.ClusterTerminationException;
 import io.aeron.cluster.service.ClusteredServiceContainer;
@@ -80,6 +81,7 @@ import org.agrona.collections.IntHashSet;
 import org.agrona.collections.MutableBoolean;
 import org.agrona.collections.MutableInteger;
 import org.agrona.collections.MutableLong;
+import org.agrona.concurrent.AgentRunner;
 import org.agrona.concurrent.AgentTerminationException;
 import org.agrona.concurrent.AtomicBuffer;
 import org.agrona.concurrent.SystemEpochClock;
@@ -96,6 +98,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.File;
+import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
@@ -159,6 +163,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.mock;
 
 @SlowTest
 @ExtendWith({ EventLogExtension.class, InterruptingTestCallback.class })
@@ -3517,6 +3522,103 @@ class ClusterTest
 
         cluster.reconnectClient();
         cluster.sendAndAwaitMessages(1);
+    }
+
+    @Test
+    @InterruptAfter(10)
+    void shouldTerminateNodeWithInvalidSnapshotAndRecoveryAfterInvalidation()
+    {
+        cluster = aCluster()
+            .withServiceSupplier((i) -> new TestNode.TestService[] { new ExceptionOnLoadService().index(i) })
+            .start();
+        systemTestWatcher.cluster(cluster);
+        systemTestWatcher.ignoreErrorsMatching(
+            (s) -> s.contains("this snapshot failed to load") || s.contains("failed to start clustered service(s)"));
+
+        final TestNode leader = cluster.awaitLeader();
+        TestNode follower = cluster.followers().get(0);
+        cluster.connectClient();
+        cluster.sendAndAwaitMessages(10);
+        cluster.takeSnapshot(leader);
+        cluster.awaitSnapshotCount(1);
+
+        cluster.stopNode(follower);
+        cluster.startStaticNode(follower.index(), false);
+        follower = cluster.node(follower.index());
+
+        final AgentRunner clusteredServiceRunner = Tests.getField(follower.container(), "serviceAgentRunner");
+        while (!clusteredServiceRunner.isClosed())
+        {
+            Tests.yield();
+        }
+
+        final AgentRunner conductorRunner = Tests.getField(follower.consensusModule(), "conductorRunner");
+        while (!conductorRunner.isClosed())
+        {
+            Tests.yield();
+        }
+
+        cluster.stopNode(follower);
+        final File followerClusterDir = follower.consensusModule().context().clusterDir();
+        assertTrue(ClusterTool.invalidateLatestSnapshot(mock(PrintStream.class), followerClusterDir));
+
+        cluster.startStaticNode(follower.index(), false);
+        follower = cluster.node(follower.index());
+        assertEquals(2, cluster.followers(2).size());
+    }
+
+    @Test
+    @InterruptAfter(10)
+    void shouldTerminateNodeWithMultipleServicesWithSingleServiceInvalidSnapshot()
+    {
+        cluster = aCluster()
+            .withServiceSupplier((i) -> new TestNode.TestService[]
+                { new ExceptionOnLoadService().index(i), new TestNode.TestService().index(i) })
+            .start();
+        systemTestWatcher.cluster(cluster);
+        systemTestWatcher.ignoreErrorsMatching(
+            (s) -> s.contains("this snapshot failed to load") || s.contains("failed to start clustered service(s)"));
+
+        final TestNode leader = cluster.awaitLeader();
+        TestNode follower = cluster.followers().get(0);
+        cluster.connectClient();
+        cluster.sendAndAwaitMessages(10);
+        cluster.takeSnapshot(leader);
+        cluster.awaitSnapshotCount(1);
+
+        cluster.stopNode(follower);
+        cluster.startStaticNode(follower.index(), false);
+        follower = cluster.node(follower.index());
+
+        final AgentRunner failingClusteredServiceRunner = Tests.getField(follower.container(0), "serviceAgentRunner");
+        while (!failingClusteredServiceRunner.isClosed())
+        {
+            Tests.yield();
+        }
+
+        final AgentRunner conductorRunner = Tests.getField(follower.consensusModule(), "conductorRunner");
+        while (!conductorRunner.isClosed())
+        {
+            Tests.yield();
+        }
+
+        final AgentRunner healthyClusteredServiceRunner = Tests.getField(follower.container(1), "serviceAgentRunner");
+        while (!healthyClusteredServiceRunner.isClosed())
+        {
+            Tests.yield();
+        }
+    }
+
+    private static final class ExceptionOnLoadService extends TestNode.TestService
+    {
+        public void onStart(final Cluster cluster, final Image snapshotImage)
+        {
+            if (null != snapshotImage)
+            {
+                throw new IllegalStateException("this snapshot failed to load");
+            }
+            super.onStart(cluster, snapshotImage);
+        }
     }
 
     private static List<RuntimeException> terminalExceptions()
