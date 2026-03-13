@@ -54,6 +54,7 @@ import io.aeron.cluster.codecs.NewLeadershipTermEventDecoder;
 import io.aeron.cluster.codecs.SessionMessageHeaderDecoder;
 import io.aeron.cluster.service.Cluster;
 import io.aeron.cluster.service.ClusterClock;
+import io.aeron.cluster.service.ClusterMarkFile;
 import io.aeron.driver.Configuration;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ReceiveChannelEndpointSupplier;
@@ -87,8 +88,11 @@ import org.agrona.collections.MutableInteger;
 import org.agrona.collections.MutableLong;
 import org.agrona.collections.Object2ObjectHashMap;
 import org.agrona.concurrent.AgentInvoker;
+import org.agrona.concurrent.AtomicBuffer;
 import org.agrona.concurrent.EpochClock;
 import org.agrona.concurrent.NoOpLock;
+import org.agrona.concurrent.SystemEpochClock;
+import org.agrona.concurrent.errors.ErrorLogReader;
 import org.agrona.concurrent.status.AtomicCounter;
 import org.agrona.concurrent.status.CountersReader;
 import org.mockito.internal.matchers.apachecommons.ReflectionEquals;
@@ -2408,6 +2412,45 @@ public final class TestCluster implements AutoCloseable
     {
         final BackupQueryRunner backupQueryRunner = backQueryRunners.computeIfAbsent(leader, BackupQueryRunner::new);
         backupQueryRunner.run(logPosition, snapshotRecord);
+    }
+
+    public void waitForError(final TestNode follower, final Predicate<String> predicate)
+    {
+        final File consensusModuleDir = follower.consensusModule().context().clusterDir();
+        final ClusterMarkFile clusterMarkFile = new ClusterMarkFile(
+            consensusModuleDir, ClusterMarkFile.FILENAME, new SystemEpochClock(), 10_000, System.out::println);
+
+        final ArrayList<AtomicBuffer> errorBuffers = new ArrayList<>();
+        errorBuffers.add(clusterMarkFile.errorBuffer());
+
+        for (int i = 0, n = follower.services().length; i < n; i++)
+        {
+            final File serviceClusterDir = follower.container(i).context().clusterDir();
+            final ClusterMarkFile serviceMarkFile = new ClusterMarkFile(
+                serviceClusterDir, ClusterMarkFile.markFilenameForService(i), new SystemEpochClock(), 10_000,
+                System.out::println);
+
+            errorBuffers.add(serviceMarkFile.errorBuffer());
+        }
+
+        final ArrayList<String> errors = new ArrayList<>();
+
+        while (true)
+        {
+            errors.clear();
+
+            for (final AtomicBuffer errorBuffer : errorBuffers)
+            {
+                ErrorLogReader.read(errorBuffer, (_0, _1, _2, encodedException) -> errors.add(encodedException));
+            }
+
+            if (errors.stream().anyMatch(predicate))
+            {
+                break;
+            }
+
+            Tests.sleep(1);
+        }
     }
 
     private class BackupQueryRunner implements AutoCloseable

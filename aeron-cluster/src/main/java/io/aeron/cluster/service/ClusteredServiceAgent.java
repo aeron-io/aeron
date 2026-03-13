@@ -800,7 +800,7 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
 
         if (null != exception)
         {
-            LangUtil.rethrowUnchecked(exception);
+            throw new AgentTerminationException("snapshot failed to load for service=" + ctx.serviceId(), exception);
         }
     }
 
