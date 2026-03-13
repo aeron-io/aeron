@@ -769,13 +769,15 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
         sessionMessageHeaderEncoder.leadershipTermId(leadershipTermId);
 
         Exception exception = null;
+        long snapshotRecordingId = NULL_VALUE;
 
         activeLifecycleCallback = LIFECYCLE_CALLBACK_ON_START;
         try
         {
             if (NULL_VALUE != leadershipTermId)
             {
-                loadSnapshot(RecoveryState.getSnapshotRecordingId(counters, recoveryCounterId, serviceId));
+                snapshotRecordingId = RecoveryState.getSnapshotRecordingId(counters, recoveryCounterId, serviceId);
+                loadSnapshot(snapshotRecordingId);
             }
             else
             {
@@ -800,7 +802,12 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
 
         if (null != exception)
         {
-            throw new AgentTerminationException("snapshot failed to load for service=" + ctx.serviceId(), exception);
+            final String message = "failed to load for service=" + ctx.serviceId() +
+                " leadershipTermId=" + leadershipTermId +
+                " logPosition=" + logPosition +
+                " clusterTime=" + clusterTime +
+                " snapshotRecordingId=" + snapshotRecordingId;
+            throw new AgentTerminationException(message, exception);
         }
     }
 
