@@ -1312,6 +1312,7 @@ public final class PersistentSubscription implements AutoCloseable
             this.state = MaxRecordedPositionState.REQUEST_MAX_POSITION;
         }
 
+        // TODO Martin: add is/has prefix, and maybe rename to something more meaningful
         public boolean caughtUp(final long replayedPosition)
         {
             return switch (state)
