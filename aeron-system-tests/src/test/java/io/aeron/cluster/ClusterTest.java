@@ -3558,6 +3558,9 @@ class ClusterTest
             Tests.yield();
         }
 
+        final int index = follower.index();
+        cluster.waitForError(follower, (s) -> s.contains("snapshot failed to load for service=" + index));
+
         cluster.stopNode(follower);
         final File followerClusterDir = follower.consensusModule().context().clusterDir();
         assertTrue(ClusterTool.invalidateLatestSnapshot(mock(PrintStream.class), followerClusterDir));
