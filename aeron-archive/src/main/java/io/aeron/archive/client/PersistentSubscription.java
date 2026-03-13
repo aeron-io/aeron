@@ -179,7 +179,23 @@ public final class PersistentSubscription implements AutoCloseable
      */
     public void close()
     {
-        CloseHelper.closeAll(this::closeReplay, asyncAeronArchive, ctx::close);
+        CloseHelper.closeAll(this::closeLive, this::closeReplay, asyncAeronArchive, ctx::close);
+    }
+
+    private void closeLive()
+    {
+        if (!ctx.ownsAeronClient())
+        {
+            if (liveSubscriptionId != Aeron.NULL_VALUE)
+            {
+                aeron.asyncRemoveSubscription(liveSubscriptionId);
+            }
+
+            if (liveSubscription != null)
+            {
+                liveSubscription.close();
+            }
+        }
     }
 
     private void closeReplay()
