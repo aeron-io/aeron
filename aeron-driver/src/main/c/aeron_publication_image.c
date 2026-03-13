@@ -25,6 +25,7 @@
 #include "util/aeron_parse_util.h"
 
 #define AERON_PUBLICATION_RESPONSE_NULL_RESPONSE_SESSION_ID INT64_C(0xF000000000000000)
+#define NAKS_SENT_PER_ITERATION (5)
 
 static void aeron_publication_image_connection_set_control_address(
     aeron_publication_image_connection_t *connection, const struct sockaddr_storage *control_address)
@@ -388,12 +389,11 @@ int aeron_publication_image_create(
         active_term_id, initial_term_offset, _image->position_bits_to_shift, initial_term_id);
     const int64_t now_ns = aeron_clock_cached_nano_time(context->cached_clock);
 
-    _image->begin_loss_change = 0;
-    _image->end_loss_change = 0;
-    _image->last_loss_change_number = 0;
-    _image->loss_term_id = active_term_id;
-    _image->loss_term_offset = initial_term_offset;
-    _image->loss_length = 0;
+    if (aeron_spsc_concurrent_array_queue_elem_init(&_image->pending_losses, AERON_LOSS_DETECTOR_MAX_LOSSES, sizeof(aeron_publication_image_pending_loss_t)) < 0)
+    {
+        AERON_APPEND_ERR("%s", "failed to init pending_losses");
+        goto error;
+    }
 
     _image->begin_sm_change = 0;
     _image->end_sm_change = 0;
@@ -443,6 +443,8 @@ int aeron_publication_image_close(aeron_counters_manager_t *counters_manager, ae
 
         aeron_free(subscribable->array);
         aeron_free(image->connections.array);
+        aeron_spsc_concurrent_array_queue_elem_close(&image->pending_losses);
+        aeron_loss_detector_close(&image->loss_detector);
 
         image->congestion_control->fini(image->congestion_control);
     }
@@ -501,16 +503,14 @@ void aeron_publication_image_clean_buffer_to(aeron_publication_image_t *image, i
 void aeron_publication_image_on_gap_detected(void *clientd, int32_t term_id, int32_t term_offset, size_t length)
 {
     aeron_publication_image_t *image = (aeron_publication_image_t *)clientd;
-    const int64_t change_number = image->begin_loss_change + 1;
 
-    AERON_SET_RELEASE(image->begin_loss_change, change_number);
-    aeron_release();
+    aeron_publication_image_pending_loss_t loss = {
+        term_id,
+        term_offset,
+        length,
+    };
 
-    image->loss_term_id = term_id;
-    image->loss_term_offset = term_offset;
-    image->loss_length = length;
-
-    AERON_SET_RELEASE(image->end_loss_change, change_number);
+    aeron_spsc_concurrent_array_queue_elem_offer(&image->pending_losses, &loss);
 
     size_t loss_report_end_offset;
     if (term_id != image->conductor_fields.loss_report_term_id ||
@@ -555,24 +555,21 @@ void aeron_publication_image_track_rebuild(aeron_publication_image_t *image, int
             return;
         }
 
-        const int64_t rebuild_position = *image->rcv_pos_position.value_addr > max_sub_pos ?
-            *image->rcv_pos_position.value_addr : max_sub_pos;
+        const int64_t rebuild_position = *image->rcv_pos_position.value_addr > max_sub_pos ? *image->rcv_pos_position.value_addr : max_sub_pos;
 
         bool loss_found = false;
         const size_t index = aeron_logbuffer_index_by_position(rebuild_position, image->position_bits_to_shift);
-        const int32_t rebuild_offset = aeron_loss_detector_scan(
+        const int64_t new_rebuild_position = aeron_loss_detector_scan(
             &image->loss_detector,
             &loss_found,
             image->mapped_raw_log.term_buffers[index].addr,
+            image->mapped_raw_log.term_buffers[(index + 1) % AERON_LOGBUFFER_PARTITION_COUNT].addr,
             rebuild_position,
             hwm_position,
             now_ns,
             (size_t)image->term_length_mask,
             image->position_bits_to_shift,
             image->initial_term_id);
-
-        const int32_t rebuild_term_offset = (int32_t)(rebuild_position & image->term_length_mask);
-        const int64_t new_rebuild_position = (rebuild_position - rebuild_term_offset) + rebuild_offset;
 
         aeron_counter_propose_max_release(image->rcv_pos_position.value_addr, new_rebuild_position);
 
@@ -935,72 +932,66 @@ int aeron_publication_image_send_pending_loss(aeron_publication_image_t *image)
     }
 
     int work_count = 0;
+    aeron_publication_image_pending_loss_t pending_loss;
 
-    int64_t change_number;
-    AERON_GET_ACQUIRE(change_number, image->end_loss_change);
-
-    if (change_number != image->last_loss_change_number)
+    for (int i = 0; i < NAKS_SENT_PER_ITERATION; i++)
     {
-        const int32_t term_id = image->loss_term_id;
-        const int32_t term_offset = image->loss_term_offset;
-        const size_t length = image->loss_length;
-
-        aeron_acquire();
-
-        int64_t begin_change_number;
-        AERON_GET_ACQUIRE(begin_change_number, image->begin_loss_change);
-
-        if (change_number == begin_change_number)
+        if (!aeron_spsc_concurrent_array_queue_elem_poll(&image->pending_losses, (void *)&pending_loss))
         {
-            if (image->conductor_fields.is_reliable)
+            break;
+        }
+
+        const int32_t term_id = pending_loss.term_id;
+        const int32_t term_offset = pending_loss.term_offset;
+        const size_t length = pending_loss.length;
+
+        if (image->conductor_fields.is_reliable)
+        {
+            const int64_t now_ns = aeron_clock_cached_nano_time(image->cached_clock);
+
+            for (size_t i = 0, len = image->connections.length; i < len; i++)
             {
-                const int64_t now_ns = aeron_clock_cached_nano_time(image->cached_clock);
+                aeron_publication_image_connection_t *connection = &image->connections.array[i];
 
-                for (size_t i = 0, len = image->connections.length; i < len; i++)
+                if (aeron_publication_image_connection_is_alive(connection, now_ns))
                 {
-                    aeron_publication_image_connection_t *connection = &image->connections.array[i];
+                    int send_nak_result = aeron_receive_channel_endpoint_send_nak(
+                        image->endpoint,
+                        connection->destination,
+                        connection->control_addr,
+                        image->stream_id,
+                        image->session_id,
+                        term_id,
+                        term_offset,
+                        (int32_t)length);
 
-                    if (aeron_publication_image_connection_is_alive(connection, now_ns))
+                    if (send_nak_result < 0)
                     {
-                        int send_nak_result = aeron_receive_channel_endpoint_send_nak(
-                            image->endpoint,
-                            connection->destination,
-                            connection->control_addr,
-                            image->stream_id,
-                            image->session_id,
-                            term_id,
-                            term_offset,
-                            (int32_t)length);
-
-                        if (send_nak_result < 0)
-                        {
-                            work_count = send_nak_result;
-                            break;
-                        }
-
-                        work_count++;
-                        aeron_counter_increment_release(image->nak_messages_sent_counter);
-                        aeron_counter_increment_release(image->rcv_naks_sent.value_addr);
+                        work_count = send_nak_result;
+                        goto done;
                     }
+
+                    work_count++;
+                    aeron_counter_increment_release(image->nak_messages_sent_counter);
+                    aeron_counter_increment_release(image->rcv_naks_sent.value_addr);
                 }
             }
-            else
+        }
+        else
+        {
+            const size_t index = aeron_logbuffer_index_by_term(image->initial_term_id, term_id);
+            uint8_t *buffer = image->mapped_raw_log.term_buffers[index].addr;
+
+            if (aeron_term_gap_filler_try_fill_gap(image->log_meta_data, buffer, term_id, term_offset, length))
             {
-                const size_t index = aeron_logbuffer_index_by_term(image->initial_term_id, term_id);
-                uint8_t *buffer = image->mapped_raw_log.term_buffers[index].addr;
-
-                if (aeron_term_gap_filler_try_fill_gap(image->log_meta_data, buffer, term_id, term_offset, length))
-                {
-                    aeron_counter_increment_release(image->loss_gap_fills_counter);
-                }
-
-                work_count = 1;
+                aeron_counter_increment_release(image->loss_gap_fills_counter);
             }
 
-            image->last_loss_change_number = change_number;
+            work_count++;
         }
     }
 
+done:
     return work_count;
 }
 

@@ -20,22 +20,34 @@
 #include <string.h>
 #include "protocol/aeron_udp_protocol.h"
 #include "aeron_atomic.h"
+#include "aeron_logbuffer_descriptor.h"
 
 inline void aeron_term_rebuilder_insert(uint8_t *dest, const uint8_t *src, size_t length)
 {
-    aeron_data_header_t *hdr_dest = (aeron_data_header_t *)dest;
-    aeron_data_header_as_longs_t *dest_hdr_as_longs = (aeron_data_header_as_longs_t *)dest;
-    aeron_data_header_as_longs_t *src_hdr_as_longs = (aeron_data_header_as_longs_t *)src;
-
-    if (0 == hdr_dest->frame_header.frame_length)
+    for (size_t offset = 0; offset < length;)
     {
-        memcpy(dest + AERON_DATA_HEADER_LENGTH, src + AERON_DATA_HEADER_LENGTH, length - AERON_DATA_HEADER_LENGTH);
+        aeron_data_header_t *src_hdr = (aeron_data_header_t *)(src + offset);
+        aeron_data_header_t *dest_hdr = (aeron_data_header_t *)(dest + offset);
+        aeron_data_header_as_longs_t *src_hdr_as_longs = (aeron_data_header_as_longs_t *)(src + offset);
+        aeron_data_header_as_longs_t *dest_hdr_as_longs = (aeron_data_header_as_longs_t *)(dest + offset);
 
-        dest_hdr_as_longs->hdr[3] = src_hdr_as_longs->hdr[3];
-        dest_hdr_as_longs->hdr[2] = src_hdr_as_longs->hdr[2];
-        dest_hdr_as_longs->hdr[1] = src_hdr_as_longs->hdr[1];
+        int32_t frame_length = src_hdr->frame_header.frame_length;
 
-        AERON_SET_RELEASE(dest_hdr_as_longs->hdr[0], src_hdr_as_longs->hdr[0]);
+        if (0 == dest_hdr->frame_header.frame_length)
+        {
+            AERON_SET_RELEASE(dest_hdr->frame_header.frame_length, (-(int32_t)frame_length));
+            aeron_release();
+
+            memcpy(dest + offset + AERON_DATA_HEADER_LENGTH, src + offset + AERON_DATA_HEADER_LENGTH, frame_length - AERON_DATA_HEADER_LENGTH);
+
+            dest_hdr_as_longs->hdr[3] = src_hdr_as_longs->hdr[3];
+            dest_hdr_as_longs->hdr[2] = src_hdr_as_longs->hdr[2];
+            dest_hdr_as_longs->hdr[1] = src_hdr_as_longs->hdr[1];
+
+            AERON_SET_RELEASE(dest_hdr_as_longs->hdr[0], src_hdr_as_longs->hdr[0]);
+        }
+
+        offset += AERON_ALIGN(frame_length, AERON_LOGBUFFER_FRAME_ALIGNMENT);
     }
 }
 
