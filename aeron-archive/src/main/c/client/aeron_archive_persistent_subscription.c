@@ -942,13 +942,23 @@ static int await_replay_subscription(aeron_archive_persistent_subscription_t *pe
         &persistent_subscription->replay_subscription,
         persistent_subscription->add_replay_subscription) < 0)
     {
-        transition(persistent_subscription, FAILED);
+        int errcode = aeron_errcode();
+
+        if (errcode == ENOTCONN)
+        {
+            clean_up_replay(persistent_subscription);
+            set_up_replay(persistent_subscription);
+        }
+        else
+        {
+            transition(persistent_subscription, FAILED);
+        }
 
         if (NULL != persistent_subscription->listener.on_error)
         {
             persistent_subscription->listener.on_error(
                 persistent_subscription->listener.clientd,
-                aeron_errcode(),
+                errcode,
                 aeron_errmsg());
         }
 
