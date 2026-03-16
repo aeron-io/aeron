@@ -699,6 +699,83 @@ static void set_up_replay(aeron_archive_persistent_subscription_t *persistent_su
     transition(persistent_subscription, SEND_REPLAY_REQUEST);
 }
 
+static bool validate_descriptor(aeron_archive_persistent_subscription_t *persistent_subscription)
+{
+    struct list_recording_request *req = &persistent_subscription->list_recording_request;
+
+    if (req->remaining == 0)
+    {
+        if (persistent_subscription->context->live_stream_id != req->stream_id)
+        {
+            transition(persistent_subscription, FAILED);
+
+            if (NULL != persistent_subscription->listener.on_error)
+            {
+                persistent_subscription->listener.on_error(
+                    persistent_subscription->listener.clientd,
+                    EINVAL,
+                    "live stream id does not match stream id of recording");
+            }
+
+            return false;
+        }
+
+        if (persistent_subscription->position >= 0)
+        {
+            if (persistent_subscription->position < req->start_position)
+            {
+                transition(persistent_subscription, FAILED);
+
+                if (NULL != persistent_subscription->listener.on_error)
+                {
+                    persistent_subscription->listener.on_error(
+                        persistent_subscription->listener.clientd,
+                        EINVAL,
+                        "requested position is lower than start position of recording");
+                }
+
+                return false;
+            }
+
+            if (req->stop_position != AERON_NULL_VALUE &&
+                persistent_subscription->position > req->stop_position)
+            {
+                transition(persistent_subscription, FAILED);
+
+                if (NULL != persistent_subscription->listener.on_error)
+                {
+                    persistent_subscription->listener.on_error(
+                        persistent_subscription->listener.clientd,
+                        EINVAL,
+                        "requested position is greater than stop position of recording");
+                }
+
+                return false;
+            }
+        }
+        else if (persistent_subscription->position == AERON_PERSISTENT_SUBSCRIPTION_FROM_START)
+        {
+            persistent_subscription->position = req->start_position;
+        }
+    }
+    else
+    {
+        transition(persistent_subscription, FAILED);
+
+        if (NULL != persistent_subscription->listener.on_error)
+        {
+            persistent_subscription->listener.on_error(
+                persistent_subscription->listener.clientd,
+                EINVAL,
+                "no recording found with requested recording id");
+        }
+
+        return false;
+    }
+
+    return true;
+}
+
 static int await_list_recording_response(aeron_archive_persistent_subscription_t *persistent_subscription)
 {
     if (!persistent_subscription->list_recording_request.op.response_received)
@@ -720,7 +797,10 @@ static int await_list_recording_response(aeron_archive_persistent_subscription_t
         return 0;
     }
 
-    // TODO validate descriptor
+    if (!validate_descriptor(persistent_subscription))
+    {
+        return 1;
+    }
 
     if (AERON_PERSISTENT_SUBSCRIPTION_FROM_LIVE == persistent_subscription->position)
     {
