@@ -148,7 +148,7 @@ int aeron_archive_persistent_subscription_context_set_start_position(
  */
 int aeron_archive_persistent_subscription_context_set_listener(
     aeron_archive_persistent_subscription_context_t *context,
-    aeron_archive_persistent_subscription_listener_t *listener);
+    const aeron_archive_persistent_subscription_listener_t *listener);
 
 /**
  * Create a persistent subscription.

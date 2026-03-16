@@ -41,6 +41,7 @@ struct aeron_archive_persistent_subscription_context_stct
     char *replay_channel;
     int32_t replay_stream_id;
     int64_t start_position;
+    aeron_archive_persistent_subscription_listener_t listener;
 };
 
 struct async_archive_op
@@ -133,6 +134,7 @@ aeron_archive_persistent_subscription_state_t;
 struct aeron_archive_persistent_subscription_stct
 {
     aeron_archive_persistent_subscription_context_t *context;
+    aeron_archive_persistent_subscription_listener_t listener;
     uint64_t message_timeout_ns;
     aeron_archive_async_client_t *archive;
     aeron_archive_async_client_listener_t archive_listener;
@@ -277,7 +279,7 @@ int aeron_archive_persistent_subscription_context_set_start_position(
 
 int aeron_archive_persistent_subscription_context_set_listener(
     aeron_archive_persistent_subscription_context_t *context,
-    aeron_archive_persistent_subscription_listener_t *listener)
+    const aeron_archive_persistent_subscription_listener_t *listener)
 {
     if (NULL == listener)
     {
@@ -387,7 +389,15 @@ static bool max_recorded_position_await_max_position(
         }
         else
         {
-            // TODO
+            transition(persistent_subscription, FAILED);
+
+            if (NULL != persistent_subscription->listener.on_error)
+            {
+                persistent_subscription->listener.on_error(
+                    persistent_subscription->listener.clientd,
+                    (int)max_recorded_position->op.relevant_id,
+                    "get max recorded position request failed");
+            }
         }
     }
     else
@@ -600,6 +610,7 @@ int aeron_archive_persistent_subscription_create(
     }
 
     _persistent_subscription->context = context;
+    _persistent_subscription->listener = context->listener;
     _persistent_subscription->message_timeout_ns = aeron_archive_context_get_message_timeout_ns(context->archive_context);
     _persistent_subscription->replay_session_id = AERON_NULL_VALUE;
     _persistent_subscription->position = context->start_position;
@@ -782,9 +793,15 @@ static int await_replay_response(aeron_archive_persistent_subscription_t *persis
     {
         transition(persistent_subscription, FAILED);
 
-        // TODO
+        if (NULL != persistent_subscription->listener.on_error)
+        {
+            persistent_subscription->listener.on_error(
+                persistent_subscription->listener.clientd,
+                (int)persistent_subscription->replay_request.relevant_id,
+                "replay request failed");
+        }
 
-        return 1; // TODO -1?
+        return 1;
     }
 
     persistent_subscription->replay_session_id = persistent_subscription->replay_request.relevant_id;
@@ -1033,7 +1050,11 @@ static int attempt_switch(
     {
         clean_up_replay(persistent_subscription);
         clean_up_replay_subscription(persistent_subscription);
-        // TODO call listener
+
+        if (NULL != persistent_subscription->listener.on_live_joined)
+        {
+            persistent_subscription->listener.on_live_joined(persistent_subscription->listener.clientd);
+        }
     }
 
     return fragments;
@@ -1072,13 +1093,16 @@ static int await_live(aeron_archive_persistent_subscription_t *persistent_subscr
     {
         if (aeron_subscription_image_count(persistent_subscription->live_subscription) > 0)
         {
-            aeron_image_t *image = aeron_subscription_image_at_index( persistent_subscription->live_subscription, 0);
+            aeron_image_t *image = aeron_subscription_image_at_index(persistent_subscription->live_subscription, 0);
             persistent_subscription->live_image = image;
             persistent_subscription->position = aeron_image_position(image);
 
             transition(persistent_subscription, LIVE);
 
-            // TODO call listener
+            if (NULL != persistent_subscription->listener.on_live_joined)
+            {
+                persistent_subscription->listener.on_live_joined(persistent_subscription->listener.clientd);
+            }
 
             return 1;
         }
@@ -1111,7 +1135,12 @@ static int live(
         persistent_subscription->position = aeron_image_position(image);
         clean_up_live_subscription(persistent_subscription);
         set_up_replay(persistent_subscription);
-        // TODO call listener
+
+        if (NULL != persistent_subscription->listener.on_live_left)
+        {
+            persistent_subscription->listener.on_live_left(persistent_subscription->listener.clientd);
+        }
+
         return 1;
     }
 
@@ -1183,8 +1212,6 @@ int aeron_archive_persistent_subscription_controlled_poll(
 
     return state_result < 0 ? -1 : archive_result + state_result;
 }
-
-
 
 bool aeron_archive_persistent_subscription_is_live(aeron_archive_persistent_subscription_t *persistent_subscription)
 {
