@@ -600,6 +600,16 @@ private:
             throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO);
         }
 
+        if (aeron_context_set_idle_strategy_init_args(context, std::to_string(sleep_duration_ns).c_str()) < 0)
+        {
+            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO);
+        }
+
+        if (aeron_context_set_idle_strategy(context, "sleep-ns") < 0)
+        {
+            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO);
+        }
+
         aeron_context_set_use_conductor_agent_invoker(context, m_useConductorAgentInvoker);
         aeron_context_set_pre_touch_mapped_memory(context, m_preTouchMappedMemory);
 
