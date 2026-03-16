@@ -838,7 +838,17 @@ static int await_replay_subscription(aeron_archive_persistent_subscription_t *pe
         &persistent_subscription->replay_subscription,
         persistent_subscription->add_replay_subscription) < 0)
     {
-        // TODO
+        transition(persistent_subscription, FAILED);
+
+        if (NULL != persistent_subscription->listener.on_error)
+        {
+            persistent_subscription->listener.on_error(
+                persistent_subscription->listener.clientd,
+                aeron_errcode(),
+                aeron_errmsg());
+        }
+
+        return 1;
     }
 
     if (NULL == persistent_subscription->replay_subscription)
