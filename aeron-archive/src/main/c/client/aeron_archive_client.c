@@ -2497,7 +2497,7 @@ int aeron_archive_initiate_replay_via_response_channel(
         goto cleanup;
     }
 
-    aeron_archive_proxy_set_control_esssion_id(&archive_proxy, aeron_archive->control_session_id);
+    aeron_archive_proxy_set_control_session_id(&archive_proxy, aeron_archive->control_session_id);
 
     aeron_counters_reader_t *counters_reader = aeron_counters_reader(aeron_archive->ctx->aeron);
     int pub_limit_counter_id = aeron_counters_reader_find_by_type_id_and_registration_id(

@@ -618,13 +618,21 @@ int aeron_archive_persistent_subscription_close(aeron_archive_persistent_subscri
 
 static int await_archive_connection(aeron_archive_persistent_subscription_t *persistent_subscription)
 {
-    if (!aeron_archive_async_client_is_connected(persistent_subscription->archive))
+    static int64_t check_count = 0;
+    bool connected = aeron_archive_async_client_is_connected(persistent_subscription->archive);
+    if (++check_count == 1 || check_count % 100000 == 0)
+    {
+        printf("await_archive_connection: count=%" PRId64 ", connected=%d\n",
+            check_count, connected);
+        fflush(stdout);
+    }
+
+    if (!connected)
     {
         return 0;
     }
 
     transition(persistent_subscription, SEND_LIST_RECORDING_REQUEST);
-
     return 1;
 }
 
@@ -1101,6 +1109,14 @@ int aeron_archive_persistent_subscription_controlled_poll(
     void *clientd,
     size_t fragment_limit)
 {
+    static int64_t poll_count = 0;
+    if (++poll_count == 1 || poll_count % 10000000 == 0)
+    {
+        printf("controlled_poll: count=%" PRId64 ", state=%d\n",
+            poll_count, persistent_subscription->state);
+        fflush(stdout);
+    }
+
     int archive_result = aeron_archive_async_client_poll(persistent_subscription->archive);
     if (archive_result < 0)
     {
