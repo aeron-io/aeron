@@ -275,6 +275,21 @@ int aeron_archive_persistent_subscription_context_set_start_position(
     return 0;
 }
 
+int aeron_archive_persistent_subscription_context_set_listener(
+    aeron_archive_persistent_subscription_context_t *context,
+    aeron_archive_persistent_subscription_listener_t *listener)
+{
+    if (NULL == listener)
+    {
+        AERON_SET_ERR(EINVAL, "%s", "listener must not be null");
+        return -1;
+    }
+
+    context->listener = *listener;
+
+    return 0;
+}
+
 static int aeron_archive_persistent_subscription_context_conclude(
     aeron_archive_persistent_subscription_context_t *context)
 {
@@ -1168,6 +1183,8 @@ int aeron_archive_persistent_subscription_controlled_poll(
 
     return state_result < 0 ? -1 : archive_result + state_result;
 }
+
+
 
 bool aeron_archive_persistent_subscription_is_live(aeron_archive_persistent_subscription_t *persistent_subscription)
 {

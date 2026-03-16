@@ -25,6 +25,15 @@
 typedef struct aeron_archive_persistent_subscription_context_stct aeron_archive_persistent_subscription_context_t;
 typedef struct aeron_archive_persistent_subscription_stct aeron_archive_persistent_subscription_t;
 
+typedef struct aeron_archive_persistent_subscription_listener_stct
+{
+    void (*on_live_joined)(void *clientd);
+    void (*on_live_left)(void *clientd);
+    void (*on_error)(void *clientd, int errcode, const char *message);
+    void *clientd;
+}
+aeron_archive_persistent_subscription_listener_t;
+
 /**
  * Create and initialize a persistent subscription context.
  *
@@ -131,6 +140,17 @@ int aeron_archive_persistent_subscription_context_set_start_position(
     int64_t start_position);
 
 /**
+ * Set the listener for events from the persistent subscription. The listener is optional.
+ *
+ * @param context to configure.
+ * @param listener the listener to set.
+ * @return 0 on success, -1 on error.
+ */
+int aeron_archive_persistent_subscription_context_set_listener(
+    aeron_archive_persistent_subscription_context_t *context,
+    aeron_archive_persistent_subscription_listener_t *listener);
+
+/**
  * Create a persistent subscription.
  * TODO something about context ownership
  *
@@ -187,9 +207,12 @@ bool aeron_archive_persistent_subscription_is_replaying(aeron_archive_persistent
 
 /**
  * Indicates if the persistent subscription has failed.
+ * <p>
+ * The listener will be notified of any terminal errors that can cause the persistent subscription to fail.
  *
  * @param persistent_subscription to check.
  * @return true if failed, false otherwise.
+ * @see aeron_archive_persistent_subscription_context_set_listener
  */
 bool aeron_archive_persistent_subscription_has_failed(aeron_archive_persistent_subscription_t *persistent_subscription);
 
