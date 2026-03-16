@@ -1316,6 +1316,33 @@ TEST_F(ClientConductorTest, asyncCounterResourceMustBeExplicitlyFreedIfPollAband
     aeron_async_cmd_free(async);
 }
 
+TEST_F(ClientConductorTest, shouldSetIdleStartegy)
+{
+    auto func = m_context->idle_strategy_func;
+    EXPECT_STREQ("sleep-ns", m_context->idle_strategy_name);
+    EXPECT_STREQ("16000000", m_context->idle_strategy_init_args);
+    EXPECT_NE(nullptr, m_context->idle_strategy_state);
+    EXPECT_NE(nullptr, func);
+
+    EXPECT_EQ(-1, aeron_context_set_idle_strategy(m_context, "unknown value"));
+    EXPECT_EQ(nullptr, m_context->idle_strategy_name);
+    EXPECT_EQ(nullptr, m_context->idle_strategy_state);
+    EXPECT_EQ(nullptr, m_context->idle_strategy_func);
+    EXPECT_STREQ("16000000", m_context->idle_strategy_init_args);
+
+    EXPECT_EQ(0, aeron_context_set_idle_strategy_init_args(m_context, nullptr));
+    EXPECT_EQ(nullptr, aeron_context_get_idle_strategy_init_args(m_context));
+
+    EXPECT_EQ(0, aeron_context_set_idle_strategy_init_args(m_context, "200-50-1us-2500ns"));
+    EXPECT_STREQ("200-50-1us-2500ns", aeron_context_get_idle_strategy_init_args(m_context));
+
+    EXPECT_EQ(0, aeron_context_set_idle_strategy(m_context, "backoff"));
+    EXPECT_STREQ("backoff", m_context->idle_strategy_name);
+    EXPECT_NE(nullptr, m_context->idle_strategy_state);
+    EXPECT_NE(func, m_context->idle_strategy_func);
+    EXPECT_STREQ("200-50-1us-2500ns", m_context->idle_strategy_init_args);
+}
+
 class ClientConductorIsLengthSufficientTest : public testing::TestWithParam<std::tuple<aeron_mapped_file_t*, bool>>
 {
 };

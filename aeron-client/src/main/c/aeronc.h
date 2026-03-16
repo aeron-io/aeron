@@ -134,8 +134,14 @@ uint64_t aeron_context_get_resource_linger_duration_ns(aeron_context_t *context)
 
 #define AERON_CLIENT_IDLE_SLEEP_DURATION_ENV_VAR "AERON_CLIENT_IDLE_SLEEP_DURATION"
 
-uint64_t aeron_context_get_idle_sleep_duration_ns(aeron_context_t *context);
 int aeron_context_set_idle_sleep_duration_ns(aeron_context_t *context, uint64_t value);
+uint64_t aeron_context_get_idle_sleep_duration_ns(aeron_context_t *context);
+
+int aeron_context_set_idle_strategy_init_args(aeron_context_t *context, const char *value);
+const char *aeron_context_get_idle_strategy_init_args(aeron_context_t *context);
+
+int aeron_context_set_idle_strategy(aeron_context_t *context, const char *value);
+const char *aeron_context_get_idle_strategy(aeron_context_t *context);
 
 #define AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY_ENV_VAR "AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY"
 
