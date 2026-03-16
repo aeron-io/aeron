@@ -143,9 +143,12 @@ struct aeron_archive_persistent_subscription_stct
     struct max_recorded_position max_recorded_position;
     struct async_archive_op replay_request;
     int64_t replay_session_id;
+    int64_t replay_image_deadline_ns;
     aeron_async_add_subscription_t *add_replay_subscription;
     aeron_subscription_t *replay_subscription;
     aeron_image_t *replay_image;
+    int64_t live_image_deadline_ns;
+    bool live_image_deadline_breached;
     aeron_async_add_subscription_t *add_live_subscription;
     aeron_subscription_t *live_subscription;
     aeron_image_t *live_image;
@@ -482,6 +485,27 @@ static void clean_up_live_subscription(aeron_archive_persistent_subscription_t *
     persistent_subscription->add_live_subscription = NULL;
     persistent_subscription->live_subscription = NULL;
     persistent_subscription->live_image = NULL;
+}
+
+static void set_live_image_deadline(aeron_archive_persistent_subscription_t *persistent_subscription)
+{
+    persistent_subscription->live_image_deadline_ns = aeron_nano_clock() + persistent_subscription->message_timeout_ns;
+    persistent_subscription->live_image_deadline_breached = false;
+}
+
+static void on_live_image_deadline_breached(aeron_archive_persistent_subscription_t *persistent_subscription)
+{
+    persistent_subscription->live_image_deadline_breached = true;
+
+    if (NULL != persistent_subscription->listener.on_error)
+    {
+        persistent_subscription->listener.on_error(
+            persistent_subscription->listener.clientd,
+            ETIMEDOUT,
+            "no image became available on the live subscription within the message timeout. "
+            "this could be caused by the publisher being down, or by a misconfiguration of the "
+            "subscriber or a firewall between them.");
+    }
 }
 
 static void on_archive_connected(void *clientd)
@@ -936,6 +960,8 @@ static int await_replay_subscription(aeron_archive_persistent_subscription_t *pe
         return 0;
     }
 
+    persistent_subscription->replay_image_deadline_ns = aeron_nano_clock() + persistent_subscription->message_timeout_ns;
+
     transition(persistent_subscription, REPLAY);
 
     return 1;
@@ -977,7 +1003,14 @@ static int replay(
 
         if (NULL == image)
         {
-            // TODO deadline
+            if (aeron_nano_clock() - persistent_subscription->replay_image_deadline_ns >= 0)
+            {
+                clean_up_replay(persistent_subscription);
+                clean_up_replay_subscription(persistent_subscription);
+                set_up_replay(persistent_subscription);
+
+                return 1;
+            }
 
             return 0;
         }
@@ -997,7 +1030,7 @@ static int replay(
         if (NULL != persistent_subscription->live_subscription)
         {
             persistent_subscription->add_live_subscription = NULL;
-            // TODO set deadline
+            set_live_image_deadline(persistent_subscription);
         }
     }
 
@@ -1013,7 +1046,11 @@ static int replay(
 
             return 1;
         }
-        // TODO deadline check
+        else if (!persistent_subscription->live_image_deadline_breached &&
+                 aeron_nano_clock() - persistent_subscription->live_image_deadline_ns >= 0)
+        {
+            on_live_image_deadline_breached(persistent_subscription);
+        }
     }
 
     aeron_image_controlled_fragment_assembler_t *assembler = persistent_subscription->assembler;
@@ -1175,7 +1212,7 @@ static int await_live(aeron_archive_persistent_subscription_t *persistent_subscr
         if (NULL != persistent_subscription->live_subscription)
         {
             persistent_subscription->add_live_subscription = NULL;
-            // TODO set deadline
+            set_live_image_deadline(persistent_subscription);
         }
     }
 
@@ -1196,7 +1233,11 @@ static int await_live(aeron_archive_persistent_subscription_t *persistent_subscr
 
             return 1;
         }
-        // TODO deadline check
+        else if (!persistent_subscription->live_image_deadline_breached &&
+                 aeron_nano_clock() - persistent_subscription->live_image_deadline_ns >= 0)
+        {
+            on_live_image_deadline_breached(persistent_subscription);
+        }
     }
 
     return 0;
