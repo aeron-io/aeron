@@ -1173,3 +1173,14 @@ bool aeron_archive_persistent_subscription_is_live(aeron_archive_persistent_subs
 {
     return persistent_subscription->state == LIVE;
 }
+
+bool aeron_archive_persistent_subscription_is_replaying(aeron_archive_persistent_subscription_t *persistent_subscription)
+{
+    return persistent_subscription->state == REPLAY ||
+           persistent_subscription->state == ATTEMPT_SWITCH;
+}
+
+bool aeron_archive_persistent_subscription_has_failed(aeron_archive_persistent_subscription_t *persistent_subscription)
+{
+    return persistent_subscription->state == FAILED;
+}

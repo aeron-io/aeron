@@ -177,4 +177,20 @@ int aeron_archive_persistent_subscription_controlled_poll(
  */
 bool aeron_archive_persistent_subscription_is_live(aeron_archive_persistent_subscription_t *persistent_subscription);
 
+/**
+ * Indicates if the persistent subscription is replaying from a recording.
+ *
+ * @param persistent_subscription to check.
+ * @return true if replaying, false otherwise.
+ */
+bool aeron_archive_persistent_subscription_is_replaying(aeron_archive_persistent_subscription_t *persistent_subscription);
+
+/**
+ * Indicates if the persistent subscription has failed.
+ *
+ * @param persistent_subscription to check.
+ * @return true if failed, false otherwise.
+ */
+bool aeron_archive_persistent_subscription_has_failed(aeron_archive_persistent_subscription_t *persistent_subscription);
+
 #endif //AERON_AERON_ARCHIVE_PERSISTENT_SUBSCRIPTION_H
