@@ -313,3 +313,33 @@ TEST_F(WrapperSystemTest, nonPolledAsyncSubscriptionMustBeManuallyFreedAfterUsag
     auto async = aeron->addSubscriptionAsync(channel, stream_id);
     delete async;
 }
+
+TEST_F(WrapperSystemTest, polledSubscriptionShouldCloseAllAllocatedResourcesInvoker)
+{
+    Context ctx;
+    ctx.useConductorAgentInvoker(true);
+
+    std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
+    AgentInvoker<ClientConductor> &invoker = aeron->conductorAgentInvoker();
+    invoker.start();
+
+    auto channel = "aeron:udp?endpoint=localhost:10000";
+    int stream_id = 1000;
+    int64_t registration_id = aeron->addSubscription(channel, stream_id);
+
+    POLL_FOR_NON_NULL(subscription, aeron->findSubscription(registration_id), invoker);
+}
+
+TEST_F(WrapperSystemTest, polledSubscriptionShouldCloseAllAllocatedResourcesConductor)
+{
+    Context ctx;
+    ctx.useConductorAgentInvoker(false);
+
+    std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
+
+    auto channel = "aeron:udp?endpoint=localhost:10000";
+    int stream_id = 1000;
+    int64_t registration_id = aeron->addSubscription(channel, stream_id);
+
+    WAIT_FOR_NON_NULL(subscription, aeron->findSubscription(registration_id));
+}
