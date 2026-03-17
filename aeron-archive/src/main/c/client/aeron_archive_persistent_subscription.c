@@ -396,6 +396,7 @@ static int aeron_archive_persistent_subscription_context_conclude(
         {
             aeron_close(context->aeron);
             context->aeron = NULL;
+            aeron_context_close(aeron_ctx);
             AERON_APPEND_ERR("%s", "Failed to start aeron");
             return -1;
         }
