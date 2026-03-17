@@ -35,6 +35,8 @@
 struct aeron_archive_persistent_subscription_context_stct
 {
     aeron_t *aeron;
+    bool owns_aeron_client;
+    char aeron_directory_name[AERON_MAX_PATH];
     aeron_archive_context_t *archive_context;
     int64_t recording_id;
     char *live_channel;
@@ -188,6 +190,7 @@ int aeron_archive_persistent_subscription_context_init(aeron_archive_persistent_
         return -1;
     }
 
+    _context->aeron_directory_name[0] = '\0';
     _context->recording_id = AERON_NULL_VALUE;
     _context->live_stream_id = AERON_NULL_VALUE;
     _context->replay_stream_id = AERON_NULL_VALUE;
@@ -204,6 +207,10 @@ int aeron_archive_persistent_subscription_context_close(aeron_archive_persistent
     {
         free(context->live_channel);
         free(context->replay_channel);
+        if (context->owns_aeron_client)
+        {
+            aeron_close(context->aeron);
+        }
         aeron_free(context);
     }
 
@@ -230,6 +237,15 @@ int aeron_archive_persistent_subscription_context_set_aeron(
 {
     context->aeron = aeron;
 
+    return 0;
+}
+
+int aeron_archive_persistent_subscription_context_set_aeron_directory_name(
+    aeron_archive_persistent_subscription_context_t *context,
+    const char *aeron_directory_name)
+{
+    strncpy(context->aeron_directory_name, aeron_directory_name, sizeof(context->aeron_directory_name) - 1);
+    context->aeron_directory_name[sizeof(context->aeron_directory_name) - 1] = '\0';
     return 0;
 }
 
@@ -362,6 +378,34 @@ static int aeron_archive_persistent_subscription_context_conclude(
     {
         AERON_SET_ERR(EINVAL, "invalid start_position %" PRIi64, context->start_position);
         return -1;
+    }
+
+    if (NULL == context->aeron)
+    {
+        aeron_context_t *aeron_ctx;
+        if (aeron_context_init(&aeron_ctx) < 0)
+        {
+            AERON_APPEND_ERR("%s", "Failed to init aeron context");
+            return -1;
+        }
+        if ('\0' != context->aeron_directory_name[0])
+        {
+            aeron_context_set_dir(aeron_ctx, context->aeron_directory_name);
+        }
+        if (aeron_init(&context->aeron, aeron_ctx) < 0)
+        {
+            aeron_context_close(aeron_ctx);
+            AERON_APPEND_ERR("%s", "Failed to init aeron");
+            return -1;
+        }
+        if (aeron_start(context->aeron) < 0)
+        {
+            aeron_close(context->aeron);
+            context->aeron = NULL;
+            AERON_APPEND_ERR("%s", "Failed to start aeron");
+            return -1;
+        }
+        context->owns_aeron_client = true;
     }
 
     return 0;

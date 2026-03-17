@@ -44,6 +44,9 @@ int aeron_archive_persistent_subscription_context_init(aeron_archive_persistent_
 
 /**
  * Close and dispose of all resources held by the persistent subscription context.
+ * <p>
+ * If the context created its own Aeron client (i.e. none was set via
+ * aeron_archive_persistent_subscription_context_set_aeron), that client will be closed here.
  *
  * @param context to close.
  * @return 0 on success, -1 on error.
@@ -52,6 +55,10 @@ int aeron_archive_persistent_subscription_context_close(aeron_archive_persistent
 
 /**
  * Set the Aeron client that will be used by the persistent subscription.
+ * <p>
+ * If not set, the persistent subscription will create and own its own Aeron client when
+ * aeron_archive_persistent_subscription_create is called. In that case, the client will be
+ * closed when the context is closed via aeron_archive_persistent_subscription_context_close.
  *
  * @param context to configure.
  * @param aeron the Aeron client to use.
@@ -60,6 +67,20 @@ int aeron_archive_persistent_subscription_context_close(aeron_archive_persistent
 int aeron_archive_persistent_subscription_context_set_aeron(
     aeron_archive_persistent_subscription_context_t *context,
     aeron_t *aeron);
+
+/**
+ * Set the Aeron directory name to use when the persistent subscription creates its own Aeron client.
+ * Has no effect if an Aeron client is set via aeron_archive_persistent_subscription_context_set_aeron.
+ * <p>
+ * The directory name is copied into the context. The caller retains ownership of the supplied string.
+ *
+ * @param context to configure.
+ * @param aeron_directory_name the Aeron directory name.
+ * @return 0 on success, -1 on error.
+ */
+int aeron_archive_persistent_subscription_context_set_aeron_directory_name(
+    aeron_archive_persistent_subscription_context_t *context,
+    const char *aeron_directory_name);
 
 /**
  * Set the Aeron Archive client context that will be used by the persistent subscription.
@@ -152,7 +173,9 @@ int aeron_archive_persistent_subscription_context_set_listener(
 
 /**
  * Create a persistent subscription.
- * TODO something about context ownership
+ * <p>
+ * If no Aeron client is set on the context, one will be created and owned by the context,
+ * and will be closed when the context is closed via aeron_archive_persistent_subscription_context_close.
  *
  * @param persistent_subscription to set if completed successfully.
  * @param context with the configuration of a persistent subscription to be created.
