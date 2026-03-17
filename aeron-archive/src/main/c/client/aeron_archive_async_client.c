@@ -19,11 +19,6 @@
 #include <c/aeron_archive_client/recordingDescriptor.h>
 #include <errno.h>
 
-
-// added for debugging
-#include <stdio.h>
-#include <inttypes.h>
-
 #include "aeron_alloc.h"
 #include "aeron_archive_async_client.h"
 #include "aeron_archive_async_connect.h"
@@ -147,45 +142,20 @@ static int aeron_archive_async_client_connecting(aeron_archive_async_client_t *c
 {
     int work_count = 0;
 
-    static int64_t count = 0;
-    static bool connect_failed = false;
-    static bool poll_failed = false;
-
-    if (++count == 1)
-    {
-        printf("async_client_connecting: first call, async_connect=%p, context->aeron=%p\n",
-            (void *)client->async_connect,
-            (void *)client->context->aeron);
-        fflush(stdout);
-    }
-
     if (NULL == client->async_connect)
     {
         bool had_aeron = client->context->aeron != NULL;
 
         if (aeron_archive_async_connect(&client->async_connect, client->context) < 0)
         {
-            if (!connect_failed)
-            {
-                connect_failed = true;
-                printf("async_client_connecting: aeron_archive_async_connect FAILED: %s\n",
-                    aeron_errmsg());
-                fflush(stdout);
-            }
             AERON_APPEND_ERR("%s", "aeron_archive_async_connect failed");
             return -1;
         }
 
-        connect_failed = false;
-        printf("async_client_connecting: aeron_archive_async_connect succeeded, async_connect=%p\n",
-            (void *)client->async_connect);
-        fflush(stdout);
-
         bool has_aeron = client->context->aeron != NULL;
         if (has_aeron && !had_aeron)
         {
-            printf("async_client_connecting: nulling context->aeron\n");
-            fflush(stdout);
+            // reset to original state, so that next _async_connect does not try to use it
             client->context->aeron = NULL;
         }
 
@@ -196,31 +166,15 @@ static int aeron_archive_async_client_connecting(aeron_archive_async_client_t *c
 
     if (aeron_archive_async_connect_poll(&client->archive, client->async_connect) < 0)
     {
-        if (!poll_failed)
-        {
-            poll_failed = true;
-            printf("async_client_connecting: aeron_archive_async_connect_poll FAILED: %s\n",
-                aeron_errmsg());
-            fflush(stdout);
-        }
         client->async_connect = NULL;
         return 1;
     }
 
-    poll_failed = false;
-
     uint8_t step_after = aeron_archive_async_connect_step(client->async_connect);
-    if (step_after != step_before)
-    {
-        printf("async_client_connecting: step %d -> %d\n", step_before, step_after);
-        fflush(stdout);
-    }
     work_count += (step_after != step_before) ? 1 : 0;
 
     if (NULL != client->archive)
     {
-        printf("async_client_connecting: archive connected!\n");
-        fflush(stdout);
         client->async_connect = NULL;
         client->state = AERON_ARCHIVE_ASYNC_CLIENT_CONNECTED;
         client->listener->on_connected(client->listener->clientd);

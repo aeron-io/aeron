@@ -14,11 +14,6 @@
  * limitations under the License.
  */
 
-// added for debugging
-#include <stdio.h>
-#include <inttypes.h>
-
-
 #include "aeron_archive.h"
 #include "aeron_archive_async_connect.h"
 #include "aeron_archive_client.h"
@@ -183,10 +178,12 @@ int aeron_archive_async_connect_poll(aeron_archive_t **aeron_archive, aeron_arch
             }
             else if (rc == 1)
             {
+                // success - exclusive_publication should now be set
                 async->async_add_exclusive_publication = NULL;
             }
             else
             {
+                // error
                 async->async_add_exclusive_publication = NULL;
                 AERON_APPEND_ERR("%s", "");
                 goto cleanup;
@@ -218,10 +215,12 @@ int aeron_archive_async_connect_poll(aeron_archive_t **aeron_archive, aeron_arch
             }
             else if (rc == 1)
             {
+                // success - subscription should now be set
                 async->async_add_subscription = NULL;
             }
             else
             {
+                // error
                 async->async_add_subscription = NULL;
                 AERON_APPEND_ERR("%s", "");
                 goto cleanup;
@@ -242,7 +241,6 @@ int aeron_archive_async_connect_poll(aeron_archive_t **aeron_archive, aeron_arch
 
         if (NULL != async->archive_proxy && NULL != async->control_response_poller)
         {
-            printf("-> AWAIT_PUBLICATION_CONNECTED\n"); fflush(stdout);
             async->state = AWAIT_PUBLICATION_CONNECTED;
         }
     }
@@ -251,7 +249,6 @@ int aeron_archive_async_connect_poll(aeron_archive_t **aeron_archive, aeron_arch
     {
         if (aeron_exclusive_publication_is_connected(async->exclusive_publication))
         {
-            printf("-> SEND_CONNECT_REQUEST\n"); fflush(stdout);
             async->state = SEND_CONNECT_REQUEST;
         }
         else
@@ -301,7 +298,6 @@ int aeron_archive_async_connect_poll(aeron_archive_t **aeron_archive, aeron_arch
 
         if (sent)
         {
-            printf("-> AWAIT_SUBSCRIPTION_CONNECTED\n"); fflush(stdout);
             async->state = AWAIT_SUBSCRIPTION_CONNECTED;
         }
         else
@@ -314,7 +310,6 @@ int aeron_archive_async_connect_poll(aeron_archive_t **aeron_archive, aeron_arch
     {
         if (aeron_subscription_is_connected(async->subscription))
         {
-            printf("-> AWAIT_CONNECT_RESPONSE\n"); fflush(stdout);
             async->state = AWAIT_CONNECT_RESPONSE;
         }
         else
@@ -332,7 +327,6 @@ int aeron_archive_async_connect_poll(aeron_archive_t **aeron_archive, aeron_arch
             return 0;
         }
 
-        printf("-> AWAIT_ARCHIVE_ID_RESPONSE\n"); fflush(stdout);
         async->state = AWAIT_ARCHIVE_ID_RESPONSE;
     }
 
@@ -352,7 +346,6 @@ int aeron_archive_async_connect_poll(aeron_archive_t **aeron_archive, aeron_arch
 
         async->encoded_credentials_from_challenge = NULL;
 
-        printf("-> AWAIT_CHALLENGE_RESPONSE\n"); fflush(stdout);
         async->state = AWAIT_CHALLENGE_RESPONSE;
     }
 
@@ -380,7 +373,6 @@ int aeron_archive_async_connect_poll(aeron_archive_t **aeron_archive, aeron_arch
                         &poller->encoded_challenge);
 
                 async->correlation_id = aeron_next_correlation_id(async->aeron);
-                printf("-> SEND_CHALLENGE_RESPONSE\n"); fflush(stdout);
                 async->state = SEND_CHALLENGE_RESPONSE;
             }
             else
@@ -404,22 +396,20 @@ int aeron_archive_async_connect_poll(aeron_archive_t **aeron_archive, aeron_arch
                 if (AWAIT_ARCHIVE_ID_RESPONSE == async->state)
                 {
                     int64_t archive_id = poller->relevant_id;
-                    printf("-> DONE (archive_id=%" PRId64 ")\n", archive_id); fflush(stdout);
+
                     return aeron_archive_async_connect_transition_to_done(aeron_archive, async, archive_id);
                 }
-                else
+                else // AWAIT_CONNECT_RESPONSE or AWAIT_CHALLENGE_RESPONSE
                 {
                     int32_t archive_protocol_version = poller->version;
 
                     if (archive_protocol_version < aeron_archive_protocol_version_with_archive_id())
                     {
-                        printf("-> DONE (no archive id, protocol_version=%d)\n", archive_protocol_version); fflush(stdout);
                         return aeron_archive_async_connect_transition_to_done(aeron_archive, async, AERON_NULL_VALUE);
                     }
                     else
                     {
                         async->correlation_id = aeron_next_correlation_id(async->aeron);
-                        printf("-> SEND_ARCHIVE_ID_REQUEST\n"); fflush(stdout);
                         async->state = SEND_ARCHIVE_ID_REQUEST;
                     }
                 }
@@ -430,8 +420,9 @@ int aeron_archive_async_connect_poll(aeron_archive_t **aeron_archive, aeron_arch
     return 0;
 
 cleanup:
-    printf("async_connect_poll: cleanup, error=%s\n", aeron_errmsg()); fflush(stdout);
+
     aeron_archive_async_connect_delete(async);
+
     return -1;
 }
 
