@@ -22,6 +22,7 @@
 #include "aeron_archive_async_client.h"
 #include "aeron_archive_persistent_subscription.h"
 #include "aeron_fragment_assembler.h"
+#include "uri/aeron_uri_string_builder.h"
 #include "util/aeron_error.h"
 
 #define transition(persistent_subscription, new_state) \
@@ -113,6 +114,13 @@ static void max_recorded_position_reset(
     max_recorded_position->close_enough_threshold = close_enough_threshold;
 }
 
+typedef enum aeron_archive_replay_channel_type_en
+{
+    REPLAY_CHANNEL_SESSION_SPECIFIC,
+    REPLAY_CHANNEL_DYNAMIC_PORT,
+}
+aeron_archive_replay_channel_type_t;
+
 typedef enum aeron_archive_persistent_subscription_state_en
 {
     AWAIT_ARCHIVE_CONNECTION,
@@ -122,6 +130,7 @@ typedef enum aeron_archive_persistent_subscription_state_en
     AWAIT_REPLAY_RESPONSE,
     ADD_REPLAY_SUBSCRIPTION,
     AWAIT_REPLAY_SUBSCRIPTION,
+    AWAIT_REPLAY_CHANNEL_ENDPOINT,
     REPLAY,
     ATTEMPT_SWITCH,
     ADD_LIVE_SUBSCRIPTION,
@@ -139,11 +148,14 @@ struct aeron_archive_persistent_subscription_stct
     aeron_archive_async_client_t *archive;
     aeron_archive_async_client_listener_t archive_listener;
     aeron_archive_persistent_subscription_state_t state;
+    aeron_archive_replay_channel_type_t replay_channel_type;
+    char replay_channel_uri[AERON_URI_MAX_LENGTH];
     struct list_recording_request list_recording_request;
     struct max_recorded_position max_recorded_position;
     struct async_archive_op replay_request;
     int64_t replay_session_id;
     int64_t replay_image_deadline_ns;
+    int64_t join_error;
     aeron_async_add_subscription_t *add_replay_subscription;
     aeron_subscription_t *replay_subscription;
     aeron_image_t *replay_image;
@@ -638,6 +650,36 @@ int aeron_archive_persistent_subscription_create(
     _persistent_subscription->message_timeout_ns = aeron_archive_context_get_message_timeout_ns(context->archive_context);
     _persistent_subscription->replay_session_id = AERON_NULL_VALUE;
     _persistent_subscription->position = context->start_position;
+
+    // Determine replay channel type and copy the URI
+    {
+        aeron_uri_string_builder_t builder;
+        if (aeron_uri_string_builder_init_on_string(&builder, context->replay_channel) < 0)
+        {
+            AERON_APPEND_ERR("%s", "Failed to parse replay_channel URI");
+            goto error;
+        }
+
+        const char *media = aeron_uri_string_builder_get(&builder, AERON_URI_STRING_BUILDER_MEDIA_KEY);
+        const char *endpoint = aeron_uri_string_builder_get(&builder, AERON_UDP_CHANNEL_ENDPOINT_KEY);
+
+        if (media != NULL && strcmp(media, "udp") == 0 &&
+            endpoint != NULL && strlen(endpoint) >= 2 &&
+            strcmp(endpoint + strlen(endpoint) - 2, ":0") == 0)
+        {
+            _persistent_subscription->replay_channel_type = REPLAY_CHANNEL_DYNAMIC_PORT;
+        }
+        else
+        {
+            _persistent_subscription->replay_channel_type = REPLAY_CHANNEL_SESSION_SPECIFIC;
+        }
+
+        aeron_uri_string_builder_close(&builder);
+    }
+
+    strncpy(_persistent_subscription->replay_channel_uri, context->replay_channel, AERON_URI_MAX_LENGTH - 1);
+    _persistent_subscription->replay_channel_uri[AERON_URI_MAX_LENGTH - 1] = '\0';
+
     transition(_persistent_subscription, AWAIT_ARCHIVE_CONNECTION);
 
     *persistent_subscription = _persistent_subscription;
@@ -720,7 +762,16 @@ static void set_up_replay(aeron_archive_persistent_subscription_t *persistent_su
         &persistent_subscription->max_recorded_position,
         persistent_subscription->list_recording_request.term_buffer_length >> 2);
 
-    transition(persistent_subscription, SEND_REPLAY_REQUEST);
+    persistent_subscription->join_error = INT64_MIN;
+
+    if (persistent_subscription->replay_channel_type == REPLAY_CHANNEL_DYNAMIC_PORT)
+    {
+        transition(persistent_subscription, ADD_REPLAY_SUBSCRIPTION);
+    }
+    else
+    {
+        transition(persistent_subscription, SEND_REPLAY_REQUEST);
+    }
 }
 
 static bool validate_descriptor(aeron_archive_persistent_subscription_t *persistent_subscription)
@@ -850,7 +901,7 @@ static int send_replay_request(aeron_archive_persistent_subscription_t *persiste
         persistent_subscription->archive,
         correlation_id,
         persistent_subscription->context->recording_id,
-        persistent_subscription->context->replay_channel,
+        persistent_subscription->replay_channel_uri,
         persistent_subscription->context->replay_stream_id,
         &params))
     {
@@ -910,18 +961,54 @@ static int await_replay_response(aeron_archive_persistent_subscription_t *persis
 
     persistent_subscription->replay_session_id = persistent_subscription->replay_request.relevant_id;
 
-    // TODO add sessionId to uri
-    transition(persistent_subscription, ADD_REPLAY_SUBSCRIPTION);
+    if (persistent_subscription->replay_channel_type == REPLAY_CHANNEL_SESSION_SPECIFIC)
+    {
+        // Inject the session id into the replay channel URI so the subscription only accepts this replay session
+        aeron_uri_string_builder_t builder;
+        if (aeron_uri_string_builder_init_on_string(&builder, persistent_subscription->replay_channel_uri) < 0)
+        {
+            AERON_APPEND_ERR("%s", "Failed to parse replay_channel_uri");
+            transition(persistent_subscription, FAILED);
+            return 1;
+        }
+
+        aeron_uri_string_builder_put_int32(
+            &builder,
+            AERON_URI_SESSION_ID_KEY,
+            (int32_t)persistent_subscription->replay_session_id);
+
+        aeron_uri_string_builder_sprint(
+            &builder,
+            persistent_subscription->replay_channel_uri,
+            sizeof(persistent_subscription->replay_channel_uri));
+
+        aeron_uri_string_builder_close(&builder);
+
+        transition(persistent_subscription, ADD_REPLAY_SUBSCRIPTION);
+    }
+    else
+    {
+        persistent_subscription->replay_image_deadline_ns =
+            aeron_nano_clock() + persistent_subscription->message_timeout_ns;
+
+        transition(persistent_subscription, REPLAY);
+    }
 
     return 1;
 }
 
 static int add_replay_subscription(aeron_archive_persistent_subscription_t *persistent_subscription)
 {
+    // Dynamic port: use the raw context channel (with :0) so the OS assigns a free port.
+    // Session-specific: use replay_channel_uri which now has the session id injected.
+    const char *channel = persistent_subscription->replay_channel_type == REPLAY_CHANNEL_DYNAMIC_PORT
+        ? persistent_subscription->context->replay_channel
+        : persistent_subscription->replay_channel_uri;
+
     if (aeron_async_add_subscription(
         &persistent_subscription->add_replay_subscription,
         persistent_subscription->context->aeron,
-        persistent_subscription->context->replay_channel,
+        channel,
         persistent_subscription->context->replay_stream_id,
         NULL,
         NULL,
@@ -972,7 +1059,30 @@ static int await_replay_subscription(aeron_archive_persistent_subscription_t *pe
 
     persistent_subscription->replay_image_deadline_ns = aeron_nano_clock() + persistent_subscription->message_timeout_ns;
 
-    transition(persistent_subscription, REPLAY);
+    if (persistent_subscription->replay_channel_type == REPLAY_CHANNEL_SESSION_SPECIFIC)
+    {
+        transition(persistent_subscription, REPLAY);
+    }
+    else
+    {
+        transition(persistent_subscription, AWAIT_REPLAY_CHANNEL_ENDPOINT);
+    }
+
+    return 1;
+}
+
+static int await_replay_channel_endpoint(aeron_archive_persistent_subscription_t *persistent_subscription)
+{
+    if (aeron_subscription_try_resolve_channel_endpoint_port(
+        persistent_subscription->replay_subscription,
+        persistent_subscription->replay_channel_uri,
+        sizeof(persistent_subscription->replay_channel_uri)) < 0)
+    {
+        // Not yet resolved, try again next poll
+        return 0;
+    }
+
+    transition(persistent_subscription, SEND_REPLAY_REQUEST);
 
     return 1;
 }
@@ -1051,6 +1161,9 @@ static int replay(
             persistent_subscription->live_image = aeron_subscription_image_at_index(
                 persistent_subscription->live_subscription,
                 0);
+
+            persistent_subscription->join_error = aeron_image_position(persistent_subscription->live_image) -
+                                      aeron_image_position(image);
 
             transition(persistent_subscription, ATTEMPT_SWITCH);
 
@@ -1234,6 +1347,7 @@ static int await_live(aeron_archive_persistent_subscription_t *persistent_subscr
             persistent_subscription->live_image = image;
             persistent_subscription->position = aeron_image_position(image);
 
+            persistent_subscription->join_error = 0;
             transition(persistent_subscription, LIVE);
 
             if (NULL != persistent_subscription->listener.on_live_joined)
@@ -1331,6 +1445,9 @@ int aeron_archive_persistent_subscription_controlled_poll(
             break;
         case AWAIT_REPLAY_SUBSCRIPTION:
             state_result = await_replay_subscription(persistent_subscription);
+            break;
+        case AWAIT_REPLAY_CHANNEL_ENDPOINT:
+            state_result = await_replay_channel_endpoint(persistent_subscription);
             break;
         case REPLAY:
             state_result = replay(persistent_subscription, handler, clientd, fragment_limit);
