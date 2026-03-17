@@ -3558,8 +3558,7 @@ class ClusterTest
             Tests.yield();
         }
 
-        final int index = follower.index();
-        cluster.waitForError(follower, (s) -> s.contains("failed to load for service=" + index));
+        cluster.waitForError(follower, (s) -> s.contains("failed to load for service=0"));
 
         cluster.stopNode(follower);
         final File followerClusterDir = follower.consensusModule().context().clusterDir();
