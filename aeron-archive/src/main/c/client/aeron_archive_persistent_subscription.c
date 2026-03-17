@@ -996,6 +996,8 @@ static int await_replay_response(aeron_archive_persistent_subscription_t *persis
     {
         transition(persistent_subscription, FAILED);
 
+        clean_up_replay_subscription(persistent_subscription);
+
         if (NULL != persistent_subscription->listener.on_error)
         {
             persistent_subscription->listener.on_error(
