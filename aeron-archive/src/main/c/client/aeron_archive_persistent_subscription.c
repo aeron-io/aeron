@@ -958,6 +958,7 @@ static int send_replay_request(aeron_archive_persistent_subscription_t *persiste
             return 0;
         }
 
+        clean_up_replay_subscription(persistent_subscription);
         transition(persistent_subscription, AWAIT_ARCHIVE_CONNECTION);
 
         return 1;
@@ -979,6 +980,7 @@ static int await_replay_response(aeron_archive_persistent_subscription_t *persis
         {
             if (aeron_archive_async_client_is_connected(persistent_subscription->archive))
             {
+                clean_up_replay_subscription(persistent_subscription);
                 set_up_replay(persistent_subscription);
             }
             else
@@ -1065,7 +1067,17 @@ static int add_replay_subscription(aeron_archive_persistent_subscription_t *pers
         NULL,
         NULL) < 0)
     {
-        // TODO
+        transition(persistent_subscription, FAILED);
+
+        if (NULL != persistent_subscription->listener.on_error)
+        {
+            persistent_subscription->listener.on_error(
+                persistent_subscription->listener.clientd,
+                aeron_errcode(),
+                aeron_errmsg());
+        }
+
+        return 1;
     }
 
     transition(persistent_subscription, AWAIT_REPLAY_SUBSCRIPTION);
@@ -1107,6 +1119,7 @@ static int await_replay_subscription(aeron_archive_persistent_subscription_t *pe
         return 0;
     }
 
+    persistent_subscription->add_replay_subscription = NULL;
     persistent_subscription->replay_image_deadline_ns = aeron_nano_clock() + persistent_subscription->message_timeout_ns;
 
     if (persistent_subscription->replay_channel_type == REPLAY_CHANNEL_SESSION_SPECIFIC)
@@ -1330,6 +1343,7 @@ static int attempt_switch(
         {
             clean_up_live_subscription(persistent_subscription);
 
+            persistent_subscription->join_error = INT64_MIN;
             max_recorded_position_reset(
                 &persistent_subscription->max_recorded_position,
                 persistent_subscription->list_recording_request.term_buffer_length >> 2);
@@ -1389,7 +1403,28 @@ static int await_live(aeron_archive_persistent_subscription_t *persistent_subscr
             &persistent_subscription->live_subscription,
             persistent_subscription->add_live_subscription) < 0)
         {
-            // TODO
+            int errcode = aeron_errcode();
+
+            persistent_subscription->add_live_subscription = NULL;
+
+            if (errcode == ENOTCONN)
+            {
+                transition(persistent_subscription, ADD_LIVE_SUBSCRIPTION);
+            }
+            else
+            {
+                transition(persistent_subscription, FAILED);
+            }
+
+            if (NULL != persistent_subscription->listener.on_error)
+            {
+                persistent_subscription->listener.on_error(
+                    persistent_subscription->listener.clientd,
+                    errcode,
+                    aeron_errmsg());
+            }
+
+            return 1;
         }
 
         if (NULL != persistent_subscription->live_subscription)
