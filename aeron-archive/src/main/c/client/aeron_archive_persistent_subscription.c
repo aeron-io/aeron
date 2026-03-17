@@ -326,12 +326,6 @@ int aeron_archive_persistent_subscription_context_set_listener(
 static int aeron_archive_persistent_subscription_context_conclude(
     aeron_archive_persistent_subscription_context_t *context)
 {
-    if (NULL == context->aeron)
-    {
-        AERON_SET_ERR(EINVAL, "%s", "aeron must be set");
-        return -1;
-    }
-
     if (NULL == context->archive_context)
     {
         AERON_SET_ERR(EINVAL, "%s", "archive_context must be set");
