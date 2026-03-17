@@ -120,10 +120,21 @@ set(GENERATED_C_CODECS
     ${ARCHIVE_CODEC_TARGET_DIR}/aeron_c_archive_client/varDataEncoding.h)
 
 add_custom_command(OUTPUT ${GENERATED_C_CODECS}
-    COMMAND ${CMAKE_COMMAND} -E env JAVA_HOME=$ENV{JAVA_HOME} BUILD_JAVA_HOME=$ENV{BUILD_JAVA_HOME} BUILD_JAVA_VERSION=$ENV{BUILD_JAVA_VERSION} ${GRADLE_WRAPPER} -Dcodec.target.dir=${ARCHIVE_C_CODEC_TARGET_DIR} :aeron-archive:generateCCodecs --no-daemon --console=plain -q
+    COMMAND ${CMAKE_COMMAND}
+            -E env
+            JAVA_HOME=${JAVA_HOME}
+            BUILD_JAVA_HOME=${BUILD_JAVA_HOME}
+            BUILD_JAVA_VERSION=${BUILD_JAVA_VERSION}
+            ${GRADLE_WRAPPER}
+            -Dcodec.target.dir=${ARCHIVE_C_CODEC_TARGET_DIR}
+            :aeron-archive:generateCCodecs
+            --no-daemon
+            --console=plain
+            --quiet
     DEPENDS ${CODEC_SCHEMA} aeron-all-jar
     WORKING_DIRECTORY ${ARCHIVE_CODEC_WORKING_DIR}
-    COMMENT "Generating C Archive codecs")
+    COMMENT "Generating C Archive codecs"
+    VERBATIM)
 
 add_custom_target(c_codecs DEPENDS ${GENERATED_C_CODECS})
 

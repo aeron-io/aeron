@@ -339,10 +339,23 @@ if (BUILD_AERON_ARCHIVE_API)
         "${CMAKE_CURRENT_SOURCE_DIR}}/aeron-archive/src/main/java/*.java")
 
     add_custom_command(OUTPUT ${AERON_ALL_JAR}
-        COMMAND ${CMAKE_COMMAND} -E env JAVA_HOME=$ENV{JAVA_HOME} BUILD_JAVA_HOME=$ENV{BUILD_JAVA_HOME} BUILD_JAVA_VERSION=$ENV{BUILD_JAVA_VERSION} ${GRADLE_WRAPPER} :aeron-all:clean :aeron-all:assemble --no-daemon -x javadoc --console=plain -q
+        COMMAND ${CMAKE_COMMAND}
+                -E env
+                JAVA_HOME=${JAVA_HOME}
+                BUILD_JAVA_HOME=${BUILD_JAVA_HOME}
+                BUILD_JAVA_VERSION=${BUILD_JAVA_VERSION}
+                ${GRADLE_WRAPPER}
+                :aeron-all:clean
+                :aeron-all:assemble
+                --exclude-task  javadoc
+                --exclude-task  check
+                --no-daemon
+                --console=plain
+                --quiet
         DEPENDS ${AERON_ALL_SOURCES}
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        COMMENT "Generating aeron-all jar")
+        COMMENT "Generating aeron-all jar"
+        VERBATIM)
 
     add_custom_target(aeron-all-jar
         DEPENDS ${AERON_ALL_JAR})
