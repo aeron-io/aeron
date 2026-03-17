@@ -423,7 +423,10 @@ static bool max_recorded_position_await_max_position(
     }
     else
     {
-        // TODO deadline check
+        if (aeron_nano_clock() - max_recorded_position->op.deadline_ns >= 0)
+        {
+            max_recorded_position->state = REQUEST_MAX_POSITION;
+        }
     }
 
     return false;
