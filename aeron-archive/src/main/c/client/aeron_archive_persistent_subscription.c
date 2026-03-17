@@ -328,6 +328,12 @@ static int aeron_archive_persistent_subscription_context_conclude(
         return -1;
     }
 
+    if (context->recording_id < 0)
+    {
+        AERON_SET_ERR(EINVAL, "invalid recording_id %" PRIi64, context->recording_id);
+        return -1;
+    }
+
     if (NULL == context->live_channel)
     {
         AERON_SET_ERR(EINVAL, "%s", "live_channel must be set");
@@ -1136,6 +1142,16 @@ static int replay(
         }
 
         persistent_subscription->replay_image = image;
+    }
+
+    if (aeron_image_is_closed(image))
+    {
+        clean_up_live_subscription(persistent_subscription);
+        clean_up_replay(persistent_subscription);
+        clean_up_replay_subscription(persistent_subscription);
+        set_up_replay(persistent_subscription);
+
+        return 1;
     }
 
     if (NULL == persistent_subscription->live_subscription && NULL != persistent_subscription->add_live_subscription)
