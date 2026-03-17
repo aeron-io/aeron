@@ -2393,7 +2393,7 @@ int aeron_client_conductor_do_work(aeron_client_conductor_t *conductor)
     }
 
     work_count += (int)aeron_mpsc_concurrent_array_queue_drain(
-        conductor->command_queue, aeron_client_conductor_on_command, conductor, 10);
+        conductor->command_queue, aeron_client_conductor_on_command, conductor, 1);
 
     work_count += aeron_broadcast_receiver_receive(
         &conductor->to_client_buffer, aeron_client_conductor_on_driver_response, conductor);
