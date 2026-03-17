@@ -91,12 +91,12 @@ public:
 
     ~Aeron()
     {
-        std::lock_guard<std::recursive_mutex> lock(m_adminLock);
-
         aeron_on_close_client_pair_t closePair = {emptyCallback, nullptr};
         aeron_add_close_handler(m_aeron, &closePair);
         aeron_close(m_aeron);
         aeron_context_close(m_aeron_context);
+
+        std::lock_guard<std::recursive_mutex> lock(m_adminLock);
 
         for (const std::pair<const std::int64_t, AsyncAddCounter *>& e : m_pendingCounters)
         {
@@ -118,6 +118,11 @@ public:
             delete e.second;
         }
 
+        for (const std::pair<const std::int64_t, AsyncAddSubscription *>& e : m_liveSubscriptions)
+        {
+            delete e.second;
+        }
+
         m_availableCounterHandlers.clear();
         m_unavailableCounterHandlers.clear();
         m_closeClientHandlers.clear();
@@ -125,6 +130,7 @@ public:
         m_pendingPublications.clear();
         m_pendingExclusivePublications.clear();
         m_pendingSubscriptions.clear();
+        m_liveSubscriptions.clear();
     }
 
     /**
@@ -618,7 +624,12 @@ public:
         else
         {
             addSubscription->m_async = nullptr;
-            return std::make_shared<Subscription>(m_aeron, subscription, addSubscription);
+            auto ptr = std::make_shared<Subscription>(m_aeron, subscription, addSubscription, onSubscriptionClosed, this);
+            auto sub = ptr.get();
+
+            std::lock_guard<std::recursive_mutex> lock(m_adminLock);
+            m_liveSubscriptions[sub->registrationId()] = addSubscription;
+            return ptr;
         }
     }
 
@@ -1120,7 +1131,6 @@ public:
         return { aeron_version_full() };
     }
 
-
 private:
     Context m_context;
     aeron_context_t *m_aeron_context;
@@ -1130,12 +1140,25 @@ private:
     std::unordered_map<std::int64_t, AsyncAddExclusivePublication *> m_pendingExclusivePublications;
     std::unordered_map<std::int64_t, AsyncAddSubscription *> m_pendingSubscriptions;
     std::unordered_map<std::int64_t, AsyncAddCounter *> m_pendingCounters;
+    std::unordered_map<std::int64_t, AsyncAddSubscription *> m_liveSubscriptions;
     std::vector<std::pair<std::int64_t, std::shared_ptr<on_available_counter_t>>> m_availableCounterHandlers;
     std::vector<std::pair<std::int64_t, std::shared_ptr<on_unavailable_counter_t>>> m_unavailableCounterHandlers;
     std::vector<std::pair<std::int64_t, std::shared_ptr<on_close_client_t>>> m_closeClientHandlers;
     std::recursive_mutex m_adminLock;
     ClientConductor m_clientConductor;
     AgentInvoker<ClientConductor> m_conductorInvoker;
+
+    void cleanupClosedSubscription(std::int64_t registrationId)
+    {
+        std::lock_guard<std::recursive_mutex> lock(m_adminLock);
+        m_liveSubscriptions.erase(registrationId);
+    }
+
+    static void onSubscriptionClosed(std::int64_t registrationId, void* clientd)
+    {
+        Aeron &aeron = *reinterpret_cast<Aeron *>(clientd);
+        aeron.cleanupClosedSubscription(registrationId);
+    }
 
     static aeron_t *init_aeron(Context &context, aeron_context_t **aeron_context)
     {

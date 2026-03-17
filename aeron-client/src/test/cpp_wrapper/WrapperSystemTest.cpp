@@ -339,7 +339,41 @@ TEST_F(WrapperSystemTest, polledSubscriptionShouldCloseAllAllocatedResourcesCond
 
     auto channel = "aeron:udp?endpoint=localhost:10000";
     int stream_id = 1000;
+
+    int64_t registration_id = aeron->addSubscription(channel, stream_id);
+    WAIT_FOR_NON_NULL(subscription, aeron->findSubscription(registration_id));
+
+    int64_t registration_id2 = aeron->addSubscription(channel, stream_id);
+    WAIT_FOR_NON_NULL(subscription2, aeron->findSubscription(registration_id2));
+}
+
+TEST_F(WrapperSystemTest, shouldFreeAllocatedMemoryEvenIfDriverIsKilled)
+{
+    Context ctx;
+    ctx.useConductorAgentInvoker(false).idleSleepDuration(200);
+
+    std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
+
+    auto channel = "aeron:udp?endpoint=localhost:10000";
+    int stream_id = 1000;
     int64_t registration_id = aeron->addSubscription(channel, stream_id);
 
     WAIT_FOR_NON_NULL(subscription, aeron->findSubscription(registration_id));
+
+    // overflow client command queue
+    while (true)
+    {
+        try
+        {
+            aeron->addCounter(1000, nullptr, 0, "test");
+        }
+        catch (...)
+        {
+            break;
+        }
+    }
+
+    // terminate media driver before Aeron and Subscription
+    m_driver.stop();
+    m_driver.closeDriver();
 }
