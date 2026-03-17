@@ -20,11 +20,11 @@
 #include <gmock/gmock.h>
 
 #include "aeron_test_base.h"
-#include "aeron_counters.h"
 
 extern "C"
 {
-#include "concurrent/aeron_atomic.h"
+#include "aeron_counters.h"
+#include "aeron_image.h"
 #include "agent/aeron_driver_agent.h"
 #include "aeron_driver_context.h"
 }
@@ -938,7 +938,92 @@ TEST_P(CSystemTest, shouldAddMultipleSubscriptionsUsingSameImage)
         std::pair<int64_t, int64_t>(id2, id2)));
 }
 
-TEST_P(CSystemTest, shouldSetClientName)
+TEST_F(CSystemTest, shouldNotifyImageGoingUnavailableWhenSubscriptionIsClosed)
+{
+    aeron_async_add_publication_t *async_pub = nullptr;
+    aeron_async_add_subscription_t *async_sub = nullptr;
+    std::atomic<bool> on_available_image_called = { false };
+    std::atomic<bool> on_unavailable_image_called = { false };
+    const char *uri = "aeron:ipc?term-length=64k";
+    size_t num_messages = 3;
+    const char message[37] = "this is a test";
+    int64_t final_position;
+
+    m_onAvailableImage = [&](aeron_subscription_t *, aeron_image_t *)
+    {
+        on_available_image_called = true;
+    };
+
+    m_onUnavailableImage = [&](aeron_subscription_t *, aeron_image_t *image)
+    {
+        EXPECT_EQ(image->final_position, final_position);
+        EXPECT_EQ(image->eos_position, INT64_MAX);
+        EXPECT_FALSE(image->is_eos);
+        EXPECT_TRUE(image->is_closed);
+        on_unavailable_image_called = true;
+    };
+
+    ASSERT_TRUE(connect());
+    ASSERT_EQ(aeron_async_add_publication(&async_pub, m_aeron, uri, STREAM_ID), 0);
+
+    aeron_publication_t *publication = awaitPublicationOrError(async_pub);
+    ASSERT_TRUE(publication) << aeron_errmsg();
+    ASSERT_EQ(aeron_async_add_subscription(
+        &async_sub, m_aeron, uri, STREAM_ID, onAvailableImage, this, onUnavailableImage, this), 0);
+
+    aeron_subscription_t *subscription = awaitSubscriptionOrError(async_sub);
+    ASSERT_TRUE(subscription) << aeron_errmsg();
+    awaitConnected(subscription);
+
+    while (!on_available_image_called)
+    {
+        std::this_thread::yield();
+    }
+
+    for (size_t i = 0; i < num_messages; i++)
+    {
+        while (aeron_publication_offer(
+            publication, (const uint8_t *)message, sizeof(message), nullptr, nullptr) < 0)
+        {
+            std::this_thread::yield();
+        }
+    }
+
+    int poll_result;
+    bool called = false;
+    poll_handler_t handler = [&](const uint8_t *buffer, size_t length, aeron_header_t *header)
+    {
+        EXPECT_EQ(length, sizeof(message));
+        called = true;
+    };
+
+    while ((poll_result = poll(subscription, handler, 1)) == 0)
+    {
+        std::this_thread::yield();
+    }
+    EXPECT_EQ(poll_result, 1);
+    EXPECT_TRUE(called);
+
+    auto image = aeron_subscription_image_at_index(subscription, 0);
+    final_position = aeron_image_position(image);
+    aeron_subscription_image_release(subscription, image);
+
+    std::atomic<bool> subscription_closed = { false };
+    aeron_notification_t on_close = [](void *clientd)
+    {
+        auto flag = reinterpret_cast<std::atomic<bool> *>(clientd);
+        *flag = true;
+    };
+    EXPECT_EQ(aeron_subscription_close(subscription, on_close, &subscription_closed), 0);
+
+    while (!subscription_closed)
+    {
+        std::this_thread::yield();
+    }
+    EXPECT_TRUE(on_unavailable_image_called);
+}
+
+TEST_F(CSystemTest, shouldSetClientName)
 {
     aeron_context_t *context;
     ASSERT_EQ(aeron_context_init(&context), 0);
@@ -949,7 +1034,7 @@ TEST_P(CSystemTest, shouldSetClientName)
     aeron_context_close(context);
 }
 
-TEST_P(CSystemTest, shouldSetNullClientName)
+TEST_F(CSystemTest, shouldSetNullClientName)
 {
     aeron_context_t *context;
     ASSERT_EQ(aeron_context_init(&context), 0);
@@ -958,7 +1043,7 @@ TEST_P(CSystemTest, shouldSetNullClientName)
     aeron_context_close(context);
 }
 
-TEST_P(CSystemTest, shouldSetClientNameOverLong)
+TEST_F(CSystemTest, shouldSetClientNameOverLong)
 {
     const char *name =
         "this is a very long value that we are hoping with be reject when the value gets "

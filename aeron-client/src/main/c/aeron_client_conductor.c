@@ -1513,6 +1513,7 @@ static int aeron_client_conductor_linger_or_delete_all_images(
 
         if (refcnt <= 0)
         {
+            aeron_image_close(image);
             if (NULL != subscription->on_unavailable_image)
             {
                 subscription->on_unavailable_image(subscription->on_unavailable_image_clientd, subscription, image);
