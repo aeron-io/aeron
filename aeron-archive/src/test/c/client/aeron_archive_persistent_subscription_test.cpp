@@ -542,3 +542,57 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldErrorIfRecordingStreamDoesN
 
     ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
 }
+
+TEST_F(AeronArchivePersistentSubscriptionTest, shouldErrorIfRecordingPositionIsBeforeStartPosition)
+{
+    TestArchive archive = createArchive(m_aeronDir);
+
+    const int32_t liveStreamId = 1000;
+    const std::string channel = "aeron:ipc?init-term-id=0|term-id=0|term-offset=1024|term-length=65536";
+
+    PersistentPublication persistent_publication(m_aeronDir, channel, liveStreamId);
+
+    AeronResource aeron(m_aeronDir);
+
+    aeron_archive_persistent_subscription_context_t *context = createPersistentSubscriptionContext(
+        aeron.aeron(),
+        createArchiveContext(),
+        persistent_publication.recordingId(),
+        channel,
+        liveStreamId,
+        "aeron:udp?endpoint=localhost:0",
+        -5,
+        0); // <-- trying to start from zero, below recording start of 1024
+
+    ListenerState listener_state;
+    aeron_archive_persistent_subscription_listener_t listener = {};
+    listener.clientd = &listener_state;
+    listener.on_error = [](void *clientd, int errcode, const char *message)
+    {
+        auto *state = static_cast<ListenerState *>(clientd);
+        state->error_count++;
+        state->last_errcode = errcode;
+        state->last_error_message = message;
+    };
+    aeron_archive_persistent_subscription_context_set_listener(context, &listener);
+
+    aeron_archive_persistent_subscription_t *persistent_subscription;
+    ASSERT_EQ(0, aeron_archive_persistent_subscription_create(&persistent_subscription, context)) << aeron_errmsg();
+
+    executeUntil(
+        "has failed",
+        [&]
+        {
+            return aeron_archive_persistent_subscription_controlled_poll(
+                persistent_subscription,
+                nullptr,
+                nullptr,
+                1);
+        },
+        [&] { return aeron_archive_persistent_subscription_has_failed(persistent_subscription); });
+
+    ASSERT_EQ(1, listener_state.error_count);
+    ASSERT_NE(std::string::npos, listener_state.last_error_message.find("position"));
+
+    ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
+}
