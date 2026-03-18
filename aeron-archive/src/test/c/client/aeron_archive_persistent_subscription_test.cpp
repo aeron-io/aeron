@@ -34,12 +34,19 @@ static const std::string IPC_CHANNEL = "aeron:ipc";
 static const std::string MDC_PUBLICATION_CHANNEL = "aeron:udp?control=localhost:2000|control-mode=dynamic|fc=max";
 static const std::string MDC_SUBSCRIPTION_CHANNEL = "aeron:udp?control=localhost:2000";
 static const int32_t STREAM_ID = 1000;
+static const int32_t ONE_KB_MESSAGE_SIZE = 1024 - AERON_DATA_HEADER_LENGTH;
 
 struct ListenerState
 {
     int error_count = 0;
     int last_errcode = 0;
     std::string last_error_message;
+};
+
+struct LiveEventListenerState
+{
+    int live_joined_count = 0;
+    int live_left_count = 0;
 };
 
 class MessageCapturingFragmentHandler
@@ -310,6 +317,16 @@ protected:
             bytes[i] = m_byteGenerator(m_randomEngine);
         }
         return bytes;
+    }
+
+    std::vector<std::vector<uint8_t>> generateFixedMessages(const int count, const int size)
+    {
+        std::vector<std::vector<uint8_t>> messages(count);
+        for (int i = 0; i < count; i++)
+        {
+            messages[i] = generateRandomBytes(size);
+        }
+        return messages;
     }
 
     static void executeUntil(
@@ -951,6 +968,170 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReplayFromRecordingStartPos
     all_messages.insert(all_messages.end(), old_messages.begin(), old_messages.end());
     all_messages.insert(all_messages.end(), new_messages.begin(), new_messages.end());
     ASSERT_EQ(all_messages, handler.messages());
+
+    ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
+}
+
+TEST_F(AeronArchivePersistentSubscriptionTest, shouldDropFromLiveBackToReplayThenJoinLiveAgain)
+{
+    TestArchive archive = createArchive(m_aeronDir);
+
+    PersistentPublication persistent_publication(m_aeronDir, MDC_PUBLICATION_CHANNEL, STREAM_ID);
+
+    const std::vector<std::vector<uint8_t>> payloads = generateFixedMessages(5, ONE_KB_MESSAGE_SIZE);
+    persistent_publication.persist(payloads);
+
+    AeronResource aeron(m_aeronDir);
+
+    LiveEventListenerState listener_state;
+    aeron_archive_persistent_subscription_listener_t listener = {};
+    listener.clientd = &listener_state;
+    listener.on_live_joined = [](void *clientd)
+    {
+        static_cast<LiveEventListenerState *>(clientd)->live_joined_count++;
+    };
+    listener.on_live_left = [](void *clientd)
+    {
+        static_cast<LiveEventListenerState *>(clientd)->live_left_count++;
+    };
+
+    aeron_archive_persistent_subscription_context_t *context = createDefaultPersistentSubscriptionContext(
+        aeron.aeron(),
+        createArchiveContext(),
+        persistent_publication.recordingId());
+
+    aeron_archive_persistent_subscription_context_set_live_channel(context, MDC_SUBSCRIPTION_CHANNEL.c_str());
+    aeron_archive_persistent_subscription_context_set_listener(context, &listener);
+
+    aeron_archive_persistent_subscription_t *persistent_subscription;
+    ASSERT_EQ(0, aeron_archive_persistent_subscription_create(&persistent_subscription, context)) << aeron_errmsg();
+
+    MessageCapturingFragmentHandler handler;
+    auto poller = [&]
+    {
+        return aeron_archive_persistent_subscription_controlled_poll(
+            persistent_subscription,
+            MessageCapturingFragmentHandler::onFragment,
+            &handler,
+            10);
+    };
+
+    ASSERT_EQ(0, listener_state.live_joined_count);
+
+    executeUntil(
+        "receives first message",
+        [&]
+        {
+            return aeron_archive_persistent_subscription_controlled_poll(
+                persistent_subscription,
+                MessageCapturingFragmentHandler::onFragment,
+                &handler,
+                1);
+        },
+        [&] { return handler.messageCount() >= 1; });
+
+    ASSERT_TRUE(aeron_archive_persistent_subscription_is_replaying(persistent_subscription));
+
+    executeUntil(
+        "receives all payloads",
+        poller,
+        [&] { return handler.messageCount() >= payloads.size(); });
+
+    executeUntil(
+        "becomes live",
+        poller,
+        [&] { return aeron_archive_persistent_subscription_is_live(persistent_subscription); });
+
+    ASSERT_EQ(1, listener_state.live_joined_count);
+    ASSERT_EQ(0, listener_state.live_left_count);
+    ASSERT_EQ(payloads.size(), handler.messageCount());
+
+    const std::vector<std::vector<uint8_t>> payloads2 = generateFixedMessages(5, ONE_KB_MESSAGE_SIZE);
+    persistent_publication.persist(payloads2);
+
+    executeUntil(
+        "receives payloads2",
+        poller,
+        [&] { return handler.messageCount() >= payloads.size() + payloads2.size(); });
+
+    ASSERT_TRUE(aeron_archive_persistent_subscription_is_live(persistent_subscription));
+
+    {
+        AeronResource aeron2(m_aeronDir);
+
+        aeron_subscription_t *fast_subscription = nullptr;
+        aeron_async_add_subscription_t *async_add = nullptr;
+        ASSERT_EQ(0, aeron_async_add_subscription(
+            &async_add,
+            aeron2.aeron(),
+            MDC_SUBSCRIPTION_CHANNEL.c_str(),
+            STREAM_ID,
+            nullptr, nullptr, nullptr, nullptr)) << aeron_errmsg();
+
+        while (fast_subscription == nullptr)
+        {
+            aeron_async_add_subscription_poll(&fast_subscription, async_add);
+            std::this_thread::yield();
+        }
+
+        while (aeron_subscription_image_count(fast_subscription) == 0)
+        {
+            std::this_thread::yield();
+        }
+
+        const std::vector<std::vector<uint8_t>> payloads3 = generateFixedMessages(64, ONE_KB_MESSAGE_SIZE);
+        persistent_publication.persist(payloads3);
+
+        size_t fast_count = 0;
+        executeUntil(
+            "fast subscription receives 64 messages",
+            [&]
+            {
+                return aeron_subscription_poll(
+                    fast_subscription,
+                    [](void *clientd, const uint8_t *, size_t, aeron_header_t *)
+                    {
+                        (*static_cast<size_t *>(clientd))++;
+                    },
+                    &fast_count,
+                    1);
+            },
+            [&] { return fast_count >= 64; });
+
+        executeUntil(
+            "drops to replaying",
+            poller,
+            [&] { return aeron_archive_persistent_subscription_is_replaying(persistent_subscription); });
+
+        ASSERT_TRUE(aeron_archive_persistent_subscription_is_replaying(persistent_subscription));
+        ASSERT_EQ(1, listener_state.live_left_count);
+
+        const std::vector<std::vector<uint8_t>> payloads4 = generateFixedMessages(5, ONE_KB_MESSAGE_SIZE);
+        persistent_publication.persist(payloads4);
+
+        const size_t expected_count =
+            payloads.size() + payloads2.size() + payloads3.size() + payloads4.size();
+
+        executeUntil(
+            "receives all messages and becomes live",
+            poller,
+            [&]
+            {
+                return handler.messageCount() >= expected_count &&
+                       aeron_archive_persistent_subscription_is_live(persistent_subscription);
+            });
+
+        ASSERT_EQ(2, listener_state.live_joined_count);
+
+        std::vector<std::vector<uint8_t>> all_messages;
+        all_messages.insert(all_messages.end(), payloads.begin(), payloads.end());
+        all_messages.insert(all_messages.end(), payloads2.begin(), payloads2.end());
+        all_messages.insert(all_messages.end(), payloads3.begin(), payloads3.end());
+        all_messages.insert(all_messages.end(), payloads4.begin(), payloads4.end());
+        ASSERT_EQ(all_messages, handler.messages());
+
+        aeron_subscription_close(fast_subscription, nullptr, nullptr);
+    }
 
     ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
 }
