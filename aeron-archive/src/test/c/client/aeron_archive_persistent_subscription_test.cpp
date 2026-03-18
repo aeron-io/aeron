@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <algorithm>
 #include <random>
 #include <utility>
 
@@ -104,6 +105,7 @@ public:
 
         aeron_publication_constants_t constants;
         aeron_exclusive_publication_constants(publication, &constants);
+        m_maxPayloadLength = constants.max_payload_length;
 
         aeron_t *aeron = aeron_archive_context_get_aeron(aeron_archive_get_archive_context(archive));
         aeron_counters_reader_t *counters_reader = aeron_counters_reader(aeron);
@@ -130,6 +132,11 @@ public:
     int64_t recordingId() const
     {
         return m_recordingId;
+    }
+
+    int32_t maxPayloadLength() const
+    {
+        return m_maxPayloadLength;
     }
 
     int64_t stop()
@@ -190,6 +197,7 @@ public:
     }
 
 private:
+    int32_t m_maxPayloadLength;
     aeron_archive_t *m_archive;
     aeron_exclusive_publication_t *m_publication;
     aeron_counters_reader_t *m_countersReader;
@@ -291,6 +299,16 @@ protected:
         }
 
         return messages;
+    }
+
+    std::vector<uint8_t> generateRandomBytes(const int count)
+    {
+        std::vector<uint8_t> bytes(count);
+        for (int i = 0; i < count; i++)
+        {
+            bytes[i] = m_byteGenerator(m_randomEngine);
+        }
+        return bytes;
     }
 
     static void executeUntil(
@@ -827,6 +845,56 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldStartFromLiveWhenThereIsNoD
         [&] { return handler.messageCount() >= messages.size(); });
 
     ASSERT_EQ(messages, handler.messages());
+
+    ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
+}
+
+TEST_F(AeronArchivePersistentSubscriptionTest, shouldAssembleMessages)
+{
+    TestArchive archive = createArchive(m_aeronDir);
+
+    PersistentPublication persistent_publication(m_aeronDir, IPC_CHANNEL, STREAM_ID);
+
+    const int32_t size_requiring_fragmentation = persistent_publication.maxPayloadLength() + 1;
+
+    const std::vector<uint8_t> payload0 = generateRandomBytes(size_requiring_fragmentation);
+    const std::vector<uint8_t> payload1 = generateRandomBytes(size_requiring_fragmentation);
+
+    persistent_publication.persist({{ payload0 }});
+
+    AeronResource aeron(m_aeronDir);
+
+    aeron_archive_persistent_subscription_context_t *context = createDefaultPersistentSubscriptionContext(
+        aeron.aeron(),
+        createArchiveContext(),
+        persistent_publication.recordingId());
+
+    aeron_archive_persistent_subscription_t *persistent_subscription;
+    ASSERT_EQ(0, aeron_archive_persistent_subscription_create(&persistent_subscription, context)) << aeron_errmsg();
+
+    MessageCapturingFragmentHandler handler;
+    auto poller = [&]
+    {
+        return aeron_archive_persistent_subscription_controlled_poll(
+            persistent_subscription,
+            MessageCapturingFragmentHandler::onFragment,
+            &handler,
+            1);
+    };
+
+    executeUntil(
+        "becomes live",
+        poller,
+        [&] { return aeron_archive_persistent_subscription_is_live(persistent_subscription); });
+
+    persistent_publication.persist({{ payload1 }});
+
+    executeUntil(
+        "receives both messages",
+        poller,
+        [&] { return handler.messageCount() >= 2; });
+
+    ASSERT_EQ((std::vector<std::vector<uint8_t>>{{ payload0, payload1 }}), handler.messages());
 
     ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
 }
