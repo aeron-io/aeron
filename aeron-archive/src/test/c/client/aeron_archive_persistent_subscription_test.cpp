@@ -397,3 +397,37 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldStartFromLiveWithNoInitialR
 
     ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
 }
+
+TEST_F(AeronArchivePersistentSubscriptionTest, shouldNotRequireEventListener)
+{
+    TestArchive archive = createArchive(m_aeronDir);
+
+    AeronResource aeron(m_aeronDir);
+
+    aeron_archive_persistent_subscription_context_t *context = createPersistentSubscriptionContext(
+        aeron.aeron(),
+        createArchiveContext(),
+        13, // does not exist
+        "aeron:ipc",
+        1000,
+        "aeron:udp?endpoint=localhost:0",
+        -5,
+        0);
+
+    aeron_archive_persistent_subscription_t *persistent_subscription;
+    ASSERT_EQ(0, aeron_archive_persistent_subscription_create(&persistent_subscription, context)) << aeron_errmsg();
+
+    executeUntil(
+        "has failed",
+        [&]
+        {
+            return aeron_archive_persistent_subscription_controlled_poll(
+                persistent_subscription,
+                nullptr,
+                nullptr,
+                1);
+        },
+        [&] { return aeron_archive_persistent_subscription_has_failed(persistent_subscription); });
+
+    ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
+}
