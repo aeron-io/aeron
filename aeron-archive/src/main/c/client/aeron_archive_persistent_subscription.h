@@ -203,7 +203,7 @@ int aeron_archive_persistent_subscription_close(aeron_archive_persistent_subscri
  * @param clientd to pass to the handler.
  * @param fragment_limit maximum number of message fragments to read when polling.
  * @return positive number if fragments have been read or the persistent subscription has done other work,
- * 0 if no fragments have been read and no work has been done, negative on error.
+ * 0 if no fragments have been read and no work has been done.
  */
 int aeron_archive_persistent_subscription_controlled_poll(
     aeron_archive_persistent_subscription_t *persistent_subscription,

@@ -1503,67 +1503,56 @@ int aeron_archive_persistent_subscription_controlled_poll(
     void *clientd,
     size_t fragment_limit)
 {
-    static int64_t poll_count = 0;
-    if (++poll_count == 1 || poll_count % 10000000 == 0)
-    {
-        printf("controlled_poll: count=%" PRId64 ", state=%d\n",
-            poll_count, persistent_subscription->state);
-        fflush(stdout);
-    }
+    // todo: this call is a bit fishy because the function can return a negative value
+    int work_count = aeron_archive_async_client_poll(persistent_subscription->archive);
 
-    int archive_result = aeron_archive_async_client_poll(persistent_subscription->archive);
-    if (archive_result < 0)
-    {
-        // TODO
-    }
 
-    int state_result = 0;
     switch (persistent_subscription->state)
     {
         case AWAIT_ARCHIVE_CONNECTION:
-            state_result = await_archive_connection(persistent_subscription);
+            work_count += await_archive_connection(persistent_subscription);
             break;
         case SEND_LIST_RECORDING_REQUEST:
-            state_result = send_list_recording_request(persistent_subscription);
+            work_count += send_list_recording_request(persistent_subscription);
             break;
         case AWAIT_LIST_RECORDING_RESPONSE:
-            state_result = await_list_recording_response(persistent_subscription);
+            work_count += await_list_recording_response(persistent_subscription);
             break;
         case SEND_REPLAY_REQUEST:
-            state_result = send_replay_request(persistent_subscription);
+            work_count += send_replay_request(persistent_subscription);
             break;
         case AWAIT_REPLAY_RESPONSE:
-            state_result = await_replay_response(persistent_subscription);
+            work_count += await_replay_response(persistent_subscription);
             break;
         case ADD_REPLAY_SUBSCRIPTION:
-            state_result = add_replay_subscription(persistent_subscription);
+            work_count += add_replay_subscription(persistent_subscription);
             break;
         case AWAIT_REPLAY_SUBSCRIPTION:
-            state_result = await_replay_subscription(persistent_subscription);
+            work_count += await_replay_subscription(persistent_subscription);
             break;
         case AWAIT_REPLAY_CHANNEL_ENDPOINT:
-            state_result = await_replay_channel_endpoint(persistent_subscription);
+            work_count += await_replay_channel_endpoint(persistent_subscription);
             break;
         case REPLAY:
-            state_result = replay(persistent_subscription, handler, clientd, fragment_limit);
+            work_count += replay(persistent_subscription, handler, clientd, fragment_limit);
             break;
         case ATTEMPT_SWITCH:
-            state_result = attempt_switch(persistent_subscription, handler, clientd, fragment_limit);
+            work_count += attempt_switch(persistent_subscription, handler, clientd, fragment_limit);
             break;
         case ADD_LIVE_SUBSCRIPTION:
-            state_result = add_live_subscription(persistent_subscription);
+            work_count += add_live_subscription(persistent_subscription);
             break;
         case AWAIT_LIVE:
-            state_result = await_live(persistent_subscription);
+            work_count += await_live(persistent_subscription);
             break;
         case LIVE:
-            state_result = live(persistent_subscription, handler, clientd, fragment_limit);
+            work_count += live(persistent_subscription, handler, clientd, fragment_limit);
             break;
         case FAILED:
             break;
     }
 
-    return state_result < 0 ? -1 : archive_result + state_result;
+    return work_count < 0 ? 0 : work_count;
 }
 
 bool aeron_archive_persistent_subscription_is_live(aeron_archive_persistent_subscription_t *persistent_subscription)
