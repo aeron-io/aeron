@@ -372,4 +372,7 @@ TEST_F(WrapperSystemTest, polledSubscriptionShouldCloseAllAllocatedResourcesWhen
             break;
         }
     }
+
+    subscription.reset();
+    aeron.reset();
 }
