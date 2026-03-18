@@ -15,6 +15,7 @@
  */
 
 #include <algorithm>
+#include <cinttypes>
 #include <random>
 #include <utility>
 
@@ -165,11 +166,35 @@ public:
         return stop_position;
     }
 
+
     void persist(const std::vector<std::vector<uint8_t>>& messages) const
     {
-        offer(messages);
+        if (messages.empty())
+        {
+            return;
+        }
 
-        const auto position = aeron_exclusive_publication_position(m_publication);
+        int64_t position = 0;
+        for (auto& message : messages)
+        {
+            while (true)
+            {
+                position = aeron_exclusive_publication_offer(
+                    m_publication,
+                    message.data(),
+                    message.size(),
+                    nullptr,
+                    nullptr);
+
+                if (position > 0)
+                {
+                    break;
+                }
+
+                std::this_thread::yield();
+            }
+        }
+
         while (*aeron_counters_reader_addr(m_countersReader, m_recPosId) < position)
         {
             std::this_thread::yield();
@@ -178,6 +203,7 @@ public:
 
     void offer(const std::vector<std::vector<uint8_t>>& messages) const
     {
+        int64_t back_pressure_count = 0;
         for (auto& message : messages)
         {
             while (true)
@@ -192,6 +218,16 @@ public:
                 if (result > 0)
                 {
                     break;
+                }
+
+                // todo: remove me
+                if (result == AERON_PUBLICATION_BACK_PRESSURED)
+                {
+                    if (++back_pressure_count % 1000 == 0)
+                    {
+                        printf("back pressured %" PRId64 " times\n", back_pressure_count);
+                        fflush(stdout);
+                    }
                 }
 
                 if (result == AERON_PUBLICATION_NOT_CONNECTED ||
@@ -973,10 +1009,20 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReplayFromRecordingStartPos
     ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
 }
 
+// A publisher publishes messages on an MDC channel which are recorded by the archive.
+// A persistent subscriber replays the recorded messages and then joins the live stream.
+// Once live, a second fast subscriber (on a separate media driver) joins the same MDC channel.
+// The publisher floods 64 large messages. Only the fast subscriber is polled during
+// this time — the persistent subscriber is not polled and falls behind, causing
+// its live image to be closed.
+// The persistent subscriber drops back to replay to catch up on the missed messages,
+// then rejoins the live stream.
+// All messages must be received exactly once and in order.
 TEST_F(AeronArchivePersistentSubscriptionTest, shouldDropFromLiveBackToReplayThenJoinLiveAgain)
 {
     TestArchive archive = createArchive(m_aeronDir);
 
+    // Phase 1: publish initial messages and start persistent subscription
     PersistentPublication persistent_publication(m_aeronDir, MDC_PUBLICATION_CHANNEL, STREAM_ID);
 
     const std::vector<std::vector<uint8_t>> payloads = generateFixedMessages(5, ONE_KB_MESSAGE_SIZE);
@@ -1019,6 +1065,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldDropFromLiveBackToReplayThe
 
     ASSERT_EQ(0, listener_state.live_joined_count);
 
+    // Phase 2: replay recorded messages
     executeUntil(
         "receives first message",
         [&]
@@ -1038,6 +1085,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldDropFromLiveBackToReplayThe
         poller,
         [&] { return handler.messageCount() >= payloads.size(); });
 
+    // Phase 3: join live
     executeUntil(
         "becomes live",
         poller,
@@ -1047,6 +1095,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldDropFromLiveBackToReplayThe
     ASSERT_EQ(0, listener_state.live_left_count);
     ASSERT_EQ(payloads.size(), handler.messageCount());
 
+    // Phase 4: consume more messages while live
     const std::vector<std::vector<uint8_t>> payloads2 = generateFixedMessages(5, ONE_KB_MESSAGE_SIZE);
     persistent_publication.persist(payloads2);
 
@@ -1057,8 +1106,18 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldDropFromLiveBackToReplayThe
 
     ASSERT_TRUE(aeron_archive_persistent_subscription_is_live(persistent_subscription));
 
+    // Phase 5: introduce a fast subscription on a separate media driver to cause the persistent subscription to fall behind.
+    // Note: Java launches a bare MediaDriver here. In C we have no standalone media driver launcher,
+    // so we launch a second TestArchive purely for its media driver — the archive part is unused. Ugly hack.
     {
-        AeronResource aeron2(m_aeronDir);
+        TestArchive archive2(
+            m_aeronDir + "-2",
+            std::string(ARCHIVE_DIR) + "-2",
+            std::cout,
+            "aeron:udp?endpoint=localhost:8011",
+            "aeron:udp?endpoint=localhost:0",
+            2);
+        AeronResource aeron2(m_aeronDir + "-2");
 
         aeron_subscription_t *fast_subscription = nullptr;
         aeron_async_add_subscription_t *async_add = nullptr;
@@ -1081,7 +1140,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldDropFromLiveBackToReplayThe
         }
 
         const std::vector<std::vector<uint8_t>> payloads3 = generateFixedMessages(64, ONE_KB_MESSAGE_SIZE);
-        persistent_publication.persist(payloads3);
+        persistent_publication.offer(payloads3);
 
         size_t fast_count = 0;
         executeUntil(
@@ -1099,6 +1158,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldDropFromLiveBackToReplayThe
             },
             [&] { return fast_count >= 64; });
 
+        // Phase 6: persistent subscription drops back to replay
         executeUntil(
             "drops to replaying",
             poller,
@@ -1107,6 +1167,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldDropFromLiveBackToReplayThe
         ASSERT_TRUE(aeron_archive_persistent_subscription_is_replaying(persistent_subscription));
         ASSERT_EQ(1, listener_state.live_left_count);
 
+        // Phase 7: recover - persistent subscription catches up via replay and rejoins live
         const std::vector<std::vector<uint8_t>> payloads4 = generateFixedMessages(5, ONE_KB_MESSAGE_SIZE);
         persistent_publication.persist(payloads4);
 

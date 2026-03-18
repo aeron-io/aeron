@@ -125,6 +125,9 @@ public:
             "-Daeron.archive.authenticator.supplier=io.aeron.samples.archive.SampleAuthenticatorSupplier",
             "-Daeron.enable.experimental.features=true",
             "-Daeron.spies.simulate.connection=true",
+            // TODO: remove me
+            "-Daeron.untethered.window.limit.timeout=2s",
+            "-Daeron.image.liveness.timeout=3s",
             maxConcurrentReplaysArg.c_str(),
             segmentLength.c_str(),
             archiveIdArg.c_str(),
