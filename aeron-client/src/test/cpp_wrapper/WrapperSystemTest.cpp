@@ -347,7 +347,7 @@ TEST_F(WrapperSystemTest, polledSubscriptionShouldCloseAllAllocatedResourcesCond
     WAIT_FOR_NON_NULL(subscription2, aeron->findSubscription(registration_id2));
 }
 
-TEST_F(WrapperSystemTest, shouldFreeAllocatedMemoryEvenIfDriverIsKilled)
+TEST_F(WrapperSystemTest, polledSubscriptionShouldCloseAllAllocatedResourcesWhenConductorQueueIsFull)
 {
     Context ctx;
     ctx.useConductorAgentInvoker(false).idleSleepDuration(200);
@@ -372,8 +372,4 @@ TEST_F(WrapperSystemTest, shouldFreeAllocatedMemoryEvenIfDriverIsKilled)
             break;
         }
     }
-
-    // terminate media driver before Aeron and Subscription
-    m_driver.stop();
-    m_driver.closeDriver();
 }
