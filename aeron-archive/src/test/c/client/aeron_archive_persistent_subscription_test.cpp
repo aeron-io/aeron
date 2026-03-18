@@ -1240,3 +1240,84 @@ TEST_F(AeronArchivePersistentSubscriptionTest, anUntetheredPersistentSubscriptio
 
     ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
 }
+
+TEST_F(AeronArchivePersistentSubscriptionTest, aTetheredPersistentSubscriptionDoesNotFallBehindAnUntetheredSubscription)
+{
+    TestArchive archive = createArchive(m_aeronDir);
+
+    PersistentPublication persistent_publication(m_aeronDir, UNICAST_CHANNEL, STREAM_ID);
+
+    AeronResource aeron(m_aeronDir);
+
+    aeron_archive_persistent_subscription_context_t *context = createDefaultPersistentSubscriptionContext(
+        aeron.aeron(),
+        createArchiveContext(),
+        persistent_publication.recordingId());
+
+    aeron_archive_persistent_subscription_context_set_live_channel(
+        context, (UNICAST_CHANNEL + "|tether=true").c_str());
+
+    aeron_archive_persistent_subscription_t *persistent_subscription;
+    ASSERT_EQ(0, aeron_archive_persistent_subscription_create(&persistent_subscription, context)) << aeron_errmsg();
+
+    aeron_subscription_t *untethered_subscription = nullptr;
+    aeron_async_add_subscription_t *async_add = nullptr;
+    ASSERT_EQ(0, aeron_async_add_subscription(
+        &async_add,
+        aeron.aeron(),
+        (UNICAST_CHANNEL + "|tether=false").c_str(),
+        STREAM_ID,
+        nullptr, nullptr, nullptr, nullptr)) << aeron_errmsg();
+
+    while (untethered_subscription == nullptr)
+    {
+        aeron_async_add_subscription_poll(&untethered_subscription, async_add);
+        std::this_thread::yield();
+    }
+
+    while (aeron_subscription_image_count(untethered_subscription) == 0)
+    {
+        std::this_thread::yield();
+    }
+
+    MessageCapturingFragmentHandler handler;
+    auto poller = [&]
+    {
+        return aeron_archive_persistent_subscription_controlled_poll(
+            persistent_subscription,
+            MessageCapturingFragmentHandler::onFragment,
+            &handler,
+            10);
+    };
+
+    executeUntil(
+        "becomes live",
+        poller,
+        [&] { return aeron_archive_persistent_subscription_is_live(persistent_subscription); });
+
+    const std::vector<std::vector<uint8_t>> payloads = generateFixedMessages(64, ONE_KB_MESSAGE_SIZE);
+    persistent_publication.persist(payloads);
+
+    executeUntil(
+        "receives 64 messages",
+        [&]
+        {
+            return aeron_archive_persistent_subscription_controlled_poll(
+                persistent_subscription,
+                MessageCapturingFragmentHandler::onFragment,
+                &handler,
+                1);
+        },
+        [&] { return handler.messageCount() >= 64; });
+
+    ASSERT_TRUE(aeron_archive_persistent_subscription_is_live(persistent_subscription));
+
+    while (aeron_subscription_is_connected(untethered_subscription))
+    {
+        std::this_thread::yield();
+    }
+
+    aeron_subscription_close(untethered_subscription, nullptr, nullptr);
+
+    ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
+}
