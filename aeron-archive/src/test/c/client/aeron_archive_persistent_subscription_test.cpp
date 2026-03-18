@@ -21,6 +21,7 @@
 #include "gtest/gtest.h"
 #include "../TestArchive.h"
 #include "ArchiveClientTestUtils.h"
+#include "uri/aeron_uri_string_builder.h"
 
 extern "C"
 {
@@ -895,6 +896,61 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldAssembleMessages)
         [&] { return handler.messageCount() >= 2; });
 
     ASSERT_EQ((std::vector<std::vector<uint8_t>>{{ payload0, payload1 }}), handler.messages());
+
+    ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
+}
+
+TEST_F(AeronArchivePersistentSubscriptionTest, shouldReplayFromRecordingStartPositionWhenStartingFromStart)
+{
+    TestArchive archive = createArchive(m_aeronDir);
+
+    const std::string channel = "aeron:ipc?init-term-id=0|term-id=0|term-offset=1024|term-length=65536";
+
+    PersistentPublication persistent_publication(m_aeronDir, channel, STREAM_ID);
+
+    const std::vector<std::vector<uint8_t>> old_messages = generateRandomMessages(5);
+    persistent_publication.persist(old_messages);
+
+    AeronResource aeron(m_aeronDir);
+
+    aeron_archive_persistent_subscription_context_t *context = createDefaultPersistentSubscriptionContext(
+        aeron.aeron(),
+        createArchiveContext(),
+        persistent_publication.recordingId());
+
+    aeron_archive_persistent_subscription_context_set_start_position(
+        context, AERON_PERSISTENT_SUBSCRIPTION_FROM_START);
+
+    aeron_archive_persistent_subscription_t *persistent_subscription;
+    ASSERT_EQ(0, aeron_archive_persistent_subscription_create(&persistent_subscription, context)) << aeron_errmsg();
+
+    MessageCapturingFragmentHandler handler;
+    auto poller = [&]
+    {
+        return aeron_archive_persistent_subscription_controlled_poll(
+            persistent_subscription,
+            MessageCapturingFragmentHandler::onFragment,
+            &handler,
+            10);
+    };
+
+    executeUntil(
+        "becomes live",
+        poller,
+        [&] { return aeron_archive_persistent_subscription_is_live(persistent_subscription); });
+
+    const std::vector<std::vector<uint8_t>> new_messages = generateRandomMessages(3);
+    persistent_publication.persist(new_messages);
+
+    executeUntil(
+        "receives all messages",
+        poller,
+        [&] { return handler.messageCount() >= old_messages.size() + new_messages.size(); });
+
+    std::vector<std::vector<uint8_t>> all_messages;
+    all_messages.insert(all_messages.end(), old_messages.begin(), old_messages.end());
+    all_messages.insert(all_messages.end(), new_messages.begin(), new_messages.end());
+    ASSERT_EQ(all_messages, handler.messages());
 
     ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
 }
