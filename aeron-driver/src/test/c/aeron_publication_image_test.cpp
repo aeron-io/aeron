@@ -700,11 +700,7 @@ TEST_F(PublicationImageTest, shouldReportUniqueLoss)
 
     // initial loss report
     aeron_publication_image_on_gap_detected(image, term_id, offset, length);
-    EXPECT_EQ(1, image->begin_loss_change);
-    EXPECT_EQ(term_id, image->loss_term_id);
-    EXPECT_EQ(offset, image->loss_term_offset);
-    EXPECT_EQ(length, image->loss_length);
-    EXPECT_EQ(1, image->end_loss_change);
+    EXPECT_EQ(1, aeron_spsc_concurrent_array_queue_elem_size(&image->pending_losses));
     EXPECT_EQ(1, aeron_loss_reporter_read(
         m_loss_reporter_buffer.data(),
         m_loss_reporter_buffer.size(),
@@ -731,11 +727,7 @@ TEST_F(PublicationImageTest, shouldReportUniqueLoss)
 
     // same loss => no reporting
     aeron_publication_image_on_gap_detected(image, term_id, offset, length);
-    EXPECT_EQ(2, image->begin_loss_change);
-    EXPECT_EQ(term_id, image->loss_term_id);
-    EXPECT_EQ(offset, image->loss_term_offset);
-    EXPECT_EQ(length, image->loss_length);
-    EXPECT_EQ(2, image->end_loss_change);
+    EXPECT_EQ(2, aeron_spsc_concurrent_array_queue_elem_size(&image->pending_losses));
     EXPECT_EQ(1, aeron_loss_reporter_read(
         m_loss_reporter_buffer.data(),
         m_loss_reporter_buffer.size(),
@@ -761,12 +753,9 @@ TEST_F(PublicationImageTest, shouldReportUniqueLoss)
         nullptr));
 
     // less loss => no reporting
+
     aeron_publication_image_on_gap_detected(image, term_id, offset, 32);
-    EXPECT_EQ(3, image->begin_loss_change);
-    EXPECT_EQ(term_id, image->loss_term_id);
-    EXPECT_EQ(offset, image->loss_term_offset);
-    EXPECT_EQ(32, image->loss_length);
-    EXPECT_EQ(3, image->end_loss_change);
+    EXPECT_EQ(3, aeron_spsc_concurrent_array_queue_elem_size(&image->pending_losses));
     EXPECT_EQ(1, aeron_loss_reporter_read(
         m_loss_reporter_buffer.data(),
         m_loss_reporter_buffer.size(),
@@ -793,11 +782,7 @@ TEST_F(PublicationImageTest, shouldReportUniqueLoss)
 
     // larger loss => report
     aeron_publication_image_on_gap_detected(image, term_id, offset, 1500);
-    EXPECT_EQ(4, image->begin_loss_change);
-    EXPECT_EQ(term_id, image->loss_term_id);
-    EXPECT_EQ(offset, image->loss_term_offset);
-    EXPECT_EQ(1500, image->loss_length);
-    EXPECT_EQ(4, image->end_loss_change);
+    EXPECT_EQ(4, aeron_spsc_concurrent_array_queue_elem_size(&image->pending_losses));
     EXPECT_EQ(1, aeron_loss_reporter_read(
         m_loss_reporter_buffer.data(),
         m_loss_reporter_buffer.size(),
@@ -824,11 +809,7 @@ TEST_F(PublicationImageTest, shouldReportUniqueLoss)
 
     // overlapping loss => report
     aeron_publication_image_on_gap_detected(image, term_id, offset + 996, 700);
-    EXPECT_EQ(5, image->begin_loss_change);
-    EXPECT_EQ(term_id, image->loss_term_id);
-    EXPECT_EQ(offset + 996, image->loss_term_offset);
-    EXPECT_EQ(700, image->loss_length);
-    EXPECT_EQ(5, image->end_loss_change);
+    EXPECT_EQ(5, aeron_spsc_concurrent_array_queue_elem_size(&image->pending_losses));
     EXPECT_EQ(1, aeron_loss_reporter_read(
         m_loss_reporter_buffer.data(),
         m_loss_reporter_buffer.size(),
@@ -855,11 +836,7 @@ TEST_F(PublicationImageTest, shouldReportUniqueLoss)
 
     // non-overlapping loss => report
     aeron_publication_image_on_gap_detected(image, term_id, offset + 4096, 128);
-    EXPECT_EQ(6, image->begin_loss_change);
-    EXPECT_EQ(term_id, image->loss_term_id);
-    EXPECT_EQ(offset + 4096, image->loss_term_offset);
-    EXPECT_EQ(128, image->loss_length);
-    EXPECT_EQ(6, image->end_loss_change);
+    EXPECT_EQ(6, aeron_spsc_concurrent_array_queue_elem_size(&image->pending_losses));
     EXPECT_EQ(1, aeron_loss_reporter_read(
         m_loss_reporter_buffer.data(),
         m_loss_reporter_buffer.size(),
@@ -886,11 +863,7 @@ TEST_F(PublicationImageTest, shouldReportUniqueLoss)
 
     // loss in another term => report
     aeron_publication_image_on_gap_detected(image, term_id + 3, 0, 400);
-    EXPECT_EQ(7, image->begin_loss_change);
-    EXPECT_EQ(term_id + 3, image->loss_term_id);
-    EXPECT_EQ(0, image->loss_term_offset);
-    EXPECT_EQ(400, image->loss_length);
-    EXPECT_EQ(7, image->end_loss_change);
+    EXPECT_EQ(7, aeron_spsc_concurrent_array_queue_elem_size(&image->pending_losses));
     EXPECT_EQ(1, aeron_loss_reporter_read(
         m_loss_reporter_buffer.data(),
         m_loss_reporter_buffer.size(),
@@ -917,11 +890,7 @@ TEST_F(PublicationImageTest, shouldReportUniqueLoss)
 
     // same loss => no report
     aeron_publication_image_on_gap_detected(image, term_id + 3, 0, 400);
-    EXPECT_EQ(8, image->begin_loss_change);
-    EXPECT_EQ(term_id + 3, image->loss_term_id);
-    EXPECT_EQ(0, image->loss_term_offset);
-    EXPECT_EQ(400, image->loss_length);
-    EXPECT_EQ(8, image->end_loss_change);
+    EXPECT_EQ(8, aeron_spsc_concurrent_array_queue_elem_size(&image->pending_losses));
     EXPECT_EQ(1, aeron_loss_reporter_read(
         m_loss_reporter_buffer.data(),
         m_loss_reporter_buffer.size(),

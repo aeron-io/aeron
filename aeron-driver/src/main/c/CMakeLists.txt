@@ -157,6 +157,7 @@ SET(C_CLIENT_SOURCE
     ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_mpsc_concurrent_array_queue.c
     ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_mpsc_rb.c
     ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_spsc_concurrent_array_queue.c
+    ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_spsc_concurrent_array_queue_elem.c
     ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_spsc_rb.c
     ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_term_gap_filler.c
     ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_term_gap_scanner.c

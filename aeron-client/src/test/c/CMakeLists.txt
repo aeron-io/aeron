@@ -51,6 +51,7 @@ if (AERON_UNIT_TESTS)
     set_tests_properties(distinct_error_log_test PROPERTIES RUN_SERIAL TRUE)
 
     aeron_c_client_test(spsc_concurrent_array_queue_test concurrent/aeron_spsc_concurrent_array_queue_test.cpp)
+    aeron_c_client_test(spsc_concurrent_array_queue_elem_test concurrent/aeron_spsc_concurrent_array_queue_elem_test.cpp)
     aeron_c_client_test(mpsc_concurrent_array_queue_test concurrent/aeron_mpsc_concurrent_array_queue_test.cpp)
     aeron_c_client_test(linked_queue_test collections/aeron_linked_queue_test.cpp)
     aeron_c_client_test(blocking_linked_queue_test concurrent/aeron_blocking_linked_queue_test.cpp)

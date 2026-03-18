@@ -90,6 +90,7 @@ TEST_F(DataPacketDispatcherTest, shouldInsertDataInputSubscribedPublicationImage
 
     aeron_data_header_t *data_header = dataPacket(data_buffer, stream_id, session_id);
     size_t len = sizeof(aeron_data_header_t) + 8;
+    data_header->frame_header.frame_length = len;
 
     ASSERT_EQ(0, aeron_data_packet_dispatcher_add_subscription(m_dispatcher, stream_id));
     ASSERT_EQ(0, aeron_data_packet_dispatcher_add_publication_image(m_dispatcher, image));
@@ -118,6 +119,7 @@ TEST_F(DataPacketDispatcherTest, shouldNotInsertDataInputWithNoSubscription)
     aeron_publication_image_t *image = createImage(stream_id, session_id);
     aeron_data_header_t *data_header = dataPacket(data_buffer, stream_id, session_id);
     size_t len = sizeof(aeron_data_header_t) + 8;
+    data_header->frame_header.frame_length = len;
 
     int32_t other_stream_id = stream_id + 1;
 
@@ -150,6 +152,7 @@ TEST_F(DataPacketDispatcherTest, shouldElicitSetupMessageForSubscriptionWithoutI
 
     aeron_data_header_t *data_header = dataPacket(data_buffer, stream_id, session_id);
     size_t len = sizeof(aeron_data_header_t) + 8;
+    data_header->frame_header.frame_length = len;
 
     // No publication added...
     ASSERT_EQ(0, aeron_data_packet_dispatcher_add_subscription(m_dispatcher, stream_id));
