@@ -28,6 +28,13 @@ extern "C"
 #include "client/aeron_archive_persistent_subscription.h"
 }
 
+struct ListenerState
+{
+    int error_count = 0;
+    int last_errcode = 0;
+    std::string last_error_message;
+};
+
 class MessageCapturingFragmentHandler
 {
 public:
@@ -428,6 +435,55 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldNotRequireEventListener)
                 1);
         },
         [&] { return aeron_archive_persistent_subscription_has_failed(persistent_subscription); });
+
+    ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
+}
+
+TEST_F(AeronArchivePersistentSubscriptionTest, shouldErrorIfRecordingDoesNotExist)
+{
+    TestArchive archive = createArchive(m_aeronDir);
+
+    AeronResource aeron(m_aeronDir);
+
+    aeron_archive_persistent_subscription_context_t *context = createPersistentSubscriptionContext(
+        aeron.aeron(),
+        createArchiveContext(),
+        13, // does not exist
+        "aeron:ipc",
+        1000,
+        "aeron:udp?endpoint=localhost:0",
+        -5,
+        0);
+
+    ListenerState listener_state;
+    aeron_archive_persistent_subscription_listener_t listener = {};
+    listener.clientd = &listener_state;
+    listener.on_error = [](void *clientd, int errcode, const char *message)
+    {
+        auto *state = static_cast<ListenerState *>(clientd);
+        state->error_count++;
+        state->last_errcode = errcode;
+        state->last_error_message = message;
+    };
+    aeron_archive_persistent_subscription_context_set_listener(context, &listener);
+
+    aeron_archive_persistent_subscription_t *persistent_subscription;
+    ASSERT_EQ(0, aeron_archive_persistent_subscription_create(&persistent_subscription, context)) << aeron_errmsg();
+
+    executeUntil(
+        "has failed",
+        [&]
+        {
+            return aeron_archive_persistent_subscription_controlled_poll(
+                persistent_subscription,
+                nullptr,
+                nullptr,
+                1);
+        },
+        [&] { return aeron_archive_persistent_subscription_has_failed(persistent_subscription); });
+
+    ASSERT_EQ(1, listener_state.error_count);
+    ASSERT_NE(std::string::npos, listener_state.last_error_message.find("recording"));
 
     ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
 }
