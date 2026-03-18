@@ -887,7 +887,7 @@ public:
             ARCHIVE_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
 
-        return std::make_shared<Subscription>(m_archiveCtxW.aeron()->aeron(), subscription, nullptr, nullptr, nullptr);
+        return std::make_shared<Subscription>(m_archiveCtxW.aeron()->aeron(), subscription, nullptr);
     }
 
     /**
@@ -1345,8 +1345,6 @@ private:
         m_controlResponseSubscription = std::make_unique<Subscription>(
             aeron,
             aeron_archive_get_and_own_control_response_subscription(m_aeron_archive_t),
-            nullptr,
-            nullptr,
             nullptr);
 
         m_errorMessageBuffer = std::make_unique<char[]>(maxErrorMessageLength);

@@ -17,11 +17,15 @@
 #ifndef AERON_SUBSCRIPTION_H
 #define AERON_SUBSCRIPTION_H
 
+#include <cstdint>
+#include <iostream>
 #include <memory>
 #include <mutex>
+#include <iterator>
 #include <stdexcept>
 
 #include "Image.h"
+#include "concurrent/CountersReader.h"
 #include "Context.h"
 #include "ChannelUri.h"
 
@@ -40,7 +44,6 @@ using AsyncDestination = aeron_async_destination_t;
 class AsyncAddSubscription
 {
     friend class Aeron;
-    friend class Subscription;
 private:
     AsyncAddSubscription(
         const on_available_image_t &onAvailableImage,
@@ -53,9 +56,6 @@ private:
     aeron_async_add_subscription_t *m_async = nullptr;
     const on_available_image_t m_onAvailableImage;
     const on_unavailable_image_t m_onUnavailableImage;
-    std::int64_t m_registrationId;
-    std::function<void(std::int64_t, void*)> m_on_subscription_complete = nullptr;
-    void *m_on_subscription_complete_clientd = nullptr;
 
 public:
     ~AsyncAddSubscription() noexcept
@@ -66,15 +66,7 @@ public:
     void static remove(void *clientd)
     {
         auto *addSubscription = static_cast<AsyncAddSubscription *>(clientd);
-        if (addSubscription)
-        {
-            if (addSubscription->m_on_subscription_complete)
-            {
-                addSubscription->m_on_subscription_complete(
-                    addSubscription->m_registrationId, addSubscription->m_on_subscription_complete_clientd);
-            }
-            delete addSubscription;
-        }
+        delete addSubscription;
     }
 };
 
@@ -95,15 +87,9 @@ public:
  */
 class Subscription
 {
-    friend class Aeron;
 public:
     /// @cond HIDDEN_SYMBOLS
-    Subscription(
-        aeron_t *aeron,
-        aeron_subscription_t *subscription,
-        AsyncAddSubscription *addSubscription,
-        const std::function<void(std::int64_t, void*)> &on_subscription_complete,
-        void *on_subscription_complete_clientd) :
+    Subscription(aeron_t *aeron, aeron_subscription_t *subscription, AsyncAddSubscription *addSubscription) :
         m_aeron(aeron),
         m_subscription(subscription),
         m_addSubscription(addSubscription)
@@ -113,12 +99,6 @@ public:
             AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
         m_channel.append(m_constants.channel);
-        if (m_addSubscription)
-        {
-            m_addSubscription->m_registrationId = m_constants.registration_id;
-            m_addSubscription->m_on_subscription_complete = on_subscription_complete;
-            m_addSubscription->m_on_subscription_complete_clientd = on_subscription_complete_clientd;
-        }
     }
     /// @endcond
 
