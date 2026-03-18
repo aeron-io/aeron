@@ -22,11 +22,8 @@
 #endif
 #endif
 
-#include <errno.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <stdint.h>
-#include <string.h>
 #include <inttypes.h>
 
 #include "aeronc.h"
@@ -824,26 +821,6 @@ int aeron_exclusive_publication_async_remove_destination_by_id(
         async, &client->conductor, publication, destination_registration_id);
 }
 
-int aeron_client_handler_cmd_await_processed(aeron_client_handler_cmd_t *cmd, uint64_t timeout_ms)
-{
-    bool processed = cmd->processed;
-    int64_t deadline_ms = (int64_t)(aeron_epoch_clock() + timeout_ms);
-    
-    while (!processed)
-    {
-        if (deadline_ms <= aeron_epoch_clock())
-        {
-            AERON_SET_ERR(ETIMEDOUT, "%s", "time out waiting for client conductor thread to process message");
-            return -1;
-        }
-
-        sched_yield();
-        AERON_GET_ACQUIRE(processed, cmd->processed);
-    }
-
-    return 0;
-}
-
 int aeron_add_available_counter_handler(aeron_t *client, aeron_on_available_counter_pair_t *pair)
 {
     aeron_client_handler_cmd_t cmd;
@@ -860,12 +837,7 @@ int aeron_add_available_counter_handler(aeron_t *client, aeron_on_available_coun
     cmd.clientd = pair->clientd;
     cmd.processed = false;
 
-    if (aeron_client_conductor_async_handler(&client->conductor, &cmd) < 0)
-    {
-        return -1;
-    }
-
-    return aeron_client_handler_cmd_await_processed(&cmd, aeron_context_get_driver_timeout_ms(client->context));
+    return aeron_client_conductor_async_handler(&client->conductor, &cmd);
 }
 
 int aeron_remove_available_counter_handler(aeron_t *client, aeron_on_available_counter_pair_t *pair)
@@ -884,12 +856,7 @@ int aeron_remove_available_counter_handler(aeron_t *client, aeron_on_available_c
     cmd.clientd = pair->clientd;
     cmd.processed = false;
 
-    if (aeron_client_conductor_async_handler(&client->conductor, &cmd) < 0)
-    {
-        return -1;
-    }
-
-    return aeron_client_handler_cmd_await_processed(&cmd, aeron_context_get_driver_timeout_ms(client->context));
+    return aeron_client_conductor_async_handler(&client->conductor, &cmd);
 }
 
 int aeron_add_unavailable_counter_handler(aeron_t *client, aeron_on_unavailable_counter_pair_t *pair)
@@ -908,12 +875,7 @@ int aeron_add_unavailable_counter_handler(aeron_t *client, aeron_on_unavailable_
     cmd.clientd = pair->clientd;
     cmd.processed = false;
 
-    if (aeron_client_conductor_async_handler(&client->conductor, &cmd) < 0)
-    {
-        return -1;
-    }
-
-    return aeron_client_handler_cmd_await_processed(&cmd, aeron_context_get_driver_timeout_ms(client->context));
+    return aeron_client_conductor_async_handler(&client->conductor, &cmd);
 }
 
 int aeron_remove_unavailable_counter_handler(aeron_t *client, aeron_on_unavailable_counter_pair_t *pair)
@@ -932,12 +894,7 @@ int aeron_remove_unavailable_counter_handler(aeron_t *client, aeron_on_unavailab
     cmd.clientd = pair->clientd;
     cmd.processed = false;
 
-    if (aeron_client_conductor_async_handler(&client->conductor, &cmd) < 0)
-    {
-        return -1;
-    }
-
-    return aeron_client_handler_cmd_await_processed(&cmd, aeron_context_get_driver_timeout_ms(client->context));
+    return aeron_client_conductor_async_handler(&client->conductor, &cmd);
 }
 
 int aeron_add_close_handler(aeron_t *client, aeron_on_close_client_pair_t *pair)
@@ -956,12 +913,7 @@ int aeron_add_close_handler(aeron_t *client, aeron_on_close_client_pair_t *pair)
     cmd.clientd = pair->clientd;
     cmd.processed = false;
 
-    if (aeron_client_conductor_async_handler(&client->conductor, &cmd) < 0)
-    {
-        return -1;
-    }
-
-    return aeron_client_handler_cmd_await_processed(&cmd, aeron_context_get_driver_timeout_ms(client->context));
+    return aeron_client_conductor_async_handler(&client->conductor, &cmd);
 }
 
 int aeron_remove_close_handler(aeron_t *client, aeron_on_close_client_pair_t *pair)
@@ -980,12 +932,7 @@ int aeron_remove_close_handler(aeron_t *client, aeron_on_close_client_pair_t *pa
     cmd.clientd = pair->clientd;
     cmd.processed = false;
 
-    if (aeron_client_conductor_async_handler(&client->conductor, &cmd) < 0)
-    {
-        return -1;
-    }
-
-    return aeron_client_handler_cmd_await_processed(&cmd, aeron_context_get_driver_timeout_ms(client->context));
+    return aeron_client_conductor_async_handler(&client->conductor, &cmd);
 }
 
 void aeron_async_cmd_free(aeron_client_registering_resource_t *async)

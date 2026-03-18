@@ -3059,14 +3059,33 @@ int aeron_client_conductor_async_handler(aeron_client_conductor_t *conductor, ae
 
     if (conductor->invoker_mode)
     {
-        aeron_client_conductor_on_cmd_handler(conductor, cmd);
+        return aeron_client_conductor_on_cmd_handler(conductor, cmd);
     }
-    else
+
+    int64_t deadline_ms = (int64_t)(aeron_epoch_clock() + conductor->driver_timeout_ms);
+    while (aeron_client_conductor_command_offer(conductor->command_queue, cmd) < 0)
     {
-        if (aeron_client_conductor_command_offer(conductor->command_queue, cmd) < 0)
+        if (deadline_ms <= aeron_epoch_clock())
         {
+            AERON_SET_ERR(ETIMEDOUT, "%s", "time out waiting for client conductor thread to process message");
             return -1;
         }
+
+        sched_yield();
+    }
+
+    bool processed;
+    AERON_GET_ACQUIRE(processed, cmd->processed);
+    while (!processed)
+    {
+        if (deadline_ms <= aeron_epoch_clock())
+        {
+            AERON_SET_ERR(ETIMEDOUT, "%s", "time out waiting for client conductor thread to process message");
+            return -1;
+        }
+
+        sched_yield();
+        AERON_GET_ACQUIRE(processed, cmd->processed);
     }
 
     return 0;
