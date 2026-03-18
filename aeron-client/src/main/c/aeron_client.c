@@ -835,7 +835,6 @@ int aeron_add_available_counter_handler(aeron_t *client, aeron_on_available_coun
     cmd.type = AERON_CLIENT_HANDLER_ADD_AVAILABLE_COUNTER;
     cmd.handler.on_available_counter = pair->handler;
     cmd.clientd = pair->clientd;
-    cmd.processed = false;
 
     return aeron_client_conductor_async_handler(&client->conductor, &cmd);
 }
@@ -854,7 +853,6 @@ int aeron_remove_available_counter_handler(aeron_t *client, aeron_on_available_c
     cmd.type = AERON_CLIENT_HANDLER_REMOVE_AVAILABLE_COUNTER;
     cmd.handler.on_available_counter = pair->handler;
     cmd.clientd = pair->clientd;
-    cmd.processed = false;
 
     return aeron_client_conductor_async_handler(&client->conductor, &cmd);
 }
@@ -873,7 +871,6 @@ int aeron_add_unavailable_counter_handler(aeron_t *client, aeron_on_unavailable_
     cmd.type = AERON_CLIENT_HANDLER_ADD_UNAVAILABLE_COUNTER;
     cmd.handler.on_unavailable_counter = pair->handler;
     cmd.clientd = pair->clientd;
-    cmd.processed = false;
 
     return aeron_client_conductor_async_handler(&client->conductor, &cmd);
 }
@@ -892,7 +889,6 @@ int aeron_remove_unavailable_counter_handler(aeron_t *client, aeron_on_unavailab
     cmd.type = AERON_CLIENT_HANDLER_REMOVE_UNAVAILABLE_COUNTER;
     cmd.handler.on_unavailable_counter = pair->handler;
     cmd.clientd = pair->clientd;
-    cmd.processed = false;
 
     return aeron_client_conductor_async_handler(&client->conductor, &cmd);
 }
@@ -911,7 +907,6 @@ int aeron_add_close_handler(aeron_t *client, aeron_on_close_client_pair_t *pair)
     cmd.type = AERON_CLIENT_HANDLER_ADD_CLOSE_HANDLER;
     cmd.handler.on_close_handler = pair->handler;
     cmd.clientd = pair->clientd;
-    cmd.processed = false;
 
     return aeron_client_conductor_async_handler(&client->conductor, &cmd);
 }
@@ -930,7 +925,6 @@ int aeron_remove_close_handler(aeron_t *client, aeron_on_close_client_pair_t *pa
     cmd.type = AERON_CLIENT_HANDLER_REMOVE_CLOSE_HANDLER;
     cmd.handler.on_close_handler = pair->handler;
     cmd.clientd = pair->clientd;
-    cmd.processed = false;
 
     return aeron_client_conductor_async_handler(&client->conductor, &cmd);
 }

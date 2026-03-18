@@ -3056,16 +3056,17 @@ int aeron_client_conductor_async_handler(aeron_client_conductor_t *conductor, ae
 {
     cmd->command_base.func = aeron_client_conductor_on_cmd_handler;
     cmd->command_base.item = NULL;
+    cmd->processed = false;
 
     if (conductor->invoker_mode)
     {
         return aeron_client_conductor_on_cmd_handler(conductor, cmd);
     }
 
-    int64_t deadline_ms = (int64_t)(aeron_epoch_clock() + conductor->driver_timeout_ms);
+    int64_t deadline_ns = (int64_t)(aeron_nano_clock() + conductor->driver_timeout_ns);
     while (aeron_client_conductor_command_offer(conductor->command_queue, cmd) < 0)
     {
-        if (deadline_ms <= aeron_epoch_clock())
+        if (aeron_nano_clock() >= deadline_ns)
         {
             AERON_SET_ERR(ETIMEDOUT, "%s", "time out waiting for client conductor thread to process message");
             return -1;
@@ -3078,7 +3079,7 @@ int aeron_client_conductor_async_handler(aeron_client_conductor_t *conductor, ae
     AERON_GET_ACQUIRE(processed, cmd->processed);
     while (!processed)
     {
-        if (deadline_ms <= aeron_epoch_clock())
+        if (aeron_nano_clock() >= deadline_ns)
         {
             AERON_SET_ERR(ETIMEDOUT, "%s", "time out waiting for client conductor thread to process message");
             return -1;
