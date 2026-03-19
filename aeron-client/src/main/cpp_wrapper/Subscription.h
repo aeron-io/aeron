@@ -81,7 +81,7 @@ public:
  * <p>
  * It is an applications responsibility to {@link Subscription#poll} the Subscriber for new messages.
  * <p>
- * Subscriptions are not threadsafe and should not be shared between subscribers.
+ * <b>Note:</b> Subscriptions are not threadsafe and should not be shared between subscribers.
  *
  * @see FragmentAssembler
  */
@@ -311,7 +311,6 @@ public:
         AsyncDestination *async = addDestinationAsync(endpointChannel);
         std::int64_t correlationId = aeron_async_destination_get_registration_id(async);
 
-        std::lock_guard<std::recursive_mutex> lock(m_adminLock);
         m_pendingDestinations[correlationId] = async;
 
         return correlationId;
@@ -339,7 +338,6 @@ public:
         AsyncDestination *async = removeDestinationAsync(endpointChannel);
         std::int64_t correlationId = aeron_async_destination_get_registration_id(async);
 
-        std::lock_guard<std::recursive_mutex> lock(m_adminLock);
         m_pendingDestinations[correlationId] = async;
 
         return correlationId;
@@ -377,8 +375,6 @@ public:
      */
     bool findDestinationResponse(std::int64_t correlationId)
     {
-        std::lock_guard<std::recursive_mutex> lock(m_adminLock);
-
         auto search = m_pendingDestinations.find(correlationId);
         if (search == m_pendingDestinations.end())
         {
@@ -594,7 +590,6 @@ private:
     aeron_subscription_constants_t m_constants = {};
     std::string m_channel;
     std::unordered_map<std::int64_t, AsyncDestination *> m_pendingDestinations = {};
-    std::recursive_mutex m_adminLock = {};
 
     static void copyToVector(aeron_image_t *image, void *clientd)
     {
@@ -609,10 +604,10 @@ private:
         try {
             result = std::make_shared<Image>(m_subscription, image);
         }
-        catch (const std::exception& e)
+        catch (...)
         {
             aeron_subscription_image_release(m_subscription, image);
-            throw e;
+            throw;
         }
         aeron_subscription_image_release(m_subscription, image);
         return result;
