@@ -70,6 +70,8 @@ static const on_reserved_value_supplier_t DEFAULT_RESERVED_VALUE_SUPPLIER =
 
 using AsyncDestination = aeron_async_destination_t;
 
+class Aeron;
+
 /**
  * @example BasicPublisher.cpp
  */
@@ -89,7 +91,8 @@ class Publication
 public:
 
     /// @cond HIDDEN_SYMBOLS
-    Publication(aeron_t *aeron, aeron_publication_t *publication) :
+    Publication(const std::shared_ptr<Aeron> &aeronRef, aeron_t *aeron, aeron_publication_t *publication) :
+        m_aeronRef(aeronRef),
         m_aeron(aeron),
         m_publication(publication)
     {
@@ -784,6 +787,7 @@ public:
     /// @endcond
 
 private:
+    std::shared_ptr<Aeron> m_aeronRef; // ensure Aeron instance is being deleted after its children
     aeron_t *m_aeron = nullptr;
     aeron_publication_t *m_publication = nullptr;
     aeron_publication_constants_t m_constants = {};

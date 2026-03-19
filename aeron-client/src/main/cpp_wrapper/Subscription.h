@@ -41,6 +41,8 @@ namespace aeron
 using namespace aeron::concurrent::logbuffer;
 using AsyncDestination = aeron_async_destination_t;
 
+class Aeron;
+
 class AsyncAddSubscription
 {
     friend class Aeron;
@@ -89,7 +91,12 @@ class Subscription
 {
 public:
     /// @cond HIDDEN_SYMBOLS
-    Subscription(aeron_t *aeron, aeron_subscription_t *subscription, AsyncAddSubscription *addSubscription) :
+    Subscription(
+        const std::shared_ptr<Aeron> &aeronRef,
+        aeron_t *aeron,
+        aeron_subscription_t *subscription,
+        AsyncAddSubscription *addSubscription) :
+        m_aeronRef(aeronRef),
         m_aeron(aeron),
         m_subscription(subscription),
         m_addSubscription(addSubscription)
@@ -584,6 +591,7 @@ public:
         return m_subscription;
     }
 private:
+    std::shared_ptr<Aeron> m_aeronRef; // ensure Aeron instance is being deleted after its children
     aeron_t *m_aeron = nullptr;
     aeron_subscription_t *m_subscription = nullptr;
     AsyncAddSubscription *m_addSubscription = nullptr;

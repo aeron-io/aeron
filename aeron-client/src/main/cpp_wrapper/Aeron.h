@@ -21,7 +21,6 @@
 #include <mutex>
 
 #include "util/Exceptions.h"
-#include "concurrent/AgentRunner.h"
 #include "concurrent/AgentInvoker.h"
 #include "Publication.h"
 #include "ExclusivePublication.h"
@@ -91,8 +90,6 @@ public:
 
     ~Aeron()
     {
-        std::lock_guard<std::recursive_mutex> lock(m_adminLock);
-
         aeron_on_close_client_pair_t closePair = {emptyCallback, nullptr};
         aeron_add_close_handler(m_aeron, &closePair);
         aeron_close(m_aeron);
@@ -147,7 +144,9 @@ public:
      */
     inline static std::shared_ptr<Aeron> connect(Context &context)
     {
-        return std::make_shared<Aeron>(context);
+        auto aeron = std::make_shared<Aeron>(context);
+        aeron->m_self = aeron;
+        return aeron;
     }
 
     /**
@@ -160,8 +159,7 @@ public:
     inline static std::shared_ptr<Aeron> connect()
     {
         Context ctx;
-
-        return std::make_shared<Aeron>(ctx);
+        return connect(ctx);
     }
 
     /**
@@ -281,7 +279,7 @@ public:
         }
         else
         {
-            return std::make_shared<Publication>(m_aeron, publication);
+            return std::make_shared<Publication>(m_self.lock(), m_aeron, publication);
         }
     }
 
@@ -416,7 +414,7 @@ public:
         }
         else
         {
-            return std::make_shared<ExclusivePublication>(m_aeron, publication);
+            return std::make_shared<ExclusivePublication>(m_self.lock(), m_aeron, publication);
         }
     }
 
@@ -618,7 +616,7 @@ public:
         else
         {
             addSubscription->m_async = nullptr;
-            return std::make_shared<Subscription>(m_aeron, subscription, addSubscription);
+            return std::make_shared<Subscription>(m_self.lock(), m_aeron, subscription, addSubscription);
         }
     }
 
@@ -779,7 +777,8 @@ public:
         {
             aeron_counter_constants_t counter_constants = {};
             aeron_counter_constants(counter, &counter_constants);
-            return std::make_shared<Counter>(counter, m_countersReader, counter_constants.registration_id);
+            return std::make_shared<Counter>(
+                counter, m_self.lock(), m_countersReader, counter_constants.registration_id);
         }
     }
 
@@ -1136,6 +1135,7 @@ private:
     std::recursive_mutex m_adminLock;
     ClientConductor m_clientConductor;
     AgentInvoker<ClientConductor> m_conductorInvoker;
+    std::weak_ptr<Aeron> m_self; // used to ensure destruction order
 
     static aeron_t *init_aeron(Context &context, aeron_context_t **aeron_context)
     {
@@ -1147,10 +1147,10 @@ private:
         {
             context.attachCallbacksToContext(_context);
         }
-        catch (IllegalArgumentException &ex)
+        catch (IllegalArgumentException&)
         {
             aeron_context_close(_context);
-            throw ex;
+            throw;
         }
 
         if (aeron_init(&aeron, _context) < 0)

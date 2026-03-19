@@ -376,3 +376,34 @@ TEST_F(WrapperSystemTest, polledSubscriptionShouldCloseAllAllocatedResourcesWhen
     subscription.reset();
     aeron.reset();
 }
+
+TEST_F(WrapperSystemTest, shouldDeleteAeronInstanceLastEvenIfManuallyReleased)
+{
+    Context ctx;
+    ctx.useConductorAgentInvoker(false);
+
+    std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
+
+    auto channel = "aeron:udp?endpoint=localhost:10000";
+    int stream_id = 1000;
+
+    int64_t sub_registration_id = aeron->addSubscription(channel, stream_id);
+    WAIT_FOR_NON_NULL(subscription, aeron->findSubscription(sub_registration_id));
+
+    int64_t pub_registration_id = aeron->addPublication(channel, stream_id);
+    WAIT_FOR_NON_NULL(publication, aeron->findPublication(pub_registration_id));
+
+    int64_t exclusive_pub_registration_id = aeron->addExclusivePublication(channel, stream_id + 1);
+    WAIT_FOR_NON_NULL(
+        exclusivePublication, aeron->findExclusivePublication(exclusive_pub_registration_id));
+
+    int64_t counter_registration_id = aeron->addCounter(1000, nullptr, 0, "test");
+    WAIT_FOR_NON_NULL(counter, aeron->findCounter(counter_registration_id));
+
+    aeron.reset();
+
+    EXPECT_EQ(sub_registration_id, subscription->registrationId());
+    EXPECT_EQ(pub_registration_id, publication->registrationId());
+    EXPECT_EQ(exclusive_pub_registration_id, exclusivePublication->registrationId());
+    EXPECT_EQ(counter_registration_id, counter->registrationId());
+}

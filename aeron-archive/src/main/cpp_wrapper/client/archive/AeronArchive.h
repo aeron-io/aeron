@@ -380,7 +380,7 @@ public:
             ARCHIVE_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
 
-        return std::make_shared<Publication>(m_archiveCtxW.aeron()->aeron(), publication);
+        return std::make_shared<Publication>(m_archiveCtxW.aeron(), m_archiveCtxW.aeron()->aeron(), publication);
     }
 
     /**
@@ -405,7 +405,7 @@ public:
             ARCHIVE_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
 
-        return std::make_shared<ExclusivePublication>(m_archiveCtxW.aeron()->aeron(), exclusivePublication);
+        return std::make_shared<ExclusivePublication>(m_archiveCtxW.aeron(), m_archiveCtxW.aeron()->aeron(), exclusivePublication);
     }
 
     /**
@@ -887,7 +887,8 @@ public:
             ARCHIVE_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
 
-        return std::make_shared<Subscription>(m_archiveCtxW.aeron()->aeron(), subscription, nullptr);
+        return std::make_shared<Subscription>(
+            m_archiveCtxW.aeron(), m_archiveCtxW.aeron()->aeron(), subscription, nullptr);
     }
 
     /**
@@ -1343,6 +1344,7 @@ private:
         }
 
         m_controlResponseSubscription = std::make_unique<Subscription>(
+            m_archiveCtxW.aeron(),
             aeron,
             aeron_archive_get_and_own_control_response_subscription(m_aeron_archive_t),
             nullptr);

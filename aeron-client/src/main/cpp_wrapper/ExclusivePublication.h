@@ -34,6 +34,8 @@ namespace aeron
 
 using namespace aeron::concurrent::status;
 
+class Aeron;
+
 /**
  * Aeron Publisher API for sending messages to subscribers of a given channel and streamId pair. ExclusivePublications
  * each get their own session id so multiple can be concurrently active on the same media driver as independent streams.
@@ -56,7 +58,9 @@ class ExclusivePublication
 public:
 
     /// @cond HIDDEN_SYMBOLS
-    ExclusivePublication(aeron_t *aeron, aeron_exclusive_publication_t *publication) :
+    ExclusivePublication(
+        const std::shared_ptr<Aeron> &aeronRef, aeron_t *aeron, aeron_exclusive_publication_t *publication) :
+        m_aeronRef(aeronRef),
         m_aeron(aeron),
         m_publication(publication)
     {
@@ -772,6 +776,7 @@ public:
     /// @endcond
 
 private:
+    std::shared_ptr<Aeron> m_aeronRef; // ensure Aeron instance is being deleted after its children
     aeron_t *m_aeron = nullptr;
     aeron_exclusive_publication_t *m_publication = nullptr;
     aeron_publication_constants_t m_constants = {};
