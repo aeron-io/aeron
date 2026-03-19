@@ -239,4 +239,18 @@ bool aeron_archive_persistent_subscription_is_replaying(aeron_archive_persistent
  */
 bool aeron_archive_persistent_subscription_has_failed(aeron_archive_persistent_subscription_t *persistent_subscription);
 
+/**
+ * Returns the join error, i.e. the difference between the live position and the replay position
+ * at the point the switch to live was attempted. A negative value means the replay was ahead of
+ * the live stream. Zero means they were aligned. INT64_MIN means no join has been attempted yet.
+ *
+ * note: This function isn't exposed as a public function in Java. But without it, the
+ * shouldHandleReplayBeingAheadOfLive can't run. So we need to decide if we want to expose this
+ * or take a different approach.
+ *
+ * @param persistent_subscription to check.
+ * @return the join error.
+ */
+int64_t aeron_archive_persistent_subscription_join_error(aeron_archive_persistent_subscription_t *persistent_subscription);
+
 #endif //AERON_AERON_ARCHIVE_PERSISTENT_SUBSCRIPTION_H

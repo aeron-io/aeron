@@ -1570,3 +1570,8 @@ bool aeron_archive_persistent_subscription_has_failed(aeron_archive_persistent_s
 {
     return persistent_subscription->state == FAILED;
 }
+
+int64_t aeron_archive_persistent_subscription_join_error(aeron_archive_persistent_subscription_t *persistent_subscription)
+{
+    return persistent_subscription->join_error;
+}
