@@ -256,7 +256,7 @@ class PersistentSubscriptionTest
 
     @Test
     @InterruptAfter(10)
-    void shouldErrorIfRecordingPositionIsBeforeStartPosition()
+    void shouldErrorIfStartPositionIsBeforeRecordingStartPosition()
     {
         final String channel = new ChannelUriStringBuilder()
             .media(IPC_MEDIA)
@@ -286,7 +286,7 @@ class PersistentSubscriptionTest
 
     @Test
     @InterruptAfter(10)
-    void shouldErrorIfRecordingPositionIsAfterStopPosition()
+    void shouldErrorIfStartPositionIsAfterStopPosition()
     {
         final PersistentPublication persistentPublication =
             PersistentPublication.create(aeronArchive, IPC_CHANNEL, STREAM_ID);

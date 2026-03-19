@@ -426,6 +426,10 @@ private:
     std::uniform_int_distribution<uint8_t> m_byteGenerator = std::uniform_int_distribution<uint8_t>(0, UINT8_MAX);
 };
 
+// Publishes 3 messages to a recording, then starts a persistent subscription.
+// Expects the subscription to first replay all 3 messages from the archive,
+// then transition to live. Once live, 3 further messages are published and
+// the subscription is expected to receive them.
 TEST_F(AeronArchivePersistentSubscriptionTest, shouldReplayAndSwitchToLiveWithNoMessagesBeingPublishedDuringSwitch)
 {
     TestArchive archive = createArchive(m_aeronDir);
@@ -474,6 +478,11 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReplayAndSwitchToLiveWithNo
     ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
 }
 
+// Publishes 3 messages to a recording, then starts a persistent subscription
+// configured with AERON_PERSISTENT_SUBSCRIPTION_FROM_LIVE, which skips any
+// replay of archived messages. The subscription is expected to become live
+// immediately without receiving the initial 3 messages. Once live, 3 further
+// messages are published and the subscription is expected to receive them.
 TEST_F(AeronArchivePersistentSubscriptionTest, shouldStartFromLiveWithNoInitialReplayIfRequested)
 {
     TestArchive archive = createArchive(m_aeronDir);
@@ -524,6 +533,9 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldStartFromLiveWithNoInitialR
     ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
 }
 
+// Verifies that a persistent subscription functions correctly when no event listener
+// is registered. A non-existent recording id is used to trigger a failure, confirming
+// that the subscription reaches a failed state without requiring a listener to be set.
 TEST_F(AeronArchivePersistentSubscriptionTest, shouldNotRequireEventListener)
 {
     TestArchive archive = createArchive(m_aeronDir);
@@ -553,6 +565,8 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldNotRequireEventListener)
     ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
 }
 
+// Verifies that subscribing to a non-existent recording id causes the subscription
+// to fail and invokes on_error exactly once with an appropriate error message
 TEST_F(AeronArchivePersistentSubscriptionTest, shouldErrorIfRecordingDoesNotExist)
 {
     TestArchive archive = createArchive(m_aeronDir);
@@ -597,6 +611,10 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldErrorIfRecordingDoesNotExis
     ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
 }
 
+// Verifies that the stream id of the recording must match the configured live stream id.
+// A recording is created on STREAM_ID, but the persistent subscription is configured
+// with a mismatched live stream id (STREAM_ID + 1). The subscription is expected to
+// fail and invoke on_error exactly once with an appropriate error message.
 TEST_F(AeronArchivePersistentSubscriptionTest, shouldErrorIfRecordingStreamDoesNotMatchLiveStream)
 {
     TestArchive archive = createArchive(m_aeronDir);
@@ -645,7 +663,13 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldErrorIfRecordingStreamDoesN
     ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
 }
 
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldErrorIfRecordingPositionIsBeforeStartPosition)
+// Verifies that a persistent subscription fails if the requested start position is before
+// the recording's start position. The recording is configured with an initial term offset
+// of 1024, giving it a start position of 1024. The persistent subscription is configured
+// with the default start position of 0, which is below the recording start. The subscription
+// is expected to fail and invoke on_error exactly once with an error message containing
+// the word "position".
+TEST_F(AeronArchivePersistentSubscriptionTest, shouldErrorIfStartPositionIsBeforeRecordingStartPosition)
 {
     TestArchive archive = createArchive(m_aeronDir);
 
@@ -696,7 +720,13 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldErrorIfRecordingPositionIsB
     ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
 }
 
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldErrorIfRecordingPositionIsAfterStopPosition)
+// Verifies that a persistent subscription cannot be created with a start position
+// that exceeds the recording's stop position. A single message is persisted and
+// the recording is stopped to obtain a known stop position. The subscription is
+// configured with a start position of twice the stop position. The subscription
+// is expected to fail and invoke on_error exactly once with an appropriate error
+// message.
+TEST_F(AeronArchivePersistentSubscriptionTest, shouldErrorIfStartPositionIsAfterStopPosition)
 {
     TestArchive archive = createArchive(m_aeronDir);
 
@@ -705,6 +735,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldErrorIfRecordingPositionIsA
     const std::vector<uint8_t> message(1024, 0);
     persistent_publication.persist({{ message }});
 
+    // todo
     const int64_t stop_position = persistent_publication.stop();
     ASSERT_GT(stop_position, 0);
 
@@ -750,6 +781,11 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldErrorIfRecordingPositionIsA
     ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
 }
 
+// Verifies that a persistent subscription configured with AERON_PERSISTENT_SUBSCRIPTION_FROM_LIVE
+// does not replay messages from the archive. Five messages are persisted before the subscription
+// is created. The subscription becomes live without receiving any of those messages, and on_live_joined
+// is invoked exactly once. Three further messages are then published and the subscription is
+// expected to receive only those.
 TEST_F(AeronArchivePersistentSubscriptionTest, shouldNotReplayOldMessagesWhenStartingFromLive)
 {
     TestArchive archive = createArchive(m_aeronDir);
@@ -814,6 +850,11 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldNotReplayOldMessagesWhenSta
     ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
 }
 
+// This test verifies that a persistent subscription can catchup from archive and then continues
+// with the live stream.
+// So first a set of messages are written to the archive. And the persistent subscription is expected
+// to process all these messages and switch to live. Then additional set of messages are send and
+// the persistent subscriuption is expected to process these as well.
 TEST_F(AeronArchivePersistentSubscriptionTest, shouldTransitionFromReplayToLiveWhileLiveIsAdvancing)
 {
     TestArchive archive = createArchive(m_aeronDir);
@@ -877,6 +918,10 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldTransitionFromReplayToLiveW
     ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
 }
 
+// Verifies that a persistent subscription transitions immediately to live when there
+// are no recorded messages to replay. No messages are published before the subscription
+// is created. The subscription is expected to become live without receiving any messages.
+// Five messages are then published and the subscription is expected to receive all of them.
 TEST_F(AeronArchivePersistentSubscriptionTest, shouldStartFromLiveWhenThereIsNoDataToReplay)
 {
     TestArchive archive = createArchive(m_aeronDir);
@@ -1427,6 +1472,12 @@ INSTANTIATE_TEST_SUITE_P(
         FragmentLimitAndChannel{10, MULTICAST_CHANNEL},
         FragmentLimitAndChannel{INT_MAX, MULTICAST_CHANNEL}));
 
+// Verifies that a persistent subscription replays an existing recording and then transitions
+// to live. Five messages are persisted before the subscription is created. The subscription
+// is confirmed to be replaying after receiving the first message. Once all five messages are
+// received, the subscription transitions to live and on_live_joined is invoked exactly once.
+// Five further messages are then published and the subscription is expected to receive all
+// ten messages in order.
 TEST_P(AeronArchivePersistentSubscriptionReplayAndJoinLiveTest, shouldReplayExistingRecordingThenJoinLive)
 {
     TestArchive archive = createArchive(m_aeronDir);
@@ -1702,6 +1753,13 @@ INSTANTIATE_TEST_SUITE_P(
     AeronArchivePersistentSubscriptionCatchupTest,
     testing::Values(1, 10));
 
+// Verifies that a persistent subscription catches up on replay before transitioning to live.
+// Five messages are persisted before the subscription is created. The subscription is confirmed
+// to be replaying after receiving the first message. While still replaying, 25 further messages
+// are persisted. The subscription is expected to catch up on all 30 messages before transitioning
+// to live, with on_live_joined invoked exactly once. Five more messages are then published and
+// the subscription is expected to receive all 35 messages in order. The test is parameterised
+// over fragment limit.
 TEST_P(AeronArchivePersistentSubscriptionCatchupTest, shouldCatchupOnReplayBeforeSwitchingToLive)
 {
     TestArchive archive = createArchive(m_aeronDir);
