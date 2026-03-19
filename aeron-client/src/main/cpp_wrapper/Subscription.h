@@ -111,14 +111,18 @@ public:
 
     ~Subscription()
     {
-        if (0 != aeron_subscription_close(m_subscription, AsyncAddSubscription::remove, m_addSubscription))
+        if (aeron_subscription_is_closed(m_subscription)) // driver or client timeout
+        {
+            delete m_addSubscription;
+        }
+        else if (0 != aeron_subscription_close(m_subscription, AsyncAddSubscription::remove, m_addSubscription))
         {
             // failed to submit close request: the underlying `aeron_subscription_t` will be eventually closed when
             // `aeron_t` is closed but the `AsyncAddSubscription` needs to be manually freed as no `on_close_complete`
             // callback will be invoked in this case.
             if (aeron_errcode() == AERON_CLIENT_ERROR_BUFFER_FULL)
             {
-                AsyncAddSubscription::remove(m_addSubscription);
+                delete m_addSubscription;
             }
         }
     }

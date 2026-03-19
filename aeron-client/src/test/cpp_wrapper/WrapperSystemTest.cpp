@@ -407,3 +407,33 @@ TEST_F(WrapperSystemTest, shouldDeleteAeronInstanceLastEvenIfManuallyReleased)
     EXPECT_EQ(exclusive_pub_registration_id, exclusivePublication->registrationId());
     EXPECT_EQ(counter_registration_id, counter->registrationId());
 }
+
+TEST_F(WrapperSystemTest, polledSubscriptionShouldCloseAllAllocatedResourcesAfterDriverWasStopped)
+{
+    Context ctx;
+    ctx
+        .useConductorAgentInvoker(false)
+        .mediaDriverTimeout(350)
+        .idleSleepDuration(1)
+        .errorHandler(
+            [](const std::exception& ignored)
+            {
+                // Deliberately ignored.
+            });
+
+    std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
+
+    auto channel = "aeron:udp?endpoint=localhost:10000";
+    int stream_id = 1000;
+    int64_t registration_id = aeron->addSubscription(channel, stream_id);
+
+    WAIT_FOR_NON_NULL(subscription, aeron->findSubscription(registration_id));
+
+    m_driver.stop();
+    m_driver.closeDriver();
+
+    // wait for driver being stopped detected by the underlying `aeron_t` instance
+    std::this_thread::sleep_for(std::chrono::milliseconds(ctx.mediaDriverTimeout() * 2));
+
+    EXPECT_EQ(registration_id, subscription->registrationId());
+}
