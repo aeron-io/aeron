@@ -823,8 +823,6 @@ int aeron_exclusive_publication_async_remove_destination_by_id(
 
 int aeron_add_available_counter_handler(aeron_t *client, aeron_on_available_counter_pair_t *pair)
 {
-    aeron_client_handler_cmd_t cmd;
-
     if (NULL == client || NULL == pair)
     {
         AERON_SET_ERR(
@@ -832,6 +830,13 @@ int aeron_add_available_counter_handler(aeron_t *client, aeron_on_available_coun
         return -1;
     }
 
+    if (aeron_client_conductor_is_closed(&client->conductor))
+    {
+        AERON_SET_ERR(EPERM, "%s", "client conductor is closed");
+        return -1;
+    }
+
+    aeron_client_handler_cmd_t cmd;
     cmd.type = AERON_CLIENT_HANDLER_ADD_AVAILABLE_COUNTER;
     cmd.handler.on_available_counter = pair->handler;
     cmd.clientd = pair->clientd;
@@ -841,8 +846,6 @@ int aeron_add_available_counter_handler(aeron_t *client, aeron_on_available_coun
 
 int aeron_remove_available_counter_handler(aeron_t *client, aeron_on_available_counter_pair_t *pair)
 {
-    aeron_client_handler_cmd_t cmd;
-
     if (NULL == client || NULL == pair)
     {
         AERON_SET_ERR(
@@ -850,6 +853,13 @@ int aeron_remove_available_counter_handler(aeron_t *client, aeron_on_available_c
         return -1;
     }
 
+    if (aeron_client_conductor_is_closed(&client->conductor))
+    {
+        AERON_SET_ERR(EPERM, "%s", "client conductor is closed");
+        return -1;
+    }
+
+    aeron_client_handler_cmd_t cmd;
     cmd.type = AERON_CLIENT_HANDLER_REMOVE_AVAILABLE_COUNTER;
     cmd.handler.on_available_counter = pair->handler;
     cmd.clientd = pair->clientd;
@@ -859,8 +869,6 @@ int aeron_remove_available_counter_handler(aeron_t *client, aeron_on_available_c
 
 int aeron_add_unavailable_counter_handler(aeron_t *client, aeron_on_unavailable_counter_pair_t *pair)
 {
-    aeron_client_handler_cmd_t cmd;
-
     if (NULL == client || NULL == pair)
     {
         AERON_SET_ERR(
@@ -868,6 +876,13 @@ int aeron_add_unavailable_counter_handler(aeron_t *client, aeron_on_unavailable_
         return -1;
     }
 
+    if (aeron_client_conductor_is_closed(&client->conductor))
+    {
+        AERON_SET_ERR(EPERM, "%s", "client conductor is closed");
+        return -1;
+    }
+
+    aeron_client_handler_cmd_t cmd;
     cmd.type = AERON_CLIENT_HANDLER_ADD_UNAVAILABLE_COUNTER;
     cmd.handler.on_unavailable_counter = pair->handler;
     cmd.clientd = pair->clientd;
@@ -877,8 +892,6 @@ int aeron_add_unavailable_counter_handler(aeron_t *client, aeron_on_unavailable_
 
 int aeron_remove_unavailable_counter_handler(aeron_t *client, aeron_on_unavailable_counter_pair_t *pair)
 {
-    aeron_client_handler_cmd_t cmd;
-
     if (NULL == client || NULL == pair)
     {
         AERON_SET_ERR(
@@ -886,6 +899,13 @@ int aeron_remove_unavailable_counter_handler(aeron_t *client, aeron_on_unavailab
         return -1;
     }
 
+    if (aeron_client_conductor_is_closed(&client->conductor))
+    {
+        AERON_SET_ERR(EPERM, "%s", "client conductor is closed");
+        return -1;
+    }
+
+    aeron_client_handler_cmd_t cmd;
     cmd.type = AERON_CLIENT_HANDLER_REMOVE_UNAVAILABLE_COUNTER;
     cmd.handler.on_unavailable_counter = pair->handler;
     cmd.clientd = pair->clientd;
@@ -895,8 +915,6 @@ int aeron_remove_unavailable_counter_handler(aeron_t *client, aeron_on_unavailab
 
 int aeron_add_close_handler(aeron_t *client, aeron_on_close_client_pair_t *pair)
 {
-    aeron_client_handler_cmd_t cmd;
-
     if (NULL == client || NULL == pair)
     {
         AERON_SET_ERR(
@@ -904,6 +922,13 @@ int aeron_add_close_handler(aeron_t *client, aeron_on_close_client_pair_t *pair)
         return -1;
     }
 
+    if (aeron_client_conductor_is_closed(&client->conductor))
+    {
+        AERON_SET_ERR(EPERM, "%s", "client conductor is closed");
+        return -1;
+    }
+
+    aeron_client_handler_cmd_t cmd;
     cmd.type = AERON_CLIENT_HANDLER_ADD_CLOSE_HANDLER;
     cmd.handler.on_close_handler = pair->handler;
     cmd.clientd = pair->clientd;
@@ -913,8 +938,6 @@ int aeron_add_close_handler(aeron_t *client, aeron_on_close_client_pair_t *pair)
 
 int aeron_remove_close_handler(aeron_t *client, aeron_on_close_client_pair_t *pair)
 {
-    aeron_client_handler_cmd_t cmd;
-
     if (NULL == client || NULL == pair)
     {
         AERON_SET_ERR(
@@ -922,6 +945,13 @@ int aeron_remove_close_handler(aeron_t *client, aeron_on_close_client_pair_t *pa
         return -1;
     }
 
+    if (aeron_client_conductor_is_closed(&client->conductor))
+    {
+        AERON_SET_ERR(EPERM, "%s", "client conductor is closed");
+        return -1;
+    }
+
+    aeron_client_handler_cmd_t cmd;
     cmd.type = AERON_CLIENT_HANDLER_REMOVE_CLOSE_HANDLER;
     cmd.handler.on_close_handler = pair->handler;
     cmd.clientd = pair->clientd;

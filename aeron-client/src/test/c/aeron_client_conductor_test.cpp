@@ -35,6 +35,7 @@ extern "C"
 #include "aeron_client_conductor.h"
 #include "aeron_counter.h"
 #include "aeron_counters.h"
+#include "aeron_client.h"
 }
 
 #define CAPACITY (16 * 1024)
@@ -1341,6 +1342,72 @@ TEST_F(ClientConductorTest, shouldSetIdleStartegy)
     EXPECT_NE(nullptr, m_context->idle_strategy_state);
     EXPECT_NE(func, m_context->idle_strategy_func);
     EXPECT_STREQ("200-50-1us-2500ns", m_context->idle_strategy_init_args);
+}
+
+TEST_F(ClientConductorTest, shouldRejectCloseHandlerIfClosed)
+{
+    m_conductor.is_closed = true;
+    aeron_t aeron = {};
+    aeron.conductor = m_conductor;
+    aeron_on_close_client_pair_t pair = {};
+
+    EXPECT_EQ(-1, aeron_add_close_handler(&aeron, &pair));
+    EXPECT_EQ(EPERM, aeron_errcode());
+}
+
+TEST_F(ClientConductorTest, shouldRejectRemoveCloseHandlerIfClosed)
+{
+    m_conductor.is_closed = true;
+    aeron_t aeron = {};
+    aeron.conductor = m_conductor;
+    aeron_on_close_client_pair_t pair = {};
+
+    EXPECT_EQ(-1, aeron_remove_close_handler(&aeron, &pair));
+    EXPECT_EQ(EPERM, aeron_errcode());
+}
+
+TEST_F(ClientConductorTest, shouldRejectAddAvailableCounterHandlerIfClosed)
+{
+    m_conductor.is_closed = true;
+    aeron_t aeron = {};
+    aeron.conductor = m_conductor;
+    aeron_on_available_counter_pair_t pair = {};
+
+    EXPECT_EQ(-1, aeron_add_available_counter_handler(&aeron, &pair));
+    EXPECT_EQ(EPERM, aeron_errcode());
+}
+
+TEST_F(ClientConductorTest, shouldRejectRemoveAvailableCounterHandlerIfClosed)
+{
+    m_conductor.is_closed = true;
+    aeron_t aeron = {};
+    aeron.conductor = m_conductor;
+    aeron_on_available_counter_pair_t pair = {};
+
+    EXPECT_EQ(-1, aeron_remove_available_counter_handler(&aeron, &pair));
+    EXPECT_EQ(EPERM, aeron_errcode());
+}
+
+TEST_F(ClientConductorTest, shouldRejectAddUnavailableCounterHandlerIfClosed)
+{
+    m_conductor.is_closed = true;
+    aeron_t aeron = {};
+    aeron.conductor = m_conductor;
+    aeron_on_unavailable_counter_pair_t pair = {};
+
+    EXPECT_EQ(-1, aeron_add_unavailable_counter_handler(&aeron, &pair));
+    EXPECT_EQ(EPERM, aeron_errcode());
+}
+
+TEST_F(ClientConductorTest, shouldRejectRemoveUnavailableCounterHandlerIfClosed)
+{
+    m_conductor.is_closed = true;
+    aeron_t aeron = {};
+    aeron.conductor = m_conductor;
+    aeron_on_unavailable_counter_pair_t pair = {};
+
+    EXPECT_EQ(-1, aeron_remove_unavailable_counter_handler(&aeron, &pair));
+    EXPECT_EQ(EPERM, aeron_errcode());
 }
 
 class ClientConductorIsLengthSufficientTest : public testing::TestWithParam<std::tuple<aeron_mapped_file_t*, bool>>
