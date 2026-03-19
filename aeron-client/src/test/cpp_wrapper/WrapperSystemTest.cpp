@@ -134,7 +134,7 @@ TEST_F(WrapperSystemTest, shouldRemovePendingAsyncPublicationUponError)
     AgentInvoker<ClientConductor> &invoker = aeron->conductorAgentInvoker();
     invoker.start();
 
-    auto channel = "aeron:udp?control=localhost:99999";
+    auto channel = "aeron:udp?endpoint=localhost:99999";
     int stream_id = 1000;
     int64_t registration_id = aeron->addPublication(channel, stream_id);
 
@@ -159,6 +159,65 @@ TEST_F(WrapperSystemTest, shouldRemovePendingAsyncPublicationUponError)
         auto errorMsg = std::string(e.what());
         EXPECT_NE(std::string::npos, errorMsg.find(std::string("Unknown registration id: ").append(std::to_string(registration_id)), 0));
     }
+}
+
+TEST_F(WrapperSystemTest, shouldRemovePendingAsyncPublicationUponSuccess)
+{
+    Context ctx;
+    ctx.useConductorAgentInvoker(true);
+
+    std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
+    AgentInvoker<ClientConductor> &invoker = aeron->conductorAgentInvoker();
+    invoker.start();
+    auto channel = "aeron:udp?endpoint=localhost:5555";
+    int stream_id = 1000;
+    int64_t registration_id = aeron->addPublication(channel, stream_id);
+    POLL_FOR_NON_NULL(publication, aeron->findPublication(registration_id), invoker);
+
+    try
+    {
+        POLL_FOR_NON_NULL(publication2, aeron->findPublication(registration_id), invoker);
+        FAIL();
+    }
+    catch( const IllegalArgumentException& e )
+    {
+        auto errorMsg = std::string(e.what());
+        EXPECT_NE(std::string::npos, errorMsg.find(std::string("Unknown registration id: ").append(std::to_string(registration_id)), 0));
+    }
+}
+
+TEST_F(WrapperSystemTest, shouldManuallyFreeAsyncPublicationIfNotPolled)
+{
+    Context ctx;
+    ctx.useConductorAgentInvoker(true);
+
+    std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
+    AgentInvoker<ClientConductor> &invoker = aeron->conductorAgentInvoker();
+    invoker.start();
+
+    auto channel = "aeron:udp?endpoint=localhost:5555";
+    int stream_id = 1000;
+    auto async = aeron->addPublicationAsync(channel, stream_id);
+    aeron_async_cmd_free(async); // safe since client conductor is not running concurrently
+}
+
+TEST_F(WrapperSystemTest, shouldManuallyFreeAsyncPublicationIfNotPolledConductor)
+{
+    Context ctx;
+    ctx.useConductorAgentInvoker(false);
+
+    std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
+
+    auto channel = "aeron:udp?endpoint=localhost:5555";
+    int stream_id = 1000;
+    auto async = aeron->addPublicationAsync(channel, stream_id);
+    EXPECT_NE(nullptr, async);
+
+    // wait for addPublicationAsync to complete
+    int64_t counterId = aeron->addCounter(1000, nullptr, 0, "test");
+    WAIT_FOR_NON_NULL(counter, aeron->findCounter(counterId));
+
+    aeron_async_cmd_free(async); // it is safe to delete now since client conductor processed this command
 }
 
 TEST_F(WrapperSystemTest, shouldRemovePendingAsyncExclusivePublicationUponError)
@@ -288,6 +347,31 @@ TEST_F(WrapperSystemTest, asyncSubscriptionMustBeManuallyFreedAfterUsage)
     try
     {
         POLL_FOR_NON_NULL(subscription, aeron->findSubscription(async), invoker);
+        FAIL();
+    }
+    catch( const AeronException& e )
+    {
+        auto errorMsg = std::string(e.what());
+        EXPECT_NE(std::string::npos, errorMsg.find("port out of range: 99999", 0));
+    }
+
+    delete async;
+}
+
+TEST_F(WrapperSystemTest, asyncSubscriptionMustBeManuallyFreedAfterUsageConductor)
+{
+    Context ctx;
+    ctx.useConductorAgentInvoker(false);
+
+    std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
+
+    auto channel = "aeron:udp?endpoint=localhost:99999";
+    int stream_id = 1000;
+    auto async = aeron->addSubscriptionAsync(channel, stream_id);
+
+    try
+    {
+        WAIT_FOR_NON_NULL(subscription, aeron->findSubscription(async));
         FAIL();
     }
     catch( const AeronException& e )
@@ -436,4 +520,109 @@ TEST_F(WrapperSystemTest, polledSubscriptionShouldCloseAllAllocatedResourcesAfte
     std::this_thread::sleep_for(std::chrono::milliseconds(ctx.mediaDriverTimeout() * 2));
 
     EXPECT_EQ(registration_id, subscription->registrationId());
+}
+
+TEST_F(WrapperSystemTest, nonPolledPendingAsyncDestinationsAreAutomaticallyFreedSubscription)
+{
+    Context ctx;
+    ctx.useConductorAgentInvoker(false);
+
+    std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
+
+    auto channel = "aeron:udp?control-mode=manual";
+    auto dest1Uri = "aeron:udp?endpoint=localhost:4554";
+    auto dest2Uri = "aeron:udp?endpoint=localhost:7777";
+    auto dest3Uri = "aeron:udp?endpoint=localhost:10000";
+    int stream_id = 1000;
+
+    int64_t registration_id = aeron->addSubscription(channel, stream_id);
+    WAIT_FOR_NON_NULL(subscription, aeron->findSubscription(registration_id));
+
+    int64_t addDest1RegistrationId = subscription->addDestination(dest1Uri);
+    auto addDest3Async = subscription->addDestinationAsync(dest3Uri);
+    int64_t addDest2RegistrationId = subscription->addDestination(dest2Uri);
+
+    auto removeDest1Async = subscription->removeDestinationAsync(dest1Uri);
+    int64_t removeDest2RegistrationId = subscription->removeDestination(dest2Uri);
+    int64_t removeDest3RegistrationId = subscription->removeDestination(dest3Uri);
+
+    EXPECT_GT(removeDest2RegistrationId, addDest1RegistrationId);
+    EXPECT_GT(removeDest3RegistrationId, removeDest2RegistrationId);
+
+    WAIT_FOR(subscription->findDestinationResponse(addDest2RegistrationId));
+    WAIT_FOR(subscription->findDestinationResponse(removeDest3RegistrationId));
+
+    // safe to delete after commands were processed by the client conductor thread
+    aeron_async_cmd_free(addDest3Async);
+    aeron_async_cmd_free(removeDest1Async);
+}
+
+TEST_F(WrapperSystemTest, nonPolledPendingAsyncDestinationsAreAutomaticallyFreedPublication)
+{
+    Context ctx;
+    ctx.useConductorAgentInvoker(false);
+
+    std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
+
+    auto channel = "aeron:udp?control-mode=manual";
+    auto dest1Uri = "aeron:udp?endpoint=localhost:4554";
+    auto dest2Uri = "aeron:udp?endpoint=localhost:7777";
+    auto dest3Uri = "aeron:udp?endpoint=localhost:10000";
+    int stream_id = 1000;
+
+    int64_t registration_id = aeron->addPublication(channel, stream_id);
+    WAIT_FOR_NON_NULL(publication, aeron->findPublication(registration_id));
+
+    int64_t addDest1RegistrationId = publication->addDestination(dest1Uri);
+    auto addDest3Async = publication->addDestinationAsync(dest3Uri);
+    int64_t addDest2RegistrationId = publication->addDestination(dest2Uri);
+
+    auto removeDest1Async = publication->removeDestinationAsync(dest1Uri);
+    int64_t removeDest2RegistrationId = publication->removeDestination(dest2Uri);
+    int64_t removeDest3RegistrationId = publication->removeDestination(dest3Uri);
+
+    EXPECT_GT(removeDest2RegistrationId, addDest1RegistrationId);
+    EXPECT_GT(removeDest3RegistrationId, removeDest2RegistrationId);
+
+    WAIT_FOR(publication->findDestinationResponse(addDest2RegistrationId));
+    WAIT_FOR(publication->findDestinationResponse(removeDest3RegistrationId));
+
+    // safe to delete after commands were processed by the client conductor thread
+    aeron_async_cmd_free(addDest3Async);
+    aeron_async_cmd_free(removeDest1Async);
+}
+
+TEST_F(WrapperSystemTest, nonPolledPendingAsyncDestinationsAreAutomaticallyFreedExclusivePublication)
+{
+    Context ctx;
+    ctx.useConductorAgentInvoker(false);
+
+    std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
+
+    auto channel = "aeron:udp?control-mode=manual";
+    auto dest1Uri = "aeron:udp?endpoint=localhost:4554";
+    auto dest2Uri = "aeron:udp?endpoint=localhost:7777";
+    auto dest3Uri = "aeron:udp?endpoint=localhost:10000";
+    int stream_id = 1000;
+
+    int64_t registration_id = aeron->addExclusivePublication(channel, stream_id);
+    WAIT_FOR_NON_NULL(publication, aeron->findExclusivePublication(registration_id));
+
+    int64_t addDest1RegistrationId = publication->addDestination(dest1Uri);
+    auto addDest3Async = publication->addDestinationAsync(dest3Uri);
+    int64_t addDest2RegistrationId = publication->addDestination(dest2Uri);
+
+    auto removeDest1Async = publication->removeDestinationAsync(dest1Uri);
+    int64_t removeDest2RegistrationId = publication->removeDestination(dest2Uri);
+    int64_t removeDest3RegistrationId = publication->removeDestination(dest3Uri);
+
+    EXPECT_GT(removeDest2RegistrationId, addDest1RegistrationId);
+    EXPECT_GT(removeDest3RegistrationId, removeDest2RegistrationId);
+
+    WAIT_FOR(publication->findDestinationResponse(addDest2RegistrationId));
+    WAIT_FOR(publication->findDestinationResponse(removeDest3RegistrationId));
+
+    // safe to delete after commands were processed by the client conductor thread
+    aeron_async_cmd_free(addDest3Async);
+    aeron_async_cmd_free(removeDest1Async);
 }

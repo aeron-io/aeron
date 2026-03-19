@@ -107,6 +107,11 @@ public:
     ~Publication()
     {
         aeron_publication_close(m_publication, nullptr, nullptr);
+
+        for (const std::pair<const std::int64_t, AsyncDestination *>& e : m_pendingDestinations)
+        {
+            aeron_async_cmd_free(e.second);
+        }
     }
 
     inline void close()
@@ -776,7 +781,21 @@ public:
             throw IllegalArgumentException("Unknown correlation id", SOURCEINFO);
         }
 
-        return findDestinationResponse(search->second);
+        auto async = search->second;
+        try
+        {
+            bool result = findDestinationResponse(async);
+            if (result)
+            {
+                m_pendingDestinations.erase(correlationId);
+            }
+            return result;
+        }
+        catch (...)
+        {
+            m_pendingDestinations.erase(correlationId);
+            throw;
+        }
     }
 
     /// @cond HIDDEN_SYMBOLS
