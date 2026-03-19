@@ -970,6 +970,12 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldStartFromLiveWhenThereIsNoD
     ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
 }
 
+// Verifies that fragmented messages are correctly reassembled by the persistent subscription.
+// Two messages are generated, each one byte larger than the maximum payload length, forcing
+// fragmentation. The first message is persisted before the subscription is created and received
+// during replay. The subscription transitions to live, after which the second message is
+// persisted and received on the live stream. Both messages are expected to be fully reassembled
+// and received in order.
 TEST_F(AeronArchivePersistentSubscriptionTest, shouldAssembleMessages)
 {
     TestArchive archive = createArchive(m_aeronDir);
@@ -1020,6 +1026,12 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldAssembleMessages)
     ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
 }
 
+// Verifies that a persistent subscription configured with AERON_PERSISTENT_SUBSCRIPTION_FROM_START
+// replays from the recording's actual start position. The channel is configured with an initial
+// term offset of 1024, so the recording starts at position 1024 rather than 0. Five messages are
+// persisted before the subscription is created. The subscription is expected to replay all five
+// messages and transition to live. Three further messages are then published and the subscription
+// is expected to receive all eight messages in order.
 TEST_F(AeronArchivePersistentSubscriptionTest, shouldReplayFromRecordingStartPositionWhenStartingFromStart)
 {
     TestArchive archive = createArchive(m_aeronDir);
