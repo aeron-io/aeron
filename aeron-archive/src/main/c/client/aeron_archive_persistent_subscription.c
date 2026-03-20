@@ -599,27 +599,23 @@ static void on_archive_control_response(
     int32_t code,
     const char *error_message)
 {
-    // TODO pass error_message
-
     aeron_archive_persistent_subscription_t *persistent_subscription = clientd;
 
-    async_archive_op_on_control_response(
-        &persistent_subscription->max_recorded_position.op,
-        correlation_id,
-        relevant_id,
-        code);
-
-    async_archive_op_on_control_response(
-        &persistent_subscription->list_recording_request.op,
-        correlation_id,
-        relevant_id,
-        code);
-
-    async_archive_op_on_control_response(
-        &persistent_subscription->replay_request,
-        correlation_id,
-        relevant_id,
-        code);
+    if (correlation_id == persistent_subscription->max_recorded_position.op.correlation_id)
+    {
+        async_archive_op_on_control_response(
+            &persistent_subscription->max_recorded_position.op, correlation_id, relevant_id, code);
+    }
+    else if (correlation_id == persistent_subscription->list_recording_request.op.correlation_id)
+    {
+        async_archive_op_on_control_response(
+            &persistent_subscription->list_recording_request.op, correlation_id, relevant_id, code);
+    }
+    else if (correlation_id == persistent_subscription->replay_request.correlation_id)
+    {
+        async_archive_op_on_control_response(
+            &persistent_subscription->replay_request, correlation_id, relevant_id, code);
+    }
 }
 
 static void on_archive_recording_descriptor(void *clientd, aeron_archive_recording_descriptor_t *recording_descriptor)
