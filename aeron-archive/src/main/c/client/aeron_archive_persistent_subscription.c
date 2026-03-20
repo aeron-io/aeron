@@ -1120,7 +1120,11 @@ static int await_replay_subscription(aeron_archive_persistent_subscription_t *pe
     }
 
     persistent_subscription->add_replay_subscription = NULL;
-    persistent_subscription->replay_image_deadline_ns = aeron_nano_clock() + persistent_subscription->message_timeout_ns;
+    if (persistent_subscription->replay_channel_type == REPLAY_CHANNEL_SESSION_SPECIFIC)
+    {
+        persistent_subscription->replay_image_deadline_ns =
+            aeron_nano_clock() + persistent_subscription->message_timeout_ns;
+    }
 
     if (persistent_subscription->replay_channel_type == REPLAY_CHANNEL_SESSION_SPECIFIC)
     {
