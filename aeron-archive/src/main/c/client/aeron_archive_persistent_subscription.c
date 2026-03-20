@@ -54,6 +54,7 @@ struct async_archive_op
 
     int64_t relevant_id;
     int32_t code;
+    char error_message[AERON_ERROR_MAX_TOTAL_LENGTH];
 
     bool response_received;
 };
@@ -62,6 +63,7 @@ static void async_archive_op_init(struct async_archive_op *op, int64_t correlati
 {
     op->correlation_id = correlation_id;
     op->deadline_ns = deadline_ns;
+    op->error_message[0] = '\0';
     op->response_received = false;
 }
 
@@ -69,12 +71,15 @@ static void async_archive_op_on_control_response(
     struct async_archive_op *op,
     int64_t correlation_id,
     int64_t relevant_id,
-    int32_t code)
+    int32_t code,
+    const char *error_message)
 {
     if (correlation_id == op->correlation_id)
     {
         op->relevant_id = relevant_id;
         op->code = code;
+        strncpy(op->error_message, error_message != NULL ? error_message : "", AERON_ERROR_MAX_TOTAL_LENGTH - 1);
+        op->error_message[AERON_ERROR_MAX_TOTAL_LENGTH - 1] = '\0';
         op->response_received = true;
     }
 }
@@ -453,10 +458,14 @@ static bool max_recorded_position_await_max_position(
 
             if (NULL != persistent_subscription->listener.on_error)
             {
+                char message[AERON_ERROR_MAX_TOTAL_LENGTH];
+                snprintf(message, sizeof(message), "get max recorded position request failed: %s",
+                    max_recorded_position->op.error_message);
+
                 persistent_subscription->listener.on_error(
                     persistent_subscription->listener.clientd,
                     (int)max_recorded_position->op.relevant_id,
-                    "get max recorded position request failed");
+                    message);
             }
         }
     }
@@ -604,17 +613,17 @@ static void on_archive_control_response(
     if (correlation_id == persistent_subscription->max_recorded_position.op.correlation_id)
     {
         async_archive_op_on_control_response(
-            &persistent_subscription->max_recorded_position.op, correlation_id, relevant_id, code);
+            &persistent_subscription->max_recorded_position.op, correlation_id, relevant_id, code, error_message);
     }
     else if (correlation_id == persistent_subscription->list_recording_request.op.correlation_id)
     {
         async_archive_op_on_control_response(
-            &persistent_subscription->list_recording_request.op, correlation_id, relevant_id, code);
+            &persistent_subscription->list_recording_request.op, correlation_id, relevant_id, code, error_message);
     }
     else if (correlation_id == persistent_subscription->replay_request.correlation_id)
     {
         async_archive_op_on_control_response(
-            &persistent_subscription->replay_request, correlation_id, relevant_id, code);
+            &persistent_subscription->replay_request, correlation_id, relevant_id, code, error_message);
     }
 }
 
@@ -998,10 +1007,14 @@ static int await_replay_response(aeron_archive_persistent_subscription_t *persis
 
         if (NULL != persistent_subscription->listener.on_error)
         {
+            char message[AERON_ERROR_MAX_TOTAL_LENGTH];
+            snprintf(message, sizeof(message), "replay request failed: %s",
+                persistent_subscription->replay_request.error_message);
+
             persistent_subscription->listener.on_error(
                 persistent_subscription->listener.clientd,
                 (int)persistent_subscription->replay_request.relevant_id,
-                "replay request failed");
+                message);
         }
 
         return 1;
