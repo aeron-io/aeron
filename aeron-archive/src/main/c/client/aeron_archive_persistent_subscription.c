@@ -1092,6 +1092,7 @@ static int await_replay_subscription(aeron_archive_persistent_subscription_t *pe
         persistent_subscription->add_replay_subscription) < 0)
     {
         int errcode = aeron_errcode();
+        persistent_subscription->add_replay_subscription = NULL;
 
         if (errcode == ENOTCONN)
         {
