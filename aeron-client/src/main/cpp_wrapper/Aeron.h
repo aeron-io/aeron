@@ -778,7 +778,7 @@ public:
             aeron_counter_constants_t counter_constants = {};
             aeron_counter_constants(counter, &counter_constants);
             return std::make_shared<Counter>(
-                counter, m_self.lock(), m_countersReader, counter_constants.registration_id);
+                m_self.lock(), m_countersReader, counter, counter_constants.registration_id);
         }
     }
 
