@@ -82,16 +82,6 @@ public:
         }
     }
 
-    inline void close()
-    {
-        if (aeron_exclusive_publication_close(m_publication, nullptr, nullptr) < 0)
-        {
-            AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
-        }
-
-        m_publication = nullptr;
-    }
-
     inline void revokeOnClose()
     {
         aeron_exclusive_publication_revoke_on_close(m_publication);

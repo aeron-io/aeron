@@ -118,9 +118,7 @@ TEST_P(PublicationRevokeTest, revokeTestSimple)
     POLL_FOR(0 < pub->offer(buffer, 0, length), invoker);
 
     pub->revokeOnClose();
-    pub->close();
-
-    ASSERT_EQ(AERON_PUBLICATION_CLOSED, pub->offer(buffer, 0, length));
+    pub.reset();
 
     POLL_FOR(1 == imageUnavailable, invoker);
 
@@ -202,7 +200,7 @@ TEST_P(PublicationRevokeTest, revokeTestExclusive)
 
     POLL_FOR(2 == imageUnavailable, invoker);
 
-    pub2->close();
+    pub2.reset();
 
     ASSERT_EQ(1, aeron->countersReader().getCounterValue(AERON_SYSTEM_COUNTER_PUBLICATIONS_REVOKED));
     ASSERT_EQ(expectedPublicationImagesRevoked, aeron->countersReader().getCounterValue(AERON_SYSTEM_COUNTER_PUBLICATION_IMAGES_REVOKED));
