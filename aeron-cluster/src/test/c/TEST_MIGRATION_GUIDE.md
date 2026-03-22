@@ -369,20 +369,70 @@ Phase 4  System tests (S) — need TestCluster.h infrastructure
 
 ## Key implementation note for mock (M) tests
 
-The Java Election and ConsensusModuleAgent tests use Mockito to inject
-synthetic publications.  The C equivalent pattern:
+There are **two distinct mock patterns** — use the correct one for each test category.
+
+---
+
+### Pattern A — Direct method call  (Election, ConsensusModuleAgent)
+
+Java uses Mockito to mock all dependencies, then **calls business-logic methods directly**
+— it does NOT encode SBE bytes. The C equivalent follows the same principle:
 
 ```c
-/* Encode a CanvassPosition message directly into a stack buffer */
-uint8_t buf[256];
-struct aeron_cluster_client_messageHeader hdr;
-struct aeron_cluster_client_canvassPosition msg;
-aeron_cluster_client_canvassPosition_wrap_and_apply_header(&msg, (char*)buf, 0, sizeof(buf), &hdr);
-aeron_cluster_client_canvassPosition_set_followerMemberId(&msg, 1);
-// ... set other fields ...
+/* C mock: a recording struct that captures publisher calls */
+typedef struct {
+    int      request_vote_count;
+    int64_t  last_candidate_term_id;
+    int32_t  last_candidate_member_id;
+    /* ... one field per message type ... */
+} mock_consensus_publisher_t;
 
-/* Feed it directly to the fragment handler */
-on_fragment(election, buf, aeron_cluster_client_canvassPosition_encoded_length(&msg), NULL);
+/* Inject via function pointers or a thin wrapper struct */
+
+/* Call election business-logic methods directly — no SBE encoding */
+aeron_cluster_election_on_canvass_position(election,
+    log_leadership_term_id, log_position, leadership_term_id,
+    follower_member_id, protocol_version);
+
+/* Verify what was "sent" to peers via the mock publisher */
+EXPECT_EQ(1, mock_pub.request_vote_count);
+EXPECT_EQ(expected_term, mock_pub.last_candidate_term_id);
 ```
 
-This avoids needing a real Aeron driver for the mock tests.
+This matches Java exactly: test the state machine, not the SBE encoding.
+
+---
+
+### Pattern B — SBE encode → fragment handler  (EgressPoller, EgressAdapter, IngressAdapter)
+
+These tests verify the **decode pipeline** (bytes in → callbacks out).
+Here, constructing SBE bytes and feeding them into the fragment handler IS correct:
+
+```c
+/* Encode a SessionEvent into a stack buffer */
+uint8_t buf[256];
+struct aeron_cluster_client_messageHeader hdr;
+struct aeron_cluster_client_sessionEvent msg;
+aeron_cluster_client_sessionEvent_wrap_and_apply_header(&msg, (char*)buf, 0, sizeof(buf), &hdr);
+aeron_cluster_client_sessionEvent_set_clusterSessionId(&msg, 42);
+aeron_cluster_client_sessionEvent_set_code(&msg, aeron_cluster_client_eventCode_OK);
+// ...
+
+/* Feed to poller and verify callback fired */
+aeron_cluster_egress_poller_poll(poller);  /* via synthetic image */
+EXPECT_EQ(42, poller->cluster_session_id);
+EXPECT_EQ(AERON_CLUSTER_EVENT_CODE_OK, poller->event_code);
+```
+
+---
+
+### Summary
+
+| Test class | Pattern | Reason |
+|------------|---------|--------|
+| Election | A (direct call) | Tests state machine logic |
+| ConsensusModuleAgent | A (direct call) | Tests agent decision making |
+| EgressPoller | B (SBE → fragment) | Tests SBE decode pipeline |
+| EgressAdapter | B (SBE → fragment) | Tests SBE decode pipeline |
+| IngressAdapter | B (SBE → fragment) | Tests SBE decode pipeline |
+| SnapshotTaker | B (encode to buffer, decode back) | Round-trip encode/decode |
