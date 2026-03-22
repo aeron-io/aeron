@@ -1210,3 +1210,155 @@ TEST_F(ClusterMemberTest, parseEmptyTopologyReturnsZero)
     EXPECT_EQ(nullptr, m_members);
 }
 
+
+/* ============================================================
+ * SORTED-ON-RELOAD TESTS (entriesInTheRecordingLogShouldBeSorted equiv.)
+ * ============================================================ */
+
+TEST_F(RecordingLogTest, entriesShouldBeSortedByLeadershipTermId)
+{
+    aeron_cluster_recording_log_t *log = nullptr;
+    ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+
+    /* Append in non-sorted order */
+    append_term(log, 0, 0, 0, 10);   /* leadershipTermId=0 */
+    append_term(log, 0, 2, 2048, 0); /* leadershipTermId=2 */
+    append_term(log, 0, 3, 5000, 100); /* leadershipTermId=3 */
+    append_term(log, 0, 1, 700, 0);  /* leadershipTermId=1 */
+
+    EXPECT_EQ(4, log->sorted_count);
+
+    /* After sort: 0, 1, 2, 3 */
+    auto *e0 = aeron_cluster_recording_log_entry_at(log, 0);
+    auto *e1 = aeron_cluster_recording_log_entry_at(log, 1);
+    auto *e2 = aeron_cluster_recording_log_entry_at(log, 2);
+    auto *e3 = aeron_cluster_recording_log_entry_at(log, 3);
+    ASSERT_NE(nullptr, e0); ASSERT_NE(nullptr, e1);
+    ASSERT_NE(nullptr, e2); ASSERT_NE(nullptr, e3);
+
+    EXPECT_EQ(0, e0->leadership_term_id);
+    EXPECT_EQ(1, e1->leadership_term_id);
+    EXPECT_EQ(2, e2->leadership_term_id);
+    EXPECT_EQ(3, e3->leadership_term_id);
+
+    aeron_cluster_recording_log_close(log);
+
+    /* Reload: sorted order must be preserved */
+    ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), false));
+    EXPECT_EQ(4, log->sorted_count);
+    EXPECT_EQ(0, aeron_cluster_recording_log_entry_at(log, 0)->leadership_term_id);
+    EXPECT_EQ(3, aeron_cluster_recording_log_entry_at(log, 3)->leadership_term_id);
+    aeron_cluster_recording_log_close(log);
+}
+
+TEST_F(RecordingLogTest, termsShouldSortBeforeSnapshotsAtSameTermBase)
+{
+    aeron_cluster_recording_log_t *log = nullptr;
+    ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+    append_term(log,  1, 0, 0, 0);
+    append_snap(log, 10, 0, 0, 100, 0, -1);  /* snapshot at same termBase=0 */
+    append_snap(log, 11, 0, 0, 100, 0, 0);
+
+    EXPECT_EQ(3, log->sorted_count);
+
+    /* TERM must come before SNAPSHOT */
+    auto *e0 = aeron_cluster_recording_log_entry_at(log, 0);
+    ASSERT_NE(nullptr, e0);
+    EXPECT_EQ(AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_TERM, e0->entry_type);
+    auto *e1 = aeron_cluster_recording_log_entry_at(log, 1);
+    ASSERT_NE(nullptr, e1);
+    EXPECT_EQ(AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_SNAPSHOT, e1->entry_type);
+
+    aeron_cluster_recording_log_close(log);
+}
+
+TEST_F(RecordingLogTest, snapshotsShouldSortByServiceIdDescending)
+{
+    aeron_cluster_recording_log_t *log = nullptr;
+    ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+    append_term(log,  1, 0, 0, 0);
+    append_snap(log, 20, 0, 0, 500, 0, 0);   /* serviceId=0 */
+    append_snap(log, 21, 0, 0, 500, 0, 1);   /* serviceId=1 */
+    append_snap(log, 22, 0, 0, 500, 0, -1);  /* serviceId=-1 (CM) */
+
+    /* All at same leadershipTermId=0, termBase=0, logPosition=500
+     * serviceId DESC: 1, 0, -1 */
+    auto *e1 = aeron_cluster_recording_log_entry_at(log, 1);
+    auto *e2 = aeron_cluster_recording_log_entry_at(log, 2);
+    auto *e3 = aeron_cluster_recording_log_entry_at(log, 3);
+    ASSERT_NE(nullptr, e1); ASSERT_NE(nullptr, e2); ASSERT_NE(nullptr, e3);
+
+    EXPECT_EQ(1,  e1->service_id);
+    EXPECT_EQ(0,  e2->service_id);
+    EXPECT_EQ(-1, e3->service_id);
+
+    aeron_cluster_recording_log_close(log);
+}
+
+TEST_F(RecordingLogTest, invalidEntriesShouldBeVisibleInSortedView)
+{
+    aeron_cluster_recording_log_t *log = nullptr;
+    ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+    append_term(log,  1, 0, 0, 0);
+    append_snap(log, 10, 0, 0, 100, 0, -1);
+    append_snap(log, 11, 0, 0, 100, 0, 0);
+
+    /* Invalidate the CM snapshot */
+    ASSERT_EQ(1, aeron_cluster_recording_log_invalidate_latest_snapshot(log));
+
+    EXPECT_EQ(3, log->sorted_count); /* all 3 still present in sorted view */
+    /* Find invalidated entries */
+    bool found_invalid = false;
+    for (int i = 0; i < log->sorted_count; i++)
+    {
+        auto *e = aeron_cluster_recording_log_entry_at(log, i);
+        if (!e->is_valid) { found_invalid = true; }
+    }
+    EXPECT_TRUE(found_invalid);
+
+    aeron_cluster_recording_log_close(log);
+}
+
+TEST_F(RecordingLogTest, reloadShouldRebuildSortedView)
+{
+    aeron_cluster_recording_log_t *log = nullptr;
+    ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+    append_term(log, 1, 5, 0, 0);
+    append_term(log, 1, 3, 0, 0);
+    append_term(log, 1, 1, 0, 0);
+
+    ASSERT_EQ(0, aeron_cluster_recording_log_reload(log));
+
+    EXPECT_EQ(3, log->sorted_count);
+    EXPECT_EQ(1, aeron_cluster_recording_log_entry_at(log, 0)->leadership_term_id);
+    EXPECT_EQ(3, aeron_cluster_recording_log_entry_at(log, 1)->leadership_term_id);
+    EXPECT_EQ(5, aeron_cluster_recording_log_entry_at(log, 2)->leadership_term_id);
+
+    aeron_cluster_recording_log_close(log);
+}
+
+TEST_F(RecordingLogTest, standbySnapshotSortsBetweenTermAndSnapshot)
+{
+    aeron_cluster_recording_log_t *log = nullptr;
+    ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+    append_term(log,  1, 0, 0, 0);
+    append_snap(log, 10, 0, 0, 100, 0, -1);   /* regular SNAPSHOT */
+    ASSERT_EQ(0, aeron_cluster_recording_log_append_standby_snapshot(
+        log, 20, 0, 0, 100, 0, -1, "aeron:udp?endpoint=localhost:8080"));  /* STANDBY */
+
+    /* Sort order at same termBase=0: TERM < STANDBY < SNAPSHOT */
+    auto *e0 = aeron_cluster_recording_log_entry_at(log, 0);
+    auto *e1 = aeron_cluster_recording_log_entry_at(log, 1);
+    auto *e2 = aeron_cluster_recording_log_entry_at(log, 2);
+    ASSERT_NE(nullptr, e0); ASSERT_NE(nullptr, e1); ASSERT_NE(nullptr, e2);
+
+    int base0 = e0->entry_type & ~AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_INVALID_FLAG;
+    int base1 = e1->entry_type & ~AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_INVALID_FLAG;
+    int base2 = e2->entry_type & ~AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_INVALID_FLAG;
+
+    EXPECT_EQ(AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_TERM,             base0);
+    EXPECT_EQ(AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_STANDBY_SNAPSHOT, base1);
+    EXPECT_EQ(AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_SNAPSHOT,         base2);
+
+    aeron_cluster_recording_log_close(log);
+}

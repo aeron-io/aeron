@@ -49,6 +49,8 @@ typedef struct aeron_cluster_recording_log_entry_stct
     int64_t timestamp;
     int32_t service_id;             /* -1 for term entries */
     int32_t entry_type;             /* AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_* */
+    int     entry_index;            /* physical slot number (0-based) — used by sort comparator */
+    bool    is_valid;               /* !( entry_type & INVALID_FLAG ) — cached for convenience */
 }
 aeron_cluster_recording_log_entry_t;
 
@@ -70,8 +72,16 @@ typedef struct aeron_cluster_recording_log_stct
     int      fd;                     /* open file descriptor */
     uint8_t *mapped;                 /* mmap'd file contents */
     size_t   mapped_length;
-    int      entry_count;
-    aeron_cluster_recording_log_entry_t *entries;  /* points into mapped */
+    int      entry_count;            /* physical slot count (includes invalid entries) */
+
+    /**
+     * Sorted in-memory view of entries, matching Java RecordingLog.entries().
+     * Sorted by: leadershipTermId → termBaseLogPosition → type (TERM < STANDBY < SNAPSHOT)
+     *            → logPosition → serviceId DESC.
+     * Rebuilt on open() and reload().
+     */
+    aeron_cluster_recording_log_entry_t *sorted_entries;
+    int                                   sorted_count;   /* count of ALL entries (valid + invalid) */
 }
 aeron_cluster_recording_log_t;
 
@@ -85,6 +95,12 @@ int  aeron_cluster_recording_log_open(
 
 int  aeron_cluster_recording_log_close(aeron_cluster_recording_log_t *log);
 int  aeron_cluster_recording_log_force(aeron_cluster_recording_log_t *log);
+
+/**
+ * Re-read all entries from disk and rebuild the sorted in-memory view.
+ * Equivalent to Java's RecordingLog.reload().
+ */
+int  aeron_cluster_recording_log_reload(aeron_cluster_recording_log_t *log);
 
 /* -----------------------------------------------------------------------
  * Writes
@@ -127,7 +143,11 @@ int  aeron_cluster_recording_log_invalidate_entry_at(
 /* -----------------------------------------------------------------------
  * Reads / queries
  * ----------------------------------------------------------------------- */
-/** Get entry at 0-based index; NULL if out of range. */
+/**
+ * Get entry at 0-based index in the SORTED view.
+ * Equivalent to Java's recordingLog.entries().get(index).
+ * Returns NULL if out of range.
+ */
 aeron_cluster_recording_log_entry_t *aeron_cluster_recording_log_entry_at(
     aeron_cluster_recording_log_t *log, int index);
 

@@ -41,6 +41,11 @@ static void entry_write(uint8_t *slot, const aeron_cluster_recording_log_entry_t
     memcpy(slot + AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_OFFSET,            &e->entry_type,            4);
 }
 
+static bool is_valid_entry(int32_t entry_type)
+{
+    return (entry_type & AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_INVALID_FLAG) == 0;
+}
+
 static void entry_read(aeron_cluster_recording_log_entry_t *e, const uint8_t *slot)
 {
     memcpy(&e->recording_id,           slot + AERON_CLUSTER_RECORDING_LOG_RECORDING_ID_OFFSET,          8);
@@ -50,11 +55,102 @@ static void entry_read(aeron_cluster_recording_log_entry_t *e, const uint8_t *sl
     memcpy(&e->timestamp,              slot + AERON_CLUSTER_RECORDING_LOG_TIMESTAMP_OFFSET,             8);
     memcpy(&e->service_id,             slot + AERON_CLUSTER_RECORDING_LOG_SERVICE_ID_OFFSET,            4);
     memcpy(&e->entry_type,             slot + AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_OFFSET,            4);
+    e->is_valid    = is_valid_entry(e->entry_type);
+    e->entry_index = -1;  /* set by caller */
 }
 
-static bool is_valid_entry(int32_t entry_type)
+/* -----------------------------------------------------------------------
+ * Comparator — mirrors Java's ENTRY_COMPARATOR exactly:
+ *   1. leadershipTermId ascending
+ *   2. termBaseLogPosition ascending
+ *   3. type: TERM(0) < STANDBY(2) < SNAPSHOT(1) — SNAPSHOT always last
+ *   4. if both TERM: entryIndex (insertion order) ascending
+ *   5. if both SNAPSHOT/STANDBY: logPosition ascending, then serviceId DESCENDING
+ * ----------------------------------------------------------------------- */
+static int entry_comparator(const void *a, const void *b)
 {
-    return (entry_type & AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_INVALID_FLAG) == 0;
+    const aeron_cluster_recording_log_entry_t *e1 =
+        (const aeron_cluster_recording_log_entry_t *)a;
+    const aeron_cluster_recording_log_entry_t *e2 =
+        (const aeron_cluster_recording_log_entry_t *)b;
+
+    /* 1. leadershipTermId */
+    if (e1->leadership_term_id != e2->leadership_term_id)
+    {
+        return (e1->leadership_term_id < e2->leadership_term_id) ? -1 : 1;
+    }
+
+    /* 2. termBaseLogPosition */
+    if (e1->term_base_log_position != e2->term_base_log_position)
+    {
+        return (e1->term_base_log_position < e2->term_base_log_position) ? -1 : 1;
+    }
+
+    /* 3. type: if different, SNAPSHOT (1) is always last */
+    int t1 = e1->entry_type & ~AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_INVALID_FLAG;
+    int t2 = e2->entry_type & ~AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_INVALID_FLAG;
+    if (t1 != t2)
+    {
+        if (t1 == AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_SNAPSHOT) { return  1; }
+        if (t2 == AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_SNAPSHOT) { return -1; }
+        return (t1 < t2) ? -1 : 1;
+    }
+
+    /* 4. same type */
+    if (t1 == AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_TERM)
+    {
+        /* TERM: sort by entryIndex (insertion order) */
+        return e1->entry_index - e2->entry_index;
+    }
+
+    /* SNAPSHOT / STANDBY: logPosition ascending */
+    if (e1->log_position != e2->log_position)
+    {
+        return (e1->log_position < e2->log_position) ? -1 : 1;
+    }
+
+    /* 5. serviceId DESCENDING (Java: Integer.compare(e2.serviceId, e1.serviceId)) */
+    if (e2->service_id != e1->service_id)
+    {
+        return (e2->service_id < e1->service_id) ? -1 : 1;
+    }
+
+    return 0;
+}
+
+/* Build / rebuild the sorted_entries array from the current mmap contents. */
+static int recording_log_sort(aeron_cluster_recording_log_t *log)
+{
+    if (log->sorted_entries)
+    {
+        aeron_free(log->sorted_entries);
+        log->sorted_entries = NULL;
+        log->sorted_count   = 0;
+    }
+
+    if (log->entry_count == 0) { return 0; }
+
+    if (aeron_alloc((void **)&log->sorted_entries,
+        (size_t)log->entry_count * sizeof(aeron_cluster_recording_log_entry_t)) < 0)
+    {
+        AERON_APPEND_ERR("%s", "unable to allocate sorted_entries");
+        return -1;
+    }
+
+    for (int i = 0; i < log->entry_count; i++)
+    {
+        const uint8_t *slot = log->mapped + (size_t)i * ENTRY_STRIDE;
+        entry_read(&log->sorted_entries[i], slot);
+        log->sorted_entries[i].entry_index = i;
+        log->sorted_entries[i].is_valid =
+            is_valid_entry(log->sorted_entries[i].entry_type);
+    }
+
+    qsort(log->sorted_entries, (size_t)log->entry_count,
+          sizeof(aeron_cluster_recording_log_entry_t), entry_comparator);
+
+    log->sorted_count = log->entry_count;
+    return 0;
 }
 
 /* -----------------------------------------------------------------------
@@ -84,7 +180,7 @@ static int recording_log_grow(aeron_cluster_recording_log_t *log)
     }
 
     log->mapped_length = new_len;
-    log->entries = (aeron_cluster_recording_log_entry_t *)log->mapped;
+    /* sorted_entries built by recording_log_sort() */
     return 0;
 }
 
@@ -127,7 +223,8 @@ int aeron_cluster_recording_log_open(
     _log->entry_count  = (int)(st.st_size / ENTRY_STRIDE);
     _log->mapped_length = (size_t)st.st_size;
     _log->mapped       = NULL;
-    _log->entries      = NULL;
+    _log->sorted_entries = NULL;
+    _log->sorted_count   = 0;
 
     if (st.st_size > 0)
     {
@@ -140,10 +237,18 @@ int aeron_cluster_recording_log_open(
             aeron_free(_log);
             return -1;
         }
-        _log->entries = (aeron_cluster_recording_log_entry_t *)_log->mapped;
+        /* sorted_entries built by recording_log_sort() */
     }
 
     *log = _log;
+
+    /* Build sorted view on open */
+    if (recording_log_sort(_log) < 0)
+    {
+        aeron_cluster_recording_log_close(_log);
+        return -1;
+    }
+
     return 0;
 }
 
@@ -151,6 +256,7 @@ int aeron_cluster_recording_log_close(aeron_cluster_recording_log_t *log)
 {
     if (NULL != log)
     {
+        aeron_free(log->sorted_entries);
         if (NULL != log->mapped)
         {
             munmap(log->mapped, log->mapped_length);
@@ -162,6 +268,15 @@ int aeron_cluster_recording_log_close(aeron_cluster_recording_log_t *log)
         aeron_free(log);
     }
     return 0;
+}
+
+int aeron_cluster_recording_log_reload(aeron_cluster_recording_log_t *log)
+{
+    /* Re-read physical entry count from file */
+    struct stat st;
+    if (fstat(log->fd, &st) < 0) { return -1; }
+    log->entry_count = (int)(st.st_size / ENTRY_STRIDE);
+    return recording_log_sort(log);
 }
 
 int aeron_cluster_recording_log_force(aeron_cluster_recording_log_t *log)
@@ -188,7 +303,7 @@ static int recording_log_append(aeron_cluster_recording_log_t *log,
     entry_write(slot, entry);
     log->entry_count++;
     msync(slot, ENTRY_STRIDE, MS_SYNC);
-    return 0;
+    return recording_log_sort(log);  /* rebuild sorted view after append */
 }
 
 /* -----------------------------------------------------------------------
@@ -365,6 +480,7 @@ int aeron_cluster_recording_log_invalidate_latest_snapshot(aeron_cluster_recordi
             count++;
         }
     }
+    if (count > 0) { recording_log_sort(log); }
     return (count > 0) ? 1 : 0;
 }
 
@@ -378,7 +494,7 @@ int aeron_cluster_recording_log_invalidate_entry_at(
     int32_t invalid = entry_type | AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_INVALID_FLAG;
     memcpy(slot + AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_OFFSET, &invalid, 4);
     msync(slot + AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_OFFSET, 4, MS_SYNC);
-    return 0;
+    return recording_log_sort(log);  /* rebuild sorted view */
 }
 
 /* -----------------------------------------------------------------------
@@ -387,17 +503,16 @@ int aeron_cluster_recording_log_invalidate_entry_at(
 aeron_cluster_recording_log_entry_t *aeron_cluster_recording_log_find_last_term(
     aeron_cluster_recording_log_t *log)
 {
-    /* Entries are stored sequentially; scan in reverse for last valid TERM */
-    static aeron_cluster_recording_log_entry_t result;
-    for (int i = log->entry_count - 1; i >= 0; i--)
+    /* Scan sorted_entries in reverse — last valid TERM after sort */
+    if (NULL == log->sorted_entries) { return NULL; }
+    for (int i = log->sorted_count - 1; i >= 0; i--)
     {
-        const uint8_t *slot = log->mapped + (size_t)i * ENTRY_STRIDE;
-        int32_t entry_type;
-        memcpy(&entry_type, slot + AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_OFFSET, 4);
-        if (entry_type == AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_TERM)
+        aeron_cluster_recording_log_entry_t *e = &log->sorted_entries[i];
+        if (is_valid_entry(e->entry_type) &&
+            (e->entry_type & ~AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_INVALID_FLAG)
+                == AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_TERM)
         {
-            entry_read(&result, slot);
-            return &result;
+            return e;
         }
     }
     return NULL;
@@ -406,18 +521,16 @@ aeron_cluster_recording_log_entry_t *aeron_cluster_recording_log_find_last_term(
 aeron_cluster_recording_log_entry_t *aeron_cluster_recording_log_get_term_entry(
     aeron_cluster_recording_log_t *log, int64_t leadership_term_id)
 {
-    static aeron_cluster_recording_log_entry_t result;
-    for (int i = 0; i < log->entry_count; i++)
+    if (NULL == log->sorted_entries) { return NULL; }
+    for (int i = 0; i < log->sorted_count; i++)
     {
-        const uint8_t *slot = log->mapped + (size_t)i * ENTRY_STRIDE;
-        int64_t stored_id; int32_t entry_type;
-        memcpy(&stored_id,  slot + AERON_CLUSTER_RECORDING_LOG_LEADERSHIP_TERM_ID_OFFSET, 8);
-        memcpy(&entry_type, slot + AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_OFFSET, 4);
-        if (stored_id == leadership_term_id &&
-            entry_type == AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_TERM)
+        aeron_cluster_recording_log_entry_t *e = &log->sorted_entries[i];
+        int32_t base_type = e->entry_type & ~AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_INVALID_FLAG;
+        if (is_valid_entry(e->entry_type) &&
+            base_type == AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_TERM &&
+            e->leadership_term_id == leadership_term_id)
         {
-            entry_read(&result, slot);
-            return &result;
+            return e;
         }
     }
     return NULL;
@@ -426,19 +539,17 @@ aeron_cluster_recording_log_entry_t *aeron_cluster_recording_log_get_term_entry(
 aeron_cluster_recording_log_entry_t *aeron_cluster_recording_log_get_latest_snapshot(
     aeron_cluster_recording_log_t *log, int32_t service_id)
 {
-    static aeron_cluster_recording_log_entry_t result;
-    for (int i = log->entry_count - 1; i >= 0; i--)
+    /* Scan sorted_entries in reverse — latest valid SNAPSHOT for service_id */
+    if (NULL == log->sorted_entries) { return NULL; }
+    for (int i = log->sorted_count - 1; i >= 0; i--)
     {
-        const uint8_t *slot = log->mapped + (size_t)i * ENTRY_STRIDE;
-        int32_t entry_type; int32_t stored_svc;
-        memcpy(&entry_type,  slot + AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_OFFSET, 4);
-        memcpy(&stored_svc,  slot + AERON_CLUSTER_RECORDING_LOG_SERVICE_ID_OFFSET, 4);
-        if (is_valid_entry(entry_type) &&
-            entry_type == AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_SNAPSHOT &&
-            stored_svc == service_id)
+        aeron_cluster_recording_log_entry_t *e = &log->sorted_entries[i];
+        int32_t base_type = e->entry_type & ~AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_INVALID_FLAG;
+        if (is_valid_entry(e->entry_type) &&
+            base_type == AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_SNAPSHOT &&
+            e->service_id == service_id)
         {
-            entry_read(&result, slot);
-            return &result;
+            return e;
         }
     }
     return NULL;
@@ -525,51 +636,26 @@ void aeron_cluster_recovery_plan_free(aeron_cluster_recovery_plan_t *plan)
 aeron_cluster_recording_log_entry_t *aeron_cluster_recording_log_entry_at(
     aeron_cluster_recording_log_t *log, int index)
 {
-    if (index < 0 || index >= log->entry_count) { return NULL; }
-    static aeron_cluster_recording_log_entry_t result;
-    const uint8_t *slot = log->mapped + (size_t)index * ENTRY_STRIDE;
-    entry_read(&result, slot);
-    return &result;
+    if (index < 0 || index >= log->sorted_count || NULL == log->sorted_entries)
+    {
+        return NULL;
+    }
+    return &log->sorted_entries[index];
 }
 
 int64_t aeron_cluster_recording_log_find_last_term_recording_id(
     aeron_cluster_recording_log_t *log)
 {
-    for (int i = log->entry_count - 1; i >= 0; i--)
-    {
-        const uint8_t *slot = log->mapped + (size_t)i * ENTRY_STRIDE;
-        int32_t entry_type;
-        memcpy(&entry_type, slot + AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_OFFSET, 4);
-        if (is_valid_entry(entry_type) &&
-            entry_type == AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_TERM)
-        {
-            int64_t recording_id;
-            memcpy(&recording_id, slot + AERON_CLUSTER_RECORDING_LOG_RECORDING_ID_OFFSET, 8);
-            return recording_id;
-        }
-    }
-    return -1;
+    aeron_cluster_recording_log_entry_t *e = aeron_cluster_recording_log_find_last_term(log);
+    return (e != NULL) ? e->recording_id : -1;
 }
 
 int64_t aeron_cluster_recording_log_get_term_timestamp(
     aeron_cluster_recording_log_t *log, int64_t leadership_term_id)
 {
-    for (int i = 0; i < log->entry_count; i++)
-    {
-        const uint8_t *slot = log->mapped + (size_t)i * ENTRY_STRIDE;
-        int64_t stored_id; int32_t entry_type;
-        memcpy(&stored_id,  slot + AERON_CLUSTER_RECORDING_LOG_LEADERSHIP_TERM_ID_OFFSET, 8);
-        memcpy(&entry_type, slot + AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_OFFSET, 4);
-        if (is_valid_entry(entry_type) &&
-            entry_type == AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_TERM &&
-            stored_id == leadership_term_id)
-        {
-            int64_t ts;
-            memcpy(&ts, slot + AERON_CLUSTER_RECORDING_LOG_TIMESTAMP_OFFSET, 8);
-            return ts;
-        }
-    }
-    return -1;
+    aeron_cluster_recording_log_entry_t *e =
+        aeron_cluster_recording_log_get_term_entry(log, leadership_term_id);
+    return (e != NULL) ? e->timestamp : -1;
 }
 
 int aeron_cluster_recording_log_append_standby_snapshot(
