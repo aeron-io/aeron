@@ -75,6 +75,16 @@ void aeron_cluster_egress_poller_set_context(
 
 int aeron_cluster_egress_poller_poll(aeron_cluster_egress_poller_t *poller);
 
+/**
+ * Test helper: dispatch a pre-built SBE buffer directly into the poller's
+ * fragment handler, bypassing the subscription.  NOT for production use.
+ * Equivalent to Java's egressPoller.onFragment(buffer, offset, length, header).
+ */
+aeron_controlled_fragment_handler_action_t aeron_cluster_egress_poller_on_fragment_for_test(
+    aeron_cluster_egress_poller_t *poller,
+    const uint8_t *buffer,
+    size_t length);
+
 
 #ifdef __cplusplus
 }

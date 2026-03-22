@@ -83,6 +83,8 @@ extern "C"
 /* -----------------------------------------------------------------------
  * Cluster role — matches Java Cluster.Role
  * ----------------------------------------------------------------------- */
+#ifndef AERON_CLUSTER_ROLE_DEFINED
+#define AERON_CLUSTER_ROLE_DEFINED
 typedef enum aeron_cluster_role_en
 {
     AERON_CLUSTER_ROLE_FOLLOWER  = 0,
@@ -90,6 +92,7 @@ typedef enum aeron_cluster_role_en
     AERON_CLUSTER_ROLE_LEADER    = 2,
 }
 aeron_cluster_role_t;
+#endif
 
 /* -----------------------------------------------------------------------
  * Election state codes — must match Java ElectionState enum ordinals

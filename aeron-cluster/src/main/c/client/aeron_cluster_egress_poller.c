@@ -390,3 +390,11 @@ int aeron_cluster_egress_poller_poll(aeron_cluster_egress_poller_t *poller)
         poller->fragment_assembler,
         poller->fragment_limit);
 }
+
+aeron_controlled_fragment_handler_action_t aeron_cluster_egress_poller_on_fragment_for_test(
+    aeron_cluster_egress_poller_t *poller,
+    const uint8_t *buffer,
+    size_t length)
+{
+    return on_fragment(poller, buffer, length, NULL);
+}
