@@ -12,6 +12,25 @@ option and is propagated across as this needs to be consistent across both agent
 
 === Changelog
 
+* **[Breaking]**: **[Client/C{plus}{plus} Wrapper]** Remove `close()` method from `Publication/ExclusivePublication`,
+i.e. the underlying `aeron_publication_t/aeron_exclusive_publication_t` will be closed when the corresponding C++
+object is destroyed.
+* **[Client/C{plus}{plus} Wrapper]** Do not use locks for adding/removing destinations to `ExclusivePublication` and
+`Subscription` since these classes are not threadsafe.
+* **[Client/C]** Allow setting idle strategy on the `aeron_context`.
+* **[Client/C{plus}{plus} Wrapper]** Set idle strategy on the underlying `aeron_context` using configured
+`idleSleepDuration`.
+* **[Client/C]** Close image before invoking unavailable handler when closing subscription.
+* **[Client/C]** Client conductor should process one command at a time.
+* **[Client/C]** Fix blocking logic of the `aeron_add_xxx_handler/aeron_remove_xxx_handler` methods, i.e. do not exit
+early if client command queue is empty and instead retry until command is added and confirmed or timeout occurs.
+* **[Client/C{plus}{plus} Wrapper]** Ensure that `Aeron` instance is deleted after all of its children are deleted.
+* **[Client/C{plus}{plus} Wrapper]** Handle a case when a media driver dies/is stopped leading to the underlying
+C-managed resources being closed, i.e. fix `AsyncAddSubscription` memory leak.
+* **[Client/C{plus}{plus} Wrapper]** Fix pending `AsyncDestination` memory leak when not polled to completion.
+* **[Driver/C]** Avoid double freeing memory when setting new idle strategy programmatically.
+* **[C]** Fix `gradlew` invocation from `cmake`, i.e. fix `aeron-all.jar` generation when running inside CLion.
+* **[Samples/Java]** Remove deprecated `UseBiasedLocking` JVM option.
 * **[Cluster]** Backup query responses are now resolved using the most recent entry in the RecordingLog instead of being derived from the RecoveryPlan.
 * **[Cluster]** When a ClusteredServiceAgent fails to start, e.g. from an exception during snapshot load, the ConsensusModuleAgent will also terminate with an error in the log. Previously this would hang indefinitely.
 * **[Java Samples]** Added a sample for ReplayMerge.
@@ -37,12 +56,35 @@ but is now explicitly enforced via the ClusteredServiceContainer.Configuration.M
 * Increase default cycle thresholds to 100ms as the previous value of 1ms was too short and their counts kept ticking up under normal conditions.
 * **[Archive]** Fix `CATALOG_RESIZE` debug logging.
 * **[C]** Renamed `aeron_archive_proxy_set_control_esssion_id` to `aeron_archive_proxy_set_control_session_id`.
-* **[Java]** Upgrade to `Gradle` 9.4.0.
+* **[Java]** Upgrade to `Gradle` 9.4.1.
 * **[Java]** Upgrade to `ByteBuddy` 1.18.7.
 * **[Java]** Upgrade to `Mockito` 5.23.0.
 * **[Java]** Upgrade to `JUnit` 6.0.3.
 * **[Java]** Upgrade to `Checkstyle` 12.3.1.
-* **[Java]** Upgrade to `Shadow` 9.3.2.
+* **[Java]** Upgrade to `Shadow` 9.4.0.
+
+== 1.50.4 (2026-03-20)
+* **[Breaking]**: **[Client/C{plus}{plus} Wrapper]** Remove `close()` method from `Publication/ExclusivePublication`,
+i.e. the underlying `aeron_publication_t/aeron_exclusive_publication_t` will be closed when the corresponding C++
+object is destroyed.
+* **[Client/C{plus}{plus} Wrapper]** Do not use locks for adding/removing destinations to `ExclusivePublication` and
+`Subscription` since these classes are not threadsafe.
+* **[Client/C]** Allow setting idle strategy on the `aeron_context`.
+* **[Client/C{plus}{plus} Wrapper]** Set idle strategy on the underlying `aeron_context` using configured
+`idleSleepDuration`.
+* **[Client/C]** Close image before invoking unavailable handler when closing subscription.
+* **[Client/C]** Client conductor should process one command at a time.
+* **[Client/C]** Fix blocking logic of the `aeron_add_xxx_handler/aeron_remove_xxx_handler` methods, i.e. do not exit
+early if client command queue is empty and instead retry until command is added and confirmed or timeout occurs.
+* **[Client/C{plus}{plus} Wrapper]** Ensure that `Aeron` instance is deleted after all of its children are deleted.
+* **[Client/C{plus}{plus} Wrapper]** Handle a case when a media driver dies/is stopped leading to the underlying
+C-managed resources being closed, i.e. fix `AsyncAddSubscription` memory leak.
+* **[Client/C{plus}{plus} Wrapper]** Fix pending `AsyncDestination` memory leak when not polled to completion.
+* **[Driver/C]** Avoid double freeing memory when setting new idle strategy programmatically.
+* **[C]** Fix `gradlew` invocation from `cmake`, i.e. fix `aeron-all.jar` generation when running inside CLion.
+* **[Samples/Java]** Remove deprecated `UseBiasedLocking` JVM option.
+* **[Java]** Upgrade to `Gradle` 9.4.1.
+* **[Java]** Upgrade to `Shadow` 9.4.0.
 
 == 1.50.3 (2026-03-13)
 * **[Java]** Avoid bind conflicts when removing and adding a subscription to the same channel.
@@ -152,7 +194,7 @@ It's also possible to specify the port used with the resolved address by using t
 * **[C]** fix: double free in `aeron_archive_context_t`. (https://github.com/aeron-io/aeron/pull/1897[#1897])
 * **[C]** Make `aeron_subscription_image_release` and `aeron_subscription_image_retain` no op if image is not found in the
 current image list, i.e. handle a case of `on_unavailable_image` being called and attempting to retain an image that
-was already removed (i.e. C++ Wrapper)).
+was already removed (i.e. C{plus}{plus} Wrapper)).
 * **[C]** invoke the client when in `aeron_archive_replay_merge_close`. (https://github.com/aeron-io/aeron/pull/1873[#1873])
 * **[C]** Handle `aeron_archive_encoded_credentials_t` being `NULL` as well as `data` field being `NULL`, i.e. treat both as empty credentials.
 * **[C]** Fix race condition in `aeron_archive_client` reentrancy check, i.e. first acquire lock and then do the check. Use
@@ -204,7 +246,7 @@ upon failure, update tests to reflect activity timestamp changes during startup 
 * **[C]** fix double free in `aeron_archive_context_t`. (https://github.com/aeron-io/aeron/pull/1897[#1897])
 * **[C]** Make `aeron_subscription_image_release` and `aeron_subscription_image_retain` no op if image is not found in the
 current image list, i.e. handle a case of `on_unavailable_image` being called and attempting to retain an image that
-was already removed (i.e. C++ Wrapper)).
+was already removed (i.e. C{plus}{plus} Wrapper)).
 * **[C]** invoke the client when in `aeron_archive_replay_merge_close`. (https://github.com/aeron-io/aeron/pull/1873[#1873])
 * **[C]** Handle `aeron_archive_encoded_credentials_t` being `NULL` as well as `data` field being `NULL`, i.e. treat both as empty credentials.
 * **[C]** Fix race condition in `aeron_archive_client` reentrancy check, i.e. first acquire lock and then do the check. Use

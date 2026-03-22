@@ -93,6 +93,11 @@ int aeron_context_init(aeron_context_t **context)
     _context->on_close_client = NULL;
     _context->on_close_client_clientd = NULL;
 
+    _context->idle_strategy_name = NULL;
+    _context->idle_strategy_init_args = NULL;
+    _context->idle_strategy_state = NULL;
+    _context->idle_strategy_func = NULL;
+
     _context->use_conductor_agent_invoker = AERON_CONTEXT_USE_CONDUCTOR_AGENT_INVOKER_DEFAULT;
     _context->agent_on_start_func = NULL;
     _context->agent_on_start_state = NULL;
@@ -167,12 +172,27 @@ int aeron_context_init(aeron_context_t **context)
     _context->pre_touch_mapped_memory = aeron_parse_bool(
         getenv(AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY_ENV_VAR), AERON_CONTEXT_PRE_TOUCH_MAPPED_MEMORY_DEFAULT);
 
-    char sleep_duration_ascii[32] = { 0 };
-    snprintf(sleep_duration_ascii, sizeof(sleep_duration_ascii), "%" PRIu64, _context->idle_sleep_duration_ns);
+    _context->idle_strategy_name = aeron_strndup("sleep-ns", AERON_MAX_PATH);
 
-    _context->idle_strategy_state = NULL;
+    size_t init_args_size = 21; // 20 (UINT64_MAX) + 1
+    if (aeron_alloc((void**)&_context->idle_strategy_init_args, init_args_size) < 0)
+    {
+        AERON_APPEND_ERR("%s", "");
+        goto error;
+    }
+
+    int rc = snprintf(_context->idle_strategy_init_args, init_args_size, "%" PRIu64, _context->idle_sleep_duration_ns);
+    if (rc < 0 || rc >= (int)init_args_size)
+    {
+        AERON_SET_ERR(EINVAL, "error formatting idle_strategy_init_args=%d", rc);
+        goto error;
+    }
+
     if ((_context->idle_strategy_func = aeron_idle_strategy_load(
-        "sleep-ns", &_context->idle_strategy_state, NULL, sleep_duration_ascii)) == NULL)
+        _context->idle_strategy_name,
+        &_context->idle_strategy_state,
+        NULL,
+        _context->idle_strategy_init_args)) == NULL)
     {
         goto error;
     }
@@ -194,6 +214,8 @@ int aeron_context_close(aeron_context_t *context)
         aeron_mpsc_concurrent_array_queue_close(&context->command_queue);
 
         aeron_free(context->idle_strategy_state);
+        aeron_free(context->idle_strategy_init_args);
+        aeron_free((void*)context->idle_strategy_name);
         aeron_free(context);
     }
 
@@ -298,6 +320,50 @@ int aeron_context_set_idle_sleep_duration_ns(aeron_context_t *context, uint64_t 
 uint64_t aeron_context_get_idle_sleep_duration_ns(aeron_context_t *context)
 {
     return NULL == context ? AERON_CONTEXT_IDLE_SLEEP_DURATION_NS_DEFAULT : context->idle_sleep_duration_ns;
+}
+
+int aeron_context_set_idle_strategy_init_args(aeron_context_t *context, const char *value)
+{
+    AERON_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+
+    aeron_free(context->idle_strategy_init_args);
+    context->idle_strategy_init_args = NULL == value ? NULL : aeron_strndup(value, AERON_MAX_PATH);
+
+    return 0;
+}
+
+const char *aeron_context_get_idle_strategy_init_args(aeron_context_t *context)
+{
+    return NULL != context ? context->idle_strategy_init_args : NULL;
+}
+
+int aeron_context_set_idle_strategy(aeron_context_t *context, const char *value)
+{
+    AERON_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+    AERON_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, value);
+
+    aeron_free(context->idle_strategy_state);
+    aeron_free((void *)context->idle_strategy_name);
+
+    context->idle_strategy_state = NULL;
+    context->idle_strategy_name = NULL;
+
+    if ((context->idle_strategy_func = aeron_idle_strategy_load(
+        value,
+        &context->idle_strategy_state,
+        NULL,
+        context->idle_strategy_init_args)) == NULL)
+    {
+        return -1;
+    }
+
+    context->idle_strategy_name = aeron_strndup(value, AERON_MAX_PATH);
+    return 0;
+}
+
+const char *aeron_context_get_idle_strategy(aeron_context_t *context)
+{
+    return NULL != context ? context->idle_strategy_name : "sleep-ns";
 }
 
 int aeron_context_set_pre_touch_mapped_memory(aeron_context_t *context, bool value)

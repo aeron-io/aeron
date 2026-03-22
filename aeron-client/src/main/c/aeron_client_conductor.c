@@ -1513,6 +1513,7 @@ static int aeron_client_conductor_linger_or_delete_all_images(
 
         if (refcnt <= 0)
         {
+            aeron_image_close(image);
             if (NULL != subscription->on_unavailable_image)
             {
                 subscription->on_unavailable_image(subscription->on_unavailable_image_clientd, subscription, image);
@@ -2392,7 +2393,7 @@ int aeron_client_conductor_do_work(aeron_client_conductor_t *conductor)
     }
 
     work_count += (int)aeron_mpsc_concurrent_array_queue_drain(
-        conductor->command_queue, aeron_client_conductor_on_command, conductor, 10);
+        conductor->command_queue, aeron_client_conductor_on_command, conductor, 1);
 
     work_count += aeron_broadcast_receiver_receive(
         &conductor->to_client_buffer, aeron_client_conductor_on_driver_response, conductor);
@@ -3055,17 +3056,37 @@ int aeron_client_conductor_async_handler(aeron_client_conductor_t *conductor, ae
 {
     cmd->command_base.func = aeron_client_conductor_on_cmd_handler;
     cmd->command_base.item = NULL;
+    cmd->processed = false;
 
     if (conductor->invoker_mode)
     {
-        aeron_client_conductor_on_cmd_handler(conductor, cmd);
+        return aeron_client_conductor_on_cmd_handler(conductor, cmd);
     }
-    else
+
+    int64_t deadline_ns = (int64_t)(aeron_nano_clock() + conductor->driver_timeout_ns);
+    while (aeron_client_conductor_command_offer(conductor->command_queue, cmd) < 0)
     {
-        if (aeron_client_conductor_command_offer(conductor->command_queue, cmd) < 0)
+        if (aeron_nano_clock() >= deadline_ns)
         {
+            AERON_SET_ERR(ETIMEDOUT, "%s", "time out waiting for client conductor thread to process message");
             return -1;
         }
+
+        sched_yield();
+    }
+
+    bool processed;
+    AERON_GET_ACQUIRE(processed, cmd->processed);
+    while (!processed)
+    {
+        if (aeron_nano_clock() >= deadline_ns)
+        {
+            AERON_SET_ERR(ETIMEDOUT, "%s", "time out waiting for client conductor thread to process message");
+            return -1;
+        }
+
+        sched_yield();
+        AERON_GET_ACQUIRE(processed, cmd->processed);
     }
 
     return 0;

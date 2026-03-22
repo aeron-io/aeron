@@ -219,6 +219,16 @@ public:
         return aeron_subscription_poll(subscription, poll_handler, this, (size_t)fragment_limit);
     }
 
+    static void onAvailableImage(void *clientd, aeron_subscription_t *subscription, aeron_image_t *image)
+    {
+        auto test = reinterpret_cast<CSystemTestBase *>(clientd);
+
+        if (test->m_onAvailableImage)
+        {
+            test->m_onAvailableImage(subscription, image);
+        }
+    }
+
     static void onUnavailableImage(void *clientd, aeron_subscription_t *subscription, aeron_image_t *image)
     {
         auto test = reinterpret_cast<CSystemTestBase *>(clientd);
@@ -241,6 +251,7 @@ protected:
     aeron_t *m_aeron = nullptr;
 
     poll_handler_t m_poll_handler = nullptr;
+    image_handler_t m_onAvailableImage = nullptr;
     image_handler_t m_onUnavailableImage = nullptr;
 };
 

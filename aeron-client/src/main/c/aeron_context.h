@@ -66,6 +66,8 @@ typedef struct aeron_context_stct
 
     aeron_idle_strategy_func_t idle_strategy_func;
     void *idle_strategy_state;
+    char *idle_strategy_init_args;
+    const char *idle_strategy_name;
 
     uint64_t driver_timeout_ms;
     uint64_t keepalive_interval_ns;

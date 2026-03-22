@@ -19,9 +19,7 @@
 
 #include <cstdint>
 #include <memory>
-#include <atomic>
 
-#include "util/Index.h"
 #include "concurrent/AtomicCounter.h"
 #include "concurrent/CountersReader.h"
 
@@ -30,14 +28,22 @@ namespace aeron
 
 using namespace aeron::concurrent;
 
+class Aeron;
 class ClientConductor;
 
 class Counter : public AtomicCounter
 {
 public:
     /// @cond HIDDEN_SYMBOLS
-    Counter(aeron_counter_t *counter, CountersReader &reader, std::int64_t registrationId) :
-        AtomicCounter(counter), m_reader(reader), m_registrationId(registrationId)
+    Counter(
+        const std::shared_ptr<Aeron> &aeronRef,
+        CountersReader &reader,
+        aeron_counter_t *counter,
+        std::int64_t registrationId) :
+        AtomicCounter(counter),
+        m_aeronRef(aeronRef),
+        m_reader(reader),
+        m_registrationId(registrationId)
     {
     }
     /// @endcond
@@ -70,6 +76,7 @@ public:
     }
 
 private:
+    std::shared_ptr<Aeron> m_aeronRef; // ensure Aeron instance is being deleted after its children
     CountersReader &m_reader;
     std::int64_t m_registrationId;
 };

@@ -2078,6 +2078,8 @@ int aeron_driver_context_set_sender_idle_strategy(aeron_driver_context_t *contex
 
     aeron_free(context->sender_idle_strategy_state);
     aeron_free((void *)context->sender_idle_strategy_name);
+    context->sender_idle_strategy_state = NULL;
+    context->sender_idle_strategy_name = NULL;
 
     if ((context->sender_idle_strategy_func = aeron_idle_strategy_load(
         value,
@@ -2105,6 +2107,8 @@ int aeron_driver_context_set_conductor_idle_strategy(aeron_driver_context_t *con
 
     aeron_free(context->conductor_idle_strategy_state);
     aeron_free((void *)context->conductor_idle_strategy_name);
+    context->conductor_idle_strategy_state = NULL;
+    context->conductor_idle_strategy_name = NULL;
 
     if ((context->conductor_idle_strategy_func = aeron_idle_strategy_load(
         value,
@@ -2132,6 +2136,8 @@ int aeron_driver_context_set_receiver_idle_strategy(aeron_driver_context_t *cont
 
     aeron_free(context->receiver_idle_strategy_state);
     aeron_free((void *)context->receiver_idle_strategy_name);
+    context->receiver_idle_strategy_state = NULL;
+    context->receiver_idle_strategy_name = NULL;
 
     if ((context->receiver_idle_strategy_func = aeron_idle_strategy_load(
         value,

@@ -296,8 +296,8 @@ public final class ArchiveTool
         }
         else if (args.length == 2 && "compact".equals(args[1]))
         {
-            out.print("WARNING: Compacting the Catalog is non-recoverable operation! All recordings in state " +
-                "`INVALID` will be deleted along with the corresponding segment files.");
+            out.print("WARNING: Compacting the Catalog is non-recoverable operation! All non-ACTIVE recordings" +
+                " will be deleted along with the corresponding segment files.");
 
             if (readContinueAnswer("Continue? (y/n)"))
             {

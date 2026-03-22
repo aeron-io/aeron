@@ -18,14 +18,12 @@
 #define AERON_EXCLUSIVE_PUBLICATION_H
 
 #include <array>
-#include <atomic>
 #include <memory>
 #include <string>
 
 #include "concurrent/AtomicBuffer.h"
 #include "concurrent/logbuffer/BufferClaim.h"
 #include "concurrent/status/UnsafeBufferPosition.h"
-#include "concurrent/status/StatusIndicatorReader.h"
 #include "util/Exceptions.h"
 #include "Publication.h"
 
@@ -35,6 +33,8 @@ namespace aeron
 {
 
 using namespace aeron::concurrent::status;
+
+class Aeron;
 
 /**
  * Aeron Publisher API for sending messages to subscribers of a given channel and streamId pair. ExclusivePublications
@@ -48,7 +48,7 @@ using namespace aeron::concurrent::status;
  *
  * The APIs tryClaim and offer are non-blocking.
  *
- * <b>Note:</b> ExclusivePublication instances are NOT threadsafe for offer and try claim methods but are for others.
+ * <b>Note:</b> ExclusivePublication instances are NOT threadsafe.
  *
  * @see Aeron#addExclusivePublication(String, int)
  * @see BufferClaim
@@ -58,7 +58,9 @@ class ExclusivePublication
 public:
 
     /// @cond HIDDEN_SYMBOLS
-    ExclusivePublication(aeron_t *aeron, aeron_exclusive_publication_t *publication) :
+    ExclusivePublication(
+        const std::shared_ptr<Aeron> &aeronRef, aeron_t *aeron, aeron_exclusive_publication_t *publication) :
+        m_aeronRef(aeronRef),
         m_aeron(aeron),
         m_publication(publication)
     {
@@ -73,16 +75,11 @@ public:
     ~ExclusivePublication()
     {
         aeron_exclusive_publication_close(m_publication, nullptr, nullptr);
-    }
 
-    inline void close()
-    {
-        if (aeron_exclusive_publication_close(m_publication, nullptr, nullptr) < 0)
+        for (const std::pair<const std::int64_t, AsyncDestination *>& e : m_pendingDestinations)
         {
-            AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
+            aeron_async_cmd_free(e.second);
         }
-
-        m_publication = nullptr;
     }
 
     inline void revokeOnClose()
@@ -634,7 +631,6 @@ public:
         AsyncDestination *async = addDestinationAsync(endpointChannel);
         std::int64_t correlationId = aeron_async_destination_get_registration_id(async);
 
-        std::lock_guard<std::recursive_mutex> lock(m_adminLock);
         m_pendingDestinations[correlationId] = async;
 
         return correlationId;
@@ -669,7 +665,6 @@ public:
         AsyncDestination *async = removeDestinationAsync(endpointChannel);
         std::int64_t correlationId = aeron_async_destination_get_registration_id(async);
 
-        std::lock_guard<std::recursive_mutex> lock(m_adminLock);
         m_pendingDestinations[correlationId] = async;
 
         return correlationId;
@@ -686,7 +681,6 @@ public:
         AsyncDestination *async = removeDestinationAsync(destinationRegistrationId);
         std::int64_t correlationId = aeron_async_destination_get_registration_id(async);
 
-        std::lock_guard<std::recursive_mutex> lock(m_adminLock);
         m_pendingDestinations[correlationId] = async;
 
         return correlationId;
@@ -760,15 +754,27 @@ public:
      */
     bool findDestinationResponse(std::int64_t correlationId)
     {
-        std::lock_guard<std::recursive_mutex> lock(m_adminLock);
-
         auto search = m_pendingDestinations.find(correlationId);
         if (search == m_pendingDestinations.end())
         {
             throw IllegalArgumentException("Unknown correlation id", SOURCEINFO);
         }
 
-        return findDestinationResponse(search->second);
+        auto async = search->second;
+        try
+        {
+            bool result = findDestinationResponse(async);
+            if (result)
+            {
+                m_pendingDestinations.erase(correlationId);
+            }
+            return result;
+        }
+        catch (...)
+        {
+            m_pendingDestinations.erase(correlationId);
+            throw;
+        }
     }
 
     /// @cond HIDDEN_SYMBOLS
@@ -779,12 +785,12 @@ public:
     /// @endcond
 
 private:
+    std::shared_ptr<Aeron> m_aeronRef; // ensure Aeron instance is being deleted after its children
     aeron_t *m_aeron = nullptr;
     aeron_exclusive_publication_t *m_publication = nullptr;
     aeron_publication_constants_t m_constants = {};
     std::string m_channel = {};
     std::unordered_map<std::int64_t, AsyncDestination *> m_pendingDestinations = {};
-    std::recursive_mutex m_adminLock = {};
 
     static std::int64_t reservedValueSupplierCallback(void *clientd, std::uint8_t *buffer, std::size_t frame_length)
     {
