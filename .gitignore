@@ -78,4 +78,5 @@ hs_err_pid*
 /aeron-cluster/aeron-cluster/
 
 aeron-samples/scripts/cluster/logs/
-aeron-samples/scripts/cluster/node*/.claude/
+aeron-samples/scripts/cluster/node*/
+.claude/
