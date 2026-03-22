@@ -254,6 +254,8 @@ set(AERON_C_ARCHIVE_SOURCE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/aeron-archive/src/m
 # cluster source
 set(AERON_CLUSTER_WRAPPER_SOURCE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/aeron-cluster/src/main/cpp_wrapper")
 set(AERON_C_CLUSTER_SOURCE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/aeron-cluster/src/main/c")
+set(AERON_C_CLUSTER_SERVICE_SOURCE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/aeron-cluster/src/main/c/service")
+set(AERON_C_CLUSTER_CONSENSUS_SOURCE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/aeron-cluster/src/main/c/consensus")
 
 if (AERON_TESTS)
     # client tests
@@ -371,6 +373,8 @@ if (BUILD_AERON_CLUSTER_CLIENT_API)
 
     add_subdirectory(${AERON_CLUSTER_WRAPPER_SOURCE_PATH})
     add_subdirectory(${AERON_C_CLUSTER_SOURCE_PATH})
+    add_subdirectory(${AERON_C_CLUSTER_SERVICE_SOURCE_PATH})
+    add_subdirectory(${AERON_C_CLUSTER_CONSENSUS_SOURCE_PATH})
 
     if (AERON_TESTS)
         add_subdirectory(${AERON_CLUSTER_WRAPPER_TEST_PATH})
