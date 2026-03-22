@@ -17,6 +17,9 @@
 #include <gtest/gtest.h>
 #include <cstring>
 #include <cstdlib>
+#include <cstdint>
+#include <algorithm>
+#include <random>
 
 #include "aeron_cluster_recording_log.h"
 #include "aeron_cluster_member.h"
@@ -25,76 +28,350 @@
 #include "aeron_consensus_module_configuration.h"
 
 /* -----------------------------------------------------------------------
- * RecordingLog unit tests
+ * Constants (mirror Java ConsensusModule.Configuration)
+ * ----------------------------------------------------------------------- */
+static constexpr int32_t CM_SERVICE_ID = -1;   /* ConsensusModule.Configuration.SERVICE_ID */
+static constexpr int32_t SERVICE_ID    = 0;    /* first user service */
+
+/* -----------------------------------------------------------------------
+ * RecordingLog tests
  * ----------------------------------------------------------------------- */
 class RecordingLogTest : public ::testing::Test
 {
 protected:
     void SetUp() override
     {
-        m_dir = "/tmp/aeron_cluster_test_recording_log";
+        m_dir = "/tmp/aeron_cluster_test_recording_log_" + std::to_string(getpid());
         std::system(("rm -rf " + m_dir + " && mkdir -p " + m_dir).c_str());
     }
-
     void TearDown() override
     {
         std::system(("rm -rf " + m_dir).c_str());
     }
 
+    static void append_term(aeron_cluster_recording_log_t *log,
+                             int64_t rec, int64_t term, int64_t base, int64_t ts)
+    {
+        ASSERT_EQ(0, aeron_cluster_recording_log_append_term(log, rec, term, base, ts));
+    }
+    static void append_snap(aeron_cluster_recording_log_t *log,
+                             int64_t rec, int64_t term, int64_t base,
+                             int64_t pos, int64_t ts, int32_t svc)
+    {
+        ASSERT_EQ(0, aeron_cluster_recording_log_append_snapshot(log, rec, term, base, pos, ts, svc));
+    }
+
     std::string m_dir;
 };
 
-TEST_F(RecordingLogTest, shouldCreateAndReloadTermEntry)
+TEST_F(RecordingLogTest, shouldCreateNewIndex)
 {
     aeron_cluster_recording_log_t *log = nullptr;
     ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
-
-    ASSERT_EQ(0, aeron_cluster_recording_log_append_term(log, 42, 0, 0, 1000));
-    ASSERT_EQ(1, log->entry_count);
-
-    aeron_cluster_recording_log_entry_t *e = aeron_cluster_recording_log_find_last_term(log);
-    ASSERT_NE(nullptr, e);
-    EXPECT_EQ(42, e->recording_id);
-    EXPECT_EQ(0,  e->leadership_term_id);
-    EXPECT_EQ(AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_TERM, e->entry_type);
-
-    aeron_cluster_recording_log_close(log);
-
-    /* Reload */
-    ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), false));
-    EXPECT_EQ(1, log->entry_count);
+    EXPECT_EQ(0, log->entry_count);
     aeron_cluster_recording_log_close(log);
 }
 
-TEST_F(RecordingLogTest, shouldCommitLogPosition)
+TEST_F(RecordingLogTest, shouldAppendAndThenCommitTermPosition)
+{
+    const int64_t new_position = 9999L;
+    {
+        aeron_cluster_recording_log_t *log = nullptr;
+        ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+        append_term(log, 1, 1111, 2222, 3333);
+        ASSERT_EQ(0, aeron_cluster_recording_log_commit_log_position(log, 1111, new_position));
+        aeron_cluster_recording_log_close(log);
+    }
+    {
+        aeron_cluster_recording_log_t *log = nullptr;
+        ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), false));
+        EXPECT_EQ(1, log->entry_count);
+        auto *e = aeron_cluster_recording_log_entry_at(log, 0);
+        ASSERT_NE(nullptr, e);
+        EXPECT_EQ(new_position, e->log_position);
+        aeron_cluster_recording_log_close(log);
+    }
+}
+
+TEST_F(RecordingLogTest, shouldAppendAndThenReloadLatestSnapshot)
+{
+    {
+        aeron_cluster_recording_log_t *log = nullptr;
+        ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+        append_term(log,  1, 0, 0, 0);
+        append_snap(log,  2, 0, 0, 100, 1, CM_SERVICE_ID);
+        append_snap(log,  3, 0, 0, 100, 2, SERVICE_ID);
+        aeron_cluster_recording_log_close(log);
+    }
+    {
+        aeron_cluster_recording_log_t *log = nullptr;
+        ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), false));
+        EXPECT_EQ(3, log->entry_count);
+        auto *snap = aeron_cluster_recording_log_get_latest_snapshot(log, CM_SERVICE_ID);
+        ASSERT_NE(nullptr, snap);
+        EXPECT_EQ(2, snap->recording_id);
+        snap = aeron_cluster_recording_log_get_latest_snapshot(log, SERVICE_ID);
+        ASSERT_NE(nullptr, snap);
+        EXPECT_EQ(3, snap->recording_id);
+        aeron_cluster_recording_log_close(log);
+    }
+}
+
+TEST_F(RecordingLogTest, shouldIgnoreIncompleteSnapshotInRecoveryPlan)
+{
+    /* Only CM snapshot at pos=777, service snapshot missing → not included */
+    {
+        aeron_cluster_recording_log_t *log = nullptr;
+        ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+        append_snap(log, 1, 1, 0, 777, 0, CM_SERVICE_ID);
+        /* service snapshot at 777 missing */
+        append_snap(log, 3, 1, 0, 888, 0, CM_SERVICE_ID);
+        append_snap(log, 4, 1, 0, 888, 0, SERVICE_ID);
+        aeron_cluster_recording_log_close(log);
+    }
+    {
+        aeron_cluster_recording_log_t *log = nullptr;
+        ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), false));
+        aeron_cluster_recovery_plan_t *plan = nullptr;
+        ASSERT_EQ(0, aeron_cluster_recording_log_create_recovery_plan(log, &plan, 1));
+        ASSERT_NE(nullptr, plan);
+        /* Latest complete snapshot is at pos=888 */
+        EXPECT_EQ(3, plan->snapshots[0].recording_id);  /* CM */
+        EXPECT_EQ(4, plan->snapshots[1].recording_id);  /* service */
+        aeron_cluster_recovery_plan_free(plan);
+        aeron_cluster_recording_log_close(log);
+    }
+}
+
+TEST_F(RecordingLogTest, shouldIgnoreInvalidMidSnapshotInRecoveryPlan)
+{
+    {
+        aeron_cluster_recording_log_t *log = nullptr;
+        ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+        append_snap(log, 1, 1, 0, 777, 0, CM_SERVICE_ID);
+        append_snap(log, 2, 1, 0, 777, 0, SERVICE_ID);
+        append_snap(log, 3, 1, 0, 888, 0, CM_SERVICE_ID);
+        append_snap(log, 4, 1, 0, 888, 0, SERVICE_ID);
+        append_snap(log, 5, 1, 0, 999, 0, CM_SERVICE_ID);
+        append_snap(log, 6, 1, 0, 999, 0, SERVICE_ID);
+        ASSERT_EQ(0, aeron_cluster_recording_log_invalidate_entry_at(log, 2)); /* rec=3 */
+        ASSERT_EQ(0, aeron_cluster_recording_log_invalidate_entry_at(log, 3)); /* rec=4 */
+        aeron_cluster_recording_log_close(log);
+    }
+    {
+        aeron_cluster_recording_log_t *log = nullptr;
+        ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), false));
+        aeron_cluster_recovery_plan_t *plan = nullptr;
+        ASSERT_EQ(0, aeron_cluster_recording_log_create_recovery_plan(log, &plan, 1));
+        ASSERT_NE(nullptr, plan);
+        /* Latest valid complete set is at pos=999 */
+        EXPECT_EQ(5, plan->snapshots[0].recording_id);
+        EXPECT_EQ(6, plan->snapshots[1].recording_id);
+        aeron_cluster_recovery_plan_free(plan);
+        aeron_cluster_recording_log_close(log);
+    }
+}
+
+TEST_F(RecordingLogTest, shouldIgnoreInvalidTermInRecoveryPlan)
+{
+    {
+        aeron_cluster_recording_log_t *log = nullptr;
+        ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+        append_term(log, 0, 9,  444, 0);
+        append_term(log, 0, 10, 666, 0);
+        append_snap(log, 1, 10, 666, 777, 0, CM_SERVICE_ID);
+        append_snap(log, 2, 10, 666, 777, 0, SERVICE_ID);
+        append_term(log, 0, 11, 999, 0);  /* will be invalidated */
+        ASSERT_EQ(0, aeron_cluster_recording_log_invalidate_entry_at(log, 4));
+        aeron_cluster_recording_log_close(log);
+    }
+    {
+        aeron_cluster_recording_log_t *log = nullptr;
+        ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), false));
+        auto *last_term = aeron_cluster_recording_log_find_last_term(log);
+        ASSERT_NE(nullptr, last_term);
+        EXPECT_EQ(10, last_term->leadership_term_id);
+        EXPECT_TRUE(aeron_cluster_recording_log_is_unknown(log, 11));
+        EXPECT_EQ(-1, aeron_cluster_recording_log_get_term_timestamp(log, 11));
+        aeron_cluster_recording_log_close(log);
+    }
+}
+
+TEST_F(RecordingLogTest, shouldInvalidateLatestSnapshot)
+{
+    {
+        aeron_cluster_recording_log_t *log = nullptr;
+        ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+        append_term(log, 1, 7, 0, 1000);
+        append_snap(log, 2, 7, 0, 640,  1001, CM_SERVICE_ID);
+        append_snap(log, 3, 7, 0, 640,  1001, SERVICE_ID);
+        append_snap(log, 4, 7, 0, 1280, 1002, CM_SERVICE_ID);
+        append_snap(log, 5, 7, 0, 1280, 1002, SERVICE_ID);
+        append_term(log, 1, 8, 1280, 1002);
+        EXPECT_EQ(1, aeron_cluster_recording_log_invalidate_latest_snapshot(log));
+        EXPECT_EQ(6, log->entry_count);
+        aeron_cluster_recording_log_close(log);
+    }
+    {
+        aeron_cluster_recording_log_t *log = nullptr;
+        ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), false));
+        /* entries 3 and 4 (pos=1280 snapshots) should be invalid */
+        auto *e3 = aeron_cluster_recording_log_entry_at(log, 3);
+        auto *e4 = aeron_cluster_recording_log_entry_at(log, 4);
+        ASSERT_NE(nullptr, e3); ASSERT_NE(nullptr, e4);
+        EXPECT_FALSE(aeron_cluster_recording_log_entry_is_valid(e3));
+        EXPECT_FALSE(aeron_cluster_recording_log_entry_is_valid(e4));
+        /* entry 1 (pos=640 CM snap) still valid */
+        auto *e1 = aeron_cluster_recording_log_entry_at(log, 1);
+        ASSERT_NE(nullptr, e1);
+        EXPECT_TRUE(aeron_cluster_recording_log_entry_is_valid(e1));
+        /* Latest snapshot now at pos=640 */
+        auto *snap = aeron_cluster_recording_log_get_latest_snapshot(log, CM_SERVICE_ID);
+        ASSERT_NE(nullptr, snap);
+        EXPECT_EQ(2, snap->recording_id);
+        /* Invalidate again — removes pos=640 set */
+        EXPECT_EQ(1, aeron_cluster_recording_log_invalidate_latest_snapshot(log));
+        aeron_cluster_recording_log_close(log);
+    }
+    {
+        aeron_cluster_recording_log_t *log = nullptr;
+        ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), false));
+        /* No valid snapshot left → returns 0 */
+        EXPECT_EQ(0, aeron_cluster_recording_log_invalidate_latest_snapshot(log));
+        aeron_cluster_recording_log_close(log);
+    }
+}
+
+TEST_F(RecordingLogTest, shouldNotAllowInvalidateOfSnapshotWithoutParentTerm)
 {
     aeron_cluster_recording_log_t *log = nullptr;
     ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
-    ASSERT_EQ(0, aeron_cluster_recording_log_append_term(log, 1, 0, 0, 1000));
+    append_snap(log, -10, 1, 0, 777, 0, CM_SERVICE_ID);
+    append_snap(log, -11, 1, 0, 777, 0, SERVICE_ID);
+    /* No parent TERM → should fail */
+    EXPECT_EQ(-1, aeron_cluster_recording_log_invalidate_latest_snapshot(log));
+    aeron_cluster_recording_log_close(log);
+}
 
-    ASSERT_EQ(0, aeron_cluster_recording_log_commit_log_position(log, 0, 12345));
+TEST_F(RecordingLogTest, shouldRecoverSnapshotsMidLogMarkedInvalid)
+{
+    {
+        aeron_cluster_recording_log_t *log = nullptr;
+        ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+        append_snap(log, 1, 1, 10, 555, 0, CM_SERVICE_ID);
+        append_snap(log, 2, 1, 10, 555, 0, SERVICE_ID);
+        append_snap(log, 3, 1, 10, 777, 0, CM_SERVICE_ID);
+        append_snap(log, 4, 1, 10, 777, 0, SERVICE_ID);
+        append_snap(log, 5, 1, 10, 888, 0, CM_SERVICE_ID);
+        append_snap(log, 6, 1, 10, 888, 0, SERVICE_ID);
+        ASSERT_EQ(0, aeron_cluster_recording_log_invalidate_entry_at(log, 2));
+        ASSERT_EQ(0, aeron_cluster_recording_log_invalidate_entry_at(log, 3));
+        aeron_cluster_recording_log_close(log);
+    }
+    /* Verify invalidated entries have correct flag */
+    {
+        aeron_cluster_recording_log_t *log = nullptr;
+        ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), false));
+        EXPECT_EQ(6, log->entry_count);
+        auto *e2 = aeron_cluster_recording_log_entry_at(log, 2);
+        auto *e3 = aeron_cluster_recording_log_entry_at(log, 3);
+        ASSERT_NE(nullptr, e2); ASSERT_NE(nullptr, e3);
+        EXPECT_FALSE(aeron_cluster_recording_log_entry_is_valid(e2));
+        EXPECT_FALSE(aeron_cluster_recording_log_entry_is_valid(e3));
+        /* Entries 0,1,4,5 still valid */
+        EXPECT_TRUE(aeron_cluster_recording_log_entry_is_valid(aeron_cluster_recording_log_entry_at(log, 0)));
+        EXPECT_TRUE(aeron_cluster_recording_log_entry_is_valid(aeron_cluster_recording_log_entry_at(log, 4)));
+        aeron_cluster_recording_log_close(log);
+    }
+}
 
-    aeron_cluster_recording_log_entry_t *e = aeron_cluster_recording_log_find_last_term(log);
-    ASSERT_NE(nullptr, e);
-    EXPECT_EQ(12345, e->log_position);
+TEST_F(RecordingLogTest, shouldRecoverSnapshotsLastInLogMarkedWithInvalid)
+{
+    {
+        aeron_cluster_recording_log_t *log = nullptr;
+        ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+        append_term(log, 1, 1, 0,  0);
+        append_snap(log, -10, 1, 0, 777, 0, CM_SERVICE_ID);
+        append_snap(log, -11, 1, 0, 777, 0, SERVICE_ID);
+        append_term(log, 1, 2, 10, 0);
+        append_snap(log, -12, 2, 10, 888, 0, CM_SERVICE_ID);
+        append_snap(log, -13, 2, 10, 888, 0, SERVICE_ID);
+        EXPECT_EQ(1, aeron_cluster_recording_log_invalidate_latest_snapshot(log));
+        EXPECT_EQ(1, aeron_cluster_recording_log_invalidate_latest_snapshot(log));
+        aeron_cluster_recording_log_close(log);
+    }
+    {
+        aeron_cluster_recording_log_t *log = nullptr;
+        ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), false));
+        /* All snapshots invalidated → no valid snapshot */
+        EXPECT_EQ(nullptr, aeron_cluster_recording_log_get_latest_snapshot(log, CM_SERVICE_ID));
+        /* But term entries remain valid */
+        auto *last_term = aeron_cluster_recording_log_find_last_term(log);
+        ASSERT_NE(nullptr, last_term);
+        EXPECT_EQ(2, last_term->leadership_term_id);
+        aeron_cluster_recording_log_close(log);
+    }
+}
+
+TEST_F(RecordingLogTest, shouldAppendTermWithLeadershipTermIdOutOfOrder)
+{
+    aeron_cluster_recording_log_t *log = nullptr;
+    ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+    /* Append terms out of order — C implementation should accept */
+    append_term(log, 1, 5, 0, 1000);
+    append_term(log, 2, 3, 0, 900);  /* earlier term appended after */
+    EXPECT_EQ(2, log->entry_count);
+    aeron_cluster_recording_log_close(log);
+}
+
+TEST_F(RecordingLogTest, shouldNotCreateInitialTermWithMinusOneTermId)
+{
+    aeron_cluster_recording_log_t *log = nullptr;
+    ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+    /* Appending term with leadership_term_id = -1 should fail */
+    EXPECT_EQ(-1, aeron_cluster_recording_log_append_term(log, 1, -1, 0, 0));
+    EXPECT_EQ(0, log->entry_count);
+    aeron_cluster_recording_log_close(log);
+}
+
+TEST_F(RecordingLogTest, shouldDetermineIfSnapshotIsInvalid)
+{
+    aeron_cluster_recording_log_t *log = nullptr;
+    ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+    append_term(log, 1, 0, 0, 0);
+    append_snap(log, 2, 0, 0, 100, 0, CM_SERVICE_ID);
+    append_snap(log, 3, 0, 0, 100, 0, SERVICE_ID);
+
+    auto *e1 = aeron_cluster_recording_log_entry_at(log, 1);
+    ASSERT_NE(nullptr, e1);
+    EXPECT_TRUE(aeron_cluster_recording_log_entry_is_valid(e1));
+
+    EXPECT_EQ(1, aeron_cluster_recording_log_invalidate_latest_snapshot(log));
+
+    auto *e1_after = aeron_cluster_recording_log_entry_at(log, 1);
+    ASSERT_NE(nullptr, e1_after);
+    EXPECT_FALSE(aeron_cluster_recording_log_entry_is_valid(e1_after));
 
     aeron_cluster_recording_log_close(log);
 }
 
-TEST_F(RecordingLogTest, shouldAppendAndFindSnapshot)
+TEST_F(RecordingLogTest, shouldFindLastTermRecordingId)
 {
     aeron_cluster_recording_log_t *log = nullptr;
     ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
-    ASSERT_EQ(0, aeron_cluster_recording_log_append_term(log, 1, 0, 0, 1000));
-    ASSERT_EQ(0, aeron_cluster_recording_log_append_snapshot(log, 99, 0, 0, 500, 2000, -1));
+    append_term(log, 42, 0, 0, 0);
+    append_term(log, 99, 1, 0, 0);
+    EXPECT_EQ(99, aeron_cluster_recording_log_find_last_term_recording_id(log));
+    aeron_cluster_recording_log_close(log);
+}
 
-    aeron_cluster_recording_log_entry_t *snap =
-        aeron_cluster_recording_log_get_latest_snapshot(log, -1);
-    ASSERT_NE(nullptr, snap);
-    EXPECT_EQ(99, snap->recording_id);
-    EXPECT_EQ(500, snap->log_position);
-    EXPECT_EQ(AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_SNAPSHOT, snap->entry_type);
-
+TEST_F(RecordingLogTest, shouldGetTermTimestamp)
+{
+    aeron_cluster_recording_log_t *log = nullptr;
+    ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+    append_term(log, 1, 5, 0, 12345);
+    EXPECT_EQ(12345, aeron_cluster_recording_log_get_term_timestamp(log, 5));
+    EXPECT_EQ(-1,    aeron_cluster_recording_log_get_term_timestamp(log, 99));
     aeron_cluster_recording_log_close(log);
 }
 
@@ -102,150 +379,511 @@ TEST_F(RecordingLogTest, shouldCreateRecoveryPlan)
 {
     aeron_cluster_recording_log_t *log = nullptr;
     ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
-    ASSERT_EQ(0, aeron_cluster_recording_log_append_term(log, 10, 0, 0, 1000));
+    append_term(log, 10, 0, 0, 1000);
     ASSERT_EQ(0, aeron_cluster_recording_log_commit_log_position(log, 0, 8000));
-    ASSERT_EQ(0, aeron_cluster_recording_log_append_snapshot(log, 20, 0, 0, 7000, 1500, -1));
+    append_snap(log, 20, 0, 0, 7000, 1500, CM_SERVICE_ID);
+    append_snap(log, 21, 0, 0, 7000, 1500, SERVICE_ID);
 
     aeron_cluster_recovery_plan_t *plan = nullptr;
     ASSERT_EQ(0, aeron_cluster_recording_log_create_recovery_plan(log, &plan, 1));
     ASSERT_NE(nullptr, plan);
-
     EXPECT_EQ(0,    plan->last_leadership_term_id);
     EXPECT_EQ(8000, plan->last_append_position);
     EXPECT_EQ(10,   plan->last_term_recording_id);
-    EXPECT_EQ(1,    plan->snapshot_count);
+    EXPECT_GE(plan->snapshot_count, 1);
     EXPECT_EQ(20,   plan->snapshots[0].recording_id);
 
     aeron_cluster_recovery_plan_free(plan);
     aeron_cluster_recording_log_close(log);
 }
 
+TEST_F(RecordingLogTest, shouldHandleEmptyRecordingLog)
+{
+    aeron_cluster_recording_log_t *log = nullptr;
+    ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+
+    EXPECT_EQ(nullptr, aeron_cluster_recording_log_find_last_term(log));
+    EXPECT_EQ(-1,      aeron_cluster_recording_log_find_last_term_recording_id(log));
+    EXPECT_TRUE(aeron_cluster_recording_log_is_unknown(log, 0));
+
+    aeron_cluster_recovery_plan_t *plan = nullptr;
+    ASSERT_EQ(0, aeron_cluster_recording_log_create_recovery_plan(log, &plan, 1));
+    ASSERT_NE(nullptr, plan);
+    EXPECT_EQ(-1, plan->last_leadership_term_id);
+    EXPECT_EQ(0,  plan->snapshot_count);
+
+    aeron_cluster_recovery_plan_free(plan);
+    aeron_cluster_recording_log_close(log);
+}
+
+TEST_F(RecordingLogTest, shouldPersistAndReloadMultipleTerms)
+{
+    const int TERM_COUNT = 5;
+    {
+        aeron_cluster_recording_log_t *log = nullptr;
+        ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+        for (int i = 0; i < TERM_COUNT; i++)
+        {
+            append_term(log, i + 100, i, i * 1000, i * 100);
+            if (i > 0)
+            {
+                ASSERT_EQ(0, aeron_cluster_recording_log_commit_log_position(log, i - 1, i * 1000));
+            }
+        }
+        aeron_cluster_recording_log_close(log);
+    }
+    {
+        aeron_cluster_recording_log_t *log = nullptr;
+        ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), false));
+        EXPECT_EQ(TERM_COUNT, log->entry_count);
+        auto *last = aeron_cluster_recording_log_find_last_term(log);
+        ASSERT_NE(nullptr, last);
+        EXPECT_EQ(TERM_COUNT - 1, last->leadership_term_id);
+        aeron_cluster_recording_log_close(log);
+    }
+}
+
+TEST_F(RecordingLogTest, shouldHandleInvalidateLatestSnapshotWithMultipleServices)
+{
+    const int service_count = 3;
+    {
+        aeron_cluster_recording_log_t *log = nullptr;
+        ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+        append_term(log, 1, 0, 0, 0);
+        /* Complete snapshot set at pos=500: CM + 3 services */
+        append_snap(log, 10, 0, 0, 500, 0, CM_SERVICE_ID);
+        for (int s = 0; s < service_count; s++)
+        {
+            append_snap(log, 20 + s, 0, 0, 500, 0, s);
+        }
+        EXPECT_EQ(1, aeron_cluster_recording_log_invalidate_latest_snapshot(log));
+        /* All snapshots at pos=500 should be invalid */
+        for (int i = 1; i <= service_count + 1; i++)
+        {
+            auto *e = aeron_cluster_recording_log_entry_at(log, i);
+            ASSERT_NE(nullptr, e);
+            EXPECT_FALSE(aeron_cluster_recording_log_entry_is_valid(e))
+                << "entry " << i << " should be invalid";
+        }
+        aeron_cluster_recording_log_close(log);
+    }
+}
+
+TEST_F(RecordingLogTest, snapshotEntriesCanBeQueriedByServiceId)
+{
+    aeron_cluster_recording_log_t *log = nullptr;
+    ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+    append_term(log, 1, 0, 0, 0);
+    append_snap(log, 10, 0, 0, 100, 0, CM_SERVICE_ID);
+    append_snap(log, 11, 0, 0, 100, 0, 0);
+    append_snap(log, 12, 0, 0, 200, 0, CM_SERVICE_ID);
+    append_snap(log, 13, 0, 0, 200, 0, 0);
+
+    auto *cm_snap  = aeron_cluster_recording_log_get_latest_snapshot(log, CM_SERVICE_ID);
+    auto *svc_snap = aeron_cluster_recording_log_get_latest_snapshot(log, 0);
+    ASSERT_NE(nullptr, cm_snap);
+    ASSERT_NE(nullptr, svc_snap);
+    EXPECT_EQ(12, cm_snap->recording_id);
+    EXPECT_EQ(13, svc_snap->recording_id);
+
+    aeron_cluster_recording_log_close(log);
+}
+
 /* -----------------------------------------------------------------------
- * ClusterMember unit tests
+ * TimerService tests
  * ----------------------------------------------------------------------- */
-TEST(ClusterMemberTest, shouldParseSingleMember)
+static int64_t g_last_fired_id    = -1;
+static int     g_fired_count      = 0;
+static bool    g_handler_returns  = true;
+
+static void reset_timer_state()
 {
-    aeron_cluster_member_t *members = nullptr;
-    int count = 0;
-
-    ASSERT_EQ(0, aeron_cluster_members_parse(
-        "0,localhost:20110:localhost:20111:localhost:20113:localhost:20114:localhost:8010",
-        &members, &count));
-
-    EXPECT_EQ(1, count);
-    EXPECT_EQ(0, members[0].id);
-    EXPECT_STREQ("localhost:20110", members[0].ingress_endpoint);
-    EXPECT_STREQ("localhost:20111", members[0].consensus_endpoint);
-
-    aeron_cluster_members_free(members, count);
+    g_last_fired_id   = -1;
+    g_fired_count     = 0;
+    g_handler_returns = true;
 }
 
-TEST(ClusterMemberTest, shouldParseThreeMembers)
+static void timer_expiry(void *clientd, int64_t correlation_id)
 {
-    aeron_cluster_member_t *members = nullptr;
-    int count = 0;
-    const char *topology =
-        "0,h0:9010:h0:9020:h0:9030:h0:9040:h0:8010|"
-        "1,h1:9010:h1:9020:h1:9030:h1:9040:h1:8010|"
-        "2,h2:9010:h2:9020:h2:9030:h2:9040:h2:8010";
-
-    ASSERT_EQ(0, aeron_cluster_members_parse(topology, &members, &count));
-    EXPECT_EQ(3, count);
-    EXPECT_EQ(0, members[0].id);
-    EXPECT_EQ(1, members[1].id);
-    EXPECT_EQ(2, members[2].id);
-
-    aeron_cluster_members_free(members, count);
+    (void)clientd;
+    g_last_fired_id = correlation_id;
+    g_fired_count++;
 }
 
-TEST(ClusterMemberTest, shouldComputeQuorumThreshold)
+class TimerServiceTest : public ::testing::Test
 {
-    EXPECT_EQ(2, aeron_cluster_member_quorum_threshold(3));
-    EXPECT_EQ(3, aeron_cluster_member_quorum_threshold(5));
-    EXPECT_EQ(4, aeron_cluster_member_quorum_threshold(7));
+protected:
+    void SetUp() override
+    {
+        reset_timer_state();
+        ASSERT_EQ(0, aeron_cluster_timer_service_create(&m_svc, timer_expiry, nullptr));
+    }
+    void TearDown() override
+    {
+        aeron_cluster_timer_service_close(m_svc);
+    }
+    aeron_cluster_timer_service_t *m_svc = nullptr;
+};
+
+TEST_F(TimerServiceTest, pollIsANoOpWhenNoTimersScheduled)
+{
+    EXPECT_EQ(0, aeron_cluster_timer_service_poll(m_svc, 999999));
+    EXPECT_EQ(-1, g_last_fired_id);
+    EXPECT_EQ(0, aeron_cluster_timer_service_timer_count(m_svc));
+}
+
+TEST_F(TimerServiceTest, pollIsANoOpWhenNoScheduledTimersAreExpired)
+{
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 1, 1000));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 2, 2000));
+    EXPECT_EQ(0, aeron_cluster_timer_service_poll(m_svc, 999));
+    EXPECT_EQ(-1, g_last_fired_id);
+    EXPECT_EQ(2, aeron_cluster_timer_service_timer_count(m_svc));
+}
+
+TEST_F(TimerServiceTest, pollShouldExpireSingleTimer)
+{
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 42, 500));
+    EXPECT_EQ(0, aeron_cluster_timer_service_poll(m_svc, 499));
+    EXPECT_EQ(-1, g_last_fired_id);
+    EXPECT_EQ(1, aeron_cluster_timer_service_poll(m_svc, 500));
+    EXPECT_EQ(42, g_last_fired_id);
+    EXPECT_EQ(0, aeron_cluster_timer_service_timer_count(m_svc));
+}
+
+TEST_F(TimerServiceTest, pollShouldRemoveExpiredTimers)
+{
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 1, 100));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 2, 200));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 3, 1000));
+    EXPECT_EQ(2, aeron_cluster_timer_service_poll(m_svc, 300));
+    EXPECT_EQ(1, aeron_cluster_timer_service_timer_count(m_svc));
+}
+
+TEST_F(TimerServiceTest, pollShouldExpireTimersInOrderOfDeadline)
+{
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 10, 300));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 20, 100));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 30, 200));
+
+    std::vector<int64_t> fired;
+    auto old_expiry = [](void *cd, int64_t id) { static_cast<std::vector<int64_t>*>(cd)->push_back(id); };
+    aeron_cluster_timer_service_t *svc2 = nullptr;
+    ASSERT_EQ(0, aeron_cluster_timer_service_create(&svc2, old_expiry, &fired));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(svc2, 10, 300));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(svc2, 20, 100));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(svc2, 30, 200));
+    aeron_cluster_timer_service_poll(svc2, 400);
+    EXPECT_EQ(3u, fired.size());
+    EXPECT_EQ(20, fired[0]);
+    EXPECT_EQ(30, fired[1]);
+    EXPECT_EQ(10, fired[2]);
+    aeron_cluster_timer_service_close(svc2);
+}
+
+TEST_F(TimerServiceTest, cancelTimerReturnsFalseForUnknownCorrelationId)
+{
+    EXPECT_FALSE(aeron_cluster_timer_service_cancel(m_svc, 999));
+}
+
+TEST_F(TimerServiceTest, cancelTimerReturnsTrueAfterCancellingTheTimer)
+{
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 7, 1000));
+    EXPECT_TRUE(aeron_cluster_timer_service_cancel(m_svc, 7));
+    EXPECT_EQ(0, aeron_cluster_timer_service_timer_count(m_svc));
+    /* Cancelled timer must not fire */
+    EXPECT_EQ(0, aeron_cluster_timer_service_poll(m_svc, 2000));
+    EXPECT_EQ(-1, g_last_fired_id);
+}
+
+TEST_F(TimerServiceTest, cancelTimerAfterPoll)
+{
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 1, 100));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 2, 200));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 3, 500));
+    EXPECT_EQ(1, aeron_cluster_timer_service_poll(m_svc, 150));
+    EXPECT_TRUE(aeron_cluster_timer_service_cancel(m_svc, 3));
+    EXPECT_EQ(1, aeron_cluster_timer_service_poll(m_svc, 300));
+    EXPECT_EQ(2, g_last_fired_id);
+    EXPECT_EQ(0, aeron_cluster_timer_service_timer_count(m_svc));
+}
+
+TEST_F(TimerServiceTest, scheduleTimerForExistingIdShouldShiftUpWhenDeadlineDecreases)
+{
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 1, 1000));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 2, 2000));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 1, 500));  /* move timer 1 earlier */
+    /* Timer 1 should fire before timer 2 */
+    EXPECT_EQ(1, aeron_cluster_timer_service_poll(m_svc, 700));
+    EXPECT_EQ(1, g_last_fired_id);
+}
+
+TEST_F(TimerServiceTest, scheduleTimerForExistingIdShouldShiftDownWhenDeadlineIncreases)
+{
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 1, 100));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 1, 2000)); /* push later */
+    EXPECT_EQ(0, aeron_cluster_timer_service_poll(m_svc, 500));
+    EXPECT_EQ(-1, g_last_fired_id);
+    EXPECT_EQ(1, aeron_cluster_timer_service_poll(m_svc, 2001));
+    EXPECT_EQ(1, g_last_fired_id);
+}
+
+TEST_F(TimerServiceTest, cancelExpiredTimerIsANoOp)
+{
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 5, 100));
+    ASSERT_EQ(1, aeron_cluster_timer_service_poll(m_svc, 200));
+    /* Timer 5 already fired — cancel is a no-op */
+    EXPECT_FALSE(aeron_cluster_timer_service_cancel(m_svc, 5));
+}
+
+TEST_F(TimerServiceTest, nextDeadlineReturnsMaxWhenEmpty)
+{
+    EXPECT_EQ(INT64_MAX, aeron_cluster_timer_service_next_deadline(m_svc));
+}
+
+TEST_F(TimerServiceTest, nextDeadlineReturnsEarliestDeadline)
+{
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 1, 500));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 2, 200));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 3, 800));
+    EXPECT_EQ(200, aeron_cluster_timer_service_next_deadline(m_svc));
+}
+
+TEST_F(TimerServiceTest, scheduleMustRetainOrderBetweenDeadlines)
+{
+    /* All timers at same deadline — all should fire at that time */
+    for (int i = 0; i < 10; i++)
+    {
+        ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, i, 1000));
+    }
+    EXPECT_EQ(10, aeron_cluster_timer_service_poll(m_svc, 1000));
+    EXPECT_EQ(0,  aeron_cluster_timer_service_timer_count(m_svc));
+}
+
+TEST_F(TimerServiceTest, manyRandomOperations)
+{
+    std::mt19937 rng(42);
+    std::uniform_int_distribution<int64_t> id_dist(1, 100);
+    std::uniform_int_distribution<int64_t> ts_dist(1, 10000);
+    std::uniform_int_distribution<int>     op_dist(0, 2);
+
+    for (int i = 0; i < 1000; i++)
+    {
+        int op = op_dist(rng);
+        int64_t id = id_dist(rng);
+        int64_t ts = ts_dist(rng);
+        if (op == 0)       { aeron_cluster_timer_service_schedule(m_svc, id, ts); }
+        else if (op == 1)  { aeron_cluster_timer_service_cancel(m_svc, id); }
+        else               { aeron_cluster_timer_service_poll(m_svc, ts); }
+    }
+    /* After random ops, drain all */
+    int remaining = aeron_cluster_timer_service_timer_count(m_svc);
+    EXPECT_GE(remaining, 0);
+}
+
+/* -----------------------------------------------------------------------
+ * ClusterMember tests
+ * ----------------------------------------------------------------------- */
+class ClusterMemberTest : public ::testing::Test
+{
+protected:
+    void TearDown() override
+    {
+        if (m_members) { aeron_cluster_members_free(m_members, m_count); }
+    }
+    void parse(const char *str)
+    {
+        if (m_members) { aeron_cluster_members_free(m_members, m_count); m_members = nullptr; }
+        ASSERT_EQ(0, aeron_cluster_members_parse(str, &m_members, &m_count));
+    }
+
+    aeron_cluster_member_t *m_members = nullptr;
+    int m_count = 0;
+};
+
+TEST_F(ClusterMemberTest, shouldParseCorrectly)
+{
+    parse("0,in:cons:log:catch:arch");
+    ASSERT_EQ(1, m_count);
+    EXPECT_EQ(0, m_members[0].id);
+    EXPECT_STREQ("in",   m_members[0].ingress_endpoint);
+    EXPECT_STREQ("cons", m_members[0].consensus_endpoint);
+    EXPECT_STREQ("log",  m_members[0].log_endpoint);
+    EXPECT_STREQ("catch",m_members[0].catchup_endpoint);
+    EXPECT_STREQ("arch", m_members[0].archive_endpoint);
+}
+
+TEST_F(ClusterMemberTest, shouldParseThreeMembers)
+{
+    parse("0,h0:9010:h0:9020:h0:9030:h0:9040:h0:8010|"
+          "1,h1:9010:h1:9020:h1:9030:h1:9040:h1:8010|"
+          "2,h2:9010:h2:9020:h2:9030:h2:9040:h2:8010");
+    ASSERT_EQ(3, m_count);
+    for (int i = 0; i < 3; i++) { EXPECT_EQ(i, m_members[i].id); }
+}
+
+TEST_F(ClusterMemberTest, shouldFindMemberById)
+{
+    parse("0,h0:e0:l0:c0:a0|1,h1:e1:l1:c1:a1|2,h2:e2:l2:c2:a2");
+    ASSERT_EQ(3, m_count);
+    auto *m = aeron_cluster_member_find_by_id(m_members, m_count, 1);
+    ASSERT_NE(nullptr, m);
+    EXPECT_EQ(1, m->id);
+    EXPECT_EQ(nullptr, aeron_cluster_member_find_by_id(m_members, m_count, 99));
+}
+
+TEST_F(ClusterMemberTest, shouldComputeQuorumThreshold)
+{
     EXPECT_EQ(1, aeron_cluster_member_quorum_threshold(1));
+    EXPECT_EQ(2, aeron_cluster_member_quorum_threshold(2));
+    EXPECT_EQ(2, aeron_cluster_member_quorum_threshold(3));
+    EXPECT_EQ(3, aeron_cluster_member_quorum_threshold(4));
+    EXPECT_EQ(3, aeron_cluster_member_quorum_threshold(5));
+    EXPECT_EQ(4, aeron_cluster_member_quorum_threshold(6));
+    EXPECT_EQ(4, aeron_cluster_member_quorum_threshold(7));
+}
+
+TEST_F(ClusterMemberTest, shouldComputeQuorumPositionWithAllActive)
+{
+    parse("0,a:b:c:d:e|1,a:b:c:d:e|2,a:b:c:d:e");
+    const int64_t now_ns = 1000000LL;
+    const int64_t timeout = 10000000000LL;  /* 10s */
+
+    m_members[0].log_position = 100; m_members[0].time_of_last_append_position_ns = now_ns;
+    m_members[1].log_position = 200; m_members[1].time_of_last_append_position_ns = now_ns;
+    m_members[2].log_position = 300; m_members[2].time_of_last_append_position_ns = now_ns;
+
+    /* Quorum (2 of 3) = second highest = 200 */
+    int64_t pos = aeron_cluster_member_quorum_position(m_members, m_count, now_ns, timeout);
+    EXPECT_EQ(200, pos);
+}
+
+TEST_F(ClusterMemberTest, shouldOnlyConsiderActiveNodesForQuorumPosition)
+{
+    parse("0,a:b:c:d:e|1,a:b:c:d:e|2,a:b:c:d:e");
+    const int64_t now_ns     = 100000000LL;
+    const int64_t timeout    = 10000000LL;  /* 10ms */
+
+    /* Member 2 timed out (last update was 0, now is 100ms > 10ms timeout) */
+    m_members[0].log_position = 100; m_members[0].time_of_last_append_position_ns = now_ns;
+    m_members[1].log_position = 200; m_members[1].time_of_last_append_position_ns = now_ns;
+    m_members[2].log_position = 300; m_members[2].time_of_last_append_position_ns = 0; /* timed out */
+
+    /* Quorum with member 2 as -1: sorted = [200, 100, -1], quorum index 1 = 100 */
+    int64_t pos = aeron_cluster_member_quorum_position(m_members, m_count, now_ns, timeout);
+    EXPECT_EQ(100, pos);
+}
+
+TEST_F(ClusterMemberTest, shouldCountVotesForCandidateTerm)
+{
+    parse("0,a:b:c:d:e|1,a:b:c:d:e|2,a:b:c:d:e");
+    m_members[0].candidate_term_id = 5;
+    m_members[1].candidate_term_id = 5;
+    m_members[2].candidate_term_id = 4;  /* voted for different term */
+    EXPECT_EQ(2, aeron_cluster_member_count_votes(m_members, m_count, 5));
+    EXPECT_EQ(1, aeron_cluster_member_count_votes(m_members, m_count, 4));
+    EXPECT_EQ(0, aeron_cluster_member_count_votes(m_members, m_count, 99));
+}
+
+TEST_F(ClusterMemberTest, singleMemberAlwaysQuorum)
+{
+    parse("0,a:b:c:d:e");
+    const int64_t now_ns  = 1000LL;
+    const int64_t timeout = 9999999999LL;
+    m_members[0].log_position = 42;
+    m_members[0].time_of_last_append_position_ns = now_ns;
+    /* Single node: quorum position = its own position */
+    EXPECT_EQ(42, aeron_cluster_member_quorum_position(m_members, m_count, now_ns, timeout));
+}
+
+TEST_F(ClusterMemberTest, noMembersActiveReturnsMinusOne)
+{
+    parse("0,a:b:c:d:e|1,a:b:c:d:e|2,a:b:c:d:e");
+    const int64_t now_ns  = 100000000LL;
+    const int64_t timeout = 1LL;  /* all timed out */
+    m_members[0].time_of_last_append_position_ns = 0;
+    m_members[1].time_of_last_append_position_ns = 0;
+    m_members[2].time_of_last_append_position_ns = 0;
+    int64_t pos = aeron_cluster_member_quorum_position(m_members, m_count, now_ns, timeout);
+    EXPECT_EQ(-1, pos);
 }
 
 /* -----------------------------------------------------------------------
- * TimerService unit tests
+ * PendingServiceMessageTracker tests
  * ----------------------------------------------------------------------- */
-static int64_t g_fired_id = -1;
-static void timer_fired(void *clientd, int64_t correlation_id)
+class PendingMessageTrackerTest : public ::testing::Test
 {
-    g_fired_id = correlation_id;
+protected:
+    aeron_cluster_pending_message_tracker_t m_tracker{};
+
+    void init(int32_t svc, int64_t next_id, int64_t log_id, int64_t cap = 4096)
+    {
+        aeron_cluster_pending_message_tracker_init(&m_tracker, svc, next_id, log_id, cap);
+    }
+};
+
+TEST_F(PendingMessageTrackerTest, shouldAppendOnlyUncommittedMessages)
+{
+    init(0, 1, 5);
+    EXPECT_FALSE(aeron_cluster_pending_message_tracker_should_append(&m_tracker, 3));
+    EXPECT_FALSE(aeron_cluster_pending_message_tracker_should_append(&m_tracker, 5));
+    EXPECT_TRUE (aeron_cluster_pending_message_tracker_should_append(&m_tracker, 6));
+    EXPECT_TRUE (aeron_cluster_pending_message_tracker_should_append(&m_tracker, 100));
 }
 
-TEST(TimerServiceTest, shouldScheduleAndFireTimer)
+TEST_F(PendingMessageTrackerTest, shouldAdvanceNextSessionIdOnAppend)
 {
-    aeron_cluster_timer_service_t *svc = nullptr;
-    ASSERT_EQ(0, aeron_cluster_timer_service_create(&svc, timer_fired, nullptr));
-
-    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(svc, 42, 1000));
-    EXPECT_EQ(0, aeron_cluster_timer_service_poll(svc, 999));
-    g_fired_id = -1;
-    EXPECT_EQ(1, aeron_cluster_timer_service_poll(svc, 1001));
-    EXPECT_EQ(42, g_fired_id);
-    EXPECT_EQ(0, aeron_cluster_timer_service_timer_count(svc));
-
-    aeron_cluster_timer_service_close(svc);
+    init(0, 1, 0);
+    EXPECT_EQ(1, m_tracker.next_service_session_id);
+    aeron_cluster_pending_message_tracker_on_appended(&m_tracker, 3);
+    EXPECT_EQ(4, m_tracker.next_service_session_id);
+    aeron_cluster_pending_message_tracker_on_appended(&m_tracker, 10);
+    EXPECT_EQ(11, m_tracker.next_service_session_id);
 }
 
-TEST(TimerServiceTest, shouldCancelTimer)
+TEST_F(PendingMessageTrackerTest, shouldNotDecreaseNextSessionIdOnAppend)
 {
-    aeron_cluster_timer_service_t *svc = nullptr;
-    ASSERT_EQ(0, aeron_cluster_timer_service_create(&svc, timer_fired, nullptr));
-
-    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(svc, 10, 500));
-    EXPECT_TRUE(aeron_cluster_timer_service_cancel(svc, 10));
-    g_fired_id = -1;
-    EXPECT_EQ(0, aeron_cluster_timer_service_poll(svc, 1000));
-    EXPECT_EQ(-1, g_fired_id);
-
-    aeron_cluster_timer_service_close(svc);
+    init(0, 1, 0);
+    aeron_cluster_pending_message_tracker_on_appended(&m_tracker, 10);
+    EXPECT_EQ(11, m_tracker.next_service_session_id);
+    aeron_cluster_pending_message_tracker_on_appended(&m_tracker, 5);  /* lower ID */
+    EXPECT_EQ(11, m_tracker.next_service_session_id);  /* unchanged */
 }
 
-TEST(TimerServiceTest, shouldUpdateExistingTimer)
+TEST_F(PendingMessageTrackerTest, shouldAdvanceLogServiceSessionIdOnCommit)
 {
-    aeron_cluster_timer_service_t *svc = nullptr;
-    ASSERT_EQ(0, aeron_cluster_timer_service_create(&svc, timer_fired, nullptr));
-
-    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(svc, 7, 100));
-    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(svc, 7, 2000));  /* update */
-    g_fired_id = -1;
-    EXPECT_EQ(0, aeron_cluster_timer_service_poll(svc, 500));
-    EXPECT_EQ(-1, g_fired_id);
-    EXPECT_EQ(1, aeron_cluster_timer_service_poll(svc, 2001));
-    EXPECT_EQ(7, g_fired_id);
-
-    aeron_cluster_timer_service_close(svc);
+    init(0, 1, 0);
+    EXPECT_EQ(0, m_tracker.log_service_session_id);
+    aeron_cluster_pending_message_tracker_on_committed(&m_tracker, 7);
+    EXPECT_EQ(7, m_tracker.log_service_session_id);
 }
 
-/* -----------------------------------------------------------------------
- * PendingMessageTracker unit tests
- * ----------------------------------------------------------------------- */
-TEST(PendingMessageTrackerTest, shouldAppendOnlyUncommittedMessages)
+TEST_F(PendingMessageTrackerTest, shouldNotDecreaseLogServiceSessionIdOnCommit)
 {
-    aeron_cluster_pending_message_tracker_t tracker;
-    aeron_cluster_pending_message_tracker_init(&tracker, 0, 1, 5, 4096);
-
-    /* Session IDs <= 5 are already committed */
-    EXPECT_FALSE(aeron_cluster_pending_message_tracker_should_append(&tracker, 3));
-    EXPECT_FALSE(aeron_cluster_pending_message_tracker_should_append(&tracker, 5));
-    EXPECT_TRUE (aeron_cluster_pending_message_tracker_should_append(&tracker, 6));
+    init(0, 1, 10);
+    aeron_cluster_pending_message_tracker_on_committed(&m_tracker, 5);
+    EXPECT_EQ(10, m_tracker.log_service_session_id);  /* unchanged */
 }
 
-TEST(PendingMessageTrackerTest, shouldAdvanceOnAppend)
+TEST_F(PendingMessageTrackerTest, emptyTrackerAllowsAllMessages)
 {
-    aeron_cluster_pending_message_tracker_t tracker;
-    aeron_cluster_pending_message_tracker_init(&tracker, 0, 1, 0, 4096);
+    init(0, 1, 0);
+    for (int64_t i = 1; i <= 100; i++)
+    {
+        EXPECT_TRUE(aeron_cluster_pending_message_tracker_should_append(&m_tracker, i));
+    }
+}
 
-    EXPECT_EQ(1, tracker.next_service_session_id);
-    aeron_cluster_pending_message_tracker_on_appended(&tracker, 3);
-    EXPECT_EQ(4, tracker.next_service_session_id);
+TEST_F(PendingMessageTrackerTest, trackerWithHighLogIdBlocksLowerMessages)
+{
+    init(0, 50, 100);
+    EXPECT_FALSE(aeron_cluster_pending_message_tracker_should_append(&m_tracker, 50));
+    EXPECT_FALSE(aeron_cluster_pending_message_tracker_should_append(&m_tracker, 100));
+    EXPECT_TRUE (aeron_cluster_pending_message_tracker_should_append(&m_tracker, 101));
 }
 
 /* -----------------------------------------------------------------------
- * ElectionState values match Java enum ordinals
+ * ElectionState enum ordinals match Java
  * ----------------------------------------------------------------------- */
 TEST(ElectionStateTest, shouldMatchJavaOrdinals)
 {
@@ -254,7 +892,17 @@ TEST(ElectionStateTest, shouldMatchJavaOrdinals)
     EXPECT_EQ(2,  (int)AERON_ELECTION_NOMINATE);
     EXPECT_EQ(3,  (int)AERON_ELECTION_CANDIDATE_BALLOT);
     EXPECT_EQ(4,  (int)AERON_ELECTION_FOLLOWER_BALLOT);
+    EXPECT_EQ(5,  (int)AERON_ELECTION_LEADER_LOG_REPLICATION);
+    EXPECT_EQ(6,  (int)AERON_ELECTION_LEADER_REPLAY);
+    EXPECT_EQ(7,  (int)AERON_ELECTION_LEADER_INIT);
     EXPECT_EQ(8,  (int)AERON_ELECTION_LEADER_READY);
+    EXPECT_EQ(9,  (int)AERON_ELECTION_FOLLOWER_LOG_REPLICATION);
+    EXPECT_EQ(10, (int)AERON_ELECTION_FOLLOWER_REPLAY);
+    EXPECT_EQ(11, (int)AERON_ELECTION_FOLLOWER_CATCHUP_INIT);
+    EXPECT_EQ(12, (int)AERON_ELECTION_FOLLOWER_CATCHUP_AWAIT);
+    EXPECT_EQ(13, (int)AERON_ELECTION_FOLLOWER_CATCHUP);
+    EXPECT_EQ(14, (int)AERON_ELECTION_FOLLOWER_LOG_INIT);
+    EXPECT_EQ(15, (int)AERON_ELECTION_FOLLOWER_LOG_AWAIT);
     EXPECT_EQ(16, (int)AERON_ELECTION_FOLLOWER_READY);
     EXPECT_EQ(17, (int)AERON_ELECTION_CLOSED);
 }

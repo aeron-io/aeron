@@ -52,6 +52,11 @@ static void entry_read(aeron_cluster_recording_log_entry_t *e, const uint8_t *sl
     memcpy(&e->entry_type,             slot + AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_OFFSET,            4);
 }
 
+static bool is_valid_entry(int32_t entry_type)
+{
+    return (entry_type & AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_INVALID_FLAG) == 0;
+}
+
 /* -----------------------------------------------------------------------
  * Grow the mapped file by one entry slot.
  * ----------------------------------------------------------------------- */
@@ -196,6 +201,13 @@ int aeron_cluster_recording_log_append_term(
     int64_t term_base_log_position,
     int64_t timestamp)
 {
+    if (leadership_term_id < 0)
+    {
+        AERON_SET_ERR(EINVAL, "leadership_term_id must be >= 0, got: %lld",
+            (long long)leadership_term_id);
+        return -1;
+    }
+
     aeron_cluster_recording_log_entry_t e = {
         .recording_id          = recording_id,
         .leadership_term_id    = leadership_term_id,
@@ -256,31 +268,84 @@ int aeron_cluster_recording_log_commit_log_position(
 
 int aeron_cluster_recording_log_invalidate_latest_snapshot(aeron_cluster_recording_log_t *log)
 {
+    /* Find the log_position of the latest valid snapshot group */
+    int64_t latest_log_position = -1;
     for (int i = log->entry_count - 1; i >= 0; i--)
+    {
+        uint8_t *slot = log->mapped + (size_t)i * ENTRY_STRIDE;
+        int32_t entry_type; int64_t log_pos;
+        memcpy(&entry_type, slot + AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_OFFSET, 4);
+        memcpy(&log_pos,    slot + AERON_CLUSTER_RECORDING_LOG_LOG_POSITION_OFFSET, 8);
+
+        if (is_valid_entry(entry_type) &&
+            entry_type == AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_SNAPSHOT)
+        {
+            latest_log_position = log_pos;
+            break;
+        }
+    }
+
+    if (latest_log_position < 0) { return 0; }  /* nothing to invalidate */
+
+    /* Verify there is a parent TERM entry for this snapshot group */
+    bool has_parent_term = false;
+    for (int i = 0; i < log->entry_count; i++)
     {
         uint8_t *slot = log->mapped + (size_t)i * ENTRY_STRIDE;
         int32_t entry_type;
         memcpy(&entry_type, slot + AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_OFFSET, 4);
+        if (is_valid_entry(entry_type) &&
+            entry_type == AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_TERM)
+        {
+            has_parent_term = true;
+            break;
+        }
+    }
 
-        if (entry_type == AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_SNAPSHOT)
+    if (!has_parent_term)
+    {
+        AERON_SET_ERR(EINVAL, "%s", "no matching term for snapshot");
+        return -1;
+    }
+
+    /* Invalidate ALL valid snapshots at that log_position */
+    int count = 0;
+    for (int i = 0; i < log->entry_count; i++)
+    {
+        uint8_t *slot = log->mapped + (size_t)i * ENTRY_STRIDE;
+        int32_t entry_type; int64_t log_pos;
+        memcpy(&entry_type, slot + AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_OFFSET, 4);
+        memcpy(&log_pos,    slot + AERON_CLUSTER_RECORDING_LOG_LOG_POSITION_OFFSET, 8);
+
+        if (is_valid_entry(entry_type) &&
+            entry_type == AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_SNAPSHOT &&
+            log_pos == latest_log_position)
         {
             int32_t invalid = entry_type | AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_INVALID_FLAG;
             memcpy(slot + AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_OFFSET, &invalid, 4);
             msync(slot + AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_OFFSET, 4, MS_SYNC);
-            return 0;
+            count++;
         }
     }
-    return 0; /* no snapshot found — not an error */
+    return (count > 0) ? 1 : 0;
+}
+
+int aeron_cluster_recording_log_invalidate_entry_at(
+    aeron_cluster_recording_log_t *log, int index)
+{
+    if (index < 0 || index >= log->entry_count) { return -1; }
+    uint8_t *slot = log->mapped + (size_t)index * ENTRY_STRIDE;
+    int32_t entry_type;
+    memcpy(&entry_type, slot + AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_OFFSET, 4);
+    int32_t invalid = entry_type | AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_INVALID_FLAG;
+    memcpy(slot + AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_OFFSET, &invalid, 4);
+    msync(slot + AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_OFFSET, 4, MS_SYNC);
+    return 0;
 }
 
 /* -----------------------------------------------------------------------
  * Queries
  * ----------------------------------------------------------------------- */
-static bool is_valid_entry(int32_t entry_type)
-{
-    return (entry_type & AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_INVALID_FLAG) == 0;
-}
-
 aeron_cluster_recording_log_entry_t *aeron_cluster_recording_log_find_last_term(
     aeron_cluster_recording_log_t *log)
 {
@@ -417,4 +482,54 @@ void aeron_cluster_recovery_plan_free(aeron_cluster_recovery_plan_t *plan)
         aeron_free(plan->snapshots);
         aeron_free(plan);
     }
+}
+
+aeron_cluster_recording_log_entry_t *aeron_cluster_recording_log_entry_at(
+    aeron_cluster_recording_log_t *log, int index)
+{
+    if (index < 0 || index >= log->entry_count) { return NULL; }
+    static aeron_cluster_recording_log_entry_t result;
+    const uint8_t *slot = log->mapped + (size_t)index * ENTRY_STRIDE;
+    entry_read(&result, slot);
+    return &result;
+}
+
+int64_t aeron_cluster_recording_log_find_last_term_recording_id(
+    aeron_cluster_recording_log_t *log)
+{
+    for (int i = log->entry_count - 1; i >= 0; i--)
+    {
+        const uint8_t *slot = log->mapped + (size_t)i * ENTRY_STRIDE;
+        int32_t entry_type;
+        memcpy(&entry_type, slot + AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_OFFSET, 4);
+        if (is_valid_entry(entry_type) &&
+            entry_type == AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_TERM)
+        {
+            int64_t recording_id;
+            memcpy(&recording_id, slot + AERON_CLUSTER_RECORDING_LOG_RECORDING_ID_OFFSET, 8);
+            return recording_id;
+        }
+    }
+    return -1;
+}
+
+int64_t aeron_cluster_recording_log_get_term_timestamp(
+    aeron_cluster_recording_log_t *log, int64_t leadership_term_id)
+{
+    for (int i = 0; i < log->entry_count; i++)
+    {
+        const uint8_t *slot = log->mapped + (size_t)i * ENTRY_STRIDE;
+        int64_t stored_id; int32_t entry_type;
+        memcpy(&stored_id,  slot + AERON_CLUSTER_RECORDING_LOG_LEADERSHIP_TERM_ID_OFFSET, 8);
+        memcpy(&entry_type, slot + AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_OFFSET, 4);
+        if (is_valid_entry(entry_type) &&
+            entry_type == AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_TERM &&
+            stored_id == leadership_term_id)
+        {
+            int64_t ts;
+            memcpy(&ts, slot + AERON_CLUSTER_RECORDING_LOG_TIMESTAMP_OFFSET, 8);
+            return ts;
+        }
+    }
+    return -1;
 }

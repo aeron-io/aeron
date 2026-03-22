@@ -110,12 +110,42 @@ int  aeron_cluster_recording_log_commit_log_position(
     int64_t leadership_term_id,
     int64_t log_position);
 
+/**
+ * Invalidate the latest complete snapshot pair (CM + all services).
+ * Returns 1 if anything was invalidated, 0 if no snapshot found, -1 on error.
+ */
 int  aeron_cluster_recording_log_invalidate_latest_snapshot(
     aeron_cluster_recording_log_t *log);
+
+/**
+ * Invalidate the entry at the given 0-based index.
+ * Used in recovery when a mid-log snapshot is replaced.
+ */
+int  aeron_cluster_recording_log_invalidate_entry_at(
+    aeron_cluster_recording_log_t *log, int index);
 
 /* -----------------------------------------------------------------------
  * Reads / queries
  * ----------------------------------------------------------------------- */
+/** Get entry at 0-based index; NULL if out of range. */
+aeron_cluster_recording_log_entry_t *aeron_cluster_recording_log_entry_at(
+    aeron_cluster_recording_log_t *log, int index);
+
+/** Check whether an entry is valid (INVALID_FLAG not set). */
+static inline bool aeron_cluster_recording_log_entry_is_valid(
+    const aeron_cluster_recording_log_entry_t *entry)
+{
+    return (entry->entry_type & AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_INVALID_FLAG) == 0;
+}
+
+/** Return recording_id of the last valid TERM entry, or -1. */
+int64_t aeron_cluster_recording_log_find_last_term_recording_id(
+    aeron_cluster_recording_log_t *log);
+
+/** Return timestamp of the term with given leadership_term_id, or -1. */
+int64_t aeron_cluster_recording_log_get_term_timestamp(
+    aeron_cluster_recording_log_t *log, int64_t leadership_term_id);
+
 aeron_cluster_recording_log_entry_t *aeron_cluster_recording_log_find_last_term(
     aeron_cluster_recording_log_t *log);
 
