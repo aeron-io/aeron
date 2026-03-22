@@ -49,3 +49,12 @@ Aeron Cluster Protocol
 
 Messages are specified using [SBE](https://github.com/aeron-io/simple-binary-encoding) in this schema
 [aeron-cluster-codecs.xml](https://github.com/aeron-io/aeron/blob/master/aeron-cluster/src/main/resources/cluster/aeron-cluster-codecs.xml).
+
+C Client
+=====
+
+A native C client library (`aeron_cluster_client`) and C++ wrapper are being developed following the same
+layering pattern as `aeron-archive`. See the implementation guide for design, file structure, and
+component-by-component instructions:
+
+[src/main/c/client/IMPLEMENTATION_GUIDE.md](src/main/c/client/IMPLEMENTATION_GUIDE.md)
