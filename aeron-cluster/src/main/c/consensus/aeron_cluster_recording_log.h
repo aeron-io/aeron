@@ -168,6 +168,29 @@ int aeron_cluster_recording_log_create_recovery_plan(
 
 void aeron_cluster_recovery_plan_free(aeron_cluster_recovery_plan_t *plan);
 
+/* Standby snapshot (ENTRY_TYPE_STANDBY_SNAPSHOT) */
+int  aeron_cluster_recording_log_append_standby_snapshot(
+    aeron_cluster_recording_log_t *log,
+    int64_t recording_id,
+    int64_t leadership_term_id,
+    int64_t term_base_log_position,
+    int64_t log_position,
+    int64_t timestamp,
+    int32_t service_id,
+    const char *archive_endpoint);
+
+/** Remove entry by leadershipTermId+index (marks invalid). */
+int  aeron_cluster_recording_log_remove_entry(
+    aeron_cluster_recording_log_t *log,
+    int64_t leadership_term_id,
+    int index);
+
+/** Alias for commit_log_position. */
+int  aeron_cluster_recording_log_commit_log_position_by_term(
+    aeron_cluster_recording_log_t *log,
+    int64_t leadership_term_id,
+    int64_t log_position);
+
 #ifdef __cplusplus
 }
 #endif

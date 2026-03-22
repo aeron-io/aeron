@@ -208,6 +208,38 @@ int aeron_cluster_recording_log_append_term(
         return -1;
     }
 
+    if (recording_id == -1LL)
+    {
+        AERON_SET_ERR(EINVAL, "invalid recordingId=%lld", (long long)recording_id);
+        return -1;
+    }
+
+    /* Enforce same recording_id across all TERM entries (Java: "invalid TERM recordingId=%d, expected...") */
+    int64_t first_rec = aeron_cluster_recording_log_find_last_term_recording_id(log);
+    if (first_rec >= 0 && first_rec != recording_id)
+    {
+        AERON_SET_ERR(EINVAL, "invalid TERM recordingId=%lld, expected recordingId=%lld",
+            (long long)recording_id, (long long)first_rec);
+        return -1;
+    }
+
+    /* Reject duplicate valid TERM for same leadershipTermId */
+    for (int i = 0; i < log->entry_count; i++)
+    {
+        const uint8_t *slot = log->mapped + (size_t)i * ENTRY_STRIDE;
+        int64_t stored_id; int32_t entry_type;
+        memcpy(&stored_id,  slot + AERON_CLUSTER_RECORDING_LOG_LEADERSHIP_TERM_ID_OFFSET, 8);
+        memcpy(&entry_type, slot + AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_OFFSET, 4);
+        if (is_valid_entry(entry_type) &&
+            entry_type == AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_TERM &&
+            stored_id == leadership_term_id)
+        {
+            AERON_SET_ERR(EINVAL, "duplicate TERM entry for leadershipTermId=%lld",
+                (long long)leadership_term_id);
+            return -1;
+        }
+    }
+
     aeron_cluster_recording_log_entry_t e = {
         .recording_id          = recording_id,
         .leadership_term_id    = leadership_term_id,
@@ -229,6 +261,12 @@ int aeron_cluster_recording_log_append_snapshot(
     int64_t timestamp,
     int32_t service_id)
 {
+    if (recording_id == -1LL)
+    {
+        AERON_SET_ERR(EINVAL, "invalid recordingId=%lld", (long long)recording_id);
+        return -1;
+    }
+
     aeron_cluster_recording_log_entry_t e = {
         .recording_id          = recording_id,
         .leadership_term_id    = leadership_term_id,
@@ -532,4 +570,47 @@ int64_t aeron_cluster_recording_log_get_term_timestamp(
         }
     }
     return -1;
+}
+
+int aeron_cluster_recording_log_append_standby_snapshot(
+    aeron_cluster_recording_log_t *log,
+    int64_t recording_id,
+    int64_t leadership_term_id,
+    int64_t term_base_log_position,
+    int64_t log_position,
+    int64_t timestamp,
+    int32_t service_id,
+    const char *archive_endpoint)
+{
+    if (recording_id < 0)
+    {
+        AERON_SET_ERR(EINVAL, "invalid recordingId=%lld", (long long)recording_id);
+        return -1;
+    }
+    aeron_cluster_recording_log_entry_t e = {
+        .recording_id           = recording_id,
+        .leadership_term_id     = leadership_term_id,
+        .term_base_log_position  = term_base_log_position,
+        .log_position            = log_position,
+        .timestamp               = timestamp,
+        .service_id              = service_id,
+        .entry_type              = AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_STANDBY_SNAPSHOT,
+    };
+    return recording_log_append(log, &e);
+}
+
+int aeron_cluster_recording_log_remove_entry(
+    aeron_cluster_recording_log_t *log,
+    int64_t leadership_term_id,
+    int index)
+{
+    return aeron_cluster_recording_log_invalidate_entry_at(log, index);
+}
+
+int aeron_cluster_recording_log_commit_log_position_by_term(
+    aeron_cluster_recording_log_t *log,
+    int64_t leadership_term_id,
+    int64_t log_position)
+{
+    return aeron_cluster_recording_log_commit_log_position(log, leadership_term_id, log_position);
 }

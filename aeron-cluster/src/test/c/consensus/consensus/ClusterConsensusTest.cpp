@@ -906,3 +906,307 @@ TEST(ElectionStateTest, shouldMatchJavaOrdinals)
     EXPECT_EQ(16, (int)AERON_ELECTION_FOLLOWER_READY);
     EXPECT_EQ(17, (int)AERON_ELECTION_CLOSED);
 }
+
+/* ============================================================
+ * REMAINING RECORDING LOG TESTS
+ * ============================================================ */
+
+TEST_F(RecordingLogTest, appendTermShouldRejectNullValueAsRecordingId)
+{
+    aeron_cluster_recording_log_t *log = nullptr;
+    ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+    EXPECT_EQ(-1, aeron_cluster_recording_log_append_term(log, -1LL, 0, 0, 0));
+    EXPECT_EQ(0, log->entry_count);
+    aeron_cluster_recording_log_close(log);
+}
+
+TEST_F(RecordingLogTest, appendSnapshotShouldRejectNullValueAsRecordingId)
+{
+    aeron_cluster_recording_log_t *log = nullptr;
+    ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+    EXPECT_EQ(-1, aeron_cluster_recording_log_append_snapshot(log, -1LL, 0, 0, 0, 0, 0));
+    EXPECT_EQ(0, log->entry_count);
+    aeron_cluster_recording_log_close(log);
+}
+
+TEST_F(RecordingLogTest, appendTermShouldNotAcceptDifferentRecordingIds)
+{
+    aeron_cluster_recording_log_t *log = nullptr;
+    ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+    append_term(log, 42, 0, 0, 0);
+    /* Different recording_id → must fail */
+    EXPECT_EQ(-1, aeron_cluster_recording_log_append_term(log, 21, 1, 0, 0));
+    EXPECT_EQ(1, log->entry_count);
+    aeron_cluster_recording_log_close(log);
+
+    /* Reload and verify */
+    ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), false));
+    EXPECT_EQ(-1, aeron_cluster_recording_log_append_term(log, -5, -5, -5, -5));
+    EXPECT_EQ(1, log->entry_count);
+    aeron_cluster_recording_log_close(log);
+}
+
+TEST_F(RecordingLogTest, appendTermShouldOnlyAllowASingleValidTermForSameLeadershipTermId)
+{
+    aeron_cluster_recording_log_t *log = nullptr;
+    ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+    append_term(log, 8, 0, 0, 0);
+    append_term(log, 8, 1, 1, 1);
+    ASSERT_EQ(0, aeron_cluster_recording_log_invalidate_entry_at(log, 0));
+    append_term(log, 8, 0, 100, 100);  /* replacing invalidated term 0 */
+    /* term 1 already valid → must fail */
+    EXPECT_EQ(-1, aeron_cluster_recording_log_append_term(log, 8, 1, 5, 5));
+    EXPECT_EQ(3, log->entry_count);
+    aeron_cluster_recording_log_close(log);
+}
+
+TEST_F(RecordingLogTest, shouldRemoveEntry)
+{
+    aeron_cluster_recording_log_t *log = nullptr;
+    ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+    append_term(log, 1, 3, 2, 4);
+    append_term(log, 1, 4, 3, 5);
+    ASSERT_EQ(0, aeron_cluster_recording_log_remove_entry(log, 4, log->entry_count - 1));
+    EXPECT_EQ(2, log->entry_count);
+
+    /* After invalidation the last term entry should be leadershipTermId=3 */
+    auto *e = aeron_cluster_recording_log_find_last_term(log);
+    ASSERT_NE(nullptr, e);
+    EXPECT_EQ(3, e->leadership_term_id);
+
+    aeron_cluster_recording_log_close(log);
+
+    /* Reload: 2 physical entries, 1 valid */
+    ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), false));
+    EXPECT_EQ(2, log->entry_count);
+    aeron_cluster_recording_log_close(log);
+}
+
+TEST_F(RecordingLogTest, shouldInvalidateLatestSnapshotWithStandbyVariant)
+{
+    aeron_cluster_recording_log_t *log = nullptr;
+    ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+    append_term(log, 1, 0, 0, 0);
+    /* Standby snapshot (not invalidated by invalidateLatestSnapshot — standby ignored) */
+    ASSERT_EQ(0, aeron_cluster_recording_log_append_standby_snapshot(
+        log, 5, 0, 0, 100, 0, -1, "aeron:udp?endpoint=localhost:8080"));
+    append_snap(log, 10, 0, 0, 200, 0, -1);
+    append_snap(log, 11, 0, 0, 200, 0, 0);
+
+    /* invalidateLatestSnapshot should invalidate the regular snapshot group at pos=200 */
+    EXPECT_EQ(1, aeron_cluster_recording_log_invalidate_latest_snapshot(log));
+
+    auto *cm_snap = aeron_cluster_recording_log_get_latest_snapshot(log, -1);
+    /* The regular snapshot at 200 is invalidated; no other regular snapshot left */
+    EXPECT_EQ(nullptr, cm_snap);
+    aeron_cluster_recording_log_close(log);
+}
+
+TEST_F(RecordingLogTest, shouldIgnoreStandbySnapshotInRecoveryPlan)
+{
+    aeron_cluster_recording_log_t *log = nullptr;
+    ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+    append_term(log, 1, 0, 0, 0);
+    ASSERT_EQ(0, aeron_cluster_recording_log_append_standby_snapshot(
+        log, 5, 0, 0, 100, 0, -1, "aeron:udp?endpoint=localhost:8080"));
+    ASSERT_EQ(0, aeron_cluster_recording_log_append_standby_snapshot(
+        log, 6, 0, 0, 100, 0, 0, "aeron:udp?endpoint=localhost:8080"));
+
+    aeron_cluster_recovery_plan_t *plan = nullptr;
+    ASSERT_EQ(0, aeron_cluster_recording_log_create_recovery_plan(log, &plan, 1));
+    /* Standby snapshots should NOT be included in recovery plan */
+    EXPECT_EQ(0, plan->snapshot_count);
+    aeron_cluster_recovery_plan_free(plan);
+    aeron_cluster_recording_log_close(log);
+}
+
+TEST_F(RecordingLogTest, shouldCommitLogPositionByTerm)
+{
+    aeron_cluster_recording_log_t *log = nullptr;
+    ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+    append_term(log, 1, 5, 0, 0);
+    ASSERT_EQ(0, aeron_cluster_recording_log_commit_log_position_by_term(log, 5, 99999));
+    auto *e = aeron_cluster_recording_log_find_last_term(log);
+    ASSERT_NE(nullptr, e);
+    EXPECT_EQ(99999, e->log_position);
+    aeron_cluster_recording_log_close(log);
+}
+
+TEST_F(RecordingLogTest, entryAtReturnsNullForOutOfRange)
+{
+    aeron_cluster_recording_log_t *log = nullptr;
+    ASSERT_EQ(0, aeron_cluster_recording_log_open(&log, m_dir.c_str(), true));
+    append_term(log, 1, 0, 0, 0);
+    EXPECT_NE(nullptr, aeron_cluster_recording_log_entry_at(log, 0));
+    EXPECT_EQ(nullptr, aeron_cluster_recording_log_entry_at(log, 1));
+    EXPECT_EQ(nullptr, aeron_cluster_recording_log_entry_at(log, -1));
+    aeron_cluster_recording_log_close(log);
+}
+
+/* ============================================================
+ * REMAINING TIMER SERVICE TESTS
+ * ============================================================ */
+
+TEST_F(TimerServiceTest, cancelTimerReturnsTrueAfterCancellingLastTimer)
+{
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 99, 1000));
+    EXPECT_TRUE(aeron_cluster_timer_service_cancel(m_svc, 99));
+    EXPECT_EQ(0, aeron_cluster_timer_service_timer_count(m_svc));
+    /* Next deadline after removing last timer */
+    EXPECT_EQ(INT64_MAX, aeron_cluster_timer_service_next_deadline(m_svc));
+}
+
+TEST_F(TimerServiceTest, scheduleTimerNoOpIfDeadlineDoesNotChange)
+{
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 5, 1000));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 5, 1000)); /* same deadline */
+    /* Still only one timer */
+    EXPECT_EQ(1, aeron_cluster_timer_service_timer_count(m_svc));
+    g_fired_count = 0;
+    EXPECT_EQ(1, aeron_cluster_timer_service_poll(m_svc, 1001));
+    EXPECT_EQ(1, g_fired_count); /* fired once */
+}
+
+TEST_F(TimerServiceTest, pollShouldExpireMultipleTimersAtSameDeadline)
+{
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 1, 500));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 2, 500));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 3, 500));
+    g_fired_count = 0;
+    EXPECT_EQ(3, aeron_cluster_timer_service_poll(m_svc, 500));
+    EXPECT_EQ(3, g_fired_count);
+}
+
+TEST_F(TimerServiceTest, expireTimerThenCancelFires)
+{
+    /* Fire timer 1 at t=100, cancel timer 2 before it fires */
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 1, 100));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 2, 500));
+    g_fired_count = 0; g_last_fired_id = -1;
+    EXPECT_EQ(1, aeron_cluster_timer_service_poll(m_svc, 100));
+    EXPECT_EQ(1, g_last_fired_id);
+    EXPECT_TRUE(aeron_cluster_timer_service_cancel(m_svc, 2));
+    EXPECT_EQ(0, aeron_cluster_timer_service_poll(m_svc, 1000));
+}
+
+TEST_F(TimerServiceTest, moveUpTimerAndCancelAnother)
+{
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 1, 1000));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 2, 2000));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 3, 3000));
+    /* Move timer 3 to fire before timer 1 */
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 3, 500));
+    EXPECT_TRUE(aeron_cluster_timer_service_cancel(m_svc, 1));
+    /* Timer 3 fires at 500, timer 2 fires at 2000 */
+    g_last_fired_id = -1;
+    EXPECT_EQ(1, aeron_cluster_timer_service_poll(m_svc, 600));
+    EXPECT_EQ(3, g_last_fired_id);
+    g_last_fired_id = -1;
+    EXPECT_EQ(1, aeron_cluster_timer_service_poll(m_svc, 2001));
+    EXPECT_EQ(2, g_last_fired_id);
+}
+
+TEST_F(TimerServiceTest, moveDownTimerAndCancelAnother)
+{
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 1, 100));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 2, 200));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 3, 300));
+    /* Push timer 1 to fire later than timer 3 */
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 1, 400));
+    EXPECT_TRUE(aeron_cluster_timer_service_cancel(m_svc, 2));
+    std::vector<int64_t> fired;
+    auto capture_fn = [](void *cd, int64_t id) {
+        static_cast<std::vector<int64_t>*>(cd)->push_back(id);
+    };
+    aeron_cluster_timer_service_t *svc = nullptr;
+    ASSERT_EQ(0, aeron_cluster_timer_service_create(&svc, capture_fn, &fired));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(svc, 1, 400));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(svc, 3, 300));
+    aeron_cluster_timer_service_poll(svc, 500);
+    EXPECT_EQ(2u, fired.size());
+    EXPECT_EQ(3, fired[0]);
+    EXPECT_EQ(1, fired[1]);
+    aeron_cluster_timer_service_close(svc);
+}
+
+/* ============================================================
+ * REMAINING CLUSTER MEMBER TESTS
+ * ============================================================ */
+
+TEST_F(ClusterMemberTest, shouldDetermineQuorumPositionWithFiveNodes)
+{
+    parse("0,a:b:c:d:e|1,a:b:c:d:e|2,a:b:c:d:e|3,a:b:c:d:e|4,a:b:c:d:e");
+    const int64_t now_ns  = 1000000LL;
+    const int64_t timeout = 10000000000LL;
+
+    m_members[0].log_position = 100; m_members[0].time_of_last_append_position_ns = now_ns;
+    m_members[1].log_position = 200; m_members[1].time_of_last_append_position_ns = now_ns;
+    m_members[2].log_position = 300; m_members[2].time_of_last_append_position_ns = now_ns;
+    m_members[3].log_position = 400; m_members[3].time_of_last_append_position_ns = now_ns;
+    m_members[4].log_position = 500; m_members[4].time_of_last_append_position_ns = now_ns;
+
+    /* Quorum = 3; third highest = 300 */
+    EXPECT_EQ(300, aeron_cluster_member_quorum_position(m_members, m_count, now_ns, timeout));
+}
+
+TEST_F(ClusterMemberTest, isQuorumCandidateFalseWhenNoPosition)
+{
+    parse("0,a:b:c:d:e");
+    m_members[0].log_position = -1; /* no position */
+    EXPECT_FALSE(aeron_cluster_member_is_quorum_candidate(&m_members[0], 1000LL, 9999999999LL));
+}
+
+TEST_F(ClusterMemberTest, isQuorumCandidateFalseWhenTimedOut)
+{
+    parse("0,a:b:c:d:e");
+    m_members[0].log_position = 100;
+    m_members[0].time_of_last_append_position_ns = 0;
+    /* timeout = 1ns, now = 1000000ns → timed out */
+    EXPECT_FALSE(aeron_cluster_member_is_quorum_candidate(&m_members[0], 1000000LL, 1LL));
+}
+
+TEST_F(ClusterMemberTest, isQuorumCandidateTrueWhenRecentAndHasPosition)
+{
+    parse("0,a:b:c:d:e");
+    m_members[0].log_position = 42;
+    m_members[0].time_of_last_append_position_ns = 900000LL;
+    EXPECT_TRUE(aeron_cluster_member_is_quorum_candidate(&m_members[0], 1000000LL, 9999999999LL));
+}
+
+TEST_F(ClusterMemberTest, shouldCountVotesForMultipleTerms)
+{
+    parse("0,a:b:c:d:e|1,a:b:c:d:e|2,a:b:c:d:e|3,a:b:c:d:e|4,a:b:c:d:e");
+    for (int i = 0; i < m_count; i++) { m_members[i].candidate_term_id = (int64_t)(i < 3 ? 10 : 11); }
+    EXPECT_EQ(3, aeron_cluster_member_count_votes(m_members, m_count, 10));
+    EXPECT_EQ(2, aeron_cluster_member_count_votes(m_members, m_count, 11));
+    EXPECT_EQ(0, aeron_cluster_member_count_votes(m_members, m_count, 99));
+}
+
+TEST_F(ClusterMemberTest, quorumThresholdForLargeCluster)
+{
+    EXPECT_EQ(5, aeron_cluster_member_quorum_threshold(9));
+    EXPECT_EQ(6, aeron_cluster_member_quorum_threshold(11));
+}
+
+TEST_F(ClusterMemberTest, quorumPositionWithTwoNodesTimedOut)
+{
+    parse("0,a:b:c:d:e|1,a:b:c:d:e|2,a:b:c:d:e");
+    const int64_t now_ns  = 100000000LL;
+    const int64_t timeout = 1LL;  /* everyone timed out */
+
+    m_members[0].log_position = 100;
+    m_members[1].log_position = 200;
+    m_members[2].log_position = 300;
+    /* All timed out → quorum position = -1 */
+    int64_t pos = aeron_cluster_member_quorum_position(m_members, m_count, now_ns, timeout);
+    EXPECT_EQ(-1, pos);
+}
+
+TEST_F(ClusterMemberTest, parseEmptyTopologyReturnsZero)
+{
+    if (m_members) { aeron_cluster_members_free(m_members, m_count); m_members = nullptr; }
+    ASSERT_EQ(0, aeron_cluster_members_parse(nullptr, &m_members, &m_count));
+    EXPECT_EQ(0, m_count);
+    EXPECT_EQ(nullptr, m_members);
+}
+

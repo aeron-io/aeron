@@ -28,7 +28,8 @@ function(aeron_c_cluster_consensus_test name file)
     target_include_directories(${name} PUBLIC
         ${AERON_C_CLUSTER_CONSENSUS_SOURCE_PATH}
         ${AERON_C_CLUSTER_SERVICE_SOURCE_PATH}
-        "${AERON_C_ARCHIVE_SOURCE_PATH}/client")
+        "${AERON_C_ARCHIVE_SOURCE_PATH}/client"
+        ${CLUSTER_C_CODEC_TARGET_DIR})
     target_link_libraries(${name} aeron_cluster_c_consensus aeron_cluster_c_service gmock_main ${CMAKE_THREAD_LIBS_INIT})
     add_test(NAME ${name} COMMAND ${name})
     set_tests_properties(${name} PROPERTIES TIMEOUT 120)
@@ -38,4 +39,5 @@ if (AERON_UNIT_TESTS)
     aeron_c_cluster_consensus_test(aeron_cluster_consensus_test consensus/ClusterConsensusTest.cpp)
     aeron_c_cluster_consensus_test(aeron_cluster_election_test consensus/ElectionTest.cpp)
     aeron_c_cluster_consensus_test(aeron_cluster_context_test consensus/ConsensusModuleContextTest.cpp)
+    aeron_c_cluster_consensus_test(aeron_cluster_snapshot_test consensus/SnapshotTakerTest.cpp)
 endif ()
