@@ -65,9 +65,10 @@ aeron-cluster/
 ```
 
 The system test scenario exists in the deprecated migration fork at:
-`/Users/guangwenzhu/aeron-old/aeron-cluster/src/test/cpp_wrapper/ClusterClientSmokeTest.cpp`
-Translate its logic into C first (`ClusterClientTest.cpp`), then add a thin
-C++ system test that exercises `AeronCluster::connect` and `AeronCluster::offer`.
+`../aeron-old/aeron-cluster/src/test/cpp_wrapper/ClusterClientSmokeTest.cpp`
+(sibling directory of this repo).  Translate its logic into C first
+(`ClusterClientTest.cpp`), then add a thin C++ system test that exercises
+`AeronCluster::connect` and `AeronCluster::offer`.
 
 **Coverage rule: every public method of `AeronCluster.java` must have a
 corresponding C or C++ test.**  `aeron_archive_test.cpp` is the structural
@@ -171,9 +172,10 @@ CMake is the driver.  The Gradle task is a tool that CMake invokes via
 `${GRADLE_WRAPPER}`.  You never run `./gradlew generateCCodecs` manually;
 `cmake --build` does it for you when the schema XML is newer than the outputs.
 
-**Two things to add** before this works:
+**Both prerequisites are already done** (committed in `c1e5e10`).  Documented
+here for reference in case the tasks need to be re-added after a rebase.
 
-**A) Add `generateCCodecs` to `build.gradle`** (cluster block, after `generateCodecs`):
+**A) `generateCCodecs` in `build.gradle`** (cluster block, after `generateCodecs`):
 
 ```groovy
 // build.gradle — project(':aeron-cluster'), codecsFile and sbeFile already defined
@@ -211,7 +213,7 @@ tasks.register('generateCCodecs', JavaExec) {
 }
 ```
 
-**B) Add cluster variables and option to top-level `CMakeLists.txt`**,
+**B) Cluster variables and option in top-level `CMakeLists.txt`**,
 mirroring the `BUILD_AERON_ARCHIVE_API` block (around line 327):
 
 ```cmake
@@ -1407,136 +1409,36 @@ Add `EgressPoller.h` to the C++ wrapper install target in CMake (see §6).
 
 ## 6. CMakeLists.txt
 
-Mirror `aeron-archive/src/main/c/CMakeLists.txt` exactly.  The key pattern is
-`add_custom_command` → `c_codecs` target → library `add_dependencies`.
-Library target name follows the archive convention: `aeron_cluster_c_client`
-(note `_c_`, not just `_client`).
+**Already committed** (`c1e5e10`).  Two separate files — mirror the split used by archive:
 
+| File | Purpose |
+|------|---------|
+| `aeron-cluster/src/main/c/CMakeLists.txt` | `cluster_c_codecs` target + `aeron_cluster_c_client` shared/static libraries |
+| `aeron-cluster/src/main/cpp_wrapper/CMakeLists.txt` | `aeron_cluster_wrapper` INTERFACE (header-only) library |
+
+Key points about `aeron-cluster/src/main/c/CMakeLists.txt`:
+
+- `GENERATED_C_CODECS` lists all 66 headers that SBE generates from
+  `aeron-cluster-codecs.xml` (verified against `cppbuild/Release/generated/c/aeron_cluster_client/`).
+  CMake uses this list to detect when re-generation is needed.
+- `add_custom_command` invokes `${GRADLE_WRAPPER} :aeron-cluster:generateCCodecs`
+  with `-Dcodec.target.dir=${CLUSTER_C_CODEC_TARGET_DIR}`.
+- Library target name: `aeron_cluster_c_client` (note `_c_`, matching archive's
+  `aeron_archive_c_client`).
+- The C++ wrapper INTERFACE target lives in `src/main/cpp_wrapper/CMakeLists.txt`,
+  **not** embedded here — same split as archive.
+
+The `aeron-cluster/src/main/cpp_wrapper/CMakeLists.txt` mirrors
+`aeron-archive/src/main/cpp_wrapper/CMakeLists.txt` exactly:
 ```cmake
-# aeron-cluster/src/main/c/CMakeLists.txt
-
-find_package(Java REQUIRED)
-
-set(CODEC_SCHEMA ${CLUSTER_CODEC_SCHEMA_DIR}/aeron-cluster-codecs.xml)
-
-# List every header that generateCCodecs will produce for the client-facing
-# messages.  CMake uses this list to detect when re-generation is needed.
-# Run generateCCodecs once and copy the actual filenames from the output dir.
-set(GENERATED_C_CODECS
-    ${CLUSTER_C_CODEC_TARGET_DIR}/aeron_cluster_client/adminRequest.h
-    ${CLUSTER_C_CODEC_TARGET_DIR}/aeron_cluster_client/adminRequestType.h
-    ${CLUSTER_C_CODEC_TARGET_DIR}/aeron_cluster_client/adminResponse.h
-    ${CLUSTER_C_CODEC_TARGET_DIR}/aeron_cluster_client/adminResponseCode.h
-    ${CLUSTER_C_CODEC_TARGET_DIR}/aeron_cluster_client/challenge.h
-    ${CLUSTER_C_CODEC_TARGET_DIR}/aeron_cluster_client/challengeResponse.h
-    ${CLUSTER_C_CODEC_TARGET_DIR}/aeron_cluster_client/eventCode.h
-    ${CLUSTER_C_CODEC_TARGET_DIR}/aeron_cluster_client/messageHeader.h
-    ${CLUSTER_C_CODEC_TARGET_DIR}/aeron_cluster_client/newLeaderEvent.h
-    ${CLUSTER_C_CODEC_TARGET_DIR}/aeron_cluster_client/sessionCloseRequest.h
-    ${CLUSTER_C_CODEC_TARGET_DIR}/aeron_cluster_client/sessionConnectRequest.h
-    ${CLUSTER_C_CODEC_TARGET_DIR}/aeron_cluster_client/sessionEvent.h
-    ${CLUSTER_C_CODEC_TARGET_DIR}/aeron_cluster_client/sessionKeepAlive.h
-    ${CLUSTER_C_CODEC_TARGET_DIR}/aeron_cluster_client/sessionMessageHeader.h
-    ${CLUSTER_C_CODEC_TARGET_DIR}/aeron_cluster_client/varAsciiEncoding.h
-    ${CLUSTER_C_CODEC_TARGET_DIR}/aeron_cluster_client/varDataEncoding.h)
-# NOTE: SBE generates headers for ALL messages in the XML, not just client-facing
-# ones.  After first generation, extend this list to include every produced file
-# so CMake can track changes correctly — see archive's CMakeLists.txt for
-# the full 40-entry pattern.
-
-add_custom_command(OUTPUT ${GENERATED_C_CODECS}
-    COMMAND ${CMAKE_COMMAND} -E env
-        JAVA_HOME=$ENV{JAVA_HOME}
-        BUILD_JAVA_HOME=$ENV{BUILD_JAVA_HOME}
-        BUILD_JAVA_VERSION=$ENV{BUILD_JAVA_VERSION}
-        ${GRADLE_WRAPPER}
-        -Dcodec.target.dir=${CLUSTER_C_CODEC_TARGET_DIR}
-        :aeron-cluster:generateCCodecs
-        --no-daemon --console=plain -q
-    DEPENDS ${CODEC_SCHEMA} aeron-all-jar
-    WORKING_DIRECTORY ${CLUSTER_CODEC_WORKING_DIR}
-    COMMENT "Generating C Cluster codecs")
-
-add_custom_target(cluster_c_codecs DEPENDS ${GENERATED_C_CODECS})
-
-set(SOURCE
-    client/aeron_cluster_async_connect.c
-    client/aeron_cluster_client.c
-    client/aeron_cluster_client_version.c
-    client/aeron_cluster_configuration.c
-    client/aeron_cluster_context.c
-    client/aeron_cluster_credentials_supplier.c
-    client/aeron_cluster_egress_poller.c
-    client/aeron_cluster_ingress_proxy.c
-)
-
-set(HEADERS
-    client/aeron_cluster.h
-    client/aeron_cluster_async_connect.h
-    client/aeron_cluster_client.h
-    client/aeron_cluster_client_version.h
-    client/aeron_cluster_configuration.h
-    client/aeron_cluster_context.h
-    client/aeron_cluster_credentials_supplier.h
-    client/aeron_cluster_egress_poller.h
-    client/aeron_cluster_ingress_proxy.h
-)
-
-# shared library — target name follows archive convention: _c_ in the name
-add_library(aeron_cluster_c_client SHARED ${SOURCE} ${HEADERS})
-add_library(aeron::aeron_cluster_c_client ALIAS aeron_cluster_c_client)
-
-add_dependencies(aeron_cluster_c_client cluster_c_codecs)
-
-target_include_directories(aeron_cluster_c_client
-    PUBLIC  "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
-            "$<INSTALL_INTERFACE:include/aeron>"
-    PRIVATE ${CLUSTER_C_CODEC_TARGET_DIR})
-
-target_link_libraries(aeron_cluster_c_client
-    aeron
-    ${CMAKE_THREAD_LIBS_INIT})
-
-# static library
-add_library(aeron_cluster_c_client_static STATIC ${SOURCE} ${HEADERS})
-add_library(aeron::aeron_cluster_c_client_static ALIAS aeron_cluster_c_client_static)
-
-add_dependencies(aeron_cluster_c_client_static cluster_c_codecs)
-
-target_include_directories(aeron_cluster_c_client_static
-    PUBLIC  "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
-            "$<INSTALL_INTERFACE:include/aeron>"
-    PRIVATE ${CLUSTER_C_CODEC_TARGET_DIR})
-
-target_link_libraries(aeron_cluster_c_client_static
-    aeron_static
-    ${CMAKE_THREAD_LIBS_INIT})
-
-# C++ wrapper — header-only INTERFACE target
-# Headers live in src/main/cpp_wrapper/cluster/client/
-set(AERON_CLUSTER_WRAPPER_SOURCE_PATH
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../../../cpp_wrapper/cluster/client")
-
-add_library(aeron_cluster_c_client_wrapper INTERFACE)
-add_library(aeron::aeron_cluster_c_client_wrapper ALIAS aeron_cluster_c_client_wrapper)
-
-target_include_directories(aeron_cluster_c_client_wrapper INTERFACE
-    "$<BUILD_INTERFACE:${AERON_CLUSTER_WRAPPER_SOURCE_PATH}>"
-    "$<INSTALL_INTERFACE:include/aeron>")
-
-target_link_libraries(aeron_cluster_c_client_wrapper INTERFACE
-    aeron_cluster_c_client
-    aeron_client_wrapper)   # brings in Aeron.h, Subscription.h, AtomicBuffer.h
-
-if (AERON_INSTALL_TARGETS)
-    install(
-        TARGETS aeron_cluster_c_client aeron_cluster_c_client_static
-        EXPORT  aeron-targets
-        RUNTIME DESTINATION lib
-        LIBRARY DESTINATION lib
-        ARCHIVE DESTINATION lib)
-    install(DIRECTORY ./ DESTINATION include/aeron FILES_MATCHING PATTERN "aeron_cluster.h")
-endif ()
+add_library(aeron_cluster_wrapper INTERFACE)
+target_include_directories(aeron_cluster_wrapper INTERFACE
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
+    "$<BUILD_INTERFACE:${AERON_C_CLUSTER_SOURCE_PATH}>"
+    "$<BUILD_INTERFACE:${AERON_CLIENT_WRAPPER_SOURCE_PATH}>"
+    "$<INSTALL_INTERFACE:include/wrapper>")
+target_sources(aeron_cluster_wrapper INTERFACE "$<BUILD_INTERFACE:${HEADERS}>")
+target_link_libraries(aeron_cluster_wrapper INTERFACE ${CMAKE_THREAD_LIBS_INIT})
 ```
 
 ---
@@ -1661,8 +1563,8 @@ shouldHandleExceptionOnConnectError
 #define AERON_CLUSTER_NEW_LEADER_EVENT_TEMPLATE_ID           6  // egress: leader changed
 #define AERON_CLUSTER_CHALLENGE_TEMPLATE_ID                  7  // egress: auth challenge from cluster
 #define AERON_CLUSTER_CHALLENGE_RESPONSE_TEMPLATE_ID         8  // ingress: response to challenge
-#define AERON_CLUSTER_ADMIN_REQUEST_TEMPLATE_ID             23  // ingress: e.g. snapshot request
-#define AERON_CLUSTER_ADMIN_RESPONSE_TEMPLATE_ID            24  // egress: response to admin request
+#define AERON_CLUSTER_ADMIN_REQUEST_TEMPLATE_ID             26  // ingress: e.g. snapshot request
+#define AERON_CLUSTER_ADMIN_RESPONSE_TEMPLATE_ID            27  // egress: response to admin request
 
 // SBE schema ID (from aeron-cluster-codecs.xml schemaId attribute = 111)
 // NOTE: use SessionMessageHeader::sbeSchemaId() — NOT MessageHeader::sbeSchemaId()

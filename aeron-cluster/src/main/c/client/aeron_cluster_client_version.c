@@ -14,22 +14,29 @@
  * limitations under the License.
  */
 
-#ifndef AERON_CLUSTER_EXCEPTION_H
-#define AERON_CLUSTER_EXCEPTION_H
+#include "aeron_cluster_client_version.h"
 
-#include "util/Exceptions.h"
-
-namespace aeron { namespace cluster { namespace client
+const char *aeron_cluster_client_version_text(void)
 {
+    return AERON_VERSION_TXT;
+}
 
-AERON_DECLARE_SOURCED_EXCEPTION(ClusterException, ExceptionCategory::EXCEPTION_CATEGORY_ERROR);
+const char *aeron_cluster_client_version_git_sha(void)
+{
+    return AERON_VERSION_GITSHA;
+}
 
-#define CLUSTER_MAP_TO_SOURCED_EXCEPTION_AND_THROW(code, message) \
-    AERON_MAP_TO_SOURCED_EXCEPTION_AND_THROW_WITH_DEFAULT(code, message, ClusterException)
+int aeron_cluster_client_version_major(void)
+{
+    return AERON_VERSION_MAJOR;
+}
 
-#define CLUSTER_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW \
-    CLUSTER_MAP_TO_SOURCED_EXCEPTION_AND_THROW(aeron_errcode(), aeron_errmsg())
+int aeron_cluster_client_version_minor(void)
+{
+    return AERON_VERSION_MINOR;
+}
 
-}}}
-
-#endif /* AERON_CLUSTER_EXCEPTION_H */
+int aeron_cluster_client_version_patch(void)
+{
+    return AERON_VERSION_PATCH;
+}

@@ -40,6 +40,6 @@ function(aeron_cluster_wrapper_test name file)
 endfunction()
 
 # Tests are added here as wrapper headers are implemented:
-# if (AERON_UNIT_TESTS)
-#     aeron_cluster_wrapper_test(clusterTest AeronClusterWrapperTest.cpp)
-# endif ()
+if (AERON_UNIT_TESTS)
+    aeron_cluster_wrapper_test(clusterTest AeronClusterWrapperTest.cpp)
+endif ()

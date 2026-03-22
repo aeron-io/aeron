@@ -14,22 +14,13 @@
  * limitations under the License.
  */
 
-#ifndef AERON_CLUSTER_EXCEPTION_H
-#define AERON_CLUSTER_EXCEPTION_H
+#include "aeron_cluster_configuration.h"
+#include "aeron_common.h"
 
-#include "util/Exceptions.h"
-
-namespace aeron { namespace cluster { namespace client
+int32_t aeron_cluster_semantic_version(void)
 {
-
-AERON_DECLARE_SOURCED_EXCEPTION(ClusterException, ExceptionCategory::EXCEPTION_CATEGORY_ERROR);
-
-#define CLUSTER_MAP_TO_SOURCED_EXCEPTION_AND_THROW(code, message) \
-    AERON_MAP_TO_SOURCED_EXCEPTION_AND_THROW_WITH_DEFAULT(code, message, ClusterException)
-
-#define CLUSTER_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW \
-    CLUSTER_MAP_TO_SOURCED_EXCEPTION_AND_THROW(aeron_errcode(), aeron_errmsg())
-
-}}}
-
-#endif /* AERON_CLUSTER_EXCEPTION_H */
+    return aeron_semantic_version_compose(
+        AERON_CLUSTER_PROTOCOL_MAJOR_VERSION,
+        AERON_CLUSTER_PROTOCOL_MINOR_VERSION,
+        AERON_CLUSTER_PROTOCOL_PATCH_VERSION);
+}
