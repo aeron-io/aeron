@@ -80,3 +80,4 @@ hs_err_pid*
 aeron-samples/scripts/cluster/logs/
 aeron-samples/scripts/cluster/node*/
 .claude/
+.cache/

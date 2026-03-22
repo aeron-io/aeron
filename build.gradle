@@ -866,6 +866,40 @@ project(':aeron-cluster') {
         args = [codecsFile, markCodecsFile, nodeStateCodecsFile]
     }
 
+    def generatedCppDir = file(System.getProperty('codec.target.dir') ?: "${rootDir}/cppbuild/Release/generated")
+    tasks.register('generateCppCodecs', JavaExec) {
+        inputs.files(codecsFile, sbeFile)
+        outputs.dir generatedCppDir
+
+        mainClass.set('uk.co.real_logic.sbe.SbeTool')
+        jvmArgs('--add-opens', 'java.base/jdk.internal.misc=ALL-UNNAMED')
+        classpath = configurations.codecGeneration
+        systemProperties(
+            'sbe.output.dir'              : generatedCppDir,
+            'sbe.target.language'         : 'Cpp',
+            'sbe.target.namespace'        : 'aeron.cluster.client',
+            'sbe.validation.xsd'          : sbeFile,
+            'sbe.validation.stop.on.error': 'true')
+        args = [codecsFile]
+    }
+
+    def generatedCDir = file(System.getProperty('codec.target.dir') ?: "${rootDir}/cppbuild/Release/generated/c")
+    tasks.register('generateCCodecs', JavaExec) {
+        inputs.files(codecsFile, sbeFile)
+        outputs.dir generatedCDir
+
+        mainClass.set('uk.co.real_logic.sbe.SbeTool')
+        jvmArgs('--add-opens', 'java.base/jdk.internal.misc=ALL-UNNAMED')
+        classpath = configurations.codecGeneration
+        systemProperties(
+            'sbe.output.dir'              : generatedCDir,
+            'sbe.target.language'         : 'C',
+            'sbe.target.namespace'        : 'aeron.cluster.client',
+            'sbe.validation.xsd'          : sbeFile,
+            'sbe.validation.stop.on.error': 'true')
+        args = [codecsFile]
+    }
+
     def markCodecsFileV0 = 'src/test/resources/aeron-cluster-mark-codecs-v0.xml'
     tasks.register('generateTestCodecsMarkFileV0', JavaExec) {
         inputs.files(markCodecsFileV0, sbeFile)

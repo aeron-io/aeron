@@ -251,6 +251,10 @@ set(AERON_DRIVER_SOURCE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/aeron-driver/src/main/
 set(AERON_ARCHIVE_WRAPPER_SOURCE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/aeron-archive/src/main/cpp_wrapper")
 set(AERON_C_ARCHIVE_SOURCE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/aeron-archive/src/main/c")
 
+# cluster source
+set(AERON_CLUSTER_WRAPPER_SOURCE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/aeron-cluster/src/main/cpp_wrapper")
+set(AERON_C_CLUSTER_SOURCE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/aeron-cluster/src/main/c")
+
 if (AERON_TESTS)
     # client tests
     set(AERON_CLIENT_WRAPPER_TEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/aeron-client/src/test/cpp_wrapper")
@@ -262,6 +266,10 @@ if (AERON_TESTS)
     # archive tests
     set(AERON_ARCHIVE_WRAPPER_TEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/aeron-archive/src/test/cpp_wrapper")
     set(AERON_C_ARCHIVE_TEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/aeron-archive/src/test/c")
+
+    # cluster tests
+    set(AERON_CLUSTER_WRAPPER_TEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/aeron-cluster/src/test/cpp_wrapper")
+    set(AERON_C_CLUSTER_TEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/aeron-cluster/src/test/c")
 
     set(AERON_SYSTEM_TEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/aeron-system-tests")
 endif ()
@@ -352,6 +360,24 @@ if (BUILD_AERON_ARCHIVE_API)
         add_subdirectory(${AERON_C_ARCHIVE_TEST_PATH})
     endif ()
 endif (BUILD_AERON_ARCHIVE_API)
+
+option(BUILD_AERON_CLUSTER_CLIENT_API "Build Aeron Cluster C Client API" ON)
+
+if (BUILD_AERON_CLUSTER_CLIENT_API)
+    set(CLUSTER_CODEC_TARGET_DIR   "${CMAKE_CURRENT_BINARY_DIR}/generated")
+    set(CLUSTER_C_CODEC_TARGET_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/c")
+    set(CLUSTER_CODEC_SCHEMA_DIR   "${CMAKE_CURRENT_SOURCE_DIR}/aeron-cluster/src/main/resources/cluster")
+    set(CLUSTER_CODEC_WORKING_DIR  "${CMAKE_CURRENT_SOURCE_DIR}")
+
+    add_subdirectory(${AERON_CLUSTER_WRAPPER_SOURCE_PATH})
+    add_subdirectory(${AERON_C_CLUSTER_SOURCE_PATH})
+
+    if (AERON_TESTS)
+        add_subdirectory(${AERON_CLUSTER_WRAPPER_TEST_PATH})
+        add_subdirectory(${AERON_C_CLUSTER_TEST_PATH})
+    endif ()
+endif (BUILD_AERON_CLUSTER_CLIENT_API)
+
 ##########################################################
 # doc target
 
