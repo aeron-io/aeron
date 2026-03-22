@@ -244,3 +244,108 @@ int aeron_cluster_member_count_votes(
     }
     return votes;
 }
+
+/* compareLog: positive if lhs has better log */
+static int compare_log(
+    int64_t lhs_term, int64_t lhs_pos,
+    int64_t rhs_term, int64_t rhs_pos)
+{
+    if (lhs_term != rhs_term) { return (lhs_term > rhs_term) ? 1 : -1; }
+    if (lhs_pos  != rhs_pos)  { return (lhs_pos  > rhs_pos)  ? 1 : -1; }
+    return 0;
+}
+
+bool aeron_cluster_member_will_vote_for(
+    const aeron_cluster_member_t *member,
+    const aeron_cluster_member_t *candidate)
+{
+    if (member->log_position < 0) { return false; }  /* NULL_POSITION */
+    return compare_log(member->leadership_term_id, member->log_position,
+                       candidate->leadership_term_id, candidate->log_position) <= 0;
+}
+
+bool aeron_cluster_member_is_unanimous_candidate(
+    aeron_cluster_member_t *members,
+    int member_count,
+    const aeron_cluster_member_t *candidate,
+    int32_t graceful_closed_leader_id)
+{
+    int possible_votes = 0;
+    for (int i = 0; i < member_count; i++)
+    {
+        if (members[i].id == graceful_closed_leader_id) { continue; }
+        if (!aeron_cluster_member_will_vote_for(&members[i], candidate)) { return false; }
+        possible_votes++;
+    }
+    return possible_votes >= aeron_cluster_member_quorum_threshold(member_count);
+}
+
+bool aeron_cluster_member_is_quorum_candidate_for(
+    aeron_cluster_member_t *members,
+    int member_count,
+    const aeron_cluster_member_t *candidate)
+{
+    int possible_votes = 0;
+    for (int i = 0; i < member_count; i++)
+    {
+        if (aeron_cluster_member_will_vote_for(&members[i], candidate)) { possible_votes++; }
+    }
+    return possible_votes >= aeron_cluster_member_quorum_threshold(member_count);
+}
+
+bool aeron_cluster_member_is_quorum_leader(
+    aeron_cluster_member_t *members,
+    int member_count,
+    int64_t candidate_term_id)
+{
+    int votes = 0;
+    for (int i = 0; i < member_count; i++)
+    {
+        if (members[i].candidate_term_id == candidate_term_id)
+        {
+            if (members[i].vote == 0) { return false; }  /* explicit NO */
+            if (members[i].vote == 1) { votes++; }
+        }
+    }
+    return votes >= aeron_cluster_member_quorum_threshold(member_count);
+}
+
+bool aeron_cluster_member_is_unanimous_leader(
+    aeron_cluster_member_t *members,
+    int member_count,
+    int64_t candidate_term_id,
+    int32_t graceful_closed_leader_id)
+{
+    int votes = 0;
+    for (int i = 0; i < member_count; i++)
+    {
+        if (members[i].id == graceful_closed_leader_id) { continue; }
+        if (members[i].candidate_term_id != candidate_term_id || members[i].vote != 1)
+        {
+            return false;
+        }
+        votes++;
+    }
+    return votes >= aeron_cluster_member_quorum_threshold(member_count);
+}
+
+bool aeron_cluster_member_has_quorum_at_position(
+    aeron_cluster_member_t *members,
+    int member_count,
+    int64_t leadership_term_id,
+    int64_t position,
+    int64_t now_ns,
+    int64_t heartbeat_timeout_ns)
+{
+    int count = 0;
+    for (int i = 0; i < member_count; i++)
+    {
+        if (aeron_cluster_member_is_quorum_candidate(&members[i], now_ns, heartbeat_timeout_ns) &&
+            members[i].leadership_term_id == leadership_term_id &&
+            members[i].log_position >= position)
+        {
+            count++;
+        }
+    }
+    return count >= aeron_cluster_member_quorum_threshold(member_count);
+}

@@ -1362,3 +1362,254 @@ TEST_F(RecordingLogTest, standbySnapshotSortsBetweenTermAndSnapshot)
 
     aeron_cluster_recording_log_close(log);
 }
+
+/* ============================================================
+ * REMAINING TIMER SERVICE TESTS
+ * ============================================================ */
+
+TEST_F(TimerServiceTest, pollShouldStopAfterPollLimitIsReached)
+{
+    const int POLL_LIMIT = 5;
+    for (int i = 0; i < POLL_LIMIT * 2; i++)
+    {
+        ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, i, i));
+    }
+    g_fired_count = 0;
+    int fired = aeron_cluster_timer_service_poll_limit(m_svc, INT64_MAX, POLL_LIMIT);
+    EXPECT_EQ(POLL_LIMIT, fired);
+    EXPECT_EQ(POLL_LIMIT, g_fired_count);
+    EXPECT_EQ(POLL_LIMIT, aeron_cluster_timer_service_timer_count(m_svc));
+}
+
+struct SnapshotCapture { std::vector<std::pair<int64_t,int64_t>> timers; };
+static void capture_snapshot(void *cd, int64_t correl, int64_t deadline)
+{
+    static_cast<SnapshotCapture*>(cd)->timers.push_back({correl, deadline});
+}
+
+TEST_F(TimerServiceTest, snapshotProcessesAllRemainingTimersInDeadlineOrder)
+{
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 3, 30));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 4, 29));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 5, 15));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 1, 10));
+    ASSERT_EQ(0, aeron_cluster_timer_service_schedule(m_svc, 2, 14));
+
+    /* Poll timers at deadline <= 14 (fires 1,2) */
+    g_fired_count = 0;
+    EXPECT_EQ(2, aeron_cluster_timer_service_poll(m_svc, 14));
+
+    /* Snapshot remaining (5,4,3) in deadline order */
+    SnapshotCapture cap;
+    aeron_cluster_timer_service_snapshot(m_svc, capture_snapshot, &cap);
+    ASSERT_EQ(3u, cap.timers.size());
+    EXPECT_EQ(5, cap.timers[0].first);  EXPECT_EQ(15, cap.timers[0].second);
+    EXPECT_EQ(4, cap.timers[1].first);  EXPECT_EQ(29, cap.timers[1].second);
+    EXPECT_EQ(3, cap.timers[2].first);  EXPECT_EQ(30, cap.timers[2].second);
+}
+
+TEST_F(TimerServiceTest, snapshotEmptyServiceDoesNothing)
+{
+    SnapshotCapture cap;
+    aeron_cluster_timer_service_snapshot(m_svc, capture_snapshot, &cap);
+    EXPECT_EQ(0u, cap.timers.size());
+}
+
+/* ============================================================
+ * REMAINING CLUSTER MEMBER TESTS
+ * ============================================================ */
+
+/* Helper: set member state from individual fields */
+static void member_set(aeron_cluster_member_t *m, int32_t id,
+                        int64_t term_id, int64_t log_pos, int64_t ts = 0)
+{
+    m->id = id;
+    m->leadership_term_id = term_id;
+    m->log_position  = log_pos;
+    m->time_of_last_append_position_ns = ts;
+    m->candidate_term_id = -1;
+    m->vote = -1;
+}
+
+TEST_F(ClusterMemberTest, shouldRankClusterStart)
+{
+    parse("0,a:b:c:d:e|1,a:b:c:d:e|2,a:b:c:d:e");
+    const int64_t now_ns  = 0LL;
+    const int64_t timeout = 10LL;
+    m_members[0].log_position = 0;
+    m_members[1].log_position = 0;
+    m_members[2].log_position = 0;
+    EXPECT_EQ(0, aeron_cluster_member_quorum_position(m_members, m_count, now_ns, timeout));
+}
+
+/* shouldDetermineQuorumPosition parameterized cases */
+struct QuorumCase { int64_t p0, p1, p2, expected; };
+static const QuorumCase QUORUM_CASES[] = {
+    {0,0,0,0},{123,0,0,0},{123,123,0,123},{123,123,123,123},
+    {0,123,123,123},{0,0,123,0},{0,123,200,123},
+    {5,3,1,3},{5,1,3,3},{1,3,5,3},{1,5,3,3},{3,1,5,3},{3,5,1,3}
+};
+
+class QuorumPositionTest : public ::testing::TestWithParam<QuorumCase> {};
+INSTANTIATE_TEST_SUITE_P(ClusterMember, QuorumPositionTest,
+    ::testing::ValuesIn(QUORUM_CASES));
+
+TEST_P(QuorumPositionTest, shouldDetermineQuorumPosition)
+{
+    auto c = GetParam();
+    aeron_cluster_member_t members[3] = {};
+    members[0].log_position = c.p0; members[0].time_of_last_append_position_ns = 0;
+    members[1].log_position = c.p1; members[1].time_of_last_append_position_ns = 0;
+    members[2].log_position = c.p2; members[2].time_of_last_append_position_ns = 0;
+    EXPECT_EQ(c.expected, aeron_cluster_member_quorum_position(members, 3, 0, INT64_MAX));
+}
+
+TEST_F(ClusterMemberTest, isUnanimousCandidateFalseIfMemberHasNoLogPosition)
+{
+    parse("1,a:b:c:d:e|2,a:b:c:d:e|3,a:b:c:d:e");
+    aeron_cluster_member_t candidate{};
+    member_set(&candidate, 4, 2, 1000);
+
+    member_set(&m_members[0], 1, 2, 100);
+    member_set(&m_members[1], 2, 8, -1);  /* no position */
+    member_set(&m_members[2], 3, 1, 1);
+
+    EXPECT_FALSE(aeron_cluster_member_is_unanimous_candidate(
+        m_members, m_count, &candidate, -1));
+}
+
+TEST_F(ClusterMemberTest, isUnanimousCandidateFalseIfMemberHasMoreLog)
+{
+    parse("1,a:b:c:d:e|2,a:b:c:d:e|3,a:b:c:d:e");
+    aeron_cluster_member_t candidate{};
+    member_set(&candidate, 4, 10, 800);
+
+    member_set(&m_members[0], 1, 2, 100);
+    member_set(&m_members[1], 2, 8, 6);
+    member_set(&m_members[2], 3, 11, 1000);  /* better than candidate */
+
+    EXPECT_FALSE(aeron_cluster_member_is_unanimous_candidate(
+        m_members, m_count, &candidate, -1));
+}
+
+TEST_F(ClusterMemberTest, isUnanimousCandidateFalseIfGracefulLeaderSkipped)
+{
+    parse("1,a:b:c:d:e|2,a:b:c:d:e");
+    aeron_cluster_member_t candidate{};
+    member_set(&candidate, 2, 2, 100);
+
+    member_set(&m_members[0], 1, 2, 100);
+    member_set(&m_members[1], 2, 2, 100);
+
+    /* gracefulClosedLeaderId=1 → only member 2 counts; 1 < quorum(2)=2 → false */
+    EXPECT_FALSE(aeron_cluster_member_is_unanimous_candidate(
+        m_members, m_count, &candidate, 1));
+}
+
+TEST_F(ClusterMemberTest, isUnanimousCandidateTrueIfCandidateHasBestLog)
+{
+    parse("10,a:b:c:d:e|20,a:b:c:d:e|30,a:b:c:d:e");
+    aeron_cluster_member_t candidate{};
+    member_set(&candidate, 2, 10, 800);
+
+    member_set(&m_members[0], 10, 2, 100);
+    member_set(&m_members[1], 20, 8, 6);
+    member_set(&m_members[2], 30, 10, 800);
+
+    EXPECT_TRUE(aeron_cluster_member_is_unanimous_candidate(
+        m_members, m_count, &candidate, -1));
+}
+
+TEST_F(ClusterMemberTest, isQuorumCandidateFalseWhenQuorumNotReached)
+{
+    parse("10,a:b:c:d:e|20,a:b:c:d:e|30,a:b:c:d:e|40,a:b:c:d:e|50,a:b:c:d:e");
+    aeron_cluster_member_t candidate{};
+    member_set(&candidate, 2, 10, 800);
+
+    member_set(&m_members[0], 10, 2, 100);
+    member_set(&m_members[1], 20, 18, 600);
+    member_set(&m_members[2], 30, 10, 800);
+    member_set(&m_members[3], 40, 19, 800);
+    member_set(&m_members[4], 50, 10, 1000);  /* better than candidate */
+
+    EXPECT_FALSE(aeron_cluster_member_is_quorum_candidate_for(
+        m_members, m_count, &candidate));
+}
+
+TEST_F(ClusterMemberTest, isQuorumCandidateTrueWhenQuorumReached)
+{
+    parse("10,a:b:c:d:e|20,a:b:c:d:e|30,a:b:c:d:e|40,a:b:c:d:e|50,a:b:c:d:e");
+    aeron_cluster_member_t candidate{};
+    member_set(&candidate, 2, 10, 800);
+
+    member_set(&m_members[0], 10, 2, 100);
+    member_set(&m_members[1], 20, 18, 600);
+    member_set(&m_members[2], 30, 10, 800);
+    member_set(&m_members[3], 40, 9, 800);
+    member_set(&m_members[4], 50, 10, 700);
+
+    EXPECT_TRUE(aeron_cluster_member_is_quorum_candidate_for(
+        m_members, m_count, &candidate));
+}
+
+TEST_F(ClusterMemberTest, isQuorumLeaderReturnsTrueWhenQuorumReached)
+{
+    const int64_t ct = -5;
+    parse("1,a:b:c:d:e|2,a:b:c:d:e|3,a:b:c:d:e|4,a:b:c:d:e|5,a:b:c:d:e");
+    m_members[0].candidate_term_id = ct;   m_members[0].vote = 1;   /* YES */
+    m_members[1].candidate_term_id = ct*2; m_members[1].vote = 0;   /* NO, different term */
+    m_members[2].candidate_term_id = ct;   m_members[2].vote = -1;  /* null */
+    m_members[3].candidate_term_id = ct;   m_members[3].vote = 1;   /* YES */
+    m_members[4].candidate_term_id = ct;   m_members[4].vote = 1;   /* YES */
+
+    EXPECT_TRUE(aeron_cluster_member_is_quorum_leader(m_members, m_count, ct));
+}
+
+TEST_F(ClusterMemberTest, isQuorumLeaderReturnsFalseOnNegativeVote)
+{
+    const int64_t ct = 8;
+    parse("1,a:b:c:d:e|2,a:b:c:d:e|3,a:b:c:d:e|4,a:b:c:d:e|5,a:b:c:d:e");
+    m_members[0].candidate_term_id = ct; m_members[0].vote = 1;
+    m_members[1].candidate_term_id = ct; m_members[1].vote = 0;  /* explicit NO */
+    m_members[2].candidate_term_id = ct; m_members[2].vote = 1;
+    m_members[3].candidate_term_id = ct; m_members[3].vote = 1;
+    m_members[4].candidate_term_id = ct; m_members[4].vote = 1;
+
+    EXPECT_FALSE(aeron_cluster_member_is_quorum_leader(m_members, m_count, ct));
+}
+
+TEST_F(ClusterMemberTest, hasQuorumAtPositionTrue)
+{
+    const int64_t now_ns = 1000LL;
+    const int64_t timeout = 9999999LL;
+    const int64_t lt = 5LL;
+    const int64_t pos = 100LL;
+
+    parse("0,a:b:c:d:e|1,a:b:c:d:e|2,a:b:c:d:e");
+    m_members[0].leadership_term_id = lt; m_members[0].log_position = 100;
+    m_members[0].time_of_last_append_position_ns = now_ns;
+    m_members[1].leadership_term_id = lt; m_members[1].log_position = 150;
+    m_members[1].time_of_last_append_position_ns = now_ns;
+    m_members[2].leadership_term_id = lt; m_members[2].log_position = 50;
+    m_members[2].time_of_last_append_position_ns = now_ns;
+
+    EXPECT_TRUE(aeron_cluster_member_has_quorum_at_position(
+        m_members, m_count, lt, pos, now_ns, timeout));
+}
+
+TEST_F(ClusterMemberTest, hasQuorumAtPositionFalse)
+{
+    const int64_t now_ns = 1000LL;
+    const int64_t timeout = 9999999LL;
+    parse("0,a:b:c:d:e|1,a:b:c:d:e|2,a:b:c:d:e");
+    m_members[0].leadership_term_id = 5; m_members[0].log_position = 50;
+    m_members[0].time_of_last_append_position_ns = now_ns;
+    m_members[1].leadership_term_id = 5; m_members[1].log_position = 50;
+    m_members[1].time_of_last_append_position_ns = now_ns;
+    m_members[2].leadership_term_id = 5; m_members[2].log_position = 50;
+    m_members[2].time_of_last_append_position_ns = now_ns;
+
+    /* Need >= 100, everyone only has 50 */
+    EXPECT_FALSE(aeron_cluster_member_has_quorum_at_position(
+        m_members, m_count, 5, 100, now_ns, timeout));
+}

@@ -200,3 +200,54 @@ int aeron_cluster_timer_service_timer_count(aeron_cluster_timer_service_t *servi
 {
     return service->heap_size;
 }
+
+int aeron_cluster_timer_service_poll_limit(
+    aeron_cluster_timer_service_t *service,
+    int64_t now_ns,
+    int limit)
+{
+    int fired = 0;
+    while (service->heap_size > 0 &&
+           service->heap[0].deadline_ns <= now_ns &&
+           fired < limit)
+    {
+        int64_t correlation_id = service->heap[0].correlation_id;
+        service->heap_size--;
+        service->heap[0] = service->heap[service->heap_size];
+        heap_sift_down(service->heap, service->heap_size, 0);
+        service->on_expiry(service->clientd, correlation_id);
+        fired++;
+    }
+    return fired;
+}
+
+void aeron_cluster_timer_service_snapshot(
+    aeron_cluster_timer_service_t *service,
+    aeron_cluster_timer_snapshot_func_t snapshot_fn,
+    void *clientd)
+{
+    /* Copy heap, sort ascending by deadline, call callback for each */
+    int n = service->heap_size;
+    if (n == 0) { return; }
+
+    /* Simple: copy and sort */
+    timer_node_t *copy = NULL;
+    aeron_alloc((void **)&copy, (size_t)n * sizeof(timer_node_t));
+    if (!copy) { return; }
+    memcpy(copy, service->heap, (size_t)n * sizeof(timer_node_t));
+
+    /* Insertion sort (small N, stable) */
+    for (int i = 1; i < n; i++)
+    {
+        timer_node_t key = copy[i];
+        int j = i - 1;
+        while (j >= 0 && copy[j].deadline_ns > key.deadline_ns) { copy[j+1] = copy[j]; j--; }
+        copy[j+1] = key;
+    }
+
+    for (int i = 0; i < n; i++)
+    {
+        snapshot_fn(clientd, copy[i].correlation_id, copy[i].deadline_ns);
+    }
+    aeron_free(copy);
+}

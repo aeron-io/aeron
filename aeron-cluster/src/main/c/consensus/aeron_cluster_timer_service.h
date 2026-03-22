@@ -62,12 +62,32 @@ bool aeron_cluster_timer_service_cancel(
     int64_t correlation_id);
 
 /**
- * Poll: fire all timers whose deadline <= now_ns.
+ * Poll: fire timers whose deadline <= now_ns, up to limit timers.
+ * Pass INT_MAX for no limit.
  * Returns the number of timers fired.
  */
 int  aeron_cluster_timer_service_poll(
     aeron_cluster_timer_service_t *service,
     int64_t now_ns);
+
+int  aeron_cluster_timer_service_poll_limit(
+    aeron_cluster_timer_service_t *service,
+    int64_t now_ns,
+    int limit);
+
+/**
+ * Snapshot callback — fired for each remaining timer in deadline order.
+ */
+typedef void (*aeron_cluster_timer_snapshot_func_t)(
+    void *clientd, int64_t correlation_id, int64_t deadline_ns);
+
+/**
+ * Iterate remaining timers in deadline (ascending) order and call snapshot_fn.
+ */
+void aeron_cluster_timer_service_snapshot(
+    aeron_cluster_timer_service_t *service,
+    aeron_cluster_timer_snapshot_func_t snapshot_fn,
+    void *clientd);
 
 /**
  * Return the deadline of the next pending timer, or INT64_MAX if none.

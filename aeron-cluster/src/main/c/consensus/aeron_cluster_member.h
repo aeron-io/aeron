@@ -56,6 +56,9 @@ typedef struct aeron_cluster_member_stct
     int64_t  time_of_last_append_position_ns;
     bool     is_leader;
 
+    /* Vote tracking (-1 = null/unknown, 0 = false/NO, 1 = true/YES) */
+    int8_t   vote;
+
     /* Publication for sending consensus messages to this peer */
     aeron_exclusive_publication_t *publication;
 }
@@ -104,11 +107,69 @@ bool aeron_cluster_member_is_quorum_candidate(
     int64_t now_ns,
     int64_t heartbeat_timeout_ns);
 
-/* Count members that have voted for a given candidateTermId. */
+/* Count members that have voted (vote==1) for a given candidateTermId. */
 int aeron_cluster_member_count_votes(
     aeron_cluster_member_t *members,
     int member_count,
     int64_t candidate_term_id);
+
+/**
+ * Would this member vote for `candidate`?
+ * true if member.log_position != -1 AND candidate has equal or better log.
+ */
+bool aeron_cluster_member_will_vote_for(
+    const aeron_cluster_member_t *member,
+    const aeron_cluster_member_t *candidate);
+
+/**
+ * Is `candidate` a viable candidate for all active members (excluding graceful_closed_leader)?
+ * Equivalent to Java ClusterMember.isUnanimousCandidate().
+ */
+bool aeron_cluster_member_is_unanimous_candidate(
+    aeron_cluster_member_t *members,
+    int member_count,
+    const aeron_cluster_member_t *candidate,
+    int32_t graceful_closed_leader_id);
+
+/**
+ * Does `candidate` have enough votes from active members (quorum)?
+ * Equivalent to Java ClusterMember.isQuorumCandidate().
+ */
+bool aeron_cluster_member_is_quorum_candidate_for(
+    aeron_cluster_member_t *members,
+    int member_count,
+    const aeron_cluster_member_t *candidate);
+
+/**
+ * Has the candidate achieved a quorum of positive votes with no negative votes?
+ * Equivalent to Java ClusterMember.isQuorumLeader().
+ */
+bool aeron_cluster_member_is_quorum_leader(
+    aeron_cluster_member_t *members,
+    int member_count,
+    int64_t candidate_term_id);
+
+/**
+ * Has the candidate achieved unanimous positive votes (excluding graceful_closed_leader)?
+ * Equivalent to Java ClusterMember.isUnanimousLeader().
+ */
+bool aeron_cluster_member_is_unanimous_leader(
+    aeron_cluster_member_t *members,
+    int member_count,
+    int64_t candidate_term_id,
+    int32_t graceful_closed_leader_id);
+
+/**
+ * Has a quorum of active members reached the given log position?
+ * Equivalent to Java ClusterMember.hasQuorumAtPosition().
+ */
+bool aeron_cluster_member_has_quorum_at_position(
+    aeron_cluster_member_t *members,
+    int member_count,
+    int64_t leadership_term_id,
+    int64_t position,
+    int64_t now_ns,
+    int64_t heartbeat_timeout_ns);
 
 #ifdef __cplusplus
 }

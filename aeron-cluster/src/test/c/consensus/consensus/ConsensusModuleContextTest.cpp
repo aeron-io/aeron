@@ -445,3 +445,117 @@ TEST_F(ServiceContextTest, shouldInitializeWithNullAeron)
     EXPECT_EQ(nullptr, m_ctx->aeron);
     EXPECT_FALSE(m_ctx->owns_aeron_client);
 }
+
+/* ============================================================
+ * REMAINING ConsensusModuleContext tests
+ * ============================================================ */
+
+TEST_F(ConsensusModuleContextTest, shouldSetAndGetConsensusChannel)
+{
+    const char *ch = "aeron:udp?term-length=128m";
+    aeron_free(m_ctx->consensus_channel);
+    size_t n = strlen(ch)+1;
+    aeron_alloc((void **)&m_ctx->consensus_channel, n);
+    memcpy(m_ctx->consensus_channel, ch, n);
+    EXPECT_STREQ(ch, m_ctx->consensus_channel);
+}
+
+TEST_F(ConsensusModuleContextTest, shouldSetAndGetIngressChannel)
+{
+    const char *ch = "aeron:udp?endpoint=localhost:20110";
+    aeron_free(m_ctx->ingress_channel);
+    size_t n = strlen(ch)+1;
+    aeron_alloc((void **)&m_ctx->ingress_channel, n);
+    memcpy(m_ctx->ingress_channel, ch, n);
+    EXPECT_STREQ(ch, m_ctx->ingress_channel);
+}
+
+TEST_F(ConsensusModuleContextTest, defaultsMustHaveAllChannelsSet)
+{
+    EXPECT_NE(nullptr, m_ctx->log_channel);
+    EXPECT_NE(nullptr, m_ctx->ingress_channel);
+    EXPECT_NE(nullptr, m_ctx->consensus_channel);
+    EXPECT_NE(nullptr, m_ctx->control_channel);
+    EXPECT_NE(nullptr, m_ctx->snapshot_channel);
+}
+
+TEST_F(ConsensusModuleContextTest, appointedLeaderDefaultIsMinusOne)
+{
+    EXPECT_EQ(AERON_CM_APPOINTED_LEADER_DEFAULT, m_ctx->appointed_leader_id);
+    EXPECT_EQ(-1, m_ctx->appointed_leader_id);
+}
+
+TEST_F(ConsensusModuleContextTest, shouldApplyEnvVarForIngressChannel)
+{
+    const char *ch = "aeron:udp?endpoint=env-ingress:9010";
+    setenv(AERON_CM_INGRESS_CHANNEL_ENV_VAR, ch, 1);
+    aeron_cm_context_close(m_ctx); m_ctx = nullptr;
+    ASSERT_EQ(0, aeron_cm_context_init(&m_ctx));
+    unsetenv(AERON_CM_INGRESS_CHANNEL_ENV_VAR);
+    ASSERT_NE(nullptr, m_ctx->ingress_channel);
+    EXPECT_STREQ(ch, m_ctx->ingress_channel);
+}
+
+TEST_F(ConsensusModuleContextTest, shouldApplyEnvVarForConsensusChannel)
+{
+    const char *ch = "aeron:udp?endpoint=env-consensus:20111";
+    setenv(AERON_CM_CONSENSUS_CHANNEL_ENV_VAR, ch, 1);
+    aeron_cm_context_close(m_ctx); m_ctx = nullptr;
+    ASSERT_EQ(0, aeron_cm_context_init(&m_ctx));
+    unsetenv(AERON_CM_CONSENSUS_CHANNEL_ENV_VAR);
+    ASSERT_NE(nullptr, m_ctx->consensus_channel);
+    EXPECT_STREQ(ch, m_ctx->consensus_channel);
+}
+
+TEST_F(ConsensusModuleContextTest, shouldApplyEnvVarForAeronDir)
+{
+    setenv(AERON_DIR_ENV_VAR, "/tmp/env_aeron_dir", 1);
+    aeron_cm_context_close(m_ctx); m_ctx = nullptr;
+    ASSERT_EQ(0, aeron_cm_context_init(&m_ctx));
+    unsetenv(AERON_DIR_ENV_VAR);
+    EXPECT_STREQ("/tmp/env_aeron_dir", m_ctx->aeron_directory_name);
+}
+
+TEST_F(ConsensusModuleContextTest, defaultTerminationTimeoutNs)
+{
+    EXPECT_EQ(AERON_CM_TERMINATION_TIMEOUT_NS_DEFAULT, m_ctx->termination_timeout_ns);
+}
+
+TEST_F(ConsensusModuleContextTest, shouldApplyEnvVarForAppVersion)
+{
+    setenv(AERON_CM_APP_VERSION_ENV_VAR, "196608", 1);  /* 0x030000 = 3.0.0 */
+    aeron_cm_context_close(m_ctx); m_ctx = nullptr;
+    ASSERT_EQ(0, aeron_cm_context_init(&m_ctx));
+    unsetenv(AERON_CM_APP_VERSION_ENV_VAR);
+    /* parsed as int: 196608 */
+    EXPECT_EQ(196608, m_ctx->app_version);
+}
+
+/* ============================================================
+ * REMAINING ServiceContext tests
+ * ============================================================ */
+
+TEST_F(ServiceContextTest, shouldApplyEnvVarForControlChannel)
+{
+    setenv(AERON_CLUSTER_CONTROL_CHANNEL_ENV_VAR, "aeron:udp?endpoint=env:20104", 1);
+    aeron_cluster_service_context_close(m_ctx); m_ctx = nullptr;
+    ASSERT_EQ(0, aeron_cluster_service_context_init(&m_ctx));
+    unsetenv(AERON_CLUSTER_CONTROL_CHANNEL_ENV_VAR);
+    ASSERT_NE(nullptr, m_ctx->control_channel);
+    EXPECT_STREQ("aeron:udp?endpoint=env:20104", m_ctx->control_channel);
+}
+
+TEST_F(ServiceContextTest, shouldApplyEnvVarForConsensusModuleStreamId)
+{
+    setenv(AERON_CLUSTER_CONSENSUS_MODULE_STREAM_ID_ENV_VAR, "555", 1);
+    aeron_cluster_service_context_close(m_ctx); m_ctx = nullptr;
+    ASSERT_EQ(0, aeron_cluster_service_context_init(&m_ctx));
+    unsetenv(AERON_CLUSTER_CONSENSUS_MODULE_STREAM_ID_ENV_VAR);
+    EXPECT_EQ(555, m_ctx->consensus_module_stream_id);
+}
+
+TEST_F(ServiceContextTest, shouldSetAppVersion)
+{
+    ASSERT_EQ(0, aeron_cluster_service_context_set_app_version(m_ctx, 42));
+    EXPECT_EQ(42, aeron_cluster_service_context_get_app_version(m_ctx));
+}
