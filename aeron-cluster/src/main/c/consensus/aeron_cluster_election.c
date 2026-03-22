@@ -27,6 +27,159 @@
 #include "util/aeron_clock.h"
 
 /* -----------------------------------------------------------------------
+ * Real publisher ops wrappers (used in production)
+ * ----------------------------------------------------------------------- */
+static bool real_canvass_position(void *clientd, aeron_cluster_member_t *member,
+    int64_t log_leadership_term_id, int64_t log_position,
+    int64_t leadership_term_id, int32_t follower_member_id, int32_t protocol_version)
+{
+    (void)clientd;
+    if (NULL == member->publication) { return false; }
+    return aeron_cluster_consensus_publisher_canvass_position(
+        member->publication, log_leadership_term_id, log_position,
+        leadership_term_id, follower_member_id, protocol_version);
+}
+
+static bool real_request_vote(void *clientd, aeron_cluster_member_t *member,
+    int64_t log_leadership_term_id, int64_t log_position,
+    int64_t candidate_term_id, int32_t candidate_member_id)
+{
+    (void)clientd;
+    if (NULL == member->publication) { return false; }
+    return aeron_cluster_consensus_publisher_request_vote(
+        member->publication, log_leadership_term_id, log_position,
+        candidate_term_id, candidate_member_id);
+}
+
+static bool real_vote(void *clientd, aeron_cluster_member_t *member,
+    int64_t candidate_term_id, int64_t log_leadership_term_id, int64_t log_position,
+    int32_t candidate_member_id, int32_t follower_member_id, bool vote)
+{
+    (void)clientd;
+    if (NULL == member->publication) { return false; }
+    return aeron_cluster_consensus_publisher_vote(
+        member->publication, candidate_term_id, log_leadership_term_id, log_position,
+        candidate_member_id, follower_member_id, vote);
+}
+
+static bool real_new_leadership_term(void *clientd, aeron_cluster_member_t *member,
+    int64_t log_leadership_term_id, int64_t next_leadership_term_id,
+    int64_t next_term_base_log_position, int64_t next_log_position,
+    int64_t leadership_term_id, int64_t term_base_log_position,
+    int64_t log_position, int64_t leader_recording_id, int64_t timestamp,
+    int32_t leader_member_id, int32_t log_session_id, int32_t app_version, bool is_startup)
+{
+    (void)clientd;
+    if (NULL == member->publication) { return false; }
+    return aeron_cluster_consensus_publisher_new_leadership_term(
+        member->publication, log_leadership_term_id, next_leadership_term_id,
+        next_term_base_log_position, next_log_position, leadership_term_id,
+        term_base_log_position, log_position, leader_recording_id, timestamp,
+        leader_member_id, log_session_id, app_version, is_startup);
+}
+
+static bool real_append_position(void *clientd, aeron_cluster_member_t *member,
+    int64_t leadership_term_id, int64_t log_position,
+    int32_t follower_member_id, int8_t flags)
+{
+    (void)clientd;
+    if (NULL == member->publication) { return false; }
+    return aeron_cluster_consensus_publisher_append_position(
+        member->publication, leadership_term_id, log_position, follower_member_id, flags);
+}
+
+static bool real_commit_position(void *clientd, aeron_cluster_member_t *member,
+    int64_t leadership_term_id, int64_t log_position, int32_t leader_member_id)
+{
+    (void)clientd;
+    if (NULL == member->publication) { return false; }
+    return aeron_cluster_consensus_publisher_commit_position(
+        member->publication, leadership_term_id, log_position, leader_member_id);
+}
+
+void aeron_cluster_election_publisher_ops_init_real(
+    aeron_cluster_election_publisher_ops_t *ops,
+    aeron_cluster_member_t *members,
+    int member_count,
+    int32_t self_id)
+{
+    ops->clientd         = NULL;
+    ops->canvass_position    = real_canvass_position;
+    ops->request_vote        = real_request_vote;
+    ops->vote                = real_vote;
+    ops->new_leadership_term = real_new_leadership_term;
+    ops->append_position     = real_append_position;
+    ops->commit_position     = real_commit_position;
+}
+
+/* -----------------------------------------------------------------------
+ * Per-member broadcast helpers (iterate members except self)
+ * ----------------------------------------------------------------------- */
+static void election_broadcast_canvass(aeron_cluster_election_t *e,
+    int64_t log_leadership_term_id, int64_t log_position,
+    int64_t leadership_term_id, int32_t follower_member_id, int32_t protocol_version)
+{
+    for (int i = 0; i < e->member_count; i++)
+    {
+        if (e->members[i].id != e->this_member->id)
+        {
+            e->pub_ops.canvass_position(e->pub_ops.clientd, &e->members[i],
+                log_leadership_term_id, log_position,
+                leadership_term_id, follower_member_id, protocol_version);
+        }
+    }
+}
+
+static void election_broadcast_request_vote(aeron_cluster_election_t *e,
+    int64_t log_leadership_term_id, int64_t log_position,
+    int64_t candidate_term_id, int32_t candidate_member_id)
+{
+    for (int i = 0; i < e->member_count; i++)
+    {
+        if (e->members[i].id != e->this_member->id)
+        {
+            e->pub_ops.request_vote(e->pub_ops.clientd, &e->members[i],
+                log_leadership_term_id, log_position,
+                candidate_term_id, candidate_member_id);
+        }
+    }
+}
+
+static void election_broadcast_new_leadership_term(aeron_cluster_election_t *e,
+    int64_t log_leadership_term_id, int64_t next_leadership_term_id,
+    int64_t next_term_base_log_position, int64_t next_log_position,
+    int64_t leadership_term_id, int64_t term_base_log_position,
+    int64_t log_position, int64_t leader_recording_id, int64_t timestamp,
+    int32_t leader_member_id, int32_t log_session_id, int32_t app_version, bool is_startup)
+{
+    for (int i = 0; i < e->member_count; i++)
+    {
+        if (e->members[i].id != e->this_member->id)
+        {
+            e->pub_ops.new_leadership_term(e->pub_ops.clientd, &e->members[i],
+                log_leadership_term_id, next_leadership_term_id,
+                next_term_base_log_position, next_log_position,
+                leadership_term_id, term_base_log_position,
+                log_position, leader_recording_id, timestamp,
+                leader_member_id, log_session_id, app_version, is_startup);
+        }
+    }
+}
+
+static void election_broadcast_commit_position(aeron_cluster_election_t *e,
+    int64_t leadership_term_id, int64_t log_position, int32_t leader_member_id)
+{
+    for (int i = 0; i < e->member_count; i++)
+    {
+        if (e->members[i].id != e->this_member->id)
+        {
+            e->pub_ops.commit_position(e->pub_ops.clientd, &e->members[i],
+                leadership_term_id, log_position, leader_member_id);
+        }
+    }
+}
+
+/* -----------------------------------------------------------------------
  * Internal helpers
  * ----------------------------------------------------------------------- */
 static bool is_quorum(int count, int member_count)
@@ -44,13 +197,68 @@ static bool is_better_candidate(
     return false;
 }
 
+/* -----------------------------------------------------------------------
+ * Real agent ops wrappers
+ * ----------------------------------------------------------------------- */
+static int32_t real_get_protocol_version(void *cd)
+{ return aeron_consensus_module_agent_get_protocol_version((aeron_consensus_module_agent_t *)cd); }
+static int32_t real_get_app_version(void *cd)
+{ return aeron_consensus_module_agent_get_app_version((aeron_consensus_module_agent_t *)cd); }
+static int64_t real_get_append_position(void *cd)
+{ return aeron_consensus_module_agent_get_append_position((aeron_consensus_module_agent_t *)cd); }
+static int64_t real_get_log_recording_id(void *cd)
+{ return aeron_consensus_module_agent_get_log_recording_id((aeron_consensus_module_agent_t *)cd); }
+static void real_on_state_change(void *cd, aeron_cluster_election_state_t s, int64_t ns)
+{ aeron_consensus_module_agent_on_election_state_change((aeron_consensus_module_agent_t *)cd, s, ns); }
+static void real_on_election_complete(void *cd, aeron_cluster_member_t *leader, int64_t ns)
+{ aeron_consensus_module_agent_on_election_complete((aeron_consensus_module_agent_t *)cd, leader, ns); }
+static void real_begin_new_leadership_term(void *cd,
+    int64_t log_term_id, int64_t new_term_id, int64_t log_pos, int64_t ts, bool startup)
+{ aeron_consensus_module_agent_begin_new_leadership_term(
+    (aeron_consensus_module_agent_t *)cd, log_term_id, new_term_id, log_pos, ts, startup); }
+static void real_on_follower_new_leadership_term(void *cd,
+    int64_t log_term_id, int64_t next_term_id,
+    int64_t next_base, int64_t next_log_pos,
+    int64_t term_id, int64_t base, int64_t log_pos,
+    int64_t rec_id, int64_t ts, int32_t leader_id,
+    int32_t session_id, int32_t app_ver, bool startup)
+{ aeron_consensus_module_agent_on_follower_new_leadership_term(
+    (aeron_consensus_module_agent_t *)cd,
+    log_term_id, next_term_id, next_base, next_log_pos,
+    term_id, base, log_pos, rec_id, ts, leader_id, session_id, app_ver, startup); }
+static void real_on_replay_new_leadership_term(void *cd,
+    int64_t term_id, int64_t log_pos, int64_t ts, int64_t base,
+    int32_t leader_id, int32_t session_id, int32_t app_ver)
+{ aeron_consensus_module_agent_on_replay_new_leadership_term_event(
+    (aeron_consensus_module_agent_t *)cd,
+    term_id, log_pos, ts, base, leader_id, session_id, app_ver); }
+static void real_notify_commit_position(void *cd, int64_t pos)
+{ aeron_consensus_module_agent_notify_commit_position((aeron_consensus_module_agent_t *)cd, pos); }
+
+void aeron_cluster_election_agent_ops_init_real(
+    aeron_cluster_election_agent_ops_t *ops,
+    aeron_consensus_module_agent_t *agent)
+{
+    ops->clientd                    = agent;
+    ops->get_protocol_version       = real_get_protocol_version;
+    ops->get_app_version            = real_get_app_version;
+    ops->get_append_position        = real_get_append_position;
+    ops->get_log_recording_id       = real_get_log_recording_id;
+    ops->on_state_change            = real_on_state_change;
+    ops->on_election_complete       = real_on_election_complete;
+    ops->begin_new_leadership_term  = real_begin_new_leadership_term;
+    ops->on_follower_new_leadership_term = real_on_follower_new_leadership_term;
+    ops->on_replay_new_leadership_term   = real_on_replay_new_leadership_term;
+    ops->notify_commit_position          = real_notify_commit_position;
+}
+
 static void transition_to(aeron_cluster_election_t *e,
                            aeron_cluster_election_state_t new_state,
                            int64_t now_ns)
 {
     e->state                  = new_state;
     e->time_of_state_change_ns = now_ns;
-    aeron_consensus_module_agent_on_election_state_change(e->agent, new_state, now_ns);
+    e->agent_ops.on_state_change(e->agent_ops.clientd, new_state, now_ns);
 }
 
 /* -----------------------------------------------------------------------
@@ -88,12 +296,10 @@ static int do_canvass(aeron_cluster_election_t *e, int64_t now_ns)
     /* Broadcast our position to all peers */
     if ((now_ns - e->time_of_last_update_ns) >= e->election_status_interval_ns)
     {
-        aeron_cluster_consensus_publisher_broadcast_canvass_position(
-            e->members, e->member_count, e->this_member->id,
+        election_broadcast_canvass(e,
             e->log_leadership_term_id, e->log_position,
-            e->leadership_term_id,
-            e->this_member->id,
-            aeron_consensus_module_agent_get_protocol_version(e->agent));
+            e->leadership_term_id, e->this_member->id,
+            e->agent_ops.get_protocol_version(e->agent_ops.clientd));
         e->time_of_last_update_ns = now_ns;
     }
 
@@ -150,8 +356,7 @@ static int do_nominate(aeron_cluster_election_t *e, int64_t now_ns)
         e->this_member->candidate_term_id = e->candidate_term_id;
 
         /* Request votes from all peers */
-        aeron_cluster_consensus_publisher_broadcast_request_vote(
-            e->members, e->member_count, e->this_member->id,
+        election_broadcast_request_vote(e,
             e->log_leadership_term_id, e->log_position,
             e->candidate_term_id, e->this_member->id);
 
@@ -162,11 +367,10 @@ static int do_nominate(aeron_cluster_election_t *e, int64_t now_ns)
     /* While waiting, keep broadcasting canvass */
     if ((now_ns - e->time_of_last_update_ns) >= e->election_status_interval_ns)
     {
-        aeron_cluster_consensus_publisher_broadcast_canvass_position(
-            e->members, e->member_count, e->this_member->id,
+        election_broadcast_canvass(e,
             e->log_leadership_term_id, e->log_position,
             e->leadership_term_id, e->this_member->id,
-            aeron_consensus_module_agent_get_protocol_version(e->agent));
+            e->agent_ops.get_protocol_version(e->agent_ops.clientd));
         e->time_of_last_update_ns = now_ns;
     }
 
@@ -224,14 +428,14 @@ static int do_leader_replay(aeron_cluster_election_t *e, int64_t now_ns)
 {
     /* Replay the local log entries.  In the full implementation this drives
      * LogAdapter to replay up to log_position.  Simplified: proceed immediately. */
-    aeron_consensus_module_agent_on_replay_new_leadership_term_event(e->agent,
+    e->agent_ops.on_replay_new_leadership_term(e->agent_ops.clientd,
         e->log_leadership_term_id,
         e->log_position,
         aeron_nano_clock(),
         e->log_position,
         e->this_member->id,
         e->log_session_id,
-        aeron_consensus_module_agent_get_app_version(e->agent));
+        e->agent_ops.get_app_version(e->agent_ops.clientd));
 
     transition_to(e, AERON_ELECTION_LEADER_INIT, now_ns);
     return 1;
@@ -241,29 +445,24 @@ static int do_leader_init(aeron_cluster_election_t *e, int64_t now_ns)
 {
     /* Append NewLeadershipTermEvent to the log and publish to all followers. */
     int64_t new_term_id = e->candidate_term_id;
-    int64_t log_pos     = aeron_consensus_module_agent_get_append_position(e->agent);
+    int64_t log_pos     = e->agent_ops.get_append_position(e->agent_ops.clientd);
 
-    aeron_consensus_module_agent_begin_new_leadership_term(e->agent,
+    e->agent_ops.begin_new_leadership_term(e->agent_ops.clientd,
         e->log_leadership_term_id,
         new_term_id,
         log_pos,
         aeron_nano_clock(),
         e->is_leader_startup);
 
-    aeron_cluster_consensus_publisher_broadcast_new_leadership_term(
-        e->members, e->member_count, e->this_member->id,
+    election_broadcast_new_leadership_term(e,
         e->log_leadership_term_id,
-        new_term_id,
-        log_pos,
-        log_pos,
-        new_term_id,
-        log_pos,
-        log_pos,
-        aeron_consensus_module_agent_get_log_recording_id(e->agent),
+        new_term_id, log_pos, log_pos,
+        new_term_id, log_pos, log_pos,
+        e->agent_ops.get_log_recording_id(e->agent_ops.clientd),
         aeron_nano_clock(),
         e->this_member->id,
         e->log_session_id,
-        aeron_consensus_module_agent_get_app_version(e->agent),
+        e->agent_ops.get_app_version(e->agent_ops.clientd),
         e->is_leader_startup);
 
     e->leadership_term_id = new_term_id;
@@ -283,7 +482,7 @@ static int do_leader_ready(aeron_cluster_election_t *e, int64_t now_ns)
 
     if (is_quorum(ready, e->member_count))
     {
-        aeron_consensus_module_agent_on_election_complete(e->agent, e->leader_member, now_ns);
+        e->agent_ops.on_election_complete(e->agent_ops.clientd, e->leader_member, now_ns);
         transition_to(e, AERON_ELECTION_CLOSED, now_ns);
         return 1;
     }
@@ -291,9 +490,8 @@ static int do_leader_ready(aeron_cluster_election_t *e, int64_t now_ns)
     /* Periodically re-broadcast in case some followers missed it */
     if ((now_ns - e->time_of_last_update_ns) >= e->election_status_interval_ns)
     {
-        int64_t log_pos = aeron_consensus_module_agent_get_append_position(e->agent);
-        aeron_cluster_consensus_publisher_broadcast_commit_position(
-            e->members, e->member_count, e->this_member->id,
+        int64_t log_pos = e->agent_ops.get_append_position(e->agent_ops.clientd);
+        election_broadcast_commit_position(e,
             e->leadership_term_id, log_pos, e->this_member->id);
         e->time_of_last_update_ns = now_ns;
     }
@@ -346,17 +544,13 @@ static int do_follower_log_await(aeron_cluster_election_t *e, int64_t now_ns)
 static int do_follower_ready(aeron_cluster_election_t *e, int64_t now_ns)
 {
     /* Send AppendPosition to confirm we are ready. */
-    if (NULL != e->leader_member && NULL != e->leader_member->publication)
+    if (NULL != e->leader_member)
     {
-        aeron_cluster_consensus_publisher_append_position(
-            e->leader_member->publication,
-            e->leadership_term_id,
-            e->log_position,
-            e->this_member->id,
-            0);
+        e->pub_ops.append_position(e->pub_ops.clientd, e->leader_member,
+            e->leadership_term_id, e->log_position, e->this_member->id, 0);
     }
 
-    aeron_consensus_module_agent_on_election_complete(e->agent, e->leader_member, now_ns);
+    e->agent_ops.on_election_complete(e->agent_ops.clientd, e->leader_member, now_ns);
     transition_to(e, AERON_ELECTION_CLOSED, now_ns);
     return 1;
 }
@@ -409,6 +603,13 @@ int aeron_cluster_election_create(
     e->is_leader_startup          = false;
     e->is_extended_canvass        = false;
     e->is_first_init              = true;
+
+    /* Default: use real publisher ops */
+    aeron_cluster_election_publisher_ops_init_real(&e->pub_ops, members, member_count,
+        this_member->id);
+
+    /* Default: use real agent ops */
+    aeron_cluster_election_agent_ops_init_real(&e->agent_ops, agent);
 
     *election = e;
     return 0;
@@ -479,7 +680,7 @@ void aeron_cluster_election_on_request_vote(aeron_cluster_election_t *e,
         e->candidate_term_id = candidate_term_id;
     }
 
-    aeron_cluster_consensus_publisher_vote(candidate->publication,
+    e->pub_ops.vote(e->pub_ops.clientd, candidate,
         candidate_term_id, log_leadership_term_id, log_position,
         candidate_member_id, e->this_member->id, vote);
 
@@ -531,7 +732,7 @@ void aeron_cluster_election_on_new_leadership_term(aeron_cluster_election_t *e,
     e->is_leader_startup  = is_startup;
 
     /* Notify agent to set up the log subscription as a follower */
-    aeron_consensus_module_agent_on_follower_new_leadership_term(e->agent,
+    e->agent_ops.on_follower_new_leadership_term(e->agent_ops.clientd,
         log_leadership_term_id, next_leadership_term_id,
         next_term_base_log_position, next_log_position,
         leadership_term_id, term_base_log_position, log_position,
@@ -560,7 +761,7 @@ void aeron_cluster_election_on_commit_position(aeron_cluster_election_t *e,
     if (e->notified_commit_position < log_position)
     {
         e->notified_commit_position = log_position;
-        aeron_consensus_module_agent_notify_commit_position(e->agent, log_position);
+        e->agent_ops.notify_commit_position(e->agent_ops.clientd, log_position);
     }
 }
 

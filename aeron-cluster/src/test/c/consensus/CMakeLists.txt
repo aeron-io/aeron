@@ -33,4 +33,5 @@ endfunction()
 
 if (AERON_UNIT_TESTS)
     aeron_c_cluster_consensus_test(aeron_cluster_consensus_test consensus/ClusterConsensusTest.cpp)
+    aeron_c_cluster_consensus_test(aeron_cluster_election_test consensus/ElectionTest.cpp)
 endif ()
