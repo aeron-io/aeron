@@ -37,6 +37,7 @@ set(SOURCE
     aeron_cluster_election.c
     aeron_consensus_module_agent.c
     aeron_cm_context.c
+    aeron_cluster_mark_file.c
     aeron_cluster_pending_message_tracker.c
 )
 

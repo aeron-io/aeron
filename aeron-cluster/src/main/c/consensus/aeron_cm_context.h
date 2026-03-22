@@ -22,6 +22,7 @@
 #include "aeronc.h"
 #include "aeron_common.h"
 #include "aeron_consensus_module_configuration.h"
+#include "aeron_cluster_mark_file.h"
 #include "aeron_archive.h"
 #include "aeron_archive_context.h"
 
@@ -83,6 +84,30 @@ typedef struct aeron_cm_context_stct
 
     aeron_error_handler_t error_handler;
     void                 *error_handler_clientd;
+
+    /* Mark file (created/checked in conclude()) */
+    aeron_cluster_mark_file_t *mark_file;
+    bool                       owns_mark_file;
+    char                       mark_file_dir[AERON_MAX_PATH];
+    int64_t                    mark_file_timeout_ms;
+
+    /**
+     * Authenticator function pointers.
+     * Default: NULL = accept all (NullAuthenticator).
+     * Equivalent to Java's AuthenticatorSupplier → Authenticator.
+     */
+    bool (*authenticate)(
+        void *clientd,
+        int64_t cluster_session_id,
+        const uint8_t *encoded_credentials,
+        size_t credentials_length);
+    void (*on_challenge_response)(
+        void *clientd,
+        int64_t cluster_session_id,
+        const uint8_t *encoded_response,
+        size_t response_length);
+    void *authenticator_clientd;
+    char  authenticator_supplier_class_name[256];
 }
 aeron_cm_context_t;
 

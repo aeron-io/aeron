@@ -17,6 +17,8 @@
 #include <errno.h>
 #include <string.h>
 #include <stdio.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "aeron_cm_context.h"
 #include "aeron_alloc.h"
@@ -93,6 +95,18 @@ int aeron_cm_context_init(aeron_cm_context_t **ctx)
     c->error_handler        = NULL;
     c->error_handler_clientd = NULL;
 
+    /* Mark file */
+    c->mark_file            = NULL;
+    c->owns_mark_file       = false;
+    c->mark_file_dir[0]     = '\0';
+    c->mark_file_timeout_ms = 5000LL;
+
+    /* Authenticator — NULL = accept all */
+    c->authenticate                    = NULL;
+    c->on_challenge_response           = NULL;
+    c->authenticator_clientd           = NULL;
+    c->authenticator_supplier_class_name[0] = '\0';
+
     /* Apply env vars */
     char *v;
 
@@ -166,6 +180,11 @@ int aeron_cm_context_close(aeron_cm_context_t *ctx)
             aeron_close(ctx->aeron);
             aeron_context_close(ac);
         }
+        if (ctx->owns_mark_file && NULL != ctx->mark_file)
+        {
+            aeron_cluster_mark_file_close(ctx->mark_file);
+            ctx->mark_file = NULL;
+        }
         aeron_free(ctx->log_channel);
         aeron_free(ctx->ingress_channel);
         aeron_free(ctx->consensus_channel);
@@ -184,6 +203,64 @@ int aeron_cm_context_conclude(aeron_cm_context_t *ctx)
     {
         AERON_SET_ERR(EINVAL, "%s", "cluster_members is required");
         return -1;
+    }
+
+    /* Validate startup_canvass_timeout_ns is a multiple of leader_heartbeat_timeout_ns */
+    if (ctx->leader_heartbeat_timeout_ns > 0 &&
+        ctx->startup_canvass_timeout_ns % ctx->leader_heartbeat_timeout_ns != 0)
+    {
+        AERON_SET_ERR(EINVAL,
+            "startupCanvassTimeoutNs=%lld must be a multiple of leaderHeartbeatTimeoutNs=%lld",
+            (long long)ctx->startup_canvass_timeout_ns,
+            (long long)ctx->leader_heartbeat_timeout_ns);
+        return -1;
+    }
+
+    /* Create/check ClusterMarkFile if cluster_dir is set and mark_file not already provided */
+    if ('\0' != ctx->cluster_dir[0] && NULL == ctx->mark_file)
+    {
+        const char *mf_dir = ctx->mark_file_dir[0] != '\0' ? ctx->mark_file_dir : ctx->cluster_dir;
+
+        /* Create mark file dir if needed */
+        struct stat st;
+        if (stat(mf_dir, &st) < 0)
+        {
+            if (mkdir(mf_dir, 0755) < 0 && errno != EEXIST)
+            {
+                AERON_SET_ERR(errno, "failed to create mark file dir: %s", mf_dir);
+                return -1;
+            }
+        }
+
+        char mark_path[AERON_MAX_PATH];
+        snprintf(mark_path, sizeof(mark_path), "%s/%s", mf_dir, AERON_CLUSTER_MARK_FILE_FILENAME);
+
+        int64_t now_ms = aeron_nano_clock() / 1000000LL;
+        if (aeron_cluster_mark_file_open(
+            &ctx->mark_file, mark_path,
+            AERON_CLUSTER_COMPONENT_CONSENSUS_MODULE,
+            AERON_CLUSTER_MARK_FILE_ERROR_BUFFER_MIN,
+            now_ms, ctx->mark_file_timeout_ms) < 0)
+        {
+            AERON_APPEND_ERR("%s", "");
+            return -1;
+        }
+        ctx->owns_mark_file = true;
+
+        /* Signal ready immediately */
+        aeron_cluster_mark_file_signal_ready(ctx->mark_file, now_ms);
+
+        /* Create symlink in cluster_dir if markFileDir differs */
+        if (ctx->mark_file_dir[0] != '\0' &&
+            strcmp(ctx->mark_file_dir, ctx->cluster_dir) != 0)
+        {
+            char link_path[AERON_MAX_PATH];
+            snprintf(link_path, sizeof(link_path), "%s/%s",
+                ctx->cluster_dir, AERON_CLUSTER_MARK_FILE_LINK_FILENAME);
+            /* Remove old link if exists */
+            unlink(link_path);
+            symlink(ctx->mark_file_dir, link_path);
+        }
     }
 
     if (NULL == ctx->aeron)
