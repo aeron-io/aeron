@@ -23,6 +23,34 @@
 #include "aeron_common.h"
 #include "aeron_consensus_module_configuration.h"
 #include "aeron_cluster_mark_file.h"
+
+/* -----------------------------------------------------------------------
+ * Counter type IDs (match Java AeronCounters constants)
+ * ----------------------------------------------------------------------- */
+#define AERON_CM_COUNTER_CONSENSUS_MODULE_STATE_TYPE_ID    200
+#define AERON_CM_COUNTER_NODE_ROLE_TYPE_ID                 201
+#define AERON_CM_COUNTER_CONTROL_TOGGLE_TYPE_ID            202
+#define AERON_CM_COUNTER_COMMIT_POSITION_TYPE_ID           203
+#define AERON_CM_COUNTER_SNAPSHOT_TYPE_ID                  205
+#define AERON_CM_COUNTER_ELECTION_STATE_TYPE_ID            207
+#define AERON_CM_COUNTER_ERROR_COUNT_TYPE_ID               212
+#define AERON_CM_COUNTER_CLIENT_TIMEOUT_TYPE_ID            213
+#define AERON_CM_COUNTER_NODE_CONTROL_TOGGLE_TYPE_ID       233
+#define AERON_CM_COUNTER_ELECTION_COUNT_TYPE_ID            238
+#define AERON_CM_COUNTER_LEADERSHIP_TERM_ID_TYPE_ID        239
+
+/**
+ * Lightweight mock/injectable counter for unit testing.
+ * In production code, a real aeron_counter_t provides the value pointer;
+ * for unit tests, inject type_id directly to validate conclude() logic.
+ */
+typedef struct aeron_cm_counter_stct
+{
+    int32_t  type_id;   /* -1 = not set */
+    int64_t  value;
+    bool     is_set;    /* true if explicitly provided (to validate type_id) */
+}
+aeron_cm_counter_t;
 #include "aeron_archive.h"
 #include "aeron_archive_context.h"
 
@@ -84,6 +112,25 @@ typedef struct aeron_cm_context_stct
 
     aeron_error_handler_t error_handler;
     void                 *error_handler_clientd;
+
+    /* Injectable counters for validation in conclude().
+     * Set type_id to the expected value; conclude() checks it matches. */
+    aeron_cm_counter_t  module_state_counter;
+    aeron_cm_counter_t  election_state_counter;
+    aeron_cm_counter_t  election_counter;
+    aeron_cm_counter_t  leadership_term_id_counter;
+    aeron_cm_counter_t  cluster_node_role_counter;
+    aeron_cm_counter_t  commit_position_counter;
+    aeron_cm_counter_t  control_toggle_counter;
+    aeron_cm_counter_t  node_control_toggle_counter;
+    aeron_cm_counter_t  snapshot_counter;
+    aeron_cm_counter_t  timed_out_client_counter;
+
+    /* max concurrent sessions (0 = unlimited) */
+    int32_t  max_concurrent_sessions;
+
+    /* Agent role name (e.g. "consensus-module-<clusterId>-<memberId>") */
+    char     agent_role_name[256];
 
     /* Mark file (created/checked in conclude()) */
     aeron_cluster_mark_file_t *mark_file;

@@ -95,6 +95,22 @@ int aeron_cm_context_init(aeron_cm_context_t **ctx)
     c->error_handler        = NULL;
     c->error_handler_clientd = NULL;
 
+    /* Counters — not set by default */
+#define INIT_COUNTER(f) do { c->f.type_id=-1; c->f.value=0; c->f.is_set=false; } while(0)
+    INIT_COUNTER(module_state_counter);
+    INIT_COUNTER(election_state_counter);
+    INIT_COUNTER(election_counter);
+    INIT_COUNTER(leadership_term_id_counter);
+    INIT_COUNTER(cluster_node_role_counter);
+    INIT_COUNTER(commit_position_counter);
+    INIT_COUNTER(control_toggle_counter);
+    INIT_COUNTER(node_control_toggle_counter);
+    INIT_COUNTER(snapshot_counter);
+    INIT_COUNTER(timed_out_client_counter);
+#undef INIT_COUNTER
+    c->max_concurrent_sessions = 0;
+    c->agent_role_name[0]      = '\0';
+
     /* Mark file */
     c->mark_file            = NULL;
     c->owns_mark_file       = false;
@@ -203,6 +219,29 @@ int aeron_cm_context_conclude(aeron_cm_context_t *ctx)
     {
         AERON_SET_ERR(EINVAL, "%s", "cluster_members is required");
         return -1;
+    }
+
+#define CHK_CTR(fld, exp, name) \
+    if (ctx->fld.is_set && ctx->fld.type_id != (exp)) { \
+        AERON_SET_ERR(EINVAL,"The type for " name " typeId=%d does not match the expected=%d", \
+            ctx->fld.type_id,(exp)); return -1; }
+    CHK_CTR(module_state_counter,        AERON_CM_COUNTER_CONSENSUS_MODULE_STATE_TYPE_ID, "moduleStateCounter")
+    CHK_CTR(election_state_counter,      AERON_CM_COUNTER_ELECTION_STATE_TYPE_ID,         "electionStateCounter")
+    CHK_CTR(election_counter,            AERON_CM_COUNTER_ELECTION_COUNT_TYPE_ID,         "electionCounter")
+    CHK_CTR(leadership_term_id_counter,  AERON_CM_COUNTER_LEADERSHIP_TERM_ID_TYPE_ID,     "leadershipTermIdCounter")
+    CHK_CTR(cluster_node_role_counter,   AERON_CM_COUNTER_NODE_ROLE_TYPE_ID,              "clusterNodeRoleCounter")
+    CHK_CTR(commit_position_counter,     AERON_CM_COUNTER_COMMIT_POSITION_TYPE_ID,        "commitPositionCounter")
+    CHK_CTR(control_toggle_counter,      AERON_CM_COUNTER_CONTROL_TOGGLE_TYPE_ID,         "controlToggleCounter")
+    CHK_CTR(node_control_toggle_counter, AERON_CM_COUNTER_NODE_CONTROL_TOGGLE_TYPE_ID,    "nodeControlToggleCounter")
+    CHK_CTR(snapshot_counter,            AERON_CM_COUNTER_SNAPSHOT_TYPE_ID,               "snapshotCounter")
+    CHK_CTR(timed_out_client_counter,    AERON_CM_COUNTER_CLIENT_TIMEOUT_TYPE_ID,         "timedOutClientCounter")
+#undef CHK_CTR
+
+    /* Generate agent role name if not set */
+    if ('\0' == ctx->agent_role_name[0])
+    {
+        snprintf(ctx->agent_role_name, sizeof(ctx->agent_role_name),
+            "consensus-module-%d-%d", 0 /* clusterId placeholder */, ctx->member_id);
     }
 
     /* Validate startup_canvass_timeout_ns is a multiple of leader_heartbeat_timeout_ns */
