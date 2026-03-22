@@ -37,6 +37,7 @@ set(SOURCE
     aeron_cluster_election.c
     aeron_consensus_module_agent.c
     aeron_cm_context.c
+    aeron_cluster_pending_message_tracker.c
 )
 
 set(HEADERS
@@ -62,29 +63,33 @@ set(HEADERS
 add_library(aeron_cluster_c_consensus SHARED ${SOURCE} ${HEADERS})
 add_library(aeron::aeron_cluster_c_consensus ALIAS aeron_cluster_c_consensus)
 
-add_dependencies(aeron_cluster_c_consensus cluster_c_codecs)
+add_dependencies(aeron_cluster_c_consensus cluster_c_codecs aeron_archive_c_client)
 
 target_include_directories(aeron_cluster_c_consensus
     PUBLIC  "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
             "$<INSTALL_INTERFACE:include/aeron>"
-    PRIVATE ${CLUSTER_C_CODEC_TARGET_DIR})
+    PRIVATE ${CLUSTER_C_CODEC_TARGET_DIR}
+    PRIVATE "${AERON_C_ARCHIVE_SOURCE_PATH}/client")
 
 target_link_libraries(aeron_cluster_c_consensus
     aeron
+    aeron_archive_c_client
     ${CMAKE_THREAD_LIBS_INIT})
 
 add_library(aeron_cluster_c_consensus_static STATIC ${SOURCE} ${HEADERS})
 add_library(aeron::aeron_cluster_c_consensus_static ALIAS aeron_cluster_c_consensus_static)
 
-add_dependencies(aeron_cluster_c_consensus_static cluster_c_codecs)
+add_dependencies(aeron_cluster_c_consensus_static cluster_c_codecs aeron_archive_c_client_static)
 
 target_include_directories(aeron_cluster_c_consensus_static
     PUBLIC  "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
             "$<INSTALL_INTERFACE:include/aeron>"
-    PRIVATE ${CLUSTER_C_CODEC_TARGET_DIR})
+    PRIVATE ${CLUSTER_C_CODEC_TARGET_DIR}
+    PRIVATE "${AERON_C_ARCHIVE_SOURCE_PATH}/client")
 
 target_link_libraries(aeron_cluster_c_consensus_static
     aeron_static
+    aeron_archive_c_client_static
     ${CMAKE_THREAD_LIBS_INIT})
 
 if (AERON_INSTALL_TARGETS)

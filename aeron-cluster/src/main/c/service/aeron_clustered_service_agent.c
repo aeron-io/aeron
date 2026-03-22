@@ -325,7 +325,21 @@ void aeron_clustered_service_agent_on_join_log(
     agent->member_id        = member_id;
     agent->log_position     = log_position;
     agent->max_log_position = max_log_position;
-    agent->role             = (int32_t)role;
+
+    /* Fire on_role_change if role differs */
+    if ((int32_t)role != agent->role)
+    {
+        agent->role = (int32_t)role;
+        aeron_clustered_service_t *svc = agent->ctx->service;
+        if (NULL != svc->on_role_change)
+        {
+            svc->on_role_change(svc->clientd, (aeron_cluster_role_t)role);
+        }
+    }
+    else
+    {
+        agent->role = (int32_t)role;
+    }
 
     /* Subscribe to the log and find the image by session id */
     aeron_subscription_t *log_sub = NULL;

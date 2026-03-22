@@ -35,7 +35,9 @@
 #include "aeron_cluster_ingress_adapter_cm.h"
 #include "aeron_cluster_cm_snapshot_taker.h"
 #include "aeron_cluster_election.h"
+#include "aeron_cluster_pending_message_tracker.h"
 #include "aeron_consensus_module_agent_fwd.h"
+#include "aeron_archive.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -107,6 +109,12 @@ struct aeron_consensus_module_agent_stct
     /* Service ACK tracking */
     int64_t                         *service_ack_positions;  /* [service_count] */
     int                              service_count;
+
+    /* Archive (IPC) — log recording, snapshot, follower catchup */
+    aeron_archive_t                 *archive;
+
+    /* Pending message trackers (one per service) */
+    aeron_cluster_pending_message_tracker_t *pending_trackers; /* [service_count] */
 };
 
 /* -----------------------------------------------------------------------

@@ -22,6 +22,8 @@
 #include "aeronc.h"
 #include "aeron_common.h"
 #include "aeron_consensus_module_configuration.h"
+#include "aeron_archive.h"
+#include "aeron_archive_context.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -70,6 +72,10 @@ typedef struct aeron_cm_context_stct
     /* Optional cluster clock (defaults to aeron_nano_clock) */
     aeron_cluster_clock_func_t cluster_clock_ns;
     void                      *cluster_clock_clientd;
+
+    /* Archive (IPC, same host) — for log recording and snapshot */
+    aeron_archive_context_t   *archive_ctx;
+    bool                       owns_archive_ctx;
 
     aeron_idle_strategy_func_t idle_strategy_func;
     void                      *idle_strategy_state;

@@ -272,6 +272,7 @@ if (AERON_TESTS)
     # cluster tests
     set(AERON_CLUSTER_WRAPPER_TEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/aeron-cluster/src/test/cpp_wrapper")
     set(AERON_C_CLUSTER_TEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/aeron-cluster/src/test/c")
+    set(AERON_C_CLUSTER_CONSENSUS_TEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/aeron-cluster/src/test/c/consensus")
 
     set(AERON_SYSTEM_TEST_PATH "${CMAKE_CURRENT_SOURCE_DIR}/aeron-system-tests")
 endif ()
@@ -379,6 +380,7 @@ if (BUILD_AERON_CLUSTER_CLIENT_API)
     if (AERON_TESTS)
         add_subdirectory(${AERON_CLUSTER_WRAPPER_TEST_PATH})
         add_subdirectory(${AERON_C_CLUSTER_TEST_PATH})
+        add_subdirectory(${AERON_C_CLUSTER_CONSENSUS_TEST_PATH})
     endif ()
 endif (BUILD_AERON_CLUSTER_CLIENT_API)
 
