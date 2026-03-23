@@ -17,6 +17,9 @@ package io.aeron.cluster;
 
 import io.aeron.Aeron;
 import io.aeron.driver.Configuration;
+import io.aeron.test.Tests;
+import org.agrona.collections.LongArrayQueue;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static io.aeron.protocol.DataHeaderFlyweight.HEADER_LENGTH;
@@ -26,12 +29,19 @@ class LogPublisherFragmentedMessageTrackerTest
 {
     private static final long MAX_PAYLOAD_LENGTH = Configuration.MTU_LENGTH_DEFAULT - HEADER_LENGTH;
     private final LogPublisherFragmentedMessageTracker tracker = new LogPublisherFragmentedMessageTracker();
+    private LongArrayQueue fragmentedMessageBounds;
+
+    @BeforeEach
+    public void beforeEach()
+    {
+        fragmentedMessageBounds = Tests.getField(tracker, "fragmentedMessageBounds");
+    }
 
     @Test
     void shouldNotTrackUnfragmentedMessage()
     {
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, MAX_PAYLOAD_LENGTH, 0, MAX_PAYLOAD_LENGTH);
-        assertEquals(0, tracker.fragmentedMessageBounds().size());
+        assertEquals(0, fragmentedMessageBounds.size());
     }
 
     @Test
@@ -42,9 +52,9 @@ class LogPublisherFragmentedMessageTrackerTest
         final long length = endPosition - startPosition;
 
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, length, startPosition, endPosition);
-        assertEquals(2, tracker.fragmentedMessageBounds().size());
-        assertEquals(endPosition, tracker.fragmentedMessageBounds().pollLong());
-        assertEquals(startPosition, tracker.fragmentedMessageBounds().pollLong());
+        assertEquals(2, fragmentedMessageBounds.size());
+        assertEquals(endPosition, fragmentedMessageBounds.pollLong());
+        assertEquals(startPosition, fragmentedMessageBounds.pollLong());
     }
 
     @Test
@@ -64,11 +74,11 @@ class LogPublisherFragmentedMessageTrackerTest
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, lengthTwo, startPositionTwo, endPositionTwo);
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, lengthThree, startPositionThree, endPositionThree);
 
-        assertEquals(4, tracker.fragmentedMessageBounds().size());
-        assertEquals(endPositionOne, tracker.fragmentedMessageBounds().pollLong());
-        assertEquals(startPositionOne, tracker.fragmentedMessageBounds().pollLong());
-        assertEquals(endPositionThree, tracker.fragmentedMessageBounds().pollLong());
-        assertEquals(startPositionThree, tracker.fragmentedMessageBounds().pollLong());
+        assertEquals(4, fragmentedMessageBounds.size());
+        assertEquals(endPositionOne, fragmentedMessageBounds.pollLong());
+        assertEquals(startPositionOne, fragmentedMessageBounds.pollLong());
+        assertEquals(endPositionThree, fragmentedMessageBounds.pollLong());
+        assertEquals(startPositionThree, fragmentedMessageBounds.pollLong());
     }
 
     @Test
@@ -80,28 +90,28 @@ class LogPublisherFragmentedMessageTrackerTest
 
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, length, startPosition, endPosition);
         tracker.sweepUncommittedEntriesTo(0L);
-        assertEquals(2, tracker.fragmentedMessageBounds().size());
-        tracker.fragmentedMessageBounds().clear();
+        assertEquals(2, fragmentedMessageBounds.size());
+        fragmentedMessageBounds.clear();
 
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, length, startPosition, endPosition);
         tracker.sweepUncommittedEntriesTo(startPosition);
-        assertEquals(2, tracker.fragmentedMessageBounds().size());
-        tracker.fragmentedMessageBounds().clear();
+        assertEquals(2, fragmentedMessageBounds.size());
+        fragmentedMessageBounds.clear();
 
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, length, startPosition, endPosition);
         tracker.sweepUncommittedEntriesTo(startPosition + MAX_PAYLOAD_LENGTH);
-        assertEquals(2, tracker.fragmentedMessageBounds().size());
-        tracker.fragmentedMessageBounds().clear();
+        assertEquals(2, fragmentedMessageBounds.size());
+        fragmentedMessageBounds.clear();
 
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, length, startPosition, endPosition);
         tracker.sweepUncommittedEntriesTo(endPosition);
-        assertEquals(0, tracker.fragmentedMessageBounds().size());
-        tracker.fragmentedMessageBounds().clear();
+        assertEquals(0, fragmentedMessageBounds.size());
+        fragmentedMessageBounds.clear();
 
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, length, startPosition, endPosition);
         tracker.sweepUncommittedEntriesTo(endPosition + MAX_PAYLOAD_LENGTH);
-        assertEquals(0, tracker.fragmentedMessageBounds().size());
-        tracker.fragmentedMessageBounds().clear();
+        assertEquals(0, fragmentedMessageBounds.size());
+        fragmentedMessageBounds.clear();
     }
 
     @Test
@@ -114,31 +124,31 @@ class LogPublisherFragmentedMessageTrackerTest
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, length, startPosition, endPosition);
         tracker.onNewElection(5218L);
         assertEquals(Aeron.NULL_VALUE, tracker.logAdapterRebuildStartPosition());
-        tracker.fragmentedMessageBounds().clear();
+        fragmentedMessageBounds.clear();
         tracker.onLogReplayComplete();
 
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, length, startPosition, endPosition);
         tracker.onNewElection(startPosition);
         assertEquals(Aeron.NULL_VALUE, tracker.logAdapterRebuildStartPosition());
-        tracker.fragmentedMessageBounds().clear();
+        fragmentedMessageBounds.clear();
         tracker.onLogReplayComplete();
 
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, length, startPosition, endPosition);
         tracker.onNewElection(startPosition + MAX_PAYLOAD_LENGTH);
         assertEquals(startPosition, tracker.logAdapterRebuildStartPosition());
-        tracker.fragmentedMessageBounds().clear();
+        fragmentedMessageBounds.clear();
         tracker.onLogReplayComplete();
 
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, length, startPosition, endPosition);
         tracker.onNewElection(endPosition);
         assertEquals(Aeron.NULL_VALUE, tracker.logAdapterRebuildStartPosition());
-        tracker.fragmentedMessageBounds().clear();
+        fragmentedMessageBounds.clear();
         tracker.onLogReplayComplete();
 
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, length, startPosition, endPosition);
         tracker.onNewElection(endPosition + MAX_PAYLOAD_LENGTH);
         assertEquals(Aeron.NULL_VALUE, tracker.logAdapterRebuildStartPosition());
-        tracker.fragmentedMessageBounds().clear();
+        fragmentedMessageBounds.clear();
         tracker.onLogReplayComplete();
     }
 
@@ -156,63 +166,63 @@ class LogPublisherFragmentedMessageTrackerTest
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, lengthTwo, startPositionTwo, endPositionTwo);
         tracker.onNewElection(76L);
         assertEquals(Aeron.NULL_VALUE, tracker.logAdapterRebuildStartPosition());
-        tracker.fragmentedMessageBounds().clear();
+        fragmentedMessageBounds.clear();
         tracker.onLogReplayComplete();
 
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, lengthOne, startPositionOne, endPositionOne);
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, lengthTwo, startPositionTwo, endPositionTwo);
         tracker.onNewElection(startPositionOne);
         assertEquals(Aeron.NULL_VALUE, tracker.logAdapterRebuildStartPosition());
-        tracker.fragmentedMessageBounds().clear();
+        fragmentedMessageBounds.clear();
         tracker.onLogReplayComplete();
 
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, lengthOne, startPositionOne, endPositionOne);
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, lengthTwo, startPositionTwo, endPositionTwo);
         tracker.onNewElection(startPositionOne + MAX_PAYLOAD_LENGTH);
         assertEquals(startPositionOne, tracker.logAdapterRebuildStartPosition());
-        tracker.fragmentedMessageBounds().clear();
+        fragmentedMessageBounds.clear();
         tracker.onLogReplayComplete();
 
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, lengthOne, startPositionOne, endPositionOne);
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, lengthTwo, startPositionTwo, endPositionTwo);
         tracker.onNewElection(endPositionOne);
         assertEquals(Aeron.NULL_VALUE, tracker.logAdapterRebuildStartPosition());
-        tracker.fragmentedMessageBounds().clear();
+        fragmentedMessageBounds.clear();
         tracker.onLogReplayComplete();
 
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, lengthOne, startPositionOne, endPositionOne);
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, lengthTwo, startPositionTwo, endPositionTwo);
         tracker.onNewElection(endPositionOne + ((startPositionTwo - endPositionOne) / 2));
         assertEquals(Aeron.NULL_VALUE, tracker.logAdapterRebuildStartPosition());
-        tracker.fragmentedMessageBounds().clear();
+        fragmentedMessageBounds.clear();
         tracker.onLogReplayComplete();
 
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, lengthOne, startPositionOne, endPositionOne);
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, lengthTwo, startPositionTwo, endPositionTwo);
         tracker.onNewElection(startPositionTwo);
         assertEquals(Aeron.NULL_VALUE, tracker.logAdapterRebuildStartPosition());
-        tracker.fragmentedMessageBounds().clear();
+        fragmentedMessageBounds.clear();
         tracker.onLogReplayComplete();
 
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, lengthOne, startPositionOne, endPositionOne);
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, lengthTwo, startPositionTwo, endPositionTwo);
         tracker.onNewElection(startPositionTwo + MAX_PAYLOAD_LENGTH);
         assertEquals(startPositionTwo, tracker.logAdapterRebuildStartPosition());
-        tracker.fragmentedMessageBounds().clear();
+        fragmentedMessageBounds.clear();
         tracker.onLogReplayComplete();
 
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, lengthOne, startPositionOne, endPositionOne);
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, lengthTwo, startPositionTwo, endPositionTwo);
         tracker.onNewElection(endPositionTwo);
         assertEquals(Aeron.NULL_VALUE, tracker.logAdapterRebuildStartPosition());
-        tracker.fragmentedMessageBounds().clear();
+        fragmentedMessageBounds.clear();
         tracker.onLogReplayComplete();
 
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, lengthOne, startPositionOne, endPositionOne);
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, lengthTwo, startPositionTwo, endPositionTwo);
         tracker.onNewElection(endPositionTwo + MAX_PAYLOAD_LENGTH);
         assertEquals(Aeron.NULL_VALUE, tracker.logAdapterRebuildStartPosition());
-        tracker.fragmentedMessageBounds().clear();
+        fragmentedMessageBounds.clear();
         tracker.onLogReplayComplete();
     }
 
@@ -230,7 +240,7 @@ class LogPublisherFragmentedMessageTrackerTest
         tracker.trackFragmentedMessage(MAX_PAYLOAD_LENGTH, lengthTwo, startPositionTwo, endPositionTwo);
         tracker.onNewElection(startPositionTwo);
         assertEquals(Aeron.NULL_VALUE, tracker.logAdapterRebuildStartPosition());
-        tracker.fragmentedMessageBounds().clear();
+        fragmentedMessageBounds.clear();
         tracker.onLogReplayComplete();
     }
 

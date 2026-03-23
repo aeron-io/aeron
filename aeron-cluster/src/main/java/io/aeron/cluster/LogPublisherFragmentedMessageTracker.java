@@ -28,9 +28,11 @@ public class LogPublisherFragmentedMessageTracker
     private final LongArrayQueue fragmentedMessageBounds = new LongArrayQueue(Long.MAX_VALUE);
     private long logAdapterRebuildStartPosition = Aeron.NULL_VALUE;
 
-    LongArrayQueue fragmentedMessageBounds()
+    /**
+     * Default constructor.
+     */
+    public LogPublisherFragmentedMessageTracker()
     {
-        return fragmentedMessageBounds;
     }
 
     long logAdapterRebuildStartPosition()

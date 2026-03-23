@@ -78,6 +78,8 @@ public final class ConsensusControlState
     }
 
     /**
+     * Fragmentation tracker or null if follower.
+     *
      * @return fragmentation tracker or null if follower.
      */
     public LogPublisherFragmentedMessageTracker fragmentedMessageTracker()

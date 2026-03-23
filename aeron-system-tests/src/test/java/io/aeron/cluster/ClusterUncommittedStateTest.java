@@ -17,20 +17,17 @@ package io.aeron.cluster;
 
 import io.aeron.Aeron;
 import io.aeron.Counter;
-import io.aeron.Aeron;
 import io.aeron.ExclusivePublication;
 import io.aeron.Image;
 import io.aeron.cluster.client.AeronCluster;
 import io.aeron.cluster.codecs.CloseReason;
 import io.aeron.cluster.codecs.MessageHeaderDecoder;
-import io.aeron.cluster.codecs.CloseReason;
 import io.aeron.cluster.codecs.MessageHeaderEncoder;
 import io.aeron.cluster.codecs.NewLeadershipTermEventEncoder;
 import io.aeron.cluster.codecs.SessionCloseEventEncoder;
 import io.aeron.cluster.codecs.SessionOpenEventEncoder;
 import io.aeron.cluster.service.ClientSession;
 import io.aeron.driver.Configuration;
-import io.aeron.cluster.service.ClientSession;
 import io.aeron.driver.DataPacketDispatcher;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ReceiveChannelEndpointSupplier;
@@ -58,7 +55,6 @@ import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
 import org.agrona.collections.IntArrayList;
 import org.agrona.collections.LongArrayQueue;
-import org.agrona.collections.IntArrayList;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.AtomicCounter;
 import org.junit.jupiter.api.BeforeEach;
@@ -74,11 +70,9 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntFunction;
-import java.util.function.IntFunction;
 
 import static io.aeron.cluster.client.AeronCluster.SESSION_HEADER_LENGTH;
 import static io.aeron.protocol.DataHeaderFlyweight.HEADER_LENGTH;
-import static io.aeron.cluster.client.AeronCluster.SESSION_HEADER_LENGTH;
 import static io.aeron.logbuffer.LogBufferDescriptor.computeFragmentedFrameLength;
 import static io.aeron.test.cluster.TestCluster.aCluster;
 import static io.aeron.test.driver.TestMediaDriver.shouldRunJavaMediaDriver;
@@ -86,7 +80,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 @ExtendWith({ EventLogExtension.class, InterruptingTestCallback.class })
 public class ClusterUncommittedStateTest
