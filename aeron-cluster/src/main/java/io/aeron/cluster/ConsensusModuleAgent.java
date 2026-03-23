@@ -1245,6 +1245,11 @@ final class ConsensusModuleAgent
     {
         if (null == election)
         {
+            if (!ctx.acceptStandbySnapshots())
+            {
+                return;
+            }
+
             if (state == ConsensusModule.State.ACTIVE ||
                 state == ConsensusModule.State.SUSPENDED ||
                 state == ConsensusModule.State.SNAPSHOT)
