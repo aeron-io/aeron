@@ -2636,7 +2636,9 @@ public final class TestCluster implements AutoCloseable
         try (RecordingLog recordingLog = new RecordingLog(file, false))
         {
             return recordingLog.entries().stream()
-                .filter((entry) -> RecordingLog.ENTRY_TYPE_SNAPSHOT == entry.type && SERVICE_ID == entry.serviceId)
+                .filter((entry) -> RecordingLog.ENTRY_TYPE_SNAPSHOT == entry.type &&
+                    SERVICE_ID == entry.serviceId &&
+                    entry.isValid)
                 .map(entry -> new SnapshotRecord(entry.recordingId, entry.logPosition))
                 .sorted(Comparator.comparingLong(SnapshotRecord::logPosition))
                 .toList();

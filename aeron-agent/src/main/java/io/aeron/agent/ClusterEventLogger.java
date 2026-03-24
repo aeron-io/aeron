@@ -1107,4 +1107,22 @@ public final class ClusterEventLogger
             }
         }
     }
+
+    /**
+     *
+     * @param memberId
+     * @param entryIndex
+     * @param recordingId
+     * @param logPosition
+     * @param serviceId
+     */
+    public void logSnapshotEntryInvalidation(
+        final int memberId,
+        final int entryIndex,
+        final long recordingId,
+        final long logPosition,
+        final int serviceId)
+    {
+        System.out.println("logSnapshotEntryInvalidation");
+    }
 }

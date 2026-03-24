@@ -272,6 +272,15 @@ final class ClusterEventDissector
         builder.append(" vote=").append(vote);
     }
 
+    static void dissectSnapshotEntryInvalidate(
+        final ClusterEventCode eventCode,
+        final MutableDirectBuffer buffer,
+        final int offset,
+        final StringBuilder builder)
+    {
+        // TODO
+    }
+
     static void dissectCatchupPosition(
         final ClusterEventCode eventCode,
         final MutableDirectBuffer buffer,

@@ -90,7 +90,6 @@ import org.agrona.concurrent.errors.ErrorConsumer;
 import org.agrona.concurrent.errors.ErrorLogReader;
 import org.agrona.concurrent.status.CountersReader;
 import org.hamcrest.CoreMatchers;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -3616,7 +3615,6 @@ class ClusterTest
 
     @Test
     @InterruptAfter(10)
-    @Disabled("not yet implemented")
     void shouldInvalidateSnapshotsThatHaveBeenRemoved()
     {
         cluster = aCluster().start();
@@ -3644,6 +3642,8 @@ class ClusterTest
         cluster.backupQueryContainsSnapshot(leader, snapshots.get(2).logPosition(), snapshots.get(2));
 
         cluster.validateRecordingLog(leader);
+
+        Tests.await(() -> cluster.snapshots(leader).size() == 1);
 
         cluster.backupQueryContainsSnapshot(leader, snapshots.get(0).logPosition(), snapshots.get(2));
     }

@@ -947,11 +947,11 @@ public class ClusterToolOperator
     }
 
     /**
-     * Instruct the Cluster node to check the snapshots in the recording log and verify that recording exist.
+     * Trigger the cluster node to validate its recording log against the archive.
      *
      * @param clusterDir where the cluster node is running.
-     * @param out        to print the result of the operation.
-     * @return {@code 0} if successful or {@code -1} otherwise.
+     * @param out to write output messages to.
+     * @return {@link ClusterToolOperator#SUCCESS} on success.  Or else {@link ClusterToolOperator#FAILURE}.
      */
     protected int validateRecordingLog(final File clusterDir, final PrintStream out)
     {
