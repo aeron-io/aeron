@@ -419,7 +419,7 @@ class ClusterInterceptor
         }
     }
 
-    static class InvalidateSnapshotEntry
+    static class SnapshotEntryInvalidation
     {
         @Advice.OnMethodEnter
         static void logSnapshotEntryInvalidation(

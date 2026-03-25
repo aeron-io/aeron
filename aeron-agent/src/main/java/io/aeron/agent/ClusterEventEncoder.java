@@ -16,6 +16,7 @@
 package io.aeron.agent;
 
 import io.aeron.cluster.codecs.CloseReason;
+import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
 
 import java.util.concurrent.TimeUnit;
@@ -902,5 +903,39 @@ public final class ClusterEventEncoder
 
         encodeTrailingString(
             encodingBuffer, offset + encodedLength, captureLength + LOG_HEADER_LENGTH - encodedLength, reason);
+    }
+
+    static int snapshotEntryInvalidationLength()
+    {
+        return
+            SIZE_OF_INT +   // memberId
+            SIZE_OF_INT +   // entryIndex
+            SIZE_OF_LONG +  // recordingId
+            SIZE_OF_LONG +  // logPosition
+            SIZE_OF_INT;    // serviceId
+    }
+
+    static void encodeSnapshotEntryInvalidation(
+        final MutableDirectBuffer encodingBuffer,
+        final int offset,
+        final int captureLength,
+        final int length,
+        final int memberId,
+        final int entryIndex,
+        final long recordingId,
+        final long logPosition,
+        final int serviceId)
+    {
+        int encodedLength = encodeLogHeader(encodingBuffer, offset, captureLength, length);
+
+        encodingBuffer.putInt(offset + encodedLength, memberId, LITTLE_ENDIAN);
+        encodedLength += SIZE_OF_INT;
+        encodingBuffer.putInt(offset + encodedLength, entryIndex, LITTLE_ENDIAN);
+        encodedLength += SIZE_OF_INT;
+        encodingBuffer.putLong(offset + encodedLength, recordingId, LITTLE_ENDIAN);
+        encodedLength += SIZE_OF_LONG;
+        encodingBuffer.putLong(offset + encodedLength, logPosition, LITTLE_ENDIAN);
+        encodedLength += SIZE_OF_LONG;
+        encodingBuffer.putInt(offset + encodedLength, serviceId, LITTLE_ENDIAN);
     }
 }

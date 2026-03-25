@@ -103,11 +103,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.IntFunction;
@@ -2029,7 +2029,7 @@ public final class TestCluster implements AutoCloseable
         }
     }
 
-    public void purgeSnapshot(final TestNode node, final long recordingId)
+    public void purgeSnapshot(final TestNode node, final long[] recordingIds)
     {
         if (null == node || node.isClosed())
         {
@@ -2039,13 +2039,13 @@ public final class TestCluster implements AutoCloseable
         try (Aeron aeron = Aeron.connect(
             new Aeron.Context().aeronDirectoryName(node.mediaDriver().aeronDirectoryName())))
         {
-            final MutableBoolean segmentsDeleted = new MutableBoolean(false);
+            final MutableInteger segmentsDeleted = new MutableInteger(0);
             final RecordingSignalConsumer deleteSignalConsumer =
                 (controlSessionId, correlationId, recordingId1, subscriptionId, position, signal) ->
                 {
                     if (RecordingSignal.DELETE == signal)
                     {
-                        segmentsDeleted.set(true);
+                        segmentsDeleted.increment();
                     }
                 };
 
@@ -2066,12 +2066,17 @@ public final class TestCluster implements AutoCloseable
 
             try (AeronArchive aeronArchive = requireNonNull(AeronArchive.connect(aeronArchiveCtx)))
             {
-                final long deletedSegmentCount = aeronArchive.purgeRecording(recordingId);
-                assertTrue(0 < deletedSegmentCount);
-
-                while (!segmentsDeleted.get())
+                long totalDeletedSegmentCount = 0;
+                for (final long recordingId : recordingIds)
                 {
-                    aeronArchive.pollForRecordingSignals();
+                    final long deletedSegmentCount = aeronArchive.purgeRecording(recordingId);
+                    assertTrue(0 < deletedSegmentCount);
+                    totalDeletedSegmentCount += deletedSegmentCount;
+
+                    while (totalDeletedSegmentCount < segmentsDeleted.get())
+                    {
+                        aeronArchive.pollForRecordingSignals();
+                    }
                 }
             }
         }
@@ -2626,7 +2631,7 @@ public final class TestCluster implements AutoCloseable
         }
     }
 
-    public record SnapshotRecord(long recordingId, long logPosition)
+    public record SnapshotRecord(long logPosition, long[] recordingIds)
     {
     }
 
@@ -2635,13 +2640,19 @@ public final class TestCluster implements AutoCloseable
         final File file = testNode.consensusModule().context().clusterDir();
         try (RecordingLog recordingLog = new RecordingLog(file, false))
         {
-            return recordingLog.entries().stream()
-                .filter((entry) -> RecordingLog.ENTRY_TYPE_SNAPSHOT == entry.type &&
-                    SERVICE_ID == entry.serviceId &&
-                    entry.isValid)
-                .map(entry -> new SnapshotRecord(entry.recordingId, entry.logPosition))
-                .sorted(Comparator.comparingLong(SnapshotRecord::logPosition))
-                .toList();
+            final TreeMap<Long, List<RecordingLog.Entry>> collect = recordingLog.entries().stream()
+                .filter((entry) -> RecordingLog.ENTRY_TYPE_SNAPSHOT == entry.type && entry.isValid)
+                .collect(Collectors.groupingBy((e) -> e.logPosition, TreeMap::new, toList()));
+
+            final ArrayList<SnapshotRecord> records = new ArrayList<>();
+            collect.forEach(
+                (logPosition, entry) ->
+                {
+                    final long[] recordingIds = entry.stream().mapToLong((e) -> e.recordingId).toArray();
+                    records.add(new SnapshotRecord(logPosition, recordingIds));
+                });
+
+            return records;
         }
     }
 

@@ -159,7 +159,7 @@ public enum ClusterEventCode implements EventCode
     /**
      *
      */
-    SNAPSHOT_ENTRY_INVALIDATE(26, ClusterEventDissector::dissectSnapshotEntryInvalidate);
+    SNAPSHOT_ENTRY_INVALIDATION(26, ClusterEventDissector::dissectSnapshotEntryInvalidation);
 
     static final int EVENT_CODE_TYPE = EventCodeType.CLUSTER.getTypeCode();
     private static final ClusterEventCode[] EVENT_CODE_BY_ID;

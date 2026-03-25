@@ -46,6 +46,7 @@ import static io.aeron.agent.ClusterEventCode.REPLAY_NEW_LEADERSHIP_TERM;
 import static io.aeron.agent.ClusterEventCode.REPLICATION_ENDED;
 import static io.aeron.agent.ClusterEventCode.REQUEST_VOTE;
 import static io.aeron.agent.ClusterEventCode.SERVICE_ACK;
+import static io.aeron.agent.ClusterEventCode.SNAPSHOT_ENTRY_INVALIDATION;
 import static io.aeron.agent.ClusterEventCode.STANDBY_SNAPSHOT_NOTIFICATION;
 import static io.aeron.agent.ClusterEventCode.STATE_CHANGE;
 import static io.aeron.agent.ClusterEventCode.STOP_CATCHUP;
@@ -62,6 +63,7 @@ import static io.aeron.agent.ClusterEventEncoder.newLeaderShipTermLength;
 import static io.aeron.agent.ClusterEventEncoder.replayNewLeadershipTermEventLength;
 import static io.aeron.agent.ClusterEventEncoder.replicationEndedLength;
 import static io.aeron.agent.ClusterEventEncoder.serviceAckLength;
+import static io.aeron.agent.ClusterEventEncoder.snapshotEntryInvalidationLength;
 import static io.aeron.agent.ClusterEventEncoder.standbySnapshotNotificationLength;
 import static io.aeron.agent.ClusterEventEncoder.terminationAckLength;
 import static io.aeron.agent.ClusterEventEncoder.terminationPositionLength;
@@ -1060,6 +1062,52 @@ class ClusterEventLoggerTest
             """
                 \\[[0-9]+\\.[0-9]+] CLUSTER: CLUSTER_SESSION_STATE_CHANGE \\[74/74]: memberId=7 \
                 sessionId=-47238947 action=WEEKS NANOSECONDS -> HOURS reason=\"state changed somehow\"""";
+
+        assertThat(sb.toString(), Matchers.matchesPattern(expectedMessagePattern));
+    }
+
+    @Test
+    void logSnapshotEntryInvalidation()
+    {
+        final int memberId = 7;
+        final int entryIndex = 123;
+        final long recordingId = 2934;
+        final long logPosition = 9823749374L;
+        final int serviceId = -1;
+
+        final int offset = 16;
+        logBuffer.putLong(CAPACITY + TAIL_POSITION_OFFSET, offset);
+
+        final int encodedLength = snapshotEntryInvalidationLength();
+
+        logger.logSnapshotEntryInvalidation(memberId, entryIndex, recordingId, logPosition, serviceId);
+
+        verifyLogHeader(
+            logBuffer,
+            offset,
+            SNAPSHOT_ENTRY_INVALIDATION.toEventCodeId(),
+            encodedLength,
+            encodedLength);
+
+        int index = encodedMsgOffset(offset) + LOG_HEADER_LENGTH;
+        assertEquals(memberId, logBuffer.getInt(index, LITTLE_ENDIAN));
+        index += SIZE_OF_INT;
+        assertEquals(entryIndex, logBuffer.getInt(index, LITTLE_ENDIAN));
+        index += SIZE_OF_INT;
+        assertEquals(recordingId, logBuffer.getLong(index, LITTLE_ENDIAN));
+        index += SIZE_OF_LONG;
+        assertEquals(logPosition, logBuffer.getLong(index, LITTLE_ENDIAN));
+        index += SIZE_OF_LONG;
+        assertEquals(serviceId, logBuffer.getInt(index, LITTLE_ENDIAN));
+
+        final StringBuilder sb = new StringBuilder();
+        ClusterEventDissector.dissectSnapshotEntryInvalidation(
+            SNAPSHOT_ENTRY_INVALIDATION, logBuffer, encodedMsgOffset(offset), sb);
+
+        final String expectedMessagePattern =
+            """
+                \\[[0-9]+\\.[0-9]+] CLUSTER: SNAPSHOT_ENTRY_INVALIDATION \\[28/28]: memberId=7 \
+                entryIndex=123 recordingId=2934 logPosition=9823749374 serviceId=-1""";
 
         assertThat(sb.toString(), Matchers.matchesPattern(expectedMessagePattern));
     }

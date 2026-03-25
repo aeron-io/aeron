@@ -3634,8 +3634,8 @@ class ClusterTest
 
         final List<TestCluster.SnapshotRecord> snapshots = cluster.snapshots(leader);
 
-        cluster.purgeSnapshot(leader, snapshots.get(0).recordingId());
-        cluster.purgeSnapshot(leader, snapshots.get(1).recordingId());
+        cluster.purgeSnapshot(leader, snapshots.get(0).recordingIds());
+        cluster.purgeSnapshot(leader, snapshots.get(1).recordingIds());
 
         cluster.backupQueryContainsSnapshot(leader, snapshots.get(0).logPosition(), snapshots.get(0));
         cluster.backupQueryContainsSnapshot(leader, snapshots.get(1).logPosition(), snapshots.get(1));
@@ -3647,7 +3647,6 @@ class ClusterTest
 
         cluster.backupQueryContainsSnapshot(leader, snapshots.get(0).logPosition(), snapshots.get(2));
     }
-
 
     private static final class ExceptionOnLoadService extends TestNode.TestService
     {

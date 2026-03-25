@@ -281,9 +281,9 @@ public class ClusterComponentLogger implements ComponentLogger
 
         tempBuilder = addEventInstrumentation(
             tempBuilder,
-            SNAPSHOT_ENTRY_INVALIDATE,
+            SNAPSHOT_ENTRY_INVALIDATION,
             "RecordingLogValidator",
-            ClusterInterceptor.InvalidateSnapshotEntry.class,
+            ClusterInterceptor.SnapshotEntryInvalidation.class,
             "logSnapshotEntryInvalidation");
 
         return tempBuilder;
