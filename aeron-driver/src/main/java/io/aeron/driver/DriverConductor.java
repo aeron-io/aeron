@@ -904,22 +904,21 @@ public final class DriverConductor implements Agent
 
     void transitionToLinger(final PublicationImage image)
     {
-        boolean rejoin = true;
-
         for (int i = 0, size = subscriptionLinks.size(); i < size; i++)
         {
             final SubscriptionLink link = subscriptionLinks.get(i);
             if (link.isLinked(image))
             {
-                rejoin = link.isRejoin();
+                if (!link.isRejoin())
+                {
+                    link.addNoRejoinSessionId(image.sessionId());
+                }
+
                 notifyUnavailableImageLink(image.correlationId(), link);
             }
         }
 
-        if (rejoin)
-        {
-            receiverProxy.removeCoolDown(image.channelEndpoint(), image.sessionId(), image.streamId());
-        }
+        receiverProxy.removeCoolDown(image.channelEndpoint(), image.sessionId(), image.streamId());
     }
 
     void transitionToLinger(final IpcPublication publication)
@@ -1780,7 +1779,8 @@ public final class DriverConductor implements Agent
         for (int i = 0, size = subscriptionLinks.size(); i < size; i++)
         {
             final SubscriptionLink subscription = subscriptionLinks.get(i);
-            if (subscription.matches(channelEndpoint, streamId, sessionId))
+            if (subscription.matches(channelEndpoint, streamId, sessionId) &&
+                !subscription.hasNoRejoinForSession(sessionId))
             {
                 final Position position = SubscriberPos.allocate(
                     tempBuffer,

@@ -17,6 +17,7 @@ package io.aeron.driver;
 
 import io.aeron.CommonContext;
 import io.aeron.driver.media.ReceiveChannelEndpoint;
+import org.agrona.collections.IntHashSet;
 import org.agrona.concurrent.status.ReadablePosition;
 
 import java.util.IdentityHashMap;
@@ -37,6 +38,7 @@ public abstract class SubscriptionLink implements DriverManagedResource
     final String channel;
     final AeronClient aeronClient;
     final IdentityHashMap<Subscribable, ReadablePosition> positionBySubscribableMap;
+    private final IntHashSet noRejoinSessionIds;
     int sessionId;
     boolean hasSessionId;
     boolean reachedEndOfLife = false;
@@ -61,6 +63,7 @@ public abstract class SubscriptionLink implements DriverManagedResource
         this.isRejoin = params.isRejoin;
 
         positionBySubscribableMap = new IdentityHashMap<>(hasSessionId ? 1 : 8);
+        noRejoinSessionIds = params.isRejoin ? null : new IntHashSet();
     }
 
     /**
@@ -187,6 +190,34 @@ public abstract class SubscriptionLink implements DriverManagedResource
     void unlink(final Subscribable subscribable)
     {
         positionBySubscribableMap.remove(subscribable);
+    }
+
+    /**
+     * Record a session id that this subscription should not rejoin. Only used when
+     * {@code rejoin=false}. Called from {@code transitionToLinger} when the image for
+     * this session becomes unavailable.
+     *
+     * @param sessionId the session id to suppress.
+     */
+    void addNoRejoinSessionId(final int sessionId)
+    {
+        if (null != noRejoinSessionIds)
+        {
+            noRejoinSessionIds.add(sessionId);
+        }
+    }
+
+    /**
+     * Check if this subscription should suppress image creation for the given session id.
+     * Returns true if this subscription has {@code rejoin=false} and has previously been
+     * linked to an image for this session.
+     *
+     * @param sessionId to check.
+     * @return true if the session should be rejected.
+     */
+    boolean hasNoRejoinForSession(final int sessionId)
+    {
+        return null != noRejoinSessionIds && noRejoinSessionIds.contains(sessionId);
     }
 
     boolean isWildcardOrSessionIdMatch(final int sessionId)
