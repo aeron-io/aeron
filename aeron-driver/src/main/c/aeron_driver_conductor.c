@@ -1812,15 +1812,16 @@ void aeron_driver_conductor_image_transition_to_linger(
 {
     if (NULL != image->conductor_fields.endpoint)
     {
-        bool rejoin = true;
-
         for (size_t i = 0, size = conductor->network_subscriptions.length; i < size; i++)
         {
             aeron_subscription_link_t *link = &conductor->network_subscriptions.array[i];
 
             if (aeron_driver_conductor_is_subscribable_linked(link, &image->conductor_fields.subscribable))
             {
-                rejoin = link->is_rejoin;
+                if (!link->is_rejoin)
+                {
+                    aeron_subscription_link_add_no_rejoin_session_id(link, image->session_id);
+                }
 
                 aeron_driver_conductor_on_unavailable_image(
                     conductor,
@@ -1832,14 +1833,11 @@ void aeron_driver_conductor_image_transition_to_linger(
             }
         }
 
-        if (rejoin)
-        {
-            aeron_driver_receiver_proxy_on_remove_cool_down(
-                conductor->context->receiver_proxy,
-                image->conductor_fields.endpoint,
-                image->session_id,
-                image->stream_id);
-        }
+        aeron_driver_receiver_proxy_on_remove_cool_down(
+            conductor->context->receiver_proxy,
+            image->conductor_fields.endpoint,
+            image->session_id,
+            image->stream_id);
     }
 }
 
@@ -4164,6 +4162,54 @@ void aeron_driver_conductor_unlink_all_subscribable(
     link->subscribable_list.array = NULL;
     link->subscribable_list.length = 0;
     link->subscribable_list.capacity = 0;
+
+    aeron_free(link->no_rejoin_sessions.session_ids);
+    link->no_rejoin_sessions.session_ids = NULL;
+    link->no_rejoin_sessions.length = 0;
+    link->no_rejoin_sessions.capacity = 0;
+}
+
+void aeron_subscription_link_add_no_rejoin_session_id(aeron_subscription_link_t *link, int32_t session_id)
+{
+    if (link->is_rejoin)
+    {
+        return;
+    }
+
+    for (size_t i = 0; i < link->no_rejoin_sessions.length; i++)
+    {
+        if (link->no_rejoin_sessions.session_ids[i] == session_id)
+        {
+            return;
+        }
+    }
+
+    if (link->no_rejoin_sessions.length >= link->no_rejoin_sessions.capacity)
+    {
+        const size_t new_capacity = 0 == link->no_rejoin_sessions.capacity ? 4 : link->no_rejoin_sessions.capacity * 2;
+
+        if (aeron_reallocf((void **)&link->no_rejoin_sessions.session_ids, sizeof(int32_t) * new_capacity) < 0)
+        {
+            return;
+        }
+
+        link->no_rejoin_sessions.capacity = new_capacity;
+    }
+
+    link->no_rejoin_sessions.session_ids[link->no_rejoin_sessions.length++] = session_id;
+}
+
+bool aeron_subscription_link_has_no_rejoin_for_session(const aeron_subscription_link_t *link, int32_t session_id)
+{
+    for (size_t i = 0; i < link->no_rejoin_sessions.length; i++)
+    {
+        if (link->no_rejoin_sessions.session_ids[i] == session_id)
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 int aeron_driver_conductor_link_ipc_subscriptions(
@@ -4522,6 +4568,9 @@ int aeron_driver_conductor_on_add_ipc_subscription(
     link->subscribable_list.length = 0;
     link->subscribable_list.capacity = 0;
     link->subscribable_list.array = NULL;
+    link->no_rejoin_sessions.length = 0;
+    link->no_rejoin_sessions.capacity = 0;
+    link->no_rejoin_sessions.session_ids = NULL;
 
     aeron_driver_conductor_on_subscription_ready(
         conductor, command->correlated.correlation_id, AERON_CHANNEL_STATUS_INDICATOR_NOT_ALLOCATED);
@@ -4611,6 +4660,9 @@ int aeron_driver_conductor_on_add_spy_subscription_complete(
     link->subscribable_list.length = 0;
     link->subscribable_list.capacity = 0;
     link->subscribable_list.array = NULL;
+    link->no_rejoin_sessions.length = 0;
+    link->no_rejoin_sessions.capacity = 0;
+    link->no_rejoin_sessions.session_ids = NULL;
 
     aeron_driver_conductor_on_subscription_ready(
         conductor, command->correlated.correlation_id, AERON_CHANNEL_STATUS_INDICATOR_NOT_ALLOCATED);
@@ -5361,6 +5413,9 @@ int aeron_driver_conductor_on_add_receive_ipc_destination(
     link->subscribable_list.length = 0;
     link->subscribable_list.capacity = 0;
     link->subscribable_list.array = NULL;
+    link->no_rejoin_sessions.length = 0;
+    link->no_rejoin_sessions.capacity = 0;
+    link->no_rejoin_sessions.session_ids = NULL;
 
     aeron_driver_conductor_on_operation_succeeded(conductor, command->correlated.correlation_id);
 
@@ -5454,6 +5509,9 @@ int aeron_driver_conductor_on_add_receive_spy_destination_complete(
     link->subscribable_list.length = 0;
     link->subscribable_list.capacity = 0;
     link->subscribable_list.array = NULL;
+    link->no_rejoin_sessions.length = 0;
+    link->no_rejoin_sessions.capacity = 0;
+    link->no_rejoin_sessions.session_ids = NULL;
 
     aeron_driver_conductor_on_operation_succeeded(conductor, command->correlated.correlation_id);
 
@@ -6325,7 +6383,8 @@ void aeron_driver_conductor_on_create_publication_image(void *clientd, void *ite
             link,
             endpoint,
             command->stream_id,
-            command->session_id))
+            command->session_id) ||
+            aeron_subscription_link_has_no_rejoin_for_session(link, command->session_id))
         {
             continue;
         }

@@ -118,6 +118,14 @@ typedef struct aeron_subscription_link_stct
         aeron_subscribable_list_entry_t *array;
     }
     subscribable_list;
+
+    struct no_rejoin_sessions_stct
+    {
+        size_t length;
+        size_t capacity;
+        int32_t *session_ids;
+    }
+    no_rejoin_sessions;
 }
 aeron_subscription_link_t;
 
@@ -388,6 +396,10 @@ void aeron_linger_resource_entry_delete(aeron_driver_conductor_t *conductor, aer
 
 void aeron_driver_conductor_image_transition_to_linger(
     aeron_driver_conductor_t *conductor, aeron_publication_image_t *image);
+
+void aeron_subscription_link_add_no_rejoin_session_id(aeron_subscription_link_t *link, int32_t session_id);
+
+bool aeron_subscription_link_has_no_rejoin_for_session(const aeron_subscription_link_t *link, int32_t session_id);
 
 int aeron_driver_conductor_init(aeron_driver_conductor_t *conductor, aeron_driver_context_t *context);
 
