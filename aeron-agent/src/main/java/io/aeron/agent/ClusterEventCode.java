@@ -157,7 +157,8 @@ public enum ClusterEventCode implements EventCode
     VOTE(25, ClusterEventDissector::dissectVote),
 
     /**
-     *
+     * Invalidation of an entry in the recording log for snapshot. Occurs when the consensus module runs the recording
+     * log validator and finds a snapshot that has been removed from the archive.
      */
     SNAPSHOT_ENTRY_INVALIDATION(26, ClusterEventDissector::dissectSnapshotEntryInvalidation);
 
