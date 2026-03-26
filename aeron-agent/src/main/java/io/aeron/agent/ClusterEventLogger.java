@@ -1112,12 +1112,13 @@ public final class ClusterEventLogger
     }
 
     /**
+     * Log a snapshot entry invalidation.
      *
-     * @param memberId
-     * @param entryIndex
-     * @param recordingId
-     * @param logPosition
-     * @param serviceId
+     * @param memberId      on which the snapshot was invalidated.
+     * @param entryIndex    within the recording long that was invalidated.
+     * @param recordingId   of the entry.
+     * @param logPosition   of the snapshot.
+     * @param serviceId     that took the snapshot.
      */
     public void logSnapshotEntryInvalidation(
         final int memberId,
