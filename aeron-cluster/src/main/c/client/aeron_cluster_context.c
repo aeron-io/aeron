@@ -107,6 +107,7 @@ int aeron_cluster_context_init(aeron_cluster_context_t **ctx)
     _ctx->egress_stream_id      = AERON_CLUSTER_EGRESS_STREAM_ID_DEFAULT;
 
     _ctx->message_timeout_ns      = AERON_CLUSTER_MESSAGE_TIMEOUT_NS_DEFAULT;
+    _ctx->new_leader_timeout_ns   = 0;  /* computed from server's heartbeat during connect */
     _ctx->message_retry_attempts  = AERON_CLUSTER_MESSAGE_RETRY_ATTEMPTS_DEFAULT;
     _ctx->is_ingress_exclusive    = false;
 

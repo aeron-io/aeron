@@ -78,7 +78,7 @@ struct MockPublisherOps
 
     const PublisherCall *last(const std::string &type) const
     {
-        for (int i = (int)calls.size()-1; i >= 0; i--)
+        for (int i = static_cast<int>(calls.size())-1; i >= 0; i--)
             if (calls[i].type == type) return &calls[i];
         return nullptr;
     }
@@ -274,6 +274,49 @@ static void init_mock_agent_ops(aeron_cluster_election_agent_ops_t *ops,
     ops->on_follower_new_leadership_term = mock_on_follower_new_leadership_term;
     ops->on_replay_new_leadership_term   = mock_on_replay_new_leadership_term;
     ops->notify_commit_position          = mock_notify_commit_position;
+
+    /* Phase 1.5 stubs — return sensible defaults so tests pass unchanged */
+    ops->quorum_position = [](void *cd, int64_t ap, int64_t) -> int64_t {
+        (void)cd; return ap; /* always at quorum */
+    };
+    ops->publish_new_leadership_term_on_interval = [](void *, int64_t, int64_t) -> int { return 0; };
+    ops->publish_commit_position_on_interval     = [](void *, int64_t, int64_t) -> int { return 0; };
+    ops->new_log_replay      = [](void *, int64_t, int64_t) -> void * { return nullptr; };
+    ops->log_replay_do_work  = [](void *, void *) -> int { return 0; };
+    ops->log_replay_is_done  = [](void *, void *) -> bool { return true; };
+    ops->log_replay_position = [](void *, void *) -> int64_t { return 0; };
+    ops->close_log_replay    = [](void *, void *) {};
+    ops->join_log_as_leader  = [](void *, int64_t, int64_t, int32_t, bool) {};
+    ops->update_recording_log = [](void *, int64_t) {};
+    ops->update_leader_position = [](void *, int64_t, int64_t, int64_t) -> int { return 0; };
+    ops->append_new_leadership_term_event = [](void *, int64_t) -> bool { return true; };
+    ops->new_log_replication = [](void *, const char *, const char *, int64_t, int64_t, int64_t) -> void * {
+        return nullptr;
+    };
+    ops->close_log_replication                = [](void *, void *) {};
+    ops->poll_archive_events                  = [](void *) -> int { return 0; };
+    ops->publish_follower_replication_position = [](void *, int64_t) -> int { return 0; };
+    ops->update_recording_log_for_replication = [](void *, int64_t, int64_t, int64_t, int64_t) {};
+    ops->add_follower_subscription = [](void *, int32_t) -> aeron_subscription_t * {
+        /* Return a sentinel so do_follower_log_init can proceed in unit tests */
+        return (aeron_subscription_t *)1;
+    };
+    ops->get_log_image = [](void *, aeron_subscription_t *, int32_t) -> aeron_image_t * {
+        /* Return a sentinel so do_follower_log_await can proceed in unit tests */
+        return (aeron_image_t *)1;
+    };
+    ops->add_catchup_log_destination = [](void *, aeron_subscription_t *, const char *) {};
+    ops->add_live_log_destination    = [](void *) {};
+    ops->this_catchup_endpoint       = [](void *) -> const char * { return nullptr; };
+    ops->send_catchup_position       = [](void *, const char *) -> bool { return false; };
+    ops->catchup_initiated           = [](void *, int64_t) {};
+    ops->try_join_log_as_follower    = [](void *, aeron_image_t *, bool, int64_t) -> bool { return true; };
+    ops->catchup_poll                = [](void *, int64_t, int64_t) -> int { return 0; };
+    ops->is_catchup_near_live        = [](void *, int64_t) -> bool { return false; };
+    ops->live_log_destination        = [](void *) -> const char * { return nullptr; };
+    ops->catchup_log_destination     = [](void *) -> const char * { return nullptr; };
+    ops->get_commit_position         = [](void *) -> int64_t { return 0; };
+    ops->agent_state                 = [](void *) -> int { return 0; };
 }
 
 /* -----------------------------------------------------------------------
@@ -361,12 +404,13 @@ public:
     void on_new_leadership_term(int64_t log_term, int64_t next_term,
         int64_t next_base, int64_t next_log_pos,
         int64_t term, int64_t base, int64_t log_pos,
+        int64_t commit_pos,
         int64_t rec_id, int64_t ts, int32_t leader_id,
         int32_t session_id, int32_t app_ver, bool startup)
     {
         aeron_cluster_election_on_new_leadership_term(election,
             log_term, next_term, next_base, next_log_pos,
-            term, base, log_pos, rec_id, ts, leader_id,
+            term, base, log_pos, commit_pos, rec_id, ts, leader_id,
             session_id, app_ver, startup);
     }
 

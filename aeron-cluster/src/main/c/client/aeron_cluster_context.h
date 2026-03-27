@@ -45,6 +45,7 @@ struct aeron_cluster_context_stct
     int32_t  egress_stream_id;
 
     uint64_t message_timeout_ns;
+    uint64_t new_leader_timeout_ns;     /* derived from server's heartbeat; used for reconnect deadline */
     uint32_t message_retry_attempts;
 
     bool     is_ingress_exclusive;  /* use ExclusivePublication for ingress */

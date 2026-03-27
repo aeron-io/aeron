@@ -46,6 +46,11 @@ extern "C"
 
 typedef struct aeron_cluster_service_context_stct aeron_cluster_service_context_t;
 
+/* Forward-declare archive type to avoid pulling in archive headers from the
+ * service module (which does not link aeron_archive). Users that want snapshot
+ * load must set the archive pointer via aeron_cluster_service_context_set_archive(). */
+typedef struct aeron_archive_stct aeron_archive_t;
+
 struct aeron_cluster_service_context_stct
 {
     aeron_t *aeron;
@@ -70,12 +75,28 @@ struct aeron_cluster_service_context_stct
 
     int32_t  app_version;
 
+    /* Cluster ID used to find the RecoveryState counter on startup. */
+    int32_t  cluster_id;
+
+    /* Optional archive client for snapshot load on recovery.
+     * Set before starting if snapshot loading is required. */
+    aeron_archive_t *archive;
+
     aeron_idle_strategy_func_t idle_strategy_func;
     void                      *idle_strategy_state;
     bool                       owns_idle_strategy;
 
     aeron_error_handler_t      error_handler;
     void                      *error_handler_clientd;
+
+    /**
+     * Optional callback invoked every ~1 second in do_work to update an
+     * activity timestamp (e.g. ClusterMarkFile.updateActivityTimestamp).
+     * now_ms is the current epoch time in milliseconds.
+     * Set to NULL if no mark-file activity tracking is needed.
+     */
+    void (*mark_file_update_fn)(void *clientd, int64_t now_ms);
+    void  *mark_file_update_clientd;
 
     aeron_clustered_service_t *service;
 };
@@ -115,6 +136,12 @@ const char *aeron_cluster_service_context_get_cluster_dir(aeron_cluster_service_
 
 int  aeron_cluster_service_context_set_app_version(aeron_cluster_service_context_t *ctx, int32_t version);
 int32_t aeron_cluster_service_context_get_app_version(aeron_cluster_service_context_t *ctx);
+
+int  aeron_cluster_service_context_set_cluster_id(aeron_cluster_service_context_t *ctx, int32_t cluster_id);
+int32_t aeron_cluster_service_context_get_cluster_id(aeron_cluster_service_context_t *ctx);
+
+int  aeron_cluster_service_context_set_archive(aeron_cluster_service_context_t *ctx, aeron_archive_t *archive);
+aeron_archive_t *aeron_cluster_service_context_get_archive(aeron_cluster_service_context_t *ctx);
 
 int  aeron_cluster_service_context_set_idle_strategy(aeron_cluster_service_context_t *ctx,
          aeron_idle_strategy_func_t func, void *state);

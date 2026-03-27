@@ -15,6 +15,7 @@
  */
 
 #include <string.h>
+#include <stdio.h>
 #include "aeron_cluster_log_publisher.h"
 
 #include "aeron_cluster_client/messageHeader.h"
@@ -31,6 +32,7 @@ int aeron_cluster_log_publisher_init(
     int64_t leadership_term_id)
 {
     publisher->publication       = publication;
+    publisher->aeron             = NULL;
     publisher->leadership_term_id = leadership_term_id;
     memset(publisher->buffer, 0, sizeof(publisher->buffer));
     return 0;
@@ -39,6 +41,34 @@ int aeron_cluster_log_publisher_init(
 int64_t aeron_cluster_log_publisher_position(aeron_cluster_log_publisher_t *publisher)
 {
     return aeron_exclusive_publication_position(publisher->publication);
+}
+
+int32_t aeron_cluster_log_publisher_session_id(aeron_cluster_log_publisher_t *publisher)
+{
+    aeron_publication_constants_t constants;
+    if (aeron_exclusive_publication_constants(publisher->publication, &constants) < 0)
+    {
+        return -1;
+    }
+    return constants.session_id;
+}
+
+int aeron_cluster_log_publisher_add_destination(
+    aeron_cluster_log_publisher_t *publisher,
+    const char *follower_log_endpoint)
+{
+    if (NULL == publisher->publication || NULL == follower_log_endpoint ||
+        NULL == publisher->aeron)
+    {
+        return -1;
+    }
+
+    char channel[512];
+    snprintf(channel, sizeof(channel), "aeron:udp?endpoint=%s", follower_log_endpoint);
+
+    aeron_async_destination_t *async = NULL;
+    return aeron_exclusive_publication_async_add_destination(
+        &async, publisher->aeron, publisher->publication, channel);
 }
 
 static int64_t log_offer(aeron_cluster_log_publisher_t *publisher, size_t length)
@@ -84,7 +114,7 @@ int64_t aeron_cluster_log_publisher_append_session_open(
     const char *pr = encoded_principal != NULL ? (const char *)encoded_principal : "";
     aeron_cluster_client_sessionOpenEvent_put_encodedPrincipal(&msg, pr, (uint32_t)principal_length);
 
-    return log_offer(publisher, aeron_cluster_client_sessionOpenEvent_encoded_length(&msg));
+    return log_offer(publisher, aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_sessionOpenEvent_encoded_length(&msg));
 }
 
 int64_t aeron_cluster_log_publisher_append_session_close(
@@ -107,7 +137,7 @@ int64_t aeron_cluster_log_publisher_append_session_close(
     aeron_cluster_client_sessionCloseEvent_set_closeReason(
         &msg, (enum aeron_cluster_client_closeReason)close_reason);
 
-    return log_offer(publisher, aeron_cluster_client_sessionCloseEvent_encoded_length(&msg));
+    return log_offer(publisher, aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_sessionCloseEvent_encoded_length(&msg));
 }
 
 int64_t aeron_cluster_log_publisher_append_session_message(
@@ -165,7 +195,7 @@ int64_t aeron_cluster_log_publisher_append_timer_event(
     aeron_cluster_client_timerEvent_set_correlationId(&msg, correlation_id);
     aeron_cluster_client_timerEvent_set_timestamp(&msg, timestamp);
 
-    return log_offer(publisher, aeron_cluster_client_timerEvent_encoded_length(&msg));
+    return log_offer(publisher, aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_timerEvent_encoded_length(&msg));
 }
 
 int64_t aeron_cluster_log_publisher_append_cluster_action(
@@ -190,7 +220,7 @@ int64_t aeron_cluster_log_publisher_append_cluster_action(
         &msg, (enum aeron_cluster_client_clusterAction)action);
     aeron_cluster_client_clusterActionRequest_set_flags(&msg, flags);
 
-    return log_offer(publisher, aeron_cluster_client_clusterActionRequest_encoded_length(&msg));
+    return log_offer(publisher, aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_clusterActionRequest_encoded_length(&msg));
 }
 
 int64_t aeron_cluster_log_publisher_append_new_leadership_term_event(
@@ -219,5 +249,5 @@ int64_t aeron_cluster_log_publisher_append_new_leadership_term_event(
     aeron_cluster_client_newLeadershipTermEvent_set_logSessionId(&msg, log_session_id);
     aeron_cluster_client_newLeadershipTermEvent_set_appVersion(&msg, app_version);
 
-    return log_offer(publisher, aeron_cluster_client_newLeadershipTermEvent_encoded_length(&msg));
+    return log_offer(publisher, aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_newLeadershipTermEvent_encoded_length(&msg));
 }

@@ -22,6 +22,8 @@
 #include "aeron_cluster_member.h"
 #include "aeron_alloc.h"
 #include "util/aeron_error.h"
+#include "uri/aeron_uri_string_builder.h"
+#include "uri/aeron_uri.h"
 
 /* -----------------------------------------------------------------------
  * Internal: deep-copy a string field
@@ -39,8 +41,10 @@ static int member_set_string(char **target, const char *src, size_t len)
 }
 
 /* -----------------------------------------------------------------------
- * Parse: "memberId,ep1:ep2:ep3:ep4:ep5"
+ * Parse: "memberId,ep0,ep1,ep2,ep3,ep4[,ep5[,ep6]]"   (Java / canonical format)
+ *    or: "memberId,ep0:ep1:ep2:ep3:ep4"               (old colon format)
  * ep indices: 0=ingress 1=consensus 2=log 3=catchup 4=archive
+ *             5=archiveResponse (optional) 6=egressResponse (optional)
  * ----------------------------------------------------------------------- */
 static int parse_single_member(aeron_cluster_member_t *m, const char *str, size_t len)
 {
@@ -49,6 +53,8 @@ static int parse_single_member(aeron_cluster_member_t *m, const char *str, size_
     m->leadership_term_id     = -1;
     m->candidate_term_id      = -1;
     m->time_of_last_append_position_ns = 0;
+    m->catchup_replay_session_id     = -1;
+    m->catchup_replay_correlation_id = -1;
 
     /* Copy to local buffer for parsing */
     char buf[4096];
@@ -68,40 +74,59 @@ static int parse_single_member(aeron_cluster_member_t *m, const char *str, size_
     m->id = (int32_t)atoi(p);
     p = comma + 1;
 
-    /* Remaining tokens are endpoints separated by ':' */
-    /* Note: endpoints themselves contain ':' for host:port, so split on the
-     * known number of ':' separators between endpoint groups. In the standard
-     * format, each endpoint is "host:port", so the format is:
-     * "host:port:host:port:host:port:host:port:host:port"
-     * which has 9 colons total for 5 host:port pairs.
-     * We split on every 2nd colon to get each endpoint pair.
-     */
-    char *endpoints[5] = {NULL, NULL, NULL, NULL, NULL};
-    int ep_idx = 0;
-    endpoints[ep_idx] = p;
+    /* Detect format: Java (comma-separated) vs old C (colon-separated).
+     * Java format has another comma in the endpoints section. */
+    char *endpoints[7] = {NULL, NULL, NULL, NULL, NULL, NULL, NULL};
+    int ep_count = 0;
 
-    /* Count colons to find boundaries between host:port groups */
-    int colon_count = 0;
-    for (char *c = p; *c != '\0' && ep_idx < 4; c++)
+    if (NULL != strchr(p, ','))
     {
-        if (':' == *c)
+        /* Java comma-separated format: "ep0,ep1,ep2,ep3,ep4[,ep5[,ep6]]" */
+        char *tok = p;
+        for (ep_count = 0; ep_count < 7 && tok != NULL; ep_count++)
         {
-            colon_count++;
-            if (0 == (colon_count % 2))  /* every 2nd colon is an endpoint boundary */
+            char *next = strchr(tok, ',');
+            if (NULL != next) { *next = '\0'; }
+            endpoints[ep_count] = tok;
+            tok = (NULL != next) ? next + 1 : NULL;
+        }
+    }
+    else
+    {
+        /* Old colon-separated format:
+         *   4 colons: "ep0:ep1:ep2:ep3:ep4"          (simple names)
+         *   9 colons: "h:p:h:p:h:p:h:p:h:p"          (host:port pairs)
+         */
+        int total_colons = 0;
+        for (const char *c = p; *c != '\0'; c++) { if (':' == *c) total_colons++; }
+        int step = (total_colons <= 4) ? 1 : 2;
+
+        endpoints[0] = p;
+        int colon_count = 0;
+        ep_count = 1;
+        for (char *c = p; *c != '\0' && ep_count < 5; c++)
+        {
+            if (':' == *c)
             {
-                *c = '\0';
-                ep_idx++;
-                endpoints[ep_idx] = c + 1;
+                colon_count++;
+                if (0 == (colon_count % step))
+                {
+                    *c = '\0';
+                    endpoints[ep_count++] = c + 1;
+                }
             }
         }
     }
 
-    char **targets[] = { &m->ingress_endpoint, &m->consensus_endpoint,
-                         &m->log_endpoint, &m->catchup_endpoint, &m->archive_endpoint };
-    for (int i = 0; i <= ep_idx && i < 5; i++)
+    char **targets[] = {
+        &m->ingress_endpoint, &m->consensus_endpoint,
+        &m->log_endpoint, &m->catchup_endpoint, &m->archive_endpoint,
+        &m->archive_response_endpoint, &m->egress_response_endpoint
+    };
+    for (int i = 0; i < ep_count && i < 7; i++)
     {
-        if (NULL != endpoints[i] && member_set_string(targets[i], endpoints[i],
-            strlen(endpoints[i])) < 0)
+        if (NULL != endpoints[i] && '\0' != endpoints[i][0] &&
+            member_set_string(targets[i], endpoints[i], strlen(endpoints[i])) < 0)
         {
             return -1;
         }
@@ -169,6 +194,8 @@ void aeron_cluster_members_free(aeron_cluster_member_t *members, int count)
         aeron_free(members[i].log_endpoint);
         aeron_free(members[i].catchup_endpoint);
         aeron_free(members[i].archive_endpoint);
+        aeron_free(members[i].archive_response_endpoint);
+        aeron_free(members[i].egress_response_endpoint);
     }
     aeron_free(members);
 }
@@ -348,4 +375,416 @@ bool aeron_cluster_member_has_quorum_at_position(
         }
     }
     return count >= aeron_cluster_member_quorum_threshold(member_count);
+}
+
+/* -----------------------------------------------------------------------
+ * Additional static utilities
+ * ----------------------------------------------------------------------- */
+
+int aeron_cluster_member_compare_log(
+    const aeron_cluster_member_t *lhs,
+    const aeron_cluster_member_t *rhs)
+{
+    return compare_log(lhs->leadership_term_id, lhs->log_position,
+                       rhs->leadership_term_id, rhs->log_position);
+}
+
+int aeron_cluster_member_compare_log_terms(
+    int64_t lhs_term_id, int64_t lhs_log_position,
+    int64_t rhs_term_id, int64_t rhs_log_position)
+{
+    return compare_log(lhs_term_id, lhs_log_position, rhs_term_id, rhs_log_position);
+}
+
+void aeron_cluster_members_reset(aeron_cluster_member_t *members, int count)
+{
+    for (int i = 0; i < count; i++)
+    {
+        members[i].vote                          = -1;
+        members[i].candidate_term_id             = -1;
+        members[i].is_ballot_sent                = false;
+        members[i].catchup_replay_session_id     = -1;
+        members[i].catchup_replay_correlation_id = -1;
+    }
+}
+
+void aeron_cluster_members_become_candidate(
+    aeron_cluster_member_t *members, int count,
+    int64_t candidate_term_id, int32_t candidate_member_id)
+{
+    for (int i = 0; i < count; i++)
+    {
+        if (members[i].id == candidate_member_id)
+        {
+            members[i].vote              = 1;        /* YES */
+            members[i].candidate_term_id = candidate_term_id;
+            members[i].is_ballot_sent    = true;
+        }
+        else
+        {
+            members[i].vote              = -1;       /* null / unknown */
+            members[i].candidate_term_id = -1;
+            members[i].is_ballot_sent    = false;
+        }
+    }
+}
+
+bool aeron_cluster_members_has_active_quorum(
+    const aeron_cluster_member_t *members,
+    int count,
+    int64_t now_ns,
+    int64_t timeout_ns)
+{
+    int threshold = aeron_cluster_member_quorum_threshold(count);
+    for (int i = 0; i < count; i++)
+    {
+        /* A member is "active" if it has sent an append-position within timeout */
+        if ((now_ns - members[i].time_of_last_append_position_ns) < timeout_ns)
+        {
+            if (--threshold <= 0) { return true; }
+        }
+    }
+    return false;
+}
+
+void aeron_cluster_members_set_is_leader(
+    aeron_cluster_member_t *members, int count, int32_t leader_id)
+{
+    for (int i = 0; i < count; i++)
+    {
+        members[i].is_leader = (members[i].id == leader_id);
+    }
+}
+
+bool aeron_cluster_member_are_same_endpoints(
+    const aeron_cluster_member_t *lhs,
+    const aeron_cluster_member_t *rhs)
+{
+    return (0 == strcmp(lhs->ingress_endpoint   ? lhs->ingress_endpoint   : "",
+                        rhs->ingress_endpoint   ? rhs->ingress_endpoint   : "")) &&
+           (0 == strcmp(lhs->consensus_endpoint ? lhs->consensus_endpoint : "",
+                        rhs->consensus_endpoint ? rhs->consensus_endpoint : "")) &&
+           (0 == strcmp(lhs->log_endpoint       ? lhs->log_endpoint       : "",
+                        rhs->log_endpoint       ? rhs->log_endpoint       : "")) &&
+           (0 == strcmp(lhs->catchup_endpoint   ? lhs->catchup_endpoint   : "",
+                        rhs->catchup_endpoint   ? rhs->catchup_endpoint   : "")) &&
+           (0 == strcmp(lhs->archive_endpoint   ? lhs->archive_endpoint   : "",
+                        rhs->archive_endpoint   ? rhs->archive_endpoint   : "")) &&
+           (0 == strcmp(lhs->archive_response_endpoint ? lhs->archive_response_endpoint : "",
+                        rhs->archive_response_endpoint ? rhs->archive_response_endpoint : "")) &&
+           (0 == strcmp(lhs->egress_response_endpoint  ? lhs->egress_response_endpoint  : "",
+                        rhs->egress_response_endpoint  ? rhs->egress_response_endpoint  : ""));
+}
+
+int aeron_cluster_members_encode_as_string(
+    const aeron_cluster_member_t *members, int count,
+    char *buf, size_t buf_len)
+{
+    size_t pos = 0;
+    for (int i = 0; i < count; i++)
+    {
+        const aeron_cluster_member_t *m = &members[i];
+        int n = snprintf(buf + pos, buf_len - pos, "%s%d,%s,%s,%s,%s,%s",
+            (i > 0) ? "|" : "",
+            m->id,
+            m->ingress_endpoint   ? m->ingress_endpoint   : "",
+            m->consensus_endpoint ? m->consensus_endpoint : "",
+            m->log_endpoint       ? m->log_endpoint       : "",
+            m->catchup_endpoint   ? m->catchup_endpoint   : "",
+            m->archive_endpoint   ? m->archive_endpoint   : "");
+        if (n < 0 || (size_t)n >= buf_len - pos) { return -1; }
+        pos += (size_t)n;
+
+        /* Append optional fields only if present */
+        if (NULL != m->archive_response_endpoint)
+        {
+            n = snprintf(buf + pos, buf_len - pos, ",%s", m->archive_response_endpoint);
+            if (n < 0 || (size_t)n >= buf_len - pos) { return -1; }
+            pos += (size_t)n;
+        }
+        if (NULL != m->egress_response_endpoint)
+        {
+            n = snprintf(buf + pos, buf_len - pos, ",%s", m->egress_response_endpoint);
+            if (n < 0 || (size_t)n >= buf_len - pos) { return -1; }
+            pos += (size_t)n;
+        }
+    }
+    return (int)pos;
+}
+
+int aeron_cluster_members_ingress_endpoints(
+    const aeron_cluster_member_t *members, int count,
+    char *buf, size_t buf_len)
+{
+    size_t pos = 0;
+    for (int i = 0; i < count; i++)
+    {
+        int n = snprintf(buf + pos, buf_len - pos, "%s%d=%s",
+            (i > 0) ? "," : "",
+            members[i].id,
+            members[i].ingress_endpoint ? members[i].ingress_endpoint : "");
+        if (n < 0 || (size_t)n >= buf_len - pos) { return -1; }
+        pos += (size_t)n;
+    }
+    return (int)pos;
+}
+
+void aeron_cluster_members_collect_ids(
+    const aeron_cluster_member_t *members, int count,
+    int32_t *out_ids)
+{
+    for (int i = 0; i < count; i++)
+    {
+        out_ids[i] = members[i].id;
+    }
+}
+
+int aeron_cluster_members_add_consensus_publications(
+    aeron_cluster_member_t *members, int count,
+    int32_t self_id,
+    aeron_t *aeron,
+    const char *channel_template,
+    int32_t stream_id)
+{
+    for (int i = 0; i < count; i++)
+    {
+        aeron_cluster_member_t *m = &members[i];
+        if (m->id == self_id || NULL == m->consensus_endpoint) { continue; }
+
+        /* Build channel by substituting the peer's consensus endpoint */
+        aeron_uri_string_builder_t builder;
+        if (aeron_uri_string_builder_init_on_string(&builder, channel_template) < 0)
+        {
+            AERON_APPEND_ERR("failed to parse channel template for member %d", m->id);
+            return -1;
+        }
+        if (aeron_uri_string_builder_put(&builder, AERON_UDP_CHANNEL_ENDPOINT_KEY,
+            m->consensus_endpoint) < 0)
+        {
+            aeron_uri_string_builder_close(&builder);
+            AERON_APPEND_ERR("failed to set endpoint for member %d", m->id);
+            return -1;
+        }
+        if (aeron_uri_string_builder_sprint(&builder, m->consensus_channel,
+            sizeof(m->consensus_channel)) < 0)
+        {
+            aeron_uri_string_builder_close(&builder);
+            AERON_APPEND_ERR("channel too long for member %d", m->id);
+            return -1;
+        }
+        aeron_uri_string_builder_close(&builder);
+
+        /* Spin-poll until the publication is connected */
+        aeron_async_add_exclusive_publication_t *async = NULL;
+        if (aeron_async_add_exclusive_publication(&async, aeron,
+            m->consensus_channel, stream_id) < 0)
+        {
+            AERON_APPEND_ERR("failed to start adding publication for member %d", m->id);
+            return -1;
+        }
+        int rc = 0;
+        do { rc = aeron_async_add_exclusive_publication_poll(&m->publication, async); } while (0 == rc);
+        if (rc < 0)
+        {
+            AERON_APPEND_ERR("failed to add publication for member %d", m->id);
+            return -1;
+        }
+    }
+    return 0;
+}
+
+void aeron_cluster_members_close_consensus_publications(
+    aeron_cluster_member_t *members, int count)
+{
+    for (int i = 0; i < count; i++)
+    {
+        if (NULL != members[i].publication)
+        {
+            aeron_exclusive_publication_close(members[i].publication, NULL, NULL);
+            members[i].publication = NULL;
+        }
+    }
+}
+
+aeron_cluster_member_t *aeron_cluster_members_determine_member(
+    aeron_cluster_member_t *members, int count,
+    int32_t self_id,
+    const char *endpoints_str)
+{
+    aeron_cluster_member_t *found = (self_id >= 0)
+        ? aeron_cluster_member_find_by_id(members, count, self_id)
+        : NULL;
+
+    if (NULL == members || 0 == count)
+    {
+        /* No cluster members configured — use endpoints_str to build a solo member */
+        if (NULL == endpoints_str || '\0' == *endpoints_str)
+        {
+            AERON_SET_ERR(EINVAL, "%s", "no cluster members and no endpoints_str provided");
+            return NULL;
+        }
+        /* Caller must manage this static — return first entry after re-parse */
+        AERON_SET_ERR(EINVAL, "%s",
+            "determineMember: no cluster members array; parse endpoints separately");
+        return NULL;
+    }
+
+    if (NULL == found)
+    {
+        AERON_SET_ERR(EINVAL, "memberId=%d not found in clusterMembers", self_id);
+        return NULL;
+    }
+
+    /* Optionally validate endpoints */
+    if (NULL != endpoints_str && '\0' != *endpoints_str)
+    {
+        aeron_cluster_member_t *tmp = NULL;
+        int tmp_count = 0;
+        char entry[2048];
+        /* Wrap as "id,endpoints" and parse */
+        snprintf(entry, sizeof(entry), "%d,%s", self_id, endpoints_str);
+        if (aeron_cluster_members_parse(entry, &tmp, &tmp_count) < 0 || 0 == tmp_count)
+        {
+            aeron_cluster_members_free(tmp, tmp_count);
+            AERON_APPEND_ERR("failed to parse endpoints_str for member %d", self_id);
+            return NULL;
+        }
+        bool same = aeron_cluster_member_are_same_endpoints(found, &tmp[0]);
+        aeron_cluster_members_free(tmp, tmp_count);
+        if (!same)
+        {
+            AERON_SET_ERR(EINVAL,
+                "clusterMembers and endpoints differ for member %d", self_id);
+            return NULL;
+        }
+    }
+
+    return found;
+}
+
+/* -----------------------------------------------------------------------
+ * parseEndpoints / validateMemberEndpoints / addConsensusPublication
+ * ----------------------------------------------------------------------- */
+
+int aeron_cluster_member_parse_endpoints(
+    aeron_cluster_member_t *member,
+    int32_t id,
+    const char *endpoints_str)
+{
+    /* Build "id,endpoints_str" and reuse parse_single_member. */
+    char buf[4096];
+    int n = snprintf(buf, sizeof(buf), "%d,%s", id, endpoints_str);
+    if (n < 0 || (size_t)n >= sizeof(buf))
+    {
+        AERON_SET_ERR(EINVAL, "endpoints string too long for member %d", id);
+        return -1;
+    }
+    return parse_single_member(member, buf, (size_t)n);
+}
+
+int aeron_cluster_members_validate_endpoints(
+    const aeron_cluster_member_t *member,
+    const char *endpoints_str)
+{
+    /* Parse a temporary member from endpoints_str and compare. */
+    aeron_cluster_member_t tmp;
+    if (aeron_cluster_member_parse_endpoints(&tmp, member->id, endpoints_str) < 0)
+    {
+        return -1;
+    }
+    bool same = aeron_cluster_member_are_same_endpoints(member, &tmp);
+    /* Free the temporary member's endpoint strings */
+    aeron_free(tmp.ingress_endpoint);
+    aeron_free(tmp.consensus_endpoint);
+    aeron_free(tmp.log_endpoint);
+    aeron_free(tmp.catchup_endpoint);
+    aeron_free(tmp.archive_endpoint);
+    aeron_free(tmp.archive_response_endpoint);
+    aeron_free(tmp.egress_response_endpoint);
+    if (!same)
+    {
+        AERON_SET_ERR(EINVAL,
+            "clusterMembers and memberEndpoints differ for member %d", member->id);
+        return -1;
+    }
+    return 0;
+}
+
+int aeron_cluster_member_try_add_publication(
+    aeron_cluster_member_t *member,
+    aeron_t *aeron,
+    int32_t stream_id)
+{
+    /* Non-blocking async add: spin until ready. Non-fatal on registration failure. */
+    aeron_async_add_exclusive_publication_t *async = NULL;
+    if (aeron_async_add_exclusive_publication(&async, aeron,
+        member->consensus_channel, stream_id) < 0)
+    {
+        /* Log warning but don't propagate — mirrors Java's tryAddPublication. */
+        AERON_APPEND_ERR("failed to start adding consensus publication for member %d", member->id);
+        aeron_err_clear();  /* non-fatal */
+        return 0;
+    }
+    int rc = 0;
+    do { rc = aeron_async_add_exclusive_publication_poll(&member->publication, async); } while (0 == rc);
+    if (rc < 0)
+    {
+        AERON_APPEND_ERR("failed to add consensus publication for member %d", member->id);
+        aeron_err_clear();  /* non-fatal */
+    }
+    return 0;
+}
+
+int aeron_cluster_member_add_consensus_publication(
+    aeron_cluster_member_t *other_member,
+    const aeron_cluster_member_t *this_member,
+    aeron_t *aeron,
+    const char *channel_template,
+    int32_t stream_id)
+{
+    /* Build consensus channel if not already set. */
+    if ('\0' == other_member->consensus_channel[0])
+    {
+        aeron_uri_string_builder_t builder;
+        if (aeron_uri_string_builder_init_on_string(&builder, channel_template) < 0)
+        {
+            AERON_APPEND_ERR("failed to parse channel template for member %d", other_member->id);
+            return -1;
+        }
+        /* Set remote endpoint to other_member's consensus endpoint */
+        if (aeron_uri_string_builder_put(&builder, AERON_UDP_CHANNEL_ENDPOINT_KEY,
+            other_member->consensus_endpoint) < 0)
+        {
+            aeron_uri_string_builder_close(&builder);
+            AERON_APPEND_ERR("failed to set endpoint for member %d", other_member->id);
+            return -1;
+        }
+        /* Set control endpoint to this_member's consensus endpoint (bind side) */
+        if (NULL != this_member && NULL != this_member->consensus_endpoint)
+        {
+            aeron_uri_string_builder_put(&builder, AERON_UDP_CHANNEL_CONTROL_KEY,
+                this_member->consensus_endpoint);
+        }
+        if (aeron_uri_string_builder_sprint(&builder, other_member->consensus_channel,
+            sizeof(other_member->consensus_channel)) < 0)
+        {
+            aeron_uri_string_builder_close(&builder);
+            AERON_APPEND_ERR("channel too long for member %d", other_member->id);
+            return -1;
+        }
+        aeron_uri_string_builder_close(&builder);
+    }
+    return aeron_cluster_member_try_add_publication(other_member, aeron, stream_id);
+}
+
+/* -----------------------------------------------------------------------
+ * Single-member publication close
+ * ----------------------------------------------------------------------- */
+void aeron_cluster_member_close_publication(aeron_cluster_member_t *member)
+{
+    if (NULL != member->publication)
+    {
+        aeron_exclusive_publication_close(member->publication, NULL, NULL);
+        member->publication = NULL;
+    }
 }

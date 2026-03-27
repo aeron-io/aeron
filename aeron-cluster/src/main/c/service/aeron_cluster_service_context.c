@@ -93,6 +93,8 @@ int aeron_cluster_service_context_init(aeron_cluster_service_context_t **ctx)
 
     _ctx->cluster_dir[0] = '\0';
     _ctx->app_version    = 0;
+    _ctx->cluster_id     = 0;
+    _ctx->archive        = NULL;
 
     _ctx->idle_strategy_func  = NULL;
     _ctx->idle_strategy_state = NULL;
@@ -100,6 +102,8 @@ int aeron_cluster_service_context_init(aeron_cluster_service_context_t **ctx)
 
     _ctx->error_handler         = NULL;
     _ctx->error_handler_clientd = NULL;
+    _ctx->mark_file_update_fn      = NULL;
+    _ctx->mark_file_update_clientd = NULL;
     _ctx->service = NULL;
 
     /* Apply env vars */
@@ -366,3 +370,15 @@ int aeron_cluster_service_context_set_error_handler(aeron_cluster_service_contex
 int aeron_cluster_service_context_set_service(aeron_cluster_service_context_t *ctx,
     aeron_clustered_service_t *service)
 { ctx->service = service; return 0; }
+
+int aeron_cluster_service_context_set_cluster_id(aeron_cluster_service_context_t *ctx, int32_t cluster_id)
+{ ctx->cluster_id = cluster_id; return 0; }
+
+int32_t aeron_cluster_service_context_get_cluster_id(aeron_cluster_service_context_t *ctx)
+{ return ctx->cluster_id; }
+
+int aeron_cluster_service_context_set_archive(aeron_cluster_service_context_t *ctx, aeron_archive_t *archive)
+{ ctx->archive = (struct aeron_archive_stct *)archive; return 0; }
+
+aeron_archive_t *aeron_cluster_service_context_get_archive(aeron_cluster_service_context_t *ctx)
+{ return ctx->archive; }

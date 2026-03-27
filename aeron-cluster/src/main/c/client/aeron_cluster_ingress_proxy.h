@@ -79,6 +79,17 @@ int64_t aeron_cluster_ingress_proxy_send_admin_request_snapshot(
     int64_t leadership_term_id,
     int64_t correlation_id);
 
+/**
+ * Send a generic admin request with an explicit request type.
+ * request_type is one of the aeron_cluster_client_adminRequestType_* enum values cast to int32_t.
+ */
+int64_t aeron_cluster_ingress_proxy_send_admin_request(
+    aeron_cluster_ingress_proxy_t *proxy,
+    int64_t cluster_session_id,
+    int64_t leadership_term_id,
+    int64_t correlation_id,
+    int32_t request_type);
+
 
 #ifdef __cplusplus
 }

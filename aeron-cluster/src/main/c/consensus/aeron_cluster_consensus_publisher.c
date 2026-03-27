@@ -28,13 +28,18 @@
 #include "aeron_cluster_client/stopCatchup.h"
 #include "aeron_cluster_client/terminationPosition.h"
 #include "aeron_cluster_client/terminationAck.h"
+#include "aeron_cluster_client/backupQuery.h"
+#include "aeron_cluster_client/backupResponse.h"
+#include "aeron_cluster_client/heartbeatResponse.h"
+#include "aeron_cluster_client/challengeResponse.h"
 
 static uint8_t g_buf[AERON_CLUSTER_CONSENSUS_PUBLISHER_BUFFER_LENGTH];
 
 static bool pub_offer(aeron_exclusive_publication_t *pub,
-                      size_t length)
+                      size_t body_length)
 {
-    int64_t result = aeron_exclusive_publication_offer(pub, g_buf, length, NULL, NULL);
+    const size_t total = aeron_cluster_client_messageHeader_encoded_length() + body_length;
+    int64_t result = aeron_exclusive_publication_offer(pub, g_buf, total, NULL, NULL);
     return result > 0;
 }
 
@@ -312,4 +317,127 @@ void aeron_cluster_consensus_publisher_broadcast_commit_position(
                 leadership_term_id, log_position, leader_member_id);
         }
     }
+}
+
+bool aeron_cluster_consensus_publisher_backup_query(
+    aeron_exclusive_publication_t *pub,
+    int64_t correlation_id,
+    int32_t response_stream_id,
+    int32_t version,
+    int64_t log_position,
+    const char *response_channel,
+    const uint8_t *encoded_credentials,
+    size_t encoded_credentials_length)
+{
+    if (NULL == pub) { return false; }
+
+    struct aeron_cluster_client_messageHeader hdr;
+    struct aeron_cluster_client_backupQuery msg;
+    if (NULL == aeron_cluster_client_backupQuery_wrap_and_apply_header(
+        &msg, (char *)g_buf, 0, sizeof(g_buf), &hdr)) { return false; }
+
+    aeron_cluster_client_backupQuery_set_correlationId(&msg, correlation_id);
+    aeron_cluster_client_backupQuery_set_responseStreamId(&msg, response_stream_id);
+    aeron_cluster_client_backupQuery_set_version(&msg, version);
+    aeron_cluster_client_backupQuery_set_logPosition(&msg, log_position);
+
+    const size_t chan_len = response_channel ? strlen(response_channel) : 0;
+    aeron_cluster_client_backupQuery_put_responseChannel(
+        &msg, response_channel ? response_channel : "", (uint32_t)chan_len);
+    aeron_cluster_client_backupQuery_put_encodedCredentials(
+        &msg, (const char *)encoded_credentials, (uint32_t)encoded_credentials_length);
+
+    return pub_offer(pub, aeron_cluster_client_backupQuery_encoded_length(&msg));
+}
+
+bool aeron_cluster_consensus_publisher_backup_response(
+    aeron_exclusive_publication_t *pub,
+    int64_t correlation_id,
+    int64_t log_recording_id,
+    int64_t log_leadership_term_id,
+    int64_t log_term_base_log_position,
+    int32_t commit_position_counter_id,
+    int32_t leader_member_id,
+    int32_t member_id,
+    const aeron_cluster_backup_response_snapshot_t *snapshots,
+    int snapshot_count,
+    const char *cluster_members)
+{
+    if (NULL == pub) { return false; }
+
+    struct aeron_cluster_client_messageHeader hdr;
+    struct aeron_cluster_client_backupResponse msg;
+    if (NULL == aeron_cluster_client_backupResponse_wrap_and_apply_header(
+        &msg, (char *)g_buf, 0, sizeof(g_buf), &hdr)) { return false; }
+
+    aeron_cluster_client_backupResponse_set_correlationId(&msg, correlation_id);
+    aeron_cluster_client_backupResponse_set_logRecordingId(&msg, log_recording_id);
+    aeron_cluster_client_backupResponse_set_logLeadershipTermId(&msg, log_leadership_term_id);
+    aeron_cluster_client_backupResponse_set_logTermBaseLogPosition(&msg, log_term_base_log_position);
+    aeron_cluster_client_backupResponse_set_lastLeadershipTermId(&msg, log_leadership_term_id);
+    aeron_cluster_client_backupResponse_set_lastTermBaseLogPosition(&msg, log_term_base_log_position);
+    aeron_cluster_client_backupResponse_set_commitPositionCounterId(&msg, commit_position_counter_id);
+    aeron_cluster_client_backupResponse_set_leaderMemberId(&msg, leader_member_id);
+    aeron_cluster_client_backupResponse_set_memberId(&msg, member_id);
+
+    struct aeron_cluster_client_backupResponse_snapshots snaps;
+    aeron_cluster_client_backupResponse_snapshots_set_count(&msg, &snaps, (uint16_t)snapshot_count);
+    for (int i = 0; i < snapshot_count; i++)
+    {
+        aeron_cluster_client_backupResponse_snapshots_next(&snaps);
+        aeron_cluster_client_backupResponse_snapshots_set_recordingId(&snaps, snapshots[i].recording_id);
+        aeron_cluster_client_backupResponse_snapshots_set_leadershipTermId(&snaps, snapshots[i].leadership_term_id);
+        aeron_cluster_client_backupResponse_snapshots_set_termBaseLogPosition(&snaps, snapshots[i].term_base_log_position);
+        aeron_cluster_client_backupResponse_snapshots_set_logPosition(&snaps, snapshots[i].log_position);
+        aeron_cluster_client_backupResponse_snapshots_set_timestamp(&snaps, snapshots[i].timestamp);
+        aeron_cluster_client_backupResponse_snapshots_set_serviceId(&snaps, snapshots[i].service_id);
+    }
+
+    const size_t members_len = cluster_members ? strlen(cluster_members) : 0;
+    aeron_cluster_client_backupResponse_put_clusterMembers(
+        &msg, cluster_members ? cluster_members : "", (uint32_t)members_len);
+
+    return pub_offer(pub, aeron_cluster_client_backupResponse_encoded_length(&msg));
+}
+
+bool aeron_cluster_consensus_publisher_heartbeat_response(
+    aeron_exclusive_publication_t *session_pub,
+    int64_t correlation_id)
+{
+    struct aeron_cluster_client_messageHeader hdr;
+    struct aeron_cluster_client_heartbeatResponse msg;
+    if (NULL == aeron_cluster_client_heartbeatResponse_wrap_and_apply_header(
+        &msg, (char *)g_buf, 0, sizeof(g_buf), &hdr))
+    {
+        return false;
+    }
+
+    aeron_cluster_client_heartbeatResponse_set_correlationId(&msg, correlation_id);
+
+    const size_t len = aeron_cluster_client_messageHeader_encoded_length() +
+                       aeron_cluster_client_heartbeatResponse_encoded_length(&msg);
+
+    return aeron_exclusive_publication_offer(session_pub, g_buf, len, NULL, NULL) > 0;
+}
+
+bool aeron_cluster_consensus_publisher_challenge_response(
+    aeron_exclusive_publication_t *pub,
+    int64_t correlation_id,
+    int64_t cluster_session_id,
+    const uint8_t *encoded_credentials,
+    size_t encoded_credentials_length)
+{
+    if (NULL == pub) { return false; }
+
+    struct aeron_cluster_client_messageHeader hdr;
+    struct aeron_cluster_client_challengeResponse msg;
+    if (NULL == aeron_cluster_client_challengeResponse_wrap_and_apply_header(
+        &msg, (char *)g_buf, 0, sizeof(g_buf), &hdr)) { return false; }
+
+    aeron_cluster_client_challengeResponse_set_correlationId(&msg, correlation_id);
+    aeron_cluster_client_challengeResponse_set_clusterSessionId(&msg, cluster_session_id);
+    aeron_cluster_client_challengeResponse_put_encodedCredentials(
+        &msg, (const char *)encoded_credentials, (uint32_t)encoded_credentials_length);
+
+    return pub_offer(pub, aeron_cluster_client_challengeResponse_encoded_length(&msg));
 }

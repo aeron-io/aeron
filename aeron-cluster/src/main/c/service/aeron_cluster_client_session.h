@@ -59,6 +59,9 @@ int  aeron_cluster_client_session_close_and_free(aeron_cluster_client_session_t 
 /* Lazily open the response publication if not already open */
 int  aeron_cluster_client_session_connect(aeron_cluster_client_session_t *session);
 
+/* Close the response publication without freeing the session (follower role) */
+void aeron_cluster_client_session_disconnect(aeron_cluster_client_session_t *session);
+
 int64_t aeron_cluster_client_session_id(aeron_cluster_client_session_t *session);
 int32_t aeron_cluster_client_session_response_stream_id(aeron_cluster_client_session_t *session);
 const char *aeron_cluster_client_session_response_channel(aeron_cluster_client_session_t *session);

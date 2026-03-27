@@ -41,6 +41,7 @@ typedef struct aeron_cluster_egress_poller_stct
     int64_t  correlation_id;
     int32_t  leader_member_id;
     int32_t  event_code;       /* aeron_cluster_client_eventCode enum as int */
+    int64_t  leader_heartbeat_timeout_ns;  /* from SESSION_EVENT, used for reconnect timeout */
 
     char    *detail;           /* heap buffer, grown as needed */
     uint32_t detail_malloced_len;

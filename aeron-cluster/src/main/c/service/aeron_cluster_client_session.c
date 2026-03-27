@@ -122,6 +122,15 @@ int aeron_cluster_client_session_connect(aeron_cluster_client_session_t *session
     return 0;
 }
 
+void aeron_cluster_client_session_disconnect(aeron_cluster_client_session_t *session)
+{
+    if (NULL != session->response_publication)
+    {
+        aeron_publication_close(session->response_publication, NULL, NULL);
+        session->response_publication = NULL;
+    }
+}
+
 int aeron_cluster_client_session_close_and_free(aeron_cluster_client_session_t *session)
 {
     if (NULL != session)

@@ -25,6 +25,9 @@ set(SOURCE
     aeron_cluster_service_snapshot_taker.c
     aeron_cluster_service_snapshot_loader.c
     aeron_clustered_service_agent.c
+    aeron_cluster_recovery_state.c
+    aeron_cluster_node_state_file.c
+    aeron_cluster_service_container.c
 )
 
 set(HEADERS
@@ -37,35 +40,42 @@ set(HEADERS
     aeron_cluster_service_snapshot_taker.h
     aeron_cluster_service_snapshot_loader.h
     aeron_clustered_service_agent.h
+    aeron_cluster_recovery_state.h
+    aeron_cluster_node_state_file.h
+    aeron_cluster_service_container.h
 )
 
 add_library(aeron_cluster_c_service SHARED ${SOURCE} ${HEADERS})
 add_library(aeron::aeron_cluster_c_service ALIAS aeron_cluster_c_service)
 
 # Service layer depends on the codec target (same codecs as client)
-add_dependencies(aeron_cluster_c_service cluster_c_codecs)
+add_dependencies(aeron_cluster_c_service cluster_c_codecs aeron_archive_c_client)
 
 target_include_directories(aeron_cluster_c_service
     PUBLIC  "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
             "$<INSTALL_INTERFACE:include/aeron>"
-    PRIVATE ${CLUSTER_C_CODEC_TARGET_DIR})
+    PRIVATE ${CLUSTER_C_CODEC_TARGET_DIR}
+    PRIVATE "${AERON_C_ARCHIVE_SOURCE_PATH}/client")
 
 target_link_libraries(aeron_cluster_c_service
     aeron
+    aeron_archive_c_client
     ${CMAKE_THREAD_LIBS_INIT})
 
 add_library(aeron_cluster_c_service_static STATIC ${SOURCE} ${HEADERS})
 add_library(aeron::aeron_cluster_c_service_static ALIAS aeron_cluster_c_service_static)
 
-add_dependencies(aeron_cluster_c_service_static cluster_c_codecs)
+add_dependencies(aeron_cluster_c_service_static cluster_c_codecs aeron_archive_c_client_static)
 
 target_include_directories(aeron_cluster_c_service_static
     PUBLIC  "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
             "$<INSTALL_INTERFACE:include/aeron>"
-    PRIVATE ${CLUSTER_C_CODEC_TARGET_DIR})
+    PRIVATE ${CLUSTER_C_CODEC_TARGET_DIR}
+    PRIVATE "${AERON_C_ARCHIVE_SOURCE_PATH}/client")
 
 target_link_libraries(aeron_cluster_c_service_static
     aeron_static
+    aeron_archive_c_client_static
     ${CMAKE_THREAD_LIBS_INIT})
 
 if (AERON_INSTALL_TARGETS)

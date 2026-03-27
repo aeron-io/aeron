@@ -251,3 +251,36 @@ int64_t aeron_cluster_ingress_proxy_send_admin_request_snapshot(
         proxy->buffer,
         aeron_cluster_client_adminRequest_encoded_length(&msg));
 }
+
+int64_t aeron_cluster_ingress_proxy_send_admin_request(
+    aeron_cluster_ingress_proxy_t *proxy,
+    int64_t cluster_session_id,
+    int64_t leadership_term_id,
+    int64_t correlation_id,
+    int32_t request_type)
+{
+    struct aeron_cluster_client_messageHeader hdr;
+    struct aeron_cluster_client_adminRequest msg;
+
+    if (NULL == aeron_cluster_client_adminRequest_wrap_and_apply_header(
+        &msg,
+        (char *)proxy->buffer,
+        0,
+        sizeof(proxy->buffer),
+        &hdr))
+    {
+        return AERON_PUBLICATION_ERROR;
+    }
+
+    aeron_cluster_client_adminRequest_set_leadershipTermId(&msg, leadership_term_id);
+    aeron_cluster_client_adminRequest_set_clusterSessionId(&msg, cluster_session_id);
+    aeron_cluster_client_adminRequest_set_correlationId(&msg, correlation_id);
+    aeron_cluster_client_adminRequest_set_requestType(
+        &msg, (enum aeron_cluster_client_adminRequestType)request_type);
+    aeron_cluster_client_adminRequest_put_payload(&msg, NULL, 0);
+
+    return ingress_proxy_offer(
+        proxy,
+        proxy->buffer,
+        aeron_cluster_client_adminRequest_encoded_length(&msg));
+}

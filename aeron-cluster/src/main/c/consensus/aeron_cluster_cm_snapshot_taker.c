@@ -24,6 +24,7 @@
 #include "aeron_cluster_client/clusterSession.h"
 #include "aeron_cluster_client/timer.h"
 #include "aeron_cluster_client/consensusModule.h"
+#include "aeron_cluster_client/pendingMessageTracker.h"
 
 #define SNAP_BUF_LEN (64 * 1024)
 static uint8_t g_snap_buf[SNAP_BUF_LEN];
@@ -127,7 +128,11 @@ int aeron_cluster_cm_snapshot_taker_snapshot_timer(
 }
 
 int aeron_cluster_cm_snapshot_taker_snapshot_cm_state(
-    aeron_exclusive_publication_t *pub, int64_t next_session_id)
+    aeron_exclusive_publication_t *pub,
+    int64_t next_session_id,
+    int64_t next_service_session_id,
+    int64_t log_service_session_id,
+    int32_t pending_message_capacity)
 {
     struct aeron_cluster_client_messageHeader hdr;
     struct aeron_cluster_client_consensusModule msg;
@@ -139,6 +144,33 @@ int aeron_cluster_cm_snapshot_taker_snapshot_cm_state(
     }
 
     aeron_cluster_client_consensusModule_set_nextSessionId(&msg, next_session_id);
+    aeron_cluster_client_consensusModule_set_nextServiceSessionId(&msg, next_service_session_id);
+    aeron_cluster_client_consensusModule_set_logServiceSessionId(&msg, log_service_session_id);
+    aeron_cluster_client_consensusModule_set_pendingMessageCapacity(&msg, pending_message_capacity);
 
     return snap_offer(pub, aeron_cluster_client_consensusModule_encoded_length(&msg));
+}
+
+int aeron_cluster_cm_snapshot_taker_snapshot_pending_tracker(
+    aeron_exclusive_publication_t *pub,
+    int64_t next_service_session_id,
+    int64_t log_service_session_id,
+    int32_t pending_message_capacity,
+    int32_t service_id)
+{
+    struct aeron_cluster_client_messageHeader hdr;
+    struct aeron_cluster_client_pendingMessageTracker msg;
+    if (NULL == aeron_cluster_client_pendingMessageTracker_wrap_and_apply_header(
+        &msg, (char *)g_snap_buf, 0, SNAP_BUF_LEN, &hdr))
+    {
+        AERON_SET_ERR(-1, "%s", "failed to wrap pendingMessageTracker snapshot");
+        return -1;
+    }
+
+    aeron_cluster_client_pendingMessageTracker_set_nextServiceSessionId(&msg, next_service_session_id);
+    aeron_cluster_client_pendingMessageTracker_set_logServiceSessionId(&msg, log_service_session_id);
+    aeron_cluster_client_pendingMessageTracker_set_pendingMessageCapacity(&msg, pending_message_capacity);
+    aeron_cluster_client_pendingMessageTracker_set_serviceId(&msg, service_id);
+
+    return snap_offer(pub, aeron_cluster_client_pendingMessageTracker_encoded_length(&msg));
 }

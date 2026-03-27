@@ -38,6 +38,13 @@ extern "C"
 /* Session-array growth constants */
 #define AERON_CLUSTER_SESSIONS_INITIAL_CAPACITY 8
 
+/* Lifecycle callback state — mirrors Java ClusteredServiceAgent.LIFECYCLE_CALLBACK_* */
+#define AERON_LIFECYCLE_CALLBACK_NONE              0
+#define AERON_LIFECYCLE_CALLBACK_ON_START           1
+#define AERON_LIFECYCLE_CALLBACK_ON_TERMINATE       2
+#define AERON_LIFECYCLE_CALLBACK_ON_ROLE_CHANGE     3
+#define AERON_LIFECYCLE_CALLBACK_DO_BACKGROUND_WORK 4
+
 struct aeron_clustered_service_agent_stct
 {
     aeron_cluster_service_context_t        *ctx;
@@ -73,6 +80,18 @@ struct aeron_clustered_service_agent_stct
     /* Snapshot state (transient during on_service_action) */
     int64_t  snapshot_log_position;
     int64_t  snapshot_leadership_term_id;
+
+    /* Mark file activity update deadline (ns) */
+    int64_t  mark_file_update_deadline_ns;
+
+    /* Lifecycle callback guard — mirrors Java ClusteredServiceAgent.activeLifecycleCallback */
+    int32_t  active_lifecycle_callback;
+
+    /* Deferred ACK position — mirrors Java requestedAckPosition */
+    int64_t  requested_ack_position;
+
+    /* Snapshot duration tracking — mirrors Java SnapshotDurationTracker */
+    int64_t  max_snapshot_duration_ns;
 };
 
 typedef struct aeron_clustered_service_agent_stct aeron_clustered_service_agent_t;
@@ -114,9 +133,59 @@ bool    aeron_cluster_schedule_timer(aeron_cluster_t *cluster,
 bool    aeron_cluster_cancel_timer(aeron_cluster_t *cluster,
             int64_t correlation_id);
 
-int64_t aeron_cluster_offer(aeron_cluster_t *cluster,
+int64_t aeron_cluster_service_offer(aeron_cluster_t *cluster,
             int64_t cluster_session_id,
             const uint8_t *buffer, size_t length);
+
+/**
+ * Vectored offer — multiple buffers sent as a single message via the client
+ * session's response publication.  Mirrors Java ClientSession.offer(DirectBufferVector[]).
+ * A session message header is prepended automatically.
+ * Returns offer position (> 0), or AERON_PUBLICATION_* error codes.
+ */
+int64_t aeron_cluster_service_offerv(
+    aeron_clustered_service_agent_t *agent,
+    int64_t cluster_session_id,
+    const aeron_iovec_t *iov,
+    size_t iovcnt);
+
+/**
+ * Try to claim a buffer for zero-copy writes on the client session's response
+ * publication.  Mirrors Java ClientSession.tryClaim().
+ * Returns offer position (> 0), or AERON_PUBLICATION_* error codes.
+ */
+int64_t aeron_cluster_service_try_claim(
+    aeron_clustered_service_agent_t *agent,
+    int64_t cluster_session_id,
+    size_t length,
+    aeron_buffer_claim_t *buffer_claim);
+
+/**
+ * Get all client sessions for iteration.
+ * On success sets *sessions_out to the internal array and *count_out to the
+ * number of sessions.  The caller must NOT free the returned array.
+ * Returns 0 on success, -1 on error (NULL agent).
+ */
+int aeron_cluster_client_sessions(
+    aeron_clustered_service_agent_t *agent,
+    aeron_cluster_client_session_t ***sessions_out,
+    size_t *count_out);
+
+/**
+ * Get the string name of the cluster role (LEADER, FOLLOWER, CANDIDATE).
+ */
+const char *aeron_cluster_role_name(aeron_clustered_service_agent_t *agent);
+
+/**
+ * Get the underlying Aeron client instance.
+ */
+aeron_t *aeron_cluster_aeron(aeron_clustered_service_agent_t *agent);
+
+/**
+ * Idle the agent using the configured idle strategy.
+ * work_count > 0 resets the strategy; 0 invokes idle/pause.
+ */
+void aeron_cluster_idle(aeron_clustered_service_agent_t *agent, int work_count);
 
 /* -----------------------------------------------------------------------
  * Internal callbacks from ServiceAdapter and BoundedLogAdapter

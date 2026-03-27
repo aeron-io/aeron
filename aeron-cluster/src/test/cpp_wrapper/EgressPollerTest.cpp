@@ -28,6 +28,7 @@
 
 #include "client/aeron_cluster_egress_poller.h"
 #include "client/aeron_cluster_configuration.h"
+#include "client/aeron_cluster_client.h"
 #include "client/aeron_cluster_context.h"
 
 /* Generated SBE encoders */
@@ -79,7 +80,7 @@ TEST_F(EgressPollerFixture, shouldIgnoreUnknownMessageSchema)
     /* Write a valid-looking message header with wrong schemaId (use 0) */
     struct aeron_cluster_client_messageHeader hdr;
     aeron_cluster_client_messageHeader_wrap(
-        &hdr, (char *)m_buf, 0,
+        &hdr, reinterpret_cast<char *>(m_buf), 0,
         aeron_cluster_client_messageHeader_sbe_schema_version(), BUF_SIZE);
     /* Manually set wrong schema id via the raw bytes */
     uint16_t wrong_schema = 17;
@@ -101,7 +102,7 @@ TEST_F(EgressPollerFixture, shouldHandleSessionMessage)
     struct aeron_cluster_client_messageHeader msg_hdr;
     struct aeron_cluster_client_sessionMessageHeader msg;
     aeron_cluster_client_sessionMessageHeader_wrap_and_apply_header(
-        &msg, (char *)m_buf, 0, BUF_SIZE, &msg_hdr);
+        &msg, reinterpret_cast<char *>(m_buf), 0, BUF_SIZE, &msg_hdr);
     aeron_cluster_client_sessionMessageHeader_set_clusterSessionId(&msg, session_id);
     aeron_cluster_client_sessionMessageHeader_set_leadershipTermId(&msg, leadership_term_id);
     aeron_cluster_client_sessionMessageHeader_set_timestamp(&msg, timestamp);
@@ -130,16 +131,18 @@ TEST_F(EgressPollerFixture, shouldHandleSessionEvent)
     struct aeron_cluster_client_messageHeader msg_hdr;
     struct aeron_cluster_client_sessionEvent msg;
     aeron_cluster_client_sessionEvent_wrap_and_apply_header(
-        &msg, (char *)m_buf, 0, BUF_SIZE, &msg_hdr);
+        &msg, reinterpret_cast<char *>(m_buf), 0, BUF_SIZE, &msg_hdr);
     aeron_cluster_client_sessionEvent_set_clusterSessionId(&msg, session_id);
     aeron_cluster_client_sessionEvent_set_correlationId(&msg, correlation_id);
     aeron_cluster_client_sessionEvent_set_leadershipTermId(&msg, leadership_term_id);
     aeron_cluster_client_sessionEvent_set_leaderMemberId(&msg, leader_member_id);
     aeron_cluster_client_sessionEvent_set_code(&msg, aeron_cluster_client_eventCode_REDIRECT);
     const char *detail = "redirect info";
-    aeron_cluster_client_sessionEvent_put_detail(&msg, detail, (uint32_t)strlen(detail));
+    aeron_cluster_client_sessionEvent_put_detail(&msg, detail, static_cast<uint32_t>(strlen(detail)));
 
-    auto action = dispatch(aeron_cluster_client_sessionEvent_encoded_length(&msg));
+    auto action = dispatch(
+        aeron_cluster_client_messageHeader_encoded_length() +
+        aeron_cluster_client_sessionEvent_encoded_length(&msg));
 
     EXPECT_EQ(AERON_ACTION_BREAK, action);
     EXPECT_TRUE(m_poller->is_poll_complete);
@@ -163,14 +166,16 @@ TEST_F(EgressPollerFixture, shouldHandleNewLeaderEvent)
     struct aeron_cluster_client_messageHeader msg_hdr;
     struct aeron_cluster_client_newLeaderEvent msg;
     aeron_cluster_client_newLeaderEvent_wrap_and_apply_header(
-        &msg, (char *)m_buf, 0, BUF_SIZE, &msg_hdr);
+        &msg, reinterpret_cast<char *>(m_buf), 0, BUF_SIZE, &msg_hdr);
     aeron_cluster_client_newLeaderEvent_set_clusterSessionId(&msg, session_id);
     aeron_cluster_client_newLeaderEvent_set_leadershipTermId(&msg, leadership_term_id);
     aeron_cluster_client_newLeaderEvent_set_leaderMemberId(&msg, leader_member_id);
     aeron_cluster_client_newLeaderEvent_put_ingressEndpoints(
-        &msg, endpoints, (uint32_t)strlen(endpoints));
+        &msg, endpoints, static_cast<uint32_t>(strlen(endpoints)));
 
-    auto action = dispatch(aeron_cluster_client_newLeaderEvent_encoded_length(&msg));
+    auto action = dispatch(
+        aeron_cluster_client_messageHeader_encoded_length() +
+        aeron_cluster_client_newLeaderEvent_encoded_length(&msg));
 
     EXPECT_EQ(AERON_ACTION_BREAK, action);
     EXPECT_TRUE(m_poller->is_poll_complete);
@@ -191,13 +196,15 @@ TEST_F(EgressPollerFixture, shouldHandleChallenge)
     struct aeron_cluster_client_messageHeader msg_hdr;
     struct aeron_cluster_client_challenge msg;
     aeron_cluster_client_challenge_wrap_and_apply_header(
-        &msg, (char *)m_buf, 0, BUF_SIZE, &msg_hdr);
+        &msg, reinterpret_cast<char *>(m_buf), 0, BUF_SIZE, &msg_hdr);
     aeron_cluster_client_challenge_set_clusterSessionId(&msg, session_id);
     aeron_cluster_client_challenge_set_correlationId(&msg, correlation_id);
     aeron_cluster_client_challenge_put_encodedChallenge(
-        &msg, (const char *)chal, sizeof(chal));
+        &msg, reinterpret_cast<const char *>(chal), sizeof(chal));
 
-    auto action = dispatch(aeron_cluster_client_challenge_encoded_length(&msg));
+    auto action = dispatch(
+        aeron_cluster_client_messageHeader_encoded_length() +
+        aeron_cluster_client_challenge_encoded_length(&msg));
 
     EXPECT_EQ(AERON_ACTION_BREAK, action);
     EXPECT_TRUE(m_poller->is_poll_complete);
@@ -218,16 +225,18 @@ TEST_F(EgressPollerFixture, shouldHandleAdminResponse)
     struct aeron_cluster_client_messageHeader hdr;
     struct aeron_cluster_client_adminResponse msg;
     aeron_cluster_client_adminResponse_wrap_and_apply_header(
-        &msg, (char *)m_buf, 0, BUF_SIZE, &hdr);
+        &msg, reinterpret_cast<char *>(m_buf), 0, BUF_SIZE, &hdr);
     aeron_cluster_client_adminResponse_set_clusterSessionId(&msg, session_id);
     aeron_cluster_client_adminResponse_set_correlationId(&msg, correl_id);
     aeron_cluster_client_adminResponse_set_requestType(
         &msg, aeron_cluster_client_adminRequestType_SNAPSHOT);
     aeron_cluster_client_adminResponse_set_responseCode(
         &msg, aeron_cluster_client_adminResponseCode_ERROR);
-    aeron_cluster_client_adminResponse_put_message(&msg, msg_text, (uint32_t)strlen(msg_text));
+    aeron_cluster_client_adminResponse_put_message(&msg, msg_text, static_cast<uint32_t>(strlen(msg_text)));
 
-    auto action = dispatch(aeron_cluster_client_adminResponse_encoded_length(&msg));
+    auto action = dispatch(
+        aeron_cluster_client_messageHeader_encoded_length() +
+        aeron_cluster_client_adminResponse_encoded_length(&msg));
 
     EXPECT_EQ(AERON_ACTION_BREAK, action);
     EXPECT_TRUE(m_poller->is_poll_complete);
@@ -244,7 +253,7 @@ TEST_F(EgressPollerFixture, shouldAbortIfAlreadyPollComplete)
     struct aeron_cluster_client_messageHeader msg_hdr;
     struct aeron_cluster_client_sessionMessageHeader msg;
     aeron_cluster_client_sessionMessageHeader_wrap_and_apply_header(
-        &msg, (char *)m_buf, 0, BUF_SIZE, &msg_hdr);
+        &msg, reinterpret_cast<char *>(m_buf), 0, BUF_SIZE, &msg_hdr);
     aeron_cluster_client_sessionMessageHeader_set_clusterSessionId(&msg, 1LL);
     aeron_cluster_client_sessionMessageHeader_set_leadershipTermId(&msg, 1LL);
     aeron_cluster_client_sessionMessageHeader_set_timestamp(&msg, 0LL);
@@ -394,12 +403,14 @@ TEST_F(EgressAdapterTest, onFragmentShouldInvokeOnMessageCallbackIfSessionIdMatc
     struct aeron_cluster_client_messageHeader msg_hdr;
     struct aeron_cluster_client_sessionMessageHeader msg;
     aeron_cluster_client_sessionMessageHeader_wrap_and_apply_header(
-        &msg, (char *)m_buf, 0, BUF_SIZE, &msg_hdr);
+        &msg, reinterpret_cast<char *>(m_buf), 0, BUF_SIZE, &msg_hdr);
     aeron_cluster_client_sessionMessageHeader_set_clusterSessionId(&msg, session_id);
     aeron_cluster_client_sessionMessageHeader_set_leadershipTermId(&msg, leadership_term_id);
     aeron_cluster_client_sessionMessageHeader_set_timestamp(&msg, timestamp);
 
-    dispatch(AERON_CLUSTER_SESSION_HEADER_LENGTH);
+    /* EgressAdapter dispatches on_message only when payload is non-empty (length > header) */
+    m_buf[AERON_CLUSTER_SESSION_HEADER_LENGTH] = 0x42;  /* one dummy payload byte */
+    dispatch(AERON_CLUSTER_SESSION_HEADER_LENGTH + 1);
 
     EXPECT_EQ(1, m_cb.message_count);
     EXPECT_EQ(session_id, m_cb.last_session_id);
@@ -419,15 +430,17 @@ TEST_F(EgressAdapterTest, onFragmentShouldInvokeOnSessionEventCallbackIfSessionI
     struct aeron_cluster_client_messageHeader hdr;
     struct aeron_cluster_client_sessionEvent msg;
     aeron_cluster_client_sessionEvent_wrap_and_apply_header(
-        &msg, (char *)m_buf, 0, BUF_SIZE, &hdr);
+        &msg, reinterpret_cast<char *>(m_buf), 0, BUF_SIZE, &hdr);
     aeron_cluster_client_sessionEvent_set_clusterSessionId(&msg, session_id);
     aeron_cluster_client_sessionEvent_set_correlationId(&msg, correlation_id);
     aeron_cluster_client_sessionEvent_set_leadershipTermId(&msg, leadership_term_id);
     aeron_cluster_client_sessionEvent_set_leaderMemberId(&msg, leader_member_id);
     aeron_cluster_client_sessionEvent_set_code(&msg, aeron_cluster_client_eventCode_REDIRECT);
-    aeron_cluster_client_sessionEvent_put_detail(&msg, event_detail, (uint32_t)strlen(event_detail));
+    aeron_cluster_client_sessionEvent_put_detail(&msg, event_detail, static_cast<uint32_t>(strlen(event_detail)));
 
-    dispatch(aeron_cluster_client_sessionEvent_encoded_length(&msg));
+    dispatch(
+        aeron_cluster_client_messageHeader_encoded_length() +
+        aeron_cluster_client_sessionEvent_encoded_length(&msg));
 
     EXPECT_EQ(1, m_cb.session_event_count);
     EXPECT_EQ(session_id,        m_cb.last_session_id);
@@ -450,14 +463,16 @@ TEST_F(EgressAdapterTest, onFragmentShouldInvokeOnNewLeaderCallbackIfSessionIdMa
     struct aeron_cluster_client_messageHeader hdr;
     struct aeron_cluster_client_newLeaderEvent msg;
     aeron_cluster_client_newLeaderEvent_wrap_and_apply_header(
-        &msg, (char *)m_buf, 0, BUF_SIZE, &hdr);
+        &msg, reinterpret_cast<char *>(m_buf), 0, BUF_SIZE, &hdr);
     aeron_cluster_client_newLeaderEvent_set_clusterSessionId(&msg, session_id);
     aeron_cluster_client_newLeaderEvent_set_leadershipTermId(&msg, leadership_term_id);
     aeron_cluster_client_newLeaderEvent_set_leaderMemberId(&msg, leader_member_id);
     aeron_cluster_client_newLeaderEvent_put_ingressEndpoints(
-        &msg, endpoints, (uint32_t)strlen(endpoints));
+        &msg, endpoints, static_cast<uint32_t>(strlen(endpoints)));
 
-    dispatch(aeron_cluster_client_newLeaderEvent_encoded_length(&msg));
+    dispatch(
+        aeron_cluster_client_messageHeader_encoded_length() +
+        aeron_cluster_client_newLeaderEvent_encoded_length(&msg));
 
     EXPECT_EQ(1, m_cb.new_leader_count);
     EXPECT_EQ(session_id, m_cb.last_new_leader_session_id);
@@ -474,7 +489,7 @@ TEST_F(EgressAdapterTest, onFragmentShouldInvokeOnAdminResponseCallbackIfSession
     struct aeron_cluster_client_messageHeader hdr;
     struct aeron_cluster_client_adminResponse msg;
     aeron_cluster_client_adminResponse_wrap_and_apply_header(
-        &msg, (char *)m_buf, 0, BUF_SIZE, &hdr);
+        &msg, reinterpret_cast<char *>(m_buf), 0, BUF_SIZE, &hdr);
     aeron_cluster_client_adminResponse_set_clusterSessionId(&msg, session_id);
     aeron_cluster_client_adminResponse_set_correlationId(&msg, correl_id);
     aeron_cluster_client_adminResponse_set_requestType(
@@ -482,9 +497,11 @@ TEST_F(EgressAdapterTest, onFragmentShouldInvokeOnAdminResponseCallbackIfSession
     aeron_cluster_client_adminResponse_set_responseCode(
         &msg, aeron_cluster_client_adminResponseCode_ERROR);
     aeron_cluster_client_adminResponse_put_message(
-        &msg, msg_text, (uint32_t)strlen(msg_text));
+        &msg, msg_text, static_cast<uint32_t>(strlen(msg_text)));
 
-    dispatch(aeron_cluster_client_adminResponse_encoded_length(&msg));
+    dispatch(
+        aeron_cluster_client_messageHeader_encoded_length() +
+        aeron_cluster_client_adminResponse_encoded_length(&msg));
 
     EXPECT_EQ(1, m_cb.admin_response_count);
     EXPECT_EQ(session_id, m_cb.last_admin_session_id);
@@ -670,4 +687,257 @@ TEST(AeronClusterContextTest2, trackIngressResultSetsIsClosedOnClosed)
     /* Just verify the context initializes cleanly without crashes */
     EXPECT_EQ(nullptr, ctx->aeron);
     aeron_cluster_context_close(ctx);
+}
+
+/* ============================================================
+ * AeronClusterTest — state machine tests without real Aeron
+ *
+ * Uses aeron_cluster_create() with a real egress poller (NULL
+ * subscription) and a heap-allocated proxy (NULL publication), then
+ * dispatches pre-built SBE buffers via aeron_cluster_on_egress_for_test
+ * to drive state transitions without any live MediaDriver.
+ * ============================================================ */
+
+static constexpr size_t AC_BUF = 512;
+
+class AeronClusterFixture : public ::testing::Test
+{
+protected:
+    static constexpr int64_t SESSION_ID  = 42LL;
+    static constexpr int64_t TERM_ID     = 5LL;
+    static constexpr int32_t LEADER_ID   = 0;
+
+    void SetUp() override
+    {
+        memset(m_buf, 0, sizeof(m_buf));
+
+        ASSERT_EQ(0, aeron_cluster_egress_poller_create(
+            &m_poller, nullptr, AERON_CLUSTER_EGRESS_POLLER_FRAGMENT_LIMIT_DEFAULT));
+
+        /* Heap-allocated proxy with NULL publication so close() won't crash */
+        ASSERT_NE(nullptr, (m_proxy = static_cast<aeron_cluster_ingress_proxy_t *>(
+            calloc(1, sizeof(aeron_cluster_ingress_proxy_t)))));
+        memset(m_proxy, 0, sizeof(aeron_cluster_ingress_proxy_t));
+        m_proxy->is_exclusive    = false;
+        m_proxy->publication     = nullptr;
+        m_proxy->retry_attempts  = 1;
+
+        ASSERT_EQ(0, aeron_cluster_context_init(&m_ctx));
+
+        ASSERT_EQ(0, aeron_cluster_create(
+            &m_cluster, m_ctx, m_proxy, nullptr /* subscription */, m_poller,
+            SESSION_ID, TERM_ID, LEADER_ID));
+        /* aeron_cluster_create takes ownership of ctx, proxy, poller */
+    }
+
+    void TearDown() override
+    {
+        /* subscription is already NULL; proxy publication is NULL — safe to close */
+        aeron_cluster_close(m_cluster);
+        /* ctx, proxy, poller all freed by close */
+    }
+
+    /* Dispatch a pre-built SBE buffer into the cluster state machine */
+    void dispatch(size_t length)
+    {
+        aeron_cluster_on_egress_for_test(m_cluster, m_buf, length);
+    }
+
+    /* Build a SESSION_EVENT with the given event code */
+    size_t build_session_event(
+        int64_t session_id, int64_t leadership_term_id, int32_t leader_member_id,
+        enum aeron_cluster_client_eventCode code,
+        const char *detail = "")
+    {
+        struct aeron_cluster_client_messageHeader hdr;
+        struct aeron_cluster_client_sessionEvent  msg;
+        aeron_cluster_client_sessionEvent_wrap_and_apply_header(
+            &msg, reinterpret_cast<char *>(m_buf), 0, AC_BUF, &hdr);
+        aeron_cluster_client_sessionEvent_set_correlationId(&msg, 0);
+        aeron_cluster_client_sessionEvent_set_clusterSessionId(&msg, session_id);
+        aeron_cluster_client_sessionEvent_set_leadershipTermId(&msg, leadership_term_id);
+        aeron_cluster_client_sessionEvent_set_leaderMemberId(&msg, leader_member_id);
+        aeron_cluster_client_sessionEvent_set_code(&msg, code);
+        uint32_t detail_len = static_cast<uint32_t>(strlen(detail));
+        aeron_cluster_client_sessionEvent_put_detail(&msg, detail, detail_len);
+        return aeron_cluster_client_messageHeader_encoded_length() +
+               aeron_cluster_client_sessionEvent_encoded_length(&msg);
+    }
+
+    /* Build a NEW_LEADER_EVENT */
+    size_t build_new_leader_event(
+        int64_t session_id, int64_t leadership_term_id, int32_t leader_member_id,
+        const char *ingress_endpoints = "")
+    {
+        struct aeron_cluster_client_messageHeader hdr;
+        struct aeron_cluster_client_newLeaderEvent msg;
+        aeron_cluster_client_newLeaderEvent_wrap_and_apply_header(
+            &msg, reinterpret_cast<char *>(m_buf), 0, AC_BUF, &hdr);
+        aeron_cluster_client_newLeaderEvent_set_clusterSessionId(&msg, session_id);
+        aeron_cluster_client_newLeaderEvent_set_leadershipTermId(&msg, leadership_term_id);
+        aeron_cluster_client_newLeaderEvent_set_leaderMemberId(&msg, leader_member_id);
+        uint32_t ep_len = static_cast<uint32_t>(strlen(ingress_endpoints));
+        aeron_cluster_client_newLeaderEvent_put_ingressEndpoints(&msg, ingress_endpoints, ep_len);
+        return aeron_cluster_client_messageHeader_encoded_length() +
+               aeron_cluster_client_newLeaderEvent_encoded_length(&msg);
+    }
+
+    aeron_cluster_t              *m_cluster = nullptr;
+    aeron_cluster_egress_poller_t *m_poller = nullptr;
+    aeron_cluster_ingress_proxy_t *m_proxy  = nullptr;
+    aeron_cluster_context_t       *m_ctx    = nullptr;
+    uint8_t m_buf[AC_BUF];
+};
+
+constexpr int64_t AeronClusterFixture::SESSION_ID;
+constexpr int64_t AeronClusterFixture::TERM_ID;
+constexpr int32_t AeronClusterFixture::LEADER_ID;
+
+/* --- state after create ------------------------------------------------ */
+
+TEST_F(AeronClusterFixture, initialStateIsConnected)
+{
+    EXPECT_EQ(AERON_CLUSTER_SESSION_CONNECTED, aeron_cluster_state(m_cluster));
+    EXPECT_FALSE(aeron_cluster_is_closed(m_cluster));
+}
+
+TEST_F(AeronClusterFixture, accessors_returnValuesPassedToCreate)
+{
+    EXPECT_EQ(SESSION_ID,  aeron_cluster_cluster_session_id(m_cluster));
+    EXPECT_EQ(TERM_ID,     aeron_cluster_leadership_term_id(m_cluster));
+    EXPECT_EQ(LEADER_ID,   aeron_cluster_leader_member_id(m_cluster));
+}
+
+/* --- trackIngressResult ------------------------------------------------ */
+
+TEST_F(AeronClusterFixture, trackIngressResult_setsClosedOnPublicationClosed)
+{
+    EXPECT_FALSE(aeron_cluster_is_closed(m_cluster));
+    aeron_cluster_track_ingress_result(m_cluster, AERON_PUBLICATION_CLOSED);
+    EXPECT_EQ(AERON_CLUSTER_SESSION_CLOSED, aeron_cluster_state(m_cluster));
+    EXPECT_TRUE(aeron_cluster_is_closed(m_cluster));
+}
+
+TEST_F(AeronClusterFixture, trackIngressResult_noChangeOnBackPressure)
+{
+    aeron_cluster_track_ingress_result(m_cluster, AERON_PUBLICATION_BACK_PRESSURED);
+    EXPECT_EQ(AERON_CLUSTER_SESSION_CONNECTED, aeron_cluster_state(m_cluster));
+}
+
+/* --- SESSION_EVENT CLOSED ---------------------------------------------- */
+
+TEST_F(AeronClusterFixture, sessionEventClosed_transitionsToClosedState)
+{
+    size_t len = build_session_event(
+        SESSION_ID, TERM_ID, LEADER_ID, aeron_cluster_client_eventCode_CLOSED);
+    dispatch(len);
+    EXPECT_EQ(AERON_CLUSTER_SESSION_CLOSED, aeron_cluster_state(m_cluster));
+    EXPECT_TRUE(aeron_cluster_is_closed(m_cluster));
+}
+
+TEST_F(AeronClusterFixture, sessionEventOk_doesNotChangeState)
+{
+    /* SESSION_EVENT with OK code (e.g. connect response) must not close */
+    size_t len = build_session_event(
+        SESSION_ID, TERM_ID, LEADER_ID, aeron_cluster_client_eventCode_OK);
+    dispatch(len);
+    EXPECT_EQ(AERON_CLUSTER_SESSION_CONNECTED, aeron_cluster_state(m_cluster));
+}
+
+/* --- SESSION_EVENT REDIRECT -------------------------------------------- */
+
+TEST_F(AeronClusterFixture, sessionEventRedirect_doesNotCloseSession)
+{
+    /* REDIRECT: reconnect attempt fails silently (ctx->aeron is NULL),
+     * but session state must remain CONNECTED, not CLOSED. */
+    size_t len = build_session_event(
+        SESSION_ID, TERM_ID, LEADER_ID, aeron_cluster_client_eventCode_REDIRECT, "");
+    dispatch(len);
+    EXPECT_EQ(AERON_CLUSTER_SESSION_CONNECTED, aeron_cluster_state(m_cluster));
+    EXPECT_FALSE(aeron_cluster_is_closed(m_cluster));
+}
+
+/* --- NEW_LEADER_EVENT -------------------------------------------------- */
+
+TEST_F(AeronClusterFixture, newLeaderEvent_updatesLeadershipTermAndMember)
+{
+    /* Use empty endpoints so cluster_handle_leader_redirect returns early
+     * (detail_length == 0 → the NEW_LEADER_EVENT branch is not entered);
+     * leadership update still happens from the leadership_term_id > current check. */
+    const int64_t new_term   = TERM_ID + 1;
+    const int32_t new_member = 2;
+    size_t len = build_new_leader_event(SESSION_ID, new_term, new_member, "");
+    dispatch(len);
+    EXPECT_EQ(new_term,   aeron_cluster_leadership_term_id(m_cluster));
+    EXPECT_EQ(new_member, aeron_cluster_leader_member_id(m_cluster));
+    EXPECT_EQ(AERON_CLUSTER_SESSION_CONNECTED, aeron_cluster_state(m_cluster));
+}
+
+TEST_F(AeronClusterFixture, newLeaderEvent_olderTerm_doesNotUpdateLeadership)
+{
+    /* A NEW_LEADER_EVENT with a lower term must be ignored */
+    const int64_t old_term = TERM_ID - 1;
+    size_t len = build_new_leader_event(SESSION_ID, old_term, 99, "");
+    dispatch(len);
+    EXPECT_EQ(TERM_ID,   aeron_cluster_leadership_term_id(m_cluster));
+    EXPECT_EQ(LEADER_ID, aeron_cluster_leader_member_id(m_cluster));
+}
+
+/* --- closed-guard ------------------------------------------------------- */
+
+TEST_F(AeronClusterFixture, onEgressForTest_isNoopWhenAlreadyClosed)
+{
+    /* Once CLOSED, dispatching further events must not crash or re-open */
+    aeron_cluster_track_ingress_result(m_cluster, AERON_PUBLICATION_CLOSED);
+    ASSERT_EQ(AERON_CLUSTER_SESSION_CLOSED, aeron_cluster_state(m_cluster));
+
+    size_t len = build_new_leader_event(SESSION_ID, TERM_ID + 5, 3, "");
+    /* Should not crash; session stays CLOSED */
+    aeron_cluster_on_egress_for_test(m_cluster, m_buf, len);
+    EXPECT_EQ(AERON_CLUSTER_SESSION_CLOSED, aeron_cluster_state(m_cluster));
+}
+
+/* --- AWAIT_NEW_LEADER_CONNECTION async reconnect state machine ---------- */
+
+TEST_F(AeronClusterFixture, stateDeadlineIsInitializedToMaxOnCreate)
+{
+    EXPECT_EQ(INT64_MAX, m_cluster->state_deadline_ns);
+    EXPECT_EQ(nullptr, m_cluster->async_reconnect_pub);
+}
+
+TEST_F(AeronClusterFixture, newLeaderEvent_withEndpoints_closesWhenNoAeron)
+{
+    /* With aeron==NULL, async_add_publication fails and we transition to CLOSED */
+    size_t len = build_new_leader_event(SESSION_ID, TERM_ID + 1, 2, "localhost:20001");
+    dispatch(len);
+    EXPECT_EQ(AERON_CLUSTER_SESSION_CLOSED, aeron_cluster_state(m_cluster));
+}
+
+TEST_F(AeronClusterFixture, sessionEventRedirect_withEndpoints_closesWhenNoAeron)
+{
+    /* REDIRECT with non-empty endpoints and null aeron → CLOSED */
+    size_t len = build_session_event(
+        SESSION_ID, TERM_ID, LEADER_ID,
+        aeron_cluster_client_eventCode_REDIRECT, "localhost:20001");
+    dispatch(len);
+    EXPECT_EQ(AERON_CLUSTER_SESSION_CLOSED, aeron_cluster_state(m_cluster));
+}
+
+TEST_F(AeronClusterFixture, awaitNewLeaderConnectionTimesOutToClosed)
+{
+    /* Manually set the state to AWAIT_NEW_LEADER_CONNECTION with a past deadline */
+    m_cluster->state = AERON_CLUSTER_SESSION_AWAIT_NEW_LEADER_CONNECTION;
+    m_cluster->async_reconnect_pub = nullptr;
+    m_cluster->state_deadline_ns = 1; /* far in the past */
+
+    /* poll_egress should detect the timeout and transition to CLOSED.
+     * egress_poller->subscription is NULL, so poll returns 0 fragments. */
+    aeron_cluster_poll_egress(m_cluster);
+    EXPECT_EQ(AERON_CLUSTER_SESSION_CLOSED, aeron_cluster_state(m_cluster));
+}
+
+TEST_F(AeronClusterFixture, pollEgressReturnsZeroWhenClosed)
+{
+    m_cluster->state = AERON_CLUSTER_SESSION_CLOSED;
+    EXPECT_EQ(0, aeron_cluster_poll_egress(m_cluster));
 }

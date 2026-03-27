@@ -44,6 +44,7 @@ extern "C"
 #include "aeron_cluster_client/timer.h"
 #include "aeron_cluster_client/clusterSession.h"
 #include "aeron_cluster_client/clientSession.h"
+#include "aeron_cluster_client/pendingMessageTracker.h"
 
 static constexpr size_t BUF_SIZE = 32 * 1024;
 
@@ -92,9 +93,10 @@ static void encode_cm_state(uint8_t *buf, size_t buf_len,
     struct aeron_cluster_client_messageHeader hdr;
     struct aeron_cluster_client_consensusModule msg;
     aeron_cluster_client_consensusModule_wrap_and_apply_header(
-        &msg, (char *)buf, 0, buf_len, &hdr);
+        &msg, reinterpret_cast<char *>(buf), 0, buf_len, &hdr);
     aeron_cluster_client_consensusModule_set_nextSessionId(&msg, next_session_id);
-    *encoded_len = aeron_cluster_client_consensusModule_encoded_length(&msg);
+    *encoded_len = aeron_cluster_client_messageHeader_encoded_length() +
+                   aeron_cluster_client_consensusModule_encoded_length(&msg);
 }
 
 static void encode_timer(uint8_t *buf, size_t buf_len,
@@ -104,10 +106,11 @@ static void encode_timer(uint8_t *buf, size_t buf_len,
     struct aeron_cluster_client_messageHeader hdr;
     struct aeron_cluster_client_timer msg;
     aeron_cluster_client_timer_wrap_and_apply_header(
-        &msg, (char *)buf, 0, buf_len, &hdr);
+        &msg, reinterpret_cast<char *>(buf), 0, buf_len, &hdr);
     aeron_cluster_client_timer_set_correlationId(&msg, correlation_id);
     aeron_cluster_client_timer_set_deadline(&msg, deadline);
-    *encoded_len = aeron_cluster_client_timer_encoded_length(&msg);
+    *encoded_len = aeron_cluster_client_messageHeader_encoded_length() +
+                   aeron_cluster_client_timer_encoded_length(&msg);
 }
 
 static void encode_cm_cluster_session(uint8_t *buf, size_t buf_len,
@@ -117,17 +120,18 @@ static void encode_cm_cluster_session(uint8_t *buf, size_t buf_len,
     struct aeron_cluster_client_messageHeader hdr;
     struct aeron_cluster_client_clusterSession msg;
     aeron_cluster_client_clusterSession_wrap_and_apply_header(
-        &msg, (char *)buf, 0, buf_len, &hdr);
+        &msg, reinterpret_cast<char *>(buf), 0, buf_len, &hdr);
     aeron_cluster_client_clusterSession_set_clusterSessionId(&msg, session->id);
     aeron_cluster_client_clusterSession_set_correlationId(&msg, session->correlation_id);
     aeron_cluster_client_clusterSession_set_openedLogPosition(&msg, session->opened_log_position);
     aeron_cluster_client_clusterSession_set_timeOfLastActivity(&msg, session->time_of_last_activity_ns);
     aeron_cluster_client_clusterSession_set_closeReason(&msg,
-        (enum aeron_cluster_client_closeReason)session->close_reason);
+        static_cast<aeron_cluster_client_closeReason>(session->close_reason));
     aeron_cluster_client_clusterSession_set_responseStreamId(&msg, session->response_stream_id);
     const char *ch = session->response_channel != nullptr ? session->response_channel : "";
-    aeron_cluster_client_clusterSession_put_responseChannel(&msg, ch, (uint32_t)strlen(ch));
-    *encoded_len = aeron_cluster_client_clusterSession_encoded_length(&msg);
+    aeron_cluster_client_clusterSession_put_responseChannel(&msg, ch, static_cast<uint32_t>(strlen(ch)));
+    *encoded_len = aeron_cluster_client_messageHeader_encoded_length() +
+                   aeron_cluster_client_clusterSession_encoded_length(&msg);
 }
 
 /* -----------------------------------------------------------------------
@@ -144,13 +148,13 @@ TEST(ConsensusModuleSnapshotTakerTest, snapshotConsensusModuleState)
     /* Decode and verify */
     struct aeron_cluster_client_messageHeader hdr;
     aeron_cluster_client_messageHeader_wrap(
-        &hdr, (char *)buf, 0, aeron_cluster_client_messageHeader_sbe_schema_version(), len);
+        &hdr, reinterpret_cast<char *>(buf), 0, aeron_cluster_client_messageHeader_sbe_schema_version(), len);
 
     EXPECT_EQ(105, (int)aeron_cluster_client_messageHeader_templateId(&hdr));  /* ConsensusModule */
 
     struct aeron_cluster_client_consensusModule msg;
     aeron_cluster_client_consensusModule_wrap_for_decode(
-        &msg, (char *)buf, aeron_cluster_client_messageHeader_encoded_length(),
+        &msg, reinterpret_cast<char *>(buf), aeron_cluster_client_messageHeader_encoded_length(),
         aeron_cluster_client_consensusModule_sbe_block_length(),
         aeron_cluster_client_consensusModule_sbe_schema_version(),
         len);
@@ -172,12 +176,12 @@ TEST(ConsensusModuleSnapshotTakerTest, snapshotTimer)
 
     struct aeron_cluster_client_messageHeader hdr;
     aeron_cluster_client_messageHeader_wrap(
-        &hdr, (char *)buf, 0, aeron_cluster_client_messageHeader_sbe_schema_version(), len);
+        &hdr, reinterpret_cast<char *>(buf), 0, aeron_cluster_client_messageHeader_sbe_schema_version(), len);
     EXPECT_EQ(104, (int)aeron_cluster_client_messageHeader_templateId(&hdr));  /* Timer */
 
     struct aeron_cluster_client_timer msg;
     aeron_cluster_client_timer_wrap_for_decode(
-        &msg, (char *)buf, aeron_cluster_client_messageHeader_encoded_length(),
+        &msg, reinterpret_cast<char *>(buf), aeron_cluster_client_messageHeader_encoded_length(),
         aeron_cluster_client_timer_sbe_block_length(),
         aeron_cluster_client_timer_sbe_schema_version(), len);
 
@@ -203,12 +207,12 @@ TEST(ConsensusModuleSnapshotTakerTest, snapshotSession)
 
     struct aeron_cluster_client_messageHeader hdr;
     aeron_cluster_client_messageHeader_wrap(
-        &hdr, (char *)buf, 0, aeron_cluster_client_messageHeader_sbe_schema_version(), len);
+        &hdr, reinterpret_cast<char *>(buf), 0, aeron_cluster_client_messageHeader_sbe_schema_version(), len);
     EXPECT_EQ(103, (int)aeron_cluster_client_messageHeader_templateId(&hdr));  /* ClusterSession */
 
     struct aeron_cluster_client_clusterSession msg;
     aeron_cluster_client_clusterSession_wrap_for_decode(
-        &msg, (char *)buf, aeron_cluster_client_messageHeader_encoded_length(),
+        &msg, reinterpret_cast<char *>(buf), aeron_cluster_client_messageHeader_encoded_length(),
         aeron_cluster_client_clusterSession_sbe_block_length(),
         aeron_cluster_client_clusterSession_sbe_schema_version(), len);
 
@@ -234,7 +238,7 @@ TEST(ConsensusModuleSnapshotTakerTest, snapshotMarkerBeginEndHaveCorrectTemplate
     struct aeron_cluster_client_messageHeader hdr;
     struct aeron_cluster_client_snapshotMarker msg;
     aeron_cluster_client_snapshotMarker_wrap_and_apply_header(
-        &msg, (char *)buf, 0, sizeof(buf), &hdr);
+        &msg, reinterpret_cast<char *>(buf), 0, sizeof(buf), &hdr);
 
     EXPECT_EQ(100, (int)aeron_cluster_client_messageHeader_templateId(&hdr));  /* SnapshotMarker */
 }
@@ -257,19 +261,20 @@ TEST(ServiceSnapshotTakerTest, snapshotSessionUsesClientSessionCodec)
     struct aeron_cluster_client_messageHeader hdr;
     struct aeron_cluster_client_clientSession msg;
     aeron_cluster_client_clientSession_wrap_and_apply_header(
-        &msg, (char *)buf, 0, sizeof(buf), &hdr);
+        &msg, reinterpret_cast<char *>(buf), 0, sizeof(buf), &hdr);
     aeron_cluster_client_clientSession_set_clusterSessionId(&msg, session.cluster_session_id);
     aeron_cluster_client_clientSession_set_responseStreamId(&msg, session.response_stream_id);
-    aeron_cluster_client_clientSession_put_responseChannel(&msg, ch, (uint32_t)strlen(ch));
+    aeron_cluster_client_clientSession_put_responseChannel(&msg, ch, static_cast<uint32_t>(strlen(ch)));
     aeron_cluster_client_clientSession_put_encodedPrincipal(&msg, "", 0);
-    size_t len = aeron_cluster_client_clientSession_encoded_length(&msg);
+    size_t len = aeron_cluster_client_messageHeader_encoded_length() +
+                 aeron_cluster_client_clientSession_encoded_length(&msg);
 
     /* Decode and verify */
     EXPECT_EQ(102, (int)aeron_cluster_client_messageHeader_templateId(&hdr));  /* ClientSession */
 
     struct aeron_cluster_client_clientSession dmsg;
     aeron_cluster_client_clientSession_wrap_for_decode(
-        &dmsg, (char *)buf, aeron_cluster_client_messageHeader_encoded_length(),
+        &dmsg, reinterpret_cast<char *>(buf), aeron_cluster_client_messageHeader_encoded_length(),
         aeron_cluster_client_clientSession_sbe_block_length(),
         aeron_cluster_client_clientSession_sbe_schema_version(), len);
 
@@ -458,6 +463,7 @@ TEST(ConsensusModuleAgentTest, onCommitPositionShouldNotUpdateTimestampForDiffer
     aeron_consensus_module_agent_on_commit_position(&agent, 9LL /* wrong term */, 100LL, 0);
     /* Verify commit position didn't advance (wrong term) */
     EXPECT_EQ(0LL, agent.notified_commit_position);
+    EXPECT_EQ(before, agent.time_of_last_log_update_ns);
 }
 
 TEST(ConsensusModuleAgentTest, shouldLimitActiveSessions)
@@ -516,4 +522,302 @@ TEST(ConsensusModuleAgentTest, cmStateCodesMatchJavaOrdinals)
     EXPECT_EQ(4, (int)AERON_CM_STATE_QUORUM_SNAPSHOT);
     EXPECT_EQ(5, (int)AERON_CM_STATE_LEAVING);
     EXPECT_EQ(6, (int)AERON_CM_STATE_CLOSED);
+}
+
+/* -----------------------------------------------------------------------
+ * snapshotCmState — encodes all four CM-state fields, decodes back
+ * ----------------------------------------------------------------------- */
+TEST(ConsensusModuleSnapshotTakerTest, snapshotCmStateAllFields)
+{
+    const int64_t next_session_id        = 55LL;
+    const int64_t next_svc_session_id    = 100LL;
+    const int64_t log_svc_session_id     = 77LL;
+    const int32_t pending_msg_capacity   = 32;
+
+    uint8_t buf[BUF_SIZE];
+    struct aeron_cluster_client_messageHeader hdr;
+    struct aeron_cluster_client_consensusModule msg;
+    aeron_cluster_client_consensusModule_wrap_and_apply_header(
+        &msg, reinterpret_cast<char *>(buf), 0, sizeof(buf), &hdr);
+    aeron_cluster_client_consensusModule_set_nextSessionId(&msg, next_session_id);
+    aeron_cluster_client_consensusModule_set_nextServiceSessionId(&msg, next_svc_session_id);
+    aeron_cluster_client_consensusModule_set_logServiceSessionId(&msg, log_svc_session_id);
+    aeron_cluster_client_consensusModule_set_pendingMessageCapacity(&msg, pending_msg_capacity);
+
+    const size_t len = aeron_cluster_client_messageHeader_encoded_length() +
+                       aeron_cluster_client_consensusModule_encoded_length(&msg);
+
+    /* Decode and verify */
+    struct aeron_cluster_client_messageHeader hdr2;
+    aeron_cluster_client_messageHeader_wrap(
+        &hdr2, reinterpret_cast<char *>(buf), 0,
+        aeron_cluster_client_messageHeader_sbe_schema_version(), len);
+    EXPECT_EQ(105, (int)aeron_cluster_client_messageHeader_templateId(&hdr2));
+
+    struct aeron_cluster_client_consensusModule msg2;
+    aeron_cluster_client_consensusModule_wrap_for_decode(
+        &msg2, reinterpret_cast<char *>(buf), aeron_cluster_client_messageHeader_encoded_length(),
+        aeron_cluster_client_consensusModule_sbe_block_length(),
+        aeron_cluster_client_consensusModule_sbe_schema_version(), len);
+
+    EXPECT_EQ(next_session_id,      aeron_cluster_client_consensusModule_nextSessionId(&msg2));
+    EXPECT_EQ(next_svc_session_id,  aeron_cluster_client_consensusModule_nextServiceSessionId(&msg2));
+    EXPECT_EQ(log_svc_session_id,   aeron_cluster_client_consensusModule_logServiceSessionId(&msg2));
+    EXPECT_EQ(pending_msg_capacity, aeron_cluster_client_consensusModule_pendingMessageCapacity(&msg2));
+}
+
+/* -----------------------------------------------------------------------
+ * snapshotPendingTracker — encodes pendingMessageTracker, decodes back
+ * ----------------------------------------------------------------------- */
+TEST(ConsensusModuleSnapshotTakerTest, snapshotPendingTrackerRoundtrip)
+{
+    const int64_t next_svc = 200LL;
+    const int64_t log_svc  = 150LL;
+    const int32_t cap      = 16;
+    const int32_t svc_id   = 2;
+
+    uint8_t buf[BUF_SIZE];
+    struct aeron_cluster_client_messageHeader hdr;
+    struct aeron_cluster_client_pendingMessageTracker msg;
+    aeron_cluster_client_pendingMessageTracker_wrap_and_apply_header(
+        &msg, reinterpret_cast<char *>(buf), 0, sizeof(buf), &hdr);
+    aeron_cluster_client_pendingMessageTracker_set_nextServiceSessionId(&msg, next_svc);
+    aeron_cluster_client_pendingMessageTracker_set_logServiceSessionId(&msg, log_svc);
+    aeron_cluster_client_pendingMessageTracker_set_pendingMessageCapacity(&msg, cap);
+    aeron_cluster_client_pendingMessageTracker_set_serviceId(&msg, svc_id);
+
+    const size_t len = aeron_cluster_client_messageHeader_encoded_length() +
+                       aeron_cluster_client_pendingMessageTracker_encoded_length(&msg);
+
+    struct aeron_cluster_client_messageHeader hdr2;
+    aeron_cluster_client_messageHeader_wrap(
+        &hdr2, reinterpret_cast<char *>(buf), 0,
+        aeron_cluster_client_messageHeader_sbe_schema_version(), len);
+    EXPECT_EQ(107, (int)aeron_cluster_client_messageHeader_templateId(&hdr2));
+
+    struct aeron_cluster_client_pendingMessageTracker msg2;
+    aeron_cluster_client_pendingMessageTracker_wrap_for_decode(
+        &msg2, reinterpret_cast<char *>(buf), aeron_cluster_client_messageHeader_encoded_length(),
+        aeron_cluster_client_pendingMessageTracker_sbe_block_length(),
+        aeron_cluster_client_pendingMessageTracker_sbe_schema_version(), len);
+
+    EXPECT_EQ(next_svc, aeron_cluster_client_pendingMessageTracker_nextServiceSessionId(&msg2));
+    EXPECT_EQ(log_svc,  aeron_cluster_client_pendingMessageTracker_logServiceSessionId(&msg2));
+    EXPECT_EQ(cap,      aeron_cluster_client_pendingMessageTracker_pendingMessageCapacity(&msg2));
+    EXPECT_EQ(svc_id,   aeron_cluster_client_pendingMessageTracker_serviceId(&msg2));
+}
+
+/* -----------------------------------------------------------------------
+ * pendingMessageTracker load_state — verify fields are restored
+ * ----------------------------------------------------------------------- */
+TEST(PendingMessageTrackerTest, loadStateRestoresAllFields)
+{
+    aeron_cluster_pending_message_tracker_t tracker{};
+    aeron_cluster_pending_message_tracker_init(&tracker, 1, 1, 0, 0);
+
+    aeron_cluster_pending_message_tracker_load_state(&tracker, 42LL, 30LL, 8LL);
+
+    EXPECT_EQ(42LL, tracker.next_service_session_id);
+    EXPECT_EQ(30LL, tracker.log_service_session_id);
+    EXPECT_EQ(8LL,  tracker.pending_message_capacity);
+
+    aeron_cluster_pending_message_tracker_close(&tracker);
+}
+
+/* -----------------------------------------------------------------------
+ * ExpandableRingBuffer unit tests
+ * ----------------------------------------------------------------------- */
+#include "aeron_expandable_ring_buffer.h"
+
+TEST(ExpandableRingBufferTest, appendAndConsumeOneMessage)
+{
+    aeron_expandable_ring_buffer_t rb{};
+    ASSERT_EQ(0, aeron_expandable_ring_buffer_init(&rb, 64, 1024));
+
+    uint8_t payload[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+    EXPECT_TRUE(aeron_expandable_ring_buffer_append(&rb, payload, 0, 8));
+    EXPECT_EQ(8 + AERON_ERB_HEADER_LENGTH, aeron_expandable_ring_buffer_size(&rb));
+
+    struct Ctx { int count; uint8_t data[8]; };
+    Ctx ctx{};
+    auto consumer = [](void *cd, uint8_t *buf, int offset, int len, int /*ho*/) -> bool {
+        auto *c = static_cast<Ctx *>(cd);
+        c->count++;
+        memcpy(c->data, buf + offset, static_cast<size_t>(len));
+        return true;
+    };
+
+    int bytes = aeron_expandable_ring_buffer_consume(&rb, &ctx, consumer, 10);
+    EXPECT_EQ(1, ctx.count);
+    EXPECT_EQ(0, memcmp(payload, ctx.data, 8));
+    EXPECT_TRUE(aeron_expandable_ring_buffer_is_empty(&rb));
+    (void)bytes;
+
+    aeron_expandable_ring_buffer_close(&rb);
+}
+
+TEST(ExpandableRingBufferTest, forEachDoesNotConsume)
+{
+    aeron_expandable_ring_buffer_t rb{};
+    ASSERT_EQ(0, aeron_expandable_ring_buffer_init(&rb, 64, 1024));
+
+    uint8_t payload[4] = {0xAA, 0xBB, 0xCC, 0xDD};
+    EXPECT_TRUE(aeron_expandable_ring_buffer_append(&rb, payload, 0, 4));
+
+    int count = 0;
+    auto counter = [](void *cd, uint8_t *, int, int, int) -> bool {
+        (*static_cast<int *>(cd))++;
+        return true;
+    };
+    aeron_expandable_ring_buffer_for_each(&rb, &count, counter, 10);
+    EXPECT_EQ(1, count);
+    EXPECT_FALSE(aeron_expandable_ring_buffer_is_empty(&rb)); /* head not advanced */
+
+    aeron_expandable_ring_buffer_close(&rb);
+}
+
+TEST(ExpandableRingBufferTest, forEachFromSkipsAlreadySeenMessages)
+{
+    aeron_expandable_ring_buffer_t rb{};
+    ASSERT_EQ(0, aeron_expandable_ring_buffer_init(&rb, 256, 4096));
+
+    uint8_t p1[8] = {1};
+    uint8_t p2[8] = {2};
+    uint8_t p3[8] = {3};
+    EXPECT_TRUE(aeron_expandable_ring_buffer_append(&rb, p1, 0, 8));
+    EXPECT_TRUE(aeron_expandable_ring_buffer_append(&rb, p2, 0, 8));
+    EXPECT_TRUE(aeron_expandable_ring_buffer_append(&rb, p3, 0, 8));
+
+    /* forEach(0, ...) sees all 3 */
+    int count0 = 0;
+    auto counter = [](void *cd, uint8_t *, int, int, int) -> bool {
+        (*static_cast<int *>(cd))++;
+        return true;
+    };
+    aeron_expandable_ring_buffer_for_each_from(&rb, 0, &count0, counter, 10);
+    EXPECT_EQ(3, count0);
+
+    /* After consuming 2, forEach(0, ...) sees 1 from head */
+    int consumed_count = 0;
+    aeron_expandable_ring_buffer_consume(&rb, &consumed_count, counter, 2);
+    EXPECT_EQ(2, consumed_count);
+
+    int count1 = 0;
+    aeron_expandable_ring_buffer_for_each_from(&rb, 0, &count1, counter, 10);
+    EXPECT_EQ(1, count1);
+
+    aeron_expandable_ring_buffer_close(&rb);
+}
+
+TEST(ExpandableRingBufferTest, resizesWhenCapacityExceeded)
+{
+    aeron_expandable_ring_buffer_t rb{};
+    /* Start tiny (capacity 16) */
+    ASSERT_EQ(0, aeron_expandable_ring_buffer_init(&rb, 16, 1 << 20));
+
+    /* Append 20 messages of 8 bytes each; ring should grow */
+    for (int i = 0; i < 20; i++)
+    {
+        uint8_t payload[8] = {};
+        payload[0] = static_cast<uint8_t>(i);
+        EXPECT_TRUE(aeron_expandable_ring_buffer_append(&rb, payload, 0, 8));
+    }
+
+    int count = 0;
+    auto counter = [](void *cd, uint8_t *, int, int, int) -> bool {
+        (*static_cast<int *>(cd))++;
+        return true;
+    };
+    aeron_expandable_ring_buffer_consume(&rb, &count, counter, 100);
+    EXPECT_EQ(20, count);
+    EXPECT_TRUE(aeron_expandable_ring_buffer_is_empty(&rb));
+
+    aeron_expandable_ring_buffer_close(&rb);
+}
+
+TEST(ExpandableRingBufferTest, resetClearsBuffer)
+{
+    aeron_expandable_ring_buffer_t rb{};
+    ASSERT_EQ(0, aeron_expandable_ring_buffer_init(&rb, 64, 1024));
+
+    uint8_t payload[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+    EXPECT_TRUE(aeron_expandable_ring_buffer_append(&rb, payload, 0, 8));
+    EXPECT_FALSE(aeron_expandable_ring_buffer_is_empty(&rb));
+
+    ASSERT_EQ(0, aeron_expandable_ring_buffer_reset(&rb, 0));
+    EXPECT_TRUE(aeron_expandable_ring_buffer_is_empty(&rb));
+
+    aeron_expandable_ring_buffer_close(&rb);
+}
+
+/* -----------------------------------------------------------------------
+ * PendingMessageTracker enqueue / sweep tests
+ * ----------------------------------------------------------------------- */
+TEST(PendingMessageTrackerTest, enqueueAndSweepFollower)
+{
+    aeron_cluster_pending_message_tracker_t tracker{};
+    ASSERT_EQ(0, aeron_cluster_pending_message_tracker_init(&tracker, 0, 1, 0, 256));
+
+    /* Build a fake [session_header(32)][payload(8)] = 40 bytes */
+    uint8_t buf[40] = {};
+    int payload_offset = 32;
+    int payload_length = 8;
+
+    /* Enqueue three messages; session IDs will be 1, 2, 3 */
+    aeron_cluster_pending_message_tracker_enqueue_message(&tracker, buf, payload_offset, payload_length);
+    aeron_cluster_pending_message_tracker_enqueue_message(&tracker, buf, payload_offset, payload_length);
+    aeron_cluster_pending_message_tracker_enqueue_message(&tracker, buf, payload_offset, payload_length);
+
+    EXPECT_EQ(4LL, tracker.next_service_session_id); /* advanced by 3 */
+    EXPECT_FALSE(aeron_expandable_ring_buffer_is_empty(&tracker.pending_messages));
+
+    /* Sweep follower at session 2 — should consume messages 1 and 2 */
+    aeron_cluster_pending_message_tracker_sweep_follower_messages(&tracker, 2LL);
+    EXPECT_EQ(2LL, tracker.log_service_session_id);
+
+    /* One message (session 3) should remain */
+    int remaining = 0;
+    auto counter = [](void *cd, uint8_t *, int, int, int) -> bool {
+        (*static_cast<int *>(cd))++;
+        return true;
+    };
+    aeron_expandable_ring_buffer_for_each(&tracker.pending_messages, &remaining, counter, 100);
+    EXPECT_EQ(1, remaining);
+
+    aeron_cluster_pending_message_tracker_close(&tracker);
+}
+
+TEST(PendingMessageTrackerTest, enqueueSkipsAlreadyCommittedMessages)
+{
+    aeron_cluster_pending_message_tracker_t tracker{};
+    /* log_service_session_id starts at 5 — messages 1..5 are already committed */
+    ASSERT_EQ(0, aeron_cluster_pending_message_tracker_init(&tracker, 0, 1, 5, 256));
+
+    uint8_t buf[40] = {};
+    /* Assign session IDs 1..5 — all skipped because they are <= log_service_session_id */
+    for (int i = 0; i < 5; i++)
+        aeron_cluster_pending_message_tracker_enqueue_message(&tracker, buf, 32, 8);
+
+    /* Ring buffer must still be empty (nothing enqueued) */
+    EXPECT_TRUE(aeron_expandable_ring_buffer_is_empty(&tracker.pending_messages));
+
+    /* Session 6 should be enqueued */
+    aeron_cluster_pending_message_tracker_enqueue_message(&tracker, buf, 32, 8);
+    EXPECT_FALSE(aeron_expandable_ring_buffer_is_empty(&tracker.pending_messages));
+
+    aeron_cluster_pending_message_tracker_close(&tracker);
+}
+
+TEST(PendingMessageTrackerTest, serviceIdHelpers)
+{
+    /* service 0: top byte = 0 */
+    int64_t sid0 = aeron_pending_message_tracker_service_session_id(0, 42);
+    EXPECT_EQ(0, aeron_pending_message_tracker_service_id_from_log_message(sid0));
+
+    /* service 3: top byte = 3 */
+    int64_t sid3 = aeron_pending_message_tracker_service_session_id(3, 100);
+    EXPECT_EQ(3, aeron_pending_message_tracker_service_id_from_log_message(sid3));
+
+    /* service_id_from_service_message just returns the low int */
+    EXPECT_EQ(7, aeron_pending_message_tracker_service_id_from_service_message(7LL));
 }

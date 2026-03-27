@@ -35,6 +35,10 @@
 #include "aeron_cluster_client/stopCatchup.h"
 #include "aeron_cluster_client/terminationPosition.h"
 #include "aeron_cluster_client/terminationAck.h"
+#include "aeron_cluster_client/backupQuery.h"
+#include "aeron_cluster_client/standbySnapshot.h"
+#include "aeron_cluster_client/challengeResponse.h"
+#include "aeron_cluster_client/heartbeatRequest.h"
 
 static aeron_controlled_fragment_handler_action_t on_fragment(
     void *clientd, const uint8_t *buffer, size_t length, aeron_header_t *header)
@@ -59,6 +63,24 @@ static aeron_controlled_fragment_handler_action_t on_fragment(
 
     switch (template_id)
     {
+        case 8: /* ChallengeResponse (forwarded by non-leader from ingress) */
+        {
+            struct aeron_cluster_client_challengeResponse msg;
+            if (NULL == aeron_cluster_client_challengeResponse_wrap_for_decode(
+                &msg, (char *)buffer, hdr_len,
+                aeron_cluster_client_challengeResponse_sbe_block_length(),
+                aeron_cluster_client_challengeResponse_sbe_schema_version(), length))
+            { break; }
+
+            uint32_t cred_len = aeron_cluster_client_challengeResponse_encodedCredentials_length(&msg);
+            const char *cred_ptr = aeron_cluster_client_challengeResponse_encodedCredentials(&msg);
+            aeron_consensus_module_agent_on_consensus_challenge_response(adapter->agent,
+                aeron_cluster_client_challengeResponse_correlationId(&msg),
+                aeron_cluster_client_challengeResponse_clusterSessionId(&msg),
+                (const uint8_t *)cred_ptr, (size_t)cred_len);
+            break;
+        }
+
         case 50: /* CanvassPosition */
         {
             struct aeron_cluster_client_canvassPosition msg;
@@ -136,6 +158,7 @@ static aeron_controlled_fragment_handler_action_t on_fragment(
                 aeron_cluster_client_newLeadershipTerm_leadershipTermId(&msg),
                 aeron_cluster_client_newLeadershipTerm_termBaseLogPosition(&msg),
                 aeron_cluster_client_newLeadershipTerm_logPosition(&msg),
+                aeron_cluster_client_newLeadershipTerm_commitPosition(&msg),
                 aeron_cluster_client_newLeadershipTerm_leaderRecordingId(&msg),
                 aeron_cluster_client_newLeadershipTerm_timestamp(&msg),
                 aeron_cluster_client_newLeadershipTerm_leaderMemberId(&msg),
@@ -244,6 +267,111 @@ static aeron_controlled_fragment_handler_action_t on_fragment(
                 aeron_cluster_client_terminationAck_leadershipTermId(&msg),
                 aeron_cluster_client_terminationAck_logPosition(&msg),
                 aeron_cluster_client_terminationAck_memberId(&msg));
+            break;
+        }
+
+        case 77: /* BackupQuery */
+        {
+            struct aeron_cluster_client_backupQuery msg;
+            if (NULL == aeron_cluster_client_backupQuery_wrap_for_decode(
+                &msg, (char *)buffer, hdr_len,
+                aeron_cluster_client_backupQuery_sbe_block_length(),
+                aeron_cluster_client_backupQuery_sbe_schema_version(), length))
+            { break; }
+
+            char response_channel[AERON_URI_MAX_LENGTH];
+            uint32_t ch_len = aeron_cluster_client_backupQuery_responseChannel_length(&msg);
+            if (ch_len >= sizeof(response_channel)) { ch_len = sizeof(response_channel) - 1; }
+            aeron_cluster_client_backupQuery_get_responseChannel(&msg, response_channel, ch_len);
+            response_channel[ch_len] = '\0';
+
+            const char *creds_ptr = aeron_cluster_client_backupQuery_encodedCredentials(&msg);
+            uint32_t creds_len    = aeron_cluster_client_backupQuery_encodedCredentials_length(&msg);
+
+            aeron_consensus_module_agent_on_backup_query(adapter->agent,
+                aeron_cluster_client_backupQuery_correlationId(&msg),
+                aeron_cluster_client_backupQuery_responseStreamId(&msg),
+                aeron_cluster_client_backupQuery_version(&msg),
+                aeron_cluster_client_backupQuery_logPosition(&msg),
+                response_channel,
+                (const uint8_t *)creds_ptr, (size_t)creds_len);
+            break;
+        }
+
+        case 79: /* HeartbeatRequest */
+        {
+            struct aeron_cluster_client_heartbeatRequest msg;
+            if (NULL == aeron_cluster_client_heartbeatRequest_wrap_for_decode(
+                &msg, (char *)buffer, hdr_len,
+                aeron_cluster_client_heartbeatRequest_sbe_block_length(),
+                aeron_cluster_client_heartbeatRequest_sbe_schema_version(), length))
+            { break; }
+
+            char hb_ch[AERON_URI_MAX_LENGTH];
+            uint32_t hb_ch_len = aeron_cluster_client_heartbeatRequest_responseChannel_length(&msg);
+            if (hb_ch_len >= sizeof(hb_ch)) { hb_ch_len = sizeof(hb_ch) - 1; }
+            aeron_cluster_client_heartbeatRequest_get_responseChannel(&msg, hb_ch, hb_ch_len);
+            hb_ch[hb_ch_len] = '\0';
+
+            const char *hb_creds = aeron_cluster_client_heartbeatRequest_encodedCredentials(&msg);
+            uint32_t hb_creds_len = aeron_cluster_client_heartbeatRequest_encodedCredentials_length(&msg);
+
+            aeron_consensus_module_agent_on_heartbeat_request(adapter->agent,
+                aeron_cluster_client_heartbeatRequest_correlationId(&msg),
+                aeron_cluster_client_heartbeatRequest_responseStreamId(&msg),
+                hb_ch,
+                (const uint8_t *)hb_creds, (size_t)hb_creds_len);
+            break;
+        }
+
+        case 81: /* StandbySnapshot */
+        {
+            struct aeron_cluster_client_standbySnapshot msg;
+            if (NULL == aeron_cluster_client_standbySnapshot_wrap_for_decode(
+                &msg, (char *)buffer, hdr_len,
+                aeron_cluster_client_standbySnapshot_sbe_block_length(),
+                aeron_cluster_client_standbySnapshot_sbe_schema_version(), length))
+            { break; }
+
+            char resp_ch[AERON_URI_MAX_LENGTH];
+            uint32_t rch_len = aeron_cluster_client_standbySnapshot_responseChannel_length(&msg);
+            if (rch_len >= sizeof(resp_ch)) { rch_len = sizeof(resp_ch) - 1; }
+            aeron_cluster_client_standbySnapshot_get_responseChannel(&msg, resp_ch, rch_len);
+            resp_ch[rch_len] = '\0';
+
+            /* Decode repeating group into stack arrays (max 32 per message) */
+#define STANDBY_SNAP_MAX 32
+            int64_t  rec_ids[STANDBY_SNAP_MAX];
+            int64_t  term_ids[STANDBY_SNAP_MAX];
+            int64_t  base_positions[STANDBY_SNAP_MAX];
+            int64_t  log_positions[STANDBY_SNAP_MAX];
+            int64_t  timestamps[STANDBY_SNAP_MAX];
+            int32_t  svc_ids[STANDBY_SNAP_MAX];
+            int snap_count = 0;
+
+            struct aeron_cluster_client_standbySnapshot_snapshots grp;
+            aeron_cluster_client_standbySnapshot_get_snapshots(&msg, &grp);
+            while (aeron_cluster_client_standbySnapshot_snapshots_has_next(&grp) &&
+                   snap_count < STANDBY_SNAP_MAX)
+            {
+                aeron_cluster_client_standbySnapshot_snapshots_next(&grp);
+                rec_ids[snap_count]       = aeron_cluster_client_standbySnapshot_snapshots_recordingId(&grp);
+                term_ids[snap_count]      = aeron_cluster_client_standbySnapshot_snapshots_leadershipTermId(&grp);
+                base_positions[snap_count]= aeron_cluster_client_standbySnapshot_snapshots_termBaseLogPosition(&grp);
+                log_positions[snap_count] = aeron_cluster_client_standbySnapshot_snapshots_logPosition(&grp);
+                timestamps[snap_count]    = aeron_cluster_client_standbySnapshot_snapshots_timestamp(&grp);
+                svc_ids[snap_count]       = aeron_cluster_client_standbySnapshot_snapshots_serviceId(&grp);
+                snap_count++;
+            }
+#undef STANDBY_SNAP_MAX
+
+            aeron_consensus_module_agent_on_standby_snapshot(adapter->agent,
+                aeron_cluster_client_standbySnapshot_correlationId(&msg),
+                aeron_cluster_client_standbySnapshot_responseStreamId(&msg),
+                aeron_cluster_client_standbySnapshot_version(&msg),
+                resp_ch,
+                rec_ids, term_ids, base_positions, log_positions, timestamps, svc_ids,
+                snap_count);
             break;
         }
 

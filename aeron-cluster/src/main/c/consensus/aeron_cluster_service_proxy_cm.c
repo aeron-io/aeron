@@ -65,7 +65,7 @@ bool aeron_cluster_service_proxy_cm_join_log(
     const char *ch = log_channel != NULL ? log_channel : "";
     aeron_cluster_client_joinLog_put_logChannel(&msg, ch, (uint32_t)strlen(ch));
 
-    return svc_proxy_offer(proxy, aeron_cluster_client_joinLog_encoded_length(&msg));
+    return svc_proxy_offer(proxy, aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_joinLog_encoded_length(&msg));
 }
 
 bool aeron_cluster_service_proxy_cm_termination_position(
@@ -77,7 +77,7 @@ bool aeron_cluster_service_proxy_cm_termination_position(
         &msg, (char *)proxy->buffer, 0, sizeof(proxy->buffer), &hdr)) { return false; }
 
     aeron_cluster_client_serviceTerminationPosition_set_logPosition(&msg, log_position);
-    return svc_proxy_offer(proxy, aeron_cluster_client_serviceTerminationPosition_encoded_length(&msg));
+    return svc_proxy_offer(proxy, aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_serviceTerminationPosition_encoded_length(&msg));
 }
 
 bool aeron_cluster_service_proxy_cm_request_service_ack(
@@ -89,5 +89,5 @@ bool aeron_cluster_service_proxy_cm_request_service_ack(
         &msg, (char *)proxy->buffer, 0, sizeof(proxy->buffer), &hdr)) { return false; }
 
     aeron_cluster_client_requestServiceAck_set_logPosition(&msg, log_position);
-    return svc_proxy_offer(proxy, aeron_cluster_client_requestServiceAck_encoded_length(&msg));
+    return svc_proxy_offer(proxy, aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_requestServiceAck_encoded_length(&msg));
 }

@@ -453,6 +453,12 @@ int aeron_cluster_async_connect_poll(
 
             if (poller->event_code == AERON_CLUSTER_EVENT_CODE_OK)
             {
+                /* Compute newLeaderTimeoutNs from server's heartbeat — mirrors Java AeronCluster */
+                int64_t hb_timeout = poller->leader_heartbeat_timeout_ns;
+                if (hb_timeout > 0)
+                {
+                    async->ctx->new_leader_timeout_ns = 2 * hb_timeout;
+                }
                 return aeron_cluster_async_connect_transition_to_done(cluster, async);
             }
             else if (poller->event_code == AERON_CLUSTER_EVENT_CODE_REDIRECT)
@@ -524,10 +530,12 @@ static int aeron_cluster_async_connect_transition_to_done(
     if (rc == 0)
     {
         /* Prevent cleanup from closing resources now owned by the cluster */
-        async->ingress_proxy  = NULL;
-        async->subscription   = NULL;
-        async->egress_poller  = NULL;
-        async->ctx            = NULL;
+        async->ingress_proxy           = NULL;
+        async->subscription            = NULL;
+        async->egress_poller           = NULL;
+        async->ctx                     = NULL;
+        async->publication             = NULL;  /* owned by ingress_proxy now */
+        async->exclusive_publication   = NULL;  /* owned by ingress_proxy now */
 
         async->state = DONE;
         aeron_cluster_async_connect_delete(async);

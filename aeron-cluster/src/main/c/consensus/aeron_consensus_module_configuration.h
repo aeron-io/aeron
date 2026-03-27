@@ -54,7 +54,7 @@ extern "C"
 #define AERON_CM_SESSION_TIMEOUT_NS_DEFAULT            (INT64_C(10)  * 1000000000LL)
 #define AERON_CM_LEADER_HEARTBEAT_TIMEOUT_NS_DEFAULT   (INT64_C(10)  * 1000000000LL)
 #define AERON_CM_LEADER_HEARTBEAT_INTERVAL_NS_DEFAULT  (INT64_C(200) * 1000000LL)
-#define AERON_CM_STARTUP_CANVASS_TIMEOUT_NS_DEFAULT    (INT64_C(5)   * 1000000000LL)
+#define AERON_CM_STARTUP_CANVASS_TIMEOUT_NS_DEFAULT    (INT64_C(60)  * 1000000000LL)
 #define AERON_CM_ELECTION_TIMEOUT_NS_DEFAULT           (INT64_C(1)   * 1000000000LL)
 #define AERON_CM_ELECTION_STATUS_INTERVAL_NS_DEFAULT   (INT64_C(20)  * 1000000LL)
 #define AERON_CM_TERMINATION_TIMEOUT_NS_DEFAULT        (INT64_C(10)  * 1000000000LL)
@@ -140,6 +140,24 @@ aeron_cm_state_t;
  * ----------------------------------------------------------------------- */
 #define AERON_CLUSTER_ACTION_SNAPSHOT       0
 #define AERON_CLUSTER_ACTION_STANDBY_SNAPSHOT 1
+
+/* -----------------------------------------------------------------------
+ * ClusterControl toggle state codes — matches Java ClusterControl.ToggleState
+ * ----------------------------------------------------------------------- */
+#define AERON_CLUSTER_TOGGLE_INACTIVE          0
+#define AERON_CLUSTER_TOGGLE_NEUTRAL           1
+#define AERON_CLUSTER_TOGGLE_SUSPEND           2
+#define AERON_CLUSTER_TOGGLE_RESUME            3
+#define AERON_CLUSTER_TOGGLE_SNAPSHOT          4
+#define AERON_CLUSTER_TOGGLE_SHUTDOWN          5
+#define AERON_CLUSTER_TOGGLE_ABORT             6
+#define AERON_CLUSTER_TOGGLE_STANDBY_SNAPSHOT  7
+
+/* -----------------------------------------------------------------------
+ * AppendPosition flags — matches Java ConsensusModuleAgent.APPEND_POSITION_FLAG_*
+ * ----------------------------------------------------------------------- */
+#define AERON_CLUSTER_APPEND_POSITION_FLAG_NONE    ((int8_t)0)
+#define AERON_CLUSTER_APPEND_POSITION_FLAG_CATCHUP ((int8_t)1)
 
 /* -----------------------------------------------------------------------
  * Cluster action flags

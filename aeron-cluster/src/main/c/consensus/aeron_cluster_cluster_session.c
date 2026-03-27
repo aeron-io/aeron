@@ -16,6 +16,7 @@
 
 #include <string.h>
 #include <errno.h>
+#include <stdint.h>
 
 #include "aeron_cluster_cluster_session.h"
 #include "aeron_cluster_egress_publisher.h"
@@ -36,15 +37,23 @@ int aeron_cluster_cluster_session_create(
         return -1;
     }
 
-    s->id               = id;
-    s->correlation_id   = correlation_id;
-    s->opened_log_position = 0;
-    s->time_of_last_activity_ns = 0;
-    s->response_stream_id = response_stream_id;
-    s->state            = AERON_CLUSTER_SESSION_STATE_INIT;
-    s->close_reason     = 0;
-    s->response_publication = NULL;
-    s->aeron            = aeron;
+    s->id                            = id;
+    s->correlation_id                = correlation_id;
+    s->opened_log_position           = 0;
+    s->closed_log_position           = -1;
+    s->time_of_last_activity_ns      = 0;
+    s->response_stream_id            = response_stream_id;
+    s->state                         = AERON_CLUSTER_SESSION_STATE_INIT;
+    s->action                        = AERON_CLUSTER_SESSION_ACTION_CLIENT;
+    s->close_reason                  = 0;
+    s->event_code                    = 0;
+    s->response_detail[0]            = '\0';
+    s->request_input                 = INT64_MAX;
+    s->has_open_event_pending        = false;
+    s->has_new_leader_event_pending  = false;
+    s->response_publication          = NULL;
+    s->async_response_pub            = NULL;
+    s->aeron                         = aeron;
 
     const size_t ch_len = response_channel != NULL ? strlen(response_channel) + 1 : 1;
     if (aeron_alloc((void **)&s->response_channel, ch_len) < 0)
@@ -70,7 +79,7 @@ int aeron_cluster_cluster_session_create(
     }
     else
     {
-        s->encoded_principal = NULL;
+        s->encoded_principal        = NULL;
         s->encoded_principal_length = 0;
     }
 
@@ -119,6 +128,70 @@ bool aeron_cluster_cluster_session_is_timed_out(
 {
     return session->state == AERON_CLUSTER_SESSION_STATE_OPEN &&
            (now_ns - session->time_of_last_activity_ns) > session_timeout_ns;
+}
+
+bool aeron_cluster_cluster_session_is_response_pub_connected(
+    aeron_cluster_cluster_session_t *session)
+{
+    if (NULL == session->response_publication) { return false; }
+    return aeron_exclusive_publication_is_connected(session->response_publication);
+}
+
+void aeron_cluster_cluster_session_reject(
+    aeron_cluster_cluster_session_t *session,
+    int32_t event_code,
+    const char *detail)
+{
+    session->state      = AERON_CLUSTER_SESSION_STATE_REJECTED;
+    session->event_code = event_code;
+    if (NULL != detail)
+    {
+        strncpy(session->response_detail, detail, sizeof(session->response_detail) - 1);
+        session->response_detail[sizeof(session->response_detail) - 1] = '\0';
+    }
+    else
+    {
+        session->response_detail[0] = '\0';
+    }
+}
+
+void aeron_cluster_cluster_session_set_redirect(
+    aeron_cluster_cluster_session_t *session,
+    const char *ingress_endpoints)
+{
+    /* EventCode: REDIRECT = 2 */
+    session->event_code = 2;
+    if (NULL != ingress_endpoints)
+    {
+        strncpy(session->response_detail, ingress_endpoints, sizeof(session->response_detail) - 1);
+        session->response_detail[sizeof(session->response_detail) - 1] = '\0';
+    }
+    else
+    {
+        session->response_detail[0] = '\0';
+    }
+}
+
+void aeron_cluster_cluster_session_authenticate(
+    aeron_cluster_cluster_session_t *session)
+{
+    session->state = AERON_CLUSTER_SESSION_STATE_AUTHENTICATED;
+}
+
+void aeron_cluster_cluster_session_open(
+    aeron_cluster_cluster_session_t *session,
+    int64_t log_position)
+{
+    session->state               = AERON_CLUSTER_SESSION_STATE_OPEN;
+    session->opened_log_position = log_position;
+}
+
+void aeron_cluster_cluster_session_closing(
+    aeron_cluster_cluster_session_t *session,
+    int32_t close_reason)
+{
+    session->state        = AERON_CLUSTER_SESSION_STATE_CLOSING;
+    session->close_reason = close_reason;
 }
 
 int64_t aeron_cluster_cluster_session_send_event(

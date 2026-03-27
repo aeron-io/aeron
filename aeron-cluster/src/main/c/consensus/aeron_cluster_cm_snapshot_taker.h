@@ -60,7 +60,18 @@ int aeron_cluster_cm_snapshot_taker_snapshot_timer(
 /** Write ConsensusModule state */
 int aeron_cluster_cm_snapshot_taker_snapshot_cm_state(
     aeron_exclusive_publication_t *pub,
-    int64_t next_session_id);
+    int64_t next_session_id,
+    int64_t next_service_session_id,
+    int64_t log_service_session_id,
+    int32_t pending_message_capacity);
+
+/** Write a PendingMessageTracker record for a given service */
+int aeron_cluster_cm_snapshot_taker_snapshot_pending_tracker(
+    aeron_exclusive_publication_t *pub,
+    int64_t next_service_session_id,
+    int64_t log_service_session_id,
+    int32_t pending_message_capacity,
+    int32_t service_id);
 
 #ifdef __cplusplus
 }

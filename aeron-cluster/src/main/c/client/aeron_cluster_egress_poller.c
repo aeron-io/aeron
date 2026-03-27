@@ -83,6 +83,7 @@ static aeron_controlled_fragment_handler_action_t on_fragment(
 
     const uint64_t hdr_len = aeron_cluster_client_messageHeader_encoded_length();
 
+
     switch (template_id)
     {
         case AERON_CLUSTER_SESSION_MESSAGE_HEADER_TEMPLATE_ID:
@@ -141,6 +142,12 @@ static aeron_controlled_fragment_handler_action_t on_fragment(
             poller->correlation_id      = aeron_cluster_client_sessionEvent_correlationId(&msg);
             poller->leadership_term_id  = aeron_cluster_client_sessionEvent_leadershipTermId(&msg);
             poller->leader_member_id    = aeron_cluster_client_sessionEvent_leaderMemberId(&msg);
+
+            if (aeron_cluster_client_sessionEvent_leaderHeartbeatTimeoutNs_in_acting_version(&msg))
+            {
+                poller->leader_heartbeat_timeout_ns =
+                    aeron_cluster_client_sessionEvent_leaderHeartbeatTimeoutNs(&msg);
+            }
 
             enum aeron_cluster_client_eventCode code;
             if (aeron_cluster_client_sessionEvent_code(&msg, &code))
@@ -335,6 +342,7 @@ int aeron_cluster_egress_poller_create(
     _poller->leadership_term_id = -1;
     _poller->correlation_id   = -1;
     _poller->leader_member_id = -1;
+    _poller->leader_heartbeat_timeout_ns = -1;
     _poller->event_code       = 0;
     _poller->detail           = NULL;
     _poller->detail_malloced_len = 0;
@@ -384,11 +392,13 @@ int aeron_cluster_egress_poller_poll(aeron_cluster_egress_poller_t *poller)
     poller->was_challenged   = false;
     poller->template_id      = -1;
 
-    return aeron_subscription_controlled_poll(
+    int result = aeron_subscription_controlled_poll(
         poller->subscription,
         aeron_controlled_fragment_assembler_handler,
         poller->fragment_assembler,
         poller->fragment_limit);
+
+    return result;
 }
 
 aeron_controlled_fragment_handler_action_t aeron_cluster_egress_poller_on_fragment_for_test(

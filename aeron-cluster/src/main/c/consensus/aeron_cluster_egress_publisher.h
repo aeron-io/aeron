@@ -71,6 +71,38 @@ bool aeron_cluster_egress_publisher_send_challenge(
     const uint8_t *encoded_challenge,
     size_t challenge_length);
 
+/**
+ * Send a ClusterMembersResponse to a client session.
+ * active_members and passive_followers are endpoint strings in
+ * "id=ingressEndpoint,..." format.
+ */
+bool aeron_cluster_egress_publisher_send_cluster_members_response(
+    aeron_exclusive_publication_t *pub,
+    int64_t correlation_id,
+    int32_t leader_member_id,
+    const char *active_members,
+    const char *passive_followers);
+
+/**
+ * Send an AdminResponse to a specific client session publication.
+ * Mirrors Java EgressPublisher.sendAdminResponse().
+ *
+ * @param session_pub       the session's response_publication (unicast to session)
+ * @param cluster_session_id session id
+ * @param correlation_id    from the original AdminRequest
+ * @param request_type      original request type (aeron_cluster_client_adminRequestType_*)
+ * @param response_code     OK / ERROR / UNAUTHORISED_ACCESS (aeron_cluster_client_adminResponseCode_*)
+ * @param message           NUL-terminated detail string (may be empty "")
+ * @return true if the offer succeeded
+ */
+bool aeron_cluster_egress_publisher_send_admin_response(
+    aeron_exclusive_publication_t *session_pub,
+    int64_t cluster_session_id,
+    int64_t correlation_id,
+    int32_t request_type,
+    int32_t response_code,
+    const char *message);
+
 #ifdef __cplusplus
 }
 #endif

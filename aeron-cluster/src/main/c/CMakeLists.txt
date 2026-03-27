@@ -102,8 +102,11 @@ set(SOURCE
     client/aeron_cluster_configuration.c
     client/aeron_cluster_context.c
     client/aeron_cluster_credentials_supplier.c
+    client/aeron_cluster_controlled_egress_adapter.c
+    client/aeron_cluster_egress_adapter.c
     client/aeron_cluster_egress_poller.c
     client/aeron_cluster_ingress_proxy.c
+    client/aeron_cluster_ingress_session_decorator.c
 )
 
 set(HEADERS
@@ -114,8 +117,11 @@ set(HEADERS
     client/aeron_cluster_configuration.h
     client/aeron_cluster_context.h
     client/aeron_cluster_credentials_supplier.h
+    client/aeron_cluster_controlled_egress_adapter.h
+    client/aeron_cluster_egress_adapter.h
     client/aeron_cluster_egress_poller.h
     client/aeron_cluster_ingress_proxy.h
+    client/aeron_cluster_ingress_session_decorator.h
 )
 
 add_library(aeron_cluster_c_client SHARED ${SOURCE} ${HEADERS})
@@ -155,3 +161,5 @@ if (AERON_INSTALL_TARGETS)
         ARCHIVE DESTINATION lib)
     install(DIRECTORY ./ DESTINATION include/aeron FILES_MATCHING PATTERN "aeron_cluster.h")
 endif ()
+
+add_subdirectory(backup)

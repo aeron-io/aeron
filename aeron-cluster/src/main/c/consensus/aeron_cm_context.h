@@ -155,6 +155,26 @@ typedef struct aeron_cm_context_stct
         size_t response_length);
     void *authenticator_clientd;
     char  authenticator_supplier_class_name[256];
+
+    /**
+     * ConsensusModuleExtension — optional plugin hooks.
+     * All function pointers are NULL by default (no extension).
+     * Mirrors Java ConsensusModuleExtension interface.
+     */
+    struct
+    {
+        void (*on_start)(void *clientd);
+        int  (*do_work)(void *clientd, int64_t now_ns);
+        int  (*slow_tick_work)(void *clientd, int64_t now_ns);
+        void (*on_election_complete)(void *clientd);
+        void (*on_new_leadership_term)(void *clientd);
+        void (*on_session_opened)(void *clientd, int64_t cluster_session_id);
+        void (*on_session_closed)(void *clientd, int64_t cluster_session_id, int32_t close_reason);
+        void (*on_prepare_for_new_leadership)(void *clientd);
+        void (*on_take_snapshot)(void *clientd, aeron_exclusive_publication_t *snapshot_pub);
+        void  *clientd;
+    }
+    extension;
 }
 aeron_cm_context_t;
 

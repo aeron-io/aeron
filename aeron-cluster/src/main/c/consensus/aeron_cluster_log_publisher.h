@@ -36,6 +36,7 @@ extern "C"
 typedef struct aeron_cluster_log_publisher_stct
 {
     aeron_exclusive_publication_t *publication;
+    aeron_t                       *aeron;
     int64_t                        leadership_term_id;
     uint8_t                        buffer[AERON_CLUSTER_LOG_PUBLISHER_BUFFER_LENGTH];
 }
@@ -47,6 +48,20 @@ int aeron_cluster_log_publisher_init(
     int64_t leadership_term_id);
 
 int64_t aeron_cluster_log_publisher_position(aeron_cluster_log_publisher_t *publisher);
+
+/**
+ * Return the session ID of the underlying log publication.
+ * Mirrors Java LogPublisher.sessionId().
+ */
+int32_t aeron_cluster_log_publisher_session_id(aeron_cluster_log_publisher_t *publisher);
+
+/**
+ * Asynchronously add a follower log endpoint as a destination.
+ * Mirrors Java LogPublisher.addDestination().
+ */
+int aeron_cluster_log_publisher_add_destination(
+    aeron_cluster_log_publisher_t *publisher,
+    const char *follower_log_endpoint);
 
 /**
  * Append a SessionOpenEvent to the log.

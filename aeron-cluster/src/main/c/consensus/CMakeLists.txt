@@ -33,12 +33,19 @@ set(SOURCE
     aeron_cluster_service_proxy_cm.c
     # Phase 4 — snapshot
     aeron_cluster_cm_snapshot_taker.c
+    aeron_cluster_cm_snapshot_loader.c
     # Phase 5 — election + agent + context
     aeron_cluster_election.c
+    aeron_cluster_log_adapter.c
+    aeron_cluster_log_replay.c
+    aeron_cluster_recording_replication.c
+    aeron_cluster_multi_recording_replication.c
     aeron_consensus_module_agent.c
     aeron_cm_context.c
     aeron_cluster_mark_file.c
     aeron_cluster_pending_message_tracker.c
+    aeron_cluster_consensus_module_adapter.c
+    aeron_expandable_ring_buffer.c
 )
 
 set(HEADERS
@@ -56,9 +63,17 @@ set(HEADERS
     aeron_cluster_session_manager.h
     aeron_cluster_service_proxy_cm.h
     aeron_cluster_cm_snapshot_taker.h
+    aeron_cluster_cm_snapshot_loader.h
     aeron_cluster_election.h
+    aeron_cluster_log_adapter.h
+    aeron_cluster_log_replay.h
+    aeron_cluster_recording_replication.h
+    aeron_cluster_multi_recording_replication.h
     aeron_consensus_module_agent.h
     aeron_cm_context.h
+    aeron_cluster_consensus_module_adapter.h
+    aeron_cluster_pending_message_tracker.h
+    aeron_expandable_ring_buffer.h
 )
 
 add_library(aeron_cluster_c_consensus SHARED ${SOURCE} ${HEADERS})

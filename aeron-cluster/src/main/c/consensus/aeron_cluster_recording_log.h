@@ -22,6 +22,7 @@
 #include <stddef.h>
 
 #include "aeron_consensus_module_configuration.h"
+#include "aeron_archive.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -39,6 +40,11 @@ extern "C"
 #define AERON_CLUSTER_RECORDING_LOG_TIMESTAMP_OFFSET            32
 #define AERON_CLUSTER_RECORDING_LOG_SERVICE_ID_OFFSET           40
 #define AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_OFFSET           44
+/* Java putStringAscii layout for archive endpoint: int32 length at 48, chars at 52 */
+#define AERON_CLUSTER_RECORDING_LOG_ENDPOINT_LENGTH_OFFSET      48
+#define AERON_CLUSTER_RECORDING_LOG_ENDPOINT_OFFSET             52
+/* Practical cap for in-memory storage; any Aeron URI fits in 512 bytes */
+#define AERON_CLUSTER_RECORDING_LOG_MAX_ENDPOINT_LENGTH         512
 
 typedef struct aeron_cluster_recording_log_entry_stct
 {
@@ -51,6 +57,8 @@ typedef struct aeron_cluster_recording_log_entry_stct
     int32_t entry_type;             /* AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_* */
     int     entry_index;            /* physical slot number (0-based) — used by sort comparator */
     bool    is_valid;               /* !( entry_type & INVALID_FLAG ) — cached for convenience */
+    /* Non-empty only for ENTRY_TYPE_STANDBY_SNAPSHOT entries */
+    char    archive_endpoint[AERON_CLUSTER_RECORDING_LOG_MAX_ENDPOINT_LENGTH];
 }
 aeron_cluster_recording_log_entry_t;
 
@@ -82,6 +90,16 @@ typedef struct aeron_cluster_recording_log_stct
      */
     aeron_cluster_recording_log_entry_t *sorted_entries;
     int                                   sorted_count;   /* count of ALL entries (valid + invalid) */
+
+    /**
+     * Physical slot indices of invalidated SNAPSHOT / STANDBY_SNAPSHOT entries.
+     * Populated by invalidate_latest_snapshot() and invalidate_entry_at().
+     * Consumed by append_snapshot() / append_standby_snapshot() to reuse slots.
+     * Mirrors Java RecordingLog.invalidSnapshots (IntArrayList).
+     */
+    int *invalid_snapshot_slots;
+    int  invalid_snapshot_count;
+    int  invalid_snapshot_capacity;
 }
 aeron_cluster_recording_log_t;
 
@@ -144,6 +162,16 @@ int  aeron_cluster_recording_log_invalidate_entry_at(
  * Reads / queries
  * ----------------------------------------------------------------------- */
 /**
+ * Return the next entry index (== entry_count, the next physical slot to be used).
+ * Mirrors Java RecordingLog.nextEntryIndex().
+ */
+static inline int aeron_cluster_recording_log_next_entry_index(
+    const aeron_cluster_recording_log_t *log)
+{
+    return log->entry_count;
+}
+
+/**
  * Get entry at 0-based index in the SORTED view.
  * Equivalent to Java's recordingLog.entries().get(index).
  * Returns NULL if out of range.
@@ -172,6 +200,14 @@ aeron_cluster_recording_log_entry_t *aeron_cluster_recording_log_find_last_term(
 aeron_cluster_recording_log_entry_t *aeron_cluster_recording_log_get_term_entry(
     aeron_cluster_recording_log_t *log, int64_t leadership_term_id);
 
+/**
+ * Find a valid TERM entry by leadershipTermId; returns NULL if not found.
+ * Mirrors Java RecordingLog.findTermEntry() (null-returning variant).
+ * Same semantics as get_term_entry() in C — both return NULL when not found.
+ */
+aeron_cluster_recording_log_entry_t *aeron_cluster_recording_log_find_term_entry(
+    aeron_cluster_recording_log_t *log, int64_t leadership_term_id);
+
 aeron_cluster_recording_log_entry_t *aeron_cluster_recording_log_get_latest_snapshot(
     aeron_cluster_recording_log_t *log, int32_t service_id);
 
@@ -184,7 +220,8 @@ bool aeron_cluster_recording_log_is_unknown(
 int aeron_cluster_recording_log_create_recovery_plan(
     aeron_cluster_recording_log_t *log,
     aeron_cluster_recovery_plan_t **plan,
-    int service_count);
+    int service_count,
+    aeron_archive_t *archive);  /* may be NULL; if provided, queries stop_position for log term */
 
 void aeron_cluster_recovery_plan_free(aeron_cluster_recovery_plan_t *plan);
 
@@ -210,6 +247,71 @@ int  aeron_cluster_recording_log_commit_log_position_by_term(
     aeron_cluster_recording_log_t *log,
     int64_t leadership_term_id,
     int64_t log_position);
+
+/**
+ * Find snapshots at or before log_position for service IDs -1 through service_count-1.
+ * For each service, picks the latest snapshot with log_position <= target.
+ * Falls back to the lowest available snapshot if none found at or before.
+ * Mirrors Java RecordingLog.findSnapshotAtOrBeforeOrLowest().
+ *
+ * out_snapshots must point to an array of at least (service_count + 1) entries.
+ * *out_count receives the number of entries filled.
+ * Returns 0 on success, -1 on allocation error.
+ */
+int aeron_cluster_recording_log_find_snapshots_at_or_before(
+    aeron_cluster_recording_log_t *log,
+    int64_t log_position,
+    int service_count,
+    aeron_cluster_recording_log_entry_t *out_snapshots,
+    int *out_count);
+
+/**
+ * Ensure the recording log is coherent for a given leadership term transition.
+ *
+ * Mirrors Java RecordingLog.ensureCoherent(). Three cases:
+ *   - No last term: append placeholder terms from initialLogLeadershipTermId to
+ *     leadershipTermId (inclusive), then optionally commit logPosition.
+ *   - Last term < target: commit any open prior term, fill gap terms, append target term,
+ *     optionally commit logPosition.
+ *   - Last term >= target: optionally commit logPosition only.
+ *
+ * @param log                           recording log
+ * @param recording_id                  recording ID for new term entries
+ * @param initial_log_leadership_term_id starting term ID (used when log is empty)
+ * @param initial_term_base_log_position starting base position (used when log is empty)
+ * @param leadership_term_id            target term to ensure is present
+ * @param term_base_log_position        base log position for target term (-1 = use initial)
+ * @param log_position                  committed log position for target term (-1 = open)
+ * @param timestamp                     timestamp for new entries (nanoseconds)
+ * @return 0 on success, -1 on error
+ */
+int aeron_cluster_recording_log_ensure_coherent(
+    aeron_cluster_recording_log_t *log,
+    int64_t recording_id,
+    int64_t initial_log_leadership_term_id,
+    int64_t initial_term_base_log_position,
+    int64_t leadership_term_id,
+    int64_t term_base_log_position,
+    int64_t log_position,
+    int64_t timestamp);
+
+/**
+ * Get the latest valid standby snapshots grouped by archive endpoint.
+ * For each distinct endpoint, finds the latest log_position at which there are
+ * exactly (service_count + 1) valid STANDBY_SNAPSHOT entries (the CM entry plus
+ * one per service), and includes all those entries in the output.
+ *
+ * The result is a flat array of entries ordered endpoint-by-endpoint. Caller must
+ * aeron_free(*out_snapshots). *out_count receives the total number of entries
+ * across all endpoints.
+ *
+ * Mirrors Java RecordingLog.latestStandbySnapshots(serviceCount).
+ */
+int aeron_cluster_recording_log_latest_standby_snapshots(
+    aeron_cluster_recording_log_t *log,
+    int service_count,
+    aeron_cluster_recording_log_entry_t **out_snapshots,
+    int *out_count);
 
 #ifdef __cplusplus
 }

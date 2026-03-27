@@ -163,7 +163,7 @@ TEST_F(ConsensusModuleContextTest, shouldSetAndGetServiceCount)
 TEST_F(ConsensusModuleContextTest, shouldSetAndGetClusterDir)
 {
     const char *dir = "/tmp/my_cluster";
-    ASSERT_EQ(0, snprintf(m_ctx->cluster_dir, sizeof(m_ctx->cluster_dir), "%s", dir));
+    snprintf(m_ctx->cluster_dir, sizeof(m_ctx->cluster_dir), "%s", dir);
     EXPECT_STREQ(dir, m_ctx->cluster_dir);
 }
 
@@ -199,7 +199,7 @@ TEST_F(ConsensusModuleContextTest, shouldSetAndGetClusterMembers)
     aeron_free(m_ctx->cluster_members);
     m_ctx->cluster_members = nullptr;
     size_t n = strlen(members) + 1;
-    aeron_alloc((void **)&m_ctx->cluster_members, n);
+    aeron_alloc(reinterpret_cast<void **>(&m_ctx->cluster_members), n);
     memcpy(m_ctx->cluster_members, members, n);
     EXPECT_STREQ(members, m_ctx->cluster_members);
 }
@@ -230,7 +230,7 @@ TEST_F(ConsensusModuleContextTest, concludeFailsIfClusterMembersIsEmpty)
 {
     aeron_free(m_ctx->cluster_members);
     size_t n = 1;
-    aeron_alloc((void **)&m_ctx->cluster_members, n);
+    aeron_alloc(reinterpret_cast<void **>(&m_ctx->cluster_members), n);
     m_ctx->cluster_members[0] = '\0';
     EXPECT_EQ(-1, aeron_cm_context_conclude(m_ctx));
 }
@@ -455,7 +455,7 @@ TEST_F(ConsensusModuleContextTest, shouldSetAndGetConsensusChannel)
     const char *ch = "aeron:udp?term-length=128m";
     aeron_free(m_ctx->consensus_channel);
     size_t n = strlen(ch)+1;
-    aeron_alloc((void **)&m_ctx->consensus_channel, n);
+    aeron_alloc(reinterpret_cast<void **>(&m_ctx->consensus_channel), n);
     memcpy(m_ctx->consensus_channel, ch, n);
     EXPECT_STREQ(ch, m_ctx->consensus_channel);
 }
@@ -465,7 +465,7 @@ TEST_F(ConsensusModuleContextTest, shouldSetAndGetIngressChannel)
     const char *ch = "aeron:udp?endpoint=localhost:20110";
     aeron_free(m_ctx->ingress_channel);
     size_t n = strlen(ch)+1;
-    aeron_alloc((void **)&m_ctx->ingress_channel, n);
+    aeron_alloc(reinterpret_cast<void **>(&m_ctx->ingress_channel), n);
     memcpy(m_ctx->ingress_channel, ch, n);
     EXPECT_STREQ(ch, m_ctx->ingress_channel);
 }
@@ -589,7 +589,7 @@ TEST_F(MarkFileDirTest, shouldThrowIllegalStateExceptionIfAnActiveMarkFileExists
     aeron_free(ctx1->cluster_members);
     const char *members = "0,h:p:h:p:h:p:h:p:h:p";
     size_t n = strlen(members)+1;
-    aeron_alloc((void **)&ctx1->cluster_members, n);
+    aeron_alloc(reinterpret_cast<void **>(&ctx1->cluster_members), n);
     memcpy(ctx1->cluster_members, members, n);
 
     /* First conclude() should succeed and create mark file */
@@ -601,7 +601,7 @@ TEST_F(MarkFileDirTest, shouldThrowIllegalStateExceptionIfAnActiveMarkFileExists
     ASSERT_EQ(0, aeron_cm_context_init(&ctx2));
     snprintf(ctx2->cluster_dir, sizeof(ctx2->cluster_dir), "%s", m_dir.c_str());
     aeron_free(ctx2->cluster_members);
-    aeron_alloc((void **)&ctx2->cluster_members, n);
+    aeron_alloc(reinterpret_cast<void **>(&ctx2->cluster_members), n);
     memcpy(ctx2->cluster_members, members, n);
 
     EXPECT_EQ(-1, aeron_cm_context_conclude(ctx2));
@@ -620,7 +620,7 @@ TEST_F(MarkFileDirTest, markFileShouldNotBeActiveAfterClose)
     aeron_free(ctx->cluster_members);
     const char *members = "0,h:p:h:p:h:p:h:p:h:p";
     size_t n = strlen(members)+1;
-    aeron_alloc((void **)&ctx->cluster_members, n);
+    aeron_alloc(reinterpret_cast<void **>(&ctx->cluster_members), n);
     memcpy(ctx->cluster_members, members, n);
 
     ASSERT_EQ(0, aeron_cm_context_conclude(ctx));
@@ -634,7 +634,7 @@ TEST_F(MarkFileDirTest, markFileShouldNotBeActiveAfterClose)
     ASSERT_EQ(0, aeron_cm_context_init(&ctx2));
     snprintf(ctx2->cluster_dir, sizeof(ctx2->cluster_dir), "%s", m_dir.c_str());
     aeron_free(ctx2->cluster_members);
-    aeron_alloc((void **)&ctx2->cluster_members, n);
+    aeron_alloc(reinterpret_cast<void **>(&ctx2->cluster_members), n);
     memcpy(ctx2->cluster_members, members, n);
     ctx2->mark_file_timeout_ms = 0; /* 0ms timeout — anything is stale */
     EXPECT_EQ(0, aeron_cm_context_conclude(ctx2));
@@ -652,7 +652,7 @@ TEST_F(MarkFileDirTest, concludeShouldCreateMarkFileDirSetDirectly)
     aeron_free(ctx->cluster_members);
     const char *members = "0,h:p:h:p:h:p:h:p:h:p";
     size_t n = strlen(members)+1;
-    aeron_alloc((void **)&ctx->cluster_members, n);
+    aeron_alloc(reinterpret_cast<void **>(&ctx->cluster_members), n);
     memcpy(ctx->cluster_members, members, n);
 
     ASSERT_EQ(0, aeron_cm_context_conclude(ctx));
@@ -682,7 +682,7 @@ TEST_F(MarkFileDirTest, concludeShouldCreateMarkFileDirViaSystemProperty)
     aeron_free(ctx->cluster_members);
     const char *members = "0,h:p:h:p:h:p:h:p:h:p";
     size_t n = strlen(members)+1;
-    aeron_alloc((void **)&ctx->cluster_members, n);
+    aeron_alloc(reinterpret_cast<void **>(&ctx->cluster_members), n);
     memcpy(ctx->cluster_members, members, n);
     ASSERT_EQ(0, aeron_cm_context_conclude(ctx));
 
@@ -702,7 +702,7 @@ TEST_F(MarkFileDirTest, concludeShouldCreateSymlinkWhenMarkFileDirDiffers)
     aeron_free(ctx->cluster_members);
     const char *members = "0,h:p:h:p:h:p:h:p:h:p";
     size_t n = strlen(members)+1;
-    aeron_alloc((void **)&ctx->cluster_members, n);
+    aeron_alloc(reinterpret_cast<void **>(&ctx->cluster_members), n);
     memcpy(ctx->cluster_members, members, n);
 
     ASSERT_EQ(0, aeron_cm_context_conclude(ctx));
@@ -724,13 +724,13 @@ TEST_F(MarkFileDirTest, concludeShouldCreateSymlinkWhenMarkFileDirDiffers)
 
 TEST_F(ConsensusModuleContextTest, startupCanvassTimeoutMustBeMultipleOfHeartbeatTimeout)
 {
-    m_ctx->startup_canvass_timeout_ns = 1000LL;
-    m_ctx->leader_heartbeat_timeout_ns = 300LL;  /* 1000 % 300 != 0 → fail */
+    m_ctx->startup_canvass_timeout_ns = 5000000000LL;  /* 5s */
+    m_ctx->leader_heartbeat_timeout_ns = 10000000000LL; /* 10s, 5/10=0 < 2 → fail */
     /* Need cluster_members for conclude to get to this check */
     aeron_free(m_ctx->cluster_members);
     const char *members = "0,h:p:h:p:h:p:h:p:h:p";
     size_t n = strlen(members)+1;
-    aeron_alloc((void **)&m_ctx->cluster_members, n);
+    aeron_alloc(reinterpret_cast<void **>(&m_ctx->cluster_members), n);
     memcpy(m_ctx->cluster_members, members, n);
     EXPECT_EQ(-1, aeron_cm_context_conclude(m_ctx));
     EXPECT_NE(nullptr, strstr(aeron_errmsg(), "must be a multiple"));

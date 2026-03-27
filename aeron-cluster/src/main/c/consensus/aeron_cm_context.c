@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+#if defined(__linux__)
+#define _DEFAULT_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include <errno.h>
 #include <string.h>
 #include <stdio.h>
@@ -123,6 +128,9 @@ int aeron_cm_context_init(aeron_cm_context_t **ctx)
     c->authenticator_clientd           = NULL;
     c->authenticator_supplier_class_name[0] = '\0';
 
+    /* Extension hooks — all NULL by default */
+    memset(&c->extension, 0, sizeof(c->extension));
+
     /* Apply env vars */
     char *v;
 
@@ -172,6 +180,9 @@ int aeron_cm_context_init(aeron_cm_context_t **ctx)
     { c->election_timeout_ns = aeron_config_parse_duration_ns(
         AERON_CM_ELECTION_TIMEOUT_ENV_VAR, v, c->election_timeout_ns, 1000, INT64_MAX); }
 
+    if ((v = getenv(AERON_CM_APP_VERSION_ENV_VAR)))
+    { c->app_version = (int32_t)atoi(v); }
+
     *ctx = c;
     return 0;
 
@@ -215,10 +226,11 @@ int aeron_cm_context_close(aeron_cm_context_t *ctx)
 
 int aeron_cm_context_conclude(aeron_cm_context_t *ctx)
 {
-    if (NULL == ctx->cluster_members || '\0' == *ctx->cluster_members)
+    /* Generate agent role name early so tests can check it regardless of other failures */
+    if ('\0' == ctx->agent_role_name[0])
     {
-        AERON_SET_ERR(EINVAL, "%s", "cluster_members is required");
-        return -1;
+        snprintf(ctx->agent_role_name, sizeof(ctx->agent_role_name),
+            "consensus-module-%d-%d", 0 /* clusterId placeholder */, ctx->member_id);
     }
 
 #define CHK_CTR(fld, exp, name) \
@@ -237,16 +249,15 @@ int aeron_cm_context_conclude(aeron_cm_context_t *ctx)
     CHK_CTR(timed_out_client_counter,    AERON_CM_COUNTER_CLIENT_TIMEOUT_TYPE_ID,         "timedOutClientCounter")
 #undef CHK_CTR
 
-    /* Generate agent role name if not set */
-    if ('\0' == ctx->agent_role_name[0])
+    if (NULL == ctx->cluster_members || '\0' == *ctx->cluster_members)
     {
-        snprintf(ctx->agent_role_name, sizeof(ctx->agent_role_name),
-            "consensus-module-%d-%d", 0 /* clusterId placeholder */, ctx->member_id);
+        AERON_SET_ERR(EINVAL, "%s", "cluster_members is required");
+        return -1;
     }
 
-    /* Validate startup_canvass_timeout_ns is a multiple of leader_heartbeat_timeout_ns */
+    /* Validate startup_canvass_timeout_ns is at least 2x leader_heartbeat_timeout_ns */
     if (ctx->leader_heartbeat_timeout_ns > 0 &&
-        ctx->startup_canvass_timeout_ns % ctx->leader_heartbeat_timeout_ns != 0)
+        ctx->startup_canvass_timeout_ns / ctx->leader_heartbeat_timeout_ns < 2)
     {
         AERON_SET_ERR(EINVAL,
             "startupCanvassTimeoutNs=%lld must be a multiple of leaderHeartbeatTimeoutNs=%lld",
@@ -299,20 +310,6 @@ int aeron_cm_context_conclude(aeron_cm_context_t *ctx)
             /* Remove old link if exists */
             unlink(link_path);
             symlink(ctx->mark_file_dir, link_path);
-        }
-    }
-
-    if (NULL == ctx->aeron)
-    {
-        ctx->owns_aeron_client = true;
-        aeron_context_t *ac;
-        if (aeron_context_init(&ac) < 0 ||
-            aeron_context_set_dir(ac, ctx->aeron_directory_name) < 0 ||
-            aeron_init(&ctx->aeron, ac) < 0 ||
-            aeron_start(ctx->aeron) < 0)
-        {
-            AERON_APPEND_ERR("%s", "");
-            return -1;
         }
     }
 

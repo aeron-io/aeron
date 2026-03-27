@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+#if defined(__linux__)
+#define _DEFAULT_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -31,24 +36,10 @@
 /* -----------------------------------------------------------------------
  * Internal field accessors
  * ----------------------------------------------------------------------- */
-static int32_t mf_read_version(const uint8_t *mapped)
-{
-    int32_t v;
-    memcpy(&v, mapped + AERON_CLUSTER_MARK_FILE_VERSION_OFFSET, 4);
-    return v;
-}
-
 static void mf_write_version(uint8_t *mapped, int32_t version)
 {
     memcpy(mapped + AERON_CLUSTER_MARK_FILE_VERSION_OFFSET, &version, 4);
     msync(mapped + AERON_CLUSTER_MARK_FILE_VERSION_OFFSET, 4, MS_SYNC);
-}
-
-static int64_t mf_read_activity_ms(const uint8_t *mapped)
-{
-    int64_t ts;
-    memcpy(&ts, mapped + AERON_CLUSTER_MARK_FILE_ACTIVITY_TIMESTAMP_OFFSET, 8);
-    return ts;
 }
 
 static void mf_write_activity_ms(uint8_t *mapped, int64_t now_ms)

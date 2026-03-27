@@ -21,6 +21,7 @@
 #include "aeron_cluster_client/sessionEvent.h"
 #include "aeron_cluster_client/newLeaderEvent.h"
 #include "aeron_cluster_client/challenge.h"
+#include "aeron_cluster_client/clusterMembersResponse.h"
 
 static uint8_t g_egress_buf[AERON_CLUSTER_EGRESS_PUBLISHER_BUFFER_LENGTH];
 
@@ -56,7 +57,9 @@ bool aeron_cluster_egress_publisher_send_session_event(
     uint32_t dlen = (detail != NULL) ? (uint32_t)detail_length : 0;
     aeron_cluster_client_sessionEvent_put_detail(&msg, d, dlen);
 
-    return egress_offer(pub, aeron_cluster_client_sessionEvent_encoded_length(&msg));
+    return egress_offer(pub,
+        aeron_cluster_client_messageHeader_encoded_length() +
+        aeron_cluster_client_sessionEvent_encoded_length(&msg));
 }
 
 bool aeron_cluster_egress_publisher_send_new_leader_event(
@@ -80,7 +83,9 @@ bool aeron_cluster_egress_publisher_send_new_leader_event(
     uint32_t eplen = (ingress_endpoints != NULL) ? (uint32_t)endpoints_length : 0;
     aeron_cluster_client_newLeaderEvent_put_ingressEndpoints(&msg, ep, eplen);
 
-    return egress_offer(pub, aeron_cluster_client_newLeaderEvent_encoded_length(&msg));
+    return egress_offer(pub,
+        aeron_cluster_client_messageHeader_encoded_length() +
+        aeron_cluster_client_newLeaderEvent_encoded_length(&msg));
 }
 
 bool aeron_cluster_egress_publisher_send_challenge(
@@ -100,5 +105,71 @@ bool aeron_cluster_egress_publisher_send_challenge(
     aeron_cluster_client_challenge_put_encodedChallenge(
         &msg, (const char *)encoded_challenge, (uint32_t)challenge_length);
 
-    return egress_offer(pub, aeron_cluster_client_challenge_encoded_length(&msg));
+    return egress_offer(pub,
+        aeron_cluster_client_messageHeader_encoded_length() +
+        aeron_cluster_client_challenge_encoded_length(&msg));
+}
+
+bool aeron_cluster_egress_publisher_send_cluster_members_response(
+    aeron_exclusive_publication_t *pub,
+    int64_t correlation_id,
+    int32_t leader_member_id,
+    const char *active_members,
+    const char *passive_followers)
+{
+    struct aeron_cluster_client_messageHeader hdr;
+    struct aeron_cluster_client_clusterMembersResponse msg;
+    if (NULL == aeron_cluster_client_clusterMembersResponse_wrap_and_apply_header(
+        &msg, (char *)g_egress_buf, 0, sizeof(g_egress_buf), &hdr)) { return false; }
+
+    aeron_cluster_client_clusterMembersResponse_set_correlationId(&msg, correlation_id);
+    aeron_cluster_client_clusterMembersResponse_set_leaderMemberId(&msg, leader_member_id);
+
+    const char *am = (active_members  != NULL) ? active_members  : "";
+    const char *pf = (passive_followers != NULL) ? passive_followers : "";
+    aeron_cluster_client_clusterMembersResponse_put_activeMembers(
+        &msg, am, (uint32_t)strlen(am));
+    aeron_cluster_client_clusterMembersResponse_put_passiveFollowers(
+        &msg, pf, (uint32_t)strlen(pf));
+
+    return egress_offer(pub,
+        aeron_cluster_client_messageHeader_encoded_length() +
+        aeron_cluster_client_clusterMembersResponse_encoded_length(&msg));
+}
+
+#include "aeron_cluster_client/adminResponse.h"
+#include "aeron_cluster_client/adminResponseCode.h"
+#include "aeron_cluster_client/adminRequestType.h"
+
+bool aeron_cluster_egress_publisher_send_admin_response(
+    aeron_exclusive_publication_t *session_pub,
+    int64_t cluster_session_id,
+    int64_t correlation_id,
+    int32_t request_type,
+    int32_t response_code,
+    const char *message)
+{
+    if (NULL == session_pub) { return false; }
+
+    uint8_t local_buf[AERON_CLUSTER_EGRESS_PUBLISHER_BUFFER_LENGTH];
+    struct aeron_cluster_client_messageHeader hdr;
+    struct aeron_cluster_client_adminResponse msg;
+    if (NULL == aeron_cluster_client_adminResponse_wrap_and_apply_header(
+        &msg, (char *)local_buf, 0, sizeof(local_buf), &hdr)) { return false; }
+
+    aeron_cluster_client_adminResponse_set_clusterSessionId(&msg, cluster_session_id);
+    aeron_cluster_client_adminResponse_set_correlationId(&msg, correlation_id);
+    aeron_cluster_client_adminResponse_set_requestType(
+        &msg, (enum aeron_cluster_client_adminRequestType)request_type);
+    aeron_cluster_client_adminResponse_set_responseCode(
+        &msg, (enum aeron_cluster_client_adminResponseCode)response_code);
+
+    const char *m = (message != NULL) ? message : "";
+    aeron_cluster_client_adminResponse_put_message(&msg, m, (uint32_t)strlen(m));
+    aeron_cluster_client_adminResponse_put_payload(&msg, NULL, 0);
+
+    size_t length = aeron_cluster_client_messageHeader_encoded_length() +
+                    aeron_cluster_client_adminResponse_encoded_length(&msg);
+
+    return aeron_exclusive_publication_offer(session_pub, local_buf, length, NULL, NULL) > 0;
 }

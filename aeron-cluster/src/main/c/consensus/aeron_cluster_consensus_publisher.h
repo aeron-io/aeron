@@ -111,6 +111,51 @@ bool aeron_cluster_consensus_publisher_termination_ack(
     int32_t member_id);
 
 /**
+ * Send a backupQuery to a remote consensus node requesting backup metadata.
+ * Used by ClusterBackupAgent.
+ */
+bool aeron_cluster_consensus_publisher_backup_query(
+    aeron_exclusive_publication_t *pub,
+    int64_t correlation_id,
+    int32_t response_stream_id,
+    int32_t version,
+    int64_t log_position,
+    const char *response_channel,
+    const uint8_t *encoded_credentials,
+    size_t encoded_credentials_length);
+
+/* -----------------------------------------------------------------------
+ * Snapshot entry passed to backup_response.
+ * ----------------------------------------------------------------------- */
+typedef struct aeron_cluster_backup_response_snapshot_stct
+{
+    int64_t recording_id;
+    int64_t leadership_term_id;
+    int64_t term_base_log_position;
+    int64_t log_position;
+    int64_t timestamp;
+    int32_t service_id;
+}
+aeron_cluster_backup_response_snapshot_t;
+
+/**
+ * Send a backupResponse to a backup node via its response publication.
+ * Mirrors Java ConsensusPublisher.backupResponse().
+ */
+bool aeron_cluster_consensus_publisher_backup_response(
+    aeron_exclusive_publication_t *pub,
+    int64_t correlation_id,
+    int64_t log_recording_id,
+    int64_t log_leadership_term_id,
+    int64_t log_term_base_log_position,
+    int32_t commit_position_counter_id,
+    int32_t leader_member_id,
+    int32_t member_id,
+    const aeron_cluster_backup_response_snapshot_t *snapshots,
+    int snapshot_count,
+    const char *cluster_members);
+
+/**
  * Broadcast a message to all active members (except self).
  * Uses each member's publication field.
  */
@@ -137,6 +182,25 @@ void aeron_cluster_consensus_publisher_broadcast_new_leadership_term(
 void aeron_cluster_consensus_publisher_broadcast_commit_position(
     aeron_cluster_member_t *members, int count, int32_t self_id,
     int64_t leadership_term_id, int64_t log_position, int32_t leader_member_id);
+
+/**
+ * Send a HeartbeatResponse to a backup node's response publication.
+ * Mirrors Java ConsensusPublisher.heartbeatResponse().
+ */
+bool aeron_cluster_consensus_publisher_heartbeat_response(
+    aeron_exclusive_publication_t *session_pub,
+    int64_t correlation_id);
+
+/**
+ * Send a ChallengeResponse to the cluster leader during backup authentication.
+ * Mirrors Java ConsensusPublisher.challengeResponse().
+ */
+bool aeron_cluster_consensus_publisher_challenge_response(
+    aeron_exclusive_publication_t *pub,
+    int64_t correlation_id,
+    int64_t cluster_session_id,
+    const uint8_t *encoded_credentials,
+    size_t encoded_credentials_length);
 
 #ifdef __cplusplus
 }

@@ -28,7 +28,13 @@
  */
 
 #include <gtest/gtest.h>
+#include <cstring>
 #include "../MockElectionAgent.h"
+
+extern "C"
+{
+#include "aeron_cluster_recording_replication.h"
+}
 
 /* Convenience topology strings */
 static const char *SINGLE_NODE =
@@ -87,10 +93,10 @@ TEST(ElectionTest, shouldElectCandidateWithFullVote)
     /* Advance past startup canvass timeout → NOMINATE */
     now += 5000000001LL;
     f.do_work(now);
-    EXPECT_EQ(AERON_ELECTION_CANVASS, f.state()); /* still canvass, checking best */
-    /* Force into NOMINATE by advancing nomination deadline */
+    EXPECT_EQ(AERON_ELECTION_NOMINATE, f.state());
+    /* Advance past nomination deadline → CANDIDATE_BALLOT */
     f.do_work(now += 5000000001LL);
-    /* Will move to NOMINATE or FOLLOWER_BALLOT depending on who is best */
+    EXPECT_TRUE(f.state_reached(AERON_ELECTION_CANDIDATE_BALLOT));
 }
 
 /* -----------------------------------------------------------------------
@@ -237,28 +243,26 @@ TEST(ElectionTest, shouldTimeoutFailedCandidateBallotOnSplitVoteThenSucceedOnRet
         100LL, 500000LL, 1LL);
 
     int64_t now = 50LL;
-    /* First election attempt */
+    /* First election attempt — no peer votes → ballot times out */
     f.do_work(now);
     f.on_canvass(1, NULL_VALUE, 0, NULL_VALUE);
     f.on_canvass(2, NULL_VALUE, 0, NULL_VALUE);
     f.do_work(now += 200LL);
-    f.do_work(now += 500001LL); /* → CANDIDATE_BALLOT */
+    f.do_work(now += 300000LL); /* → CANDIDATE_BALLOT (past max nomination deadline) */
 
     int64_t first_candidate_term = f.election->candidate_term_id;
 
-    /* Split vote: only 1 votes yes (not enough for quorum=2) */
-    f.on_vote(1, first_candidate_term, NULL_VALUE, 0, 0, true);
+    /* No peer votes — only self vote, not enough for quorum=2 */
 
     /* Timeout the ballot */
     f.do_work(now += 500001LL); /* → back to CANVASS */
 
     /* Second attempt */
     f.pub.reset();
-    f.do_work(now += 200LL);  /* canvass again */
     f.on_canvass(1, NULL_VALUE, 0, NULL_VALUE);
     f.on_canvass(2, NULL_VALUE, 0, NULL_VALUE);
-    f.do_work(now += 200LL);
-    f.do_work(now += 500001LL); /* → CANDIDATE_BALLOT */
+    f.do_work(now += 200LL);    /* canvass timeout → NOMINATE */
+    f.do_work(now += 300000LL); /* → CANDIDATE_BALLOT (past max nomination deadline) */
 
     int64_t second_candidate_term = f.election->candidate_term_id;
     EXPECT_GT(second_candidate_term, first_candidate_term); /* term incremented */
@@ -359,6 +363,7 @@ TEST(ElectionTest, followerShouldTransitionToReadyAfterReceivingNewLeadershipTer
         1LL,         /* leadership_term_id */
         0,           /* base */
         0,           /* log_pos */
+        0,           /* commit_pos */
         600LL,       /* recording_id */
         now,         /* timestamp */
         0,           /* leader_member_id */
@@ -366,7 +371,7 @@ TEST(ElectionTest, followerShouldTransitionToReadyAfterReceivingNewLeadershipTer
         0,           /* app_version */
         true);       /* is_startup */
 
-    EXPECT_EQ(AERON_ELECTION_FOLLOWER_READY, f.state());
+    EXPECT_EQ(AERON_ELECTION_FOLLOWER_REPLAY, f.state());
     EXPECT_EQ(1, f.agent.follower_new_term_count);
 }
 
@@ -382,10 +387,10 @@ TEST(ElectionTest, followerShouldSendAppendPositionOnReady)
     int64_t now = 50LL;
     f.do_work(now);
 
-    f.on_new_leadership_term(NULL_VALUE, 1LL, 0, 0, 1LL, 0, 0, 600LL, now, 0, 777, 0, true);
-    EXPECT_EQ(AERON_ELECTION_FOLLOWER_READY, f.state());
+    f.on_new_leadership_term(NULL_VALUE, 1LL, 0, 0, 1LL, 0, 0, 0, 600LL, now, 0, 777, 0, true);
+    EXPECT_EQ(AERON_ELECTION_FOLLOWER_REPLAY, f.state());
 
-    f.do_work(now + 1LL); /* Process FOLLOWER_READY → sends AppendPosition + CLOSED */
+    f.do_work(now + 1LL); /* FOLLOWER_REPLAY → LOG_INIT → LOG_AWAIT → READY → CLOSED */
 
     /* Should have sent AppendPosition to leader (member 0) */
     EXPECT_TRUE(f.pub.sent_to("append_position", 0));
@@ -709,4 +714,162 @@ TEST(ElectionTest, shouldRecordStateTransitionsInOrder)
     EXPECT_TRUE(f.state_reached(AERON_ELECTION_LEADER_INIT));
     EXPECT_TRUE(f.state_reached(AERON_ELECTION_LEADER_READY));
     EXPECT_EQ(AERON_ELECTION_CLOSED, f.state());
+}
+
+/* -----------------------------------------------------------------------
+ * 26. followerShouldReplicateLogAndTransitionToCanvass
+ *     When a follower's appendPosition < termBaseLogPosition it enters
+ *     FOLLOWER_LOG_REPLICATION, runs the replication to completion and
+ *     then returns to CANVASS to re-join the quorum.
+ * ----------------------------------------------------------------------- */
+
+/* File-level mock for the recording replication object used in tests 26-27. */
+static aeron_cluster_recording_replication_t s_test_log_rep;
+
+TEST(ElectionTest, followerShouldReplicateLogAndTransitionToCanvass)
+{
+    ElectionTestFixture f;
+    /* member 1, initial append_position = 0 (via log_position = 0) */
+    f.build(THREE_NODE, 1, NULL_VALUE, 0, NULL_VALUE, -1,
+        /* startup_canvass */ 5000000000LL,
+        /* election_timeout */ 1000000000LL,
+        /* status_interval */ 1LL,
+        /* heartbeat_timeout */ 10000000000LL);
+
+    int64_t now = 1000LL;
+    f.do_work(now);
+    EXPECT_EQ(AERON_ELECTION_CANVASS, f.state());
+
+    /* Prepare mock replication: already done when first polled */
+    memset(&s_test_log_rep, 0, sizeof(s_test_log_rep));
+    s_test_log_rep.has_replication_ended = true;
+    s_test_log_rep.has_stopped           = true;
+    s_test_log_rep.position              = 100LL;
+    s_test_log_rep.stop_position         = 100LL;
+    s_test_log_rep.progress_check_deadline_ns = INT64_MAX;
+    s_test_log_rep.progress_deadline_ns       = INT64_MAX;
+
+    /* Override: new_log_replication returns the pre-built mock */
+    f.election->agent_ops.new_log_replication =
+        [](void *, const char *, const char *, int64_t, int64_t, int64_t) -> void *
+        { return &s_test_log_rep; };
+    /* close_log_replication is a no-op (mock is stack/static memory) */
+    f.election->agent_ops.close_log_replication = [](void *, void *) {};
+
+    /* Leader (member 0) sends NewLeadershipTerm.
+     * append_position (0) < term_base_log_position (200) → FOLLOWER_LOG_REPLICATION.
+     * next_term_base = 100, so replication_stop_position = 100. */
+    f.on_new_leadership_term(
+        0LL,    /* log_leadership_term_id  */
+        1LL,    /* next_leadership_term_id */
+        100LL,  /* next_term_base          */
+        200LL,  /* next_log_position       */
+        1LL,    /* leadership_term_id      */
+        200LL,  /* term_base_log_position  */
+        200LL,  /* log_position            */
+        0LL,    /* commit_position         */
+        600LL,  /* leader_recording_id     */
+        now,    /* timestamp               */
+        0,      /* leader_member_id        */
+        777,    /* log_session_id          */
+        0,      /* app_version             */
+        false); /* is_startup              */
+
+    EXPECT_EQ(AERON_ELECTION_FOLLOWER_LOG_REPLICATION, f.state());
+
+    /* Drive: creates replication → polls (done immediately) → CANVASS */
+    f.do_work(now + 1LL);
+
+    EXPECT_TRUE(f.state_reached(AERON_ELECTION_FOLLOWER_LOG_REPLICATION));
+    EXPECT_EQ(AERON_ELECTION_CANVASS, f.state());
+    EXPECT_EQ(100LL, f.election->append_position);
+}
+
+/* -----------------------------------------------------------------------
+ * 27. followerAlreadyAtReplicationPositionGoesDirectlyToCanvass
+ *     When appendPosition already equals the replication stop position
+ *     the follower skips actual replication and transitions to CANVASS.
+ * ----------------------------------------------------------------------- */
+TEST(ElectionTest, followerAlreadyAtReplicationPositionGoesDirectlyToCanvass)
+{
+    ElectionTestFixture f;
+    /* member 1, initial append_position = 100 */
+    f.agent.append_position = 100LL;
+    f.build(THREE_NODE, 1,
+        /* log_term */ NULL_VALUE,
+        /* log_pos  */ 100LL,
+        /* term_id  */ NULL_VALUE,
+        -1,
+        5000000000LL, 1000000000LL, 1LL, 10000000000LL);
+
+    int64_t now = 1000LL;
+    f.do_work(now);
+    EXPECT_EQ(AERON_ELECTION_CANVASS, f.state());
+
+    /* NewLeadershipTerm: append (100) < term_base (200), next_term_base=100,
+     * next_log_pos=100  →  append == next_term_base, stop = next_log_pos = 100.
+     * In do_follower_log_replication: append (100) >= stop (100) → skip to CANVASS. */
+    f.on_new_leadership_term(
+        0LL, 1LL, 100LL, 100LL, 1LL, 200LL, 200LL,
+        0LL, 600LL, now, 0, 777, 0, false);
+
+    EXPECT_EQ(AERON_ELECTION_FOLLOWER_LOG_REPLICATION, f.state());
+
+    f.do_work(now + 1LL);
+
+    EXPECT_TRUE(f.state_reached(AERON_ELECTION_FOLLOWER_LOG_REPLICATION));
+    EXPECT_EQ(AERON_ELECTION_CANVASS, f.state());
+}
+
+/* -----------------------------------------------------------------------
+ * 28. followerShouldCatchupAndJoinLiveLog
+ *     When a follower's appendPosition is at the term base but behind
+ *     the leader's log_position it takes the CATCHUP path:
+ *     FOLLOWER_REPLAY → FOLLOWER_CATCHUP_INIT → FOLLOWER_CATCHUP_AWAIT
+ *     → FOLLOWER_CATCHUP → FOLLOWER_LOG_INIT → FOLLOWER_READY → CLOSED
+ * ----------------------------------------------------------------------- */
+TEST(ElectionTest, followerShouldCatchupAndJoinLiveLog)
+{
+    ElectionTestFixture f;
+    /* member 1, append_position = 0 */
+    f.build(THREE_NODE, 1, NULL_VALUE, 0, NULL_VALUE, -1,
+        5000000000LL, 1000000000LL, 1LL, 10000000000LL);
+
+    int64_t now = 1000LL;
+    f.do_work(now);
+    EXPECT_EQ(AERON_ELECTION_CANVASS, f.state());
+
+    /* Override agent ops so catchup can complete in unit tests:
+     * - send_catchup_position: return true so CATCHUP_INIT → CATCHUP_AWAIT
+     * - is_catchup_near_live: true so live destination is added immediately
+     * - get_commit_position: 100 (== catchup_join_position) so CATCHUP → LOG_INIT */
+    f.election->agent_ops.this_catchup_endpoint =
+        [](void *) -> const char * { return "localhost:9999"; };
+    f.election->agent_ops.send_catchup_position =
+        [](void *, const char *) -> bool { return true; };
+    f.election->agent_ops.is_catchup_near_live =
+        [](void *, int64_t) -> bool { return true; };
+    f.election->agent_ops.get_commit_position =
+        [](void *) -> int64_t { return 100LL; };
+
+    /* NewLeadershipTerm: term_base=0, log_pos=100.
+     * append (0) >= term_base (0) → FOLLOWER_REPLAY.
+     * log_pos (100) > append (0) → catchup_join_position = 100. */
+    f.on_new_leadership_term(
+        NULL_VALUE, 1LL, 0LL, 0LL,
+        1LL, 0LL, 100LL,
+        0LL, 600LL, now, 0, 777, 0, false);
+
+    EXPECT_EQ(AERON_ELECTION_FOLLOWER_REPLAY, f.state());
+
+    /* Single do_work drives the full catchup path to CLOSED */
+    f.do_work(now + 1LL);
+
+    EXPECT_TRUE(f.state_reached(AERON_ELECTION_FOLLOWER_CATCHUP_INIT));
+    EXPECT_TRUE(f.state_reached(AERON_ELECTION_FOLLOWER_CATCHUP_AWAIT));
+    EXPECT_TRUE(f.state_reached(AERON_ELECTION_FOLLOWER_CATCHUP));
+    EXPECT_TRUE(f.state_reached(AERON_ELECTION_FOLLOWER_LOG_INIT));
+    EXPECT_TRUE(f.state_reached(AERON_ELECTION_FOLLOWER_READY));
+    EXPECT_EQ(AERON_ELECTION_CLOSED, f.state());
+    EXPECT_EQ(1, f.agent.election_complete_count);
 }
