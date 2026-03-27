@@ -37,6 +37,7 @@ import static io.aeron.agent.ClusterEventCode.REPLAY_NEW_LEADERSHIP_TERM;
 import static io.aeron.agent.ClusterEventCode.REPLICATION_ENDED;
 import static io.aeron.agent.ClusterEventCode.REQUEST_VOTE;
 import static io.aeron.agent.ClusterEventCode.SERVICE_ACK;
+import static io.aeron.agent.ClusterEventCode.SNAPSHOT_ENTRY_INVALIDATION;
 import static io.aeron.agent.ClusterEventCode.STANDBY_SNAPSHOT_NOTIFICATION;
 import static io.aeron.agent.ClusterEventCode.STOP_CATCHUP;
 import static io.aeron.agent.ClusterEventCode.TERMINATION_ACK;
@@ -58,10 +59,12 @@ import static io.aeron.agent.ClusterEventEncoder.encodeOnReplayNewLeadershipTerm
 import static io.aeron.agent.ClusterEventEncoder.encodeOnRequestVote;
 import static io.aeron.agent.ClusterEventEncoder.encodeOnStopCatchup;
 import static io.aeron.agent.ClusterEventEncoder.encodeOnVote;
+import static io.aeron.agent.ClusterEventEncoder.encodeSnapshotEntryInvalidation;
 import static io.aeron.agent.ClusterEventEncoder.encodeStateChange;
 import static io.aeron.agent.ClusterEventEncoder.encodeTruncateLogEntry;
 import static io.aeron.agent.ClusterEventEncoder.newLeaderShipTermLength;
 import static io.aeron.agent.ClusterEventEncoder.replayNewLeadershipTermEventLength;
+import static io.aeron.agent.ClusterEventEncoder.snapshotEntryInvalidationLength;
 import static io.aeron.agent.ClusterEventEncoder.stateChangeLength;
 import static io.aeron.agent.ClusterEventEncoder.terminationPositionLength;
 import static io.aeron.agent.CommonEventEncoder.captureLength;
@@ -1100,6 +1103,50 @@ public final class ClusterEventLogger
                     oldState,
                     newState,
                     reason);
+            }
+            finally
+            {
+                ringBuffer.commit(index);
+            }
+        }
+    }
+
+    /**
+     * Log a snapshot entry invalidation.
+     *
+     * @param memberId      on which the snapshot was invalidated.
+     * @param entryIndex    within the recording long that was invalidated.
+     * @param recordingId   of the entry.
+     * @param logPosition   of the snapshot.
+     * @param serviceId     that took the snapshot.
+     */
+    public void logSnapshotEntryInvalidation(
+        final int memberId,
+        final int entryIndex,
+        final long recordingId,
+        final long logPosition,
+        final int serviceId)
+    {
+        final int length = snapshotEntryInvalidationLength();
+        final int captureLength = captureLength(length);
+        final int encodedLength = encodedLength(captureLength);
+        final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
+        final int index = ringBuffer.tryClaim(SNAPSHOT_ENTRY_INVALIDATION.toEventCodeId(), encodedLength);
+
+        if (index > 0)
+        {
+            try
+            {
+                encodeSnapshotEntryInvalidation(
+                    ringBuffer.buffer(),
+                    index,
+                    captureLength,
+                    length,
+                    memberId,
+                    entryIndex,
+                    recordingId,
+                    logPosition,
+                    serviceId);
             }
             finally
             {

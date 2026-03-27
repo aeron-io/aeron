@@ -3613,6 +3613,41 @@ class ClusterTest
         cluster.waitForError(follower, (s) -> s.contains("failed to start service=1"));
     }
 
+    @Test
+    @InterruptAfter(10)
+    void shouldInvalidateSnapshotsThatHaveBeenRemoved()
+    {
+        cluster = aCluster().start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode leader = cluster.awaitLeader();
+        cluster.connectClient();
+        cluster.sendAndAwaitMessages(10);
+        cluster.takeSnapshot(leader);
+        cluster.awaitSnapshotCount(1);
+        cluster.sendAndAwaitMessages(10, 20);
+        cluster.takeSnapshot(leader);
+        cluster.awaitSnapshotCount(2);
+        cluster.sendAndAwaitMessages(10, 30);
+        cluster.takeSnapshot(leader);
+        cluster.awaitSnapshotCount(3);
+
+        final List<TestCluster.SnapshotRecord> snapshots = cluster.snapshots(leader);
+
+        cluster.purgeSnapshot(leader, snapshots.get(0).recordingIds());
+        cluster.purgeSnapshot(leader, snapshots.get(1).recordingIds());
+
+        cluster.backupQueryContainsSnapshot(leader, snapshots.get(0).logPosition(), snapshots.get(0));
+        cluster.backupQueryContainsSnapshot(leader, snapshots.get(1).logPosition(), snapshots.get(1));
+        cluster.backupQueryContainsSnapshot(leader, snapshots.get(2).logPosition(), snapshots.get(2));
+
+        cluster.validateRecordingLog(leader);
+
+        Tests.await(() -> cluster.snapshots(leader).size() == 1);
+
+        cluster.backupQueryContainsSnapshot(leader, snapshots.get(0).logPosition(), snapshots.get(2));
+    }
+
     private static final class ExceptionOnLoadService extends TestNode.TestService
     {
         public void onStart(final Cluster cluster, final Image snapshotImage)
@@ -3643,7 +3678,7 @@ class ClusterTest
             ClusterCounters.CLUSTER_ID_LABEL_SUFFIX + clusterId;
     }
 
-    private long readSnapshot(final TestNode node)
+    static long readSnapshot(final TestNode node)
     {
         final long recordingId;
         try (RecordingLog recordingLog = new RecordingLog(node.consensusModule().context().clusterDir(),

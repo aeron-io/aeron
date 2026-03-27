@@ -729,4 +729,32 @@ final class ClusterEventDissector
         buffer.getStringAscii(absoluteOffset, builder, LITTLE_ENDIAN);
         builder.append('"');
     }
+
+    static void dissectSnapshotEntryInvalidation(
+        final ClusterEventCode eventCode,
+        final MutableDirectBuffer buffer,
+        final int offset,
+        final StringBuilder builder)
+    {
+        int absoluteOffset = offset;
+        absoluteOffset += dissectLogHeader(CONTEXT, eventCode, buffer, absoluteOffset, builder);
+
+        final int memberId = buffer.getInt(absoluteOffset, LITTLE_ENDIAN);
+        absoluteOffset += SIZE_OF_INT;
+        final int entryIndex = buffer.getInt(absoluteOffset, LITTLE_ENDIAN);
+        absoluteOffset += SIZE_OF_INT;
+        final long recordingId = buffer.getLong(absoluteOffset, LITTLE_ENDIAN);
+        absoluteOffset += SIZE_OF_LONG;
+        final long logPosition = buffer.getLong(absoluteOffset, LITTLE_ENDIAN);
+        absoluteOffset += SIZE_OF_LONG;
+        final int serviceId = buffer.getInt(absoluteOffset, LITTLE_ENDIAN);
+
+        builder
+            .append(":")
+            .append(" memberId=").append(memberId)
+            .append(" entryIndex=").append(entryIndex)
+            .append(" recordingId=").append(recordingId)
+            .append(" logPosition=").append(logPosition)
+            .append(" serviceId=").append(serviceId);
+    }
 }

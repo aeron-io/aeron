@@ -61,7 +61,8 @@ but is now explicitly enforced via the ClusteredServiceContainer.Configuration.M
 * **[Java]** Upgrade to `Mockito` 5.23.0.
 * **[Java]** Upgrade to `JUnit` 6.0.3.
 * **[Java]** Upgrade to `Checkstyle` 12.3.1.
-* **[Java]** Upgrade to `Shadow` 9.4.0.
+* **[Java]** Upgrade to `Shadow` 9.4.1.
+* **[C]** Upgrade to `CMake` 4.3.0.
 
 == 1.50.4 (2026-03-20)
 * **[Breaking]**: **[Client/C{plus}{plus} Wrapper]** Remove `close()` method from `Publication/ExclusivePublication`,

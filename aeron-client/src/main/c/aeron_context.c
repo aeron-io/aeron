@@ -554,9 +554,9 @@ int aeron_context_request_driver_termination(const char *directory, const uint8_
 {
     size_t min_length = AERON_CNC_VERSION_AND_META_DATA_LENGTH;
 
-    if (AERON_MAX_PATH < token_length)
+    if (token_length > AERON_MAX_PATH)
     {
-        AERON_SET_ERR(EINVAL, "Token too long: %lu", (unsigned long)token_length);
+        AERON_SET_ERR(EINVAL, "Token too long: %" PRIu64, (uint64_t)token_length);
         return -1;
     }
 
@@ -581,12 +581,12 @@ int aeron_context_request_driver_termination(const char *directory, const uint8_
         if (aeron_map_existing_file(&cnc_mmap, filename) < 0)
         {
             AERON_APPEND_ERR("%s", "Failed to map cnc for driver termination");
-            return aeron_errcode();
+            return -1;
         }
 
         if (cnc_mmap.length > min_length)
         {
-            int result = 1;
+            int result = -1;
 
             aeron_cnc_metadata_t *metadata = (aeron_cnc_metadata_t *)cnc_mmap.addr;
             int32_t cnc_version = aeron_cnc_version_volatile(metadata);
@@ -594,8 +594,6 @@ int aeron_context_request_driver_termination(const char *directory, const uint8_
             if (cnc_version <= 0)
             {
                 AERON_SET_ERR(EINVAL, "%s", "Aeron CnC not initialised");
-
-                result = -1;
                 goto cleanup;
             }
 
@@ -603,11 +601,9 @@ int aeron_context_request_driver_termination(const char *directory, const uint8_
             {
                 AERON_SET_ERR(
                     EINVAL,
-                    "Aeron CnC version does not match: client=%" PRId32 ", file=%" PRId32,
+                    "Aeron CnC version does not match: client=%" PRIi32 ", file=%" PRIi32,
                     AERON_CNC_VERSION,
                     cnc_version);
-
-                result = -1;
                 goto cleanup;
             }
 
@@ -615,18 +611,15 @@ int aeron_context_request_driver_termination(const char *directory, const uint8_
             {
                 AERON_SET_ERR(
                     EINVAL,
-                    "Driver version insufficient: client=%" PRId32 ", file=%" PRId32,
+                    "Driver version insufficient: client=%" PRIi32 ", file=%" PRIi32,
                     AERON_CNC_VERSION,
                     cnc_version);
-
-                result = -1;
                 goto cleanup;
             }
 
             if (!aeron_cnc_is_file_length_sufficient(&cnc_mmap))
             {
-                AERON_SET_ERR(EINVAL, "Aeron CnC file length not sufficient: length=%" PRId64, file_length_result);
-                result = -1;
+                AERON_SET_ERR(EINVAL, "Aeron CnC file length not sufficient: length=%" PRIi64, file_length_result);
                 goto cleanup;
             }
 
@@ -635,7 +628,16 @@ int aeron_context_request_driver_termination(const char *directory, const uint8_
                 &rb, aeron_cnc_to_driver_buffer(metadata), (size_t)metadata->to_driver_buffer_length) < 0)
             {
                 AERON_APPEND_ERR("%s", "Failed to setup ring buffer for termination");
-                result = -1;
+                goto cleanup;
+            }
+
+            if (token_length > rb.max_message_length)
+            {
+                AERON_SET_ERR(
+                    EINVAL,
+                    "%s", "Token length (%" PRIu64 ") > max message length (%" PRIu64 ")",
+                    (uint64_t)token_length,
+                    (uint64_t)rb.max_message_length);
                 goto cleanup;
             }
 
@@ -644,7 +646,7 @@ int aeron_context_request_driver_termination(const char *directory, const uint8_
             if (offset < 0)
             {
                 AERON_SET_ERR(AERON_CLIENT_ERROR_BUFFER_FULL, "%s", "Unable to write to driver ring buffer");
-                result = -1;
+                goto cleanup;
             }
 
             aeron_terminate_driver_command_t *command = (aeron_terminate_driver_command_t *)(rb.buffer + offset);
@@ -655,6 +657,7 @@ int aeron_context_request_driver_termination(const char *directory, const uint8_
             memcpy((void *)(command + 1), token_buffer, token_length);
 
             aeron_mpsc_rb_commit(&rb, offset);
+            result = 1;
 
 cleanup:
             aeron_unmap(&cnc_mmap);

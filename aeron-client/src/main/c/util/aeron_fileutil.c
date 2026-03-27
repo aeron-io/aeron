@@ -326,8 +326,6 @@ int aeron_delete_file(const char *dir)
 #include <stdio.h>
 #include <pwd.h>
 
-#define aeron_delete_file remove
-
 static int aeron_mmap(aeron_mapped_file_t *mapping, int fd, bool pre_touch)
 {
     int flags = MAP_SHARED;
@@ -372,6 +370,11 @@ int aeron_msync(void *addr, size_t length)
         return -1;
     }
     return 0;
+}
+
+int aeron_delete_file(const char *path)
+{
+    return remove(path);
 }
 
 static int unlink_func(const char *path, const struct stat *sb, int type_flag, struct FTW *ftw)

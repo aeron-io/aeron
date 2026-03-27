@@ -202,6 +202,7 @@ final class ConsensusModuleAgent
     private String catchupLogDestination;
     private String ingressEndpoints;
     private StandbySnapshotReplicator standbySnapshotReplicator = null;
+    private RecordingLogValidator recordingLogValidator = null;
     private String localLogChannel;
     private Subscription extensionLeaderSubscription = null;
 
@@ -2398,6 +2399,16 @@ final class ConsensusModuleAgent
             workCount += consensusModuleExtension.slowTickWork(nowNs);
         }
 
+        if (null != recordingLogValidator)
+        {
+            workCount += recordingLogValidator.poll();
+
+            if (recordingLogValidator.isComplete())
+            {
+                recordingLogValidator = null;
+            }
+        }
+
         return workCount;
     }
 
@@ -2606,6 +2617,20 @@ final class ConsensusModuleAgent
                     ctx.replicationChannel(),
                     ctx.fileSyncLevel(),
                     ctx.snapshotCounter());
+            }
+
+            NodeControl.ToggleState.reset(nodeControlToggle);
+
+            return 1;
+        }
+        else if (NodeControl.ToggleState.VALIDATE_RECORDING_LOG == NodeControl.ToggleState.get(nodeControlToggle))
+        {
+            if (null == recordingLogValidator)
+            {
+                recordingLogValidator = RecordingLogValidator.newInstance(
+                    memberId,
+                    ctx.archiveContext(),
+                    recordingLog);
             }
 
             NodeControl.ToggleState.reset(nodeControlToggle);

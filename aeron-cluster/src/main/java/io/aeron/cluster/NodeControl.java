@@ -52,7 +52,12 @@ public final class NodeControl
         /**
          * Trigger a replication of the most resent standby snapshots.
          */
-        REPLICATE_STANDBY_SNAPSHOT(2);
+        REPLICATE_STANDBY_SNAPSHOT(2),
+
+        /**
+         * Validate that the snapshot in the recording log have associated recordings.
+         */
+        VALIDATE_RECORDING_LOG(3);
 
         private final int code;
 

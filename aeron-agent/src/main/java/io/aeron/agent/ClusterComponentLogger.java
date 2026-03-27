@@ -279,6 +279,13 @@ public class ClusterComponentLogger implements ComponentLogger
             ClusterInterceptor.NewElection.class,
             "logNewElection");
 
+        tempBuilder = addEventInstrumentation(
+            tempBuilder,
+            SNAPSHOT_ENTRY_INVALIDATION,
+            "RecordingLogValidator",
+            ClusterInterceptor.SnapshotEntryInvalidation.class,
+            "logSnapshotEntryInvalidation");
+
         return tempBuilder;
     }
 

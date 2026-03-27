@@ -72,7 +72,8 @@ public final class ClusterToolCommand
         for (final Map.Entry<String, ClusterToolCommand> command : commands.entrySet())
         {
             final int indent = indentValue - command.getKey().length();
-            final String description = command.getValue().describe().replaceAll("%n", "%n" + indentSpaces);
+            final String description = command.getValue().describe().replaceAll(
+                "%n", String.format("%n") + indentSpaces);
             System.out.printf("%" + indent + "s", " ");
             System.out.printf("%s: %s%n", command.getKey(), description);
         }

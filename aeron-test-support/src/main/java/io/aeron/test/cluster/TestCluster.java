@@ -71,6 +71,7 @@ import io.aeron.security.AuthorisationServiceSupplier;
 import io.aeron.security.CredentialsSupplier;
 import io.aeron.security.DefaultAuthenticatorSupplier;
 import io.aeron.security.NullCredentialsSupplier;
+import io.aeron.test.CapturingPrintStream;
 import io.aeron.test.DataCollector;
 import io.aeron.test.Tests;
 import io.aeron.test.driver.DriverOutputConsumer;
@@ -102,11 +103,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.IntFunction;
@@ -2028,6 +2029,68 @@ public final class TestCluster implements AutoCloseable
         }
     }
 
+    public void purgeSnapshot(final TestNode node, final long[] recordingIds)
+    {
+        if (null == node || node.isClosed())
+        {
+            return;
+        }
+
+        try (Aeron aeron = Aeron.connect(
+            new Aeron.Context().aeronDirectoryName(node.mediaDriver().aeronDirectoryName())))
+        {
+            final MutableInteger segmentsDeleted = new MutableInteger(0);
+            final RecordingSignalConsumer deleteSignalConsumer =
+                (controlSessionId, correlationId, recordingId1, subscriptionId, position, signal) ->
+                {
+                    if (RecordingSignal.DELETE == signal)
+                    {
+                        segmentsDeleted.increment();
+                    }
+                };
+
+            final AeronArchive.Context aeronArchiveCtx = node
+                .consensusModule()
+                .context()
+                .archiveContext()
+                .clone();
+
+            aeronArchiveCtx
+                .recordingSignalConsumer(deleteSignalConsumer)
+                .aeron(aeron)
+                .ownsAeronClient(false)
+                .controlResponseStreamId(10000 + node.index())
+                .controlResponseChannel(new ChannelUriStringBuilder(aeronArchiveCtx.controlResponseChannel())
+                    .alias("purge-snapshot-node-" + node.index())
+                    .build());
+
+            try (AeronArchive aeronArchive = requireNonNull(AeronArchive.connect(aeronArchiveCtx)))
+            {
+                long totalDeletedSegmentCount = 0;
+                for (final long recordingId : recordingIds)
+                {
+                    final long deletedSegmentCount = aeronArchive.purgeRecording(recordingId);
+                    assertTrue(0 < deletedSegmentCount);
+                    totalDeletedSegmentCount += deletedSegmentCount;
+
+                    while (totalDeletedSegmentCount < segmentsDeleted.get())
+                    {
+                        aeronArchive.pollForRecordingSignals();
+                    }
+                }
+            }
+        }
+    }
+
+    public void validateRecordingLog(final TestNode leader)
+    {
+        final CapturingPrintStream out = new CapturingPrintStream();
+        final File clusterDir = leader.consensusModule().context().clusterDir();
+        assertTrue(
+            ClusterTool.validateRecordingLog(clusterDir, out.resetAndGetPrintStream()),
+            out.flushAndGetContent());
+    }
+
     String clusterConsensusEndpoints(final int beginIndex, final int endIndex)
     {
         final StringBuilder builder = new StringBuilder();
@@ -2568,7 +2631,7 @@ public final class TestCluster implements AutoCloseable
         }
     }
 
-    public record SnapshotRecord(long recordingId, long logPosition)
+    public record SnapshotRecord(long logPosition, long[] recordingIds)
     {
     }
 
@@ -2577,11 +2640,19 @@ public final class TestCluster implements AutoCloseable
         final File file = testNode.consensusModule().context().clusterDir();
         try (RecordingLog recordingLog = new RecordingLog(file, false))
         {
-            return recordingLog.entries().stream()
-                .filter((entry) -> RecordingLog.ENTRY_TYPE_SNAPSHOT == entry.type && SERVICE_ID == entry.serviceId)
-                .map(entry -> new SnapshotRecord(entry.recordingId, entry.logPosition))
-                .sorted(Comparator.comparingLong(SnapshotRecord::logPosition))
-                .toList();
+            final TreeMap<Long, List<RecordingLog.Entry>> collect = recordingLog.entries().stream()
+                .filter((entry) -> RecordingLog.ENTRY_TYPE_SNAPSHOT == entry.type && entry.isValid)
+                .collect(Collectors.groupingBy((e) -> e.logPosition, TreeMap::new, toList()));
+
+            final ArrayList<SnapshotRecord> records = new ArrayList<>();
+            collect.forEach(
+                (logPosition, entry) ->
+                {
+                    final long[] recordingIds = entry.stream().mapToLong((e) -> e.recordingId).toArray();
+                    records.add(new SnapshotRecord(logPosition, recordingIds));
+                });
+
+            return records;
         }
     }
 

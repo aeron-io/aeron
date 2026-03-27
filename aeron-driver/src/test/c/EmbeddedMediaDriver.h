@@ -52,12 +52,12 @@ public:
 
     ~EmbeddedMediaDriver()
     {
-        if (0 != aeron_driver_close(m_driver))
+        if (nullptr != m_driver && 0 != aeron_driver_close(m_driver))
         {
             fprintf(stderr, "ERROR: driver close (%d) %s\n", aeron_errcode(), aeron_errmsg());
         }
 
-        if (0 != aeron_driver_context_close(m_context))
+        if (nullptr != m_context && 0 != aeron_driver_context_close(m_context))
         {
             fprintf(stderr, "ERROR: driver context close (%d) %s\n", aeron_errcode(), aeron_errmsg());
         }

@@ -418,4 +418,18 @@ class ClusterInterceptor
             LOGGER.logClusterSessionStateChange(memberId, sessionId, action, oldState, newState, reason);
         }
     }
+
+    static class SnapshotEntryInvalidation
+    {
+        @Advice.OnMethodEnter
+        static void logSnapshotEntryInvalidation(
+            final int memberId,
+            final int entryIndex,
+            final long recordingId,
+            final long logPosition,
+            final int serviceId)
+        {
+            LOGGER.logSnapshotEntryInvalidation(memberId, entryIndex, recordingId, logPosition, serviceId);
+        }
+    }
 }
