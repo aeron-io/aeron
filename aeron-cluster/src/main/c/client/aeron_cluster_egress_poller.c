@@ -274,10 +274,10 @@ static aeron_controlled_fragment_handler_action_t on_fragment(
             poller->cluster_session_id = aeron_cluster_client_adminResponse_clusterSessionId(&msg);
             poller->correlation_id     = aeron_cluster_client_adminResponse_correlationId(&msg);
 
-            enum aeron_cluster_client_adminRequestType req_type;
+            enum aeron_cluster_client_adminRequestType req_type = 0;
             aeron_cluster_client_adminResponse_requestType(&msg, &req_type);
 
-            enum aeron_cluster_client_adminResponseCode resp_code;
+            enum aeron_cluster_client_adminResponseCode resp_code = 0;
             aeron_cluster_client_adminResponse_responseCode(&msg, &resp_code);
 
             const uint32_t msg_len = aeron_cluster_client_adminResponse_message_length(&msg);

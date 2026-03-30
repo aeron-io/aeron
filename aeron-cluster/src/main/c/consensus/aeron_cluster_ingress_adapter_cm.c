@@ -165,7 +165,7 @@ static aeron_controlled_fragment_handler_action_t on_ingress_fragment(
                 aeron_cluster_client_adminRequest_sbe_schema_version(), length))
             { break; }
 
-            enum aeron_cluster_client_adminRequestType req_type;
+            enum aeron_cluster_client_adminRequestType req_type = 0;
             aeron_cluster_client_adminRequest_requestType(&msg, &req_type);
 
             uint32_t payload_len = aeron_cluster_client_adminRequest_payload_length(&msg);

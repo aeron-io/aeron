@@ -125,7 +125,7 @@ static aeron_controlled_fragment_handler_action_t on_fragment(
                 aeron_cluster_client_vote_sbe_schema_version(), length))
             { break; }
 
-            enum aeron_cluster_client_booleanType vote_val;
+            enum aeron_cluster_client_booleanType vote_val = 0;
             aeron_cluster_client_vote_vote(&msg, &vote_val);
 
             aeron_consensus_module_agent_on_vote(adapter->agent,
@@ -147,7 +147,7 @@ static aeron_controlled_fragment_handler_action_t on_fragment(
                 aeron_cluster_client_newLeadershipTerm_sbe_schema_version(), length))
             { break; }
 
-            enum aeron_cluster_client_booleanType is_startup;
+            enum aeron_cluster_client_booleanType is_startup = 0;
             aeron_cluster_client_newLeadershipTerm_isStartup(&msg, &is_startup);
 
             aeron_consensus_module_agent_on_new_leadership_term(adapter->agent,
@@ -350,6 +350,7 @@ static aeron_controlled_fragment_handler_action_t on_fragment(
             int snap_count = 0;
 
             struct aeron_cluster_client_standbySnapshot_snapshots grp;
+            memset(&grp, 0, sizeof(grp));
             aeron_cluster_client_standbySnapshot_get_snapshots(&msg, &grp);
             while (aeron_cluster_client_standbySnapshot_snapshots_has_next(&grp) &&
                    snap_count < STANDBY_SNAP_MAX)
