@@ -597,6 +597,8 @@ int aeron_cluster_poll_egress(aeron_cluster_t *cluster)
 
 /* -----------------------------------------------------------------------
  * on_egress_for_test — bypass real subscription; dispatch buffer directly.
+ * Declaration guarded by AERON_CLUSTER_TESTING in the header; implementation
+ * is always compiled so the symbol is available when tests link against the lib.
  * ----------------------------------------------------------------------- */
 void aeron_cluster_on_egress_for_test(
     aeron_cluster_t *cluster,

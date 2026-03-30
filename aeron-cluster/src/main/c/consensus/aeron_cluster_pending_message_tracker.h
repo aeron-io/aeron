@@ -195,13 +195,18 @@ void aeron_cluster_pending_message_tracker_sweep_follower_messages(
     int64_t cluster_session_id);
 
 /**
- * Reset the timestamp field of uncommitted messages back to AERON_PMT_NOT_APPENDED,
- * then clear uncommitted_messages and pending_message_head_offset.
+ * Consume committed messages, then reset the timestamp field of remaining
+ * (uncommitted) messages back to AERON_PMT_NOT_APPENDED. Clears
+ * uncommitted_messages and pending_message_head_offset.
  * Called when the leader steps down.
  * Mirrors Java PendingServiceMessageTracker.restoreUncommittedMessages().
+ *
+ * @param commit_position current commit position used to determine which
+ *                        messages have been committed
  */
 void aeron_cluster_pending_message_tracker_restore_uncommitted_messages(
-    aeron_cluster_pending_message_tracker_t *tracker);
+    aeron_cluster_pending_message_tracker_t *tracker,
+    int64_t commit_position);
 
 /**
  * Directly append a raw message (session_header + payload) to the ring buffer.
@@ -218,6 +223,29 @@ void aeron_cluster_pending_message_tracker_append_message(
     const uint8_t *buffer,
     int            offset,
     int            total_length);
+
+/**
+ * Reset the timestamp field of all pending messages back to AERON_PMT_NOT_APPENDED.
+ * Does not consume any messages. Called during state transitions.
+ * Mirrors Java PendingServiceMessageTracker.reset().
+ */
+void aeron_cluster_pending_message_tracker_reset(
+    aeron_cluster_pending_message_tracker_t *tracker);
+
+/**
+ * Return the byte size of the pending messages ring buffer.
+ * Mirrors Java PendingServiceMessageTracker.size().
+ */
+int aeron_cluster_pending_message_tracker_size(
+    aeron_cluster_pending_message_tracker_t *tracker);
+
+/**
+ * Verify that pending messages are consistent with the tracker state.
+ * Returns 0 on success, -1 on verification failure.
+ * Mirrors Java PendingServiceMessageTracker.verify().
+ */
+int aeron_cluster_pending_message_tracker_verify(
+    aeron_cluster_pending_message_tracker_t *tracker);
 
 /* -----------------------------------------------------------------------
  * Static helpers — mirrors Java static methods

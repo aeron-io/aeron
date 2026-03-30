@@ -61,10 +61,10 @@ endfunction()
 
 if (AERON_TESTS)
     aeron_c_cluster_integration_test(aeron_cluster_integration_test
-        integration/ClusterIntegrationTest.cpp)
+        integration/aeron_cluster_integration_test.cpp)
     aeron_c_cluster_integration_test(aeron_cluster_echo_test
-        integration/ClusterEchoTest.cpp
-        integration/ClusterServerHelper.cpp)
+        integration/aeron_cluster_echo_test.cpp
+        integration/aeron_cluster_server_helper.cpp)
     aeron_c_cluster_integration_test(aeron_cluster_3node_test
-        integration/ThreeNodeClusterTest.cpp)
+        integration/aeron_cluster_three_node_test.cpp)
 endif ()

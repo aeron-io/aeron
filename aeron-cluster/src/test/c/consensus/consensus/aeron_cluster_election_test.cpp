@@ -29,7 +29,7 @@
 
 #include <gtest/gtest.h>
 #include <cstring>
-#include "../MockElectionAgent.h"
+#include "../aeron_mock_election_agent.h"
 
 extern "C"
 {

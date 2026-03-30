@@ -34,7 +34,7 @@ extern "C"
 #include "util/aeron_fileutil.h"
 }
 
-#include "../integration/TestClusterNode.h"
+#include "../integration/aeron_test_cluster_node.h"
 
 /**
  * Integration test: starts a real ArchivingMediaDriver (Java process),

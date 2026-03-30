@@ -15,20 +15,25 @@
  */
 
 #include <string.h>
+#include <inttypes.h>
 #include "aeron_cluster_cm_snapshot_loader.h"
 #include "aeron_cluster_cm_snapshot_taker.h"    /* for AERON_CM_SNAPSHOT_MARK_* */
+#include "aeron_consensus_module_configuration.h"
 #include "aeron_alloc.h"
 #include "util/aeron_error.h"
 
 #include "aeron_cluster_client/messageHeader.h"
 #include "aeron_cluster_client/snapshotMarker.h"
 #include "aeron_cluster_client/clusterSession.h"
+#include "aeron_cluster_client/sessionMessageHeader.h"
 #include "aeron_cluster_client/timer.h"
 #include "aeron_cluster_client/consensusModule.h"
+#include "aeron_cluster_client/clusterMembers.h"
 #include "aeron_cluster_client/pendingMessageTracker.h"
 
 /* -----------------------------------------------------------------------
- * Fragment handler — dispatches on SBE template ID
+ * Fragment handler — dispatches on SBE template ID.
+ * Mirrors Java ConsensusModuleSnapshotAdapter.onFragment().
  * ----------------------------------------------------------------------- */
 static aeron_controlled_fragment_handler_action_t on_fragment(
     void *clientd, const uint8_t *buffer, size_t length, aeron_header_t *header)
@@ -52,6 +57,37 @@ static aeron_controlled_fragment_handler_action_t on_fragment(
     const uint64_t hdr_len    = aeron_cluster_client_messageHeader_encoded_length();
     const int32_t  template_id = (int32_t)aeron_cluster_client_messageHeader_templateId(&hdr);
 
+    /* ---- SessionMessageHeader (template 1) — pending service messages ---- */
+    if (template_id == AERON_CLUSTER_CLIENT_SESSION_MESSAGE_HEADER_SBE_TEMPLATE_ID)
+    {
+        struct aeron_cluster_client_sessionMessageHeader smh;
+        if (NULL == aeron_cluster_client_sessionMessageHeader_wrap_for_decode(
+            &smh, (char *)buffer, hdr_len,
+            aeron_cluster_client_sessionMessageHeader_sbe_block_length(),
+            aeron_cluster_client_sessionMessageHeader_sbe_schema_version(),
+            length))
+        {
+            return AERON_ACTION_CONTINUE;
+        }
+
+        int64_t cluster_session_id =
+            aeron_cluster_client_sessionMessageHeader_clusterSessionId(&smh);
+        int32_t service_id =
+            aeron_pending_message_tracker_service_id_from_log_message(cluster_session_id);
+
+        if (NULL != ldr->pending_trackers &&
+            service_id >= 0 && service_id < ldr->pending_tracker_count)
+        {
+            aeron_cluster_pending_message_tracker_append_message(
+                &ldr->pending_trackers[service_id],
+                buffer,
+                0,
+                (int)length);
+        }
+
+        return AERON_ACTION_CONTINUE;
+    }
+
     /* ---- SnapshotMarker (template 100) ---- */
     if (template_id == AERON_CLUSTER_CLIENT_SNAPSHOT_MARKER_SBE_TEMPLATE_ID)
     {
@@ -65,11 +101,39 @@ static aeron_controlled_fragment_handler_action_t on_fragment(
             return AERON_ACTION_CONTINUE;
         }
 
+        /* Validate snapshot type ID matches ConsensusModule snapshot */
+        int64_t type_id = aeron_cluster_client_snapshotMarker_typeId(&msg);
+        if (type_id != AERON_CM_SNAPSHOT_TYPE_ID)
+        {
+            AERON_SET_ERR(-1, "unexpected snapshot typeId: %" PRId64, type_id);
+            ldr->has_error = true;
+            return AERON_ACTION_BREAK;
+        }
+
         enum aeron_cluster_client_snapshotMark mark;
         if (aeron_cluster_client_snapshotMarker_mark(&msg, &mark))
         {
+            if ((int)mark == AERON_CM_SNAPSHOT_MARK_BEGIN)
+            {
+                if (ldr->in_snapshot)
+                {
+                    AERON_SET_ERR(-1, "%s", "already in snapshot — duplicate BEGIN marker");
+                    ldr->has_error = true;
+                    return AERON_ACTION_BREAK;
+                }
+                ldr->in_snapshot = true;
+                ldr->app_version = aeron_cluster_client_snapshotMarker_appVersion(&msg);
+                return AERON_ACTION_CONTINUE;
+            }
+
             if ((int)mark == AERON_CM_SNAPSHOT_MARK_END)
             {
+                if (!ldr->in_snapshot)
+                {
+                    AERON_SET_ERR(-1, "%s", "missing BEGIN snapshot marker");
+                    ldr->has_error = true;
+                    return AERON_ACTION_BREAK;
+                }
                 ldr->is_done = true;
                 return AERON_ACTION_BREAK;
             }
@@ -165,8 +229,11 @@ static aeron_controlled_fragment_handler_action_t on_fragment(
             return AERON_ACTION_CONTINUE;
         }
 
-        ldr->next_session_id = aeron_cluster_client_consensusModule_nextSessionId(&msg);
-        ldr->has_cm_state    = true;
+        ldr->next_session_id          = aeron_cluster_client_consensusModule_nextSessionId(&msg);
+        ldr->next_service_session_id  = aeron_cluster_client_consensusModule_nextServiceSessionId(&msg);
+        ldr->log_service_session_id   = aeron_cluster_client_consensusModule_logServiceSessionId(&msg);
+        ldr->pending_message_capacity = aeron_cluster_client_consensusModule_pendingMessageCapacity(&msg);
+        ldr->has_cm_state             = true;
 
         /* Update session manager's next session ID if available */
         if (NULL != ldr->session_manager)
@@ -181,13 +248,20 @@ static aeron_controlled_fragment_handler_action_t on_fragment(
         {
             aeron_cluster_pending_message_tracker_load_state(
                 &ldr->pending_trackers[0],
-                aeron_cluster_client_consensusModule_nextServiceSessionId(&msg),
-                aeron_cluster_client_consensusModule_logServiceSessionId(&msg),
-                (int64_t)aeron_cluster_client_consensusModule_pendingMessageCapacity(&msg));
+                ldr->next_service_session_id,
+                ldr->log_service_session_id,
+                (int64_t)ldr->pending_message_capacity);
         }
         return AERON_ACTION_CONTINUE;
     }
 
+    /* ---- ClusterMembers (template 106) — ignored, mirrors Java ---- */
+    if (template_id == AERON_CLUSTER_CLIENT_CLUSTER_MEMBERS_SBE_TEMPLATE_ID)
+    {
+        return AERON_ACTION_CONTINUE;
+    }
+
+    /* ---- PendingMessageTracker (template 107) ---- */
     if (template_id == AERON_CLUSTER_CLIENT_PENDING_MESSAGE_TRACKER_SBE_TEMPLATE_ID)
     {
         struct aeron_cluster_client_pendingMessageTracker msg;
@@ -240,9 +314,14 @@ int aeron_cluster_cm_snapshot_loader_create(
     l->pending_trackers       = pending_trackers;
     l->pending_tracker_count  = pending_tracker_count;
     l->next_session_id        = 1;
-    l->has_cm_state    = false;
-    l->is_done         = false;
-    l->has_error       = false;
+    l->next_service_session_id = 0;
+    l->log_service_session_id  = 0;
+    l->pending_message_capacity = 0;
+    l->app_version  = 0;
+    l->has_cm_state = false;
+    l->in_snapshot  = false;
+    l->is_done      = false;
+    l->has_error    = false;
 
     *loader = l;
     return 0;

@@ -765,6 +765,31 @@ static int process_one_pending_list(
             if (NULL != s->response_publication &&
                 aeron_exclusive_publication_is_connected(s->response_publication))
             {
+                /* Send the challenge data to the client if not yet sent */
+                if (s->has_challenge_pending &&
+                    s->encoded_challenge_length > 0 &&
+                    NULL != s->encoded_challenge)
+                {
+                    if (aeron_cluster_egress_publisher_send_challenge(
+                        s->response_publication,
+                        s->correlation_id,
+                        s->id,
+                        s->encoded_challenge,
+                        s->encoded_challenge_length))
+                    {
+                        s->has_challenge_pending = false;
+                        /* Free the challenge data — it has been sent */
+                        aeron_free(s->encoded_challenge);
+                        s->encoded_challenge        = NULL;
+                        s->encoded_challenge_length = 0;
+                        work++;
+                    }
+                }
+                else
+                {
+                    s->has_challenge_pending = false;
+                }
+
                 manager->authenticator.on_challenged_session(
                     manager->authenticator.clientd, s, now_ms);
             }

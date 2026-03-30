@@ -324,15 +324,20 @@ static bool pmt_message_reset(
 }
 
 void aeron_cluster_pending_message_tracker_restore_uncommitted_messages(
-    aeron_cluster_pending_message_tracker_t *tracker)
+    aeron_cluster_pending_message_tracker_t *tracker,
+    int64_t commit_position)
 {
     if (tracker->uncommitted_messages > 0)
     {
-        /* First consume the committed messages (those before pending_message_head_offset) */
-        aeron_expandable_ring_buffer_consume(
-            &tracker->pending_messages, NULL, pmt_message_reset, INT32_MAX);
+        pmt_leader_sweep_ctx_t sweep_ctx = {
+            .commit_position = commit_position,
+            .log_session_id  = &tracker->log_service_session_id,
+            .uncommitted     = &tracker->uncommitted_messages,
+        };
 
-        /* Reset all remaining entries' timestamps */
+        aeron_expandable_ring_buffer_consume(
+            &tracker->pending_messages, &sweep_ctx, pmt_leader_message_sweeper, INT32_MAX);
+
         aeron_expandable_ring_buffer_for_each(
             &tracker->pending_messages, NULL, pmt_message_reset, INT32_MAX);
 
@@ -352,4 +357,82 @@ void aeron_cluster_pending_message_tracker_append_message(
 {
     aeron_expandable_ring_buffer_append(
         &tracker->pending_messages, buffer, offset, total_length);
+}
+
+/* -----------------------------------------------------------------------
+ * reset — reset timestamp fields without consuming
+ * ----------------------------------------------------------------------- */
+void aeron_cluster_pending_message_tracker_reset(
+    aeron_cluster_pending_message_tracker_t *tracker)
+{
+    aeron_expandable_ring_buffer_for_each(
+        &tracker->pending_messages, NULL, pmt_message_reset, INT32_MAX);
+}
+
+/* -----------------------------------------------------------------------
+ * size — return byte size of pending messages
+ * ----------------------------------------------------------------------- */
+int aeron_cluster_pending_message_tracker_size(
+    aeron_cluster_pending_message_tracker_t *tracker)
+{
+    return aeron_expandable_ring_buffer_size(&tracker->pending_messages);
+}
+
+/* -----------------------------------------------------------------------
+ * verify — validate pending message consistency
+ * ----------------------------------------------------------------------- */
+typedef struct
+{
+    aeron_cluster_pending_message_tracker_t *tracker;
+    int message_count;
+    int result;
+} pmt_verify_ctx_t;
+
+static bool pmt_verify_consumer(
+    void    *clientd,
+    uint8_t *buffer,
+    int      offset,
+    int      length,
+    int      head_offset)
+{
+    (void)length; (void)head_offset;
+    pmt_verify_ctx_t *ctx = (pmt_verify_ctx_t *)clientd;
+
+    ctx->message_count++;
+
+    int64_t cluster_session_id = pmt_read_int64_le(
+        buffer, offset + AERON_PMT_CLUSTER_SESSION_ID_OFFSET);
+
+    if (cluster_session_id != (ctx->tracker->log_service_session_id + ctx->message_count))
+    {
+        ctx->result = -1;
+        return false;
+    }
+
+    return true;
+}
+
+int aeron_cluster_pending_message_tracker_verify(
+    aeron_cluster_pending_message_tracker_t *tracker)
+{
+    pmt_verify_ctx_t ctx = {
+        .tracker = tracker,
+        .message_count = 0,
+        .result = 0,
+    };
+
+    aeron_expandable_ring_buffer_for_each(
+        &tracker->pending_messages, &ctx, pmt_verify_consumer, INT32_MAX);
+
+    if (ctx.result != 0)
+    {
+        return -1;
+    }
+
+    if (tracker->next_service_session_id != (tracker->log_service_session_id + ctx.message_count + 1))
+    {
+        return -1;
+    }
+
+    return 0;
 }

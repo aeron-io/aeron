@@ -19,7 +19,7 @@
  * Kept in a separate TU so client-only TUs avoid the aeron_cluster_t typedef clash.
  */
 
-#include "ClusterServerHelper.h"
+#include "aeron_cluster_server_helper.h"
 
 #include <cstdlib>
 #include <cstring>

@@ -353,6 +353,38 @@ int aeron_cluster_member_try_add_publication(
 void aeron_cluster_member_close_publication(aeron_cluster_member_t *member);
 
 /* -----------------------------------------------------------------------
+ * Dynamic membership helpers
+ * ----------------------------------------------------------------------- */
+
+/**
+ * Find the member with the oldest (smallest) timeOfLastAppendPositionNs.
+ * Used to detect slow or dead members. Skips members whose id matches exclude_id.
+ * Returns NULL if no candidate found.
+ * Useful for dynamic membership / forced removal of unresponsive nodes.
+ */
+aeron_cluster_member_t *aeron_cluster_member_determine_dated_member(
+    aeron_cluster_member_t *members,
+    int count,
+    int32_t exclude_id);
+
+/**
+ * Return the highest member ID in the array.
+ * Used when assigning IDs to dynamically added members.
+ * Returns -1 if the array is empty.
+ */
+int32_t aeron_cluster_members_high_member_id(
+    const aeron_cluster_member_t *members, int count);
+
+/**
+ * Have all members (excluding self_id) acknowledged termination?
+ * Returns true if every member other than self_id has has_terminate_notified == true.
+ */
+bool aeron_cluster_members_has_terminated_all(
+    const aeron_cluster_member_t *members,
+    int count,
+    int32_t self_id);
+
+/* -----------------------------------------------------------------------
  * Per-member activity helpers
  * ----------------------------------------------------------------------- */
 

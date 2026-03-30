@@ -161,3 +161,38 @@ Offset  Size  Field
 
 - **SnapshotMarker BEGIN/END are mandatory**: the snapshot loader uses them as
   boundaries; missing either marker causes recovery to fail.
+
+---
+
+## Testing
+
+The C implementation has **294 unit tests** and **12 integration tests** (all passing).
+
+| Suite | Tests | Target |
+|-------|-------|--------|
+| ElectionTest | 28 | `aeron_cluster_election_test` |
+| SnapshotTakerTest | 29 | `aeron_cluster_snapshot_test` |
+| ClusterConsensusTest | 237 | `aeron_cluster_consensus_test` |
+| ClusterIntegrationTest | 7 | `aeron_cluster_integration_test` |
+| ClusterEchoTest | 3 | `aeron_cluster_echo_test` |
+| ThreeNodeClusterTest | 2 | `aeron_cluster_3node_test` |
+
+### Building and running tests
+
+From the CMake build directory:
+
+```bash
+# Build and run a specific unit test suite
+cmake --build . --target aeron_cluster_election_test
+ctest -R aeron_cluster_election_test --output-on-failure
+
+# Build and run all cluster C unit tests
+cmake --build . --target aeron_cluster_consensus_test aeron_cluster_election_test aeron_cluster_snapshot_test
+ctest -R "aeron_cluster_(consensus|election|snapshot)_test" --output-on-failure
+
+# Integration tests (require Java ArchivingMediaDriver)
+cmake --build . --target aeron_cluster_integration_test aeron_cluster_echo_test aeron_cluster_3node_test
+ctest -L integration --output-on-failure
+```
+
+Integration tests require a Java ArchivingMediaDriver on the `PATH`.

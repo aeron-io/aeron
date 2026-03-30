@@ -1244,7 +1244,7 @@ void aeron_consensus_module_agent_on_election_complete(
             for (int svc = 0; svc < agent->service_count; svc++)
             {
                 aeron_cluster_pending_message_tracker_restore_uncommitted_messages(
-                    &agent->pending_trackers[svc]);
+                    &agent->pending_trackers[svc], agent->notified_commit_position);
             }
         }
         if (NULL != agent->session_manager)
@@ -1992,14 +1992,28 @@ void aeron_consensus_module_agent_on_ingress_challenge_response(
     const uint8_t *encoded_credentials, size_t credentials_length,
     aeron_header_t *header)
 {
-    (void)correlation_id; (void)header;
-    if (NULL != agent->session_manager)
+    (void)header;
+    if (AERON_CLUSTER_ROLE_LEADER == agent->role)
     {
-        aeron_cluster_session_manager_on_challenge_response(
-            agent->session_manager,
-            correlation_id, cluster_session_id,
-            encoded_credentials, credentials_length,
-            aeron_nano_clock());
+        if (NULL != agent->session_manager)
+        {
+            aeron_cluster_session_manager_on_challenge_response(
+                agent->session_manager,
+                correlation_id, cluster_session_id,
+                encoded_credentials, credentials_length,
+                aeron_nano_clock());
+        }
+    }
+    else
+    {
+        /* Follower: forward the challenge response to the leader via consensus channel */
+        if (NULL != agent->leader_member && NULL != agent->leader_member->publication)
+        {
+            aeron_cluster_consensus_publisher_challenge_response(
+                agent->leader_member->publication,
+                correlation_id, cluster_session_id,
+                encoded_credentials, credentials_length);
+        }
     }
 }
 

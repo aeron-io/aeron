@@ -16,6 +16,8 @@
 
 #include <string.h>
 #include <errno.h>
+#include <stdlib.h>
+#include <sys/stat.h>
 
 #include "aeron_cluster_service_container.h"
 #include "aeron_cluster_service_context.h"
@@ -24,8 +26,10 @@
 #include "aeron_alloc.h"
 #include "util/aeron_error.h"
 
+#define AERON_CLUSTER_MAX_SERVICE_COUNT 127
+
 /* -----------------------------------------------------------------------
- * conclude: validate & fill defaults
+ * conclude: validate & fill defaults — mirrors Java ClusteredServiceContainer.Context.conclude()
  * ----------------------------------------------------------------------- */
 int aeron_cluster_service_container_conclude(aeron_cluster_service_context_t *ctx)
 {
@@ -42,6 +46,14 @@ int aeron_cluster_service_container_conclude(aeron_cluster_service_context_t *ct
     if (NULL == ctx->service)
     {
         AERON_SET_ERR(EINVAL, "%s", "clustered service must be set on context before conclude");
+        return -1;
+    }
+
+    /* Validate service ID range — mirrors Java: serviceId in [0, MAX_SERVICE_COUNT) */
+    if (ctx->service_id < 0 || ctx->service_id >= AERON_CLUSTER_MAX_SERVICE_COUNT)
+    {
+        AERON_SET_ERR(EINVAL, "service_id %d out of range [0, %d)",
+            ctx->service_id, AERON_CLUSTER_MAX_SERVICE_COUNT);
         return -1;
     }
 
@@ -72,6 +84,40 @@ int aeron_cluster_service_container_conclude(aeron_cluster_service_context_t *ct
     if (ctx->snapshot_stream_id == 0)
     {
         ctx->snapshot_stream_id = AERON_CLUSTER_SNAPSHOT_STREAM_ID_DEFAULT;
+    }
+
+    /* Fill cluster_dir from env var if not explicitly set */
+    if (ctx->cluster_dir[0] == '\0')
+    {
+        const char *env_dir = getenv(AERON_CLUSTER_DIR_ENV_VAR);
+        if (NULL != env_dir && env_dir[0] != '\0')
+        {
+            aeron_cluster_service_context_set_cluster_dir(ctx, env_dir);
+        }
+    }
+
+    /* Ensure cluster directory exists */
+    if (ctx->cluster_dir[0] != '\0')
+    {
+        struct stat st;
+        if (stat(ctx->cluster_dir, &st) != 0)
+        {
+            if (mkdir(ctx->cluster_dir, 0755) != 0 && errno != EEXIST)
+            {
+                AERON_SET_ERR(errno, "failed to create cluster dir: %s", ctx->cluster_dir);
+                return -1;
+            }
+        }
+    }
+
+    /* Fill app_version from env var if not set */
+    if (ctx->app_version == 0)
+    {
+        const char *env_ver = getenv(AERON_CLUSTER_SERVICE_APP_VERSION_ENV_VAR);
+        if (NULL != env_ver)
+        {
+            ctx->app_version = (int32_t)strtol(env_ver, NULL, 10);
+        }
     }
 
     return 0;

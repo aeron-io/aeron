@@ -51,6 +51,9 @@ int aeron_cluster_cluster_session_create(
     s->request_input                 = INT64_MAX;
     s->has_open_event_pending        = false;
     s->has_new_leader_event_pending  = false;
+    s->has_challenge_pending         = false;
+    s->encoded_challenge             = NULL;
+    s->encoded_challenge_length      = 0;
     s->response_publication          = NULL;
     s->async_response_pub            = NULL;
     s->aeron                         = aeron;
@@ -117,6 +120,7 @@ int aeron_cluster_cluster_session_close_and_free(aeron_cluster_cluster_session_t
         }
         aeron_free(session->response_channel);
         aeron_free(session->encoded_principal);
+        aeron_free(session->encoded_challenge);
         aeron_free(session);
     }
     return 0;
@@ -176,6 +180,30 @@ void aeron_cluster_cluster_session_authenticate(
     aeron_cluster_cluster_session_t *session)
 {
     session->state = AERON_CLUSTER_SESSION_STATE_AUTHENTICATED;
+}
+
+void aeron_cluster_cluster_session_challenge(
+    aeron_cluster_cluster_session_t *session,
+    const uint8_t *encoded_challenge,
+    size_t challenge_length)
+{
+    /* Free any previous challenge data */
+    aeron_free(session->encoded_challenge);
+    session->encoded_challenge        = NULL;
+    session->encoded_challenge_length = 0;
+
+    if (challenge_length > 0 && NULL != encoded_challenge)
+    {
+        if (aeron_alloc((void **)&session->encoded_challenge, challenge_length) < 0)
+        {
+            return;
+        }
+        memcpy(session->encoded_challenge, encoded_challenge, challenge_length);
+        session->encoded_challenge_length = challenge_length;
+    }
+
+    session->state                = AERON_CLUSTER_SESSION_STATE_CHALLENGED;
+    session->has_challenge_pending = true;
 }
 
 void aeron_cluster_cluster_session_open(

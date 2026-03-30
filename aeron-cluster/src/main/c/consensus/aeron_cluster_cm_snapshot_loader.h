@@ -48,9 +48,14 @@ typedef struct aeron_cluster_cm_snapshot_loader_stct
 
     /* Set after successfully reading the consensusModule state record */
     int64_t  next_session_id;
+    int64_t  next_service_session_id;
+    int64_t  log_service_session_id;
+    int32_t  pending_message_capacity;
+    int32_t  app_version;
     bool     has_cm_state;
 
-    bool     is_done;     /* true once END marker processed */
+    bool     in_snapshot;  /* true after BEGIN marker, before END */
+    bool     is_done;      /* true once END marker processed */
     bool     has_error;
 }
 aeron_cluster_cm_snapshot_loader_t;

@@ -171,6 +171,7 @@ int aeron_cluster_poll_egress(aeron_cluster_t *cluster);
  */
 void aeron_cluster_track_ingress_result(aeron_cluster_t *cluster, int64_t result);
 
+#ifdef AERON_CLUSTER_TESTING
 /**
  * Test helper: dispatch a pre-built egress SBE buffer directly into the cluster's
  * event-processing logic, bypassing the real subscription poll.
@@ -181,6 +182,7 @@ void aeron_cluster_on_egress_for_test(
     aeron_cluster_t *cluster,
     const uint8_t *buffer,
     size_t length);
+#endif /* AERON_CLUSTER_TESTING */
 
 
 #ifdef __cplusplus

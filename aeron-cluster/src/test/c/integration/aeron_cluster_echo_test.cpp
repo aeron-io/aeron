@@ -39,8 +39,8 @@ extern "C"
 #include "util/aeron_fileutil.h"
 }
 
-#include "../integration/TestClusterNode.h"
-#include "../integration/ClusterServerHelper.h"
+#include "../integration/aeron_test_cluster_node.h"
+#include "../integration/aeron_cluster_server_helper.h"
 
 /* -----------------------------------------------------------------------
  * Egress message collector

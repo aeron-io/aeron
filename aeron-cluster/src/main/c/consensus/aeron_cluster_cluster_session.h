@@ -73,6 +73,12 @@ typedef struct aeron_cluster_cluster_session_stct
 
     bool     has_open_event_pending;
     bool     has_new_leader_event_pending;
+    bool     has_challenge_pending;       /* true when challenge data needs sending */
+
+    /* Challenge data — set by aeron_cluster_cluster_session_challenge(),
+     * sent by process_pending_sessions, then freed. */
+    uint8_t *encoded_challenge;
+    size_t   encoded_challenge_length;
 
     /* Egress publication to reply to this client */
     aeron_exclusive_publication_t            *response_publication;
@@ -114,6 +120,13 @@ void aeron_cluster_cluster_session_set_redirect(
 /** Mark session as authenticated (no-challenge case). */
 void aeron_cluster_cluster_session_authenticate(
     aeron_cluster_cluster_session_t *session);
+
+/** Issue a challenge: stores the challenge data and transitions to CHALLENGED state.
+ *  The challenge is sent to the client by process_pending_sessions. */
+void aeron_cluster_cluster_session_challenge(
+    aeron_cluster_cluster_session_t *session,
+    const uint8_t *encoded_challenge,
+    size_t challenge_length);
 
 /** Transition to OPEN after log commit, record log position. */
 void aeron_cluster_cluster_session_open(

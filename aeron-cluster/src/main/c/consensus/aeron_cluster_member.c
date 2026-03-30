@@ -778,6 +778,75 @@ int aeron_cluster_member_add_consensus_publication(
 }
 
 /* -----------------------------------------------------------------------
+ * Dynamic membership helpers
+ * ----------------------------------------------------------------------- */
+
+aeron_cluster_member_t *aeron_cluster_member_determine_dated_member(
+    aeron_cluster_member_t *members,
+    int count,
+    int32_t exclude_id)
+{
+    aeron_cluster_member_t *dated = NULL;
+
+    for (int i = 0; i < count; i++)
+    {
+        if (members[i].id == exclude_id)
+        {
+            continue;
+        }
+
+        if (NULL == dated ||
+            members[i].time_of_last_append_position_ns < dated->time_of_last_append_position_ns)
+        {
+            dated = &members[i];
+        }
+    }
+
+    return dated;
+}
+
+int32_t aeron_cluster_members_high_member_id(
+    const aeron_cluster_member_t *members, int count)
+{
+    if (0 == count || NULL == members)
+    {
+        return -1;
+    }
+
+    int32_t high = members[0].id;
+    for (int i = 1; i < count; i++)
+    {
+        if (members[i].id > high)
+        {
+            high = members[i].id;
+        }
+    }
+
+    return high;
+}
+
+bool aeron_cluster_members_has_terminated_all(
+    const aeron_cluster_member_t *members,
+    int count,
+    int32_t self_id)
+{
+    for (int i = 0; i < count; i++)
+    {
+        if (members[i].id == self_id)
+        {
+            continue;
+        }
+
+        if (!members[i].has_terminate_notified)
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/* -----------------------------------------------------------------------
  * Single-member publication close
  * ----------------------------------------------------------------------- */
 void aeron_cluster_member_close_publication(aeron_cluster_member_t *member)

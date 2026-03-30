@@ -164,9 +164,12 @@ int aeron_cluster_recording_replication_poll(
 
     if (now_ns >= replication->progress_deadline_ns)
     {
-        replication->has_replication_ended = true;
-        bool stopped = false;
-        aeron_archive_try_stop_replication(&stopped, replication->archive, replication->replication_id);
+        if (!replication->has_replication_ended)
+        {
+            replication->has_replication_ended = true;
+            bool stopped = false;
+            aeron_archive_try_stop_replication(&stopped, replication->archive, replication->replication_id);
+        }
 
         if (AERON_NULL_VALUE == replication->stop_position ||
             replication->position < replication->stop_position)
@@ -223,7 +226,13 @@ void aeron_cluster_recording_replication_on_signal(
         }
         replication->has_stopped = true;
     }
-    /* Note: DELETE signal would be a fatal error in Java; here we just record the signal */
+    else if (AERON_ARCHIVE_CLIENT_RECORDING_SIGNAL_DELETE == (aeron_archive_client_recording_signal_t)code)
+    {
+        AERON_SET_ERR(EINVAL,
+            "recording was deleted during replication: replicationId=%" PRId64 " recordingId=%" PRId64,
+            replication->replication_id, signal->recording_id);
+        replication->has_replication_ended = true;
+    }
 
     replication->last_recording_signal = code;
 

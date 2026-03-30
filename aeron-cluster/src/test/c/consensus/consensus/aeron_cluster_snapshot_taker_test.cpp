@@ -442,12 +442,13 @@ TEST(ConsensusModuleAgentTest, onCommitPositionShouldUpdateTimeOfLastLeaderUpdat
     agent.time_of_last_log_update_ns = 0;
     agent.leadership_term_id        = 42;
     agent.notified_commit_position  = 0;
+    agent.last_do_work_ns           = 77777LL;
 
     /* on_commit_position updates time_of_last_log_update_ns */
     aeron_consensus_module_agent_on_commit_position(
         &agent, 42LL /* leadership_term_id */, 555LL /* log_position */, 0);
 
-    EXPECT_GT(agent.time_of_last_log_update_ns, 0LL);
+    EXPECT_EQ(agent.time_of_last_log_update_ns, 77777LL);
 }
 
 TEST(ConsensusModuleAgentTest, onCommitPositionShouldNotUpdateTimestampForDifferentLeadershipTerm)

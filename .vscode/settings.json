@@ -1,0 +1,4 @@
+{
+  "cmake.cmakePath": "/usr/local/bin/cmake",
+  "java.compile.nullAnalysis.mode": "automatic"
+}

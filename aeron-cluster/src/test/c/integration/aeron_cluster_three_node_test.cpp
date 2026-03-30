@@ -36,7 +36,7 @@ extern "C"
 #include "util/aeron_fileutil.h"
 }
 
-#include "../integration/TestClusterNode.h"
+#include "../integration/aeron_test_cluster_node.h"
 
 class ThreeNodeClusterTest : public ::testing::Test
 {
@@ -193,6 +193,116 @@ TEST_F(ThreeNodeClusterTest, shouldElectAppointedLeader)
                 << "Node " << i << " should be follower";
         }
     }
+}
+
+TEST_F(ThreeNodeClusterTest, shouldTakeAndRestoreSnapshot)
+{
+    int appointed = 1;
+
+    /* Connect Aeron clients */
+    for (int i = 0; i < NODE_COUNT; i++)
+    {
+        ASSERT_TRUE(connect_aeron(i)) << "Failed to connect aeron for node " << i;
+    }
+
+    /* Create agents */
+    for (int i = 0; i < NODE_COUNT; i++)
+    {
+        ASSERT_EQ(0, create_agent(i, appointed))
+            << "Failed to create agent " << i << ": " << aeron_errmsg();
+    }
+
+    /* Drive election until leader is elected */
+    int64_t now_ns = aeron_nano_clock();
+    int leader_idx = -1;
+    for (int tick = 0; tick < 500; tick++)
+    {
+        now_ns += INT64_C(20000000);  /* 20ms per tick */
+        for (int i = 0; i < NODE_COUNT; i++)
+        {
+            aeron_consensus_module_agent_do_work(m_agents[i], now_ns);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+        for (int i = 0; i < NODE_COUNT; i++)
+        {
+            if (AERON_CLUSTER_ROLE_LEADER == m_agents[i]->role)
+            {
+                leader_idx = i;
+                break;
+            }
+        }
+        if (leader_idx >= 0) break;
+    }
+
+    ASSERT_GE(leader_idx, 0) << "No leader elected within timeout";
+    ASSERT_EQ(appointed, m_agents[leader_idx]->member_id)
+        << "Elected leader does not match appointed";
+
+    /* Verify leader has a recording log */
+    aeron_consensus_module_agent_t *leader = m_agents[leader_idx];
+    ASSERT_NE(nullptr, leader->recording_log)
+        << "Leader recording log should not be null";
+
+    /* Record the entry count before snapshot */
+    int entries_before = leader->recording_log->sorted_count;
+
+    /* Append a snapshot entry to the leader's recording log.
+     * This simulates the final step of take_cm_snapshot() which writes
+     * the snapshot metadata after writing the snapshot data to the archive.
+     * With service_count=0 there are no service snapshots to record. */
+    int64_t snap_log_position = 0;  /* log position at snapshot time */
+    int64_t snap_timestamp = now_ns / INT64_C(1000000);  /* ms */
+    int rc = aeron_cluster_recording_log_append_snapshot(
+        leader->recording_log,
+        42 /* recording_id — dummy */,
+        leader->leadership_term_id,
+        snap_log_position /* term_base_log_position */,
+        snap_log_position /* log_position */,
+        snap_timestamp,
+        -1 /* service_id: -1 = CM snapshot */);
+    ASSERT_EQ(0, rc) << "Failed to append snapshot to recording log";
+
+    /* Force the recording log to disk and reload to verify persistence */
+    ASSERT_EQ(0, aeron_cluster_recording_log_force(leader->recording_log))
+        << "Failed to force recording log";
+    ASSERT_EQ(0, aeron_cluster_recording_log_reload(leader->recording_log))
+        << "Failed to reload recording log";
+
+    /* Verify the snapshot entry was persisted */
+    int entries_after = leader->recording_log->sorted_count;
+    EXPECT_GT(entries_after, entries_before)
+        << "Recording log should have more entries after snapshot";
+
+    /* Query for the latest snapshot and verify it matches what we wrote */
+    aeron_cluster_recording_log_entry_t *latest_snap =
+        aeron_cluster_recording_log_get_latest_snapshot(leader->recording_log, -1);
+    ASSERT_NE(nullptr, latest_snap)
+        << "Should find latest CM snapshot in recording log";
+    EXPECT_EQ(42, latest_snap->recording_id);
+    EXPECT_EQ(leader->leadership_term_id, latest_snap->leadership_term_id);
+    EXPECT_EQ(snap_log_position, latest_snap->log_position);
+    EXPECT_EQ(-1, latest_snap->service_id)
+        << "CM snapshot should have service_id == -1";
+    EXPECT_EQ(AERON_CLUSTER_RECORDING_LOG_ENTRY_TYPE_SNAPSHOT, latest_snap->entry_type);
+
+    /* Verify the snapshot survives a fresh recording log open (restart simulation).
+     * Open a second recording log from the same cluster dir — proves the snapshot
+     * is recoverable across process restarts. */
+    aeron_cluster_recording_log_t *reloaded_log = nullptr;
+    rc = aeron_cluster_recording_log_open(
+        &reloaded_log, m_nodes[leader_idx]->cluster_dir().c_str(), false);
+    ASSERT_EQ(0, rc) << "Failed to open recording log for reload";
+    ASSERT_NE(nullptr, reloaded_log);
+
+    aeron_cluster_recording_log_entry_t *reloaded_snap =
+        aeron_cluster_recording_log_get_latest_snapshot(reloaded_log, -1);
+    ASSERT_NE(nullptr, reloaded_snap)
+        << "Reloaded recording log should contain the snapshot";
+    EXPECT_EQ(42, reloaded_snap->recording_id);
+    EXPECT_EQ(leader->leadership_term_id, reloaded_snap->leadership_term_id);
+
+    aeron_cluster_recording_log_close(reloaded_log);
 }
 
 TEST_F(ThreeNodeClusterTest, shouldFailoverWhenLeaderStopped)

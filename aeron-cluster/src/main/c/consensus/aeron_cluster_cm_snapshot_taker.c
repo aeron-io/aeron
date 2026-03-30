@@ -63,7 +63,9 @@ static int write_marker(aeron_exclusive_publication_t *pub,
     aeron_cluster_client_snapshotMarker_set_mark(&msg, (enum aeron_cluster_client_snapshotMark)mark);
     aeron_cluster_client_snapshotMarker_set_appVersion(&msg, app_version);
 
-    return snap_offer(pub, aeron_cluster_client_snapshotMarker_encoded_length(&msg));
+    return snap_offer(pub,
+        aeron_cluster_client_messageHeader_encoded_length() +
+        aeron_cluster_client_snapshotMarker_encoded_length(&msg));
 }
 
 int aeron_cluster_cm_snapshot_taker_mark_begin(aeron_exclusive_publication_t *pub,
@@ -96,8 +98,7 @@ int aeron_cluster_cm_snapshot_taker_snapshot_session(
     aeron_cluster_client_clusterSession_set_clusterSessionId(&msg, session->id);
     aeron_cluster_client_clusterSession_set_correlationId(&msg, session->correlation_id);
     aeron_cluster_client_clusterSession_set_openedLogPosition(&msg, session->opened_log_position);
-    aeron_cluster_client_clusterSession_set_timeOfLastActivity(&msg,
-        session->time_of_last_activity_ns);
+    aeron_cluster_client_clusterSession_set_timeOfLastActivity(&msg, AERON_NULL_VALUE);
     aeron_cluster_client_clusterSession_set_closeReason(&msg,
         (enum aeron_cluster_client_closeReason)session->close_reason);
     aeron_cluster_client_clusterSession_set_responseStreamId(&msg, session->response_stream_id);
@@ -105,7 +106,9 @@ int aeron_cluster_cm_snapshot_taker_snapshot_session(
     const char *ch = session->response_channel != NULL ? session->response_channel : "";
     aeron_cluster_client_clusterSession_put_responseChannel(&msg, ch, (uint32_t)strlen(ch));
 
-    return snap_offer(pub, aeron_cluster_client_clusterSession_encoded_length(&msg));
+    return snap_offer(pub,
+        aeron_cluster_client_messageHeader_encoded_length() +
+        aeron_cluster_client_clusterSession_encoded_length(&msg));
 }
 
 int aeron_cluster_cm_snapshot_taker_snapshot_timer(
@@ -124,7 +127,9 @@ int aeron_cluster_cm_snapshot_taker_snapshot_timer(
     aeron_cluster_client_timer_set_correlationId(&msg, correlation_id);
     aeron_cluster_client_timer_set_deadline(&msg, deadline_ns);
 
-    return snap_offer(pub, aeron_cluster_client_timer_encoded_length(&msg));
+    return snap_offer(pub,
+        aeron_cluster_client_messageHeader_encoded_length() +
+        aeron_cluster_client_timer_encoded_length(&msg));
 }
 
 int aeron_cluster_cm_snapshot_taker_snapshot_cm_state(
@@ -148,7 +153,9 @@ int aeron_cluster_cm_snapshot_taker_snapshot_cm_state(
     aeron_cluster_client_consensusModule_set_logServiceSessionId(&msg, log_service_session_id);
     aeron_cluster_client_consensusModule_set_pendingMessageCapacity(&msg, pending_message_capacity);
 
-    return snap_offer(pub, aeron_cluster_client_consensusModule_encoded_length(&msg));
+    return snap_offer(pub,
+        aeron_cluster_client_messageHeader_encoded_length() +
+        aeron_cluster_client_consensusModule_encoded_length(&msg));
 }
 
 int aeron_cluster_cm_snapshot_taker_snapshot_pending_tracker(
@@ -172,5 +179,7 @@ int aeron_cluster_cm_snapshot_taker_snapshot_pending_tracker(
     aeron_cluster_client_pendingMessageTracker_set_pendingMessageCapacity(&msg, pending_message_capacity);
     aeron_cluster_client_pendingMessageTracker_set_serviceId(&msg, service_id);
 
-    return snap_offer(pub, aeron_cluster_client_pendingMessageTracker_encoded_length(&msg));
+    return snap_offer(pub,
+        aeron_cluster_client_messageHeader_encoded_length() +
+        aeron_cluster_client_pendingMessageTracker_encoded_length(&msg));
 }
