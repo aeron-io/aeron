@@ -573,10 +573,10 @@ protected:
     void SetUp() override
     {
         m_dir = "/tmp/aeron_cm_ctx_markfile_" + std::to_string(getpid());
-        (void)std::system(("rm -rf " + m_dir).c_str());
+        if (std::system(("rm -rf " + m_dir).c_str())) {}
         mkdir(m_dir.c_str(), 0755);
     }
-    void TearDown() override { (void)std::system(("rm -rf " + m_dir).c_str()); }
+    void TearDown() override { if (std::system(("rm -rf " + m_dir).c_str())) {} }
     std::string m_dir;
 };
 
@@ -797,10 +797,10 @@ protected:
     void SetUp() override
     {
         m_dir = "/tmp/aeron_mark_file_unit_" + std::to_string(getpid());
-        (void)std::system(("rm -rf " + m_dir + " && mkdir -p " + m_dir).c_str());
+        if (std::system(("rm -rf " + m_dir + " && mkdir -p " + m_dir).c_str())) {}
         m_path = m_dir + "/" + AERON_CLUSTER_MARK_FILE_FILENAME;
     }
-    void TearDown() override { (void)std::system(("rm -rf " + m_dir).c_str()); }
+    void TearDown() override { if (std::system(("rm -rf " + m_dir).c_str())) {} }
     std::string m_dir, m_path;
 };
 

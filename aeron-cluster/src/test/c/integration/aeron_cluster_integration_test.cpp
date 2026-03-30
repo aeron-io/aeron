@@ -49,7 +49,8 @@ protected:
     void SetUp() override
     {
         m_base_dir = "/tmp/aeron_cluster_integ_" + std::to_string(getpid());
-        std::system(("rm -rf " + m_base_dir).c_str());
+        if (std::system(("rm -rf " + m_base_dir).c_str())) {}
+
 
         m_node = new TestClusterNode(0, 1, m_base_dir, std::cout);
         m_node->start();
@@ -74,7 +75,8 @@ protected:
             delete m_node;
             m_node = nullptr;
         }
-        std::system(("rm -rf " + m_base_dir).c_str());
+        if (std::system(("rm -rf " + m_base_dir).c_str())) {}
+
     }
 
     bool connect_aeron()

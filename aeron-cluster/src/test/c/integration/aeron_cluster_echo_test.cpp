@@ -71,7 +71,8 @@ protected:
     void SetUp() override
     {
         m_base_dir = "/tmp/aeron_cluster_echo_" + std::to_string(getpid());
-        std::system(("rm -rf " + m_base_dir + " && mkdir -p " + m_base_dir).c_str());
+        if (std::system(("rm -rf " + m_base_dir + " && mkdir -p " + m_base_dir).c_str())) {}
+
         /* Use node_index=5 to get unique port 8015 — avoids collision with other tests */
         m_node = new TestClusterNode(5, 1, m_base_dir, std::cout);
         m_node->start();
@@ -84,7 +85,8 @@ protected:
         if (m_aeron)      { aeron_close(m_aeron); m_aeron = nullptr; }
         if (m_aeron_ctx)  { aeron_context_close(m_aeron_ctx); m_aeron_ctx = nullptr; }
         if (m_node)       { m_node->stop(); delete m_node; m_node = nullptr; }
-        std::system(("rm -rf " + m_base_dir).c_str());
+        if (std::system(("rm -rf " + m_base_dir).c_str())) {}
+
     }
 
     bool connect_aeron()

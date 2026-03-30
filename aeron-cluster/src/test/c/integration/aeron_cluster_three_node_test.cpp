@@ -47,7 +47,8 @@ protected:
     void SetUp() override
     {
         m_base_dir = "/tmp/aeron_cluster_3node_" + std::to_string(getpid());
-        std::system(("rm -rf " + m_base_dir).c_str());
+        if (std::system(("rm -rf " + m_base_dir).c_str())) {}
+
 
         for (int i = 0; i < NODE_COUNT; i++)
         {
@@ -65,7 +66,8 @@ protected:
             if (m_aeron_ctx[i]) { aeron_context_close(m_aeron_ctx[i]); m_aeron_ctx[i] = nullptr; }
             if (m_nodes[i])  { m_nodes[i]->stop(); delete m_nodes[i]; m_nodes[i] = nullptr; }
         }
-        std::system(("rm -rf " + m_base_dir).c_str());
+        if (std::system(("rm -rf " + m_base_dir).c_str())) {}
+
     }
 
     bool connect_aeron(int idx)

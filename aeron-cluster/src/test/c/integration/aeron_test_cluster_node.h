@@ -95,9 +95,12 @@ public:
     void start()
     {
         /* Create directories */
-        std::system(("mkdir -p " + m_aeron_dir).c_str());
-        std::system(("mkdir -p " + m_archive_dir).c_str());
-        std::system(("mkdir -p " + m_cluster_dir).c_str());
+        if (std::system(("mkdir -p " + m_aeron_dir).c_str())) {}
+
+        if (std::system(("mkdir -p " + m_archive_dir).c_str())) {}
+
+        if (std::system(("mkdir -p " + m_cluster_dir).c_str())) {}
+
 
         start_archiving_media_driver();
     }
@@ -198,9 +201,12 @@ private:
         }
 
         /* Clean up directories */
-        std::system(("rm -rf " + m_aeron_dir).c_str());
-        std::system(("rm -rf " + m_archive_dir).c_str());
-        std::system(("rm -rf " + m_cluster_dir).c_str());
+        if (std::system(("rm -rf " + m_aeron_dir).c_str())) {}
+
+        if (std::system(("rm -rf " + m_archive_dir).c_str())) {}
+
+        if (std::system(("rm -rf " + m_cluster_dir).c_str())) {}
+
     }
 
     int          m_node_index;
