@@ -180,7 +180,7 @@ static int build_entries(aeron_cluster_standby_snapshot_replicator_t *r)
         {
             g = group_count++;
             snprintf(r->entries[g].endpoint, sizeof(r->entries[g].endpoint),
-                "%s", e->archive_endpoint);
+                "%.255s", e->archive_endpoint);
         }
 
         aeron_cluster_standby_snapshot_entry_t *grp = &r->entries[g];
@@ -279,7 +279,7 @@ int aeron_cluster_standby_snapshot_replicator_poll(
         {
             snprintf(replicator->endpoint_errors[replicator->endpoint_error_count],
                      sizeof(replicator->endpoint_errors[0]),
-                     "%s: %s", current->endpoint, aeron_errmsg());
+                     "%.128s: %.125s", current->endpoint, aeron_errmsg());
             replicator->endpoint_error_count++;
         }
         aeron_cluster_multi_recording_replication_close(replicator->recording_replication);

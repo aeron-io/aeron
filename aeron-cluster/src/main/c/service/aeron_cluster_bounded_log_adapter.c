@@ -152,7 +152,7 @@ static aeron_controlled_fragment_handler_action_t on_fragment(
                 return AERON_ACTION_CONTINUE;
             }
 
-            enum aeron_cluster_client_closeReason close_reason;
+            enum aeron_cluster_client_closeReason close_reason = 0;
             aeron_cluster_client_sessionCloseEvent_closeReason(&msg, &close_reason);
 
             aeron_clustered_service_agent_on_session_close(
@@ -175,7 +175,7 @@ static aeron_controlled_fragment_handler_action_t on_fragment(
                 return AERON_ACTION_CONTINUE;
             }
 
-            enum aeron_cluster_client_clusterAction action_val;
+            enum aeron_cluster_client_clusterAction action_val = 0;
             aeron_cluster_client_clusterActionRequest_action(&msg, &action_val);
 
             aeron_clustered_service_agent_on_service_action(
@@ -223,7 +223,7 @@ static aeron_controlled_fragment_handler_action_t on_fragment(
                 return AERON_ACTION_CONTINUE;
             }
 
-            enum aeron_cluster_client_changeType change_type_val;
+            enum aeron_cluster_client_changeType change_type_val = 0;
             aeron_cluster_client_membershipChangeEvent_changeType(&msg, &change_type_val);
 
             aeron_clustered_service_agent_on_membership_change(
