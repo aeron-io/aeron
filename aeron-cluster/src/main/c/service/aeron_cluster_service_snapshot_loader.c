@@ -68,7 +68,7 @@ static aeron_controlled_fragment_handler_action_t loader_on_fragment(
             return AERON_ACTION_CONTINUE;
         }
 
-        enum aeron_cluster_client_snapshotMark mark;
+        enum aeron_cluster_client_snapshotMark mark = 0;
         aeron_cluster_client_snapshotMarker_mark(&msg, &mark);
         if ((int32_t)mark == AERON_CLUSTER_SNAPSHOT_MARK_END)
         {

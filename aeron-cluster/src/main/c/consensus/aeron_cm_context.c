@@ -283,7 +283,12 @@ int aeron_cm_context_conclude(aeron_cm_context_t *ctx)
         }
 
         char mark_path[AERON_MAX_PATH];
-        snprintf(mark_path, sizeof(mark_path), "%s/%s", mf_dir, AERON_CLUSTER_MARK_FILE_FILENAME);
+        int mp_len = snprintf(mark_path, sizeof(mark_path), "%s/%s", mf_dir, AERON_CLUSTER_MARK_FILE_FILENAME);
+        if (mp_len < 0 || (size_t)mp_len >= sizeof(mark_path))
+        {
+            AERON_SET_ERR(EINVAL, "mark file path too long: %s/%s", mf_dir, AERON_CLUSTER_MARK_FILE_FILENAME);
+            return -1;
+        }
 
         int64_t now_ms = aeron_nano_clock() / 1000000LL;
         if (aeron_cluster_mark_file_open(
@@ -305,11 +310,16 @@ int aeron_cm_context_conclude(aeron_cm_context_t *ctx)
             strcmp(ctx->mark_file_dir, ctx->cluster_dir) != 0)
         {
             char link_path[AERON_MAX_PATH];
-            snprintf(link_path, sizeof(link_path), "%s/%s",
+            int lp_len = snprintf(link_path, sizeof(link_path), "%s/%s",
                 ctx->cluster_dir, AERON_CLUSTER_MARK_FILE_LINK_FILENAME);
-            /* Remove old link if exists */
-            unlink(link_path);
-            symlink(ctx->mark_file_dir, link_path);
+            if (lp_len >= 0 && (size_t)lp_len < sizeof(link_path))
+            {
+                unlink(link_path);
+                if (symlink(ctx->mark_file_dir, link_path) < 0)
+                {
+                    /* non-fatal: symlink is convenience only */
+                }
+            }
         }
     }
 

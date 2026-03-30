@@ -632,7 +632,7 @@ static int do_live_log_record(aeron_cluster_backup_agent_t *agent, int64_t now_m
         }
 
         /* Build channel with session ID */
-        char channel[512];
+        char channel[1024];
         snprintf(channel, sizeof(channel), "%s|session-id=%d",
                  agent->ctx->catchup_channel,
                  agent->live_log_recording_session_id);
