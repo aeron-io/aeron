@@ -637,8 +637,8 @@ static int do_live_log_record(aeron_cluster_backup_agent_t *agent, int64_t now_m
                  agent->ctx->catchup_channel,
                  agent->live_log_recording_session_id);
 
-        snprintf(agent->recording_channel, sizeof(agent->recording_channel), "%s", channel);
-        snprintf(agent->replay_channel,    sizeof(agent->replay_channel),    "%s", channel);
+        snprintf(agent->recording_channel, sizeof(agent->recording_channel), "%.511s", channel);
+        snprintf(agent->replay_channel,    sizeof(agent->replay_channel),    "%.511s", channel);
 
         /* Start recording subscription */
         if (NULL != agent->ctx->backup_archive)
