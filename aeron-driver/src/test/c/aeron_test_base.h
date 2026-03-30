@@ -206,6 +206,22 @@ public:
         }
     }
 
+    static void awaitConnected(aeron_exclusive_publication_t *publication)
+    {
+        while (!aeron_exclusive_publication_is_connected(publication))
+        {
+            std::this_thread::yield();
+        }
+    }
+
+    static void awaitConnected(aeron_publication_t *publication)
+    {
+        while (!aeron_publication_is_connected(publication))
+        {
+            std::this_thread::yield();
+        }
+    }
+
     static void poll_handler(void *clientd, const uint8_t *buffer, size_t length, aeron_header_t *header)
     {
         auto test = reinterpret_cast<CSystemTestBase *>(clientd);

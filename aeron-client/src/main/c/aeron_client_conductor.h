@@ -59,6 +59,15 @@ typedef struct aeron_client_command_base_stct
 }
 aeron_client_command_base_t;
 
+typedef struct aeron_client_remove_resource_cmd_stct
+{
+    aeron_client_command_base_t command_base;
+    int64_t registration_id;
+    aeron_notification_t on_complete;
+    void *on_complete_clientd;
+}
+aeron_client_remove_resource_cmd_t;
+
 typedef struct aeron_client_registering_resource_stct
 {
     aeron_client_command_base_t command_base;
@@ -291,6 +300,13 @@ int aeron_client_conductor_async_close_subscription(
     aeron_subscription_t *subscription,
     aeron_notification_t on_close_complete,
     void *on_close_complete_clientd);
+
+int aeron_client_conductor_async_remove_resource(
+    int64_t registration_id,
+    aeron_client_managed_resource_type_t type,
+    aeron_client_conductor_t *conductor,
+    aeron_notification_t on_complete,
+    void *on_complete_clientd);
 
 int aeron_client_conductor_async_add_counter(
     aeron_async_add_counter_t **async,

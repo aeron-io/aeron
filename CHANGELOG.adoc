@@ -9,6 +9,16 @@ changed from flat classes to records, so the data accessors are now methods and 
 * **Breaking:** **[Cluster]** Removed the `ClusteredServiceContainer.Context.standbySnapshotsEnabled` method. This
 configuration is no longer required. It is controlled `ConsensusModule.Context.standbySnapshotsEnabled` configuration
 option and is propagated across as this needs to be consistent across both agents.
+* **[Client/C]**: Added API to cancel async add operations:
+** `aeron_async_add_subscription_cancel`
+** `aeron_async_add_publication_cancel`
+** `aeron_async_add_exclusive_publication_cancel`
+** `aeron_async_add_counter_cancel`
+* **[Client/C]**: Added API to remove resources using their registration IDs:
+** `aeron_async_remove_subscription`
+** `aeron_async_remove_publication`
+** `aeron_async_remove_exclusive_publication`
+** `aeron_async_remove_counter`
 
 === Changelog
 

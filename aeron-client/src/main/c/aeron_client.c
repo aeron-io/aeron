@@ -438,6 +438,21 @@ int aeron_async_add_publication_poll(aeron_publication_t **publication, aeron_as
     return aeron_async_resource_poll((void **)publication, AERON_CLIENT_MANAGED_RESOURCE_TYPE_PUBLICATION, async);
 }
 
+int aeron_async_add_publication_cancel(aeron_t *client, aeron_async_add_publication_t *async)
+{
+    if (NULL == async)
+    {
+        AERON_SET_ERR(EINVAL, "Parameters must not be null, async: %s", AERON_NULL_STR(async));
+        return -1;
+    }
+
+    return aeron_async_remove_publication(
+        aeron_async_add_publication_get_registration_id(async),
+        client,
+        (aeron_notification_t)aeron_async_cmd_free,
+        async);
+}
+
 int aeron_async_add_exclusive_publication(
     aeron_async_add_exclusive_publication_t **async, aeron_t *client, const char *uri, int32_t stream_id)
 {
@@ -454,6 +469,21 @@ int aeron_async_add_exclusive_publication_poll(
     aeron_exclusive_publication_t **publication, aeron_async_add_exclusive_publication_t *async)
 {
     return aeron_async_resource_poll((void **)publication, AERON_CLIENT_MANAGED_RESOURCE_TYPE_EXCLUSIVE_PUBLICATION, async);
+}
+
+int aeron_async_add_exclusive_publication_cancel(aeron_t *client, aeron_async_add_exclusive_publication_t *async)
+{
+    if (NULL == async)
+    {
+        AERON_SET_ERR(EINVAL, "Parameters must not be null, async: %s", AERON_NULL_STR(async));
+        return -1;
+    }
+
+    return aeron_async_remove_exclusive_publication(
+        aeron_async_add_exclusive_publication_get_registration_id(async),
+        client,
+        (aeron_notification_t)aeron_async_cmd_free,
+        async);
 }
 
 int aeron_async_add_subscription(
@@ -491,6 +521,89 @@ int aeron_async_add_subscription(
 int aeron_async_add_subscription_poll(aeron_subscription_t **subscription, aeron_async_add_subscription_t *async)
 {
     return aeron_async_resource_poll((void **)subscription, AERON_CLIENT_MANAGED_RESOURCE_TYPE_SUBSCRIPTION, async);
+}
+
+int aeron_async_add_subscription_cancel(aeron_t *client, aeron_async_add_subscription_t *async)
+{
+    if (NULL == async)
+    {
+        AERON_SET_ERR(EINVAL, "Parameters must not be null, async: %s", AERON_NULL_STR(async));
+        return -1;
+    }
+
+    return aeron_async_remove_subscription(
+        aeron_async_add_subscription_get_registration_id(async),
+        client,
+        (aeron_notification_t)aeron_async_cmd_free,
+        async);
+}
+
+static int aeron_async_remove_resource(
+    int64_t registration_id,
+    aeron_client_managed_resource_type_t type,
+    aeron_t *client,
+    aeron_notification_t on_complete,
+    void *on_complete_clientd)
+{
+    if (NULL == client)
+    {
+        AERON_SET_ERR(
+            EINVAL,
+            "Parameters must be valid, client: %s",
+            AERON_NULL_STR(client));
+        return -1;
+    }
+
+    return aeron_client_conductor_async_remove_resource(
+        registration_id,
+        type,
+        &client->conductor,
+        on_complete,
+        on_complete_clientd);
+}
+
+int aeron_async_remove_subscription(
+    int64_t registration_id, aeron_t *client, aeron_notification_t on_complete, void *on_complete_clientd)
+{
+    return aeron_async_remove_resource(
+        registration_id,
+        AERON_CLIENT_MANAGED_RESOURCE_TYPE_SUBSCRIPTION,
+        client,
+        on_complete,
+        on_complete_clientd);
+}
+
+int aeron_async_remove_publication(
+    int64_t registration_id, aeron_t *client, aeron_notification_t on_complete, void *on_complete_clientd)
+{
+    return aeron_async_remove_resource(
+        registration_id,
+        AERON_CLIENT_MANAGED_RESOURCE_TYPE_PUBLICATION,
+        client,
+        on_complete,
+        on_complete_clientd);
+}
+
+int aeron_async_remove_exclusive_publication(
+    int64_t registration_id, aeron_t *client, aeron_notification_t on_complete, void *on_complete_clientd)
+{
+    return aeron_async_remove_resource(
+        registration_id,
+        AERON_CLIENT_MANAGED_RESOURCE_TYPE_EXCLUSIVE_PUBLICATION,
+        client,
+        on_complete,
+        on_complete_clientd);
+}
+
+int aeron_async_remove_counter(
+    int64_t registration_id, aeron_t *client, aeron_notification_t on_complete, void *on_complete_clientd)
+{
+    return aeron_async_remove_resource(
+        registration_id,
+        AERON_CLIENT_MANAGED_RESOURCE_TYPE_COUNTER,
+        client,
+        on_complete,
+        on_complete_clientd);
 }
 
 int aeron_async_next_session_id(aeron_async_get_next_available_session_id_t **async, aeron_t *client, int32_t stream_id)
@@ -607,6 +720,27 @@ int aeron_async_add_counter(
 int aeron_async_add_counter_poll(aeron_counter_t **counter, aeron_async_add_counter_t *async)
 {
     return aeron_async_resource_poll((void **)counter, AERON_CLIENT_MANAGED_RESOURCE_TYPE_COUNTER, async);
+}
+
+int aeron_async_add_counter_cancel(aeron_t *client, aeron_async_add_counter_t *async)
+{
+    if (NULL == async)
+    {
+        AERON_SET_ERR(EINVAL, "Parameters must not be null, async: %s", AERON_NULL_STR(async));
+        return -1;
+    }
+
+    if (0 != async->counter.registration_id)
+    {
+        AERON_SET_ERR(EINVAL, "%s", "Can't cancel adding a static counter");
+        return -1;
+    }
+
+    return aeron_async_remove_counter(
+        aeron_async_add_counter_get_registration_id(async),
+        client,
+        (aeron_notification_t)aeron_async_cmd_free,
+        async);
 }
 
 int aeron_async_add_static_counter(
