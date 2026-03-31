@@ -63,6 +63,7 @@ import static io.aeron.AeronCounters.SYSTEM_COUNTER_ID_SENDER_MAX_CYCLE_TIME;
 import static io.aeron.AeronCounters.SYSTEM_COUNTER_ID_SENDER_PROXY_FAILS;
 import static io.aeron.AeronCounters.SYSTEM_COUNTER_ID_SHORT_SENDS;
 import static io.aeron.AeronCounters.SYSTEM_COUNTER_ID_STATUS_MESSAGES_RECEIVED;
+import static io.aeron.AeronCounters.SYSTEM_COUNTER_ID_STATUS_MESSAGES_REJECTED;
 import static io.aeron.AeronCounters.SYSTEM_COUNTER_ID_STATUS_MESSAGES_SENT;
 import static io.aeron.AeronCounters.SYSTEM_COUNTER_ID_UNBLOCKED_COMMANDS;
 import static io.aeron.AeronCounters.SYSTEM_COUNTER_ID_UNBLOCKED_PUBLICATIONS;
@@ -329,7 +330,14 @@ public enum SystemCounterDescriptor
      *
      * @since 1.49.0
      */
-    CONTROL_PROTOCOL_VERSION(SYSTEM_COUNTER_ID_CONTROL_PROTOCOL_VERSION, "Control protocol version");
+    CONTROL_PROTOCOL_VERSION(SYSTEM_COUNTER_ID_CONTROL_PROTOCOL_VERSION, "Control protocol version"),
+
+    /**
+     * Count of status messages received from receivers for flow control.
+     *
+     * @since 1.51.0
+     */
+    STATUS_MESSAGES_REJECTED(SYSTEM_COUNTER_ID_STATUS_MESSAGES_REJECTED, "Status Messages rejected");
 
     /**
      * All system counters have the same type id, i.e. system counters are the same type. Other types can exist.

@@ -317,6 +317,15 @@ public final class AeronCounters
     @AeronCounter
     public static final int SYSTEM_COUNTER_ID_CONTROL_PROTOCOL_VERSION = 43;
 
+    /**
+     * Counter id for status messages that are rejected while being outside the send window, i.e. being behind or
+     * ahead of the `snd-pos` by more than one term.
+     *
+     * @since 1.51.0
+     */
+    @AeronCounter
+    public static final int SYSTEM_COUNTER_ID_STATUS_MESSAGES_REJECTED = 44;
+
     // Client/driver counters
     /**
      * System-wide counters for monitoring. These are separate from counters used for position tracking on streams.
