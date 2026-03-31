@@ -512,7 +512,7 @@ public final class NetworkPublication
      * @param msg SM to check.
      * @return {@code true} if the SM is accepted.
      */
-    public boolean canAcceptStatusMessage(final StatusMessageFlyweight msg)
+    public boolean isValidStatusMessage(final StatusMessageFlyweight msg)
     {
         final long smPosition = computePosition(
             msg.consumptionTermId(),

@@ -373,7 +373,7 @@ public class SendChannelEndpoint extends UdpChannelTransport
 
         final NetworkPublication publication = publicationBySessionAndStreamId.get(compoundKey(sessionId, streamId));
         if (SEND_SETUP_FLAG != (msg.flags() & SEND_SETUP_FLAG) &&
-            null != publication && !publication.canAcceptStatusMessage(msg))
+            null != publication && !publication.isValidStatusMessage(msg))
         {
             statusMessagesRejected.incrementRelease();
             return; // drop SM that is out of bounds
