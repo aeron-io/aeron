@@ -310,7 +310,7 @@ int aeron_archive_server_context_conclude(aeron_archive_server_context_t *ctx)
          * A full recursive delete is intentionally omitted for safety. */
         char cmd[4200];
         snprintf(cmd, sizeof(cmd), "rm -rf %s/*", ctx->archive_dir);
-        (void)system(cmd);
+        if (system(cmd)) {}
     }
 
     /* Ensure directories exist */
