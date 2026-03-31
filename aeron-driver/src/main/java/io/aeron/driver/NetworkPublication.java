@@ -507,6 +507,25 @@ public final class NetworkPublication
     }
 
     /**
+     * Check if the SM should be accepted or not.
+     *
+     * @param msg SM to check.
+     * @return {@code true} if the SM is accepted.
+     */
+    public boolean canAcceptStatusMessage(final StatusMessageFlyweight msg)
+    {
+        final long smPosition = computePosition(
+            msg.consumptionTermId(),
+            msg.consumptionTermOffset(),
+            positionBitsToShift,
+            initialTermId);
+
+        final long sndPos = senderPosition.get();
+        final int maxTransmissionWindow = termBufferLength >> 1;
+        return smPosition >= sndPos - maxTransmissionWindow && smPosition <= sndPos + maxTransmissionWindow;
+    }
+
+    /**
      * Process an error message from a receiver.
      *
      * @param msg                       flyweight over the network packet.

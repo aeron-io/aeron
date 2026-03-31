@@ -114,6 +114,7 @@ class SelectorAndTransportTest
         when(mockSystemCounters.get(any())).thenReturn(mockStatusMessagesReceivedCounter);
         when(mockPublication.streamId()).thenReturn(STREAM_ID);
         when(mockPublication.sessionId()).thenReturn(SESSION_ID);
+        when(mockPublication.canAcceptStatusMessage(any(StatusMessageFlyweight.class))).thenReturn(true);
     }
 
     @AfterEach
