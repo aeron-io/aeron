@@ -67,19 +67,6 @@ static std::string segment_file_name(int64_t recording_id, int64_t segment_base_
     return std::string(buf);
 }
 
-static std::string segment_file_path(
-    const std::string &archive_dir, int64_t recording_id, int64_t start_position)
-{
-    /* Compute segment base position: align down to segment boundary from term-aligned start */
-    int64_t segment_base = start_position - (start_position & (TERM_LENGTH - 1));
-    /* Further align to segment boundary */
-    int64_t start_term_base = start_position - (start_position & (TERM_LENGTH - 1));
-    int64_t length_from_base = start_position - start_term_base;
-    int64_t segments = length_from_base - (length_from_base & (SEGMENT_LENGTH - 1));
-    segment_base = start_term_base + segments;
-
-    return archive_dir + "/" + segment_file_name(recording_id, segment_base);
-}
 
 static bool file_exists(const std::string &path)
 {

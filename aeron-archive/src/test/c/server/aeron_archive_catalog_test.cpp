@@ -445,9 +445,9 @@ TEST_F(CatalogIndexTest, getSingleElement_100)
 
 TEST_F(CatalogIndexTest, getSingleElement_max)
 {
-    ASSERT_EQ(0, add(INT64_MAX, INT64_MAX * 3));
-    /* INT64_MAX * 3 overflows, but we test what the index stores */
-    EXPECT_EQ(INT64_MAX * 3, recording_offset(INT64_MAX));
+    ASSERT_EQ(0, add(INT64_MAX, (int64_t)((uint64_t)INT64_MAX * 3)));
+    /* (int64_t)((uint64_t)INT64_MAX * 3) overflows, but we test what the index stores */
+    EXPECT_EQ((int64_t)((uint64_t)INT64_MAX * 3), recording_offset(INT64_MAX));
 }
 
 TEST_F(CatalogIndexTest, getFirstElement)
