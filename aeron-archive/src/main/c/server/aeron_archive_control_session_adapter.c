@@ -73,11 +73,6 @@ static inline const char *sbe_decode_var_data_ptr(const uint8_t *buffer, size_t 
 /**
  * Skip one var-data field and return the total bytes consumed (4-byte length header + data).
  */
-static inline size_t sbe_skip_var_data(const uint8_t *buffer, size_t offset)
-{
-    uint32_t length = sbe_decode_var_data_length(buffer, offset);
-    return sizeof(uint32_t) + length;
-}
 
 /* Session map helpers - simple linked list */
 
