@@ -66,9 +66,7 @@ class SpecifiedPositionPublicationTest
         .publicationTermBufferLength(TERM_MIN_LENGTH)
         .ipcTermBufferLength(TERM_MIN_LENGTH)
         .threadingMode(ThreadingMode.SHARED)
-        .publicationLingerTimeoutNs(0)
-        .socketRcvbufLength(1014 * 1024)
-        .socketSndbufLength(1014 * 1024);
+        .publicationLingerTimeoutNs(0);
     private final DirectBuffer msg = new UnsafeBuffer(new byte[64]);
 
     @AfterEach
@@ -255,7 +253,6 @@ class SpecifiedPositionPublicationTest
     {
         final int streamId = 876;
         final int termLength = 1024 * 1024;
-        final int receiverWindowLength = termLength / 2;
         final int positionBitsToShift = positionBitsToShift(termLength);
         final int initialTermId = -199;
         final int termId = initialTermId + (int)(4_000_000_000L / termLength);
@@ -274,26 +271,25 @@ class SpecifiedPositionPublicationTest
             pub1Pos = lowPos;
         }
 
-        final ChannelUriStringBuilder builder = new ChannelUriStringBuilder(
-            "aeron:udp?endpoint=224.20.30.39:24326|interface=localhost");
-        builder.termLength(termLength).mtu(2048).receiverWindowLength(receiverWindowLength);
-        final String subUri = builder.build();
-
-        builder.sessionId(42).receiverWindowLength((Integer)null).linger(0L);
+        final String uri = "aeron:udp?endpoint=224.20.30.39:24326|interface=localhost";
+        final ChannelUriStringBuilder builder = new ChannelUriStringBuilder(uri);
+        builder.termLength(termLength).mtu(2048).sessionId(42).linger(0L);
         final String pub1Uri = builder.initialPosition(pub1Pos, initialTermId, termLength).build();
         final String pub2Uri = builder.initialPosition(pub2Pos, initialTermId, termLength).build();
 
+        final String aeronDir = context.aeronDirectoryName();
         try (
-            TestMediaDriver driver1 = TestMediaDriver.launch(context.clone(), testWatcher);
+            TestMediaDriver driver1 = TestMediaDriver.launch(
+                context.clone().aeronDirectoryName(aeronDir + "-A"), testWatcher);
             TestMediaDriver driver2 = TestMediaDriver.launch(
-                context.clone().aeronDirectoryName(CommonContext.generateRandomDirName()), testWatcher);
+                context.clone().aeronDirectoryName(aeronDir + "-B"), testWatcher);
             Aeron aeron1 = Aeron.connect(new Aeron.Context()
                 .aeronDirectoryName(driver1.aeronDirectoryName())
                 .subscriberErrorHandler(RethrowingErrorHandler.INSTANCE));
             Aeron aeron2 = Aeron.connect(new Aeron.Context()
                 .aeronDirectoryName(driver2.aeronDirectoryName())
                 .subscriberErrorHandler(RethrowingErrorHandler.INSTANCE));
-            Subscription subscription = aeron1.addSubscription(subUri, streamId);
+            Subscription subscription = aeron1.addSubscription(uri, streamId);
             Publication pub1 = aeron1.addExclusivePublication(pub1Uri, streamId))
         {
             Tests.awaitConnected(subscription);
@@ -313,7 +309,7 @@ class SpecifiedPositionPublicationTest
             }
 
             // sends setup eliciting SM
-            final Subscription subscription2 = aeron2.addSubscription(subUri, streamId);
+            final Subscription subscription2 = aeron2.addSubscription(uri, streamId);
             Tests.awaitConnected(subscription2);
             assertEquals(pub1.position(), subscription2.imageBySessionId(pub1.sessionId()).position());
 
