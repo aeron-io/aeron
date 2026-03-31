@@ -564,14 +564,13 @@ int aeron_network_publication_send_data(
     const size_t max_vlen = publication->max_messages_per_send;
     int result = 0, vlen = 0;
     int64_t bytes_sent = 0;
-    int32_t available_window = (int32_t)(aeron_counter_get_plain(publication->snd_lmt_position.value_addr) - snd_pos);
+    int64_t available_window = aeron_counter_get_plain(publication->snd_lmt_position.value_addr) - snd_pos;
     int64_t highest_pos = snd_pos;
     struct iovec iov[AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND];
 
     for (size_t i = 0; i < max_vlen && available_window > 0; i++)
     {
-        int32_t scan_limit = available_window < (int32_t)publication->mtu_length ?
-           available_window : (int32_t)publication->mtu_length;
+        int32_t scan_limit = (int32_t)AERON_MIN(available_window, (int64_t)publication->mtu_length);
         size_t active_index = aeron_logbuffer_index_by_position(snd_pos, publication->position_bits_to_shift);
         int32_t padding = 0;
 
