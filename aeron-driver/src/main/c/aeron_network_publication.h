@@ -181,6 +181,9 @@ void aeron_network_publication_on_status_message(
     size_t length,
     struct sockaddr_storage *addr);
 
+bool aeron_network_publication_is_valid_status_message(
+    aeron_network_publication_t *publication, const uint8_t *buffer);
+
 void aeron_network_publication_on_error(
     aeron_network_publication_t *publication,
     int64_t destination_registration_id,

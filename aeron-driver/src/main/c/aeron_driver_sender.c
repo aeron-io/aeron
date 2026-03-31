@@ -102,6 +102,8 @@ int aeron_driver_sender_init(
     sender->invalid_frames_counter = aeron_system_counter_addr(system_counters, AERON_SYSTEM_COUNTER_INVALID_PACKETS);
     sender->status_messages_received_counter = aeron_system_counter_addr(
         system_counters, AERON_SYSTEM_COUNTER_STATUS_MESSAGES_RECEIVED);
+    sender->status_messages_rejected_counter = aeron_system_counter_addr(
+        system_counters, AERON_SYSTEM_COUNTER_STATUS_MESSAGES_REJECTED);
     sender->nak_messages_received_counter = aeron_system_counter_addr(
         system_counters, AERON_SYSTEM_COUNTER_NAK_MESSAGES_RECEIVED);
     sender->error_messages_received_counter = aeron_system_counter_addr(

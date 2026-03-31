@@ -886,6 +886,23 @@ void aeron_network_publication_on_status_message(
             aeron_network_publication_has_subscribers(publication));
 }
 
+bool aeron_network_publication_is_valid_status_message(
+    aeron_network_publication_t *publication, const uint8_t *buffer)
+{
+    const aeron_status_message_header_t *sm = (aeron_status_message_header_t *)buffer;
+
+    int64_t sm_position = aeron_logbuffer_compute_position(
+        sm->consumption_term_id,
+        sm->consumption_term_offset,
+        publication->position_bits_to_shift,
+        publication->initial_term_id);
+
+    int64_t snd_pos = aeron_counter_get_plain(publication->snd_pos_position.value_addr);
+    int64_t max_transmission_window = publication->term_buffer_length >> 1;
+
+    return sm_position >= snd_pos - max_transmission_window && sm_position <= snd_pos + max_transmission_window;
+}
+
 void aeron_network_publication_on_error(
     aeron_network_publication_t *publication,
     int64_t destination_registration_id,

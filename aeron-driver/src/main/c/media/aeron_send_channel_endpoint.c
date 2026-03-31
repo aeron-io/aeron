@@ -429,8 +429,8 @@ void aeron_send_channel_endpoint_dispatch(
         case AERON_HDR_TYPE_NAK:
             if (length >= sizeof(aeron_nak_header_t) && length >= (size_t)frame_header->frame_length)
             {
-                result = aeron_send_channel_endpoint_on_nak(endpoint, buffer, length, addr);
                 aeron_counter_increment_release(sender->nak_messages_received_counter);
+                result = aeron_send_channel_endpoint_on_nak(endpoint, buffer, length, addr);
             }
             else
             {
@@ -441,8 +441,8 @@ void aeron_send_channel_endpoint_dispatch(
         case AERON_HDR_TYPE_SM:
             if (length >= sizeof(aeron_status_message_header_t) && length >= (size_t)frame_header->frame_length)
             {
-                result = aeron_send_channel_endpoint_on_status_message(endpoint, conductor_proxy, buffer, length, addr);
                 aeron_counter_increment_release(sender->status_messages_received_counter);
+                result = aeron_send_channel_endpoint_on_status_message(sender, endpoint, conductor_proxy, buffer, length, addr);
             }
             else
             {
@@ -453,8 +453,8 @@ void aeron_send_channel_endpoint_dispatch(
         case AERON_HDR_TYPE_ERR:
             if (length >= sizeof(aeron_error_t) && length >= (size_t)frame_header->frame_length)
             {
-                result = aeron_send_channel_endpoint_on_error(endpoint, conductor_proxy, buffer, length, addr);
                 aeron_counter_increment_release(sender->error_messages_received_counter);
+                result = aeron_send_channel_endpoint_on_error(endpoint, conductor_proxy, buffer, length, addr);
             }
             else
             {
@@ -533,6 +533,7 @@ int aeron_send_channel_endpoint_on_nak(
 }
 
 int aeron_send_channel_endpoint_on_status_message(
+    aeron_driver_sender_t *sender,
     aeron_send_channel_endpoint_t *endpoint,
     aeron_driver_conductor_proxy_t *conductor_proxy,
     uint8_t *buffer,
@@ -543,6 +544,13 @@ int aeron_send_channel_endpoint_on_status_message(
     int64_t key_value = aeron_map_compound_key(sm_header->stream_id, sm_header->session_id);
     aeron_network_publication_t *publication = aeron_int64_to_ptr_hash_map_get(
         &endpoint->publication_dispatch_map, key_value);
+
+    if (!(sm_header->frame_header.flags & AERON_STATUS_MESSAGE_HEADER_SEND_SETUP_FLAG) &&
+        NULL != publication && !aeron_network_publication_is_valid_status_message(publication, buffer))
+    {
+        aeron_counter_increment_release(sender->status_messages_rejected_counter);
+        return 0;
+    }
 
     int result = 0;
 
