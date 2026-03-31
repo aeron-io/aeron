@@ -147,15 +147,6 @@ static void replication_session_error(
         msg);
 }
 
-static int replication_session_track_action(
-    aeron_archive_replication_session_t *session,
-    int64_t correlation_id,
-    int64_t now_ms)
-{
-    session->time_of_last_action_ms = now_ms;
-    session->active_correlation_id = correlation_id;
-    return 1;
-}
 
 static bool replication_session_should_add_live(
     aeron_archive_replication_session_t *session)

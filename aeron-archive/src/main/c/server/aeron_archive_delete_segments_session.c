@@ -197,7 +197,7 @@ static void on_delete_error(
     const char *file_path)
 {
     char error_message[512];
-    snprintf(error_message, sizeof(error_message), "unable to delete segment file: %s", file_path);
+    snprintf(error_message, sizeof(error_message), "unable to delete segment file: %.470s", file_path);
 
     if (NULL != session->send_error)
     {

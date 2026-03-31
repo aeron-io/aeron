@@ -15,7 +15,6 @@
  */
 
 #if defined(__linux__)
-#define _DEFAULT_SOURCE
 #define _GNU_SOURCE
 #endif
 

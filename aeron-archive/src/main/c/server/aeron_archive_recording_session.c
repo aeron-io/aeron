@@ -202,8 +202,8 @@ int aeron_archive_recording_session_create(
     _session->progress_event_position = image_constants.join_position;
     _session->join_position = image_constants.join_position;
     _session->block_length_limit = min_size(
-        image_constants.term_buffer_length,
-        (size_t)(file_io_max_length > 0 ? file_io_max_length : image_constants.term_buffer_length));
+        (size_t)image_constants.term_buffer_length,
+        file_io_max_length > 0 ? (size_t)file_io_max_length : (size_t)image_constants.term_buffer_length);
 
     /* Create the recording writer */
     if (aeron_archive_recording_writer_create(

@@ -22,7 +22,6 @@
 #include "aeron_archive_control_session.h"
 #include "aeron_archive_conductor.h"
 
-static const char *AERON_ARCHIVE_CONTROL_SESSION_CLOSED_MSG = "session closed";
 static const char *AERON_ARCHIVE_CONTROL_SESSION_RESPONSE_NOT_CONNECTED_MSG =
     "control response publication is not connected";
 static const char *AERON_ARCHIVE_CONTROL_SESSION_REJECTED_MSG = "authentication rejected";
