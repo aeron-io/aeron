@@ -66,7 +66,9 @@ class SpecifiedPositionPublicationTest
         .publicationTermBufferLength(TERM_MIN_LENGTH)
         .ipcTermBufferLength(TERM_MIN_LENGTH)
         .threadingMode(ThreadingMode.SHARED)
-        .publicationLingerTimeoutNs(0);
+        .publicationLingerTimeoutNs(0)
+        .socketRcvbufLength(1014 * 1024)
+        .socketSndbufLength(1014 * 1024);
     private final DirectBuffer msg = new UnsafeBuffer(new byte[64]);
 
     @AfterEach
