@@ -66,7 +66,8 @@ static aeron_system_counter_t system_counters[] =
         { "Publications Revoked", AERON_SYSTEM_COUNTER_PUBLICATIONS_REVOKED },
         { "Publication Images Revoked", AERON_SYSTEM_COUNTER_PUBLICATION_IMAGES_REVOKED },
         { "Images rejected", AERON_SYSTEM_COUNTER_IMAGES_REJECTED },
-        { "Control protocol version", AERON_SYSTEM_COUNTER_CONTROL_PROTOCOL_VERSION }
+        { "Control protocol version", AERON_SYSTEM_COUNTER_CONTROL_PROTOCOL_VERSION },
+        { "Status Messages rejected", AERON_SYSTEM_COUNTER_STATUS_MESSAGES_REJECTED }
     };
 
 static size_t num_system_counters = sizeof(system_counters) / sizeof(aeron_system_counter_t);
