@@ -815,10 +815,10 @@ public final class NetworkPublication
     private int sendData(final long nowNs, final long senderPosition, final int termOffset)
     {
         int bytesSent = 0;
-        final int availableWindow = (int)(senderLimit.get() - senderPosition);
+        final long availableWindow = senderLimit.get() - senderPosition;
         if (availableWindow > 0)
         {
-            final int scanLimit = Math.min(availableWindow, mtuLength);
+            final int scanLimit = (int)Math.min(availableWindow, mtuLength);
             final int activeIndex = indexByPosition(senderPosition, positionBitsToShift);
 
             final long scanOutcome = scanForAvailability(termBuffers[activeIndex], termOffset, scanLimit);
