@@ -75,7 +75,7 @@ bool aeron_cluster_consensus_module_proxy_schedule_timer(
     aeron_cluster_client_scheduleTimer_set_deadline(&msg, deadline);
 
     return proxy_offer(proxy, proxy->buffer,
-        aeron_cluster_client_scheduleTimer_encoded_length(&msg)) > 0;
+        aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_scheduleTimer_encoded_length(&msg)) > 0;
 }
 
 bool aeron_cluster_consensus_module_proxy_cancel_timer(
@@ -94,7 +94,7 @@ bool aeron_cluster_consensus_module_proxy_cancel_timer(
     aeron_cluster_client_cancelTimer_set_correlationId(&msg, correlation_id);
 
     return proxy_offer(proxy, proxy->buffer,
-        aeron_cluster_client_cancelTimer_encoded_length(&msg)) > 0;
+        aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_cancelTimer_encoded_length(&msg)) > 0;
 }
 
 bool aeron_cluster_consensus_module_proxy_ack(
@@ -121,7 +121,7 @@ bool aeron_cluster_consensus_module_proxy_ack(
     aeron_cluster_client_serviceAck_set_serviceId(&msg, service_id);
 
     return proxy_offer(proxy, proxy->buffer,
-        aeron_cluster_client_serviceAck_encoded_length(&msg)) > 0;
+        aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_serviceAck_encoded_length(&msg)) > 0;
 }
 
 bool aeron_cluster_consensus_module_proxy_close_session(
@@ -140,7 +140,7 @@ bool aeron_cluster_consensus_module_proxy_close_session(
     aeron_cluster_client_closeSession_set_clusterSessionId(&msg, cluster_session_id);
 
     return proxy_offer(proxy, proxy->buffer,
-        aeron_cluster_client_closeSession_encoded_length(&msg)) > 0;
+        aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_closeSession_encoded_length(&msg)) > 0;
 }
 
 int64_t aeron_cluster_consensus_module_proxy_offer(

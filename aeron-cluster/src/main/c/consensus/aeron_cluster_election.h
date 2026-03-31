@@ -107,7 +107,7 @@ typedef struct aeron_cluster_election_agent_ops_stct
     void (*on_state_change)(void *clientd,
         aeron_cluster_election_state_t new_state, int64_t now_ns);
     void (*on_election_complete)(void *clientd,
-        aeron_cluster_member_t *leader, int64_t now_ns);
+        aeron_cluster_member_t *leader, int64_t now_ns, bool is_startup);
     void (*begin_new_leadership_term)(void *clientd,
         int64_t log_leadership_term_id, int64_t new_term_id,
         int64_t log_position, int64_t timestamp, bool is_startup);

@@ -216,3 +216,98 @@ if (AERON_INSTALL_TARGETS)
         ARCHIVE DESTINATION lib)
     install(DIRECTORY ./ DESTINATION include/aeron FILES_MATCHING PATTERN "aeron_archive.h")
 endif ()
+
+# -----------------------------------------------------------------------
+# Archive Server library
+# -----------------------------------------------------------------------
+
+SET(SERVER_SOURCE
+    server/aeron_archive_catalog.c
+    server/aeron_archive_conductor.c
+    server/aeron_archive_control_response_proxy.c
+    server/aeron_archive_control_session.c
+    server/aeron_archive_control_session_adapter.c
+    server/aeron_archive_control_session_proxy.c
+    server/aeron_archive_dedicated_conductor.c
+    server/aeron_archive_delete_segments_session.c
+    server/aeron_archive_list_recordings_session.c
+    server/aeron_archive_mark_file.c
+    server/aeron_archive_recording_events_proxy.c
+    server/aeron_archive_recording_reader.c
+    server/aeron_archive_recording_session.c
+    server/aeron_archive_recording_writer.c
+    server/aeron_archive_replay_session.c
+    server/aeron_archive_replication_session.c
+    server/aeron_archive_server.c
+    server/aeron_archive_session_worker.c
+    server/aeron_archive_tool.c
+    server/aeron_archive_update_channel_session.c
+    server/aeron_archiving_media_driver.c
+)
+
+SET(SERVER_HEADERS
+    server/aeron_archive_catalog.h
+    server/aeron_archive_conductor.h
+    server/aeron_archive_control_response_proxy.h
+    server/aeron_archive_control_session.h
+    server/aeron_archive_control_session_adapter.h
+    server/aeron_archive_control_session_proxy.h
+    server/aeron_archive_dedicated_conductor.h
+    server/aeron_archive_delete_segments_session.h
+    server/aeron_archive_list_recordings_session.h
+    server/aeron_archive_mark_file.h
+    server/aeron_archive_recording_events_proxy.h
+    server/aeron_archive_recording_reader.h
+    server/aeron_archive_recording_session.h
+    server/aeron_archive_recording_writer.h
+    server/aeron_archive_replay_session.h
+    server/aeron_archive_replication_session.h
+    server/aeron_archive_server.h
+    server/aeron_archive_session_worker.h
+    server/aeron_archive_tool.h
+    server/aeron_archive_update_channel_session.h
+    server/aeron_archiving_media_driver.h
+)
+
+# shared library
+add_library(aeron_archive_c_server SHARED ${SERVER_SOURCE} ${SERVER_HEADERS})
+add_library(aeron::aeron_archive_c_server ALIAS aeron_archive_c_server)
+
+add_dependencies(aeron_archive_c_server c_codecs)
+
+target_include_directories(aeron_archive_c_server
+    PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>" "$<INSTALL_INTERFACE:include/aeron>"
+    PRIVATE ${ARCHIVE_CODEC_TARGET_DIR} ${AERON_DRIVER_SOURCE_PATH})
+
+target_link_libraries(
+    aeron_archive_c_server
+    aeron
+    aeron_driver
+    aeron_archive_c_client
+    ${CMAKE_THREAD_LIBS_INIT})
+
+# static library
+add_library(aeron_archive_c_server_static STATIC ${SERVER_SOURCE} ${SERVER_HEADERS})
+add_library(aeron::aeron_archive_c_server_static ALIAS aeron_archive_c_server_static)
+
+add_dependencies(aeron_archive_c_server_static c_codecs)
+
+target_include_directories(aeron_archive_c_server_static
+    PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>" "$<INSTALL_INTERFACE:include/aeron>"
+    PRIVATE ${ARCHIVE_CODEC_TARGET_DIR})
+
+target_link_libraries(
+    aeron_archive_c_server_static
+    aeron_static
+    aeron_driver_static
+    aeron_archive_c_client_static
+    ${CMAKE_THREAD_LIBS_INIT})
+
+if (AERON_INSTALL_TARGETS)
+    install(
+        TARGETS aeron_archive_c_server aeron_archive_c_server_static
+        EXPORT aeron-targets
+        RUNTIME DESTINATION lib
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib)
+endif ()

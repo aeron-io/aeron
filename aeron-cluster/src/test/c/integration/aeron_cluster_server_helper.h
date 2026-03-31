@@ -24,27 +24,27 @@
 extern "C" {
 #endif
 
-typedef struct aeron_stct aeron_t;
-
 /**
- * Opaque server handle — bundles CM agent + echo service agent running in a thread.
- * Deliberately hides the service-side aeron_cluster_t typedef so client-only TUs
- * can include this header without typedef conflicts.
+ * Opaque server handle -- bundles CM agent + echo service agent.
+ * Each component creates its own Aeron client from the given aeron_dir,
+ * matching the Java ClusteredMediaDriver pattern.
  */
 typedef struct cluster_server_handle_stct cluster_server_handle_t;
 
 /**
  * Create and start a single-node echo cluster server.
+ * Creates its own Aeron clients internally from the given aeron_dir.
  *
- * @param aeron_dir    path to the shared MediaDriver (already running)
- * @param cluster_dir  empty directory for recording log
- * @param archive_port port the ArchivingMediaDriver control listener is on
+ * @param aeron_dir      path to the shared MediaDriver directory
+ * @param cluster_dir    empty directory for recording log
+ * @param cluster_members cluster members string
+ * @param ingress_port   ingress port
+ * @param consensus_port consensus port
  * @return handle, or NULL on failure
  */
 cluster_server_handle_t *cluster_server_start(
-    aeron_t *aeron,                 /* caller-owned Aeron instance to reuse */
+    const char *aeron_dir,
     const char *cluster_dir,
-    int archive_port,
     const char *cluster_members,
     int ingress_port,
     int consensus_port);
@@ -76,11 +76,31 @@ int  cluster_server_has_session_log_pub(const cluster_server_handle_t *srv);
 /** Returns 1 if service has a log_adapter (on_join_log was called). */
 int  cluster_server_svc_has_log_adapter(const cluster_server_handle_t *srv);
 
-/** Returns the server's Aeron client (for cross-client diagnostics). */
-aeron_t *cluster_server_get_aeron(const cluster_server_handle_t *srv);
 void cluster_server_do_work(cluster_server_handle_t *srv, int64_t now_ns);
 
-/** Stop and free the server. */
+/**
+ * Create and start a service-only echo container (no CM).
+ * Use when the CM is already running (e.g. inside ClusteredMediaDriver).
+ * Creates its own Aeron client internally from the given aeron_dir.
+ *
+ * @param aeron_dir      path to the shared MediaDriver directory
+ * @param cluster_dir    cluster dir for recording log
+ * @return handle, or NULL on failure
+ */
+cluster_server_handle_t *cluster_service_start(
+    const char *aeron_dir,
+    const char *cluster_dir);
+
+/**
+ * Start a background thread that drives the CM and/or service agents.
+ * The server must already be started via cluster_server_start() or cluster_service_start().
+ */
+void cluster_server_start_background(cluster_server_handle_t *srv);
+
+/**
+ * Stop the background thread (if running) and free the server.
+ * Closes its own Aeron clients.
+ */
 void cluster_server_stop(cluster_server_handle_t *srv);
 
 #ifdef __cplusplus

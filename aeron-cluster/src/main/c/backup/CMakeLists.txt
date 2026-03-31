@@ -34,6 +34,8 @@ add_library(aeron::aeron_cluster_c_backup ALIAS aeron_cluster_c_backup)
 add_dependencies(aeron_cluster_c_backup
     cluster_c_codecs
     aeron_archive_c_client
+    aeron_archive_c_server
+    aeron_driver
     aeron_cluster_c_consensus)
 
 target_include_directories(aeron_cluster_c_backup
@@ -41,11 +43,15 @@ target_include_directories(aeron_cluster_c_backup
             "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>"
             "$<INSTALL_INTERFACE:include/aeron>"
     PRIVATE ${CLUSTER_C_CODEC_TARGET_DIR}
-    PRIVATE "${AERON_C_ARCHIVE_SOURCE_PATH}/client")
+    PRIVATE "${AERON_C_ARCHIVE_SOURCE_PATH}/client"
+    PRIVATE "${AERON_C_ARCHIVE_SOURCE_PATH}/server"
+    PRIVATE "${AERON_DRIVER_SOURCE_PATH}")
 
 target_link_libraries(aeron_cluster_c_backup
     aeron
+    aeron_driver
     aeron_archive_c_client
+    aeron_archive_c_server
     aeron_cluster_c_consensus
     aeron_cluster_c_client
     ${CMAKE_THREAD_LIBS_INIT})
@@ -56,6 +62,8 @@ add_library(aeron::aeron_cluster_c_backup_static ALIAS aeron_cluster_c_backup_st
 add_dependencies(aeron_cluster_c_backup_static
     cluster_c_codecs
     aeron_archive_c_client_static
+    aeron_archive_c_server_static
+    aeron_driver_static
     aeron_cluster_c_consensus_static)
 
 target_include_directories(aeron_cluster_c_backup_static
@@ -63,11 +71,15 @@ target_include_directories(aeron_cluster_c_backup_static
             "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>"
             "$<INSTALL_INTERFACE:include/aeron>"
     PRIVATE ${CLUSTER_C_CODEC_TARGET_DIR}
-    PRIVATE "${AERON_C_ARCHIVE_SOURCE_PATH}/client")
+    PRIVATE "${AERON_C_ARCHIVE_SOURCE_PATH}/client"
+    PRIVATE "${AERON_C_ARCHIVE_SOURCE_PATH}/server"
+    PRIVATE "${AERON_DRIVER_SOURCE_PATH}")
 
 target_link_libraries(aeron_cluster_c_backup_static
     aeron_static
+    aeron_driver_static
     aeron_archive_c_client_static
+    aeron_archive_c_server_static
     aeron_cluster_c_consensus_static
     aeron_cluster_c_client_static
     ${CMAKE_THREAD_LIBS_INIT})

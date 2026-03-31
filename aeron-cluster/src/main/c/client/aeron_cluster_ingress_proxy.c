@@ -132,7 +132,7 @@ int64_t aeron_cluster_ingress_proxy_send_connect_request(
     return ingress_proxy_offer(
         proxy,
         proxy->buffer,
-        aeron_cluster_client_sessionConnectRequest_encoded_length(&msg));
+        aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_sessionConnectRequest_encoded_length(&msg));
 }
 
 int64_t aeron_cluster_ingress_proxy_send_close_session(
@@ -159,7 +159,7 @@ int64_t aeron_cluster_ingress_proxy_send_close_session(
     return ingress_proxy_offer(
         proxy,
         proxy->buffer,
-        aeron_cluster_client_sessionCloseRequest_encoded_length(&msg));
+        aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_sessionCloseRequest_encoded_length(&msg));
 }
 
 int64_t aeron_cluster_ingress_proxy_send_keep_alive(
@@ -186,7 +186,7 @@ int64_t aeron_cluster_ingress_proxy_send_keep_alive(
     return ingress_proxy_offer(
         proxy,
         proxy->buffer,
-        aeron_cluster_client_sessionKeepAlive_encoded_length(&msg));
+        aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_sessionKeepAlive_encoded_length(&msg));
 }
 
 int64_t aeron_cluster_ingress_proxy_send_challenge_response(
@@ -218,7 +218,7 @@ int64_t aeron_cluster_ingress_proxy_send_challenge_response(
     return ingress_proxy_offer(
         proxy,
         proxy->buffer,
-        aeron_cluster_client_challengeResponse_encoded_length(&msg));
+        aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_challengeResponse_encoded_length(&msg));
 }
 
 int64_t aeron_cluster_ingress_proxy_send_admin_request_snapshot(
@@ -249,7 +249,7 @@ int64_t aeron_cluster_ingress_proxy_send_admin_request_snapshot(
     return ingress_proxy_offer(
         proxy,
         proxy->buffer,
-        aeron_cluster_client_adminRequest_encoded_length(&msg));
+        aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_adminRequest_encoded_length(&msg));
 }
 
 int64_t aeron_cluster_ingress_proxy_send_admin_request(
@@ -282,5 +282,5 @@ int64_t aeron_cluster_ingress_proxy_send_admin_request(
     return ingress_proxy_offer(
         proxy,
         proxy->buffer,
-        aeron_cluster_client_adminRequest_encoded_length(&msg));
+        aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_adminRequest_encoded_length(&msg));
 }

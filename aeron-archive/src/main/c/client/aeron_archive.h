@@ -345,12 +345,15 @@ typedef void (*aeron_archive_recording_signal_consumer_func_t)(
     aeron_archive_recording_signal_t *recording_signal,
     void *clientd);
 
+#ifndef AERON_ARCHIVE_SOURCE_LOCATION_DEFINED
+#define AERON_ARCHIVE_SOURCE_LOCATION_DEFINED
 typedef enum aeron_archive_source_location_en
 {
     AERON_ARCHIVE_SOURCE_LOCATION_LOCAL = 0,
     AERON_ARCHIVE_SOURCE_LOCATION_REMOTE = 1
 }
 aeron_archive_source_location_t;
+#endif
 
 /* context */
 

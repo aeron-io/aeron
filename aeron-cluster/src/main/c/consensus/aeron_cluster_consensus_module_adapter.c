@@ -45,7 +45,7 @@ static aeron_controlled_fragment_handler_action_t on_cm_fragment(
 
     if (length < aeron_cluster_client_messageHeader_encoded_length())
     {
-        return AERON_ACTION_CONTINUE;
+        return AERON_ACTION_COMMIT;
     }
 
     struct aeron_cluster_client_messageHeader hdr;
@@ -53,7 +53,7 @@ static aeron_controlled_fragment_handler_action_t on_cm_fragment(
         &hdr, (char *)buffer, 0,
         aeron_cluster_client_messageHeader_sbe_schema_version(), length))
     {
-        return AERON_ACTION_CONTINUE;
+        return AERON_ACTION_COMMIT;
     }
 
     const uint64_t hdr_len     = aeron_cluster_client_messageHeader_encoded_length();
@@ -184,7 +184,7 @@ static aeron_controlled_fragment_handler_action_t on_cm_fragment(
             break;
     }
 
-    return AERON_ACTION_CONTINUE;
+    return AERON_ACTION_COMMIT;
 }
 
 int aeron_cluster_consensus_module_adapter_create(

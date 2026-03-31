@@ -165,6 +165,10 @@ struct aeron_consensus_module_agent_stct
     /* Follower catchup destination strings */
     char                                    *live_log_destination;
     char                                    *catchup_log_destination;
+
+    /* Tracks whether the current leadership term started during node startup.
+     * Set by on_election_complete; forwarded to service JoinLog messages. */
+    bool                                     is_leader_startup;
 };
 
 /* -----------------------------------------------------------------------
@@ -214,7 +218,8 @@ void aeron_consensus_module_agent_on_election_state_change(
 void aeron_consensus_module_agent_on_election_complete(
     aeron_consensus_module_agent_t *agent,
     aeron_cluster_member_t *leader,
-    int64_t now_ns);
+    int64_t now_ns,
+    bool is_startup);
 
 void aeron_consensus_module_agent_begin_new_leadership_term(
     aeron_consensus_module_agent_t *agent,

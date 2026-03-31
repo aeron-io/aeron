@@ -18,6 +18,7 @@
 #include <string.h>
 #include <errno.h>
 #include <inttypes.h>
+#include "concurrent/aeron_thread.h"
 
 #include "aeron_consensus_module_agent.h"
 #include "aeron_cm_context.h"
@@ -247,6 +248,30 @@ int aeron_consensus_module_agent_on_start(aeron_consensus_module_agent_t *agent)
 {
     aeron_cm_context_t *ctx = agent->ctx;
 
+    /* Auto-create Aeron client if none was provided -- mirrors Java ClusteredMediaDriver
+     * pattern where each component creates its own client to the same driver directory. */
+    if (NULL == ctx->aeron)
+    {
+        ctx->owns_aeron_client = true;
+
+        aeron_context_t *aeron_ctx;
+        if (aeron_context_init(&aeron_ctx) < 0 ||
+            aeron_context_set_dir(aeron_ctx, ctx->aeron_directory_name) < 0)
+        {
+            AERON_APPEND_ERR("%s", "");
+            return -1;
+        }
+
+        if (aeron_init(&ctx->aeron, aeron_ctx) < 0 ||
+            aeron_start(ctx->aeron) < 0)
+        {
+            AERON_APPEND_ERR("%s", "");
+            return -1;
+        }
+
+        agent->aeron = ctx->aeron;
+    }
+
     /* Register unavailable counter handler — mirrors Java onUnavailableCounter().
      * Detects when service client counters are deregistered (service crash). */
     /* Note: requires aeron context to be set before aeron_start(), which is
@@ -338,9 +363,15 @@ int aeron_consensus_module_agent_on_start(aeron_consensus_module_agent_t *agent)
             ctx->cluster_dir, true) < 0) { return -1; }
     }
 
-    /* Connect to archive (IPC) — needed for log recording and snapshots */
+    /* Connect to archive (IPC) -- needed for log recording and snapshots.
+     * Share the CM's Aeron client with the archive context to avoid cross-client
+     * IPC issues with the in-process C archive server. */
     if (NULL != ctx->archive_ctx)
     {
+        if (NULL == ctx->archive_ctx->aeron && NULL != ctx->aeron)
+        {
+            aeron_archive_context_set_aeron(ctx->archive_ctx, ctx->aeron);
+        }
         if (aeron_archive_connect(&agent->archive, ctx->archive_ctx) < 0)
         {
             AERON_APPEND_ERR("%s", "failed to connect to archive");
@@ -1193,9 +1224,11 @@ void aeron_consensus_module_agent_on_election_state_change(
 void aeron_consensus_module_agent_on_election_complete(
     aeron_consensus_module_agent_t *agent,
     aeron_cluster_member_t *leader,
-    int64_t now_ns)
+    int64_t now_ns,
+    bool is_startup)
 {
     agent->leader_member = leader;
+    agent->is_leader_startup = is_startup;
     /* updateMemberDetails: mark which member is leader, mirroring Java's updateMemberDetails() */
     if (NULL != leader)
     {
@@ -1318,17 +1351,79 @@ void aeron_consensus_module_agent_on_election_complete(
         }
     }
 
-    /* Send JoinLog to services */
+    /* Send JoinLog to services and wait for ACK — mirrors Java:
+     * serviceProxy.joinLog(...)
+     * while (!ServiceAck.hasReached(logPosition, ...)) { idle(consensusModuleAdapter.poll()); }
+     */
     int64_t append_pos = aeron_consensus_module_agent_get_append_position(agent);
-    aeron_cluster_service_proxy_cm_join_log(
-        &agent->service_proxy,
-        append_pos, INT64_MAX,  /* max_log_position = Long.MAX_VALUE for leader */
-        agent->member_id,
-        agent->log_session_id_cache,
-        ctx->log_stream_id,
-        false,
-        (int32_t)agent->role,
-        ctx->log_channel);
+    if (agent->service_count > 0)
+    {
+        aeron_cluster_service_proxy_cm_join_log(
+            &agent->service_proxy,
+            append_pos, INT64_MAX,
+            agent->member_id,
+            agent->log_session_id_cache,
+            ctx->log_stream_id,
+            agent->is_leader_startup,
+            (int32_t)agent->role,
+            ctx->log_channel);
+
+        /* Spin-wait for service ACK (with resend on interval) */
+        agent->expected_ack_position = append_pos;
+        int64_t resend_deadline_ns = aeron_nano_clock() + INT64_C(200000000); /* 200ms */
+        for (int spin = 0; spin < 50000; spin++)
+        {
+            if (NULL != agent->cm_adapter)
+            {
+                aeron_cluster_consensus_module_adapter_poll(agent->cm_adapter);
+            }
+
+            /* Check if service ACKed — mirrors Java ServiceAck.hasReached(logPosition, ...) */
+            bool all_acked = true;
+            for (int s = 0; s < agent->service_count; s++)
+            {
+                if (agent->service_ack_positions[s] < append_pos)
+                {
+                    all_acked = false;
+                    break;
+                }
+            }
+            if (all_acked)
+            {
+                break;
+            }
+
+            /* Resend JoinLog periodically (service may not be ready yet) */
+            if (aeron_nano_clock() > resend_deadline_ns)
+            {
+                resend_deadline_ns = aeron_nano_clock() + INT64_C(200000000);
+                aeron_cluster_service_proxy_cm_join_log(
+                    &agent->service_proxy,
+                    append_pos, INT64_MAX,
+                    agent->member_id,
+                    agent->log_session_id_cache,
+                    ctx->log_stream_id,
+                    agent->is_leader_startup,
+                    (int32_t)agent->role,
+                    ctx->log_channel);
+            }
+
+            aeron_micro_sleep(100);
+        }
+    }
+    else
+    {
+        /* No services — just send JoinLog without waiting */
+        aeron_cluster_service_proxy_cm_join_log(
+            &agent->service_proxy,
+            append_pos, INT64_MAX,
+            agent->member_id,
+            agent->log_session_id_cache,
+            ctx->log_stream_id,
+            agent->is_leader_startup,
+            (int32_t)agent->role,
+            ctx->log_channel);
+    }
 
     /* Extension hook: onElectionComplete */
     if (NULL != agent->ctx->extension.on_election_complete)

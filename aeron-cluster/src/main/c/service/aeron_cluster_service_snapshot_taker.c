@@ -69,7 +69,7 @@ static int write_snapshot_marker(
     aeron_cluster_client_snapshotMarker_set_appVersion(&msg, app_version);
 
     return snapshot_offer(publication, buffer,
-        aeron_cluster_client_snapshotMarker_encoded_length(&msg));
+        aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_snapshotMarker_encoded_length(&msg));
 }
 
 int aeron_cluster_service_snapshot_taker_mark_begin(
@@ -117,5 +117,5 @@ int aeron_cluster_service_snapshot_taker_snapshot_session(
         &msg, (const char *)(principal != NULL ? principal : (const uint8_t *)""), plen);
 
     return snapshot_offer(publication, buffer,
-        aeron_cluster_client_clientSession_encoded_length(&msg));
+        aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_clientSession_encoded_length(&msg));
 }

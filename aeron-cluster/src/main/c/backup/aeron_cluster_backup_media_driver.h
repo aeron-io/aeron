@@ -21,21 +21,25 @@
 #include "aeronc.h"
 #include "aeron_archive.h"
 
+/* Forward declaration -- full definition in server/aeron_archiving_media_driver.h */
+typedef struct aeron_archiving_media_driver_stct aeron_archiving_media_driver_t;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /**
- * Aggregate of Aeron client + Archive client + ClusterBackup agent.
- * Mirrors Java ClusterBackupMediaDriver — bundles the three components
- * needed to run a cluster backup node.
+ * Aggregate of ArchivingMediaDriver (in-process driver + archive server) +
+ * Aeron client + Archive client + ClusterBackup agent.
  *
- * The actual MediaDriver is expected to be running externally (e.g.,
- * Java ArchivingMediaDriver or an embedded C driver). This struct
- * manages the Aeron CLIENT connection, archive CLIENT, and backup agent.
+ * Mirrors Java ClusterBackupMediaDriver -- bundles the media driver, archive
+ * server, and backup agent into a single process. The archiving media driver
+ * is launched in-process (no external Java process needed).
  */
 typedef struct aeron_cluster_backup_media_driver_stct
 {
+    aeron_archiving_media_driver_t *archiving_driver;
+
     aeron_context_t                *aeron_ctx;
     aeron_t                        *aeron;
     bool                            owns_aeron;
@@ -52,6 +56,9 @@ aeron_cluster_backup_media_driver_t;
 /**
  * Launch a ClusterBackupMediaDriver aggregate.
  *
+ * This launches an in-process C ArchivingMediaDriver (media driver + archive
+ * server), then creates an Aeron client, archive client, and backup agent.
+ *
  * @param driver      out: created driver handle.
  * @param backup_ctx  fully configured backup context (conclude will be called).
  * @param cluster_dir directory for recording log.
@@ -63,7 +70,7 @@ int aeron_cluster_backup_media_driver_launch(
     const char *cluster_dir);
 
 /**
- * Drive one iteration of the backup agent's duty cycle.
+ * Drive one iteration of the archiving media driver and backup agent duty cycles.
  */
 int aeron_cluster_backup_media_driver_do_work(
     aeron_cluster_backup_media_driver_t *driver,

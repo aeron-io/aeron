@@ -221,7 +221,7 @@ static void mock_on_state_change(void *cd, aeron_cluster_election_state_t s, int
     a->state_changes.push_back(s);
     AgentCall c; c.type="state_change"; c.state=s; a->calls.push_back(c);
 }
-static void mock_on_election_complete(void *cd, aeron_cluster_member_t *leader, int64_t)
+static void mock_on_election_complete(void *cd, aeron_cluster_member_t *leader, int64_t, bool)
 {
     auto *a = static_cast<MockAgentOps*>(cd);
     a->election_complete_count++;

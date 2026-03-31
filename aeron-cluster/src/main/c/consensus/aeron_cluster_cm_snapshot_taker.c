@@ -65,7 +65,7 @@ static int write_marker(aeron_exclusive_publication_t *pub,
 
     return snap_offer(pub,
         aeron_cluster_client_messageHeader_encoded_length() +
-        aeron_cluster_client_snapshotMarker_encoded_length(&msg));
+        aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_snapshotMarker_encoded_length(&msg));
 }
 
 int aeron_cluster_cm_snapshot_taker_mark_begin(aeron_exclusive_publication_t *pub,
@@ -108,7 +108,7 @@ int aeron_cluster_cm_snapshot_taker_snapshot_session(
 
     return snap_offer(pub,
         aeron_cluster_client_messageHeader_encoded_length() +
-        aeron_cluster_client_clusterSession_encoded_length(&msg));
+        aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_clusterSession_encoded_length(&msg));
 }
 
 int aeron_cluster_cm_snapshot_taker_snapshot_timer(
@@ -129,7 +129,7 @@ int aeron_cluster_cm_snapshot_taker_snapshot_timer(
 
     return snap_offer(pub,
         aeron_cluster_client_messageHeader_encoded_length() +
-        aeron_cluster_client_timer_encoded_length(&msg));
+        aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_timer_encoded_length(&msg));
 }
 
 int aeron_cluster_cm_snapshot_taker_snapshot_cm_state(
@@ -155,7 +155,7 @@ int aeron_cluster_cm_snapshot_taker_snapshot_cm_state(
 
     return snap_offer(pub,
         aeron_cluster_client_messageHeader_encoded_length() +
-        aeron_cluster_client_consensusModule_encoded_length(&msg));
+        aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_consensusModule_encoded_length(&msg));
 }
 
 int aeron_cluster_cm_snapshot_taker_snapshot_pending_tracker(
@@ -181,5 +181,5 @@ int aeron_cluster_cm_snapshot_taker_snapshot_pending_tracker(
 
     return snap_offer(pub,
         aeron_cluster_client_messageHeader_encoded_length() +
-        aeron_cluster_client_pendingMessageTracker_encoded_length(&msg));
+        aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_pendingMessageTracker_encoded_length(&msg));
 }

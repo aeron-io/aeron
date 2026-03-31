@@ -214,8 +214,8 @@ static int64_t real_get_log_recording_id(void *cd)
 { return aeron_consensus_module_agent_get_log_recording_id((aeron_consensus_module_agent_t *)cd); }
 static void real_on_state_change(void *cd, aeron_cluster_election_state_t s, int64_t ns)
 { aeron_consensus_module_agent_on_election_state_change((aeron_consensus_module_agent_t *)cd, s, ns); }
-static void real_on_election_complete(void *cd, aeron_cluster_member_t *leader, int64_t ns)
-{ aeron_consensus_module_agent_on_election_complete((aeron_consensus_module_agent_t *)cd, leader, ns); }
+static void real_on_election_complete(void *cd, aeron_cluster_member_t *leader, int64_t ns, bool is_startup)
+{ aeron_consensus_module_agent_on_election_complete((aeron_consensus_module_agent_t *)cd, leader, ns, is_startup); }
 static void real_begin_new_leadership_term(void *cd,
     int64_t log_term_id, int64_t new_term_id, int64_t log_pos, int64_t ts, bool startup)
 { aeron_consensus_module_agent_begin_new_leadership_term(
@@ -729,7 +729,7 @@ static int do_leader_ready(aeron_cluster_election_t *e, int64_t now_ns)
     {
         if (e->agent_ops.append_new_leadership_term_event(e->agent_ops.clientd, now_ns))
         {
-            e->agent_ops.on_election_complete(e->agent_ops.clientd, e->leader_member, now_ns);
+            e->agent_ops.on_election_complete(e->agent_ops.clientd, e->leader_member, now_ns, e->is_leader_startup);
             transition_to(e, AERON_ELECTION_CLOSED, now_ns);
             work_count++;
         }
@@ -1100,7 +1100,7 @@ static int do_follower_ready(aeron_cluster_election_t *e, int64_t now_ns)
         e->pub_ops.append_position(e->pub_ops.clientd, e->leader_member,
             e->leadership_term_id, e->log_position, e->this_member->id, 0))
     {
-        e->agent_ops.on_election_complete(e->agent_ops.clientd, e->leader_member, now_ns);
+        e->agent_ops.on_election_complete(e->agent_ops.clientd, e->leader_member, now_ns, e->is_leader_startup);
         transition_to(e, AERON_ELECTION_CLOSED, now_ns);
     }
     else if (now_ns >= (e->time_of_state_change_ns + e->leader_heartbeat_timeout_ns))

@@ -59,7 +59,7 @@ bool aeron_cluster_egress_publisher_send_session_event(
 
     return egress_offer(pub,
         aeron_cluster_client_messageHeader_encoded_length() +
-        aeron_cluster_client_sessionEvent_encoded_length(&msg));
+        aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_sessionEvent_encoded_length(&msg));
 }
 
 bool aeron_cluster_egress_publisher_send_new_leader_event(
@@ -85,7 +85,7 @@ bool aeron_cluster_egress_publisher_send_new_leader_event(
 
     return egress_offer(pub,
         aeron_cluster_client_messageHeader_encoded_length() +
-        aeron_cluster_client_newLeaderEvent_encoded_length(&msg));
+        aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_newLeaderEvent_encoded_length(&msg));
 }
 
 bool aeron_cluster_egress_publisher_send_challenge(
@@ -107,7 +107,7 @@ bool aeron_cluster_egress_publisher_send_challenge(
 
     return egress_offer(pub,
         aeron_cluster_client_messageHeader_encoded_length() +
-        aeron_cluster_client_challenge_encoded_length(&msg));
+        aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_challenge_encoded_length(&msg));
 }
 
 bool aeron_cluster_egress_publisher_send_cluster_members_response(
@@ -134,7 +134,7 @@ bool aeron_cluster_egress_publisher_send_cluster_members_response(
 
     return egress_offer(pub,
         aeron_cluster_client_messageHeader_encoded_length() +
-        aeron_cluster_client_clusterMembersResponse_encoded_length(&msg));
+        aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_clusterMembersResponse_encoded_length(&msg));
 }
 
 #include "aeron_cluster_client/adminResponse.h"

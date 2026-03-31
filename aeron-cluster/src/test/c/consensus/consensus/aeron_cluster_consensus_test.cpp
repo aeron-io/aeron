@@ -2643,7 +2643,7 @@ TEST_F(ConsensusModuleAgentTest, onElectionCompleteSetsIsLeader)
         m_agent->active_members, m_agent->active_member_count, 1);
     ASSERT_NE(nullptr, leader);
 
-    aeron_consensus_module_agent_on_election_complete(m_agent, leader, 0LL);
+    aeron_consensus_module_agent_on_election_complete(m_agent, leader, 0LL, true);
 
     EXPECT_FALSE(m_agent->active_members[0].is_leader);
     EXPECT_TRUE(m_agent->active_members[1].is_leader);
@@ -2691,7 +2691,7 @@ TEST_F(ConsensusModuleAgentTest, onElectionCompleteRestoresUncommittedTimers)
     /* elect a different member as leader */
     aeron_cluster_member_t *other = aeron_cluster_member_find_by_id(
         m_agent->active_members, m_agent->active_member_count, 1);
-    aeron_consensus_module_agent_on_election_complete(m_agent, other, 0LL);
+    aeron_consensus_module_agent_on_election_complete(m_agent, other, 0LL, true);
 
     /* uncommitted_timers should be cleared after restore */
     EXPECT_EQ(0, m_agent->uncommitted_timers_count);
@@ -2829,7 +2829,7 @@ TEST_F(ConsensusModuleAgentTest, onElectionCompleteUpdatesNotifiedCommitPosition
      * add_exclusive_pub path that would early-return without real Aeron. */
     aeron_cluster_member_t *leader = aeron_cluster_member_find_by_id(
         m_agent->active_members, m_agent->active_member_count, 1);
-    aeron_consensus_module_agent_on_election_complete(m_agent, leader, 0LL);
+    aeron_consensus_module_agent_on_election_complete(m_agent, leader, 0LL, true);
     m_agent->election = nullptr;   /* prevent TearDown from touching fake */
 
     EXPECT_EQ(200LL, m_agent->notified_commit_position);
@@ -2845,7 +2845,7 @@ TEST_F(ConsensusModuleAgentTest, onElectionCompleteNotifiedCommitPositionDoesNot
 
     aeron_cluster_member_t *leader = aeron_cluster_member_find_by_id(
         m_agent->active_members, m_agent->active_member_count, 1);
-    aeron_consensus_module_agent_on_election_complete(m_agent, leader, 0LL);
+    aeron_consensus_module_agent_on_election_complete(m_agent, leader, 0LL, true);
     m_agent->election = nullptr;
 
     EXPECT_EQ(200LL, m_agent->notified_commit_position);

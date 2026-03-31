@@ -60,7 +60,7 @@ bool aeron_cluster_consensus_publisher_canvass_position(
     aeron_cluster_client_canvassPosition_set_followerMemberId(&msg, follower_member_id);
     aeron_cluster_client_canvassPosition_set_protocolVersion(&msg, protocol_version);
 
-    return pub_offer(pub, aeron_cluster_client_canvassPosition_encoded_length(&msg));
+    return pub_offer(pub, aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_canvassPosition_encoded_length(&msg));
 }
 
 bool aeron_cluster_consensus_publisher_request_vote(
@@ -78,7 +78,7 @@ bool aeron_cluster_consensus_publisher_request_vote(
     aeron_cluster_client_requestVote_set_candidateTermId(&msg, candidate_term_id);
     aeron_cluster_client_requestVote_set_candidateMemberId(&msg, candidate_member_id);
 
-    return pub_offer(pub, aeron_cluster_client_requestVote_encoded_length(&msg));
+    return pub_offer(pub, aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_requestVote_encoded_length(&msg));
 }
 
 bool aeron_cluster_consensus_publisher_vote(
@@ -100,7 +100,7 @@ bool aeron_cluster_consensus_publisher_vote(
     aeron_cluster_client_vote_set_vote(&msg,
         vote ? aeron_cluster_client_booleanType_TRUE : aeron_cluster_client_booleanType_FALSE);
 
-    return pub_offer(pub, aeron_cluster_client_vote_encoded_length(&msg));
+    return pub_offer(pub, aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_vote_encoded_length(&msg));
 }
 
 bool aeron_cluster_consensus_publisher_new_leadership_term(
@@ -139,7 +139,7 @@ bool aeron_cluster_consensus_publisher_new_leadership_term(
     aeron_cluster_client_newLeadershipTerm_set_isStartup(&msg,
         is_startup ? aeron_cluster_client_booleanType_TRUE : aeron_cluster_client_booleanType_FALSE);
 
-    return pub_offer(pub, aeron_cluster_client_newLeadershipTerm_encoded_length(&msg));
+    return pub_offer(pub, aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_newLeadershipTerm_encoded_length(&msg));
 }
 
 bool aeron_cluster_consensus_publisher_append_position(
@@ -157,7 +157,7 @@ bool aeron_cluster_consensus_publisher_append_position(
     aeron_cluster_client_appendPosition_set_followerMemberId(&msg, follower_member_id);
     aeron_cluster_client_appendPosition_set_flags(&msg, (int8_t)flags);
 
-    return pub_offer(pub, aeron_cluster_client_appendPosition_encoded_length(&msg));
+    return pub_offer(pub, aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_appendPosition_encoded_length(&msg));
 }
 
 bool aeron_cluster_consensus_publisher_commit_position(
@@ -174,7 +174,7 @@ bool aeron_cluster_consensus_publisher_commit_position(
     aeron_cluster_client_commitPosition_set_logPosition(&msg, log_position);
     aeron_cluster_client_commitPosition_set_leaderMemberId(&msg, leader_member_id);
 
-    return pub_offer(pub, aeron_cluster_client_commitPosition_encoded_length(&msg));
+    return pub_offer(pub, aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_commitPosition_encoded_length(&msg));
 }
 
 bool aeron_cluster_consensus_publisher_catchup_position(
@@ -193,7 +193,7 @@ bool aeron_cluster_consensus_publisher_catchup_position(
     const char *ep = catchup_endpoint != NULL ? catchup_endpoint : "";
     aeron_cluster_client_catchupPosition_put_catchupEndpoint(&msg, ep, (uint32_t)strlen(ep));
 
-    return pub_offer(pub, aeron_cluster_client_catchupPosition_encoded_length(&msg));
+    return pub_offer(pub, aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_catchupPosition_encoded_length(&msg));
 }
 
 bool aeron_cluster_consensus_publisher_stop_catchup(
@@ -208,7 +208,7 @@ bool aeron_cluster_consensus_publisher_stop_catchup(
     aeron_cluster_client_stopCatchup_set_leadershipTermId(&msg, leadership_term_id);
     aeron_cluster_client_stopCatchup_set_followerMemberId(&msg, follower_member_id);
 
-    return pub_offer(pub, aeron_cluster_client_stopCatchup_encoded_length(&msg));
+    return pub_offer(pub, aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_stopCatchup_encoded_length(&msg));
 }
 
 bool aeron_cluster_consensus_publisher_termination_position(
@@ -223,7 +223,7 @@ bool aeron_cluster_consensus_publisher_termination_position(
     aeron_cluster_client_terminationPosition_set_leadershipTermId(&msg, leadership_term_id);
     aeron_cluster_client_terminationPosition_set_logPosition(&msg, log_position);
 
-    return pub_offer(pub, aeron_cluster_client_terminationPosition_encoded_length(&msg));
+    return pub_offer(pub, aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_terminationPosition_encoded_length(&msg));
 }
 
 bool aeron_cluster_consensus_publisher_termination_ack(
@@ -239,7 +239,7 @@ bool aeron_cluster_consensus_publisher_termination_ack(
     aeron_cluster_client_terminationAck_set_logPosition(&msg, log_position);
     aeron_cluster_client_terminationAck_set_memberId(&msg, member_id);
 
-    return pub_offer(pub, aeron_cluster_client_terminationAck_encoded_length(&msg));
+    return pub_offer(pub, aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_terminationAck_encoded_length(&msg));
 }
 
 /* -----------------------------------------------------------------------
@@ -347,7 +347,7 @@ bool aeron_cluster_consensus_publisher_backup_query(
     aeron_cluster_client_backupQuery_put_encodedCredentials(
         &msg, (const char *)encoded_credentials, (uint32_t)encoded_credentials_length);
 
-    return pub_offer(pub, aeron_cluster_client_backupQuery_encoded_length(&msg));
+    return pub_offer(pub, aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_backupQuery_encoded_length(&msg));
 }
 
 bool aeron_cluster_consensus_publisher_backup_response(
@@ -397,7 +397,7 @@ bool aeron_cluster_consensus_publisher_backup_response(
     aeron_cluster_client_backupResponse_put_clusterMembers(
         &msg, cluster_members ? cluster_members : "", (uint32_t)members_len);
 
-    return pub_offer(pub, aeron_cluster_client_backupResponse_encoded_length(&msg));
+    return pub_offer(pub, aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_backupResponse_encoded_length(&msg));
 }
 
 bool aeron_cluster_consensus_publisher_heartbeat_response(
@@ -439,5 +439,5 @@ bool aeron_cluster_consensus_publisher_challenge_response(
     aeron_cluster_client_challengeResponse_put_encodedCredentials(
         &msg, (const char *)encoded_credentials, (uint32_t)encoded_credentials_length);
 
-    return pub_offer(pub, aeron_cluster_client_challengeResponse_encoded_length(&msg));
+    return pub_offer(pub, aeron_cluster_client_messageHeader_encoded_length() + aeron_cluster_client_challengeResponse_encoded_length(&msg));
 }

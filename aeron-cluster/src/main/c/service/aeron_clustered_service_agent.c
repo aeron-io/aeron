@@ -172,6 +172,31 @@ int aeron_clustered_service_agent_on_start(aeron_clustered_service_agent_t *agen
 {
     aeron_cluster_service_context_t *ctx = agent->ctx;
 
+    /* Auto-create Aeron client if none was provided -- mirrors Java pattern
+     * where each component creates its own client to the same driver directory. */
+    if (NULL == ctx->aeron)
+    {
+        ctx->owns_aeron_client = true;
+
+        aeron_context_t *aeron_ctx;
+        if (aeron_context_init(&aeron_ctx) < 0 ||
+            aeron_context_set_dir(aeron_ctx, ctx->aeron_directory_name) < 0)
+        {
+            AERON_APPEND_ERR("%s", "");
+            return -1;
+        }
+
+        if (aeron_init(&ctx->aeron, aeron_ctx) < 0 ||
+            aeron_start(ctx->aeron) < 0)
+        {
+            AERON_APPEND_ERR("%s", "");
+            return -1;
+        }
+
+        agent->aeron = ctx->aeron;
+        agent->counters_reader = aeron_counters_reader(ctx->aeron);
+    }
+
     /* Add service publication (service→CM) — spin-poll until ready */
     {
         aeron_async_add_exclusive_publication_t *async_pub = NULL;

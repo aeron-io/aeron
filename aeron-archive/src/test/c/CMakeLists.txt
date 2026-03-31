@@ -37,3 +37,30 @@ endfunction()
 if (AERON_UNIT_TESTS)
     aeron_c_archive_test(aeron_archive_test client/aeron_archive_test.cpp)
 endif ()
+
+# Archive server tests
+function(aeron_c_archive_server_test name file)
+    add_executable(${name} ${file})
+    add_dependencies(${name} gmock aeron_archive_c_server)
+    target_include_directories(${name} PUBLIC
+        ${AERON_C_ARCHIVE_SOURCE_PATH}
+        ${AERON_DRIVER_SOURCE_PATH}
+        ${ARCHIVE_C_CODEC_TARGET_DIR})
+    target_link_libraries(${name}
+        aeron
+        aeron_driver
+        aeron_archive_c_client
+        aeron_archive_c_server
+        gmock_main
+        ${CMAKE_THREAD_LIBS_INIT})
+    add_test(NAME ${name} COMMAND ${name})
+    set_tests_properties(${name} PROPERTIES TIMEOUT 120)
+endfunction()
+
+if (AERON_UNIT_TESTS)
+    aeron_c_archive_server_test(aeron_archive_catalog_test server/aeron_archive_catalog_test.cpp)
+    aeron_c_archive_server_test(aeron_archive_recording_test server/aeron_archive_recording_test.cpp)
+    aeron_c_archive_server_test(aeron_archive_replay_test server/aeron_archive_replay_test.cpp)
+    aeron_c_archive_server_test(aeron_archive_context_test server/aeron_archive_context_test.cpp)
+    aeron_c_archive_server_test(aeron_archive_conductor_test server/aeron_archive_conductor_test.cpp)
+endif ()

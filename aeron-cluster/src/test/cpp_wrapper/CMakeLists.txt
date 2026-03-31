@@ -14,14 +14,7 @@
 # limitations under the License.
 #
 
-find_package(Java REQUIRED)
-
-add_definitions(-DAERON_ALL_JAR="${AERON_ALL_JAR}")
-add_definitions(-DAERON_AGENT_JAR="${AERON_AGENT_JAR}")
-add_definitions(-DJAVA_EXECUTABLE="${Java_JAVA_EXECUTABLE}")
 add_definitions(-DCLUSTER_DIR="${CMAKE_CURRENT_BINARY_DIR}/cluster")
-add_definitions(-DJAVA_MAJOR_VERSION=${Java_VERSION_MAJOR})
-add_definitions(-DJAVA_MINOR_VERSION=${Java_VERSION_MINOR})
 
 set(TEST_HEADERS)
 

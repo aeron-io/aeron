@@ -15,8 +15,9 @@
  */
 
 /**
- * Implementation of ClusterServerHelper — includes service-side headers.
- * Kept in a separate TU so client-only TUs avoid the aeron_cluster_t typedef clash.
+ * Implementation of ClusterServerHelper.
+ * Each component (CM, service) creates its own Aeron client from the given aeron_dir,
+ * matching the Java ClusteredMediaDriver pattern.
  */
 
 #include "aeron_cluster_server_helper.h"
@@ -25,6 +26,9 @@
 #include <cstring>
 #include <cstdio>
 #include <string>
+#include <thread>
+#include <atomic>
+#include <chrono>
 
 extern "C"
 {
@@ -62,7 +66,6 @@ static void echo_on_session_message(
         static_cast<aeron_clustered_service_agent_t *>(clientd);
     if (agent && session)
     {
-        /* Echo directly to client via session's response publication — mirrors Java session.offer() */
         aeron_cluster_client_session_offer(session, agent->leadership_term_id, buffer, length);
     }
 }
@@ -73,53 +76,57 @@ static void echo_on_session_message(
 
 struct cluster_server_handle_stct
 {
-    aeron_t                         *aeron        = nullptr;
-    aeron_context_t                 *aeron_ctx    = nullptr;
     aeron_consensus_module_agent_t  *cm_agent     = nullptr;
     aeron_clustered_service_agent_t *svc_agent    = nullptr;
     aeron_cm_context_t              *cm_ctx       = nullptr;
     aeron_cluster_service_context_t *svc_ctx      = nullptr;
     aeron_clustered_service_t        service{};
+    std::thread                      bg_thread;
+    std::atomic<bool>                bg_running{false};
 };
 
 cluster_server_handle_t *cluster_server_start(
-    aeron_t *aeron,
+    const char *aeron_dir,
     const char *cluster_dir,
-    int archive_port,
     const char *cluster_members,
     int ingress_port,
     int consensus_port)
 {
     cluster_server_handle_t *srv = new cluster_server_handle_t{};
 
-    /* Use the caller's Aeron client for the server — same process, same driver,
-     * avoids cross-client IPC pub→sub issues with exclusive publications */
-    srv->aeron     = aeron;
-    srv->aeron_ctx = nullptr; /* not owned */
-
-    /* CM context */
+    /* ---- CM context ----
+     * Set aeron_directory_name so that aeron_cm_context_conclude() auto-creates
+     * its own Aeron client pointing to the driver directory. */
     if (aeron_cm_context_init(&srv->cm_ctx) < 0) { delete srv; return nullptr; }
-    srv->cm_ctx->aeron               = srv->aeron;
+
+    snprintf(srv->cm_ctx->aeron_directory_name, sizeof(srv->cm_ctx->aeron_directory_name),
+             "%s", aeron_dir);
     srv->cm_ctx->member_id           = 0;
     srv->cm_ctx->appointed_leader_id = 0;
     srv->cm_ctx->service_count       = 1;
     srv->cm_ctx->app_version         = 1;
+
+    if (srv->cm_ctx->cluster_members) { free(srv->cm_ctx->cluster_members); }
     srv->cm_ctx->cluster_members     = strdup(cluster_members);
     strncpy(srv->cm_ctx->cluster_dir, cluster_dir, sizeof(srv->cm_ctx->cluster_dir) - 1);
 
+    if (srv->cm_ctx->consensus_channel) { free(srv->cm_ctx->consensus_channel); }
     srv->cm_ctx->consensus_channel        = strdup("aeron:udp");
     srv->cm_ctx->consensus_stream_id      = 108;
+    if (srv->cm_ctx->log_channel) { free(srv->cm_ctx->log_channel); }
     srv->cm_ctx->log_channel              = strdup("aeron:ipc");
     srv->cm_ctx->log_stream_id            = 100;
+    if (srv->cm_ctx->snapshot_channel) { free(srv->cm_ctx->snapshot_channel); }
     srv->cm_ctx->snapshot_channel         = strdup("aeron:ipc");
     srv->cm_ctx->snapshot_stream_id       = 107;
+    if (srv->cm_ctx->control_channel) { free(srv->cm_ctx->control_channel); }
     srv->cm_ctx->control_channel          = strdup("aeron:ipc");
-    srv->cm_ctx->consensus_module_stream_id = 105;  /* CM ← service (service publishes on 105) */
-    srv->cm_ctx->service_stream_id          = 104;  /* CM → service (service subscribes on 104) */
+    srv->cm_ctx->consensus_module_stream_id = 105;
+    srv->cm_ctx->service_stream_id          = 104;
+    if (srv->cm_ctx->ingress_channel) { free(srv->cm_ctx->ingress_channel); }
     srv->cm_ctx->ingress_channel          = strdup("aeron:ipc");
     srv->cm_ctx->ingress_stream_id        = 101;
 
-    /* member_id is the first field of cluster_members */
     srv->cm_ctx->member_id = atoi(cluster_members);
 
     srv->cm_ctx->startup_canvass_timeout_ns   = INT64_C(200000000);
@@ -130,21 +137,21 @@ cluster_server_handle_t *cluster_server_start(
     srv->cm_ctx->session_timeout_ns           = INT64_C(10000000000);
     srv->cm_ctx->termination_timeout_ns       = INT64_C(5000000000);
 
+    /* Archive context -- also auto-creates its own Aeron client from aeron_directory_name */
     aeron_archive_context_t *arch_ctx = nullptr;
     aeron_archive_context_init(&arch_ctx);
-    aeron_archive_context_set_aeron(arch_ctx, srv->aeron);
-    /* Use local IPC to connect to the archive on the same host (avoids port conflict) */
-    std::string ctrl = "aeron:udp?endpoint=localhost:" + std::to_string(archive_port);
-    aeron_archive_context_set_control_request_channel(arch_ctx, ctrl.c_str());
-    aeron_archive_context_set_control_response_channel(arch_ctx, "aeron:udp?endpoint=localhost:0");
+    aeron_archive_context_set_aeron_directory_name(arch_ctx, aeron_dir);
+    aeron_archive_context_set_control_request_channel(arch_ctx, "aeron:ipc");
+    aeron_archive_context_set_control_response_channel(arch_ctx, "aeron:ipc");
     aeron_archive_context_set_control_request_stream_id(arch_ctx, 10);
     aeron_archive_context_set_control_response_stream_id(arch_ctx, 20);
     srv->cm_ctx->archive_ctx      = arch_ctx;
     srv->cm_ctx->owns_archive_ctx = true;
 
-    /* Service context */
+    /* ---- Service context ----
+     * Set aeron_directory_name so on_start auto-creates its own Aeron client. */
     aeron_cluster_service_context_init(&srv->svc_ctx);
-    aeron_cluster_service_context_set_aeron(srv->svc_ctx, srv->aeron);
+    aeron_cluster_service_context_set_aeron_directory_name(srv->svc_ctx, aeron_dir);
     aeron_cluster_service_context_set_service_id(srv->svc_ctx, 0);
     aeron_cluster_service_context_set_control_channel(srv->svc_ctx, "aeron:ipc");
     aeron_cluster_service_context_set_consensus_module_stream_id(srv->svc_ctx, 104);
@@ -155,22 +162,88 @@ cluster_server_handle_t *cluster_server_start(
     srv->svc_ctx->cluster_id         = 0;
     strncpy(srv->svc_ctx->cluster_dir, cluster_dir, sizeof(srv->svc_ctx->cluster_dir) - 1);
 
-    /* Create agents */
-    if (aeron_consensus_module_agent_create(&srv->cm_agent, srv->cm_ctx) < 0)
-    { delete srv; return nullptr; }
-    if (aeron_clustered_service_agent_create(&srv->svc_agent, srv->svc_ctx) < 0)
-    { delete srv; return nullptr; }
-
-    /* Wire echo service callbacks (clientd set after svc_agent created) */
+    /* Wire echo service callbacks -- must be set before conclude (service is required) */
     srv->service.on_start           = echo_on_start;
     srv->service.on_terminate       = echo_on_terminate;
     srv->service.on_session_message = echo_on_session_message;
-    srv->service.clientd            = srv->svc_agent;
+    srv->service.clientd            = nullptr;  /* updated after agent created */
     srv->svc_ctx->service           = &srv->service;
 
+    /* Create agents */
+    if (aeron_consensus_module_agent_create(&srv->cm_agent, srv->cm_ctx) < 0)
+    {
+        fprintf(stderr, "cluster_server_start: cm_agent_create failed: %s\n", aeron_errmsg());
+        delete srv;
+        return nullptr;
+    }
+    if (aeron_clustered_service_agent_create(&srv->svc_agent, srv->svc_ctx) < 0)
+    {
+        fprintf(stderr, "cluster_server_start: svc_agent_create failed: %s\n", aeron_errmsg());
+        delete srv;
+        return nullptr;
+    }
+
+    /* Set clientd to service agent for echo callback */
+    srv->service.clientd = srv->svc_agent;
+
     /* Start service FIRST so its control subscription is ready for CM's JoinLog */
-    if (aeron_clustered_service_agent_on_start(srv->svc_agent) < 0) { delete srv; return nullptr; }
-    if (aeron_consensus_module_agent_on_start(srv->cm_agent) < 0) { delete srv; return nullptr; }
+    if (aeron_clustered_service_agent_on_start(srv->svc_agent) < 0)
+    {
+        fprintf(stderr, "cluster_server_start: svc on_start failed: %s\n", aeron_errmsg());
+        delete srv;
+        return nullptr;
+    }
+    if (aeron_consensus_module_agent_on_start(srv->cm_agent) < 0)
+    {
+        fprintf(stderr, "cluster_server_start: cm on_start failed: %s\n", aeron_errmsg());
+        delete srv;
+        return nullptr;
+    }
+
+    return srv;
+}
+
+cluster_server_handle_t *cluster_service_start(
+    const char *aeron_dir,
+    const char *cluster_dir)
+{
+    cluster_server_handle_t *srv = new cluster_server_handle_t{};
+
+    /* Service context -- set aeron_directory_name so on_start auto-creates its own Aeron client. */
+    aeron_cluster_service_context_init(&srv->svc_ctx);
+    aeron_cluster_service_context_set_aeron_directory_name(srv->svc_ctx, aeron_dir);
+    aeron_cluster_service_context_set_service_id(srv->svc_ctx, 0);
+    aeron_cluster_service_context_set_control_channel(srv->svc_ctx, "aeron:ipc?term-length=128k");
+    aeron_cluster_service_context_set_consensus_module_stream_id(srv->svc_ctx, 104);
+    srv->svc_ctx->service_channel    = strdup("aeron:ipc?term-length=128k");
+    srv->svc_ctx->service_stream_id  = 105;
+    srv->svc_ctx->snapshot_channel   = strdup("aeron:ipc?term-length=128k");
+    srv->svc_ctx->snapshot_stream_id = 107;
+    srv->svc_ctx->cluster_id         = 0;
+    strncpy(srv->svc_ctx->cluster_dir, cluster_dir, sizeof(srv->svc_ctx->cluster_dir) - 1);
+
+    /* Wire echo service callbacks */
+    srv->service.on_start           = echo_on_start;
+    srv->service.on_terminate       = echo_on_terminate;
+    srv->service.on_session_message = echo_on_session_message;
+    srv->service.clientd            = nullptr;
+    srv->svc_ctx->service           = &srv->service;
+
+    if (aeron_clustered_service_agent_create(&srv->svc_agent, srv->svc_ctx) < 0)
+    {
+        fprintf(stderr, "cluster_service_start: svc_agent_create failed: %s\n", aeron_errmsg());
+        delete srv;
+        return nullptr;
+    }
+
+    srv->service.clientd = srv->svc_agent;
+
+    if (aeron_clustered_service_agent_on_start(srv->svc_agent) < 0)
+    {
+        fprintf(stderr, "cluster_service_start: svc on_start failed: %s\n", aeron_errmsg());
+        delete srv;
+        return nullptr;
+    }
 
     return srv;
 }
@@ -213,19 +286,6 @@ int cluster_server_session_open_pending(const cluster_server_handle_t *srv)
     auto *s = mgr->sessions[0];
     int pub_connected = (s->response_publication &&
         aeron_exclusive_publication_is_connected(s->response_publication)) ? 1 : 0;
-    static bool printed = false;
-    if (!printed && s->response_publication) {
-        printed = true;
-        aeron_publication_constants_t consts;
-        if (aeron_exclusive_publication_constants(s->response_publication, &consts) == 0) {
-            fprintf(stderr, "[Server] response_pub channel=%s stream=%d connected=%d\n",
-                    consts.channel, consts.stream_id, pub_connected);
-        }
-        fprintf(stderr, "[Server] session id=%lld corr=%lld response_channel='%s' response_stream=%d open_pending=%d\n",
-                static_cast<long long>(s->id), static_cast<long long>(s->correlation_id),
-                s->response_channel, s->response_stream_id,
-                static_cast<int>(s->has_open_event_pending));
-    }
     return s->has_open_event_pending ? (10 + pub_connected) : pub_connected;
 }
 
@@ -245,30 +305,43 @@ int cluster_server_svc_has_log_adapter(const cluster_server_handle_t *srv)
     return (srv && srv->svc_agent && srv->svc_agent->log_adapter != nullptr) ? 1 : 0;
 }
 
-aeron_t *cluster_server_get_aeron(const cluster_server_handle_t *srv)
-{
-    return srv ? srv->aeron : nullptr;
-}
-
 void cluster_server_do_work(cluster_server_handle_t *srv, int64_t now_ns)
 {
     if (!srv) { return; }
     if (srv->cm_agent)  { aeron_consensus_module_agent_do_work(srv->cm_agent, now_ns); }
-    if (srv->svc_agent)
+    if (srv->svc_agent) { aeron_clustered_service_agent_do_work(srv->svc_agent, now_ns); }
+}
+
+void cluster_server_start_background(cluster_server_handle_t *srv)
+{
+    if (!srv || srv->bg_running.load()) { return; }
+    srv->bg_running.store(true);
+    srv->bg_thread = std::thread([srv]()
     {
-        static int dw_count = 0;
-        if (dw_count < 3) { fprintf(stderr, "[do_work] svc_agent log_adapter=%p\n", static_cast<void*>(srv->svc_agent->log_adapter)); }
-        aeron_clustered_service_agent_do_work(srv->svc_agent, now_ns);
-        if (dw_count++ < 3) { fprintf(stderr, "[do_work] svc done\n"); }
-    }
+        while (srv->bg_running.load())
+        {
+            int64_t now_ns = aeron_nano_clock();
+            if (srv->cm_agent)  { aeron_consensus_module_agent_do_work(srv->cm_agent, now_ns); }
+            if (srv->svc_agent) { aeron_clustered_service_agent_do_work(srv->svc_agent, now_ns); }
+            std::this_thread::sleep_for(std::chrono::microseconds(100));
+        }
+    });
 }
 
 void cluster_server_stop(cluster_server_handle_t *srv)
 {
     if (!srv) { return; }
+    /* Stop background thread first */
+    if (srv->bg_running.load())
+    {
+        srv->bg_running.store(false);
+        if (srv->bg_thread.joinable()) { srv->bg_thread.join(); }
+    }
     if (srv->svc_agent) { aeron_clustered_service_agent_close(srv->svc_agent); }
     if (srv->svc_ctx)   { srv->svc_ctx->service = nullptr; aeron_cluster_service_context_close(srv->svc_ctx); }
     if (srv->cm_agent)  { aeron_consensus_module_agent_close(srv->cm_agent); }
-    /* aeron is caller-owned — don't close it */
+    /* CM context owns its aeron client (owns_aeron_client=true via conclude),
+     * and owns the archive context. Closing CM context cleans up both. */
+    if (srv->cm_ctx)    { aeron_cm_context_close(srv->cm_ctx); }
     delete srv;
 }
