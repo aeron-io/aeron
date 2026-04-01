@@ -1124,7 +1124,7 @@ TEST_F(ControlSessionTest, shouldStartInInitState)
 
 TEST_F(ControlSessionTest, shouldReturnSessionId)
 {
-    EXPECT_EQ(CONTROL_SESSION_ID, aeron_archive_control_session_id(session));
+    EXPECT_EQ(int64_t{42}, aeron_archive_control_session_id(session));
 }
 
 TEST_F(ControlSessionTest, shouldReturnControlPublicationChannel)
