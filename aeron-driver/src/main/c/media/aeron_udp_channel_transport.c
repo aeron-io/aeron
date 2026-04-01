@@ -317,12 +317,18 @@ int aeron_udp_channel_transport_init(
     return 0;
 
 error:
+    if (-1 != transport->recv_fd && transport->recv_fd != transport->fd)
+    {
+        aeron_close_socket(transport->recv_fd);
+    }
+
     if (-1 != transport->fd)
     {
         aeron_close_socket(transport->fd);
     }
 
     transport->fd = -1;
+    transport->recv_fd = -1;
     return -1;
 }
 
