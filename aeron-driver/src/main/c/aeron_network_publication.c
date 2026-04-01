@@ -564,14 +564,13 @@ int aeron_network_publication_send_data(
     const size_t max_vlen = publication->max_messages_per_send;
     int result = 0, vlen = 0;
     int64_t bytes_sent = 0;
-    int32_t available_window = (int32_t)(aeron_counter_get_plain(publication->snd_lmt_position.value_addr) - snd_pos);
+    int64_t available_window = aeron_counter_get_plain(publication->snd_lmt_position.value_addr) - snd_pos;
     int64_t highest_pos = snd_pos;
     struct iovec iov[AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND];
 
     for (size_t i = 0; i < max_vlen && available_window > 0; i++)
     {
-        int32_t scan_limit = available_window < (int32_t)publication->mtu_length ?
-           available_window : (int32_t)publication->mtu_length;
+        int32_t scan_limit = (int32_t)AERON_MIN(available_window, (int64_t)publication->mtu_length);
         size_t active_index = aeron_logbuffer_index_by_position(snd_pos, publication->position_bits_to_shift);
         int32_t padding = 0;
 
@@ -885,6 +884,23 @@ void aeron_network_publication_on_status_message(
     aeron_network_publication_update_connected_status(
             publication,
             aeron_network_publication_has_subscribers(publication));
+}
+
+bool aeron_network_publication_is_valid_status_message(
+    aeron_network_publication_t *publication, const uint8_t *buffer)
+{
+    const aeron_status_message_header_t *sm = (aeron_status_message_header_t *)buffer;
+
+    int64_t sm_position = aeron_logbuffer_compute_position(
+        sm->consumption_term_id,
+        sm->consumption_term_offset,
+        publication->position_bits_to_shift,
+        publication->initial_term_id);
+
+    int64_t snd_pos = aeron_counter_get_plain(publication->snd_pos_position.value_addr);
+    int64_t max_transmission_window = publication->term_buffer_length >> 1;
+
+    return sm_position >= snd_pos - max_transmission_window && sm_position <= snd_pos + max_transmission_window;
 }
 
 void aeron_network_publication_on_error(

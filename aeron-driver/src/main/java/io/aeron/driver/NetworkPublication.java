@@ -507,6 +507,25 @@ public final class NetworkPublication
     }
 
     /**
+     * Check if the SM should be accepted or not.
+     *
+     * @param msg SM to check.
+     * @return {@code true} if the SM is accepted.
+     */
+    public boolean isValidStatusMessage(final StatusMessageFlyweight msg)
+    {
+        final long smPosition = computePosition(
+            msg.consumptionTermId(),
+            msg.consumptionTermOffset(),
+            positionBitsToShift,
+            initialTermId);
+
+        final long sndPos = senderPosition.get();
+        final int maxTransmissionWindow = termBufferLength >> 1;
+        return smPosition >= sndPos - maxTransmissionWindow && smPosition <= sndPos + maxTransmissionWindow;
+    }
+
+    /**
      * Process an error message from a receiver.
      *
      * @param msg                       flyweight over the network packet.
@@ -815,10 +834,10 @@ public final class NetworkPublication
     private int sendData(final long nowNs, final long senderPosition, final int termOffset)
     {
         int bytesSent = 0;
-        final int availableWindow = (int)(senderLimit.get() - senderPosition);
+        final long availableWindow = senderLimit.get() - senderPosition;
         if (availableWindow > 0)
         {
-            final int scanLimit = Math.min(availableWindow, mtuLength);
+            final int scanLimit = (int)Math.min(availableWindow, mtuLength);
             final int activeIndex = indexByPosition(senderPosition, positionBitsToShift);
 
             final long scanOutcome = scanForAvailability(termBuffers[activeIndex], termOffset, scanLimit);

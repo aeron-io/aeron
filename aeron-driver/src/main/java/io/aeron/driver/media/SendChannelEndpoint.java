@@ -57,6 +57,7 @@ import static io.aeron.driver.media.UdpChannelTransport.onSendError;
 import static io.aeron.driver.status.SystemCounterDescriptor.ERROR_FRAMES_RECEIVED;
 import static io.aeron.driver.status.SystemCounterDescriptor.NAK_MESSAGES_RECEIVED;
 import static io.aeron.driver.status.SystemCounterDescriptor.STATUS_MESSAGES_RECEIVED;
+import static io.aeron.driver.status.SystemCounterDescriptor.STATUS_MESSAGES_REJECTED;
 import static io.aeron.protocol.StatusMessageFlyweight.SEND_SETUP_FLAG;
 import static io.aeron.status.ChannelEndpointStatus.status;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
@@ -77,6 +78,7 @@ public class SendChannelEndpoint extends UdpChannelTransport
     private final Long2ObjectHashMap<NetworkPublication> publicationBySessionAndStreamId = new Long2ObjectHashMap<>();
     private final MultiSndDestination multiSndDestination;
     private final AtomicCounter statusMessagesReceived;
+    private final AtomicCounter statusMessagesRejected;
     private final AtomicCounter nakMessagesReceived;
     private final AtomicCounter statusIndicator;
     private final AtomicCounter errorMessagesReceived;
@@ -106,6 +108,7 @@ public class SendChannelEndpoint extends UdpChannelTransport
 
         nakMessagesReceived = context.systemCounters().get(NAK_MESSAGES_RECEIVED);
         statusMessagesReceived = context.systemCounters().get(STATUS_MESSAGES_RECEIVED);
+        statusMessagesRejected = context.systemCounters().get(STATUS_MESSAGES_REJECTED);
         errorMessagesReceived = context.systemCounters().get(ERROR_FRAMES_RECEIVED);
         this.statusIndicator = statusIndicator;
 
@@ -368,12 +371,19 @@ public class SendChannelEndpoint extends UdpChannelTransport
 
         statusMessagesReceived.incrementRelease();
 
+        final NetworkPublication publication = publicationBySessionAndStreamId.get(compoundKey(sessionId, streamId));
+        if (SEND_SETUP_FLAG != (msg.flags() & SEND_SETUP_FLAG) &&
+            null != publication && !publication.isValidStatusMessage(msg))
+        {
+            statusMessagesRejected.incrementRelease();
+            return; // drop SM that is out of bounds
+        }
+
         if (null != multiSndDestination)
         {
             multiSndDestination.onStatusMessage(msg, srcAddress);
         }
 
-        final NetworkPublication publication = publicationBySessionAndStreamId.get(compoundKey(sessionId, streamId));
         if (null != publication)
         {
             if (SEND_SETUP_FLAG == (msg.flags() & SEND_SETUP_FLAG))

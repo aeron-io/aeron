@@ -12,6 +12,8 @@ option and is propagated across as this needs to be consistent across both agent
 
 === Changelog
 
+* **[Breaking]**: **[Driver/Java/C]** Reject SMs that out of bounds, i.e. whose position is more than half a term
+ahead or behind of the sender position. (https://github.com/aeron-io/aeron/pull/1971[#1971])
 * **[Breaking]**: **[Client/C{plus}{plus} Wrapper]** Remove `close()` method from `Publication/ExclusivePublication`,
 i.e. the underlying `aeron_publication_t/aeron_exclusive_publication_t` will be closed when the corresponding C++
 object is destroyed.
