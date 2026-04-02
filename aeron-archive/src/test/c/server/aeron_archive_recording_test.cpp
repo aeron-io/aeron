@@ -25,6 +25,10 @@
 #if defined(_MSC_VER)
 #include <direct.h>
 #include <io.h>
+typedef long long ssize_t;
+#define read _read
+#define open _open
+#define close _close
 static char *mkdtemp(char *tmpl)
 {
     if (_mktemp_s(tmpl, strlen(tmpl) + 1) != 0) return NULL;

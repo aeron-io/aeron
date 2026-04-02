@@ -24,6 +24,9 @@
 #include <sys/stat.h>
 #if defined(_MSC_VER)
 #include <direct.h>
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
 #include <io.h>
 #include <process.h>
 #if !defined(getpid)
