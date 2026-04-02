@@ -485,6 +485,7 @@ project(':aeron-client') {
         def sourceDir = 'src/main/c'
         def driverSourceDir = '../aeron-driver/src/main/c'
 
+        dependsOn 'compileJava'
         inputs.files(configInfoFile)
 
         mainClass.set('io.aeron.config.validation.ValidateConfigExpectationsTask')
@@ -495,6 +496,7 @@ project(':aeron-client') {
     tasks.register('generateConfigDoc', JavaExec) {
         def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.md"
 
+        dependsOn 'compileJava'
         inputs.files(configInfoFile)
         outputs.files(generatedDocFile)
 
@@ -507,6 +509,7 @@ project(':aeron-client') {
         def counterInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/counter-info.dat"
         def sourceDir = 'src/main/c'
 
+        dependsOn 'compileJava'
         inputs.files(counterInfoFile)
 
         mainClass.set('io.aeron.counter.validation.ValidateCounterExpectationsTask')
@@ -585,6 +588,7 @@ project(':aeron-driver') {
     tasks.register('validateConfigExpectations', JavaExec) {
         def sourceDir = 'src/main/c'
 
+        dependsOn 'compileJava'
         inputs.files(configInfoFile)
 
         mainClass.set('io.aeron.config.validation.ValidateConfigExpectationsTask')
@@ -595,6 +599,7 @@ project(':aeron-driver') {
     tasks.register('generateConfigDoc', JavaExec) {
         def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.md"
 
+        dependsOn 'compileJava'
         inputs.files(configInfoFile)
         outputs.files(generatedDocFile)
 
@@ -808,6 +813,7 @@ project(':aeron-archive') {
     tasks.register('validateConfigExpectations', JavaExec) {
         def sourceDir = 'src/main/c'
 
+        dependsOn 'compileJava'
         inputs.files(configInfoFile)
 
         mainClass.set('io.aeron.config.validation.ValidateConfigExpectationsTask')
@@ -818,6 +824,7 @@ project(':aeron-archive') {
     tasks.register('generateConfigDoc', JavaExec) {
         def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.md"
 
+        dependsOn 'compileJava'
         inputs.files(configInfoFile)
         outputs.files(generatedDocFile)
 
@@ -997,6 +1004,7 @@ project(':aeron-cluster') {
         def configInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/config-info.dat"
         def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.md"
 
+        dependsOn 'compileJava'
         inputs.files(configInfoFile)
         outputs.files(generatedDocFile)
 
