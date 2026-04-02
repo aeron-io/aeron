@@ -123,7 +123,11 @@ void proc_yield(void);
 #elif defined(AERON_COMPILER_MSVC)
 
 int sched_yield(void);
+#if defined(AERON_CPU_ARM)
+#define proc_yield __yield
+#else
 #define proc_yield _mm_pause
+#endif
 
 #else
 #error Unsupported platform!

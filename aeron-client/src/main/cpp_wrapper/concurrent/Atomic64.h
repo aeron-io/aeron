@@ -24,6 +24,8 @@
     #include "concurrent/atomic/Atomic64_gcc_cpp11.h"
 #elif defined(AERON_COMPILER_MSVC) && defined(AERON_CPU_X64)
     #include "concurrent/atomic/Atomic64_msvc.h"
+#elif defined(AERON_COMPILER_MSVC) && defined(AERON_CPU_ARM)
+    #include "concurrent/atomic/Atomic64_msvc.h"
 #else
     #error Unsupported platform!
 #endif
