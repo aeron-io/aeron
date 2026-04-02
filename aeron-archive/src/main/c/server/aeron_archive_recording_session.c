@@ -20,6 +20,7 @@
 #include "aeron_alloc.h"
 #include "util/aeron_error.h"
 #include "protocol/aeron_udp_protocol.h"
+#include "concurrent/aeron_atomic.h"
 #include "aeron_archive_recording_session.h"
 
 #define AERON_ARCHIVE_GENERIC_ERROR (0)
@@ -103,9 +104,8 @@ static int recording_session_record(aeron_archive_recording_session_t *session)
         {
             /*
              * Use ordered/release store semantics matching Java's setRelease.
-             * __atomic_store_n with __ATOMIC_RELEASE ensures visibility.
              */
-            __atomic_store_n(counter_addr, writer_position, __ATOMIC_RELEASE);
+            AERON_SET_RELEASE(*(volatile int64_t *)counter_addr, writer_position);
         }
     }
     else if (aeron_image_is_end_of_stream(session->image) || aeron_image_is_closed(session->image))
@@ -256,8 +256,11 @@ int aeron_archive_recording_session_do_work(aeron_archive_recording_session_t *s
         if (NULL != session->recording_events_proxy)
         {
             int64_t *counter_addr = aeron_counter_addr(session->position);
-            int64_t stop_position = (NULL != counter_addr) ?
-                __atomic_load_n(counter_addr, __ATOMIC_RELAXED) : AERON_NULL_VALUE;
+            int64_t stop_position = AERON_NULL_VALUE;
+            if (NULL != counter_addr)
+            {
+                AERON_GET_ACQUIRE(stop_position, *(volatile int64_t *)counter_addr);
+            }
 
             aeron_archive_recording_events_proxy_stopped(
                 session->recording_events_proxy,
@@ -346,7 +349,9 @@ int64_t aeron_archive_recording_session_recorded_position(const aeron_archive_re
         return AERON_NULL_VALUE;
     }
 
-    return __atomic_load_n(counter_addr, __ATOMIC_ACQUIRE);
+    int64_t value;
+    AERON_GET_ACQUIRE(value, *(volatile int64_t *)counter_addr);
+    return value;
 }
 
 const char *aeron_archive_recording_session_error_message(const aeron_archive_recording_session_t *session)

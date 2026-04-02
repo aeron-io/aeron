@@ -19,13 +19,26 @@
 #include <stdio.h>
 #include <errno.h>
 #include <sys/stat.h>
+
+#if defined(_MSC_VER)
+#include <direct.h>
+#include <io.h>
+#include <windows.h>
+#include <process.h>
+#define mkdir(dir, mode) _mkdir(dir)
+#define stat _stat
+#ifndef S_ISDIR
+#define S_ISDIR(m) (((m) & _S_IFMT) == _S_IFDIR)
+#endif
+#else
 #include <sys/types.h>
-#include <time.h>
 #include <unistd.h>
+#endif
 
 #include "aeron_archive_server.h"
 #include "aeron_alloc.h"
 #include "util/aeron_error.h"
+#include "util/aeron_clock.h"
 
 /* -----------------------------------------------------------------------
  * Utility: check power of 2
@@ -64,9 +77,7 @@ static int aeron_archive_ensure_dir(const char *dir, const char *label)
  * ----------------------------------------------------------------------- */
 static int64_t aeron_archive_epoch_ms(void)
 {
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    return (int64_t)ts.tv_sec * 1000 + (int64_t)ts.tv_nsec / 1000000;
+    return aeron_epoch_clock();
 }
 
 /* -----------------------------------------------------------------------
@@ -334,7 +345,11 @@ int aeron_archive_server_context_conclude(aeron_archive_server_context_t *ctx)
         else
         {
             /* Generate a pseudo-unique ID from pid and time */
+#if defined(_MSC_VER)
+            ctx->archive_id = ((int64_t)_getpid() << 32) | (aeron_archive_epoch_ms() & 0xFFFFFFFF);
+#else
             ctx->archive_id = ((int64_t)getpid() << 32) | (aeron_archive_epoch_ms() & 0xFFFFFFFF);
+#endif
         }
     }
 

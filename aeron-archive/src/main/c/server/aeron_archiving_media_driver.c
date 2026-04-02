@@ -18,7 +18,6 @@
 #include <string.h>
 #include <stdio.h>
 #include <errno.h>
-#include <pthread.h>
 
 #include "aeron_archiving_media_driver.h"
 #include "aeronmd.h"
@@ -120,13 +119,13 @@ int aeron_archiving_media_driver_launch(
     amd->archive_thread = NULL;
 
     /* Start archive duty cycle on background thread */
-    pthread_t *thread = NULL;
-    if (aeron_alloc((void **)&thread, sizeof(pthread_t)) < 0)
+    aeron_thread_t *thread = NULL;
+    if (aeron_alloc((void **)&thread, sizeof(aeron_thread_t)) < 0)
     {
         aeron_free(amd);
         goto error_cleanup;
     }
-    if (pthread_create(thread, NULL, archive_duty_cycle_thread, amd) != 0)
+    if (aeron_thread_create(thread, NULL, archive_duty_cycle_thread, amd) != 0)
     {
         AERON_SET_ERR(errno, "%s", "failed to create archive thread");
         aeron_free(thread);
@@ -209,8 +208,8 @@ int aeron_archiving_media_driver_close(aeron_archiving_media_driver_t *archiving
     archiving_driver->running = false;
     if (NULL != archiving_driver->archive_thread)
     {
-        pthread_t *thread = (pthread_t *)archiving_driver->archive_thread;
-        pthread_join(*thread, NULL);
+        aeron_thread_t *thread = (aeron_thread_t *)archiving_driver->archive_thread;
+        aeron_thread_join(*thread, NULL);
         aeron_free(thread);
         archiving_driver->archive_thread = NULL;
     }

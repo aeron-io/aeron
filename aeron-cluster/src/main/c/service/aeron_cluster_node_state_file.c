@@ -23,20 +23,33 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/stat.h>
+
+#if defined(_MSC_VER)
+#include <io.h>
+#include <windows.h>
+#define open _open
+#define close _close
+#define ftruncate(fd, size) _chsize_s(fd, size)
+#define O_RDWR _O_RDWR
+#define O_CREAT _O_CREAT
+#define O_TRUNC _O_TRUNC
+#else
 #include <unistd.h>
 #include <sys/mman.h>
-#include <sys/stat.h>
-#include <stdatomic.h>
+#endif
 
 #include "aeron_cluster_node_state_file.h"
 #include "aeron_alloc.h"
 #include "util/aeron_error.h"
+#include "util/aeron_fileutil.h"
+#include "concurrent/aeron_atomic.h"
 
 static void nsf_sync(aeron_cluster_node_state_file_t *nsf, size_t offset, size_t len)
 {
     if (nsf->file_sync_level > 0)
     {
-        msync(nsf->mapped + offset, len, MS_SYNC);
+        aeron_msync(nsf->mapped + offset, len);
     }
 }
 
@@ -95,6 +108,28 @@ int aeron_cluster_node_state_file_open(
         return -1;
     }
 
+#if defined(_MSC_VER)
+    {
+        HANDLE hmap = CreateFileMapping((HANDLE)_get_osfhandle(f->fd), NULL, PAGE_READWRITE, 0,
+            (DWORD)f->mapped_length, NULL);
+        if (NULL == hmap)
+        {
+            AERON_SET_ERR(GetLastError(), "CreateFileMapping node state file: %s", f->path);
+            close(f->fd);
+            aeron_free(f);
+            return -1;
+        }
+        f->mapped = (uint8_t *)MapViewOfFile(hmap, FILE_MAP_WRITE, 0, 0, f->mapped_length);
+        CloseHandle(hmap);
+        if (NULL == f->mapped)
+        {
+            AERON_SET_ERR(GetLastError(), "MapViewOfFile node state file: %s", f->path);
+            close(f->fd);
+            aeron_free(f);
+            return -1;
+        }
+    }
+#else
     f->mapped = (uint8_t *)mmap(NULL, f->mapped_length, PROT_READ | PROT_WRITE, MAP_SHARED, f->fd, 0);
     if (MAP_FAILED == f->mapped)
     {
@@ -103,6 +138,7 @@ int aeron_cluster_node_state_file_open(
         aeron_free(f);
         return -1;
     }
+#endif
 
     if (!exists)
     {
@@ -125,7 +161,11 @@ int aeron_cluster_node_state_file_open(
             AERON_SET_ERR(EINVAL,
                 "node state file version mismatch: expected %d got %d in %s",
                 AERON_CLUSTER_NODE_STATE_FILE_VERSION, version, f->path);
+#if defined(_MSC_VER)
+            UnmapViewOfFile(f->mapped);
+#else
             munmap(f->mapped, f->mapped_length);
+#endif
             close(f->fd);
             aeron_free(f);
             return -1;
@@ -139,9 +179,16 @@ int aeron_cluster_node_state_file_open(
 int aeron_cluster_node_state_file_close(aeron_cluster_node_state_file_t *nsf)
 {
     if (NULL == nsf) { return 0; }
-    if (NULL != nsf->mapped && MAP_FAILED != (void *)nsf->mapped)
+    if (NULL != nsf->mapped)
     {
-        munmap(nsf->mapped, nsf->mapped_length);
+#if defined(_MSC_VER)
+        UnmapViewOfFile(nsf->mapped);
+#else
+        if (MAP_FAILED != (void *)nsf->mapped)
+        {
+            munmap(nsf->mapped, nsf->mapped_length);
+        }
+#endif
     }
     if (nsf->fd >= 0) { close(nsf->fd); }
     aeron_free(nsf);
@@ -157,7 +204,7 @@ void aeron_cluster_node_state_file_update_candidate_term_id(
     /* Write supporting fields first, then candidateTermId last as a commit sentinel */
     memcpy(nsf->mapped + AERON_CLUSTER_NSF_LOG_POSITION_OFFSET, &log_position,  sizeof(int64_t));
     memcpy(nsf->mapped + AERON_CLUSTER_NSF_TIMESTAMP_OFFSET,    &timestamp_ms,  sizeof(int64_t));
-    atomic_thread_fence(memory_order_release);
+    aeron_release();
     memcpy(nsf->mapped + AERON_CLUSTER_NSF_CANDIDATE_TERM_OFFSET, &candidate_term_id, sizeof(int64_t));
     nsf_sync(nsf, AERON_CLUSTER_NSF_LOG_POSITION_OFFSET, 24);
 }
@@ -180,7 +227,7 @@ int64_t aeron_cluster_node_state_file_propose_max_candidate_term_id(
 int64_t aeron_cluster_node_state_file_candidate_term_id(const aeron_cluster_node_state_file_t *nsf)
 {
     int64_t v;
-    atomic_thread_fence(memory_order_acquire);
+    aeron_acquire();
     memcpy(&v, nsf->mapped + AERON_CLUSTER_NSF_CANDIDATE_TERM_OFFSET, sizeof(int64_t));
     return v;
 }

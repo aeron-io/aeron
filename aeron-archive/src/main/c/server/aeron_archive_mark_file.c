@@ -22,14 +22,34 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/stat.h>
+
+#if defined(_MSC_VER)
+#include <io.h>
+#include <direct.h>
+#include <windows.h>
+#include <process.h>
+#define open _open
+#define close _close
+#define read _read
+#define write _write
+#define ftruncate(fd, size) _chsize_s(fd, size)
+#define O_RDONLY _O_RDONLY
+#define O_RDWR _O_RDWR
+#define O_CREAT _O_CREAT
+#define S_IRUSR _S_IREAD
+#define S_IWUSR _S_IWRITE
+#else
 #include <unistd.h>
 #include <sys/mman.h>
-#include <sys/stat.h>
 #include <sys/types.h>
+#endif
 
 #include "aeron_archive_mark_file.h"
 #include "aeron_alloc.h"
 #include "util/aeron_error.h"
+#include "util/aeron_fileutil.h"
+#include "concurrent/aeron_atomic.h"
 
 /* -----------------------------------------------------------------------
  * Internal field accessors (memcpy + msync for portability)
@@ -37,13 +57,13 @@
 static void amf_write_version(uint8_t *mapped, int32_t version)
 {
     memcpy(mapped + AERON_ARCHIVE_MARK_FILE_VERSION_OFFSET, &version, sizeof(version));
-    msync(mapped + AERON_ARCHIVE_MARK_FILE_VERSION_OFFSET, sizeof(version), MS_SYNC);
+    aeron_msync(mapped + AERON_ARCHIVE_MARK_FILE_VERSION_OFFSET, sizeof(version));
 }
 
 static void amf_write_activity_ms(uint8_t *mapped, int64_t now_ms)
 {
     memcpy(mapped + AERON_ARCHIVE_MARK_FILE_ACTIVITY_TIMESTAMP_OFFSET, &now_ms, sizeof(now_ms));
-    msync(mapped + AERON_ARCHIVE_MARK_FILE_ACTIVITY_TIMESTAMP_OFFSET, sizeof(now_ms), MS_SYNC);
+    aeron_msync(mapped + AERON_ARCHIVE_MARK_FILE_ACTIVITY_TIMESTAMP_OFFSET, sizeof(now_ms));
 }
 
 static void amf_build_path(char *buf, size_t buf_len, const char *directory)
@@ -138,6 +158,23 @@ int aeron_archive_mark_file_create(
         return -1;
     }
 
+#if defined(_MSC_VER)
+    HANDLE hmap = CreateFileMapping((HANDLE)_get_osfhandle(fd), NULL, PAGE_READWRITE, 0, (DWORD)total, NULL);
+    if (NULL == hmap)
+    {
+        AERON_SET_ERR(GetLastError(), "CreateFileMapping archive mark file: %s", path);
+        close(fd);
+        return -1;
+    }
+    uint8_t *mapped = (uint8_t *)MapViewOfFile(hmap, FILE_MAP_WRITE, 0, 0, total);
+    CloseHandle(hmap);
+    if (NULL == mapped)
+    {
+        AERON_SET_ERR(GetLastError(), "MapViewOfFile archive mark file: %s", path);
+        close(fd);
+        return -1;
+    }
+#else
     uint8_t *mapped = (uint8_t *)mmap(NULL, total, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (MAP_FAILED == mapped)
     {
@@ -145,11 +182,16 @@ int aeron_archive_mark_file_create(
         close(fd);
         return -1;
     }
+#endif
 
     memset(mapped, 0, total);
 
     /* Write fixed fields */
+#if defined(_MSC_VER)
+    int64_t pid = (int64_t)_getpid();
+#else
     int64_t pid = (int64_t)getpid();
+#endif
     memcpy(mapped + AERON_ARCHIVE_MARK_FILE_PID_OFFSET, &pid, 8);
     memcpy(mapped + AERON_ARCHIVE_MARK_FILE_START_TIMESTAMP_OFFSET, &now_ms, 8);
     memcpy(mapped + AERON_ARCHIVE_MARK_FILE_CONTROL_STREAM_ID_OFFSET, &control_stream_id, 4);
@@ -189,12 +231,16 @@ int aeron_archive_mark_file_create(
         }
     }
 
-    msync(mapped, total, MS_SYNC);
+    aeron_msync(mapped, total);
 
     aeron_archive_mark_file_t *mf = NULL;
     if (aeron_alloc((void **)&mf, sizeof(aeron_archive_mark_file_t)) < 0)
     {
+#if defined(_MSC_VER)
+        UnmapViewOfFile(mapped);
+#else
         munmap(mapped, total);
+#endif
         close(fd);
         return -1;
     }
@@ -218,7 +264,11 @@ int aeron_archive_mark_file_close(aeron_archive_mark_file_t *mark_file)
     {
         if (NULL != mark_file->mapped)
         {
+#if defined(_MSC_VER)
+            UnmapViewOfFile(mark_file->mapped);
+#else
             munmap(mark_file->mapped, mark_file->mapped_length);
+#endif
             mark_file->mapped = NULL;
         }
         if (mark_file->fd >= 0)
@@ -273,10 +323,8 @@ int64_t aeron_archive_mark_file_activity_timestamp_volatile(
     }
 
     int64_t ts;
-    __atomic_load(
-        (int64_t *)(mark_file->mapped + AERON_ARCHIVE_MARK_FILE_ACTIVITY_TIMESTAMP_OFFSET),
-        &ts,
-        __ATOMIC_ACQUIRE);
+    AERON_GET_ACQUIRE(ts,
+        *(volatile int64_t *)(mark_file->mapped + AERON_ARCHIVE_MARK_FILE_ACTIVITY_TIMESTAMP_OFFSET));
     return ts;
 }
 

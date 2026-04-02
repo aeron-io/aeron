@@ -19,8 +19,18 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
+
+#if defined(_MSC_VER)
+#include <io.h>
+#include <windows.h>
+#define open _open
+#define close _close
+#define O_RDONLY _O_RDONLY
+#else
 #include <unistd.h>
 #include <sys/mman.h>
+#endif
+
 #include <sys/stat.h>
 
 #include "aeron_archive_recording_reader.h"
@@ -55,7 +65,11 @@ static void aeron_archive_recording_reader_close_segment(aeron_archive_recording
 {
     if (NULL != reader->mapped_segment)
     {
+#if defined(_MSC_VER)
+        UnmapViewOfFile(reader->mapped_segment);
+#else
         munmap(reader->mapped_segment, reader->mapped_segment_size);
+#endif
         reader->mapped_segment = NULL;
         reader->mapped_segment_size = 0;
     }
@@ -79,6 +93,24 @@ static int aeron_archive_recording_reader_open_segment(aeron_archive_recording_r
         return -1;
     }
 
+#if defined(_MSC_VER)
+    HANDLE hmap = CreateFileMapping((HANDLE)_get_osfhandle(fd), NULL, PAGE_READONLY, 0,
+        (DWORD)reader->segment_length, NULL);
+    if (NULL == hmap)
+    {
+        AERON_SET_ERR(GetLastError(), "CreateFileMapping recording segment file: %s", segment_file_path);
+        close(fd);
+        return -1;
+    }
+    void *mapped = MapViewOfFile(hmap, FILE_MAP_READ, 0, 0, (size_t)reader->segment_length);
+    CloseHandle(hmap);
+    close(fd);
+    if (NULL == mapped)
+    {
+        AERON_SET_ERR(GetLastError(), "MapViewOfFile recording segment file: %s", segment_file_path);
+        return -1;
+    }
+#else
     void *mapped = mmap(NULL, (size_t)reader->segment_length, PROT_READ, MAP_PRIVATE, fd, 0);
     close(fd);
 
@@ -87,6 +119,7 @@ static int aeron_archive_recording_reader_open_segment(aeron_archive_recording_r
         AERON_SET_ERR(errno, "failed to mmap recording segment file: %s", segment_file_path);
         return -1;
     }
+#endif
 
     reader->mapped_segment = (uint8_t *)mapped;
     reader->mapped_segment_size = (size_t)reader->segment_length;

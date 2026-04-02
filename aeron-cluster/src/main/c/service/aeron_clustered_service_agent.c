@@ -588,7 +588,18 @@ int64_t aeron_cluster_service_offerv(
 
     /* Prepend header as first vector, then append user vectors */
     size_t total_iovcnt = 1 + iovcnt;
-    aeron_iovec_t vectors[total_iovcnt];
+#define AERON_CLUSTER_SERVICE_MAX_STACK_IOVCNT 16
+    aeron_iovec_t stack_vectors[AERON_CLUSTER_SERVICE_MAX_STACK_IOVCNT];
+    aeron_iovec_t *vectors = stack_vectors;
+    aeron_iovec_t *heap_vectors = NULL;
+    if (total_iovcnt > AERON_CLUSTER_SERVICE_MAX_STACK_IOVCNT)
+    {
+        if (aeron_alloc((void **)&heap_vectors, total_iovcnt * sizeof(aeron_iovec_t)) < 0)
+        {
+            return AERON_PUBLICATION_ERROR;
+        }
+        vectors = heap_vectors;
+    }
     vectors[0].iov_base = hdr_buf;
     vectors[0].iov_len  = SESSION_HEADER_LENGTH;
     for (size_t i = 0; i < iovcnt; i++)
@@ -596,7 +607,9 @@ int64_t aeron_cluster_service_offerv(
         vectors[1 + i] = iov[i];
     }
 
-    return aeron_publication_offerv(session->response_publication, vectors, total_iovcnt, NULL, NULL);
+    int64_t result = aeron_publication_offerv(session->response_publication, vectors, total_iovcnt, NULL, NULL);
+    aeron_free(heap_vectors);
+    return result;
 }
 
 int64_t aeron_cluster_service_try_claim(

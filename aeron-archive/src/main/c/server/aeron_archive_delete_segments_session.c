@@ -25,6 +25,10 @@
 #include "aeron_archive_delete_segments_session.h"
 #include "aeron_archive_conductor.h"
 
+#ifndef PATH_MAX
+#define PATH_MAX AERON_MAX_PATH
+#endif
+
 /**
  * Parse the segment position from a segment file name.
  *

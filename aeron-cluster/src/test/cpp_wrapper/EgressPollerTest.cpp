@@ -620,18 +620,32 @@ TEST(AeronClusterContextTest, clientNameMustNotExceedMaxLength)
 TEST(AeronClusterContextTest, shouldApplyEnvVarOverrides)
 {
     /* Set env vars */
+#if defined(_MSC_VER)
+    _putenv_s("AERON_CLUSTER_INGRESS_CHANNEL", "aeron:udp?endpoint=env:9010");
+    _putenv_s("AERON_CLUSTER_INGRESS_STREAM_ID", "301");
+    _putenv_s("AERON_CLUSTER_EGRESS_STREAM_ID", "302");
+    _putenv_s("AERON_CLUSTER_MESSAGE_TIMEOUT", "15000000000ns");
+#else
     setenv("AERON_CLUSTER_INGRESS_CHANNEL", "aeron:udp?endpoint=env:9010", 1);
     setenv("AERON_CLUSTER_INGRESS_STREAM_ID", "301", 1);
     setenv("AERON_CLUSTER_EGRESS_STREAM_ID", "302", 1);
     setenv("AERON_CLUSTER_MESSAGE_TIMEOUT", "15000000000ns", 1);
+#endif
 
     aeron_cluster_context_t *ctx = nullptr;
     ASSERT_EQ(0, aeron_cluster_context_init(&ctx));
 
+#if defined(_MSC_VER)
+    _putenv_s("AERON_CLUSTER_INGRESS_CHANNEL", "");
+    _putenv_s("AERON_CLUSTER_INGRESS_STREAM_ID", "");
+    _putenv_s("AERON_CLUSTER_EGRESS_STREAM_ID", "");
+    _putenv_s("AERON_CLUSTER_MESSAGE_TIMEOUT", "");
+#else
     unsetenv("AERON_CLUSTER_INGRESS_CHANNEL");
     unsetenv("AERON_CLUSTER_INGRESS_STREAM_ID");
     unsetenv("AERON_CLUSTER_EGRESS_STREAM_ID");
     unsetenv("AERON_CLUSTER_MESSAGE_TIMEOUT");
+#endif
 
     EXPECT_STREQ("aeron:udp?endpoint=env:9010", ctx->ingress_channel);
     EXPECT_EQ(301, ctx->ingress_stream_id);

@@ -18,11 +18,11 @@
 #include <string.h>
 #include <stdio.h>
 #include <inttypes.h>
-#include <time.h>
 #include <errno.h>
 
 #include "aeron_alloc.h"
 #include "util/aeron_error.h"
+#include "util/aeron_clock.h"
 #include "concurrent/aeron_thread.h"
 #include "aeron_archive_conductor.h"
 #include "aeron_archive_control_session.h"
@@ -46,9 +46,7 @@
 
 static int64_t aeron_archive_conductor_epoch_clock_ms(void)
 {
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    return (int64_t)ts.tv_sec * 1000 + (int64_t)ts.tv_nsec / 1000000;
+    return aeron_epoch_clock();
 }
 
 /**

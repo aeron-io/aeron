@@ -23,15 +23,33 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/stat.h>
+
+#if defined(_MSC_VER)
+#include <io.h>
+#include <direct.h>
+#include <windows.h>
+#include <process.h>
+#define open _open
+#define close _close
+#define read _read
+#define write _write
+#define ftruncate(fd, size) _chsize_s(fd, size)
+#define O_RDONLY _O_RDONLY
+#define O_RDWR _O_RDWR
+#define O_CREAT _O_CREAT
+typedef int ssize_t;
+#else
 #include <unistd.h>
 #include <sys/mman.h>
-#include <sys/stat.h>
 #include <sys/types.h>
 #include <time.h>
+#endif
 
 #include "aeron_cluster_mark_file.h"
 #include "aeron_alloc.h"
 #include "util/aeron_error.h"
+#include "util/aeron_fileutil.h"
 
 /* -----------------------------------------------------------------------
  * Internal field accessors
@@ -39,13 +57,13 @@
 static void mf_write_version(uint8_t *mapped, int32_t version)
 {
     memcpy(mapped + AERON_CLUSTER_MARK_FILE_VERSION_OFFSET, &version, 4);
-    msync(mapped + AERON_CLUSTER_MARK_FILE_VERSION_OFFSET, 4, MS_SYNC);
+    aeron_msync(mapped + AERON_CLUSTER_MARK_FILE_VERSION_OFFSET, 4);
 }
 
 static void mf_write_activity_ms(uint8_t *mapped, int64_t now_ms)
 {
     memcpy(mapped + AERON_CLUSTER_MARK_FILE_ACTIVITY_TIMESTAMP_OFFSET, &now_ms, 8);
-    msync(mapped + AERON_CLUSTER_MARK_FILE_ACTIVITY_TIMESTAMP_OFFSET, 8, MS_SYNC);
+    aeron_msync(mapped + AERON_CLUSTER_MARK_FILE_ACTIVITY_TIMESTAMP_OFFSET, 8);
 }
 
 /* -----------------------------------------------------------------------
@@ -108,6 +126,23 @@ int aeron_cluster_mark_file_open(
         return -1;
     }
 
+#if defined(_MSC_VER)
+    HANDLE hmap = CreateFileMapping((HANDLE)_get_osfhandle(fd), NULL, PAGE_READWRITE, 0, (DWORD)total, NULL);
+    if (NULL == hmap)
+    {
+        AERON_SET_ERR(GetLastError(), "CreateFileMapping mark file: %s", path);
+        close(fd);
+        return -1;
+    }
+    uint8_t *mapped = (uint8_t *)MapViewOfFile(hmap, FILE_MAP_WRITE, 0, 0, total);
+    CloseHandle(hmap);
+    if (NULL == mapped)
+    {
+        AERON_SET_ERR(GetLastError(), "MapViewOfFile mark file: %s", path);
+        close(fd);
+        return -1;
+    }
+#else
     uint8_t *mapped = (uint8_t *)mmap(NULL, total, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (MAP_FAILED == mapped)
     {
@@ -115,6 +150,7 @@ int aeron_cluster_mark_file_open(
         close(fd);
         return -1;
     }
+#endif
 
     memset(mapped, 0, total);
 
@@ -131,18 +167,26 @@ int aeron_cluster_mark_file_open(
     memcpy(mapped + AERON_CLUSTER_MARK_FILE_CANDIDATE_TERM_ID_OFFSET, &null_term, 8);
 
     /* pid */
+#if defined(_MSC_VER)
+    int64_t pid = (int64_t)_getpid();
+#else
     int64_t pid = (int64_t)getpid();
+#endif
     memcpy(mapped + AERON_CLUSTER_MARK_FILE_PID_OFFSET, &pid, 8);
 
     /* startTimestamp */
     memcpy(mapped + AERON_CLUSTER_MARK_FILE_START_TIMESTAMP_OFFSET, &now_ms, 8);
 
-    msync(mapped, total, MS_SYNC);
+    aeron_msync(mapped, total);
 
     aeron_cluster_mark_file_t *mf = NULL;
     if (aeron_alloc((void **)&mf, sizeof(aeron_cluster_mark_file_t)) < 0)
     {
+#if defined(_MSC_VER)
+        UnmapViewOfFile(mapped);
+#else
         munmap(mapped, total);
+#endif
         close(fd);
         return -1;
     }
@@ -162,7 +206,11 @@ int aeron_cluster_mark_file_close(aeron_cluster_mark_file_t *mark_file)
     {
         if (NULL != mark_file->mapped)
         {
+#if defined(_MSC_VER)
+            UnmapViewOfFile(mark_file->mapped);
+#else
             munmap(mark_file->mapped, mark_file->mapped_length);
+#endif
         }
         if (mark_file->fd >= 0)
         {
@@ -196,7 +244,7 @@ void aeron_cluster_mark_file_set_candidate_term_id(
     aeron_cluster_mark_file_t *mark_file, int64_t term_id)
 {
     memcpy(mark_file->mapped + AERON_CLUSTER_MARK_FILE_CANDIDATE_TERM_ID_OFFSET, &term_id, 8);
-    msync(mark_file->mapped + AERON_CLUSTER_MARK_FILE_CANDIDATE_TERM_ID_OFFSET, 8, MS_SYNC);
+    aeron_msync(mark_file->mapped + AERON_CLUSTER_MARK_FILE_CANDIDATE_TERM_ID_OFFSET, 8);
 }
 
 void aeron_cluster_mark_file_filename(char *buf, size_t buf_len)

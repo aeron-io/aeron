@@ -19,14 +19,34 @@
 #include "aeron_archive_mark_file.h"
 #include "aeron_archive_recording_writer.h"
 
-#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
 #include <string.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+
+#if defined(_MSC_VER)
+#include <io.h>
+#include <windows.h>
+#define open _open
+#define close _close
+#define read _read
+#define fstat _fstat
+#define stat _stat
+#define O_RDONLY _O_RDONLY
+
+static int aeron_archive_tool_pread(int fd, void *buf, size_t count, int64_t offset)
+{
+    if (_lseeki64(fd, offset, SEEK_SET) < 0) { return -1; }
+    return _read(fd, buf, (unsigned int)count);
+}
+#define pread(fd, buf, count, offset) aeron_archive_tool_pread(fd, buf, count, offset)
+typedef int ssize_t;
+#else
+#include <dirent.h>
 #include <unistd.h>
+#endif
 
 #include "aeron_common.h"
 #include "util/aeron_error.h"
@@ -385,15 +405,42 @@ static int aeron_archive_tool_collect_segment_files(
     int64_t recording_id,
     aeron_archive_tool_segment_files_t *files)
 {
+    char prefix[64];
+    snprintf(prefix, sizeof(prefix), "%" PRId64 "-", recording_id);
+    size_t prefix_len = strlen(prefix);
+
+#if defined(_MSC_VER)
+    char search_path[AERON_MAX_PATH];
+    snprintf(search_path, sizeof(search_path), "%s\\*", archive_dir);
+
+    WIN32_FIND_DATAA find_data;
+    HANDLE hFind = FindFirstFileA(search_path, &find_data);
+    if (INVALID_HANDLE_VALUE == hFind)
+    {
+        return -1;
+    }
+
+    do
+    {
+        if (strncmp(find_data.cFileName, prefix, prefix_len) == 0 &&
+            aeron_archive_tool_is_segment_file(find_data.cFileName))
+        {
+            if (aeron_archive_tool_segment_files_add(files, find_data.cFileName) < 0)
+            {
+                FindClose(hFind);
+                return -1;
+            }
+        }
+    }
+    while (FindNextFileA(hFind, &find_data));
+
+    FindClose(hFind);
+#else
     DIR *dir = opendir(archive_dir);
     if (NULL == dir)
     {
         return -1;
     }
-
-    char prefix[64];
-    snprintf(prefix, sizeof(prefix), "%" PRId64 "-", recording_id);
-    size_t prefix_len = strlen(prefix);
 
     struct dirent *entry;
     while (NULL != (entry = readdir(dir)))
@@ -410,6 +457,7 @@ static int aeron_archive_tool_collect_segment_files(
     }
 
     closedir(dir);
+#endif
     return 0;
 }
 

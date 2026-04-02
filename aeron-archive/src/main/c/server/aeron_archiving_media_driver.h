@@ -42,7 +42,7 @@ typedef struct aeron_archiving_media_driver_stct
     aeron_archive_server_t       *archive;
     aeron_archive_server_context_t *archive_ctx;
     volatile bool                 running;
-    void                         *archive_thread; /* pthread_t */
+    void                         *archive_thread; /* aeron_thread_t */
 }
 aeron_archiving_media_driver_t;
 

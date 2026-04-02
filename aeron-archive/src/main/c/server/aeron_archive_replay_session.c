@@ -19,12 +19,32 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include <fcntl.h>
-#include <unistd.h>
 #include <errno.h>
+
+#if defined(_MSC_VER)
+#include <io.h>
+#include <windows.h>
+#define open _open
+#define close _close
+#define O_RDONLY _O_RDONLY
+
+static int aeron_archive_pread(int fd, void *buf, size_t count, int64_t offset)
+{
+    if (_lseeki64(fd, offset, SEEK_SET) < 0) { return -1; }
+    return _read(fd, buf, (unsigned int)count);
+}
+#define pread(fd, buf, count, offset) aeron_archive_pread(fd, buf, count, offset)
+#define access(path, mode) _access(path, mode)
+#define F_OK 0
+typedef int ssize_t;
+#else
+#include <unistd.h>
+#endif
 
 #include "aeron_alloc.h"
 #include "util/aeron_error.h"
 #include "protocol/aeron_udp_protocol.h"
+#include "concurrent/aeron_atomic.h"
 #include "aeron_archive_replay_session.h"
 
 #define AERON_ARCHIVE_SEGMENT_FILE_SUFFIX ".rec"
@@ -203,7 +223,7 @@ static bool not_extended(aeron_archive_replay_session_t *session, int64_t replay
 
     if (NULL != counter_addr)
     {
-        current_limit_position = __atomic_load_n(counter_addr, __ATOMIC_ACQUIRE);
+        AERON_GET_ACQUIRE(current_limit_position, *(volatile int64_t *)counter_addr);
     }
 
     if (aeron_counter_is_closed(limit_position))

@@ -19,7 +19,33 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
+
+#if defined(_MSC_VER)
+#include <io.h>
+#include <windows.h>
+#define open _open
+#define close _close
+#define ftruncate(fd, size) _chsize_s(fd, size)
+#define O_RDWR _O_RDWR
+#define O_CREAT _O_CREAT
+#define S_IRUSR _S_IREAD
+#define S_IWUSR _S_IWRITE
+#define S_IRGRP 0
+#define S_IROTH 0
+
+static int aeron_archive_pwrite(int fd, const void *buf, size_t count, int64_t offset)
+{
+    if (_lseeki64(fd, offset, SEEK_SET) < 0) { return -1; }
+    return _write(fd, buf, (unsigned int)count);
+}
+#define pwrite(fd, buf, count, offset) aeron_archive_pwrite(fd, buf, count, offset)
+#define fsync(fd) _commit(fd)
+#define fdatasync(fd) _commit(fd)
+typedef int ssize_t;
+#else
 #include <unistd.h>
+#endif
+
 #include <sys/stat.h>
 
 #include "aeron_archive_recording_writer.h"

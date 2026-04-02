@@ -24,9 +24,25 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/stat.h>
+
+#if defined(_MSC_VER)
+#include <io.h>
+#include <windows.h>
+#define open _open
+#define close _close
+#define read _read
+#define write _write
+#define ftruncate(fd, size) _chsize_s(fd, size)
+#define fstat _fstat
+#define stat _stat
+#define O_RDWR _O_RDWR
+#define O_CREAT _O_CREAT
+#define O_TRUNC _O_TRUNC
+#else
 #include <unistd.h>
 #include <sys/mman.h>
-#include <sys/stat.h>
+#endif
 
 #include "aeronc.h"
 #include "aeron_archive.h"
@@ -36,6 +52,26 @@
 #include "util/aeron_fileutil.h"
 
 #define ENTRY_STRIDE AERON_CLUSTER_RECORDING_LOG_MAX_ENTRY_LENGTH
+
+#if defined(_MSC_VER)
+static void *aeron_recording_log_mmap(size_t length, int prot, int flags, int fd, int64_t offset)
+{
+    (void)prot; (void)flags; (void)offset;
+    HANDLE hmap = CreateFileMapping((HANDLE)_get_osfhandle(fd), NULL, PAGE_READWRITE, 0, (DWORD)length, NULL);
+    if (NULL == hmap) { return NULL; }
+    void *addr = MapViewOfFile(hmap, FILE_MAP_WRITE, 0, 0, length);
+    CloseHandle(hmap);
+    return addr;
+}
+#define mmap(addr, length, prot, flags, fd, offset) aeron_recording_log_mmap(length, prot, flags, fd, offset)
+#define munmap(addr, length) (UnmapViewOfFile(addr) ? 0 : -1)
+#define MAP_FAILED NULL
+#define PROT_READ 1
+#define PROT_WRITE 2
+#define MAP_SHARED 1
+#define msync(addr, length, flags) aeron_msync(addr, length)
+#define MS_SYNC 0
+#endif
 
 static void entry_write(uint8_t *slot, const aeron_cluster_recording_log_entry_t *e)
 {

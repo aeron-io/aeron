@@ -23,7 +23,18 @@
 #include <string.h>
 #include <stdio.h>
 #include <sys/stat.h>
+
+#if defined(_MSC_VER)
+#include <direct.h>
+#include <io.h>
+#include <windows.h>
+#define mkdir(dir, mode) _mkdir(dir)
+#define unlink _unlink
+#define stat _stat
+#define symlink(target, linkpath) (-1) /* symlink not available on Windows; non-fatal */
+#else
 #include <unistd.h>
+#endif
 
 #include "aeron_cm_context.h"
 #include "aeron_alloc.h"
