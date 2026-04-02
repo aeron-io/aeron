@@ -305,7 +305,7 @@ class ReplaySessionTest
 
         final ArchiveException exception = assertThrowsExactly(ArchiveException.class, replaySession::doWork);
         assertEquals(AeronException.Category.ERROR, exception.category());
-        assertEquals(ArchiveException.GENERIC, exception.errorCode());
+        assertEquals(ArchiveException.INVALID_POSITION, exception.errorCode());
         assertEquals("ERROR - replayPosition=1025 (segmentFilePosition=0, segmentOffset=0, termOffset=1025, " +
             "frameOffset=0) does not point to a valid frame, recordingId=0," +
             " replaySessionId=1, segmentFile=0-0.rec", exception.getMessage());
