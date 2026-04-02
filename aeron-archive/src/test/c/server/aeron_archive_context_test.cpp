@@ -283,7 +283,7 @@ static void remove_temp_dir(const std::string &dir)
 static bool dir_exists(const std::string &path)
 {
     struct stat st;
-    return stat(path.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
+    return stat(path.c_str(), &st) == 0 && ((st.st_mode & S_IFMT) == S_IFDIR);
 }
 
 static bool file_exists(const std::string &path)
