@@ -1368,61 +1368,50 @@ void aeron_consensus_module_agent_on_election_complete(
             (int32_t)agent->role,
             ctx->log_channel);
 
-        /* Spin-wait for service ACK (with resend on interval) */
+        /* Spin-wait for service ACK (with resend on interval).
+         * Only wait if cm_adapter exists (real service subscription is wired).
+         * In unit tests without a real service, cm_adapter is NULL so we skip. */
         agent->expected_ack_position = append_pos;
-        int64_t resend_deadline_ns = aeron_nano_clock() + INT64_C(200000000); /* 200ms */
-        for (int spin = 0; spin < 50000; spin++)
+        if (NULL != agent->cm_adapter)
         {
-            if (NULL != agent->cm_adapter)
+            int64_t resend_deadline_ns = aeron_nano_clock() + INT64_C(200000000); /* 200ms */
+            for (int spin = 0; spin < 50000; spin++)
             {
                 aeron_cluster_consensus_module_adapter_poll(agent->cm_adapter);
-            }
 
-            /* Check if service ACKed — mirrors Java ServiceAck.hasReached(logPosition, ...) */
-            bool all_acked = true;
-            for (int s = 0; s < agent->service_count; s++)
-            {
-                if (agent->service_ack_positions[s] < append_pos)
+                /* Check if service ACKed — mirrors Java ServiceAck.hasReached(logPosition, ...) */
+                bool all_acked = true;
+                for (int s = 0; s < agent->service_count; s++)
                 {
-                    all_acked = false;
+                    if (agent->service_ack_positions[s] < append_pos)
+                    {
+                        all_acked = false;
+                        break;
+                    }
+                }
+                if (all_acked)
+                {
                     break;
                 }
-            }
-            if (all_acked)
-            {
-                break;
-            }
 
-            /* Resend JoinLog periodically (service may not be ready yet) */
-            if (aeron_nano_clock() > resend_deadline_ns)
-            {
-                resend_deadline_ns = aeron_nano_clock() + INT64_C(200000000);
-                aeron_cluster_service_proxy_cm_join_log(
-                    &agent->service_proxy,
-                    append_pos, INT64_MAX,
-                    agent->member_id,
-                    agent->log_session_id_cache,
-                    ctx->log_stream_id,
-                    agent->is_leader_startup,
-                    (int32_t)agent->role,
-                    ctx->log_channel);
-            }
+                /* Resend JoinLog periodically (service may not be ready yet) */
+                if (aeron_nano_clock() > resend_deadline_ns)
+                {
+                    resend_deadline_ns = aeron_nano_clock() + INT64_C(200000000);
+                    aeron_cluster_service_proxy_cm_join_log(
+                        &agent->service_proxy,
+                        append_pos, INT64_MAX,
+                        agent->member_id,
+                        agent->log_session_id_cache,
+                        ctx->log_stream_id,
+                        agent->is_leader_startup,
+                        (int32_t)agent->role,
+                        ctx->log_channel);
+                }
 
-            aeron_micro_sleep(100);
+                aeron_micro_sleep(100);
+            }
         }
-    }
-    else
-    {
-        /* No services — just send JoinLog without waiting */
-        aeron_cluster_service_proxy_cm_join_log(
-            &agent->service_proxy,
-            append_pos, INT64_MAX,
-            agent->member_id,
-            agent->log_session_id_cache,
-            ctx->log_stream_id,
-            agent->is_leader_startup,
-            (int32_t)agent->role,
-            ctx->log_channel);
     }
 
     /* Extension hook: onElectionComplete */
