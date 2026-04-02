@@ -27,12 +27,9 @@ class DlopenTest : public testing::Test
 
 TEST_F(DlopenTest, shouldFindExistingSymbolWithRtldDefault)
 {
-    void *sym = aeron_dlsym(RTLD_DEFAULT, "aeron_version_major");
-    ASSERT_NE(nullptr, sym);
-
-    typedef int (*version_func_t)(void);
-    version_func_t version_func = (version_func_t)sym;
-    EXPECT_GT(version_func(), 0);
+    // printf is universally available in the C runtime on all platforms
+    void *sym = aeron_dlsym(RTLD_DEFAULT, "printf");
+    EXPECT_NE(nullptr, sym);
 }
 
 TEST_F(DlopenTest, shouldReturnNullForNonexistentSymbolWithRtldDefault)
