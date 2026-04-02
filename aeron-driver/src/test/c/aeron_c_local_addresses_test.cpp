@@ -291,8 +291,9 @@ TEST_P(CLocalAddressesTestParameterized, shouldGetOriginalChannelWhenNoWildcardS
 
     char uriWithResolvedEndpoint[1024] = { 0 };
 
-    ASSERT_LT(0, aeron_subscription_try_resolve_channel_endpoint_port(
-        subscription, uriWithResolvedEndpoint, sizeof(uriWithResolvedEndpoint)));
+    int result = aeron_subscription_try_resolve_channel_endpoint_port(
+        subscription, uriWithResolvedEndpoint, sizeof(uriWithResolvedEndpoint));
+    ASSERT_EQ(channel.length(), result);
     ASSERT_STREQ(channel.c_str(), uriWithResolvedEndpoint);
 
     aeron_subscription_close(subscription, setFlagOnClose, &subscriptionClosedFlag);

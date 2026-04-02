@@ -713,7 +713,7 @@ int aeron_subscription_try_resolve_channel_endpoint_port(
         else
         {
             strcpy(uri, subscription->channel);
-            result = 1;
+            result = (int)strlen(subscription->channel);
         }
     }
 
