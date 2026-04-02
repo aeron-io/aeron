@@ -25,7 +25,14 @@
 
 #ifdef _MSC_VER
 #include <direct.h>
+#include <io.h>
 #define MKDIR(dir) _mkdir(dir)
+static char *mkdtemp(char *tmpl)
+{
+    if (_mktemp_s(tmpl, strlen(tmpl) + 1) != 0) return NULL;
+    if (_mkdir(tmpl) != 0) return NULL;
+    return tmpl;
+}
 #else
 #include <sys/stat.h>
 #define MKDIR(dir) mkdir((dir), 0755)

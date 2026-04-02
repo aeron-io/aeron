@@ -31,6 +31,27 @@
 #include <cstdlib>
 #include <string>
 
+#ifdef _MSC_VER
+#include <process.h>
+#include <direct.h>
+#include <sys/stat.h>
+#if !defined(getpid)
+#define getpid _getpid
+#endif
+#define S_ISDIR(m) (((m) & _S_IFMT) == _S_IFDIR)
+#define S_ISLNK(m) (0)
+#define lstat stat
+static int setenv(const char *name, const char *value, int overwrite)
+{
+    (void)overwrite;
+    return _putenv_s(name, value);
+}
+static int unsetenv(const char *name)
+{
+    return _putenv_s(name, "");
+}
+#endif
+
 extern "C"
 {
 #include "aeron_cm_context.h"
@@ -565,7 +586,9 @@ TEST_F(ServiceContextTest, shouldSetAppVersion)
  * ============================================================ */
 #include "aeron_cluster_mark_file.h"
 #include <cstdlib>
+#if !defined(_MSC_VER)
 #include <sys/stat.h>
+#endif
 
 class MarkFileDirTest : public ::testing::Test
 {
@@ -574,7 +597,11 @@ protected:
     {
         m_dir = "/tmp/aeron_cm_ctx_markfile_" + std::to_string(getpid());
         if (std::system(("rm -rf " + m_dir).c_str())) {}
+#ifdef _MSC_VER
+        _mkdir(m_dir.c_str());
+#else
         mkdir(m_dir.c_str(), 0755);
+#endif
     }
     void TearDown() override { if (std::system(("rm -rf " + m_dir).c_str())) {} }
     std::string m_dir;

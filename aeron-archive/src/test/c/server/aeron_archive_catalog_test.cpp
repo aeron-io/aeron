@@ -25,6 +25,17 @@
 #include <numeric>
 #include <random>
 
+#ifdef _MSC_VER
+#include <direct.h>
+#include <io.h>
+static char *mkdtemp(char *tmpl)
+{
+    if (_mktemp_s(tmpl, strlen(tmpl) + 1) != 0) return NULL;
+    if (_mkdir(tmpl) != 0) return NULL;
+    return tmpl;
+}
+#endif
+
 extern "C"
 {
 #include "server/aeron_archive_catalog.h"

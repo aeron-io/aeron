@@ -22,7 +22,22 @@
 #include <climits>
 #include <string>
 #include <sys/stat.h>
+#if defined(_MSC_VER)
+#include <direct.h>
+#include <io.h>
+#include <process.h>
+#if !defined(getpid)
+#define getpid _getpid
+#endif
+static char *mkdtemp(char *tmpl)
+{
+    if (_mktemp_s(tmpl, strlen(tmpl) + 1) != 0) return NULL;
+    if (_mkdir(tmpl) != 0) return NULL;
+    return tmpl;
+}
+#else
 #include <unistd.h>
+#endif
 
 /*
  * Include order matters: aeron_archive_conductor.h and aeron_archive_control_response_proxy.h
@@ -624,7 +639,11 @@ TEST_F(ArchiveContextTest, shouldPopulateConductorContextOnConclude)
 TEST_F(ArchiveContextTest, deleteArchiveOnStartClearsContents)
 {
     std::string archDir = temp_dir + "/del_archive";
+#ifdef _MSC_VER
+    _mkdir(archDir.c_str());
+#else
     mkdir(archDir.c_str(), 0755);
+#endif
     std::string testFile = archDir + "/testfile.dat";
     FILE *f = fopen(testFile.c_str(), "w");
     ASSERT_NE(nullptr, f);

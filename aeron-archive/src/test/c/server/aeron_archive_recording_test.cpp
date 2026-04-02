@@ -22,7 +22,18 @@
 #include <vector>
 #include <sys/stat.h>
 #include <fcntl.h>
+#if defined(_MSC_VER)
+#include <direct.h>
+#include <io.h>
+static char *mkdtemp(char *tmpl)
+{
+    if (_mktemp_s(tmpl, strlen(tmpl) + 1) != 0) return NULL;
+    if (_mkdir(tmpl) != 0) return NULL;
+    return tmpl;
+}
+#else
 #include <unistd.h>
+#endif
 
 #include "gtest/gtest.h"
 
