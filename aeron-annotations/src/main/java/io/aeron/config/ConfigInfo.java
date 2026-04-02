@@ -117,6 +117,10 @@ public class ConfigInfo implements Serializable
      * Whether property is deprecated.
      */
     public boolean deprecated = false;
+    /**
+     * Whether this config option exists in Java.
+     */
+    public boolean existsInJava = true;
 
     /**
      * Construct the ConfigInfo with the unique id.

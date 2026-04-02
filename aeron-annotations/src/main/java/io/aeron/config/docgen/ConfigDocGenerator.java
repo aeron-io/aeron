@@ -64,13 +64,17 @@ final class ConfigDocGenerator implements AutoCloseable
             writeHeader(
                 toHeaderString(configInfo.id) +
                 (configInfo.expectations.c.exists ? "" : " (***JAVA ONLY***)") +
+                (configInfo.existsInJava ? "" : " (***C ONLY***)") +
                 (configInfo.deprecated ? " (***DEPRECATED***)" : ""));
             write("Description", configInfo.propertyNameDescription);
             write("Type",
                 (DefaultType.isUndefined(configInfo.overrideDefaultValueType) ?
                 configInfo.defaultValueType :
                 configInfo.overrideDefaultValueType).getSimpleName());
-            writeCode("System Property", configInfo.propertyName);
+            if (configInfo.existsInJava)
+            {
+                writeCode("System Property", configInfo.propertyName);
+            }
             if (configInfo.context != null && !configInfo.context.isEmpty())
             {
                 writeCode("Context", configInfo.context);
@@ -92,10 +96,13 @@ final class ConfigDocGenerator implements AutoCloseable
                 (configInfo.defaultValue == null ? "" : configInfo.defaultValue) :
                 configInfo.overrideDefaultValue;
 
-            write("Default", getDefaultString(
-                configInfo.defaultValueString == null ? defaultValue : configInfo.defaultValueString,
-                configInfo.isTimeValue,
-                configInfo.timeUnit));
+            if (configInfo.existsInJava)
+            {
+                write("Default", getDefaultString(
+                    configInfo.defaultValueString == null ? defaultValue : configInfo.defaultValueString,
+                    configInfo.isTimeValue,
+                    configInfo.timeUnit));
+            }
             if (configInfo.isTimeValue == Boolean.TRUE)
             {
                 write("Time Unit", configInfo.timeUnit.toString());

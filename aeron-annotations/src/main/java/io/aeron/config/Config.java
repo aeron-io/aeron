@@ -66,6 +66,13 @@ public @interface Config
     String uriParam() default "";
 
     /**
+     * Whether this config option exists in the Java code.
+     *
+     * @return whether this config option exists in the Java code.
+     */
+    boolean existsInJava() default true;
+
+    /**
      * Whether this config option exists in the C code.
      *
      * @return whether this config option exists in the C code.

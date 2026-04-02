@@ -483,12 +483,13 @@ project(':aeron-client') {
 
     tasks.register('validateConfigExpectations', JavaExec) {
         def sourceDir = 'src/main/c'
+        def driverSourceDir = '../aeron-driver/src/main/c'
 
         inputs.files(configInfoFile)
 
         mainClass.set('io.aeron.config.validation.ValidateConfigExpectationsTask')
         classpath project(':aeron-annotations').sourceSets.main.runtimeClasspath
-        args = [configInfoFile, sourceDir]
+        args = [configInfoFile, sourceDir, driverSourceDir]
     }
 
     tasks.register('generateConfigDoc', JavaExec) {
@@ -579,8 +580,9 @@ project(':aeron-driver') {
         sign publishing.publications.aeronDriver
     }
 
+    def configInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/config-info.dat"
+
     tasks.register('validateConfigExpectations', JavaExec) {
-        def configInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/config-info.dat"
         def sourceDir = 'src/main/c'
 
         inputs.files(configInfoFile)
@@ -591,7 +593,6 @@ project(':aeron-driver') {
     }
 
     tasks.register('generateConfigDoc', JavaExec) {
-        def configInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/config-info.dat"
         def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.md"
 
         inputs.files(configInfoFile)
@@ -802,8 +803,19 @@ project(':aeron-archive') {
         sign publishing.publications.aeronArchive
     }
 
+    def configInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/config-info.dat"
+
+    tasks.register('validateConfigExpectations', JavaExec) {
+        def sourceDir = 'src/main/c'
+
+        inputs.files(configInfoFile)
+
+        mainClass.set('io.aeron.config.validation.ValidateConfigExpectationsTask')
+        classpath project(':aeron-annotations').sourceSets.main.runtimeClasspath
+        args = [configInfoFile, sourceDir]
+    }
+
     tasks.register('generateConfigDoc', JavaExec) {
-        def configInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/config-info.dat"
         def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.md"
 
         inputs.files(configInfoFile)

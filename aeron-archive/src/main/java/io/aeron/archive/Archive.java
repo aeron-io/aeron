@@ -587,7 +587,7 @@ public final class Archive implements AutoCloseable
         /**
          * Name of the system property for specifying a supplier of {@link AuthorisationService} for the archive.
          */
-        @Config(defaultType = DefaultType.STRING, defaultString = "")
+        @Config()
         public static final String AUTHORISATION_SERVICE_SUPPLIER_PROP_NAME =
             "aeron.archive.authorisation.service.supplier";
 
@@ -595,6 +595,10 @@ public final class Archive implements AutoCloseable
          * Default {@link AuthorisationServiceSupplier} that returns {@link AuthorisationService} that allows any
          * command to be executed (i.e. {@link AuthorisationService#ALLOW_ALL}).
          */
+        @Config(
+            id = "AUTHORISATION_SERVICE_SUPPLIER",
+            defaultType = DefaultType.STRING,
+            defaultString = AuthorisationService.ALLOW_ALL_NAME)
         public static final AuthorisationServiceSupplier DEFAULT_AUTHORISATION_SERVICE_SUPPLIER =
             () -> AuthorisationService.ALLOW_ALL;
 
@@ -615,7 +619,7 @@ public final class Archive implements AutoCloseable
         public static final String ERROR_BUFFER_LENGTH_PROP_NAME = "aeron.archive.error.buffer.length";
 
         /**
-         * Size in bytes of the error buffer for the archive when not eternally provided.
+         * Size in bytes of the error buffer for the archive when not externally provided.
          */
         @Config
         public static final int ERROR_BUFFER_LENGTH_DEFAULT = 1024 * 1024;
@@ -1932,6 +1936,7 @@ public final class Archive implements AutoCloseable
          * @return the stream id on which the control request subscription will listen.
          * @see io.aeron.archive.client.AeronArchive.Configuration#LOCAL_CONTROL_STREAM_ID_PROP_NAME
          */
+        @Config
         public int localControlStreamId()
         {
             return localControlStreamId;

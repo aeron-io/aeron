@@ -174,11 +174,18 @@ public class ConfigProcessor extends Processor
                 configInfo.propertyNameClassName = element.getEnclosingElement().toString();
                 configInfo.propertyNameDescription = getDocComment(element);
 
+                final Config enclosingConfig = element.getEnclosingElement().getAnnotation(Config.class);
+                final boolean existsInJava = config.existsInJava() &&
+                    (enclosingConfig == null || enclosingConfig.existsInJava());
+                if (!existsInJava)
+                {
+                    configInfo.existsInJava = false;
+                }
                 if (constantValue instanceof String)
                 {
                     configInfo.propertyName = (String)constantValue;
                 }
-                else
+                else if (existsInJava || constantValue != null)
                 {
                     error("Property names must be Strings", element);
                 }
@@ -475,8 +482,17 @@ public class ConfigProcessor extends Processor
     private void applyTypeDefaults(final String id, final ConfigInfo configInfo)
     {
         Optional.ofNullable(typeConfigMap.get(configInfo.propertyNameClassName))
-            .filter(config -> !config.existsInC())
-            .ifPresent(config -> configInfo.expectations.c.exists = false);
+            .ifPresent(config ->
+            {
+                if (!config.existsInC())
+                {
+                    configInfo.expectations.c.exists = false;
+                }
+                if (!config.existsInJava())
+                {
+                    configInfo.existsInJava = false;
+                }
+            });
     }
 
     private void deriveCExpectations(final String id, final ConfigInfo configInfo)
@@ -490,9 +506,14 @@ public class ConfigProcessor extends Processor
         {
             final ExpectedCConfig c = configInfo.expectations.c;
 
-            if (Objects.isNull(c.envVar) && configInfo.foundPropertyName)
+            if (Objects.isNull(c.envVar) && configInfo.foundPropertyName && configInfo.propertyName != null)
             {
                 c.envVar = configInfo.propertyName.toUpperCase().replace('.', '_');
+            }
+
+            if (Objects.isNull(c.envVar) && !configInfo.existsInJava)
+            {
+                c.envVar = "AERON_" + id;
             }
 
             if (Objects.isNull(c.envVarFieldName))
@@ -554,6 +575,11 @@ public class ConfigProcessor extends Processor
         if (configInfo.hasContext && (configInfo.context == null || configInfo.context.isEmpty()))
         {
             note("Configuration (" + id + ") is missing context");
+        }
+
+        if (null != configInfo.context && !configInfo.context.contains("Context."))
+        {
+            insane(id, configInfo.context + " should be on a 'Context'");
         }
     }
 

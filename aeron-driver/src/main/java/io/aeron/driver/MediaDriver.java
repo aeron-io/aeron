@@ -1712,6 +1712,7 @@ public final class MediaDriver implements AutoCloseable
          * @see Configuration#GROUP_RECEIVER_CONSIDERATION_PROP_NAME
          * @see CommonContext#GROUP_PARAM_NAME
          */
+        @Config
         public InferableBoolean receiverGroupConsideration()
         {
             return receiverGroupConsideration;
@@ -3871,6 +3872,7 @@ public final class MediaDriver implements AutoCloseable
          * @return the limit of sessions per stream
          * @see Context#streamSessionLimit(int)
          */
+        @Config
         public int streamSessionLimit()
         {
             return this.streamSessionLimit;

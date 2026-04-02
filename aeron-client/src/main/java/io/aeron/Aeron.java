@@ -981,7 +981,7 @@ public final class Aeron implements AutoCloseable
         public static final String PRE_TOUCH_MAPPED_MEMORY_PROP_NAME = "aeron.pre.touch.mapped.memory";
 
         /**
-         * Default for if a memory-mapped filed should be pre-touched to fault it into a process.
+         * Default for if a memory-mapped file should be pre-touched to fault it into a process.
          */
         @Config
         public static final boolean PRE_TOUCH_MAPPED_MEMORY_DEFAULT = false;
@@ -1029,7 +1029,6 @@ public final class Aeron implements AutoCloseable
          * @return duration in nanoseconds to wait when idle in client conductor.
          * @see #IDLE_SLEEP_DURATION_PROP_NAME
          */
-        @Config
         public static long idleSleepDurationNs()
         {
             return getDurationInNanos(IDLE_SLEEP_DURATION_PROP_NAME, IDLE_SLEEP_DEFAULT_NS);
@@ -1042,7 +1041,6 @@ public final class Aeron implements AutoCloseable
          * @return duration in nanoseconds to wait before deleting an expired resource.
          * @see #RESOURCE_LINGER_DURATION_PROP_NAME
          */
-        @Config
         public static long resourceLingerDurationNs()
         {
             return getDurationInNanos(RESOURCE_LINGER_DURATION_PROP_NAME, RESOURCE_LINGER_DURATION_DEFAULT_NS);
@@ -1055,7 +1053,6 @@ public final class Aeron implements AutoCloseable
          * @return duration in nanoseconds to wait before deleting an expired resource.
          * @see #RESOURCE_LINGER_DURATION_PROP_NAME
          */
-        @Config
         public static long closeLingerDurationNs()
         {
             return getDurationInNanos(CLOSE_LINGER_DURATION_PROP_NAME, CLOSE_LINGER_DURATION_DEFAULT_NS);
@@ -1067,7 +1064,6 @@ public final class Aeron implements AutoCloseable
          * @return true if memory mappings should be pre-touched, otherwise false.
          * @see #PRE_TOUCH_MAPPED_MEMORY_PROP_NAME
          */
-        @Config
         public static boolean preTouchMappedMemory()
         {
             final String value = System.getProperty(PRE_TOUCH_MAPPED_MEMORY_PROP_NAME);
@@ -1085,7 +1081,6 @@ public final class Aeron implements AutoCloseable
          * @return specified client name or empty string if not set.
          * @see #CLIENT_NAME_PROP_NAME
          */
-        @Config
         public static String clientName()
         {
             return getProperty(CLIENT_NAME_PROP_NAME, "");
@@ -1311,6 +1306,7 @@ public final class Aeron implements AutoCloseable
          * @see Configuration#CLIENT_NAME_PROP_NAME
          * @since 1.44.0
          */
+        @Config
         public String clientName()
         {
             return clientName;
@@ -1359,6 +1355,7 @@ public final class Aeron implements AutoCloseable
          * @return true if mapped-memory should be pre-touched otherwise false.
          * @see Configuration#PRE_TOUCH_MAPPED_MEMORY_PROP_NAME
          */
+        @Config
         public boolean preTouchMappedMemory()
         {
             return preTouchMappedMemory;
@@ -1842,6 +1839,7 @@ public final class Aeron implements AutoCloseable
          * @return duration in nanoseconds to sleep when conductor is idle.
          * @see Configuration#IDLE_SLEEP_DURATION_PROP_NAME
          */
+        @Config
         public long idleSleepDurationNs()
         {
             return idleSleepDurationNs;
@@ -1868,6 +1866,7 @@ public final class Aeron implements AutoCloseable
          * @return duration in nanoseconds to wait before deleting an expired resource.
          * @see Configuration#RESOURCE_LINGER_DURATION_PROP_NAME
          */
+        @Config
         public long resourceLingerDurationNs()
         {
             return resourceLingerDurationNs;
@@ -1900,6 +1899,7 @@ public final class Aeron implements AutoCloseable
          * @return duration in nanoseconds to wait before deleting resources when closing.
          * @see Configuration#CLOSE_LINGER_DURATION_PROP_NAME
          */
+        @Config
         public long closeLingerDurationNs()
         {
             return closeLingerDurationNs;

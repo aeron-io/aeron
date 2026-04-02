@@ -1777,6 +1777,7 @@ public final class AeronCluster implements AutoCloseable
          * @see AeronCluster.Configuration#CLIENT_NAME_PROP_NAME
          * @since 1.49.0
          */
+        @Config
         public String clientName()
         {
             return clientName;

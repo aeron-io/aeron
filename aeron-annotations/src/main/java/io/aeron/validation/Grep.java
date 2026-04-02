@@ -17,10 +17,12 @@ package io.aeron.validation;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * A utility class for running 'grep'.
@@ -36,14 +38,29 @@ public final class Grep
      */
     public static Grep execute(final String pattern, final String sourceDir)
     {
-        final String commandString = "grep -r -n -E '^" + pattern + "' " + sourceDir;
+        return execute(pattern, new String[] {sourceDir});
+    }
+
+    /**
+     * Execute a grep process.
+     *
+     * @param pattern the regex pattern passed to grep.
+     * @param sourceDirs an array of base directories where the search should begin.
+     * @return a Grep object with the results of the action.
+     */
+    public static Grep execute(final String pattern, final String[] sourceDirs)
+    {
+        final String commandString = "grep -r -n -E '^" + pattern + "' " + String.join(" ", sourceDirs);
 
         try
         {
             // TODO make grep location configurable??
             final Process process = new ProcessBuilder()
                 .redirectErrorStream(true)
-                .command(new String[] {"/usr/bin/grep", "-r", "-n", "-E", "^" + pattern, sourceDir})
+                .command(Stream.concat(
+                    Arrays.stream(new String[] {"/usr/bin/grep", "-r", "-n", "-E", "^" + pattern}),
+                    Arrays.stream(sourceDirs))
+                    .toArray(String[]::new))
                 .start();
 
             final int exitCode = process.waitFor();
@@ -92,17 +109,17 @@ public final class Grep
      */
     public boolean success()
     {
-        return success(true);
+        return success(1);
     }
 
     /**
      * Determine if the process completed successfully.
      *
-     * @param expectOneLine many of the usages expect only a single line to be found.
+     * @param maxLines      many of the usages expect only a single line to be found.
      *                      if more than one are found, that counts as a failure
      * @return whether grep succeeded.
      */
-    public boolean success(final boolean expectOneLine)
+    public boolean success(final int maxLines)
     {
         if (this.e != null)
         {
@@ -114,7 +131,7 @@ public final class Grep
             return false;
         }
 
-        return !expectOneLine || this.lines.size() == 1;
+        return this.lines.size() <= maxLines;
     }
 
     /**

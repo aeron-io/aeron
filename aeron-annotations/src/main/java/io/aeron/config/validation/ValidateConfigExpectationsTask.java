@@ -17,6 +17,8 @@ package io.aeron.config.validation;
 
 import io.aeron.utility.ElementIO;
 
+import java.util.Arrays;
+
 /**
  * A gradle task for validating the C code looks as expected, based on the contents of the @Config java annotations.
  */
@@ -35,6 +37,7 @@ public final class ValidateConfigExpectationsTask
      */
     public static void main(final String[] args) throws Exception
     {
-        Validator.validate(ElementIO.read(args[0]), args[1]).printFailuresOn(System.err);
+        final String[] sourceDirs = Arrays.copyOfRange(args, 1, args.length);
+        Validator.validate(ElementIO.read(args[0]), sourceDirs).printFailuresOn(System.err);
     }
 }
