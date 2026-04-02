@@ -76,6 +76,10 @@ set(HEADERS
     aeron_expandable_ring_buffer.h
 )
 
+if (MSVC AND "${CMAKE_SYSTEM_NAME}" MATCHES "Windows")
+    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif ()
+
 add_library(aeron_cluster_c_consensus SHARED ${SOURCE} ${HEADERS})
 add_library(aeron::aeron_cluster_c_consensus ALIAS aeron_cluster_c_consensus)
 

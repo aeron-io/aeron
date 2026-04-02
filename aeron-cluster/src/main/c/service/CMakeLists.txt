@@ -45,6 +45,10 @@ set(HEADERS
     aeron_cluster_service_container.h
 )
 
+if (MSVC AND "${CMAKE_SYSTEM_NAME}" MATCHES "Windows")
+    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif ()
+
 add_library(aeron_cluster_c_service SHARED ${SOURCE} ${HEADERS})
 add_library(aeron::aeron_cluster_c_service ALIAS aeron_cluster_c_service)
 

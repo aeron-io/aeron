@@ -124,6 +124,10 @@ set(HEADERS
     client/aeron_cluster_ingress_session_decorator.h
 )
 
+if (MSVC AND "${CMAKE_SYSTEM_NAME}" MATCHES "Windows")
+    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif ()
+
 add_library(aeron_cluster_c_client SHARED ${SOURCE} ${HEADERS})
 add_library(aeron::aeron_cluster_c_client ALIAS aeron_cluster_c_client)
 
