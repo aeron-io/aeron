@@ -22,7 +22,7 @@ endif ()
 if (MSVC AND "${CMAKE_SYSTEM_NAME}" MATCHES "Windows")
     set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
     set(BUILD_SHARED_LIBS ON)
-    set(AERON_LIB_WINSOCK_LIBS wsock32 ws2_32 Iphlpapi)
+    set(AERON_LIB_WINSOCK_LIBS wsock32 ws2_32 Iphlpapi Psapi)
     set(WSAPOLL_PROTOTYPE_EXISTS True)
 endif ()
 
