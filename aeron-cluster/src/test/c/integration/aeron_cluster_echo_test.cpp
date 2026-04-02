@@ -126,7 +126,6 @@ TEST_F(ClusterEchoTest, shouldAttemptClientConnectToCluster)
         if (rc != 0) { break; }
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
-    EXPECT_NO_FATAL_FAILURE();
     if (cluster_client) { aeron_cluster_close(cluster_client); m_client = nullptr; }
 }
 
