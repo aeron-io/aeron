@@ -28,6 +28,9 @@
 #if defined(_MSC_VER)
 #include <io.h>
 #include <direct.h>
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
 #include <process.h>
 #define open _open

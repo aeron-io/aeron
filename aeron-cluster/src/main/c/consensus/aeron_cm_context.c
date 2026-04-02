@@ -27,6 +27,9 @@
 #if defined(_MSC_VER)
 #include <direct.h>
 #include <io.h>
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
 #define mkdir(dir, mode) _mkdir(dir)
 #define unlink _unlink

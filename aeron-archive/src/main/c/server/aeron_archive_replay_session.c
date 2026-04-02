@@ -23,6 +23,9 @@
 
 #if defined(_MSC_VER)
 #include <io.h>
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
 #define open _open
 #define close _close
