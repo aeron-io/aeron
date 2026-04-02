@@ -1471,7 +1471,7 @@ bool aeron_is_driver_active_with_cnc(
     {
         if (aeron_epoch_clock() > (now_ms + timeout_ms))
         {
-            snprintf(buffer, sizeof(buffer) - 1, "ERROR: aeron cnc file version was 0 for timeout");
+            AERON_SET_ERR(-AERON_ERROR_CODE_GENERIC_ERROR, "%s", "CnC file is created but not initialised");
             return false;
         }
 
@@ -1480,44 +1480,33 @@ bool aeron_is_driver_active_with_cnc(
 
     if (aeron_semantic_version_major(AERON_CNC_VERSION) != aeron_semantic_version_major(cnc_version))
     {
-        snprintf(
-            buffer, sizeof(buffer) - 1,
-            "ERROR: aeron cnc version not compatible: app version=%d.%d.%d file=%d.%d.%d",
+        AERON_SET_ERR(
+            -AERON_ERROR_CODE_GENERIC_ERROR,
+            "CnC version not compatible: app version=%d.%d.%d file=%d.%d.%d",
             (int)aeron_semantic_version_major(AERON_CNC_VERSION),
             (int)aeron_semantic_version_minor(AERON_CNC_VERSION),
             (int)aeron_semantic_version_patch(AERON_CNC_VERSION),
             (int)aeron_semantic_version_major(cnc_version),
             (int)aeron_semantic_version_minor(cnc_version),
             (int)aeron_semantic_version_patch(cnc_version));
-
-        log_func(buffer);
+        return false;
     }
-    else
+
+    aeron_mpsc_rb_t rb;
+    if (aeron_mpsc_rb_init(
+        &rb, aeron_cnc_to_driver_buffer(metadata), (size_t)metadata->to_driver_buffer_length) != 0)
     {
-        aeron_mpsc_rb_t rb;
-
-        if (aeron_mpsc_rb_init(
-            &rb, aeron_cnc_to_driver_buffer(metadata), (size_t)metadata->to_driver_buffer_length) != 0)
-        {
-            snprintf(buffer, sizeof(buffer) - 1, "ERROR: aeron cnc file could not init to-driver buffer");
-            log_func(buffer);
-        }
-        else
-        {
-            int64_t timestamp_ms = aeron_mpsc_rb_consumer_heartbeat_time_value(&rb);
-            int64_t age = now_ms - timestamp_ms;
-
-            snprintf(buffer, sizeof(buffer) - 1, "INFO: Aeron driver heartbeat is %" PRId64 " ms old", age);
-            log_func(buffer);
-
-            if (age <= timeout_ms)
-            {
-                return true;
-            }
-        }
+        AERON_APPEND_ERR("%s", "Failed to create to_driver_buffer");
+        return false;
     }
 
-    return false;
+    int64_t timestamp_ms = aeron_mpsc_rb_consumer_heartbeat_time_value(&rb);
+    int64_t age = now_ms - timestamp_ms;
+
+    snprintf(buffer, sizeof(buffer) - 1, "INFO: Aeron driver heartbeat is %" PRId64 " ms old", age);
+    log_func(buffer);
+
+    return age <= timeout_ms;
 }
 
 bool aeron_is_driver_active(const char *dirname, int64_t timeout_ms, aeron_log_func_t log_func)
@@ -1535,6 +1524,7 @@ bool aeron_is_driver_active(const char *dirname, int64_t timeout_ms, aeron_log_f
 
         if (aeron_cnc_resolve_filename(dirname, filename, sizeof(filename)) < 0)
         {
+            aeron_err_clear();
             snprintf(buffer, sizeof(buffer) - 1, "INFO: Unable to resolve cnc filename: %s", aeron_errmsg());
             log_func(buffer);
             return false;
@@ -1542,6 +1532,12 @@ bool aeron_is_driver_active(const char *dirname, int64_t timeout_ms, aeron_log_f
 
         if (aeron_map_existing_file(&cnc_map, filename) < 0)
         {
+            if (ENOENT == aeron_errcode())
+            {
+                aeron_err_clear();
+                return false;
+            }
+            aeron_err_clear();
             snprintf(buffer, sizeof(buffer) - 1, "INFO: failed to mmap CnC file");
             log_func(buffer);
             return false;
@@ -1551,6 +1547,7 @@ bool aeron_is_driver_active(const char *dirname, int64_t timeout_ms, aeron_log_f
         log_func(buffer);
 
         result = aeron_is_driver_active_with_cnc(&cnc_map, timeout_ms, aeron_epoch_clock(), log_func);
+        aeron_err_clear();
 
         aeron_unmap(&cnc_map);
     }

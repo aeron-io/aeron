@@ -147,10 +147,10 @@ int aeron_driver_ensure_dir_is_recreated(aeron_driver_context_t *context)
 
         if (context->dirs_delete_on_start)
         {
-            if (0 != aeron_delete_directory(dirname))
+            int rc = aeron_delete_directory(dirname);
+            if (0 != rc)
             {
-                snprintf(buffer, sizeof(buffer), "INFO: failed to delete: %s", dirname);
-                log_func(buffer);
+                AERON_SET_ERR(rc, "Failed to delete directory: %s", dirname);
                 return -1;
             }
         }
@@ -160,8 +160,7 @@ int aeron_driver_ensure_dir_is_recreated(aeron_driver_context_t *context)
 
             if (aeron_cnc_resolve_filename(dirname, filename, sizeof(filename)) < 0)
             {
-                snprintf(buffer, sizeof(buffer), "INFO: failed to resole CnC file: path=%s", dirname);
-                log_func(buffer);
+                AERON_APPEND_ERR("Failed to resole CnC file: path=%s", dirname);
                 return -1;
             }
 
@@ -173,25 +172,23 @@ int aeron_driver_ensure_dir_is_recreated(aeron_driver_context_t *context)
                 }
                 else
                 {
-                    snprintf(buffer, sizeof(buffer), "INFO: failed to mmap CnC file: %s", filename);
-                    log_func(buffer);
+                    AERON_APPEND_ERR("Failed to mmap CnC file: %s", filename);
                     return -1;
                 }
             }
             else
             {
-                snprintf(buffer, sizeof(buffer), "INFO: Aeron CnC file %s exists", filename);
-                log_func(buffer);
-
                 if (aeron_is_driver_active_with_cnc(
                     &cnc_mmap, (int64_t)context->driver_timeout_ms, aeron_epoch_clock(), log_func))
                 {
+                    AERON_APPEND_ERR("Active media driver detected: %s", filename);
                     aeron_unmap(&cnc_mmap);
                     return -1;
                 }
 
                 if (aeron_report_existing_errors(&cnc_mmap, dirname) < 0)
                 {
+                    AERON_APPEND_ERR("%s", "");
                     aeron_unmap(&cnc_mmap);
                     return -1;
                 }
@@ -199,10 +196,11 @@ int aeron_driver_ensure_dir_is_recreated(aeron_driver_context_t *context)
                 aeron_unmap(&cnc_mmap);
             }
 
-            if (aeron_delete_directory(context->aeron_dir) != 0)
+            int rc = aeron_delete_directory(dirname);
+            if (0 != rc)
             {
-                snprintf(buffer, sizeof(buffer) - 1, "INFO: failed to delete %s", context->aeron_dir);
-                log_func(buffer);
+                AERON_SET_ERR(rc, "Failed to delete directory: %s", dirname);
+                return -1;
             }
         }
     }
@@ -233,7 +231,7 @@ int aeron_driver_ensure_dir_is_recreated(aeron_driver_context_t *context)
 
     if (aeron_mkdir_recursive(filename, S_IRWXU | S_IRWXG | S_IRWXO) != 0)
     {
-        AERON_SET_ERR(errno, "Failed to mkdir images directory: %s", filename);
+        AERON_APPEND_ERR("Failed to mkdir images directory: %s", filename);
         return -1;
     }
 
@@ -286,7 +284,7 @@ int aeron_driver_validate_value_range(uint64_t value, uint64_t min_value, uint64
 
 int aeron_driver_create_cnc_file(aeron_driver_t *driver)
 {
-    char buffer[AERON_MAX_PATH];
+    char path[AERON_MAX_PATH];
     size_t cnc_file_length = aeron_cnc_length(driver->context);
     if (aeron_driver_validate_value_range(cnc_file_length, 0, INT32_MAX, "CnC file length") < 0)
     {
@@ -297,15 +295,15 @@ int aeron_driver_create_cnc_file(aeron_driver_t *driver)
     driver->context->cnc_map.addr = NULL;
     driver->context->cnc_map.length = cnc_file_length;
 
-    if(aeron_file_resolve(driver->context->aeron_dir, AERON_CNC_FILE, buffer, sizeof(buffer)) < 0)
+    if(aeron_file_resolve(driver->context->aeron_dir, AERON_CNC_FILE, path, sizeof(path)) < 0)
     {
         AERON_APPEND_ERR("Failed to resolve CnC file path: dir=%s, filename=%s", driver->context->aeron_dir, AERON_CNC_FILE);
         return -1;
     }
 
-    if (aeron_map_new_file(&driver->context->cnc_map, buffer, true) < 0)
+    if (aeron_map_new_file(&driver->context->cnc_map, path, true) < 0)
     {
-        AERON_APPEND_ERR("CnC file: %s", buffer);
+        AERON_APPEND_ERR("CnC file: %s", path);
         return -1;
     }
 

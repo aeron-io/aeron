@@ -42,6 +42,7 @@ import org.agrona.concurrent.ringbuffer.RingBuffer;
 import org.agrona.concurrent.status.*;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -367,7 +368,8 @@ public final class MediaDriver implements AutoCloseable
                 {
                     if (CommonContext.isDriverActive(ctx.driverTimeoutMs(), logger, cncByteBuffer))
                     {
-                        throw new ActiveDriverException("active driver detected");
+                        throw new ActiveDriverException("Active media driver detected: " +
+                            new File(ctx.aeronDirectory(), CncFileDescriptor.CNC_FILE));
                     }
 
                     reportExistingErrors(ctx, cncByteBuffer);

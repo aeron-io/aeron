@@ -1029,7 +1029,7 @@ public class CommonContext implements Cloneable
         {
             if (System.currentTimeMillis() > (startTimeMs + driverTimeoutMs))
             {
-                throw new DriverTimeoutException("CnC file is created but not initialised.");
+                throw new DriverTimeoutException("CnC file is created but not initialised");
             }
 
             sleep(1);

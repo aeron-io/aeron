@@ -246,7 +246,7 @@ final class ClientConductor implements Agent
 
     public String roleName()
     {
-        return "aeron-client-conductor";
+        return "aeron-client";
     }
 
     boolean isClosed()
