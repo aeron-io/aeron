@@ -14,6 +14,13 @@
  * limitations under the License.
  */
 
+#ifdef _MSC_VER
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
+#endif
+
 #include <gtest/gtest.h>
 
 #include <cstdlib>
@@ -23,6 +30,10 @@
 #include <string>
 #include <sys/stat.h>
 #if defined(_MSC_VER)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
 #include <windows.h>
 #include <direct.h>
 #ifndef PATH_MAX

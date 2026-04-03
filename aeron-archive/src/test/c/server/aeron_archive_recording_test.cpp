@@ -27,9 +27,12 @@
 #include <io.h>
 #include <windows.h>
 typedef long long ssize_t;
-#define read _read
-#define open _open
-#define close _close
+#define read(fd, buf, n)      _read((fd), (buf), (unsigned)(n))
+#define open                  _open
+#define close                 _close
+#define O_RDONLY              _O_RDONLY
+#define O_WRONLY              _O_WRONLY
+#define O_CREAT               _O_CREAT
 static char *mkdtemp(char *tmpl)
 {
     char tmp_path[MAX_PATH];
