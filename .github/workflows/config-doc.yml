@@ -2,6 +2,9 @@ name: Config Documentation
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - config-annotation-updates
 
 env:
   GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.java.installations.auto-detect=false -Dorg.gradle.warning.mode=fail'
@@ -33,4 +36,9 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v5
       - name: Build and validate config annotations
-        run: ./gradlew compileJava generateConfigDoc validateConfigExpectations validateCounterExpectations --console=plain
+        run: ./gradlew generateCombinedConfigDoc --console=plain
+      - name: Upload config doc
+        uses: actions/upload-artifact@v5
+        with:
+          name: config-doc
+          path: build/generated-doc/config.md
