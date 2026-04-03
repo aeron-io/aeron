@@ -28,6 +28,21 @@
 #include <atomic>
 #include <vector>
 
+#ifdef _MSC_VER
+#include <windows.h>
+static std::string make_test_dir(const char *prefix)
+{
+    char tmp[MAX_PATH];
+    GetTempPathA(MAX_PATH, tmp);
+    return std::string(tmp) + prefix + std::to_string(GetCurrentProcessId());
+}
+#else
+static std::string make_test_dir(const char *prefix)
+{
+    return std::string("/tmp/") + prefix + std::to_string(getpid());
+}
+#endif
+
 extern "C"
 {
 #include "aeronc.h"
@@ -70,8 +85,12 @@ protected:
     /* Matches Java @BeforeEach: ClusteredMediaDriver.launch() -- no wait for leader */
     void SetUp() override
     {
-        m_base_dir = "/tmp/aeron_cluster_integ_" + std::to_string(getpid());
+        m_base_dir = make_test_dir("aeron_cluster_integ_");
+#ifdef _MSC_VER
+        if (std::system(("rmdir /s /q \"" + m_base_dir + "\" 2>nul").c_str())) {}
+#else
         if (std::system(("rm -rf " + m_base_dir).c_str())) {}
+#endif
 
         m_cmd = new TestClusteredMediaDriver(0, 1, m_base_dir, std::cout);
         ASSERT_EQ(0, m_cmd->launch()) << "ClusteredMediaDriver launch failed";
@@ -101,7 +120,11 @@ protected:
             delete m_cmd;
             m_cmd = nullptr;
         }
+#ifdef _MSC_VER
+        if (std::system(("rmdir /s /q \"" + m_base_dir + "\"").c_str())) {}
+#else
         if (std::system(("rm -rf " + m_base_dir).c_str())) {}
+#endif
     }
 
     /* Matches Java launchEchoService() */

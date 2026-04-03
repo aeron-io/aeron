@@ -43,6 +43,21 @@ extern "C"
 #include "../integration/aeron_test_cluster_node.h"
 #include "../integration/aeron_cluster_server_helper.h"
 
+#ifdef _MSC_VER
+#include <windows.h>
+static std::string make_test_dir(const char *prefix)
+{
+    char tmp[MAX_PATH];
+    GetTempPathA(MAX_PATH, tmp);
+    return std::string(tmp) + prefix + std::to_string(GetCurrentProcessId());
+}
+#else
+static std::string make_test_dir(const char *prefix)
+{
+    return std::string("/tmp/") + prefix + std::to_string(getpid());
+}
+#endif
+
 /* -----------------------------------------------------------------------
  * Egress message collector
  * ----------------------------------------------------------------------- */
@@ -71,8 +86,12 @@ class ClusterEchoTest : public ::testing::Test
 protected:
     void SetUp() override
     {
-        m_base_dir = "/tmp/aeron_cluster_echo_" + std::to_string(getpid());
+        m_base_dir = make_test_dir("aeron_cluster_echo_");
+#ifdef _MSC_VER
+        if (std::system(("rmdir /s /q \"" + m_base_dir + "\" 2>nul & mkdir \"" + m_base_dir + "\"").c_str())) {}
+#else
         if (std::system(("rm -rf " + m_base_dir + " && mkdir -p " + m_base_dir).c_str())) {}
+#endif
 
         /* Use node_index=5 to get unique port 8015 -- avoids collision with other tests */
         m_node = new TestClusterNode(5, 1, m_base_dir, std::cout);
@@ -84,7 +103,11 @@ protected:
         if (m_client)     { aeron_cluster_close(m_client); m_client = nullptr; }
         if (m_client_ctx) { aeron_cluster_context_close(m_client_ctx); m_client_ctx = nullptr; }
         if (m_node)       { m_node->stop(); delete m_node; m_node = nullptr; }
+#ifdef _MSC_VER
+        if (std::system(("rmdir /s /q \"" + m_base_dir + "\"").c_str())) {}
+#else
         if (std::system(("rm -rf " + m_base_dir).c_str())) {}
+#endif
     }
 
     TestClusterNode         *m_node       = nullptr;

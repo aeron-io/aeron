@@ -22,6 +22,13 @@
 #include <atomic>
 #include <chrono>
 
+#if defined(_MSC_VER)
+#define S_IRWXU 0
+#define S_IRWXG 0
+#define S_IRWXO 0
+#endif
+#include <sys/stat.h>
+
 extern "C"
 {
 #include "aeronc.h"

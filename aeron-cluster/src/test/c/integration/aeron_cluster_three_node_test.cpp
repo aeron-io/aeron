@@ -39,6 +39,21 @@ extern "C"
 
 #include "../integration/aeron_test_cluster_node.h"
 
+#ifdef _MSC_VER
+#include <windows.h>
+static std::string make_test_dir(const char *prefix)
+{
+    char tmp[MAX_PATH];
+    GetTempPathA(MAX_PATH, tmp);
+    return std::string(tmp) + prefix + std::to_string(GetCurrentProcessId());
+}
+#else
+static std::string make_test_dir(const char *prefix)
+{
+    return std::string("/tmp/") + prefix + std::to_string(getpid());
+}
+#endif
+
 class ThreeNodeClusterTest : public ::testing::Test
 {
 protected:
@@ -47,8 +62,12 @@ protected:
 
     void SetUp() override
     {
-        m_base_dir = "/tmp/aeron_cluster_3node_" + std::to_string(getpid());
+        m_base_dir = make_test_dir("aeron_cluster_3node_");
+#ifdef _MSC_VER
+        if (std::system(("rmdir /s /q \"" + m_base_dir + "\" 2>nul").c_str())) {}
+#else
         if (std::system(("rm -rf " + m_base_dir).c_str())) {}
+#endif
 
         for (int i = 0; i < NODE_COUNT; i++)
         {
@@ -78,7 +97,11 @@ protected:
                 m_nodes[i] = nullptr;
             }
         }
+#ifdef _MSC_VER
+        if (std::system(("rmdir /s /q \"" + m_base_dir + "\"").c_str())) {}
+#else
         if (std::system(("rm -rf " + m_base_dir).c_str())) {}
+#endif
     }
 
     /**
