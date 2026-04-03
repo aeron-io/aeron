@@ -28,9 +28,14 @@
 #ifdef _MSC_VER
 #include <direct.h>
 #include <io.h>
+#include <windows.h>
 static char *mkdtemp(char *tmpl)
 {
-    if (_mktemp_s(tmpl, strlen(tmpl) + 1) != 0) return NULL;
+    char tmp_path[MAX_PATH];
+    DWORD len = GetTempPathA(MAX_PATH, tmp_path);
+    if (len == 0 || len > MAX_PATH) return NULL;
+    if (GetTempFileNameA(tmp_path, "aer", 0, tmpl) == 0) return NULL;
+    DeleteFileA(tmpl);
     if (_mkdir(tmpl) != 0) return NULL;
     return tmpl;
 }
@@ -603,7 +608,7 @@ static const int32_t MTU_LENGTH = 1024;
 class CatalogTest : public ::testing::Test
 {
 protected:
-    char m_archive_dir[256] = {};
+    char m_archive_dir[260] = {};
     aeron_archive_catalog_t *m_catalog = nullptr;
     int64_t m_recording_one_id = -1;
     int64_t m_recording_two_id = -1;
@@ -649,7 +654,12 @@ protected:
             aeron_archive_catalog_close(m_catalog);
             m_catalog = nullptr;
         }
-        std::string cmd = std::string("rm -rf ") + m_archive_dir;
+        std::string cmd =
+#ifdef _MSC_VER
+            std::string("rmdir /s /q \"") + m_archive_dir + "\"";
+#else
+            std::string("rm -rf ") + m_archive_dir;
+#endif
         if (std::system(cmd.c_str())) {}
     }
 
