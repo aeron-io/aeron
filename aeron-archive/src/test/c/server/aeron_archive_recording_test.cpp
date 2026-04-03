@@ -53,7 +53,19 @@ static char *mkdtemp(char *tmpl)
 #include <unistd.h>
 #endif
 
+#ifdef _MSC_VER
+#undef read
+#undef open
+#undef close
+#endif
+
 #include "gtest/gtest.h"
+
+#ifdef _MSC_VER
+#define read(fd, buf, n)      _read((fd), (buf), (unsigned)(n))
+#define open                  _open
+#define close                 _close
+#endif
 
 extern "C"
 {
