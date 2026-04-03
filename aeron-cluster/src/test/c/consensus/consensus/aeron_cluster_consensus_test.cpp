@@ -14,16 +14,6 @@
  * limitations under the License.
  */
 
-#ifdef _MSC_VER
-#ifndef _WINSOCKAPI_
-#define _WINSOCKAPI_
-#endif
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
-#endif
-
 #include <gtest/gtest.h>
 #include <cstring>
 #include <cstdlib>
@@ -32,20 +22,17 @@
 #include <random>
 #include <string>
 
-#ifdef _MSC_VER
+extern "C"
+{
+#include "util/aeron_fileutil.h"
+}
+
 static std::string make_test_dir(const char *prefix)
 {
-    char tmp[MAX_PATH];
-    GetTempPathA(MAX_PATH, tmp);
-    std::string dir = std::string(tmp) + prefix + std::to_string(GetCurrentProcessId());
-    return dir;
+    char base[AERON_MAX_PATH] = {0};
+    aeron_temp_filename(base, sizeof(base));
+    return std::string(base) + "-" + prefix;
 }
-#else
-static std::string make_test_dir(const char *prefix)
-{
-    return std::string("/tmp/") + prefix + std::to_string(getpid());
-}
-#endif
 
 #include "aeron_cluster_recording_log.h"
 #include "aeron_cluster_member.h"
@@ -71,19 +58,12 @@ protected:
     void SetUp() override
     {
         m_dir = make_test_dir("aeron_cluster_test_recording_log_");
-#ifdef _MSC_VER
-        if (std::system(("rmdir /s /q \"" + m_dir + "\" 2>nul & mkdir \"" + m_dir + "\"").c_str())) {}
-#else
-        if (std::system(("rm -rf " + m_dir + " && mkdir -p " + m_dir).c_str())) {}
-#endif
+        aeron_delete_directory(m_dir.c_str());
+        aeron_mkdir_recursive(m_dir.c_str(), 0777);
     }
     void TearDown() override
     {
-#ifdef _MSC_VER
-        if (std::system(("rmdir /s /q \"" + m_dir + "\"").c_str())) {}
-#else
-        if (std::system(("rm -rf " + m_dir).c_str())) {}
-#endif
+        aeron_delete_directory(m_dir.c_str());
     }
 
     static void append_term(aeron_cluster_recording_log_t *log,
@@ -3117,21 +3097,14 @@ protected:
     void SetUp() override
     {
         m_dir = make_test_dir("aeron_cluster_recovery_plan_test_");
-#ifdef _MSC_VER
-        if (std::system(("rmdir /s /q \"" + m_dir + "\" 2>nul & mkdir \"" + m_dir + "\"").c_str())) {}
-#else
-        if (std::system(("rm -rf " + m_dir + " && mkdir -p " + m_dir).c_str())) {}
-#endif
+        aeron_delete_directory(m_dir.c_str());
+        aeron_mkdir_recursive(m_dir.c_str(), 0777);
         ASSERT_EQ(0, aeron_cluster_recording_log_open(&m_log, m_dir.c_str(), true));
     }
     void TearDown() override
     {
         aeron_cluster_recording_log_close(m_log);
-#ifdef _MSC_VER
-        if (std::system(("rmdir /s /q \"" + m_dir + "\"").c_str())) {}
-#else
-        if (std::system(("rm -rf " + m_dir).c_str())) {}
-#endif
+        aeron_delete_directory(m_dir.c_str());
     }
 
     std::string m_dir;
@@ -3233,11 +3206,8 @@ protected:
     void SetUp() override
     {
         m_log_dir = make_test_dir("aeron_cluster_ssn_test_");
-#ifdef _MSC_VER
-        if (std::system(("rmdir /s /q \"" + m_log_dir + "\" 2>nul & mkdir \"" + m_log_dir + "\"").c_str())) {}
-#else
-        if (std::system(("rm -rf " + m_log_dir + " && mkdir -p " + m_log_dir).c_str())) {}
-#endif
+        aeron_delete_directory(m_log_dir.c_str());
+        aeron_mkdir_recursive(m_log_dir.c_str(), 0777);
         ASSERT_EQ(0, aeron_cluster_recording_log_open(&m_log, m_log_dir.c_str(), true));
         ASSERT_EQ(0, aeron_cluster_session_manager_create(&m_manager, 1, nullptr));
         m_manager->recording_log = m_log;
@@ -3248,11 +3218,7 @@ protected:
         m_manager->recording_log = nullptr;  /* log is closed separately */
         aeron_cluster_session_manager_close(m_manager);
         aeron_cluster_recording_log_close(m_log);
-#ifdef _MSC_VER
-        if (std::system(("rmdir /s /q \"" + m_log_dir + "\"").c_str())) {}
-#else
-        if (std::system(("rm -rf " + m_log_dir).c_str())) {}
-#endif
+        aeron_delete_directory(m_log_dir.c_str());
     }
 
     /* Enqueue one batch with a single entry at the given logPosition */

@@ -253,9 +253,17 @@ TestClusteredMediaDriver::TestClusteredMediaDriver(
     std::ostream &stream)
 {
     m_impl = new Impl(node_index, stream);
-    m_impl->aeron_dir   = base_dir + "/node" + std::to_string(node_index) + "/aeron";
-    m_impl->archive_dir = base_dir + "/node" + std::to_string(node_index) + "/archive";
-    m_impl->cluster_dir = base_dir + "/node" + std::to_string(node_index) + "/cluster";
+
+    std::string node_name = "node" + std::to_string(node_index);
+    char node_dir[AERON_MAX_PATH], resolved[AERON_MAX_PATH];
+    aeron_file_resolve(base_dir.c_str(), node_name.c_str(), node_dir, sizeof(node_dir));
+
+    aeron_file_resolve(node_dir, "aeron", resolved, sizeof(resolved));
+    m_impl->aeron_dir = resolved;
+    aeron_file_resolve(node_dir, "archive", resolved, sizeof(resolved));
+    m_impl->archive_dir = resolved;
+    aeron_file_resolve(node_dir, "cluster", resolved, sizeof(resolved));
+    m_impl->cluster_dir = resolved;
 
     int base = node_index - (node_index % ((node_count > 1) ? node_count : 1));
     if (node_count == 1) { base = node_index; }

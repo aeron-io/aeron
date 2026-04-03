@@ -18,17 +18,6 @@
  * @InterruptAfter(10) maps to TEST timeout of 10 seconds.
  */
 
-#ifdef _MSC_VER
-/* Before gtest/Aeron: avoid winsock.h vs winsock2.h include order on MSVC */
-#ifndef _WINSOCKAPI_
-#define _WINSOCKAPI_
-#endif
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
-#endif
-
 #include <gtest/gtest.h>
 #include <cstdlib>
 #include <cstring>
@@ -39,20 +28,6 @@
 #include <atomic>
 #include <vector>
 
-#ifdef _MSC_VER
-static std::string make_test_dir(const char *prefix)
-{
-    char tmp[MAX_PATH];
-    GetTempPathA(MAX_PATH, tmp);
-    return std::string(tmp) + prefix + std::to_string(GetCurrentProcessId());
-}
-#else
-static std::string make_test_dir(const char *prefix)
-{
-    return std::string("/tmp/") + prefix + std::to_string(getpid());
-}
-#endif
-
 extern "C"
 {
 #include "aeronc.h"
@@ -61,6 +36,13 @@ extern "C"
 #include "client/aeron_cluster_client.h"
 #include "client/aeron_cluster_async_connect.h"
 #include "util/aeron_fileutil.h"
+}
+
+static std::string make_test_dir(const char *prefix)
+{
+    char base[AERON_MAX_PATH] = {0};
+    aeron_temp_filename(base, sizeof(base));
+    return std::string(base) + "-" + prefix;
 }
 
 #include "../integration/aeron_test_clustered_media_driver.h"
@@ -96,11 +78,7 @@ protected:
     void SetUp() override
     {
         m_base_dir = make_test_dir("aeron_cluster_integ_");
-#ifdef _MSC_VER
-        if (std::system(("rmdir /s /q \"" + m_base_dir + "\" 2>nul").c_str())) {}
-#else
-        if (std::system(("rm -rf " + m_base_dir).c_str())) {}
-#endif
+        aeron_delete_directory(m_base_dir.c_str());
 
         m_cmd = new TestClusteredMediaDriver(0, 1, m_base_dir, std::cout);
         ASSERT_EQ(0, m_cmd->launch()) << "ClusteredMediaDriver launch failed";
@@ -130,11 +108,7 @@ protected:
             delete m_cmd;
             m_cmd = nullptr;
         }
-#ifdef _MSC_VER
-        if (std::system(("rmdir /s /q \"" + m_base_dir + "\"").c_str())) {}
-#else
-        if (std::system(("rm -rf " + m_base_dir).c_str())) {}
-#endif
+        aeron_delete_directory(m_base_dir.c_str());
     }
 
     /* Matches Java launchEchoService() */

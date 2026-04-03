@@ -21,16 +21,6 @@
  * NO shared m_aeron array.
  */
 
-#ifdef _MSC_VER
-#ifndef _WINSOCKAPI_
-#define _WINSOCKAPI_
-#endif
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
-#endif
-
 #include <gtest/gtest.h>
 #include <cstdlib>
 #include <string>
@@ -49,19 +39,12 @@ extern "C"
 
 #include "../integration/aeron_test_cluster_node.h"
 
-#ifdef _MSC_VER
 static std::string make_test_dir(const char *prefix)
 {
-    char tmp[MAX_PATH];
-    GetTempPathA(MAX_PATH, tmp);
-    return std::string(tmp) + prefix + std::to_string(GetCurrentProcessId());
+    char base[AERON_MAX_PATH] = {0};
+    aeron_temp_filename(base, sizeof(base));
+    return std::string(base) + "-" + prefix;
 }
-#else
-static std::string make_test_dir(const char *prefix)
-{
-    return std::string("/tmp/") + prefix + std::to_string(getpid());
-}
-#endif
 
 class ThreeNodeClusterTest : public ::testing::Test
 {
@@ -72,11 +55,7 @@ protected:
     void SetUp() override
     {
         m_base_dir = make_test_dir("aeron_cluster_3node_");
-#ifdef _MSC_VER
-        if (std::system(("rmdir /s /q \"" + m_base_dir + "\" 2>nul").c_str())) {}
-#else
-        if (std::system(("rm -rf " + m_base_dir).c_str())) {}
-#endif
+        aeron_delete_directory(m_base_dir.c_str());
 
         for (int i = 0; i < NODE_COUNT; i++)
         {
@@ -106,11 +85,7 @@ protected:
                 m_nodes[i] = nullptr;
             }
         }
-#ifdef _MSC_VER
-        if (std::system(("rmdir /s /q \"" + m_base_dir + "\"").c_str())) {}
-#else
-        if (std::system(("rm -rf " + m_base_dir).c_str())) {}
-#endif
+        aeron_delete_directory(m_base_dir.c_str());
     }
 
     /**

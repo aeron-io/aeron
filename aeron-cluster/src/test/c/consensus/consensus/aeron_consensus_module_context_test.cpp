@@ -51,12 +51,6 @@
 #define S_ISDIR(m) (((m) & _S_IFMT) == _S_IFDIR)
 #define S_ISLNK(m) (0)
 #define lstat stat
-static std::string make_test_dir(const char *prefix)
-{
-    char tmp[MAX_PATH];
-    GetTempPathA(MAX_PATH, tmp);
-    return std::string(tmp) + prefix + std::to_string(GetCurrentProcessId());
-}
 static int setenv(const char *name, const char *value, int overwrite)
 {
     (void)overwrite;
@@ -66,11 +60,6 @@ static int unsetenv(const char *name)
 {
     return _putenv_s(name, "");
 }
-#else
-static std::string make_test_dir(const char *prefix)
-{
-    return std::string("/tmp/") + prefix + std::to_string(getpid());
-}
 #endif
 
 extern "C"
@@ -79,6 +68,14 @@ extern "C"
 #include "aeron_consensus_module_configuration.h"
 #include "aeron_alloc.h"
 #include "aeron_cluster_service_context.h"
+#include "util/aeron_fileutil.h"
+}
+
+static std::string make_test_dir(const char *prefix)
+{
+    char base[AERON_MAX_PATH] = {0};
+    aeron_temp_filename(base, sizeof(base));
+    return std::string(base) + "-" + prefix;
 }
 
 class ConsensusModuleContextTest : public ::testing::Test
@@ -617,20 +614,12 @@ protected:
     void SetUp() override
     {
         m_dir = make_test_dir("aeron_cm_ctx_markfile_");
-#ifdef _MSC_VER
-        if (std::system(("rmdir /s /q \"" + m_dir + "\" 2>nul & mkdir \"" + m_dir + "\"").c_str())) {}
-#else
-        if (std::system(("rm -rf " + m_dir).c_str())) {}
-        mkdir(m_dir.c_str(), 0755);
-#endif
+        aeron_delete_directory(m_dir.c_str());
+        aeron_mkdir_recursive(m_dir.c_str(), 0777);
     }
     void TearDown() override
     {
-#ifdef _MSC_VER
-        if (std::system(("rmdir /s /q \"" + m_dir + "\"").c_str())) {}
-#else
-        if (std::system(("rm -rf " + m_dir).c_str())) {}
-#endif
+        aeron_delete_directory(m_dir.c_str());
     }
     std::string m_dir;
 };
@@ -852,20 +841,16 @@ protected:
     void SetUp() override
     {
         m_dir = make_test_dir("aeron_mark_file_unit_");
-#ifdef _MSC_VER
-        if (std::system(("rmdir /s /q \"" + m_dir + "\" 2>nul & mkdir \"" + m_dir + "\"").c_str())) {}
-#else
-        if (std::system(("rm -rf " + m_dir + " && mkdir -p " + m_dir).c_str())) {}
-#endif
-        m_path = m_dir + "/" + AERON_CLUSTER_MARK_FILE_FILENAME;
+        aeron_delete_directory(m_dir.c_str());
+        aeron_mkdir_recursive(m_dir.c_str(), 0777);
+
+        char path_buf[AERON_MAX_PATH];
+        aeron_file_resolve(m_dir.c_str(), AERON_CLUSTER_MARK_FILE_FILENAME, path_buf, sizeof(path_buf));
+        m_path = path_buf;
     }
     void TearDown() override
     {
-#ifdef _MSC_VER
-        if (std::system(("rmdir /s /q \"" + m_dir + "\"").c_str())) {}
-#else
-        if (std::system(("rm -rf " + m_dir).c_str())) {}
-#endif
+        aeron_delete_directory(m_dir.c_str());
     }
     std::string m_dir, m_path;
 };

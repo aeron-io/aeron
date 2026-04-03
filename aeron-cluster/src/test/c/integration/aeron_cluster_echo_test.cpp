@@ -20,16 +20,6 @@
  * Aeron client from the driver's aeron_dir.
  */
 
-#ifdef _MSC_VER
-#ifndef _WINSOCKAPI_
-#define _WINSOCKAPI_
-#endif
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
-#endif
-
 #include <gtest/gtest.h>
 #include <cstdlib>
 #include <cstring>
@@ -53,19 +43,12 @@ extern "C"
 #include "../integration/aeron_test_cluster_node.h"
 #include "../integration/aeron_cluster_server_helper.h"
 
-#ifdef _MSC_VER
 static std::string make_test_dir(const char *prefix)
 {
-    char tmp[MAX_PATH];
-    GetTempPathA(MAX_PATH, tmp);
-    return std::string(tmp) + prefix + std::to_string(GetCurrentProcessId());
+    char base[AERON_MAX_PATH] = {0};
+    aeron_temp_filename(base, sizeof(base));
+    return std::string(base) + "-" + prefix;
 }
-#else
-static std::string make_test_dir(const char *prefix)
-{
-    return std::string("/tmp/") + prefix + std::to_string(getpid());
-}
-#endif
 
 /* -----------------------------------------------------------------------
  * Egress message collector
@@ -96,11 +79,8 @@ protected:
     void SetUp() override
     {
         m_base_dir = make_test_dir("aeron_cluster_echo_");
-#ifdef _MSC_VER
-        if (std::system(("rmdir /s /q \"" + m_base_dir + "\" 2>nul & mkdir \"" + m_base_dir + "\"").c_str())) {}
-#else
-        if (std::system(("rm -rf " + m_base_dir + " && mkdir -p " + m_base_dir).c_str())) {}
-#endif
+        aeron_delete_directory(m_base_dir.c_str());
+        aeron_mkdir_recursive(m_base_dir.c_str(), 0777);
 
         /* Use node_index=5 to get unique port 8015 -- avoids collision with other tests */
         m_node = new TestClusterNode(5, 1, m_base_dir, std::cout);
@@ -112,11 +92,7 @@ protected:
         if (m_client)     { aeron_cluster_close(m_client); m_client = nullptr; }
         if (m_client_ctx) { aeron_cluster_context_close(m_client_ctx); m_client_ctx = nullptr; }
         if (m_node)       { m_node->stop(); delete m_node; m_node = nullptr; }
-#ifdef _MSC_VER
-        if (std::system(("rmdir /s /q \"" + m_base_dir + "\"").c_str())) {}
-#else
-        if (std::system(("rm -rf " + m_base_dir).c_str())) {}
-#endif
+        aeron_delete_directory(m_base_dir.c_str());
     }
 
     TestClusterNode         *m_node       = nullptr;
