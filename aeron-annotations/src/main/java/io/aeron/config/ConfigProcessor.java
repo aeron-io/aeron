@@ -16,6 +16,7 @@
 package io.aeron.config;
 
 import io.aeron.utility.ElementIO;
+import io.aeron.utility.JavadocCleaner;
 import io.aeron.utility.Processor;
 
 import javax.annotation.processing.RoundEnvironment;

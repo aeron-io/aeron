@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.aeron.config;
+package io.aeron.utility;
 
 import java.util.regex.Pattern;
 

@@ -37,8 +37,8 @@ jobs:
         uses: gradle/actions/setup-gradle@v5
       - name: Build and validate config annotations
         run: ./gradlew generateCombinedConfigDoc --console=plain
-      - name: Upload config doc
+      - name: Upload generated docs
         uses: actions/upload-artifact@v5
         with:
-          name: config-doc
-          path: build/generated-doc/config.md
+          name: generated-docs
+          path: build/generated-doc/

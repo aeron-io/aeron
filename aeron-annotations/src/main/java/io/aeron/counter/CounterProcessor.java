@@ -15,6 +15,7 @@
  */
 package io.aeron.counter;
 
+import io.aeron.utility.JavadocCleaner;
 import io.aeron.utility.ElementIO;
 import io.aeron.utility.Processor;
 
@@ -135,7 +136,11 @@ public class CounterProcessor extends Processor
             return;
         }
 
+        counterInfo.isSystemCounter = systemCounterId;
+        counterInfo.javaFieldName = element.getEnclosingElement().getSimpleName() + "." + name;
+
         counterInfo.counterDescription = getDocComment(element);
+        counterInfo.counterDescriptionClean = JavadocCleaner.clean(counterInfo.counterDescription);
 
         final Object constantValue = element.getConstantValue();
         if (constantValue instanceof Integer)

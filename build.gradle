@@ -516,6 +516,19 @@ project(':aeron-client') {
         classpath project(':aeron-annotations').sourceSets.main.runtimeClasspath
         args = [counterInfoFile, sourceDir]
     }
+
+    tasks.register('generateCounterDoc', JavaExec) {
+        def counterInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/counter-info.dat"
+        def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/counters.md"
+
+        dependsOn 'compileJava'
+        inputs.files(counterInfoFile)
+        outputs.files(generatedDocFile)
+
+        mainClass.set('io.aeron.counter.docgen.GenerateCounterDocTask')
+        classpath project(':aeron-annotations').sourceSets.main.runtimeClasspath
+        args = [counterInfoFile, generatedDocFile]
+    }
 }
 
 project(':aeron-driver') {
@@ -1447,7 +1460,7 @@ tasks.register('uploadArtifactsToCentralPortal', io.aeron.build.SonatypeCentralP
 
 tasks.register('generateCombinedConfigDoc') {
     group = 'documentation'
-    description = 'Validates config annotations across all subprojects and generates a combined configuration reference document.'
+    description = 'Validates config/counter annotations across all subprojects and generates combined reference documents.'
 
     dependsOn ':aeron-client:validateConfigExpectations',
               ':aeron-driver:validateConfigExpectations',
@@ -1456,7 +1469,8 @@ tasks.register('generateCombinedConfigDoc') {
               ':aeron-client:generateConfigDoc',
               ':aeron-driver:generateConfigDoc',
               ':aeron-archive:generateConfigDoc',
-              ':aeron-cluster:generateConfigDoc'
+              ':aeron-cluster:generateConfigDoc',
+              ':aeron-client:generateCounterDoc'
 
     project(':aeron-client').tasks.named('generateConfigDoc').configure {
         mustRunAfter ':aeron-client:validateConfigExpectations', ':aeron-client:validateCounterExpectations'
@@ -1467,16 +1481,23 @@ tasks.register('generateCombinedConfigDoc') {
     project(':aeron-archive').tasks.named('generateConfigDoc').configure {
         mustRunAfter ':aeron-archive:validateConfigExpectations'
     }
+    project(':aeron-client').tasks.named('generateCounterDoc').configure {
+        mustRunAfter ':aeron-client:validateCounterExpectations'
+    }
 
     final def subprojectNames = ['aeron-client', 'aeron-driver', 'aeron-archive', 'aeron-cluster']
     final def docFileProviders = subprojectNames.collect {
         project(":${it}").layout.buildDirectory.file('generated-doc/out.md')
     }
+    final def counterDocFileProvider = project(':aeron-client').layout.buildDirectory.file('generated-doc/counters.md')
 
     inputs.files(docFileProviders)
+    inputs.files(counterDocFileProvider)
 
     final def outputFile = layout.buildDirectory.file('generated-doc/config.md')
+    final def counterOutputFile = layout.buildDirectory.file('generated-doc/counters.md')
     outputs.file(outputFile)
+    outputs.file(counterOutputFile)
 
     doLast {
         final def out = outputFile.get().asFile
@@ -1497,6 +1518,12 @@ tasks.register('generateCombinedConfigDoc') {
         }
 
         logger.lifecycle("Combined config doc written to: ${out.path}")
+
+        final def counterSrc = counterDocFileProvider.get().asFile
+        final def counterOut = counterOutputFile.get().asFile
+        counterOut.parentFile.mkdirs()
+        counterOut.text = counterSrc.text
+        logger.lifecycle("Counter doc written to: ${counterOut.path}")
     }
 }
 

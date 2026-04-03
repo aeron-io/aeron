@@ -40,9 +40,24 @@ public class CounterInfo implements Serializable
     public String counterDescription;
 
     /**
+     * Counter description with Javadoc markup converted to Markdown.
+     */
+    public String counterDescriptionClean;
+
+    /**
      * Whether counter exists in the C media driver.
      */
     public boolean existsInC = true;
+
+    /**
+     * Whether this is a system counter sub-type (SYSTEM_COUNTER_ID_* field).
+     */
+    public boolean isSystemCounter = false;
+
+    /**
+     * Fully-qualified Java field reference, e.g. {@code AeronCounters.SYSTEM_COUNTER_ID_BYTES_SENT}.
+     */
+    public String javaFieldName;
 
     /**
      * Expected name in the C media driver.
