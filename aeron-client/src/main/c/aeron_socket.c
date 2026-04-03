@@ -553,8 +553,6 @@ int aeron_connect(aeron_socket_t fd, struct sockaddr *address, socklen_t address
     {
         char addr_str[AERON_NETUTIL_FORMATTED_MAX_LENGTH];
         aeron_format_source_identity(addr_str, sizeof(addr_str), (struct sockaddr_storage *)address);
-        struct sockaddr_in *a = (struct sockaddr_in *) address;
-        printf("addr: %lu, %d\n", a->sin_addr.s_addr, a->sin_port);
         AERON_SET_ERR_WIN(WSAGetLastError(), "failed to connect to address: %s", addr_str);
 
         return -1;
