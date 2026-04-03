@@ -501,7 +501,7 @@ bool aeron_archive_control_session_is_done(const aeron_archive_control_session_t
     return AERON_ARCHIVE_CONTROL_SESSION_STATE_DONE == session->state;
 }
 
-int64_t aeron_archive_control_session_id(const aeron_archive_control_session_t *session)
+int64_t aeron_archive_control_session_get_id(const aeron_archive_control_session_t *session)
 {
     return session->control_session_id;
 }

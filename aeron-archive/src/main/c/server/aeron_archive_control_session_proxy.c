@@ -63,7 +63,7 @@ int64_t aeron_archive_control_session_proxy_session_id(
         return -1;
     }
 
-    return aeron_archive_control_session_id(proxy->control_session);
+    return aeron_archive_control_session_get_id(proxy->control_session);
 }
 
 bool aeron_archive_control_session_proxy_challenge(
@@ -73,7 +73,7 @@ bool aeron_archive_control_session_proxy_challenge(
 {
     aeron_archive_control_session_t *session = proxy->control_session;
 
-    const int64_t session_id = aeron_archive_control_session_id(session);
+    const int64_t session_id = aeron_archive_control_session_get_id(session);
     aeron_exclusive_publication_t *publication = aeron_archive_control_session_publication(session);
 
     if (aeron_archive_control_response_proxy_send_challenge(
@@ -98,7 +98,7 @@ bool aeron_archive_control_session_proxy_authenticate(
 {
     aeron_archive_control_session_t *session = proxy->control_session;
 
-    const int64_t session_id = aeron_archive_control_session_id(session);
+    const int64_t session_id = aeron_archive_control_session_get_id(session);
     aeron_exclusive_publication_t *publication = aeron_archive_control_session_publication(session);
 
     if (aeron_archive_control_response_proxy_send_response(

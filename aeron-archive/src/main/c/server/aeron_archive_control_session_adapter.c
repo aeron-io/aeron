@@ -183,7 +183,7 @@ void aeron_archive_control_session_adapter_add_session(
         return;
     }
 
-    info->control_session_id = aeron_archive_control_session_id(session);
+    info->control_session_id = aeron_archive_control_session_get_id(session);
     info->control_session = session;
     info->image = image;
     info->next = adapter->session_map_head;
