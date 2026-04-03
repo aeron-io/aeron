@@ -25,13 +25,17 @@
 #if defined(_MSC_VER)
 #include <direct.h>
 #include <io.h>
+#include <windows.h>
 typedef long long ssize_t;
 #define read _read
 #define open _open
 #define close _close
 static char *mkdtemp(char *tmpl)
 {
-    if (_mktemp_s(tmpl, strlen(tmpl) + 1) != 0) return NULL;
+    char tmp_path[MAX_PATH];
+    if (GetTempPathA(MAX_PATH, tmp_path) == 0) return NULL;
+    if (GetTempFileNameA(tmp_path, "aer", 0, tmpl) == 0) return NULL;
+    DeleteFileA(tmpl);
     if (_mkdir(tmpl) != 0) return NULL;
     return tmpl;
 }
@@ -63,7 +67,7 @@ static const int32_t SEGMENT_LENGTH = TERM_LENGTH * 4;                       /* 
 
 static std::string make_temp_dir()
 {
-    char tmpl[] = "/tmp/aeron_recording_test_XXXXXX";
+    char tmpl[260] = "/tmp/aeron_recording_test_XXXXXX";
     char *dir = mkdtemp(tmpl);
     EXPECT_NE(nullptr, dir);
     return std::string(dir);
@@ -71,7 +75,11 @@ static std::string make_temp_dir()
 
 static void remove_temp_dir(const std::string &dir)
 {
+#ifdef _MSC_VER
+    std::string cmd = "rmdir /s /q \"" + dir + "\"";
+#else
     std::string cmd = "rm -rf \"" + dir + "\"";
+#endif
     if (std::system(cmd.c_str())) {}
 }
 
