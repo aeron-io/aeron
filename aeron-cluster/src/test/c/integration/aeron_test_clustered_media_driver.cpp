@@ -16,7 +16,6 @@
 
 #include "aeron_test_clustered_media_driver.h"
 
-#include <cstdlib>
 #include <cstring>
 #include <cstdio>
 #include <thread>
@@ -55,9 +54,21 @@ struct TestClusteredMediaDriver::Impl
 
     int launch_archiving_media_driver()
     {
-        if (std::system(("mkdir -p " + aeron_dir).c_str())) {}
-        if (std::system(("mkdir -p " + archive_dir).c_str())) {}
-        if (std::system(("mkdir -p " + cluster_dir).c_str())) {}
+        if (aeron_mkdir_recursive(aeron_dir.c_str(), S_IRWXU | S_IRWXG | S_IRWXO) < 0)
+        {
+            stream << "[CMD " << node_index << "] ERROR: mkdir aeron_dir failed: " << aeron_errmsg() << std::endl;
+            return -1;
+        }
+        if (aeron_mkdir_recursive(archive_dir.c_str(), S_IRWXU | S_IRWXG | S_IRWXO) < 0)
+        {
+            stream << "[CMD " << node_index << "] ERROR: mkdir archive_dir failed: " << aeron_errmsg() << std::endl;
+            return -1;
+        }
+        if (aeron_mkdir_recursive(cluster_dir.c_str(), S_IRWXU | S_IRWXG | S_IRWXO) < 0)
+        {
+            stream << "[CMD " << node_index << "] ERROR: mkdir cluster_dir failed: " << aeron_errmsg() << std::endl;
+            return -1;
+        }
 
         stream << "[CMD " << node_index << "] Launching ArchivingMediaDriver..." << std::endl;
 
@@ -213,9 +224,9 @@ struct TestClusteredMediaDriver::Impl
             archiving_driver = nullptr;
         }
 
-        if (std::system(("rm -rf " + aeron_dir).c_str())) {}
-        if (std::system(("rm -rf " + archive_dir).c_str())) {}
-        if (std::system(("rm -rf " + cluster_dir).c_str())) {}
+        (void)aeron_delete_directory(aeron_dir.c_str());
+        (void)aeron_delete_directory(archive_dir.c_str());
+        (void)aeron_delete_directory(cluster_dir.c_str());
     }
 
     bool is_leader() const
