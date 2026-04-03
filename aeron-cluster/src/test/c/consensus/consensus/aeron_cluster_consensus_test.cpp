@@ -24,6 +24,7 @@
 
 extern "C"
 {
+#include "aeron_common.h"
 #include "util/aeron_fileutil.h"
 }
 
