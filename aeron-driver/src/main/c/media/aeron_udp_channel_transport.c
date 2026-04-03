@@ -94,6 +94,7 @@ int aeron_udp_channel_transport_init(
     struct sockaddr_in6 *in6 = (struct sockaddr_in6 *)bind_addr;
 
     transport->fd = -1;
+    transport->recv_fd = -1;
     transport->bindings_clientd = NULL;
     transport->timestamp_flags = AERON_UDP_CHANNEL_TRANSPORT_MEDIA_RCV_TIMESTAMP_NONE;
     transport->error_log = context->error_log;
