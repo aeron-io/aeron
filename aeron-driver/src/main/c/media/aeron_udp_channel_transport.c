@@ -606,9 +606,12 @@ static int aeron_udp_channel_transport_sendv(
         }
         else
         {
-            char addr[AERON_NETUTIL_FORMATTED_MAX_LENGTH];
-            aeron_format_source_identity(addr, sizeof(addr), address);
-            AERON_SET_ERR(errno, "%s: address=%s (protocol_family=%i)", "failed to sendmmsg", addr, address->ss_family);
+            // If the transport is connected, then connected_address will not be NULL and address is NULL.
+            // If the transport is not connected, then connected_address will be NULL and address is not NULL.
+            struct sockaddr_storage *err_addr = address != NULL ? address : transport->connected_address;
+            char addr_str[AERON_NETUTIL_FORMATTED_MAX_LENGTH];
+            aeron_format_source_identity(addr_str, sizeof(addr_str), err_addr);
+            AERON_SET_ERR(errno, "%s: address=%s (protocol_family=%i)", "failed to sendmmsg", addr_str, err_addr->ss_family);
             return -1;
         }
     }
