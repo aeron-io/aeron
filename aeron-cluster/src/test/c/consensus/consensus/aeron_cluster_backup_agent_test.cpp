@@ -41,7 +41,11 @@ protected:
     void SetUp() override
     {
         m_dir = "/tmp/aeron_cluster_backup_agent_test_" + std::to_string(getpid());
+#ifdef _MSC_VER
+        if (std::system(("rmdir /s /q \"" + m_dir + "\" 2>nul & mkdir \"" + m_dir + "\"").c_str())) {}
+#else
         if (std::system(("rm -rf " + m_dir + " && mkdir -p " + m_dir).c_str())) {}
+#endif
 
 
         memset(&m_ctx, 0, sizeof(m_ctx));
@@ -74,7 +78,11 @@ protected:
             aeron_cluster_backup_agent_close(m_agent);
             m_agent = nullptr;
         }
+#ifdef _MSC_VER
+        if (std::system(("rmdir /s /q \"" + m_dir + "\"").c_str())) {}
+#else
         if (std::system(("rm -rf " + m_dir).c_str())) {}
+#endif
 
     }
 
@@ -275,13 +283,21 @@ TEST_F(ClusterBackupAgentTest, singleEndpointParsedCorrectly)
             sizeof(ctx2.cluster_consensus_endpoints) - 1);
 
     std::string dir2 = m_dir + "_single";
+#ifdef _MSC_VER
+    if (std::system(("mkdir \"" + dir2 + "\"").c_str())) {}
+#else
     if (std::system(("mkdir -p " + dir2).c_str())) {}
+#endif
 
     aeron_cluster_backup_agent_t *agent2 = nullptr;
     ASSERT_EQ(0, aeron_cluster_backup_agent_create(&agent2, &ctx2, dir2.c_str()));
     EXPECT_EQ(1, agent2->parsed_endpoints_count);
     aeron_cluster_backup_agent_close(agent2);
+#ifdef _MSC_VER
+    if (std::system(("rmdir /s /q \"" + dir2 + "\"").c_str())) {}
+#else
     if (std::system(("rm -rf " + dir2).c_str())) {}
+#endif
 }
 
 TEST_F(ClusterBackupAgentTest, emptyEndpointsYieldsZeroParsed)
@@ -296,13 +312,21 @@ TEST_F(ClusterBackupAgentTest, emptyEndpointsYieldsZeroParsed)
     ctx2.cluster_consensus_endpoints[0] = '\0';
 
     std::string dir2 = m_dir + "_empty";
+#ifdef _MSC_VER
+    if (std::system(("mkdir \"" + dir2 + "\"").c_str())) {}
+#else
     if (std::system(("mkdir -p " + dir2).c_str())) {}
+#endif
 
     aeron_cluster_backup_agent_t *agent2 = nullptr;
     ASSERT_EQ(0, aeron_cluster_backup_agent_create(&agent2, &ctx2, dir2.c_str()));
     EXPECT_EQ(0, agent2->parsed_endpoints_count);
     aeron_cluster_backup_agent_close(agent2);
+#ifdef _MSC_VER
+    if (std::system(("rmdir /s /q \"" + dir2 + "\"").c_str())) {}
+#else
     if (std::system(("rm -rf " + dir2).c_str())) {}
+#endif
 }
 
 TEST_F(ClusterBackupAgentTest, logSourceAcceptableDefaultIsAny)

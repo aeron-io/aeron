@@ -45,11 +45,19 @@ protected:
     void SetUp() override
     {
         m_dir = "/tmp/aeron_cluster_test_recording_log_" + std::to_string(getpid());
+#ifdef _MSC_VER
+        if (std::system(("rmdir /s /q \"" + m_dir + "\" 2>nul & mkdir \"" + m_dir + "\"").c_str())) {}
+#else
         if (std::system(("rm -rf " + m_dir + " && mkdir -p " + m_dir).c_str())) {}
+#endif
     }
     void TearDown() override
     {
+#ifdef _MSC_VER
+        if (std::system(("rmdir /s /q \"" + m_dir + "\"").c_str())) {}
+#else
         if (std::system(("rm -rf " + m_dir).c_str())) {}
+#endif
     }
 
     static void append_term(aeron_cluster_recording_log_t *log,
@@ -3083,13 +3091,21 @@ protected:
     void SetUp() override
     {
         m_dir = "/tmp/aeron_cluster_recovery_plan_test_" + std::to_string(getpid());
+#ifdef _MSC_VER
+        if (std::system(("rmdir /s /q \"" + m_dir + "\" 2>nul & mkdir \"" + m_dir + "\"").c_str())) {}
+#else
         if (std::system(("rm -rf " + m_dir + " && mkdir -p " + m_dir).c_str())) {}
+#endif
         ASSERT_EQ(0, aeron_cluster_recording_log_open(&m_log, m_dir.c_str(), true));
     }
     void TearDown() override
     {
         aeron_cluster_recording_log_close(m_log);
+#ifdef _MSC_VER
+        if (std::system(("rmdir /s /q \"" + m_dir + "\"").c_str())) {}
+#else
         if (std::system(("rm -rf " + m_dir).c_str())) {}
+#endif
     }
 
     std::string m_dir;
@@ -3191,7 +3207,11 @@ protected:
     void SetUp() override
     {
         m_log_dir = "/tmp/aeron_cluster_ssn_test_" + std::to_string(getpid());
+#ifdef _MSC_VER
+        if (std::system(("rmdir /s /q \"" + m_log_dir + "\" 2>nul & mkdir \"" + m_log_dir + "\"").c_str())) {}
+#else
         if (std::system(("rm -rf " + m_log_dir + " && mkdir -p " + m_log_dir).c_str())) {}
+#endif
         ASSERT_EQ(0, aeron_cluster_recording_log_open(&m_log, m_log_dir.c_str(), true));
         ASSERT_EQ(0, aeron_cluster_session_manager_create(&m_manager, 1, nullptr));
         m_manager->recording_log = m_log;
@@ -3202,7 +3222,11 @@ protected:
         m_manager->recording_log = nullptr;  /* log is closed separately */
         aeron_cluster_session_manager_close(m_manager);
         aeron_cluster_recording_log_close(m_log);
+#ifdef _MSC_VER
+        if (std::system(("rmdir /s /q \"" + m_log_dir + "\"").c_str())) {}
+#else
         if (std::system(("rm -rf " + m_log_dir).c_str())) {}
+#endif
     }
 
     /* Enqueue one batch with a single entry at the given logPosition */

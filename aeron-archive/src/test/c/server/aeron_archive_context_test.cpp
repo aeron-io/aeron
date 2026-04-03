@@ -23,6 +23,7 @@
 #include <string>
 #include <sys/stat.h>
 #if defined(_MSC_VER)
+#include <windows.h>
 #include <direct.h>
 #ifndef PATH_MAX
 #define PATH_MAX 4096
@@ -34,7 +35,10 @@
 #endif
 static char *mkdtemp(char *tmpl)
 {
-    if (_mktemp_s(tmpl, strlen(tmpl) + 1) != 0) return NULL;
+    char tmp_path[MAX_PATH];
+    if (GetTempPathA(MAX_PATH, tmp_path) == 0) return NULL;
+    if (GetTempFileNameA(tmp_path, "aer", 0, tmpl) == 0) return NULL;
+    DeleteFileA(tmpl);
     if (_mkdir(tmpl) != 0) return NULL;
     return tmpl;
 }
@@ -276,7 +280,11 @@ static std::string make_temp_dir(const char *prefix)
 
 static void remove_temp_dir(const std::string &dir)
 {
+#ifdef _MSC_VER
+    std::string cmd = "rmdir /s /q \"" + dir + "\"";
+#else
     std::string cmd = "rm -rf \"" + dir + "\"";
+#endif
     if (std::system(cmd.c_str())) {}
 }
 

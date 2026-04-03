@@ -24,12 +24,16 @@
 #include <fstream>
 
 #ifdef _MSC_VER
+#include <windows.h>
 #include <direct.h>
 #include <io.h>
 #define MKDIR(dir) _mkdir(dir)
 static char *mkdtemp(char *tmpl)
 {
-    if (_mktemp_s(tmpl, strlen(tmpl) + 1) != 0) return NULL;
+    char tmp_path[MAX_PATH];
+    if (GetTempPathA(MAX_PATH, tmp_path) == 0) return NULL;
+    if (GetTempFileNameA(tmp_path, "aer", 0, tmpl) == 0) return NULL;
+    DeleteFileA(tmpl);
     if (_mkdir(tmpl) != 0) return NULL;
     return tmpl;
 }
@@ -283,7 +287,7 @@ TEST_F(DeleteSegmentsSessionTest, shouldDeleteSegmentFiles)
     const int64_t correlation_id = 100;
 
     /* Create a temp directory for segment files */
-    char temp_dir[] = "/tmp/aeron_del_seg_test_XXXXXX";
+    char temp_dir[260] = "/tmp/aeron_del_seg_test_XXXXXX";
     ASSERT_NE(nullptr, mkdtemp(temp_dir));
 
     std::string dir(temp_dir);
@@ -344,7 +348,11 @@ TEST_F(DeleteSegmentsSessionTest, shouldDeleteSegmentFiles)
     aeron_archive_delete_segments_session_close(session);
 
     /* Clean up temp directory */
-    std::string rm_cmd = "rm -rf " + dir;
+#ifdef _MSC_VER
+    std::string rm_cmd = "rmdir /s /q \"" + dir + "\"";
+#else
+    std::string rm_cmd = "rm -rf \"" + dir + "\"";
+#endif
     if (std::system(rm_cmd.c_str())) {}
 }
 
