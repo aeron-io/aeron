@@ -15,10 +15,14 @@
  */
 
 #ifdef _MSC_VER
+#ifndef _WINSOCKAPI_
+#define _WINSOCKAPI_
+#endif
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <winsock2.h>
+#include <windows.h>
 #endif
 
 #include <gtest/gtest.h>
@@ -35,7 +39,6 @@
 #ifdef _MSC_VER
 #include <direct.h>
 #include <io.h>
-#include <windows.h>
 static char *mkdtemp(char *tmpl)
 {
     char tmp_path[MAX_PATH];

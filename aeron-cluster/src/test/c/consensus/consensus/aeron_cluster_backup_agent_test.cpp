@@ -14,6 +14,16 @@
  * limitations under the License.
  */
 
+#ifdef _MSC_VER
+#ifndef _WINSOCKAPI_
+#define _WINSOCKAPI_
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
+
 #include <gtest/gtest.h>
 #include <cstring>
 #include <cstdlib>
@@ -21,7 +31,6 @@
 #include <string>
 
 #ifdef _MSC_VER
-#include <windows.h>
 static std::string make_test_dir(const char *prefix)
 {
     char tmp[MAX_PATH];

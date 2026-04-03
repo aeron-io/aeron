@@ -20,6 +20,16 @@
  * Aeron client from the driver's aeron_dir.
  */
 
+#ifdef _MSC_VER
+#ifndef _WINSOCKAPI_
+#define _WINSOCKAPI_
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
+
 #include <gtest/gtest.h>
 #include <cstdlib>
 #include <cstring>
@@ -44,7 +54,6 @@ extern "C"
 #include "../integration/aeron_cluster_server_helper.h"
 
 #ifdef _MSC_VER
-#include <windows.h>
 static std::string make_test_dir(const char *prefix)
 {
     char tmp[MAX_PATH];

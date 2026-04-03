@@ -21,6 +21,16 @@
  * NO shared m_aeron array.
  */
 
+#ifdef _MSC_VER
+#ifndef _WINSOCKAPI_
+#define _WINSOCKAPI_
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
+
 #include <gtest/gtest.h>
 #include <cstdlib>
 #include <string>
@@ -40,7 +50,6 @@ extern "C"
 #include "../integration/aeron_test_cluster_node.h"
 
 #ifdef _MSC_VER
-#include <windows.h>
 static std::string make_test_dir(const char *prefix)
 {
     char tmp[MAX_PATH];
