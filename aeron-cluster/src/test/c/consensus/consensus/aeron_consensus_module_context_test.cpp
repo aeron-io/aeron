@@ -32,6 +32,7 @@
 #include <string>
 
 #ifdef _MSC_VER
+#include <windows.h>
 #include <process.h>
 #include <direct.h>
 #include <sys/stat.h>
@@ -41,6 +42,12 @@
 #define S_ISDIR(m) (((m) & _S_IFMT) == _S_IFDIR)
 #define S_ISLNK(m) (0)
 #define lstat stat
+static std::string make_test_dir(const char *prefix)
+{
+    char tmp[MAX_PATH];
+    GetTempPathA(MAX_PATH, tmp);
+    return std::string(tmp) + prefix + std::to_string(GetCurrentProcessId());
+}
 static int setenv(const char *name, const char *value, int overwrite)
 {
     (void)overwrite;
@@ -49,6 +56,11 @@ static int setenv(const char *name, const char *value, int overwrite)
 static int unsetenv(const char *name)
 {
     return _putenv_s(name, "");
+}
+#else
+static std::string make_test_dir(const char *prefix)
+{
+    return std::string("/tmp/") + prefix + std::to_string(getpid());
 }
 #endif
 
@@ -595,7 +607,7 @@ class MarkFileDirTest : public ::testing::Test
 protected:
     void SetUp() override
     {
-        m_dir = "/tmp/aeron_cm_ctx_markfile_" + std::to_string(getpid());
+        m_dir = make_test_dir("aeron_cm_ctx_markfile_");
 #ifdef _MSC_VER
         if (std::system(("rmdir /s /q \"" + m_dir + "\" 2>nul & mkdir \"" + m_dir + "\"").c_str())) {}
 #else
@@ -830,7 +842,7 @@ class ClusterMarkFileTest : public ::testing::Test
 protected:
     void SetUp() override
     {
-        m_dir = "/tmp/aeron_mark_file_unit_" + std::to_string(getpid());
+        m_dir = make_test_dir("aeron_mark_file_unit_");
 #ifdef _MSC_VER
         if (std::system(("rmdir /s /q \"" + m_dir + "\" 2>nul & mkdir \"" + m_dir + "\"").c_str())) {}
 #else

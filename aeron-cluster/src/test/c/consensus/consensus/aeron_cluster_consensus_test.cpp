@@ -20,6 +20,23 @@
 #include <cstdint>
 #include <algorithm>
 #include <random>
+#include <string>
+
+#ifdef _MSC_VER
+#include <windows.h>
+static std::string make_test_dir(const char *prefix)
+{
+    char tmp[MAX_PATH];
+    GetTempPathA(MAX_PATH, tmp);
+    std::string dir = std::string(tmp) + prefix + std::to_string(GetCurrentProcessId());
+    return dir;
+}
+#else
+static std::string make_test_dir(const char *prefix)
+{
+    return std::string("/tmp/") + prefix + std::to_string(getpid());
+}
+#endif
 
 #include "aeron_cluster_recording_log.h"
 #include "aeron_cluster_member.h"
@@ -44,7 +61,7 @@ class RecordingLogTest : public ::testing::Test
 protected:
     void SetUp() override
     {
-        m_dir = "/tmp/aeron_cluster_test_recording_log_" + std::to_string(getpid());
+        m_dir = make_test_dir("aeron_cluster_test_recording_log_");
 #ifdef _MSC_VER
         if (std::system(("rmdir /s /q \"" + m_dir + "\" 2>nul & mkdir \"" + m_dir + "\"").c_str())) {}
 #else
@@ -3090,7 +3107,7 @@ class RecoveryPlanTest : public ::testing::Test
 protected:
     void SetUp() override
     {
-        m_dir = "/tmp/aeron_cluster_recovery_plan_test_" + std::to_string(getpid());
+        m_dir = make_test_dir("aeron_cluster_recovery_plan_test_");
 #ifdef _MSC_VER
         if (std::system(("rmdir /s /q \"" + m_dir + "\" 2>nul & mkdir \"" + m_dir + "\"").c_str())) {}
 #else
@@ -3206,7 +3223,7 @@ class SessionManagerStandbySnapshotTest : public ::testing::Test
 protected:
     void SetUp() override
     {
-        m_log_dir = "/tmp/aeron_cluster_ssn_test_" + std::to_string(getpid());
+        m_log_dir = make_test_dir("aeron_cluster_ssn_test_");
 #ifdef _MSC_VER
         if (std::system(("rmdir /s /q \"" + m_log_dir + "\" 2>nul & mkdir \"" + m_log_dir + "\"").c_str())) {}
 #else

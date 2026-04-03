@@ -20,6 +20,21 @@
 #include <cstdint>
 #include <string>
 
+#ifdef _MSC_VER
+#include <windows.h>
+static std::string make_test_dir(const char *prefix)
+{
+    char tmp[MAX_PATH];
+    GetTempPathA(MAX_PATH, tmp);
+    return std::string(tmp) + prefix + std::to_string(GetCurrentProcessId());
+}
+#else
+static std::string make_test_dir(const char *prefix)
+{
+    return std::string("/tmp/") + prefix + std::to_string(getpid());
+}
+#endif
+
 #include "aeron_cluster_backup_agent.h"
 #include "aeron_cluster_recording_log.h"
 
@@ -40,7 +55,7 @@ class ClusterBackupAgentTest : public ::testing::Test
 protected:
     void SetUp() override
     {
-        m_dir = "/tmp/aeron_cluster_backup_agent_test_" + std::to_string(getpid());
+        m_dir = make_test_dir("aeron_cluster_backup_agent_test_");
 #ifdef _MSC_VER
         if (std::system(("rmdir /s /q \"" + m_dir + "\" 2>nul & mkdir \"" + m_dir + "\"").c_str())) {}
 #else
