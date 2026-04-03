@@ -46,6 +46,10 @@ public class ConfigInfo implements Serializable
      */
     public String propertyNameDescription;
     /**
+     * Property description with Javadoc markup converted to Markdown.
+     */
+    public String propertyNameDescriptionClean;
+    /**
      * Property field name.
      */
     public String propertyNameFieldName;
@@ -61,6 +65,10 @@ public class ConfigInfo implements Serializable
      * Default description.
      */
     public String defaultDescription;
+    /**
+     * Default description with Javadoc markup converted to Markdown.
+     */
+    public String defaultDescriptionClean;
     /**
      * Default field name.
      */
@@ -105,6 +113,10 @@ public class ConfigInfo implements Serializable
      * Context description.
      */
     public String contextDescription;
+    /**
+     * Context description with Javadoc markup converted to Markdown.
+     */
+    public String contextDescriptionClean;
     /**
      * Is time value.
      */

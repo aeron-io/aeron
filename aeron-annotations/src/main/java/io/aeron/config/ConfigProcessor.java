@@ -173,6 +173,7 @@ public class ConfigProcessor extends Processor
                 configInfo.propertyNameFieldName = element.toString();
                 configInfo.propertyNameClassName = element.getEnclosingElement().toString();
                 configInfo.propertyNameDescription = getDocComment(element);
+                configInfo.propertyNameDescriptionClean = JavadocCleaner.clean(configInfo.propertyNameDescription);
 
                 final Config enclosingConfig = element.getEnclosingElement().getAnnotation(Config.class);
                 final boolean existsInJava = config.existsInJava() &&
@@ -205,6 +206,7 @@ public class ConfigProcessor extends Processor
                 configInfo.defaultFieldName = element.toString();
                 configInfo.defaultClassName = element.getEnclosingElement().toString();
                 configInfo.defaultDescription = getDocComment(element);
+                configInfo.defaultDescriptionClean = JavadocCleaner.clean(configInfo.defaultDescription);
 
                 if (constantValue != null)
                 {
@@ -383,6 +385,7 @@ public class ConfigProcessor extends Processor
 
         configInfo.context = enclosingElementName.substring(packageName.length() + 1) + "." + methodName;
         configInfo.contextDescription = getDocComment(element);
+        configInfo.contextDescriptionClean = JavadocCleaner.clean(configInfo.contextDescription);
 
         return configInfo;
     }
