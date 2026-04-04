@@ -225,6 +225,12 @@ int aeron_archive_recording_writer_write(
         return -1;
     }
 
+    if (writer->segment_fd < 0)
+    {
+        AERON_SET_ERR(EBADF, "%s", "segment file not opened; call aeron_archive_recording_writer_init first");
+        return -1;
+    }
+
     const size_t data_length = is_padding_frame ? AERON_DATA_HEADER_LENGTH : length;
 
     ssize_t total_written = 0;

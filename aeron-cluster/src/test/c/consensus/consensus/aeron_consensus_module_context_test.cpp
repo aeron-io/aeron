@@ -737,6 +737,10 @@ TEST_F(MarkFileDirTest, concludeShouldCreateMarkFileDirViaSystemProperty)
 
 TEST_F(MarkFileDirTest, concludeShouldCreateSymlinkWhenMarkFileDirDiffers)
 {
+#if defined(_MSC_VER)
+    /* aeron_cm_context.c stubs symlink() on MSVC; mark file dir still works without the link */
+    GTEST_SKIP() << "mark-file symlink not created on Windows (symlink unavailable in cm context)";
+#else
     std::string sub_dir = m_dir + "/markfile_sub2";
 
     aeron_cm_context_t *ctx = nullptr;
@@ -760,6 +764,7 @@ TEST_F(MarkFileDirTest, concludeShouldCreateSymlinkWhenMarkFileDirDiffers)
     EXPECT_TRUE(S_ISLNK(lst.st_mode));
 
     aeron_cm_context_close(ctx);
+#endif
 }
 
 /* ============================================================
