@@ -23,22 +23,44 @@
 #include <windows.h>
 #include <intrin.h>
 
+#if defined(AERON_CPU_ARM)
+#define AERON_MEMORY_BARRIER() MemoryBarrier()
+#else
+#define AERON_MEMORY_BARRIER() _ReadWriteBarrier()
+#endif
+
 #define AERON_GET_ACQUIRE(dst, src) \
 do \
 { \
     dst = src; \
-    _ReadWriteBarrier(); \
+    AERON_MEMORY_BARRIER(); \
 } \
 while (false) \
 
 #define AERON_SET_RELEASE(dst, src) \
 do \
 { \
-    _ReadWriteBarrier(); \
+    AERON_MEMORY_BARRIER(); \
     dst = src; \
 } \
 while (false) \
 
+#if defined(AERON_CPU_ARM)
+#define AERON_GET_AND_ADD_INT64(original, current, value) \
+do \
+{ \
+    original = _InterlockedAdd64((long long volatile *)&current, (long long)value) - value; \
+} \
+while (false) \
+
+#define AERON_GET_AND_ADD_INT32(original, current, value) \
+do \
+{ \
+    original = _InterlockedAdd((long volatile *)&current, (long)value) - value; \
+} \
+while (false) \
+
+#else
 #define AERON_GET_AND_ADD_INT64(original, current, value) \
 do \
 { \
@@ -52,6 +74,8 @@ do \
     original = _InlineInterlockedAdd((long volatile *)&current, (long)value) - value; \
 } \
 while (false) \
+
+#endif
 
 inline bool aeron_cas_int64(volatile int64_t *dst, int64_t expected, int64_t desired)
 {
@@ -78,12 +102,12 @@ inline bool aeron_cas_int32(volatile int32_t *dst, int32_t expected, int32_t des
 
 inline void aeron_acquire(void)
 {
-    _ReadWriteBarrier();
+    AERON_MEMORY_BARRIER();
 }
 
 inline void aeron_release(void)
 {
-    _ReadWriteBarrier();
+    AERON_MEMORY_BARRIER();
 }
 
 #define AERON_DECL_ALIGNED(declaration, amt) __declspec(align(amt))  declaration

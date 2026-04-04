@@ -26,6 +26,8 @@
 
 #if defined(_M_X64)
 #define AERON_CPU_X64 1
+#elif defined(_M_ARM64)
+#define AERON_CPU_ARM 1
 #else
 #error Unsupported CPU!
 #endif

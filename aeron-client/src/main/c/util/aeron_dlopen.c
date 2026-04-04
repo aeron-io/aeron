@@ -263,7 +263,7 @@ int aeron_dl_load_libs_delete(aeron_dl_loaded_libs_state_t *state)
 
 #if defined(AERON_COMPILER_GCC)
             dlclose(lib->handle);
-#elif defined(AERON_COMPILER_MSVC) && defined(AERON_CPU_X64)
+#elif defined(AERON_COMPILER_MSVC)
             FreeLibrary(lib->handle);
 #else
 #error Unsupported platform!

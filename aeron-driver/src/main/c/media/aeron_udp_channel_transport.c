@@ -94,6 +94,7 @@ int aeron_udp_channel_transport_init(
     struct sockaddr_in6 *in6 = (struct sockaddr_in6 *)bind_addr;
 
     transport->fd = -1;
+    transport->recv_fd = -1;
     transport->bindings_clientd = NULL;
     transport->timestamp_flags = AERON_UDP_CHANNEL_TRANSPORT_MEDIA_RCV_TIMESTAMP_NONE;
     transport->error_log = context->error_log;
@@ -317,18 +318,7 @@ int aeron_udp_channel_transport_init(
     return 0;
 
 error:
-    if (-1 != transport->recv_fd && transport->recv_fd != transport->fd)
-    {
-        aeron_close_socket(transport->recv_fd);
-    }
-
-    if (-1 != transport->fd)
-    {
-        aeron_close_socket(transport->fd);
-    }
-
-    transport->fd = -1;
-    transport->recv_fd = -1;
+    aeron_udp_channel_transport_close(transport);
     return -1;
 }
 
@@ -352,14 +342,17 @@ int aeron_udp_channel_transport_reconnect(
 
 int aeron_udp_channel_transport_close(aeron_udp_channel_transport_t *transport)
 {
+    if (transport->recv_fd != -1 && transport->recv_fd != transport->fd)
+    {
+        aeron_close_socket(transport->recv_fd);
+    }
+
     if (transport->fd != -1)
     {
         aeron_close_socket(transport->fd);
     }
-    if (transport->recv_fd != transport->fd)
-    {
-        aeron_close_socket(transport->recv_fd);
-    }
+    transport->recv_fd = -1;
+    transport->fd = -1;
 
     return 0;
 }
