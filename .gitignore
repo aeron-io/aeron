@@ -38,6 +38,9 @@ cmake-build-release/
 cmake-build-debug-*/
 cmake-build-release-*/
 
+# CMake/CTest in-tree build output
+Testing/Temporary/
+
 # cpp build linux
 cppbuild/CMakeCache.txt
 cppbuild/CMakeFiles/
