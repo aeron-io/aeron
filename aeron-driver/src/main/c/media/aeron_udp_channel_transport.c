@@ -407,6 +407,10 @@ static inline int aeron_udp_channel_transport_recvmsg(
         {
             media_rcv_timestamp = (struct timespec *)CMSG_DATA(cmsg);
         }
+        else
+        {
+            media_rcv_timestamp = NULL;
+        }
 #endif
 
         msgvec[i].msg_len = (unsigned int)result;
@@ -492,6 +496,10 @@ int aeron_udp_channel_transport_recvmmsg(
                     CMSG_LEN(sizeof(struct timespec)) == cmsg->cmsg_len)
                 {
                     media_rcv_timestamp = (struct timespec *)CMSG_DATA(cmsg);
+                }
+                else
+                {
+                    media_rcv_timestamp = NULL;
                 }
 #endif
 
