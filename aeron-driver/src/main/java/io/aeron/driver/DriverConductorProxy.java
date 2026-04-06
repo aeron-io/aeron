@@ -302,6 +302,11 @@ public final class DriverConductorProxy
         }
     }
 
+    void reResolveBootstrapNeighbor(final String bootstrapNeighbor)
+    {
+        driverConductor.onReResolveBootstrapNeighbor(bootstrapNeighbor);
+    }
+
     private void offer(final Runnable cmd)
     {
         if (!commandQueue.offer(cmd))

@@ -64,7 +64,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 @SlowTest
 @ExtendWith(InterruptingTestCallback.class)
-class DriverNameResolverTest
+class DriverNameResolverSystemTest
 {
     private static final SleepingMillisIdleStrategy SLEEP_50_MS = new SleepingMillisIdleStrategy(50);
     private final String baseDir = CommonContext.generateRandomDirName();
