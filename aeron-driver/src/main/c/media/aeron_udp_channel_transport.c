@@ -376,7 +376,7 @@ static inline int aeron_udp_channel_transport_recvmsg(
         for (int i = 0; i < (int)vlen; i++)
         {
             msgvec[i].msg_hdr.msg_control = (void *)buf[i];
-            msgvec[i].msg_hdr.msg_controllen = CMSG_LEN(sizeof(buf[i]));
+            msgvec[i].msg_hdr.msg_controllen = sizeof(buf[i]);
         }
     }
 #endif
@@ -450,7 +450,7 @@ int aeron_udp_channel_transport_recvmmsg(
             for (int i = 0; i < (int)vlen; i++)
             {
                 msgvec[i].msg_hdr.msg_control = (void *)buf[i];
-                msgvec[i].msg_hdr.msg_controllen = CMSG_LEN(sizeof(buf[i]));
+                msgvec[i].msg_hdr.msg_controllen = sizeof(buf[i]);
             }
         }
 #endif
