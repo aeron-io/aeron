@@ -293,7 +293,7 @@ int aeron_receive_channel_endpoint_send_sm(
     {
         if (bytes_sent >= 0)
         {
-            aeron_counter_increment(endpoint->short_sends_counter);
+            aeron_counter_increment_opaque(endpoint->short_sends_counter);
         }
     }
 
@@ -332,7 +332,7 @@ int aeron_receive_channel_endpoint_send_nak(
     {
         if (bytes_sent >= 0)
         {
-            aeron_counter_increment(endpoint->short_sends_counter);
+            aeron_counter_increment_opaque(endpoint->short_sends_counter);
         }
     }
 
@@ -385,7 +385,7 @@ int aeron_receive_channel_endpoint_send_rttm(
     {
         if (bytes_sent >= 0)
         {
-            aeron_counter_increment(endpoint->short_sends_counter);
+            aeron_counter_increment_opaque(endpoint->short_sends_counter);
         }
     }
 
@@ -419,7 +419,7 @@ int aeron_receive_channel_endpoint_send_response_setup(
     {
         if (bytes_sent >= 0)
         {
-            aeron_counter_increment(endpoint->short_sends_counter);
+            aeron_counter_increment_opaque(endpoint->short_sends_counter);
         }
     }
 
@@ -460,12 +460,12 @@ int aeron_receiver_channel_endpoint_send_error_frame(
     {
         if (bytes_sent >= 0)
         {
-            aeron_counter_increment(channel_endpoint->short_sends_counter);
+            aeron_counter_increment_opaque(channel_endpoint->short_sends_counter);
         }
     }
     else
     {
-        aeron_counter_increment(channel_endpoint->errors_frames_sent_counter);
+        aeron_counter_increment_opaque(channel_endpoint->errors_frames_sent_counter);
     }
 
     return bytes_sent;
@@ -489,7 +489,7 @@ void aeron_receive_channel_endpoint_dispatch(
 
     if ((length < sizeof(aeron_frame_header_t)) || (frame_header->version != AERON_FRAME_HEADER_VERSION))
     {
-        aeron_counter_increment(receiver->invalid_frames_counter);
+        aeron_counter_increment_opaque(receiver->invalid_frames_counter);
         return;
     }
 
@@ -508,7 +508,7 @@ void aeron_receive_channel_endpoint_dispatch(
             }
             else
             {
-                aeron_counter_increment(receiver->invalid_frames_counter);
+                aeron_counter_increment_opaque(receiver->invalid_frames_counter);
             }
             break;
 
@@ -523,7 +523,7 @@ void aeron_receive_channel_endpoint_dispatch(
             }
             else
             {
-                aeron_counter_increment(receiver->invalid_frames_counter);
+                aeron_counter_increment_opaque(receiver->invalid_frames_counter);
             }
             break;
 
@@ -538,7 +538,7 @@ void aeron_receive_channel_endpoint_dispatch(
             }
             else
             {
-                aeron_counter_increment(receiver->invalid_frames_counter);
+                aeron_counter_increment_opaque(receiver->invalid_frames_counter);
             }
             break;
 

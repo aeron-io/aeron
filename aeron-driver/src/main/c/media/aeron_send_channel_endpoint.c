@@ -420,7 +420,7 @@ void aeron_send_channel_endpoint_dispatch(
 
     if (!aeron_is_frame_valid(frame_header, length))
     {
-        aeron_counter_increment(sender->invalid_frames_counter);
+        aeron_counter_increment_opaque(sender->invalid_frames_counter);
         return;
     }
 
@@ -434,7 +434,7 @@ void aeron_send_channel_endpoint_dispatch(
             }
             else
             {
-                aeron_counter_increment(sender->invalid_frames_counter);
+                aeron_counter_increment_opaque(sender->invalid_frames_counter);
             }
             break;
 
@@ -446,7 +446,7 @@ void aeron_send_channel_endpoint_dispatch(
             }
             else
             {
-                aeron_counter_increment(sender->invalid_frames_counter);
+                aeron_counter_increment_opaque(sender->invalid_frames_counter);
             }
             break;
 
@@ -458,7 +458,7 @@ void aeron_send_channel_endpoint_dispatch(
             }
             else
             {
-                aeron_counter_increment(sender->invalid_frames_counter);
+                aeron_counter_increment_opaque(sender->invalid_frames_counter);
             }
             break;
 
@@ -469,7 +469,7 @@ void aeron_send_channel_endpoint_dispatch(
             }
             else
             {
-                aeron_counter_increment(sender->invalid_frames_counter);
+                aeron_counter_increment_opaque(sender->invalid_frames_counter);
             }
             break;
 
@@ -480,7 +480,7 @@ void aeron_send_channel_endpoint_dispatch(
             }
             else
             {
-                aeron_counter_increment(sender->invalid_frames_counter);
+                aeron_counter_increment_opaque(sender->invalid_frames_counter);
             }
             break;
 
@@ -548,7 +548,7 @@ int aeron_send_channel_endpoint_on_status_message(
     if (!(sm_header->frame_header.flags & AERON_STATUS_MESSAGE_HEADER_SEND_SETUP_FLAG) &&
         NULL != publication && !aeron_network_publication_is_valid_status_message(publication, buffer))
     {
-        aeron_counter_increment_release(sender->status_messages_rejected_counter);
+        aeron_counter_increment_opaque(sender->status_messages_rejected_counter);
         return 0;
     }
 
