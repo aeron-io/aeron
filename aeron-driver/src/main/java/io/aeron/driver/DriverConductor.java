@@ -1079,83 +1079,42 @@ public final class DriverConductor implements Agent
         validateDestinationUri(channelUri, destinationChannel);
         validateSendDestinationUri(channelUri, destinationChannel);
 
-        SendChannelEndpoint sendChannelEndpoint = null;
+        final SendChannelEndpoint sendChannelEndpoint = findExistingManualSendChannelEndpoint(registrationId);
 
-        for (int i = 0, size = networkPublications.size(); i < size; i++)
-        {
-            final NetworkPublication publication = networkPublications.get(i);
-
-            if (registrationId == publication.registrationId())
+        executeAsyncClientTask(
+            correlationId,
+            () -> UdpChannel.destinationAddress(channelUri, nameResolver),
+            (asyncResult) ->
             {
-                sendChannelEndpoint = publication.channelEndpoint();
-                break;
+                final InetSocketAddress dstAddress = asyncResult.get();
+                senderProxy.addDestination(sendChannelEndpoint, channelUri, dstAddress, correlationId);
+                clientProxy.operationSucceeded(correlationId);
             }
-        }
-
-        if (null == sendChannelEndpoint)
-        {
-            throw new ControlProtocolException(UNKNOWN_PUBLICATION, "unknown publication: " + registrationId);
-        }
-
-        sendChannelEndpoint.validateAllowsManualControl();
-
-        final InetSocketAddress dstAddress = UdpChannel.destinationAddress(channelUri, nameResolver);
-        senderProxy.addDestination(sendChannelEndpoint, channelUri, dstAddress, correlationId);
-        clientProxy.operationSucceeded(correlationId);
+        );
     }
 
     void onRemoveSendDestination(final long registrationId, final String destinationChannel, final long correlationId)
     {
-        SendChannelEndpoint sendChannelEndpoint = null;
-
-        for (int i = 0, size = networkPublications.size(); i < size; i++)
-        {
-            final NetworkPublication publication = networkPublications.get(i);
-
-            if (registrationId == publication.registrationId())
-            {
-                sendChannelEndpoint = publication.channelEndpoint();
-                break;
-            }
-        }
-
-        if (null == sendChannelEndpoint)
-        {
-            throw new ControlProtocolException(UNKNOWN_PUBLICATION, "unknown publication: " + registrationId);
-        }
-
-        sendChannelEndpoint.validateAllowsManualControl();
-
         final ChannelUri channelUri = parseUri(destinationChannel);
-        final InetSocketAddress dstAddress = UdpChannel.destinationAddress(channelUri, nameResolver);
-        senderProxy.removeDestination(sendChannelEndpoint, channelUri, dstAddress);
-        clientProxy.operationSucceeded(correlationId);
+        final SendChannelEndpoint sendChannelEndpoint = findExistingManualSendChannelEndpoint(registrationId);
+
+        executeAsyncClientTask(
+            correlationId,
+            () -> UdpChannel.destinationAddress(channelUri, nameResolver),
+            (asyncResult) ->
+            {
+                final InetSocketAddress dstAddress = asyncResult.get();
+                senderProxy.removeDestination(sendChannelEndpoint, channelUri, dstAddress);
+                clientProxy.operationSucceeded(correlationId);
+            }
+        );
     }
 
     void onRemoveSendDestination(
         final long publicationRegistrationId, final long destinationRegistrationId, final long correlationId)
     {
-        SendChannelEndpoint sendChannelEndpoint = null;
-
-        for (int i = 0, size = networkPublications.size(); i < size; i++)
-        {
-            final NetworkPublication publication = networkPublications.get(i);
-
-            if (publicationRegistrationId == publication.registrationId())
-            {
-                sendChannelEndpoint = publication.channelEndpoint();
-                break;
-            }
-        }
-
-        if (null == sendChannelEndpoint)
-        {
-            throw new ControlProtocolException(
-                UNKNOWN_PUBLICATION, "unknown publication: " + publicationRegistrationId);
-        }
-
-        sendChannelEndpoint.validateAllowsManualControl();
-
+        final SendChannelEndpoint sendChannelEndpoint =
+            findExistingManualSendChannelEndpoint(publicationRegistrationId);
         senderProxy.removeDestination(sendChannelEndpoint, destinationRegistrationId);
         clientProxy.operationSucceeded(correlationId);
     }
@@ -1800,10 +1759,10 @@ public final class DriverConductor implements Agent
         return subscriberPositions;
     }
 
-    private void executeAsyncClientTask(
+    private <T> void executeAsyncClientTask(
         final long correlationId,
-        final Supplier<UdpChannel> asyncTask,
-        final Consumer<Supplier<UdpChannel>> command)
+        final Supplier<T> asyncTask,
+        final Consumer<Supplier<T>> command)
     {
         if (asyncExecutionDisabled)
         {
@@ -1814,7 +1773,7 @@ public final class DriverConductor implements Agent
             asyncClientCommandInFlight = true;
             asyncTaskExecutor.execute(() ->
             {
-                final AsyncResult<UdpChannel> asyncResult = AsyncResult.of(asyncTask);
+                final AsyncResult<T> asyncResult = AsyncResult.of(asyncTask);
                 addToCommandQueue(() ->
                 {
                     try
@@ -2365,6 +2324,31 @@ public final class DriverConductor implements Agent
                     " existingChannel=" + channelEndpoint.originalUriString() + " channel=" +
                     udpChannel.originalUriString());
         }
+    }
+
+    private SendChannelEndpoint findExistingManualSendChannelEndpoint(final long registrationId)
+    {
+        SendChannelEndpoint sendChannelEndpoint = null;
+
+        for (int i = 0, size = networkPublications.size(); i < size; i++)
+        {
+            final NetworkPublication publication = networkPublications.get(i);
+
+            if (registrationId == publication.registrationId())
+            {
+                sendChannelEndpoint = publication.channelEndpoint();
+                break;
+            }
+        }
+
+        if (null == sendChannelEndpoint)
+        {
+            throw new ControlProtocolException(UNKNOWN_PUBLICATION, "unknown publication: " + registrationId);
+        }
+
+        sendChannelEndpoint.validateAllowsManualControl();
+
+        return sendChannelEndpoint;
     }
 
     private SendChannelEndpoint findExistingSendChannelEndpoint(final UdpChannel udpChannel)
