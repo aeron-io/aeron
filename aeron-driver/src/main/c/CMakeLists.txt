@@ -272,8 +272,7 @@ set(C_CLIENT_HEADERS
     ${AERON_C_CLIENT_SOURCE_PATH}/aeron_windows.h
     ${AERON_C_CLIENT_SOURCE_PATH}/aeronc.h)
 
-SET(SOURCE
-    ${C_CLIENT_SOURCE}
+SET(DRIVER_ONLY_SOURCE
     agent/aeron_driver_agent.c
     concurrent/aeron_logbuffer_unblocker.c
     media/aeron_receive_channel_endpoint.c
@@ -315,6 +314,10 @@ SET(SOURCE
     aeron_retransmit_handler.c
     aeron_system_counters.c
     aeron_termination_validator.c)
+
+SET(SOURCE
+    ${C_CLIENT_SOURCE}
+    ${DRIVER_ONLY_SOURCE})
 
 SET(HEADERS
     ${C_CLIENT_HEADERS}
@@ -362,7 +365,7 @@ SET(HEADERS
     aeron_driver_version.h
     aeronmd.h)
 
-add_library(aeron_driver SHARED ${SOURCE} ${HEADERS})
+add_library(aeron_driver SHARED ${DRIVER_ONLY_SOURCE} ${HEADERS})
 add_library(aeron::aeron_driver ALIAS aeron_driver)
 target_include_directories(aeron_driver PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR};${AERON_C_CLIENT_SOURCE_PATH}>"
@@ -408,6 +411,7 @@ endif ()
 
 target_link_libraries(
     aeron_driver
+    aeron
     ${CMAKE_DL_LIBS}
     ${AERON_LIB_BSD_LIBS}
     ${AERON_LIB_UUID_LIBS}

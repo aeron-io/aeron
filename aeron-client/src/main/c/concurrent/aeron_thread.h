@@ -22,11 +22,14 @@
 
 #include "util/aeron_platform.h"
 
-void aeron_thread_set_name(const char *role_name);
+#define AERON_THREAD_NAME_MAX_LENGTH UINT16_C(15)
+
+int aeron_thread_set_name(const char *name);
+int aeron_thread_get_name(char *name_buf, size_t name_buf_size);
 
 void aeron_nano_sleep(uint64_t nanoseconds);
 void aeron_micro_sleep(unsigned int microseconds);
-int aeron_thread_set_affinity(const char *role_name, uint8_t cpu_affinity_no);
+int aeron_thread_set_affinity(const char *name, uint8_t cpu_affinity_no);
 
 #if defined(AERON_COMPILER_GCC)
 

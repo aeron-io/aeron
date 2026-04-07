@@ -1043,7 +1043,7 @@ TEST_F(CSystemTest, shouldSetNullClientName)
     aeron_context_close(context);
 }
 
-TEST_F(CSystemTest, shouldSetClientNameOverLong)
+TEST_F(CSystemTest, shouldFailIfClientNameIsTooLong)
 {
     const char *name =
         "this is a very long value that we are hoping with be reject when the value gets "
@@ -1053,6 +1053,20 @@ TEST_F(CSystemTest, shouldSetClientNameOverLong)
     ASSERT_EQ(aeron_context_init(&context), 0);
     ASSERT_EQ(-1, aeron_context_set_client_name(context, name));
     ASSERT_EQ(EINVAL, aeron_errcode());
+
+    aeron_context_close(context);
+}
+
+TEST_F(CSystemTest, shouldSetMaxClientName)
+{
+    auto max_name = std::string("").append(AERON_COUNTER_MAX_CLIENT_NAME_LENGTH - 1, 'x').append("a");
+    ASSERT_EQ(AERON_COUNTER_MAX_CLIENT_NAME_LENGTH, max_name.length());
+
+    aeron_context_t *context;
+    ASSERT_EQ(aeron_context_init(&context), 0);
+
+    ASSERT_EQ(0, aeron_context_set_client_name(context, max_name.c_str()));
+    ASSERT_STREQ(max_name.c_str(), aeron_context_get_client_name(context));
 
     aeron_context_close(context);
 }

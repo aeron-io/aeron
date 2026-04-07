@@ -4530,3 +4530,37 @@ TEST_F(AeronCArchiveNoSetupTest, shouldNotHangClosingReplayMergeWhenUsingInvoker
     ASSERT_EQ_ERR(0, aeron_close(m_aeron));
     ASSERT_EQ_ERR(0, aeron_context_close(aeron_ctx));
 }
+
+class AeronArchiveClientNameTest : public AeronCArchiveTestBase, public testing::TestWithParam<std::string>
+{
+};
+
+INSTANTIATE_TEST_SUITE_P(
+    AeronCArchive,
+    AeronArchiveClientNameTest,
+    testing::Values(
+        "abc",
+        std::string("").append(AERON_COUNTER_MAX_CLIENT_NAME_LENGTH - 1, 'x').append("$")
+));
+
+TEST_P(AeronArchiveClientNameTest, shouldSetClientName)
+{
+    ASSERT_EQ_ERR(0, aeron_archive_context_init(&m_ctx));
+    const auto& client_name = GetParam();
+
+    EXPECT_EQ(0, aeron_archive_context_set_client_name(m_ctx, client_name.c_str()));
+    EXPECT_STREQ(client_name.c_str(), aeron_archive_context_get_client_name(m_ctx));
+
+    ASSERT_EQ_ERR(0, aeron_archive_context_close(m_ctx));
+}
+
+TEST_F(AeronArchiveClientNameTest, shouldFailIfClientNameIsTooLong)
+{
+    ASSERT_EQ_ERR(0, aeron_archive_context_init(&m_ctx));
+    auto client_name = std::string("abc").append(AERON_COUNTER_MAX_CLIENT_NAME_LENGTH, 'x');
+
+    EXPECT_EQ(-1, aeron_archive_context_set_client_name(m_ctx, client_name.c_str()));
+    EXPECT_EQ(EINVAL, aeron_errcode());
+
+    ASSERT_EQ_ERR(0, aeron_archive_context_close(m_ctx));
+}

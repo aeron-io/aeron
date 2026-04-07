@@ -18,13 +18,14 @@ package io.aeron;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
 import io.aeron.driver.status.SystemCounterDescriptor;
+import io.aeron.logbuffer.BufferClaim;
 import io.aeron.logbuffer.LogBufferDescriptor;
+import io.aeron.protocol.DataHeaderFlyweight;
 import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.Tests;
 import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.CloseHelper;
-import org.agrona.collections.MutableInteger;
-import org.agrona.concurrent.UnsafeBuffer;
+import org.agrona.collections.MutableLong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,7 +37,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class MultiGapLossAndRecoverySystemTest
 {
@@ -51,7 +52,8 @@ public class MultiGapLossAndRecoverySystemTest
     private final MediaDriver.Context context = new MediaDriver.Context()
         .aeronDirectoryName(CommonContext.generateRandomDirName())
         .publicationTermBufferLength(LogBufferDescriptor.TERM_MIN_LENGTH)
-        .threadingMode(ThreadingMode.SHARED);
+        .threadingMode(ThreadingMode.SHARED)
+        .reliableStream(true);
     private TestMediaDriver driver;
 
     @BeforeEach
@@ -108,14 +110,8 @@ public class MultiGapLossAndRecoverySystemTest
     private void sendAndReceive(final String channel, final int publicationLength)
     {
         final int streamId = 10000;
-        final byte[] input = new byte[publicationLength];
-        final byte[] output = new byte[publicationLength];
-        final Random r = new Random(1);
-        r.nextBytes(input);
-        final UnsafeBuffer sendBuffer = new UnsafeBuffer();
-
-        int inputPosition = TERM_ID;
-        final MutableInteger outputPosition = new MutableInteger(TERM_ID);
+        final Random r = new Random(4234266349L);
+        final MutableLong receiverValue = new MutableLong();
 
         try (Aeron aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver.aeronDirectoryName()));
             ExclusivePublication pub = aeron.addExclusivePublication(channel, streamId);
@@ -124,32 +120,29 @@ public class MultiGapLossAndRecoverySystemTest
             Tests.awaitConnected(pub);
             Tests.awaitConnected(sub);
 
+            final Image image = sub.imageBySessionId(pub.sessionId());
+
             final FragmentAssembler handler = new FragmentAssembler(
-                (buffer, offset, length, header) ->
-                {
-                    buffer.getBytes(offset, output, outputPosition.get(), length);
-                    outputPosition.addAndGet(length);
-                });
+                (buffer, offset, length, header) -> receiverValue.set(buffer.getLong(offset)));
 
-            while (inputPosition < input.length || outputPosition.get() < output.length)
+            final BufferClaim bufferClaim = new BufferClaim();
+            while (pub.position() < publicationLength)
             {
-                if (inputPosition < input.length)
+                while (pub.tryClaim(pub.maxPayloadLength(), bufferClaim) < 0)
                 {
-                    final int length = Math.min(input.length - inputPosition, pub.maxMessageLength());
-                    sendBuffer.wrap(input, inputPosition, length);
-                    if (TERM_ID < pub.offer(sendBuffer))
-                    {
-                        inputPosition += length;
-                    }
+                    Tests.yield();
                 }
 
-                if (outputPosition.get() < output.length)
+                final long value = r.nextLong();
+                bufferClaim.buffer().putLong(DataHeaderFlyweight.HEADER_LENGTH, value);
+                bufferClaim.commit();
+
+                while (0 == image.poll(handler, 1))
                 {
-                    sub.poll(handler, 10);
+                    Tests.yield();
                 }
+                assertEquals(value, receiverValue.get());
             }
         }
-
-        assertArrayEquals(input, output);
     }
 }

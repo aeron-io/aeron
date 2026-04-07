@@ -22,11 +22,10 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <stdlib.h>
+#include <assert.h>
 #include "aeron_alloc.h"
 #include "concurrent/aeron_thread.h"
-
-#include <assert.h>
-
+#include "util/aeron_bitutil.h"
 #include "util/aeron_error.h"
 
 #if !defined(_WIN32)
@@ -94,7 +93,7 @@ void aeron_micro_sleep(unsigned int microseconds)
 #endif
 }
 
-int aeron_thread_set_affinity(const char *role_name, uint8_t cpu_affinity_no)
+int aeron_thread_set_affinity(const char *name, uint8_t cpu_affinity_no)
 {
 #if defined(__linux__)
     cpu_set_t mask;
@@ -103,7 +102,7 @@ int aeron_thread_set_affinity(const char *role_name, uint8_t cpu_affinity_no)
     CPU_SET(cpu_affinity_no, &mask);
     if (sched_setaffinity(0, size, &mask) < 0)
     {
-        AERON_SET_ERR(errno, "failed to set thread affinity role_name=%s, cpu_affinity_no=%" PRIu8, role_name, cpu_affinity_no);
+        AERON_SET_ERR(errno, "failed to set thread affinity name=%s, cpu_affinity_no=%" PRIu8, name, cpu_affinity_no);
         return -1;
     }
     return 0;
@@ -115,13 +114,42 @@ int aeron_thread_set_affinity(const char *role_name, uint8_t cpu_affinity_no)
 
 #if defined(AERON_COMPILER_GCC)
 
-void aeron_thread_set_name(const char *role_name)
+int aeron_thread_set_name(const char *name)
 {
+    char thread_name[AERON_THREAD_NAME_MAX_LENGTH + 1];
+    size_t copy_len = AERON_MIN(strlen(name), AERON_THREAD_NAME_MAX_LENGTH);
+    memcpy(thread_name, name, copy_len);
+    thread_name[copy_len] = '\0';
+
+    int rc;
 #if defined(__APPLE__)
-    pthread_setname_np(role_name);
+    rc = pthread_setname_np(thread_name);
 #else
-    pthread_setname_np(pthread_self(), role_name);
+    rc = pthread_setname_np(pthread_self(), thread_name);
 #endif
+    if (0 != rc)
+    {
+        AERON_SET_ERR(-rc, "%s", "pthread_setname_np failed");
+        return -1;
+    }
+    return 0;
+}
+
+int aeron_thread_get_name(char *name_buf, size_t name_buf_size)
+{
+    if (NULL == name_buf)
+    {
+        AERON_SET_ERR(EINVAL, "%s", "name_buf is NULL");
+        return -1;
+    }
+
+    if (name_buf_size <= AERON_THREAD_NAME_MAX_LENGTH)
+    {
+        AERON_SET_ERR(EINVAL, "name_buf is too small: %" PRIu64, (uint64_t)name_buf_size);
+        return -1;
+    }
+
+    return pthread_getname_np(pthread_self(), name_buf, name_buf_size);
 }
 
 int aeron_mutex_init(aeron_mutex_t *mutex)
@@ -229,11 +257,13 @@ int aeron_thread_create(aeron_thread_t *thread_ptr, void *attr, void *(*callback
 {
     if (NULL == thread_ptr)
     {
+        AERON_SET_ERR_WIN(EINVAL, "%s", "aeron_thread_t is NULL");
         return -1;
     }
 
     if (aeron_alloc((void **)thread_ptr, sizeof(struct aeron_thread_stct)) < 0)
     {
+        AERON_APPEND_ERR("%s", "Failed to allocate memory for aeron_thread_t");
         return -1;
     }
 
@@ -242,15 +272,16 @@ int aeron_thread_create(aeron_thread_t *thread_ptr, void *attr, void *(*callback
     DWORD id;
 
     (*thread_ptr)->handle = CreateThread(
-        NULL,  // default security attributes
-        0,         // use default stack size
+        NULL,                 // default security attributes
+        0,                    // use default stack size
         aeron_thread_proc,    // thread function name
         thread_ptr,           // argument to thread function
-        0,      // use default creation flags
+        0,                    // use default creation flags
         &id);                 // returns the thread identifier
 
     if (!(*thread_ptr)->handle)
     {
+        AERON_SET_ERR_WIN(GetLastError(), "%s", "CreateThread failed");
         aeron_free(*thread_ptr);
         return -1;
     }
@@ -258,19 +289,80 @@ int aeron_thread_create(aeron_thread_t *thread_ptr, void *attr, void *(*callback
     return 0;
 }
 
-void aeron_thread_set_name(const char *role_name)
+int aeron_thread_set_name(const char *name)
 {
-    size_t wchar_count = mbstowcs(NULL, role_name, 0);
+    char thread_name[AERON_THREAD_NAME_MAX_LENGTH + 1];
+    size_t copy_len = AERON_MIN(strlen(name), AERON_THREAD_NAME_MAX_LENGTH);
+    memcpy(thread_name, name, copy_len);
+    thread_name[copy_len] = '\0';
+
+    size_t wchar_count;
+    if (0 != mbstowcs_s(&wchar_count, NULL, 0, thread_name, 0))
+    {
+        AERON_SET_ERR_WIN(GetLastError(), "%s", "mbstowcs_s failed");
+        return -1;
+    }
+
     wchar_t *buf;
     if (aeron_alloc((void **)&buf, sizeof(wchar_t) * (wchar_count + 1)) < 0)  // value-initialize to 0 (see below)
     {
-        return;
+        AERON_APPEND_ERR("%s", "Failed to allocate wchar_t buffer");
+        return -1;
     }
 
-    mbstowcs(buf, role_name, wchar_count + 1);
-    SetThreadDescription(GetCurrentThread(), buf);
+    if (0 != mbstowcs_s(NULL, buf, wchar_count + 1, thread_name, copy_len))
+    {
+        AERON_SET_ERR_WIN(GetLastError(), "%s", "mbstowcs_s failed");
+        goto error;
+    }
+
+    HRESULT hr = SetThreadDescription(GetCurrentThread(), buf);
+    if (FAILED(hr))
+    {
+        AERON_SET_ERR_WIN(GetLastError(), "%s", "SetThreadDescription failed");
+        goto error;
+    }
 
     aeron_free(buf);
+    return 0;
+
+error:
+    aeron_free(buf);
+    return -1;
+}
+
+int aeron_thread_get_name(char *name_buf, size_t name_buf_size)
+{
+    if (NULL == name_buf)
+    {
+        AERON_SET_ERR(EINVAL, "%s", "name_buf is NULL");
+        return -1;
+    }
+
+    if (name_buf_size <= AERON_THREAD_NAME_MAX_LENGTH)
+    {
+        AERON_SET_ERR(EINVAL, "name_buf is too small: %" PRIu64, (uint64_t)name_buf_size);
+        return -1;
+    }
+
+    wchar_t *buf;
+    HRESULT hr = GetThreadDescription(GetCurrentThread(), &buf);
+    if (FAILED(hr))
+    {
+        AERON_SET_ERR_WIN(GetLastError(), "%s", "GetThreadDescription failed");
+        return -1;
+    }
+
+    size_t size;
+    if (0 != wcstombs_s(&size, name_buf, name_buf_size, buf, _TRUNCATE))
+    {
+        AERON_SET_ERR_WIN(GetLastError(), "%s", "wcstombs_s failed");
+        LocalFree(buf);
+        return -1;
+    }
+
+    LocalFree(buf);
+    return 0;
 }
 
 int aeron_thread_join(aeron_thread_t thread, void **value_ptr)

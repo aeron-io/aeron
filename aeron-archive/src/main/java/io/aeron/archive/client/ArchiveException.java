@@ -103,6 +103,12 @@ public class ArchiveException extends AeronException
      */
     public static final short EMPTY_RECORDING = 15;
 
+
+    /**
+     * The position specified for the operation is not valid, e.g. not frame-aligned, below start, or above stop.
+     */
+    public static final int INVALID_POSITION = 16;
+
     private static final long serialVersionUID = 386758252787901080L;
 
     /**
@@ -274,6 +280,7 @@ public class ArchiveException extends AeronException
             case UNKNOWN_REPLICATION -> "UNKNOWN_REPLICATION";
             case UNAUTHORISED_ACTION -> "UNAUTHORISED_ACTION";
             case REPLICATION_CONNECTION_FAILURE -> "REPLICATION_CONNECTION_FAILURE";
+            case INVALID_POSITION -> "INVALID_POSITION";
             default -> "unknown error code: " + errorCode;
         };
     }

@@ -45,11 +45,9 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import java.net.BindException;
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static io.aeron.Aeron.NULL_VALUE;
-import static io.aeron.driver.DriverNameResolver.NEIGHBOR_RESOLUTION_INTERVAL_MS;
 import static org.agrona.concurrent.status.CountersReader.METADATA_LENGTH;
 import static org.agrona.concurrent.status.CountersReader.RECORD_ALLOCATED;
 import static org.agrona.concurrent.status.CountersReader.RECORD_UNUSED;
@@ -439,7 +437,7 @@ class DriverNameResolverTest
         final int aNeighborsCounterId = awaitNeighborsCounterId("A");
         final int bNeighborsCounterId = awaitNeighborsCounterId("AA");
 
-        final long deadlineNs = System.nanoTime() + 2 * TimeUnit.MILLISECONDS.toNanos(NEIGHBOR_RESOLUTION_INTERVAL_MS);
+        final long deadlineNs = System.nanoTime() + 2 * Configuration.RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_NS_DEFAULT;
 
         awaitCounterValue("A", aNeighborsCounterId, 1);
         awaitCounterValue("AA", bNeighborsCounterId, 1);

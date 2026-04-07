@@ -63,92 +63,151 @@ const char *aeron_dlinfo_func(void (*func)(void), char *buffer, size_t max_buffe
 #include "concurrent/aeron_counters_manager.h"
 #include "aeronc.h"
 #include <Windows.h>
+#include <Psapi.h>
+#include <intrin.h>
 
-void *aeron_dlsym_fallback(LPCSTR name)
-{
-    return NULL;
-}
-
+static SRWLOCK modules_lock = SRWLOCK_INIT;
 static HMODULE *modules = NULL;
 static size_t modules_size = 0;
 static size_t modules_capacity = 10;
 
-HMODULE GetCurrentModule()
-{
-    HMODULE hModule = NULL;
-    if (GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (LPCTSTR)GetCurrentModule, &hModule))
-    {
-        return hModule;
-    }
-
-    return NULL;
-}
-
-void aeron_init_dlopen_support()
+// Caller must hold modules_lock exclusively.
+static void aeron_init_dlopen_support()
 {
     if (NULL == modules)
     {
-        modules = (HMODULE*)malloc(sizeof(HMODULE) * modules_capacity);
-        memset(modules, 0, sizeof(HMODULE) * modules_capacity);
-        modules[0] = GetCurrentModule();
-        modules_size = modules[0] != NULL;
+        HANDLE process = GetCurrentProcess();
+        DWORD cb_needed = 0;
+
+        EnumProcessModules(process, NULL, 0, &cb_needed);
+
+        do
+        {
+            size_t num_modules = cb_needed / sizeof(HMODULE);
+            modules_capacity = num_modules + 10;  // extra space for future aeron_dlopen() calls
+            modules = (HMODULE *)realloc(modules, sizeof(HMODULE) * modules_capacity);
+            memset(modules, 0, sizeof(HMODULE) * modules_capacity);
+
+            EnumProcessModules(process, modules, (DWORD)(modules_capacity * sizeof(HMODULE)), &cb_needed);
+        }
+        while (cb_needed / sizeof(HMODULE) > modules_capacity);
+
+        modules_size = cb_needed / sizeof(HMODULE);
     }
 }
 
-void *aeron_dlsym(void *module, const char *name)
+// Returns the index of the module containing addr, or modules_size if not found.
+static size_t aeron_dlsym_find_module_index(void *addr)
 {
-    aeron_init_dlopen_support();
+    HMODULE caller_module = NULL;
+    GetModuleHandleEx(
+        GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+        (LPCTSTR)addr,
+        &caller_module);
+
+    if (NULL != caller_module)
+    {
+        for (size_t i = 0; i < modules_size; i++)
+        {
+            if (modules[i] == caller_module)
+            {
+                return i;
+            }
+        }
+    }
+
+    return modules_size;
+}
+
+static void *aeron_dlsym_from(void *module, const char *name, void *return_address)
+{
+    void *result = NULL;
+
+    AcquireSRWLockShared(&modules_lock);
+
+    if (NULL == modules)
+    {
+        ReleaseSRWLockShared(&modules_lock);
+        AcquireSRWLockExclusive(&modules_lock);
+        aeron_init_dlopen_support();
+        ReleaseSRWLockExclusive(&modules_lock);
+        AcquireSRWLockShared(&modules_lock);
+    }
 
     if (RTLD_DEFAULT == module)
     {
-        for (size_t i = 1; i <= modules_size; i++)
+        for (size_t i = 0; i < modules_size; i++)
         {
-            void *res = aeron_dlsym(modules[modules_size - i], name);
+            void *res = GetProcAddress(modules[i], name);
             if (NULL != res)
             {
-                return res;
+                result = res;
+                break;
             }
         }
-
-        return aeron_dlsym_fallback(name);
     }
-
-    if (RTLD_NEXT == module)
+    else if (RTLD_NEXT == module)
     {
-        BOOL firstFound = FALSE;
-        for (size_t i = 1; i <= modules_size; i++)
-        {
-            void *res = aeron_dlsym(modules[modules_size - i], name);
-            if (NULL != res && firstFound)
-            {
-                return res;
-            }
+        size_t caller_index = aeron_dlsym_find_module_index(return_address);
 
-            if (NULL != res && !firstFound)
+        for (size_t i = caller_index + 1; i < modules_size; i++)
+        {
+            void *res = GetProcAddress(modules[i], name);
+            if (NULL != res)
             {
-                firstFound = TRUE;
+                result = res;
+                break;
             }
         }
-
-        return aeron_dlsym_fallback(name);
+    }
+    else
+    {
+        result = GetProcAddress((HMODULE)module, name);
     }
 
-    return GetProcAddress((HMODULE)module, name);
+    ReleaseSRWLockShared(&modules_lock);
+
+    return result;
+}
+
+__declspec(noinline) void *aeron_dlsym(void *module, const char *name)
+{
+    return aeron_dlsym_from(module, name, _ReturnAddress());
 }
 
 void *aeron_dlopen(const char *filename)
 {
+    AcquireSRWLockExclusive(&modules_lock);
     aeron_init_dlopen_support();
 
     HMODULE module = LoadLibraryA(filename);
 
-    if (modules_size == modules_capacity)
+    if (NULL != module)
     {
-        modules_capacity = modules_capacity * 2;
-        modules = (HMODULE*)realloc(modules, sizeof(HMODULE) * modules_capacity);
+        // Check if module is already in the list (may have been captured by EnumProcessModules)
+        BOOL found = FALSE;
+        for (size_t i = 0; i < modules_size; i++)
+        {
+            if (modules[i] == module)
+            {
+                found = TRUE;
+                break;
+            }
+        }
+
+        if (!found)
+        {
+            if (modules_size == modules_capacity)
+            {
+                modules_capacity = modules_capacity * 2;
+                modules = (HMODULE *)realloc(modules, sizeof(HMODULE) * modules_capacity);
+            }
+
+            modules[modules_size++] = module;
+        }
     }
 
-    modules[modules_size++] = module;
+    ReleaseSRWLockExclusive(&modules_lock);
 
     return module;
 }

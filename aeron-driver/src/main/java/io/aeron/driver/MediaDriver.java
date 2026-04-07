@@ -433,6 +433,7 @@ public final class MediaDriver implements AutoCloseable
     public static final class Context extends CommonContext
     {
         private static final VarHandle IS_CLOSED_VH;
+
         static
         {
             try
@@ -591,6 +592,9 @@ public final class MediaDriver implements AutoCloseable
         private PortManager senderPortManager;
         private PortManager receiverPortManager;
         private int streamSessionLimit = Configuration.streamSessionLimit();
+        private long resolverNeighbourTimeoutNs = Configuration.resolverNeighborTimeoutNs();
+        private long resolverSelfResolutionIntervalNs = Configuration.resolverSelfResolutionIntervalNs();
+        private long resolverNeighborResolutionIntervalNs = Configuration.resolverNeighborResolutionIntervalNs();
 
         /**
          * Construct a Context using default values and loading from system properties.
@@ -3382,6 +3386,79 @@ public final class MediaDriver implements AutoCloseable
         public Context resolverBootstrapNeighbor(final String resolverBootstrapNeighbor)
         {
             this.resolverBootstrapNeighbor = resolverBootstrapNeighbor;
+            return this;
+        }
+
+        /**
+         * Get the time to wait before removing a neighbor entry from the cache if an update for that neighbor has not
+         * been received.
+         *
+         * @return the time to wait before removing a neighbor entry from the cache if an update for that neighbor has
+         * not been received.
+         * @see #resolverNeighborTimeoutNs(long)
+         */
+        public long resolverNeighborTimeoutNs()
+        {
+            return this.resolverNeighbourTimeoutNs;
+        }
+
+        /**
+         * Set the time to wait before removing a neighbor entry from the cache if an update for that neighbor has not
+         * been received.
+         *
+         * @param timeoutNs to wait before removing a neighbor entry from the cache.
+         * @return this for a fluent API.
+         *
+         */
+        public Context resolverNeighborTimeoutNs(final long timeoutNs)
+        {
+            this.resolverNeighbourTimeoutNs = timeoutNs;
+            return this;
+        }
+
+        /**
+         * Get the interval between sending name to address messages for this driver to its neighbors.
+         *
+         * @return the interval between sending name to address messages for this driver to its neighbors.
+         * @see #resolverSelfResolutionIntervalNs(long)
+         */
+        public long resolverSelfResolutionIntervalNs()
+        {
+            return this.resolverSelfResolutionIntervalNs;
+        }
+
+        /**
+         * Set the interval between sending name to address messages for this driver to its neighbors.
+         *
+         * @param intervalNs between sending name to address messages for this driver.
+         * @return this for a fluent API.
+         */
+        public Context resolverSelfResolutionIntervalNs(final long intervalNs)
+        {
+            this.resolverSelfResolutionIntervalNs = intervalNs;
+            return this;
+        }
+
+        /**
+         * Get the interval between sending name to address messages for all known neighbors.
+         *
+         * @return the interval between sending name to address messages for all known neighbors.
+         * @see #resolverNeighborResolutionIntervalNs(long)
+         */
+        public long resolverNeighborResolutionIntervalNs()
+        {
+            return this.resolverNeighborResolutionIntervalNs;
+        }
+
+        /**
+         * Set the interval between sending name to address messages for all known neighbors.
+         *
+         * @param intervalNs between sending name to address messages for all known neighbors.
+         * @return this for a fluent API.
+         */
+        public Context resolverNeighborResolutionIntervalNs(final long intervalNs)
+        {
+            this.resolverNeighborResolutionIntervalNs = intervalNs;
             return this;
         }
 

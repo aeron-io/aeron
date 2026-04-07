@@ -51,10 +51,7 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
     static NameResolver bootstrapNameResolver = DefaultNameResolver.INSTANCE;
     private static final String RESOLVER_NEIGHBORS_COUNTER_LABEL = "Resolver neighbors";
 
-    // TODO: make these configurable
-    private static final long SELF_RESOLUTION_INTERVAL_MS = TimeUnit.SECONDS.toMillis(1);
-    static final long NEIGHBOR_RESOLUTION_INTERVAL_MS = TimeUnit.SECONDS.toMillis(2);
-    private static final long TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
+    static final long TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
     private static final long WORK_INTERVAL_MS = 10;
 
     private final ByteBuffer byteBuffer = BufferUtil.allocateDirectAligned(
@@ -83,9 +80,9 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
     private InetSocketAddress bootstrapNeighborAddress;
     private long bootstrapNeighborResolveDeadlineMs;
 
-    private final long neighborTimeoutMs = TIMEOUT_MS;
-    private final long selfResolutionIntervalMs = SELF_RESOLUTION_INTERVAL_MS;
-    private final long neighborResolutionIntervalMs = NEIGHBOR_RESOLUTION_INTERVAL_MS;
+    private final long neighborTimeoutMs;
+    private final long selfResolutionIntervalMs;
+    private final long neighborResolutionIntervalMs;
     private final int mtuLength;
     private final boolean preferIPv6 = false;
 
@@ -104,6 +101,10 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
         localName = localDriverName.getBytes(StandardCharsets.US_ASCII);
         localSocketAddress = UdpNameResolutionTransport.getInterfaceAddress(ctx.resolverInterface());
         localAddress = localSocketAddress.getAddress().getAddress();
+
+        neighborTimeoutMs = TimeUnit.NANOSECONDS.toMillis(ctx.resolverNeighborTimeoutNs());
+        selfResolutionIntervalMs = TimeUnit.NANOSECONDS.toMillis(ctx.resolverSelfResolutionIntervalNs());
+        neighborResolutionIntervalMs = TimeUnit.NANOSECONDS.toMillis(ctx.resolverNeighborResolutionIntervalNs());
 
         bootstrapNeighbors = null != ctx.resolverBootstrapNeighbor() ?
             ctx.resolverBootstrapNeighbor().split(",") : null;

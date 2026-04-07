@@ -92,6 +92,7 @@ import static io.aeron.archive.client.ArchiveException.ACTIVE_SUBSCRIPTION;
 import static io.aeron.archive.client.ArchiveException.EMPTY_RECORDING;
 import static io.aeron.archive.client.ArchiveException.GENERIC;
 import static io.aeron.archive.client.ArchiveException.INVALID_EXTENSION;
+import static io.aeron.archive.client.ArchiveException.INVALID_POSITION;
 import static io.aeron.archive.client.ArchiveException.MAX_RECORDINGS;
 import static io.aeron.archive.client.ArchiveException.MAX_REPLAYS;
 import static io.aeron.archive.client.ArchiveException.STORAGE_SPACE;
@@ -806,7 +807,7 @@ abstract class ArchiveConductor
             {
                 final String msg = "requested replay start position=" + replayPosition +
                     " must be less than the limit position=" + limitPosition + " for recording " + recordingId;
-                controlSession.sendErrorResponse(correlationId, msg);
+                controlSession.sendErrorResponse(correlationId, INVALID_POSITION, msg);
                 return;
             }
             stopPosition = limitPosition;
@@ -2158,7 +2159,7 @@ abstract class ArchiveConductor
         {
             final String msg = "invalid position " + position +
                 ": start=" + startPosition + " stop=" + stopPosition + " alignment=" + FRAME_ALIGNMENT;
-            controlSession.sendErrorResponse(correlationId, msg);
+            controlSession.sendErrorResponse(correlationId, INVALID_POSITION, msg);
             return false;
         }
 

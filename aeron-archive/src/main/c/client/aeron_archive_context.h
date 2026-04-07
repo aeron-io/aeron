@@ -44,7 +44,7 @@ struct aeron_archive_context_stct
 {
     aeron_t *aeron;
     char aeron_directory_name[AERON_MAX_PATH];
-    char client_name[AERON_COUNTER_MAX_CLIENT_NAME_LENGTH];
+    char client_name[AERON_COUNTER_MAX_CLIENT_NAME_LENGTH + 1];
     bool owns_aeron_client;
 
     char *control_request_channel;

@@ -1164,6 +1164,43 @@ public final class Configuration
     public static final int STREAM_SESSION_LIMIT_DEFAULT = Integer.MAX_VALUE;
 
     /**
+     * Property name for time to wait before removing a neighbor entry from the cache if an update for that neighbor has
+     * not been received.
+     */
+    @Config(defaultType = DefaultType.LONG, defaultLong = 10_000_000_000L)
+    public static final String RESOLVER_NEIGHBOR_TIMEOUT_NS_PROP_NAME = "aeron.driver.resolver.neighbor.timeout.ns";
+
+    /**
+     * Default time to wait before removing a neighbor entry from the cache if an update for that neighbor has not
+     * been received.
+     */
+    public static final long RESOLVER_NEIGHBOR_TIMEOUT_NS_DEFAULT = TimeUnit.SECONDS.toNanos(10);
+
+    /**
+     * Property name for the interval between sending name to address messages for this driver to its neighbors.
+     */
+    @Config(defaultType = DefaultType.LONG, defaultLong = 1_000_000_000L)
+    public static final String RESOLVER_SELF_RESOLUTION_INTERVAL_NS_PROP_NAME =
+        "aeron.driver.resolver.self.resolution.interval.ns";
+
+    /**
+     * Default interval between sending name to address messages for this driver to its neighbors.
+     */
+    public static final long RESOLVER_SELF_RESOLUTION_INTERVAL_NS_DEFAULT = TimeUnit.SECONDS.toNanos(1);
+
+    /**
+     * Property name for the interval between sending name to address messages for all known neighbors.
+     */
+    @Config(defaultType = DefaultType.LONG, defaultLong = 2_000_000_000L)
+    public static final String RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_NS_PROP_NAME =
+        "aeron.driver.resolver.neighbor.resolution.interval.ns";
+
+    /**
+     * Default interval between sending name to address messages for all known neighbors.
+     */
+    public static final long RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_NS_DEFAULT = TimeUnit.SECONDS.toNanos(2);
+
+    /**
      * {@link Executor} that run tasks on the caller thread.
      */
     public static final Executor CALLER_RUNS_TASK_EXECUTOR = Runnable::run;
@@ -1583,6 +1620,46 @@ public final class Configuration
     public static String resolverBootstrapNeighbor()
     {
         return getProperty(RESOLVER_BOOTSTRAP_NEIGHBOR_PROP_NAME);
+    }
+
+    /**
+     * Resolve configuration for time to wait before removing a neighbor entry from the cache if an update for that
+     * neighbor has not been received.
+     *
+     * @return time to wait before removing a neighbor entry from the cache if an update for that * neighbor has not
+     * been received.
+     * @see #RESOLVER_NEIGHBOR_TIMEOUT_NS_DEFAULT
+     * @see #RESOLVER_NEIGHBOR_TIMEOUT_NS_PROP_NAME
+     */
+    public static long resolverNeighborTimeoutNs()
+    {
+        return getDurationInNanos(RESOLVER_NEIGHBOR_TIMEOUT_NS_PROP_NAME, RESOLVER_NEIGHBOR_TIMEOUT_NS_DEFAULT);
+    }
+
+    /**
+     * Resolve configuration for the interval between sending name to address messages for this driver to its neighbors.
+     *
+     * @return interval between sending name to address messages for this driver to its neighbors.
+     * @see #RESOLVER_SELF_RESOLUTION_INTERVAL_NS_DEFAULT
+     * @see #RESOLVER_SELF_RESOLUTION_INTERVAL_NS_PROP_NAME
+     */
+    public static long resolverSelfResolutionIntervalNs()
+    {
+        return getDurationInNanos(
+            RESOLVER_SELF_RESOLUTION_INTERVAL_NS_PROP_NAME, RESOLVER_SELF_RESOLUTION_INTERVAL_NS_DEFAULT);
+    }
+
+    /**
+     * Resolve configuration for the interval between sending name to address messages for all known neighbors.
+     *
+     * @return interval between sending name to address messages for all known neighbors.
+     * @see #RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_NS_DEFAULT
+     * @see #RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_NS_PROP_NAME
+     */
+    public static long resolverNeighborResolutionIntervalNs()
+    {
+        return getDurationInNanos(
+            RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_NS_PROP_NAME, RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_NS_DEFAULT);
     }
 
     /**
