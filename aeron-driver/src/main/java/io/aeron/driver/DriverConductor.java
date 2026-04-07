@@ -26,7 +26,6 @@ import io.aeron.driver.media.ReceiveChannelEndpoint;
 import io.aeron.driver.media.ReceiveDestinationTransport;
 import io.aeron.driver.media.SendChannelEndpoint;
 import io.aeron.driver.media.UdpChannel;
-import io.aeron.driver.media.UdpNameResolutionTransport;
 import io.aeron.driver.status.ClientHeartbeatTimestamp;
 import io.aeron.driver.status.PublisherLimit;
 import io.aeron.driver.status.PublisherPos;
@@ -581,30 +580,6 @@ public final class DriverConductor implements Agent
                     recordError(ex);
                 }
             });
-    }
-
-    void onReResolveBootstrapNeighbor(final String bootstrapNeighbor)
-    {
-        executeAsyncTask(
-            () ->
-            {
-                try
-                {
-                    return UdpNameResolutionTransport.getInetSocketAddress(
-                        bootstrapNeighbor, DefaultNameResolver.INSTANCE);
-                }
-                catch (final Exception ex)
-                {
-                    recordError(ex);
-                }
-                return null;
-            },
-            (asyncResult) ->
-            {
-                ((DriverNameResolver)nameResolver.delegateResolver())
-                    .onBootstrapNeighborAddressResolutionChange(asyncResult.get());
-            }
-        );
     }
 
     IpcPublication getSharedIpcPublication(final long streamId, final long responseCorrelationId)

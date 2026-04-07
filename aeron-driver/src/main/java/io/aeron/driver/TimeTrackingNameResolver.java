@@ -109,11 +109,6 @@ final class TimeTrackingNameResolver implements NameResolver, AutoCloseable
         }
     }
 
-    NameResolver delegateResolver()
-    {
-        return delegateResolver;
-    }
-
     /**
      * {@inheritDoc}
      */

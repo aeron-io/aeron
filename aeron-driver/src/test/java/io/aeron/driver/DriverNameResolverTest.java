@@ -15,25 +15,21 @@
  */
 package io.aeron.driver;
 
-import io.aeron.Aeron;
-import io.aeron.AeronCounters;
 import io.aeron.driver.media.PortManager;
+import io.aeron.driver.media.UdpNameResolutionTransport;
 import io.aeron.driver.media.WildcardPortManager;
 import io.aeron.driver.status.SystemCounters;
 import io.aeron.test.Tests;
-import org.agrona.collections.MutableInteger;
 import org.agrona.concurrent.CachedEpochClock;
+import org.agrona.concurrent.CachedNanoClock;
 import org.agrona.concurrent.status.AtomicCounter;
 import org.agrona.concurrent.status.CountersManager;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.net.InetSocketAddress;
 import java.util.concurrent.TimeUnit;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -51,16 +47,23 @@ class DriverNameResolverTest
     private SystemCounters systemCounters = mock(SystemCounters.class);
     private AtomicCounter mockCounter = mock(AtomicCounter.class);
     private CachedEpochClock epochClock = new CachedEpochClock();
+    private CachedNanoClock nanoClock = new CachedNanoClock();
     private CountersManager countersManager = Tests.newCountersManager(1024);
     private PortManager portManager = new WildcardPortManager(WildcardPortManager.EMPTY_PORT_RANGE, false);
-
+    private DriverNameResolver.UdpNameResolutionTransportFactory udpNameResolutionTransportFactory =
+        mock(DriverNameResolver.UdpNameResolutionTransportFactory.class);
+    private UdpNameResolutionTransport transport = mock(UdpNameResolutionTransport.class);
+    private DutyCycleTracker dutyCycleTracker = mock(DutyCycleTracker.class);
 
     @BeforeEach
     void beforeEach()
     {
         epochClock.update(0);
+        nanoClock.update(0);
 
         when(systemCounters.get(any())).thenReturn(mockCounter);
+
+        when(udpNameResolutionTransportFactory.newInstance(any(), any(), any(), any())).thenReturn(transport);
 
         mediaDriverCtx = mock(MediaDriver.Context.class);
         when(mediaDriverCtx.driverConductorProxy()).thenReturn(driverConductorProxy);
@@ -71,6 +74,8 @@ class DriverNameResolverTest
         when(mediaDriverCtx.resolverInterface()).thenReturn("0.0.0.0:0");
         when(mediaDriverCtx.resolverBootstrapNeighbor()).thenReturn("127.0.0.1:1234");
         when(mediaDriverCtx.epochClock()).thenReturn(epochClock);
+        when(mediaDriverCtx.nanoClock()).thenReturn(nanoClock);
+        when(mediaDriverCtx.nameResolverTimeTracker()).thenReturn(dutyCycleTracker);
         when(mediaDriverCtx.countersManager()).thenReturn(countersManager);
         when(mediaDriverCtx.receiverPortManager()).thenReturn(portManager);
     }
@@ -79,42 +84,13 @@ class DriverNameResolverTest
     void shouldUseAllBootstrapNeighbors()
     {
         final String bootstrapNeighborAddresses = "186.123.23.1:1234,224.0.1.1:9713,123.91.72.255:7123";
-        final String[] bootstrapNeighborAddressArray = bootstrapNeighborAddresses.split(",");
         when(mediaDriverCtx.resolverBootstrapNeighbor()).thenReturn(bootstrapNeighborAddresses);
 
-        driverNameResolver = new DriverNameResolver(mediaDriverCtx);
-        final int neighborsCounterId = neighborsCounterId();
+        driverNameResolver = new DriverNameResolver(mediaDriverCtx, udpNameResolutionTransportFactory);
 
         driverNameResolver.doWork(TIMEOUT_MS * 0);
-        verify(driverConductorProxy).reResolveBootstrapNeighbor(eq(bootstrapNeighborAddressArray[0]));
-        driverNameResolver.onBootstrapNeighborAddressResolutionChange(new InetSocketAddress("186.123.23.1", 1234));
-        final String firstLabel = countersManager.getCounterLabel(neighborsCounterId);
-        assertThat(firstLabel, containsString(bootstrapNeighborAddressArray[0]));
-
-        driverNameResolver.doWork(TIMEOUT_MS * 1);
-        verify(driverConductorProxy).reResolveBootstrapNeighbor(eq(bootstrapNeighborAddressArray[1]));
-        driverNameResolver.onBootstrapNeighborAddressResolutionChange(new InetSocketAddress("224.0.1.1", 9713));
-        final String secondLabel = countersManager.getCounterLabel(neighborsCounterId);
-        assertThat(secondLabel, containsString(bootstrapNeighborAddressArray[1]));
-
-        driverNameResolver.doWork(TIMEOUT_MS * 2);
-        verify(driverConductorProxy).reResolveBootstrapNeighbor(eq(bootstrapNeighborAddressArray[2]));
-        driverNameResolver.onBootstrapNeighborAddressResolutionChange(new InetSocketAddress("123.91.72.255", 7123));
-        final String thirdLabel = countersManager.getCounterLabel(neighborsCounterId);
-        assertThat(thirdLabel, containsString(bootstrapNeighborAddressArray[2]));
-    }
-
-    private int neighborsCounterId()
-    {
-        final MutableInteger counterIdRef = new MutableInteger(Aeron.NULL_VALUE);
-        countersManager.forEach((counterId, typeId, keyBuffer, label) ->
-        {
-            if (AeronCounters.NAME_RESOLVER_NEIGHBORS_COUNTER_TYPE_ID == typeId)
-            {
-                counterIdRef.set(counterId);
-            }
-        });
-        Assertions.assertNotEquals(Aeron.NULL_VALUE, counterIdRef.get());
-        return counterIdRef.get();
+        verify(transport).sendTo(any(), eq(new InetSocketAddress("186.123.23.1", 1234)));
+        verify(transport).sendTo(any(), eq(new InetSocketAddress("224.0.1.1", 9713)));
+        verify(transport).sendTo(any(), eq(new InetSocketAddress("123.91.72.255", 7123)));
     }
 }
