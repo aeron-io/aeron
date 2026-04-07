@@ -752,7 +752,7 @@ abstract class ArchiveConductor
 
         if (!catalog.hasRecording(recordingId))
         {
-            final String msg = "unknown recording id: " + recordingId;
+            final String msg = ArchiveException.buildUnknownRecordingErrorMsg(recordingId);
             controlSession.sendErrorResponse(correlationId, UNKNOWN_RECORDING, msg);
             return;
         }
@@ -805,8 +805,8 @@ abstract class ArchiveConductor
         {
             if (replayPosition > limitPosition)
             {
-                final String msg = "requested replay start position=" + replayPosition +
-                    " must be less than the limit position=" + limitPosition + " for recording " + recordingId;
+                final String msg = ArchiveException.buildReplayExceedsLimitErrorMsg(
+                    recordingId, replayPosition, limitPosition);
                 controlSession.sendErrorResponse(correlationId, INVALID_POSITION, msg);
                 return;
             }
@@ -1024,7 +1024,7 @@ abstract class ArchiveConductor
 
         if (!catalog.hasRecording(recordingId))
         {
-            final String msg = "unknown recording id: " + recordingId;
+            final String msg = ArchiveException.buildUnknownRecordingErrorMsg(recordingId);
             controlSession.sendErrorResponse(correlationId, UNKNOWN_RECORDING, msg);
             return msg;
         }
@@ -1889,7 +1889,7 @@ abstract class ArchiveConductor
     {
         if (!catalog.hasRecording(recordingId))
         {
-            final String msg = "unknown recording id: " + recordingId;
+            final String msg = ArchiveException.buildUnknownRecordingErrorMsg(recordingId);
             session.sendErrorResponse(correlationId, UNKNOWN_RECORDING, msg);
             return false;
         }
@@ -2209,18 +2209,16 @@ abstract class ArchiveConductor
         final long startPosition = recordingSummary.startPosition;
         if (position - startPosition < 0)
         {
-            final String msg = "requested replay start position=" + position +
-                " is less than recording start position=" + startPosition + " for recording " + recordingId;
-            controlSession.sendErrorResponse(correlationId, msg);
+            final String msg = ArchiveException.buildReplayBeforeStartErrorMsg(recordingId, position, startPosition);
+            controlSession.sendErrorResponse(correlationId, INVALID_POSITION, msg);
             return true;
         }
 
         final long stopPosition = recordingSummary.stopPosition;
         if (stopPosition != NULL_POSITION && position >= stopPosition)
         {
-            final String msg = "requested replay start position=" + position +
-                " must be less than highest recorded position=" + stopPosition + " for recording " + recordingId;
-            controlSession.sendErrorResponse(correlationId, msg);
+            final String msg = ArchiveException.buildReplayExceedsLimitErrorMsg(recordingId, position, stopPosition);
+            controlSession.sendErrorResponse(correlationId, INVALID_POSITION, msg);
             return true;
         }
 
