@@ -67,35 +67,35 @@ int aeron_receive_channel_endpoint_create(
     if (aeron_alloc((void **)&_endpoint, sizeof(aeron_receive_channel_endpoint_t)) < 0)
     {
         AERON_APPEND_ERR("%s", "could not allocate receive_channel_endpoint");
-        return -1;
+        goto error;
     }
 
     if (aeron_data_packet_dispatcher_init(
         &_endpoint->dispatcher, context->conductor_proxy, context->receiver_proxy->receiver) < 0)
     {
         AERON_APPEND_ERR("%s", "Failed to initialise data packet dispatcher");
-        return -1;
+        goto error;
     }
 
     if (aeron_int64_counter_map_init(
         &_endpoint->stream_id_to_refcnt_map, 0, 16, AERON_MAP_DEFAULT_LOAD_FACTOR) < 0)
     {
         AERON_APPEND_ERR("%s", "could not init stream_id_to_refcnt_map");
-        return -1;
+        goto error;
     }
 
     if (aeron_int64_counter_map_init(
         &_endpoint->stream_and_session_id_to_refcnt_map, 0, 16, AERON_MAP_DEFAULT_LOAD_FACTOR) < 0)
     {
         AERON_APPEND_ERR("%s", "could not init stream_and_session_id_to_refcnt_map");
-        return -1;
+        goto error;
     }
 
     if (aeron_int64_counter_map_init(
         &_endpoint->response_stream_id_to_refcnt_map, 0, 16, AERON_MAP_DEFAULT_LOAD_FACTOR) < 0)
     {
         AERON_APPEND_ERR("%s", "could not init response_stream_id_to_refcnt_map");
-        return -1;
+        goto error;
     }
 
     _endpoint->conductor_fields.managed_resource.clientd = _endpoint;
@@ -115,8 +115,7 @@ int aeron_receive_channel_endpoint_create(
 
     if (aeron_receive_channel_endpoint_set_group_tag(_endpoint, channel, context) < 0)
     {
-        aeron_receive_channel_endpoint_delete(NULL, _endpoint);
-        return -1;
+        goto error;
     }
 
     _endpoint->short_sends_counter = aeron_system_counter_addr(system_counters, AERON_SYSTEM_COUNTER_SHORT_SENDS);
@@ -133,7 +132,7 @@ int aeron_receive_channel_endpoint_create(
     {
         if (aeron_receive_channel_endpoint_add_destination(_endpoint, straight_through_destination) < 0)
         {
-            return -1;
+            goto error;
         }
     }
 
@@ -141,6 +140,13 @@ int aeron_receive_channel_endpoint_create(
     _endpoint->conductor_fields.udp_channel = channel;
     *endpoint = _endpoint;
     return 0;
+
+    error:
+    if (NULL != _endpoint)
+    {
+        aeron_receive_channel_endpoint_delete(NULL, _endpoint);
+    }
+    return -1;
 }
 
 int aeron_receive_channel_endpoint_delete(
