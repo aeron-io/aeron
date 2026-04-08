@@ -42,7 +42,7 @@ class TimeTrackingNameResolverTest
     {
         assertThrowsExactly(
             NullPointerException.class,
-            () -> new TimeTrackingNameResolver(mock(NameResolver.class), null, mock(DutyCycleTracker.class)));
+            () -> new TimeTrackingNameResolver(mock(NameResolverAgent.class), null, mock(DutyCycleTracker.class)));
     }
 
     @Test
@@ -50,13 +50,13 @@ class TimeTrackingNameResolverTest
     {
         assertThrowsExactly(
             NullPointerException.class,
-            () -> new TimeTrackingNameResolver(mock(NameResolver.class), mock(NanoClock.class), null));
+            () -> new TimeTrackingNameResolver(mock(NameResolverAgent.class), mock(NanoClock.class), null));
     }
 
     @Test
     void closeIsANoOpIfDelegateResolverIsNotCloseable()
     {
-        final NameResolver delegateResolver = mock(NameResolver.class);
+        final NameResolverAgent delegateResolver = mock(NameResolverAgent.class);
         final NanoClock clock = mock(NanoClock.class);
         final DutyCycleTracker maxTime = mock(DutyCycleTracker.class);
         final TimeTrackingNameResolver resolver = new TimeTrackingNameResolver(delegateResolver, clock, maxTime);
@@ -69,8 +69,8 @@ class TimeTrackingNameResolverTest
     @Test
     void closeIShouldCloseDelegateResolver() throws Exception
     {
-        final NameResolver delegateResolver = mock(
-            NameResolver.class, withSettings().extraInterfaces(AutoCloseable.class));
+        final NameResolverAgent delegateResolver = mock(
+            NameResolverAgent.class, withSettings().extraInterfaces(AutoCloseable.class));
         final NanoClock clock = mock(NanoClock.class);
         final DutyCycleTracker maxTime = mock(DutyCycleTracker.class);
         final TimeTrackingNameResolver resolver = new TimeTrackingNameResolver(delegateResolver, clock, maxTime);
@@ -85,15 +85,14 @@ class TimeTrackingNameResolverTest
     @Test
     void doWorkShouldCallActualMethod()
     {
-        final NameResolver delegateResolver = mock(NameResolver.class);
+        final NameResolverAgent delegateResolver = mock(NameResolverAgent.class);
         final NanoClock clock = mock(NanoClock.class);
         final DutyCycleTracker maxTime = mock(DutyCycleTracker.class);
         final TimeTrackingNameResolver resolver = new TimeTrackingNameResolver(delegateResolver, clock, maxTime);
 
-        final long nowMs = 1111;
-        resolver.doWork(nowMs);
+        resolver.doWork();
 
-        verify(delegateResolver).doWork(nowMs);
+        verify(delegateResolver).doWork();
         verifyNoMoreInteractions(delegateResolver);
         verifyNoInteractions(clock, maxTime);
     }
@@ -101,7 +100,7 @@ class TimeTrackingNameResolverTest
     @Test
     void initShouldCallActualMethod()
     {
-        final NameResolver delegateResolver = mock(NameResolver.class);
+        final NameResolverAgent delegateResolver = mock(NameResolverAgent.class);
         final NanoClock clock = mock(NanoClock.class);
         final DutyCycleTracker maxTime = mock(DutyCycleTracker.class);
         final TimeTrackingNameResolver resolver = new TimeTrackingNameResolver(delegateResolver, clock, maxTime);
@@ -118,7 +117,7 @@ class TimeTrackingNameResolverTest
     @Test
     void lookupShouldMeasureExecutionTime()
     {
-        final NameResolver delegateResolver = mock(NameResolver.class);
+        final NameResolverAgent delegateResolver = mock(NameResolverAgent.class);
         when(delegateResolver.lookup(anyString(), anyString(), anyBoolean()))
             .thenAnswer(invocation ->
             {
@@ -149,7 +148,7 @@ class TimeTrackingNameResolverTest
     @Test
     void lookupShouldMeasureExecutionTimeEvenIfExceptionIsThrown()
     {
-        final NameResolver delegateResolver = mock(NameResolver.class);
+        final NameResolverAgent delegateResolver = mock(NameResolverAgent.class);
         final Error error = new Error("broken");
         when(delegateResolver.lookup(anyString(), anyString(), anyBoolean())).thenThrow(error);
         final NanoClock clock = mock(NanoClock.class);
@@ -177,7 +176,7 @@ class TimeTrackingNameResolverTest
     @Test
     void resolveShouldMeasureExecutionTime()
     {
-        final NameResolver delegateResolver = mock(NameResolver.class);
+        final NameResolverAgent delegateResolver = mock(NameResolverAgent.class);
         when(delegateResolver.resolve(anyString(), anyString(), anyBoolean()))
             .thenAnswer(invocation -> InetAddress.getByName(invocation.getArgument(0)));
         final NanoClock clock = mock(NanoClock.class);
@@ -204,7 +203,7 @@ class TimeTrackingNameResolverTest
     @Test
     void resolveShouldMeasureExecutionTimeEvenWhenExceptionIsThrown()
     {
-        final NameResolver delegateResolver = mock(NameResolver.class);
+        final NameResolverAgent delegateResolver = mock(NameResolverAgent.class);
         final IllegalStateException exception = new IllegalStateException("error");
         when(delegateResolver.resolve(anyString(), anyString(), anyBoolean()))
             .thenThrow(exception);

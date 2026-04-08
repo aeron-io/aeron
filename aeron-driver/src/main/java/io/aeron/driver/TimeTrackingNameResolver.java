@@ -24,14 +24,14 @@ import java.net.InetAddress;
 
 import static java.util.Objects.requireNonNull;
 
-final class TimeTrackingNameResolver implements NameResolver, AutoCloseable
+final class TimeTrackingNameResolver implements NameResolverAgent, AutoCloseable
 {
-    private final NameResolver delegateResolver;
+    private final NameResolverAgent delegateResolver;
     private final NanoClock clock;
     private final DutyCycleTracker maxTimeTracker;
 
     TimeTrackingNameResolver(
-        final NameResolver delegateResolver,
+        final NameResolverAgent delegateResolver,
         final NanoClock clock,
         final DutyCycleTracker maxTimeTracker)
     {
@@ -93,9 +93,9 @@ final class TimeTrackingNameResolver implements NameResolver, AutoCloseable
     /**
      * {@inheritDoc}
      */
-    public int doWork(final long nowMs)
+    public int doWork()
     {
-        return delegateResolver.doWork(nowMs);
+        return delegateResolver.doWork();
     }
 
     /**

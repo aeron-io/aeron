@@ -16,6 +16,7 @@
 package io.aeron.driver;
 
 import io.aeron.AeronCounters;
+import io.aeron.CounterProvider;
 import io.aeron.driver.media.NetworkUtil;
 import io.aeron.driver.media.UdpChannel;
 import io.aeron.driver.media.UdpNameResolutionTransport;
@@ -24,11 +25,14 @@ import io.aeron.protocol.HeaderFlyweight;
 import io.aeron.protocol.ResolutionEntryFlyweight;
 import org.agrona.BufferUtil;
 import org.agrona.CloseHelper;
+import org.agrona.ExpandableArrayBuffer;
 import org.agrona.LangUtil;
 import org.agrona.collections.ArrayListUtil;
 import org.agrona.concurrent.CountedErrorHandler;
+import org.agrona.concurrent.EpochClock;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.AtomicCounter;
+import org.agrona.concurrent.status.CountersReader;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -46,7 +50,7 @@ import static org.agrona.BitUtil.CACHE_LINE_LENGTH;
 /**
  * Default {@link NameResolver} for the {@link MediaDriver}.
  */
-final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransport.UdpFrameHandler, NameResolver
+final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransport.UdpFrameHandler, NameResolverAgent
 {
     private static final String RESOLVER_NEIGHBORS_COUNTER_LABEL = "Resolver neighbors";
 
@@ -63,10 +67,11 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
     private final UdpNameResolutionTransport transport;
     private final DriverNameResolverCache cache;
     private final NameResolver delegateResolver;
+    private final EpochClock clock;
     private final AtomicCounter invalidPackets;
     private final AtomicCounter shortSends;
-    private final AtomicCounter neighborsCounter;
-    private final AtomicCounter cacheEntriesCounter;
+    private AtomicCounter neighborsCounter;
+    private AtomicCounter cacheEntriesCounter;
     private final byte[] nameTempBuffer = new byte[ResolutionEntryFlyweight.MAX_NAME_LENGTH];
     private final byte[] addressTempBuffer = new byte[ResolutionEntryFlyweight.ADDRESS_LENGTH_IP6];
 
@@ -102,6 +107,7 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
         invalidPackets = ctx.systemCounters().get(SystemCounterDescriptor.INVALID_PACKETS);
         shortSends = ctx.systemCounters().get(SystemCounterDescriptor.SHORT_SENDS);
         delegateResolver = ctx.nameResolver();
+        clock = ctx.cachedEpochClock();
 
         localDriverName = ctx.resolverName();
         localName = localDriverName.getBytes(StandardCharsets.US_ASCII);
@@ -145,13 +151,23 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
                 delegateResolver);
         transport = transportFactory.newInstance(resolverChannel, localSocketAddress, unsafeBuffer, ctx);
 
-        neighborsCounter = ctx.countersManager().newCounter(
-            RESOLVER_NEIGHBORS_COUNTER_LABEL, AeronCounters.NAME_RESOLVER_NEIGHBORS_COUNTER_TYPE_ID);
-        cacheEntriesCounter = ctx.countersManager().newCounter(
-            "Resolver cache entries: name=" + localDriverName,
-            AeronCounters.NAME_RESOLVER_CACHE_ENTRIES_COUNTER_TYPE_ID);
-
         openDatagramChannel();
+    }
+
+    public void init(final CountersReader countersReader, final CounterProvider counterProvider)
+    {
+        final ExpandableArrayBuffer expandableArrayBuffer = new ExpandableArrayBuffer();
+
+        final int neighborsCounterLength = expandableArrayBuffer.putStringAscii(0, RESOLVER_NEIGHBORS_COUNTER_LABEL);
+        neighborsCounter = counterProvider.newCounter(
+            AeronCounters.NAME_RESOLVER_NEIGHBORS_COUNTER_TYPE_ID,
+            expandableArrayBuffer, 0, 0, expandableArrayBuffer, 0, neighborsCounterLength);
+
+        final int cacheEntriesCounterLength = expandableArrayBuffer.putStringAscii(
+            0, "Resolver cache entries: name=" + localDriverName);
+        cacheEntriesCounter = counterProvider.newCounter(
+            AeronCounters.NAME_RESOLVER_CACHE_ENTRIES_COUNTER_TYPE_ID,
+            expandableArrayBuffer, 0, 0, expandableArrayBuffer, 0, cacheEntriesCounterLength);
     }
 
     /**
@@ -162,11 +178,9 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
         CloseHelper.close(transport);
     }
 
-    /**
-     * {@inheritDoc}
-     */
-    public int doWork(final long nowMs)
+    public int doWork()
     {
+        final long nowMs = clock.time();
         int workCount = 0;
 
         if (workDeadlineMs - nowMs <= 0)

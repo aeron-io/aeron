@@ -21,7 +21,7 @@ import java.net.UnknownHostException;
 /**
  * Use the default host name resolver via {@link InetAddress}.
  */
-public class DefaultNameResolver implements NameResolver
+public class DefaultNameResolver implements NameResolverAgent
 {
     /**
      * Default constructor.

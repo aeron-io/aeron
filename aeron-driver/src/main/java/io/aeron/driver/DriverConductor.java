@@ -276,7 +276,7 @@ public final class DriverConductor implements Agent
         timeOfLastToDriverPositionChangeNs = nowNs;
 
         nameResolver = new TimeTrackingNameResolver(
-            null == ctx.resolverInterface() ? ctx.nameResolver() : new DriverNameResolver(ctx),
+            ctx.nameResolver(),
             nanoClock,
             ctx.nameResolverTimeTracker());
 
@@ -341,7 +341,7 @@ public final class DriverConductor implements Agent
         }
         workCount += drainCommandQueue();
         workCount += trackStreamPositions(workCount, nowNs);
-        workCount += nameResolver.doWork(cachedEpochClock.time());
+        workCount += nameResolver.doWork();
         workCount += freeEndOfLifeResources(ctx.resourceFreeLimit());
 
         return workCount;

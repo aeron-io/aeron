@@ -15,9 +15,6 @@
  */
 package io.aeron.driver;
 
-import io.aeron.CounterProvider;
-import org.agrona.concurrent.status.CountersReader;
-
 import java.net.InetAddress;
 
 /**
@@ -49,41 +46,6 @@ public interface NameResolver
     default String lookup(final String name, final String uriParamName, final boolean isReLookup)
     {
         return name;
-    }
-
-    /**
-     * Do post construction initialisation of the name resolver.  Happens during the conductor start lifecycle.  Can be
-     * used for actions like adding counters.
-     *
-     * @param context for the media driver that the name resolver is running in.
-     * @deprecated Use {@link #init(CountersReader, CounterProvider)} instead.
-     * @see #init(CountersReader, CounterProvider)
-     */
-    @Deprecated
-    default void init(final MediaDriver.Context context)
-    {
-        throw new UnsupportedOperationException("deprecated: use NameResolver.init(io.aeron.CounterFactory) instead");
-    }
-
-    /**
-     * Do post construction initialisation of the name resolver.
-     *
-     * @param countersReader for finding existing counters.
-     * @param counterProvider for adding counters.
-     */
-    default void init(final CountersReader countersReader, final CounterProvider counterProvider)
-    {
-    }
-
-    /**
-     * Perform periodic work for the resolver.
-     *
-     * @param nowMs current epoch clock time in milliseconds
-     * @return work count
-     */
-    default int doWork(final long nowMs)
-    {
-        return 0;
     }
 
     /**
