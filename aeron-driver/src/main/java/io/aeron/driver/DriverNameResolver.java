@@ -364,14 +364,14 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
             for (int i = 0; i < bootstrapNeighborAddresses.length; ++i)
             {
                 final InetSocketAddress bootstrapNeighborAddress = bootstrapNeighborAddresses[i];
-                if (neighbor.socketAddress.equals(bootstrapNeighborAddress))// || null == bootstrapNeighborAddress)
+                if (neighbor.socketAddress.equals(bootstrapNeighborAddress))
                 {
                     bootstrapNeighborInNeighborList.set(i, true);
                 }
             }
         }
 
-        for (int i = 0; i < bootstrapNeighbors.length; ++i)
+        for (int i = 0; i < bootstrapNeighborAddresses.length; ++i)
         {
             if (!bootstrapNeighborInNeighborList.get(i))
             {
@@ -389,7 +389,7 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
                         bootstrapNeighborAddresses,
                         bootstrapNeighborInNeighborList);
                     bootstrapNeighborNextIndex = reresolvedIndex + 1;
-                    if (bootstrapNeighborNextIndex >= bootstrapNeighbors.length)
+                    if (bootstrapNeighborNextIndex >= bootstrapNeighborAddresses.length)
                     {
                         bootstrapNeighborNextIndex = 0;
                     }
@@ -407,7 +407,7 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
         final InetSocketAddress[] bootstrapNeighborAddresses,
         final BitSet bootstrapNeighborInNeighborList)
     {
-        for (int j = nextIndex; j < bootstrapNeighbors.length; ++j)
+        for (int j = nextIndex; j < bootstrapNeighborAddresses.length; ++j)
         {
             if (!bootstrapNeighborInNeighborList.get(j))
             {
