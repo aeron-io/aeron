@@ -37,7 +37,6 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.BitSet;
 import java.util.concurrent.TimeUnit;
 
 import static io.aeron.driver.DriverNameResolverCache.fullLengthMatch;
@@ -80,7 +79,6 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
 
     private final String[] bootstrapNeighbors;
     private final InetSocketAddress[] bootstrapNeighborAddresses;
-    private final BitSet bootstrapNeighborInNeighborList;
     private int bootstrapNeighborNextIndex = 0;
     private long bootstrapNeighborResolveDeadlineMs;
 
@@ -121,7 +119,6 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
         if (null != bootstrapNeighbors)
         {
             bootstrapNeighborAddresses = new InetSocketAddress[bootstrapNeighbors.length];
-            bootstrapNeighborInNeighborList = new BitSet(bootstrapNeighbors.length);
 
             for (int i = 0; i < bootstrapNeighbors.length; ++i)
             {
@@ -132,7 +129,6 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
         else
         {
             bootstrapNeighborAddresses = new InetSocketAddress[0];
-            bootstrapNeighborInNeighborList = new BitSet(0);
         }
 
         final long nowMs = ctx.epochClock().time();
@@ -188,6 +184,11 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
             if (neighborResolutionDeadlineMs <= nowMs)
             {
                 sendNeighborResolutions(nowMs);
+            }
+
+            if (0 < bootstrapNeighborAddresses.length && bootstrapNeighborResolveDeadlineMs <= nowMs)
+            {
+                reresolveBootstrapNeighbors(nowMs);
             }
         }
 
@@ -356,76 +357,34 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
 
         byteBuffer.limit(length);
 
-        bootstrapNeighborInNeighborList.clear();
-        for (final Neighbor neighbor : neighborList)
+        for (final InetSocketAddress bootstrapNeighbor : bootstrapNeighborAddresses)
         {
-            sendResolutionFrameTo(byteBuffer, neighbor.socketAddress);
-
-            for (int i = 0; i < bootstrapNeighborAddresses.length; ++i)
+            if (null != bootstrapNeighbor)
             {
-                final InetSocketAddress bootstrapNeighborAddress = bootstrapNeighborAddresses[i];
-                if (neighbor.socketAddress.equals(bootstrapNeighborAddress))
-                {
-                    bootstrapNeighborInNeighborList.set(i, true);
-                }
+                sendResolutionFrameTo(byteBuffer, bootstrapNeighbor);
             }
         }
 
-        for (int i = 0; i < bootstrapNeighborAddresses.length; ++i)
+        for (final Neighbor neighbor : neighborList)
         {
-            if (!bootstrapNeighborInNeighborList.get(i))
-            {
-                final InetSocketAddress bootstrapNeighbor = bootstrapNeighborAddresses[i];
-                if (null != bootstrapNeighbor)
-                {
-                    sendResolutionFrameTo(byteBuffer, bootstrapNeighbor);
-                }
+            boolean isBootstrapNeighbor = false;
 
-                if (nowMs >= bootstrapNeighborResolveDeadlineMs)
+            for (final InetSocketAddress bootstrapNeighborAddress : bootstrapNeighborAddresses)
+            {
+                if (neighbor.socketAddress.equals(bootstrapNeighborAddress))
                 {
-                    final int reresolvedIndex = reresolveBootstrapNeighbor(
-                        bootstrapNeighborNextIndex,
-                        bootstrapNeighbors,
-                        bootstrapNeighborAddresses,
-                        bootstrapNeighborInNeighborList);
-                    bootstrapNeighborNextIndex = reresolvedIndex + 1;
-                    if (bootstrapNeighborNextIndex >= bootstrapNeighborAddresses.length)
-                    {
-                        bootstrapNeighborNextIndex = 0;
-                    }
-                    bootstrapNeighborResolveDeadlineMs = nowMs + TIMEOUT_MS;
+                    isBootstrapNeighbor = true;
+                    break;
                 }
+            }
+
+            if (!isBootstrapNeighbor)
+            {
+                sendResolutionFrameTo(byteBuffer, neighbor.socketAddress);
             }
         }
 
         selfResolutionDeadlineMs = nowMs + selfResolutionIntervalMs;
-    }
-
-    private int reresolveBootstrapNeighbor(
-        final int nextIndex,
-        final String[] bootstrapNeighbors,
-        final InetSocketAddress[] bootstrapNeighborAddresses,
-        final BitSet bootstrapNeighborInNeighborList)
-    {
-        for (int j = nextIndex; j < bootstrapNeighborAddresses.length; ++j)
-        {
-            if (!bootstrapNeighborInNeighborList.get(j))
-            {
-                bootstrapNeighborAddresses[j] = resolveBootstrapNeighbor(bootstrapNeighbors[j]);
-                return j;
-            }
-        }
-
-        for (int j = 0; j < nextIndex; ++j)
-        {
-            if (!bootstrapNeighborInNeighborList.get(j))
-            {
-                bootstrapNeighborAddresses[j] = resolveBootstrapNeighbor(bootstrapNeighbors[j]);
-                return j;
-            }
-        }
-
-        return -1;
     }
 
     private void sendResolutionFrameTo(final ByteBuffer buffer, final InetSocketAddress remoteAddress)
@@ -551,6 +510,63 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
         }
 
         neighborResolutionDeadlineMs = nowMs + neighborResolutionIntervalMs;
+    }
+
+    private void reresolveBootstrapNeighbors(final long nowMs)
+    {
+        bootstrapNeighborNextIndex = reresolveSingleBootstrapNeighborNotInNeighborList() + 1;
+        if (bootstrapNeighborAddresses.length <= bootstrapNeighborNextIndex)
+        {
+            bootstrapNeighborNextIndex = 0;
+        }
+
+        bootstrapNeighborResolveDeadlineMs = nowMs + TIMEOUT_MS;
+    }
+
+    private int reresolveSingleBootstrapNeighborNotInNeighborList()
+    {
+        for (int i = bootstrapNeighborNextIndex; i < bootstrapNeighborAddresses.length; ++i)
+        {
+            final InetSocketAddress bootstrapNeighbor = bootstrapNeighborAddresses[i];
+            boolean inNeighborList = false;
+
+            for (final Neighbor neighbor : neighborList)
+            {
+                if (neighbor.socketAddress.equals(bootstrapNeighbor))
+                {
+                    inNeighborList = true;
+                    break;
+                }
+            }
+
+            if (!inNeighborList)
+            {
+                bootstrapNeighborAddresses[i] = resolveBootstrapNeighbor(bootstrapNeighbors[i]);
+                return i;
+            }
+        }
+
+        for (int i = 0; i < bootstrapNeighborNextIndex; ++i)
+        {
+            final InetSocketAddress bootstrapNeighbor = bootstrapNeighborAddresses[i];
+            boolean inNeighborList = false;
+
+            for (final Neighbor neighbor : neighborList)
+            {
+                if (neighbor.socketAddress.equals(bootstrapNeighbor))
+                {
+                    inNeighborList = true;
+                    break;
+                }
+            }
+
+            if (!inNeighborList)
+            {
+                bootstrapNeighborAddresses[i] = resolveBootstrapNeighbor(bootstrapNeighbors[i]);
+                return i;
+            }
+        }
+        return -1;
     }
 
     private InetSocketAddress resolveBootstrapNeighbor(final String neighbor)
