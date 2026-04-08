@@ -29,6 +29,7 @@ import org.agrona.concurrent.status.AtomicCounter;
 import org.agrona.concurrent.status.CountersManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -66,6 +67,7 @@ class DriverNameResolverTest
     private final DriverNameResolver.UdpNameResolutionTransportFactory udpNameResolutionTransportFactory =
         mock(DriverNameResolver.UdpNameResolutionTransportFactory.class);
     private final UdpNameResolutionTransport transport = mock(UdpNameResolutionTransport.class);
+    private final ArgumentCaptor<UnsafeBuffer> bufferCaptor = ArgumentCaptor.forClass(UnsafeBuffer.class);
     private final DutyCycleTracker dutyCycleTracker = mock(DutyCycleTracker.class);
 
     private final UnsafeBuffer unsafeBuffer = new UnsafeBuffer(new byte[1024]);
@@ -80,7 +82,8 @@ class DriverNameResolverTest
 
         when(systemCounters.get(any())).thenReturn(mockCounter);
 
-        when(udpNameResolutionTransportFactory.newInstance(any(), any(), any(), any())).thenReturn(transport);
+        when(udpNameResolutionTransportFactory.newInstance(any(), any(), bufferCaptor.capture(), any()))
+            .thenReturn(transport);
 
         mediaDriverCtx = mock(MediaDriver.Context.class);
         when(mediaDriverCtx.driverConductorProxy()).thenReturn(driverConductorProxy);
@@ -126,6 +129,8 @@ class DriverNameResolverTest
 
         when(mediaDriverCtx.resolverBootstrapNeighbor()).thenReturn(bootstrapNeighborAddresses);
         when(mediaDriverCtx.resolverNeighborTimeoutNs()).thenReturn(Long.MAX_VALUE);
+        when(mediaDriverCtx.resolverBootstrapNeighborResolutionIntervalNs())
+            .thenReturn(TimeUnit.MILLISECONDS.toNanos(TIMEOUT_MS));
 
         driverNameResolver = new DriverNameResolver(mediaDriverCtx, udpNameResolutionTransportFactory);
         verify(delegateResolver).lookup(eq(endpointOne), anyString(), eq(false));
@@ -151,10 +156,56 @@ class DriverNameResolverTest
         verifyNoMoreInteractions(delegateResolver);
     }
 
+    @Test
+    void shouldReResolveBootstrapNeighborEvictedFromNeighborList()
+    {
+        final String nameOne = "driver-a";
+        final String addressOne = "186.123.23.1";
+        final int portOne = 1234;
+        final String endpointOne = addressOne + ":" + portOne;
+        final String nameTwo = "driver-b";
+        final String addressTwo = "123.91.72.255";
+        final int portTwo = 7123;
+        final String endpointTwo = addressTwo + ":" + portTwo;
+        final String bootstrapNeighborAddresses = endpointOne + "," + endpointTwo;
+
+        final long neighborTimeoutMs = TimeUnit.SECONDS.toMillis(10);
+
+        when(mediaDriverCtx.resolverBootstrapNeighbor()).thenReturn(bootstrapNeighborAddresses);
+        when(mediaDriverCtx.resolverNeighborTimeoutNs()).thenReturn(TimeUnit.MILLISECONDS.toNanos(neighborTimeoutMs));
+        when(mediaDriverCtx.resolverBootstrapNeighborResolutionIntervalNs()).thenReturn(TimeUnit.SECONDS.toNanos(1));
+
+        driverNameResolver = new DriverNameResolver(mediaDriverCtx, udpNameResolutionTransportFactory);
+        verify(delegateResolver).lookup(eq(endpointOne), anyString(), eq(false));
+        verify(delegateResolver).resolve(eq(addressOne), anyString(), eq(false));
+        verify(delegateResolver).lookup(eq(endpointTwo), anyString(), eq(false));
+        verify(delegateResolver).resolve(eq(addressTwo), anyString(), eq(false));
+        verify(delegateResolver).lookup(eq("0.0.0.0:0"), anyString(), eq(false));
+        verify(delegateResolver).resolve(eq("0.0.0.0"), anyString(), eq(false));
+
+        onNeighborFrame(nameOne, addressOne, portOne, neighborTimeoutMs * 0);
+        onNeighborFrame(nameTwo, addressTwo, portTwo, neighborTimeoutMs * 0);
+        driverNameResolver.doWork(neighborTimeoutMs * 0);
+        verifyNoMoreInteractions(delegateResolver);
+
+        driverNameResolver.doWork(neighborTimeoutMs / 2);
+        verifyNoMoreInteractions(delegateResolver);
+
+        onNeighborFrame(nameOne, addressOne, portOne, neighborTimeoutMs / 2);
+        driverNameResolver.doWork(neighborTimeoutMs / 2);
+        verifyNoMoreInteractions(delegateResolver);
+
+        driverNameResolver.doWork(neighborTimeoutMs);
+        verify(delegateResolver).lookup(eq(endpointTwo), anyString(), eq(false));
+        verify(delegateResolver).resolve(eq(addressTwo), anyString(), eq(false));
+        verifyNoMoreInteractions(delegateResolver);
+    }
+
     private void onNeighborFrame(final String name, final String address, final int port, final long time)
     {
         final InetSocketAddress socketAddress = new InetSocketAddress(address, port);
 
+        final UnsafeBuffer unsafeBuffer = bufferCaptor.getValue();
         headerFlyweight.wrap(unsafeBuffer);
         headerFlyweight
             .headerType(HeaderFlyweight.HDR_TYPE_RES)

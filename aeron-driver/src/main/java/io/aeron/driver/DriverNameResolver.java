@@ -51,7 +51,6 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
     static NameResolver bootstrapNameResolver = DefaultNameResolver.INSTANCE;
     private static final String RESOLVER_NEIGHBORS_COUNTER_LABEL = "Resolver neighbors";
 
-    static final long TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
     private static final long WORK_INTERVAL_MS = 10;
 
     private final ByteBuffer byteBuffer = BufferUtil.allocateDirectAligned(
@@ -85,6 +84,7 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
     private final long neighborTimeoutMs;
     private final long selfResolutionIntervalMs;
     private final long neighborResolutionIntervalMs;
+    private final long bootstrapNeighborResolutionIntervalMs;
     private final int mtuLength;
     private final boolean preferIPv6 = false;
 
@@ -113,6 +113,8 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
         neighborTimeoutMs = TimeUnit.NANOSECONDS.toMillis(ctx.resolverNeighborTimeoutNs());
         selfResolutionIntervalMs = TimeUnit.NANOSECONDS.toMillis(ctx.resolverSelfResolutionIntervalNs());
         neighborResolutionIntervalMs = TimeUnit.NANOSECONDS.toMillis(ctx.resolverNeighborResolutionIntervalNs());
+        bootstrapNeighborResolutionIntervalMs = TimeUnit.NANOSECONDS.toMillis(
+            ctx.resolverBootstrapNeighborResolutionIntervalNs());
 
         bootstrapNeighbors = null != ctx.resolverBootstrapNeighbor() ?
             ctx.resolverBootstrapNeighbor().split(",") : null;
@@ -132,12 +134,12 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
         }
 
         final long nowMs = ctx.epochClock().time();
-        bootstrapNeighborResolveDeadlineMs = nowMs + TIMEOUT_MS;
+        bootstrapNeighborResolveDeadlineMs = nowMs + bootstrapNeighborResolutionIntervalMs;
 
         selfResolutionDeadlineMs = 0;
         neighborResolutionDeadlineMs = nowMs + neighborResolutionIntervalMs;
 
-        cache = new DriverNameResolverCache(TIMEOUT_MS);
+        cache = new DriverNameResolverCache(neighborTimeoutMs);
 
         final UdpChannel resolverChannel =
             UdpChannel.parse("aeron:udp?endpoint=" +
@@ -520,7 +522,7 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
             bootstrapNeighborNextIndex = 0;
         }
 
-        bootstrapNeighborResolveDeadlineMs = nowMs + TIMEOUT_MS;
+        bootstrapNeighborResolveDeadlineMs = nowMs + bootstrapNeighborResolutionIntervalMs;
     }
 
     private int reresolveSingleBootstrapNeighborNotInNeighborList()

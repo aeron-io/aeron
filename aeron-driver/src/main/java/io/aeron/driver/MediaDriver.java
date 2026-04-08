@@ -595,6 +595,7 @@ public final class MediaDriver implements AutoCloseable
         private long resolverNeighbourTimeoutNs = Configuration.resolverNeighborTimeoutNs();
         private long resolverSelfResolutionIntervalNs = Configuration.resolverSelfResolutionIntervalNs();
         private long resolverNeighborResolutionIntervalNs = Configuration.resolverNeighborResolutionIntervalNs();
+        private long resolverBootstrapNeighborResolutionIntervalNs = TimeUnit.SECONDS.toNanos(10);
 
         /**
          * Construct a Context using default values and loading from system properties.
@@ -3459,6 +3460,17 @@ public final class MediaDriver implements AutoCloseable
         public Context resolverNeighborResolutionIntervalNs(final long intervalNs)
         {
             this.resolverNeighborResolutionIntervalNs = intervalNs;
+            return this;
+        }
+
+        public long resolverBootstrapNeighborResolutionIntervalNs()
+        {
+            return this.resolverBootstrapNeighborResolutionIntervalNs;
+        }
+
+        public Context resolverBootstrapNeighborResolutionIntervalNs(final long intervalNs)
+        {
+            this.resolverBootstrapNeighborResolutionIntervalNs = intervalNs;
             return this;
         }
 
