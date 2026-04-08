@@ -388,7 +388,11 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
                         bootstrapNeighbors,
                         bootstrapNeighborAddresses,
                         bootstrapNeighborInNeighborList);
-                    bootstrapNeighborNextIndex = (reresolvedIndex + 1 == bootstrapNeighbors.length) ? 0 : reresolvedIndex + 1;
+                    bootstrapNeighborNextIndex = reresolvedIndex + 1;
+                    if (bootstrapNeighborNextIndex >= bootstrapNeighbors.length)
+                    {
+                        bootstrapNeighborNextIndex = 0;
+                    }
                     bootstrapNeighborResolveDeadlineMs = nowMs + TIMEOUT_MS;
                 }
             }
