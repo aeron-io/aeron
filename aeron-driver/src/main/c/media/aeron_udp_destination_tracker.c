@@ -304,7 +304,7 @@ int aeron_udp_destination_tracker_manual_add_destination(
     }
 
     return aeron_udp_destination_tracker_add_destination(
-        tracker, now_ns, 0, false, uri, addr, destination_registration_id);
+        tracker, 0, false, now_ns, uri, addr, destination_registration_id);
 }
 
 int aeron_udp_destination_tracker_address_compare(struct sockaddr_storage *lhs, struct sockaddr_storage *rhs)
