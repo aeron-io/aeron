@@ -318,6 +318,8 @@ class DriverNameResolverSystemTest
     @InterruptAfter(10)
     void shouldUseFirstAvailableBootstrapNeighbor()
     {
+        assumeTrue(TestMediaDriver.shouldRunJavaMediaDriver());
+
         testWatcher.ignoreErrorsMatching(
             (s) -> s.contains("java.lang.IllegalArgumentException: invalid format: just:wrong") ||
                 s.contains("ava.net.UnknownHostException: unresolved - endpoint=non_existing_host:8050"));
