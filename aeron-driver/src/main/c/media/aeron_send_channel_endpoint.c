@@ -27,6 +27,7 @@
 #include "aeron_alloc.h"
 #include "aeron_position.h"
 #include "aeron_timestamps.h"
+#include "util/aeron_bitutil.h"
 
 #if !defined(HAVE_STRUCT_MMSGHDR)
 struct mmsghdr
@@ -231,6 +232,13 @@ int aeron_send_channel_endpoint_create(
     _endpoint->time_of_last_sm_ns = aeron_clock_cached_nano_time(_endpoint->cached_clock);
     memcpy(&_endpoint->current_data_addr, &channel->remote_data, sizeof(_endpoint->current_data_addr));
 
+    _endpoint->data_loss_generator = NULL;
+    _endpoint->control_loss_generator = NULL;
+    if (NULL != context->send_channel_loss_supplier_func)
+    {
+        context->send_channel_loss_supplier_func(context->send_channel_loss_supplier_clientd, _endpoint);
+    }
+
     *endpoint = _endpoint;
     return 0;
 
@@ -276,6 +284,15 @@ int aeron_send_channel_endpoint_delete(
     {
         aeron_udp_destination_tracker_close(endpoint->destination_tracker);
         aeron_free(endpoint->destination_tracker);
+    }
+
+    if (NULL != endpoint->data_loss_generator && NULL != endpoint->data_loss_generator->close)
+    {
+        endpoint->data_loss_generator->close((aeron_loss_generator_t *)endpoint->data_loss_generator);
+    }
+    if (NULL != endpoint->control_loss_generator && NULL != endpoint->control_loss_generator->close)
+    {
+        endpoint->control_loss_generator->close((aeron_loss_generator_t *)endpoint->control_loss_generator);
     }
 
     aeron_free(endpoint);
@@ -352,6 +369,20 @@ int aeron_send_channel_send(
     int64_t *bytes_sent)
 {
     int result;
+
+    if (AERON_C_COND_EXPECT(NULL != endpoint->data_loss_generator, 0) &&
+        aeron_loss_generator_should_drop_frame(
+            endpoint->data_loss_generator,
+            &endpoint->current_data_addr,
+            (const uint8_t *)iov[0].iov_base,
+            (int32_t)iov[0].iov_len))
+    {
+        if (NULL != bytes_sent)
+        {
+            *bytes_sent = (int64_t)iov[0].iov_len;
+        }
+        return 0;
+    }
 
     aeron_send_channel_apply_timestamps(endpoint, iov, iov_length);
 
@@ -502,6 +533,13 @@ void aeron_send_channel_endpoint_dispatch(
 int aeron_send_channel_endpoint_on_nak(
     aeron_send_channel_endpoint_t *endpoint, uint8_t *buffer, size_t length, struct sockaddr_storage *addr)
 {
+    if (AERON_C_COND_EXPECT(NULL != endpoint->control_loss_generator, 0) &&
+        aeron_loss_generator_should_drop_frame(
+            endpoint->control_loss_generator, addr, buffer, (int32_t)length))
+    {
+        return 0;
+    }
+
     aeron_nak_header_t *nak_header = (aeron_nak_header_t *)buffer;
     int64_t key_value = aeron_map_compound_key(nak_header->stream_id, nak_header->session_id);
     aeron_network_publication_t *publication = aeron_int64_to_ptr_hash_map_get(
@@ -545,6 +583,13 @@ int aeron_send_channel_endpoint_on_status_message(
     size_t length,
     struct sockaddr_storage *addr)
 {
+    if (AERON_C_COND_EXPECT(NULL != endpoint->control_loss_generator, 0) &&
+        aeron_loss_generator_should_drop_frame(
+            endpoint->control_loss_generator, addr, buffer, (int32_t)length))
+    {
+        return 0;
+    }
+
     aeron_status_message_header_t *sm_header = (aeron_status_message_header_t *)buffer;
     int64_t key_value = aeron_map_compound_key(sm_header->stream_id, sm_header->session_id);
     aeron_network_publication_t *publication = aeron_int64_to_ptr_hash_map_get(
@@ -620,6 +665,13 @@ int aeron_send_channel_endpoint_on_error(
 void aeron_send_channel_endpoint_on_rttm(
     aeron_send_channel_endpoint_t *endpoint, uint8_t *buffer, size_t length, struct sockaddr_storage *addr)
 {
+    if (AERON_C_COND_EXPECT(NULL != endpoint->control_loss_generator, 0) &&
+        aeron_loss_generator_should_drop_frame(
+            endpoint->control_loss_generator, addr, buffer, (int32_t)length))
+    {
+        return;
+    }
+
     aeron_rttm_header_t *rttm_header = (aeron_rttm_header_t *)buffer;
     int64_t key_value = aeron_map_compound_key(rttm_header->stream_id, rttm_header->session_id);
     aeron_network_publication_t *publication = aeron_int64_to_ptr_hash_map_get(

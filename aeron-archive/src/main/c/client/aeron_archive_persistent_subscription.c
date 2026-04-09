@@ -2453,3 +2453,9 @@ int64_t aeron_archive_persistent_subscription_join_difference(
 {
     return persistent_subscription->join_difference;
 }
+
+void aeron_archive_persistent_subscription_set_message_timeout_ns_for_testing(
+    aeron_archive_persistent_subscription_t *persistent_subscription, uint64_t message_timeout_ns)
+{
+    persistent_subscription->message_timeout_ns = message_timeout_ns;
+}

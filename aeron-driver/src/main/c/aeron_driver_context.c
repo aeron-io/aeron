@@ -40,6 +40,7 @@
 #include "aeron_termination_validator.h"
 #include "agent/aeron_driver_agent.h"
 #include "util/aeron_dlopen.h"
+#include "media/aeron_debug_channel_endpoint_configuration.h"
 
 aeron_threading_mode_t aeron_config_parse_threading_mode(const char *threading_mode, aeron_threading_mode_t def)
 {
@@ -380,6 +381,11 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
     {
         goto error;
     }
+
+    _context->send_channel_loss_supplier_func = NULL;
+    _context->send_channel_loss_supplier_clientd = NULL;
+    _context->receive_channel_loss_supplier_func = NULL;
+    _context->receive_channel_loss_supplier_clientd = NULL;
 
     if (aeron_wildcard_port_manager_init(&_context->sender_wildcard_port_manager, true) < 0)
     {
@@ -1390,6 +1396,8 @@ int aeron_driver_context_close(aeron_driver_context_t *context)
         AERON_SET_ERR(EINVAL, "%s", "aeron_driver_context_close(NULL)");
         return -1;
     }
+
+    aeron_debug_channel_endpoint_configuration_cleanup(context);
 
     aeron_wildcard_port_manager_delete(&context->sender_wildcard_port_manager);
     aeron_wildcard_port_manager_delete(&context->receiver_wildcard_port_manager);
@@ -2901,6 +2909,30 @@ int aeron_driver_context_set_name_resolver_init_args(aeron_driver_context_t *con
 const char *aeron_driver_context_get_name_resolver_init_args(aeron_driver_context_t *context)
 {
     return NULL != context ? context->name_resolver_init_args : NULL;
+}
+
+int aeron_driver_context_set_send_channel_loss_supplier(
+    aeron_driver_context_t *context,
+    aeron_send_channel_loss_supplier_func_t func,
+    void *clientd)
+{
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+
+    context->send_channel_loss_supplier_func = func;
+    context->send_channel_loss_supplier_clientd = clientd;
+    return 0;
+}
+
+int aeron_driver_context_set_receive_channel_loss_supplier(
+    aeron_driver_context_t *context,
+    aeron_receive_channel_loss_supplier_func_t func,
+    void *clientd)
+{
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+
+    context->receive_channel_loss_supplier_func = func;
+    context->receive_channel_loss_supplier_clientd = clientd;
+    return 0;
 }
 
 int aeron_driver_context_set_resolver_neighbor_timeout_ns(aeron_driver_context_t *context, uint64_t value)

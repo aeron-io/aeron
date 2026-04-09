@@ -66,6 +66,22 @@ if (AERON_UNIT_TESTS)
     aeron_driver_test(driver_agent_test agent/aeron_driver_agent_test.cpp)
     aeron_driver_test(udp_channel_transport_loss_test media/aeron_udp_channel_transport_loss_test.cpp)
     aeron_driver_test(udp_channel_transport_multi_gap_loss_test media/aeron_udp_channel_transport_multi_gap_loss_test.cpp)
+    set(AERON_TEST_SUPPORT_C_PATH "${CMAKE_SOURCE_DIR}/aeron-test-support/src/main/c")
+    add_executable(aeron_test_loss_generators_test
+        media/aeron_test_loss_generators_test.cpp
+        ${AERON_TEST_SUPPORT_C_PATH}/aeron_stream_id_loss_generator.c
+        ${AERON_TEST_SUPPORT_C_PATH}/aeron_port_loss_generator.c
+        ${AERON_TEST_SUPPORT_C_PATH}/aeron_frame_data_loss_generator.c
+        ${AERON_TEST_SUPPORT_C_PATH}/aeron_stream_id_frame_data_loss_generator.c
+        ${TEST_HEADERS})
+    add_dependencies(aeron_test_loss_generators_test gmock)
+    target_include_directories(aeron_test_loss_generators_test PUBLIC ${AERON_TEST_SUPPORT_C_PATH})
+    target_link_libraries(aeron_test_loss_generators_test aeron_driver gmock_main ${CMAKE_THREAD_LIBS_INIT} ${AERON_LIB_WINSOCK_LIBS})
+    target_compile_definitions(aeron_test_loss_generators_test PUBLIC "_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING")
+    if (STRUCT_MMSGHDR_TYPE_EXISTS)
+        target_compile_definitions(aeron_test_loss_generators_test PUBLIC -DHAVE_STRUCT_MMSGHDR)
+    endif ()
+    add_test(NAME aeron_test_loss_generators_test COMMAND aeron_test_loss_generators_test)
     aeron_driver_test(flow_control_test aeron_flow_control_test.cpp)
     aeron_driver_test(name_resolver_test aeron_name_resolver_test.cpp)
     aeron_driver_test(name_resolver_cache_test aeron_name_resolver_cache_test.cpp)

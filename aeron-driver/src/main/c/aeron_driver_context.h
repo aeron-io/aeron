@@ -133,6 +133,17 @@ typedef void (*aeron_driver_name_resolver_on_host_name_t)(
     int64_t duration_ns,
     const char *host_name);
 
+struct aeron_send_channel_endpoint_stct;
+struct aeron_receive_channel_endpoint_stct;
+
+typedef void (*aeron_send_channel_loss_supplier_func_t)(
+    void *clientd,
+    struct aeron_send_channel_endpoint_stct *endpoint);
+
+typedef void (*aeron_receive_channel_loss_supplier_func_t)(
+    void *clientd,
+    struct aeron_receive_channel_endpoint_stct *endpoint);
+
 typedef struct aeron_driver_context_stct
 {
     char aeron_dir[AERON_MAX_PATH];                         /* aeron.dir */
@@ -344,6 +355,11 @@ typedef struct aeron_driver_context_stct
     aeron_name_resolver_supplier_func_t driver_name_resolver_bootstrap_resolver_supplier_func;
     const char *driver_name_resolver_boostrap_resolver_init_args;
 
+    aeron_send_channel_loss_supplier_func_t send_channel_loss_supplier_func;
+    void *send_channel_loss_supplier_clientd;
+    aeron_receive_channel_loss_supplier_func_t receive_channel_loss_supplier_func;
+    void *receive_channel_loss_supplier_clientd;
+
     aeron_duty_cycle_tracker_t *conductor_duty_cycle_tracker;
     aeron_duty_cycle_tracker_t *sender_duty_cycle_tracker;
     aeron_duty_cycle_tracker_t *receiver_duty_cycle_tracker;
@@ -398,6 +414,16 @@ int aeron_driver_context_bindings_clientd_find(aeron_driver_context_t *context, 
 
 aeron_driver_context_bindings_clientd_entry_t *aeron_driver_context_bindings_clientd_get_or_find_first_free_entry(
     aeron_driver_context_t *context, const char *name);
+
+int aeron_driver_context_set_send_channel_loss_supplier(
+    aeron_driver_context_t *context,
+    aeron_send_channel_loss_supplier_func_t func,
+    void *clientd);
+
+int aeron_driver_context_set_receive_channel_loss_supplier(
+    aeron_driver_context_t *context,
+    aeron_receive_channel_loss_supplier_func_t func,
+    void *clientd);
 
 inline void aeron_cnc_version_signal_cnc_ready(aeron_cnc_metadata_t *metadata, int32_t cnc_version)
 {

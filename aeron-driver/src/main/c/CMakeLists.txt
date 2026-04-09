@@ -283,6 +283,10 @@ SET(DRIVER_ONLY_SOURCE
     media/aeron_udp_channel_transport_fixed_loss.c
     media/aeron_udp_channel_transport_multi_gap_loss.c
     media/aeron_udp_channel_transport_loss.c
+    media/aeron_random_loss_generator.c
+    media/aeron_fixed_loss_generator.c
+    media/aeron_multi_gap_loss_generator.c
+    media/aeron_debug_channel_endpoint_configuration.c
     media/aeron_udp_destination_tracker.c
     media/aeron_udp_transport_poller.c
     uri/aeron_driver_uri.c
@@ -332,6 +336,11 @@ SET(HEADERS
     media/aeron_udp_channel_transport_fixed_loss.h
     media/aeron_udp_channel_transport_multi_gap_loss.h
     media/aeron_udp_channel_transport_loss.h
+    media/aeron_loss_generator.h
+    media/aeron_random_loss_generator.h
+    media/aeron_fixed_loss_generator.h
+    media/aeron_multi_gap_loss_generator.h
+    media/aeron_debug_channel_endpoint_configuration.h
     media/aeron_udp_destination_tracker.h
     media/aeron_udp_transport_poller.h
     uri/aeron_driver_uri.h

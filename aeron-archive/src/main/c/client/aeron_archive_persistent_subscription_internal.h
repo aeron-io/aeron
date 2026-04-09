@@ -34,4 +34,14 @@ aeron_counter_t *aeron_archive_persistent_subscription_context_get_state_counter
  */
 int64_t aeron_archive_persistent_subscription_join_difference(aeron_archive_persistent_subscription_t *persistent_subscription);
 
+/**
+ * Overrides the message timeout used for internal deadline calculations.
+ * Intended for testing timeout code paths.
+ *
+ * @param persistent_subscription to modify.
+ * @param message_timeout_ns new timeout in nanoseconds.
+ */
+void aeron_archive_persistent_subscription_set_message_timeout_ns_for_testing(
+    aeron_archive_persistent_subscription_t *persistent_subscription, uint64_t message_timeout_ns);
+
 #endif //AERON_AERON_ARCHIVE_PERSISTENT_SUBSCRIPTION_INTERNAL_H

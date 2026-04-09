@@ -25,6 +25,7 @@
 #include "aeron_driver_context.h"
 #include "aeron_system_counters.h"
 #include "media/aeron_receive_destination.h"
+#include "aeron_loss_generator.h"
 
 typedef enum aeron_receive_channel_endpoint_status_enum
 {
@@ -82,6 +83,9 @@ typedef struct aeron_receive_channel_endpoint_stct
     int64_t *short_sends_counter;
     int64_t *possible_ttl_asymmetry_counter;
     int64_t *errors_frames_sent_counter;
+
+    const aeron_loss_generator_t *data_loss_generator;
+    const aeron_loss_generator_t *control_loss_generator;
 }
 aeron_receive_channel_endpoint_t;
 
