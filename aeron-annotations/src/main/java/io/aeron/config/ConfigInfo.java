@@ -19,7 +19,30 @@ import java.io.Serializable;
 import java.util.concurrent.TimeUnit;
 
 /**
- * A handy class for storing data that gets serialized into json.
+ * Holds all metadata collected by {@link ConfigProcessor} for a single logical configuration
+ * option, serialised to {@code config-info.dat} for use by downstream Gradle tasks.
+ *
+ * <p>A single {@code ConfigInfo} entry is built from up to three annotated Java elements that
+ * share the same {@link #id}:</p>
+ * <ul>
+ *   <li>A {@code _PROP_NAME} field → populates {@link #propertyName},
+ *       {@link #propertyNameFieldName}, {@link #propertyNameClassName}, and
+ *       {@link #propertyNameDescription}.</li>
+ *   <li>A {@code _DEFAULT} / {@code _DEFAULT_NS} field → populates {@link #defaultValue},
+ *       {@link #defaultFieldName}, {@link #defaultClassName}, and
+ *       {@link #defaultDescription}.</li>
+ *   <li>A {@code Context} method → populates {@link #context} and
+ *       {@link #contextDescription}.</li>
+ * </ul>
+ *
+ * <p>After all elements are processed, {@link ConfigProcessor} derives the expected C driver
+ * definitions ({@link ExpectedCConfig}) and runs a sanity check.  Use {@link #existsInC} /
+ * {@link #existsInJava} to mark options that only exist on one side of the Java/C boundary.</p>
+ *
+ * <p>Each description field has a paired {@code *Clean} field that contains the same text with
+ * Javadoc markup (inline tags, HTML) converted to Markdown, produced by
+ * {@link io.aeron.utility.JavadocCleaner}.  The clean field is {@code null} when the cleaned
+ * text is identical to the original (i.e. no markup was present).</p>
  */
 public class ConfigInfo implements Serializable
 {
