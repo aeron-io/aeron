@@ -494,7 +494,7 @@ project(':aeron-client') {
     }
 
     tasks.register('generateConfigDoc', JavaExec) {
-        def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.md"
+        def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.adoc"
 
         dependsOn 'compileJava'
         inputs.files(configInfoFile)
@@ -519,7 +519,7 @@ project(':aeron-client') {
 
     tasks.register('generateCounterDoc', JavaExec) {
         def counterInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/counter-info.dat"
-        def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/counters.md"
+        def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/counters.adoc"
 
         dependsOn 'compileJava'
         inputs.files(counterInfoFile)
@@ -610,7 +610,7 @@ project(':aeron-driver') {
     }
 
     tasks.register('generateConfigDoc', JavaExec) {
-        def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.md"
+        def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.adoc"
 
         dependsOn 'compileJava'
         inputs.files(configInfoFile)
@@ -835,7 +835,7 @@ project(':aeron-archive') {
     }
 
     tasks.register('generateConfigDoc', JavaExec) {
-        def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.md"
+        def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.adoc"
 
         dependsOn 'compileJava'
         inputs.files(configInfoFile)
@@ -1015,7 +1015,7 @@ project(':aeron-cluster') {
 
     tasks.register('generateConfigDoc', JavaExec) {
         def configInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/config-info.dat"
-        def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.md"
+        def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.adoc"
 
         dependsOn 'compileJava'
         inputs.files(configInfoFile)
@@ -1487,15 +1487,15 @@ tasks.register('generateCombinedConfigDoc') {
 
     final def subprojectNames = ['aeron-client', 'aeron-driver', 'aeron-archive', 'aeron-cluster']
     final def docFileProviders = subprojectNames.collect {
-        project(":${it}").layout.buildDirectory.file('generated-doc/out.md')
+        project(":${it}").layout.buildDirectory.file('generated-doc/out.adoc')
     }
-    final def counterDocFileProvider = project(':aeron-client').layout.buildDirectory.file('generated-doc/counters.md')
+    final def counterDocFileProvider = project(':aeron-client').layout.buildDirectory.file('generated-doc/counters.adoc')
 
     inputs.files(docFileProviders)
     inputs.files(counterDocFileProvider)
 
-    final def outputFile = layout.buildDirectory.file('generated-doc/config.md')
-    final def counterOutputFile = layout.buildDirectory.file('generated-doc/counters.md')
+    final def outputFile = layout.buildDirectory.file('generated-doc/config.adoc')
+    final def counterOutputFile = layout.buildDirectory.file('generated-doc/counters.adoc')
     outputs.file(outputFile)
     outputs.file(counterOutputFile)
 
@@ -1508,10 +1508,10 @@ tasks.register('generateCombinedConfigDoc') {
                 if (idx > 0)
                 {
                     writer.println()
-                    writer.println('---')
+                    writer.println("'''")
                     writer.println()
                 }
-                writer.println("## ${pair[0]}")
+                writer.println("== ${pair[0]}")
                 writer.println()
                 writer.print(pair[1].get().asFile.text)
             }

@@ -80,7 +80,7 @@ final class CounterDocGenerator implements AutoCloseable
     {
         writeHeader(
             toHeaderString(counterInfo.name) +
-            (counterInfo.existsInC ? "" : " (***JAVA ONLY***)"));
+            (counterInfo.existsInC ? "" : " *(JAVA ONLY)*"));
         write("ID", String.valueOf(counterInfo.id));
         write("Description", counterInfo.counterDescription);
         if (counterInfo.counterDescriptionClean != null)
@@ -108,15 +108,14 @@ final class CounterDocGenerator implements AutoCloseable
 
     private void writeSectionHeader(final String title) throws IOException
     {
-        writer.write("## " + title + "\n\n");
+        writer.write("== " + title + "\n\n");
     }
 
     private void writeHeader(final String t) throws IOException
     {
-        writeRow("", t);
-        writeLine();
-        writeRow("---", "---");
-        writeLine();
+        writer.write("=== " + t + "\n\n");
+        writer.write("[cols=\"1h,3\"]\n");
+        writer.write("|===\n");
     }
 
     private void writeCode(final String a, final String b) throws IOException
@@ -127,18 +126,13 @@ final class CounterDocGenerator implements AutoCloseable
     private void write(final String a, final String b) throws IOException
     {
         final String value = b == null ? "" : b.replaceAll("\n", " ").trim();
-        writeRow("**" + a + "**", value);
-        writeLine();
+        writer.write("| " + a + "\n");
+        writer.write("| " + value + "\n\n");
     }
 
     private void writeLine() throws IOException
     {
-        writer.write("\n");
-    }
-
-    private void writeRow(final String a, final String b) throws IOException
-    {
-        writer.write("| " + a + " | " + b + " |");
+        writer.write("|===\n\n");
     }
 
     private String toHeaderString(final String t)

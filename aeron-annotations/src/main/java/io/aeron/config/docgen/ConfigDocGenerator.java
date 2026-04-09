@@ -63,9 +63,9 @@ final class ConfigDocGenerator implements AutoCloseable
         {
             writeHeader(
                 toHeaderString(configInfo.id) +
-                (configInfo.expectations.c.exists ? "" : " (***JAVA ONLY***)") +
-                (configInfo.existsInJava ? "" : " (***C ONLY***)") +
-                (configInfo.deprecated ? " (***DEPRECATED***)" : ""));
+                (configInfo.expectations.c.exists ? "" : " *(JAVA ONLY)*") +
+                (configInfo.existsInJava ? "" : " *(C ONLY)*") +
+                (configInfo.deprecated ? " *(DEPRECATED)*" : ""));
             write("Description", configInfo.propertyNameDescription);
             if (configInfo.propertyNameDescriptionClean != null)
             {
@@ -142,10 +142,9 @@ final class ConfigDocGenerator implements AutoCloseable
 
     private void writeHeader(final String t) throws IOException
     {
-        writeRow("", t);
-        writeLine();
-        writeRow("---", "---");
-        writeLine();
+        writer.write("=== " + t + "\n\n");
+        writer.write("[cols=\"1h,3\"]\n");
+        writer.write("|===\n");
     }
 
     private void writeCode(final String a, final String b) throws IOException
@@ -155,18 +154,13 @@ final class ConfigDocGenerator implements AutoCloseable
 
     private void write(final String a, final String b) throws IOException
     {
-        writeRow("**" + a + "**", b.replaceAll("\n", " ").trim());
-        writeLine();
+        writer.write("| " + a + "\n");
+        writer.write("| " + b.replaceAll("\n", " ").trim() + "\n\n");
     }
 
     private void writeLine() throws IOException
     {
-        writer.write("\n");
-    }
-
-    private void writeRow(final String a, final String b) throws IOException
-    {
-        writer.write("| " + a + " | " + b + " |");
+        writer.write("|===\n\n");
     }
 
     private String toHeaderString(final String t)

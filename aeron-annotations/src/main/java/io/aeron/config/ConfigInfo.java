@@ -36,8 +36,8 @@ import java.util.concurrent.TimeUnit;
  * </ul>
  *
  * <p>After all elements are processed, {@link ConfigProcessor} derives the expected C driver
- * definitions ({@link ExpectedCConfig}) and runs a sanity check.  Use {@link #existsInC} /
- * {@link #existsInJava} to mark options that only exist on one side of the Java/C boundary.</p>
+ * definitions ({@link ExpectedCConfig}) and runs a sanity check.  Use {@link Config#existsInC} /
+ * {@link Config#existsInJava} to mark options that only exist on one side of the Java/C boundary.</p>
  *
  * <p>Each description field has a paired {@code *Clean} field that contains the same text with
  * Javadoc markup (inline tags, HTML) converted to Markdown, produced by

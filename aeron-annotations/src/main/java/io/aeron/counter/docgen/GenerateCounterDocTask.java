@@ -30,7 +30,7 @@ public final class GenerateCounterDocTask
      * Run the counter doc generator task.
      *
      * @param args Arg 0 should be the location of a counter-info.dat file with a list of CounterInfo objects. Arg 1
-     *             should be the location of an output file where a .md file is to be written.
+     *             should be the location of an output file where a .adoc file is to be written.
      * @throws Exception on IO failure.
      */
     public static void main(final String[] args) throws Exception
