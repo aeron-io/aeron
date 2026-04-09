@@ -48,7 +48,6 @@ import static org.agrona.BitUtil.CACHE_LINE_LENGTH;
  */
 final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransport.UdpFrameHandler, NameResolver
 {
-    static NameResolver bootstrapNameResolver = DefaultNameResolver.INSTANCE;
     private static final String RESOLVER_NEIGHBORS_COUNTER_LABEL = "Resolver neighbors";
 
     private static final long WORK_INTERVAL_MS = 10;
@@ -297,13 +296,6 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
     {
         final StringBuilder builder = new StringBuilder(RESOLVER_NEIGHBORS_COUNTER_LABEL);
         builder.append(": bound ").append(transport.bindAddressAndPort());
-
-//        if (null != bootstrapNeighborAddress)
-//        {
-//            builder.append(" bootstrap ").append(
-//                formatAddressAndPort(bootstrapNeighborAddress.getAddress(), bootstrapNeighborAddress.getPort()));
-//        }
-
         return builder.toString();
     }
 
