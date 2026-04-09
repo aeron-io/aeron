@@ -225,7 +225,7 @@ class DriverNameResolverTest
             .putAddress(socketAddress.getAddress().getAddress())
             .putName(name.getBytes(StandardCharsets.US_ASCII));
 
-        int frameLength = MIN_HEADER_LENGTH + resolutionEntryFlyweight.entryLength();
+        final int frameLength = MIN_HEADER_LENGTH + resolutionEntryFlyweight.entryLength();
         driverNameResolver.onFrame(unsafeBuffer, frameLength, socketAddress, time);
     }
 }

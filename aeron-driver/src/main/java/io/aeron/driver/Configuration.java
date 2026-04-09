@@ -1201,6 +1201,18 @@ public final class Configuration
     public static final long RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_NS_DEFAULT = TimeUnit.SECONDS.toNanos(2);
 
     /**
+     * Property name for the interval between resolutions of bootstrap neighbors that are not active.
+     */
+    @Config(defaultType = DefaultType.LONG, defaultLong = 10_000_000_000L)
+    public static final String RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_NS_PROP_NAME =
+        "aeron.driver.resolver.neighbor.resolution.interval.ns";
+
+    /**
+     * Default interval between resolutions of bootstrap neighbors that are not active.
+     */
+    public static final long RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_NS_DEFAULT = TimeUnit.SECONDS.toNanos(10);
+
+    /**
      * {@link Executor} that run tasks on the caller thread.
      */
     public static final Executor CALLER_RUNS_TASK_EXECUTOR = Runnable::run;
@@ -1660,6 +1672,20 @@ public final class Configuration
     {
         return getDurationInNanos(
             RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_NS_PROP_NAME, RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_NS_DEFAULT);
+    }
+
+    /**
+     * Resolve configuration for the interval between resolutions of bootstrap neighbors that are not active.
+     *
+     * @return interval between sending name to address messages for all known neighbors.
+     * @see #RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_NS_DEFAULT
+     * @see #RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_NS_PROP_NAME
+     */
+    public static long resolverBootstrapNeighborResolutionIntervalNs()
+    {
+        return getDurationInNanos(
+            RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_NS_PROP_NAME,
+            RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_NS_DEFAULT);
     }
 
     /**
