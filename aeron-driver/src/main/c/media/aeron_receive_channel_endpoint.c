@@ -245,7 +245,7 @@ int aeron_receive_channel_endpoint_elicit_setup(
             return -1;
         }
 
-        result += work_count;
+        work_count += result;
     }
 
     return work_count;
