@@ -1971,6 +1971,7 @@ class DriverConductorTest
         final DriverConductor conductor = new DriverConductor(ctx.clone()
             .cncByteBuffer(IoUtil.mapNewFile(dir.resolve("some.txt").toFile(), 64))
             .asyncTaskExecutor(asyncTaskExecutor));
+        conductor.onStart();
 
         conductor.onClose();
 
@@ -1989,6 +1990,7 @@ class DriverConductorTest
         final DriverConductor conductor = new DriverConductor(ctx.clone()
             .cncByteBuffer(IoUtil.mapNewFile(dir.resolve("some.txt").toFile(), 64))
             .asyncTaskExecutor(asyncTaskExecutor));
+        conductor.onStart();
 
         conductor.onClose();
 
@@ -2007,6 +2009,7 @@ class DriverConductorTest
         final DriverConductor conductor = new DriverConductor(ctx.clone()
             .cncByteBuffer(IoUtil.mapNewFile(dir.resolve("some.txt").toFile(), 64))
             .asyncTaskExecutor(asyncTaskExecutor));
+        conductor.onStart();
 
         conductor.onClose();
 
@@ -2024,6 +2027,7 @@ class DriverConductorTest
         final DriverConductor conductor = new DriverConductor(ctx.clone()
             .cncByteBuffer(IoUtil.mapNewFile(dir.resolve("some.txt").toFile(), 64))
             .asyncTaskExecutor(asyncTaskExecutor));
+        conductor.onStart();
 
         conductor.onClose();
 
@@ -2041,6 +2045,7 @@ class DriverConductorTest
     {
         final MappedByteBuffer cncByteBuffer = spy(IoUtil.mapNewFile(dir.resolve("test.cnc").toFile(), 1024));
         final DriverConductor conductor = new DriverConductor(ctx.clone().cncByteBuffer(cncByteBuffer));
+        conductor.onStart();
 
         conductor.onClose();
 

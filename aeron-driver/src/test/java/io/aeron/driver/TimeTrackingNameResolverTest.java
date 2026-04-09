@@ -61,23 +61,23 @@ class TimeTrackingNameResolverTest
         final DutyCycleTracker maxTime = mock(DutyCycleTracker.class);
         final TimeTrackingNameResolver resolver = new TimeTrackingNameResolver(delegateResolver, clock, maxTime);
 
-        resolver.close();
+        resolver.onClose();
 
-        verifyNoInteractions(delegateResolver, clock, maxTime);
+        verify(delegateResolver).onClose();
+        verifyNoMoreInteractions(delegateResolver, clock, maxTime);
     }
 
     @Test
-    void closeIShouldCloseDelegateResolver() throws Exception
+    void closeIShouldCloseDelegateResolver()
     {
-        final NameResolverAgent delegateResolver = mock(
-            NameResolverAgent.class, withSettings().extraInterfaces(AutoCloseable.class));
+        final NameResolverAgent delegateResolver = mock(NameResolverAgent.class);
         final NanoClock clock = mock(NanoClock.class);
         final DutyCycleTracker maxTime = mock(DutyCycleTracker.class);
         final TimeTrackingNameResolver resolver = new TimeTrackingNameResolver(delegateResolver, clock, maxTime);
 
-        resolver.close();
+        resolver.onClose();
 
-        verify((AutoCloseable)delegateResolver).close();
+        verify(delegateResolver).onClose();
         verifyNoMoreInteractions(delegateResolver);
         verifyNoInteractions(clock, maxTime);
     }

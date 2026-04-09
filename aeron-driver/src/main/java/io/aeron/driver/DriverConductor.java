@@ -279,6 +279,7 @@ public final class DriverConductor implements Agent
             ctx.nameResolver(),
             nanoClock,
             ctx.nameResolverTimeTracker());
+        nameResolver.onStart();
 
         final SystemCounters systemCounters = ctx.systemCounters();
         systemCounters.get(RESOLUTION_CHANGES).appendToLabel(": driverName=" + ctx.resolverName());
@@ -305,7 +306,7 @@ public final class DriverConductor implements Agent
                 ctx.errorHandler().onError(e);
             }
         }
-        CloseHelper.close(ctx.errorHandler(), nameResolver);
+        nameResolver.onClose();
         CloseHelper.closeAll(receiveChannelEndpointByChannelMap.values());
         CloseHelper.closeAll(sendChannelEndpointByChannelMap.values());
         publicationImages.forEach(PublicationImage::free);

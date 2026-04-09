@@ -3298,7 +3298,7 @@ public final class MediaDriver implements AutoCloseable
          * @param nameResolver to use for resolving endpoints and control names.
          * @return this for fluent API.
          */
-        public Context nameResolver(final NameResolver nameResolver)
+        public Context nameResolver(final NameResolverAgent nameResolver)
         {
             this.nameResolver = nameResolver;
             return this;

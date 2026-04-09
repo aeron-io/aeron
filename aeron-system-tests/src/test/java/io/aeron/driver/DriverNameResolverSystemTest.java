@@ -414,7 +414,7 @@ class DriverNameResolverSystemTest
             (s) -> s.contains("java.net.UnknownHostException: unresolved - endpoint=localhostA:8050"));
 
         final MutableBoolean resolveHostA = new MutableBoolean(true);
-        final NameResolver bootstrapResolver = new NameResolver()
+        final NameResolverAgent bootstrapResolver = new NameResolverAgent()
         {
             public InetAddress resolve(final String name, final String uriParamName, final boolean isReResolution)
             {

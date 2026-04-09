@@ -50,7 +50,7 @@ import static org.agrona.BitUtil.CACHE_LINE_LENGTH;
 /**
  * Default {@link NameResolver} for the {@link MediaDriver}.
  */
-final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransport.UdpFrameHandler, NameResolverAgent
+final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHandler, NameResolverAgent
 {
     private static final String RESOLVER_NEIGHBORS_COUNTER_LABEL = "Resolver neighbors";
 
@@ -150,8 +150,6 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
                 NetworkUtil.formatAddressAndPort(localSocketAddress.getAddress(), localSocketAddress.getPort()),
                 delegateResolver);
         transport = transportFactory.newInstance(resolverChannel, localSocketAddress, unsafeBuffer, ctx);
-
-        openDatagramChannel();
     }
 
     public void init(final CountersReader countersReader, final CounterProvider counterProvider)
@@ -173,11 +171,14 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
     /**
      * {@inheritDoc}
      */
-    public void close()
+    public void onStart()
     {
-        CloseHelper.close(transport);
+        openDatagramChannel();
     }
 
+    /**
+     * {@inheritDoc}
+     */
     public int doWork()
     {
         final long nowMs = clock.time();
@@ -208,6 +209,14 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
         }
 
         return workCount;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public void onClose()
+    {
+        CloseHelper.close(transport);
     }
 
     /**

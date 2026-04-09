@@ -24,7 +24,6 @@ import org.agrona.concurrent.status.CountersReader;
  */
 public interface NameResolverAgent extends NameResolver, Agent
 {
-
     /**
      * Do post construction initialisation of the name resolver.
      *
