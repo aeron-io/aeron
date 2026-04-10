@@ -121,21 +121,8 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
             ctx.resolverBootstrapNeighborResolutionIntervalNs());
 
         bootstrapNeighbors = null != ctx.resolverBootstrapNeighbor() ?
-            ctx.resolverBootstrapNeighbor().split(",") : null;
-        if (null != bootstrapNeighbors)
-        {
-            bootstrapNeighborAddresses = new InetSocketAddress[bootstrapNeighbors.length];
-
-            for (int i = 0; i < bootstrapNeighbors.length; ++i)
-            {
-                final InetSocketAddress neighborAddress = resolveBootstrapNeighbor(bootstrapNeighbors[i]);
-                bootstrapNeighborAddresses[i] = neighborAddress;
-            }
-        }
-        else
-        {
-            bootstrapNeighborAddresses = new InetSocketAddress[0];
-        }
+            ctx.resolverBootstrapNeighbor().split(",") : new String[0];
+        bootstrapNeighborAddresses = new InetSocketAddress[bootstrapNeighbors.length];
 
         final long nowMs = ctx.epochClock().time();
         bootstrapNeighborResolveDeadlineMs = nowMs + bootstrapNeighborResolutionIntervalMs;
@@ -174,6 +161,11 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
     public void onStart()
     {
         openDatagramChannel();
+
+        for (int i = 0; i < bootstrapNeighborAddresses.length; ++i)
+        {
+            bootstrapNeighborAddresses[i] = resolveBootstrapNeighbor(bootstrapNeighbors[i]);
+        }
     }
 
     /**

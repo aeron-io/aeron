@@ -109,6 +109,7 @@ class DriverNameResolverTest
 
         driverNameResolver = new DriverNameResolver(mediaDriverCtx, udpNameResolutionTransportFactory);
         driverNameResolver.init(countersManager, countersManager::newCounter);
+        driverNameResolver.onStart();
 
         epochClock.update(TIMEOUT_MS * 0);
         driverNameResolver.doWork();
@@ -137,6 +138,8 @@ class DriverNameResolverTest
 
         driverNameResolver = new DriverNameResolver(mediaDriverCtx, udpNameResolutionTransportFactory);
         driverNameResolver.init(countersManager, countersManager::newCounter);
+        driverNameResolver.onStart();
+
         verify(delegateResolver).lookup(eq(endpointOne), anyString(), eq(false));
         verify(delegateResolver).resolve(eq(addressOne), anyString(), eq(false));
         verify(delegateResolver).lookup(eq(endpointTwo), anyString(), eq(false));
@@ -186,6 +189,8 @@ class DriverNameResolverTest
 
         driverNameResolver = new DriverNameResolver(mediaDriverCtx, udpNameResolutionTransportFactory);
         driverNameResolver.init(countersManager, countersManager::newCounter);
+        driverNameResolver.onStart();
+
         verify(delegateResolver).lookup(eq(endpointOne), anyString(), eq(false));
         verify(delegateResolver).resolve(eq(addressOne), anyString(), eq(false));
         verify(delegateResolver).lookup(eq(endpointTwo), anyString(), eq(false));
