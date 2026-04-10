@@ -167,6 +167,10 @@ class DriverNameResolverTest
         verify(delegateResolver, times(3)).lookup(eq(endpointTwo), anyString(), eq(false));
         verify(delegateResolver, times(3)).resolve(eq(addressTwo), anyString(), eq(false));
 
+        driverNameResolver.doWork(TIMEOUT_MS * 2);
+        verify(delegateResolver, times(4)).lookup(eq(endpointTwo), anyString(), eq(false));
+        verify(delegateResolver, times(4)).resolve(eq(addressTwo), anyString(), eq(false));
+
         onNeighborFrame(nameTwo, addressTwo, portTwo, TIMEOUT_MS * 2);
 
         epochClock.update(TIMEOUT_MS * 3);

@@ -21,6 +21,7 @@ import io.aeron.driver.media.NetworkUtil;
 import io.aeron.driver.media.UdpChannel;
 import io.aeron.driver.media.UdpNameResolutionTransport;
 import io.aeron.driver.status.SystemCounterDescriptor;
+import io.aeron.exceptions.AeronException;
 import io.aeron.protocol.HeaderFlyweight;
 import io.aeron.protocol.ResolutionEntryFlyweight;
 import org.agrona.BufferUtil;
@@ -52,6 +53,8 @@ import static org.agrona.BitUtil.CACHE_LINE_LENGTH;
  */
 final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHandler, NameResolverAgent
 {
+    private static final int MAX_BOOTSTRAP_NEIGHBORS = 20;
+
     private static final String RESOLVER_NEIGHBORS_COUNTER_LABEL = "Resolver neighbors";
 
     private static final long WORK_INTERVAL_MS = 10;
@@ -70,6 +73,7 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
     private final EpochClock clock;
     private final AtomicCounter invalidPackets;
     private final AtomicCounter shortSends;
+    private final AtomicCounter errors;
     private AtomicCounter neighborsCounter;
     private AtomicCounter cacheEntriesCounter;
     private final byte[] nameTempBuffer = new byte[ResolutionEntryFlyweight.MAX_NAME_LENGTH];
@@ -106,6 +110,7 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
         mtuLength = ctx.mtuLength();
         invalidPackets = ctx.systemCounters().get(SystemCounterDescriptor.INVALID_PACKETS);
         shortSends = ctx.systemCounters().get(SystemCounterDescriptor.SHORT_SENDS);
+        errors = ctx.systemCounters().get(SystemCounterDescriptor.ERRORS);
         delegateResolver = ctx.nameResolver();
         clock = ctx.cachedEpochClock();
 
@@ -125,7 +130,7 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
         bootstrapNeighborAddresses = new InetSocketAddress[bootstrapNeighbors.length];
 
         final long nowMs = ctx.epochClock().time();
-        bootstrapNeighborResolveDeadlineMs = nowMs + bootstrapNeighborResolutionIntervalMs;
+        bootstrapNeighborResolveDeadlineMs = nowMs;
 
         selfResolutionDeadlineMs = 0;
         neighborResolutionDeadlineMs = nowMs + neighborResolutionIntervalMs;
@@ -286,7 +291,8 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
             {
                 resolutionEntryFlyweight.wrap(unsafeBuffer, offset, length - offset);
 
-                if ((length - offset) < resolutionEntryFlyweight.entryLength())
+                if (HeaderFlyweight.CURRENT_VERSION != resolutionEntryFlyweight.version() ||
+                    (length - offset) < resolutionEntryFlyweight.entryLength())
                 {
                     invalidPackets.increment();
                     return 0;
@@ -329,7 +335,7 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
         {
             final Neighbor neighbor = neighborList.get(i);
 
-            if (nowMs > (neighbor.timeOfLastActivityMs + neighborTimeoutMs))
+            if ((neighbor.timeOfLastActivityMs + neighborTimeoutMs) <= nowMs)
             {
                 Neighbor.neighborRemoved(nowMs, neighbor.socketAddress);
                 ArrayListUtil.fastUnorderedRemove(neighborList, i, lastIndex--);
@@ -348,6 +354,11 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
 
     private void sendSelfResolutions(final long nowMs)
     {
+        if (0 == bootstrapNeighborAddresses.length && neighborList.isEmpty())
+        {
+            return;
+        }
+
         byteBuffer.clear();
 
         final int currentOffset = HeaderFlyweight.MIN_HEADER_LENGTH;
@@ -412,6 +423,11 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
         if (0 <= bytesSent && bytesSent < bytesRemaining)
         {
             shortSends.increment();
+        }
+
+        if (0 == bytesSent) // TODO ????
+        {
+            errors.increment();
         }
     }
 
