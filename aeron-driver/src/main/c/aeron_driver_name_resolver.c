@@ -82,6 +82,7 @@ typedef struct aeron_driver_name_resolver_stct
     bootstrap_neighbor_addrs;
 
     aeron_udp_channel_transport_bindings_t *transport_bindings;
+    size_t mtu_length;
     aeron_name_resolver_t bootstrap_resolver;
     aeron_udp_channel_data_paths_t data_paths;
     aeron_udp_channel_transport_t transport;
@@ -209,6 +210,7 @@ int aeron_driver_name_resolver_init(
     _driver_resolver->aligned_buffer = aeron_cache_line_align_buffer(_driver_resolver->buffer);
     _driver_resolver->name = name;
     _driver_resolver->name_length = strlen(name);
+    _driver_resolver->mtu_length = context->mtu_length;
 
     size_t prefixlen = 0;
     if (aeron_interface_parse_and_resolve(interface_name, &_driver_resolver->local_socket_addr, &prefixlen) < 0)
@@ -914,7 +916,7 @@ static int aeron_driver_name_resolver_send_neighbor_resolutions(aeron_driver_nam
 
             int entry_length = aeron_driver_name_resolver_set_resolution_header(
                 resolution_header,
-                AERON_MAX_UDP_PAYLOAD_LENGTH - entry_offset,
+                resolver->mtu_length - entry_offset,
                 0,
                 &cache_entry->cache_addr,
                 cache_entry->name,
@@ -942,7 +944,7 @@ static int aeron_driver_name_resolver_send_neighbor_resolutions(aeron_driver_nam
             if (aeron_driver_name_resolver_do_send(resolver, frame_header, entry_offset, &neighbor->socket_addr) < 0)
             {
                 AERON_APPEND_ERR("%s", "Failed to send neighbor resolutions");
-                aeron_distinct_error_log_record(resolver->error_log, aeron_errcode(), aeron_errmsg());
+                aeron_name_resolver_log_and_clear_error(resolver);
             }
             else
             {
