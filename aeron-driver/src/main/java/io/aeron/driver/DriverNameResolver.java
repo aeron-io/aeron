@@ -66,7 +66,7 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
     private final CountedErrorHandler countedErrorHandler;
     private final UdpNameResolutionTransport transport;
     private final DriverNameResolverCache cache;
-    private final NameResolver delegateResolver;
+    private final NameResolverAgent delegateResolver;
     private final EpochClock clock;
     private final AtomicCounter invalidPackets;
     private final AtomicCounter shortSends;
@@ -153,6 +153,8 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
         cacheEntriesCounter = counterProvider.newCounter(
             AeronCounters.NAME_RESOLVER_CACHE_ENTRIES_COUNTER_TYPE_ID,
             expandableArrayBuffer, 0, 0, expandableArrayBuffer, 0, cacheEntriesCounterLength);
+
+        delegateResolver.init(countersReader, counterProvider);
     }
 
     /**
@@ -166,6 +168,8 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
         {
             bootstrapNeighborAddresses[i] = resolveBootstrapNeighbor(bootstrapNeighbors[i]);
         }
+
+        delegateResolver.onStart();
     }
 
     /**
@@ -198,6 +202,8 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
                 reresolveBootstrapNeighbors();
                 bootstrapNeighborResolveDeadlineMs = nowMs + bootstrapNeighborResolutionIntervalMs;
             }
+
+            workCount += delegateResolver.doWork();
         }
 
         return workCount;
@@ -208,6 +214,7 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
      */
     public void onClose()
     {
+        delegateResolver.onClose();
         CloseHelper.close(transport);
     }
 
