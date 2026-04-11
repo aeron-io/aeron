@@ -488,7 +488,7 @@ void aeron_driver_receiver_on_remove_destination(void *clientd, void *item)
             &endpoint->dispatcher,
             AERON_UDP_CHANNEL_INTERCEPTOR_REMOVE_NOTIFICATION) < 0)
         {
-            AERON_APPEND_ERR("%s", "on_add_destination, interceptors transport notifications");
+            AERON_APPEND_ERR("%s", "on_remove_destination, interceptors transport notifications");
             aeron_driver_receiver_log_error(receiver);
         }
 
