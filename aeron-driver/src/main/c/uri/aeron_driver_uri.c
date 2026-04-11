@@ -384,7 +384,7 @@ int aeron_diver_uri_publication_params(
                 EINVAL,
                 "Param %s=%" PRIu64 " must be multiple of FRAME_ALIGNMENT",
                 AERON_URI_TERM_OFFSET_KEY,
-                params->term_offset);
+                term_offset);
             return -1;
         }
 
