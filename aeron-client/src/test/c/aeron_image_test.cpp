@@ -357,7 +357,9 @@ TEST_F(ImageTest, shouldStopReadingIfImageIsClosed)
     EXPECT_EQ(imagePoll(handler, std::numeric_limits<size_t>::max()), 1);
     EXPECT_EQ(true, aeron_image_is_closed(m_image));
     EXPECT_EQ(handlerCallCount, 1u);
-    EXPECT_EQ(m_sub_pos, alignedMessageLength);
+    // subscriber_position should NOT be advanced because the image was closed
+    // during the handler — the !is_closed guard prevents the position write.
+    EXPECT_EQ(m_sub_pos, 0);
 }
 
 TEST_F(ImageTest, shouldReadLastMessage)
@@ -656,7 +658,10 @@ TEST_F(ImageTest, shouldPollOneFragmentToControlledFragmentHandlerOnBreak)
         EXPECT_EQ(header->frame->frame_header.type, AERON_HDR_TYPE_DATA);
         EXPECT_EQ(values.frame.type, AERON_HDR_TYPE_DATA);
         EXPECT_EQ(image_constants.initial_term_id, values.initial_term_id);
-        EXPECT_EQ(image_constants.position_bits_to_shift, values.position_bits_to_shift);
+        // memcpy to avoid ubsan complaint
+        size_t position_bits_to_shift;
+        memcpy(&position_bits_to_shift, &values.position_bits_to_shift, sizeof(position_bits_to_shift));
+        EXPECT_EQ(image_constants.position_bits_to_shift, position_bits_to_shift);
         EXPECT_EQ(alignedMessageLength, aeron_header_position(header));
 
         return AERON_ACTION_BREAK;
@@ -830,7 +835,9 @@ TEST_F(ImageTest, shouldStopPollFragmentsToControlledFragmentHandlerIfImageIsClo
     EXPECT_EQ(imageControlledPoll(handler, std::numeric_limits<size_t>::max()), 1);
     EXPECT_EQ(true, aeron_image_is_closed(m_image));
     EXPECT_EQ(1, fragmentCount);
-    EXPECT_EQ(m_sub_pos, initialPosition + alignedMessageLength);
+    // subscriber_position should NOT be advanced because the image was closed
+    // during the handler
+    EXPECT_EQ(m_sub_pos, initialPosition);
 }
 
 TEST_F(ImageTest, shouldPollNoFragmentsToBoundedControlledFragmentHandlerWithMaxPositionBeforeInitialPosition)
@@ -938,7 +945,7 @@ TEST_F(ImageTest, shouldStopPollFragmentsToBoundedControlledFragmentHandlerIfIma
 
     EXPECT_EQ(imageBoundedControlledPoll(handler, INT64_MAX, std::numeric_limits<size_t>::max()), 1);
     EXPECT_EQ(true, aeron_image_is_closed(m_image));
-    EXPECT_EQ(m_sub_pos, initialPosition + alignedMessageLength);
+    EXPECT_EQ(m_sub_pos, initialPosition);
 }
 
 TEST_F(ImageTest, shouldPollFragmentsToBoundedFragmentHandlerWithMaxPositionBeforeNextMessage)
@@ -985,7 +992,69 @@ TEST_F(ImageTest, shouldStopPollFragmentsToBoundedFragmentHandlerIfImageIsClosed
 
     EXPECT_EQ(imageBoundedPoll(null_handler, INT64_MAX, std::numeric_limits<size_t>::max()), 1);
     EXPECT_EQ(true, aeron_image_is_closed(m_image));
-    EXPECT_EQ(m_sub_pos, initialPosition + alignedMessageLength);
+    EXPECT_EQ(m_sub_pos, initialPosition);
+}
+
+TEST_F(ImageTest, boundedControlledPollCommitShouldNotAdvancePositionWhenClosedDuringHandler)
+{
+    const size_t messageLength = 64;
+    const int64_t alignedLength =
+        AERON_ALIGN(messageLength + AERON_DATA_HEADER_LENGTH, AERON_LOGBUFFER_FRAME_ALIGNMENT);
+
+    createImage();
+
+    appendMessage(0, messageLength);
+    appendMessage(alignedLength, messageLength);
+
+    EXPECT_EQ(0, m_sub_pos);
+
+    int callCount = 0;
+    int fragments = imageBoundedControlledPoll(
+        [&](const uint8_t *, size_t, aeron_header_t *) -> aeron_controlled_fragment_handler_action_t
+        {
+            callCount++;
+            if (callCount == 1)
+            {
+                aeron_image_close(m_image);
+                // COMMIT should be skipped because is_closed is now true
+                return AERON_ACTION_COMMIT;
+            }
+            return AERON_ACTION_CONTINUE;
+        },
+        INT64_MAX,
+        10);
+
+    EXPECT_EQ(1, fragments);
+    EXPECT_EQ(1, callCount);
+    EXPECT_EQ(0, m_sub_pos);
+    EXPECT_EQ(0, aeron_image_position(m_image));
+}
+
+TEST_F(ImageTest, blockPollShouldNotAdvancePositionWhenClosedDuringHandler)
+{
+    const size_t messageLength = 64;
+
+    createImage();
+
+    appendMessage(0, messageLength);
+
+    EXPECT_EQ(0, m_sub_pos);
+
+    int length = aeron_image_block_poll(
+        m_image,
+        [](void *clientd, const uint8_t *, size_t, int32_t, int32_t)
+        {
+            aeron_image_t *img = static_cast<aeron_image_t *>(clientd);
+            aeron_image_close(img);
+        },
+        m_image,
+        m_term_length);
+
+    // block_poll scanned and delivered the block, but the position write
+    // should be skipped because the image was closed
+    EXPECT_GT(length, 0);
+    EXPECT_EQ(0, m_sub_pos);
+    EXPECT_EQ(0, aeron_image_position(m_image));
 }
 
 TEST_F(ImageTest, shouldPollFragmentsToBoundedControlledFragmentHandlerWithMaxPositionAfterEndOfTerm)

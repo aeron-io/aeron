@@ -337,7 +337,11 @@ int aeron_image_poll(aeron_image_t *image, aeron_fragment_handler_t handler, voi
     int64_t new_position = initial_position + (offset - initial_offset);
     if (new_position > initial_position)
     {
-        aeron_counter_set_release(image->subscriber_position, new_position);
+        AERON_GET_ACQUIRE(is_closed, image->is_closed);
+        if (!is_closed)
+        {
+            aeron_counter_set_release(image->subscriber_position, new_position);
+        }
     }
 
     return (int)fragments_read;
@@ -430,14 +434,22 @@ int aeron_image_controlled_poll(
         {
             initial_position += (offset - initial_offset);
             initial_offset = offset;
-            aeron_counter_set_release(image->subscriber_position, initial_position);
+            AERON_GET_ACQUIRE(is_closed, image->is_closed);
+            if (!is_closed)
+            {
+                aeron_counter_set_release(image->subscriber_position, initial_position);
+            }
         }
     }
 
     int64_t new_position = initial_position + (offset - initial_offset);
     if (new_position > initial_position)
     {
-        aeron_counter_set_release(image->subscriber_position, new_position);
+        AERON_GET_ACQUIRE(is_closed, image->is_closed);
+        if (!is_closed)
+        {
+            aeron_counter_set_release(image->subscriber_position, new_position);
+        }
     }
 
     return (int)fragments_read;
@@ -526,7 +538,11 @@ int aeron_image_bounded_poll(
     int64_t new_position = initial_position + (offset - initial_offset);
     if (new_position > initial_position)
     {
-        aeron_counter_set_release(image->subscriber_position, new_position);
+        AERON_GET_ACQUIRE(is_closed, image->is_closed);
+        if (!is_closed)
+        {
+            aeron_counter_set_release(image->subscriber_position, new_position);
+        }
     }
 
     return (int)fragments_read;
@@ -630,14 +646,22 @@ int aeron_image_bounded_controlled_poll(
         {
             initial_position += (offset - initial_offset);
             initial_offset = offset;
-            aeron_counter_set_release(image->subscriber_position, initial_position);
+            AERON_GET_ACQUIRE(is_closed, image->is_closed);
+            if (!is_closed)
+            {
+                aeron_counter_set_release(image->subscriber_position, initial_position);
+            }
         }
     }
 
     int64_t new_position = initial_position + (offset - initial_offset);
     if (new_position > initial_position)
     {
-        aeron_counter_set_release(image->subscriber_position, new_position);
+        AERON_GET_ACQUIRE(is_closed, image->is_closed);
+        if (!is_closed)
+        {
+            aeron_counter_set_release(image->subscriber_position, new_position);
+        }
     }
 
     return (int)fragments_read;
@@ -829,7 +853,11 @@ int aeron_image_block_poll(
             term_id);
     }
 
-    aeron_counter_set_release(image->subscriber_position, position + length);
+    AERON_GET_ACQUIRE(is_closed, image->is_closed);
+    if (!is_closed)
+    {
+        aeron_counter_set_release(image->subscriber_position, position + length);
+    }
 
     return (int)length;
 }
