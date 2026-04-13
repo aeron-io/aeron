@@ -291,7 +291,7 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
             {
                 resolutionEntryFlyweight.wrap(unsafeBuffer, offset, length - offset);
 
-                if (HeaderFlyweight.CURRENT_VERSION != resolutionEntryFlyweight.version() ||
+                if (HeaderFlyweight.CURRENT_VERSION != headerFlyweight.version() ||
                     (length - offset) < resolutionEntryFlyweight.entryLength())
                 {
                     invalidPackets.increment();
