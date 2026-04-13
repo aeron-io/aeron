@@ -66,11 +66,8 @@ final class ConfigDocGenerator implements AutoCloseable
                 (configInfo.expectations.c.exists ? "" : " *(JAVA ONLY)*") +
                 (configInfo.existsInJava ? "" : " *(C ONLY)*") +
                 (configInfo.deprecated ? " *(DEPRECATED)*" : ""));
-            write("Description", configInfo.propertyNameDescription);
-            if (configInfo.propertyNameDescriptionClean != null)
-            {
-                write("Description (clean)", configInfo.propertyNameDescriptionClean);
-            }
+            write("Description", configInfo.propertyNameDescriptionClean != null ?
+                configInfo.propertyNameDescriptionClean : configInfo.propertyNameDescription);
             write("Type",
                 (DefaultType.isUndefined(configInfo.overrideDefaultValueType) ?
                 configInfo.defaultValueType :
@@ -85,11 +82,8 @@ final class ConfigDocGenerator implements AutoCloseable
             }
             if (configInfo.contextDescription != null && !configInfo.contextDescription.isEmpty())
             {
-                write("Context Description", configInfo.contextDescription);
-                if (configInfo.contextDescriptionClean != null)
-                {
-                    write("Context Description (clean)", configInfo.contextDescriptionClean);
-                }
+                write("Context Description", configInfo.contextDescriptionClean != null ?
+                    configInfo.contextDescriptionClean : configInfo.contextDescription);
             }
             if (configInfo.uriParam != null && !configInfo.uriParam.isEmpty())
             {
@@ -98,11 +92,8 @@ final class ConfigDocGenerator implements AutoCloseable
 
             if (configInfo.defaultDescription != null)
             {
-                write("Default Description", configInfo.defaultDescription);
-                if (configInfo.defaultDescriptionClean != null)
-                {
-                    write("Default Description (clean)", configInfo.defaultDescriptionClean);
-                }
+                write("Default Description", configInfo.defaultDescriptionClean != null ?
+                    configInfo.defaultDescriptionClean : configInfo.defaultDescription);
             }
             final String defaultValue = configInfo.overrideDefaultValue == null ?
                 (configInfo.defaultValue == null ? "" : configInfo.defaultValue) :

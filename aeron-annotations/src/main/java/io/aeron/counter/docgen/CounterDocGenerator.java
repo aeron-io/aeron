@@ -82,11 +82,8 @@ final class CounterDocGenerator implements AutoCloseable
             toHeaderString(counterInfo.name) +
             (counterInfo.existsInC ? "" : " *(JAVA ONLY)*"));
         write("ID", String.valueOf(counterInfo.id));
-        write("Description", counterInfo.counterDescription);
-        if (counterInfo.counterDescriptionClean != null)
-        {
-            write("Description (clean)", counterInfo.counterDescriptionClean);
-        }
+        write("Description", counterInfo.counterDescriptionClean != null ?
+            counterInfo.counterDescriptionClean : counterInfo.counterDescription);
         if (counterInfo.javaFieldName != null)
         {
             writeCode("Java Field", counterInfo.javaFieldName);
