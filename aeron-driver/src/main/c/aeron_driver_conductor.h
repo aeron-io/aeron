@@ -47,8 +47,8 @@ aeron_publication_link_t;
 
 #define AERON_PUBLICATION_LINK_INIT(_link, _resource, _registration_id) \
 do {                                                                    \
-    link->resource = _resource;                                         \
-    link->registration_id = registration_id;                            \
+    _link->resource = _resource;                                        \
+    _link->registration_id = _registration_id;                          \
 } while (0)
 
 typedef struct aeron_counter_link_stct
