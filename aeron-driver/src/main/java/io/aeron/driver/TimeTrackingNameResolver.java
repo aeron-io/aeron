@@ -105,6 +105,9 @@ final class TimeTrackingNameResolver implements NameResolverAgent
         return delegateResolver.doWork();
     }
 
+    /**
+     * {@inheritDoc}
+     */
     public void onClose()
     {
         delegateResolver.onClose();

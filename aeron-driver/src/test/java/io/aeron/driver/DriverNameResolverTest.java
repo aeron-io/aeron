@@ -140,6 +140,9 @@ class DriverNameResolverTest
         driverNameResolver.init(countersManager, countersManager::newCounter);
         driverNameResolver.onStart();
 
+        verify(delegateResolver).init(any(), any());
+        verify(delegateResolver).onStart();
+
         verify(delegateResolver).lookup(eq(endpointOne), anyString(), eq(false));
         verify(delegateResolver).resolve(eq(addressOne), anyString(), eq(false));
         verify(delegateResolver).lookup(eq(endpointTwo), anyString(), eq(false));
@@ -149,15 +152,18 @@ class DriverNameResolverTest
 
         epochClock.update(TIMEOUT_MS * 0);
         driverNameResolver.doWork();
+        verify(delegateResolver).doWork();
         onNeighborFrame(nameOne, addressOne, portOne, TIMEOUT_MS * 0);
 
         epochClock.update(TIMEOUT_MS * 1);
         driverNameResolver.doWork();
+        verify(delegateResolver, times(2)).doWork();
         verify(delegateResolver, times(2)).lookup(eq(endpointTwo), anyString(), eq(false));
         verify(delegateResolver, times(2)).resolve(eq(addressTwo), anyString(), eq(false));
 
         epochClock.update(TIMEOUT_MS * 2);
         driverNameResolver.doWork();
+        verify(delegateResolver, times(3)).doWork();
         verify(delegateResolver, times(3)).lookup(eq(endpointTwo), anyString(), eq(false));
         verify(delegateResolver, times(3)).resolve(eq(addressTwo), anyString(), eq(false));
 
@@ -165,6 +171,7 @@ class DriverNameResolverTest
 
         epochClock.update(TIMEOUT_MS * 3);
         driverNameResolver.doWork();
+        verify(delegateResolver, times(4)).doWork();
         verifyNoMoreInteractions(delegateResolver);
     }
 
@@ -191,6 +198,9 @@ class DriverNameResolverTest
         driverNameResolver.init(countersManager, countersManager::newCounter);
         driverNameResolver.onStart();
 
+        verify(delegateResolver).init(any(), any());
+        verify(delegateResolver).onStart();
+
         verify(delegateResolver).lookup(eq(endpointOne), anyString(), eq(false));
         verify(delegateResolver).resolve(eq(addressOne), anyString(), eq(false));
         verify(delegateResolver).lookup(eq(endpointTwo), anyString(), eq(false));
@@ -202,10 +212,12 @@ class DriverNameResolverTest
         onNeighborFrame(nameOne, addressOne, portOne, neighborTimeoutMs * 0);
         onNeighborFrame(nameTwo, addressTwo, portTwo, neighborTimeoutMs * 0);
         driverNameResolver.doWork();
+        verify(delegateResolver).doWork();
         verifyNoMoreInteractions(delegateResolver);
 
         epochClock.update(neighborTimeoutMs / 2);
         driverNameResolver.doWork();
+        verify(delegateResolver, times(2)).doWork();
         verifyNoMoreInteractions(delegateResolver);
 
         epochClock.update(neighborTimeoutMs / 2);
@@ -215,6 +227,7 @@ class DriverNameResolverTest
 
         epochClock.update(neighborTimeoutMs);
         driverNameResolver.doWork();
+        verify(delegateResolver, times(3)).doWork();
         verify(delegateResolver).lookup(eq(endpointTwo), anyString(), eq(false));
         verify(delegateResolver).resolve(eq(addressTwo), anyString(), eq(false));
         verifyNoMoreInteractions(delegateResolver);

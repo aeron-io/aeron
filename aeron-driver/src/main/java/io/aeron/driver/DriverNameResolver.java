@@ -140,6 +140,9 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
         openDatagramChannel();
     }
 
+    /**
+     * {@inheritDoc}
+     */
     public void init(final CountersReader countersReader, final CounterProvider counterProvider)
     {
         final ExpandableArrayBuffer expandableArrayBuffer = new ExpandableArrayBuffer();
