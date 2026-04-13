@@ -137,13 +137,14 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
                 NetworkUtil.formatAddressAndPort(localSocketAddress.getAddress(), localSocketAddress.getPort()),
                 delegateResolver);
         transport = transportFactory.newInstance(resolverChannel, localSocketAddress, unsafeBuffer, ctx);
+        openDatagramChannel();
     }
 
     public void init(final CountersReader countersReader, final CounterProvider counterProvider)
     {
         final ExpandableArrayBuffer expandableArrayBuffer = new ExpandableArrayBuffer();
 
-        final int neighborsCounterLength = expandableArrayBuffer.putStringAscii(0, RESOLVER_NEIGHBORS_COUNTER_LABEL);
+        final int neighborsCounterLength = expandableArrayBuffer.putStringAscii(0, buildNeighborsCounterLabel());
         neighborsCounter = counterProvider.newCounter(
             AeronCounters.NAME_RESOLVER_NEIGHBORS_COUNTER_TYPE_ID,
             expandableArrayBuffer, 0, 0, expandableArrayBuffer, 0, neighborsCounterLength);
@@ -162,8 +163,6 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
      */
     public void onStart()
     {
-        openDatagramChannel();
-
         for (int i = 0; i < bootstrapNeighborAddresses.length; ++i)
         {
             bootstrapNeighborAddresses[i] = resolveBootstrapNeighbor(bootstrapNeighbors[i]);
@@ -309,8 +308,6 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
         {
             localSocketAddress = boundAddress;
             localAddress = boundAddress.getAddress().getAddress();
-
-            neighborsCounter.updateLabel(buildNeighborsCounterLabel());
         }
     }
 
