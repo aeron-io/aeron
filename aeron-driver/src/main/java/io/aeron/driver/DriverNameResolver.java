@@ -73,7 +73,6 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
     private final EpochClock clock;
     private final AtomicCounter invalidPackets;
     private final AtomicCounter shortSends;
-    private final AtomicCounter errors;
     private AtomicCounter neighborsCounter;
     private AtomicCounter cacheEntriesCounter;
     private final byte[] nameTempBuffer = new byte[ResolutionEntryFlyweight.MAX_NAME_LENGTH];
@@ -110,7 +109,6 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
         mtuLength = ctx.mtuLength();
         invalidPackets = ctx.systemCounters().get(SystemCounterDescriptor.INVALID_PACKETS);
         shortSends = ctx.systemCounters().get(SystemCounterDescriptor.SHORT_SENDS);
-        errors = ctx.systemCounters().get(SystemCounterDescriptor.ERRORS);
         delegateResolver = ctx.nameResolver();
         clock = ctx.cachedEpochClock();
 
@@ -423,11 +421,6 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
         if (0 <= bytesSent && bytesSent < bytesRemaining)
         {
             shortSends.increment();
-        }
-
-        if (0 == bytesSent) // TODO ????
-        {
-            errors.increment();
         }
     }
 
