@@ -144,12 +144,13 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
     {
         final ExpandableArrayBuffer expandableArrayBuffer = new ExpandableArrayBuffer();
 
-        final int neighborsCounterLength = expandableArrayBuffer.putStringAscii(0, buildNeighborsCounterLabel());
+        final int neighborsCounterLength = expandableArrayBuffer.putStringWithoutLengthAscii(
+            0, buildNeighborsCounterLabel());
         neighborsCounter = counterProvider.newCounter(
             AeronCounters.NAME_RESOLVER_NEIGHBORS_COUNTER_TYPE_ID,
             expandableArrayBuffer, 0, 0, expandableArrayBuffer, 0, neighborsCounterLength);
 
-        final int cacheEntriesCounterLength = expandableArrayBuffer.putStringAscii(
+        final int cacheEntriesCounterLength = expandableArrayBuffer.putStringWithoutLengthAscii(
             0, "Resolver cache entries: name=" + localDriverName);
         cacheEntriesCounter = counterProvider.newCounter(
             AeronCounters.NAME_RESOLVER_CACHE_ENTRIES_COUNTER_TYPE_ID,
