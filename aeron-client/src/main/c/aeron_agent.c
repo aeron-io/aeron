@@ -226,7 +226,7 @@ static int aeron_idle_strategy_backoff_state_init_args(void **state, const char 
     uint64_t max_yields = strtoull(yields_str, &end_ptr, 10);
     if ((0 == max_yields && 0 != errno) || end_ptr == yields_str)
     {
-        AERON_SET_ERR(errno, "max yields not parseable: %s", max_yields);
+        AERON_SET_ERR(errno, "max yields not parseable: %s", yields_str);
         return -1;
     }
 
