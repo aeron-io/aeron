@@ -21,6 +21,7 @@ import io.aeron.driver.media.NetworkUtil;
 import io.aeron.driver.media.UdpChannel;
 import io.aeron.driver.media.UdpNameResolutionTransport;
 import io.aeron.driver.status.SystemCounterDescriptor;
+import io.aeron.exceptions.AeronException;
 import io.aeron.protocol.HeaderFlyweight;
 import io.aeron.protocol.ResolutionEntryFlyweight;
 import org.agrona.BufferUtil;
@@ -129,6 +130,14 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
 
         bootstrapNeighbors = null != ctx.resolverBootstrapNeighbor() ?
             ctx.resolverBootstrapNeighbor().split(",") : new String[0];
+
+        if (MAX_BOOTSTRAP_NEIGHBORS < bootstrapNeighbors.length)
+        {
+            throw new AeronException(
+                "Resolver Bootstrap Neighbor list too large.  Can have a maximum of " +
+                MAX_BOOTSTRAP_NEIGHBORS + ".");
+        }
+
         bootstrapNeighborAddresses = new InetSocketAddress[bootstrapNeighbors.length];
 
         final long nowMs = ctx.epochClock().time();
