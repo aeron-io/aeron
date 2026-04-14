@@ -21,7 +21,6 @@ import io.aeron.driver.media.NetworkUtil;
 import io.aeron.driver.media.UdpChannel;
 import io.aeron.driver.media.UdpNameResolutionTransport;
 import io.aeron.driver.status.SystemCounterDescriptor;
-import io.aeron.exceptions.AeronException;
 import io.aeron.protocol.HeaderFlyweight;
 import io.aeron.protocol.ResolutionEntryFlyweight;
 import org.agrona.BufferUtil;
@@ -45,7 +44,12 @@ import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
 import static io.aeron.driver.DriverNameResolverCache.fullLengthMatch;
-import static io.aeron.protocol.ResolutionEntryFlyweight.*;
+import static io.aeron.protocol.ResolutionEntryFlyweight.HDR_TYPE_RES;
+import static io.aeron.protocol.ResolutionEntryFlyweight.MIN_HEADER_LENGTH;
+import static io.aeron.protocol.ResolutionEntryFlyweight.RES_TYPE_NAME_TO_IP4_MD;
+import static io.aeron.protocol.ResolutionEntryFlyweight.RES_TYPE_NAME_TO_IP6_MD;
+import static io.aeron.protocol.ResolutionEntryFlyweight.SELF_FLAG;
+import static io.aeron.protocol.ResolutionEntryFlyweight.entryLengthRequired;
 import static org.agrona.BitUtil.CACHE_LINE_LENGTH;
 
 /**
@@ -128,7 +132,7 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
         bootstrapNeighborAddresses = new InetSocketAddress[bootstrapNeighbors.length];
 
         final long nowMs = ctx.epochClock().time();
-        bootstrapNeighborResolveDeadlineMs = nowMs;
+        bootstrapNeighborResolveDeadlineMs = nowMs + bootstrapNeighborResolutionIntervalMs;
 
         selfResolutionDeadlineMs = 0;
         neighborResolutionDeadlineMs = nowMs + neighborResolutionIntervalMs;

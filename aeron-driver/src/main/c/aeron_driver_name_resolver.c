@@ -364,7 +364,7 @@ int aeron_driver_name_resolver_init(
     _driver_resolver->neighbor_resolution_interval_ms = neighbor_resolution_interval_ms;
     _driver_resolver->neighbor_resolutions_deadline_ms = now_ms + _driver_resolver->neighbor_resolution_interval_ms;
     _driver_resolver->bootstrap_neighbor_resolution_interval_ms = bootstrap_neighbor_resolution_interval_ms;
-    _driver_resolver->bootstrap_neighbor_resolve_deadline_ms = now_ms;
+    _driver_resolver->bootstrap_neighbor_resolve_deadline_ms = now_ms + bootstrap_neighbor_resolution_interval_ms;
     _driver_resolver->work_deadline_ms = 0;
 
     const char *neighbor_counter_label = aeron_driver_name_resolver_build_neighbor_counter_label(_driver_resolver);
