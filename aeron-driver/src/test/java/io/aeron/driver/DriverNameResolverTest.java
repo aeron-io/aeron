@@ -35,7 +35,6 @@ import org.mockito.ArgumentCaptor;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.StreamSupport;
 
 import static io.aeron.protocol.HeaderFlyweight.MIN_HEADER_LENGTH;
 import static io.aeron.protocol.ResolutionEntryFlyweight.RES_TYPE_NAME_TO_IP4_MD;
@@ -75,7 +74,6 @@ class DriverNameResolverTest
     private final ArgumentCaptor<UnsafeBuffer> bufferCaptor = ArgumentCaptor.forClass(UnsafeBuffer.class);
     private final DutyCycleTracker dutyCycleTracker = mock(DutyCycleTracker.class);
 
-    private final UnsafeBuffer unsafeBuffer = new UnsafeBuffer(new byte[1024]);
     private final HeaderFlyweight headerFlyweight = new HeaderFlyweight();
     private final ResolutionEntryFlyweight resolutionEntryFlyweight = new ResolutionEntryFlyweight();
 
