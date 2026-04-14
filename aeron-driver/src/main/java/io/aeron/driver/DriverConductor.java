@@ -259,6 +259,11 @@ public final class DriverConductor implements Agent
             clientProxy,
             this);
 
+        nameResolver = new TimeTrackingNameResolver(
+            ctx.nameResolver(),
+            nanoClock,
+            ctx.nameResolverTimeTracker());
+
         lastCommandConsumerPosition = toDriverCommands.consumerPosition();
     }
 
@@ -275,10 +280,6 @@ public final class DriverConductor implements Agent
         clockUpdateDeadlineNs = nowNs + CLOCK_UPDATE_INTERNAL_NS;
         timeOfLastToDriverPositionChangeNs = nowNs;
 
-        nameResolver = new TimeTrackingNameResolver(
-            ctx.nameResolver(),
-            nanoClock,
-            ctx.nameResolverTimeTracker());
         nameResolver.onStart();
 
         final SystemCounters systemCounters = ctx.systemCounters();
