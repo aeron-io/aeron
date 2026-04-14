@@ -530,6 +530,18 @@ int aeron_archive_async_connect_transition_to_done(aeron_archive_t **aeron_archi
 
 int aeron_archive_async_connect_delete(aeron_archive_async_connect_t *async)
 {
+    if (NULL != async->async_add_subscription)
+    {
+        aeron_async_add_subscription_cancel(async->aeron, async->async_add_subscription);
+        async->async_add_subscription = NULL;
+    }
+
+    if (NULL != async->async_add_exclusive_publication)
+    {
+        aeron_async_add_exclusive_publication_cancel(async->aeron, async->async_add_exclusive_publication);
+        async->async_add_exclusive_publication = NULL;
+    }
+
     if (NULL != async->subscription)
     {
         aeron_subscription_close(async->subscription, NULL, NULL);

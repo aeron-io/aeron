@@ -2568,35 +2568,6 @@ int aeron_client_conductor_do_work(aeron_client_conductor_t *conductor)
     return work_count;
 }
 
-void aeron_client_conductor_on_close(aeron_client_conductor_t *conductor)
-{
-    aeron_client_conductor_notify_close_handlers(conductor);
-
-    aeron_int64_to_ptr_hash_map_for_each(
-        &conductor->log_buffer_by_id_map, aeron_client_conductor_delete_log_buffer, NULL);
-    aeron_int64_to_ptr_hash_map_for_each(
-        &conductor->resource_by_id_map, aeron_client_conductor_delete_resource, NULL);
-    aeron_array_to_ptr_hash_map_for_each(
-        &conductor->image_by_key_map, aeron_client_conductor_delete_image, NULL);
-
-    for (size_t i = 0, length = conductor->lingering_resources.length; i < length; i++)
-    {
-        aeron_client_conductor_delete_lingering_resource(&conductor->lingering_resources.array[i]);
-    }
-
-    aeron_client_conductor_on_cmd_client_close(conductor);
-    aeron_broadcast_receiver_close(&conductor->to_client_buffer);
-
-    aeron_int64_to_ptr_hash_map_delete(&conductor->log_buffer_by_id_map);
-    aeron_int64_to_ptr_hash_map_delete(&conductor->resource_by_id_map);
-    aeron_array_to_ptr_hash_map_delete(&conductor->image_by_key_map);
-    aeron_free(conductor->registering_resources.array);
-    aeron_free(conductor->lingering_resources.array);
-    aeron_free(conductor->available_counter_handlers.array);
-    aeron_free(conductor->unavailable_counter_handlers.array);
-    aeron_free(conductor->close_handlers.array);
-}
-
 int aeron_client_conductor_async_add_publication(
     aeron_async_add_publication_t **async, aeron_client_conductor_t *conductor, const char *uri, int32_t stream_id)
 {
@@ -2969,6 +2940,68 @@ int aeron_client_conductor_async_remove_resource(
     }
 
     return 0;
+}
+
+static void aeron_client_conductor_free_pending_command(void *clientd, void *item)
+{
+    aeron_client_command_base_t *cmd = (aeron_client_command_base_t *)item;
+
+    if (cmd->func == aeron_client_conductor_on_cmd_add_publication ||
+        cmd->func == aeron_client_conductor_on_cmd_add_exclusive_publication ||
+        cmd->func == aeron_client_conductor_on_cmd_add_subscription ||
+        cmd->func == aeron_client_conductor_on_cmd_add_counter ||
+        cmd->func == aeron_client_conductor_on_cmd_add_static_counter)
+    {
+        aeron_async_cmd_free((aeron_client_registering_resource_t *)item);
+    }
+    else if (cmd->func == aeron_client_conductor_on_cmd_remove_resource)
+    {
+        // Don't call on_complete here — it would free the associated async handle,
+        // which is also referenced in registering_resources and freed below.
+        aeron_free(item);
+    }
+    // Close commands and destination commands reference resources that are
+    // cleaned up by the resource_by_id_map iteration below — don't double-free.
+}
+
+void aeron_client_conductor_on_close(aeron_client_conductor_t *conductor)
+{
+    aeron_mpsc_concurrent_array_queue_drain_all(
+        conductor->command_queue,
+        aeron_client_conductor_free_pending_command,
+        conductor);
+
+    for (size_t i = 0, length = conductor->registering_resources.length; i < length; i++)
+    {
+        aeron_async_cmd_free(conductor->registering_resources.array[i].resource);
+    }
+    conductor->registering_resources.length = 0;
+
+    aeron_client_conductor_notify_close_handlers(conductor);
+
+    aeron_int64_to_ptr_hash_map_for_each(
+        &conductor->log_buffer_by_id_map, aeron_client_conductor_delete_log_buffer, NULL);
+    aeron_int64_to_ptr_hash_map_for_each(
+        &conductor->resource_by_id_map, aeron_client_conductor_delete_resource, NULL);
+    aeron_array_to_ptr_hash_map_for_each(
+        &conductor->image_by_key_map, aeron_client_conductor_delete_image, NULL);
+
+    for (size_t i = 0, length = conductor->lingering_resources.length; i < length; i++)
+    {
+        aeron_client_conductor_delete_lingering_resource(&conductor->lingering_resources.array[i]);
+    }
+
+    aeron_client_conductor_on_cmd_client_close(conductor);
+    aeron_broadcast_receiver_close(&conductor->to_client_buffer);
+
+    aeron_int64_to_ptr_hash_map_delete(&conductor->log_buffer_by_id_map);
+    aeron_int64_to_ptr_hash_map_delete(&conductor->resource_by_id_map);
+    aeron_array_to_ptr_hash_map_delete(&conductor->image_by_key_map);
+    aeron_free(conductor->registering_resources.array);
+    aeron_free(conductor->lingering_resources.array);
+    aeron_free(conductor->available_counter_handlers.array);
+    aeron_free(conductor->unavailable_counter_handlers.array);
+    aeron_free(conductor->close_handlers.array);
 }
 
 int aeron_client_conductor_async_add_counter(
