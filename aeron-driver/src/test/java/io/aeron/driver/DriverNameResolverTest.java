@@ -15,6 +15,8 @@
  */
 package io.aeron.driver;
 
+import io.aeron.Aeron;
+import io.aeron.AeronCounters;
 import io.aeron.driver.media.PortManager;
 import io.aeron.driver.media.UdpNameResolutionTransport;
 import io.aeron.driver.media.WildcardPortManager;
@@ -23,8 +25,11 @@ import io.aeron.exceptions.AeronException;
 import io.aeron.protocol.HeaderFlyweight;
 import io.aeron.protocol.ResolutionEntryFlyweight;
 import io.aeron.test.Tests;
+import io.aeron.test.driver.RedirectingNameResolver;
+import org.agrona.collections.MutableInteger;
 import org.agrona.concurrent.CachedEpochClock;
 import org.agrona.concurrent.CachedNanoClock;
+import org.agrona.concurrent.CountedErrorHandler;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.AtomicCounter;
 import org.agrona.concurrent.status.CountersManager;
@@ -36,12 +41,20 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
 
+import static io.aeron.Aeron.NULL_VALUE;
 import static io.aeron.protocol.HeaderFlyweight.MIN_HEADER_LENGTH;
 import static io.aeron.protocol.ResolutionEntryFlyweight.RES_TYPE_NAME_TO_IP4_MD;
 import static io.aeron.protocol.ResolutionEntryFlyweight.SELF_FLAG;
+import static io.aeron.test.driver.RedirectingNameResolver.DISABLE_RESOLUTION;
+import static io.aeron.test.driver.RedirectingNameResolver.USE_INITIAL_RESOLUTION_HOST;
+import static io.aeron.test.driver.RedirectingNameResolver.USE_RE_RESOLUTION_HOST;
+import static io.aeron.test.driver.RedirectingNameResolver.updateNameResolutionStatus;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -73,6 +86,7 @@ class DriverNameResolverTest
     private final UdpNameResolutionTransport transport = mock(UdpNameResolutionTransport.class);
     private final ArgumentCaptor<UnsafeBuffer> bufferCaptor = ArgumentCaptor.forClass(UnsafeBuffer.class);
     private final DutyCycleTracker dutyCycleTracker = mock(DutyCycleTracker.class);
+    private final CountedErrorHandler countedErrorHandler = mock(CountedErrorHandler.class);
 
     private final HeaderFlyweight headerFlyweight = new HeaderFlyweight();
     private final ResolutionEntryFlyweight resolutionEntryFlyweight = new ResolutionEntryFlyweight();
@@ -90,6 +104,7 @@ class DriverNameResolverTest
 
         mediaDriverCtx = mock(MediaDriver.Context.class);
         when(mediaDriverCtx.driverConductorProxy()).thenReturn(driverConductorProxy);
+        when(mediaDriverCtx.countedErrorHandler()).thenReturn(countedErrorHandler);
         when(mediaDriverCtx.nameResolver()).thenReturn(delegateResolver);
         when(mediaDriverCtx.mtuLength()).thenReturn(Configuration.mtuLength());
         when(mediaDriverCtx.systemCounters()).thenReturn(systemCounters);
@@ -257,6 +272,86 @@ class DriverNameResolverTest
             () -> driverNameResolver = new DriverNameResolver(mediaDriverCtx, udpNameResolutionTransportFactory));
 
         assertThat(ex.getMessage(), containsString("Bootstrap Neighbor list too large"));
+    }
+
+    @Test
+    void shouldHandleBootstrapNeighborCounter()
+    {
+        driverNameResolver = new DriverNameResolver(mediaDriverCtx, udpNameResolutionTransportFactory);
+        driverNameResolver.init(countersManager, countersManager::newCounter);
+
+        driverNameResolver.onStart();
+
+        final MutableInteger bootstrapNeighborCounterId = new MutableInteger(NULL_VALUE);
+        countersManager.forEach((counterId, typeId, keyBuffer, label) ->
+        {
+            if (AeronCounters.NAME_RESOLVER_BOOTSTRAP_NEIGHBOR_COUNTER_TYPE_ID == typeId)
+            {
+                bootstrapNeighborCounterId.set(counterId);
+            }
+        });
+        assertNotEquals(NULL_VALUE, bootstrapNeighborCounterId.get());
+
+        final String onStartLabel = "Bootstrap neighbor: name=127.0.0.1:1234 resolved=127.0.0.1:1234";
+        assertEquals(onStartLabel, countersManager.getCounterLabel(bootstrapNeighborCounterId.get()));
+
+        epochClock.update(TIMEOUT_MS);
+        onNeighborFrame("driver-b", "127.0.0.1", 1234, TIMEOUT_MS);
+        driverNameResolver.doWork();
+        assertEquals(TIMEOUT_MS, countersManager.getCounterValue(bootstrapNeighborCounterId.get()));
+
+        epochClock.update(TIMEOUT_MS * 2);
+        onNeighborFrame("driver-b", "127.0.0.1", 1234, TIMEOUT_MS * 2);
+        driverNameResolver.doWork();
+        assertEquals(TIMEOUT_MS * 2, countersManager.getCounterValue(bootstrapNeighborCounterId.get()));
+    }
+
+    @Test
+    void shouldHandleBootstrapNeighborCounterOnReresolution()
+    {
+        final String driverAddr = "driver";
+        final int driverPort = 1234;
+        final String driver = driverAddr + ":" + driverPort;
+
+        final RedirectingNameResolver redirectingNameResolver = new RedirectingNameResolver(
+            "driver,127.0.0.1,127.0.0.2");
+        when(mediaDriverCtx.resolverBootstrapNeighbor()).thenReturn(driver);
+        when(mediaDriverCtx.nameResolver()).thenReturn(redirectingNameResolver);
+
+        driverNameResolver = new DriverNameResolver(mediaDriverCtx, udpNameResolutionTransportFactory);
+        driverNameResolver.init(countersManager, countersManager::newCounter);
+
+        assertTrue(updateNameResolutionStatus(countersManager, driverAddr, USE_INITIAL_RESOLUTION_HOST));
+
+        driverNameResolver.onStart();
+
+        final MutableInteger bootstrapNeighborCounterId = new MutableInteger(NULL_VALUE);
+        countersManager.forEach((counterId, typeId, keyBuffer, label) ->
+        {
+            if (AeronCounters.NAME_RESOLVER_BOOTSTRAP_NEIGHBOR_COUNTER_TYPE_ID == typeId)
+            {
+                bootstrapNeighborCounterId.set(counterId);
+            }
+        });
+        assertNotEquals(NULL_VALUE, bootstrapNeighborCounterId.get());
+
+        final String onStartLabel = "Bootstrap neighbor: name=driver:1234 resolved=127.0.0.1:1234";
+        assertEquals(onStartLabel, countersManager.getCounterLabel(bootstrapNeighborCounterId.get()));
+
+        assertTrue(updateNameResolutionStatus(countersManager, "driver", USE_RE_RESOLUTION_HOST));
+        epochClock.update(TIMEOUT_MS);
+        driverNameResolver.doWork();
+
+        final String onReResolutionLabel = "Bootstrap neighbor: name=driver:1234 resolved=127.0.0.2:1234";
+        assertEquals(onReResolutionLabel, countersManager.getCounterLabel(bootstrapNeighborCounterId.get()));
+
+        assertTrue(updateNameResolutionStatus(countersManager, "driver", DISABLE_RESOLUTION));
+        epochClock.update(TIMEOUT_MS * 2);
+        driverNameResolver.doWork();
+        verify(countedErrorHandler).onError(any());
+
+        final String unResolvableLabel = "Bootstrap neighbor: name=driver:1234 resolved=";
+        assertEquals(unResolvableLabel, countersManager.getCounterLabel(bootstrapNeighborCounterId.get()));
     }
 
     private void onNeighborFrame(final String name, final String address, final int port, final long time)

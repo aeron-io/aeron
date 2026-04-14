@@ -456,6 +456,12 @@ public final class AeronCounters
     @AeronCounter
     public static final int DRIVER_RECEIVER_NAKS_SENT_TYPE_ID = 20;
 
+    /**
+     * Counter for each bootstrap neighbors used for driver name resolution.
+     */
+    @AeronCounter
+    public static final int NAME_RESOLVER_BOOTSTRAP_NEIGHBOR_COUNTER_TYPE_ID = 21;
+
     // EF_VI counters
     /**
      * EF_VI_PORT_INFO_TYPE_ID.

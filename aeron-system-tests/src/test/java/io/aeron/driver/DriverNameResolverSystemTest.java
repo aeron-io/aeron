@@ -30,6 +30,7 @@ import io.aeron.test.Tests;
 import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.CloseHelper;
 import org.agrona.collections.MutableBoolean;
+import org.agrona.collections.MutableInteger;
 import org.agrona.collections.MutableReference;
 import org.agrona.concurrent.AtomicBuffer;
 import org.agrona.concurrent.SleepingMillisIdleStrategy;
@@ -95,11 +96,15 @@ class DriverNameResolverSystemTest
         addDriver(TestMediaDriver.launch(setDefaults(new MediaDriver.Context())
             .aeronDirectoryName(baseDir + "-A")
             .resolverName("A")
-            .resolverInterface("0.0.0.0:0"), testWatcher));
+            .resolverInterface("0.0.0.0:0")
+            .resolverBootstrapNeighbor("localhost:8051"), testWatcher));
         startClients();
 
         final int neighborsCounterId = awaitNeighborsCounterId("A");
         assertNotEquals(neighborsCounterId, NULL_VALUE);
+
+        final int bootstrapNeighborCounterId = awaitBootstrapNeighborCounter("A", "localhost:8051");
+        assertNotEquals(bootstrapNeighborCounterId, NULL_VALUE);
     }
 
     @Test
@@ -120,9 +125,13 @@ class DriverNameResolverSystemTest
 
         final int aNeighborsCounterId = awaitNeighborsCounterId("A");
         final int bNeighborsCounterId = awaitNeighborsCounterId("B");
+        final int bBootstrapNeighborACounterId = awaitBootstrapNeighborCounter("B", "localhost:8050");
 
         awaitCounterValue("A", aNeighborsCounterId, 1);
         awaitCounterValue("B", bNeighborsCounterId, 1);
+        awaitCounterValueGreaterThan("B", bBootstrapNeighborACounterId, 0);
+        awaitCounterLabel(
+            "B", bBootstrapNeighborACounterId, "Bootstrap neighbor: name=localhost:8050 resolved=127.0.0.1:8050");
     }
 
     @Test
@@ -599,6 +608,36 @@ class DriverNameResolverSystemTest
         }
     }
 
+    private int awaitBootstrapNeighborCounter(final String name, final String bootstrapNeighborName)
+    {
+        final Aeron aeron = clients.get(name);
+        final CountersReader countersReader = aeron.countersReader();
+
+        final String labelString = "name=" + bootstrapNeighborName;
+        final MutableInteger counterIdRef = new MutableInteger(NULL_VALUE);
+        while (Aeron.NULL_VALUE == counterIdRef.get())
+        {
+            countersReader.forEach((counterId, typeId, keyBuffer, label) ->
+            {
+                if (AeronCounters.NAME_RESOLVER_BOOTSTRAP_NEIGHBOR_COUNTER_TYPE_ID == typeId)
+                {
+                    if (label.contains(labelString))
+                    {
+                        counterIdRef.set(counterId);
+                    }
+                }
+            });
+
+            Tests.sleep(1);
+            if (aeron.isClosed())
+            {
+                fail("unexpected Aeron client close");
+            }
+        }
+
+        return counterIdRef.get();
+    }
+
     private int awaitCacheEntriesCounterId(final String name)
     {
         final Aeron aeron = clients.get(name);
@@ -641,6 +680,23 @@ class DriverNameResolverSystemTest
             () -> "Counter value: " + countersReader.getCounterValue(counterId) + ", expected: " + expectedValue;
 
         while (countersReader.getCounterValue(counterId) != expectedValue)
+        {
+            Tests.idle(SLEEP_50_MS, messageSupplier);
+            if (aeron.isClosed())
+            {
+                fail(messageSupplier.get());
+            }
+        }
+    }
+
+    private void awaitCounterValueGreaterThan(final String name, final int counterId, final long expectedValue)
+    {
+        final Aeron aeron = clients.get(name);
+        final CountersReader countersReader = aeron.countersReader();
+        final Supplier<String> messageSupplier =
+            () -> "Counter value: " + countersReader.getCounterValue(counterId) + ", expected: " + expectedValue;
+
+        while (countersReader.getCounterValue(counterId) <= expectedValue)
         {
             Tests.idle(SLEEP_50_MS, messageSupplier);
             if (aeron.isClosed())
