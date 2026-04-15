@@ -1416,58 +1416,44 @@ class ClientConductorIsLengthSufficientTest : public testing::TestWithParam<std:
 {
 };
 
-static aeron_mapped_file_t* mappedFileFrom(size_t length, const aeron_cnc_metadata_t *metadata)
+// cnc_version, to_driver, to_clients, counter_metadata, counter_values, error_log, client_liveness_timeout, start_timestamp, pid, file_page_size
+static aeron_cnc_metadata_t s_metadata[] =
 {
-    aeron_mapped_file_t *mappedFile;
-    if (aeron_alloc(reinterpret_cast<void **>(&mappedFile), sizeof(aeron_mapped_file_t)) < 0)
-    {
-        throw std::runtime_error("failed to allocate aeron_mapped_file_t");
-    }
-    mappedFile->addr = (void*)metadata;
-    mappedFile->length = length;
-    return mappedFile;
-}
+    { 0, (int32_t)TO_DRIVER_RING_BUFFER_LENGTH, 0, 0, 0, 0, 0, 0, 0, 0 },
+    { 0, (int32_t)TO_DRIVER_RING_BUFFER_LENGTH, (int32_t)TO_CLIENTS_BUFFER_LENGTH, 0, 0, 0, 0, 0, 0, 0 },
+    { 0, (int32_t)TO_DRIVER_RING_BUFFER_LENGTH, (int32_t)TO_CLIENTS_BUFFER_LENGTH, (int32_t)COUNTER_METADATA_BUFFER_LENGTH, 0, 0, 0, 0, 0, 0 },
+    { 0, (int32_t)TO_DRIVER_RING_BUFFER_LENGTH, (int32_t)TO_CLIENTS_BUFFER_LENGTH, (int32_t)COUNTER_METADATA_BUFFER_LENGTH, (int32_t)COUNTER_VALUES_BUFFER_LENGTH, 0, 0, 0, 0, 0 },
+    { 0, (int32_t)TO_DRIVER_RING_BUFFER_LENGTH, (int32_t)TO_CLIENTS_BUFFER_LENGTH, (int32_t)COUNTER_METADATA_BUFFER_LENGTH, (int32_t)COUNTER_VALUES_BUFFER_LENGTH, (int32_t)ERROR_BUFFER_LENGTH, 0, 0, 0, 0 },
+    { 0, (int32_t)TO_DRIVER_RING_BUFFER_LENGTH, (int32_t)TO_CLIENTS_BUFFER_LENGTH, (int32_t)COUNTER_METADATA_BUFFER_LENGTH, (int32_t)COUNTER_VALUES_BUFFER_LENGTH, (int32_t)ERROR_BUFFER_LENGTH, 0, 0, 0, 0 },
+    { 0, (int32_t)TO_DRIVER_RING_BUFFER_LENGTH, (int32_t)TO_CLIENTS_BUFFER_LENGTH, (int32_t)COUNTER_METADATA_BUFFER_LENGTH, (int32_t)COUNTER_VALUES_BUFFER_LENGTH, (int32_t)ERROR_BUFFER_LENGTH, 0, 0, 0, 0 },
+};
 
-static aeron_cnc_metadata_t* metadata(
-    int32_t to_driver_buffer_length,
-    int32_t to_clients_buffer_length,
-    int32_t counter_metadata_buffer_length,
-    int32_t counter_values_buffer_length,
-    int32_t error_log_buffer_length)
+static aeron_mapped_file_t s_mapped_files[] =
 {
-    aeron_cnc_metadata_t *metadata;
-    if (aeron_alloc(reinterpret_cast<void **>(&metadata), sizeof(aeron_cnc_metadata_t)) < 0)
-    {
-        throw std::runtime_error("failed to allocate aeron_cnc_metadata_t");
-    }
-    metadata->to_driver_buffer_length = to_driver_buffer_length;
-    metadata->to_clients_buffer_length = to_clients_buffer_length;
-    metadata->counter_metadata_buffer_length = counter_metadata_buffer_length;
-    metadata->counter_values_buffer_length = counter_values_buffer_length;
-    metadata->error_log_buffer_length = error_log_buffer_length;
-    return metadata;
-}
+    { nullptr, 0 },
+    { nullptr, AERON_CNC_VERSION_AND_META_DATA_LENGTH - 1 },
+    { &s_metadata[0], AERON_CNC_VERSION_AND_META_DATA_LENGTH },
+    { &s_metadata[1], AERON_CNC_VERSION_AND_META_DATA_LENGTH + TO_DRIVER_RING_BUFFER_LENGTH },
+    { &s_metadata[2], AERON_CNC_VERSION_AND_META_DATA_LENGTH + TO_DRIVER_RING_BUFFER_LENGTH + TO_CLIENTS_BUFFER_LENGTH },
+    { &s_metadata[3], AERON_CNC_VERSION_AND_META_DATA_LENGTH + TO_DRIVER_RING_BUFFER_LENGTH + TO_CLIENTS_BUFFER_LENGTH + COUNTER_METADATA_BUFFER_LENGTH },
+    { &s_metadata[4], AERON_CNC_VERSION_AND_META_DATA_LENGTH + TO_DRIVER_RING_BUFFER_LENGTH + TO_CLIENTS_BUFFER_LENGTH + COUNTER_METADATA_BUFFER_LENGTH + COUNTER_VALUES_BUFFER_LENGTH },
+    { &s_metadata[5], AERON_CNC_VERSION_AND_META_DATA_LENGTH + TO_DRIVER_RING_BUFFER_LENGTH + TO_CLIENTS_BUFFER_LENGTH + COUNTER_METADATA_BUFFER_LENGTH + COUNTER_VALUES_BUFFER_LENGTH + ERROR_BUFFER_LENGTH },
+    { &s_metadata[6], INT64_MAX },
+};
 
 INSTANTIATE_TEST_SUITE_P(
     ClientConductorIsLengthSufficientTest,
     ClientConductorIsLengthSufficientTest,
     testing::Values(
-        std::make_tuple(mappedFileFrom(0, nullptr), false),
-        std::make_tuple(mappedFileFrom(AERON_CNC_VERSION_AND_META_DATA_LENGTH - 1, nullptr), false),
-        std::make_tuple(mappedFileFrom(AERON_CNC_VERSION_AND_META_DATA_LENGTH,
-            metadata(TO_DRIVER_RING_BUFFER_LENGTH,0,0,0,0)), false),
-        std::make_tuple(mappedFileFrom(AERON_CNC_VERSION_AND_META_DATA_LENGTH + TO_DRIVER_RING_BUFFER_LENGTH,
-            metadata(TO_DRIVER_RING_BUFFER_LENGTH,TO_CLIENTS_BUFFER_LENGTH,0,0,0)), false),
-        std::make_tuple(mappedFileFrom(AERON_CNC_VERSION_AND_META_DATA_LENGTH + TO_DRIVER_RING_BUFFER_LENGTH + TO_CLIENTS_BUFFER_LENGTH,
-            metadata(TO_DRIVER_RING_BUFFER_LENGTH,TO_CLIENTS_BUFFER_LENGTH,COUNTER_METADATA_BUFFER_LENGTH,0,0)), false),
-        std::make_tuple(mappedFileFrom(AERON_CNC_VERSION_AND_META_DATA_LENGTH + TO_DRIVER_RING_BUFFER_LENGTH + TO_CLIENTS_BUFFER_LENGTH + COUNTER_METADATA_BUFFER_LENGTH,
-            metadata(TO_DRIVER_RING_BUFFER_LENGTH,TO_CLIENTS_BUFFER_LENGTH,COUNTER_METADATA_BUFFER_LENGTH,COUNTER_VALUES_BUFFER_LENGTH,0)), false),
-        std::make_tuple(mappedFileFrom(AERON_CNC_VERSION_AND_META_DATA_LENGTH + TO_DRIVER_RING_BUFFER_LENGTH + TO_CLIENTS_BUFFER_LENGTH + COUNTER_METADATA_BUFFER_LENGTH + COUNTER_VALUES_BUFFER_LENGTH,
-            metadata(TO_DRIVER_RING_BUFFER_LENGTH,TO_CLIENTS_BUFFER_LENGTH,COUNTER_METADATA_BUFFER_LENGTH,COUNTER_VALUES_BUFFER_LENGTH,ERROR_BUFFER_LENGTH)), false),
-        std::make_tuple(mappedFileFrom(AERON_CNC_VERSION_AND_META_DATA_LENGTH + TO_DRIVER_RING_BUFFER_LENGTH + TO_CLIENTS_BUFFER_LENGTH + COUNTER_METADATA_BUFFER_LENGTH + COUNTER_VALUES_BUFFER_LENGTH + ERROR_BUFFER_LENGTH,
-            metadata(TO_DRIVER_RING_BUFFER_LENGTH,TO_CLIENTS_BUFFER_LENGTH,COUNTER_METADATA_BUFFER_LENGTH,COUNTER_VALUES_BUFFER_LENGTH,ERROR_BUFFER_LENGTH)), true),
-        std::make_tuple(mappedFileFrom(INT64_MAX,
-            metadata(TO_DRIVER_RING_BUFFER_LENGTH,TO_CLIENTS_BUFFER_LENGTH,COUNTER_METADATA_BUFFER_LENGTH,COUNTER_VALUES_BUFFER_LENGTH,ERROR_BUFFER_LENGTH)), true)
+        std::make_tuple(&s_mapped_files[0], false),
+        std::make_tuple(&s_mapped_files[1], false),
+        std::make_tuple(&s_mapped_files[2], false),
+        std::make_tuple(&s_mapped_files[3], false),
+        std::make_tuple(&s_mapped_files[4], false),
+        std::make_tuple(&s_mapped_files[5], false),
+        std::make_tuple(&s_mapped_files[6], false),
+        std::make_tuple(&s_mapped_files[7], true),
+        std::make_tuple(&s_mapped_files[8], true)
     ));
 
 TEST_P(ClientConductorIsLengthSufficientTest, shouldCheckIfLengthIsSufficient)
@@ -1475,8 +1461,6 @@ TEST_P(ClientConductorIsLengthSufficientTest, shouldCheckIfLengthIsSufficient)
     const auto mappedFile = std::get<0>(GetParam());
     const bool expected = std::get<1>(GetParam());
     ASSERT_EQ(expected, aeron_cnc_is_file_length_sufficient(mappedFile));
-    aeron_free(mappedFile->addr);
-    aeron_free(mappedFile);
 }
 
 TEST_F(ClientConductorTest, shouldAsyncCloseSubscription)
