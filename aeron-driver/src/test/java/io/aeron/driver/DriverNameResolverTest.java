@@ -295,15 +295,23 @@ class DriverNameResolverTest
         final String onStartLabel = "Bootstrap neighbor: name=127.0.0.1:1234 resolved=127.0.0.1:1234";
         assertEquals(onStartLabel, countersManager.getCounterLabel(bootstrapNeighborCounterId.get()));
 
-        epochClock.update(TIMEOUT_MS);
-        onNeighborFrame("driver-b", "127.0.0.1", 1234, TIMEOUT_MS);
+        epochClock.update(0);
         driverNameResolver.doWork();
-        assertEquals(TIMEOUT_MS, countersManager.getCounterValue(bootstrapNeighborCounterId.get()));
+        assertEquals(0L, countersManager.getCounterValue(bootstrapNeighborCounterId.get()));
+
+        onNeighborFrame("driver-b", "127.0.0.1", 1234, TIMEOUT_MS);
+        epochClock.update(TIMEOUT_MS);
+        driverNameResolver.doWork();
+        assertEquals(1L, countersManager.getCounterValue(bootstrapNeighborCounterId.get()));
 
         epochClock.update(TIMEOUT_MS * 2);
         onNeighborFrame("driver-b", "127.0.0.1", 1234, TIMEOUT_MS * 2);
         driverNameResolver.doWork();
-        assertEquals(TIMEOUT_MS * 2, countersManager.getCounterValue(bootstrapNeighborCounterId.get()));
+        assertEquals(1L, countersManager.getCounterValue(bootstrapNeighborCounterId.get()));
+
+        epochClock.update(TIMEOUT_MS * 3);
+        driverNameResolver.doWork();
+        assertEquals(0L, countersManager.getCounterValue(bootstrapNeighborCounterId.get()));
     }
 
     @Test

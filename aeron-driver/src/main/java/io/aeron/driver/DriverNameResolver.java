@@ -42,6 +42,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.concurrent.TimeUnit;
 
 import static io.aeron.driver.DriverNameResolverCache.fullLengthMatch;
@@ -93,6 +94,7 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
     private final InetSocketAddress[] bootstrapNeighborAddresses;
     private final AtomicCounter[] bootstrapNeighborCounters;
     private long bootstrapNeighborResolveDeadlineMs;
+    private final BitSet bootstrapNeighborConnected;
 
     private final long neighborTimeoutMs;
     private final long selfResolutionIntervalMs;
@@ -142,6 +144,7 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
 
         bootstrapNeighborAddresses = new InetSocketAddress[bootstrapNeighbors.length];
         bootstrapNeighborCounters = new AtomicCounter[bootstrapNeighbors.length];
+        bootstrapNeighborConnected = new BitSet(bootstrapNeighborAddresses.length);
 
         final long nowMs = ctx.epochClock().time();
         bootstrapNeighborResolveDeadlineMs = nowMs + bootstrapNeighborResolutionIntervalMs;
@@ -425,15 +428,18 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
             }
         }
 
+        bootstrapNeighborConnected.clear();
         for (final Neighbor neighbor : neighborList)
         {
             boolean isBootstrapNeighbor = false;
 
-            for (final InetSocketAddress bootstrapNeighborAddress : bootstrapNeighborAddresses)
+            for (int i = 0, n = bootstrapNeighborAddresses.length; i < n; i++)
             {
+                final InetSocketAddress bootstrapNeighborAddress = bootstrapNeighborAddresses[i];
                 if (neighbor.socketAddress.equals(bootstrapNeighborAddress))
                 {
                     isBootstrapNeighbor = true;
+                    bootstrapNeighborConnected.set(i, true);
                     break;
                 }
             }
@@ -442,6 +448,12 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
             {
                 sendResolutionFrameTo(byteBuffer, neighbor.socketAddress);
             }
+        }
+
+        for (int i = 0, n = bootstrapNeighborAddresses.length; i < n; i++)
+        {
+            final long value = bootstrapNeighborConnected.get(i) ? 1L : 0L;
+            bootstrapNeighborCounters[i].setRelease(value);
         }
 
         selfResolutionDeadlineMs = nowMs + selfResolutionIntervalMs;
@@ -584,7 +596,6 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
                 if (neighbor.socketAddress.equals(bootstrapNeighborAddress))
                 {
                     inNeighborList = true;
-                    bootstrapNeighborCounters[i].setRelease(neighbor.timeOfLastActivityMs);
                     break;
                 }
             }

@@ -96,15 +96,22 @@ class DriverNameResolverSystemTest
         addDriver(TestMediaDriver.launch(setDefaults(new MediaDriver.Context())
             .aeronDirectoryName(baseDir + "-A")
             .resolverName("A")
-            .resolverInterface("0.0.0.0:0")
+            .resolverInterface("0.0.0.0:8050")
             .resolverBootstrapNeighbor("localhost:8051"), testWatcher));
+
+        addDriver(TestMediaDriver.launch(setDefaults(new MediaDriver.Context())
+            .aeronDirectoryName(baseDir + "-B")
+            .resolverName("B")
+            .resolverInterface("0.0.0.0:8051"), testWatcher));
+
         startClients();
 
         final int neighborsCounterId = awaitNeighborsCounterId("A");
-        assertNotEquals(neighborsCounterId, NULL_VALUE);
+        assertNotEquals(NULL_VALUE, neighborsCounterId);
 
         final int bootstrapNeighborCounterId = awaitBootstrapNeighborCounter("A", "localhost:8051");
-        assertNotEquals(bootstrapNeighborCounterId, NULL_VALUE);
+        assertNotEquals(NULL_VALUE, bootstrapNeighborCounterId);
+        awaitCounterValue("A", bootstrapNeighborCounterId, 1L);
     }
 
     @Test
