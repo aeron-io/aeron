@@ -24,6 +24,7 @@ import io.aeron.driver.status.SystemCounterDescriptor;
 import io.aeron.exceptions.AeronException;
 import io.aeron.protocol.HeaderFlyweight;
 import io.aeron.protocol.ResolutionEntryFlyweight;
+import org.agrona.BitUtil;
 import org.agrona.BufferUtil;
 import org.agrona.CloseHelper;
 import org.agrona.ExpandableArrayBuffer;
@@ -183,11 +184,13 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
 
         for (int i = 0; i < bootstrapNeighbors.length; ++i)
         {
-            final int neighborLength = expandableArrayBuffer.putStringWithoutLengthAscii(
-                0, buildBootstrapNeighborCounterLabel(bootstrapNeighbors[i], null));
+            expandableArrayBuffer.putInt(0, i);
+            final int keyLength = BitUtil.SIZE_OF_INT;
+            final int labelLength = expandableArrayBuffer.putStringWithoutLengthAscii(
+                keyLength, buildBootstrapNeighborCounterLabel(bootstrapNeighbors[i], null));
             bootstrapNeighborCounters[i] = counterProvider.newCounter(
                 AeronCounters.NAME_RESOLVER_BOOTSTRAP_NEIGHBOR_COUNTER_TYPE_ID,
-                expandableArrayBuffer, 0, 0, expandableArrayBuffer, 0, neighborLength);
+                expandableArrayBuffer, 0, keyLength, expandableArrayBuffer, keyLength, labelLength);
         }
 
         delegateResolver.init(countersReader, counterProvider);

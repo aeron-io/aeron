@@ -287,7 +287,11 @@ class DriverNameResolverTest
         {
             if (AeronCounters.NAME_RESOLVER_BOOTSTRAP_NEIGHBOR_COUNTER_TYPE_ID == typeId)
             {
-                bootstrapNeighborCounterId.set(counterId);
+                final int bootstrapNeighborIndexKey = keyBuffer.getInt(0);
+                if (0 == bootstrapNeighborIndexKey)
+                {
+                    bootstrapNeighborCounterId.set(counterId);
+                }
             }
         });
         assertNotEquals(NULL_VALUE, bootstrapNeighborCounterId.get());
@@ -338,7 +342,11 @@ class DriverNameResolverTest
         {
             if (AeronCounters.NAME_RESOLVER_BOOTSTRAP_NEIGHBOR_COUNTER_TYPE_ID == typeId)
             {
-                bootstrapNeighborCounterId.set(counterId);
+                final int bootstrapNeighborIndexKey = keyBuffer.getInt(0);
+                if (0 == bootstrapNeighborIndexKey)
+                {
+                    bootstrapNeighborCounterId.set(counterId);
+                }
             }
         });
         assertNotEquals(NULL_VALUE, bootstrapNeighborCounterId.get());

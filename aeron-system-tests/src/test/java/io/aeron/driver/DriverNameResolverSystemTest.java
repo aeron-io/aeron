@@ -99,7 +99,7 @@ class DriverNameResolverSystemTest
             .aeronDirectoryName(baseDir + "-A")
             .resolverName("A")
             .resolverInterface("0.0.0.0:8050")
-            .resolverBootstrapNeighbor("localhost:8051"), testWatcher));
+            .resolverBootstrapNeighbor("localhost:8051,localhost:8052"), testWatcher));
 
         addDriver(TestMediaDriver.launch(setDefaults(new MediaDriver.Context())
             .aeronDirectoryName(baseDir + "-B")
@@ -111,9 +111,13 @@ class DriverNameResolverSystemTest
         final int neighborsCounterId = awaitNeighborsCounterId("A");
         assertNotEquals(NULL_VALUE, neighborsCounterId);
 
-        final int bootstrapNeighborCounterId = awaitBootstrapNeighborCounter("A", "localhost:8051");
-        assertNotEquals(NULL_VALUE, bootstrapNeighborCounterId);
-        awaitCounterValue("A", bootstrapNeighborCounterId, 1L);
+        final int aBootstrapNeighborBCounterId = awaitBootstrapNeighborCounter("A", 0);
+        assertNotEquals(NULL_VALUE, aBootstrapNeighborBCounterId);
+        awaitCounterValue("A", aBootstrapNeighborBCounterId, 1L);
+
+        final int aBootstrapNeighborCCounterId = awaitBootstrapNeighborCounter("A", 1);
+        assertNotEquals(NULL_VALUE, aBootstrapNeighborCCounterId);
+        awaitCounterValue("A", aBootstrapNeighborCCounterId, 0L);
     }
 
     @Test
@@ -134,7 +138,7 @@ class DriverNameResolverSystemTest
 
         final int aNeighborsCounterId = awaitNeighborsCounterId("A");
         final int bNeighborsCounterId = awaitNeighborsCounterId("B");
-        final int bBootstrapNeighborACounterId = awaitBootstrapNeighborCounter("B", "localhost:8050");
+        final int bBootstrapNeighborACounterId = awaitBootstrapNeighborCounter("B", 0);
 
         awaitCounterValue("A", aNeighborsCounterId, 1);
         awaitCounterValue("B", bNeighborsCounterId, 1);
@@ -611,12 +615,11 @@ class DriverNameResolverSystemTest
         }
     }
 
-    private int awaitBootstrapNeighborCounter(final String name, final String bootstrapNeighborName)
+    private int awaitBootstrapNeighborCounter(final String name, final int bootstrapNeighborIndex)
     {
         final Aeron aeron = clients.get(name);
         final CountersReader countersReader = aeron.countersReader();
 
-        final String labelString = "name=" + bootstrapNeighborName;
         final MutableInteger counterIdRef = new MutableInteger(NULL_VALUE);
         while (Aeron.NULL_VALUE == counterIdRef.get())
         {
@@ -624,7 +627,8 @@ class DriverNameResolverSystemTest
             {
                 if (AeronCounters.NAME_RESOLVER_BOOTSTRAP_NEIGHBOR_COUNTER_TYPE_ID == typeId)
                 {
-                    if (label.contains(labelString))
+                    final int bootstrapNeighborIndexKey = keyBuffer.getInt(0);
+                    if (bootstrapNeighborIndex == bootstrapNeighborIndexKey)
                     {
                         counterIdRef.set(counterId);
                     }
