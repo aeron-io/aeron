@@ -15,7 +15,6 @@
  */
 package io.aeron.driver;
 
-import io.aeron.Aeron;
 import io.aeron.AeronCounters;
 import io.aeron.driver.media.PortManager;
 import io.aeron.driver.media.UdpNameResolutionTransport;
@@ -277,6 +276,7 @@ class DriverNameResolverTest
     @Test
     void shouldHandleBootstrapNeighborCounter()
     {
+        when(mediaDriverCtx.resolverNeighborTimeoutNs()).thenReturn(TimeUnit.MILLISECONDS.toNanos(TIMEOUT_MS));
         driverNameResolver = new DriverNameResolver(mediaDriverCtx, udpNameResolutionTransportFactory);
         driverNameResolver.init(countersManager, countersManager::newCounter);
 
