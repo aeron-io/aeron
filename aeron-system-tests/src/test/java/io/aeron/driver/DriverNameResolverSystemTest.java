@@ -79,6 +79,8 @@ class DriverNameResolverSystemTest
     @BeforeEach
     void before()
     {
+        assumeTrue(TestMediaDriver.shouldRunJavaMediaDriver());
+
         testWatcher.ignoreErrorsMatching(s -> s.contains("Failed to send resolution frames to neighbor"));
     }
 
@@ -335,8 +337,6 @@ class DriverNameResolverSystemTest
     @InterruptAfter(10)
     void shouldUseFirstAvailableBootstrapNeighbor()
     {
-        assumeTrue(TestMediaDriver.shouldRunJavaMediaDriver());
-
         testWatcher.ignoreErrorsMatching(
             (s) -> s.contains("java.lang.IllegalArgumentException: invalid format: just:wrong") ||
                 s.contains("ava.net.UnknownHostException: unresolved - endpoint=non_existing_host:8050"));
@@ -423,8 +423,6 @@ class DriverNameResolverSystemTest
     @InterruptAfter(30)
     void shouldFallbackToAnotherBootstrapNeighborIfOneBecomesUnavailable()
     {
-        assumeTrue(TestMediaDriver.shouldRunJavaMediaDriver());
-
         testWatcher.ignoreErrorsMatching(
             (s) -> s.contains("java.net.UnknownHostException: unresolved - endpoint=localhostA:8050"));
 
@@ -539,8 +537,6 @@ class DriverNameResolverSystemTest
     @SuppressWarnings("try")
     void shouldUseActuallySpecifiedHostNamePortPairForCreatingChannelUri()
     {
-        assumeTrue(TestMediaDriver.shouldRunJavaMediaDriver());
-
         final String aeronDir = baseDir + "-error";
         final MutableReference<Throwable> error = new MutableReference<>();
 
