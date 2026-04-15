@@ -1960,6 +1960,19 @@ int aeron_subscription_image_retain(aeron_subscription_t *subscription, aeron_im
 int aeron_subscription_image_release(aeron_subscription_t *subscription, aeron_image_t *image);
 
 /**
+ * Release an image that was retained by aeron_subscription_image_by_session_id or
+ * aeron_subscription_image_at_index.
+ *
+ * Unlike aeron_subscription_image_release, this function unconditionally decrements the reference
+ * count and is safe to call after the image has become unavailable (i.e. after it has been removed
+ * from the subscription's image list).
+ *
+ * @param image to release
+ * @return 0 for success and -1 for error.
+ */
+int aeron_image_release(aeron_image_t *image);
+
+/**
  * Is the subscription closed.
  *
  * @param subscription to be checked.
