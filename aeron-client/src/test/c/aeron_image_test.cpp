@@ -1154,3 +1154,26 @@ TEST_F(ImageTest, shouldCorrectlyCountReferences)
     EXPECT_EQ(0, aeron_image_decr_refcnt(m_image));
     EXPECT_EQ(0, aeron_image_refcnt_acquire(m_image));
 }
+
+TEST_F(ImageTest, shouldReleaseRetainedImageAfterItBecomesUnavailable)
+{
+    int32_t session_id = (int32_t)createImage();
+
+    EXPECT_EQ(0, aeron_client_conductor_subscription_add_image(m_subscription, m_image));
+    int64_t expected_refcnt = aeron_image_refcnt_acquire(m_image);
+
+    aeron_image_t *retained = aeron_subscription_image_by_session_id(m_subscription, session_id);
+    EXPECT_EQ(m_image, retained);
+    expected_refcnt++;
+    EXPECT_EQ(expected_refcnt, aeron_image_refcnt_acquire(m_image));
+
+    EXPECT_EQ(0, aeron_client_conductor_subscription_remove_image(m_subscription, m_image));
+    EXPECT_EQ(nullptr, aeron_subscription_image_by_session_id(m_subscription, session_id));
+
+    EXPECT_EQ(0, aeron_subscription_image_release(m_subscription, m_image));
+    EXPECT_EQ(expected_refcnt, aeron_image_refcnt_acquire(m_image));
+
+    EXPECT_EQ(0, aeron_image_release(m_image));
+    expected_refcnt--;
+    EXPECT_EQ(expected_refcnt, aeron_image_refcnt_acquire(m_image));
+}
