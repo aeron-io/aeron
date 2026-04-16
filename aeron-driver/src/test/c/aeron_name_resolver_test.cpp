@@ -911,7 +911,7 @@ TEST_F(NameResolverTest, shouldHandleBootstrapNeighborCounter)
     initResolver(&m_b, AERON_NAME_RESOLVER_DRIVER, "", timestamp_ms, "B", "0.0.0.0:8051", "localhost:8050");
     ASSERT_EQ(0, readBootstrapNeighborCounter(&m_b, 0));
 
-    const int64_t deadline_ms = aeron_epoch_clock() + (5 * 1000);
+    int64_t deadline_ms = aeron_epoch_clock() + (5 * 1000);
     while (1 != readBootstrapNeighborCounter(&m_b, 0))
     {
         timestamp_ms += 1000;
@@ -929,10 +929,17 @@ TEST_F(NameResolverTest, shouldHandleBootstrapNeighborCounter)
     }
     ASSERT_EQ(1, readBootstrapNeighborCounter(&m_b, 0));
 
-    timestamp_ms += 10000;
-    aeron_clock_update_cached_epoch_time(m_b.context->cached_clock, timestamp_ms);
-    m_b.resolver.do_work_func(&m_b.resolver, timestamp_ms);
-    ASSERT_EQ(0, aeron_errcode()) << aeron_errmsg();
+    deadline_ms = aeron_epoch_clock() + (5 * 1000);
+    while (0 != readBootstrapNeighborCounter(&m_b, 0))
+    {
+        timestamp_ms += 10000;
+        aeron_clock_update_cached_epoch_time(m_b.context->cached_clock, timestamp_ms);
+        m_b.resolver.do_work_func(&m_b.resolver, timestamp_ms);
+        ASSERT_EQ(0, aeron_errcode()) << aeron_errmsg();
+
+        aeron_micro_sleep(10000);
+        ASSERT_LT(aeron_epoch_clock(), deadline_ms) << "Timed out waiting for b bootstrap neighbor to disconnect" << *this;
+    }
     ASSERT_EQ(0, readBootstrapNeighborCounter(&m_b, 0));
 }
 
