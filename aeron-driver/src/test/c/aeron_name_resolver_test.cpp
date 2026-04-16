@@ -135,6 +135,21 @@ protected:
     }
     counter_label_clientd_t;
 
+    typedef struct bootstrap_neighbor_counters_clientd_stct
+    {
+        int32_t bootstrap_neighbor_index;
+        int64_t value;
+    }
+    bootstrap_neighbor_counters_clientd_t;
+
+    typedef struct bootstrap_neighbor_counter_label_clientd_stct
+    {
+        int32_t bootstrap_neighbor_index;
+        size_t label_length;
+        char label[sizeof(aeron_counter_metadata_descriptor_t::label)];
+    }
+    bootstrap_neighbor_counter_label_clientd_t;
+
     typedef struct find_name_counter_clientd_stct
     {
         const char *name;
@@ -219,6 +234,49 @@ protected:
         }
     }
 
+    static void foreachFilterByBootstrapNeighbor(
+        int64_t value,
+        int32_t id,
+        int32_t type_id,
+        const uint8_t *key,
+        size_t key_length,
+        const char *label,
+        size_t label_length,
+        void *clientd)
+    {
+        auto *counters_clientd = static_cast<NameResolverTest::bootstrap_neighbor_counters_clientd_t *>(clientd);
+        if (AERON_COUNTER_NAME_BOOTSTRAP_RESOLVER_NEIGHBOR_COUNTER_TYPE_ID == type_id)
+        {
+            const int32_t *bootstrap_neighbor_index_key = (int32_t *)key;
+            if (counters_clientd->bootstrap_neighbor_index == *bootstrap_neighbor_index_key)
+            {
+                counters_clientd->value = value;
+            }
+        }
+    }
+
+    static void foreachFilterByBootstrapNeighborGetLabel(
+        int64_t value,
+        int32_t id,
+        int32_t type_id,
+        const uint8_t *key,
+        size_t key_length,
+        const char *label,
+        size_t label_length,
+        void *clientd)
+    {
+        auto *label_clientd = static_cast<NameResolverTest::bootstrap_neighbor_counter_label_clientd_t *>(clientd);
+        if (AERON_COUNTER_NAME_BOOTSTRAP_RESOLVER_NEIGHBOR_COUNTER_TYPE_ID == type_id)
+        {
+            const int32_t *bootstrap_neighbor_index_key = (int32_t *)key;
+            if (label_clientd->bootstrap_neighbor_index == *bootstrap_neighbor_index_key)
+            {
+                label_clientd->label_length = label_length;
+                strncpy(label_clientd->label, label, label_length);
+            }
+        }
+    }
+
     static int64_t readCounterByTypeId(const aeron_counters_reader_t *counters_reader, int32_t type_id)
     {
         counters_clientd_t clientd = { type_id, -1 };
@@ -240,6 +298,28 @@ protected:
         return clientd;
     }
 
+    static int64_t readBootstrapNeighborCounter(
+        const aeron_counters_reader_t *counters_reader, int32_t bootstrap_neighbor_index)
+    {
+        bootstrap_neighbor_counters_clientd_t clientd = {bootstrap_neighbor_index, -1};
+
+        aeron_counters_reader_foreach_counter(
+            (aeron_counters_reader_t *)counters_reader, foreachFilterByBootstrapNeighbor, &clientd);
+
+        return clientd.value;
+    }
+
+    static bootstrap_neighbor_counter_label_clientd_t readBootstrapNeighborCounterLabel(
+        const aeron_counters_reader_t *counters_reader, int32_t bootstrap_neighbor_index)
+    {
+        bootstrap_neighbor_counter_label_clientd_t clientd = { bootstrap_neighbor_index, 0, { '\0' }};
+
+        aeron_counters_reader_foreach_counter(
+            (aeron_counters_reader_t *)counters_reader, foreachFilterByBootstrapNeighborGetLabel, &clientd);
+
+        return clientd;
+    }
+
     static int64_t readNeighborCounter(const resolver_fields_t *resolver)
     {
         return readCounterByTypeId(&resolver->counters_reader, AERON_COUNTER_NAME_RESOLVER_NEIGHBORS_COUNTER_TYPE_ID);
@@ -249,6 +329,11 @@ protected:
     {
         return readCounterByTypeId(
             &resolver->counters_reader, AERON_COUNTER_NAME_RESOLVER_CACHE_ENTRIES_COUNTER_TYPE_ID);
+    }
+
+    static int64_t readBootstrapNeighborCounter(const resolver_fields_t *resolver, int32_t bootstrap_neighbor_index)
+    {
+        return readBootstrapNeighborCounter(&resolver->counters_reader, bootstrap_neighbor_index);
     }
 
     static int64_t readSystemCounter(const resolver_fields_t *resolver, aeron_system_counter_enum_t counter)
@@ -275,6 +360,17 @@ protected:
     {
         auto result = readCounterLabelByTypeId(
             &resolver->counters_reader, AERON_COUNTER_NAME_RESOLVER_NEIGHBORS_COUNTER_TYPE_ID);
+        EXPECT_EQ(result.label_length, strlen(expected_label));
+        ASSERT_EQ(0, strncmp(
+            expected_label, result.label,
+            result.label_length)) << "Expected: " << expected_label << ", actual: " << result.label;
+    }
+
+    static void assert_bootstrap_neighbor_counter_label_is(
+        const resolver_fields_t *resolver, int32_t bootstrap_neighbor_index, const char *expected_label)
+    {
+        auto result = readBootstrapNeighborCounterLabel(
+            &resolver->counters_reader, bootstrap_neighbor_index);
         EXPECT_EQ(result.label_length, strlen(expected_label));
         ASSERT_EQ(0, strncmp(
             expected_label, result.label,
@@ -806,6 +902,63 @@ TEST_F(NameResolverTest, shouldTimeoutNeighbor)
     ASSERT_EQ(-1, m_a.resolver.resolve_func(&m_a.resolver, "B", "endpoint", false, &address));
     ASSERT_EQ(0, readCacheEntriesCounter(&m_a));
     ASSERT_EQ(0, readNeighborCounter(&m_a));
+}
+
+TEST_F(NameResolverTest, shouldHandleBootstrapNeighborCounter)
+{
+    int64_t timestamp_ms = INTMAX_C(8932472347945);
+    initResolver(&m_a, AERON_NAME_RESOLVER_DRIVER, "", timestamp_ms, "A", "0.0.0.0:8050");
+    initResolver(&m_b, AERON_NAME_RESOLVER_DRIVER, "", timestamp_ms, "B", "0.0.0.0:8051", "localhost:8050");
+    ASSERT_EQ(0, readBootstrapNeighborCounter(&m_b, 0));
+
+    timestamp_ms += 1000;
+    aeron_clock_update_cached_epoch_time(m_a.context->cached_clock, timestamp_ms);
+    aeron_clock_update_cached_epoch_time(m_b.context->cached_clock, timestamp_ms);
+    m_b.resolver.do_work_func(&m_b.resolver, timestamp_ms);
+    ASSERT_EQ(0, aeron_errcode()) << aeron_errmsg();
+    m_a.resolver.do_work_func(&m_a.resolver, timestamp_ms);
+    ASSERT_EQ(0, aeron_errcode()) << aeron_errmsg();
+
+    timestamp_ms += 1000;
+    aeron_clock_update_cached_epoch_time(m_a.context->cached_clock, timestamp_ms);
+    aeron_clock_update_cached_epoch_time(m_b.context->cached_clock, timestamp_ms);
+    m_b.resolver.do_work_func(&m_b.resolver, timestamp_ms);
+    ASSERT_EQ(0, aeron_errcode()) << aeron_errmsg();
+    ASSERT_EQ(1, readBootstrapNeighborCounter(&m_b, 0));
+
+    timestamp_ms += 1000;
+    aeron_clock_update_cached_epoch_time(m_a.context->cached_clock, timestamp_ms);
+    aeron_clock_update_cached_epoch_time(m_b.context->cached_clock, timestamp_ms);
+    m_b.resolver.do_work_func(&m_b.resolver, timestamp_ms);
+    ASSERT_EQ(0, aeron_errcode()) << aeron_errmsg();
+    ASSERT_EQ(1, readBootstrapNeighborCounter(&m_b, 0));
+
+    timestamp_ms += 10000;
+    aeron_clock_update_cached_epoch_time(m_b.context->cached_clock, timestamp_ms);
+    m_b.resolver.do_work_func(&m_b.resolver, timestamp_ms);
+    ASSERT_EQ(0, aeron_errcode()) << aeron_errmsg();
+    ASSERT_EQ(0, readBootstrapNeighborCounter(&m_b, 0));
+}
+
+TEST_F(NameResolverTest, shouldHandleBootstrapNeighborCounterOnReresolution)
+{
+    int64_t timestamp_ms = INTMAX_C(8932472347945);
+    initResolver(&m_a, AERON_NAME_RESOLVER_DRIVER, "", timestamp_ms, "A", "0.0.0.0:8050", "127.0.0.1:8051", bootstrap_name_resolver_supplier);
+    assert_bootstrap_neighbor_counter_label_is(&m_a, 0, "Bootstrap neighbor: name=127.0.0.1:8051 resolved=127.0.0.1:8051");
+
+    unresolvable_address = "127.0.0.1:8051";
+    timestamp_ms += 10000;
+    aeron_clock_update_cached_epoch_time(m_a.context->cached_clock, timestamp_ms);
+    m_a.resolver.do_work_func(&m_a.resolver, timestamp_ms);
+    ASSERT_EQ(0, aeron_errcode()) << aeron_errmsg();
+    assert_bootstrap_neighbor_counter_label_is(&m_a, 0, "Bootstrap neighbor: name=127.0.0.1:8051 resolved=");
+
+    unresolvable_address = nullptr;
+    timestamp_ms += 10000;
+    aeron_clock_update_cached_epoch_time(m_a.context->cached_clock, timestamp_ms);
+    m_a.resolver.do_work_func(&m_a.resolver, timestamp_ms);
+    ASSERT_EQ(0, aeron_errcode()) << aeron_errmsg();
+    assert_bootstrap_neighbor_counter_label_is(&m_a, 0, "Bootstrap neighbor: name=127.0.0.1:8051 resolved=127.0.0.1:8051");
 }
 
 TEST_F(NameResolverTest, shouldHandleDissection)

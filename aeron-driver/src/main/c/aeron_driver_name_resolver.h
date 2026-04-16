@@ -17,9 +17,6 @@
 #ifndef AERON_NAME_RESOLVER_DRIVER_H
 #define AERON_NAME_RESOLVER_DRIVER_H
 
-#define AERON_COUNTER_NAME_RESOLVER_NEIGHBORS_COUNTER_TYPE_ID (15)
-#define AERON_COUNTER_NAME_RESOLVER_CACHE_ENTRIES_COUNTER_TYPE_ID (16)
-
 #include "protocol/aeron_udp_protocol.h"
 #include "aeronmd.h"
 #include "aeron_name_resolver_cache.h"
