@@ -392,30 +392,180 @@ int aeron_thread_join(aeron_thread_t thread, void **value_ptr)
     return result;
 }
 
+/* Note on TLS destructor support on Windows:
+ *
+ * Win32's TlsAlloc/TlsGetValue/TlsSetValue do not support destructors.
+ * Windows' Fiber Local Storage does, but FlsGetValue is much slower
+ * than TlsGetValue.
+ *
+ * So to add support for pthreads-style destructors to TlsAlloc, we maintain
+ * a registry of (key, destructor) pairs and hook into the Windows loader's
+ * TLS directory via a custom PIMAGE_TLS_CALLBACK (see:
+ * https://iangrunert.com/2025/08/04/fiber-local-storage-slow)
+ * The loader calls this callback for every thread attach/detach event; on
+ * DLL_THREAD_DETACH (and DLL_PROCESS_DETACH) we snapshot the registry and
+ * invoke each registered destructor for that thread's TLS value.
+ */
+
+#define AERON_TLS_DESTRUCTOR_ITERATIONS 4
+
+typedef struct aeron_tls_destructor_entry_stct
+{
+    DWORD key;
+    void (*destr_func)(void *);
+    struct aeron_tls_destructor_entry_stct *next;
+}
+aeron_tls_destructor_entry_t;
+
+static aeron_tls_destructor_entry_t *s_aeron_tls_destructor_head = NULL;
+static SRWLOCK s_aeron_tls_destructor_lock = SRWLOCK_INIT;
+
+typedef struct aeron_tls_destructor_call_stct
+{
+    void (*destr)(void *);
+    void *value;
+}
+aeron_tls_destructor_call_t;
+
+static size_t aeron_tls_run_pending_destructors(void)
+{
+    AcquireSRWLockShared(&s_aeron_tls_destructor_lock);
+
+    size_t count = 0;
+    for (aeron_tls_destructor_entry_t *entry = s_aeron_tls_destructor_head;
+         NULL != entry;
+         entry = entry->next)
+    {
+        if (NULL != TlsGetValue(entry->key))
+        {
+            count++;
+        }
+    }
+
+    if (0 == count)
+    {
+        ReleaseSRWLockShared(&s_aeron_tls_destructor_lock);
+        return 0;
+    }
+
+    /* Snapshot (destr_func, value) tuples onto the stack and clear each TLS
+     * slot under the lock. */
+    aeron_tls_destructor_call_t *calls =
+        (aeron_tls_destructor_call_t *)_alloca(count * sizeof(aeron_tls_destructor_call_t));
+    size_t n = 0;
+    for (aeron_tls_destructor_entry_t *entry = s_aeron_tls_destructor_head;
+         NULL != entry;
+         entry = entry->next)
+    {
+        void *value = TlsGetValue(entry->key);
+        if (NULL != value)
+        {
+            TlsSetValue(entry->key, NULL);
+            calls[n].destr = entry->destr_func;
+            calls[n].value = value;
+            n++;
+        }
+    }
+    ReleaseSRWLockShared(&s_aeron_tls_destructor_lock);
+
+    /* Call destructors with the lock released. A destructor may safely call
+     * any aeron_thread_* API. If it sets new TLS values for this thread,
+     * those will be picked up on the next iteration of the outer loop. */
+    for (size_t i = 0; i < n; i++)
+    {
+        calls[i].destr(calls[i].value);
+    }
+    return n;
+}
+
+static VOID NTAPI aeron_tls_thread_callback(PVOID hModule, DWORD reason, PVOID pvReserved)
+{
+    (void)hModule;
+    (void)pvReserved;
+
+    if (DLL_THREAD_DETACH != reason && DLL_PROCESS_DETACH != reason)
+    {
+        return;
+    }
+
+    for (int iter = 0; iter < AERON_TLS_DESTRUCTOR_ITERATIONS; iter++)
+    {
+        if (0 == aeron_tls_run_pending_destructors())
+        {
+            break;
+        }
+    }
+}
+
+/* Register the callback in the PE image's TLS directory. /INCLUDE prevents the
+ * linker from stripping the symbol; placing the pointer in .CRT$XLB causes the
+ * CRT's TLS directory builder to pick it up. */
+#ifdef _WIN64
+#pragma comment(linker, "/INCLUDE:_tls_used")
+#pragma comment(linker, "/INCLUDE:p_aeron_tls_thread_callback")
+#else
+#pragma comment(linker, "/INCLUDE:__tls_used")
+#pragma comment(linker, "/INCLUDE:_p_aeron_tls_thread_callback")
+#endif
+
+#pragma section(".CRT$XLB", long, read)
+__declspec(allocate(".CRT$XLB"))
+const PIMAGE_TLS_CALLBACK p_aeron_tls_thread_callback = aeron_tls_thread_callback;
+
 int aeron_thread_key_create(pthread_key_t *key_ptr, void (*destr_func)(void *))
 {
     DWORD dkey = TlsAlloc();
-    if (dkey != TLS_OUT_OF_INDEXES)
-    {
-        *key_ptr = dkey;
-        return 0;
-    }
-    else
+    if (TLS_OUT_OF_INDEXES == dkey)
     {
         return EAGAIN;
     }
+
+    if (NULL != destr_func)
+    {
+        aeron_tls_destructor_entry_t *entry = NULL;
+        if (aeron_alloc((void **)&entry, sizeof(aeron_tls_destructor_entry_t)) < 0)
+        {
+            TlsFree(dkey);
+            return ENOMEM;
+        }
+        entry->key = dkey;
+        entry->destr_func = destr_func;
+
+        AcquireSRWLockExclusive(&s_aeron_tls_destructor_lock);
+        entry->next = s_aeron_tls_destructor_head;
+        s_aeron_tls_destructor_head = entry;
+        ReleaseSRWLockExclusive(&s_aeron_tls_destructor_lock);
+    }
+
+    *key_ptr = dkey;
+    return 0;
 }
 
 int aeron_thread_key_delete(pthread_key_t key)
 {
-    if (TlsFree(key))
+    aeron_tls_destructor_entry_t *to_free = NULL;
+
+    AcquireSRWLockExclusive(&s_aeron_tls_destructor_lock);
+    aeron_tls_destructor_entry_t **link = &s_aeron_tls_destructor_head;
+    while (NULL != *link)
     {
-        return 0;
+        if ((*link)->key == key)
+        {
+            to_free = *link;
+            *link = (*link)->next;
+            break;
+        }
+        link = &(*link)->next;
     }
-    else
+    ReleaseSRWLockExclusive(&s_aeron_tls_destructor_lock);
+
+    aeron_free(to_free);
+
+    if (!TlsFree(key))
     {
         return EINVAL;
     }
+    return 0;
 }
 
 int aeron_thread_set_specific(pthread_key_t key, const void *pointer)
