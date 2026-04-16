@@ -159,6 +159,11 @@ static const char *aeron_driver_name_resolver_build_bootstrap_neighbor_counter_l
     const size_t buffer_size = sizeof(buffer);
 
     int offset = snprintf(buffer, buffer_size, "Bootstrap neighbor: name=%s resolved=", bootstrap_neighbor);
+    if (offset < 0)
+    {
+        snprintf(buffer, buffer_size, "Bootstrap neighbor");
+        return buffer;
+    }
     if (((size_t)offset) < buffer_size)
     {
         size_t capacity = buffer_size - (size_t)offset;
@@ -340,7 +345,7 @@ int aeron_driver_name_resolver_init(
 
             _driver_resolver->bootstrap_neighbor_counters.array[i].counter_id = aeron_counters_manager_allocate(
                 context->counters_manager,
-                AERON_COUNTER_NAME_BOOTSTRAP_RESOLVER_NEIGHBOR_COUNTER_TYPE_ID,
+                AERON_COUNTER_NAME_RESOLVER_BOOTSTRAP_NEIGHBOR_COUNTER_TYPE_ID,
                 (uint8_t *)&i, sizeof(int),
                 bootstrap_neighbor_label, strlen(bootstrap_neighbor_label));
 

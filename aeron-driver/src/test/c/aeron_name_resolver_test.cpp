@@ -245,7 +245,7 @@ protected:
         void *clientd)
     {
         auto *counters_clientd = static_cast<NameResolverTest::bootstrap_neighbor_counters_clientd_t *>(clientd);
-        if (AERON_COUNTER_NAME_BOOTSTRAP_RESOLVER_NEIGHBOR_COUNTER_TYPE_ID == type_id)
+        if (AERON_COUNTER_NAME_RESOLVER_BOOTSTRAP_NEIGHBOR_COUNTER_TYPE_ID == type_id)
         {
             const int32_t *bootstrap_neighbor_index_key = (int32_t *)key;
             if (counters_clientd->bootstrap_neighbor_index == *bootstrap_neighbor_index_key)
@@ -266,7 +266,7 @@ protected:
         void *clientd)
     {
         auto *label_clientd = static_cast<NameResolverTest::bootstrap_neighbor_counter_label_clientd_t *>(clientd);
-        if (AERON_COUNTER_NAME_BOOTSTRAP_RESOLVER_NEIGHBOR_COUNTER_TYPE_ID == type_id)
+        if (AERON_COUNTER_NAME_RESOLVER_BOOTSTRAP_NEIGHBOR_COUNTER_TYPE_ID == type_id)
         {
             const int32_t *bootstrap_neighbor_index_key = (int32_t *)key;
             if (label_clientd->bootstrap_neighbor_index == *bootstrap_neighbor_index_key)
