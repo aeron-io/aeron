@@ -89,7 +89,7 @@ typedef struct aeron_driver_name_resolver_stct
     }
     bootstrap_neighbor_counters;
 
-    aeron_bit_set_t *bootstrap_neighbor_bitset;
+    aeron_bit_set_t *bootstrap_neighbor_connected;
 
     aeron_udp_channel_transport_bindings_t *transport_bindings;
     size_t mtu_length;
@@ -224,9 +224,9 @@ int aeron_driver_name_resolver_free(aeron_driver_name_resolver_t *driver_resolve
     aeron_free(driver_resolver->bootstrap_neighbors);
     aeron_free(driver_resolver->bootstrap_neighbor_addrs.array);
     aeron_free(driver_resolver->bootstrap_neighbor_counters.array);
-    if (NULL != driver_resolver->bootstrap_neighbor_bitset)
+    if (NULL != driver_resolver->bootstrap_neighbor_connected)
     {
-        aeron_bit_set_heap_free(driver_resolver->bootstrap_neighbor_bitset);
+        aeron_bit_set_heap_free(driver_resolver->bootstrap_neighbor_connected);
     }
     aeron_free(driver_resolver);
 
@@ -360,7 +360,7 @@ int aeron_driver_name_resolver_init(
         }
     }
 
-    if (aeron_bit_set_heap_init(_driver_resolver->bootstrap_neighbors_length, false, &_driver_resolver->bootstrap_neighbor_bitset) < 0)
+    if (aeron_bit_set_heap_init(_driver_resolver->bootstrap_neighbors_length, false, &_driver_resolver->bootstrap_neighbor_connected) < 0)
     {
         AERON_APPEND_ERR("%s", "failed to allocate bootstrap neighbors bitset");
         goto error_cleanup;
@@ -936,7 +936,7 @@ static int aeron_driver_name_resolver_send_self_resolutions(
         }
     }
 
-    aeron_bit_set_init(driver_resolver->bootstrap_neighbor_bitset, false);
+    aeron_bit_set_init(driver_resolver->bootstrap_neighbor_connected, false);
     struct sockaddr_storage neighbor_sock_addr;
     for (size_t k = 0; k < driver_resolver->neighbors.length; k++)
     {
@@ -951,7 +951,7 @@ static int aeron_driver_name_resolver_send_self_resolutions(
             if (aeron_driver_name_resolver_sockaddr_equals(bootstrap_neighbor_addr, &neighbor_sock_addr))
             {
                 is_bootstrap_neighbor = true;
-                aeron_bit_set_set(driver_resolver->bootstrap_neighbor_bitset, i, true);
+                aeron_bit_set_set(driver_resolver->bootstrap_neighbor_connected, i, true);
             }
         }
 
@@ -972,7 +972,7 @@ static int aeron_driver_name_resolver_send_self_resolutions(
     for (size_t i = 0; i < driver_resolver->bootstrap_neighbor_counters.length; i++)
     {
         bool value = false;
-        aeron_bit_set_get(driver_resolver->bootstrap_neighbor_bitset, i, &value);
+        aeron_bit_set_get(driver_resolver->bootstrap_neighbor_connected, i, &value);
         aeron_counter_set_release(driver_resolver->bootstrap_neighbor_counters.array[i].value_addr, value);
     }
 
