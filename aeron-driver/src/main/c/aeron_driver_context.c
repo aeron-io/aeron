@@ -221,7 +221,12 @@ static void aeron_driver_untethered_subscription_state_change_null(
 #define AERON_DRIVER_CONNECT_DEFAULT true
 #define AERON_ENABLE_EXPERIMENTAL_FEATURES_DEFAULT false
 #define AERON_DRIVER_STREAM_SESSION_LIMIT_DEFAULT (INT32_MAX)
-
+#define AERON_DRIVER_TERMINATION_VALIDATOR_DEFAULT ("deny")
+#define AERON_SENDER_IDLE_STRATEGY_DEFAULT ("backoff")
+#define AERON_CONDUCTOR_IDLE_STRATEGY_DEFAULT ("backoff")
+#define AERON_RECEIVER_IDLE_STRATEGY_DEFAULT ("backoff")
+#define AERON_SHAREDNETWORK_IDLE_STRATEGY_DEFAULT ("backoff")
+#define AERON_SHARED_IDLE_STRATEGY_DEFAULT ("backoff")
 
 int aeron_driver_context_init(aeron_driver_context_t **context)
 {
@@ -1070,7 +1075,7 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
     _context->conductor_idle_strategy_init_args =
         AERON_CONFIG_STRNDUP_GETENV_OR_NULL(AERON_CONDUCTOR_IDLE_STRATEGY_INIT_ARGS_ENV_VAR);
     if ((_context->conductor_idle_strategy_func = aeron_idle_strategy_load(
-        AERON_CONFIG_GETENV_OR_DEFAULT(AERON_CONDUCTOR_IDLE_STRATEGY_ENV_VAR, "backoff"),
+        AERON_CONFIG_GETENV_OR_DEFAULT(AERON_CONDUCTOR_IDLE_STRATEGY_ENV_VAR, AERON_CONDUCTOR_IDLE_STRATEGY_DEFAULT),
         &_context->conductor_idle_strategy_state,
         AERON_CONDUCTOR_IDLE_STRATEGY_ENV_VAR,
         _context->conductor_idle_strategy_init_args)) == NULL)
@@ -1081,7 +1086,7 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
     _context->shared_idle_strategy_init_args =
         AERON_CONFIG_STRNDUP_GETENV_OR_NULL(AERON_SHARED_IDLE_STRATEGY_ENV_INIT_ARGS_VAR);
     if ((_context->shared_idle_strategy_func = aeron_idle_strategy_load(
-        AERON_CONFIG_GETENV_OR_DEFAULT(AERON_SHARED_IDLE_STRATEGY_ENV_VAR, "backoff"),
+        AERON_CONFIG_GETENV_OR_DEFAULT(AERON_SHARED_IDLE_STRATEGY_ENV_VAR, AERON_SHARED_IDLE_STRATEGY_DEFAULT),
         &_context->shared_idle_strategy_state,
         AERON_SHARED_IDLE_STRATEGY_ENV_VAR,
         _context->shared_idle_strategy_init_args)) == NULL)
@@ -1092,7 +1097,7 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
     _context->shared_network_idle_strategy_init_args =
         AERON_CONFIG_STRNDUP_GETENV_OR_NULL(AERON_SHAREDNETWORK_IDLE_STRATEGY_INIT_ARGS_ENV_VAR);
     if ((_context->shared_network_idle_strategy_func = aeron_idle_strategy_load(
-        AERON_CONFIG_GETENV_OR_DEFAULT(AERON_SHAREDNETWORK_IDLE_STRATEGY_ENV_VAR, "backoff"),
+        AERON_CONFIG_GETENV_OR_DEFAULT(AERON_SHAREDNETWORK_IDLE_STRATEGY_ENV_VAR, AERON_SHAREDNETWORK_IDLE_STRATEGY_DEFAULT),
         &_context->shared_network_idle_strategy_state,
         AERON_SHAREDNETWORK_IDLE_STRATEGY_ENV_VAR,
         _context->shared_network_idle_strategy_init_args)) == NULL)
@@ -1103,7 +1108,7 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
     _context->sender_idle_strategy_init_args =
         AERON_CONFIG_STRNDUP_GETENV_OR_NULL(AERON_SENDER_IDLE_STRATEGY_INIT_ARGS_ENV_VAR);
     if ((_context->sender_idle_strategy_func = aeron_idle_strategy_load(
-        AERON_CONFIG_GETENV_OR_DEFAULT(AERON_SENDER_IDLE_STRATEGY_ENV_VAR, "backoff"),
+        AERON_CONFIG_GETENV_OR_DEFAULT(AERON_SENDER_IDLE_STRATEGY_ENV_VAR, AERON_SENDER_IDLE_STRATEGY_DEFAULT),
         &_context->sender_idle_strategy_state,
         AERON_SENDER_IDLE_STRATEGY_ENV_VAR,
         _context->sender_idle_strategy_init_args)) == NULL)
@@ -1114,7 +1119,7 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
     _context->receiver_idle_strategy_init_args =
         AERON_CONFIG_STRNDUP_GETENV_OR_NULL(AERON_RECEIVER_IDLE_STRATEGY_INIT_ARGS_ENV_VAR);
     if ((_context->receiver_idle_strategy_func = aeron_idle_strategy_load(
-        AERON_CONFIG_GETENV_OR_DEFAULT(AERON_RECEIVER_IDLE_STRATEGY_ENV_VAR, "backoff"),
+        AERON_CONFIG_GETENV_OR_DEFAULT(AERON_RECEIVER_IDLE_STRATEGY_ENV_VAR, AERON_RECEIVER_IDLE_STRATEGY_DEFAULT),
         &_context->receiver_idle_strategy_state,
         AERON_RECEIVER_IDLE_STRATEGY_ENV_VAR,
         _context->receiver_idle_strategy_init_args)) == NULL)
@@ -1154,7 +1159,9 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
     _context->log.resend = NULL;
 
     if ((_context->termination_validator_func = aeron_driver_termination_validator_load(
-        AERON_CONFIG_GETENV_OR_DEFAULT(AERON_DRIVER_TERMINATION_VALIDATOR_ENV_VAR, "deny"))) == NULL)
+        AERON_CONFIG_GETENV_OR_DEFAULT(
+            AERON_DRIVER_TERMINATION_VALIDATOR_ENV_VAR,
+            AERON_DRIVER_TERMINATION_VALIDATOR_DEFAULT))) == NULL)
     {
         goto error;
     }

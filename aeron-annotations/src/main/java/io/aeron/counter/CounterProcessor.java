@@ -15,6 +15,7 @@
  */
 package io.aeron.counter;
 
+import io.aeron.utility.JavadocCleaner;
 import io.aeron.utility.ElementIO;
 import io.aeron.utility.Processor;
 
@@ -32,7 +33,22 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * AeronCounter processor.
+ * Annotation processor for {@link AeronCounter}-annotated fields.
+ *
+ * <p>Recognises two field naming conventions and sets {@link CounterInfo#isSystemCounter}
+ * accordingly:</p>
+ * <ul>
+ *   <li>{@code SYSTEM_COUNTER_ID_*} — system counter sub-types.  The derived C name uses the
+ *       {@code AERON_SYSTEM_COUNTER_ID_} prefix.</li>
+ *   <li>{@code *_TYPE_ID} — counter type-IDs.  The derived C name uses the
+ *       {@code AERON_COUNTER_} prefix.  As a special case, the {@code DRIVER_} prefix is stripped
+ *       from the Java name before constructing the C name (e.g. {@code DRIVER_BYTES_SENT_TYPE_ID}
+ *       → {@code AERON_COUNTER_BYTES_SENT_TYPE_ID}).</li>
+ * </ul>
+ *
+ * <p>Output is written to {@code counter-info.dat} (via {@link io.aeron.utility.ElementIO}) and
+ * consumed by the {@code validateCounterExpectations} and {@code generateCounterDoc} Gradle
+ * tasks.</p>
  */
 @SupportedAnnotationTypes("io.aeron.counter.AeronCounter")
 public class CounterProcessor extends Processor
@@ -135,7 +151,11 @@ public class CounterProcessor extends Processor
             return;
         }
 
+        counterInfo.isSystemCounter = systemCounterId;
+        counterInfo.javaFieldName = element.getEnclosingElement().getSimpleName() + "." + name;
+
         counterInfo.counterDescription = getDocComment(element);
+        counterInfo.counterDescriptionClean = JavadocCleaner.clean(counterInfo.counterDescription);
 
         final Object constantValue = element.getConstantValue();
         if (constantValue instanceof Integer)

@@ -876,7 +876,7 @@ public final class ConsensusModule implements AutoCloseable
         /**
          * Resolution in nanoseconds for each tick of the timer wheel for scheduling deadlines. Defaults to 8ms.
          */
-        @Config(defaultType = DefaultType.LONG, defaultLong = 4L * 1000 * 1000)
+        @Config(defaultType = DefaultType.LONG, defaultLong = 8L * 1000 * 1000)
         public static final long WHEEL_TICK_RESOLUTION_DEFAULT_NS = TimeUnit.MILLISECONDS.toNanos(8);
 
         /**
@@ -964,7 +964,7 @@ public final class ConsensusModule implements AutoCloseable
          *
          * @since 1.41.0
          */
-        @Config(defaultType = DefaultType.LONG, defaultLong = 0)
+        @Config(defaultType = DefaultType.LONG, defaultValueString = "replicationProgressTimeoutNs() / 10")
         public static final String CLUSTER_REPLICATION_PROGRESS_INTERVAL_PROP_NAME =
             "aeron.cluster.replication.progress.interval";
 
@@ -3224,7 +3224,6 @@ public final class ConsensusModule implements AutoCloseable
          * @return this for a fluent API.
          * @see Configuration#LEADER_HEARTBEAT_INTERVAL_PROP_NAME
          */
-        @Config
         public Context leaderHeartbeatIntervalNs(final long heartbeatIntervalNs)
         {
             this.leaderHeartbeatIntervalNs = heartbeatIntervalNs;
@@ -3237,6 +3236,7 @@ public final class ConsensusModule implements AutoCloseable
          * @return the interval at which a leader will send heartbeats if the log is not progressing.
          * @see Configuration#LEADER_HEARTBEAT_INTERVAL_PROP_NAME
          */
+        @Config
         public long leaderHeartbeatIntervalNs()
         {
             return leaderHeartbeatIntervalNs;

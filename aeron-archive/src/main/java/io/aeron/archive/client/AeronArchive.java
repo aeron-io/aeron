@@ -2615,7 +2615,7 @@ public final class AeronArchive implements AutoCloseable
     /**
      * Common configuration properties for communicating with an Aeron archive.
      */
-    @Config(existsInC = false)
+    @Config
     public static final class Configuration
     {
         private Configuration()
@@ -2657,7 +2657,10 @@ public final class AeronArchive implements AutoCloseable
         /**
          * Timeout when waiting on a message to be sent or received.
          */
-        @Config(defaultType = DefaultType.LONG, defaultLong = 10L * 1000 * 1000 * 1000)
+        @Config(
+            defaultType = DefaultType.LONG,
+            defaultLong = 10L * 1000 * 1000 * 1000,
+            expectedCDefaultFieldName = "AERON_ARCHIVE_MESSAGE_TIMEOUT_NS_DEFAULT")
         public static final long MESSAGE_TIMEOUT_DEFAULT_NS = TimeUnit.SECONDS.toNanos(10);
 
         /**
@@ -2675,7 +2678,7 @@ public final class AeronArchive implements AutoCloseable
         /**
          * Channel for sending control messages to an archive.
          */
-        @Config(defaultType = DefaultType.STRING, defaultString = "")
+        @Config(defaultType = DefaultType.STRING, defaultString = "", skipCDefaultValidation = true)
         public static final String CONTROL_CHANNEL_PROP_NAME = "aeron.archive.control.channel";
 
         /**
@@ -2693,7 +2696,7 @@ public final class AeronArchive implements AutoCloseable
         /**
          * Channel for sending control messages to a driver local archive.
          */
-        @Config(hasContext = false)
+        @Config(hasContext = false, existsInC = false)
         public static final String LOCAL_CONTROL_CHANNEL_PROP_NAME = "aeron.archive.local.control.channel";
 
         /**
@@ -2705,7 +2708,7 @@ public final class AeronArchive implements AutoCloseable
         /**
          * Stream id within a channel for sending control messages to a driver local archive.
          */
-        @Config(hasContext = false)
+        @Config(hasContext = false, existsInC = false)
         public static final String LOCAL_CONTROL_STREAM_ID_PROP_NAME = "aeron.archive.local.control.stream.id";
 
         /**
@@ -2729,7 +2732,7 @@ public final class AeronArchive implements AutoCloseable
          *     <a href="https://en.wikipedia.org/wiki/Ephemeral_port">ephemeral port range</a>.</li>
          * </ul>
          */
-        @Config(defaultType = DefaultType.STRING, defaultString = "")
+        @Config(defaultType = DefaultType.STRING, defaultString = "", skipCDefaultValidation = true)
         public static final String CONTROL_RESPONSE_CHANNEL_PROP_NAME = "aeron.archive.control.response.channel";
 
         /**
@@ -2747,7 +2750,7 @@ public final class AeronArchive implements AutoCloseable
         /**
          * Channel for receiving progress events of recordings from an archive.
          */
-        @Config
+        @Config(skipCDefaultValidation = true)
         public static final String RECORDING_EVENTS_CHANNEL_PROP_NAME = "aeron.archive.recording.events.channel";
 
         /**
@@ -2774,7 +2777,7 @@ public final class AeronArchive implements AutoCloseable
         /**
          * Is channel enabled for recording progress events of recordings from an archive.
          */
-        @Config
+        @Config(existsInC = false)
         public static final String RECORDING_EVENTS_ENABLED_PROP_NAME = "aeron.archive.recording.events.enabled";
 
         /**
@@ -2811,7 +2814,7 @@ public final class AeronArchive implements AutoCloseable
         /**
          * MTU length for control streams.
          */
-        @Config
+        @Config(skipCDefaultValidation = true)
         public static final String CONTROL_MTU_LENGTH_PROP_NAME = "aeron.archive.control.mtu.length";
 
         /**
@@ -3497,6 +3500,7 @@ public final class AeronArchive implements AutoCloseable
          * @see AeronArchive.Configuration#CLIENT_NAME_PROP_NAME
          * @since 1.49.0
          */
+        @Config
         public String clientName()
         {
             return clientName;

@@ -82,6 +82,10 @@ final class ValidationReport
 
     void printFailuresOn(final PrintStream out)
     {
-        entries.forEach(entry -> entry.printFailuresOn(out));
+        final long invalidEntries = entries.stream().filter(entry -> entry.printFailuresOn(out)).count();
+        if (0 < invalidEntries)
+        {
+            out.println("Total invalid entries: " + invalidEntries);
+        }
     }
 }

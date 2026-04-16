@@ -20,7 +20,9 @@ import io.aeron.config.DefaultType;
 import io.aeron.config.ExpectedCConfig;
 import io.aeron.validation.Grep;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -29,17 +31,17 @@ final class Validator
 {
     static ValidationReport validate(
         final Collection<ConfigInfo> configInfoCollection,
-        final String sourceDir)
+        final String[] sourceDirs)
     {
-        return new Validator(sourceDir).validate(configInfoCollection).report;
+        return new Validator(sourceDirs).validate(configInfoCollection).report;
     }
 
-    private final String sourceDir;
+    private final String[] sourceDirs;
     private final ValidationReport report;
 
-    private Validator(final String sourceDir)
+    private Validator(final String[] sourceDirs)
     {
-        this.sourceDir = sourceDir;
+        this.sourceDirs = sourceDirs;
         this.report = new ValidationReport();
     }
 
@@ -70,8 +72,8 @@ final class Validator
          * #define AERON_OPTION_ENV_VAR "AERON_OPTION"
          */
         final String pattern = "#define[ \t]+" + c.envVarFieldName + "[ \t]+\"" + c.envVar + "\"";
-        final Grep grep = Grep.execute(pattern, sourceDir);
-        if (grep.success())
+        final Grep grep = Grep.execute(pattern, sourceDirs);
+        if (grep.success(2))
         {
             validation.valid("Expected Env Var found in " + grep.getFilenameAndLine());
         }
@@ -96,9 +98,9 @@ final class Validator
          * #define AERON_OPTION_DEFAULT false
          * #define AERON_OPTION_DEFAULT (true)
          */
-        final String pattern = "#define[ \t]+" + c.defaultFieldName;
+        final String pattern = "#define[ \t]+" + c.defaultFieldName + "[ \t]+";
 
-        final Grep grep = Grep.execute(pattern, sourceDir);
+        final Grep grep = Grep.execute(pattern, sourceDirs);
         if (!grep.success())
         {
             validation.invalid("Expected Default NOT found.  `grep` command:\n" + grep.getCommandString());
@@ -183,10 +185,13 @@ final class Validator
         final String location)
     {
         final String foundDefaultString = originalFoundDefaultString
+            .replaceAll("UINT64_C", "")
             .replaceAll("INT64_C", "")
             .replaceAll("UINT32_C", "")
             .replaceAll("([0-9]+)LL", "$1")
-            .replaceAll("([0-9]+)L", "$1");
+            .replaceAll("([0-9]+)L", "$1")
+            .replaceAll("\\((.*)\\)", "$1")
+            .replaceAll("(.*)//.*", "$1");
 
         if (foundDefaultString.equals(c.defaultValue))
         {
@@ -194,7 +199,23 @@ final class Validator
         }
         else
         {
-            validation.invalid("found " + foundDefaultString + " but expected " + c.defaultValue);
+            final List<Long> numbers = new ArrayList<>();
+
+            final Matcher matcher = Pattern.compile("-?\\d+").matcher(foundDefaultString);
+            while (matcher.find())
+            {
+                numbers.add(Long.parseLong(matcher.group()));
+            }
+
+            if (!numbers.isEmpty() &&
+                Long.toString(numbers.stream().reduce(1L, (a, b) -> a * b)).equals(c.defaultValue))
+            {
+                validation.valid("Expected Default '" + foundDefaultString + "' found in " + location);
+            }
+            else
+            {
+                validation.invalid("found " + foundDefaultString + " but expected " + c.defaultValue);
+            }
         }
     }
 }

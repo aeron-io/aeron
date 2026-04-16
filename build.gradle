@@ -483,17 +483,20 @@ project(':aeron-client') {
 
     tasks.register('validateConfigExpectations', JavaExec) {
         def sourceDir = 'src/main/c'
+        def driverSourceDir = '../aeron-driver/src/main/c'
 
+        dependsOn 'compileJava'
         inputs.files(configInfoFile)
 
         mainClass.set('io.aeron.config.validation.ValidateConfigExpectationsTask')
         classpath project(':aeron-annotations').sourceSets.main.runtimeClasspath
-        args = [configInfoFile, sourceDir]
+        args = [configInfoFile, sourceDir, driverSourceDir]
     }
 
     tasks.register('generateConfigDoc', JavaExec) {
-        def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.md"
+        def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.adoc"
 
+        dependsOn 'compileJava'
         inputs.files(configInfoFile)
         outputs.files(generatedDocFile)
 
@@ -506,11 +509,25 @@ project(':aeron-client') {
         def counterInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/counter-info.dat"
         def sourceDir = 'src/main/c'
 
+        dependsOn 'compileJava'
         inputs.files(counterInfoFile)
 
         mainClass.set('io.aeron.counter.validation.ValidateCounterExpectationsTask')
         classpath project(':aeron-annotations').sourceSets.main.runtimeClasspath
         args = [counterInfoFile, sourceDir]
+    }
+
+    tasks.register('generateCounterDoc', JavaExec) {
+        def counterInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/counter-info.dat"
+        def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/counters.adoc"
+
+        dependsOn 'compileJava'
+        inputs.files(counterInfoFile)
+        outputs.files(generatedDocFile)
+
+        mainClass.set('io.aeron.counter.docgen.GenerateCounterDocTask')
+        classpath project(':aeron-annotations').sourceSets.main.runtimeClasspath
+        args = [counterInfoFile, generatedDocFile]
     }
 }
 
@@ -579,10 +596,12 @@ project(':aeron-driver') {
         sign publishing.publications.aeronDriver
     }
 
+    def configInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/config-info.dat"
+
     tasks.register('validateConfigExpectations', JavaExec) {
-        def configInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/config-info.dat"
         def sourceDir = 'src/main/c'
 
+        dependsOn 'compileJava'
         inputs.files(configInfoFile)
 
         mainClass.set('io.aeron.config.validation.ValidateConfigExpectationsTask')
@@ -591,9 +610,9 @@ project(':aeron-driver') {
     }
 
     tasks.register('generateConfigDoc', JavaExec) {
-        def configInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/config-info.dat"
-        def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.md"
+        def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.adoc"
 
+        dependsOn 'compileJava'
         inputs.files(configInfoFile)
         outputs.files(generatedDocFile)
 
@@ -802,10 +821,23 @@ project(':aeron-archive') {
         sign publishing.publications.aeronArchive
     }
 
-    tasks.register('generateConfigDoc', JavaExec) {
-        def configInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/config-info.dat"
-        def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.md"
+    def configInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/config-info.dat"
 
+    tasks.register('validateConfigExpectations', JavaExec) {
+        def sourceDir = 'src/main/c'
+
+        dependsOn 'compileJava'
+        inputs.files(configInfoFile)
+
+        mainClass.set('io.aeron.config.validation.ValidateConfigExpectationsTask')
+        classpath project(':aeron-annotations').sourceSets.main.runtimeClasspath
+        args = [configInfoFile, sourceDir]
+    }
+
+    tasks.register('generateConfigDoc', JavaExec) {
+        def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.adoc"
+
+        dependsOn 'compileJava'
         inputs.files(configInfoFile)
         outputs.files(generatedDocFile)
 
@@ -983,8 +1015,9 @@ project(':aeron-cluster') {
 
     tasks.register('generateConfigDoc', JavaExec) {
         def configInfoFile = "${layout.buildDirectory.get()}/generated/sources/headers/java/main/config-info.dat"
-        def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.md"
+        def generatedDocFile = "${layout.buildDirectory.get()}/generated-doc/out.adoc"
 
+        dependsOn 'compileJava'
         inputs.files(configInfoFile)
         outputs.files(generatedDocFile)
 
@@ -1423,6 +1456,75 @@ tasks.register('uploadArtifactsToCentralPortal', io.aeron.build.SonatypeCentralP
     portalPassword.set(sonatypeCentralPortalPassword)
     groupId.set(aeronGroup)
     snapshotRelease.set(!isReleaseVersion)
+}
+
+tasks.register('generateCombinedConfigDoc') {
+    group = 'documentation'
+    description = 'Validates config/counter annotations across all subprojects and generates combined reference documents.'
+
+    dependsOn ':aeron-client:validateConfigExpectations',
+              ':aeron-driver:validateConfigExpectations',
+              ':aeron-archive:validateConfigExpectations',
+              ':aeron-client:validateCounterExpectations',
+              ':aeron-client:generateConfigDoc',
+              ':aeron-driver:generateConfigDoc',
+              ':aeron-archive:generateConfigDoc',
+              ':aeron-cluster:generateConfigDoc',
+              ':aeron-client:generateCounterDoc'
+
+    project(':aeron-client').tasks.named('generateConfigDoc').configure {
+        mustRunAfter ':aeron-client:validateConfigExpectations', ':aeron-client:validateCounterExpectations'
+    }
+    project(':aeron-driver').tasks.named('generateConfigDoc').configure {
+        mustRunAfter ':aeron-driver:validateConfigExpectations'
+    }
+    project(':aeron-archive').tasks.named('generateConfigDoc').configure {
+        mustRunAfter ':aeron-archive:validateConfigExpectations'
+    }
+    project(':aeron-client').tasks.named('generateCounterDoc').configure {
+        mustRunAfter ':aeron-client:validateCounterExpectations'
+    }
+
+    final def subprojectNames = ['aeron-client', 'aeron-driver', 'aeron-archive', 'aeron-cluster']
+    final def docFileProviders = subprojectNames.collect {
+        project(":${it}").layout.buildDirectory.file('generated-doc/out.adoc')
+    }
+    final def counterDocFileProvider = project(':aeron-client').layout.buildDirectory.file('generated-doc/counters.adoc')
+
+    inputs.files(docFileProviders)
+    inputs.files(counterDocFileProvider)
+
+    final def outputFile = layout.buildDirectory.file('generated-doc/config.adoc')
+    final def counterOutputFile = layout.buildDirectory.file('generated-doc/counters.adoc')
+    outputs.file(outputFile)
+    outputs.file(counterOutputFile)
+
+    doLast {
+        final def out = outputFile.get().asFile
+        out.parentFile.mkdirs()
+
+        out.withWriter { writer ->
+            [subprojectNames, docFileProviders].transpose().eachWithIndex { pair, idx ->
+                if (idx > 0)
+                {
+                    writer.println()
+                    writer.println("'''")
+                    writer.println()
+                }
+                writer.println("== ${pair[0]}")
+                writer.println()
+                writer.print(pair[1].get().asFile.text)
+            }
+        }
+
+        logger.lifecycle("Combined config doc written to: ${out.path}")
+
+        final def counterSrc = counterDocFileProvider.get().asFile
+        final def counterOut = counterOutputFile.get().asFile
+        counterOut.parentFile.mkdirs()
+        counterOut.text = counterSrc.text
+        logger.lifecycle("Counter doc written to: ${counterOut.path}")
+    }
 }
 
 wrapper {

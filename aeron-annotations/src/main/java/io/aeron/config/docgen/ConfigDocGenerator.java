@@ -63,21 +63,27 @@ final class ConfigDocGenerator implements AutoCloseable
         {
             writeHeader(
                 toHeaderString(configInfo.id) +
-                (configInfo.expectations.c.exists ? "" : " (***JAVA ONLY***)") +
-                (configInfo.deprecated ? " (***DEPRECATED***)" : ""));
-            write("Description", configInfo.propertyNameDescription);
+                (configInfo.expectations.c.exists ? "" : " *(JAVA ONLY)*") +
+                (configInfo.existsInJava ? "" : " *(C ONLY)*") +
+                (configInfo.deprecated ? " *(DEPRECATED)*" : ""));
+            write("Description", configInfo.propertyNameDescriptionClean != null ?
+                configInfo.propertyNameDescriptionClean : configInfo.propertyNameDescription);
             write("Type",
                 (DefaultType.isUndefined(configInfo.overrideDefaultValueType) ?
                 configInfo.defaultValueType :
                 configInfo.overrideDefaultValueType).getSimpleName());
-            writeCode("System Property", configInfo.propertyName);
+            if (configInfo.existsInJava)
+            {
+                writeCode("System Property", configInfo.propertyName);
+            }
             if (configInfo.context != null && !configInfo.context.isEmpty())
             {
                 writeCode("Context", configInfo.context);
             }
             if (configInfo.contextDescription != null && !configInfo.contextDescription.isEmpty())
             {
-                write("Context Description", configInfo.contextDescription);
+                write("Context Description", configInfo.contextDescriptionClean != null ?
+                    configInfo.contextDescriptionClean : configInfo.contextDescription);
             }
             if (configInfo.uriParam != null && !configInfo.uriParam.isEmpty())
             {
@@ -86,16 +92,20 @@ final class ConfigDocGenerator implements AutoCloseable
 
             if (configInfo.defaultDescription != null)
             {
-                write("Default Description", configInfo.defaultDescription);
+                write("Default Description", configInfo.defaultDescriptionClean != null ?
+                    configInfo.defaultDescriptionClean : configInfo.defaultDescription);
             }
             final String defaultValue = configInfo.overrideDefaultValue == null ?
                 (configInfo.defaultValue == null ? "" : configInfo.defaultValue) :
                 configInfo.overrideDefaultValue;
 
-            write("Default", getDefaultString(
-                configInfo.defaultValueString == null ? defaultValue : configInfo.defaultValueString,
-                configInfo.isTimeValue,
-                configInfo.timeUnit));
+            if (configInfo.existsInJava)
+            {
+                write("Default", getDefaultString(
+                    configInfo.defaultValueString == null ? defaultValue : configInfo.defaultValueString,
+                    configInfo.isTimeValue,
+                    configInfo.timeUnit));
+            }
             if (configInfo.isTimeValue == Boolean.TRUE)
             {
                 write("Time Unit", configInfo.timeUnit.toString());
@@ -123,10 +133,9 @@ final class ConfigDocGenerator implements AutoCloseable
 
     private void writeHeader(final String t) throws IOException
     {
-        writeRow("", t);
-        writeLine();
-        writeRow("---", "---");
-        writeLine();
+        writer.write("=== " + t + "\n\n");
+        writer.write("[cols=\"1h,3\"]\n");
+        writer.write("|===\n");
     }
 
     private void writeCode(final String a, final String b) throws IOException
@@ -136,18 +145,13 @@ final class ConfigDocGenerator implements AutoCloseable
 
     private void write(final String a, final String b) throws IOException
     {
-        writeRow("**" + a + "**", b.replaceAll("\n", " ").trim());
-        writeLine();
+        writer.write("| " + a + "\n");
+        writer.write("| " + b.replaceAll("\n", " ").trim() + "\n\n");
     }
 
     private void writeLine() throws IOException
     {
-        writer.write("\n");
-    }
-
-    private void writeRow(final String a, final String b) throws IOException
-    {
-        writer.write("| " + a + " | " + b + " |");
+        writer.write("|===\n\n");
     }
 
     private String toHeaderString(final String t)

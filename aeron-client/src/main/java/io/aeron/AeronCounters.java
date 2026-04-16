@@ -807,7 +807,7 @@ public final class AeronCounters
     /**
      * The type id of the {@link Counter} used for tracking the count of active recording sessions.
      */
-    @AeronCounter(existsInC = false)
+    @AeronCounter
     public static final int ARCHIVE_RECORDING_SESSION_COUNT_TYPE_ID = 111;
 
     /**
@@ -1016,19 +1016,19 @@ public final class AeronCounters
     /**
      * Counter type for count of standby snapshots received.
      */
-    @AeronCounter(existsInC = false)
+    @AeronCounter
     public static final int CLUSTER_STANDBY_SNAPSHOT_COUNTER_TYPE_ID = 232;
 
     /**
      * The type of the {@link Counter} used for handling node specific operations.
      */
-    @AeronCounter(existsInC = false)
+    @AeronCounter
     public static final int NODE_CONTROL_TOGGLE_TYPE_ID = 233;
 
     /**
      * The type id of the {@link Counter} used for keeping track of the maximum total snapshot duration.
      */
-    @AeronCounter(existsInC = false)
+    @AeronCounter
     public static final int CLUSTER_TOTAL_MAX_SNAPSHOT_DURATION_TYPE_ID = 234;
 
     /**
@@ -1042,7 +1042,7 @@ public final class AeronCounters
      * The type id of the {@link Counter} used for keeping track of the maximum snapshot duration
      * for a given clustered service.
      */
-    @AeronCounter(existsInC = false)
+    @AeronCounter
     public static final int CLUSTERED_SERVICE_MAX_SNAPSHOT_DURATION_TYPE_ID = 236;
 
     /**
@@ -1061,7 +1061,7 @@ public final class AeronCounters
     /**
      * The type id of the {@link Counter} used for keeping track of the Cluster leadership term id.
      */
-    @AeronCounter(existsInC = false)
+    @AeronCounter
     public static final int CLUSTER_LEADERSHIP_TERM_ID_TYPE_ID = 239;
 
     /**

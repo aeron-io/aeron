@@ -38,6 +38,9 @@
 #define AERON_CUBICCONGESTIONCONTROL_B (0.2)
 #define AERON_CUBICCONGESTIONCONTROL_RTT_TIMEOUT_MULTIPLE (4)
 
+#define AERON_CUBICCONGESTIONCONTROL_MEASURERTT_DEFAULT (false)
+#define AERON_CUBICCONGESTIONCONTROL_TCPMODE_DEFAULT (false)
+
 static const aeron_symbol_table_func_t aeron_congestion_control_table[] =
     {
         {
@@ -398,8 +401,12 @@ int aeron_cubic_congestion_control_strategy_supplier(
     aeron_cubic_congestion_control_strategy_state_t *state = _strategy->state;
 
     // Config values
-    state->tcp_mode = aeron_parse_bool(getenv(AERON_CUBICCONGESTIONCONTROL_TCPMODE_ENV_VAR), false);
-    state->measure_rtt = aeron_parse_bool(getenv(AERON_CUBICCONGESTIONCONTROL_MEASURERTT_ENV_VAR), false);
+    state->tcp_mode = aeron_parse_bool(
+        getenv(AERON_CUBICCONGESTIONCONTROL_TCPMODE_ENV_VAR),
+        AERON_CUBICCONGESTIONCONTROL_TCPMODE_DEFAULT);
+    state->measure_rtt = aeron_parse_bool(
+        getenv(AERON_CUBICCONGESTIONCONTROL_MEASURERTT_ENV_VAR),
+        AERON_CUBICCONGESTIONCONTROL_MEASURERTT_DEFAULT);
     state->initial_rtt_ns = AERON_CUBICCONGESTIONCONTROL_INITIALRTT_DEFAULT;
     char *const rtt_ns = getenv(AERON_CUBICCONGESTIONCONTROL_INITIALRTT_ENV_VAR);
     if (NULL != rtt_ns)

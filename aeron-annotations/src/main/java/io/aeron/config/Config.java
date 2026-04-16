@@ -19,7 +19,36 @@ import java.lang.annotation.*;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Annotation to indicate this is a config option.
+ * Annotation to mark fields and methods that together describe a single Aeron configuration
+ * option, and to record the expected corresponding definitions in the C driver.
+ *
+ * <h2>How a config option is assembled</h2>
+ * <p>A single logical config option is typically spread across two or three Java elements, all
+ * tied together by a shared {@link #id()} (derived automatically from the field name when not
+ * set explicitly):</p>
+ * <ol>
+ *   <li>A {@code static final String} field whose name ends in {@code _PROP_NAME} holds the
+ *       Java system-property key (e.g. {@code "aeron.dir"}).
+ *       {@link Type#PROPERTY_NAME}</li>
+ *   <li>A {@code static final} field whose name ends in {@code _DEFAULT} or {@code _DEFAULT_NS}
+ *       holds the default value.
+ *       {@link Type#DEFAULT}</li>
+ *   <li>Optionally, a method on a {@code Context} class provides the runtime accessor.  Placing
+ *       {@code @Config} on the method records the context class and method name in the
+ *       documentation.</li>
+ * </ol>
+ *
+ * <h2>C driver cross-referencing</h2>
+ * <p>The C driver exposes each config option as a pair of {@code #define}s:</p>
+ * <ul>
+ *   <li>An env-var name define, e.g. {@code AERON_DIR_ENV_VAR "AERON_DIR"}</li>
+ *   <li>A default-value define, e.g. {@code AERON_DIR_DEFAULT "/dev/shm/aeron"}</li>
+ * </ul>
+ * <p>The processor derives expected C names automatically from the Java system-property key
+ * (upper-cased, dots replaced with underscores).  The {@code expectedC*} attributes let you
+ * override the derived names when the C code uses a non-standard convention.
+ * Set {@link #existsInC()} to {@code false} for Java-only options that have no C equivalent,
+ * and {@link #existsInJava()} to {@code false} for C-only options.</p>
  */
 @Target({ElementType.FIELD, ElementType.METHOD, ElementType.TYPE})
 @Retention(RetentionPolicy.SOURCE)
@@ -64,6 +93,13 @@ public @interface Config
      * @return the uri parameter (if any) associated with this option.
      */
     String uriParam() default "";
+
+    /**
+     * Whether this config option exists in the Java code.
+     *
+     * @return whether this config option exists in the Java code.
+     */
+    boolean existsInJava() default true;
 
     /**
      * Whether this config option exists in the C code.

@@ -16,6 +16,7 @@
 package io.aeron.config;
 
 import io.aeron.utility.ElementIO;
+import io.aeron.utility.JavadocCleaner;
 import io.aeron.utility.Processor;
 
 import javax.annotation.processing.RoundEnvironment;
@@ -173,12 +174,20 @@ public class ConfigProcessor extends Processor
                 configInfo.propertyNameFieldName = element.toString();
                 configInfo.propertyNameClassName = element.getEnclosingElement().toString();
                 configInfo.propertyNameDescription = getDocComment(element);
+                configInfo.propertyNameDescriptionClean = JavadocCleaner.clean(configInfo.propertyNameDescription);
 
+                final Config enclosingConfig = element.getEnclosingElement().getAnnotation(Config.class);
+                final boolean existsInJava = config.existsInJava() &&
+                    (enclosingConfig == null || enclosingConfig.existsInJava());
+                if (!existsInJava)
+                {
+                    configInfo.existsInJava = false;
+                }
                 if (constantValue instanceof String)
                 {
                     configInfo.propertyName = (String)constantValue;
                 }
-                else
+                else if (existsInJava || constantValue != null)
                 {
                     error("Property names must be Strings", element);
                 }
@@ -198,6 +207,7 @@ public class ConfigProcessor extends Processor
                 configInfo.defaultFieldName = element.toString();
                 configInfo.defaultClassName = element.getEnclosingElement().toString();
                 configInfo.defaultDescription = getDocComment(element);
+                configInfo.defaultDescriptionClean = JavadocCleaner.clean(configInfo.defaultDescription);
 
                 if (constantValue != null)
                 {
@@ -376,6 +386,7 @@ public class ConfigProcessor extends Processor
 
         configInfo.context = enclosingElementName.substring(packageName.length() + 1) + "." + methodName;
         configInfo.contextDescription = getDocComment(element);
+        configInfo.contextDescriptionClean = JavadocCleaner.clean(configInfo.contextDescription);
 
         return configInfo;
     }
@@ -475,8 +486,17 @@ public class ConfigProcessor extends Processor
     private void applyTypeDefaults(final String id, final ConfigInfo configInfo)
     {
         Optional.ofNullable(typeConfigMap.get(configInfo.propertyNameClassName))
-            .filter(config -> !config.existsInC())
-            .ifPresent(config -> configInfo.expectations.c.exists = false);
+            .ifPresent(config ->
+            {
+                if (!config.existsInC())
+                {
+                    configInfo.expectations.c.exists = false;
+                }
+                if (!config.existsInJava())
+                {
+                    configInfo.existsInJava = false;
+                }
+            });
     }
 
     private void deriveCExpectations(final String id, final ConfigInfo configInfo)
@@ -490,9 +510,14 @@ public class ConfigProcessor extends Processor
         {
             final ExpectedCConfig c = configInfo.expectations.c;
 
-            if (Objects.isNull(c.envVar) && configInfo.foundPropertyName)
+            if (Objects.isNull(c.envVar) && configInfo.foundPropertyName && configInfo.propertyName != null)
             {
                 c.envVar = configInfo.propertyName.toUpperCase().replace('.', '_');
+            }
+
+            if (Objects.isNull(c.envVar) && !configInfo.existsInJava)
+            {
+                c.envVar = "AERON_" + id;
             }
 
             if (Objects.isNull(c.envVarFieldName))
@@ -554,6 +579,11 @@ public class ConfigProcessor extends Processor
         if (configInfo.hasContext && (configInfo.context == null || configInfo.context.isEmpty()))
         {
             note("Configuration (" + id + ") is missing context");
+        }
+
+        if (null != configInfo.context && !configInfo.context.contains("Context."))
+        {
+            insane(id, configInfo.context + " should be on a 'Context'");
         }
     }
 

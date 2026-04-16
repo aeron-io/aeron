@@ -45,11 +45,14 @@ class Entry
         }
     }
 
-    void printFailuresOn(final PrintStream out)
+    boolean printFailuresOn(final PrintStream out)
     {
         if (configInfo.expectations.c.exists && (!envVarValidation.isValid() || !defaultValidation.isValid()))
         {
             printOn(out);
+            return true;
         }
+
+        return false;
     }
 }

@@ -113,12 +113,23 @@ public final class Configuration
     /**
      * Property name for boolean value if term buffers should be created sparse.
      */
-    @Config(defaultType = DefaultType.BOOLEAN, defaultBoolean = false)
+    @Config
     public static final String TERM_BUFFER_SPARSE_FILE_PROP_NAME = "aeron.term.buffer.sparse.file";
+
+    /**
+     * Default value for term buffer sparse file.
+     */
+    @Config
+    public static final boolean TERM_BUFFER_SPARSE_FILE_DEFAULT = true;
 
     /**
      * Property name for default boolean value for if subscriptions should be considered a group member or individual.
      */
+    @Config(
+        id = "RECEIVER_GROUP_CONSIDERATION",
+        defaultType = DefaultType.STRING,
+        defaultString = "infer",
+        skipCDefaultValidation = true)
     public static final String GROUP_RECEIVER_CONSIDERATION_PROP_NAME = "aeron.receiver.group.consideration";
 
     /**
@@ -166,7 +177,7 @@ public final class Configuration
     /**
      * Property name low file storage warning threshold in bytes.
      */
-    @Config
+    @Config(skipCDefaultValidation = true)
     public static final String LOW_FILE_STORE_WARNING_THRESHOLD_PROP_NAME = "aeron.low.file.store.warning.threshold";
 
     /**
@@ -511,7 +522,7 @@ public final class Configuration
     /**
      * Property name for {@link IdleStrategy} to be employed by {@link Sender} for {@link ThreadingMode#DEDICATED}.
      */
-    @Config(skipCDefaultValidation = true)
+    @Config(expectedCDefault = "backoff")
     public static final String SENDER_IDLE_STRATEGY_PROP_NAME = "aeron.sender.idle.strategy";
 
     /**
@@ -523,7 +534,7 @@ public final class Configuration
     /**
      * Property name for {@link IdleStrategy} to be employed by {@link Receiver} for {@link ThreadingMode#DEDICATED}.
      */
-    @Config(skipCDefaultValidation = true)
+    @Config(expectedCDefault = "backoff")
     public static final String RECEIVER_IDLE_STRATEGY_PROP_NAME = "aeron.receiver.idle.strategy";
 
     /**
@@ -536,7 +547,7 @@ public final class Configuration
      * Property name for {@link IdleStrategy} to be employed by {@link DriverConductor} for
      * {@link ThreadingMode#DEDICATED} and {@link ThreadingMode#SHARED_NETWORK}.
      */
-    @Config(skipCDefaultValidation = true)
+    @Config(expectedCDefault = "backoff")
     public static final String CONDUCTOR_IDLE_STRATEGY_PROP_NAME = "aeron.conductor.idle.strategy";
 
     /**
@@ -549,7 +560,7 @@ public final class Configuration
      * Property name for {@link IdleStrategy} to be employed by {@link Sender} and {@link Receiver} for
      * {@link ThreadingMode#SHARED_NETWORK}.
      */
-    @Config(skipCDefaultValidation = true)
+    @Config(expectedCDefault = "backoff")
     public static final String SHARED_NETWORK_IDLE_STRATEGY_PROP_NAME = "aeron.sharednetwork.idle.strategy";
 
     /**
@@ -562,7 +573,7 @@ public final class Configuration
      * Property name for {@link IdleStrategy} to be employed by {@link Sender}, {@link Receiver},
      * and {@link DriverConductor} for {@link ThreadingMode#SHARED}.
      */
-    @Config(skipCDefaultValidation = true)
+    @Config(expectedCDefault = "backoff")
     public static final String SHARED_IDLE_STRATEGY_PROP_NAME = "aeron.shared.idle.strategy";
 
     /**
@@ -827,7 +838,7 @@ public final class Configuration
     /**
      * Unicast NAK delay in nanoseconds property name.
      */
-    @Config(uriParam = CommonContext.NAK_DELAY_PARAM_NAME)
+    @Config(uriParam = CommonContext.NAK_DELAY_PARAM_NAME, skipCDefaultValidation = true)
     public static final String NAK_UNICAST_DELAY_PROP_NAME = "aeron.nak.unicast.delay";
 
     /**
@@ -939,13 +950,14 @@ public final class Configuration
         isTimeValue = Config.IsTimeValue.TRUE,
         timeUnit = TimeUnit.NANOSECONDS,
         defaultType = DefaultType.LONG,
-        defaultLong = Aeron.NULL_VALUE)
+        defaultLong = Aeron.NULL_VALUE,
+        skipCDefaultValidation = true)
     public static final String UNTETHERED_LINGER_TIMEOUT_PROP_NAME = "aeron.untethered.linger.timeout";
 
     /**
      * Property name of the max number of active retransmissions tracked for udp streams with group semantics.
      */
-    @Config
+    @Config(expectedCDefaultFieldName = "AERON_RETRANSMIT_HANDLER_MAX_RESEND")
     public static final String MAX_RESEND_PROP_NAME = "aeron.max.resend";
 
     /**
@@ -965,8 +977,7 @@ public final class Configuration
     @Config(
         defaultType = DefaultType.STRING,
         defaultString = "io.aeron.driver.DefaultDenyTerminationValidator",
-        expectedCDefault = "aeron_driver_termination_validator_default_deny",
-        skipCDefaultValidation = true)
+        expectedCDefault = "deny")
     public static final String TERMINATION_VALIDATOR_PROP_NAME = "aeron.driver.termination.validator";
 
     /**
@@ -981,7 +992,7 @@ public final class Configuration
     @Config(
         uriParam = CommonContext.GROUP_TAG_PARAM_NAME,
         defaultType = DefaultType.LONG,
-        defaultLong = 0,
+        defaultValueString = "null",
         expectedCDefaultFieldName = "AERON_RECEIVER_GROUP_TAG_VALUE_DEFAULT",
         expectedCDefault = "-1")
     public static final String RECEIVER_GROUP_TAG_PROP_NAME = "aeron.receiver.group.tag";
@@ -1014,14 +1025,14 @@ public final class Configuration
     /**
      * Property name for default retransmit receiver window multiple used by the unicast flow control strategy.
      */
-    @Config(defaultType = DefaultType.INT, defaultInt = 16)
+    @Config(existsInC = false, defaultType = DefaultType.INT, defaultInt = 16)
     public static final String UNICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE_PROP_NAME =
         "aeron.unicast.flow.control.rrwm";
 
     /**
      * Property name for default retransmit receiver window multiple used by multicast flow control strategies.
      */
-    @Config(defaultType = DefaultType.INT, defaultInt = 4)
+    @Config(existsInC = false, defaultType = DefaultType.INT, defaultInt = 4)
     public static final String MULTICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE_PROP_NAME =
         "aeron.multicast.flow.control.rrwm";
 
@@ -1167,12 +1178,13 @@ public final class Configuration
     /**
      * Property name to set a limit on the number sessions allowed per stream on a subscription.
      */
-    @Config(defaultType = DefaultType.INT, defaultInt = Integer.MAX_VALUE)
+    @Config(skipCDefaultValidation = true)
     public static final String STREAM_SESSION_LIMIT_PROP_NAME = "aeron.driver.stream.session.limit";
 
     /**
      * Default number of sessions allowed per stream on a subscription. Default is to be effectively unlimited.
      */
+    @Config
     public static final int STREAM_SESSION_LIMIT_DEFAULT = Integer.MAX_VALUE;
 
     /**
@@ -1282,7 +1294,8 @@ public final class Configuration
      */
     public static boolean termBufferSparseFile()
     {
-        return "true".equals(getProperty(TERM_BUFFER_SPARSE_FILE_PROP_NAME, "true"));
+        return "true".equals(
+            getProperty(TERM_BUFFER_SPARSE_FILE_PROP_NAME, Boolean.toString(TERM_BUFFER_SPARSE_FILE_DEFAULT)));
     }
 
     /**

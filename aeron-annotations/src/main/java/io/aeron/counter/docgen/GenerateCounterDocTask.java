@@ -13,31 +13,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.aeron.config.validation;
+package io.aeron.counter.docgen;
 
 import io.aeron.utility.ElementIO;
 
-import java.util.Arrays;
-
 /**
- * A gradle task for validating the C code looks as expected, based on the contents of the @Config java annotations.
+ * A gradle task for generating counter documentation.
  */
-public final class ValidateConfigExpectationsTask
+public final class GenerateCounterDocTask
 {
-    private ValidateConfigExpectationsTask()
+    private GenerateCounterDocTask()
     {
     }
 
     /**
-     * Launch task to validate config expectations.
+     * Run the counter doc generator task.
      *
-     * @param args Arg 0 should be the location of a config-info.xml file with a list of ConfigInfo objects. Arg 1
-     *             should be the location of the C source code
+     * @param args Arg 0 should be the location of a counter-info.dat file with a list of CounterInfo objects. Arg 1
+     *             should be the location of an output file where a .adoc file is to be written.
      * @throws Exception on IO failure.
      */
     public static void main(final String[] args) throws Exception
     {
-        final String[] sourceDirs = Arrays.copyOfRange(args, 1, args.length);
-        Validator.validate(ElementIO.read(args[0]), sourceDirs).printFailuresOn(System.err);
+        CounterDocGenerator.generate(ElementIO.read(args[0]), args[1]);
     }
 }

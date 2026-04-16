@@ -1584,6 +1584,7 @@ public final class ClusterBackup implements AutoCloseable
          *
          * @return members of the cluster to attempt to request a backup from.
          */
+        @Config
         public String clusterConsensusEndpoints()
         {
             return clusterConsensusEndpoints;

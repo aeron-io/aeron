@@ -183,7 +183,9 @@ public class CommonContext implements Cloneable
      *
      * @since 1.44.0
      */
-    @Config(defaultType = DefaultType.BOOLEAN, defaultBoolean = false, existsInC = false)
+    @Config(
+        defaultType = DefaultType.BOOLEAN,
+        defaultBoolean = false)
     public static final String ENABLE_EXPERIMENTAL_FEATURES_PROP_NAME = "aeron.enable.experimental.features";
 
     /**
@@ -493,11 +495,13 @@ public class CommonContext implements Cloneable
     /**
      * Property name to use to set the secure random algorithm to be used by the Aeron component.
      */
+    @Config(existsInC = false)
     public static final String SECURE_RANDOM_ALGORITHM_PROP_NAME = "aeron.secure.random.algorithm";
 
     /**
      * The default secure random algorithm to be used.
      */
+    @Config(defaultType = DefaultType.STRING, defaultString = "Windows-PRNG or NativePRNGNonBlocking")
     public static final String SECURE_RANDOM_ALGORITHM_DEFAULT =
         SystemUtil.isWindows() ? "Windows-PRNG" : "NativePRNGNonBlocking";
 
@@ -507,6 +511,7 @@ public class CommonContext implements Cloneable
      * @return {@code true} if the configuration should be printed on start.
      * @see #PRINT_CONFIGURATION_ON_START_PROP_NAME
      */
+    @Config(id = "PRINT_CONFIGURATION_ON_START")
     public static boolean shouldPrintConfigurationOnStart()
     {
         return "true".equals(getProperty(PRINT_CONFIGURATION_ON_START_PROP_NAME));
@@ -519,6 +524,7 @@ public class CommonContext implements Cloneable
      * @see #SECURE_RANDOM_ALGORITHM_PROP_NAME
      * @see #SECURE_RANDOM_ALGORITHM_DEFAULT
      */
+    @Config(id = "SECURE_RANDOM_ALGORITHM")
     public static String getSecureRandomAlgorithm()
     {
         return System.getProperty(SECURE_RANDOM_ALGORITHM_PROP_NAME, SECURE_RANDOM_ALGORITHM_DEFAULT);

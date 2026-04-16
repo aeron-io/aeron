@@ -18,7 +18,18 @@ package io.aeron.counter;
 import java.io.Serializable;
 
 /**
- * A handy class for storing data that gets serialized into json.
+ * Holds all metadata collected by {@link CounterProcessor} for a single {@code @AeronCounter}
+ * annotated field, serialised to {@code counter-info.dat} for use by downstream Gradle tasks.
+ *
+ * <p>The {@link #isSystemCounter} flag distinguishes the two namespaces:</p>
+ * <ul>
+ *   <li>{@code false} — a counter <em>type-ID</em> ({@code *_TYPE_ID} field).  {@link #id} is
+ *       unique across all type-IDs and matches {@code AERON_COUNTER_*_TYPE_ID} in C.</li>
+ *   <li>{@code true} — a system counter <em>sub-type</em> ({@code SYSTEM_COUNTER_ID_*} field).
+ *       {@link #id} is an index within {@code DRIVER_SYSTEM_COUNTER_TYPE_ID} (type-ID 0) and
+ *       matches {@code AERON_SYSTEM_COUNTER_ID_*} in C.  These IDs overlap with type-IDs and
+ *       must never be sorted or compared alongside them.</li>
+ * </ul>
  */
 public class CounterInfo implements Serializable
 {
@@ -40,9 +51,24 @@ public class CounterInfo implements Serializable
     public String counterDescription;
 
     /**
+     * Counter description with Javadoc markup converted to Markdown.
+     */
+    public String counterDescriptionClean;
+
+    /**
      * Whether counter exists in the C media driver.
      */
     public boolean existsInC = true;
+
+    /**
+     * Whether this is a system counter sub-type (SYSTEM_COUNTER_ID_* field).
+     */
+    public boolean isSystemCounter = false;
+
+    /**
+     * Fully-qualified Java field reference, e.g. {@code AeronCounters.SYSTEM_COUNTER_ID_BYTES_SENT}.
+     */
+    public String javaFieldName;
 
     /**
      * Expected name in the C media driver.
