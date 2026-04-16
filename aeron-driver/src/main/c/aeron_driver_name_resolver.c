@@ -966,7 +966,7 @@ static int aeron_driver_name_resolver_send_self_resolutions(
 
     for (size_t i = 0; i < driver_resolver->bootstrap_neighbor_counters.length; i++)
     {
-        bool value;
+        bool value = false;
         aeron_bit_set_get(driver_resolver->bootstrap_neighbor_bitset, i, &value);
         aeron_counter_set_release(driver_resolver->bootstrap_neighbor_counters.array[i].value_addr, value);
     }
