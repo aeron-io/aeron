@@ -342,6 +342,7 @@ typedef struct aeron_driver_context_stct
     const char *name_resolver_init_args;
     aeron_name_resolver_supplier_func_t name_resolver_supplier_func;
     aeron_name_resolver_supplier_func_t driver_name_resolver_bootstrap_resolver_supplier_func;
+    const char *driver_name_resolver_boostrap_resolver_init_args;
 
     aeron_duty_cycle_tracker_t *conductor_duty_cycle_tracker;
     aeron_duty_cycle_tracker_t *sender_duty_cycle_tracker;

@@ -785,7 +785,12 @@ static int aeron_time_tracking_name_resolver_lookup(
 static int aeron_time_tracking_name_resolver_start(aeron_name_resolver_t *resolver)
 {
     aeron_time_tracking_name_resolver_t *time_tracking_resolver = (aeron_time_tracking_name_resolver_t *)resolver->state;
-    return time_tracking_resolver->delegate_resolver.start_func(&time_tracking_resolver->delegate_resolver);
+    int result = time_tracking_resolver->delegate_resolver.start_func(&time_tracking_resolver->delegate_resolver);
+    if (result < 0)
+    {
+        AERON_APPEND_ERR("%s", "");
+    }
+    return result;
 }
 
 static int aeron_time_tracking_name_resolver_do_work(aeron_name_resolver_t *resolver, int64_t now_ms)
@@ -3857,7 +3862,11 @@ int aeron_driver_conductor_do_work(void *clientd)
 
     if (!conductor->is_started)
     {
-        conductor->name_resolver.start_func(&conductor->name_resolver);
+        if (conductor->name_resolver.start_func(&conductor->name_resolver) < 0)
+        {
+            AERON_APPEND_ERR("%s", "failed to start name resolver");
+            aeron_driver_conductor_log_error(conductor);
+        }
         conductor->is_started = true;
     }
 

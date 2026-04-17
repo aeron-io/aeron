@@ -80,7 +80,8 @@ protected:
         const char *driver_resolver_name = nullptr,
         const char *driver_resolver_interface = nullptr,
         const char *driver_bootstrap_neighbour = nullptr,
-        const aeron_name_resolver_supplier_func_t name_resolver_bootstrap_supplier_func = nullptr)
+        const aeron_name_resolver_supplier_func_t name_resolver_bootstrap_supplier_func = nullptr,
+        const char *name_resolver_bootstrap_args = nullptr)
     {
         aeron_name_resolver_supplier_func_t supplier_func = aeron_name_resolver_supplier_load(resolver_supplier_name);
         ASSERT_NE(nullptr, supplier_func);
@@ -93,6 +94,7 @@ protected:
         aeron_driver_context_set_resolver_bootstrap_neighbor(resolver_fields->context, driver_bootstrap_neighbour);
         resolver_fields->context->driver_name_resolver_bootstrap_resolver_supplier_func =
             name_resolver_bootstrap_supplier_func;
+        resolver_fields->context->driver_name_resolver_boostrap_resolver_init_args = name_resolver_bootstrap_args;
 
         aeron_counters_manager_init(
             &resolver_fields->counters,
@@ -945,23 +947,40 @@ TEST_F(NameResolverTest, shouldHandleBootstrapNeighborCounter)
 
 TEST_F(NameResolverTest, shouldHandleBootstrapNeighborCounterOnReresolution)
 {
+    const char *config_param = NAME_0 "," HOST_0A "," HOST_0B;
+
     int64_t timestamp_ms = INTMAX_C(8932472347945);
-    initResolver(&m_a, AERON_NAME_RESOLVER_DRIVER, "", timestamp_ms, "A", "0.0.0.0:8050", "127.0.0.1:8051", bootstrap_name_resolver_supplier);
-    assert_bootstrap_neighbor_counter_label_is(&m_a, 0, "Bootstrap neighbor: name=127.0.0.1:8051 resolved=127.0.0.1:8051");
+    initResolver(&m_a,
+        AERON_NAME_RESOLVER_DRIVER,
+        "", timestamp_ms,
+        "A",
+        "0.0.0.0:8050",
+        "server0:8051",
+        aeron_csv_table_name_resolver_supplier,
+        config_param);
 
-    unresolvable_address = "127.0.0.1:8051";
+    int64_t *name0ToggleAddr = nameCounterAddrByHostname(&m_a, NAME_0);
+
+    aeron_counter_set_release(name0ToggleAddr, AERON_NAME_RESOLVER_CSV_USE_INITIAL_RESOLUTION_HOST_OP);
     timestamp_ms += 10000;
     aeron_clock_update_cached_epoch_time(m_a.context->cached_clock, timestamp_ms);
     m_a.resolver.do_work_func(&m_a.resolver, timestamp_ms);
     ASSERT_EQ(0, aeron_errcode()) << aeron_errmsg();
-    assert_bootstrap_neighbor_counter_label_is(&m_a, 0, "Bootstrap neighbor: name=127.0.0.1:8051 resolved=");
+    assert_bootstrap_neighbor_counter_label_is(&m_a, 0, "Bootstrap neighbor: name=server0:8051 resolved=127.0.0.1:8051");
 
-    unresolvable_address = nullptr;
+    aeron_counter_set_release(name0ToggleAddr, AERON_NAME_RESOLVER_CSV_USE_RE_RESOLUTION_HOST_OP);
     timestamp_ms += 10000;
     aeron_clock_update_cached_epoch_time(m_a.context->cached_clock, timestamp_ms);
     m_a.resolver.do_work_func(&m_a.resolver, timestamp_ms);
     ASSERT_EQ(0, aeron_errcode()) << aeron_errmsg();
-    assert_bootstrap_neighbor_counter_label_is(&m_a, 0, "Bootstrap neighbor: name=127.0.0.1:8051 resolved=127.0.0.1:8051");
+    assert_bootstrap_neighbor_counter_label_is(&m_a, 0, "Bootstrap neighbor: name=server0:8051 resolved=127.0.0.2:8051");
+
+    aeron_counter_set_release(name0ToggleAddr, AERON_NAME_RESOLVER_CSV_DISABLE_RESOLUTION_OP);
+    timestamp_ms += 10000;
+    aeron_clock_update_cached_epoch_time(m_a.context->cached_clock, timestamp_ms);
+    m_a.resolver.do_work_func(&m_a.resolver, timestamp_ms);
+    ASSERT_EQ(0, aeron_errcode()) << aeron_errmsg();
+    assert_bootstrap_neighbor_counter_label_is(&m_a, 0, "Bootstrap neighbor: name=server0:8051 resolved=");
 }
 
 TEST_F(NameResolverTest, shouldHandleDissection)
