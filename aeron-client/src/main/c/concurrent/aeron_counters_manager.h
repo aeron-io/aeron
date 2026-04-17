@@ -205,7 +205,14 @@ inline int64_t aeron_counter_increment_release(volatile int64_t *addr)
     return current_value;
 }
 
-inline int64_t aeron_counter_increment_plain(volatile int64_t *addr)
+inline int64_t aeron_counter_increment_plain(int64_t *addr)
+{
+    int64_t current_value = *addr;
+    *addr = current_value + 1;
+    return current_value;
+}
+
+inline int64_t aeron_counter_increment_opaque(volatile int64_t *addr)
 {
     int64_t current_value = *addr;
     *addr = current_value + 1;

@@ -1397,7 +1397,7 @@ void aeron_driver_conductor_log_explicit_error(
     const char *description)
 {
     aeron_distinct_error_log_record(&conductor->error_log, error_code, description);
-    aeron_counter_increment(conductor->errors_counter);
+    aeron_counter_increment_opaque(conductor->errors_counter);
     aeron_err_clear();
 }
 
