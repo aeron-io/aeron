@@ -520,7 +520,7 @@ class DriverNameResolverSystemTest
         final int aNeighborsCounterId = awaitNeighborsCounterId("A");
         final int bNeighborsCounterId = awaitNeighborsCounterId("AA");
 
-        final long deadlineNs = System.nanoTime() + 2 * Configuration.RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_NS_DEFAULT;
+        final long deadlineNs = System.nanoTime() + 2 * Configuration.RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_DEFAULT_NS;
 
         awaitCounterValue("A", aNeighborsCounterId, 1);
         awaitCounterValue("AA", bNeighborsCounterId, 1);
