@@ -150,10 +150,12 @@ void aeron_driver_name_resolver_receive(
     struct timespec *media_receive_timestamp);
 
 static int aeron_driver_name_resolver_from_sockaddr(
-    struct sockaddr_storage *addr, aeron_name_resolver_cache_addr_t *cache_addr);
+    struct sockaddr_storage *addr,
+    aeron_name_resolver_cache_addr_t *cache_addr);
 
 static const char *aeron_driver_name_resolver_build_bootstrap_neighbor_counter_label(
-    char *bootstrap_neighbor, struct sockaddr_storage *bootstrap_neighbor_address)
+    char *bootstrap_neighbor,
+    struct sockaddr_storage *bootstrap_neighbor_address)
 {
     static char buffer[512] = "";
     const size_t buffer_size = sizeof(buffer);
@@ -499,7 +501,8 @@ int aeron_driver_name_resolver_close(aeron_name_resolver_t *resolver)
 }
 
 static int aeron_driver_name_resolver_to_sockaddr(
-    aeron_name_resolver_cache_addr_t *cache_addr, struct sockaddr_storage *addr)
+    aeron_name_resolver_cache_addr_t *cache_addr,
+    struct sockaddr_storage *addr)
 {
     int result = -1;
     if (cache_addr->res_type == AERON_RES_HEADER_TYPE_NAME_TO_IP6_MD)
@@ -527,7 +530,8 @@ static int aeron_driver_name_resolver_to_sockaddr(
 }
 
 static int aeron_driver_name_resolver_from_sockaddr(
-    struct sockaddr_storage *addr, aeron_name_resolver_cache_addr_t *cache_addr)
+    struct sockaddr_storage *addr,
+    aeron_name_resolver_cache_addr_t *cache_addr)
 {
     int result = -1;
     if (AF_INET6 == addr->ss_family)

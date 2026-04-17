@@ -377,7 +377,7 @@ protected:
             result.label_length)) << "Expected: " << expected_label << ", actual: " << result.label;
     }
 
-    static int ignore_unreslovable_address_lookup_function(
+    static int ignore_unresolvable_address_lookup_function(
         aeron_name_resolver_t *resolver,
         const char *name,
         const char *uri_param_name,
@@ -399,7 +399,7 @@ protected:
     {
         if (0 == aeron_default_name_resolver_supplier(resolver, args, context))
         {
-            resolver->lookup_func = ignore_unreslovable_address_lookup_function;
+            resolver->lookup_func = ignore_unresolvable_address_lookup_function;
             resolver->name = "test-bootstrap";
             return 0;
         }
