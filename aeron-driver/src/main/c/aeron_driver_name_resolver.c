@@ -1242,7 +1242,7 @@ int aeron_driver_name_resolver_on_start(aeron_name_resolver_t *resolver)
 
     if (driver_resolver->bootstrap_resolver.start_func(&driver_resolver->bootstrap_resolver) < 0)
     {
-        AERON_APPEND_ERR("%", "");
+        AERON_APPEND_ERR("%s", "");
         aeron_name_resolver_log_and_clear_error(driver_resolver);
     }
 
