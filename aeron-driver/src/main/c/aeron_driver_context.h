@@ -335,10 +335,10 @@ typedef struct aeron_driver_context_stct
     const char *resolver_name;
     const char *resolver_interface;
     const char *resolver_bootstrap_neighbor;
-    uint64_t resolver_neighbor_timeout_ns;                          /* aeron.driver.resolver.neighbor.timeout.ns */
-    uint64_t resolver_self_resolution_interval_ns;                  /* aeron.driver.resolver.self.resolution.interval.ns */
-    uint64_t resolver_neighbor_resolution_interval_ns;              /* aeron.driver.resolver.neighbor.resolution.interval.ns */
-    uint64_t resolver_bootstrap_neighbor_resolution_interval_ns;    /* aeron.driver.resolver.bootstrap.neighbor.resolution.interval.ns */
+    uint64_t resolver_neighbor_timeout_ns;                          /* aeron.driver.resolver.neighbor.timeout */
+    uint64_t resolver_self_resolution_interval_ns;                  /* aeron.driver.resolver.self.resolution.interval */
+    uint64_t resolver_neighbor_resolution_interval_ns;              /* aeron.driver.resolver.neighbor.resolution.interval */
+    uint64_t resolver_bootstrap_neighbor_resolution_interval_ns;    /* aeron.driver.resolver.bootstrap.neighbor.resolution.interval */
     const char *name_resolver_init_args;
     aeron_name_resolver_supplier_func_t name_resolver_supplier_func;
     aeron_name_resolver_supplier_func_t driver_name_resolver_bootstrap_resolver_supplier_func;

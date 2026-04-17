@@ -558,29 +558,29 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
     }
 
     _context->resolver_neighbor_timeout_ns = aeron_config_parse_duration_ns(
-        AERON_DRIVER_RESOLVER_NEIGHBOR_TIMEOUT_NS_ENV_VAR,
-        getenv(AERON_DRIVER_RESOLVER_NEIGHBOR_TIMEOUT_NS_ENV_VAR),
+        AERON_DRIVER_RESOLVER_NEIGHBOR_TIMEOUT_ENV_VAR,
+        getenv(AERON_DRIVER_RESOLVER_NEIGHBOR_TIMEOUT_ENV_VAR),
         _context->resolver_neighbor_timeout_ns,
         1000 * 1000,
         INT64_MAX);
 
     _context->resolver_self_resolution_interval_ns = aeron_config_parse_duration_ns(
-        AERON_DRIVER_RESOLVER_SELF_RESOLUTION_INTERVAL_NS_ENV_VAR,
-        getenv(AERON_DRIVER_RESOLVER_SELF_RESOLUTION_INTERVAL_NS_ENV_VAR),
+        AERON_DRIVER_RESOLVER_SELF_RESOLUTION_INTERVAL_ENV_VAR,
+        getenv(AERON_DRIVER_RESOLVER_SELF_RESOLUTION_INTERVAL_ENV_VAR),
         _context->resolver_self_resolution_interval_ns,
         1000 * 1000,
         INT64_MAX);
 
     _context->resolver_neighbor_resolution_interval_ns = aeron_config_parse_duration_ns(
-        AERON_DRIVER_RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_NS_ENV_VAR,
-        getenv(AERON_DRIVER_RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_NS_ENV_VAR),
+        AERON_DRIVER_RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_ENV_VAR,
+        getenv(AERON_DRIVER_RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_ENV_VAR),
         _context->resolver_neighbor_resolution_interval_ns,
         1000 * 1000,
         INT64_MAX);
 
     _context->resolver_bootstrap_neighbor_resolution_interval_ns = aeron_config_parse_duration_ns(
-        AERON_DRIVER_RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_NS_ENV_VAR,
-        getenv(AERON_DRIVER_RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_NS_ENV_VAR),
+        AERON_DRIVER_RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_ENV_VAR,
+        getenv(AERON_DRIVER_RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_ENV_VAR),
         _context->resolver_bootstrap_neighbor_resolution_interval_ns,
         1000 * 1000,
         INT64_MAX);

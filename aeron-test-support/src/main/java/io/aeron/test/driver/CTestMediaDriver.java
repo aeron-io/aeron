@@ -302,6 +302,15 @@ public final class CTestMediaDriver implements TestMediaDriver
 
         environment.put("AERON_DRIVER_STREAM_SESSION_LIMIT", String.valueOf(context.streamSessionLimit()));
 
+        environment.put("AERON_DRIVER_RESOLVER_NEIGHBOR_TIMEOUT",
+            String.valueOf(context.resolverNeighborTimeoutNs()));
+        environment.put("AERON_DRIVER_RESOLVER_SELF_RESOLUTION_INTERVAL",
+            String.valueOf(context.resolverSelfResolutionIntervalNs()));
+        environment.put("AERON_DRIVER_RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL",
+            String.valueOf(context.resolverNeighborResolutionIntervalNs()));
+        environment.put("AERON_DRIVER_RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL",
+            String.valueOf(context.resolverBootstrapNeighborResolutionIntervalNs()));
+
         setFlowControlStrategy(environment, context);
         setLogging(environment);
         setTransportSecurity(environment);
