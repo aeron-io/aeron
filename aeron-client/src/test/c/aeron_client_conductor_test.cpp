@@ -2252,3 +2252,218 @@ TEST_F(ClientConductorTest, shouldAddMultipleStaticCountersWithTheSameRegistrati
 
     doWork();
 }
+
+TEST_F(ClientConductorTest, shouldFreeRemoveResourceCmdAfterConductorProcessesIt)
+{
+    m_conductor.invoker_mode = false;
+
+    aeron_async_add_subscription_t *async = nullptr;
+    aeron_subscription_t *subscription = nullptr;
+
+    ASSERT_EQ(aeron_client_conductor_async_add_subscription(
+        &async, &m_conductor, SUB_URI, STREAM_ID, nullptr, nullptr, nullptr, nullptr), 0);
+    doWork();
+
+    transmitOnSubscriptionReady(async);
+    doWork();
+
+    ASSERT_EQ(aeron_async_add_subscription_poll(&subscription, async), 1) << aeron_errmsg();
+    ASSERT_NE(nullptr, subscription);
+    const int64_t registration_id = subscription->registration_id;
+
+    std::atomic<bool> removed(false);
+    auto on_remove = [](void *clientd)
+    {
+        static_cast<std::atomic<bool> *>(clientd)->store(true);
+    };
+
+    ASSERT_EQ(aeron_client_conductor_async_remove_resource(
+        registration_id, AERON_CLIENT_MANAGED_RESOURCE_TYPE_SUBSCRIPTION, &m_conductor, on_remove, &removed), 0);
+
+    EXPECT_FALSE(removed);
+
+    doWork();
+
+    EXPECT_TRUE(removed) << "on_complete should fire after the conductor processes the remove cmd";
+}
+
+TEST_F(ClientConductorTest, shouldFreeUnprocessedRemoveResourceCmdOnClose)
+{
+    m_conductor.invoker_mode = false;
+
+    aeron_async_add_subscription_t *async = nullptr;
+    aeron_subscription_t *subscription = nullptr;
+
+    ASSERT_EQ(aeron_client_conductor_async_add_subscription(
+        &async, &m_conductor, SUB_URI, STREAM_ID, nullptr, nullptr, nullptr, nullptr), 0);
+    doWork();
+
+    transmitOnSubscriptionReady(async);
+    doWork();
+
+    ASSERT_EQ(aeron_async_add_subscription_poll(&subscription, async), 1) << aeron_errmsg();
+    ASSERT_NE(nullptr, subscription);
+    const int64_t registration_id = subscription->registration_id;
+
+    std::atomic<bool> removed(false);
+    auto on_remove = [](void *clientd)
+    {
+        static_cast<std::atomic<bool> *>(clientd)->store(true);
+    };
+
+    ASSERT_EQ(aeron_client_conductor_async_remove_resource(
+        registration_id, AERON_CLIENT_MANAGED_RESOURCE_TYPE_SUBSCRIPTION, &m_conductor, on_remove, &removed), 0);
+
+    /* Intentionally do not doWork() — cmd stays queued. Close should drain it. */
+    aeron_client_conductor_on_close(&m_conductor);
+    m_conductor_isClosed = true;
+
+    EXPECT_TRUE(removed) << "on_complete should fire from the close-time queue drain";
+}
+
+TEST_F(ClientConductorTest, shouldFreeRemoveResourceCmdImmediatelyInInvokerMode)
+{
+    /* Fixture defaults to invoker_mode = true. */
+    ASSERT_TRUE(m_conductor.invoker_mode);
+
+    aeron_async_add_subscription_t *async = nullptr;
+    aeron_subscription_t *subscription = nullptr;
+
+    ASSERT_EQ(aeron_client_conductor_async_add_subscription(
+        &async, &m_conductor, SUB_URI, STREAM_ID, nullptr, nullptr, nullptr, nullptr), 0);
+    transmitOnSubscriptionReady(async);
+    doWork();
+
+    ASSERT_EQ(aeron_async_add_subscription_poll(&subscription, async), 1) << aeron_errmsg();
+    ASSERT_NE(nullptr, subscription);
+    const int64_t registration_id = subscription->registration_id;
+
+    std::atomic<bool> removed(false);
+    auto on_remove = [](void *clientd)
+    {
+        static_cast<std::atomic<bool> *>(clientd)->store(true);
+    };
+
+    ASSERT_EQ(aeron_client_conductor_async_remove_resource(
+        registration_id, AERON_CLIENT_MANAGED_RESOURCE_TYPE_SUBSCRIPTION, &m_conductor, on_remove, &removed), 0);
+
+    EXPECT_TRUE(removed) << "invoker mode processes the remove cmd synchronously in the caller";
+}
+
+TEST_F(ClientConductorTest, shouldSupportConcurrentAsyncRemoveResourceFromMultipleThreads)
+{
+    m_conductor.invoker_mode = false;
+
+    constexpr int kProducerThreads = 4;
+    constexpr int kCmdsPerThread = 32;
+    constexpr int kTotalCmds = kProducerThreads * kCmdsPerThread;
+
+    std::atomic<int> completed(0);
+    auto on_remove = [](void *clientd)
+    {
+        static_cast<std::atomic<int> *>(clientd)->fetch_add(1, std::memory_order_relaxed);
+    };
+
+    std::atomic<bool> go(false);
+    std::vector<std::thread> producers;
+    producers.reserve(kProducerThreads);
+
+    for (int t = 0; t < kProducerThreads; t++)
+    {
+        producers.emplace_back([&, t]()
+        {
+            while (!go.load(std::memory_order_acquire))
+            {
+                std::this_thread::yield();
+            }
+            for (int i = 0; i < kCmdsPerThread; i++)
+            {
+                const int64_t registration_id = (int64_t)(t * kCmdsPerThread + i);
+                /* No registered resource behind these ids — the remove cmd will be a no-op
+                 * for driver-side work, but the conductor still frees the cmd and fires
+                 * on_complete. Exercises the MPSC offer + tag path from multiple producers. */
+                ASSERT_EQ(aeron_client_conductor_async_remove_resource(
+                    registration_id,
+                    AERON_CLIENT_MANAGED_RESOURCE_TYPE_SUBSCRIPTION,
+                    &m_conductor,
+                    on_remove,
+                    &completed), 0);
+            }
+        });
+    }
+
+    go.store(true, std::memory_order_release);
+
+    int total_work = 0;
+    while (completed.load(std::memory_order_relaxed) < kTotalCmds && total_work < (kTotalCmds * 100))
+    {
+        total_work += doWork();
+        std::this_thread::yield();
+    }
+
+    for (auto &p : producers)
+    {
+        p.join();
+    }
+
+    /* Drain anything still queued. */
+    doWork();
+
+    EXPECT_EQ(kTotalCmds, completed.load());
+}
+
+TEST_F(ClientConductorTest, shouldDrainQueuedRemoveCmdsFromProducerThreadOnClose)
+{
+    m_conductor.invoker_mode = false;
+
+    std::atomic<bool> stop(false);
+    std::atomic<int> offers_succeeded(0);
+    std::atomic<int> callbacks_fired(0);
+
+    auto on_remove = [](void *clientd)
+    {
+        static_cast<std::atomic<int> *>(clientd)->fetch_add(1, std::memory_order_relaxed);
+    };
+
+    /* Producer thread offers remove cmds until the main thread signals stop. Exercises the
+     * MPSC queue's multi-producer offer while the main thread alternates doWork (the
+     * single-consumer path) — mirrors how a user thread would issue async_remove_resource
+     * while the conductor agent drains in production. */
+    std::thread producer([&]()
+    {
+        int64_t next_id = 0;
+        while (!stop.load(std::memory_order_acquire))
+        {
+            if (aeron_client_conductor_async_remove_resource(
+                next_id++,
+                AERON_CLIENT_MANAGED_RESOURCE_TYPE_SUBSCRIPTION,
+                &m_conductor,
+                on_remove,
+                &callbacks_fired) == 0)
+            {
+                offers_succeeded.fetch_add(1, std::memory_order_relaxed);
+            }
+        }
+    });
+
+    /* Interleave processing with production for a short burst. */
+    auto start = std::chrono::steady_clock::now();
+    while (std::chrono::steady_clock::now() - start < std::chrono::milliseconds(5))
+    {
+        doWork();
+    }
+
+    /* Stop the producer and join before triggering close. In production, aeron_close's
+     * internal pthread_join establishes the same ordering guarantee: no producer offers
+     * after the close-path drain starts. */
+    stop.store(true, std::memory_order_release);
+    producer.join();
+
+    /* Close must drain everything the producer left queued. */
+    aeron_client_conductor_on_close(&m_conductor);
+    m_conductor_isClosed = true;
+
+    EXPECT_EQ(offers_succeeded.load(), callbacks_fired.load())
+        << "Every successfully-offered cmd must have had its on_complete fired "
+           "(either by doWork during the burst or by the close-time drain).";
+}

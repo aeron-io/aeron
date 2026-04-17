@@ -588,6 +588,71 @@ TEST_F(CSystemTest, shouldCancelAddingCounterAndRemoveByRegistrationId)
     EXPECT_NE(AERON_NULL_COUNTER_ID, aeron_counters_reader_find_by_type_id_and_registration_id(counters_reader, static_type_id, 9876));
 }
 
+TEST_F(CSystemTest, shouldFreePendingRemoveCmdsOnClose)
+{
+    constexpr int N = 16;
+
+    ASSERT_TRUE(connect());
+
+    aeron_async_add_subscription_t *asyncSubs[N] = {};
+    int64_t registrationIds[N] = {};
+    for (int i = 0; i < N; i++)
+    {
+        ASSERT_EQ(
+            aeron_async_add_subscription(
+                &asyncSubs[i], m_aeron, AERON_IPC_CHANNEL, STREAM_ID, nullptr, nullptr, nullptr, nullptr),
+            0);
+        aeron_subscription_t *subscription = awaitSubscriptionOrError(asyncSubs[i]);
+        ASSERT_TRUE(subscription) << aeron_errmsg();
+        aeron_subscription_constants_t constants;
+        aeron_subscription_constants(subscription, &constants);
+        registrationIds[i] = constants.registration_id;
+    }
+
+    std::atomic<int> completed(0);
+    auto incrementCounter = [](void *clientd)
+    {
+        static_cast<std::atomic<int> *>(clientd)->fetch_add(1);
+    };
+
+    for (int i = 0; i < N; i++)
+    {
+        ASSERT_EQ(
+            aeron_async_remove_subscription(registrationIds[i], m_aeron, incrementCounter, &completed),
+            0);
+    }
+
+    aeron_close(m_aeron);
+    m_aeron = nullptr;
+
+    EXPECT_EQ(N, completed.load())
+        << "Every on_complete should fire exactly once, whether processed by the conductor or "
+           "drained at close.";
+}
+
+TEST_F(CSystemTest, shouldFreePendingCancelCmdsOnClose)
+{
+    constexpr int N = 16;
+
+    ASSERT_TRUE(connect());
+
+    aeron_async_add_publication_t *asyncPubs[N] = {};
+    for (int i = 0; i < N; i++)
+    {
+        ASSERT_EQ(
+            aeron_async_add_publication(&asyncPubs[i], m_aeron, AERON_IPC_CHANNEL, STREAM_ID),
+            0);
+    }
+
+    for (int i = 0; i < N; i++)
+    {
+        ASSERT_EQ(aeron_async_add_publication_cancel(m_aeron, asyncPubs[i]), 0);
+    }
+
+    aeron_close(m_aeron);
+    m_aeron = nullptr;
+}
+
 TEST_F(CSystemTest, shouldAddAndCloseCounter)
 {
     std::atomic<bool> counterClosedFlag(false);

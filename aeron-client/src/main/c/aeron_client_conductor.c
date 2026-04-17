@@ -245,10 +245,52 @@ static int aeron_client_conductor_release_log_buffer(aeron_client_conductor_t *c
     return 0;
 }
 
+/* Low bit of a queued cmd pointer tags it as an owned aeron_client_remove_resource_cmd_t
+ * that the conductor (or close-time drain) is responsible for freeing. Other queue items
+ * (close cmds aliasing publication/subscription/counter structs, or aeron_client_registering_resource_t
+ * allocations the user may free directly via aeron_async_cmd_free) are left untagged. This lets
+ * aeron_client_conductor_drain_pending_cmd_on_close classify a queued item without dereferencing it,
+ * which is the only safe thing to do after a close cmd's underlying resource has been torn down
+ * or an async struct has been freed externally. aeron_alloc uses malloc so the low bits are free. */
+#define AERON_CMD_TAG_REMOVE ((uintptr_t)1)
+
+/* Guards the tag scheme: if the cmd struct's alignment ever drops below 2, the low bit
+ * is no longer free and the tag bit could collide with real pointer bits. */
+_Static_assert(
+    _Alignof(aeron_client_remove_resource_cmd_t) >= 2,
+    "remove_resource_cmd must be aligned >= 2 for AERON_CMD_TAG_REMOVE pointer tagging");
+
+static inline void *aeron_client_conductor_cmd_untag(void *item)
+{
+    return (void *)((uintptr_t)item & ~AERON_CMD_TAG_REMOVE);
+}
+
+static inline bool aeron_client_conductor_cmd_is_remove(void *item)
+{
+    return ((uintptr_t)item & AERON_CMD_TAG_REMOVE) != 0;
+}
+
 static void aeron_client_conductor_on_command(void *clientd, void *item)
 {
-    aeron_client_command_base_t *cmd = (aeron_client_command_base_t *)item;
+    aeron_client_command_base_t *cmd =
+        (aeron_client_command_base_t *)aeron_client_conductor_cmd_untag(item);
     cmd->func(clientd, cmd);
+}
+
+static void aeron_client_conductor_drain_pending_cmd_on_close(void *clientd, void *item)
+{
+    (void)clientd;
+
+    if (aeron_client_conductor_cmd_is_remove(item))
+    {
+        aeron_client_remove_resource_cmd_t *cmd =
+            (aeron_client_remove_resource_cmd_t *)aeron_client_conductor_cmd_untag(item);
+        if (NULL != cmd->on_complete)
+        {
+            cmd->on_complete(cmd->on_complete_clientd);
+        }
+        aeron_free(cmd);
+    }
 }
 
 static void aeron_client_conductor_forward_error(void *clientd, int64_t key, void *value)
@@ -2603,6 +2645,15 @@ void aeron_client_conductor_on_close(aeron_client_conductor_t *conductor)
     aeron_client_conductor_on_cmd_client_close(conductor);
     aeron_broadcast_receiver_close(&conductor->to_client_buffer);
 
+    /* Free any remove_resource cmds still in the command queue. Every queued remove cmd is
+     * tagged via its pointer's low bit, so we can classify items by tag alone — never
+     * dereferencing untagged items, whose targets may already be freed (close cmds aliased
+     * with the resources torn down above; async handles freed by user code). The drain runs
+     * after resource teardown so on_complete fires after the resource is gone, matching the
+     * ordering in aeron_client_conductor_on_cmd_remove_resource. */
+    aeron_mpsc_concurrent_array_queue_drain_all(
+        conductor->command_queue, aeron_client_conductor_drain_pending_cmd_on_close, conductor);
+
     aeron_int64_to_ptr_hash_map_delete(&conductor->log_buffer_by_id_map);
     aeron_int64_to_ptr_hash_map_delete(&conductor->resource_by_id_map);
     aeron_array_to_ptr_hash_map_delete(&conductor->image_by_key_map);
@@ -2985,10 +3036,12 @@ int aeron_client_conductor_async_remove_resource(
 
     if (conductor->invoker_mode)
     {
+        /* Synchronous processing — cmd never reaches the queue, so no tag needed. */
         return aeron_client_conductor_on_cmd_remove_resource(conductor, cmd);
     }
 
-    if (aeron_client_conductor_command_offer(conductor->command_queue, cmd) < 0)
+    void *tagged_cmd = (void *)((uintptr_t)cmd | AERON_CMD_TAG_REMOVE);
+    if (aeron_client_conductor_command_offer(conductor->command_queue, tagged_cmd) < 0)
     {
         aeron_free(cmd);
         return -1;
