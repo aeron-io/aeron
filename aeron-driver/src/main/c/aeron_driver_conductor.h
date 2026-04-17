@@ -23,7 +23,7 @@
 #include "concurrent/aeron_broadcast_transmitter.h"
 #include "concurrent/aeron_distinct_error_log.h"
 #include "concurrent/aeron_counters_manager.h"
-#include "concurrent/aeron_executor.h"
+#include "aeron_async_executor.h"
 #include "command/aeron_control_protocol.h"
 #include "aeron_system_counters.h"
 #include "aeron_ipc_publication.h"

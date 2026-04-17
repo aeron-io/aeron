@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-#ifndef AERON_EXECUTOR_H
-#define AERON_EXECUTOR_H
+#ifndef AERON_ASYNC_EXECUTOR_H
+#define AERON_ASYNC_EXECUTOR_H
 
 #include "aeron_agent.h"
+#include "aeron_name_resolver.h"
 #include "concurrent/aeron_blocking_linked_queue.h"
 #include "util/aeron_error.h"
 
@@ -33,8 +34,7 @@ typedef struct aeron_executor_stct
     aeron_blocking_linked_queue_t queue;
     aeron_blocking_linked_queue_t return_queue;
     aeron_agent_runner_t runner;
-    aeron_idle_strategy_func_t idle_strategy_func;
-    void *idle_strategy_state;
+    aeron_name_resolver_t *name_resolver;
 }
 aeron_executor_t;
 
@@ -56,13 +56,9 @@ typedef struct aeron_executor_task_stct
 }
 aeron_executor_task_t;
 
-int aeron_executor_init(
-    aeron_executor_t *executor,
-    bool async,
-    aeron_idle_strategy_func_t idle_strategy_func,
-    void *idle_strategy_state,
-    aeron_executor_on_execution_complete_func_t on_execution_complete,
-    void *clientd);
+int aeron_executor_init(aeron_executor_t *executor, aeron_driver_context_t *context, aeron_driver_conductor_t *conductor);
+int aeron_executor_do_work(void *clientd);
+void aeron_executor_on_start(void *state, const char *role_name);
 
 int aeron_executor_close(aeron_executor_t *executor);
 
@@ -77,4 +73,4 @@ int aeron_executor_process_completions(aeron_executor_t *executor, int limit);
 
 void aeron_executor_task_do_complete(aeron_executor_task_t *task);
 
-#endif //AERON_EXECUTOR_H
+#endif //AERON_ASYNC_EXECUTOR_H

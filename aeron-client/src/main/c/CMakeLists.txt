@@ -115,7 +115,6 @@ set(SOURCE
     concurrent/aeron_broadcast_transmitter.c
     concurrent/aeron_counters_manager.c
     concurrent/aeron_distinct_error_log.c
-    concurrent/aeron_executor.c
     concurrent/aeron_logbuffer_descriptor.c
     concurrent/aeron_mpsc_concurrent_array_queue.c
     concurrent/aeron_mpsc_rb.c
@@ -188,7 +187,6 @@ set(HEADERS
     concurrent/aeron_concurrent_array_queue.h
     concurrent/aeron_counters_manager.h
     concurrent/aeron_distinct_error_log.h
-    concurrent/aeron_executor.h
     concurrent/aeron_logbuffer_descriptor.h
     concurrent/aeron_mpsc_concurrent_array_queue.h
     concurrent/aeron_mpsc_rb.h

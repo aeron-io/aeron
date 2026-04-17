@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-#include "aeron_executor.h"
+#include "aeron_async_executor.h"
 #include "aeron_alloc.h"
+#include "aeron_driver_conductor.h"
 #include "util/aeron_error.h"
-#include "aeron_atomic.h"
+#include "concurrent/aeron_atomic.h"
 
 static aeron_executor_task_t *aeron_executor_task_allocate(
     aeron_executor_t *executor,
@@ -44,36 +45,10 @@ static aeron_executor_task_t *aeron_executor_task_allocate(
     return task;
 }
 
-static int aeron_executor_dispatch(void *state)
+void aeron_executor_on_start(void *state, const char *role_name)
 {
     aeron_executor_t *executor = (aeron_executor_t *)state;
-    aeron_executor_task_t *task = (aeron_executor_task_t *)aeron_blocking_linked_queue_poll(&executor->queue);
-
-    if (NULL == task)
-    {
-        return 0;
-    }
-
-    task->result = (NULL == task->on_execute) ? 0 : task->on_execute(task->clientd, executor->clientd);
-
-    if (task->result < 0)
-    {
-        task->errcode = aeron_errcode();
-        memcpy(task->errmsg, aeron_errmsg(), strlen(aeron_errmsg()));
-        aeron_err_clear();
-    }
-
-    if (NULL == executor->on_execution_complete)
-    {
-        aeron_blocking_linked_queue_offer(&executor->return_queue, task);
-    }
-    else
-    {
-        executor->on_execution_complete(task, executor->clientd);
-        aeron_free(task);
-    }
-
-    return 1;
+    executor->name_resolver->start_func(executor->name_resolver);
 }
 
 static void aeron_executor_cancel_all_tasks_and_close_queue(aeron_blocking_linked_queue_t *queue)
@@ -92,32 +67,66 @@ static void aeron_executor_cancel_all_tasks_and_close_queue(aeron_blocking_linke
     aeron_blocking_linked_queue_close(queue); // queue is empty at this point
 }
 
-static void aeron_executor_drain_and_close_submit_queue(void *state)
+static void aeron_executor_on_close(void *state)
 {
     aeron_executor_t *executor = (aeron_executor_t *)state;
     aeron_executor_cancel_all_tasks_and_close_queue(&executor->queue);
+    executor->name_resolver->close_func(executor->name_resolver);
 }
 
-int aeron_executor_init(
-    aeron_executor_t *executor,
-    bool async,
-    aeron_idle_strategy_func_t idle_strategy_func,
-    void *idle_strategy_state,
-    aeron_executor_on_execution_complete_func_t on_execution_complete,
-    void *clientd)
+int aeron_executor_do_work(void *clientd)
 {
-    executor->async = async,
-    executor->on_execution_complete = on_execution_complete;
-    executor->clientd = clientd;
+    aeron_executor_t *executor = (aeron_executor_t *)clientd;
+
+    int work_count = executor->name_resolver->do_work_func(executor->name_resolver, 0 /* FIXME */);
+
+    if (executor->async)
+    {
+        aeron_executor_task_t *task = (aeron_executor_task_t *)aeron_blocking_linked_queue_poll(&executor->queue);
+
+        if (NULL == task)
+        {
+            return work_count;
+        }
+
+        task->result = (NULL == task->on_execute) ? 0 : task->on_execute(task->clientd, executor->clientd);
+
+        if (task->result < 0)
+        {
+            task->errcode = aeron_errcode();
+            memcpy(task->errmsg, aeron_errmsg(), strlen(aeron_errmsg()));
+            aeron_err_clear();
+        }
+
+        if (NULL == executor->on_execution_complete)
+        {
+            aeron_blocking_linked_queue_offer(&executor->return_queue, task);
+        }
+        else
+        {
+            executor->on_execution_complete(task, executor->clientd);
+            aeron_free(task);
+        }
+    }
+
+    work_count++;
+
+    return work_count;
+}
+
+int aeron_executor_init(aeron_executor_t *executor, aeron_driver_context_t *context, aeron_driver_conductor_t *conductor)
+{
+    executor->async = context->async_executor_enabled,
+    executor->on_execution_complete = NULL;
+    executor->clientd = conductor;
 
     executor->runner.state = AERON_AGENT_STATE_UNUSED;
     executor->runner.role_name = NULL;
     executor->runner.on_close = NULL;
 
-    executor->idle_strategy_func = idle_strategy_func;
-    executor->idle_strategy_state = idle_strategy_state;
+    executor->name_resolver = &conductor->name_resolver;
 
-    if (async)
+    if (context->async_executor_enabled)
     {
         if (NULL == executor->on_execution_complete)
         {
@@ -138,12 +147,12 @@ int aeron_executor_init(
             &executor->runner,
             "aeron-executor",
             executor,
-            NULL,
-            NULL,
-            aeron_executor_dispatch,
-            aeron_executor_drain_and_close_submit_queue,
-            executor->idle_strategy_func,
-            executor->idle_strategy_state) < 0)
+            aeron_executor_on_start,
+            executor,
+            aeron_executor_do_work,
+            aeron_executor_on_close,
+            context->async_executor_idle_strategy_func,
+            context->async_executor_idle_strategy_state) < 0)
         {
             AERON_APPEND_ERR("%s", "failed to init agent runner");
             return -1;
