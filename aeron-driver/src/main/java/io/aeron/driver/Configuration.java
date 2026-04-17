@@ -1180,7 +1180,7 @@ public final class Configuration
      * not been received.
      */
     @Config(defaultType = DefaultType.LONG, defaultLong = 10_000_000_000L)
-    public static final String RESOLVER_NEIGHBOR_TIMEOUT_PROP_NAME = "aeron.resolver.neighbor.timeout.ns";
+    public static final String RESOLVER_NEIGHBOR_TIMEOUT_PROP_NAME = "aeron.driver.resolver.neighbor.timeout";
 
     /**
      * Default time to wait before removing a neighbor entry from the cache if an update for that neighbor has not
@@ -1193,7 +1193,7 @@ public final class Configuration
      */
     @Config(defaultType = DefaultType.LONG, defaultLong = 1_000_000_000L)
     public static final String RESOLVER_SELF_RESOLUTION_INTERVAL_PROP_NAME =
-        "aeron.resolver.self.resolution.interval";
+        "aeron.driver.resolver.self.resolution.interval";
 
     /**
      * Default interval between sending name to address messages for this driver to its neighbors.
@@ -1205,7 +1205,7 @@ public final class Configuration
      */
     @Config(defaultType = DefaultType.LONG, defaultLong = 2_000_000_000L)
     public static final String RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_PROP_NAME =
-        "aeron.resolver.neighbor.resolution.interval";
+        "aeron.driver.resolver.neighbor.resolution.interval";
 
     /**
      * Default interval between sending name to address messages for all known neighbors.
@@ -1217,7 +1217,7 @@ public final class Configuration
      */
     @Config(defaultType = DefaultType.LONG, defaultLong = 10_000_000_000L)
     public static final String RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_PROP_NAME =
-        "aeron.resolver.bootstrap.neighbor.resolution.interval";
+        "aeron.driver.resolver.bootstrap.neighbor.resolution.interval";
 
     /**
      * Default interval between resolutions of bootstrap neighbors that are not active.
