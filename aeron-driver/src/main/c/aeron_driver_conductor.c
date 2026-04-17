@@ -519,7 +519,7 @@ static int aeron_driver_conductor_validate_initial_window_for_rcvbuf(
         {
             AERON_SET_ERR(
                 EINVAL,
-                "Initial window greater than SO_SNDBUF for channel: rcv-wnd=%" PRIu64 " so-rcvbuf=%" PRIu64 " channel=%.*s",
+                "Initial window greater than SO_RCVBUF for channel: rcv-wnd=%" PRIu64 " so-rcvbuf=%" PRIu64 " channel=%.*s",
                 params->initial_window_length,
                 endpoint_socket_rcvbuf,
                 (int)channel->uri_length,
@@ -529,7 +529,7 @@ static int aeron_driver_conductor_validate_initial_window_for_rcvbuf(
         {
             AERON_SET_ERR(
                 EINVAL,
-                "Initial window greater than SO_SNDBUF for channel: rcv-wnd=%" PRIu64 " so-rcvbuf=%" PRIu64 " existingChannel=%.*s channel=%.*s",
+                "Initial window greater than SO_RCVBUF for channel: rcv-wnd=%" PRIu64 " so-rcvbuf=%" PRIu64 " existingChannel=%.*s channel=%.*s",
                 params->initial_window_length,
                 endpoint_socket_rcvbuf,
                 (int)existing_channel->uri_length,
@@ -546,7 +546,7 @@ static int aeron_driver_conductor_validate_initial_window_for_rcvbuf(
         {
             AERON_SET_ERR(
                 EINVAL,
-                "Initial window greater than SO_SNDBUF for channel: rcv-wnd=%" PRIu64 " so-rcvbuf=%" PRIu64 " (OS default) channel=%.*s",
+                "Initial window greater than SO_RCVBUF for channel: rcv-wnd=%" PRIu64 " so-rcvbuf=%" PRIu64 " (OS default) channel=%.*s",
                 params->initial_window_length,
                 endpoint_socket_rcvbuf,
                 (int)channel->uri_length,
@@ -556,7 +556,7 @@ static int aeron_driver_conductor_validate_initial_window_for_rcvbuf(
         {
             AERON_SET_ERR(
                 EINVAL,
-                "Initial window greater than SO_SNDBUF for channel: rcv-wnd=%" PRIu64 " so-rcvbuf=%" PRIu64 " (OS default) existingChannel=%.*s channel=%.*s",
+                "Initial window greater than SO_RCVBUF for channel: rcv-wnd=%" PRIu64 " so-rcvbuf=%" PRIu64 " (OS default) existingChannel=%.*s channel=%.*s",
                 params->initial_window_length,
                 endpoint_socket_rcvbuf,
                 (int)existing_channel->uri_length,
