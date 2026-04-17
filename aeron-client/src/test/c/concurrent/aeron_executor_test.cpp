@@ -19,7 +19,7 @@
 
 extern "C"
 {
-#include "concurrent/aeron_executor.h"
+#include "../../../../../aeron-driver/src/main/c/aeron_async_executor.h"
 }
 
 typedef struct

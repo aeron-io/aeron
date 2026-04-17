@@ -152,7 +152,6 @@ SET(C_CLIENT_SOURCE
     ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_broadcast_transmitter.c
     ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_counters_manager.c
     ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_distinct_error_log.c
-    ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_executor.c
     ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_logbuffer_descriptor.c
     ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_mpsc_concurrent_array_queue.c
     ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_mpsc_rb.c
@@ -223,7 +222,6 @@ set(C_CLIENT_HEADERS
     ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_concurrent_array_queue.h
     ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_counters_manager.h
     ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_distinct_error_log.h
-    ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_executor.h
     ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_logbuffer_descriptor.h
     ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_mpsc_concurrent_array_queue.h
     ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_mpsc_rb.h
@@ -288,6 +286,7 @@ SET(DRIVER_ONLY_SOURCE
     media/aeron_udp_destination_tracker.c
     media/aeron_udp_transport_poller.c
     uri/aeron_driver_uri.c
+    aeron_async_executor.c
     aeron_congestion_control.c
     aeron_csv_table_name_resolver.c
     aeron_data_packet_dispatcher.c
@@ -336,6 +335,7 @@ SET(HEADERS
     media/aeron_udp_destination_tracker.h
     media/aeron_udp_transport_poller.h
     uri/aeron_driver_uri.h
+    aeron_async_executor.h
     aeron_congestion_control.h
     aeron_csv_table_name_resolver.h
     aeron_data_packet_dispatcher.h

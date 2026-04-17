@@ -882,16 +882,6 @@ int aeron_driver_conductor_init(aeron_driver_conductor_t *conductor, aeron_drive
     conductor->conductor_proxy.threading_mode = context->threading_mode;
     conductor->conductor_proxy.conductor = conductor;
 
-    if (aeron_executor_init(
-        &conductor->executor,
-        context->async_executor_enabled,
-        context->async_executor_idle_strategy_func,
-        context->async_executor_idle_strategy_state,
-        NULL,
-        conductor) < 0)
-    {
-        goto error;
-    }
     conductor->async_client_command_in_flight = false;
 
     conductor->clients.array = NULL;
@@ -1031,6 +1021,11 @@ int aeron_driver_conductor_init(aeron_driver_conductor_t *conductor, aeron_drive
     conductor->name_resolver.do_work_func = aeron_time_tracking_name_resolver_do_work;
     conductor->name_resolver.close_func = aeron_time_tracking_name_resolver_close;
     conductor->name_resolver.state = time_tracking_name_resolver;
+
+    if (aeron_executor_init( &conductor->executor, context, conductor) < 0)
+    {
+        goto error;
+    }
 
     char label[AERON_COUNTER_MAX_LABEL_LENGTH];
     const char *driver_name = NULL == context->resolver_name ? "" : context->resolver_name;
@@ -3862,10 +3857,9 @@ int aeron_driver_conductor_do_work(void *clientd)
 
     if (!conductor->is_started)
     {
-        if (conductor->name_resolver.start_func(&conductor->name_resolver) < 0)
+        if (!conductor->context->async_executor_enabled)
         {
-            AERON_APPEND_ERR("%s", "failed to start name resolver");
-            aeron_driver_conductor_log_error(conductor);
+            aeron_executor_on_start(&conductor->executor, "aeron-executor");
         }
         conductor->is_started = true;
     }
@@ -3914,6 +3908,11 @@ int aeron_driver_conductor_do_work(void *clientd)
     work_count += aeron_driver_conductor_free_end_of_life_resources(conductor);
     work_count += aeron_executor_process_completions(&conductor->executor, 1);
 
+    if (!conductor->context->async_executor_enabled)
+    {
+        work_count += aeron_executor_do_work(&conductor->executor);
+    }
+
     return work_count;
 }
 
@@ -3922,8 +3921,6 @@ void aeron_driver_conductor_on_close(void *clientd)
     aeron_driver_conductor_t *conductor = (aeron_driver_conductor_t *)clientd;
 
     aeron_executor_close(&conductor->executor);
-
-    conductor->name_resolver.close_func(&conductor->name_resolver);
 
     for (size_t i = 0, length = conductor->clients.length; i < length; i++)
     {
