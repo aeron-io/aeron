@@ -1238,14 +1238,14 @@ int aeron_driver_name_resolver_resolve(
 int aeron_driver_name_resolver_on_start(aeron_name_resolver_t *resolver)
 {
     aeron_driver_name_resolver_t *driver_resolver = (aeron_driver_name_resolver_t *)resolver->state;
-    aeron_driver_name_resolver_resolve_bootstrap_neighbors(driver_resolver);
 
     if (driver_resolver->bootstrap_resolver.start_func(&driver_resolver->bootstrap_resolver) < 0)
     {
         AERON_APPEND_ERR("%s", "");
-        aeron_name_resolver_log_and_clear_error(driver_resolver);
+        return -1;
     }
 
+    aeron_driver_name_resolver_resolve_bootstrap_neighbors(driver_resolver);
     return 0;
 }
 
