@@ -67,6 +67,9 @@ const char * const AERON_DRIVER_CONDUCTOR_INVALID_DESTINATION_KEYS[] =
     NULL
 };
 
+const char * AERON_EXECUTOR_AGENT_ROLE_NAME = "aeron-executor";
+
+
 static bool aeron_driver_conductor_network_subscription_link_matches(
     const aeron_subscription_link_t *link,
     const aeron_receive_channel_endpoint_t *endpoint,
@@ -1022,7 +1025,7 @@ int aeron_driver_conductor_init(aeron_driver_conductor_t *conductor, aeron_drive
     conductor->name_resolver.close_func = aeron_time_tracking_name_resolver_close;
     conductor->name_resolver.state = time_tracking_name_resolver;
 
-    if (aeron_async_executor_init( &conductor->executor, context, conductor) < 0)
+    if (aeron_async_executor_init( &conductor->executor, context, conductor, AERON_EXECUTOR_AGENT_ROLE_NAME) < 0)
     {
         goto error;
     }
@@ -3859,7 +3862,7 @@ int aeron_driver_conductor_do_work(void *clientd)
     {
         if (!conductor->context->async_executor_enabled)
         {
-            aeron_executor_on_start(&conductor->executor, "aeron-executor");
+            aeron_executor_on_start(&conductor->executor, AERON_EXECUTOR_AGENT_ROLE_NAME);
         }
         conductor->is_started = true;
     }

@@ -56,7 +56,7 @@ typedef struct aeron_executor_task_stct
 }
 aeron_async_executor_task_t;
 
-int aeron_async_executor_init(aeron_async_executor_t *executor, aeron_driver_context_t *context, aeron_driver_conductor_t *conductor);
+int aeron_async_executor_init(aeron_async_executor_t *executor, aeron_driver_context_t *context, aeron_driver_conductor_t *conductor, char* agent_role_name);
 int aeron_async_executor_do_work(void *clientd);
 void aeron_async_executor_on_start(void *state, const char *role_name);
 

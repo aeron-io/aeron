@@ -118,7 +118,7 @@ int aeron_async_executor_do_work(void *clientd)
     return work_count;
 }
 
-int aeron_async_executor_init(aeron_async_executor_t *executor, aeron_driver_context_t *context, aeron_driver_conductor_t *conductor)
+int aeron_async_executor_init(aeron_async_executor_t *executor, aeron_driver_context_t *context, aeron_driver_conductor_t *conductor, char *agent_role_name)
 {
     executor->async_enabled = context->async_executor_enabled,
     executor->on_execution_complete = NULL;
@@ -149,7 +149,7 @@ int aeron_async_executor_init(aeron_async_executor_t *executor, aeron_driver_con
 
         if (aeron_agent_init(
             &executor->runner,
-            "aeron-executor",
+            agent_role_name,
             executor,
             aeron_async_executor_on_start,
             executor,
