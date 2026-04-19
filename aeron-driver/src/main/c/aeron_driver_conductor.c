@@ -1022,7 +1022,7 @@ int aeron_driver_conductor_init(aeron_driver_conductor_t *conductor, aeron_drive
     conductor->name_resolver.close_func = aeron_time_tracking_name_resolver_close;
     conductor->name_resolver.state = time_tracking_name_resolver;
 
-    if (aeron_executor_init( &conductor->executor, context, conductor) < 0)
+    if (aeron_async_executor_init( &conductor->executor, context, conductor) < 0)
     {
         goto error;
     }

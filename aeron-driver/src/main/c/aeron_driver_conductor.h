@@ -181,7 +181,7 @@ typedef struct aeron_driver_conductor_stct
     aeron_driver_conductor_proxy_t conductor_proxy;
     aeron_loss_reporter_t loss_reporter;
     aeron_name_resolver_t name_resolver;
-    aeron_executor_t executor;
+    aeron_async_executor_t executor;
 
     aeron_str_to_ptr_hash_map_t send_channel_endpoint_by_channel_map;
     aeron_str_to_ptr_hash_map_t receive_channel_endpoint_by_channel_map;
