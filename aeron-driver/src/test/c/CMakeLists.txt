@@ -42,6 +42,7 @@ function(aeron_driver_test name file)
 endfunction()
 
 if (AERON_UNIT_TESTS)
+    aeron_driver_test(executor_test aeron_async_executor_test.cpp)
     aeron_driver_test(counters_manager_test aeron_counters_manager_test.cpp)
     aeron_driver_test(driver_conductor_ipc_test aeron_driver_conductor_ipc_test.cpp)
     aeron_driver_test(driver_conductor_network_test aeron_driver_conductor_network_test.cpp)

@@ -22,9 +22,9 @@
 
 static aeron_async_executor_task_t *aeron_async_executor_task_allocate(
     aeron_async_executor_t *executor,
-    aeron_executor_task_on_execute_func_t on_execute,
-    aeron_executor_task_on_complete_func_t on_complete,
-    aeron_executor_task_on_cancel_func_t on_cancel,
+    aeron_async_executor_task_on_execute_func_t on_execute,
+    aeron_async_executor_task_on_complete_func_t on_complete,
+    aeron_async_executor_task_on_cancel_func_t on_cancel,
     void *clientd)
 {
     aeron_async_executor_task_t *task;
@@ -55,7 +55,7 @@ void aeron_async_executor_on_start(void *state, const char *role_name)
     }
 }
 
-static void aeron_executor_cancel_all_tasks_and_close_queue(aeron_blocking_linked_queue_t *queue)
+static void aeron_async_executor_cancel_all_tasks_and_close_queue(aeron_blocking_linked_queue_t *queue)
 {
     while (true)
     {
@@ -71,10 +71,10 @@ static void aeron_executor_cancel_all_tasks_and_close_queue(aeron_blocking_linke
     aeron_blocking_linked_queue_close(queue); // queue is empty at this point
 }
 
-static void aeron_executor_on_close(void *state)
+static void aeron_async_executor_on_close(void *state)
 {
     aeron_async_executor_t *executor = (aeron_async_executor_t *)state;
-    aeron_executor_cancel_all_tasks_and_close_queue(&executor->queue);
+    aeron_async_executor_cancel_all_tasks_and_close_queue(&executor->queue);
     executor->name_resolver->close_func(executor->name_resolver);
 }
 
@@ -118,7 +118,7 @@ int aeron_async_executor_do_work(void *clientd)
     return work_count;
 }
 
-int aeron_async_executor_init(aeron_async_executor_t *executor, aeron_driver_context_t *context, aeron_driver_conductor_t *conductor, char *agent_role_name)
+int aeron_async_executor_init(aeron_async_executor_t *executor, aeron_driver_context_t *context, aeron_driver_conductor_t *conductor, const char *agent_role_name)
 {
     executor->async_enabled = context->async_executor_enabled,
     executor->on_execution_complete = NULL;
@@ -154,7 +154,7 @@ int aeron_async_executor_init(aeron_async_executor_t *executor, aeron_driver_con
             aeron_async_executor_on_start,
             executor,
             aeron_async_executor_do_work,
-            aeron_executor_on_close,
+            aeron_async_executor_on_close,
             context->async_executor_idle_strategy_func,
             context->async_executor_idle_strategy_state) < 0)
         {
@@ -190,7 +190,7 @@ int aeron_async_executor_close(aeron_async_executor_t *executor)
 
         if (NULL == executor->on_execution_complete)
         {
-            aeron_executor_cancel_all_tasks_and_close_queue(&executor->return_queue);
+            aeron_async_executor_cancel_all_tasks_and_close_queue(&executor->return_queue);
         }
     }
     return 0;
@@ -198,9 +198,9 @@ int aeron_async_executor_close(aeron_async_executor_t *executor)
 
 int aeron_async_executor_submit(
     aeron_async_executor_t *executor,
-    aeron_executor_task_on_execute_func_t on_execute,
-    aeron_executor_task_on_complete_func_t on_complete,
-    aeron_executor_task_on_cancel_func_t on_cancel,
+    aeron_async_executor_task_on_execute_func_t on_execute,
+    aeron_async_executor_task_on_complete_func_t on_complete,
+    aeron_async_executor_task_on_cancel_func_t on_cancel,
     void *clientd)
 {
     if (executor->async_enabled)

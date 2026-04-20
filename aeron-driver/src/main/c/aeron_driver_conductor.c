@@ -67,7 +67,7 @@ const char * const AERON_DRIVER_CONDUCTOR_INVALID_DESTINATION_KEYS[] =
     NULL
 };
 
-const char * AERON_EXECUTOR_AGENT_ROLE_NAME = "aeron-executor";
+const char *AERON_ASYNC_EXECUTOR_AGENT_ROLE_NAME = "aeron-executor";
 
 
 static bool aeron_driver_conductor_network_subscription_link_matches(
@@ -1025,7 +1025,7 @@ int aeron_driver_conductor_init(aeron_driver_conductor_t *conductor, aeron_drive
     conductor->name_resolver.close_func = aeron_time_tracking_name_resolver_close;
     conductor->name_resolver.state = time_tracking_name_resolver;
 
-    if (aeron_async_executor_init( &conductor->executor, context, conductor, AERON_EXECUTOR_AGENT_ROLE_NAME) < 0)
+    if (aeron_async_executor_init( &conductor->executor, context, conductor, AERON_ASYNC_EXECUTOR_AGENT_ROLE_NAME) < 0)
     {
         goto error;
     }
@@ -1143,7 +1143,7 @@ int aeron_driver_conductor_init(aeron_driver_conductor_t *conductor, aeron_drive
 
 error:
     aeron_deque_close(&conductor->end_of_life_queue);
-    aeron_executor_close(&conductor->executor);
+    aeron_async_executor_close(&conductor->executor);
     aeron_str_to_ptr_hash_map_delete(&conductor->receive_channel_endpoint_by_channel_map);
     aeron_str_to_ptr_hash_map_delete(&conductor->send_channel_endpoint_by_channel_map);
     aeron_distinct_error_log_close(&conductor->error_log);
@@ -3249,7 +3249,7 @@ int aeron_driver_async_client_command_execute(void *task_clientd, void *executor
     return 0;
 }
 
-/* This is an aeron_executor 'complete' callback - it's called when 'aeron_executor_process_completions' is called */
+/* This is an aeron_async_executor 'complete' callback - it's called when 'aeron_async_executor_process_completions' is called */
 void aeron_driver_async_client_command_complete(
     int result,
     int errcode,
@@ -3339,7 +3339,7 @@ int aeron_driver_async_client_command_submit(
 {
     conductor->async_client_command_in_flight = true;
 
-    if (aeron_executor_submit(
+    if (aeron_async_executor_submit(
         &conductor->executor,
         aeron_driver_async_client_command_execute,
         aeron_driver_async_client_command_complete,
@@ -3862,7 +3862,7 @@ int aeron_driver_conductor_do_work(void *clientd)
     {
         if (!conductor->context->async_executor_enabled)
         {
-            aeron_executor_on_start(&conductor->executor, AERON_EXECUTOR_AGENT_ROLE_NAME);
+            aeron_async_executor_on_start(&conductor->executor, AERON_ASYNC_EXECUTOR_AGENT_ROLE_NAME);
         }
         conductor->is_started = true;
     }
@@ -3909,11 +3909,11 @@ int aeron_driver_conductor_do_work(void *clientd)
 
     work_count += conductor->name_resolver.do_work_func(&conductor->name_resolver, now_ms);
     work_count += aeron_driver_conductor_free_end_of_life_resources(conductor);
-    work_count += aeron_executor_process_completions(&conductor->executor, 1);
+    work_count += aeron_async_executor_process_completions(&conductor->executor, 1);
 
     if (!conductor->context->async_executor_enabled)
     {
-        work_count += aeron_executor_do_work(&conductor->executor);
+        work_count += aeron_async_executor_do_work(&conductor->executor);
     }
 
     return work_count;
@@ -3923,7 +3923,7 @@ void aeron_driver_conductor_on_close(void *clientd)
 {
     aeron_driver_conductor_t *conductor = (aeron_driver_conductor_t *)clientd;
 
-    aeron_executor_close(&conductor->executor);
+    aeron_async_executor_close(&conductor->executor);
 
     for (size_t i = 0, length = conductor->clients.length; i < length; i++)
     {
@@ -6451,7 +6451,7 @@ void aeron_driver_conductor_on_re_resolve_endpoint(void *clientd, void *item)
     async_cmd->endpoint = endpoint;
     async_cmd->destination = NULL;
 
-    if (aeron_executor_submit(
+    if (aeron_async_executor_submit(
         &conductor->executor,
         aeron_driver_conductor_async_resolve_host_and_port_execute,
         aeron_driver_conductor_on_re_resolve_endpoint_complete,
@@ -6517,7 +6517,7 @@ void aeron_driver_conductor_on_re_resolve_control(void *clientd, void *item)
     async_cmd->endpoint = cmd->endpoint;
     async_cmd->destination = cmd->destination;
 
-    if (aeron_executor_submit(
+    if (aeron_async_executor_submit(
         &conductor->executor,
         aeron_driver_conductor_async_resolve_host_and_port_execute,
         aeron_driver_conductor_on_re_resolve_control_complete,

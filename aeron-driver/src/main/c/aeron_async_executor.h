@@ -22,14 +22,14 @@
 #include "concurrent/aeron_blocking_linked_queue.h"
 #include "util/aeron_error.h"
 
-typedef struct aeron_executor_task_stct aeron_async_executor_task_t;
+typedef struct aeron_async_executor_task_stct aeron_async_executor_task_t;
 
-typedef int (*aeron_executor_on_execution_complete_func_t)(aeron_async_executor_task_t *task, void *executor_clientd);
+typedef int (*aeron_async_executor_on_execution_complete_func_t)(aeron_async_executor_task_t *task, void *executor_clientd);
 
 typedef struct aeron_async_executor_stct
 {
     bool async_enabled;
-    aeron_executor_on_execution_complete_func_t on_execution_complete;
+    aeron_async_executor_on_execution_complete_func_t on_execution_complete;
     void *clientd;
     aeron_blocking_linked_queue_t queue;
     aeron_blocking_linked_queue_t return_queue;
@@ -38,17 +38,17 @@ typedef struct aeron_async_executor_stct
 }
 aeron_async_executor_t;
 
-typedef int (*aeron_executor_task_on_execute_func_t)(void *task_clientd, void *executor_clientd);
-typedef void (*aeron_executor_task_on_cancel_func_t)(void *task_clientd, void *executor_clientd);
-typedef void (*aeron_executor_task_on_complete_func_t)(
+typedef int (*aeron_async_executor_task_on_execute_func_t)(void *task_clientd, void *executor_clientd);
+typedef void (*aeron_async_executor_task_on_cancel_func_t)(void *task_clientd, void *executor_clientd);
+typedef void (*aeron_async_executor_task_on_complete_func_t)(
     int execution_result, int errcode, const char *errmsg, void *task_clientd, void *executor_clientd);
 
-typedef struct aeron_executor_task_stct
+typedef struct aeron_async_executor_task_stct
 {
     aeron_async_executor_t *executor;
-    aeron_executor_task_on_execute_func_t on_execute;
-    aeron_executor_task_on_complete_func_t on_complete;
-    aeron_executor_task_on_cancel_func_t on_cancel;
+    aeron_async_executor_task_on_execute_func_t on_execute;
+    aeron_async_executor_task_on_complete_func_t on_complete;
+    aeron_async_executor_task_on_cancel_func_t on_cancel;
     void *clientd;
     int result;
     int errcode;
@@ -56,7 +56,7 @@ typedef struct aeron_executor_task_stct
 }
 aeron_async_executor_task_t;
 
-int aeron_async_executor_init(aeron_async_executor_t *executor, aeron_driver_context_t *context, aeron_driver_conductor_t *conductor, char* agent_role_name);
+int aeron_async_executor_init(aeron_async_executor_t *executor, aeron_driver_context_t *context, aeron_driver_conductor_t *conductor, const char* agent_role_name);
 int aeron_async_executor_do_work(void *clientd);
 void aeron_async_executor_on_start(void *state, const char *role_name);
 
@@ -64,9 +64,9 @@ int aeron_async_executor_close(aeron_async_executor_t *executor);
 
 int aeron_async_executor_submit(
     aeron_async_executor_t *executor,
-    aeron_executor_task_on_execute_func_t on_execute,
-    aeron_executor_task_on_complete_func_t on_complete,
-    aeron_executor_task_on_cancel_func_t on_cancel,
+    aeron_async_executor_task_on_execute_func_t on_execute,
+    aeron_async_executor_task_on_complete_func_t on_complete,
+    aeron_async_executor_task_on_cancel_func_t on_cancel,
     void *clientd);
 
 int aeron_async_executor_process_completions(aeron_async_executor_t *executor, int limit);
