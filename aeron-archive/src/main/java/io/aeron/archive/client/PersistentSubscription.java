@@ -141,6 +141,7 @@ public final class PersistentSubscription implements AutoCloseable
     private long joinDifference;
     private long nextLivePosition = Aeron.NULL_VALUE;
     private long position;
+    private long lastObservedLivePosition = Aeron.NULL_VALUE;
     private Exception failureReason = null;
 
     private PersistentSubscription(final Context ctx)
@@ -462,7 +463,9 @@ public final class PersistentSubscription implements AutoCloseable
         }
         else
         {
-            if (FROM_LIVE == position)
+            if (FROM_LIVE == position ||
+                (NULL_POSITION != listRecordingRequest.stopPosition &&
+                position == listRecordingRequest.stopPosition))
             {
                 state(State.ADD_LIVE_SUBSCRIPTION);
             }
@@ -489,6 +492,17 @@ public final class PersistentSubscription implements AutoCloseable
                     listRecordingRequest.streamId + " for recording: " + recordingId);
             }
 
+            if (NULL_POSITION != listRecordingRequest.stopPosition &&
+                lastObservedLivePosition > listRecordingRequest.stopPosition)
+            {
+                return new PersistentSubscriptionException(
+                    PersistentSubscriptionException.Reason.INVALID_START_POSITION,
+                    "recording " + recordingId + " stopped at position=" +
+                        listRecordingRequest.stopPosition +
+                        " which is earlier than last observed live position=" +
+                        lastObservedLivePosition);
+            }
+
             if (position >= 0)
             {
                 if (position < listRecordingRequest.startPosition)
@@ -499,7 +513,7 @@ public final class PersistentSubscription implements AutoCloseable
                             recordingId, position, listRecordingRequest.startPosition));
                 }
 
-                if (NULL_POSITION != listRecordingRequest.stopPosition && position >= listRecordingRequest.stopPosition)
+                if (NULL_POSITION != listRecordingRequest.stopPosition && position > listRecordingRequest.stopPosition)
                 {
                     return new PersistentSubscriptionException(
                         PersistentSubscriptionException.Reason.INVALID_START_POSITION,
@@ -528,15 +542,26 @@ public final class PersistentSubscription implements AutoCloseable
 
     private void setUpReplay()
     {
-        joinDifference(Long.MIN_VALUE);
-
-        maxRecordedPosition.reset(listRecordingRequest.termBufferLength >> 2);
+        resetReplayCatchupState();
 
         state(switch (replayChannelType)
         {
             case SESSION_SPECIFIC -> State.SEND_REPLAY_REQUEST;
             case DYNAMIC_PORT, RESPONSE_CHANNEL -> State.ADD_REPLAY_SUBSCRIPTION;
         });
+    }
+
+    private void refreshRecordingDescriptor()
+    {
+        resetReplayCatchupState();
+
+        state(State.SEND_LIST_RECORDING_REQUEST);
+    }
+
+    private void resetReplayCatchupState()
+    {
+        joinDifference(Long.MIN_VALUE);
+        maxRecordedPosition.reset(listRecordingRequest.termBufferLength >> 2);
     }
 
     private void cleanUpReplay()
@@ -1100,10 +1125,11 @@ public final class PersistentSubscription implements AutoCloseable
             if (replayImage.isClosed())
             {
                 position = replayPosition;
+                advanceLastObservedLivePosition(livePosition);
                 cleanUpLiveSubscription();
                 cleanUpReplay();
                 cleanUpReplaySubscription();
-                setUpReplay();
+                refreshRecordingDescriptor();
 
                 return 1;
             }
@@ -1111,11 +1137,7 @@ public final class PersistentSubscription implements AutoCloseable
             if (liveImage.isClosed())
             {
                 cleanUpLiveSubscription();
-
-                joinDifference(Long.MIN_VALUE);
-
-                maxRecordedPosition.reset(listRecordingRequest.termBufferLength >> 2);
-
+                resetReplayCatchupState();
                 state(State.REPLAY);
 
                 return 1;
@@ -1246,8 +1268,21 @@ public final class PersistentSubscription implements AutoCloseable
         {
             if (0 < liveSubscription.imageCount())
             {
-                liveImage = liveSubscription.imageAtIndex(0);
-                position = liveImage.position();
+                final Image image = liveSubscription.imageAtIndex(0);
+                final long livePosition = image.position();
+                advanceLastObservedLivePosition(livePosition);
+
+                if (position >= 0 && livePosition > position)
+                {
+                    cleanUpLiveSubscription();
+                    liveImage = null;
+                    refreshRecordingDescriptor();
+
+                    return 1;
+                }
+
+                liveImage = image;
+                position = livePosition;
                 joinDifference(0);
                 state(State.LIVE);
                 onLiveJoined();
@@ -1269,14 +1304,24 @@ public final class PersistentSubscription implements AutoCloseable
         final int fragments = doPoll(image, fragmentLimit, isControlled);
         if (0 == fragments && image.isClosed())
         {
-            position = image.position();
+            final long finalPosition = image.position();
+            advanceLastObservedLivePosition(finalPosition);
+            position = finalPosition;
             cleanUpLiveSubscription();
-            setUpReplay();
+            refreshRecordingDescriptor();
             onLiveLeft();
 
             return 1;
         }
         return fragments;
+    }
+
+    private void advanceLastObservedLivePosition(final long livePosition)
+    {
+        if (livePosition > lastObservedLivePosition)
+        {
+            lastObservedLivePosition = livePosition;
+        }
     }
 
     private void state(final State newState)

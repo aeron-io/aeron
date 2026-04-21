@@ -931,7 +931,7 @@ abstract class PersistentSubscriptionTest
 
     @Test
     @InterruptAfter(10)
-    void replayStartPositionMustNotBeTheSameAsTheRecordingStopPosition()
+    void canStartAtRecordingStopPositionWhenLiveHasNotAdvanced()
     {
         final PersistentPublication persistentPublication =
             PersistentPublication.create(aeronArchive, IPC_CHANNEL, STREAM_ID);
@@ -947,14 +947,297 @@ abstract class PersistentSubscriptionTest
 
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
         {
-            executeUntil(persistentSubscription::hasFailed, () -> poll(persistentSubscription, null, 1));
+            executeUntil(
+                persistentSubscription::isLive,
+                () -> poll(persistentSubscription, fragmentHandler, 1));
 
-            assertEquals(1, listener.errorCount);
+            final List<byte[]> liveMessages = generateRandomPayloads(3);
+            persistentPublication.publish(liveMessages);
+
+            executeUntil(
+                () -> fragmentHandler.hasReceivedPayloads(liveMessages.size()),
+                () -> poll(persistentSubscription, fragmentHandler, 1));
+            assertPayloads(fragmentHandler.receivedPayloads, liveMessages);
+            assertEquals(0, listener.errorCount);
+            verify(persistentSubscription);
+        }
+    }
+
+    @Test
+    @InterruptAfter(10)
+    void shouldRecoverWhenTheLiveStreamIsRestarted()
+    {
+        final PersistentPublication persistentPublication = PersistentPublication.create(
+            aeronArchive, IPC_CHANNEL, STREAM_ID
+        );
+        persistentPublication.persist(generateRandomPayloads(1));
+        final long recordingId = persistentPublication.recordingId();
+
+        persistentSubscriptionCtx
+            .startPosition(FROM_LIVE)
+            .recordingId(recordingId)
+            .aeronArchiveContext().messageTimeoutNs(TimeUnit.MILLISECONDS.toNanos(500));
+
+        try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
+        {
+            executeUntil(
+                persistentSubscription::isLive,
+                () -> poll(persistentSubscription, fragmentHandler, 1)
+            );
+
+            persistentPublication.close();
+
+            executeUntil(
+                () -> listener.errorCount > 0,
+                () -> poll(persistentSubscription, fragmentHandler, 1)
+            );
+            assertThat(
+                listener.lastException.getMessage(),
+                containsString("No image became available on the live subscription")
+            );
+            assertFalse(persistentSubscription.isLive());
+
+            final PersistentPublication resumedPublication = PersistentPublication.resume(
+                aeronArchive, IPC_CHANNEL, STREAM_ID, recordingId
+            );
+
+            executeUntil(
+                persistentSubscription::isLive,
+                () -> poll(persistentSubscription, fragmentHandler, 10)
+            );
+
+            final List<byte[]> messages = generateRandomPayloads(5);
+            resumedPublication.persist(messages);
+
+            executeUntil(
+                () -> fragmentHandler.hasReceivedPayloads(messages.size()),
+                () -> poll(persistentSubscription, fragmentHandler, 10));
+
+            assertPayloads(fragmentHandler.receivedPayloads, messages);
+
+            verify(persistentSubscription);
+        }
+    }
+
+    @Test
+    @InterruptAfter(10)
+    void fallbackFromLiveFailsWhenRecordingStoppedBeforeLivePosition()
+    {
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, IPC_CHANNEL, STREAM_ID);
+
+        persistentPublication.persist(generateRandomPayloads(1));
+
+        persistentSubscriptionCtx
+            .recordingId(persistentPublication.recordingId())
+            .startPosition(FROM_LIVE);
+
+        try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
+        {
+            executeUntil(
+                persistentSubscription::isLive,
+                () -> poll(persistentSubscription, fragmentHandler, 1));
+
+            persistentPublication.stop();
+
+            // These messages advance live past the now-frozen recording stopPosition.
+            final List<byte[]> liveOnlyMessages = generateRandomPayloads(3);
+            persistentPublication.publish(liveOnlyMessages);
+
+            executeUntil(
+                () -> fragmentHandler.hasReceivedPayloads(liveOnlyMessages.size()),
+                () -> poll(persistentSubscription, fragmentHandler, 1));
+
+            persistentPublication.closePublicationOnly();
+
+            executeUntil(persistentSubscription::hasFailed, () -> poll(persistentSubscription, fragmentHandler, 1));
+
             assertEquals(
                 Reason.INVALID_START_POSITION,
-                ((PersistentSubscriptionException)listener.lastException).reason()
+                ((PersistentSubscriptionException)persistentSubscription.failureReason()).reason()
             );
-            assertEquals(listener.lastException, persistentSubscription.failureReason());
+        }
+    }
+
+    @Test
+    @InterruptAfter(10)
+    void shouldCatchUpWhenStartingAtStopPositionAndRecordingResumes()
+    {
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, IPC_CHANNEL, STREAM_ID);
+
+        persistentPublication.persist(generateRandomPayloads(1));
+        final long stopPosition = persistentPublication.stop();
+        assertTrue(stopPosition > 0);
+        final long recordingId = persistentPublication.recordingId();
+        persistentPublication.closePublicationOnly();
+
+        persistentSubscriptionCtx
+            .recordingId(recordingId)
+            .startPosition(stopPosition)
+            .aeronArchiveContext().messageTimeoutNs(TimeUnit.MILLISECONDS.toNanos(500));
+
+        try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
+        {
+            // PS shortcuts to ADD_LIVE_SUBSCRIPTION and parks in AWAIT_LIVE with no publisher available;
+            // the liveImage deadline breaches as a non-terminal error.
+            executeUntil(
+                () -> listener.errorCount > 0,
+                () -> poll(persistentSubscription, fragmentHandler, 1));
+            assertThat(
+                listener.lastException.getMessage(),
+                containsString("No image became available on the live subscription")
+            );
+            assertFalse(persistentSubscription.isLive());
+
+            // Resume the publication; this extends the recording so subsequent messages are captured.
+            final PersistentPublication resumedPublication =
+                PersistentPublication.resume(aeronArchive, IPC_CHANNEL, STREAM_ID, recordingId);
+            final List<byte[]> messages = generateRandomPayloads(3);
+            resumedPublication.persist(messages);
+
+            executeUntil(
+                persistentSubscription::isLive,
+                () -> poll(persistentSubscription, fragmentHandler, 10));
+
+            executeUntil(
+                () -> fragmentHandler.hasReceivedPayloads(messages.size()),
+                () -> poll(persistentSubscription, fragmentHandler, 10));
+
+            assertPayloads(fragmentHandler.receivedPayloads, messages);
+            verify(persistentSubscription);
+        }
+    }
+
+    // Recording is stopped at stop_0, the publication is closed, then the recording is resumed via
+    // extendRecording on a fresh MDC publication and more messages are persisted so the recorded
+    // end is past stop_0. The subscription then starts with startPosition = stop_0. Because the
+    // recording is now active (stopPosition = NULL_VALUE), PS does not shortcut to
+    // ADD_LIVE_SUBSCRIPTION — it takes the normal replay path, replays the newly-recorded gap,
+    // catches up via ATTEMPT_SWITCH, and joins live.
+    @Test
+    @InterruptAfter(10)
+    void shouldCatchUpWhenStartingAtStopPositionOfExtendedRecording()
+    {
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID);
+
+        persistentPublication.persist(generateRandomPayloads(1));
+        final long stopPosition = persistentPublication.stop();
+        assertTrue(stopPosition > 0);
+        final long recordingId = persistentPublication.recordingId();
+        persistentPublication.closePublicationOnly();
+
+        final PersistentPublication resumedPublication =
+            PersistentPublication.resume(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID, recordingId);
+        final List<byte[]> catchupMessages = generateRandomPayloads(3);
+        resumedPublication.persist(catchupMessages);
+
+        persistentSubscriptionCtx
+            .recordingId(recordingId)
+            .startPosition(stopPosition)
+            .liveChannel(MDC_SUBSCRIPTION_CHANNEL);
+
+        try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
+        {
+            executeUntil(
+                () -> fragmentHandler.hasReceivedPayloads(catchupMessages.size()),
+                () -> poll(persistentSubscription, fragmentHandler, 10));
+
+            executeUntil(
+                persistentSubscription::isLive,
+                () -> poll(persistentSubscription, fragmentHandler, 10));
+
+            final List<byte[]> liveMessages = generateRandomPayloads(2);
+            resumedPublication.persist(liveMessages);
+
+            executeUntil(
+                () -> fragmentHandler.hasReceivedPayloads(catchupMessages.size() + liveMessages.size()),
+                () -> poll(persistentSubscription, fragmentHandler, 10));
+
+            assertPayloads(fragmentHandler.receivedPayloads, catchupMessages, liveMessages);
+            assertEquals(1, listener.liveJoinedCount);
+            verify(persistentSubscription);
+        }
+    }
+
+    // Deterministically exercises the shortcut → live-ahead → refresh → replay → live path. PS starts
+    // while the recording is stopped so the first list_recording returns stopPosition == startPosition
+    // and PS takes the shortcut to ADD_LIVE_SUBSCRIPTION. After PS has parked in AWAIT_LIVE (confirmed
+    // by the deadline-breach error), the recording is resumed and messages are persisted on a fresh
+    // publisher. The new publisher is ahead of stop_0 by the time its live image reaches PS, so
+    // live_position > position triggers the refresh. The second list_recording sees the extended
+    // recording, validation passes, and PS replays the gap before joining live. The assertion on
+    // isReplaying() observation proves the refresh → replay path was actually taken.
+    @Test
+    @InterruptAfter(10)
+    void shouldRefreshAndReplayWhenLiveAheadOfStopPositionAfterResume()
+    {
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID);
+
+        persistentPublication.persist(generateRandomPayloads(1));
+        final long stopPosition = persistentPublication.stop();
+        assertTrue(stopPosition > 0);
+        final long recordingId = persistentPublication.recordingId();
+        persistentPublication.closePublicationOnly();
+        // Wait for the closed publication's residual state to drain; otherwise PS's live subscription
+        // can briefly attach to the ghost image and join LIVE before the actual resumed publisher's
+        // image arrives.
+        Tests.await(() -> !persistentPublication.publicationCountersExist());
+
+        persistentSubscriptionCtx
+            .recordingId(recordingId)
+            .startPosition(stopPosition)
+            .liveChannel(MDC_SUBSCRIPTION_CHANNEL)
+            .aeronArchiveContext().messageTimeoutNs(TimeUnit.MILLISECONDS.toNanos(500));
+
+        try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
+        {
+            final boolean[] observedReplaying = { false };
+            final Runnable pollAndTrack = () ->
+            {
+                poll(persistentSubscription, fragmentHandler, 10);
+                if (persistentSubscription.isReplaying())
+                {
+                    observedReplaying[0] = true;
+                }
+            };
+
+            executeUntil(
+                () -> listener.errorCount > 0,
+                pollAndTrack);
+            // Exactly one deadline breach — fired once while PS was parked in AWAIT_LIVE.
+            assertEquals(1, listener.errorCount);
+            assertThat(
+                listener.lastException.getMessage(),
+                containsString("No image became available on the live subscription")
+            );
+            assertFalse(persistentSubscription.isLive());
+            assertFalse(observedReplaying[0]);
+
+            final PersistentPublication resumedPublication =
+                PersistentPublication.resume(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID, recordingId);
+            final List<byte[]> catchupMessages = generateRandomPayloads(3);
+            resumedPublication.persist(catchupMessages);
+
+            executeUntil(
+                persistentSubscription::isLive,
+                pollAndTrack);
+
+            executeUntil(
+                () -> fragmentHandler.hasReceivedPayloads(catchupMessages.size()),
+                pollAndTrack);
+
+            assertPayloads(fragmentHandler.receivedPayloads, catchupMessages);
+            assertTrue(observedReplaying[0],
+                "PS did not transition through REPLAY/ATTEMPT_SWITCH; refresh path was not exercised");
+            assertEquals(1, listener.liveJoinedCount,
+                "liveJoinedCount=" + listener.liveJoinedCount + " liveLeftCount=" + listener.liveLeftCount);
+            assertEquals(0, listener.liveLeftCount);
+            // No additional AWAIT_LIVE entries after the initial one, so no additional breaches.
+            assertEquals(1, listener.errorCount);
+            verify(persistentSubscription);
         }
     }
 
@@ -1509,8 +1792,9 @@ abstract class PersistentSubscriptionTest
             assertEquals(recordedMessages.size(), fragmentHandler.receivedPayloads.size());
             assertEquals(1, listener.errorCount);
             assertEquals(PersistentSubscriptionException.class, listener.lastException.getClass());
-            assertThat(listener.lastException.getMessage(), containsString(
-                "ERROR - replay request failed")
+            assertEquals(
+                Reason.INVALID_START_POSITION,
+                ((PersistentSubscriptionException)listener.lastException).reason()
             );
             assertEquals(listener.lastException, persistentSubscription.failureReason());
             verify(persistentSubscription);
@@ -1800,14 +2084,9 @@ abstract class PersistentSubscriptionTest
             );
             assertEquals(PersistentSubscriptionException.class, listener.lastException.getClass());
             assertEquals(listener.lastException, persistentSubscription.failureReason());
-            assertThat(
-                listener.lastException.getMessage(),
-                containsString("ERROR - replay request failed: requested replay start position=")
-            );
-
-            assertThat(
-                listener.lastException.getMessage(),
-                containsString("must be less than the limit position=")
+            assertEquals(
+                Reason.INVALID_START_POSITION,
+                ((PersistentSubscriptionException)listener.lastException).reason()
             );
 
             verify(persistentSubscription);
@@ -2260,48 +2539,6 @@ abstract class PersistentSubscriptionTest
                 Reason.STREAM_ID_MISMATCH,
                 ((PersistentSubscriptionException)listener.lastException).reason()
             );
-            assertEquals(listener.lastException, persistentSubscription.failureReason());
-        }
-    }
-
-    @Test
-    @InterruptAfter(5)
-    void shouldFailWhenLivePublicationIsRevoked()
-    {
-        final ExclusivePublication publication =
-            addCloseable(aeron.addExclusivePublication(MDC_PUBLICATION_CHANNEL, STREAM_ID));
-        aeronArchive.startRecording(MDC_PUBLICATION_CHANNEL, STREAM_ID, SourceLocation.LOCAL);
-
-        final PersistentPublication persistentPublication = PersistentPublication.create(aeronArchive, publication);
-        final List<byte[]> payloads = generateFixedPayloads(2, ONE_KB_MESSAGE_SIZE);
-        persistentPublication.persist(payloads);
-
-        final Subscription subscription = addCloseable(aeron.addSubscription(MDC_SUBSCRIPTION_CHANNEL, STREAM_ID));
-
-        persistentSubscriptionCtx
-            .recordingId(persistentPublication.recordingId)
-            .startPosition(FROM_START)
-            .liveChannel(MDC_SUBSCRIPTION_CHANNEL)
-            .aeronArchiveContext().messageTimeoutNs(TimeUnit.SECONDS.toNanos(3));
-
-        try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
-        {
-            executeUntil(
-                persistentSubscription::isLive,
-                () -> poll(persistentSubscription, fragmentHandler, 10));
-
-            Tests.await(subscription::isConnected);
-            Tests.await(() -> subscription.imageCount() > 0);
-            publication.revoke();
-            Tests.await(publication::isClosed);
-            Tests.await(() -> subscription.imageCount() == 0);
-            subscription.close();
-
-            executeUntil(
-                () -> listener.errorCount > 0,
-                () -> poll(persistentSubscription, fragmentHandler, 1));
-            assertEquals(PersistentSubscriptionException.class, listener.lastException.getClass());
-            assertTrue(persistentSubscription.hasFailed());
             assertEquals(listener.lastException, persistentSubscription.failureReason());
         }
     }
@@ -3174,6 +3411,11 @@ abstract class PersistentSubscriptionTest
         public void close()
         {
             aeronArchive.stopRecording(publication);
+            CloseHelper.close(publication);
+        }
+
+        void closePublicationOnly()
+        {
             CloseHelper.close(publication);
         }
     }
