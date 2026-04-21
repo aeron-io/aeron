@@ -24,12 +24,9 @@
 
 typedef struct aeron_async_executor_task_stct aeron_async_executor_task_t;
 
-typedef int (*aeron_async_executor_on_execution_complete_func_t)(aeron_async_executor_task_t *task, void *executor_clientd);
-
 typedef struct aeron_async_executor_stct
 {
     bool async_enabled;
-    aeron_async_executor_on_execution_complete_func_t on_execution_complete;
     void *clientd;
     aeron_blocking_linked_queue_t queue;
     aeron_blocking_linked_queue_t return_queue;
@@ -56,7 +53,12 @@ typedef struct aeron_async_executor_task_stct
 }
 aeron_async_executor_task_t;
 
-int aeron_async_executor_init(aeron_async_executor_t *executor, aeron_driver_context_t *context, aeron_driver_conductor_t *conductor, const char* agent_role_name);
+int aeron_async_executor_init(
+    aeron_async_executor_t *executor,
+    aeron_driver_context_t *context,
+    aeron_name_resolver_t *name_resolver,
+    const char *agent_role_name,
+    void *clientd);
 int aeron_async_executor_do_work(void *clientd);
 void aeron_async_executor_on_start(void *state, const char *role_name);
 

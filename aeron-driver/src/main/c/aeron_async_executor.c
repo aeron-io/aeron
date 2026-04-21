@@ -75,14 +75,22 @@ static void aeron_async_executor_on_close(void *state)
 {
     aeron_async_executor_t *executor = (aeron_async_executor_t *)state;
     aeron_async_executor_cancel_all_tasks_and_close_queue(&executor->queue);
-    executor->name_resolver->close_func(executor->name_resolver);
+    if (NULL != executor->name_resolver)
+    {
+        executor->name_resolver->close_func(executor->name_resolver);
+    }
 }
 
 int aeron_async_executor_do_work(void *clientd)
 {
     aeron_async_executor_t *executor = (aeron_async_executor_t *)clientd;
 
-    int work_count = executor->name_resolver->do_work_func(executor->name_resolver, 0 /* FIXME */);
+    int work_count = 0;
+
+    if (NULL != executor->name_resolver)
+    {
+        work_count += executor->name_resolver->do_work_func(executor->name_resolver, 0 /* FIXME */);
+    }
 
     if (executor->async_enabled)
     {
@@ -102,15 +110,7 @@ int aeron_async_executor_do_work(void *clientd)
             aeron_err_clear();
         }
 
-        if (NULL == executor->on_execution_complete)
-        {
-            aeron_blocking_linked_queue_offer(&executor->return_queue, task);
-        }
-        else
-        {
-            executor->on_execution_complete(task, executor->clientd);
-            aeron_free(task);
-        }
+        aeron_blocking_linked_queue_offer(&executor->return_queue, task);
     }
 
     work_count++;
@@ -118,27 +118,28 @@ int aeron_async_executor_do_work(void *clientd)
     return work_count;
 }
 
-int aeron_async_executor_init(aeron_async_executor_t *executor, aeron_driver_context_t *context, aeron_driver_conductor_t *conductor, const char *agent_role_name)
+int aeron_async_executor_init(
+    aeron_async_executor_t *executor,
+    aeron_driver_context_t *context,
+    aeron_name_resolver_t *name_resolver,
+    const char *agent_role_name,
+    void *clientd)
 {
     executor->async_enabled = context->async_executor_enabled,
-    executor->on_execution_complete = NULL;
-    executor->clientd = conductor;
+    executor->clientd = clientd;
 
     executor->runner.state = AERON_AGENT_STATE_UNUSED;
     executor->runner.role_name = NULL;
     executor->runner.on_close = NULL;
 
-    executor->name_resolver = &conductor->name_resolver;
+    executor->name_resolver = name_resolver;
 
     if (context->async_executor_enabled)
     {
-        if (NULL == executor->on_execution_complete)
+        if (aeron_blocking_linked_queue_init(&executor->return_queue) < 0)
         {
-            if (aeron_blocking_linked_queue_init(&executor->return_queue) < 0)
-            {
-                AERON_APPEND_ERR("%s", "");
-                return -1;
-            }
+            AERON_APPEND_ERR("%s", "");
+            return -1;
         }
 
         if (aeron_blocking_linked_queue_init(&executor->queue) < 0)
@@ -188,10 +189,7 @@ int aeron_async_executor_close(aeron_async_executor_t *executor)
             return -1;
         }
 
-        if (NULL == executor->on_execution_complete)
-        {
-            aeron_async_executor_cancel_all_tasks_and_close_queue(&executor->return_queue);
-        }
+        aeron_async_executor_cancel_all_tasks_and_close_queue(&executor->return_queue);
     }
     return 0;
 }
@@ -233,7 +231,7 @@ int aeron_async_executor_submit(
 
 int aeron_async_executor_process_completions(aeron_async_executor_t *executor, int limit)
 {
-    if (!executor->async_enabled || NULL != executor->on_execution_complete)
+    if (!executor->async_enabled)
     {
         return 0;
     }
