@@ -89,7 +89,8 @@ int aeron_async_executor_do_work(void *clientd)
 
     if (NULL != executor->name_resolver)
     {
-        work_count += executor->name_resolver->do_work_func(executor->name_resolver, 0 /* FIXME */);
+        const int64_t now = executor->aeron_epoch_clock();
+        work_count += executor->name_resolver->do_work_func(executor->name_resolver, now);
     }
 
     if (executor->async_enabled)
@@ -126,6 +127,7 @@ int aeron_async_executor_init(
     void *clientd)
 {
     executor->async_enabled = context->async_executor_enabled,
+    executor->aeron_epoch_clock = context->epoch_clock,
     executor->clientd = clientd;
 
     executor->runner.state = AERON_AGENT_STATE_UNUSED;

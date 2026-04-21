@@ -27,6 +27,7 @@ typedef struct aeron_async_executor_task_stct aeron_async_executor_task_t;
 typedef struct aeron_async_executor_stct
 {
     bool async_enabled;
+    aeron_clock_func_t aeron_epoch_clock;
     void *clientd;
     aeron_blocking_linked_queue_t queue;
     aeron_blocking_linked_queue_t return_queue;
