@@ -183,6 +183,7 @@ SET(C_CLIENT_SOURCE
     ${AERON_C_CLIENT_SOURCE_PATH}/util/aeron_strutil.c
     ${AERON_C_CLIENT_SOURCE_PATH}/util/aeron_symbol_table.c
     ${AERON_C_CLIENT_SOURCE_PATH}/uri/aeron_uri.c
+    ${AERON_C_CLIENT_SOURCE_PATH}/uri/aeron_uri_string_builder.c
     ${AERON_C_CLIENT_SOURCE_PATH}/aeron_agent.c
     ${AERON_C_CLIENT_SOURCE_PATH}/aeron_alloc.c
     ${AERON_C_CLIENT_SOURCE_PATH}/aeron_client.c
@@ -217,6 +218,7 @@ set(C_CLIENT_HEADERS
     ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_blocking_linked_queue.h
     ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_atomic64_gcc_x86_64.h
     ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_atomic64_msvc.h
+    ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_atomic64_c11.h
     ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_broadcast_descriptor.h
     ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_broadcast_receiver.h
     ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_broadcast_transmitter.h
@@ -238,6 +240,7 @@ set(C_CLIENT_HEADERS
     ${AERON_C_CLIENT_SOURCE_PATH}/concurrent/aeron_thread.h
     ${AERON_C_CLIENT_SOURCE_PATH}/protocol/aeron_udp_protocol.h
     ${AERON_C_CLIENT_SOURCE_PATH}/reports/aeron_loss_reporter.h
+    ${AERON_C_CLIENT_SOURCE_PATH}/status/aeron_local_sockaddr.h
     ${AERON_C_CLIENT_SOURCE_PATH}/util/aeron_arrayutil.h
     ${AERON_C_CLIENT_SOURCE_PATH}/util/aeron_bitutil.h
     ${AERON_C_CLIENT_SOURCE_PATH}/util/aeron_clock.h
@@ -254,6 +257,8 @@ set(C_CLIENT_HEADERS
     ${AERON_C_CLIENT_SOURCE_PATH}/util/aeron_properties_util.h
     ${AERON_C_CLIENT_SOURCE_PATH}/util/aeron_strutil.h
     ${AERON_C_CLIENT_SOURCE_PATH}/util/aeron_symbol_table.h
+    ${AERON_C_CLIENT_SOURCE_PATH}/uri/aeron_uri.h
+    ${AERON_C_CLIENT_SOURCE_PATH}/uri/aeron_uri_string_builder.h
     ${AERON_C_CLIENT_SOURCE_PATH}/aeron_agent.h
     ${AERON_C_CLIENT_SOURCE_PATH}/aeron_alloc.h
     ${AERON_C_CLIENT_SOURCE_PATH}/aeron_client.h
@@ -262,6 +267,7 @@ set(C_CLIENT_HEADERS
     ${AERON_C_CLIENT_SOURCE_PATH}/aeron_common.h
     ${AERON_C_CLIENT_SOURCE_PATH}/aeron_context.h
     ${AERON_C_CLIENT_SOURCE_PATH}/aeron_counter.h
+    ${AERON_C_CLIENT_SOURCE_PATH}/aeron_counters.h
     ${AERON_C_CLIENT_SOURCE_PATH}/aeron_exclusive_publication.h
     ${AERON_C_CLIENT_SOURCE_PATH}/aeron_fragment_assembler.h
     ${AERON_C_CLIENT_SOURCE_PATH}/aeron_image.h
