@@ -3912,7 +3912,6 @@ int aeron_driver_conductor_do_work(void *clientd)
         work_count += aeron_ipc_publication_update_pub_pos_and_lmt(conductor->ipc_publications.array[i].publication);
     }
 
-    work_count += conductor->name_resolver.do_work_func(&conductor->name_resolver, now_ms);
     work_count += aeron_driver_conductor_free_end_of_life_resources(conductor);
     work_count += aeron_async_executor_process_completions(&conductor->executor, 1);
 

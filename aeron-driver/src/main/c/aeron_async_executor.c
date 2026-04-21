@@ -112,9 +112,9 @@ int aeron_async_executor_do_work(void *clientd)
         }
 
         aeron_blocking_linked_queue_offer(&executor->return_queue, task);
-    }
 
-    work_count++;
+        work_count++;
+    }
 
     return work_count;
 }
