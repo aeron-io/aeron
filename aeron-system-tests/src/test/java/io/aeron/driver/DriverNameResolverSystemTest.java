@@ -576,6 +576,7 @@ class DriverNameResolverSystemTest
         context
             .publicationTermBufferLength(LogBufferDescriptor.TERM_MIN_LENGTH)
             .threadingMode(ThreadingMode.SHARED)
+            .asyncExecutorEnabled(true)
             .dirDeleteOnStart(true)
             .resolverNeighborTimeoutNs(TimeUnit.SECONDS.toNanos(2))
             .resolverSelfResolutionIntervalNs(TimeUnit.SECONDS.toNanos(1))
