@@ -48,10 +48,10 @@ static aeron_async_executor_task_t *aeron_async_executor_task_allocate(
 void aeron_async_executor_on_start(void *state, const char *role_name)
 {
     aeron_async_executor_t *executor = (aeron_async_executor_t *)state;
-    if (executor->name_resolver->start_func(executor->name_resolver) < 0)
+    if (NULL != executor->name_resolver &&
+        executor->name_resolver->start_func(executor->name_resolver) < 0)
     {
         AERON_APPEND_ERR("%s", "failed to start name resolver");
-        aeron_driver_conductor_log_error(conductor);
     }
 }
 
