@@ -71,7 +71,7 @@ inline static int32_t aeron_spsc_rb_claim_capacity(aeron_spsc_rb_t *ring_buffer,
 
         if (required_capacity > (ring_buffer->capacity - (size_t)(tail - head)))
         {
-            return -1;
+            return AERON_RB_FULL;
         }
 
         ring_buffer->descriptor->head_cache_position = head;
@@ -101,7 +101,7 @@ inline static int32_t aeron_spsc_rb_claim_capacity(aeron_spsc_rb_t *ring_buffer,
 
             if (required_capacity > head_index)
             {
-                write_index = -1;
+                write_index = AERON_RB_FULL;
                 next_tail = tail;
             }
 
@@ -127,7 +127,7 @@ inline static int32_t aeron_spsc_rb_claim_capacity(aeron_spsc_rb_t *ring_buffer,
         record_index = 0;
     }
 
-    if (-1 != write_index)
+    if (AERON_RB_FULL != write_index)
     {
         next_header = (aeron_rb_record_descriptor_t *)(ring_buffer->buffer + write_index + aligned_record_length);
 
@@ -135,7 +135,7 @@ inline static int32_t aeron_spsc_rb_claim_capacity(aeron_spsc_rb_t *ring_buffer,
         next_header->msg_type_id = 0;
     }
 
-    return (int32_t)record_index;
+    return (int32_t)write_index;
 }
 
 aeron_rb_write_result_t aeron_spsc_rb_writev(
