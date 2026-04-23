@@ -789,14 +789,17 @@ public final class PersistentSubscription implements AutoCloseable
 
     private int awaitReplayChannelEndpoint()
     {
-        final String endpoint = replaySubscription.resolvedEndpoint();
-
-        if (null == endpoint)
+        final String resolvedChannel = replaySubscription.tryResolveChannelEndpointPort();
+        if (null == resolvedChannel)
         {
             return 0;
         }
 
-        replayChannelUri.put(ENDPOINT_PARAM_NAME, endpoint);
+        final String resolvedEndpoint = ChannelUri.parse(resolvedChannel).get(ENDPOINT_PARAM_NAME);
+        if (null != resolvedEndpoint)
+        {
+            replayChannelUri.put(ENDPOINT_PARAM_NAME, resolvedEndpoint);
+        }
 
         state(State.SEND_REPLAY_REQUEST);
 

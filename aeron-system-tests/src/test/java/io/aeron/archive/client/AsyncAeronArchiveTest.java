@@ -15,6 +15,7 @@
  */
 package io.aeron.archive.client;
 
+import io.aeron.Aeron;
 import io.aeron.ChannelUri;
 import io.aeron.CommonContext;
 import io.aeron.ExclusivePublication;
@@ -172,7 +173,7 @@ class AsyncAeronArchiveTest
         }
 
         final long recordingId = 0;
-        pollUntil(() -> aeronArchive.getStopPosition(recordingId), equalTo(position));
+        pollUntil(() -> getStopPositionOrNullValue(recordingId), equalTo(position));
 
         assertTrue(asyncAeronArchive.trySendListRecordingRequest(4, recordingId));
         pollUntil(listener::recordingDescriptors, not(empty()));
@@ -291,6 +292,22 @@ class AsyncAeronArchiveTest
         assertInstanceOf(ConfigurationException.class, listener.lastError());
 
         assertTrue(asyncAeronArchive.isClosed());
+    }
+
+    private long getStopPositionOrNullValue(final long recordingId)
+    {
+        try
+        {
+            return aeronArchive.getStopPosition(recordingId);
+        }
+        catch (final ArchiveException e)
+        {
+            if (e.errorCode() == UNKNOWN_RECORDING)
+            {
+                return Aeron.NULL_VALUE;
+            }
+            throw e;
+        }
     }
 
     private <T> T pollUntil(final Supplier<T> supplier, final Matcher<T> matcher)
