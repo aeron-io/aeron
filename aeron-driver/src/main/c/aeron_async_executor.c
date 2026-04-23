@@ -193,6 +193,13 @@ int aeron_async_executor_close(aeron_async_executor_t *executor)
 
         aeron_async_executor_cancel_all_tasks_and_close_queue(&executor->return_queue);
     }
+    else
+    {
+        if (NULL != executor->name_resolver)
+        {
+            executor->name_resolver->close_func(executor->name_resolver);
+        }
+    }
     return 0;
 }
 
