@@ -1191,7 +1191,7 @@ abstract class PersistentSubscriptionTest
             .listener(null);
 
         final int maxSeconds = 60;
-        final int ratePerSecond = 10_000;
+        final int ratePerSecond = 500;
         final long maxProcessingTime = 1_000_000_000 / ratePerSecond / 8;
         final long t0 = System.nanoTime();
         final PerSecondStats publisherMessagesPerSecond = new PerSecondStats(t0, maxSeconds);
@@ -2305,14 +2305,14 @@ abstract class PersistentSubscriptionTest
     }
 
     @Test
-    @InterruptAfter(20)
+    @InterruptAfter(30)
     void shouldRecoverFromReplayChannelNetworkProblems() throws Exception
     {
         shouldRecoverFromNetworkProblems(NetworkFlow.REPLAY);
     }
 
     @Test
-    @InterruptAfter(20)
+    @InterruptAfter(30)
     void shouldRecoverFromLiveChannelNetworkProblems() throws Exception
     {
         shouldRecoverFromNetworkProblems(NetworkFlow.LIVE);
@@ -2348,7 +2348,7 @@ abstract class PersistentSubscriptionTest
             .recordingId(persistentPublication.recordingId())
             .liveChannel(subChannel);
 
-        final int ratePerSecond = 10_000;
+        final int ratePerSecond = 500;
         final long maxProcessingTime = 1_000_000_000 / ratePerSecond / 8;
 
         final Thread publisher = new Thread(

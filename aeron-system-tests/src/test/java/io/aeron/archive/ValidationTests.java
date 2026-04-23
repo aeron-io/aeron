@@ -95,7 +95,7 @@ class ValidationTests
                 .aeronDirectoryName(driver.aeronDirectoryName())
                 .archiveDir(tempDir.resolve("archive").toFile())
                 .threadingMode(ArchiveThreadingMode.INVOKER)
-                .controlChannel("aeron:udp?endpoint=localhost:5050")
+                .controlChannel("aeron:udp?endpoint=localhost:0")
                 .replicationChannel("aeron:udp?endpoint=localhost:0")
                 .segmentFileLength(TERM_MIN_LENGTH)
                 .epochClock(epochClock));
