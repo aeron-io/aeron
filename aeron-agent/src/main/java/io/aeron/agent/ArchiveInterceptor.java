@@ -129,4 +129,54 @@ class ArchiveInterceptor
             LOGGER.logCatalogResize(catalogLength, newCatalogLength);
         }
     }
+
+    static class PersistentSubscriptionStateChange
+    {
+        @Advice.OnMethodEnter
+        static <E extends Enum<E>> void logStateChange(
+            final E oldState,
+            final E newState,
+            final long recordingId,
+            final String replayChannel,
+            final int replayStreamId,
+            final String liveChannel,
+            final int liveStreamId
+        )
+        {
+            LOGGER.logPersistentSubscriptionStateChange(
+                oldState,
+                newState,
+                recordingId,
+                replayChannel,
+                replayStreamId,
+                liveChannel,
+                liveStreamId
+            );
+        }
+    }
+
+    static class PersistentSubscriptionJoinedLive
+    {
+        @Advice.OnMethodEnter
+        static void logJoinedLive(
+            final long recordingId,
+            final String replayChannel,
+            final int replayStreamId,
+            final String liveChannel,
+            final int liveStreamId,
+            final int liveSessionId,
+            final long joinPosition
+        )
+        {
+            LOGGER.logPersistentSubscriptionJoinedLive(
+                recordingId,
+                replayChannel,
+                replayStreamId,
+                liveChannel,
+                liveStreamId,
+                liveSessionId,
+                joinPosition
+            );
+        }
+    }
 }

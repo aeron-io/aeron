@@ -32,17 +32,16 @@ import org.agrona.concurrent.ShutdownSignalBarrier;
 import org.agrona.concurrent.YieldingIdleStrategy;
 
 import java.util.concurrent.atomic.AtomicBoolean;
+import static io.aeron.samples.SamplesUtil.findLatestRecording;
 
 /**
  * This is an Aeron subscriber utilising {@link io.aeron.archive.client.ReplayMerge}.
  * <p>
- * The application uses {@code ReplayMerge} to replay historical messages, before joining the live stream.
- * It uses a default channel for replay and live, and the same default stream ID for both.
+ * The application uses {@code ReplayMerge} to replay from a recording, before joining the live stream.
+ * It uses the default channel for live, and the default stream ID for both live and replay.
  * These defaults can be overwritten by setting their corresponding Java system properties
  * at the command line, for example:
  * export JVM_OPTS="-Daeron.sample.channel=aeron:udp?endpoint=localhost:5555 -Daeron.sample.streamId=20"
- * <p>
- * This application only handles non-fragmented data.
  */
 public class ReplayMergeSubscriber
 {
@@ -96,7 +95,13 @@ public class ReplayMergeSubscriber
             try (Aeron aeron = Aeron.connect(ctx);
                 AeronArchive aeronArchive = AeronArchive.connect(aeronArchiveCtx.aeron(aeron)))
             {
-                final RecordingDescriptor descriptor = getLastDescriptor(aeronArchive);
+                if (null == aeronArchive)
+                {
+                    System.out.println("Could not connect to aeron archive.");
+                    return;
+                }
+
+                final RecordingDescriptor descriptor = findLatestRecording(aeronArchive, LIVE_DESTINATION, STREAM_ID);
 
                 if (descriptor == null)
                 {
@@ -141,19 +146,5 @@ public class ReplayMergeSubscriber
                 }
             }
         }
-    }
-
-    private static RecordingDescriptor getLastDescriptor(final AeronArchive aeronArchive)
-    {
-        final RecordingDescriptorCollector collector = new RecordingDescriptorCollector(1);
-
-        if (0 == aeronArchive.listRecordingsForUri(
-            0, Integer.MAX_VALUE, "alias=replay-merge-sample", STREAM_ID, collector.reset()))
-        {
-            return null;
-        }
-
-        final int lastIndex = collector.descriptors().size() - 1;
-        return collector.descriptors().get(lastIndex);
     }
 }

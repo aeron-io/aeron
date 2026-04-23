@@ -75,6 +75,13 @@ public:
         return aeron_counter_is_closed(counter());
     }
 
+    /// @cond HIDDEN_SYMBOLS
+    aeron_counter_t *c_counter() const
+    {
+        return counter();
+    }
+    /// @endcond
+
 private:
     std::shared_ptr<Aeron> m_aeronRef; // ensure Aeron instance is being deleted after its children
     CountersReader &m_reader;

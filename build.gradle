@@ -279,7 +279,8 @@ subprojects {
             'aeron.test.system.ats.path': System.getProperty('aeron.test.system.ats.path'),
             'aeron.test.system.ats.conf.dir': System.getProperty('aeron.test.system.ats.conf.dir'),
             'aeron.test.system.ats.conf.file': System.getProperty('aeron.test.system.ats.conf.file'),
-            'aeron.test.system.driver.await.counters': System.getProperty('aeron.test.system.driver.await.counters'))
+            'aeron.test.system.driver.await.counters': System.getProperty('aeron.test.system.driver.await.counters'),
+            'aeron.test.system.persistentsubscription.printresults': System.getProperty('aeron.test.system.persistentsubscription.printresults'))
 
         javaLauncher.set(toolchainLauncher)
     }

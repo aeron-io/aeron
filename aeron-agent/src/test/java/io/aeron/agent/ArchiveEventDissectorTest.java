@@ -20,6 +20,7 @@ import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.Test;
 
 import static io.aeron.agent.ArchiveEventCode.*;
+import static io.aeron.agent.ArchiveEventCode.PERSISTENT_SUBSCRIPTION_STATE_CHANGE;
 import static io.aeron.agent.ArchiveEventDissector.*;
 import static io.aeron.agent.CommonEventEncoder.LOG_HEADER_LENGTH;
 import static io.aeron.agent.CommonEventEncoder.internalEncodeLogHeader;
@@ -27,6 +28,7 @@ import static io.aeron.agent.EventConfiguration.MAX_EVENT_LENGTH;
 import static io.aeron.archive.codecs.ControlResponseCode.NULL_VAL;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static java.nio.charset.StandardCharsets.US_ASCII;
+import static org.agrona.BitUtil.SIZE_OF_INT;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -964,4 +966,58 @@ class ArchiveEventDissectorTest
             builder.toString());
     }
 
+    @Test
+    void persistentSubscriptionStateChange()
+    {
+        int offset = internalEncodeLogHeader(buffer, 0, 10, 20, () -> 1_500_000_000L);
+        buffer.putLong(offset, 16);
+        offset += SIZE_OF_LONG;
+        offset += buffer.putStringAscii(offset, "aeron:udp?endpoint=localhost:9010");
+        buffer.putInt(offset, 10);
+        offset += SIZE_OF_INT;
+        offset += buffer.putStringAscii(offset, "aeron:udp?endpoint=localhost:10010");
+        buffer.putInt(offset, 11);
+        offset += SIZE_OF_INT;
+        buffer.putStringAscii(offset, "x -> y");
+
+        dissectPersistentSubscriptionStateChange(PERSISTENT_SUBSCRIPTION_STATE_CHANGE, buffer, 0, builder);
+
+        assertEquals("[1.500000000] " + CONTEXT + ": " + PERSISTENT_SUBSCRIPTION_STATE_CHANGE.name() + " [10/20]:" +
+                " recordingId=16" +
+                " replayChannel=aeron:udp?endpoint=localhost:9010" +
+                " replayStreamId=10" +
+                " liveChannel=aeron:udp?endpoint=localhost:10010" +
+                " liveStreamId=11" +
+                " x -> y",
+            builder.toString());
+    }
+
+    @Test
+    void persistentSubscriptionJoinedLive()
+    {
+        int offset = internalEncodeLogHeader(buffer, 0, 10, 20, () -> 1_500_000_000L);
+        buffer.putLong(offset, 16);
+        offset += SIZE_OF_LONG;
+        offset += buffer.putStringAscii(offset, "aeron:udp?endpoint=localhost:9010");
+        buffer.putInt(offset, 10);
+        offset += SIZE_OF_INT;
+        offset += buffer.putStringAscii(offset, "aeron:udp?endpoint=localhost:10010");
+        buffer.putInt(offset, 11);
+        offset += SIZE_OF_INT;
+        buffer.putInt(offset, 21);
+        offset += SIZE_OF_INT;
+        buffer.putLong(offset, 128);
+
+        dissectPersistentSubscriptionJoinedLive(PERSISTENT_SUBSCRIPTION_JOINED_LIVE, buffer, 0, builder);
+
+        assertEquals("[1.500000000] " + CONTEXT + ": " + PERSISTENT_SUBSCRIPTION_JOINED_LIVE.name() + " [10/20]:" +
+                " recordingId=16" +
+                " replayChannel=aeron:udp?endpoint=localhost:9010" +
+                " replayStreamId=10" +
+                " liveChannel=aeron:udp?endpoint=localhost:10010" +
+                " liveStreamId=11" +
+                " liveSessionId=21" +
+                " joinPosition=128",
+            builder.toString());
+    }
 }

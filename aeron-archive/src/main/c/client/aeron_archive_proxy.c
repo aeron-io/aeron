@@ -15,6 +15,7 @@
  */
 
 #include <stdio.h>
+#include <inttypes.h>
 
 #include "aeron_alloc.h"
 #include "aeron_archive.h"
@@ -1071,7 +1072,7 @@ bool aeron_archive_proxy_offer(
             AERON_PUBLICATION_NOT_CONNECTED == result ||
             AERON_PUBLICATION_MAX_POSITION_EXCEEDED == result)
         {
-            AERON_APPEND_ERR("%s", "");
+            AERON_SET_ERR(ENOTCONN, "offer failed with result %" PRIi64, result);
             return false;
         }
 

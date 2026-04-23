@@ -14,14 +14,10 @@
  * limitations under the License.
  */
 
+#include <thread>
+
 #include "gtest/gtest.h"
 #include <gmock/gmock-matchers.h>
-
-#ifdef _MSC_VER
-#define AERON_FILE_SEP '\\'
-#else
-#define AERON_FILE_SEP '/'
-#endif
 
 extern "C"
 {
@@ -39,7 +35,7 @@ extern "C"
 #include "util/aeron_env.h"
 }
 
-#include "../TestArchive.h"
+#include "TestArchive.h"
 #include "aeron_archive_client/controlResponse.h"
 
 testing::AssertionResult EqualOrErrmsg(const int x, const int y)
@@ -4529,6 +4525,256 @@ TEST_F(AeronCArchiveNoSetupTest, shouldNotHangClosingReplayMergeWhenUsingInvoker
 
     ASSERT_EQ_ERR(0, aeron_close(m_aeron));
     ASSERT_EQ_ERR(0, aeron_context_close(aeron_ctx));
+}
+
+
+// A test for :ARCHIVE_REPLAY_ALL_AND_STOP
+// If there is an empty recording and if a replay is configured with ARCHIVE_REPLAY_ALL_AND_STOP,
+// then start replay will fail immediately
+TEST_F(AeronCArchiveTest, shouldExitOnEmptyRecording)
+{
+    connect();
+
+    aeron_counters_reader_t *counters_reader = aeron_counters_reader(m_aeron);
+
+    aeron_publication_t *publication;
+    ASSERT_EQ_ERR(0, aeron_archive_add_recorded_publication(
+        &publication,
+        m_archive,
+        "aeron:ipc",
+        10000));
+
+    int32_t recording_counter_id = getRecordingCounterId(
+        aeron_publication_session_id(publication),
+        counters_reader);
+
+    int64_t recording_id = aeron_archive_recording_pos_get_recording_id(
+        counters_reader, recording_counter_id);
+
+    // publication closed here, nothing offered
+    ASSERT_EQ_ERR(0, aeron_publication_close(publication, nullptr, nullptr));
+
+    int state;
+    do
+    {
+        idle();
+        ASSERT_EQ(0, aeron_counters_reader_counter_state(
+            counters_reader, recording_counter_id, &state));
+    }
+    while (AERON_COUNTER_RECORD_ALLOCATED == state);
+
+    int64_t stop_position;
+    ASSERT_EQ_ERR(0, aeron_archive_get_stop_position(
+        &stop_position, m_archive, recording_id));
+    ASSERT_EQ(0, stop_position);
+
+    const int replay_stream_id = 10001;
+
+    aeron_archive_replay_params_t replay_params;
+    aeron_archive_replay_params_init(&replay_params);
+    replay_params.position = AERON_NULL_VALUE;
+    replay_params.length = ARCHIVE_REPLAY_ALL_AND_STOP;
+
+    int64_t replay_session_id;
+    ASSERT_EQ(-1, aeron_archive_start_replay(
+        &replay_session_id,
+        m_archive,
+        recording_id,
+        "aeron:ipc",
+        replay_stream_id,
+        &replay_params));
+
+    //ASSERT_EQ(-ARCHIVE_ERROR_CODE_EMPTY_RECORDING, aeron_errcode());
+    ASSERT_EQ(-AERON_ERROR_CODE_GENERIC_ERROR, aeron_errcode());
+}
+
+
+// A test for :ARCHIVE_REPLAY_ALL_AND_STOP
+// First time messages are recorded. And if a replay is configured with ARCHIVE_REPLAY_ALL_AND_STOP,
+// the subscription will consume the recorded data and then the image will reach end-of-stream
+TEST_F(AeronCArchiveTest, shouldExitOnNonEmptyLiveRecording)
+{
+    connect();
+
+    aeron_publication_t *publication;
+    ASSERT_EQ_ERR(0, aeron_archive_add_recorded_publication(
+        &publication,
+        m_archive,
+        "aeron:ipc",
+        10000));
+
+    setupCounters(aeron_publication_session_id(publication));
+
+    int64_t recording_id = m_recording_id_from_counter;
+
+    offerMessages(publication, 1);
+    waitUntilCaughtUp(aeron_publication_position(publication));
+
+    const int replay_stream_id = 10001;
+
+    aeron_archive_replay_params_t replay_params;
+    aeron_archive_replay_params_init(&replay_params);
+    replay_params.position = AERON_NULL_VALUE;
+    replay_params.length = ARCHIVE_REPLAY_ALL_AND_STOP;
+
+    int64_t replay_session_id;
+    ASSERT_EQ_ERR(0, aeron_archive_start_replay(
+        &replay_session_id,
+        m_archive,
+        recording_id,
+        "aeron:ipc",
+        replay_stream_id,
+        &replay_params));
+
+    char replay_channel[AERON_URI_MAX_LENGTH];
+    snprintf(replay_channel, sizeof(replay_channel),
+        "aeron:ipc?session-id=%" PRId32, (int32_t)replay_session_id);
+
+    aeron_subscription_t *replay = addSubscription(replay_channel, replay_stream_id);
+
+    aeron_image_t *image = nullptr;
+    while (nullptr == image)
+    {
+        idle();
+        char error_buffer[AERON_ERROR_MAX_TOTAL_LENGTH];
+        ASSERT_EQ_ERR(0, aeron_archive_poll_for_error_response(
+            m_archive, error_buffer, sizeof(error_buffer)));
+        image = aeron_subscription_image_at_index(replay, 0);
+    }
+
+    fragment_handler_clientd_t clientd;
+    clientd.received = 0;
+    clientd.position = 0;
+
+    while (!aeron_image_is_end_of_stream(image))
+    {
+        if (0 == aeron_image_poll(
+            image, fragment_handler, &clientd, m_fragment_limit))
+        {
+            char error_buffer[AERON_ERROR_MAX_TOTAL_LENGTH];
+            ASSERT_EQ_ERR(0, aeron_archive_poll_for_error_response(
+                m_archive, error_buffer, sizeof(error_buffer)));
+            idle();
+        }
+    }
+
+    while (aeron_subscription_is_connected(replay))
+    {
+        idle();
+    }
+
+    aeron_subscription_close(replay, nullptr, nullptr);
+    ASSERT_EQ_ERR(0, aeron_archive_stop_replay(m_archive, replay_session_id));
+
+    ASSERT_EQ_ERR(0, aeron_publication_close(publication, nullptr, nullptr));
+}
+
+// A test for :ARCHIVE_REPLAY_ALL_AND_STOP
+// If there is an empty recording and if a replay is configured with ARCHIVE_REPLAY_ALL_AND_STOP,
+// then start replay will fail immediately
+TEST_F(AeronCArchiveTest, shouldExitOnEmptyLiveRecording)
+{
+    connect();
+
+    aeron_publication_t *publication;
+    ASSERT_EQ_ERR(0, aeron_archive_add_recorded_publication(
+        &publication,
+        m_archive,
+        "aeron:ipc",
+        10000));
+
+    setupCounters(aeron_publication_session_id(publication));
+
+    int64_t recording_id = m_recording_id_from_counter;
+
+    const int replay_stream_id = 10001;
+
+    aeron_archive_replay_params_t replay_params;
+    aeron_archive_replay_params_init(&replay_params);
+    replay_params.position = AERON_NULL_VALUE;
+    replay_params.length = ARCHIVE_REPLAY_ALL_AND_STOP;
+
+    int64_t replay_session_id;
+    ASSERT_EQ(-1, aeron_archive_start_replay(
+        &replay_session_id,
+        m_archive,
+        recording_id,
+        "aeron:ipc",
+        replay_stream_id,
+        &replay_params));
+
+    //ASSERT_EQ(-ARCHIVE_ERROR_CODE_EMPTY_RECORDING, aeron_errcode());
+    ASSERT_EQ(-AERON_ERROR_CODE_GENERIC_ERROR, aeron_errcode());
+
+    ASSERT_EQ_ERR(0, aeron_publication_close(publication, nullptr, nullptr));
+}
+
+// A test for :ARCHIVE_REPLAY_ALL_AND_FOLLOW
+// If there is an empty recording live and if a replay is configured with ARCHIVE_REPLAY_ALL_AND_FOLLOW,
+// then the subscription should remain connected.
+TEST_F(AeronCArchiveTest, shouldNotExitWhenFollowingAnEmptyLiveRecording)
+{
+    connect();
+
+    aeron_publication_t *publication;
+    ASSERT_EQ_ERR(0, aeron_archive_add_recorded_publication(
+        &publication,
+        m_archive,
+        "aeron:ipc",
+        10000));
+
+    setupCounters(aeron_publication_session_id(publication));
+
+    int64_t recording_id = m_recording_id_from_counter;
+
+    const int replay_stream_id = 10001;
+
+    aeron_archive_replay_params_t replay_params;
+    aeron_archive_replay_params_init(&replay_params);
+    replay_params.position = AERON_NULL_VALUE;
+    replay_params.length = ARCHIVE_REPLAY_ALL_AND_FOLLOW;
+
+    int64_t replay_session_id;
+    ASSERT_EQ_ERR(0, aeron_archive_start_replay(
+        &replay_session_id,
+        m_archive,
+        recording_id,
+        "aeron:ipc",
+        replay_stream_id,
+        &replay_params));
+
+    char replay_channel[AERON_URI_MAX_LENGTH];
+    snprintf(replay_channel, sizeof(replay_channel),
+        "aeron:ipc?session-id=%" PRId32, (int32_t)replay_session_id);
+
+    aeron_subscription_t *replay = addSubscription(replay_channel, replay_stream_id);
+
+    aeron_image_t *image = nullptr;
+    while (nullptr == image)
+    {
+        idle();
+        char error_buffer[AERON_ERROR_MAX_TOTAL_LENGTH];
+        ASSERT_EQ_ERR(0, aeron_archive_poll_for_error_response(
+            m_archive, error_buffer, sizeof(error_buffer)));
+        image = aeron_subscription_image_at_index(replay, 0);
+    }
+
+    int64_t deadline_ns = aeron_nano_clock() + 1000000000LL;
+    while (aeron_nano_clock() < deadline_ns)
+    {
+        ASSERT_FALSE(aeron_image_is_end_of_stream(image));
+        char error_buffer[AERON_ERROR_MAX_TOTAL_LENGTH];
+        ASSERT_EQ_ERR(0, aeron_archive_poll_for_error_response(
+            m_archive, error_buffer, sizeof(error_buffer)));
+        idle();
+    }
+
+    ASSERT_TRUE(aeron_subscription_is_connected(replay));
+
+    aeron_subscription_close(replay, nullptr, nullptr);
+    ASSERT_EQ_ERR(0, aeron_archive_stop_replay(m_archive, replay_session_id));
+
+    ASSERT_EQ_ERR(0, aeron_publication_close(publication, nullptr, nullptr));
 }
 
 class AeronArchiveClientNameTest : public AeronCArchiveTestBase, public testing::TestWithParam<std::string>

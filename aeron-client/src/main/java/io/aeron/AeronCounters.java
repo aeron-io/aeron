@@ -824,6 +824,32 @@ public final class AeronCounters
     @AeronCounter
     public static final int ARCHIVE_CONTROL_SESSION_TYPE_ID = 113;
 
+    /**
+     * The type id of the {@link Counter} used for tracking the state of a {@code PersistentSubscription}.
+     */
+    @AeronCounter
+    public static final int PERSISTENT_SUBSCRIPTION_STATE_TYPE_ID = 114;
+
+    /**
+     * The type id of the {@link Counter} used for tracking the join difference of a {@code PersistentSubscription}.
+     */
+    @AeronCounter
+    public static final int PERSISTENT_SUBSCRIPTION_JOIN_DIFFERENCE_TYPE_ID = 115;
+
+    /**
+     * The type id of the {@link Counter} used for tracking the number of times a {@code PersistentSubscription} has
+     * left the live stream.
+     */
+    @AeronCounter
+    public static final int PERSISTENT_SUBSCRIPTION_LIVE_LEFT_COUNT_TYPE_ID = 116;
+
+    /**
+     * The type id of the {@link Counter} used for tracking the number of times a {@code PersistentSubscription} has
+     * joined the live stream.
+     */
+    @AeronCounter
+    public static final int PERSISTENT_SUBSCRIPTION_LIVE_JOINED_COUNT_TYPE_ID = 117;
+
     // Cluster counters
 
     /**

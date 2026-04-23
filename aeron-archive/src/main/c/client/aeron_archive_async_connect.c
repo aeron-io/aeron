@@ -64,8 +64,6 @@ int aeron_archive_check_and_setup_response_channel(aeron_archive_context_t *ctx,
 
 int aeron_archive_async_connect_transition_to_done(aeron_archive_t **aeron_archive, aeron_archive_async_connect_t *async, int64_t archive_id);
 
-int aeron_archive_async_connect_delete(aeron_archive_async_connect_t *async);
-
 /* *********************** */
 
 uint8_t aeron_archive_async_connect_step(aeron_archive_async_connect_t *async)

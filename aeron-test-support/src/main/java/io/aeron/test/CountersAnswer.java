@@ -42,8 +42,8 @@ public final class CountersAnswer implements Answer<Counter>
         if (2 == invocation.getArguments().length)
         {
             counterId = countersManager.allocate(
-                invocation.getArgument(0, String.class),
-                invocation.getArgument(1, Integer.class));
+                invocation.getArgument(1, String.class),
+                invocation.getArgument(0, Integer.class));
         }
         else if (7 == invocation.getArguments().length)
         {
@@ -59,7 +59,7 @@ public final class CountersAnswer implements Answer<Counter>
         else
         {
             throw new RuntimeException(
-                "Unexpected number of arguments, should be used for Aeron::addCounter(String, int) or " +
+                "Unexpected number of arguments, should be used for Aeron::addCounter(int, String) or " +
                 "Aeron::addCounter(int, DirectBuffer, int, int, DirectBuffer, int, int)");
         }
 

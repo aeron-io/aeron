@@ -70,6 +70,7 @@ typedef std::function<void()> delegating_invoker_t;
 class Context
 {
     friend class AeronArchive;
+    friend class PersistentSubscription;
 
 public:
     Context()

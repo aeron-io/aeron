@@ -20,49 +20,40 @@
 // Uncomment for logging
 // #define ENABLE_AGENT_DEBUG_LOGGING 1
 
-extern "C"
-{
-#include <atomic>
-#include <signal.h>
-}
-
-#include <thread>
-
-#define TERM_LENGTH AERON_LOGBUFFER_TERM_MIN_LENGTH
-#define SEGMENT_LENGTH (TERM_LENGTH * 2)
-#define ARCHIVE_MARK_FILE_HEADER_LENGTH (8192)
-
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <shellapi.h>
-typedef intptr_t pid_t;
-
-static void await_process_terminated(pid_t process_handle)
-{
-    WaitForSingleObject(reinterpret_cast<HANDLE>(process_handle), INFINITE);
-}
-#else
-#include "ftw.h"
-#include "spawn.h"
-
-static void await_process_terminated(pid_t process_handle)
-{
-    int process_status = -1;
-    while (true)
-    {
-        waitpid(process_handle, &process_status, WUNTRACED);
-        if (WIFSIGNALED(process_status) || WIFEXITED(process_status))
-        {
-            break;
-        }
-    }
-}
-#endif
+#include <iostream>
+#include <string>
+#include <unordered_map>
+#include <vector>
+#include "TestProcessUtils.h"
 
 class TestArchive
 {
 public:
+    static std::unordered_map<std::string, std::string> defaultProperties()
+    {
+        return {
+            {"aeron.dir.delete.on.start", "true"},
+            {"aeron.dir.delete.on.shutdown", "true"},
+            {"aeron.archive.dir.delete.on.start", "true"},
+            {"aeron.archive.max.catalog.entries", "128"},
+            {"aeron.term.buffer.sparse.file", "true"},
+            {"aeron.perform.storage.checks", "false"},
+            {"aeron.term.buffer.length", "64k"},
+            {"aeron.ipc.term.buffer.length", "64k"},
+            {"aeron.archive.segment.file.length", std::to_string(SEGMENT_LENGTH)},
+            {"aeron.threading.mode", "SHARED"},
+            {"aeron.shared.idle.strategy", "yield"},
+            {"aeron.archive.threading.mode", "SHARED"},
+            {"aeron.archive.idle.strategy", "yield"},
+            {"aeron.archive.recording.events.enabled", "false"},
+            {"aeron.driver.termination.validator", "io.aeron.driver.DefaultAllowTerminationValidator"},
+            {"aeron.archive.authenticator.supplier", "io.aeron.samples.archive.SampleAuthenticatorSupplier"},
+            {"aeron.enable.experimental.features", "true"},
+            {"aeron.spies.simulate.connection", "true"},
+            {"aeron.archive.control.response.channel", "aeron:udp?endpoint=localhost:0"},
+        };
+    }
+
     TestArchive(
         std::string aeronDir,
         std::string archiveDir,
@@ -70,7 +61,8 @@ public:
         std::string controlChannel,
         std::string replicationChannel,
         std::int64_t archiveId,
-        std::int32_t maxConcurrentReplays = 100)
+        std::int32_t maxConcurrentReplays = 100,
+        const std::unordered_map<std::string, std::string>& properties = defaultProperties())
         : m_archiveDir(archiveDir), m_aeronDir(aeronDir), m_stream(stream)
     {
         m_stream << aeron_epoch_clock() << " [SetUp] Starting ArchivingMediaDriver..." << std::endl;
@@ -83,58 +75,52 @@ public:
         std::string controlChannelArg = "-Daeron.archive.control.channel=" + controlChannel;
         std::string replicationChannelArg = "-Daeron.archive.replication.channel=" + replicationChannel;
         std::string archiveIdArg = "-Daeron.archive.id=" + std::to_string(archiveId);
-        std::string segmentLength = "-Daeron.archive.segment.file.length=" + std::to_string(SEGMENT_LENGTH);
         std::string maxConcurrentReplaysArg = "-Daeron.archive.max.concurrent.replays=" + std::to_string(maxConcurrentReplays);
 
-        const char *const argv[] =
-        {
+        std::vector<std::string> args = {
             "java",
             "--add-opens",
             "java.base/jdk.internal.misc=ALL-UNNAMED",
             "--add-opens",
             "java.base/java.util.zip=ALL-UNNAMED",
-#if ENABLE_AGENT_DEBUG_LOGGING
-            m_aeronAgentJar.c_str(),
-            "-Daeron.event.log=admin",
-            "-Daeron.event.archive.log=all",
-#endif
-            "-Daeron.dir.delete.on.start=true",
-            "-Daeron.dir.delete.on.shutdown=true",
-            "-Daeron.archive.dir.delete.on.start=true",
-            "-Daeron.archive.max.catalog.entries=128",
-            "-Daeron.term.buffer.sparse.file=true",
-            "-Daeron.perform.storage.checks=false",
-            "-Daeron.term.buffer.length=64k",
-            "-Daeron.ipc.term.buffer.length=64k",
-            "-Daeron.threading.mode=SHARED",
-            "-Daeron.shared.idle.strategy=yield",
-            "-Daeron.archive.threading.mode=SHARED",
-            "-Daeron.archive.idle.strategy=yield",
-            "-Daeron.archive.recording.events.enabled=false",
-            "-Daeron.driver.termination.validator=io.aeron.driver.DefaultAllowTerminationValidator",
-            "-Daeron.archive.authenticator.supplier=io.aeron.samples.archive.SampleAuthenticatorSupplier",
-            "-Daeron.enable.experimental.features=true",
-            "-Daeron.spies.simulate.connection=true",
-            maxConcurrentReplaysArg.c_str(),
-            segmentLength.c_str(),
-            archiveIdArg.c_str(),
-            controlChannelArg.c_str(),
-            replicationChannelArg.c_str(),
-            "-Daeron.archive.control.response.channel=aeron:udp?endpoint=localhost:0",
-            archiveDirArg.c_str(),
-            archiveMarkFileDirArg.c_str(),
-            aeronDirArg.c_str(),
-            "-cp",
-            m_aeronAllJar.c_str(),
-            "io.aeron.archive.ArchivingMediaDriver",
-            nullptr
         };
+
+#if ENABLE_AGENT_DEBUG_LOGGING
+        args.push_back(m_aeronAgentJar);
+        args.emplace_back("-Daeron.event.log=admin");
+        args.emplace_back("-Daeron.event.archive.log=all");
+#endif
+
+        for (const auto& property : properties)
+        {
+            args.emplace_back("-D" + property.first + "=" + property.second);
+        }
+
+        args.push_back(maxConcurrentReplaysArg);
+        args.push_back(archiveIdArg);
+        args.push_back(controlChannelArg);
+        args.push_back(replicationChannelArg);
+        args.push_back(archiveDirArg);
+        args.push_back(archiveMarkFileDirArg);
+        args.push_back(aeronDirArg);
+        args.emplace_back("-cp");
+        args.push_back(m_aeronAllJar);
+        args.emplace_back("io.aeron.archive.ArchivingMediaDriver");
+
+        std::vector<const char *> argv;
+        argv.reserve(args.size() + 1);
+        for (const auto& arg : args)
+        {
+            argv.push_back(arg.c_str());
+        }
+        argv.push_back(nullptr);
+
         m_process_handle = -1;
 
 #if defined(_WIN32)
-        m_process_handle = _spawnv(P_NOWAIT, m_java.c_str(), &argv[0]);
+        m_process_handle = _spawnv(P_NOWAIT, m_java.c_str(), &argv.front());
 #else
-        if (0 != posix_spawn(&m_process_handle, m_java.c_str(), nullptr, nullptr, (char *const *)&argv[0], nullptr))
+        if (0 != posix_spawn(&m_process_handle, m_java.c_str(), nullptr, nullptr, (char *const *)&argv.front(), nullptr))
         {
             perror("spawn");
             ::exit(EXIT_FAILURE);
@@ -210,7 +196,7 @@ public:
                 }
             }
 
-            if (archive_terminated && aeron_is_directory(m_archiveDir.c_str()) >= 0)
+            if (m_deleteDirOnTearDown && archive_terminated && aeron_is_directory(m_archiveDir.c_str()) >= 0)
             {
                 m_stream << aeron_epoch_clock() << " [TearDown] Deleting " << m_archiveDir << std::endl;
                 if (aeron_delete_directory(m_archiveDir.c_str()) != 0)
@@ -222,6 +208,11 @@ public:
         }
     }
 
+    void deleteDirOnTearDown(const bool deleteDirOnTearDown)
+    {
+        m_deleteDirOnTearDown = deleteDirOnTearDown;
+    }
+
 private:
     const std::string m_java = JAVA_EXECUTABLE;          // Defined in CMakeLists.txt
     const std::string m_aeronAllJar = AERON_ALL_JAR;     // Defined in CMakeLists.txt
@@ -231,6 +222,7 @@ private:
     std::ostream &m_stream;
     pid_t m_process_handle = -1;
     pid_t m_pid = 0;
+    bool m_deleteDirOnTearDown = true;
 };
 
 #endif //AERON_TESTARCHIVE_H

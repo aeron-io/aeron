@@ -14,53 +14,15 @@
  * limitations under the License.
  */
 
-#ifndef AERON_TESTARCHIVE_H
-#define AERON_TESTARCHIVE_H
+#ifndef AERON_TEST_ARCHIVE_WRAPPER_H
+#define AERON_TEST_ARCHIVE_WRAPPER_H
+
+#include <iostream>
+#include <string>
+#include "TestProcessUtils.h"
 
 // Uncomment for logging
 // #define ENABLE_AGENT_DEBUG_LOGGING 1
-
-extern "C"
-{
-#include <atomic>
-#include <signal.h>
-
-#include "aeron_log_buffer.h"
-}
-
-#include <thread>
-
-#define TERM_LENGTH AERON_LOGBUFFER_TERM_MIN_LENGTH
-#define SEGMENT_LENGTH (TERM_LENGTH * 2)
-#define ARCHIVE_MARK_FILE_HEADER_LENGTH (8192)
-
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <shellapi.h>
-typedef intptr_t pid_t;
-
-static void await_process_terminated(pid_t process_handle)
-{
-    WaitForSingleObject(reinterpret_cast<HANDLE>(process_handle), INFINITE);
-}
-#else
-#include "ftw.h"
-#include "spawn.h"
-
-static void await_process_terminated(pid_t process_handle)
-{
-    int process_status = -1;
-    while (true)
-    {
-        waitpid(process_handle, &process_status, WUNTRACED);
-        if (WIFSIGNALED(process_status) || WIFEXITED(process_status))
-        {
-            break;
-        }
-    }
-}
-#endif
 
 class TestArchive
 {
@@ -72,13 +34,13 @@ public:
         std::string controlChannel,
         std::string replicationChannel,
         std::int64_t archiveId)
-        : m_archiveDir(archiveDir), m_aeronDir(aeronDir), m_stream(stream)
+        : m_archiveDir(std::move(archiveDir)), m_aeronDir(std::move(aeronDir)), m_stream(stream)
     {
         m_stream << aeron_epoch_clock() << " [SetUp] Starting ArchivingMediaDriver..." << std::endl;
 
-        std::string aeronDirArg = "-Daeron.dir=" + aeronDir;
-        std::string archiveDirArg = "-Daeron.archive.dir=" + archiveDir;
-        std::string archiveMarkFileDirArg = "-Daeron.archive.mark.file.dir=" + aeronDir;
+        std::string aeronDirArg = "-Daeron.dir=" + m_aeronDir;
+        std::string archiveDirArg = "-Daeron.archive.dir=" + m_archiveDir;
+        std::string archiveMarkFileDirArg = "-Daeron.archive.mark.file.dir=" + m_aeronDir;
         m_stream << aeron_epoch_clock() << " [SetUp] " << aeronDirArg << std::endl;
         m_stream << aeron_epoch_clock() << " [SetUp] " << archiveDirArg << std::endl;
         std::string controlChannelArg = "-Daeron.archive.control.channel=" + controlChannel;
@@ -151,9 +113,8 @@ public:
         m_pid = GetProcessId((HANDLE)m_process_handle);
 #endif
 
-        const std::string mark_file = aeronDir + std::string(1, AERON_FILE_SEP) + "archive-mark.dat";
+        const std::string mark_file = m_aeronDir + std::string(1, AERON_FILE_SEP) + "archive-mark.dat";
 
-        // await mark file creation as an indicator that Archive process is running
         while (true)
         {
             int64_t file_length = aeron_file_length(mark_file.c_str());
@@ -185,10 +146,9 @@ public:
 
             if (!archive_terminated)
             {
-                const std::string aeronPath = m_aeronDir;
-                const std::string cncFilename = aeronPath + std::string(1, AERON_FILE_SEP) + "cnc.dat";
+                const std::string cncFilename = m_aeronDir + std::string(1, AERON_FILE_SEP) + "cnc.dat";
 
-                if (aeron_context_request_driver_termination(aeronPath.c_str(), nullptr, 0))
+                if (aeron_context_request_driver_termination(m_aeronDir.c_str(), nullptr, 0))
                 {
                     m_stream << aeron_epoch_clock() << " [TearDown] Waiting for driver termination" << std::endl;
 
@@ -222,9 +182,9 @@ public:
     }
 
 private:
-    const std::string m_java = JAVA_EXECUTABLE;          // Defined in CMakeLists.txt
-    const std::string m_aeronAllJar = AERON_ALL_JAR;     // Defined in CMakeLists.txt
-    const std::string m_aeronAgentJar = "-javaagent:" AERON_AGENT_JAR; // Defined in CMakeLists.txt
+    const std::string m_java = JAVA_EXECUTABLE;
+    const std::string m_aeronAllJar = AERON_ALL_JAR;
+    const std::string m_aeronAgentJar = "-javaagent:" AERON_AGENT_JAR;
     const std::string m_archiveDir;
     const std::string m_aeronDir;
     std::ostream &m_stream;
@@ -232,4 +192,4 @@ private:
     pid_t m_pid = 0;
 };
 
-#endif //AERON_TESTARCHIVE_H
+#endif //AERON_TEST_ARCHIVE_WRAPPER_H
