@@ -28,6 +28,7 @@ import io.aeron.test.cluster.TestCluster;
 import io.aeron.test.cluster.TestNode;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -58,6 +59,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 @TopologyTest
 @ExtendWith({ EventLogExtension.class, InterruptingTestCallback.class })
 @EnabledOnOs(OS.LINUX)
+@Disabled("Requires sudo to run iptables")
 class ClusterNetworkPartitionTest
 {
     private static final List<String> HOSTNAMES =

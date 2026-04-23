@@ -4511,12 +4511,14 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReconnectToTheArchiveAfterA
 }
 
 #if defined(__linux__)
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldHandleReplayImageBecomingUnavailableDuringReplay)
+// Requires sudo to run iptables
+TEST_F(AeronArchivePersistentSubscriptionTest, DISABLED_shouldHandleReplayImageBecomingUnavailableDuringReplay)
 {
     shouldHandleReplayImageBecomingUnavailable(80);
 }
 
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldHandleReplayImageBecomingUnavailableDuringAttemptSwitch)
+// Requires sudo to run iptables
+TEST_F(AeronArchivePersistentSubscriptionTest, DISABLED_shouldHandleReplayImageBecomingUnavailableDuringAttemptSwitch)
 {
     shouldHandleReplayImageBecomingUnavailable(12);
 }
