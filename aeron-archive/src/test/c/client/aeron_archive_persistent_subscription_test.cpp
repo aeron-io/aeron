@@ -507,7 +507,7 @@ std::string to_hex(const std::vector<unsigned char>& vector)
     char *ptr = &s.front();
     for (const unsigned char c : vector)
     {
-        sprintf(ptr, "%02x", c);
+        snprintf(ptr, 3, "%02x", c);
         ptr += 2;
     }
     return s;
