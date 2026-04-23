@@ -218,8 +218,6 @@ static void aeron_archive_persistent_subscription_transition(
     aeron_archive_persistent_subscription_t *persistent_subscription,
     aeron_archive_persistent_subscription_state_t new_state)
 {
-    // printf("-> %d\n", new_state);
-    // fflush(stdout);
     persistent_subscription->state = new_state;
     aeron_counter_t *state_counter = persistent_subscription->context->state_counter;
     if (!aeron_counter_is_closed(state_counter))
