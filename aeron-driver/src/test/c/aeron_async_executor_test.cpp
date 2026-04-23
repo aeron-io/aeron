@@ -53,6 +53,7 @@ public:
     void TearDown() override
     {
         aeron_async_executor_close(&m_executor);
+        aeron_driver_context_close(m_context);
     }
 
     virtual bool be_async() = 0;
