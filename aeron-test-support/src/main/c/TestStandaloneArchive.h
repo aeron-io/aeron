@@ -131,6 +131,14 @@ public:
             TerminateProcess(reinterpret_cast<HANDLE>(m_process_handle), 0);
             await_process_terminated(m_process_handle);
             m_stream << aeron_epoch_clock() << " [TearDown] Archive terminated" << std::endl;
+
+            // TerminateProcess skips the JVM's shutdown hooks, so the 'archive-mark.dat' mark file
+            // does not get cleaned up like it does on Unix, which causes tests that start the archive
+            // back up quickly to fail on Windows. Ideally we should support graceeful archive shtudown
+            // on Windows as well; this is here as a temporary fix.
+            const std::string mark_file_to_remove =
+                m_aeronDir + std::string(1, AERON_FILE_SEP) + "archive-mark.dat";
+            aeron_delete_file(mark_file_to_remove.c_str());
 #endif
 
             if (m_deleteDirOnTearDown && aeron_is_directory(m_archiveDir.c_str()) >= 0)
