@@ -198,6 +198,7 @@ struct aeron_archive_persistent_subscription_stct
     aeron_archive_proxy_t *response_channel_archive_proxy;
     int failure_errcode;
     char failure_message[AERON_ERROR_MAX_TOTAL_LENGTH];
+    bool use_aeron_agent_invoker;
 };
 
 typedef struct aeron_archive_persistent_subscription_poll_ctx_stct
@@ -512,6 +513,9 @@ static int aeron_archive_persistent_subscription_persistent_subscription_allocat
         return -1;
     }
 
+    aeron_context_t *ctx = aeron_context(aeron);
+    bool use_agent_invoker = aeron_context_get_use_conductor_agent_invoker(ctx);
+
     aeron_counter_t *counter = NULL;
     while (NULL == counter)
     {
@@ -522,7 +526,14 @@ static int aeron_archive_persistent_subscription_persistent_subscription_allocat
         }
         if (0 == result)
         {
-            sched_yield();
+            if (use_agent_invoker)
+            {
+                aeron_main_do_work(aeron);
+            }
+            else
+            {
+                sched_yield();
+            }
         }
     }
 
@@ -622,6 +633,12 @@ int aeron_archive_persistent_subscription_context_conclude(aeron_archive_persist
         if (aeron_context_init(&aeron_ctx) < 0)
         {
             AERON_APPEND_ERR("%s", "Failed to init aeron context");
+            return -1;
+        }
+        if (aeron_context_set_use_conductor_agent_invoker(aeron_ctx, true) < 0)
+        {
+            aeron_context_close(aeron_ctx);
+            AERON_APPEND_ERR("%s", "Failed to set use_conductor_agent_invoker");
             return -1;
         }
         if (NULL != context->aeron_directory_name)
@@ -1123,6 +1140,7 @@ int aeron_archive_persistent_subscription_create(
     _persistent_subscription->message_timeout_ns = aeron_archive_context_get_message_timeout_ns(context->archive_context);
     _persistent_subscription->replay_session_id = AERON_NULL_VALUE;
     _persistent_subscription->position = context->start_position;
+    _persistent_subscription->use_aeron_agent_invoker = aeron_context_get_use_conductor_agent_invoker(aeron_context(context->aeron));
 
     // Determine replay channel type and copy the URI
     {
@@ -2280,7 +2298,14 @@ static int aeron_archive_persistent_subscription_do_work(
     aeron_archive_persistent_subscription_t *persistent_subscription,
     aeron_archive_persistent_subscription_poll_ctx_t *poll_ctx)
 {
-    int work_count = aeron_archive_async_client_poll(persistent_subscription->archive);
+    int work_count = 0;
+
+    if (persistent_subscription->use_aeron_agent_invoker)
+    {
+        work_count += aeron_main_do_work(persistent_subscription->context->aeron);
+    }
+
+    work_count += aeron_archive_async_client_poll(persistent_subscription->archive);
 
     switch (persistent_subscription->state)
     {
