@@ -16,10 +16,12 @@
 
 package io.aeron.archive.client;
 
+import io.aeron.exceptions.AeronException;
+
 /**
  * Exception raised when using a {@link PersistentSubscription}.
  */
-public final class PersistentSubscriptionException extends ArchiveException
+public final class PersistentSubscriptionException extends AeronException
 {
     private static final long serialVersionUID = -6953277621087533657L;
 
