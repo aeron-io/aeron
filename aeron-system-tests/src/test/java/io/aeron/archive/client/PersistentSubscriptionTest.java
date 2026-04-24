@@ -1923,9 +1923,10 @@ abstract class PersistentSubscriptionTest
             PersistentPublication.create(remoteArchive, exclusivePublication);
 
         persistentSubscriptionCtx
+            .aeron(aeron)
             .liveChannel(MDC_SUBSCRIPTION_CHANNEL)
             .recordingId(persistentPublication.recordingId())
-            .aeronArchiveContext(remoteAeronArchiveCtx)
+            .aeronArchiveContext(remoteAeronArchiveCtx.aeron(aeron))
             .startPosition(FROM_START);
 
         final List<byte[]> firstMessageBatch = generateFixedPayloads(1, ONE_KB_MESSAGE_SIZE);
@@ -2009,9 +2010,10 @@ abstract class PersistentSubscriptionTest
         persistentPublication.persist(messages);
 
         persistentSubscriptionCtx
+            .aeron(aeron)
             .liveChannel(MDC_SUBSCRIPTION_CHANNEL)
             .recordingId(persistentPublication.recordingId())
-            .aeronArchiveContext(remoteAeronArchiveCtx)
+            .aeronArchiveContext(remoteAeronArchiveCtx.aeron(aeron))
             .startPosition(FROM_START);
 
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
@@ -2561,7 +2563,7 @@ abstract class PersistentSubscriptionTest
             .recordingId(persistentPublication.recordingId)
             .startPosition(FROM_START)
             .liveChannel(MDC_SUBSCRIPTION_CHANNEL)
-            .aeronArchiveContext(aeronArchiveCtxTpl.clone());
+            .aeronArchiveContext(aeronArchiveCtxTpl.clone().aeron(aeron));
 
         final PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx);
         executeUntil(

@@ -158,7 +158,7 @@ public final class PersistentSubscription implements AutoCloseable
         listener = ctx.listener;
         aeron = ctx.aeron;
         nanoClock = aeron.context().nanoClock();
-        asyncAeronArchive = new AsyncAeronArchive(ctx.aeronArchiveContext().aeron(aeron), new ArchiveListener());
+        asyncAeronArchive = new AsyncAeronArchive(ctx.aeronArchiveContext(), new ArchiveListener());
         messageTimeoutNs = ctx.aeronArchiveContext().messageTimeoutNs();
         stateCounter = ctx.stateCounter;
         joinDifferenceCounter = ctx.joinDifferenceCounter;
@@ -1679,6 +1679,11 @@ public final class PersistentSubscription implements AutoCloseable
                 }
                 aeron = Aeron.connect(aeronCtx);
                 ownsAeronClient = true;
+            }
+
+            if (null == aeronArchiveContext.aeron())
+            {
+                aeronArchiveContext.aeron(aeron);
             }
 
             if (null == stateCounter)
