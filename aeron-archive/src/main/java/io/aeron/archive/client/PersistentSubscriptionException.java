@@ -19,7 +19,7 @@ package io.aeron.archive.client;
 /**
  * Exception raised when using a {@link PersistentSubscription}.
  */
-public class PersistentSubscriptionException extends RuntimeException
+public final class PersistentSubscriptionException extends ArchiveException
 {
     private static final long serialVersionUID = -6953277621087533657L;
 
