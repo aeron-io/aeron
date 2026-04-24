@@ -76,6 +76,9 @@ typedef enum aeron_rb_read_action_stct aeron_rb_read_action_t;
 
 typedef aeron_rb_read_action_t (*aeron_rb_controlled_handler_t)(int32_t, const void *, size_t, void *);
 
-#define AERON_RB_IS_CAPACITY_VALID(capacity, min_capacity) AERON_IS_POWER_OF_TWO(capacity) && (capacity) >= (min_capacity)
+#define AERON_RB_IS_CAPACITY_VALID(capacity, min_capacity) \
+    (AERON_IS_POWER_OF_TWO(capacity) && \
+    (capacity) >= (min_capacity) && \
+    (capacity) <= INT32_MAX)
 
 #endif //AERON_RB_H
