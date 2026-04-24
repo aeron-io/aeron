@@ -39,6 +39,7 @@ import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
 import org.agrona.Strings;
 import org.agrona.SystemUtil;
+import org.agrona.concurrent.AgentInvoker;
 import org.agrona.concurrent.NanoClock;
 
 import java.lang.invoke.MethodHandles;
@@ -237,7 +238,13 @@ public final class PersistentSubscription implements AutoCloseable
 
     private int doWork(final int fragmentLimit, final boolean isControlled)
     {
-        int workCount = asyncAeronArchive.poll();
+        int workCount = 0;
+        final AgentInvoker agentInvoker = aeron.conductorAgentInvoker();
+        if (null != agentInvoker)
+        {
+            workCount += agentInvoker.invoke();
+        }
+        workCount += asyncAeronArchive.poll();
 
         workCount += switch (state)
         {
@@ -1644,7 +1651,8 @@ public final class PersistentSubscription implements AutoCloseable
             if (null == aeron)
             {
                 final Aeron.Context aeronCtx = new Aeron.Context()
-                    .clientName("PersistentSubscription");
+                    .clientName("PersistentSubscription")
+                    .useConductorAgentInvoker(true);
                 if (null != aeronDirectoryName)
                 {
                     aeronCtx.aeronDirectoryName(aeronDirectoryName);
