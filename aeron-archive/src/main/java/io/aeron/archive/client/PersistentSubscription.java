@@ -191,10 +191,14 @@ public final class PersistentSubscription implements AutoCloseable
     }
 
     /**
-     * Poll for the next available message(s).
+     * Poll for the next available message(s). The handler receives fully assembled messages; the action it returns
+     * applies to the assembled message as a whole.
      * <p>
      * Either this method or {@link #controlledPoll(ControlledFragmentHandler, int)} must be called in a duty cycle for
      * the {@code PersistentSubscription} to perform its work.
+     * <p>
+     * If an error occurs during polling, the {@link PersistentSubscriptionListener} will be notified.
+     * Exceptions thrown from the {@link FragmentHandler} will be propagated.
      *
      * @param fragmentHandler the handler to receive assembled messages if any are available.
      * @param fragmentLimit the maximum number of fragments to be processed during the poll operation.
@@ -214,10 +218,15 @@ public final class PersistentSubscription implements AutoCloseable
     }
 
     /**
-     * Poll for the next available message(s).
+     * Poll for the next available message(s), allowing the {@link ControlledFragmentHandler} to control
+     * whether polling continues by returning an {@link io.aeron.logbuffer.ControlledFragmentHandler.Action}.
+     * The handler receives fully assembled messages; the action it returns applies to the assembled message as a whole.
      * <p>
      * Either this method or {@link #poll(FragmentHandler, int)} must be called in a duty cycle for the
      * {@code PersistentSubscription} to perform its work.
+     * <p>
+     * If an error occurs during polling, the {@link PersistentSubscriptionListener} will be notified.
+     * Exceptions thrown from the {@link ControlledFragmentHandler} will be propagated.
      *
      * @param fragmentHandler the handler to receive assembled messages if any are available.
      * @param fragmentLimit the maximum number of fragments to be processed during the poll operation.
