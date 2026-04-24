@@ -34,6 +34,7 @@ import static io.aeron.agent.ArchiveEventCode.CATALOG_RESIZE;
 import static io.aeron.agent.ArchiveEventCode.CMD_IN_MAX_RECORDED_POSITION;
 import static io.aeron.agent.ArchiveEventCode.CMD_OUT_RESPONSE;
 import static io.aeron.agent.ArchiveEventCode.CONTROL_SESSION_STATE_CHANGE;
+import static io.aeron.agent.ArchiveEventCode.PERSISTENT_SUBSCRIPTION_LEFT_LIVE;
 import static io.aeron.agent.ArchiveEventCode.PERSISTENT_SUBSCRIPTION_JOINED_LIVE;
 import static io.aeron.agent.ArchiveEventCode.PERSISTENT_SUBSCRIPTION_STATE_CHANGE;
 import static io.aeron.agent.ArchiveEventCode.RECORDING_SIGNAL;
@@ -90,7 +91,8 @@ class ArchiveEventLoggerTest
             "CMD_OUT_RESPONSE", "REPLICATION_SESSION_STATE_CHANGE",
             "CONTROL_SESSION_STATE_CHANGE", "REPLAY_SESSION_ERROR", "CATALOG_RESIZE",
             "REPLICATION_SESSION_DONE", "REPLAY_SESSION_STATE_CHANGE", "RECORDING_SESSION_STATE_CHANGE",
-            "PERSISTENT_SUBSCRIPTION_STATE_CHANGE", "PERSISTENT_SUBSCRIPTION_JOINED_LIVE"
+            "PERSISTENT_SUBSCRIPTION_STATE_CHANGE", "PERSISTENT_SUBSCRIPTION_JOINED_LIVE",
+            "PERSISTENT_SUBSCRIPTION_LEFT_LIVE"
         })
     void logControlRequest(final ArchiveEventCode eventCode)
     {
@@ -465,5 +467,41 @@ class ArchiveEventLoggerTest
         assertEquals(liveSessionId, logBuffer.getInt(encodedMsgOffset(absoluteOffset), LITTLE_ENDIAN));
         absoluteOffset += SIZE_OF_INT;
         assertEquals(joinPosition, logBuffer.getLong(encodedMsgOffset(absoluteOffset), LITTLE_ENDIAN));
+    }
+
+    @Test
+    void logPersistentSubscriptionLeftLive()
+    {
+        final int offset = ALIGNMENT * 4;
+        logBuffer.putLong(CAPACITY + TAIL_POSITION_OFFSET, offset);
+        final long recordingId = 555_000_000_000L;
+        final String replayChannel = "aeron:udp?endpoint=localhost:9010";
+        final int replayStreamId = 10;
+        final String liveChannel = "aeron:udp?endpoint=localhost:10010";
+        final int liveStreamId = 11;
+        final long livePosition = 256L;
+        final int captureLength = SIZE_OF_LONG + replayChannel.length() + SIZE_OF_INT * 2 + liveChannel.length() +
+            SIZE_OF_INT * 2 + SIZE_OF_LONG;
+
+        logger.logPersistentSubscriptionLeftLive(recordingId, replayChannel, replayStreamId, liveChannel,
+            liveStreamId, livePosition
+        );
+
+        int absoluteOffset = offset + LOG_HEADER_LENGTH;
+
+        verifyLogHeader(
+            logBuffer, offset, PERSISTENT_SUBSCRIPTION_LEFT_LIVE.toEventCodeId(),
+            captureLength, captureLength);
+        assertEquals(recordingId, logBuffer.getLong(encodedMsgOffset(absoluteOffset), LITTLE_ENDIAN));
+        absoluteOffset += SIZE_OF_LONG;
+        assertEquals(replayChannel, logBuffer.getStringAscii(encodedMsgOffset(absoluteOffset)));
+        absoluteOffset += replayChannel.length() + SIZE_OF_INT;
+        assertEquals(replayStreamId, logBuffer.getInt(encodedMsgOffset(absoluteOffset), LITTLE_ENDIAN));
+        absoluteOffset += SIZE_OF_INT;
+        assertEquals(liveChannel, logBuffer.getStringAscii(encodedMsgOffset(absoluteOffset)));
+        absoluteOffset += liveChannel.length() + SIZE_OF_INT;
+        assertEquals(liveStreamId, logBuffer.getInt(encodedMsgOffset(absoluteOffset), LITTLE_ENDIAN));
+        absoluteOffset += SIZE_OF_INT;
+        assertEquals(livePosition, logBuffer.getLong(encodedMsgOffset(absoluteOffset), LITTLE_ENDIAN));
     }
 }

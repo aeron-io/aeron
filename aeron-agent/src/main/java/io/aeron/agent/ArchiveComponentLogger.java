@@ -160,6 +160,13 @@ public final class ArchiveComponentLogger implements ComponentLogger
             ArchiveInterceptor.PersistentSubscriptionJoinedLive.class,
             "logJoinedLive");
 
+        tempBuilder = addEventInstrumentation(
+            tempBuilder,
+            PERSISTENT_SUBSCRIPTION_LEFT_LIVE,
+            "PersistentSubscription",
+            ArchiveInterceptor.PersistentSubscriptionLeftLive.class,
+            "logLeftLive");
+
         return tempBuilder;
     }
 

@@ -1319,6 +1319,16 @@ public final class PersistentSubscription implements AutoCloseable
     {
     }
 
+    private void logLeftLive(
+        final long recordingId,
+        final String replayChannel,
+        final int replayStreamId,
+        final String liveChannel,
+        final int liveStreamId,
+        final long livePosition)
+    {
+    }
+
     private void onLiveJoined()
     {
         logJoinedLive(
@@ -1347,6 +1357,7 @@ public final class PersistentSubscription implements AutoCloseable
         }
 
         listener.onLiveLeft();
+        logLeftLive(recordingId, replayChannel, replayStreamId, liveChannel, liveStreamId, position);
     }
 
     private int doPoll(final Image image, final int fragmentLimit, final boolean isControlled)

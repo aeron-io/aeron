@@ -278,4 +278,44 @@ class ArchiveEventEncoderTest
         absoluteOffset += SIZE_OF_INT;
         assertEquals(joinPosition, buffer.getLong(absoluteOffset));
     }
+
+    @Test
+    void testEncodePersistentSubscriptionLeftLive()
+    {
+        final int offset = 24;
+        final long recordingId = 16;
+        final String replayChannel = "aeron:udp?endpoint=localhost:9010";
+        final int replayStreamId = 10;
+        final String liveChannel = "aeron:udp?endpoint=localhost:10010";
+        final int liveStreamId = 11;
+        final long livePosition = 256;
+
+        final int length = SIZE_OF_LONG + replayChannel.length() + SIZE_OF_INT * 2 +
+            liveChannel.length() + SIZE_OF_INT * 2 + SIZE_OF_LONG;
+        final int captureLength = captureLength(length);
+
+        final int encodedLength = encodePersistentSubscriptionLeftLive(
+            buffer, offset, captureLength, length, recordingId, replayChannel, replayStreamId, liveChannel,
+            liveStreamId, livePosition
+        );
+
+        int absoluteOffset = offset + LOG_HEADER_LENGTH;
+
+        assertEquals(
+            encodedLength(persistentSubscriptionLeftLiveLength(replayChannel, liveChannel)), encodedLength);
+        assertEquals(captureLength, buffer.getInt(offset, LITTLE_ENDIAN));
+        assertEquals(length, buffer.getInt(offset + SIZE_OF_INT, LITTLE_ENDIAN));
+
+        assertEquals(recordingId, buffer.getLong(absoluteOffset));
+        absoluteOffset += SIZE_OF_LONG;
+        assertEquals(replayChannel, buffer.getStringAscii(absoluteOffset));
+        absoluteOffset += replayChannel.length() + SIZE_OF_INT;
+        assertEquals(replayStreamId, buffer.getInt(absoluteOffset));
+        absoluteOffset += SIZE_OF_INT;
+        assertEquals(liveChannel, buffer.getStringAscii(absoluteOffset));
+        absoluteOffset += liveChannel.length() + SIZE_OF_INT;
+        assertEquals(liveStreamId, buffer.getInt(absoluteOffset));
+        absoluteOffset += SIZE_OF_INT;
+        assertEquals(livePosition, buffer.getLong(absoluteOffset));
+    }
 }

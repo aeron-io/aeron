@@ -179,4 +179,27 @@ class ArchiveInterceptor
             );
         }
     }
+
+    static class PersistentSubscriptionLeftLive
+    {
+        @Advice.OnMethodEnter
+        static void logLeftLive(
+            final long recordingId,
+            final String replayChannel,
+            final int replayStreamId,
+            final String liveChannel,
+            final int liveStreamId,
+            final long livePosition
+        )
+        {
+            LOGGER.logPersistentSubscriptionLeftLive(
+                recordingId,
+                replayChannel,
+                replayStreamId,
+                liveChannel,
+                liveStreamId,
+                livePosition
+            );
+        }
+    }
 }

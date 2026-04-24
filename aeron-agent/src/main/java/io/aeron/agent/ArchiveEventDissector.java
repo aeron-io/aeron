@@ -733,6 +733,42 @@ final class ArchiveEventDissector
             .append(joinPosition);
     }
 
+    static void dissectPersistentSubscriptionLeftLive(
+        final ArchiveEventCode eventCode,
+        final MutableDirectBuffer buffer,
+        final int offset,
+        final StringBuilder builder)
+    {
+        int absoluteOffset = offset;
+        absoluteOffset += dissectLogHeader(CONTEXT, eventCode, buffer, absoluteOffset, builder);
+
+        final long recordingId = buffer.getLong(absoluteOffset);
+        absoluteOffset += SIZE_OF_LONG;
+        builder
+            .append(": recordingId=")
+            .append(recordingId)
+            .append(" replayChannel=");
+
+        absoluteOffset += buffer.getStringAscii(absoluteOffset, builder, LITTLE_ENDIAN) + SIZE_OF_INT;
+
+        final int replayStreamId = buffer.getInt(absoluteOffset);
+        absoluteOffset += SIZE_OF_INT;
+        builder
+            .append(" replayStreamId=")
+            .append(replayStreamId)
+            .append(" liveChannel=");
+        absoluteOffset += buffer.getStringAscii(absoluteOffset, builder, LITTLE_ENDIAN) + SIZE_OF_INT;
+        final int liveStreamId = buffer.getInt(absoluteOffset);
+        absoluteOffset += SIZE_OF_INT;
+        final long position = buffer.getLong(absoluteOffset);
+
+        builder
+            .append(" liveStreamId=")
+            .append(liveStreamId)
+            .append(" livePosition=")
+            .append(position);
+    }
+
     private static void appendConnect(final StringBuilder builder)
     {
         builder.append(": correlationId=").append(CONNECT_REQUEST_DECODER.correlationId())

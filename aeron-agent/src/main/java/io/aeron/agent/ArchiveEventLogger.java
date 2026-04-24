@@ -261,6 +261,56 @@ public final class ArchiveEventLogger
     }
 
     /**
+     * Log the state of {@link PersistentSubscription} when it leaves live.
+     *
+     * @param recordingId    recording id used by the {@link PersistentSubscription}.
+     * @param replayChannel  the replay channel used by the {@link PersistentSubscription}.
+     * @param replayStreamId the replay stream id used by the {@link PersistentSubscription}.
+     * @param liveChannel    the live channel used by the {@link PersistentSubscription}.
+     * @param liveStreamId   the live stream id used by the {@link PersistentSubscription}.
+     * @param livePosition   the live position when the {@link PersistentSubscription} left.
+     */
+    public void logPersistentSubscriptionLeftLive(
+        final long recordingId,
+        final String replayChannel,
+        final int replayStreamId,
+        final String liveChannel,
+        final int liveStreamId,
+        final long livePosition
+    )
+    {
+        final int length = persistentSubscriptionLeftLiveLength(replayChannel, liveChannel);
+        final int captureLength = captureLength(length);
+        final int encodedLength = encodedLength(captureLength);
+        final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
+        final int index = ringBuffer.tryClaim(
+            PERSISTENT_SUBSCRIPTION_LEFT_LIVE.toEventCodeId(), encodedLength);
+
+        if (index > 0)
+        {
+            try
+            {
+                encodePersistentSubscriptionLeftLive(
+                    (UnsafeBuffer)ringBuffer.buffer(),
+                    index,
+                    captureLength,
+                    length,
+                    recordingId,
+                    replayChannel,
+                    replayStreamId,
+                    liveChannel,
+                    liveStreamId,
+                    livePosition
+                );
+            }
+            finally
+            {
+                ringBuffer.commit(index);
+            }
+        }
+    }
+
+    /**
      * Log a state change event for an archive recording session.
      *
      * @param <E>         type representing the state change.
