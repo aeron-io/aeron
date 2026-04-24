@@ -103,12 +103,28 @@ typedef struct aeron_client_conductor_clientd_stct
 }
 aeron_client_conductor_clientd_t;
 
-static int aeron_client_conductor_command_offer(aeron_mpsc_concurrent_array_queue_t *command_queue, void *cmd)
+#define AERON_COMMAND_RB_TYPE_PTR (1)
+#define AERON_COMMAND_RB_TYPE_INLINE (2)
+
+static int aeron_client_conductor_command_rb_offer(aeron_mpsc_rb_t *command_queue, void *cmd)
 {
     int fail_count = 0;
 
-    while (AERON_OFFER_SUCCESS != aeron_mpsc_concurrent_array_queue_offer(command_queue, cmd))
+    do
     {
+        aeron_rb_write_result_t result = aeron_mpsc_rb_write(command_queue, AERON_COMMAND_RB_TYPE_PTR, &cmd, sizeof(void *));
+
+        if (AERON_RB_SUCCESS == result)
+        {
+            return 0;
+        }
+
+        if (AERON_RB_ERROR == result)
+        {
+            AERON_SET_ERR(EINVAL, "%s", "could not offer to conductor command queue");
+            return -1;
+        }
+
         if (++fail_count > AERON_CLIENT_COMMAND_QUEUE_FAIL_THRESHOLD)
         {
             AERON_SET_ERR(-AERON_CLIENT_ERROR_BUFFER_FULL, "%s", "could not offer to conductor command queue");
@@ -118,7 +134,37 @@ static int aeron_client_conductor_command_offer(aeron_mpsc_concurrent_array_queu
         sched_yield();
     }
 
-    return 0;
+    while (true);
+}
+
+static int aeron_client_conductor_command_rb_offer_inline(aeron_mpsc_rb_t *command_queue, void *cmd, size_t length)
+{
+    int fail_count = 0;
+
+    do
+    {
+        aeron_rb_write_result_t result = aeron_mpsc_rb_write(command_queue, AERON_COMMAND_RB_TYPE_INLINE, cmd, length);
+
+        if (AERON_RB_SUCCESS == result)
+        {
+            return 0;
+        }
+
+        if (AERON_RB_ERROR == result)
+        {
+            AERON_SET_ERR(EINVAL, "%s", "could not offer to conductor command queue");
+            return -1;
+        }
+
+        if (++fail_count > AERON_CLIENT_COMMAND_QUEUE_FAIL_THRESHOLD)
+        {
+            AERON_SET_ERR(-AERON_CLIENT_ERROR_BUFFER_FULL, "%s", "could not offer to conductor command queue");
+            return -1;
+        }
+
+        sched_yield();
+    }
+    while (true);
 }
 
 static void aeron_client_conductor_registering_resource_set_error_message(
@@ -213,36 +259,24 @@ static int aeron_client_conductor_release_log_buffer(aeron_client_conductor_t *c
     return 0;
 }
 
-/* Low bit of a queued cmd pointer tags it as an owned aeron_client_remove_resource_cmd_t
- * that the conductor (or close-time drain) is responsible for freeing. Other queue items
- * (close cmds aliasing publication/subscription/counter structs, or aeron_client_registering_resource_t
- * allocations the user may free directly via aeron_async_cmd_free) are left untagged. This lets
- * aeron_client_conductor_drain_pending_cmd_on_close classify a queued item without dereferencing it,
- * which is the only safe thing to do after a close cmd's underlying resource has been torn down
- * or an async struct has been freed externally. aeron_alloc uses malloc so the low bits are free. */
-#define AERON_CMD_TAG_REMOVE ((uintptr_t)1)
-
-/* Guards the tag scheme: if the cmd struct's alignment ever drops below 2, the low bit
- * is no longer free and the tag bit could collide with real pointer bits. */
-_Static_assert(
-    _Alignof(aeron_client_remove_resource_cmd_t) >= 2,
-    "remove_resource_cmd must be aligned >= 2 for AERON_CMD_TAG_REMOVE pointer tagging");
-
-static inline void *aeron_client_conductor_cmd_untag(void *item)
-{
-    return (void *)((uintptr_t)item & ~AERON_CMD_TAG_REMOVE);
-}
-
-static inline bool aeron_client_conductor_cmd_is_remove(void *item)
-{
-    return ((uintptr_t)item & AERON_CMD_TAG_REMOVE) != 0;
-}
-
 static void aeron_client_conductor_on_command(void *clientd, void *item)
 {
-    aeron_client_command_base_t *cmd =
-        (aeron_client_command_base_t *)aeron_client_conductor_cmd_untag(item);
+    aeron_client_command_base_t *cmd = (aeron_client_command_base_t *)(item);
     cmd->func(clientd, cmd);
+}
+
+static void aeron_client_conductor_rb_on_command(int32_t type, const void *ptr, size_t length, void *clientd)
+{
+    if (AERON_COMMAND_RB_TYPE_PTR == type)
+    {
+        uintptr_t *cmd_ptr = (uintptr_t *)ptr;
+        void *cmd = (void *)*cmd_ptr;
+        aeron_client_conductor_on_command(clientd, cmd);
+    }
+    else if (AERON_COMMAND_RB_TYPE_INLINE == type)
+    {
+        aeron_client_conductor_on_command(clientd, (void *)ptr);
+    }
 }
 
 static void aeron_client_conductor_async_resource_free(aeron_client_registering_resource_t *async_resource)
@@ -263,23 +297,22 @@ static void aeron_client_conductor_async_resource_free(aeron_client_registering_
     }
 }
 
-static void aeron_client_conductor_drain_pending_cmd_on_close(void *clientd, void *item)
+static void aeron_client_conductor_drain_pending_cmd_on_close(
+    int32_t type, const void *ptr, size_t length, void *clientd)
 {
     const aeron_client_conductor_t *conductor = clientd;
 
-    if (aeron_client_conductor_cmd_is_remove(item))
+    if (AERON_COMMAND_RB_TYPE_INLINE == type)
     {
-        aeron_client_remove_resource_cmd_t *cmd =
-            (aeron_client_remove_resource_cmd_t *)aeron_client_conductor_cmd_untag(item);
+        aeron_client_remove_resource_cmd_t *cmd = (aeron_client_remove_resource_cmd_t *)ptr;
         if (NULL != cmd->on_complete)
         {
             cmd->on_complete(cmd->on_complete_clientd);
         }
-        aeron_free(cmd);
     }
     else
     {
-        aeron_client_command_base_t *cmd = item;
+        aeron_client_command_base_t *cmd = ptr;
         if (conductor == cmd->item) // async `add` commands
         {
             aeron_client_conductor_async_resource_free((aeron_client_registering_resource_t *)cmd);
@@ -2191,7 +2224,7 @@ static int aeron_client_conductor_async_destination(
     }
     else
     {
-        if (aeron_client_conductor_command_offer(conductor->command_queue, cmd) < 0)
+        if (aeron_client_conductor_command_rb_offer(conductor->command_rb, cmd) < 0)
         {
             goto error;
         }
@@ -2241,7 +2274,7 @@ static int aeron_client_conductor_async_destination_by_id(
     }
     else
     {
-        if (aeron_client_conductor_command_offer(conductor->command_queue, cmd) < 0)
+        if (aeron_client_conductor_command_rb_offer(conductor->command_rb, cmd) < 0)
         {
             goto error;
         }
@@ -2577,7 +2610,7 @@ int aeron_client_conductor_init(aeron_client_conductor_t *conductor, aeron_conte
     conductor->heartbeat_timestamp.addr = NULL;
     conductor->heartbeat_timestamp.counter_id = AERON_NULL_COUNTER_ID;
 
-    conductor->command_queue = &context->command_queue;
+    conductor->command_rb = &context->command_rb;
     conductor->epoch_clock = context->epoch_clock;
     conductor->nano_clock = context->nano_clock;
 
@@ -2647,8 +2680,8 @@ int aeron_client_conductor_do_work(aeron_client_conductor_t *conductor)
         return 0;
     }
 
-    work_count += (int)aeron_mpsc_concurrent_array_queue_drain(
-        conductor->command_queue, aeron_client_conductor_on_command, conductor, 1);
+    work_count += (int)aeron_mpsc_rb_read(
+        conductor->command_rb, aeron_client_conductor_rb_on_command, conductor, 1);
 
     result = aeron_broadcast_receiver_receive(
         &conductor->to_client_buffer, aeron_client_conductor_on_driver_response, conductor);
@@ -2708,13 +2741,13 @@ void aeron_client_conductor_on_close(aeron_client_conductor_t *conductor)
     }
 
     /* Free any remove_resource cmds still in the command queue. Every queued remove cmd is
-     * tagged via its pointer's low bit, so we can classify items by tag alone — never
-     * dereferencing untagged items, whose targets may already be freed (close cmds aliased
-     * with the resources torn down above; async handles freed by user code). The drain runs
-     * after resource teardown so on_complete fires after the resource is gone, matching the
-     * ordering in aeron_client_conductor_on_cmd_remove_resource. */
-    aeron_mpsc_concurrent_array_queue_drain_all(
-        conductor->command_queue, aeron_client_conductor_drain_pending_cmd_on_close, conductor);
+     * an inline message. The drain runs after resource teardown so on_complete fires after the resource is gone,
+     * matching the ordering in aeron_client_conductor_on_cmd_remove_resource. */
+    while (0 != aeron_mpsc_rb_read(
+        conductor->command_rb, aeron_client_conductor_drain_pending_cmd_on_close, conductor, SIZE_MAX))
+    {
+        // loop.
+    }
 
     aeron_int64_to_ptr_hash_map_for_each(
         &conductor->resource_by_id_map, aeron_client_conductor_delete_resource, NULL);
@@ -2787,7 +2820,7 @@ int aeron_client_conductor_async_add_publication(
     }
     else
     {
-        if (aeron_client_conductor_command_offer(conductor->command_queue, cmd) < 0)
+        if (aeron_client_conductor_command_rb_offer(conductor->command_rb, cmd) < 0)
         {
             goto error;
         }
@@ -2818,7 +2851,7 @@ int aeron_client_conductor_async_close_publication(
         return aeron_client_conductor_on_cmd_close_publication(conductor, publication);
     }
 
-    if (aeron_client_conductor_command_offer(conductor->command_queue, publication) < 0)
+    if (aeron_client_conductor_command_rb_offer(conductor->command_rb, publication) < 0)
     {
         AERON_SET_RELEASE(publication->pending_close_action, true);
     }
@@ -2875,7 +2908,7 @@ int aeron_client_conductor_async_add_exclusive_publication(
     }
     else
     {
-        if (aeron_client_conductor_command_offer(conductor->command_queue, cmd) < 0)
+        if (aeron_client_conductor_command_rb_offer(conductor->command_rb, cmd) < 0)
         {
             goto error;
         }
@@ -2906,7 +2939,7 @@ int aeron_client_conductor_async_close_exclusive_publication(
         return aeron_client_conductor_on_cmd_close_exclusive_publication(conductor, publication);
     }
 
-    if (aeron_client_conductor_command_offer(conductor->command_queue, publication) < 0)
+    if (aeron_client_conductor_command_rb_offer(conductor->command_rb, publication) < 0)
     {
         AERON_SET_RELEASE(publication->pending_close_action, true);
     }
@@ -2971,7 +3004,7 @@ int aeron_client_conductor_async_add_subscription(
     }
     else
     {
-        if (aeron_client_conductor_command_offer(conductor->command_queue, cmd) < 0)
+        if (aeron_client_conductor_command_rb_offer(conductor->command_rb, cmd) < 0)
         {
             goto error;
         }
@@ -3002,7 +3035,7 @@ int aeron_client_conductor_async_close_subscription(
         return aeron_client_conductor_on_cmd_close_subscription(conductor, subscription);
     }
 
-    if (aeron_client_conductor_command_offer(conductor->command_queue, subscription) < 0)
+    if (aeron_client_conductor_command_rb_offer(conductor->command_rb, subscription) < 0)
     {
         AERON_SET_RELEASE(subscription->pending_close_action, true);
     }
@@ -3066,24 +3099,30 @@ static int aeron_client_conductor_on_cmd_remove_resource(void *clientd, void *it
 
     aeron_client_command_base_t *resource = aeron_int64_to_ptr_hash_map_get(
         &conductor->resource_by_id_map, cmd->registration_id);
-    if (NULL != resource && aeron_client_conductor_resource_type_match(resource->type, cmd->command_base.type))
+    if (NULL != resource)
     {
-        if (AERON_CLIENT_MANAGED_RESOURCE_TYPE_SUBSCRIPTION == resource->type)
+        aeron_client_managed_resource_type_t resource_type = resource->type;
+        aeron_client_managed_resource_type_t command_type = cmd->command_base.type;
+
+        if (aeron_client_conductor_resource_type_match(resource_type, command_type))
         {
-            result = aeron_client_conductor_on_cmd_close_subscription(conductor, resource);
-        }
-        else if (AERON_CLIENT_MANAGED_RESOURCE_TYPE_PUBLICATION == resource->type)
-        {
-            result = aeron_client_conductor_on_cmd_close_publication(conductor, resource);
-        }
-        else if (AERON_CLIENT_MANAGED_RESOURCE_TYPE_EXCLUSIVE_PUBLICATION == resource->type)
-        {
-            result = aeron_client_conductor_on_cmd_close_exclusive_publication(conductor, resource);
-        }
-        else if (AERON_CLIENT_MANAGED_RESOURCE_TYPE_COUNTER == resource->type ||
-                AERON_CLIENT_MANAGED_RESOURCE_TYPE_STATIC_COUNTER == resource->type)
-        {
-            result = aeron_client_conductor_on_cmd_close_counter(conductor, resource);
+            if (AERON_CLIENT_MANAGED_RESOURCE_TYPE_SUBSCRIPTION == resource_type)
+            {
+                result = aeron_client_conductor_on_cmd_close_subscription(conductor, resource);
+            }
+            else if (AERON_CLIENT_MANAGED_RESOURCE_TYPE_PUBLICATION == resource_type)
+            {
+                result = aeron_client_conductor_on_cmd_close_publication(conductor, resource);
+            }
+            else if (AERON_CLIENT_MANAGED_RESOURCE_TYPE_EXCLUSIVE_PUBLICATION == resource_type)
+            {
+                result = aeron_client_conductor_on_cmd_close_exclusive_publication(conductor, resource);
+            }
+            else if (AERON_CLIENT_MANAGED_RESOURCE_TYPE_COUNTER == resource_type ||
+                    AERON_CLIENT_MANAGED_RESOURCE_TYPE_STATIC_COUNTER == resource_type)
+            {
+                result = aeron_client_conductor_on_cmd_close_counter(conductor, resource);
+            }
         }
     }
 
@@ -3091,8 +3130,6 @@ static int aeron_client_conductor_on_cmd_remove_resource(void *clientd, void *it
     {
         cmd->on_complete(cmd->on_complete_clientd);
     }
-
-    aeron_free(cmd);
 
     return result;
 }
@@ -3104,31 +3141,24 @@ int aeron_client_conductor_async_remove_resource(
     aeron_notification_t on_complete,
     void *on_complete_clientd)
 {
-    aeron_client_remove_resource_cmd_t *cmd = NULL;
+    aeron_client_remove_resource_cmd_t cmd;
 
-    if (aeron_alloc((void **)&cmd, sizeof(aeron_client_remove_resource_cmd_t)) < 0)
-    {
-        AERON_APPEND_ERR("%s", "Unable to allocate command");
-        return -1;
-    }
-
-    cmd->command_base.func = aeron_client_conductor_on_cmd_remove_resource;
-    cmd->command_base.item = NULL;
-    cmd->command_base.type = type;
-    cmd->registration_id = registration_id;
-    cmd->on_complete = on_complete;
-    cmd->on_complete_clientd = on_complete_clientd;
+    cmd.command_base.func = aeron_client_conductor_on_cmd_remove_resource;
+    cmd.command_base.item = NULL;
+    cmd.command_base.type = type;
+    cmd.registration_id = registration_id;
+    cmd.on_complete = on_complete;
+    cmd.on_complete_clientd = on_complete_clientd;
 
     if (conductor->invoker_mode)
     {
         /* Synchronous processing — cmd never reaches the queue, so no tag needed. */
-        return aeron_client_conductor_on_cmd_remove_resource(conductor, cmd);
+        return aeron_client_conductor_on_cmd_remove_resource(conductor, &cmd);
     }
 
-    void *tagged_cmd = (void *)((uintptr_t)cmd | AERON_CMD_TAG_REMOVE);
-    if (aeron_client_conductor_command_offer(conductor->command_queue, tagged_cmd) < 0)
+    if (aeron_client_conductor_command_rb_offer_inline(conductor->command_rb, &cmd, sizeof(cmd)) < 0)
     {
-        aeron_free(cmd);
+        AERON_APPEND_ERR("%s", "");
         return -1;
     }
 
@@ -3204,7 +3234,7 @@ int aeron_client_conductor_async_add_counter(
     }
     else
     {
-        if (aeron_client_conductor_command_offer(conductor->command_queue, cmd) < 0)
+        if (aeron_client_conductor_command_rb_offer(conductor->command_rb, cmd) < 0)
         {
             goto error;
         }
@@ -3236,7 +3266,7 @@ int aeron_client_conductor_async_close_counter(
         return aeron_client_conductor_on_cmd_close_counter(conductor, counter);
     }
 
-    if (aeron_client_conductor_command_offer(conductor->command_queue, counter) < 0)
+    if (aeron_client_conductor_command_rb_offer(conductor->command_rb, counter) < 0)
     {
         AERON_SET_RELEASE(counter->pending_close_action, true);
     }
@@ -3318,7 +3348,7 @@ int aeron_client_conductor_async_add_static_counter(
     }
     else
     {
-        if (aeron_client_conductor_command_offer(conductor->command_queue, cmd) < 0)
+        if (aeron_client_conductor_command_rb_offer(conductor->command_rb, cmd) < 0)
         {
             goto error;
         }
@@ -3479,7 +3509,7 @@ int aeron_client_conductor_async_get_next_available_session_id(
     }
     else
     {
-        if (aeron_client_conductor_command_offer(conductor->command_queue, cmd) < 0)
+        if (aeron_client_conductor_command_rb_offer(conductor->command_rb, cmd) < 0)
         {
             goto error;
         }
@@ -3506,7 +3536,7 @@ int aeron_client_conductor_async_handler(aeron_client_conductor_t *conductor, ae
     }
 
     int64_t deadline_ns = (int64_t)(aeron_nano_clock() + conductor->driver_timeout_ns);
-    while (aeron_client_conductor_command_offer(conductor->command_queue, cmd) < 0)
+    while (aeron_client_conductor_command_rb_offer(conductor->command_rb, cmd) < 0)
     {
         if (aeron_nano_clock() >= deadline_ns)
         {

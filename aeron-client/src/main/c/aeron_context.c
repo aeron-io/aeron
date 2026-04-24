@@ -64,9 +64,17 @@ int aeron_context_init(aeron_context_t **context)
         goto error;
     }
 
-    if (aeron_mpsc_concurrent_array_queue_init(&_context->command_queue, AERON_CLIENT_COMMAND_QUEUE_CAPACITY) < 0)
+    void *command_buffer;
+    const size_t command_buffer_capacity = AERON_CLIENT_COMMAND_QUEUE_CAPACITY * 256 + AERON_RB_TRAILER_LENGTH;
+    if (aeron_alloc(&command_buffer, command_buffer_capacity) < 0)
     {
-        AERON_APPEND_ERR("%s", "Unable to init command_queue");
+        AERON_APPEND_ERR("%s", "Unable to allocate buffer for commands");
+        goto error;
+    }
+
+    if (aeron_mpsc_rb_init(&_context->command_rb, command_buffer, command_buffer_capacity) < 0)
+    {
+        AERON_APPEND_ERR("%s", "Unable to init command_rb");
         goto error;
     }
 
@@ -211,8 +219,7 @@ int aeron_context_close(aeron_context_t *context)
     {
         aeron_unmap(&context->cnc_map);
 
-        aeron_mpsc_concurrent_array_queue_close(&context->command_queue);
-
+        aeron_free(context->command_rb.buffer);
         aeron_free(context->idle_strategy_state);
         aeron_free(context->idle_strategy_init_args);
         aeron_free((void*)context->idle_strategy_name);

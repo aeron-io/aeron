@@ -20,7 +20,7 @@
 #include "aeronc.h"
 #include "aeron_agent.h"
 #include "util/aeron_fileutil.h"
-#include "concurrent/aeron_mpsc_concurrent_array_queue.h"
+#include "concurrent/aeron_mpsc_rb.h"
 
 #define AERON_CNC_FILE "cnc.dat"
 
@@ -82,7 +82,7 @@ typedef struct aeron_context_stct
 
     aeron_mapped_file_t cnc_map;
 
-    aeron_mpsc_concurrent_array_queue_t command_queue;
+    aeron_mpsc_rb_t command_rb;
 }
 aeron_context_t;
 
