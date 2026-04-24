@@ -206,6 +206,17 @@ elseif (MSVC)
         string(APPEND AERON_SANITISE_OPTIONS "/fsanitize=address /Zi /D AERON_SANITIZE_ENABLED")
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${AERON_SANITISE_OPTIONS}")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${AERON_SANITISE_OPTIONS}")
+
+        # /RTC runtime checks and /Gm minimal-rebuild are incompatible with /fsanitize=address on MSVC.
+        # Edit-and-continue (/ZI) is also unsupported; prefer /Zi, which is already added above.
+        # https://learn.microsoft.com/en-us/cpp/sanitizers/asan-known-issues
+        foreach (flag_var
+                CMAKE_C_FLAGS_DEBUG CMAKE_CXX_FLAGS_DEBUG
+                CMAKE_C_FLAGS_RELWITHDEBINFO CMAKE_CXX_FLAGS_RELWITHDEBINFO)
+            string(REGEX REPLACE "/RTC[1csu]+" "" ${flag_var} "${${flag_var}}")
+            string(REGEX REPLACE "/Gm[-]?" "" ${flag_var} "${${flag_var}}")
+            string(REGEX REPLACE "/ZI" "/Zi" ${flag_var} "${${flag_var}}")
+        endforeach ()
     endif (SANITISE_BUILD)
 
 endif ()

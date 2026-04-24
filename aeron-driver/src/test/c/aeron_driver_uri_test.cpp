@@ -616,6 +616,9 @@ TEST_F(UriResolverTest, shouldResolveIpv4Interface)
 
 TEST_F(UriResolverTest, shouldResolveHostNameInTheInterfaceSpecification)
 {
+#if defined(AERON_SANITIZE_ENABLED) && defined(_WIN32)
+    GTEST_SKIP() << "Windows hostname resolution fast-fails with MSVC's AddressSanitizer";
+#endif
     char buffer[AERON_URI_MAX_LENGTH];
 
     ASSERT_EQ(aeron_interface_parse_and_resolve("localhost:5551", &m_addr, &m_prefixlen), 0) << aeron_errmsg();
