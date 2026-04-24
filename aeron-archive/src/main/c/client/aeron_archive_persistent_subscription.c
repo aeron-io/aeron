@@ -66,6 +66,11 @@ typedef struct aeron_archive_persistent_subscription_async_archive_op_stct
 }
 aeron_archive_persistent_subscription_async_archive_op_t;
 
+static inline int aeron_archive_persistent_subscription_errcode(void)
+{
+    int errcode = aeron_errcode();
+    return errcode < 0 ? -errcode : errcode;
+}
 
 static void aeron_archive_persistent_subscription_async_archive_op_init(
     aeron_archive_persistent_subscription_async_archive_op_t *op,
@@ -1540,7 +1545,7 @@ static int aeron_archive_persistent_subscription_add_replay_subscription(
 
         aeron_archive_persistent_subscription_on_terminal_error(
             persistent_subscription,
-            aeron_errcode(),
+            aeron_archive_persistent_subscription_errcode(),
             aeron_errmsg());
 
         return 1;
@@ -1558,12 +1563,12 @@ static int aeron_archive_persistent_subscription_await_replay_subscription(
         &persistent_subscription->replay_subscription,
         persistent_subscription->add_replay_subscription) < 0)
     {
-        int errcode = aeron_errcode();
+        int errcode = aeron_archive_persistent_subscription_errcode();
         const char *errmsg = aeron_errmsg();
         persistent_subscription->add_replay_subscription = NULL;
         aeron_archive_persistent_subscription_clean_up_replay(persistent_subscription);
 
-        if (-AERON_ERROR_CODE_RESOURCE_TEMPORARILY_UNAVAILABLE == errcode)
+        if (AERON_ERROR_CODE_RESOURCE_TEMPORARILY_UNAVAILABLE == errcode)
         {
 
             aeron_archive_persistent_subscription_set_up_replay(persistent_subscription);
@@ -1664,7 +1669,7 @@ static int aeron_archive_persistent_subscription_add_request_publication(
 
         aeron_archive_persistent_subscription_on_terminal_error(
             persistent_subscription,
-            aeron_errcode(),
+            aeron_archive_persistent_subscription_errcode(),
             aeron_errmsg());
 
         return 1;
@@ -1681,7 +1686,7 @@ static int aeron_archive_persistent_subscription_add_request_publication(
 
         aeron_archive_persistent_subscription_on_terminal_error(
             persistent_subscription,
-            aeron_errcode(),
+            aeron_archive_persistent_subscription_errcode(),
             aeron_errmsg());
 
         return 1;
@@ -1707,12 +1712,12 @@ static int aeron_archive_persistent_subscription_await_request_publication(
 
     if (result < 0)
     {
-        int errcode = aeron_errcode();
+        int errcode = aeron_archive_persistent_subscription_errcode();
         const char *errmsg = aeron_errmsg();
 
         aeron_archive_persistent_subscription_clean_up_replay_subscription(persistent_subscription);
 
-        if (-AERON_ERROR_CODE_RESOURCE_TEMPORARILY_UNAVAILABLE == errcode)
+        if (AERON_ERROR_CODE_RESOURCE_TEMPORARILY_UNAVAILABLE == errcode)
         {
             aeron_archive_persistent_subscription_set_up_replay(persistent_subscription);
 
@@ -1748,7 +1753,7 @@ static int aeron_archive_persistent_subscription_await_request_publication(
 
         aeron_archive_persistent_subscription_on_terminal_error(
             persistent_subscription,
-            aeron_errcode(),
+            aeron_archive_persistent_subscription_errcode(),
             aeron_errmsg());
 
         return 1;
@@ -1873,7 +1878,7 @@ static bool aeron_archive_persistent_subscription_do_add_live_subscription(
 
         aeron_archive_persistent_subscription_on_terminal_error(
             persistent_subscription,
-            aeron_errcode(),
+            aeron_archive_persistent_subscription_errcode(),
             aeron_errmsg());
 
         return false;
@@ -1955,12 +1960,12 @@ static int aeron_archive_persistent_subscription_replay(
             &persistent_subscription->live_subscription,
             persistent_subscription->add_live_subscription) < 0)
         {
-            int errcode = aeron_errcode();
+            int errcode = aeron_archive_persistent_subscription_errcode();
             const char *errmsg = aeron_errmsg();
             persistent_subscription->add_live_subscription = NULL;
 
             AERON_APPEND_ERR("%s", "failed to add live subscription");
-            if (-AERON_ERROR_CODE_RESOURCE_TEMPORARILY_UNAVAILABLE != errcode)
+            if (AERON_ERROR_CODE_RESOURCE_TEMPORARILY_UNAVAILABLE != errcode)
             {
                 aeron_archive_persistent_subscription_clean_up_replay(persistent_subscription);
                 aeron_archive_persistent_subscription_clean_up_replay_subscription(persistent_subscription);
@@ -2193,12 +2198,12 @@ static int aeron_archive_persistent_subscription_await_live(
             &persistent_subscription->live_subscription,
             persistent_subscription->add_live_subscription) < 0)
         {
-            int errcode = aeron_errcode();
+            int errcode = aeron_archive_persistent_subscription_errcode();
             const char *errmsg = aeron_errmsg();
 
             persistent_subscription->add_live_subscription = NULL;
 
-            if (-AERON_ERROR_CODE_RESOURCE_TEMPORARILY_UNAVAILABLE == errcode)
+            if (AERON_ERROR_CODE_RESOURCE_TEMPORARILY_UNAVAILABLE == errcode)
             {
 
                 aeron_archive_persistent_subscription_transition(persistent_subscription, ADD_LIVE_SUBSCRIPTION);
