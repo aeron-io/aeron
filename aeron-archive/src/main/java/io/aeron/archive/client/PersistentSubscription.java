@@ -37,6 +37,7 @@ import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.Header;
 import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
+import org.agrona.Strings;
 import org.agrona.SystemUtil;
 import org.agrona.concurrent.NanoClock;
 
@@ -1510,7 +1511,7 @@ public final class PersistentSubscription implements AutoCloseable
     /**
      * Configuration of a {@code PersistentSubscription} to be created.
      */
-    public static class Context implements Cloneable
+    public static final class Context implements Cloneable
     {
         private static final VarHandle IS_CONCLUDED_VH;
 
@@ -1588,12 +1589,12 @@ public final class PersistentSubscription implements AutoCloseable
                 throw new ConfigurationException("liveStreamId must be set");
             }
 
-            if (null == liveChannel)
+            if (Strings.isEmpty(liveChannel))
             {
                 throw new ConfigurationException("liveChannel must be set");
             }
 
-            if (null == replayChannel)
+            if (Strings.isEmpty(replayChannel))
             {
                 throw new ConfigurationException("replayChannel must be set");
             }

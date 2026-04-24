@@ -26,6 +26,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.stream.Stream;
 
@@ -85,10 +87,11 @@ class PersistentSubscriptionContextTest
         assertThrows(ConfigurationException.class, context::conclude);
     }
 
-    @Test
-    void contextMustHaveLiveChannel()
+    @ParameterizedTest
+    @NullAndEmptySource
+    void contextMustHaveLiveChannel(final String channel)
     {
-        context.liveChannel(null);
+        context.liveChannel(channel);
         assertThrows(ConfigurationException.class, context::conclude);
     }
 
@@ -99,10 +102,11 @@ class PersistentSubscriptionContextTest
         assertThrows(ConfigurationException.class, context::conclude);
     }
 
-    @Test
-    void contextMustHaveReplayChannel()
+    @ParameterizedTest
+    @NullAndEmptySource
+    void contextMustHaveReplayChannel(final String channel)
     {
-        context.replayChannel(null);
+        context.replayChannel(channel);
         assertThrows(ConfigurationException.class, context::conclude);
     }
 
