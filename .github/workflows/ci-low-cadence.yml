@@ -417,6 +417,7 @@ jobs:
     env:
       CC: cl
       CXX: cl
+      ASAN_WIN_CONTINUE_ON_INTERCEPTION_FAILURE: "1"
     steps:
       - name: Use faster temporary storage (Windows)
         run: |
