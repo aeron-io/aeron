@@ -4,6 +4,10 @@
 
 === New & Noteworthy
 
+* **[Archive]** Added `PersistentSubscription` to Aeron Archive for all languages (Java, C++ and C).
++
+`PersistentSubscription` is an alternative to ReplayMerge with IPC and Spy support, plus a fallback mechanism for slow consumers.
+
 * **Breaking:** **[Driver]** Async executor is now a single-threaded `Agent`.
 +
 Previously async executor could be configured to run on `N` threads (Java only). Now it can either be enabled in which
