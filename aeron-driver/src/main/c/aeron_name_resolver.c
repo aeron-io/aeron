@@ -93,7 +93,11 @@ int aeron_default_name_resolver_resolve(
     bool is_re_resolution,
     struct sockaddr_storage *address)
 {
-    return aeron_ip_addr_resolver(name, address, AF_INET, IPPROTO_UDP);
+    if (0 == aeron_ip_addr_resolver(name, address, AF_INET, IPPROTO_UDP))
+    {
+        return 0;
+    }
+    return aeron_ip_addr_resolver(name, address, AF_INET6, IPPROTO_UDP);
 }
 
 int aeron_default_name_resolver_lookup(
@@ -160,8 +164,6 @@ int aeron_name_resolver_resolve_host_and_port(
                 result = resolver->resolve_func(
                     resolver, parsed_address.host, uri_param_name, is_re_resolution, sockaddr);
             }
-
-            ((struct sockaddr_in *)sockaddr)->sin_port = htons((uint16_t)port);
         }
         else if (AF_INET6 == family_hint)
         {
@@ -174,8 +176,18 @@ int aeron_name_resolver_resolve_host_and_port(
                 result = resolver->resolve_func(
                     resolver, parsed_address.host, uri_param_name, is_re_resolution, sockaddr);
             }
+        }
 
-            ((struct sockaddr_in6 *)sockaddr)->sin6_port = htons((uint16_t)port);
+        if (0 == result)
+        {
+            if (AF_INET == sockaddr->ss_family)
+            {
+                ((struct sockaddr_in *)sockaddr)->sin_port = htons((uint16_t)port);
+            }
+            else if (AF_INET6 == sockaddr->ss_family)
+            {
+                ((struct sockaddr_in6 *)sockaddr)->sin6_port = htons((uint16_t)port);
+            }
         }
     }
 

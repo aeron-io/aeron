@@ -738,3 +738,51 @@ TEST_F(UriResolverTest, shouldCalculateIpv6PrefixlenFromNetmask)
     EXPECT_EQ(ipv6_prefixlen("FFFF:FF80::"), 25u);
     EXPECT_EQ(ipv6_prefixlen("0000:0000:0000:0000:0000:0000:0000:0000"), 0u);
 }
+
+TEST_F(UriResolverTest, shouldDefaultResolveRawIPv6AddressesAndHostNames)
+{
+    EXPECT_EQ(0, m_resolver.resolve_func(&m_resolver, "127.0.0.1", "endpoint", false, &m_addr));
+    EXPECT_EQ(AF_INET, m_addr.ss_family);
+
+    EXPECT_EQ(0, m_resolver.resolve_func(&m_resolver, "localhost", "endpoint", false, &m_addr));
+    EXPECT_EQ(AF_INET, m_addr.ss_family);
+
+    EXPECT_EQ(0, m_resolver.resolve_func(&m_resolver, "::1", "endpoint", false, &m_addr));
+    EXPECT_EQ(AF_INET6, m_addr.ss_family);
+
+#if defined(__linux__)
+    EXPECT_EQ(0, m_resolver.resolve_func(&m_resolver, "fe00::0", "endpoint", false, &m_addr));
+    EXPECT_EQ(AF_INET6, m_addr.ss_family);
+
+    EXPECT_EQ(0, m_resolver.resolve_func(&m_resolver, "ip6-localnet", "endpoint", false, &m_addr));
+    EXPECT_EQ(AF_INET6, m_addr.ss_family);
+#endif
+}
+
+TEST_F(UriResolverTest, shouldHandleIpv6ResultFromHostNameResolution)
+{
+    EXPECT_EQ(0, aeron_name_resolver_resolve_host_and_port(&m_resolver, "127.0.0.1:5051", "endpoint", false, &m_addr));
+    EXPECT_EQ(AF_INET, m_addr.ss_family);
+    EXPECT_EQ(htons(5051), addr_in->sin_port);
+
+    EXPECT_EQ(0, aeron_name_resolver_resolve_host_and_port(&m_resolver, "localhost:5052", "endpoint", false, &m_addr));
+    EXPECT_EQ(AF_INET, m_addr.ss_family);
+    EXPECT_EQ(htons(5052), addr_in->sin_port);
+
+    EXPECT_EQ(0, aeron_name_resolver_resolve_host_and_port(&m_resolver, "[::1]:5053", "endpoint", false, &m_addr));
+    EXPECT_EQ(AF_INET6, m_addr.ss_family);
+    EXPECT_EQ(AF_INET6, addr_in6->sin6_family);
+    EXPECT_EQ(htons(5053), addr_in6->sin6_port);
+
+#if defined(__linux__)
+    EXPECT_EQ(0, aeron_name_resolver_resolve_host_and_port(&m_resolver, "[fe00::0]:5054", "endpoint", false, &m_addr));
+    EXPECT_EQ(AF_INET6, m_addr.ss_family);
+    EXPECT_EQ(AF_INET6, addr_in6->sin6_family);
+    EXPECT_EQ(htons(5054), addr_in6->sin6_port);
+
+    EXPECT_EQ(0, aeron_name_resolver_resolve_host_and_port(&m_resolver, "ip6-localnet:5055", "endpoint", false, &m_addr));
+    EXPECT_EQ(AF_INET6, m_addr.ss_family);
+    EXPECT_EQ(AF_INET6, addr_in6->sin6_family);
+    EXPECT_EQ(htons(5055), addr_in6->sin6_port);
+#endif
+}
