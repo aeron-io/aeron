@@ -112,7 +112,9 @@ static int aeron_client_conductor_command_rb_offer(aeron_mpsc_rb_t *command_queu
 
     do
     {
-        aeron_rb_write_result_t result = aeron_mpsc_rb_write(command_queue, AERON_COMMAND_RB_TYPE_PTR, &cmd, sizeof(void *));
+        const uintptr_t cmd_value = (uintptr_t)cmd;
+        const aeron_rb_write_result_t result = aeron_mpsc_rb_write(
+            command_queue, AERON_COMMAND_RB_TYPE_PTR, &cmd_value, sizeof(cmd_value));
 
         if (AERON_RB_SUCCESS == result)
         {
@@ -269,8 +271,7 @@ static void aeron_client_conductor_rb_on_command(int32_t type, const void *ptr, 
 {
     if (AERON_COMMAND_RB_TYPE_PTR == type)
     {
-        uintptr_t *cmd_ptr = (uintptr_t *)ptr;
-        void *cmd = (void *)*cmd_ptr;
+        void *cmd = (void *)(*(uintptr_t *)ptr);
         aeron_client_conductor_on_command(clientd, cmd);
     }
     else if (AERON_COMMAND_RB_TYPE_INLINE == type)
@@ -312,7 +313,7 @@ static void aeron_client_conductor_drain_pending_cmd_on_close(
     }
     else
     {
-        aeron_client_command_base_t *cmd = ptr;
+        aeron_client_command_base_t *cmd = (aeron_client_command_base_t *)(*(uintptr_t*)ptr);
         if (conductor == cmd->item) // async `add` commands
         {
             aeron_client_conductor_async_resource_free((aeron_client_registering_resource_t *)cmd);

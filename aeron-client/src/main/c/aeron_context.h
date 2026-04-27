@@ -82,6 +82,7 @@ typedef struct aeron_context_stct
 
     aeron_mapped_file_t cnc_map;
 
+    uint8_t *command_buffer;
     aeron_mpsc_rb_t command_rb;
 }
 aeron_context_t;

@@ -220,7 +220,6 @@ typedef struct aeron_client_conductor_stct
     }
     heartbeat_timestamp;
 
-    // aeron_mpsc_concurrent_array_queue_t *command_queue;
     aeron_mpsc_rb_t *command_rb;
 
     uint64_t driver_timeout_ms;
