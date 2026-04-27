@@ -26,6 +26,7 @@ import io.aeron.ExclusivePublication;
 import io.aeron.Image;
 import io.aeron.ImageControlledFragmentAssembler;
 import io.aeron.ImageFragmentAssembler;
+import io.aeron.RethrowingErrorHandler;
 import io.aeron.Subscription;
 import io.aeron.archive.codecs.ControlResponseCode;
 import io.aeron.exceptions.AeronEvent;
@@ -199,7 +200,8 @@ public final class PersistentSubscription implements AutoCloseable
      * the {@code PersistentSubscription} to perform its work.
      * <p>
      * If an error occurs during polling, the {@link PersistentSubscriptionListener} will be notified.
-     * Exceptions thrown from the {@link FragmentHandler} will be propagated.
+     * Exceptions thrown from the {@link FragmentHandler} will be passed to the
+     * {@link Aeron.Context#subscriberErrorHandler} for the Aeron instance.
      *
      * @param fragmentHandler the handler to receive assembled messages if any are available.
      * @param fragmentLimit the maximum number of fragments to be processed during the poll operation.
@@ -227,7 +229,8 @@ public final class PersistentSubscription implements AutoCloseable
      * {@code PersistentSubscription} to perform its work.
      * <p>
      * If an error occurs during polling, the {@link PersistentSubscriptionListener} will be notified.
-     * Exceptions thrown from the {@link ControlledFragmentHandler} will be propagated.
+     * Exceptions thrown from the {@link FragmentHandler} will be passed to the
+     * {@link Aeron.Context#subscriberErrorHandler} for the Aeron instance.
      *
      * @param fragmentHandler the handler to receive assembled messages if any are available.
      * @param fragmentLimit the maximum number of fragments to be processed during the poll operation.
@@ -1717,6 +1720,7 @@ public final class PersistentSubscription implements AutoCloseable
             {
                 final Aeron.Context aeronCtx = new Aeron.Context()
                     .clientName("PersistentSubscription")
+                    .subscriberErrorHandler(RethrowingErrorHandler.INSTANCE)
                     .useConductorAgentInvoker(true);
                 if (null != aeronDirectoryName)
                 {
