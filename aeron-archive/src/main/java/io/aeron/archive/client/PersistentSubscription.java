@@ -1399,13 +1399,14 @@ public final class PersistentSubscription implements AutoCloseable
 
     private void onLiveLeft()
     {
+        logLeftLive(recordingId, replayChannel, replayStreamId, liveChannel, liveStreamId, position);
+
         if (!liveLeftCounter.isClosed())
         {
             liveLeftCounter.incrementRelease();
         }
 
         listener.onLiveLeft();
-        logLeftLive(recordingId, replayChannel, replayStreamId, liveChannel, liveStreamId, position);
     }
 
     private int doPoll(final Image image, final int fragmentLimit, final boolean isControlled)
