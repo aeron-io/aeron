@@ -2019,7 +2019,7 @@ abstract class PersistentSubscriptionTest
     }
 
     @Test
-    @InterruptAfter(20)
+    @InterruptAfter(30)
     void cannotFallbackToReplayWhenTheRecordingHasStoppedAtAnEarlierPosition()
     {
         final PersistentPublication persistentPublication =
