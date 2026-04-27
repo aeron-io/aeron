@@ -6405,7 +6405,7 @@ void aeron_driver_conductor_on_re_resolve_endpoint_complete(
     {
         aeron_driver_conductor_log_explicit_error(conductor, errcode, errmsg);
     }
-    else if (AF_UNSPEC != async_cmd->existing_addr.ss_family && 0 != memcmp(
+    else if (0 != memcmp(
         &async_cmd->async_resolve.sockaddr,
         &async_cmd->existing_addr,
         sizeof(struct sockaddr_storage)))
