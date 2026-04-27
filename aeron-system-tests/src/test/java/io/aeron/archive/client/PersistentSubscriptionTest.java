@@ -91,6 +91,7 @@ import static io.aeron.AeronCounters.DRIVER_PUBLISHER_POS_TYPE_ID;
 import static io.aeron.AeronCounters.FLOW_CONTROL_RECEIVERS_COUNTER_TYPE_ID;
 import static io.aeron.CommonContext.IPC_CHANNEL;
 import static io.aeron.CommonContext.IPC_MEDIA;
+import static io.aeron.CommonContext.REJOIN_PARAM_NAME;
 import static io.aeron.CommonContext.SESSION_ID_PARAM_NAME;
 import static io.aeron.CommonContext.SPY_PREFIX;
 import static io.aeron.Publication.BACK_PRESSURED;
@@ -366,7 +367,7 @@ abstract class PersistentSubscriptionTest
                     final int streamId = keyBuffer.getInt(STREAM_ID_OFFSET);
                     if (streamId == replayStreamId)
                     {
-                        assertEquals(replayChannel, removeSessionId(keyBuffer.getStringAscii(CHANNEL_OFFSET)));
+                        assertEquals(replayChannel, removeExtraFields(keyBuffer.getStringAscii(CHANNEL_OFFSET)));
                         replaySubPos.set(counters.getCounterValue(counterId1));
                     }
                 }
@@ -3092,10 +3093,11 @@ abstract class PersistentSubscriptionTest
         );
     }
 
-    private static String removeSessionId(final String channel)
+    private static String removeExtraFields(final String channel)
     {
         final ChannelUri uri = ChannelUri.parse(channel);
         uri.remove(SESSION_ID_PARAM_NAME);
+        uri.remove(REJOIN_PARAM_NAME);
         return uri.toString();
     }
 

@@ -16,6 +16,7 @@
 package io.aeron.archive.client;
 
 import io.aeron.Aeron;
+import io.aeron.ChannelUriStringBuilder;
 import io.aeron.exceptions.ConcurrentConcludeException;
 import io.aeron.exceptions.ConfigurationException;
 import io.aeron.test.CountersAnswer;
@@ -32,6 +33,7 @@ import java.util.stream.Stream;
 
 import static io.aeron.CommonContext.IPC_CHANNEL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -107,6 +109,19 @@ class PersistentSubscriptionContextTest
     {
         context.replayChannel(channel);
         assertThrows(ConfigurationException.class, context::conclude);
+    }
+
+    @Test
+    void mustNotRejoinOnReplayChannels()
+    {
+        final ChannelUriStringBuilder builder = new ChannelUriStringBuilder("aeron:udp?endpoint=localhost:0");
+        final String configuredReplayChannel = builder.rejoin(true).build();
+
+        context.replayChannel(configuredReplayChannel);
+        context.conclude();
+        final String actualReplayChannel = context.replayChannel();
+        final ChannelUriStringBuilder channelUri = new ChannelUriStringBuilder(actualReplayChannel);
+        assertFalse(channelUri.rejoin());
     }
 
     @Test

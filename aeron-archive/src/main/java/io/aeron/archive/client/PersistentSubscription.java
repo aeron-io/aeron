@@ -1716,6 +1716,7 @@ public final class PersistentSubscription implements AutoCloseable
                     );
                 }
             }
+            replayChannel = new ChannelUriStringBuilder(replayChannelUri).rejoin(false).build();
 
             if (null == aeron)
             {

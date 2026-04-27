@@ -22,6 +22,7 @@ extern "C"
 {
 #include "client/aeron_archive.h"
 #include "client/aeron_archive_persistent_subscription.h"
+#include "uri/aeron_uri.h"
 }
 
 class AeronArchivePersistentSubscriptionContextTest : public testing::Test
@@ -276,6 +277,17 @@ TEST_P(ReplayAndControlChannelsTest, replayAndControlChannelMediaTypesMustMatchW
     EXPECT_EQ(0, aeron_archive_persistent_subscription_context_set_replay_stream_id(context, 2000)) << aeron_errmsg();
     EXPECT_EQ(0, aeron_archive_persistent_subscription_context_set_aeron(context, aeron.aeron())) << aeron_errmsg();
     EXPECT_EQ(param.expectedConcludeResult, aeron_archive_persistent_subscription_context_conclude(context)) << aeron_errmsg();
+
+    if (0 == param.expectedConcludeResult)
+    {
+        const char *concluded_channel = aeron_archive_persistent_subscription_context_get_replay_channel(context);
+        aeron_uri_string_builder_t builder;
+        ASSERT_EQ(0, aeron_uri_string_builder_init_on_string(&builder, concluded_channel)) << aeron_errmsg();
+        EXPECT_STREQ("false", aeron_uri_string_builder_get(&builder, AERON_URI_REJOIN_KEY))
+            << "Expected rejoin=false in concluded replay channel: " << concluded_channel;
+        aeron_uri_string_builder_close(&builder);
+    }
+
     EXPECT_EQ(0, aeron_archive_persistent_subscription_context_close(context)) << aeron_errmsg();
 
     EXPECT_EQ(0, aeron_archive_context_close(archive_context)) << aeron_errmsg();

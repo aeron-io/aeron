@@ -480,6 +480,27 @@ int aeron_archive_persistent_subscription_context_conclude(aeron_archive_persist
     }
     aeron_uri_close(&uri);
 
+    aeron_uri_string_builder_t builder;
+    char rebuilt[AERON_URI_MAX_LENGTH];
+    if (aeron_uri_string_builder_init_on_string(&builder, context->replay_channel) < 0)
+    {
+        AERON_APPEND_ERR("failed to parse replay channel '%s'", context->replay_channel);
+        return -1;
+    }
+    if (aeron_uri_string_builder_put(&builder, AERON_URI_REJOIN_KEY, "false") < 0 ||
+        aeron_uri_string_builder_sprint(&builder, rebuilt, sizeof(rebuilt)) < 0)
+    {
+        aeron_uri_string_builder_close(&builder);
+        AERON_APPEND_ERR("failed to set rejoin=false on replay channel '%s'", context->replay_channel);
+        return -1;
+    }
+    aeron_uri_string_builder_close(&builder);
+    if (aeron_archive_persistent_subscription_set_string(&context->replay_channel, rebuilt) < 0)
+    {
+        AERON_APPEND_ERR("failed to set replay channel '%s'", rebuilt);
+        return -1;
+    }
+
     if (NULL == context->aeron)
     {
         aeron_context_t *aeron_ctx;
