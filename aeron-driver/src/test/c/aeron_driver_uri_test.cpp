@@ -419,6 +419,11 @@ public:
         aeron_default_name_resolver_supplier(&m_resolver, nullptr, nullptr);
     }
 
+    ~UriResolverTest() override
+    {
+        m_resolver.close_func(&m_resolver);
+    }
+
     static bool ipv4_match(const char *addr1_str, const char *addr2_str, size_t prefixlen)
     {
         struct sockaddr_in addr1{}, addr2{};

@@ -617,6 +617,8 @@ TEST_P(UdpChannelEqualityParameterisedTest, shouldMatch)
 
     aeron_udp_channel_delete(channel_1);
     aeron_udp_channel_delete(channel_2);
+
+    resolver.close_func(&resolver);
 }
 
 INSTANTIATE_TEST_SUITE_P(

@@ -133,6 +133,8 @@ protected:
         aeron_system_counters_close(&m_system_counters);
         aeron_counters_manager_close(&m_counters_manager);
         aeron_driver_context_close(m_context);
+
+        m_resolver.close_func(&m_resolver);
     }
 
     aeron_receive_channel_endpoint_t *createEndpoint(aeron_udp_channel_t *channel)

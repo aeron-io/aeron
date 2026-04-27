@@ -88,6 +88,8 @@ protected:
         aeron_counters_manager_close(&m_counters_manager);
         aeron_distinct_error_log_close(&m_error_log);
         aeron_driver_context_close(m_context);
+
+        m_resolver.close_func(&m_resolver);
     }
 
     aeron_send_channel_endpoint_t *createEndpoint(

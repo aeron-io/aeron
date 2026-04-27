@@ -45,6 +45,11 @@ public:
         aeron_default_name_resolver_supplier(&m_resolver, nullptr, nullptr);
     };
 
+    ~FlowControlTest() override
+    {
+        m_resolver.close_func(&m_resolver);
+    }
+
     int64_t apply_status_message(
         aeron_flow_control_strategy_t *strategy,
         int64_t receiver_id,

@@ -58,6 +58,7 @@ public:
 
     ~CongestionControlTest() override
     {
+        m_resolver.close_func(&m_resolver);
         aeron_driver_context_close(m_context);
         aeron_counters_manager_close(&m_counters_manager);
         reset_env();
