@@ -32,6 +32,12 @@
 #include "aeron_driver_name_resolver.h"
 #include "aeron_csv_table_name_resolver.h"
 
+typedef struct aeron_default_name_resolver_stct
+{
+    bool ipv4_available;
+    bool ipv6_available;
+} aeron_default_name_resolver_t;
+
 static const aeron_symbol_table_func_t aeron_name_resolver_table[] =
     {
         {
@@ -72,15 +78,69 @@ int aeron_name_resolver_init(aeron_name_resolver_t *resolver, const char *args, 
     return 0;
 }
 
+int aeron_default_name_resolver_init(
+    aeron_default_name_resolver_t **default_resolver,
+    aeron_driver_context_t *context)
+{
+    aeron_default_name_resolver_t *_default_resolver = NULL;
+    int rc = 0;
+
+    if (aeron_alloc((void **)&_default_resolver, sizeof(aeron_default_name_resolver_t)) < 0)
+    {
+        AERON_APPEND_ERR("%s", "Failed to allocate default resolver");
+        return -1;
+    }
+
+    rc = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (rc < 0)
+    {
+        _default_resolver->ipv4_available = false;
+    }
+    else
+    {
+        _default_resolver->ipv4_available = true;
+        close(rc);
+    }
+
+    rc = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
+    if (rc < 0)
+    {
+        _default_resolver->ipv6_available = false;
+    }
+    else
+    {
+        _default_resolver->ipv6_available = true;
+        close(rc);
+    }
+
+    if (!_default_resolver->ipv4_available && !_default_resolver->ipv6_available)
+    {
+        free(_default_resolver);
+        AERON_APPEND_ERR("%s", "IPv4 and IPv6 are unavailable for default resolver");
+        return -1;
+    }
+
+    *default_resolver = _default_resolver;
+    return 0;
+}
+
 int aeron_default_name_resolver_supplier(
     aeron_name_resolver_t *resolver, const char *args, aeron_driver_context_t *context)
 {
+    aeron_default_name_resolver_t *default_resolver = NULL;
+
+    resolver->state = NULL;
+    if (aeron_default_name_resolver_init(&default_resolver, context) < 0)
+    {
+        return -1;
+    }
+
     resolver->lookup_func = aeron_default_name_resolver_lookup;
     resolver->resolve_func = aeron_default_name_resolver_resolve;
     resolver->start_func = aeron_default_name_resolver_start;
     resolver->do_work_func = aeron_default_name_resolver_do_work;
     resolver->close_func = aeron_default_name_resolver_close;
-    resolver->state = NULL;
+    resolver->state = default_resolver;
     resolver->name = "default";
 
     return 0;
@@ -93,11 +153,23 @@ int aeron_default_name_resolver_resolve(
     bool is_re_resolution,
     struct sockaddr_storage *address)
 {
-    if (0 == aeron_ip_addr_resolver(name, address, AF_INET, IPPROTO_UDP))
+    aeron_default_name_resolver_t *default_resolver = (aeron_default_name_resolver_t *)resolver->state;
+    int family_hint;
+
+    if (default_resolver->ipv4_available && !default_resolver->ipv6_available)
     {
-        return 0;
+        family_hint = AF_INET;
     }
-    return aeron_ip_addr_resolver(name, address, AF_INET6, IPPROTO_UDP);
+    else if (!default_resolver->ipv4_available && default_resolver->ipv6_available)
+    {
+        family_hint = AF_INET6;
+    }
+    else
+    {
+        family_hint = AF_UNSPEC;
+    }
+
+    return aeron_ip_addr_resolver(name, address, family_hint, IPPROTO_UDP);
 }
 
 int aeron_default_name_resolver_lookup(
@@ -123,6 +195,8 @@ int aeron_default_name_resolver_do_work(aeron_name_resolver_t *resolver, int64_t
 
 int aeron_default_name_resolver_close(aeron_name_resolver_t *resolver)
 {
+    aeron_default_name_resolver_t *default_resolver = (aeron_default_name_resolver_t *)resolver->state;
+    free(default_resolver);
     return 0;
 }
 
