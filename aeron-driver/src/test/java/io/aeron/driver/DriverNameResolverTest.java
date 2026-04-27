@@ -36,6 +36,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
@@ -368,6 +369,17 @@ class DriverNameResolverTest
 
         final String unResolvableLabel = "Bootstrap neighbor: name=driver:1234 resolved=";
         assertEquals(unResolvableLabel, countersManager.getCounterLabel(bootstrapNeighborCounterId.get()));
+    }
+
+
+    @Test
+    void testGetAddrInfo() throws Exception
+    {
+        final InetAddress[] addresses = InetAddress.getAllByName("localhost");
+        for (final InetAddress address : addresses)
+        {
+            System.err.println(address);
+        }
     }
 
     private void onNeighborFrame(final String name, final String address, final int port, final long time)
