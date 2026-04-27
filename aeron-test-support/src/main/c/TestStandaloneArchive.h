@@ -60,7 +60,17 @@ public:
     {
     }
 
-    std::int64_t archiveId() const { return m_archiveId; }
+    // Reading archiveId() implies the caller may reuse the id on a successor archive
+    // (the kill+restart pattern). Mark this instance so its destructor waits for the
+    // driver to reap the error counter before returning, so the next archive starting
+    // with the same id does not get rejected with "found existing archive for archiveId=".
+    std::int64_t archiveId()
+    {
+#ifdef _WIN32
+        m_idMayBeReused = true;
+#endif
+        return m_archiveId;
+    }
 
 private:
     static std::int64_t nextArchiveId()
@@ -201,10 +211,13 @@ public:
                 m_aeronDir + std::string(1, AERON_FILE_SEP) + "archive-mark.dat";
             aeron_delete_file(mark_file_to_remove.c_str());
 
-            // Only wait when this archive was constructed with an explicit id, since the
-            // wait exists to make a same-id restart safe. Auto-allocated ids are unique per
-            // process so the next archive cannot collide on the ghost error counter.
-            if (m_explicitId)
+            // Wait for the driver to reap this archive's error counter when the id may
+            // be reused: explicit-id construction (kill+restart with hardcoded id), or an
+            // auto-id instance whose archiveId() was queried by the test (so a successor
+            // can be constructed with the same id). Without the wait, the next archive
+            // starting with the same id would be rejected with "found existing archive for
+            // archiveId=".
+            if (m_explicitId || m_idMayBeReused)
             {
                 awaitArchiveCountersFreed();
             }
@@ -239,6 +252,7 @@ private:
     bool m_deleteDirOnTearDown = true;
 #ifdef _WIN32
     bool m_explicitId = false;
+    bool m_idMayBeReused = false;
 #endif
 
 #ifdef _WIN32
