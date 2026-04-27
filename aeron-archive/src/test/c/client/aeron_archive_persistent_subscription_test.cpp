@@ -400,6 +400,8 @@ public:
 
     void offer(const std::vector<std::vector<uint8_t>>& messages) const
     {
+        const std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+
         for (const std::vector<uint8_t>& message : messages)
         {
             while (true)
@@ -416,13 +418,24 @@ public:
                     break;
                 }
 
-                if (result == AERON_PUBLICATION_NOT_CONNECTED ||
-                    result == AERON_PUBLICATION_CLOSED ||
+                // CLOSED / MAX_POSITION_EXCEEDED / ERROR are terminal — fail fast. NOT_CONNECTED
+                // is transient and expected when the caller offers right after the PS transitions
+                // to LIVE: the publication's subscriber-image accounting briefly lags the PS's
+                // own live-state signal, so we retry within the 30s deadline rather than throw.
+                if (result == AERON_PUBLICATION_CLOSED ||
                     result == AERON_PUBLICATION_MAX_POSITION_EXCEEDED ||
                     result == AERON_PUBLICATION_ERROR)
                 {
                     throw std::runtime_error("offer returned " + std::to_string(result));
                 }
+
+                if (std::chrono::steady_clock::now() >= deadline)
+                {
+                    throw std::runtime_error(
+                        "offer timed out, last result " + std::to_string(result));
+                }
+
+                std::this_thread::yield();
             }
         }
     }
@@ -3835,12 +3848,17 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldHandleReplayBeingAheadOfLiv
         },
         isLive(persistent_subscription));
 
-    // join_difference = live_position - replay_position
-    // Live is limited by the 4KB receiver window; replay consumed all 32 frames.
-    const int64_t rcv_wnd = 4 * 1024;
-    const int64_t frame_length = AERON_ALIGN(ONE_KB_MESSAGE_SIZE + AERON_DATA_HEADER_LENGTH, AERON_LOGBUFFER_FRAME_ALIGNMENT);
-    const int64_t expected_join_difference = rcv_wnd - (32 * frame_length);
-    ASSERT_EQ(expected_join_difference, aeron_archive_persistent_subscription_join_difference(persistent_subscription));
+    // join_difference = live_position - replay_position. Replay consumed all 32 frames
+    // (~32 KB) while live is held at the slow subscription's 4 KB receive window, so any
+    // value the PS exposes here must be <= 0 — replay is at-or-ahead-of live, never behind.
+    // We don't pin a specific value because the path through the PS state machine is racy:
+    //   * If the live image attaches while PS is still in REPLAY, the REPLAY handler enters
+    //     ATTEMPT_SWITCH with join_difference = live_position - replay_position (negative,
+    //     ~rcv_wnd - 32*frame_length), and ATTEMPT_SWITCH preserves that value through to LIVE.
+    //   * If the replay image closes first (e.g. PS already at recorded stop_position when
+    //     the live image arrives), PS shortcuts via ADD_LIVE_SUBSCRIPTION → AWAIT_LIVE → LIVE,
+    //     which sets join_difference = 0 before transitioning. Both are valid handling.
+    ASSERT_LE(aeron_archive_persistent_subscription_join_difference(persistent_subscription), 0);
 
     aeron_subscription_close(slow_subscription, nullptr, nullptr);
 

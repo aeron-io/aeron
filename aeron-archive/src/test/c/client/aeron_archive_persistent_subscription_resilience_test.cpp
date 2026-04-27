@@ -414,6 +414,8 @@ public:
 
     void offer(const std::vector<std::vector<uint8_t>>& messages) const
     {
+        const std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+
         for (const std::vector<uint8_t>& message : messages)
         {
             while (true)
@@ -430,13 +432,24 @@ public:
                     break;
                 }
 
-                if (result == AERON_PUBLICATION_NOT_CONNECTED ||
-                    result == AERON_PUBLICATION_CLOSED ||
+                // CLOSED / MAX_POSITION_EXCEEDED / ERROR are terminal — fail fast. NOT_CONNECTED
+                // is transient and expected when the caller offers right after the PS transitions
+                // to LIVE: the publication's subscriber-image accounting briefly lags the PS's
+                // own live-state signal, so we retry within the 30s deadline rather than throw.
+                if (result == AERON_PUBLICATION_CLOSED ||
                     result == AERON_PUBLICATION_MAX_POSITION_EXCEEDED ||
                     result == AERON_PUBLICATION_ERROR)
                 {
                     throw std::runtime_error("offer returned " + std::to_string(result));
                 }
+
+                if (std::chrono::steady_clock::now() >= deadline)
+                {
+                    throw std::runtime_error(
+                        "offer timed out, last result " + std::to_string(result));
+                }
+
+                std::this_thread::yield();
             }
         }
     }
