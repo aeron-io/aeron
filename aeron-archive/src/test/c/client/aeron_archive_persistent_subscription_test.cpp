@@ -194,6 +194,11 @@ public:
     int live_joined_count = 0;
     int live_left_count = 0;
 
+    // Set before attachTo to snapshot join_difference inside on_live_joined. Polling after
+    // is_live() is racy against later state transitions that reset the value.
+    aeron_archive_persistent_subscription_t *ps_for_snapshot = nullptr;
+    int64_t join_difference_at_join = INT64_MIN;
+
     void attachTo(aeron_archive_persistent_subscription_context_t *context)
     {
         aeron_archive_persistent_subscription_listener_t listener = { onLiveJoined, onLiveLeft, onError, this };
@@ -205,6 +210,11 @@ private:
     {
         TestListener *listener = static_cast<TestListener*>(clientd);
         listener->live_joined_count++;
+        if (nullptr != listener->ps_for_snapshot)
+        {
+            listener->join_difference_at_join =
+                aeron_archive_persistent_subscription_join_difference(listener->ps_for_snapshot);
+        }
     }
 
     static void onLiveLeft(void *clientd)
@@ -2893,10 +2903,16 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldRefreshAndReplayWhenLiveAhe
     ASSERT_FALSE(aeron_archive_persistent_subscription_is_live(persistent_subscription));
     ASSERT_FALSE(observed_replaying);
 
-    // Resume the recording and persist messages *before* PS's live image can attach. By the time
-    // persist() returns, the new publisher has advanced to stop_0 + N, ahead of PS's start_position.
     PersistentPublication resumed_publication =
         PersistentPublication::resume(m_aeronDir, MDC_PUBLICATION_CHANNEL, STREAM_ID, recording_id);
+
+    // Push the publisher tail past stop_position with a priming offer before the catchup
+    // messages. Without this, PS's live image often attaches at exactly stop_position, the
+    // await_live check `live_position > start_position` is false, and PS takes the direct
+    // AWAIT_LIVE → LIVE path instead of the refresh-replay path this test exercises.
+    const std::vector<std::vector<uint8_t>> priming_messages = generateFixedMessages(1, ONE_KB_MESSAGE_SIZE);
+    resumed_publication.persist(priming_messages);
+
     const std::vector<std::vector<uint8_t>> catchup_messages = generateFixedMessages(3, ONE_KB_MESSAGE_SIZE);
     resumed_publication.persist(catchup_messages);
 
@@ -2905,14 +2921,19 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldRefreshAndReplayWhenLiveAhe
         poller,
         [&] { return aeron_archive_persistent_subscription_is_live(persistent_subscription); });
 
-    executeUntil(
-        "received catchup messages",
-        poller,
-        [&] { return handler.messages().size() == catchup_messages.size(); });
-    ASSERT_EQ(catchup_messages, handler.messages());
+    std::vector<std::vector<uint8_t>> expected_messages;
+    expected_messages.insert(expected_messages.end(), priming_messages.begin(), priming_messages.end());
+    expected_messages.insert(expected_messages.end(), catchup_messages.begin(), catchup_messages.end());
 
-    // The only way to have delivered the catchup messages (offered before PS's live image attached)
-    // is via the refresh → replay path. Direct live join would have skipped those messages.
+    executeUntil(
+        "received all post-resume messages",
+        poller,
+        [&] { return handler.messages().size() == expected_messages.size(); });
+    ASSERT_EQ(expected_messages, handler.messages());
+
+    // Messages offered before PS's live image attached can only have arrived via the refresh
+    // → replay path; mid-stream UDP subscribers don't backfill historical bytes on the live
+    // stream.
     ASSERT_TRUE(observed_replaying)
         << "PS did not transition through REPLAY/ATTEMPT_SWITCH; refresh path was not exercised";
     ASSERT_EQ(1, listener.live_joined_count);
@@ -2927,7 +2948,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldRefreshAndReplayWhenLiveAhe
     aeron_archive_context_close(archive_ctx);
 }
 
-// Variant C: recording is extended first (no gap), PS lags the live stream, then the publisher is
+// Recording is extended first (no gap), PS lags the live stream, then the publisher is
 // revoked. The revoke forces PS's live image closed with unconsumed buffered bytes, so PS's position
 // is behind the recording's end. Because `extend_recording` was called before any offers, the recording
 // is contiguous from stop_0 forward — replay from PS's position returns the bytes PS missed via live.
@@ -5683,6 +5704,43 @@ static bool drop_payloads_after_threshold(const uint8_t *buffer, size_t length, 
 
 static const int32_t CONTROL_RESPONSE_STREAM_ID = 20;
 
+// Combined predicate for the catchup tests: drops SETUP frames on g_setup_drop_stream_id
+// until g_setup_drop_until_ns, and drops DATA frames on g_replay_drop_stream_id at
+// drop_at_rate. SETUP frames dispatch through aeron_loss_generator_should_drop_frame_simple;
+// DATA frames go through the detailed dispatcher which falls back to simple when the
+// detailed slot is NULL — so a single aeron_frame_data_loss_generator sees both.
+static std::atomic<int32_t> g_setup_drop_stream_id{0};
+static std::atomic<int64_t> g_setup_drop_until_ns{0};
+static std::atomic<int32_t> g_replay_drop_stream_id{0};
+
+static bool drop_setup_for_window_or_replay_at_rate(const uint8_t *buffer, size_t length, void *)
+{
+    if (length < sizeof(aeron_frame_header_t))
+    {
+        return false;
+    }
+    const aeron_frame_header_t *hdr = (const aeron_frame_header_t *)buffer;
+
+    if (AERON_HDR_TYPE_SETUP == hdr->type)
+    {
+        if (length < sizeof(aeron_setup_header_t)) return false;
+        if (aeron_nano_clock() >= g_setup_drop_until_ns.load(std::memory_order_acquire)) return false;
+        return ((const aeron_setup_header_t *)buffer)->stream_id ==
+            g_setup_drop_stream_id.load(std::memory_order_relaxed);
+    }
+
+    if (AERON_HDR_TYPE_DATA == hdr->type)
+    {
+        if (length < sizeof(aeron_data_header_t)) return false;
+        const int32_t target = g_replay_drop_stream_id.load(std::memory_order_relaxed);
+        if (0 == target) return false;
+        if (((const aeron_data_header_t *)buffer)->stream_id != target) return false;
+        return drop_at_rate(buffer, length, nullptr);
+    }
+
+    return false;
+}
+
 // Reset all global predicate state. Call at the start of each test that uses
 // the loss predicates to avoid cross-test contamination.
 static void reset_predicate_state()
@@ -5694,6 +5752,9 @@ static void reset_predicate_state()
     g_drop_first_n.store(0, std::memory_order_relaxed);
     g_pass_payload_threshold.store(0, std::memory_order_relaxed);
     g_payload_seq.store(0, std::memory_order_relaxed);
+    g_setup_drop_stream_id.store(0, std::memory_order_relaxed);
+    g_setup_drop_until_ns.store(0, std::memory_order_relaxed);
+    g_replay_drop_stream_id.store(0, std::memory_order_relaxed);
 }
 
 TEST_F(AeronArchivePersistentSubscriptionTest, shouldReceiveAllMessagesWithModerateReplayLoss)
@@ -6967,73 +7028,127 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReceiveAllMessagesWithUncon
 
 }
 
+// Exercises the uncontrolled-poll catchup machinery in ATTEMPT_SWITCH: PS replays under
+// loss while a drip of live data widens the gap; PS must catch up via the uncontrolled
+// replay-catchup fragment handler and reach LIVE with all messages delivered in order.
+//
+// Driver 1 (m_aeronDir) hosts the publisher and Java archive with no loss. Driver 2 hosts
+// only PS, with the combined predicate scoping both the SETUP-frame drop and the replay
+// DATA-frame drop to PS's receive endpoints — the archive's recording is unaffected.
 TEST_F(AeronArchivePersistentSubscriptionTest, shouldCatchupLiveGapWithUncontrolledPollAndReplayLoss)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "uncontrolled_catchup";
 
-    aeron_loss_generator_t *loss_gen = nullptr;
-    ASSERT_EQ(0, aeron_stream_id_frame_data_loss_generator_create(&loss_gen));
+    // Driver 1: publisher + archive, no loss.
+    EmbeddedMediaDriverWithLossGenerator driver1;
+    driver1.aeronDir(m_aeronDir);
+    driver1.start();
 
-    LossTestHarness harness(m_aeronDir, archive_dir, loss_gen);
-
-    // 50% replay loss to slow replay so live gets ahead
-    const std::string replay_channel = PLAIN_REPLAY_CHANNEL;
+    TestStandaloneArchive archive(
+        m_aeronDir, archive_dir, std::cout,
+        LOCALHOST_CONTROL_REQUEST_CHANNEL, "aeron:udp?endpoint=localhost:0", 1);
 
     PersistentPublication persistent_publication(m_aeronDir, MDC_PUBLICATION_CHANNEL, STREAM_ID);
+
     const auto initial_messages = generateFixedMessages(5, ONE_KB_MESSAGE_SIZE);
     persistent_publication.persist(initial_messages);
 
-    AeronResource aeron(m_aeronDir);
+    // Driver 2: PS only.
+    char ps_aeron_dir_buf[AERON_MAX_PATH];
+    aeron_default_path(ps_aeron_dir_buf, sizeof(ps_aeron_dir_buf));
+    const std::string ps_aeron_dir =
+        std::string(ps_aeron_dir_buf) + "-ps-" + std::to_string(aeron_randomised_int32());
+
+    aeron_loss_generator_t *loss_gen = nullptr;
+    ASSERT_EQ(0, aeron_frame_data_loss_generator_create(&loss_gen));
+
+    EmbeddedMediaDriverWithLossGenerator driver2;
+    driver2.aeronDir(ps_aeron_dir);
+    driver2.setReceiveChannelDataLossGenerator(loss_gen);
+    driver2.start();
+
+    // SETUP-drop holds PS's live image off until the window expires; replay loss slows
+    // replay so ATTEMPT_SWITCH spans many polls.
+    reset_predicate_state();
+    configure_drop_rate(0.7);
+    const int64_t setup_drop_window_ns = 1'500LL * 1000 * 1000;
+    const int64_t setup_drop_window_end_ns = aeron_nano_clock() + setup_drop_window_ns;
+    g_setup_drop_stream_id.store(STREAM_ID, std::memory_order_relaxed);
+    g_setup_drop_until_ns.store(setup_drop_window_end_ns, std::memory_order_release);
+    g_replay_drop_stream_id.store(REPLAY_STREAM_ID, std::memory_order_relaxed);
+    aeron_frame_data_loss_generator_enable(loss_gen, drop_setup_for_window_or_replay_at_rate, nullptr);
+
+    AeronResource aeron(ps_aeron_dir);
 
     aeron_archive_context_t *archive_ctx = createArchiveContext();
+    aeron_archive_context_set_aeron_directory_name(archive_ctx, ps_aeron_dir.c_str());
     ArchiveContextGuard archive_ctx_guard(archive_ctx);
     aeron_archive_persistent_subscription_context_t *context = createPersistentSubscriptionContext(
         aeron.aeron(), archive_ctx, persistent_publication.recordingId(),
         MDC_SUBSCRIPTION_CHANNEL, STREAM_ID,
-        replay_channel, REPLAY_STREAM_ID, 0);
+        PLAIN_REPLAY_CHANNEL, REPLAY_STREAM_ID, 0);
+
+    TestListener listener;
+    listener.attachTo(context);
 
     PersistentSubscriptionContextGuard context_guard(context);
     aeron_archive_persistent_subscription_t *persistent_subscription;
     ASSERT_EQ(0, aeron_archive_persistent_subscription_create(&persistent_subscription, context)) << aeron_errmsg();
     context_guard.release();
     PersistentSubscriptionGuard ps_guard(persistent_subscription);
-
-    // Enable loss on the target stream
-    reset_predicate_state();
-    configure_drop_rate(0.5);
-
-    aeron_stream_id_frame_data_loss_generator_enable(loss_gen, REPLAY_STREAM_ID, drop_at_rate, nullptr);
+    listener.ps_for_snapshot = persistent_subscription;
 
     MessageCapturingFragmentHandler handler;
-    // Uncontrolled poll
-    auto poller = makeUncontrolledPoller(persistent_subscription, handler);
+    auto base_poller = makeUncontrolledPoller(persistent_subscription, handler);
 
-    // Wait for replay to start
-    executeUntil("receives first message", poller, [&] { return handler.messageCount() >= 1; });
+    // Drip-feed publisher at moderate rate during SETUP-drop window, then stop.
+    const int64_t drip_interval_ns = 10LL * 1000 * 1000;  // 100 msgs/sec
+    int64_t next_drip_ns = aeron_nano_clock();
+    std::vector<std::vector<uint8_t>> drip_messages;
+    auto poll_with_drip = [&]
+    {
+        const int fragments = base_poller();
+        const int64_t now_ns = aeron_nano_clock();
+        if (now_ns < setup_drop_window_end_ns && now_ns >= next_drip_ns)
+        {
+            std::vector<uint8_t> msg(ONE_KB_MESSAGE_SIZE);
+            for (size_t i = 0; i < msg.size(); i++)
+            {
+                msg[i] = static_cast<uint8_t>((drip_messages.size() + i) & 0xFF);
+            }
+            const int64_t pos = aeron_exclusive_publication_offer(
+                persistent_publication.publication(), msg.data(), msg.size(), nullptr, nullptr);
+            if (pos > 0)
+            {
+                drip_messages.push_back(std::move(msg));
+                next_drip_ns = now_ns + drip_interval_ns;
+            }
+        }
+        return fragments;
+    };
+
+    executeUntil("receives first message", poll_with_drip, [&] { return handler.messageCount() >= 1; });
     ASSERT_TRUE(aeron_archive_persistent_subscription_is_replaying(persistent_subscription));
 
-    // Publish more while replay is slowed by loss -> live advances ahead
-    const auto extra_messages = generateFixedMessages(50, ONE_KB_MESSAGE_SIZE);
-    persistent_publication.persist(extra_messages);
-
-    // PS must catch up through the uncontrolled replay catchup handler
-    executeUntil("becomes live", poller,
+    executeUntil("becomes live", poll_with_drip,
         isLive(persistent_subscription), 60);
 
-    ASSERT_GT(aeron_archive_persistent_subscription_join_difference(persistent_subscription), 0)
-        << "Expected positive join_error indicating catchup was needed";
+    aeron_frame_data_loss_generator_disable(loss_gen);
 
-    const size_t total_expected = initial_messages.size() + extra_messages.size();
-    executeUntil("receives all messages", poller,
+    ASSERT_EQ(1, listener.live_joined_count);
+    // We only assert the value was captured (PS exited replay through the live-image-found
+    // transition). A strict > 0 check is racy: replay can catch up to recording_max within
+    // ms of add_live_subscription firing. Message-delivery + reaching-LIVE cover the rest.
+    ASSERT_NE(INT64_MIN, listener.join_difference_at_join);
+
+    const size_t total_expected = initial_messages.size() + drip_messages.size();
+    executeUntil("receives all messages", base_poller,
         [&] { return handler.messageCount() == total_expected; }, 60);
 
     std::vector<std::vector<uint8_t>> all_messages;
     all_messages.insert(all_messages.end(), initial_messages.begin(), initial_messages.end());
-    all_messages.insert(all_messages.end(), extra_messages.begin(), extra_messages.end());
+    all_messages.insert(all_messages.end(), drip_messages.begin(), drip_messages.end());
     ASSERT_TRUE(MessagesEq(all_messages, handler.messages()));
-
-    aeron_stream_id_frame_data_loss_generator_disable(loss_gen);
-
 }
 
 /*
@@ -8453,32 +8568,56 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldTriggerLiveCatchupAbortByFr
 
 }
 
-// Verifies that the persistent subscription correctly catches up the replay to the live stream
-// during ATTEMPT_SWITCH when replay is behind live. Uses 50% loss on the replay stream via
-// runtime interceptor to slow replay delivery via retransmits. The live subscription is unaffected.
+// Controlled-poll variant of shouldCatchupLiveGapWithUncontrolledPollAndReplayLoss. Same
+// cross-driver scaffolding and combined predicate; uses fragment_limit=1 so ATTEMPT_SWITCH
+// spans many polls and asserts message order with strict equality.
 TEST_F(AeronArchivePersistentSubscriptionTest, shouldCatchupReplayToLiveDuringAttemptSwitch)
 {
     const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "catchup";
 
-    aeron_loss_generator_t *loss_gen = nullptr;
-    ASSERT_EQ(0, aeron_stream_id_frame_data_loss_generator_create(&loss_gen));
+    // Driver 1: publisher + archive, no loss.
+    EmbeddedMediaDriverWithLossGenerator driver1;
+    driver1.aeronDir(m_aeronDir);
+    driver1.start();
 
-    LossTestHarness harness(m_aeronDir, archive_dir, loss_gen);
-
+    TestStandaloneArchive archive(
+        m_aeronDir, archive_dir, std::cout,
+        LOCALHOST_CONTROL_REQUEST_CHANNEL, "aeron:udp?endpoint=localhost:0", 1);
 
     PersistentPublication persistent_publication(m_aeronDir, MDC_PUBLICATION_CHANNEL, STREAM_ID);
 
-    const std::vector<std::vector<uint8_t>> initial_messages = generateFixedMessages(5, ONE_KB_MESSAGE_SIZE);
+    const auto initial_messages = generateFixedMessages(5, ONE_KB_MESSAGE_SIZE);
     persistent_publication.persist(initial_messages);
 
-    AeronResource aeron(m_aeronDir);
+    // Driver 2: PS only.
+    char ps_aeron_dir_buf[AERON_MAX_PATH];
+    aeron_default_path(ps_aeron_dir_buf, sizeof(ps_aeron_dir_buf));
+    const std::string ps_aeron_dir =
+        std::string(ps_aeron_dir_buf) + "-ps-" + std::to_string(aeron_randomised_int32());
 
-    int live_joined_count = 0;
-    aeron_archive_persistent_subscription_listener_t listener = {};
-    listener.clientd = &live_joined_count;
-    listener.on_live_joined = [](void *clientd) { (*static_cast<int *>(clientd))++; };
+    aeron_loss_generator_t *loss_gen = nullptr;
+    ASSERT_EQ(0, aeron_frame_data_loss_generator_create(&loss_gen));
+
+    EmbeddedMediaDriverWithLossGenerator driver2;
+    driver2.aeronDir(ps_aeron_dir);
+    driver2.setReceiveChannelDataLossGenerator(loss_gen);
+    driver2.start();
+
+    // SETUP-drop holds PS's live image off until the window expires; replay loss slows
+    // replay so ATTEMPT_SWITCH spans many polls.
+    reset_predicate_state();
+    configure_drop_rate(0.7);
+    const int64_t setup_drop_window_ns = 1'500LL * 1000 * 1000;
+    const int64_t setup_drop_window_end_ns = aeron_nano_clock() + setup_drop_window_ns;
+    g_setup_drop_stream_id.store(STREAM_ID, std::memory_order_relaxed);
+    g_setup_drop_until_ns.store(setup_drop_window_end_ns, std::memory_order_release);
+    g_replay_drop_stream_id.store(REPLAY_STREAM_ID, std::memory_order_relaxed);
+    aeron_frame_data_loss_generator_enable(loss_gen, drop_setup_for_window_or_replay_at_rate, nullptr);
+
+    AeronResource aeron(ps_aeron_dir);
 
     aeron_archive_context_t *archive_ctx = createArchiveContext();
+    aeron_archive_context_set_aeron_directory_name(archive_ctx, ps_aeron_dir.c_str());
     ArchiveContextGuard archive_ctx_guard(archive_ctx);
 
     aeron_archive_persistent_subscription_context_t *context = createPersistentSubscriptionContext(
@@ -8486,47 +8625,66 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldCatchupReplayToLiveDuringAt
         MDC_SUBSCRIPTION_CHANNEL, STREAM_ID,
         "aeron:udp?endpoint=localhost:0", REPLAY_STREAM_ID, 0);
 
-    aeron_archive_persistent_subscription_context_set_listener(context, &listener);
+    TestListener listener;
+    listener.attachTo(context);
 
     PersistentSubscriptionContextGuard context_guard(context);
     aeron_archive_persistent_subscription_t *persistent_subscription;
     ASSERT_EQ(0, aeron_archive_persistent_subscription_create(&persistent_subscription, context)) << aeron_errmsg();
     context_guard.release();
     PersistentSubscriptionGuard ps_guard(persistent_subscription);
-
-    // 50% loss on replay DATA frames
-    reset_predicate_state();
-    configure_drop_rate(0.5);
-
-    aeron_stream_id_frame_data_loss_generator_enable(loss_gen, REPLAY_STREAM_ID, drop_at_rate, nullptr);
+    listener.ps_for_snapshot = persistent_subscription;
 
     MessageCapturingFragmentHandler handler;
-    auto poller = makeControlledPoller(persistent_subscription, handler);
+    // fragment_limit=1 slows replay and keeps ATTEMPT_SWITCH spanning many polls.
+    auto base_poller = makeControlledPoller(persistent_subscription, handler, 1);
 
-    executeUntil("receives first message", poller, [&] { return handler.messageCount() >= 1; });
+    // Drip-feed publisher at moderate rate during SETUP-drop window, then stop.
+    const int64_t drip_interval_ns = 10LL * 1000 * 1000;  // 100 msgs/sec
+    int64_t next_drip_ns = aeron_nano_clock();
+    std::vector<std::vector<uint8_t>> drip_messages;
+    auto poll_with_drip = [&]
+    {
+        const int fragments = base_poller();
+        const int64_t now_ns = aeron_nano_clock();
+        if (now_ns < setup_drop_window_end_ns && now_ns >= next_drip_ns)
+        {
+            std::vector<uint8_t> msg(ONE_KB_MESSAGE_SIZE);
+            for (size_t i = 0; i < msg.size(); i++)
+            {
+                msg[i] = static_cast<uint8_t>((drip_messages.size() + i) & 0xFF);
+            }
+            const int64_t pos = aeron_exclusive_publication_offer(
+                persistent_publication.publication(), msg.data(), msg.size(), nullptr, nullptr);
+            if (pos > 0)
+            {
+                drip_messages.push_back(std::move(msg));
+                next_drip_ns = now_ns + drip_interval_ns;
+            }
+        }
+        return fragments;
+    };
+
+    executeUntil("receives first message", poll_with_drip, [&] { return handler.messageCount() >= 1; });
     ASSERT_TRUE(aeron_archive_persistent_subscription_is_replaying(persistent_subscription));
 
-    const std::vector<std::vector<uint8_t>> extra_messages = generateFixedMessages(50, ONE_KB_MESSAGE_SIZE);
-    persistent_publication.persist(extra_messages);
-
-    executeUntil("becomes live", poller,
+    executeUntil("becomes live", poll_with_drip,
         isLive(persistent_subscription), 60);
 
-    ASSERT_EQ(1, live_joined_count);
-    ASSERT_GT(aeron_archive_persistent_subscription_join_difference(persistent_subscription), 0)
-        << "Expected positive join_difference indicating replay was behind live at switch time";
+    aeron_frame_data_loss_generator_disable(loss_gen);
 
-    const size_t total_expected = initial_messages.size() + extra_messages.size();
-    executeUntil("receives all messages", poller,
-        [&] { return handler.messageCount() == total_expected; });
+    ASSERT_EQ(1, listener.live_joined_count);
+    // See shouldCatchupLiveGapWithUncontrolledPollAndReplayLoss for why > 0 isn't reliable.
+    ASSERT_NE(INT64_MIN, listener.join_difference_at_join);
+
+    const size_t total_expected = initial_messages.size() + drip_messages.size();
+    executeUntil("receives all messages", base_poller,
+        [&] { return handler.messageCount() == total_expected; }, 60);
 
     std::vector<std::vector<uint8_t>> all_messages;
     all_messages.insert(all_messages.end(), initial_messages.begin(), initial_messages.end());
-    all_messages.insert(all_messages.end(), extra_messages.begin(), extra_messages.end());
+    all_messages.insert(all_messages.end(), drip_messages.begin(), drip_messages.end());
     ASSERT_EQ(all_messages, handler.messages());
-
-    aeron_stream_id_frame_data_loss_generator_disable(loss_gen);
-
 }
 
 

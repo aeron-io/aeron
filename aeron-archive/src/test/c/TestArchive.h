@@ -137,6 +137,7 @@ public:
 #ifdef _WIN32
         m_pid = GetProcessId((HANDLE)m_process_handle);
 #endif
+        aeron_test_register_spawned_process(m_process_handle);
 
         const std::string mark_file = aeronDir + std::string(1, AERON_FILE_SEP) + "archive-mark.dat";
 
@@ -157,6 +158,7 @@ public:
     {
         if (m_process_handle > 0)
         {
+            aeron_test_unregister_spawned_process(m_process_handle);
             m_stream << aeron_epoch_clock() << " [TearDown] Shutting down ArchivingMediaDriver PID " << m_pid << std::endl;
 
             bool archive_terminated = false;
