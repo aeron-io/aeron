@@ -20,7 +20,7 @@
 #include <string>
 
 #include "AeronArchive.h"
-#include "client/aeron_archive_persistent_subscription.h"
+#include "client/aeron_archive.h"
 extern "C"
 {
 #include "util/aeron_error.h"
