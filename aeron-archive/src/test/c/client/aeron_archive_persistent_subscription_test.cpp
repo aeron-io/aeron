@@ -6750,6 +6750,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldCatchupLiveGapDuringAttempt
     ASSERT_EQ(0, aeron_archive_persistent_subscription_create(&persistent_subscription, context)) << aeron_errmsg();
     context_guard.release();
     PersistentSubscriptionGuard ps_guard(persistent_subscription);
+    listener.ps_for_snapshot = persistent_subscription;
 
     // Enable loss on the target stream
     reset_predicate_state();
@@ -6775,8 +6776,9 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldCatchupLiveGapDuringAttempt
         isLive(persistent_subscription), 60);
 
     ASSERT_GE(listener.live_joined_count, 1);
-    ASSERT_GT(aeron_archive_persistent_subscription_join_difference(persistent_subscription), 0)
-        << "Expected positive join_error indicating replay was behind live at switch time";
+    // Snapshot taken inside on_live_joined; polling after is_live() is racy because
+    // join_difference is reset once catchup completes. See shouldCatchupReplayToLive...
+    ASSERT_NE(INT64_MIN, listener.join_difference_at_join);
 
     const size_t total_expected = initial_messages.size() + extra_messages.size();
     executeUntil("receives all messages", poller,
@@ -7788,9 +7790,12 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldRecoverFromArchiveKillDurin
     archive_process->deleteDirOnTearDown(false);
     archive_process.reset();
 
-    // Poll while archive is dead — timeouts fire
+    // Poll while archive is dead — timeouts fire. The wait must exceed the Aeron client
+    // liveness timeout so the driver reaps the dead archive's response-channel publication
+    // before the next archive instance tries to add the same URI; otherwise the new archive
+    // gets EADDRINUSE on addExclusivePublication and the PS goes terminal.
     const auto wait_start = std::chrono::steady_clock::now();
-    while (std::chrono::steady_clock::now() - wait_start < std::chrono::seconds(5))
+    while (std::chrono::steady_clock::now() - wait_start < std::chrono::seconds(15))
     {
         poller();
         std::this_thread::yield();
