@@ -1450,8 +1450,8 @@ abstract class PersistentSubscriptionTest
             //     when the live image arrives), PS shortcuts via AWAIT_LIVE → LIVE which sets
             //     joinDifference = 0 before transitioning. Both are valid handling.
             assertTrue(persistentSubscription.joinDifference() <= 0,
-                "joinDifference must be <= 0 (replay was ahead of live), got: "
-                    + persistentSubscription.joinDifference());
+                "joinDifference must be <= 0 (replay was ahead of live), got: " +
+                    persistentSubscription.joinDifference());
 
             verify(persistentSubscription);
         }
