@@ -17,6 +17,7 @@
 #ifndef AERON_TEST_STANDALONE_ARCHIVE_H
 #define AERON_TEST_STANDALONE_ARCHIVE_H
 
+#include <atomic>
 #include <cstring>
 #include <iostream>
 #include <string>
@@ -36,10 +37,56 @@ public:
         std::ostream &stream,
         std::string controlChannel,
         std::string replicationChannel,
-        std::int64_t archiveId,
         bool deleteOnStart = true)
-        : m_archiveDir(std::move(archiveDir)), m_aeronDir(std::move(aeronDir)), m_stream(stream)
+        : TestStandaloneArchive(
+            std::move(aeronDir), std::move(archiveDir), stream,
+            std::move(controlChannel), std::move(replicationChannel),
+            nextArchiveId(), deleteOnStart, false /* explicit_id */)
     {
+    }
+
+    TestStandaloneArchive(
+        std::string aeronDir,
+        std::string archiveDir,
+        std::ostream &stream,
+        std::string controlChannel,
+        std::string replicationChannel,
+        std::int64_t archiveId,
+        bool deleteOnStart)
+        : TestStandaloneArchive(
+            std::move(aeronDir), std::move(archiveDir), stream,
+            std::move(controlChannel), std::move(replicationChannel),
+            archiveId, deleteOnStart, true /* explicit_id */)
+    {
+    }
+
+    std::int64_t archiveId() const { return m_archiveId; }
+
+private:
+    static std::int64_t nextArchiveId()
+    {
+        static std::atomic<std::int64_t> s_next{10000};
+        return s_next.fetch_add(1);
+    }
+
+    TestStandaloneArchive(
+        std::string aeronDir,
+        std::string archiveDir,
+        std::ostream &stream,
+        std::string controlChannel,
+        std::string replicationChannel,
+        std::int64_t archiveId,
+        bool deleteOnStart,
+        bool explicitId)
+        : m_archiveDir(std::move(archiveDir)), m_aeronDir(std::move(aeronDir)),
+          m_stream(stream)
+#ifdef _WIN32
+        , m_explicitId(explicitId)
+#endif
+    {
+#ifndef _WIN32
+        (void)explicitId;  // m_explicitId is Windows-only; unused on POSIX builds
+#endif
         m_stream << aeron_epoch_clock() << " [SetUp] Starting standalone Archive..." << std::endl;
 
         std::string aeronDirArg = "-Daeron.dir=" + m_aeronDir;
@@ -118,6 +165,7 @@ public:
         m_stream << aeron_epoch_clock() << " [SetUp] Archive PID " << m_pid << std::endl;
     }
 
+public:
     ~TestStandaloneArchive()
     {
         if (m_process_handle > 0)
@@ -153,7 +201,13 @@ public:
                 m_aeronDir + std::string(1, AERON_FILE_SEP) + "archive-mark.dat";
             aeron_delete_file(mark_file_to_remove.c_str());
 
-            awaitArchiveCountersFreed();
+            // Only wait when this archive was constructed with an explicit id, since the
+            // wait exists to make a same-id restart safe. Auto-allocated ids are unique per
+            // process so the next archive cannot collide on the ghost error counter.
+            if (m_explicitId)
+            {
+                awaitArchiveCountersFreed();
+            }
 #endif
 
             if (m_deleteDirOnTearDown && aeron_is_directory(m_archiveDir.c_str()) >= 0)
@@ -183,6 +237,9 @@ private:
     pid_t m_pid = 0;
     std::int64_t m_archiveId = 0;
     bool m_deleteDirOnTearDown = true;
+#ifdef _WIN32
+    bool m_explicitId = false;
+#endif
 
 #ifdef _WIN32
     // Wait for the driver to reap the dead archive's client and free its counters

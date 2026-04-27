@@ -64,7 +64,8 @@ endif ()
 if (AERON_SYSTEM_TESTS)
     aeron_c_archive_system_test(aeron_archive_async_client_test client/aeron_archive_async_client_test.cpp)
     aeron_c_archive_system_test(aeron_archive_persistent_subscription_test client/aeron_archive_persistent_subscription_test.cpp)
-    target_sources(aeron_archive_persistent_subscription_test PRIVATE
+    aeron_c_archive_system_test(aeron_archive_persistent_subscription_resilience_test client/aeron_archive_persistent_subscription_resilience_test.cpp)
+    target_sources(aeron_archive_persistent_subscription_resilience_test PRIVATE
         ${AERON_TEST_SUPPORT_C_PATH}/aeron_stream_id_loss_generator.c
         ${AERON_TEST_SUPPORT_C_PATH}/aeron_stream_id_frame_data_loss_generator.c
         ${AERON_TEST_SUPPORT_C_PATH}/aeron_frame_data_loss_generator.c)
