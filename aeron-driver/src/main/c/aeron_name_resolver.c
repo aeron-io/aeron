@@ -115,13 +115,16 @@ int aeron_default_name_resolver_init(
 
     if (!_default_resolver->ipv4_available && !_default_resolver->ipv6_available)
     {
-        free(_default_resolver);
         AERON_APPEND_ERR("%s", "IPv4 and IPv6 are unavailable for default resolver");
-        return -1;
+        goto error_cleanup;
     }
 
     *default_resolver = _default_resolver;
     return 0;
+
+error_cleanup:
+    free(_default_resolver);
+    return -1;
 }
 
 int aeron_default_name_resolver_supplier(
