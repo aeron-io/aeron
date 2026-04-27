@@ -1039,3 +1039,50 @@ TEST_F(NameResolverTest, shouldHandleDissection)
     std::string output = testing::internal::GetCapturedStdout();
     EXPECT_EQ("[0.000000000] DRIVER: FRAME_IN [104/104]: address=127.0.0.1:5555 type=RES flags=10101011 frameLength=104 [resType=2 flags=10000000 port=9872 ageInMs=100 address=::1 name=ABCDEFHG] [resType=1 flags=00110011 port=8080 ageInMs=333 address=127.0.0.1 name=test]\n", output);
 }
+
+static void print_addrinfo(struct addrinfo *res)
+{
+    struct sockaddr_in *ipv4_addr;
+    struct sockaddr_in6 *ipv6_addr;
+    char ipv4_str[INET_ADDRSTRLEN ];
+    char ipv6_str[INET6_ADDRSTRLEN];
+
+    fprintf(stderr, "name=%s ", res->ai_canonname);
+    fprintf(stderr, "flags=%d family=%d socktype=%d protocol=%d ", res->ai_flags, res->ai_family, res->ai_socktype, res->ai_protocol);
+    fprintf(stderr, "addrlen=%d ", res->ai_addrlen);
+
+    if (AF_INET == res->ai_family)
+    {
+        ipv4_addr = (struct sockaddr_in *) res->ai_addr;
+        if (inet_ntop(res->ai_family, &ipv4_addr->sin_addr, ipv4_str, res->ai_addrlen) == NULL)
+        {
+            return;
+        }
+        fprintf(stderr, "addr=%s port=%d", ipv4_str, htons(ipv4_addr->sin_port));
+    }
+    else if (AF_INET6 == res->ai_family)
+    {
+        ipv6_addr = (struct sockaddr_in6 *) res->ai_addr;
+
+        if (inet_ntop(res->ai_family, &ipv6_addr->sin6_addr, ipv6_str, res->ai_addrlen) == NULL)
+        {
+            return;
+        }
+        fprintf(stderr, "addr=%s port=%d", ipv6_str, htons(ipv6_addr->sin6_port));
+    }
+
+    fprintf(stderr, "\n");
+}
+
+TEST_F(NameResolverTest, seeGetAddrInfo)
+{
+    struct addrinfo *res, *ressave;
+    ASSERT_EQ(0, getaddrinfo("localhost", NULL, NULL, &ressave));
+
+    res = ressave;
+    for (; res != nullptr; res = res->ai_next)
+    {
+        print_addrinfo(res);
+    }
+    freeaddrinfo(ressave);
+}
