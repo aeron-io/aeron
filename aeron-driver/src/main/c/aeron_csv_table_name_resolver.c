@@ -46,8 +46,23 @@ typedef struct aeron_csv_table_name_resolver_stct
     size_t length;
     size_t capacity;
     char *saved_config_csv;
+    aeron_name_resolver_t delegate_resolver;
+    int64_t *error_counter;
+    aeron_distinct_error_log_t *error_log;
 }
 aeron_csv_table_name_resolver_t;
+
+int aeron_csv_tablename_resolver_lookup(
+    aeron_name_resolver_t *resolver,
+    const char *name,
+    const char *uri_param_name,
+    bool is_re_lookup,
+    const char **resolved_name)
+{
+    aeron_csv_table_name_resolver_t *csv_resolver = (aeron_csv_table_name_resolver_t *)resolver->state;
+    return csv_resolver->delegate_resolver.lookup_func(
+        &csv_resolver->delegate_resolver, name, uri_param_name, is_re_lookup, resolved_name);
+}
 
 int aeron_csv_table_name_resolver_resolve(
     aeron_name_resolver_t *resolver,
@@ -57,89 +72,112 @@ int aeron_csv_table_name_resolver_resolve(
     struct sockaddr_storage *address)
 {
     const char *hostname = name;
-    if (NULL != resolver->state)
+    aeron_csv_table_name_resolver_t *csv_resolver = (aeron_csv_table_name_resolver_t *)resolver->state;
+
+    for (size_t i = 0; i < csv_resolver->length; i++)
     {
-        aeron_csv_table_name_resolver_t *table = (aeron_csv_table_name_resolver_t *)resolver->state;
-
-        for (size_t i = 0; i < table->length; i++)
+        if (strncmp(name, csv_resolver->array[i].name, strlen(csv_resolver->array[i].name) + 1) == 0)
         {
-            if (strncmp(name, table->array[i].name, strlen(table->array[i].name) + 1) == 0)
-            {
-                int64_t operation;
-                AERON_GET_ACQUIRE(operation, *table->array[i].operation_toggle.value_addr);
+            int64_t operation;
+            AERON_GET_ACQUIRE(operation, *csv_resolver->array[i].operation_toggle.value_addr);
 
-                if (AERON_NAME_RESOLVER_CSV_DISABLE_RESOLUTION_OP == operation)
-                {
-                    AERON_SET_ERR(-AERON_ERROR_CODE_UNKNOWN_HOST, "Unable to resolve host=(%s): (forced)", hostname);
-                    return -1;
-                }
-                else if (AERON_NAME_RESOLVER_CSV_USE_INITIAL_RESOLUTION_HOST_OP == operation)
-                {
-                    hostname = table->array[i].initial_resolution_host;
-                }
-                else if (AERON_NAME_RESOLVER_CSV_USE_RE_RESOLUTION_HOST_OP == operation)
-                {
-                    hostname = table->array[i].re_resolution_host;
-                }
+            if (AERON_NAME_RESOLVER_CSV_DISABLE_RESOLUTION_OP == operation)
+            {
+                AERON_SET_ERR(-AERON_ERROR_CODE_UNKNOWN_HOST, "Unable to resolve host=(%s): (forced)", hostname);
+                return -1;
+            }
+            else if (AERON_NAME_RESOLVER_CSV_USE_INITIAL_RESOLUTION_HOST_OP == operation)
+            {
+                hostname = csv_resolver->array[i].initial_resolution_host;
+            }
+            else if (AERON_NAME_RESOLVER_CSV_USE_RE_RESOLUTION_HOST_OP == operation)
+            {
+                hostname = csv_resolver->array[i].re_resolution_host;
             }
         }
     }
 
-    int result = aeron_default_name_resolver_resolve(resolver, hostname, uri_param_name, is_re_resolution, address);
+    int result = csv_resolver->delegate_resolver.resolve_func(
+        &csv_resolver->delegate_resolver, hostname, uri_param_name, is_re_resolution, address);
 
     return result;
+}
+
+int aeron_csv_table_name_resolver_on_start(aeron_name_resolver_t *resolver)
+{
+    aeron_csv_table_name_resolver_t *csv_resolver = (aeron_csv_table_name_resolver_t *)resolver->state;
+    return csv_resolver->delegate_resolver.start_func(&csv_resolver->delegate_resolver);
+}
+
+int aeron_csv_table_name_resolver_do_work(aeron_name_resolver_t *resolver, int64_t now_ms)
+{
+    aeron_csv_table_name_resolver_t *csv_resolver = (aeron_csv_table_name_resolver_t *)resolver->state;
+    return csv_resolver->delegate_resolver.do_work_func(&csv_resolver->delegate_resolver, now_ms);
+}
+
+int aeron_csv_table_name_resolver_free(aeron_csv_table_name_resolver_t *csv_resolver)
+{
+    aeron_free(csv_resolver->saved_config_csv);
+    aeron_free(csv_resolver->array);
+    aeron_free(csv_resolver);
+    return 0;
+}
+
+static void aeron_csv_table_name_resolver_log_and_clear_error(aeron_csv_table_name_resolver_t *resolver)
+{
+    aeron_distinct_error_log_record(resolver->error_log, aeron_errcode(), aeron_errmsg());
+    aeron_counter_increment(resolver->error_counter);
+    aeron_err_clear();
 }
 
 int aeron_csv_table_name_resolver_close(aeron_name_resolver_t *resolver)
 {
     aeron_csv_table_name_resolver_t *resolver_state = (aeron_csv_table_name_resolver_t *)resolver->state;
 
-    if (NULL != resolver_state)
+    if (resolver_state->delegate_resolver.close_func(&resolver_state->delegate_resolver) < 0)
     {
-        aeron_free(resolver_state->saved_config_csv);
-        aeron_free(resolver_state->array);
-        aeron_free(resolver_state);
+        AERON_APPEND_ERR("%s", "");
+        aeron_csv_table_name_resolver_log_and_clear_error(resolver_state);
     }
-    return 0;
+
+    return aeron_csv_table_name_resolver_free(resolver_state);
 }
 
-int aeron_csv_table_name_resolver_supplier(
-    aeron_name_resolver_t *resolver,
-    const char *args,
-    aeron_driver_context_t *context)
+int aeron_csv_table_name_resolver_init(
+    aeron_csv_table_name_resolver_t **csv_resolver,
+    aeron_driver_context_t *context,
+    const char *args)
 {
-    resolver->lookup_func = aeron_default_name_resolver_lookup;
-    resolver->close_func = aeron_csv_table_name_resolver_close;
-    resolver->start_func = aeron_default_name_resolver_start;
-    resolver->resolve_func = aeron_csv_table_name_resolver_resolve;
-    resolver->do_work_func = aeron_default_name_resolver_do_work;
-    resolver->name = "csv";
-
     char *rows[AERON_NAME_RESOLVER_CSV_TABLE_MAX_SIZE];
     char *columns[AERON_NAME_RESOLVER_CSV_TABLE_COLUMNS];
-    aeron_csv_table_name_resolver_t *lookup_table = NULL;
+    aeron_csv_table_name_resolver_t *_csv_resolver = NULL;
 
     if (NULL == args)
     {
         AERON_SET_ERR(EINVAL, "No CSV configuration, please specify: %s", AERON_NAME_RESOLVER_INIT_ARGS_ENV_VAR);
-        goto error;
+        return -1;
     }
 
-    if (aeron_alloc((void **)&lookup_table, sizeof(aeron_csv_table_name_resolver_t)) < 0)
+    if (aeron_alloc((void **)&_csv_resolver, sizeof(aeron_csv_table_name_resolver_t)) < 0)
     {
         AERON_APPEND_ERR("%s", "Allocating lookup table");
+        return -1;
+    }
+
+    if (aeron_default_name_resolver_supplier(&_csv_resolver->delegate_resolver, NULL, context) < 0)
+    {
+        AERON_APPEND_ERR("%s", "");
         goto error;
     }
-    resolver->state = lookup_table;
 
-    lookup_table->saved_config_csv = strdup(args);
-    if (NULL == lookup_table->saved_config_csv)
+    _csv_resolver->saved_config_csv = strdup(args);
+    if (NULL == _csv_resolver->saved_config_csv)
     {
         AERON_SET_ERR(errno, "%s", "Duplicating config string");
         goto error;
     }
 
-    int num_rows = aeron_tokenise(lookup_table->saved_config_csv, '|', AERON_NAME_RESOLVER_CSV_TABLE_MAX_SIZE, rows);
+    int num_rows = aeron_tokenise(_csv_resolver->saved_config_csv, '|', AERON_NAME_RESOLVER_CSV_TABLE_MAX_SIZE, rows);
     if (num_rows < 0)
     {
         AERON_SET_ERR(num_rows, "%s", "Failed to parse rows for lookup table");
@@ -149,13 +187,13 @@ int aeron_csv_table_name_resolver_supplier(
     for (int i = num_rows; -1 < --i;)
     {
         int ensure_capacity_result = 0;
-        AERON_ARRAY_ENSURE_CAPACITY(ensure_capacity_result, (*lookup_table), aeron_csv_table_name_resolver_row_t)
+        AERON_ARRAY_ENSURE_CAPACITY(ensure_capacity_result, (*_csv_resolver), aeron_csv_table_name_resolver_row_t)
         if (ensure_capacity_result < 0)
         {
             AERON_APPEND_ERR(
                 "Failed to allocate rows for lookup table (%" PRIu64 ",%" PRIu64 ")",
-                (uint64_t)lookup_table->length,
-                (uint64_t)lookup_table->capacity);
+                (uint64_t)_csv_resolver->length,
+                (uint64_t)_csv_resolver->capacity);
             goto error;
         }
 
@@ -163,7 +201,7 @@ int aeron_csv_table_name_resolver_supplier(
         if (AERON_NAME_RESOLVER_CSV_TABLE_COLUMNS == num_columns)
         {
             // Fields are in reverse order.
-            aeron_csv_table_name_resolver_row_t *row = &lookup_table->array[lookup_table->length];
+            aeron_csv_table_name_resolver_row_t *row = &_csv_resolver->array[_csv_resolver->length];
             row->re_resolution_host = columns[0];
             row->initial_resolution_host = columns[1];
             row->name = columns[2];
@@ -186,7 +224,7 @@ int aeron_csv_table_name_resolver_supplier(
                 row->name,
                 row->initial_resolution_host,
                 row->re_resolution_host);
-            
+
             if (value_buffer_result < 0)
             {
                 AERON_SET_ERR(EINVAL, "%s", "Failed to create csv resolver counter label");
@@ -198,7 +236,7 @@ int aeron_csv_table_name_resolver_supplier(
                 (size_t)value_buffer_result : value_buffer_maxlen;
 
             row->operation_toggle.counter_id = aeron_counters_manager_allocate(
-                context->counters_manager, 
+                context->counters_manager,
                 AERON_NAME_RESOLVER_CSV_ENTRY_COUNTER_TYPE_ID,
                 key_buffer,
                 key_length,
@@ -214,15 +252,41 @@ int aeron_csv_table_name_resolver_supplier(
             row->operation_toggle.value_addr = aeron_counters_manager_addr(
                 context->counters_manager, row->operation_toggle.counter_id);
 
-            lookup_table->length++;
+            _csv_resolver->length++;
         }
     }
 
-    resolver->state = lookup_table;
+    _csv_resolver->error_counter = aeron_system_counter_addr(context->system_counters, AERON_SYSTEM_COUNTER_ERRORS);
+    _csv_resolver->error_log = context->error_log;
 
+    *csv_resolver = _csv_resolver;
     return 0;
 
 error:
-    aeron_csv_table_name_resolver_close(resolver);
+    aeron_csv_table_name_resolver_free(_csv_resolver);
     return -1;
+}
+
+int aeron_csv_table_name_resolver_supplier(
+    aeron_name_resolver_t *resolver,
+    const char *args,
+    aeron_driver_context_t *context)
+{
+    aeron_csv_table_name_resolver_t *csv_resolver = NULL;
+
+    resolver->state = NULL;
+    if (aeron_csv_table_name_resolver_init(&csv_resolver, context, args) < 0)
+    {
+        return -1;
+    }
+
+    resolver->lookup_func = aeron_csv_tablename_resolver_lookup;
+    resolver->resolve_func = aeron_csv_table_name_resolver_resolve;
+    resolver->start_func = aeron_csv_table_name_resolver_on_start;
+    resolver->do_work_func = aeron_csv_table_name_resolver_do_work;
+    resolver->close_func = aeron_csv_table_name_resolver_close;
+    resolver->state = csv_resolver;
+    resolver->name = "csv";
+
+    return 0;
 }
