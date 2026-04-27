@@ -665,6 +665,7 @@ int aeron_send_channel_endpoint_check_for_re_resolution(
     }
     else if (!endpoint->conductor_fields.udp_channel->is_multicast &&
         endpoint->conductor_fields.udp_channel->has_explicit_endpoint &&
+        AERON_UDP_CHANNEL_CONTROL_MODE_RESPONSE != endpoint->conductor_fields.udp_channel->control_mode &&
         now_ns > (endpoint->time_of_last_sm_ns + AERON_SEND_CHANNEL_ENDPOINT_DESTINATION_TIMEOUT_NS))
     {
         const char *endpoint_name = endpoint->conductor_fields.udp_channel->uri.params.udp.endpoint;

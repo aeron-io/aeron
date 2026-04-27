@@ -339,7 +339,7 @@ public class SendChannelEndpoint extends UdpChannelTransport
         {
             multiSndDestination.checkForReResolution(this, nowNs, conductorProxy);
         }
-        else if (udpChannel.hasExplicitEndpoint() && !udpChannel.isMulticast())
+        else if (udpChannel.hasExplicitEndpoint() && !udpChannel.isMulticast() && !udpChannel.isResponseControlMode())
         {
             if (statusMessageTimeout(nowNs) && ((timeOfLastResolutionNs + DESTINATION_TIMEOUT) - nowNs) < 0)
             {

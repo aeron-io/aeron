@@ -530,7 +530,7 @@ public final class DriverConductor implements Agent
                     {
                         recordError(new AeronEvent("could not re-resolve: endpoint=" + endpoint));
                     }
-                    else if (!address.equals(newAddress))
+                    else if (address != null && !address.equals(newAddress))
                     {
                         senderProxy.onResolutionChange(channelEndpoint, endpoint, newAddress);
                     }

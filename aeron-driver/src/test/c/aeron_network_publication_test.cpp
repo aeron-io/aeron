@@ -24,6 +24,7 @@ extern "C"
 #include "aeron_test_udp_bindings.h"
 #include "aeron_driver_sender.h"
 #include "aeron_position.h"
+#include "concurrent/aeron_mpsc_rb.h"
 
 int aeron_driver_ensure_dir_is_recreated(aeron_driver_context_t *context);
 }
@@ -516,4 +517,79 @@ TEST_F(NetworkPublicationTest, publicationLimitShouldNotCrossIntoTheDirtyTerm)
     aeron_network_publication_update_pub_pos_and_lmt(publication);
     EXPECT_EQ(initial_position + 2 * term_length + 192 + 2 * publication_window_length, aeron_counter_get_plain(publication->pub_lmt_position.value_addr));
     EXPECT_EQ(initial_position + term_length + 192 + publication_window_length, publication->conductor_fields.clean_position);
+}
+
+typedef std::array<std::uint8_t, 4096 + AERON_RB_TRAILER_LENGTH> cmd_queue_buffer_t;
+
+class CheckForReResolutionTest : public NetworkPublicationTest
+{
+protected:
+    void SetUp() override
+    {
+        NetworkPublicationTest::SetUp();
+        ASSERT_EQ(0, aeron_mpsc_rb_init(&m_cmd_queue, m_cmd_queue_buffer.data(), m_cmd_queue_buffer.size()));
+        m_conductor_proxy.threading_mode = AERON_THREADING_MODE_DEDICATED;
+        m_conductor_proxy.command_queue = &m_cmd_queue;
+        m_conductor_proxy.fail_counter = &m_fail_counter;
+    }
+
+    void TearDown() override
+    {
+        EXPECT_EQ(0, m_fail_counter) << "command queue should never have been full";
+        NetworkPublicationTest::TearDown();
+    }
+
+    aeron_send_channel_endpoint_t *createEndpointForUri(const char *uri)
+    {
+        aeron_driver_uri_publication_params_t params = {};
+        params.mtu_length = 1408;
+        params.has_mtu_length = true;
+        params.term_length = 65536;
+        params.has_term_length = true;
+        params.publication_window_length = (int32_t)(params.term_length >> 1);
+        params.has_publication_window_length = true;
+        return createEndpoint(uri, &params, false);
+    }
+
+    static void countMessage(int32_t /*type_id*/, const void * /*buffer*/, size_t /*length*/, void *clientd)
+    {
+        (*static_cast<int *>(clientd))++;
+    }
+
+    int drainAndCount()
+    {
+        int count = 0;
+        aeron_mpsc_rb_read(&m_cmd_queue, countMessage, &count, 100);
+        return count;
+    }
+
+    AERON_DECL_ALIGNED(cmd_queue_buffer_t m_cmd_queue_buffer, 16) = {};
+    aeron_mpsc_rb_t m_cmd_queue = {};
+    aeron_driver_conductor_proxy_t m_conductor_proxy = {};
+    int64_t m_fail_counter = 0;
+};
+
+TEST_F(CheckForReResolutionTest, shouldSkipReResolveForResponseControlMode)
+{
+    auto *endpoint = createEndpointForUri(
+        "aeron:udp?control-mode=response|control=127.0.0.1:10001|endpoint=127.0.0.1:10002");
+    ASSERT_NE(nullptr, endpoint) << aeron_errmsg();
+
+    const int64_t now_ns = AERON_SEND_CHANNEL_ENDPOINT_DESTINATION_TIMEOUT_NS * 2;
+
+    ASSERT_EQ(0, aeron_send_channel_endpoint_check_for_re_resolution(endpoint, now_ns, &m_conductor_proxy));
+
+    EXPECT_EQ(0, drainAndCount()) << "no re-resolve command should be posted for response control mode";
+}
+
+TEST_F(CheckForReResolutionTest, shouldReResolveExplicitEndpointAfterTimeout)
+{
+    auto *endpoint = createEndpointForUri("aeron:udp?endpoint=127.0.0.1:10002");
+    ASSERT_NE(nullptr, endpoint) << aeron_errmsg();
+
+    const int64_t now_ns = AERON_SEND_CHANNEL_ENDPOINT_DESTINATION_TIMEOUT_NS * 2;
+
+    ASSERT_EQ(0, aeron_send_channel_endpoint_check_for_re_resolution(endpoint, now_ns, &m_conductor_proxy));
+
+    EXPECT_EQ(1, drainAndCount());
 }
