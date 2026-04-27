@@ -657,9 +657,20 @@ TEST_F(AeronArchiveAsyncClientTest, shouldAllowToStopReplay)
     ASSERT_EQ(0, aeron_archive_add_recorded_exclusive_publication(&publication, m_archive, "aeron:ipc", 5000)) << aeron_errmsg();
     aeron_subscription_t *subscription = addSubscription(aeron.aeron(), "aeron:ipc", 6000);
 
+    // Wait for the recording to be registered with the archive (the recording counter only
+    // appears once the archive's recording-side image attaches to this publication). Without
+    // this wait the replay request below races against recording-id allocation and the archive
+    // can respond with "unknown recording id" on slow CI runners.
+    aeron_counters_reader_t *counters_reader = aeron_counters_reader(aeron.aeron());
+    aeron_publication_constants_t pub_constants;
+    ASSERT_EQ(0, aeron_exclusive_publication_constants(publication, &pub_constants));
+    const int32_t counter_id = getRecordingCounterId(pub_constants.session_id, counters_reader);
+    const int64_t recording_id = aeron_archive_recording_pos_get_recording_id(counters_reader, counter_id);
+
     aeron_archive_replay_params_t replay_params;
     aeron_archive_replay_params_init(&replay_params);
-    ASSERT_TRUE(aeron_archive_async_client_try_send_replay_request(client, nullptr, 1, 0, "aeron:ipc", 6000, &replay_params));
+    ASSERT_TRUE(aeron_archive_async_client_try_send_replay_request(
+        client, nullptr, 1, recording_id, "aeron:ipc", 6000, &replay_params));
     auto replayResponse = pollUntilControlResponseReceived(client, listener, 1);
     ASSERT_THAT(replayResponse, IsOk(1));
 
