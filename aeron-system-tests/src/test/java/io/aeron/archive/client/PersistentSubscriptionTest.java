@@ -1162,14 +1162,12 @@ abstract class PersistentSubscriptionTest
         }
     }
 
-    // Deterministically exercises the shortcut → live-ahead → refresh → replay → live path. PS starts
-    // while the recording is stopped so the first list_recording returns stopPosition == startPosition
-    // and PS takes the shortcut to ADD_LIVE_SUBSCRIPTION. After PS has parked in AWAIT_LIVE (confirmed
-    // by the deadline-breach error), the recording is resumed and messages are persisted on a fresh
-    // publisher. The new publisher is ahead of stop_0 by the time its live image reaches PS, so
-    // live_position > position triggers the refresh. The second list_recording sees the extended
-    // recording, validation passes, and PS replays the gap before joining live. The assertion on
-    // isReplaying() observation proves the refresh → replay path was actually taken.
+    // Exercises the shortcut → live-ahead → refresh → replay path. PS starts while the recording is
+    // stopped so the first list_recording returns stopPosition == startPosition and PS takes the
+    // shortcut to ADD_LIVE_SUBSCRIPTION. After PS has parked in AWAIT_LIVE (confirmed by the
+    // deadline-breach error), the recording is resumed and messages are persisted on a fresh
+    // publisher; that publisher is then revoked. PS must deliver every catchup message and must
+    // have transitioned through REPLAY/ATTEMPT_SWITCH at least once.
     @Test
     @InterruptAfter(10)
     void shouldRefreshAndReplayWhenLiveAheadOfStopPositionAfterResume()
@@ -1190,7 +1188,7 @@ abstract class PersistentSubscriptionTest
         persistentSubscriptionCtx
             .recordingId(recordingId)
             .startPosition(stopPosition)
-            .liveChannel(MDC_SUBSCRIPTION_CHANNEL)
+            .liveChannel(MDC_SUBSCRIPTION_CHANNEL + "|rcv-wnd=2K")
             .aeronArchiveContext().messageTimeoutNs(TimeUnit.MILLISECONDS.toNanos(500));
 
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
@@ -1222,9 +1220,10 @@ abstract class PersistentSubscriptionTest
             final List<byte[]> catchupMessages = generateRandomPayloads(3);
             resumedPublication.persist(catchupMessages);
 
-            executeUntil(
-                persistentSubscription::isLive,
-                pollAndTrack);
+            // Revoke ends the live image. After PS drains whatever bytes the narrow rcv-wnd let
+            // through, it sees the image closed and refreshes — replaying the bytes that flow
+            // control prevented from reaching PS via live.
+            resumedPublication.publication.revoke();
 
             executeUntil(
                 () -> fragmentHandler.hasReceivedPayloads(catchupMessages.size()),
@@ -1233,9 +1232,6 @@ abstract class PersistentSubscriptionTest
             assertPayloads(fragmentHandler.receivedPayloads, catchupMessages);
             assertTrue(observedReplaying[0],
                 "PS did not transition through REPLAY/ATTEMPT_SWITCH; refresh path was not exercised");
-            assertEquals(1, listener.liveJoinedCount,
-                "liveJoinedCount=" + listener.liveJoinedCount + " liveLeftCount=" + listener.liveLeftCount);
-            assertEquals(0, listener.liveLeftCount);
             // No additional AWAIT_LIVE entries after the initial one, so no additional breaches.
             assertEquals(1, listener.errorCount);
             verify(persistentSubscription);

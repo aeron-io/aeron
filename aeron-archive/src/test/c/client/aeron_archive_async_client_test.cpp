@@ -686,6 +686,11 @@ TEST_F(AeronArchiveAsyncClientTest, shouldAllowToStopReplay)
 
     aeron_archive_async_client_destroy(client);
     ASSERT_EQ(0, aeron_archive_context_close(context));
+
+    // Close the synchronous archive client now while the driver is still alive.
+    // Without this, TearDown's disconnect() runs after `testArchive` has already torn the driver down,
+    // and aeron_archive_close races against driver shutdown.
+    disconnect();
 }
 
 TEST_F(AeronArchiveAsyncClientTest, shouldCloseItselfIfErrorIsTerminal)

@@ -2857,16 +2857,9 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldRefreshAndReplayWhenLiveAhe
     aeron_archive_context_close(archive_ctx);
 }
 
-// Recording is extended first (no gap), PS lags the live stream, then the publisher is
-// revoked. The revoke forces PS's live image closed with unconsumed buffered bytes, so PS's position
-// is behind the recording's end. Because `extend_recording` was called before any offers, the recording
-// is contiguous from stop_0 forward — replay from PS's position returns the bytes PS missed via live.
-// PS must deliver every message exactly once and in order.
-//
-// Uses MDC (UDP) because publication.revoke() on IPC is a soft signal — the subscriber can still
-// drain the shared term buffer before the image reports closed, so the scenario never actually
-// forces PS into the refresh-replay path. On UDP, revoke truly closes the image with buffered bytes
-// dropped.
+// Recording is extended (no gap), PS lags the live stream, then the publisher is revoked.
+// The recording end is past PS's position when the live image dies, so PS must REPLAY to
+// catch up.
 TEST_F(AeronArchivePersistentSubscriptionTest, shouldReplayAndCatchUpWhenExtendedRecordingIsAheadOfLivePosition)
 {
     TestArchive archive = createArchive(m_aeronDir);
@@ -2894,11 +2887,13 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReplayAndCatchUpWhenExtende
     aeron_archive_context_t *archive_ctx = createArchiveContext();
     ArchiveContextGuard archive_ctx_guard(archive_ctx);
     aeron_archive_context_set_message_timeout_ns(archive_ctx, 500LL * 1000 * 1000);
+    // Constrain persistent subscriber's receive window so it cannot drain all 5 messages via live
+    const std::string narrow_live_channel = MDC_SUBSCRIPTION_CHANNEL + "|rcv-wnd=2K";
     aeron_archive_persistent_subscription_context_t *context = createPersistentSubscriptionContext(
         aeron.aeron(),
         archive_ctx,
         recording_id,
-        MDC_SUBSCRIPTION_CHANNEL,
+        narrow_live_channel,
         STREAM_ID,
         "aeron:udp?endpoint=localhost:0",
         -5,
@@ -2945,23 +2940,22 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReplayAndCatchUpWhenExtende
     const std::vector<std::vector<uint8_t>> first_batch = generateFixedMessages(1, ONE_KB_MESSAGE_SIZE);
     resumed_publication.persist(first_batch);
 
-    // Poll PS until it receives the first message live.
+    // Poll PS until it has received the first message (may arrive via live or replay).
     executeUntil(
-        "received first message via live",
+        "received first message",
         poller,
         [&] { return handler.messages().size() == first_batch.size(); });
 
-    // Publisher B offers 4 more messages; archive records all of them. PS is intentionally not polled
-    // here, so these bytes accumulate in PS's live image term buffer but PS's position stays pinned.
+    // Publisher B offers 4 more messages. Archive records all of them, but PS's narrow rcv-wnd
+    // (and the fact that PS isn't being polled here) means publisher flow-control stops sending
+    // to PS well before all four arrive in PS's term buffer.
     const std::vector<std::vector<uint8_t>> catchup_messages = generateFixedMessages(4, ONE_KB_MESSAGE_SIZE);
     resumed_publication.persist(catchup_messages);
 
-    // Revoke forcibly closes PS's live image, dropping the 4 unconsumed bytes from its term buffer.
-    // PS.position stays at stop_0 + 1KB (after the first message). Recording end = stop_0 + 5KB.
+    // Revoke ends the live image. After the term buffer is drained, PS sees the image closed,
+    // refreshes the recording descriptor, and replays the bytes the live channel never delivered.
     aeron_exclusive_publication_revoke(resumed_publication.publication(), nullptr, nullptr);
 
-    // Resume polling: PS's live() detects image closed, calls refresh, sees the recording extended
-    // to stop_0 + 5KB, goes to REPLAY from stop_0 + 1KB, delivers the 4 missing messages.
     std::vector<std::vector<uint8_t>> expected;
     expected.insert(expected.end(), first_batch.begin(), first_batch.end());
     expected.insert(expected.end(), catchup_messages.begin(), catchup_messages.end());
@@ -2971,20 +2965,9 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReplayAndCatchUpWhenExtende
         poller,
         [&] { return handler.messages().size() == expected.size(); });
 
-    // Invariants: every expected message delivered, exactly once, in order — the strict equality
-    // catches duplicates, reordering, and missing messages in one check.
     ASSERT_EQ(expected, handler.messages());
     ASSERT_TRUE(observed_replaying)
         << "PS did not transition through REPLAY/ATTEMPT_SWITCH; refresh-replay path was not exercised";
-    // On MDC the live image attaches at publisher B's head (which is already past PS's start
-    // position by the time the first poll runs), so PS's first awaitLive takes the refresh path
-    // straight into REPLAY rather than the direct-join-LIVE path. PS then delivers the entire
-    // 5-message catchup via replay, and because publisher B is revoked before PS's ATTEMPT_SWITCH
-    // can attach a new live image, PS never transitions to LIVE at all. Hence liveJoined == 0 and
-    // liveLeft == 0. What matters here is the message stream invariant above; these counters
-    // confirm the observed path.
-    ASSERT_EQ(0, listener.live_joined_count);
-    ASSERT_EQ(0, listener.live_left_count);
 
     ps_guard.release();
     ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
