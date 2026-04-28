@@ -1162,6 +1162,61 @@ abstract class PersistentSubscriptionTest
         }
     }
 
+    @Test
+    @InterruptAfter(10)
+    void shouldHandOffToLiveWhenReplayCatchesUpAtPublisherJoinPosition()
+    {
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID);
+
+        final List<byte[]> recordedBatch = generateFixedPayloads(3, ONE_KB_MESSAGE_SIZE);
+        persistentPublication.persist(recordedBatch);
+        final long stopPosition = persistentPublication.stop();
+        assertTrue(stopPosition > 0);
+        final long recordingId = persistentPublication.recordingId();
+        persistentPublication.closePublicationOnly();
+        // Wait for the closed publication's residual state to drain before bringing publisher B up.
+        Tests.await(() -> !persistentPublication.publicationCountersExist());
+
+        // Resume publisher B at stopPosition and DO NOT offer anything to it yet.
+        // Publisher B's snd_pos stays at stopPosition; the live image, when it attaches, will
+        // attach at exactly that position.
+        final PersistentPublication resumedPublication =
+            PersistentPublication.resume(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID, recordingId);
+
+        persistentSubscriptionCtx
+            .recordingId(recordingId)
+            .startPosition(FROM_START)
+            .liveChannel(MDC_SUBSCRIPTION_CHANNEL);
+
+        try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
+        {
+            // Drain the replay; PS sees all recorded bytes up to stopPosition.
+            executeUntil(
+                () -> fragmentHandler.hasReceivedPayloads(recordedBatch.size()),
+                () -> poll(persistentSubscription, fragmentHandler, 10));
+
+            // PS reaches LIVE via the replayPosition == livePosition outer branch in attemptSwitch.
+            executeUntil(
+                persistentSubscription::isLive,
+                () -> poll(persistentSubscription, fragmentHandler, 10));
+            assertEquals(1, listener.liveJoinedCount);
+            assertEquals(0, listener.liveLeftCount);
+
+            // Now publisher B publishes more — the handoff must not have lost track of position;
+            // these messages must arrive via live, in order, with no gap.
+            final List<byte[]> liveBatch = generateFixedPayloads(3, ONE_KB_MESSAGE_SIZE);
+            resumedPublication.persist(liveBatch);
+
+            executeUntil(
+                () -> fragmentHandler.hasReceivedPayloads(recordedBatch.size() + liveBatch.size()),
+                () -> poll(persistentSubscription, fragmentHandler, 10));
+
+            assertPayloads(fragmentHandler.receivedPayloads, recordedBatch, liveBatch);
+            verify(persistentSubscription);
+        }
+    }
+
     // Exercises the shortcut → live-ahead → refresh → replay path. PS starts while the recording is
     // stopped so the first list_recording returns stopPosition == startPosition and PS takes the
     // shortcut to ADD_LIVE_SUBSCRIPTION. After PS has parked in AWAIT_LIVE (confirmed by the
@@ -2569,6 +2624,105 @@ abstract class PersistentSubscriptionTest
         shouldRecoverFromNetworkProblems(NetworkFlow.LIVE);
     }
 
+    @Test
+    @InterruptAfter(30)
+    void shouldNotUseStaleNextLivePositionAfterRefreshFromAttemptSwitch() throws Exception
+    {
+        TestMediaDriver.notSupportedOnCMediaDriver("loss generator");
+
+        final String pubChannel =
+            "aeron:udp?term-length=16m|control=localhost:24326|control-mode=dynamic|fc=min";
+        final String subChannel = "aeron:udp?control=localhost:24326|group=true";
+
+        final StreamIdLossGenerator lossGenerator = new StreamIdLossGenerator();
+        final String aeronDir2 = CommonContext.generateRandomDirName();
+        final MediaDriver.Context driver2Ctx = driverCtxTpl.clone().aeronDirectoryName(aeronDir2)
+            .receiveChannelEndpointSupplier(receiveChannelEndpointSupplier(lossGenerator));
+        addCloseable(TestMediaDriver.launch(driver2Ctx, systemTestWatcher));
+        systemTestWatcher.dataCollector().add(driver2Ctx.aeronDirectory());
+        final Aeron aeron2 = addCloseable(Aeron.connect(aeronCtxTpl.clone().aeronDirectoryName(aeronDir2)));
+
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, pubChannel, STREAM_ID);
+
+        persistentSubscriptionCtx
+            .aeron(aeron2)
+            .recordingId(persistentPublication.recordingId())
+            .liveChannel(subChannel);
+
+        final int ratePerSecond = 500;
+        final long maxProcessingTime = 1_000_000_000 / ratePerSecond / 8;
+
+        final AtomicBoolean publisherPaused = new AtomicBoolean(false);
+        final Thread publisher = startPausablePublisher(
+            persistentPublication, publisherPaused, ratePerSecond, "shouldNotUseStaleNextLivePositionPublisher");
+
+        // Give the publisher a head start so PS will have meaningful replay work to do.
+        LockSupport.parkNanos(TimeUnit.SECONDS.toNanos(2));
+
+        try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
+        {
+            final MessageVerifier handler = new MessageVerifier(maxProcessingTime);
+
+            // Step (a): wait until PS has actually entered ATTEMPT_SWITCH 1 — joinDifference
+            // is set to (livePosition - replayPosition) at the REPLAY → ATTEMPT_SWITCH
+            // transition and starts at Long.MIN_VALUE — then arm replay-stream loss. Polling
+            // with fragment_limit=1 stretches replay catchup over many polls so the test thread
+            // can observe the ATTEMPT_SWITCH window before catchup completes naturally.
+            // Coupling to ATTEMPT_SWITCH (rather than isReplaying() which also matches REPLAY)
+            // eliminates the prior race where loss could be armed during REPLAY and stall
+            // catchup before the live subscription was even added.
+            executeUntil(
+                () -> persistentSubscription.joinDifference() > 0 && !persistentSubscription.isLive(),
+                () -> poll(persistentSubscription, handler, 1));
+
+            lossGenerator.enable(persistentSubscriptionCtx.replayStreamId());
+
+            // Step (b): wait for the refresh path to engage. resetReplayCatchupState resets
+            // joinDifference back to Long.MIN_VALUE, so observing that transition tells us
+            // image-liveness has fired on the replay 1 image and PS has started the refresh.
+            executeUntil(
+                () -> persistentSubscription.joinDifference() == Long.MIN_VALUE,
+                () -> poll(persistentSubscription, handler, 10));
+
+            // Step (c): pause the publisher now that refresh has fired. By the time replay 2
+            // adds a new live subscription, the publisher's snd_pos will be frozen and the
+            // new live image attaches with an empty term buffer — so onLiveCatchupFragment
+            // is never called during ATTEMPT_SWITCH 2 and nextLivePosition (without the fix)
+            // keeps its stale value from ATTEMPT_SWITCH 1.
+            publisherPaused.set(true);
+
+            // Give publisher's most recent offer a moment to be flushed by the sender thread,
+            // then disable loss so replay 2's setup can complete.
+            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(50));
+            lossGenerator.disable();
+
+            // Resume the publisher only after PS has either reached LIVE or failed.
+            final long settleDeadlineNs = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+            while (!persistentSubscription.isLive() &&
+                !persistentSubscription.hasFailed() &&
+                System.nanoTime() - settleDeadlineNs < 0)
+            {
+                poll(persistentSubscription, handler, 10);
+            }
+
+            assertFalse(persistentSubscription.hasFailed(),
+                "PS failed before reaching LIVE: " + persistentSubscription.failureReason());
+            assertTrue(persistentSubscription.isLive(),
+                "PS did not reach LIVE within the deadline");
+
+            // Resume the publisher and let PS drain the stream.
+            publisherPaused.set(false);
+
+            interruptAndJoin(publisher);
+
+            drainStream(persistentSubscription, handler, persistentPublication.position(),
+                TimeUnit.SECONDS.toNanos(10));
+
+            verify(persistentSubscription);
+        }
+    }
+
     private enum NetworkFlow
     {
         REPLAY,
@@ -2840,6 +2994,63 @@ abstract class PersistentSubscriptionTest
     {
         thread.interrupt();
         thread.join();
+    }
+
+    private Thread startPausablePublisher(
+        final PersistentPublication persistentPublication,
+        final AtomicBoolean publisherPaused,
+        final int ratePerSecond,
+        final String threadName)
+    {
+        final Thread publisher = new Thread(
+            () ->
+            {
+                final ThreadLocalRandom random = ThreadLocalRandom.current();
+                final UnsafeBuffer buffer = new UnsafeBuffer(new byte[2048]);
+                long messageId = 0;
+                long nextMessageAt = System.nanoTime() + exponentialArrivalDelay(ratePerSecond);
+                while (!Thread.currentThread().isInterrupted())
+                {
+                    if (publisherPaused.get())
+                    {
+                        Thread.yield();
+                        continue;
+                    }
+                    final long now = System.nanoTime();
+                    if (now - nextMessageAt >= 0)
+                    {
+                        final int length = random.nextInt(2 * SIZE_OF_LONG, buffer.capacity() + 1);
+                        buffer.putLong(0, messageId);
+                        buffer.putLong(length - SIZE_OF_LONG, messageId);
+                        final long result = persistentPublication.offer(buffer, 0, length);
+                        if (result > 0)
+                        {
+                            messageId++;
+                            nextMessageAt = now + exponentialArrivalDelay(ratePerSecond);
+                        }
+                    }
+                }
+            },
+            threadName);
+        publisher.start();
+        addCloseable(() -> interruptAndJoin(publisher));
+        return publisher;
+    }
+
+    private void drainStream(
+        final PersistentSubscription persistentSubscription,
+        final MessageVerifier handler,
+        final long lastPosition,
+        final long timeoutNs)
+    {
+        final long deadlineNs = System.nanoTime() + timeoutNs;
+        while (handler.position < lastPosition && System.nanoTime() - deadlineNs < 0)
+        {
+            if (poll(persistentSubscription, handler, 10) == 0)
+            {
+                Thread.yield();
+            }
+        }
     }
 
     private static void checkForInterrupt(final String message)

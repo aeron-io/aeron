@@ -565,6 +565,7 @@ public final class PersistentSubscription implements AutoCloseable
     {
         joinDifference(Long.MIN_VALUE);
         maxRecordedPosition.reset(listRecordingRequest.termBufferLength >> 2);
+        nextLivePosition = Aeron.NULL_VALUE;
     }
 
     private void cleanUpReplay()

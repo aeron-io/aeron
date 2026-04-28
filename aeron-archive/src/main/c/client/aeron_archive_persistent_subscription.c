@@ -1016,6 +1016,7 @@ int aeron_archive_persistent_subscription_create(
     _persistent_subscription->position = context->start_position;
     _persistent_subscription->use_aeron_agent_invoker = aeron_context_get_use_conductor_agent_invoker(aeron_context(context->aeron));
     _persistent_subscription->last_observed_live_position = AERON_NULL_VALUE;
+    _persistent_subscription->next_live_position = AERON_NULL_VALUE;
 
     // Determine replay channel type and copy the URI
     {
@@ -1137,6 +1138,8 @@ static void aeron_archive_persistent_subscription_reset_replay_catchup_state(
     aeron_archive_persistent_subscription_max_recorded_position_reset(
         &persistent_subscription->max_recorded_position,
         persistent_subscription->list_recording_request.term_buffer_length >> 2);
+
+    persistent_subscription->next_live_position = AERON_NULL_VALUE;
 }
 
 static void aeron_archive_persistent_subscription_set_up_replay(
