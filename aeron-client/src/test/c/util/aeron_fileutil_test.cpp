@@ -23,7 +23,15 @@ extern "C"
 {
 #include "util/aeron_fileutil.h"
 #include "util/aeron_error.h"
+
+int aeron_create_file(const char *path, size_t length, bool sparse_file);
 }
+
+#ifdef _MSC_VER
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
 
 #if defined(AERON_COMPILER_GCC)
 #define removeDir remove
@@ -37,13 +45,51 @@ extern "C"
 #define AERON_FILE_SEP_STR "/"
 #endif
 
+static bool probe_sparse_file_support(const char *dir)
+{
+    char probe_path[1024];
+    snprintf(probe_path, sizeof(probe_path), "%s%saeron_sparse_probe", dir, AERON_FILE_SEP_STR);
+    aeron_delete_file(probe_path); // sweep up any stale file from a prior crashed run
+    int fd = aeron_create_file(probe_path, 4096, true);
+    if (fd < 0)
+    {
+        aeron_err_clear();
+        return false;
+    }
+#ifdef _MSC_VER
+    _close(fd);
+#else
+    close(fd);
+#endif
+    aeron_delete_file(probe_path);
+    return true;
+}
+
 class FileUtilTest : public testing::Test {
 public:
     FileUtilTest() = default;
+
+    static bool s_sparse_supported;
+
+    static void SetUpTestSuite()
+    {
+        s_sparse_supported = probe_sparse_file_support(".");
+    }
 };
+
+bool FileUtilTest::s_sparse_supported = false;
+
+#define SKIP_IF_NO_SPARSE_SUPPORT() \
+    do { \
+        if (!FileUtilTest::s_sparse_supported) \
+        { \
+            GTEST_SKIP() << "filesystem at cwd does not support sparse files"; \
+        } \
+    } while (0)
 
 TEST_F(FileUtilTest, rawLogCloseShouldUnmapAndDeleteLogFile)
 {
+    SKIP_IF_NO_SPARSE_SUPPORT();
     aeron_mapped_raw_log_t mapped_raw_log = {};
     const char *file = "test_close_unused_file.log";
     const size_t file_length = 16384;
@@ -71,6 +117,7 @@ TEST_F(FileUtilTest, rawLogCloseShouldUnmapAndDeleteLogFile)
 
 TEST_F(FileUtilTest, rawLogFreeShouldUnmapAndDeleteLogFile)
 {
+    SKIP_IF_NO_SPARSE_SUPPORT();
     aeron_mapped_raw_log_t mapped_raw_log = {};
     const char *file = "test_free_unused_file.log";
     const size_t file_length = 16384;
@@ -89,6 +136,7 @@ TEST_F(FileUtilTest, rawLogFreeShouldUnmapAndDeleteLogFile)
 
 TEST_F(FileUtilTest, rawLogCloseShouldNotDeleteFileIfUnmapFails)
 {
+    SKIP_IF_NO_SPARSE_SUPPORT();
     aeron_mapped_raw_log_t mapped_raw_log = {};
     const char *file = "test_close_unmap_fails.log";
     const size_t file_length = 16384;
@@ -106,6 +154,7 @@ TEST_F(FileUtilTest, rawLogCloseShouldNotDeleteFileIfUnmapFails)
 
 TEST_F(FileUtilTest, rawLogFreeShouldNotDeleteFileIfUnmapFails)
 {
+    SKIP_IF_NO_SPARSE_SUPPORT();
     aeron_mapped_raw_log_t mapped_raw_log = {};
     const char *file = "test_free_unmap_fails.log";
     const size_t file_length = 16384;
@@ -149,6 +198,7 @@ TEST_F(FileUtilTest, resolveShouldReportTruncatedPaths)
 
 TEST_F(FileUtilTest, mapNewFileShouldHandleFilesBiggerThan2GB)
 {
+    SKIP_IF_NO_SPARSE_SUPPORT();
     aeron_mapped_file_t mapped_file = {};
     const char *file = "test_map_new_file_big_size.log";
     const size_t file_length = 3221225472;
@@ -169,6 +219,7 @@ TEST_F(FileUtilTest, mapNewFileShouldHandleFilesBiggerThan2GB)
 
 TEST_F(FileUtilTest, mapExistingFileShouldHandleFilesBiggerThan2GB)
 {
+    SKIP_IF_NO_SPARSE_SUPPORT();
     aeron_mapped_file_t mapped_file = {};
     const char *file = "test_map_existing_file_big_size.log";
     const size_t file_length = 2500000000;
@@ -192,6 +243,7 @@ TEST_F(FileUtilTest, mapExistingFileShouldHandleFilesBiggerThan2GB)
 
 TEST_F(FileUtilTest, rawLogMapShouldHandleMaxTermBufferLengthAndMaxPageSize)
 {
+    SKIP_IF_NO_SPARSE_SUPPORT();
     aeron_mapped_raw_log_t mapped_raw_log = {};
     const char *file = "test_raw_log_map_new_file_max_buffer_length.log";
     const size_t file_length = 4294967296;
@@ -218,6 +270,7 @@ TEST_F(FileUtilTest, rawLogMapShouldHandleMaxTermBufferLengthAndMaxPageSize)
 
 TEST_F(FileUtilTest, rawLogMapExistingShouldHandleMaxTermBufferLength)
 {
+    SKIP_IF_NO_SPARSE_SUPPORT();
     aeron_mapped_raw_log_t mapped_raw_log = {};
     const char *file = "test_raw_log_map_existing_file_max_buffer_length.log";
     const size_t file_length = 3223322624;
@@ -303,6 +356,7 @@ TEST_F(FileUtilTest, rawLogMapShouldCreateNonSparseFile)
 
 TEST_F(FileUtilTest, shouldMsyncMappedFile)
 {
+    SKIP_IF_NO_SPARSE_SUPPORT();
     aeron_mapped_file_t mapped_file = {};
     const char *file = "test.txt";
     const size_t file_length = 1024 * 512;

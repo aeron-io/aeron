@@ -145,12 +145,23 @@ typedef ULONG (NTAPI *aeron_pfn_RtlNtStatusToDosError)(NTSTATUS Status);
 // NtCreateFile CreateDisposition / CreateOptions values not present in winternl.h.
 #define AERON_FILE_OPEN                        0x00000001UL
 #define AERON_FILE_SYNCHRONOUS_IO_NONALERT     0x00000020UL
-#define AERON_FILE_DELETE_ON_CLOSE             0x00001000UL
 #define AERON_FILE_OPEN_FOR_BACKUP_INTENT      0x00004000UL
 #define AERON_FILE_OPEN_REPARSE_POINT          0x00200000UL
 
 #define AERON_STATUS_OBJECT_NAME_NOT_FOUND     ((NTSTATUS)0xC0000034L)
 #define AERON_STATUS_OBJECT_PATH_NOT_FOUND     ((NTSTATUS)0xC000003AL)
+
+// FileDispositionInfoEx and its flags may be missing from older Windows SDK
+// headers; redeclare locally so the build doesn't depend on the SDK version.
+#define AERON_FILE_DISPOSITION_INFO_EX_CLASS         21
+#define AERON_FILE_DISPOSITION_FLAG_DELETE           0x00000001UL
+#define AERON_FILE_DISPOSITION_FLAG_POSIX_SEMANTICS  0x00000002UL
+
+typedef struct aeron_file_disposition_info_ex_stct
+{
+    DWORD Flags;
+}
+aeron_file_disposition_info_ex_t;
 
 // NTFS caps filenames at 255 WCHAR (UCS-2); one extra slot for alignment/safety.
 #define AERON_NT_MAX_NAME_WCHARS               256
@@ -159,9 +170,37 @@ typedef ULONG (NTAPI *aeron_pfn_RtlNtStatusToDosError)(NTSTATUS Status);
 // Initial capacity of the per-directory collected-names array.
 #define AERON_NT_NAMES_INITIAL_CAPACITY        16
 
+// Access mask used by every open-for-delete in this module: DELETE for the
+// disposition call, READ_ATTRIBUTES for FileBasicInfo / FileId queries,
+// WRITE_ATTRIBUTES for the READONLY clear, LIST_DIRECTORY for enumeration,
+// and SYNCHRONIZE because we use synchronous I/O.
+#define AERON_DELETE_ACCESS \
+    (DELETE | FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | FILE_LIST_DIRECTORY | SYNCHRONIZE)
+// Full sharing so we don't fight with other handles to the same file.
+#define AERON_DELETE_SHARE \
+    (FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
+
+static inline bool aeron_is_dot_or_dotdot(const WCHAR *name, ULONG nchars)
+{
+    if (1 == nchars && L'.' == name[0])
+    {
+        return true;
+    }
+    if (2 == nchars && L'.' == name[0] && L'.' == name[1])
+    {
+        return true;
+    }
+    return false;
+}
+
+// FileId is captured when the filesystem supports it (NTFS / ReFS /
+// most local filesystems) so we can verify after-open that the entry we got
+// is the one we enumerated.
 typedef struct aeron_nt_name_stct
 {
     USHORT length_bytes;
+    bool has_file_id;
+    LARGE_INTEGER file_id;
     WCHAR name[AERON_NT_MAX_NAME_WCHARS];
 }
 aeron_nt_name_t;
@@ -179,7 +218,7 @@ static int aeron_load_nt(void)
     HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
     if (NULL == ntdll)
     {
-        AERON_SET_ERR_WIN(GetLastError(), "%s", "GetModuleHandle(ntdll.dll) failed");
+        AERON_APPEND_ERR_WIN(GetLastError(), "%s", "GetModuleHandle(ntdll.dll) failed");
         return -1;
     }
 
@@ -188,7 +227,7 @@ static int aeron_load_nt(void)
         (aeron_pfn_RtlNtStatusToDosError)GetProcAddress(ntdll, "RtlNtStatusToDosError");
     if (NULL == aeron_p_NtCreateFile || NULL == aeron_p_RtlNtStatusToDosError)
     {
-        AERON_SET_ERR_WIN(GetLastError(), "%s", "GetProcAddress(NtCreateFile/RtlNtStatusToDosError) failed");
+        AERON_APPEND_ERR_WIN(GetLastError(), "%s", "GetProcAddress(NtCreateFile/RtlNtStatusToDosError) failed");
         return -1;
     }
 
@@ -197,6 +236,9 @@ static int aeron_load_nt(void)
 
 // Enumerate `dir_handle` into a heap-allocated list of child names (. and .. skipped).
 // On success, the caller owns *out_names and must aeron_free it.
+//
+// FileIdBothDirectoryInfo is preferred but unsupported on some file systems, so we
+// fall back to FileFullDirectoryInfo if needed.
 static int aeron_nt_collect_children(
     HANDLE dir_handle, const char *ctx, aeron_nt_name_t **out_names, size_t *out_count)
 {
@@ -209,50 +251,81 @@ static int aeron_nt_collect_children(
         return -1;
     }
 
+    FILE_INFO_BY_HANDLE_CLASS info_class = FileIdBothDirectoryInfo;
     char enum_buf[AERON_NT_ENUM_BUFFER_BYTES];
     while (true)
     {
-        if (!GetFileInformationByHandleEx(dir_handle, FileIdBothDirectoryInfo, enum_buf, sizeof(enum_buf)))
+        if (!GetFileInformationByHandleEx(dir_handle, info_class, enum_buf, sizeof(enum_buf)))
         {
             DWORD err = GetLastError();
             if (ERROR_NO_MORE_FILES == err)
             {
                 break;
             }
-            AERON_SET_ERR_WIN(err, "GetFileInformationByHandleEx(enumerate) failed under: %s", ctx);
+            if (ERROR_INVALID_PARAMETER == err && FileIdBothDirectoryInfo == info_class && 0 == count)
+            {
+                info_class = FileFullDirectoryInfo;
+                continue;
+            }
+            AERON_APPEND_ERR_WIN(err, "GetFileInformationByHandleEx(enumerate) failed under: %s", ctx);
             goto error;
         }
 
-        const FILE_ID_BOTH_DIR_INFO *entry = (const FILE_ID_BOTH_DIR_INFO *)enum_buf;
+        const char *entry_bytes = enum_buf;
         while (true)
         {
-            const ULONG nchars = entry->FileNameLength / sizeof(WCHAR);
-            const bool is_dot = 1 == nchars && L'.' == entry->FileName[0];
-            const bool is_dotdot = 2 == nchars && L'.' == entry->FileName[0] && L'.' == entry->FileName[1];
-            if (!is_dot && !is_dotdot)
+            ULONG next_entry_offset;
+            ULONG file_name_length;
+            const WCHAR *file_name;
+            LARGE_INTEGER file_id;
+            bool has_file_id;
+            if (FileIdBothDirectoryInfo == info_class)
             {
-                if (entry->FileNameLength > (ULONG)sizeof(names[0].name))
+                const FILE_ID_BOTH_DIR_INFO *entry = (const FILE_ID_BOTH_DIR_INFO *)entry_bytes;
+                next_entry_offset = entry->NextEntryOffset;
+                file_name_length = entry->FileNameLength;
+                file_name = entry->FileName;
+                file_id = entry->FileId;
+                has_file_id = true;
+            }
+            else
+            {
+                const FILE_FULL_DIR_INFO *entry = (const FILE_FULL_DIR_INFO *)entry_bytes;
+                next_entry_offset = entry->NextEntryOffset;
+                file_name_length = entry->FileNameLength;
+                file_name = entry->FileName;
+                file_id.QuadPart = 0;
+                has_file_id = false;
+            }
+
+            if (!aeron_is_dot_or_dotdot(file_name, file_name_length / sizeof(WCHAR)))
+            {
+                if (file_name_length > (ULONG)sizeof(names[0].name))
                 {
-                    AERON_SET_ERR_WIN(EINVAL, "directory entry name too long under: %s", ctx);
+                    AERON_APPEND_ERR_WIN(EINVAL, "directory entry name too long under: %s", ctx);
                     goto error;
                 }
                 if (count == capacity)
                 {
                     capacity *= 2;
+                    // aeron_reallocf nulls *names on failure, so the error: path's
+                    // aeron_free(NULL) is a safe no-op.
                     if (aeron_reallocf((void **)&names, capacity * sizeof(aeron_nt_name_t)) < 0)
                     {
-                        return -1;
+                        goto error;
                     }
                 }
-                names[count].length_bytes = (USHORT)entry->FileNameLength;
-                memcpy(names[count].name, entry->FileName, entry->FileNameLength);
+                names[count].length_bytes = (USHORT)file_name_length;
+                names[count].has_file_id = has_file_id;
+                names[count].file_id = file_id;
+                memcpy(names[count].name, file_name, file_name_length);
                 count++;
             }
-            if (0 == entry->NextEntryOffset)
+            if (0 == next_entry_offset)
             {
                 break;
             }
-            entry = (const FILE_ID_BOTH_DIR_INFO *)((const char *)entry + entry->NextEntryOffset);
+            entry_bytes += next_entry_offset;
         }
     }
 
@@ -265,110 +338,221 @@ error:
     return -1;
 }
 
+// Mark the open handle for deletion. Prefer FileDispositionInfoEx with POSIX semantics
+// (Windows 10 1709+ on NTFS) so the entry leaves the parent directory namespace
+// synchronously even when a third party (AV, indexer, etc.) holds a FILE_SHARE_DELETE
+// handle.
+//
+// Some file systems don't implement FileDispositionInfoEx, in which case we fall back
+// to the legacy FILE_DISPOSITION_INFO.
+static int aeron_set_disposition_delete(HANDLE h, const char *ctx)
+{
+    aeron_file_disposition_info_ex_t info_ex =
+    {
+        .Flags = AERON_FILE_DISPOSITION_FLAG_DELETE | AERON_FILE_DISPOSITION_FLAG_POSIX_SEMANTICS
+    };
+    if (SetFileInformationByHandle(
+        h, (FILE_INFO_BY_HANDLE_CLASS)AERON_FILE_DISPOSITION_INFO_EX_CLASS, &info_ex, sizeof(info_ex)))
+    {
+        return 0;
+    }
+
+    const DWORD ex_err = GetLastError();
+    if (ERROR_INVALID_PARAMETER == ex_err ||
+        ERROR_INVALID_FUNCTION == ex_err ||
+        ERROR_NOT_SUPPORTED == ex_err)
+    {
+        FILE_DISPOSITION_INFO info = { TRUE };
+        if (SetFileInformationByHandle(h, FileDispositionInfo, &info, sizeof(info)))
+        {
+            return 0;
+        }
+
+        AERON_APPEND_ERR_WIN(GetLastError(),
+            "SetFileInformationByHandle(FileDispositionInfo) failed (Ex returned %lu): %s",
+            (unsigned long)ex_err, ctx);
+        return -1;
+    }
+
+    AERON_APPEND_ERR_WIN(ex_err,
+        "SetFileInformationByHandle(FileDispositionInfoEx) failed: %s", ctx);
+    return -1;
+}
+
+// Result of opening a child entry by name relative to the parent directory handle.
+//   OK    — *out_child is a valid handle the caller now owns.
+//   RACED — entry vanished between enumeration and open; end state matches intent,
+//           so caller should skip and continue.
+//   ERROR — aeron_errmsg() is set; caller should propagate the failure.
+typedef enum
+{
+    AERON_CHILD_OPEN_OK,
+    AERON_CHILD_OPEN_RACED,
+    AERON_CHILD_OPEN_ERROR
+}
+aeron_child_open_result_t;
+
+// Open a child for delete and (when FileId is available) verify it's the same entry
+// we enumerated. The parent handle anchors name resolution so absolute-path traversal
+// isn't possible, and FILE_OPEN_REPARSE_POINT blocks symlink redirection — the FileId
+// check closes the remaining hardlink / directory-swap window. Some file systems don't
+// expose a FileId so the verification is silently skipped there.
+static aeron_child_open_result_t aeron_open_child_for_delete(
+    HANDLE parent, const aeron_nt_name_t *name, const char *ctx, HANDLE *out_child)
+{
+    UNICODE_STRING us;
+    us.Length = name->length_bytes;
+    us.MaximumLength = name->length_bytes;
+    us.Buffer = (PWSTR)name->name;
+
+    OBJECT_ATTRIBUTES oa;
+    InitializeObjectAttributes(&oa, &us, OBJ_CASE_INSENSITIVE, parent, NULL);
+
+    HANDLE child = NULL;
+    IO_STATUS_BLOCK iosb = { 0 };
+    NTSTATUS st = aeron_p_NtCreateFile(
+        &child,
+        AERON_DELETE_ACCESS,
+        &oa,
+        &iosb,
+        NULL,
+        0,
+        AERON_DELETE_SHARE,
+        AERON_FILE_OPEN,
+        AERON_FILE_OPEN_FOR_BACKUP_INTENT | AERON_FILE_OPEN_REPARSE_POINT |
+            AERON_FILE_SYNCHRONOUS_IO_NONALERT,
+        NULL,
+        0);
+
+    if (!NT_SUCCESS(st))
+    {
+        if (AERON_STATUS_OBJECT_NAME_NOT_FOUND == st || AERON_STATUS_OBJECT_PATH_NOT_FOUND == st)
+        {
+            return AERON_CHILD_OPEN_RACED;
+        }
+        AERON_APPEND_ERR_WIN(aeron_p_RtlNtStatusToDosError(st),
+            "NtCreateFile(delete) failed under: %s", ctx);
+        return AERON_CHILD_OPEN_ERROR;
+    }
+
+    if (name->has_file_id)
+    {
+        BY_HANDLE_FILE_INFORMATION post_open;
+        if (!GetFileInformationByHandle(child, &post_open))
+        {
+            AERON_APPEND_ERR_WIN(GetLastError(),
+                "GetFileInformationByHandle (verify) failed under: %s", ctx);
+            CloseHandle(child);
+            return AERON_CHILD_OPEN_ERROR;
+        }
+        const ULONGLONG opened_id =
+            ((ULONGLONG)post_open.nFileIndexHigh << 32) | post_open.nFileIndexLow;
+        if (opened_id != (ULONGLONG)name->file_id.QuadPart)
+        {
+            aeron_set_errno(EAGAIN);
+            AERON_APPEND_ERR(
+                "directory entry replaced between enumerate and open under: %s", ctx);
+            CloseHandle(child);
+            return AERON_CHILD_OPEN_ERROR;
+        }
+    }
+
+    *out_child = child;
+    return AERON_CHILD_OPEN_OK;
+}
+
+// Recursively delete the entry referenced by `h`. Takes ownership of `h` and always
+// closes it before returning, success or failure. Reparse points (symlinks, junctions,
+// mount points) are treated as opaque leaves so we never traverse outside the subtree
+// the caller asked us to delete.
 static int aeron_recursively_delete_by_handle(HANDLE h, const char *ctx)
 {
     FILE_BASIC_INFO basic;
     if (!GetFileInformationByHandleEx(h, FileBasicInfo, &basic, sizeof(basic)))
     {
-        AERON_SET_ERR_WIN(GetLastError(), "GetFileInformationByHandleEx(Basic) failed: %s", ctx);
+        AERON_APPEND_ERR_WIN(GetLastError(), "GetFileInformationByHandleEx(Basic) failed: %s", ctx);
         CloseHandle(h);
         return -1;
     }
 
-    if (basic.FileAttributes & FILE_ATTRIBUTE_READONLY)
+    const ULONG attrs = basic.FileAttributes;
+
+    // Best-effort clear of READONLY so disposition delete can proceed; ignore failure here
+    // since the disposition step will surface a clearer error later if the delete fails.
+    if (attrs & FILE_ATTRIBUTE_READONLY)
     {
         FILE_BASIC_INFO clear = basic;
-        clear.FileAttributes &= ~FILE_ATTRIBUTE_READONLY;
+        clear.FileAttributes = attrs & ~FILE_ATTRIBUTE_READONLY;
         SetFileInformationByHandle(h, FileBasicInfo, &clear, sizeof(clear));
     }
 
-    const bool is_dir = 0 != (basic.FileAttributes & FILE_ATTRIBUTE_DIRECTORY);
-    const bool is_reparse = 0 != (basic.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT);
-
     int rc = 0;
-    if (is_dir && !is_reparse)
+    if ((attrs & FILE_ATTRIBUTE_DIRECTORY) && !(attrs & FILE_ATTRIBUTE_REPARSE_POINT))
     {
-        if (0 != aeron_load_nt())
-        {
-            rc = -1;
-            goto close_handle;
-        }
-
-        aeron_nt_name_t *names = NULL;
-        size_t count = 0;
-        if (aeron_nt_collect_children(h, ctx, &names, &count) < 0)
-        {
-            rc = -1;
-            goto close_handle;
-        }
-
-        for (size_t i = 0; i < count; i++)
-        {
-            UNICODE_STRING us;
-            us.Length = names[i].length_bytes;
-            us.MaximumLength = names[i].length_bytes;
-            us.Buffer = (PWSTR)names[i].name;
-
-            OBJECT_ATTRIBUTES oa;
-            InitializeObjectAttributes(&oa, &us, OBJ_CASE_INSENSITIVE, h, NULL);
-
-            HANDLE child = NULL;
-            IO_STATUS_BLOCK iosb = { 0 };
-
-            NTSTATUS st = aeron_p_NtCreateFile(
-                &child,
-                DELETE | FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | FILE_LIST_DIRECTORY | SYNCHRONIZE,
-                &oa,
-                &iosb,
-                NULL,
-                0,
-                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                AERON_FILE_OPEN,
-                AERON_FILE_OPEN_FOR_BACKUP_INTENT | AERON_FILE_OPEN_REPARSE_POINT |
-                    AERON_FILE_SYNCHRONOUS_IO_NONALERT | AERON_FILE_DELETE_ON_CLOSE,
-                NULL,
-                0);
-
-            if (!NT_SUCCESS(st))
-            {
-                // Raced: entry was removed between enumeration and open. End state matches
-                // what we wanted, so keep going.
-                if (AERON_STATUS_OBJECT_NAME_NOT_FOUND == st || AERON_STATUS_OBJECT_PATH_NOT_FOUND == st)
-                {
-                    continue;
-                }
-                AERON_SET_ERR_WIN(aeron_p_RtlNtStatusToDosError(st),
-                    "NtCreateFile(delete-on-close) failed under: %s", ctx);
-                rc = -1;
-                break;
-            }
-
-            if (0 != aeron_recursively_delete_by_handle(child, ctx))
-            {
-                rc = -1;
-                break;
-            }
-        }
-
-        aeron_free(names);
+        rc = aeron_delete_directory_contents(h, ctx);
     }
 
-close_handle:
-    // FILE_DELETE_ON_CLOSE fires here. Leaves and reparse points always delete; real
-    // directories delete only if empty — which they are when the loop above succeeded.
+    // POSIX-semantics delete leaves the parent namespace synchronously even if a
+    // FILE_SHARE_DELETE handle is held elsewhere. Skip on prior failure so the
+    // "directory not empty" disposition error doesn't clobber the original cause.
+    if (0 == rc && 0 != aeron_set_disposition_delete(h, ctx))
+    {
+        rc = -1;
+    }
     CloseHandle(h);
     return rc;
 }
 
-static int aeron_delete_path(const char *path, DWORD extra_flags)
+// Enumerate `dir_handle` and recursively delete every entry inside it. Does not
+// close `dir_handle` — the caller still owns it.
+static int aeron_delete_directory_contents(HANDLE dir_handle, const char *ctx)
+{
+    if (0 != aeron_load_nt())
+    {
+        return -1;
+    }
+
+    aeron_nt_name_t *names = NULL;
+    size_t count = 0;
+    if (aeron_nt_collect_children(dir_handle, ctx, &names, &count) < 0)
+    {
+        return -1;
+    }
+
+    int rc = 0;
+    for (size_t i = 0; i < count; i++)
+    {
+        HANDLE child;
+        const aeron_child_open_result_t res = aeron_open_child_for_delete(dir_handle, &names[i], ctx, &child);
+        if (AERON_CHILD_OPEN_RACED == res)
+        {
+            continue;
+        }
+        if (AERON_CHILD_OPEN_ERROR == res)
+        {
+            rc = -1;
+            break;
+        }
+        if (0 != aeron_recursively_delete_by_handle(child, ctx))
+        {
+            rc = -1;
+            break;
+        }
+    }
+
+    aeron_free(names);
+    return rc;
+}
+
+static int aeron_delete_path_internal(const char *path, DWORD extra_flags)
 {
     HANDLE h = CreateFileA(
         path,
-        DELETE | FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | FILE_LIST_DIRECTORY | SYNCHRONIZE,
-        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        AERON_DELETE_ACCESS,
+        AERON_DELETE_SHARE,
         NULL,
         OPEN_EXISTING,
-        FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_DELETE_ON_CLOSE | extra_flags,
+        FILE_FLAG_OPEN_REPARSE_POINT | extra_flags,
         NULL);
 
     if (INVALID_HANDLE_VALUE == h)
@@ -378,11 +562,16 @@ static int aeron_delete_path(const char *path, DWORD extra_flags)
         {
             return 0;
         }
-        AERON_SET_ERR_WIN(err, "CreateFile(delete-on-close) failed: %s", path);
+        AERON_APPEND_ERR_WIN(err, "CreateFile(delete) failed: %s", path);
         return -1;
     }
 
     return aeron_recursively_delete_by_handle(h, path);
+}
+
+static int aeron_delete_file_internal(const char *path)
+{
+    return aeron_delete_path_internal(path, 0);
 }
 
 int aeron_unmap(aeron_mapped_file_t *mapped_file)
@@ -486,7 +675,7 @@ int aeron_create_file(const char *path, size_t length, bool sparse_file)
 
 error:
     CloseHandle(hfile);
-    if (-1 == aeron_delete_file(path))
+    if (-1 == aeron_delete_file_internal(path))
     {
         AERON_APPEND_ERR("(%d) Failed to remove file: %s", GetLastError(), path);
     }
@@ -522,7 +711,8 @@ int aeron_open_file_rw(const char *path)
 
 int aeron_delete_directory(const char *dir)
 {
-    return aeron_delete_path(dir, FILE_FLAG_BACKUP_SEMANTICS);
+    aeron_err_clear();
+    return aeron_delete_path_internal(dir, FILE_FLAG_BACKUP_SEMANTICS);
 }
 
 int aeron_is_directory(const char *path)
@@ -533,7 +723,8 @@ int aeron_is_directory(const char *path)
 
 int aeron_delete_file(const char *path)
 {
-    return aeron_delete_path(path, 0);
+    aeron_err_clear();
+    return aeron_delete_file_internal(path);
 }
 
 #else

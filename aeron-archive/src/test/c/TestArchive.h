@@ -203,7 +203,8 @@ public:
                 m_stream << aeron_epoch_clock() << " [TearDown] Deleting " << m_archiveDir << std::endl;
                 if (aeron_delete_directory(m_archiveDir.c_str()) != 0)
                 {
-                    m_stream << aeron_epoch_clock() << " [TearDown] Failed to delete " << m_archiveDir << std::endl;
+                    m_stream << aeron_epoch_clock() << " [TearDown] Failed to delete " << m_archiveDir
+                             << ": " << aeron_errmsg() << std::endl;
                 }
             }
             m_stream.flush();

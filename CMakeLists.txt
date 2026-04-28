@@ -217,6 +217,24 @@ elseif (MSVC)
             string(REGEX REPLACE "/Gm[-]?" "" ${flag_var} "${${flag_var}}")
             string(REGEX REPLACE "/ZI" "/Zi" ${flag_var} "${${flag_var}}")
         endforeach ()
+
+        # Incremental linking is unsupported with /fsanitize=address — leaving it
+        # produces noisy LNK4300 warnings on every link. Convert any bare /INCREMENTAL
+        # to /INCREMENTAL:NO (and append it if neither form is present) for Debug /
+        # RelWithDebInfo across all link variants. The explicit :NO is required for
+        # the VS generator's <LinkIncremental> property — without it MSBuild defaults
+        # the property to true for Debug regardless of the linker-flags string and
+        # passes /INCREMENTAL to the linker itself.
+        foreach (flag_var
+                CMAKE_EXE_LINKER_FLAGS_DEBUG CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO
+                CMAKE_SHARED_LINKER_FLAGS_DEBUG CMAKE_SHARED_LINKER_FLAGS_RELWITHDEBINFO
+                CMAKE_MODULE_LINKER_FLAGS_DEBUG CMAKE_MODULE_LINKER_FLAGS_RELWITHDEBINFO)
+            string(REGEX REPLACE "(^|[ \t])/INCREMENTAL($|[ \t])" "\\1/INCREMENTAL:NO\\2"
+                ${flag_var} "${${flag_var}}")
+            if (NOT "${${flag_var}}" MATCHES "/INCREMENTAL:NO")
+                string(APPEND ${flag_var} " /INCREMENTAL:NO")
+            endif ()
+        endforeach ()
     endif (SANITISE_BUILD)
 
 endif ()

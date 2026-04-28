@@ -27,6 +27,12 @@ if (AERON_SYSTEM_TESTS)
                 :aeron-system-tests:test
                 --no-daemon
                 --console=plain)
+    if (SANITISE_BUILD)
+        # Sanitizer-instrumented runs are several times slower; double the budget.
+        set_tests_properties(java_system_tests_c_media_driver PROPERTIES TIMEOUT 3000)
+    else ()
+        set_tests_properties(java_system_tests_c_media_driver PROPERTIES TIMEOUT 1500)
+    endif ()
     set_tests_properties(java_system_tests_c_media_driver PROPERTIES RUN_SERIAL TRUE)
 endif ()
 
@@ -45,6 +51,11 @@ if (AERON_SLOW_SYSTEM_TESTS)
                 :aeron-system-tests:slowTest
                 --no-daemon
                 --console=plain)
-    set_tests_properties(java_slow_system_tests_c_media_driver PROPERTIES TIMEOUT 3600)
+    if (SANITISE_BUILD)
+        # Sanitizer-instrumented runs are several times slower; double the budget.
+        set_tests_properties(java_slow_system_tests_c_media_driver PROPERTIES TIMEOUT 7200)
+    else ()
+        set_tests_properties(java_slow_system_tests_c_media_driver PROPERTIES TIMEOUT 3600)
+    endif ()
     set_tests_properties(java_slow_system_tests_c_media_driver PROPERTIES RUN_SERIAL TRUE)
 endif ()
