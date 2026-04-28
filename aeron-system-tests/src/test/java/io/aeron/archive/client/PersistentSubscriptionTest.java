@@ -2029,7 +2029,7 @@ abstract class PersistentSubscriptionTest
     }
 
     @Test
-    @InterruptAfter(30)
+    @InterruptAfter(15)
     void cannotFallbackToReplayWhenTheRecordingHasStoppedAtAnEarlierPosition()
     {
         final PersistentPublication persistentPublication =
@@ -2065,7 +2065,8 @@ abstract class PersistentSubscriptionTest
             // Stop the recording
             aeronArchive.stopRecording(persistentPublication.publication);
 
-            // Consume more messages on live, which will not be recorded
+            // Publish more messages that will not be recorded so the persistent subscription advances past
+            // the recording's stop position.
             final List<byte[]> secondMessageBatch = generateFixedPayloads(5, ONE_KB_MESSAGE_SIZE);
             persistentPublication.publish(secondMessageBatch);
 
@@ -2074,21 +2075,11 @@ abstract class PersistentSubscriptionTest
                 () -> poll(persistentSubscription, fragmentHandler, 10)
             );
 
-            // Allow a faster consumer to advance ahead, causing the persistent subscription to drop from live.
-            final List<byte[]> thirdMessageBatch = new ArrayList<>();
-            for (int i = 0; i < 3; i++)
-            {
-                final List<byte[]> batch = generateFixedPayloads(32, ONE_KB_MESSAGE_SIZE);
-                persistentPublication.publish(batch);
-                thirdMessageBatch.addAll(batch);
-                executeUntil(
-                    () -> countingFragmentHandler.hasReceivedPayloads(thirdMessageBatch.size()),
-                    () -> fastSubscription.poll(countingFragmentHandler, 10)
-                );
-            }
+            // Close the publication so the live image ends via EOS rather than relying on a flow-control timeout.
+            // The persistent subscription then refreshes the recording descriptor and the validate step rejects
+            // the replay because its position is past the recording's stop position.
+            persistentPublication.closePublicationOnly();
 
-            // Verify we cannot fall back to replay, as we have already advanced beyond the stop position of
-            // the recording.
             executeUntil(
                 persistentSubscription::hasFailed,
                 () -> poll(persistentSubscription, fragmentHandler, 10)

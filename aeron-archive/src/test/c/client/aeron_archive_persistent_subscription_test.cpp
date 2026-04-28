@@ -3366,26 +3366,10 @@ TEST_F(AeronArchivePersistentSubscriptionTest, cannotFallbackToReplayWhenRecordi
     executeUntil("receives both batches", poller,
         [&] { return handler.messageCount() == first_batch.size() + second_batch.size(); });
 
-    // Flood messages to make the persistent subscription fall behind and drop from live.
-    // Interleave offering with polling the fast consumer so the publication can advance.
-    for (int i = 0; i < 3; i++)
-    {
-        const std::vector<std::vector<uint8_t>> flood = generateFixedMessages(32, ONE_KB_MESSAGE_SIZE);
-        for (const std::vector<uint8_t> &msg : flood)
-        {
-            while (aeron_exclusive_publication_offer(
-                persistent_publication.publication(), msg.data(), msg.size(), nullptr, nullptr) < 0)
-            {
-                aeron_subscription_poll(fast_subscription,
-                    [](void*, const uint8_t*, size_t, aeron_header_t*){}, nullptr, 10);
-            }
-        }
-        // Drain any remaining in the fast consumer
-        while (aeron_subscription_poll(fast_subscription,
-            [](void*, const uint8_t*, size_t, aeron_header_t*){}, nullptr, 10) > 0)
-        {
-        }
-    }
+    // Close the publication so the live image ends via EOS rather than relying on a flow-control timeout.
+    // The persistent subscription then refreshes the recording descriptor and the validate step rejects
+    // the replay because its position is past the recording's stop position.
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
 
     // PS should fail because it can't replay past the recording's stop position
     executeUntil("has failed", poller,
