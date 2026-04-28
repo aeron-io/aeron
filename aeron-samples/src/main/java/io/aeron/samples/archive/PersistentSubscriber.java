@@ -38,6 +38,8 @@ import static io.aeron.samples.SamplesUtil.findLatestRecording;
  * The default values for channel and stream ID are defined in {@link SampleConfiguration} and can be
  * overridden by setting their corresponding properties via the command-line; e.g.:
  * {@code -Daeron.sample.channel=aeron:udp?endpoint=localhost:5555 -Daeron.sample.streamId=20}
+ *
+ * For details on how to use this sample, see the Persistent Subscription section in the Archive samples README.
  */
 public class PersistentSubscriber
 {

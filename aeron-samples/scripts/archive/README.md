@@ -124,7 +124,5 @@ channel.
 4. Let some messages be sentm then start a Persistent Subscription subscriber, setting `aeron.sample.channel` to the same channel as the publication.
 
 ```shell
-export JVM_OPTS="-Daeron.sample.channel=aeron:udp?control=localhost:20550"
-
 ./persistent-subscriber
 ```
