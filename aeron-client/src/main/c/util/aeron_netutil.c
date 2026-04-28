@@ -62,7 +62,7 @@ int aeron_ip_addr_resolver(const char *host, struct sockaddr_storage *sockaddr, 
     }
 
     struct addrinfo hints;
-    struct addrinfo *info = NULL;
+    struct addrinfo *info = NULL, *temp_info;
 
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = family_hint;
@@ -77,19 +77,27 @@ int aeron_ip_addr_resolver(const char *host, struct sockaddr_storage *sockaddr, 
         return -1;
     }
 
-    if (AF_INET == info->ai_family)
+    for (temp_info = info; temp_info != NULL && result == -1; temp_info = temp_info->ai_next)
     {
-        memcpy(sockaddr, info->ai_addr, sizeof(struct sockaddr_in));
-        sockaddr->ss_family = AF_INET;
-        result = 0;
+        if (AF_INET == info->ai_family)
+        {
+            memcpy(sockaddr, info->ai_addr, sizeof(struct sockaddr_in));
+            sockaddr->ss_family = AF_INET;
+            result = 0;
+        }
     }
-    else if (AF_INET6 == info->ai_family)
+
+    for (temp_info = info; temp_info != NULL && result == -1; temp_info = temp_info->ai_next)
     {
-        memcpy(sockaddr, info->ai_addr, sizeof(struct sockaddr_in6));
-        sockaddr->ss_family = AF_INET6;
-        result = 0;
+        if (AF_INET6 == info->ai_family)
+        {
+            memcpy(sockaddr, info->ai_addr, sizeof(struct sockaddr_in6));
+            sockaddr->ss_family = AF_INET6;
+            result = 0;
+        }
     }
-    else
+
+    if (result == -1)
     {
         AERON_SET_ERR(EINVAL, "Only IPv4 and IPv6 hosts are supported: family=%d", info->ai_family);
     }

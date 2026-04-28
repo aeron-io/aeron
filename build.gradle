@@ -270,7 +270,7 @@ subprojects {
             'io.aeron.shadow.net.bytebuddy.experimental': 'true',
             'net.bytebuddy.safe': 'true',
             'io.aeron.shadow.net.bytebuddy.safe': 'true',
-//            'java.net.preferIPv4Stack': 'true',
+            'java.net.preferIPv6Addresses': 'false',
             'aeron.fallback.logger': 'no_op',
             'aeron.test.system.aeronmd.path': System.getProperty('aeron.test.system.aeronmd.path'),
             'aeron.test.system.binding.remote.host': System.getProperty('aeron.test.system.binding.remote.host'),
