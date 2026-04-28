@@ -1217,19 +1217,33 @@ abstract class PersistentSubscriptionTest
 
             final PersistentPublication resumedPublication =
                 PersistentPublication.resume(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID, recordingId);
-            final List<byte[]> catchupMessages = generateRandomPayloads(3);
-            resumedPublication.persist(catchupMessages);
 
-            // Revoke ends the live image. After PS drains whatever bytes the narrow rcv-wnd let
-            // through, it sees the image closed and refreshes — replaying the bytes that flow
-            // control prevented from reaching PS via live.
-            resumedPublication.publication.revoke();
-
+            // Publish 1 msg first and wait for PS to receive it. This ensures the live image is
+            // attached before the publisher is revoked; without this, the revoke can race ahead
+            // of PS's setup-msg handshake and PS gets stuck in AWAIT_LIVE forever (the deadline
+            // breach has already fired and won't fire again).
+            final List<byte[]> firstBatch = generateFixedPayloads(1, ONE_KB_MESSAGE_SIZE);
+            resumedPublication.persist(firstBatch);
             executeUntil(
-                () -> fragmentHandler.hasReceivedPayloads(catchupMessages.size()),
+                () -> fragmentHandler.hasReceivedPayloads(firstBatch.size()),
                 pollAndTrack);
 
-            assertPayloads(fragmentHandler.receivedPayloads, catchupMessages);
+            // Publish 4 more 1KB messages. The publisher will only deliver ~rcv-wnd worth to PS
+            // via live; the remaining bytes are recorded but never reach PS through the live
+            // image, so PS must replay them from the archive.
+            final List<byte[]> catchupMessages = generateFixedPayloads(4, ONE_KB_MESSAGE_SIZE);
+            resumedPublication.persist(catchupMessages);
+
+            // Revoke ends the live image. PS sees the close, refreshes, and replays missing bytes.
+            resumedPublication.publication.revoke();
+
+            final List<byte[]> expected = new ArrayList<>(firstBatch);
+            expected.addAll(catchupMessages);
+            executeUntil(
+                () -> fragmentHandler.hasReceivedPayloads(expected.size()),
+                pollAndTrack);
+
+            assertPayloads(fragmentHandler.receivedPayloads, expected);
             assertTrue(observedReplaying[0],
                 "PS did not transition through REPLAY/ATTEMPT_SWITCH; refresh path was not exercised");
             // No additional AWAIT_LIVE entries after the initial one, so no additional breaches.
