@@ -24,6 +24,7 @@ extern "C"
 {
 #include "aeron_client.h"
 #include "aeron_cnc_file_descriptor.h"
+#include "util/aeron_error.h"
 #include "util/aeron_fileutil.h"
 }
 
@@ -78,6 +79,7 @@ TEST_F(TerminateTest, shouldRejectTerminationRequestIfCncFileDoesNotExist)
 
 TEST_F(TerminateTest, noOpIfCncFileIsEmpty)
 {
+    aeron_err_clear();
     m_driver.stop();
 
     char filename[AERON_MAX_PATH] = { 0 };
@@ -90,7 +92,7 @@ TEST_F(TerminateTest, noOpIfCncFileIsEmpty)
     EXPECT_EQ(0, aeron_map_new_file(&mapped_file, filename, true)) << aeron_errmsg();
 
     EXPECT_EQ(0, aeron_context_request_driver_termination(m_driver.directory(), (uint8_t *)TERMINATION_KEY, strlen(TERMINATION_KEY)));
-    EXPECT_EQ(EINVAL, aeron_errcode());
+    EXPECT_EQ(0, aeron_errcode());
 
     aeron_unmap(&mapped_file);
 }
