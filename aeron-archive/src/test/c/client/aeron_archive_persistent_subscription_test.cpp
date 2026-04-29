@@ -2864,7 +2864,13 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReplayAndCatchUpWhenExtende
 {
     TestArchive archive = createArchive(m_aeronDir);
 
-    PersistentPublication persistent_publication(m_aeronDir, MDC_PUBLICATION_CHANNEL, STREAM_ID);
+    // Set the publication's term-length to the Aeron minimum (64 KiB) so the receiver-side
+    // flow-control overrun threshold (`last_sm_position + term_length/2`) is just 32 KiB.
+    // With a 32 KiB threshold we can publish enough catchup data after PS's last SM
+    // to guarantee the trailing messages are dropped at PS and must come via REPLAY.
+    const std::string short_term_publication_channel = MDC_PUBLICATION_CHANNEL + "|term-length=65536";
+
+    PersistentPublication persistent_publication(m_aeronDir, short_term_publication_channel, STREAM_ID);
     persistent_publication.persist(generateFixedMessages(1, ONE_KB_MESSAGE_SIZE));
     const int64_t stop_position = persistent_publication.stop();
     ASSERT_GT(stop_position, 0);
@@ -2887,13 +2893,11 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReplayAndCatchUpWhenExtende
     aeron_archive_context_t *archive_ctx = createArchiveContext();
     ArchiveContextGuard archive_ctx_guard(archive_ctx);
     aeron_archive_context_set_message_timeout_ns(archive_ctx, 500LL * 1000 * 1000);
-    // Constrain persistent subscriber's receive window so it cannot drain all 5 messages via live
-    const std::string narrow_live_channel = MDC_SUBSCRIPTION_CHANNEL + "|rcv-wnd=2K";
     aeron_archive_persistent_subscription_context_t *context = createPersistentSubscriptionContext(
         aeron.aeron(),
         archive_ctx,
         recording_id,
-        narrow_live_channel,
+        MDC_SUBSCRIPTION_CHANNEL,
         STREAM_ID,
         "aeron:udp?endpoint=localhost:0",
         -5,
@@ -2946,14 +2950,18 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReplayAndCatchUpWhenExtende
         poller,
         [&] { return handler.messages().size() == first_batch.size(); });
 
-    // Publisher B offers 4 more messages. Archive records all of them, but PS's narrow rcv-wnd
-    // (and the fact that PS isn't being polled here) means publisher flow-control stops sending
-    // to PS well before all four arrive in PS's term buffer.
-    const std::vector<std::vector<uint8_t>> catchup_messages = generateFixedMessages(4, ONE_KB_MESSAGE_SIZE);
+    // Publisher B offers many more messages. Archive records all of them, but PS isn't being
+    // polled here so its `last_sm_position` is pinned ~2 KiB and the receiver-side overrun
+    // threshold is pinned ~34 KiB (2 KiB + term_length/2). Catchup data spans past that
+    // threshold, so the trailing messages are dropped at PS's image and only ever appear in
+    // the recording — PS must replay to receive them.
+    const std::vector<std::vector<uint8_t>> catchup_messages = generateFixedMessages(40, ONE_KB_MESSAGE_SIZE);
     resumed_publication.persist(catchup_messages);
 
-    // Revoke ends the live image. After the term buffer is drained, PS sees the image closed,
-    // refreshes the recording descriptor, and replays the bytes the live channel never delivered.
+    // Revoke ends the live image and discards any unsent term-buffer data, so the over-run
+    // bytes can't be recovered via NAK retransmits. After the term buffer is drained, PS sees
+    // the image closed, refreshes the recording descriptor, and replays the bytes the live
+    // channel never delivered.
     aeron_exclusive_publication_revoke(resumed_publication.publication(), nullptr, nullptr);
 
     std::vector<std::vector<uint8_t>> expected;
@@ -2961,7 +2969,7 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReplayAndCatchUpWhenExtende
     expected.insert(expected.end(), catchup_messages.begin(), catchup_messages.end());
 
     executeUntil(
-        "received all 5 messages",
+        "received all messages",
         poller,
         [&] { return handler.messages().size() == expected.size(); });
 

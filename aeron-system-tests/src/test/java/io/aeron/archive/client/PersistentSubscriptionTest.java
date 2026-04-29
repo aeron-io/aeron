@@ -1283,10 +1283,12 @@ abstract class PersistentSubscriptionTest
                 () -> fragmentHandler.hasReceivedPayloads(firstBatch.size()),
                 pollAndTrack);
 
-            // Publish 4 more 1KB messages. The publisher will only deliver ~rcv-wnd worth to PS
-            // via live; the remaining bytes are recorded but never reach PS through the live
-            // image, so PS must replay them from the archive.
-            final List<byte[]> catchupMessages = generateFixedPayloads(4, ONE_KB_MESSAGE_SIZE);
+            // Publish many more 1KB messages. PS isn't being polled here so its `last_sm_position`
+            // is pinned ~2 KiB and the receiver-side overrun threshold (`last_sm_position +
+            // term_length/2`) is pinned ~34 KiB. Catchup spans past that threshold, so the
+            // trailing messages are dropped at PS's image — they're only ever recorded — and PS
+            // must replay to receive them.
+            final List<byte[]> catchupMessages = generateFixedPayloads(40, ONE_KB_MESSAGE_SIZE);
             resumedPublication.persist(catchupMessages);
 
             // Revoke ends the live image. PS sees the close, refreshes, and replays missing bytes.
