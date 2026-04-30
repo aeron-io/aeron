@@ -409,3 +409,56 @@ jobs:
         with:
           name: crash-logs-cpp-sanitize-clang-${{ matrix.version }}
           path: ${{ steps.copy_test_logs.outputs.file }}
+
+  cpp-sanitize-msvc:
+    name: C++ Sanitise Build MSVC
+    runs-on: windows-latest
+    timeout-minutes: 120
+    env:
+      CC: cl
+      CXX: cl
+      ASAN_WIN_CONTINUE_ON_INTERCEPTION_FAILURE: "1"
+    steps:
+      - name: Use faster temporary storage (Windows)
+        run: |
+          echo "TMP=$env:RUNNER_TEMP" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "TEMP=$env:RUNNER_TEMP" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Disable CPU hogs (Windows)
+        run: |
+          Set-MpPreference -DisableRealtimeMonitoring $true -Force
+          Add-MpPreference -ExclusionPath "C:\" -Force
+          Add-MpPreference -ExclusionPath "D:\" -Force
+          sc config wuauserv start= disabled
+          Stop-Service wuauserv -ErrorAction SilentlyContinue
+          reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\wsl.exe" /v Debugger /t REG_SZ /d "block.exe" /f
+          reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\CompatTelRunner.exe" /v Debugger /t REG_SZ /d "block.exe" /f
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - name: Setup java
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'zulu'
+          java-version: ${{ env.JAVA_VERSION }}
+      - name: Setup BUILD_JAVA_HOME & BUILD_JAVA_VERSION
+        run: |
+          java -Xinternalversion
+          echo "BUILD_JAVA_HOME=$env:JAVA_HOME" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "BUILD_JAVA_VERSION=${{ env.JAVA_VERSION }}" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+      - name: Build
+        run: cppbuild/cppbuild.ps1 --relwithdebinfo-build --sanitise-build --c-warnings-as-errors --cxx-warnings-as-errors --slow-system-tests
+      - name: Copy test logs
+        id: copy_test_logs
+        if: failure()
+        run: |
+          echo "file=build/distributions/test_logs.tbz2" | Out-File $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          ./gradlew tarTestLogs
+      - name: Upload crash logs
+        if: always() && steps.copy_test_logs.outputs.file == 'build/distributions/test_logs.tbz2'
+        uses: actions/upload-artifact@v7
+        with:
+          name: crash-logs-cpp-sanitize-msvc
+          path: ${{ steps.copy_test_logs.outputs.file }}
