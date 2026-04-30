@@ -292,6 +292,7 @@ SET(DRIVER_ONLY_SOURCE
     uri/aeron_driver_uri.c
     aeron_async_executor.c
     aeron_congestion_control.c
+    aeron_cpuset.c
     aeron_csv_table_name_resolver.c
     aeron_data_packet_dispatcher.c
     aeron_driver_version.c
@@ -346,6 +347,7 @@ SET(HEADERS
     uri/aeron_driver_uri.h
     aeron_async_executor.h
     aeron_congestion_control.h
+    aeron_cpuset.h
     aeron_csv_table_name_resolver.h
     aeron_data_packet_dispatcher.h
     aeron_driver.h
