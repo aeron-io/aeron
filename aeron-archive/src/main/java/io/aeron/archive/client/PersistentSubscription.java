@@ -328,7 +328,7 @@ public final class PersistentSubscription implements AutoCloseable
      */
     public Exception failureReason()
     {
-        return this.failureReason;
+        return failureReason;
     }
 
     /**
@@ -730,7 +730,7 @@ public final class PersistentSubscription implements AutoCloseable
             };
 
             onTerminalError(new PersistentSubscriptionException(
-                reason, "ERROR - replay request failed: " + replayRequest.errorMessage));
+                reason, "replay request failed: " + replayRequest.errorMessage));
 
             return 1;
         }
