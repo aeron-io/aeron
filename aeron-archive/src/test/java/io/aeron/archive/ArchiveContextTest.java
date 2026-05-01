@@ -79,7 +79,6 @@ import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.startsWith;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -260,7 +259,7 @@ class ArchiveContextTest
     }
 
     @Test
-    void shouldThrowIllegalStateExceptionIfThereIsAnActiveMarkFile()
+    void shouldThrowConfigurationExceptionIfThereIsAnActiveMarkFile()
     {
         context.conclude();
         assertNotNull(context.archiveMarkFile());
@@ -271,9 +270,33 @@ class ArchiveContextTest
             .errorHandler(context.errorHandler())
             .aeron(context.aeron());
 
-        final IllegalStateException exception =
-            assertThrowsExactly(IllegalStateException.class, anotherContext::conclude);
-        assertThat(exception.getMessage(), startsWith("active mark file detected: "));
+        final ConfigurationException exception =
+            assertThrowsExactly(ConfigurationException.class, anotherContext::conclude);
+        assertThat(exception.getMessage(), containsString("active archive detected"));
+    }
+
+    @Test
+    void shouldThrowConfigurationExceptionIfActiveMarkFileFoundViaLinkFile(final @TempDir Path tempDir)
+        throws IOException
+    {
+        final Path archiveDir = tempDir.resolve("archive");
+        final Path markFileDir = tempDir.resolve("mark");
+        Files.createDirectories(archiveDir);
+        Files.createDirectories(markFileDir);
+
+        context.archiveDir(archiveDir.toFile()).markFileDir(markFileDir.toFile());
+        context.conclude();
+        assertNotNull(context.archiveMarkFile());
+        assertNotEquals(0, context.archiveMarkFile().activityTimestampVolatile());
+
+        final Archive.Context anotherContext = TestContexts.localhostArchive()
+            .archiveDir(archiveDir.toFile())
+            .errorHandler(context.errorHandler())
+            .aeron(context.aeron());
+
+        final ConfigurationException exception =
+            assertThrowsExactly(ConfigurationException.class, anotherContext::conclude);
+        assertThat(exception.getMessage(), containsString("active archive detected"));
     }
 
     @Test

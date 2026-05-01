@@ -1288,6 +1288,11 @@ public final class Archive implements AutoCloseable
                 epochClock = SystemEpochClock.INSTANCE;
             }
 
+            if (null == markFile)
+            {
+                ensureNoConflictingMarkFile(archiveDir, epochClock);
+            }
+
             if (null == nanoClock)
             {
                 nanoClock = SystemNanoClock.INSTANCE;
@@ -3796,6 +3801,37 @@ public final class Archive implements AutoCloseable
                 {
                     archiveId = CommonContext.nextCorrelationId(
                         new File(aeronDirectoryName), epochClock, new CommonContext().driverTimeoutMs());
+                }
+            }
+        }
+
+        private static void ensureNoConflictingMarkFile(final File archiveDir, final EpochClock epochClock)
+        {
+            if (ArchiveMarkFile.isActive(archiveDir, epochClock))
+            {
+                throw new ConfigurationException("active archive detected, archive.dir=" + archiveDir + " is in use");
+            }
+
+            final File linkFile = new File(archiveDir, ArchiveMarkFile.LINK_FILENAME);
+            if (linkFile.exists())
+            {
+                try
+                {
+                    final String path = new String(Files.readAllBytes(linkFile.toPath()), US_ASCII).trim();
+                    if (!path.isEmpty())
+                    {
+                        final File markFileDir = new File(path);
+                        if (ArchiveMarkFile.isActive(markFileDir, epochClock))
+                        {
+                            throw new ConfigurationException(
+                                "active archive detected, archive.dir=" + archiveDir +
+                                " mark file dir=" + markFileDir + " is in use");
+                        }
+                    }
+                }
+                catch (final IOException ex)
+                {
+                    throw new UncheckedIOException(ex);
                 }
             }
         }
