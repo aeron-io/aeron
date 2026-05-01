@@ -231,6 +231,5 @@ if (AERON_INSTALL_TARGETS)
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib)
     install(DIRECTORY ./ DESTINATION include/aeron FILES_MATCHING
-            PATTERN "aeron_archive.h"
-            PATTERN "aeron_archive_persistent_subscription.h")
+            PATTERN "aeron_archive.h")
 endif ()
