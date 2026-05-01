@@ -317,7 +317,8 @@ SET(DRIVER_ONLY_SOURCE
     aeron_publication_image.c
     aeron_retransmit_handler.c
     aeron_system_counters.c
-    aeron_termination_validator.c)
+    aeron_termination_validator.c
+    aeron_topology.c)
 
 SET(SOURCE
     ${C_CLIENT_SOURCE}
@@ -373,6 +374,7 @@ SET(HEADERS
     aeron_retransmit_handler.h
     aeron_system_counters.h
     aeron_termination_validator.h
+    aeron_topology.h
     aeron_driver_version.h
     aeronmd.h)
 
