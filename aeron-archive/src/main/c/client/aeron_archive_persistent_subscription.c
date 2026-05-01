@@ -1890,7 +1890,7 @@ static int aeron_archive_persistent_subscription_replay(
         aeron_archive_persistent_subscription_clean_up_live_subscription(persistent_subscription);
         aeron_archive_persistent_subscription_clean_up_replay(persistent_subscription);
         aeron_archive_persistent_subscription_clean_up_replay_subscription(persistent_subscription);
-        aeron_archive_persistent_subscription_set_up_replay(persistent_subscription);
+        aeron_archive_persistent_subscription_refresh_recording_descriptor(persistent_subscription);
 
         return 1;
     }
