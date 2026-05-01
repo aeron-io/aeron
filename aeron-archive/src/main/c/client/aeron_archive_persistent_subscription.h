@@ -23,12 +23,6 @@
 #include "util/aeron_error.h"
 #include "uri/aeron_uri_string_builder.h"
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
-
 struct aeron_archive_persistent_subscription_context_stct
 {
     aeron_t *aeron;
@@ -62,7 +56,6 @@ typedef struct aeron_archive_persistent_subscription_async_archive_op_stct
 }
 aeron_archive_persistent_subscription_async_archive_op_t;
 
-
 enum aeron_archive_persistent_subscription_max_recorded_position_state
 {
     REQUEST_MAX_POSITION,
@@ -79,7 +72,6 @@ typedef struct aeron_archive_persistent_subscription_max_recorded_position_stct
     int32_t close_enough_threshold;
 }
 max_recorded_position_t;
-
 
 typedef enum aeron_archive_persistent_subscription_state_en
 {
@@ -104,7 +96,6 @@ typedef enum aeron_archive_persistent_subscription_state_en
 }
 aeron_archive_persistent_subscription_state_t;
 
-
 typedef enum aeron_archive_replay_channel_type_en
 {
     REPLAY_CHANNEL_SESSION_SPECIFIC,
@@ -112,8 +103,6 @@ typedef enum aeron_archive_replay_channel_type_en
     REPLAY_CHANNEL_RESPONSE_CHANNEL,
 }
 aeron_archive_replay_channel_type_t;
-
-
 
 typedef struct aeron_archive_persistent_subscription_list_recording_request_stct
 {
@@ -128,7 +117,6 @@ typedef struct aeron_archive_persistent_subscription_list_recording_request_stct
     int32_t stream_id;
 }
 aeron_archive_persistent_subscription_list_recording_request_t;
-
 
 struct aeron_archive_persistent_subscription_stct
 {
@@ -170,9 +158,6 @@ struct aeron_archive_persistent_subscription_stct
     bool use_aeron_agent_invoker;
 };
 
-
-
-
 typedef struct aeron_archive_persistent_subscription_poll_ctx_stct
 {
     bool controlled;
@@ -186,8 +171,6 @@ typedef struct aeron_archive_persistent_subscription_poll_ctx_stct
     size_t fragment_limit;
 }
 aeron_archive_persistent_subscription_poll_ctx_t;
-
-
 
 int aeron_archive_persistent_subscription_context_conclude(aeron_archive_persistent_subscription_context_t *context);
 
@@ -213,10 +196,5 @@ int64_t aeron_archive_persistent_subscription_join_difference(aeron_archive_pers
  */
 void aeron_archive_persistent_subscription_set_message_timeout_ns_for_testing(
     aeron_archive_persistent_subscription_t *persistent_subscription, uint64_t message_timeout_ns);
-
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif //AERON_AERON_ARCHIVE_PERSISTENT_SUBSCRIPTION_H
