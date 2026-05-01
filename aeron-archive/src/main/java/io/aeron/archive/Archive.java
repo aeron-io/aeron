@@ -1290,7 +1290,7 @@ public final class Archive implements AutoCloseable
 
             if (null == markFile)
             {
-                ensureNoConflictingMarkFile(archiveDir, epochClock);
+                ensureNoConflictingMarkFile(archiveDir, markFileDir, epochClock);
             }
 
             if (null == nanoClock)
@@ -3805,13 +3805,9 @@ public final class Archive implements AutoCloseable
             }
         }
 
-        private static void ensureNoConflictingMarkFile(final File archiveDir, final EpochClock epochClock)
+        private static void ensureNoConflictingMarkFile(
+            final File archiveDir, final File markFileDir, final EpochClock epochClock)
         {
-            if (ArchiveMarkFile.isActive(archiveDir, epochClock))
-            {
-                throw new ConfigurationException("active archive detected, archive.dir=" + archiveDir + " is in use");
-            }
-
             final File linkFile = new File(archiveDir, ArchiveMarkFile.LINK_FILENAME);
             if (linkFile.exists())
             {
@@ -3820,12 +3816,15 @@ public final class Archive implements AutoCloseable
                     final String path = new String(Files.readAllBytes(linkFile.toPath()), US_ASCII).trim();
                     if (!path.isEmpty())
                     {
-                        final File markFileDir = new File(path);
-                        if (ArchiveMarkFile.isActive(markFileDir, epochClock))
+                        final File linkedMarkFileDir = new File(path).getCanonicalFile();
+                        if (!linkedMarkFileDir.equals(markFileDir) &&
+                            ArchiveMarkFile.isActive(linkedMarkFileDir, epochClock))
                         {
                             throw new ConfigurationException(
-                                "active archive detected, archive.dir=" + archiveDir +
-                                " mark file dir=" + markFileDir + " is in use");
+                                "There is an active Archive at archive.dir=" + archiveDir +
+                                    " detected through an existing link to " +
+                                    "mark file dir=" + linkedMarkFileDir + ", but this Archive is configured " +
+                                    "with mark file dir=" + markFileDir);
                         }
                     }
                 }
@@ -3833,6 +3832,13 @@ public final class Archive implements AutoCloseable
                 {
                     throw new UncheckedIOException(ex);
                 }
+            }
+
+            if (!markFileDir.equals(archiveDir) && ArchiveMarkFile.isActive(archiveDir, epochClock))
+            {
+                throw new ConfigurationException(
+                    "archive.dir=" + archiveDir + " has an active mark file but this Archive is configured" +
+                    " with mark file dir=" + markFileDir);
             }
         }
 

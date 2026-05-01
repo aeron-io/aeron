@@ -78,6 +78,7 @@ import static io.aeron.protocol.DataHeaderFlyweight.HEADER_LENGTH;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
 import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.startsWith;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -87,6 +88,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -259,7 +261,7 @@ class ArchiveContextTest
     }
 
     @Test
-    void shouldThrowConfigurationExceptionIfThereIsAnActiveMarkFile()
+    void shouldThrowIllegalStateExceptionIfThereIsAnActiveMarkFile()
     {
         context.conclude();
         assertNotNull(context.archiveMarkFile());
@@ -270,9 +272,9 @@ class ArchiveContextTest
             .errorHandler(context.errorHandler())
             .aeron(context.aeron());
 
-        final ConfigurationException exception =
-            assertThrowsExactly(ConfigurationException.class, anotherContext::conclude);
-        assertThat(exception.getMessage(), containsString("active archive detected"));
+        final IllegalStateException exception =
+            assertThrowsExactly(IllegalStateException.class, anotherContext::conclude);
+        assertThat(exception.getMessage(), startsWith("active mark file detected: "));
     }
 
     @Test
@@ -296,7 +298,49 @@ class ArchiveContextTest
 
         final ConfigurationException exception =
             assertThrowsExactly(ConfigurationException.class, anotherContext::conclude);
-        assertThat(exception.getMessage(), containsString("active archive detected"));
+        assertThat(exception.getMessage(), containsString("archive.dir="));
+        assertThat(exception.getMessage(), containsString("mark file dir="));
+    }
+
+    @Test
+    void shouldThrowConfigurationExceptionIfActiveMarkFileInArchiveDirWithDifferentMarkFileDir(
+        final @TempDir Path tempDir) throws IOException
+    {
+        final Path archiveDir = tempDir.resolve("archive");
+        final Path markFileDir = tempDir.resolve("mark");
+        Files.createDirectories(archiveDir);
+        Files.createDirectories(markFileDir);
+
+        context.archiveDir(archiveDir.toFile());
+        context.conclude();
+        assertNotNull(context.archiveMarkFile());
+        assertNotEquals(0, context.archiveMarkFile().activityTimestampVolatile());
+
+        final Archive.Context anotherContext = TestContexts.localhostArchive()
+            .archiveDir(archiveDir.toFile())
+            .markFileDir(markFileDir.toFile())
+            .errorHandler(context.errorHandler())
+            .aeron(context.aeron());
+
+        final ConfigurationException exception =
+            assertThrowsExactly(ConfigurationException.class, anotherContext::conclude);
+        assertThat(exception.getMessage(), containsString("archive.dir="));
+        assertThat(exception.getMessage(), containsString("mark file dir="));
+    }
+
+    @Test
+    void shouldNotThrowIfLinkFileIsStale(@TempDir final Path tempDir) throws IOException
+    {
+        final Path archiveDir = tempDir.resolve("archive");
+        final Path markFileDir = tempDir.resolve("mark");
+        Files.createDirectories(archiveDir);
+
+        // Write a stale link file pointing to a directory that has no active archive
+        final Path linkFile = archiveDir.resolve(ArchiveMarkFile.LINK_FILENAME);
+        Files.writeString(linkFile, markFileDir.toFile().getCanonicalPath());
+
+        context.archiveDir(archiveDir.toFile());
+        assertDoesNotThrow(context::conclude);
     }
 
     @Test
