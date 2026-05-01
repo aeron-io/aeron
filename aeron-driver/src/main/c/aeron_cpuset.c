@@ -25,51 +25,22 @@
 #include "aeron_alloc.h"
 #include "util/aeron_error.h"
 
-char *aeron_cpuset_read_file(const char *filename)
+#define AERON_CGROUP_SYS_FILE_LENGTH_MAX (4096)
+
+int aeron_cpuset_read_sysfs_file(const char *filename, char *buf, size_t buf_size)
 {
-    char *file_data = NULL;
-    FILE *io_file = fopen(filename, "r");
-    if (!io_file)
+    FILE *f = fopen(filename, "r");
+    if (NULL == f)
     {
-        AERON_SET_ERR(EINVAL, "unable to open file: %s", filename);
-        return NULL;
+        AERON_SET_ERR(errno, "unable to open: %s", filename);
+        return -1;
     }
 
-    if (fseek(io_file, 0, SEEK_END) < 0)
-    {
-        AERON_SET_ERR(errno, "unable to seek to end of file: %s", filename);
-        goto error;
-    }
+    size_t read = fread(buf, 1, buf_size - 1, f);
+    fclose(f);
+    buf[read] = '\0';
 
-    const int size = ftell(io_file);
-    if (size < 0)
-    {
-        AERON_SET_ERR(errno, "unable to get file length: %s", filename);
-        goto error;
-    }
-
-    if (aeron_alloc((void **)&file_data, size + 1) < 0)
-    {
-        AERON_APPEND_ERR("unable to allocate buffer for: %s", filename);
-        goto error;
-    }
-
-    fseek(io_file, 0, SEEK_SET);
-    const size_t read = fread(file_data, 1, size, io_file);
-    if (read != (size_t)size)
-    {
-        AERON_SET_ERR(EINVAL, "unable to read from file: %s", filename);
-        goto error;
-    }
-
-    fclose(io_file);
-    file_data[size] = '\0';
-    return file_data;
-
-error:
-    fclose(io_file);
-    aeron_free(file_data);
-    return NULL;
+    return (int)read;
 }
 
 typedef enum aeron_cpuset_cgroup_parse_state_en
@@ -83,14 +54,15 @@ aeron_cpuset_cgroup_parse_state_t;
 
 static const char *aeron_cpuset_find_cgroup_path(const char *proc_cgroup_file)
 {
-    char *proc_cgroup_data = aeron_cpuset_read_file(proc_cgroup_file);
-    if (NULL == proc_cgroup_data)
+    char proc_cgroup_data[AERON_CGROUP_SYS_FILE_LENGTH_MAX];
+    const int proc_cgroup_len = aeron_cpuset_read_sysfs_file(
+        proc_cgroup_file, proc_cgroup_data, sizeof(proc_cgroup_data));
+
+    if (-1 == proc_cgroup_len)
     {
         AERON_APPEND_ERR("%s", "");
         return NULL;
     }
-
-    const int proc_cgroup_len = (int)strlen(proc_cgroup_data);
 
     aeron_cpuset_cgroup_parse_state_t state = AERON_CPUSET_CGROUP_PARSE_STATE_ID;
     const char *id = NULL;
@@ -164,7 +136,6 @@ static const char *aeron_cpuset_find_cgroup_path(const char *proc_cgroup_file)
         }
     }
 
-    aeron_free(proc_cgroup_data);
     return return_path;
 }
 
@@ -336,30 +307,26 @@ error:
 
 int aeron_cpuset_parse_cpulist_from_file(const char *cgroup_path, int **cpus, int *cpu_count)
 {
-    char *cpulist_data = aeron_cpuset_read_file(cgroup_path);
-    if (NULL == cpulist_data)
+    char cpulist_data[AERON_CGROUP_SYS_FILE_LENGTH_MAX];
+
+    if (-1 == aeron_cpuset_read_sysfs_file(cgroup_path, cpulist_data, sizeof(cpulist_data)))
     {
         AERON_APPEND_ERR("%s", "");
-        goto error;
+        return -1;
     }
 
     if (aeron_cpuset_parse_cpulist(cpulist_data, cpus, cpu_count) < 0)
     {
         AERON_APPEND_ERR("%s", "");
-        goto error;
+        return -1;
     }
 
-    aeron_free(cpulist_data);
     return 0;
-
-error:
-    aeron_free(cpulist_data);
-    return -1;
 }
 
 int aeron_cpuset_cgroup_read_v2(const char *proc_cgroup_file, const char *mount_root, int **cpus, int *cpu_count)
 {
-    const char *cgroup_path = aeron_cpuset_find_cgroup_path(proc_cgroup_file);
+    char *cgroup_path = (char *)aeron_cpuset_find_cgroup_path(proc_cgroup_file);
     if (NULL == cgroup_path)
     {
         AERON_APPEND_ERR("%s", "");
@@ -367,22 +334,45 @@ int aeron_cpuset_cgroup_read_v2(const char *proc_cgroup_file, const char *mount_
     }
 
     char absolute_cgroup_path[4096];
-    const int written = snprintf(
-        absolute_cgroup_path, sizeof(absolute_cgroup_path), "%s%s/cpuset.cpus.effective", mount_root, cgroup_path);
-
-    printf("%s\n", absolute_cgroup_path);
-
-    if (written < 0 || sizeof(absolute_cgroup_path) <= (size_t)written)
+    do
     {
-        AERON_SET_ERR(EINVAL, "%s", "cgroup path name too long");
-        goto error;
-    }
+        const int written = snprintf(
+            absolute_cgroup_path, sizeof(absolute_cgroup_path), "%s%s/cpuset.cpus.effective", mount_root, cgroup_path);
 
-    if (aeron_cpuset_parse_cpulist_from_file(absolute_cgroup_path, cpus, cpu_count) < 0)
-    {
-        AERON_APPEND_ERR("%s", "");
-        goto error;
+        if (written < 0 || sizeof(absolute_cgroup_path) <= (size_t)written)
+        {
+            AERON_SET_ERR(EINVAL, "%s", "cgroup path name too long");
+            goto error;
+        }
+
+        if (0 <= aeron_cpuset_parse_cpulist_from_file(absolute_cgroup_path, cpus, cpu_count))
+        {
+            break;
+        }
+
+        if ('\0' == *cgroup_path)
+        {
+            AERON_APPEND_ERR("unable to find '%s' in path '%s'", "cpuset.cpus.effective", mount_root);
+            return -1;
+        }
+
+        if (ENOMEM == aeron_errcode())
+        {
+            AERON_APPEND_ERR("%s", "");
+            return -1;
+        }
+
+        char *last_slash = strrchr(cgroup_path, '/');
+        if (NULL == last_slash)
+        {
+            *cgroup_path = '\0';
+        }
+        else
+        {
+            *last_slash = '\0';
+        }
     }
+    while (true);
 
     aeron_free((void *)cgroup_path);
     return 0;

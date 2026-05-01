@@ -18,6 +18,10 @@
 #ifndef AERON_CPUSET_H
 #define AERON_CPUSET_H
 
+#define AERON_CPUSET_CGROUP_MOUNT_V2 "/sys/fs/cgroup"
+#define AERON_CPUSET_CGROUP_MOUNT_V1 "/sys/fs/cgroup/cpuset"
+#define AERON_CPUSET_PROC_SELF_CGROUP "/proc/self/cgroup"
+
 /**
  * Parse a list of cpus, e.g. '1,3,4,5-19'.
  *
