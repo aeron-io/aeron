@@ -1021,7 +1021,7 @@ public final class PersistentSubscription implements AutoCloseable
             cleanUpLiveSubscription();
             cleanUpReplay();
             cleanUpReplaySubscription();
-            setUpReplay();
+            refreshRecordingDescriptor();
 
             return 1;
         }

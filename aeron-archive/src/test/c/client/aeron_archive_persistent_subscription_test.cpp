@@ -2857,6 +2857,88 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldRefreshAndReplayWhenLiveAhe
     aeron_archive_context_close(archive_ctx);
 }
 
+// Exercises the refresh_recording_descriptor recovery path inside REPLAY: PS is mid-replay when
+// the publisher is stopped. The replay image closes; PS must refresh the descriptor (rather than
+// retry replay against stale recording info) before transitioning to await-live, so that when the
+// publication is later resumed, PS picks up the live image and joins live.
+TEST_F(AeronArchivePersistentSubscriptionTest, shouldRecoverWhenThePersistentPublicationIsRestartedDuringReplay)
+{
+    TestArchive archive = createArchive(m_aeronDir);
+
+    PersistentPublication persistent_publication(m_aeronDir, IPC_CHANNEL, STREAM_ID);
+    const std::vector<std::vector<uint8_t>> recorded_batch = generateFixedMessages(1, ONE_KB_MESSAGE_SIZE);
+    persistent_publication.persist(recorded_batch);
+    const int64_t recording_id = persistent_publication.recordingId();
+
+    AeronResource aeron(m_aeronDir);
+
+    aeron_archive_context_t *archive_ctx = createArchiveContext();
+    ArchiveContextGuard archive_ctx_guard(archive_ctx);
+    aeron_archive_context_set_message_timeout_ns(archive_ctx, 500LL * 1000 * 1000);
+    aeron_archive_persistent_subscription_context_t *context = createPersistentSubscriptionContext(
+        aeron.aeron(),
+        archive_ctx,
+        recording_id,
+        IPC_CHANNEL,
+        STREAM_ID,
+        "aeron:udp?endpoint=localhost:0",
+        -5,
+        AERON_ARCHIVE_PERSISTENT_SUBSCRIPTION_FROM_START);
+
+    TestListener listener;
+    listener.attachTo(context);
+
+    PersistentSubscriptionContextGuard context_guard(context);
+    aeron_archive_persistent_subscription_t *persistent_subscription;
+    ASSERT_EQ(0, aeron_archive_persistent_subscription_create(&persistent_subscription, context)) << aeron_errmsg();
+    context_guard.release();
+    PersistentSubscriptionGuard ps_guard(persistent_subscription);
+
+    MessageCapturingFragmentHandler handler;
+    auto poller = makeControlledPoller(persistent_subscription, handler, 1);
+
+    executeUntil(
+        "received recorded batch via replay",
+        poller,
+        [&] { return handler.messages().size() == recorded_batch.size(); });
+    ASSERT_TRUE(aeron_archive_persistent_subscription_is_replaying(persistent_subscription));
+
+    persistent_publication.stop();
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
+
+    int64_t *state = aeron_counter_addr(aeron_archive_persistent_subscription_context_get_state_counter(context));
+    executeUntil(
+        "PS reaches AWAIT_LIVE after replay image closes",
+        makeControlledPoller(persistent_subscription, handler, 10),
+        [&] { return AWAIT_LIVE == *state; });
+
+    PersistentPublication resumed_publication =
+        PersistentPublication::resume(m_aeronDir, IPC_CHANNEL, STREAM_ID, recording_id);
+
+    executeUntil(
+        "is live",
+        makeControlledPoller(persistent_subscription, handler, 10),
+        isLive(persistent_subscription));
+
+    const std::vector<std::vector<uint8_t>> batch_after_resuming = generateFixedMessages(5, ONE_KB_MESSAGE_SIZE);
+    resumed_publication.persist(batch_after_resuming);
+
+    executeUntil(
+        "received all messages",
+        makeControlledPoller(persistent_subscription, handler, 10),
+        [&] { return handler.messages().size() == recorded_batch.size() + batch_after_resuming.size(); });
+
+    std::vector<std::vector<uint8_t>> expected_messages;
+    expected_messages.insert(expected_messages.end(), recorded_batch.begin(), recorded_batch.end());
+    expected_messages.insert(expected_messages.end(), batch_after_resuming.begin(), batch_after_resuming.end());
+    ASSERT_EQ(expected_messages, handler.messages());
+
+    ps_guard.release();
+    ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
+    archive_ctx_guard.release();
+    aeron_archive_context_close(archive_ctx);
+}
+
 // Recording is extended (no gap), PS lags the live stream, then the publisher is revoked.
 // The recording end is past PS's position when the live image dies, so PS must REPLAY to
 // catch up.
