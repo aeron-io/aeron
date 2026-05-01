@@ -774,7 +774,9 @@ public final class Image
 
         final long position = subscriberPosition.get();
         final int offset = (int)position & termLengthMask;
-        final int limitOffset = Math.min(offset + blockLengthLimit, termLengthMask + 1);
+        final int capacity = termLengthMask + 1;
+        final long highLimitOffset = (long)offset + blockLengthLimit;
+        final int limitOffset = capacity < highLimitOffset ? capacity : (int)highLimitOffset;
         final UnsafeBuffer termBuffer = activeTermBuffer(position);
         final int resultingOffset = TermBlockScanner.scan(termBuffer, offset, limitOffset);
         final int length = resultingOffset - offset;
@@ -831,7 +833,8 @@ public final class Image
         final int activeIndex = LogBufferDescriptor.indexByPosition(position, positionBitsToShift);
         final UnsafeBuffer termBuffer = termBuffers[activeIndex];
         final int capacity = termBuffer.capacity();
-        final int limitOffset = Math.min(offset + blockLengthLimit, capacity);
+        final long highLimitOffset = (long)offset + blockLengthLimit;
+        final int limitOffset = capacity < highLimitOffset ? capacity : (int)highLimitOffset;
         final int resultingOffset = TermBlockScanner.scan(termBuffer, offset, limitOffset);
         final int length = resultingOffset - offset;
 
