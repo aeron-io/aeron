@@ -218,35 +218,6 @@ private:
     }
 };
 
-class PrintingListener
-{
-    aeron_archive_persistent_subscription_listener_t m_listener;
-
-    static void onLiveJoined(void *clientd)
-    {
-        std::cout << "live joined" << std::endl;
-    }
-
-    static void onLiveLeft(void *clientd)
-    {
-        std::cout << "live left" << std::endl;
-    }
-
-    static void onError(void *clientd, int errcode, const char *message)
-    {
-        std::cout << "error " << errcode << " " << message << std::endl;
-    }
-
-public:
-    PrintingListener() : m_listener({onLiveJoined, onLiveLeft, onError, nullptr})
-    {
-    }
-
-    aeron_archive_persistent_subscription_listener_t *listener()
-    {
-        return &m_listener;
-    }
-};
 
 class PersistentPublication
 {
@@ -2726,262 +2697,6 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldCatchUpWhenStartingAtStopPo
     aeron_archive_context_close(archive_ctx);
 }
 
-// Deterministically exercises the shortcut → live-ahead → refresh_recording_descriptor → replay → live
-// path. PS starts while the recording is stopped, so its first list_recording returns the stopped
-// descriptor and PS takes the shortcut to ADD_LIVE_SUBSCRIPTION. After PS has parked in AWAIT_LIVE
-// (confirmed by the deadline-breach error), the test resumes the recording and persists messages on
-// a fresh publisher. Because the new publisher has already advanced past stop_0 by the time its
-// live image reaches PS, `live_position > position` triggers the refresh. The second list_recording
-// sees the extended recording, validation passes, and PS replays the gap before joining live.
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldRefreshAndReplayWhenLiveAheadOfStopPositionAfterResume)
-{
-    TestArchive archive = createArchive(m_aeronDir);
-
-    PersistentPublication persistent_publication(m_aeronDir, MDC_PUBLICATION_CHANNEL, STREAM_ID);
-    const std::vector<std::vector<uint8_t>> initial_messages = generateFixedMessages(1, ONE_KB_MESSAGE_SIZE);
-    persistent_publication.persist(initial_messages);
-
-    const int64_t stop_position = persistent_publication.stop();
-    ASSERT_GT(stop_position, 0);
-    const int64_t recording_id = persistent_publication.recordingId();
-
-    aeron_publication_constants_t pub_constants;
-    aeron_exclusive_publication_constants(persistent_publication.publication(), &pub_constants);
-    aeron_counters_reader_t *counters = aeron_counters_reader(
-        aeron_archive_context_get_aeron(aeron_archive_get_archive_context(persistent_publication.archive())));
-    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
-    waitUntil("publication counters removed",
-        [&]
-        {
-            return AERON_NULL_COUNTER_ID == aeron_counters_reader_find_by_type_id_and_registration_id(
-                counters, AERON_COUNTER_PUBLISHER_POSITION_TYPE_ID, pub_constants.registration_id);
-        });
-
-    AeronResource aeron(m_aeronDir);
-
-    aeron_archive_context_t *archive_ctx = createArchiveContext();
-    ArchiveContextGuard archive_ctx_guard(archive_ctx);
-    // Short timeout so the AWAIT_LIVE deadline breach fires quickly while the recording is stopped
-    // and no publisher is available yet.
-    aeron_archive_context_set_message_timeout_ns(archive_ctx, 500LL * 1000 * 1000);
-    aeron_archive_persistent_subscription_context_t *context = createPersistentSubscriptionContext(
-        aeron.aeron(),
-        archive_ctx,
-        recording_id,
-        MDC_SUBSCRIPTION_CHANNEL,
-        STREAM_ID,
-        "aeron:udp?endpoint=localhost:0",
-        -5,
-        stop_position);
-
-    TestListener listener;
-    listener.attachTo(context);
-
-    PersistentSubscriptionContextGuard context_guard(context);
-    aeron_archive_persistent_subscription_t *persistent_subscription;
-    ASSERT_EQ(0, aeron_archive_persistent_subscription_create(&persistent_subscription, context)) << aeron_errmsg();
-    context_guard.release();
-    PersistentSubscriptionGuard ps_guard(persistent_subscription);
-
-    MessageCapturingFragmentHandler handler;
-    bool observed_replaying = false;
-    auto poller = [&]
-    {
-        const int fragments = aeron_archive_persistent_subscription_controlled_poll(
-            persistent_subscription,
-            MessageCapturingFragmentHandler::onFragment,
-            &handler,
-            10);
-        if (aeron_archive_persistent_subscription_is_replaying(persistent_subscription))
-        {
-            observed_replaying = true;
-        }
-        return fragments;
-    };
-
-    // PS shortcuts to ADD_LIVE_SUBSCRIPTION and parks in AWAIT_LIVE; no publisher exists so the
-    // live-image deadline breaches as a non-terminal error — fired exactly once by this AWAIT_LIVE
-    // entry (guarded by `live_image_deadline_breached`).
-    executeUntil(
-        "live-image deadline breach fires",
-        poller,
-        [&] { return listener.error_count > 0; });
-    ASSERT_EQ(1, listener.error_count);
-    ASSERT_NE(std::string::npos,
-        listener.last_error_message.find("No image became available on the live subscription"));
-    ASSERT_FALSE(aeron_archive_persistent_subscription_is_live(persistent_subscription));
-    ASSERT_FALSE(observed_replaying);
-
-    PersistentPublication resumed_publication =
-        PersistentPublication::resume(m_aeronDir, MDC_PUBLICATION_CHANNEL, STREAM_ID, recording_id);
-
-    // Push the publisher tail past stop_position with a priming offer before the catchup
-    // messages. Without this, PS's live image often attaches at exactly stop_position, the
-    // await_live check `live_position > start_position` is false, and PS takes the direct
-    // AWAIT_LIVE → LIVE path instead of the refresh-replay path this test exercises.
-    const std::vector<std::vector<uint8_t>> priming_messages = generateFixedMessages(1, ONE_KB_MESSAGE_SIZE);
-    resumed_publication.persist(priming_messages);
-
-    const std::vector<std::vector<uint8_t>> catchup_messages = generateFixedMessages(3, ONE_KB_MESSAGE_SIZE);
-    resumed_publication.persist(catchup_messages);
-
-    executeUntil(
-        "is live",
-        poller,
-        [&] { return aeron_archive_persistent_subscription_is_live(persistent_subscription); });
-
-    std::vector<std::vector<uint8_t>> expected_messages;
-    expected_messages.insert(expected_messages.end(), priming_messages.begin(), priming_messages.end());
-    expected_messages.insert(expected_messages.end(), catchup_messages.begin(), catchup_messages.end());
-
-    executeUntil(
-        "received all post-resume messages",
-        poller,
-        [&] { return handler.messages().size() == expected_messages.size(); });
-    ASSERT_EQ(expected_messages, handler.messages());
-
-    // Messages offered before PS's live image attached can only have arrived via the refresh
-    // → replay path; mid-stream UDP subscribers don't backfill historical bytes on the live
-    // stream.
-    ASSERT_TRUE(observed_replaying)
-        << "PS did not transition through REPLAY/ATTEMPT_SWITCH; refresh path was not exercised";
-    ASSERT_EQ(1, listener.live_joined_count);
-    ASSERT_EQ(0, listener.live_left_count);
-    // Still exactly the one initial deadline-breach error — PS refreshed once, went to REPLAY then
-    // LIVE, and has stayed there. No additional AWAIT_LIVE entries, so no additional breaches.
-    ASSERT_EQ(1, listener.error_count);
-
-    ps_guard.release();
-    ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
-    archive_ctx_guard.release();
-    aeron_archive_context_close(archive_ctx);
-}
-
-// Recording is extended (no gap), PS lags the live stream, then the publisher is revoked.
-// The recording end is past PS's position when the live image dies, so PS must REPLAY to
-// catch up.
-TEST_F(AeronArchivePersistentSubscriptionTest, shouldReplayAndCatchUpWhenExtendedRecordingIsAheadOfLivePosition)
-{
-    TestArchive archive = createArchive(m_aeronDir);
-
-    // Set the publication's term-length to the Aeron minimum (64 KiB) so the receiver-side
-    // flow-control overrun threshold (`last_sm_position + term_length/2`) is just 32 KiB.
-    // With a 32 KiB threshold we can publish enough catchup data after PS's last SM
-    // to guarantee the trailing messages are dropped at PS and must come via REPLAY.
-    const std::string short_term_publication_channel = MDC_PUBLICATION_CHANNEL + "|term-length=65536";
-
-    PersistentPublication persistent_publication(m_aeronDir, short_term_publication_channel, STREAM_ID);
-    persistent_publication.persist(generateFixedMessages(1, ONE_KB_MESSAGE_SIZE));
-    const int64_t stop_position = persistent_publication.stop();
-    ASSERT_GT(stop_position, 0);
-    const int64_t recording_id = persistent_publication.recordingId();
-
-    aeron_publication_constants_t pub_constants;
-    aeron_exclusive_publication_constants(persistent_publication.publication(), &pub_constants);
-    aeron_counters_reader_t *counters = aeron_counters_reader(
-        aeron_archive_context_get_aeron(aeron_archive_get_archive_context(persistent_publication.archive())));
-    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
-    waitUntil("publication counters removed",
-        [&]
-        {
-            return AERON_NULL_COUNTER_ID == aeron_counters_reader_find_by_type_id_and_registration_id(
-                counters, AERON_COUNTER_PUBLISHER_POSITION_TYPE_ID, pub_constants.registration_id);
-        });
-
-    AeronResource aeron(m_aeronDir);
-
-    aeron_archive_context_t *archive_ctx = createArchiveContext();
-    ArchiveContextGuard archive_ctx_guard(archive_ctx);
-    aeron_archive_context_set_message_timeout_ns(archive_ctx, 500LL * 1000 * 1000);
-    aeron_archive_persistent_subscription_context_t *context = createPersistentSubscriptionContext(
-        aeron.aeron(),
-        archive_ctx,
-        recording_id,
-        MDC_SUBSCRIPTION_CHANNEL,
-        STREAM_ID,
-        "aeron:udp?endpoint=localhost:0",
-        -5,
-        stop_position);
-
-    TestListener listener;
-    listener.attachTo(context);
-
-    PersistentSubscriptionContextGuard context_guard(context);
-    aeron_archive_persistent_subscription_t *persistent_subscription;
-    ASSERT_EQ(0, aeron_archive_persistent_subscription_create(&persistent_subscription, context)) << aeron_errmsg();
-    context_guard.release();
-    PersistentSubscriptionGuard ps_guard(persistent_subscription);
-
-    MessageCapturingFragmentHandler handler;
-    bool observed_replaying = false;
-    auto poller = [&]
-    {
-        const int fragments = aeron_archive_persistent_subscription_controlled_poll(
-            persistent_subscription,
-            MessageCapturingFragmentHandler::onFragment,
-            &handler,
-            1);
-        if (aeron_archive_persistent_subscription_is_replaying(persistent_subscription))
-        {
-            observed_replaying = true;
-        }
-        return fragments;
-    };
-
-    // PS shortcuts to AWAIT_LIVE; no publisher, deadline breaches exactly once.
-    executeUntil(
-        "deadline breach fires",
-        poller,
-        [&] { return listener.error_count > 0; });
-    ASSERT_EQ(1, listener.error_count);
-
-    // Resume: creates publisher B at stop_0 and extends the recording. Because extend happens
-    // before any offers, the recording is contiguous from stop_0.
-    PersistentPublication resumed_publication =
-        PersistentPublication::resume(m_aeronDir, MDC_PUBLICATION_CHANNEL, STREAM_ID, recording_id);
-
-    // Publisher B offers and records the first message.
-    const std::vector<std::vector<uint8_t>> first_batch = generateFixedMessages(1, ONE_KB_MESSAGE_SIZE);
-    resumed_publication.persist(first_batch);
-
-    // Poll PS until it has received the first message (may arrive via live or replay).
-    executeUntil(
-        "received first message",
-        poller,
-        [&] { return handler.messages().size() == first_batch.size(); });
-
-    // Publisher B offers many more messages. Archive records all of them, but PS isn't being
-    // polled here so its `last_sm_position` is pinned ~2 KiB and the receiver-side overrun
-    // threshold is pinned ~34 KiB (2 KiB + term_length/2). Catchup data spans past that
-    // threshold, so the trailing messages are dropped at PS's image and only ever appear in
-    // the recording — PS must replay to receive them.
-    const std::vector<std::vector<uint8_t>> catchup_messages = generateFixedMessages(40, ONE_KB_MESSAGE_SIZE);
-    resumed_publication.persist(catchup_messages);
-
-    // Revoke ends the live image and discards any unsent term-buffer data, so the over-run
-    // bytes can't be recovered via NAK retransmits. After the term buffer is drained, PS sees
-    // the image closed, refreshes the recording descriptor, and replays the bytes the live
-    // channel never delivered.
-    aeron_exclusive_publication_revoke(resumed_publication.publication(), nullptr, nullptr);
-
-    std::vector<std::vector<uint8_t>> expected;
-    expected.insert(expected.end(), first_batch.begin(), first_batch.end());
-    expected.insert(expected.end(), catchup_messages.begin(), catchup_messages.end());
-
-    executeUntil(
-        "received all messages",
-        poller,
-        [&] { return handler.messages().size() == expected.size(); });
-
-    ASSERT_EQ(expected, handler.messages());
-    ASSERT_TRUE(observed_replaying)
-        << "PS did not transition through REPLAY/ATTEMPT_SWITCH; refresh-replay path was not exercised";
-
-    ps_guard.release();
-    ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
-    archive_ctx_guard.release();
-    aeron_archive_context_close(archive_ctx);
-}
 
 TEST_F(AeronArchivePersistentSubscriptionTest, shouldNotRequireEventListener)
 {
@@ -4550,7 +4265,6 @@ TEST_P(AeronArchivePersistentSubscriptionAllReplayChannelTypesTest, shouldCloseC
 
     const std::string& replay_channel = GetParam();
     std::vector<int64_t> states_up_to_live;
-    PrintingListener printingListener;
 
     {
         AeronResource aeron(m_aeronDir);
@@ -4567,7 +4281,6 @@ TEST_P(AeronArchivePersistentSubscriptionAllReplayChannelTypesTest, shouldCloseC
             STREAM_ID + 1,
             0);
 
-        aeron_archive_persistent_subscription_context_set_listener(context, printingListener.listener());
 
         PersistentSubscriptionContextGuard context_guard(context);
         aeron_archive_persistent_subscription_t *persistent_subscription;
@@ -4620,7 +4333,6 @@ TEST_P(AeronArchivePersistentSubscriptionAllReplayChannelTypesTest, shouldCloseC
             STREAM_ID + 1,
             0);
 
-        aeron_archive_persistent_subscription_context_set_listener(context, printingListener.listener());
 
         PersistentSubscriptionContextGuard context_guard(context);
         aeron_archive_persistent_subscription_t *persistent_subscription;

@@ -68,6 +68,8 @@ if (AERON_SYSTEM_TESTS)
     target_sources(aeron_archive_persistent_subscription_resilience_test PRIVATE
         ${AERON_TEST_SUPPORT_C_PATH}/aeron_stream_id_loss_generator.c
         ${AERON_TEST_SUPPORT_C_PATH}/aeron_stream_id_frame_data_loss_generator.c
-        ${AERON_TEST_SUPPORT_C_PATH}/aeron_frame_data_loss_generator.c)
+        ${AERON_TEST_SUPPORT_C_PATH}/aeron_frame_data_loss_generator.c
+        ${AERON_TEST_SUPPORT_C_PATH}/aeron_setup_at_position_loss_generator.c
+        ${AERON_TEST_SUPPORT_C_PATH}/aeron_data_in_range_loss_generator.c)
     aeron_c_archive_system_test(aeron_archive_test client/aeron_archive_test.cpp)
 endif ()
