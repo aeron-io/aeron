@@ -28,28 +28,34 @@ import org.agrona.concurrent.ShutdownSignalBarrier;
 import org.agrona.concurrent.YieldingIdleStrategy;
 
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import static io.aeron.archive.client.PersistentSubscription.FROM_START;
+import static io.aeron.samples.SampleConfiguration.FRAGMENT_COUNT_LIMIT;
 import static io.aeron.samples.SamplesUtil.findLatestRecording;
 
 /**
- *  This is an Aeron subscriber utilising {@link io.aeron.archive.client.PersistentSubscription}.
- *  <p>
- *  The application uses {@code PersistentSubscription} to replay messages from a recording before joining the live
- *  stream.
- * The default values for channel and stream ID are defined in {@link SampleConfiguration} and can be
+ * This is an Aeron subscriber utilising {@link io.aeron.archive.client.PersistentSubscription}.
+ * <p>
+ * The application uses {@code PersistentSubscription} to replay messages from a recording before joining the live
+ * stream on startup and whenever it disconnects.
+ * <p>
+ * The default values for configuration options are defined in {@link SampleConfiguration} or here, and can be
  * overridden by setting their corresponding properties via the command-line; e.g.:
  * {@code -Daeron.sample.channel=aeron:udp?endpoint=localhost:5555 -Daeron.sample.streamId=20}
- *
- * For details on how to use this sample, see the Persistent Subscription section in the Archive samples README.
+ * <p>
+ * For details on how to use this sample, see the Persistent Subscription section in
+ * {@code aeron-samples/scripts/archive/README.md}.
  */
 public class PersistentSubscriber
 {
-    private static final int LIVE_STREAM_ID = SampleConfiguration.STREAM_ID;
     private static final String LIVE_CHANNEL = SampleConfiguration.CHANNEL;
+    private static final int LIVE_STREAM_ID = SampleConfiguration.STREAM_ID;
 
-    private static final String REPLAY_CHANNEL = "aeron:udp?endpoint=localhost:0";
-    private static final int REPLAY_STREAM_ID = SampleConfiguration.STREAM_ID + 1;
+    private static final String REPLAY_CHANNEL =
+        System.getProperty("aeron.sample.replay.channel", "aeron:udp?endpoint=localhost:0");
+    private static final int REPLAY_STREAM_ID = Integer.getInteger("aeron.sample.replay.streamId", 5000);
 
-    private static final int FRAGMENT_COUNT_LIMIT = SampleConfiguration.FRAGMENT_COUNT_LIMIT;
+    private static final long START_POSITION = Long.getLong("aeron.sample.startPosition", FROM_START);
 
     /**
      * Main method for launching the process.
@@ -59,47 +65,42 @@ public class PersistentSubscriber
     @SuppressWarnings("try")
     public static void main(final String[] args)
     {
-        System.out.println("Subscribing to live " + LIVE_CHANNEL + " on stream id " + LIVE_STREAM_ID +
-            ", and replay " + REPLAY_CHANNEL + " on stream id " + REPLAY_STREAM_ID);
+        System.out.println("Subscribing to live on channel " + LIVE_CHANNEL + " and stream id " + LIVE_STREAM_ID +
+                           ", to replays on channel " + REPLAY_CHANNEL + " and stream id " + REPLAY_STREAM_ID +
+                           ", starting from position " + START_POSITION);
 
         final AtomicBoolean running = new AtomicBoolean(true);
-        final AtomicBoolean isLive = new AtomicBoolean(false);
         final IdleStrategy idleStrategy = new YieldingIdleStrategy();
-        final FragmentHandler fragmentHandler = (
+        final SamplePersistentSubscriptionListener listener = new SamplePersistentSubscriptionListener();
+        final FragmentHandler fragmentHandler =
             (final DirectBuffer buffer, final int offset, final int length, final Header header) ->
             {
                 final String msg = buffer.getStringWithoutLengthAscii(offset, length);
-                final String streamState = isLive.get() ? "live" : "replay";
+                final String streamState = listener.isLive() ? "live" : "replay";
 
-                System.out.printf("Message to %s stream %d from session %d (%d@%d) <<%s>>%n",
-                    streamState, LIVE_STREAM_ID, header.sessionId(), length, offset, msg);
-            });
+                System.out.printf("Message to %s stream %d from session %d of length %d at position %d <<%s>>%n",
+                    streamState, header.streamId(), header.sessionId(), length, header.position(), msg);
+            };
 
-        final AeronArchive.Context archiveCtx = new AeronArchive.Context()
-            .controlResponseStreamId(AeronArchive.Configuration.controlResponseStreamId() + 2);
+        final AeronArchive.Context archiveCtx = new AeronArchive.Context();
 
         try (ShutdownSignalBarrier ignore = new ShutdownSignalBarrier(() -> running.set(false));
             AeronArchive aeronArchive = AeronArchive.connect(archiveCtx.clone()))
         {
-            if (null == aeronArchive)
-            {
-                System.out.println("Could not connect to aeron archive.");
-                return;
-            }
-
             final RecordingDescriptor descriptor = findLatestRecording(aeronArchive, LIVE_CHANNEL, LIVE_STREAM_ID);
 
             if (null == descriptor)
             {
-                System.out.println("No recordings found for channel " + LIVE_CHANNEL);
+                System.out.println("No recordings found for channel " + LIVE_CHANNEL +
+                                   " and stream id " + LIVE_STREAM_ID);
                 return;
             }
 
             final PersistentSubscription.Context ctx = new PersistentSubscription.Context()
                 .aeron(aeronArchive.context().aeron())
                 .aeronArchiveContext(archiveCtx.clone())
-                .listener(new SamplePersistentSubscriptionListener())
-                .startPosition(PersistentSubscription.FROM_START)
+                .listener(listener)
+                .startPosition(START_POSITION)
                 .recordingId(descriptor.recordingId())
                 .liveChannel(LIVE_CHANNEL)
                 .liveStreamId(LIVE_STREAM_ID)
@@ -110,23 +111,14 @@ public class PersistentSubscriber
             {
                 while (running.get())
                 {
+                    final int workCount = subscription.poll(fragmentHandler, FRAGMENT_COUNT_LIMIT);
+
                     if (subscription.hasFailed())
                     {
-                        throw new IllegalStateException("PersistentSubscription has failed");
+                        break;
                     }
 
-                    if (subscription.isReplaying())
-                    {
-                        isLive.set(false);
-                    }
-
-                    if (subscription.isLive())
-                    {
-                        isLive.set(true);
-                    }
-
-                    final int fragmentsRead = subscription.poll(fragmentHandler, FRAGMENT_COUNT_LIMIT);
-                    idleStrategy.idle(fragmentsRead);
+                    idleStrategy.idle(workCount);
                 }
 
                 System.out.println("Shutting down...");
@@ -136,8 +128,12 @@ public class PersistentSubscriber
 
     private static final class SamplePersistentSubscriptionListener implements PersistentSubscriptionListener
     {
+        private boolean live;
+
         public void onLiveJoined()
         {
+            live = true;
+
             System.out.println("===========");
             System.out.println("PersistentSubscription has joined live stream.");
             System.out.println("===========");
@@ -145,6 +141,8 @@ public class PersistentSubscriber
 
         public void onLiveLeft()
         {
+            live = false;
+
             System.out.println("===========");
             System.out.println("PersistentSubscription has left live stream.");
             System.out.println("===========");
@@ -152,8 +150,13 @@ public class PersistentSubscriber
 
         public void onError(final Exception e)
         {
-            System.err.println("Persistent subscription error: " + e.getMessage());
+            System.err.println("Persistent subscription error:");
             e.printStackTrace(System.err);
+        }
+
+        public boolean isLive()
+        {
+            return live;
         }
     }
 }

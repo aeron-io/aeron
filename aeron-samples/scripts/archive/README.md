@@ -102,6 +102,12 @@ export JVM_OPTS="-Daeron.sample.channel=aeron:udp?control=localhost:20550"
 
 ## Persistent Subscription
 
+When running the commands below, you can customize their configuration by passing system properties using the `JVM_OPTS` environment variable, e.g.:
+
+```shell
+JVM_OPTS="-Dfoo=bar" ./baz
+```
+
 1. Start the archiving media driver in its own terminal.
 
 ```shell
@@ -114,14 +120,13 @@ export JVM_OPTS="-Daeron.sample.channel=aeron:udp?control=localhost:20550"
 ./recorded-basic-publisher
 ```
 
-3. Start a basic subscriber so that the publication connects and can record. Make sure `aeron.sample.channel` matches the publication channel.
+3. Start a basic subscriber so that the publication connects and can record.
 
-channel.
 ```shell
 ../basic-subscriber
 ```
 
-4. Let some messages be sentm then start a Persistent Subscription subscriber, setting `aeron.sample.channel` to the same channel as the publication.
+4. Let some messages be sent, then start a Persistent Subscription subscriber.
 
 ```shell
 ./persistent-subscriber
