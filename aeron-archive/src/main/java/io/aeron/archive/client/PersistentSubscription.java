@@ -1730,7 +1730,10 @@ public final class PersistentSubscription implements AutoCloseable
                     );
                 }
             }
-            replayChannel = new ChannelUriStringBuilder(replayChannelUri).rejoin(false).build();
+
+            replayChannelUri.put(CommonContext.REJOIN_PARAM_NAME, "false");
+
+            replayChannel = replayChannelUri.toString();
 
             if (null == aeron)
             {
