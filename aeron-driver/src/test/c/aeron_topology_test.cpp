@@ -66,6 +66,10 @@ protected:
 
 TEST_F(TopologyTest, shouldReadV2Cgroups)
 {
+#ifndef __linux__
+    GTEST_SKIP() << "CGroups only supported on Linux";
+#endif
+
     int *cpus = nullptr;
     int cpu_count = 8;
 

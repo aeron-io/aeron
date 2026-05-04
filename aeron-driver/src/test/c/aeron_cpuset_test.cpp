@@ -83,6 +83,10 @@ protected:
 
 TEST_F(CpusetTest, shouldReadV2Cgroups)
 {
+#ifndef __linux__
+    GTEST_SKIP() << "CGroups only supported on Linux";
+#endif
+
     std::string mountRoot = std::string(m_tempDir) + "/cgroup";
     std::string cgroupRoot = mountRoot + "/user.slice/user-1000.slice";
     ASSERT_EQ(0, aeron_mkdir_recursive(cgroupRoot.c_str(), 0700));
@@ -112,6 +116,10 @@ TEST_F(CpusetTest, shouldReadV2Cgroups)
 
 TEST_F(CpusetTest, shouldReadV2CgroupsInParent)
 {
+#ifndef __linux__
+    GTEST_SKIP() << "CGroups only supported on Linux";
+#endif
+
     std::string mountRoot = std::string(m_tempDir) + "/cgroup";
     std::string cgroupRoot = mountRoot + "/user.slice/user-1000.slice";
     ASSERT_EQ(0, aeron_mkdir_recursive(cgroupRoot.c_str(), 0700));
@@ -141,6 +149,10 @@ TEST_F(CpusetTest, shouldReadV2CgroupsInParent)
 
 TEST_F(CpusetTest, shouldErrorIfNotFoundReadV2Cgroups)
 {
+#ifndef __linux__
+    GTEST_SKIP() << "CGroups only supported on Linux";
+#endif
+
     std::string mountRoot = std::string(m_tempDir) + "/cgroup";
     std::string cgroupRoot = mountRoot + "/user.slice/user-1000.slice";
     ASSERT_EQ(0, aeron_mkdir_recursive(cgroupRoot.c_str(), 0700));
@@ -166,6 +178,10 @@ TEST_F(CpusetTest, shouldErrorIfNotFoundReadV2Cgroups)
 
 TEST_F(CpusetTest, shouldParseCpulist)
 {
+#ifndef __linux__
+    GTEST_SKIP() << "CGroups only supported on Linux";
+#endif
+
     EXPECT_THAT(parseCpulist("0"), ElementsAre(0)) << aeron_errmsg();
     EXPECT_THAT(parseCpulist("7"), ElementsAre(7)) << aeron_errmsg();
     EXPECT_THAT(parseCpulist("3,1,2"), ElementsAre(1, 2, 3)) << aeron_errmsg();
@@ -179,6 +195,10 @@ TEST_F(CpusetTest, shouldParseCpulist)
 
 TEST_F(CpusetTest, shouldNotParseCpulist)
 {
+#ifndef __linux__
+    GTEST_SKIP() << "CGroups only supported on Linux";
+#endif
+
     EXPECT_EQ(-1, parseCpulistError(""));
     EXPECT_THAT(aeron_errmsg(), ContainsRegex("empty string"));
 
@@ -206,6 +226,10 @@ TEST_F(CpusetTest, shouldNotParseCpulist)
 
 TEST_F(CpusetTest, shouldReadCore)
 {
+#ifndef __linux__
+    GTEST_SKIP() << "CGroups only supported on Linux";
+#endif
+
     int *cpus = nullptr;
     int cpu_count = 0;
 
