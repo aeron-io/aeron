@@ -126,6 +126,8 @@ int main(int argc, char **argv)
         goto cleanup;
     }
 
+    // aeron_cpuset_affinity.....
+
     // preserve overridden start function and state
     context->agent_on_start_func_delegate = context->agent_on_start_func;
     context->agent_on_start_state_delegate = context->agent_on_start_state;

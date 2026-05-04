@@ -493,6 +493,8 @@ int aeron_topology_check_alignment(const int *cpus, const int cpu_count, FILE *o
         }
     }
 
+    aeron_topology_core_groups_free(groups, group_count);
+
     return result;
 }
 
@@ -534,6 +536,7 @@ int aeron_topology_check_l3_locality(const int *cpus, const int cpu_count, FILE*
         aeron_err_clear();
     }
 
+    aeron_free(peers);
     return 0;
 }
 

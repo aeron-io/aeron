@@ -104,4 +104,6 @@ TEST_F(TopologyTest, shouldReadV2Cgroups)
 
     fflush(m_output);
     printf("%s", m_output_ptr);
+    aeron_free(cpus);
+    aeron_topology_cores_free(topology, core_count);
 }

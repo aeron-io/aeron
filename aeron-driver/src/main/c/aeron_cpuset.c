@@ -353,13 +353,13 @@ int aeron_cpuset_cgroup_read_v2(const char *proc_cgroup_file, const char *mount_
         if ('\0' == *cgroup_path)
         {
             AERON_APPEND_ERR("unable to find '%s' in path '%s'", "cpuset.cpus.effective", mount_root);
-            return -1;
+            goto error;
         }
 
         if (ENOMEM == aeron_errcode())
         {
             AERON_APPEND_ERR("%s", "");
-            return -1;
+            goto error;
         }
 
         char *last_slash = strrchr(cgroup_path, '/');
@@ -374,10 +374,10 @@ int aeron_cpuset_cgroup_read_v2(const char *proc_cgroup_file, const char *mount_
     }
     while (true);
 
-    aeron_free((void *)cgroup_path);
+    aeron_free(cgroup_path);
     return 0;
 
 error:
-    aeron_free((void *)cgroup_path);
+    aeron_free(cgroup_path);
     return -1;
 }

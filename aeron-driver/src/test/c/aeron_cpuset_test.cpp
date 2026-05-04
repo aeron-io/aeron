@@ -218,4 +218,6 @@ TEST_F(CpusetTest, shouldReadCore)
         printf("%d ", cpus[i]);
     }
     printf("\n");
+
+    aeron_free(cpus);
 }
