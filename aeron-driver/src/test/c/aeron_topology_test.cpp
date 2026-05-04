@@ -16,7 +16,7 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include <stdlib.h>
+#include <cstdio>
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -38,7 +38,7 @@ using namespace testing;
 class TopologyTest : public Test
 {
 public:
-    TopologyTest() : m_tempDir(nullptr)
+    TopologyTest() : m_tempDir(nullptr), m_output(nullptr), m_output_ptr(nullptr), m_output_size(0)
     {
     }
 
@@ -47,15 +47,21 @@ protected:
     {
         m_tempDir = mkdtemp(m_tempDirArray);
         std::cout << "m_tempDir: " << m_tempDir << " " << m_tempDirArray << std::endl;
+        m_output = open_memstream(&m_output_ptr, &m_output_size);
     }
 
     void TearDown() override
     {
         EXPECT_EQ(0, aeron_delete_directory(m_tempDir)) << aeron_errmsg();
+        fclose(m_output);
+        free(m_output_ptr);
     }
 
     char m_tempDirArray[19] = { "/tmp/cpuset_XXXXXX" };
     char *m_tempDir;
+    FILE *m_output;
+    char *m_output_ptr;
+    size_t m_output_size;
 };
 
 TEST_F(TopologyTest, shouldReadV2Cgroups)
@@ -70,11 +76,7 @@ TEST_F(TopologyTest, shouldReadV2Cgroups)
 
     ASSERT_NE(-1, aeron_topology_read(cpus, cpu_count, &topology, &core_count)) << aeron_errmsg();
 
-
-    char **warnings = nullptr;
-    int warning_count = 0;
-
-    aeron_topology_check_alignment(cpus, cpu_count, &warnings, &warning_count);
+    aeron_topology_check_alignment(cpus, cpu_count, m_output);
 
     printf("%s ", "cpus");
     for (int i = 0; i < cpu_count; i++)
@@ -97,24 +99,9 @@ TEST_F(TopologyTest, shouldReadV2Cgroups)
     }
     printf("\n");
 
-    for (int i = 0; i < warning_count; i++)
-    {
-        printf("%s\n", warnings[i]);
-    }
+    aeron_topology_check_l3_locality(cpus, cpu_count, m_output);
+    aeron_topology_check_cluster_locality(cpus, cpu_count, m_output);
 
-    aeron_free(warnings);
-
-    char warning_buf[4096] = { 0 };
-    const int warning_len = sizeof(warning_buf);
-
-    aeron_topology_check_l3_locality(cpus, cpu_count, warning_buf, warning_len);
-    EXPECT_EQ('\0', warning_buf[0]) << warning_buf;
-
-    aeron_topology_check_cluster_locality(cpus, cpu_count, warning_buf, warning_len);
-    EXPECT_EQ('\0', warning_buf[0]) << warning_buf;
-
-    for (int i = 0; i < warning_count; i++)
-    {
-        printf("%s\n", warnings[i]);
-    }
+    fflush(m_output);
+    printf("%s", m_output_ptr);
 }

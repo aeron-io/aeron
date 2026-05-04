@@ -46,8 +46,8 @@ static int aeron_topology_cmp_int(const void *a, const void *b)
 
 static int aeron_topology_cmp_core_by_prime(const void *a, const void *b)
 {
-    const aeron_topology_core_t *ca = (const aeron_topology_core_t *)a;
-    const aeron_topology_core_t *cb = (const aeron_topology_core_t *)b;
+    const aeron_topology_core_t *ca = a;
+    const aeron_topology_core_t *cb = b;
     if (0 == ca->cpu_count)
     {
         return 1;
@@ -326,31 +326,6 @@ static int aeron_topology_format_cpulist(const int *cpus, int cpu_count, char *b
     return written;
 }
 
-static int aeron_topology_append_warning(char ***warnings, int *count, int *capacity, const char *msg)
-{
-    if (*count == *capacity)
-    {
-        int new_capacity = *capacity == 0 ? 4 : *capacity * 2;
-        if (aeron_reallocf((void **)warnings, sizeof(char *) * new_capacity) < 0)
-        {
-            AERON_APPEND_ERR("%s", "");
-            return -1;
-        }
-        *capacity = new_capacity;
-    }
-
-    size_t len = strlen(msg);
-    char *copy = NULL;
-    if (aeron_alloc((void **)&copy, len + 1) < 0)
-    {
-        AERON_APPEND_ERR("%s", "");
-        return -1;
-    }
-    memcpy(copy, msg, len + 1);
-    (*warnings)[(*count)++] = copy;
-    return 0;
-}
-
 void aeron_topology_cores_free(aeron_topology_core_t *cores, int core_count)
 {
     if (NULL == cores)
@@ -362,19 +337,6 @@ void aeron_topology_cores_free(aeron_topology_core_t *cores, int core_count)
         aeron_free(cores[i].cpus);
     }
     aeron_free(cores);
-}
-
-void aeron_topology_warnings_free(char **warnings, int warning_count)
-{
-    if (NULL == warnings)
-    {
-        return;
-    }
-    for (int i = 0; i < warning_count; i++)
-    {
-        aeron_free(warnings[i]);
-    }
-    aeron_free(warnings);
 }
 
 int aeron_topology_read(
@@ -495,15 +457,9 @@ int aeron_topology_all_of(
     return 0;
 }
 
-int aeron_topology_check_alignment(
-    const int *cpus,
-    const int cpu_count,
-    char ***warnings_out,
-    int *warning_count_out)
+int aeron_topology_check_alignment(const int *cpus, const int cpu_count, FILE *output)
 {
-    char **warnings = NULL;
-    int warning_count = 0;
-    int warning_capacity = 0;
+    int result = 0;
 
     aeron_topology_core_group_t *groups = NULL;
     int group_count = 0;
@@ -528,46 +484,25 @@ int aeron_topology_check_alignment(
             char cpulist_buf[4096];
             aeron_topology_format_cpulist(groups[i].missing, groups[i].missing_count, cpulist_buf, sizeof(cpulist_buf));
 
-            char warning_buf[4096 + 128];
-            snprintf(
-                warning_buf, sizeof(warning_buf),
+            fprintf(
+                output,
                 "cpuset is missing sibling CPU(s) %s of the core containing CPU %d (partial core in cpuset)",
                 cpulist_buf, groups[i].present[0]);
 
-            if (aeron_topology_append_warning(&warnings, &warning_count, &warning_capacity, warning_buf) < 0)
-            {
-                aeron_topology_core_groups_free(groups, group_count);
-                aeron_topology_warnings_free(warnings, warning_count);
-                return -1;
-            }
+            result++;
         }
     }
 
-    aeron_topology_core_groups_free(groups, group_count);
-    *warnings_out = warnings;
-    *warning_count_out = warning_count;
-    return 0;
+    return result;
 }
 
-int aeron_topology_check_l3_locality(
-    const int *cpus,
-    const int cpu_count,
-    char *warning_buf,
-    const int warning_buf_len)
+int aeron_topology_check_l3_locality(const int *cpus, const int cpu_count, FILE* output)
 {
-    if (!(NULL != warning_buf && 0 < warning_buf_len))
-    {
-        AERON_SET_ERR(EINVAL, "%s", "invalid warning buffer");
-        return -1;
-    }
-
     if (AERON_TOPOLOGY_MAX_CPU_ID < cpu_count)
     {
         AERON_SET_ERR(EINVAL, "cpu count %d is greater than max cpu count", cpu_count);
         return -1;
     }
-
-    warning_buf[0] = '\0';
 
     if (cpu_count < 2)
     {
@@ -590,7 +525,7 @@ int aeron_topology_check_l3_locality(
         {
             if (!seen[cpus[j]])
             {
-                snprintf(warning_buf, warning_buf_len, "%s", "cpuset spans multiple L3 cache domains");
+                fprintf(output, "%s", "cpuset spans multiple L3 cache domains");
             }
         }
     }
@@ -602,29 +537,19 @@ int aeron_topology_check_l3_locality(
     return 0;
 }
 
-int aeron_topology_check_cluster_locality(
-    const int *cpus,
-    int cpu_count,
-    char *warning_buf,
-    const int warning_buf_len)
+int aeron_topology_check_cluster_locality(const int *cpus, int cpu_count, FILE* output)
 {
-    if (!(NULL != warning_buf && 0 < warning_buf_len))
-    {
-        AERON_SET_ERR(EINVAL, "%s", "invalid warning buffer");
-        return -1;
-    }
-
     if (AERON_TOPOLOGY_MAX_CPU_ID < cpu_count)
     {
         AERON_SET_ERR(EINVAL, "cpu count %d is greater than max cpu count", cpu_count);
         return -1;
     }
 
-    warning_buf[0] = '\0';
+    int result = 0;
 
     if (cpu_count < 2)
     {
-        return 0;
+        return result;
     }
 
     // --- Cluster check ---
@@ -674,11 +599,9 @@ int aeron_topology_check_cluster_locality(
             }
         }
 
-        snprintf(
-            warning_buf, warning_buf_len,
-            "cpuset spans %d CPU clusters (cluster IDs: %s)",
-            cluster_id_count, id_list_buf);
+        fprintf(output, "cpuset spans %d CPU clusters (cluster IDs: %s)", cluster_id_count, id_list_buf);
+        result++;
     }
 
-    return 0;
+    return result;
 }

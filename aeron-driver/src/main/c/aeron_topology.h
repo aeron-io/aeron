@@ -17,6 +17,8 @@
 #ifndef AERON_TOPOLOGY_H
 #define AERON_TOPOLOGY_H
 
+#include <stdio.h>
+
 #define AERON_TOPOLOGY_SYS_CPU_PATH "/sys/devices/system/cpu"
 
 /**
@@ -91,52 +93,34 @@ int aeron_topology_all_of(
  *
  * @param cpus input array of CPU IDs
  * @param cpu_count number of entries in cpus
- * @param warnings output array of warning strings allocated within this function;
- *                 free with aeron_topology_warnings_free
- * @param warning_count number of warnings
- * @return 0 on success (even with warnings), -1 on memory allocation failure
+ * @param output to write the warnings to.
+ * @return the count of the number of warnings or -1 on error.
  */
-int aeron_topology_check_alignment(
-    const int *cpus,
-    int cpu_count,
-    char ***warnings,
-    int *warning_count);
+int aeron_topology_check_alignment(const int *cpus, int cpu_count, FILE *output);
 
 /**
  * Check that all CPUs in cpus share the same L3 cache domain.
  *
  * @param cpus input array of CPU IDs
  * @param cpu_count number of entries in cpus
- * @param warning_buf buffer to write the warning to, if any. Will be length 0 if no warnings.
- * @param warning_buf_len available bytes in supplied buffer.
- * @return 0 on success (even with warnings), -1 on memory allocation failure
+ * @param output buffer to write the warning to, if any. Will be length 0 if no warnings.
+ * @return the count of the number of warnings or -1 on error.
  */
-int aeron_topology_check_cluster_locality(
-    const int *cpus,
-    int cpu_count,
-    char *warning_buf,
-    int warning_buf_len);
+int aeron_topology_check_cluster_locality(const int *cpus, int cpu_count, FILE* output);
 
 /**
  * Check that all CPUs in cpus share the same CPU cluster.
  *
  * @param cpus input array of CPU IDs
  * @param cpu_count number of entries in cpus
- * @param warning_buf buffer to write the warning to, if any. Will be length 0 if no warnings.
- * @param warning_buf_len available bytes in supplied buffer.
- * @return 0 on success (even with warnings), -1 on memory allocation failure
+ * @param output
+ * @return the count of the number of warnings or -1 on error.
  */
-int aeron_topology_check_l3_locality(
-    const int *cpus,
-    int cpu_count,
-    char *warning_buf,
-    int warning_buf_len);
+int aeron_topology_check_l3_locality(const int *cpus, int cpu_count, FILE* output);
 
 /**
  * Free an array of cores allocated by aeron_topology_read.
  */
 void aeron_topology_cores_free(aeron_topology_core_t *cores, int core_count);
-
-void aeron_topology_warnings_free(char **warnings, int warning_count);
 
 #endif //AERON_TOPOLOGY_H
