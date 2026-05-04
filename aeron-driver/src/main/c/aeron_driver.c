@@ -181,7 +181,14 @@ int aeron_driver_ensure_dir_is_recreated(aeron_driver_context_t *context)
                 if (aeron_is_driver_active_with_cnc(
                     &cnc_mmap, (int64_t)context->driver_timeout_ms, aeron_epoch_clock(), log_func))
                 {
-                    AERON_APPEND_ERR("Active media driver detected: %s", filename);
+                    if (0 == aeron_errcode())
+                    {
+                        AERON_SET_ERR(EBUSY, "Active media driver detected: %s", filename);
+                    }
+                    else
+                    {
+                        AERON_APPEND_ERR("CnC check error: %s", filename);
+                    }
                     aeron_unmap(&cnc_mmap);
                     return -1;
                 }
