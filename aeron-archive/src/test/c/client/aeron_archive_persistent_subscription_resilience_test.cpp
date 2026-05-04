@@ -5503,6 +5503,16 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldReplayAndCatchUpWhenExtende
         poller,
         [&] { return handler.messages().size() == first_batch.size(); });
 
+    // Wait for PS to be on its live image. In the advanced-offset SETUP path, PS may have
+    // delivered first_batch via initial-refresh REPLAY and still be in REPLAY/ATTEMPT_SWITCH.
+    // Without polling the live image, PS's last_sm_position doesn't advance and publisher
+    // B's flow control stops sending live to PS — so the loss generator never sees catchup
+    // frames on PS's live endpoint and frames_dropped stays at 0.
+    executeUntil(
+        "is live",
+        poller,
+        [&] { return aeron_archive_persistent_subscription_is_live(persistent_subscription); });
+
     // Reset observed_replaying after the first_batch phase. If publisher B's SETUP arrived
     // at an advanced offset, PS already went through REFRESH/REPLAY once to deliver
     // first_batch — we don't want that observation to satisfy the post-revoke assertion
