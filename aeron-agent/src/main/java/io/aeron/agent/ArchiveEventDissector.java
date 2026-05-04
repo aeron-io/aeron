@@ -789,6 +789,10 @@ final class ArchiveEventDissector
         AUTH_CONNECT_REQUEST_DECODER.getResponseChannel(builder);
 
         builder.append(" encodedCredentialsLength=").append(AUTH_CONNECT_REQUEST_DECODER.encodedCredentialsLength());
+
+        AUTH_CONNECT_REQUEST_DECODER.skipEncodedCredentials();
+
+        builder.append(" clientInfo=").append(AUTH_CONNECT_REQUEST_DECODER.clientInfo());
     }
 
     private static void appendCloseSession(final StringBuilder builder)

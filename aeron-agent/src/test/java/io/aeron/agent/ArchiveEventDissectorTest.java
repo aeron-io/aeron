@@ -761,7 +761,8 @@ class ArchiveEventDissectorTest
             .responseStreamId(19)
             .version(2)
             .responseChannel("English Channel")
-            .putEncodedCredentials("hello".getBytes(US_ASCII), 0, 5);
+            .putEncodedCredentials("hello".getBytes(US_ASCII), 0, 5)
+            .clientInfo("my test client \"ABC\" 42");
 
         dissectControlRequest(CMD_IN_AUTH_CONNECT, buffer, 0, builder);
 
@@ -770,7 +771,8 @@ class ArchiveEventDissectorTest
             " responseStreamId=19" +
             " version=2" +
             " responseChannel=English Channel" +
-            " encodedCredentialsLength=5",
+            " encodedCredentialsLength=5" +
+            " clientInfo=my test client \"ABC\" 42",
             builder.toString());
     }
 
