@@ -104,10 +104,14 @@ TEST_F(TopologyTest, shouldReadV2Cgroups)
 
     aeron_free(warnings);
 
-    warnings = nullptr;
-    warning_count = 0;
+    char warning_buf[4096] = { 0 };
+    const int warning_len = sizeof(warning_buf);
 
-    aeron_topology_check_locality(cpus, cpu_count, &warnings, &warning_count);
+    aeron_topology_check_l3_locality(cpus, cpu_count, warning_buf, warning_len);
+    EXPECT_EQ('\0', warning_buf[0]) << warning_buf;
+
+    aeron_topology_check_cluster_locality(cpus, cpu_count, warning_buf, warning_len);
+    EXPECT_EQ('\0', warning_buf[0]) << warning_buf;
 
     for (int i = 0; i < warning_count; i++)
     {

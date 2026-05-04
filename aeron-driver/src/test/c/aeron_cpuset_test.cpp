@@ -212,4 +212,10 @@ TEST_F(CpusetTest, shouldReadCore)
     aeron_cpuset_cgroup_read_v2(AERON_CPUSET_PROC_SELF_CGROUP, AERON_CPUSET_CGROUP_MOUNT_V2, &cpus, &cpu_count);
 
     EXPECT_NE(0, cpu_count) << aeron_errmsg();
+
+    for (int i = 0; i < cpu_count; i++)
+    {
+        printf("%d ", cpus[i]);
+    }
+    printf("\n");
 }

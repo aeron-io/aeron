@@ -30,7 +30,7 @@ extern const char *aeron_topology_sys_cpu_path;
  * only those present in the cpuset being processed. Sorted ascending;
  * cpus[0] is the prime (lowest-numbered) thread.
  */
-typedef struct aeron_topology_core_st
+typedef struct aeron_topology_core_stct
 {
     int *cpus;
     int cpu_count;
@@ -103,31 +103,40 @@ int aeron_topology_check_alignment(
     int *warning_count);
 
 /**
- * Check that all CPUs in cpus share the same L3 cache domain and CPU cluster.
- * Returns at most one warning per violation (two total). Best-effort: if the
- * relevant sysfs files are absent the corresponding check is skipped silently.
+ * Check that all CPUs in cpus share the same L3 cache domain.
  *
  * @param cpus input array of CPU IDs
  * @param cpu_count number of entries in cpus
- * @param warnings output array of warning strings allocated within this function;
- *                 free with aeron_topology_warnings_free
- * @param warning_count number of warnings
+ * @param warning_buf buffer to write the warning to, if any. Will be length 0 if no warnings.
+ * @param warning_buf_len available bytes in supplied buffer.
  * @return 0 on success (even with warnings), -1 on memory allocation failure
  */
-int aeron_topology_check_locality(
+int aeron_topology_check_cluster_locality(
     const int *cpus,
     int cpu_count,
-    char ***warnings,
-    int *warning_count);
+    char *warning_buf,
+    int warning_buf_len);
+
+/**
+ * Check that all CPUs in cpus share the same CPU cluster.
+ *
+ * @param cpus input array of CPU IDs
+ * @param cpu_count number of entries in cpus
+ * @param warning_buf buffer to write the warning to, if any. Will be length 0 if no warnings.
+ * @param warning_buf_len available bytes in supplied buffer.
+ * @return 0 on success (even with warnings), -1 on memory allocation failure
+ */
+int aeron_topology_check_l3_locality(
+    const int *cpus,
+    int cpu_count,
+    char *warning_buf,
+    int warning_buf_len);
 
 /**
  * Free an array of cores allocated by aeron_topology_read.
  */
 void aeron_topology_cores_free(aeron_topology_core_t *cores, int core_count);
 
-/**
- * Free an array of warning strings allocated by aeron_topology_check_*.
- */
 void aeron_topology_warnings_free(char **warnings, int warning_count);
 
 #endif //AERON_TOPOLOGY_H

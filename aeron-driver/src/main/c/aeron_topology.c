@@ -30,7 +30,7 @@
 
 const char *aeron_topology_sys_cpu_path = AERON_TOPOLOGY_SYS_CPU_PATH;
 
-typedef struct aeron_topology_core_group_st
+typedef struct aeron_topology_core_group_stct
 {
     int *present;
     int present_count;
@@ -39,12 +39,12 @@ typedef struct aeron_topology_core_group_st
 }
 aeron_topology_core_group_t;
 
-static int cmp_int(const void *a, const void *b)
+static int aeron_topology_cmp_int(const void *a, const void *b)
 {
     return *(const int *)a - *(const int *)b;
 }
 
-static int cmp_core_by_prime(const void *a, const void *b)
+static int aeron_topology_cmp_core_by_prime(const void *a, const void *b)
 {
     const aeron_topology_core_t *ca = (const aeron_topology_core_t *)a;
     const aeron_topology_core_t *cb = (const aeron_topology_core_t *)b;
@@ -59,7 +59,7 @@ static int cmp_core_by_prime(const void *a, const void *b)
     return ca->cpus[0] - cb->cpus[0];
 }
 
-static int read_sysfs_cpu_file(int cpu, const char *suffix, char *buf, size_t buf_size)
+static int aeron_topology_read_sysfs_cpu_file(int cpu, const char *suffix, char *buf, size_t buf_size)
 {
     char path[4096];
     int n = snprintf(path, sizeof(path), "%s/cpu%d/%s", aeron_topology_sys_cpu_path, cpu, suffix);
@@ -82,10 +82,10 @@ static int read_sysfs_cpu_file(int cpu, const char *suffix, char *buf, size_t bu
     return (int)read;
 }
 
-static int read_siblings(int cpu, int **siblings, int *sibling_count)
+static int aeron_topology_read_siblings(int cpu, int **siblings, int *sibling_count)
 {
     char buf[AERON_TOPOLOGY_FILE_BUF_SIZE];
-    if (read_sysfs_cpu_file(cpu, "topology/thread_siblings_list", buf, sizeof(buf)) < 0)
+    if (aeron_topology_read_sysfs_cpu_file(cpu, "topology/thread_siblings_list", buf, sizeof(buf)) < 0)
     {
         AERON_APPEND_ERR("reading topology for CPU %d", cpu);
         return -1;
@@ -98,10 +98,10 @@ static int read_siblings(int cpu, int **siblings, int *sibling_count)
     return 0;
 }
 
-static int read_l3_peers(int cpu, int **peers, int *peer_count)
+static int aeron_topology_read_l3_peers(int cpu, int **peers, int *peer_count)
 {
     char buf[AERON_TOPOLOGY_FILE_BUF_SIZE];
-    if (read_sysfs_cpu_file(cpu, "cache/index3/shared_cpu_list", buf, sizeof(buf)) < 0)
+    if (aeron_topology_read_sysfs_cpu_file(cpu, "cache/index3/shared_cpu_list", buf, sizeof(buf)) < 0)
     {
         return -1;
     }
@@ -112,10 +112,10 @@ static int read_l3_peers(int cpu, int **peers, int *peer_count)
     return 0;
 }
 
-static int read_cluster_id(int cpu, int *cluster_id)
+static int aeron_topology_read_cluster_id(int cpu, int *cluster_id)
 {
     char buf[64];
-    if (read_sysfs_cpu_file(cpu, "topology/cluster_id", buf, sizeof(buf)) < 0)
+    if (aeron_topology_read_sysfs_cpu_file(cpu, "topology/cluster_id", buf, sizeof(buf)) < 0)
     {
         return -1;
     }
@@ -130,7 +130,7 @@ static int read_cluster_id(int cpu, int *cluster_id)
     return 0;
 }
 
-static void core_groups_free(aeron_topology_core_group_t *groups, int group_count)
+static void aeron_topology_core_groups_free(aeron_topology_core_group_t *groups, int group_count)
 {
     if (NULL == groups)
     {
@@ -144,7 +144,7 @@ static void core_groups_free(aeron_topology_core_group_t *groups, int group_coun
     aeron_free(groups);
 }
 
-static int read_core_groups(
+static int aeron_topology_read_core_groups(
     const int *cpus,
     int cpu_count,
     aeron_topology_core_group_t **groups_out,
@@ -166,23 +166,20 @@ static int read_core_groups(
 
     for (int i = 0; i < cpu_count; i++)
     {
-        if (0 <= cpus[i] && cpus[i] < AERON_TOPOLOGY_MAX_CPU_ID)
-        {
-            cpu_set[cpus[i]] = 1;
-        }
+        cpu_set[cpus[i]] = 1;
     }
 
     for (int i = 0; i < cpu_count; i++)
     {
         int cpu = cpus[i];
-        if (0 <= cpu && cpu < AERON_TOPOLOGY_MAX_CPU_ID && seen[cpu])
+        if (seen[cpu])
         {
             continue;
         }
 
         int *siblings = NULL;
         int sibling_count = 0;
-        if (read_siblings(cpu, &siblings, &sibling_count) < 0)
+        if (aeron_topology_read_siblings(cpu, &siblings, &sibling_count) < 0)
         {
             AERON_APPEND_ERR("%s", "");
             result = -1;
@@ -288,7 +285,7 @@ done:
     return result;
 }
 
-static int format_cpulist(const int *cpus, int cpu_count, char *buf, size_t buf_size)
+static int aeron_topology_format_cpulist(const int *cpus, int cpu_count, char *buf, size_t buf_size)
 {
     int written = 0;
     int i = 0;
@@ -329,7 +326,7 @@ static int format_cpulist(const int *cpus, int cpu_count, char *buf, size_t buf_
     return written;
 }
 
-static int append_warning(char ***warnings, int *count, int *capacity, const char *msg)
+static int aeron_topology_append_warning(char ***warnings, int *count, int *capacity, const char *msg)
 {
     if (*count == *capacity)
     {
@@ -391,17 +388,17 @@ int aeron_topology_read(
     aeron_topology_core_t *cores = NULL;
     int core_count = 0;
 
-    if (read_core_groups(cpus, cpu_count, &groups, &group_count) < 0)
+    if (aeron_topology_read_core_groups(cpus, cpu_count, &groups, &group_count) < 0)
     {
         AERON_APPEND_ERR("%s", "");
-        core_groups_free(groups, group_count);
+        aeron_topology_core_groups_free(groups, group_count);
         return -1;
     }
 
     if (group_count > 0 && aeron_alloc((void **)&cores, sizeof(aeron_topology_core_t) * group_count) < 0)
     {
         AERON_APPEND_ERR("%s", "");
-        core_groups_free(groups, group_count);
+        aeron_topology_core_groups_free(groups, group_count);
         return -1;
     }
 
@@ -419,7 +416,7 @@ int aeron_topology_read(
     }
     aeron_free(groups);
 
-    qsort(cores, core_count, sizeof(aeron_topology_core_t), cmp_core_by_prime);
+    qsort(cores, core_count, sizeof(aeron_topology_core_t), aeron_topology_cmp_core_by_prime);
 
     *cores_out = cores;
     *core_count_out = core_count;
@@ -500,7 +497,7 @@ int aeron_topology_all_of(
 
 int aeron_topology_check_alignment(
     const int *cpus,
-    int cpu_count,
+    const int cpu_count,
     char ***warnings_out,
     int *warning_count_out)
 {
@@ -510,14 +507,26 @@ int aeron_topology_check_alignment(
 
     aeron_topology_core_group_t *groups = NULL;
     int group_count = 0;
-    read_core_groups(cpus, cpu_count, &groups, &group_count); // best-effort
+
+    if (AERON_TOPOLOGY_MAX_CPU_ID < cpu_count)
+    {
+        AERON_SET_ERR(EINVAL, "cpu count %d is greater than max cpu count", cpu_count);
+        return -1;
+    }
+
+    if (cpu_count < 2)
+    {
+        return 0;
+    }
+
+    aeron_topology_read_core_groups(cpus, cpu_count, &groups, &group_count); // best-effort
 
     for (int i = 0; i < group_count; i++)
     {
-        if (groups[i].missing_count > 0 && groups[i].present_count > 0)
+        if (0 < groups[i].missing_count && 0 < groups[i].present_count)
         {
             char cpulist_buf[4096];
-            format_cpulist(groups[i].missing, groups[i].missing_count, cpulist_buf, sizeof(cpulist_buf));
+            aeron_topology_format_cpulist(groups[i].missing, groups[i].missing_count, cpulist_buf, sizeof(cpulist_buf));
 
             char warning_buf[4096 + 128];
             snprintf(
@@ -525,32 +534,31 @@ int aeron_topology_check_alignment(
                 "cpuset is missing sibling CPU(s) %s of the core containing CPU %d (partial core in cpuset)",
                 cpulist_buf, groups[i].present[0]);
 
-            if (append_warning(&warnings, &warning_count, &warning_capacity, warning_buf) < 0)
+            if (aeron_topology_append_warning(&warnings, &warning_count, &warning_capacity, warning_buf) < 0)
             {
-                core_groups_free(groups, group_count);
+                aeron_topology_core_groups_free(groups, group_count);
                 aeron_topology_warnings_free(warnings, warning_count);
                 return -1;
             }
         }
     }
 
-    core_groups_free(groups, group_count);
+    aeron_topology_core_groups_free(groups, group_count);
     *warnings_out = warnings;
     *warning_count_out = warning_count;
     return 0;
 }
 
-int aeron_topology_check_locality(
+int aeron_topology_check_l3_locality(
     const int *cpus,
-    int cpu_count,
-    char ***warnings_out,
-    int *warning_count_out)
+    const int cpu_count,
+    char *warning_buf,
+    const int warning_buf_len)
 {
-    if (cpu_count < 2)
+    if (!(NULL != warning_buf && 0 < warning_buf_len))
     {
-        *warnings_out = NULL;
-        *warning_count_out = 0;
-        return 0;
+        AERON_SET_ERR(EINVAL, "%s", "invalid warning buffer");
+        return -1;
     }
 
     if (AERON_TOPOLOGY_MAX_CPU_ID < cpu_count)
@@ -559,23 +567,19 @@ int aeron_topology_check_locality(
         return -1;
     }
 
-    char **warnings = NULL;
-    int warning_count = 0;
-    int warning_capacity = 0;
+    warning_buf[0] = '\0';
 
-    uint8_t cpu_set[AERON_TOPOLOGY_MAX_CPU_ID] = { 0 };
-    uint8_t seen[AERON_TOPOLOGY_MAX_CPU_ID] = { 0 };
-    int result = 0;
-
-    for (int i = 0; i < cpu_count; i++)
+    if (cpu_count < 2)
     {
-        cpu_set[cpus[i]] = 1;
+        return 0;
     }
+
+    uint8_t seen[AERON_TOPOLOGY_MAX_CPU_ID] = { 0 };
 
     int *peers = NULL;
     int peer_count = 0;
 
-    if (0 <= read_l3_peers(cpus[0], &peers, &peer_count))
+    if (0 <= aeron_topology_read_l3_peers(cpus[0], &peers, &peer_count))
     {
         for (int i = 0; i < peer_count; i++)
         {
@@ -586,19 +590,41 @@ int aeron_topology_check_locality(
         {
             if (!seen[cpus[j]])
             {
-                if (append_warning(
-                    &warnings, &warning_count, &warning_capacity, "cpuset spans multiple L3 cache domains") < 0)
-                {
-                    AERON_APPEND_ERR("%s", "");
-                    result = -1;
-                    goto done;
-                }
+                snprintf(warning_buf, warning_buf_len, "%s", "cpuset spans multiple L3 cache domains");
             }
         }
     }
     else
     {
         aeron_err_clear();
+    }
+
+    return 0;
+}
+
+int aeron_topology_check_cluster_locality(
+    const int *cpus,
+    int cpu_count,
+    char *warning_buf,
+    const int warning_buf_len)
+{
+    if (!(NULL != warning_buf && 0 < warning_buf_len))
+    {
+        AERON_SET_ERR(EINVAL, "%s", "invalid warning buffer");
+        return -1;
+    }
+
+    if (AERON_TOPOLOGY_MAX_CPU_ID < cpu_count)
+    {
+        AERON_SET_ERR(EINVAL, "cpu count %d is greater than max cpu count", cpu_count);
+        return -1;
+    }
+
+    warning_buf[0] = '\0';
+
+    if (cpu_count < 2)
+    {
+        return 0;
     }
 
     // --- Cluster check ---
@@ -609,7 +635,7 @@ int aeron_topology_check_locality(
     for (int i = 0; i < cpu_count; i++)
     {
         int id = 0;
-        if (read_cluster_id(cpus[i], &id) < 0)
+        if (aeron_topology_read_cluster_id(cpus[i], &id) < 0)
         {
             cluster_ok = 0;
             aeron_err_clear();
@@ -633,7 +659,7 @@ int aeron_topology_check_locality(
 
     if (cluster_ok && cluster_id_count > 1)
     {
-        qsort(cluster_ids, cluster_id_count, sizeof(int), cmp_int);
+        qsort(cluster_ids, cluster_id_count, sizeof(int), aeron_topology_cmp_int);
 
         char id_list_buf[512];
         int written = 0;
@@ -648,27 +674,11 @@ int aeron_topology_check_locality(
             }
         }
 
-        char warning_buf[512 + 64];
         snprintf(
-            warning_buf, sizeof(warning_buf),
+            warning_buf, warning_buf_len,
             "cpuset spans %d CPU clusters (cluster IDs: %s)",
             cluster_id_count, id_list_buf);
-
-        if (append_warning(&warnings, &warning_count, &warning_capacity, warning_buf) < 0)
-        {
-            result = -1;
-            goto done;
-        }
     }
 
-done:
-    if (result < 0)
-    {
-        aeron_topology_warnings_free(warnings, warning_count);
-        return -1;
-    }
-
-    *warnings_out = warnings;
-    *warning_count_out = warning_count;
     return 0;
 }
