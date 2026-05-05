@@ -558,42 +558,14 @@ public class ArchiveMarkFile implements AutoCloseable
 
     static boolean isActive(final File directory, final EpochClock epochClock)
     {
-        final File markFile = new File(directory, FILENAME);
-        if (!markFile.exists())
+        try (final ArchiveMarkFile archiveMarkFile = new ArchiveMarkFile(
+            directory, FILENAME, epochClock, 0, (version) -> {}, null))
         {
-            return false;
-        }
-
-        final int headerOffset = headerOffset(markFile);
-        final int versionOffset = headerOffset + MarkFileHeaderDecoder.versionEncodingOffset();
-        final int timestampOffset = headerOffset + MarkFileHeaderDecoder.activityTimestampEncodingOffset();
-        final int mapOffset = Math.min(versionOffset, timestampOffset);
-        final int mapLength = Math.max(versionOffset, timestampOffset) + Long.BYTES - mapOffset;
-
-        final MappedByteBuffer byteBuffer = MarkFile.mapExistingFile(markFile, null, mapOffset, mapLength);
-        if (null == byteBuffer)
-        {
-            return false;
-        }
-
-        try
-        {
-            return MarkFile.isActive(
-                byteBuffer,
-                epochClock,
-                LIVENESS_TIMEOUT_MS,
-                versionOffset - mapOffset,
-                timestampOffset - mapOffset,
-                (version) -> {},
-                null);
+            return epochClock.time() - archiveMarkFile.activityTimestampVolatile() <= LIVENESS_TIMEOUT_MS;
         }
         catch (final IllegalStateException ignore)
         {
             return false;
-        }
-        finally
-        {
-            IoUtil.unmap(byteBuffer);
         }
     }
 
