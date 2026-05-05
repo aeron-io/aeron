@@ -3500,3 +3500,50 @@ bool aeron_driver_context_get_cpuset_warnings_as_errors(aeron_driver_context_t *
 {
     return NULL != context ? context->cpuset_warnings_as_errors : AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS_DEFAULT;
 }
+
+int aeron_driver_context_apply_cpuset_affinity(aeron_driver_context_t *context, const int *cpus, int cpu_count)
+{
+    const int32_t conductor_affinity = aeron_driver_context_get_conductor_cpu_affinity(context);
+    if (cpu_count <= conductor_affinity)
+    {
+        AERON_SET_ERR(
+            EINVAL, "conductor affinity %" PRId32 " must be less than cpuset count %d", conductor_affinity, cpu_count);
+        return -1;
+    }
+
+    if (-1 < conductor_affinity)
+    {
+        const int32_t cpuset_conductor_affinity = cpus[(int)conductor_affinity];
+        aeron_driver_context_set_conductor_cpu_affinity(context, cpuset_conductor_affinity);
+    }
+
+    const int32_t sender_affinity = aeron_driver_context_get_sender_cpu_affinity(context);
+    if (cpu_count <= sender_affinity)
+    {
+        AERON_SET_ERR(
+            EINVAL, "sender affinity %" PRId32 " must be less than cpuset count %d", sender_affinity, cpu_count);
+        return -1;
+    }
+
+    if (-1 < sender_affinity)
+    {
+        const int32_t cpuset_sender_affinity = cpus[(int)sender_affinity];
+        aeron_driver_context_set_sender_cpu_affinity(context, cpuset_sender_affinity);
+    }
+
+    const int32_t receiver_affinity = aeron_driver_context_get_receiver_cpu_affinity(context);
+    if (cpu_count <= receiver_affinity)
+    {
+        AERON_SET_ERR(
+            EINVAL, "receiver affinity %" PRId32 " must be less than cpuset count %d", receiver_affinity, cpu_count);
+        return -1;
+    }
+
+    if (-1 < receiver_affinity)
+    {
+        const int32_t cpuset_receiver_affinity = cpus[(int)receiver_affinity];
+        aeron_driver_context_set_receiver_cpu_affinity(context, cpuset_receiver_affinity);
+    }
+
+    return 0;
+}

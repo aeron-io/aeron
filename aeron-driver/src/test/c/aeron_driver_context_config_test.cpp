@@ -22,6 +22,11 @@
 #include "aeron_test_base.h"
 #include "aeronmd.h"
 
+extern "C"
+{
+#include "aeron_driver_context.h"
+}
+
 using namespace aeron;
 
 static const uint32_t DEFAULT_VALUE = UINT32_C(4);
@@ -35,6 +40,9 @@ protected:
     {
         aeron_env_unset(AERON_RECEIVER_IO_VECTOR_CAPACITY_ENV_VAR);
         aeron_env_unset(AERON_SENDER_IO_VECTOR_CAPACITY_ENV_VAR);
+        aeron_env_unset(AERON_LOW_FILE_STORE_WARNING_THRESHOLD_ENV_VAR);
+        aeron_env_unset(AERON_NAK_UNICAST_DELAY_ENV_VAR);
+        aeron_env_unset(AERON_NAK_UNICAST_RETRY_DELAY_RATIO_ENV_VAR);
     }
 };
 
@@ -303,4 +311,77 @@ TEST_F(DriverContextConfigTest, shouldFailInitIfNakDelayComboIsOutOfBounds)
     EXPECT_NE(
         std::string::npos,
         std::string(aeron_errmsg()).find("nak_unicast_delay_ns (1000000000000000) * nak_unicast_retry_delay_ratio (567890473482340000) exceeds 9223372036854775807"));
+}
+
+TEST_F(DriverContextConfigTest, shouldApplyCpusetAffinity)
+{
+    aeron_driver_context_t *context;
+    aeron_env_set(AERON_CONDUCTOR_CPU_AFFINITY_ENV_VAR, "1");
+    aeron_env_set(AERON_SENDER_CPU_AFFINITY_ENV_VAR, "2");
+    aeron_env_set(AERON_RECEIVER_CPU_AFFINITY_ENV_VAR, "3");
+
+    EXPECT_EQ(0, aeron_driver_context_init(&context)) << aeron_errmsg();
+    EXPECT_EQ(1, aeron_driver_context_get_conductor_cpu_affinity(context));
+    EXPECT_EQ(2, aeron_driver_context_get_sender_cpu_affinity(context));
+    EXPECT_EQ(3, aeron_driver_context_get_receiver_cpu_affinity(context));
+
+    int cpus[4] = { 9, 11, 13, 17 };
+    EXPECT_EQ(0, aeron_driver_context_apply_cpuset_affinity(context, cpus, 4)) << aeron_errmsg();
+
+    EXPECT_EQ(11, aeron_driver_context_get_conductor_cpu_affinity(context));
+    EXPECT_EQ(13, aeron_driver_context_get_sender_cpu_affinity(context));
+    EXPECT_EQ(17, aeron_driver_context_get_receiver_cpu_affinity(context));
+
+    aeron_driver_context_close(context);
+}
+
+TEST_F(DriverContextConfigTest, shouldErrorWithInvalidCpusetAffinity)
+{
+    aeron_driver_context_t *context;
+    int cpus[4] = { 9, 11, 13, 17 };
+
+    EXPECT_EQ(0, aeron_driver_context_init(&context)) << aeron_errmsg();
+
+    aeron_driver_context_set_conductor_cpu_affinity(context, 5);
+    aeron_driver_context_set_sender_cpu_affinity(context, 2);
+    aeron_driver_context_set_receiver_cpu_affinity(context, 3);
+
+    EXPECT_EQ(-1, aeron_driver_context_apply_cpuset_affinity(context, cpus, 4)) << aeron_errmsg();
+
+    aeron_driver_context_set_conductor_cpu_affinity(context, 1);
+    aeron_driver_context_set_sender_cpu_affinity(context, 5);
+    aeron_driver_context_set_receiver_cpu_affinity(context, 3);
+
+    EXPECT_EQ(-1, aeron_driver_context_apply_cpuset_affinity(context, cpus, 4)) << aeron_errmsg();
+
+    aeron_driver_context_set_conductor_cpu_affinity(context, 1);
+    aeron_driver_context_set_sender_cpu_affinity(context, 2);
+    aeron_driver_context_set_receiver_cpu_affinity(context, 5);
+
+    EXPECT_EQ(-1, aeron_driver_context_apply_cpuset_affinity(context, cpus, 4)) << aeron_errmsg();
+
+    aeron_driver_context_close(context);
+}
+
+TEST_F(DriverContextConfigTest, shouldNotChangeAffinityWhenUnset)
+{
+    aeron_driver_context_t *context;
+    int cpus[4] = { 9, 11, 13, 17 };
+
+    EXPECT_EQ(0, aeron_driver_context_init(&context)) << aeron_errmsg();
+
+    aeron_driver_context_set_conductor_cpu_affinity(context, -1);
+    aeron_driver_context_set_sender_cpu_affinity(context, -1);
+    aeron_driver_context_set_receiver_cpu_affinity(context, -1);
+    EXPECT_EQ(-1, aeron_driver_context_get_conductor_cpu_affinity(context));
+    EXPECT_EQ(-1, aeron_driver_context_get_sender_cpu_affinity(context));
+    EXPECT_EQ(-1, aeron_driver_context_get_receiver_cpu_affinity(context));
+
+    EXPECT_EQ(0, aeron_driver_context_apply_cpuset_affinity(context, cpus, 4)) << aeron_errmsg();
+
+    EXPECT_EQ(-1, aeron_driver_context_get_conductor_cpu_affinity(context));
+    EXPECT_EQ(-1, aeron_driver_context_get_sender_cpu_affinity(context));
+    EXPECT_EQ(-1, aeron_driver_context_get_receiver_cpu_affinity(context));
+
+    aeron_driver_context_close(context);
 }

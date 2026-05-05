@@ -1114,6 +1114,12 @@ int aeron_driver_apply_cpuset_affinity(aeron_driver_context_t *context)
         goto error;
     }
 
+    if (aeron_driver_context_apply_cpuset_affinity(context, cpus, cpu_count) < 0)
+    {
+        AERON_APPEND_ERR("%s", "failed to apply cpuset affinity");
+        goto error;
+    }
+
     aeron_free(cpus);
     return 0;
 
