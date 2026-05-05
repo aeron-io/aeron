@@ -42,6 +42,8 @@ extern "C"
 #include "aeron_stream_id_loss_generator.h"
 #include "aeron_stream_id_frame_data_loss_generator.h"
 #include "aeron_frame_data_loss_generator.h"
+#include "aeron_setup_at_position_loss_generator.h"
+#include "aeron_data_in_range_loss_generator.h"
 }
 
 static const std::string IPC_CHANNEL = "aeron:ipc";
@@ -229,36 +231,6 @@ private:
         listener->last_errcode = errcode;
         listener->last_error_message = message;
         listener->error_count++;
-    }
-};
-
-class PrintingListener
-{
-    aeron_archive_persistent_subscription_listener_t m_listener;
-
-    static void onLiveJoined(void *clientd)
-    {
-        std::cout << "live joined" << std::endl;
-    }
-
-    static void onLiveLeft(void *clientd)
-    {
-        std::cout << "live left" << std::endl;
-    }
-
-    static void onError(void *clientd, int errcode, const char *message)
-    {
-        std::cout << "error " << errcode << " " << message << std::endl;
-    }
-
-public:
-    PrintingListener() : m_listener({onLiveJoined, onLiveLeft, onError, nullptr})
-    {
-    }
-
-    aeron_archive_persistent_subscription_listener_t *listener()
-    {
-        return &m_listener;
     }
 };
 
@@ -1564,6 +1536,20 @@ public:
         m_ownedGenerators.push_back(gen);
     }
 
+    // Installs a custom supplier called for each new receive endpoint. The supplier
+    // is responsible for setting endpoint->data_loss_generator (and/or
+    // control_loss_generator) — typically by allocating a fresh per-endpoint
+    // generator that captures the endpoint pointer in its state. Use this when
+    // the loss decision needs endpoint-specific context (e.g. the URI) that isn't
+    // available at frame-check time through the simple shared-generator hook.
+    // Mutually exclusive with setReceiveChannelDataLossGenerator(); call before start().
+    void setReceiveChannelLossSupplier(
+        aeron_receive_channel_loss_supplier_func_t supplier, void *clientd)
+    {
+        m_receiveLossSupplier = supplier;
+        m_receiveLossSupplierClientd = clientd;
+    }
+
     void setImageLivenessTimeoutNs(std::uint64_t ns)
     {
         m_imageLivenessTimeoutNs = ns;
@@ -1621,7 +1607,12 @@ private:
         aeron_driver_context_set_enable_experimental_features(m_context, true);
         aeron_driver_context_set_spies_simulate_connection(m_context, true);
 
-        if (m_receiveDataLossGenerator != nullptr)
+        if (m_receiveLossSupplier != nullptr)
+        {
+            aeron_driver_context_set_receive_channel_loss_supplier(
+                m_context, m_receiveLossSupplier, m_receiveLossSupplierClientd);
+        }
+        else if (m_receiveDataLossGenerator != nullptr)
         {
             aeron_driver_context_set_receive_channel_loss_supplier(
                 m_context, installReceiveDataLossGenerator, m_receiveDataLossGenerator);
@@ -1658,6 +1649,8 @@ private:
     aeron_driver_context_t *m_context = nullptr;
     aeron_driver_t *m_driver = nullptr;
     aeron_loss_generator_t *m_receiveDataLossGenerator = nullptr;
+    aeron_receive_channel_loss_supplier_func_t m_receiveLossSupplier = nullptr;
+    void *m_receiveLossSupplierClientd = nullptr;
     std::vector<aeron_loss_generator_t *> m_ownedGenerators;
 };
 
@@ -1692,6 +1685,33 @@ public:
           m_archiveDir(archiveDir)
     {
         driver.setReceiveChannelDataLossGenerator(receiveDataLossGenerator);
+        driver.aeronDir(aeronDir);
+        if (imageLivenessTimeoutNs > 0)
+        {
+            driver.setImageLivenessTimeoutNs(imageLivenessTimeoutNs);
+        }
+        driver.start();
+
+        archive = std::make_unique<TestStandaloneArchive>(
+            m_aeronDir, m_archiveDir, std::cout,
+            LOCALHOST_CONTROL_REQUEST_CHANNEL, "aeron:udp?endpoint=localhost:0");
+    }
+
+    // Supplier-driven variant for tests that need per-endpoint loss generators.
+    // The supplier callback is invoked by the driver for each new receive endpoint
+    // and is expected to populate endpoint->data_loss_generator (and/or
+    // control_loss_generator) with a fresh per-endpoint generator that captures
+    // any endpoint-specific context it needs.
+    LossTestHarness(
+        const std::string &aeronDir,
+        const std::string &archiveDir,
+        aeron_receive_channel_loss_supplier_func_t receiveLossSupplier,
+        void *receiveLossSupplierClientd,
+        std::uint64_t imageLivenessTimeoutNs = 0)
+        : m_aeronDir(aeronDir),
+          m_archiveDir(archiveDir)
+    {
+        driver.setReceiveChannelLossSupplier(receiveLossSupplier, receiveLossSupplierClientd);
         driver.aeronDir(aeronDir);
         if (imageLivenessTimeoutNs > 0)
         {
@@ -1758,9 +1778,6 @@ void AeronArchivePersistentSubscriptionTest::shouldHandleReplayImageBecomingUnav
     PersistentSubscriptionContextGuard context_guard(context);
     aeron_archive_persistent_subscription_context_set_replay_channel(context,
         "aeron:udp?endpoint=127.0.0.1:10013|rcv-wnd=4k");
-
-    PrintingListener printingListener;
-    aeron_archive_persistent_subscription_context_set_listener(context, printingListener.listener());
 
     aeron_archive_persistent_subscription_t *persistent_subscription = nullptr;
     ASSERT_EQ(0, aeron_archive_persistent_subscription_create(&persistent_subscription, context)) << aeron_errmsg();
@@ -5148,3 +5165,405 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldCancelPendingLiveSubscripti
 
 }
 
+// Per-endpoint supplier used by shouldRefreshAndReplayWhenLiveAheadOfStopPositionAfterResume.
+// `clientd` is the shared aeron_setup_at_position_loss_config_t. Each new receive endpoint
+// gets its own generator instance whose state captures the endpoint pointer; at frame-check
+// time the generator reads endpoint->conductor_fields.udp_channel->original_uri to decide
+// whether the endpoint is exempt from the drop (i.e. the recording subscription's endpoint).
+static void installSetupAtPositionLossGenerator(
+    void *clientd, aeron_receive_channel_endpoint_t *endpoint)
+{
+    auto *config = static_cast<aeron_setup_at_position_loss_config_t *>(clientd);
+    aeron_loss_generator_t *generator = nullptr;
+    if (aeron_setup_at_position_loss_generator_create(&generator, config, endpoint) == 0)
+    {
+        endpoint->data_loss_generator = generator;
+    }
+}
+
+// Deterministically exercises the AWAIT_LIVE -> live-ahead -> refresh_recording_descriptor
+// -> replay -> live path. PS shortcuts to AWAIT_LIVE while the recording is stopped at
+// stop_0. When publisher B is resumed, its first SETUP carries (initial_term_id,
+// term_id_at_stop_0, offset_at_stop_0) — which is also where PS's start_position sits.
+// Without intervention, PS's image is created at exactly stop_0, the AWAIT_LIVE check
+// `live_position > position` is false, and PS takes the direct LIVE path instead of
+// refreshing.
+//
+// To force the refresh path deterministically, a per-endpoint loss generator drops SETUPs
+// whose (initial_term_id, active_term_id, term_offset) tuple matches publisher B's initial
+// position — but only on PS's endpoint. The recording subscription's endpoint is exempt
+// (its URI carries `init-term-id=`), so the recording is created at stop_0 and stays
+// contiguous. PS's UDP receiver elicits another SETUP via SM. By the time publisher B's
+// next SETUP fires (gated by AERON_NETWORK_PUBLICATION_SETUP_TIMEOUT_NS = 100 ms),
+// `snd_pos` has advanced past the offers we issued, the SETUP no longer matches the drop
+// filter, and PS's image is created with `join_position > stop_0` — triggering the
+// refresh path.
+TEST_F(AeronArchivePersistentSubscriptionTest, shouldRefreshAndReplayWhenLiveAheadOfStopPositionAfterResume)
+{
+    aeron_setup_at_position_loss_config_t loss_config;
+    aeron_setup_at_position_loss_config_init(&loss_config);
+    // The archive's recording subscription URI carries `init-term-id=` (set by
+    // PersistentPublication::resume when it stamps the publisher's continuation params).
+    // PS's plain MDC subscription URI does not — that's how we tell the two endpoints
+    // apart at frame-check time.
+    aeron_setup_at_position_loss_config_set_endpoint_skip_substring(&loss_config, "init-term-id=");
+
+    const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "refresh_replay_when_live_ahead";
+    LossTestHarness harness(
+        m_aeronDir, archive_dir, installSetupAtPositionLossGenerator, &loss_config);
+
+    PersistentPublication persistent_publication(m_aeronDir, MDC_PUBLICATION_CHANNEL, STREAM_ID);
+    persistent_publication.persist(generateFixedMessages(1, ONE_KB_MESSAGE_SIZE));
+    const int64_t stop_position = persistent_publication.stop();
+    ASSERT_GT(stop_position, 0);
+    const int64_t recording_id = persistent_publication.recordingId();
+
+    // Read the recording descriptor while persistent_publication still holds an archive
+    // client open; we need initial_term_id and term_buffer_length to compute publisher
+    // B's first-SETUP position so the loss filter can match it exactly.
+    struct RecordingInfo
+    {
+        int32_t initial_term_id;
+        int32_t term_buffer_length;
+    } info = {};
+    int32_t descriptor_count = 0;
+    ASSERT_LE(0, aeron_archive_list_recording(
+        &descriptor_count,
+        persistent_publication.archive(),
+        recording_id,
+        [](aeron_archive_recording_descriptor_t *descriptor, void *clientd)
+        {
+            RecordingInfo *i = static_cast<RecordingInfo *>(clientd);
+            i->initial_term_id = descriptor->initial_term_id;
+            i->term_buffer_length = descriptor->term_buffer_length;
+        },
+        &info));
+    ASSERT_EQ(1, descriptor_count);
+
+    const int32_t target_active_term_id = aeron_logbuffer_compute_term_id_from_position(
+        stop_position,
+        aeron_number_of_trailing_zeroes(info.term_buffer_length),
+        info.initial_term_id);
+    const int32_t target_term_offset = (int32_t)(stop_position & (info.term_buffer_length - 1));
+    aeron_setup_at_position_loss_config_set_target(
+        &loss_config, STREAM_ID, info.initial_term_id, target_active_term_id, target_term_offset);
+
+    aeron_publication_constants_t pub_constants;
+    aeron_exclusive_publication_constants(persistent_publication.publication(), &pub_constants);
+    aeron_counters_reader_t *counters = aeron_counters_reader(
+        aeron_archive_context_get_aeron(aeron_archive_get_archive_context(persistent_publication.archive())));
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
+    waitUntil("publication counters removed",
+        [&]
+        {
+            return AERON_NULL_COUNTER_ID == aeron_counters_reader_find_by_type_id_and_registration_id(
+                counters, AERON_COUNTER_PUBLISHER_POSITION_TYPE_ID, pub_constants.registration_id);
+        });
+
+    AeronResource aeron(m_aeronDir);
+
+    aeron_archive_context_t *archive_ctx = createArchiveContext();
+    ArchiveContextGuard archive_ctx_guard(archive_ctx);
+    aeron_archive_context_set_message_timeout_ns(archive_ctx, 500LL * 1000 * 1000);
+    aeron_archive_persistent_subscription_context_t *context = createPersistentSubscriptionContext(
+        aeron.aeron(),
+        archive_ctx,
+        recording_id,
+        MDC_SUBSCRIPTION_CHANNEL,
+        STREAM_ID,
+        "aeron:udp?endpoint=localhost:0",
+        REPLAY_STREAM_ID,
+        stop_position);
+
+    TestListener listener;
+    listener.attachTo(context);
+
+    PersistentSubscriptionContextGuard context_guard(context);
+    aeron_archive_persistent_subscription_t *persistent_subscription;
+    ASSERT_EQ(0, aeron_archive_persistent_subscription_create(&persistent_subscription, context)) << aeron_errmsg();
+    context_guard.release();
+    PersistentSubscriptionGuard ps_guard(persistent_subscription);
+
+    MessageCapturingFragmentHandler handler;
+    bool observed_replaying = false;
+    auto poller = [&]
+    {
+        const int fragments = aeron_archive_persistent_subscription_controlled_poll(
+            persistent_subscription,
+            MessageCapturingFragmentHandler::onFragment,
+            &handler,
+            10);
+        if (aeron_archive_persistent_subscription_is_replaying(persistent_subscription))
+        {
+            observed_replaying = true;
+        }
+        return fragments;
+    };
+
+    // PS shortcuts to ADD_LIVE_SUBSCRIPTION and parks in AWAIT_LIVE; with no publisher up,
+    // its live-image deadline breaches as a non-terminal error — fired exactly once.
+    executeUntil(
+        "live-image deadline breach fires",
+        poller,
+        [&] { return listener.error_count > 0; });
+    ASSERT_EQ(1, listener.error_count);
+    ASSERT_NE(std::string::npos,
+        listener.last_error_message.find("No image became available on the live subscription"));
+    ASSERT_FALSE(aeron_archive_persistent_subscription_is_live(persistent_subscription));
+    ASSERT_FALSE(observed_replaying);
+
+    // Arm the SETUP filter just before resuming. Publisher B's first SETUP carries the
+    // exact target tuple we configured above; it will be dropped at PS's endpoint and
+    // delivered normally to the archive's recording subscription's endpoint (which is
+    // exempt by URI substring).
+    aeron_setup_at_position_loss_config_enable(&loss_config);
+
+    PersistentPublication resumed_publication =
+        PersistentPublication::resume(m_aeronDir, MDC_PUBLICATION_CHANNEL, STREAM_ID, recording_id);
+
+    // Persist a few messages so publisher B's snd_pos advances past stop_0. The next SETUP
+    // (gated by AERON_NETWORK_PUBLICATION_SETUP_TIMEOUT_NS after the dropped one) carries
+    // the advanced term_offset, no longer matches the filter, and creates PS's image with
+    // join_position > stop_0.
+    const std::vector<std::vector<uint8_t>> post_resume_messages =
+        generateFixedMessages(4, ONE_KB_MESSAGE_SIZE);
+    resumed_publication.persist(post_resume_messages);
+
+    executeUntil(
+        "is live",
+        poller,
+        [&] { return aeron_archive_persistent_subscription_is_live(persistent_subscription); });
+
+    executeUntil(
+        "received all post-resume messages",
+        poller,
+        [&] { return handler.messages().size() == post_resume_messages.size(); });
+    ASSERT_EQ(post_resume_messages, handler.messages());
+
+    aeron_setup_at_position_loss_config_disable(&loss_config);
+
+    // Messages offered before PS's live image attached can only have arrived via the
+    // refresh -> replay path; mid-stream UDP subscribers don't backfill historical bytes
+    // on the live stream.
+    ASSERT_TRUE(observed_replaying)
+        << "PS did not transition through REPLAY/ATTEMPT_SWITCH; refresh path was not exercised";
+    ASSERT_EQ(1, listener.live_joined_count);
+    ASSERT_EQ(0, listener.live_left_count);
+    // Still exactly the one initial deadline-breach error — PS refreshed once, went to
+    // REPLAY then LIVE, and has stayed there. No additional AWAIT_LIVE entries means no
+    // additional breaches.
+    ASSERT_EQ(1, listener.error_count);
+    // The filter is a safety net for the race where publisher B's first SETUP carries
+    // its initial term_offset (causing PS's image to attach at stop_0 and skip refresh).
+    // It may or may not fire depending on how fast publisher B's snd_pos advances
+    // relative to the first SETUP send. observed_replaying being true is what proves
+    // the refresh path was taken — either naturally or because the filter forced it.
+
+    ps_guard.release();
+    ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
+    archive_ctx_guard.release();
+    aeron_archive_context_close(archive_ctx);
+}
+
+// Per-endpoint supplier used by shouldReplayAndCatchUpWhenExtendedRecordingIsAheadOfLivePosition.
+// Same pattern as installSetupAtPositionLossGenerator above, but allocates a DATA-in-range
+// loss generator instead of a SETUP-at-position one. Each new receive endpoint gets its own
+// generator instance whose state captures the endpoint pointer; at frame-check time the
+// generator inspects the endpoint's URI and decides whether to drop.
+static void installDataInRangeLossGenerator(
+    void *clientd, aeron_receive_channel_endpoint_t *endpoint)
+{
+    auto *config = static_cast<aeron_data_in_range_loss_config_t *>(clientd);
+    aeron_loss_generator_t *generator = nullptr;
+    if (aeron_data_in_range_loss_generator_create(&generator, config, endpoint) == 0)
+    {
+        endpoint->data_loss_generator = generator;
+    }
+}
+
+// Deterministically exercises the LIVE -> image-closed -> refresh -> replay path. PS
+// shortcuts to AWAIT_LIVE while the recording is stopped at stop_0, then publisher B is
+// resumed. PS receives publisher B's SETUP normally and either joins live directly at
+// stop_0 (and consumes first_batch via live) or refreshes via AWAIT_LIVE if publisher
+// B's first SETUP carries an advanced offset — both paths land in LIVE with first_batch
+// either delivered or about to be delivered.
+//
+// Once first_batch is delivered, a per-endpoint loss generator drops every catchup DATA
+// frame on PS's endpoint (the recording subscription's endpoint is exempt by URI: its
+// URI carries `init-term-id=`, PS's plain MDC URI does not). Heartbeats are always
+// preserved so PS still sees the EOS+REVOKE flag when publisher B is revoked. After
+// revoke, PS's image closes and the bytes the loss generator dropped can never be
+// recovered via NAK retransmits — PS must replay the full catchup from the recording.
+TEST_F(AeronArchivePersistentSubscriptionTest, shouldReplayAndCatchUpWhenExtendedRecordingIsAheadOfLivePosition)
+{
+    aeron_data_in_range_loss_config_t loss_config;
+    aeron_data_in_range_loss_config_init(&loss_config);
+    aeron_data_in_range_loss_config_set_endpoint_skip_substring(&loss_config, "init-term-id=");
+
+    const std::string archive_dir = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "replay_catchup_when_ahead";
+    LossTestHarness harness(
+        m_aeronDir, archive_dir, installDataInRangeLossGenerator, &loss_config);
+
+    PersistentPublication persistent_publication(m_aeronDir, MDC_PUBLICATION_CHANNEL, STREAM_ID);
+    persistent_publication.persist(generateFixedMessages(1, ONE_KB_MESSAGE_SIZE));
+    const int64_t stop_position = persistent_publication.stop();
+    ASSERT_GT(stop_position, 0);
+    const int64_t recording_id = persistent_publication.recordingId();
+
+    struct RecordingInfo
+    {
+        int32_t initial_term_id;
+        int32_t term_buffer_length;
+    } info = {};
+    int32_t descriptor_count = 0;
+    ASSERT_LE(0, aeron_archive_list_recording(
+        &descriptor_count,
+        persistent_publication.archive(),
+        recording_id,
+        [](aeron_archive_recording_descriptor_t *descriptor, void *clientd)
+        {
+            RecordingInfo *i = static_cast<RecordingInfo *>(clientd);
+            i->initial_term_id = descriptor->initial_term_id;
+            i->term_buffer_length = descriptor->term_buffer_length;
+        },
+        &info));
+    ASSERT_EQ(1, descriptor_count);
+
+    aeron_publication_constants_t pub_constants;
+    aeron_exclusive_publication_constants(persistent_publication.publication(), &pub_constants);
+    aeron_counters_reader_t *counters = aeron_counters_reader(
+        aeron_archive_context_get_aeron(aeron_archive_get_archive_context(persistent_publication.archive())));
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
+    waitUntil("publication counters removed",
+        [&]
+        {
+            return AERON_NULL_COUNTER_ID == aeron_counters_reader_find_by_type_id_and_registration_id(
+                counters, AERON_COUNTER_PUBLISHER_POSITION_TYPE_ID, pub_constants.registration_id);
+        });
+
+    AeronResource aeron(m_aeronDir);
+
+    aeron_archive_context_t *archive_ctx = createArchiveContext();
+    ArchiveContextGuard archive_ctx_guard(archive_ctx);
+    aeron_archive_context_set_message_timeout_ns(archive_ctx, 500LL * 1000 * 1000);
+    aeron_archive_persistent_subscription_context_t *context = createPersistentSubscriptionContext(
+        aeron.aeron(),
+        archive_ctx,
+        recording_id,
+        MDC_SUBSCRIPTION_CHANNEL,
+        STREAM_ID,
+        "aeron:udp?endpoint=localhost:0",
+        REPLAY_STREAM_ID,
+        stop_position);
+
+    TestListener listener;
+    listener.attachTo(context);
+
+    PersistentSubscriptionContextGuard context_guard(context);
+    aeron_archive_persistent_subscription_t *persistent_subscription;
+    ASSERT_EQ(0, aeron_archive_persistent_subscription_create(&persistent_subscription, context)) << aeron_errmsg();
+    context_guard.release();
+    PersistentSubscriptionGuard ps_guard(persistent_subscription);
+
+    MessageCapturingFragmentHandler handler;
+    bool observed_replaying = false;
+    auto poller = [&]
+    {
+        const int fragments = aeron_archive_persistent_subscription_controlled_poll(
+            persistent_subscription,
+            MessageCapturingFragmentHandler::onFragment,
+            &handler,
+            1);
+        if (aeron_archive_persistent_subscription_is_replaying(persistent_subscription))
+        {
+            observed_replaying = true;
+        }
+        return fragments;
+    };
+
+    // PS shortcuts to AWAIT_LIVE; no publisher up, deadline breaches exactly once.
+    executeUntil(
+        "deadline breach fires",
+        poller,
+        [&] { return listener.error_count > 0; });
+    ASSERT_EQ(1, listener.error_count);
+
+    // Resume publisher B at stop_0. Recording continues contiguously.
+    PersistentPublication resumed_publication =
+        PersistentPublication::resume(m_aeronDir, MDC_PUBLICATION_CHANNEL, STREAM_ID, recording_id);
+
+    // Persist first_batch and let PS receive it. Either path can deliver it: direct LIVE
+    // (publisher B's SETUP arrived at stop_0) or AWAIT_LIVE -> refresh -> replay
+    // (publisher B's SETUP arrived at an advanced offset). Either way, by the time the
+    // loop exits PS has consumed first_batch and is positioned just past it.
+    const std::vector<std::vector<uint8_t>> first_batch = generateFixedMessages(1, ONE_KB_MESSAGE_SIZE);
+    resumed_publication.persist(first_batch);
+    executeUntil(
+        "received first message",
+        poller,
+        [&] { return handler.messages().size() == first_batch.size(); });
+
+    // Wait for PS to be on its live image. In the advanced-offset SETUP path, PS may have
+    // delivered first_batch via initial-refresh REPLAY and still be in REPLAY/ATTEMPT_SWITCH.
+    // Without polling the live image, PS's last_sm_position doesn't advance and publisher
+    // B's flow control stops sending live to PS — so the loss generator never sees catchup
+    // frames on PS's live endpoint and frames_dropped stays at 0.
+    executeUntil(
+        "is live",
+        poller,
+        [&] { return aeron_archive_persistent_subscription_is_live(persistent_subscription); });
+
+    // Reset observed_replaying after the first_batch phase. If publisher B's SETUP arrived
+    // at an advanced offset, PS already went through REFRESH/REPLAY once to deliver
+    // first_batch — we don't want that observation to satisfy the post-revoke assertion
+    // below. From here on, only the catchup-refresh path can flip this back to true.
+    observed_replaying = false;
+
+    // Arm the data-loss filter. Drop every catchup DATA frame on PS's endpoint, anywhere
+    // from "right past first_batch" through end-of-term. The recording subscription's
+    // endpoint is exempt (URI substring), so the recording stays contiguous.
+    const int64_t first_byte_after_first_batch = stop_position + (int64_t)(ONE_KB_MESSAGE_SIZE + AERON_DATA_HEADER_LENGTH);
+    const int32_t target_active_term_id = aeron_logbuffer_compute_term_id_from_position(
+        first_byte_after_first_batch,
+        aeron_number_of_trailing_zeroes(info.term_buffer_length),
+        info.initial_term_id);
+    const int32_t target_drop_min = (int32_t)(first_byte_after_first_batch & (info.term_buffer_length - 1));
+    aeron_data_in_range_loss_config_set_target(
+        &loss_config, STREAM_ID, target_active_term_id, target_drop_min, info.term_buffer_length);
+    aeron_data_in_range_loss_config_enable(&loss_config);
+
+    // Persist 40 catchup messages. The recording sees them all; PS sees none of them on
+    // its live image — they're dropped at PS's receive endpoint by the loss generator.
+    const std::vector<std::vector<uint8_t>> catchup_messages = generateFixedMessages(40, ONE_KB_MESSAGE_SIZE);
+    resumed_publication.persist(catchup_messages);
+
+    // Revoke ends the live image; after the EOS+REVOKE heartbeat reaches PS (loss gen
+    // explicitly preserves heartbeats) and the image closes, the dropped bytes are gone
+    // forever from the live channel — PS must replay them from the recording.
+    aeron_exclusive_publication_revoke(resumed_publication.publication(), nullptr, nullptr);
+
+    std::vector<std::vector<uint8_t>> expected;
+    expected.insert(expected.end(), first_batch.begin(), first_batch.end());
+    expected.insert(expected.end(), catchup_messages.begin(), catchup_messages.end());
+    executeUntil(
+        "received all messages",
+        poller,
+        [&] { return handler.messages().size() == expected.size(); });
+
+    aeron_data_in_range_loss_config_disable(&loss_config);
+
+    ASSERT_EQ(expected, handler.messages());
+    ASSERT_TRUE(observed_replaying)
+        << "PS did not transition through REPLAY/ATTEMPT_SWITCH after revoke; the "
+           "catchup-refresh path was not exercised (first_batch's refresh, if any, was "
+           "cleared before catchup was armed, so this isolates the post-revoke replay)";
+    // The filter must have actually fired — otherwise the test could pass for the wrong
+    // reason (the natural overrun race winning), and a future change that breaks the
+    // tuple computation would silently regress the test back to that race.
+    ASSERT_GT(aeron_data_in_range_loss_config_frames_dropped(&loss_config), 0);
+
+    ps_guard.release();
+    ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
+    archive_ctx_guard.release();
+    aeron_archive_context_close(archive_ctx);
+}

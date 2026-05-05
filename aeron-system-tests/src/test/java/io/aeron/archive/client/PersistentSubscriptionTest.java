@@ -52,7 +52,9 @@ import io.aeron.test.RandomWatcher;
 import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.TestContexts;
 import io.aeron.test.Tests;
+import io.aeron.test.driver.DataInRangeLossGenerator;
 import io.aeron.test.driver.FrameDataLossGenerator;
+import io.aeron.test.driver.SetupAtPositionLossGenerator;
 import io.aeron.test.driver.StreamIdFrameDataLossGenerator;
 import io.aeron.test.driver.StreamIdLossGenerator;
 import io.aeron.test.driver.TestMediaDriver;
@@ -224,7 +226,7 @@ abstract class PersistentSubscriptionTest
     @Test
     @InterruptAfter(15)
     @SuppressWarnings("MethodLength")
-    void shouldSwitchFromReplayToLiveAndFallBackToReplay()
+    void shouldDropFromLiveBackToReplayThenJoinLiveAgain()
     {
         final PersistentPublication persistentPublication =
             PersistentPublication.create(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID);
@@ -454,7 +456,7 @@ abstract class PersistentSubscriptionTest
     @ParameterizedTest
     @ValueSource(longs = { 0, 1024 })
     @InterruptAfter(10)
-    void canReplayFromStartOfRecording(final long recordingStartPosition)
+    void shouldReplayFromRecordingStartPositionWhenStartingFromStart(final long recordingStartPosition)
     {
         final String channel = new ChannelUriStringBuilder()
             .media(IPC_MEDIA)
@@ -490,7 +492,7 @@ abstract class PersistentSubscriptionTest
 
     @Test
     @InterruptAfter(10)
-    void canReplayFromSpecifiedPosition()
+    void shouldReplayFromSpecificMidRecordingPosition()
     {
         final String channel = new ChannelUriStringBuilder()
             .media(IPC_MEDIA)
@@ -523,7 +525,7 @@ abstract class PersistentSubscriptionTest
 
     @Test
     @InterruptAfter(10)
-    void replayStartPositionMustNotBeBeforeRecordingStartPosition()
+    void shouldErrorIfStartPositionIsBeforeRecordingStartPosition()
     {
         final String channel = new ChannelUriStringBuilder()
             .media(IPC_MEDIA)
@@ -554,7 +556,7 @@ abstract class PersistentSubscriptionTest
 
     @Test
     @InterruptAfter(10)
-    void replayStartPositionMustNotBeAfterRecordingStopPosition()
+    void shouldErrorIfStartPositionIsAfterStopPosition()
     {
         final PersistentPublication persistentPublication =
             PersistentPublication.create(aeronArchive, IPC_CHANNEL, STREAM_ID);
@@ -584,7 +586,7 @@ abstract class PersistentSubscriptionTest
 
     @Test
     @InterruptAfter(10)
-    void replayStartPositionMustNotBeAfterRecordingLivePosition()
+    void shouldErrorIfStartPositionIsAfterRecordingLivePosition()
     {
         final PersistentPublication persistentPublication =
             PersistentPublication.create(aeronArchive, IPC_CHANNEL, STREAM_ID);
@@ -611,7 +613,7 @@ abstract class PersistentSubscriptionTest
 
     @Test
     @InterruptAfter(5)
-    void replayStartPositionMustBeAlignedOnFrameBoundary()
+    void shouldErrorWhenStartPositionDoesNotAlignWithFrame()
     {
         final PersistentPublication persistentPublication =
             PersistentPublication.create(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID);
@@ -637,7 +639,7 @@ abstract class PersistentSubscriptionTest
 
     @Test
     @InterruptAfter(15)
-    void shouldJoinLiveWhenThereIsNoDataToReplay()
+    void shouldStartFromLiveWhenThereIsNoDataToReplay()
     {
         final PersistentPublication persistentPublication =
             PersistentPublication.create(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID);
@@ -736,7 +738,7 @@ abstract class PersistentSubscriptionTest
 
     @Test
     @InterruptAfter(10)
-    void shouldJoinLiveWhenItBecomesAvailable()
+    void shouldRetryAndRecoverWhenLiveIsNotAvailableDuringStartUp()
     {
         // Ensure a recording exists for the stream.
         final PersistentPublication persistentPublication = PersistentPublication.create(
@@ -858,7 +860,8 @@ abstract class PersistentSubscriptionTest
     @ParameterizedTest
     @ValueSource(longs = { FROM_START, FROM_LIVE })
     @InterruptAfter(10)
-    void shouldConnectToArchiveWhenItBecomesAvailable(final long startPosition, final @TempDir Path tempDir)
+    void shouldRetryAndRecoverWhenArchiveIsNotAvailableDuringStartUp(
+        final long startPosition, final @TempDir Path tempDir)
     {
         archive.close();
         final File archiveDir = new File(tempDir.toString(), "testLocalArchive");
@@ -1274,58 +1277,56 @@ abstract class PersistentSubscriptionTest
         }
     }
 
-    // Exercises the shortcut → live-ahead → refresh → replay path. PS starts while the recording is
-    // stopped so the first list_recording returns stopPosition == startPosition and PS takes the
-    // shortcut to ADD_LIVE_SUBSCRIPTION. After PS has parked in AWAIT_LIVE (confirmed by the
-    // deadline-breach error), the recording is resumed and messages are persisted on a fresh
-    // publisher; that publisher is then revoked. PS must deliver every catchup message and must
-    // have transitioned through REPLAY/ATTEMPT_SWITCH at least once.
+    // Deterministically exercises the LIVE -> image-closed -> refresh -> replay path. PS
+    // shortcuts to AWAIT_LIVE while the recording is stopped at stop_0, then publisher B is
+    // resumed. PS receives publisher B's SETUP normally and either joins live directly at
+    // stop_0 (and consumes first_batch via live) or refreshes via AWAIT_LIVE if publisher B's
+    // first SETUP carries an advanced offset — both paths land in LIVE with first_batch
+    // either delivered or about to be delivered.
+    //
+    // Once first_batch is delivered AND PS is on its live image, a per-driver loss generator
+    // drops every catchup DATA frame on PS's live stream (the recording subscription on the
+    // main driver sees no loss). The isLive() wait is required: in path B without it PS
+    // stays in REPLAY/ATTEMPT_SWITCH, doesn't poll the live image, doesn't send SMs, and
+    // publisher B's flow control stops sending live to PS — catchup arrives only via the
+    // REPLAY stream and the loss generator never fires.
+    //
+    // Heartbeats are always preserved so PS still sees the EOS+REVOKED flag when publisher B
+    // is revoked. After revoke, PS's image closes and the bytes the loss generator dropped
+    // can never be recovered via NAK retransmits — PS must replay the full catchup from the
+    // recording.
     @Test
     @InterruptAfter(10)
-    void shouldRefreshAndReplayWhenLiveAheadOfStopPositionAfterResume()
+    void shouldReplayAndCatchUpWhenExtendedRecordingIsAheadOfLivePosition()
     {
+        TestMediaDriver.notSupportedOnCMediaDriver("loss generator");
+
+        final DataInRangeLossGenerator lossGenerator = new DataInRangeLossGenerator();
+        final Aeron aeron2 = startSecondAeronWithReceiveLoss(lossGenerator);
+
         final PersistentPublication persistentPublication =
             PersistentPublication.create(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID);
 
-        persistentPublication.persist(generateRandomPayloads(1));
+        persistentPublication.persist(generateFixedPayloads(1, ONE_KB_MESSAGE_SIZE));
         final long stopPosition = persistentPublication.stop();
         assertTrue(stopPosition > 0);
         final long recordingId = persistentPublication.recordingId();
-        persistentPublication.closePublicationOnly();
-        // Wait for the closed publication's residual state to drain; otherwise PS's live subscription
-        // can briefly attach to the ghost image and join LIVE before the actual resumed publisher's
-        // image arrives.
-        Tests.await(() -> !persistentPublication.publicationCountersExist());
+
+        closePublicationAndAwaitDrain(persistentPublication);
 
         persistentSubscriptionCtx
+            .aeron(aeron2)
             .recordingId(recordingId)
             .startPosition(stopPosition)
-            .liveChannel(MDC_SUBSCRIPTION_CHANNEL + "|rcv-wnd=2K")
+            .liveChannel(MDC_SUBSCRIPTION_CHANNEL)
             .aeronArchiveContext().messageTimeoutNs(TimeUnit.MILLISECONDS.toNanos(500));
 
         try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
         {
             final boolean[] observedReplaying = { false };
-            final Runnable pollAndTrack = () ->
-            {
-                poll(persistentSubscription, fragmentHandler, 10);
-                if (persistentSubscription.isReplaying())
-                {
-                    observedReplaying[0] = true;
-                }
-            };
+            final Runnable pollAndTrack = newReplayObservingPoller(persistentSubscription, observedReplaying);
 
-            executeUntil(
-                () -> listener.errorCount > 0,
-                pollAndTrack);
-            // Exactly one deadline breach — fired once while PS was parked in AWAIT_LIVE.
-            assertEquals(1, listener.errorCount);
-            assertThat(
-                listener.lastException.getMessage(),
-                containsString("No image became available on the live subscription")
-            );
-            assertFalse(persistentSubscription.isLive());
-            assertFalse(observedReplaying[0]);
+            awaitFirstAwaitLiveDeadlineBreach(persistentSubscription, pollAndTrack, observedReplaying);
 
             final PersistentPublication resumedPublication =
                 PersistentPublication.resume(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID, recordingId);
@@ -1340,15 +1341,31 @@ abstract class PersistentSubscriptionTest
                 () -> fragmentHandler.hasReceivedPayloads(firstBatch.size()),
                 pollAndTrack);
 
-            // Publish many more 1KB messages. PS isn't being polled here so its `last_sm_position`
-            // is pinned ~2 KiB and the receiver-side overrun threshold (`last_sm_position +
-            // term_length/2`) is pinned ~34 KiB. Catchup spans past that threshold, so the
-            // trailing messages are dropped at PS's image — they're only ever recorded — and PS
-            // must replay to receive them.
+            // Wait for PS to be on its live image. In path B (advanced-offset SETUP), PS may
+            // have delivered first_batch via initial-refresh REPLAY and still be in
+            // REPLAY/ATTEMPT_SWITCH. Without polling the live image, PS's last_sm_position
+            // doesn't advance and publisher B's flow control stops sending live to PS — so
+            // the loss generator never sees catchup frames on PS's live endpoint.
+            executeUntil(persistentSubscription::isLive, pollAndTrack);
+
+            // Reset observedReplaying after the first_batch phase. If publisher B's SETUP arrived
+            // at an advanced offset, PS already went through REFRESH/REPLAY once to deliver
+            // first_batch — we don't want that observation to satisfy the post-revoke assertion
+            // below. From here on, only the catchup-refresh path can flip this back to true.
+            observedReplaying[0] = false;
+
+            armDataDropFromPosition(lossGenerator, recordingId, stopPosition + 1024L);
+            lossGenerator.enable();
+
+            // Publish 40 catchup messages. The recording (on the main driver) sees them all;
+            // PS (on driver2) sees none of them on its live image — they're dropped by the
+            // loss generator on driver2's receive endpoint.
             final List<byte[]> catchupMessages = generateFixedPayloads(40, ONE_KB_MESSAGE_SIZE);
             resumedPublication.persist(catchupMessages);
 
-            // Revoke ends the live image. PS sees the close, refreshes, and replays missing bytes.
+            // Revoke ends the live image; after the EOS+REVOKED heartbeat reaches PS (the loss
+            // generator explicitly preserves heartbeats) and the image closes, the dropped
+            // bytes are gone forever from the live channel — PS must replay them.
             resumedPublication.publication.revoke();
 
             final List<byte[]> expected = new ArrayList<>(firstBatch);
@@ -1357,11 +1374,117 @@ abstract class PersistentSubscriptionTest
                 () -> fragmentHandler.hasReceivedPayloads(expected.size()),
                 pollAndTrack);
 
+            lossGenerator.disable();
+
             assertPayloads(fragmentHandler.receivedPayloads, expected);
             assertTrue(observedReplaying[0],
-                "PS did not transition through REPLAY/ATTEMPT_SWITCH; refresh path was not exercised");
+                "PS did not transition through REPLAY/ATTEMPT_SWITCH after revoke; the " +
+                    "catchup-refresh path was not exercised");
             // No additional AWAIT_LIVE entries after the initial one, so no additional breaches.
             assertEquals(1, listener.errorCount);
+            // The filter must have actually fired — otherwise the test could pass for the wrong
+            // reason (catchup somehow reaching PS without going through the drop range), and a
+            // future change that breaks the tuple computation would silently regress. The
+            // isLive() wait above is what makes this assertion deterministic: in path B without
+            // it, PS stays in REPLAY/ATTEMPT_SWITCH, doesn't poll the live image, doesn't send
+            // SMs, and publisher B's flow control stops sending live to PS — catchup arrives
+            // only via the REPLAY stream-id (which the filter doesn't target) and framesDropped
+            // would stay at 0.
+            assertTrue(lossGenerator.framesDropped() > 0,
+                "loss generator did not fire on any catchup DATA frame");
+            verify(persistentSubscription);
+        }
+    }
+
+    // Deterministically exercises the AWAIT_LIVE -> live-ahead -> refresh -> replay -> live path.
+    // PS shortcuts to AWAIT_LIVE while the recording is stopped at stop_0. When publisher B is
+    // resumed, its first SETUP carries the (initial_term_id, term_id_at_stop_0, offset_at_stop_0)
+    // tuple — which is also where PS's start_position sits. Without intervention, PS's image is
+    // created at stop_0, the AWAIT_LIVE check `live_position > position` is false, and PS takes
+    // the direct LIVE path instead of refreshing.
+    //
+    // To force the refresh path deterministically, PS runs on its own MediaDriver whose receive
+    // endpoints carry a SetupAtPositionLossGenerator. When publisher B is resumed, its first
+    // SETUP at stop_0 is dropped on PS's endpoint. PS's UDP receiver elicits another SETUP via
+    // SM. By the time publisher B's next SETUP fires, snd_pos has advanced past the offers we
+    // issued, the SETUP no longer matches the drop filter, and PS's image is created with
+    // join_position > stop_0 — triggering the refresh path. The recording subscription on the
+    // main driver is unaffected, so the recording stays contiguous.
+    @Test
+    @InterruptAfter(10)
+    void shouldRefreshAndReplayWhenLiveAheadOfStopPositionAfterResume()
+    {
+        TestMediaDriver.notSupportedOnCMediaDriver("loss generator");
+
+        final SetupAtPositionLossGenerator lossGenerator = new SetupAtPositionLossGenerator();
+        final Aeron aeron2 = startSecondAeronWithReceiveLoss(lossGenerator);
+
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID);
+
+        persistentPublication.persist(generateFixedPayloads(1, ONE_KB_MESSAGE_SIZE));
+        final long stopPosition = persistentPublication.stop();
+        assertTrue(stopPosition > 0);
+        final long recordingId = persistentPublication.recordingId();
+
+        armSetupDropAtPosition(lossGenerator, recordingId, stopPosition);
+
+        closePublicationAndAwaitDrain(persistentPublication);
+
+        persistentSubscriptionCtx
+            .aeron(aeron2)
+            .recordingId(recordingId)
+            .startPosition(stopPosition)
+            .liveChannel(MDC_SUBSCRIPTION_CHANNEL)
+            .aeronArchiveContext().messageTimeoutNs(TimeUnit.MILLISECONDS.toNanos(500));
+
+        try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
+        {
+            final boolean[] observedReplaying = { false };
+            final Runnable pollAndTrack = newReplayObservingPoller(persistentSubscription, observedReplaying);
+
+            awaitFirstAwaitLiveDeadlineBreach(persistentSubscription, pollAndTrack, observedReplaying);
+
+            // Arm the SETUP filter just before resuming. Publisher B's first SETUP carries the
+            // exact target tuple we configured above; it will be dropped at PS's endpoint and
+            // delivered normally to the recording subscription on the main driver (driver1, which
+            // has no loss generator).
+            lossGenerator.enable();
+
+            final PersistentPublication resumedPublication =
+                PersistentPublication.resume(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID, recordingId);
+
+            // Persist a few messages so publisher B's snd_pos advances past stop_0. The next SETUP
+            // (gated by the publication SETUP timeout) carries the advanced term_offset, no longer
+            // matches the filter, and creates PS's image with join_position > stop_0.
+            final List<byte[]> postResumeMessages = generateFixedPayloads(4, ONE_KB_MESSAGE_SIZE);
+            resumedPublication.persist(postResumeMessages);
+
+            executeUntil(persistentSubscription::isLive, pollAndTrack);
+
+            executeUntil(
+                () -> fragmentHandler.hasReceivedPayloads(postResumeMessages.size()),
+                pollAndTrack);
+            assertPayloads(fragmentHandler.receivedPayloads, postResumeMessages);
+
+            lossGenerator.disable();
+
+            // Messages offered before PS's live image attached can only have arrived via the
+            // refresh -> replay path; mid-stream UDP subscribers don't backfill historical bytes
+            // on the live stream.
+            assertTrue(observedReplaying[0],
+                "PS did not transition through REPLAY/ATTEMPT_SWITCH; refresh path was not exercised");
+            assertEquals(1, listener.liveJoinedCount);
+            assertEquals(0, listener.liveLeftCount);
+            // Still exactly the one initial deadline-breach error — PS refreshed once, went to
+            // REPLAY then LIVE, and has stayed there. No additional AWAIT_LIVE entries means no
+            // additional breaches.
+            assertEquals(1, listener.errorCount);
+            // The filter is a safety net for the race where publisher B's first SETUP carries
+            // its initial term_offset (causing PS's image to attach at stop_0 and skip refresh).
+            // It may or may not fire depending on how fast publisher B's snd_pos advances
+            // relative to the first SETUP send. observedReplaying being true is what proves
+            // the refresh path was taken — either naturally or because the filter forced it.
             verify(persistentSubscription);
         }
     }
@@ -1369,7 +1492,7 @@ abstract class PersistentSubscriptionTest
     @ParameterizedTest
     @ValueSource(ints = { 1, 10 })
     @InterruptAfter(5)
-    void canSwitchReplayToLiveWhenLivePositionMatchesReplayPosition(final int fragmentLimit)
+    void shouldReplayExistingRecordingThenJoinLive(final int fragmentLimit)
     {
         final PersistentPublication persistentPublication =
             PersistentPublication.create(aeronArchive, IPC_CHANNEL, STREAM_ID);
@@ -1517,7 +1640,7 @@ abstract class PersistentSubscriptionTest
 
     @Test
     @InterruptAfter(5)
-    void canSwitchFromReplayToLiveWhenLivePositionIsBehindReplayPosition()
+    void shouldHandleReplayBeingAheadOfLive()
     {
         final String pubChannel = "aeron:udp?control=localhost:2000|control-mode=dynamic|fc=min";
         final String subChannel = "aeron:udp?control=localhost:2000|rcv-wnd=4k";
@@ -1787,7 +1910,7 @@ abstract class PersistentSubscriptionTest
 
     @Test
     @InterruptAfter(5)
-    void canJoinLiveUponReachingEndOfRecordingIfLiveHasNotAdvanced()
+    void shouldStartFromStoppedRecordingAndJoinLiveWhenLiveHasNotAdvanced()
     {
         final PersistentPublication persistentPublication =
             PersistentPublication.create(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID);
@@ -1887,7 +2010,7 @@ abstract class PersistentSubscriptionTest
 
     @Test
     @InterruptAfter(5)
-    void cannotJoinLiveUponReachingEndOfRecordingIfLiveHasAdvanced()
+    void shouldStartFromStoppedRecordingAndErrorWhenLiveHasAdvanced()
     {
         final PersistentPublication persistentPublication =
             PersistentPublication.create(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID);
@@ -1938,7 +2061,7 @@ abstract class PersistentSubscriptionTest
 
     @Test
     @InterruptAfter(10)
-    void shouldStayOnAReplayWhenLiveCannotConnect()
+    void shouldStayOnReplayWhenLiveCannotConnect()
     {
         final PersistentPublication persistentPublication =
             PersistentPublication.create(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID);
@@ -2154,7 +2277,7 @@ abstract class PersistentSubscriptionTest
 
     @Test
     @InterruptAfter(15)
-    void cannotFallbackToReplayWhenTheRecordingHasStoppedAtAnEarlierPosition()
+    void cannotFallbackToReplayWhenRecordingHasStoppedAtAnEarlierPosition()
     {
         final PersistentPublication persistentPublication =
             PersistentPublication.create(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID);
@@ -2221,7 +2344,7 @@ abstract class PersistentSubscriptionTest
 
     @Test
     @InterruptAfter(10)
-    void cannotFallbackToReplayWhenTheRecordingHasBeenRemoved()
+    void cannotFallbackToReplayWhenRecordingHasBeenRemoved()
     {
         final PersistentPublication persistentPublication =
             PersistentPublication.create(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID);
@@ -2573,10 +2696,167 @@ abstract class PersistentSubscriptionTest
         }
     }
 
+    // 30% replay loss while PS catches up from archive. NAK/retransmit must deliver all 100.
+    @Test
+    @InterruptAfter(60)
+    void shouldReceiveAllMessagesWithModerateReplayLoss()
+    {
+        runReplayLossTest(100, 0.3);
+    }
+
+    // 80% replay loss — severe stress on NAK/retransmit. Verifies no duplicates, no gaps.
+    @Test
+    @InterruptAfter(90)
+    void shouldReceiveAllMessagesWithHeavyReplayLoss()
+    {
+        runReplayLossTest(50, 0.8);
+    }
+
+    // Persist initial batch, start PS with lossy replay, then publish more WHILE PS is still
+    // replaying. PS must catch up through lossy replay, transition to LIVE, receive everything.
+    @Test
+    @InterruptAfter(60)
+    void shouldTransitionToLiveThroughLossyReplayWhilePublishing()
+    {
+        TestMediaDriver.notSupportedOnCMediaDriver("loss generator");
+
+        final StreamIdFrameDataLossGenerator lossGenerator = new StreamIdFrameDataLossGenerator();
+        final String aeronDir2 = CommonContext.generateRandomDirName();
+        final MediaDriver.Context driver2Ctx = driverCtxTpl.clone().aeronDirectoryName(aeronDir2)
+            .receiveChannelEndpointSupplier(receiveChannelEndpointSupplier(lossGenerator));
+        addCloseable(TestMediaDriver.launch(driver2Ctx, systemTestWatcher));
+        systemTestWatcher.dataCollector().add(driver2Ctx.aeronDirectory());
+        final Aeron aeron2 = addCloseable(Aeron.connect(aeronCtxTpl.clone().aeronDirectoryName(aeronDir2)));
+
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID);
+        final List<byte[]> initialMessages = generateFixedPayloads(20, ONE_KB_MESSAGE_SIZE);
+        persistentPublication.persist(initialMessages);
+
+        persistentSubscriptionCtx
+            .aeron(aeron2)
+            .recordingId(persistentPublication.recordingId())
+            .liveChannel(MDC_SUBSCRIPTION_CHANNEL);
+
+        try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
+        {
+            final ThreadLocalRandom random = ThreadLocalRandom.current();
+            lossGenerator.enable(persistentSubscriptionCtx.replayStreamId(), bytes -> random.nextDouble() < 0.5);
+
+            // Start PS draining; while it's catching up from archive (with loss), publish more.
+            executeUntil(
+                () -> fragmentHandler.hasReceivedPayloads(initialMessages.size() / 2),
+                () -> poll(persistentSubscription, fragmentHandler, 10));
+
+            final List<byte[]> liveMessages = generateFixedPayloads(20, ONE_KB_MESSAGE_SIZE);
+            persistentPublication.publish(liveMessages);
+
+            executeUntil(
+                () -> fragmentHandler.hasReceivedPayloads(initialMessages.size() + liveMessages.size()) &&
+                    persistentSubscription.isLive(),
+                () -> poll(persistentSubscription, fragmentHandler, 10));
+
+            assertPayloads(fragmentHandler.receivedPayloads, initialMessages, liveMessages);
+            lossGenerator.disable();
+            verify(persistentSubscription);
+        }
+    }
+
+    private void runReplayLossTest(final int messageCount, final double dropRate)
+    {
+        TestMediaDriver.notSupportedOnCMediaDriver("loss generator");
+
+        final StreamIdFrameDataLossGenerator lossGenerator = new StreamIdFrameDataLossGenerator();
+        final String aeronDir2 = CommonContext.generateRandomDirName();
+        final MediaDriver.Context driver2Ctx = driverCtxTpl.clone().aeronDirectoryName(aeronDir2)
+            .receiveChannelEndpointSupplier(receiveChannelEndpointSupplier(lossGenerator));
+        addCloseable(TestMediaDriver.launch(driver2Ctx, systemTestWatcher));
+        systemTestWatcher.dataCollector().add(driver2Ctx.aeronDirectory());
+        final Aeron aeron2 = addCloseable(Aeron.connect(aeronCtxTpl.clone().aeronDirectoryName(aeronDir2)));
+
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID);
+        final List<byte[]> messages = generateFixedPayloads(messageCount, ONE_KB_MESSAGE_SIZE);
+        persistentPublication.persist(messages);
+
+        persistentSubscriptionCtx
+            .aeron(aeron2)
+            .recordingId(persistentPublication.recordingId())
+            .liveChannel(MDC_SUBSCRIPTION_CHANNEL);
+
+        try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
+        {
+            // Drop the configured fraction of DATA frames on the replay stream-id. SETUPs and
+            // other control go through. NAK/retransmit must restore everything.
+            final ThreadLocalRandom random = ThreadLocalRandom.current();
+            lossGenerator.enable(persistentSubscriptionCtx.replayStreamId(), bytes -> random.nextDouble() < dropRate);
+
+            executeUntil(
+                () -> fragmentHandler.hasReceivedPayloads(messages.size()) && persistentSubscription.isLive(),
+                () -> poll(persistentSubscription, fragmentHandler, 10));
+
+            assertPayloads(fragmentHandler.receivedPayloads, messages);
+            lossGenerator.disable();
+            verify(persistentSubscription);
+        }
+    }
+
+    // 30% loss on PS's live MDC subscription channel. Initial 5 messages are persisted before
+    // PS starts so they replay cleanly; 30 more are offered live with loss. Verifies all 35
+    // messages are received in order — proves NAK-driven retransmission across loss.
+    @Test
+    @InterruptAfter(60)
+    void shouldReceiveAllMessagesWithLossOnLiveChannel()
+    {
+        TestMediaDriver.notSupportedOnCMediaDriver("loss generator");
+
+        final StreamIdFrameDataLossGenerator lossGenerator = new StreamIdFrameDataLossGenerator();
+        final String aeronDir2 = CommonContext.generateRandomDirName();
+        final MediaDriver.Context driver2Ctx = driverCtxTpl.clone().aeronDirectoryName(aeronDir2)
+            .receiveChannelEndpointSupplier(receiveChannelEndpointSupplier(lossGenerator));
+        addCloseable(TestMediaDriver.launch(driver2Ctx, systemTestWatcher));
+        systemTestWatcher.dataCollector().add(driver2Ctx.aeronDirectory());
+        final Aeron aeron2 = addCloseable(Aeron.connect(aeronCtxTpl.clone().aeronDirectoryName(aeronDir2)));
+
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, MDC_PUBLICATION_CHANNEL, STREAM_ID);
+        final List<byte[]> initialMessages = generateFixedPayloads(5, ONE_KB_MESSAGE_SIZE);
+        persistentPublication.persist(initialMessages);
+
+        persistentSubscriptionCtx
+            .aeron(aeron2)
+            .recordingId(persistentPublication.recordingId())
+            .liveChannel(MDC_SUBSCRIPTION_CHANNEL);
+
+        try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
+        {
+            // Enable 30% drop on the live stream-id BEFORE PS is live, so SETUPs go through but
+            // post-attach DATA frames are sampled for drop.
+            final ThreadLocalRandom random = ThreadLocalRandom.current();
+            lossGenerator.enable(STREAM_ID, bytes -> random.nextDouble() < 0.3);
+
+            executeUntil(
+                persistentSubscription::isLive,
+                () -> poll(persistentSubscription, fragmentHandler, 10));
+
+            // Use offer (non-blocking) so persist's 30s timeout doesn't trip with backpressure.
+            final List<byte[]> liveMessages = generateFixedPayloads(30, ONE_KB_MESSAGE_SIZE);
+            persistentPublication.publish(liveMessages);
+
+            executeUntil(
+                () -> fragmentHandler.hasReceivedPayloads(initialMessages.size() + liveMessages.size()),
+                () -> poll(persistentSubscription, fragmentHandler, 10));
+
+            assertPayloads(fragmentHandler.receivedPayloads, initialMessages, liveMessages);
+            lossGenerator.disable();
+            verify(persistentSubscription);
+        }
+    }
+
     @ParameterizedTest
     @ValueSource(strings = { UNICAST_CHANNEL, IPC_CHANNEL })
     @InterruptAfter(15)
-    void anUntetheredPersistentSubscriptionCanFallBackToReplay(final String channel)
+    void anUntetheredPersistentSubscriptionCanFallBehindATetheredSubscription(final String channel)
     {
         final ChannelUriStringBuilder channelUriStringBuilder = new ChannelUriStringBuilder(channel);
 
@@ -2625,7 +2905,7 @@ abstract class PersistentSubscriptionTest
 
     @Test
     @InterruptAfter(10)
-    void recordingMustExist()
+    void shouldErrorIfRecordingDoesNotExist()
     {
         final int recordingId = 13; // <-- does not exist
         persistentSubscriptionCtx.recordingId(recordingId);
@@ -2645,7 +2925,7 @@ abstract class PersistentSubscriptionTest
 
     @Test
     @InterruptAfter(10)
-    void recordingStreamMustMatchLiveStream()
+    void shouldErrorIfRecordingStreamDoesNotMatchLiveStream()
     {
         final int liveStreamId = 1001; // <-- not the same as the recorded stream.
 
@@ -3278,6 +3558,105 @@ abstract class PersistentSubscriptionTest
             randomPayloads.add(bytes);
         }
         return randomPayloads;
+    }
+
+    private Aeron startSecondAeronWithReceiveLoss(final LossGenerator lossGenerator)
+    {
+        final String aeronDir2 = CommonContext.generateRandomDirName();
+        final MediaDriver.Context driver2Ctx = driverCtxTpl.clone().aeronDirectoryName(aeronDir2)
+            .receiveChannelEndpointSupplier(receiveChannelEndpointSupplier(lossGenerator));
+        addCloseable(TestMediaDriver.launch(driver2Ctx, systemTestWatcher));
+        systemTestWatcher.dataCollector().add(driver2Ctx.aeronDirectory());
+        return addCloseable(Aeron.connect(aeronCtxTpl.clone().aeronDirectoryName(aeronDir2)));
+    }
+
+    // Returns {initialTermId, termBufferLength} from the recording descriptor.
+    private int[] readRecordingTermLayout(final long recordingId)
+    {
+        final int[] result = { 0, 0 };
+        aeronArchive.listRecording(recordingId,
+            (controlSessionId, correlationId, recordingId1, startTimestamp, stopTimestamp,
+                startPosition, stopPos, initialTermId, segmentFileLength, termBufferLength,
+                mtuLength, sessionId, streamId1, strippedChannel, originalChannel, sourceIdentity) ->
+            {
+                result[0] = initialTermId;
+                result[1] = termBufferLength;
+            });
+        return result;
+    }
+
+    // Wait for the closed publication's residual state to drain; otherwise PS's live
+    // subscription can briefly attach to the ghost image and join LIVE before the actual
+    // resumed publisher's image arrives.
+    private static void closePublicationAndAwaitDrain(final PersistentPublication publication)
+    {
+        publication.closePublicationOnly();
+        Tests.await(() -> !publication.publicationCountersExist());
+    }
+
+    private Runnable newReplayObservingPoller(
+        final PersistentSubscription persistentSubscription,
+        final boolean[] observedReplaying)
+    {
+        return () ->
+        {
+            poll(persistentSubscription, fragmentHandler, 10);
+            if (persistentSubscription.isReplaying())
+            {
+                observedReplaying[0] = true;
+            }
+        };
+    }
+
+    private void awaitFirstAwaitLiveDeadlineBreach(
+        final PersistentSubscription persistentSubscription,
+        final Runnable pollAndTrack,
+        final boolean[] observedReplaying)
+    {
+        executeUntil(() -> listener.errorCount > 0, pollAndTrack);
+        // Exactly one deadline breach — fired once while PS was parked in AWAIT_LIVE.
+        assertEquals(1, listener.errorCount);
+        assertThat(
+            listener.lastException.getMessage(),
+            containsString("No image became available on the live subscription"));
+        assertFalse(persistentSubscription.isLive());
+        assertFalse(observedReplaying[0]);
+    }
+
+    // Drop every DATA frame on PS's live stream whose term offset lies past fromPosition,
+    // all the way to end-of-term. Stream-id discrimination (STREAM_ID vs the replay
+    // stream id) leaves the replay subscription unaffected.
+    private void armDataDropFromPosition(
+        final DataInRangeLossGenerator lossGenerator,
+        final long recordingId,
+        final long fromPosition)
+    {
+        final int[] info = readRecordingTermLayout(recordingId);
+        final int initialTermId = info[0];
+        final int termBufferLength = info[1];
+        final int positionBitsToShift = LogBufferDescriptor.positionBitsToShift(termBufferLength);
+        final int targetActiveTermId = LogBufferDescriptor.computeTermIdFromPosition(
+            fromPosition, positionBitsToShift, initialTermId);
+        final int targetTermOffsetMin = (int)(fromPosition & (termBufferLength - 1L));
+        lossGenerator.setTarget(STREAM_ID, targetActiveTermId, targetTermOffsetMin, termBufferLength);
+    }
+
+    // Drop SETUP frames whose (term_id, term_offset) tuple matches position. Once the
+    // publisher's snd_pos advances past it, subsequent SETUPs no longer match and PS
+    // attaches at the advanced position instead.
+    private void armSetupDropAtPosition(
+        final SetupAtPositionLossGenerator lossGenerator,
+        final long recordingId,
+        final long position)
+    {
+        final int[] info = readRecordingTermLayout(recordingId);
+        final int initialTermId = info[0];
+        final int termBufferLength = info[1];
+        final int positionBitsToShift = LogBufferDescriptor.positionBitsToShift(termBufferLength);
+        final int targetActiveTermId = LogBufferDescriptor.computeTermIdFromPosition(
+            position, positionBitsToShift, initialTermId);
+        final int targetTermOffset = (int)(position & (termBufferLength - 1L));
+        lossGenerator.setTarget(STREAM_ID, initialTermId, targetActiveTermId, targetTermOffset);
     }
 
     private static void executeUntil(final BooleanSupplier predicate, final Runnable runnable)
