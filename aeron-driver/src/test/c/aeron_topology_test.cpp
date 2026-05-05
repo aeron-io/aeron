@@ -78,9 +78,10 @@ TEST_F(TopologyTest, shouldReadV2Cgroups)
     aeron_topology_core_t *topology = nullptr;
     int core_count = 0;
 
-    ASSERT_NE(-1, aeron_topology_read(cpus, cpu_count, &topology, &core_count)) << aeron_errmsg();
+    ASSERT_NE(-1, aeron_topology_read(AERON_TOPOLOGY_SYS_CPU_PATH, cpus, cpu_count, &topology, &core_count))
+        << aeron_errmsg();
 
-    aeron_topology_check_alignment(cpus, cpu_count, m_output);
+    aeron_topology_check_alignment(AERON_TOPOLOGY_SYS_CPU_PATH, cpus, cpu_count, m_output);
 
     printf("%s ", "cpus");
     for (int i = 0; i < cpu_count; i++)
@@ -103,8 +104,8 @@ TEST_F(TopologyTest, shouldReadV2Cgroups)
     }
     printf("\n");
 
-    aeron_topology_check_l3_locality(cpus, cpu_count, m_output);
-    aeron_topology_check_cluster_locality(cpus, cpu_count, m_output);
+    aeron_topology_check_l3_locality(AERON_TOPOLOGY_SYS_CPU_PATH, cpus, cpu_count, m_output);
+    aeron_topology_check_cluster_locality(AERON_TOPOLOGY_SYS_CPU_PATH, cpus, cpu_count, m_output);
 
     fflush(m_output);
     printf("%s", m_output_ptr);

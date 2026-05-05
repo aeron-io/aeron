@@ -22,12 +22,6 @@
 #define AERON_TOPOLOGY_SYS_CPU_PATH "/sys/devices/system/cpu"
 
 /**
- * Overrideable root of the kernel's per-CPU sysfs tree. Defaults to
- * AERON_TOPOLOGY_SYS_CPU_PATH; tests may redirect to a fake sysfs directory.
- */
-extern const char *aeron_topology_sys_cpu_path;
-
-/**
  * The set of logical CPU siblings that share a physical core, filtered to
  * only those present in the cpuset being processed. Sorted ascending;
  * cpus[0] is the prime (lowest-numbered) thread.
@@ -44,6 +38,7 @@ aeron_topology_core_t;
  * Each returned Core contains only the CPUs from cpus that belong to that
  * physical core, sorted ascending. The returned array is sorted by prime thread.
  *
+ * @param sys_cpu_root of the sys fs filesystem to access cpu information.
  * @param cpus input array of logical CPU IDs to inspect
  * @param cpu_count number of entries in cpus
  * @param cores output array allocated within this function; free with aeron_topology_cores_free
@@ -51,6 +46,7 @@ aeron_topology_core_t;
  * @return 0 on success, -1 on failure
  */
 int aeron_topology_read(
+    const char *sys_cpu_root,
     const int *cpus,
     int cpu_count,
     aeron_topology_core_t **cores,
@@ -91,32 +87,35 @@ int aeron_topology_all_of(
  * logical sibling threads are in cpus. Returns one warning string per partial
  * core. Best-effort: if sysfs is unavailable warnings will be empty.
  *
+ * @param sys_cpu_root of the sys fs filesystem to access cpu information.
  * @param cpus input array of CPU IDs
  * @param cpu_count number of entries in cpus
  * @param output to write the warnings to.
  * @return the count of the number of warnings or -1 on error.
  */
-int aeron_topology_check_alignment(const int *cpus, int cpu_count, FILE *output);
+int aeron_topology_check_alignment(const char* sys_cpu_root, const int *cpus, int cpu_count, FILE *output);
 
 /**
  * Check that all CPUs in cpus share the same L3 cache domain.
  *
- * @param cpus input array of CPU IDs
- * @param cpu_count number of entries in cpus
- * @param output buffer to write the warning to, if any. Will be length 0 if no warnings.
+ * @param sys_cpu_root  of the sys fs filesystem to access cpu information.
+ * @param cpus          input array of CPU IDs
+ * @param cpu_count     number of entries in cpus
+ * @param output        buffer to write the warning to, if any. Will be length 0 if no warnings.
  * @return the count of the number of warnings or -1 on error.
  */
-int aeron_topology_check_cluster_locality(const int *cpus, int cpu_count, FILE* output);
+int aeron_topology_check_cluster_locality(const char* sys_cpu_root, const int *cpus, int cpu_count, FILE* output);
 
 /**
  * Check that all CPUs in cpus share the same CPU cluster.
  *
+ * @param sys_cpu_root of the sys fs filesystem to access cpu information.
  * @param cpus input array of CPU IDs
  * @param cpu_count number of entries in cpus
  * @param output
  * @return the count of the number of warnings or -1 on error.
  */
-int aeron_topology_check_l3_locality(const int *cpus, int cpu_count, FILE* output);
+int aeron_topology_check_l3_locality(const char* sys_cpu_root, const int *cpus, int cpu_count, FILE* output);
 
 /**
  * Free an array of cores allocated by aeron_topology_read.
