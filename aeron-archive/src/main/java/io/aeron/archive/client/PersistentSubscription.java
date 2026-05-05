@@ -1276,13 +1276,26 @@ public final class PersistentSubscription implements AutoCloseable
                 final long livePosition = image.position();
                 advanceLastObservedLivePosition(livePosition);
 
-                if (position >= 0 && livePosition > position)
+                if (position >= 0)
                 {
-                    cleanUpLiveSubscription();
-                    liveImage = null;
-                    refreshRecordingDescriptor();
+                    if (livePosition < position)
+                    {
+                        cleanUpLiveSubscription();
+                        state(State.FAILED);
+                        onTerminalError(new PersistentSubscriptionException(
+                            PersistentSubscriptionException.Reason.GENERIC,
+                            "live stream joined at position " + livePosition +
+                            " which is earlier than last seen position " + position));
 
-                    return 1;
+                        return 1;
+                    }
+                    else if (livePosition > position)
+                    {
+                        cleanUpLiveSubscription();
+                        refreshRecordingDescriptor();
+
+                        return 1;
+                    }
                 }
 
                 liveImage = image;

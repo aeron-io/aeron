@@ -2181,13 +2181,33 @@ static int aeron_archive_persistent_subscription_await_live(
             int64_t live_position = aeron_image_position(image);
             aeron_archive_persistent_subscription_advance_last_observed_live_position(persistent_subscription, live_position);
 
-            if (persistent_subscription->position >= 0 && live_position > persistent_subscription->position)
+            if (persistent_subscription->position >= 0)
             {
-                aeron_archive_persistent_subscription_clean_up_live_subscription(persistent_subscription);
-                persistent_subscription->live_image = NULL;
-                aeron_archive_persistent_subscription_refresh_recording_descriptor(persistent_subscription);
+                if (live_position < persistent_subscription->position)
+                {
+                    aeron_archive_persistent_subscription_clean_up_live_subscription(persistent_subscription);
+                    aeron_archive_persistent_subscription_transition(persistent_subscription, FAILED);
 
-                return 1;
+                    char message[128];
+                    snprintf(message, sizeof(message),
+                             "ERROR - live stream joined at position %" PRIi64
+                             " which is earlier than last seen position %" PRIi64,
+                             live_position, persistent_subscription->position);
+
+                    aeron_archive_persistent_subscription_on_terminal_error(
+                        persistent_subscription,
+                        ARCHIVE_ERROR_CODE_GENERIC,
+                        message);
+
+                    return 1;
+                }
+                else if (live_position > persistent_subscription->position)
+                {
+                    aeron_archive_persistent_subscription_clean_up_live_subscription(persistent_subscription);
+                    aeron_archive_persistent_subscription_refresh_recording_descriptor(persistent_subscription);
+
+                    return 1;
+                }
             }
 
             persistent_subscription->live_image = image;
