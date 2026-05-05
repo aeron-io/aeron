@@ -961,6 +961,10 @@ int32_t aeron_driver_context_get_sender_cpu_affinity(aeron_driver_context_t *con
 int aeron_driver_context_set_cpuset_affinity(aeron_driver_context_t *context, bool value);
 bool aeron_driver_context_get_cpuset_affinity(aeron_driver_context_t *context);
 
+#define AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS_ENV_VAR "AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS"
+int aeron_driver_context_set_cpuset_warnings_as_errors(aeron_driver_context_t *context, bool value);
+bool aeron_driver_context_get_cpuset_warnings_as_errors(aeron_driver_context_t *context);
+
 /**
  * Set the list of filenames to dynamic libraries to load upon context init.
  */

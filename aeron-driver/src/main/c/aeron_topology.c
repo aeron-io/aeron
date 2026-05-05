@@ -466,7 +466,7 @@ int aeron_topology_check_alignment(const int *cpus, const int cpu_count, FILE *o
 
     if (AERON_TOPOLOGY_MAX_CPU_ID < cpu_count)
     {
-        AERON_SET_ERR(EINVAL, "cpu count %d is greater than max cpu count", cpu_count);
+        AERON_SET_ERR(EINVAL, "WARNING: cpu count %d is greater than max cpu count", cpu_count);
         return -1;
     }
 
@@ -486,7 +486,7 @@ int aeron_topology_check_alignment(const int *cpus, const int cpu_count, FILE *o
 
             fprintf(
                 output,
-                "cpuset is missing sibling CPU(s) %s of the core containing CPU %d (partial core in cpuset)",
+                "WARNING: cpuset is missing sibling CPU(s) %s of the core containing CPU %d (partial core in cpuset)\n",
                 cpulist_buf, groups[i].present[0]);
 
             result++;
@@ -527,7 +527,7 @@ int aeron_topology_check_l3_locality(const int *cpus, const int cpu_count, FILE*
         {
             if (!seen[cpus[j]])
             {
-                fprintf(output, "%s", "cpuset spans multiple L3 cache domains");
+                fprintf(output, "%s", "WARNING: cpuset spans multiple L3 cache domains\n");
             }
         }
     }
@@ -602,7 +602,7 @@ int aeron_topology_check_cluster_locality(const int *cpus, int cpu_count, FILE* 
             }
         }
 
-        fprintf(output, "cpuset spans %d CPU clusters (cluster IDs: %s)", cluster_id_count, id_list_buf);
+        fprintf(output, "cpuset spans %d CPU clusters (cluster IDs: %s)\n", cluster_id_count, id_list_buf);
         result++;
     }
 

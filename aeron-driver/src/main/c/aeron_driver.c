@@ -44,6 +44,8 @@
 #include "aeron_driver.h"
 #include "aeron_socket.h"
 #include "util/aeron_dlopen.h"
+#include "aeron_cpuset.h"
+#include "aeron_topology.h"
 
 void aeron_log_func_stderr(const char *str)
 {
@@ -571,6 +573,8 @@ void aeron_driver_context_print_configuration(aeron_driver_context_t *context)
     fprintf(fpout, "\n    conductor_cpu_affinity_no=%" PRId32, context->conductor_cpu_affinity_no);
     fprintf(fpout, "\n    receiver_cpu_affinity_no=%" PRId32, context->receiver_cpu_affinity_no);
     fprintf(fpout, "\n    sender_cpu_affinity_no=%" PRId32, context->sender_cpu_affinity_no);
+    fprintf(fpout, "\n    cpuset_affinity=%" PRId32, context->cpuset_affinity);
+    fprintf(fpout, "\n    cpuset_warnings_as_errors=%" PRId32, context->cpuset_warnings_as_errors);
 
     fprintf(fpout, "\n    epoch_clock=%s",
         aeron_dlinfo_func((aeron_fptr_t)context->epoch_clock, buffer, sizeof(buffer)));
@@ -1056,6 +1060,65 @@ error:
         aeron_free(_driver);
     }
 
+    return -1;
+}
+
+int aeron_driver_apply_cpuset_affinity(aeron_driver_context_t *context)
+{
+    if (!context->cpuset_affinity)
+    {
+        return 0;
+    }
+
+#ifndef __linux__
+    AERON_SET_ERR("%s", "Cpuset affinity is only supported on Linux");
+    return -1;
+#endif
+
+    int *cpus = NULL;
+    int cpu_count = 0;
+
+    if (aeron_cpuset_cgroup_read_v2(AERON_CPUSET_PROC_SELF_CGROUP, AERON_CPUSET_CGROUP_MOUNT_V2, &cpus, &cpu_count) < 0)
+    {
+        AERON_APPEND_ERR("%s", "cpuset affinity enabled and failed to properly read cgroups and cpuset information");
+        goto error;
+    }
+
+    int alignment_warnings_count;
+    if ((alignment_warnings_count = aeron_topology_check_alignment(cpus, cpu_count, stdout)) < 0)
+    {
+        AERON_APPEND_ERR("%s", "failed to check cpu alignment");
+        goto error;
+    }
+
+    int cluster_locality_warnings_count;
+    if ((cluster_locality_warnings_count = aeron_topology_check_cluster_locality(cpus, cpu_count, stdout)) < 0)
+    {
+        AERON_APPEND_ERR("%s", "failed to check cpu cluster locality");
+        goto error;
+    }
+
+    int l3_locality_warnings_count;
+    if ((l3_locality_warnings_count = aeron_topology_check_l3_locality(cpus, cpu_count, stdout)) < 0)
+    {
+        AERON_APPEND_ERR("%s", "failed to check cpu l3 cache locality");
+        goto error;
+    }
+
+    const int total_warnings_count =
+        alignment_warnings_count + cluster_locality_warnings_count + l3_locality_warnings_count;
+
+    if (context->cpuset_warnings_as_errors && 0 < total_warnings_count)
+    {
+        AERON_SET_ERR(EINVAL, "cpuset warnings as errors, %d warnings", total_warnings_count);
+        goto error;
+    }
+
+    aeron_free(cpus);
+    return 0;
+
+    error:
+        aeron_free(cpus);
     return -1;
 }
 

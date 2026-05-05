@@ -32,7 +32,7 @@
 #include "aeron_driver_context.h"
 #include "util/aeron_properties_util.h"
 #include "util/aeron_strutil.h"
-#include "util/aeron_error.h"
+#include "aeron_driver.h"
 
 volatile int exit_status = AERON_NULL_VALUE;
 
@@ -126,7 +126,12 @@ int main(int argc, char **argv)
         goto cleanup;
     }
 
-    // aeron_cpuset_affinity.....
+    if (aeron_driver_apply_cpuset_affinity(context) < 0)
+    {
+        fprintf(stderr, "ERROR: apply cpuset affinity %s\n", aeron_errmsg());
+        AERON_SET_RELEASE(exit_status, EXIT_FAILURE);
+        goto cleanup;
+    }
 
     // preserve overridden start function and state
     context->agent_on_start_func_delegate = context->agent_on_start_func;
