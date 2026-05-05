@@ -1616,36 +1616,8 @@ abstract class PersistentSubscriptionTest
         //     being slower than the receive-of-5 loop.
         final StreamIdLossGenerator streamIdFrameDataLossGenerator = new StreamIdLossGenerator();
         final SetupAtPositionLossGenerator setupAtSnd5LossGenerator = new SetupAtPositionLossGenerator();
-        final LossGenerator combinedLossGenerator = new LossGenerator()
-        {
-            public boolean shouldDropFrame(
-                final InetSocketAddress address, final UnsafeBuffer buffer, final int length)
-            {
-                return setupAtSnd5LossGenerator.shouldDropFrame(address, buffer, length) ||
-                    streamIdFrameDataLossGenerator.shouldDropFrame(address, buffer, length);
-            }
-
-            public boolean shouldDropFrame(
-                final InetSocketAddress address, final UnsafeBuffer buffer,
-                final int streamId, final int sessionId, final int termId,
-                final int termOffset, final int length)
-            {
-                return setupAtSnd5LossGenerator.shouldDropFrame(
-                    address, buffer, streamId, sessionId, termId, termOffset, length) ||
-                    streamIdFrameDataLossGenerator.shouldDropFrame(
-                        address, buffer, streamId, sessionId, termId, termOffset, length);
-            }
-        };
-
-        final MediaDriver.Context driver2Ctx = driverCtxTpl.clone()
-            .aeronDirectoryName(CommonContext.generateRandomDirName())
-            .receiveChannelEndpointSupplier(receiveChannelEndpointSupplier(combinedLossGenerator));
-
-        addCloseable(TestMediaDriver.launch(driver2Ctx, systemTestWatcher));
-        final Aeron aeron = addCloseable(
-            Aeron.connect(new Aeron.Context().aeronDirectoryName(driver2Ctx.aeronDirectoryName()))
-        );
-        systemTestWatcher.dataCollector().add(driver2Ctx.aeronDirectory());
+        final Aeron aeron = startSecondAeronWithReceiveLoss(
+            anyOf(setupAtSnd5LossGenerator, streamIdFrameDataLossGenerator));
 
         persistentSubscriptionCtx
             .aeron(aeron)
@@ -3446,6 +3418,28 @@ abstract class PersistentSubscriptionTest
         return (udpChannel, statusIndicator, context) ->
             new DebugSendChannelEndpoint(
                 udpChannel, statusIndicator, context, lossGenerator, lossGenerator);
+    }
+
+    private static LossGenerator anyOf(final LossGenerator a, final LossGenerator b)
+    {
+        return new LossGenerator()
+        {
+            public boolean shouldDropFrame(
+                final InetSocketAddress address, final UnsafeBuffer buffer, final int length)
+            {
+                return a.shouldDropFrame(address, buffer, length) ||
+                    b.shouldDropFrame(address, buffer, length);
+            }
+
+            public boolean shouldDropFrame(
+                final InetSocketAddress address, final UnsafeBuffer buffer,
+                final int streamId, final int sessionId, final int termId,
+                final int termOffset, final int length)
+            {
+                return a.shouldDropFrame(address, buffer, streamId, sessionId, termId, termOffset, length) ||
+                    b.shouldDropFrame(address, buffer, streamId, sessionId, termId, termOffset, length);
+            }
+        };
     }
 
     private static void interruptAndJoin(final Thread thread) throws InterruptedException
