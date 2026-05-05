@@ -2221,6 +2221,57 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldErrorIfRecordingStreamDoesN
 
 }
 
+TEST_F(AeronArchivePersistentSubscriptionTest, shouldErrorIfLiveStreamPositionGoesBackwards)
+{
+    TestArchive archive = createArchive(m_aeronDir);
+
+    PersistentPublication persistent_publication(m_aeronDir, IPC_CHANNEL, STREAM_ID);
+
+    const std::vector<std::vector<uint8_t>> messages = generateFixedMessages(2, 32);
+    persistent_publication.persist(messages);
+
+    AeronResource aeron(m_aeronDir);
+
+    aeron_archive_context_t *archive_ctx = createArchiveContext();
+    ArchiveContextGuard archive_ctx_guard(archive_ctx);
+    aeron_archive_persistent_subscription_context_t *context = createDefaultPersistentSubscriptionContext(
+        aeron.aeron(),
+        archive_ctx,
+        persistent_publication.recordingId());
+
+    TestListener listener;
+    listener.attachTo(context);
+
+    PersistentSubscriptionContextGuard context_guard(context);
+    aeron_archive_persistent_subscription_t *persistent_subscription;
+    ASSERT_EQ(0, aeron_archive_persistent_subscription_create(&persistent_subscription, context)) << aeron_errmsg();
+    context_guard.release();
+    PersistentSubscriptionGuard ps_guard(persistent_subscription);
+
+    MessageCapturingFragmentHandler handler;
+    auto poller = makeControlledPoller(persistent_subscription, handler, 10);
+
+    executeUntil(
+        "is live",
+        poller,
+        isLive(persistent_subscription));
+
+    persistent_publication.stop();
+    aeron_exclusive_publication_close(persistent_publication.publication(), nullptr, nullptr);
+
+    PersistentPublication persistent_publication2(m_aeronDir, IPC_CHANNEL, STREAM_ID);
+
+    executeUntil(
+        "has failed",
+        poller,
+        hasFailed(persistent_subscription));
+
+    ASSERT_EQ(1, listener.error_count);
+    ASSERT_EQ(
+        "ERROR - live stream joined at position 0 which is earlier than last seen position 128",
+        listener.last_error_message);
+}
+
 // Verifies that a persistent subscription fails if the requested start position is before
 // the recording's start position. The recording is configured with an initial term offset
 // of 1024, giving it a start position of 1024. The persistent subscription is configured

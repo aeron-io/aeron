@@ -2670,6 +2670,40 @@ abstract class PersistentSubscriptionTest
     }
 
     @Test
+    @InterruptAfter(10)
+    void shouldFailIfLiveStreamPositionGoesBackwards()
+    {
+        final PersistentPublication persistentPublication =
+            PersistentPublication.create(aeronArchive, IPC_CHANNEL, STREAM_ID);
+
+        final List<byte[]> payloads = generateFixedPayloads(2, 32);
+        persistentPublication.persist(payloads);
+
+        persistentSubscriptionCtx
+            .recordingId(persistentPublication.recordingId());
+
+        try (PersistentSubscription persistentSubscription = PersistentSubscription.create(persistentSubscriptionCtx))
+        {
+            executeUntil(
+                persistentSubscription::isLive,
+                () -> poll(persistentSubscription, fragmentHandler, 10));
+
+            persistentPublication.close();
+
+            PersistentPublication.create(aeronArchive, IPC_CHANNEL, STREAM_ID);
+
+            executeUntil(
+                persistentSubscription::hasFailed,
+                () -> poll(persistentSubscription, fragmentHandler, 10),
+                description(persistentSubscription, fragmentHandler, listener));
+
+            assertEquals(
+                "ERROR - live stream joined at position 0 which is earlier than last seen position 128",
+                persistentSubscription.failureReason().getMessage());
+        }
+    }
+
+    @Test
     @InterruptAfter(30)
     void shouldRecoverFromReplayChannelNetworkProblems() throws Exception
     {
