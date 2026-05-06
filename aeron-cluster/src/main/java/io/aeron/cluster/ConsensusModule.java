@@ -109,6 +109,7 @@ import static io.aeron.cluster.ConsensusModule.Configuration.CONSENSUS_MODULE_ER
 import static io.aeron.cluster.ConsensusModule.Configuration.CONSENSUS_MODULE_STATE_TYPE_ID;
 import static io.aeron.cluster.ConsensusModule.Configuration.CONTROL_TOGGLE_TYPE_ID;
 import static io.aeron.cluster.ConsensusModule.Configuration.ELECTION_STATE_TYPE_ID;
+import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.LIVENESS_TIMEOUT_MS;
 import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.MAX_SERVICE_COUNT;
 import static io.aeron.cluster.ConsensusModule.Configuration.SERVICE_ID;
 import static io.aeron.cluster.ConsensusModule.Configuration.SNAPSHOT_COUNTER_TYPE_ID;
@@ -1786,6 +1787,8 @@ public final class ConsensusModule implements AutoCloseable
             {
                 epochClock = SystemEpochClock.INSTANCE;
             }
+
+            ensureNoConflictingMarkFile(clusterDir, markFileDir, epochClock);
 
             if (null == appVersionValidator)
             {
@@ -4478,6 +4481,14 @@ public final class ConsensusModule implements AutoCloseable
         ConsensusModuleStateExport bootstrapState()
         {
             return bootstrapState;
+        }
+
+        private static void ensureNoConflictingMarkFile(
+            final File clusterDir, final File markFileDir, final EpochClock epochClock)
+        {
+            ClusterMarkFile.ensureNoConflictingMarkFile(
+                clusterDir, markFileDir, ClusterMarkFile.FILENAME, ClusterMarkFile.LINK_FILENAME,
+                epochClock, LIVENESS_TIMEOUT_MS);
         }
 
         private void concludeMarkFile()

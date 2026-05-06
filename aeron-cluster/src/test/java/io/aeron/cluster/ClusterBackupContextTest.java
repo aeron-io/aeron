@@ -18,6 +18,7 @@ package io.aeron.cluster;
 import io.aeron.Aeron;
 import io.aeron.CommonContext;
 import io.aeron.RethrowingErrorHandler;
+import io.aeron.exceptions.ConfigurationException;
 import io.aeron.cluster.service.ClusterMarkFile;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
@@ -48,6 +49,7 @@ import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.M
 import static io.aeron.logbuffer.LogBufferDescriptor.PAGE_MIN_SIZE;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.startsWith;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -256,5 +258,22 @@ class ClusterBackupContextTest
             assertTrue(file.exists());
             assertEquals(BitUtil.align(context.errorBufferLength() + HEADER_LENGTH, filePageSize), file.length());
         }
+    }
+
+    @Test
+    void shouldThrowConfigurationExceptionIfClusterInUseViaDifferentMarkFile(final @TempDir File tempDir)
+    {
+        final File markFileDir = new File(tempDir, "mark-file-dir");
+        assertFalse(markFileDir.exists());
+
+        final ClusterBackup.Context anotherContext = context.clone();
+
+        context.markFileDir(markFileDir);
+        context.conclude();
+
+        final ConfigurationException exception =
+            assertThrowsExactly(ConfigurationException.class, anotherContext::conclude);
+        assertThat(exception.getMessage(), containsString("cluster.dir="));
+        assertThat(exception.getMessage(), containsString("mark file dir="));
     }
 }
