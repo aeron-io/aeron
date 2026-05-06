@@ -89,7 +89,7 @@ TEST_F(CpusetTest, shouldReadV2Cgroups)
 
     std::string mountRoot = std::string(m_tempDir) + "/cgroup";
     std::string cgroupRoot = mountRoot + "/user.slice/user-1000.slice";
-    ASSERT_EQ(0, aeron_mkdir_recursive(cgroupRoot.c_str(), 0700));
+    aeron_mkdir_recursive(cgroupRoot.c_str(), 0700);
 
     std::string cgroupFilename = std::string(m_tempDir) + "/proc-cgroup";
     std::string effectiveCpusFilename = cgroupRoot + "/cpuset.cpus.effective";

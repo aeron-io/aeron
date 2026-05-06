@@ -513,9 +513,11 @@ int aeron_topology_check_l3_locality(const char* sys_cpu_root, const int *cpus, 
         return -1;
     }
 
+    int warnings = 0;
+
     if (cpu_count < 2)
     {
-        return 0;
+        return warnings;
     }
 
     uint8_t seen[AERON_TOPOLOGY_MAX_CPU_ID] = { 0 };
@@ -535,6 +537,8 @@ int aeron_topology_check_l3_locality(const char* sys_cpu_root, const int *cpus, 
             if (!seen[cpus[j]])
             {
                 fprintf(output, "%s", "WARNING: cpuset spans multiple L3 cache domains\n");
+                warnings++;
+                break;
             }
         }
     }
@@ -544,7 +548,7 @@ int aeron_topology_check_l3_locality(const char* sys_cpu_root, const int *cpus, 
     }
 
     aeron_free(peers);
-    return 0;
+    return warnings;
 }
 
 int aeron_topology_check_cluster_locality(const char* sys_cpu_root, const int *cpus, int cpu_count, FILE* output)

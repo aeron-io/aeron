@@ -46,7 +46,6 @@ protected:
     void SetUp() override
     {
         m_tempDir = mkdtemp(m_tempDirArray);
-        std::cout << "m_tempDir: " << m_tempDir << " " << m_tempDirArray << std::endl;
         m_output = open_memstream(&m_output_ptr, &m_output_size);
     }
 
@@ -57,6 +56,64 @@ protected:
         free(m_output_ptr);
     }
 
+    static void setupCgroupCpuset(
+        std::string &procSelfCgroupFilename,
+        std::string &cgroupMountRoot,
+        const char *cpuset)
+    {
+        std::string cgroupRoot = cgroupMountRoot + "/user.slice/user-1000.slice";
+        ASSERT_EQ(0, aeron_mkdir_recursive(cgroupRoot.c_str(), 0700));
+
+        std::string effectiveCpusFilename = cgroupMountRoot + "/user.slice/cpuset.cpus.effective";
+
+        std::ofstream cgroupFile(procSelfCgroupFilename.c_str(), std::ios::out);
+        cgroupFile << "0::/user.slice/user-1000.slice" << std::endl;
+        cgroupFile.close();
+
+        std::ofstream effectiveCgroupFile(effectiveCpusFilename.c_str(), std::ios::out);
+        effectiveCgroupFile << cpuset << std::endl;
+        effectiveCgroupFile.close();
+    }
+
+    static void setupSiblings(std::string &sysfsRoot, std::vector<std::pair<int, int>> &siblings)
+    {
+        for (int i = 0; i < static_cast<int>(siblings.size()); i++)
+        {
+            std::string cpuDirectory = sysfsRoot + "/cpu" + std::to_string(i) + "/topology";
+            std::string threadSiblingsList = cpuDirectory + "/thread_siblings_list";
+            aeron_mkdir_recursive(cpuDirectory.c_str(), 0700);
+            std::ofstream os(threadSiblingsList.c_str(), std::ios::out);
+            os << siblings[i].first << '-' << siblings[i].second << std::endl;
+            os.close();
+        }
+    }
+
+    static void setupL3Shared(std::string &sysfsRoot, std::vector<std::pair<int, int>> &l3Peers)
+    {
+        for (int i = 0; i < static_cast<int>(l3Peers.size()); i++)
+        {
+            std::string cpuDirectory = sysfsRoot + "/cpu" + std::to_string(i) + "/cache/index3";
+            std::string threadSiblingsList = cpuDirectory + "/shared_cpu_list";
+            aeron_mkdir_recursive(cpuDirectory.c_str(), 0700);
+            std::ofstream os(threadSiblingsList.c_str(), std::ios::out);
+            os << l3Peers[i].first << '-' << l3Peers[i].second << std::endl;
+            os.close();
+        }
+    }
+
+    static void setupClusterShared(std::string &sysfsRoot, std::vector<int> &clusters)
+    {
+        for (int i = 0; i < static_cast<int>(clusters.size()); i++)
+        {
+            std::string cpuDirectory = sysfsRoot + "/cpu" + std::to_string(i) + "/topology";
+            std::string threadSiblingsList = cpuDirectory + "/cluster_id";
+            aeron_mkdir_recursive(cpuDirectory.c_str(), 0700);
+            std::ofstream os(threadSiblingsList.c_str(), std::ios::out);
+            os << clusters[i] << std::endl;
+            os.close();
+        }
+    }
+
     char m_tempDirArray[19] = { "/tmp/cpuset_XXXXXX" };
     char *m_tempDir;
     FILE *m_output;
@@ -64,51 +121,106 @@ protected:
     size_t m_output_size;
 };
 
-TEST_F(TopologyTest, shouldReadV2Cgroups)
+TEST_F(TopologyTest, shouldCheckAlignment)
 {
 #ifndef __linux__
     GTEST_SKIP() << "CGroups only supported on Linux";
 #endif
 
+    ASSERT_NE(nullptr, m_output);
+
+    std::string mountRoot = std::string(m_tempDir) + "/cgroup";
+    std::string cgroupFilename = std::string(m_tempDir) + "/proc-cgroup";
+    std::string sysfsRoot = std::string(m_tempDir) + "/sysfs";
+    setupCgroupCpuset(cgroupFilename, mountRoot, "5-10");
+    std::vector<std::pair<int, int>> a = {
+        {0, 1}, {0, 1}, {2, 3}, {2, 3}, {4, 5}, {4, 5},
+        {6, 7}, {6, 7}, {8, 9}, {8, 9}, {10, 11}, {10, 11},
+        {12, 13}, {12, 13}, {14, 15}, {14, 15}
+    };
+    setupSiblings(sysfsRoot, a);
+
     int *cpus = nullptr;
     int cpu_count = 8;
 
-    aeron_cpuset_cgroup_read_v2(AERON_CPUSET_PROC_SELF_CGROUP, AERON_CPUSET_CGROUP_MOUNT_V2, &cpus, &cpu_count);
+    aeron_cpuset_cgroup_read_v2(cgroupFilename.c_str(), mountRoot.c_str(), &cpus, &cpu_count);
 
-    aeron_topology_core_t *topology = nullptr;
-    int core_count = 0;
-
-    ASSERT_NE(-1, aeron_topology_read(AERON_TOPOLOGY_SYS_CPU_PATH, cpus, cpu_count, &topology, &core_count))
-        << aeron_errmsg();
-
-    aeron_topology_check_alignment(AERON_TOPOLOGY_SYS_CPU_PATH, cpus, cpu_count, m_output);
-
-    printf("%s ", "cpus");
-    for (int i = 0; i < cpu_count; i++)
-    {
-        printf("%d ", cpus[i]);
-    }
-    printf("\n");
-
-    printf("%s ", "cores");
-    for (int i = 0; i < core_count; i++)
-    {
-        const int *core_cpus = topology[i].cpus;
-        const int core_cpu_count = topology[i].cpu_count;
-
-        for (int j = 0; j < core_cpu_count; j++)
-        {
-            printf("%d ", core_cpus[j]);
-        }
-        printf("\n");
-    }
-    printf("\n");
-
-    aeron_topology_check_l3_locality(AERON_TOPOLOGY_SYS_CPU_PATH, cpus, cpu_count, m_output);
-    aeron_topology_check_cluster_locality(AERON_TOPOLOGY_SYS_CPU_PATH, cpus, cpu_count, m_output);
-
+    const int warnings = aeron_topology_check_alignment(sysfsRoot.c_str(), cpus, cpu_count, m_output);
+    ASSERT_NE(-1, warnings) << aeron_errmsg();
+    EXPECT_EQ(2, warnings);
     fflush(m_output);
-    printf("%s", m_output_ptr);
+
+    ASSERT_NE(nullptr, m_output_ptr);
+    EXPECT_NE(nullptr, strstr(m_output_ptr, "cpuset is missing sibling CPU(s) 4"));
+    EXPECT_NE(nullptr, strstr(m_output_ptr, "cpuset is missing sibling CPU(s) 11"));
+
     aeron_free(cpus);
-    aeron_topology_cores_free(topology, core_count);
+}
+
+TEST_F(TopologyTest, shouldCheckL3Locality)
+{
+#ifndef __linux__
+    GTEST_SKIP() << "CGroups only supported on Linux";
+#endif
+
+    ASSERT_NE(nullptr, m_output);
+
+    std::string mountRoot = std::string(m_tempDir) + "/cgroup";
+    std::string cgroupFilename = std::string(m_tempDir) + "/proc-cgroup";
+    std::string sysfsRoot = std::string(m_tempDir) + "/sysfs";
+    setupCgroupCpuset(cgroupFilename, mountRoot, "5-10");
+    std::vector<std::pair<int, int>> a = {
+        {0, 7}, {0, 7}, {0, 7}, {0, 7}, {0, 7}, {0, 7}, {0, 7}, {0, 7},
+        {8, 15}, {8, 15}, {8, 15}, {8, 15}, {8, 15}, {8, 15}, {8, 15}, {8, 15}
+    };
+    setupL3Shared(sysfsRoot, a);
+
+    int *cpus = nullptr;
+    int cpu_count = 8;
+
+    aeron_cpuset_cgroup_read_v2(cgroupFilename.c_str(), mountRoot.c_str(), &cpus, &cpu_count);
+
+    const int warnings = aeron_topology_check_l3_locality(sysfsRoot.c_str(), cpus, cpu_count, m_output);
+    ASSERT_NE(-1, warnings) << aeron_errmsg();
+    EXPECT_EQ(1, warnings);
+    fflush(m_output);
+
+    ASSERT_NE(nullptr, m_output_ptr);
+    EXPECT_NE(nullptr, strstr(m_output_ptr, "cpuset spans multiple L3 cache domains"));
+
+    aeron_free(cpus);
+}
+
+TEST_F(TopologyTest, shouldCheckClusterLocality)
+{
+#ifndef __linux__
+    GTEST_SKIP() << "CGroups only supported on Linux";
+#endif
+
+    ASSERT_NE(nullptr, m_output);
+
+    std::string mountRoot = std::string(m_tempDir) + "/cgroup";
+    std::string cgroupFilename = std::string(m_tempDir) + "/proc-cgroup";
+    std::string sysfsRoot = std::string(m_tempDir) + "/sysfs";
+    setupCgroupCpuset(cgroupFilename, mountRoot, "5-10");
+    std::vector<int> a = {
+        65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535,
+        0, 0, 0, 0, 0, 0, 0, 0
+    };
+    setupClusterShared(sysfsRoot, a);
+
+    int *cpus = nullptr;
+    int cpu_count = 8;
+
+    aeron_cpuset_cgroup_read_v2(cgroupFilename.c_str(), mountRoot.c_str(), &cpus, &cpu_count);
+
+    const int warnings = aeron_topology_check_cluster_locality(sysfsRoot.c_str(), cpus, cpu_count, m_output);
+    ASSERT_NE(-1, warnings) << aeron_errmsg();
+    EXPECT_EQ(1, warnings);
+    fflush(m_output);
+
+    ASSERT_NE(nullptr, m_output_ptr);
+    EXPECT_NE(nullptr, strstr(m_output_ptr, "cpuset spans 2 CPU clusters"));
+
+    aeron_free(cpus);
 }
