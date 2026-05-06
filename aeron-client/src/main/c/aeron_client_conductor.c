@@ -1437,7 +1437,7 @@ static int aeron_client_conductor_check_registering_resources(aeron_client_condu
     {
         aeron_client_registering_resource_t *resource = conductor->registering_resources.array[index].resource;
         aeron_client_registration_status_t status;
-        AERON_GET_ACQUIRE(status, resource->registeration_status);
+        AERON_GET_ACQUIRE(status, resource->registration_status);
 
         if (AERON_CLIENT_REGISTRATION_STATUS_AWAITING == status && now_ns > resource->registration_deadline_ns)
         {
