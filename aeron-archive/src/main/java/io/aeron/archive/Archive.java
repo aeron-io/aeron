@@ -1244,6 +1244,11 @@ public final class Archive implements AutoCloseable
                 archiveDir = new File(archiveDirectoryName);
             }
 
+            if (null != markFile)
+            {
+                markFileDir = markFile.parentDirectory();
+            }
+
             if (null == markFileDir)
             {
                 final String markFileDirPath = Configuration.markFileDir();
@@ -1288,10 +1293,7 @@ public final class Archive implements AutoCloseable
                 epochClock = SystemEpochClock.INSTANCE;
             }
 
-            if (null == markFile)
-            {
-                ensureNoConflictingMarkFile(archiveDir, markFileDir, epochClock);
-            }
+            ensureNoConflictingMarkFile(archiveDir, markFileDir, epochClock);
 
             if (null == nanoClock)
             {

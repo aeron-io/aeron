@@ -558,7 +558,7 @@ public class ArchiveMarkFile implements AutoCloseable
 
     static boolean isActive(final File directory, final EpochClock epochClock)
     {
-        try (final ArchiveMarkFile archiveMarkFile = new ArchiveMarkFile(
+        try (ArchiveMarkFile archiveMarkFile = new ArchiveMarkFile(
             directory, FILENAME, epochClock, 0, (version) -> {}, null))
         {
             return epochClock.time() - archiveMarkFile.activityTimestampVolatile() <= LIVENESS_TIMEOUT_MS;

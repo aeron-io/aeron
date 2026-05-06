@@ -329,6 +329,26 @@ class ArchiveContextTest
     }
 
     @Test
+    void shouldThrowConfigurationExceptionIfInjectedMarkFileDoesNotBypassConflictDetection(
+        @TempDir final Path archiveDir,
+        @TempDir final Path markFileDir)
+    {
+        context.archiveDir(archiveDir.toFile()).conclude();
+
+        final Archive.Context markFileContext = TestContexts.localhostArchive();
+        init(markFileContext, markFileDir.toFile());
+        markFileContext.conclude();
+
+        final Archive.Context anotherContext = TestContexts.localhostArchive()
+            .archiveDir(archiveDir.toFile())
+            .archiveMarkFile(markFileContext.archiveMarkFile())
+            .aeron(context.aeron())
+            .errorHandler(context.errorHandler());
+
+        assertThrowsExactly(ConfigurationException.class, anotherContext::conclude);
+    }
+
+    @Test
     void shouldNotThrowIfLinkFileIsStale(@TempDir final Path tempDir) throws IOException
     {
         final Path archiveDir = tempDir.resolve("archive");
@@ -1070,7 +1090,7 @@ class ArchiveContextTest
         context.conclude();
 
         assertEquals(archiveDir.toFile().getCanonicalFile(), context.archiveDir());
-        assertEquals(markFileDir.toFile().getCanonicalFile(), context.markFileDir());
+        assertEquals(archiveMarkFileDir.toFile().getCanonicalFile(), context.markFileDir());
         assertSame(archiveMarkFile, context.archiveMarkFile());
         assertEquals(archiveMarkFileDir.toFile(), archiveMarkFile.parentDirectory());
         final Path linkFile = archiveDir.resolve(ArchiveMarkFile.LINK_FILENAME);
