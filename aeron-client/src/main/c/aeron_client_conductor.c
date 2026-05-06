@@ -1436,14 +1436,15 @@ static int aeron_client_conductor_check_registering_resources(aeron_client_condu
     for (size_t size = conductor->registering_resources.length, last_index = size - 1, i = size, index = i - 1; i > 0; i--, index--)
     {
         aeron_client_registering_resource_t *resource = conductor->registering_resources.array[index].resource;
+        aeron_client_registration_status_t status;
+        AERON_GET_ACQUIRE(status, resource->registeration_status);
 
-        if (AERON_CLIENT_REGISTRATION_STATUS_AWAITING == resource->registration_status &&
-            now_ns > resource->registration_deadline_ns)
+        if (AERON_CLIENT_REGISTRATION_STATUS_AWAITING == status && now_ns > resource->registration_deadline_ns)
         {
-            AERON_SET_RELEASE(resource->registration_status, AERON_CLIENT_REGISTRATION_STATUS_TIMED_OUT);
+            AERON_SET_RELEASE(status, AERON_CLIENT_REGISTRATION_STATUS_TIMED_OUT);
             work_count++;
         }
-        else if (AERON_CLIENT_REGISTRATION_STATUS_POLL_COMPLETED == resource->registration_status)
+        else if (AERON_CLIENT_REGISTRATION_STATUS_POLL_COMPLETED == status)
         {
             aeron_array_fast_unordered_remove(
                 (uint8_t*)conductor->registering_resources.array,
