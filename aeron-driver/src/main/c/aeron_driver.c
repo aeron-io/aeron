@@ -1071,7 +1071,7 @@ int aeron_driver_apply_cpuset_affinity(aeron_driver_context_t *context)
     }
 
 #ifndef __linux__
-    AERON_SET_ERR("%s", "Cpuset affinity is only supported on Linux");
+    AERON_SET_ERR(EPERM, "%s", "Cpuset affinity is only supported on Linux");
     return -1;
 #endif
 
