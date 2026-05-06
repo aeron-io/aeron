@@ -19,7 +19,6 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 
 #include "aeron_alloc.h"
 #include "util/aeron_error.h"
