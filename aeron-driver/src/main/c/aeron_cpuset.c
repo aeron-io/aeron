@@ -20,7 +20,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <asm-generic/errno-base.h>
 
 #include "aeron_alloc.h"
 #include "util/aeron_error.h"

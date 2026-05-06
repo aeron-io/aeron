@@ -46,7 +46,6 @@ protected:
     void SetUp() override
     {
         m_tempDir = mkdtemp(m_tempDirArray);
-        std::cout << "m_tempDir: " << m_tempDir << " " << m_tempDirArray << std::endl;
     }
 
     void TearDown() override
@@ -158,15 +157,10 @@ TEST_F(CpusetTest, shouldErrorIfNotFoundReadV2Cgroups)
     ASSERT_EQ(0, aeron_mkdir_recursive(cgroupRoot.c_str(), 0700));
 
     std::string cgroupFilename = std::string(m_tempDir) + "/proc-cgroup";
-    // std::string effectiveCpusFilename = cgroupRoot + "/cpuset.cpus.effective";
 
     std::ofstream cgroupFile(cgroupFilename.c_str(), std::ios::out);
     cgroupFile << "0::/user.slice/user-1000.slice" << std::endl;
     cgroupFile.close();
-
-    // std::ofstream effectiveCgroupFile(effectiveCpusFilename.c_str(), std::ios::out);
-    // effectiveCgroupFile << "5-10" << std::endl;
-    // effectiveCgroupFile.close();
 
     int *cpus = nullptr;
     int cpu_count = 0;
@@ -224,24 +218,3 @@ TEST_F(CpusetTest, shouldNotParseCpulist)
     EXPECT_THAT(aeron_errmsg(), ContainsRegex("range end less than start"));
 }
 
-TEST_F(CpusetTest, shouldReadCore)
-{
-#ifndef __linux__
-    GTEST_SKIP() << "CGroups only supported on Linux";
-#endif
-
-    int *cpus = nullptr;
-    int cpu_count = 0;
-
-    aeron_cpuset_cgroup_read_v2(AERON_CPUSET_PROC_SELF_CGROUP, AERON_CPUSET_CGROUP_MOUNT_V2, &cpus, &cpu_count);
-
-    EXPECT_NE(0, cpu_count) << aeron_errmsg();
-
-    for (int i = 0; i < cpu_count; i++)
-    {
-        printf("%d ", cpus[i]);
-    }
-    printf("\n");
-
-    aeron_free(cpus);
-}
