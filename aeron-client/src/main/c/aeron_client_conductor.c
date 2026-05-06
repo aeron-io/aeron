@@ -1441,7 +1441,7 @@ static int aeron_client_conductor_check_registering_resources(aeron_client_condu
 
         if (AERON_CLIENT_REGISTRATION_STATUS_AWAITING == status && now_ns > resource->registration_deadline_ns)
         {
-            AERON_SET_RELEASE(status, AERON_CLIENT_REGISTRATION_STATUS_TIMED_OUT);
+            AERON_SET_RELEASE(resource->registration_status, AERON_CLIENT_REGISTRATION_STATUS_TIMED_OUT);
             work_count++;
         }
         else if (AERON_CLIENT_REGISTRATION_STATUS_POLL_COMPLETED == status)
