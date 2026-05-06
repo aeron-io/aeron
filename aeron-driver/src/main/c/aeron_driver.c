@@ -1085,21 +1085,24 @@ int aeron_driver_apply_cpuset_affinity(aeron_driver_context_t *context)
     }
 
     int alignment_warnings_count;
-    if ((alignment_warnings_count = aeron_topology_check_alignment(AERON_TOPOLOGY_SYS_CPU_PATH, cpus, cpu_count,stdout)) < 0)
+    if ((alignment_warnings_count = aeron_topology_check_alignment(
+        AERON_TOPOLOGY_SYS_CPU_PATH, cpus, cpu_count, stderr)) < 0)
     {
         AERON_APPEND_ERR("%s", "failed to check cpu alignment");
         goto error;
     }
 
     int cluster_locality_warnings_count;
-    if ((cluster_locality_warnings_count = aeron_topology_check_cluster_locality(AERON_TOPOLOGY_SYS_CPU_PATH, cpus, cpu_count, stdout)) < 0)
+    if ((cluster_locality_warnings_count = aeron_topology_check_cluster_locality(
+        AERON_TOPOLOGY_SYS_CPU_PATH, cpus, cpu_count, stderr)) < 0)
     {
         AERON_APPEND_ERR("%s", "failed to check cpu cluster locality");
         goto error;
     }
 
     int l3_locality_warnings_count;
-    if ((l3_locality_warnings_count = aeron_topology_check_l3_locality(AERON_TOPOLOGY_SYS_CPU_PATH, cpus, cpu_count,stdout)) < 0)
+    if ((l3_locality_warnings_count = aeron_topology_check_l3_locality(
+        AERON_TOPOLOGY_SYS_CPU_PATH, cpus, cpu_count, stderr)) < 0)
     {
         AERON_APPEND_ERR("%s", "failed to check cpu l3 cache locality");
         goto error;
@@ -1123,8 +1126,8 @@ int aeron_driver_apply_cpuset_affinity(aeron_driver_context_t *context)
     aeron_free(cpus);
     return 0;
 
-    error:
-        aeron_free(cpus);
+error:
+    aeron_free(cpus);
     return -1;
 }
 
