@@ -488,7 +488,9 @@ int aeron_network_publication_setup_message_check(
 
         publication->time_of_last_setup_ns = now_ns;
 
-        if (publication->has_receivers)
+        bool has_receivers;
+        AERON_GET_ACQUIRE(has_receivers, publication->has_receivers);
+        if (has_receivers)
         {
             publication->is_setup_elicited = false;
         }
@@ -666,7 +668,10 @@ int aeron_network_publication_send(aeron_network_publication_t *publication, int
         bool has_spies;
         AERON_GET_ACQUIRE(has_spies, publication->has_spies);
 
-        if (publication->spies_simulate_connection && has_spies && !publication->has_receivers)
+        bool has_receivers;
+        AERON_GET_ACQUIRE(has_receivers, publication->has_receivers);
+
+        if (publication->spies_simulate_connection && has_spies && !has_receivers)
         {
             const int64_t new_snd_pos = aeron_network_publication_max_spy_position(publication, snd_pos);
             aeron_counter_set_release(publication->snd_pos_position.value_addr, new_snd_pos);
