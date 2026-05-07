@@ -48,7 +48,7 @@ static const std::string IPC_CHANNEL = "aeron:ipc";
 static const std::string MDC_PUBLICATION_CHANNEL = "aeron:udp?control=localhost:2000|control-mode=dynamic|fc=max";
 static const std::string MDC_SUBSCRIPTION_CHANNEL = "aeron:udp?control=localhost:2000";
 static const std::string UNICAST_CHANNEL = "aeron:udp?endpoint=localhost:2000";
-static const std::string MULTICAST_CHANNEL = "aeron:udp?endpoint=224.20.30.39:40456|interface=localhost";
+static const std::string MULTICAST_CHANNEL = "aeron:udp?endpoint=224.20.30.39:14456|interface=localhost";
 static const std::string LOCALHOST_CONTROL_REQUEST_CHANNEL = "aeron:udp?endpoint=localhost:8010";
 static const std::string LOCALHOST_CONTROL_RESPONSE_CHANNEL = "aeron:udp?endpoint=localhost:0";
 static const int32_t STREAM_ID = 1000;

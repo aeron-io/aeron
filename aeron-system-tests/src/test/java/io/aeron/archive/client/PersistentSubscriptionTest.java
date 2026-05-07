@@ -130,7 +130,7 @@ abstract class PersistentSubscriptionTest
     private static final String MDC_PUBLICATION_CHANNEL =
         "aeron:udp?control=localhost:2000|control-mode=dynamic|fc=max";
     private static final String UNICAST_CHANNEL = "aeron:udp?endpoint=localhost:2000";
-    private static final String MULTICAST_CHANNEL = "aeron:udp?endpoint=224.20.30.39:40456|interface=localhost";
+    private static final String MULTICAST_CHANNEL = "aeron:udp?endpoint=224.20.30.39:14456|interface=localhost";
 
     @RegisterExtension
     final SystemTestWatcher systemTestWatcher = new SystemTestWatcher();
