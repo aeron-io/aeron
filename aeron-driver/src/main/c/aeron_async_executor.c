@@ -48,6 +48,22 @@ static aeron_async_executor_task_t *aeron_async_executor_task_allocate(
 void aeron_async_executor_on_start(void *state, const char *role_name)
 {
     aeron_async_executor_t *executor = (aeron_async_executor_t *)state;
+
+    if (0 <= executor->cpu_affinity_no && aeron_thread_set_affinity(role_name, (uint8_t)executor->cpu_affinity_no) < 0)
+    {
+        AERON_APPEND_ERR("%s", "WARNING: unable to apply affinity");
+        // Just in case the error log is not initialised, but it should be by this point.
+        if (NULL != executor->error_log)
+        {
+            aeron_distinct_error_log_record(executor->error_log, aeron_errcode(), aeron_errmsg());
+        }
+        else
+        {
+            fprintf(stderr, "%s", aeron_errmsg());
+        }
+        aeron_err_clear();
+    }
+
     if (NULL != executor->name_resolver &&
         executor->name_resolver->start_func(executor->name_resolver) < 0)
     {
@@ -135,6 +151,8 @@ int aeron_async_executor_init(
     executor->runner.on_close = NULL;
 
     executor->name_resolver = name_resolver;
+    executor->cpu_affinity_no = context->async_cpu_affinity_no;
+    executor->error_log = context->error_log;
 
     if (context->async_executor_enabled)
     {

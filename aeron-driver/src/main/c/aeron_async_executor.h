@@ -33,6 +33,8 @@ typedef struct aeron_async_executor_stct
     aeron_blocking_linked_queue_t return_queue;
     aeron_agent_runner_t runner;
     aeron_name_resolver_t *name_resolver;
+    int32_t cpu_affinity_no;
+    aeron_distinct_error_log_t *error_log;
 }
 aeron_async_executor_t;
 

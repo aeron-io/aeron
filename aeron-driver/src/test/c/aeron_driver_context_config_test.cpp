@@ -319,18 +319,21 @@ TEST_F(DriverContextConfigTest, shouldApplyCpusetAffinity)
     aeron_env_set(AERON_CONDUCTOR_CPU_AFFINITY_ENV_VAR, "1");
     aeron_env_set(AERON_SENDER_CPU_AFFINITY_ENV_VAR, "2");
     aeron_env_set(AERON_RECEIVER_CPU_AFFINITY_ENV_VAR, "3");
+    aeron_env_set(AERON_ASYNC_CPU_AFFINITY_ENV_VAR, "4");
 
     EXPECT_EQ(0, aeron_driver_context_init(&context)) << aeron_errmsg();
     EXPECT_EQ(1, aeron_driver_context_get_conductor_cpu_affinity(context));
     EXPECT_EQ(2, aeron_driver_context_get_sender_cpu_affinity(context));
     EXPECT_EQ(3, aeron_driver_context_get_receiver_cpu_affinity(context));
+    EXPECT_EQ(4, aeron_driver_context_get_async_cpu_affinity(context));
 
-    int cpus[4] = { 9, 11, 13, 17 };
-    EXPECT_EQ(0, aeron_driver_context_apply_cpuset_affinity(context, cpus, 4)) << aeron_errmsg();
+    int cpus[5] = { 9, 11, 13, 17, 19 };
+    EXPECT_EQ(0, aeron_driver_context_apply_cpuset_affinity(context, cpus, 5)) << aeron_errmsg();
 
     EXPECT_EQ(11, aeron_driver_context_get_conductor_cpu_affinity(context));
     EXPECT_EQ(13, aeron_driver_context_get_sender_cpu_affinity(context));
     EXPECT_EQ(17, aeron_driver_context_get_receiver_cpu_affinity(context));
+    EXPECT_EQ(19, aeron_driver_context_get_async_cpu_affinity(context));
 
     aeron_driver_context_close(context);
 }
@@ -345,18 +348,28 @@ TEST_F(DriverContextConfigTest, shouldErrorWithInvalidCpusetAffinity)
     aeron_driver_context_set_conductor_cpu_affinity(context, 5);
     aeron_driver_context_set_sender_cpu_affinity(context, 2);
     aeron_driver_context_set_receiver_cpu_affinity(context, 3);
+    aeron_driver_context_set_async_cpu_affinity(context, 1);
 
     EXPECT_EQ(-1, aeron_driver_context_apply_cpuset_affinity(context, cpus, 4)) << aeron_errmsg();
 
     aeron_driver_context_set_conductor_cpu_affinity(context, 1);
     aeron_driver_context_set_sender_cpu_affinity(context, 5);
     aeron_driver_context_set_receiver_cpu_affinity(context, 3);
+    aeron_driver_context_set_async_cpu_affinity(context, 2);
 
     EXPECT_EQ(-1, aeron_driver_context_apply_cpuset_affinity(context, cpus, 4)) << aeron_errmsg();
 
     aeron_driver_context_set_conductor_cpu_affinity(context, 1);
     aeron_driver_context_set_sender_cpu_affinity(context, 2);
     aeron_driver_context_set_receiver_cpu_affinity(context, 5);
+    aeron_driver_context_set_async_cpu_affinity(context, 3);
+
+    EXPECT_EQ(-1, aeron_driver_context_apply_cpuset_affinity(context, cpus, 4)) << aeron_errmsg();
+
+    aeron_driver_context_set_conductor_cpu_affinity(context, 1);
+    aeron_driver_context_set_sender_cpu_affinity(context, 2);
+    aeron_driver_context_set_receiver_cpu_affinity(context, 3);
+    aeron_driver_context_set_async_cpu_affinity(context, 5);
 
     EXPECT_EQ(-1, aeron_driver_context_apply_cpuset_affinity(context, cpus, 4)) << aeron_errmsg();
 
@@ -373,15 +386,18 @@ TEST_F(DriverContextConfigTest, shouldNotChangeAffinityWhenUnset)
     aeron_driver_context_set_conductor_cpu_affinity(context, -1);
     aeron_driver_context_set_sender_cpu_affinity(context, -1);
     aeron_driver_context_set_receiver_cpu_affinity(context, -1);
+    aeron_driver_context_set_async_cpu_affinity(context, -1);
     EXPECT_EQ(-1, aeron_driver_context_get_conductor_cpu_affinity(context));
     EXPECT_EQ(-1, aeron_driver_context_get_sender_cpu_affinity(context));
     EXPECT_EQ(-1, aeron_driver_context_get_receiver_cpu_affinity(context));
+    EXPECT_EQ(-1, aeron_driver_context_get_async_cpu_affinity(context));
 
     EXPECT_EQ(0, aeron_driver_context_apply_cpuset_affinity(context, cpus, 4)) << aeron_errmsg();
 
     EXPECT_EQ(-1, aeron_driver_context_get_conductor_cpu_affinity(context));
     EXPECT_EQ(-1, aeron_driver_context_get_sender_cpu_affinity(context));
     EXPECT_EQ(-1, aeron_driver_context_get_receiver_cpu_affinity(context));
+    EXPECT_EQ(-1, aeron_driver_context_get_async_cpu_affinity(context));
 
     aeron_driver_context_close(context);
 }
