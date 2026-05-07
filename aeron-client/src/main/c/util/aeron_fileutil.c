@@ -325,7 +325,7 @@ const char *aeron_realpath(const char *path, char *resolved_path, const size_t r
 
 const char *aeron_tmpdir(char path, size_t path_len)
 {
-    const int result = GetTempPath2(path, path_len);
+    const int result = GetTempPath2(path_len, path);
     if (0 < result && result < path_len)
     {
         path[result] = '\0';
