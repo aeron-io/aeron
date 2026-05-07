@@ -143,7 +143,8 @@ TEST_F(TopologyTest, shouldCheckAlignment)
     int *cpus = nullptr;
     int cpu_count = 8;
 
-    aeron_cpuset_cgroup_read_v2(cgroupFilename.c_str(), mountRoot.c_str(), &cpus, &cpu_count);
+    ASSERT_NE(-1, aeron_cpuset_cgroup_read_v2(cgroupFilename.c_str(), mountRoot.c_str(), &cpus, &cpu_count))
+        << aeron_errmsg();
 
     const int warnings = aeron_topology_check_alignment(sysfsRoot.c_str(), cpus, cpu_count, m_output);
     ASSERT_NE(-1, warnings) << aeron_errmsg();
@@ -178,7 +179,8 @@ TEST_F(TopologyTest, shouldCheckL3Locality)
     int *cpus = nullptr;
     int cpu_count = 8;
 
-    aeron_cpuset_cgroup_read_v2(cgroupFilename.c_str(), mountRoot.c_str(), &cpus, &cpu_count);
+    ASSERT_NE(-1, aeron_cpuset_cgroup_read_v2(cgroupFilename.c_str(), mountRoot.c_str(), &cpus, &cpu_count))
+        << aeron_errmsg();
 
     const int warnings = aeron_topology_check_l3_locality(sysfsRoot.c_str(), cpus, cpu_count, m_output);
     ASSERT_NE(-1, warnings) << aeron_errmsg();
@@ -212,7 +214,8 @@ TEST_F(TopologyTest, shouldCheckClusterLocality)
     int *cpus = nullptr;
     int cpu_count = 8;
 
-    aeron_cpuset_cgroup_read_v2(cgroupFilename.c_str(), mountRoot.c_str(), &cpus, &cpu_count);
+    ASSERT_NE(-1, aeron_cpuset_cgroup_read_v2(cgroupFilename.c_str(), mountRoot.c_str(), &cpus, &cpu_count))
+        << aeron_errmsg();
 
     const int warnings = aeron_topology_check_cluster_locality(sysfsRoot.c_str(), cpus, cpu_count, m_output);
     ASSERT_NE(-1, warnings) << aeron_errmsg();

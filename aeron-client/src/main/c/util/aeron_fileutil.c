@@ -318,6 +318,35 @@ int aeron_delete_file(const char *dir)
     return aeron_delete_path(dir, FOF_NORECURSION | FOF_FILESONLY | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT);
 }
 
+const char *aeron_realpath(const char *path, char *resolved_path, const size_t resolved_path_len)
+{
+    return _fullpath(resolved_path, path, resolved_path_len);
+}
+
+const char *aeron_tmpdir(char path, size_t path_len)
+{
+    const int result = GetTempPath2(path, path_len);
+    if (0 < result && result < path_len)
+    {
+        path[result] = '\0';
+        return path;
+    }
+
+    return NULL;
+}
+
+bool aeron_file_exists(const char* path)
+{
+    const int result = _access_s(path, F_OK);
+    if (0 == result)
+    {
+        return true;
+    }
+
+    errno = 0;
+    return false;
+}
+
 #else
 #include <unistd.h>
 #include <sys/mman.h>
@@ -376,6 +405,29 @@ int aeron_delete_file(const char *path)
 {
     return remove(path);
 }
+
+const char *aeron_realpath(const char *path, char *resolved_path, const size_t resolved_path_len)
+{
+    return realpath(path, resolved_path);
+}
+
+const char *aeron_tmpdir(char *path, size_t path_len)
+{
+    return P_tmpdir;
+}
+
+bool aeron_file_exists(const char* path)
+{
+    const int result = access(path, F_OK);
+    if (0 == result)
+    {
+        return true;
+    }
+
+    errno = 0;
+    return false;
+}
+
 
 static int unlink_func(const char *path, const struct stat *sb, int type_flag, struct FTW *ftw)
 {

@@ -482,7 +482,11 @@ int aeron_topology_check_alignment(const char* sys_cpu_root, const int *cpus, co
         return 0;
     }
 
-    aeron_topology_read_core_groups(sys_cpu_root, cpus, cpu_count, &groups, &group_count); // best-effort
+    if (-1 == aeron_topology_read_core_groups(sys_cpu_root, cpus, cpu_count, &groups, &group_count))
+    {
+        AERON_APPEND_ERR("%s", "");
+        return -1;
+    }
 
     for (int i = 0; i < group_count; i++)
     {

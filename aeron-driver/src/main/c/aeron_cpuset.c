@@ -22,6 +22,7 @@
 
 #include "aeron_alloc.h"
 #include "util/aeron_error.h"
+#include "util/aeron_fileutil.h"
 
 #define AERON_CGROUP_SYS_FILE_LENGTH_MAX (4096)
 
@@ -154,6 +155,29 @@ static int aeron_cpuset_cmp_int(const void *a, const void *b)
     const int _b = *(int *)b;
 
     return _a - _b;
+}
+
+static int aeron_cpuset_validate_path_root(const char *path)
+{
+    char resolved_path[AERON_MAX_FILE_PATH_LENGTH];
+    char tmp_path[AERON_MAX_FILE_PATH_LENGTH];
+
+    const char *realpath = aeron_realpath(path, resolved_path, sizeof(resolved_path));
+    if (NULL == realpath)
+    {
+        AERON_SET_ERR(errno, "unable to resolve path for %s", path);
+        return -1;
+    }
+
+    const char *tmpdir = aeron_tmpdir(tmp_path, sizeof(tmp_path));
+    if (0 != strncmp("/sys/", realpath, strlen("/sys/")) &&
+        (NULL == tmpdir || 0 != strncmp(tmpdir, realpath, strlen(tmpdir))))
+    {
+        AERON_SET_ERR(EINVAL, "file %s is from an invalid location", path);
+        return -1;
+    }
+
+    return 0;
 }
 
 int aeron_cpuset_parse_cpulist(const char *cpulist_data, int **cpus, int *cpu_count)
@@ -331,7 +355,7 @@ int aeron_cpuset_cgroup_read_v2(const char *proc_cgroup_file, const char *mount_
         return -1;
     }
 
-    char absolute_cgroup_path[4096];
+    char absolute_cgroup_path[AERON_MAX_FILE_PATH_LENGTH];
     do
     {
         const int written = snprintf(
@@ -343,8 +367,20 @@ int aeron_cpuset_cgroup_read_v2(const char *proc_cgroup_file, const char *mount_
             goto error;
         }
 
-        if (0 <= aeron_cpuset_parse_cpulist_from_file(absolute_cgroup_path, cpus, cpu_count))
+        if (aeron_file_exists(absolute_cgroup_path))
         {
+            if (aeron_cpuset_validate_path_root(absolute_cgroup_path) < 0)
+            {
+                AERON_APPEND_ERR("%s", "");
+                goto error;
+            }
+
+            if (aeron_cpuset_parse_cpulist_from_file(absolute_cgroup_path, cpus, cpu_count) < 0)
+            {
+                AERON_APPEND_ERR("%s", "");
+                goto error;
+            }
+
             break;
         }
 
