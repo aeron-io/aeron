@@ -157,12 +157,11 @@ static int aeron_cpuset_cmp_int(const void *a, const void *b)
     return _a - _b;
 }
 
-static int aeron_cpuset_validate_path_root(const char *path)
+static int aeron_cpuset_validate_path_root(const char *path, char *validated_path, size_t validated_path_len)
 {
-    char resolved_path[AERON_MAX_FILE_PATH_LENGTH];
     char tmp_path[AERON_MAX_FILE_PATH_LENGTH];
 
-    const char *realpath = aeron_realpath(path, resolved_path, sizeof(resolved_path));
+    const char *realpath = aeron_realpath(path, validated_path, validated_path_len);
     if (NULL == realpath)
     {
         AERON_SET_ERR(errno, "unable to resolve path for %s", path);
@@ -369,13 +368,14 @@ int aeron_cpuset_cgroup_read_v2(const char *proc_cgroup_file, const char *mount_
 
         if (aeron_file_exists(absolute_cgroup_path))
         {
-            if (aeron_cpuset_validate_path_root(absolute_cgroup_path) < 0)
+            char validated_path[AERON_MAX_FILE_PATH_LENGTH];
+            if (aeron_cpuset_validate_path_root(absolute_cgroup_path, validated_path, sizeof(validated_path)) < 0)
             {
                 AERON_APPEND_ERR("%s", "");
                 goto error;
             }
 
-            if (aeron_cpuset_parse_cpulist_from_file(absolute_cgroup_path, cpus, cpu_count) < 0)
+            if (aeron_cpuset_parse_cpulist_from_file(validated_path, cpus, cpu_count) < 0)
             {
                 AERON_APPEND_ERR("%s", "");
                 goto error;
