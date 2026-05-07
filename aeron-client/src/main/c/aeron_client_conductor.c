@@ -2746,10 +2746,10 @@ void aeron_client_conductor_on_close(aeron_client_conductor_t *conductor)
     /* Free any remove_resource cmds still in the command queue. Every queued remove cmd is
      * an inline message. The drain runs after resource teardown so on_complete fires after the resource is gone,
      * matching the ordering in aeron_client_conductor_on_cmd_remove_resource. */
-    while (0 != aeron_mpsc_rb_read(
-        conductor->command_rb, aeron_client_conductor_drain_pending_cmd_on_close, conductor, SIZE_MAX))
+    while (0 < aeron_mpsc_rb_size(conductor->command_rb))
     {
-        // loop.
+        aeron_mpsc_rb_read(
+            conductor->command_rb, aeron_client_conductor_drain_pending_cmd_on_close, conductor, SIZE_MAX);
     }
 
     aeron_int64_to_ptr_hash_map_for_each(
