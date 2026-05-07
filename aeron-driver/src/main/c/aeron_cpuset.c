@@ -138,8 +138,6 @@ static const char *aeron_cpuset_find_cgroup_path(const char *proc_cgroup_file)
     return return_path;
 }
 
-
-
 typedef enum aeron_cpuset_cpulist_parse_state_en
 {
     AERON_CPUSET_CPULIST_PARSE_STATE_ID,
@@ -177,6 +175,26 @@ static int aeron_cpuset_validate_path_root(const char *path, char *validated_pat
     }
 
     return 0;
+}
+
+static int aeron_cpuset_uniq(int *array, const int array_count)
+{
+    if (array_count <= 1)
+    {
+        return array_count;
+    }
+
+    int write = 1;
+    for (int read = 1; read < array_count; read++)
+    {
+        if (array[read] != array[write - 1])
+        {
+            array[write] = array[read];
+            write++;
+        }
+    }
+
+    return write;
 }
 
 int aeron_cpuset_parse_cpulist(const char *cpulist_data, int **cpus, int *cpu_count)
@@ -294,22 +312,7 @@ int aeron_cpuset_parse_cpulist(const char *cpulist_data, int **cpus, int *cpu_co
     }
 
     qsort(_cpus, _cpu_count, sizeof(int), aeron_cpuset_cmp_int);
-
-    for (int i = 0; i < _cpu_count; i++)
-    {
-        for (int j = i + 1; j < _cpu_count; j++)
-        {
-            if (_cpus[i] == _cpus[j])
-            {
-                for (int k = j; k < _cpu_count - 1; k++)
-                {
-                    _cpus[k] = _cpus[k + 1];
-                }
-                _cpu_count--;
-                j--;
-            }
-        }
-    }
+    _cpu_count = aeron_cpuset_uniq(_cpus, _cpu_count);
 
     if (aeron_reallocf((void **)&_cpus, sizeof(int) * _cpu_count) < 0)
     {
