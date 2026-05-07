@@ -323,9 +323,9 @@ const char *aeron_realpath(const char *path, char *resolved_path, const size_t r
     return _fullpath(resolved_path, path, resolved_path_len);
 }
 
-const char *aeron_tmpdir(char path, size_t path_len)
+const char *aeron_tmpdir(char *path, size_t path_len)
 {
-    const int result = GetTempPath2(path_len, path);
+    const int result = GetTempPath(path_len, path);
     if (0 < result && result < path_len)
     {
         path[result] = '\0';
@@ -337,7 +337,7 @@ const char *aeron_tmpdir(char path, size_t path_len)
 
 bool aeron_file_exists(const char* path)
 {
-    const int result = _access_s(path, F_OK);
+    const int result = _access_s(path, 0);
     if (0 == result)
     {
         return true;
