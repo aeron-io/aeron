@@ -358,7 +358,9 @@ static int aeron_client_conductor_on_error(aeron_client_conductor_t *conductor, 
     for (size_t i = 0, size = conductor->registering_resources.length; i <  size; i++)
     {
         aeron_client_registering_resource_t *resource = conductor->registering_resources.array[i].resource;
-        if (AERON_CLIENT_REGISTRATION_STATUS_AWAITING == resource->registration_status &&
+        aeron_client_registration_status_t status;
+        AERON_GET_ACQUIRE(status, resource->registration_status);
+        if (AERON_CLIENT_REGISTRATION_STATUS_AWAITING == status &&
             response->offending_command_correlation_id == resource->registration_id)
         {
             aeron_client_conductor_on_resource_registration_error(
@@ -441,7 +443,9 @@ static int aeron_client_conductor_on_publication_ready(
     for (size_t i = 0, size = conductor->registering_resources.length, last_index = size - 1; i < size; i++)
     {
         aeron_client_registering_resource_t *resource = conductor->registering_resources.array[i].resource;
-        if (AERON_CLIENT_REGISTRATION_STATUS_AWAITING == resource->registration_status &&
+        aeron_client_registration_status_t status;
+        AERON_GET_ACQUIRE(status, resource->registration_status);
+        if (AERON_CLIENT_REGISTRATION_STATUS_AWAITING == status &&
             response->correlation_id == resource->registration_id)
         {
             char log_file[AERON_MAX_PATH];
@@ -606,7 +610,9 @@ static int aeron_client_conductor_on_subscription_ready(
     for (size_t i = 0, size = conductor->registering_resources.length, last_index = size - 1; i < size; i++)
     {
         aeron_client_registering_resource_t *resource = conductor->registering_resources.array[i].resource;
-        if (AERON_CLIENT_REGISTRATION_STATUS_AWAITING == resource->registration_status &&
+        aeron_client_registration_status_t status;
+        AERON_GET_ACQUIRE(status, resource->registration_status);
+        if (AERON_CLIENT_REGISTRATION_STATUS_AWAITING == status &&
             response->correlation_id == resource->registration_id)
         {
             const char *channel = resource->uri;
@@ -846,7 +852,9 @@ static int aeron_client_conductor_on_counter_ready(aeron_client_conductor_t *con
     for (size_t i = 0, size = conductor->registering_resources.length; i <  size; i++)
     {
         aeron_client_registering_resource_t *resource = conductor->registering_resources.array[i].resource;
-        if (AERON_CLIENT_REGISTRATION_STATUS_AWAITING == resource->registration_status &&
+        aeron_client_registration_status_t status;
+        AERON_GET_ACQUIRE(status, resource->registration_status);
+        if (AERON_CLIENT_REGISTRATION_STATUS_AWAITING == status &&
             response->correlation_id == resource->registration_id)
         {
             aeron_counter_t *counter;
@@ -903,7 +911,9 @@ static int aeron_client_conductor_on_static_counter(aeron_client_conductor_t *co
     for (size_t i = 0, size = conductor->registering_resources.length; i < size; i++)
     {
         aeron_client_registering_resource_t *resource = conductor->registering_resources.array[i].resource;
-        if (AERON_CLIENT_REGISTRATION_STATUS_AWAITING == resource->registration_status &&
+        aeron_client_registration_status_t status;
+        AERON_GET_ACQUIRE(status, resource->registration_status);
+        if (AERON_CLIENT_REGISTRATION_STATUS_AWAITING == status &&
             response->correlation_id == resource->registration_id)
         {
             aeron_counter_t *counter;
@@ -949,7 +959,9 @@ static int aeron_client_conductor_on_next_available_session_id(
     for (size_t i = 0, size = conductor->registering_resources.length; i < size; i++)
     {
         aeron_client_registering_resource_t *resource = conductor->registering_resources.array[i].resource;
-        if (AERON_CLIENT_REGISTRATION_STATUS_AWAITING == resource->registration_status &&
+        aeron_client_registration_status_t status;
+        AERON_GET_ACQUIRE(status, resource->registration_status);
+        if (AERON_CLIENT_REGISTRATION_STATUS_AWAITING == status &&
             response->correlation_id == resource->registration_id)
         {
             resource->resource.next_session_id = response->next_session_id;
@@ -967,7 +979,9 @@ static int aeron_client_conductor_on_operation_success(
     for (size_t i = 0, size = conductor->registering_resources.length; i < size; i++)
     {
         aeron_client_registering_resource_t *resource = conductor->registering_resources.array[i].resource;
-        if (AERON_CLIENT_REGISTRATION_STATUS_AWAITING == resource->registration_status &&
+        aeron_client_registration_status_t status;
+        AERON_GET_ACQUIRE(status, resource->registration_status);
+        if (AERON_CLIENT_REGISTRATION_STATUS_AWAITING == status &&
             response->correlation_id == resource->registration_id)
         {
             AERON_SET_RELEASE(resource->registration_status, AERON_CLIENT_REGISTRATION_STATUS_REGISTERED);
@@ -1436,14 +1450,15 @@ static int aeron_client_conductor_check_registering_resources(aeron_client_condu
     for (size_t size = conductor->registering_resources.length, last_index = size - 1, i = size, index = i - 1; i > 0; i--, index--)
     {
         aeron_client_registering_resource_t *resource = conductor->registering_resources.array[index].resource;
+        aeron_client_registration_status_t status;
+        AERON_GET_ACQUIRE(status, resource->registration_status);
 
-        if (AERON_CLIENT_REGISTRATION_STATUS_AWAITING == resource->registration_status &&
-            now_ns > resource->registration_deadline_ns)
+        if (AERON_CLIENT_REGISTRATION_STATUS_AWAITING == status && now_ns > resource->registration_deadline_ns)
         {
             AERON_SET_RELEASE(resource->registration_status, AERON_CLIENT_REGISTRATION_STATUS_TIMED_OUT);
             work_count++;
         }
-        else if (AERON_CLIENT_REGISTRATION_STATUS_POLL_COMPLETED == resource->registration_status)
+        else if (AERON_CLIENT_REGISTRATION_STATUS_POLL_COMPLETED == status)
         {
             aeron_array_fast_unordered_remove(
                 (uint8_t*)conductor->registering_resources.array,
