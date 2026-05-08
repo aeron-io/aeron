@@ -17,6 +17,7 @@
 #include <functional>
 #include <cmath>
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 
 #include "EmbeddedMediaDriver.h"
 
@@ -208,6 +209,7 @@ TEST_F(TerminateTest, shouldFailIfTokenIsLargerThanRingBufferMaxMessageSize)
 
     EXPECT_EQ(-1, aeron_context_request_driver_termination(m_driver.directory(), (uint8_t *)TERMINATION_KEY, 100));
     EXPECT_EQ(EINVAL, aeron_errcode());
+    EXPECT_THAT(aeron_errmsg(), ::testing::HasSubstr("Token length (100) > max message length (0)"));
 
     aeron_unmap(&mapped_file);
 }

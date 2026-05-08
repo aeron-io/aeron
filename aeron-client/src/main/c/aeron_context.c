@@ -642,7 +642,7 @@ int aeron_context_request_driver_termination(const char *directory, const uint8_
             {
                 AERON_SET_ERR(
                     EINVAL,
-                    "%s", "Token length (%" PRIu64 ") > max message length (%" PRIu64 ")",
+                    "Token length (%" PRIu64 ") > max message length (%" PRIu64 ")",
                     (uint64_t)token_length,
                     (uint64_t)rb.max_message_length);
                 goto cleanup;
