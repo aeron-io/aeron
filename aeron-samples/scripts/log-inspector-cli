@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+##
+## Copyright 2014-2025 Real Logic Limited.
+##
+## Licensed under the Apache License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+## https://www.apache.org/licenses/LICENSE-2.0
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+##
+set -eo pipefail
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+
+source "${DIR}/java-common"
+
+format="hex"
+skip_default_header="false"
+scan_over_zeroes="false"
+
+usage() {
+  cat << END
+Usage: $(basename "$0") [-h] [-d true|false] [-f hex|ascii] [-z true|false] filename [number_of_bytes]
+  -h: Shows usage (this message).
+  -d: A boolean flag indicating if the default header output should be skipped. Defaults to false.
+      Valid values are true or false.
+  -f: Configures the output format for the body of each message, defaults to hex. The other
+      supported value is ascii, which can be useful when the message contents are known to be strings.
+  -z: Should the inspector skip zeros in the file, defaults to false. Useful for scanning a log
+      that joined late or experienced loss.
+   filename: Filename of the log to be inspected.
+   number_of_bytes: Limits the number of bytes to be dumped from the body of each message.
+END
+}
+
+error() {
+  usage >&2
+  exit 1
+}
+
+while getopts ":d:f:hz:" o; do
+  case "${o}" in
+    d)
+      d="${OPTARG}"
+      [[ "${d}" =~ ^(true|false)$ ]] || error
+      skip_default_header="${d}"
+      ;;
+    f)
+      f="${OPTARG}"
+      [[ "${f}" =~ ^(hex|ascii)$ ]] || error
+      format="${f}"
+      ;;
+    z)
+      z="${OPTARG}"
+      [[ "${z}" =~ ^(true|false)$ ]] || error
+      scan_over_zeroes="${z}"
+      ;;
+    h)
+      usage
+      exit 0
+      ;;
+    *)
+      error
+      ;;
+  esac
+done
+shift $((OPTIND-1))
+
+if [ $# -lt 1 ] || [ $# -gt 2 ]; then
+  error
+fi
+
+exec "${JAVA_HOME}/bin/java" \
+  -cp "${DIR}/../../aeron-all/build/libs/aeron-all-${VERSION}.jar" \
+  ${JAVA_OPTIONS} \
+  ${ADD_OPENS} \
+  ${JVM_OPTS} \
+  -Daeron.log.inspector.data.format="${format}" \
+  -Daeron.log.inspector.skipDefaultHeader="${skip_default_header}" \
+  -Daeron.log.inspector.scanOverZeroes="${scan_over_zeroes}" \
+  io.aeron.samples.LogInspector "${@}"
