@@ -2551,7 +2551,8 @@ public final class AeronCluster implements AutoCloseable
                 null == oldLeader.publicationException &&
                 newLeader.endpoint.equals(oldLeader.endpoint))
             {
-                ingressPublication = newLeader.publication = oldLeader.publication;
+                newLeader.publication = oldLeader.publication;
+                ingressPublication = oldLeader.publication;
                 newLeader.registrationId = oldLeader.registrationId;
             }
             else
