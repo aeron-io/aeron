@@ -556,6 +556,19 @@ public class ArchiveMarkFile implements AutoCloseable
             logger);
     }
 
+    static boolean isActive(final File directory, final EpochClock epochClock)
+    {
+        try (ArchiveMarkFile archiveMarkFile = new ArchiveMarkFile(
+            directory, FILENAME, epochClock, 0, (version) -> {}, null))
+        {
+            return epochClock.time() - archiveMarkFile.activityTimestampVolatile() <= LIVENESS_TIMEOUT_MS;
+        }
+        catch (final IllegalStateException ignore)
+        {
+            return false;
+        }
+    }
+
     /**
      * {@inheritDoc}
      */

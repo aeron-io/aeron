@@ -1244,6 +1244,11 @@ public final class Archive implements AutoCloseable
                 archiveDir = new File(archiveDirectoryName);
             }
 
+            if (null != markFile)
+            {
+                markFileDir = markFile.parentDirectory();
+            }
+
             if (null == markFileDir)
             {
                 final String markFileDirPath = Configuration.markFileDir();
@@ -1287,6 +1292,8 @@ public final class Archive implements AutoCloseable
             {
                 epochClock = SystemEpochClock.INSTANCE;
             }
+
+            ensureNoConflictingMarkFile(archiveDir, markFileDir, epochClock);
 
             if (null == nanoClock)
             {
@@ -3797,6 +3804,43 @@ public final class Archive implements AutoCloseable
                     archiveId = CommonContext.nextCorrelationId(
                         new File(aeronDirectoryName), epochClock, new CommonContext().driverTimeoutMs());
                 }
+            }
+        }
+
+        private static void ensureNoConflictingMarkFile(
+            final File archiveDir, final File markFileDir, final EpochClock epochClock)
+        {
+            final File linkFile = new File(archiveDir, ArchiveMarkFile.LINK_FILENAME);
+            if (linkFile.exists())
+            {
+                try
+                {
+                    final String path = new String(Files.readAllBytes(linkFile.toPath()), US_ASCII).trim();
+                    if (!path.isEmpty())
+                    {
+                        final File linkedMarkFileDir = new File(path).getCanonicalFile();
+                        if (!linkedMarkFileDir.equals(markFileDir) &&
+                            ArchiveMarkFile.isActive(linkedMarkFileDir, epochClock))
+                        {
+                            throw new ConfigurationException(
+                                "There is an active Archive at archive.dir=" + archiveDir +
+                                    " detected through an existing link to " +
+                                    "mark file dir=" + linkedMarkFileDir + ", but this Archive is configured " +
+                                    "with mark file dir=" + markFileDir);
+                        }
+                    }
+                }
+                catch (final IOException ex)
+                {
+                    throw new UncheckedIOException(ex);
+                }
+            }
+
+            if (!markFileDir.equals(archiveDir) && ArchiveMarkFile.isActive(archiveDir, epochClock))
+            {
+                throw new ConfigurationException(
+                    "archive.dir=" + archiveDir + " has an active mark file but this Archive is configured" +
+                    " with mark file dir=" + markFileDir);
             }
         }
 

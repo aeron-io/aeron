@@ -876,6 +876,14 @@ public final class ClusteredServiceContainer implements AutoCloseable
             IoUtil.ensureDirectoryExists(clusterDir, "cluster");
             IoUtil.ensureDirectoryExists(markFileDir, "mark file");
 
+            ClusterMarkFile.ensureNoConflictingMarkFile(
+                clusterDir,
+                markFileDir,
+                ClusterMarkFile.markFilenameForService(serviceId),
+                ClusterMarkFile.linkFilenameForService(serviceId),
+                epochClock,
+                LIVENESS_TIMEOUT_MS);
+
             if (null == markFile)
             {
                 final int filePageSize = null != aeron ? aeron.context().filePageSize() :

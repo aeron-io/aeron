@@ -18,6 +18,7 @@ package io.aeron.cluster.service;
 import io.aeron.Aeron;
 import io.aeron.CommonContext;
 import io.aeron.cluster.client.ClusterException;
+import io.aeron.exceptions.ConfigurationException;
 import io.aeron.cluster.codecs.mark.ClusterComponentType;
 import io.aeron.cluster.codecs.mark.MarkFileHeaderDecoder;
 import io.aeron.cluster.codecs.mark.MarkFileHeaderEncoder;
@@ -36,13 +37,17 @@ import org.agrona.concurrent.EpochClock;
 import org.agrona.concurrent.UnsafeBuffer;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.PrintStream;
+import java.io.UncheckedIOException;
 import java.nio.MappedByteBuffer;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.function.Consumer;
 
 import static io.aeron.Aeron.NULL_VALUE;
+import static java.nio.charset.StandardCharsets.US_ASCII;
 import static io.aeron.logbuffer.LogBufferDescriptor.PAGE_MIN_SIZE;
 
 /**
@@ -712,5 +717,86 @@ public final class ClusterMarkFile implements AutoCloseable
                 }
             },
             logger);
+    }
+
+
+    private static boolean isActive(final File markFileDir, final EpochClock epochClock, final long timeoutMs)
+    {
+        try (ClusterMarkFile tempClusterMarkFile =
+            new ClusterMarkFile(markFileDir, FILENAME, epochClock, 0, null))
+        {
+            return epochClock.time() - tempClusterMarkFile.activityTimestampVolatile() < timeoutMs;
+        }
+    }
+
+    private static boolean isActive(
+        final File markFileDir,
+        final String filename,
+        final EpochClock epochClock,
+        final long timeoutMs)
+    {
+        try (ClusterMarkFile tempClusterMarkFile =
+            new ClusterMarkFile(markFileDir, filename, epochClock, 0, null))
+        {
+            return epochClock.time() - tempClusterMarkFile.activityTimestampVolatile() < timeoutMs;
+        }
+        catch (final IllegalStateException ignore)
+        {
+            return false;
+        }
+    }
+
+    /**
+     * Ensures that there isn't an existing cluster or clustered service running in the
+     * given cluster dir, potentially with a different mark file location.
+     *
+     * @param clusterDir the directory of the cluster
+     * @param markFileDir the directory of the mark file
+     * @param markFilename the name of the mark file
+     * @param linkFilename the name of the link file
+     * @param epochClock the EpocClock to use
+     * @param livenessTimeoutMs the liveness timeout in milliseconds
+     */
+    public static void ensureNoConflictingMarkFile(
+        final File clusterDir,
+        final File markFileDir,
+        final String markFilename,
+        final String linkFilename,
+        final EpochClock epochClock,
+        final long livenessTimeoutMs)
+    {
+        final File linkFile = new File(clusterDir, linkFilename);
+        if (linkFile.exists())
+        {
+            try
+            {
+                final String path = new String(Files.readAllBytes(linkFile.toPath()), US_ASCII).trim();
+                if (!path.isEmpty())
+                {
+                    final File linkedMarkFileDir = new File(path).getCanonicalFile();
+                    if (!linkedMarkFileDir.equals(markFileDir) &&
+                        isActive(linkedMarkFileDir, markFilename, epochClock, livenessTimeoutMs))
+                    {
+                        throw new ConfigurationException(
+                            "There is an active Cluster at cluster.dir=" + clusterDir +
+                            " detected through an existing link to " +
+                            "mark file dir=" + linkedMarkFileDir + ", but this Cluster is configured " +
+                            "with mark file dir=" + markFileDir);
+                    }
+                }
+            }
+            catch (final IOException ex)
+            {
+                throw new UncheckedIOException(ex);
+            }
+        }
+
+        if (!markFileDir.equals(clusterDir) &&
+            isActive(clusterDir, markFilename, epochClock, livenessTimeoutMs))
+        {
+            throw new ConfigurationException(
+                "cluster.dir=" + clusterDir + " has an active mark file but this Cluster is configured" +
+                " with mark file dir=" + markFileDir);
+        }
     }
 }

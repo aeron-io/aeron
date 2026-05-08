@@ -92,6 +92,7 @@ import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.M
 import static io.aeron.logbuffer.LogBufferDescriptor.PAGE_MIN_SIZE;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.startsWith;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -561,6 +562,25 @@ class ConsensusModuleContextTest
 
         assertEquals(context.clusterDir().getAbsolutePath(), context.clusterDirectoryName());
         assertEquals(serviceDirectory.toFile().getCanonicalPath(), context.clusterServicesDirectoryName());
+    }
+
+    @Test
+    void shouldThrowConfigurationExceptionIfClusterInUseViaDifferentMarkFile(final @TempDir File tempDir)
+    {
+        final File rootDir = new File(tempDir, "root");
+        final File markFileDir = new File(rootDir, "mark-file-dir");
+        assertFalse(markFileDir.exists());
+
+        final ConsensusModule.Context anotherContext = context.clone();
+
+        context.markFileDir(markFileDir);
+        context.conclude();
+
+        final ConfigurationException exception =
+            assertThrowsExactly(ConfigurationException.class, anotherContext::conclude);
+        assertThat(exception.getMessage(), containsString("cluster.dir="));
+        assertThat(exception.getMessage(), containsString("mark file dir="));
+
     }
 
     @Test

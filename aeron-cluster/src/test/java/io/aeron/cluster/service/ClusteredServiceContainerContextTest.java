@@ -18,6 +18,7 @@ package io.aeron.cluster.service;
 import io.aeron.Aeron;
 import io.aeron.ChannelUri;
 import io.aeron.CommonContext;
+import io.aeron.exceptions.ConfigurationException;
 import io.aeron.Counter;
 import io.aeron.RethrowingErrorHandler;
 import io.aeron.archive.client.AeronArchive;
@@ -428,5 +429,22 @@ class ClusteredServiceContainerContextTest
             assertTrue(file.exists());
             assertEquals(BitUtil.align(context.errorBufferLength() + HEADER_LENGTH, filePageSize), file.length());
         }
+    }
+
+    @Test
+    void shouldThrowConfigurationExceptionIfClusterInUseViaDifferentMarkFile(final @TempDir File tempDir)
+    {
+        final File markFileDir = new File(tempDir, "mark-file-dir");
+        assertFalse(markFileDir.exists());
+
+        final ClusteredServiceContainer.Context anotherContext = context.clone();
+
+        context.markFileDir(markFileDir);
+        context.conclude();
+
+        final ConfigurationException exception =
+            assertThrowsExactly(ConfigurationException.class, anotherContext::conclude);
+        assertThat(exception.getMessage(), Matchers.containsString("cluster.dir="));
+        assertThat(exception.getMessage(), Matchers.containsString("mark file dir="));
     }
 }

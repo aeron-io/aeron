@@ -726,6 +726,10 @@ public final class ClusterBackup implements AutoCloseable
                 replicationProgressIntervalNs = Math.max(replicationProgressTimeoutNs / 10, 1);
             }
 
+            ClusterMarkFile.ensureNoConflictingMarkFile(
+                clusterDir, markFileDir, ClusterMarkFile.FILENAME, ClusterMarkFile.LINK_FILENAME,
+                epochClock, LIVENESS_TIMEOUT_MS);
+
             if (null == markFile)
             {
                 final int filePageSize = null != aeron ? aeron.context().filePageSize() :
