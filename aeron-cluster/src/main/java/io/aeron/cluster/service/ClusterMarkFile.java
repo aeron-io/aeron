@@ -43,7 +43,6 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.function.Consumer;
 
 import static io.aeron.Aeron.NULL_VALUE;
-import static io.aeron.logbuffer.LogBufferDescriptor.PAGE_MIN_SIZE;
 
 /**
  * Used to indicate if a cluster component is running and what configuration it is using. Errors encountered by
