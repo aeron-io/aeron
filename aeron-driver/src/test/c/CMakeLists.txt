@@ -134,6 +134,14 @@ if (AERON_UNIT_TESTS)
         target_compile_definitions(aeronmd_signal_test PUBLIC "_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING")
         target_link_libraries(aeronmd_signal_test aeron gmock_main ${CMAKE_THREAD_LIBS_INIT} ${AERON_LIB_WINSOCK_LIBS})
         add_test(NAME aeronmd_signal_test COMMAND aeronmd_signal_test $<TARGET_FILE:aeronmd>)
+
+
+        aeron_driver_test(cpuset_test aeron_cpuset_test.cpp)
+        aeron_driver_test(topology_test aeron_topology_test.cpp)
     endif ()
+
+#    aeron_driver_test(cpuset_test aeron_cpuset_test.cpp)
+#    if ("${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
+#    endif ()
 
 endif ()

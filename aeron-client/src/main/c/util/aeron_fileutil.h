@@ -23,6 +23,8 @@
 #include "util/aeron_platform.h"
 #include "concurrent/aeron_logbuffer_descriptor.h"
 
+#define AERON_MAX_FILE_PATH_LENGTH (4096)
+
 typedef struct aeron_mapped_file_stct
 {
     void *addr;
@@ -47,6 +49,9 @@ int aeron_unmap(aeron_mapped_file_t *mapped_file);
 
 int aeron_msync(void *addr, size_t length);
 int aeron_delete_file(const char *path);
+const char *aeron_realpath(const char *path, char *resolved_path, size_t resolved_path_len);
+const char *aeron_tmpdir(char *path, size_t path_len);
+bool aeron_file_exists(const char* path);
 
 #if defined(AERON_COMPILER_GCC)
 #include <unistd.h>

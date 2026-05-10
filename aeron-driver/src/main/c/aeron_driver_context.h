@@ -213,6 +213,8 @@ typedef struct aeron_driver_context_stct
     int32_t receiver_cpu_affinity_no;                       /* aeron.receiver.cpu.affinity = -1 */
     int32_t sender_cpu_affinity_no;                         /* aeron.sender.cpu.affinity = -1 */
     int32_t stream_session_limit;                           /* aeron.driver.stream.session.limit = INT32_MAX */
+    bool cpuset_affinity;                                   /* aeron.driver.cpuset.affinity = false */
+    bool cpuset_warnings_as_errors;                         /* aeron.driver.cpuset.warnings_as_errors = false */
     bool enable_experimental_features;                      /* aeron.enable.experimental.features = false */
 
     struct                                                  /* aeron.receiver.receiver.tag = <unset> */
@@ -424,6 +426,8 @@ int aeron_driver_context_set_receive_channel_loss_supplier(
     aeron_driver_context_t *context,
     aeron_receive_channel_loss_supplier_func_t func,
     void *clientd);
+
+int aeron_driver_context_apply_cpuset_affinity(aeron_driver_context_t *context, const int *cpus, int cpu_count);
 
 inline void aeron_cnc_version_signal_cnc_ready(aeron_cnc_metadata_t *metadata, int32_t cnc_version)
 {

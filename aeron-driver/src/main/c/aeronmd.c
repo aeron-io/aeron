@@ -32,7 +32,7 @@
 #include "aeron_driver_context.h"
 #include "util/aeron_properties_util.h"
 #include "util/aeron_strutil.h"
-#include "util/aeron_error.h"
+#include "aeron_driver.h"
 
 volatile int exit_status = AERON_NULL_VALUE;
 
@@ -122,6 +122,13 @@ int main(int argc, char **argv)
     if (aeron_driver_context_set_driver_termination_hook(context, termination_hook, NULL) < 0)
     {
         fprintf(stderr, "ERROR: context set termination hook (%d) %s\n", aeron_errcode(), aeron_errmsg());
+        AERON_SET_RELEASE(exit_status, EXIT_FAILURE);
+        goto cleanup;
+    }
+
+    if (aeron_driver_apply_cpuset_affinity(context) < 0)
+    {
+        fprintf(stderr, "ERROR: apply cpuset affinity %s\n", aeron_errmsg());
         AERON_SET_RELEASE(exit_status, EXIT_FAILURE);
         goto cleanup;
     }
