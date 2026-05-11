@@ -3837,7 +3837,8 @@ public final class AeronArchive implements AutoCloseable
                 this.ctx = ctx;
                 final Aeron aeron = ctx.aeron();
 
-                subscriptionRegistrationId = aeron.asyncAddSubscription(ctx.controlResponseChannel(),
+                subscriptionRegistrationId = aeron.asyncAddSubscription(
+                    ctx.controlResponseChannel(),
                     ctx.controlResponseStreamId(),
                     null,
                     (image) ->
