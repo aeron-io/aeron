@@ -8,6 +8,8 @@ image during a replay. (https://github.com/aeron-io/aeron/pull/2037[#2037])
 * [C] Improved support for AddressSanitizer builds and testing on Windows. (https://github.com/aeron-io/aeron/pull/2022[#2022])
 * [Client/Java] Fixed potential integer overflow of `blockLengthLimit` in `Image.blockPoll` and `Image.rawPoll`. (https://github.com/aeron-io/aeron/pull/2036[#2036])
 * [Client/C] Remove `aeron_archive_persistent_subscription.h` from the package as it has no public API.
+* [Driver/C] Support using CGroups based cpusets when setting thread affinity. Validate that the cpuset has a sane configuration.
+* [Driver/C] Support setting thread affinity on the async agent (used for name resolution, etc.)
 
 == 1.51.0 (2026-04-28)
 
