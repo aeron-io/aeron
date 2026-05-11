@@ -212,6 +212,7 @@ typedef struct aeron_driver_context_stct
     int32_t conductor_cpu_affinity_no;                      /* aeron.conductor.cpu.affinity = -1 */
     int32_t receiver_cpu_affinity_no;                       /* aeron.receiver.cpu.affinity = -1 */
     int32_t sender_cpu_affinity_no;                         /* aeron.sender.cpu.affinity = -1 */
+    int32_t async_cpu_affinity_no;                          /* aeron.async.cpu.affinity = -1 */
     int32_t stream_session_limit;                           /* aeron.driver.stream.session.limit = INT32_MAX */
     bool cpuset_affinity;                                   /* aeron.driver.cpuset.affinity = false */
     bool cpuset_warnings_as_errors;                         /* aeron.driver.cpuset.warnings_as_errors = false */

@@ -580,6 +580,7 @@ void aeron_driver_context_print_configuration(aeron_driver_context_t *context)
     fprintf(fpout, "\n    conductor_cpu_affinity_no=%" PRId32, context->conductor_cpu_affinity_no);
     fprintf(fpout, "\n    receiver_cpu_affinity_no=%" PRId32, context->receiver_cpu_affinity_no);
     fprintf(fpout, "\n    sender_cpu_affinity_no=%" PRId32, context->sender_cpu_affinity_no);
+    fprintf(fpout, "\n    async_cpu_affinity_no=%" PRId32, context->async_cpu_affinity_no);
     fprintf(fpout, "\n    cpuset_affinity=%" PRId32, context->cpuset_affinity);
     fprintf(fpout, "\n    cpuset_warnings_as_errors=%" PRId32, context->cpuset_warnings_as_errors);
 

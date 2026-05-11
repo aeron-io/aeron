@@ -38,7 +38,11 @@ function(aeron_driver_test name file)
     if (STRUCT_MMSGHDR_TYPE_EXISTS)
         target_compile_definitions(${name} PUBLIC -DHAVE_STRUCT_MMSGHDR)
     endif ()
-    add_test(NAME ${name} COMMAND ${name})
+    if (ARGC GREATER 2)
+        add_test(NAME ${name} COMMAND ${name} ${ARGV2})
+    else()
+        add_test(NAME ${name} COMMAND ${name})
+    endif ()
 endfunction()
 
 if (AERON_UNIT_TESTS)
@@ -129,19 +133,9 @@ if (AERON_UNIT_TESTS)
     aeron_driver_test(driver_context_config_test aeron_driver_context_config_test.cpp)
 
     if ("${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
-        add_executable(aeronmd_signal_test aeronmd_signal_test.cpp)
-        add_dependencies(aeronmd_signal_test gmock aeronmd)
-        target_compile_definitions(aeronmd_signal_test PUBLIC "_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING")
-        target_link_libraries(aeronmd_signal_test aeron gmock_main ${CMAKE_THREAD_LIBS_INIT} ${AERON_LIB_WINSOCK_LIBS})
-        add_test(NAME aeronmd_signal_test COMMAND aeronmd_signal_test $<TARGET_FILE:aeronmd>)
-
-
+        aeron_driver_test(aeronmd_signal_test aeronmd_signal_test.cpp $<TARGET_FILE:aeronmd>)
         aeron_driver_test(cpuset_test aeron_cpuset_test.cpp)
         aeron_driver_test(topology_test aeron_topology_test.cpp)
     endif ()
-
-#    aeron_driver_test(cpuset_test aeron_cpuset_test.cpp)
-#    if ("${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
-#    endif ()
 
 endif ()
