@@ -24,7 +24,6 @@ extern "C"
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <stddef.h>
 
 typedef struct aeron_driver_context_stct aeron_driver_context_t;
 typedef struct aeron_driver_stct aeron_driver_t;
@@ -784,7 +783,7 @@ int aeron_driver_context_set_resolver_interface(aeron_driver_context_t *context,
 const char *aeron_driver_context_get_resolver_interface(aeron_driver_context_t *context);
 
 /**
- * Get the bootstrap neighbor of the {@link MediaDriver} for name resolver purposes.
+ * Get the bootstrap neighbor of the Media Driver for name resolver purposes.
  *
  * The format is comma separated list of hostname:port pairs and follows the URI format for the endpoint parameter.
  */
