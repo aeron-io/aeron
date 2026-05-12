@@ -123,7 +123,7 @@ aeron_fprintf_handler_t aeron_set_fprintf_handler(aeron_fprintf_handler_t fn);
 /**
  * return the fprintf_handler
  */
-aeron_fprintf_handler_t aeron_get_fprintf_handler();
+aeron_fprintf_handler_t aeron_get_fprintf_handler(void);
 
 /**
  * Macro to invoke the above with correct callsite information

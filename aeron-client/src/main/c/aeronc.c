@@ -48,7 +48,7 @@ static int aeron_default_fprintf(const char* src_, uint64_t line_, void *stream,
     return vfprintf(stream, format, list);
 }
 
-static aeron_fprintf_handler_t* aeron_get_fprintf_handler_impl()
+static aeron_fprintf_handler_t* aeron_get_fprintf_handler_impl(void)
 {
     static aeron_fprintf_handler_t ret = &aeron_default_fprintf;
     return &ret;
@@ -63,7 +63,7 @@ aeron_fprintf_handler_t aeron_set_fprintf_handler(aeron_fprintf_handler_t fn)
     return ret;
 }
 
-aeron_fprintf_handler_t aeron_get_fprintf_handler()
+aeron_fprintf_handler_t aeron_get_fprintf_handler(void)
 {
     return *aeron_get_fprintf_handler_impl();
 }
