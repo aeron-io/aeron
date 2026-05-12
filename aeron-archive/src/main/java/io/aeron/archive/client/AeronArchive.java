@@ -3988,7 +3988,8 @@ public final class AeronArchive implements AutoCloseable
                     " publication=" +
                     (null != archiveProxy ? archiveProxy.publication() : ctx.controlRequestChannel()) +
                     " subscription=" +
-                    (null != controlResponsePoller ? controlResponsePoller.subscription() : ctx.controlResponseChannel()));
+                    (null != controlResponsePoller ? controlResponsePoller.subscription() :
+                        ctx.controlResponseChannel()));
             }
 
             if (Thread.currentThread().isInterrupted())
