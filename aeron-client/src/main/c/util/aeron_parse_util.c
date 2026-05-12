@@ -23,6 +23,7 @@
 #include <string.h>
 #include "util/aeron_parse_util.h"
 #include "util/aeron_error.h"
+#include "aeronc.h"
 
 const uint64_t AERON_ONE_GIGABYTE = 1073741824ULL;
 const uint64_t AERON_ONE_MEGABYTE = 1048576ULL;
@@ -619,9 +620,7 @@ int aeron_parse_get_line(char *str, size_t max_length, const char *buffer)
 
 void aeron_config_prop_warning(const char *name, const char *str)
 {
-    char buffer[AERON_ERROR_MAX_TOTAL_LENGTH];
-    snprintf(buffer, sizeof(buffer) - 1, "WARNING: %s=%s is invalid, using default\n", name, str);
-    fprintf(stderr, "%s", buffer);
+    AERON_FPRINTF(stderr, "WARNING: %s=%s is invalid, using default\n", name, str);
 }
 
 uint64_t aeron_config_parse_uint64(const char *name, const char *str, uint64_t def, uint64_t min, uint64_t max)

@@ -185,7 +185,7 @@ int aeron_distinct_error_log_record(aeron_distinct_error_log_t *log, int error_c
             char buffer[AERON_ERROR_MAX_TOTAL_LENGTH];
 
             aeron_format_date(buffer, sizeof(buffer), timestamp);
-            fprintf(stderr, "%s - unrecordable error %s\n", buffer, description);
+            AERON_FPRINTF(stderr, "%s - unrecordable error %s\n", buffer, description);
             aeron_set_errno(ENOMEM);
             return -1;
         }

@@ -50,7 +50,7 @@ static void init_dev_urandom(void)
 {
     if ((aeron_dev_urandom_fd = open("/dev/urandom", O_RDONLY)) < 0)
     {
-        fprintf(stderr, "could not open /dev/urandom (%d): %s\n", errno, strerror(errno));
+        AERON_FPRINTF(stderr, "could not open /dev/urandom (%d): %s\n", errno, strerror(errno));
         exit(EXIT_FAILURE);
     }
 }
@@ -70,7 +70,7 @@ int32_t aeron_randomised_int32(void)
 
     if (sizeof(result) != read(aeron_dev_urandom_fd, &result, sizeof(result)))
     {
-        fprintf(stderr, "Failed to read from aeron_dev_random (%d): %s\n", errno, strerror(errno));
+        AERON_FPRINTF(stderr, "Failed to read from aeron_dev_random (%d): %s\n", errno, strerror(errno));
         exit(EXIT_FAILURE);
     }
 #elif defined(AERON_COMPILER_MSVC)

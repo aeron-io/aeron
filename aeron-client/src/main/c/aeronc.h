@@ -25,6 +25,7 @@ extern "C"
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
 #define AERON_NULL_VALUE (-1)
 
@@ -107,6 +108,28 @@ typedef struct aeron_image_controlled_fragment_assembler_stct aeron_image_contro
 typedef struct aeron_fragment_assembler_stct aeron_fragment_assembler_t;
 typedef struct aeron_controlled_fragment_assembler_stct aeron_controlled_fragment_assembler_t;
 
+/**
+ * Global file writing method, allows for interposition
+ */
+int aeron_fprintf(const char* src_, uint64_t line_, void *stream, const char *format, ...);
+
+typedef int (*aeron_fprintf_handler_t)(const char*, uint64_t, void*, const char *, va_list);
+
+/**
+ * update the fprintf_handler, return previously installed handler
+ */
+aeron_fprintf_handler_t aeron_set_fprintf_handler(aeron_fprintf_handler_t fn);
+
+/**
+ * return the fprintf_handler
+ */
+aeron_fprintf_handler_t aeron_get_fprintf_handler();
+
+/**
+ * Macro to invoke the above with correct callsite information
+ */
+
+#define AERON_FPRINTF(...) (aeron_fprintf(__FILE__,__LINE__,__VA_ARGS__))
 
 /**
  * Environment variables and functions used for setting values of an aeron_context_t.

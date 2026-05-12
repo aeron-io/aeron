@@ -3400,7 +3400,7 @@ void aeron_set_thread_affinity_on_start(void *state, const char *role_name)
         }
         else
         {
-            fprintf(stderr, "%s", aeron_errmsg());
+            AERON_FPRINTF(stderr, "%s", aeron_errmsg());
         }
         aeron_err_clear();
     }
