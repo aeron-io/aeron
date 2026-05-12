@@ -41,6 +41,7 @@
 
 #ifndef HAVE_ARC4RANDOM
 #ifdef HAVE_DEV_URANDOM
+#include "aeronc.h"
 #include "concurrent/aeron_thread.h"
 
 static AERON_INIT_ONCE aeron_dev_urandom_is_initialized = AERON_INIT_ONCE_VALUE;
