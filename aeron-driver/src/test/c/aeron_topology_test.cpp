@@ -106,7 +106,7 @@ protected:
         for (int i = 0; i < static_cast<int>(clusters.size()); i++)
         {
             std::string cpuDirectory = sysfsRoot + "/cpu" + std::to_string(i) + "/topology";
-            std::string threadSiblingsList = cpuDirectory + "/cluster_id";
+            std::string threadSiblingsList = cpuDirectory + "/die_id";
             aeron_mkdir_recursive(cpuDirectory.c_str(), 0700);
             std::ofstream os(threadSiblingsList.c_str(), std::ios::out);
             os << clusters[i] << std::endl;
@@ -217,7 +217,7 @@ TEST_F(TopologyTest, shouldCheckClusterLocality)
     ASSERT_NE(-1, aeron_cpuset_cgroup_read_v2(cgroupFilename.c_str(), mountRoot.c_str(), &cpus, &cpu_count))
         << aeron_errmsg();
 
-    const int warnings = aeron_topology_check_cluster_locality(sysfsRoot.c_str(), cpus, cpu_count, m_output);
+    const int warnings = aeron_topology_check_die_locality(sysfsRoot.c_str(), cpus, cpu_count, m_output);
     ASSERT_NE(-1, warnings) << aeron_errmsg();
     EXPECT_EQ(1, warnings);
     fflush(m_output);

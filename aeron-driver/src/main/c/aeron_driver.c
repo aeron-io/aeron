@@ -1101,7 +1101,7 @@ int aeron_driver_apply_cpuset_affinity(aeron_driver_context_t *context)
     }
 
     int cluster_locality_warnings_count;
-    if ((cluster_locality_warnings_count = aeron_topology_check_cluster_locality(
+    if ((cluster_locality_warnings_count = aeron_topology_check_die_locality(
         AERON_TOPOLOGY_SYS_CPU_PATH, cpus, cpu_count, stderr)) < 0)
     {
         AERON_APPEND_ERR("%s", "failed to check cpu cluster locality");

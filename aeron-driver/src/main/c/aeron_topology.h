@@ -96,7 +96,7 @@ int aeron_topology_all_of(
 int aeron_topology_check_alignment(const char* sys_cpu_root, const int *cpus, int cpu_count, FILE *output);
 
 /**
- * Check that all CPUs in cpus share the same L3 cache domain.
+ * Check that all CPUs in cpus share the same die.
  *
  * @param sys_cpu_root  of the sys fs filesystem to access cpu information.
  * @param cpus          input array of CPU IDs
@@ -104,10 +104,10 @@ int aeron_topology_check_alignment(const char* sys_cpu_root, const int *cpus, in
  * @param output        buffer to write the warning to, if any. Will be length 0 if no warnings.
  * @return the count of the number of warnings or -1 on error.
  */
-int aeron_topology_check_cluster_locality(const char* sys_cpu_root, const int *cpus, int cpu_count, FILE* output);
+int aeron_topology_check_die_locality(const char* sys_cpu_root, const int *cpus, int cpu_count, FILE* output);
 
 /**
- * Check that all CPUs in cpus share the same CPU cluster.
+ * Check that all CPUs in cpus share the same L3 cache.
  *
  * @param sys_cpu_root of the sys fs filesystem to access cpu information.
  * @param cpus input array of CPU IDs

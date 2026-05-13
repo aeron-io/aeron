@@ -117,10 +117,10 @@ static int aeron_topology_read_l3_peers(const char *sys_cpu_root, int cpu, int *
     return 0;
 }
 
-static int aeron_topology_read_cluster_id(const char *sys_cpu_root, int cpu, int *cluster_id)
+static int aeron_topology_read_die_id(const char *sys_cpu_root, int cpu, int *cluster_id)
 {
     char buf[64];
-    if (aeron_topology_read_sysfs_cpu_file(sys_cpu_root, cpu, "topology/cluster_id", buf, sizeof(buf)) < 0)
+    if (aeron_topology_read_sysfs_cpu_file(sys_cpu_root, cpu, "topology/die_id", buf, sizeof(buf)) < 0)
     {
         return -1;
     }
@@ -555,7 +555,7 @@ int aeron_topology_check_l3_locality(const char* sys_cpu_root, const int *cpus, 
     return warnings;
 }
 
-int aeron_topology_check_cluster_locality(const char* sys_cpu_root, const int *cpus, int cpu_count, FILE* output)
+int aeron_topology_check_die_locality(const char* sys_cpu_root, const int *cpus, int cpu_count, FILE* output)
 {
     if (AERON_TOPOLOGY_MAX_CPU_ID < cpu_count)
     {
@@ -578,7 +578,7 @@ int aeron_topology_check_cluster_locality(const char* sys_cpu_root, const int *c
     for (int i = 0; i < cpu_count; i++)
     {
         int id = 0;
-        if (aeron_topology_read_cluster_id(sys_cpu_root, cpus[i], &id) < 0)
+        if (aeron_topology_read_die_id(sys_cpu_root, cpus[i], &id) < 0)
         {
             cluster_ok = 0;
             aeron_err_clear();
