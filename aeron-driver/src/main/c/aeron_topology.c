@@ -28,8 +28,6 @@
 #define AERON_TOPOLOGY_MAX_CPU_ID 8192
 #define AERON_TOPOLOGY_FILE_BUF_SIZE 4096
 
-const char *aeron_topology_sys_cpu_path = AERON_TOPOLOGY_SYS_CPU_PATH;
-
 typedef struct aeron_topology_core_group_stct
 {
     int *present;
