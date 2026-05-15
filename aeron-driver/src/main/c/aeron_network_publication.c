@@ -482,7 +482,7 @@ int aeron_network_publication_setup_message_check(
         {
             if (bytes_sent < (int64_t)iov.iov_len)
             {
-                aeron_counter_increment(publication->short_sends_counter);
+                aeron_counter_increment_opaque(publication->short_sends_counter);
             }
         }
 
@@ -548,7 +548,7 @@ int aeron_network_publication_heartbeat_message_check(
             result = (int)bytes_sent;
             if (bytes_sent < (int64_t)iov.iov_len)
             {
-                aeron_counter_increment(publication->short_sends_counter);
+                aeron_counter_increment_opaque(publication->short_sends_counter);
             }
         }
 
@@ -619,7 +619,7 @@ int aeron_network_publication_send_data(
         }
         else if (result >= 0)
         {
-            aeron_counter_increment(publication->short_sends_counter);
+            aeron_counter_increment_opaque(publication->short_sends_counter);
         }
     }
     else if (publication->track_sender_limits && available_window <= 0)
@@ -742,7 +742,7 @@ int aeron_network_publication_resend(void *clientd, int32_t term_id, int32_t ter
             {
                 if (msg_bytes_sent < (int64_t)iov.iov_len)
                 {
-                    aeron_counter_increment(publication->short_sends_counter);
+                    aeron_counter_increment_opaque(publication->short_sends_counter);
                     break;
                 }
             }
@@ -967,7 +967,7 @@ void aeron_network_publication_on_rttm(
         {
             if (bytes_sent < (int64_t)iov.iov_len)
             {
-                aeron_counter_increment(publication->short_sends_counter);
+                aeron_counter_increment_opaque(publication->short_sends_counter);
             }
         }
     }
