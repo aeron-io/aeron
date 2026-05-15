@@ -31,11 +31,11 @@ public class LogInspectorCliTest
         final LogInspectorCli.ParsedArgs parsed = LogInspectorCli.parseArgs(new String[]{ "my.log" });
 
         assertNotNull(parsed);
-        assertEquals("my.log", parsed.logFileName);
-        assertEquals("hex", parsed.format);
-        assertFalse(parsed.skipDefaultHeader);
-        assertFalse(parsed.scanOverZeroes);
-        assertEquals(Integer.MAX_VALUE, parsed.messageDumpLimit);
+        assertEquals("my.log", parsed.logFileName());
+        assertEquals("hex", parsed.format());
+        assertFalse(parsed.skipDefaultHeader());
+        assertFalse(parsed.scanOverZeroes());
+        assertEquals(Integer.MAX_VALUE, parsed.messageDumpLimit());
     }
 
     @Test
@@ -44,8 +44,8 @@ public class LogInspectorCliTest
         final LogInspectorCli.ParsedArgs parsed = LogInspectorCli.parseArgs(new String[]{ "my.log", "128" });
 
         assertNotNull(parsed);
-        assertEquals("my.log", parsed.logFileName);
-        assertEquals(128, parsed.messageDumpLimit);
+        assertEquals("my.log", parsed.logFileName());
+        assertEquals(128, parsed.messageDumpLimit());
     }
 
     @Test
@@ -54,7 +54,7 @@ public class LogInspectorCliTest
         final LogInspectorCli.ParsedArgs parsed = LogInspectorCli.parseArgs(new String[]{ "-f", "hex", "my.log" });
 
         assertNotNull(parsed);
-        assertEquals("hex", parsed.format);
+        assertEquals("hex", parsed.format());
     }
 
     @Test
@@ -63,7 +63,7 @@ public class LogInspectorCliTest
         final LogInspectorCli.ParsedArgs parsed = LogInspectorCli.parseArgs(new String[]{ "-f", "ascii", "my.log" });
 
         assertNotNull(parsed);
-        assertEquals("ascii", parsed.format);
+        assertEquals("ascii", parsed.format());
     }
 
     @Test
@@ -72,7 +72,7 @@ public class LogInspectorCliTest
         final LogInspectorCli.ParsedArgs parsed = LogInspectorCli.parseArgs(new String[]{ "-d", "true", "my.log" });
 
         assertNotNull(parsed);
-        assertTrue(parsed.skipDefaultHeader);
+        assertTrue(parsed.skipDefaultHeader());
     }
 
     @Test
@@ -81,7 +81,7 @@ public class LogInspectorCliTest
         final LogInspectorCli.ParsedArgs parsed = LogInspectorCli.parseArgs(new String[]{ "-d", "false", "my.log" });
 
         assertNotNull(parsed);
-        assertFalse(parsed.skipDefaultHeader);
+        assertFalse(parsed.skipDefaultHeader());
     }
 
     @Test
@@ -90,7 +90,7 @@ public class LogInspectorCliTest
         final LogInspectorCli.ParsedArgs parsed = LogInspectorCli.parseArgs(new String[]{ "-z", "true", "my.log" });
 
         assertNotNull(parsed);
-        assertTrue(parsed.scanOverZeroes);
+        assertTrue(parsed.scanOverZeroes());
     }
 
     @Test
@@ -99,7 +99,7 @@ public class LogInspectorCliTest
         final LogInspectorCli.ParsedArgs parsed = LogInspectorCli.parseArgs(new String[]{ "-z", "false", "my.log" });
 
         assertNotNull(parsed);
-        assertFalse(parsed.scanOverZeroes);
+        assertFalse(parsed.scanOverZeroes());
     }
 
     @Test
@@ -115,11 +115,11 @@ public class LogInspectorCliTest
             new String[]{ "-f", "ascii", "-d", "true", "-z", "true", "my.log", "64" });
 
         assertNotNull(parsed);
-        assertEquals("ascii", parsed.format);
-        assertTrue(parsed.skipDefaultHeader);
-        assertTrue(parsed.scanOverZeroes);
-        assertEquals("my.log", parsed.logFileName);
-        assertEquals(64, parsed.messageDumpLimit);
+        assertEquals("ascii", parsed.format());
+        assertTrue(parsed.skipDefaultHeader());
+        assertTrue(parsed.scanOverZeroes());
+        assertEquals("my.log", parsed.logFileName());
+        assertEquals(64, parsed.messageDumpLimit());
     }
 
     // --- error paths ---

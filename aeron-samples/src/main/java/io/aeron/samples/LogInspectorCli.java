@@ -32,28 +32,20 @@ public class LogInspectorCli
 {
     /**
      * Holds the result of a successful argument parse.
+     *
+     * @param format            output format for message body bytes: {@code "hex"} or {@code "ascii"}.
+     * @param skipDefaultHeader if {@code true}, the default frame header is omitted from the output.
+     * @param scanOverZeroes    if {@code true}, zero-length frames are skipped rather than stopping the scan.
+     * @param logFileName       path to the log file to inspect.
+     * @param messageDumpLimit  maximum number of bytes to dump from each message body.
      */
-    static final class ParsedArgs
+    record ParsedArgs(
+        String format,
+        boolean skipDefaultHeader,
+        boolean scanOverZeroes,
+        String logFileName,
+        int messageDumpLimit)
     {
-        final String format;
-        final boolean skipDefaultHeader;
-        final boolean scanOverZeroes;
-        final String logFileName;
-        final int messageDumpLimit;
-
-        ParsedArgs(
-            final String format,
-            final boolean skipDefaultHeader,
-            final boolean scanOverZeroes,
-            final String logFileName,
-            final int messageDumpLimit)
-        {
-            this.format = format;
-            this.skipDefaultHeader = skipDefaultHeader;
-            this.scanOverZeroes = scanOverZeroes;
-            this.logFileName = logFileName;
-            this.messageDumpLimit = messageDumpLimit;
-        }
     }
 
     /**
