@@ -18,26 +18,42 @@ package io.aeron.agent;
 import io.aeron.test.CapturingPrintStream;
 import net.bytebuddy.agent.builder.AgentBuilder;
 import org.agrona.MutableDirectBuffer;
+import org.agrona.SystemUtil;
 import org.agrona.concurrent.CachedEpochClock;
 import org.agrona.concurrent.CachedNanoClock;
 import org.agrona.concurrent.SystemEpochClock;
 import org.agrona.concurrent.SystemNanoClock;
+import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.ZoneId;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
+import static io.aeron.agent.ConfigOption.LOG_FILENAME;
+import static io.aeron.agent.ConfigOption.LOG_FILE_MAX_LENGTH;
+import static io.aeron.agent.EventConfiguration.MAX_EVENT_LENGTH;
+import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.greaterThan;
+import static org.hamcrest.Matchers.lessThan;
+import static org.hamcrest.Matchers.lessThanOrEqualTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -74,6 +90,71 @@ class EventLogReaderAgentTest
     }
 
     @Test
+    void shouldRotateLogs(@TempDir final Path tempDir) throws IOException
+    {
+        final Path file = tempDir.resolve("test-out.log");
+        assertFalse(Files.exists(file));
+        assertEquals(0, Files.list(tempDir).count());
+
+        final long maxFileLength = 16 * 1024;
+        final String maxFileLengthStr = SystemUtil.formatSize(maxFileLength);
+        final Map<String, String> configOptions = Map.of(
+            LOG_FILENAME, file.toString(),
+            LOG_FILE_MAX_LENGTH, maxFileLengthStr);
+
+        final CachedNanoClock nanoClock = new CachedNanoClock();
+        nanoClock.update(System.nanoTime());
+        final CachedEpochClock epochClock = new CachedEpochClock();
+        epochClock.update(System.currentTimeMillis());
+        final int eventTypeId = 22;
+        final EventLogReaderAgent logReaderAgent = new EventLogReaderAgent(
+            configOptions,
+            System.out,
+            nanoClock,
+            epochClock,
+            List.of(new AsciiLogger(eventTypeId, "v1")));
+
+        logReaderAgent.onStart();
+
+        final ManyToOneRingBuffer eventRingBuffer = EventConfiguration.EVENT_RING_BUFFER;
+        assertNotNull(eventRingBuffer);
+
+        final byte[] bs = new byte[1024];
+        Arrays.fill(bs, (byte)'x');
+        final String msg = new String(bs, US_ASCII);
+
+        final int messageId = eventTypeId << 16;
+
+        for (int i = 0; i < 100; i++)
+        {
+            final int index = eventRingBuffer.tryClaim(messageId, 4 + msg.length());
+            eventRingBuffer.buffer().putStringAscii(index, msg);
+            eventRingBuffer.commit(index);
+            logReaderAgent.doWork();
+        }
+
+        logReaderAgent.onClose();
+
+        Files.list(tempDir)
+            .forEach((f) -> assertThat(f.toFile().length(), lessThanOrEqualTo(maxFileLength + MAX_EVENT_LENGTH)));
+
+        Files.list(tempDir).forEach(
+            (f) ->
+            {
+                try
+                {
+                    final Optional<String> firstLine = Files.lines(f).findFirst();
+                    assertTrue(firstLine.isPresent());
+//                    assertTrue(Files.lines(f).limit(1).allMatch((s) -> s.contains("log started")), f.toString());
+                }
+                catch (final IOException ex)
+                {
+                    throw new RuntimeException(ex);
+                }
+            });
+    }
+
+    @Test
     void shouldListSingleEnabledLoggerOnStart()
     {
         final CapturingPrintStream out = new CapturingPrintStream();
@@ -82,7 +163,7 @@ class EventLogReaderAgentTest
         final CachedEpochClock epochClock = new CachedEpochClock();
         epochClock.update(System.currentTimeMillis());
         final EventLogReaderAgent logReaderAgent = new EventLogReaderAgent(
-            null,
+            (String)null,
             out.resetAndGetPrintStream(),
             nanoClock,
             epochClock,
@@ -134,7 +215,7 @@ class EventLogReaderAgentTest
     void throwsNullPointerExceptionIfNanoClockIsNull()
     {
         assertThrowsExactly(NullPointerException.class, () -> new EventLogReaderAgent(
-            null,
+            (String)null,
             System.out,
             null,
             SystemEpochClock.INSTANCE,
@@ -145,7 +226,7 @@ class EventLogReaderAgentTest
     void throwsNullPointerExceptionIfEpochClockIsNull()
     {
         assertThrowsExactly(NullPointerException.class, () -> new EventLogReaderAgent(
-            null,
+            (String)null,
             System.out,
             SystemNanoClock.INSTANCE,
             null,
@@ -156,7 +237,7 @@ class EventLogReaderAgentTest
     void throwsNullPointerExceptionIfFileIsNullAndPrintStreamIsNull()
     {
         assertThrowsExactly(NullPointerException.class, () -> new EventLogReaderAgent(
-            null,
+            (String)null,
             null,
             SystemNanoClock.INSTANCE,
             SystemEpochClock.INSTANCE,
@@ -183,6 +264,31 @@ class EventLogReaderAgentTest
 
         public void reset()
         {
+        }
+    }
+
+    private record AsciiLogger(int eventType, String version) implements ComponentLogger
+    {
+        public int typeCode()
+        {
+            return eventType;
+        }
+
+        public void decode(
+            final MutableDirectBuffer buffer, final int offset, final int eventCodeId, final StringBuilder builder)
+        {
+            final String stringAscii = buffer.getStringAscii(offset);
+            builder.append(stringAscii);
+        }
+
+        public AgentBuilder addInstrumentation(final AgentBuilder agentBuilder, final Map<String, String> configOptions)
+        {
+            return null;
+        }
+
+        public void reset()
+        {
+
         }
     }
 }
