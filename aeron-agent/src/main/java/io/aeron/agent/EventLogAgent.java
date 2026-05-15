@@ -191,21 +191,32 @@ public final class EventLogAgent
 
             try
             {
+                final Constructor<?> constructor = aClass.getDeclaredConstructor(Map.class, List.class);
+                return (Agent)constructor.newInstance(configOptions, loggers);
+            }
+            catch (final NoSuchMethodException ignore)
+            {
+            }
+
+            try
+            {
                 final Constructor<?> constructor = aClass.getDeclaredConstructor(String.class, List.class);
                 return (Agent)constructor.newInstance(configOptions.get(LOG_FILENAME), loggers);
             }
-            catch (final NoSuchMethodException ex)
+            catch (final NoSuchMethodException ignore)
             {
-                try
-                {
-                    final Constructor<?> constructor = aClass.getDeclaredConstructor(String.class);
-                    return (Agent)constructor.newInstance(configOptions.get(LOG_FILENAME));
-                }
-                catch (final NoSuchMethodException ex2)
-                {
-                    return (Agent)aClass.getDeclaredConstructor().newInstance();
-                }
             }
+
+            try
+            {
+                final Constructor<?> constructor = aClass.getDeclaredConstructor(String.class);
+                return (Agent)constructor.newInstance(configOptions.get(LOG_FILENAME));
+            }
+            catch (final NoSuchMethodException ignore)
+            {
+            }
+
+            return (Agent)aClass.getDeclaredConstructor().newInstance();
         }
         catch (final Exception ex)
         {

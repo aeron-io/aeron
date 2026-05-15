@@ -15,6 +15,7 @@
  */
 package io.aeron.agent;
 
+import io.aeron.Aeron;
 import org.agrona.CloseHelper;
 import org.agrona.LangUtil;
 import org.agrona.MutableDirectBuffer;
@@ -33,8 +34,11 @@ import java.io.PrintStream;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import static io.aeron.agent.CommonEventDissector.dissectLogStartMessage;
@@ -44,10 +48,12 @@ import static java.lang.System.lineSeparator;
 import static java.nio.channels.FileChannel.open;
 import static java.nio.file.StandardOpenOption.APPEND;
 import static java.nio.file.StandardOpenOption.CREATE;
+import static java.nio.file.StandardOpenOption.CREATE_NEW;
 import static java.nio.file.StandardOpenOption.WRITE;
 import static java.time.ZoneId.systemDefault;
 import static org.agrona.BitUtil.CACHE_LINE_LENGTH;
 import static org.agrona.BufferUtil.allocateDirectAligned;
+import static org.agrona.SystemUtil.parseSize;
 
 /**
  * Simple reader of {@link EventConfiguration#EVENT_RING_BUFFER} that appends to {@link System#out} by default
@@ -64,15 +70,28 @@ public final class EventLogReaderAgent implements Agent
     private final StringBuilder builder = new StringBuilder(MAX_EVENT_LENGTH);
     private final MessageHandler messageHandler = this::onMessage;
     private final ByteBuffer byteBuffer;
-    private final FileChannel fileChannel;
     private final Int2ObjectHashMap<ComponentLogger> loggers = new Int2ObjectHashMap<>();
     private final PrintStream out;
     private final NanoClock nanoClock;
     private final EpochClock epochClock;
+    private final long maxFileLength;
+    private final String filename;
+    private int nextFileIndex = Aeron.NULL_VALUE;
+
+    private FileChannel fileChannel;
 
     EventLogReaderAgent(final String filename, final List<ComponentLogger> loggers)
     {
         this(filename, System.out, SystemNanoClock.INSTANCE, SystemEpochClock.INSTANCE, loggers);
+    }
+
+    EventLogReaderAgent(final Map<String, String> configOptions, final List<ComponentLogger> loggers)
+    {
+        this(
+            configOptions,
+            System.out,
+            SystemNanoClock.INSTANCE,
+            SystemEpochClock.INSTANCE, loggers);
     }
 
     EventLogReaderAgent(
@@ -82,6 +101,19 @@ public final class EventLogReaderAgent implements Agent
         final EpochClock epochClock,
         final List<ComponentLogger> loggers)
     {
+        this(asConfigOptions(filename), out, nanoClock, epochClock, loggers);
+    }
+
+    EventLogReaderAgent(
+        final Map<String, String> configOptions,
+        final PrintStream out,
+        final NanoClock nanoClock,
+        final EpochClock epochClock,
+        final List<ComponentLogger> loggers)
+    {
+        filename = configOptions.get(LOG_FILENAME_PROP_NAME);
+        maxFileLength = getMaxFileLength(configOptions);
+
         this.nanoClock = Objects.requireNonNull(nanoClock);
         this.epochClock = Objects.requireNonNull(epochClock);
         for (final ComponentLogger componentLogger : loggers)
@@ -152,8 +184,8 @@ public final class EventLogReaderAgent implements Agent
         }
         else
         {
-            appendEvent(builder, byteBuffer, fileChannel);
-            write(byteBuffer, fileChannel);
+            appendEvent(builder, byteBuffer);
+            write(byteBuffer);
         }
     }
 
@@ -181,7 +213,7 @@ public final class EventLogReaderAgent implements Agent
         final int eventsRead = ringBuffer.read(messageHandler, EVENT_READER_FRAME_LIMIT);
         if (null != byteBuffer && byteBuffer.position() > 0)
         {
-            write(byteBuffer, fileChannel);
+            write(byteBuffer);
         }
 
         return eventsRead;
@@ -202,7 +234,7 @@ public final class EventLogReaderAgent implements Agent
         }
         else
         {
-            appendEvent(builder, byteBuffer, fileChannel);
+            appendEvent(builder, byteBuffer);
         }
     }
 
@@ -227,13 +259,13 @@ public final class EventLogReaderAgent implements Agent
         builder.append(lineSeparator());
     }
 
-    private static void appendEvent(final StringBuilder builder, final ByteBuffer buffer, final FileChannel fileChannel)
+    private void appendEvent(final StringBuilder builder, final ByteBuffer buffer)
     {
         final int length = builder.length();
 
         if (buffer.position() + length > buffer.capacity())
         {
-            write(buffer, fileChannel);
+            write(buffer);
         }
 
         final int position = buffer.position();
@@ -246,7 +278,7 @@ public final class EventLogReaderAgent implements Agent
         buffer.position(position + length);
     }
 
-    private static void write(final ByteBuffer buffer, final FileChannel fileChannel)
+    private void write(final ByteBuffer buffer)
     {
         try
         {
@@ -257,6 +289,8 @@ public final class EventLogReaderAgent implements Agent
                 fileChannel.write(buffer);
             }
             while (buffer.remaining() > 0);
+
+            fileChannel = checkForFileRolling(fileChannel, filename, maxFileLength);
         }
         catch (final Exception ex)
         {
@@ -266,5 +300,56 @@ public final class EventLogReaderAgent implements Agent
         {
             buffer.clear();
         }
+    }
+
+    private static Map<String, String> asConfigOptions(final String filename)
+    {
+        return null != filename ? Map.of(LOG_FILENAME_PROP_NAME, filename) : Map.of();
+    }
+
+    private long getMaxFileLength(final Map<String, String> configOptions)
+    {
+        final String maxFileLengthStr = configOptions.get(ConfigOption.LOG_FILE_MAX_LENGTH);
+        try
+        {
+            return null != maxFileLengthStr ?
+                parseSize(ConfigOption.LOG_FILE_MAX_LENGTH, maxFileLengthStr) : Long.MAX_VALUE;
+        }
+        catch (final NumberFormatException ex)
+        {
+            System.err.println(ex.getMessage() + "  Disabling log rotation.");
+            return Long.MAX_VALUE;
+        }
+    }
+
+    private FileChannel checkForFileRolling(
+        final FileChannel fileChannel,
+        final String filename,
+        final long maxFileLength) throws IOException
+    {
+        if (maxFileLength <= fileChannel.size())
+        {
+            if (Aeron.NULL_VALUE == nextFileIndex)
+            {
+                nextFileIndex = 1;
+            }
+
+            fileChannel.close();
+            final Path file = Path.of(filename);
+
+            Path rolledFile;
+            do
+            {
+                rolledFile = Path.of(filename + "." + nextFileIndex);
+                nextFileIndex++;
+            }
+            while (Files.exists(rolledFile));
+
+            Files.move(file, rolledFile);
+
+            return open(Paths.get(filename), CREATE_NEW, APPEND, WRITE);
+        }
+
+        return fileChannel;
     }
 }
