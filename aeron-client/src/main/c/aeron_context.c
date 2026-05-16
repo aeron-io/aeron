@@ -40,7 +40,7 @@
 
 void aeron_default_error_handler(void *clientd, int errcode, const char *message)
 {
-    fprintf(stderr, "ERROR: (%d): %s\n", errcode, message);
+    AERON_FPRINTF(stderr, "ERROR: (%d): %s\n", errcode, message);
     exit(EXIT_FAILURE);
 }
 

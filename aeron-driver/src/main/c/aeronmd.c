@@ -75,7 +75,7 @@ int main(int argc, char **argv)
                 aeron_properties_parse_init(&state);
                 if (aeron_properties_parse_line(&state, optarg, strlen(optarg), set_property, NULL) < 0)
                 {
-                    fprintf(stderr, "malformed define: %s\n", optarg);
+                    AERON_FPRINTF(stderr, "malformed define: %s\n", optarg);
                     exit(EXIT_FAILURE);
                 }
                 break;
@@ -95,7 +95,7 @@ int main(int argc, char **argv)
             }
 
             default:
-                fprintf(stderr, "Usage: %s [-v][-Dname=value]\n", argv[0]);
+                AERON_FPRINTF(stderr, "Usage: %s [-v][-Dname=value]\n", argv[0]);
                 exit(EXIT_FAILURE);
         }
     }
@@ -104,7 +104,7 @@ int main(int argc, char **argv)
     {
         if (aeron_properties_load(argv[i]) < 0)
         {
-            fprintf(stderr, "ERROR: loading properties from %s (%d) %s\n", argv[i], aeron_errcode(), aeron_errmsg());
+            AERON_FPRINTF(stderr, "ERROR: loading properties from %s (%d) %s\n", argv[i], aeron_errcode(), aeron_errmsg());
             exit(EXIT_FAILURE);
         }
     }
@@ -114,21 +114,21 @@ int main(int argc, char **argv)
 
     if (aeron_driver_context_init(&context) < 0)
     {
-        fprintf(stderr, "ERROR: context init (%d) %s\n", aeron_errcode(), aeron_errmsg());
+        AERON_FPRINTF(stderr, "ERROR: context init (%d) %s\n", aeron_errcode(), aeron_errmsg());
         AERON_SET_RELEASE(exit_status, EXIT_FAILURE);
         goto cleanup;
     }
 
     if (aeron_driver_context_set_driver_termination_hook(context, termination_hook, NULL) < 0)
     {
-        fprintf(stderr, "ERROR: context set termination hook (%d) %s\n", aeron_errcode(), aeron_errmsg());
+        AERON_FPRINTF(stderr, "ERROR: context set termination hook (%d) %s\n", aeron_errcode(), aeron_errmsg());
         AERON_SET_RELEASE(exit_status, EXIT_FAILURE);
         goto cleanup;
     }
 
     if (aeron_driver_apply_cpuset_affinity(context) < 0)
     {
-        fprintf(stderr, "ERROR: apply cpuset affinity %s\n", aeron_errmsg());
+        AERON_FPRINTF(stderr, "ERROR: apply cpuset affinity %s\n", aeron_errmsg());
         AERON_SET_RELEASE(exit_status, EXIT_FAILURE);
         goto cleanup;
     }
@@ -138,21 +138,21 @@ int main(int argc, char **argv)
     context->agent_on_start_state_delegate = context->agent_on_start_state;
     if (aeron_driver_context_set_agent_on_start_function(context, aeron_set_thread_affinity_on_start, context))
     {
-        fprintf(stderr, "ERROR: unable to set on_start function(%d) %s\n", aeron_errcode(), aeron_errmsg());
+        AERON_FPRINTF(stderr, "ERROR: unable to set on_start function(%d) %s\n", aeron_errcode(), aeron_errmsg());
         AERON_SET_RELEASE(exit_status, EXIT_FAILURE);
         goto cleanup;
     }
 
     if (aeron_driver_init(&driver, context) < 0)
     {
-        fprintf(stderr, "ERROR: driver init (%d) %s\n", aeron_errcode(), aeron_errmsg());
+        AERON_FPRINTF(stderr, "ERROR: driver init (%d) %s\n", aeron_errcode(), aeron_errmsg());
         AERON_SET_RELEASE(exit_status, EXIT_FAILURE);
         goto cleanup;
     }
 
     if (aeron_driver_start(driver, true) < 0)
     {
-        fprintf(stderr, "ERROR: driver start (%d) %s\n", aeron_errcode(), aeron_errmsg());
+        AERON_FPRINTF(stderr, "ERROR: driver start (%d) %s\n", aeron_errcode(), aeron_errmsg());
         AERON_SET_RELEASE(exit_status, EXIT_FAILURE);
         goto cleanup;
     }
@@ -167,13 +167,13 @@ int main(int argc, char **argv)
 cleanup:
     if (NULL != driver && 0 != aeron_driver_close(driver))
     {
-        fprintf(stderr, "ERROR: driver close (%d) %s\n", aeron_errcode(), aeron_errmsg());
+        AERON_FPRINTF(stderr, "ERROR: driver close (%d) %s\n", aeron_errcode(), aeron_errmsg());
         AERON_SET_RELEASE(exit_status, EXIT_FAILURE);
     }
 
     if (NULL != context && 0 != aeron_driver_context_close(context))
     {
-        fprintf(stderr, "ERROR: driver context close (%d) %s\n", aeron_errcode(), aeron_errmsg());
+        AERON_FPRINTF(stderr, "ERROR: driver context close (%d) %s\n", aeron_errcode(), aeron_errmsg());
         AERON_SET_RELEASE(exit_status, EXIT_FAILURE);
     }
 

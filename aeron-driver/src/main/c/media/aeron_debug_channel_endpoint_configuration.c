@@ -96,12 +96,12 @@ static void aeron_debug_channel_endpoint_configuration_on_send_channel(
     if (aeron_debug_channel_endpoint_configuration_attach_random(
         &endpoint->data_loss_generator, params->data_rate, params->data_seed) < 0)
     {
-        fprintf(stderr, "INFO: failed to attach debug send data loss generator\n");
+        AERON_FPRINTF(stderr, "INFO: failed to attach debug send data loss generator\n");
     }
     if (aeron_debug_channel_endpoint_configuration_attach_random(
         &endpoint->control_loss_generator, params->control_rate, params->control_seed) < 0)
     {
-        fprintf(stderr, "INFO: failed to attach debug send control loss generator\n");
+        AERON_FPRINTF(stderr, "INFO: failed to attach debug send control loss generator\n");
     }
 }
 
@@ -114,12 +114,12 @@ static void aeron_debug_channel_endpoint_configuration_on_receive_channel(
     if (aeron_debug_channel_endpoint_configuration_attach_random(
         &endpoint->data_loss_generator, params->data_rate, params->data_seed) < 0)
     {
-        fprintf(stderr, "INFO: failed to attach debug receive data loss generator\n");
+        AERON_FPRINTF(stderr, "INFO: failed to attach debug receive data loss generator\n");
     }
     if (aeron_debug_channel_endpoint_configuration_attach_random(
         &endpoint->control_loss_generator, params->control_rate, params->control_seed) < 0)
     {
-        fprintf(stderr, "INFO: failed to attach debug receive control loss generator\n");
+        AERON_FPRINTF(stderr, "INFO: failed to attach debug receive control loss generator\n");
     }
 }
 

@@ -90,7 +90,7 @@ static void initialize_per_thread_error(void)
 {
     if (aeron_thread_key_create(&error_key, free))
     {
-        fprintf(stderr, "could not create per thread error key, exiting.\n");
+        AERON_FPRINTF(stderr, "could not create per thread error key, exiting.\n");
         exit(EXIT_FAILURE);
     }
 }
@@ -148,13 +148,13 @@ static aeron_per_thread_error_t *get_required_error_state(void)
         error_state = malloc(sizeof(aeron_per_thread_error_t));
         if (NULL == error_state)
         {
-            fprintf(stderr, "could not create per thread error state, exiting.\n");
+            AERON_FPRINTF(stderr, "could not create per thread error state, exiting.\n");
             exit(EXIT_FAILURE);
         }
 
         if (aeron_thread_set_specific(error_key, error_state))
         {
-            fprintf(stderr, "could not associate per thread error key, exiting.\n");
+            AERON_FPRINTF(stderr, "could not associate per thread error key, exiting.\n");
             exit(EXIT_FAILURE);
         }
     }
@@ -268,7 +268,7 @@ static void aeron_err_vprintf(
 
     if (result < 0)
     {
-        fprintf(stderr, "Failed to update err_msg: %d\n", result);
+        AERON_FPRINTF(stderr, "Failed to update err_msg: %d\n", result);
     }
 
     error_state->offset += result;

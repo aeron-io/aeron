@@ -173,7 +173,7 @@ void aeron_driver_agent_logging_ring_buffer_init(void)
 
     if ((rb_buffer = (uint8_t *)malloc(rb_length)) == NULL)
     {
-        fprintf(stderr, "could not allocate ring buffer buffer. exiting.\n");
+        AERON_FPRINTF(stderr, "could not allocate ring buffer buffer. exiting.\n");
         exit(EXIT_FAILURE);
     }
 
@@ -181,7 +181,7 @@ void aeron_driver_agent_logging_ring_buffer_init(void)
 
     if (aeron_mpsc_rb_init(&logging_mpsc_rb, rb_buffer, rb_length) < 0)
     {
-        fprintf(stderr, "could not init logging mpsc_rb. exiting.\n");
+        AERON_FPRINTF(stderr, "could not init logging mpsc_rb. exiting.\n");
         exit(EXIT_FAILURE);
     }
 }
@@ -400,7 +400,7 @@ static bool aeron_driver_agent_events_set_enabled(char const **events, const int
             }
             else
             {
-                fprintf(stderr, "unknown event code: '%s'\n", event_name);
+                AERON_FPRINTF(stderr, "unknown event code: '%s'\n", event_name);
             }
         }
     }
@@ -419,7 +419,7 @@ bool aeron_driver_agent_logging_events_init(const char *event_log, const char *e
     char *event_log_dup = strdup(event_log);
     if (NULL == event_log_dup)
     {
-        fprintf(stderr, "failed to copy logging events string\n");
+        AERON_FPRINTF(stderr, "failed to copy logging events string\n");
         return false;
     }
 
@@ -428,7 +428,7 @@ bool aeron_driver_agent_logging_events_init(const char *event_log, const char *e
 
     if (num_events < 0)
     {
-        fprintf(stderr, "failed to parse logging events: '%s'\n", event_log);
+        AERON_FPRINTF(stderr, "failed to parse logging events: '%s'\n", event_log);
         aeron_free(event_log_dup);
         return false;
     }
@@ -442,7 +442,7 @@ bool aeron_driver_agent_logging_events_init(const char *event_log, const char *e
         event_log_disable_dup = strdup(event_log_disable);
         if (NULL == event_log_disable_dup)
         {
-            fprintf(stderr, "failed to copy logging disable events string\n");
+            AERON_FPRINTF(stderr, "failed to copy logging disable events string\n");
             aeron_free(event_log_dup);
             return false;
         }
@@ -452,7 +452,7 @@ bool aeron_driver_agent_logging_events_init(const char *event_log, const char *e
 
         if (num_events_disable < 0)
         {
-            fprintf(stderr, "failed to parse logging events: '%s'\n", event_log_disable);
+            AERON_FPRINTF(stderr, "failed to parse logging events: '%s'\n", event_log_disable);
             aeron_free(event_log_dup);
             aeron_free(event_log_disable_dup);
             return false;
@@ -499,7 +499,8 @@ static void initialize_agent_logging(void)
             {
                 int errcode = errno;
 
-                fprintf(stderr, "could not fopen log file %s (%d, %s). exiting.\n",
+                AERON_FPRINTF(
+                    stderr, "could not fopen log file %s (%d, %s). exiting.\n",
                     log_filename, errcode, strerror(errcode));
                 exit(EXIT_FAILURE);
             }
@@ -509,11 +510,11 @@ static void initialize_agent_logging(void)
 
         if (aeron_thread_create(&log_reader_thread, NULL, aeron_driver_agent_log_reader, NULL) != 0)
         {
-            fprintf(stderr, "could not start log reader thread. exiting.\n");
+            AERON_FPRINTF(stderr, "could not start log reader thread. exiting.\n");
             exit(EXIT_FAILURE);
         }
 
-        fprintf(logfp, "%s\n", aeron_driver_agent_dissect_log_start(aeron_nano_clock(), aeron_epoch_clock()));
+        AERON_FPRINTF(logfp, "%s\n", aeron_driver_agent_dissect_log_start(aeron_nano_clock(), aeron_epoch_clock()));
     }
 }
 
@@ -709,7 +710,7 @@ void aeron_driver_agent_log_frame(int32_t msg_type_id, const struct msghdr *msgh
 
         if (msghdr->msg_iovlen > 1)
         {
-            fprintf(stderr, "only aware of 1 iov. %d iovs detected.\n", (int)msghdr->msg_iovlen);
+            AERON_FPRINTF(stderr, "only aware of 1 iov. %d iovs detected.\n", (int)msghdr->msg_iovlen);
         }
 
         ptr += sizeof(aeron_driver_agent_frame_log_header_t);
@@ -2239,7 +2240,7 @@ void aeron_driver_agent_log_dissector(int32_t msg_type_id, const void *message, 
             char addr_buf[AERON_NETUTIL_FORMATTED_MAX_LENGTH];
             const int addr_length = aeron_format_source_identity(addr_buf, sizeof(addr_buf), addr);
 
-            fprintf(
+            AERON_FPRINTF(
                 logfp,
                 "%s: address=%.*s %s\n",
                 aeron_driver_agent_dissect_log_header(hdr->time_ns, msg_type_id, length, (size_t)hdr->message_len),
@@ -2253,7 +2254,7 @@ void aeron_driver_agent_log_dissector(int32_t msg_type_id, const void *message, 
         {
             aeron_driver_agent_remove_resource_cleanup_t *hdr = (aeron_driver_agent_remove_resource_cleanup_t *)message;
             const char *channel = (const char *)message + sizeof(aeron_driver_agent_remove_resource_cleanup_t);
-            fprintf(
+            AERON_FPRINTF(
                 logfp,
                 "%s: sessionId=%d streamId=%d channel=%.*s\n",
                 aeron_driver_agent_dissect_log_header(hdr->time_ns, msg_type_id, length, length),
@@ -2268,7 +2269,7 @@ void aeron_driver_agent_log_dissector(int32_t msg_type_id, const void *message, 
         {
             aeron_driver_agent_remove_resource_cleanup_t *hdr = (aeron_driver_agent_remove_resource_cleanup_t *)message;
             const char *channel = (const char *)message + sizeof(aeron_driver_agent_remove_resource_cleanup_t);
-            fprintf(
+            AERON_FPRINTF(
                 logfp,
                 "%s: streamId=%d id=%" PRId64 " channel=%.*s\n",
                 aeron_driver_agent_dissect_log_header(hdr->time_ns, msg_type_id, length, length),
@@ -2283,7 +2284,7 @@ void aeron_driver_agent_log_dissector(int32_t msg_type_id, const void *message, 
         {
             aeron_driver_agent_remove_resource_cleanup_t *hdr = (aeron_driver_agent_remove_resource_cleanup_t *)message;
             const char *channel = (const char *)message + sizeof(aeron_driver_agent_remove_resource_cleanup_t);
-            fprintf(
+            AERON_FPRINTF(
                 logfp,
                 "%s: sessionId=%d streamId=%d id=%" PRId64 " channel=%.*s\n",
                 aeron_driver_agent_dissect_log_header(hdr->time_ns, msg_type_id, length, length),
@@ -2308,7 +2309,7 @@ void aeron_driver_agent_log_dissector(int32_t msg_type_id, const void *message, 
             const int remote_addr_length = aeron_format_source_identity(
                 remote_addr_buf, sizeof(remote_addr_buf), &hdr->remote_data);
 
-            fprintf(
+            AERON_FPRINTF(
                 logfp,
                 "%s: localData: %.*s, remoteData: %.*s, ttl: %d\n",
                 aeron_driver_agent_dissect_log_header(hdr->time_ns, msg_type_id, length, length),
@@ -2325,7 +2326,7 @@ void aeron_driver_agent_log_dissector(int32_t msg_type_id, const void *message, 
             aeron_driver_agent_untethered_subscription_state_change_log_header_t *hdr =
                 (aeron_driver_agent_untethered_subscription_state_change_log_header_t *)message;
 
-            fprintf(
+            AERON_FPRINTF(
                 logfp,
                 "%s: subscriptionId=%" PRId64 " streamId=%d sessionId=%d %s -> %s\n",
                 aeron_driver_agent_dissect_log_header(hdr->time_ns, msg_type_id, length, length),
@@ -2346,7 +2347,7 @@ void aeron_driver_agent_log_dissector(int32_t msg_type_id, const void *message, 
             char addr_buf[AERON_NETUTIL_FORMATTED_MAX_LENGTH];
             const int addr_length = aeron_format_source_identity(addr_buf, sizeof(addr_buf), addr);
 
-            fprintf(
+            AERON_FPRINTF(
                 logfp,
                 "%s: %.*s\n",
                 aeron_driver_agent_dissect_log_header(hdr->time_ns, msg_type_id, length, length),
@@ -2360,7 +2361,7 @@ void aeron_driver_agent_log_dissector(int32_t msg_type_id, const void *message, 
         {
             aeron_driver_agent_flow_control_receiver_change_log_header_t *hdr = (aeron_driver_agent_flow_control_receiver_change_log_header_t *)message;
             const char *channel = (const char *)message + sizeof(aeron_driver_agent_flow_control_receiver_change_log_header_t);
-            fprintf(
+            AERON_FPRINTF(
                 logfp,
                 "%s: receiverCount=%d receiverId=%" PRId64 " sessionId=%d streamId=%d channel=%.*s\n",
                 aeron_driver_agent_dissect_log_header(hdr->time_ns, msg_type_id, length, length),
@@ -2381,7 +2382,7 @@ void aeron_driver_agent_log_dissector(int32_t msg_type_id, const void *message, 
             const int address_length = aeron_format_source_identity(address_buf, sizeof(address_buf), &hdr->address);
             const char *channel = (const char *)message + sizeof(aeron_driver_agent_nak_message_header_t);
 
-            fprintf(
+            AERON_FPRINTF(
                 logfp,
                 "%s: address=%.*s sessionId=%d streamId=%d termId=%d termOffset=%d length=%d channel=%.*s\n",
                 aeron_driver_agent_dissect_log_header(hdr->time_ns, msg_type_id, length, length),
@@ -2403,7 +2404,7 @@ void aeron_driver_agent_log_dissector(int32_t msg_type_id, const void *message, 
             aeron_driver_agent_resend_header_t *hdr = (aeron_driver_agent_resend_header_t *)message;
             const char *channel = (const char *)message + sizeof(aeron_driver_agent_resend_header_t);
 
-            fprintf(
+            AERON_FPRINTF(
                 logfp,
                 "%s: sessionId=%d streamId=%d termId=%d termOffset=%d length=%d channel=%.*s\n",
                 aeron_driver_agent_dissect_log_header(hdr->time_ns, msg_type_id, length, length),
@@ -2423,7 +2424,7 @@ void aeron_driver_agent_log_dissector(int32_t msg_type_id, const void *message, 
             aeron_driver_agent_publication_revoke_header_t *hdr = (aeron_driver_agent_publication_revoke_header_t *)message;
             const char *channel = (const char *)message + sizeof(aeron_driver_agent_publication_revoke_header_t);
 
-            fprintf(
+            AERON_FPRINTF(
                 logfp,
                 "%s: revokedPos=%" PRIu64 " sessionId=%d streamId=%d channel=%.*s\n",
                 aeron_driver_agent_dissect_log_header(hdr->time_ns, msg_type_id, length, length),
@@ -2441,7 +2442,7 @@ void aeron_driver_agent_log_dissector(int32_t msg_type_id, const void *message, 
             aeron_driver_agent_publication_image_revoke_header_t *hdr = (aeron_driver_agent_publication_image_revoke_header_t *)message;
             const char *channel = (const char *)message + sizeof(aeron_driver_agent_publication_image_revoke_header_t);
 
-            fprintf(
+            AERON_FPRINTF(
                 logfp,
                 "%s: revokedPos=%" PRIu64 " sessionId=%d streamId=%d channel=%.*s\n",
                 aeron_driver_agent_dissect_log_header(hdr->time_ns, msg_type_id, length, length),
@@ -2481,7 +2482,7 @@ void aeron_driver_agent_log_dissector(int32_t msg_type_id, const void *message, 
                 address_str = address_buf;
             }
 
-            fprintf(
+            AERON_FPRINTF(
                 logfp,
                 "%s: resolver=%.*s durationNs=%" PRIu64 " name=%.*s isReResolution=%s address=%s%s%s\n",
                 aeron_driver_agent_dissect_log_header(hdr->time_ns, msg_type_id, length, length),
@@ -2506,7 +2507,7 @@ void aeron_driver_agent_log_dissector(int32_t msg_type_id, const void *message, 
             uint8_t *name_ptr = resolver_name_ptr + hdr->resolver_name_length;
             uint8_t *resolved_name_ptr = name_ptr + hdr->name_length;
 
-            fprintf(
+            AERON_FPRINTF(
                 logfp,
                 "%s: resolver=%.*s durationNs=%" PRIu64 " name=%.*s isReLookup=%s resolvedName=%.*s\n",
                 aeron_driver_agent_dissect_log_header(hdr->time_ns, msg_type_id, length, length),
@@ -2528,7 +2529,7 @@ void aeron_driver_agent_log_dissector(int32_t msg_type_id, const void *message, 
             uint8_t *host_name_name_ptr =
                 (uint8_t *)message + sizeof(aeron_driver_agent_name_resolver_host_name_log_header_t);
 
-            fprintf(
+            AERON_FPRINTF(
                 logfp,
                 "%s: durationNs=%" PRIu64 " hostName=%.*s\n",
                 aeron_driver_agent_dissect_log_header(hdr->time_ns, msg_type_id, length, length),
@@ -2545,7 +2546,7 @@ void aeron_driver_agent_log_dissector(int32_t msg_type_id, const void *message, 
             uint8_t *message_ptr =
                 (uint8_t *)message + sizeof(aeron_driver_agent_text_data_log_header_t);
 
-            fprintf(
+            AERON_FPRINTF(
                 logfp,
                 "%s: %.*s\n",
                 aeron_driver_agent_dissect_log_header(hdr->time_ns, msg_type_id, length, length),
@@ -2594,7 +2595,7 @@ void aeron_driver_agent_log_dissector(int32_t msg_type_id, const void *message, 
                 {
                     aeron_driver_agent_cmd_log_header_t *hdr = (aeron_driver_agent_cmd_log_header_t *)message;
 
-                    fprintf(
+                    AERON_FPRINTF(
                         logfp,
                         "%s: %s\n",
                         aeron_driver_agent_dissect_log_header(hdr->time_ns, msg_type_id, length, length),
@@ -2607,7 +2608,7 @@ void aeron_driver_agent_log_dissector(int32_t msg_type_id, const void *message, 
                 {
                     aeron_driver_agent_cmd_log_header_t *hdr = (aeron_driver_agent_cmd_log_header_t *)message;
 
-                    fprintf(
+                    AERON_FPRINTF(
                         logfp,
                         "%s: %s\n",
                         aeron_driver_agent_dissect_log_header(hdr->time_ns, msg_type_id, length, length),

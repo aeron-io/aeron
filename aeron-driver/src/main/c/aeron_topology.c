@@ -25,6 +25,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "aeronc.h"
+
 #define AERON_TOPOLOGY_MAX_CPU_ID 8192
 #define AERON_TOPOLOGY_FILE_BUF_SIZE 4096
 
@@ -493,7 +495,7 @@ int aeron_topology_check_alignment(const char* sys_cpu_root, const int *cpus, co
             char cpulist_buf[4096];
             aeron_topology_format_cpulist(groups[i].missing, groups[i].missing_count, cpulist_buf, sizeof(cpulist_buf));
 
-            fprintf(
+            AERON_FPRINTF(
                 output,
                 "WARNING: cpuset is missing sibling CPU(s) %s of the core containing CPU %d (partial core in cpuset)\n",
                 cpulist_buf, groups[i].present[0]);
@@ -538,7 +540,7 @@ int aeron_topology_check_l3_locality(const char* sys_cpu_root, const int *cpus, 
         {
             if (!seen[cpus[j]])
             {
-                fprintf(output, "%s", "WARNING: cpuset spans multiple L3 cache domains\n");
+                AERON_FPRINTF(output, "%s", "WARNING: cpuset spans multiple L3 cache domains\n");
                 warnings++;
                 break;
             }
@@ -615,7 +617,7 @@ int aeron_topology_check_die_locality(const char* sys_cpu_root, const int *cpus,
             }
         }
 
-        fprintf(output, "cpuset spans %d CPU clusters (cluster IDs: %s)\n", cluster_id_count, id_list_buf);
+        AERON_FPRINTF(output, "cpuset spans %d CPU clusters (cluster IDs: %s)\n", cluster_id_count, id_list_buf);
         result++;
     }
 
