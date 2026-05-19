@@ -76,7 +76,7 @@ public final class EventLogReaderAgent implements Agent
     private final EpochClock epochClock;
     private final long maxFileLength;
     private final String filename;
-    private int nextFileIndex = Aeron.NULL_VALUE;
+    private int nextFileIndex = 1;
 
     private FileChannel fileChannel;
 
@@ -133,7 +133,7 @@ public final class EventLogReaderAgent implements Agent
                 throw new UncheckedIOException(ex);
             }
 
-            byteBuffer = allocateDirectAligned(MAX_EVENT_LENGTH * 2, CACHE_LINE_LENGTH);
+            byteBuffer = allocateDirectAligned((MAX_EVENT_LENGTH + lineSeparator().length()) * 2, CACHE_LINE_LENGTH);
         }
         else
         {
@@ -329,11 +329,6 @@ public final class EventLogReaderAgent implements Agent
     {
         if (maxFileLength <= fileChannel.size())
         {
-            if (Aeron.NULL_VALUE == nextFileIndex)
-            {
-                nextFileIndex = 1;
-            }
-
             fileChannel.close();
             final Path file = Path.of(filename);
 
