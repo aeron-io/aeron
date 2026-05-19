@@ -336,7 +336,7 @@ public final class PersistentSubscription implements AutoCloseable
      */
     public void close()
     {
-        CloseHelper.closeAll(this::closeLive, this::closeReplay, asyncAeronArchive, ctx::close);
+        CloseHelper.quietCloseAll(this::closeLive, this::closeReplay, asyncAeronArchive, ctx::close);
     }
 
     private void closeLive()
