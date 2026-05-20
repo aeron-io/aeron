@@ -15,7 +15,6 @@
  */
 package io.aeron.agent;
 
-import io.aeron.Aeron;
 import org.agrona.CloseHelper;
 import org.agrona.LangUtil;
 import org.agrona.MutableDirectBuffer;
@@ -66,6 +65,11 @@ public final class EventLogReaderAgent implements Agent
      */
     public static final String LOG_FILENAME_PROP_NAME = ConfigOption.LOG_FILENAME;
 
+    /**
+     * Length of the buffer used for writing rendered messages to the log file.
+     */
+    public static final int BUFFER_LENGTH = (MAX_EVENT_LENGTH + lineSeparator().length()) * 2;
+
     private final ManyToOneRingBuffer ringBuffer = EventConfiguration.EVENT_RING_BUFFER;
     private final StringBuilder builder = new StringBuilder(MAX_EVENT_LENGTH);
     private final MessageHandler messageHandler = this::onMessage;
@@ -79,6 +83,7 @@ public final class EventLogReaderAgent implements Agent
     private int nextFileIndex = 1;
 
     private FileChannel fileChannel;
+    private long startTimeMs;
 
     EventLogReaderAgent(final String filename, final List<ComponentLogger> loggers)
     {
@@ -133,7 +138,7 @@ public final class EventLogReaderAgent implements Agent
                 throw new UncheckedIOException(ex);
             }
 
-            byteBuffer = allocateDirectAligned((MAX_EVENT_LENGTH + lineSeparator().length()) * 2, CACHE_LINE_LENGTH);
+            byteBuffer = allocateDirectAligned(BUFFER_LENGTH, CACHE_LINE_LENGTH);
         }
         else
         {
@@ -149,34 +154,8 @@ public final class EventLogReaderAgent implements Agent
     public void onStart()
     {
         final long startTimeNs = nanoClock.nanoTime();
-        final long startTimeMs = epochClock.time();
-        dissectLogStartMessage(startTimeNs, startTimeMs, systemDefault(), builder);
-
-        builder.append(", enabled loggers: {");
-
-        final EventCodeType[] eventCodeTypes = EventCodeType.values();
-        final IntHashSet visited = new IntHashSet(loggers.size());
-        String separator = "";
-        for (final EventCodeType type : eventCodeTypes)
-        {
-            visited.add(type.getTypeCode());
-            final ComponentLogger logger = loggers.get(type.getTypeCode());
-            if (null != logger)
-            {
-                builder.append(separator).append(type).append(": ").append(logger.version());
-                separator = ", ";
-            }
-        }
-
-        loggers.forEachInt((type, logger) ->
-        {
-            if (!visited.contains(type))
-            {
-                builder.append(", ").append(logger.getClass().getName()).append(": ").append(logger.version());
-            }
-        });
-
-        builder.append('}').append(lineSeparator());
+        startTimeMs = epochClock.time();
+        appendFileHeader(startTimeNs, startTimeMs);
 
         if (null == fileChannel)
         {
@@ -289,8 +268,6 @@ public final class EventLogReaderAgent implements Agent
                 fileChannel.write(buffer);
             }
             while (buffer.remaining() > 0);
-
-            fileChannel = checkForFileRolling(fileChannel, filename, maxFileLength);
         }
         catch (final Exception ex)
         {
@@ -299,6 +276,15 @@ public final class EventLogReaderAgent implements Agent
         finally
         {
             buffer.clear();
+        }
+
+        try
+        {
+            checkForFileRolling(filename, maxFileLength);
+        }
+        catch (final Exception ex)
+        {
+            LangUtil.rethrowUnchecked(ex);
         }
     }
 
@@ -322,29 +308,69 @@ public final class EventLogReaderAgent implements Agent
         }
     }
 
-    private FileChannel checkForFileRolling(
-        final FileChannel fileChannel,
-        final String filename,
-        final long maxFileLength) throws IOException
+    private void checkForFileRolling(final String filename, final long maxFileLength) throws IOException
     {
-        if (maxFileLength <= fileChannel.size())
+        if (fileChannel.size() < maxFileLength)
         {
-            fileChannel.close();
-            final Path file = Path.of(filename);
-
-            Path rolledFile;
-            do
-            {
-                rolledFile = Path.of(filename + "." + nextFileIndex);
-                nextFileIndex++;
-            }
-            while (Files.exists(rolledFile));
-
-            Files.move(file, rolledFile);
-
-            return open(Paths.get(filename), CREATE_NEW, APPEND, WRITE);
+            return;
         }
 
-        return fileChannel;
+        fileChannel.close();
+        final Path file = Path.of(filename);
+
+        Path rolledFile;
+        do
+        {
+            rolledFile = Path.of(filename + "." + nextFileIndex);
+            nextFileIndex++;
+        }
+        while (Files.exists(rolledFile));
+
+        Files.move(file, rolledFile);
+
+        fileChannel = open(Paths.get(filename), CREATE_NEW, APPEND, WRITE);
+
+        appendFileHeader(nanoClock.nanoTime(), startTimeMs);
+        appendEvent(builder, byteBuffer);
+        write(byteBuffer);
+    }
+
+    private void appendFileHeader(final long startTimeNs, final long startTimeMs)
+    {
+        builder.setLength(0);
+        dissectLogStartMessage(startTimeNs, startTimeMs, systemDefault(), builder);
+
+        builder.append(", enabled loggers: {");
+
+        final EventCodeType[] eventCodeTypes = EventCodeType.values();
+        final IntHashSet visited = new IntHashSet(loggers.size());
+        String separator = "";
+        for (final EventCodeType type : eventCodeTypes)
+        {
+            visited.add(type.getTypeCode());
+            final ComponentLogger logger = loggers.get(type.getTypeCode());
+            if (null != logger)
+            {
+                builder.append(separator).append(type).append(": ").append(logger.version());
+                separator = ", ";
+            }
+        }
+
+        loggers.forEachInt((type, logger) ->
+        {
+            if (!visited.contains(type))
+            {
+                builder.append(logger.getClass().getName()).append(": ").append(logger.version()).append(", ");
+            }
+        });
+
+        if (2 < builder.length() &&
+            ',' == builder.charAt(builder.length() - 2) &&
+            ' ' == builder.charAt(builder.length() - 1))
+        {
+            builder.setLength(builder.length() - 2);
+        }
+
+        builder.append('}').append(lineSeparator());
     }
 }

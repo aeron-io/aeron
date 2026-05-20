@@ -41,10 +41,10 @@ import java.util.function.Supplier;
 
 import static io.aeron.agent.ConfigOption.LOG_FILENAME;
 import static io.aeron.agent.ConfigOption.LOG_FILE_MAX_LENGTH;
-import static io.aeron.agent.EventConfiguration.MAX_EVENT_LENGTH;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -87,14 +87,14 @@ class EventLogReaderAgentTest
     @Test
     void shouldRotateLogs(@TempDir final Path tempDir) throws IOException
     {
-        final Path file = tempDir.resolve("test-out.log");
-        assertFalse(Files.exists(file));
+        final Path logFile = tempDir.resolve("test-out.log");
+        assertFalse(Files.exists(logFile));
         assertEquals(0, Files.list(tempDir).count());
 
-        final long maxFileLength = 16 * 1024;
+        final long maxFileLength = 32 * 1024;
         final String maxFileLengthStr = SystemUtil.formatSize(maxFileLength);
         final Map<String, String> configOptions = Map.of(
-            LOG_FILENAME, file.toString(),
+            LOG_FILENAME, logFile.toString(),
             LOG_FILE_MAX_LENGTH, maxFileLengthStr);
 
         final CachedNanoClock nanoClock = new CachedNanoClock();
@@ -119,6 +119,7 @@ class EventLogReaderAgentTest
         final String msg = new String(bs, US_ASCII);
 
         final int messageId = eventTypeId << 16;
+        long lastFileCount = 0;
 
         for (int i = 0; i < 100; i++)
         {
@@ -126,27 +127,28 @@ class EventLogReaderAgentTest
             eventRingBuffer.buffer().putStringAscii(index, msg);
             eventRingBuffer.commit(index);
             logReaderAgent.doWork();
+
+            final long fileCount = Files.list(tempDir).count();
+            if (lastFileCount < fileCount)
+            {
+                final Optional<String> firstLine = Files.lines(logFile).findFirst();
+                assertTrue(firstLine.isPresent());
+                assertTrue(firstLine.get().contains("log started"));
+                final String expectedTimestamp = LogUtil.renderTimestamp(nanoClock.nanoTime());
+                assertTrue(
+                    firstLine.get().startsWith(expectedTimestamp),
+                    () -> "expected '" + expectedTimestamp + "' at the beginning of '" + firstLine.get() + "'");
+                lastFileCount = fileCount;
+
+                nanoClock.update(System.nanoTime());
+            }
         }
 
         logReaderAgent.onClose();
 
-        Files.list(tempDir)
-            .forEach((f) -> assertThat(f.toFile().length(), lessThanOrEqualTo(maxFileLength + MAX_EVENT_LENGTH)));
-
-        Files.list(tempDir).forEach(
-            (f) ->
-            {
-                try
-                {
-                    final Optional<String> firstLine = Files.lines(f).findFirst();
-                    assertTrue(firstLine.isPresent());
-//                    assertTrue(Files.lines(f).limit(1).allMatch((s) -> s.contains("log started")), f.toString());
-                }
-                catch (final IOException ex)
-                {
-                    throw new RuntimeException(ex);
-                }
-            });
+        assertThat(Files.list(tempDir).count(), greaterThan(1L));
+        final long expectedFileLimit = maxFileLength + EventLogReaderAgent.BUFFER_LENGTH;
+        Files.list(tempDir).forEach((f) -> assertThat(f.toFile().length(), lessThanOrEqualTo(expectedFileLimit)));
     }
 
     @Test
