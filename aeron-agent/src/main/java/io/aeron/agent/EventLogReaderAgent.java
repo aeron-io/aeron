@@ -344,15 +344,14 @@ public final class EventLogReaderAgent implements Agent
 
         final EventCodeType[] eventCodeTypes = EventCodeType.values();
         final IntHashSet visited = new IntHashSet(loggers.size());
-        String separator = "";
+
         for (final EventCodeType type : eventCodeTypes)
         {
             visited.add(type.getTypeCode());
             final ComponentLogger logger = loggers.get(type.getTypeCode());
             if (null != logger)
             {
-                builder.append(separator).append(type).append(": ").append(logger.version());
-                separator = ", ";
+                builder.append(type).append(": ").append(logger.version()).append(", ");
             }
         }
 

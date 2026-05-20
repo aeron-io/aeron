@@ -23,10 +23,9 @@ import org.agrona.AsciiEncoding;
 final class LogUtil
 {
     private static final long NANOS_PER_SECOND = 1_000_000_000;
-    private static final long NANOS_PER_MICROSECOND = 1_000;
 
     /**
-     * Render a nanosecond timestamp to the supplied {@link StringBuilder} in the following format:
+     * Render a nanosecond timestamp to the supplied {@link StringBuilder} in the following format.
      * <pre>
      *     [&lt;seconds&gt;.&lt;nanoseconds&gt;]
      * </pre>
@@ -51,7 +50,7 @@ final class LogUtil
     }
 
     /**
-     * Render a nanosecond timestamp as a string in the following format:
+     * Render a nanosecond timestamp as a string in the following format.
      * <pre>
      *     [&lt;seconds&gt;.&lt;nanoseconds&gt;]
      * </pre>
