@@ -758,7 +758,7 @@ bool aeron_file_exists(const char* path)
 
 int64_t aeron_ftell(void *stream)
 {
-    return (int64_t)_ftell64((FILE *)stream);
+    return (int64_t)_ftelli64((FILE *)stream);
 }
 
 #else
