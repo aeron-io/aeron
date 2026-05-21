@@ -1531,19 +1531,27 @@ TEST_F(DriverAgentTest, dissecLogStartShouldFormatNanoTimeWithMicrosecondPrecisi
 {
     int64_t time_ns = 55555001234567;
     int64_t time_ms = 1234567890987;
+    char *buf = nullptr;
+    size_t length = 0;
 
-    auto result = std::string(aeron_driver_agent_dissect_log_start(time_ns, time_ms));
+    FILE *memf = open_memstream(&buf, &length);
+    aeron_driver_agent_dissect_log_start(memf, time_ns, time_ms);
+    fflush(memf);
+    fclose(memf);
+    std::string result(buf, length);
 
     std::string startString = "[55555.001234567] log started 2009-02-1";
     std::string endString = std::string(", enabled loggers: {DRIVER:")
-    .append(" version=")
-    .append(aeron_driver_version_text())
-    .append(" commit=")
-    .append(aeron_driver_version_git_sha())
-    .append("}");
+        .append(" version=")
+        .append(aeron_driver_version_text())
+        .append(" commit=")
+        .append(aeron_driver_version_git_sha())
+        .append("}");
 
     EXPECT_EQ(0, result.find(startString));
     EXPECT_NE(std::string::npos, result.find(endString, startString.length()));
+
+    free(buf);
 }
 
 TEST_F(DriverAgentTest, dissecLogHeaderShouldFormatNanoTimeWithMicrosecondPrecision)

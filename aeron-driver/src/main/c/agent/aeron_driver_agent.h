@@ -277,7 +277,7 @@ const char *aeron_driver_agent_dissect_log_header(
     size_t capture_length,
     size_t message_length);
 
-const char *aeron_driver_agent_dissect_log_start(int64_t time_ns, int64_t time_ms);
+void aeron_driver_agent_dissect_log_start(FILE* stream, int64_t time_ns, int64_t time_ms);
 
 const char *aeron_driver_agent_dissect_frame(const void *message, size_t length);
 

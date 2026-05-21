@@ -155,7 +155,7 @@ aeron_mpsc_rb_t *aeron_driver_agent_mpsc_rb(void)
 
 void aeron_driver_agent_log_reader_do_start(const aeron_driver_agent_log_state_t *state)
 {
-    fprintf(state->logfp, "%s\n", aeron_driver_agent_dissect_log_start(aeron_nano_clock(), state->start_time_ms));
+    aeron_driver_agent_dissect_log_start(state->logfp, aeron_nano_clock(), state->start_time_ms);
 }
 
 void aeron_driver_agent_log_reader_do_work(aeron_driver_agent_log_state_t *state, aeron_mpsc_rb_t *rb)
@@ -1546,23 +1546,21 @@ const char *aeron_driver_agent_dissect_log_header(
     return buffer;
 }
 
-// TODO: Make this take a FILE* str.
-const char *aeron_driver_agent_dissect_log_start(int64_t time_ns, int64_t time_ms)
+void aeron_driver_agent_dissect_log_start(FILE* stream, const int64_t time_ns, const int64_t time_ms)
 {
-    static char buffer[512];
     static char datestamp[256];
 
     const int64_t seconds = time_ns / NANOS_PER_SECOND;
     const int64_t nanos = time_ns - seconds * NANOS_PER_SECOND;
     aeron_format_date(datestamp, sizeof(datestamp) - 1, time_ms);
-    snprintf(buffer, sizeof(buffer) - 1, "[%" PRIu64".%09" PRIu64 "] log started %s, enabled loggers: {DRIVER: version=%s commit=%s}",
+    fprintf(
+        stream,
+        "[%" PRIu64".%09" PRIu64 "] log started %s, enabled loggers: {DRIVER: version=%s commit=%s}\n",
         seconds,
         nanos,
         datestamp,
         aeron_driver_version_text(),
         aeron_driver_version_git_sha());
-
-    return buffer;
 }
 
 static const char *dissect_cmd_in(int64_t cmd_id, const void *message, size_t length)
@@ -2291,7 +2289,8 @@ static void aeron_driver_agent_check_for_file_rolling(aeron_driver_agent_log_sta
     }
     else
     {
-        fprintf(state->logfp, "%s\n", aeron_driver_agent_dissect_log_start(aeron_nano_clock(), state->start_time_ms));
+        aeron_driver_agent_dissect_log_start(state->logfp, aeron_nano_clock(), state->start_time_ms);
+        // fprintf(state->logfp, "%s\n", );
     }
 }
 
