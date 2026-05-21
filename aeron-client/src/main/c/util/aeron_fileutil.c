@@ -756,6 +756,11 @@ bool aeron_file_exists(const char* path)
     return false;
 }
 
+int64_t aeron_ftell(void *stream)
+{
+    return (int64_t)_ftell64((FILE *)stream);
+}
+
 #else
 #include <unistd.h>
 #include <sys/mman.h>
@@ -837,6 +842,10 @@ bool aeron_file_exists(const char* path)
     return false;
 }
 
+int64_t aeron_ftell(void *stream)
+{
+    return (int64_t)ftello(stream);
+}
 
 static int unlink_func(const char *path, const struct stat *sb, int type_flag, struct FTW *ftw)
 {

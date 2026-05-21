@@ -30,9 +30,6 @@ extern "C"
 #include "util/aeron_fileutil.h"
 }
 
-
-#define AERON_CPUSET_TEST_TEMPLATE "cpuset_XXXXXX"
-
 using namespace testing;
 
 class CpusetTest : public Test

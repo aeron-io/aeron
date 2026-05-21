@@ -52,6 +52,7 @@ int aeron_delete_file(const char *path);
 const char *aeron_realpath(const char *path, char *resolved_path, size_t resolved_path_len);
 const char *aeron_tmpdir(char *path, size_t path_len);
 bool aeron_file_exists(const char* path);
+int64_t aeron_ftell(void *stream);
 
 #if defined(AERON_COMPILER_GCC)
 #include <unistd.h>

@@ -18,6 +18,8 @@
 
 #include <gtest/gtest.h>
 #include <cinttypes>
+#include <dirent.h>
+#include <cstdio>
 
 #include "aeron_driver_version.h"
 
@@ -25,12 +27,15 @@ extern "C"
 {
 #include "aeron_driver_context.h"
 #include "agent/aeron_driver_agent.h"
+
+void aeron_driver_agent_log_reader_do_start(aeron_driver_agent_log_state_t *);
+void aeron_driver_agent_log_reader_do_work(aeron_driver_agent_log_state_t *, aeron_mpsc_rb_t *);
 }
 
 class DriverAgentTest : public testing::Test
 {
 public:
-    DriverAgentTest()
+    DriverAgentTest() : m_tempDir(nullptr)
     {
         if (aeron_driver_context_init(&m_context) < 0)
         {
@@ -51,6 +56,24 @@ public:
 
 protected:
     aeron_driver_context_t *m_context = nullptr;
+    char m_tempDirArray[25] = { "/tmp/driver_agent_XXXXXX" };
+    char *m_tempDir;
+    uint8_t *m_rb_buffer = nullptr;
+    const size_t rb_length = AERON_EVENT_RB_LENGTH + AERON_RB_TRAILER_LENGTH;
+
+    void SetUp() override
+    {
+        m_rb_buffer = static_cast<uint8_t*>(malloc(rb_length));
+        memset(m_rb_buffer, 0, rb_length);
+
+        m_tempDir = mkdtemp(m_tempDirArray);
+    }
+
+    void TearDown() override
+    {
+        free(m_rb_buffer);
+        EXPECT_EQ(0, aeron_delete_directory(m_tempDir)) << aeron_errmsg();
+    }
 
     static void assert_all_events_disabled()
     {
@@ -127,6 +150,19 @@ protected:
         EXPECT_EQ(is_enabled, aeron_driver_agent_is_event_enabled(AERON_DRIVER_EVENT_CMD_OUT_COUNTER_READY));
         EXPECT_EQ(is_enabled, aeron_driver_agent_is_event_enabled(AERON_DRIVER_EVENT_CMD_OUT_ON_UNAVAILABLE_COUNTER));
         EXPECT_EQ(is_enabled, aeron_driver_agent_is_event_enabled(AERON_DRIVER_EVENT_CMD_OUT_ON_CLIENT_TIMEOUT));
+    }
+
+    static void writeLogEvent(aeron_mpsc_rb_t *ring_buffer, int64_t time_ns)
+    {
+        constexpr int32_t msg_length = 4096 - 8;
+        const int32_t index = aeron_mpsc_rb_try_claim(ring_buffer, AERON_DRIVER_EVENT_NAME_TEXT_DATA, msg_length);
+        uint8_t *ptr = (ring_buffer->buffer + index);
+        auto *hdr = reinterpret_cast<aeron_driver_agent_text_data_log_header_t *>(ptr);
+        hdr->time_ns = time_ns;
+        hdr->message_length = msg_length;
+        constexpr size_t data_offset = (sizeof(hdr->time_ns) + sizeof(hdr->message_length));
+        memset(ptr + data_offset, 'x', msg_length - data_offset);
+        aeron_mpsc_rb_commit(ring_buffer, index);
     }
 };
 
@@ -1673,4 +1709,58 @@ TEST_F(DriverAgentTest, dissecUknownFrame)
     EXPECT_STREQ(
         "type=unknown frame type (0xfe) version=0xb flags=10101100 frameLength=150",
         aeron_driver_agent_dissect_frame(&buff, sizeof(buff)));
+}
+
+TEST_F(DriverAgentTest, shouldWriteHeaderToLogFile)
+{
+    static aeron_mpsc_rb_t logging_mpsc_rb;
+    ASSERT_NE(-1, aeron_mpsc_rb_init(&logging_mpsc_rb, m_rb_buffer, rb_length));
+
+    char log_filename[4096];
+    snprintf(log_filename, sizeof(log_filename), "%s/%s", m_tempDir, "test-out.log");
+
+    FILE *out = fopen(log_filename, "w+");
+
+    constexpr size_t max_file_length = (32 * 1024);
+    aeron_driver_agent_log_state_t state = {
+        log_filename, out, max_file_length, 0, 1
+    };
+
+    aeron_driver_agent_log_reader_do_start(&state);
+    aeron_driver_agent_log_reader_do_work(&state, &logging_mpsc_rb);
+
+    for (int i = 0; i < 100; i++)
+    {
+        writeLogEvent(&logging_mpsc_rb, 13212312);
+        aeron_driver_agent_log_reader_do_work(&state, &logging_mpsc_rb);
+    }
+
+    DIR *dir = opendir(m_tempDir);
+    dirent *entry;
+    int filecount = 0;
+    while (nullptr != (entry = readdir(dir)))
+    {
+        if (0 == strncmp(entry->d_name, ".", 1))
+        {
+            continue;
+        }
+
+        filecount++;
+
+        char filename[4096];
+        snprintf(filename, sizeof(filename), "%s/%s", m_tempDir, entry->d_name);
+
+        struct stat statbuf = {};
+        stat(filename, &statbuf);
+
+        EXPECT_LT(statbuf.st_size, max_file_length + 8192) << "file too big: " << entry->d_name;
+
+        FILE *f = fopen(filename, "r");
+
+        char line[8192];
+        fgets(line, sizeof(line), f);
+        EXPECT_NE(nullptr, strstr(line, "log started"));
+    }
+
+    EXPECT_LT(1, filecount);
 }
