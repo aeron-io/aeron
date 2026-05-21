@@ -310,7 +310,7 @@ public final class EventLogReaderAgent implements Agent
 
     private void checkForFileRolling(final String filename, final long maxFileLength) throws IOException
     {
-        if (fileChannel.size() < maxFileLength)
+        if (fileChannel.position() < maxFileLength)
         {
             return;
         }
