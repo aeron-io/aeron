@@ -1765,9 +1765,9 @@ TEST_F(DriverAgentTest, shouldWriteHeaderToLogFile)
 
         FILE *f = fopen(filename, "r");
 
-        char line[8192];
-        fgets(line, sizeof(line), f);
-        EXPECT_NE(nullptr, strstr(line, "log started"));
+        char buf[8192];
+        const char *header = fgets(buf, sizeof(buf), f);
+        EXPECT_NE(nullptr, strstr(header, "log started"));
     }
     closedir(dir);
 
