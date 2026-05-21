@@ -27,6 +27,7 @@ extern "C"
 #include "aeron_system_counters.h"
 #include "agent/aeron_driver_agent.h"
 #include "aeron_csv_table_name_resolver.h"
+#include "agent/aeron_driver_agent.h"
 }
 
 #define METADATA_LENGTH (32 * 1024)
@@ -1035,7 +1036,9 @@ TEST_F(NameResolverTest, shouldHandleDissection)
     GTEST_SKIP();
 #endif
     testing::internal::CaptureStdout();
-    aeron_driver_agent_log_dissector(AERON_DRIVER_EVENT_FRAME_IN, buffer, res_offset, nullptr);
-    std::string output = testing::internal::GetCapturedStdout();
+    aeron_driver_agent_log_state_t state;
+    state.logfp = stdout;
+    aeron_driver_agent_log_dissector(AERON_DRIVER_EVENT_FRAME_IN, buffer, res_offset, &state);
+    const std::string output = testing::internal::GetCapturedStdout();
     EXPECT_EQ("[0.000000000] DRIVER: FRAME_IN [104/104]: address=127.0.0.1:5555 type=RES flags=10101011 frameLength=104 [resType=2 flags=10000000 port=9872 ageInMs=100 address=::1 name=ABCDEFHG] [resType=1 flags=00110011 port=8080 ageInMs=333 address=127.0.0.1 name=test]\n", output);
 }

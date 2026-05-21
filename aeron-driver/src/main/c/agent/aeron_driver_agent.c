@@ -502,28 +502,44 @@ static void initialize_agent_logging(void)
 {
     const char *event_log_str = getenv(AERON_EVENT_LOG_ENV_VAR);
     const char *event_log_disable_str = getenv(AERON_EVENT_LOG_DISABLE_ENV_VAR);
+    aeron_driver_agent_log_state_t *state;
+
+    if (aeron_alloc((void **)&state, sizeof(aeron_driver_agent_log_state_t)) < 0)
+    {
+        AERON_FPRINTF(stderr, "%s\n", "failed to allocate memory for event logging");
+        exit(EXIT_FAILURE);
+    }
 
     if (aeron_driver_agent_logging_events_init(event_log_str, event_log_disable_str))
     {
-        FILE *logfp = stdout;
-        const char *log_filename = getenv(AERON_EVENT_LOG_FILENAME_ENV_VAR);
+        state->logfp = stdout;
+        state->start_time_ms = aeron_epoch_clock();
+        state->file_max_length = INT64_MAX;
+        state->filename = getenv(AERON_EVENT_LOG_FILENAME_ENV_VAR);
+        state->next_file_index = 1;
 
-        if (log_filename)
+        if (state->filename)
         {
-            if ((logfp = fopen(log_filename, "a")) == NULL)
+            if ((state->logfp = fopen(state->filename, "a")) == NULL)
             {
                 int errcode = errno;
 
                 AERON_FPRINTF(
                     stderr, "could not fopen log file %s (%d, %s). exiting.\n",
-                    log_filename, errcode, strerror(errcode));
+                    state->filename, errcode, strerror(errcode));
                 exit(EXIT_FAILURE);
             }
         }
 
+        uint64_t file_max_length = 0;
+        if (0 == aeron_parse_size64(getenv(AERON_EVENT_LOG_FILE_MAX_LENGTH_ENV_VAR), &file_max_length))
+        {
+            state->file_max_length = (INT64_MAX < file_max_length) ? INT64_MAX : (int64_t)file_max_length;
+        }
+
         aeron_driver_agent_logging_ring_buffer_init();
 
-        if (aeron_thread_create(&log_reader_thread, NULL, aeron_driver_agent_log_reader, logfp) != 0)
+        if (aeron_thread_create(&log_reader_thread, NULL, aeron_driver_agent_log_reader, state) != 0)
         {
             AERON_FPRINTF(stderr, "could not start log reader thread. exiting.\n");
             exit(EXIT_FAILURE);
@@ -2241,7 +2257,7 @@ static const char *dissect_tether_state(aeron_subscription_tether_state_t state)
 
 static void aeron_driver_agent_check_for_file_rolling(aeron_driver_agent_log_state_t *state)
 {
-    if (NULL == state->filename || aeron_ftell(state->logfp) < state->max_file_size)
+    if (NULL == state->filename || aeron_ftell(state->logfp) < state->file_max_length)
     {
         return;
     }

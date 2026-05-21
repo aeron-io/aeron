@@ -1761,6 +1761,7 @@ TEST_F(DriverAgentTest, shouldWriteHeaderToLogFile)
         fgets(line, sizeof(line), f);
         EXPECT_NE(nullptr, strstr(line, "log started"));
     }
+    closedir(dir);
 
     EXPECT_LT(1, filecount);
 }

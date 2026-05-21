@@ -23,6 +23,7 @@
 #define AERON_EVENT_LOG_ENV_VAR "AERON_EVENT_LOG"
 #define AERON_EVENT_LOG_DISABLE_ENV_VAR "AERON_EVENT_LOG_DISABLE"
 #define AERON_EVENT_LOG_FILENAME_ENV_VAR "AERON_EVENT_LOG_FILENAME"
+#define AERON_EVENT_LOG_FILE_MAX_LENGTH_ENV_VAR "AERON_EVENT_LOG_FILE_MAX_LENGTH"
 #define AERON_EVENT_RB_LENGTH (8 * 1024 * 1024)
 #define AERON_MAX_FRAME_LENGTH (AERON_MAX_UDP_PAYLOAD_LENGTH)
 
@@ -256,7 +257,7 @@ typedef struct aeron_driver_agent_log_state_stct
 {
     const char *filename;
     FILE *logfp;
-    int64_t max_file_size;
+    int64_t file_max_length;
     int64_t start_time_ms;
     int64_t next_file_index;
 }
