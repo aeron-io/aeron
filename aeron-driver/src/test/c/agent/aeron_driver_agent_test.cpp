@@ -56,8 +56,7 @@ public:
 
 protected:
     aeron_driver_context_t *m_context = nullptr;
-    char m_tempDirArray[25] = { "/tmp/driver_agent_XXXXXX" };
-    char *m_tempDir;
+        const char *m_tempDir;
     uint8_t *m_rb_buffer = nullptr;
     const size_t rb_length = AERON_EVENT_RB_LENGTH + AERON_RB_TRAILER_LENGTH;
 
@@ -66,13 +65,14 @@ protected:
         m_rb_buffer = static_cast<uint8_t*>(malloc(rb_length));
         memset(m_rb_buffer, 0, rb_length);
 
-        m_tempDir = mkdtemp(m_tempDirArray);
+        m_tempDir = aeron_temp_dir("driver_agent_XXXXXX");
     }
 
     void TearDown() override
     {
         free(m_rb_buffer);
         EXPECT_EQ(0, aeron_delete_directory(m_tempDir)) << aeron_errmsg();
+        aeron_free(const_cast<char *>(m_tempDir));
     }
 
     static void assert_all_events_disabled()

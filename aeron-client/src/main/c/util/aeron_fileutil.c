@@ -33,6 +33,8 @@
 #include "aeron_error.h"
 #include "aeron_fileutil.h"
 
+#include "aeron_alloc.h"
+
 #ifdef _MSC_VER
 #define AERON_FILE_SEP '\\'
 #else
@@ -780,6 +782,37 @@ void *aeron_open_log_file(const char *path)
     return f;
 }
 
+const char *aeron_temp_dir(char *dir_template)
+{
+    char temp_path[MAX_PATH];
+    GetTempPathA(MAX_PATH, temp_path);
+    char *path;
+
+    if (aeron_alloc((void **)&path, MAX_PATH) < 0)
+    {
+        AERON_APPEND_ERR("%s", "");
+        return NULL;
+    }
+
+    snprintf(path, MAX_PATH, "%s%s", temp_path, dir_template);
+    if (0 != _mktemp_s(path, strlen(path) + 1))
+    {
+        aeron_free(path);
+        AERON_SET_ERR(errno, "failed to create a temporary directory name: %s", dir_template);
+        return NULL;
+    }
+
+    if (!CreateDirectoryA(path, nullptr))
+    {
+        aeron_free(path);
+        AERON_SET_ERR_WIN(GetLastError(), "failed to create a temporary directory: %s", template);
+        return NULL;
+    }
+
+    path;
+}
+
+
 #else
 #include <unistd.h>
 #include <sys/mman.h>
@@ -787,6 +820,7 @@ void *aeron_open_log_file(const char *path)
 #include <ftw.h>
 #include <stdio.h>
 #include <pwd.h>
+#include <limits.h>
 
 static int aeron_mmap(aeron_mapped_file_t *mapping, int fd, bool pre_touch)
 {
@@ -1185,6 +1219,27 @@ size_t aeron_temp_filename(char *filename, size_t length)
 
     return 0;
 #endif
+}
+
+const char *aeron_temp_dir(const char* dir_template)
+{
+    char *path;
+    if (aeron_alloc((void **)&path, PATH_MAX) < 0)
+    {
+        AERON_APPEND_ERR("%s", "");
+        return NULL;
+    }
+
+    snprintf(path, PATH_MAX, "%s/%s", P_tmpdir, dir_template);
+    const char *dirname = mkdtemp(path);
+    if (NULL == dirname)
+    {
+        aeron_free(path);
+        AERON_SET_ERR(errno, "failed to create a temporary directory: %s", dir_template);
+        return NULL;
+    }
+
+    return dirname;
 }
 
 int aeron_raw_log_map(

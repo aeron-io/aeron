@@ -110,6 +110,8 @@ int aeron_publication_image_location(char *dst, size_t length, const char *aeron
 
 size_t aeron_temp_filename(char *filename, size_t length);
 
+const char *aeron_temp_dir(const char *dir_template);
+
 typedef int (*aeron_raw_log_map_func_t)(aeron_mapped_raw_log_t *, const char *, bool, uint64_t, uint64_t);
 typedef int (*aeron_raw_log_close_func_t)(aeron_mapped_raw_log_t *, const char *filename);
 typedef bool (*aeron_raw_log_free_func_t)(aeron_mapped_raw_log_t *, const char *filename);
