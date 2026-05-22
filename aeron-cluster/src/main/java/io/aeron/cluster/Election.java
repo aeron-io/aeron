@@ -627,6 +627,7 @@ class Election
     {
         consensusModuleAgent.truncateLogEntry(logLeadershipTermId, newPosition);
         this.appendPosition = newPosition;
+        this.logPosition = newPosition;
         throw new ClusterEvent("Truncating Cluster Log - memberId=" + memberId +
             " state=" + state +
             " this.logLeadershipTermId=" + logLeadershipTermId +
@@ -1530,7 +1531,7 @@ class Election
         logLeadershipTermId = leadershipTermId;
     }
 
-    private void verifyLogJoinPosition(final String state, final long joinPosition)
+    void verifyLogJoinPosition(final String state, final long joinPosition)
     {
         if (joinPosition != logPosition)
         {
