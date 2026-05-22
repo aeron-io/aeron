@@ -761,6 +761,25 @@ int64_t aeron_ftell(void *stream)
     return (int64_t)_ftelli64((FILE *)stream);
 }
 
+void *aeron_open_log_file(const char *path)
+{
+    const int fd = open(path, _O_RDWR | _O_CREAT | _O_APPEND, _S_IREAD | _S_IWRITE);
+    if (-1 == fd)
+    {
+        AERON_SET_ERR(errno, "%s", "Failed to open logfile");
+        return NULL;
+    }
+
+    FILE *f = fdopen(fd, "a");
+    if (NULL == f)
+    {
+        AERON_SET_ERR(errno, "%s", "Failed to fdopen logfile");
+        return NULL;
+    }
+
+    return f;
+}
+
 #else
 #include <unistd.h>
 #include <sys/mman.h>
@@ -845,6 +864,25 @@ bool aeron_file_exists(const char* path)
 int64_t aeron_ftell(void *stream)
 {
     return (int64_t)ftello(stream);
+}
+
+void *aeron_open_log_file(const char *path)
+{
+    const int fd = open(path, O_RDWR | O_CREAT | O_APPEND, 0644);
+    if (-1 == fd)
+    {
+        AERON_SET_ERR(errno, "%s", "Failed to open logfile");
+        return NULL;
+    }
+
+    FILE *f = fdopen(fd, "a");
+    if (NULL == f)
+    {
+        AERON_SET_ERR(errno, "%s", "Failed to fdopen logfile");
+        return NULL;
+    }
+
+    return f;
 }
 
 static int unlink_func(const char *path, const struct stat *sb, int type_flag, struct FTW *ftw)

@@ -69,7 +69,7 @@ aeron_driver_agent_log_event_t;
 static AERON_INIT_ONCE agent_is_initialized = AERON_INIT_ONCE_VALUE;
 static aeron_mpsc_rb_t logging_mpsc_rb;
 static uint8_t *rb_buffer = NULL;
-// static FILE *logfp = NULL;
+
 static aeron_thread_t log_reader_thread;
 static aeron_driver_agent_dynamic_dissector_entry_t *dynamic_dissector_entries = NULL;
 static size_t num_dynamic_dissector_entries = 0;
@@ -520,13 +520,9 @@ static void initialize_agent_logging(void)
 
         if (state->filename)
         {
-            if ((state->logfp = fopen(state->filename, "a")) == NULL)
+            if ((state->logfp = aeron_open_log_file(state->filename)) == NULL)
             {
-                int errcode = errno;
-
-                AERON_FPRINTF(
-                    stderr, "could not fopen log file %s (%d, %s). exiting.\n",
-                    state->filename, errcode, strerror(errcode));
+                AERON_FPRINTF( stderr, "could not open log file %s. exiting.\n%s\n", state->filename, aeron_errmsg());
                 exit(EXIT_FAILURE);
             }
         }
@@ -2279,9 +2275,9 @@ static void aeron_driver_agent_check_for_file_rolling(aeron_driver_agent_log_sta
         aeron_err_clear();
     }
 
-    if (NULL == (state->logfp = fopen(state->filename, "w+")))
+    if (NULL == (state->logfp = aeron_open_log_file(state->filename)))
     {
-        AERON_SET_ERR(errno, "failed to open debug log file %s, falling back to stdout", state->filename);
+        AERON_APPEND_ERR("%s", "failed to open log file after rolling, falling back to stdout");
         AERON_FPRINTF(stderr, "%s", aeron_errmsg());
         aeron_err_clear();
         state->logfp = stdout;
@@ -2290,7 +2286,6 @@ static void aeron_driver_agent_check_for_file_rolling(aeron_driver_agent_log_sta
     else
     {
         aeron_driver_agent_dissect_log_start(state->logfp, aeron_nano_clock(), state->start_time_ms);
-        // fprintf(state->logfp, "%s\n", );
     }
 }
 

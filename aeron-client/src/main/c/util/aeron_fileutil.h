@@ -53,6 +53,13 @@ const char *aeron_realpath(const char *path, char *resolved_path, size_t resolve
 const char *aeron_tmpdir(char *path, size_t path_len);
 bool aeron_file_exists(const char* path);
 int64_t aeron_ftell(void *stream);
+/**
+ * Opens or creates a new file in append mode.  Will use 0644 permissions on Linux/Mac and default on Windows.
+ *
+ * @param path to the location on the file system.
+ * @return A FILE* pointer as an void* to reduce type dependencies.  Returns null on failure.
+ */
+void *aeron_open_log_file(const char *path);
 
 #if defined(AERON_COMPILER_GCC)
 #include <unistd.h>
