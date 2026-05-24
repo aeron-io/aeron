@@ -19,6 +19,8 @@
 #include <gtest/gtest.h>
 #include <cinttypes>
 #include <cstdio>
+#include <fstream>
+#include <string>
 
 extern "C"
 {
@@ -171,7 +173,7 @@ protected:
     }
 
 #if defined(AERON_COMPILER_MSVC)
-    static void foreachInDirectory(const char *dir, const std::function<void(const char *, int64_t)> &fn)
+    static int foreachInDirectory(const char *dir, const std::function<void(const char *, int64_t)> &fn)
     {
         char pattern[MAX_PATH];
         snprintf(pattern, sizeof(pattern), "%s\\*", dir);
@@ -180,9 +182,10 @@ protected:
         HANDLE hFind = FindFirstFileA(pattern, &find_data);
         if (INVALID_HANDLE_VALUE == hFind)
         {
-            return;
+            return -1;
         }
 
+        int filecount = 0;
         do
         {
             const char *name = find_data.cFileName;
@@ -199,10 +202,13 @@ protected:
             file_size.HighPart = find_data.nFileSizeHigh;
 
             fn(path, file_size.QuadPart);
+            filecount++;
         }
         while (FindNextFileA(hFind, &find_data));
 
         FindClose(hFind);
+
+        return filecount;
     }
 #else
     static int foreachInDirectory(const char *dirname, const std::function<void(const char *, int64_t)>& fn)
@@ -1603,11 +1609,16 @@ TEST_F(DriverAgentTest, dissecLogStartShouldFormatNanoTimeWithMicrosecondPrecisi
     char *buf = nullptr;
     size_t length = 0;
 
-    FILE *memf = open_memstream(&buf, &length);
+    char filename[AERON_MAX_FILE_PATH_LENGTH];
+    snprintf(filename, sizeof(filename), "%s/%s", m_tempDir, "test_file");
+
+    FILE *memf = fopen(filename, "w+");
     aeron_driver_agent_dissect_log_start(memf, time_ns, time_ms);
     fflush(memf);
     fclose(memf);
-    std::string result(buf, length);
+
+    std::ifstream f(filename);
+    std::string result((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
 
     std::string startString = "[55555.001234567] log started 2009-02-1";
     std::string endString = std::string(", enabled loggers: {DRIVER:")
