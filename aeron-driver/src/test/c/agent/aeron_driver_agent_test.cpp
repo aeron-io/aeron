@@ -18,11 +18,12 @@
 
 #include <gtest/gtest.h>
 #include <cinttypes>
-#include <dirent.h>
 #include <cstdio>
 
 #if defined(AERON_COMPILER_MSVC)
 #include <windows.h>
+#else
+#include <dirent.h>
 #endif
 
 #include "aeron_driver_version.h"
