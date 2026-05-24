@@ -1607,7 +1607,6 @@ TEST_F(DriverAgentTest, dissecLogStartShouldFormatNanoTimeWithMicrosecondPrecisi
     int64_t time_ns = 55555001234567;
     int64_t time_ms = 1234567890987;
     char *buf = nullptr;
-    size_t length = 0;
 
     char filename[AERON_MAX_FILE_PATH_LENGTH];
     snprintf(filename, sizeof(filename), "%s/%s", m_tempDir, "test_file");
