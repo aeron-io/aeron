@@ -110,6 +110,12 @@ int aeron_publication_image_location(char *dst, size_t length, const char *aeron
 
 size_t aeron_temp_filename(char *filename, size_t length);
 
+/**
+ * Returns a new temporary directory, allocates the string which needs to be freed by the user.
+ *
+ * @param dir_template to be used to create the temporary directory.
+ * @return the new temporary path.
+ */
 const char *aeron_temp_dir(const char *dir_template);
 
 typedef int (*aeron_raw_log_map_func_t)(aeron_mapped_raw_log_t *, const char *, bool, uint64_t, uint64_t);

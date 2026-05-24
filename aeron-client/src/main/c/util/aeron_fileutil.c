@@ -809,7 +809,7 @@ const char *aeron_temp_dir(const char *dir_template)
         return NULL;
     }
 
-    path;
+    return path;
 }
 
 
