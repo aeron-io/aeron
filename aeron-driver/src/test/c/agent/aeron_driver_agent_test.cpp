@@ -20,22 +20,22 @@
 #include <cinttypes>
 #include <cstdio>
 
-#if defined(AERON_COMPILER_MSVC)
-#include <windows.h>
-#else
-#include <dirent.h>
-#endif
-
-#include "aeron_driver_version.h"
-
 extern "C"
 {
+#include "aeron_driver_version.h"
+#include "util/aeron_platform.h"
 #include "aeron_driver_context.h"
 #include "agent/aeron_driver_agent.h"
 
 void aeron_driver_agent_log_reader_do_start(aeron_driver_agent_log_state_t *);
 void aeron_driver_agent_log_reader_do_work(aeron_driver_agent_log_state_t *, aeron_mpsc_rb_t *);
 }
+
+#if defined(AERON_COMPILER_MSVC)
+#include <windows.h>
+#else
+#include <dirent.h>
+#endif
 
 class DriverAgentTest : public testing::Test
 {
