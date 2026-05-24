@@ -805,7 +805,7 @@ const char *aeron_temp_dir(const char *dir_template)
     if (!CreateDirectoryA(path, NULL))
     {
         aeron_free(path);
-        AERON_SET_ERR_WIN(GetLastError(), "failed to create a temporary directory: %s", template);
+        AERON_SET_ERR_WIN(GetLastError(), "failed to create a temporary directory: %s", dir_template);
         return NULL;
     }
 
