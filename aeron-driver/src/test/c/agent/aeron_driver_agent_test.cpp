@@ -201,7 +201,7 @@ protected:
             file_size.LowPart = find_data.nFileSizeLow;
             file_size.HighPart = find_data.nFileSizeHigh;
 
-            fn(path, file_size.QuadPart);
+            fn(path, static_cast<int64_t>(file_size.QuadPart));
             filecount++;
         }
         while (FindNextFileA(hFind, &find_data));
@@ -1824,7 +1824,7 @@ TEST_F(DriverAgentTest, shouldWriteHeaderToLogFile)
 
     const int fileCount = foreachInDirectory(
         m_tempDir,
-        [&](const char* filename, const off_t file_length)
+        [&](const char* filename, const int64_t file_length)
         {
             EXPECT_LT(file_length, max_file_length + 8192) << "file too big: " << filename;
 
