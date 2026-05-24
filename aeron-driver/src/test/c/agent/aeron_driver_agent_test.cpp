@@ -21,6 +21,10 @@
 #include <dirent.h>
 #include <cstdio>
 
+#if defined(AERON_COMPILER_MSVC)
+#include <windows.h>
+#endif
+
 #include "aeron_driver_version.h"
 
 extern "C"
@@ -164,6 +168,70 @@ protected:
         memset(ptr + data_offset, 'x', msg_length - data_offset);
         aeron_mpsc_rb_commit(ring_buffer, index);
     }
+
+#if defined(AERON_COMPILER_MSVC)
+    static void foreachInDirectory(const char *dir, const std::function<void(const char *, int64_t)> &fn)
+    {
+        char pattern[MAX_PATH];
+        snprintf(pattern, sizeof(pattern), "%s\\*", dir);
+
+        WIN32_FIND_DATAA find_data;
+        HANDLE hFind = FindFirstFileA(pattern, &find_data);
+        if (INVALID_HANDLE_VALUE == hFind)
+        {
+            return;
+        }
+
+        do
+        {
+            const char *name = find_data.cFileName;
+            if (0 == strcmp(name, ".") || 0 == strcmp(name, ".."))
+            {
+                continue;
+            }
+
+            char path[MAX_PATH];
+            snprintf(path, sizeof(path), "%s\\%s", dir, name);
+
+            LARGE_INTEGER file_size;
+            file_size.LowPart = find_data.nFileSizeLow;
+            file_size.HighPart = find_data.nFileSizeHigh;
+
+            fn(path, file_size.QuadPart);
+        }
+        while (FindNextFileA(hFind, &find_data));
+
+        FindClose(hFind);
+    }
+#else
+    static int foreachInDirectory(const char *dirname, const std::function<void(const char *, int64_t)>& fn)
+    {
+        DIR *dir = opendir(dirname);
+        dirent *entry;
+        int filecount = 0;
+        while (nullptr != (entry = readdir(dir)))
+        {
+            if (0 == strncmp(entry->d_name, ".", 1))
+            {
+                continue;
+            }
+
+            filecount++;
+
+            char filename[4096];
+            snprintf(filename, sizeof(filename), "%s/%s", dirname, entry->d_name);
+
+            struct stat statbuf = {};
+            stat(filename, &statbuf);
+            const off_t file_length = statbuf.st_size;
+
+            fn(filename, file_length);
+        }
+        closedir(dir);
+
+        return filecount;
+    }
+#endif
 };
 
 TEST_F(DriverAgentTest, allLoggingEventsShouldHaveUniqueNames)
@@ -1743,33 +1811,20 @@ TEST_F(DriverAgentTest, shouldWriteHeaderToLogFile)
         aeron_driver_agent_log_reader_do_work(&state, &logging_mpsc_rb);
     }
 
-    DIR *dir = opendir(m_tempDir);
-    dirent *entry;
-    int filecount = 0;
-    while (nullptr != (entry = readdir(dir)))
-    {
-        if (0 == strncmp(entry->d_name, ".", 1))
+    const int fileCount = foreachInDirectory(
+        m_tempDir,
+        [](const char* filename, const off64_t file_length)
         {
-            continue;
-        }
+            EXPECT_LT(file_length, max_file_length + 8192) << "file too big: " << filename;
 
-        filecount++;
+            FILE *f = fopen(filename, "r");
 
-        char filename[4096];
-        snprintf(filename, sizeof(filename), "%s/%s", m_tempDir, entry->d_name);
+            char buf[8192];
+            const char *header = fgets(buf, sizeof(buf), f);
+            EXPECT_NE(nullptr, strstr(header, "log started"));
 
-        struct stat statbuf = {};
-        stat(filename, &statbuf);
+            fclose(f);
+        });
 
-        EXPECT_LT(statbuf.st_size, max_file_length + 8192) << "file too big: " << entry->d_name;
-
-        FILE *f = fopen(filename, "r");
-
-        char buf[8192];
-        const char *header = fgets(buf, sizeof(buf), f);
-        EXPECT_NE(nullptr, strstr(header, "log started"));
-    }
-    closedir(dir);
-
-    EXPECT_LT(1, filecount);
+    EXPECT_LT(1, fileCount);
 }
