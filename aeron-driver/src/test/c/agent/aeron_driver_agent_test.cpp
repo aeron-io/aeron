@@ -1813,7 +1813,7 @@ TEST_F(DriverAgentTest, shouldWriteHeaderToLogFile)
 
     const int fileCount = foreachInDirectory(
         m_tempDir,
-        [](const char* filename, const off64_t file_length)
+        [](const char* filename, const off_t file_length)
         {
             EXPECT_LT(file_length, max_file_length + 8192) << "file too big: " << filename;
 
