@@ -782,7 +782,7 @@ void *aeron_open_log_file(const char *path)
     return f;
 }
 
-const char *aeron_temp_dir(char *dir_template)
+const char *aeron_temp_dir(const char *dir_template)
 {
     char temp_path[MAX_PATH];
     GetTempPathA(MAX_PATH, temp_path);
@@ -802,7 +802,7 @@ const char *aeron_temp_dir(char *dir_template)
         return NULL;
     }
 
-    if (!CreateDirectoryA(path, nullptr))
+    if (!CreateDirectoryA(path, NULL))
     {
         aeron_free(path);
         AERON_SET_ERR_WIN(GetLastError(), "failed to create a temporary directory: %s", template);
@@ -1039,6 +1039,27 @@ int aeron_open_file_rw(const char *path)
     }
     return fd;
 }
+
+const char *aeron_temp_dir(const char* dir_template)
+{
+    char *path;
+    if (aeron_alloc((void **)&path, PATH_MAX) < 0)
+    {
+        AERON_APPEND_ERR("%s", "");
+        return NULL;
+    }
+
+    snprintf(path, PATH_MAX, "%s/%s", P_tmpdir, dir_template);
+    const char *dirname = mkdtemp(path);
+    if (NULL == dirname)
+    {
+        aeron_free(path);
+        AERON_SET_ERR(errno, "failed to create a temporary directory: %s", dir_template);
+        return NULL;
+    }
+
+    return dirname;
+}
 #endif
 
 int aeron_mkdir_recursive(const char *pathname, int permission)
@@ -1219,27 +1240,6 @@ size_t aeron_temp_filename(char *filename, size_t length)
 
     return 0;
 #endif
-}
-
-const char *aeron_temp_dir(const char* dir_template)
-{
-    char *path;
-    if (aeron_alloc((void **)&path, PATH_MAX) < 0)
-    {
-        AERON_APPEND_ERR("%s", "");
-        return NULL;
-    }
-
-    snprintf(path, PATH_MAX, "%s/%s", P_tmpdir, dir_template);
-    const char *dirname = mkdtemp(path);
-    if (NULL == dirname)
-    {
-        aeron_free(path);
-        AERON_SET_ERR(errno, "failed to create a temporary directory: %s", dir_template);
-        return NULL;
-    }
-
-    return dirname;
 }
 
 int aeron_raw_log_map(
