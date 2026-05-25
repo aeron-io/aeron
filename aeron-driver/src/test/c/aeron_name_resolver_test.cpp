@@ -1032,8 +1032,8 @@ TEST_F(NameResolverTest, shouldHandleDissection)
     log_header->message_len = frame->frame_length;
 
     aeron_env_set(AERON_EVENT_LOG_ENV_VAR, AERON_DRIVER_AGENT_ALL_EVENTS);
-    char temp_filename[AERON_MAX_FILE_PATH_LENGTH];
-    aeron_temp_filename(temp_filename, AERON_MAX_FILE_PATH_LENGTH);
+    char temp_filename[AERON_MAX_PATH];
+    aeron_temp_filename(temp_filename, AERON_MAX_PATH);
 
     aeron_driver_agent_log_state_t state;
     state.logfp = static_cast<FILE*>(aeron_open_log_file(temp_filename));

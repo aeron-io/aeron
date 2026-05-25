@@ -23,8 +23,6 @@
 #include "util/aeron_platform.h"
 #include "concurrent/aeron_logbuffer_descriptor.h"
 
-#define AERON_MAX_FILE_PATH_LENGTH (4096)
-
 typedef struct aeron_mapped_file_stct
 {
     void *addr;

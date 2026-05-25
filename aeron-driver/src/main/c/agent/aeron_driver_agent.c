@@ -2260,7 +2260,7 @@ static void aeron_driver_agent_check_for_file_rolling(aeron_driver_agent_log_sta
     fflush(state->logfp);
     fclose(state->logfp);
 
-    char new_filename[4096];
+    char new_filename[AERON_MAX_PATH];
     do
     {
         snprintf(new_filename, sizeof(new_filename), "%s.%" PRId64, state->filename, state->next_file_index);

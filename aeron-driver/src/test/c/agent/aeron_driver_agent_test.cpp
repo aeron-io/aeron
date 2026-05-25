@@ -225,7 +225,7 @@ protected:
 
             filecount++;
 
-            char filename[4096];
+            char filename[AERON_MAX_PATH];
             snprintf(filename, sizeof(filename), "%s/%s", dirname, entry->d_name);
 
             struct stat statbuf = {};
@@ -1608,7 +1608,7 @@ TEST_F(DriverAgentTest, dissecLogStartShouldFormatNanoTimeWithMicrosecondPrecisi
     int64_t time_ms = 1234567890987;
     char *buf = nullptr;
 
-    char filename[AERON_MAX_FILE_PATH_LENGTH];
+    char filename[AERON_MAX_PATH];
     snprintf(filename, sizeof(filename), "%s/%s", m_tempDir, "test_file");
 
     auto logf = static_cast<FILE*>(aeron_open_log_file(filename));

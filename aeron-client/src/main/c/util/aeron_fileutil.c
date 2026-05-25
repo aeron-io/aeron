@@ -784,17 +784,17 @@ void *aeron_open_log_file(const char *path)
 
 const char *aeron_temp_dir(const char *dir_template)
 {
-    char temp_path[AERON_MAX_FILE_PATH_LENGTH];
-    GetTempPathA(AERON_MAX_FILE_PATH_LENGTH, temp_path);
+    char temp_path[AERON_MAX_PATH];
+    GetTempPathA(AERON_MAX_PATH, temp_path);
     char *path;
 
-    if (aeron_alloc((void **)&path, AERON_MAX_FILE_PATH_LENGTH) < 0)
+    if (aeron_alloc((void **)&path, AERON_MAX_PATH) < 0)
     {
         AERON_APPEND_ERR("%s", "");
         return NULL;
     }
 
-    snprintf(path, AERON_MAX_FILE_PATH_LENGTH, "%s%s", temp_path, dir_template);
+    snprintf(path, AERON_MAX_PATH, "%s%s", temp_path, dir_template);
     if (0 != _mktemp_s(path, strlen(path) + 1))
     {
         aeron_free(path);
@@ -1043,13 +1043,13 @@ int aeron_open_file_rw(const char *path)
 const char *aeron_temp_dir(const char* dir_template)
 {
     char *path;
-    if (aeron_alloc((void **)&path, AERON_MAX_FILE_PATH_LENGTH) < 0)
+    if (aeron_alloc((void **)&path, AERON_MAX_PATH) < 0)
     {
         AERON_APPEND_ERR("%s", "");
         return NULL;
     }
 
-    snprintf(path, AERON_MAX_FILE_PATH_LENGTH, "%s/%s", P_tmpdir, dir_template);
+    snprintf(path, AERON_MAX_PATH, "%s/%s", P_tmpdir, dir_template);
     const char *dirname = mkdtemp(path);
     if (NULL == dirname)
     {
@@ -1226,10 +1226,10 @@ size_t aeron_temp_filename(char *filename, size_t length)
 
     return strlen(filename);
 #else
-    char tmpdir[AERON_MAX_FILE_PATH_LENGTH + 1];
-    char tmpfile[AERON_MAX_FILE_PATH_LENGTH];
+    char tmpdir[AERON_MAX_PATH + 1];
+    char tmpfile[AERON_MAX_PATH];
 
-    if (GetTempPath(AERON_MAX_FILE_PATH_LENGTH, &tmpdir[0]) > 0)
+    if (GetTempPath(AERON_MAX_PATH, &tmpdir[0]) > 0)
     {
         if (GetTempFileName(tmpdir, TEXT("aeron-c"), 101, &tmpfile[0]) != 0)
         {
@@ -1399,9 +1399,9 @@ bool aeron_raw_log_free(aeron_mapped_raw_log_t *mapped_raw_log, const char *file
 inline static const char *tmp_dir(void)
 {
 #if defined(_MSC_VER)
-    static char buff[AERON_MAX_FILE_PATH_LENGTH + 1];
+    static char buff[AERON_MAX_PATH + 1];
 
-    if (GetTempPath(AERON_MAX_FILE_PATH_LENGTH, &buff[0]) > 0)
+    if (GetTempPath(AERON_MAX_PATH, &buff[0]) > 0)
     {
         return buff;
     }

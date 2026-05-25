@@ -157,7 +157,7 @@ static int aeron_cpuset_cmp_int(const void *a, const void *b)
 
 static int aeron_cpuset_validate_path_root(const char *path, char *validated_path, size_t validated_path_len)
 {
-    char tmp_path[AERON_MAX_FILE_PATH_LENGTH];
+    char tmp_path[AERON_MAX_PATH];
 
     const char *realpath = aeron_realpath(path, validated_path, validated_path_len);
     if (NULL == realpath)
@@ -357,7 +357,7 @@ int aeron_cpuset_cgroup_read_v2(const char *proc_cgroup_file, const char *mount_
         return -1;
     }
 
-    char absolute_cgroup_path[AERON_MAX_FILE_PATH_LENGTH];
+    char absolute_cgroup_path[AERON_MAX_PATH];
     do
     {
         const int written = snprintf(
@@ -371,7 +371,7 @@ int aeron_cpuset_cgroup_read_v2(const char *proc_cgroup_file, const char *mount_
 
         if (aeron_file_exists(absolute_cgroup_path))
         {
-            char validated_path[AERON_MAX_FILE_PATH_LENGTH];
+            char validated_path[AERON_MAX_PATH];
             if (aeron_cpuset_validate_path_root(absolute_cgroup_path, validated_path, sizeof(validated_path)) < 0)
             {
                 AERON_APPEND_ERR("%s", "");

@@ -66,7 +66,7 @@ static int aeron_topology_read_sysfs_cpu_file(
     char *buf,
     const size_t buf_size)
 {
-    char path[4096];
+    char path[AERON_MAX_PATH];
     int n = snprintf(path, sizeof(path), "%s/cpu%d/%s", sys_cpu_root, cpu, suffix);
     if (n < 0 || (size_t)n >= sizeof(path))
     {
