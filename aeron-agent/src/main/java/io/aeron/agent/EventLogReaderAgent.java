@@ -330,7 +330,7 @@ public final class EventLogReaderAgent implements Agent
 
         fileChannel = open(Paths.get(filename), CREATE_NEW, APPEND, WRITE);
 
-        appendFileHeader(nanoClock.nanoTime(), startTimeMs);
+        appendFileHeader(nanoClock.nanoTime(), epochClock.time());
         appendEvent(builder, byteBuffer);
         write(byteBuffer);
     }
