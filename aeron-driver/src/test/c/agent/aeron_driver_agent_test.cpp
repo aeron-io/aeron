@@ -1822,6 +1822,8 @@ TEST_F(DriverAgentTest, shouldWriteHeaderToLogFile)
         aeron_driver_agent_log_reader_do_work(&state, &logging_mpsc_rb);
     }
 
+    fclose(out);
+
     const int fileCount = foreachInDirectory(
         m_tempDir,
         [&](const char* filename, const int64_t file_length)
