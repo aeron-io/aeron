@@ -1611,10 +1611,10 @@ TEST_F(DriverAgentTest, dissecLogStartShouldFormatNanoTimeWithMicrosecondPrecisi
     char filename[AERON_MAX_FILE_PATH_LENGTH];
     snprintf(filename, sizeof(filename), "%s/%s", m_tempDir, "test_file");
 
-    FILE *memf = fopen(filename, "w+");
-    aeron_driver_agent_dissect_log_start(memf, time_ns, time_ms);
-    fflush(memf);
-    fclose(memf);
+    auto logf = static_cast<FILE*>(aeron_open_log_file(filename));
+    aeron_driver_agent_dissect_log_start(logf, time_ns, time_ms);
+    fflush(logf);
+    fclose(logf);
 
     std::ifstream f(filename);
     std::string result((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
@@ -1806,7 +1806,7 @@ TEST_F(DriverAgentTest, shouldWriteHeaderToLogFile)
     char log_filename[4096];
     snprintf(log_filename, sizeof(log_filename), "%s/%s", m_tempDir, "test-out.log");
 
-    FILE *out = fopen(log_filename, "w+");
+    auto out = static_cast<FILE*>(aeron_open_log_file(log_filename));
 
     constexpr size_t max_file_length = (32 * 1024);
     aeron_driver_agent_log_state_t state = {
