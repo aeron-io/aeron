@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <fstream>
+#include <string>
 #include <gtest/gtest.h>
 
 extern "C"
@@ -1025,20 +1027,30 @@ TEST_F(NameResolverTest, shouldHandleDissection)
     res_offset += aeron_res_header_entry_length_ipv4(res2);
 
     frame->type = AERON_HDR_TYPE_RES;
-    frame->frame_length = (int32_t)res_offset;
+    frame->frame_length = static_cast<int32_t>(res_offset);
     frame->flags = 0b10101011;
     log_header->message_len = frame->frame_length;
 
     aeron_env_set(AERON_EVENT_LOG_ENV_VAR, AERON_DRIVER_AGENT_ALL_EVENTS);
-    aeron_driver_agent_context_init(m_a.context);
+    char temp_filename[AERON_MAX_FILE_PATH_LENGTH];
+    aeron_temp_filename(temp_filename, AERON_MAX_FILE_PATH_LENGTH);
 
-#if AERON_COMPILER_MSVC
-    GTEST_SKIP();
-#endif
-    testing::internal::CaptureStdout();
     aeron_driver_agent_log_state_t state;
-    state.logfp = stdout;
+    state.logfp = fopen(temp_filename, "w+");
+
     aeron_driver_agent_log_dissector(AERON_DRIVER_EVENT_FRAME_IN, buffer, res_offset, &state);
-    const std::string output = testing::internal::GetCapturedStdout();
-    EXPECT_EQ("[0.000000000] DRIVER: FRAME_IN [104/104]: address=127.0.0.1:5555 type=RES flags=10101011 frameLength=104 [resType=2 flags=10000000 port=9872 ageInMs=100 address=::1 name=ABCDEFHG] [resType=1 flags=00110011 port=8080 ageInMs=333 address=127.0.0.1 name=test]\n", output);
+
+    fflush(state.logfp);
+    fclose(state.logfp);
+
+    {
+        std::ifstream f(temp_filename); // Scope forces close of ifstream.
+        std::string result((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+
+        EXPECT_EQ(
+            "[0.000000000] DRIVER: FRAME_IN [104/104]: address=127.0.0.1:5555 type=RES flags=10101011 frameLength=104 [resType=2 flags=10000000 port=9872 ageInMs=100 address=::1 name=ABCDEFHG] [resType=1 flags=00110011 port=8080 ageInMs=333 address=127.0.0.1 name=test]\n",
+            result);
+    }
+
+    aeron_delete_file(temp_filename);
 }
