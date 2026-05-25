@@ -520,7 +520,7 @@ static void initialize_agent_logging(void)
 
         if (state->filename)
         {
-            if ((state->logfp = aeron_open_log_file(state->filename)) == NULL)
+            if (NULL == (state->logfp = aeron_open_file_append(state->filename)))
             {
                 AERON_FPRINTF( stderr, "could not open log file %s. exiting.\n%s\n", state->filename, aeron_errmsg());
                 exit(EXIT_FAILURE);
@@ -2275,7 +2275,7 @@ static void aeron_driver_agent_check_for_file_rolling(aeron_driver_agent_log_sta
         aeron_err_clear();
     }
 
-    if (NULL == (state->logfp = aeron_open_log_file(state->filename)))
+    if (NULL == (state->logfp = aeron_open_file_append(state->filename)))
     {
         AERON_APPEND_ERR("%s", "failed to open log file after rolling, falling back to stdout");
         AERON_FPRINTF(stderr, "%s", aeron_errmsg());
@@ -2285,7 +2285,7 @@ static void aeron_driver_agent_check_for_file_rolling(aeron_driver_agent_log_sta
     }
     else
     {
-        aeron_driver_agent_dissect_log_start(state->logfp, aeron_nano_clock(), state->start_time_ms);
+        aeron_driver_agent_dissect_log_start(state->logfp, aeron_nano_clock(), aeron_epoch_clock());
     }
 }
 

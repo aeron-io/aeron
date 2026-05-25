@@ -55,9 +55,9 @@ int64_t aeron_ftell(void *stream);
  * Opens or creates a new file in append mode.  Will use 0644 permissions on Linux/Mac and default on Windows.
  *
  * @param path to the location on the file system.
- * @return A FILE* pointer as an void* to reduce type dependencies.  Returns null on failure.
+ * @return A FILE* pointer as a void* to reduce type dependencies.  Returns null on failure.
  */
-void *aeron_open_log_file(const char *path);
+void *aeron_open_file_append(const char *path);
 
 #if defined(AERON_COMPILER_GCC)
 #include <unistd.h>

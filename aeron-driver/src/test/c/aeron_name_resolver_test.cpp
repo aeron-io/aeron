@@ -1036,7 +1036,7 @@ TEST_F(NameResolverTest, shouldHandleDissection)
     aeron_temp_filename(temp_filename, AERON_MAX_PATH);
 
     aeron_driver_agent_log_state_t state;
-    state.logfp = static_cast<FILE*>(aeron_open_log_file(temp_filename));
+    state.logfp = static_cast<FILE*>(aeron_open_file_append(temp_filename));
 
     aeron_driver_agent_log_dissector(AERON_DRIVER_EVENT_FRAME_IN, buffer, res_offset, &state);
 

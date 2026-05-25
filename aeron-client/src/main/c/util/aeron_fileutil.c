@@ -763,7 +763,7 @@ int64_t aeron_ftell(void *stream)
     return (int64_t)_ftelli64((FILE *)stream);
 }
 
-void *aeron_open_log_file(const char *path)
+void *aeron_open_file_append(const char *path)
 {
     const int fd = open(path, _O_RDWR | _O_CREAT | _O_APPEND, _S_IREAD | _S_IWRITE);
     if (-1 == fd)
@@ -900,7 +900,7 @@ int64_t aeron_ftell(void *stream)
     return (int64_t)ftello(stream);
 }
 
-void *aeron_open_log_file(const char *path)
+void *aeron_open_file_append(const char *path)
 {
     const int fd = open(path, O_RDWR | O_CREAT | O_APPEND, 0644);
     if (-1 == fd)
@@ -1226,7 +1226,7 @@ size_t aeron_temp_filename(char *filename, size_t length)
 
     return strlen(filename);
 #else
-    char tmpdir[AERON_MAX_PATH + 1];
+    char tmpdir[AERON_MAX_PATH];
     char tmpfile[AERON_MAX_PATH];
 
     if (GetTempPath(AERON_MAX_PATH, &tmpdir[0]) > 0)
@@ -1399,7 +1399,7 @@ bool aeron_raw_log_free(aeron_mapped_raw_log_t *mapped_raw_log, const char *file
 inline static const char *tmp_dir(void)
 {
 #if defined(_MSC_VER)
-    static char buff[AERON_MAX_PATH + 1];
+    static char buff[AERON_MAX_PATH];
 
     if (GetTempPath(AERON_MAX_PATH, &buff[0]) > 0)
     {
