@@ -83,7 +83,6 @@ public final class EventLogReaderAgent implements Agent
     private int nextFileIndex = 1;
 
     private FileChannel fileChannel;
-    private long startTimeMs;
 
     EventLogReaderAgent(final String filename, final List<ComponentLogger> loggers)
     {
@@ -153,9 +152,7 @@ public final class EventLogReaderAgent implements Agent
      */
     public void onStart()
     {
-        final long startTimeNs = nanoClock.nanoTime();
-        startTimeMs = epochClock.time();
-        appendFileHeader(startTimeNs, startTimeMs);
+        appendFileHeader(nanoClock.nanoTime(), epochClock.time());
 
         if (null == fileChannel)
         {
