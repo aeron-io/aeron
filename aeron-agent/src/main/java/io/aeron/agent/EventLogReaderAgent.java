@@ -80,6 +80,7 @@ public final class EventLogReaderAgent implements Agent
     private final EpochClock epochClock;
     private final long maxFileLength;
     private final String filename;
+    private final Path logFilePath;
     private int nextFileIndex = 1;
 
     private FileChannel fileChannel;
@@ -95,7 +96,8 @@ public final class EventLogReaderAgent implements Agent
             configOptions,
             System.out,
             SystemNanoClock.INSTANCE,
-            SystemEpochClock.INSTANCE, loggers);
+            SystemEpochClock.INSTANCE,
+            loggers);
     }
 
     EventLogReaderAgent(
@@ -116,6 +118,7 @@ public final class EventLogReaderAgent implements Agent
         final List<ComponentLogger> loggers)
     {
         filename = configOptions.get(LOG_FILENAME_PROP_NAME);
+        logFilePath = null != filename ? Path.of(filename) : null;
         maxFileLength = getMaxFileLength(configOptions);
 
         this.nanoClock = Objects.requireNonNull(nanoClock);
@@ -125,12 +128,12 @@ public final class EventLogReaderAgent implements Agent
             this.loggers.put(componentLogger.typeCode(), componentLogger);
         }
 
-        if (null != filename)
+        if (null != logFilePath)
         {
             this.out = null;
             try
             {
-                fileChannel = open(Paths.get(filename), CREATE, APPEND, WRITE);
+                fileChannel = open(logFilePath, CREATE, APPEND, WRITE);
             }
             catch (final IOException ex)
             {
@@ -277,7 +280,7 @@ public final class EventLogReaderAgent implements Agent
 
         try
         {
-            checkForFileRolling(filename, maxFileLength);
+            checkForFileRolling(logFilePath, filename, maxFileLength);
         }
         catch (final Exception ex)
         {
@@ -305,7 +308,7 @@ public final class EventLogReaderAgent implements Agent
         }
     }
 
-    private void checkForFileRolling(final String filename, final long maxFileLength) throws IOException
+    private void checkForFileRolling(final Path logFilePath, final String filename, final long maxFileLength) throws IOException
     {
         if (fileChannel.position() < maxFileLength)
         {
@@ -313,19 +316,18 @@ public final class EventLogReaderAgent implements Agent
         }
 
         fileChannel.close();
-        final Path file = Path.of(filename);
 
-        Path rolledFile;
+        Path rolledFilePath;
         do
         {
-            rolledFile = Path.of(filename + "." + nextFileIndex);
+            rolledFilePath = Path.of(filename + "." + nextFileIndex);
             nextFileIndex++;
         }
-        while (Files.exists(rolledFile));
+        while (Files.exists(rolledFilePath));
 
-        Files.move(file, rolledFile);
+        Files.move(logFilePath, rolledFilePath);
 
-        fileChannel = open(Paths.get(filename), CREATE_NEW, APPEND, WRITE);
+        fileChannel = open(logFilePath, CREATE_NEW, APPEND, WRITE);
 
         appendFileHeader(nanoClock.nanoTime(), epochClock.time());
         appendEvent(builder, byteBuffer);
