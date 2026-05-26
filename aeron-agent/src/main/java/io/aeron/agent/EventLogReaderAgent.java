@@ -35,12 +35,12 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 import static io.aeron.agent.CommonEventDissector.dissectLogStartMessage;
+import static io.aeron.agent.ConfigOption.LOG_FILE_MAX_LENGTH;
 import static io.aeron.agent.EventConfiguration.EVENT_READER_FRAME_LIMIT;
 import static io.aeron.agent.EventConfiguration.MAX_EVENT_LENGTH;
 import static java.lang.System.lineSeparator;
@@ -295,20 +295,24 @@ public final class EventLogReaderAgent implements Agent
 
     private long getMaxFileLength(final Map<String, String> configOptions)
     {
-        final String maxFileLengthStr = configOptions.get(ConfigOption.LOG_FILE_MAX_LENGTH);
+        final String maxFileLengthStr = configOptions.get(LOG_FILE_MAX_LENGTH);
         try
         {
             return null != maxFileLengthStr ?
-                parseSize(ConfigOption.LOG_FILE_MAX_LENGTH, maxFileLengthStr) : Long.MAX_VALUE;
+                parseSize(LOG_FILE_MAX_LENGTH, maxFileLengthStr) : Long.MAX_VALUE;
         }
         catch (final NumberFormatException ex)
         {
-            System.err.println(ex.getMessage() + "  Disabling log rotation.");
+            System.err.println(
+                "Disabling log rotation, invalid '" + LOG_FILE_MAX_LENGTH + "' - " + ex.getMessage());
             return Long.MAX_VALUE;
         }
     }
 
-    private void checkForFileRolling(final Path logFilePath, final String filename, final long maxFileLength) throws IOException
+    private void checkForFileRolling(
+        final Path logFilePath,
+        final String filename,
+        final long maxFileLength) throws IOException
     {
         if (fileChannel.position() < maxFileLength)
         {
