@@ -7,6 +7,7 @@
 * **Breaking**  **[Cluster]** Removed unused method `ConsensusModuleExtension#supportedSchemaId()` that gave the
 impression as if there could only be a single schema supported by an extension. This is a breaking change in an
 internal API.
+* **[Archive]** Truncating a recording now stops any concurrent replays of that recording before proceeding with the deletion of segments.
 
 === Changelog
 

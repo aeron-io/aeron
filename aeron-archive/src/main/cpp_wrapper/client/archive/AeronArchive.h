@@ -896,6 +896,7 @@ public:
      * The position must be less than the stopped position.
      * The position must be on a fragment boundary.
      * Truncating a recording to the start position effectively deletes the recording.
+     * Truncating a recording will stop any concurrent replays of that recording.
      *
      * @param recordingId the id of the recording
      * @param position the position to which the recording will be truncated
@@ -1250,7 +1251,7 @@ public:
      * The source recording will be effectively truncated back to its start position after the migration.
      *
      * @param srcRecordingId the id of an existing recording from which segments will be migrated
-     * @param dstRecordingId the id of an exisintg recording to which segments will be migrated
+     * @param dstRecordingId the id of an existing recording to which segments will be migrated
      * @return the number of segments deleted
      */
     inline std::int64_t migrateSegments(std::int64_t srcRecordingId, std::int64_t dstRecordingId)

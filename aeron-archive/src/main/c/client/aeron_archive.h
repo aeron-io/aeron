@@ -941,6 +941,7 @@ int aeron_archive_replay(
  * The position must be less than the stopped position.
  * The position must be on a fragment boundary.
  * Truncating a recording to the start position effectively deletes the recording.
+ * Truncating a recording will stop any concurrent replays of that recording.
  *
  * @param count_p out param set to the number of segments deleted
  * @param aeron_archive the archive client
