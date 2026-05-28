@@ -72,6 +72,7 @@ import java.util.Iterator;
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 import static io.aeron.Aeron.NULL_VALUE;
@@ -848,6 +849,17 @@ abstract class ArchiveConductor
             return;
         }
 
+        final DeleteSegmentsSession deleteSegmentsSession = deleteSegmentsSessionByIdMap.get(recordingId);
+        if (null != deleteSegmentsSession &&
+            deleteSegmentsSession.maxDeletePosition() > recordingSummary.stopPosition &&
+            stopPosition > recordingSummary.stopPosition)
+        {
+            final String msg = "cannot start replay of recording " + recordingId +
+                " due to an outstanding delete operation";
+            controlSession.sendErrorResponse(correlationId, msg);
+            return;
+        }
+
         try
         {
             final ChannelUri channelUri = ChannelUri.parse(replayChannel);
@@ -994,6 +1006,13 @@ abstract class ArchiveConductor
 
     void stopAllReplays(final long correlationId, final long recordingId, final ControlSession controlSession)
     {
+        stopAllReplays(recordingId);
+
+        controlSession.sendOkResponse(correlationId);
+    }
+
+    private void stopAllReplays(final long recordingId)
+    {
         for (final ReplaySession replaySession : replaySessionByIdMap.values())
         {
             if (NULL_VALUE == recordingId || replaySession.recordingId() == recordingId)
@@ -1001,8 +1020,6 @@ abstract class ArchiveConductor
                 replaySession.abort("stop all replays");
             }
         }
-
-        controlSession.sendOkResponse(correlationId);
     }
 
     /* Returns a Subscription or a String error message indicating why the subscription couldn't be acquired */
@@ -1184,7 +1201,8 @@ abstract class ArchiveConductor
                 }
             }
 
-            deleteSegments(correlationId, recordingId, controlSession, files);
+            stopAllReplays(recordingId);
+            deleteSegments(correlationId, recordingId, controlSession, files, () -> !hasInProgressReplays(recordingId));
         }
     }
 
@@ -1199,7 +1217,7 @@ abstract class ArchiveConductor
             final ArrayDeque<String> files = new ArrayDeque<>();
             listSegmentFiles(recordingId, files::addLast);
 
-            deleteSegments(correlationId, recordingId, controlSession, files);
+            deleteSegments(correlationId, recordingId, controlSession, files, null);
         }
     }
 
@@ -1470,7 +1488,7 @@ abstract class ArchiveConductor
             {
                 findDetachedSegments(recordingId, files, minPosition.get());
             }
-            deleteSegments(correlationId, recordingId, controlSession, files);
+            deleteSegments(correlationId, recordingId, controlSession, files, null);
         }
     }
 
@@ -1491,7 +1509,7 @@ abstract class ArchiveConductor
 
             final ArrayDeque<String> files = new ArrayDeque<>();
             findDetachedSegments(recordingId, files, oldStartPosition);
-            deleteSegments(correlationId, recordingId, controlSession, files);
+            deleteSegments(correlationId, recordingId, controlSession, files, null);
         }
     }
 
@@ -1616,7 +1634,7 @@ abstract class ArchiveConductor
             if (movedSegmentCount >= 0)
             {
                 final int toBeDeletedSegmentCount = addDeleteSegmentsSession(
-                    correlationId, srcRecordingId, controlSession, emptyFollowingSrcSegment);
+                    correlationId, srcRecordingId, controlSession, emptyFollowingSrcSegment, null);
 
                 if (toBeDeletedSegmentCount >= 0)
                 {
@@ -1683,7 +1701,8 @@ abstract class ArchiveConductor
         final long correlationId,
         final long recordingId,
         final ControlSession controlSession,
-        final ArrayDeque<String> files)
+        final ArrayDeque<String> files,
+        final BooleanSupplier gate)
     {
         if (files.isEmpty())
         {
@@ -1696,8 +1715,9 @@ abstract class ArchiveConductor
             deleteList.add(new File(archiveDir, name));
         }
 
-        final DeleteSegmentsSession session = new DeleteSegmentsSession(
-            recordingId, correlationId, deleteList, controlSession, errorHandler);
+        final DeleteSegmentsSession session = null != gate ?
+            new GatedDeleteSegmentsSession(recordingId, correlationId, deleteList, controlSession, errorHandler, gate) :
+            new DeleteSegmentsSession(recordingId, correlationId, deleteList, controlSession, errorHandler);
         addSession(session);
         deleteSegmentsSessionByIdMap.put(session.sessionId(), session);
 
@@ -2131,19 +2151,22 @@ abstract class ArchiveConductor
         }
     }
 
-    private boolean isValidTruncate(
-        final long correlationId, final ControlSession controlSession, final long recordingId, final long position)
+    private boolean hasInProgressReplays(final long recordingId)
     {
         for (final ReplaySession replaySession : replaySessionByIdMap.values())
         {
             if (replaySession.recordingId() == recordingId)
             {
-                final String msg = "cannot truncate recording with active replay " + recordingId;
-                controlSession.sendErrorResponse(correlationId, ACTIVE_RECORDING, msg);
-                return false;
+                return true;
             }
         }
 
+        return false;
+    }
+
+    private boolean isValidTruncate(
+        final long correlationId, final ControlSession controlSession, final long recordingId, final long position)
+    {
         catalog.recordingSummary(recordingId, recordingSummary);
         final long stopPosition = recordingSummary.stopPosition;
         final long startPosition = recordingSummary.startPosition;
@@ -2168,14 +2191,11 @@ abstract class ArchiveConductor
 
     private boolean isValidPurge(final long correlationId, final ControlSession controlSession, final long recordingId)
     {
-        for (final ReplaySession replaySession : replaySessionByIdMap.values())
+        if (hasInProgressReplays(recordingId))
         {
-            if (replaySession.recordingId() == recordingId)
-            {
-                final String msg = "cannot purge recording with active replay " + recordingId;
-                controlSession.sendErrorResponse(correlationId, ACTIVE_RECORDING, msg);
-                return false;
-            }
+            final String msg = "cannot purge recording with active replay " + recordingId;
+            controlSession.sendErrorResponse(correlationId, ACTIVE_RECORDING, msg);
+            return false;
         }
 
         catalog.recordingSummary(recordingId, recordingSummary);
@@ -2558,9 +2578,10 @@ abstract class ArchiveConductor
         final long correlationId,
         final long recordingId,
         final ControlSession controlSession,
-        final ArrayDeque<String> files)
+        final ArrayDeque<String> files,
+        final BooleanSupplier gate)
     {
-        final int count = addDeleteSegmentsSession(correlationId, recordingId, controlSession, files);
+        final int count = addDeleteSegmentsSession(correlationId, recordingId, controlSession, files, gate);
         if (count >= 0)
         {
             controlSession.sendOkResponse(correlationId, count);

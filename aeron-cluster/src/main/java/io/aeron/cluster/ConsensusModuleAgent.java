@@ -1837,7 +1837,6 @@ final class ConsensusModuleAgent
 
     void truncateLogEntry(final long leadershipTermId, final long logPosition)
     {
-        archive.stopAllReplays(logRecordingId);
         archive.truncateRecording(logRecordingId, logPosition);
         if (NULL_VALUE != leadershipTermId)
         {

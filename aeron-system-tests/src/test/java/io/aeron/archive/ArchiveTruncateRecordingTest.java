@@ -16,6 +16,7 @@
 package io.aeron.archive;
 
 import io.aeron.Aeron;
+import io.aeron.Counter;
 import io.aeron.ChannelUri;
 import io.aeron.ExclusivePublication;
 import io.aeron.FragmentAssembler;
@@ -23,6 +24,7 @@ import io.aeron.Subscription;
 import io.aeron.archive.checksum.Checksum;
 import io.aeron.archive.checksum.Checksums;
 import io.aeron.archive.client.AeronArchive;
+import io.aeron.archive.client.ReplayParams;
 import io.aeron.archive.codecs.RecordingSignal;
 import io.aeron.archive.codecs.SourceLocation;
 import io.aeron.archive.status.RecordingPos;
@@ -60,6 +62,7 @@ import java.util.EnumSet;
 import java.util.concurrent.ThreadLocalRandom;
 
 import static io.aeron.Aeron.NULL_VALUE;
+import static io.aeron.CommonContext.IPC_CHANNEL;
 import static io.aeron.archive.Archive.Configuration.CATALOG_FILE_NAME;
 import static io.aeron.archive.Archive.Configuration.RECORDING_SEGMENT_SUFFIX;
 import static io.aeron.archive.Archive.segmentFileName;
@@ -398,6 +401,24 @@ class ArchiveTruncateRecordingTest
             verifyRecording(recordingId);
 
             assertTrue(Files.exists(archiveDir.resolve(CATALOG_FILE_NAME)));
+        }
+    }
+
+    @Test
+    @InterruptAfter(10)
+    void shouldTruncateRecordingWithConcurrentReplay()
+    {
+        final ArchiveSystemTests.RecordingResult recordingResult = ArchiveSystemTests.recordData(aeronArchive);
+
+        aeronArchive.startReplay(recordingResult.recordingId(), IPC_CHANNEL, 10001, new ReplayParams());
+        aeronArchive.truncateRecording(recordingResult.recordingId(), 0);
+
+        assertEquals(0, aeronArchive.getStopPosition(recordingResult.recordingId()));
+
+        final Counter replaySessionCounter = archive.context().replaySessionCounter();
+        while (replaySessionCounter.get() > 0)
+        {
+            Tests.yield();
         }
     }
 
