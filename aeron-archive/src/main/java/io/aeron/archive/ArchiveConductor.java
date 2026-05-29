@@ -859,6 +859,7 @@ abstract class ArchiveConductor
 
             final String lingerValue = channelUri.get(CommonContext.LINGER_PARAM_NAME);
             channelBuilder.linger(null != lingerValue ? Long.parseLong(lingerValue) : ctx.replayLingerTimeoutNs());
+            final String channel = channelBuilder.build();
 
             addSession(new CreateReplayPublicationSession(
                 correlationId,
@@ -870,9 +871,10 @@ abstract class ArchiveConductor
                 recordingSummary.segmentFileLength,
                 recordingSummary.termBufferLength,
                 recordingSummary.streamId,
-                aeron.asyncAddExclusivePublication(channelBuilder.build(), replayStreamId),
+                () -> aeron.asyncAddExclusivePublication(channel, replayStreamId),
                 fileIoMaxLength,
                 replayLimitPositionCounter,
+                cachedEpochClock,
                 aeron,
                 controlSession,
                 this));

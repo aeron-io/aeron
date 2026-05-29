@@ -18,9 +18,14 @@ package io.aeron.archive;
 import io.aeron.Aeron;
 import io.aeron.Counter;
 import io.aeron.ExclusivePublication;
+import org.agrona.concurrent.EpochClock;
+
+import java.util.function.LongSupplier;
 
 class CreateReplayPublicationSession implements Session
 {
+    private static final long RETRY_COOLDOWN_MS = 10;
+
     private final long correlationId;
     private final long recordingId;
     private final long replayPosition;
@@ -30,9 +35,12 @@ class CreateReplayPublicationSession implements Session
     private final int segmentFileLength;
     private final int termBufferLength;
     private final int streamId;
+    private final LongSupplier addPublication;
     private long publicationRegistrationId;
+    private long retryDeadlineMs = 0;
     private final int fileIoMaxLength;
     private boolean isDone = false;
+    private final EpochClock epochClock;
     private final Aeron aeron;
     private final Counter limitPositionCounter;
     private final ControlSession controlSession;
@@ -48,9 +56,10 @@ class CreateReplayPublicationSession implements Session
         final int segmentFileLength,
         final int termBufferLength,
         final int streamId,
-        final long publicationRegistrationId,
+        final LongSupplier addPublication,
         final int fileIoMaxLength,
         final Counter limitPositionCounter,
+        final EpochClock epochClock,
         final Aeron aeron,
         final ControlSession controlSession,
         final ArchiveConductor conductor)
@@ -64,8 +73,10 @@ class CreateReplayPublicationSession implements Session
         this.segmentFileLength = segmentFileLength;
         this.termBufferLength = termBufferLength;
         this.streamId = streamId;
-        this.publicationRegistrationId = publicationRegistrationId;
+        this.addPublication = addPublication;
+        this.publicationRegistrationId = Aeron.NULL_VALUE;
         this.fileIoMaxLength = fileIoMaxLength;
+        this.epochClock = epochClock;
         this.limitPositionCounter = limitPositionCounter;
         this.aeron = aeron;
         this.controlSession = controlSession;
@@ -112,46 +123,67 @@ class CreateReplayPublicationSession implements Session
      */
     public int doWork()
     {
-        int workCount = 0;
-
-        if (!isDone)
+        if (isDone)
         {
-            final ExclusivePublication publication;
-            try
-            {
-                publication = aeron.getExclusivePublication(publicationRegistrationId);
-            }
-            catch (final Exception ex)
-            {
-                isDone = true;
-                final String msg = "failed to create replay publication: " + ex.getMessage();
-                controlSession.sendErrorResponse(correlationId, msg);
-                throw ex;
-            }
-
-            if (null != publication)
-            {
-                publicationRegistrationId = Aeron.NULL_VALUE;
-                isDone = true;
-                workCount += 1;
-
-                conductor.newReplaySession(
-                    correlationId,
-                    recordingId,
-                    replayPosition,
-                    replayLength,
-                    startPosition,
-                    stopPosition,
-                    segmentFileLength,
-                    termBufferLength,
-                    streamId,
-                    fileIoMaxLength,
-                    controlSession,
-                    limitPositionCounter,
-                    publication);
-            }
+            return 0;
         }
 
-        return workCount;
+        if (Aeron.NULL_VALUE == publicationRegistrationId)
+        {
+            if (epochClock.time() < retryDeadlineMs)
+            {
+                return 0;
+            }
+
+            publicationRegistrationId = addPublication.getAsLong();
+
+            return 1;
+        }
+
+        final ExclusivePublication publication;
+        try
+        {
+            publication = aeron.getExclusivePublication(publicationRegistrationId);
+        }
+        catch (final Exception ex)
+        {
+            if (ex.getMessage().contains("clashing sessionId"))
+            {
+                publicationRegistrationId = Aeron.NULL_VALUE;
+                retryDeadlineMs = epochClock.time() + RETRY_COOLDOWN_MS;
+
+                return 1;
+            }
+
+            isDone = true;
+            final String msg = "failed to create replay publication: " + ex.getMessage();
+            controlSession.sendErrorResponse(correlationId, msg);
+            throw ex;
+        }
+
+        if (null == publication)
+        {
+            return 0;
+        }
+
+        publicationRegistrationId = Aeron.NULL_VALUE;
+        isDone = true;
+
+        conductor.newReplaySession(
+            correlationId,
+            recordingId,
+            replayPosition,
+            replayLength,
+            startPosition,
+            stopPosition,
+            segmentFileLength,
+            termBufferLength,
+            streamId,
+            fileIoMaxLength,
+            controlSession,
+            limitPositionCounter,
+            publication);
+
+        return 1;
     }
 }
