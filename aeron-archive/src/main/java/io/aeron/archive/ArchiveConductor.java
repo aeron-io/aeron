@@ -72,7 +72,6 @@ import java.util.Iterator;
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 import static io.aeron.Aeron.NULL_VALUE;
@@ -1202,7 +1201,7 @@ abstract class ArchiveConductor
             }
 
             stopAllReplays(recordingId);
-            deleteSegments(correlationId, recordingId, controlSession, files, () -> !hasInProgressReplays(recordingId));
+            deleteSegments(correlationId, recordingId, controlSession, files, true);
         }
     }
 
@@ -1217,7 +1216,7 @@ abstract class ArchiveConductor
             final ArrayDeque<String> files = new ArrayDeque<>();
             listSegmentFiles(recordingId, files::addLast);
 
-            deleteSegments(correlationId, recordingId, controlSession, files, null);
+            deleteSegments(correlationId, recordingId, controlSession, files, false);
         }
     }
 
@@ -1488,7 +1487,7 @@ abstract class ArchiveConductor
             {
                 findDetachedSegments(recordingId, files, minPosition.get());
             }
-            deleteSegments(correlationId, recordingId, controlSession, files, null);
+            deleteSegments(correlationId, recordingId, controlSession, files, false);
         }
     }
 
@@ -1509,7 +1508,7 @@ abstract class ArchiveConductor
 
             final ArrayDeque<String> files = new ArrayDeque<>();
             findDetachedSegments(recordingId, files, oldStartPosition);
-            deleteSegments(correlationId, recordingId, controlSession, files, null);
+            deleteSegments(correlationId, recordingId, controlSession, files, false);
         }
     }
 
@@ -1634,7 +1633,7 @@ abstract class ArchiveConductor
             if (movedSegmentCount >= 0)
             {
                 final int toBeDeletedSegmentCount = addDeleteSegmentsSession(
-                    correlationId, srcRecordingId, controlSession, emptyFollowingSrcSegment, null);
+                    correlationId, srcRecordingId, controlSession, emptyFollowingSrcSegment, false);
 
                 if (toBeDeletedSegmentCount >= 0)
                 {
@@ -1702,7 +1701,7 @@ abstract class ArchiveConductor
         final long recordingId,
         final ControlSession controlSession,
         final ArrayDeque<String> files,
-        final BooleanSupplier gate)
+        final boolean awaitReplaysStop)
     {
         if (files.isEmpty())
         {
@@ -1715,9 +1714,8 @@ abstract class ArchiveConductor
             deleteList.add(new File(archiveDir, name));
         }
 
-        final DeleteSegmentsSession session = null != gate ?
-            new GatedDeleteSegmentsSession(recordingId, correlationId, deleteList, controlSession, errorHandler, gate) :
-            new DeleteSegmentsSession(recordingId, correlationId, deleteList, controlSession, errorHandler);
+        final DeleteSegmentsSession session = new DeleteSegmentsSession(
+            recordingId, correlationId, deleteList, controlSession, errorHandler, awaitReplaysStop);
         addSession(session);
         deleteSegmentsSessionByIdMap.put(session.sessionId(), session);
 
@@ -2151,7 +2149,7 @@ abstract class ArchiveConductor
         }
     }
 
-    private boolean hasInProgressReplays(final long recordingId)
+    boolean hasInProgressReplays(final long recordingId)
     {
         for (final ReplaySession replaySession : replaySessionByIdMap.values())
         {
@@ -2579,9 +2577,9 @@ abstract class ArchiveConductor
         final long recordingId,
         final ControlSession controlSession,
         final ArrayDeque<String> files,
-        final BooleanSupplier gate)
+        final boolean awaitReplaysStop)
     {
-        final int count = addDeleteSegmentsSession(correlationId, recordingId, controlSession, files, gate);
+        final int count = addDeleteSegmentsSession(correlationId, recordingId, controlSession, files, awaitReplaysStop);
         if (count >= 0)
         {
             controlSession.sendOkResponse(correlationId, count);

@@ -36,7 +36,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -128,34 +127,6 @@ class ArchiveConductorTest
 
         verify(mockControlSession).sendErrorResponse(
             eq(correlationId), eq((long)ArchiveException.STORAGE_SPACE), anyString());
-    }
-
-    @Test
-    void truncateRecordingShouldAddDeleteSegmentsSession()
-    {
-        createTestConductor();
-
-        final long recordingId = 42L;
-        final int segmentLength = Archive.Configuration.SEGMENT_FILE_LENGTH_DEFAULT;
-        final long stopPosition = segmentLength;
-        final long truncatePosition = stopPosition;
-
-        when(mockCatalog.hasRecording(recordingId)).thenReturn(true);
-        doAnswer(invocation ->
-        {
-            final RecordingSummary summary = invocation.getArgument(1);
-            summary.startPosition = 0L;
-            summary.stopPosition = stopPosition;
-            summary.segmentFileLength = segmentLength;
-            summary.termBufferLength = 64 * 1024;
-            return summary;
-        }).when(mockCatalog).recordingSummary(eq(recordingId), any(RecordingSummary.class));
-
-        final ControlSession mockControlSession = mock(ControlSession.class);
-        conductor.truncateRecording(1L, recordingId, truncatePosition, mockControlSession);
-
-        assertEquals(1, conductor.capturedSessions.size());
-        assertInstanceOf(GatedDeleteSegmentsSession.class, conductor.capturedSessions.get(0));
     }
 
     @Test

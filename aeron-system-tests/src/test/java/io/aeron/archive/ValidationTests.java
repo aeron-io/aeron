@@ -185,6 +185,7 @@ class ValidationTests
             exception.getMessage(),
             endsWith("cannot extend recording " + recordingId + " due to an outstanding delete operation"));
 
+        archive.invoker().invoke();
         awaitSignal(aeronArchive, recordingSignalConsumer, recordingId, RecordingSignal.DELETE);
 
         // once delete is complete we can extend the recording

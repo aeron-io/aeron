@@ -37,12 +37,20 @@ class DeleteSegmentsSession implements Session
     private final ControlSession controlSession;
     private final ErrorHandler errorHandler;
 
+    enum State
+    {
+        AWAIT_REPLAYS_STOP, DELETE_FILES, DONE
+    }
+
+    private State state;
+
     DeleteSegmentsSession(
         final long recordingId,
         final long correlationId,
         final ArrayDeque<File> files,
         final ControlSession controlSession,
-        final ErrorHandler errorHandler)
+        final ErrorHandler errorHandler,
+        final boolean awaitReplaysStop)
     {
         this.recordingId = recordingId;
         this.correlationId = correlationId;
@@ -60,6 +68,8 @@ class DeleteSegmentsSession implements Session
                 maxSegmentPosition, parseLongAscii(name, prefixLength, dotIndex - prefixLength));
         }
         maxDeletePosition = maxSegmentPosition;
+
+        state = awaitReplaysStop ? State.AWAIT_REPLAYS_STOP : State.DELETE_FILES;
     }
 
     long maxDeletePosition()
@@ -104,7 +114,30 @@ class DeleteSegmentsSession implements Session
      */
     public int doWork()
     {
+        return switch (state)
+        {
+            case AWAIT_REPLAYS_STOP -> doAwaitReplaysStop();
+            case DELETE_FILES -> doDeleteFiles();
+            case DONE -> 0;
+        };
+    }
+
+    private int doAwaitReplaysStop()
+    {
+        if (controlSession.archiveConductor().hasInProgressReplays(recordingId))
+        {
+            return 0;
+        }
+
+        state = State.DELETE_FILES;
+
+        return 1;
+    }
+
+    private int doDeleteFiles()
+    {
         int workCount = 0;
+
         final File file = files.pollFirst();
         if (null != file)
         {
