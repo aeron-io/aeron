@@ -28,6 +28,7 @@ import static io.aeron.cluster.ClusterMember.isQuorumCandidate;
 import static io.aeron.cluster.ClusterMember.isQuorumLeader;
 import static io.aeron.cluster.ClusterMember.isUnanimousCandidate;
 import static io.aeron.cluster.ClusterMember.isUnanimousLeader;
+import static io.aeron.cluster.ClusterMember.hasQuorumAckedSince;
 import static io.aeron.cluster.ClusterMember.quorumPosition;
 import static io.aeron.cluster.ClusterMember.quorumThreshold;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -232,6 +233,74 @@ class ClusterMemberTest
 
         final long quorumPosition = quorumPosition(clusterMembers, positions, nowNs, timeoutNs);
         assertEquals(expectedQuorumPosition, quorumPosition);
+    }
+
+    @Test
+    void hasQuorumAckedSinceShouldConfirmWhenAQuorumAcknowledgesCurrentTermSinceT0()
+    {
+        final int leaderId = 0;
+        final long term = 5;
+        final long t0 = 100;
+        final ClusterMember[] members = new ClusterMember[]
+        {
+            newMember(leaderId, term, 1000, 250), // self (leader) -- always counted
+            newMember(1, term, 900, 150),         // follower acked the current term at/after t0
+            newMember(2, term, 800, 50)           // follower acked BEFORE t0 -- does not count
+        };
+
+        // self + member1 = quorum of 2 -> confirmed
+        assertTrue(hasQuorumAckedSince(members, term, leaderId, t0));
+    }
+
+    @Test
+    void hasQuorumAckedSinceShouldDeclineWhenOnlySelfIsFresh()
+    {
+        final int leaderId = 0;
+        final long term = 5;
+        final long t0 = 100;
+        final ClusterMember[] members = new ClusterMember[]
+        {
+            newMember(leaderId, term, 1000, 250),
+            newMember(1, term, 900, 50),  // stale (before t0)
+            newMember(2, term, 800, 50)   // stale (before t0)
+        };
+
+        // only self qualifies (1 < quorum of 2) -> fail safe (caller falls back to a barrier)
+        assertFalse(hasQuorumAckedSince(members, term, leaderId, t0));
+    }
+
+    @Test
+    void hasQuorumAckedSinceShouldNotCountStaleTermAcknowledgements()
+    {
+        final int leaderId = 0;
+        final long term = 5;
+        final long t0 = 100;
+        final ClusterMember[] members = new ClusterMember[]
+        {
+            newMember(leaderId, term, 1000, 250),
+            newMember(1, term - 1, 900, 200), // fresh, but acknowledges a STALE term -> must not count
+            newMember(2, term - 1, 800, 200)  // fresh, stale term -> must not count
+        };
+
+        // followers ack the wrong term, so only self qualifies -> decline. The linearizability-critical guard.
+        assertFalse(hasQuorumAckedSince(members, term, leaderId, t0));
+    }
+
+    @Test
+    void hasQuorumAckedSinceShouldConfirmWithMultipleFreshFollowers()
+    {
+        final int leaderId = 0;
+        final long term = 5;
+        final long t0 = 100;
+        final ClusterMember[] members = new ClusterMember[]
+        {
+            newMember(leaderId, term, 1000, 250),
+            newMember(1, term, 900, 150),
+            newMember(2, term, 800, 200)
+        };
+
+        // self + two fresh current-term followers -> well past quorum -> confirmed
+        assertTrue(hasQuorumAckedSince(members, term, leaderId, t0));
     }
 
     @Test
