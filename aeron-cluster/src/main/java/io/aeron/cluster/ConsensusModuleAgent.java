@@ -134,6 +134,10 @@ final class ConsensusModuleAgent
     private long terminationLeadershipTermId = NULL_VALUE;
     private long notifiedCommitPosition = 0;
     private long lastAppendPosition = NULL_POSITION;
+    // Set when a follower receives a commit-position heartbeat from the current leader, so it sends an
+    // AppendPosition promptly (even with no position change) -- letting the leader confirm leadership on
+    // demand for a linearizable read rather than waiting for the periodic keep-alive.
+    private boolean appendPositionForceSend = false;
     private long lastQuorumBacktrackCommitPosition = NULL_POSITION;
     private long timeOfLastLogUpdateNs = 0;
     private long timeOfLastAppendPositionUpdateNs = 0;
@@ -582,6 +586,33 @@ final class ConsensusModuleAgent
     public ClusterMember clusterMember()
     {
         return thisMember;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public boolean isLeadershipConfirmedSince(final long sinceNs)
+    {
+        if (Cluster.Role.LEADER != role)
+        {
+            return false;
+        }
+
+        return ClusterMember.hasQuorumAckedSince(activeMembers, leadershipTermId, memberId, sinceNs);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public void triggerQuorumConfirmation()
+    {
+        if (Cluster.Role.LEADER == role)
+        {
+            // Broadcast a commit-position heartbeat now; followers ack promptly (see onCommitPosition ->
+            // appendPositionForceSend), so a subsequent isLeadershipConfirmedSince confirms leadership in
+            // ~1 RTT rather than waiting for the periodic keep-alive. Used to support faster linearizable reads.
+            publishCommitPosition(commitPosition.getPlain(), leadershipTermId);
+        }
     }
 
     public void onLoadBeginSnapshot(
@@ -1080,6 +1111,9 @@ final class ConsensusModuleAgent
             {
                 notifiedCommitPosition = max(notifiedCommitPosition, logPosition);
                 timeOfLastLogUpdateNs = nowNs;
+                // Ack this heartbeat promptly so a leader-triggered round confirms leadership in
+                // ~1 RTT instead of waiting for the periodic keep-alive interval.
+                appendPositionForceSend = true;
             }
         }
         else if (leadershipTermId > this.leadershipTermId)
@@ -2699,6 +2733,7 @@ final class ConsensusModuleAgent
     {
         final long position = max(appendPosition, lastAppendPosition);
         if (position > lastAppendPosition ||
+            appendPositionForceSend ||
             nowNs >= (timeOfLastAppendPositionSendNs + leaderHeartbeatIntervalNs))
         {
             if (consensusPublisher.appendPosition(publication, leadershipTermId, position, memberId, flags))
@@ -2709,6 +2744,7 @@ final class ConsensusModuleAgent
                     timeOfLastAppendPositionUpdateNs = nowNs;
                 }
                 timeOfLastAppendPositionSendNs = nowNs;
+                appendPositionForceSend = false;
 
                 return 1;
             }

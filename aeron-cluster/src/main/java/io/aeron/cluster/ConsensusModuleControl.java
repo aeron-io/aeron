@@ -124,4 +124,26 @@ public interface ConsensusModuleControl
      * @return cluster member for this node.
      */
     ClusterMember clusterMember();
+
+    /**
+     * Is this node still the leader, confirmed by a quorum of members that recognise the current leadership term
+     * and have acknowledged at or after {@code sinceNs}? {@code false} if this node is not the leader or fewer
+     * than a quorum have done so.
+     *
+     * <p>Non-blocking; poll from {@link ConsensusModuleExtension#consensusWork(long)}. Across a multi-poll wait,
+     * also track the leadership term (via
+     * {@link ConsensusModuleExtension#onNewLeadershipTerm(ConsensusControlState)} /
+     * {@link ConsensusModuleExtension#onElectionComplete(ConsensusControlState)}) to reject a term change.
+     *
+     * @param sinceNs cluster-clock time at or after which a quorum must have acknowledged.
+     * @return {@code true} if leadership is confirmed by a fresh quorum, otherwise {@code false}.
+     */
+    boolean isLeadershipConfirmedSince(long sinceNs);
+
+    /**
+     * Trigger an immediate leader heartbeat so followers acknowledge promptly, letting
+     * {@link #isLeadershipConfirmedSince(long)} confirm leadership in ~1 RTT rather than waiting for the periodic
+     * keep-alive. No-op unless this node is the leader.
+     */
+    void triggerQuorumConfirmation();
 }
