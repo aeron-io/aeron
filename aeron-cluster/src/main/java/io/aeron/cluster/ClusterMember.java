@@ -895,6 +895,40 @@ public final class ClusterMember
     }
 
     /**
+     * Has a quorum of members that recognise {@code leadershipTermId} acknowledged at or after
+     * {@code ackNotBeforeNs}? The hosting member ({@code leaderMemberId}) is always counted; a non-self member
+     * counts iff it recognises {@code leadershipTermId} and last acknowledged at or after {@code ackNotBeforeNs}.
+     *
+     * @param members          of the cluster (typically the active members, including the hosting node).
+     * @param leadershipTermId the term a non-self member must recognise to be counted.
+     * @param leaderMemberId   id of the hosting (leader) member, which is always counted.
+     * @param ackNotBeforeNs   time (leader clock) at or after which a non-self member must have acknowledged.
+     * @return {@code true} if a quorum (counting the hosting member) qualifies, otherwise {@code false}.
+     */
+    public static boolean hasQuorumAckedSince(
+        final ClusterMember[] members,
+        final long leadershipTermId,
+        final int leaderMemberId,
+        final long ackNotBeforeNs)
+    {
+        final int quorum = quorumThreshold(members.length);
+        int confirmed = 0;
+        for (final ClusterMember member : members)
+        {
+            if (member.id == leaderMemberId ||
+                (member.leadershipTermId == leadershipTermId && member.timeOfLastAppendPositionNs >= ackNotBeforeNs))
+            {
+                if (++confirmed >= quorum)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Has a quorum of members of appended a position to their local log.
      *
      * @param clusterMembers   to check.
