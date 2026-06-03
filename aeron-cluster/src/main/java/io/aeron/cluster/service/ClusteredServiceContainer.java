@@ -22,6 +22,7 @@ import io.aeron.RethrowingErrorHandler;
 import io.aeron.Subscription;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.cluster.AppVersionValidator;
+import io.aeron.cluster.VersionValidator;
 import io.aeron.cluster.client.ClusterException;
 import io.aeron.cluster.codecs.mark.ClusterComponentType;
 import io.aeron.cluster.codecs.mark.MarkFileHeaderEncoder;
@@ -778,7 +779,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
         private Aeron aeron;
         private DutyCycleTracker dutyCycleTracker;
         private SnapshotDurationTracker snapshotDurationTracker;
-        private AppVersionValidator appVersionValidator;
+        private VersionValidator appVersionValidator;
         private boolean ownsAeronClient;
 
         private ClusteredService clusteredService;
@@ -1097,7 +1098,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
          * @param appVersionValidator for user application.
          * @return this for fluent API.
          */
-        public Context appVersionValidator(final AppVersionValidator appVersionValidator)
+        public Context appVersionValidator(final VersionValidator appVersionValidator)
         {
             this.appVersionValidator = appVersionValidator;
             return this;
@@ -1108,9 +1109,9 @@ public final class ClusteredServiceContainer implements AutoCloseable
          * <p>
          * The default is to use {@link org.agrona.SemanticVersion} major version for checking compatibility.
          *
-         * @return AppVersionValidator in use.
+         * @return VersionValidator in use.
          */
-        public AppVersionValidator appVersionValidator()
+        public VersionValidator appVersionValidator()
         {
             return appVersionValidator;
         }

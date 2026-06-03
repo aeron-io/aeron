@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2025 Real Logic Limited.
+ * Copyright 2026 Adaptive Financial Consulting Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,25 +15,17 @@
  */
 package io.aeron.cluster;
 
-import org.agrona.SemanticVersion;
-
 /**
- * Default {@link VersionValidator} used for determining AppVersion compatibility, which uses
- * {@link org.agrona.SemanticVersion} major version for checking compatibility.
+ * Interface for determining AppVersion compatibility, so that a custom policy can be supplied via
+ * {@link ConsensusModule.Context#appVersionValidator(VersionValidator)} and
+ * {@link io.aeron.cluster.service.ClusteredServiceContainer.Context#appVersionValidator(VersionValidator)}.
  * <p>
- * A custom policy can be supplied by implementing {@link VersionValidator}.
+ * The default implementation is {@link AppVersionValidator#SEMANTIC_VERSIONING_VALIDATOR} which uses
+ * {@link org.agrona.SemanticVersion} major version for checking compatibility.
  */
-public final class AppVersionValidator implements VersionValidator
+@FunctionalInterface
+public interface VersionValidator
 {
-    private AppVersionValidator()
-    {
-    }
-
-    /**
-     * Singleton instance of {@link AppVersionValidator} version which can be used to avoid allocation.
-     */
-    public static final AppVersionValidator SEMANTIC_VERSIONING_VALIDATOR = new AppVersionValidator();
-
     /**
      * Check version compatibility between configured context appVersion and appVersion in
      * new leadership term or snapshot.
@@ -42,8 +34,5 @@ public final class AppVersionValidator implements VersionValidator
      * @param appVersionUnderTest to check against configured appVersion.
      * @return true for compatible or false for not compatible.
      */
-    public boolean isVersionCompatible(final int contextAppVersion, final int appVersionUnderTest)
-    {
-        return SemanticVersion.major(contextAppVersion) == SemanticVersion.major(appVersionUnderTest);
-    }
+    boolean isVersionCompatible(int contextAppVersion, int appVersionUnderTest);
 }

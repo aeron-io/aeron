@@ -1667,7 +1667,7 @@ public final class ConsensusModule implements AutoCloseable
         private EgressPublisher egressPublisher;
         private DutyCycleTracker dutyCycleTracker;
         private SnapshotDurationTracker totalSnapshotDurationTracker;
-        private AppVersionValidator appVersionValidator;
+        private VersionValidator appVersionValidator;
         private boolean isLogMdc;
         private boolean useAgentInvoker = false;
         private ConsensusModuleStateExport bootstrapState = null;
@@ -2335,7 +2335,7 @@ public final class ConsensusModule implements AutoCloseable
          * @param appVersionValidator for user application.
          * @return this for fluent API.
          */
-        public Context appVersionValidator(final AppVersionValidator appVersionValidator)
+        public Context appVersionValidator(final VersionValidator appVersionValidator)
         {
             this.appVersionValidator = appVersionValidator;
             return this;
@@ -2346,9 +2346,9 @@ public final class ConsensusModule implements AutoCloseable
          * <p>
          * The default is to use {@link org.agrona.SemanticVersion} major version for checking compatibility.
          *
-         * @return AppVersionValidator in use.
+         * @return VersionValidator in use.
          */
-        public AppVersionValidator appVersionValidator()
+        public VersionValidator appVersionValidator()
         {
             return appVersionValidator;
         }

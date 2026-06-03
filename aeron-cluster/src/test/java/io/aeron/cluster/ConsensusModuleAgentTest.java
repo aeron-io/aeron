@@ -668,7 +668,7 @@ class ConsensusModuleAgentTest
 
         controlToggle.set(NEUTRAL.code());
 
-        final AppVersionValidator appVersionValidator = mock(AppVersionValidator.class);
+        final VersionValidator appVersionValidator = mock(VersionValidator.class);
         when(appVersionValidator.isVersionCompatible(anyInt(), anyInt())).thenReturn(true);
         ctx.moduleStateCounter(stateCounter)
             .controlToggleCounter(controlToggle)
