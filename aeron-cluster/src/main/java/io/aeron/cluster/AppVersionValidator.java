@@ -22,9 +22,13 @@ import org.agrona.SemanticVersion;
  * <p>
  * Default is to use {@link org.agrona.SemanticVersion} major version for checking compatibility.
  */
-public final class AppVersionValidator
+public class AppVersionValidator
 {
-    private AppVersionValidator()
+    /**
+     * Create a validator which uses {@link org.agrona.SemanticVersion} major version for checking compatibility.
+     * Subclasses may override {@link #isVersionCompatible(int, int)} to provide a custom policy.
+     */
+    public AppVersionValidator()
     {
     }
 

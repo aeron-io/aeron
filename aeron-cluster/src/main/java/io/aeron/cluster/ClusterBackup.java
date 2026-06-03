@@ -318,9 +318,12 @@ public final class ClusterBackup implements AutoCloseable
      * Configuration options for {@link ClusterBackup} with defaults and constants for system properties lookup.
      */
     @Config(existsInC = false)
-    public static final class Configuration
+    public static class Configuration
     {
-        private Configuration()
+        /**
+         * Create an instance. All configuration options are provided via static members.
+         */
+        public Configuration()
         {
         }
 

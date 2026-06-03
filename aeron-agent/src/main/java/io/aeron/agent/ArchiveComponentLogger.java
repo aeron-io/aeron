@@ -36,7 +36,7 @@ import static net.bytebuddy.matcher.ElementMatchers.named;
  * Implementation of a component logger for archive log events.
  */
 @Versioned
-public final class ArchiveComponentLogger implements ComponentLogger
+public class ArchiveComponentLogger implements ComponentLogger
 {
     static final EnumSet<ArchiveEventCode> ENABLED_EVENTS = EnumSet.noneOf(ArchiveEventCode.class);
     private static final Object2ObjectHashMap<String, EnumSet<ArchiveEventCode>> SPECIAL_EVENTS =

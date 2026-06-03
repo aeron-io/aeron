@@ -908,9 +908,12 @@ public final class Aeron implements AutoCloseable
     /**
      * Configuration options for the {@link Aeron} client.
      */
-    public static final class Configuration
+    public static class Configuration
     {
-        private Configuration()
+        /**
+         * Create an instance. All configuration options are provided via static members.
+         */
+        public Configuration()
         {
         }
 
@@ -1110,7 +1113,7 @@ public final class Aeron implements AutoCloseable
      * The context will be owned by {@link ClientConductor} after a successful
      * {@link Aeron#connect(Context)} and closed via {@link Aeron#close()}.
      */
-    public static final class Context extends CommonContext
+    public static class Context extends CommonContext
     {
         private long clientId;
         private String clientName = Configuration.clientName();
