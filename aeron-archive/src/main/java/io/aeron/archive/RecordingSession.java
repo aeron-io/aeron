@@ -64,7 +64,8 @@ class RecordingSession implements Session
         final Archive.Context ctx,
         final ControlSession controlSession,
         final boolean isAutoStop,
-        final ArchiveConductor.Recorder recorder)
+        final ArchiveConductor.Recorder recorder,
+        final SegmentPreparer segmentPreparer)
     {
         this.correlationId = correlationId;
         this.recordingId = recordingId;
@@ -78,7 +79,8 @@ class RecordingSession implements Session
         this.progressEventPosition = image.joinPosition();
 
         blockLengthLimit = Math.min(image.termBufferLength(), ctx.fileIoMaxLength());
-        recordingWriter = new RecordingWriter(recordingId, startPosition, segmentLength, image, ctx, recorder);
+        recordingWriter = new RecordingWriter(
+            recordingId, startPosition, segmentLength, image, ctx, recorder, segmentPreparer);
     }
 
     /**

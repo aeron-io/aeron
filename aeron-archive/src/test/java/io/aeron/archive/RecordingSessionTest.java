@@ -144,7 +144,8 @@ class RecordingSessionTest
             context,
             CONTROL_SESSION,
             false,
-            mock(ArchiveConductor.Recorder.class));
+            mock(ArchiveConductor.Recorder.class),
+            null);
 
         assertEquals(RECORDING_ID, session.sessionId());
 

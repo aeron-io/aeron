@@ -65,10 +65,12 @@ final class RecordingWriter implements BlockHandler, AutoCloseable
     private final Archive.Context ctx;
 
     private final ArchiveConductor.Recorder recorder;
+    private final SegmentPreparer segmentPreparer;
 
     private long segmentBasePosition;
     private int segmentOffset;
     private FileChannel recordingFileChannel;
+    private SegmentPrepareRequest preparedSegment;
 
     private boolean isClosed = false;
 
@@ -78,7 +80,8 @@ final class RecordingWriter implements BlockHandler, AutoCloseable
         final int segmentLength,
         final Image image,
         final Archive.Context ctx,
-        final ArchiveConductor.Recorder recorder)
+        final ArchiveConductor.Recorder recorder,
+        final SegmentPreparer segmentPreparer)
     {
         this.recordingId = recordingId;
         this.archiveDirChannel = ctx.archiveDirChannel();
@@ -99,6 +102,7 @@ final class RecordingWriter implements BlockHandler, AutoCloseable
         final long joinPosition = image.joinPosition();
         segmentBasePosition = segmentFileBasePosition(startPosition, joinPosition, termLength, segmentLength);
         segmentOffset = (int)(joinPosition - segmentBasePosition);
+        this.segmentPreparer = segmentPreparer;
     }
 
     /**
@@ -144,6 +148,10 @@ final class RecordingWriter implements BlockHandler, AutoCloseable
             recorder.writeTimeNs(writeTimeNs);
 
             segmentOffset += length;
+            if (null != segmentPreparer && null == preparedSegment && segmentOffset >= (segmentLength / 2))
+            {
+                prepareNextSegment();
+            }
             if (segmentOffset >= segmentLength)
             {
                 onFileRollOver();
@@ -175,6 +183,15 @@ final class RecordingWriter implements BlockHandler, AutoCloseable
         {
             isClosed = true;
             CloseHelper.close(countedErrorHandler, recordingFileChannel);
+
+            final SegmentPrepareRequest request = preparedSegment;
+            preparedSegment = null;
+            if (null != request && !request.cancel() && SegmentPrepareRequest.DONE == request.state())
+            {
+                // canceled requests are cleaned up by the preparer; a completed one is ours to discard
+                CloseHelper.quietClose(request.channel());
+                deletePreparedFile(request.file());
+            }
         }
     }
 
@@ -229,7 +246,15 @@ final class RecordingWriter implements BlockHandler, AutoCloseable
         }
     }
 
-    private void onFileRollOver()
+    private void prepareNextSegment()
+    {
+        preparedSegment = new SegmentPrepareRequest(
+            new File(archiveDir, Archive.segmentFileName(recordingId, segmentBasePosition + segmentLength) + ".prep"),
+            segmentLength);
+        segmentPreparer.prepareSegment(preparedSegment);
+    }
+
+    private void onFileRollOver() throws IOException
     {
         CloseHelper.close(recordingFileChannel);
         segmentOffset = 0;
@@ -241,7 +266,55 @@ final class RecordingWriter implements BlockHandler, AutoCloseable
             throw new ArchiveException("segment file already exists: " + file);
         }
 
+        if (usePreparedSegment(file))
+        {
+            return;
+        }
+
         openRecordingSegmentFile(file);
+    }
+
+    private boolean usePreparedSegment(final File file) throws IOException
+    {
+        final SegmentPrepareRequest request = preparedSegment;
+        if (null == request)
+        {
+            return false;
+        }
+        preparedSegment = null;
+
+        if (request.cancel())
+        {
+            // not prepared in time: the preparer cleans up when it observes the request; open inline
+            return false;
+        }
+
+        if (SegmentPrepareRequest.DONE == request.state())
+        {
+            final FileChannel channel = request.channel();
+            if (request.file().renameTo(file))
+            {
+                recordingFileChannel = channel;
+                if (forceWrites && null != archiveDirChannel)
+                {
+                    archiveDirChannel.force(forceMetadata);
+                }
+                return true;
+            }
+
+            CloseHelper.quietClose(channel);
+            deletePreparedFile(request.file());
+        }
+
+        return false; // FAILED: the preparer has already cleaned up
+    }
+
+    private void deletePreparedFile(final File file)
+    {
+        if (!file.delete() && file.exists())
+        {
+            countedErrorHandler.onError(new ArchiveException("failed to delete prepared segment: " + file));
+        }
     }
 
     private void checkErrorType(final IOException ex, final int writeLength)

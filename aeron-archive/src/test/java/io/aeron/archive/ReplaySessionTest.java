@@ -164,7 +164,8 @@ class ReplaySessionTest
             SEGMENT_LENGTH,
             mockImage,
             context,
-            mock(ArchiveConductor.Recorder.class));
+            mock(ArchiveConductor.Recorder.class),
+            null);
 
         writer.init();
 
@@ -409,7 +410,8 @@ class ReplaySessionTest
             SEGMENT_LENGTH,
             mockImage,
             context,
-            mock(ArchiveConductor.Recorder.class));
+            mock(ArchiveConductor.Recorder.class),
+            null);
 
         writer.init();
 
@@ -521,7 +523,8 @@ class ReplaySessionTest
             SEGMENT_LENGTH,
             mockImage,
             context,
-            mock(ArchiveConductor.Recorder.class));
+            mock(ArchiveConductor.Recorder.class),
+            null);
 
         writer.init();
 
@@ -640,7 +643,8 @@ class ReplaySessionTest
             SEGMENT_LENGTH,
             mockImage,
             context,
-            mock(ArchiveConductor.Recorder.class));
+            mock(ArchiveConductor.Recorder.class),
+            null);
 
         writer.init();
 

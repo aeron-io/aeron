@@ -21,6 +21,7 @@ import io.aeron.archive.client.ArchiveException;
 import io.aeron.logbuffer.LogBufferDescriptor;
 import org.agrona.BitUtil;
 import org.agrona.IoUtil;
+import org.agrona.LangUtil;
 import org.agrona.collections.MutableLong;
 import org.agrona.concurrent.NanoClock;
 import org.agrona.concurrent.SystemNanoClock;
@@ -31,6 +32,8 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 import static io.aeron.archive.Archive.segmentFileName;
 import static io.aeron.archive.checksum.Checksums.crc32;
@@ -52,6 +55,7 @@ class RecordingWriterTest
     private static final int TERM_LENGTH = LogBufferDescriptor.TERM_MIN_LENGTH;
     private static final int SEGMENT_LENGTH = TERM_LENGTH * 4;
 
+    private final List<SegmentPrepareRequest> prepareRequests = new ArrayList<>();
     private File archiveDir;
 
     @BeforeEach
@@ -71,7 +75,7 @@ class RecordingWriterTest
     {
         final Image image = mockImage(0L);
         final RecordingWriter recordingWriter = new RecordingWriter(
-            1, 0, SEGMENT_LENGTH, image, new Context().archiveDir(archiveDir), null);
+            1, 0, SEGMENT_LENGTH, image, new Context().archiveDir(archiveDir), null, null);
         final File segmentFile = segmentFile(1, 0);
         assertFalse(segmentFile.exists());
 
@@ -94,7 +98,7 @@ class RecordingWriterTest
 
         final Image image = mockImage(0L);
         final RecordingWriter recordingWriter = new RecordingWriter(
-            1, 0, SEGMENT_LENGTH, image, new Context().archiveDir(notADirectory), null);
+            1, 0, SEGMENT_LENGTH, image, new Context().archiveDir(notADirectory), null, null);
 
         assertThrows(IOException.class, recordingWriter::init);
     }
@@ -104,7 +108,7 @@ class RecordingWriterTest
     {
         final Image image = mockImage(0L);
         final RecordingWriter recordingWriter = new RecordingWriter(
-            1, 0, SEGMENT_LENGTH, image, new Context().archiveDir(archiveDir), null);
+            1, 0, SEGMENT_LENGTH, image, new Context().archiveDir(archiveDir), null, null);
         recordingWriter.init();
 
         recordingWriter.close();
@@ -124,7 +128,8 @@ class RecordingWriterTest
             SEGMENT_LENGTH,
             image,
             new Context().archiveDir(archiveDir),
-            mock(ArchiveConductor.Recorder.class));
+            mock(ArchiveConductor.Recorder.class),
+            null);
 
         assertThrows(
             NullPointerException.class,
@@ -137,7 +142,7 @@ class RecordingWriterTest
         final Image image = mockImage(0L);
         final RecordingWriter recordingWriter = new RecordingWriter(
             1, 0, SEGMENT_LENGTH, image, new Context().archiveDir(archiveDir)
-            .nanoClock(SystemNanoClock.INSTANCE), mock(ArchiveConductor.Recorder.class));
+            .nanoClock(SystemNanoClock.INSTANCE), mock(ArchiveConductor.Recorder.class), null);
         recordingWriter.init();
 
         assertFalse(Thread.interrupted());
@@ -165,7 +170,7 @@ class RecordingWriterTest
         final ArchiveConductor.Recorder mockRecorder = mock(ArchiveConductor.Recorder.class);
         final RecordingWriter recordingWriter = new RecordingWriter(
             1, 0, SEGMENT_LENGTH, image, new Context().archiveDir(archiveDir)
-            .nanoClock(clock), mockRecorder);
+            .nanoClock(clock), mockRecorder, null);
         recordingWriter.init();
         final UnsafeBuffer termBuffer = new UnsafeBuffer(allocate(128));
         frameType(termBuffer, 0, HDR_TYPE_DATA);
@@ -208,7 +213,8 @@ class RecordingWriterTest
             SEGMENT_LENGTH,
             image,
             new Context().archiveDir(archiveDir).nanoClock(SystemNanoClock.INSTANCE),
-            mock(ArchiveConductor.Recorder.class));
+            mock(ArchiveConductor.Recorder.class),
+            null);
         recordingWriter.init();
         final UnsafeBuffer termBuffer = new UnsafeBuffer(allocate(1024));
         frameType(termBuffer, 0, HDR_TYPE_PAD);
@@ -252,7 +258,7 @@ class RecordingWriterTest
         final ArchiveConductor.Recorder mockRecorder = mock(ArchiveConductor.Recorder.class);
         final RecordingWriter recordingWriter = new RecordingWriter(
             13, 0, SEGMENT_LENGTH, image, new Context().archiveDir(archiveDir)
-            .nanoClock(clock), mockRecorder);
+            .nanoClock(clock), mockRecorder, null);
         recordingWriter.init();
 
         final byte[] data1 = new byte[992];
@@ -312,7 +318,7 @@ class RecordingWriterTest
             .nanoClock(SystemNanoClock.INSTANCE);
 
         final RecordingWriter recordingWriter = new RecordingWriter(
-            1, 0, SEGMENT_LENGTH, image, ctx, mock(ArchiveConductor.Recorder.class));
+            1, 0, SEGMENT_LENGTH, image, ctx, mock(ArchiveConductor.Recorder.class), null);
 
         recordingWriter.init();
 
@@ -364,7 +370,7 @@ class RecordingWriterTest
             .recordChecksum(crc32())
             .nanoClock(SystemNanoClock.INSTANCE);
         final RecordingWriter recordingWriter = new RecordingWriter(
-            1, 0, SEGMENT_LENGTH, image, ctx, mock(ArchiveConductor.Recorder.class));
+            1, 0, SEGMENT_LENGTH, image, ctx, mock(ArchiveConductor.Recorder.class), null);
 
         recordingWriter.init();
 
@@ -394,6 +400,234 @@ class RecordingWriterTest
         assertEquals(termId, frameTermId(fileBuffer, 0));
         assertEquals(length, frameLength(fileBuffer, 0));
         assertEquals(sessionId, frameSessionId(fileBuffer, 0));
+    }
+
+    @Test
+    void onFileRollOverShouldOpenTheNextSegmentInline() throws IOException
+    {
+        final Image image = mockImage(0L);
+        final RecordingWriter recordingWriter = new RecordingWriter(
+            1, 0, SEGMENT_LENGTH, image, new Context().archiveDir(archiveDir)
+            .nanoClock(SystemNanoClock.INSTANCE), mock(ArchiveConductor.Recorder.class), null);
+        recordingWriter.init();
+
+        try
+        {
+            for (int i = 0; i < 5; i++)
+            {
+                recordingWriter.onBlock(dataBlock((byte)i), 0, TERM_LENGTH, -1, -1);
+            }
+            assertEquals(SEGMENT_LENGTH + TERM_LENGTH, recordingWriter.position());
+        }
+        finally
+        {
+            recordingWriter.close();
+        }
+
+        assertSegmentContents(segmentFile(1, 0), (byte)0, (byte)1, (byte)2, (byte)3);
+        assertSegmentContents(new File(archiveDir, segmentFileName(1, SEGMENT_LENGTH)), (byte)4);
+    }
+
+    @Test
+    void onFileRollOverShouldUseThePreparedSegmentWhenPrepareAheadIsEnabled() throws IOException
+    {
+        final Image image = mockImage(0L);
+        final RecordingWriter recordingWriter = new RecordingWriter(
+            1, 0, SEGMENT_LENGTH, image, new Context().archiveDir(archiveDir)
+            .nanoClock(SystemNanoClock.INSTANCE), mock(ArchiveConductor.Recorder.class), executingPreparer());
+        recordingWriter.init();
+
+        try
+        {
+            for (int i = 0; i < 5; i++)
+            {
+                recordingWriter.onBlock(dataBlock((byte)i), 0, TERM_LENGTH, -1, -1);
+            }
+            assertEquals(SEGMENT_LENGTH + TERM_LENGTH, recordingWriter.position());
+        }
+        finally
+        {
+            recordingWriter.close();
+        }
+
+        assertEquals(1, prepareRequests.size());
+        assertEquals(SegmentPrepareRequest.DONE, prepareRequests.get(0).state());
+        assertSegmentContents(segmentFile(1, 0), (byte)0, (byte)1, (byte)2, (byte)3);
+        assertSegmentContents(new File(archiveDir, segmentFileName(1, SEGMENT_LENGTH)), (byte)4);
+        assertArrayEquals(new String[0], preparedFiles(), "no .prep files should remain");
+    }
+
+    @Test
+    void onFileRollOverShouldOpenInlineWhenThePreparedSegmentIsNotReady() throws IOException
+    {
+        final Image image = mockImage(0L);
+        final RecordingWriter recordingWriter = new RecordingWriter(
+            1, 0, SEGMENT_LENGTH, image, new Context().archiveDir(archiveDir)
+            .nanoClock(SystemNanoClock.INSTANCE), mock(ArchiveConductor.Recorder.class), pendingPreparer());
+        recordingWriter.init();
+
+        try
+        {
+            for (int i = 0; i < 5; i++)
+            {
+                recordingWriter.onBlock(dataBlock((byte)i), 0, TERM_LENGTH, -1, -1);
+            }
+        }
+        finally
+        {
+            recordingWriter.close();
+        }
+
+        // the preparer processes the request only after the roll over has already opened the segment inline
+        assertEquals(1, prepareRequests.size());
+        final SegmentPrepareRequest request = prepareRequests.get(0);
+        assertEquals(SegmentPrepareRequest.CANCELLED, request.state());
+        request.execute();
+        assertEquals(SegmentPrepareRequest.CANCELLED, request.state());
+
+        assertSegmentContents(segmentFile(1, 0), (byte)0, (byte)1, (byte)2, (byte)3);
+        assertSegmentContents(new File(archiveDir, segmentFileName(1, SEGMENT_LENGTH)), (byte)4);
+        assertArrayEquals(new String[0], preparedFiles(), "no .prep files should remain");
+    }
+
+    @Test
+    void prepareAheadShouldStartFromAFreshFileWhenAStalePreparedSegmentWasLeftByACrash() throws IOException
+    {
+        final File staleFile = new File(archiveDir, segmentFileName(1, SEGMENT_LENGTH) + ".prep");
+        final byte[] garbage = new byte[SEGMENT_LENGTH];
+        fill(garbage, (byte)13);
+        java.nio.file.Files.write(staleFile.toPath(), garbage);
+
+        final Image image = mockImage(0L);
+        final RecordingWriter recordingWriter = new RecordingWriter(
+            1, 0, SEGMENT_LENGTH, image, new Context().archiveDir(archiveDir)
+            .nanoClock(SystemNanoClock.INSTANCE), mock(ArchiveConductor.Recorder.class), executingPreparer());
+        recordingWriter.init();
+
+        try
+        {
+            for (int i = 0; i < 5; i++)
+            {
+                recordingWriter.onBlock(dataBlock((byte)i), 0, TERM_LENGTH, -1, -1);
+            }
+        }
+        finally
+        {
+            recordingWriter.close();
+        }
+
+        // catalog recovery scans rely on the unwritten tail of a segment reading as zeroes:
+        // the stale garbage must not survive into the renamed segment.
+        final File segmentFile = new File(archiveDir, segmentFileName(1, SEGMENT_LENGTH));
+        assertSegmentContents(segmentFile, (byte)4);
+        final UnsafeBuffer fileBuffer = new UnsafeBuffer(readAllBytes(segmentFile.toPath()));
+        for (int offset = TERM_LENGTH; offset < SEGMENT_LENGTH; offset++)
+        {
+            if (0 != fileBuffer.getByte(offset))
+            {
+                fail("stale prepared-segment byte survived at offset " + offset);
+            }
+        }
+        assertArrayEquals(new String[0], preparedFiles(), "no .prep files should remain");
+    }
+
+    @Test
+    void closeShouldDiscardACompletedPreparedSegment() throws IOException
+    {
+        final Image image = mockImage(0L);
+        final RecordingWriter recordingWriter = new RecordingWriter(
+            1, 0, SEGMENT_LENGTH, image, new Context().archiveDir(archiveDir)
+            .nanoClock(SystemNanoClock.INSTANCE), mock(ArchiveConductor.Recorder.class), executingPreparer());
+        recordingWriter.init();
+
+        // two blocks pass the half-way trigger so the next segment is prepared,
+        // but the recording stops before the roll over consumes it.
+        recordingWriter.onBlock(dataBlock((byte)0), 0, TERM_LENGTH, -1, -1);
+        recordingWriter.onBlock(dataBlock((byte)1), 0, TERM_LENGTH, -1, -1);
+        recordingWriter.close();
+
+        assertArrayEquals(new String[0], preparedFiles(), "no .prep files should remain");
+        assertFalse(new File(archiveDir, segmentFileName(1, SEGMENT_LENGTH)).exists());
+    }
+
+    @Test
+    void closeShouldCancelAPendingPreparedSegment() throws IOException
+    {
+        final Image image = mockImage(0L);
+        final RecordingWriter recordingWriter = new RecordingWriter(
+            1, 0, SEGMENT_LENGTH, image, new Context().archiveDir(archiveDir)
+            .nanoClock(SystemNanoClock.INSTANCE), mock(ArchiveConductor.Recorder.class), pendingPreparer());
+        recordingWriter.init();
+
+        recordingWriter.onBlock(dataBlock((byte)0), 0, TERM_LENGTH, -1, -1);
+        recordingWriter.onBlock(dataBlock((byte)1), 0, TERM_LENGTH, -1, -1);
+        recordingWriter.close();
+
+        // the preparer processes the request only after close has already cancelled it
+        assertEquals(1, prepareRequests.size());
+        final SegmentPrepareRequest request = prepareRequests.get(0);
+        assertEquals(SegmentPrepareRequest.CANCELLED, request.state());
+        request.execute();
+
+        assertArrayEquals(new String[0], preparedFiles(), "no .prep files should remain");
+        assertFalse(new File(archiveDir, segmentFileName(1, SEGMENT_LENGTH)).exists());
+    }
+
+    private UnsafeBuffer dataBlock(final byte fillValue)
+    {
+        final UnsafeBuffer termBuffer = new UnsafeBuffer(allocate(TERM_LENGTH));
+        frameType(termBuffer, 0, HDR_TYPE_DATA);
+        frameLengthOrdered(termBuffer, 0, TERM_LENGTH);
+        final byte[] data = new byte[TERM_LENGTH - HEADER_LENGTH];
+        fill(data, fillValue);
+        termBuffer.putBytes(HEADER_LENGTH, data);
+        return termBuffer;
+    }
+
+    private void assertSegmentContents(final File segmentFile, final byte... termFillValues) throws IOException
+    {
+        assertTrue(segmentFile.exists(), "missing segment file: " + segmentFile);
+        assertEquals(SEGMENT_LENGTH, segmentFile.length());
+
+        final UnsafeBuffer fileBuffer = new UnsafeBuffer();
+        fileBuffer.wrap(readAllBytes(segmentFile.toPath()));
+        for (int term = 0; term < termFillValues.length; term++)
+        {
+            final int termOffset = term * TERM_LENGTH;
+            assertEquals(HDR_TYPE_DATA, frameType(fileBuffer, termOffset));
+            assertEquals(TERM_LENGTH, frameLength(fileBuffer, termOffset));
+            assertEquals(
+                termFillValues[term],
+                fileBuffer.getByte(termOffset + HEADER_LENGTH),
+                "wrong contents in term " + term + " of " + segmentFile);
+        }
+    }
+
+    private String[] preparedFiles()
+    {
+        final String[] files = archiveDir.list((dir, name) -> name.endsWith(".prep"));
+        return null == files ? new String[0] : files;
+    }
+
+    private SegmentPreparer executingPreparer()
+    {
+        return (request) ->
+        {
+            prepareRequests.add(request);
+            try
+            {
+                request.execute();
+            }
+            catch (final IOException ex)
+            {
+                LangUtil.rethrowUnchecked(ex);
+            }
+        };
+    }
+
+    private SegmentPreparer pendingPreparer()
+    {
+        return prepareRequests::add;
     }
 
     private Image mockImage(final long joinPosition)

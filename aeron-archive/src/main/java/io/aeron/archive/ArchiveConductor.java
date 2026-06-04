@@ -57,6 +57,7 @@ import org.agrona.concurrent.AgentTerminationException;
 import org.agrona.concurrent.CachedEpochClock;
 import org.agrona.concurrent.CountedErrorHandler;
 import org.agrona.concurrent.EpochClock;
+import org.agrona.concurrent.ManyToOneConcurrentLinkedQueue;
 import org.agrona.concurrent.NanoClock;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.CountersReader;
@@ -114,7 +115,7 @@ import static org.agrona.concurrent.status.CountersReader.METADATA_LENGTH;
 
 abstract class ArchiveConductor
     extends SessionWorker<Session>
-    implements UnavailableImageHandler, UnavailableCounterHandler
+    implements UnavailableImageHandler, UnavailableCounterHandler, SegmentPreparer
 {
     private static final EnumSet<StandardOpenOption> FILE_OPTIONS = EnumSet.of(READ, WRITE);
     static final String DELETE_SUFFIX = ".del";
@@ -131,6 +132,8 @@ abstract class ArchiveConductor
     private final RecordingSummary recordingSummary = new RecordingSummary();
     private final ControlRequestDecoders decoders = new ControlRequestDecoders();
     private final ArrayDeque<Runnable> taskQueue = new ArrayDeque<>();
+    private final ManyToOneConcurrentLinkedQueue<SegmentPrepareRequest> segmentPrepareQueue =
+        new ManyToOneConcurrentLinkedQueue<>();
     private final Long2ObjectHashMap<ReplaySession> replaySessionByIdMap = new Long2ObjectHashMap<>();
     private final Long2ObjectHashMap<RecordingSession> recordingSessionByIdMap = new Long2ObjectHashMap<>();
     private final Long2ObjectHashMap<ReplicationSession> replicationSessionByIdMap = new Long2ObjectHashMap<>();
@@ -271,6 +274,12 @@ abstract class ArchiveConductor
      */
     protected void postSessionsClose()
     {
+        // session workers are closed by now so every queued request was cancelled by its writer's close;
+        // dropping them is safe as a canceled request never created a file
+        while (null != segmentPrepareQueue.poll())
+        {
+        }
+
         if (isAbort)
         {
             ctx.abortLatch().countDown();
@@ -361,8 +370,41 @@ abstract class ArchiveConductor
         workCount += checkReplayTokens(nowNs);
         workCount += invokeDriverConductor();
         workCount += runTasks(taskQueue);
+        workCount += processSegmentPrepareQueue();
 
         return workCount + super.doWork();
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * Called from the recorder thread when a recording passes the half-way point of its current segment.
+     */
+    public void prepareSegment(final SegmentPrepareRequest request)
+    {
+        segmentPrepareQueue.offer(request);
+    }
+
+    private int processSegmentPrepareQueue()
+    {
+        // at most one prepare per duty cycle: each open + setLength can block on file-system metadata,
+        // mirroring how DeleteSegmentsSession bounds file deletes per duty cycle
+        final SegmentPrepareRequest request = segmentPrepareQueue.poll();
+        if (null == request)
+        {
+            return 0;
+        }
+
+        try
+        {
+            request.execute();
+        }
+        catch (final IOException ex)
+        {
+            errorHandler.onError(ex); // the recording falls back to the inline segment open
+        }
+
+        return 1;
     }
 
     Archive.Context context()
@@ -1997,7 +2039,8 @@ abstract class ArchiveConductor
             ctx,
             controlSession,
             autoStop,
-            recorder);
+            recorder,
+            ctx.segmentPrepareAhead() ? this : null);
 
         controlSession.sendSignal(
             correlationId,
@@ -2071,7 +2114,8 @@ abstract class ArchiveConductor
                 ctx,
                 controlSession,
                 autoStop,
-                recorder);
+                recorder,
+                ctx.segmentPrepareAhead() ? this : null);
 
             catalog.extendRecording(recordingId, controlSession.sessionId(), correlationId, image.sessionId());
             controlSession.sendSignal(

@@ -324,6 +324,14 @@ public final class Archive implements AutoCloseable
         public static final int SEGMENT_FILE_LENGTH_DEFAULT = 128 * 1024 * 1024;
 
         /**
+         * Pre-create the next recording segment file once a recording passes the half-way point of its
+         * current segment. Only applies in {@link ArchiveThreadingMode#DEDICATED} threading mode.
+         * Default is true.
+         */
+        @Config(defaultType = DefaultType.BOOLEAN, defaultBoolean = true)
+        public static final String SEGMENT_PREPARE_AHEAD_PROP_NAME = "aeron.archive.segment.prepare.ahead";
+
+        /**
          * Threshold below which the archive will reject new recording requests.
          */
         @Config
@@ -700,6 +708,17 @@ public final class Archive implements AutoCloseable
         public static int segmentFileLength()
         {
             return getSizeAsInt(SEGMENT_FILE_LENGTH_PROP_NAME, SEGMENT_FILE_LENGTH_DEFAULT);
+        }
+
+        /**
+         * Should the next recording segment file be pre-created on the conductor.
+         *
+         * @return true if the next recording segment file should be pre-created on the conductor.
+         * @see #SEGMENT_PREPARE_AHEAD_PROP_NAME
+         */
+        public static boolean segmentPrepareAhead()
+        {
+            return "true".equals(getProperty(SEGMENT_PREPARE_AHEAD_PROP_NAME, "true"));
         }
 
         /**
@@ -1107,6 +1126,7 @@ public final class Archive implements AutoCloseable
         private long catalogCapacity = Configuration.catalogCapacity();
         private long lowStorageSpaceThreshold = Configuration.lowStorageSpaceThreshold();
         private int segmentFileLength = Configuration.segmentFileLength();
+        private boolean segmentPrepareAhead = Configuration.segmentPrepareAhead();
         private int fileSyncLevel = Configuration.fileSyncLevel();
         private int catalogFileSyncLevel = Configuration.catalogFileSyncLevel();
         private int maxConcurrentRecordings = Configuration.maxConcurrentRecordings();
@@ -2548,6 +2568,33 @@ public final class Archive implements AutoCloseable
         }
 
         /**
+         * Should the next recording segment file be pre-created on the conductor once a recording passes the
+         * half-way point of its current segment.
+         *
+         * @return true if the next recording segment file should be pre-created on the conductor.
+         * @see Configuration#SEGMENT_PREPARE_AHEAD_PROP_NAME
+         */
+        @Config
+        public boolean segmentPrepareAhead()
+        {
+            return segmentPrepareAhead;
+        }
+
+        /**
+         * Pre-create the next recording segment file once a recording passes the half-way point of its
+         * current segment. Only applies in {@link ArchiveThreadingMode#DEDICATED} threading mode.
+         *
+         * @param segmentPrepareAhead true if the next recording segment file should be pre-created.
+         * @return this for a fluent API.
+         * @see Configuration#SEGMENT_PREPARE_AHEAD_PROP_NAME
+         */
+        public Context segmentPrepareAhead(final boolean segmentPrepareAhead)
+        {
+            this.segmentPrepareAhead = segmentPrepareAhead;
+            return this;
+        }
+
+        /**
          * Get level at which files should be sync'ed to disk.
          * <ul>
          * <li>0 - normal writes.</li>
@@ -3839,6 +3886,7 @@ public final class Archive implements AutoCloseable
                 "\n    catalogCapacity=" + catalogCapacity +
                 "\n    lowStorageSpaceThreshold=" + lowStorageSpaceThreshold +
                 "\n    segmentFileLength=" + segmentFileLength +
+                "\n    segmentPrepareAhead=" + segmentPrepareAhead +
                 "\n    fileSyncLevel=" + fileSyncLevel +
                 "\n    catalogFileSyncLevel=" + catalogFileSyncLevel +
                 "\n    maxConcurrentRecordings=" + maxConcurrentRecordings +
