@@ -136,6 +136,11 @@ if (SENDMMSG_PROTOTYPE_EXISTS)
     add_definitions(-DHAVE_SENDMMSG)
 endif ()
 
+if (APPLE)
+    add_definitions(-DHAVE_SENDMSG_X)
+    add_definitions(-DHAVE_RECVMSG_X)
+endif ()
+
 SET(C_CLIENT_SOURCE
     ${AERON_C_CLIENT_SOURCE_PATH}/collections/aeron_array_to_ptr_hash_map.c
     ${AERON_C_CLIENT_SOURCE_PATH}/collections/aeron_bit_set.c

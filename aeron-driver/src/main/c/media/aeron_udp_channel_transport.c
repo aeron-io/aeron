@@ -54,6 +54,23 @@ struct mmsghdr
 };
 #endif
 
+#if defined(HAVE_SENDMSG_X) || defined(HAVE_RECVMSG_X)
+struct msghdr_x
+{
+    void *msg_name;
+    socklen_t msg_namelen;
+    struct iovec *msg_iov;
+    int msg_iovlen;
+    void *msg_control;
+    socklen_t msg_controllen;
+    int msg_flags;
+    size_t msg_datalen;
+};
+
+extern ssize_t sendmsg_x(int s, const struct msghdr_x *msgp, unsigned int cnt, int flags);
+extern ssize_t recvmsg_x(int s, struct msghdr_x *msgp, unsigned int cnt, int flags);
+#endif
+
 static int aeron_udp_channel_transport_setup_media_rcv_timestamps(aeron_udp_channel_transport_t *transport)
 {
 #if defined(HAS_MEDIA_RCV_TIMESTAMPS)
@@ -427,6 +444,74 @@ static inline int aeron_udp_channel_transport_recvmsg(
     return work_count;
 }
 
+#if defined(HAVE_RECVMSG_X)
+
+static int aeron_udp_channel_transport_recvmsg_x(
+    aeron_udp_channel_transport_t *transport,
+    struct mmsghdr *msgvec,
+    size_t vlen,
+    int64_t *bytes_rcved,
+    aeron_udp_transport_recv_func_t recv_func,
+    void *clientd)
+{
+    struct msghdr_x msgs[AERON_DRIVER_RECEIVER_IO_VECTOR_LENGTH_MAX];
+    size_t msg_i;
+
+    for (msg_i = 0; msg_i < vlen && msg_i < AERON_DRIVER_RECEIVER_IO_VECTOR_LENGTH_MAX; msg_i++)
+    {
+        msgs[msg_i].msg_name = msgvec[msg_i].msg_hdr.msg_name;
+        msgs[msg_i].msg_namelen = msgvec[msg_i].msg_hdr.msg_namelen;
+        msgs[msg_i].msg_iov = msgvec[msg_i].msg_hdr.msg_iov;
+        msgs[msg_i].msg_iovlen = msgvec[msg_i].msg_hdr.msg_iovlen;
+        msgs[msg_i].msg_control = NULL;
+        msgs[msg_i].msg_controllen = 0;
+        msgs[msg_i].msg_flags = 0;
+        msgs[msg_i].msg_datalen = msgvec[msg_i].msg_hdr.msg_iov[0].iov_len;
+    }
+
+    int num_rcved = (int)recvmsg_x(transport->recv_fd, msgs, (unsigned int)msg_i, 0);
+    if (num_rcved < 0)
+    {
+        int err = errno;
+
+        // ECONNREFUSED can sometimes occur with connected UDP sockets if ICMP traffic is able to indicate that the
+        // remote end had closed on a previous send.
+        if (EINTR == err || EAGAIN == err || EWOULDBLOCK == err || ECONNREFUSED == err)
+        {
+            return 0;
+        }
+
+        AERON_SET_ERR(
+            err,
+            "Failed to recvmsg_x, fd=%d, recv_fd=%d, connected=%s",
+            transport->fd,
+            transport->recv_fd,
+            NULL != transport->connected_address ? "true" : "false");
+
+        return -1;
+    }
+
+    for (int i = 0; i < num_rcved; i++)
+    {
+        msgvec[i].msg_len = (unsigned int)msgs[i].msg_datalen;
+        recv_func(
+            transport->data_paths,
+            transport,
+            clientd,
+            transport->dispatch_clientd,
+            transport->destination_clientd,
+            msgs[i].msg_iov[0].iov_base,
+            msgvec[i].msg_len,
+            msgs[i].msg_name,
+            NULL);
+        *bytes_rcved += msgvec[i].msg_len;
+    }
+
+    return num_rcved;
+}
+
+#endif
+
 int aeron_udp_channel_transport_recvmmsg(
     aeron_udp_channel_transport_t *transport,
     struct mmsghdr *msgvec,
@@ -512,6 +597,12 @@ int aeron_udp_channel_transport_recvmmsg(
         }
     }
     else
+#elif defined(HAVE_RECVMSG_X)
+    if (vlen > 1)
+    {
+        return aeron_udp_channel_transport_recvmsg_x(transport, msgvec, vlen, bytes_rcved, recv_func, clientd);
+    }
+    else
 #endif
     {
         return aeron_udp_channel_transport_recvmsg(transport, msgvec, vlen, bytes_rcved, recv_func, clientd);
@@ -539,7 +630,7 @@ static int aeron_udp_channel_transport_send_connected(
     }
 }
 
-#if !defined(HAVE_SENDMMSG)
+#if !defined(HAVE_SENDMMSG) && !defined(HAVE_SENDMSG_X)
 static int aeron_udp_channel_transport_send_unconnected(
     aeron_udp_channel_transport_t *transport,
     struct sockaddr_storage *address,
@@ -628,6 +719,67 @@ static int aeron_udp_channel_transport_sendv(
 
 #endif
 
+#if defined(HAVE_SENDMSG_X)
+
+static int aeron_udp_channel_transport_sendmsg_x(
+    aeron_udp_channel_transport_t *transport,
+    struct sockaddr_storage *address,
+    struct iovec *iov,
+    size_t iov_length,
+    int64_t *bytes_sent)
+{
+    struct msghdr_x msgs[AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND];
+    size_t msg_i;
+
+    socklen_t msg_namelen = address == NULL ? 0 : AERON_ADDR_LEN(address);
+
+    for (msg_i = 0; msg_i < iov_length && msg_i < AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND; msg_i++)
+    {
+        msgs[msg_i].msg_name = address;
+        msgs[msg_i].msg_namelen = msg_namelen;
+        msgs[msg_i].msg_iov = &iov[msg_i];
+        msgs[msg_i].msg_iovlen = 1;
+        msgs[msg_i].msg_control = NULL;
+        msgs[msg_i].msg_controllen = 0;
+        msgs[msg_i].msg_flags = 0;
+        msgs[msg_i].msg_datalen = 0;
+    }
+
+    int num_sent = (int)sendmsg_x(transport->fd, msgs, (unsigned int)msg_i, 0);
+    if (num_sent < 0)
+    {
+        if (EAGAIN == errno || EWOULDBLOCK == errno || ECONNREFUSED == errno || EINTR == errno)
+        {
+            return 0;
+        }
+        else
+        {
+            // If the transport is connected, then connected_address will not be NULL and address is NULL.
+            // If the transport is not connected, then connected_address will be NULL and address is not NULL.
+            struct sockaddr_storage *err_addr = address != NULL ? address : transport->connected_address;
+            char addr_str[AERON_NETUTIL_FORMATTED_MAX_LENGTH];
+            aeron_format_source_identity(addr_str, sizeof(addr_str), err_addr);
+            AERON_SET_ERR(errno, "%s: address=%s (protocol_family=%i)", "failed to sendmsg_x", addr_str, err_addr->ss_family);
+            return -1;
+        }
+    }
+    else
+    {
+        // UDP datagrams are atomic: sendmsg_x reports the count of fully-sent datagrams, so the bytes
+        // for those are exactly their iov lengths (no partial-datagram accounting needed). An unsent
+        // tail (num_sent < msg_i, e.g. socket buffer full) is retried on the next Sender pass via the
+        // publication position -- the same invariant the sendmmsg and per-datagram paths rely on.
+        for (int i = 0; i < num_sent; i++)
+        {
+            *bytes_sent += iov[i].iov_len;
+        }
+
+        return num_sent;
+    }
+}
+
+#endif
+
 
 int aeron_udp_channel_transport_send(
     aeron_udp_channel_data_paths_t *data_paths,
@@ -652,6 +804,22 @@ int aeron_udp_channel_transport_send(
     else
     {
         return aeron_udp_channel_transport_sendv(transport, address, iov, iov_length, bytes_sent);
+    }
+#elif defined(HAVE_SENDMSG_X)
+    if (NULL != transport->connected_address)
+    {
+        if (1 == iov_length)
+        {
+            return aeron_udp_channel_transport_send_connected(transport, iov, bytes_sent);
+        }
+        else
+        {
+            return aeron_udp_channel_transport_sendmsg_x(transport, NULL, iov, iov_length, bytes_sent);
+        }
+    }
+    else
+    {
+        return aeron_udp_channel_transport_sendmsg_x(transport, address, iov, iov_length, bytes_sent);
     }
 #else
     int result = 0;
