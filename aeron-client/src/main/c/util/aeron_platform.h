@@ -51,6 +51,13 @@
 #endif
 #endif
 
+#if defined(__powerpc64__)
+#define AERON_CPU_PPC64 1
+#if defined(__STDC_NO_ATOMICS__)
+#error C11 atomics are required to compile for powerpc64!
+#endif
+#endif
+
 #if defined(__cplusplus)
 #define _Static_assert static_assert
 #endif

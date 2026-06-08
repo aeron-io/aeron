@@ -58,7 +58,7 @@ while (false)
 
 #endif
 
-#if !defined(AERON_CPU_X64) && !defined(AERON_CPU_ARM)
+#if !defined(AERON_CPU_X64) && !defined(AERON_CPU_ARM) && !defined(AERON_CPU_PPC64)
     #error Unsupported CPU type!
 #endif
 
@@ -66,6 +66,8 @@ while (false)
     #if defined(AERON_CPU_X64)
         #include "concurrent/aeron_atomic64_gcc_x86_64.h"
     #elif defined(AERON_CPU_ARM)
+        #include "concurrent/aeron_atomic64_c11.h"
+    #elif defined(AERON_CPU_PPC64)
         #include "concurrent/aeron_atomic64_c11.h"
     #endif
 #elif defined(AERON_COMPILER_MSVC)
