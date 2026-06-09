@@ -141,7 +141,6 @@ class ArchiveTruncateRecordingTest
             ThreadLocalRandom.current().nextBytes(data.byteArray());
 
             sendMessages(publication, subscription, messageLength, data, 99);
-            final long startPosition = publication.position();
 
             final long subscriptionId = aeronArchive.startRecording(
                 ChannelUri.addSessionId(channel, publication.sessionId()), streamId, SourceLocation.LOCAL);
@@ -150,7 +149,13 @@ class ArchiveTruncateRecordingTest
             final int counterId =
                 Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
             final long recordingId = RecordingPos.getRecordingId(counters, counterId);
-            assertEquals(startPosition, aeronArchive.getStartPosition(recordingId));
+            // The recording joins at the IPC publication's join position, i.e. min(consumerPosition,
+            // subscriberPositions). consumerPosition is only advanced on the driver conductor duty cycle, so it can
+            // lag the producer position by up to one duty cycle. Capture the actual recording start position rather
+            // than assuming it equals publication.position() when startRecording() was called, which is racy (see
+            // IpcPublication.joinPosition()).
+            final long startPosition = aeronArchive.getStartPosition(recordingId);
+            assertTrue(startPosition <= publication.position());
             assertEquals(NULL_VALUE, aeronArchive.getStopPosition(recordingId));
 
             ThreadLocalRandom.current().nextBytes(data.byteArray());
@@ -171,12 +176,17 @@ class ArchiveTruncateRecordingTest
             final Path archiveDir = archive.context().archiveDir().toPath();
             final ArrayList<String> segmentFiles = Catalog.listSegmentFiles(archiveDir.toFile(), recordingId);
             segmentFiles.sort(Comparator.naturalOrder());
-            assertEquals(asList(
-                recordingId + "-1048576.rec",
-                recordingId + "-1179648.rec",
-                recordingId + "-1310720.rec",
-                recordingId + "-917504.rec"),
-                segmentFiles);
+            final int termLength = publication.termBufferLength();
+            final int segmentFileLength = Math.max(archive.context().segmentFileLength(), termLength);
+            final ArrayList<String> expectedSegmentFiles = new ArrayList<>();
+            for (long base = segmentFileBasePosition(startPosition, startPosition, termLength, segmentFileLength);
+                base < stopPosition;
+                base += segmentFileLength)
+            {
+                expectedSegmentFiles.add(segmentFileName(recordingId, base));
+            }
+            expectedSegmentFiles.sort(Comparator.naturalOrder());
+            assertEquals(expectedSegmentFiles, segmentFiles);
 
             final ArrayList<Path> deleteList = new ArrayList<>();
             for (final String segmentFileName : segmentFiles)
@@ -322,7 +332,6 @@ class ArchiveTruncateRecordingTest
 
             ThreadLocalRandom.current().nextBytes(data.byteArray());
             sendMessages(publication, subscription, messageLength, data, 10);
-            final long startPosition = publication.position();
 
             aeronArchive.startRecording(
                 ChannelUri.addSessionId(channel, publication.sessionId()), streamId, SourceLocation.LOCAL);
@@ -331,7 +340,13 @@ class ArchiveTruncateRecordingTest
             final int counterId =
                 Tests.awaitRecordingCounterId(counters, publication.sessionId(), aeronArchive.archiveId());
             final long recordingId = RecordingPos.getRecordingId(counters, counterId);
-            assertEquals(startPosition, aeronArchive.getStartPosition(recordingId));
+            // The recording joins at the IPC publication's join position, i.e. min(consumerPosition,
+            // subscriberPositions). consumerPosition is only advanced on the driver conductor duty cycle, so it can
+            // lag the producer position by up to one duty cycle relative to the test subscription's last poll.
+            // Capture the actual recording start position rather than assuming it equals publication.position() at
+            // the time startRecording() was called, which is racy (see IpcPublication.joinPosition()).
+            final long startPosition = aeronArchive.getStartPosition(recordingId);
+            assertTrue(startPosition <= publication.position());
 
             ThreadLocalRandom.current().nextBytes(data.byteArray());
             sendMessages(publication, subscription, messageLength, data, 10);
