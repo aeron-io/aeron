@@ -16,6 +16,7 @@
 package io.aeron.version;
 
 import javax.annotation.processing.AbstractProcessor;
+import javax.annotation.processing.Messager;
 import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
 import javax.annotation.processing.SupportedOptions;
@@ -23,6 +24,7 @@ import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.PackageElement;
 import javax.lang.model.element.TypeElement;
+import javax.tools.Diagnostic;
 import javax.tools.JavaFileObject;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -85,11 +87,21 @@ public class VersionProcessor extends AbstractProcessor
      */
     public boolean process(final Set<? extends TypeElement> annotations, final RoundEnvironment roundEnv)
     {
+        final Messager messager = processingEnv.getMessager();
+        final String versionString = processingEnv.getOptions().get("io.aeron.version");
+        final String gitSha = processingEnv.getOptions().get("io.aeron.gitsha");
+
         for (final TypeElement annotation : annotations)
         {
             final Set<? extends Element> elementsAnnotatedWith = roundEnv.getElementsAnnotatedWith(annotation);
             for (final Element element : elementsAnnotatedWith)
             {
+                final VersionInformation info = VersionInformation.parse(versionString, messager, element);
+                if (null == info)
+                {
+                    continue;
+                }
+
                 final PackageElement pkg = processingEnv.getElementUtils().getPackageOf(element);
                 final String packageName = pkg.getQualifiedName().toString();
                 final String className = element.getSimpleName() + "Version";
@@ -97,13 +109,9 @@ public class VersionProcessor extends AbstractProcessor
                 try
                 {
                     final JavaFileObject sourceFile = processingEnv.getFiler().createSourceFile(
-                        packageName + '.' + className);
+                        packageName + '.' + className, element);
                     try (PrintWriter out = new PrintWriter(sourceFile.openWriter()))
                     {
-                        final String versionString = processingEnv.getOptions().get("io.aeron.version");
-                        final VersionInformation info = new VersionInformation(versionString);
-                        final String gitSha = processingEnv.getOptions().get("io.aeron.gitsha");
-
                         out.printf("package %s;%n", packageName);
                         out.println();
                         out.printf("public class %s%n implements io.aeron.version.Version%n", className);
@@ -127,24 +135,56 @@ public class VersionProcessor extends AbstractProcessor
         return false;
     }
 
-    private static class VersionInformation
+    private static final class VersionInformation
     {
         private static final Pattern VERSION_PATTERN = Pattern.compile("([0-9]+).([0-9]+).([0-9]+)(?:-.+)?");
         private final int major;
         private final int minor;
         private final int patch;
 
-        VersionInformation(final String versionString)
+        private VersionInformation(final int major, final int minor, final int patch)
         {
+            this.major = major;
+            this.minor = minor;
+            this.patch = patch;
+        }
+
+        /**
+         * Parse the {@code io.aeron.version} option, reporting a compilation error when it is
+         * absent or malformed, so the build fails with an actionable message.
+         *
+         * @param versionString the value supplied via {@code -Aio.aeron.version}, or {@code null} if it was not set.
+         * @param messager      used to report errors back to the compiler.
+         * @param element       the {@code @Versioned} element the error relates to.
+         * @return the parsed version, or {@code null} if the option was missing or invalid.
+         */
+        static VersionInformation parse(final String versionString, final Messager messager, final Element element)
+        {
+            if (null == versionString)
+            {
+                messager.printMessage(
+                    Diagnostic.Kind.ERROR,
+                    "@Versioned requires the 'io.aeron.version' annotation processor option, but it was not set. " +
+                    "Pass it to the compiler, for example: -Aio.aeron.version=1.2.3",
+                    element);
+                return null;
+            }
+
             final Matcher matcher = VERSION_PATTERN.matcher(versionString);
             if (!matcher.matches())
             {
-                throw new IllegalArgumentException("The version string: '" + versionString + "' is not valid");
+                messager.printMessage(
+                    Diagnostic.Kind.ERROR,
+                    "The 'io.aeron.version' value '" + versionString + "' is not a valid version; expected " +
+                    "<major>.<minor>.<patch> optionally followed by '-<suffix>', for example: 1.2.3 or 1.2.3-SNAPSHOT",
+                    element);
+                return null;
             }
 
-            major = Integer.parseInt(matcher.group(1));
-            minor = Integer.parseInt(matcher.group(2));
-            patch = Integer.parseInt(matcher.group(3));
+            return new VersionInformation(
+                Integer.parseInt(matcher.group(1)),
+                Integer.parseInt(matcher.group(2)),
+                Integer.parseInt(matcher.group(3)));
         }
     }
 }
