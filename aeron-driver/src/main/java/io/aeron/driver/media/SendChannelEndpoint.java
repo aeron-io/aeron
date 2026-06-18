@@ -226,6 +226,16 @@ public class SendChannelEndpoint extends UdpChannelTransport
     }
 
     /**
+     * Checks if an endpoint is still active, i.e. not being closed.
+     *
+     * @return {@code true} if active.
+     */
+    public boolean isActive()
+    {
+        return !statusIndicator.isClosed() && ChannelEndpointStatus.ACTIVE == statusIndicator.get();
+    }
+
+    /**
      * Called by to determine if the channel endpoint should be closed.
      *
      * @return true if ready to be closed.

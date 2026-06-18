@@ -439,10 +439,20 @@ public final class DriverConductor implements Agent
     void onReResolveEndpoint(
         final String endpoint, final SendChannelEndpoint channelEndpoint, final InetSocketAddress address)
     {
+        if (!channelEndpoint.isActive())
+        {
+            return;
+        }
+
         executeAsyncTask(
             () -> UdpChannel.resolve(endpoint, ENDPOINT_PARAM_NAME, true, nameResolver),
             (asyncResult) ->
             {
+                if (!channelEndpoint.isActive())
+                {
+                    return;
+                }
+
                 try
                 {
                     final InetSocketAddress newAddress = asyncResult.get();
@@ -468,10 +478,20 @@ public final class DriverConductor implements Agent
         final ReceiveChannelEndpoint channelEndpoint,
         final InetSocketAddress address)
     {
+        if (!channelEndpoint.isActive())
+        {
+            return;
+        }
+
         executeAsyncTask(
             () -> UdpChannel.resolve(control, MDC_CONTROL_PARAM_NAME, true, nameResolver),
             (asyncResult) ->
             {
+                if (!channelEndpoint.isActive())
+                {
+                    return;
+                }
+
                 try
                 {
                     final InetSocketAddress newAddress = asyncResult.get();
