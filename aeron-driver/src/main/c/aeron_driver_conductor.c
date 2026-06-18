@@ -6176,6 +6176,12 @@ void aeron_driver_conductor_on_re_resolve_endpoint_complete(
     aeron_async_re_resolve_t *async_cmd = task_clientd;
     aeron_driver_conductor_t *conductor = executor_clientd;
 
+    aeron_send_channel_endpoint_t *endpoint = async_cmd->endpoint;
+    if (AERON_SEND_CHANNEL_ENDPOINT_STATUS_ACTIVE != endpoint->conductor_fields.status)
+    {
+        return;
+    }
+
     if (result < 0)
     {
         aeron_driver_conductor_log_explicit_error(conductor, errcode, errmsg);
@@ -6201,8 +6207,8 @@ void aeron_driver_conductor_on_re_resolve_endpoint(void *clientd, void *item)
     aeron_command_re_resolve_t *cmd = item;
     struct sockaddr_storage resolved_addr;
     memset(&resolved_addr, 0, sizeof(resolved_addr));
-    aeron_send_channel_endpoint_t *endpoint = cmd->endpoint;
 
+    aeron_send_channel_endpoint_t *endpoint = cmd->endpoint;
     if (AERON_SEND_CHANNEL_ENDPOINT_STATUS_ACTIVE != endpoint->conductor_fields.status)
     {
         return;
@@ -6245,6 +6251,12 @@ void aeron_driver_conductor_on_re_resolve_control_complete(
     aeron_async_re_resolve_t *async_cmd = task_clientd;
     aeron_driver_conductor_t *conductor = executor_clientd;
 
+    aeron_receive_channel_endpoint_t *endpoint = async_cmd->endpoint;
+    if (AERON_RECEIVE_CHANNEL_ENDPOINT_STATUS_ACTIVE != endpoint->conductor_fields.status)
+    {
+        return;
+    }
+
     if (result < 0)
     {
         aeron_driver_conductor_log_explicit_error(conductor, errcode, errmsg);
@@ -6272,8 +6284,13 @@ void aeron_driver_conductor_on_re_resolve_control(void *clientd, void *item)
     struct sockaddr_storage resolved_addr;
     memset(&resolved_addr, 0, sizeof(resolved_addr));
 
-    aeron_async_re_resolve_t *async_cmd;
+    aeron_receive_channel_endpoint_t *endpoint = cmd->endpoint;
+    if (AERON_RECEIVE_CHANNEL_ENDPOINT_STATUS_ACTIVE != endpoint->conductor_fields.status)
+    {
+        return;
+    }
 
+    aeron_async_re_resolve_t *async_cmd;
     if (aeron_alloc((void **)&async_cmd, sizeof(aeron_async_re_resolve_t)) < 0)
     {
         AERON_APPEND_ERR("%s", "");
