@@ -111,6 +111,10 @@ if (AERON_UNIT_TESTS)
     aeron_driver_test(position_test aeron_position_test.cpp)
     aeron_driver_test(driver_context_config_test aeron_driver_context_config_test.cpp)
 
+    aeron_driver_test(c_spy_subscribable_race_test aeron_spy_subscribable_race_test.cpp)
+    set_tests_properties(c_spy_subscribable_race_test PROPERTIES TIMEOUT 60)
+    set_tests_properties(c_spy_subscribable_race_test PROPERTIES RUN_SERIAL TRUE)
+
     if ("${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
         add_executable(aeronmd_signal_test aeronmd_signal_test.cpp)
         add_dependencies(aeronmd_signal_test gmock aeronmd)
