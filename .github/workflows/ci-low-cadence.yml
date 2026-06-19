@@ -38,7 +38,7 @@ jobs:
       fail-fast: false
       matrix:
         java: [ '17', '21', '25' ]
-        os: ['ubuntu-24.04', 'windows-latest', 'macos-15']
+        os: ['ubuntu-24.04', 'windows-2022', 'macos-15']
     steps:
       - name: Use faster temporary storage (Windows)
         if: runner.os == 'Windows'
@@ -250,7 +250,7 @@ jobs:
 
   cpp-slow-tests-msvc:
     name: C++ Slow System Tests MSVC
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 120
     env:
       CC: cl
