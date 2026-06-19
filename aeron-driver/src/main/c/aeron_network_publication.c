@@ -673,7 +673,10 @@ int aeron_network_publication_send(aeron_network_publication_t *publication, int
 
         if (publication->spies_simulate_connection && has_spies && !has_receivers)
         {
-            const int64_t new_snd_pos = aeron_network_publication_max_spy_position(publication, snd_pos);
+            int64_t max_spy_position;
+            AERON_GET_ACQUIRE(max_spy_position, publication->conductor_fields.max_spy_position);
+
+            const int64_t new_snd_pos = max_spy_position > snd_pos ? max_spy_position : snd_pos;
             aeron_counter_set_release(publication->snd_pos_position.value_addr, new_snd_pos);
 
             int64_t flow_control_position = publication->flow_control->on_idle(
@@ -1013,6 +1016,7 @@ int aeron_network_publication_update_pub_pos_and_lmt(aeron_network_publication_t
             int64_t min_consumer_position = snd_pos;
             if (publication->conductor_fields.subscribable.length > 0)
             {
+                int64_t max_consumer_position = snd_pos;
                 for (size_t i = 0, length = publication->conductor_fields.subscribable.length; i < length; i++)
                 {
                     aeron_tetherable_position_t *tetherable_position =
@@ -1022,7 +1026,12 @@ int aeron_network_publication_update_pub_pos_and_lmt(aeron_network_publication_t
                     {
                         int64_t position = aeron_counter_get_acquire(tetherable_position->value_addr);
                         min_consumer_position = position < min_consumer_position ? position : min_consumer_position;
+                        max_consumer_position = position > max_consumer_position ? position : max_consumer_position;
                     }
+                }
+                if (max_consumer_position > publication->conductor_fields.max_spy_position)
+                {
+                    AERON_SET_RELEASE(publication->conductor_fields.max_spy_position, max_consumer_position);
                 }
             }
 
@@ -1437,8 +1446,6 @@ extern void aeron_network_publication_trigger_send_setup_frame(
 extern void aeron_network_publication_sender_release(aeron_network_publication_t *publication);
 
 extern bool aeron_network_publication_has_sender_released(aeron_network_publication_t *publication);
-
-extern int64_t aeron_network_publication_max_spy_position(aeron_network_publication_t *publication, int64_t snd_pos);
 
 extern bool aeron_network_publication_is_accepting_subscriptions(aeron_network_publication_t *publication);
 
