@@ -38,6 +38,8 @@ import org.agrona.concurrent.status.AtomicCounter;
 import org.agrona.concurrent.status.Position;
 import org.agrona.concurrent.status.ReadablePosition;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -79,12 +81,27 @@ class NetworkPublicationPadding1
 class NetworkPublicationConductorFields extends NetworkPublicationPadding1
 {
     static final ReadablePosition[] EMPTY_POSITIONS = new ReadablePosition[0];
+    static final VarHandle MAX_SPY_POSITION_MH;
+
+    static
+    {
+        try
+        {
+            MAX_SPY_POSITION_MH = MethodHandles.lookup()
+                .findVarHandle(NetworkPublicationConductorFields.class, "maxSpyPosition", long.class);
+        }
+        catch (final ReflectiveOperationException ex)
+        {
+            throw new ExceptionInInitializerError(ex);
+        }
+    }
 
     long cleanPosition;
     long timeOfLastActivityNs;
     long lastSenderPosition;
     int refCount = 0;
     ReadablePosition[] spyPositions = EMPTY_POSITIONS;
+    volatile long maxSpyPosition;
     final ArrayList<UntetheredSubscription> untetheredSubscriptions = new ArrayList<>();
 }
 
@@ -677,7 +694,7 @@ public final class NetworkPublication
 
             if (spiesSimulateConnection && hasSpies && !hasReceivers)
             {
-                final long newSenderPosition = maxSpyPosition(senderPosition);
+                final long newSenderPosition = Math.max((long)MAX_SPY_POSITION_MH.getAcquire(this), senderPosition);
                 this.senderPosition.setRelease(newSenderPosition);
                 senderLimit.setRelease(flowControl.onIdle(nowNs, newSenderPosition, newSenderPosition, isEndOfStream));
             }
@@ -779,10 +796,14 @@ public final class NetworkPublication
             if (hasSubscribers())
             {
                 long minConsumerPosition = senderPosition;
+                long maxConsumerPosition = senderPosition;
                 for (final ReadablePosition spyPosition : spyPositions)
                 {
-                    minConsumerPosition = Math.min(minConsumerPosition, spyPosition.getVolatile());
+                    final long position = spyPosition.getAcquire();
+                    minConsumerPosition = Math.min(minConsumerPosition, position);
+                    maxConsumerPosition = Math.max(maxConsumerPosition, position);
                 }
+                MAX_SPY_POSITION_MH.setRelease(this, maxConsumerPosition);
 
                 final long newLimitPosition = minConsumerPosition + termWindowLength;
                 if (newLimitPosition > publisherLimit.get())
@@ -1027,18 +1048,6 @@ public final class NetworkPublication
         }
 
         return true;
-    }
-
-    private long maxSpyPosition(final long senderPosition)
-    {
-        long position = senderPosition;
-
-        for (final ReadablePosition spyPosition : spyPositions)
-        {
-            position = Math.max(position, spyPosition.getVolatile());
-        }
-
-        return position;
     }
 
     private void updateConnectedState(final boolean newConnectedState)
