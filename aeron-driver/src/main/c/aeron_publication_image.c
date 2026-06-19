@@ -311,6 +311,7 @@ int aeron_publication_image_create(
     _image->conductor_fields.subscribable.length = 0;
     _image->conductor_fields.subscribable.capacity = 0;
     _image->conductor_fields.subscribable.inactive_count = 0;
+    _image->conductor_fields.subscribable.read_in_progress = false;
     _image->conductor_fields.subscribable.add_position_hook_func = aeron_driver_subscribable_null_hook;
     _image->conductor_fields.subscribable.remove_position_hook_func = aeron_driver_subscribable_null_hook;
     _image->conductor_fields.subscribable.clientd = NULL;

@@ -276,6 +276,7 @@ int aeron_network_publication_create(
     _pub->conductor_fields.subscribable.length = 0;
     _pub->conductor_fields.subscribable.capacity = 0;
     _pub->conductor_fields.subscribable.inactive_count = 0;
+    _pub->conductor_fields.subscribable.read_in_progress = false;
     _pub->conductor_fields.subscribable.add_position_hook_func = aeron_network_publication_add_subscriber_hook;
     _pub->conductor_fields.subscribable.remove_position_hook_func = aeron_network_publication_remove_subscriber_hook;
     _pub->conductor_fields.subscribable.clientd = _pub;

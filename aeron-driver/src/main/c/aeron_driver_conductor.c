@@ -3926,25 +3926,40 @@ int aeron_driver_subscribable_add_position(
     int64_t *value_addr,
     int64_t now_ns)
 {
-    int ensure_capacity_result = 0, result = -1;
-    AERON_ARRAY_ENSURE_CAPACITY(ensure_capacity_result, (*subscribable), aeron_tetherable_position_t)
+    aeron_tetherable_position_t *old_array = NULL, *new_array = NULL;
 
-    if (ensure_capacity_result >= 0)
+    AERON_ARRAY_ENSURE_CAPACITY_WITH_ALLOC_RETURN((*subscribable), aeron_tetherable_position_t, new_array, -1);
+
+    if (NULL != new_array)
     {
-        aeron_tetherable_position_t *entry = &subscribable->array[subscribable->length];
-        entry->is_tether = link->is_tether;
-        entry->is_rejoin = link->is_rejoin;
-        entry->state = AERON_SUBSCRIPTION_TETHER_ACTIVE;
-        entry->counter_id = counter_id;
-        entry->value_addr = value_addr;
-        entry->subscription_registration_id = link->registration_id;
-        entry->time_of_last_update_ns = now_ns;
-        subscribable->add_position_hook_func(subscribable->clientd, value_addr);
-        subscribable->length++;
-        result = 0;
+        old_array = subscribable->array;
+        AERON_SET_RELEASE(subscribable->array, new_array);
     }
 
-    return result;
+    aeron_tetherable_position_t *entry = &subscribable->array[subscribable->length];
+    entry->is_tether = link->is_tether;
+    entry->is_rejoin = link->is_rejoin;
+    entry->state = AERON_SUBSCRIPTION_TETHER_ACTIVE;
+    entry->counter_id = counter_id;
+    entry->value_addr = value_addr;
+    entry->subscription_registration_id = link->registration_id;
+    entry->time_of_last_update_ns = now_ns;
+    subscribable->add_position_hook_func(subscribable->clientd, value_addr);
+    AERON_SET_RELEASE(subscribable->length, subscribable->length + 1);
+
+    if (NULL != old_array)
+    {
+        bool read_in_progress;
+        do
+        {
+            AERON_GET_ACQUIRE(read_in_progress, subscribable->read_in_progress);
+        }
+        while (read_in_progress);
+
+        aeron_free(old_array);
+    }
+
+    return 0;
 }
 
 void aeron_driver_subscribable_remove_position(aeron_subscribable_t *subscribable, int32_t counter_id)

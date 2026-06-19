@@ -97,6 +97,10 @@ if (AERON_UNIT_TESTS)
     set_tests_properties(c_cnc_test PROPERTIES TIMEOUT 60)
     set_tests_properties(c_cnc_test PROPERTIES RUN_SERIAL TRUE)
 
+    aeron_driver_test(c_spy_subscribable_race_test aeron_spy_subscribable_race_test.cpp)
+    set_tests_properties(c_spy_subscribable_race_test PROPERTIES TIMEOUT 60)
+    set_tests_properties(c_spy_subscribable_race_test PROPERTIES RUN_SERIAL TRUE)
+
     aeron_driver_test(congestion_control_test aeron_congestion_control_test.cpp)
 
     aeron_driver_test(ipc_publication_test aeron_ipc_publication_test.cpp)

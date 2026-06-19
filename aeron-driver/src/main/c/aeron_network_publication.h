@@ -288,10 +288,16 @@ inline bool aeron_network_publication_has_sender_released(aeron_network_publicat
 inline int64_t aeron_network_publication_max_spy_position(aeron_network_publication_t *publication, int64_t snd_pos)
 {
     int64_t position = snd_pos;
+    size_t length;
+    aeron_tetherable_position_t *array;
 
-    for (size_t i = 0, length = publication->conductor_fields.subscribable.length; i < length; i++)
+    AERON_SET_RELEASE(publication->conductor_fields.subscribable.read_in_progress, true);
+    AERON_GET_ACQUIRE(length, publication->conductor_fields.subscribable.length);
+    AERON_GET_ACQUIRE(array, publication->conductor_fields.subscribable.array);
+
+    for (size_t i = 0; i < length; i++)
     {
-        aeron_tetherable_position_t *tetherable_position = &publication->conductor_fields.subscribable.array[i];
+        aeron_tetherable_position_t *tetherable_position = &array[i];
         int64_t spy_position = aeron_counter_get_acquire(tetherable_position->value_addr);
 
         if (aeron_driver_subscribable_is_active_state(tetherable_position->state))
@@ -299,6 +305,8 @@ inline int64_t aeron_network_publication_max_spy_position(aeron_network_publicat
             position = spy_position > position ? spy_position : position;
         }
     }
+
+    AERON_SET_RELEASE(publication->conductor_fields.subscribable.read_in_progress, false);
 
     return position;
 }

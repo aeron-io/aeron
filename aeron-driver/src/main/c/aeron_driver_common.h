@@ -104,6 +104,7 @@ typedef struct aeron_subscribable_stct
     size_t capacity;
     aeron_tetherable_position_t *array;
     size_t inactive_count;
+    bool read_in_progress;
     void (*add_position_hook_func)(void *clientd, volatile int64_t *value_addr);
     void (*remove_position_hook_func)(void *clientd, volatile int64_t *value_addr);
     void *clientd;

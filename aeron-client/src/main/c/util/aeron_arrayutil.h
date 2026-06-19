@@ -30,6 +30,20 @@
 #include "aeron_alloc.h"
 #include "util/aeron_error.h"
 
+#define AERON_ARRAY_ENSURE_CAPACITY_WITH_ALLOC_RETURN(a, t, n, r) \
+if (a.length >= a.capacity) \
+{ \
+    size_t new_capacity = 0 == a.capacity ? 2 : (a.capacity + (a.capacity / 2)); \
+    if (aeron_alloc((void **)&(n), new_capacity * sizeof(t)) < 0) \
+    { \
+        AERON_SET_ERR(ENOMEM, "could not ensure capacity of: %" PRIu64, (uint64_t)(new_capacity * sizeof(t))); \
+        return r; \
+    } \
+    memcpy(n, a.array, a.capacity * sizeof(t)); \
+    memset((uint8_t *)(n) + (a.capacity * sizeof(t)), 0, (new_capacity - a.capacity) * sizeof(t)); \
+    a.capacity = new_capacity; \
+}
+
 #define AERON_ARRAY_ENSURE_CAPACITY(r, a, t) \
 if (a.length >= a.capacity) \
 { \
