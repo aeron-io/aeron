@@ -28,6 +28,7 @@ import org.agrona.SystemUtil;
 import org.agrona.collections.MutableInteger;
 import org.agrona.collections.Object2ObjectHashMap;
 import org.agrona.concurrent.AgentInvoker;
+import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.status.CountersReader;
 
 import java.io.File;
@@ -36,6 +37,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 public final class CTestMediaDriver implements TestMediaDriver
 {
@@ -239,6 +241,11 @@ public final class CTestMediaDriver implements TestMediaDriver
         {
             environment.put("AERON_THREADING_MODE", context.threadingMode().name());
         }
+        setIdleStrategy(environment, "AERON_CONDUCTOR_IDLE_STRATEGY", context::conductorIdleStrategy);
+        setIdleStrategy(environment, "AERON_SENDER_IDLE_STRATEGY", context::senderIdleStrategy);
+        setIdleStrategy(environment, "AERON_RECEIVER_IDLE_STRATEGY", context::receiverIdleStrategy);
+        setIdleStrategy(environment, "AERON_SHARED_IDLE_STRATEGY", context::sharedIdleStrategy);
+        setIdleStrategy(environment, "AERON_SHAREDNETWORK_IDLE_STRATEGY", context::sharedNetworkIdleStrategy);
         environment.put("AERON_TIMER_INTERVAL", String.valueOf(context.timerIntervalNs()));
         environment.put(
             "AERON_UNTETHERED_WINDOW_LIMIT_TIMEOUT", String.valueOf(context.untetheredWindowLimitTimeoutNs()));
@@ -333,6 +340,18 @@ public final class CTestMediaDriver implements TestMediaDriver
         {
             LangUtil.rethrowUnchecked(ex);
             return null;
+        }
+    }
+
+    private static void setIdleStrategy(
+        final HashMap<String, String> environment,
+        final String envKey,
+        final Supplier<IdleStrategy> idleStrategySupplier)
+    {
+        final IdleStrategy idleStrategy = idleStrategySupplier.get();
+        if (null != idleStrategy)
+        {
+            environment.put(envKey, idleStrategy.alias());
         }
     }
 
