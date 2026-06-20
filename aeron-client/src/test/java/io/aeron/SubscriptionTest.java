@@ -42,6 +42,8 @@ class SubscriptionTest
     private static final int STREAM_ID_1 = 1002;
     private static final int INITIAL_TERM_ID = 7;
     private static final long SUBSCRIPTION_CORRELATION_ID = 100;
+    private static final long IMAGE_ONE_CORRELATION_ID = 1;
+    private static final long IMAGE_TWO_CORRELATION_ID = 2;
     private static final long REGISTRATION_ID = 10;
     private static final int READ_BUFFER_CAPACITY = 1024;
     private static final int FRAGMENT_COUNT_LIMIT = Integer.MAX_VALUE;
@@ -65,8 +67,8 @@ class SubscriptionTest
     @BeforeEach
     void setUp()
     {
-        when(imageOneMock.correlationId()).thenReturn(1L);
-        when(imageTwoMock.correlationId()).thenReturn(2L);
+        when(imageOneMock.correlationId()).thenReturn(IMAGE_ONE_CORRELATION_ID);
+        when(imageTwoMock.correlationId()).thenReturn(IMAGE_TWO_CORRELATION_ID);
 
         when(conductor.countersReader()).thenReturn(countersManager);
 
@@ -354,5 +356,42 @@ class SubscriptionTest
 
         LocalSocketAddressStatus.updateBindAddress(counter, address, (UnsafeBuffer)countersManager.metaDataBuffer());
         counter.setRelease(status);
+    }
+
+    @Test
+    void shouldRemoveImageByCorrelationId()
+    {
+        final LogBuffers logBuffers = mock(LogBuffers.class);
+        when(imageOneMock.logBuffers()).thenReturn(logBuffers);
+        subscription.addImage(imageOneMock);
+        subscription.addImage(imageTwoMock);
+
+        assertSame(imageOneMock, subscription.removeImage(IMAGE_ONE_CORRELATION_ID));
+
+        assertEquals(1, subscription.imageCount());
+        assertSame(imageTwoMock, subscription.imageAtIndex(0));
+        verify(imageOneMock).close();
+        verify(conductor).releaseLogBuffers(logBuffers, IMAGE_ONE_CORRELATION_ID, NULL_VALUE);
+        verify(imageTwoMock, never()).close();
+    }
+
+    @Test
+    void shouldDescribeSubscription()
+    {
+        when(conductor.channelStatus(anyInt())).thenReturn(ACTIVE);
+        when(imageOneMock.isClosed()).thenReturn(false);
+        subscription.addImage(imageOneMock);
+
+        assertEquals(
+            "Subscription{" +
+            "registrationId=" + SUBSCRIPTION_CORRELATION_ID +
+            ", isClosed=false" +
+            ", isConnected=true" +
+            ", streamId=" + STREAM_ID_1 +
+            ", channel='" + CHANNEL + '\'' +
+            ", localSocketAddresses=[]" +
+            ", imageCount=1" +
+            '}',
+            subscription.toString());
     }
 }
