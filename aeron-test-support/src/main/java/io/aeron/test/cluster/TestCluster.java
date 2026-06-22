@@ -2571,10 +2571,6 @@ public final class TestCluster implements AutoCloseable
                 .responseChannel(responseChannel);
 
             final int requestLength = headerEncoder.encodedLength() + backupQueryEncoder.encodedLength();
-            while (publication.offer(expandableArrayBuffer, 0, requestLength) < 0)
-            {
-                Tests.yield();
-            }
 
             final MutableBoolean found = new MutableBoolean(false);
             final MutableBoolean matches = new MutableBoolean(false);
@@ -2613,10 +2609,19 @@ public final class TestCluster implements AutoCloseable
                 matches.set(hasMatch);
             };
 
+            // Re-send the query while waiting for a response. A single query can be missed if it reaches
+            // the cluster before a member is ready to answer it (for example during an election), even if
+            // 'offer' succeeded.
+            long nextQueryDeadlineNs = 0;
             while (!found.get())
             {
-                final int fragments = subscription.poll(handler, 10);
-                if (0 == fragments)
+                if (System.nanoTime() - nextQueryDeadlineNs >= 0 &&
+                    publication.offer(expandableArrayBuffer, 0, requestLength) > 0)
+                {
+                    nextQueryDeadlineNs = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(100);
+                }
+
+                if (0 == subscription.poll(handler, 10))
                 {
                     Tests.yield();
                 }
