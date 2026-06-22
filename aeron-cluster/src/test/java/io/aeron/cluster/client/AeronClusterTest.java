@@ -16,6 +16,7 @@
 package io.aeron.cluster.client;
 
 import io.aeron.Aeron;
+import io.aeron.ErrorCode;
 import io.aeron.ExclusivePublication;
 import io.aeron.Image;
 import io.aeron.Publication;
@@ -23,6 +24,7 @@ import io.aeron.RethrowingErrorHandler;
 import io.aeron.Subscription;
 import io.aeron.cluster.codecs.MessageHeaderEncoder;
 import io.aeron.cluster.codecs.NewLeaderEventEncoder;
+import io.aeron.exceptions.RegistrationException;
 import io.aeron.logbuffer.BufferClaim;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.FrameDescriptor;
@@ -185,6 +187,28 @@ class AeronClusterTest
         nanoTime += 1;
 
         assertEquals(0, aeronCluster.pollEgress());
+        assertFalse(aeronCluster.isClosed());
+    }
+
+    @Test
+    void shouldRetryNewLeaderIngressPublicationWhenSendChannelEndpointIsClosing()
+    {
+        // When the ingress publication for a new leader is added, the send channel endpoint of the
+        // just-closed publication may still be closing, so the driver returns a retryable error. The client
+        // must retry rather than fail the leader change.
+        final long registrationId = ingressPublication.registrationId();
+        when(aeron.getExclusivePublication(registrationId))
+            .thenThrow(new RegistrationException(
+                registrationId,
+                ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE.value(),
+                ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE,
+                "send_channel_endpoint found in CLOSING state, please retry"))
+            .thenReturn(ingressPublication);
+
+        makeEgressSubscriptionDeliverNewLeaderEvent();
+
+        assertEquals(1, aeronCluster.pollEgress());
+        verify(egressListener).onNewLeader(CLUSTER_SESSION_ID, leadershipTermId, leaderMemberId, INGRESS_ENDPOINTS);
         assertFalse(aeronCluster.isClosed());
     }
 
