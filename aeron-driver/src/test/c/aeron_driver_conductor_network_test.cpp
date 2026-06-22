@@ -489,6 +489,35 @@ TEST_F(DriverConductorNetworkTest, shouldUseExistingChannelEndpointOnAddPublicat
     EXPECT_EQ(aeron_driver_conductor_num_send_channel_endpoints(&m_conductor.m_conductor), 0u);
 }
 
+TEST_F(DriverConductorNetworkTest, shouldNotLogRetryableResourceTemporarilyUnavailableToDistinctErrorLog)
+{
+    const int64_t correlation_id = nextCorrelationId();
+    const size_t observations_before =
+        aeron_distinct_error_log_num_observations(&m_conductor.m_conductor.error_log);
+
+    // RESOURCE_TEMPORARILY_UNAVAILABLE is a transient, retryable condition reported to the client (for example
+    // adding a publication while a send channel endpoint is still closing). It must not be recorded in the
+    // distinct error log, matching the Java driver which only sends it to the client.
+    aeron_driver_conductor_on_error(
+        &m_conductor.m_conductor,
+        -AERON_ERROR_CODE_RESOURCE_TEMPORARILY_UNAVAILABLE,
+        "send_channel_endpoint found in CLOSING state, please retry",
+        correlation_id);
+
+    EXPECT_EQ(observations_before,
+        aeron_distinct_error_log_num_observations(&m_conductor.m_conductor.error_log));
+
+    // A genuine (non-retryable) error must still be recorded in the distinct error log.
+    aeron_driver_conductor_on_error(
+        &m_conductor.m_conductor,
+        -AERON_ERROR_CODE_INVALID_CHANNEL,
+        "invalid channel",
+        correlation_id);
+
+    EXPECT_EQ(observations_before + 1,
+        aeron_distinct_error_log_num_observations(&m_conductor.m_conductor.error_log));
+}
+
 TEST_F(DriverConductorNetworkTest, shouldUseExistingChannelEndpointOnAddPublicationWithSameTagIdDifferentStreamId)
 {
     int64_t client_id = nextCorrelationId();

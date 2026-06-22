@@ -429,6 +429,9 @@ void aeron_driver_conductor_on_unavailable_counter(
 
 void aeron_driver_conductor_on_client_timeout(aeron_driver_conductor_t *conductor, int64_t correlation_id);
 
+void aeron_driver_conductor_on_error(
+    aeron_driver_conductor_t *conductor, int32_t errcode, const char *errmsg, int64_t correlation_id);
+
 void aeron_driver_conductor_on_static_counter(
     aeron_driver_conductor_t *conductor, int64_t correlation_id, int32_t counter_id);
 
