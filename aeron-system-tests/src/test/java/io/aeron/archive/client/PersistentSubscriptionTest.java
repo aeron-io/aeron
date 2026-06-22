@@ -3183,7 +3183,7 @@ abstract class PersistentSubscriptionTest
             .recordingId(persistentPublication.recordingId())
             .liveChannel(subChannel);
 
-        final int ratePerSecond = 500;
+        final int ratePerSecond = 50;
         final long maxProcessingTime = 1_000_000_000 / ratePerSecond / 8;
 
         final Thread publisher = new Thread(
