@@ -193,9 +193,14 @@ public class ArchiveListRecordingsTest
             assertEquals(1, collector.descriptors().size());
             final RecordingDescriptor recordingDescriptor = collector.descriptors().get(0);
 
+            // Record enough recordings, each with a large descriptor (padded alias), that listing them all
+            // (below) produces far more data than the control response flow-control window can hold. The
+            // listing therefore back-pressures and remains in progress while updateChannel is attempted,
+            // rather than racing to completion first (which would leave nothing for updateChannel to reject).
+            final String aliasPadding = "x".repeat(200);
             for (int i = 0; i < 150; i++)
             {
-                recordData(aeronArchive, 1, "snapshot-id:" + (i + 1));
+                recordData(aeronArchive, 1, "snapshot-id:" + (i + 1) + "-" + aliasPadding);
             }
 
             assertTrue(aeronArchive.archiveProxy().listRecordings(
