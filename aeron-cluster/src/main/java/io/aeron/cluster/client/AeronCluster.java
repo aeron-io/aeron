@@ -757,15 +757,32 @@ public final class AeronCluster implements AutoCloseable
 
     private Publication addNewLeaderIngressPublication(final Context ctx, final String channel, final int streamId)
     {
-        final long registrationId = asyncAddIngressPublication(ctx, channel, streamId);
+        long registrationId = asyncAddIngressPublication(ctx, channel, streamId);
         final long deadlineNs = nanoClock.nanoTime() + ctx.messageTimeoutNs();
         do
         {
-            final Publication publication = getIngressPublication(ctx, registrationId);
-            if (null != publication)
+            if (NULL_VALUE == registrationId)
             {
-                return publication;
+                registrationId = asyncAddIngressPublication(ctx, channel, streamId);
             }
+
+            try
+            {
+                final Publication publication = getIngressPublication(ctx, registrationId);
+                if (null != publication)
+                {
+                    return publication;
+                }
+            }
+            catch (final RegistrationException ex)
+            {
+                registrationId = NULL_VALUE;
+                if (ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE != ex.errorCode())
+                {
+                    throw ex;
+                }
+            }
+
             idleStrategy.idle(ctx.runAgentInvokers());
         }
         while (nanoClock.nanoTime() < deadlineNs);
