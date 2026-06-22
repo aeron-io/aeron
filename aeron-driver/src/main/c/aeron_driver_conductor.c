@@ -1574,10 +1574,19 @@ bool aeron_send_channel_endpoint_entry_has_reached_end_of_life(
 void aeron_send_channel_endpoint_entry_delete(
     aeron_driver_conductor_t *conductor, aeron_send_channel_endpoint_entry_t *entry)
 {
-    aeron_str_to_ptr_hash_map_remove(
+    // Only remove the map entry if it still refers to this endpoint. A new endpoint
+    // with the same canonical form may have already been created by the time we get
+    // here, in which case we don't want to remove that new endpoint's map entry.
+    if (entry->endpoint == aeron_str_to_ptr_hash_map_get(
         &conductor->send_channel_endpoint_by_channel_map,
         entry->endpoint->conductor_fields.udp_channel->canonical_form,
-        entry->endpoint->conductor_fields.udp_channel->canonical_length);
+        entry->endpoint->conductor_fields.udp_channel->canonical_length))
+    {
+        aeron_str_to_ptr_hash_map_remove(
+            &conductor->send_channel_endpoint_by_channel_map,
+            entry->endpoint->conductor_fields.udp_channel->canonical_form,
+            entry->endpoint->conductor_fields.udp_channel->canonical_length);
+    }
 
     aeron_send_channel_endpoint_delete(&conductor->counters_manager, entry->endpoint);
 }
