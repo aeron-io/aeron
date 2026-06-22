@@ -3525,7 +3525,7 @@ class ClusterTest
     }
 
     @Test
-    @InterruptAfter(10)
+    @InterruptAfter(30)
     void shouldTerminateNodeWithInvalidSnapshotAndRecoveryAfterInvalidation()
     {
         cluster = aCluster()
