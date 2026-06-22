@@ -2777,7 +2777,10 @@ void aeron_driver_conductor_on_error(
     }
 
 log_error:
-    aeron_driver_conductor_log_explicit_error(conductor, code, errmsg);
+    if (AERON_ERROR_CODE_RESOURCE_TEMPORARILY_UNAVAILABLE != code)
+    {
+        aeron_driver_conductor_log_explicit_error(conductor, code, errmsg);
+    }
 }
 
 void on_publication_ready(
