@@ -36,6 +36,7 @@ import io.aeron.test.launcher.FileResolveUtil;
 import io.aeron.test.launcher.RemoteLaunchClient;
 import org.agrona.IoUtil;
 import org.agrona.MutableDirectBuffer;
+import org.agrona.collections.MutableLong;
 import org.agrona.collections.MutableReference;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.BeforeEach;
@@ -69,6 +70,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.*;
@@ -298,9 +300,16 @@ class ClusterNetworkTopologyTest
                     },
                     SECONDS.toNanos(5));
 
+                final MutableLong nextKeepAliveNs = new MutableLong(System.nanoTime() + MILLISECONDS.toNanos(100));
                 Tests.await(
                     () ->
                     {
+                        final long nowNs = System.nanoTime();
+                        if (nowNs >= nextKeepAliveNs.get())
+                        {
+                            aeronCluster.sendKeepAlive();
+                            nextKeepAliveNs.set(nowNs + MILLISECONDS.toNanos(100));
+                        }
                         aeronCluster.pollEgress();
                         pollSelector(selector);
                         return message.equals(egressResponse.get());
