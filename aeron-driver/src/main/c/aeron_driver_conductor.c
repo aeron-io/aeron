@@ -1550,11 +1550,6 @@ bool aeron_send_channel_endpoint_entry_has_reached_end_of_life(
 void aeron_send_channel_endpoint_entry_delete(
     aeron_driver_conductor_t *conductor, aeron_send_channel_endpoint_entry_t *entry)
 {
-    aeron_str_to_ptr_hash_map_remove(
-        &conductor->send_channel_endpoint_by_channel_map,
-        entry->endpoint->conductor_fields.udp_channel->canonical_form,
-        entry->endpoint->conductor_fields.udp_channel->canonical_length);
-
     aeron_send_channel_endpoint_delete(&conductor->counters_manager, entry->endpoint);
 }
 
