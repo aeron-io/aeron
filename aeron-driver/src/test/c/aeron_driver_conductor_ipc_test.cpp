@@ -18,6 +18,28 @@
 
 using testing::_;
 
+namespace
+{
+// State shared with eol_uaf_remove_publication_cleanup (the cleanup callback has no user pointer).
+aeron_driver_native_resource_agent_t *g_eol_uaf_agent = nullptr;
+bool g_eol_uaf_drain_during_cleanup = false;
+
+// Installed as context->log.remove_publication_cleanup, which the managed-resource sweep invokes
+// from aeron_ipc_publication_entry_delete BEFORE aeron_ipc_publication_close. Draining the native
+// resource agent here runs any free that free_func has already scheduled for this publication.
+// With the buggy ordering (free_func before delete_func) the publication is freed at this point and
+// the following close reads freed memory -> AddressSanitizer heap-use-after-free. With the correct
+// ordering (delete_func before free_func) nothing is queued yet, so this is a no-op and close reads
+// a live publication.
+void eol_uaf_remove_publication_cleanup(int32_t /*session_id*/, int32_t /*stream_id*/, size_t /*channel_length*/, const char * /*channel*/)
+{
+    if (g_eol_uaf_drain_during_cleanup && nullptr != g_eol_uaf_agent)
+    {
+        aeron_driver_native_resource_agent_do_work(g_eol_uaf_agent);
+    }
+}
+}
+
 class DriverConductorIpcTest : public DriverConductorTest, public testing::Test
 {
 protected:
@@ -270,6 +292,52 @@ TEST_F(DriverConductorIpcTest, shouldBeAbleToTimeoutIpcPublicationWithActiveIpcS
         .With(IsUnavailableImage(STREAM_ID_1, pub_id, sub_id, AERON_IPC_CHANNEL));
 
     readAllBroadcastsFromConductor(mock_broadcast_handler);
+}
+
+// Regression test for the managed-resource end-of-life ordering: the conductor must close an
+// end-of-life resource before scheduling its (async) free. The native resource agent frees the
+// publication on its own thread, so if the free is scheduled before the close, the agent can free
+// the struct while aeron_ipc_publication_close is still reading it.
+//
+// This single-threaded test forces that interleaving deterministically: a cleanup callback drains
+// the native resource agent from inside aeron_ipc_publication_entry_delete (before the close). With
+// the buggy ordering the publication is freed there and the close reads freed memory, which the
+// sanitiser build reports as a heap-use-after-free. With the correct ordering the free has not been
+// scheduled yet, the drain is a no-op, and the close is safe.
+TEST_F(DriverConductorIpcTest, DISABLED_shouldCloseEndOfLifeIpcPublicationBeforeSchedulingAsyncFree)
+{
+    int64_t client_id = nextCorrelationId();
+    int64_t pub_id = nextCorrelationId();
+    int64_t sub_id = nextCorrelationId();
+    int64_t remove_correlation_id = nextCorrelationId();
+
+    ASSERT_EQ(addIpcPublication(client_id, pub_id, STREAM_ID_1, false), 0);
+    ASSERT_EQ(addIpcSubscription(client_id, sub_id, STREAM_ID_1, false), 0);
+    doWorkUntilDone();
+    ASSERT_EQ(aeron_driver_conductor_num_ipc_publications(&m_conductor.m_conductor), 1u);
+
+    ASSERT_EQ(removePublication(client_id, remove_correlation_id, pub_id), 0);
+    doWorkUntilDone();
+
+    readAllBroadcastsFromConductor(null_broadcast_handler);
+
+    g_eol_uaf_agent = &m_conductor.m_native_resource_agent;
+    g_eol_uaf_drain_during_cleanup = true;
+    m_context.m_context->log.remove_publication_cleanup = eol_uaf_remove_publication_cleanup;
+
+    auto timeout = static_cast<int64_t>(m_context.m_context->publication_linger_timeout_ns * 2);
+    doWorkForNs(
+        timeout,
+        100,
+        [&]()
+        {
+            clientKeepalive(client_id);
+        });
+
+    g_eol_uaf_drain_during_cleanup = false;
+    g_eol_uaf_agent = nullptr;
+
+    EXPECT_EQ(aeron_driver_conductor_num_ipc_publications(&m_conductor.m_conductor), 0u);
 }
 
 // TODO: Parameterise
