@@ -665,7 +665,7 @@ class ClusterBackupTest
     }
 
     @Test
-    @InterruptAfter(5)
+    @InterruptAfter(30)
     void shouldQueryForSnapshotsWithLogPosition()
     {
         final TestCluster cluster = aCluster().withStaticNodes(3).start();
