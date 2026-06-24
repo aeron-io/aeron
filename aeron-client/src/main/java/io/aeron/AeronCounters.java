@@ -1283,6 +1283,32 @@ public final class AeronCounters
     @AeronCounter
     public static final int SEQUENCER_REPLAY_INDEX_INITIAL_SEQUENCE_LOG_POSITION_COUNTER_TYPE_ID = 525;
 
+    /**
+     * Counter id used for keeping track of the max duty cycle time of the replay-service agent.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_REPLAY_SERVICE_MAX_CYCLE_TIME_COUNTER_TYPE_ID = 545;
+
+    /**
+     * Counter id used for keeping track of the count of cycle time threshold exceeded of
+     * an replay-service agent.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_REPLAY_SERVICE_CYCLE_TIME_THRESHOLD_EXCEEDED_TYPE_ID = 546;
+
+    /**
+     * Counter id used for keeping track of the max duty cycle time of the snapshot-service agent.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_SNAPSHOT_SERVICE_MAX_CYCLE_TIME_COUNTER_TYPE_ID = 547;
+
+    /**
+     * Counter id used for keeping track of the count of cycle time threshold exceeded of
+     * an snapshot-service agent.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_SNAPSHOT_SERVICE_CYCLE_TIME_THRESHOLD_EXCEEDED_TYPE_ID = 548;
+
     private AeronCounters()
     {
     }
