@@ -148,8 +148,10 @@ class ConsensusModuleSnapshotPendingServiceMessagesPatchTest
             // The default 1s leader heartbeat timeout is too aggressive for this throughput-heavy test on slow
             // CI runners: draining the backlog of pending service messages can starve the leader conductor long
             // enough to trip a spurious re-election, which stalls egress and trips @InterruptAfter. Use the more
-            // tolerant timeouts from ClusterNetworkPartitionTest (election = heartbeat / 2).
+            // tolerant timeouts from ClusterNetworkPartitionTest (startup canvass = heartbeat * 2, which the
+            // ConsensusModule requires, and election = heartbeat / 2).
             .withLeaderHeartbeatTimeoutNs(TimeUnit.SECONDS.toNanos(10))
+            .withStartupCanvassTimeoutNs(TimeUnit.SECONDS.toNanos(20))
             .withElectionTimeoutNs(TimeUnit.SECONDS.toNanos(5))
             .start();
         systemTestWatcher.cluster(cluster);
@@ -270,8 +272,10 @@ class ConsensusModuleSnapshotPendingServiceMessagesPatchTest
             // The default 1s leader heartbeat timeout is too aggressive for this throughput-heavy test on slow
             // CI runners: draining the backlog of pending service messages can starve the leader conductor long
             // enough to trip a spurious re-election, which stalls egress and trips @InterruptAfter. Use the more
-            // tolerant timeouts from ClusterNetworkPartitionTest (election = heartbeat / 2).
+            // tolerant timeouts from ClusterNetworkPartitionTest (startup canvass = heartbeat * 2, which the
+            // ConsensusModule requires, and election = heartbeat / 2).
             .withLeaderHeartbeatTimeoutNs(TimeUnit.SECONDS.toNanos(10))
+            .withStartupCanvassTimeoutNs(TimeUnit.SECONDS.toNanos(20))
             .withElectionTimeoutNs(TimeUnit.SECONDS.toNanos(5))
             .start();
         systemTestWatcher.cluster(cluster);
