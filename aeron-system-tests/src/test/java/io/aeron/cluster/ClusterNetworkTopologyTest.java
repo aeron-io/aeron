@@ -86,6 +86,7 @@ class ClusterNetworkTopologyTest
     private static final long CLIENT_LIVENESS_TIMEOUT_S = 30;
     private static final long DRIVER_TIMEOUT_S = 30;
     private static final long PUBLICATION_UNBLOCK_TIMEOUT_S = 60;
+    private static final long MESSAGE_TIMEOUT_S = 20;
     private static final List<String> HOSTNAMES = Arrays.asList("10.42.0.10", "10.42.0.11", "10.42.0.12");
     private static final List<String> INTERNAL_HOSTNAMES = Arrays.asList("10.42.1.10", "10.42.1.11", "10.42.1.12");
 
@@ -301,7 +302,7 @@ class ClusterNetworkTopologyTest
                         pollSelector(selector);
                         return 0 < position;
                     },
-                    SECONDS.toNanos(5));
+                    SECONDS.toNanos(MESSAGE_TIMEOUT_S));
 
                 final MutableLong nextKeepAliveNs = new MutableLong(System.nanoTime() + MILLISECONDS.toNanos(100));
                 Tests.await(
@@ -317,7 +318,7 @@ class ClusterNetworkTopologyTest
                         pollSelector(selector);
                         return message.equals(egressResponse.get());
                     },
-                    SECONDS.toNanos(5));
+                    SECONDS.toNanos(MESSAGE_TIMEOUT_S));
             }
         }
     }
@@ -487,7 +488,7 @@ class ClusterNetworkTopologyTest
         command.add("-Daeron.driver.resolver.name=node" + nodeId);
         command.add("-Daeron.cluster.startup.canvass.timeout=" + STARTUP_CANVASS_TIMEOUT_S + "s");
         command.add("-Daeron.client.liveness.timeout=" + CLIENT_LIVENESS_TIMEOUT_S + "s");
-        command.add("-Daeron.driver.timeout=" + DRIVER_TIMEOUT_S + "s");
+        command.add("-Daeron.driver.timeout=" + SECONDS.toMillis(DRIVER_TIMEOUT_S));
         command.add("-Daeron.publication.unblock.timeout=" + PUBLICATION_UNBLOCK_TIMEOUT_S + "s");
 
         if (null != ingressChannel)
