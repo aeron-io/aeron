@@ -132,7 +132,7 @@ class ConsensusModuleSnapshotPendingServiceMessagesPatchTest
 
     @Test
     @SlowTest
-    @InterruptAfter(60)
+    @InterruptAfter(90)
     void executeIsANoOpIfTheSnapshotIsValid()
     {
         final IntFunction<TestNode.TestService[]> servicesSupplier =
@@ -145,6 +145,12 @@ class ConsensusModuleSnapshotPendingServiceMessagesPatchTest
             .withStaticNodes(3)
             .withTimerServiceSupplier(new PriorityHeapTimerServiceSupplier())
             .withServiceSupplier(servicesSupplier)
+            // The default 1s leader heartbeat timeout is too aggressive for this throughput-heavy test on slow
+            // CI runners: draining the backlog of pending service messages can starve the leader conductor long
+            // enough to trip a spurious re-election, which stalls egress and trips @InterruptAfter. Use the more
+            // tolerant timeouts from ClusterNetworkPartitionTest (election = heartbeat / 2).
+            .withLeaderHeartbeatTimeoutNs(TimeUnit.SECONDS.toNanos(10))
+            .withElectionTimeoutNs(TimeUnit.SECONDS.toNanos(5))
             .start();
         systemTestWatcher.cluster(cluster);
         final int serviceCount = cluster.node(0).services().length;
@@ -242,7 +248,7 @@ class ConsensusModuleSnapshotPendingServiceMessagesPatchTest
         "$compute, 200000, 1, 199999, NextServiceSessionId",
         "7777, 9999, 1000000000000000, 1223372036854775, MaxClusterSessionId" })
     @SlowTest
-    @InterruptAfter(60)
+    @InterruptAfter(90)
     @SuppressWarnings("MethodLength")
     void executeShouldPatchTheStateOfTheLeaderSnapshot(
         final String baseLogServiceSessionId,
@@ -261,6 +267,12 @@ class ConsensusModuleSnapshotPendingServiceMessagesPatchTest
             .withStaticNodes(3)
             .withTimerServiceSupplier(new PriorityHeapTimerServiceSupplier())
             .withServiceSupplier(servicesSupplier)
+            // The default 1s leader heartbeat timeout is too aggressive for this throughput-heavy test on slow
+            // CI runners: draining the backlog of pending service messages can starve the leader conductor long
+            // enough to trip a spurious re-election, which stalls egress and trips @InterruptAfter. Use the more
+            // tolerant timeouts from ClusterNetworkPartitionTest (election = heartbeat / 2).
+            .withLeaderHeartbeatTimeoutNs(TimeUnit.SECONDS.toNanos(10))
+            .withElectionTimeoutNs(TimeUnit.SECONDS.toNanos(5))
             .start();
         systemTestWatcher.cluster(cluster);
         final int serviceCount = cluster.node(0).services().length;
