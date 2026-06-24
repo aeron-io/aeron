@@ -84,6 +84,7 @@ class ClusterNetworkTopologyTest
     private static final long STARTUP_CANVASS_TIMEOUT_S =
         NANOSECONDS.toSeconds(2 * ConsensusModule.Configuration.leaderHeartbeatTimeoutNs());
     private static final long CLIENT_LIVENESS_TIMEOUT_S = 30;
+    private static final long DRIVER_TIMEOUT_S = 30;
     private static final long PUBLICATION_UNBLOCK_TIMEOUT_S = 60;
     private static final List<String> HOSTNAMES = Arrays.asList("10.42.0.10", "10.42.0.11", "10.42.0.12");
     private static final List<String> INTERNAL_HOSTNAMES = Arrays.asList("10.42.1.10", "10.42.1.11", "10.42.1.12");
@@ -486,6 +487,7 @@ class ClusterNetworkTopologyTest
         command.add("-Daeron.driver.resolver.name=node" + nodeId);
         command.add("-Daeron.cluster.startup.canvass.timeout=" + STARTUP_CANVASS_TIMEOUT_S + "s");
         command.add("-Daeron.client.liveness.timeout=" + CLIENT_LIVENESS_TIMEOUT_S + "s");
+        command.add("-Daeron.driver.timeout=" + DRIVER_TIMEOUT_S + "s");
         command.add("-Daeron.publication.unblock.timeout=" + PUBLICATION_UNBLOCK_TIMEOUT_S + "s");
 
         if (null != ingressChannel)
