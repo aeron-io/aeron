@@ -4374,7 +4374,7 @@ error:
     aeron_counters_manager_free(&conductor->counters_manager, pub_pos_position.counter_id);
     aeron_counters_manager_free(&conductor->counters_manager, pub_lmt_position.counter_id);
     aeron_counters_manager_free(&conductor->counters_manager, snd_pos_position.counter_id);
-    aeron_counters_manager_free(&conductor->counters_manager, snd_pos_position.counter_id);
+    aeron_counters_manager_free(&conductor->counters_manager, snd_lmt_position.counter_id);
     aeron_counters_manager_free(&conductor->counters_manager, snd_bpe_counter.counter_id);
     aeron_counters_manager_free(&conductor->counters_manager, snd_naks_received_counter.counter_id);
 
