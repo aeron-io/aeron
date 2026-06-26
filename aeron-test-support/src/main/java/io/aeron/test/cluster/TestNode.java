@@ -23,6 +23,7 @@ import io.aeron.FragmentAssembler;
 import io.aeron.Image;
 import io.aeron.RethrowingErrorHandler;
 import io.aeron.archive.Archive;
+import io.aeron.archive.ArchiveThreadingMode;
 import io.aeron.archive.ArchiveTool;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.status.RecordingPos;
@@ -42,6 +43,7 @@ import io.aeron.cluster.service.ClusterCounters;
 import io.aeron.cluster.service.ClusterTerminationException;
 import io.aeron.cluster.service.ClusteredServiceContainer;
 import io.aeron.driver.MediaDriver;
+import io.aeron.driver.ThreadingMode;
 import io.aeron.exceptions.AeronException;
 import io.aeron.exceptions.TimeoutException;
 import io.aeron.logbuffer.BufferClaim;
@@ -53,7 +55,9 @@ import io.aeron.test.Tests;
 import io.aeron.test.driver.RedirectingNameResolver;
 import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.CloseHelper;
+import org.agrona.IoUtil;
 import org.agrona.DirectBuffer;
+import org.agrona.LangUtil;
 import org.agrona.ExpandableArrayBuffer;
 import org.agrona.collections.Hashing;
 import org.agrona.collections.IntArrayList;
@@ -70,6 +74,7 @@ import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Function;
 import java.util.function.IntPredicate;
@@ -114,16 +119,37 @@ public final class TestNode implements AutoCloseable
 
         try
         {
+            final NodeAgentPools pools = context.nodeAgentPools;
+            final boolean pooled = null != pools;
+
+            if (pooled)
+            {
+                context.mediaDriverContext.threadingMode(ThreadingMode.INVOKER);
+            }
+
             mediaDriver = TestMediaDriver.launch(
                 context.mediaDriverContext, TestCluster.clientDriverOutputConsumer(dataCollector));
 
             final String aeronDirectoryName = mediaDriver.context().aeronDirectoryName();
+
+            if (pooled)
+            {
+                // Driver onto the shared driver thread first, so subsequent client connects (which
+                // busy-wait on the driver heartbeat) are serviced cross-thread while this thread blocks.
+                pools.registerDriver(mediaDriver.sharedAgentInvoker());
+
+                context.archiveContext.threadingMode(ArchiveThreadingMode.INVOKER);
+            }
             archive = Archive.launch(context.archiveContext.aeronDirectoryName(aeronDirectoryName));
+            if (pooled)
+            {
+                pools.registerArchive(archive.invoker());
+            }
 
             services = context.services;
 
             Aeron consensusModuleAeronClient = null;
-            if (null != context.errorCounterSupplier || null != context.snapshotCounterSupplier)
+            if (pooled || null != context.errorCounterSupplier || null != context.snapshotCounterSupplier)
             {
                 consensusModuleAeronClient = Aeron.connect(new Aeron.Context()
                     .aeronDirectoryName(aeronDirectoryName)
@@ -139,6 +165,7 @@ public final class TestNode implements AutoCloseable
                 .serviceCount(services.length)
                 .aeron(consensusModuleAeronClient)
                 .aeronDirectoryName(aeronDirectoryName)
+                .useAgentInvoker(pooled)
                 .isIpcIngressAllowed(true)
                 .terminationHook(ClusterTests.terminationHook(
                     context.isTerminationExpected, context.hasMemberTerminated));
@@ -179,31 +206,85 @@ public final class TestNode implements AutoCloseable
 
             final AeronArchive.Context archiveContext = context.consensusModuleContext.archiveContext().clone();
 
-            consensusModule = ConsensusModule.launch(context.consensusModuleContext);
+            containers = new ClusteredServiceContainer[services.length];
+
+            if (pooled)
+            {
+                // The consensus module and the clustered service share the same cluster directory and both
+                // create it in their conclude() via the non-atomic IoUtil.ensureDirectoryExists. Because we
+                // launch them concurrently (below), pre-create it here on this single thread — performing the
+                // clean-start delete ourselves and clearing deleteDirOnStart so conclude does not race to
+                // delete/recreate it underneath the concurrent launches.
+                final File clusterDir = context.consensusModuleContext.clusterDir();
+                if (context.consensusModuleContext.deleteDirOnStart())
+                {
+                    IoUtil.delete(clusterDir, false);
+                    context.consensusModuleContext.deleteDirOnStart(false);
+                }
+                IoUtil.ensureDirectoryExists(clusterDir, "cluster");
+                if (null != context.consensusModuleContext.markFileDir())
+                {
+                    IoUtil.ensureDirectoryExists(context.consensusModuleContext.markFileDir(), "mark file");
+                }
+
+                // The consensus module's onStart blocks awaiting a ServiceAck while the clustered service's
+                // onStart awaits the consensus module, so the two must start CONCURRENTLY (as they do in the
+                // normal AgentRunner mode where ConsensusModule.launch returns immediately). In invoker mode
+                // launch runs onStart synchronously, so run it on a dedicated startup thread, registering it
+                // with the pool the moment its onStart completes so it is pumped while the services come up.
+                final AtomicReference<ConsensusModule> cmHolder = new AtomicReference<>();
+                final AtomicReference<Throwable> cmError = new AtomicReference<>();
+                final Thread cmStartup = new Thread(
+                    () ->
+                    {
+                        try
+                        {
+                            final ConsensusModule cm = ConsensusModule.launch(context.consensusModuleContext);
+                            cmHolder.set(cm);
+                            pools.registerConsensusModule(cm.conductorAgentInvoker());
+                        }
+                        catch (final Throwable t)
+                        {
+                            cmError.set(t);
+                        }
+                    },
+                    "test-cm-startup-" + context.consensusModuleContext.clusterMemberId());
+                cmStartup.start();
+
+                for (int i = 0; i < services.length; i++)
+                {
+                    containers[i] = launchServiceContainer(context, aeronDirectoryName, archiveContext, i, true);
+                    // Register immediately so the service is pumped (and keeps sending keepalives to the
+                    // driver) while we wait for the consensus module startup thread to finish below.
+                    pools.registerService(containers[i].serviceAgentInvoker());
+                }
+
+                try
+                {
+                    cmStartup.join();
+                }
+                catch (final InterruptedException ex)
+                {
+                    Thread.currentThread().interrupt();
+                    LangUtil.rethrowUnchecked(ex);
+                }
+                if (null != cmError.get())
+                {
+                    LangUtil.rethrowUnchecked(cmError.get());
+                }
+                consensusModule = cmHolder.get();
+            }
+            else
+            {
+                consensusModule = ConsensusModule.launch(context.consensusModuleContext);
+                for (int i = 0; i < services.length; i++)
+                {
+                    containers[i] = launchServiceContainer(context, aeronDirectoryName, archiveContext, i, false);
+                }
+            }
+
             final File baseDir = context.consensusModuleContext.clusterDir().getParentFile();
             dataCollector.addForCleanup(baseDir);
-
-            containers = new ClusteredServiceContainer[services.length];
-            for (int i = 0; i < services.length; i++)
-            {
-                final ClusteredServiceContainer.Context ctx = context.serviceContainerContext.clone();
-
-                final int clusterId = context.consensusModuleContext.clusterId();
-                final int memberId = context.consensusModuleContext.clusterMemberId();
-
-                ctx.aeronDirectoryName(aeronDirectoryName)
-                    .clusterId(clusterId)
-                    .archiveContext(archiveContext.clone())
-                    .terminationHook(ClusterTests.terminationHook(
-                        context.isTerminationExpected, context.hasServiceTerminated[i]))
-                    .clusterDir(context.consensusModuleContext.clusterDir())
-                    .markFileDir(context.consensusModuleContext.markFileDir())
-                    .clusteredService(services[i])
-                    .snapshotDurationThresholdNs(TimeUnit.MILLISECONDS.toNanos(100))
-                    .serviceName("clustered-service-" + clusterId + "-" + memberId + "-" + i)
-                    .serviceId(i);
-                containers[i] = ClusteredServiceContainer.launch(ctx);
-            }
 
             dataCollector.add(consensusModule.context().clusterDir().toPath());
             dataCollector.add(archive.context().archiveDir().toPath());
@@ -222,6 +303,47 @@ public final class TestNode implements AutoCloseable
 
             throw ex;
         }
+    }
+
+    private static ClusteredServiceContainer launchServiceContainer(
+        final Context context,
+        final String aeronDirectoryName,
+        final AeronArchive.Context archiveContext,
+        final int index,
+        final boolean pooled)
+    {
+        final ClusteredServiceContainer.Context ctx = context.serviceContainerContext.clone();
+
+        final int clusterId = context.consensusModuleContext.clusterId();
+        final int memberId = context.consensusModuleContext.clusterMemberId();
+
+        ctx.aeronDirectoryName(aeronDirectoryName)
+            .clusterId(clusterId)
+            .archiveContext(archiveContext.clone())
+            .terminationHook(ClusterTests.terminationHook(
+                context.isTerminationExpected, context.hasServiceTerminated[index]))
+            .clusterDir(context.consensusModuleContext.clusterDir())
+            .markFileDir(context.consensusModuleContext.markFileDir())
+            .clusteredService(context.services[index])
+            .snapshotDurationThresholdNs(TimeUnit.MILLISECONDS.toNanos(100))
+            .serviceName("clustered-service-" + clusterId + "-" + memberId + "-" + index)
+            .serviceId(index);
+
+        if (pooled)
+        {
+            // Service connects to the driver (driver pool) and archive (archive pool) cross-thread, so it
+            // needs no driver agent invoker of its own; its conductor is invoker driven by the client pool.
+            final Aeron serviceAeronClient = Aeron.connect(new Aeron.Context()
+                .aeronDirectoryName(aeronDirectoryName)
+                .subscriberErrorHandler(RethrowingErrorHandler.INSTANCE)
+                .useConductorAgentInvoker(true)
+                .awaitingIdleStrategy(YieldingIdleStrategy.INSTANCE)
+                .clientLock(NoOpLock.INSTANCE)
+                .clientName("test-service-client-" + clusterId + "-" + memberId + "-" + index));
+            ctx.aeron(serviceAeronClient).ownsAeronClient(true).useAgentInvoker(true);
+        }
+
+        return ClusteredServiceContainer.launch(ctx);
     }
 
     public void stopServiceContainers()
@@ -283,7 +405,47 @@ public final class TestNode implements AutoCloseable
         if (!isClosed)
         {
             isClosed = true;
-            CloseHelper.closeAll(consensusModule, () -> CloseHelper.closeAll(containers), archive, mediaDriver);
+            final NodeAgentPools pools = context.nodeAgentPools;
+            if (null != pools)
+            {
+                // Close in dependency order, keeping the driver and archive pumped while the consensus module
+                // and services close: their onClose performs blocking archive operations (e.g. stop log
+                // recording) that need the driver and archive to keep running to complete. Deregister each
+                // component from its pool immediately before closing it so the pool stops invoking it first.
+                if (null != consensusModule)
+                {
+                    pools.deregister(consensusModule.conductorAgentInvoker());
+                }
+                CloseHelper.close(consensusModule);
+
+                if (null != containers)
+                {
+                    for (final ClusteredServiceContainer container : containers)
+                    {
+                        if (null != container)
+                        {
+                            pools.deregister(container.serviceAgentInvoker());
+                        }
+                    }
+                    CloseHelper.closeAll(containers);
+                }
+
+                if (null != archive)
+                {
+                    pools.deregister(archive.invoker());
+                }
+                CloseHelper.close(archive);
+
+                if (null != mediaDriver)
+                {
+                    pools.deregister(mediaDriver.sharedAgentInvoker());
+                }
+                CloseHelper.close(mediaDriver);
+            }
+            else
+            {
+                CloseHelper.closeAll(consensusModule, () -> CloseHelper.closeAll(containers), archive, mediaDriver);
+            }
         }
     }
 
@@ -1342,6 +1504,11 @@ public final class TestNode implements AutoCloseable
         Supplier<ConsensusModuleExtension> extensionSupplier;
         Function<Aeron, Counter> errorCounterSupplier;
         Function<Aeron, Counter> snapshotCounterSupplier;
+        // When non-null, this node's driver, archive, consensus module and clustered service
+        // run in invoker mode and are driven by the shared type-pooled threads (all drivers on one thread,
+        // all archives on another, all consensus modules and services on a third) instead of ~4 threads of
+        // their own.
+        NodeAgentPools nodeAgentPools;
 
         Context(final TestService[] services, final String hostName, final String nodeMappings)
         {

@@ -141,6 +141,13 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 public final class TestCluster implements AutoCloseable
 {
+    // When -Daeron.test.cluster.pooled.node.threads=true, all nodes' components run in invoker
+    // mode pooled by type onto three shared threads (drivers / archives / consensus modules + services)
+    // rather than ~4 threads per node.
+    // Defaults to false so the standard multi-threaded path used by every other test is unaffected.
+    static final boolean POOLED_NODE_THREADS =
+        Boolean.getBoolean("aeron.test.cluster.pooled.node.threads");
+
     static final int TERM_LENGTH = 64 * 1024;
     static final int SEGMENT_FILE_LENGTH = 128 * 1024;
     static final long CATALOG_CAPACITY = 128 * 1024;
@@ -198,6 +205,7 @@ public final class TestCluster implements AutoCloseable
     private ControlledEgressListener controlledEgressListener;
 
     private final TestNode[] nodes;
+    private final NodeAgentPools nodeAgentPools;
     private final String clusterMembers;
     private final String clusterMemberEndpoints;
     private final String[] senderWildcardPortRanges;
@@ -266,6 +274,7 @@ public final class TestCluster implements AutoCloseable
         this.serviceSupplier = requireNonNull(serviceSupplier);
 
         this.nodes = new TestNode[memberCount + 1];
+        this.nodeAgentPools = POOLED_NODE_THREADS ? new NodeAgentPools(Throwable::printStackTrace) : null;
         this.backupNodeIndex = memberCount;
         this.useResponseChannels = useResponseChannels;
         this.clusterMembers = clusterMembers(clusterId, 0, memberCount, memberCount, this.useResponseChannels);
@@ -403,6 +412,11 @@ public final class TestCluster implements AutoCloseable
         }
     }
 
+    NodeAgentPools nodeAgentPools()
+    {
+        return nodeAgentPools;
+    }
+
     public void close()
     {
         final boolean isInterrupted = Thread.interrupted();
@@ -414,7 +428,8 @@ public final class TestCluster implements AutoCloseable
                 client,
                 clientMediaDriver,
                 null != backupNode ? () -> backupNode.close() : null,
-                () -> CloseHelper.closeAll(Stream.of(nodes).filter(Objects::nonNull).collect(toList())));
+                () -> CloseHelper.closeAll(Stream.of(nodes).filter(Objects::nonNull).collect(toList())),
+                nodeAgentPools);
         }
         finally
         {
@@ -440,6 +455,7 @@ public final class TestCluster implements AutoCloseable
         final File markFileDir = null != markFileBaseDir ? new File(markFileBaseDir, "mark-" + index) : null;
         final TestNode.Context context = new TestNode.Context(
             serviceSupplier.apply(index), hostname(index, memberCount), nodeNameMappings());
+        context.nodeAgentPools = nodeAgentPools;
         context.extensionSupplier = extensionSupplier;
         context.errorCounterSupplier = errorCounterSupplier;
         context.snapshotCounterSupplier = snapshotCounterSupplier;
@@ -626,6 +642,7 @@ public final class TestCluster implements AutoCloseable
         final File markFileDir = null != markFileBaseDir ? new File(markFileBaseDir, "mark-" + backupNodeIndex) : null;
         final TestNode.Context context = new TestNode.Context(
             serviceSupplier.apply(backupNodeIndex), hostname(backupNodeIndex, memberCount), nodeNameMappings());
+        context.nodeAgentPools = nodeAgentPools;
 
         if (null == backupNode || !backupNode.isClosed())
         {
