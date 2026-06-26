@@ -44,6 +44,7 @@ import org.agrona.SemanticVersion;
 import org.agrona.Strings;
 import org.agrona.SystemUtil;
 import org.agrona.concurrent.Agent;
+import org.agrona.concurrent.AgentInvoker;
 import org.agrona.concurrent.AgentRunner;
 import org.agrona.concurrent.CountedErrorHandler;
 import org.agrona.concurrent.EpochClock;
@@ -107,6 +108,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
 
     private final Context ctx;
     private final AgentRunner serviceAgentRunner;
+    private final AgentInvoker serviceAgentInvoker;
 
     private ClusteredServiceContainer(final Context ctx)
     {
@@ -129,7 +131,16 @@ public final class ClusteredServiceContainer implements AutoCloseable
         }
 
         final ClusteredServiceAgent agent = new ClusteredServiceAgent(ctx);
-        serviceAgentRunner = new AgentRunner(ctx.idleStrategy(), ctx.errorHandler(), ctx.errorCounter(), agent);
+        if (ctx.useAgentInvoker())
+        {
+            serviceAgentInvoker = new AgentInvoker(ctx.errorHandler(), ctx.errorCounter(), agent);
+            serviceAgentRunner = null;
+        }
+        else
+        {
+            serviceAgentRunner = new AgentRunner(ctx.idleStrategy(), ctx.errorHandler(), ctx.errorCounter(), agent);
+            serviceAgentInvoker = null;
+        }
     }
 
     /**
@@ -151,9 +162,26 @@ public final class ClusteredServiceContainer implements AutoCloseable
     public static ClusteredServiceContainer launch(final Context ctx)
     {
         final ClusteredServiceContainer clusteredServiceContainer = new ClusteredServiceContainer(ctx);
-        AgentRunner.startOnThread(clusteredServiceContainer.serviceAgentRunner, ctx.threadFactory());
+        if (null != clusteredServiceContainer.serviceAgentRunner)
+        {
+            AgentRunner.startOnThread(clusteredServiceContainer.serviceAgentRunner, ctx.threadFactory());
+        }
+        else
+        {
+            clusteredServiceContainer.serviceAgentInvoker.start();
+        }
 
         return clusteredServiceContainer;
+    }
+
+    /**
+     * Get the {@link AgentInvoker} for the clustered service if it is running in invoker mode, otherwise null.
+     *
+     * @return the {@link AgentInvoker} for the clustered service, or null if running on its own thread.
+     */
+    public AgentInvoker serviceAgentInvoker()
+    {
+        return serviceAgentInvoker;
     }
 
     /**
@@ -172,6 +200,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
     public void close()
     {
         CloseHelper.close(serviceAgentRunner);
+        CloseHelper.close(serviceAgentInvoker);
     }
 
     /**
@@ -781,6 +810,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
         private SnapshotDurationTracker snapshotDurationTracker;
         private VersionValidator appVersionValidator;
         private boolean ownsAeronClient;
+        private boolean useAgentInvoker = false;
 
         private ClusteredService clusteredService;
         private Runnable terminationHook;
@@ -930,6 +960,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
                         .errorHandler(errorHandler)
                         .subscriberErrorHandler(RethrowingErrorHandler.INSTANCE)
                         .awaitingIdleStrategy(YieldingIdleStrategy.INSTANCE)
+                        .useConductorAgentInvoker(useAgentInvoker)
                         .epochClock(epochClock)
                         .clientName(serviceName));
 
@@ -1632,6 +1663,30 @@ public final class ClusteredServiceContainer implements AutoCloseable
         {
             this.ownsAeronClient = ownsAeronClient;
             return this;
+        }
+
+        /**
+         * Should an {@link AgentInvoker} be used for running the {@link ClusteredServiceContainer} rather than
+         * run it on a thread with an {@link AgentRunner}. When enabled the owned {@link Aeron} client (if created)
+         * uses a conductor agent invoker, and {@link #serviceAgentInvoker()} must be driven by the caller.
+         *
+         * @param useAgentInvoker use an {@link AgentInvoker} for running the {@link ClusteredServiceContainer}?
+         * @return this for a fluent API.
+         */
+        public Context useAgentInvoker(final boolean useAgentInvoker)
+        {
+            this.useAgentInvoker = useAgentInvoker;
+            return this;
+        }
+
+        /**
+         * Should an {@link AgentInvoker} be used for running the {@link ClusteredServiceContainer}?
+         *
+         * @return true if the {@link ClusteredServiceContainer} will be run with an {@link AgentInvoker}.
+         */
+        public boolean useAgentInvoker()
+        {
+            return useAgentInvoker;
         }
 
         /**
