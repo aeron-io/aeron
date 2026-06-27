@@ -124,10 +124,7 @@ import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
 import static io.aeron.cluster.ConsensusModule.Configuration.ELECTION_STATUS_INTERVAL_DEFAULT_NS;
 import static io.aeron.cluster.ConsensusModule.Configuration.ELECTION_TIMEOUT_DEFAULT_NS;
 import static io.aeron.cluster.ConsensusModule.Configuration.LEADER_HEARTBEAT_INTERVAL_DEFAULT_NS;
-import static io.aeron.cluster.ConsensusModule.Configuration.LEADER_HEARTBEAT_TIMEOUT_DEFAULT_NS;
 import static io.aeron.cluster.ConsensusModule.Configuration.SERVICE_ID;
-import static io.aeron.cluster.ConsensusModule.Configuration.STARTUP_CANVASS_TIMEOUT_DEFAULT_NS;
-import static io.aeron.cluster.ConsensusModule.Configuration.TERMINATION_TIMEOUT_DEFAULT_NS;
 import static io.aeron.cluster.service.Cluster.Role.FOLLOWER;
 import static io.aeron.test.cluster.ClusterTests.LARGE_MSG;
 import static io.aeron.test.cluster.ClusterTests.PAUSE;
@@ -161,12 +158,17 @@ public final class TestCluster implements AutoCloseable
     {
         if (SystemUtil.isWindows())
         {
-            LEADER_HEARTBEAT_TIMEOUT_NS = LEADER_HEARTBEAT_TIMEOUT_DEFAULT_NS;
+            // Windows CI runners are slower, so use larger timeouts than other platforms for liveness
+            // headroom; but keep them well below the per-test @InterruptAfter budgets. In particular the
+            // startup canvass timeout must be small enough that a node restarting with only a bare quorum
+            // present (so it can never be a unanimous candidate and must wait out the canvass deadline before
+            // nominating) still elects within the test budget.
+            LEADER_HEARTBEAT_TIMEOUT_NS = TimeUnit.SECONDS.toNanos(4);
             LEADER_HEARTBEAT_INTERVAL_NS = LEADER_HEARTBEAT_INTERVAL_DEFAULT_NS;
             ELECTION_TIMEOUT_NS = ELECTION_TIMEOUT_DEFAULT_NS;
             ELECTION_STATUS_INTERVAL_NS = ELECTION_STATUS_INTERVAL_DEFAULT_NS;
-            STARTUP_CANVASS_TIMEOUT_NS = STARTUP_CANVASS_TIMEOUT_DEFAULT_NS;
-            TERMINATION_TIMEOUT_NS = TERMINATION_TIMEOUT_DEFAULT_NS;
+            STARTUP_CANVASS_TIMEOUT_NS = LEADER_HEARTBEAT_TIMEOUT_NS * 3;
+            TERMINATION_TIMEOUT_NS = LEADER_HEARTBEAT_TIMEOUT_NS;
         }
         else
         {
