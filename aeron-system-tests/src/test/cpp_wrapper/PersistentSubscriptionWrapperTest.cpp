@@ -43,7 +43,11 @@ static const std::string UNICAST_CHANNEL = "aeron:udp?endpoint=localhost:2000";
 static const std::int32_t STREAM_ID = 1000;
 static const std::int32_t REPLAY_STREAM_ID = -5;
 static const std::int32_t ONE_KB = 992;
-static const std::string CONTROL_REQUEST_CHANNEL = "aeron:udp?endpoint=localhost:8010";
+// Use control ports dedicated to this test binary. Sharing the common 8010/8011 with the archive system
+// tests (aeron_archive_test / archiveTestW) means that if one of those tests is killed by the CTest timeout
+// it can leave an orphaned media driver holding the port, causing this test to fail to bind with
+// "Address already in use" and masking the real culprit.
+static const std::string CONTROL_REQUEST_CHANNEL = "aeron:udp?endpoint=localhost:8200";
 static const std::string CONTROL_RESPONSE_CHANNEL = "aeron:udp?endpoint=localhost:0";
 
 class PersistentSubscriptionWrapperTestBase
@@ -328,7 +332,7 @@ TEST_F(PersistentSubscriptionWrapperTest, shouldCycleThroughMultipleLiveReplayTr
         const std::string aeronDir2 = aeron::Context::defaultAeronPath() + "_2";
         const std::string archiveDir2 = std::string(ARCHIVE_DIR) + AERON_FILE_SEP + "driver2";
         TestArchive archive2(aeronDir2, archiveDir2, std::cout,
-            "aeron:udp?endpoint=localhost:8011", "aeron:udp?endpoint=localhost:0", 2);
+            "aeron:udp?endpoint=localhost:8201", "aeron:udp?endpoint=localhost:0", 2);
 
         aeron::Context aeronCtx2;
         aeronCtx2.aeronDir(aeronDir2);
