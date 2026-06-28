@@ -38,6 +38,13 @@ public class DefaultAuthenticatorSupplier implements AuthenticatorSupplier
     public static final Authenticator DEFAULT_AUTHENTICATOR = new DefaultAuthenticator();
 
     /**
+     * Default constructor.
+     */
+    public DefaultAuthenticatorSupplier()
+    {
+    }
+
+    /**
      * Gets the singleton instance {@link #DEFAULT_AUTHENTICATOR} which authenticates all connection requests
      * immediately.
      *

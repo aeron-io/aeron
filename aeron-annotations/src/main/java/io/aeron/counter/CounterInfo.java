@@ -58,6 +58,8 @@ public class CounterInfo implements Serializable
     }
 
     /**
+     * Create the CounterInfo given a name.
+     *
      * @param name the name of the counter
      */
     public CounterInfo(final String name)

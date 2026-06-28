@@ -1,10 +1,426 @@
 = Aeron Releases
 
-== 1.50.0 (????-??-??)
+== 1.52.0 (Unreleased)
 
 === New & Noteworthy
 
-* **[Breaking]** Remove deprecated standalone C{plus}{plus} API. The C{plus}{plus} Wrapper API should be used instead.
+* **[Driver]** Move log buffer creation/removal out of the `conductor` thread.
++
+Creating and removing log buffers can take a long time (on the order of hundreds of milliseconds for large term buffers).
+Previously this was done on the driver conductor thread which meant a stall whenever such operation was executed. This
+stall then was impacting end to end latency of the message flows, because conductor was not updating the stream counters
+while stalled (i.e. `pub-lmt`).
++
+Now these operation are executed on the background thread (`NativeResourceAgent`) and the driver conductor is no longer
+blocked by them.
+
+* **Breaking:** **[Driver]** `AsyncExecutor` configuration changes.
++
+`AsyncExecutor` was renamed to `NativeResourceAgent` along side the corresponding configuration options (i.e.
+`aeron.driver.async.executor.idle.strategy` was renamed to `aeron.driver.native.resource.agent.idle.strategy`).
++
+`NativeResourceAgent` is now tied to the threading mode of the media driver, i.e. it is no longer possible to
+enable/disable it separately (`aeron.driver.async.executor.enabled` was removed). When thread mode is configured to:
++
+--
+** `DEDICATED`/`SHARED_NETWORK` - it will run on a dedicated thread.
+** `SHARED`/`INVOKER` - it will run on the `conductor` thread.
+--
++
+Thread name was changed from `aeron-executor` to `aeron-md-nra`.
+
+* **[Archive]** Truncating a recording now stops any concurrent replays of that recording before proceeding with the
+deletion of segments.
+
+* **[Event Logging]** The event debug logging when writing to a file allows for files to be rolled automatically based
+on the max configured file size (`aeron.event.log.file.max.length`). By default max file size is unlimited, i.e. file
+rollover is disabled.
+
+* **Breaking:** **[Cluster]** Removed unused method `ConsensusModuleExtension#supportedSchemaId()` that gave the
+impression as if there could only be a single schema supported by an extension. This is a breaking change in an
+internal API.
+
+* **Breaking:** **[Cluster]** Introduce `VersionValidator` interface and use it within the `ConsensusModule` and
+`ClusteredServiceContainer` in place of the `AppVersionValidator` allowing for custom versions. `AppVersionValidator`
+remains the default.
+
+* **[Driver/C]** CPU affinity for driver threads is now cgroup aware. The user supplied CPU number for each thread can
+be an offset into the CPU set for the processes current CPU group.
+
+* **[Driver/C]** CPU affinity is now supported for the background thread used for longer operations, e.g. name
+resolution.
+
+* **Breaking:** **[Driver/C]** `aeron_spsc_rb_writev` was removed.
+
+=== Changelog
+
+* **[Driver/C]** Set default `resolver_bootstrap_neighbor_resolution_interval` correctly. (https://github.com/aeron-io/aeron/issues/2035[#2035])
+* **[Client]** Refresh the recording descriptor before attempting the replay again if a Persistent Subscription loses its
+image during a replay. (https://github.com/aeron-io/aeron/pull/2037[#2037])
+* **[C]** Improved support for AddressSanitizer builds and testing on Windows. (https://github.com/aeron-io/aeron/pull/2022[#2022])
+* **[Client/Java]** Fixed potential integer overflow of `blockLengthLimit` in `Image.blockPoll` and `Image.rawPoll`. (https://github.com/aeron-io/aeron/pull/2036[#2036])
+* **[Client/C]** Remove `aeron_archive_persistent_subscription.h` from the package as it has no public API.
+* **[C/C{plus}{plus} Wrapper]** Add PowerPC 64-bit (`ppc64le`) support to C and C++ clients. (https://github.com/aeron-io/aeron/pull/2060[#2060])
+* **[Cluster]** Added `VersionValidator` interface. (https://github.com/aeron-io/aeron/pull/2059[#2059])
+* **[Driver/C]** Fix `session-id` checks for network publications.
+* **[Driver/C]** Remove `aeron_spsc_rb_writev` and restore compilation on Windows.
+* **[Driver]** Do not re-resolve control/endpoint addresses if the corresponding endpoint is not active (i.e. closing).
+* **[Driver]** Fix a race condition when there are only spies and spies simulate connection, i.e. adding/removing spies
+mutated the array that the sender thread was iterating over.
+* **[Java]** Upgrade to `Gradle` 9.6.0.
+* **[Java]** Upgrade to `JUnit` 6.1.0.
+* **[Java]** Upgrade to `ByteBuddy` 1.18.9.
+* **[Java]** Upgrade to `Shadow` 9.4.2.
+* **[Java]** Upgrade to `ASM` 9.10.1.
+
+== 1.51.0 (2026-04-28)
+
+=== New & Noteworthy
+
+* **[Archive]** Added `PersistentSubscriptions` to Aeron Archive for all languages (Java, C++ and C).
++
+https://github.com/aeron-io/aeron/wiki/Persistent-Subscriptions[Persistent Subscriptions] is an alternative to
+ReplayMerge with IPC and Spy support, plus a fallback mechanism for slow consumers.
+
+* **Breaking:** **[Driver]** Async executor is now a single-threaded `Agent`.
++
+Previously async executor could be configured to run on `N` threads (Java only). Now it can either be enabled in which
+case it runs on a dedicated `aeron-executor` thread or disabled (i.e. runs on the `conductor` thread instead).
++
+Removed the `aeron.driver.async.executor.threads` property and the corresponding
+configuration API (i.e. `MediaDriver.Context.asyncTaskExecutorThreads(int)`,
+`MediaDriver.Context.asyncTaskExecutor(Executor)`).
++
+Added new configuration properties:
++
+** `aeron.driver.async.executor.enabled` - to enable/disable async executor (defaults to `true`).
+** `aeron.driver.async.executor.idle.strategy` - to set idle strategy for an async executor when enabled. Defaults to
+sleeping for 1ms when idle.
+
+* **Breaking:** **[Java Driver]** The name resolver interface has been changed. The `NameResolver` has had the lifecycle
+methods (`init`/`doWork`) removed to narrow the interface to the resolution methods. A new interface `NameResolverAgent`
+has been introduce to include the `Agent` lifecycle methods. Custom name resolvers will need to implement this interface
+to be managed correctly by the driver and be passed into the `MediaDriver.Context`. Default methods are provided so
+implementing is not required.
+
+* **Breaking:** **[Driver/C]** The name resolver interface has been changed. The C name resolver now requires an
+additional `on_start` lifecycle method.
+
+* **Breaking:** **[Driver/C]** The `aeronmd` binary now requires the aeron client library (`libaeron.so`/`aeron.dll`)
+to be present when running. This is because previously the library code was included twice.  Once in the driver library
+(`libaeron_driver.so`/`aeron_driver.dll`) and once in executable. The logging relies on a thread local symbol and without
+this change it could be duplicated in some situations. The client library should reside in the same location as the
+driver library when being deployed.
+
+* **Breaking:** **[Cluster]** The classes `RecordingLog.Snapshot`, `RecordingLog.Log` and `Recording.RecoveryPlan` have
+been changed from flat classes to records, so the data accessors are now methods and not fields.
+
+* **Breaking:** **[Cluster]** Removed the `ClusteredServiceContainer.Context.standbySnapshotsEnabled` method. This
+configuration is no longer required. It is controlled `ConsensusModule.Context.standbySnapshotsEnabled` configuration
+option and is propagated across as this needs to be consistent across both agents.
+
+* **Breaking:** **[Client/C]** Removed `async` parameter from the `aeron_on_new_publication_t` and
+`aeron_async_add_subscription_t` callbacks.
++
+NOTE: These callbacks should only be used to signal resource availability, i.e. the polling of the async struct should
+be done on the application thread.
+
+* **Breaking:** **[Client/C]** Removed `aeron_async_cmd_free` method.
++
+[NOTE]
+====
+Async structs (e.g. `aeron_async_add_subscription_t`) are freed automatically when:
+
+* poll call (e.g. `aeron_async_add_subscription_poll`) completes, i.e. resource is created, errored or timed out.
+* resource creation is canceled without polling (e.g. `aeron_async_add_subscription_cancel`).
+* resource removal operation is invoked without polling (e.g. `aeron_async_remove_subscription`).
+* `aeron_client_t` is closed.
+====
+
+* **Breaking:** **[Client/Java]** Removed `registrationId` parameter from the `io.aeron.Counter` constructor.
+
+* **[Breaking]**: **[Driver/Java/C]** Reject SMs that out of bounds, i.e. whose position is more than half a term
+ahead or behind of the sender position. (https://github.com/aeron-io/aeron/pull/1971[#1971])
+
+* **[Breaking]**: **[Client/C{plus}{plus} Wrapper]** Remove `close()` method from `Publication/ExclusivePublication`,
+i.e. the underlying `aeron_publication_t/aeron_exclusive_publication_t` will be closed when the corresponding C{plus}{plus}
+object is destroyed.
+
+* **[Client/C]**: Added API to cancel async add operations:
+** `aeron_async_add_subscription_cancel`
+** `aeron_async_add_publication_cancel`
+** `aeron_async_add_exclusive_publication_cancel`
+** `aeron_async_add_counter_cancel`
+
+* **[Client/C]**: Added API to remove resources using their registration IDs:
+** `aeron_async_remove_subscription`
+** `aeron_async_remove_publication`
+** `aeron_async_remove_exclusive_publication`
+** `aeron_async_remove_counter`
+
+=== Known issues
+
+* [Driver/C] Bootstrap neighbor resolution is disabled out of the box due to default value not being set.
++
+TIP: The workaround is to explicitly set `aeron.driver.resolver.bootstrap.neighbor.resolution.interval` explicitly, e.g.
+`-Daeron.driver.resolver.bootstrap.neighbor.resolution.interval=10s` or
+`AERON_DRIVER_RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL=10s`.
+
+=== Changelog
+* **[C]** Removed `aeron_async_cmd_free` API, i.e. free async structs automatically when:
+** poll call completes, i.e. resource is created, errored or timed out.
+** resource creation is canceled without polling.
+** resource removal operation is invoked without polling.
+** `aeron_client_t` is closed.
+* **[C]** Try to resolve host name as IPv4 first before attempting an IPv6 resolution. (https://github.com/aeron-io/aeron/issues/2020[#2020])
+* **[C]** Align C build output on Windows with the Unix build.
+* **[C]** Added `AERON_RB_IS_CAPACITY_VALID` upper bound check. (https://github.com/aeron-io/aeron/pull/2017[#2017])
+* **[C]** Drain pending remove cmds on conductor close to avoid a possible leak. (https://github.com/aeron-io/aeron/pull/2008[#2008])
+* **[C]** Fix bug `aeron_spsc_rb try_claim` when full. (https://github.com/aeron-io/aeron/pull/2015[#2015])
+* **[C]** Async executor agent refactoring. (https://github.com/aeron-io/aeron/pull/2014[#2014])
+* **[CI]** Add a once per day push to the maven central snapshot repository.
+* **[Driver/Java/C]** Driver name resolver configuration. (https://github.com/aeron-io/aeron/pull/2013[#2013])
+* **[Driver/C]** Align Driver Name Resolver with Java implementation. (https://github.com/aeron-io/aeron/pull/2012[#2012])
+* **[C]** Add pthread-style TLS destructor support on Windows. (https://github.com/aeron-io/aeron/pull/2009[#2009])
+* **[Driver/C]** Fix misleading SO_SNDBUF reference in rcvbuf validation error message. (https://github.com/aeron-io/aeron/pull/2011[#2011])
+* **[Driver/C]** Add per-bootstrap neighbor counters. (https://github.com/aeron-io/aeron/pull/2010[#2010])
+* **[Java]** Make `AsyncExecutor` an `Agent`, i.e. remove executor thread pool and replace with a single-threaded agent.
+Move ownership of the `NameResolver` to `AsyncExecutor` to make all access to `NameResolver` single-threaded.
+* **[Checkstyle]** Allow inline return tags in the Javadoc comments.
+* **[C]** implement `aeron_image_release`. (https://github.com/aeron-io/aeron/pull/2005[#2005])
+* **[C]** Fixed leak of async connect commands if connection was closed before completing. (https://github.com/aeron-io/aeron/pull/2007[#2007])
+* **[C]** Fixed possible leak of ClientConductorIsLengthSufficientTest test parameters when the test is skipped. (https://github.com/aeron-io/aeron/pull/2006[#2006])
+* **[Java]** Refactor `Counter` class, i.e. define both `registrationId` and `correlationId` to allow for better handling
+of the static counters.
+* **[C/Client]** Make static counter creation operation cancellable. Use a dedicated resource type
+`AERON_CLIENT_MANAGED_RESOURCE_TYPE_STATIC_COUNTER` for static counters. Add `correlation_id` to
+`aeron_counter_constants_t`. Validate async resource type before cancelling an operation.
+* **[Driver/Java]** Add per-bootstrap neighbor counters. (https://github.com/aeron-io/aeron/pull/2004[#2004])
+* **[Driver/Java]** Update DriverNameResolver to align more with C code. (https://github.com/aeron-io/aeron/pull/1995[#1995])
+* **[C/Client]** Removed `async` parameter from the `aeron_on_new_publication_t` and `aeron_async_add_subscription_t` callbacks.
+* **[Driver/Java]** Separate NameResolver interface and create NameResolverAgent interface. (https://github.com/aeron-io/aeron/pull/2001[#2001])
+* **[C]** Fix use-after-free issue when removing pending close resource fails to submit delete command to the media driver,
+i.e. perform a single shot close action just like a normal close command would.
+* **[C]** Correctly decode errors in aeron_delete_file on Windows.
+* **[PS1]** Update the configuration of the VsDevShell in the cppbuild.ps1 script.
+* **[Driver/C]** Introduce a start life cycle for name resolvers.
+* **[C]** aeron_idle_strategy_backoff_state_init_args error message fix. (https://github.com/aeron-io/aeron/pull/2000[#2000])
+* **[C]** Added check for `!is_closed` in poll functions to prevent potentially accessing free'd memory. (https://github.com/aeron-io/aeron/pull/1998[#1998])
+* **[C]** Notify `on_complete` callbacks for pending close operations when client conductor is closed.
+* **[C{plus}{plus} Wrapper]** Rely on the guaranteed close of the underlying `aeron_subscription_t` to call the `on_close` callback to
+free the memory.
+* **[C]** Make `AERON_CLIENT_ERROR_` codes positive to match the rest of Aeron-specific error codes. Handle client error
+codes when setting errors, i.e. write user-friendly message.
+* **[C]** Fix `AERON_PUBLICATION_LINK_INIT` wrong var names. (https://github.com/aeron-io/aeron/pull/1999[#1999])
+* **[C]** Return early if `aeron_driver_name_resolver_t` allocation fails.
+* **[Driver/C]** Change driver name resolver to all defined bootstrap neighbors rather than one at a time.
+* **[Driver/C]** Add configuration option for bootstrap neighbor resolution interval.
+* **[C]** Ensure that `aeron_subscription_t/aeron_publication_t/aeron_exclusive_publication_t/aeron_counter_t` resources
+are closed even if client conductor buffer is full.
+* **[C]** Use `AERON_CLIENT_ERROR_DRIVER_BUFFER_FULL` error code when failing to add to the driver command queue.
+* **[C]** Fixed `aeron_driver_receiver_on_remove_destination` error message. (https://github.com/aeron-io/aeron/pull/1997[#1997])
+* **[C]** Fix `aeron_diver_uri_publication_params` term_offset. (https://github.com/aeron-io/aeron/pull/1996[#1996])
+* **[Java]** Always perform reentrancy checks when removing Subscription/Publication.
+* **[Driver/Java]** When re-resolving bootstrap addresses, resolve all of them at once.
+* **[Driver/Java]** Driver Name Resolution, publish self name/address frames to all bootstrap neighbors. (https://github.com/aeron-io/aeron/pull/1993[#1993])
+* **[C]** More hashmap allocation cleanups.
+* **[C]** Fixes `aeron_array_to_ptr_hash_map_rehash` memory leak. (https://github.com/aeron-io/aeron/pull/1992[#1992])
+* **[C]** Fix `aeron_receive_channel_endpoint_elicit_setup work_count` bug. (https://github.com/aeron-io/aeron/pull/1991[#1991])
+* **[C]** Fix `use-after-free` bug whereby an async resource could be deleted before
+`on_new_publication/exclusive_publication/subscription` was invoked, because the resource was released too early.
+* **[C]** Handle `aeron_broadcast_receiver_receive` errors and hide OS errors when invoking `error_handler`, i.e. only error
+codes defined by Aeron will be passed to the handler and OS error codes will be replaced with `AERON_ERROR_CODE_GENERIC_ERROR`.
+* **[C]** Use common error handling to delete partially created `aeron_send_channel_endpoint_t`.
+* **[C]** Prevent segfault when deleting a partially constructed `aeron_receive_channel_endpoint_t`.
+* **[C]** Fixes aeron_receive_channel_endpoint_create memory leak. (https://github.com/aeron-io/aeron/pull/1990[#1990])
+* **[C]** Allow `aeron_data_packet_dispatcher_close` to be called even if `aeron_data_packet_dispatcher_init` fails.
+* **[C]** Fix DNR config parsing default values.
+* **[Driver/C]** Implement additional configuration options for the driver name resolver.
+* **[C]** Fixes `aeron_udp_destination_tracker_manual_add_destination` wrong arg order. (https://github.com/aeron-io/aeron/pull/1989[#1989])
+* **[Driver/C]** Use `CMSG_LEN` correctly for `recvmsg/recvmmsg`.
+* **[Driver/Java]** Make `DriverConductor#onAddSendDestination` and `DriverConductor#onRemoveSendDestination` use async DNS.
+(https://github.com/aeron-io/aeron/pull/1987[#1987])
+* **[Archive]** `ArchiveException` build error messages for persistent subscriptions. (https://github.com/aeron-io/aeron/pull/1986[#1986])
+* **[C]** Add API for cancelling async add operations and removing by registration IDs. (https://github.com/aeron-io/aeron/pull/1974[#1974])
+* **[Driver/Java]** Implement additional configuration options for the driver name resolver.
+* **[Archive]** Added `INVALID_POSITION` error code. (https://github.com/aeron-io/aeron/pull/1980[#1980])
+* **[C]** Fix out of bounds access issue when setting client name of the max allowed size (i.e. `AERON_COUNTER_MAX_CLIENT_NAME_LENGTH`).
+* **[C]** Truncate thread name if longer than 15 characters due to `pthread_setname_np` limit on Linux.
+* **[Driver/C]** Moved some client source files out of the `aeron_driver` source list and linked `aeron_driver` to `libaeron`
+to use its copy of the source files instead. (https://github.com/aeron-io/aeron/pull/1972[#1972])
+* **[C]** Improved Windows implementation of `aeron_dlopen/aeron_dlsym`. (https://github.com/aeron-io/aeron/pull/1976[#1976])
+* **[C]** `aeron_connect` for MSCV unwanted printf. (https://github.com/aeron-io/aeron/pull/1979[#1979])
+* **[C]** Fix `aeron_udp_channel_transport_sendv` NULL address dereference. (https://github.com/aeron-io/aeron/pull/1982[#1982])
+* **[C]** `aeron_udp_channel_transport_init` `recv_fd` init bug. (https://github.com/aeron-io/aeron/pull/1978[#1978])
+* **[C]** Fixes a memory leak in the `aeron_udp_channel_transport_close`. (https://github.com/aeron-io/aeron/pull/1977[#1977])
+* **[C/C{plus}{plus} Wrapper]** Added support for C/C{plus}{plus} builds using MSVC on Windows ARM. (https://github.com/aeron-io/aeron/pull/1975[#1975])
+* **[Client/Java/C]** Use `aeron-client` as a name for client conductor thread, i.e. shorter name to fit the 15 characters
+limit of the `pthread_setname_np` API.
+* **[Java]** Align exception messages across C and Java.
+* **[Driver/C]** Set error status for failed CnC file checks instead just logging them.
+* **[C]** Return length of the channel in case no wildcard port is set on the subscription.
+* **[Driver/C]** Socket can leak with multicast. (https://github.com/aeron-io/aeron/pull/1973[#1973])
+* **[C]** Fallback to env variables for `JAVA_HOME` and friends during build.
+* **[Java/C]** Strict SM handling. (https://github.com/aeron-io/aeron/pull/1971[#1971])
+* **[Cluster]** Recording log validator. (https://github.com/aeron-io/aeron/pull/1969[#1969])
+* **[Cluster]** Fixed newline formatting in cluster tool help text. (https://github.com/aeron-io/aeron/pull/1968[#1968])
+* **[Cluster]** Rollback the consensus module leader's next committed session id. (https://github.com/aeron-io/aeron/pull/1918[#1918])
+* **[C]** Handle `AERON_CLIENT_ERROR_BUFFER_FULL` when sending driver termination command.
+* **[C]** Sanitise build options are compiler-dependent.
+* **[Archive]** Correct warning for `compact` command.
+* **[C{plus}{plus} Wrapper]** Fix forward definition of the `Aeron` class and reorder constructor arguments.
+* **[C{plus}{plus} Wrapper]** Remove `close()` method from `Publication/ExclusivePublication`, i.e. the underlying C publications wil
+ be closed when the corresponding C{plus}{plus} object is destroyed.
+* **[C{plus}{plus} Wrapper]** Fix pending `AsyncDestination` memory leak when not polled to completion.
+* **[C{plus}{plus} Wrapper]** Handle a case when a media driver dies/is stopped leading to the underlying C-managed resources to being
+closed, i.e. manually delete `AsyncAddSubscription` instance since no `on_close_complete` callback will be executed in
+this case.
+* **[C{plus}{plus} Wrapper]** Ensure that `Aeron` instance is deleted after all of its children are deleted. Deleting `Aeron` before
+its children leads to a segfault due to use-after-free of C-managed memory.
+* **[C{plus}{plus} Wrapper]** Remove internal locks from `ExclusivePublication` and `Subscription`.
+* **[C]** Do not block when adding/removing handlers if client conductor was closed (i.e. when media driver terminates).
+* **[C]** Fix blocking logic of the `aeron_add_xxx_handler/aeron_remove_xxx_handler` methods, i.e. do not exit early if
+client command queue is empty and instead retry until command is added and confirmed or timeout occurs.
+* **[C{plus}{plus} Wrapper]** Free `AsyncAddSubscription` associated with a `Subscription` when it is destroyed. Ensure that any
+dangling `AsyncAddSubscription` instances are freed by the `Aeron` when it is destroyed, i.e. if
+`aeron_subscription_close` didn't run (because `aeron_client` was closed).
+* **[C]** Close image before invoking unavailable handler when closing subscription.
+* **[Driver/C]** Avoid double freeing memory when setting new idle strategy programmatically.
+* **[C{plus}{plus} Wrapper]** Set idle strategy on the underlying `aeron_context` using `m_idleSleepDuration`.
+* **[C]** Allow setting idle strategy on the `aeron_context`.
+* **[Cluster]** Update SnapshotReplication to allow accessing snapshot currently being replicated.
+* **[Cluster]** Add better message for `ClusteredServiceAgent` startup exception.
+* **[Cluster]** Expose package private `replicationId` in `SnapshotReplication`.
+* **[Cluster]** `ConsensusModuleAgent` idle strategy usage. (https://github.com/aeron-io/aeron/pull/1959[#1959])
+* **[Cluster]** Allow a delay before processing standby snapshot notifications.
+* **[Driver/C]** Fix memory leak whereby async commands submitted to the async executor were not freed upon driver termination.
+(https://github.com/aeron-io/aeron/pull/1960[#1960])
+* **[Java]** Fix all Javadoc warnings produced by JDK24.
+* **[Cluster]** Delay processing of standby snapshot notifications until after the commit position has passed the snapshot
+log position.
+* **[Cluster]** Use `ConsensusModule#acceptStandbySnapshots` to reject standby snapshot notifications if node is not
+configured for accepting standby snapshots. (https://github.com/aeron-io/aeron/pull/1957[#1957])
+* **[C]** Remove `aeron_executor_task_do_complete` and simplify interactions when return queue is not used.
+* **[C]** Remove explicit node management from `aeron_linked_queue`.
+* **[C]** Use agent runner to implement `aeron_executor`.
+* **[C]** Fix agent runner state assignment.
+* **[Cluster]** Add `isStandby` to `Join` Log message.
+* **[Cluster]** Cluster backup to ask for latest snapshot.
+* **[Client/C{plus}{plus} Wrapper]** Do not use locks for adding/removing destinations to `ExclusivePublication` and
+`Subscription` since these classes are not threadsafe.
+* **[Client/C]** Allow setting idle strategy on the `aeron_context`.
+* **[Client/C{plus}{plus} Wrapper]** Set idle strategy on the underlying `aeron_context` using configured
+`idleSleepDuration`.
+* **[Client/C]** Close image before invoking unavailable handler when closing subscription.
+* **[Client/C]** Client conductor should process one command at a time.
+* **[Client/C]** Fix blocking logic of the `aeron_add_xxx_handler/aeron_remove_xxx_handler` methods, i.e. do not exit
+early if client command queue is empty and instead retry until command is added and confirmed or timeout occurs.
+* **[Client/C{plus}{plus} Wrapper]** Ensure that `Aeron` instance is deleted after all of its children are deleted.
+* **[Client/C{plus}{plus} Wrapper]** Handle a case when a media driver dies/is stopped leading to the underlying
+C-managed resources being closed, i.e. fix `AsyncAddSubscription` memory leak.
+* **[Client/C{plus}{plus} Wrapper]** Fix pending `AsyncDestination` memory leak when not polled to completion.
+* **[Driver/C]** Avoid double freeing memory when setting new idle strategy programmatically.
+* **[C]** Fix `gradlew` invocation from `cmake`, i.e. fix `aeron-all.jar` generation when running inside CLion.
+* **[Samples/Java]** Remove deprecated `UseBiasedLocking` JVM option.
+* **[Cluster]** Backup query responses are now resolved using the most recent entry in the `RecordingLog` instead of
+being derived from the `RecoveryPlan`.
+* **[Cluster]** When a `ClusteredServiceAgent` fails to start, e.g. from an exception during snapshot load, the
+`ConsensusModuleAgent` will also terminate with an error in the log. Previously this would hang indefinitely.
+(https://github.com/aeron-io/aeron/pull/1963[#1963])
+* **[Samples/Java]** Added a sample for ReplayMerge.  (https://github.com/aeron-io/aeron/pull/1956[#1956])
+* **[Java]** Avoid bind conflicts when removing and adding a subscription to the same channel.
+(https://github.com/aeron-io/aeron/pull/1955[#1955])
+* **[Driver/Java]** Close sockets on the conductor thread just like the C driver.
+* **[Driver/C]** Fix memory leak whereby async commands submitted to the async executor were not freed upon driver
+termination. (https://github.com/aeron-io/aeron/pull/1960[#1960])
+* **[C{plus}{plus} Wrapper]** Cleanup pending async resources when `Aeron` client is closed, i.e. prevent a memory leak.
+* **[C]** Refactor async resource registration in `aeron_client_conductor` to ensure proper cleanup if resource cannot
+be added to the client conductor.
+* **[Client]** Fixed a bug in the controlled fragment assemblers where their handler after aborting on a fragmented
+message would receive on subsequent calls for that message a header with invalid position and fragmented frame length.
+* **[Driver/C]** Fix data corruption resulting from `aeron_append_block` ignoring `term_offset`.  (https://github.com/aeron-io/aeron/issues/1944[#1944])
+* **[Driver]** Process pending loss without delays in case of an unreliable subscriber (`reliable=false`), i.e. do not
+apply NAK delay if no recovery will be attempted. (https://github.com/aeron-io/aeron/issues/1946[#1946])
+* **[Driver/Java]** Now replies with a `RESOURCE_TEMPORARILY_UNAVAILABLE` error when the endpoint is mid-closing (as in the C driver) when reuse would be unsafe and new endpoint/socket creation would lead to a bind error.
+* **[Cluster]** Now retries when a `RESOURCE_TEMPORARILY_UNAVAILABLE` error is encountered when creating an egress subscription.
+* **[Cluster]** Enforce a maximum service count of 10. This limit has always existed in Cluster
+but is now explicitly enforced via the ClusteredServiceContainer.Configuration.MAX_SERVICE_COUNT setting.
+* **[Cluster]** Restores old behaviour around single-node cluster liveness timeouts. (https://github.com/aeron-io/aeron/pull/1947[#1947])
+* **[Cluster]** Fix single-node cluster leader re-election which could happen after a stall or a time jump.
+* Increase default cycle thresholds to 100ms as the previous value of 1ms was too short and their counts kept ticking up under normal conditions.
+* **[Archive]** Fix `CATALOG_RESIZE` debug logging.
+* **[C]** Renamed `aeron_archive_proxy_set_control_esssion_id` to `aeron_archive_proxy_set_control_session_id`.
+* **[Java]** Upgrade to https://github.com/aeron-io/agrona/releases/tag/2.4.1[Agrona 2.4.1].
+* **[Java]** Upgrade to https://github.com/aeron-io/simple-binary-encoding/releases/tag/1.38.1[SBE 1.38.1].
+* **[Java]** Upgrade to `Gradle` 9.5.0.
+* **[Java]** Upgrade to `ByteBuddy` 1.18.8.
+* **[Java]** Upgrade to `Mockito` 5.23.0.
+* **[Java]** Upgrade to `JUnit` 6.0.3.
+* **[Java]** Upgrade to `Checkstyle` 12.3.1.
+* **[Java]** Upgrade to `Shadow` 9.4.1.
+* **[Java]** Upgrade to `Versions` 0.54.0.
+* **[C]** Upgrade to `CMake` 4.3.2.
+
+== 1.50.4 (2026-03-20)
+* **[Breaking]**: **[Client/C{plus}{plus} Wrapper]** Remove `close()` method from `Publication/ExclusivePublication`,
+i.e. the underlying `aeron_publication_t/aeron_exclusive_publication_t` will be closed when the corresponding C{plus}{plus}
+object is destroyed.
+* **[Client/C{plus}{plus} Wrapper]** Do not use locks for adding/removing destinations to `ExclusivePublication` and
+`Subscription` since these classes are not threadsafe.
+* **[Client/C]** Allow setting idle strategy on the `aeron_context`.
+* **[Client/C{plus}{plus} Wrapper]** Set idle strategy on the underlying `aeron_context` using configured
+`idleSleepDuration`.
+* **[Client/C]** Close image before invoking unavailable handler when closing subscription.
+* **[Client/C]** Client conductor should process one command at a time.
+* **[Client/C]** Fix blocking logic of the `aeron_add_xxx_handler/aeron_remove_xxx_handler` methods, i.e. do not exit
+early if client command queue is empty and instead retry until command is added and confirmed or timeout occurs.
+* **[Client/C{plus}{plus} Wrapper]** Ensure that `Aeron` instance is deleted after all of its children are deleted.
+* **[Client/C{plus}{plus} Wrapper]** Handle a case when a media driver dies/is stopped leading to the underlying
+C-managed resources being closed, i.e. fix `AsyncAddSubscription` memory leak.
+* **[Client/C{plus}{plus} Wrapper]** Fix pending `AsyncDestination` memory leak when not polled to completion.
+* **[Driver/C]** Avoid double freeing memory when setting new idle strategy programmatically.
+* **[C]** Fix `gradlew` invocation from `cmake`, i.e. fix `aeron-all.jar` generation when running inside CLion.
+* **[Samples/Java]** Remove deprecated `UseBiasedLocking` JVM option.
+* **[Java]** Upgrade to `Gradle` 9.4.1.
+* **[Java]** Upgrade to `Shadow` 9.4.0.
+
+== 1.50.3 (2026-03-13)
+* **[Java]** Avoid bind conflicts when removing and adding a subscription to the same channel.
+(https://github.com/aeron-io/aeron/pull/1955[#1955])
+* **[Driver/Java]** Close sockets on the conductor thread just like the C driver.
+* **[Driver/C]** Fix memory leak whereby async commands submitted to the async executor were not freed upon driver
+termination. (https://github.com/aeron-io/aeron/pull/1960[#1960])
+* **[C{plus}{plus} Wrapper]** Cleanup pending async resources when `Aeron` client is closed, i.e. prevent a memory leak.
+* **[C]** Refactor async resource registration in `aeron_client_conductor` to ensure proper cleanup if resource cannot
+be added to the client conductor.
+* **[Java]** Upgrade to `Gradle` 9.4.0.
+* **[Java]** Upgrade to `ByteBuddy` 1.18.7.
+* **[Java]** Upgrade to `Mockito` 5.23.0.
+* **[Java]** Upgrade to `Shadow` 9.3.2.
+
+== 1.50.2 (2026-02-27)
+
+* **[Client]** Fixed a bug in the controlled fragment assemblers where their handler after aborting on a fragmented
+message would receive on subsequent calls for that message a header with invalid position and fragmented frame length.
+* **[Archive/C]** Fix typo in `aeron_archive_proxy_set_control_esssion_id` function name.
+* **[Driver/C]** Fix data corruption resulting from `aeron_append_block` ignoring `term_offset`.  (https://github.com/aeron-io/aeron/issues/1944[#1944])
+* **[Driver]** Process pending loss without delays in case of an unreliable subscriber (`reliable=false`), i.e. do not
+apply NAK delay if no recovery will be attempted. (https://github.com/aeron-io/aeron/issues/1946[#1946])
+* **[Cluster]** Restores old behaviour around single-node cluster liveness timeouts. (https://github.com/aeron-io/aeron/pull/1947[#1947])
+* **[Java]** Upgrade to `ByteBuddy` 1.18.5.
+* **[Java]** Upgrade to `JUnit` 6.0.3.
+* **[Java]** Upgrade to `Checkstyle` 12.3.1.
+
+== 1.50.1 (2026-02-05)
+
+* **[Cluster]** Fix single-node cluster leader re-election which could happen after a stall or a time jump.
+* Increase default cycle thresholds to 100ms as the previous value of 1ms was too short and their counts kept ticking up under normal conditions.
+* **[Archive]** Fix `CATALOG_RESIZE` debug logging.
+
+== 1.50.0 (2026-01-16)
+=== New & Noteworthy
+
+* **[Breaking]**: **[C{plus}{plus}]** Remove deprecated standalone C{plus}{plus} API. The C{plus}{plus} Wrapper API should be used instead.
 
 * The `interface` channel parameter now accepts network interface names in the `\{interface-name}` format, e.g. `interface=\{eth0}`.
 +
@@ -18,14 +434,65 @@ It's also possible to specify the port used with the resolved address by using t
 
 === Changelog
 
-* **[Cluster]** Unconditionally set reliable=true on the ingress subscription to ensure that the ingress stream is
-reliable.
+* **[Archive]** Do not set `session-id` on the replay channel if response channels are used to avoid `session-id` clash.
+* **[Archive]** Default `AeronArchive.Context.Archive` instance is configured with `RethrowingErrorHandler` for Subscriptions.
+* **[Archive]** Allow asynchronously connecting to Archive using AgentInvokers.
+* **[Archive]** Format size and duration parameters when using `ChannelUriStringBuilder` to create full channel URI.
+* **[Archive]** Use the configured control term buffer length for the replication client instead of hardcoding `64k`.
+* **[Archive/Java/C/C{plus}{plus} Wrapper]** Make message retry attempts for `aeron_archive` configurable. (Java PR: https://github.com/aeron-io/aeron/pull/1885[#1885])
+* **[Archive]** Ensure that errors from `ReplaySession` are both captured in the error log and sent to the control session. Improve error messages.
+* **[Cluster]** Prevent fast follower node from consuming log ahead of the commit position when majority lags behind. (https://github.com/aeron-io/aeron/pull/1898[#1898])
+* **[Cluster]** Prevent infinite loop while awaiting service ACKs if services terminated/crashed.
+* **[Cluster]** Add reason to the `STATE_CHANGE` event. Always quote `reason` value across all events.
+* **[Cluster]** Default `AeronCluster.Context.Archive` instance is configured with `RethrowingErrorHandler` for Subscriptions.
+* **[Cluster]** Add support for `AgentInvoker`/`Aeron.conductorAgentInvoker` to `AeronCluster#asyncConnect`.
+* **[Cluster]** Add log event for `Vote` message, i.e. a response to `RequestVote`.
+* **[Cluster]** Handle quorum commit position going backwards.
+* **[Cluster]** Make default Cluster consensus channel use UDP term length of the media driver instead of assigning `term-length=64k`. With the Aeron defaults this increases the term length from `64KB` to `16MB`.
+* **[Cluster]** Unconditionally set `reliable=true` on the ingress subscription to ensure that the ingress stream is reliable.
 * **[Cluster]** Ignore unknown schema messages (e.g. from Sequencer) in `EgressPoller`.
-* **[Archive]** Ensure that errors from `ReplaySession` are both captured in the error log and sent to the control session.
+* **[Cluster]** Make `AeronCluster.asyncConnect` fully asynchronous by using `Aeron#asyncAddExclusivePublication/asyncAddPublication` API when dealing with redirect requests in case no valid existing leader publication was found.
+* **[Cluster]** Reuse existing leader ingress publication if it is still valid when receiving redirect response.
+* **[Cluster]** Only consider active members when computing `hasQuorumAtPosition`. We now always await for the active quorum of nodes o reach target position. Remove `hasVotersAtPosition` since it is no longer used.
+* **[Cluster]** Refactor `isCandidate` checks and document why we must consider all existing members when doing so. We cannot check only the "active" nodes since that breaks the nomination phase whereby the nodes will stop proposing themselves as candidates once `timeOfLastAppendPositionNs` stops advancing.
+* **[Cluster]** Only consider active Cluster members when computing the quorum position.
+* **[Cluster]** Consistently update follower position, i.e. always set `logPosition`, `leadershipTermId` and `timeOfLastAppendPositionNs` together. Add missing update of the follower info upon receiving `CanvassPosition`.
+* **[Cluster]** Increment snapshot counter after updating snapshot duration tracker to avoid a race in a test.
+* **[Java/C]** Allow to specify network interface name in the interface channel parameter. (https://github.com/aeron-io/aeron/pull/1901[#1901])
+* **[Driver]** Do not append threading mode to the name resolver cycle counters.
+* **[C]** Fix threshold formatting + format threshold info for the name resolver cycle tracker.
+* **[C]** Remove duty cycle threshold limit of 1 hour.
+* **[C]** Format duty cycle threshold before adding to the driver counters.
+* **[Java]** Use `SystemUtil#formatDuration` to format `threshold` for the duty cycle tracker counters.
+* **[C]** Set `ownerId` for each stream counter created via client command (e.g. `ADD_PUBLICATION`).
+* **[Java]** Set `ownerId` for each stream counter created via client command (e.g. `ADD_PUBLICATION`).
+* **[Java]** Add Publication type to the counters and log buffer metadata, i.e. `pub-pos` counter now has a suffix (`(concurrent)` or `(exclusive)` depending on the type) and log buffer metadata contains a new field `type` (`unit8`) at offset 497 which can have values `0` (concurrent publication), `1` (exclusive publication) or `2` (publication image).
+* **[C]** Add Publication type to the counters and log buffer metadata, i.e. `pub-pos` counter now has a suffix (`(concurrent)` or `(exclusive)` depending on the type)  and log buffer metadata contains a new field `is_exclusive_publication` (`unit8`) at offset 497.
+* **[Driver/C]** Increase sender/receiver IO vector capacity and publication max messages per send to `4` from `2`.
+* **[C]** Do not throttle sends to one per call if short sends are encountered.
+* **[Driver/C/Java]** Add `EF_VI`, `VMA`, `ATS`, `DPDK` and `Selector` counter types. Synchronize Java and C counter definitions.
+* **[C]** Add `aeron_format_duration_ns`.
+* **[C]** Add `aeron_format_size64`.
+* **[C]** Refactor duration and size parsing.
+* **[C]** Fixes data races on AERON_GET_ACQUIRE and AERON_SET_RELEASE usages. (https://github.com/aeron-io/aeron/pull/1902[#1902])
+* **[C]** Fixes broken atomic instructions. (https://github.com/aeron-io/aeron/pull/1905[#1905])
+* **[C]** Replace `__asm__ volatile` with `__asm__ __volatile__` just like in Linux kernel.
+* **[C]** aeron_atomic64_gcc_x86_64.h acquire/release fixes (https://github.com/aeron-io/aeron/pull/1904[#1904])
+* **[C]** Optimized register allocation aeron_atomic64_gcc_x86_64h (https://github.com/aeron-io/aeron/pull/1910[#1910])
+* **[C]** Fix aeron_log_buffer.c mem leak (https://github.com/aeron-io/aeron/pull/1907[#1907])
+* **[C]** Fixed aeron_agent_init role_name bugs. (https://github.com/aeron-io/aeron/pull/1908[#1908])
+* **[C]** Do not resolve `endpoint` with ephemeral port for MDS subscription. Copy original channel as-is if no resolution is performed.
+* **[Java]** Do not resolve `endpoint` with ephemeral port if MDS is used.
+* **[Java]** Parse channel lazily when `tryResolveChannelEndpointPort` is called.
+* **[Java]** Fix `Subscription#tryResolveChannelEndpointPort` when no addresses exist, i.e. return `null` if active address is not yet available. Also cache results and avoid doing any work if `endpoint` is not defined or does not contain a port zero.
+* **[Java]** Fixed StatusIndicator deprecated method usage. (https://github.com/aeron-io/aeron/pull/1895[#1895])
+* **[Java]** Replaced the AtomicCounter.getWeak usages by getPlain. (https://github.com/aeron-io/aeron/pull/1893[#1893])
+* **[Java]** Replaced Counter.getAndAddOrdered by getAndAddRelease. (https://github.com/aeron-io/aeron/pull/1894[#1894])
+* **[Java]** Add per-stream counters to `StreamStat` and extract counter name from label instead of relying on static mapping by type.
 * **[C]** fix: double free in `aeron_archive_context_t`. (https://github.com/aeron-io/aeron/pull/1897[#1897])
 * **[C]** Make `aeron_subscription_image_release` and `aeron_subscription_image_retain` no op if image is not found in the
 current image list, i.e. handle a case of `on_unavailable_image` being called and attempting to retain an image that
-was already removed (i.e. C++ Wrapper)).
+was already removed (i.e. C{plus}{plus} Wrapper)).
 * **[C]** invoke the client when in `aeron_archive_replay_merge_close`. (https://github.com/aeron-io/aeron/pull/1873[#1873])
 * **[C]** Handle `aeron_archive_encoded_credentials_t` being `NULL` as well as `data` field being `NULL`, i.e. treat both as empty credentials.
 * **[C]** Fix race condition in `aeron_archive_client` reentrancy check, i.e. first acquire lock and then do the check. Use
@@ -45,11 +512,6 @@ leaking memory.
 * **[Driver/C]** Use `aeron_interface_parse_and_resolve` to resolve `aeron.driver.resolver.interface` parameter, i.e.
 skip the `aeron_find_interface` checks. This aligns the implementation with the `DriverNameResolver` in Java. Fix
 filtering out of self entries, i.e. use full name matching instead of a prefix match.
-* **[C]** Do not resolve `endpoint` with ephemeral port for MDS subscription. Copy original channel as-is if no
-resolution is performed.
-* **[Java]** Fix `Subscription#tryResolveChannelEndpointPort` when no addresses exist, i.e. return `null` if active
-address is not yet available. Avoid doing any work if `endpoint` is not defined (IPC, MDS, response channel) or does not
-contain a port zero.
 * **[C]** Add `aeron_is_frame_valid` method.
 * **[C/Java]** Add all missing counter type constants for the premium components.
 * **[C]** Do not truncate frames longer than 1408 bytes when logging, i.e. allow up to `AERON_MAX_UDP_PAYLOAD_LENGTH`
@@ -65,15 +527,24 @@ upon failure, update tests to reflect activity timestamp changes during startup 
 * **[C]** Add ability to counter number of digits in a 32-bit number (`aeron_digit_count`).
 * **[C]** Link `aeron-client` against `libbsd`.
 * **[Java]** Delete `DeduplicateTask`, i.e. use built-in capabilities of the Shadow plugin instead.
-* **[Java]** Upgrade to https://github.com/aeron-io/agrona/releases/tag/2.3.2[Agrona 2.3.2].
-* **[Java]** Upgrade to https://github.com/aeron-io/simple-binary-encoding/releases/tag/1.36.2[SBE 1.36.2].
-* **[Java]** Upgrade to `ByteBuddy` 1.18.2.
-* **[Java]** Upgrade to `ASM` 9.9.
-* **[Java]** Upgrade to `JUnit` 6.0.1.
+* **[Java]** Upgrade to https://github.com/aeron-io/agrona/releases/tag/2.4.0[Agrona 2.4.0].
+* **[Java]** Upgrade to https://github.com/aeron-io/simple-binary-encoding/releases/tag/1.37.1[SBE 1.37.1].
+* **[Java]** Upgrade to `ByteBuddy` 1.18.3.
+* **[Java]** Upgrade to `ASM` 9.9.1.
+* **[Java]** Upgrade to `JUnit` 6.0.2.
 * **[Java]** Upgrade to `Mockito` 5.21.0.
 * **[Java]** Upgrade to `Checkstyle` 12.3.0.
-* **[Java]** Upgrade to `Shadow` 9.3.0.
+* **[Java]** Upgrade to `Shadow` 9.3.1.
 * **[C]** Upgrade to `CMake` 4.2.1.
+
+== 1.49.5 (2026-06-19)
+
+* **[Driver]** Fix a race condition when there are only spies and spies simulate connection, i.e. adding/removing spies
+mutated the array that the sender thread was iterating over.
+
+== 1.49.4 (2026-06-19)
+
+WARNING: **DO NOT USE: Not all artifacts were released!**
 
 == 1.49.3 (2025-12-15)
 
@@ -82,7 +553,7 @@ upon failure, update tests to reflect activity timestamp changes during startup 
 * **[C]** fix double free in `aeron_archive_context_t`. (https://github.com/aeron-io/aeron/pull/1897[#1897])
 * **[C]** Make `aeron_subscription_image_release` and `aeron_subscription_image_retain` no op if image is not found in the
 current image list, i.e. handle a case of `on_unavailable_image` being called and attempting to retain an image that
-was already removed (i.e. C++ Wrapper)).
+was already removed (i.e. C{plus}{plus} Wrapper)).
 * **[C]** invoke the client when in `aeron_archive_replay_merge_close`. (https://github.com/aeron-io/aeron/pull/1873[#1873])
 * **[C]** Handle `aeron_archive_encoded_credentials_t` being `NULL` as well as `data` field being `NULL`, i.e. treat both as empty credentials.
 * **[C]** Fix race condition in `aeron_archive_client` reentrancy check, i.e. first acquire lock and then do the check. Use
@@ -312,6 +783,10 @@ bound to reduce the chance of the returning publication not being connected and 
 * **[Java]** Upgrade to `Versions` 0.53.0.
 * **[C]** Upgrade to `CMake` 4.1.2.
 * **[C]** Upgrade to `HDR Histogram` 0.11.9.
+
+== 1.48.11 (2026-06-18)
+
+* **[Driver]** Do not re-resolve control/endpoint addresses if the corresponding endpoint is not active (i.e. closing).
 
 == 1.48.10 (2025-11-21)
 
@@ -943,7 +1418,6 @@ Fixed in https://github.com/aeron-io/aeron/releases/tag/1.47.3[1.47.3].
 * **[Java]** Do not refine response channel for a ClusterSession during a replay or loading of a snapshot.
 * **[C]** Check subscribed sessions before removing a stream interest before removing by stream_id.
 * **[build]** remove .CMakeLists.txt.swp
-* Archive client <<1636,C and C{plus}{plus} wrapper>>
 * **[Java]** Assert that synchronous ControlSession calls are only allowed from a conductor thread.
 * **[Java]** Fix race with new Image becoming available while reject errors are asserted.
 * **[Java]** Add debug wrapper for `messageTimeout`.
@@ -1128,9 +1602,9 @@ Aeron currently has two C{plus}{plus} APIs, a pure C{plus}{plus} version and a w
 * **[C/C{plus}{plus}]** Pass custom optimization level to the MSVC compiler.
 * **[Build]** Download and install CMake as part of the build process to ensure latest version of CMake.
 * **[C]** Tidy up aeron_reallocf to work correctly on allocation failure.
-* **[C Driver]** Expose try_connect_stream method for use from within ATS.
-* **[C Driver]** Remove unconnected stream message.
-* **[C Driver]** Fix string format for AERON_SET_ERROR arguments.
+* **[Driver/C]** Expose try_connect_stream method for use from within ATS.
+* **[Driver/C]** Remove unconnected stream message.
+* **[Driver/C]** Fix string format for AERON_SET_ERROR arguments.
 * **[C/C{plus}{plus}/Java]** Add per channel untethered window limit and resting timeouts (#1588)
 * **[C{plus}{plus} Wrapper]** Add findByTypeIdAndRegistrationId to C{plus}{plus} Wrapper.
 * **[Java Driver]** Pre-start async task executor threads to avoid inheriting affinity from the conductor thread.
@@ -1166,7 +1640,7 @@ Aeron currently has two C{plus}{plus} APIs, a pure C{plus}{plus} version and a w
 * **[Java Cluster]** Remove default for cluster services directory configuration and leave resolution of that value until conclude.
 * **[Java Archive]** Use publication.availableWindow instead of looking up the pubLmt counter.
 * **[Java Cluster]** First cut at consensus module extension integration.
-* **[C Driver]** Fixes for fixed loss interceptor used for testing.
+* **[Driver/C]** Fixes for fixed loss interceptor used for testing.
 * **[Java Cluster]** Remove unused params.
 * **[Java Archive]** Separate lines for debugging.
 * **[Java Cluster]** Provide access to archive and aeron for consensus module extension.
@@ -1200,7 +1674,7 @@ Aeron currently has two C{plus}{plus} APIs, a pure C{plus}{plus} version and a w
 * **[Java Samples]** Fix StreamStat mapping of `sub-pos` which had a join position included in the channel uri and prevented it to be merged with the rest of stream positions. Also ensure that longest channel uri is printed.
 * **[Java Cluster]** Extract ReplicationParams for RecordingReplication to allow for more flexible configuration.
 * **[Java Cluster]** Use response channels for log replication during the election.
-* **[C Driver]** Handle a case when `getifaddrs` call fails.
+* **[Driver/C]** Handle a case when `getifaddrs` call fails.
 * **[Java Cluster]** Provide access to cluster client session from extension via an interface to restrict usage.
 * **[Java Cluster]** Add source response channel to MultipleRecordingReplication.
 * **[Java Cluster]** Simplify hash code for RecordingLog.
@@ -1328,29 +1802,29 @@ Fixed in https://github.com/aeron-io/aeron/releases/tag/1.44.1[1.44.1].
 
 === Changelog
 
-* **[Java/C Driver]** Support configuration flag for experimental features (#1577)
-* **[C Driver]** Fix buffer overflow when updating counter labels.
+* **[Java/Driver/C]** Support configuration flag for experimental features (#1577)
+* **[Driver/C]** Fix buffer overflow when updating counter labels.
 * **[Java ConsensusModule]** Log cluster session failures.
 * **[Java/C/C{plus}{plus} Client/Driver]** Add ability to set name on the Aeron client. (#1581)
 * **[Java Driver]** Async DNS resolution. (#1564)
-* **[C Driver]** async DNS resolution for the C media driver (#1566)
+* **[Driver/C]** async DNS resolution for the C media driver (#1566)
 * **[Java CluserBackup]** Have cluster backup start from a specific position (#1579)
 * **[Java ConsensusModule]** Introduce clustered service specific SnapshotDurationTracker (#1575)
 * **[Java Cluster]** Allow setting ClusterClock via `aeron.cluster.clock` system property.
 * **[Java Driver]** Call force on CnC file when doing clean shutdown and signalling ready.
-* **[C Driver]** Add `aeron_msync` and use to flush CnC file contents upon start and shutdown.
+* **[Driver/C]** Add `aeron_msync` and use to flush CnC file contents upon start and shutdown.
 * **[Java Cluster/Archive]** Add *MarkFile.force() method to flush any pending updates to disc and use it for signalling readiness and when closing the mark file.
 
 * **[C/Java Driver]** Dissect frames and commands using key/value format.
 * **[C/Java Driver]** Use nanosecond resolution for logging messages.
-* **[C Driver]** Install pre-/post-interceptors logging interceptors if the incoming/outgoing chains are not NULL. Change logging order for outgoing events to log before executing command to match Java and log plain messages before encryption.
+* **[Driver/C]** Install pre-/post-interceptors logging interceptors if the incoming/outgoing chains are not NULL. Change logging order for outgoing events to log before executing command to match Java and log plain messages before encryption.
 * **[Java Driver]** Fix `FRAME_IN/FRAME_OUT` event logging, i.e. allow redefinition of previously loaded classes.
-* **[C Driver]** Scope logging functions with a "log" struct. (#1556)
-* **[C Driver]** Add C driver logging for send_nak_message and resend (#1553)
-* **[C Driver]** Track pending setups for cases when notified of unconnected messages. Only allow pending setups for unknown interest or existing images when in ACTIVE state. Handle unconnected streams by sending setup eliciting SMs.
-* **[C Driver]** Fix potential leak in when adding stream interest to subscription by session.
+* **[Driver/C]** Scope logging functions with a "log" struct. (#1556)
+* **[Driver/C]** Add C driver logging for send_nak_message and resend (#1553)
+* **[Driver/C]** Track pending setups for cases when notified of unconnected messages. Only allow pending setups for unknown interest or existing images when in ACTIVE state. Handle unconnected streams by sending setup eliciting SMs.
+* **[Driver/C]** Fix potential leak in when adding stream interest to subscription by session.
 * **[Java Samples]** Improve response channels samples.
-* **[C Driver]** Align min flow control implementation with Java + allocate memory only if a receiver is added.
+* **[Driver/C]** Align min flow control implementation with Java + allocate memory only if a receiver is added.
 * **[Java ConsensusModule]** Use fixed 64 byte alignment that does not depend on the CACHE_LINE_LENGTH and is backwards compatible.
 * **[Java ConsensusModule]** Fix IndexOutOfBoundsException when recording entry straddles page size.
 * **[Java ConsensusModule]** Add leadership term id counter to ease debugging.
@@ -1372,11 +1846,11 @@ Fixed in https://github.com/aeron-io/aeron/releases/tag/1.44.1[1.44.1].
 * **[Java Archive Client]** Use `archiveId` for looking up the RecordingPos counters. (#1571)
 * **[C{plus}{plus}/Java Archive Client]** Add getMaxRecordedPosition to AeronArchive to get the length of a recording if it is active or stopped.
 * **[Java/C{plus}{plus} Archive Client]** Update Aeron Archive control protocol minor version.
-* **[C Driver]** Align implementation of retransmit handler with Java driver.
+* **[Driver/C]** Align implementation of retransmit handler with Java driver.
 * **[Java Cluster]** Set isLeader appropriately on cluster member when listing. Issue #1569
 * **[Java Driver]** Remove unused sourceAddress from PublicationImage.
 * **[Java Driver]** Allow the RetransmitHandler to prevent retransmissions where the term offsets don't match but NAK'd region is wholly subsumed by an existing retransmission.
-* **[C Driver]** Per stream nak delay (#1570)
+* **[Driver/C]** Per stream nak delay (#1570)
 * **[Java Driver]** Add support for per channel configuration of nak-delay.
 * **[Java Driver]** Add fixed loss interceptor for testing (#1551)
 * **[Java Driver]** Suppress retransmits of the offset of the NAK is in the range of any active retransmits.
@@ -1385,7 +1859,7 @@ Fixed in https://github.com/aeron-io/aeron/releases/tag/1.44.1[1.44.1].
 * **[C{plus}{plus} Wrapper Client]** Prevent sanitiser errors when shutting down subscription and client in quick succession (#1549)
 * **[Java Archive]** Validate replay completely before creating a replay Publication.
 * **[C Samples]** add response_client/server sample apps (#1559)
-* **[C Driver]** check for response parameters when adding destinations (#1565)
+* **[Driver/C]** check for response parameters when adding destinations (#1565)
 * **[Java Driver]** add validation when control-mode=response (#1563)
 * **[C Utility]** Add support for PUT requests using aeron_http_util. (#1561)
 * **[Build]** Set aeronmd rpath in the generated package. (#1557)
@@ -1397,15 +1871,15 @@ Fixed in https://github.com/aeron-io/aeron/releases/tag/1.44.1[1.44.1].
 == 1.43.0 (2023-12-19)
 
 * **[Driver]** Support specifying endpoints and tags in the same URI
-* **[C Driver]** Add reference id to counters.
+* **[Driver/C]** Add reference id to counters.
 * **[Driver]** Set reference id of sub-pos to registration id of the image/publication.
 * **[C Client]** Fix aeron_print_counters.
 * **[Java Driver]** Touch ups for RetransmitHandler.
-* **[C Driver]** Put enum events in order.
-* **[C Driver]** Remove reliance of max event num in enum for driver agent.
-* **[C Driver]** Fix signed comparisons.
-* **[C Driver]** Declare void param.
-* **[C Driver]** Keep loop types consistent.
+* **[Driver/C]** Put enum events in order.
+* **[Driver/C]** Remove reliance of max event num in enum for driver agent.
+* **[Driver/C]** Fix signed comparisons.
+* **[Driver/C]** Declare void param.
+* **[Driver/C]** Keep loop types consistent.
 * **[Java Driver]** Add a clamp on retransmit length.
 * **[Java Client]** Fix Aeron.getSubscription(long) JavaDoc.
 * **[Java Driver]** Encapsulate retransmit multiples constants.
@@ -1415,16 +1889,16 @@ Fixed in https://github.com/aeron-io/aeron/releases/tag/1.44.1[1.44.1].
 * **[C Client]** Populate the client image subscriber_position_id.
 * **[Cluster]** Improve error message when cluster fails to connect.
 * Add detailed version information to Aeron error counters for all components. Include release version and Git SHA.
-* **[C Driver]** Fix capture of spy subscription channels so that image availability callbacks include the correct subscription URI.
+* **[Driver/C]** Fix capture of spy subscription channels so that image availability callbacks include the correct subscription URI.
 * **[C]** Use -fno-omit-frame-pointer on Linux native builds so provide easy and accurate profiling with tools like perf.
 * Add `+guilty` to version information if using a build that has changes that have not been committed to git.
 * **[C Client]** Correctly handle the case where an image is used across multiple subscriptions. Including ensuring the unavailability callbacks a delivered correctly.
 * **[Archive]** Exclude invalid recordings from ArchiveTool describe and add a `describe-all` command which shows valid and invalid recordings.
-* **[C Driver]** Introduce a parameters structure that can be used to carry transport configuration information when initialising a udp_channel_transport. Also pass MTU information through the bindings to allow for improved validation of within the DPDK bindings.
+* **[Driver/C]** Introduce a parameters structure that can be used to carry transport configuration information when initialising a udp_channel_transport. Also pass MTU information through the bindings to allow for improved validation of within the DPDK bindings.
 * **[Driver]** Only include timestamps on packets that carry the DATA_BEGIN_FLAG to prevent accidental corruption of packets when the timestamp is being carried within the payload.
 * **[Cluster]** Remove the need for MDS subscription on cluster ingress by having a separate IPC ingress subscription when required. Plus await sockets closing on the log subscription in parallel with the other activities when preparing for an election.
 * **[Cluster]** A leader should assert its leadership when a follower requests a vote and the leader has a more up-to-date log rather than re-initialising an election which could result in log truncation.
-* **[C Driver]** Ensure loop iteration index is used when setting timestamps for publication.
+* **[Driver/C]** Ensure loop iteration index is used when setting timestamps for publication.
 * **[Cluster]** Log event for unknown session close in service container rather than throw and exception.
 * **[Cluster]** Throw exception if a member id is not found in the cluster backup's configuration.
 * **[Cluster]** Avoid list creation when throwing an exception.
@@ -1441,13 +1915,13 @@ Fixed in https://github.com/aeron-io/aeron/releases/tag/1.44.1[1.44.1].
 * **[Driver]** Pass in setup triggering SMs into flow control so that tags can be matched for controlling setup sender limiting.
 * **[C]** Fix client image reference counting by use the appropriate literals to ensure that 64-bit parameters are used.
 * **[Cluster]** Call unexpectedTermination on incompatible app versions in the ConsensusModuleAgent.
-* **[C Driver]** Implement low storage warnings for the C driver.
+* **[Driver/C]** Implement low storage warnings for the C driver.
 * **[Java Driver]** Backoff from sending when a short send it detected by polling for status messages as a means to provide a little breathing room for underlying stack.
 * **[Cluster]** Detect when log subscription in an election has an error, such as bind exception, throw an exception giving context and restart election.
 * **[Cluster]** Close log subscription after prepareForNewLeadership.
 * **[Cluster]** Introduce SnapshotDurationTracker to track the time taken for snapshots in the Cluster.
 * **[Java]** Rename aeron-version module to aeron-annotations.
-* **[C Driver]** add max_retransmission_length.
+* **[Driver/C]** add max_retransmission_length.
 * **[Java]** Remove suffix from version.
 * **[Cluster]** Stop log recording even if an image has not been picked up and no need to try stop the recording by identity if stopped by log subscription id.
 * **[Cluster]** Increase visibility from private to package-protected for a number of ClusterTool utility methods.
@@ -1456,15 +1930,15 @@ Fixed in https://github.com/aeron-io/aeron/releases/tag/1.44.1[1.44.1].
 * **[C{plus}{plus}]** Use static constexpr for declaring constants.
 * **[C/C{plus}{plus}]** Use functions to return version information to enable runtime version checks against the media driver.
 * **[C{plus}{plus} Wrapper Client]** Allow to access the underlying client of the C{plus}{plus} wrapper.
-* **[C Driver]** Fix error reporting for aeron_port_manager.
-* **[C Driver]** Implement timestamp capturing for the recvmsg path.
-* **[C Driver]** Switch sender poller to poll for a single SM, i.e. do the `recvmsg` syscall.
-* **[C Driver]** Add additional validation for frame_length on status messages.
-* **[C Driver]** Fix error format strings when configuring sockets for the udp transport.
+* **[Driver/C]** Fix error reporting for aeron_port_manager.
+* **[Driver/C]** Implement timestamp capturing for the recvmsg path.
+* **[Driver/C]** Switch sender poller to poll for a single SM, i.e. do the `recvmsg` syscall.
+* **[Driver/C]** Add additional validation for frame_length on status messages.
+* **[Driver/C]** Fix error format strings when configuring sockets for the udp transport.
 * **[C/C{plus}{plus}]** Remove date/time from the version files for a reproducible build.
 * **[C]** Fix line ordering bug and add missing return statements and error appending.
 * **[Driver]** Allow publication image flow control under runs if they are heartbeats so a stream can be kept connected and to get a more accurate EOS when using MDS.
-* **[C Driver]** Use correct type for array length calculation, fix #1539.
+* **[Driver/C]** Use correct type for array length calculation, fix #1539.
 * **[Driver]** Track EOS position per image connection for MDS.
 * **[C{plus}{plus} Wrapper]** Fix maxMessageLength.
 * **[C{plus}{plus} Wrapper]** Fix FragmentAssembler.
@@ -1490,13 +1964,13 @@ Fixed in https://github.com/aeron-io/aeron/releases/tag/1.44.1[1.44.1].
 * Add port manager to C and Java drivers to allow for a limited range of ports that can be used when subscription endpoint addresses and publication control addresses specify a port of `0`. This can make network access configuration simpler (Driver).
 * Wait for end of stream event on the log instead of the counter becoming unavailable before entering into a new Election (Cluster).
 * Close log publications before trying to stop recording to speed up graceful leader step down (Cluster).
-* Ignore resting subscription positions when calculating join position or draining driver entities when tethering is being used (C Driver).
+* Ignore resting subscription positions when calculating join position or draining driver entities when tethering is being used (Driver/C).
 * Extensions points to support Standby Snapshots (Cluster).
 * Ensure that the `clusterDirectoryName` field is synced with the `clusterDir` configuration parameter during conclude in `ConsensusModule` and `ClusterBacker` (Cluster).
 * Cluster tutorial updates (Documentation).
 * Extract invocation of background work in the service container.
-* Do not fail if Aeron directory exists, but the CnC file does not (C Driver).
-* Use `aeron_errcode` to get the latest error code when reporting problems creating the Aeron directory (C Driver).
+* Do not fail if Aeron directory exists, but the CnC file does not (Driver/C).
+* Use `aeron_errcode` to get the latest error code when reporting problems creating the Aeron directory (Driver/C).
 * Don't let a bounded replay go beyond counter value to stop position so commit position can be used for replay (Archive).
 * Add addition example Authentication and Authorisation services (Archive/Cluster).
 * Add additional documentation to specify details when Authorisation is used (Archive/Cluster).
@@ -1509,12 +1983,12 @@ Fixed in https://github.com/aeron-io/aeron/releases/tag/1.44.1[1.44.1].
 * Trigger graceful leader close election based on recording stop signal (Archive).
 * Add end of stream position to Subscriptions (Client).
 * Allow for relocatable mark files for the `ConsensusModule`, `ClusteredServiceContainer`, and `ClusterBackup` (Cluster).
-* Move close operations on MDS transports on the conductor not the receiver thread (C Driver).
+* Move close operations on MDS transports on the conductor not the receiver thread (Driver/C).
 * Allow preparing for new leadership to be less serial to reduce election time (Cluster).
 * Async removal of destinations as log adaptor closes when preparing for election (Cluster).
-* Fix CMD_OUT_ERROR log format (C Driver).
+* Fix CMD_OUT_ERROR log format (Driver/C).
 * Fix `aeron_err_clear()` (C).
-* C driver handle untethered subscriptions correctly, ensure that tethering behaviour matches Java driver (C Driver).
+* C driver handle untethered subscriptions correctly, ensure that tethering behaviour matches Java driver (Driver/C).
 * Fix name in toString (Java Client).
 * Improve error message (C{plus}{plus} Archive Client).
 * Clean up Apple M1 compilation. Move loss reporter function into compilation unit. Add pragmas to account for unused but set variables (C).
@@ -1547,8 +2021,8 @@ Fixed in https://github.com/aeron-io/aeron/releases/tag/1.44.1[1.44.1].
 * On snapshot of PendingServiceMessageTracker, check to see if the buffer is empty and the nextServiceSessionId is lower than what it should be. Correct this and log an error that follower may not have executed the service IPC logic deterministically (Cluster).
 * Include the recording position in the debug log when replicate session state changes (Archive).
 * Don't cool down an Image that is EOS (Driver)
-* Reset eos_flagged when adding a receiver (C Driver)
-* Filter images by session id when adding new network subscriptions (C Driver)
+* Reset eos_flagged when adding a receiver (Driver/C)
+* Filter images by session id when adding new network subscriptions (Driver/C)
 * Allow the session-id of the publication used during replication to be specified to avoid session-id clashes on replication retries (Archive).
 * Allow the authorisation credentials to be specified on a replication request to support simple authentication between the destination and source archives (Archive).
 * Use custom session-ids when replicating snapshots and logs (Cluster).

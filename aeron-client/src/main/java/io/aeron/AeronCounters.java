@@ -317,6 +317,22 @@ public final class AeronCounters
     @AeronCounter
     public static final int SYSTEM_COUNTER_ID_CONTROL_PROTOCOL_VERSION = 43;
 
+    /**
+     * Counter id for status messages that are rejected while being outside the send window, i.e. being behind or
+     * ahead of the `snd-pos` by more than one term.
+     *
+     * @since 1.51.0
+     */
+    @AeronCounter
+    public static final int SYSTEM_COUNTER_ID_STATUS_MESSAGES_REJECTED = 44;
+
+    /**
+     * Counter id for failed offers to the native resource agent proxy.
+     * @since 1.51.0
+     */
+    @AeronCounter
+    public static final int SYSTEM_COUNTER_ID_NATIVE_RESOURCE_AGENT_PROXY_FAILS = 45;
+
     // Client/driver counters
     /**
      * System-wide counters for monitoring. These are separate from counters used for position tracking on streams.
@@ -446,6 +462,12 @@ public final class AeronCounters
      */
     @AeronCounter
     public static final int DRIVER_RECEIVER_NAKS_SENT_TYPE_ID = 20;
+
+    /**
+     * Counter for each bootstrap neighbors used for driver name resolution.
+     */
+    @AeronCounter
+    public static final int NAME_RESOLVER_BOOTSTRAP_NEIGHBOR_COUNTER_TYPE_ID = 21;
 
     // EF_VI counters
     /**
@@ -802,6 +824,32 @@ public final class AeronCounters
      */
     @AeronCounter
     public static final int ARCHIVE_CONTROL_SESSION_TYPE_ID = 113;
+
+    /**
+     * The type id of the {@link Counter} used for tracking the state of a {@code PersistentSubscription}.
+     */
+    @AeronCounter
+    public static final int PERSISTENT_SUBSCRIPTION_STATE_TYPE_ID = 114;
+
+    /**
+     * The type id of the {@link Counter} used for tracking the join difference of a {@code PersistentSubscription}.
+     */
+    @AeronCounter
+    public static final int PERSISTENT_SUBSCRIPTION_JOIN_DIFFERENCE_TYPE_ID = 115;
+
+    /**
+     * The type id of the {@link Counter} used for tracking the number of times a {@code PersistentSubscription} has
+     * left the live stream.
+     */
+    @AeronCounter
+    public static final int PERSISTENT_SUBSCRIPTION_LIVE_LEFT_COUNT_TYPE_ID = 116;
+
+    /**
+     * The type id of the {@link Counter} used for tracking the number of times a {@code PersistentSubscription} has
+     * joined the live stream.
+     */
+    @AeronCounter
+    public static final int PERSISTENT_SUBSCRIPTION_LIVE_JOINED_COUNT_TYPE_ID = 117;
 
     // Cluster counters
 

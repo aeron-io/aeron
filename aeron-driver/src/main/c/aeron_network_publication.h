@@ -50,6 +50,7 @@ typedef struct aeron_network_publication_stct
         int32_t refcnt;
         aeron_driver_managed_resource_t managed_resource;
         aeron_subscribable_t subscribable;
+        volatile int64_t max_spy_position;
         int64_t clean_position;
         int64_t time_of_last_activity_ns;
         int64_t last_snd_pos;
@@ -181,6 +182,9 @@ void aeron_network_publication_on_status_message(
     size_t length,
     struct sockaddr_storage *addr);
 
+bool aeron_network_publication_is_valid_status_message(
+    aeron_network_publication_t *publication, const uint8_t *buffer);
+
 void aeron_network_publication_on_error(
     aeron_network_publication_t *publication,
     int64_t destination_registration_id,
@@ -282,24 +286,6 @@ inline bool aeron_network_publication_has_sender_released(aeron_network_publicat
     AERON_GET_ACQUIRE(has_sender_released, publication->has_sender_released);
 
     return has_sender_released;
-}
-
-inline int64_t aeron_network_publication_max_spy_position(aeron_network_publication_t *publication, int64_t snd_pos)
-{
-    int64_t position = snd_pos;
-
-    for (size_t i = 0, length = publication->conductor_fields.subscribable.length; i < length; i++)
-    {
-        aeron_tetherable_position_t *tetherable_position = &publication->conductor_fields.subscribable.array[i];
-        int64_t spy_position = aeron_counter_get_acquire(tetherable_position->value_addr);
-
-        if (aeron_driver_subscribable_is_active_state(tetherable_position->state))
-        {
-            position = spy_position > position ? spy_position : position;
-        }
-    }
-
-    return position;
 }
 
 inline bool aeron_network_publication_is_accepting_subscriptions(aeron_network_publication_t *publication)

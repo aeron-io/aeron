@@ -23,15 +23,17 @@ import org.agrona.AsciiEncoding;
 final class LogUtil
 {
     private static final long NANOS_PER_SECOND = 1_000_000_000;
-    private static final long NANOS_PER_MICROSECOND = 1_000;
 
     /**
-     * Render a nanosecond timestamp to the supplied builder in the format [seconds].[microseconds].
+     * Render a nanosecond timestamp to the supplied {@link StringBuilder} in the following format.
+     * <pre>
+     *     [&lt;seconds&gt;.&lt;nanoseconds&gt;]
+     * </pre>
      *
      * @param builder       to render the timestamp too.
      * @param timestampNs   the nanosecond timestamp.
      */
-    static void appendTimestamp(final StringBuilder builder, final long timestampNs)
+    public static void appendTimestamp(final StringBuilder builder, final long timestampNs)
     {
         final long seconds = timestampNs / NANOS_PER_SECOND;
         final long nanos = timestampNs - seconds * NANOS_PER_SECOND;
@@ -45,5 +47,25 @@ final class LogUtil
         }
         builder.append(nanos);
         builder.append(']').append(' ');
+    }
+
+    /**
+     * Render a nanosecond timestamp as a string in the following format.
+     * <pre>
+     *     [&lt;seconds&gt;.&lt;nanoseconds&gt;]
+     * </pre>
+     * Note: this will allocate a string builder internally, for a low allocation option use
+     * {@link LogUtil#appendTimestamp(StringBuilder, long)}.
+     *
+     * @param timestampNs   the nanosecond timestamp.
+     * @return the string formatted nanosecond timestamp.
+     * @see #appendTimestamp(StringBuilder, long)
+     */
+    public static String renderTimestamp(final long timestampNs)
+    {
+        final StringBuilder sb = new StringBuilder();
+        appendTimestamp(sb, timestampNs);
+        sb.setLength(sb.length() - 1);
+        return sb.toString();
     }
 }

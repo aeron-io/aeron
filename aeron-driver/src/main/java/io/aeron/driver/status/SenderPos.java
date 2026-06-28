@@ -26,7 +26,7 @@ import static io.aeron.Aeron.NULL_VALUE;
 /**
  * The position the Sender has reached for sending data to the media on a session-channel-stream tuple.
  */
-public class SenderPos
+public final class SenderPos
 {
     /**
      * Type id of a sender position counter.
@@ -37,6 +37,10 @@ public class SenderPos
      * Human-readable name for the counter.
      */
     public static final String NAME = "snd-pos";
+
+    private SenderPos()
+    {
+    }
 
     /**
      * Allocate a new sender position counter for a stream.

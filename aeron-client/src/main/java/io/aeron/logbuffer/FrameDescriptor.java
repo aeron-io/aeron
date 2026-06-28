@@ -48,8 +48,12 @@ import static java.nio.ByteOrder.LITTLE_ENDIAN;
  * The (B)egin and (E)nd flags are used for message fragmentation. R is for reserved bit.
  * Both (B)egin and (E)nd flags are set for a message that does not span frames.
  */
-public class FrameDescriptor
+public final class FrameDescriptor
 {
+    private FrameDescriptor()
+    {
+    }
+
     /**
      * Set a pragmatic maximum message length regardless of term length to encourage better design.
      * Messages larger than half the cache size should be broken up into chunks and streamed.

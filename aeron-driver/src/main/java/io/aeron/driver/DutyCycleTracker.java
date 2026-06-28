@@ -39,6 +39,13 @@ public class DutyCycleTracker extends DutyCycleTrackerFields
     byte p112, p113, p114, p115, p116, p117, p118, p119, p120, p121, p122, p123, p124, p125, p126, p127;
 
     /**
+     * Default constructor.
+     */
+    public DutyCycleTracker()
+    {
+    }
+
+    /**
      * Update the last known clock time.
      *
      * @param nowNs to update with.

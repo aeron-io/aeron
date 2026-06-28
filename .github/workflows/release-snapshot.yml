@@ -1,0 +1,48 @@
+name: Release Snapshot
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.java.installations.auto-detect=false -Dorg.gradle.warning.mode=fail'
+  JAVA_VERSION: '17'
+
+jobs:
+  release-java:
+    name: Release java snapshot artifacts
+    permissions:
+      contents: read
+      packages: write
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.ref }}
+      - name: Setup java
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: 'zulu'
+          java-version: ${{ env.JAVA_VERSION }}
+      - name: Setup BUILD_JAVA_HOME & BUILD_JAVA_VERSION
+        run: |
+          java -Xinternalversion
+          echo "BUILD_JAVA_HOME=${JAVA_HOME}" >> $GITHUB_ENV
+          echo "BUILD_JAVA_VERSION=${{ env.JAVA_VERSION }}" >> $GITHUB_ENV
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # v6.1.0
+        with:
+          cache-provider: basic
+      - name: Publish with Gradle
+        run: ./gradlew publish
+        env:
+          SIGNING_GPG_SECRET_KEY: ${{ secrets.GPG_RSA_SIGN_KEY }}
+          SIGNING_GPG_PASSWORD: ${{ secrets.GPG_RSA_SIGN_KEYPASS }}
+          SONATYPE_CENTRAL_PORTAL_USERNAME: ${{ secrets.SONATYPE_CENTRAL_PORTAL_USERNAME }}
+          SONATYPE_CENTRAL_PORTAL_PASSWORD: ${{ secrets.SONATYPE_CENTRAL_PORTAL_PASSWORD }}

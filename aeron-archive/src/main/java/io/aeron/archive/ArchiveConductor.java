@@ -15,7 +15,17 @@
  */
 package io.aeron.archive;
 
-import io.aeron.*;
+import io.aeron.Aeron;
+import io.aeron.AvailableImageHandler;
+import io.aeron.ChannelUri;
+import io.aeron.ChannelUriStringBuilder;
+import io.aeron.CommonContext;
+import io.aeron.Counter;
+import io.aeron.ExclusivePublication;
+import io.aeron.Image;
+import io.aeron.Subscription;
+import io.aeron.UnavailableCounterHandler;
+import io.aeron.UnavailableImageHandler;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.client.ArchiveEvent;
 import io.aeron.archive.client.ArchiveException;
@@ -29,13 +39,26 @@ import io.aeron.exceptions.TimeoutException;
 import io.aeron.logbuffer.LogBufferDescriptor;
 import io.aeron.security.Authenticator;
 import io.aeron.security.AuthorisationService;
-import org.agrona.*;
+import org.agrona.AsciiEncoding;
+import org.agrona.CloseHelper;
+import org.agrona.ExpandableArrayBuffer;
+import org.agrona.LangUtil;
+import org.agrona.SemanticVersion;
+import org.agrona.Strings;
+import org.agrona.SystemUtil;
 import org.agrona.collections.Int2ObjectHashMap;
 import org.agrona.collections.Long2LongCounterMap;
 import org.agrona.collections.Long2ObjectHashMap;
 import org.agrona.collections.MutableLong;
 import org.agrona.collections.Object2ObjectHashMap;
-import org.agrona.concurrent.*;
+import org.agrona.concurrent.AgentInvoker;
+import org.agrona.concurrent.AgentRunner;
+import org.agrona.concurrent.AgentTerminationException;
+import org.agrona.concurrent.CachedEpochClock;
+import org.agrona.concurrent.CountedErrorHandler;
+import org.agrona.concurrent.EpochClock;
+import org.agrona.concurrent.NanoClock;
+import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.CountersReader;
 
 import java.io.File;
@@ -52,16 +75,36 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import static io.aeron.Aeron.NULL_VALUE;
-import static io.aeron.CommonContext.*;
+import static io.aeron.CommonContext.CONTROL_MODE_RESPONSE;
+import static io.aeron.CommonContext.MDC_CONTROL_MODE_PARAM_NAME;
+import static io.aeron.CommonContext.MTU_LENGTH_PARAM_NAME;
+import static io.aeron.CommonContext.SPARSE_PARAM_NAME;
+import static io.aeron.CommonContext.SPY_PREFIX;
+import static io.aeron.CommonContext.TERM_LENGTH_PARAM_NAME;
 import static io.aeron.archive.Archive.Configuration.MARK_FILE_UPDATE_INTERVAL_MS;
 import static io.aeron.archive.Archive.Configuration.RECORDING_SEGMENT_SUFFIX;
 import static io.aeron.archive.Archive.segmentFileName;
 import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
 import static io.aeron.archive.client.AeronArchive.segmentFileBasePosition;
-import static io.aeron.archive.client.ArchiveException.*;
+import static io.aeron.archive.client.ArchiveException.ACTIVE_LISTING;
+import static io.aeron.archive.client.ArchiveException.ACTIVE_RECORDING;
+import static io.aeron.archive.client.ArchiveException.ACTIVE_SUBSCRIPTION;
+import static io.aeron.archive.client.ArchiveException.EMPTY_RECORDING;
+import static io.aeron.archive.client.ArchiveException.GENERIC;
+import static io.aeron.archive.client.ArchiveException.INVALID_EXTENSION;
+import static io.aeron.archive.client.ArchiveException.INVALID_POSITION;
+import static io.aeron.archive.client.ArchiveException.MAX_RECORDINGS;
+import static io.aeron.archive.client.ArchiveException.MAX_REPLAYS;
+import static io.aeron.archive.client.ArchiveException.STORAGE_SPACE;
+import static io.aeron.archive.client.ArchiveException.UNKNOWN_RECORDING;
+import static io.aeron.archive.client.ArchiveException.UNKNOWN_REPLICATION;
+import static io.aeron.archive.client.ArchiveException.UNKNOWN_SUBSCRIPTION;
 import static io.aeron.archive.codecs.RecordingState.DELETED;
 import static io.aeron.logbuffer.FrameDescriptor.FRAME_ALIGNMENT;
-import static io.aeron.protocol.DataHeaderFlyweight.*;
+import static io.aeron.protocol.DataHeaderFlyweight.HEADER_LENGTH;
+import static io.aeron.protocol.DataHeaderFlyweight.fragmentLength;
+import static io.aeron.protocol.DataHeaderFlyweight.streamId;
+import static io.aeron.protocol.DataHeaderFlyweight.termId;
 import static java.lang.Math.max;
 import static java.lang.Math.min;
 import static java.nio.file.StandardOpenOption.READ;
@@ -709,7 +752,7 @@ abstract class ArchiveConductor
 
         if (!catalog.hasRecording(recordingId))
         {
-            final String msg = "unknown recording id: " + recordingId;
+            final String msg = ArchiveException.buildUnknownRecordingErrorMsg(recordingId);
             controlSession.sendErrorResponse(correlationId, UNKNOWN_RECORDING, msg);
             return;
         }
@@ -762,9 +805,9 @@ abstract class ArchiveConductor
         {
             if (replayPosition > limitPosition)
             {
-                final String msg = "requested replay start position=" + replayPosition +
-                    " must be less than the limit position=" + limitPosition + " for recording " + recordingId;
-                controlSession.sendErrorResponse(correlationId, msg);
+                final String msg = ArchiveException.buildReplayExceedsLimitErrorMsg(
+                    recordingId, replayPosition, limitPosition);
+                controlSession.sendErrorResponse(correlationId, INVALID_POSITION, msg);
                 return;
             }
             stopPosition = limitPosition;
@@ -801,6 +844,17 @@ abstract class ArchiveConductor
             final String msg = "replay length must be positive: replayLength=" + replayLength + ", length=" + length +
                 ", stopPosition=" + stopPosition + ", replayPosition=" + replayPosition + " for recording " +
                 recordingId;
+            controlSession.sendErrorResponse(correlationId, msg);
+            return;
+        }
+
+        final DeleteSegmentsSession deleteSegmentsSession = deleteSegmentsSessionByIdMap.get(recordingId);
+        if (null != deleteSegmentsSession &&
+            deleteSegmentsSession.maxDeletePosition() > recordingSummary.stopPosition &&
+            stopPosition > recordingSummary.stopPosition)
+        {
+            final String msg = "cannot start replay of recording " + recordingId +
+                " due to an outstanding delete operation";
             controlSession.sendErrorResponse(correlationId, msg);
             return;
         }
@@ -913,7 +967,7 @@ abstract class ArchiveConductor
         {
             try
             {
-                replayLimitCounter = new Counter(aeron.countersReader(), NULL_VALUE, limitCounterId);
+                replayLimitCounter = new Counter(aeron.countersReader(), limitCounterId);
             }
             catch (final Exception ex)
             {
@@ -951,6 +1005,13 @@ abstract class ArchiveConductor
 
     void stopAllReplays(final long correlationId, final long recordingId, final ControlSession controlSession)
     {
+        stopAllReplays(recordingId);
+
+        controlSession.sendOkResponse(correlationId);
+    }
+
+    private void stopAllReplays(final long recordingId)
+    {
         for (final ReplaySession replaySession : replaySessionByIdMap.values())
         {
             if (NULL_VALUE == recordingId || replaySession.recordingId() == recordingId)
@@ -958,8 +1019,6 @@ abstract class ArchiveConductor
                 replaySession.abort("stop all replays");
             }
         }
-
-        controlSession.sendOkResponse(correlationId);
     }
 
     /* Returns a Subscription or a String error message indicating why the subscription couldn't be acquired */
@@ -981,7 +1040,7 @@ abstract class ArchiveConductor
 
         if (!catalog.hasRecording(recordingId))
         {
-            final String msg = "unknown recording id: " + recordingId;
+            final String msg = ArchiveException.buildUnknownRecordingErrorMsg(recordingId);
             controlSession.sendErrorResponse(correlationId, UNKNOWN_RECORDING, msg);
             return msg;
         }
@@ -1005,8 +1064,7 @@ abstract class ArchiveConductor
         final DeleteSegmentsSession deleteSegmentsSession = deleteSegmentsSessionByIdMap.get(recordingId);
         if (null != deleteSegmentsSession && deleteSegmentsSession.maxDeletePosition() >= recordingSummary.stopPosition)
         {
-            final String msg = "cannot extend recording " + recordingId +
-                " due to an outstanding delete operation";
+            final String msg = "cannot extend recording " + recordingId + " due to an outstanding delete operation";
             controlSession.sendErrorResponse(correlationId, msg);
             return msg;
         }
@@ -1142,7 +1200,8 @@ abstract class ArchiveConductor
                 }
             }
 
-            deleteSegments(correlationId, recordingId, controlSession, files);
+            stopAllReplays(recordingId);
+            deleteSegments(correlationId, recordingId, controlSession, files, true);
         }
     }
 
@@ -1157,7 +1216,7 @@ abstract class ArchiveConductor
             final ArrayDeque<String> files = new ArrayDeque<>();
             listSegmentFiles(recordingId, files::addLast);
 
-            deleteSegments(correlationId, recordingId, controlSession, files);
+            deleteSegments(correlationId, recordingId, controlSession, files, false);
         }
     }
 
@@ -1428,7 +1487,7 @@ abstract class ArchiveConductor
             {
                 findDetachedSegments(recordingId, files, minPosition.get());
             }
-            deleteSegments(correlationId, recordingId, controlSession, files);
+            deleteSegments(correlationId, recordingId, controlSession, files, false);
         }
     }
 
@@ -1449,7 +1508,7 @@ abstract class ArchiveConductor
 
             final ArrayDeque<String> files = new ArrayDeque<>();
             findDetachedSegments(recordingId, files, oldStartPosition);
-            deleteSegments(correlationId, recordingId, controlSession, files);
+            deleteSegments(correlationId, recordingId, controlSession, files, false);
         }
     }
 
@@ -1574,7 +1633,7 @@ abstract class ArchiveConductor
             if (movedSegmentCount >= 0)
             {
                 final int toBeDeletedSegmentCount = addDeleteSegmentsSession(
-                    correlationId, srcRecordingId, controlSession, emptyFollowingSrcSegment);
+                    correlationId, srcRecordingId, controlSession, emptyFollowingSrcSegment, false);
 
                 if (toBeDeletedSegmentCount >= 0)
                 {
@@ -1641,7 +1700,8 @@ abstract class ArchiveConductor
         final long correlationId,
         final long recordingId,
         final ControlSession controlSession,
-        final ArrayDeque<String> files)
+        final ArrayDeque<String> files,
+        final boolean awaitReplaysStop)
     {
         if (files.isEmpty())
         {
@@ -1654,8 +1714,10 @@ abstract class ArchiveConductor
             deleteList.add(new File(archiveDir, name));
         }
 
-        addSession(new DeleteSegmentsSession(
-            recordingId, correlationId, deleteList, controlSession, errorHandler));
+        final DeleteSegmentsSession session = new DeleteSegmentsSession(
+            recordingId, correlationId, deleteList, controlSession, errorHandler, awaitReplaysStop);
+        addSession(session);
+        deleteSegmentsSessionByIdMap.put(session.sessionId(), session);
 
         return files.size();
     }
@@ -1845,7 +1907,7 @@ abstract class ArchiveConductor
     {
         if (!catalog.hasRecording(recordingId))
         {
-            final String msg = "unknown recording id: " + recordingId;
+            final String msg = ArchiveException.buildUnknownRecordingErrorMsg(recordingId);
             session.sendErrorResponse(correlationId, UNKNOWN_RECORDING, msg);
             return false;
         }
@@ -1970,18 +2032,19 @@ abstract class ArchiveConductor
                 throw new ArchiveEvent(msg);
             }
 
+            catalog.recordingSummary(recordingId, recordingSummary);
+
             final DeleteSegmentsSession deleteSegmentsSession = deleteSegmentsSessionByIdMap.get(recordingId);
             if (null != deleteSegmentsSession &&
                 deleteSegmentsSession.maxDeletePosition() >= recordingSummary.stopPosition)
             {
                 final String msg = "cannot extend recording " + recordingId +
-                    " streamId=" + image.subscription().streamId() + " channel=" + originalChannel +
-                    " due to an outstanding delete operation";
+                    " due to an outstanding delete operation: streamId=" +
+                    image.subscription().streamId() + " channel=" + originalChannel;
                 controlSession.sendErrorResponse(correlationId, GENERIC, msg);
                 throw new ArchiveEvent(msg);
             }
 
-            catalog.recordingSummary(recordingId, recordingSummary);
             validateImageForExtendRecording(correlationId, controlSession, image, recordingSummary);
 
             final Counter position = RecordingPos.allocate(
@@ -2086,19 +2149,22 @@ abstract class ArchiveConductor
         }
     }
 
-    private boolean isValidTruncate(
-        final long correlationId, final ControlSession controlSession, final long recordingId, final long position)
+    boolean hasInProgressReplays(final long recordingId)
     {
         for (final ReplaySession replaySession : replaySessionByIdMap.values())
         {
             if (replaySession.recordingId() == recordingId)
             {
-                final String msg = "cannot truncate recording with active replay " + recordingId;
-                controlSession.sendErrorResponse(correlationId, ACTIVE_RECORDING, msg);
-                return false;
+                return true;
             }
         }
 
+        return false;
+    }
+
+    private boolean isValidTruncate(
+        final long correlationId, final ControlSession controlSession, final long recordingId, final long position)
+    {
         catalog.recordingSummary(recordingId, recordingSummary);
         final long stopPosition = recordingSummary.stopPosition;
         final long startPosition = recordingSummary.startPosition;
@@ -2114,7 +2180,7 @@ abstract class ArchiveConductor
         {
             final String msg = "invalid position " + position +
                 ": start=" + startPosition + " stop=" + stopPosition + " alignment=" + FRAME_ALIGNMENT;
-            controlSession.sendErrorResponse(correlationId, msg);
+            controlSession.sendErrorResponse(correlationId, INVALID_POSITION, msg);
             return false;
         }
 
@@ -2123,14 +2189,11 @@ abstract class ArchiveConductor
 
     private boolean isValidPurge(final long correlationId, final ControlSession controlSession, final long recordingId)
     {
-        for (final ReplaySession replaySession : replaySessionByIdMap.values())
+        if (hasInProgressReplays(recordingId))
         {
-            if (replaySession.recordingId() == recordingId)
-            {
-                final String msg = "cannot purge recording with active replay " + recordingId;
-                controlSession.sendErrorResponse(correlationId, ACTIVE_RECORDING, msg);
-                return false;
-            }
+            final String msg = "cannot purge recording with active replay " + recordingId;
+            controlSession.sendErrorResponse(correlationId, ACTIVE_RECORDING, msg);
+            return false;
         }
 
         catalog.recordingSummary(recordingId, recordingSummary);
@@ -2164,18 +2227,16 @@ abstract class ArchiveConductor
         final long startPosition = recordingSummary.startPosition;
         if (position - startPosition < 0)
         {
-            final String msg = "requested replay start position=" + position +
-                " is less than recording start position=" + startPosition + " for recording " + recordingId;
-            controlSession.sendErrorResponse(correlationId, msg);
+            final String msg = ArchiveException.buildReplayBeforeStartErrorMsg(recordingId, position, startPosition);
+            controlSession.sendErrorResponse(correlationId, INVALID_POSITION, msg);
             return true;
         }
 
         final long stopPosition = recordingSummary.stopPosition;
         if (stopPosition != NULL_POSITION && position >= stopPosition)
         {
-            final String msg = "requested replay start position=" + position +
-                " must be less than highest recorded position=" + stopPosition + " for recording " + recordingId;
-            controlSession.sendErrorResponse(correlationId, msg);
+            final String msg = ArchiveException.buildReplayExceedsLimitErrorMsg(recordingId, position, stopPosition);
+            controlSession.sendErrorResponse(correlationId, INVALID_POSITION, msg);
             return true;
         }
 
@@ -2515,9 +2576,10 @@ abstract class ArchiveConductor
         final long correlationId,
         final long recordingId,
         final ControlSession controlSession,
-        final ArrayDeque<String> files)
+        final ArrayDeque<String> files,
+        final boolean awaitReplaysStop)
     {
-        final int count = addDeleteSegmentsSession(correlationId, recordingId, controlSession, files);
+        final int count = addDeleteSegmentsSession(correlationId, recordingId, controlSession, files, awaitReplaysStop);
         if (count >= 0)
         {
             controlSession.sendOkResponse(correlationId, count);

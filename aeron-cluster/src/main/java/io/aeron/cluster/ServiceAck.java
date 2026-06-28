@@ -15,9 +15,13 @@
  */
 package io.aeron.cluster;
 
+import io.aeron.cluster.client.ClusterEvent;
 import io.aeron.cluster.client.ClusterException;
+import org.agrona.concurrent.errors.DistinctErrorLog;
 
 import java.util.ArrayDeque;
+
+import static io.aeron.Aeron.NULL_VALUE;
 
 /**
  * State holder for ACKs from each of the {@link io.aeron.cluster.service.ClusteredService}s.
@@ -80,6 +84,63 @@ final class ServiceAck
         {
             queue.pollFirst();
         }
+    }
+
+    static ServiceAck[] pollServiceAcks(final ArrayDeque<ServiceAck>[] serviceAckQueues)
+    {
+        final ServiceAck[] serviceAcks = new ServiceAck[serviceAckQueues.length];
+        for (int id = 0, length = serviceAckQueues.length; id < length; id++)
+        {
+            final ServiceAck serviceAck = serviceAckQueues[id].pollFirst();
+            if (null == serviceAck)
+            {
+                throw new ClusterException("invalid ack for serviceId=" + id);
+            }
+
+            serviceAcks[id] = serviceAck;
+        }
+
+        return serviceAcks;
+    }
+
+    static ServiceAck[] pollServiceAcks(
+        final long logPosition,
+        final int serviceId,
+        final ArrayDeque<ServiceAck>[] serviceAckQueues)
+    {
+        final ServiceAck[] serviceAcks = new ServiceAck[serviceAckQueues.length];
+        for (int id = 0, length = serviceAckQueues.length; id < length; id++)
+        {
+            final ServiceAck serviceAck = serviceAckQueues[id].pollFirst();
+            if (null == serviceAck || serviceAck.logPosition() != logPosition)
+            {
+                throw new ClusterException(
+                    "invalid ack for serviceId=" + serviceId + " logPosition=" + logPosition + " " + serviceAck);
+            }
+
+            serviceAcks[id] = serviceAck;
+        }
+
+        return serviceAcks;
+    }
+
+    static boolean areAllRelevantIdsNonNull(
+        final String message,
+        final ServiceAck[] serviceAcks,
+        final DistinctErrorLog distinctErrorLog)
+    {
+        boolean isSetComplete = true;
+
+        for (int serviceId = serviceAcks.length - 1; serviceId >= 0; serviceId--)
+        {
+            if (NULL_VALUE == serviceAcks[serviceId].relevantId())
+            {
+                distinctErrorLog.record(new ClusterEvent("service=" + serviceId + " " + message));
+                isSetComplete = false;
+            }
+        }
+
+        return isSetComplete;
     }
 
     @SuppressWarnings({ "unchecked", "rawtypes" })

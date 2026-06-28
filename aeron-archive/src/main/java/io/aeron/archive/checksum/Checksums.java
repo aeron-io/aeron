@@ -27,6 +27,10 @@ public final class Checksums
     private static final Checksum CRC_32 = Crc32.INSTANCE::compute;
     private static final Checksum CRC_32C = Crc32c.INSTANCE::compute;
 
+    private Checksums()
+    {
+    }
+
     /**
      * Returns an instance of {@link Checksum} that computes CRC-32 checksums.
      *

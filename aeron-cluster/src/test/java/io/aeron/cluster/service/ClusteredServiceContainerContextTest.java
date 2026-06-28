@@ -24,6 +24,8 @@ import io.aeron.archive.client.AeronArchive;
 import io.aeron.cluster.codecs.mark.ClusterComponentType;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
+import io.aeron.test.SystemTestWatcher;
+import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.BitUtil;
 import org.agrona.DirectBuffer;
 import org.agrona.concurrent.NoOpLock;
@@ -33,6 +35,7 @@ import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -74,6 +77,8 @@ class ClusteredServiceContainerContextTest
     private File clusterDir;
     private ClusteredServiceContainer.Context context;
     private final int serviceId = 1;
+    @RegisterExtension
+    final SystemTestWatcher systemTestWatcher = new SystemTestWatcher();
 
     @BeforeEach
     void setUp()
@@ -354,8 +359,8 @@ class ClusteredServiceContainerContextTest
     @ParameterizedTest
     @CsvSource({
         "aeron:ipc,aeron:ipc?term-length=64k|mtu=8k," +
-            "aeron:ipc?alias=sc-88-archive-ctrl-req-cluster-99," +
-            "aeron:ipc?term-length=64k|mtu=8k|alias=sc-88-archive-ctrl-resp-cluster-99",
+            "aeron:ipc?alias=sc-8-archive-ctrl-req-cluster-99," +
+            "aeron:ipc?term-length=64k|mtu=8k|alias=sc-8-archive-ctrl-resp-cluster-99",
         "aeron:ipc?alias=x,aeron:ipc?alias=y,aeron:ipc?alias=x,aeron:ipc?alias=y"
     })
     void shouldCreateAliasForControlStreamsEvenWhenArchiveContextAssignedExplicitly(
@@ -369,7 +374,7 @@ class ClusteredServiceContainerContextTest
             .controlResponseChannel(controlResponseChannel)
             .controlRequestStreamId(42)
             .controlResponseStreamId(18);
-        context.archiveContext(archiveContext).clusterId(99).serviceId(88);
+        context.archiveContext(archiveContext).clusterId(99).serviceId(8);
 
         context.conclude();
 
@@ -406,11 +411,11 @@ class ClusteredServiceContainerContextTest
         Files.createDirectories(aeronDir);
 
         final int filePageSize = 1024 * 1024;
-        try (MediaDriver driver = MediaDriver.launch(new MediaDriver.Context()
+        try (TestMediaDriver driver = TestMediaDriver.launch(new MediaDriver.Context()
             .aeronDirectoryName(aeronDir.toString())
             .dirDeleteOnShutdown(true)
             .threadingMode(ThreadingMode.SHARED)
-            .filePageSize(filePageSize)))
+            .filePageSize(filePageSize), systemTestWatcher))
         {
             context
                 .aeron(null)

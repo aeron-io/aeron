@@ -229,7 +229,7 @@ aeron_controlled_fragment_handler_action_t aeron_archive_control_response_poller
             {
                 if (aeron_reallocf((void **)&poller->error_message, len_with_terminator) < 0)
                 {
-                    AERON_SET_ERR(ENOMEM, "%s", "unable to reallocate error_message");
+                    AERON_APPEND_ERR("%s", "unable to reallocate error_message");
                     poller->error_on_fragment = true;
                     return AERON_ACTION_BREAK;
                 }

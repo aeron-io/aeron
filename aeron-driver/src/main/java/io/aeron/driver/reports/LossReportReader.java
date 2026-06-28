@@ -65,6 +65,10 @@ public final class LossReportReader
             String source);
     }
 
+    private LossReportReader()
+    {
+    }
+
     /**
      * Create a default {@link EntryConsumer} which outputs to a provided {@link PrintStream}.
      *

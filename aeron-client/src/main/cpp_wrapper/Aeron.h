@@ -21,7 +21,6 @@
 #include <mutex>
 
 #include "util/Exceptions.h"
-#include "concurrent/AgentRunner.h"
 #include "concurrent/AgentInvoker.h"
 #include "Publication.h"
 #include "ExclusivePublication.h"
@@ -94,12 +93,20 @@ public:
         aeron_on_close_client_pair_t closePair = {emptyCallback, nullptr};
         aeron_add_close_handler(m_aeron, &closePair);
         aeron_close(m_aeron);
+        aeron_context_close(m_aeron_context);
+
+        for (const std::pair<const std::int64_t, AsyncAddSubscription *>& e : m_pendingSubscriptions)
+        {
+            delete e.second;
+        }
 
         m_availableCounterHandlers.clear();
         m_unavailableCounterHandlers.clear();
         m_closeClientHandlers.clear();
-
-        aeron_context_close(m_aeron_context);
+        m_pendingCounters.clear();
+        m_pendingPublications.clear();
+        m_pendingExclusivePublications.clear();
+        m_pendingSubscriptions.clear();
     }
 
     /**
@@ -122,7 +129,9 @@ public:
      */
     inline static std::shared_ptr<Aeron> connect(Context &context)
     {
-        return std::make_shared<Aeron>(context);
+        auto aeron = std::make_shared<Aeron>(context);
+        aeron->m_self = aeron;
+        return aeron;
     }
 
     /**
@@ -135,8 +144,7 @@ public:
     inline static std::shared_ptr<Aeron> connect()
     {
         Context ctx;
-
-        return std::make_shared<Aeron>(ctx);
+        return connect(ctx);
     }
 
     /**
@@ -184,16 +192,24 @@ public:
         auto search = m_pendingPublications.find(registrationId);
         if (search == m_pendingPublications.end())
         {
-            throw IllegalArgumentException("Unknown registration id", SOURCEINFO);
+            throw IllegalArgumentException(
+                std::string("Unknown registration id: ").append(std::to_string(registrationId)), SOURCEINFO);
         }
 
-        std::shared_ptr<Publication> publication = findPublication(search->second);
-        if (nullptr != publication)
+        try
+        {
+            std::shared_ptr<Publication> publication = findPublication(search->second);
+            if (nullptr != publication)
+            {
+                m_pendingPublications.erase(registrationId);
+            }
+            return publication;
+        }
+        catch (...)
         {
             m_pendingPublications.erase(registrationId);
+            throw;
         }
-
-        return publication;
     }
 
     /**
@@ -248,7 +264,7 @@ public:
         }
         else
         {
-            return std::make_shared<Publication>(m_aeron, publication);
+            return std::make_shared<Publication>(m_self.lock(), m_aeron, publication);
         }
     }
 
@@ -310,16 +326,24 @@ public:
         auto search = m_pendingExclusivePublications.find(registrationId);
         if (search == m_pendingExclusivePublications.end())
         {
-            throw IllegalArgumentException("Unknown registration id", SOURCEINFO);
+            throw IllegalArgumentException(
+                std::string("Unknown registration id: ").append(std::to_string(registrationId)), SOURCEINFO);
         }
 
-        std::shared_ptr<ExclusivePublication> publication = findExclusivePublication(search->second);
-        if (nullptr != publication)
+        try
+        {
+            std::shared_ptr<ExclusivePublication> publication = findExclusivePublication(search->second);
+            if (nullptr != publication)
+            {
+                m_pendingExclusivePublications.erase(registrationId);
+            }
+            return publication;
+        }
+        catch (...)
         {
             m_pendingExclusivePublications.erase(registrationId);
+            throw;
         }
-
-        return publication;
     }
 
     /**
@@ -375,7 +399,7 @@ public:
         }
         else
         {
-            return std::make_shared<ExclusivePublication>(m_aeron, publication);
+            return std::make_shared<ExclusivePublication>(m_self.lock(), m_aeron, publication);
         }
     }
 
@@ -460,16 +484,26 @@ public:
         auto search = m_pendingSubscriptions.find(registrationId);
         if (search == m_pendingSubscriptions.end())
         {
-            throw IllegalArgumentException("Unknown registration id", SOURCEINFO);
+            throw IllegalArgumentException(
+                std::string("Unknown registration id: ").append(std::to_string(registrationId)), SOURCEINFO);
         }
 
-        std::shared_ptr<Subscription> subscription = findSubscription(search->second);
-        if (nullptr != subscription)
+        AsyncAddSubscription* addSubscription = search->second;
+        try
+        {
+            std::shared_ptr<Subscription> subscription = findSubscription(addSubscription);
+            if (nullptr != subscription)
+            {
+                m_pendingSubscriptions.erase(registrationId);
+            }
+            return subscription;
+        }
+        catch (...)
         {
             m_pendingSubscriptions.erase(registrationId);
+            delete addSubscription;
+            throw;
         }
-
-        return subscription;
     }
 
     /**
@@ -490,25 +524,33 @@ public:
         const on_unavailable_image_t &onUnavailableImageHandler)
     {
         auto *addSubscription = new AsyncAddSubscription(onAvailableImageHandler, onUnavailableImageHandler);
-        void *availableClientd =
-            const_cast<void *>(reinterpret_cast<const void *>(&addSubscription->m_onAvailableImage));
-        void *unavailableClientd =
-            const_cast<void *>(reinterpret_cast<const void *>(&addSubscription->m_onUnavailableImage));
-
-        if (aeron_async_add_subscription(
-            &addSubscription->m_async,
-            m_aeron,
-            channel.c_str(),
-            streamId,
-            onAvailableImageCallback,
-            availableClientd,
-            onUnavailableImageCallback,
-            unavailableClientd) < 0)
+        try
         {
-            AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
-        }
+            void *availableClientd =
+                const_cast<void *>(reinterpret_cast<const void *>(&addSubscription->m_onAvailableImage));
+            void *unavailableClientd =
+                const_cast<void *>(reinterpret_cast<const void *>(&addSubscription->m_onUnavailableImage));
 
-        return addSubscription;
+            if (aeron_async_add_subscription(
+                &addSubscription->m_async,
+                m_aeron,
+                channel.c_str(),
+                streamId,
+                onAvailableImageCallback,
+                availableClientd,
+                onUnavailableImageCallback,
+                unavailableClientd) < 0)
+            {
+                AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
+            }
+
+            return addSubscription;
+        }
+        catch (...)
+        {
+            delete addSubscription;
+            throw;
+        }
     }
 
     /**
@@ -549,6 +591,7 @@ public:
         int result = aeron_async_add_subscription_poll(&subscription, addSubscription->m_async);
         if (result < 0)
         {
+            addSubscription->m_async = nullptr;
             AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
         else if (0 == result)
@@ -558,7 +601,7 @@ public:
         else
         {
             addSubscription->m_async = nullptr;
-            return std::make_shared<Subscription>(m_aeron, subscription, addSubscription);
+            return std::make_shared<Subscription>(m_self.lock(), m_aeron, subscription, addSubscription);
         }
     }
 
@@ -640,17 +683,24 @@ public:
         auto search = m_pendingCounters.find(registrationId);
         if (search == m_pendingCounters.end())
         {
-            throw IllegalArgumentException("Unknown registration id", SOURCEINFO);
+            throw IllegalArgumentException(
+                std::string("Unknown registration id: ").append(std::to_string(registrationId)), SOURCEINFO);
         }
 
-        std::shared_ptr<Counter> counter = findCounter(search->second);
-
-        if (nullptr != counter)
+        try
+        {
+            std::shared_ptr<Counter> counter = findCounter(search->second);
+            if (nullptr != counter)
+            {
+                m_pendingCounters.erase(registrationId);
+            }
+            return counter;
+        }
+        catch (...)
         {
             m_pendingCounters.erase(registrationId);
+            throw;
         }
-
-        return counter;
     }
 
     /**
@@ -712,7 +762,8 @@ public:
         {
             aeron_counter_constants_t counter_constants = {};
             aeron_counter_constants(counter, &counter_constants);
-            return std::make_shared<Counter>(counter, m_countersReader, counter_constants.registration_id);
+            return std::make_shared<Counter>(
+                m_self.lock(), m_countersReader, counter, counter_constants.registration_id);
         }
     }
 
@@ -1069,6 +1120,7 @@ private:
     std::recursive_mutex m_adminLock;
     ClientConductor m_clientConductor;
     AgentInvoker<ClientConductor> m_conductorInvoker;
+    std::weak_ptr<Aeron> m_self; // used to ensure destruction order
 
     static aeron_t *init_aeron(Context &context, aeron_context_t **aeron_context)
     {
@@ -1080,10 +1132,10 @@ private:
         {
             context.attachCallbacksToContext(_context);
         }
-        catch (IllegalArgumentException &ex)
+        catch (IllegalArgumentException&)
         {
             aeron_context_close(_context);
-            throw ex;
+            throw;
         }
 
         if (aeron_init(&aeron, _context) < 0)

@@ -18,19 +18,38 @@ package io.aeron.test.driver;
 import io.aeron.driver.ext.LossGenerator;
 import org.agrona.concurrent.UnsafeBuffer;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.net.InetSocketAddress;
 
-public class StreamIdLossGenerator implements LossGenerator
+public final class StreamIdLossGenerator implements LossGenerator
 {
-    private int streamId;
-    private long dropUntil;
-    private volatile boolean drop;
+    private static final VarHandle ENABLED_VH;
 
-    public void startDropping(final int streamId, final long durationNs)
+    static
+    {
+        try
+        {
+            ENABLED_VH = MethodHandles.lookup().findVarHandle(StreamIdLossGenerator.class, "enabled", boolean.class);
+        }
+        catch (final NoSuchFieldException | IllegalAccessException e)
+        {
+            throw new Error(e);
+        }
+    }
+
+    private int streamId;
+    private volatile boolean enabled;
+
+    public void enable(final int streamId)
     {
         this.streamId = streamId;
-        dropUntil = System.nanoTime() + durationNs;
-        drop = true;
+        ENABLED_VH.setRelease(this, true);
+    }
+
+    public void disable()
+    {
+        ENABLED_VH.setRelease(this, false);
     }
 
     public boolean shouldDropFrame(
@@ -42,19 +61,7 @@ public class StreamIdLossGenerator implements LossGenerator
         final int termOffset,
         final int length)
     {
-        if (drop && streamId == this.streamId)
-        {
-            if (System.nanoTime() - dropUntil < 0)
-            {
-                return true;
-            }
-            else
-            {
-                drop = false;
-            }
-        }
-
-        return false;
+        return (boolean)ENABLED_VH.getAcquire(this) && streamId == this.streamId;
     }
 
     public boolean shouldDropFrame(final InetSocketAddress address, final UnsafeBuffer buffer, final int length)

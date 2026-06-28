@@ -76,7 +76,7 @@ import static org.agrona.BitUtil.*;
  *  +---------------------------------------------------------------+
  * </pre>
  */
-public class CncFileDescriptor
+public final class CncFileDescriptor
 {
     /**
      * Name used for CnC file in the Aeron directory.
@@ -150,6 +150,10 @@ public class CncFileDescriptor
         START_TIMESTAMP_FIELD_OFFSET = CLIENT_LIVENESS_TIMEOUT_FIELD_OFFSET + SIZE_OF_LONG;
         PID_FIELD_OFFSET = START_TIMESTAMP_FIELD_OFFSET + SIZE_OF_LONG;
         FILE_PAGE_SIZE_FIELD_OFFSET = PID_FIELD_OFFSET + SIZE_OF_LONG;
+    }
+
+    private CncFileDescriptor()
+    {
     }
 
     /**

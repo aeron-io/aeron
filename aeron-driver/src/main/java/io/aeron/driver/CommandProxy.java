@@ -19,49 +19,17 @@ import org.agrona.concurrent.AgentTerminationException;
 import org.agrona.concurrent.OneToOneConcurrentArrayQueue;
 import org.agrona.concurrent.status.AtomicCounter;
 
-import java.util.function.Consumer;
-
-import static io.aeron.driver.ThreadingMode.INVOKER;
-import static io.aeron.driver.ThreadingMode.SHARED;
-
 abstract class CommandProxy
 {
-    static final Consumer<Runnable> RUN_TASK = Runnable::run;
-    private final ThreadingMode threadingMode;
-    private final OneToOneConcurrentArrayQueue<Runnable> commandQueue;
+    final OneToOneConcurrentArrayQueue<Runnable> commandQueue;
     private final AtomicCounter failCount;
-    private final boolean notConcurrent;
 
     CommandProxy(
-        final ThreadingMode threadingMode,
         final OneToOneConcurrentArrayQueue<Runnable> commandQueue,
         final AtomicCounter failCount)
     {
-        this.threadingMode = threadingMode;
         this.commandQueue = commandQueue;
         this.failCount = failCount;
-        notConcurrent = SHARED == threadingMode || INVOKER == threadingMode;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public String toString()
-    {
-        return getClass().getSimpleName() + "{" +
-            "threadingMode=" + threadingMode +
-            ", failCount=" + failCount +
-            '}';
-    }
-
-    final boolean notConcurrent()
-    {
-        return notConcurrent;
-    }
-
-    final ThreadingMode threadingMode()
-    {
-        return threadingMode;
     }
 
     final void offer(final Runnable cmd)

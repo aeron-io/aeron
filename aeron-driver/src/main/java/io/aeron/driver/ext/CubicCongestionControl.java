@@ -116,7 +116,7 @@ public class CubicCongestionControl implements CongestionControl
     {
         try
         {
-            errorHandler = context.errorHandler();
+            errorHandler = context.countedErrorHandler();
             mtu = senderMtuLength;
 
             final int receiverWindowLength = 0 != udpChannel.receiverWindowLength() ?

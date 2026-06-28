@@ -37,9 +37,15 @@ import java.util.Set;
 @SupportedAnnotationTypes("io.aeron.counter.AeronCounter")
 public class CounterProcessor extends Processor
 {
-
     private static final String SYSTEM_COUNTER_ID_PREFIX = "SYSTEM_COUNTER_ID_";
     private static final String TYPE_ID_SUFFIX = "_TYPE_ID";
+
+    /**
+     * Create CounterProcessor to processor counter id definitions.
+     */
+    public CounterProcessor()
+    {
+    }
 
     protected String getEnabledPropertyName()
     {

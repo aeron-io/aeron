@@ -24,7 +24,7 @@ import org.agrona.concurrent.status.CountersManager;
 /**
  * The status of a receiving channel endpoint represented as a counter value.
  */
-public class ReceiveChannelStatus
+public final class ReceiveChannelStatus
 {
     /**
      * Type id of a receive channel status indicator.
@@ -35,6 +35,10 @@ public class ReceiveChannelStatus
      * Human-readable name for the counter.
      */
     public static final String NAME = "rcv-channel";
+
+    private ReceiveChannelStatus()
+    {
+    }
 
     /**
      * Allocate a new channel status counter for a stream.

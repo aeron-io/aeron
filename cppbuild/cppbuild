@@ -10,7 +10,7 @@ BUILD_PACKAGE=false
 COVERAGE_BUILD=0
 
 BUILD_DELETE_CMAKE=false
-BUILD_CMAKE_VERSION=4.2.1
+BUILD_CMAKE_VERSION=4.3.3
 BUILD_CMAKE_DIR="$(dirname "${BUILD_DIR}")/cmake"
 
 ncpus=1
@@ -72,7 +72,7 @@ do
       ;;
     --skip-archive-api)
       EXTRA_CMAKE_ARGS="${EXTRA_CMAKE_ARGS} -DBUILD_AERON_ARCHIVE_API=OFF"
-      echo "Disabline building of Aeron Archive API"
+      echo "Disabling building of Aeron Archive API"
       shift
       ;;
     -d|--debug-build)
@@ -106,6 +106,7 @@ do
       ;;
     --parallel-cpus)
       ncpus=${2}
+      echo "Using ${ncpus} CPUs"
       shift
       shift
       ;;

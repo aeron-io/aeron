@@ -28,6 +28,13 @@ import org.agrona.concurrent.status.AtomicCounter;
 public class DebugReceiveChannelEndpointSupplier implements ReceiveChannelEndpointSupplier
 {
     /**
+     * Create a supplier for the DebugReceiveChannelEndpoint.
+     */
+    public DebugReceiveChannelEndpointSupplier()
+    {
+    }
+
+    /**
      * Supply a new instance of a {@link DebugReceiveChannelEndpoint} for testing loss.
      *
      * @param udpChannel      on which the receiver is listening.

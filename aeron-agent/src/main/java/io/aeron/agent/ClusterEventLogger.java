@@ -23,11 +23,57 @@ import org.agrona.concurrent.ringbuffer.RingBuffer;
 
 import java.util.concurrent.TimeUnit;
 
-import static io.aeron.agent.ClusterEventCode.*;
-import static io.aeron.agent.ClusterEventEncoder.*;
-import static io.aeron.agent.CommonEventEncoder.*;
+import static io.aeron.agent.ClusterEventCode.APPEND_POSITION;
+import static io.aeron.agent.ClusterEventCode.APPEND_SESSION_CLOSE;
+import static io.aeron.agent.ClusterEventCode.APPEND_SESSION_OPEN;
+import static io.aeron.agent.ClusterEventCode.CANVASS_POSITION;
+import static io.aeron.agent.ClusterEventCode.CATCHUP_POSITION;
+import static io.aeron.agent.ClusterEventCode.CLUSTER_SESSION_STATE_CHANGE;
+import static io.aeron.agent.ClusterEventCode.COMMIT_POSITION;
+import static io.aeron.agent.ClusterEventCode.ELECTION_STATE_CHANGE;
+import static io.aeron.agent.ClusterEventCode.NEW_ELECTION;
+import static io.aeron.agent.ClusterEventCode.NEW_LEADERSHIP_TERM;
+import static io.aeron.agent.ClusterEventCode.REPLAY_NEW_LEADERSHIP_TERM;
+import static io.aeron.agent.ClusterEventCode.REPLICATION_ENDED;
+import static io.aeron.agent.ClusterEventCode.REQUEST_VOTE;
+import static io.aeron.agent.ClusterEventCode.SERVICE_ACK;
+import static io.aeron.agent.ClusterEventCode.SNAPSHOT_ENTRY_INVALIDATION;
+import static io.aeron.agent.ClusterEventCode.STANDBY_SNAPSHOT_NOTIFICATION;
+import static io.aeron.agent.ClusterEventCode.STOP_CATCHUP;
+import static io.aeron.agent.ClusterEventCode.TERMINATION_ACK;
+import static io.aeron.agent.ClusterEventCode.TERMINATION_POSITION;
+import static io.aeron.agent.ClusterEventCode.TRUNCATE_LOG_ENTRY;
+import static io.aeron.agent.ClusterEventCode.VOTE;
+import static io.aeron.agent.ClusterEventEncoder.appendSessionCloseLength;
+import static io.aeron.agent.ClusterEventEncoder.appendSessionOpenLength;
+import static io.aeron.agent.ClusterEventEncoder.canvassPositionLength;
+import static io.aeron.agent.ClusterEventEncoder.catchupPositionLength;
+import static io.aeron.agent.ClusterEventEncoder.clusterSessionStateChangeLength;
+import static io.aeron.agent.ClusterEventEncoder.electionStateChangeLength;
+import static io.aeron.agent.ClusterEventEncoder.encodeClusterSessionStateChange;
+import static io.aeron.agent.ClusterEventEncoder.encodeElectionStateChange;
+import static io.aeron.agent.ClusterEventEncoder.encodeOnCanvassPosition;
+import static io.aeron.agent.ClusterEventEncoder.encodeOnCatchupPosition;
+import static io.aeron.agent.ClusterEventEncoder.encodeOnNewLeadershipTerm;
+import static io.aeron.agent.ClusterEventEncoder.encodeOnReplayNewLeadershipTermEvent;
+import static io.aeron.agent.ClusterEventEncoder.encodeOnRequestVote;
+import static io.aeron.agent.ClusterEventEncoder.encodeOnStopCatchup;
+import static io.aeron.agent.ClusterEventEncoder.encodeOnVote;
+import static io.aeron.agent.ClusterEventEncoder.encodeSnapshotEntryInvalidation;
+import static io.aeron.agent.ClusterEventEncoder.encodeStateChange;
+import static io.aeron.agent.ClusterEventEncoder.encodeTruncateLogEntry;
+import static io.aeron.agent.ClusterEventEncoder.newLeaderShipTermLength;
+import static io.aeron.agent.ClusterEventEncoder.replayNewLeadershipTermEventLength;
+import static io.aeron.agent.ClusterEventEncoder.snapshotEntryInvalidationLength;
+import static io.aeron.agent.ClusterEventEncoder.stateChangeLength;
+import static io.aeron.agent.ClusterEventEncoder.terminationPositionLength;
+import static io.aeron.agent.CommonEventEncoder.captureLength;
+import static io.aeron.agent.CommonEventEncoder.encodedLength;
+import static io.aeron.agent.CommonEventEncoder.enumName;
 import static io.aeron.agent.EventConfiguration.EVENT_RING_BUFFER;
-import static org.agrona.BitUtil.*;
+import static org.agrona.BitUtil.SIZE_OF_BYTE;
+import static org.agrona.BitUtil.SIZE_OF_INT;
+import static org.agrona.BitUtil.SIZE_OF_LONG;
 
 /**
  * Event logger interface used by interceptors for recording cluster events into a {@link RingBuffer} for a
@@ -129,11 +175,12 @@ public final class ClusterEventLogger
      * @param memberId  of the current cluster node.
      * @param oldState  before the change.
      * @param newState  after the change.
+     * @param reason for state to change.
      */
     public <E extends Enum<E>> void logStateChange(
-        final ClusterEventCode eventCode, final int memberId, final E oldState, final E newState)
+        final ClusterEventCode eventCode, final int memberId, final E oldState, final E newState, final String reason)
     {
-        final int length = stateChangeLength(oldState, newState);
+        final int length = stateChangeLength(oldState, newState, reason);
         final int captureLength = captureLength(length);
         final int encodedLength = encodedLength(captureLength);
         final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
@@ -150,8 +197,8 @@ public final class ClusterEventLogger
                     length,
                     memberId,
                     oldState,
-                    newState
-                );
+                    newState,
+                    reason);
             }
             finally
             {
@@ -271,7 +318,7 @@ public final class ClusterEventLogger
     }
 
     /**
-     * Log a request to vote from a cluster candidate for leadership.
+     * Log a request to vote from a cluster candidate for new leadership.
      *
      * @param memberId            of the current cluster node.
      * @param logLeadershipTermId leadershipTermId processes from the log by the candidate.
@@ -288,7 +335,7 @@ public final class ClusterEventLogger
         final int candidateId,
         final int protocolVersion)
     {
-        final int length = requestVoteLength();
+        final int length = 3 * SIZE_OF_LONG + 3 * SIZE_OF_INT;
         final int captureLength = captureLength(length);
         final int encodedLength = encodedLength(captureLength);
         final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
@@ -309,6 +356,56 @@ public final class ClusterEventLogger
                     candidateTermId,
                     candidateId,
                     protocolVersion);
+            }
+            finally
+            {
+                ringBuffer.commit(index);
+            }
+        }
+    }
+
+    /**
+     * Log a vote response from a cluster candidate for new leadership.
+     *
+     * @param memberId            of the current cluster node.
+     * @param logLeadershipTermId leadershipTermId processes from the log by the candidate.
+     * @param logPosition         position reached in the log for the latest leadership term.
+     * @param candidateTermId     the term id as the candidate sees it for the election.
+     * @param candidateId         id of the candidate node.
+     * @param voterId             id of the follower node that voted.
+     * @param vote                expressed by the follower node.
+     */
+    public void logOnVote(
+        final int memberId,
+        final long logLeadershipTermId,
+        final long logPosition,
+        final long candidateTermId,
+        final int candidateId,
+        final int voterId,
+        final boolean vote)
+    {
+        final int length = 3 * SIZE_OF_LONG + 3 * SIZE_OF_INT + SIZE_OF_BYTE;
+        final int captureLength = captureLength(length);
+        final int encodedLength = encodedLength(captureLength);
+        final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
+        final int index = ringBuffer.tryClaim(VOTE.toEventCodeId(), encodedLength);
+
+        if (index > 0)
+        {
+            try
+            {
+                encodeOnVote(
+                    (UnsafeBuffer)ringBuffer.buffer(),
+                    index,
+                    captureLength,
+                    length,
+                    memberId,
+                    candidateTermId,
+                    logLeadershipTermId,
+                    logPosition,
+                    candidateId,
+                    voterId,
+                    vote);
             }
             finally
             {
@@ -1006,6 +1103,50 @@ public final class ClusterEventLogger
                     oldState,
                     newState,
                     reason);
+            }
+            finally
+            {
+                ringBuffer.commit(index);
+            }
+        }
+    }
+
+    /**
+     * Log a snapshot entry invalidation.
+     *
+     * @param memberId      on which the snapshot was invalidated.
+     * @param entryIndex    within the recording long that was invalidated.
+     * @param recordingId   of the entry.
+     * @param logPosition   of the snapshot.
+     * @param serviceId     that took the snapshot.
+     */
+    public void logSnapshotEntryInvalidation(
+        final int memberId,
+        final int entryIndex,
+        final long recordingId,
+        final long logPosition,
+        final int serviceId)
+    {
+        final int length = snapshotEntryInvalidationLength();
+        final int captureLength = captureLength(length);
+        final int encodedLength = encodedLength(captureLength);
+        final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
+        final int index = ringBuffer.tryClaim(SNAPSHOT_ENTRY_INVALIDATION.toEventCodeId(), encodedLength);
+
+        if (index > 0)
+        {
+            try
+            {
+                encodeSnapshotEntryInvalidation(
+                    ringBuffer.buffer(),
+                    index,
+                    captureLength,
+                    length,
+                    memberId,
+                    entryIndex,
+                    recordingId,
+                    logPosition,
+                    serviceId);
             }
             finally
             {

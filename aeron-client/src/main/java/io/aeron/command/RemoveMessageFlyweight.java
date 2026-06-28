@@ -44,6 +44,15 @@ public abstract class RemoveMessageFlyweight extends CorrelatedMessageFlyweight
     private static final int MINIMUM_LENGTH = REGISTRATION_ID_FIELD_OFFSET + SIZE_OF_LONG;
 
     /**
+     * An empty flyweight, which should be wrapped over a buffer.
+     *
+     * @see #wrap(MutableDirectBuffer, int)
+     */
+    public RemoveMessageFlyweight()
+    {
+    }
+
+    /**
      * Wrap the buffer at a given offset for updates.
      *
      * @param buffer to wrap.

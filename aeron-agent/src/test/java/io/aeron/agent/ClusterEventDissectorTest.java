@@ -65,16 +65,19 @@ class ClusterEventDissectorTest
     }
 
     @ParameterizedTest
-    @EnumSource(value = ClusterEventCode.class, names = { "STATE_CHANGE", "ROLE_CHANGE" })
+    @EnumSource(value = ClusterEventCode.class, names = { "CLUSTER_BACKUP_STATE_CHANGE", "ROLE_CHANGE" })
     void dissectStateChange(final ClusterEventCode code)
     {
         internalEncodeLogHeader(buffer, 0, 100, 200, () -> -1_000_000_000);
         buffer.putInt(LOG_HEADER_LENGTH, 42, LITTLE_ENDIAN);
-        buffer.putStringAscii(LOG_HEADER_LENGTH + SIZE_OF_INT, "a -> b");
+        final int stateLength = buffer.putStringAscii(LOG_HEADER_LENGTH + SIZE_OF_INT, "a -> b");
+        final String reason = CLUSTER_BACKUP_STATE_CHANGE == code ? "" : "the reason!";
+        buffer.putStringAscii(LOG_HEADER_LENGTH + SIZE_OF_INT + stateLength, reason);
 
         ClusterEventDissector.dissectStateChange(code, buffer, 0, builder);
 
-        assertEquals("[-1.000000000] " + CONTEXT + ": " + code.name() + " [100/200]: memberId=42 a -> b",
+        assertEquals("[-1.000000000] " + CONTEXT + ": " + code.name() +
+            " [100/200]: memberId=42 a -> b reason=\"" + reason + "\"",
             builder.toString());
     }
 
@@ -107,7 +110,7 @@ class ClusterEventDissectorTest
 
         assertEquals("[5.000000000] " + CONTEXT + ": " + ELECTION_STATE_CHANGE.name() + " [100/200]: memberId=86" +
             " old -> new leaderId=3 candidateTermId=101010 leadershipTermId=6 logPosition=1024 logLeadershipTermId=2" +
-            " appendPosition=1218 catchupPosition=800 reason=this is a test",
+            " appendPosition=1218 catchupPosition=800 reason=\"this is a test\"",
             builder.toString());
     }
 

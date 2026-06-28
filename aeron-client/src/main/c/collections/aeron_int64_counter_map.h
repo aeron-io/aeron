@@ -60,6 +60,7 @@ inline int aeron_int64_counter_map_init(
         AERON_APPEND_ERR("%s", "");
         return -1;
     }
+
     for (size_t i = 0, size = map->entries_length; i < size; i++)
     {
         map->entries[i] = map->initial_value;
@@ -87,6 +88,7 @@ inline int aeron_int64_counter_map_rehash(aeron_int64_counter_map_t *map, size_t
         AERON_APPEND_ERR("%s", "");
         return -1;
     }
+
     for (size_t i = 0, size = new_entries_length; i < size; i++)
     {
         tmp_entries[i] = map->initial_value;

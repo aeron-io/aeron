@@ -64,7 +64,7 @@ class SnapshotReplication implements AutoCloseable
     void addSnapshot(final RecordingLog.Snapshot snapshot)
     {
         snapshotsPending.add(snapshot);
-        multipleRecordingReplication.addRecording(snapshot.recordingId, Aeron.NULL_VALUE, Aeron.NULL_VALUE);
+        multipleRecordingReplication.addRecording(snapshot.recordingId(), Aeron.NULL_VALUE, Aeron.NULL_VALUE);
     }
 
     int poll(final long nowNs)
@@ -75,6 +75,11 @@ class SnapshotReplication implements AutoCloseable
     void onSignal(final long correlationId, final long recordingId, final long position, final RecordingSignal signal)
     {
         multipleRecordingReplication.onSignal(correlationId, recordingId, position, signal);
+    }
+
+    long currentReplicationId()
+    {
+        return multipleRecordingReplication.currentReplicationId();
     }
 
     boolean isComplete()
@@ -89,22 +94,42 @@ class SnapshotReplication implements AutoCloseable
         {
             final RecordingLog.Snapshot pendingSnapshot = snapshotsPending.get(i);
             final long dstRecordingId = multipleRecordingReplication.completedDstRecordingId(
-                pendingSnapshot.recordingId);
+                pendingSnapshot.recordingId());
             snapshots.add(retrievedSnapshot(pendingSnapshot, dstRecordingId));
         }
 
         return snapshots;
     }
 
+    RecordingLog.Snapshot currentSnapshot()
+    {
+        final long currentSrcRecordingId = multipleRecordingReplication.currentSrcRecordingId();
+        if (Aeron.NULL_VALUE == currentSrcRecordingId)
+        {
+            return null;
+        }
+
+        for (int i = 0, n = snapshotsPending.size(); i < n; i++)
+        {
+            final RecordingLog.Snapshot snapshot = snapshotsPending.get(i);
+            if (snapshot.recordingId() == currentSrcRecordingId)
+            {
+                return snapshot;
+            }
+        }
+
+        return null;
+    }
+
     static RecordingLog.Snapshot retrievedSnapshot(final RecordingLog.Snapshot pending, final long recordingId)
     {
         return new RecordingLog.Snapshot(
             recordingId,
-            pending.leadershipTermId,
-            pending.termBaseLogPosition,
-            pending.logPosition,
-            pending.timestamp,
-            pending.serviceId);
+            pending.leadershipTermId(),
+            pending.termBaseLogPosition(),
+            pending.logPosition(),
+            pending.timestamp(),
+            pending.serviceId());
     }
 
     /**

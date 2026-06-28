@@ -16,7 +16,6 @@
 package io.aeron.driver;
 
 import io.aeron.CounterProvider;
-import org.agrona.CloseHelper;
 import org.agrona.concurrent.NanoClock;
 import org.agrona.concurrent.status.CountersReader;
 
@@ -24,14 +23,14 @@ import java.net.InetAddress;
 
 import static java.util.Objects.requireNonNull;
 
-final class TimeTrackingNameResolver implements NameResolver, AutoCloseable
+final class TimeTrackingNameResolver implements NameResolverAgent
 {
-    private final NameResolver delegateResolver;
+    private final NameResolverAgent delegateResolver;
     private final NanoClock clock;
     private final DutyCycleTracker maxTimeTracker;
 
     TimeTrackingNameResolver(
-        final NameResolver delegateResolver,
+        final NameResolverAgent delegateResolver,
         final NanoClock clock,
         final DutyCycleTracker maxTimeTracker)
     {
@@ -93,20 +92,25 @@ final class TimeTrackingNameResolver implements NameResolver, AutoCloseable
     /**
      * {@inheritDoc}
      */
-    public int doWork(final long nowMs)
+    public void onStart()
     {
-        return delegateResolver.doWork(nowMs);
+        delegateResolver.onStart();
     }
 
     /**
      * {@inheritDoc}
      */
-    public void close()
+    public int doWork()
     {
-        if (delegateResolver instanceof AutoCloseable)
-        {
-            CloseHelper.close((AutoCloseable)delegateResolver);
-        }
+        return delegateResolver.doWork();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public void onClose()
+    {
+        delegateResolver.onClose();
     }
 
     /**

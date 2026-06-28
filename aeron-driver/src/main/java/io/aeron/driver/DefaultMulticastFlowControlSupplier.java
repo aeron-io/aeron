@@ -28,6 +28,13 @@ import static io.aeron.driver.Configuration.MULTICAST_FLOW_CONTROL_STRATEGY;
 public class DefaultMulticastFlowControlSupplier implements FlowControlSupplier
 {
     /**
+     * Default constructor.
+     */
+    public DefaultMulticastFlowControlSupplier()
+    {
+    }
+
+    /**
      * {@inheritDoc}
      */
     public FlowControl newInstance(final UdpChannel udpChannel, final int streamId, final long registrationId)

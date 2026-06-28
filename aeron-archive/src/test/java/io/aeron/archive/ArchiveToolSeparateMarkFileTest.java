@@ -16,8 +16,11 @@
 package io.aeron.archive;
 
 import io.aeron.driver.MediaDriver;
+import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.TestContexts;
+import io.aeron.test.driver.TestMediaDriver;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayOutputStream;
@@ -25,18 +28,24 @@ import java.io.File;
 import java.io.PrintStream;
 import java.util.Objects;
 
+import static io.aeron.CommonContext.generateRandomDirName;
+
 class ArchiveToolSeparateMarkFileTest
 {
+    @RegisterExtension
+    final SystemTestWatcher systemTestWatcher = new SystemTestWatcher();
+
     @Test
     void shouldDescribe(@TempDir final File archiveDir, @TempDir final File markFileDir)
     {
-        final MediaDriver.Context driverContext = new MediaDriver.Context();
+        final MediaDriver.Context driverContext = new MediaDriver.Context()
+            .aeronDirectoryName(generateRandomDirName());
         final Archive.Context archiveContext = TestContexts.localhostArchive()
             .aeronDirectoryName(driverContext.aeronDirectoryName())
             .archiveDir(archiveDir)
             .markFileDir(markFileDir);
 
-        try (MediaDriver driver = MediaDriver.launch(driverContext);
+        try (TestMediaDriver driver = TestMediaDriver.launch(driverContext, systemTestWatcher);
             Archive archive = Archive.launch(archiveContext))
         {
             Objects.requireNonNull(driver);
@@ -49,13 +58,14 @@ class ArchiveToolSeparateMarkFileTest
     @Test
     void shouldDescribeRecordings(@TempDir final File archiveDir, @TempDir final File markFileDir)
     {
-        final MediaDriver.Context driverContext = new MediaDriver.Context();
+        final MediaDriver.Context driverContext = new MediaDriver.Context()
+            .aeronDirectoryName(generateRandomDirName());
         final Archive.Context archiveContext = TestContexts.localhostArchive()
             .aeronDirectoryName(driverContext.aeronDirectoryName())
             .archiveDir(archiveDir)
             .markFileDir(markFileDir);
 
-        try (MediaDriver driver = MediaDriver.launch(driverContext);
+        try (TestMediaDriver driver = TestMediaDriver.launch(driverContext, systemTestWatcher);
             Archive archive = Archive.launch(archiveContext))
         {
             Objects.requireNonNull(driver);
@@ -68,13 +78,14 @@ class ArchiveToolSeparateMarkFileTest
     @Test
     void shouldSetCapacity(@TempDir final File archiveDir, @TempDir final File markFileDir)
     {
-        final MediaDriver.Context driverContext = new MediaDriver.Context();
+        final MediaDriver.Context driverContext = new MediaDriver.Context()
+            .aeronDirectoryName(generateRandomDirName());
         final Archive.Context archiveContext = TestContexts.localhostArchive()
             .aeronDirectoryName(driverContext.aeronDirectoryName())
             .archiveDir(archiveDir)
             .markFileDir(markFileDir);
 
-        try (MediaDriver driver = MediaDriver.launch(driverContext);
+        try (TestMediaDriver driver = TestMediaDriver.launch(driverContext, systemTestWatcher);
             Archive archive = Archive.launch(archiveContext))
         {
             Objects.requireNonNull(driver);

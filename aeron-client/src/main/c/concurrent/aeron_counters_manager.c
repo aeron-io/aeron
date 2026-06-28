@@ -269,6 +269,7 @@ int aeron_counters_manager_free(aeron_counters_manager_t *manager, int32_t count
 
         if (aeron_reallocf((void **)&manager->free_list, sizeof(int32_t) * new_length) < 0)
         {
+            AERON_APPEND_ERR("%s", "");
             return -1;
         }
 

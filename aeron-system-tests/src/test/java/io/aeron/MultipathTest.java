@@ -20,6 +20,7 @@ import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
 import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.Tests;
+import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.MutableInteger;
 import org.agrona.concurrent.UnsafeBuffer;
@@ -42,7 +43,8 @@ public class MultipathTest
         final String endpoint2 = "aeron:udp?endpoint=localhost:10002|group=true";
         final int streamId = 10000;
 
-        try (MediaDriver driver = MediaDriver.launch(new MediaDriver.Context());
+        try (TestMediaDriver driver = TestMediaDriver.launch(
+            new MediaDriver.Context().aeronDirectoryName(CommonContext.generateRandomDirName()), testWatcher);
             Aeron aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver.aeronDirectoryName()));
             Publication multipathPub = aeron.addPublication(mdcUri, streamId);
             Subscription multipathSub = aeron.addSubscription(mdcUri, streamId))

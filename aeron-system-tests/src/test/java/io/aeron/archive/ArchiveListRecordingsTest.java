@@ -42,6 +42,8 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import java.io.File;
 
 import static io.aeron.archive.ArchiveSystemTests.recordData;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -54,6 +56,8 @@ public class ArchiveListRecordingsTest
     @RegisterExtension
     final SystemTestWatcher systemTestWatcher = new SystemTestWatcher()
         .ignoreErrorsMatching(s -> s.contains("response publication is closed"));
+
+    private static final long DRIVER_TIMEOUT_MS = SECONDS.toMillis(30);
 
     private TestMediaDriver driver;
     private Archive archive;
@@ -88,8 +92,7 @@ public class ArchiveListRecordingsTest
     @AfterEach
     void tearDown()
     {
-        CloseHelper.quietCloseAll(archive);
-        CloseHelper.quietCloseAll(driver);
+        CloseHelper.quietCloseAll(archive, driver);
     }
 
     @Test
@@ -176,11 +179,13 @@ public class ArchiveListRecordingsTest
     }
 
     @Test
-    @InterruptAfter(15)
+    @InterruptAfter(45)
     @SlowTest
     void shouldFailToUpdateChannelWhileARecordingListingIsRunning()
     {
-        try (AeronArchive aeronArchive = AeronArchive.connect(TestContexts.ipcAeronArchive()))
+        try (AeronArchive aeronArchive = AeronArchive.connect(TestContexts.ipcAeronArchive()
+            .aeronDirectoryName(driver.aeronDirectoryName())
+            .messageTimeoutNs(MILLISECONDS.toNanos(DRIVER_TIMEOUT_MS))))
         {
             final ArchiveSystemTests.RecordingResult result1 = recordData(
                 aeronArchive, 1, "alias=original");
@@ -193,9 +198,14 @@ public class ArchiveListRecordingsTest
             assertEquals(1, collector.descriptors().size());
             final RecordingDescriptor recordingDescriptor = collector.descriptors().get(0);
 
+            // Record enough recordings, each with a large descriptor (padded alias), that listing them all
+            // (below) produces far more data than the control response flow-control window can hold. The
+            // listing therefore back-pressures and remains in progress while updateChannel is attempted,
+            // rather than racing to completion first (which would leave nothing for updateChannel to reject).
+            final String aliasPadding = "x".repeat(200);
             for (int i = 0; i < 150; i++)
             {
-                recordData(aeronArchive, 1, "snapshot-id:" + (i + 1));
+                recordData(aeronArchive, 1, "snapshot-id:" + (i + 1) + "-" + aliasPadding);
             }
 
             assertTrue(aeronArchive.archiveProxy().listRecordings(

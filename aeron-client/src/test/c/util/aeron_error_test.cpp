@@ -23,6 +23,8 @@
 
 extern "C"
 {
+#include "command/aeron_control_protocol.h"
+#include "aeronc.h"
 #include "util/aeron_error.h"
 }
 
@@ -192,4 +194,66 @@ TEST_F(ErrorTest, shouldAllowConcurrentAccess)
     {
         test_concurrent_access();
     }
+}
+
+
+class ErrorMessageTest : public testing::TestWithParam<std::pair<int, std::string>>
+{
+};
+
+INSTANTIATE_TEST_SUITE_P(
+    ErrorMessageTest,
+    ErrorMessageTest,
+    testing::Values(
+        std::make_pair(AERON_ERROR_CODE_UNUSED, "generic error, see message"),
+        std::make_pair(AERON_ERROR_CODE_GENERIC_ERROR, "generic error, see message"),
+        std::make_pair(AERON_ERROR_CODE_INVALID_CHANNEL, "invalid channel"),
+        std::make_pair(AERON_ERROR_CODE_UNKNOWN_SUBSCRIPTION, "unknown subscription"),
+        std::make_pair(AERON_ERROR_CODE_UNKNOWN_PUBLICATION, "unknown publication"),
+        std::make_pair(AERON_ERROR_CODE_CHANNEL_ENDPOINT_ERROR, "channel endpoint error"),
+        std::make_pair(AERON_ERROR_CODE_UNKNOWN_COUNTER, "unknown counter"),
+        std::make_pair(AERON_ERROR_CODE_UNKNOWN_COMMAND_TYPE_ID, "unknown command type id"),
+        std::make_pair(AERON_ERROR_CODE_MALFORMED_COMMAND, "malformed command"),
+        std::make_pair(AERON_ERROR_CODE_NOT_SUPPORTED, "not supported"),
+        std::make_pair(AERON_ERROR_CODE_UNKNOWN_HOST, "unknown host"),
+        std::make_pair(AERON_ERROR_CODE_RESOURCE_TEMPORARILY_UNAVAILABLE, "resource temporarily unavailable"),
+        std::make_pair(AERON_ERROR_CODE_STORAGE_SPACE, "insufficient storage space"),
+        std::make_pair(AERON_ERROR_CODE_IMAGE_REJECTED, "image rejected"),
+        std::make_pair(AERON_ERROR_CODE_PUBLICATION_REVOKED, "publication revoked"),
+        std::make_pair(AERON_CLIENT_ERROR_DRIVER_TIMEOUT, "driver timeout"),
+        std::make_pair(AERON_CLIENT_ERROR_CLIENT_TIMEOUT, "client timeout"),
+        std::make_pair(AERON_CLIENT_ERROR_CONDUCTOR_SERVICE_TIMEOUT, "client service timeout"),
+        std::make_pair(AERON_CLIENT_ERROR_BUFFER_FULL, "client command buffer full"),
+        std::make_pair(AERON_CLIENT_ERROR_DRIVER_BUFFER_FULL, "driver command buffer full")));
+
+TEST_P(ErrorMessageTest, shouldReturnErrorMessageForAeronErrorCodes)
+{
+    int aeron_err_code = std::get<0>(GetParam());
+    auto expected_err_msg = std::get<1>(GetParam());
+    EXPECT_STREQ(expected_err_msg.c_str(), aeron_error_code_str(aeron_err_code));
+}
+
+TEST_P(ErrorMessageTest, shouldReplaceNegatedAeronCodeWithCorrectMessage)
+{
+    int aeron_err_code = std::get<0>(GetParam());
+    auto expected_err_msg = std::get<1>(GetParam());
+
+    aeron_err_clear();
+    AERON_SET_ERR(-aeron_err_code, "%s", "test error");
+
+    EXPECT_EQ(-aeron_err_code, aeron_errcode());
+    auto actual = std::string(aeron_errmsg());
+    EXPECT_NE(std::string::npos, actual.find(expected_err_msg));
+
+    if (aeron_err_code != AERON_ERROR_CODE_UNUSED)
+    {
+        aeron_err_clear();
+        AERON_SET_ERR(aeron_err_code, "%s", "should not translate error message when positive");
+
+        auto another = std::string(aeron_errmsg());
+        EXPECT_EQ(aeron_err_code, aeron_errcode());
+        EXPECT_EQ(std::string::npos, another.find(expected_err_msg));
+    }
+
+    aeron_err_clear();
 }

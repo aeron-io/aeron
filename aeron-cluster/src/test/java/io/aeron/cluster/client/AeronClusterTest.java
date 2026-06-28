@@ -16,12 +16,15 @@
 package io.aeron.cluster.client;
 
 import io.aeron.Aeron;
+import io.aeron.ErrorCode;
 import io.aeron.ExclusivePublication;
 import io.aeron.Image;
 import io.aeron.Publication;
+import io.aeron.RethrowingErrorHandler;
 import io.aeron.Subscription;
 import io.aeron.cluster.codecs.MessageHeaderEncoder;
 import io.aeron.cluster.codecs.NewLeaderEventEncoder;
+import io.aeron.exceptions.RegistrationException;
 import io.aeron.logbuffer.BufferClaim;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.FrameDescriptor;
@@ -64,7 +67,9 @@ class AeronClusterTest
     private final UnsafeBuffer appMessage = new UnsafeBuffer(new byte[8]);
     private final EgressListener egressListener = mock(EgressListener.class);
     private final Aeron aeron = mock(Aeron.class);
-    private final Aeron.Context aeronContext = new Aeron.Context().nanoClock(this::nanoTime);
+    private final Aeron.Context aeronContext = new Aeron.Context()
+        .nanoClock(this::nanoTime)
+        .subscriberErrorHandler(RethrowingErrorHandler.INSTANCE);
     private final AeronCluster.Context context = spy(new AeronCluster.Context()
         .aeron(aeron)
         .ownsAeronClient(false)
@@ -85,11 +90,14 @@ class AeronClusterTest
     @BeforeEach
     void setUp()
     {
-        context.conclude();
-
         when(aeron.context()).thenReturn(aeronContext);
-        when(aeron.addExclusivePublication(context.ingressChannel(), context.ingressStreamId()))
-            .thenReturn(ingressPublication);
+        final long ingressPublicationRegistrationId = 42L;
+        when(ingressPublication.registrationId()).thenReturn(ingressPublicationRegistrationId);
+        when(aeron.asyncAddExclusivePublication(context.ingressChannel(), context.ingressStreamId()))
+            .thenReturn(ingressPublicationRegistrationId);
+        when(aeron.getExclusivePublication(ingressPublicationRegistrationId)).thenReturn(ingressPublication);
+
+        context.conclude();
 
         when(egressSubscription.poll(any(FragmentHandler.class), anyInt())).thenAnswer(invocation ->
         {
@@ -182,8 +190,30 @@ class AeronClusterTest
         assertFalse(aeronCluster.isClosed());
     }
 
+    @Test
+    void shouldRetryNewLeaderIngressPublicationWhenSendChannelEndpointIsClosing()
+    {
+        // When the ingress publication for a new leader is added, the send channel endpoint of the
+        // just-closed publication may still be closing, so the driver returns a retryable error. The client
+        // must retry rather than fail the leader change.
+        final long registrationId = ingressPublication.registrationId();
+        when(aeron.getExclusivePublication(registrationId))
+            .thenThrow(new RegistrationException(
+                registrationId,
+                ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE.value(),
+                ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE,
+                "send_channel_endpoint found in CLOSING state, please retry"))
+            .thenReturn(ingressPublication);
+
+        makeEgressSubscriptionDeliverNewLeaderEvent();
+
+        assertEquals(1, aeronCluster.pollEgress());
+        verify(egressListener).onNewLeader(CLUSTER_SESSION_ID, leadershipTermId, leaderMemberId, INGRESS_ENDPOINTS);
+        assertFalse(aeronCluster.isClosed());
+    }
+
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     void shouldCloseItselfWhenDisconnectedForLongerThanNewLeaderTimeout(final boolean withAppMessages)
     {
         makeIngressPublicationReturn(Publication.NOT_CONNECTED);
@@ -208,7 +238,7 @@ class AeronClusterTest
     }
 
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
+    @ValueSource(booleans = { false, true })
     void shouldCloseItselfWhenUnableToSendMessageForLongerThanNewLeaderConnectionTimeout(final boolean withAppMessages)
     {
         makeIngressPublicationReturn(Publication.NOT_CONNECTED);

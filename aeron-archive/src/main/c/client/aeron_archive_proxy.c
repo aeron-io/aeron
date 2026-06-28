@@ -15,6 +15,7 @@
  */
 
 #include <stdio.h>
+#include <inttypes.h>
 
 #include "aeron_alloc.h"
 #include "aeron_archive.h"
@@ -116,7 +117,7 @@ int aeron_archive_proxy_init(
     return 0;
 }
 
-int aeron_archive_proxy_set_control_esssion_id(
+int aeron_archive_proxy_set_control_session_id(
     aeron_archive_proxy_t *archive_proxy,
     int64_t control_session_id)
 {
@@ -1071,7 +1072,7 @@ bool aeron_archive_proxy_offer(
             AERON_PUBLICATION_NOT_CONNECTED == result ||
             AERON_PUBLICATION_MAX_POSITION_EXCEEDED == result)
         {
-            AERON_APPEND_ERR("%s", "");
+            AERON_SET_ERR(ENOTCONN, "offer failed with result %" PRIi64, result);
             return false;
         }
 

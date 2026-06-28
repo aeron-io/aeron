@@ -110,6 +110,7 @@ int aeron_csv_table_name_resolver_supplier(
 {
     resolver->lookup_func = aeron_default_name_resolver_lookup;
     resolver->close_func = aeron_csv_table_name_resolver_close;
+    resolver->start_func = aeron_default_name_resolver_start;
     resolver->resolve_func = aeron_csv_table_name_resolver_resolve;
     resolver->do_work_func = aeron_default_name_resolver_do_work;
     resolver->name = "csv";

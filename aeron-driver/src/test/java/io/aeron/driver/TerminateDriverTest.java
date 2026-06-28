@@ -18,9 +18,12 @@ package io.aeron.driver;
 import io.aeron.CommonContext;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
+import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.Tests;
+import io.aeron.test.driver.TestMediaDriver;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -31,6 +34,9 @@ import static org.mockito.Mockito.*;
 @ExtendWith(InterruptingTestCallback.class)
 class TerminateDriverTest
 {
+    @RegisterExtension
+    final SystemTestWatcher systemTestWatcher = new SystemTestWatcher();
+
     @Test
     void shouldCallTerminationHookUponValidRequest()
     {
@@ -44,7 +50,7 @@ class TerminateDriverTest
 
         when(mockTerminationValidator.allowTermination(any(), any(), anyInt(), anyInt())).thenReturn(true);
 
-        try (MediaDriver mediaDriver = MediaDriver.launch(ctx))
+        try (TestMediaDriver mediaDriver = TestMediaDriver.launch(ctx, systemTestWatcher))
         {
             assertTrue(CommonContext.requestDriverTermination(mediaDriver.context().aeronDirectory(), null, 0, 0));
 
@@ -74,7 +80,7 @@ class TerminateDriverTest
                 return false;
             });
 
-        try (MediaDriver mediaDriver = MediaDriver.launch(ctx))
+        try (TestMediaDriver mediaDriver = TestMediaDriver.launch(ctx, systemTestWatcher))
         {
             assertFalse(hasCalledTerminationValidator.get());
             assertTrue(CommonContext.requestDriverTermination(mediaDriver.context().aeronDirectory(), null, 0, 0));

@@ -52,14 +52,22 @@ for ($i = 0; $i -lt $Args.count; $i++)
     elseif ($arg -eq "--c-warnings-as-errors")
     {
         $CmakeExtraArgs = Add-Arg $CmakeExtraArgs "-DC_WARNINGS_AS_ERRORS=ON"
+        Write-Host "Enabling warnings as errors for c"
     }
     elseif ($arg -eq "--cxx-warnings-as-errors")
     {
         $CmakeExtraArgs = Add-Arg $CmakeExtraArgs "-DCXX_WARNINGS_AS_ERRORS=ON"
+        Write-Host "Enabling warnings as errors for c++"
     }
     elseif ($arg -eq "--cxx-hide-deprecation-message")
     {
         $CmakeExtraArgs = Add-Arg $CmakeExtraArgs "-DAERON_HIDE_DEPRECATION_MESSAGE=ON"
+        Write-Host "Hiding API deprecation message for c++"
+    }
+    elseif ($arg -eq "--skip-archive-api")
+    {
+        $CmakeExtraArgs = Add-Arg $CmakeExtraArgs "-DBUILD_AERON_ARCHIVE_API=OFF"
+        Write-Host "Disabling building of Aeron Archive API"
     }
     elseif ($arg -eq "--link-samples-client-shared")
     {
@@ -72,18 +80,22 @@ for ($i = 0; $i -lt $Args.count; $i++)
     elseif ($arg -eq "--no-tests")
     {
         $CmakeExtraArgs = Add-Arg $CmakeExtraArgs "-DAERON_TESTS=OFF"
+        Write-Host "Disabling all tests"
     }
     elseif ($arg -eq "--no-system-tests")
     {
         $CmakeExtraArgs = Add-Arg $CmakeExtraArgs "-DAERON_SYSTEM_TESTS=OFF"
+        Write-Host "Disabling system tests"
     }
     elseif ($arg -eq "--no-unit-tests")
     {
         $CmakeExtraArgs = Add-Arg $CmakeExtraArgs "-DAERON_UNIT_TESTS=OFF"
+        Write-Host "Disabling unit tests"
     }
     elseif ($arg -eq "--slow-system-tests")
     {
         $CmakeExtraArgs = Add-Arg $CmakeExtraArgs "-DAERON_SLOW_SYSTEM_TESTS=ON"
+        Write-Host "Enabling slow system tests"
     }
     elseif ($arg -eq "--debug-build")
     {
@@ -112,6 +124,7 @@ for ($i = 0; $i -lt $Args.count; $i++)
     elseif ($arg -eq "--sanitise-build")
     {
         $CmakeExtraArgs = Add-Arg $CmakeExtraArgs "-DSANITISE_BUILD=ON"
+        Write-Host "Enabling sanitise build"
     }
     elseif ($arg -eq "--gradle-wrapper")
     {
@@ -134,12 +147,12 @@ for ($i = 0; $i -lt $Args.count; $i++)
     {
         if ($i + 1 -eq $Args.count)
         {
-            throw "--gradle-wrapper requires a parameter"
+            throw "--parallel-cpus requires a parameter"
         }
         $nextArg = $Args[$i + 1]
 
         $CmakeBuildParallelLevel = $nextArg
-        Write-Host "Using $CmakeBuildParallelLevel cpus"
+        Write-Host "Using $CmakeBuildParallelLevel CPUs"
         $i++
     }
     else
@@ -151,8 +164,13 @@ for ($i = 0; $i -lt $Args.count; $i++)
 
 $BuildDir = "$PSScriptRoot\$BuildConfig"
 $SourceDir = "$PSScriptRoot\.."
-$CMakeVersion = "4.2.1"
-$CMakeDirName = "cmake-$CMakeVersion-windows-x86_64"
+$CMakeVersion = "4.3.3"
+$CMakeArch = "x86_64"
+if ( $env:PROCESSOR_ARCHITECTURE -eq "ARM64" )
+{
+    $CMakeArch = "arm64"
+}
+$CMakeDirName = "cmake-$CMakeVersion-windows-$CMakeArch"
 $CMakeArchive = "$CMakeDirName.zip"
 $CMakePath = "$PSScriptRoot\$CMakeDirName"
 $OldPath = $env:Path
@@ -186,9 +204,8 @@ try
 
     Push-Location -Path $BuildDir
 
-    $vsPath = &(Join-Path ${env:ProgramFiles(x86)} "\Microsoft Visual Studio\Installer\vswhere.exe") -property installationpath
-    Write-Host $vsPath
-    Import-Module (Join-Path $vsPath "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
+    $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationpath
+    Import-Module (Get-ChildItem $vsPath -Recurse -File -Filter Microsoft.VisualStudio.DevShell.dll).FullName
     Enter-VsDevShell -VsInstallPath $vsPath -SkipAutomaticLocation
 
     $env:Path = "$CMakePath\bin;$env:Path"

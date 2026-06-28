@@ -544,6 +544,7 @@ class NameReResolutionTest
     @InterruptAfter(20)
     void shouldReResolveUnicastAddressWhenSendChannelEndpointIsReused()
     {
+        systemTestWatcher.ignoreErrorsMatching((s) -> s.contains("Network is unreachable"));
         subscription = client.addSubscription("aeron:udp?endpoint=127.0.0.1:5555", STREAM_ID);
 
         final long startTimeNs = System.nanoTime();

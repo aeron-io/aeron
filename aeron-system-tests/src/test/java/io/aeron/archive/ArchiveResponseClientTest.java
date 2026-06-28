@@ -16,6 +16,7 @@
 package io.aeron.archive;
 
 import io.aeron.Aeron;
+import io.aeron.ChannelUri;
 import io.aeron.Counter;
 import io.aeron.Subscription;
 import io.aeron.archive.client.AeronArchive;
@@ -42,6 +43,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 
+import static io.aeron.CommonContext.RESPONSE_CORRELATION_ID_PARAM_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
@@ -243,6 +245,22 @@ public class ArchiveResponseClientTest
             {
                 CloseHelper.close(aeronArchive);
             }
+        }
+    }
+
+    @Test
+    void shouldConnectUsingLocalIpcResponseChannels()
+    {
+        final AeronArchive.Context context = new AeronArchive.Context()
+            .controlRequestChannel(archive.context().localControlChannel())
+            .controlRequestStreamId(archive.context().localControlStreamId())
+            .controlResponseChannel("aeron:ipc?control-mode=response");
+        try (AeronArchive aeronArchive = AeronArchive.connect(context))
+        {
+            final ChannelUri requestChannel = ChannelUri.parse(context.controlRequestChannel());
+            assertEquals(
+                Long.toString(aeronArchive.controlResponsePoller().subscription().registrationId()),
+                requestChannel.get(RESPONSE_CORRELATION_ID_PARAM_NAME));
         }
     }
 }

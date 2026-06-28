@@ -91,6 +91,13 @@ public final class SimpleAuthorisationService implements AuthorisationService
         private final Principal defaultPrincipal = new Principal(new byte[0]);
 
         /**
+         * Default constructor.
+         */
+        public Builder()
+        {
+        }
+
+        /**
          * Set the default authorisation if the authorisation request does not match any of the supplied rules.
          *
          * @param defaultAuthorisation an authorisation service to fall back to.

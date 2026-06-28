@@ -17,12 +17,14 @@
 #if defined(__linux__)
 #define _BSD_SOURCE
 #define _GNU_SOURCE
+#ifdef HAVE_BSDSTDLIB_H
+#include <bsd/stdlib.h>
+#endif
 #endif
 
 #include "util/aeron_platform.h"
 
 #include <stdlib.h>
-#include <string.h>
 #include <errno.h>
 #include <inttypes.h>
 
@@ -33,21 +35,6 @@
 #include "util/aeron_bitutil.h"
 #include "util/aeron_error.h"
 #include "aeron_alloc.h"
-
-int aeron_alloc_no_err(void **ptr, size_t size)
-{
-    void *bytes = malloc(size);
-    if (NULL == bytes)
-    {
-        *ptr = NULL;
-        return -1;
-    }
-
-    memset(bytes, 0, size);
-    *ptr = bytes;
-
-    return 0;
-}
 
 int aeron_alloc(void **ptr, size_t size)
 {
@@ -69,76 +56,64 @@ int aeron_alloc_aligned(void **ptr, size_t *offset, size_t size, size_t alignmen
 {
     if (!(AERON_IS_POWER_OF_TWO(alignment)))
     {
-        errno = EINVAL;
-#if defined(AERON_COMPILER_MSVC)
-        SetLastError(ERROR_INCORRECT_SIZE);
-#endif
+        AERON_SET_ERR(EINVAL, "Alignment must be a power of two: %" PRIu64, (uint64_t)alignment);
         return -1;
     }
 
-#if defined(__linux__) || defined(__APPLE__)
-    int alloc_result;
-    if ((alloc_result = posix_memalign(ptr, alignment, size)) < 0)
+#ifdef HAVE_POSIX_MEMALIGN
+    int rc = posix_memalign(ptr, alignment, size);
+    if (rc != 0)
     {
-        errno = alloc_result;
+        // any non zero value is a failure.
+        AERON_SET_ERR(rc, "Failed to allocate %" PRIu64 " bytes, alignment %" PRIu64, (uint64_t)size, (uint64_t)alignment);
         return -1;
     }
-
     memset(*ptr, 0, size);
     *offset = 0;
 #else
-    int result = aeron_alloc(ptr, size + alignment);
-    if (result < 0)
+    if (aeron_alloc(ptr, size + alignment) < 0)
     {
+        AERON_APPEND_ERR("alignment=%" PRIu64, alignment);
         return -1;
     }
 
     intptr_t addr = (intptr_t)*ptr;
     *offset = alignment - (addr & (alignment - 1));
 #endif
-    return 0;
-}
-
-#if defined(__linux__) || defined(AERON_COMPILER_MSVC)
-int aeron_reallocf(void **ptr, size_t size)
-{
-    void *new_ptr = NULL;
-    /* mimic reallocf */
-    if ((new_ptr = realloc(*ptr, size)) == NULL)
-    {
-        if (0 == size)
-        {
-            *ptr = NULL;
-        }
-        else
-        {
-            free(*ptr);
-            *ptr = NULL;
-            errno = ENOMEM;
-#if defined(AERON_COMPILER_MSVC)
-            SetLastError(ERROR_OUTOFMEMORY);
-#endif
-            return -1;
-        }
-    }
-    else
-    {
-        *ptr = new_ptr;
-    }
 
     return 0;
 }
-#else
+
 int aeron_reallocf(void **ptr, size_t size)
 {
-    if ((*ptr = reallocf(*ptr, size)) == NULL)
+    if (0 == size)
     {
-        errno = ENOMEM;
+        aeron_free(*ptr);
+        *ptr = NULL;
+        return 0;
+    }
+
+#ifdef HAVE_REALLOCF
+    if (NULL == (*ptr = reallocf(*ptr, size)))
+    {
+        AERON_SET_ERR(ENOMEM, "Failed to re-allocate memory with a new size %" PRIu64, (uint64_t)size);
         return -1;
     }
+#else
+    void *new_ptr = NULL;
+    /* mimic reallocf */
+    if (NULL == (new_ptr = realloc(*ptr, size)))
+    {
+        free(*ptr);
+        *ptr = NULL;
+        AERON_SET_ERR(ENOMEM, "Failed to re-allocate memory with a new size %" PRIu64, (uint64_t)size);
+        return -1;
+    }
+
+    *ptr = new_ptr;
+#endif
     return 0;
 }
-#endif
 
 void aeron_free(void *ptr)
 {

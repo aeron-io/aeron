@@ -22,6 +22,8 @@ import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -44,12 +46,14 @@ import static io.aeron.agent.ClusterEventCode.REPLAY_NEW_LEADERSHIP_TERM;
 import static io.aeron.agent.ClusterEventCode.REPLICATION_ENDED;
 import static io.aeron.agent.ClusterEventCode.REQUEST_VOTE;
 import static io.aeron.agent.ClusterEventCode.SERVICE_ACK;
+import static io.aeron.agent.ClusterEventCode.SNAPSHOT_ENTRY_INVALIDATION;
 import static io.aeron.agent.ClusterEventCode.STANDBY_SNAPSHOT_NOTIFICATION;
 import static io.aeron.agent.ClusterEventCode.STATE_CHANGE;
 import static io.aeron.agent.ClusterEventCode.STOP_CATCHUP;
 import static io.aeron.agent.ClusterEventCode.TERMINATION_ACK;
 import static io.aeron.agent.ClusterEventCode.TERMINATION_POSITION;
 import static io.aeron.agent.ClusterEventCode.TRUNCATE_LOG_ENTRY;
+import static io.aeron.agent.ClusterEventCode.VOTE;
 import static io.aeron.agent.ClusterEventEncoder.MAX_REASON_LENGTH;
 import static io.aeron.agent.ClusterEventEncoder.canvassPositionLength;
 import static io.aeron.agent.ClusterEventEncoder.clusterSessionStateChangeLength;
@@ -59,6 +63,7 @@ import static io.aeron.agent.ClusterEventEncoder.newLeaderShipTermLength;
 import static io.aeron.agent.ClusterEventEncoder.replayNewLeadershipTermEventLength;
 import static io.aeron.agent.ClusterEventEncoder.replicationEndedLength;
 import static io.aeron.agent.ClusterEventEncoder.serviceAckLength;
+import static io.aeron.agent.ClusterEventEncoder.snapshotEntryInvalidationLength;
 import static io.aeron.agent.ClusterEventEncoder.standbySnapshotNotificationLength;
 import static io.aeron.agent.ClusterEventEncoder.terminationAckLength;
 import static io.aeron.agent.ClusterEventEncoder.terminationPositionLength;
@@ -183,9 +188,10 @@ class ClusterEventLoggerTest
         final TimeUnit to = SECONDS;
         final int memberId = 42;
         final String payload = from.name() + STATE_SEPARATOR + to.name();
-        final int captureLength = SIZE_OF_INT * 2 + payload.length();
+        final String reason = "this is the way";
+        final int captureLength = ClusterEventEncoder.stateChangeLength(from, to, reason);
 
-        logger.logStateChange(STATE_CHANGE, memberId, from, to);
+        logger.logStateChange(STATE_CHANGE, memberId, from, to, reason);
 
         verifyLogHeader(logBuffer, offset, STATE_CHANGE.toEventCodeId(), captureLength, captureLength);
         final int index = encodedMsgOffset(offset) + LOG_HEADER_LENGTH;
@@ -197,7 +203,7 @@ class ClusterEventLoggerTest
             ClusterEventCode.STATE_CHANGE, logBuffer, encodedMsgOffset(offset), sb);
 
         final String expectedMessagePattern = "\\[[0-9]+\\.[0-9]+] CLUSTER: STATE_CHANGE " +
-            "\\[26/26]: memberId=42 MINUTES -> SECONDS";
+            "\\[45/45]: memberId=42 MINUTES -> SECONDS reason=\"this is the way\"";
 
         assertThat(sb.toString(), Matchers.matchesPattern(expectedMessagePattern));
     }
@@ -262,7 +268,8 @@ class ClusterEventLoggerTest
 
         final String expectedMessagePattern = "\\[[0-9]+\\.[0-9]+] CLUSTER: ELECTION_STATE_CHANGE " +
             "\\[376/376]: memberId=18 ERAS -> null leaderId=-1 candidateTermId=29 leadershipTermId=0 " +
-            "logPosition=100 logLeadershipTermId=-9 appendPosition=16384 catchupPosition=8192 reason=" + trailingReason;
+            "logPosition=100 logLeadershipTermId=-9 appendPosition=16384 catchupPosition=8192 reason=\"" +
+            trailingReason + "\"";
 
         assertThat(sb.toString(), Matchers.matchesPattern(expectedMessagePattern));
     }
@@ -673,6 +680,56 @@ class ClusterEventLoggerTest
         assertThat(sb.toString(), Matchers.matchesPattern(expectedMessagePattern));
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    void logOnVote(final boolean vote)
+    {
+        final long logLeadershipTermId = 8;
+        final long logPosition = 1024;
+        final long candidateTermId = 42;
+        final int candidateId = 5;
+        final int voterId = 1;
+        final int memberId = 4;
+        final int offset = 16;
+        logBuffer.putLong(CAPACITY + TAIL_POSITION_OFFSET, offset);
+
+        logger.logOnVote(
+            memberId, logLeadershipTermId, logPosition, candidateTermId, candidateId, voterId, vote);
+
+        final ClusterEventCode eventCode = VOTE;
+        final int captureLength = 37;
+        verifyLogHeader(logBuffer, offset, eventCode.toEventCodeId(), captureLength, captureLength);
+        int index = encodedMsgOffset(offset) + LOG_HEADER_LENGTH;
+        assertEquals(logLeadershipTermId, logBuffer.getLong(index, LITTLE_ENDIAN));
+        index += SIZE_OF_LONG;
+        assertEquals(logPosition, logBuffer.getLong(index, LITTLE_ENDIAN));
+        index += SIZE_OF_LONG;
+        assertEquals(candidateTermId, logBuffer.getLong(index, LITTLE_ENDIAN));
+        index += SIZE_OF_LONG;
+        assertEquals(candidateId, logBuffer.getInt(index, LITTLE_ENDIAN));
+        index += SIZE_OF_INT;
+        assertEquals(voterId, logBuffer.getInt(index, LITTLE_ENDIAN));
+        index += SIZE_OF_INT;
+        assertEquals(memberId, logBuffer.getInt(index, LITTLE_ENDIAN));
+        index += SIZE_OF_INT;
+        assertEquals(vote ? 1 : 0, logBuffer.getByte(index));
+
+        final StringBuilder sb = new StringBuilder();
+        ClusterEventDissector.dissectVote(eventCode, logBuffer, encodedMsgOffset(offset), sb);
+
+        final String expectedMessagePattern = "\\[[0-9]+\\.[0-9]+] CLUSTER: VOTE " +
+            "\\[" + captureLength + "/" + captureLength + "]:" +
+            " memberId=" + memberId +
+            " logLeadershipTermId=" + logLeadershipTermId +
+            " logPosition=" + logPosition +
+            " candidateTermId=" + candidateTermId +
+            " candidateId=" + candidateId +
+            " voterId=" + voterId +
+            " vote=" + vote;
+
+        assertThat(sb.toString(), Matchers.matchesPattern(expectedMessagePattern));
+    }
+
     @Test
     void logOnCanvassPosition()
     {
@@ -956,7 +1013,7 @@ class ClusterEventLoggerTest
 
         final String expectedMessagePattern =
             "\\[[0-9]+\\.[0-9]+] CLUSTER: NEW_ELECTION \\[59/59]: memberId=42 " +
-            "leadershipTermId=8 logPosition=9827342 appendPosition=342384382 reason=why an election was started";
+            "leadershipTermId=8 logPosition=9827342 appendPosition=342384382 reason=\"why an election was started\"";
 
         assertThat(sb.toString(), Matchers.matchesPattern(expectedMessagePattern));
     }
@@ -1005,6 +1062,52 @@ class ClusterEventLoggerTest
             """
                 \\[[0-9]+\\.[0-9]+] CLUSTER: CLUSTER_SESSION_STATE_CHANGE \\[74/74]: memberId=7 \
                 sessionId=-47238947 action=WEEKS NANOSECONDS -> HOURS reason=\"state changed somehow\"""";
+
+        assertThat(sb.toString(), Matchers.matchesPattern(expectedMessagePattern));
+    }
+
+    @Test
+    void logSnapshotEntryInvalidation()
+    {
+        final int memberId = 7;
+        final int entryIndex = 123;
+        final long recordingId = 2934;
+        final long logPosition = 9823749374L;
+        final int serviceId = -1;
+
+        final int offset = 16;
+        logBuffer.putLong(CAPACITY + TAIL_POSITION_OFFSET, offset);
+
+        final int encodedLength = snapshotEntryInvalidationLength();
+
+        logger.logSnapshotEntryInvalidation(memberId, entryIndex, recordingId, logPosition, serviceId);
+
+        verifyLogHeader(
+            logBuffer,
+            offset,
+            SNAPSHOT_ENTRY_INVALIDATION.toEventCodeId(),
+            encodedLength,
+            encodedLength);
+
+        int index = encodedMsgOffset(offset) + LOG_HEADER_LENGTH;
+        assertEquals(memberId, logBuffer.getInt(index, LITTLE_ENDIAN));
+        index += SIZE_OF_INT;
+        assertEquals(entryIndex, logBuffer.getInt(index, LITTLE_ENDIAN));
+        index += SIZE_OF_INT;
+        assertEquals(recordingId, logBuffer.getLong(index, LITTLE_ENDIAN));
+        index += SIZE_OF_LONG;
+        assertEquals(logPosition, logBuffer.getLong(index, LITTLE_ENDIAN));
+        index += SIZE_OF_LONG;
+        assertEquals(serviceId, logBuffer.getInt(index, LITTLE_ENDIAN));
+
+        final StringBuilder sb = new StringBuilder();
+        ClusterEventDissector.dissectSnapshotEntryInvalidation(
+            SNAPSHOT_ENTRY_INVALIDATION, logBuffer, encodedMsgOffset(offset), sb);
+
+        final String expectedMessagePattern =
+            """
+                \\[[0-9]+\\.[0-9]+] CLUSTER: SNAPSHOT_ENTRY_INVALIDATION \\[28/28]: memberId=7 \
+                entryIndex=123 recordingId=2934 logPosition=9823749374 serviceId=-1""";
 
         assertThat(sb.toString(), Matchers.matchesPattern(expectedMessagePattern));
     }

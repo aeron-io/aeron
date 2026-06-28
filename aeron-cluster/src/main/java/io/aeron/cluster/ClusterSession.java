@@ -382,6 +382,12 @@ final class ClusterSession implements ClusterClientSession
         }
     }
 
+    void redirect(final String ingressEndpoints)
+    {
+        this.eventCode = EventCode.REDIRECT;
+        this.responseDetail = ingressEndpoints;
+    }
+
     EventCode eventCode()
     {
         return eventCode;
@@ -468,6 +474,11 @@ final class ClusterSession implements ClusterClientSession
     long ingressImageCorrelationId()
     {
         return ingressImageCorrelationId;
+    }
+
+    boolean hasTimedOut(final long nowNs, final long sessionTimeoutNs)
+    {
+        return State.INIT != state() && (timeOfLastActivityNs() + sessionTimeoutNs) < nowNs;
     }
 
     private long addSessionCounter(final Aeron aeron, final MutableDirectBuffer tempBuffer, final int clusterId)

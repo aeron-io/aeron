@@ -553,7 +553,7 @@ static int aeron_archive_context_set_channel(char **target_channel, size_t *targ
         {
             if (aeron_reallocf((void **)&temp, channel_length) < 0)
             {
-                AERON_SET_ERR(ENOMEM, "%s", "unable to reallocate control_response_channel");
+                AERON_APPEND_ERR("%s", "unable to reallocate control_response_channel");
                 return -1;
             }
         }

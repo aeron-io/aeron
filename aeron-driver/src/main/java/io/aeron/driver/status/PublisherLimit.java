@@ -27,7 +27,7 @@ import static io.aeron.Aeron.NULL_VALUE;
  * The limit as a position in bytes applied to publishers on a session-channel-stream tuple. Publishers will experience
  * back pressure when this position is passed as a means of flow control.
  */
-public class PublisherLimit
+public final class PublisherLimit
 {
     /**
      * Type id of a publisher limit counter.
@@ -38,6 +38,10 @@ public class PublisherLimit
      * Human-readable name for the counter.
      */
     public static final String NAME = "pub-lmt";
+
+    private PublisherLimit()
+    {
+    }
 
     /**
      * Allocate a new publisher limit counter for a stream.

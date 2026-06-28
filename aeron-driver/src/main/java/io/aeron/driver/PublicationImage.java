@@ -224,10 +224,11 @@ public final class PublicationImage
         final int activeTermId,
         final int termOffset,
         final short flags,
-        final RawLog rawLog,
+        final boolean isReliable,
         final long untetheredWindowLimitTimeoutNs,
         final long untetheredLingerTimeoutNs,
         final long untetheredRestingTimeoutNs,
+        final RawLog rawLog,
         final FeedbackDelayGenerator lossFeedbackDelayGenerator,
         final ArrayList<SubscriberPosition> subscriberPositions,
         final Position hwmPosition,
@@ -253,7 +254,7 @@ public final class PublicationImage
         this.sourceIdentity = sourceIdentity;
         this.initialTermId = initialTermId;
         this.congestionControl = congestionControl;
-        this.errorHandler = ctx.errorHandler();
+        this.errorHandler = ctx.countedErrorHandler();
         this.lossReport = ctx.lossReport();
 
         this.nanoClock = ctx.nanoClock();
@@ -265,7 +266,7 @@ public final class PublicationImage
         this.timeOfLastPacketNs = nowNs;
 
         this.subscriberPositions = positionArray(subscriberPositions, nowNs);
-        this.isReliable = subscriberPositions.get(0).subscription().isReliable();
+        this.isReliable = isReliable;
 
         final SystemCounters systemCounters = ctx.systemCounters();
         heartbeatsReceived = systemCounters.get(HEARTBEATS_RECEIVED);
@@ -296,14 +297,6 @@ public final class PublicationImage
 
         hwmPosition.setRelease(position);
         rebuildPosition.setRelease(position);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public boolean free()
-    {
-        return rawLog.free();
     }
 
     /**
@@ -716,9 +709,7 @@ public final class PublicationImage
      */
     boolean isConnected(final long nowNs)
     {
-        return ((timeOfLastPacketNs + imageLivenessTimeoutNs) - nowNs >= 0) &&
-            !channelEndpoint.isClosed() &&
-            (!isEndOfStream || !isReceiverReleaseTriggered);
+        return ((timeOfLastPacketNs + imageLivenessTimeoutNs) - nowNs >= 0) && !isReceiverReleaseTriggered;
     }
 
     boolean isEndOfStream()
@@ -966,11 +957,11 @@ public final class PublicationImage
 
                     conductor.transitionToLinger(this);
 
+                    isReceiverReleaseTriggered = true;
                     channelEndpoint.decRefImages();
                     conductor.tryCloseReceiveChannelEndpoint(channelEndpoint);
 
                     timeOfLastStateChangeNs = timeNs;
-                    isReceiverReleaseTriggered = true;
                     state(State.LINGER);
                 }
                 break;

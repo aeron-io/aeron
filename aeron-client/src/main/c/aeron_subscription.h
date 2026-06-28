@@ -65,6 +65,7 @@ typedef struct aeron_subscription_stct
     size_t round_robin_index;
 
     volatile bool is_closed;
+    volatile bool pending_close_action;
     uint8_t post_fields_padding[AERON_CACHE_LINE_LENGTH];
 }
 aeron_subscription_t;

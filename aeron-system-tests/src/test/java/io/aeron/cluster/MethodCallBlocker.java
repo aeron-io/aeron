@@ -38,6 +38,7 @@ import net.bytebuddy.matcher.ElementMatchers;
 import net.bytebuddy.utility.JavaModule;
 
 import java.lang.instrument.Instrumentation;
+import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -107,7 +108,8 @@ public final class MethodCallBlocker
         try (DynamicType.Unloaded<Object> adviceType = createAdviceType(adviceClassName))
         {
             final Class<?> dynamicAdviceClass = adviceType
-                .load(MethodCallBlocker.class.getClassLoader(), ClassLoadingStrategy.Default.INJECTION)
+                .load(MethodCallBlocker.class.getClassLoader(), ClassLoadingStrategy.UsingLookup.of(
+                    MethodHandles.privateLookupIn(MethodCallBlocker.class, MethodHandles.lookup())))
                 .getLoaded();
 
             final MethodCallHandler methodCallHandler = new MethodCallHandler();
@@ -131,6 +133,10 @@ public final class MethodCallBlocker
             methodCallHandler.transformer(transformer);
 
             return methodCallHandler;
+        }
+        catch (final IllegalAccessException exception)
+        {
+            throw new RuntimeException(exception);
         }
     }
 

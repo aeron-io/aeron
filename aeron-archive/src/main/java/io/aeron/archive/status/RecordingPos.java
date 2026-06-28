@@ -68,6 +68,10 @@ public final class RecordingPos
      */
     public static final String NAME = "rec-pos";
 
+    private RecordingPos()
+    {
+    }
+
     static final int RECORDING_ID_OFFSET = 0;
     static final int SESSION_ID_OFFSET = RECORDING_ID_OFFSET + SIZE_OF_LONG;
     static final int SOURCE_IDENTITY_LENGTH_OFFSET = SESSION_ID_OFFSET + SIZE_OF_INT;

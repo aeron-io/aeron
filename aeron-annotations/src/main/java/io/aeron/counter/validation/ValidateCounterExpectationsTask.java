@@ -20,12 +20,17 @@ import io.aeron.utility.ElementIO;
 /**
  * A gradle task for validating C counters conform to expectations set by the AeronCounter annotation in java.
  */
-public class ValidateCounterExpectationsTask
+public final class ValidateCounterExpectationsTask
 {
+    private ValidateCounterExpectationsTask()
+    {
+    }
+
     /**
-     * @param args
-     * Arg 0 should be the location of a counter-info.xml file with a list of CounterInfo objects
-     * Arg 1 should be the location of the C source code
+     * Launch task to validate counter expectations.
+     *
+     * @param args Arg 0 should be the location of a counter-info.xml file with a list of CounterInfo objects. Arg 1
+     *             should be the location of the C source code
      * @throws Exception on IO failure.
      */
     public static void main(final String[] args) throws Exception

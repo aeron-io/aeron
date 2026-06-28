@@ -29,6 +29,7 @@ import io.aeron.test.Tests;
 import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.CloseHelper;
 import org.agrona.collections.MutableInteger;
+import org.agrona.concurrent.NoOpIdleStrategy;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.CountersReader;
 import org.junit.jupiter.api.AfterEach;
@@ -85,14 +86,18 @@ class SpySimulatedConnectionTest
     @RegisterExtension
     final SystemTestWatcher watcher = new SystemTestWatcher();
 
-    private void launch()
+    private void launch(final ThreadingMode threadingMode)
     {
         driverContext
             .aeronDirectoryName(CommonContext.generateRandomDirName())
             .publicationTermBufferLength(TERM_BUFFER_LENGTH)
             .errorHandler(Tests::onError)
             .dirDeleteOnStart(true)
-            .threadingMode(ThreadingMode.SHARED);
+            .threadingMode(threadingMode)
+            .senderIdleStrategy(NoOpIdleStrategy.INSTANCE)
+            .receiverIdleStrategy(NoOpIdleStrategy.INSTANCE)
+            .conductorIdleStrategy(NoOpIdleStrategy.INSTANCE)
+            .nativeResourceAgentIdleStrategy(NoOpIdleStrategy.INSTANCE);
 
         driver = TestMediaDriver.launch(driverContext, watcher);
         watcher.dataCollector().add(driver.context().aeronDirectory());
@@ -111,7 +116,7 @@ class SpySimulatedConnectionTest
     @InterruptAfter(10)
     void shouldNotSimulateConnectionWhenNotConfigured(final String channel)
     {
-        launch();
+        launch(ThreadingMode.SHARED);
 
         spy = client.addSubscription(spyForChannel(channel), STREAM_ID);
         publication = client.addPublication(channel, STREAM_ID);
@@ -126,7 +131,7 @@ class SpySimulatedConnectionTest
     @InterruptAfter(10)
     void shouldSimulateConnectionWhenOnChannel(final String channel)
     {
-        launch();
+        launch(ThreadingMode.SHARED);
 
         spy = client.addSubscription(spyForChannel(channel), STREAM_ID);
         publication = client.addPublication(channel + "|ssc=true", STREAM_ID);
@@ -147,7 +152,7 @@ class SpySimulatedConnectionTest
             .timerIntervalNs(TimeUnit.MILLISECONDS.toNanos(100))
             .spiesSimulateConnection(true);
 
-        launch();
+        launch(ThreadingMode.SHARED);
 
         spy = client.addSubscription(spyForChannel(channel), STREAM_ID);
         publication = client.addPublication(channel, STREAM_ID);
@@ -198,7 +203,7 @@ class SpySimulatedConnectionTest
             .timerIntervalNs(TimeUnit.MILLISECONDS.toNanos(100))
             .spiesSimulateConnection(true);
 
-        launch();
+        launch(ThreadingMode.SHARED);
 
         spy = client.addSubscription(spyForChannel(channel), STREAM_ID);
         subscription = client.addSubscription(channel, STREAM_ID);
@@ -247,7 +252,7 @@ class SpySimulatedConnectionTest
             .timerIntervalNs(TimeUnit.MILLISECONDS.toNanos(100))
             .spiesSimulateConnection(true);
 
-        launch();
+        launch(ThreadingMode.SHARED);
 
         spy = client.addSubscription(spyForChannel(channel), STREAM_ID);
         subscription = client.addSubscription(channel, STREAM_ID);
@@ -290,9 +295,9 @@ class SpySimulatedConnectionTest
     @InterruptAfter(10)
     void shouldNotHaveShortSendsWithMDCPublication()
     {
-        launch();
+        launch(ThreadingMode.SHARED);
 
-        final String channel = "aeron:udp?control=localhost:40456|control-mode=dynamic";
+        final String channel = "aeron:udp?control=localhost:20000|control-mode=dynamic";
 
         spy = client.addSubscription(spyForChannel(channel), STREAM_ID);
         publication = client.addExclusivePublication(channel + "|ssc=true", STREAM_ID);
@@ -323,7 +328,7 @@ class SpySimulatedConnectionTest
     void shouldNotChangeConnectionStatusOnPublicationIfNormalSubscriberGoesAway(final String channel)
         throws InterruptedException
     {
-        launch();
+        launch(ThreadingMode.SHARED);
 
         spy = client.addSubscription(spyForChannel(channel), STREAM_ID);
         subscription = client.addSubscription(channel, STREAM_ID);
@@ -375,6 +380,64 @@ class SpySimulatedConnectionTest
         assertTrue(publication.isConnected(), "connection status changed unexpectedly");
         assertFalse(publication.isClosed());
         assertTrue(spy.isConnected());
+    }
+
+    @ParameterizedTest
+    @MethodSource("channels")
+    @InterruptAfter(10)
+    void addingAndRemovingSpiesIsThreadSafe(final String channel) throws InterruptedException
+    {
+        launch(ThreadingMode.DEDICATED);
+
+        final String spyChannel = spyForChannel(channel);
+        spy = client.addSubscription(spyChannel, STREAM_ID);
+        publication = client.addPublication(channel + "|ssc=true", STREAM_ID);
+        Tests.awaitConnected(publication);
+        Tests.awaitConnected(spy);
+
+        final AtomicBoolean running = new AtomicBoolean(true);
+        final Thread sender = new Thread(() ->
+        {
+            while (running.get())
+            {
+                if (publication.offer(buffer) < 0)
+                {
+                    Tests.yield();
+                }
+            }
+        });
+        sender.start();
+
+        final long[] spyRegistrationIds = new long[100];
+        for (int i = 0; i < spyRegistrationIds.length; i++)
+        {
+            spyRegistrationIds[i] = client.asyncAddSubscription(spyChannel, STREAM_ID);
+        }
+
+        final Subscription[] spies = new Subscription[spyRegistrationIds.length];
+
+        int count;
+        do
+        {
+            count = 0;
+            for (int i = 0; i < spyRegistrationIds.length; i++)
+            {
+                if (null == spies[i])
+                {
+                    spies[i] = client.getSubscription(spyRegistrationIds[i]);
+                }
+                else
+                {
+                    count++;
+                }
+            }
+        }
+        while (spyRegistrationIds.length != count);
+
+        CloseHelper.closeAll(spies);
+
+        running.set(false);
+        sender.join();
     }
 
     private void waitUntilFullConnectivity()

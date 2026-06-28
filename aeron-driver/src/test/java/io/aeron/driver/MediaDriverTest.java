@@ -37,11 +37,23 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
 
-import static io.aeron.driver.status.SystemCounterDescriptor.*;
+import static io.aeron.driver.status.SystemCounterDescriptor.CONDUCTOR_CYCLE_TIME_THRESHOLD_EXCEEDED;
+import static io.aeron.driver.status.SystemCounterDescriptor.CONDUCTOR_MAX_CYCLE_TIME;
+import static io.aeron.driver.status.SystemCounterDescriptor.NAME_RESOLVER_MAX_TIME;
+import static io.aeron.driver.status.SystemCounterDescriptor.NAME_RESOLVER_TIME_THRESHOLD_EXCEEDED;
+import static io.aeron.driver.status.SystemCounterDescriptor.RECEIVER_CYCLE_TIME_THRESHOLD_EXCEEDED;
+import static io.aeron.driver.status.SystemCounterDescriptor.RECEIVER_MAX_CYCLE_TIME;
+import static io.aeron.driver.status.SystemCounterDescriptor.SENDER_CYCLE_TIME_THRESHOLD_EXCEEDED;
+import static io.aeron.driver.status.SystemCounterDescriptor.SENDER_MAX_CYCLE_TIME;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.endsWith;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(InterruptingTestCallback.class)
 class MediaDriverTest
@@ -183,8 +195,7 @@ class MediaDriverTest
         final Path aeronDir = tempDir.resolve("aeron");
         final MediaDriver.Context context = new MediaDriver.Context()
             .aeronDirectoryName(aeronDir.toString())
-            .threadingMode(ThreadingMode.DEDICATED)
-            .asyncTaskExecutorThreads(2);
+            .threadingMode(ThreadingMode.DEDICATED);
         try (TestMediaDriver mediaDriver = TestMediaDriver.launch(context, systemTestWatcher))
         {
             systemTestWatcher.dataCollector().add(mediaDriver.context().aeronDirectory());

@@ -26,6 +26,13 @@ import java.util.concurrent.TimeUnit;
 public class NanosecondClusterClock implements ClusterClock
 {
     /**
+     * Default constructor.
+     */
+    public NanosecondClusterClock()
+    {
+    }
+
+    /**
      * {@inheritDoc}
      */
     public TimeUnit timeUnit()

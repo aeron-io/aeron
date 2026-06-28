@@ -22,6 +22,7 @@ import io.aeron.RethrowingErrorHandler;
 import io.aeron.Subscription;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.cluster.AppVersionValidator;
+import io.aeron.cluster.VersionValidator;
 import io.aeron.cluster.client.ClusterException;
 import io.aeron.cluster.codecs.mark.ClusterComponentType;
 import io.aeron.cluster.codecs.mark.MarkFileHeaderEncoder;
@@ -70,6 +71,7 @@ import java.util.function.Supplier;
 import static io.aeron.ChannelUri.addAliasIfAbsent;
 import static io.aeron.CommonContext.driverFilePageSize;
 import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.LIVENESS_TIMEOUT_MS;
+import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.MAX_SERVICE_COUNT;
 import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.SERVICE_NAME_PROP_NAME;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.agrona.SystemUtil.getDurationInNanos;
@@ -178,6 +180,10 @@ public final class ClusteredServiceContainer implements AutoCloseable
     @Config(existsInC = false)
     public static final class Configuration
     {
+        private Configuration()
+        {
+        }
+
         /**
          * Type of snapshot for this service.
          */
@@ -216,6 +222,11 @@ public final class ClusteredServiceContainer implements AutoCloseable
          */
         @Config
         public static final int SERVICE_ID_DEFAULT = 0;
+
+        /**
+         * The max number of services supported by the cluster instance.
+         */
+        public static final int MAX_SERVICE_COUNT = 10;
 
         /**
          * Name for a clustered service to be the role of the {@link Agent}.
@@ -402,8 +413,8 @@ public final class ClusteredServiceContainer implements AutoCloseable
         @Config(
             id = "SERVICE_CYCLE_THRESHOLD",
             defaultType = DefaultType.LONG,
-            defaultLong = 1_000_000L)
-        public static final long CYCLE_THRESHOLD_DEFAULT_NS = TimeUnit.MILLISECONDS.toNanos(1);
+            defaultLong = 100_000_000L)
+        public static final long CYCLE_THRESHOLD_DEFAULT_NS = TimeUnit.MILLISECONDS.toNanos(100);
 
         /**
          * Property name for threshold value, which is used for tracking snapshot duration breaches.
@@ -559,13 +570,6 @@ public final class ClusteredServiceContainer implements AutoCloseable
         public static final String CLUSTER_IDLE_STRATEGY_PROP_NAME = "aeron.cluster.idle.strategy";
 
         /**
-         * Property to configure if this node should take standby snapshots. The default for this property is
-         * <code>false</code>.
-         */
-        @Config(defaultType = DefaultType.BOOLEAN, defaultBoolean = false)
-        public static final String STANDBY_SNAPSHOT_ENABLED_PROP_NAME = "aeron.cluster.standby.snapshot.enabled";
-
-        /**
          * Create a supplier of {@link IdleStrategy}s that will use the system property.
          *
          * @param controllableStatus if a {@link org.agrona.concurrent.ControllableIdleStrategy} is required.
@@ -658,16 +662,6 @@ public final class ClusteredServiceContainer implements AutoCloseable
         public static long snapshotDurationThresholdNs()
         {
             return getDurationInNanos(SNAPSHOT_DURATION_THRESHOLD_PROP_NAME, SNAPSHOT_DURATION_THRESHOLD_DEFAULT_NS);
-        }
-
-        /**
-         * Get the configuration value to determine if this node should take standby snapshots be enabled.
-         *
-         * @return configuration value for standby snapshots being enabled.
-         */
-        public static boolean standbySnapshotEnabled()
-        {
-            return Boolean.getBoolean(STANDBY_SNAPSHOT_ENABLED_PROP_NAME);
         }
 
         /**
@@ -766,7 +760,6 @@ public final class ClusteredServiceContainer implements AutoCloseable
         private int logFragmentLimit = Configuration.logFragmentLimit();
         private long cycleThresholdNs = Configuration.cycleThresholdNs();
         private long snapshotDurationThresholdNs = Configuration.snapshotDurationThresholdNs();
-        private boolean standbySnapshotEnabled = Configuration.standbySnapshotEnabled();
 
         private CountDownLatch abortLatch;
         private ThreadFactory threadFactory;
@@ -786,12 +779,19 @@ public final class ClusteredServiceContainer implements AutoCloseable
         private Aeron aeron;
         private DutyCycleTracker dutyCycleTracker;
         private SnapshotDurationTracker snapshotDurationTracker;
-        private AppVersionValidator appVersionValidator;
+        private VersionValidator appVersionValidator;
         private boolean ownsAeronClient;
 
         private ClusteredService clusteredService;
         private Runnable terminationHook;
         private ClusterMarkFile markFile;
+
+        /**
+         * Construct a Context using default values and loading from system properties.
+         */
+        public Context()
+        {
+        }
 
         /**
          * Perform a shallow copy of the object.
@@ -821,9 +821,10 @@ public final class ClusteredServiceContainer implements AutoCloseable
                 throw new ConcurrentConcludeException();
             }
 
-            if (serviceId < 0 || serviceId > 127)
+            final int maxId = MAX_SERVICE_COUNT - 1;
+            if (serviceId < 0 || serviceId > maxId)
             {
-                throw new ConfigurationException("service id outside allowed range (0-127): " + serviceId);
+                throw new ConfigurationException("service id outside allowed range [0," + maxId + "]: " + serviceId);
             }
 
             if (null == threadFactory)
@@ -1097,7 +1098,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
          * @param appVersionValidator for user application.
          * @return this for fluent API.
          */
-        public Context appVersionValidator(final AppVersionValidator appVersionValidator)
+        public Context appVersionValidator(final VersionValidator appVersionValidator)
         {
             this.appVersionValidator = appVersionValidator;
             return this;
@@ -1108,9 +1109,9 @@ public final class ClusteredServiceContainer implements AutoCloseable
          * <p>
          * The default is to use {@link org.agrona.SemanticVersion} major version for checking compatibility.
          *
-         * @return AppVersionValidator in use.
+         * @return VersionValidator in use.
          */
-        public AppVersionValidator appVersionValidator()
+        public VersionValidator appVersionValidator()
         {
             return appVersionValidator;
         }
@@ -1993,13 +1994,12 @@ public final class ClusteredServiceContainer implements AutoCloseable
          * Indicates if this node should take standby snapshots.
          *
          * @return <code>true</code> if this should take standby snapshots, <code>false</code> otherwise.
-         * @see ClusteredServiceContainer.Configuration#STANDBY_SNAPSHOT_ENABLED_PROP_NAME
-         * @see ClusteredServiceContainer.Configuration#standbySnapshotEnabled()
+         * @deprecated This value is now ignored. The cluster will auto-determine if standby snapshots are required.
          */
-        @Config
+        @Deprecated
         public boolean standbySnapshotEnabled()
         {
-            return standbySnapshotEnabled;
+            return false;
         }
 
         /**
@@ -2007,12 +2007,11 @@ public final class ClusteredServiceContainer implements AutoCloseable
          *
          * @param standbySnapshotEnabled if this node should take standby snapshots.
          * @return this for a fluent API.
-         * @see ClusteredServiceContainer.Configuration#STANDBY_SNAPSHOT_ENABLED_PROP_NAME
-         * @see ClusteredServiceContainer.Configuration#standbySnapshotEnabled()
+         * @deprecated This value is now ignored. The cluster will auto-determine if standby snapshots are required.
          */
+        @Deprecated
         public ClusteredServiceContainer.Context standbySnapshotEnabled(final boolean standbySnapshotEnabled)
         {
-            this.standbySnapshotEnabled = standbySnapshotEnabled;
             return this;
         }
 

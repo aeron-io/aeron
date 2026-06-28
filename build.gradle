@@ -64,17 +64,14 @@ def getConfigProperty(final String projectPropertyName, final String envVarName)
     return value ? value : null
 }
 
-ext {
-    isReleaseVersion = !aeronVersion.endsWith('-SNAPSHOT')
-
-    sonatypeCentralPortalReleasesRepoUrl = 'https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/'
-    sonatypeCentralPortalSnapshotsRepoUrl = 'https://central.sonatype.com/repository/maven-snapshots/'
-    sonatypeCentralPortalUsername = getConfigProperty('sonatypeCentralPortalUsername', 'SONATYPE_CENTRAL_PORTAL_USERNAME')
-    sonatypeCentralPortalPassword = getConfigProperty('sonatypeCentralPortalPassword', 'SONATYPE_CENTRAL_PORTAL_PASSWORD')
-
-    signingKey = getConfigProperty('signingKey', 'SIGNING_GPG_SECRET_KEY')         // NOTE: ASCII armored secret key
-    signingPassword = getConfigProperty('signingPassword', 'SIGNING_GPG_PASSWORD') // NOTE: Plain text
-}
+def isReleaseVersion = !aeronVersion.endsWith('-SNAPSHOT')
+def sonatypeCentralPortalReleasesRepoUrl = 'https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/'
+def sonatypeCentralPortalSnapshotsRepoUrl = 'https://central.sonatype.com/repository/maven-snapshots/'
+def sonatypeCentralPortalUsername = getConfigProperty('sonatypeCentralPortalUsername', 'SONATYPE_CENTRAL_PORTAL_USERNAME')
+def sonatypeCentralPortalPassword = getConfigProperty('sonatypeCentralPortalPassword', 'SONATYPE_CENTRAL_PORTAL_PASSWORD')
+def signingKey = getConfigProperty('signingKey', 'SIGNING_GPG_SECRET_KEY')         // NOTE: ASCII armored secret key
+def signingPassword = getConfigProperty('signingPassword', 'SIGNING_GPG_PASSWORD') // NOTE: Plain text
+def libs = rootProject.libs
 
 def projectPom = {
     name = 'aeron'
@@ -173,6 +170,10 @@ subprojects {
 
     checkstyle.toolVersion = libs.versions.checkstyle.get()
 
+    configurations {
+        javadocLinks
+    }
+
     dependencies {
         testImplementation libs.hamcrest
         testImplementation libs.mockito
@@ -180,6 +181,7 @@ subprojects {
         testImplementation "org.junit.jupiter:junit-jupiter-params"
         testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine"
         testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+        javadocLinks("org.agrona:agrona:${libs.versions.agrona.get()}:javadoc@jar")
     }
 
     java {
@@ -279,7 +281,8 @@ subprojects {
             'aeron.test.system.ats.path': System.getProperty('aeron.test.system.ats.path'),
             'aeron.test.system.ats.conf.dir': System.getProperty('aeron.test.system.ats.conf.dir'),
             'aeron.test.system.ats.conf.file': System.getProperty('aeron.test.system.ats.conf.file'),
-            'aeron.test.system.driver.await.counters': System.getProperty('aeron.test.system.driver.await.counters'))
+            'aeron.test.system.driver.await.counters': System.getProperty('aeron.test.system.driver.await.counters'),
+            'aeron.test.system.persistentsubscription.printresults': System.getProperty('aeron.test.system.persistentsubscription.printresults'))
 
         javaLauncher.set(toolchainLauncher)
     }
@@ -288,7 +291,7 @@ subprojects {
 
     tasks.register('slowTest', Test) {
         group = 'verification'
-        dependsOn ':aeron-agent:jar'
+        dependsOn ':aeron-agent:shadowJar'
 
         maxParallelForks = 1
         useJUnitPlatform {
@@ -306,7 +309,7 @@ subprojects {
 
     tasks.register('bindingsTest', Test) {
         group = 'verification'
-        dependsOn ':aeron-agent:jar'
+        dependsOn ':aeron-agent:shadowJar'
 
         maxParallelForks = 1
         useJUnitPlatform {
@@ -339,13 +342,29 @@ subprojects {
     }
 
     javadoc {
-        failOnError = false
-        title = '<h1>Aeron Message Transport</h1>'
+
+        doFirst {
+            configurations.javadocLinks.resolvedConfiguration.resolvedArtifacts.each { artifact ->
+                def id = artifact.moduleVersion.id
+                def destDir = layout.buildDirectory.dir("javadoc-links/${id.name}").get().asFile
+                copy {
+                    from zipTree(artifact.file)
+                    into destDir
+                    include 'element-list', 'package-list'
+                }
+                options.linksOffline(
+                    "https://www.javadoc.io/doc/${id.group}/${id.name}/${id.version}/",
+                    destDir.absolutePath
+                )
+            }
+        }
+
+        failOnError = true
+        title = '<h1>Aeron</h1>'
         options.bottom = '<i>Copyright &#169; 2014-2025 Real Logic Limited. All Rights Reserved.</i>'
         options.encoding = 'UTF-8'
         options.docEncoding = 'UTF-8'
         options.charSet = 'UTF-8'
-        options.links("https://www.javadoc.io/doc/org.agrona/agrona/${libs.versions.agrona.get()}/")
 
         if (isEarlyAccessJavaVersion) {
             options.links("https://download.java.net/java/early_access/jdk${buildJavaVersion}/docs/api/")
@@ -1005,7 +1024,7 @@ project(':aeron-agent') {
     def aeronClusterProject = project(':aeron-cluster')
 
     dependencies {
-        implementation aeronClusterProject
+        implementation project(':aeron-cluster')
         implementation libs.byteBuddy
         implementation libs.byteBuddy.agent
         implementation project(':aeron-annotations')
@@ -1020,8 +1039,8 @@ project(':aeron-agent') {
 
         duplicatesStrategy = DuplicatesStrategy.EXCLUDE // exclude duplicate files by default
 
-        mergeServiceFiles() // merge service files into a single file
-        filesMatching("META-INF/services/**") {
+        mergeServiceFiles('META-INF/services') // merge service files into a single file
+        filesMatching('META-INF/services/**') {
             duplicatesStrategy = DuplicatesStrategy.INCLUDE // copy all services across
         }
 
@@ -1039,7 +1058,7 @@ project(':aeron-agent') {
         relocate 'net.bytebuddy', 'io.aeron.shadow.net.bytebuddy'
     }
 
-    jar.finalizedBy shadowJar
+    jar.enabled = false
 
     tasks.register('sourcesJar', Jar) {
         dependsOn ':aeron-archive:generateCodecs', ':aeron-cluster:generateCodecs'
@@ -1149,7 +1168,7 @@ project(':aeron-samples') {
     }
 
     tasks.named('test').configure {
-        dependsOn ':aeron-agent:jar'
+        dependsOn ':aeron-agent:shadowJar'
 
         ext.agentFilename = {
             project.file("../aeron-agent/build/libs/aeron-agent-${aeronVersion}.jar").absolutePath
@@ -1196,7 +1215,7 @@ project(':aeron-system-tests') {
     }
 
     tasks.named('test').configure {
-        dependsOn ':aeron-agent:jar'
+        dependsOn ':aeron-agent:shadowJar'
 
         ext.agentFilename = {
             project.file("../aeron-agent/build/libs/aeron-agent-${aeronVersion}.jar").absolutePath
@@ -1287,8 +1306,8 @@ project(':aeron-all') {
     def aeronSamplesProject = project(':aeron-samples')
 
     dependencies {
-        implementation aeronClusterProject
-        implementation aeronSamplesProject
+        implementation project(':aeron-cluster')
+        implementation project(':aeron-samples')
     }
 
     shadowJar {
@@ -1296,8 +1315,8 @@ project(':aeron-all') {
 
         duplicatesStrategy = DuplicatesStrategy.EXCLUDE // exclude duplicate files by default
 
-        mergeServiceFiles() // merge service files into a single file
-        filesMatching("META-INF/services/**") {
+        mergeServiceFiles('META-INF/services') // merge service files into a single file
+        filesMatching('META-INF/services/**') {
             duplicatesStrategy = DuplicatesStrategy.INCLUDE // copy all services across
         }
 

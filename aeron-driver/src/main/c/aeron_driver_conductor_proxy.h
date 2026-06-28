@@ -35,7 +35,6 @@ typedef struct aeron_driver_conductor_stct aeron_driver_conductor_t;
 typedef struct aeron_driver_conductor_proxy_stct
 {
     aeron_driver_conductor_t *conductor;
-    aeron_threading_mode_t threading_mode;
     aeron_mpsc_rb_t *command_queue;
     int64_t *fail_counter;
 }

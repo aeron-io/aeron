@@ -24,7 +24,7 @@ import org.agrona.concurrent.status.CountersManager;
 /**
  * The status of a sending channel endpoint represented as a counter value.
  */
-public class SendChannelStatus
+public final class SendChannelStatus
 {
     /**
      * Type id of a sending channel status indicator.
@@ -35,6 +35,10 @@ public class SendChannelStatus
      * Human-readable name for the counter.
      */
     public static final String NAME = "snd-channel";
+
+    private SendChannelStatus()
+    {
+    }
 
     /**
      * Allocate a new channel status counter for a stream.

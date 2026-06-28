@@ -908,8 +908,12 @@ public final class Aeron implements AutoCloseable
     /**
      * Configuration options for the {@link Aeron} client.
      */
-    public static class Configuration
+    public static final class Configuration
     {
+        private Configuration()
+        {
+        }
+
         /**
          * Duration in milliseconds for which the client conductor will sleep between duty cycles.
          */
@@ -1106,7 +1110,7 @@ public final class Aeron implements AutoCloseable
      * The context will be owned by {@link ClientConductor} after a successful
      * {@link Aeron#connect(Context)} and closed via {@link Aeron#close()}.
      */
-    public static class Context extends CommonContext
+    public static final class Context extends CommonContext
     {
         private long clientId;
         private String clientName = Configuration.clientName();
@@ -1140,6 +1144,13 @@ public final class Aeron implements AutoCloseable
         private int filePageSize;
 
         private ThreadFactory threadFactory = Thread::new;
+
+        /**
+         * Construct a Context using default values and loading from system properties.
+         */
+        public Context()
+        {
+        }
 
         /**
          * Perform a shallow copy of the object.

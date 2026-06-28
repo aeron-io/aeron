@@ -21,7 +21,6 @@ import org.agrona.CloseHelper;
 import org.agrona.LangUtil;
 import org.agrona.concurrent.UnsafeBuffer;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.MappedByteBuffer;
@@ -30,9 +29,16 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.EnumSet;
 
-import static io.aeron.logbuffer.LogBufferDescriptor.*;
+import static io.aeron.logbuffer.LogBufferDescriptor.LOG_META_DATA_LENGTH;
+import static io.aeron.logbuffer.LogBufferDescriptor.LOG_META_DATA_SECTION_INDEX;
+import static io.aeron.logbuffer.LogBufferDescriptor.PARTITION_COUNT;
+import static io.aeron.logbuffer.LogBufferDescriptor.TERM_MAX_LENGTH;
+import static io.aeron.logbuffer.LogBufferDescriptor.checkPageSize;
+import static io.aeron.logbuffer.LogBufferDescriptor.checkTermLength;
 import static java.nio.channels.FileChannel.MapMode.READ_WRITE;
-import static java.nio.file.StandardOpenOption.*;
+import static java.nio.file.StandardOpenOption.READ;
+import static java.nio.file.StandardOpenOption.SPARSE;
+import static java.nio.file.StandardOpenOption.WRITE;
 
 /**
  * Takes a log file name and maps the file into memory and wraps it with {@link UnsafeBuffer}s as appropriate.
@@ -139,14 +145,10 @@ public final class LogBuffers implements AutoCloseable
                 }
             }
         }
-        catch (final IOException ex)
-        {
-            LangUtil.rethrowUnchecked(ex);
-        }
-        catch (final IllegalStateException ex)
+        catch (final Exception ex)
         {
             close(fileChannel, logMetaDataBuffer, mappedByteBuffers);
-            throw ex;
+            LangUtil.rethrowUnchecked(ex);
         }
 
         this.termLength = termLength;

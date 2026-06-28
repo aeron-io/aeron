@@ -16,8 +16,6 @@
 package io.aeron.agent;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -25,8 +23,6 @@ import java.util.Collections;
 import java.util.EnumSet;
 
 import static io.aeron.agent.EventConfiguration.parseEventCodes;
-import static io.aeron.driver.Configuration.ASYNC_TASK_EXECUTOR_THREADS_PROP_NAME;
-import static io.aeron.driver.Configuration.asyncTaskExecutorThreads;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.startsWith;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -58,48 +54,6 @@ public class EventConfigurationTest
         finally
         {
             System.setErr(err);
-        }
-    }
-
-    @Test
-    void asyncTaskExecutorThreadsReturnsOneByDefault()
-    {
-        try
-        {
-            assertEquals(1, asyncTaskExecutorThreads());
-        }
-        finally
-        {
-            System.clearProperty(ASYNC_TASK_EXECUTOR_THREADS_PROP_NAME);
-        }
-    }
-
-    @ParameterizedTest
-    @ValueSource(ints = { -123, 4, 0, Integer.MAX_VALUE })
-    void asyncTaskExecutorThreadsReturnsZeroIfNegative(final int threads)
-    {
-        System.setProperty(ASYNC_TASK_EXECUTOR_THREADS_PROP_NAME, Integer.toString(threads));
-        try
-        {
-            assertEquals(threads, asyncTaskExecutorThreads());
-        }
-        finally
-        {
-            System.clearProperty(ASYNC_TASK_EXECUTOR_THREADS_PROP_NAME);
-        }
-    }
-
-    @Test
-    void asyncTaskExecutorThreadsReturnsOneIfInvalid()
-    {
-        System.setProperty(ASYNC_TASK_EXECUTOR_THREADS_PROP_NAME, "abc");
-        try
-        {
-            assertEquals(1, asyncTaskExecutorThreads());
-        }
-        finally
-        {
-            System.clearProperty(ASYNC_TASK_EXECUTOR_THREADS_PROP_NAME);
         }
     }
 

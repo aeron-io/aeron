@@ -66,6 +66,13 @@ public class RecordingSummary
     public int streamId;
 
     /**
+     * Default constructor.
+     */
+    public RecordingSummary()
+    {
+    }
+
+    /**
      * {@inheritDoc}
      */
     public String toString()

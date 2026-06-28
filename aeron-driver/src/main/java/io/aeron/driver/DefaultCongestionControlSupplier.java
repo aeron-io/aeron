@@ -30,6 +30,13 @@ import java.net.InetSocketAddress;
 public class DefaultCongestionControlSupplier implements CongestionControlSupplier
 {
     /**
+     * Default constructor.
+     */
+    public DefaultCongestionControlSupplier()
+    {
+    }
+
+    /**
      * {@inheritDoc}
      */
     public CongestionControl newInstance(

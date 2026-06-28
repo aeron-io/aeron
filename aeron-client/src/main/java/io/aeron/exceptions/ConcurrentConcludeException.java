@@ -21,5 +21,12 @@ package io.aeron.exceptions;
  */
 public class ConcurrentConcludeException extends AeronException
 {
+    /**
+     * Create a default ConcurrentConcludeException.
+     */
+    public ConcurrentConcludeException()
+    {
+    }
+
     private static final long serialVersionUID = 684839776662091577L;
 }

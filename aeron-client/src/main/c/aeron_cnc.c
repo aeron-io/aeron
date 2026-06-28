@@ -70,7 +70,7 @@ int aeron_cnc_init(aeron_cnc_t **aeron_cnc, const char *base_path, int64_t timeo
             if (deadline_ms <= aeron_epoch_clock())
             {
                 AERON_SET_ERR(
-                    AERON_CLIENT_ERROR_DRIVER_TIMEOUT,
+                    -AERON_CLIENT_ERROR_DRIVER_TIMEOUT,
                     "Timed out waiting for CnC file to become available after %" PRId64 "ms",
                     timeout_ms);
                 goto error;

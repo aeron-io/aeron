@@ -28,18 +28,21 @@ typedef struct aeron_counter_stct
     aeron_client_conductor_t *conductor;
 
     int64_t *counter_addr;
+    int64_t correlation_id;
     int64_t registration_id;
     int32_t counter_id;
 
     aeron_notification_t on_close_complete;
     void *on_close_complete_clientd;
     volatile bool is_closed;
+    volatile bool pending_close_action;
 }
 aeron_counter_t;
 
 int aeron_counter_create(
     aeron_counter_t **counter,
     aeron_client_conductor_t *conductor,
+    int64_t correlation_id,
     int64_t registration_id,
     int32_t counter_id,
     int64_t *counter_addr);

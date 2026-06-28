@@ -43,6 +43,17 @@ jobs:
         run: |
           echo "TMP=$env:RUNNER_TEMP" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           echo "TEMP=$env:RUNNER_TEMP" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Disable CPU hogs (Windows)
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        run: |
+          Set-MpPreference -DisableRealtimeMonitoring $true -Force
+          Add-MpPreference -ExclusionPath "C:\" -Force
+          Add-MpPreference -ExclusionPath "D:\" -Force
+          sc config wuauserv start= disabled
+          Stop-Service wuauserv -ErrorAction SilentlyContinue
+          reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\wsl.exe" /v Debugger /t REG_SZ /d "block.exe" /f
+          reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\CompatTelRunner.exe" /v Debugger /t REG_SZ /d "block.exe" /f
       - name: Setup small temp file system (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -57,10 +68,11 @@ jobs:
       - name: Setup small temp file system (Windows)
         if: runner.os == 'Windows'
         run: |
-          $current_size = (Get-PartitionSupportedSize -DiskNumber 1 -PartitionNumber 1)
+          $current_size = (Get-PartitionSupportedSize -DriveLetter D)
           $new_size = ($current_size.SizeMax - 100 * 1024 * 1024)
-          Resize-Partition -DiskNumber 1 -PartitionNumber 1 -Size ($new_size)
-          New-Partition -DiskNumber 1 -Size 60MB -DriveLetter T | Format-Volume -FileSystem NTFS -Confirm:$false
+          Resize-Partition -DriveLetter D -Size ($new_size)
+          $disk = (Get-Disk -Partition (Get-Partition -DriveLetter D)).Number
+          New-Partition -DiskNumber ($disk) -Size 60MB -DriveLetter T | Format-Volume -FileSystem NTFS -Confirm:$false
           New-Item -ItemType Directory -Path T:\tmp_aeron_dir
       - name: Enable core dumps (Linux)
         if: runner.os == 'Linux'
@@ -80,11 +92,11 @@ jobs:
           sudo sysctl -w kern.coredump=1
           sudo sysctl -w kern.corefile="/var/coredump/core.%P"
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.sha }}
       - name: Setup java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
           distribution: 'zulu'
           java-version: ${{ matrix.java }}
@@ -101,12 +113,14 @@ jobs:
           echo "BUILD_JAVA_HOME=$env:JAVA_HOME" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           echo "BUILD_JAVA_VERSION=${{ matrix.java }}" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Setup java to run Gradle
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
           distribution: 'zulu'
           java-version: ${{ env.JAVA_VERSION }}
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # v6.1.0
+        with:
+          cache-provider: basic
       - name: Build with Gradle
         run: ./gradlew -x javadoc --console=plain
       - name: Remove small temp file system (Linux)
@@ -132,7 +146,7 @@ jobs:
           ./gradlew tarTestLogs
       - name: Upload crash logs
         if: always() && steps.copy_test_logs.outputs.file == 'build/distributions/test_logs.tbz2'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: crash-logs-${{ matrix.os }}-java-${{ matrix.java }}
           path: ${{ steps.copy_test_logs.outputs.file }}
@@ -148,16 +162,18 @@ jobs:
         os: [ 'ubuntu-24.04' ]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.sha }}
       - name: Setup java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
           distribution: 'zulu'
           java-version: ${{ matrix.java }}
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # v6.1.0
+        with:
+          cache-provider: basic
       - name: Setup BUILD_JAVA_HOME & BUILD_JAVA_VERSION
         run: |
           java -Xinternalversion
@@ -185,7 +201,7 @@ jobs:
           ./gradlew tarTestLogs
       - name: Upload crash logs
         if: always() && steps.copy_test_logs.outputs.file == 'build/distributions/test_logs.tbz2'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: crash-logs-topology-${{ matrix.os }}-java-${{ matrix.java }}
           path: ${{ steps.copy_test_logs.outputs.file }}
@@ -203,11 +219,11 @@ jobs:
       CXX: g++-${{ matrix.version }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.sha }}
       - name: Setup java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
           distribution: 'zulu'
           java-version: ${{ env.JAVA_VERSION }}
@@ -217,7 +233,9 @@ jobs:
           echo "BUILD_JAVA_HOME=${JAVA_HOME}" >> $GITHUB_ENV
           echo "BUILD_JAVA_VERSION=${{ env.JAVA_VERSION }}" >> $GITHUB_ENV
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # v6.1.0
+        with:
+          cache-provider: basic
       - name: Install compiler
         run: |
           echo 'Acquire::Retries "${INSTALL_COMPILER_RETRIES}";' | sudo tee -a /etc/apt/apt.conf.d/99retries
@@ -229,7 +247,7 @@ jobs:
           sudo mkdir -p /mnt/tmp_aeron_dir
           sudo mount -t tmpfs -o size=50M,mode=777 tmpfs /mnt/tmp_aeron_dir
       - name: Build
-        run: cppbuild/cppbuild --c-warnings-as-errors --cxx-warnings-as-errors --cxx-hide-deprecation-message
+        run: cppbuild/cppbuild --c-warnings-as-errors --cxx-warnings-as-errors
       - name: Remove small temp file system
         if: always()
         run: |
@@ -243,7 +261,7 @@ jobs:
           ./gradlew tarTestLogs
       - name: Upload crash logs
         if: always() && steps.copy_test_logs.outputs.file == 'build/distributions/test_logs.tbz2'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: crash-logs-gcc-2404-${{ matrix.version }}
           path: ${{ steps.copy_test_logs.outputs.file }}
@@ -258,11 +276,13 @@ jobs:
         version: [ '13' ]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.sha }}
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # v6.1.0
+        with:
+          cache-provider: basic
       - name: Build
         run: GCC_VERSION=${{ matrix.version }} cppbuild/rocky-docker-build
       - name: Copy test logs
@@ -273,7 +293,7 @@ jobs:
           ./gradlew tarTestLogs
       - name: Upload crash logs
         if: always() && steps.copy_test_logs.outputs.file == 'build/distributions/test_logs.tbz2'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: crash-logs-gcc-rhel-${{ matrix.version }}
           path: ${{ steps.copy_test_logs.outputs.file }}
@@ -285,17 +305,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: [ '17', '18', '19', '20', '21' ]
+        version: [ '17', '18', '19', '20', '21', '22' ]
     env:
       CC: clang-${{ matrix.version }}
       CXX: clang++-${{ matrix.version }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.sha }}
       - name: Setup java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
           distribution: 'zulu'
           java-version: ${{ env.JAVA_VERSION }}
@@ -305,7 +325,9 @@ jobs:
           echo "BUILD_JAVA_HOME=${JAVA_HOME}" >> $GITHUB_ENV
           echo "BUILD_JAVA_VERSION=${{ env.JAVA_VERSION }}" >> $GITHUB_ENV
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # v6.1.0
+        with:
+          cache-provider: basic
       - name: Install compiler
         run: |
           echo 'Acquire::Retries "${INSTALL_COMPILER_RETRIES}";' | sudo tee -a /etc/apt/apt.conf.d/99retries
@@ -319,7 +341,7 @@ jobs:
           sudo mkdir -p /mnt/tmp_aeron_dir
           sudo mount -t tmpfs -o size=50M,mode=777 tmpfs /mnt/tmp_aeron_dir
       - name: Build
-        run: cppbuild/cppbuild --c-warnings-as-errors --cxx-warnings-as-errors --cxx-hide-deprecation-message
+        run: cppbuild/cppbuild --c-warnings-as-errors --cxx-warnings-as-errors
       - name: Remove small temp file system
         if: always()
         run: |
@@ -333,7 +355,7 @@ jobs:
           ./gradlew tarTestLogs
       - name: Upload crash logs
         if: always() && steps.copy_test_logs.outputs.file == 'build/distributions/test_logs.tbz2'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: crash-logs-clang-2404-${{ matrix.version }}
           path: ${{ steps.copy_test_logs.outputs.file }}
@@ -345,17 +367,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: [ '21' ]
+        version: [ '22' ]
     env:
       CC: clang-${{ matrix.version }}
       CXX: clang++-${{ matrix.version }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.sha }}
       - name: Setup java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
           distribution: 'zulu'
           java-version: ${{ env.JAVA_VERSION }}
@@ -365,7 +387,9 @@ jobs:
           echo "BUILD_JAVA_HOME=${JAVA_HOME}" >> $GITHUB_ENV
           echo "BUILD_JAVA_VERSION=${{ env.JAVA_VERSION }}" >> $GITHUB_ENV
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # v6.1.0
+        with:
+          cache-provider: basic
       - name: Install compiler
         run: |
           echo 'Acquire::Retries "${INSTALL_COMPILER_RETRIES}";' | sudo tee -a /etc/apt/apt.conf.d/99retries
@@ -375,7 +399,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang-${{ matrix.version }} libbsd-dev uuid-dev
       - name: Build
-        run: cppbuild/cppbuild --debug-build --cxx-hide-deprecation-message
+        run: cppbuild/cppbuild --debug-build
       - name: Copy test logs
         id: copy_test_logs
         if: failure()
@@ -384,7 +408,7 @@ jobs:
           ./gradlew tarTestLogs
       - name: Upload crash logs
         if: always() && steps.copy_test_logs.outputs.file == 'build/distributions/test_logs.tbz2'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: crash-logs-clang-debug-${{ matrix.version }}
           path: ${{ steps.copy_test_logs.outputs.file }}
@@ -398,11 +422,11 @@ jobs:
       CXX: clang++
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.sha }}
       - name: Setup java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
           distribution: 'zulu'
           java-version: ${{ env.JAVA_VERSION }}
@@ -412,14 +436,16 @@ jobs:
           echo "BUILD_JAVA_HOME=${JAVA_HOME}" >> $GITHUB_ENV
           echo "BUILD_JAVA_VERSION=${{ env.JAVA_VERSION }}" >> $GITHUB_ENV
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # v6.1.0
+        with:
+          cache-provider: basic
       - name: Setup small temp file system and localhost name
         run: |
           sudo sed -i bak "s/localhost/localhost $(hostname)/" /etc/hosts
           dscacheutil -flushcache
           sudo diskutil eraseDisk APFS tmp_aeron_dir $(hdiutil attach -nomount ram://$((2 * 1024 * 60)))
       - name: Build
-        run: cppbuild/cppbuild --c-warnings-as-errors --cxx-warnings-as-errors --cxx-hide-deprecation-message
+        run: cppbuild/cppbuild --c-warnings-as-errors --cxx-warnings-as-errors
       - name: Remove small temp file system
         run: sudo diskutil eject tmp_aeron_dir
       - name: Copy test logs
@@ -430,7 +456,7 @@ jobs:
           ./gradlew tarTestLogs
       - name: Upload crash logs
         if: always() && steps.copy_test_logs.outputs.file == 'build/distributions/test_logs.tbz2'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: crash-logs-xcode-latest
           path: ${{ steps.copy_test_logs.outputs.file }}
@@ -447,19 +473,33 @@ jobs:
         run: |
           echo "TMP=$env:RUNNER_TEMP" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           echo "TEMP=$env:RUNNER_TEMP" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Use faster temporary storage (Windows)
+        run: |
+          echo "TMP=$env:RUNNER_TEMP" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "TEMP=$env:RUNNER_TEMP" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Disable CPU hogs
+        run: |
+          Set-MpPreference -DisableRealtimeMonitoring $true -Force
+          Add-MpPreference -ExclusionPath "C:\" -Force
+          Add-MpPreference -ExclusionPath "D:\" -Force
+          sc config wuauserv start= disabled
+          Stop-Service wuauserv -ErrorAction SilentlyContinue
+          reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\wsl.exe" /v Debugger /t REG_SZ /d "block.exe" /f
+          reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\CompatTelRunner.exe" /v Debugger /t REG_SZ /d "block.exe" /f
       - name: Setup small temp file system
         run: |
-          $current_size = (Get-PartitionSupportedSize -DiskNumber 1 -PartitionNumber 1)
+          $current_size = (Get-PartitionSupportedSize -DriveLetter D)
           $new_size = ($current_size.SizeMax - 100 * 1024 * 1024)
-          Resize-Partition -DiskNumber 1 -PartitionNumber 1 -Size ($new_size)
-          New-Partition -DiskNumber 1 -Size 60MB -DriveLetter T | Format-Volume -FileSystem NTFS -Confirm:$false
+          Resize-Partition -DriveLetter D -Size ($new_size)
+          $disk = (Get-Disk -Partition (Get-Partition -DriveLetter D)).Number
+          New-Partition -DiskNumber ($disk) -Size 60MB -DriveLetter T | Format-Volume -FileSystem NTFS -Confirm:$false
           New-Item -ItemType Directory -Path T:\tmp_aeron_dir
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.sha }}
       - name: Setup java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
           distribution: 'zulu'
           java-version: ${{ env.JAVA_VERSION }}
@@ -469,9 +509,11 @@ jobs:
           echo "BUILD_JAVA_HOME=$env:JAVA_HOME" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           echo "BUILD_JAVA_VERSION=${{ env.JAVA_VERSION }}" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@50e97c2cd7a37755bbfafc9c5b7cafaece252f6e # v6.1.0
+        with:
+          cache-provider: basic
       - name: Build
-        run: cppbuild/cppbuild.ps1 --c-warnings-as-errors --cxx-warnings-as-errors --cxx-hide-deprecation-message
+        run: cppbuild/cppbuild.ps1 --c-warnings-as-errors --cxx-warnings-as-errors
       - name: Remove small temp file system (Windows)
         if: always()
         run: |
@@ -487,7 +529,7 @@ jobs:
           ./gradlew tarTestLogs
       - name: Upload crash logs
         if: always() && steps.copy_test_logs.outputs.file == 'build/distributions/test_logs.tbz2'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: crash-logs-msvc-latest
           path: ${{ steps.copy_test_logs.outputs.file }}

@@ -54,7 +54,7 @@ public class RegistrationException extends AeronException
     {
         super(
             stripCategoryName(msg) + ", errorCodeValue=" + errorCodeValue,
-            ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE == errorCode ? Category.WARN : Category.ERROR);
+            ControlProtocolException.errorToCategory(errorCode));
         this.correlationId = correlationId;
         this.errorCode = errorCode;
         this.errorCodeValue = errorCodeValue;

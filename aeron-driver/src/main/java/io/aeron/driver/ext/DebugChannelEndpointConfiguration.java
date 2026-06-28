@@ -25,8 +25,12 @@ import static java.lang.System.getProperty;
  * Configuration options to be applied when {@link DebugSendChannelEndpoint} and {@link DebugReceiveChannelEndpoint}
  * are load.
  */
-public class DebugChannelEndpointConfiguration
+public final class DebugChannelEndpointConfiguration
 {
+    private DebugChannelEndpointConfiguration()
+    {
+    }
+
     /**
      * Property name for receiver inbound data loss rate.
      */

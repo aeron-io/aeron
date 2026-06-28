@@ -19,8 +19,12 @@ package io.aeron.archive;
  * Tool for inspecting and performing administrative tasks on an {@link Archive} and its contents which is described in
  * the {@link Catalog}. The tool delegates to {@link ArchiveTool}.
  */
-public class CatalogTool
+public final class CatalogTool
 {
+    private CatalogTool()
+    {
+    }
+
     /**
      * Main method for launching the process.
      *

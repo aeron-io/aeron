@@ -318,8 +318,12 @@ public final class ClusterBackup implements AutoCloseable
      * Configuration options for {@link ClusterBackup} with defaults and constants for system properties lookup.
      */
     @Config(existsInC = false)
-    public static class Configuration
+    public static final class Configuration
     {
+        private Configuration()
+        {
+        }
+
         /**
          * Channel template used for catchup and replication of log and snapshots.
          */
@@ -639,6 +643,13 @@ public final class ClusterBackup implements AutoCloseable
         private long replicationProgressTimeoutNs = ConsensusModule.Configuration.replicationProgressTimeoutNs();
         private long replicationProgressIntervalNs = ConsensusModule.Configuration.replicationProgressIntervalNs();
         private Configuration.ReplayStart initialReplayStart = Configuration.clusterInitialReplayStart();
+
+        /**
+         * Construct a Context using default values and loading from system properties.
+         */
+        public Context()
+        {
+        }
 
         /**
          * Perform a shallow copy of the object.

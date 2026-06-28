@@ -47,6 +47,15 @@ public final class GetNextAvailableSessionIdMessageFlyweight extends CorrelatedM
     public static final int LENGTH = STREAM_ID_OFFSET + SIZE_OF_INT;
 
     /**
+     * An empty flyweight, which should be wrapped over a buffer.
+     *
+     * @see #wrap(MutableDirectBuffer, int)
+     */
+    public GetNextAvailableSessionIdMessageFlyweight()
+    {
+    }
+
+    /**
      * Wrap the buffer at a given offset for updates.
      *
      * @param buffer to wrap.

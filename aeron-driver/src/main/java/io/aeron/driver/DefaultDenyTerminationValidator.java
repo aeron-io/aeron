@@ -25,6 +25,13 @@ import java.io.File;
 public class DefaultDenyTerminationValidator implements TerminationValidator
 {
     /**
+     * Default constructor.
+     */
+    public DefaultDenyTerminationValidator()
+    {
+    }
+
+    /**
      * {@inheritDoc}
      */
     public boolean allowTermination(

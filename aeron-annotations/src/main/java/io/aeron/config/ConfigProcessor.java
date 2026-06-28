@@ -39,6 +39,13 @@ public class ConfigProcessor extends Processor
 
     private final Map<String, Config> typeConfigMap = new HashMap<>();
 
+    /**
+     * Construct the ConfigProcessor.
+     */
+    public ConfigProcessor()
+    {
+    }
+
     @Override
     protected String getEnabledPropertyName()
     {

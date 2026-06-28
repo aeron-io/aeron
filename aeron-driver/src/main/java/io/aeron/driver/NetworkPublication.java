@@ -38,6 +38,8 @@ import org.agrona.concurrent.status.AtomicCounter;
 import org.agrona.concurrent.status.Position;
 import org.agrona.concurrent.status.ReadablePosition;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -79,12 +81,27 @@ class NetworkPublicationPadding1
 class NetworkPublicationConductorFields extends NetworkPublicationPadding1
 {
     static final ReadablePosition[] EMPTY_POSITIONS = new ReadablePosition[0];
+    static final VarHandle MAX_SPY_POSITION_MH;
+
+    static
+    {
+        try
+        {
+            MAX_SPY_POSITION_MH = MethodHandles.lookup()
+                .findVarHandle(NetworkPublicationConductorFields.class, "maxSpyPosition", long.class);
+        }
+        catch (final ReflectiveOperationException ex)
+        {
+            throw new ExceptionInInitializerError(ex);
+        }
+    }
 
     long cleanPosition;
     long timeOfLastActivityNs;
     long lastSenderPosition;
     int refCount = 0;
     ReadablePosition[] spyPositions = EMPTY_POSITIONS;
+    volatile long maxSpyPosition;
     final ArrayList<UntetheredSubscription> untetheredSubscriptions = new ArrayList<>();
 }
 
@@ -267,7 +284,7 @@ public final class NetworkPublication
         }
 
         sendBuffers = rawLog.sliceTerms();
-        errorHandler = ctx.errorHandler();
+        errorHandler = ctx.countedErrorHandler();
 
         final int termLength = rawLog.termLength();
         termBufferLength = termLength;
@@ -283,14 +300,6 @@ public final class NetworkPublication
         lastSenderPosition = senderPosition.get();
         cleanPosition = lastSenderPosition;
         timeOfLastActivityNs = nowNs;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public boolean free()
-    {
-        return rawLog.free();
     }
 
     /**
@@ -507,6 +516,25 @@ public final class NetworkPublication
     }
 
     /**
+     * Check if the SM should be accepted or not.
+     *
+     * @param msg SM to check.
+     * @return {@code true} if the SM is accepted.
+     */
+    public boolean isValidStatusMessage(final StatusMessageFlyweight msg)
+    {
+        final long smPosition = computePosition(
+            msg.consumptionTermId(),
+            msg.consumptionTermOffset(),
+            positionBitsToShift,
+            initialTermId);
+
+        final long sndPos = senderPosition.get();
+        final int maxTransmissionWindow = termBufferLength >> 1;
+        return smPosition >= sndPos - maxTransmissionWindow && smPosition <= sndPos + maxTransmissionWindow;
+    }
+
+    /**
      * Process an error message from a receiver.
      *
      * @param msg                       flyweight over the network packet.
@@ -658,7 +686,7 @@ public final class NetworkPublication
 
             if (spiesSimulateConnection && hasSpies && !hasReceivers)
             {
-                final long newSenderPosition = maxSpyPosition(senderPosition);
+                final long newSenderPosition = Math.max((long)MAX_SPY_POSITION_MH.getAcquire(this), senderPosition);
                 this.senderPosition.setRelease(newSenderPosition);
                 senderLimit.setRelease(flowControl.onIdle(nowNs, newSenderPosition, newSenderPosition, isEndOfStream));
             }
@@ -760,9 +788,19 @@ public final class NetworkPublication
             if (hasSubscribers())
             {
                 long minConsumerPosition = senderPosition;
-                for (final ReadablePosition spyPosition : spyPositions)
+                if (spyPositions.length > 0)
                 {
-                    minConsumerPosition = Math.min(minConsumerPosition, spyPosition.getVolatile());
+                    long maxConsumerPosition = senderPosition;
+                    for (final ReadablePosition spyPosition : spyPositions)
+                    {
+                        final long position = spyPosition.getAcquire();
+                        minConsumerPosition = Math.min(minConsumerPosition, position);
+                        maxConsumerPosition = Math.max(maxConsumerPosition, position);
+                    }
+                    if (maxConsumerPosition > (long)MAX_SPY_POSITION_MH.get(this))
+                    {
+                        MAX_SPY_POSITION_MH.setRelease(this, maxConsumerPosition);
+                    }
                 }
 
                 final long newLimitPosition = minConsumerPosition + termWindowLength;
@@ -815,10 +853,10 @@ public final class NetworkPublication
     private int sendData(final long nowNs, final long senderPosition, final int termOffset)
     {
         int bytesSent = 0;
-        final int availableWindow = (int)(senderLimit.get() - senderPosition);
+        final long availableWindow = senderLimit.get() - senderPosition;
         if (availableWindow > 0)
         {
-            final int scanLimit = Math.min(availableWindow, mtuLength);
+            final int scanLimit = (int)Math.min(availableWindow, mtuLength);
             final int activeIndex = indexByPosition(senderPosition, positionBitsToShift);
 
             final long scanOutcome = scanForAvailability(termBuffers[activeIndex], termOffset, scanLimit);
@@ -1008,18 +1046,6 @@ public final class NetworkPublication
         }
 
         return true;
-    }
-
-    private long maxSpyPosition(final long senderPosition)
-    {
-        long position = senderPosition;
-
-        for (final ReadablePosition spyPosition : spyPositions)
-        {
-            position = Math.max(position, spyPosition.getVolatile());
-        }
-
-        return position;
     }
 
     private void updateConnectedState(final boolean newConnectedState)

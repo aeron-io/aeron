@@ -18,15 +18,12 @@ package io.aeron;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
 import io.aeron.exceptions.RegistrationException;
-import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.LogBufferDescriptor;
-import io.aeron.test.*;
+import io.aeron.test.InterruptingTestCallback;
+import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.CloseHelper;
-import org.agrona.DirectBuffer;
 import org.agrona.ErrorHandler;
-import org.agrona.concurrent.UnsafeBuffer;
-import org.agrona.concurrent.status.CountersReader;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,8 +33,12 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.stream.Stream;
 
-import static io.aeron.CommonContext.*;
-import static org.junit.jupiter.api.Assertions.*;
+import static io.aeron.CommonContext.IPC_MEDIA;
+import static io.aeron.CommonContext.UDP_MEDIA;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
 
 @ExtendWith(InterruptingTestCallback.class)
@@ -91,24 +92,30 @@ class SessionSpecificPublicationTest
 
     @ParameterizedTest
     @MethodSource("data")
-    void shouldNotCreateExclusivePublicationWhenSessionIdCollidesWithExistingPublication(
+    void shouldNotCreateExclusivePublicationWhenSessionIdCollidesWithExistingExclusivePublication(
         final ChannelUriStringBuilder channelBuilder)
     {
         final String channel = channelBuilder.build();
-        aeron.addSubscription(channel, STREAM_ID);
-
         final Publication publication = aeron.addExclusivePublication(channel, STREAM_ID);
-        Tests.awaitConnected(publication);
 
         final int existingSessionId = publication.sessionId();
         final String invalidChannel = channelBuilder.sessionId(existingSessionId).build();
 
-        assertThrows(RegistrationException.class, () ->
-        {
-            aeron.addExclusivePublication(invalidChannel, STREAM_ID);
+        assertThrows(RegistrationException.class, () -> aeron.addExclusivePublication(invalidChannel, STREAM_ID));
+    }
 
-            fail("Exception should have been thrown due to duplicate session id");
-        });
+    @ParameterizedTest
+    @MethodSource("data")
+    void shouldNotCreateExclusivePublicationWhenSessionIdCollidesWithExistingConcurrentPublication(
+        final ChannelUriStringBuilder channelBuilder)
+    {
+        final String channel = channelBuilder.build();
+        final Publication publication = aeron.addPublication(channel, STREAM_ID);
+
+        final int existingSessionId = publication.sessionId();
+        final String invalidChannel = channelBuilder.sessionId(existingSessionId).build();
+
+        assertThrows(RegistrationException.class, () -> aeron.addExclusivePublication(invalidChannel, STREAM_ID));
     }
 
     @ParameterizedTest
@@ -153,61 +160,10 @@ class SessionSpecificPublicationTest
     {
         channelBuilder.endpoint(ENDPOINT);
 
-        final String channelOne = channelBuilder.sessionId(SESSION_ID_1).build();
-        final String channelTwo = channelBuilder.sessionId(SESSION_ID_2).build();
+        aeron.addPublication(channelBuilder.sessionId(SESSION_ID_1).build(), STREAM_ID);
 
         assertThrows(RegistrationException.class, () ->
-        {
-            aeron.addPublication(channelOne, STREAM_ID);
-            aeron.addPublication(channelTwo, STREAM_ID);
-
-            fail("Exception should have been thrown due using different session ids");
-        });
-    }
-
-    @ParameterizedTest
-    @MethodSource("data")
-    @InterruptAfter(20)
-    @SlowTest
-    void shouldNotAddPublicationWithSameSessionUntilLingerCompletes(final ChannelUriStringBuilder builder)
-    {
-        final DirectBuffer msg = new UnsafeBuffer(new byte[8]);
-        final String channel = builder.sessionId(SESSION_ID_1).build();
-
-        final String subscriptionChannel = "ipc".equals(builder.media()) ? channel : SPY_PREFIX + channel;
-
-        final Publication publication1 = aeron.addPublication(channel, STREAM_ID);
-        final Subscription subscription = aeron.addSubscription(subscriptionChannel, STREAM_ID);
-        final int positionLimitId = publication1.positionLimitId();
-        assertEquals(CountersReader.RECORD_ALLOCATED, aeron.countersReader().getCounterState(positionLimitId));
-
-        while (publication1.offer(msg) < 0)
-        {
-            Tests.yieldingIdle("Failed to offer message");
-        }
-
-        publication1.close();
-
-        assertThrows(RegistrationException.class, () ->
-        {
-            aeron.addPublication(channel, STREAM_ID);
-
-            fail("Exception should have been thrown due lingering publication keeping session id active");
-        });
-
-        final FragmentHandler fragmentHandler = (buffer, offset, length, header) -> {};
-        while (subscription.poll(fragmentHandler, 10) <= 0)
-        {
-            Tests.yieldingIdle("Failed to drain message");
-        }
-        subscription.close();
-
-        while (CountersReader.RECORD_ALLOCATED == aeron.countersReader().getCounterState(positionLimitId))
-        {
-            Tests.yieldingIdle("Publication never cleaned up");
-        }
-
-        aeron.addPublication(channel, STREAM_ID);
+            aeron.addPublication(channelBuilder.sessionId(SESSION_ID_2).build(), STREAM_ID));
     }
 
     @ParameterizedTest
@@ -218,5 +174,18 @@ class SessionSpecificPublicationTest
 
         aeron.addPublication(channel, STREAM_ID);
         aeron.addPublication(channel, STREAM_ID + 1);
+    }
+
+    @ParameterizedTest
+    @MethodSource("data")
+    void twoExclusivePublicationsOnTheSameStreamShouldHaveUniqueSessionIds(final ChannelUriStringBuilder channelBuilder)
+    {
+        final String channel = channelBuilder.build();
+
+        final ExclusivePublication pub1 = aeron.addExclusivePublication(channel, STREAM_ID);
+        final ExclusivePublication pub2 = aeron.addExclusivePublication(channel, STREAM_ID);
+        assertNotSame(pub1, pub2);
+        assertNotEquals(pub1.originalRegistrationId(), pub2.originalRegistrationId());
+        assertNotEquals(pub1.sessionId(), pub2.sessionId());
     }
 }

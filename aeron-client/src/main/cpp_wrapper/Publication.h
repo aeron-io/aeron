@@ -70,6 +70,8 @@ static const on_reserved_value_supplier_t DEFAULT_RESERVED_VALUE_SUPPLIER =
 
 using AsyncDestination = aeron_async_destination_t;
 
+class Aeron;
+
 /**
  * @example BasicPublisher.cpp
  */
@@ -89,7 +91,8 @@ class Publication
 public:
 
     /// @cond HIDDEN_SYMBOLS
-    Publication(aeron_t *aeron, aeron_publication_t *publication) :
+    Publication(const std::shared_ptr<Aeron> &aeronRef, aeron_t *aeron, aeron_publication_t *publication) :
+        m_aeronRef(aeronRef),
         m_aeron(aeron),
         m_publication(publication)
     {
@@ -104,16 +107,7 @@ public:
     ~Publication()
     {
         aeron_publication_close(m_publication, nullptr, nullptr);
-    }
-
-    inline void close()
-    {
-        if (aeron_publication_close(m_publication, nullptr, nullptr) < 0)
-        {
-            AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
-        }
-
-        m_publication = nullptr;
+        m_pendingDestinations.clear();
     }
 
     /**
@@ -270,11 +264,6 @@ public:
         std::int64_t position = aeron_publication_position(m_publication);
         if (AERON_PUBLICATION_ERROR == position)
         {
-            if (nullptr == m_publication)
-            {
-                return AERON_PUBLICATION_CLOSED;
-            }
-
             AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
 
@@ -293,11 +282,6 @@ public:
         std::int64_t limit = aeron_publication_position_limit(m_publication);
         if (AERON_PUBLICATION_ERROR == limit)
         {
-            if (nullptr == m_publication)
-            {
-                return AERON_PUBLICATION_CLOSED;
-            }
-
             AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
 
@@ -407,11 +391,6 @@ public:
             (void *)&reservedValueSupplier);
         if (AERON_PUBLICATION_ERROR == position)
         {
-            if (nullptr == m_publication)
-            {
-                return AERON_PUBLICATION_CLOSED;
-            }
-
             AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
 
@@ -480,11 +459,6 @@ public:
 
         if (AERON_PUBLICATION_ERROR == position)
         {
-            if (nullptr == m_publication)
-            {
-                return AERON_PUBLICATION_CLOSED;
-            }
-
             AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
 
@@ -547,11 +521,6 @@ public:
 
         if (AERON_PUBLICATION_ERROR == position)
         {
-            if (nullptr == m_publication)
-            {
-                return AERON_PUBLICATION_CLOSED;
-            }
-
             AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
 
@@ -597,11 +566,6 @@ public:
             m_publication, static_cast<std::size_t>(length), &temp_claim);
         if (AERON_PUBLICATION_ERROR == position)
         {
-            if (nullptr == m_publication)
-            {
-                return AERON_PUBLICATION_CLOSED;
-            }
-
             AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
 
@@ -773,7 +737,21 @@ public:
             throw IllegalArgumentException("Unknown correlation id", SOURCEINFO);
         }
 
-        return findDestinationResponse(search->second);
+        auto async = search->second;
+        try
+        {
+            bool result = findDestinationResponse(async);
+            if (result)
+            {
+                m_pendingDestinations.erase(correlationId);
+            }
+            return result;
+        }
+        catch (...)
+        {
+            m_pendingDestinations.erase(correlationId);
+            throw;
+        }
     }
 
     /// @cond HIDDEN_SYMBOLS
@@ -784,6 +762,7 @@ public:
     /// @endcond
 
 private:
+    std::shared_ptr<Aeron> m_aeronRef; // ensure Aeron instance is being deleted after its children
     aeron_t *m_aeron = nullptr;
     aeron_publication_t *m_publication = nullptr;
     aeron_publication_constants_t m_constants = {};

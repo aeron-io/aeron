@@ -28,6 +28,10 @@ extern int aeron_bit_set_stack_init(
 
 extern void aeron_bit_set_heap_free(aeron_bit_set_t *bit_set);
 
+extern int aeron_bit_set_heap_alloc(size_t bit_set_length, aeron_bit_set_t **bit_set);
+
+extern int aeron_bit_set_heap_init(size_t bit_set_length, bool initial_value, aeron_bit_set_t **bit_set);
+
 extern void aeron_bit_set_stack_free(aeron_bit_set_t *bit_set);
 
 extern int aeron_bit_set_init(aeron_bit_set_t *bit_set, bool initial_value);

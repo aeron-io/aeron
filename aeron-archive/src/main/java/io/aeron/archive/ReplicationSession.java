@@ -675,8 +675,6 @@ class ReplicationSession implements Session, RecordingDescriptorConsumer
             }
 
             final ChannelUri channelUri = ChannelUri.parse(replicationChannel);
-            channelUri.put(CommonContext.SESSION_ID_PARAM_NAME, Integer.toString(replaySessionId));
-
             final String endpoint = channelUri.get(CommonContext.ENDPOINT_PARAM_NAME);
             if (null != endpoint)
             {
@@ -694,6 +692,10 @@ class ReplicationSession implements Session, RecordingDescriptorConsumer
                 channelUri.put(
                     CommonContext.RESPONSE_CORRELATION_ID_PARAM_NAME,
                     String.valueOf(recordingSubscription.registrationId()));
+            }
+            else
+            {
+                channelUri.put(CommonContext.SESSION_ID_PARAM_NAME, Integer.toString(replaySessionId));
             }
 
             final long correlationId = aeron.nextCorrelationId();
@@ -745,7 +747,7 @@ class ReplicationSession implements Session, RecordingDescriptorConsumer
     {
         int workCount = 0;
 
-        final Image image = recordingSubscription.imageBySessionId(replaySessionId);
+        final Image image = recordingSubscription.imageBySessionId((int)srcReplaySessionId);
         if (null != image)
         {
             this.image = image;
@@ -758,8 +760,8 @@ class ReplicationSession implements Session, RecordingDescriptorConsumer
         else if (epochClock.time() >= (timeOfLastActionMs + actionTimeoutMs))
         {
             throw new TimeoutException(
-                "failed get replay image for sessionId " + replaySessionId +
-                " on channel " + recordingSubscription.channel());
+                "failed get replay image for sessionId=" + (int)srcReplaySessionId +
+                " on channel=" + recordingSubscription.channel());
         }
 
         return workCount;

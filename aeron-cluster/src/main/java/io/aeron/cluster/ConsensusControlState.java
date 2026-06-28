@@ -54,6 +54,8 @@ public final class ConsensusControlState
     }
 
     /**
+     * True iff we are the leader (and have the log publication).
+     *
      * @return true iff we are the leader (and have the log publication).
      */
     public boolean isLeader()
@@ -62,6 +64,8 @@ public final class ConsensusControlState
     }
 
     /**
+     * Log publication or null if follower.
+     *
      * @return log publication or null if follower.
      */
     public ExclusivePublication logPublication()
@@ -70,6 +74,8 @@ public final class ConsensusControlState
     }
 
     /**
+     * Log recording id.
+     *
      * @return log recording id.
      */
     public long logRecordingId()
@@ -78,6 +84,8 @@ public final class ConsensusControlState
     }
 
     /**
+     * Leadership term id.
+     *
      * @return leadership term id.
      */
     public long leadershipTermId()
@@ -86,6 +94,9 @@ public final class ConsensusControlState
     }
 
     /**
+     * A subscription to the log, joined at the log position of the election for a leader node, or null for a
+     * follower.
+     *
      * @return a subscription to the log, joined at the log position of the election for a leader node, or null for a
      * follower.
      */

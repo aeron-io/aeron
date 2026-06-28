@@ -53,6 +53,7 @@ typedef struct aeron_exclusive_publication_stct
 
     volatile bool is_closed;
     volatile bool revoke_on_close;
+    volatile bool pending_close_action;
 
     uint8_t pre_fields_padding[AERON_CACHE_LINE_LENGTH];
     int64_t term_begin_position;
@@ -104,7 +105,7 @@ inline int64_t aeron_exclusive_publication_new_position(
         return publication->term_begin_position + resulting_offset;
     }
 
-    if ((publication->term_begin_position + publication->term_buffer_length) > publication->max_possible_position)
+    if ((publication->term_begin_position + publication->term_buffer_length) >= publication->max_possible_position)
     {
         return AERON_PUBLICATION_MAX_POSITION_EXCEEDED;
     }

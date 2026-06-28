@@ -23,12 +23,16 @@ import org.agrona.concurrent.status.CountersManager;
 /**
  * The sending end of a local socket address, i.e. control endpoint of a publication.
  */
-public class SendLocalSocketAddress
+public final class SendLocalSocketAddress
 {
     /**
      * The human-readable name for the beginning of a label.
      */
     public static final String NAME = "snd-local-sockaddr";
+
+    private SendLocalSocketAddress()
+    {
+    }
 
     /**
      * Allocate a counter to represent a local socket address associated with a sending channel endpoint.

@@ -28,7 +28,7 @@ import static org.agrona.BitUtil.align;
  * <p>
  * <b>Note:</b> This class is threadsafe to be used across multiple threads.
  */
-public class TermGapScanner
+public final class TermGapScanner
 {
     /**
      * Handler for notifying of gaps in the log.
@@ -44,6 +44,10 @@ public class TermGapScanner
          * @param length of the gap in bytes.
          */
         void onGap(int termId, int offset, int length);
+    }
+
+    private TermGapScanner()
+    {
     }
 
     /**

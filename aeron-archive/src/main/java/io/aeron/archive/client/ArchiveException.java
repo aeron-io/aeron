@@ -103,6 +103,12 @@ public class ArchiveException extends AeronException
      */
     public static final short EMPTY_RECORDING = 15;
 
+
+    /**
+     * The position specified for the operation is not valid, e.g. not frame-aligned, below start, or above stop.
+     */
+    public static final int INVALID_POSITION = 16;
+
     private static final long serialVersionUID = 386758252787901080L;
 
     /**
@@ -229,6 +235,47 @@ public class ArchiveException extends AeronException
     }
 
     /**
+     * Builds an error message for a replay with a start position beyond the limit.
+     *
+     * @param recordingId the recording id
+     * @param replayStartPosition the replay position
+     * @param limitPosition the limit position
+     * @return the created message
+     */
+    public static String buildReplayExceedsLimitErrorMsg(
+        final long recordingId, final long replayStartPosition, final long limitPosition)
+    {
+        return "requested replay start position=" + replayStartPosition +
+            " must be less than the limit position=" + limitPosition + " for recording " + recordingId;
+    }
+
+    /**
+     * Builds an error message for a replay with a position before the start position.
+     *
+     * @param recordingId the recording id
+     * @param replayStartPosition the replay start position
+     * @param startPosition the start position of the recording
+     * @return the created message
+     */
+    public static String buildReplayBeforeStartErrorMsg(
+        final long recordingId, final long replayStartPosition, final long startPosition)
+    {
+        return "requested replay start position=" + replayStartPosition +
+            " is less than recording start position=" + startPosition + " for recording " + recordingId;
+    }
+
+    /**
+     * Builds an error message for an unknown recording.
+     *
+     * @param recordingId the recording id
+     * @return the created message.
+     */
+    public static String buildUnknownRecordingErrorMsg(final long recordingId)
+    {
+        return "unknown recording id: " + recordingId;
+    }
+
+    /**
      * Error code providing more detail into what went wrong.
      *
      * @return code providing more detail into what went wrong.
@@ -274,6 +321,7 @@ public class ArchiveException extends AeronException
             case UNKNOWN_REPLICATION -> "UNKNOWN_REPLICATION";
             case UNAUTHORISED_ACTION -> "UNAUTHORISED_ACTION";
             case REPLICATION_CONNECTION_FAILURE -> "REPLICATION_CONNECTION_FAILURE";
+            case INVALID_POSITION -> "INVALID_POSITION";
             default -> "unknown error code: " + errorCode;
         };
     }

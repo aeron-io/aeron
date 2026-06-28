@@ -34,6 +34,7 @@ import org.agrona.concurrent.AgentInvoker;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.CountersReader;
 import org.hamcrest.CoreMatchers;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,11 +49,26 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static io.aeron.Aeron.NULL_VALUE;
+import static org.agrona.concurrent.status.CountersReader.RECORD_ALLOCATED;
 import static org.hamcrest.CoreMatchers.allOf;
 import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.MatcherAssert.*;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(InterruptingTestCallback.class)
 class CounterTest
@@ -150,7 +166,7 @@ class CounterTest
             Tests.sleep(1);
         }
 
-        assertEquals(CountersReader.RECORD_ALLOCATED, readableCounter.state());
+        assertEquals(RECORD_ALLOCATED, readableCounter.state());
         assertEquals(counter.id(), readableCounter.counterId());
         assertEquals(counter.registrationId(), readableCounter.registrationId());
     }
@@ -177,7 +193,7 @@ class CounterTest
         }
 
         assertFalse(readableCounter.isClosed());
-        assertEquals(CountersReader.RECORD_ALLOCATED, readableCounter.state());
+        assertEquals(RECORD_ALLOCATED, readableCounter.state());
 
         counter.close();
 
@@ -214,7 +230,7 @@ class CounterTest
         }
 
         assertFalse(readableCounter.isClosed());
-        assertEquals(CountersReader.RECORD_ALLOCATED, readableCounter.state());
+        assertEquals(RECORD_ALLOCATED, readableCounter.state());
 
         clientA.close();
 
@@ -249,8 +265,10 @@ class CounterTest
             100);
 
         assertFalse(counter1.isClosed());
+        assertThat(counter1.correlationId(), Matchers.greaterThan(0L));
         assertEquals(100, counter1.registrationId());
-        assertEquals(CountersReader.RECORD_ALLOCATED, clientA.countersReader().getCounterState(counter1.id()));
+        assertNotEquals(counter1.correlationId(), counter1.registrationId());
+        assertEquals(RECORD_ALLOCATED, clientA.countersReader().getCounterState(counter1.id()));
         assertEquals(counter1.registrationId(), clientA.countersReader().getCounterRegistrationId(counter1.id()));
         assertEquals(NULL_VALUE, clientA.countersReader().getCounterOwnerId(counter1.id()));
         assertEquals(COUNTER_TYPE_ID, clientA.countersReader().getCounterTypeId(counter1.id()));
@@ -258,8 +276,9 @@ class CounterTest
         final Counter counter2 = clientB.addStaticCounter(COUNTER_TYPE_ID, "test static counter", 200);
 
         assertFalse(counter2.isClosed());
+        assertThat(counter2.correlationId(), Matchers.greaterThan(counter1.correlationId()));
         assertEquals(200, counter2.registrationId());
-        assertEquals(CountersReader.RECORD_ALLOCATED, clientB.countersReader().getCounterState(counter2.id()));
+        assertEquals(RECORD_ALLOCATED, clientB.countersReader().getCounterState(counter2.id()));
         assertEquals(counter2.registrationId(), clientB.countersReader().getCounterRegistrationId(counter2.id()));
         assertEquals(NULL_VALUE, clientB.countersReader().getCounterOwnerId(counter2.id()));
         assertEquals("test static counter", clientB.countersReader().getCounterLabel(counter2.id()));
@@ -304,7 +323,7 @@ class CounterTest
 
         assertFalse(counter1.isClosed());
         assertEquals(registrationId, counter1.registrationId());
-        assertEquals(CountersReader.RECORD_ALLOCATED, clientA.countersReader().getCounterState(counter1.id()));
+        assertEquals(RECORD_ALLOCATED, clientA.countersReader().getCounterState(counter1.id()));
         assertEquals(counter1.registrationId(), clientA.countersReader().getCounterRegistrationId(counter1.id()));
         assertEquals(NULL_VALUE, clientA.countersReader().getCounterOwnerId(counter1.id()));
         assertEquals(COUNTER_TYPE_ID, clientA.countersReader().getCounterTypeId(counter1.id()));
@@ -312,9 +331,11 @@ class CounterTest
 
         final Counter counter2 = clientB.addStaticCounter(COUNTER_TYPE_ID, "test static counter", registrationId);
 
+        assertNotSame(counter1, counter2);
         assertEquals(counter1.id(), counter2.id());
+        assertThat(counter2.correlationId(), Matchers.greaterThan(counter1.correlationId()));
         assertEquals(registrationId, counter2.registrationId());
-        assertEquals(CountersReader.RECORD_ALLOCATED, clientB.countersReader().getCounterState(counter2.id()));
+        assertEquals(RECORD_ALLOCATED, clientB.countersReader().getCounterState(counter2.id()));
         assertEquals(registrationId, clientB.countersReader().getCounterRegistrationId(counter2.id()));
         assertEquals(NULL_VALUE, clientB.countersReader().getCounterOwnerId(counter2.id()));
         assertEquals(COUNTER_TYPE_ID, clientB.countersReader().getCounterTypeId(counter2.id()));
@@ -365,7 +386,7 @@ class CounterTest
 
         assertFalse(counter1.isClosed());
         assertEquals(100, counter1.registrationId());
-        assertEquals(CountersReader.RECORD_ALLOCATED, clientA.countersReader().getCounterState(counter1.id()));
+        assertEquals(RECORD_ALLOCATED, clientA.countersReader().getCounterState(counter1.id()));
         assertEquals(counter1.registrationId(), clientA.countersReader().getCounterRegistrationId(counter1.id()));
         assertEquals(NULL_VALUE, clientA.countersReader().getCounterOwnerId(counter1.id()));
         assertEquals(COUNTER_TYPE_ID, clientB.countersReader().getCounterTypeId(counter1.id()));
@@ -376,8 +397,8 @@ class CounterTest
         verify(unavailableCounterHandlerClientA, Mockito.after(1000L).never())
             .onUnavailableCounter(any(CountersReader.class), eq(counter1.registrationId()), eq(counter1.id()));
 
-        assertEquals(CountersReader.RECORD_ALLOCATED, clientA.countersReader().getCounterState(counter1.id()));
-        assertEquals(CountersReader.RECORD_ALLOCATED, clientB.countersReader().getCounterState(counter1.id()));
+        assertEquals(RECORD_ALLOCATED, clientA.countersReader().getCounterState(counter1.id()));
+        assertEquals(RECORD_ALLOCATED, clientB.countersReader().getCounterState(counter1.id()));
     }
 
     @Test
@@ -441,8 +462,8 @@ class CounterTest
         assertTrue(counter3.isClosed());
 
         Tests.await(() -> CountersReader.RECORD_RECLAIMED == clientB.countersReader().getCounterState(counter3.id()));
-        assertEquals(CountersReader.RECORD_ALLOCATED, clientB.countersReader().getCounterState(counter1.id()));
-        assertEquals(CountersReader.RECORD_ALLOCATED, clientB.countersReader().getCounterState(counter2.id()));
+        assertEquals(RECORD_ALLOCATED, clientB.countersReader().getCounterState(counter1.id()));
+        assertEquals(RECORD_ALLOCATED, clientB.countersReader().getCounterState(counter2.id()));
         assertFalse(counter2.isClosed());
     }
 
@@ -468,7 +489,7 @@ class CounterTest
             final Counter counter = aeron.addStaticCounter(COUNTER_TYPE_ID, "test", 42);
             assertNotNull(counter);
             assertFalse(counter.isClosed());
-            assertEquals(CountersReader.RECORD_ALLOCATED, aeron.countersReader().getCounterState(counter.id()));
+            assertEquals(RECORD_ALLOCATED, aeron.countersReader().getCounterState(counter.id()));
 
             final Counter counter2 = aeron.addCounter(COUNTER_TYPE_ID * 2, "delete me");
 
@@ -510,7 +531,7 @@ class CounterTest
                 any(CountersReader.class), eq(counter2.registrationId()), eq(counter2.id()));
 
             assertFalse(counter.isClosed());
-            assertEquals(CountersReader.RECORD_ALLOCATED, aeron.countersReader().getCounterState(counter.id()));
+            assertEquals(RECORD_ALLOCATED, aeron.countersReader().getCounterState(counter.id()));
             verify(availableCounterHandler, never()).onAvailableCounter(
                 any(CountersReader.class), eq(counter.registrationId()), eq(counter.id()));
             verify(unavailableCounterHandler, never()).onUnavailableCounter(
@@ -622,8 +643,9 @@ class CounterTest
         assertNotNull(counter1);
         assertNull(clientB.getCounter(correlationId1));
         assertFalse(counter1.isClosed());
+        assertEquals(correlationId1, counter1.correlationId());
         assertEquals(registrationId1, counter1.registrationId());
-        assertEquals(CountersReader.RECORD_ALLOCATED, clientA.countersReader().getCounterState(counter1.id()));
+        assertEquals(RECORD_ALLOCATED, clientA.countersReader().getCounterState(counter1.id()));
         assertEquals(registrationId1, clientA.countersReader().getCounterRegistrationId(counter1.id()));
         assertEquals(NULL_VALUE, clientA.countersReader().getCounterOwnerId(counter1.id()));
         assertEquals(COUNTER_TYPE_ID, clientA.countersReader().getCounterTypeId(counter1.id()));
@@ -642,8 +664,9 @@ class CounterTest
         assertNotNull(counter2);
         assertNull(clientA.getCounter(correlationId2));
         assertFalse(counter2.isClosed());
+        assertEquals(correlationId2, counter2.correlationId());
         assertEquals(registrationId2, counter2.registrationId());
-        assertEquals(CountersReader.RECORD_ALLOCATED, clientB.countersReader().getCounterState(counter2.id()));
+        assertEquals(RECORD_ALLOCATED, clientB.countersReader().getCounterState(counter2.id()));
         assertEquals(registrationId2, clientB.countersReader().getCounterRegistrationId(counter2.id()));
         assertEquals(NULL_VALUE, clientB.countersReader().getCounterOwnerId(counter2.id()));
         assertEquals("test static counter", clientB.countersReader().getCounterLabel(counter2.id()));
@@ -699,10 +722,59 @@ class CounterTest
 
         assertTrue(counter3.isClosed());
         Tests.await(() -> CountersReader.RECORD_RECLAIMED == clientB.countersReader().getCounterState(counter3.id()));
-        assertEquals(CountersReader.RECORD_ALLOCATED, clientB.countersReader().getCounterState(counter1.id()));
-        assertEquals(CountersReader.RECORD_ALLOCATED, clientB.countersReader().getCounterState(counter2.id()));
+        assertEquals(RECORD_ALLOCATED, clientB.countersReader().getCounterState(counter1.id()));
+        assertEquals(RECORD_ALLOCATED, clientB.countersReader().getCounterState(counter2.id()));
         assertFalse(counter1.isClosed());
         assertFalse(counter2.isClosed());
+    }
+
+    @Test
+    void shouldSupportMultipleStaticCountersWithTheSameRegistrationId()
+    {
+        final String channel = "aeron:ipc?term-length=64k";
+        final int streamId = 1000;
+        final Publication publication = clientB.addPublication(channel, streamId);
+
+        final Counter shared = clientA.addCounter(555, "shared");
+        final long sharedRegistrationId = shared.registrationId();
+        final Counter counter1 = clientA.addStaticCounter(1000, "counter1", sharedRegistrationId);
+        final Counter counter2 = clientA.addStaticCounter(2000, "counter2", sharedRegistrationId);
+        final Counter counter3 = clientB.addStaticCounter(3000, "counter3", sharedRegistrationId);
+        assertNotEquals(shared.id(), counter1.id());
+        assertNotEquals(counter1.id(), counter2.id());
+        assertNotEquals(counter2.id(), counter3.id());
+        assertNotEquals(counter1.id(), counter3.id());
+
+        final Counter counter4 = clientB.addStaticCounter(4000, "counter4", publication.registrationId());
+        final Counter counter5 = clientA.addStaticCounter(5000, "counter5", publication.registrationId());
+        assertNotEquals(counter4.id(), counter5.id());
+        assertEquals(publication.registrationId(), counter4.registrationId());
+        assertEquals(publication.registrationId(), counter5.registrationId());
+
+        final Counter counter6 = clientB.addStaticCounter(4000, "counter6", publication.registrationId());
+        assertEquals(counter4.id(), counter6.id());
+        assertEquals(counter4.label(), counter6.label());
+        assertEquals(publication.registrationId(), counter6.registrationId());
+
+        final Subscription subscription1 = clientA.addSubscription(channel, streamId);
+        final Subscription subscription2 = clientB.addSubscription(channel, streamId);
+        assertNotEquals(subscription1.registrationId(), subscription2.registrationId());
+
+        final long asyncCorrelationId = clientB.asyncAddStaticCounter(6000, "counter7", publication.registrationId());
+
+        final int positionLimitId = publication.positionLimitId();
+        shared.close();
+        publication.close();
+
+        Tests.await(() -> RECORD_ALLOCATED != clientA.countersReader().getCounterState(positionLimitId));
+        assertNotEquals(RECORD_ALLOCATED, clientA.countersReader().getCounterState(shared.id()));
+
+        Counter counter7;
+        while (null == (counter7 = clientB.getCounter(asyncCorrelationId)))
+        {
+            Tests.yield();
+        }
+        assertEquals(publication.registrationId(), counter7.registrationId());
     }
 
     private void createReadableCounter(final CountersReader counters, final long registrationId, final int counterId)

@@ -47,6 +47,17 @@ int aeron_unmap(aeron_mapped_file_t *mapped_file);
 
 int aeron_msync(void *addr, size_t length);
 int aeron_delete_file(const char *path);
+const char *aeron_realpath(const char *path, char *resolved_path, size_t resolved_path_len);
+const char *aeron_tmpdir(char *path, size_t path_len);
+bool aeron_file_exists(const char* path);
+int64_t aeron_ftell(void *stream);
+/**
+ * Opens or creates a new file in append mode.  Will use 0644 permissions on Linux/Mac and default on Windows.
+ *
+ * @param path to the location on the file system.
+ * @return A FILE* pointer as a void* to reduce type dependencies.  Returns null on failure.
+ */
+void *aeron_open_file_append(const char *path);
 
 #if defined(AERON_COMPILER_GCC)
 #include <unistd.h>
@@ -96,6 +107,14 @@ int aeron_network_publication_location(char *dst, size_t length, const char *aer
 int aeron_publication_image_location(char *dst, size_t length, const char *aeron_dir, int64_t correlation_id);
 
 size_t aeron_temp_filename(char *filename, size_t length);
+
+/**
+ * Returns a new temporary directory, allocates the string which needs to be freed by the user.
+ *
+ * @param dir_template to be used to create the temporary directory.
+ * @return the new temporary path.
+ */
+const char *aeron_temp_dir(const char *dir_template);
 
 typedef int (*aeron_raw_log_map_func_t)(aeron_mapped_raw_log_t *, const char *, bool, uint64_t, uint64_t);
 typedef int (*aeron_raw_log_close_func_t)(aeron_mapped_raw_log_t *, const char *filename);

@@ -15,7 +15,6 @@
  */
 package io.aeron.driver.media;
 
-import io.aeron.driver.DriverConductorProxy;
 import io.aeron.driver.MediaDriver;
 import io.aeron.status.ChannelEndpointStatus;
 import io.aeron.status.LocalSocketAddressStatus;
@@ -23,7 +22,8 @@ import org.agrona.CloseHelper;
 import org.agrona.concurrent.status.AtomicCounter;
 
 import java.net.InetSocketAddress;
-import java.nio.channels.SelectionKey;
+
+import static io.aeron.status.ChannelEndpointStatus.status;
 
 abstract class ReceiveDestinationTransportLhsPadding extends UdpChannelTransport
 {
@@ -93,6 +93,7 @@ public final class ReceiveDestinationTransport extends ReceiveDestinationTranspo
 {
     private InetSocketAddress currentControlAddress;
     private final AtomicCounter localSocketAddressIndicator;
+    private final ReceiveChannelEndpoint receiveChannelEndpoint;
 
     /**
      * Construct transport for a receiving destination.
@@ -120,17 +121,30 @@ public final class ReceiveDestinationTransport extends ReceiveDestinationTranspo
         this.timeOfLastActivityNs = context.receiverCachedNanoClock().nanoTime();
         this.currentControlAddress = udpChannel.hasExplicitControl() ? udpChannel.localControl() : null;
         this.localSocketAddressIndicator = localSocketAddressIndicator;
+        this.receiveChannelEndpoint = receiveChannelEndpoint;
     }
 
     /**
      * Open the channel by the receiver.
      *
-     * @param conductorProxy  for sending instructions by to the driver conductor.
      * @param statusIndicator for the channel.
      */
-    public void openChannel(final DriverConductorProxy conductorProxy, final AtomicCounter statusIndicator)
+    public void openChannel(final AtomicCounter statusIndicator)
     {
         openDatagramChannel(statusIndicator);
+    }
+
+    /**
+     * Indicate that the transport is active after successfully opening it.
+     */
+    public void indicateActive()
+    {
+        final long currentStatus = localSocketAddressIndicator.getPlain();
+        if (currentStatus != ChannelEndpointStatus.INITIALIZING)
+        {
+            throw new IllegalStateException(
+                "channel cannot be registered unless INITIALIZING: status=" + status(currentStatus));
+        }
 
         LocalSocketAddressStatus.updateBindAddress(
             localSocketAddressIndicator, bindAddressAndPort(), context.countersMetaDataBuffer());
@@ -138,19 +152,12 @@ public final class ReceiveDestinationTransport extends ReceiveDestinationTranspo
     }
 
     /**
-     * Close the networking elements of the ReceiveChannelEndpoint, but leave other components (e.g. counters) in place.
+     * {@inheritDoc}
      */
-    public void closeTransport()
+    public void close()
     {
         super.close();
-    }
-
-    /**
-     * Close indicator counters associated with the transport.
-     */
-    public void closeIndicators()
-    {
-        CloseHelper.close(localSocketAddressIndicator);
+        CloseHelper.close(errorHandler, localSocketAddressIndicator);
     }
 
     /**
@@ -171,16 +178,6 @@ public final class ReceiveDestinationTransport extends ReceiveDestinationTranspo
     public InetSocketAddress explicitControlAddress()
     {
         return udpChannel.hasExplicitControl() ? currentControlAddress : null;
-    }
-
-    /**
-     * Store the {@link SelectionKey} for the registered transport.
-     *
-     * @param key the {@link SelectionKey} for the registered transport.
-     */
-    public void selectionKey(final SelectionKey key)
-    {
-        selectionKey = key;
     }
 
     /**
@@ -240,7 +237,8 @@ public final class ReceiveDestinationTransport extends ReceiveDestinationTranspo
     {
         return "ReceiveDestinationTransport{" +
             "currentControlAddress=" + currentControlAddress +
-            ", localSocketAddressIndicator=" + localSocketAddressIndicator +
+            ", localSocketAddress=" + localSocketAddressIndicator.label() +
+            ", statusIndicator=" + localSocketAddressIndicator.getPlain() +
             '}';
     }
 }

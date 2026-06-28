@@ -58,6 +58,7 @@ typedef struct aeron_driver_sender_stct
     volatile int64_t *errors_counter;
     volatile int64_t *invalid_frames_counter;
     volatile int64_t *status_messages_received_counter;
+    volatile int64_t *status_messages_rejected_counter;
     volatile int64_t *nak_messages_received_counter;
     volatile int64_t *error_messages_received_counter;
     volatile int64_t *resolution_changes_counter;

@@ -52,20 +52,15 @@ protected:
     EmbeddedMediaDriver m_driver;
 };
 
-// TODO: We need a way to clean up unresolved aeron_client_registering_resource_t* commands
-TEST_F(SystemTest, DISABLED_shouldReclaimSubscriptionWhenOutOfScopeAndNotFound)
+TEST_F(SystemTest, shouldReclaimAsyncResourcesOnShutdown)
 {
     std::shared_ptr<Aeron> aeron = Aeron::connect();
 
-    aeron->addSubscription("aeron:udp?endpoint=localhost:24325", 10);
-    const auto pub_reg_id = aeron->addPublication("aeron:udp?endpoint=localhost:24325", 10);
-
-    auto pub = aeron->findPublication(pub_reg_id);
-    while (!pub)
-    {
-        std::this_thread::yield();
-        pub = aeron->findPublication(pub_reg_id);
-    }
+    aeron->addSubscription("aeron:udp?endpoint=localhost:24325", 1000);
+    aeron->addPublication("aeron:udp?endpoint=localhost:24325", 1000);
+    aeron->addExclusivePublication("aeron:ipc", 3000);
+    aeron->addCounter(1818, nullptr, 0, "label");
+    aeron->addCounter(8888, nullptr, 0, "another");
 }
 
 TEST_F(SystemTest, shouldGetDefaultPath)

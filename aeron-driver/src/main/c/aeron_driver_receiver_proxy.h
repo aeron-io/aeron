@@ -18,6 +18,8 @@
 #define AERON_DRIVER_RECEIVER_PROXY_H
 
 #include "aeron_driver_context.h"
+#include "concurrent/aeron_spsc_rb.h"
+#include "util/aeron_parse_util.h"
 
 typedef struct aeron_driver_receiver_stct aeron_driver_receiver_t;
 typedef struct aeron_receive_channel_endpoint_stct aeron_receive_channel_endpoint_t;
@@ -27,13 +29,12 @@ typedef struct aeron_publication_image_stct aeron_publication_image_t;
 typedef struct aeron_driver_receiver_proxy_stct
 {
     aeron_driver_receiver_t *receiver;
-    aeron_threading_mode_t threading_mode;
     struct
     {
         aeron_on_endpoint_change_func_t on_add_endpoint;
         aeron_on_endpoint_change_func_t on_remove_endpoint;
     } log;
-    aeron_mpsc_rb_t *command_queue;
+    aeron_spsc_rb_t *command_queue;
     int64_t *fail_counter;
 }
 aeron_driver_receiver_proxy_t;
@@ -126,7 +127,7 @@ aeron_command_on_remove_matching_state_t;
 typedef struct aeron_command_receiver_resolution_change_stct
 {
     aeron_command_base_t base;
-    const char *endpoint_name;
+    char endpoint_name[AERON_MAX_HOST_LENGTH + 1];
     void *endpoint;
     void *destination;
     struct sockaddr_storage new_addr;

@@ -27,6 +27,13 @@ import org.agrona.concurrent.status.AtomicCounter;
 public class DebugSendChannelEndpointSupplier implements SendChannelEndpointSupplier
 {
     /**
+     * Create a supplier for the DebugSendChannelEndpoint.
+     */
+    public DebugSendChannelEndpointSupplier()
+    {
+    }
+
+    /**
      * Supply a new instance of a {@link DebugSendChannelEndpoint} for testing loss.
      *
      * @param udpChannel      on which the sender will send.

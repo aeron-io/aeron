@@ -44,7 +44,11 @@ inline void release()
 
 inline void cpu_pause()
 {
+#if defined(AERON_CPU_ARM)
+    __yield();
+#else
     _mm_pause();
+#endif
 }
 
 inline std::int32_t getInt32Volatile(volatile std::int32_t *source)

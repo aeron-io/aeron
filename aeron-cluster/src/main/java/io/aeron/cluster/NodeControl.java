@@ -30,7 +30,7 @@ import java.io.File;
  * Toggle control {@link ToggleState}s for a cluster node such as {@link ToggleState#REPLICATE_STANDBY_SNAPSHOT}.
  * This can only be applied to individual nodes and does not apply across the cluster.
  */
-public class NodeControl
+public final class NodeControl
 {
     /**
      * Toggle states for controlling the cluster node once it has entered the active state after initialising.
@@ -52,7 +52,12 @@ public class NodeControl
         /**
          * Trigger a replication of the most resent standby snapshots.
          */
-        REPLICATE_STANDBY_SNAPSHOT(2);
+        REPLICATE_STANDBY_SNAPSHOT(2),
+
+        /**
+         * Validate that the snapshot in the recording log have associated recordings.
+         */
+        VALIDATE_RECORDING_LOG(3);
 
         private final int code;
 
@@ -147,6 +152,10 @@ public class NodeControl
      * Counter type id for the control toggle.
      */
     public static final int CONTROL_TOGGLE_TYPE_ID = AeronCounters.NODE_CONTROL_TOGGLE_TYPE_ID;
+
+    private NodeControl()
+    {
+    }
 
     /**
      * Find the control toggle counter or return null if not found.

@@ -38,6 +38,7 @@ import java.util.*;
 
 import static io.aeron.Aeron.NULL_VALUE;
 import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
+import static io.aeron.cluster.ConsensusModule.Configuration.SERVICE_ID;
 import static java.lang.Math.max;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static java.nio.file.StandardOpenOption.*;
@@ -352,267 +353,74 @@ public final class RecordingLog implements AutoCloseable
 
     /**
      * Representation of a snapshot entry in the {@link RecordingLog}.
+     *
+     * @param recordingId           identity of the recording in the archive for the snapshot.
+     * @param leadershipTermId      identity of the leadership term.
+     * @param termBaseLogPosition   the log position as the base of the leadership term.
+     * @param logPosition           that the log has reached for the snapshot.
+     * @param timestamp             that the cluster clock was as at the point of the snapshot (in configured units).
+     * @param serviceId             identity of the service taking the snapshot
+     *                              ({@link ConsensusModule.Configuration#SERVICE_ID} is used for the consensus module's
+     *                              entry.
      */
-    public static final class Snapshot
+    public record Snapshot(
+        long recordingId,
+        long leadershipTermId,
+        long termBaseLogPosition,
+        long logPosition,
+        long timestamp,
+        int serviceId)
     {
-        /**
-         * Identity of the recording in the archive for the snapshot.
-         */
-        public final long recordingId;
-
-        /**
-         * Identity of the leadership term.
-         */
-        public final long leadershipTermId;
-
-        /**
-         * The log position at the base of the leadership term.
-         */
-        public final long termBaseLogPosition;
-
-        /**
-         * Position the log has reached for the snapshot.
-         */
-        public final long logPosition;
-
-        /**
-         * Timestamp for the cluster clock in the time units configured for the cluster at time of the snapshot.
-         */
-        public final long timestamp;
-
-        /**
-         * Identity of the service associated with the snapshot.
-         */
-        public final int serviceId;
-
-        /**
-         * A snapshot entry in the {@link RecordingLog}.
-         *
-         * @param recordingId         of the entry in an archive.
-         * @param leadershipTermId    in which the snapshot was taken.
-         * @param termBaseLogPosition position of the log over leadership terms at the beginning of this term.
-         * @param logPosition         position reached when the entry was snapshot was taken.
-         * @param timestamp           as which the snapshot was taken.
-         * @param serviceId           which the snapshot belongs to.
-         */
-        public Snapshot(
-            final long recordingId,
-            final long leadershipTermId,
-            final long termBaseLogPosition,
-            final long logPosition,
-            final long timestamp,
-            final int serviceId)
-        {
-            this.recordingId = recordingId;
-            this.leadershipTermId = leadershipTermId;
-            this.termBaseLogPosition = termBaseLogPosition;
-            this.logPosition = logPosition;
-            this.timestamp = timestamp;
-            this.serviceId = serviceId;
-        }
-
-        /**
-         * {@inheritDoc}
-         */
-        public String toString()
-        {
-            return "Snapshot{" +
-                "recordingId=" + recordingId +
-                ", leadershipTermId=" + leadershipTermId +
-                ", termBaseLogPosition=" + termBaseLogPosition +
-                ", logPosition=" + logPosition +
-                ", timestamp=" + timestamp +
-                ", serviceId=" + serviceId +
-                '}';
-        }
     }
 
     /**
      * Representation of a log entry in the {@link RecordingLog}.
+     *
+     * @param recordingId           identity of the recording in the archive for the snapshot.
+     * @param leadershipTermId      identity of the leadership term.
+     * @param termBaseLogPosition   the log position as the base of the leadership term.
+     * @param logPosition           that the log has reached for the snapshot.
+     * @param startPosition         of the recording captured in the archive.
+     * @param stopPosition          of the recording captured in the archive.
+     * @param initialTermId         of the stream captured for the recording.
+     * @param termBufferLength      of the stream captured for the recording.
+     * @param mtuLength             of the stream captured for the recording.
+     * @param sessionId             of the stream captured for the recording.
      */
-    public static final class Log
+    public record Log(
+        long recordingId,
+        long leadershipTermId,
+        long termBaseLogPosition,
+        long logPosition,
+        long startPosition,
+        long stopPosition,
+        int initialTermId,
+        int termBufferLength,
+        int mtuLength,
+        int sessionId)
     {
-        /**
-         * Identity of the recording in the archive for the log.
-         */
-        public final long recordingId;
-
-        /**
-         * Identity of the leadership term.
-         */
-        public final long leadershipTermId;
-
-        /**
-         * The log position at the base of the leadership term.
-         */
-        public final long termBaseLogPosition;
-
-        /**
-         * Position the log has reached for the term which can be {@link AeronArchive#NULL_POSITION} when not committed.
-         */
-        public final long logPosition;
-
-        /**
-         * Start position of the recording captured in the archive.
-         */
-        public final long startPosition;
-
-        /**
-         * Stop position of the recording captured in the archive.
-         */
-        public final long stopPosition;
-
-        /**
-         * Initial term identity of the stream captured for the recording.
-         */
-        public final int initialTermId;
-
-        /**
-         * Transport term buffer length of the stream captured for the recording.
-         */
-        public final int termBufferLength;
-
-        /**
-         * Transport MTU length of the stream captured for the recording.
-         */
-        public final int mtuLength;
-
-        /**
-         * Transport session identity of the stream captured for the recording.
-         */
-        public final int sessionId;
-
-        /**
-         * Construct a representation of a log entry in the {@link RecordingLog}.
-         *
-         * @param recordingId         for the recording in an archive.
-         * @param leadershipTermId    identity for the leadership term.
-         * @param termBaseLogPosition log position at the base of the leadership term.
-         * @param logPosition         position the log has reached for the term.
-         * @param startPosition       of the recording captured in the archive.
-         * @param stopPosition        of the recording captured in the archive.
-         * @param initialTermId       of the stream captured for the recording.
-         * @param termBufferLength    of the stream captured for the recording.
-         * @param mtuLength           of the stream captured for the recording.
-         * @param sessionId           of the stream captured for the recording.
-         */
-        public Log(
-            final long recordingId,
-            final long leadershipTermId,
-            final long termBaseLogPosition,
-            final long logPosition,
-            final long startPosition,
-            final long stopPosition,
-            final int initialTermId,
-            final int termBufferLength,
-            final int mtuLength,
-            final int sessionId)
-        {
-            this.recordingId = recordingId;
-            this.leadershipTermId = leadershipTermId;
-            this.termBaseLogPosition = termBaseLogPosition;
-            this.logPosition = logPosition;
-            this.startPosition = startPosition;
-            this.stopPosition = stopPosition;
-            this.initialTermId = initialTermId;
-            this.termBufferLength = termBufferLength;
-            this.mtuLength = mtuLength;
-            this.sessionId = sessionId;
-        }
-
-        /**
-         * {@inheritDoc}
-         */
-        public String toString()
-        {
-            return "Log{" +
-                "recordingId=" + recordingId +
-                ", leadershipTermId=" + leadershipTermId +
-                ", termBaseLogPosition=" + termBaseLogPosition +
-                ", logPosition=" + logPosition +
-                ", startPosition=" + startPosition +
-                ", stopPosition=" + stopPosition +
-                ", initialTermId=" + initialTermId +
-                ", termBufferLength=" + termBufferLength +
-                ", mtuLength=" + mtuLength +
-                ", sessionId=" + sessionId +
-                '}';
-        }
     }
 
     /**
      * The snapshots and steps to recover the state of a cluster.
+     *
+     * @param lastLeadershipTermId      the last, i.e. most recent, leadership term identity for the log.
+     * @param lastTermBaseLogPosition   the last, i.e. most recent, leadership term base log position.
+     * @param appendedLogPosition       the position reached for local appended log.
+     * @param committedLogPosition      the position reached for the local appended log for which the commit position
+     *                                  is known.
+     * @param snapshots                 the most recent snapshots for the consensus module and services to accelerate
+     *                                  recovery.
+     * @param log                       the appended local log details.
      */
-    public static final class RecoveryPlan
+    public record RecoveryPlan(
+        long lastLeadershipTermId,
+        long lastTermBaseLogPosition,
+        long appendedLogPosition,
+        long committedLogPosition,
+        ArrayList<Snapshot> snapshots,
+        Log log)
     {
-        /**
-         * The last, i.e. most recent, leadership term identity for the log.
-         */
-        public final long lastLeadershipTermId;
-
-        /**
-         * The last, i.e. most recent, leadership term base log position.
-         */
-        public final long lastTermBaseLogPosition;
-
-        /**
-         * The position reached for local appended log.
-         */
-        public final long appendedLogPosition;
-
-        /**
-         * The position reached for the local appended log for which the commit position is known.
-         */
-        public final long committedLogPosition;
-
-        /**
-         * The most recent snapshots for the consensus module and services to accelerate recovery.
-         */
-        public final ArrayList<Snapshot> snapshots;
-
-        /**
-         * The appended local log details.
-         */
-        public final Log log;
-
-        /**
-         * @param lastLeadershipTermId    the last, i.e. most recent, leadership term identity for the log.
-         * @param lastTermBaseLogPosition last, i.e. most recent, leadership term base log position.
-         * @param appendedLogPosition     reached for local appended log.
-         * @param committedLogPosition    reached for the local appended log for which the commit position is known.
-         * @param snapshots               most recent snapshots for the consensus module and services.
-         * @param log                     appended local log details.
-         */
-        public RecoveryPlan(
-            final long lastLeadershipTermId,
-            final long lastTermBaseLogPosition,
-            final long appendedLogPosition,
-            final long committedLogPosition,
-            final ArrayList<Snapshot> snapshots,
-            final Log log)
-        {
-            this.lastLeadershipTermId = lastLeadershipTermId;
-            this.lastTermBaseLogPosition = lastTermBaseLogPosition;
-            this.appendedLogPosition = appendedLogPosition;
-            this.committedLogPosition = committedLogPosition;
-            this.snapshots = snapshots;
-            this.log = log;
-        }
-
-        /**
-         * {@inheritDoc}
-         */
-        public String toString()
-        {
-            return "RecoveryPlan{" +
-                "lastLeadershipTermId=" + lastLeadershipTermId +
-                ", lastTermBaseLogPosition=" + lastTermBaseLogPosition +
-                ", appendedLogPosition=" + appendedLogPosition +
-                ", committedLogPosition=" + committedLogPosition +
-                ", snapshots=" + snapshots +
-                ", log=" + log +
-                '}';
-        }
     }
 
     /**
@@ -960,9 +768,9 @@ public final class RecordingLog implements AutoCloseable
         for (int i = entriesCache.size() - 1; i >= 0; i--)
         {
             final Entry entry = entriesCache.get(i);
-            if (isValidSnapshot(entry) && ConsensusModule.Configuration.SERVICE_ID == entry.serviceId)
+            if (isValidSnapshot(entry) && SERVICE_ID == entry.serviceId)
             {
-                if (ConsensusModule.Configuration.SERVICE_ID == serviceId)
+                if (SERVICE_ID == serviceId)
                 {
                     return entry;
                 }
@@ -995,7 +803,7 @@ public final class RecordingLog implements AutoCloseable
         for (int idx = entriesCache.size() - 1; idx >= 0; idx--)
         {
             final Entry entry = entriesCache.get(idx);
-            if (isValidAnySnapshot(entry) && ConsensusModule.Configuration.SERVICE_ID == entry.serviceId)
+            if (isValidAnySnapshot(entry) && SERVICE_ID == entry.serviceId)
             {
                 if (entry.logPosition >= highLogPosition)
                 {
@@ -1027,7 +835,7 @@ public final class RecordingLog implements AutoCloseable
         {
             final int startingIndex = indices.popInt();
 
-            int serviceId = ConsensusModule.Configuration.SERVICE_ID;
+            int serviceId = SERVICE_ID;
 
             for (int idx = startingIndex; idx >= 0; idx--)
             {
@@ -1378,6 +1186,82 @@ public final class RecordingLog implements AutoCloseable
             });
 
         return latestStandbySnapshots;
+    }
+
+    List<Snapshot> findSnapshotAtOrBeforeOrLowest(final long logPosition, final int serviceCount)
+    {
+        entriesCache.sort(ENTRY_COMPARATOR);
+
+        for (int i = entriesCache.size() - 1; i >= 0; i--)
+        {
+            final Entry entry = entriesCache.get(i);
+            if (isValidSnapshot(entry) && SERVICE_ID == entry.serviceId)
+            {
+                if (entry.logPosition > logPosition)
+                {
+                    continue;
+                }
+
+                if (validateSnapshotEntries(entriesCache, serviceCount, i, entry))
+                {
+                    return convertEntryListToSnapshotList(entriesCache.subList(i - serviceCount, i + 1));
+                }
+            }
+        }
+
+        for (int i = 0; i < entriesCache.size(); i++)
+        {
+            final Entry entry = entriesCache.get(i);
+            if (isValidSnapshot(entry) && SERVICE_ID == entry.serviceId)
+            {
+                if (validateSnapshotEntries(entriesCache, serviceCount, i, entry))
+                {
+                    return convertEntryListToSnapshotList(entriesCache.subList(i - serviceCount, i + 1));
+                }
+            }
+        }
+
+        return null;
+    }
+
+    static List<Snapshot> convertEntryListToSnapshotList(final List<Entry> entries)
+    {
+        final List<Snapshot> snapshots = new ArrayList<>(entries.size());
+
+        for (int i = 0; i < entries.size(); i++)
+        {
+            final Entry entry = entries.get(i);
+            snapshots.add(new Snapshot(
+                entry.recordingId,
+                entry.leadershipTermId,
+                entry.termBaseLogPosition,
+                entry.logPosition,
+                entry.timestamp,
+                entry.serviceId));
+        }
+
+        return snapshots;
+    }
+
+    static boolean validateSnapshotEntries(
+        final ArrayList<Entry> entries,
+        final int serviceCount,
+        final int snapshotIndex,
+        final Entry consensusModuleEntry)
+    {
+        for (int i = 1; i <= serviceCount; i++)
+        {
+            final Entry entry = entries.get(snapshotIndex - i);
+
+            if (ENTRY_TYPE_SNAPSHOT != entry.type ||
+                entry.leadershipTermId != consensusModuleEntry.leadershipTermId ||
+                entry.logPosition != consensusModuleEntry.logPosition)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -1841,7 +1725,7 @@ public final class RecordingLog implements AutoCloseable
         {
             final Entry entry = entries.get(i);
             if (-1 == snapshotIndex && isValidSnapshot(entry) &&
-                entry.serviceId == ConsensusModule.Configuration.SERVICE_ID)
+                entry.serviceId == SERVICE_ID)
             {
                 snapshotIndex = i;
             }

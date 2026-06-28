@@ -178,19 +178,38 @@ BOOL aeron_ipv6_does_prefix_match(struct in6_addr *in6_addr1, struct in6_addr *i
     return aeron_uint128_equals(aeron_uint128_bitwise_and(addr1, netmask), aeron_uint128_bitwise_and(addr2, netmask));
 }
 
+double aeron_erand48(unsigned short xsubi[3])
+{
+    // POSIX-compatible 48-bit linear congruential generator: X_{n+1} = (a * X_n + c) mod 2^48.
+    // Standard drand48/erand48 constants. Per POSIX, xsubi[0] holds the low 16 bits of the
+    // state and xsubi[2] the high 16 bits.
+    static const uint64_t a = 0x5DEECE66DULL;
+    static const uint64_t c = 0xBULL;
+    static const uint64_t mask48 = (1ULL << 48) - 1ULL;
+
+    uint64_t x = (uint64_t)xsubi[0] | ((uint64_t)xsubi[1] << 16) | ((uint64_t)xsubi[2] << 32);
+    x = (a * x + c) & mask48;
+    xsubi[0] = (unsigned short)(x & 0xFFFF);
+    xsubi[1] = (unsigned short)((x >> 16) & 0xFFFF);
+    xsubi[2] = (unsigned short)((x >> 32) & 0xFFFF);
+
+    return (double)x / (double)(1ULL << 48);
+}
+
+// Global state for drand48/srand48. POSIX-compatible default matches "as if srand48(1) was called".
+static unsigned short aeron_drand48_state[3] = { 0x330E, 0x0001, 0x0000 };
+
 void aeron_srand48(uint64_t aeron_nano_clock)
 {
-    srand((unsigned int)aeron_nano_clock);
+    // POSIX srand48 uses only the low 32 bits of the seed and sets the low 16 of X to 0x330E.
+    aeron_drand48_state[0] = 0x330E;
+    aeron_drand48_state[1] = (unsigned short)(aeron_nano_clock & 0xFFFF);
+    aeron_drand48_state[2] = (unsigned short)((aeron_nano_clock >> 16) & 0xFFFF);
 }
 
 double aeron_drand48()
 {
-    return rand() / (double)(RAND_MAX + 1);
-}
-
-double aeron_erand48(unsigned short xsubi[3])
-{
-    return rand() / (double)(RAND_MAX + 1);
+    return aeron_erand48(aeron_drand48_state);
 }
 
 void localtime_r(const time_t *timep, struct tm *result)

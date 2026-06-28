@@ -32,6 +32,10 @@ public final class LossReportUtil
      */
     public static final String LOSS_REPORT_FILE_NAME = "loss-report.dat";
 
+    private LossReportUtil()
+    {
+    }
+
     /**
      * Create a new {@link File} object for the loss report.
      *

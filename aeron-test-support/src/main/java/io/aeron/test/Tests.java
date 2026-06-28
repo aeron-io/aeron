@@ -866,10 +866,11 @@ public class Tests
             final int labelOffset = invocation.getArgument(5, Integer.class);
             final int labelLength = invocation.getArgument(6, Integer.class);
 
-            final int allocate = countersManager.allocate(
+            final int id = countersManager.allocate(
                 counterType, keyBuffer, keyOffset, keyLength, labelBuffer, labelOffset, labelLength);
+            countersManager.setCounterRegistrationId(id, registrationId.getAsLong());
 
-            return new Counter(countersManager, registrationId.getAsLong(), allocate);
+            return new Counter(countersManager, id);
         };
     }
 

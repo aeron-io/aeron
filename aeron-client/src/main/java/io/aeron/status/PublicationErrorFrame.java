@@ -35,6 +35,13 @@ public class PublicationErrorFrame implements Cloneable
     private InetSocketAddress sourceAddress;
 
     /**
+     * Create an error frame flyweight that can be reused across calls.
+     */
+    public PublicationErrorFrame()
+    {
+    }
+
+    /**
      * Registration id of the publication that received the error frame.
      *
      * @return registration id of the publication.

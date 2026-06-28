@@ -23,7 +23,6 @@
 #include "concurrent/aeron_broadcast_transmitter.h"
 #include "concurrent/aeron_distinct_error_log.h"
 #include "concurrent/aeron_counters_manager.h"
-#include "concurrent/aeron_executor.h"
 #include "command/aeron_control_protocol.h"
 #include "aeron_system_counters.h"
 #include "aeron_ipc_publication.h"
@@ -47,8 +46,8 @@ aeron_publication_link_t;
 
 #define AERON_PUBLICATION_LINK_INIT(_link, _resource, _registration_id) \
 do {                                                                    \
-    link->resource = _resource;                                         \
-    link->registration_id = registration_id;                            \
+    (_link)->resource = (_resource);                                    \
+    (_link)->registration_id = (_registration_id);                      \
 } while (0)
 
 typedef struct aeron_counter_link_stct
@@ -159,16 +158,32 @@ typedef struct aeron_linger_resource_entry_stct
 }
 aeron_linger_resource_entry_t;
 
-typedef bool (*aeron_end_of_life_resource_free_t)(void *resource);
-
-struct aeron_end_of_life_resource_stct
-{
-    void *resource;
-    aeron_end_of_life_resource_free_t free_func;
-};
-typedef struct aeron_end_of_life_resource_stct aeron_end_of_life_resource_t;
-
 typedef struct aeron_driver_conductor_stct aeron_driver_conductor_t;
+
+typedef enum aeron_driver_conductor_command_state_en
+{
+    AERON_DRIVER_CONDUCTOR_COMMAND_STATE_ERROR = -1,
+    AERON_DRIVER_CONDUCTOR_COMMAND_STATE_RUNNING = 0,
+    AERON_DRIVER_CONDUCTOR_COMMAND_STATE_DONE = 1
+}
+aeron_driver_conductor_command_state_t;
+
+typedef struct aeron_driver_conductor_driver_command_stct
+{
+    aeron_driver_conductor_command_state_t (*execute)(
+        aeron_driver_conductor_t *conductor, struct aeron_driver_conductor_driver_command_stct *cmd);
+    void (*free)(struct aeron_driver_conductor_driver_command_stct *cmd);
+}
+aeron_driver_conductor_driver_command_t;
+
+typedef struct aeron_driver_conductor_client_command_stct
+{
+    aeron_driver_conductor_command_state_t (*execute)(
+        aeron_driver_conductor_t *conductor, struct aeron_driver_conductor_client_command_stct *cmd);
+    void (*free)(struct aeron_driver_conductor_client_command_stct *cmd);
+    aeron_correlated_command_t *correlated;
+}
+aeron_driver_conductor_client_command_t;
 
 typedef struct aeron_driver_conductor_stct
 {
@@ -180,8 +195,6 @@ typedef struct aeron_driver_conductor_stct
     aeron_system_counters_t system_counters;
     aeron_driver_conductor_proxy_t conductor_proxy;
     aeron_loss_reporter_t loss_reporter;
-    aeron_name_resolver_t name_resolver;
-    aeron_executor_t executor;
 
     aeron_str_to_ptr_hash_map_t send_channel_endpoint_by_channel_map;
     aeron_str_to_ptr_hash_map_t receive_channel_endpoint_by_channel_map;
@@ -294,8 +307,6 @@ typedef struct aeron_driver_conductor_stct
     }
     lingering_resources;
 
-    aeron_deque_t end_of_life_queue;
-
     int64_t *errors_counter;
     int64_t *images_rejected_counter;
     int64_t *unblocked_commands_counter;
@@ -310,7 +321,10 @@ typedef struct aeron_driver_conductor_stct
     int64_t time_of_last_to_driver_position_change_ns;
     int64_t last_command_consumer_position;
 
-    bool async_client_command_in_flight;
+    bool is_started;
+
+    aeron_driver_conductor_client_command_t *client_command;
+    aeron_driver_conductor_driver_command_t *driver_command;
 
     uint8_t padding[AERON_CACHE_LINE_LENGTH];
 }
@@ -424,6 +438,9 @@ void aeron_driver_conductor_on_unavailable_counter(
     aeron_driver_conductor_t *conductor, int64_t registration_id, int32_t counter_id);
 
 void aeron_driver_conductor_on_client_timeout(aeron_driver_conductor_t *conductor, int64_t correlation_id);
+
+void aeron_driver_conductor_on_error(
+    aeron_driver_conductor_t *conductor, int32_t errcode, const char *errmsg, int64_t correlation_id);
 
 void aeron_driver_conductor_on_static_counter(
     aeron_driver_conductor_t *conductor, int64_t correlation_id, int32_t counter_id);

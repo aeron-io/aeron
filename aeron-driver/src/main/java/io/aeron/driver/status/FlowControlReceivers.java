@@ -25,8 +25,12 @@ import static io.aeron.Aeron.NULL_VALUE;
 /**
  * The number of active receivers represented as a counter value.
  */
-public class FlowControlReceivers
+public final class FlowControlReceivers
 {
+    private FlowControlReceivers()
+    {
+    }
+
     /**
      * Type id of number of receivers counter.
      */

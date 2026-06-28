@@ -20,6 +20,7 @@ import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.Test;
 
 import static io.aeron.agent.ArchiveEventCode.*;
+import static io.aeron.agent.ArchiveEventCode.PERSISTENT_SUBSCRIPTION_STATE_CHANGE;
 import static io.aeron.agent.ArchiveEventDissector.*;
 import static io.aeron.agent.CommonEventEncoder.LOG_HEADER_LENGTH;
 import static io.aeron.agent.CommonEventEncoder.internalEncodeLogHeader;
@@ -760,7 +761,8 @@ class ArchiveEventDissectorTest
             .responseStreamId(19)
             .version(2)
             .responseChannel("English Channel")
-            .putEncodedCredentials("hello".getBytes(US_ASCII), 0, 5);
+            .putEncodedCredentials("hello".getBytes(US_ASCII), 0, 5)
+            .clientInfo("my test client \"ABC\" 42");
 
         dissectControlRequest(CMD_IN_AUTH_CONNECT, buffer, 0, builder);
 
@@ -769,7 +771,8 @@ class ArchiveEventDissectorTest
             " responseStreamId=19" +
             " version=2" +
             " responseChannel=English Channel" +
-            " encodedCredentialsLength=5",
+            " encodedCredentialsLength=5" +
+            " clientInfo=my test client \"ABC\" 42",
             builder.toString());
     }
 
@@ -935,16 +938,14 @@ class ArchiveEventDissectorTest
     @Test
     void catalogResize()
     {
-        internalEncodeLogHeader(buffer, 0, 6, 100, () -> 5_600_000_000L);
-        buffer.putInt(LOG_HEADER_LENGTH, 24, LITTLE_ENDIAN);
-        buffer.putLong(LOG_HEADER_LENGTH + SIZE_OF_INT, 100, LITTLE_ENDIAN);
-        buffer.putInt(LOG_HEADER_LENGTH + SIZE_OF_INT + SIZE_OF_LONG, 777, LITTLE_ENDIAN);
-        buffer.putLong(LOG_HEADER_LENGTH + SIZE_OF_INT * 2 + SIZE_OF_LONG, 10_000_000_000L, LITTLE_ENDIAN);
+        internalEncodeLogHeader(buffer, 0, 16, 16, () -> 5_600_000_000L);
+        buffer.putLong(LOG_HEADER_LENGTH, 128, LITTLE_ENDIAN);
+        buffer.putLong(LOG_HEADER_LENGTH + SIZE_OF_LONG, 1024, LITTLE_ENDIAN);
 
         dissectCatalogResize(buffer, 0, builder);
 
-        assertEquals("[5.600000000] " + CONTEXT + ": " + CATALOG_RESIZE.name() + " [6/100]:" +
-            " 24 entries (100 bytes) => 777 entries (10000000000 bytes)",
+        assertEquals("[5.600000000] " + CONTEXT + ": " + CATALOG_RESIZE.name() + " [16/16]:" +
+            " 128 bytes => 1024 bytes",
             builder.toString());
     }
 
@@ -967,4 +968,86 @@ class ArchiveEventDissectorTest
             builder.toString());
     }
 
+    @Test
+    void persistentSubscriptionStateChange()
+    {
+        int offset = internalEncodeLogHeader(buffer, 0, 10, 20, () -> 1_500_000_000L);
+        buffer.putLong(offset, 16);
+        offset += SIZE_OF_LONG;
+        offset += buffer.putStringAscii(offset, "aeron:udp?endpoint=localhost:9010");
+        buffer.putInt(offset, 10);
+        offset += SIZE_OF_INT;
+        offset += buffer.putStringAscii(offset, "aeron:udp?endpoint=localhost:10010");
+        buffer.putInt(offset, 11);
+        offset += SIZE_OF_INT;
+        buffer.putStringAscii(offset, "x -> y");
+
+        dissectPersistentSubscriptionStateChange(PERSISTENT_SUBSCRIPTION_STATE_CHANGE, buffer, 0, builder);
+
+        assertEquals("[1.500000000] " + CONTEXT + ": " + PERSISTENT_SUBSCRIPTION_STATE_CHANGE.name() + " [10/20]:" +
+                " recordingId=16" +
+                " replayChannel=aeron:udp?endpoint=localhost:9010" +
+                " replayStreamId=10" +
+                " liveChannel=aeron:udp?endpoint=localhost:10010" +
+                " liveStreamId=11" +
+                " x -> y",
+            builder.toString());
+    }
+
+    @Test
+    void persistentSubscriptionJoinedLive()
+    {
+        int offset = internalEncodeLogHeader(buffer, 0, 10, 20, () -> 1_500_000_000L);
+        buffer.putLong(offset, 16);
+        offset += SIZE_OF_LONG;
+        offset += buffer.putStringAscii(offset, "aeron:udp?endpoint=localhost:9010");
+        buffer.putInt(offset, 10);
+        offset += SIZE_OF_INT;
+        offset += buffer.putStringAscii(offset, "aeron:udp?endpoint=localhost:10010");
+        buffer.putInt(offset, 11);
+        offset += SIZE_OF_INT;
+        buffer.putInt(offset, 21);
+        offset += SIZE_OF_INT;
+        buffer.putLong(offset, 128);
+
+        dissectPersistentSubscriptionJoinedLive(PERSISTENT_SUBSCRIPTION_JOINED_LIVE, buffer, 0, builder);
+
+        assertEquals("[1.500000000] " + CONTEXT + ": " + PERSISTENT_SUBSCRIPTION_JOINED_LIVE.name() + " [10/20]:" +
+                " recordingId=16" +
+                " replayChannel=aeron:udp?endpoint=localhost:9010" +
+                " replayStreamId=10" +
+                " liveChannel=aeron:udp?endpoint=localhost:10010" +
+                " liveStreamId=11" +
+                " liveSessionId=21" +
+                " joinPosition=128",
+            builder.toString());
+    }
+
+    @Test
+    void persistentSubscriptionLeftLive()
+    {
+        int offset = internalEncodeLogHeader(buffer, 0, 10, 20, () -> 1_500_000_000L);
+        buffer.putLong(offset, 16);
+        offset += SIZE_OF_LONG;
+        offset += buffer.putStringAscii(offset, "aeron:udp?endpoint=localhost:9010");
+        buffer.putInt(offset, 10);
+        offset += SIZE_OF_INT;
+        offset += buffer.putStringAscii(offset, "aeron:udp?endpoint=localhost:10010");
+        buffer.putInt(offset, 11);
+        offset += SIZE_OF_INT;
+        buffer.putLong(offset, 256);
+
+        dissectPersistentSubscriptionLeftLive(
+            PERSISTENT_SUBSCRIPTION_LEFT_LIVE, buffer, 0, builder);
+
+        assertEquals("[1.500000000] " + CONTEXT + ": " +
+                PERSISTENT_SUBSCRIPTION_LEFT_LIVE.name() + " [10/20]:" +
+                " recordingId=16" +
+                " replayChannel=aeron:udp?endpoint=localhost:9010" +
+                " replayStreamId=10" +
+                " liveChannel=aeron:udp?endpoint=localhost:10010" +
+                " liveStreamId=11" +
+                " livePosition=256",
+            builder.toString());
+    }
 }

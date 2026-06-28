@@ -28,6 +28,13 @@ import static io.aeron.driver.Configuration.UNICAST_FLOW_CONTROL_STRATEGY;
 public class DefaultUnicastFlowControlSupplier implements FlowControlSupplier
 {
     /**
+     * Default constructor.
+     */
+    public DefaultUnicastFlowControlSupplier()
+    {
+    }
+
+    /**
      * {@inheritDoc}
      */
     public FlowControl newInstance(final UdpChannel udpChannel, final int streamId, final long registrationId)

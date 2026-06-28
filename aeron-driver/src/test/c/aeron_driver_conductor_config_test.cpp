@@ -26,14 +26,14 @@ class DriverConductorConfigTest : public DriverConductorTest, public testing::Te
 TEST_F(DriverConductorConfigTest, shouldRejectResponsePublicationDestination)
 {
     addPublication(1234, 1234, "aeron:udp?control=localhost:4000|control-mode=manual", 1234, false);
-    doWork();
+    doWorkUntilDone();
     EXPECT_CALL(m_mockCallbacks, broadcastToClient(AERON_RESPONSE_ON_COUNTER_READY, _, _));
     EXPECT_CALL(m_mockCallbacks, broadcastToClient(AERON_RESPONSE_ON_PUBLICATION_READY, _, _));
     readAllBroadcastsFromConductor(mock_broadcast_handler);
     testing::Mock::VerifyAndClear(&m_mockCallbacks);
 
     addDestination(1234, 1234, 1234, "aeron:udp?endpoint=localhost:8001|control-mode=response");
-    doWork();
+    doWorkUntilDone();
     EXPECT_CALL(m_mockCallbacks, broadcastToClient(AERON_RESPONSE_ON_ERROR, _, _))
     .WillOnce(
         [&](std::int32_t msgTypeId, uint8_t *buffer, size_t length)
@@ -53,7 +53,7 @@ TEST_F(DriverConductorConfigTest, shouldRejectResponsePublicationDestination)
     testing::Mock::VerifyAndClear(&m_mockCallbacks);
 
     addDestination(1234, 1234, 1234, "aeron:udp?endpoint=localhost:8001|response-correlation-id=2345");
-    doWork();
+    doWorkUntilDone();
     EXPECT_CALL(m_mockCallbacks, broadcastToClient(AERON_RESPONSE_ON_ERROR, _, _))
         .WillOnce(
             [&](std::int32_t msgTypeId, uint8_t *buffer, size_t length)
@@ -74,14 +74,14 @@ TEST_F(DriverConductorConfigTest, shouldRejectResponsePublicationDestination)
 TEST_F(DriverConductorConfigTest, shouldRejectResponseSubscriptionDestination)
 {
     addNetworkSubscription(1234, 1234, "aeron:udp?control-mode=manual", 1234);
-    doWork();
+    doWorkUntilDone();
     EXPECT_CALL(m_mockCallbacks, broadcastToClient(AERON_RESPONSE_ON_COUNTER_READY, _, _));
     EXPECT_CALL(m_mockCallbacks, broadcastToClient(AERON_RESPONSE_ON_SUBSCRIPTION_READY, _, _));
     readAllBroadcastsFromConductor(mock_broadcast_handler);
     testing::Mock::VerifyAndClear(&m_mockCallbacks);
 
     addReceiveDestination(1234, 1234, 1234, "aeron:udp?endpoint=localhost:8001|control-mode=response");
-    doWork();
+    doWorkUntilDone();
     EXPECT_CALL(m_mockCallbacks, broadcastToClient(AERON_RESPONSE_ON_ERROR, _, _))
         .WillOnce(
             [&](std::int32_t msgTypeId, uint8_t *buffer, size_t length)
@@ -101,7 +101,7 @@ TEST_F(DriverConductorConfigTest, shouldRejectResponseSubscriptionDestination)
     testing::Mock::VerifyAndClear(&m_mockCallbacks);
 
     addReceiveDestination(1234, 1234, 1234, "aeron:udp?endpoint=localhost:8001|response-correlation-id=2345");
-    doWork();
+    doWorkUntilDone();
     EXPECT_CALL(m_mockCallbacks, broadcastToClient(AERON_RESPONSE_ON_ERROR, _, _))
         .WillOnce(
             [&](std::int32_t msgTypeId, uint8_t *buffer, size_t length)

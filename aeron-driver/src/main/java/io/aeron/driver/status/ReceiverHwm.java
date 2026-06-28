@@ -27,7 +27,7 @@ import static io.aeron.Aeron.NULL_VALUE;
  * The highest position the Receiver has observed on a session-channel-stream tuple while rebuilding the stream.
  * It is possible the stream is not complete to this point if the stream has experienced loss.
  */
-public class ReceiverHwm
+public final class ReceiverHwm
 {
     /**
      * Type id of a receiver high-water-mark position counter.
@@ -38,6 +38,10 @@ public class ReceiverHwm
      * Human-readable name for the counter.
      */
     public static final String NAME = "rcv-hwm";
+
+    private ReceiverHwm()
+    {
+    }
 
     /**
      * Allocate a new receiver high-water-mark position counter for a stream.

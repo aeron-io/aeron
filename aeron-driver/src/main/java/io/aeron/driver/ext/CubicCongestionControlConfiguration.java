@@ -22,8 +22,12 @@ import java.util.concurrent.TimeUnit;
 /**
  * Configuration options to be applied when {@link CubicCongestionControl} is loaded.
  */
-public class CubicCongestionControlConfiguration
+public final class CubicCongestionControlConfiguration
 {
+    private CubicCongestionControlConfiguration()
+    {
+    }
+
     /**
      * Property name for measuring RTT or using static constant based on initial value.
      *

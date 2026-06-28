@@ -118,30 +118,37 @@ public final class Sender extends SenderRhsPadding implements Agent
         cachedNanoClock.update(nowNs);
         dutyCycleTracker.measureAndUpdate(nowNs);
 
-        final int workCount = commandQueue.drain(CommandProxy.RUN_TASK, Configuration.COMMAND_DRAIN_LIMIT);
+        int workCount = 0;
+        final Runnable command = commandQueue.poll();
+        if (null != command)
+        {
+            command.run();
+            workCount++;
+        }
 
         final long shortSendsBefore = shortSends.get();
         final int bytesSent = doSend(nowNs);
-        int bytesReceived = 0;
 
         if (0 == bytesSent ||
             ++dutyCycleCounter >= dutyCycleRatio ||
             (controlPollDeadlineNs - nowNs < 0) ||
             shortSendsBefore < shortSends.get())
         {
-            bytesReceived = controlTransportPoller.pollTransports();
+            controlTransportPoller.pollTransports();
 
             dutyCycleCounter = 0;
             controlPollDeadlineNs = nowNs + statusMessageReadTimeoutNs;
+            workCount++;
         }
 
         if (reResolutionCheckIntervalNs > 0 && (reResolutionDeadlineNs - nowNs) < 0)
         {
             reResolutionDeadlineNs = nowNs + reResolutionCheckIntervalNs;
             controlTransportPoller.checkForReResolutions(nowNs, conductorProxy);
+            workCount++;
         }
 
-        return workCount + bytesSent + bytesReceived;
+        return workCount + bytesSent;
     }
 
     /**
@@ -154,12 +161,13 @@ public final class Sender extends SenderRhsPadding implements Agent
 
     void onRegisterSendChannelEndpoint(final SendChannelEndpoint channelEndpoint)
     {
-        channelEndpoint.registerForRead(controlTransportPoller);
+        controlTransportPoller.registerForRead(channelEndpoint);
     }
 
     void onCloseSendChannelEndpoint(final SendChannelEndpoint channelEndpoint)
     {
-        channelEndpoint.close();
+        controlTransportPoller.cancelRead(channelEndpoint);
+        conductorProxy.sendChannelEndpointClosed(channelEndpoint);
     }
 
     void onNewNetworkPublication(final NetworkPublication publication)

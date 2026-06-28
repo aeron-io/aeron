@@ -44,14 +44,23 @@ class EmbeddedMediaDriver
 public:
     ~EmbeddedMediaDriver()
     {
-        if (0 != aeron_driver_close(m_driver))
-        {
-            fprintf(stderr, "ERROR: driver close (%d) %s\n", aeron_errcode(), aeron_errmsg());
-        }
+        closeDriver();
+    }
 
-        if (0 != aeron_driver_context_close(m_context))
+    void closeDriver()
+    {
+        bool closed = false;
+        if (m_closed.compare_exchange_strong(closed, true))
         {
-            fprintf(stderr, "ERROR: driver context close (%d) %s\n", aeron_errcode(), aeron_errmsg());
+            if (0 != aeron_driver_close(m_driver))
+            {
+                fprintf(stderr, "ERROR: driver close (%d) %s\n", aeron_errcode(), aeron_errmsg());
+            }
+
+            if (0 != aeron_driver_context_close(m_context))
+            {
+                fprintf(stderr, "ERROR: driver context close (%d) %s\n", aeron_errcode(), aeron_errmsg());
+            }
         }
     }
 
@@ -65,10 +74,13 @@ public:
 
     void stop()
     {
-        m_running = false;
-        if (m_thread.joinable())
+        bool running = true;
+        if (m_running.compare_exchange_strong(running, false))
         {
-            m_thread.join();
+            if (m_thread.joinable())
+            {
+                m_thread.join();
+            }
         }
     }
 
@@ -160,6 +172,7 @@ private:
     std::uint64_t m_livenessTimeoutNs = 5 * 1000 * 1000 * 1000LL;
     std::string m_aeronDir;
     std::atomic<bool> m_running = { true };
+    std::atomic<bool> m_closed = { false };
     std::thread m_thread;
     aeron_driver_context_t *m_context = nullptr;
     aeron_driver_t *m_driver = nullptr;

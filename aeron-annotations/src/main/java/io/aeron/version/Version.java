@@ -21,21 +21,29 @@ package io.aeron.version;
 public interface Version
 {
     /**
+     * Major version portion.
+     *
      * @return major version portion.
      */
     int majorVersion();
 
     /**
+     * Minor version portion.
+     *
      * @return minor version portion.
      */
     int minorVersion();
 
     /**
+     * Patched version portion.
+     *
      * @return patched version portion.
      */
     int patchVersion();
 
     /**
+     * Git SHA.
+     *
      * @return git SHA.
      */
     String gitSha();

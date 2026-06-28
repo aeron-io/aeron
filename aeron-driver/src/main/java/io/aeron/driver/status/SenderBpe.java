@@ -26,7 +26,7 @@ import static io.aeron.Aeron.NULL_VALUE;
  * Count of back-pressure events (BPE)s a sender has experienced on a stream. This is a per-stream event count for
  * that which is aggregated in {@link SystemCounterDescriptor#SENDER_FLOW_CONTROL_LIMITS}.
  */
-public class SenderBpe
+public final class SenderBpe
 {
     /**
      * Type id of a sender back-pressure event counter.
@@ -37,6 +37,10 @@ public class SenderBpe
      * Human-readable name for the counter.
      */
     public static final String NAME = "snd-bpe";
+
+    private SenderBpe()
+    {
+    }
 
     /**
      * Allocate a new sender back-pressure counter for a stream.

@@ -23,6 +23,13 @@ import io.aeron.driver.media.UdpChannel;
 public class MinMulticastFlowControlSupplier implements FlowControlSupplier
 {
     /**
+     * Default constructor.
+     */
+    public MinMulticastFlowControlSupplier()
+    {
+    }
+
+    /**
      * {@inheritDoc}
      */
     public FlowControl newInstance(final UdpChannel udpChannel, final int streamId, final long registrationId)

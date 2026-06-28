@@ -42,6 +42,10 @@ public interface ClusteredService
      * <b>Note:</b> As this is a potentially long-running operation the implementation should use
      * {@link Cluster#idleStrategy()} and then occasionally call {@link org.agrona.concurrent.IdleStrategy#idle()} or
      * {@link org.agrona.concurrent.IdleStrategy#idle(int)}, especially when polling the {@link Image} returns 0.
+     * <p>
+     * If a {@link RuntimeException} is thrown from this method, e.g. {@link IllegalStateException}, then this will
+     * cause the ClusteredServiceAgent and the ConsensusModuleAgent to shut down with an
+     * {@link org.agrona.concurrent.AgentTerminationException}.
      *
      * @param cluster       with which the service can interact.
      * @param snapshotImage from which the service can load its archived state which can be null when no snapshot.

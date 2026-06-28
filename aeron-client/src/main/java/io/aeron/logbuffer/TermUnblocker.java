@@ -25,7 +25,7 @@ import static io.aeron.protocol.HeaderFlyweight.HDR_TYPE_PAD;
 /**
  * Unblocks a term buffer if a publisher has died leaving the log with a partial log entry.
  */
-public class TermUnblocker
+public final class TermUnblocker
 {
     /**
      * Status result of an {@link #unblock(UnsafeBuffer, UnsafeBuffer, int, int, int)} operation.
@@ -46,6 +46,10 @@ public class TermUnblocker
          * The term has been unblocked from the offset until the end of the term.
          */
         UNBLOCKED_TO_END,
+    }
+
+    private TermUnblocker()
+    {
     }
 
     /**

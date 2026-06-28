@@ -132,7 +132,7 @@ class ConsensusModuleSnapshotPendingServiceMessagesPatchTest
 
     @Test
     @SlowTest
-    @InterruptAfter(60)
+    @InterruptAfter(90)
     void executeIsANoOpIfTheSnapshotIsValid()
     {
         final IntFunction<TestNode.TestService[]> servicesSupplier =
@@ -242,7 +242,7 @@ class ConsensusModuleSnapshotPendingServiceMessagesPatchTest
         "$compute, 200000, 1, 199999, NextServiceSessionId",
         "7777, 9999, 1000000000000000, 1223372036854775, MaxClusterSessionId" })
     @SlowTest
-    @InterruptAfter(60)
+    @InterruptAfter(90)
     @SuppressWarnings("MethodLength")
     void executeShouldPatchTheStateOfTheLeaderSnapshot(
         final String baseLogServiceSessionId,

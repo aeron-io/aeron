@@ -26,7 +26,6 @@
 #include "TestUtil.h"
 #include "FragmentAssembler.h"
 
-
 using namespace aeron;
 using testing::MockFunction;
 using testing::_;
@@ -531,7 +530,7 @@ TEST_F(PubSubTest, DISABLED_shouldError)
     std::int32_t initialTermId = 3;
     std::int32_t termOffset = 1024;
     ChannelUriStringBuilder uriBuilder;
-    const std::string channel = setParameters("udp", "224.0.1.1:40456", uriBuilder)
+    const std::string channel = setParameters("udp", "224.0.1.1:20000", uriBuilder)
         .termId(termId)
         .termOffset(termOffset)
         .initialTermId(initialTermId)
@@ -663,53 +662,102 @@ TEST_F(PubSubTest, shouldFragmentAndReassembleMessagesIfNeeded)
     invoker.invoke();
 }
 
-TEST_F(PubSubTest, shouldCreatePublicationUsingAsyncApi)
+class PubSubTestInvokerTest : public testing::TestWithParam<bool>
+{
+public:
+    PubSubTestInvokerTest()
+    {
+        m_driver.start();
+    }
+
+    ~PubSubTestInvokerTest() override
+    {
+        m_driver.stop();
+    }
+
+protected:
+    EmbeddedMediaDriver m_driver;
+};
+
+INSTANTIATE_TEST_SUITE_P(
+    PubSubTestInvokerTest,
+    PubSubTestInvokerTest,
+    testing::Values(false, true));
+
+TEST_P(PubSubTestInvokerTest, shouldCreatePublicationUsingAsyncApi)
 {
     const int32_t streamId = 1000;
 
     Context ctx;
-    ctx.useConductorAgentInvoker(true);
+    bool use_invoker = GetParam();
+    ctx.useConductorAgentInvoker(use_invoker);
     std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
-    AgentInvoker<ClientConductor> &invoker = aeron->conductorAgentInvoker();
 
     auto asyncPublication = aeron->addPublicationAsync(IPC_CHANNEL, streamId);
     ASSERT_NE(nullptr, asyncPublication);
     const int64_t registrationId = aeron->addPublicationAsyncGetRegistrationId(asyncPublication);
 
-    POLL_FOR_NON_NULL(publication, aeron->findPublication(asyncPublication), invoker);
-    ASSERT_EQ(registrationId, publication->registrationId());
+    if (use_invoker)
+    {
+        AgentInvoker<ClientConductor> &invoker = aeron->conductorAgentInvoker();
+        POLL_FOR_NON_NULL(publication, aeron->findPublication(asyncPublication), invoker);
+        ASSERT_EQ(registrationId, publication->registrationId());
+    }
+    else
+    {
+        WAIT_FOR_NON_NULL(publication, aeron->findPublication(asyncPublication));
+        ASSERT_EQ(registrationId, publication->registrationId());
+    }
 }
 
-TEST_F(PubSubTest, shouldCreateExclusivePublicationUsingAsyncApi)
+TEST_P(PubSubTestInvokerTest, shouldCreateExclusivePublicationUsingAsyncApi)
 {
     const int32_t streamId = 231;
 
     Context ctx;
-    ctx.useConductorAgentInvoker(true);
+    bool use_invoker = GetParam();
+    ctx.useConductorAgentInvoker(use_invoker);
     std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
-    AgentInvoker<ClientConductor> &invoker = aeron->conductorAgentInvoker();
 
     auto asyncPublication = aeron->addExclusivePublicationAsync(IPC_CHANNEL, streamId);
     ASSERT_NE(nullptr, asyncPublication);
     const int64_t registrationId = aeron->addExclusivePublicationAsyncGetRegistrationId(asyncPublication);
 
-    POLL_FOR_NON_NULL(publication, aeron->findExclusivePublication(asyncPublication), invoker);
-    ASSERT_EQ(registrationId, publication->registrationId());
+    if (use_invoker)
+    {
+        AgentInvoker<ClientConductor> &invoker = aeron->conductorAgentInvoker();
+        POLL_FOR_NON_NULL(publication, aeron->findExclusivePublication(asyncPublication), invoker);
+        ASSERT_EQ(registrationId, publication->registrationId());
+    }
+    else
+    {
+        WAIT_FOR_NON_NULL(publication, aeron->findExclusivePublication(asyncPublication));
+        ASSERT_EQ(registrationId, publication->registrationId());
+    }
 }
 
-TEST_F(PubSubTest, shouldCreateSubscriptionUsingAsyncApi)
+TEST_P(PubSubTestInvokerTest, shouldCreateSubscriptionUsingAsyncApi)
 {
     const int32_t streamId = 231;
 
     Context ctx;
-    ctx.useConductorAgentInvoker(true);
+    bool use_invoker = GetParam();
+    ctx.useConductorAgentInvoker(use_invoker);
     std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
-    AgentInvoker<ClientConductor> &invoker = aeron->conductorAgentInvoker();
 
     auto asyncSubscription = aeron->addSubscriptionAsync(IPC_CHANNEL, streamId);
     ASSERT_NE(nullptr, asyncSubscription);
     const int64_t registrationId = aeron->addSubscriptionAsyncGetRegistrationId(asyncSubscription);
 
-    POLL_FOR_NON_NULL(subscription, aeron->findSubscription(asyncSubscription), invoker);
-    ASSERT_EQ(registrationId, subscription->registrationId());
+    if (use_invoker)
+    {
+        AgentInvoker<ClientConductor> &invoker = aeron->conductorAgentInvoker();
+        POLL_FOR_NON_NULL(subscription, aeron->findSubscription(asyncSubscription), invoker);
+        ASSERT_EQ(registrationId, subscription->registrationId());
+    }
+    else
+    {
+        WAIT_FOR_NON_NULL(subscription, aeron->findSubscription(asyncSubscription));
+        ASSERT_EQ(registrationId, subscription->registrationId());
+    }
 }

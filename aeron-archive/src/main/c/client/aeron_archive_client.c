@@ -306,7 +306,7 @@ int aeron_archive_create(
     _aeron_archive->owns_ctx = true;
     _aeron_archive->ctx = ctx;
 
-    aeron_mutex_init(&_aeron_archive->lock, NULL);
+    aeron_mutex_init(&_aeron_archive->lock);
 
     _aeron_archive->archive_proxy = archive_proxy;
     _aeron_archive->owns_control_response_subscription = true;
@@ -1817,7 +1817,7 @@ int aeron_archive_try_stop_replication(
             aeron_archive,
             "AeronArchive::tryStopReplication",
             correlation_id,
-            ARCHIVE_ERROR_CODE_UNKNOWN_SUBSCRIPTION);
+            ARCHIVE_ERROR_CODE_UNKNOWN_REPLICATION);
     }
 
     aeron_mutex_unlock(&aeron_archive->lock);
@@ -2497,7 +2497,7 @@ int aeron_archive_initiate_replay_via_response_channel(
         goto cleanup;
     }
 
-    aeron_archive_proxy_set_control_esssion_id(&archive_proxy, aeron_archive->control_session_id);
+    aeron_archive_proxy_set_control_session_id(&archive_proxy, aeron_archive->control_session_id);
 
     aeron_counters_reader_t *counters_reader = aeron_counters_reader(aeron_archive->ctx->aeron);
     int pub_limit_counter_id = aeron_counters_reader_find_by_type_id_and_registration_id(

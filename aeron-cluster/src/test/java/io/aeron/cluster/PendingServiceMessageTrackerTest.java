@@ -41,7 +41,7 @@ class PendingServiceMessageTrackerTest
 {
     private final CountersManager countersManager = Tests.newCountersManager(16 * 1024);
     private final int counterId = countersManager.allocate("test");
-    private final Counter counter = new Counter(countersManager, 0, counterId);
+    private final Counter counter = new Counter(countersManager, counterId);
     private final LogPublisher logPublisher = mock(LogPublisher.class);
     private final int clusterSessionIdOffset =
         MessageHeaderEncoder.ENCODED_LENGTH + SessionMessageHeaderDecoder.clusterSessionIdEncodingOffset();
@@ -172,7 +172,7 @@ class PendingServiceMessageTrackerTest
     {
         final CountersManager countersManager = Tests.newCountersManager(16 * 1024);
         final int counterId = countersManager.allocate("test");
-        final Counter counter = new Counter(countersManager, 0, counterId);
+        final Counter counter = new Counter(countersManager, counterId);
         final LogPublisher logPublisher = mock(LogPublisher.class);
 
         final TestClusterClock clusterClock = new TestClusterClock(TimeUnit.MILLISECONDS);
@@ -189,7 +189,7 @@ class PendingServiceMessageTrackerTest
     {
         final CountersManager countersManager = Tests.newCountersManager(16 * 1024);
         final int counterId = countersManager.allocate("test");
-        final Counter counter = new Counter(countersManager, 0, counterId);
+        final Counter counter = new Counter(countersManager, counterId);
         final LogPublisher logPublisher = mock(LogPublisher.class);
 
         final TestClusterClock clusterClock = new TestClusterClock(TimeUnit.MILLISECONDS);

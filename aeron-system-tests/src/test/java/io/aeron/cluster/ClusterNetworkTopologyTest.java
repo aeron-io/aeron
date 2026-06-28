@@ -31,10 +31,12 @@ import io.aeron.test.InterruptingTestCallback;
 import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.Tests;
 import io.aeron.test.TopologyTest;
+import io.aeron.test.driver.TestMediaDriver;
 import io.aeron.test.launcher.FileResolveUtil;
 import io.aeron.test.launcher.RemoteLaunchClient;
 import org.agrona.IoUtil;
 import org.agrona.MutableDirectBuffer;
+import org.agrona.collections.MutableLong;
 import org.agrona.collections.MutableReference;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.BeforeEach;
@@ -68,6 +70,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.*;
@@ -80,6 +83,9 @@ class ClusterNetworkTopologyTest
     private static final int REMOTE_LAUNCH_PORT = 11112;
     private static final long STARTUP_CANVASS_TIMEOUT_S =
         NANOSECONDS.toSeconds(2 * ConsensusModule.Configuration.leaderHeartbeatTimeoutNs());
+    private static final long LIVENESS_TIMEOUT_S = 30;
+    private static final long PUBLICATION_UNBLOCK_TIMEOUT_S = 60;
+    private static final long MESSAGE_TIMEOUT_S = 20;
     private static final List<String> HOSTNAMES = Arrays.asList("10.42.0.10", "10.42.0.11", "10.42.0.12");
     private static final List<String> INTERNAL_HOSTNAMES = Arrays.asList("10.42.1.10", "10.42.1.11", "10.42.1.12");
 
@@ -273,11 +279,10 @@ class ClusterNetworkTopologyTest
                 egressResponse.set(stringAscii);
             };
 
-        try (
-            MediaDriver mediaDriver = MediaDriver.launch(new MediaDriver.Context()
+        try (TestMediaDriver mediaDriver = TestMediaDriver.launch(new MediaDriver.Context()
                 .threadingMode(ThreadingMode.SHARED)
                 .dirDeleteOnStart(true)
-                .dirDeleteOnShutdown(true));
+                .dirDeleteOnShutdown(true), systemTestWatcher);
             AeronCluster.AsyncConnect asyncConnect = AeronCluster.asyncConnect(new AeronCluster.Context()
                 .messageTimeoutNs(SECONDS.toNanos(STARTUP_CANVASS_TIMEOUT_S * 2))
                 .egressListener(egressListener)
@@ -296,16 +301,23 @@ class ClusterNetworkTopologyTest
                         pollSelector(selector);
                         return 0 < position;
                     },
-                    SECONDS.toNanos(5));
+                    SECONDS.toNanos(MESSAGE_TIMEOUT_S));
 
+                final MutableLong nextKeepAliveNs = new MutableLong(System.nanoTime() + MILLISECONDS.toNanos(100));
                 Tests.await(
                     () ->
                     {
+                        final long nowNs = System.nanoTime();
+                        if (nowNs >= nextKeepAliveNs.get())
+                        {
+                            aeronCluster.sendKeepAlive();
+                            nextKeepAliveNs.set(nowNs + MILLISECONDS.toNanos(100));
+                        }
                         aeronCluster.pollEgress();
                         pollSelector(selector);
                         return message.equals(egressResponse.get());
                     },
-                    SECONDS.toNanos(5));
+                    SECONDS.toNanos(MESSAGE_TIMEOUT_S));
             }
         }
     }
@@ -474,6 +486,9 @@ class ClusterNetworkTopologyTest
         command.add("-Daeron.event.log.filename=" + new File(clusterDir, "event.log").getAbsolutePath());
         command.add("-Daeron.driver.resolver.name=node" + nodeId);
         command.add("-Daeron.cluster.startup.canvass.timeout=" + STARTUP_CANVASS_TIMEOUT_S + "s");
+        command.add("-Daeron.client.liveness.timeout=" + LIVENESS_TIMEOUT_S + "s");
+        command.add("-Daeron.driver.timeout=" + LIVENESS_TIMEOUT_S + "s");
+        command.add("-Daeron.publication.unblock.timeout=" + PUBLICATION_UNBLOCK_TIMEOUT_S + "s");
 
         if (null != ingressChannel)
         {

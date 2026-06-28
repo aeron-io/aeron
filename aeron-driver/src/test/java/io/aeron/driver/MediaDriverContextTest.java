@@ -25,11 +25,13 @@ import io.aeron.driver.media.UdpTransportPoller;
 import io.aeron.driver.status.SystemCounterDescriptor;
 import io.aeron.exceptions.ConfigurationException;
 import org.agrona.ErrorHandler;
-import org.agrona.collections.ObjectHashSet;
 import org.agrona.concurrent.CountedErrorHandler;
+import org.agrona.concurrent.IdleStrategy;
+import org.agrona.concurrent.NoOpIdleStrategy;
+import org.agrona.concurrent.OneToOneConcurrentArrayQueue;
+import org.agrona.concurrent.SleepingIdleStrategy;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.AtomicCounter;
-import org.hamcrest.CoreMatchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -43,15 +45,9 @@ import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CopyOnWriteArraySet;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import static io.aeron.driver.Configuration.CALLER_RUNS_TASK_EXECUTOR;
+import static io.aeron.driver.Configuration.CMD_QUEUE_CAPACITY;
 import static io.aeron.driver.Configuration.COUNTERS_VALUES_BUFFER_LENGTH_MAX;
 import static io.aeron.driver.Configuration.COUNTERS_VALUES_BUFFER_LENGTH_MIN;
 import static io.aeron.driver.Configuration.ERROR_BUFFER_LENGTH_DEFAULT;
@@ -59,9 +55,14 @@ import static io.aeron.driver.Configuration.LOSS_REPORT_BUFFER_LENGTH_DEFAULT;
 import static io.aeron.driver.Configuration.NAK_MAX_BACKOFF_DEFAULT_NS;
 import static io.aeron.driver.Configuration.NAK_MULTICAST_MAX_BACKOFF_PROP_NAME;
 import static io.aeron.driver.Configuration.NAK_UNICAST_DELAY_MIN_VALUE_NS;
+import static io.aeron.driver.Configuration.NATIVE_RESOURCE_AGENT_IDLE_STRATEGY_PROP_NAME;
 import static io.aeron.driver.Configuration.UNTETHERED_LINGER_TIMEOUT_PROP_NAME;
 import static io.aeron.driver.Configuration.UNTETHERED_WINDOW_LIMIT_TIMEOUT_DEFAULT_NS;
 import static io.aeron.driver.Configuration.UNTETHERED_WINDOW_LIMIT_TIMEOUT_PROP_NAME;
+import static io.aeron.driver.ThreadingMode.DEDICATED;
+import static io.aeron.driver.ThreadingMode.INVOKER;
+import static io.aeron.driver.ThreadingMode.SHARED;
+import static io.aeron.driver.ThreadingMode.SHARED_NETWORK;
 import static io.aeron.logbuffer.LogBufferDescriptor.TERM_MAX_LENGTH;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
@@ -75,7 +76,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
@@ -191,95 +191,136 @@ class MediaDriverContextTest
         assertThat(exception.getMessage(), containsString("ipcPublicationTermWindowLength"));
     }
 
-    @ParameterizedTest
-    @ValueSource(ints = { -100, 42, Integer.MAX_VALUE })
-    void asyncTaskExecutorThreadCount(final int threadCount)
+    @Test
+    void shouldAllowSettingNativeResourceAgentProxy(@TempDir final Path tempDir)
     {
-        assertEquals(1, context.asyncTaskExecutorThreads());
+        context.aeronDirectoryName(tempDir.toString());
+        final NativeResourceAgentProxy proxy = mock(NativeResourceAgentProxy.class);
+        assertNull(context.nativeResourceAgentProxy());
 
-        context.asyncTaskExecutorThreads(threadCount);
-        assertEquals(threadCount, context.asyncTaskExecutorThreads());
+        context.nativeResourceAgentProxy(proxy);
+        assertSame(proxy, context.nativeResourceAgentProxy());
     }
 
-    @ParameterizedTest
-    @ValueSource(ints = { -5, 0 })
-    void shouldDisableAsyncExecutionIfThreadsAreNotConfigured(final int asyncExecutorThreadCount)
+    @Test
+    void shouldAllowConfiguringNativeResourceAgentIdleStrategy(@TempDir final Path tempDir)
     {
-        context.asyncTaskExecutorThreads(asyncExecutorThreadCount);
-        assertNull(context.asyncTaskExecutor());
+        context.aeronDirectoryName(tempDir.toString());
+        assertNull(context.nativeResourceAgentIdleStrategy());
 
-        context.concludeNullProperties();
+        final IdleStrategy idleStrategy = mock(IdleStrategy.class);
+        context.nativeResourceAgentIdleStrategy(idleStrategy);
+        assertSame(idleStrategy, context.nativeResourceAgentIdleStrategy());
 
-        final Executor asyncTaskExecutor = context.asyncTaskExecutor();
-        assertNotNull(asyncTaskExecutor);
-        assertSame(CALLER_RUNS_TASK_EXECUTOR, asyncTaskExecutor);
+        context.conclude();
+
+        assertSame(idleStrategy, context.nativeResourceAgentIdleStrategy());
     }
 
-    @ParameterizedTest
-    @ValueSource(ints = { 1, 4 })
-    void shouldCreateFixedThreadPoolExecutor(final int asyncExecutorThreadCount) throws Exception
+    @Test
+    void shouldUseSleepingNativeResourceAgentIdleStrategyByDefault(@TempDir final Path tempDir)
     {
-        assertNull(context.asyncTaskExecutor());
-        context.asyncTaskExecutorThreads(asyncExecutorThreadCount);
+        context.aeronDirectoryName(tempDir.toString());
+        assertNull(context.nativeResourceAgentIdleStrategy());
 
-        context.concludeNullProperties();
+        context.conclude();
 
-        final Executor asyncTaskExecutor = context.asyncTaskExecutor();
-        assertNotNull(asyncTaskExecutor);
-        assertInstanceOf(ThreadPoolExecutor.class, asyncTaskExecutor);
+        final IdleStrategy idleStrategy = context.nativeResourceAgentIdleStrategy();
+        assertNotNull(idleStrategy);
+        assertInstanceOf(SleepingIdleStrategy.class, idleStrategy);
+        assertThat(idleStrategy.toString(), containsString("sleepPeriodNs=1000000"));
+    }
 
-        final ThreadPoolExecutor threadPoolExecutor = (ThreadPoolExecutor)asyncTaskExecutor;
-        assertEquals(asyncExecutorThreadCount, threadPoolExecutor.getCorePoolSize());
-        assertEquals(asyncExecutorThreadCount, threadPoolExecutor.getPoolSize());
-
-        final CyclicBarrier barrier = new CyclicBarrier(asyncExecutorThreadCount + 1);
-        final CopyOnWriteArraySet<Thread> threads = new CopyOnWriteArraySet<>();
-        final Callable<Void> task = () ->
+    @Test
+    void shouldConfigureNativeResourceAgentIdleStrategyUsingSystemProperty(@TempDir final Path tempDir)
+    {
+        System.setProperty(NATIVE_RESOURCE_AGENT_IDLE_STRATEGY_PROP_NAME, "noop");
+        try
         {
-            threads.add(Thread.currentThread());
-            barrier.await();
-            return null;
-        };
-        for (int i = 0; i < asyncExecutorThreadCount; i++)
-        {
-            threadPoolExecutor.submit(task);
+            context.aeronDirectoryName(tempDir.toString());
+            assertNull(context.nativeResourceAgentIdleStrategy());
+
+            context.conclude();
+
+            assertSame(NoOpIdleStrategy.INSTANCE, context.nativeResourceAgentIdleStrategy());
         }
-
-        barrier.await(10, TimeUnit.SECONDS);
-
-        assertEquals(asyncExecutorThreadCount, threads.size());
-        assertEquals(asyncExecutorThreadCount, threadPoolExecutor.getPoolSize());
-
-        final ObjectHashSet<String> uniqueNames = new ObjectHashSet<>(asyncExecutorThreadCount);
-        for (final Thread t : threads)
+        finally
         {
-            assertThat(t.getName(), CoreMatchers.startsWith("async-executor"));
-            assertTrue(t.isDaemon());
-            assertTrue(uniqueNames.add(t.getName()));
+            System.clearProperty(NATIVE_RESOURCE_AGENT_IDLE_STRATEGY_PROP_NAME);
         }
     }
 
     @Test
-    void shouldAllowSettingTheAsyncTaskExecutor()
+    void shouldNotCreateAsyncExecutorIdleStrategyIfNativeResourceAgentNotEnabled(@TempDir final Path tempDir)
     {
-        final Executor asynTaskExecutor = mock(Executor.class);
-        context.asyncTaskExecutor(asynTaskExecutor);
-        assertSame(asynTaskExecutor, context.asyncTaskExecutor());
+        context.aeronDirectoryName(tempDir.toString()).threadingMode(INVOKER);
+        assertNull(context.nativeResourceAgentIdleStrategy());
 
-        context.concludeNullProperties();
+        context.conclude();
 
-        assertSame(asynTaskExecutor, context.asyncTaskExecutor());
+        assertNull(context.nativeResourceAgentIdleStrategy());
     }
 
     @Test
-    void shouldNotCloseAsyncTaskExecutor()
+    void shouldInitializeNativeResourceAgentCommandQueue(@TempDir final Path tempDir)
     {
-        final ExecutorService asyncTaskExecutor = mock(ExecutorService.class);
-        context.asyncTaskExecutor(asyncTaskExecutor);
+        context.aeronDirectoryName(tempDir.toString()).threadingMode(DEDICATED);
+        assertNull(context.nativeResourceAgentCommandQueue());
 
-        context.close();
+        context.conclude();
 
-        verify(asyncTaskExecutor, never()).shutdownNow();
+        final OneToOneConcurrentArrayQueue<Runnable> commandQueue = context.nativeResourceAgentCommandQueue();
+        assertNotNull(commandQueue);
+        assertEquals(CMD_QUEUE_CAPACITY, commandQueue.capacity());
+    }
+
+    @Test
+    void shouldAssignNativeResourceAgentCommandQueue(@TempDir final Path tempDir)
+    {
+        context.aeronDirectoryName(tempDir.toString()).threadingMode(SHARED_NETWORK);
+        final OneToOneConcurrentArrayQueue<Runnable> cmdQueue = new OneToOneConcurrentArrayQueue<>(5);
+        context.nativeResourceAgentCommandQueue(cmdQueue);
+
+        context.conclude();
+
+        assertSame(cmdQueue, context.nativeResourceAgentCommandQueue());
+    }
+
+    @Test
+    void shouldConfigureNativeResourceAgentProxy(@TempDir final Path tempDir)
+    {
+        context.aeronDirectoryName(tempDir.toString()).threadingMode(SHARED_NETWORK);
+        final OneToOneConcurrentArrayQueue<Runnable> cmdQueue = new OneToOneConcurrentArrayQueue<>(7);
+        context.nativeResourceAgentCommandQueue(cmdQueue);
+        assertNull(context.nativeResourceAgentProxy());
+
+        context.conclude();
+
+        final NativeResourceAgentProxy proxy = context.nativeResourceAgentProxy();
+        assertNotNull(proxy);
+        assertSame(cmdQueue, proxy.commandQueue);
+    }
+
+    @Test
+    void shouldCreateNativeResourceAgentThreadFactoryIfEnabled(@TempDir final Path tempDir)
+    {
+        context.aeronDirectoryName(tempDir.toString()).threadingMode(SHARED_NETWORK);
+        assertNull(context.nativeResourceAgentThreadFactory());
+
+        context.conclude();
+
+        assertNotNull(context.nativeResourceAgentThreadFactory());
+    }
+
+    @Test
+    void shouldNotCreateNativeResourceAgentThreadFactoryIfDisabled(@TempDir final Path tempDir)
+    {
+        context.aeronDirectoryName(tempDir.toString()).threadingMode(SHARED);
+        assertNull(context.nativeResourceAgentThreadFactory());
+
+        context.conclude();
+
+        assertNull(context.nativeResourceAgentThreadFactory());
     }
 
     @ParameterizedTest
@@ -491,7 +532,7 @@ class MediaDriverContextTest
     }
 
     @ParameterizedTest
-    @CsvSource({"5000000000,1000000000000"})
+    @CsvSource({ "5000000000,1000000000000" })
     void shouldRejectInvalidNakUnicastDelayRetryCombination(
         final long nakUnicastDelayNs, final long nakUnicastRetryDelayRatio)
     {

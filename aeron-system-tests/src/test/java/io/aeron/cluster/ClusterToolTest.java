@@ -28,6 +28,7 @@ import io.aeron.test.SlowTest;
 import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.cluster.TestCluster;
 import io.aeron.test.cluster.TestNode;
+import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.concurrent.SystemEpochClock;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -400,9 +401,8 @@ class ClusterToolTest
     void listMembersShouldReturnFalseIfQueryTimesOut(@TempDir final Path clusterDir)
     {
         final SystemEpochClock clock = SystemEpochClock.INSTANCE;
-        try (MediaDriver driver = MediaDriver.launch(new MediaDriver.Context()
-            .aeronDirectoryName(CommonContext.generateRandomDirName())
-            .dirDeleteOnShutdown(true));
+        try (TestMediaDriver driver = TestMediaDriver.launch(new MediaDriver.Context()
+            .aeronDirectoryName(CommonContext.generateRandomDirName()), systemTestWatcher);
             ClusterMarkFile clusterMarkFile = new ClusterMarkFile(
                 clusterDir.resolve(ClusterMarkFile.FILENAME).toFile(),
                 ClusterComponentType.BACKUP,

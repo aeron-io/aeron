@@ -20,8 +20,12 @@ import org.agrona.SemanticVersion;
 /**
  * List of events used in the control protocol between client and the media driver.
  */
-public class ControlProtocolEvents
+public final class ControlProtocolEvents
 {
+    private ControlProtocolEvents()
+    {
+    }
+
     /**
      * Major version of the control protocol between client and the media driver.
      *

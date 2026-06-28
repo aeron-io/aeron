@@ -37,7 +37,7 @@ import static org.agrona.concurrent.status.CountersReader.RECORD_UNUSED;
  * When the value is {@link ChannelEndpointStatus#ACTIVE} then the key value and label will be updated with the
  * socket address and port which is bound.
  */
-public class LocalSocketAddressStatus
+public final class LocalSocketAddressStatus
 {
     private static final int CHANNEL_STATUS_ID_OFFSET = 0;
     private static final int LOCAL_SOCKET_ADDRESS_LENGTH_OFFSET = CHANNEL_STATUS_ID_OFFSET + BitUtil.SIZE_OF_INT;
@@ -56,6 +56,10 @@ public class LocalSocketAddressStatus
      */
     public static final int LOCAL_SOCKET_ADDRESS_STATUS_TYPE_ID =
         AeronCounters.DRIVER_LOCAL_SOCKET_ADDRESS_STATUS_TYPE_ID;
+
+    private LocalSocketAddressStatus()
+    {
+    }
 
     /**
      * Allocate a counter to represent a local socket address associated with a channel.

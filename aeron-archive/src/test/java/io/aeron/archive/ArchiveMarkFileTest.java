@@ -24,7 +24,9 @@ import io.aeron.archive.codecs.mark.MarkFileHeaderEncoder;
 import io.aeron.archive.codecs.mark.MessageHeaderDecoder;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
+import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.TestContexts;
+import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.BitUtil;
 import org.agrona.IoUtil;
 import org.agrona.MarkFile;
@@ -37,6 +39,7 @@ import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledForJreRange;
 import org.junit.jupiter.api.condition.JRE;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.InOrder;
 
@@ -66,6 +69,8 @@ import static org.mockito.Mockito.when;
 class ArchiveMarkFileTest
 {
     private static final int ERROR_BUFFER_LENGTH = 4096;
+    @RegisterExtension
+    final SystemTestWatcher systemTestWatcher = new SystemTestWatcher();
 
     @Test
     void shouldUseMarkFileDirectory(final @TempDir File tempDir)
@@ -109,7 +114,7 @@ class ArchiveMarkFileTest
             .epochClock(SystemEpochClock.INSTANCE)
             .threadingMode(ArchiveThreadingMode.SHARED);
 
-        try (MediaDriver ignored = MediaDriver.launch(driverContext.clone());
+        try (TestMediaDriver ignored = TestMediaDriver.launch(driverContext.clone(), systemTestWatcher);
             Archive ignored1 = Archive.launch(archiveContext.clone()))
         {
             assertTrue(new File(markFileDir, ArchiveMarkFile.FILENAME).exists());
@@ -118,7 +123,7 @@ class ArchiveMarkFileTest
         }
 
         archiveContext.markFileDir(null);
-        try (MediaDriver ignored = MediaDriver.launch(driverContext.clone());
+        try (TestMediaDriver ignored = TestMediaDriver.launch(driverContext.clone(), systemTestWatcher);
             Archive ignored1 = Archive.launch(archiveContext.clone()))
         {
             assertTrue(new File(archiveDir, ArchiveMarkFile.FILENAME).exists());
@@ -174,7 +179,7 @@ class ArchiveMarkFileTest
         }
 
         // Should be able to successfully start the archive
-        try (MediaDriver ignored1 = MediaDriver.launch(driverContext.clone());
+        try (TestMediaDriver ignored = TestMediaDriver.launch(driverContext.clone(), systemTestWatcher);
             Archive archive = Archive.launch(archiveContext.clone().aeron(null)))
         {
             assertTrue(archiveMarkFile.exists());
@@ -555,7 +560,7 @@ class ArchiveMarkFileTest
             .epochClock(SystemEpochClock.INSTANCE)
             .errorBufferLength(1234567);
 
-        try (MediaDriver ignored = MediaDriver.launch(mediaDriverContext);
+        try (TestMediaDriver ignored = TestMediaDriver.launch(mediaDriverContext, systemTestWatcher);
             ArchiveMarkFile archiveMarkFile = new ArchiveMarkFile(context))
         {
             assertEquals(filePageSize, archiveMarkFile.buffer().capacity());

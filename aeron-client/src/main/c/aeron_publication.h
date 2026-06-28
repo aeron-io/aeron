@@ -52,6 +52,7 @@ typedef struct aeron_publication_stct
     void *on_close_complete_clientd;
 
     volatile bool is_closed;
+    volatile bool pending_close_action;
 }
 aeron_publication_t;
 

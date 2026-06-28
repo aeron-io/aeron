@@ -17,7 +17,7 @@ package io.aeron.test.driver;
 
 import io.aeron.CounterProvider;
 import io.aeron.driver.DefaultNameResolver;
-import io.aeron.driver.NameResolver;
+import io.aeron.driver.NameResolverAgent;
 import org.agrona.ExpandableArrayBuffer;
 import org.agrona.collections.MutableInteger;
 import org.agrona.collections.Object2ObjectHashMap;
@@ -31,7 +31,7 @@ import java.util.Objects;
 import static io.aeron.Aeron.NULL_VALUE;
 import static org.agrona.BitUtil.SIZE_OF_INT;
 
-public class RedirectingNameResolver implements NameResolver
+public class RedirectingNameResolver implements NameResolverAgent
 {
     public static final int DISABLE_RESOLUTION = -1;
     public static final int USE_INITIAL_RESOLUTION_HOST = 0;
@@ -60,6 +60,9 @@ public class RedirectingNameResolver implements NameResolver
         }
     }
 
+    /**
+     * {@inheritDoc}
+     */
     public void init(final CountersReader countersReader, final CounterProvider counterProvider)
     {
         countersReader.forEach((counterId, typeId, keyBuffer, label) ->
@@ -96,11 +99,17 @@ public class RedirectingNameResolver implements NameResolver
         }
     }
 
+    /**
+     * {@inheritDoc}
+     */
     public String lookup(final String name, final String uriParamName, final boolean isReLookup)
     {
         return name.endsWith(":X") ? name.substring(0, name.length() - 2) : name;
     }
 
+    /**
+     * {@inheritDoc}
+     */
     public InetAddress resolve(final String name, final String uriParamName, final boolean isReResolution)
     {
         final NameEntry nameEntry = nameToEntryMap.get(name);

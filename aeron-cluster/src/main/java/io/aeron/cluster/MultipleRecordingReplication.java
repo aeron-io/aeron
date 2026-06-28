@@ -165,6 +165,22 @@ final class MultipleRecordingReplication implements AutoCloseable
         }
     }
 
+    long currentReplicationId()
+    {
+        return null != recordingReplication ? recordingReplication.replicationId() : Aeron.NULL_VALUE;
+    }
+
+    long currentSrcRecordingId()
+    {
+        if (0 <= recordingCursor && recordingCursor < recordingsPending.size())
+        {
+            final RecordingInfo recordingInfo = recordingsPending.get(recordingCursor);
+            return recordingInfo.srcRecordingId;
+        }
+
+        return Aeron.NULL_VALUE;
+    }
+
     boolean isComplete()
     {
         return recordingCursor >= recordingsPending.size();

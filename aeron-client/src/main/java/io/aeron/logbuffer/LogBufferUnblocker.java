@@ -22,8 +22,12 @@ import static io.aeron.logbuffer.LogBufferDescriptor.*;
 /**
  * Provides the functionality to unblock a log at a given position.
  */
-public class LogBufferUnblocker
+public final class LogBufferUnblocker
 {
+    private LogBufferUnblocker()
+    {
+    }
+
     /**
      * Attempt to unblock a log buffer at given position.
      *

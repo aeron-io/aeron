@@ -25,8 +25,12 @@ import static org.agrona.BitUtil.align;
 /**
  * Scan a term buffer for a block of message fragments including padding. The block must include complete fragments.
  */
-public class TermBlockScanner
+public final class TermBlockScanner
 {
+    private TermBlockScanner()
+    {
+    }
+
     /**
      * Scan a term buffer for a block of message fragments from an offset up to a limitOffset.
      * <p>

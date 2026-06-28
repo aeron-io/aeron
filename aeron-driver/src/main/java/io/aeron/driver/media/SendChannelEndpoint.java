@@ -54,9 +54,11 @@ import java.util.concurrent.TimeUnit;
 
 import static io.aeron.driver.media.SendChannelEndpoint.DESTINATION_TIMEOUT;
 import static io.aeron.driver.media.UdpChannelTransport.onSendError;
-import static io.aeron.driver.status.SystemCounterDescriptor.*;
+import static io.aeron.driver.status.SystemCounterDescriptor.ERROR_FRAMES_RECEIVED;
+import static io.aeron.driver.status.SystemCounterDescriptor.NAK_MESSAGES_RECEIVED;
+import static io.aeron.driver.status.SystemCounterDescriptor.STATUS_MESSAGES_RECEIVED;
+import static io.aeron.driver.status.SystemCounterDescriptor.STATUS_MESSAGES_REJECTED;
 import static io.aeron.protocol.StatusMessageFlyweight.SEND_SETUP_FLAG;
-import static io.aeron.status.ChannelEndpointStatus.status;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static java.util.Objects.requireNonNull;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
@@ -75,6 +77,7 @@ public class SendChannelEndpoint extends UdpChannelTransport
     private final Long2ObjectHashMap<NetworkPublication> publicationBySessionAndStreamId = new Long2ObjectHashMap<>();
     private final MultiSndDestination multiSndDestination;
     private final AtomicCounter statusMessagesReceived;
+    private final AtomicCounter statusMessagesRejected;
     private final AtomicCounter nakMessagesReceived;
     private final AtomicCounter statusIndicator;
     private final AtomicCounter errorMessagesReceived;
@@ -104,6 +107,7 @@ public class SendChannelEndpoint extends UdpChannelTransport
 
         nakMessagesReceived = context.systemCounters().get(NAK_MESSAGES_RECEIVED);
         statusMessagesReceived = context.systemCounters().get(STATUS_MESSAGES_RECEIVED);
+        statusMessagesRejected = context.systemCounters().get(STATUS_MESSAGES_REJECTED);
         errorMessagesReceived = context.systemCounters().get(ERROR_FRAMES_RECEIVED);
         this.statusIndicator = statusIndicator;
 
@@ -150,10 +154,8 @@ public class SendChannelEndpoint extends UdpChannelTransport
 
     /**
      * Open the underlying sockets for the channel.
-     *
-     * @param conductorProxy for notifying potential channel errors.
      */
-    public void openChannel(final DriverConductorProxy conductorProxy)
+    public void openChannel()
     {
         openDatagramChannel(statusIndicator);
 
@@ -189,11 +191,12 @@ public class SendChannelEndpoint extends UdpChannelTransport
      */
     public void indicateActive()
     {
-        final long currentStatus = statusIndicator.get();
+        final long currentStatus = statusIndicator.getPlain();
         if (currentStatus != ChannelEndpointStatus.INITIALIZING)
         {
             throw new IllegalStateException(
-                "channel cannot be registered unless INITIALIZING: status=" + status(currentStatus));
+                "channel cannot be registered unless INITIALIZING: status=" +
+                ChannelEndpointStatus.status(currentStatus));
         }
 
         statusIndicator.appendToLabel(bindAddressAndPort());
@@ -201,13 +204,34 @@ public class SendChannelEndpoint extends UdpChannelTransport
     }
 
     /**
-     * Close the counters used to indicate channel status.
+     * Indicate that the channel is closing and should not be used for new publications.
      */
-    public void closeIndicators()
+    public void indicateClosing()
     {
-        CloseHelper.close(statusIndicator);
-        CloseHelper.close(localSocketAddressIndicator);
-        CloseHelper.close(mdcDestinationsCounter);
+        statusIndicator.setRelease(ChannelEndpointStatus.CLOSING);
+    }
+
+    /**
+     * The {@link ChannelEndpointStatus} value for the channel.
+     *
+     * <p>Must not be called after calling {@link #close()}, as it accesses a counter.</p>
+     *
+     * @return the {@link ChannelEndpointStatus} value for the channel.
+     */
+    public long status()
+    {
+        return statusIndicator.getAcquire();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public void close()
+    {
+        super.close();
+        CloseHelper.close(errorHandler, statusIndicator);
+        CloseHelper.close(errorHandler, localSocketAddressIndicator);
+        CloseHelper.close(errorHandler, mdcDestinationsCounter);
     }
 
     /**
@@ -217,7 +241,9 @@ public class SendChannelEndpoint extends UdpChannelTransport
      */
     public boolean shouldBeClosed()
     {
-        return 0 == refCount && !statusIndicator.isClosed();
+        return 0 == refCount &&
+            !statusIndicator.isClosed() &&
+            statusIndicator.get() != ChannelEndpointStatus.CLOSING;
     }
 
     /**
@@ -291,7 +317,7 @@ public class SendChannelEndpoint extends UdpChannelTransport
      * Send contents of a {@link ByteBuffer} to connected address.
      * This is used on the sender side for performance over send(ByteBuffer, SocketAddress).
      *
-     * @param buffer to send
+     * @param buffer          to send
      * @param endpointAddress to send data to.
      * @return number of bytes sent
      */
@@ -335,7 +361,7 @@ public class SendChannelEndpoint extends UdpChannelTransport
         {
             multiSndDestination.checkForReResolution(this, nowNs, conductorProxy);
         }
-        else if (udpChannel.hasExplicitEndpoint() && !udpChannel.isMulticast())
+        else if (udpChannel.hasExplicitEndpoint() && !udpChannel.isMulticast() && !udpChannel.isResponseControlMode())
         {
             if (statusMessageTimeout(nowNs) && ((timeOfLastResolutionNs + DESTINATION_TIMEOUT) - nowNs) < 0)
             {
@@ -367,12 +393,19 @@ public class SendChannelEndpoint extends UdpChannelTransport
 
         statusMessagesReceived.incrementRelease();
 
+        final NetworkPublication publication = publicationBySessionAndStreamId.get(compoundKey(sessionId, streamId));
+        if (SEND_SETUP_FLAG != (msg.flags() & SEND_SETUP_FLAG) &&
+            null != publication && !publication.isValidStatusMessage(msg))
+        {
+            statusMessagesRejected.incrementRelease();
+            return; // drop SM that is out of bounds
+        }
+
         if (null != multiSndDestination)
         {
             multiSndDestination.onStatusMessage(msg, srcAddress);
         }
 
-        final NetworkPublication publication = publicationBySessionAndStreamId.get(compoundKey(sessionId, streamId));
         if (null != publication)
         {
             if (SEND_SETUP_FLAG == (msg.flags() & SEND_SETUP_FLAG))
@@ -510,8 +543,8 @@ public class SendChannelEndpoint extends UdpChannelTransport
     /**
      * Add a destination for an MDC channel.
      *
-     * @param channelUri for the destination to be added.
-     * @param address    of the destination to be added.
+     * @param channelUri     for the destination to be added.
+     * @param address        of the destination to be added.
      * @param registrationId of the destination.
      */
     public void addDestination(final ChannelUri channelUri, final InetSocketAddress address, final long registrationId)
@@ -1113,7 +1146,7 @@ final class Destination extends DestinationRhsPadding
     {
         return
             (isReceiverIdValid && receiverId == this.receiverId && address.getPort() == this.port) ||
-            (!isReceiverIdValid &&
-                address.getPort() == this.port && address.getAddress().equals(this.address.getAddress()));
+                (!isReceiverIdValid &&
+                    address.getPort() == this.port && address.getAddress().equals(this.address.getAddress()));
     }
 }

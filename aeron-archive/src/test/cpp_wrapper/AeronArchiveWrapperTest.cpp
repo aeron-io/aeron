@@ -1430,11 +1430,16 @@ TEST_F(AeronArchiveWrapperTest, shouldPurgeStoppedRecording)
 
     aeronArchive->stopRecording(subscriptionId);
 
+    YieldingIdleStrategy idleStrategy;
+    while (aeronArchive->getStopPosition(recordingIdFromCounter) != stopPosition)
+    {
+        idleStrategy.idle();
+    }
+
     const std::int64_t recordingId = aeronArchive->findLastMatchingRecording(
         0, "endpoint=localhost:3333", m_recordingStreamId, sessionId);
 
     EXPECT_EQ(recordingIdFromCounter, recordingId);
-    EXPECT_EQ(aeronArchive->getStopPosition(recordingIdFromCounter), stopPosition);
 
     EXPECT_EQ(1, aeronArchive->purgeRecording(recordingId));
 
@@ -1642,7 +1647,11 @@ TEST_F(AeronArchiveWrapperTest, shouldReadJumboRecordingDescriptor)
 
     aeronArchive->stopRecording(subscriptionId);
 
-    EXPECT_EQ(aeronArchive->getStopPosition(recordingId), stopPosition);
+    YieldingIdleStrategy idleStrategy;
+    while (aeronArchive->getStopPosition(recordingId) != stopPosition)
+    {
+        idleStrategy.idle();
+    }
 
     const std::int32_t count = aeronArchive->listRecording(
         recordingId,

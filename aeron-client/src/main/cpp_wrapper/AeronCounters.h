@@ -124,6 +124,11 @@ namespace AeronCounters
      */
     const std::int32_t MDC_DESTINATIONS_COUNTER_TYPE_ID = 18;
 
+    /**
+     * Counter for each bootstrap neighbors used for driver name resolution.
+     */
+    const std::int32_t NAME_RESOLVER_BOOTSTRAP_NEIGHBOR_COUNTER_TYPE_ID = 21;
+
     // Archive counters
     /**
      * The position a recording has reached when being archived.

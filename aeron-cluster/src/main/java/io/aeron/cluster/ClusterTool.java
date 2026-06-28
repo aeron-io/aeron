@@ -57,10 +57,11 @@ import io.aeron.config.DefaultType;
  *                            abort: stops the cluster without a snapshot.
  *      describe-latest-cm-snapshot: prints the contents of the latest valid consensus module snapshot.
  *                        is-leader: returns zero if the cluster node is leader, non-zero if not
+ *           validate-recording-log: triggers the cluster node to validate its recording log against the archive.
  * </pre>
  */
 @Config(existsInC = false)
-public class ClusterTool
+public final class ClusterTool
 {
     /**
      * Timeout in nanoseconds for the tool to wait while trying to perform an operation.
@@ -219,8 +220,15 @@ public class ClusterTool
             listener,
             null)),
             "prints the contents of the latest valid consensus module snapshot."));
+
+        COMMANDS.put("validate-recording-log", new ClusterToolCommand(
+            action(operator::validateRecordingLog),
+            "triggers the cluster node to validate its recording log against the archive."));
     }
 
+    private ClusterTool()
+    {
+    }
 
     /**
      * Main method for launching the process.
@@ -599,6 +607,18 @@ public class ClusterTool
     }
 
     /**
+     * Instruct the cluster node to check the snapshots in the recording log and verify that recording exist.
+     *
+     * @param clusterDir    where the consensus module is running.
+     * @param out           to print the result of the operation.
+     * @return <code>true</code> if the module was succesfully requested, <code>false</code> otherwise.
+     */
+    public static boolean validateRecordingLog(final File clusterDir, final PrintStream out)
+    {
+        return BACKWARD_COMPATIBLE_OPERATIONS.validateRecordingLog(clusterDir, out) == SUCCESS;
+    }
+
+    /**
      * Finds the latest valid snapshot from the log file.
      *
      * @param clusterDir where the cluster node is running.
@@ -634,5 +654,4 @@ public class ClusterTool
     {
         return new Object2ObjectHashMap<>(COMMANDS);
     }
-
 }

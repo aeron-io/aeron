@@ -94,6 +94,7 @@ class ReceiverTest
     private static final long STATUS_MESSAGE_TIMEOUT = Configuration.STATUS_MESSAGE_TIMEOUT_DEFAULT_NS;
     private static final InetSocketAddress SOURCE_ADDRESS = new InetSocketAddress("localhost", 45679);
     private static final String SOURCE_IDENTITY = Configuration.sourceIdentity(SOURCE_ADDRESS);
+    private static final boolean IS_RELIABLE = true;
 
     private static final Position POSITION = mock(Position.class);
     private static final ArrayList<SubscriberPosition> POSITIONS = new ArrayList<>();
@@ -131,7 +132,7 @@ class ReceiverTest
     private ReceiverProxy receiverProxy;
     private final ManyToOneConcurrentLinkedQueue<Runnable> toConductorQueue = new ManyToOneConcurrentLinkedQueue<>();
     private final DriverConductorProxy driverConductorProxy =
-        new DriverConductorProxy(ThreadingMode.DEDICATED, toConductorQueue, mock(AtomicCounter.class));
+        new DriverConductorProxy(toConductorQueue);
     private final CongestionControl congestionControl = mock(CongestionControl.class);
     private final MediaDriver.Context ctx = new MediaDriver.Context()
         .systemCounters(mockSystemCounters)
@@ -178,7 +179,7 @@ class ReceiverTest
             .receiverDutyCycleTracker(new DutyCycleTracker());
 
         receiverProxy = new ReceiverProxy(
-            ThreadingMode.DEDICATED, ctx.receiverCommandQueue(), mock(AtomicCounter.class));
+            ctx.receiverCommandQueue(), mock(AtomicCounter.class));
 
         receiver = new Receiver(ctx);
         receiverProxy.receiver(receiver);
@@ -215,7 +216,7 @@ class ReceiverTest
     @InterruptAfter(10)
     void shouldCreateRcvTermAndSendSmOnSetup() throws IOException
     {
-        receiveChannelEndpoint.openChannel(driverConductorProxy);
+        receiveChannelEndpoint.openChannel();
         receiverProxy.registerReceiveChannelEndpoint(receiveChannelEndpoint);
         receiverProxy.addSubscription(receiveChannelEndpoint, STREAM_ID);
 
@@ -238,10 +239,11 @@ class ReceiverTest
             ACTIVE_TERM_ID,
             INITIAL_TERM_OFFSET,
             (short)0,
+            IS_RELIABLE,
+            UNTETHERED_TIMEOUT_NS,
+            UNTETHERED_TIMEOUT_NS,
+            UNTETHERED_TIMEOUT_NS,
             rawLog,
-            UNTETHERED_TIMEOUT_NS,
-            UNTETHERED_TIMEOUT_NS,
-            UNTETHERED_TIMEOUT_NS,
             mockFeedbackDelayGenerator,
             POSITIONS,
             mockHighestReceivedPosition,
@@ -285,7 +287,7 @@ class ReceiverTest
     @Test
     void shouldInsertDataIntoLogAfterInitialExchange()
     {
-        receiveChannelEndpoint.openChannel(driverConductorProxy);
+        receiveChannelEndpoint.openChannel();
         receiverProxy.registerReceiveChannelEndpoint(receiveChannelEndpoint);
         receiverProxy.addSubscription(receiveChannelEndpoint, STREAM_ID);
 
@@ -310,10 +312,11 @@ class ReceiverTest
                     ACTIVE_TERM_ID,
                     INITIAL_TERM_OFFSET,
                     (short)0,
+                    IS_RELIABLE,
+                    UNTETHERED_TIMEOUT_NS,
+                    UNTETHERED_TIMEOUT_NS,
+                    UNTETHERED_TIMEOUT_NS,
                     rawLog,
-                    UNTETHERED_TIMEOUT_NS,
-                    UNTETHERED_TIMEOUT_NS,
-                    UNTETHERED_TIMEOUT_NS,
                     mockFeedbackDelayGenerator,
                     POSITIONS,
                     mockHighestReceivedPosition,
@@ -356,7 +359,7 @@ class ReceiverTest
     @Test
     void shouldNotOverwriteDataFrameWithHeartbeat()
     {
-        receiveChannelEndpoint.openChannel(driverConductorProxy);
+        receiveChannelEndpoint.openChannel();
         receiverProxy.registerReceiveChannelEndpoint(receiveChannelEndpoint);
         receiverProxy.addSubscription(receiveChannelEndpoint, STREAM_ID);
 
@@ -381,10 +384,11 @@ class ReceiverTest
                     ACTIVE_TERM_ID,
                     INITIAL_TERM_OFFSET,
                     (short)0,
+                    IS_RELIABLE,
+                    UNTETHERED_TIMEOUT_NS,
+                    UNTETHERED_TIMEOUT_NS,
+                    UNTETHERED_TIMEOUT_NS,
                     rawLog,
-                    UNTETHERED_TIMEOUT_NS,
-                    UNTETHERED_TIMEOUT_NS,
-                    UNTETHERED_TIMEOUT_NS,
                     mockFeedbackDelayGenerator,
                     POSITIONS,
                     mockHighestReceivedPosition,
@@ -430,7 +434,7 @@ class ReceiverTest
     @Test
     void shouldOverwriteHeartbeatWithDataFrame()
     {
-        receiveChannelEndpoint.openChannel(driverConductorProxy);
+        receiveChannelEndpoint.openChannel();
         receiverProxy.registerReceiveChannelEndpoint(receiveChannelEndpoint);
         receiver.doWork();
         receiverProxy.addSubscription(receiveChannelEndpoint, STREAM_ID);
@@ -454,10 +458,11 @@ class ReceiverTest
                     ACTIVE_TERM_ID,
                     INITIAL_TERM_OFFSET,
                     (short)0,
+                    IS_RELIABLE,
+                    UNTETHERED_TIMEOUT_NS,
+                    UNTETHERED_TIMEOUT_NS,
+                    UNTETHERED_TIMEOUT_NS,
                     rawLog,
-                    UNTETHERED_TIMEOUT_NS,
-                    UNTETHERED_TIMEOUT_NS,
-                    UNTETHERED_TIMEOUT_NS,
                     mockFeedbackDelayGenerator,
                     POSITIONS,
                     mockHighestReceivedPosition,
@@ -507,7 +512,7 @@ class ReceiverTest
         final int alignedDataFrameLength =
             align(DataHeaderFlyweight.HEADER_LENGTH + FAKE_PAYLOAD.length, FrameDescriptor.FRAME_ALIGNMENT);
 
-        receiveChannelEndpoint.openChannel(driverConductorProxy);
+        receiveChannelEndpoint.openChannel();
         receiverProxy.registerReceiveChannelEndpoint(receiveChannelEndpoint);
         receiverProxy.addSubscription(receiveChannelEndpoint, STREAM_ID);
 
@@ -532,10 +537,11 @@ class ReceiverTest
                     ACTIVE_TERM_ID,
                     initialTermOffset,
                     (short)0,
+                    IS_RELIABLE,
+                    UNTETHERED_TIMEOUT_NS,
+                    UNTETHERED_TIMEOUT_NS,
+                    UNTETHERED_TIMEOUT_NS,
                     rawLog,
-                    UNTETHERED_TIMEOUT_NS,
-                    UNTETHERED_TIMEOUT_NS,
-                    UNTETHERED_TIMEOUT_NS,
                     mockFeedbackDelayGenerator,
                     POSITIONS,
                     mockHighestReceivedPosition,
@@ -582,7 +588,7 @@ class ReceiverTest
     @Test
     void shouldRemoveImageFromDispatcherWithNoActivity()
     {
-        receiveChannelEndpoint.openChannel(driverConductorProxy);
+        receiveChannelEndpoint.openChannel();
         receiverProxy.registerReceiveChannelEndpoint(receiveChannelEndpoint);
         receiverProxy.addSubscription(receiveChannelEndpoint, STREAM_ID);
 
@@ -606,7 +612,7 @@ class ReceiverTest
     @Test
     void shouldNotRemoveImageFromDispatcherOnRemoveSubscription()
     {
-        receiveChannelEndpoint.openChannel(driverConductorProxy);
+        receiveChannelEndpoint.openChannel();
         receiverProxy.registerReceiveChannelEndpoint(receiveChannelEndpoint);
         receiverProxy.addSubscription(receiveChannelEndpoint, STREAM_ID);
 
@@ -671,7 +677,7 @@ class ReceiverTest
     private int drainConductorQueue(final Consumer<Runnable> consumer)
     {
         int workCount = 0;
-        for (;;)
+        for (; ; )
         {
             final Runnable command = toConductorQueue.poll();
             if (null != command)

@@ -15,12 +15,13 @@
  */
 package io.aeron.driver.exceptions;
 
-import io.aeron.exceptions.AeronException;
+import io.aeron.ErrorCode;
+import io.aeron.exceptions.ControlProtocolException;
 
 /**
  * Indicates the subscription is unknown to the driver when a request to remove it has been received.
  */
-public class UnknownSubscriptionException extends AeronException
+public class UnknownSubscriptionException extends ControlProtocolException
 {
     private static final long serialVersionUID = 8934006869519172332L;
 
@@ -31,6 +32,6 @@ public class UnknownSubscriptionException extends AeronException
      */
     public UnknownSubscriptionException(final String message)
     {
-        super(message);
+        super(ErrorCode.UNKNOWN_SUBSCRIPTION, message);
     }
 }

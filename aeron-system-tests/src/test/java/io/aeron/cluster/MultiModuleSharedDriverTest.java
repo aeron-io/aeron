@@ -24,7 +24,7 @@ import io.aeron.cluster.client.EgressListener;
 import io.aeron.cluster.service.ClientSession;
 import io.aeron.cluster.service.ClusteredServiceContainer;
 import io.aeron.driver.MediaDriver;
-import io.aeron.driver.NameResolver;
+import io.aeron.driver.NameResolverAgent;
 import io.aeron.driver.ThreadingMode;
 import io.aeron.logbuffer.Header;
 import io.aeron.test.DataCollector;
@@ -229,7 +229,7 @@ class MultiModuleSharedDriverTest
         final int nodeId;
         final DataCollector dataCollector;
         final ArchivingMediaDriver archivingMediaDriver;
-        final NameResolver nameResolver;
+        final NameResolverAgent nameResolver;
 
         final ConsensusModule consensusModule0;
         final ClusteredServiceContainer container0;

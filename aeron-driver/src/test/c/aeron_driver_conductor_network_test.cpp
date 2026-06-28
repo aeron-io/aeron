@@ -395,7 +395,7 @@ TEST_F(DriverConductorNetworkTest, shouldSendAvailableImageForSecondSubscription
     EXPECT_NE(image, (aeron_publication_image_t *)nullptr);
 
     ASSERT_EQ(addNetworkSubscription(client_id, sub_id_2, CHANNEL_1, STREAM_ID_1), 0);
-    doWork();
+    doWorkUntilDone();
 
     int64_t image_registration_id = aeron_publication_image_registration_id(image);
     const char *log_file_name = aeron_publication_image_log_file_name(image);
@@ -489,6 +489,121 @@ TEST_F(DriverConductorNetworkTest, shouldUseExistingChannelEndpointOnAddPublicat
     EXPECT_EQ(aeron_driver_conductor_num_send_channel_endpoints(&m_conductor.m_conductor), 0u);
 }
 
+TEST_F(DriverConductorNetworkTest, shouldNotLogRetryableResourceTemporarilyUnavailableToDistinctErrorLog)
+{
+    const int64_t correlation_id = nextCorrelationId();
+    const size_t observations_before =
+        aeron_distinct_error_log_num_observations(&m_conductor.m_conductor.error_log);
+
+    // RESOURCE_TEMPORARILY_UNAVAILABLE is a transient, retryable condition reported to the client (for example
+    // adding a publication while a send channel endpoint is still closing). It must not be recorded in the
+    // distinct error log, matching the Java driver which only sends it to the client.
+    aeron_driver_conductor_on_error(
+        &m_conductor.m_conductor,
+        -AERON_ERROR_CODE_RESOURCE_TEMPORARILY_UNAVAILABLE,
+        "send_channel_endpoint found in CLOSING state, please retry",
+        correlation_id);
+
+    EXPECT_EQ(observations_before,
+        aeron_distinct_error_log_num_observations(&m_conductor.m_conductor.error_log));
+
+    // A genuine (non-retryable) error must still be recorded in the distinct error log.
+    aeron_driver_conductor_on_error(
+        &m_conductor.m_conductor,
+        -AERON_ERROR_CODE_INVALID_CHANNEL,
+        "invalid channel",
+        correlation_id);
+
+    EXPECT_EQ(observations_before + 1,
+        aeron_distinct_error_log_num_observations(&m_conductor.m_conductor.error_log));
+}
+
+TEST_F(DriverConductorNetworkTest, shouldNotEvictRecreatedSendChannelEndpointWhenPriorEndpointDeferredDeleteRuns)
+{
+    int64_t client_id = nextCorrelationId();
+    int64_t pub_id_1 = nextCorrelationId();
+
+    // Create the initial send channel endpoint for the channel.
+    ASSERT_EQ(addPublication(client_id, pub_id_1, CHANNEL_1, STREAM_ID_1, false), 0);
+    doWorkUntilDone();
+    ASSERT_EQ(aeron_driver_conductor_num_send_channel_endpoints(&m_conductor.m_conductor), 1u);
+
+    aeron_send_channel_endpoint_t *endpoint_a = aeron_driver_conductor_find_send_channel_endpoint(
+        &m_conductor.m_conductor, CHANNEL_1);
+    ASSERT_NE(endpoint_a, nullptr);
+
+    char canonical[1024];
+    size_t canonical_length = endpoint_a->conductor_fields.udp_channel->canonical_length;
+    ASSERT_LT(canonical_length, sizeof(canonical));
+    memcpy(canonical, endpoint_a->conductor_fields.udp_channel->canonical_form, canonical_length);
+
+    aeron_str_to_ptr_hash_map_t *endpoint_map =
+        &m_conductor.m_conductor.send_channel_endpoint_by_channel_map;
+
+    // Begin teardown of the endpoint by removing its only publication.
+    int64_t remove_id = nextCorrelationId();
+    ASSERT_EQ(removePublication(client_id, remove_id, pub_id_1), 0);
+    doWork();
+
+    // Advance past the publication linger (one timer cycle per iteration) until the publication is freed,
+    // which drops the endpoint reference count to zero and transitions it to CLOSING.
+    int guard = 0;
+    while (0u != aeron_driver_conductor_num_network_publications(&m_conductor.m_conductor) && guard++ < 1000)
+    {
+        test_increment_nano_time((int64_t)m_context.m_context->publication_linger_timeout_ns + 1);
+        clientKeepalive(client_id);
+        doWork();
+    }
+
+    // Complete the conductor->sender->conductor release round-trip with plain doWork() calls. doWork() does
+    // not advance the test clock, so the managed-resource sweep does not run: this leaves the endpoint removed
+    // from the lookup map (by on_release_resource) but still present in the endpoint array awaiting its
+    // deferred delete.
+    guard = 0;
+    while (nullptr != aeron_str_to_ptr_hash_map_get(endpoint_map, canonical, canonical_length) &&
+        guard++ < 1000)
+    {
+        doWork();
+    }
+
+    // Window reached: prior endpoint is out of the lookup map but still in the array.
+    ASSERT_EQ(nullptr, aeron_str_to_ptr_hash_map_get(endpoint_map, canonical, canonical_length));
+    ASSERT_EQ(aeron_driver_conductor_num_send_channel_endpoints(&m_conductor.m_conductor), 1u);
+
+    // Recreate an endpoint for the same channel. It is mapped under the same canonical form as the prior,
+    // not-yet-deleted endpoint.
+    int64_t pub_id_2 = nextCorrelationId();
+    ASSERT_EQ(addPublication(client_id, pub_id_2, CHANNEL_1, STREAM_ID_1, false), 0);
+    doWorkUntilDone();
+
+    void *mapped_b = aeron_str_to_ptr_hash_map_get(endpoint_map, canonical, canonical_length);
+    ASSERT_NE(nullptr, mapped_b);
+    ASSERT_EQ(aeron_driver_conductor_num_send_channel_endpoints(&m_conductor.m_conductor), 2u);
+
+    // Fire managed-resource sweeps until the prior end-of-life endpoint is deferred-deleted. The deferred
+    // delete must not remove the map entry that now belongs to the recreated successor.
+    int sweep_guard = 0;
+    while (aeron_driver_conductor_num_send_channel_endpoints(&m_conductor.m_conductor) > 1u &&
+        sweep_guard++ < 1000)
+    {
+        test_increment_nano_time((int64_t)m_context.m_context->timer_interval_ns + 1);
+        clientKeepalive(client_id);
+        doWork();
+    }
+    ASSERT_EQ(aeron_driver_conductor_num_send_channel_endpoints(&m_conductor.m_conductor), 1u);
+
+    // Regression: a stale-handle deferred delete used to remove the map entry by canonical form
+    // unconditionally, evicting the live successor and leaving the lookup map and endpoint array inconsistent.
+    EXPECT_EQ(mapped_b, aeron_str_to_ptr_hash_map_get(endpoint_map, canonical, canonical_length));
+
+    // A subsequent publication on the same channel must reuse the mapped endpoint rather than create a
+    // duplicate (which, against a real media driver, collides on the bind with EADDRINUSE).
+    int64_t pub_id_3 = nextCorrelationId();
+    ASSERT_EQ(addPublication(client_id, pub_id_3, CHANNEL_1, STREAM_ID_1, false), 0);
+    doWorkUntilDone();
+    EXPECT_EQ(aeron_driver_conductor_num_send_channel_endpoints(&m_conductor.m_conductor), 1u);
+}
+
 TEST_F(DriverConductorNetworkTest, shouldUseExistingChannelEndpointOnAddPublicationWithSameTagIdDifferentStreamId)
 {
     int64_t client_id = nextCorrelationId();
@@ -565,7 +680,7 @@ TEST_F(DriverConductorNetworkTest, shouldErrorWithUnknownSessionIdTag)
     int64_t pub_id_1 = nextCorrelationId();
 
     ASSERT_EQ(addPublication(client_id, pub_id_1, CHANNEL_2 "|session-id=tag:1002", STREAM_ID_1, false), 0);
-    doWork();
+    doWorkUntilDone();
 
     EXPECT_CALL(m_mockCallbacks, broadcastToClient(AERON_RESPONSE_ON_ERROR, _, _));
     readAllBroadcastsFromConductor(mock_broadcast_handler);
@@ -607,7 +722,7 @@ TEST_F(DriverConductorNetworkTest, shouldBeAbleToAddAndRemoveDestinationToManual
     readAllBroadcastsFromConductor(mock_broadcast_handler);
 
     ASSERT_EQ(removeDestination(client_id, remove_destination_id, pub_id, CHANNEL_1), 0);
-    doWork();
+    doWorkUntilDone();
 
     EXPECT_CALL(m_mockCallbacks, broadcastToClient(AERON_RESPONSE_ON_OPERATION_SUCCESS, _, _))
         .With(IsOperationSuccess(remove_destination_id));
@@ -780,4 +895,156 @@ TEST_F(DriverConductorNetworkTest, shouldFailToAddSubscriptionWithAtsEnabled)
     doWorkUntilDone();
     EXPECT_CALL(m_mockCallbacks, broadcastToClient(AERON_RESPONSE_ON_ERROR, _, _));
     EXPECT_EQ(1, readAllBroadcastsFromConductor(mock_broadcast_handler));
+}
+
+TEST_F(DriverConductorNetworkTest, shouldSkipControlAddressReResolutionIfEndpointIsNotActive)
+{
+    aeron_receive_channel_endpoint_t endpoint;
+    endpoint.conductor_fields.status = AERON_RECEIVE_CHANNEL_ENDPOINT_STATUS_CLOSING;
+    m_conductor.m_conductor.context->receiver_proxy = nullptr;
+
+    aeron_command_re_resolve_t cmd;
+    cmd.endpoint_name = "#@#%@&^%#@$*%*@$ this won't resolve #%$*&$@%^";
+    cmd.endpoint = &endpoint;
+    cmd.destination = nullptr;
+    memset(&cmd.existing_addr, 0, sizeof(cmd.existing_addr));
+
+    auto driverErrorCounter =
+        aeron_counters_manager_addr(&m_context.m_counters_manager, AERON_SYSTEM_COUNTER_ID_ERRORS);
+    EXPECT_EQ(0, aeron_counter_get_acquire(driverErrorCounter));
+
+    aeron_driver_conductor_on_re_resolve_control(&m_conductor.m_conductor, &cmd);
+
+    doWork();
+    doWork();
+
+    // error counter zero means that the command was not executed
+    EXPECT_EQ(0, aeron_counter_get_acquire(driverErrorCounter));
+}
+
+TEST_F(DriverConductorNetworkTest, shouldNotNotifyControlAddressReResolutionResultsIfEndpointIsNotActiveWhenTaskCompletes)
+{
+    aeron_receive_channel_endpoint_t endpoint;
+    endpoint.conductor_fields.status = AERON_RECEIVE_CHANNEL_ENDPOINT_STATUS_ACTIVE;
+    m_conductor.m_conductor.context->receiver_proxy = nullptr;
+
+    aeron_command_re_resolve_t cmd;
+    cmd.endpoint_name = "127.0.0.1:10101";
+    cmd.endpoint = &endpoint;
+    cmd.destination = nullptr;
+    memset(&cmd.existing_addr, 0, sizeof(cmd.existing_addr));
+
+    auto driverErrorCounter =
+        aeron_counters_manager_addr(&m_context.m_counters_manager, AERON_SYSTEM_COUNTER_ID_ERRORS);
+    EXPECT_EQ(0, aeron_counter_get_acquire(driverErrorCounter));
+
+    aeron_driver_conductor_on_re_resolve_control(&m_conductor.m_conductor, &cmd);
+    endpoint.conductor_fields.status = AERON_RECEIVE_CHANNEL_ENDPOINT_STATUS_CLOSED;
+
+    doWork();
+    doWork();
+
+    EXPECT_EQ(0, aeron_counter_get_acquire(driverErrorCounter));
+}
+
+TEST_F(DriverConductorNetworkTest, shouldReportControlAddressReResolutionErrorEvenIfEndpointIsNotActiveWhenTaskCompletes)
+{
+    aeron_receive_channel_endpoint_t endpoint;
+    endpoint.conductor_fields.status = AERON_RECEIVE_CHANNEL_ENDPOINT_STATUS_ACTIVE;
+    m_conductor.m_conductor.context->receiver_proxy = nullptr;
+
+    aeron_command_re_resolve_t cmd;
+    cmd.endpoint_name = "*#&(%#%&";
+    cmd.endpoint = &endpoint;
+    cmd.destination = nullptr;
+    memset(&cmd.existing_addr, 0, sizeof(cmd.existing_addr));
+
+    auto driverErrorCounter =
+        aeron_counters_manager_addr(&m_context.m_counters_manager, AERON_SYSTEM_COUNTER_ID_ERRORS);
+    EXPECT_EQ(0, aeron_counter_get_acquire(driverErrorCounter));
+
+    aeron_driver_conductor_on_re_resolve_control(&m_conductor.m_conductor, &cmd);
+    endpoint.conductor_fields.status = AERON_RECEIVE_CHANNEL_ENDPOINT_STATUS_CLOSING;
+
+    doWork();
+    doWork();
+
+    EXPECT_EQ(1, aeron_counter_get_acquire(driverErrorCounter));
+    EXPECT_EQ(0, aeron_errcode());
+}
+
+TEST_F(DriverConductorNetworkTest, shouldSkipEndpointAddressReResolutionIfEndpointIsNotActive)
+{
+    aeron_send_channel_endpoint_t endpoint;
+    endpoint.conductor_fields.status = AERON_SEND_CHANNEL_ENDPOINT_STATUS_CLOSED;
+    m_conductor.m_conductor.context->sender_proxy = nullptr;
+
+    aeron_command_re_resolve_t cmd;
+    cmd.endpoint_name = "#@#%@&^%#@$*%*@$ this won't resolve #%$*&$@%^";
+    cmd.endpoint = &endpoint;
+    cmd.destination = nullptr;
+    memset(&cmd.existing_addr, 0, sizeof(cmd.existing_addr));
+
+    auto driverErrorCounter =
+        aeron_counters_manager_addr(&m_context.m_counters_manager, AERON_SYSTEM_COUNTER_ID_ERRORS);
+    EXPECT_EQ(0, aeron_counter_get_acquire(driverErrorCounter));
+
+    aeron_driver_conductor_on_re_resolve_endpoint(&m_conductor.m_conductor, &cmd);
+
+    doWork();
+    doWork();
+
+    // error counter zero means that the command was not executed
+    EXPECT_EQ(0, aeron_counter_get_acquire(driverErrorCounter));
+}
+
+TEST_F(DriverConductorNetworkTest, shouldNotNotifyEndpointAddressReResolutionResultsIfEndpointIsNotActiveWhenTaskCompletes)
+{
+    aeron_send_channel_endpoint_t endpoint;
+    endpoint.conductor_fields.status = AERON_SEND_CHANNEL_ENDPOINT_STATUS_ACTIVE;
+    m_conductor.m_conductor.context->sender_proxy = nullptr;
+
+    aeron_command_re_resolve_t cmd;
+    cmd.endpoint_name = "127.0.0.1:10101";
+    cmd.endpoint = &endpoint;
+    cmd.destination = nullptr;
+    memset(&cmd.existing_addr, 0, sizeof(cmd.existing_addr));
+
+    auto driverErrorCounter =
+        aeron_counters_manager_addr(&m_context.m_counters_manager, AERON_SYSTEM_COUNTER_ID_ERRORS);
+    EXPECT_EQ(0, aeron_counter_get_acquire(driverErrorCounter));
+
+    aeron_driver_conductor_on_re_resolve_endpoint(&m_conductor.m_conductor, &cmd);
+    endpoint.conductor_fields.status = AERON_SEND_CHANNEL_ENDPOINT_STATUS_CLOSING;
+
+    doWork();
+    doWork();
+
+    EXPECT_EQ(0, aeron_counter_get_acquire(driverErrorCounter));
+}
+
+TEST_F(DriverConductorNetworkTest, shouldReportEndpointAddressReResolutionErrorEvenIfEndpointIsNotActiveWhenTaskCompletes)
+{
+    aeron_send_channel_endpoint_t endpoint;
+    endpoint.conductor_fields.status = AERON_SEND_CHANNEL_ENDPOINT_STATUS_ACTIVE;
+    m_conductor.m_conductor.context->sender_proxy = nullptr;
+
+    aeron_command_re_resolve_t cmd;
+    cmd.endpoint_name = "*#&(%#%&";
+    cmd.endpoint = &endpoint;
+    cmd.destination = nullptr;
+    memset(&cmd.existing_addr, 0, sizeof(cmd.existing_addr));
+
+    auto driverErrorCounter =
+        aeron_counters_manager_addr(&m_context.m_counters_manager, AERON_SYSTEM_COUNTER_ID_ERRORS);
+    EXPECT_EQ(0, aeron_counter_get_acquire(driverErrorCounter));
+
+    aeron_driver_conductor_on_re_resolve_endpoint(&m_conductor.m_conductor, &cmd);
+    endpoint.conductor_fields.status = AERON_SEND_CHANNEL_ENDPOINT_STATUS_CLOSED;
+
+    doWork();
+    doWork();
+
+    EXPECT_EQ(1, aeron_counter_get_acquire(driverErrorCounter));
+    EXPECT_EQ(0, aeron_errcode());
 }

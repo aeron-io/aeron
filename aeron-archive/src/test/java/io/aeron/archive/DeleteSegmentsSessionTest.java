@@ -32,7 +32,6 @@ import static org.mockito.Mockito.*;
 class DeleteSegmentsSessionTest
 {
     private final ControlSession controlSession = mock(ControlSession.class);
-    private final ControlResponseProxy controlResponseProxy = mock(ControlResponseProxy.class);
     private final ErrorHandler errorHandler = mock(ErrorHandler.class);
 
     @Test
@@ -49,7 +48,7 @@ class DeleteSegmentsSessionTest
             new File(segmentFileName(recordingId, 56678))));
 
         final DeleteSegmentsSession deleteSegmentsSession = new DeleteSegmentsSession(
-            recordingId, correlationId, files, controlSession, errorHandler);
+            recordingId, correlationId, files, controlSession, errorHandler, false);
 
         assertEquals(12345000000L, deleteSegmentsSession.maxDeletePosition());
     }
@@ -64,7 +63,7 @@ class DeleteSegmentsSessionTest
         when(controlSession.archiveConductor()).thenReturn(conductor);
 
         final DeleteSegmentsSession deleteSegmentsSession = new DeleteSegmentsSession(
-            recordingId, correlationId, files, controlSession, errorHandler);
+            recordingId, correlationId, files, controlSession, errorHandler, false);
 
         deleteSegmentsSession.close();
 
@@ -73,5 +72,45 @@ class DeleteSegmentsSessionTest
         inOrder.verify(conductor).removeDeleteSegmentsSession(deleteSegmentsSession);
         inOrder.verify(controlSession).sendSignal(correlationId, recordingId, NULL_VALUE, NULL_VALUE, DELETE);
         inOrder.verifyNoMoreInteractions();
+    }
+
+    @Test
+    void shouldStayInAwaitReplaysStopWhileReplaysAreInProgress()
+    {
+        final long recordingId = 5;
+        final long correlationId = 100;
+        final ArrayDeque<File> files = new ArrayDeque<>(List.of(
+            new File(segmentFileName(recordingId, 0))));
+        final ArchiveConductor conductor = mock(ArchiveConductor.class);
+        when(controlSession.archiveConductor()).thenReturn(conductor);
+        when(conductor.hasInProgressReplays(recordingId)).thenReturn(true);
+
+        final DeleteSegmentsSession session = new DeleteSegmentsSession(
+            recordingId, correlationId, files, controlSession, errorHandler, true);
+
+        assertEquals(0, session.doWork());
+        assertEquals(0, session.doWork());
+        assertEquals(1, files.size());
+        verify(conductor, times(2)).hasInProgressReplays(recordingId);
+    }
+
+    @Test
+    void shouldTransitionToDeleteFilesStateWhenReplaysStop()
+    {
+        final long recordingId = 5;
+        final long correlationId = 100;
+        final ArrayDeque<File> files = new ArrayDeque<>(List.of(
+            new File(segmentFileName(recordingId, 0))));
+        final ArchiveConductor conductor = mock(ArchiveConductor.class);
+        when(controlSession.archiveConductor()).thenReturn(conductor);
+        when(conductor.hasInProgressReplays(recordingId)).thenReturn(true, false);
+
+        final DeleteSegmentsSession session = new DeleteSegmentsSession(
+            recordingId, correlationId, files, controlSession, errorHandler, true);
+
+        assertEquals(0, session.doWork()); // replays in progress, no work
+        assertEquals(1, session.doWork()); // replays done, transitions to DELETE_FILES
+        assertEquals(1, session.doWork()); // DELETE_FILES, deletes file
+        assertEquals(0, files.size());
     }
 }

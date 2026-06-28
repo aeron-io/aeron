@@ -753,6 +753,60 @@ class ImageTest
         verify(position, never()).setRelease(AdditionalMatchers.not(eq(initialPosition)));
     }
 
+    @Test
+    void blockPollClampsBlockLengthLimitWithoutIntegerOverflow()
+    {
+        final int frameOffset = ALIGNED_FRAME_LENGTH;
+        final long initialPosition = computePosition(
+            INITIAL_TERM_ID, frameOffset, POSITION_BITS_TO_SHIFT, INITIAL_TERM_ID);
+        position.setRelease(initialPosition);
+        final Image image = createImage();
+
+        insertDataFrame(INITIAL_TERM_ID, frameOffset);
+
+        final int[] handlerCallCount = { 0 };
+        final int[] receivedLength = { -1 };
+        final int bytes = image.blockPoll(
+            (buf, off, len, sid, tid) ->
+            {
+                handlerCallCount[0]++;
+                receivedLength[0] = len;
+            },
+            Integer.MAX_VALUE);
+
+        assertEquals(ALIGNED_FRAME_LENGTH, bytes);
+        assertEquals(1, handlerCallCount[0]);
+        assertEquals(ALIGNED_FRAME_LENGTH, receivedLength[0]);
+        assertEquals(initialPosition + ALIGNED_FRAME_LENGTH, image.position());
+    }
+
+    @Test
+    void rawPollClampsBlockLengthLimitWithoutIntegerOverflow()
+    {
+        final int frameOffset = ALIGNED_FRAME_LENGTH;
+        final long initialPosition = computePosition(
+            INITIAL_TERM_ID, frameOffset, POSITION_BITS_TO_SHIFT, INITIAL_TERM_ID);
+        position.setRelease(initialPosition);
+        final Image image = createImage();
+
+        insertDataFrame(INITIAL_TERM_ID, frameOffset);
+
+        final int[] handlerCallCount = { 0 };
+        final int[] receivedLength = { -1 };
+        final int bytes = image.rawPoll(
+            (fc, fo, buf, to, len, sid, tid) ->
+            {
+                handlerCallCount[0]++;
+                receivedLength[0] = len;
+            },
+            Integer.MAX_VALUE);
+
+        assertEquals(ALIGNED_FRAME_LENGTH, bytes);
+        assertEquals(1, handlerCallCount[0]);
+        assertEquals(ALIGNED_FRAME_LENGTH, receivedLength[0]);
+        assertEquals(initialPosition + ALIGNED_FRAME_LENGTH, image.position());
+    }
+
     private Image createImage()
     {
         return new Image(subscription, SESSION_ID, position, logBuffers, errorHandler, SOURCE_IDENTITY, CORRELATION_ID);

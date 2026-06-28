@@ -25,8 +25,6 @@ struct aeron_linked_queue_node_stct
     void *element;
 };
 
-#define IS_EMPTY(_q) (NULL == (_q)->head && NULL == (_q)->tail)
-
 int aeron_linked_queue_init(aeron_linked_queue_t *queue)
 {
     queue->head = NULL;
@@ -37,7 +35,7 @@ int aeron_linked_queue_init(aeron_linked_queue_t *queue)
 
 int aeron_linked_queue_close(aeron_linked_queue_t *queue)
 {
-    if (IS_EMPTY(queue))
+    if (aeron_linked_queue_is_empty(queue))
     {
         return 0;
     }
@@ -49,25 +47,16 @@ int aeron_linked_queue_close(aeron_linked_queue_t *queue)
 
 int aeron_linked_queue_offer(aeron_linked_queue_t *queue, void *element)
 {
-    return aeron_linked_queue_offer_ex(queue, element, NULL);
-}
-
-int aeron_linked_queue_offer_ex(aeron_linked_queue_t *queue, void *element, aeron_linked_queue_node_t *in_node)
-{
-    aeron_linked_queue_node_t *node = in_node;
-
-    if (NULL == node)
+    aeron_linked_queue_node_t *node = NULL;
+    if (aeron_alloc((void **)&node, sizeof(aeron_linked_queue_node_t)) < 0)
     {
-        if (aeron_alloc((void **)&node, sizeof(aeron_linked_queue_node_t)) < 0)
-        {
-            AERON_APPEND_ERR("%s", "");
-            return -1;
-        }
+        AERON_APPEND_ERR("%s", "");
+        return -1;
     }
     node->element = element;
     node->next = NULL;
 
-    if (IS_EMPTY(queue))
+    if (aeron_linked_queue_is_empty(queue))
     {
         queue->head = node;
         queue->tail = node;
@@ -88,11 +77,6 @@ void *aeron_linked_queue_peek(aeron_linked_queue_t *queue)
 
 void *aeron_linked_queue_poll(aeron_linked_queue_t *queue)
 {
-    return aeron_linked_queue_poll_ex(queue, NULL);
-}
-
-void *aeron_linked_queue_poll_ex(aeron_linked_queue_t *queue, aeron_linked_queue_node_t **out_nodep)
-{
     aeron_linked_queue_node_t *next;
 
     next = queue->tail;
@@ -111,27 +95,12 @@ void *aeron_linked_queue_poll_ex(aeron_linked_queue_t *queue, aeron_linked_queue
         queue->head = NULL;
     }
 
-    if (NULL == out_nodep)
-    {
-        aeron_linked_queue_node_delete(next);
-    }
-    else
-    {
-        next->next = NULL;
-        next->element = NULL;
-
-        *out_nodep = next;
-    }
+    aeron_free(next);
 
     return element;
 }
 
-int aeron_linked_queue_node_delete(aeron_linked_queue_node_t *node)
+bool aeron_linked_queue_is_empty(aeron_linked_queue_t *queue)
 {
-    if (NULL != node)
-    {
-        aeron_free(node);
-    }
-
-    return 0;
+    return NULL == queue->head && NULL == queue->tail;
 }

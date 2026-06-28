@@ -25,7 +25,7 @@ import org.agrona.concurrent.status.UnsafeBufferPosition;
  * The position an individual Subscriber has reached on a session-channel-stream tuple. It is possible to have multiple
  * Subscribers on the same machine tracked by a {@link io.aeron.driver.MediaDriver}.
  */
-public class SubscriberPos
+public final class SubscriberPos
 {
     /**
      * Type id of a subscriber position counter.
@@ -36,6 +36,10 @@ public class SubscriberPos
      * Human-readable name for the counter.
      */
     public static final String NAME = "sub-pos";
+
+    private SubscriberPos()
+    {
+    }
 
     /**
      * Allocate a new subscriber position counter for a stream.

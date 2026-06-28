@@ -29,12 +29,9 @@ final class SenderProxy extends CommandProxy
 {
     private Sender sender;
 
-    SenderProxy(
-        final ThreadingMode threadingMode,
-        final OneToOneConcurrentArrayQueue<Runnable> commandQueue,
-        final AtomicCounter failCount)
+    SenderProxy(final OneToOneConcurrentArrayQueue<Runnable> commandQueue, final AtomicCounter failCount)
     {
-        super(threadingMode, commandQueue, failCount);
+        super(commandQueue, failCount);
     }
 
     void sender(final Sender sender)
@@ -44,50 +41,22 @@ final class SenderProxy extends CommandProxy
 
     void registerSendChannelEndpoint(final SendChannelEndpoint channelEndpoint)
     {
-        if (notConcurrent())
-        {
-            sender.onRegisterSendChannelEndpoint(channelEndpoint);
-        }
-        else
-        {
-            offer(() -> sender.onRegisterSendChannelEndpoint(channelEndpoint));
-        }
+        offer(() -> sender.onRegisterSendChannelEndpoint(channelEndpoint));
     }
 
     void closeSendChannelEndpoint(final SendChannelEndpoint channelEndpoint)
     {
-        if (notConcurrent())
-        {
-            sender.onCloseSendChannelEndpoint(channelEndpoint);
-        }
-        else
-        {
-            offer(() -> sender.onCloseSendChannelEndpoint(channelEndpoint));
-        }
+        offer(() -> sender.onCloseSendChannelEndpoint(channelEndpoint));
     }
 
     void removeNetworkPublication(final NetworkPublication publication)
     {
-        if (notConcurrent())
-        {
-            sender.onRemoveNetworkPublication(publication);
-        }
-        else
-        {
-            offer(() -> sender.onRemoveNetworkPublication(publication));
-        }
+        offer(() -> sender.onRemoveNetworkPublication(publication));
     }
 
     void newNetworkPublication(final NetworkPublication publication)
     {
-        if (notConcurrent())
-        {
-            sender.onNewNetworkPublication(publication);
-        }
-        else
-        {
-            offer(() -> sender.onNewNetworkPublication(publication));
-        }
+        offer(() -> sender.onNewNetworkPublication(publication));
     }
 
     void addDestination(
@@ -96,52 +65,24 @@ final class SenderProxy extends CommandProxy
         final InetSocketAddress address,
         final long registrationId)
     {
-        if (notConcurrent())
-        {
-            sender.onAddDestination(channelEndpoint, channelUri, address, registrationId);
-        }
-        else
-        {
-            offer(() -> sender.onAddDestination(channelEndpoint, channelUri, address, registrationId));
-        }
+        offer(() -> sender.onAddDestination(channelEndpoint, channelUri, address, registrationId));
     }
 
     void removeDestination(
         final SendChannelEndpoint channelEndpoint, final ChannelUri channelUri, final InetSocketAddress address)
     {
-        if (notConcurrent())
-        {
-            sender.onRemoveDestination(channelEndpoint, channelUri, address);
-        }
-        else
-        {
-            offer(() -> sender.onRemoveDestination(channelEndpoint, channelUri, address));
-        }
+        offer(() -> sender.onRemoveDestination(channelEndpoint, channelUri, address));
     }
 
     void removeDestination(
         final SendChannelEndpoint channelEndpoint, final long destinationRegistrationId)
     {
-        if (notConcurrent())
-        {
-            sender.onRemoveDestination(channelEndpoint, destinationRegistrationId);
-        }
-        else
-        {
-            offer(() -> sender.onRemoveDestination(channelEndpoint, destinationRegistrationId));
-        }
+        offer(() -> sender.onRemoveDestination(channelEndpoint, destinationRegistrationId));
     }
 
     void onResolutionChange(
         final SendChannelEndpoint channelEndpoint, final String endpoint, final InetSocketAddress newAddress)
     {
-        if (notConcurrent())
-        {
-            sender.onResolutionChange(channelEndpoint, endpoint, newAddress);
-        }
-        else
-        {
-            offer(() -> sender.onResolutionChange(channelEndpoint, endpoint, newAddress));
-        }
+        offer(() -> sender.onResolutionChange(channelEndpoint, endpoint, newAddress));
     }
 }

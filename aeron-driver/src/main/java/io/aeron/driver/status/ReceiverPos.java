@@ -27,7 +27,7 @@ import static io.aeron.Aeron.NULL_VALUE;
  * The highest position the Receiver has rebuilt up to on a session-channel-stream tuple while rebuilding the stream.
  * The stream is complete up to this point.
  */
-public class ReceiverPos
+public final class ReceiverPos
 {
     /**
      * Type id of a receiver position counter.
@@ -38,6 +38,10 @@ public class ReceiverPos
      * Human-readable name for the counter.
      */
     public static final String NAME = "rcv-pos";
+
+    private ReceiverPos()
+    {
+    }
 
     /**
      * Allocate a new receiver position counter for a stream.

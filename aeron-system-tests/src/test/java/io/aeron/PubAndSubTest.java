@@ -26,6 +26,7 @@ import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.Header;
 import io.aeron.logbuffer.RawBlockHandler;
+import io.aeron.test.EventLogExtension;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
 import io.aeron.test.SlowTest;
@@ -38,6 +39,7 @@ import org.agrona.DirectBuffer;
 import org.agrona.collections.MutableBoolean;
 import org.agrona.collections.MutableInteger;
 import org.agrona.collections.MutableLong;
+import org.agrona.concurrent.AgentInvoker;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.CountersReader;
 import org.junit.jupiter.api.AfterEach;
@@ -45,6 +47,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
@@ -91,10 +94,14 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.agrona.BitUtil.SIZE_OF_INT;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.allOf;
+import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.lessThan;
+import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.hamcrest.Matchers.startsWith;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -109,7 +116,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-@ExtendWith(InterruptingTestCallback.class)
+@ExtendWith({ EventLogExtension.class, InterruptingTestCallback.class })
 class PubAndSubTest
 {
     private static final String IPC_URI = "aeron:ipc";
@@ -131,10 +138,14 @@ class PubAndSubTest
     private final MediaDriver.Context driverContext = new MediaDriver.Context()
         .publicationConnectionTimeoutNs(MILLISECONDS.toNanos(300))
         .imageLivenessTimeoutNs(MILLISECONDS.toNanos(500))
-        .timerIntervalNs(MILLISECONDS.toNanos(100));
+        .timerIntervalNs(MILLISECONDS.toNanos(10))
+        .aeronDirectoryName(CommonContext.generateRandomDirName())
+        .threadingMode(ThreadingMode.SHARED);
 
     private final Aeron.Context clientContext = new Aeron.Context()
-        .resourceLingerDurationNs(MILLISECONDS.toNanos(200));
+        .resourceLingerDurationNs(MILLISECONDS.toNanos(200))
+        .subscriberErrorHandler(RethrowingErrorHandler.INSTANCE)
+        .aeronDirectoryName(driverContext.aeronDirectoryName());
 
     private Aeron publishingClient;
     private Aeron subscribingClient;
@@ -150,8 +161,6 @@ class PubAndSubTest
 
     private void launch(final String channel)
     {
-        driverContext.dirDeleteOnStart(true).threadingMode(ThreadingMode.SHARED);
-
         driver = TestMediaDriver.launch(driverContext, watcher);
         watcher.dataCollector().add(driver.context().aeronDirectory());
 
@@ -652,7 +661,6 @@ class PubAndSubTest
         final int numMessagesInTermBuffer = 64;
         final int messageLength = (termBufferLength / numMessagesInTermBuffer) - HEADER_LENGTH;
         final int numMessagesToSendStageOne = numMessagesInTermBuffer / 2;
-        final int numMessagesToSendStageTwo = numMessagesInTermBuffer;
 
         driverContext.publicationTermBufferLength(termBufferLength);
 
@@ -677,7 +685,7 @@ class PubAndSubTest
 
         Tests.awaitConnected(subscription);
 
-        for (int i = 0; i < numMessagesToSendStageTwo; i++)
+        for (int i = 0; i < numMessagesInTermBuffer; i++)
         {
             while (publication.offer(buffer, 0, messageLength) < 0L)
             {
@@ -1388,6 +1396,181 @@ class PubAndSubTest
         {
             final Image image = subscription.imageBySessionId(publication.sessionId());
             verifyLogBufferType(image.correlationId(), "images", LOG_BUFFER_TYPE_PUBLICATION_IMAGE);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(ThreadingMode.class)
+    @InterruptAfter(5)
+    void shouldSharePublicationImagesBetweenSubscriptions(final ThreadingMode threadingMode)
+    {
+        if (ThreadingMode.INVOKER == threadingMode)
+        {
+            TestMediaDriver.notSupportedOnCMediaDriver("INVOKER mode tests require Java media driver");
+        }
+
+        testImageSharing(threadingMode, "aeron:udp?term-length=64k|endpoint=localhost:20802", 12345);
+    }
+
+    @ParameterizedTest
+    @EnumSource(ThreadingMode.class)
+    @InterruptAfter(5)
+    void shouldShareLogBufferForIpc(final ThreadingMode threadingMode)
+    {
+        if (ThreadingMode.INVOKER == threadingMode)
+        {
+            TestMediaDriver.notSupportedOnCMediaDriver("INVOKER mode tests require Java media driver");
+        }
+
+        testImageSharing(threadingMode, "aeron:ipc?term-length=64k", 777);
+    }
+
+    @SuppressWarnings("MethodLength")
+    private void testImageSharing(final ThreadingMode threadingMode, final String channel, final int streamId)
+    {
+        driverContext
+            .threadingMode(threadingMode)
+            .publicationReservedSessionIdLow(0)
+            .publicationReservedSessionIdHigh(1000);
+        driver = TestMediaDriver.launch(driverContext, watcher);
+        watcher.dataCollector().add(driver.context().aeronDirectory());
+
+        final AgentInvoker driverAgentInvoker = driver.sharedAgentInvoker();
+        final Aeron.Context clientCtx = new Aeron.Context()
+            .aeronDirectoryName(driverContext.aeronDirectoryName())
+            .driverAgentInvoker(driverAgentInvoker)
+            .useConductorAgentInvoker(true)
+            .subscriberErrorHandler(RethrowingErrorHandler.INSTANCE);
+        subscribingClient = Aeron.connect(clientCtx.clone());
+        publishingClient = Aeron.connect(clientCtx.clone());
+
+        final Subscription sub1 = subscribingClient.addSubscription(channel, streamId);
+        final Publication pub1 = publishingClient.addPublication(channel, streamId);
+        final Publication pub2 = subscribingClient.addPublication(channel, streamId);
+        assertNotEquals(pub1.registrationId(), pub2.registrationId());
+        assertEquals(pub1.registrationId(), pub2.originalRegistrationId());
+        assertEquals(pub1.sessionId(), pub2.sessionId());
+
+        while (!pub1.isConnected() || !pub2.isConnected() || !sub1.isConnected())
+        {
+            invokeInvokers();
+        }
+
+        final CountersReader pubCounters = publishingClient.countersReader();
+        final int pub1LimitCounterId = pubCounters
+            .findByTypeIdAndRegistrationId(DRIVER_PUBLISHER_LIMIT_TYPE_ID, pub1.registrationId());
+        assertNotEquals(CountersReader.NULL_COUNTER_ID, pub1LimitCounterId);
+        Tests.await(() -> 0 != pubCounters.getCounterValue(pub1LimitCounterId));
+
+        publishRandomData(pub1);
+
+        final Image sub1Img1 = sub1.imageBySessionId(pub1.sessionId());
+        assertEquals(0, sub1Img1.joinPosition());
+        final FragmentHandler fragmentHandler = (data, offset, length, header) ->
+        {
+            final byte[] bytes = buffer.byteArray();
+            assertEquals(bytes.length, length);
+            for (int i = 0; i < length; i++)
+            {
+                assertEquals(bytes[i], data.getByte(offset + i));
+            }
+        };
+        final ImageFragmentAssembler messageAssembler1 = new ImageFragmentAssembler(fragmentHandler);
+        pollImageFully(sub1Img1, pub1, messageAssembler1);
+        assertEquals(pub1.position(), sub1Img1.position());
+
+        final long positionMsg2 = pub1.position();
+
+        publishRandomData(pub2);
+        pollImageFully(sub1Img1, pub2, messageAssembler1);
+        assertEquals(pub2.position(), sub1Img1.position());
+        assertEquals(pub2.position(), pub1.position());
+
+        Tests.await(() -> pubCounters.getCounterValue(pub1LimitCounterId) > positionMsg2 + pub1.termBufferLength() / 2);
+
+        final Subscription sub2 =
+            subscribingClient.addSubscription(ChannelUri.addSessionId(channel, pub1.sessionId()), streamId);
+        while (!sub2.isConnected())
+        {
+            invokeInvokers();
+        }
+
+        final ImageFragmentAssembler messageAssembler2 = new ImageFragmentAssembler(fragmentHandler);
+        final Image sub2Img1 = sub2.imageBySessionId(pub1.sessionId());
+        assertThat(sub2Img1.joinPosition(), allOf(greaterThan(positionMsg2), lessThanOrEqualTo(pub1.position())));
+        assertNotSame(sub1Img1, sub2Img1);
+        assertEquals(sub1Img1.correlationId(), sub2Img1.correlationId());
+
+        publishRandomData(pub1);
+
+        pollImageFully(sub1Img1, pub1, messageAssembler1);
+        pollImageFully(sub2Img1, pub1, messageAssembler2);
+
+        assertEquals(pub1.position(), sub1Img1.position());
+        assertEquals(pub1.position(), sub2Img1.position());
+
+        final ChannelUri channelUri = ChannelUri.parse(channel);
+        channelUri.put(CommonContext.SESSION_ID_PARAM_NAME, "42");
+        final long initialPosition = 1024L * 1024 * 1024 * 1024 * 17;
+        channelUri.initialPosition(initialPosition, 555, 128 * 1024);
+        final Publication pub3 = publishingClient.addExclusivePublication(channelUri.toString(), streamId);
+        assertEquals(initialPosition, pub3.position());
+
+        Image sub1Img2;
+        while (null == (sub1Img2 = sub1.imageBySessionId(pub3.sessionId())))
+        {
+            invokeInvokers();
+        }
+        assertEquals(pub3.position(), sub1Img2.joinPosition());
+        assertEquals(pub3.position(), sub1Img2.position());
+
+        assertEquals(2, sub1.imageCount());
+        assertNotEquals(sub1Img1.correlationId(), sub1Img2.correlationId());
+
+        publishRandomData(pub3);
+        pollImageFully(sub1Img2, pub3, messageAssembler1);
+
+        verifyLogBufferType(pub1.registrationId(), "publications", LOG_BUFFER_TYPE_CONCURRENT_PUBLICATION);
+        verifyLogBufferType(pub3.registrationId(), "publications", LOG_BUFFER_TYPE_EXCLUSIVE_PUBLICATION);
+        if (ChannelUri.parse(channel).isUdp())
+        {
+            verifyLogBufferType(sub1Img1.correlationId(), "images", LOG_BUFFER_TYPE_PUBLICATION_IMAGE);
+            verifyLogBufferType(sub1Img2.correlationId(), "images", LOG_BUFFER_TYPE_PUBLICATION_IMAGE);
+        }
+    }
+
+    private void invokeInvokers()
+    {
+        invoke(driver.sharedAgentInvoker());
+        invoke(publishingClient.conductorAgentInvoker());
+        invoke(subscribingClient.conductorAgentInvoker());
+    }
+
+    private void invoke(final AgentInvoker invoker)
+    {
+        if (null != invoker)
+        {
+            invoker.invoke();
+        }
+    }
+
+    private void pollImageFully(
+        final Image image, final Publication pub, final ImageFragmentAssembler messageHandler)
+    {
+        while (image.position() < pub.position())
+        {
+            image.poll(messageHandler, 1);
+            invokeInvokers();
+        }
+    }
+
+    private void publishRandomData(final Publication pub)
+    {
+        ThreadLocalRandom.current().nextBytes(buffer.byteArray());
+        invokeInvokers();
+        while (pub.offer(buffer) < 0)
+        {
+            invokeInvokers();
         }
     }
 

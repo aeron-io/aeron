@@ -25,13 +25,15 @@ extern "C"
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
 #define AERON_NULL_VALUE (-1)
 
-#define AERON_CLIENT_ERROR_DRIVER_TIMEOUT (-1000)
-#define AERON_CLIENT_ERROR_CLIENT_TIMEOUT (-1001)
-#define AERON_CLIENT_ERROR_CONDUCTOR_SERVICE_TIMEOUT (-1002)
-#define AERON_CLIENT_ERROR_BUFFER_FULL (-1003)
+#define AERON_CLIENT_ERROR_DRIVER_TIMEOUT (1000)
+#define AERON_CLIENT_ERROR_CLIENT_TIMEOUT (1001)
+#define AERON_CLIENT_ERROR_CONDUCTOR_SERVICE_TIMEOUT (1002)
+#define AERON_CLIENT_ERROR_BUFFER_FULL (1003)
+#define AERON_CLIENT_ERROR_DRIVER_BUFFER_FULL (1004)
 #define AERON_CLIENT_MAX_LOCAL_ADDRESS_STR_LEN (64)
 
 #define AERON_RESPONSE_ADDRESS_TYPE_IPV4 (0x1)
@@ -106,6 +108,28 @@ typedef struct aeron_image_controlled_fragment_assembler_stct aeron_image_contro
 typedef struct aeron_fragment_assembler_stct aeron_fragment_assembler_t;
 typedef struct aeron_controlled_fragment_assembler_stct aeron_controlled_fragment_assembler_t;
 
+/**
+ * Global file writing method, allows for interposition
+ */
+int aeron_fprintf(const char* src_, uint64_t line_, void *stream, const char *format, ...);
+
+typedef int (*aeron_fprintf_handler_t)(const char*, uint64_t, void*, const char *, va_list);
+
+/**
+ * update the fprintf_handler, return previously installed handler
+ */
+aeron_fprintf_handler_t aeron_set_fprintf_handler(aeron_fprintf_handler_t fn);
+
+/**
+ * return the fprintf_handler
+ */
+aeron_fprintf_handler_t aeron_get_fprintf_handler(void);
+
+/**
+ * Macro to invoke the above with correct callsite information
+ */
+
+#define AERON_FPRINTF(...) (aeron_fprintf(__FILE__,__LINE__,__VA_ARGS__))
 
 /**
  * Environment variables and functions used for setting values of an aeron_context_t.
@@ -134,8 +158,14 @@ uint64_t aeron_context_get_resource_linger_duration_ns(aeron_context_t *context)
 
 #define AERON_CLIENT_IDLE_SLEEP_DURATION_ENV_VAR "AERON_CLIENT_IDLE_SLEEP_DURATION"
 
-uint64_t aeron_context_get_idle_sleep_duration_ns(aeron_context_t *context);
 int aeron_context_set_idle_sleep_duration_ns(aeron_context_t *context, uint64_t value);
+uint64_t aeron_context_get_idle_sleep_duration_ns(aeron_context_t *context);
+
+int aeron_context_set_idle_strategy_init_args(aeron_context_t *context, const char *value);
+const char *aeron_context_get_idle_strategy_init_args(aeron_context_t *context);
+
+int aeron_context_set_idle_strategy(aeron_context_t *context, const char *value);
+const char *aeron_context_get_idle_strategy(aeron_context_t *context);
 
 #define AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY_ENV_VAR "AERON_CLIENT_PRE_TOUCH_MAPPED_MEMORY"
 
@@ -196,7 +226,6 @@ void *aeron_context_get_publication_error_frame_handler_clientd(aeron_context_t 
  * Implementations should do the minimum work for passing off state to another thread for later processing.
  *
  * @param clientd to be returned in the call
- * @param async associated with the original add publication call
  * @param channel of the publication
  * @param stream_id within the channel of the publication
  * @param session_id of the publication
@@ -204,7 +233,6 @@ void *aeron_context_get_publication_error_frame_handler_clientd(aeron_context_t 
  */
 typedef void (*aeron_on_new_publication_t)(
     void *clientd,
-    aeron_async_add_publication_t *async,
     const char *channel,
     int32_t stream_id,
     int32_t session_id,
@@ -226,7 +254,6 @@ void *aeron_context_get_on_new_exclusive_publication_clientd(aeron_context_t *co
  * Implementations should do the minimum work for handing off state to another thread for later processing.
  *
  * @param clientd to be returned in the call
- * @param async associated with the original aeron_add_async_subscription call
  * @param channel of the subscription
  * @param stream_id within the channel of the subscription
  * @param session_id of the subscription
@@ -234,7 +261,6 @@ void *aeron_context_get_on_new_exclusive_publication_clientd(aeron_context_t *co
  */
 typedef void (*aeron_on_new_subscription_t)(
     void *clientd,
-    aeron_async_add_subscription_t *async,
     const char *channel,
     int32_t stream_id,
     int64_t correlation_id);
@@ -476,6 +502,38 @@ int aeron_async_add_publication(
 int aeron_async_add_publication_poll(aeron_publication_t **publication, aeron_async_add_publication_t *async);
 
 /**
+ * Cancel an in-progress <code>aeron_async_add_publication</code> operation.
+ *
+ * <p>
+ * Will eventually free the given <code>aeron_async_add_publication_t</code> instance. If a publication gets created by
+ * the time cancellation happens, it will get removed.
+ *
+ * <p>
+ * <em>Note:</em> The above guarantees only apply when a call to this method succeeds, i.e. return value is zero. If a
+ * return value is non-zero the operation won't be canceled and the <code>aeron_async_add_publication_t</code> instance
+ * won't be freed.
+ *
+ * @param client which the publication is being added to.
+ * @param async operation to be canceled. Must not be accessed after this call succeeds.
+ * @return 0 for success or -1 for error.
+ */
+int aeron_async_add_publication_cancel(aeron_t *client, aeron_async_add_publication_t *async);
+
+/**
+ * Asynchronously remove a publication.
+ * If there is an aeron_publication_t object for that publication, it will get closed and freed.
+ *
+ * @param registration_id of the publication to be removed.
+ * @param client which owns the publication.
+ * @param on_complete optional callback to execute once the publication has been removed. This may happen on a separate
+ * thread, so the caller should ensure that clientd has the appropriate lifetime. Use NULL if not needed.
+ * @param on_complete_clientd parameter to pass to the on_complete callback.
+ * @return 0 for success or -1 for error.
+ */
+int aeron_async_remove_publication(
+    int64_t registration_id, aeron_t *client, aeron_notification_t on_complete, void *on_complete_clientd);
+
+/**
  * Asynchronously add an exclusive publication using the given client and return an object to use to determine when the
  * publication is available.
  *
@@ -497,6 +555,38 @@ int aeron_async_add_exclusive_publication(
  */
 int aeron_async_add_exclusive_publication_poll(
     aeron_exclusive_publication_t **publication, aeron_async_add_exclusive_publication_t *async);
+
+/**
+ * Cancel an in-progress <code>aeron_async_add_exclusive_publication</code> operation.
+ *
+ * <p>
+ * Will eventually free the given <code>aeron_async_add_exclusive_publication_t</code> instance. If a publication gets
+ * created by the time cancellation happens, it will get removed.
+ *
+ * <p>
+ * <em>Note:</em> The above guarantees only apply when a call to this method succeeds, i.e. return value is zero. If a
+ * return value is non-zero the operation won't be canceled and the <code>aeron_async_add_exclusive_publication_t</code>
+ * instance won't be freed.
+ *
+ * @param client which the exclusive publication is being added to.
+ * @param async operation to be canceled. Must not be accessed after this call succeeds.
+ * @return 0 for success or -1 for error.
+ */
+int aeron_async_add_exclusive_publication_cancel(aeron_t *client, aeron_async_add_exclusive_publication_t *async);
+
+/**
+ * Asynchronously remove an exclusive publication.
+ * If there is an aeron_exclusive_publication_t object for that publication, it will get closed and freed.
+ *
+ * @param registration_id of the exclusive publication to be removed.
+ * @param client which owns the exclusive publication.
+ * @param on_complete optional callback to execute once the exclusive publication has been removed. This may happen on
+ * a separate thread, so the caller should ensure that clientd has the appropriate lifetime. Use NULL if not needed.
+ * @param on_complete_clientd parameter to pass to the on_complete callback.
+ * @return 0 for success or -1 for error.
+ */
+int aeron_async_remove_exclusive_publication(
+    int64_t registration_id, aeron_t *client, aeron_notification_t on_complete, void *on_complete_clientd);
 
 /**
  * Asynchronously add a subscription using the given client and return an object to use to determine when the
@@ -530,6 +620,38 @@ int aeron_async_add_subscription(
  * @return 0 for not complete (try again), 1 for completed successfully, or -1 for an error.
  */
 int aeron_async_add_subscription_poll(aeron_subscription_t **subscription, aeron_async_add_subscription_t *async);
+
+/**
+ * Cancel an in-progress aeron_async_add_subscription operation.
+ *
+ * <p>
+ * Will eventually free the given <code>aeron_async_add_subscription_t</code> instance. If a subscription gets created
+ * by the time cancellation happens, it will get removed.
+ *
+ * <p>
+ * <em>Note:</em> The above guarantees only apply when a call to this method succeeds, i.e. return value is zero. If a
+ * return value is non-zero the operation won't be canceled and the <code>aeron_async_add_subscription_t</code> instance
+ * won't be freed.
+ *
+ * @param client which the subscription is being added to.
+ * @param async operation to be canceled. Must not be accessed after this call succeeds.
+ * @return 0 for success or -1 for error.
+ */
+int aeron_async_add_subscription_cancel(aeron_t *client, aeron_async_add_subscription_t *async);
+
+/**
+ * Asynchronously remove a subscription.
+ * If there is an aeron_subscription_t object for that subscription, it will get closed and freed.
+ *
+ * @param registration_id of the subscription to be removed.
+ * @param client which owns the subscription.
+ * @param on_complete optional callback to execute once the subscription has been removed. This may happen on a separate
+ * thread, so the caller should ensure that clientd has the appropriate lifetime. Use NULL if not needed.
+ * @param on_complete_clientd parameter to pass to the on_complete callback.
+ * @return 0 for success or -1 for error.
+ */
+int aeron_async_remove_subscription(
+    int64_t registration_id, aeron_t *client, aeron_notification_t on_complete, void *on_complete_clientd);
 
 /**
  * Return a reference to the counters reader of the given client.
@@ -571,6 +693,39 @@ int aeron_async_add_counter(
  * @return 0 for not complete (try again), 1 for completed successfully, or -1 for an error.
  */
 int aeron_async_add_counter_poll(aeron_counter_t **counter, aeron_async_add_counter_t *async);
+
+/**
+ * Cancel an in-progress <code>aeron_async_add_counter</code> operation. Not applicable to
+ * <code>aeron_async_add_static_counter</code>, i.e. attempt to cancel static counter will fail with an error.
+ *
+ * <p>
+ * Will eventually free the given <code>aeron_async_add_counter_t</code> instance. If a counter gets created by the time
+ * cancellation happens, it will get removed.
+ *
+* <p>
+ * <em>Note:</em> The above guarantees only apply when a call to this method succeeds, i.e. return value is zero. If a
+ * return value is non-zero the operation won't be canceled and the <code>aeron_async_add_counter_t</code> instance
+ * won't be freed.
+ *
+ * @param client which the counter is being added to.
+ * @param async operation to be canceled. Must not be accessed after this call succeeds.
+ * @return 0 for success or -1 for error.
+ */
+int aeron_async_add_counter_cancel(aeron_t *client, aeron_async_add_counter_t *async);
+
+/**
+ * Asynchronously remove a counter. Not applicable to static counters.
+ * If there is an aeron_counter_t object for that counter, it will get closed and freed.
+ *
+ * @param registration_id of the counter to be removed.
+ * @param client which owns the counter.
+ * @param on_complete optional callback to execute once the counter has been removed. This may happen on a separate
+ * thread, so the caller should ensure that clientd has the appropriate lifetime. Use NULL if not needed.
+ * @param on_complete_clientd parameter to pass to the on_complete callback.
+ * @return 0 for success or -1 for error.
+ */
+int aeron_async_remove_counter(
+    int64_t registration_id, aeron_t *client, aeron_notification_t on_complete, void *on_complete_clientd);
 
 /**
  * Asynchronously allocates or returns an existing static counter instance using specified <code>type_id</code> and
@@ -1819,6 +1974,19 @@ int aeron_subscription_image_retain(aeron_subscription_t *subscription, aeron_im
 int aeron_subscription_image_release(aeron_subscription_t *subscription, aeron_image_t *image);
 
 /**
+ * Release an image that was retained by aeron_subscription_image_by_session_id or
+ * aeron_subscription_image_at_index.
+ *
+ * Unlike aeron_subscription_image_release, this function unconditionally decrements the reference
+ * count and is safe to call after the image has become unavailable (i.e. after it has been removed
+ * from the subscription's image list).
+ *
+ * @param image to release
+ * @return 0 for success and -1 for error.
+ */
+int aeron_image_release(aeron_image_t *image);
+
+/**
  * Is the subscription closed.
  *
  * @param subscription to be checked.
@@ -2330,12 +2498,22 @@ aeron_controlled_fragment_handler_action_t aeron_controlled_fragment_assembler_h
 int64_t *aeron_counter_addr(aeron_counter_t *counter);
 
 /**
- * Configuration for a counter that does not change during it's lifetime.
+ * Configuration for a counter that does not change during its lifetime.
  */
 typedef struct aeron_counter_constants_stct
 {
     /**
+     * Return the correlation id of the counter creation request that was sent to the media driver. Correlation id is
+     * unique across all requests sent to the media driver.
+     */
+    int64_t correlation_id;
+
+    /**
      * Return the registration id used to register this counter with the media driver.
+     * <p>
+     * For non-static counters this value is the same as <code>correlation_id</code. For static counters this is the
+     * value that was explicitly assigned. by the caller, i.e. passed as <code>registration_id</code> parameter into
+     * <code>aeron_async_add_static_counter</code> call.
      */
     int64_t registration_id;
 

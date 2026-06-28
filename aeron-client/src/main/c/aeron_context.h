@@ -20,7 +20,7 @@
 #include "aeronc.h"
 #include "aeron_agent.h"
 #include "util/aeron_fileutil.h"
-#include "concurrent/aeron_mpsc_concurrent_array_queue.h"
+#include "concurrent/aeron_mpsc_rb.h"
 
 #define AERON_CNC_FILE "cnc.dat"
 
@@ -29,7 +29,7 @@
 typedef struct aeron_context_stct
 {
     char aeron_dir[AERON_MAX_PATH];
-    char client_name[AERON_COUNTER_MAX_CLIENT_NAME_LENGTH];
+    char client_name[AERON_COUNTER_MAX_CLIENT_NAME_LENGTH + 1];
 
     aeron_error_handler_t error_handler;
     void *error_handler_clientd;
@@ -66,6 +66,8 @@ typedef struct aeron_context_stct
 
     aeron_idle_strategy_func_t idle_strategy_func;
     void *idle_strategy_state;
+    char *idle_strategy_init_args;
+    const char *idle_strategy_name;
 
     uint64_t driver_timeout_ms;
     uint64_t keepalive_interval_ns;
@@ -80,7 +82,8 @@ typedef struct aeron_context_stct
 
     aeron_mapped_file_t cnc_map;
 
-    aeron_mpsc_concurrent_array_queue_t command_queue;
+    uint8_t *command_buffer;
+    aeron_mpsc_rb_t command_rb;
 }
 aeron_context_t;
 

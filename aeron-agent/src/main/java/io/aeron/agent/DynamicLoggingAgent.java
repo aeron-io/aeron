@@ -30,8 +30,12 @@ import static java.lang.System.out;
 /**
  * Attach/detach logging agent dynamically to a running process.
  */
-public class DynamicLoggingAgent
+public final class DynamicLoggingAgent
 {
+    private DynamicLoggingAgent()
+    {
+    }
+
     /**
      * Attach logging agent jar to a running process.
      *

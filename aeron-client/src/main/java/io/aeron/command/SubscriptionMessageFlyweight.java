@@ -56,6 +56,15 @@ public class SubscriptionMessageFlyweight extends CorrelatedMessageFlyweight
     private int lengthOfChannel;
 
     /**
+     * An empty flyweight, which should be wrapped over a buffer.
+     *
+     * @see #wrap(MutableDirectBuffer, int)
+     */
+    public SubscriptionMessageFlyweight()
+    {
+    }
+
+    /**
      * Wrap the buffer at a given offset for updates.
      *
      * @param buffer to wrap.

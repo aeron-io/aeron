@@ -22,7 +22,7 @@ endif ()
 if (MSVC AND "${CMAKE_SYSTEM_NAME}" MATCHES "Windows")
     set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
     set(BUILD_SHARED_LIBS ON)
-    set(AERON_LIB_WINSOCK_LIBS wsock32 ws2_32 Iphlpapi)
+    set(AERON_LIB_WINSOCK_LIBS wsock32 ws2_32 Iphlpapi Psapi)
     set(WSAPOLL_PROTOTYPE_EXISTS True)
 endif ()
 
@@ -55,9 +55,13 @@ endif ()
 
 if (NOT BSDSTDLIB_H_EXISTS)
     check_symbol_exists(arc4random "stdlib.h" ARC4RANDOM_PROTOTYPE_EXISTS)
+    check_symbol_exists(posix_memalign "stdlib.h" POSIX_MEMALIGN_PROTOTYPE_EXISTS)
+    check_symbol_exists(reallocf "stdlib.h" REALLOCF_PROTOTYPE_EXISTS)
 else ()
     add_definitions(-DHAVE_BSDSTDLIB_H)
     check_symbol_exists(arc4random "bsd/stdlib.h" ARC4RANDOM_PROTOTYPE_EXISTS)
+    check_symbol_exists(posix_memalign "bsd/stdlib.h" POSIX_MEMALIGN_PROTOTYPE_EXISTS)
+    check_symbol_exists(reallocf "bsd/stdlib.h" REALLOCF_PROTOTYPE_EXISTS)
 endif ()
 
 check_symbol_exists(fallocate "fcntl.h" FALLOCATE_PROTOTYPE_EXISTS)
@@ -87,6 +91,14 @@ if (DEV_URANDOM_EXISTS EQUAL 0)
     add_definitions(-DHAVE_DEV_URANDOM)
 endif ()
 
+if (POSIX_MEMALIGN_PROTOTYPE_EXISTS)
+    add_definitions(-DHAVE_POSIX_MEMALIGN)
+endif ()
+
+if (REALLOCF_PROTOTYPE_EXISTS)
+    add_definitions(-DHAVE_REALLOCF)
+endif ()
+
 set(SOURCE
     collections/aeron_array_to_ptr_hash_map.c
     collections/aeron_bit_set.c
@@ -98,12 +110,10 @@ set(SOURCE
     collections/aeron_map.c
     collections/aeron_str_to_ptr_hash_map.c
     concurrent/aeron_atomic.c
-    concurrent/aeron_blocking_linked_queue.c
     concurrent/aeron_broadcast_receiver.c
     concurrent/aeron_broadcast_transmitter.c
     concurrent/aeron_counters_manager.c
     concurrent/aeron_distinct_error_log.c
-    concurrent/aeron_executor.c
     concurrent/aeron_logbuffer_descriptor.c
     concurrent/aeron_mpsc_concurrent_array_queue.c
     concurrent/aeron_mpsc_rb.c
@@ -169,14 +179,12 @@ set(HEADERS
     concurrent/aeron_atomic64_gcc_x86_64.h
     concurrent/aeron_atomic64_msvc.h
     concurrent/aeron_atomic64_c11.h
-    concurrent/aeron_blocking_linked_queue.h
     concurrent/aeron_broadcast_descriptor.h
     concurrent/aeron_broadcast_receiver.h
     concurrent/aeron_broadcast_transmitter.h
     concurrent/aeron_concurrent_array_queue.h
     concurrent/aeron_counters_manager.h
     concurrent/aeron_distinct_error_log.h
-    concurrent/aeron_executor.h
     concurrent/aeron_logbuffer_descriptor.h
     concurrent/aeron_mpsc_concurrent_array_queue.h
     concurrent/aeron_mpsc_rb.h

@@ -26,11 +26,23 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-import static io.aeron.agent.ClusterEventEncoder.*;
-import static io.aeron.agent.CommonEventEncoder.*;
+import static io.aeron.agent.ClusterEventEncoder.electionStateChangeLength;
+import static io.aeron.agent.ClusterEventEncoder.encodeElectionStateChange;
+import static io.aeron.agent.ClusterEventEncoder.encodeOnNewLeadershipTerm;
+import static io.aeron.agent.ClusterEventEncoder.encodeStateChange;
+import static io.aeron.agent.ClusterEventEncoder.encodeTruncateLogEntry;
+import static io.aeron.agent.ClusterEventEncoder.newLeaderShipTermLength;
+import static io.aeron.agent.ClusterEventEncoder.stateChangeLength;
+import static io.aeron.agent.CommonEventEncoder.LOG_HEADER_LENGTH;
+import static io.aeron.agent.CommonEventEncoder.STATE_SEPARATOR;
+import static io.aeron.agent.CommonEventEncoder.captureLength;
+import static io.aeron.agent.CommonEventEncoder.encodedLength;
+import static io.aeron.agent.CommonEventEncoder.enumName;
 import static io.aeron.agent.EventConfiguration.MAX_EVENT_LENGTH;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
-import static org.agrona.BitUtil.*;
+import static org.agrona.BitUtil.SIZE_OF_BYTE;
+import static org.agrona.BitUtil.SIZE_OF_INT;
+import static org.agrona.BitUtil.SIZE_OF_LONG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
@@ -46,16 +58,22 @@ class ClusterEventEncoderTest
         final ConsensusModule.State to = ConsensusModule.State.CLOSED;
         final int memberId = 42;
         final String payload = from.name() + STATE_SEPARATOR + to.name();
-        final int length = payload.length() + SIZE_OF_INT * 2;
+        final String reason = "test it here";
+        final int length = stateChangeLength(from, to, reason);
         final int captureLength = captureLength(length);
 
-        final int encodedLength = encodeStateChange(buffer, offset, captureLength, length, memberId, from, to);
+        final int encodedLength = encodeStateChange(buffer, offset, captureLength, length, memberId, from, to, reason);
+        assertEquals(encodedLength(captureLength), encodedLength);
 
-        assertEquals(encodedLength(stateChangeLength(from, to)), encodedLength);
+        int index = offset;
         assertEquals(captureLength, buffer.getInt(offset, LITTLE_ENDIAN));
+        index += SIZE_OF_INT;
         assertEquals(length, buffer.getInt(offset + SIZE_OF_INT, LITTLE_ENDIAN));
+        index += SIZE_OF_INT;
         assertNotEquals(0, buffer.getLong(offset + SIZE_OF_INT * 2, LITTLE_ENDIAN));
+        index += SIZE_OF_LONG;
         assertEquals(memberId, buffer.getInt(offset + LOG_HEADER_LENGTH));
+        index += SIZE_OF_INT;
         assertEquals(payload, buffer.getStringAscii(offset + LOG_HEADER_LENGTH + SIZE_OF_INT));
     }
 
@@ -156,8 +174,11 @@ class ClusterEventEncoderTest
         final ChronoUnit from = ChronoUnit.CENTURIES;
         final ChronoUnit to = ChronoUnit.HALF_DAYS;
         final String payload = from.name() + STATE_SEPARATOR + to.name();
+        final String data = "data ...";
 
-        assertEquals(payload.length() + (SIZE_OF_INT * 2), stateChangeLength(from, to));
+        assertEquals(
+            payload.length() + (SIZE_OF_INT * 2) + SIZE_OF_INT + data.length(),
+            stateChangeLength(from, to, data));
     }
 
     @Test

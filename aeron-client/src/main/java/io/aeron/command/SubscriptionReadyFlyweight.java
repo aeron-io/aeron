@@ -48,6 +48,15 @@ public class SubscriptionReadyFlyweight
     private int offset;
 
     /**
+     * An empty flyweight, which should be wrapped over a buffer.
+     *
+     * @see #wrap(MutableDirectBuffer, int)
+     */
+    public SubscriptionReadyFlyweight()
+    {
+    }
+
+    /**
      * Wrap the buffer at a given offset for updates.
      *
      * @param buffer to wrap

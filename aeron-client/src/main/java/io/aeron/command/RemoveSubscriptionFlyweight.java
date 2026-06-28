@@ -15,6 +15,8 @@
  */
 package io.aeron.command;
 
+import org.agrona.MutableDirectBuffer;
+
 /**
  * Control message for removing a Subscription.
  * <pre>
@@ -34,4 +36,12 @@ package io.aeron.command;
  */
 public class RemoveSubscriptionFlyweight extends RemoveMessageFlyweight
 {
+    /**
+     * An empty flyweight, which should be wrapped over a buffer.
+     *
+     * @see #wrap(MutableDirectBuffer, int)
+     */
+    public RemoveSubscriptionFlyweight()
+    {
+    }
 }

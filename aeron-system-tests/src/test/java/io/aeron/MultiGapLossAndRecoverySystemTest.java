@@ -18,13 +18,14 @@ package io.aeron;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
 import io.aeron.driver.status.SystemCounterDescriptor;
+import io.aeron.logbuffer.BufferClaim;
 import io.aeron.logbuffer.LogBufferDescriptor;
+import io.aeron.protocol.DataHeaderFlyweight;
 import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.Tests;
 import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.CloseHelper;
-import org.agrona.collections.MutableInteger;
-import org.agrona.concurrent.UnsafeBuffer;
+import org.agrona.collections.MutableLong;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,23 +34,32 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import java.util.Random;
 
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.allOf;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class MultiGapLossAndRecoverySystemTest
 {
+    private static final int TOTAL_GAPS = 100;
+    private static final int GAP_LENGTH = 128;
+    private static final int GAP_RADIX = 4096;
+    private static final int TERM_ID = 0;
+
     @RegisterExtension
     final SystemTestWatcher watcher = new SystemTestWatcher();
 
     private final MediaDriver.Context context = new MediaDriver.Context()
+        .aeronDirectoryName(CommonContext.generateRandomDirName())
         .publicationTermBufferLength(LogBufferDescriptor.TERM_MIN_LENGTH)
-        .threadingMode(ThreadingMode.SHARED);
+        .threadingMode(ThreadingMode.SHARED)
+        .reliableStream(true);
     private TestMediaDriver driver;
 
     @BeforeEach
     void setUp()
     {
-        TestMediaDriver.enableMultiGapLoss(context, 0, 4096, 100, 100);
+        TestMediaDriver.enableMultiGapLoss(context, TERM_ID, GAP_RADIX, GAP_LENGTH, TOTAL_GAPS);
     }
 
     private void launch(final MediaDriver.Context context)
@@ -70,7 +80,7 @@ public class MultiGapLossAndRecoverySystemTest
         launch(context);
 
         sendAndReceive(
-            "aeron:udp?endpoint=localhost:10000|term-length=1m|init-term-id=0|term-id=0|term-offset=0",
+            "aeron:udp?endpoint=localhost:10000|term-length=1m|init-term-id=0|term-id=0|term-offset=0|nak-delay=50us",
             10 * 1024 * 1024
         );
 
@@ -85,8 +95,14 @@ public class MultiGapLossAndRecoverySystemTest
             // Now, however, the UnicastRetransmitHandler treats new NAKs as a tacit admission that the previous
             // NAK did its job and the prior gap was filled, so we can immediately handle the new NAK.
 
-            final long expectedCountWithBuffer = 300L;
-            assertThat(retransmitCount, lessThanOrEqualTo(expectedCountWithBuffer));
+            final long gapCount = TOTAL_GAPS;
+            final long expectedCountWithBuffer = gapCount * 2;
+            assertThat(
+                retransmitCount,
+                allOf(greaterThanOrEqualTo(gapCount), lessThanOrEqualTo(expectedCountWithBuffer)));
+            assertThat(
+                nakCount,
+                allOf(greaterThanOrEqualTo(gapCount), lessThanOrEqualTo(expectedCountWithBuffer)));
             assertThat(nakCount, lessThanOrEqualTo(expectedCountWithBuffer));
         }
     }
@@ -94,14 +110,8 @@ public class MultiGapLossAndRecoverySystemTest
     private void sendAndReceive(final String channel, final int publicationLength)
     {
         final int streamId = 10000;
-        final byte[] input = new byte[publicationLength];
-        final byte[] output = new byte[publicationLength];
-        final Random r = new Random(1);
-        r.nextBytes(input);
-        final UnsafeBuffer sendBuffer = new UnsafeBuffer();
-
-        int inputPosition = 0;
-        final MutableInteger outputPosition = new MutableInteger(0);
+        final Random r = new Random(4234266349L);
+        final MutableLong receiverValue = new MutableLong();
 
         try (Aeron aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver.aeronDirectoryName()));
             ExclusivePublication pub = aeron.addExclusivePublication(channel, streamId);
@@ -110,32 +120,29 @@ public class MultiGapLossAndRecoverySystemTest
             Tests.awaitConnected(pub);
             Tests.awaitConnected(sub);
 
+            final Image image = sub.imageBySessionId(pub.sessionId());
+
             final FragmentAssembler handler = new FragmentAssembler(
-                (buffer, offset, length, header) ->
-                {
-                    buffer.getBytes(offset, output, outputPosition.get(), length);
-                    outputPosition.addAndGet(length);
-                });
+                (buffer, offset, length, header) -> receiverValue.set(buffer.getLong(offset)));
 
-            while (inputPosition < input.length || outputPosition.get() < output.length)
+            final BufferClaim bufferClaim = new BufferClaim();
+            while (pub.position() < publicationLength)
             {
-                if (inputPosition < input.length)
+                while (pub.tryClaim(pub.maxPayloadLength(), bufferClaim) < 0)
                 {
-                    final int length = Math.min(input.length - inputPosition, pub.maxMessageLength());
-                    sendBuffer.wrap(input, inputPosition, length);
-                    if (0 < pub.offer(sendBuffer))
-                    {
-                        inputPosition += length;
-                    }
+                    Tests.yield();
                 }
 
-                if (outputPosition.get() < output.length)
+                final long value = r.nextLong();
+                bufferClaim.buffer().putLong(DataHeaderFlyweight.HEADER_LENGTH, value);
+                bufferClaim.commit();
+
+                while (0 == image.poll(handler, 1))
                 {
-                    sub.poll(handler, 10);
+                    Tests.yield();
                 }
+                assertEquals(value, receiverValue.get());
             }
         }
-
-        assertArrayEquals(input, output);
     }
 }

@@ -58,7 +58,19 @@ if (MSVC AND "${CMAKE_SYSTEM_NAME}" MATCHES "Windows")
     set(BUILD_SHARED_LIBS ON)
 endif ()
 
-find_package(Java REQUIRED)
+find_package(Java 17 REQUIRED)
+
+if (NOT DEFINED JAVA_HOME)
+    set(CACHE{JAVA_HOME} TYPE PATH FORCE VALUE $ENV{JAVA_HOME})
+endif ()
+
+if (NOT DEFINED BUILD_JAVA_HOME)
+    set(CACHE{BUILD_JAVA_HOME} TYPE PATH FORCE VALUE $ENV{BUILD_JAVA_HOME})
+endif ()
+
+if (NOT DEFINED BUILD_JAVA_VERSION)
+    set(CACHE{BUILD_JAVA_VERSION} TYPE STRING FORCE VALUE $ENV{BUILD_JAVA_VERSION})
+endif ()
 
 set(CODEC_SCHEMA ${ARCHIVE_CODEC_SCHEMA_DIR}/aeron-archive-codecs.xml)
 set(GENERATED_C_CODECS
@@ -120,14 +132,26 @@ set(GENERATED_C_CODECS
     ${ARCHIVE_CODEC_TARGET_DIR}/aeron_c_archive_client/varDataEncoding.h)
 
 add_custom_command(OUTPUT ${GENERATED_C_CODECS}
-    COMMAND ${CMAKE_COMMAND} -E env JAVA_HOME=$ENV{JAVA_HOME} BUILD_JAVA_HOME=$ENV{BUILD_JAVA_HOME} BUILD_JAVA_VERSION=$ENV{BUILD_JAVA_VERSION} ${GRADLE_WRAPPER} -Dcodec.target.dir=${ARCHIVE_C_CODEC_TARGET_DIR} :aeron-archive:generateCCodecs --no-daemon --console=plain -q
+    COMMAND ${CMAKE_COMMAND}
+            -E env
+            JAVA_HOME=${JAVA_HOME}
+            BUILD_JAVA_HOME=${BUILD_JAVA_HOME}
+            BUILD_JAVA_VERSION=${BUILD_JAVA_VERSION}
+            ${GRADLE_WRAPPER}
+            -Dcodec.target.dir=${ARCHIVE_C_CODEC_TARGET_DIR}
+            :aeron-archive:generateCCodecs
+            --no-daemon
+            --console=plain
+            --quiet
     DEPENDS ${CODEC_SCHEMA} aeron-all-jar
     WORKING_DIRECTORY ${ARCHIVE_CODEC_WORKING_DIR}
-    COMMENT "Generating C Archive codecs")
+    COMMENT "Generating C Archive codecs"
+    VERBATIM)
 
 add_custom_target(c_codecs DEPENDS ${GENERATED_C_CODECS})
 
 SET(SOURCE
+    client/aeron_archive_async_client.c
     client/aeron_archive_async_connect.c
     client/aeron_archive_client.c
     client/aeron_archive_client_version.c
@@ -135,6 +159,7 @@ SET(SOURCE
     client/aeron_archive_context.c
     client/aeron_archive_control_response_poller.c
     client/aeron_archive_credentials_supplier.c
+    client/aeron_archive_persistent_subscription.c
     client/aeron_archive_proxy.c
     client/aeron_archive_recording_descriptor_poller.c
     client/aeron_archive_recording_pos.c
@@ -147,6 +172,7 @@ SET(SOURCE
 
 SET(HEADERS
     client/aeron_archive.h
+    client/aeron_archive_async_client.h
     client/aeron_archive_async_connect.h
     client/aeron_archive_client.h
     client/aeron_archive_client_version.h
@@ -154,6 +180,7 @@ SET(HEADERS
     client/aeron_archive_context.h
     client/aeron_archive_control_response_poller.h
     client/aeron_archive_credentials_supplier.h
+    client/aeron_archive_persistent_subscription.h
     client/aeron_archive_proxy.h
     client/aeron_archive_recording_descriptor_poller.h
     client/aeron_archive_recording_signal.h
@@ -203,5 +230,6 @@ if (AERON_INSTALL_TARGETS)
         RUNTIME DESTINATION lib
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib)
-    install(DIRECTORY ./ DESTINATION include/aeron FILES_MATCHING PATTERN "aeron_archive.h")
+    install(DIRECTORY ./ DESTINATION include/aeron FILES_MATCHING
+            PATTERN "aeron_archive.h")
 endif ()

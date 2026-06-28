@@ -25,10 +25,17 @@ import java.util.Collection;
 import java.util.List;
 
 /**
+ * Utility class for wring configuration elements.
  */
-public class ElementIO
+public final class ElementIO
 {
+    private ElementIO()
+    {
+    }
+
     /**
+     * Read a list of objects from the named file.
+     *
      * @param elementsFilename the name of the filename that contains a list of objects
      * @return a list of elements
      * @param <T> the type of elements - ConfigInfo or CounterInfo
@@ -44,6 +51,8 @@ public class ElementIO
     }
 
     /**
+     * Write a list of objects to the named file.
+     *
      * @param resourceFile the destination file to write to
      * @param elements a Collection of elements
      * @throws Exception on IO failure.

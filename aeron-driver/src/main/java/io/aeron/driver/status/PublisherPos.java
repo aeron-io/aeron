@@ -29,7 +29,7 @@ import static io.aeron.Aeron.NULL_VALUE;
  * <b>Note:</b> This is a not a real-time value like the other and is updated each conductor duty cycle
  * for monitoring purposes.
  */
-public class PublisherPos
+public final class PublisherPos
 {
     /**
      * Type id of a publisher limit counter.
@@ -38,6 +38,10 @@ public class PublisherPos
 
     private static final String NAME_CONCURRENT = "pub-pos (concurrent)";
     private static final String NAME_EXCLUSIVE = "pub-pos (exclusive)";
+
+    private PublisherPos()
+    {
+    }
 
     /**
      * Allocate a new publication position counter for a stream.

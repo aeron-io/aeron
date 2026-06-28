@@ -41,6 +41,8 @@ namespace aeron
 using namespace aeron::concurrent::logbuffer;
 using AsyncDestination = aeron_async_destination_t;
 
+class Aeron;
+
 class AsyncAddSubscription
 {
     friend class Aeron;
@@ -70,13 +72,13 @@ public:
  * Subscribers are created via an {@link Aeron} object, and received messages are delivered
  * to the {@link fragment_handler_t}.
  * <p>
- * By default fragmented messages are not reassembled before delivery. If an application must
+ * By default, fragmented messages are not reassembled before delivery. If an application must
  * receive whole messages, whether or not they were fragmented, then the Subscriber
  * should be created with a {@link FragmentAssembler} or a custom implementation.
  * <p>
- * It is an applications responsibility to {@link #poll} the Subscriber for new messages.
+ * It is an applications responsibility to {@link Subscription#poll} the Subscriber for new messages.
  * <p>
- * Subscriptions are not threadsafe and should not be shared between subscribers.
+ * <b>Note:</b> Subscriptions are not threadsafe and should not be shared between subscribers.
  *
  * @see FragmentAssembler
  */
@@ -84,7 +86,12 @@ class Subscription
 {
 public:
     /// @cond HIDDEN_SYMBOLS
-    Subscription(aeron_t *aeron, aeron_subscription_t *subscription, AsyncAddSubscription *addSubscription) :
+    Subscription(
+        const std::shared_ptr<Aeron> &aeronRef,
+        aeron_t *aeron,
+        aeron_subscription_t *subscription,
+        AsyncAddSubscription *addSubscription) :
+        m_aeronRef(aeronRef),
         m_aeron(aeron),
         m_subscription(subscription),
         m_addSubscription(addSubscription)
@@ -99,7 +106,16 @@ public:
 
     ~Subscription()
     {
-        aeron_subscription_close(m_subscription, AsyncAddSubscription::remove, m_addSubscription);
+        if (aeron_subscription_is_closed(m_subscription)) // driver or client timeout
+        {
+            delete m_addSubscription;
+        }
+        else
+        {
+            aeron_subscription_close(m_subscription, AsyncAddSubscription::remove, m_addSubscription);
+        }
+
+        m_pendingDestinations.clear();
     }
 
     /**
@@ -297,7 +313,6 @@ public:
         AsyncDestination *async = addDestinationAsync(endpointChannel);
         std::int64_t correlationId = aeron_async_destination_get_registration_id(async);
 
-        std::lock_guard<std::recursive_mutex> lock(m_adminLock);
         m_pendingDestinations[correlationId] = async;
 
         return correlationId;
@@ -325,7 +340,6 @@ public:
         AsyncDestination *async = removeDestinationAsync(endpointChannel);
         std::int64_t correlationId = aeron_async_destination_get_registration_id(async);
 
-        std::lock_guard<std::recursive_mutex> lock(m_adminLock);
         m_pendingDestinations[correlationId] = async;
 
         return correlationId;
@@ -363,15 +377,27 @@ public:
      */
     bool findDestinationResponse(std::int64_t correlationId)
     {
-        std::lock_guard<std::recursive_mutex> lock(m_adminLock);
-
         auto search = m_pendingDestinations.find(correlationId);
         if (search == m_pendingDestinations.end())
         {
             throw IllegalArgumentException("Unknown correlation id", SOURCEINFO);
         }
 
-        return findDestinationResponse(search->second);
+        auto async = search->second;
+        try
+        {
+            bool result = findDestinationResponse(async);
+            if (result)
+            {
+                m_pendingDestinations.erase(correlationId);
+            }
+            return result;
+        }
+        catch (...)
+        {
+            m_pendingDestinations.erase(correlationId);
+            throw;
+        }
     }
 
     /**
@@ -574,13 +600,13 @@ public:
         return m_subscription;
     }
 private:
+    std::shared_ptr<Aeron> m_aeronRef; // ensure Aeron instance is being deleted after its children
     aeron_t *m_aeron = nullptr;
     aeron_subscription_t *m_subscription = nullptr;
     AsyncAddSubscription *m_addSubscription = nullptr;
     aeron_subscription_constants_t m_constants = {};
     std::string m_channel;
     std::unordered_map<std::int64_t, AsyncDestination *> m_pendingDestinations = {};
-    std::recursive_mutex m_adminLock = {};
 
     static void copyToVector(aeron_image_t *image, void *clientd)
     {
@@ -595,10 +621,10 @@ private:
         try {
             result = std::make_shared<Image>(m_subscription, image);
         }
-        catch (const std::exception& e)
+        catch (...)
         {
             aeron_subscription_image_release(m_subscription, image);
-            throw e;
+            throw;
         }
         aeron_subscription_image_release(m_subscription, image);
         return result;

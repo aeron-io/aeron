@@ -18,6 +18,7 @@ package io.aeron.config;
 import java.io.Serializable;
 
 /**
+ * Wrapper class to contain the expected C config.
  */
 public class ExpectedConfig implements Serializable
 {

@@ -25,6 +25,13 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 public class MillisecondClusterClock implements ClusterClock
 {
     /**
+     * Default constructor.
+     */
+    public MillisecondClusterClock()
+    {
+    }
+
+    /**
      * {@inheritDoc}
      */
     public long time()

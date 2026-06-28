@@ -649,19 +649,124 @@ final class ArchiveEventDissector
         int absoluteOffset = offset;
         absoluteOffset += dissectLogHeader(CONTEXT, CATALOG_RESIZE, buffer, absoluteOffset, builder);
 
-        final int maxEntries = buffer.getInt(absoluteOffset, LITTLE_ENDIAN);
-        absoluteOffset += SIZE_OF_INT;
         final long catalogLength = buffer.getLong(absoluteOffset, LITTLE_ENDIAN);
         absoluteOffset += SIZE_OF_LONG;
 
-        final int newMaxEntries = buffer.getInt(absoluteOffset, LITTLE_ENDIAN);
-        absoluteOffset += SIZE_OF_INT;
         final long newCatalogLength = buffer.getLong(absoluteOffset, LITTLE_ENDIAN);
 
-        builder.append(": ").append(maxEntries);
-        builder.append(" entries (").append(catalogLength).append(" bytes)");
-        builder.append(" => ").append(newMaxEntries);
-        builder.append(" entries (").append(newCatalogLength).append(" bytes)");
+        builder.append(": ").append(catalogLength).append(" bytes => ").append(newCatalogLength).append(" bytes");
+    }
+
+    static void dissectPersistentSubscriptionStateChange(
+        final ArchiveEventCode eventCode,
+        final MutableDirectBuffer buffer,
+        final int offset,
+        final StringBuilder builder)
+    {
+        int absoluteOffset = offset;
+        absoluteOffset += dissectLogHeader(CONTEXT, eventCode, buffer, absoluteOffset, builder);
+
+        final long recordingId = buffer.getLong(absoluteOffset);
+        absoluteOffset += SIZE_OF_LONG;
+        builder
+            .append(": recordingId=")
+            .append(recordingId)
+            .append(" replayChannel=");
+
+        absoluteOffset += buffer.getStringAscii(absoluteOffset, builder, LITTLE_ENDIAN) + SIZE_OF_INT;
+
+        final int replayStreamId = buffer.getInt(absoluteOffset);
+        absoluteOffset += SIZE_OF_INT;
+        builder
+            .append(" replayStreamId=")
+            .append(replayStreamId)
+            .append(" liveChannel=");
+        absoluteOffset += buffer.getStringAscii(absoluteOffset, builder, LITTLE_ENDIAN) + SIZE_OF_INT;
+        final int liveStreamId = buffer.getInt(absoluteOffset);
+        absoluteOffset += SIZE_OF_INT;
+
+        builder
+            .append(" liveStreamId=")
+            .append(liveStreamId)
+            .append(" ");
+
+        buffer.getStringAscii(absoluteOffset, builder, LITTLE_ENDIAN);
+    }
+
+    static void dissectPersistentSubscriptionJoinedLive(
+        final ArchiveEventCode eventCode,
+        final MutableDirectBuffer buffer,
+        final int offset,
+        final StringBuilder builder)
+    {
+        int absoluteOffset = offset;
+        absoluteOffset += dissectLogHeader(CONTEXT, eventCode, buffer, absoluteOffset, builder);
+
+        final long recordingId = buffer.getLong(absoluteOffset);
+        absoluteOffset += SIZE_OF_LONG;
+        builder
+            .append(": recordingId=")
+            .append(recordingId)
+            .append(" replayChannel=");
+
+        absoluteOffset += buffer.getStringAscii(absoluteOffset, builder, LITTLE_ENDIAN) + SIZE_OF_INT;
+
+        final int replayStreamId = buffer.getInt(absoluteOffset);
+        absoluteOffset += SIZE_OF_INT;
+        builder
+            .append(" replayStreamId=")
+            .append(replayStreamId)
+            .append(" liveChannel=");
+        absoluteOffset += buffer.getStringAscii(absoluteOffset, builder, LITTLE_ENDIAN) + SIZE_OF_INT;
+        final int liveStreamId = buffer.getInt(absoluteOffset);
+        absoluteOffset += SIZE_OF_INT;
+        final long liveSessionId = buffer.getInt(absoluteOffset);
+        absoluteOffset += SIZE_OF_INT;
+        final long joinPosition = buffer.getLong(absoluteOffset);
+
+        builder
+            .append(" liveStreamId=")
+            .append(liveStreamId)
+            .append(" liveSessionId=")
+            .append(liveSessionId)
+            .append(" joinPosition=")
+            .append(joinPosition);
+    }
+
+    static void dissectPersistentSubscriptionLeftLive(
+        final ArchiveEventCode eventCode,
+        final MutableDirectBuffer buffer,
+        final int offset,
+        final StringBuilder builder)
+    {
+        int absoluteOffset = offset;
+        absoluteOffset += dissectLogHeader(CONTEXT, eventCode, buffer, absoluteOffset, builder);
+
+        final long recordingId = buffer.getLong(absoluteOffset);
+        absoluteOffset += SIZE_OF_LONG;
+        builder
+            .append(": recordingId=")
+            .append(recordingId)
+            .append(" replayChannel=");
+
+        absoluteOffset += buffer.getStringAscii(absoluteOffset, builder, LITTLE_ENDIAN) + SIZE_OF_INT;
+
+        final int replayStreamId = buffer.getInt(absoluteOffset);
+        absoluteOffset += SIZE_OF_INT;
+        builder
+            .append(" replayStreamId=")
+            .append(replayStreamId)
+            .append(" liveChannel=");
+        absoluteOffset += buffer.getStringAscii(absoluteOffset, builder, LITTLE_ENDIAN) + SIZE_OF_INT;
+        final int liveStreamId = buffer.getInt(absoluteOffset);
+        absoluteOffset += SIZE_OF_INT;
+        final long position = buffer.getLong(absoluteOffset);
+
+        builder
+            .append(" liveStreamId=")
+            .append(liveStreamId)
+            .append(" livePosition=")
+            .append(position);
     }
 
     private static void appendConnect(final StringBuilder builder)
@@ -684,6 +789,10 @@ final class ArchiveEventDissector
         AUTH_CONNECT_REQUEST_DECODER.getResponseChannel(builder);
 
         builder.append(" encodedCredentialsLength=").append(AUTH_CONNECT_REQUEST_DECODER.encodedCredentialsLength());
+
+        AUTH_CONNECT_REQUEST_DECODER.skipEncodedCredentials();
+
+        builder.append(" clientInfo=").append(AUTH_CONNECT_REQUEST_DECODER.clientInfo());
     }
 
     private static void appendCloseSession(final StringBuilder builder)

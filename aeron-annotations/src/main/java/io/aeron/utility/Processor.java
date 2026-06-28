@@ -35,6 +35,13 @@ public abstract class Processor extends AbstractProcessor
     private Diagnostic.Kind errorKind;
 
     /**
+     * Default constructor.
+     */
+    public Processor()
+    {
+    }
+
+    /**
      * {@inheritDoc}
      */
     public SourceVersion getSupportedSourceVersion()

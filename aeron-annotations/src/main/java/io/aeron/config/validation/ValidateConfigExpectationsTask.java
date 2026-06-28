@@ -20,12 +20,17 @@ import io.aeron.utility.ElementIO;
 /**
  * A gradle task for validating the C code looks as expected, based on the contents of the @Config java annotations.
  */
-public class ValidateConfigExpectationsTask
+public final class ValidateConfigExpectationsTask
 {
+    private ValidateConfigExpectationsTask()
+    {
+    }
+
     /**
-     * @param args
-     * Arg 0 should be the location of a config-info.xml file with a list of ConfigInfo objects
-     * Arg 1 should be the location of the C source code
+     * Launch task to validate config expectations.
+     *
+     * @param args Arg 0 should be the location of a config-info.xml file with a list of ConfigInfo objects. Arg 1
+     *             should be the location of the C source code
      * @throws Exception on IO failure.
      */
     public static void main(final String[] args) throws Exception

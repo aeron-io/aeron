@@ -40,6 +40,13 @@ public final class BufferClaim
     private final UnsafeBuffer buffer = new UnsafeBuffer(0, 0);
 
     /**
+     * An empty buffer claim, ready to be used with {@link io.aeron.Publication#tryClaim(int, BufferClaim)}.
+     */
+    public BufferClaim()
+    {
+    }
+
+    /**
      * Wrap a region of an underlying log buffer so can can represent a claimed space for use by a publisher.
      *
      * @param buffer to be wrapped.

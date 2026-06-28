@@ -233,8 +233,8 @@ public class RejectImageTest
             {
                 Tests.yield();
             }
-            assertTrue(pub.isConnected());
-            assertTrue(sub.isConnected());
+            Tests.awaitConnected(pub);
+            Tests.awaitConnected(sub);
             assertEquals(1, sub.imageCount());
             assertNotSame(image, sub.imageAtIndex(0));
             assertEquals(IPC_CHANNEL.equals(channel), image.correlationId() == sub.imageAtIndex(0).correlationId());
@@ -316,9 +316,9 @@ public class RejectImageTest
                 {
                     Tests.yield();
                 }
-                assertTrue(pub.isConnected());
-                assertTrue(pub2.isConnected());
-                assertTrue(sub.isConnected());
+                Tests.awaitConnected(pub);
+                Tests.awaitConnected(pub2);
+                Tests.awaitConnected(sub);
                 assertEquals(1, sub.imageCount());
                 assertNotSame(image, sub.imageAtIndex(0));
                 assertEquals(IPC_CHANNEL.equals(channel), image.correlationId() == sub.imageAtIndex(0).correlationId());

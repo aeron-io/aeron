@@ -19,6 +19,7 @@ import io.aeron.CommonContext;
 import io.aeron.FragmentAssembler;
 import io.aeron.Image;
 import io.aeron.Subscription;
+import io.aeron.archive.client.AeronArchive;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.protocol.HeaderFlyweight;
 import org.agrona.DirectBuffer;
@@ -27,6 +28,8 @@ import org.agrona.collections.MutableInteger;
 import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.status.CountersReader;
 
+import io.aeron.samples.archive.RecordingDescriptor;
+import io.aeron.samples.archive.RecordingDescriptorCollector;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -252,5 +255,36 @@ public class SamplesUtil
             createCountersMetaDataBuffer(cncByteBuffer, cncMetaData),
             createCountersValuesBuffer(cncByteBuffer, cncMetaData),
             US_ASCII);
+    }
+
+    /**
+     * Find the latest {@link RecordingDescriptor} for a stream.
+     *
+     * @param aeronArchive an {@link AeronArchive} instance.
+     * @param channelFragment a fragment of the recorded stream's channel
+     * @param streamId the stream ID of the recorded stream.
+     * @return the {@link CountersReader} over the CnC file.
+     */
+    public static RecordingDescriptor findLatestRecording(
+         final AeronArchive aeronArchive,
+         final String channelFragment,
+         final int streamId
+    )
+    {
+        final RecordingDescriptorCollector collector = new RecordingDescriptorCollector(1);
+
+        if (0 == aeronArchive.listRecordingsForUri(
+            0,
+            Integer.MAX_VALUE,
+            channelFragment,
+            streamId,
+            collector.reset())
+        )
+        {
+            return null;
+        }
+
+        final int lastIndex = collector.descriptors().size() - 1;
+        return collector.descriptors().get(lastIndex);
     }
 }

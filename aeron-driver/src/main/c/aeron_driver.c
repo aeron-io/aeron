@@ -44,10 +44,12 @@
 #include "aeron_driver.h"
 #include "aeron_socket.h"
 #include "util/aeron_dlopen.h"
+#include "aeron_cpuset.h"
+#include "aeron_topology.h"
 
 void aeron_log_func_stderr(const char *str)
 {
-    fprintf(stderr, "%s\n", str);
+    AERON_FPRINTF(stderr, "%s\n", str);
 }
 
 void aeron_log_func_none(const char *str)
@@ -68,7 +70,7 @@ static void error_log_reader_save_to_file(
 
     aeron_format_date(first_datestamp, sizeof(first_datestamp) - 1, first_observation_timestamp);
     aeron_format_date(last_datestamp, sizeof(last_datestamp) - 1, last_observation_timestamp);
-    fprintf(
+    AERON_FPRINTF(
         saved_errors_file,
         "***\n%d observations from %s to %s for:\n %.*s\n",
         observation_count,
@@ -114,8 +116,8 @@ int aeron_report_existing_errors(aeron_mapped_file_t *cnc_map, const char *aeron
                 saved_errors_file,
                 0);
 
-            fprintf(saved_errors_file, "\n%" PRIu64 " distinct errors observed.\n", observations);
-            fprintf(stderr, "WARNING: Existing errors saved to: %s\n", buffer);
+            AERON_FPRINTF(saved_errors_file, "\n%" PRIu64 " distinct errors observed.\n", observations);
+            AERON_FPRINTF(stderr, "WARNING: Existing errors saved to: %s\n", buffer);
 
             fclose(saved_errors_file);
         }
@@ -147,10 +149,10 @@ int aeron_driver_ensure_dir_is_recreated(aeron_driver_context_t *context)
 
         if (context->dirs_delete_on_start)
         {
-            if (0 != aeron_delete_directory(dirname))
+            int rc = aeron_delete_directory(dirname);
+            if (0 != rc)
             {
-                snprintf(buffer, sizeof(buffer), "INFO: failed to delete: %s", dirname);
-                log_func(buffer);
+                AERON_SET_ERR(rc, "Failed to delete directory: %s", dirname);
                 return -1;
             }
         }
@@ -160,8 +162,7 @@ int aeron_driver_ensure_dir_is_recreated(aeron_driver_context_t *context)
 
             if (aeron_cnc_resolve_filename(dirname, filename, sizeof(filename)) < 0)
             {
-                snprintf(buffer, sizeof(buffer), "INFO: failed to resole CnC file: path=%s", dirname);
-                log_func(buffer);
+                AERON_APPEND_ERR("Failed to resole CnC file: path=%s", dirname);
                 return -1;
             }
 
@@ -173,25 +174,30 @@ int aeron_driver_ensure_dir_is_recreated(aeron_driver_context_t *context)
                 }
                 else
                 {
-                    snprintf(buffer, sizeof(buffer), "INFO: failed to mmap CnC file: %s", filename);
-                    log_func(buffer);
+                    AERON_APPEND_ERR("Failed to mmap CnC file: %s", filename);
                     return -1;
                 }
             }
             else
             {
-                snprintf(buffer, sizeof(buffer), "INFO: Aeron CnC file %s exists", filename);
-                log_func(buffer);
-
                 if (aeron_is_driver_active_with_cnc(
                     &cnc_mmap, (int64_t)context->driver_timeout_ms, aeron_epoch_clock(), log_func))
                 {
+                    if (0 == aeron_errcode())
+                    {
+                        AERON_SET_ERR(EBUSY, "Active media driver detected: %s", filename);
+                    }
+                    else
+                    {
+                        AERON_APPEND_ERR("CnC check error: %s", filename);
+                    }
                     aeron_unmap(&cnc_mmap);
                     return -1;
                 }
 
                 if (aeron_report_existing_errors(&cnc_mmap, dirname) < 0)
                 {
+                    AERON_APPEND_ERR("%s", "");
                     aeron_unmap(&cnc_mmap);
                     return -1;
                 }
@@ -199,10 +205,11 @@ int aeron_driver_ensure_dir_is_recreated(aeron_driver_context_t *context)
                 aeron_unmap(&cnc_mmap);
             }
 
-            if (aeron_delete_directory(context->aeron_dir) != 0)
+            int rc = aeron_delete_directory(dirname);
+            if (0 != rc)
             {
-                snprintf(buffer, sizeof(buffer) - 1, "INFO: failed to delete %s", context->aeron_dir);
-                log_func(buffer);
+                AERON_SET_ERR(rc, "Failed to delete directory: %s", dirname);
+                return -1;
             }
         }
     }
@@ -233,7 +240,7 @@ int aeron_driver_ensure_dir_is_recreated(aeron_driver_context_t *context)
 
     if (aeron_mkdir_recursive(filename, S_IRWXU | S_IRWXG | S_IRWXO) != 0)
     {
-        AERON_SET_ERR(errno, "Failed to mkdir images directory: %s", filename);
+        AERON_APPEND_ERR("Failed to mkdir images directory: %s", filename);
         return -1;
     }
 
@@ -286,7 +293,7 @@ int aeron_driver_validate_value_range(uint64_t value, uint64_t min_value, uint64
 
 int aeron_driver_create_cnc_file(aeron_driver_t *driver)
 {
-    char buffer[AERON_MAX_PATH];
+    char path[AERON_MAX_PATH];
     size_t cnc_file_length = aeron_cnc_length(driver->context);
     if (aeron_driver_validate_value_range(cnc_file_length, 0, INT32_MAX, "CnC file length") < 0)
     {
@@ -297,15 +304,15 @@ int aeron_driver_create_cnc_file(aeron_driver_t *driver)
     driver->context->cnc_map.addr = NULL;
     driver->context->cnc_map.length = cnc_file_length;
 
-    if(aeron_file_resolve(driver->context->aeron_dir, AERON_CNC_FILE, buffer, sizeof(buffer)) < 0)
+    if(aeron_file_resolve(driver->context->aeron_dir, AERON_CNC_FILE, path, sizeof(path)) < 0)
     {
         AERON_APPEND_ERR("Failed to resolve CnC file path: dir=%s, filename=%s", driver->context->aeron_dir, AERON_CNC_FILE);
         return -1;
     }
 
-    if (aeron_map_new_file(&driver->context->cnc_map, buffer, true) < 0)
+    if (aeron_map_new_file(&driver->context->cnc_map, path, true) < 0)
     {
-        AERON_APPEND_ERR("CnC file: %s", buffer);
+        AERON_APPEND_ERR("CnC file: %s", path);
         return -1;
     }
 
@@ -388,7 +395,7 @@ int aeron_driver_validate_sufficient_socket_buffer_lengths(aeron_driver_t *drive
 
         if (driver->context->socket_sndbuf > socket_sndbuf)
         {
-            fprintf(
+            AERON_FPRINTF(
                 stderr,
                 "WARNING: Could not get desired SO_SNDBUF, adjust OS buffer to match %s: attempted=%" PRIu64 ", actual=%" PRIu64 "\n",
                 AERON_SOCKET_SO_SNDBUF_ENV_VAR,
@@ -418,7 +425,7 @@ int aeron_driver_validate_sufficient_socket_buffer_lengths(aeron_driver_t *drive
 
         if (driver->context->socket_rcvbuf > socket_rcvbuf)
         {
-            fprintf(
+            AERON_FPRINTF(
                 stderr,
                 "WARNING: Could not get desired SO_RCVBUF, adjust OS buffer to match %s: attempted=%" PRIu64 ", actual=%" PRIu64 "\n",
                 AERON_SOCKET_SO_RCVBUF_ENV_VAR,
@@ -499,159 +506,166 @@ void aeron_driver_context_print_configuration(aeron_driver_context_t *context)
     FILE *fpout = stdout;
     char buffer[1024];
 
-    fprintf(fpout, "aeron_driver_context_t {");
-    fprintf(fpout, "\n    cnc_version=%d.%d.%d",
+    AERON_FPRINTF(fpout, "aeron_driver_context_t {");
+    AERON_FPRINTF(fpout, "\n    cnc_version=%d.%d.%d",
         (int)aeron_semantic_version_major(AERON_CNC_VERSION),
         (int)aeron_semantic_version_minor(AERON_CNC_VERSION),
         (int)aeron_semantic_version_patch(AERON_CNC_VERSION));
-    fprintf(fpout, "\n    aeron_dir=%s", context->aeron_dir);
-    fprintf(fpout, "\n    driver_timeout_ms=%" PRIu64, context->driver_timeout_ms);
-    fprintf(fpout, "\n    print_configuration_on_start=%d", context->print_configuration_on_start);
-    fprintf(fpout, "\n    dirs_delete_on_start=%d", context->dirs_delete_on_start);
-    fprintf(fpout, "\n    dirs_delete_on_shutdown=%d", context->dirs_delete_on_shutdown);
-    fprintf(fpout, "\n    warn_if_dirs_exists=%d", context->warn_if_dirs_exist);
-    fprintf(fpout, "\n    term_buffer_sparse_file=%d", context->term_buffer_sparse_file);
-    fprintf(fpout, "\n    perform_storage_checks=%d", context->perform_storage_checks);
-    fprintf(fpout, "\n    spies_simulate_connection=%d", context->spies_simulate_connection);
-    fprintf(fpout, "\n    reliable_stream=%d", context->reliable_stream);
-    fprintf(fpout, "\n    tether_subscriptions=%d", context->tether_subscriptions);
-    fprintf(fpout, "\n    rejoin_stream=%d", context->rejoin_stream);
-    fprintf(fpout, "\n    receiver_group_consideration=%d", context->receiver_group_consideration);
-    fprintf(fpout, "\n    to_driver_buffer_length=%" PRIu64, (uint64_t)context->to_driver_buffer_length);
-    fprintf(fpout, "\n    to_clients_buffer_length=%" PRIu64, (uint64_t)context->to_clients_buffer_length);
-    fprintf(fpout, "\n    counters_values_buffer_length=%" PRIu64, (uint64_t)context->counters_values_buffer_length);
-    fprintf(fpout, "\n    error_buffer_length=%" PRIu64, (uint64_t)context->error_buffer_length);
-    fprintf(fpout, "\n    timer_interval_ns=%" PRIu64, context->timer_interval_ns);
-    fprintf(fpout, "\n    client_liveness_timeout_ns=%" PRIu64, context->client_liveness_timeout_ns);
-    fprintf(fpout, "\n    image_liveness_timeout_ns=%" PRIu64, context->image_liveness_timeout_ns);
-    fprintf(fpout, "\n    publication_unblock_timeout_ns=%" PRIu64, context->publication_unblock_timeout_ns);
-    fprintf(fpout, "\n    publication_connection_timeout_ns=%" PRIu64, context->publication_connection_timeout_ns);
-    fprintf(fpout, "\n    publication_linger_timeout_ns=%" PRIu64, context->publication_linger_timeout_ns);
-    fprintf(fpout, "\n    untethered_window_limit_timeout_ns=%" PRIu64, context->untethered_window_limit_timeout_ns);
-    fprintf(fpout, "\n    untethered_resting_timeout_ns=%" PRIu64, context->untethered_resting_timeout_ns);
-    fprintf(fpout, "\n    max_resend=%" PRIu32, context->max_resend);
-    fprintf(fpout, "\n    retransmit_unicast_delay_ns=%" PRIu64, context->retransmit_unicast_delay_ns);
-    fprintf(fpout, "\n    retransmit_unicast_linger_ns=%" PRIu64, context->retransmit_unicast_linger_ns);
-    fprintf(fpout, "\n    nak_unicast_delay_ns=%" PRIu64, context->nak_unicast_delay_ns);
-    fprintf(fpout, "\n    nak_unicast_retry_delay_ratio=%" PRIu64, context->nak_unicast_retry_delay_ratio);
-    fprintf(fpout, "\n    nak_multicast_max_backoff_ns=%" PRIu64, context->nak_multicast_max_backoff_ns);
-    fprintf(fpout, "\n    unicast_flow_control_rrwm=%" PRIu64, (uint64_t)context->unicast_flow_control_rrwm);
-    fprintf(fpout, "\n    multicast_flow_control_rrwm=%" PRIu64, (uint64_t)context->multicast_flow_control_rrwm);
-    fprintf(fpout, "\n    nak_multicast_group_size=%" PRIu64, (uint64_t)context->nak_multicast_group_size);
-    fprintf(fpout, "\n    status_message_timeout_ns=%" PRIu64, context->status_message_timeout_ns);
-    fprintf(fpout, "\n    counter_free_to_reuse_ns=%" PRIu64, context->counter_free_to_reuse_ns);
-    fprintf(fpout, "\n    conductor_cycle_threshold_ns=%" PRIu64,
+    AERON_FPRINTF(fpout, "\n    aeron_dir=%s", context->aeron_dir);
+    AERON_FPRINTF(fpout, "\n    driver_timeout_ms=%" PRIu64, context->driver_timeout_ms);
+    AERON_FPRINTF(fpout, "\n    print_configuration_on_start=%d", context->print_configuration_on_start);
+    AERON_FPRINTF(fpout, "\n    dirs_delete_on_start=%d", context->dirs_delete_on_start);
+    AERON_FPRINTF(fpout, "\n    dirs_delete_on_shutdown=%d", context->dirs_delete_on_shutdown);
+    AERON_FPRINTF(fpout, "\n    warn_if_dirs_exists=%d", context->warn_if_dirs_exist);
+    AERON_FPRINTF(fpout, "\n    term_buffer_sparse_file=%d", context->term_buffer_sparse_file);
+    AERON_FPRINTF(fpout, "\n    perform_storage_checks=%d", context->perform_storage_checks);
+    AERON_FPRINTF(fpout, "\n    spies_simulate_connection=%d", context->spies_simulate_connection);
+    AERON_FPRINTF(fpout, "\n    reliable_stream=%d", context->reliable_stream);
+    AERON_FPRINTF(fpout, "\n    tether_subscriptions=%d", context->tether_subscriptions);
+    AERON_FPRINTF(fpout, "\n    rejoin_stream=%d", context->rejoin_stream);
+    AERON_FPRINTF(fpout, "\n    receiver_group_consideration=%d", context->receiver_group_consideration);
+    AERON_FPRINTF(fpout, "\n    to_driver_buffer_length=%" PRIu64, (uint64_t)context->to_driver_buffer_length);
+    AERON_FPRINTF(fpout, "\n    to_clients_buffer_length=%" PRIu64, (uint64_t)context->to_clients_buffer_length);
+    AERON_FPRINTF(fpout, "\n    counters_values_buffer_length=%" PRIu64, (uint64_t)context->counters_values_buffer_length);
+    AERON_FPRINTF(fpout, "\n    error_buffer_length=%" PRIu64, (uint64_t)context->error_buffer_length);
+    AERON_FPRINTF(fpout, "\n    timer_interval_ns=%" PRIu64, context->timer_interval_ns);
+    AERON_FPRINTF(fpout, "\n    client_liveness_timeout_ns=%" PRIu64, context->client_liveness_timeout_ns);
+    AERON_FPRINTF(fpout, "\n    image_liveness_timeout_ns=%" PRIu64, context->image_liveness_timeout_ns);
+    AERON_FPRINTF(fpout, "\n    publication_unblock_timeout_ns=%" PRIu64, context->publication_unblock_timeout_ns);
+    AERON_FPRINTF(fpout, "\n    publication_connection_timeout_ns=%" PRIu64, context->publication_connection_timeout_ns);
+    AERON_FPRINTF(fpout, "\n    publication_linger_timeout_ns=%" PRIu64, context->publication_linger_timeout_ns);
+    AERON_FPRINTF(fpout, "\n    untethered_window_limit_timeout_ns=%" PRIu64, context->untethered_window_limit_timeout_ns);
+    AERON_FPRINTF(fpout, "\n    untethered_resting_timeout_ns=%" PRIu64, context->untethered_resting_timeout_ns);
+    AERON_FPRINTF(fpout, "\n    max_resend=%" PRIu32, context->max_resend);
+    AERON_FPRINTF(fpout, "\n    retransmit_unicast_delay_ns=%" PRIu64, context->retransmit_unicast_delay_ns);
+    AERON_FPRINTF(fpout, "\n    retransmit_unicast_linger_ns=%" PRIu64, context->retransmit_unicast_linger_ns);
+    AERON_FPRINTF(fpout, "\n    nak_unicast_delay_ns=%" PRIu64, context->nak_unicast_delay_ns);
+    AERON_FPRINTF(fpout, "\n    nak_unicast_retry_delay_ratio=%" PRIu64, context->nak_unicast_retry_delay_ratio);
+    AERON_FPRINTF(fpout, "\n    nak_multicast_max_backoff_ns=%" PRIu64, context->nak_multicast_max_backoff_ns);
+    AERON_FPRINTF(fpout, "\n    unicast_flow_control_rrwm=%" PRIu64, (uint64_t)context->unicast_flow_control_rrwm);
+    AERON_FPRINTF(fpout, "\n    multicast_flow_control_rrwm=%" PRIu64, (uint64_t)context->multicast_flow_control_rrwm);
+    AERON_FPRINTF(fpout, "\n    nak_multicast_group_size=%" PRIu64, (uint64_t)context->nak_multicast_group_size);
+    AERON_FPRINTF(fpout, "\n    status_message_timeout_ns=%" PRIu64, context->status_message_timeout_ns);
+    AERON_FPRINTF(fpout, "\n    counter_free_to_reuse_ns=%" PRIu64, context->counter_free_to_reuse_ns);
+    AERON_FPRINTF(fpout, "\n    conductor_cycle_threshold_ns=%" PRIu64,
         context->conductor_duty_cycle_stall_tracker.cycle_threshold_ns);
-    fprintf(fpout, "\n    sender_cycle_threshold_ns=%" PRIu64,
+    AERON_FPRINTF(fpout, "\n    sender_cycle_threshold_ns=%" PRIu64,
         context->sender_duty_cycle_stall_tracker.cycle_threshold_ns);
-    fprintf(fpout, "\n    receiver_cycle_threshold_ns=%" PRIu64,
+    AERON_FPRINTF(fpout, "\n    receiver_cycle_threshold_ns=%" PRIu64,
         context->receiver_duty_cycle_stall_tracker.cycle_threshold_ns);
-    fprintf(fpout, "\n    name_resolver_threshold_ns=%" PRIu64,
+    AERON_FPRINTF(fpout, "\n    name_resolver_threshold_ns=%" PRIu64,
         context->name_resolver_time_stall_tracker.cycle_threshold_ns);
-    fprintf(fpout, "\n    term_buffer_length=%" PRIu64, (uint64_t)context->term_buffer_length);
-    fprintf(fpout, "\n    ipc_term_buffer_length=%" PRIu64, (uint64_t)context->ipc_term_buffer_length);
-    fprintf(fpout, "\n    publication_window_length=%" PRIu64, (uint64_t)context->publication_window_length);
-    fprintf(fpout, "\n    ipc_publication_window_length=%" PRIu64, (uint64_t)context->ipc_publication_window_length);
-    fprintf(fpout, "\n    initial_window_length=%" PRIu64, (uint64_t)context->initial_window_length);
-    fprintf(fpout, "\n    socket_sndbuf_length=%" PRIu64, (uint64_t)context->socket_sndbuf);
-    fprintf(fpout, "\n    socket_rcvbuf_length=%" PRIu64, (uint64_t)context->socket_rcvbuf);
-    fprintf(fpout, "\n    multicast_ttl=%" PRIu8, context->multicast_ttl);
-    fprintf(fpout, "\n    mtu_length=%" PRIu64, (uint64_t)context->mtu_length);
-    fprintf(fpout, "\n    ipc_mtu_length=%" PRIu64, (uint64_t)context->ipc_mtu_length);
-    fprintf(fpout, "\n    file_page_size=%" PRIu64, (uint64_t)context->file_page_size);
-    fprintf(fpout, "\n    low_file_store_warning_threshold=%" PRIu64, (uint64_t)context->low_file_store_warning_threshold);
-    fprintf(fpout, "\n    publication_reserved_session_id_low=%" PRId32, context->publication_reserved_session_id_low);
-    fprintf(fpout, "\n    publication_reserved_session_id_high=%" PRId32, context->publication_reserved_session_id_high);
-    fprintf(fpout, "\n    loss_report_length=%" PRIu64, (uint64_t)context->loss_report_length);
-    fprintf(fpout, "\n    send_to_sm_poll_ratio=%" PRIu64, (uint64_t)context->send_to_sm_poll_ratio);
-    fprintf(fpout, "\n    receiver_io_vector_capacity=%" PRIu64, (uint64_t)context->receiver_io_vector_capacity);
-    fprintf(fpout, "\n    sender_io_vector_capacity=%" PRIu64, (uint64_t)context->sender_io_vector_capacity);
-    fprintf(
+    AERON_FPRINTF(fpout, "\n    term_buffer_length=%" PRIu64, (uint64_t)context->term_buffer_length);
+    AERON_FPRINTF(fpout, "\n    ipc_term_buffer_length=%" PRIu64, (uint64_t)context->ipc_term_buffer_length);
+    AERON_FPRINTF(fpout, "\n    publication_window_length=%" PRIu64, (uint64_t)context->publication_window_length);
+    AERON_FPRINTF(fpout, "\n    ipc_publication_window_length=%" PRIu64, (uint64_t)context->ipc_publication_window_length);
+    AERON_FPRINTF(fpout, "\n    initial_window_length=%" PRIu64, (uint64_t)context->initial_window_length);
+    AERON_FPRINTF(fpout, "\n    socket_sndbuf_length=%" PRIu64, (uint64_t)context->socket_sndbuf);
+    AERON_FPRINTF(fpout, "\n    socket_rcvbuf_length=%" PRIu64, (uint64_t)context->socket_rcvbuf);
+    AERON_FPRINTF(fpout, "\n    multicast_ttl=%" PRIu8, context->multicast_ttl);
+    AERON_FPRINTF(fpout, "\n    mtu_length=%" PRIu64, (uint64_t)context->mtu_length);
+    AERON_FPRINTF(fpout, "\n    ipc_mtu_length=%" PRIu64, (uint64_t)context->ipc_mtu_length);
+    AERON_FPRINTF(fpout, "\n    file_page_size=%" PRIu64, (uint64_t)context->file_page_size);
+    AERON_FPRINTF(fpout, "\n    low_file_store_warning_threshold=%" PRIu64, (uint64_t)context->low_file_store_warning_threshold);
+    AERON_FPRINTF(fpout, "\n    publication_reserved_session_id_low=%" PRId32, context->publication_reserved_session_id_low);
+    AERON_FPRINTF(fpout, "\n    publication_reserved_session_id_high=%" PRId32, context->publication_reserved_session_id_high);
+    AERON_FPRINTF(fpout, "\n    loss_report_length=%" PRIu64, (uint64_t)context->loss_report_length);
+    AERON_FPRINTF(fpout, "\n    send_to_sm_poll_ratio=%" PRIu64, (uint64_t)context->send_to_sm_poll_ratio);
+    AERON_FPRINTF(fpout, "\n    receiver_io_vector_capacity=%" PRIu64, (uint64_t)context->receiver_io_vector_capacity);
+    AERON_FPRINTF(fpout, "\n    sender_io_vector_capacity=%" PRIu64, (uint64_t)context->sender_io_vector_capacity);
+    AERON_FPRINTF(
         fpout, "\n    network_publication_max_messages_per_send=%" PRIu64,
         (uint64_t)context->network_publication_max_messages_per_send);
-    fprintf(fpout, "\n    resource_free_limit=%" PRIu32, context->resource_free_limit);
-    fprintf(fpout, "\n    async_executor_threads=%" PRIu32, context->async_executor_threads);
-    fprintf(fpout, "\n    conductor_cpu_affinity_no=%" PRId32, context->conductor_cpu_affinity_no);
-    fprintf(fpout, "\n    receiver_cpu_affinity_no=%" PRId32, context->receiver_cpu_affinity_no);
-    fprintf(fpout, "\n    sender_cpu_affinity_no=%" PRId32, context->sender_cpu_affinity_no);
+    AERON_FPRINTF(fpout, "\n    resource_free_limit=%" PRIu32, context->resource_free_limit);
+    AERON_FPRINTF(fpout, "\n    conductor_cpu_affinity_no=%" PRId32, context->conductor_cpu_affinity_no);
+    AERON_FPRINTF(fpout, "\n    receiver_cpu_affinity_no=%" PRId32, context->receiver_cpu_affinity_no);
+    AERON_FPRINTF(fpout, "\n    sender_cpu_affinity_no=%" PRId32, context->sender_cpu_affinity_no);
+    AERON_FPRINTF(fpout, "\n    native_resource_agent_cpu_affinity_no=%" PRId32, context->native_resource_agent_cpu_affinity_no);
+    AERON_FPRINTF(fpout, "\n    cpuset_affinity=%" PRId32, context->cpuset_affinity);
+    AERON_FPRINTF(fpout, "\n    cpuset_warnings_as_errors=%" PRId32, context->cpuset_warnings_as_errors);
 
-    fprintf(fpout, "\n    epoch_clock=%s",
+    AERON_FPRINTF(fpout, "\n    epoch_clock=%s",
         aeron_dlinfo_func((aeron_fptr_t)context->epoch_clock, buffer, sizeof(buffer)));
-    fprintf(fpout, "\n    nano_clock=%s",
+    AERON_FPRINTF(fpout, "\n    nano_clock=%s",
         aeron_dlinfo_func((aeron_fptr_t)context->nano_clock, buffer, sizeof(buffer)));
     /* cachedEpochClock */
     /* cachedNanoClock */
-    fprintf(fpout, "\n    threading_mode=%s", aeron_driver_threading_mode_to_string(context->threading_mode));
-    fprintf(fpout, "\n    agent_on_start_func=%s",
+    AERON_FPRINTF(fpout, "\n    threading_mode=%s", aeron_driver_threading_mode_to_string(context->threading_mode));
+    AERON_FPRINTF(fpout, "\n    agent_on_start_func=%s",
         aeron_dlinfo_func((aeron_fptr_t)context->agent_on_start_func, buffer, sizeof(buffer)));
-    fprintf(fpout, "\n    agent_on_start_state=%p", context->agent_on_start_state);
-    fprintf(fpout, "\n    conductor_idle_strategy_func=%s",
+    AERON_FPRINTF(fpout, "\n    agent_on_start_state=%p", context->agent_on_start_state);
+    AERON_FPRINTF(fpout, "\n    conductor_idle_strategy_func=%s",
         aeron_dlinfo_func((aeron_fptr_t)context->conductor_idle_strategy_func, buffer, sizeof(buffer)));
-    fprintf(fpout, "\n    conductor_idle_strategy_init_args=%p%s",
+    AERON_FPRINTF(fpout, "\n    conductor_idle_strategy_init_args=%p%s",
         (void *)context->conductor_idle_strategy_init_args,
         context->conductor_idle_strategy_init_args ? context->conductor_idle_strategy_init_args : "");
-    fprintf(fpout, "\n    sender_idle_strategy_func=%s",
+    AERON_FPRINTF(fpout, "\n    sender_idle_strategy_func=%s",
         aeron_dlinfo_func((aeron_fptr_t)context->sender_idle_strategy_func, buffer, sizeof(buffer)));
-    fprintf(fpout, "\n    sender_idle_strategy_init_args=%p%s",
+    AERON_FPRINTF(fpout, "\n    sender_idle_strategy_init_args=%p%s",
         (void *)context->sender_idle_strategy_init_args,
         context->sender_idle_strategy_init_args ? context->sender_idle_strategy_init_args : "");
-    fprintf(fpout, "\n    receiver_idle_strategy_func=%s",
+    AERON_FPRINTF(fpout, "\n    receiver_idle_strategy_func=%s",
         aeron_dlinfo_func((aeron_fptr_t)context->receiver_idle_strategy_func, buffer, sizeof(buffer)));
-    fprintf(fpout, "\n    receiver_idle_strategy_init_args=%p%s",
+    AERON_FPRINTF(fpout, "\n    receiver_idle_strategy_init_args=%p%s",
         (void *)context->receiver_idle_strategy_init_args,
         context->receiver_idle_strategy_init_args ? context->receiver_idle_strategy_init_args : "");
-    fprintf(fpout, "\n    shared_network_idle_strategy_func=%s",
+    AERON_FPRINTF(fpout, "\n    shared_network_idle_strategy_func=%s",
         aeron_dlinfo_func((aeron_fptr_t)context->shared_network_idle_strategy_func, buffer, sizeof(buffer)));
-    fprintf(fpout, "\n    shared_network_idle_strategy_init_args=%p%s",
+    AERON_FPRINTF(fpout, "\n    shared_network_idle_strategy_init_args=%p%s",
         (void *)context->shared_network_idle_strategy_init_args,
         context->shared_network_idle_strategy_init_args ? context->shared_network_idle_strategy_init_args : "");
-    fprintf(fpout, "\n    shared_idle_strategy_func=%s",
+    AERON_FPRINTF(fpout, "\n    shared_idle_strategy_func=%s",
         aeron_dlinfo_func((aeron_fptr_t)context->shared_idle_strategy_func, buffer, sizeof(buffer)));
-    fprintf(fpout, "\n    shared_idle_strategy_init_args=%p%s",
+    AERON_FPRINTF(fpout, "\n    shared_idle_strategy_init_args=%p%s",
         (void *)context->shared_idle_strategy_init_args,
         context->shared_idle_strategy_init_args ? context->shared_idle_strategy_init_args : "");
-    fprintf(fpout, "\n    unicast_flow_control_supplier_func=%s",
+    AERON_FPRINTF(fpout, "\n    native_resource_agent_idle_strategy_func=%s",
+    aeron_dlinfo_func((aeron_fptr_t)context->native_resource_agent_idle_strategy_func, buffer, sizeof(buffer)));
+    AERON_FPRINTF(fpout, "\n    native_resource_agent_idle_strategy_init_args=%p%s",
+        (void *)context->native_resource_agent_idle_strategy_init_args,
+        context->native_resource_agent_idle_strategy_init_args ? context->native_resource_agent_idle_strategy_init_args : "");
+    AERON_FPRINTF(fpout, "\n    unicast_flow_control_supplier_func=%s",
         aeron_dlinfo_func((aeron_fptr_t)context->unicast_flow_control_supplier_func, buffer, sizeof(buffer)));
-    fprintf(fpout, "\n    multicast_flow_control_supplier_func=%s",
+    AERON_FPRINTF(fpout, "\n    multicast_flow_control_supplier_func=%s",
         aeron_dlinfo_func((aeron_fptr_t)context->multicast_flow_control_supplier_func, buffer, sizeof(buffer)));
-    fprintf(fpout, "\n    receiver_group_tag.is_present=%d",
+    AERON_FPRINTF(fpout, "\n    receiver_group_tag.is_present=%d",
         context->receiver_group_tag.is_present);
-    fprintf(fpout, "\n    receiver_group_tag.value=%" PRId64, context->receiver_group_tag.value);
-    fprintf(fpout, "\n    flow_control.group_tag=%" PRId64, context->flow_control.group_tag);
-    fprintf(fpout, "\n    flow_control.group_min_size=%" PRId32, context->flow_control.group_min_size);
-    fprintf(fpout, "\n    flow_control_receiver_timeout_ns=%" PRIu64, context->flow_control.receiver_timeout_ns);
-    fprintf(fpout, "\n    congestion_control_supplier_func=%s",
+    AERON_FPRINTF(fpout, "\n    receiver_group_tag.value=%" PRId64, context->receiver_group_tag.value);
+    AERON_FPRINTF(fpout, "\n    flow_control.group_tag=%" PRId64, context->flow_control.group_tag);
+    AERON_FPRINTF(fpout, "\n    flow_control.group_min_size=%" PRId32, context->flow_control.group_min_size);
+    AERON_FPRINTF(fpout, "\n    flow_control_receiver_timeout_ns=%" PRIu64, context->flow_control.receiver_timeout_ns);
+    AERON_FPRINTF(fpout, "\n    congestion_control_supplier_func=%s",
         aeron_dlinfo_func((aeron_fptr_t)context->congestion_control_supplier_func, buffer, sizeof(buffer)));
-    fprintf(fpout, "\n    usable_fs_space_func=%s",
+    AERON_FPRINTF(fpout, "\n    usable_fs_space_func=%s",
         aeron_dlinfo_func((aeron_fptr_t)context->usable_fs_space_func, buffer, sizeof(buffer)));
-    fprintf(fpout, "\n    termination_validator_func=%s",
+    AERON_FPRINTF(fpout, "\n    termination_validator_func=%s",
         aeron_dlinfo_func((aeron_fptr_t)context->termination_validator_func, buffer, sizeof(buffer)));
-    fprintf(fpout, "\n    termination_validator_state=%p", context->termination_validator_state);
-    fprintf(fpout, "\n    termination_hook_func=%s",
+    AERON_FPRINTF(fpout, "\n    termination_validator_state=%p", context->termination_validator_state);
+    AERON_FPRINTF(fpout, "\n    termination_hook_func=%s",
         aeron_dlinfo_func((aeron_fptr_t)context->termination_hook_func, buffer, sizeof(buffer)));
-    fprintf(fpout, "\n    termination_hook_state=%p", context->termination_hook_state);
-    fprintf(fpout, "\n    name_resolver_supplier_func=%s",
+    AERON_FPRINTF(fpout, "\n    termination_hook_state=%p", context->termination_hook_state);
+    AERON_FPRINTF(fpout, "\n    name_resolver_supplier_func=%s",
         aeron_dlinfo_func((aeron_fptr_t)context->name_resolver_supplier_func, buffer, sizeof(buffer)));
-    fprintf(fpout, "\n    name_resolver_init_args=%s",
+    AERON_FPRINTF(fpout, "\n    name_resolver_init_args=%s",
         (void *)context->name_resolver_init_args ? context->name_resolver_init_args : "");
-    fprintf(fpout, "\n    resolver_name=%s",
+    AERON_FPRINTF(fpout, "\n    resolver_name=%s",
         (void *)context->resolver_name ? context->resolver_name : "");
-    fprintf(fpout, "\n    resolver_interface=%s",
+    AERON_FPRINTF(fpout, "\n    resolver_interface=%s",
         (void *)context->resolver_interface ? context->resolver_interface : "");
-    fprintf(fpout, "\n    resolver_bootstrap_neighbor=%s",
+    AERON_FPRINTF(fpout, "\n    resolver_bootstrap_neighbor=%s",
         (void *)context->resolver_bootstrap_neighbor ? context->resolver_bootstrap_neighbor : "");
-    fprintf(fpout, "\n    re_resolution_check_interval_ns=%" PRIu64, context->re_resolution_check_interval_ns);
-    fprintf(fpout, "\n    sender_wildcard_port_range=\"%" PRIu16 " %" PRIu16 "\"", 
+    AERON_FPRINTF(fpout, "\n    re_resolution_check_interval_ns=%" PRIu64, context->re_resolution_check_interval_ns);
+    AERON_FPRINTF(fpout, "\n    sender_wildcard_port_range=\"%" PRIu16 " %" PRIu16 "\"",
         context->sender_wildcard_port_manager.low_port, context->sender_wildcard_port_manager.high_port);
-    fprintf(fpout, "\n    receiver_wildcard_port_range=\"%" PRIu16 " %" PRIu16 "\"",
+    AERON_FPRINTF(fpout, "\n    receiver_wildcard_port_range=\"%" PRIu16 " %" PRIu16 "\"",
         context->receiver_wildcard_port_manager.low_port, context->receiver_wildcard_port_manager.high_port);
-    fprintf(fpout, "\n    enable_experimental_features=%s", context->enable_experimental_features ? "true" : "false");
-    fprintf(fpout, "\n    stream_session_limit=%" PRId32, context->stream_session_limit);
+    AERON_FPRINTF(fpout, "\n    enable_experimental_features=%s", context->enable_experimental_features ? "true" : "false");
+    AERON_FPRINTF(fpout, "\n    stream_session_limit=%" PRId32, context->stream_session_limit);
 
     const aeron_udp_channel_transport_bindings_t *bindings = context->udp_channel_transport_bindings;
     if (NULL != bindings)
     {
-        fprintf(
+        AERON_FPRINTF(
             fpout, "\n    udp_channel_transport_bindings.%s=%s,%p%s",
             bindings->meta_info.type,
             bindings->meta_info.name,
@@ -662,7 +676,7 @@ void aeron_driver_context_print_configuration(aeron_driver_context_t *context)
     const aeron_udp_channel_transport_bindings_t *conductor_bindings = context->conductor_udp_channel_transport_bindings;
     if (NULL != conductor_bindings)
     {
-        fprintf(
+        AERON_FPRINTF(
             fpout, "\n    conductor_udp_channel_transport_bindings.%s=%s,%p%s",
             conductor_bindings->meta_info.type,
             conductor_bindings->meta_info.name,
@@ -675,7 +689,7 @@ void aeron_driver_context_print_configuration(aeron_driver_context_t *context)
     interceptor_bindings = context->udp_channel_outgoing_interceptor_bindings;
     while (NULL != interceptor_bindings)
     {
-        fprintf(
+        AERON_FPRINTF(
             fpout, "\n    udp_channel_outgoing_interceptor_bindings.%s=%s,%s",
             interceptor_bindings->meta_info.type,
             interceptor_bindings->meta_info.name,
@@ -687,7 +701,7 @@ void aeron_driver_context_print_configuration(aeron_driver_context_t *context)
     interceptor_bindings = context->udp_channel_incoming_interceptor_bindings;
     while (NULL != interceptor_bindings)
     {
-        fprintf(
+        AERON_FPRINTF(
             fpout, "\n    udp_channel_incoming_interceptor_bindings.%s=%s,%s",
             interceptor_bindings->meta_info.type,
             interceptor_bindings->meta_info.name,
@@ -696,20 +710,31 @@ void aeron_driver_context_print_configuration(aeron_driver_context_t *context)
         interceptor_bindings = interceptor_bindings->meta_info.next_interceptor_bindings;
     }
 
-    fprintf(fpout, "\n}\n");
+    AERON_FPRINTF(fpout, "\n}\n");
     fflush(fpout);
+}
+
+void aeron_driver_shared_on_start(void *state, const char *role_name)
+{
+    aeron_driver_t *driver = (aeron_driver_t *)state;
+    if (NULL != driver->context->agent_on_start_func)
+    {
+        driver->context->agent_on_start_func(driver->context->agent_on_start_state, role_name);
+    }
+    aeron_driver_native_resource_agent_on_start(&driver->native_resource_agent, role_name);
 }
 
 int aeron_driver_shared_do_work(void *clientd)
 {
     aeron_driver_t *driver = (aeron_driver_t *)clientd;
-    int sum = 0;
+    int work_count = 0;
 
-    sum += aeron_driver_conductor_do_work(&driver->conductor);
-    sum += aeron_driver_sender_do_work(&driver->sender);
-    sum += aeron_driver_receiver_do_work(&driver->receiver);
+    work_count += aeron_driver_conductor_do_work(&driver->conductor);
+    work_count += aeron_driver_native_resource_agent_do_work(&driver->native_resource_agent);
+    work_count += aeron_driver_sender_do_work(&driver->sender);
+    work_count += aeron_driver_receiver_do_work(&driver->receiver);
 
-    return sum;
+    return work_count;
 }
 
 void aeron_driver_shared_on_close(void *clientd)
@@ -717,6 +742,7 @@ void aeron_driver_shared_on_close(void *clientd)
     aeron_driver_t *driver = (aeron_driver_t *)clientd;
 
     aeron_driver_conductor_on_close(&driver->conductor);
+    aeron_driver_native_resource_agent_on_close(&driver->native_resource_agent);
     aeron_driver_sender_on_close(&driver->sender);
     aeron_driver_receiver_on_close(&driver->receiver);
 }
@@ -888,6 +914,12 @@ int aeron_driver_init(aeron_driver_t **driver, aeron_driver_context_t *context)
         goto error;
     }
 
+    if (aeron_driver_native_resource_agent_init(&_driver->native_resource_agent, context) < 0)
+    {
+        goto error;
+    }
+    _driver->context->native_resource_agent_proxy = &_driver->native_resource_agent.native_resource_agent_proxy;
+
     if (aeron_driver_sender_init(
         &_driver->sender, context, &_driver->conductor.system_counters, &_driver->conductor.error_log) < 0)
     {
@@ -955,10 +987,10 @@ int aeron_driver_init(aeron_driver_t **driver, aeron_driver_context_t *context)
         case AERON_THREADING_MODE_SHARED:
             if (aeron_agent_init(
                 &_driver->runners[AERON_AGENT_RUNNER_SHARED],
-                "[conductor, sender, receiver]",
+                AERON_DRIVER_AGENT_ROLE_NAME_SHARED,
                 _driver,
-                _driver->context->agent_on_start_func,
-                _driver->context->agent_on_start_state,
+                aeron_driver_shared_on_start,
+                _driver,
                 aeron_driver_shared_do_work,
                 aeron_driver_shared_on_close,
                 _driver->context->shared_idle_strategy_func,
@@ -971,7 +1003,7 @@ int aeron_driver_init(aeron_driver_t **driver, aeron_driver_context_t *context)
         case AERON_THREADING_MODE_SHARED_NETWORK:
             if (aeron_agent_init(
                 &_driver->runners[AERON_AGENT_RUNNER_CONDUCTOR],
-                "conductor",
+                AERON_DRIVER_AGENT_ROLE_NAME_CONDUCTOR,
                 &_driver->conductor,
                 _driver->context->agent_on_start_func,
                 _driver->context->agent_on_start_state,
@@ -984,8 +1016,22 @@ int aeron_driver_init(aeron_driver_t **driver, aeron_driver_context_t *context)
             }
 
             if (aeron_agent_init(
+                &_driver->runners[AERON_AGENT_RUNNER_NATIVE_RESOURCE_AGENT],
+                AERON_DRIVER_AGENT_ROLE_NAME_NATIVE_RESOURCE_AGENT,
+                &_driver->native_resource_agent,
+                aeron_driver_native_resource_agent_on_start,
+                &_driver->native_resource_agent,
+                aeron_driver_native_resource_agent_do_work,
+                aeron_driver_native_resource_agent_on_close,
+                _driver->context->native_resource_agent_idle_strategy_func,
+                _driver->context->native_resource_agent_idle_strategy_state) < 0)
+            {
+                goto error;
+            }
+
+            if (aeron_agent_init(
                 &_driver->runners[AERON_AGENT_RUNNER_SHARED_NETWORK],
-                "[sender, receiver]",
+                AERON_DRIVER_AGENT_ROLE_NAME_SHARED_NETWORK,
                 _driver,
                 _driver->context->agent_on_start_func,
                 _driver->context->agent_on_start_state,
@@ -1002,7 +1048,7 @@ int aeron_driver_init(aeron_driver_t **driver, aeron_driver_context_t *context)
         default:
             if (aeron_agent_init(
                 &_driver->runners[AERON_AGENT_RUNNER_CONDUCTOR],
-                "conductor",
+                AERON_DRIVER_AGENT_ROLE_NAME_CONDUCTOR,
                 &_driver->conductor,
                 _driver->context->agent_on_start_func,
                 _driver->context->agent_on_start_state,
@@ -1015,8 +1061,22 @@ int aeron_driver_init(aeron_driver_t **driver, aeron_driver_context_t *context)
             }
 
             if (aeron_agent_init(
+                &_driver->runners[AERON_AGENT_RUNNER_NATIVE_RESOURCE_AGENT],
+                AERON_DRIVER_AGENT_ROLE_NAME_NATIVE_RESOURCE_AGENT,
+                &_driver->native_resource_agent,
+                aeron_driver_native_resource_agent_on_start,
+                &_driver->native_resource_agent,
+                aeron_driver_native_resource_agent_do_work,
+                aeron_driver_native_resource_agent_on_close,
+                _driver->context->native_resource_agent_idle_strategy_func,
+                _driver->context->native_resource_agent_idle_strategy_state) < 0)
+            {
+                goto error;
+            }
+
+            if (aeron_agent_init(
                 &_driver->runners[AERON_AGENT_RUNNER_SENDER],
-                "sender",
+                AERON_DRIVER_AGENT_ROLE_NAME_SENDER,
                 &_driver->sender,
                 _driver->context->agent_on_start_func,
                 _driver->context->agent_on_start_state,
@@ -1030,7 +1090,7 @@ int aeron_driver_init(aeron_driver_t **driver, aeron_driver_context_t *context)
 
             if (aeron_agent_init(
                 &_driver->runners[AERON_AGENT_RUNNER_RECEIVER],
-                "receiver",
+                AERON_DRIVER_AGENT_ROLE_NAME_RECEIVER,
                 &_driver->receiver,
                 _driver->context->agent_on_start_func,
                 _driver->context->agent_on_start_state,
@@ -1053,6 +1113,74 @@ error:
         aeron_free(_driver);
     }
 
+    return -1;
+}
+
+int aeron_driver_apply_cpuset_affinity(aeron_driver_context_t *context)
+{
+    if (!context->cpuset_affinity)
+    {
+        return 0;
+    }
+
+#ifndef __linux__
+    AERON_SET_ERR(EPERM, "%s", "Cpuset affinity is only supported on Linux");
+    return -1;
+#endif
+
+    int *cpus = NULL;
+    int cpu_count = 0;
+
+    if (aeron_cpuset_cgroup_read_v2(AERON_CPUSET_PROC_SELF_CGROUP, AERON_CPUSET_CGROUP_MOUNT_V2, &cpus, &cpu_count) < 0)
+    {
+        AERON_APPEND_ERR("%s", "cpuset affinity enabled and failed to properly read cgroups and cpuset information");
+        goto error;
+    }
+
+    int alignment_warnings_count;
+    if ((alignment_warnings_count = aeron_topology_check_alignment(
+        AERON_TOPOLOGY_SYS_CPU_PATH, cpus, cpu_count, stderr)) < 0)
+    {
+        AERON_APPEND_ERR("%s", "failed to check cpu alignment");
+        goto error;
+    }
+
+    int cluster_locality_warnings_count;
+    if ((cluster_locality_warnings_count = aeron_topology_check_die_locality(
+        AERON_TOPOLOGY_SYS_CPU_PATH, cpus, cpu_count, stderr)) < 0)
+    {
+        AERON_APPEND_ERR("%s", "failed to check cpu cluster locality");
+        goto error;
+    }
+
+    int l3_locality_warnings_count;
+    if ((l3_locality_warnings_count = aeron_topology_check_l3_locality(
+        AERON_TOPOLOGY_SYS_CPU_PATH, cpus, cpu_count, stderr)) < 0)
+    {
+        AERON_APPEND_ERR("%s", "failed to check cpu l3 cache locality");
+        goto error;
+    }
+
+    const int total_warnings_count =
+        alignment_warnings_count + cluster_locality_warnings_count + l3_locality_warnings_count;
+
+    if (context->cpuset_warnings_as_errors && 0 < total_warnings_count)
+    {
+        AERON_SET_ERR(EINVAL, "cpuset warnings as errors, %d warnings", total_warnings_count);
+        goto error;
+    }
+
+    if (aeron_driver_context_apply_cpuset_affinity(context, cpus, cpu_count) < 0)
+    {
+        AERON_APPEND_ERR("%s", "failed to apply cpuset affinity");
+        goto error;
+    }
+
+    aeron_free(cpus);
+    return 0;
+
+error:
+    aeron_free(cpus);
     return -1;
 }
 

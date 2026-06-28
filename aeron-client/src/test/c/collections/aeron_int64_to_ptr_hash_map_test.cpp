@@ -252,3 +252,41 @@ TEST_F(Int64ToPtrHashMapTest, removeIfWorksWhenChainCompactionBringsElementsToEn
     ASSERT_EQ(called, 2u);
     ASSERT_EQ(m_map.size, 0u);
 }
+
+TEST_F(Int64ToPtrHashMapTest, removeIfDoesNotSkipEntriesAfterCompaction)
+{
+    int value = 42;
+    int32_t num_entries = 1000;
+    ASSERT_EQ(aeron_int64_to_ptr_hash_map_init(&m_map, 16, AERON_MAP_DEFAULT_LOAD_FACTOR), 0);
+    for (int32_t i = 0; i < num_entries; ++i)
+    {
+        EXPECT_EQ(0, aeron_int64_to_ptr_hash_map_put(&m_map, i, &value));
+    }
+    EXPECT_EQ(num_entries, m_map.size);
+    EXPECT_EQ(2048, m_map.capacity);
+
+    size_t called = 0;
+    remove_if(
+        [&](int64_t key, void *value_ptr)
+        {
+            // std::cout << key << std::endl;
+            called++;
+            EXPECT_EQ(&value, value_ptr);
+            return 0 == (key & 1);
+        });
+
+    EXPECT_EQ(num_entries, called);
+    EXPECT_EQ(num_entries / 2, m_map.size);
+
+    for (int32_t i = 0; i < num_entries; ++i)
+    {
+        if (0 == (i & 1))
+        {
+            EXPECT_EQ(nullptr, aeron_int64_to_ptr_hash_map_get(&m_map, i));
+        }
+        else
+        {
+            EXPECT_EQ(&value, aeron_int64_to_ptr_hash_map_get(&m_map, i));
+        }
+    }
+}

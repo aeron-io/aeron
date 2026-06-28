@@ -60,9 +60,9 @@ class SnapshotReplicationTest
             new RecordingLog.Snapshot(2, 3, 5, 7, 11, 0),
             new RecordingLog.Snapshot(17, 3, 5, 7, 31, -1));
 
-        when(archive.replicate(eq(snapshots.get(0).recordingId), anyInt(), any(), any()))
+        when(archive.replicate(eq(snapshots.get(0).recordingId()), anyInt(), any(), any()))
             .thenReturn(replicationId0);
-        when(archive.replicate(eq(snapshots.get(1).recordingId), anyInt(), any(), any()))
+        when(archive.replicate(eq(snapshots.get(1).recordingId()), anyInt(), any(), any()))
             .thenReturn(replicationId1);
 
         final SnapshotReplication snapshotReplication = new SnapshotReplication(
@@ -78,10 +78,13 @@ class SnapshotReplicationTest
             .replicationSessionId((int)correlationId);
 
         verify(archive).replicate(
-            snapshots.get(0).recordingId,
+            snapshots.get(0).recordingId(),
             srcStreamId,
             srcChannel,
             replicationParams);
+        assertEquals(replicationId0, snapshotReplication.currentReplicationId());
+        assertEquals(snapshots.get(0).recordingId(), snapshotReplication.currentSnapshot().recordingId());
+
         ignoreArchiveContextLookup();
 
         snapshotReplication.poll(nowNs);
@@ -98,10 +101,13 @@ class SnapshotReplicationTest
         snapshotReplication.poll(nowNs);
 
         verify(archive).replicate(
-            snapshots.get(1).recordingId,
+            snapshots.get(1).recordingId(),
             srcStreamId,
             srcChannel,
             replicationParams);
+        assertEquals(replicationId1, snapshotReplication.currentReplicationId());
+        assertEquals(snapshots.get(1).recordingId(), snapshotReplication.currentSnapshot().recordingId());
+
         ignoreArchiveContextLookup();
 
         snapshotReplication.poll(nowNs);
@@ -116,10 +122,10 @@ class SnapshotReplicationTest
         verifyNoMoreInteractions(archive);
 
         assertTrue(snapshotReplication.isComplete());
-        assertEquals(0, snapshotReplication.snapshotsRetrieved().get(0).serviceId);
-        assertEquals(newRecordingId0, snapshotReplication.snapshotsRetrieved().get(0).recordingId);
-        assertEquals(-1, snapshotReplication.snapshotsRetrieved().get(1).serviceId);
-        assertEquals(newRecordingId1, snapshotReplication.snapshotsRetrieved().get(1).recordingId);
+        assertEquals(0, snapshotReplication.snapshotsRetrieved().get(0).serviceId());
+        assertEquals(newRecordingId0, snapshotReplication.snapshotsRetrieved().get(0).recordingId());
+        assertEquals(-1, snapshotReplication.snapshotsRetrieved().get(1).serviceId());
+        assertEquals(newRecordingId1, snapshotReplication.snapshotsRetrieved().get(1).recordingId());
 
         snapshotReplication.poll(nowNs);
         verifyNoMoreInteractions(archive);
@@ -134,9 +140,9 @@ class SnapshotReplicationTest
             new RecordingLog.Snapshot(2, 3, 5, 7, 11, 13),
             new RecordingLog.Snapshot(17, 19, 23, 29, 31, 37));
 
-        when(archive.replicate(eq(snapshots.get(0).recordingId), anyLong(), anyLong(), anyInt(), any(), any(), any()))
+        when(archive.replicate(eq(snapshots.get(0).recordingId()), anyLong(), anyLong(), anyInt(), any(), any(), any()))
             .thenReturn(replicationId0);
-        when(archive.replicate(eq(snapshots.get(1).recordingId), anyLong(), anyLong(), anyInt(), any(), any(), any()))
+        when(archive.replicate(eq(snapshots.get(1).recordingId()), anyLong(), anyLong(), anyInt(), any(), any(), any()))
             .thenReturn(replicationId1);
 
         final SnapshotReplication snapshotReplication = new SnapshotReplication(
@@ -146,10 +152,10 @@ class SnapshotReplicationTest
         snapshotReplication.addSnapshot(snapshots.get(1));
 
         snapshotReplication.poll(nowNs);
-        verify(archive).replicate(eq(snapshots.get(0).recordingId), anyInt(), any(), any());
+        verify(archive).replicate(eq(snapshots.get(0).recordingId()), anyInt(), any(), any());
 
         snapshotReplication.poll(nowNs);
-        snapshotReplication.onSignal(replicationId0, snapshots.get(0).recordingId, 23423, REPLICATE_END);
+        snapshotReplication.onSignal(replicationId0, snapshots.get(0).recordingId(), 23423, REPLICATE_END);
         assertFalse(snapshotReplication.isComplete());
     }
 
@@ -160,9 +166,9 @@ class SnapshotReplicationTest
             new RecordingLog.Snapshot(2, 3, 5, 7, 11, 0),
             new RecordingLog.Snapshot(17, 3, 5, 7, 31, -1));
 
-        when(archive.replicate(eq(snapshots.get(0).recordingId), anyLong(), anyLong(), anyInt(), any(), any(), any()))
+        when(archive.replicate(eq(snapshots.get(0).recordingId()), anyLong(), anyLong(), anyInt(), any(), any(), any()))
             .thenReturn(1L);
-        when(archive.replicate(eq(snapshots.get(1).recordingId), anyLong(), anyLong(), anyInt(), any(), any(), any()))
+        when(archive.replicate(eq(snapshots.get(1).recordingId()), anyLong(), anyLong(), anyInt(), any(), any(), any()))
             .thenReturn(2L);
 
         final SnapshotReplication snapshotReplication = new SnapshotReplication(

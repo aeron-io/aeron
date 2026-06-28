@@ -24,8 +24,12 @@ import static io.aeron.protocol.HeaderFlyweight.HDR_TYPE_PAD;
 /**
  * Fills a gap in a term with a padding record.
  */
-public class TermGapFiller
+public final class TermGapFiller
 {
+    private TermGapFiller()
+    {
+    }
+
     /**
      * Try to gap fill the current term at a given offset if the gap contains no data.
      * <p>

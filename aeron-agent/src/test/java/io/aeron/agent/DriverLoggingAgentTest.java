@@ -15,8 +15,15 @@
  */
 package io.aeron.agent;
 
-import io.aeron.*;
+import io.aeron.Aeron;
+import io.aeron.AvailableImageHandler;
+import io.aeron.ExclusivePublication;
+import io.aeron.Image;
+import io.aeron.Publication;
+import io.aeron.Subscription;
+import io.aeron.UnavailableImageHandler;
 import io.aeron.driver.MediaDriver;
+import io.aeron.driver.ThreadingMode;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
@@ -32,16 +39,40 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 import static io.aeron.CommonContext.IPC_CHANNEL;
-import static io.aeron.agent.DriverEventCode.*;
+import static io.aeron.agent.DriverEventCode.CMD_IN_ADD_EXCLUSIVE_PUBLICATION;
+import static io.aeron.agent.DriverEventCode.CMD_IN_ADD_PUBLICATION;
+import static io.aeron.agent.DriverEventCode.CMD_IN_ADD_SUBSCRIPTION;
+import static io.aeron.agent.DriverEventCode.CMD_IN_CLIENT_CLOSE;
+import static io.aeron.agent.DriverEventCode.CMD_IN_REMOVE_PUBLICATION;
+import static io.aeron.agent.DriverEventCode.CMD_IN_REMOVE_SUBSCRIPTION;
+import static io.aeron.agent.DriverEventCode.CMD_OUT_AVAILABLE_IMAGE;
+import static io.aeron.agent.DriverEventCode.CMD_OUT_COUNTER_READY;
+import static io.aeron.agent.DriverEventCode.CMD_OUT_EXCLUSIVE_PUBLICATION_READY;
+import static io.aeron.agent.DriverEventCode.CMD_OUT_ON_OPERATION_SUCCESS;
+import static io.aeron.agent.DriverEventCode.CMD_OUT_ON_UNAVAILABLE_COUNTER;
+import static io.aeron.agent.DriverEventCode.CMD_OUT_PUBLICATION_READY;
+import static io.aeron.agent.DriverEventCode.CMD_OUT_SUBSCRIPTION_READY;
+import static io.aeron.agent.DriverEventCode.FLOW_CONTROL_RECEIVER_ADDED;
+import static io.aeron.agent.DriverEventCode.FLOW_CONTROL_RECEIVER_REMOVED;
+import static io.aeron.agent.DriverEventCode.FRAME_IN;
+import static io.aeron.agent.DriverEventCode.FRAME_OUT;
+import static io.aeron.agent.DriverEventCode.PUBLICATION_IMAGE_REVOKE;
+import static io.aeron.agent.DriverEventCode.PUBLICATION_REVOKE;
+import static io.aeron.agent.DriverEventCode.RECEIVE_CHANNEL_CLOSE;
+import static io.aeron.agent.DriverEventCode.RECEIVE_CHANNEL_CREATION;
+import static io.aeron.agent.DriverEventCode.REMOVE_IMAGE_CLEANUP;
+import static io.aeron.agent.DriverEventCode.REMOVE_PUBLICATION_CLEANUP;
+import static io.aeron.agent.DriverEventCode.SEND_CHANNEL_CLOSE;
+import static io.aeron.agent.DriverEventCode.SEND_CHANNEL_CREATION;
 import static io.aeron.agent.EventConfiguration.EVENT_READER_FRAME_LIMIT;
 import static io.aeron.agent.EventConfiguration.EVENT_RING_BUFFER;
 import static java.util.Collections.synchronizedSet;
@@ -183,14 +214,7 @@ class DriverLoggingAgentTest
     @InterruptAfter(10)
     void logIndividualEvents(final DriverEventCode eventCode)
     {
-        try
-        {
-            testLogMediaDriverEvents(NETWORK_CHANNEL, eventCode.name(), EnumSet.of(eventCode));
-        }
-        finally
-        {
-            after();
-        }
+        testLogMediaDriverEvents(NETWORK_CHANNEL, eventCode.name(), EnumSet.of(eventCode));
     }
 
     @ParameterizedTest
@@ -201,14 +225,7 @@ class DriverLoggingAgentTest
     @InterruptAfter(10)
     void logIndividualExclusivePublicationEvents(final DriverEventCode eventCode)
     {
-        try
-        {
-            testLogExclusivePublicationMediaDriverEvents(NETWORK_CHANNEL, eventCode.name(), EnumSet.of(eventCode));
-        }
-        finally
-        {
-            after();
-        }
+        testLogExclusivePublicationMediaDriverEvents(NETWORK_CHANNEL, eventCode.name(), EnumSet.of(eventCode));
     }
 
     private void testLogMediaDriverEvents(
@@ -217,6 +234,7 @@ class DriverLoggingAgentTest
         before(enabledEvents, expectedEvents);
 
         final MediaDriver.Context driverCtx = new MediaDriver.Context()
+            .threadingMode(ThreadingMode.SHARED)
             .errorHandler(Tests::onError)
             .publicationLingerTimeoutNs(1_000_000_000L)
             .timerIntervalNs(TimeUnit.MILLISECONDS.toNanos(1));

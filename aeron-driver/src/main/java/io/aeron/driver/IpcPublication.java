@@ -117,7 +117,7 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         this.initialTermId = LogBufferDescriptor.initialTermId(rawLog.metaData());
         this.startingTermId = params.termId;
         this.startingTermOffset = params.termOffset;
-        this.errorHandler = ctx.errorHandler();
+        this.errorHandler = ctx.countedErrorHandler();
 
         final int termLength = params.termLength;
         this.termBufferLength = termLength;
@@ -233,14 +233,6 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
     int mtuLength()
     {
         return mtuLength;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    public boolean free()
-    {
-        return rawLog.free();
     }
 
     /**

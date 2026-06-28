@@ -41,7 +41,9 @@
 
         <module name="JavadocStyle"/>
         <module name="JavadocType"/>
-        <module name="JavadocMethod"/>
+        <module name="JavadocMethod">
+            <property name="allowInlineReturn" value="true"/>
+        </module>
         <module name="JavadocVariable">
             <property name="accessModifiers" value="public"/>
         </module>
@@ -192,7 +194,5 @@
             <property name="illegalPattern" value="true"/>
             <property name="message" value="Trailing whitespace"/>
         </module>
-
-        <module name="JavadocMethod"/>
     </module>
 </module>

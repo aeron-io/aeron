@@ -15,21 +15,13 @@
  */
 
 #include "aeron_driver_sender.h"
-#include "aeron_alloc.h"
 
 void aeron_driver_sender_proxy_offer(aeron_driver_sender_proxy_t *sender_proxy, void *cmd, size_t length)
 {
-    aeron_rb_write_result_t result;
-    while (AERON_RB_FULL == (result = aeron_mpsc_rb_write(sender_proxy->command_queue, 1, cmd, length)))
+    while (AERON_RB_SUCCESS != aeron_spsc_rb_write(sender_proxy->command_queue, 1, cmd, length))
     {
         aeron_counter_increment_release(sender_proxy->fail_counter);
         sched_yield();
-    }
-
-    if (AERON_RB_ERROR == result)
-    {
-        aeron_distinct_error_log_record(
-            sender_proxy->sender->error_log, EINVAL, "Error writing to receiver proxy ring buffer");
     }
 }
 
@@ -43,14 +35,7 @@ void aeron_driver_sender_proxy_on_add_endpoint(
             .item = endpoint
         };
 
-    if (AERON_THREADING_MODE_IS_SHARED_OR_INVOKER(sender_proxy->threading_mode))
-    {
-        aeron_driver_sender_on_add_endpoint(sender_proxy->sender, &cmd);
-    }
-    else
-    {
-        aeron_driver_sender_proxy_offer(sender_proxy, &cmd, sizeof(cmd));
-    }
+    aeron_driver_sender_proxy_offer(sender_proxy, &cmd, sizeof(cmd));
 }
 
 void aeron_driver_sender_proxy_on_remove_endpoint(
@@ -63,14 +48,7 @@ void aeron_driver_sender_proxy_on_remove_endpoint(
             .item = endpoint
         };
 
-    if (AERON_THREADING_MODE_IS_SHARED_OR_INVOKER(sender_proxy->threading_mode))
-    {
-        aeron_driver_sender_on_remove_endpoint(sender_proxy->sender, &cmd);
-    }
-    else
-    {
-        aeron_driver_sender_proxy_offer(sender_proxy, &cmd, sizeof(cmd));
-    }
+    aeron_driver_sender_proxy_offer(sender_proxy, &cmd, sizeof(cmd));
 }
 
 void aeron_driver_sender_proxy_on_add_publication(
@@ -82,14 +60,7 @@ void aeron_driver_sender_proxy_on_add_publication(
             .item = publication
         };
 
-    if (AERON_THREADING_MODE_IS_SHARED_OR_INVOKER(sender_proxy->threading_mode))
-    {
-        aeron_driver_sender_on_add_publication(sender_proxy->sender, &cmd);
-    }
-    else
-    {
-        aeron_driver_sender_proxy_offer(sender_proxy, &cmd, sizeof(cmd));
-    }
+    aeron_driver_sender_proxy_offer(sender_proxy, &cmd, sizeof(cmd));
 }
 
 void aeron_driver_sender_proxy_on_remove_publication(
@@ -101,14 +72,7 @@ void aeron_driver_sender_proxy_on_remove_publication(
             .item = publication
         };
 
-    if (AERON_THREADING_MODE_IS_SHARED_OR_INVOKER(sender_proxy->threading_mode))
-    {
-        aeron_driver_sender_on_remove_publication(sender_proxy->sender, &cmd);
-    }
-    else
-    {
-        aeron_driver_sender_proxy_offer(sender_proxy, &cmd, sizeof(cmd));
-    }
+    aeron_driver_sender_proxy_offer(sender_proxy, &cmd, sizeof(cmd));
 }
 
 void aeron_driver_sender_proxy_on_add_destination(
@@ -127,14 +91,7 @@ void aeron_driver_sender_proxy_on_add_destination(
         };
     memcpy(&cmd.control_address, addr, sizeof(cmd.control_address));
 
-    if (AERON_THREADING_MODE_IS_SHARED_OR_INVOKER(sender_proxy->threading_mode))
-    {
-        aeron_driver_sender_on_add_destination(sender_proxy->sender, &cmd);
-    }
-    else
-    {
-        aeron_driver_sender_proxy_offer(sender_proxy, &cmd, sizeof(cmd));
-    }
+    aeron_driver_sender_proxy_offer(sender_proxy, &cmd, sizeof(cmd));
 }
 
 void aeron_driver_sender_proxy_on_remove_destination(
@@ -147,14 +104,7 @@ void aeron_driver_sender_proxy_on_remove_destination(
         };
     memcpy(&cmd.control_address, addr, sizeof(cmd.control_address));
 
-    if (AERON_THREADING_MODE_IS_SHARED_OR_INVOKER(sender_proxy->threading_mode))
-    {
-        aeron_driver_sender_on_remove_destination(sender_proxy->sender, &cmd);
-    }
-    else
-    {
-        aeron_driver_sender_proxy_offer(sender_proxy, &cmd, sizeof(cmd));
-    }
+    aeron_driver_sender_proxy_offer(sender_proxy, &cmd, sizeof(cmd));
 }
 
 void aeron_driver_sender_proxy_on_remove_destination_by_id(
@@ -169,14 +119,7 @@ void aeron_driver_sender_proxy_on_remove_destination_by_id(
             .destination_registration_id = destination_registration_id
         };
 
-    if (AERON_THREADING_MODE_IS_SHARED_OR_INVOKER(sender_proxy->threading_mode))
-    {
-        aeron_driver_sender_on_remove_destination_by_id(sender_proxy->sender, &cmd);
-    }
-    else
-    {
-        aeron_driver_sender_proxy_offer(sender_proxy, &cmd, sizeof(cmd));
-    }
+    aeron_driver_sender_proxy_offer(sender_proxy, &cmd, sizeof(cmd));
 }
 
 void aeron_driver_sender_proxy_on_resolution_change(
@@ -188,17 +131,13 @@ void aeron_driver_sender_proxy_on_resolution_change(
     aeron_command_sender_resolution_change_t cmd =
         {
             .base = { .func = aeron_driver_sender_on_resolution_change, .item = NULL },
-            .endpoint = endpoint,
-            .endpoint_name = endpoint_name,
+            .endpoint = endpoint
         };
     memcpy(&cmd.new_addr, new_addr, sizeof(cmd.new_addr));
 
-    if (AERON_THREADING_MODE_IS_SHARED_OR_INVOKER(sender_proxy->threading_mode))
-    {
-        aeron_driver_sender_on_resolution_change(sender_proxy->sender, &cmd);
-    }
-    else
-    {
-        aeron_driver_sender_proxy_offer(sender_proxy, &cmd, sizeof(cmd));
-    }
+    size_t endpoint_name_length = strlen(endpoint_name);
+    memcpy(&cmd.endpoint_name, endpoint_name, endpoint_name_length);
+    cmd.endpoint_name[endpoint_name_length] = '\0';
+
+    aeron_driver_sender_proxy_offer(sender_proxy, &cmd, sizeof(cmd));
 }

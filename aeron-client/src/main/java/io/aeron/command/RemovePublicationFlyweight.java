@@ -46,6 +46,15 @@ public class RemovePublicationFlyweight extends RemoveMessageFlyweight
     private static final long FLAG_REVOKE = 0x1;
 
     /**
+     * An empty flyweight, which should be wrapped over a buffer.
+     *
+     * @see #wrap(MutableDirectBuffer, int)
+     */
+    public RemovePublicationFlyweight()
+    {
+    }
+
+    /**
      * Wrap the buffer at a given offset for updates.
      *
      * @param buffer to wrap.

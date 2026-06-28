@@ -212,6 +212,7 @@ class AeronClusterAsyncConnectTest
         final long subscriptionId = 42;
         when(aeron.asyncAddSubscription(context.egressChannel(), context.egressStreamId())).thenReturn(subscriptionId);
         final Subscription subscription = mock(Subscription.class);
+        when(subscription.tryResolveChannelEndpointPort()).thenReturn("something");
         when(aeron.getSubscription(subscriptionId)).thenReturn(subscription);
 
         final int insgressStreamId = 878;
@@ -241,23 +242,25 @@ class AeronClusterAsyncConnectTest
         for (int i = 0; i < iterations; i++)
         {
             assertNull(asyncConnect.poll());
-            assertEquals(CREATE_INGRESS_PUBLICATIONS, asyncConnect.state());
+            assertEquals(AWAIT_PUBLICATION_CONNECTED, asyncConnect.state());
         }
 
         verify(aeron, atMostOnce())
             .asyncAddExclusivePublication("aeron:udp?endpoint=localhost:20000", insgressStreamId);
-        verify(aeron, times(iterations))
+        verify(aeron, times(iterations - 1))
             .asyncAddExclusivePublication("aeron:udp?endpoint=localhost:20001", insgressStreamId);
         verify(aeron, atMostOnce())
             .asyncAddExclusivePublication("aeron:udp?endpoint=localhost:20002", insgressStreamId);
         verify(aeron, times(2)).getExclusivePublication(publicationId1);
-        verify(aeron, times(iterations)).getExclusivePublication(publicationId2);
-        verify(aeron, times(iterations)).getExclusivePublication(publicationId3);
+        verify(aeron, times(iterations - 1)).getExclusivePublication(publicationId2);
+        verify(aeron, times(iterations - 1)).getExclusivePublication(publicationId3);
 
         asyncConnect.close();
 
-        verify(subscription, only()).close();
-        verify(publication1, only()).close();
+        verify(subscription, times(iterations - 1)).tryResolveChannelEndpointPort();
+        verify(subscription).close();
+        verify(publication1, times(iterations - 2)).isConnected();
+        verify(publication1).close();
         verify(context).close();
         verify(aeron, atMostOnce()).asyncRemovePublication(publicationId3);
         verify(aeron, never()).asyncRemoveSubscription(subscriptionId);

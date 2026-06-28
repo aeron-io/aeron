@@ -98,6 +98,13 @@ public final class SimpleAuthenticator implements Authenticator
         private final ArrayList<Principal> principals = new ArrayList<>();
 
         /**
+         * Default constructor.
+         */
+        public Builder()
+        {
+        }
+
+        /**
          * Add a principal/credentials pair to the list supported by this authenticator. Note that the
          * {@link SimpleAuthenticator} keys the principals by the credentials, so the encoded credentials should
          * include the encoded principal. The associated {@link CredentialsSupplier} used on the client should handle

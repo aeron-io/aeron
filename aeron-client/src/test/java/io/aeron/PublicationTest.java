@@ -484,7 +484,7 @@ class PublicationTest
         {
             final int partitionIndex = 2;
             final int termId = TERM_ID_1 + 2;
-            final int termOffset = 978;
+            final int termOffset = 992;
             final int offset = 11;
             final int length = 23;
             when(publicationLimit.getVolatile()).thenReturn(Long.MAX_VALUE);
@@ -495,7 +495,7 @@ class PublicationTest
             final long position = publication.offer(
                 sendBuffer, offset, length, (termBuffer, frameOffset, frameLength) -> Long.MIN_VALUE);
 
-            assertEquals(525330, position);
+            assertEquals(525344, position);
             final UnsafeBuffer termBuffer = termBuffers[partitionIndex];
             assertEquals(Long.MIN_VALUE, DataHeaderFlyweight.reservedValue(termBuffer, termOffset));
             for (int i = 0; i < length; i++)

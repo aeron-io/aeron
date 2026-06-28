@@ -34,6 +34,10 @@ import static java.util.Collections.sort;
  */
 public final class NetworkUtil
 {
+    private NetworkUtil()
+    {
+    }
+
     /**
      * Search for a list of network interfaces that match the specified address and subnet prefix.
      * The results will be ordered by the length of the subnet prefix

@@ -56,6 +56,15 @@ public class RejectImageFlyweight extends CorrelatedMessageFlyweight
     private static final int MINIMUM_SIZE = REASON_FIELD_OFFSET + SIZE_OF_INT;
 
     /**
+     * An empty flyweight, which should be wrapped over a buffer.
+     *
+     * @see #wrap(MutableDirectBuffer, int)
+     */
+    public RejectImageFlyweight()
+    {
+    }
+
+    /**
      * Wrap the buffer at a given offset for updates.
      *
      * @param buffer to wrap.

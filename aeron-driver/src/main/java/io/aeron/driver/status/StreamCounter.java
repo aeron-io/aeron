@@ -43,7 +43,7 @@ import static org.agrona.concurrent.status.CountersReader.MAX_LABEL_LENGTH;
  *     Subscriber.</li>
  * </ul>
  */
-public class StreamCounter
+public final class StreamCounter
 {
     /**
      * Offset in the key metadata for the registration id of the counter.
@@ -69,6 +69,10 @@ public class StreamCounter
      * The maximum length in bytes of the encoded channel identity.
      */
     public static final int MAX_CHANNEL_LENGTH = CountersReader.MAX_KEY_LENGTH - (CHANNEL_OFFSET + SIZE_OF_INT);
+
+    private StreamCounter()
+    {
+    }
 
     /**
      * Allocate a counter id for tracking a position on a stream of messages.

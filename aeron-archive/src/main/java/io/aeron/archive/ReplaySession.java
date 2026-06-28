@@ -111,6 +111,7 @@ class ReplaySession implements Session, AutoCloseable
     private File segmentFile;
     private State state = State.INIT;
     private String errorMessage = null;
+    private int errorCode;
     private boolean revokePublication;
     private volatile boolean isAborted;
 
@@ -225,7 +226,7 @@ class ReplaySession implements Session, AutoCloseable
         }
         catch (final IOException ex)
         {
-            raiseError(ex.toString(), ex);
+            raiseError(ex.toString(), ArchiveException.GENERIC, ex);
         }
 
         if (State.INACTIVE == state)
@@ -283,7 +284,7 @@ class ReplaySession implements Session, AutoCloseable
         if (null != errorMessage)
         {
             onPendingError(sessionId, recordingId, errorMessage);
-            controlSession.sendErrorResponse(correlationId, ArchiveException.GENERIC, errorMessage);
+            controlSession.sendErrorResponse(correlationId, errorCode, errorMessage);
         }
     }
 
@@ -301,7 +302,7 @@ class ReplaySession implements Session, AutoCloseable
             {
                 if (epochClock.time() > connectDeadlineMs)
                 {
-                    raiseError("recording segment file not created", null);
+                    raiseError("recording segment file not created", ArchiveException.GENERIC, null);
                 }
 
                 return 0;
@@ -322,7 +323,8 @@ class ReplaySession implements Session, AutoCloseable
                 {
                     if (notHeaderAligned(fileChannel, replayBuffer, segmentOffset, termOffset, termId, streamId))
                     {
-                        raiseError("replayPosition=" + framePosition(0) + " does not point to a valid frame", null);
+                        raiseError("replayPosition=" + framePosition(0) +
+                            " does not point to a valid frame", ArchiveException.INVALID_POSITION, null);
                         return 0;
                     }
                 }
@@ -336,7 +338,7 @@ class ReplaySession implements Session, AutoCloseable
             if (epochClock.time() > connectDeadlineMs)
             {
                 raiseError("no connection established for replayChannel=" + publication.channel() +
-                    ", replayStreamId=" + publication.streamId(), null);
+                    ", replayStreamId=" + publication.streamId(), ArchiveException.GENERIC, null);
             }
 
             return 0;
@@ -391,7 +393,8 @@ class ReplaySession implements Session, AutoCloseable
                     final int frameLength = frameLength(replayBuffer, batchOffset);
                     if (frameLength <= 0)
                     {
-                        raiseError("unexpected end of recording at position=" + framePosition(batchOffset), null);
+                        raiseError("unexpected end of recording at position=" + framePosition(batchOffset),
+                            ArchiveException.GENERIC, null);
                     }
 
                     final int frameType = frameType(replayBuffer, batchOffset);
@@ -494,7 +497,7 @@ class ReplaySession implements Session, AutoCloseable
         {
             final String message = "CRC checksum mismatch at position=" + framePosition(frameOffset) +
                 ": recorded checksum=" + recordedChecksum + ", computed checksum=" + computedChecksum;
-            raiseError(message, null);
+            raiseError(message, ArchiveException.GENERIC, null);
         }
     }
 
@@ -520,15 +523,16 @@ class ReplaySession implements Session, AutoCloseable
         return limit;
     }
 
-    private void raiseError(final String errorMessage, final Throwable cause)
+    private void raiseError(final String errorMessage, final int errorCode, final Throwable cause)
     {
         revokePublication = true;
+        this.errorCode = errorCode;
         this.errorMessage = errorMessage +
             ", recordingId=" + recordingId +
             ", replaySessionId=" + sessionId +
             ", segmentFile=" + segmentFileName(recordingId, segmentFileBasePosition);
         state(State.INACTIVE, errorMessage);
-        throw new ArchiveException(this.errorMessage, cause, ArchiveException.GENERIC);
+        throw new ArchiveException(this.errorMessage, cause, errorCode);
     }
 
     private boolean notExtended(final long replayPosition, final long oldStopPosition)
@@ -597,7 +601,7 @@ class ReplaySession implements Session, AutoCloseable
 
             if (!segmentFile.exists())
             {
-                raiseError("recording segment not found", null);
+                raiseError("recording segment not found", ArchiveException.GENERIC, null);
                 return;
             }
         }

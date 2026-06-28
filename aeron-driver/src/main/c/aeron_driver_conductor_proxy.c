@@ -67,14 +67,7 @@ void aeron_driver_conductor_proxy_on_create_publication_image_cmd(
     memcpy(&cmd.control_address, control_address, sizeof(struct sockaddr_storage));
     memcpy(&cmd.src_address, src_address, sizeof(struct sockaddr_storage));
 
-    if (AERON_THREADING_MODE_IS_SHARED_OR_INVOKER(conductor_proxy->threading_mode))
-    {
-        aeron_driver_conductor_on_create_publication_image(conductor_proxy->conductor, &cmd);
-    }
-    else
-    {
-        aeron_driver_conductor_proxy_offer(conductor_proxy, &cmd, sizeof(cmd));
-    }
+    aeron_driver_conductor_proxy_offer(conductor_proxy, &cmd, sizeof(cmd));
 }
 
 void aeron_driver_conductor_proxy_on_re_resolve(
@@ -94,14 +87,7 @@ void aeron_driver_conductor_proxy_on_re_resolve(
         };
     memcpy(&cmd.existing_addr, existing_addr, sizeof(cmd.existing_addr));
 
-    if (AERON_THREADING_MODE_IS_SHARED_OR_INVOKER(conductor_proxy->threading_mode))
-    {
-        resolve_func(conductor_proxy->conductor, &cmd);
-    }
-    else
-    {
-        aeron_driver_conductor_proxy_offer(conductor_proxy, &cmd, sizeof(cmd));
-    }
+    aeron_driver_conductor_proxy_offer(conductor_proxy, &cmd, sizeof(cmd));
 }
 
 void aeron_driver_conductor_proxy_on_re_resolve_endpoint(
@@ -141,14 +127,7 @@ void aeron_driver_conductor_proxy_on_delete_receive_destination(
             .channel = channel
         };
 
-    if (AERON_THREADING_MODE_IS_SHARED_OR_INVOKER(conductor_proxy->threading_mode))
-    {
-        aeron_driver_conductor_on_delete_receive_destination(conductor_proxy->conductor, &cmd);
-    }
-    else
-    {
-        aeron_driver_conductor_proxy_offer(conductor_proxy, &cmd, sizeof(cmd));
-    }
+    aeron_driver_conductor_proxy_offer(conductor_proxy, &cmd, sizeof(cmd));
 }
 
 void aeron_driver_conductor_proxy_on_delete_send_destination(
@@ -160,14 +139,7 @@ void aeron_driver_conductor_proxy_on_delete_send_destination(
             .item = removed_uri,
         };
 
-    if (AERON_THREADING_MODE_IS_SHARED_OR_INVOKER(conductor_proxy->threading_mode))
-    {
-        aeron_driver_conductor_on_delete_send_destination(conductor_proxy->conductor, &cmd);
-    }
-    else
-    {
-        aeron_driver_conductor_proxy_offer(conductor_proxy, &cmd, sizeof(cmd));
-    }
+    aeron_driver_conductor_proxy_offer(conductor_proxy, &cmd, sizeof(cmd));
 }
 
 void aeron_driver_conductor_proxy_on_receive_endpoint_removed(
@@ -179,14 +151,7 @@ void aeron_driver_conductor_proxy_on_receive_endpoint_removed(
             .item = endpoint
         };
 
-    if (AERON_THREADING_MODE_IS_SHARED_OR_INVOKER(conductor_proxy->threading_mode))
-    {
-        aeron_driver_conductor_on_receive_endpoint_removed(conductor_proxy->conductor, &cmd);
-    }
-    else
-    {
-        aeron_driver_conductor_proxy_offer(conductor_proxy, &cmd, sizeof(cmd));
-    }
+    aeron_driver_conductor_proxy_offer(conductor_proxy, &cmd, sizeof(cmd));
 }
 
 void aeron_driver_conductor_proxy_on_response_setup(
@@ -203,14 +168,7 @@ void aeron_driver_conductor_proxy_on_response_setup(
         .response_session_id = response_session_id
     };
 
-    if (AERON_THREADING_MODE_IS_SHARED_OR_INVOKER(conductor_proxy->threading_mode))
-    {
-        aeron_driver_conductor_on_response_setup(conductor_proxy->conductor, &cmd);
-    }
-    else
-    {
-        aeron_driver_conductor_proxy_offer(conductor_proxy, &cmd, sizeof(cmd));
-    }
+    aeron_driver_conductor_proxy_offer(conductor_proxy, &cmd, sizeof(cmd));
 }
 
 void aeron_driver_conductor_proxy_on_response_connected(
@@ -225,14 +183,7 @@ void aeron_driver_conductor_proxy_on_response_connected(
         .response_correlation_id = response_correlation_id
     };
 
-    if (AERON_THREADING_MODE_IS_SHARED_OR_INVOKER(conductor_proxy->threading_mode))
-    {
-        aeron_driver_conductor_on_response_connected(conductor_proxy->conductor, &cmd);
-    }
-    else
-    {
-        aeron_driver_conductor_proxy_offer(conductor_proxy, &cmd, sizeof(cmd));
-    }
+    aeron_driver_conductor_proxy_offer(conductor_proxy, &cmd, sizeof(cmd));
 }
 
 void aeron_driver_conductor_proxy_on_release_resource(
@@ -250,14 +201,7 @@ void aeron_driver_conductor_proxy_on_release_resource(
             .resource_type = resource_type
         };
 
-    if (AERON_THREADING_MODE_IS_SHARED_OR_INVOKER(conductor_proxy->threading_mode))
-    {
-        aeron_driver_conductor_on_release_resource(conductor_proxy->conductor, &cmd);
-    }
-    else
-    {
-        aeron_driver_conductor_proxy_offer(conductor_proxy, &cmd, sizeof(cmd));
-    }
+    aeron_driver_conductor_proxy_offer(conductor_proxy, &cmd, sizeof(cmd));
 }
 
 void aeron_driver_conductor_proxy_on_publication_error(
@@ -294,13 +238,5 @@ void aeron_driver_conductor_proxy_on_publication_error(
 
     size_t cmd_length = sizeof(aeron_command_publication_error_t) + error_length + 1;
 
-    if (AERON_THREADING_MODE_IS_SHARED_OR_INVOKER(conductor_proxy->threading_mode))
-    {
-        aeron_driver_conductor_on_publication_error(conductor_proxy->conductor, error);
-    }
-    else
-    {
-        aeron_driver_conductor_proxy_offer(conductor_proxy, (void *)error, cmd_length);
-    }
+    aeron_driver_conductor_proxy_offer(conductor_proxy, (void *)error, cmd_length);
 }
-

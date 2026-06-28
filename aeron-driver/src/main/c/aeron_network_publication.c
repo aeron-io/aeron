@@ -285,7 +285,7 @@ int aeron_network_publication_create(
     _pub->conductor_fields.has_reached_end_of_life = false;
     _pub->conductor_fields.clean_position = 0;
     _pub->conductor_fields.state = AERON_NETWORK_PUBLICATION_STATE_ACTIVE;
-    _pub->conductor_fields.refcnt = 1;
+    _pub->conductor_fields.refcnt = 0;
     _pub->conductor_fields.time_of_last_activity_ns = now_ns;
     _pub->conductor_fields.last_snd_pos = 0;
     _pub->session_id = session_id;
@@ -488,7 +488,9 @@ int aeron_network_publication_setup_message_check(
 
         publication->time_of_last_setup_ns = now_ns;
 
-        if (publication->has_receivers)
+        bool has_receivers;
+        AERON_GET_ACQUIRE(has_receivers, publication->has_receivers);
+        if (has_receivers)
         {
             publication->is_setup_elicited = false;
         }
@@ -564,14 +566,13 @@ int aeron_network_publication_send_data(
     const size_t max_vlen = publication->max_messages_per_send;
     int result = 0, vlen = 0;
     int64_t bytes_sent = 0;
-    int32_t available_window = (int32_t)(aeron_counter_get_plain(publication->snd_lmt_position.value_addr) - snd_pos);
+    int64_t available_window = aeron_counter_get_plain(publication->snd_lmt_position.value_addr) - snd_pos;
     int64_t highest_pos = snd_pos;
     struct iovec iov[AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND];
 
     for (size_t i = 0; i < max_vlen && available_window > 0; i++)
     {
-        int32_t scan_limit = available_window < (int32_t)publication->mtu_length ?
-           available_window : (int32_t)publication->mtu_length;
+        int32_t scan_limit = (int32_t)AERON_MIN(available_window, (int64_t)publication->mtu_length);
         size_t active_index = aeron_logbuffer_index_by_position(snd_pos, publication->position_bits_to_shift);
         int32_t padding = 0;
 
@@ -667,9 +668,15 @@ int aeron_network_publication_send(aeron_network_publication_t *publication, int
         bool has_spies;
         AERON_GET_ACQUIRE(has_spies, publication->has_spies);
 
-        if (publication->spies_simulate_connection && has_spies && !publication->has_receivers)
+        bool has_receivers;
+        AERON_GET_ACQUIRE(has_receivers, publication->has_receivers);
+
+        if (publication->spies_simulate_connection && has_spies && !has_receivers)
         {
-            const int64_t new_snd_pos = aeron_network_publication_max_spy_position(publication, snd_pos);
+            int64_t max_spy_position;
+            AERON_GET_ACQUIRE(max_spy_position, publication->conductor_fields.max_spy_position);
+
+            const int64_t new_snd_pos = max_spy_position > snd_pos ? max_spy_position : snd_pos;
             aeron_counter_set_release(publication->snd_pos_position.value_addr, new_snd_pos);
 
             int64_t flow_control_position = publication->flow_control->on_idle(
@@ -887,6 +894,23 @@ void aeron_network_publication_on_status_message(
             aeron_network_publication_has_subscribers(publication));
 }
 
+bool aeron_network_publication_is_valid_status_message(
+    aeron_network_publication_t *publication, const uint8_t *buffer)
+{
+    const aeron_status_message_header_t *sm = (aeron_status_message_header_t *)buffer;
+
+    int64_t sm_position = aeron_logbuffer_compute_position(
+        sm->consumption_term_id,
+        sm->consumption_term_offset,
+        publication->position_bits_to_shift,
+        publication->initial_term_id);
+
+    int64_t snd_pos = aeron_counter_get_plain(publication->snd_pos_position.value_addr);
+    int64_t max_transmission_window = publication->term_buffer_length >> 1;
+
+    return sm_position >= snd_pos - max_transmission_window && sm_position <= snd_pos + max_transmission_window;
+}
+
 void aeron_network_publication_on_error(
     aeron_network_publication_t *publication,
     int64_t destination_registration_id,
@@ -992,6 +1016,7 @@ int aeron_network_publication_update_pub_pos_and_lmt(aeron_network_publication_t
             int64_t min_consumer_position = snd_pos;
             if (publication->conductor_fields.subscribable.length > 0)
             {
+                int64_t max_consumer_position = snd_pos;
                 for (size_t i = 0, length = publication->conductor_fields.subscribable.length; i < length; i++)
                 {
                     aeron_tetherable_position_t *tetherable_position =
@@ -1001,7 +1026,12 @@ int aeron_network_publication_update_pub_pos_and_lmt(aeron_network_publication_t
                     {
                         int64_t position = aeron_counter_get_acquire(tetherable_position->value_addr);
                         min_consumer_position = position < min_consumer_position ? position : min_consumer_position;
+                        max_consumer_position = position > max_consumer_position ? position : max_consumer_position;
                     }
+                }
+                if (max_consumer_position > publication->conductor_fields.max_spy_position)
+                {
+                    AERON_SET_RELEASE(publication->conductor_fields.max_spy_position, max_consumer_position);
                 }
             }
 
@@ -1416,8 +1446,6 @@ extern void aeron_network_publication_trigger_send_setup_frame(
 extern void aeron_network_publication_sender_release(aeron_network_publication_t *publication);
 
 extern bool aeron_network_publication_has_sender_released(aeron_network_publication_t *publication);
-
-extern int64_t aeron_network_publication_max_spy_position(aeron_network_publication_t *publication, int64_t snd_pos);
 
 extern bool aeron_network_publication_is_accepting_subscriptions(aeron_network_publication_t *publication);
 

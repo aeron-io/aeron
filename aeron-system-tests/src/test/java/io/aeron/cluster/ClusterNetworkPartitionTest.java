@@ -15,16 +15,7 @@
  */
 package io.aeron.cluster;
 
-import io.aeron.Aeron;
-import io.aeron.ChannelUri;
-import io.aeron.Image;
-import io.aeron.Subscription;
-import io.aeron.archive.client.AeronArchive;
-import io.aeron.archive.status.RecordingPos;
-import io.aeron.cluster.codecs.MessageHeaderDecoder;
-import io.aeron.cluster.codecs.SessionMessageHeaderDecoder;
 import io.aeron.cluster.service.Cluster;
-import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.test.EventLogExtension;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
@@ -35,9 +26,9 @@ import io.aeron.test.TopologyTest;
 import io.aeron.test.cluster.ClusterTests;
 import io.aeron.test.cluster.TestCluster;
 import io.aeron.test.cluster.TestNode;
-import org.agrona.collections.MutableInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -57,15 +48,18 @@ import static io.aeron.cluster.client.AeronCluster.SESSION_HEADER_LENGTH;
 import static io.aeron.logbuffer.FrameDescriptor.FRAME_ALIGNMENT;
 import static io.aeron.protocol.DataHeaderFlyweight.HEADER_LENGTH;
 import static io.aeron.test.cluster.TestCluster.aCluster;
+import static io.aeron.test.cluster.TestCluster.awaitElectionClosed;
+import static io.aeron.test.cluster.TestCluster.awaitElectionState;
+import static io.aeron.test.cluster.TestCluster.awaitLeaderLogRecording;
 import static org.agrona.BitUtil.align;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 @TopologyTest
 @ExtendWith({ EventLogExtension.class, InterruptingTestCallback.class })
 @EnabledOnOs(OS.LINUX)
+@Disabled("Requires sudo to run iptables")
 class ClusterNetworkPartitionTest
 {
     private static final List<String> HOSTNAMES =
@@ -75,8 +69,6 @@ class ClusterNetworkPartitionTest
 
     @RegisterExtension
     final SystemTestWatcher systemTestWatcher = new SystemTestWatcher();
-    private final MessageHeaderDecoder messageHeaderDecoder = new MessageHeaderDecoder();
-    private final SessionMessageHeaderDecoder sessionHeaderDecoder = new SessionMessageHeaderDecoder();
     private TestCluster cluster;
 
     @BeforeEach
@@ -173,7 +165,7 @@ class ClusterNetworkPartitionTest
         final int messagesReceivedByMinority = 300;
         cluster.sendMessages(messagesReceivedByMinority);
 
-        awaitLeaderLogRecording(firstLeader, committedMessageCount + messagesReceivedByMinority);
+        awaitLeaderLogRecording(cluster, firstLeader, committedMessageCount + messagesReceivedByMinority);
 
         verifyClusterState(commitPositionBeforePartition, committedMessageCount);
 
@@ -239,7 +231,7 @@ class ClusterNetworkPartitionTest
             HEADER_LENGTH + SESSION_HEADER_LENGTH + ClusterTests.LARGE_MSG.length(), FRAME_ALIGNMENT);
         cluster.sendLargeMessages(messagesReceivedByMinority);
 
-        awaitLeaderLogRecording(firstLeader, committedMessageCount + messagesReceivedByMinority);
+        awaitLeaderLogRecording(cluster, firstLeader, committedMessageCount + messagesReceivedByMinority);
 
         verifyClusterState(commitPositionBeforePartition, committedMessageCount);
 
@@ -295,8 +287,7 @@ class ClusterNetworkPartitionTest
         cluster.sendMessages(messagesReceivedByMinority); // these messages will be only received by 2 out of 5 nodes
 
         final int expectedFinalMessageCount = initialMessageCount + messagesReceivedByMinority;
-        final long leaderAppendPosition =
-            awaitLeaderLogRecording(leader, expectedFinalMessageCount);
+        final long leaderAppendPosition = awaitLeaderLogRecording(cluster, leader, expectedFinalMessageCount);
 
         Tests.await(() -> leaderAppendPosition == fastFollower.appendPosition());
 
@@ -306,12 +297,12 @@ class ClusterNetworkPartitionTest
         fastFollower.isTerminationExpected(true);
         fastFollower.close();
         final TestNode fastFollowerRestarted = cluster.startStaticNode(fastFollower.memberId(), false);
-        TestCluster.awaitElectionState(fastFollowerRestarted, ElectionState.FOLLOWER_REPLAY);
+        awaitElectionState(fastFollowerRestarted, ElectionState.FOLLOWER_REPLAY);
         verifyNodeState(fastFollowerRestarted, commitPositionBeforePartition, initialMessageCount);
 
         IpTables.flushChain(CHAIN_NAME); // remove network partition
         assertSame(leader, cluster.awaitLeader());
-        TestCluster.awaitElectionClosed(fastFollowerRestarted);
+        awaitElectionClosed(fastFollowerRestarted);
 
         // Once the network partition is removed the majority of nodes will receive the missing data and the commit
         // position will advance. This in turn will unblock `FOLLOWER_REPLAY` progress that is bounded by it.
@@ -351,7 +342,7 @@ class ClusterNetworkPartitionTest
         cluster.sendMessages(messagesReceivedByMinority); // these messages will be only received by 2 out of 5 nodes
 
         final long leaderAppendPosition =
-            awaitLeaderLogRecording(originalLeader, initialMessageCount + messagesReceivedByMinority);
+            awaitLeaderLogRecording(cluster, originalLeader, initialMessageCount + messagesReceivedByMinority);
 
         Tests.await(() -> leaderAppendPosition == fastFollower.appendPosition());
 
@@ -372,7 +363,7 @@ class ClusterNetworkPartitionTest
 
         // restart sleeping node in new term
         final TestNode fastFollowerRestarted = cluster.startStaticNode(fastFollower.memberId(), false);
-        TestCluster.awaitElectionClosed(fastFollowerRestarted);
+        awaitElectionClosed(fastFollowerRestarted);
         assertEquals(Cluster.Role.FOLLOWER, fastFollowerRestarted.role());
 
         final long commitPositionInNewTerm = majorityLeader.commitPosition();
@@ -419,10 +410,10 @@ class ClusterNetworkPartitionTest
         cluster.sendMessages(numMessagesAfterPartition); // only leader will receive these messages
 
         final long leaderAppendPosition =
-            awaitLeaderLogRecording(leader, initialMessageCount + numMessagesAfterPartition);
+            awaitLeaderLogRecording(cluster, leader, initialMessageCount + numMessagesAfterPartition);
 
         final TestNode follower1Restarted = cluster.startStaticNode(follower1.memberId(), false);
-        TestCluster.awaitElectionState(follower1Restarted, ElectionState.FOLLOWER_CATCHUP_AWAIT);
+        awaitElectionState(follower1Restarted, ElectionState.FOLLOWER_CATCHUP_AWAIT);
 
         follower2.isTerminationExpected(true);
         follower2.close();
@@ -430,75 +421,15 @@ class ClusterNetworkPartitionTest
         IpTables.flushChain(CHAIN_NAME); // remove network partition
 
         final TestNode follower2Restarted = cluster.startStaticNode(follower2.memberId(), false);
-        TestCluster.awaitElectionState(follower2Restarted, ElectionState.FOLLOWER_CATCHUP_AWAIT);
+        awaitElectionState(follower2Restarted, ElectionState.FOLLOWER_CATCHUP_AWAIT);
 
         // wait for election to be complete
         assertSame(leader, cluster.awaitLeader());
         assertEquals(Cluster.Role.LEADER, leader.role());
-        TestCluster.awaitElectionClosed(follower1Restarted);
-        TestCluster.awaitElectionClosed(follower2Restarted);
+        awaitElectionClosed(follower1Restarted);
+        awaitElectionClosed(follower2Restarted);
 
         verifyClusterState(leaderAppendPosition, initialMessageCount + numMessagesAfterPartition);
-    }
-
-    private long awaitLeaderLogRecording(final TestNode leader, final int expectedMessageCount)
-    {
-        final long firstLeaderLogRecordingId =
-            RecordingPos.getRecordingId(leader.mediaDriver().counters(), leader.logRecordingCounterId());
-
-        // await leader to record all ingress messages
-        try (AeronArchive aeronArchive = AeronArchive.connect(new AeronArchive.Context()
-            .clientName("test")
-            .aeronDirectoryName(cluster.startClientMediaDriver().aeronDirectoryName())
-            .controlRequestChannel(leader.archive().context().controlChannel())
-            .controlRequestStreamId(leader.archive().context().controlStreamId())
-            .controlResponseChannel("aeron:udp?endpoint=localhost:0")))
-        {
-            final Aeron aeron = aeronArchive.context().aeron();
-            final String replayChannel = "aeron:udp?endpoint=localhost:18181";
-            final int replayStreamId = 1111;
-            final long replaySubscriptionId = aeronArchive.startReplay(
-                firstLeaderLogRecordingId, 0, AeronArchive.REPLAY_ALL_AND_FOLLOW, replayChannel, replayStreamId);
-            final int sessionId = (int)replaySubscriptionId;
-            final Subscription subscription =
-                aeron.addSubscription(ChannelUri.addSessionId(replayChannel, sessionId), replayStreamId);
-            Tests.awaitConnected(subscription);
-
-            final Image image = subscription.imageBySessionId(sessionId);
-            assertNotNull(image);
-            final MutableInteger messageCount = new MutableInteger();
-            final FragmentHandler fragmentHandler = (buffer, offset, length, header) ->
-            {
-                messageHeaderDecoder.wrap(buffer, offset);
-                if (MessageHeaderDecoder.SCHEMA_ID == messageHeaderDecoder.schemaId() &&
-                    SessionMessageHeaderDecoder.TEMPLATE_ID == messageHeaderDecoder.templateId())
-                {
-                    sessionHeaderDecoder.wrap(
-                        buffer,
-                        offset + MessageHeaderDecoder.ENCODED_LENGTH,
-                        messageHeaderDecoder.blockLength(),
-                        messageHeaderDecoder.version());
-                    messageCount.increment();
-                }
-            };
-
-            final Supplier<String> messageSupplier = () -> "awaiting expectedMessageCount=" + expectedMessageCount +
-                ", currentMessageCount=" + messageCount.get();
-            while (messageCount.get() < expectedMessageCount)
-            {
-                if (0 == image.poll(fragmentHandler, 100))
-                {
-                    Tests.yieldingIdle(messageSupplier);
-                }
-            }
-
-            final long position = image.position();
-
-            subscription.close();
-            aeronArchive.stopReplay(replaySubscriptionId);
-
-            return position;
-        }
     }
 
     private static void blockTrafficToSpecificEndpoint(

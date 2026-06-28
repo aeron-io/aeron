@@ -20,12 +20,17 @@ import io.aeron.utility.ElementIO;
 /**
  * A gradle task for generating config documentation.
  */
-public class GenerateConfigDocTask
+public final class GenerateConfigDocTask
 {
+    private GenerateConfigDocTask()
+    {
+    }
+
     /**
-     * @param args
-     * Arg 0 should be the location of a config-info.xml file with a list of ConfigInfo objects.
-     * Arg 1 should be the location of an output file where a .md file is to be written.
+     * Run the config generator task.
+     *
+     * @param args Arg 0 should be the location of a config-info.xml file with a list of ConfigInfo objects. Arg 1
+     *             should be the location of an output file where a .md file is to be written.
      * @throws Exception on IO failure.
      */
     public static void main(final String[] args) throws Exception

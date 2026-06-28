@@ -25,8 +25,6 @@ import org.agrona.ErrorHandler;
 import org.agrona.LangUtil;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
-import org.agrona.concurrent.status.AtomicCounter;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -39,26 +37,22 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
 
 class ClientCommandAdapterTest
 {
-    private final AtomicCounter errors = mock(AtomicCounter.class);
     private final ErrorHandler errorHandler = mock(ErrorHandler.class);
     private final RingBuffer toDriverCommands = mock(RingBuffer.class);
     private final ClientProxy clientProxy = mock(ClientProxy.class);
     private final DriverConductor driverConductor = mock(DriverConductor.class);
     private final ClientCommandAdapter clientCommandAdapter = new ClientCommandAdapter(
-        errors, errorHandler, toDriverCommands, clientProxy, driverConductor);
+        errorHandler, toDriverCommands, clientProxy, driverConductor);
 
     private final UnsafeBuffer buffer = new UnsafeBuffer(new byte[1024]);
     private final PublicationMessageFlyweight publicationMsgFlyweight = new PublicationMessageFlyweight();
-
-    @BeforeEach
-    void before()
-    {
-        when(errors.isClosed()).thenReturn(false);
-    }
 
     @Test
     void shouldThrowControlProtocolExceptionIfUnknownCommand()
@@ -71,9 +65,7 @@ class ClientCommandAdapterTest
 
         final ArgumentCaptor<ControlProtocolException> exceptionArgumentCaptor =
             ArgumentCaptor.forClass(ControlProtocolException.class);
-        final InOrder inOrder = inOrder(errors, errorHandler, clientProxy);
-        inOrder.verify(errors).isClosed();
-        inOrder.verify(errors).increment();
+        final InOrder inOrder = inOrder(errorHandler, clientProxy);
         inOrder.verify(errorHandler).onError(exceptionArgumentCaptor.capture());
         inOrder.verify(clientProxy).onError(0, expectedErrorCode, expectedErrorMessage);
         inOrder.verifyNoMoreInteractions();
@@ -107,10 +99,8 @@ class ClientCommandAdapterTest
         clientCommandAdapter.onMessage(
             ControlProtocolEvents.ADD_PUBLICATION, buffer, 0, publicationMsgFlyweight.length());
 
-        final InOrder inOrder = inOrder(driverConductor, errors, errorHandler, clientProxy);
+        final InOrder inOrder = inOrder(driverConductor, errorHandler, clientProxy);
         inOrder.verify(driverConductor).onAddNetworkPublication(channel, streamId, correlationId, clientId, false);
-        inOrder.verify(errors).isClosed();
-        inOrder.verify(errors).increment();
         inOrder.verify(errorHandler).onError(exception);
         inOrder.verify(clientProxy).onError(correlationId, expectedErrorCode, expectedErrorMessage);
         inOrder.verifyNoMoreInteractions();
@@ -139,10 +129,8 @@ class ClientCommandAdapterTest
         clientCommandAdapter.onMessage(
             ControlProtocolEvents.ADD_PUBLICATION, buffer, 0, publicationMsgFlyweight.length());
 
-        final InOrder inOrder = inOrder(driverConductor, errors, errorHandler, clientProxy);
+        final InOrder inOrder = inOrder(driverConductor, errorHandler, clientProxy);
         inOrder.verify(driverConductor).onAddIpcPublication(channel, streamId, correlationId, clientId, false);
-        inOrder.verify(errors).isClosed();
-        inOrder.verify(errors).increment();
         inOrder.verify(errorHandler).onError(exception);
         inOrder.verify(clientProxy).onError(correlationId, expectedErrorCode, expectedErrorMessage);
         inOrder.verifyNoMoreInteractions();
@@ -174,10 +162,8 @@ class ClientCommandAdapterTest
         clientCommandAdapter.onMessage(
             ControlProtocolEvents.ADD_PUBLICATION, buffer, 0, publicationMsgFlyweight.length());
 
-        final InOrder inOrder = inOrder(driverConductor, errors, errorHandler, clientProxy);
+        final InOrder inOrder = inOrder(driverConductor, errorHandler, clientProxy);
         inOrder.verify(driverConductor).onAddIpcPublication(channel, streamId, correlationId, clientId, false);
-        inOrder.verify(errors).isClosed();
-        inOrder.verify(errors).increment();
         inOrder.verify(errorHandler).onError(exception);
         inOrder.verify(clientProxy).onError(correlationId, expectedErrorCode, expectedErrorMessage);
         inOrder.verifyNoMoreInteractions();

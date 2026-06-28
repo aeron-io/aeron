@@ -98,8 +98,11 @@ static void aeron_data_packet_dispatcher_delete_stream_interest(void *clientd, i
 
 int aeron_data_packet_dispatcher_close(aeron_data_packet_dispatcher_t *dispatcher)
 {
-    aeron_int64_to_ptr_hash_map_for_each(
-        &dispatcher->session_by_stream_id_map, aeron_data_packet_dispatcher_delete_stream_interest, dispatcher);
+    if (NULL != dispatcher->session_by_stream_id_map.keys && NULL != dispatcher->session_by_stream_id_map.values)
+    {
+        aeron_int64_to_ptr_hash_map_for_each(
+            &dispatcher->session_by_stream_id_map, aeron_data_packet_dispatcher_delete_stream_interest, dispatcher);
+    }
     aeron_int64_to_ptr_hash_map_delete(&dispatcher->ignored_sessions_map);
     aeron_int64_to_ptr_hash_map_delete(&dispatcher->session_by_stream_id_map);
 

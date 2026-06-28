@@ -37,7 +37,7 @@ public class ControlProtocolException extends AeronException
      */
     public ControlProtocolException(final ErrorCode code, final String msg)
     {
-        super(msg);
+        super(msg, errorToCategory(code));
         this.code = code;
     }
 
@@ -49,7 +49,7 @@ public class ControlProtocolException extends AeronException
      */
     public ControlProtocolException(final ErrorCode code, final Exception rootCause)
     {
-        super(rootCause);
+        super(rootCause, errorToCategory(code));
         this.code = code;
     }
 
@@ -62,7 +62,7 @@ public class ControlProtocolException extends AeronException
      */
     public ControlProtocolException(final ErrorCode code, final String msg, final Exception rootCause)
     {
-        super(msg, rootCause);
+        super(msg, rootCause, errorToCategory(code));
         this.code = code;
     }
 
@@ -74,5 +74,10 @@ public class ControlProtocolException extends AeronException
     public ErrorCode errorCode()
     {
         return code;
+    }
+
+    static Category errorToCategory(final ErrorCode errorCode)
+    {
+        return ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE == errorCode ? Category.WARN : Category.ERROR;
     }
 }

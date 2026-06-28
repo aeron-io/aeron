@@ -64,8 +64,6 @@ int aeron_archive_check_and_setup_response_channel(aeron_archive_context_t *ctx,
 
 int aeron_archive_async_connect_transition_to_done(aeron_archive_t **aeron_archive, aeron_archive_async_connect_t *async, int64_t archive_id);
 
-int aeron_archive_async_connect_delete(aeron_archive_async_connect_t *async);
-
 /* *********************** */
 
 uint8_t aeron_archive_async_connect_step(aeron_archive_async_connect_t *async)
@@ -365,7 +363,7 @@ int aeron_archive_async_connect_poll(aeron_archive_t **aeron_archive, aeron_arch
             poller->correlation_id == async->correlation_id)
         {
             async->control_session_id = poller->control_session_id;
-            aeron_archive_proxy_set_control_esssion_id(async->archive_proxy, poller->control_session_id);
+            aeron_archive_proxy_set_control_session_id(async->archive_proxy, poller->control_session_id);
 
             if (poller->was_challenged)
             {
@@ -530,6 +528,18 @@ int aeron_archive_async_connect_transition_to_done(aeron_archive_t **aeron_archi
 
 int aeron_archive_async_connect_delete(aeron_archive_async_connect_t *async)
 {
+    if (NULL != async->async_add_subscription)
+    {
+        aeron_async_add_subscription_cancel(async->aeron, async->async_add_subscription);
+        async->async_add_subscription = NULL;
+    }
+
+    if (NULL != async->async_add_exclusive_publication)
+    {
+        aeron_async_add_exclusive_publication_cancel(async->aeron, async->async_add_exclusive_publication);
+        async->async_add_exclusive_publication = NULL;
+    }
+
     if (NULL != async->subscription)
     {
         aeron_subscription_close(async->subscription, NULL, NULL);

@@ -138,36 +138,37 @@ AERON_DECLARE_SOURCED_EXCEPTION(UnknownSubscriptionException, ExceptionCategory:
 AERON_DECLARE_SOURCED_EXCEPTION(ReentrantException, ExceptionCategory::EXCEPTION_CATEGORY_ERROR);
 AERON_DECLARE_SOURCED_EXCEPTION(UnsupportedOperationException, ExceptionCategory::EXCEPTION_CATEGORY_ERROR);
 
-#define AERON_MAP_TO_SOURCED_EXCEPTION_AND_THROW_WITH_DEFAULT(code, message, defaultException)  \
-do                                                                                  \
-{                                                                                   \
-    switch (code)                                                                   \
-    {                                                                               \
-        case EINVAL:                                                                \
-            throw IllegalArgumentException(message, SOURCEINFO);                    \
-                                                                                    \
-        case EPERM:                                                                 \
-        case AERON_CLIENT_ERROR_BUFFER_FULL:                                        \
-            throw IllegalStateException(message, SOURCEINFO);                       \
-                                                                                    \
-        case EIO:                                                                   \
-        case ENOENT:                                                                \
-            throw IOException(message, SOURCEINFO);                                 \
-                                                                                    \
-        case AERON_CLIENT_ERROR_DRIVER_TIMEOUT:                                     \
-            throw DriverTimeoutException(message, SOURCEINFO);                      \
-                                                                                    \
-        case AERON_CLIENT_ERROR_CLIENT_TIMEOUT:                                     \
-            throw ClientTimeoutException(message, SOURCEINFO);                      \
-                                                                                    \
-        case AERON_CLIENT_ERROR_CONDUCTOR_SERVICE_TIMEOUT:                          \
-            throw ConductorServiceTimeoutException(message, SOURCEINFO);            \
-                                                                                    \
-        case ETIMEDOUT:                                                             \
-        default:                                                                    \
-            throw defaultException(message, SOURCEINFO);                            \
-    }                                                                               \
-}                                                                                   \
+#define AERON_MAP_TO_SOURCED_EXCEPTION_AND_THROW_WITH_DEFAULT(code, message, defaultException) \
+do                                                                                             \
+{                                                                                              \
+    switch ((code))                                                                            \
+    {                                                                                          \
+        case EINVAL:                                                                           \
+            throw IllegalArgumentException((message), SOURCEINFO);                             \
+                                                                                               \
+        case EPERM:                                                                            \
+        case -AERON_CLIENT_ERROR_BUFFER_FULL:                                                  \
+        case -AERON_CLIENT_ERROR_DRIVER_BUFFER_FULL:                                           \
+            throw IllegalStateException((message), SOURCEINFO);                                \
+                                                                                               \
+        case EIO:                                                                              \
+        case ENOENT:                                                                           \
+            throw IOException((message), SOURCEINFO);                                          \
+                                                                                               \
+        case -AERON_CLIENT_ERROR_DRIVER_TIMEOUT:                                               \
+            throw DriverTimeoutException((message), SOURCEINFO);                               \
+                                                                                               \
+        case -AERON_CLIENT_ERROR_CLIENT_TIMEOUT:                                               \
+            throw ClientTimeoutException((message), SOURCEINFO);                               \
+                                                                                               \
+        case -AERON_CLIENT_ERROR_CONDUCTOR_SERVICE_TIMEOUT:                                    \
+            throw ConductorServiceTimeoutException((message), SOURCEINFO);                     \
+                                                                                               \
+        case ETIMEDOUT:                                                                        \
+        default:                                                                               \
+            throw defaultException((message), SOURCEINFO);                                     \
+    }                                                                                          \
+}                                                                                              \
 while (0)
 
 #define AERON_MAP_TO_SOURCED_EXCEPTION_AND_THROW(code, message) AERON_MAP_TO_SOURCED_EXCEPTION_AND_THROW_WITH_DEFAULT(code, message, AeronException)

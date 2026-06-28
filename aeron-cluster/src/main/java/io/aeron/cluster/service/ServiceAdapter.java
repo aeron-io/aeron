@@ -80,6 +80,7 @@ final class ServiceAdapter implements AutoCloseable
                     joinLogDecoder.logStreamId(),
                     joinLogDecoder.isStartup() == BooleanType.TRUE,
                     Cluster.Role.get(joinLogDecoder.role()),
+                    joinLogDecoder.isStandby() == BooleanType.TRUE,
                     joinLogDecoder.logChannel());
                 break;
 

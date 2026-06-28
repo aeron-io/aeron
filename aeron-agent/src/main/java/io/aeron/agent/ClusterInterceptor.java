@@ -99,9 +99,10 @@ class ClusterInterceptor
     static class ConsensusModuleStateChange
     {
         @Advice.OnMethodEnter
-        static <E extends Enum<E>> void logStateChange(final int memberId, final E oldState, final E newState)
+        static <E extends Enum<E>> void logStateChange(
+            final int memberId, final E oldState, final E newState, final String reason)
         {
-            LOGGER.logStateChange(STATE_CHANGE, memberId, oldState, newState);
+            LOGGER.logStateChange(STATE_CHANGE, memberId, oldState, newState, reason);
         }
     }
 
@@ -110,7 +111,7 @@ class ClusterInterceptor
         @Advice.OnMethodEnter
         static <E extends Enum<E>> void logRoleChange(final int memberId, final E oldRole, final E newRole)
         {
-            LOGGER.logStateChange(ROLE_CHANGE, memberId, oldRole, newRole);
+            LOGGER.logStateChange(ROLE_CHANGE, memberId, oldRole, newRole, "");
         }
     }
 
@@ -143,6 +144,23 @@ class ClusterInterceptor
         {
             LOGGER.logOnRequestVote(
                 memberId, logLeadershipTermId, logPosition, candidateTermId, candidateId, protocolVersion);
+        }
+    }
+
+    static class Vote
+    {
+        @Advice.OnMethodEnter
+        static void logOnVote(
+            final int memberId,
+            final long logLeadershipTermId,
+            final long logPosition,
+            final long candidateTermId,
+            final int candidateId,
+            final int voterId,
+            final boolean vote)
+        {
+            LOGGER.logOnVote(
+                memberId, logLeadershipTermId, logPosition, candidateTermId, candidateId, voterId, vote);
         }
     }
 
@@ -290,7 +308,7 @@ class ClusterInterceptor
         @Advice.OnMethodEnter
         static <E extends Enum<E>> void logStateChange(final E oldState, final E newState, final long nowMs)
         {
-            LOGGER.logStateChange(CLUSTER_BACKUP_STATE_CHANGE, Aeron.NULL_VALUE, oldState, newState);
+            LOGGER.logStateChange(CLUSTER_BACKUP_STATE_CHANGE, Aeron.NULL_VALUE, oldState, newState, "");
         }
     }
 
@@ -398,6 +416,20 @@ class ClusterInterceptor
             final String reason)
         {
             LOGGER.logClusterSessionStateChange(memberId, sessionId, action, oldState, newState, reason);
+        }
+    }
+
+    static class SnapshotEntryInvalidation
+    {
+        @Advice.OnMethodEnter
+        static void logSnapshotEntryInvalidation(
+            final int memberId,
+            final int entryIndex,
+            final long recordingId,
+            final long logPosition,
+            final int serviceId)
+        {
+            LOGGER.logSnapshotEntryInvalidation(memberId, entryIndex, recordingId, logPosition, serviceId);
         }
     }
 }

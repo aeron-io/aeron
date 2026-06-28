@@ -26,6 +26,7 @@
 #include "collections/aeron_hashing.h"
 #include "collections/aeron_map.h"
 #include "aeron_alloc.h"
+#include "util/aeron_error.h"
 
 typedef struct aeron_int64_to_tagged_ptr_entry_stct
 {
@@ -68,11 +69,13 @@ inline int aeron_int64_to_tagged_ptr_hash_map_init(
 
     if (aeron_alloc((void **)&map->keys, (capacity * sizeof(int64_t))) < 0)
     {
+        AERON_APPEND_ERR("%s", "");
         return -1;
     }
 
     if (aeron_alloc((void **)&map->entries, (capacity * sizeof(aeron_int64_to_tagged_ptr_entry_t))) < 0)
     {
+        AERON_APPEND_ERR("%s", "");
         return -1;
     }
 
@@ -102,11 +105,14 @@ inline int aeron_int64_to_tagged_ptr_hash_map_rehash(aeron_int64_to_tagged_ptr_h
 
     if (aeron_alloc((void **)&tmp_keys, (new_capacity * sizeof(int64_t))) < 0)
     {
+        AERON_APPEND_ERR("%s", "");
         return -1;
     }
 
     if (aeron_alloc((void **)&tmp_entries, (new_capacity * sizeof(aeron_int64_to_tagged_ptr_entry_t))) < 0)
     {
+        AERON_APPEND_ERR("%s", "");
+        aeron_free(tmp_keys);
         return -1;
     }
 

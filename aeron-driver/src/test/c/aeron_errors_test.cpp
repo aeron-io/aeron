@@ -146,7 +146,7 @@ protected:
         aeron_t *aeron = CSystemTestBase::connect();
 
         m_countersReader = aeron_counters_reader(aeron);
-        m_errorCounter = aeron_counters_reader_addr(m_countersReader, AERON_SYSTEM_COUNTER_ERRORS);
+        m_errorCounter = aeron_counters_reader_addr(m_countersReader, AERON_SYSTEM_COUNTER_ID_ERRORS);
         AERON_GET_ACQUIRE(m_initialErrorCount, *m_errorCounter);
 
         return aeron;
@@ -383,7 +383,7 @@ TEST_F(CErrorsTest, shouldRecordDistinctErrorCorrectlyOnReresolve)
     aeron_async_add_publication_t *pub_async = nullptr;
     aeron_publication_t *pub = nullptr;
 
-    ASSERT_EQ(0, aeron_async_add_publication(&pub_async, aeron, "aeron:udp?endpoint=localhost:21345", 1001));
+    ASSERT_EQ(0, aeron_async_add_publication(&pub_async, aeron, "aeron:udp?endpoint=localhost:5656", 1001));
 
     int result;
     while (0 == (result = aeron_async_add_publication_poll(&pub, pub_async)))

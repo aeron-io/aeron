@@ -283,11 +283,24 @@ aeron_controlled_fragment_handler_action_t aeron_archive_recording_subscription_
 
         case AERON_ARCHIVE_CLIENT_RECORDING_SIGNAL_EVENT_SBE_TEMPLATE_ID:
         {
-            if (aeron_archive_recording_signal_dispatch_buffer(poller->ctx, buffer, length) < 0)
+            struct aeron_archive_client_controlResponse control_response;
+
+            aeron_archive_client_controlResponse_wrap_for_decode(
+                &control_response,
+                (char *)buffer,
+                aeron_archive_client_messageHeader_encoded_length(),
+                aeron_archive_client_controlResponse_sbe_block_length(),
+                aeron_archive_client_controlResponse_sbe_schema_version(),
+                length);
+
+            if (aeron_archive_client_controlResponse_controlSessionId(&control_response) == poller->control_session_id)
             {
-                AERON_APPEND_ERR("%s", "");
-                poller->error_on_fragment = true;
-                return AERON_ACTION_BREAK;
+                if (aeron_archive_recording_signal_dispatch_buffer(poller->ctx, buffer, length) < 0)
+                {
+                    AERON_APPEND_ERR("%s", "");
+                    poller->error_on_fragment = true;
+                    return AERON_ACTION_BREAK;
+                }
             }
 
             break;

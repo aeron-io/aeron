@@ -46,7 +46,7 @@ int aeron_archive_proxy_init(
     aeron_exclusive_publication_t *exclusive_publication,
     int retry_attempts);
 
-int aeron_archive_proxy_set_control_esssion_id(
+int aeron_archive_proxy_set_control_session_id(
     aeron_archive_proxy_t *archive_proxy,
     int64_t control_session_id);
 

@@ -17,6 +17,7 @@ package io.aeron.archive;
 
 import io.aeron.Aeron;
 import io.aeron.ChannelUriStringBuilder;
+import io.aeron.CommonContext;
 import io.aeron.ExclusivePublication;
 import io.aeron.Image;
 import io.aeron.Publication;
@@ -52,25 +53,44 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.function.Executable;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
+import java.nio.file.Path;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 import static io.aeron.Aeron.NULL_VALUE;
 import static io.aeron.CommonContext.IPC_CHANNEL;
 import static io.aeron.CommonContext.generateRandomDirName;
-import static io.aeron.archive.ArchiveSystemTests.*;
+import static io.aeron.archive.ArchiveSystemTests.CATALOG_CAPACITY;
+import static io.aeron.archive.ArchiveSystemTests.TERM_LENGTH;
+import static io.aeron.archive.ArchiveSystemTests.awaitSignal;
+import static io.aeron.archive.ArchiveSystemTests.consume;
+import static io.aeron.archive.ArchiveSystemTests.injectRecordingSignalConsumer;
+import static io.aeron.archive.ArchiveSystemTests.offer;
+import static io.aeron.archive.ArchiveSystemTests.resetAndAwaitSignal;
 import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
-import static io.aeron.archive.codecs.RecordingSignal.*;
+import static io.aeron.archive.codecs.RecordingSignal.DELETE;
+import static io.aeron.archive.codecs.RecordingSignal.EXTEND;
+import static io.aeron.archive.codecs.RecordingSignal.MERGE;
+import static io.aeron.archive.codecs.RecordingSignal.REPLICATE;
+import static io.aeron.archive.codecs.RecordingSignal.REPLICATE_END;
+import static io.aeron.archive.codecs.RecordingSignal.START;
+import static io.aeron.archive.codecs.RecordingSignal.STOP;
+import static io.aeron.archive.codecs.RecordingSignal.SYNC;
 import static io.aeron.archive.codecs.SourceLocation.LOCAL;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.endsWith;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 @ExtendWith({ EventLogExtension.class, InterruptingTestCallback.class })
 class ReplicateRecordingTest
@@ -124,11 +144,14 @@ class ReplicateRecordingTest
             .dirDeleteOnStart(true)
             .dirDeleteOnShutdown(true);
 
+        final AeronArchive.Context archiveClientContext = new AeronArchive.Context()
+            .messageTimeoutNs(TimeUnit.SECONDS.toNanos(1));
+
         srcArchiveCtx = new Archive.Context()
             .catalogCapacity(CATALOG_CAPACITY)
             .aeronDirectoryName(srcAeronDirectoryName)
             .controlChannel(SRC_CONTROL_REQUEST_CHANNEL)
-            .archiveClientContext(new AeronArchive.Context().controlResponseChannel(SRC_CONTROL_RESPONSE_CHANNEL))
+            .archiveClientContext(archiveClientContext.clone().controlResponseChannel(SRC_CONTROL_RESPONSE_CHANNEL))
             .recordingEventsEnabled(false)
             .replicationChannel(SRC_REPLICATION_CHANNEL)
             .deleteArchiveOnStart(true)
@@ -149,7 +172,7 @@ class ReplicateRecordingTest
             .catalogCapacity(CATALOG_CAPACITY)
             .aeronDirectoryName(dstAeronDirectoryName)
             .controlChannel(DST_CONTROL_REQUEST_CHANNEL)
-            .archiveClientContext(new AeronArchive.Context().controlResponseChannel(DST_CONTROL_RESPONSE_CHANNEL))
+            .archiveClientContext(archiveClientContext.clone().controlResponseChannel(DST_CONTROL_RESPONSE_CHANNEL))
             .recordingEventsEnabled(false)
             .replicationChannel(DST_REPLICATION_CHANNEL)
             .deleteArchiveOnStart(true)
@@ -725,6 +748,108 @@ class ReplicateRecordingTest
             awaitSignal(dstAeronArchive, dstRecordingSignalConsumer, dstRecordingId, STOP);
         }
 
+        srcRecordingSignalConsumer.reset();
+        srcAeronArchive.stopRecording(subscriptionId);
+        awaitSignal(srcAeronArchive, srcRecordingSignalConsumer, srcRecordingId, STOP);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    @InterruptAfter(10)
+    void shouldHandleMultipleConcurrentReplicationsToSeveralArchives(
+        final boolean useResponseChannels, final @TempDir Path tempDir)
+    {
+        final String messagePrefix = "Message-Prefix-";
+        final int messageCount = 10;
+        final long srcRecordingId;
+
+        final long subscriptionId = srcAeronArchive.startRecording(LIVE_CHANNEL, LIVE_STREAM_ID, LOCAL);
+        final Aeron srcAeron = srcAeronArchive.context().aeron();
+        final ReplicationParams replicationParams = new ReplicationParams()
+            .replicationSessionId(42);
+        if (useResponseChannels)
+        {
+            replicationParams
+                .replicationChannel("aeron:udp?control-mode=response|control=localhost:3000")
+                .srcResponseChannel(SRC_RESPONSE_CHANNEL);
+        }
+        else
+        {
+            replicationParams.replicationChannel("aeron:udp?endpoint=localhost:0");
+        }
+
+        try (TestMediaDriver driver = TestMediaDriver.launch(new MediaDriver.Context()
+            .aeronDirectoryName(CommonContext.generateRandomDirName())
+            .threadingMode(ThreadingMode.SHARED), systemTestWatcher);
+            Archive archive = Archive.launch(srcArchiveCtx.clone()
+                .aeronDirectoryName(driver.aeronDirectoryName())
+                .archiveDir(tempDir.resolve("archive").toFile())
+                .archiveClientContext(new AeronArchive.Context()
+                    .controlResponseChannel("aeron:udp?endpoint=localhost:0").controlResponseStreamId(222))
+                .controlChannel("aeron:udp?endpoint=127.0.0.1:8099")
+                .controlStreamId(110)
+                .replicationChannel("aeron:udp?endpoint=localhost:0")
+                .archiveId(Long.MAX_VALUE));
+            AeronArchive aeronArchive = AeronArchive.connect(new AeronArchive.Context()
+                .aeronDirectoryName(driver.aeronDirectoryName())
+                .controlRequestChannel(archive.context().controlChannel())
+                .controlRequestStreamId(archive.context().controlStreamId())
+                .controlResponseStreamId(120)
+                .controlResponseChannel("aeron:udp?control-mode=response|control=127.0.0.1:30000")))
+        {
+            final TestRecordingSignalConsumer recordingSignalConsumer =
+                injectRecordingSignalConsumer(aeronArchive);
+
+            try (Publication publication = srcAeron.addPublication(LIVE_CHANNEL, LIVE_STREAM_ID))
+            {
+                final CountersReader srcCounters = srcAeron.countersReader();
+                final int counterId =
+                    Tests.awaitRecordingCounterId(srcCounters, publication.sessionId(), srcAeronArchive.archiveId());
+                srcRecordingId = RecordingPos.getRecordingId(srcCounters, counterId);
+
+                offer(publication, messageCount, messagePrefix);
+                Tests.awaitPosition(srcCounters, counterId, publication.position());
+
+                dstRecordingSignalConsumer.reset();
+                final long replicationId1 = dstAeronArchive.replicate(
+                    srcRecordingId, SRC_CONTROL_STREAM_ID, SRC_CONTROL_REQUEST_CHANNEL, replicationParams);
+
+                recordingSignalConsumer.reset();
+                final long replicationId2 = aeronArchive.replicate(
+                    srcRecordingId, SRC_CONTROL_STREAM_ID, SRC_CONTROL_REQUEST_CHANNEL, replicationParams);
+
+                awaitSignal(dstAeronArchive, dstRecordingSignalConsumer, REPLICATE);
+                final long dstRecordingId1 = dstRecordingSignalConsumer.recordingId;
+                resetAndAwaitSignal(dstAeronArchive, dstRecordingSignalConsumer, dstRecordingId1, EXTEND);
+
+                awaitSignal(aeronArchive, recordingSignalConsumer, REPLICATE);
+                final long dstRecordingId2 = recordingSignalConsumer.recordingId;
+                resetAndAwaitSignal(aeronArchive, recordingSignalConsumer, dstRecordingId2, EXTEND);
+
+                final CountersReader counters1 = dstArchive.context().aeron().countersReader();
+                final int counterId1 =
+                    RecordingPos.findCounterIdByRecording(counters1, dstRecordingId1, dstAeronArchive.archiveId());
+                Tests.awaitPosition(counters1, counterId1, publication.position());
+
+                final CountersReader counters2 = aeronArchive.context().aeron().countersReader();
+                final int counterId2 =
+                    RecordingPos.findCounterIdByRecording(counters2, dstRecordingId2, aeronArchive.archiveId());
+                Tests.awaitPosition(counters2, counterId2, publication.position());
+
+                offer(publication, messageCount, messagePrefix);
+                Tests.awaitPosition(counters1, counterId1, publication.position());
+                Tests.awaitPosition(counters2, counterId2, publication.position());
+
+                dstRecordingSignalConsumer.reset();
+                dstAeronArchive.stopReplication(replicationId1);
+
+                recordingSignalConsumer.reset();
+                aeronArchive.stopReplication(replicationId2);
+
+                awaitSignal(dstAeronArchive, dstRecordingSignalConsumer, dstRecordingId1, STOP);
+                awaitSignal(aeronArchive, recordingSignalConsumer, dstRecordingId1, STOP);
+            }
+        }
         srcRecordingSignalConsumer.reset();
         srcAeronArchive.stopRecording(subscriptionId);
         awaitSignal(srcAeronArchive, srcRecordingSignalConsumer, srcRecordingId, STOP);
@@ -1316,16 +1441,13 @@ class ReplicateRecordingTest
                 new ReplicationParams());
 
             awaitSignal(dstAeronArchive, dstRecordingSignalConsumer, REPLICATE);
+            fail("expected archive exception");
         }
         catch (final ArchiveException ex)
         {
             assertEquals(ArchiveException.REPLICATION_CONNECTION_FAILURE, ex.errorCode());
             awaitSignal(dstAeronArchive, dstRecordingSignalConsumer, REPLICATE_END);
-
-            return;
         }
-
-        fail("expected archive exception");
     }
 
     @Test

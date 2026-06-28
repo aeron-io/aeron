@@ -64,6 +64,15 @@ public class StaticCounterMessageFlyweight extends CorrelatedMessageFlyweight
     private static final int MINIMUM_LENGTH = KEY_BUFFER_OFFSET + SIZE_OF_INT;
 
     /**
+     * An empty flyweight, which should be wrapped over a buffer.
+     *
+     * @see #wrap(MutableDirectBuffer, int)
+     */
+    public StaticCounterMessageFlyweight()
+    {
+    }
+
+    /**
      * Wrap the buffer at a given offset for updates.
      *
      * @param buffer to wrap.

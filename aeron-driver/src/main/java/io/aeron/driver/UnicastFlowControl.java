@@ -39,6 +39,13 @@ public class UnicastFlowControl implements FlowControl
     private int retransmitReceiverWindowMultiple;
 
     /**
+     * Default constructor.
+     */
+    public UnicastFlowControl()
+    {
+    }
+
+    /**
      * {@inheritDoc}
      */
     public long onStatusMessage(

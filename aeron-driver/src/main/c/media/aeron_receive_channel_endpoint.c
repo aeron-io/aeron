@@ -27,6 +27,8 @@
 #include "media/aeron_receive_channel_endpoint.h"
 #include "aeron_driver_receiver.h"
 #include "aeron_timestamps.h"
+#include "util/aeron_bitutil.h"
+#include "protocol/aeron_udp_protocol.h"
 
 int aeron_receive_channel_endpoint_set_group_tag(
     aeron_receive_channel_endpoint_t *endpoint,
@@ -70,38 +72,16 @@ int aeron_receive_channel_endpoint_create(
         return -1;
     }
 
-    if (aeron_data_packet_dispatcher_init(
-        &_endpoint->dispatcher, context->conductor_proxy, context->receiver_proxy->receiver) < 0)
-    {
-        AERON_APPEND_ERR("%s", "Failed to initialise data packet dispatcher");
-        return -1;
-    }
-
-    if (aeron_int64_counter_map_init(
-        &_endpoint->stream_id_to_refcnt_map, 0, 16, AERON_MAP_DEFAULT_LOAD_FACTOR) < 0)
-    {
-        AERON_APPEND_ERR("%s", "could not init stream_id_to_refcnt_map");
-        return -1;
-    }
-
-    if (aeron_int64_counter_map_init(
-        &_endpoint->stream_and_session_id_to_refcnt_map, 0, 16, AERON_MAP_DEFAULT_LOAD_FACTOR) < 0)
-    {
-        AERON_APPEND_ERR("%s", "could not init stream_and_session_id_to_refcnt_map");
-        return -1;
-    }
-
-    if (aeron_int64_counter_map_init(
-        &_endpoint->response_stream_id_to_refcnt_map, 0, 16, AERON_MAP_DEFAULT_LOAD_FACTOR) < 0)
-    {
-        AERON_APPEND_ERR("%s", "could not init response_stream_id_to_refcnt_map");
-        return -1;
-    }
-
     _endpoint->conductor_fields.managed_resource.clientd = _endpoint;
     _endpoint->conductor_fields.managed_resource.registration_id = -1;
     _endpoint->conductor_fields.status = AERON_RECEIVE_CHANNEL_ENDPOINT_STATUS_ACTIVE;
     _endpoint->conductor_fields.image_ref_count = 0;
+    _endpoint->conductor_fields.udp_channel = NULL;
+
+    _endpoint->destinations.array = NULL;
+    _endpoint->destinations.length = 0;
+    _endpoint->destinations.capacity = 0;
+
     _endpoint->channel_status.counter_id = -1;
     _endpoint->transport_bindings = context->udp_channel_transport_bindings;
 
@@ -113,12 +93,6 @@ int aeron_receive_channel_endpoint_create(
     _endpoint->receiver_id = context->next_receiver_id++;
     _endpoint->receiver_proxy = context->receiver_proxy;
 
-    if (aeron_receive_channel_endpoint_set_group_tag(_endpoint, channel, context) < 0)
-    {
-        aeron_receive_channel_endpoint_delete(NULL, _endpoint);
-        return -1;
-    }
-
     _endpoint->short_sends_counter = aeron_system_counter_addr(system_counters, AERON_SYSTEM_COUNTER_SHORT_SENDS);
     _endpoint->possible_ttl_asymmetry_counter = aeron_system_counter_addr(
         system_counters, AERON_SYSTEM_COUNTER_POSSIBLE_TTL_ASYMMETRY);
@@ -129,18 +103,62 @@ int aeron_receive_channel_endpoint_create(
 
     _endpoint->send_nak_message = context->log.send_nak_message;
 
+    if (aeron_receive_channel_endpoint_set_group_tag(_endpoint, channel, context) < 0)
+    {
+        goto error;
+    }
+
+    if (aeron_data_packet_dispatcher_init(
+        &_endpoint->dispatcher, context->conductor_proxy, context->receiver_proxy->receiver) < 0)
+    {
+        AERON_APPEND_ERR("%s", "Failed to initialise data packet dispatcher");
+        goto error;
+    }
+
+    if (aeron_int64_counter_map_init(
+        &_endpoint->stream_id_to_refcnt_map, 0, 16, AERON_MAP_DEFAULT_LOAD_FACTOR) < 0)
+    {
+        AERON_APPEND_ERR("%s", "could not init stream_id_to_refcnt_map");
+        goto error;
+    }
+
+    if (aeron_int64_counter_map_init(
+        &_endpoint->stream_and_session_id_to_refcnt_map, 0, 16, AERON_MAP_DEFAULT_LOAD_FACTOR) < 0)
+    {
+        AERON_APPEND_ERR("%s", "could not init stream_and_session_id_to_refcnt_map");
+        goto error;
+    }
+
+    if (aeron_int64_counter_map_init(
+        &_endpoint->response_stream_id_to_refcnt_map, 0, 16, AERON_MAP_DEFAULT_LOAD_FACTOR) < 0)
+    {
+        AERON_APPEND_ERR("%s", "could not init response_stream_id_to_refcnt_map");
+        goto error;
+    }
+
     if (NULL != straight_through_destination)
     {
         if (aeron_receive_channel_endpoint_add_destination(_endpoint, straight_through_destination) < 0)
         {
-            return -1;
+            goto error;
         }
+    }
+
+    _endpoint->data_loss_generator = NULL;
+    _endpoint->control_loss_generator = NULL;
+    if (NULL != context->receive_channel_loss_supplier_func)
+    {
+        context->receive_channel_loss_supplier_func(context->receive_channel_loss_supplier_clientd, _endpoint);
     }
 
     // Only take ownership on successful construction.
     _endpoint->conductor_fields.udp_channel = channel;
     *endpoint = _endpoint;
     return 0;
+
+error:
+    aeron_receive_channel_endpoint_delete(NULL, _endpoint);
+    return -1;
 }
 
 int aeron_receive_channel_endpoint_delete(
@@ -177,6 +195,16 @@ int aeron_receive_channel_endpoint_delete(
     }
 
     aeron_free(endpoint->destinations.array);
+
+    if (NULL != endpoint->data_loss_generator && NULL != endpoint->data_loss_generator->close)
+    {
+        endpoint->data_loss_generator->close((aeron_loss_generator_t *)endpoint->data_loss_generator);
+    }
+    if (NULL != endpoint->control_loss_generator && NULL != endpoint->control_loss_generator->close)
+    {
+        endpoint->control_loss_generator->close((aeron_loss_generator_t *)endpoint->control_loss_generator);
+    }
+
     aeron_free(endpoint);
 
     return 0;
@@ -203,6 +231,16 @@ int aeron_receive_channel_endpoint_send(
 {
     int64_t min_bytes_sent = (int64_t)iov->iov_len;
     int64_t bytes_sent = 0;
+
+    if (AERON_C_COND_EXPECT(NULL != endpoint->control_loss_generator, 0) &&
+        aeron_loss_generator_should_drop_frame(
+            endpoint->control_loss_generator,
+            address,
+            (const uint8_t *)iov->iov_base,
+            (int32_t)iov->iov_len))
+    {
+        return (int)min_bytes_sent;
+    }
 
     const int sendmsg_result = destination->data_paths->send_func(
         destination->data_paths, &destination->transport, address, iov, 1, &bytes_sent);
@@ -245,7 +283,7 @@ int aeron_receive_channel_endpoint_elicit_setup(
             return -1;
         }
 
-        result += work_count;
+        work_count += result;
     }
 
     return work_count;
@@ -584,6 +622,20 @@ int aeron_receive_channel_endpoint_on_data(
 {
     aeron_data_header_t *data_header = (aeron_data_header_t *)buffer;
 
+    if (AERON_C_COND_EXPECT(NULL != endpoint->data_loss_generator, 0) &&
+        aeron_loss_generator_should_drop_frame_detailed(
+            endpoint->data_loss_generator,
+            addr,
+            buffer,
+            data_header->stream_id,
+            data_header->session_id,
+            data_header->term_id,
+            data_header->term_offset,
+            (int32_t)length))
+    {
+        return 0;
+    }
+
     aeron_receive_channel_endpoint_apply_timestamps(
         endpoint->conductor_fields.udp_channel,
         destination->transport.timestamp_flags,
@@ -605,6 +657,13 @@ int aeron_receive_channel_endpoint_on_setup(
     size_t length,
     struct sockaddr_storage *addr)
 {
+    if (AERON_C_COND_EXPECT(NULL != endpoint->data_loss_generator, 0) &&
+        aeron_loss_generator_should_drop_frame(
+            endpoint->data_loss_generator, addr, buffer, (int32_t)length))
+    {
+        return 0;
+    }
+
     aeron_setup_header_t *setup_header = (aeron_setup_header_t *)buffer;
 
     aeron_receive_destination_update_last_activity_ns(
@@ -621,6 +680,13 @@ int aeron_receive_channel_endpoint_on_rttm(
     size_t length,
     struct sockaddr_storage *addr)
 {
+    if (AERON_C_COND_EXPECT(NULL != endpoint->data_loss_generator, 0) &&
+        aeron_loss_generator_should_drop_frame(
+            endpoint->data_loss_generator, addr, buffer, (int32_t)length))
+    {
+        return 0;
+    }
+
     aeron_rttm_header_t *rttm_header = (aeron_rttm_header_t *)buffer;
     int result = 0;
 

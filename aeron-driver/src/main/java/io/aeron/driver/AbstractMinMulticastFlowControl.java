@@ -113,7 +113,7 @@ public abstract class AbstractMinMulticastFlowControl
 
         parseUriParam(udpChannel.channelUri().get(CommonContext.FLOW_CONTROL_PARAM_NAME));
         hasRequiredReceivers = receivers.length >= groupMinSize;
-        errorHandler = context.errorHandler();
+        errorHandler = context.countedErrorHandler();
         receiverCount = FlowControlReceivers.allocate(
             context.tempBuffer(), countersManager, registrationId, sessionId, streamId, channel);
         timeOfLastSetupNs = 0;

@@ -52,4 +52,11 @@ public class ExpectedCConfig implements Serializable
      * Whether default value validation should be skipped.
      */
     public boolean skipDefaultValidation = false;
+
+    /**
+     * Default constructor.
+     */
+    public ExpectedCConfig()
+    {
+    }
 }

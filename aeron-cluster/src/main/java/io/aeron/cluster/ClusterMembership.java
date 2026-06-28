@@ -25,6 +25,13 @@ import static io.aeron.Aeron.NULL_VALUE;
 public class ClusterMembership
 {
     /**
+     * Create a mutable holder for membership information. Initialise all values to null/NULL_VALUE.
+     */
+    public ClusterMembership()
+    {
+    }
+
+    /**
      * Member id that the query is run against.
      */
     public int memberId = NULL_VALUE;

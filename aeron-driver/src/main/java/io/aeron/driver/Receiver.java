@@ -28,7 +28,6 @@ import org.agrona.concurrent.OneToOneConcurrentArrayQueue;
 import org.agrona.concurrent.status.AtomicCounter;
 
 import java.net.InetSocketAddress;
-import java.nio.channels.SelectionKey;
 import java.util.ArrayList;
 
 import static io.aeron.driver.Configuration.PENDING_SETUPS_TIMEOUT_NS;
@@ -105,7 +104,13 @@ public final class Receiver implements Agent
         cachedNanoClock.update(nowNs);
         dutyCycleTracker.measureAndUpdate(nowNs);
 
-        int workCount = commandQueue.drain(CommandProxy.RUN_TASK, Configuration.COMMAND_DRAIN_LIMIT);
+        int workCount = 0;
+        final Runnable command = commandQueue.poll();
+        if (null != command)
+        {
+            command.run();
+            workCount++;
+        }
 
         final int bytesReceived = dataTransportPoller.pollTransports();
         totalBytesReceived.getAndAddOrdered(bytesReceived);
@@ -128,15 +133,17 @@ public final class Receiver implements Agent
                     EMPTY_IMAGES : ArrayUtil.remove(this.publicationImages, i);
                 image.removeFromDispatcher();
                 image.receiverRelease();
+                workCount++;
             }
         }
 
-        checkPendingSetupMessages(nowNs);
+        workCount += checkPendingSetupMessages(nowNs);
 
         if (reResolutionCheckIntervalNs > 0 && (reResolutionDeadlineNs - nowNs) < 0)
         {
             reResolutionDeadlineNs = nowNs + reResolutionCheckIntervalNs;
             dataTransportPoller.checkForReResolutions(nowNs, conductorProxy);
+            workCount++;
         }
 
         return workCount + bytesReceived;
@@ -216,7 +223,7 @@ public final class Receiver implements Agent
     {
         if (!channelEndpoint.hasDestinationControl())
         {
-            channelEndpoint.registerForRead(dataTransportPoller);
+            dataTransportPoller.registerForRead(channelEndpoint, channelEndpoint, 0);
 
             if (channelEndpoint.hasExplicitControl())
             {
@@ -228,6 +235,8 @@ public final class Receiver implements Agent
 
     void onCloseReceiveChannelEndpoint(final ReceiveChannelEndpoint channelEndpoint)
     {
+        dataTransportPoller.cancelReadForAllTransports(channelEndpoint);
+
         final ArrayList<PendingSetupMessageFromSource> pendingSetupMessages = this.pendingSetupMessages;
         for (int lastIndex = pendingSetupMessages.size() - 1, i = lastIndex; i >= 0; i--)
         {
@@ -240,9 +249,7 @@ public final class Receiver implements Agent
             }
         }
 
-        channelEndpoint.closeMultiRcvDestinationTransports(dataTransportPoller);
-        channelEndpoint.close();
-        channelEndpoint.closeMultiRcvDestinationIndicators(conductorProxy);
+        conductorProxy.receiveChannelEndpointClosed(channelEndpoint);
     }
 
     void onRemoveCoolDown(final ReceiveChannelEndpoint channelEndpoint, final int sessionId, final int streamId)
@@ -253,8 +260,7 @@ public final class Receiver implements Agent
     void onAddDestination(final ReceiveChannelEndpoint channelEndpoint, final ReceiveDestinationTransport transport)
     {
         final int transportIndex = channelEndpoint.addDestination(transport);
-        final SelectionKey key = dataTransportPoller.registerForRead(channelEndpoint, transport, transportIndex);
-        transport.selectionKey(key);
+        dataTransportPoller.registerForRead(channelEndpoint, transport, transportIndex);
 
         if (transport.hasExplicitControl())
         {
@@ -280,8 +286,6 @@ public final class Receiver implements Agent
 
             dataTransportPoller.cancelRead(channelEndpoint, transport);
             channelEndpoint.removeDestination(transportIndex);
-            transport.closeTransport();
-            dataTransportPoller.selectNowWithoutProcessing();
 
             for (final PublicationImage image : publicationImages)
             {
@@ -291,7 +295,7 @@ public final class Receiver implements Agent
                 }
             }
 
-            conductorProxy.closeReceiveDestinationIndicators(transport);
+            conductorProxy.closeReceiveDestination(transport);
         }
     }
 
@@ -328,8 +332,9 @@ public final class Receiver implements Agent
         }
     }
 
-    private void checkPendingSetupMessages(final long nowNs)
+    private int checkPendingSetupMessages(final long nowNs)
     {
+        int workCount = 0;
         for (int lastIndex = pendingSetupMessages.size() - 1, i = lastIndex; i >= 0; i--)
         {
             final PendingSetupMessageFromSource pending = pendingSetupMessages.get(i);
@@ -340,15 +345,18 @@ public final class Receiver implements Agent
                 {
                     ArrayListUtil.fastUnorderedRemove(pendingSetupMessages, i, lastIndex--);
                     pending.removeFromDataPacketDispatcher();
+                    workCount++;
                 }
                 else if (pending.shouldElicitSetupMessage())
                 {
                     pending.timeOfStatusMessageNs(nowNs);
                     pending.channelEndpoint().sendSetupElicitingStatusMessage(
                         pending.transportIndex(), pending.controlAddress(), pending.sessionId(), pending.streamId());
+                    workCount++;
                 }
             }
         }
+        return workCount;
     }
 
     void disconnectInactiveImage(

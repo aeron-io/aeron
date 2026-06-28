@@ -56,11 +56,13 @@ inline int aeron_int64_to_ptr_hash_map_init(
 
     if (aeron_alloc((void **)&map->keys, (capacity * sizeof(int64_t))) < 0)
     {
+        AERON_APPEND_ERR("%s", "");
         return -1;
     }
 
     if (aeron_alloc((void **)&map->values, (capacity * sizeof(void *))) < 0)
     {
+        AERON_APPEND_ERR("%s", "");
         return -1;
     }
 
@@ -88,13 +90,16 @@ inline int aeron_int64_to_ptr_hash_map_rehash(aeron_int64_to_ptr_hash_map_t *map
     int64_t *tmp_keys;
     void **tmp_values;
 
-    if (aeron_alloc((void **)&tmp_keys, (new_capacity * sizeof(int64_t))) < 0)
+    if (aeron_alloc((void **)&tmp_keys, new_capacity * sizeof(int64_t)) < 0)
     {
+        AERON_APPEND_ERR("%s", "");
         return -1;
     }
 
-    if (aeron_alloc((void **)&tmp_values, (new_capacity * sizeof(void *))) < 0)
+    if (aeron_alloc((void **)&tmp_values, new_capacity * sizeof(void *)) < 0)
     {
+        AERON_APPEND_ERR("%s", "");
+        aeron_free(tmp_keys);
         return -1;
     }
 

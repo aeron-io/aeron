@@ -27,6 +27,7 @@
 #include "aeron_alloc.h"
 #include "aeron_position.h"
 #include "aeron_timestamps.h"
+#include "util/aeron_bitutil.h"
 
 #if !defined(HAVE_STRUCT_MMSGHDR)
 struct mmsghdr
@@ -63,8 +64,15 @@ int aeron_send_channel_endpoint_create(
     struct sockaddr_storage *connect_addr = NULL;
     if (aeron_udp_channel_is_multi_destination(channel))
     {
-        if (aeron_alloc((void **)&_endpoint->destination_tracker, sizeof(aeron_udp_destination_tracker_t)) < 0 ||
-            aeron_udp_destination_tracker_init(
+        if (aeron_alloc((void **)&_endpoint->destination_tracker, sizeof(aeron_udp_destination_tracker_t)) < 0)
+        {
+            AERON_APPEND_ERR("%s", "");
+            aeron_udp_channel_delete(channel);
+            aeron_free(_endpoint);
+            return -1;
+        }
+
+        if (aeron_udp_destination_tracker_init(
                 _endpoint->destination_tracker,
                 _endpoint->data_paths,
                 context->sender_cached_clock,
@@ -73,6 +81,7 @@ int aeron_send_channel_endpoint_create(
         {
             AERON_APPEND_ERR("%s", "");
             aeron_udp_channel_delete(channel);
+            aeron_free(_endpoint->destination_tracker);
             aeron_free(_endpoint);
             return -1;
         }
@@ -107,8 +116,7 @@ int aeron_send_channel_endpoint_create(
         channel->is_multicast ? &channel->remote_control : &channel->local_control) < 0)
     {
         AERON_APPEND_ERR("uri=%s", channel->original_uri);
-        aeron_send_channel_endpoint_delete(counters_manager, _endpoint);
-        return -1;
+        goto error;
     }
 
     _endpoint->port_manager = context->sender_port_manager;
@@ -132,8 +140,7 @@ int aeron_send_channel_endpoint_create(
         AERON_UDP_CHANNEL_TRANSPORT_AFFINITY_SENDER) < 0)
     {
         AERON_APPEND_ERR("uri=%s", channel->original_uri);
-        aeron_send_channel_endpoint_delete(counters_manager, _endpoint);
-        return -1;
+        goto error;
     }
 
     if (aeron_udp_channel_is_channel_snd_timestamps_enabled(channel))
@@ -144,16 +151,14 @@ int aeron_send_channel_endpoint_create(
     if (aeron_int64_to_ptr_hash_map_init(
         &_endpoint->publication_dispatch_map, 8, AERON_MAP_DEFAULT_LOAD_FACTOR) < 0)
     {
-        aeron_send_channel_endpoint_delete(counters_manager, _endpoint);
-        return -1;
+        goto error;
     }
 
     if ((bind_addr_and_port_length = aeron_send_channel_endpoint_bind_addr_and_port(
         _endpoint, bind_addr_and_port, sizeof(bind_addr_and_port))) < 0)
     {
         AERON_APPEND_ERR("%s", "");
-        aeron_send_channel_endpoint_delete(counters_manager, _endpoint);
-        return -1;
+        goto error;
     }
 
     _endpoint->transport.dispatch_clientd = _endpoint;
@@ -167,8 +172,7 @@ int aeron_send_channel_endpoint_create(
     if (_endpoint->channel_status.counter_id < 0)
     {
         AERON_APPEND_ERR("%s", "");
-        aeron_send_channel_endpoint_delete(counters_manager, _endpoint);
-        return -1;
+        goto error;
     }
 
     _endpoint->on_nak_message = context->log.on_nak_message;
@@ -188,8 +192,7 @@ int aeron_send_channel_endpoint_create(
         if (_endpoint->tracker_num_destinations.counter_id < 0)
         {
             AERON_APPEND_ERR("%s", "");
-            aeron_send_channel_endpoint_delete(counters_manager, _endpoint);
-            return -1;
+            goto error;
         }
 
         aeron_udp_destination_tracker_set_counter(
@@ -218,8 +221,7 @@ int aeron_send_channel_endpoint_create(
     if (_endpoint->local_sockaddr_indicator.counter_id < 0)
     {
         AERON_APPEND_ERR("%s", "");
-        aeron_send_channel_endpoint_delete(counters_manager, _endpoint);
-        return -1;
+        goto error;
     }
 
     aeron_counter_set_release(
@@ -230,8 +232,19 @@ int aeron_send_channel_endpoint_create(
     _endpoint->time_of_last_sm_ns = aeron_clock_cached_nano_time(_endpoint->cached_clock);
     memcpy(&_endpoint->current_data_addr, &channel->remote_data, sizeof(_endpoint->current_data_addr));
 
+    _endpoint->data_loss_generator = NULL;
+    _endpoint->control_loss_generator = NULL;
+    if (NULL != context->send_channel_loss_supplier_func)
+    {
+        context->send_channel_loss_supplier_func(context->send_channel_loss_supplier_clientd, _endpoint);
+    }
+
     *endpoint = _endpoint;
     return 0;
+
+error:
+    aeron_send_channel_endpoint_delete(counters_manager, _endpoint);
+    return -1;
 }
 
 int aeron_send_channel_endpoint_delete(
@@ -271,6 +284,15 @@ int aeron_send_channel_endpoint_delete(
     {
         aeron_udp_destination_tracker_close(endpoint->destination_tracker);
         aeron_free(endpoint->destination_tracker);
+    }
+
+    if (NULL != endpoint->data_loss_generator && NULL != endpoint->data_loss_generator->close)
+    {
+        endpoint->data_loss_generator->close((aeron_loss_generator_t *)endpoint->data_loss_generator);
+    }
+    if (NULL != endpoint->control_loss_generator && NULL != endpoint->control_loss_generator->close)
+    {
+        endpoint->control_loss_generator->close((aeron_loss_generator_t *)endpoint->control_loss_generator);
     }
 
     aeron_free(endpoint);
@@ -347,6 +369,20 @@ int aeron_send_channel_send(
     int64_t *bytes_sent)
 {
     int result;
+
+    if (AERON_C_COND_EXPECT(NULL != endpoint->data_loss_generator, 0) &&
+        aeron_loss_generator_should_drop_frame(
+            endpoint->data_loss_generator,
+            &endpoint->current_data_addr,
+            (const uint8_t *)iov[0].iov_base,
+            (int32_t)iov[0].iov_len))
+    {
+        if (NULL != bytes_sent)
+        {
+            *bytes_sent = (int64_t)iov[0].iov_len;
+        }
+        return 0;
+    }
 
     aeron_send_channel_apply_timestamps(endpoint, iov, iov_length);
 
@@ -429,8 +465,8 @@ void aeron_send_channel_endpoint_dispatch(
         case AERON_HDR_TYPE_NAK:
             if (length >= sizeof(aeron_nak_header_t) && length >= (size_t)frame_header->frame_length)
             {
-                result = aeron_send_channel_endpoint_on_nak(endpoint, buffer, length, addr);
                 aeron_counter_increment_release(sender->nak_messages_received_counter);
+                result = aeron_send_channel_endpoint_on_nak(endpoint, buffer, length, addr);
             }
             else
             {
@@ -441,8 +477,8 @@ void aeron_send_channel_endpoint_dispatch(
         case AERON_HDR_TYPE_SM:
             if (length >= sizeof(aeron_status_message_header_t) && length >= (size_t)frame_header->frame_length)
             {
-                result = aeron_send_channel_endpoint_on_status_message(endpoint, conductor_proxy, buffer, length, addr);
                 aeron_counter_increment_release(sender->status_messages_received_counter);
+                result = aeron_send_channel_endpoint_on_status_message(sender, endpoint, conductor_proxy, buffer, length, addr);
             }
             else
             {
@@ -453,8 +489,8 @@ void aeron_send_channel_endpoint_dispatch(
         case AERON_HDR_TYPE_ERR:
             if (length >= sizeof(aeron_error_t) && length >= (size_t)frame_header->frame_length)
             {
-                result = aeron_send_channel_endpoint_on_error(endpoint, conductor_proxy, buffer, length, addr);
                 aeron_counter_increment_release(sender->error_messages_received_counter);
+                result = aeron_send_channel_endpoint_on_error(endpoint, conductor_proxy, buffer, length, addr);
             }
             else
             {
@@ -497,6 +533,13 @@ void aeron_send_channel_endpoint_dispatch(
 int aeron_send_channel_endpoint_on_nak(
     aeron_send_channel_endpoint_t *endpoint, uint8_t *buffer, size_t length, struct sockaddr_storage *addr)
 {
+    if (AERON_C_COND_EXPECT(NULL != endpoint->control_loss_generator, 0) &&
+        aeron_loss_generator_should_drop_frame(
+            endpoint->control_loss_generator, addr, buffer, (int32_t)length))
+    {
+        return 0;
+    }
+
     aeron_nak_header_t *nak_header = (aeron_nak_header_t *)buffer;
     int64_t key_value = aeron_map_compound_key(nak_header->stream_id, nak_header->session_id);
     aeron_network_publication_t *publication = aeron_int64_to_ptr_hash_map_get(
@@ -533,16 +576,31 @@ int aeron_send_channel_endpoint_on_nak(
 }
 
 int aeron_send_channel_endpoint_on_status_message(
+    aeron_driver_sender_t *sender,
     aeron_send_channel_endpoint_t *endpoint,
     aeron_driver_conductor_proxy_t *conductor_proxy,
     uint8_t *buffer,
     size_t length,
     struct sockaddr_storage *addr)
 {
+    if (AERON_C_COND_EXPECT(NULL != endpoint->control_loss_generator, 0) &&
+        aeron_loss_generator_should_drop_frame(
+            endpoint->control_loss_generator, addr, buffer, (int32_t)length))
+    {
+        return 0;
+    }
+
     aeron_status_message_header_t *sm_header = (aeron_status_message_header_t *)buffer;
     int64_t key_value = aeron_map_compound_key(sm_header->stream_id, sm_header->session_id);
     aeron_network_publication_t *publication = aeron_int64_to_ptr_hash_map_get(
         &endpoint->publication_dispatch_map, key_value);
+
+    if (!(sm_header->frame_header.flags & AERON_STATUS_MESSAGE_HEADER_SEND_SETUP_FLAG) &&
+        NULL != publication && !aeron_network_publication_is_valid_status_message(publication, buffer))
+    {
+        aeron_counter_increment_release(sender->status_messages_rejected_counter);
+        return 0;
+    }
 
     int result = 0;
 
@@ -607,6 +665,13 @@ int aeron_send_channel_endpoint_on_error(
 void aeron_send_channel_endpoint_on_rttm(
     aeron_send_channel_endpoint_t *endpoint, uint8_t *buffer, size_t length, struct sockaddr_storage *addr)
 {
+    if (AERON_C_COND_EXPECT(NULL != endpoint->control_loss_generator, 0) &&
+        aeron_loss_generator_should_drop_frame(
+            endpoint->control_loss_generator, addr, buffer, (int32_t)length))
+    {
+        return;
+    }
+
     aeron_rttm_header_t *rttm_header = (aeron_rttm_header_t *)buffer;
     int64_t key_value = aeron_map_compound_key(rttm_header->stream_id, rttm_header->session_id);
     aeron_network_publication_t *publication = aeron_int64_to_ptr_hash_map_get(
@@ -652,6 +717,7 @@ int aeron_send_channel_endpoint_check_for_re_resolution(
     }
     else if (!endpoint->conductor_fields.udp_channel->is_multicast &&
         endpoint->conductor_fields.udp_channel->has_explicit_endpoint &&
+        AERON_UDP_CHANNEL_CONTROL_MODE_RESPONSE != endpoint->conductor_fields.udp_channel->control_mode &&
         now_ns > (endpoint->time_of_last_sm_ns + AERON_SEND_CHANNEL_ENDPOINT_DESTINATION_TIMEOUT_NS))
     {
         const char *endpoint_name = endpoint->conductor_fields.udp_channel->uri.params.udp.endpoint;

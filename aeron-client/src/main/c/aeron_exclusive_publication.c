@@ -397,10 +397,14 @@ static inline int32_t aeron_append_block(
     int32_t resulting_offset = term_offset + (int32_t)length;
     aeron_put_raw_tail_release(term_tail_counter, term_id, resulting_offset);
 
-    aeron_data_header_as_longs_t *dest_hdr_as_longs = (aeron_data_header_as_longs_t *)term_buffer->addr;
+    aeron_data_header_as_longs_t *dest_hdr_as_longs =
+        (aeron_data_header_as_longs_t *)(term_buffer->addr + term_offset);
     aeron_data_header_as_longs_t *src_hdr_as_longs = (aeron_data_header_as_longs_t *)buffer;
 
-    memcpy(term_buffer->addr + AERON_DATA_HEADER_LENGTH, buffer + AERON_DATA_HEADER_LENGTH, length - AERON_DATA_HEADER_LENGTH);
+    memcpy(
+        term_buffer->addr + term_offset + AERON_DATA_HEADER_LENGTH,
+        buffer + AERON_DATA_HEADER_LENGTH,
+        length - AERON_DATA_HEADER_LENGTH);
 
     dest_hdr_as_longs->hdr[3] = src_hdr_as_longs->hdr[3];
     dest_hdr_as_longs->hdr[2] = src_hdr_as_longs->hdr[2];
@@ -434,7 +438,7 @@ int aeron_exclusive_publication_create(
         return -1;
     }
 
-    _publication->command_base.type = AERON_CLIENT_TYPE_EXCLUSIVE_PUBLICATION;
+    _publication->command_base.type = AERON_CLIENT_MANAGED_RESOURCE_TYPE_EXCLUSIVE_PUBLICATION;
 
     _publication->log_buffer = log_buffer;
     _publication->log_meta_data = (aeron_logbuffer_metadata_t *)log_buffer->mapped_raw_log.log_meta_data.addr;
@@ -500,13 +504,8 @@ int aeron_exclusive_publication_close(
         if (!is_closed)
         {
             AERON_SET_RELEASE(publication->is_closed, true);
-
-            if (aeron_client_conductor_async_close_exclusive_publication(
-                publication->conductor, publication, on_close_complete, on_close_complete_clientd) < 0)
-            {
-                AERON_APPEND_ERR("%s", "");
-                return -1;
-            }
+            return aeron_client_conductor_async_close_exclusive_publication(
+                publication->conductor, publication, on_close_complete, on_close_complete_clientd);
         }
     }
 
@@ -814,6 +813,12 @@ int64_t aeron_exclusive_publication_offer_block(
     if (NULL == publication)
     {
         AERON_SET_ERR(EINVAL, "%s", "aeron_exclusive_publication_offer_block(NULL)");
+        return AERON_PUBLICATION_ERROR;
+    }
+
+    if (NULL == buffer)
+    {
+        AERON_SET_ERR(EINVAL, "%s", "aeron_exclusive_publication_offer_block buffer is NULL");
         return AERON_PUBLICATION_ERROR;
     }
 

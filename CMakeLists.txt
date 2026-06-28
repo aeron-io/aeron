@@ -133,9 +133,9 @@ endif (AERON_HIDE_DEPRECATION_MESSAGE)
 if (UNIX)
     add_compile_options(-fstrict-aliasing -Wall -Wpedantic -Wextra -Wno-unused-parameter -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer)
 
-    if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER "11.0")
+    if (CMAKE_C_COMPILER_ID STREQUAL "GNU" AND CMAKE_C_COMPILER_VERSION VERSION_GREATER "11.0")
         add_compile_options(-Wno-error=maybe-uninitialized)
-    elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER "21.0")
+    elseif (CMAKE_C_COMPILER_ID STREQUAL "Clang" AND CMAKE_C_COMPILER_VERSION VERSION_GREATER "21.0")
         # See gtest: https://github.com/google/googletest/issues/4762
         add_compile_options(-Wno-error=character-conversion)
     endif ()
@@ -149,10 +149,13 @@ if (UNIX)
     endif (CXX_WARNINGS_AS_ERRORS)
 
     if (SANITISE_BUILD)
-        if (NOT DEFINED APPLE)
-            set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fsanitize-address-use-after-scope -fsanitize=leak -fsanitize=undefined -DAERON_SANITIZE_ENABLED")
-            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fsanitize-address-use-after-scope -fsanitize=leak -fsanitize=undefined -DAERON_SANITIZE_ENABLED")
+        string(APPEND AERON_SANITISE_OPTIONS "-DAERON_SANITIZE_ENABLED -fsanitize=address -fsanitize-address-use-after-scope -fsanitize=undefined")
+        if (NOT CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
+            string(APPEND AERON_SANITISE_OPTIONS " -fsanitize=leak")
         endif ()
+
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${AERON_SANITISE_OPTIONS}")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${AERON_SANITISE_OPTIONS}")
     endif (SANITISE_BUILD)
 
     if (COVERAGE_BUILD)
@@ -163,13 +166,7 @@ endif ()
 
 # platform specific flags
 if (APPLE)
-    add_compile_options(-Wsign-compare)
-    add_compile_options(-Wno-deprecated-register)
-
-    if (SANITISE_BUILD)
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fsanitize-address-use-after-scope -fsanitize=undefined -DAERON_SANITIZE_ENABLED")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fsanitize-address-use-after-scope -fsanitize=undefined -DAERON_SANITIZE_ENABLED")
-    endif (SANITISE_BUILD)
+    add_compile_options(-Wsign-compare -Wno-deprecated-register)
 elseif (CYGWIN)
     add_definitions(-DWIN32)
     if (AERON_TESTS)
@@ -206,8 +203,38 @@ elseif (MSVC)
     endif (CXX_WARNINGS_AS_ERRORS)
 
     if (SANITISE_BUILD)
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /fsanitize=address /Zi /D AERON_SANITIZE_ENABLED")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /fsanitize=address /Zi /D AERON_SANITIZE_ENABLED")
+        string(APPEND AERON_SANITISE_OPTIONS "/fsanitize=address /Zi /D AERON_SANITIZE_ENABLED")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${AERON_SANITISE_OPTIONS}")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${AERON_SANITISE_OPTIONS}")
+
+        # /RTC runtime checks and /Gm minimal-rebuild are incompatible with /fsanitize=address on MSVC.
+        # Edit-and-continue (/ZI) is also unsupported; prefer /Zi, which is already added above.
+        # https://learn.microsoft.com/en-us/cpp/sanitizers/asan-known-issues
+        foreach (flag_var
+                CMAKE_C_FLAGS_DEBUG CMAKE_CXX_FLAGS_DEBUG
+                CMAKE_C_FLAGS_RELWITHDEBINFO CMAKE_CXX_FLAGS_RELWITHDEBINFO)
+            string(REGEX REPLACE "/RTC[1csu]+" "" ${flag_var} "${${flag_var}}")
+            string(REGEX REPLACE "/Gm[-]?" "" ${flag_var} "${${flag_var}}")
+            string(REGEX REPLACE "/ZI" "/Zi" ${flag_var} "${${flag_var}}")
+        endforeach ()
+
+        # Incremental linking is unsupported with /fsanitize=address — leaving it
+        # produces noisy LNK4300 warnings on every link. Convert any bare /INCREMENTAL
+        # to /INCREMENTAL:NO (and append it if neither form is present) for Debug /
+        # RelWithDebInfo across all link variants. The explicit :NO is required for
+        # the VS generator's <LinkIncremental> property — without it MSBuild defaults
+        # the property to true for Debug regardless of the linker-flags string and
+        # passes /INCREMENTAL to the linker itself.
+        foreach (flag_var
+                CMAKE_EXE_LINKER_FLAGS_DEBUG CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO
+                CMAKE_SHARED_LINKER_FLAGS_DEBUG CMAKE_SHARED_LINKER_FLAGS_RELWITHDEBINFO
+                CMAKE_MODULE_LINKER_FLAGS_DEBUG CMAKE_MODULE_LINKER_FLAGS_RELWITHDEBINFO)
+            string(REGEX REPLACE "(^|[ \t])/INCREMENTAL($|[ \t])" "\\1/INCREMENTAL:NO\\2"
+                ${flag_var} "${${flag_var}}")
+            if (NOT "${${flag_var}}" MATCHES "/INCREMENTAL:NO")
+                string(APPEND ${flag_var} " /INCREMENTAL:NO")
+            endif ()
+        endforeach ()
     endif (SANITISE_BUILD)
 
 endif ()
@@ -324,6 +351,18 @@ if (BUILD_AERON_DRIVER)
     endif ()
 endif (BUILD_AERON_DRIVER)
 
+if (NOT DEFINED JAVA_HOME)
+    set(CACHE{JAVA_HOME} TYPE PATH FORCE VALUE $ENV{JAVA_HOME})
+endif ()
+
+if (NOT DEFINED BUILD_JAVA_HOME)
+    set(CACHE{BUILD_JAVA_HOME} TYPE PATH FORCE VALUE $ENV{BUILD_JAVA_HOME})
+endif ()
+
+if (NOT DEFINED BUILD_JAVA_VERSION)
+    set(CACHE{BUILD_JAVA_VERSION} TYPE STRING FORCE VALUE $ENV{BUILD_JAVA_VERSION})
+endif ()
+
 if (BUILD_AERON_ARCHIVE_API)
     set(ARCHIVE_CODEC_TARGET_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
     set(ARCHIVE_C_CODEC_TARGET_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/c")
@@ -339,17 +378,31 @@ if (BUILD_AERON_ARCHIVE_API)
         "${CMAKE_CURRENT_SOURCE_DIR}}/aeron-archive/src/main/java/*.java")
 
     add_custom_command(OUTPUT ${AERON_ALL_JAR}
-        COMMAND ${CMAKE_COMMAND} -E env JAVA_HOME=$ENV{JAVA_HOME} BUILD_JAVA_HOME=$ENV{BUILD_JAVA_HOME} BUILD_JAVA_VERSION=$ENV{BUILD_JAVA_VERSION} ${GRADLE_WRAPPER} :aeron-all:clean :aeron-all:assemble --no-daemon -x javadoc --console=plain -q
+        COMMAND ${CMAKE_COMMAND}
+                -E env
+                JAVA_HOME=${JAVA_HOME}
+                BUILD_JAVA_HOME=${BUILD_JAVA_HOME}
+                BUILD_JAVA_VERSION=${BUILD_JAVA_VERSION}
+                ${GRADLE_WRAPPER}
+                :aeron-all:clean
+                :aeron-all:assemble
+                --exclude-task  javadoc
+                --exclude-task  check
+                --no-daemon
+                --console=plain
+                --quiet
         DEPENDS ${AERON_ALL_SOURCES}
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        COMMENT "Generating aeron-all jar")
+        COMMENT "Generating aeron-all jar"
+        VERBATIM)
 
     add_custom_target(aeron-all-jar
         DEPENDS ${AERON_ALL_JAR})
 
     if (AERON_TESTS)
-        add_subdirectory(${AERON_ARCHIVE_WRAPPER_TEST_PATH})
         add_subdirectory(${AERON_C_ARCHIVE_TEST_PATH})
+        add_subdirectory(${AERON_ARCHIVE_WRAPPER_TEST_PATH})
+        add_subdirectory(${AERON_SYSTEM_TEST_PATH}/src/test/cpp_wrapper ${CMAKE_CURRENT_BINARY_DIR}/aeron-system-tests-cpp)
     endif ()
 endif (BUILD_AERON_ARCHIVE_API)
 ##########################################################

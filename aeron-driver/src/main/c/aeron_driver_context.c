@@ -40,6 +40,7 @@
 #include "aeron_termination_validator.h"
 #include "agent/aeron_driver_agent.h"
 #include "util/aeron_dlopen.h"
+#include "media/aeron_debug_channel_endpoint_configuration.h"
 
 aeron_threading_mode_t aeron_config_parse_threading_mode(const char *threading_mode, aeron_threading_mode_t def)
 {
@@ -166,7 +167,7 @@ static void aeron_driver_untethered_subscription_state_change_null(
 #define AERON_SOCKET_SO_RCVBUF_DEFAULT (128 * 1024)
 #define AERON_SOCKET_SO_SNDBUF_DEFAULT (0)
 #define AERON_SOCKET_MULTICAST_TTL_DEFAULT (0)
-#define AERON_RECEIVER_GROUP_TAG_IS_PRESENT_DEFAULT false
+#define AERON_RECEIVER_GROUP_TAG_IS_PRESENT_DEFAULT (false)
 #define AERON_RECEIVER_GROUP_TAG_VALUE_DEFAULT (-1)
 #define AERON_FLOW_CONTROL_GROUP_TAG_DEFAULT (-1)
 #define AERON_FLOW_CONTROL_GROUP_MIN_SIZE_DEFAULT (0)
@@ -203,19 +204,24 @@ static void aeron_driver_untethered_subscription_state_change_null(
 #define AERON_REJOIN_STREAM_DEFAULT (true)
 #define AERON_PUBLICATION_RESERVED_SESSION_ID_LOW_DEFAULT (-1)
 #define AERON_PUBLICATION_RESERVED_SESSION_ID_HIGH_DEFAULT (1000)
+#define AERON_DRIVER_RESOLVER_NEIGHBOR_TIMEOUT_NS_DEFAULT (UINT64_C(10) * 1000 * 1000 * 1000)
+#define AERON_DRIVER_RESOLVER_SELF_RESOLUTION_INTERVAL_NS_DEFAULT (UINT64_C(1) * 1000 * 1000 * 1000);
+#define AERON_DRIVER_RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_NS_DEFAULT (UINT64_C(2) * 1000 * 1000 * 1000)
+#define AERON_DRIVER_RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_NS_DEFAULT (UINT64_C(10) * 1000 * 1000 * 1000)
 #define AERON_DRIVER_RERESOLUTION_CHECK_INTERVAL_NS_DEFAULT (1 * 1000 * 1000 * INT64_C(1000))
-#define AERON_DRIVER_CONDUCTOR_CYCLE_THRESHOLD_NS_DEFAULT (1 * 1000 * INT64_C(1000))
-#define AERON_DRIVER_SENDER_CYCLE_THRESHOLD_NS_DEFAULT (1 * 1000 * INT64_C(1000))
-#define AERON_DRIVER_RECEIVER_CYCLE_THRESHOLD_NS_DEFAULT (1 * 1000 * INT64_C(1000))
+#define AERON_DRIVER_CONDUCTOR_CYCLE_THRESHOLD_NS_DEFAULT (100 * 1000 * INT64_C(1000))
+#define AERON_DRIVER_SENDER_CYCLE_THRESHOLD_NS_DEFAULT (100 * 1000 * INT64_C(1000))
+#define AERON_DRIVER_RECEIVER_CYCLE_THRESHOLD_NS_DEFAULT (100 * 1000 * INT64_C(1000))
 #define AERON_DRIVER_NAME_RESOLVER_THRESHOLD_NS_DEFAULT (5 * 1000 * 1000 * INT64_C(1000))
 #define AERON_RECEIVER_IO_VECTOR_CAPACITY_DEFAULT UINT32_C(4)
 #define AERON_SENDER_IO_VECTOR_CAPACITY_DEFAULT UINT32_C(4)
 #define AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND_DEFAULT UINT32_C(4)
 #define AERON_DRIVER_RESOURCE_FREE_LIMIT_DEFAULT UINT32_C(10)
-#define AERON_DRIVER_ASYNC_EXECUTOR_THREADS_DEFAULT UINT32_C(1)
 #define AERON_CPU_AFFINITY_DEFAULT (-1)
-#define AERON_DRIVER_CONNECT_DEFAULT true
-#define AERON_ENABLE_EXPERIMENTAL_FEATURES_DEFAULT false
+#define AERON_DRIVER_CPUSET_AFFINITY_DEFAULT (false)
+#define AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS_DEFAULT (false)
+#define AERON_DRIVER_CONNECT_DEFAULT (true)
+#define AERON_ENABLE_EXPERIMENTAL_FEATURES_DEFAULT (false)
 #define AERON_DRIVER_STREAM_SESSION_LIMIT_DEFAULT (INT32_MAX)
 
 
@@ -242,6 +248,30 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
     _context->receiver_proxy = NULL;
     _context->counters_manager = NULL;
     _context->error_log = NULL;
+
+    _context->conductor_idle_strategy_state = NULL;
+    _context->conductor_idle_strategy_init_args = NULL;
+    _context->conductor_idle_strategy_name = NULL;
+
+    _context->sender_idle_strategy_state = NULL;
+    _context->sender_idle_strategy_init_args = NULL;
+    _context->sender_idle_strategy_name = NULL;
+
+    _context->receiver_idle_strategy_state = NULL;
+    _context->receiver_idle_strategy_init_args = NULL;
+    _context->receiver_idle_strategy_name = NULL;
+
+    _context->shared_idle_strategy_state = NULL;
+    _context->shared_idle_strategy_init_args = NULL;
+    _context->shared_idle_strategy_name = NULL;
+
+    _context->shared_network_idle_strategy_state = NULL;
+    _context->shared_network_idle_strategy_init_args = NULL;
+    _context->shared_network_idle_strategy_name = NULL;
+
+    _context->native_resource_agent_idle_strategy_state = NULL;
+    _context->native_resource_agent_idle_strategy_init_args = NULL;
+    _context->native_resource_agent_idle_strategy_name = NULL;
 
     _context->conductor_duty_cycle_tracker = &_context->conductor_duty_cycle_stall_tracker.tracker;
     _context->conductor_duty_cycle_stall_tracker.tracker.update =
@@ -289,7 +319,7 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
         goto error;
     }
 
-    if (aeron_mpsc_rb_init(&_context->sender_command_queue, sender_buffer, command_rb_capacity))
+    if (aeron_spsc_rb_init(&_context->sender_command_queue, sender_buffer, command_rb_capacity))
     {
         AERON_APPEND_ERR("%s", "");
         aeron_free(sender_buffer);
@@ -303,10 +333,24 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
         goto error;
     }
 
-    if (aeron_mpsc_rb_init(&_context->receiver_command_queue, receiver_buffer, command_rb_capacity))
+    if (aeron_spsc_rb_init(&_context->receiver_command_queue, receiver_buffer, command_rb_capacity))
     {
         AERON_APPEND_ERR("%s", "");
         aeron_free(receiver_buffer);
+        goto error;
+    }
+
+    void *native_resource_agent_buffer;
+    if (aeron_alloc(&native_resource_agent_buffer, command_rb_capacity))
+    {
+        AERON_APPEND_ERR("%s", "");
+        goto error;
+    }
+
+    if (aeron_spsc_rb_init(&_context->native_resource_agent_command_queue, native_resource_agent_buffer, command_rb_capacity))
+    {
+        AERON_APPEND_ERR("%s", "");
+        aeron_free(native_resource_agent_buffer);
         goto error;
     }
 
@@ -352,6 +396,11 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
     {
         goto error;
     }
+
+    _context->send_channel_loss_supplier_func = NULL;
+    _context->send_channel_loss_supplier_clientd = NULL;
+    _context->receive_channel_loss_supplier_func = NULL;
+    _context->receive_channel_loss_supplier_clientd = NULL;
 
     if (aeron_wildcard_port_manager_init(&_context->sender_wildcard_port_manager, true) < 0)
     {
@@ -436,7 +485,11 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
     _context->resolver_interface = NULL;
     _context->resolver_bootstrap_neighbor = NULL;
     _context->name_resolver_init_args = NULL;
+    _context->resolver_neighbor_timeout_ns = AERON_DRIVER_RESOLVER_NEIGHBOR_TIMEOUT_NS_DEFAULT;
+    _context->resolver_self_resolution_interval_ns = AERON_DRIVER_RESOLVER_SELF_RESOLUTION_INTERVAL_NS_DEFAULT;
+    _context->resolver_neighbor_resolution_interval_ns = AERON_DRIVER_RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_NS_DEFAULT;
     _context->re_resolution_check_interval_ns = AERON_DRIVER_RERESOLUTION_CHECK_INTERVAL_NS_DEFAULT;
+    _context->resolver_bootstrap_neighbor_resolution_interval_ns = AERON_DRIVER_RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_NS_DEFAULT;
     _context->conductor_duty_cycle_stall_tracker.cycle_threshold_ns = AERON_DRIVER_CONDUCTOR_CYCLE_THRESHOLD_NS_DEFAULT;
     _context->sender_duty_cycle_stall_tracker.cycle_threshold_ns = AERON_DRIVER_SENDER_CYCLE_THRESHOLD_NS_DEFAULT;
     _context->receiver_duty_cycle_stall_tracker.cycle_threshold_ns = AERON_DRIVER_RECEIVER_CYCLE_THRESHOLD_NS_DEFAULT;
@@ -445,11 +498,13 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
     _context->sender_io_vector_capacity = AERON_SENDER_IO_VECTOR_CAPACITY_DEFAULT;
     _context->network_publication_max_messages_per_send = AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND_DEFAULT;
     _context->resource_free_limit = AERON_DRIVER_RESOURCE_FREE_LIMIT_DEFAULT;
-    _context->async_executor_threads = AERON_DRIVER_ASYNC_EXECUTOR_THREADS_DEFAULT;
     _context->connect_enabled = AERON_DRIVER_CONNECT_DEFAULT;
     _context->conductor_cpu_affinity_no = AERON_CPU_AFFINITY_DEFAULT;
     _context->sender_cpu_affinity_no = AERON_CPU_AFFINITY_DEFAULT;
     _context->receiver_cpu_affinity_no = AERON_CPU_AFFINITY_DEFAULT;
+    _context->native_resource_agent_cpu_affinity_no = AERON_CPU_AFFINITY_DEFAULT;
+    _context->cpuset_affinity = AERON_DRIVER_CPUSET_AFFINITY_DEFAULT;
+    _context->cpuset_warnings_as_errors = AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS_DEFAULT;
     _context->enable_experimental_features = AERON_ENABLE_EXPERIMENTAL_FEATURES_DEFAULT;
     _context->stream_session_limit = AERON_DRIVER_STREAM_SESSION_LIMIT_DEFAULT;
 
@@ -525,6 +580,34 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
             goto error;
         }
     }
+
+    _context->resolver_neighbor_timeout_ns = aeron_config_parse_duration_ns(
+        AERON_DRIVER_RESOLVER_NEIGHBOR_TIMEOUT_ENV_VAR,
+        getenv(AERON_DRIVER_RESOLVER_NEIGHBOR_TIMEOUT_ENV_VAR),
+        _context->resolver_neighbor_timeout_ns,
+        1000 * 1000,
+        INT64_MAX);
+
+    _context->resolver_self_resolution_interval_ns = aeron_config_parse_duration_ns(
+        AERON_DRIVER_RESOLVER_SELF_RESOLUTION_INTERVAL_ENV_VAR,
+        getenv(AERON_DRIVER_RESOLVER_SELF_RESOLUTION_INTERVAL_ENV_VAR),
+        _context->resolver_self_resolution_interval_ns,
+        1000 * 1000,
+        INT64_MAX);
+
+    _context->resolver_neighbor_resolution_interval_ns = aeron_config_parse_duration_ns(
+        AERON_DRIVER_RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_ENV_VAR,
+        getenv(AERON_DRIVER_RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_ENV_VAR),
+        _context->resolver_neighbor_resolution_interval_ns,
+        1000 * 1000,
+        INT64_MAX);
+
+    _context->resolver_bootstrap_neighbor_resolution_interval_ns = aeron_config_parse_duration_ns(
+        AERON_DRIVER_RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_ENV_VAR,
+        getenv(AERON_DRIVER_RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_ENV_VAR),
+        _context->resolver_bootstrap_neighbor_resolution_interval_ns,
+        1000 * 1000,
+        INT64_MAX);
 
     _context->dirs_delete_on_start = aeron_parse_bool(
         getenv(AERON_DIR_DELETE_ON_START_ENV_VAR), _context->dirs_delete_on_start);
@@ -681,6 +764,18 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
         _context->sender_cpu_affinity_no,
         -1,
         255);
+    _context->native_resource_agent_cpu_affinity_no = aeron_config_parse_int32(
+        AERON_DRIVER_NATIVE_RESOURCE_AGENT_CPU_AFFINITY_ENV_VAR,
+        getenv(AERON_DRIVER_NATIVE_RESOURCE_AGENT_CPU_AFFINITY_ENV_VAR),
+        _context->native_resource_agent_cpu_affinity_no,
+        -1,
+        255);
+
+    _context->cpuset_affinity = aeron_parse_bool(
+        getenv(AERON_DRIVER_CPUSET_AFFINITY_ENV_VAR), AERON_DRIVER_CPUSET_AFFINITY_DEFAULT);
+
+    _context->cpuset_warnings_as_errors = aeron_parse_bool(
+        getenv(AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS_ENV_VAR), AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS_DEFAULT);
 
     _context->send_to_sm_poll_ratio = (uint8_t)aeron_config_parse_uint64(
         AERON_SEND_TO_STATUS_POLL_RATIO_ENV_VAR,
@@ -988,13 +1083,6 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
         1,
         INT32_MAX);
 
-    _context->async_executor_threads = aeron_config_parse_uint32(
-        AERON_DRIVER_ASYNC_EXECUTOR_THREADS_ENV_VAR,
-        getenv(AERON_DRIVER_ASYNC_EXECUTOR_THREADS_ENV_VAR),
-        _context->async_executor_threads,
-        0,
-        1);
-
     _context->enable_experimental_features = aeron_parse_bool(
         getenv(AERON_ENABLE_EXPERIMENTAL_FEATURES_ENV_VAR), _context->enable_experimental_features);
 
@@ -1031,11 +1119,12 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
     _context->shared_network_idle_strategy_name = aeron_strndup("backoff", 10);
     _context->sender_idle_strategy_name = aeron_strndup("backoff", 10);
     _context->receiver_idle_strategy_name = aeron_strndup("backoff", 10);
+    _context->native_resource_agent_idle_strategy_name = aeron_strndup("sleep-ns", 10);
 
     _context->conductor_idle_strategy_init_args =
         AERON_CONFIG_STRNDUP_GETENV_OR_NULL(AERON_CONDUCTOR_IDLE_STRATEGY_INIT_ARGS_ENV_VAR);
     if ((_context->conductor_idle_strategy_func = aeron_idle_strategy_load(
-        AERON_CONFIG_GETENV_OR_DEFAULT(AERON_CONDUCTOR_IDLE_STRATEGY_ENV_VAR, "backoff"),
+        AERON_CONFIG_GETENV_OR_DEFAULT(AERON_CONDUCTOR_IDLE_STRATEGY_ENV_VAR, _context->conductor_idle_strategy_name),
         &_context->conductor_idle_strategy_state,
         AERON_CONDUCTOR_IDLE_STRATEGY_ENV_VAR,
         _context->conductor_idle_strategy_init_args)) == NULL)
@@ -1043,32 +1132,10 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
         goto error;
     }
 
-    _context->shared_idle_strategy_init_args =
-        AERON_CONFIG_STRNDUP_GETENV_OR_NULL(AERON_SHARED_IDLE_STRATEGY_ENV_INIT_ARGS_VAR);
-    if ((_context->shared_idle_strategy_func = aeron_idle_strategy_load(
-        AERON_CONFIG_GETENV_OR_DEFAULT(AERON_SHARED_IDLE_STRATEGY_ENV_VAR, "backoff"),
-        &_context->shared_idle_strategy_state,
-        AERON_SHARED_IDLE_STRATEGY_ENV_VAR,
-        _context->shared_idle_strategy_init_args)) == NULL)
-    {
-        goto error;
-    }
-
-    _context->shared_network_idle_strategy_init_args =
-        AERON_CONFIG_STRNDUP_GETENV_OR_NULL(AERON_SHAREDNETWORK_IDLE_STRATEGY_INIT_ARGS_ENV_VAR);
-    if ((_context->shared_network_idle_strategy_func = aeron_idle_strategy_load(
-        AERON_CONFIG_GETENV_OR_DEFAULT(AERON_SHAREDNETWORK_IDLE_STRATEGY_ENV_VAR, "backoff"),
-        &_context->shared_network_idle_strategy_state,
-        AERON_SHAREDNETWORK_IDLE_STRATEGY_ENV_VAR,
-        _context->shared_network_idle_strategy_init_args)) == NULL)
-    {
-        goto error;
-    }
-
     _context->sender_idle_strategy_init_args =
         AERON_CONFIG_STRNDUP_GETENV_OR_NULL(AERON_SENDER_IDLE_STRATEGY_INIT_ARGS_ENV_VAR);
     if ((_context->sender_idle_strategy_func = aeron_idle_strategy_load(
-        AERON_CONFIG_GETENV_OR_DEFAULT(AERON_SENDER_IDLE_STRATEGY_ENV_VAR, "backoff"),
+        AERON_CONFIG_GETENV_OR_DEFAULT(AERON_SENDER_IDLE_STRATEGY_ENV_VAR, _context->sender_idle_strategy_name),
         &_context->sender_idle_strategy_state,
         AERON_SENDER_IDLE_STRATEGY_ENV_VAR,
         _context->sender_idle_strategy_init_args)) == NULL)
@@ -1079,10 +1146,44 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
     _context->receiver_idle_strategy_init_args =
         AERON_CONFIG_STRNDUP_GETENV_OR_NULL(AERON_RECEIVER_IDLE_STRATEGY_INIT_ARGS_ENV_VAR);
     if ((_context->receiver_idle_strategy_func = aeron_idle_strategy_load(
-        AERON_CONFIG_GETENV_OR_DEFAULT(AERON_RECEIVER_IDLE_STRATEGY_ENV_VAR, "backoff"),
+        AERON_CONFIG_GETENV_OR_DEFAULT(AERON_RECEIVER_IDLE_STRATEGY_ENV_VAR,  _context->receiver_idle_strategy_name),
         &_context->receiver_idle_strategy_state,
         AERON_RECEIVER_IDLE_STRATEGY_ENV_VAR,
         _context->receiver_idle_strategy_init_args)) == NULL)
+    {
+        goto error;
+    }
+
+    _context->shared_idle_strategy_init_args =
+        AERON_CONFIG_STRNDUP_GETENV_OR_NULL(AERON_SHARED_IDLE_STRATEGY_ENV_INIT_ARGS_VAR);
+    if ((_context->shared_idle_strategy_func = aeron_idle_strategy_load(
+        AERON_CONFIG_GETENV_OR_DEFAULT(AERON_SHARED_IDLE_STRATEGY_ENV_VAR, _context->shared_idle_strategy_name),
+        &_context->shared_idle_strategy_state,
+        AERON_SHARED_IDLE_STRATEGY_ENV_VAR,
+        _context->shared_idle_strategy_init_args)) == NULL)
+    {
+        goto error;
+    }
+
+    _context->shared_network_idle_strategy_init_args =
+        AERON_CONFIG_STRNDUP_GETENV_OR_NULL(AERON_SHAREDNETWORK_IDLE_STRATEGY_INIT_ARGS_ENV_VAR);
+    if ((_context->shared_network_idle_strategy_func = aeron_idle_strategy_load(
+        AERON_CONFIG_GETENV_OR_DEFAULT(AERON_SHAREDNETWORK_IDLE_STRATEGY_ENV_VAR, _context->shared_network_idle_strategy_name),
+        &_context->shared_network_idle_strategy_state,
+        AERON_SHAREDNETWORK_IDLE_STRATEGY_ENV_VAR,
+        _context->shared_network_idle_strategy_init_args)) == NULL)
+    {
+        goto error;
+    }
+
+    _context->native_resource_agent_idle_strategy_init_args =
+        NULL == getenv(AERON_DRIVER_NATIVE_RESOURCE_AGENT_IDLE_STRATEGY_ENV_VAR) ? aeron_strndup("1ms", 3) :
+        AERON_CONFIG_STRNDUP_GETENV_OR_NULL(AERON_DRIVER_NATIVE_RESOURCE_AGENT_IDLE_STRATEGY_INIT_ARGS_ENV_VAR);
+    if ((_context->native_resource_agent_idle_strategy_func = aeron_idle_strategy_load(
+    AERON_CONFIG_GETENV_OR_DEFAULT(AERON_DRIVER_NATIVE_RESOURCE_AGENT_IDLE_STRATEGY_ENV_VAR, _context->native_resource_agent_idle_strategy_name),
+        &_context->native_resource_agent_idle_strategy_state,
+        AERON_DRIVER_NATIVE_RESOURCE_AGENT_IDLE_STRATEGY_ENV_VAR,
+        _context->native_resource_agent_idle_strategy_init_args)) == NULL)
     {
         goto error;
     }
@@ -1323,10 +1424,13 @@ int aeron_driver_context_close(aeron_driver_context_t *context)
         return -1;
     }
 
+    aeron_debug_channel_endpoint_configuration_cleanup(context);
+
     aeron_wildcard_port_manager_delete(&context->sender_wildcard_port_manager);
     aeron_wildcard_port_manager_delete(&context->receiver_wildcard_port_manager);
 
     aeron_free(context->conductor_command_queue.buffer);
+    aeron_free(context->native_resource_agent_command_queue.buffer);
     aeron_free(context->sender_command_queue.buffer);
     aeron_free(context->receiver_command_queue.buffer);
 
@@ -1354,20 +1458,23 @@ int aeron_driver_context_close(aeron_driver_context_t *context)
     }
 
     aeron_free(context->conductor_idle_strategy_state);
-    aeron_free(context->receiver_idle_strategy_state);
     aeron_free(context->sender_idle_strategy_state);
+    aeron_free(context->receiver_idle_strategy_state);
     aeron_free(context->shared_idle_strategy_state);
     aeron_free(context->shared_network_idle_strategy_state);
+    aeron_free(context->native_resource_agent_idle_strategy_state);
     aeron_free((void *)context->conductor_idle_strategy_name);
-    aeron_free((void *)context->shared_network_idle_strategy_name);
-    aeron_free((void *)context->shared_idle_strategy_name);
     aeron_free((void *)context->sender_idle_strategy_name);
     aeron_free((void *)context->receiver_idle_strategy_name);
+    aeron_free((void *)context->shared_idle_strategy_name);
+    aeron_free((void *)context->shared_network_idle_strategy_name);
+    aeron_free((void *)context->native_resource_agent_idle_strategy_name);
     aeron_free(context->conductor_idle_strategy_init_args);
     aeron_free(context->sender_idle_strategy_init_args);
     aeron_free(context->receiver_idle_strategy_init_args);
     aeron_free(context->shared_idle_strategy_init_args);
     aeron_free(context->shared_network_idle_strategy_init_args);
+    aeron_free(context->native_resource_agent_idle_strategy_init_args);
     aeron_free(context->bindings_clientd_entries);
     aeron_free(context->cached_clock);
     aeron_free(context->sender_cached_clock);
@@ -1471,7 +1578,7 @@ bool aeron_is_driver_active_with_cnc(
     {
         if (aeron_epoch_clock() > (now_ms + timeout_ms))
         {
-            snprintf(buffer, sizeof(buffer) - 1, "ERROR: aeron cnc file version was 0 for timeout");
+            AERON_SET_ERR(-AERON_ERROR_CODE_GENERIC_ERROR, "%s", "CnC file is created but not initialised");
             return false;
         }
 
@@ -1480,44 +1587,33 @@ bool aeron_is_driver_active_with_cnc(
 
     if (aeron_semantic_version_major(AERON_CNC_VERSION) != aeron_semantic_version_major(cnc_version))
     {
-        snprintf(
-            buffer, sizeof(buffer) - 1,
-            "ERROR: aeron cnc version not compatible: app version=%d.%d.%d file=%d.%d.%d",
+        AERON_SET_ERR(
+            -AERON_ERROR_CODE_GENERIC_ERROR,
+            "CnC version not compatible: app version=%d.%d.%d file=%d.%d.%d",
             (int)aeron_semantic_version_major(AERON_CNC_VERSION),
             (int)aeron_semantic_version_minor(AERON_CNC_VERSION),
             (int)aeron_semantic_version_patch(AERON_CNC_VERSION),
             (int)aeron_semantic_version_major(cnc_version),
             (int)aeron_semantic_version_minor(cnc_version),
             (int)aeron_semantic_version_patch(cnc_version));
-
-        log_func(buffer);
+        return false;
     }
-    else
+
+    aeron_mpsc_rb_t rb;
+    if (aeron_mpsc_rb_init(
+        &rb, aeron_cnc_to_driver_buffer(metadata), (size_t)metadata->to_driver_buffer_length) != 0)
     {
-        aeron_mpsc_rb_t rb;
-
-        if (aeron_mpsc_rb_init(
-            &rb, aeron_cnc_to_driver_buffer(metadata), (size_t)metadata->to_driver_buffer_length) != 0)
-        {
-            snprintf(buffer, sizeof(buffer) - 1, "ERROR: aeron cnc file could not init to-driver buffer");
-            log_func(buffer);
-        }
-        else
-        {
-            int64_t timestamp_ms = aeron_mpsc_rb_consumer_heartbeat_time_value(&rb);
-            int64_t age = now_ms - timestamp_ms;
-
-            snprintf(buffer, sizeof(buffer) - 1, "INFO: Aeron driver heartbeat is %" PRId64 " ms old", age);
-            log_func(buffer);
-
-            if (age <= timeout_ms)
-            {
-                return true;
-            }
-        }
+        AERON_APPEND_ERR("%s", "Failed to create to_driver_buffer");
+        return false;
     }
 
-    return false;
+    int64_t timestamp_ms = aeron_mpsc_rb_consumer_heartbeat_time_value(&rb);
+    int64_t age = now_ms - timestamp_ms;
+
+    snprintf(buffer, sizeof(buffer) - 1, "INFO: Aeron driver heartbeat is %" PRId64 " ms old", age);
+    log_func(buffer);
+
+    return age <= timeout_ms;
 }
 
 bool aeron_is_driver_active(const char *dirname, int64_t timeout_ms, aeron_log_func_t log_func)
@@ -1535,6 +1631,7 @@ bool aeron_is_driver_active(const char *dirname, int64_t timeout_ms, aeron_log_f
 
         if (aeron_cnc_resolve_filename(dirname, filename, sizeof(filename)) < 0)
         {
+            aeron_err_clear();
             snprintf(buffer, sizeof(buffer) - 1, "INFO: Unable to resolve cnc filename: %s", aeron_errmsg());
             log_func(buffer);
             return false;
@@ -1542,6 +1639,12 @@ bool aeron_is_driver_active(const char *dirname, int64_t timeout_ms, aeron_log_f
 
         if (aeron_map_existing_file(&cnc_map, filename) < 0)
         {
+            if (ENOENT == aeron_errcode())
+            {
+                aeron_err_clear();
+                return false;
+            }
+            aeron_err_clear();
             snprintf(buffer, sizeof(buffer) - 1, "INFO: failed to mmap CnC file");
             log_func(buffer);
             return false;
@@ -1551,6 +1654,7 @@ bool aeron_is_driver_active(const char *dirname, int64_t timeout_ms, aeron_log_f
         log_func(buffer);
 
         result = aeron_is_driver_active_with_cnc(&cnc_map, timeout_ms, aeron_epoch_clock(), log_func);
+        aeron_err_clear();
 
         aeron_unmap(&cnc_map);
     }
@@ -2078,6 +2182,8 @@ int aeron_driver_context_set_sender_idle_strategy(aeron_driver_context_t *contex
 
     aeron_free(context->sender_idle_strategy_state);
     aeron_free((void *)context->sender_idle_strategy_name);
+    context->sender_idle_strategy_state = NULL;
+    context->sender_idle_strategy_name = NULL;
 
     if ((context->sender_idle_strategy_func = aeron_idle_strategy_load(
         value,
@@ -2105,6 +2211,8 @@ int aeron_driver_context_set_conductor_idle_strategy(aeron_driver_context_t *con
 
     aeron_free(context->conductor_idle_strategy_state);
     aeron_free((void *)context->conductor_idle_strategy_name);
+    context->conductor_idle_strategy_state = NULL;
+    context->conductor_idle_strategy_name = NULL;
 
     if ((context->conductor_idle_strategy_func = aeron_idle_strategy_load(
         value,
@@ -2132,6 +2240,8 @@ int aeron_driver_context_set_receiver_idle_strategy(aeron_driver_context_t *cont
 
     aeron_free(context->receiver_idle_strategy_state);
     aeron_free((void *)context->receiver_idle_strategy_name);
+    context->receiver_idle_strategy_state = NULL;
+    context->receiver_idle_strategy_name = NULL;
 
     if ((context->receiver_idle_strategy_func = aeron_idle_strategy_load(
         value,
@@ -2159,6 +2269,8 @@ int aeron_driver_context_set_sharednetwork_idle_strategy(aeron_driver_context_t 
 
     aeron_free(context->shared_network_idle_strategy_state);
     aeron_free((void *)context->shared_network_idle_strategy_name);
+    context->shared_network_idle_strategy_state = NULL;
+    context->shared_network_idle_strategy_name = NULL;
 
     if ((context->shared_network_idle_strategy_func = aeron_idle_strategy_load(
         value,
@@ -2186,6 +2298,8 @@ int aeron_driver_context_set_shared_idle_strategy(aeron_driver_context_t *contex
 
     aeron_free(context->shared_idle_strategy_state);
     aeron_free((void *)context->shared_idle_strategy_name);
+    context->shared_idle_strategy_state = NULL;
+    context->shared_idle_strategy_name = NULL;
 
     if ((context->shared_idle_strategy_func = aeron_idle_strategy_load(
         value,
@@ -2288,6 +2402,50 @@ int aeron_driver_context_set_agent_on_start_function(
 
     context->agent_on_start_func = value;
     context->agent_on_start_state = state;
+
+    return 0;
+}
+
+int aeron_driver_context_set_native_resource_agent_idle_strategy(aeron_driver_context_t *context, const char *value)
+{
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, value);
+
+    aeron_free(context->native_resource_agent_idle_strategy_state);
+    aeron_free((void *)context->native_resource_agent_idle_strategy_name);
+    context->native_resource_agent_idle_strategy_state = NULL;
+    context->native_resource_agent_idle_strategy_name = NULL;
+
+    if ((context->native_resource_agent_idle_strategy_func = aeron_idle_strategy_load(
+        value,
+        &context->native_resource_agent_idle_strategy_state,
+        AERON_DRIVER_NATIVE_RESOURCE_AGENT_IDLE_STRATEGY_ENV_VAR,
+        context->native_resource_agent_idle_strategy_init_args)) == NULL)
+    {
+        return -1;
+    }
+
+    context->native_resource_agent_idle_strategy_name = aeron_strndup(value, AERON_MAX_PATH);
+
+    return 0;
+}
+
+const char *aeron_driver_context_get_native_resource_agent_idle_strategy(aeron_driver_context_t *context)
+{
+    return NULL != context ? context->native_resource_agent_idle_strategy_name : AERON_IDLE_STRATEGY_BACKOFF_DEFAULT;
+}
+
+const char *aeron_driver_context_get_native_resource_agent_idle_strategy_init_args(aeron_driver_context_t *context)
+{
+    return NULL != context ? context->native_resource_agent_idle_strategy_init_args : NULL;
+}
+
+int aeron_driver_context_set_native_resource_agent_idle_strategy_init_args(aeron_driver_context_t *context, const char *value)
+{
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+
+    aeron_free(context->native_resource_agent_idle_strategy_init_args);
+    context->native_resource_agent_idle_strategy_init_args = NULL == value ? NULL : aeron_strndup(value, AERON_MAX_PATH);
 
     return 0;
 }
@@ -2781,6 +2939,90 @@ const char *aeron_driver_context_get_name_resolver_init_args(aeron_driver_contex
     return NULL != context ? context->name_resolver_init_args : NULL;
 }
 
+int aeron_driver_context_set_send_channel_loss_supplier(
+    aeron_driver_context_t *context,
+    aeron_send_channel_loss_supplier_func_t func,
+    void *clientd)
+{
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+
+    context->send_channel_loss_supplier_func = func;
+    context->send_channel_loss_supplier_clientd = clientd;
+    return 0;
+}
+
+int aeron_driver_context_set_receive_channel_loss_supplier(
+    aeron_driver_context_t *context,
+    aeron_receive_channel_loss_supplier_func_t func,
+    void *clientd)
+{
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+
+    context->receive_channel_loss_supplier_func = func;
+    context->receive_channel_loss_supplier_clientd = clientd;
+    return 0;
+}
+
+int aeron_driver_context_set_resolver_neighbor_timeout_ns(aeron_driver_context_t *context, uint64_t value)
+{
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+
+    context->resolver_neighbor_timeout_ns = value;
+    return 0;
+}
+
+uint64_t aeron_driver_context_get_resolver_neighbor_timeout_ns(aeron_driver_context_t *context)
+{
+    return NULL != context ?
+        context->resolver_neighbor_timeout_ns : AERON_DRIVER_RESOLVER_NEIGHBOR_TIMEOUT_NS_DEFAULT;
+}
+
+int aeron_driver_context_set_self_resolution_interval_ns(aeron_driver_context_t *context, uint64_t value)
+{
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+
+    context->resolver_self_resolution_interval_ns = value;
+    return 0;
+}
+
+uint64_t aeron_driver_context_get_self_resolution_interval_ns(aeron_driver_context_t *context)
+{
+    return NULL != context ?
+        context->resolver_self_resolution_interval_ns : AERON_DRIVER_RESOLVER_SELF_RESOLUTION_INTERVAL_NS_DEFAULT;
+}
+
+int aeron_driver_context_set_resolver_neighbor_resolution_interval_ns(aeron_driver_context_t *context, uint64_t value)
+{
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+
+    context->resolver_neighbor_resolution_interval_ns = value;
+    return 0;
+}
+
+uint64_t aeron_driver_context_get_resolver_neighbor_resolution_interval_ns(aeron_driver_context_t *context)
+{
+    return NULL != context ?
+        context->resolver_neighbor_resolution_interval_ns : AERON_DRIVER_RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_NS_DEFAULT;
+}
+
+int aeron_driver_context_set_resolver_bootstrap_neighbor_resolution_interval_ns(
+    aeron_driver_context_t *context,
+    uint64_t value)
+{
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+
+    context->resolver_bootstrap_neighbor_resolution_interval_ns = value;
+    return 0;
+}
+
+uint64_t aeron_driver_context_get_resolver_bootstrap_resolution_interval_ns(aeron_driver_context_t *context)
+{
+    return NULL != context ?
+        context->resolver_bootstrap_neighbor_resolution_interval_ns :
+        AERON_DRIVER_RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_NS_DEFAULT;
+}
+
+
 int aeron_driver_context_set_re_resolution_check_interval_ns(aeron_driver_context_t *context, uint64_t value)
 {
     AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
@@ -3068,10 +3310,7 @@ static uint32_t aeron_driver_context_clamp_value(uint32_t value, uint32_t min, u
 
 int aeron_driver_context_set_receiver_io_vector_capacity(aeron_driver_context_t *context, uint32_t value)
 {
-    if (NULL == context)
-    {
-        return -1;
-    }
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
 
     context->receiver_io_vector_capacity = aeron_driver_context_clamp_value(
         value, 1, AERON_DRIVER_RECEIVER_IO_VECTOR_LENGTH_MAX);
@@ -3086,10 +3325,7 @@ uint32_t aeron_driver_context_get_receiver_io_vector_capacity(aeron_driver_conte
 
 int aeron_driver_context_set_sender_io_vector_capacity(aeron_driver_context_t *context, uint32_t value)
 {
-    if (NULL == context)
-    {
-        return -1;
-    }
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
 
     context->sender_io_vector_capacity = aeron_driver_context_clamp_value(
         value, 1, AERON_DRIVER_SENDER_IO_VECTOR_LENGTH_MAX);
@@ -3104,10 +3340,7 @@ uint32_t aeron_driver_context_get_sender_io_vector_capacity(aeron_driver_context
 
 int aeron_driver_context_set_network_publication_max_messages_per_send(aeron_driver_context_t *context, uint32_t value)
 {
-    if (NULL == context)
-    {
-        return -1;
-    }
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
 
     context->network_publication_max_messages_per_send = aeron_driver_context_clamp_value(
         value, 1, AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND);
@@ -3122,10 +3355,7 @@ uint32_t aeron_driver_context_get_network_publication_max_messages_per_send(aero
 
 int aeron_driver_context_set_resource_free_limit(aeron_driver_context_t *context, uint32_t value)
 {
-    if (NULL == context)
-    {
-        return -1;
-    }
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
 
     context->resource_free_limit = value;
     return 0;
@@ -3136,41 +3366,31 @@ uint32_t aeron_driver_context_get_resource_free_limit(aeron_driver_context_t *co
     return NULL != context ? context->resource_free_limit : AERON_DRIVER_RESOURCE_FREE_LIMIT_DEFAULT;
 }
 
-int aeron_driver_context_set_async_executor_threads(aeron_driver_context_t *context, uint32_t value)
-{
-    if (NULL == context)
-    {
-        return -1;
-    }
-
-    context->async_executor_threads = value;
-    return 0;
-}
-
-uint32_t aeron_driver_context_get_async_executor_threads(aeron_driver_context_t *context)
-{
-    return NULL != context ? context->async_executor_threads : AERON_DRIVER_ASYNC_EXECUTOR_THREADS_DEFAULT;
-}
-
 void aeron_set_thread_affinity_on_start(void *state, const char *role_name)
 {
     aeron_driver_context_t *context = (aeron_driver_context_t *)state;
     int result = 0;
     if (0 <= context->conductor_cpu_affinity_no &&
-       (0 == strcmp("conductor", role_name) ||
-        0 == strcmp("[conductor, sender, receiver]", role_name)))
+       (0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_CONDUCTOR, role_name) ||
+        0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_SHARED, role_name)))
     {
         result = aeron_thread_set_affinity(role_name, (uint8_t)context->conductor_cpu_affinity_no);
     }
     else if (0 <= context->sender_cpu_affinity_no &&
-            (0 == strcmp("sender", role_name) ||
-             0 == strcmp("[sender, receiver]", role_name)))
+            (0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_SENDER, role_name) ||
+             0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_SHARED_NETWORK, role_name)))
     {
         result = aeron_thread_set_affinity(role_name, (uint8_t)context->sender_cpu_affinity_no);
     }
-    else if (0 <= context->receiver_cpu_affinity_no && 0 == strcmp("receiver", role_name))
+    else if (0 <= context->receiver_cpu_affinity_no &&
+             0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_RECEIVER, role_name))
     {
         result = aeron_thread_set_affinity(role_name, (uint8_t)context->receiver_cpu_affinity_no);
+    }
+    else if (0 <= context->native_resource_agent_cpu_affinity_no &&
+             0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_NATIVE_RESOURCE_AGENT, role_name))
+    {
+        result = aeron_thread_set_affinity(role_name, (uint8_t)context->native_resource_agent_cpu_affinity_no);
     }
 
     if (result < 0)
@@ -3183,7 +3403,7 @@ void aeron_set_thread_affinity_on_start(void *state, const char *role_name)
         }
         else
         {
-            fprintf(stderr, "%s", aeron_errmsg());
+            AERON_FPRINTF(stderr, "%s", aeron_errmsg());
         }
         aeron_err_clear();
     }
@@ -3199,10 +3419,7 @@ void aeron_set_thread_affinity_on_start(void *state, const char *role_name)
 
 int aeron_driver_context_set_conductor_cpu_affinity(aeron_driver_context_t *context, int32_t value)
 {
-    if (NULL == context)
-    {
-        return -1;
-    }
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
 
     context->conductor_cpu_affinity_no = value;
     return 0;
@@ -3215,10 +3432,7 @@ int32_t aeron_driver_context_get_conductor_cpu_affinity(aeron_driver_context_t *
 
 int aeron_driver_context_set_sender_cpu_affinity(aeron_driver_context_t *context, int32_t value)
 {
-    if (NULL == context)
-    {
-        return -1;
-    }
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
 
     context->sender_cpu_affinity_no = value;
     return 0;
@@ -3231,10 +3445,7 @@ int32_t aeron_driver_context_get_sender_cpu_affinity(aeron_driver_context_t *con
 
 int aeron_driver_context_set_receiver_cpu_affinity(aeron_driver_context_t *context, int32_t value)
 {
-    if (NULL == context)
-    {
-        return -1;
-    }
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
 
     context->receiver_cpu_affinity_no = value;
     return 0;
@@ -3242,5 +3453,97 @@ int aeron_driver_context_set_receiver_cpu_affinity(aeron_driver_context_t *conte
 
 int32_t aeron_driver_context_get_receiver_cpu_affinity(aeron_driver_context_t *context)
 {
-    return NULL != context ? context->receiver_cpu_affinity_no :AERON_CPU_AFFINITY_DEFAULT;
+    return NULL != context ? context->receiver_cpu_affinity_no : AERON_CPU_AFFINITY_DEFAULT;
+}
+
+int aeron_driver_context_set_native_resource_agent_cpu_affinity(aeron_driver_context_t *context, int32_t value)
+{
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+
+    context->native_resource_agent_cpu_affinity_no = value;
+    return 0;
+}
+
+int32_t aeron_driver_context_get_native_resource_agent_cpu_affinity(aeron_driver_context_t *context)
+{
+    return NULL != context ? context->native_resource_agent_cpu_affinity_no : AERON_CPU_AFFINITY_DEFAULT;
+}
+
+int aeron_driver_context_set_cpuset_affinity(aeron_driver_context_t *context, bool value)
+{
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+
+    context->cpuset_affinity = value;
+    return 0;
+}
+
+bool aeron_driver_context_get_cpuset_affinity(aeron_driver_context_t *context)
+{
+    return NULL != context ? context->cpuset_affinity : AERON_DRIVER_CPUSET_AFFINITY_DEFAULT;
+}
+
+int aeron_driver_context_set_cpuset_warnings_as_errors(aeron_driver_context_t *context, bool value)
+{
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+
+    context->cpuset_warnings_as_errors = value;
+    return 0;
+}
+
+bool aeron_driver_context_get_cpuset_warnings_as_errors(aeron_driver_context_t *context)
+{
+    return NULL != context ? context->cpuset_warnings_as_errors : AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS_DEFAULT;
+}
+
+static int aeron_driver_context_apply_cpuset_affinity_per_cpu(
+    const int *cpus, int cpu_count, const char *name, int32_t *affinity_ptr)
+{
+    const int32_t affinity = *affinity_ptr;
+    if (cpu_count <= affinity)
+    {
+        AERON_SET_ERR(
+            EINVAL, "%s affinity %" PRId32 " must be less than cpuset count %d", name, affinity, cpu_count);
+        return -1;
+    }
+
+    if (-1 < affinity)
+    {
+        const int32_t cpuset_conductor_affinity = cpus[(int)affinity];
+        *affinity_ptr = cpuset_conductor_affinity;
+    }
+
+    return 0;
+}
+
+int aeron_driver_context_apply_cpuset_affinity(aeron_driver_context_t *context, const int *cpus, int cpu_count)
+{
+    if (aeron_driver_context_apply_cpuset_affinity_per_cpu(
+        cpus, cpu_count, AERON_DRIVER_AGENT_ROLE_NAME_CONDUCTOR, &context->conductor_cpu_affinity_no))
+    {
+        AERON_APPEND_ERR("%s", "");
+        return -1;
+    }
+
+    if (aeron_driver_context_apply_cpuset_affinity_per_cpu(
+        cpus, cpu_count, AERON_DRIVER_AGENT_ROLE_NAME_RECEIVER, &context->receiver_cpu_affinity_no))
+    {
+        AERON_APPEND_ERR("%s", "");
+        return -1;
+    }
+
+    if (aeron_driver_context_apply_cpuset_affinity_per_cpu(
+        cpus, cpu_count, AERON_DRIVER_AGENT_ROLE_NAME_SENDER, &context->sender_cpu_affinity_no))
+    {
+        AERON_APPEND_ERR("%s", "");
+        return -1;
+    }
+
+    if (aeron_driver_context_apply_cpuset_affinity_per_cpu(
+        cpus, cpu_count, AERON_DRIVER_AGENT_ROLE_NAME_NATIVE_RESOURCE_AGENT, &context->native_resource_agent_cpu_affinity_no))
+    {
+        AERON_APPEND_ERR("%s", "");
+        return -1;
+    }
+
+    return 0;
 }

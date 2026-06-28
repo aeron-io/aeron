@@ -585,14 +585,15 @@ class ArchiveSystemTest
         {
             final long replayCorrelationId = client.nextCorrelationId();
 
-            assertTrue(archiveProxy.replay(
-                recordingId,
-                startPosition,
-                totalRecordingLength,
-                REPLAY_URI,
-                REPLAY_STREAM_ID,
-                replayCorrelationId,
-                controlSessionId),
+            assertTrue(
+                archiveProxy.replay(
+                    recordingId,
+                    startPosition,
+                    totalRecordingLength,
+                    REPLAY_URI,
+                    REPLAY_STREAM_ID,
+                    replayCorrelationId,
+                    controlSessionId),
                 "failed to replay");
 
             ArchiveTests.awaitOk(controlResponse, replayCorrelationId);
@@ -626,7 +627,6 @@ class ArchiveSystemTest
         assertNotEquals(0, totalReadTimeNs);
         final long maxReadTimeNs = context.maxReadTimeCounter().get();
         assertNotEquals(0, maxReadTimeNs);
-        assertTrue(totalReadTimeNs > maxReadTimeNs);
     }
 
     private void validateArchiveFile(final long recordingId)

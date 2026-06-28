@@ -22,11 +22,14 @@
 
 #include "util/aeron_platform.h"
 
-void aeron_thread_set_name(const char *role_name);
+#define AERON_THREAD_NAME_MAX_LENGTH UINT16_C(15)
+
+int aeron_thread_set_name(const char *name);
+int aeron_thread_get_name(char *name_buf, size_t name_buf_size);
 
 void aeron_nano_sleep(uint64_t nanoseconds);
 void aeron_micro_sleep(unsigned int microseconds);
-int aeron_thread_set_affinity(const char *role_name, uint8_t cpu_affinity_no);
+int aeron_thread_set_affinity(const char *name, uint8_t cpu_affinity_no);
 
 #if defined(AERON_COMPILER_GCC)
 
@@ -38,10 +41,11 @@ typedef pthread_mutex_t aeron_mutex_t;
 typedef pthread_t aeron_thread_t;
 typedef pthread_attr_t aeron_thread_attr_t;
 
-int aeron_mutex_init(aeron_mutex_t *mutex, void *attr);
-#define aeron_mutex_lock pthread_mutex_lock
-#define aeron_mutex_unlock pthread_mutex_unlock
-#define aeron_mutex_destroy pthread_mutex_destroy
+int aeron_mutex_init(aeron_mutex_t *mutex);
+int aeron_mutex_destroy(aeron_mutex_t *mutex);
+int aeron_mutex_lock(aeron_mutex_t *mutex);
+int aeron_mutex_unlock(aeron_mutex_t *mutex);
+
 #define aeron_thread_once pthread_once
 #define aeron_thread_attr_init pthread_attr_init
 #define aeron_thread_create pthread_create
@@ -82,7 +86,7 @@ typedef CONDITION_VARIABLE aeron_cond_t;
 
 void aeron_thread_once(AERON_INIT_ONCE *s_init_once, void *callback);
 
-int aeron_mutex_init(aeron_mutex_t *mutex, void *attr);
+int aeron_mutex_init(aeron_mutex_t *mutex);
 int aeron_mutex_destroy(aeron_mutex_t *mutex);
 int aeron_mutex_lock(aeron_mutex_t *mutex);
 int aeron_mutex_unlock(aeron_mutex_t *mutex);
@@ -122,7 +126,11 @@ void proc_yield(void);
 #elif defined(AERON_COMPILER_MSVC)
 
 int sched_yield(void);
+#if defined(AERON_CPU_ARM)
+#define proc_yield __yield
+#else
 #define proc_yield _mm_pause
+#endif
 
 #else
 #error Unsupported platform!

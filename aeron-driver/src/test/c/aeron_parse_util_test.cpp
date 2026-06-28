@@ -274,9 +274,9 @@ TEST_F(ParseUtilTest, shouldSplitAddress)
     EXPECT_EQ(std::string(split_address.port), "123");
     EXPECT_EQ(split_address.ip_version_hint, 4);
 
-    EXPECT_EQ(aeron_address_split("[FF01::FD]:40456", &split_address), 0);
+    EXPECT_EQ(aeron_address_split("[FF01::FD]:20000", &split_address), 0);
     EXPECT_EQ(std::string(split_address.host), "FF01::FD");
-    EXPECT_EQ(std::string(split_address.port), "40456");
+    EXPECT_EQ(std::string(split_address.port), "20000");
     EXPECT_EQ(split_address.ip_version_hint, 6);
 }
 
@@ -308,15 +308,15 @@ TEST_F(ParseUtilTest, shouldSplitInterface)
     EXPECT_EQ(std::string(split_interface.prefix), "");
     EXPECT_EQ(split_interface.ip_version_hint, 4);
 
-    EXPECT_EQ(aeron_interface_split("[FF01::FD]:40456/8", &split_interface), 0);
+    EXPECT_EQ(aeron_interface_split("[FF01::FD]:20000/8", &split_interface), 0);
     EXPECT_EQ(std::string(split_interface.host), "FF01::FD");
-    EXPECT_EQ(std::string(split_interface.port), "40456");
+    EXPECT_EQ(std::string(split_interface.port), "20000");
     EXPECT_EQ(std::string(split_interface.prefix), "8");
     EXPECT_EQ(split_interface.ip_version_hint, 6);
 
-    EXPECT_EQ(aeron_interface_split("[FF01::FD]:40456", &split_interface), 0);
+    EXPECT_EQ(aeron_interface_split("[FF01::FD]:20000", &split_interface), 0);
     EXPECT_EQ(std::string(split_interface.host), "FF01::FD");
-    EXPECT_EQ(std::string(split_interface.port), "40456");
+    EXPECT_EQ(std::string(split_interface.port), "20000");
     EXPECT_EQ(std::string(split_interface.prefix), "");
     EXPECT_EQ(split_interface.ip_version_hint, 6);
 

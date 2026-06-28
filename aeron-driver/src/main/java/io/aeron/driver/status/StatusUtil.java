@@ -26,8 +26,12 @@ import org.agrona.concurrent.status.UnsafeBufferStatusIndicator;
 /**
  * Functions for working with status counters.
  */
-public class StatusUtil
+public final class StatusUtil
 {
+    private StatusUtil()
+    {
+    }
+
     /**
      * Return the controllable idle strategy {@link StatusIndicator}.
      *

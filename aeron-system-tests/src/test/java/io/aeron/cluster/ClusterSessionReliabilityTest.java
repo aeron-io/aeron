@@ -233,14 +233,13 @@ class ClusterSessionReliabilityTest
             if (!lossRequested && egressListener.nextSequence >= 5)
             {
                 lossRequested = true;
-                clientReceiveLossGenerator.startDropping(
-                    client.context().egressStreamId(),
-                    imageLivenessTimeoutNs + TimeUnit.MILLISECONDS.toNanos(200));
+                clientReceiveLossGenerator.enable(client.context().egressStreamId());
             }
 
             Tests.sleep(1);
         }
 
+        clientReceiveLossGenerator.disable();
         assertTrue(lossRequested);
         assertEquals(0, egressListener.outOfSequenceCount);
     }

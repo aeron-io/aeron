@@ -28,8 +28,12 @@ import io.aeron.archive.codecs.RecordingDescriptorHeaderEncoder;
 /**
  * Read only view of a {@link Catalog} which can be used for listing entries.
  */
-public class CatalogView
+public final class CatalogView
 {
+    private CatalogView()
+    {
+    }
+
     /**
      * List all recording descriptors in a {@link Catalog}.
      *

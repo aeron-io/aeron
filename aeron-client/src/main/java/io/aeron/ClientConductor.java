@@ -29,6 +29,7 @@ import org.agrona.BitUtil;
 import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
 import org.agrona.SemanticVersion;
+import org.agrona.SystemUtil;
 import org.agrona.collections.ArrayListUtil;
 import org.agrona.collections.Long2ObjectHashMap;
 import org.agrona.collections.LongHashSet;
@@ -245,7 +246,7 @@ final class ClientConductor implements Agent
 
     public String roleName()
     {
-        return "aeron-client-conductor";
+        return "aeron-client";
     }
 
     boolean isClosed()
@@ -456,7 +457,9 @@ final class ClientConductor implements Agent
 
     void onNewCounter(final long correlationId, final int counterId)
     {
-        resourceByRegIdMap.put(correlationId, new Counter(correlationId, this, counterValuesBuffer, counterId));
+        resourceByRegIdMap.put(
+            correlationId,
+            new Counter(correlationId, correlationId, true, this, counterValuesBuffer, counterId));
         onAvailableCounter(correlationId, counterId);
     }
 
@@ -654,10 +657,10 @@ final class ClientConductor implements Agent
                 return;
             }
 
+            ensureNotReentrant();
+
             if (!publication.isClosed())
             {
-                ensureNotReentrant();
-
                 publication.internalClose();
                 if (publication == resourceByRegIdMap.remove(publication.registrationId()))
                 {
@@ -822,10 +825,10 @@ final class ClientConductor implements Agent
                 return;
             }
 
+            ensureNotReentrant();
+
             if (!subscription.isClosed())
             {
-                ensureNotReentrant();
-
                 subscription.internalClose(EXPLICIT_CLOSE_LINGER_NS);
                 final long registrationId = subscription.registrationId();
                 if (subscription == resourceByRegIdMap.remove(registrationId))
@@ -1598,7 +1601,7 @@ final class ClientConductor implements Agent
         }
     }
 
-    void releaseCounter(final Counter counter)
+    void removeCounter(final Counter counter)
     {
         clientLock.lock();
         try
@@ -1610,10 +1613,10 @@ final class ClientConductor implements Agent
 
             ensureNotReentrant();
 
-            final long registrationId = counter.registrationId();
-            if (counter == resourceByRegIdMap.remove(registrationId))
+            final long correlationId = counter.correlationId();
+            if (counter == resourceByRegIdMap.remove(correlationId) && counter.clientOwned())
             {
-                asyncCommandIdSet.add(driverProxy.removeCounter(registrationId));
+                asyncCommandIdSet.add(driverProxy.removeCounter(correlationId));
             }
         }
         finally
@@ -1674,9 +1677,13 @@ final class ClientConductor implements Agent
     void onStaticCounter(final long correlationId, final int counterId)
     {
         final CountersReader countersReader = aeron.countersReader();
-        resourceByRegIdMap.put(
+        resourceByRegIdMap.put(correlationId, new Counter(
             correlationId,
-            new Counter(countersReader, countersReader.getCounterRegistrationId(counterId), counterId));
+            countersReader.getCounterRegistrationId(counterId),
+            false,
+            this,
+            counterValuesBuffer,
+            counterId));
     }
 
     void rejectImage(final long correlationId, final long position, final String reason)
@@ -1838,7 +1845,8 @@ final class ClientConductor implements Agent
         }
         while (deadlineNs - nanoClock.nanoTime() > 0);
 
-        throw new DriverTimeoutException("no response from MediaDriver within " + driverTimeoutNs + "ns");
+        throw new DriverTimeoutException("no response from MediaDriver within " +
+            SystemUtil.formatDuration(driverTimeoutNs));
     }
 
     private int checkTimeouts(final long nowNs)
@@ -1864,8 +1872,8 @@ final class ClientConductor implements Agent
             terminateConductor();
 
             throw new ConductorServiceTimeoutException(
-                "service interval exceeded: timeout=" + interServiceTimeoutNs +
-                "ns, interval=" + (nowNs - timeOfLastServiceNs) + "ns");
+                "service interval exceeded: timeout=" + SystemUtil.formatDuration(interServiceTimeoutNs) +
+                ", interval=" + SystemUtil.formatDuration(nowNs - timeOfLastServiceNs));
         }
     }
 
@@ -1967,7 +1975,7 @@ final class ClientConductor implements Agent
                 publication.internalClose();
                 releaseLogBuffers(publication.logBuffers(), publication.originalRegistrationId(), NULL_VALUE);
             }
-            else if (resource instanceof Counter counter && this == counter.clientConductor())
+            else if (resource instanceof Counter counter && counter.clientOwned())
             {
                 counter.internalClose();
                 notifyUnavailableCounterHandlers(counter.registrationId(), counter.id());

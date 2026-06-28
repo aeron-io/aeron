@@ -172,12 +172,12 @@ int aeron_udp_port_resolver(const char *port_str, bool optional)
 
     if ((0 == value && 0 != errno) || end_ptr == port_str)
     {
-        AERON_SET_ERR(EINVAL, "port invalid: %s", port_str);
+        AERON_SET_ERR(EINVAL, "port invalid: '%s'", port_str);
         return -1;
     }
     else if (value > UINT16_MAX)
     {
-        AERON_SET_ERR(EINVAL, "port out of range: %s", port_str);
+        AERON_SET_ERR(EINVAL, "port out of range: '%s'", port_str);
         return -1;
     }
 

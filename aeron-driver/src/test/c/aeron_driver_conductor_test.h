@@ -20,7 +20,6 @@
 #include <array>
 #include <cstdint>
 #include <thread>
-#include <exception>
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -28,10 +27,9 @@
 extern "C"
 {
 #include "aeron_driver_conductor.h"
-#include "util/aeron_error.h"
+#include "aeron_driver_native_resource_agent.h"
 #include "aeron_driver_sender.h"
 #include "aeron_driver_receiver.h"
-#include "aeron_counters.h"
 #include "concurrent/aeron_broadcast_receiver.h"
 #include "concurrent/aeron_counters_manager.h"
 #include "concurrent/aeron_mpsc_rb.h"
@@ -212,7 +210,6 @@ struct TestDriverContext
         }
 
         m_context->threading_mode = AERON_THREADING_MODE_SHARED;
-        m_context->async_executor_threads = 0;
         m_context->cnc_map.length = aeron_cnc_length(m_context);
         m_cnc = std::unique_ptr<uint8_t[]>(new uint8_t[m_context->cnc_map.length]);
         m_context->cnc_map.addr = m_cnc.get();
@@ -263,6 +260,7 @@ struct TestDriverConductor
         }
 
         context.m_context->conductor_proxy = &m_conductor.conductor_proxy;
+        context.m_context->system_counters = &m_conductor.system_counters;
 
         if (aeron_driver_sender_init(
             &m_sender, context.m_context, &m_conductor.system_counters, &m_conductor.error_log) < 0)
@@ -279,12 +277,23 @@ struct TestDriverConductor
         }
 
         context.m_context->receiver_proxy = &m_receiver.receiver_proxy;
+
+        if (aeron_driver_native_resource_agent_init(&m_native_resource_agent, context.m_context) < 0)
+        {
+            throw std::runtime_error("could not init native_resource_agent: " + std::string(aeron_errmsg()));
+        }
+        context.m_context->native_resource_agent_proxy = &m_native_resource_agent.native_resource_agent_proxy;
+
         m_destination.has_control_addr = false;
+        m_destination.transport.fd = -1;
+        m_destination.data_paths = &m_receiver.receiver_proxy.receiver->data_paths;
+        m_destination.transport.data_paths = m_destination.data_paths;
     }
 
     virtual ~TestDriverConductor()
     {
         aeron_driver_conductor_on_close(&m_conductor);
+        aeron_driver_native_resource_agent_on_close(&m_native_resource_agent);
         aeron_driver_sender_on_close(&m_sender);
         aeron_driver_receiver_on_close(&m_receiver);
     }
@@ -297,6 +306,7 @@ struct TestDriverConductor
     aeron_driver_conductor_t m_conductor = {};
     aeron_driver_sender_t m_sender = {};
     aeron_driver_receiver_t m_receiver = {};
+    aeron_driver_native_resource_agent_t m_native_resource_agent = {};
     aeron_receive_destination_t m_destination = {};
 };
 
@@ -587,17 +597,19 @@ public:
 
     int doWork()
     {
-        return aeron_driver_conductor_do_work(&m_conductor.m_conductor);
+        int work_count = 0;
+        work_count += aeron_driver_conductor_do_work(&m_conductor.m_conductor);
+        work_count += aeron_driver_native_resource_agent_do_work(&m_conductor.m_native_resource_agent);
+        work_count += aeron_driver_sender_do_work(&m_conductor.m_sender);
+        work_count += aeron_driver_receiver_do_work(&m_conductor.m_receiver);
+        return work_count;
     }
 
     void doWorkUntilDone()
     {
-        while (true)
+        while (0 != doWork())
         {
-            if (0 == doWork())
-            {
-                break;
-            }
+            std::this_thread::yield();
         }
     }
 

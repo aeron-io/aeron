@@ -147,7 +147,20 @@ public enum ClusterEventCode implements EventCode
      *
      * @since 1.49.0
      */
-    CLUSTER_SESSION_STATE_CHANGE(24, ClusterEventDissector::dissectClusterSessionStateChange);
+    CLUSTER_SESSION_STATE_CHANGE(24, ClusterEventDissector::dissectClusterSessionStateChange),
+
+    /**
+     * An actual vote for new leadership, i.e. response to the {@link #REQUEST_VOTE}.
+     *
+     * @since 1.50.0
+     */
+    VOTE(25, ClusterEventDissector::dissectVote),
+
+    /**
+     * Invalidation of an entry in the recording log for snapshot. Occurs when the consensus module runs the recording
+     * log validator and finds a snapshot that has been removed from the archive.
+     */
+    SNAPSHOT_ENTRY_INVALIDATION(26, ClusterEventDissector::dissectSnapshotEntryInvalidation);
 
     static final int EVENT_CODE_TYPE = EventCodeType.CLUSTER.getTypeCode();
     private static final ClusterEventCode[] EVENT_CODE_BY_ID;

@@ -18,17 +18,24 @@ package io.aeron.cluster;
 import io.aeron.archive.Archive;
 import io.aeron.archive.ArchivingMediaDriver;
 import io.aeron.archive.client.AeronArchive;
+import io.aeron.cluster.client.AeronCluster;
 import io.aeron.cluster.service.Cluster;
+import io.aeron.driver.DriverConductorProxy;
 import io.aeron.driver.MediaDriver;
+import io.aeron.driver.ThreadingMode;
 import io.aeron.samples.archive.RecordingDescriptor;
 import io.aeron.samples.archive.RecordingDescriptorCollector;
 import io.aeron.test.EventLogExtension;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
+import io.aeron.test.SlowTest;
 import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.TestContexts;
 import io.aeron.test.cluster.TestCluster;
 import io.aeron.test.cluster.TestNode;
+import io.aeron.test.driver.TestMediaDriver;
+import org.agrona.CloseHelper;
+import org.agrona.concurrent.SystemEpochClock;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -37,6 +44,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import static io.aeron.Aeron.Configuration.PRE_TOUCH_MAPPED_MEMORY_PROP_NAME;
 import static io.aeron.test.cluster.TestCluster.aCluster;
@@ -62,6 +70,29 @@ class SingleNodeTest
 
         assertEquals(0, leader.index());
         assertEquals(Cluster.Role.LEADER, leader.role());
+    }
+
+    @Test
+    @InterruptAfter(20)
+    void shouldNotConsiderItselfInactiveAndEnterAnElection()
+    {
+        final OffsetMillisecondClusterClock clusterClock = new OffsetMillisecondClusterClock(SystemEpochClock.INSTANCE);
+        final TestCluster cluster = aCluster()
+            .withClusterClock(clusterClock)
+            .withStaticNodes(1)
+            .start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode leader = cluster.awaitLeader();
+        assertEquals(0, leader.index());
+        assertEquals(Cluster.Role.LEADER, leader.role());
+
+        final long heartbeatTimeOutNs = leader.consensusModule().context().leaderHeartbeatTimeoutNs();
+        clusterClock.addOffset(TimeUnit.NANOSECONDS.toMillis(heartbeatTimeOutNs) * 2);
+
+        final ClusterMembership clusterMembership = leader.clusterMembership();
+        assertEquals(1, clusterMembership.activeMembers.size());
+        assertEquals(0, clusterMembership.activeMembers.get(0).leadershipTermId());
     }
 
     @ParameterizedTest
@@ -143,6 +174,64 @@ class SingleNodeTest
         cluster.startStaticNode(0, false);
         final TestNode newLeader = cluster.awaitLeader();
         cluster.awaitServiceMessageCount(newLeader, largeMessageCount);
+    }
+
+    @Test
+    @SlowTest
+    @InterruptAfter(20)
+    void shouldReattemptEgressSubscriptionCreationOnTransientError()
+    {
+        TestMediaDriver.notSupportedOnCMediaDriver("uses instrumentation to simulate race condition");
+
+        final MethodCallBlocker methodCallBlocker = new MethodCallBlocker();
+
+        try
+        {
+            final TestCluster cluster = aCluster().withStaticNodes(1).start();
+            systemTestWatcher.cluster(cluster);
+
+            final TestNode leader = cluster.awaitLeader();
+
+            assertEquals(0, leader.index());
+            assertEquals(Cluster.Role.LEADER, leader.role());
+
+            cluster.clientThreadingMode(ThreadingMode.DEDICATED);
+            cluster.egressChannel("aeron:udp?term-length=128k|endpoint=localhost:30000|alias=egress");
+            final AeronCluster client = cluster.connectClient();
+
+            final MethodCallBlocker.Controller receiveChannelEndpointClosedController =
+                methodCallBlocker.getControllerFor(
+                    DriverConductorProxy.class.getCanonicalName(),
+                    "receiveChannelEndpointClosed",
+                    "receiver"
+                );
+
+            receiveChannelEndpointClosedController.blockNextEntry();
+            client.close();
+            receiveChannelEndpointClosedController.awaitBlocked();
+
+            final TestMediaDriver clientDriver = cluster.startClientMediaDriver();
+            final AeronCluster.Context context = cluster.clientCtx()
+                .aeronDirectoryName(clientDriver.aeronDirectoryName());
+            try (AeronCluster.AsyncConnect asyncConnect = AeronCluster.asyncConnect(context))
+            {
+                AeronCluster client2;
+                int iterations = 0;
+                while (null == (client2 = asyncConnect.poll()))
+                {
+                    if (++iterations == 10)
+                    {
+                        receiveChannelEndpointClosedController.release();
+                    }
+                    Thread.yield();
+                }
+                CloseHelper.close(client2);
+            }
+        }
+        finally
+        {
+            methodCallBlocker.removeInstrumentation();
+        }
     }
 
     private void truncateRecordingToTermLength(final String aeronDirectoryName, final File archiveDir)

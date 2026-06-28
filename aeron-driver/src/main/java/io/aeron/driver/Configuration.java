@@ -68,6 +68,10 @@ import static org.agrona.SystemUtil.getSizeAsLong;
  */
 public final class Configuration
 {
+    private Configuration()
+    {
+    }
+
     /**
      * Warn if the Aeron directory exists.
      */
@@ -574,7 +578,7 @@ public final class Configuration
     public static final String UNICAST_FLOW_CONTROL_STRATEGY_PROP_NAME = "aeron.unicast.flow.control.strategy";
 
     /**
-     *
+     * Default flow control strategy for unicast.
      */
     @Config
     public static final String UNICAST_FLOW_CONTROL_STRATEGY_DEFAULT = "io.aeron.driver.UnicastFlowControl";
@@ -592,7 +596,7 @@ public final class Configuration
     public static final String MULTICAST_FLOW_CONTROL_STRATEGY_PROP_NAME = "aeron.multicast.flow.control.strategy";
 
     /**
-     *
+     *  Default flow control strategy for multicast.
      */
     @Config
     public static final String MULTICAST_FLOW_CONTROL_STRATEGY_DEFAULT = "io.aeron.driver.MaxMulticastFlowControl";
@@ -654,7 +658,7 @@ public final class Configuration
     public static final String IPC_MTU_LENGTH_PROP_NAME = "aeron.ipc.mtu.length";
 
     /**
-     *
+     * Default mtu length for IPC publications.
      */
     @Config(configType = Config.Type.DEFAULT)
     public static final int IPC_MTU_LENGTH_DEFAULT = MTU_LENGTH_DEFAULT;
@@ -1070,9 +1074,9 @@ public final class Configuration
      */
     @Config(
         defaultType = DefaultType.LONG,
-        defaultLong = 1_000_000L,
+        defaultLong = 100_000_000L,
         expectedCDefaultFieldName = "AERON_DRIVER_CONDUCTOR_CYCLE_THRESHOLD_NS_DEFAULT")
-    public static final long CONDUCTOR_CYCLE_THRESHOLD_DEFAULT_NS = TimeUnit.MILLISECONDS.toNanos(1);
+    public static final long CONDUCTOR_CYCLE_THRESHOLD_DEFAULT_NS = TimeUnit.MILLISECONDS.toNanos(100);
 
     /**
      * Property name for threshold value for the sender work cycle threshold to track for being exceeded.
@@ -1085,9 +1089,9 @@ public final class Configuration
      */
     @Config(
         defaultType = DefaultType.LONG,
-        defaultLong = 1_000_000L,
+        defaultLong = 100_000_000L,
         expectedCDefaultFieldName = "AERON_DRIVER_SENDER_CYCLE_THRESHOLD_NS_DEFAULT")
-    public static final long SENDER_CYCLE_THRESHOLD_DEFAULT_NS = TimeUnit.MILLISECONDS.toNanos(1);
+    public static final long SENDER_CYCLE_THRESHOLD_DEFAULT_NS = TimeUnit.MILLISECONDS.toNanos(100);
 
     /**
      * Property name for threshold value for the receiver work cycle threshold to track for being exceeded.
@@ -1100,9 +1104,9 @@ public final class Configuration
      */
     @Config(
         defaultType = DefaultType.LONG,
-        defaultLong = 1_000_000L,
+        defaultLong = 100_000_000L,
         expectedCDefaultFieldName = "AERON_DRIVER_RECEIVER_CYCLE_THRESHOLD_NS_DEFAULT")
-    public static final long RECEIVER_CYCLE_THRESHOLD_DEFAULT_NS = TimeUnit.MILLISECONDS.toNanos(1);
+    public static final long RECEIVER_CYCLE_THRESHOLD_DEFAULT_NS = TimeUnit.MILLISECONDS.toNanos(100);
 
     /**
      * Property name for threshold value for the name resolution threshold to track for being exceeded.
@@ -1140,13 +1144,14 @@ public final class Configuration
     public static final String RECEIVER_WILDCARD_PORT_RANGE_PROP_NAME = "aeron.receiver.wildcard.port.range";
 
     /**
-     * Property name to configure the number of async executor threads. Defaults to {@code 1}. Negative value or zero
-     * means no asynchronous threads should be created, i.e. execution will be done on the conductor thread.
+     * Property name to configure idle strategy for {@code NativeResourceAgent}. Defaults to {@code sleep-ns} strategy
+     * with one-millisecond sleep time.
      *
-     * @since 1.44.0
+     * @since 1.52.0
      */
-    @Config(defaultType = DefaultType.INT, defaultInt = 1)
-    public static final String ASYNC_TASK_EXECUTOR_THREADS_PROP_NAME = "aeron.driver.async.executor.threads";
+    @Config(defaultType = DefaultType.BOOLEAN, defaultBoolean = true)
+    public static final String NATIVE_RESOURCE_AGENT_IDLE_STRATEGY_PROP_NAME =
+        "aeron.driver.native.resource.agent.idle.strategy";
 
     /**
      * Property name to set a limit on the number sessions allowed per stream on a subscription.
@@ -1158,6 +1163,55 @@ public final class Configuration
      * Default number of sessions allowed per stream on a subscription. Default is to be effectively unlimited.
      */
     public static final int STREAM_SESSION_LIMIT_DEFAULT = Integer.MAX_VALUE;
+
+    /**
+     * Property name for time to wait before removing a neighbor entry from the cache if an update for that neighbor has
+     * not been received.
+     */
+    @Config(defaultType = DefaultType.LONG, defaultLong = 10_000_000_000L)
+    public static final String RESOLVER_NEIGHBOR_TIMEOUT_PROP_NAME = "aeron.driver.resolver.neighbor.timeout";
+
+    /**
+     * Default time to wait before removing a neighbor entry from the cache if an update for that neighbor has not
+     * been received.
+     */
+    public static final long RESOLVER_NEIGHBOR_TIMEOUT_DEFAULT_NS = TimeUnit.SECONDS.toNanos(10);
+
+    /**
+     * Property name for the interval between sending name to address messages for this driver to its neighbors.
+     */
+    @Config(defaultType = DefaultType.LONG, defaultLong = 1_000_000_000L)
+    public static final String RESOLVER_SELF_RESOLUTION_INTERVAL_PROP_NAME =
+        "aeron.driver.resolver.self.resolution.interval";
+
+    /**
+     * Default interval between sending name to address messages for this driver to its neighbors.
+     */
+    public static final long RESOLVER_SELF_RESOLUTION_INTERVAL_DEFAULT_NS = TimeUnit.SECONDS.toNanos(1);
+
+    /**
+     * Property name for the interval between sending name to address messages for all known neighbors.
+     */
+    @Config(defaultType = DefaultType.LONG, defaultLong = 2_000_000_000L)
+    public static final String RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_PROP_NAME =
+        "aeron.driver.resolver.neighbor.resolution.interval";
+
+    /**
+     * Default interval between sending name to address messages for all known neighbors.
+     */
+    public static final long RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_DEFAULT_NS = TimeUnit.SECONDS.toNanos(2);
+
+    /**
+     * Property name for the interval between resolutions of bootstrap neighbors that are not active.
+     */
+    @Config(defaultType = DefaultType.LONG, defaultLong = 10_000_000_000L)
+    public static final String RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_PROP_NAME =
+        "aeron.driver.resolver.bootstrap.neighbor.resolution.interval";
+
+    /**
+     * Default interval between resolutions of bootstrap neighbors that are not active.
+     */
+    public static final long RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_DEFAULT_NS = TimeUnit.SECONDS.toNanos(10);
 
     /**
      * {@link Executor} that run tasks on the caller thread.
@@ -1582,6 +1636,60 @@ public final class Configuration
     }
 
     /**
+     * Resolve configuration for time to wait before removing a neighbor entry from the cache if an update for that
+     * neighbor has not been received.
+     *
+     * @return time to wait before removing a neighbor entry from the cache if an update for that * neighbor has not
+     * been received.
+     * @see #RESOLVER_NEIGHBOR_TIMEOUT_DEFAULT_NS
+     * @see #RESOLVER_NEIGHBOR_TIMEOUT_PROP_NAME
+     */
+    public static long resolverNeighborTimeoutNs()
+    {
+        return getDurationInNanos(RESOLVER_NEIGHBOR_TIMEOUT_PROP_NAME, RESOLVER_NEIGHBOR_TIMEOUT_DEFAULT_NS);
+    }
+
+    /**
+     * Resolve configuration for the interval between sending name to address messages for this driver to its neighbors.
+     *
+     * @return interval between sending name to address messages for this driver to its neighbors.
+     * @see #RESOLVER_SELF_RESOLUTION_INTERVAL_DEFAULT_NS
+     * @see #RESOLVER_SELF_RESOLUTION_INTERVAL_PROP_NAME
+     */
+    public static long resolverSelfResolutionIntervalNs()
+    {
+        return getDurationInNanos(
+            RESOLVER_SELF_RESOLUTION_INTERVAL_PROP_NAME, RESOLVER_SELF_RESOLUTION_INTERVAL_DEFAULT_NS);
+    }
+
+    /**
+     * Resolve configuration for the interval between sending name to address messages for all known neighbors.
+     *
+     * @return interval between sending name to address messages for all known neighbors.
+     * @see #RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_DEFAULT_NS
+     * @see #RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_PROP_NAME
+     */
+    public static long resolverNeighborResolutionIntervalNs()
+    {
+        return getDurationInNanos(
+            RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_PROP_NAME, RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_DEFAULT_NS);
+    }
+
+    /**
+     * Resolve configuration for the interval between resolutions of bootstrap neighbors that are not active.
+     *
+     * @return interval between sending name to address messages for all known neighbors.
+     * @see #RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_DEFAULT_NS
+     * @see #RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_PROP_NAME
+     */
+    public static long resolverBootstrapNeighborResolutionIntervalNs()
+    {
+        return getDurationInNanos(
+            RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_PROP_NAME,
+            RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_DEFAULT_NS);
+    }
+
+    /**
      * Re-resolution check interval for resolving names to IP address when they may have changed.
      *
      * @return re-resolution check interval for resolving names to IP address when they may have changed.
@@ -1963,17 +2071,21 @@ public final class Configuration
         return getProperty(RECEIVER_WILDCARD_PORT_RANGE_PROP_NAME);
     }
 
-
     /**
-     * Number of async executor threads.
+     * {@return {@link IdleStrategy} to be employed by the async executor when enabled.}
      *
-     * @return number of threads, defaults to one.
-     * @see #ASYNC_TASK_EXECUTOR_THREADS_PROP_NAME
-     * @since 1.44.0
+     * @param controllableStatus to allow control of {@link ControllableIdleStrategy}, which can be null if not used.
+     * @see #NATIVE_RESOURCE_AGENT_IDLE_STRATEGY_PROP_NAME
+     * @since 1.51.0
      */
-    public static int asyncTaskExecutorThreads()
+    public static IdleStrategy nativeResourceAgentIdleStrategy(final StatusIndicator controllableStatus)
     {
-        return getInteger(ASYNC_TASK_EXECUTOR_THREADS_PROP_NAME, 1);
+        final String idleStategyName = getProperty(NATIVE_RESOURCE_AGENT_IDLE_STRATEGY_PROP_NAME);
+        if (Strings.isEmpty(idleStategyName))
+        {
+            return new SleepingIdleStrategy(TimeUnit.MILLISECONDS.toNanos(1));
+        }
+        return agentIdleStrategy(idleStategyName, controllableStatus);
     }
 
     /**
@@ -1985,61 +2097,50 @@ public final class Configuration
      */
     public static IdleStrategy agentIdleStrategy(final String strategyName, final StatusIndicator controllableStatus)
     {
-        IdleStrategy idleStrategy = null;
-
-        switch (strategyName)
+        return switch (strategyName)
         {
             case NoOpIdleStrategy.ALIAS:
             case "org.agrona.concurrent.NoOpIdleStrategy":
-                idleStrategy = NoOpIdleStrategy.INSTANCE;
-                break;
+                yield NoOpIdleStrategy.INSTANCE;
 
             case BusySpinIdleStrategy.ALIAS:
             case "org.agrona.concurrent.BusySpinIdleStrategy":
-                idleStrategy = BusySpinIdleStrategy.INSTANCE;
-                break;
+                yield BusySpinIdleStrategy.INSTANCE;
 
             case YieldingIdleStrategy.ALIAS:
             case "org.agrona.concurrent.YieldingIdleStrategy":
-                idleStrategy = YieldingIdleStrategy.INSTANCE;
-                break;
+                yield YieldingIdleStrategy.INSTANCE;
 
             case SleepingIdleStrategy.ALIAS:
             case "org.agrona.concurrent.SleepingIdleStrategy":
-                idleStrategy = new SleepingIdleStrategy();
-                break;
+                yield new SleepingIdleStrategy();
 
             case SleepingMillisIdleStrategy.ALIAS:
             case "org.agrona.concurrent.SleepingMillisIdleStrategy":
-                idleStrategy = new SleepingMillisIdleStrategy();
-                break;
+                yield new SleepingMillisIdleStrategy();
 
             case BackoffIdleStrategy.ALIAS:
-            case DEFAULT_IDLE_STRATEGY:
-                idleStrategy = new BackoffIdleStrategy(
+            case "org.agrona.concurrent.BackoffIdleStrategy":
+                yield new BackoffIdleStrategy(
                     IDLE_MAX_SPINS, IDLE_MAX_YIELDS, IDLE_MIN_PARK_NS, IDLE_MAX_PARK_NS);
-                break;
 
             case ControllableIdleStrategy.ALIAS:
-            case CONTROLLABLE_IDLE_STRATEGY:
+            case "org.agrona.concurrent.ControllableIdleStrategy":
                 Objects.requireNonNull(controllableStatus);
                 controllableStatus.setRelease(ControllableIdleStrategy.PARK);
-                idleStrategy = new ControllableIdleStrategy(controllableStatus);
-                break;
+                yield new ControllableIdleStrategy(controllableStatus);
 
             default:
                 try
                 {
-                    idleStrategy = (IdleStrategy)Class.forName(strategyName).getConstructor().newInstance();
+                    yield (IdleStrategy)Class.forName(strategyName).getConstructor().newInstance();
                 }
                 catch (final Exception ex)
                 {
                     LangUtil.rethrowUnchecked(ex);
+                    yield null; // unreachable
                 }
-                break;
-        }
-
-        return idleStrategy;
+        };
     }
 
     /**

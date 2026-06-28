@@ -25,6 +25,13 @@ import org.agrona.concurrent.status.AtomicCounter;
 public class DefaultSendChannelEndpointSupplier implements SendChannelEndpointSupplier
 {
     /**
+     * Default constructor.
+     */
+    public DefaultSendChannelEndpointSupplier()
+    {
+    }
+
+    /**
      * {@inheritDoc}
      */
     public SendChannelEndpoint newInstance(

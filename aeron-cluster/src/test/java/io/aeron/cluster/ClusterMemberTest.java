@@ -15,13 +15,15 @@
  */
 package io.aeron.cluster;
 
-import io.aeron.Aeron;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import static io.aeron.Aeron.NULL_VALUE;
 import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
 import static io.aeron.cluster.ClusterMember.compareLog;
+import static io.aeron.cluster.ClusterMember.hasQuorumAtPosition;
 import static io.aeron.cluster.ClusterMember.isQuorumCandidate;
 import static io.aeron.cluster.ClusterMember.isQuorumLeader;
 import static io.aeron.cluster.ClusterMember.isUnanimousCandidate;
@@ -72,7 +74,11 @@ class ClusterMemberTest
             assertEquals(
                 "ingressEndpoint,consensusEndpoint,logEndpoint,catchupEndpoint,archiveEndpoint", member.endpoints());
         }
+    }
 
+    @Test
+    void shouldParseCorrectlyOptionalArchiveResponse()
+    {
         for (final ClusterMember member : membersWithArchiveResponse)
         {
             assertEquals("ingressEndpoint", member.ingressEndpoint());
@@ -86,7 +92,11 @@ class ClusterMemberTest
                 "ingressEndpoint,consensusEndpoint,logEndpoint,catchupEndpoint,archiveEndpoint,archiveResponseEndpoint",
                 member.endpoints());
         }
+    }
 
+    @Test
+    void shouldParseCorrectlyOptionalEgressResponseEntry()
+    {
         for (final ClusterMember member : membersWithEgressResponse)
         {
             assertEquals("ingressEndpoint", member.ingressEndpoint());
@@ -103,23 +113,48 @@ class ClusterMemberTest
         }
     }
 
-    @Test
-    void shouldDetermineQuorumSize()
+    @ParameterizedTest
+    @CsvSource({
+        "1,1",
+        "2,2",
+        "3,2",
+        "4,3",
+        "5,3",
+        "6,4",
+        "7,4" })
+    void shouldDetermineQuorumSize(final int clusterSize, final int expectedQuorumSize)
     {
-        final int[] clusterSizes = new int[]{ 1, 2, 3, 4, 5, 6, 7 };
-        final int[] quorumValues = new int[]{ 1, 2, 2, 3, 3, 4, 4 };
+        assertEquals(expectedQuorumSize, ClusterMember.quorumThreshold(clusterSize));
+    }
 
-        for (int i = 0, length = clusterSizes.length; i < length; i++)
-        {
-            final int quorumThreshold = quorumThreshold(clusterSizes[i]);
-            assertThat("Cluster size: " + clusterSizes[i], quorumThreshold, is(quorumValues[i]));
-        }
+    @ParameterizedTest
+    @CsvSource({
+        "0,0,0,false",
+        "0,0,1,true",
+        "0,1,1,false",
+        "0,2,1,false",
+        "1,2,1,false",
+        "1,2,5,true",
+        "1,5,5,true",
+        "1,8,5,false",
+        "10,8,1,true",
+        "10,10,1,true",
+        "10,12,1,false"
+    })
+    void shouldCheckMemberIsActive(
+        final long timeOfLastAppendPositionNs,
+        final long nowNs,
+        final long timeoutNs,
+        final boolean expected)
+    {
+        final ClusterMember member = newMember(0).timeOfLastAppendPositionNs(timeOfLastAppendPositionNs);
+        assertEquals(expected, member.isActive(nowNs, timeoutNs));
     }
 
     @Test
     void shouldRankClusterStart()
     {
-        assertThat(quorumPosition(members, rankedPositions), is(0L));
+        assertThat(quorumPosition(members, rankedPositions, 0, 10), is(0L));
     }
 
     @ParameterizedTest
@@ -148,20 +183,67 @@ class ClusterMemberTest
         members[1].logPosition(member1LogPosition);
         members[2].logPosition(member2LogPosition);
 
-        final long quorumPosition = quorumPosition(members, rankedPositions);
+        final long quorumPosition = quorumPosition(members, rankedPositions, 0, 10);
+        assertEquals(expectedQuorumPosition, quorumPosition);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "0,0,0,0,0,0,0,0,0,0,0,10,0",
+        "1,0,2,0,3,0,4,0,5,0,5,10,3",
+        "1,0,2,0,3,0,2,0,5,0,5,10,2",
+        "1,1,2,0,3,1,2,0,5,1,5,5,1",
+        "5,1,2,0,3,1,2,0,1,1,5,5,1",
+        "5,0,2,1,3,0,2,1,1,0,5,5,0",
+        "5,0,2,1,3,0,2,1,1,1,5,5,1",
+        "5,0,2,1,3,1,2,1,1,0,5,5,2",
+        "5,0,2,2,3,3,2,1,1,5,8,7,1",
+        "5,0,2,0,3,0,2,0,1,0,8,7,0",
+        "5,5,2,0,3,0,2,0,1,0,8,7,0",
+        "5,5,2,5,3,0,2,0,1,0,8,7,0",
+        "5,5,2,5,3,5,2,0,1,0,8,7,2",
+        "4,5,2,5,4,5,2,0,1,0,8,7,2",
+        "4,5,2,5,4,5,2,0,3,3,8,7,3",
+    })
+    void shouldOnlyConsiderActiveNodesWhenDeterminingQuorumPosition(
+        final long member0LogPosition,
+        final long member0Timestamp,
+        final long member1LogPosition,
+        final long member1Timestamp,
+        final long member2LogPosition,
+        final long member2Timestamp,
+        final long member3LogPosition,
+        final long member3Timestamp,
+        final long member4LogPosition,
+        final long member4Timestamp,
+        final long nowNs,
+        final long timeoutNs,
+        final long expectedQuorumPosition)
+    {
+        final ClusterMember[] clusterMembers = new ClusterMember[]
+        {
+            newMember(0, 0, member0LogPosition, member0Timestamp),
+            newMember(1, 0, member1LogPosition, member1Timestamp),
+            newMember(2, 0, member2LogPosition, member2Timestamp),
+            newMember(3, 0, member3LogPosition, member3Timestamp),
+            newMember(4, 0, member4LogPosition, member4Timestamp)
+        };
+        final long[] positions = new long[quorumThreshold(clusterMembers.length)];
+
+        final long quorumPosition = quorumPosition(clusterMembers, positions, nowNs, timeoutNs);
         assertEquals(expectedQuorumPosition, quorumPosition);
     }
 
     @Test
     void isUnanimousCandidateReturnFalseIfThereIsAMemberWithoutLogPosition()
     {
-        final int gracefulClosedLeaderId = Aeron.NULL_VALUE;
-        final ClusterMember candidate = newMember(4, 100, 1000);
+        final int gracefulClosedLeaderId = NULL_VALUE;
+        final ClusterMember candidate = newMember(4, 100, 1000, 0);
         final ClusterMember[] members = new ClusterMember[]
         {
-            newMember(1, 2, 100),
-            newMember(2, 8, NULL_POSITION),
-            newMember(3, 1, 1)
+            newMember(1, 2, 100, 0),
+            newMember(2, 8, NULL_POSITION, 0),
+            newMember(3, 1, 1, 0)
         };
 
         assertFalse(isUnanimousCandidate(members, candidate, gracefulClosedLeaderId));
@@ -170,13 +252,13 @@ class ClusterMemberTest
     @Test
     void isUnanimousCandidateReturnFalseIfThereIsAMemberWithMoreUpToDateLog()
     {
-        final int gracefulClosedLeaderId = Aeron.NULL_VALUE;
-        final ClusterMember candidate = newMember(4, 10, 800);
+        final int gracefulClosedLeaderId = NULL_VALUE;
+        final ClusterMember candidate = newMember(4, 10, 800, 0);
         final ClusterMember[] members = new ClusterMember[]
         {
-            newMember(1, 2, 100),
-            newMember(2, 8, 6),
-            newMember(3, 11, 1000)
+            newMember(1, 2, 100, 0),
+            newMember(2, 8, 6, 0),
+            newMember(3, 11, 1000, 0)
         };
 
         assertFalse(isUnanimousCandidate(members, candidate, gracefulClosedLeaderId));
@@ -186,11 +268,11 @@ class ClusterMemberTest
     void isUnanimousCandidateReturnFalseIfLeaderClosesGracefully()
     {
         final int gracefulClosedLeaderId = 1;
-        final ClusterMember candidate = newMember(2, 2, 100);
+        final ClusterMember candidate = newMember(2, 2, 100, 0);
         final ClusterMember[] members = new ClusterMember[]
         {
-            newMember(1, 2, 100),
-            newMember(2, 2, 100),
+            newMember(1, 2, 100, 0),
+            newMember(2, 2, 100, 0),
         };
 
         assertFalse(isUnanimousCandidate(members, candidate, gracefulClosedLeaderId));
@@ -199,13 +281,13 @@ class ClusterMemberTest
     @Test
     void isUnanimousCandidateReturnTrueIfTheCandidateHasTheMostUpToDateLog()
     {
-        final int gracefulClosedLeaderId = Aeron.NULL_VALUE;
-        final ClusterMember candidate = newMember(2, 10, 800);
+        final int gracefulClosedLeaderId = NULL_VALUE;
+        final ClusterMember candidate = newMember(2, 10, 800, 0);
         final ClusterMember[] members = new ClusterMember[]
         {
-            newMember(10, 2, 100),
-            newMember(20, 8, 6),
-            newMember(30, 10, 800)
+            newMember(10, 2, 100, 0),
+            newMember(20, 8, 6, 0),
+            newMember(30, 10, 800, 0)
         };
 
         assertTrue(isUnanimousCandidate(members, candidate, gracefulClosedLeaderId));
@@ -214,14 +296,14 @@ class ClusterMemberTest
     @Test
     void isQuorumCandidateReturnFalseWhenQuorumIsNotReached()
     {
-        final ClusterMember candidate = newMember(2, 10, 800);
+        final ClusterMember candidate = newMember(2, 10, 800, 0);
         final ClusterMember[] members = new ClusterMember[]
         {
-            newMember(10, 2, 100),
-            newMember(20, 18, 6),
-            newMember(30, 10, 800),
-            newMember(40, 19, 800),
-            newMember(50, 10, 1000),
+            newMember(10, 2, 100, 0),
+            newMember(20, 18, 600, 0),
+            newMember(30, 10, 800, 0),
+            newMember(40, 19, 800, 0),
+            newMember(50, 10, 1000, 0),
         };
 
         assertFalse(isQuorumCandidate(members, candidate));
@@ -230,14 +312,14 @@ class ClusterMemberTest
     @Test
     void isQuorumCandidateReturnTrueWhenQuorumIsReached()
     {
-        final ClusterMember candidate = newMember(2, 10, 800);
+        final ClusterMember candidate = newMember(2, 10, 800, 0);
         final ClusterMember[] members = new ClusterMember[]
         {
-            newMember(10, 2, 100),
-            newMember(20, 18, 6),
-            newMember(30, 10, 800),
-            newMember(40, 9, 800),
-            newMember(50, 10, 700)
+            newMember(10, 2, 100, 0),
+            newMember(20, 18, 600, 0),
+            newMember(30, 10, 800, 0),
+            newMember(40, 9, 800, 0),
+            newMember(50, 10, 700, 0)
         };
 
         assertTrue(isQuorumCandidate(members, candidate));
@@ -291,7 +373,7 @@ class ClusterMemberTest
     void isUnanimousLeaderReturnsFalseIfThereIsAtLeastOneNegativeVoteForAGivenCandidateTerm()
     {
         final int candidateTermId = 42;
-        final int gracefulClosedLeaderId = Aeron.NULL_VALUE;
+        final int gracefulClosedLeaderId = NULL_VALUE;
         final ClusterMember[] members = new ClusterMember[]
         {
             newMember(1).candidateTermId(candidateTermId).vote(Boolean.TRUE),
@@ -320,7 +402,7 @@ class ClusterMemberTest
     void isUnanimousLeaderReturnsFalseIfNotAllNodesVotedPositively()
     {
         final int candidateTermId = 2;
-        final int gracefulClosedLeaderId = Aeron.NULL_VALUE;
+        final int gracefulClosedLeaderId = NULL_VALUE;
         final ClusterMember[] members = new ClusterMember[]
         {
             newMember(1).candidateTermId(candidateTermId).vote(Boolean.TRUE),
@@ -335,7 +417,7 @@ class ClusterMemberTest
     void isUnanimousLeaderReturnsFalseIfNotAllNodesHadTheExpectedCandidateTermId()
     {
         final int candidateTermId = 2;
-        final int gracefulClosedLeaderId = Aeron.NULL_VALUE;
+        final int gracefulClosedLeaderId = NULL_VALUE;
         final ClusterMember[] members = new ClusterMember[]
         {
             newMember(1).candidateTermId(candidateTermId).vote(Boolean.TRUE),
@@ -350,7 +432,7 @@ class ClusterMemberTest
     void isUnanimousLeaderReturnsTrueIfAllNodesVotedWithTrue()
     {
         final int candidateTermId = 42;
-        final int gracefulClosedLeaderId = Aeron.NULL_VALUE;
+        final int gracefulClosedLeaderId = NULL_VALUE;
         final ClusterMember[] members = new ClusterMember[]
         {
             newMember(1).candidateTermId(candidateTermId).vote(Boolean.TRUE),
@@ -380,14 +462,108 @@ class ClusterMemberTest
             expectedResult,
             compareLog(lhsLogLeadershipTermId, lhsLogPosition, rhsLogLeadershipTermId, rhsLogPosition));
         assertEquals(expectedResult, compareLog(
-            newMember(5, lhsLogLeadershipTermId, lhsLogPosition),
-            newMember(100, rhsLogLeadershipTermId, rhsLogPosition)));
+            newMember(5, lhsLogLeadershipTermId, lhsLogPosition, 0),
+            newMember(100, rhsLogLeadershipTermId, rhsLogPosition, 0)));
     }
 
-    private static ClusterMember newMember(final int id, final long leadershipTermId, final long logPosition)
+    @Test
+    void shouldNotVoteIfHasNoPosition()
     {
-        final ClusterMember clusterMember = newMember(id);
-        return clusterMember.leadershipTermId(leadershipTermId).logPosition(logPosition);
+        final ClusterMember member = newMember(1, 0, NULL_POSITION, 0);
+        final ClusterMember candidate = newMember(2, 0, 100, 0);
+        assertFalse(member.willVoteFor(candidate));
+    }
+
+    @Test
+    void shouldNotVoteIfHasMoreLog()
+    {
+        final ClusterMember member = newMember(1, 0, 500, 0);
+        final ClusterMember candidate = newMember(2, 0, 100, 0);
+        assertFalse(member.willVoteFor(candidate));
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = { 0, 900, 1024 })
+    void shouldVoteIfHasLessOrTheSameAmountOfLog(final long logPosition)
+    {
+        final ClusterMember member = newMember(1, 0, logPosition, 0);
+        final ClusterMember candidate = newMember(2, 0, 1024, 0);
+        assertTrue(member.willVoteFor(candidate));
+    }
+
+    @Test
+    void shouldReturnFalseIfNotActiveWhenDoingPositionChecks()
+    {
+        final long leadershipTermId = 42;
+        final long logPosition = 500;
+        final ClusterMember member = newMember(1, leadershipTermId, logPosition, 0);
+        assertFalse(member.hasReachedPosition(leadershipTermId, logPosition, 5, 3));
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = { 0, 10 })
+    void shouldReturnFalseIfLeadershipTermIdDoesNotMatch(final long leadershipTermId)
+    {
+        final long logPosition = 500;
+        final ClusterMember member = newMember(1, 6, logPosition, 0);
+        assertFalse(member.hasReachedPosition(leadershipTermId, logPosition, 5, 10));
+    }
+
+    @Test
+    void shouldReturnFalseIfLogPositionIsLessThan()
+    {
+        final long leadershipTermId = 6;
+        final long logPosition = 500;
+        final ClusterMember member = newMember(1, leadershipTermId, 100, 0);
+        assertFalse(member.hasReachedPosition(leadershipTermId, logPosition, 5, 10));
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = { 100, Long.MAX_VALUE })
+    void shouldReturnTrueIfLogPositionIsEqualOrGreaterThan(final long logPosition)
+    {
+        final long leadershipTermId = 42;
+        final ClusterMember member = newMember(1, leadershipTermId, logPosition, 10);
+        assertTrue(member.hasReachedPosition(leadershipTermId, 100, 12, 5));
+    }
+
+    @Test
+    void hasQuorumAtPositionReturnFalseIfNotAQuorum()
+    {
+        final ClusterMember[] members = new ClusterMember[]
+        {
+            newMember(10, 2, 100, 0),
+            newMember(20, 18, 600, 0),
+            newMember(30, 10, 800, 0),
+            newMember(40, 19, 800, 0),
+            newMember(50, 10, 1000, 0),
+        };
+
+        assertFalse(hasQuorumAtPosition(members, 10, 800, 0, 10));
+    }
+
+    @Test
+    void hasQuorumAtPositionReturnTrueIfQuorumIsAtPosition()
+    {
+        final ClusterMember[] members = new ClusterMember[]
+        {
+            newMember(10, 2, 100, 0),
+            newMember(20, 10, 600, 0),
+            newMember(30, 10, 800, 0),
+            newMember(40, 19, 800, 0),
+            newMember(50, 10, 1000, 0),
+        };
+
+        assertTrue(hasQuorumAtPosition(members, 10, 600, 5, 10));
+    }
+
+    private static ClusterMember newMember(
+        final int id, final long leadershipTermId, final long logPosition, final long timeOfLastAppendPositionNs)
+    {
+        return newMember(id)
+            .leadershipTermId(leadershipTermId)
+            .logPosition(logPosition)
+            .timeOfLastAppendPositionNs(timeOfLastAppendPositionNs);
     }
 
     private static ClusterMember newMember(final int id)

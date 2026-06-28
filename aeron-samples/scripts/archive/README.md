@@ -68,4 +68,66 @@ It is worth playing with different messages lengths and threading configurations
 ```
     $ error-stat
 ```
- 
+
+## ReplayMerge
+
+1. Start the archiving media driver in its own terminal.
+
+```shell
+./archiving-media-driver
+```
+
+2. Start an MDC or multicast publisher with its recorded publication in another terminal.
+
+```shell
+export JVM_OPTS="-Daeron.sample.channel=aeron:udp?control=localhost:20550|control-mode=dynamic|alias=replay-merge-sample"
+
+./recorded-basic-publisher
+```
+
+3. Start a basic subscriber so that the publication connects and can record. Make sure `aeron.sample.channel` matches the publication channel.
+```shell
+export JVM_OPTS="-Daeron.sample.channel=aeron:udp?control=localhost:20550"
+
+../basic-subscriber
+```
+
+4. Wait a moment, then start a ReplayMerge subscriber, setting `aeron.sample.channel` to the same channel as the publication.
+
+```shell
+export JVM_OPTS="-Daeron.sample.channel=aeron:udp?control=localhost:20550"
+
+./replay-merge-subscriber
+```
+
+## Persistent Subscription
+
+When running the commands below, you can customize their configuration by passing system properties using the `JVM_OPTS` environment variable, e.g.:
+
+```shell
+JVM_OPTS="-Dfoo=bar" ./baz
+```
+
+1. Start the archiving media driver in its own terminal.
+
+```shell
+./archiving-media-driver
+```
+
+2. Start a publisher with its recorded publication in another terminal.
+
+```shell
+./recorded-basic-publisher
+```
+
+3. Start a basic subscriber so that the publication connects and can record.
+
+```shell
+../basic-subscriber
+```
+
+4. Let some messages be sent, then start a Persistent Subscription subscriber.
+
+```shell
+./persistent-subscriber
+```

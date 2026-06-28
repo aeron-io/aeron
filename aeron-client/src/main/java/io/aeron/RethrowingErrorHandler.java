@@ -24,6 +24,13 @@ import org.agrona.LangUtil;
 public final class RethrowingErrorHandler implements ErrorHandler
 {
     /**
+     * Default constructor.
+     */
+    public RethrowingErrorHandler()
+    {
+    }
+
+    /**
      * Singleton instance to avoid allocation.
      */
     public static final RethrowingErrorHandler INSTANCE = new RethrowingErrorHandler();

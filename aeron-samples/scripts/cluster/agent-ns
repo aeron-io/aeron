@@ -30,8 +30,6 @@ function startNode() {
         -Xmx16m \
         -cp ../../../aeron-all/build/libs/aeron-all-${VERSION}.jar:../../../aeron-test-support/build/libs/aeron-test-support-${VERSION}.jar \
         -javaagent:../../../aeron-agent/build/libs/aeron-agent-${VERSION}.jar \
-        -XX:+UseBiasedLocking \
-        -XX:BiasedLockingStartupDelay=0 \
         -XX:+UnlockExperimentalVMOptions \
         -XX:+TrustFinalNonStaticFields \
         -XX:+UnlockDiagnosticVMOptions \

@@ -109,6 +109,7 @@ import static io.aeron.cluster.ConsensusModule.Configuration.CONSENSUS_MODULE_ER
 import static io.aeron.cluster.ConsensusModule.Configuration.CONSENSUS_MODULE_STATE_TYPE_ID;
 import static io.aeron.cluster.ConsensusModule.Configuration.CONTROL_TOGGLE_TYPE_ID;
 import static io.aeron.cluster.ConsensusModule.Configuration.ELECTION_STATE_TYPE_ID;
+import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.MAX_SERVICE_COUNT;
 import static io.aeron.cluster.ConsensusModule.Configuration.SERVICE_ID;
 import static io.aeron.cluster.ConsensusModule.Configuration.SNAPSHOT_COUNTER_TYPE_ID;
 import static java.lang.Boolean.parseBoolean;
@@ -380,6 +381,10 @@ public final class ConsensusModule implements AutoCloseable
     @Config(existsInC = false)
     public static final class Configuration
     {
+        private Configuration()
+        {
+        }
+
         /**
          * Major version of the network protocol from consensus module to consensus module. If these don't match then
          * consensus modules are not compatible.
@@ -576,7 +581,7 @@ public final class ConsensusModule implements AutoCloseable
          * configuration with the endpoints replaced with those provided by {@link #CLUSTER_MEMBERS_PROP_NAME}.
          */
         @Config
-        public static final String CONSENSUS_CHANNEL_DEFAULT = "aeron:udp?term-length=64k";
+        public static final String CONSENSUS_CHANNEL_DEFAULT = "aeron:udp";
 
         /**
          * Stream id within a channel for communicating consensus messages.
@@ -686,7 +691,7 @@ public final class ConsensusModule implements AutoCloseable
         public static final String SERVICE_COUNT_PROP_NAME = "aeron.cluster.service.count";
 
         /**
-         * The number of services in this cluster instance.
+         * The default number of services in this cluster instance.
          */
         @Config
         public static final int SERVICE_COUNT_DEFAULT = 1;
@@ -826,8 +831,8 @@ public final class ConsensusModule implements AutoCloseable
         /**
          * Default threshold value for the consensus module agent work cycle threshold to track for being exceeded.
          */
-        @Config(defaultType = DefaultType.LONG, defaultLong = 1_000_000L)
-        public static final long CYCLE_THRESHOLD_DEFAULT_NS = TimeUnit.MILLISECONDS.toNanos(1);
+        @Config(defaultType = DefaultType.LONG, defaultLong = 100_000_000L)
+        public static final long CYCLE_THRESHOLD_DEFAULT_NS = TimeUnit.MILLISECONDS.toNanos(100);
 
         /**
          * Property name for threshold value, which is used for tracking total snapshot duration breaches.
@@ -842,6 +847,19 @@ public final class ConsensusModule implements AutoCloseable
         @Config(defaultType = DefaultType.LONG, defaultLong = 1000L * 1000 * 1000)
         public static final long TOTAL_SNAPSHOT_DURATION_THRESHOLD_DEFAULT_NS =
             TimeUnit.MILLISECONDS.toNanos(1000);
+
+        /**
+         * Property name for the standby snapshot notification processing delay.
+         */
+        @Config
+        public static final String STANDBY_SNAPSHOT_NOTIFICATION_PROCESSING_DELAY_PROP_NAME =
+            "aeron.cluster.standby.snapshot.notification.processing.delay";
+
+        /**
+         * Default standby snapshot notification processing delay.
+         */
+        @Config
+        public static final long STANDBY_SNAPSHOT_NOTIFICATION_PROCESSING_DELAY_DEFAULT_NS = 0;
 
         /**
          * Default timeout a leader will wait on getting termination ACKs from followers.
@@ -1243,6 +1261,19 @@ public final class ConsensusModule implements AutoCloseable
         }
 
         /**
+         * Get the delay before recording a standby snapshot notification.
+         * The delay starts after the commit position passes the snapshot's log position.
+         *
+         * @return the delay, in nanoseconds.
+         */
+        public static long standbySnapshotNotificationProcessingDelayNs()
+        {
+            return getDurationInNanos(
+                STANDBY_SNAPSHOT_NOTIFICATION_PROCESSING_DELAY_PROP_NAME,
+                STANDBY_SNAPSHOT_NOTIFICATION_PROCESSING_DELAY_DEFAULT_NS);
+        }
+
+        /**
          * Size in bytes of the error buffer in the mark file.
          *
          * @return length of error buffer in bytes.
@@ -1599,6 +1630,8 @@ public final class ConsensusModule implements AutoCloseable
         private long terminationTimeoutNs = Configuration.terminationTimeoutNs();
         private long cycleThresholdNs = Configuration.cycleThresholdNs();
         private long totalSnapshotDurationThresholdNs = Configuration.totalSnapshotDurationThresholdNs();
+        private long standbySnapshotNotificationProcessingDelayNs =
+            Configuration.standbySnapshotNotificationProcessingDelayNs();
 
         private String agentRoleName = Configuration.agentRoleName();
         private ThreadFactory threadFactory;
@@ -1634,13 +1667,20 @@ public final class ConsensusModule implements AutoCloseable
         private EgressPublisher egressPublisher;
         private DutyCycleTracker dutyCycleTracker;
         private SnapshotDurationTracker totalSnapshotDurationTracker;
-        private AppVersionValidator appVersionValidator;
+        private VersionValidator appVersionValidator;
         private boolean isLogMdc;
         private boolean useAgentInvoker = false;
         private ConsensusModuleStateExport bootstrapState = null;
         private boolean acceptStandbySnapshots = Configuration.acceptStandbySnapshots();
         private boolean enableControlOnConsensusChannel = Configuration.enableControlOnConsensusChannel();
         private boolean enableControlOnLogChannel = Configuration.enableControlOnLogChannel();
+
+        /**
+         * Construct a Context using default values and loading from system properties.
+         */
+        public Context()
+        {
+        }
 
         /**
          * Perform a shallow copy of the object.
@@ -1671,6 +1711,11 @@ public final class ConsensusModule implements AutoCloseable
             }
 
             validateLogChannel();
+
+            if (serviceCount < 0 || serviceCount > MAX_SERVICE_COUNT)
+            {
+                throw new ClusterException("service count of range [0, " + MAX_SERVICE_COUNT + "]: " + serviceCount);
+            }
 
             if (null == clusterDir)
             {
@@ -2081,7 +2126,11 @@ public final class ConsensusModule implements AutoCloseable
 
             if (null != consensusModuleExtension && 0 != serviceCount)
             {
-                throw new ClusterException("Service count must be zero when a ConsensusModuleExtension installed");
+                throw new ClusterException("service count must be zero when ConsensusModuleExtension is enabled");
+            }
+            else if (null == consensusModuleExtension && 0 == serviceCount)
+            {
+                throw new ClusterException("zero services are only supported when ConsensusModuleExtension is enabled");
             }
 
             concludeMarkFile();
@@ -2286,7 +2335,7 @@ public final class ConsensusModule implements AutoCloseable
          * @param appVersionValidator for user application.
          * @return this for fluent API.
          */
-        public Context appVersionValidator(final AppVersionValidator appVersionValidator)
+        public Context appVersionValidator(final VersionValidator appVersionValidator)
         {
             this.appVersionValidator = appVersionValidator;
             return this;
@@ -2297,9 +2346,9 @@ public final class ConsensusModule implements AutoCloseable
          * <p>
          * The default is to use {@link org.agrona.SemanticVersion} major version for checking compatibility.
          *
-         * @return AppVersionValidator in use.
+         * @return VersionValidator in use.
          */
-        public AppVersionValidator appVersionValidator()
+        public VersionValidator appVersionValidator()
         {
             return appVersionValidator;
         }
@@ -3065,6 +3114,32 @@ public final class ConsensusModule implements AutoCloseable
         public int serviceCount()
         {
             return serviceCount;
+        }
+
+        /**
+         * Set the delay before recording a standby snapshot notification.
+         * The delay starts after the commit position passes the snapshot's log position.
+         *
+         * @param standbySnapshotNotificationProcessingDelayNs the delay, in nanoseconds.
+         * @return this for a fluent API
+         */
+        public Context standbySnapshotNotificationProcessingDelayNs(
+            final long standbySnapshotNotificationProcessingDelayNs)
+        {
+            this.standbySnapshotNotificationProcessingDelayNs = standbySnapshotNotificationProcessingDelayNs;
+            return this;
+        }
+
+        /**
+         * Get the delay before recording a standby snapshot notification.
+         * The delay starts after the commit position passes the snapshot's log position.
+         *
+         * @return the delay, in nanoseconds.
+         */
+        @Config
+        public long standbySnapshotNotificationProcessingDelayNs()
+        {
+            return standbySnapshotNotificationProcessingDelayNs;
         }
 
         /**

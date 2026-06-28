@@ -23,6 +23,13 @@ import java.util.concurrent.TimeUnit;
 public class PriorityHeapTimerServiceSupplier implements TimerServiceSupplier
 {
     /**
+     * Default constructor.
+     */
+    public PriorityHeapTimerServiceSupplier()
+    {
+    }
+
+    /**
      * {@inheritDoc}
      */
     public TimerService newInstance(final TimeUnit timeUnit, final TimerService.TimerHandler timerHandler)

@@ -26,6 +26,7 @@
 #include "concurrent/aeron_counters_manager.h"
 #include "aeron_udp_destination_tracker.h"
 #include "aeron_driver_sender_proxy.h"
+#include "aeron_loss_generator.h"
 
 #define AERON_SEND_CHANNEL_ENDPOINT_DESTINATION_TIMEOUT_NS (5 * 1000 * 1000 * 1000LL)
 
@@ -68,6 +69,9 @@ typedef struct aeron_send_channel_endpoint_stct
     int64_t time_of_last_sm_ns;
 
     aeron_driver_nak_message_func_t on_nak_message;
+
+    const aeron_loss_generator_t *data_loss_generator;
+    const aeron_loss_generator_t *control_loss_generator;
 
     uint8_t padding[AERON_CACHE_LINE_LENGTH];
 }
@@ -120,6 +124,7 @@ int aeron_send_channel_endpoint_on_nak(
     aeron_send_channel_endpoint_t *endpoint, uint8_t *buffer, size_t length, struct sockaddr_storage *addr);
 
 int aeron_send_channel_endpoint_on_status_message(
+    aeron_driver_sender_t *sender,
     aeron_send_channel_endpoint_t *endpoint,
     aeron_driver_conductor_proxy_t *conductor_proxy,
     uint8_t *buffer,

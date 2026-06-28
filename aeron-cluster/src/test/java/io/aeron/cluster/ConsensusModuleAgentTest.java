@@ -102,7 +102,6 @@ class ConsensusModuleAgentTest
     private final Image mockImage = mock(Image.class);
     private final Header header = new Header(0, 0, mockImage);
     private final CountersManager countersManager = Tests.newCountersManager(2 * COUNTER_LENGTH);
-    private long registrationId = 20;
 
     private final ConsensusModule.Context ctx = TestContexts.localhostConsensusModule()
         .errorHandler(Tests::onError)
@@ -132,7 +131,7 @@ class ConsensusModuleAgentTest
     private Counter newCounter(final String name, final int typeId)
     {
         final AtomicCounter atomicCounter = countersManager.newCounter(name, typeId);
-        return new Counter(countersManager, ++registrationId, atomicCounter.id());
+        return new Counter(countersManager, atomicCounter.id());
     }
 
     @BeforeEach
@@ -178,7 +177,7 @@ class ConsensusModuleAgentTest
         final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
 
         final long correlationIdOne = 1L;
-        agent.state(ConsensusModule.State.ACTIVE);
+        agent.state(ConsensusModule.State.ACTIVE, "");
         agent.role(Cluster.Role.LEADER);
         Tests.setField(agent, "appendPosition", mock(ReadableCounter.class));
         agent.onSessionConnect(
@@ -214,7 +213,7 @@ class ConsensusModuleAgentTest
         final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
 
         final long correlationId = 1L;
-        agent.state(ConsensusModule.State.ACTIVE);
+        agent.state(ConsensusModule.State.ACTIVE, "");
         agent.role(Cluster.Role.LEADER);
         Tests.setField(agent, "appendPosition", mock(ReadableCounter.class));
         agent.onSessionConnect(
@@ -227,6 +226,8 @@ class ConsensusModuleAgentTest
 
         final long timeMs = startMs + TimeUnit.NANOSECONDS.toMillis(ConsensusModule.Configuration.sessionTimeoutNs());
         clock.update(timeMs, TimeUnit.MILLISECONDS);
+        agent.clusterMember().timeOfLastAppendPositionNs(clock.nanoTime());
+
         agent.doWork();
 
         final long timeoutMs = timeMs + SLOW_TICK_INTERVAL_MS;
@@ -254,7 +255,7 @@ class ConsensusModuleAgentTest
         final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
 
         final long correlationId = 1L;
-        agent.state(ConsensusModule.State.ACTIVE);
+        agent.state(ConsensusModule.State.ACTIVE, "");
         agent.role(Cluster.Role.LEADER);
         Tests.setField(agent, "appendPosition", mock(ReadableCounter.class));
         agent.onSessionConnect(
@@ -301,7 +302,7 @@ class ConsensusModuleAgentTest
 
         assertEquals(ConsensusModule.State.INIT.code(), stateCounter.get());
 
-        agent.state(ConsensusModule.State.ACTIVE);
+        agent.state(ConsensusModule.State.ACTIVE, "");
         agent.role(Cluster.Role.LEADER);
         assertEquals(ConsensusModule.State.ACTIVE.code(), stateCounter.get());
 
@@ -347,7 +348,7 @@ class ConsensusModuleAgentTest
             .clusterClock(clock);
 
         final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
-        agent.state(ConsensusModule.State.QUITTING);
+        agent.state(ConsensusModule.State.QUITTING, "");
 
         assertThrows(ClusterTerminationException.class,
             () -> agent.onServiceAck(1024, 100, 0, 55, 0));
@@ -378,7 +379,7 @@ class ConsensusModuleAgentTest
             .isIpcIngressAllowed(isIpcIngressAllowed);
 
         final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
-        agent.state(ConsensusModule.State.ACTIVE);
+        agent.state(ConsensusModule.State.ACTIVE, "");
         agent.role(Cluster.Role.LEADER);
 
         final long correlationId = 1L;
@@ -411,7 +412,7 @@ class ConsensusModuleAgentTest
 
         assertEquals(ConsensusModule.State.INIT.code(), stateCounter.get());
 
-        agent.state(ConsensusModule.State.ACTIVE);
+        agent.state(ConsensusModule.State.ACTIVE, "");
         agent.role(Cluster.Role.LEADER);
         assertEquals(ConsensusModule.State.ACTIVE.code(), stateCounter.get());
 
@@ -487,7 +488,6 @@ class ConsensusModuleAgentTest
     void shouldDelegateHandlingToRegisteredExtension()
     {
         final ConsensusModuleExtension consensusModuleExtension = mock(ConsensusModuleExtension.class, "used adapter");
-        when(consensusModuleExtension.supportedSchemaId()).thenReturn(SCHEMA_ID);
         final TestClusterClock clock = new TestClusterClock(TimeUnit.MILLISECONDS);
         ctx.epochClock(clock.asEpochClock())
             .clusterClock(clock)
@@ -534,7 +534,7 @@ class ConsensusModuleAgentTest
 
         assertEquals(ConsensusModule.State.INIT.code(), stateCounter.get());
 
-        agent.state(ConsensusModule.State.ACTIVE);
+        agent.state(ConsensusModule.State.ACTIVE, "");
         agent.role(Cluster.Role.LEADER);
         assertEquals(ConsensusModule.State.ACTIVE.code(), stateCounter.get());
 
@@ -560,7 +560,7 @@ class ConsensusModuleAgentTest
         final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
         assertEquals(ConsensusModule.State.INIT.code(), stateCounter.get());
 
-        agent.state(ConsensusModule.State.ACTIVE);
+        agent.state(ConsensusModule.State.ACTIVE, "");
         agent.role(Cluster.Role.FOLLOWER);
         final long leadershipTermId = 42;
         agent.leadershipTermId(leadershipTermId);
@@ -633,7 +633,7 @@ class ConsensusModuleAgentTest
         final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
         assertEquals(ConsensusModule.State.INIT.code(), stateCounter.get());
 
-        agent.state(ConsensusModule.State.ACTIVE);
+        agent.state(ConsensusModule.State.ACTIVE, "");
         agent.role(Cluster.Role.FOLLOWER);
         final Election election = mock(Election.class);
         final long logPosition = 200L;
@@ -668,7 +668,7 @@ class ConsensusModuleAgentTest
 
         controlToggle.set(NEUTRAL.code());
 
-        final AppVersionValidator appVersionValidator = mock(AppVersionValidator.class);
+        final VersionValidator appVersionValidator = mock(VersionValidator.class);
         when(appVersionValidator.isVersionCompatible(anyInt(), anyInt())).thenReturn(true);
         ctx.moduleStateCounter(stateCounter)
             .controlToggleCounter(controlToggle)
@@ -679,7 +679,7 @@ class ConsensusModuleAgentTest
         final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
         assertEquals(ConsensusModule.State.INIT.code(), stateCounter.get());
 
-        agent.state(ConsensusModule.State.ACTIVE);
+        agent.state(ConsensusModule.State.ACTIVE, "");
         agent.role(Cluster.Role.FOLLOWER);
         final long leadershipTermId = 42;
         agent.leadershipTermId(leadershipTermId);

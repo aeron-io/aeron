@@ -28,6 +28,8 @@ import java.util.stream.Collectors;
 public final class Grep
 {
     /**
+     * Execute a grep process.
+     *
      * @param pattern the regex pattern passed to grep.
      * @param sourceDir the base directory where the search should begin.
      * @return a Grep object with the results of the action.
@@ -84,6 +86,8 @@ public final class Grep
     }
 
     /**
+     * Whether grep succeeded.
+     *
      * @return whether grep succeeded.
      */
     public boolean success()
@@ -92,6 +96,8 @@ public final class Grep
     }
 
     /**
+     * Determine if the process completed successfully.
+     *
      * @param expectOneLine many of the usages expect only a single line to be found.
      *                      if more than one are found, that counts as a failure
      * @return whether grep succeeded.
@@ -112,7 +118,9 @@ public final class Grep
     }
 
     /**
-     * @return the command string that was executed
+     * The command string that was executed.
+     *
+     * @return the command string that was executed.
      */
     public String getCommandString()
     {
@@ -120,7 +128,9 @@ public final class Grep
     }
 
     /**
-     * @return the filename and line number of the first line of output
+     * The filename and line number of the first line of output.
+     *
+     * @return the filename and line number of the first line of output.
      */
     public String getFilenameAndLine()
     {
@@ -128,6 +138,8 @@ public final class Grep
     }
 
     /**
+     * Get the file name and line, given the line number.
+     *
      * @param lineNumber specify the line of output
      * @return the filename and line number of the specified line of output
      */
@@ -138,7 +150,9 @@ public final class Grep
     }
 
     /**
-     * @return the first line of output (minus the filename and line number)
+     * The first line of output (minus the filename and line number).
+     *
+     * @return the first line of output (minus the filename and line number).
      */
     public String getOutput()
     {
@@ -146,6 +160,8 @@ public final class Grep
     }
 
     /**
+     * Get the output given the line number.
+     *
      * @param lineNumber specify the line of output
      * @return the output of the specified line number (minus the filename and the line number)
      */
@@ -155,6 +171,8 @@ public final class Grep
     }
 
     /**
+     * Apply the consumer to all the lines in the result.
+     *
      * @param action a BiConsumer that consumes the filename/line number and output for each line of output
      */
     public void forEach(final BiConsumer<String, String> action)

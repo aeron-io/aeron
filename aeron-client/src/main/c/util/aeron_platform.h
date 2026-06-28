@@ -26,6 +26,8 @@
 
 #if defined(_M_X64)
 #define AERON_CPU_X64 1
+#elif defined(_M_ARM64)
+#define AERON_CPU_ARM 1
 #else
 #error Unsupported CPU!
 #endif
@@ -46,6 +48,13 @@
 #define AERON_CPU_ARM 1
 #if defined(__STDC_NO_ATOMICS__)
 #error C11 atomics are required to compile for aarch64!
+#endif
+#endif
+
+#if defined(__powerpc64__)
+#define AERON_CPU_PPC64 1
+#if defined(__STDC_NO_ATOMICS__)
+#error C11 atomics are required to compile for powerpc64!
 #endif
 #endif
 

@@ -30,6 +30,10 @@ import static org.agrona.BitUtil.align;
  */
 public final class TermScanner
 {
+    private TermScanner()
+    {
+    }
+
     /**
      * Scan the term buffer for availability of new message fragments from a given offset up to a maxLength of bytes.
      *

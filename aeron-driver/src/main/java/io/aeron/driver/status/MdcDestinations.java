@@ -24,7 +24,7 @@ import org.agrona.concurrent.status.CountersManager;
 /**
  * The number of destinations represented as a counter value.
  */
-public class MdcDestinations
+public final class MdcDestinations
 {
     /**
      * Type id of number of destinations counter.
@@ -35,6 +35,10 @@ public class MdcDestinations
      * Human-readable name for the counter.
      */
     public static final String NAME = "mdc-num-dest";
+
+    private MdcDestinations()
+    {
+    }
 
     /**
      * Allocate a new MDC destinations counter for an endpoint.

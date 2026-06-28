@@ -32,6 +32,42 @@
 #include "aeron_cnc_file_descriptor.h"
 #include "concurrent/aeron_mpsc_rb.h"
 
+#include <stdio.h>
+
+int aeron_fprintf(const char* src_, uint64_t line_, void *stream, const char *format, ...)
+{
+    va_list list;
+    va_start(list, format);
+    int ret = aeron_get_fprintf_handler()(src_, line_, (FILE*)stream, format, list);
+    va_end(list);
+    return ret;
+}
+
+static int aeron_default_fprintf(const char* src_, uint64_t line_, void *stream, const char *format, va_list list)
+{
+    return vfprintf(stream, format, list);
+}
+
+static aeron_fprintf_handler_t* aeron_get_fprintf_handler_impl(void)
+{
+    static aeron_fprintf_handler_t ret = &aeron_default_fprintf;
+    return &ret;
+}
+
+aeron_fprintf_handler_t aeron_set_fprintf_handler(aeron_fprintf_handler_t fn)
+{
+    aeron_fprintf_handler_t* ptr = aeron_get_fprintf_handler_impl();
+    aeron_fprintf_handler_t  ret = *ptr;
+
+    *ptr = fn;
+    return ret;
+}
+
+aeron_fprintf_handler_t aeron_get_fprintf_handler(void)
+{
+    return *aeron_get_fprintf_handler_impl();
+}
+
 int aeron_client_connect_to_driver(aeron_mapped_file_t *cnc_mmap, aeron_context_t *context)
 {
     long long start_ms = context->epoch_clock();
@@ -56,7 +92,7 @@ int aeron_client_connect_to_driver(aeron_mapped_file_t *cnc_mmap, aeron_context_
             case AERON_CNC_LOAD_AWAIT_FILE:
                 if (context->epoch_clock() > deadline_ms)
                 {
-                    AERON_SET_ERR(AERON_CLIENT_ERROR_DRIVER_TIMEOUT, "CnC file not created: %s", filename);
+                    AERON_SET_ERR(-AERON_CLIENT_ERROR_DRIVER_TIMEOUT, "CnC file not created: %s", filename);
                     return -1;
                 }
                 aeron_micro_sleep(16 * 1000);
@@ -70,7 +106,7 @@ int aeron_client_connect_to_driver(aeron_mapped_file_t *cnc_mmap, aeron_context_
                 if (context->epoch_clock() > deadline_ms)
                 {
                     AERON_SET_ERR(
-                        AERON_CLIENT_ERROR_CLIENT_TIMEOUT, "CnC file is created but not initialised: %s", filename);
+                        -AERON_CLIENT_ERROR_CLIENT_TIMEOUT, "CnC file is created but not initialised: %s", filename);
                     aeron_unmap(cnc_mmap);
                     return -1;
                 }
@@ -101,7 +137,7 @@ int aeron_client_connect_to_driver(aeron_mapped_file_t *cnc_mmap, aeron_context_
             if (context->epoch_clock() > deadline_ms)
             {
                 AERON_SET_ERR(
-                    AERON_CLIENT_ERROR_DRIVER_TIMEOUT,
+                    -AERON_CLIENT_ERROR_DRIVER_TIMEOUT,
                     "no driver heartbeat detected after: %" PRIu64 "ms",
                     context->driver_timeout_ms);
                 aeron_unmap(cnc_mmap);
@@ -117,7 +153,7 @@ int aeron_client_connect_to_driver(aeron_mapped_file_t *cnc_mmap, aeron_context_
             if (now_ms > deadline_ms)
             {
                 AERON_SET_ERR(
-                    AERON_CLIENT_ERROR_DRIVER_TIMEOUT,
+                    -AERON_CLIENT_ERROR_DRIVER_TIMEOUT,
                     "no driver heartbeat detected after: %" PRIu64 "ms",
                     context->driver_timeout_ms);
                 aeron_unmap(cnc_mmap);

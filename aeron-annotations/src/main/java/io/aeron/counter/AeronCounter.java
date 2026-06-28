@@ -28,11 +28,15 @@ import java.lang.annotation.Target;
 public @interface AeronCounter
 {
     /**
+     * Whether this counter exists in the C code.
+     *
      * @return whether this counter exists in the C code.
      */
     boolean existsInC() default true;
 
     /**
+     * The name of the #define in C.
+     *
      * @return the name of the #define in C.
      */
     String expectedCName() default "";

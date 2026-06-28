@@ -47,6 +47,8 @@ typedef int (*aeron_name_resolver_lookup_func_t)(
     bool is_re_lookup,
     const char **resolved_name);
 
+typedef int (*aeron_name_resolver_on_start_func_t)(aeron_name_resolver_t *resolver);
+
 typedef int (*aeron_name_resolver_do_work_func_t)(aeron_name_resolver_t *resolver, int64_t now_ms);
 
 typedef int (*aeron_name_resolver_close_func_t)(aeron_name_resolver_t *resolver);
@@ -56,6 +58,7 @@ typedef struct aeron_name_resolver_stct
     const char *name;
     aeron_name_resolver_lookup_func_t lookup_func;
     aeron_name_resolver_resolve_func_t resolve_func;
+    aeron_name_resolver_on_start_func_t start_func;
     aeron_name_resolver_do_work_func_t do_work_func;
     aeron_name_resolver_close_func_t close_func;
     void *state;
@@ -83,6 +86,8 @@ int aeron_default_name_resolver_lookup(
     bool is_re_lookup,
     const char **resolved_name);
 
+int aeron_default_name_resolver_start(aeron_name_resolver_t *resolver);
+
 int aeron_default_name_resolver_do_work(aeron_name_resolver_t *resolver, int64_t now_ms);
 
 int aeron_default_name_resolver_close(aeron_name_resolver_t *resolver);
@@ -91,8 +96,8 @@ typedef struct aeron_name_resolver_async_resolve_stct
 {
     const char *uri_param_name;
     bool is_re_resolution;
-    struct sockaddr_storage sockaddr;
     char endpoint_name[AERON_MAX_HOST_LENGTH + 1];
+    struct sockaddr_storage resolved_address;
 }
 aeron_name_resolver_async_resolve_t;
 

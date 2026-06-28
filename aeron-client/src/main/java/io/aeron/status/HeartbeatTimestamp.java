@@ -30,8 +30,12 @@ import static org.agrona.concurrent.status.CountersReader.*;
 /**
  * Allocate a counter for tracking the last heartbeat of an entity with a given registration id.
  */
-public class HeartbeatTimestamp
+public final class HeartbeatTimestamp
 {
+    private HeartbeatTimestamp()
+    {
+    }
+
     /**
      * Type id of a heartbeat counter.
      */

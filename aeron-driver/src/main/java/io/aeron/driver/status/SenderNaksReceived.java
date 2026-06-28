@@ -26,7 +26,7 @@ import static io.aeron.Aeron.NULL_VALUE;
  * Count the number of NAK messages received by the Sender. This is a per-stream event count for
  * that which is aggregated in {@link SystemCounterDescriptor#NAK_MESSAGES_RECEIVED}.
  */
-public class SenderNaksReceived
+public final class SenderNaksReceived
 {
     /**
      * Type id of a counter.
@@ -37,6 +37,10 @@ public class SenderNaksReceived
      * Human-readable name for the counter.
      */
     public static final String NAME = "snd-naks-received";
+
+    private SenderNaksReceived()
+    {
+    }
 
     /**
      * Allocate a new sender back-pressure counter for a stream.

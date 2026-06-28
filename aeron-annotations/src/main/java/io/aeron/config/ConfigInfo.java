@@ -119,6 +119,8 @@ public class ConfigInfo implements Serializable
     public boolean deprecated = false;
 
     /**
+     * Construct the ConfigInfo with the unique id.
+     *
      * @param id the unique identifier for this block o' config information.
      */
     public ConfigInfo(final String id)

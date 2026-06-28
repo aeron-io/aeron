@@ -23,8 +23,12 @@ import static io.aeron.protocol.DataHeaderFlyweight.HEADER_LENGTH;
  * Rebuild a term buffer from received frames which can be out-of-order. The resulting data structure will only
  * monotonically increase in state.
  */
-public class TermRebuilder
+public final class TermRebuilder
 {
+    private TermRebuilder()
+    {
+    }
+
     /**
      * Insert a packet of frames into the log at the appropriate termOffset as indicated by the term termOffset header.
      * <p>

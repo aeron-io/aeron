@@ -26,7 +26,7 @@ import static io.aeron.Aeron.NULL_VALUE;
 /**
  * The position the Sender can immediately send up-to on a session-channel-stream tuple.
  */
-public class SenderLimit
+public final class SenderLimit
 {
     /**
      * Type id of a sender position counter.
@@ -37,6 +37,10 @@ public class SenderLimit
      * Human-readable name for the counter.
      */
     public static final String NAME = "snd-lmt";
+
+    private SenderLimit()
+    {
+    }
 
     /**
      * Allocate a new sender limit counter for a stream.

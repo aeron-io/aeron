@@ -60,6 +60,8 @@ public enum DefaultType
     }
 
     /**
+     * Resolve a <code>DefaultType</code> from a <code>canonicalName</code>.
+     *
      * @param canonicalName the name of the java class.
      * @return the associated DefaultType.
      */
@@ -69,6 +71,8 @@ public enum DefaultType
     }
 
     /**
+     * Determines if a <code>DefaultType</code> is undefined.
+     *
      * @param defaultType a DefaultType or null.
      * @return true if the type is null or if it's UNDEFINED, otherwise false.
      */
@@ -89,6 +93,8 @@ public enum DefaultType
     }
 
     /**
+     * Indicates whether the value is numeric (int or long).
+     *
      * @return indicates whether the value is numeric (int or long).
      */
     public boolean isNumeric()
@@ -97,6 +103,8 @@ public enum DefaultType
     }
 
     /**
+     * A simple name, for display purposes.
+     *
      * @return a simple name, for display purposes.
      */
     public String getSimpleName()

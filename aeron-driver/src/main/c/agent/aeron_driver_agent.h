@@ -23,6 +23,7 @@
 #define AERON_EVENT_LOG_ENV_VAR "AERON_EVENT_LOG"
 #define AERON_EVENT_LOG_DISABLE_ENV_VAR "AERON_EVENT_LOG_DISABLE"
 #define AERON_EVENT_LOG_FILENAME_ENV_VAR "AERON_EVENT_LOG_FILENAME"
+#define AERON_EVENT_LOG_FILE_MAX_LENGTH_ENV_VAR "AERON_EVENT_LOG_FILE_MAX_LENGTH"
 #define AERON_EVENT_RB_LENGTH (8 * 1024 * 1024)
 #define AERON_MAX_FRAME_LENGTH (AERON_MAX_UDP_PAYLOAD_LENGTH)
 
@@ -252,6 +253,16 @@ typedef struct aeron_driver_agent_text_data_log_header_stct
 }
 aeron_driver_agent_text_data_log_header_t;
 
+typedef struct aeron_driver_agent_log_state_stct
+{
+    const char *filename;
+    FILE *logfp;
+    int64_t file_max_length;
+    int64_t start_time_ms;
+    int64_t next_file_index;
+}
+aeron_driver_agent_log_state_t;
+
 aeron_mpsc_rb_t *aeron_driver_agent_mpsc_rb(void);
 
 typedef int (*aeron_driver_context_init_t)(aeron_driver_context_t **);
@@ -266,9 +277,11 @@ const char *aeron_driver_agent_dissect_log_header(
     size_t capture_length,
     size_t message_length);
 
-const char *aeron_driver_agent_dissect_log_start(int64_t time_ns, int64_t time_ms);
+void aeron_driver_agent_dissect_log_start(FILE* stream, int64_t time_ns, int64_t time_ms);
 
 const char *aeron_driver_agent_dissect_frame(const void *message, size_t length);
+
+void aeron_driver_agent_buffer_read(int32_t msg_type_id, const void *message, size_t length, void *clientd);
 
 void aeron_driver_agent_log_dissector(int32_t msg_type_id, const void *message, size_t length, void *clientd);
 

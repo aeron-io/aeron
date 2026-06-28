@@ -20,7 +20,7 @@ import org.agrona.BitUtil;
 import static java.lang.System.getProperty;
 
 /**
- * {@inheritDoc}.
+ * Older flow control using preferred, should not be used.
  *
  * @deprecated Use {@link TaggedMulticastFlowControl} instead
  */
@@ -38,6 +38,13 @@ public class PreferredMulticastFlowControl extends TaggedMulticastFlowControl
      * Default Application Specific Feedback (ASF) value.
      */
     public static final String PREFERRED_ASF_DEFAULT = "FFFFFFFFFFFFFFFF";
+
+    /**
+     * Default constructor.
+     */
+    public PreferredMulticastFlowControl()
+    {
+    }
 
     static final String PREFERRED_ASF = getProperty(PREFERRED_ASF_PROP_NAME, PREFERRED_ASF_DEFAULT);
     static final byte[] PREFERRED_ASF_BYTES = BitUtil.fromHex(PREFERRED_ASF);

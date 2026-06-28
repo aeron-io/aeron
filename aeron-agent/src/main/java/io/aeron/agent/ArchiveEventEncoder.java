@@ -58,9 +58,140 @@ final class ArchiveEventEncoder
         return encodedLength;
     }
 
+    static <E extends Enum<E>> int encodePersistentSubscriptionStateChange(
+        final UnsafeBuffer encodingBuffer,
+        final int offset,
+        final int captureLength,
+        final int length,
+        final E from,
+        final E to,
+        final long recordingId,
+        final String replayChannel,
+        final int replayStreamId,
+        final String liveChannel,
+        final int liveStreamId
+    )
+    {
+        int encodedLength = encodeLogHeader(encodingBuffer, offset, captureLength, length);
+
+        encodingBuffer.putLong(offset + encodedLength, recordingId, LITTLE_ENDIAN);
+        encodedLength += SIZE_OF_LONG;
+
+        encodedLength += encodeTrailingString(
+            encodingBuffer, offset + encodedLength, captureLength, replayChannel);
+
+        encodingBuffer.putInt(offset + encodedLength, replayStreamId, LITTLE_ENDIAN);
+        encodedLength += SIZE_OF_INT;
+
+        encodedLength += encodeTrailingString(encodingBuffer, offset + encodedLength, captureLength, liveChannel);
+
+        encodingBuffer.putInt(offset + encodedLength, liveStreamId, LITTLE_ENDIAN);
+        encodedLength += SIZE_OF_INT;
+
+        encodedLength += encodeStateChange(encodingBuffer, offset + encodedLength, from, to);
+
+        return encodedLength;
+    }
+
+    static int encodePersistentSubscriptionJoinedLive(
+        final UnsafeBuffer encodingBuffer,
+        final int offset,
+        final int captureLength,
+        final int length,
+        final long recordingId,
+        final String replayChannel,
+        final int replayStreamId,
+        final String liveChannel,
+        final int liveStreamId,
+        final int liveSessionId,
+        final long joinPosition
+    )
+    {
+        int encodedLength = encodeLogHeader(encodingBuffer, offset, captureLength, length);
+
+        encodingBuffer.putLong(offset + encodedLength, recordingId, LITTLE_ENDIAN);
+        encodedLength += SIZE_OF_LONG;
+
+        encodedLength += encodeTrailingString(
+            encodingBuffer, offset + encodedLength, captureLength, replayChannel);
+
+        encodingBuffer.putInt(offset + encodedLength, replayStreamId, LITTLE_ENDIAN);
+        encodedLength += SIZE_OF_INT;
+
+        encodedLength += encodeTrailingString(encodingBuffer, offset + encodedLength, captureLength, liveChannel);
+
+        encodingBuffer.putInt(offset + encodedLength, liveStreamId, LITTLE_ENDIAN);
+        encodedLength += SIZE_OF_INT;
+
+        encodingBuffer.putInt(offset + encodedLength, liveSessionId, LITTLE_ENDIAN);
+        encodedLength += SIZE_OF_INT;
+
+        encodingBuffer.putLong(offset + encodedLength, joinPosition, LITTLE_ENDIAN);
+        encodedLength += SIZE_OF_LONG;
+
+        return encodedLength;
+    }
+
+    static int encodePersistentSubscriptionLeftLive(
+        final UnsafeBuffer encodingBuffer,
+        final int offset,
+        final int captureLength,
+        final int length,
+        final long recordingId,
+        final String replayChannel,
+        final int replayStreamId,
+        final String liveChannel,
+        final int liveStreamId,
+        final long livePosition
+    )
+    {
+        int encodedLength = encodeLogHeader(encodingBuffer, offset, captureLength, length);
+
+        encodingBuffer.putLong(offset + encodedLength, recordingId, LITTLE_ENDIAN);
+        encodedLength += SIZE_OF_LONG;
+
+        encodedLength += encodeTrailingString(
+          encodingBuffer, offset + encodedLength, captureLength, replayChannel);
+
+        encodingBuffer.putInt(offset + encodedLength, replayStreamId, LITTLE_ENDIAN);
+        encodedLength += SIZE_OF_INT;
+
+        encodedLength += encodeTrailingString(encodingBuffer, offset + encodedLength, captureLength, liveChannel);
+
+        encodingBuffer.putInt(offset + encodedLength, liveStreamId, LITTLE_ENDIAN);
+        encodedLength += SIZE_OF_INT;
+
+        encodingBuffer.putLong(offset + encodedLength, livePosition, LITTLE_ENDIAN);
+        encodedLength += SIZE_OF_LONG;
+
+        return encodedLength;
+    }
+
     static <E extends Enum<E>> int replaySessionStateChangeLength(final E from, final E to, final String reason)
     {
         return stateTransitionStringLength(from, to) + (3 * SIZE_OF_LONG) + (SIZE_OF_INT + reason.length());
+    }
+
+    static <E extends Enum<E>> int persistentSubscriptionStateChangeLength(
+        final E from,
+        final E to,
+        final String replayChannel,
+        final String liveChannel)
+    {
+        return stateTransitionStringLength(from, to) + SIZE_OF_LONG + replayChannel.length() + SIZE_OF_INT * 2 +
+            liveChannel.length() + SIZE_OF_INT * 2;
+    }
+
+    static int persistentSubscriptionJoinedLiveLength(final String replayChannel, final String liveChannel)
+    {
+        return SIZE_OF_LONG + replayChannel.length() + SIZE_OF_INT * 2 + liveChannel.length() + SIZE_OF_INT * 2 +
+            SIZE_OF_INT + SIZE_OF_LONG;
+    }
+
+    static int persistentSubscriptionLeftLiveLength(final String replayChannel, final String liveChannel)
+    {
+        return SIZE_OF_LONG + replayChannel.length() + SIZE_OF_INT * 2 + liveChannel.length() + SIZE_OF_INT * 2 +
+            SIZE_OF_LONG;
     }
 
     static <E extends Enum<E>> int encodeRecordingSessionStateChange(

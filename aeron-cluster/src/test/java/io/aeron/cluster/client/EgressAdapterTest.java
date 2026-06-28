@@ -74,7 +74,8 @@ class EgressAdapterTest
             new EgressAdapter(listener, 42, mock(Subscription.class), 5);
         final ClusterException exception = assertThrows(ClusterException.class,
             () -> adapter.onFragment(buffer, 0, 64, new Header(0, 0)));
-        assertEquals("ERROR - expected schemaId=" + MessageHeaderDecoder.SCHEMA_ID + ", actual=0",
+        assertEquals(
+            "ERROR - expected schemaId=" + MessageHeaderDecoder.SCHEMA_ID + ", actual=0",
             exception.getMessage());
 
     }

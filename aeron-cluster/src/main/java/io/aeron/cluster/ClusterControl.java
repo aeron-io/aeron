@@ -33,7 +33,7 @@ import static io.aeron.CncFileDescriptor.*;
  * Toggle control {@link ToggleState}s for a cluster node such as {@link ToggleState#SUSPEND} or
  * {@link ToggleState#RESUME}. This can only be applied to the {@link io.aeron.cluster.service.Cluster.Role#LEADER}.
  */
-public class ClusterControl
+public final class ClusterControl
 {
     /**
      * Toggle states for controlling the cluster node once it has entered the active state after initialising.
@@ -177,6 +177,10 @@ public class ClusterControl
 
             return STATES[(int)toggleValue];
         }
+    }
+
+    private ClusterControl()
+    {
     }
 
     /**

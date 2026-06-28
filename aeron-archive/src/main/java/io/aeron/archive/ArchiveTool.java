@@ -80,7 +80,7 @@ import static org.agrona.concurrent.SystemEpochClock.INSTANCE;
  * Tool for inspecting and performing administrative tasks on an {@link Archive} and its contents which is described
  * in a {@link Catalog}.
  */
-public class ArchiveTool
+public final class ArchiveTool
 {
     /**
      * Allows user to confirm or reject an action.
@@ -97,6 +97,10 @@ public class ArchiveTool
          * @return {@code true} confirms the action and {@code false} to reject the action.
          */
         boolean confirm(T context);
+    }
+
+    private ArchiveTool()
+    {
     }
 
     /**
@@ -292,8 +296,8 @@ public class ArchiveTool
         }
         else if (args.length == 2 && "compact".equals(args[1]))
         {
-            out.print("WARNING: Compacting the Catalog is non-recoverable operation! All recordings in state " +
-                "`INVALID` will be deleted along with the corresponding segment files.");
+            out.print("WARNING: Compacting the Catalog is non-recoverable operation! All non-ACTIVE recordings" +
+                " will be deleted along with the corresponding segment files.");
 
             if (readContinueAnswer("Continue? (y/n)"))
             {

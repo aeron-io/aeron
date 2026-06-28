@@ -33,6 +33,13 @@ import java.net.InetSocketAddress;
 public class CubicCongestionControlSupplier implements CongestionControlSupplier
 {
     /**
+     * Construct a supplier for CubicCongestionControl.
+     */
+    public CubicCongestionControlSupplier()
+    {
+    }
+
+    /**
      * {@inheritDoc}
      */
     public CongestionControl newInstance(

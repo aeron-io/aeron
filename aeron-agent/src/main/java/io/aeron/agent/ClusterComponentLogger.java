@@ -49,6 +49,13 @@ public class ClusterComponentLogger implements ComponentLogger
     }
 
     /**
+     * Create a ClusterComponentLogger, used by Java Service API.
+     */
+    public ClusterComponentLogger()
+    {
+    }
+
+    /**
      * {@inheritDoc}
      */
     public int typeCode()
@@ -211,6 +218,13 @@ public class ClusterComponentLogger implements ComponentLogger
 
         tempBuilder = addEventInstrumentation(
             tempBuilder,
+            REQUEST_VOTE,
+            "ConsensusModuleAgent",
+            ClusterInterceptor.Vote.class,
+            "logOnVote");
+
+        tempBuilder = addEventInstrumentation(
+            tempBuilder,
             CATCHUP_POSITION,
             "ConsensusModuleAgent",
             ClusterInterceptor.CatchupPosition.class,
@@ -264,6 +278,13 @@ public class ClusterComponentLogger implements ComponentLogger
             "ConsensusModuleAgent",
             ClusterInterceptor.NewElection.class,
             "logNewElection");
+
+        tempBuilder = addEventInstrumentation(
+            tempBuilder,
+            SNAPSHOT_ENTRY_INVALIDATION,
+            "RecordingLogValidator",
+            ClusterInterceptor.SnapshotEntryInvalidation.class,
+            "logSnapshotEntryInvalidation");
 
         return tempBuilder;
     }

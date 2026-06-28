@@ -18,19 +18,31 @@
 
 #include <gtest/gtest.h>
 #include <cinttypes>
-
-#include "aeron_driver_version.h"
+#include <cstdio>
+#include <fstream>
+#include <string>
 
 extern "C"
 {
+#include "aeron_driver_version.h"
+#include "util/aeron_platform.h"
 #include "aeron_driver_context.h"
 #include "agent/aeron_driver_agent.h"
+
+void aeron_driver_agent_log_reader_do_start(aeron_driver_agent_log_state_t *);
+void aeron_driver_agent_log_reader_do_work(aeron_driver_agent_log_state_t *, aeron_mpsc_rb_t *);
 }
+
+#if defined(AERON_COMPILER_MSVC)
+#include <windows.h>
+#else
+#include <dirent.h>
+#endif
 
 class DriverAgentTest : public testing::Test
 {
 public:
-    DriverAgentTest()
+    DriverAgentTest() : m_tempDir(nullptr)
     {
         if (aeron_driver_context_init(&m_context) < 0)
         {
@@ -51,6 +63,24 @@ public:
 
 protected:
     aeron_driver_context_t *m_context = nullptr;
+        const char *m_tempDir;
+    uint8_t *m_rb_buffer = nullptr;
+    const size_t rb_length = AERON_EVENT_RB_LENGTH + AERON_RB_TRAILER_LENGTH;
+
+    void SetUp() override
+    {
+        m_rb_buffer = static_cast<uint8_t*>(malloc(rb_length));
+        memset(m_rb_buffer, 0, rb_length);
+
+        m_tempDir = aeron_temp_dir("driver_agent_XXXXXX");
+    }
+
+    void TearDown() override
+    {
+        free(m_rb_buffer);
+        EXPECT_EQ(0, aeron_delete_directory(m_tempDir)) << aeron_errmsg();
+        aeron_free(const_cast<char *>(m_tempDir));
+    }
 
     static void assert_all_events_disabled()
     {
@@ -128,6 +158,87 @@ protected:
         EXPECT_EQ(is_enabled, aeron_driver_agent_is_event_enabled(AERON_DRIVER_EVENT_CMD_OUT_ON_UNAVAILABLE_COUNTER));
         EXPECT_EQ(is_enabled, aeron_driver_agent_is_event_enabled(AERON_DRIVER_EVENT_CMD_OUT_ON_CLIENT_TIMEOUT));
     }
+
+    static void writeLogEvent(aeron_mpsc_rb_t *ring_buffer, int64_t time_ns)
+    {
+        constexpr int32_t msg_length = 4096 - 8;
+        const int32_t index = aeron_mpsc_rb_try_claim(ring_buffer, AERON_DRIVER_EVENT_NAME_TEXT_DATA, msg_length);
+        uint8_t *ptr = (ring_buffer->buffer + index);
+        auto *hdr = reinterpret_cast<aeron_driver_agent_text_data_log_header_t *>(ptr);
+        hdr->time_ns = time_ns;
+        hdr->message_length = msg_length;
+        constexpr size_t data_offset = (sizeof(hdr->time_ns) + sizeof(hdr->message_length));
+        memset(ptr + data_offset, 'x', msg_length - data_offset);
+        aeron_mpsc_rb_commit(ring_buffer, index);
+    }
+
+#if defined(AERON_COMPILER_MSVC)
+    static int foreachInDirectory(const char *dir, const std::function<void(const char *, int64_t)> &fn)
+    {
+        char pattern[MAX_PATH];
+        snprintf(pattern, sizeof(pattern), "%s\\*", dir);
+
+        WIN32_FIND_DATAA find_data;
+        HANDLE hFind = FindFirstFileA(pattern, &find_data);
+        if (INVALID_HANDLE_VALUE == hFind)
+        {
+            return -1;
+        }
+
+        int filecount = 0;
+        do
+        {
+            const char *name = find_data.cFileName;
+            if (0 == strcmp(name, ".") || 0 == strcmp(name, ".."))
+            {
+                continue;
+            }
+
+            char path[MAX_PATH];
+            snprintf(path, sizeof(path), "%s\\%s", dir, name);
+
+            LARGE_INTEGER file_size;
+            file_size.LowPart = find_data.nFileSizeLow;
+            file_size.HighPart = find_data.nFileSizeHigh;
+
+            fn(path, static_cast<int64_t>(file_size.QuadPart));
+            filecount++;
+        }
+        while (FindNextFileA(hFind, &find_data));
+
+        FindClose(hFind);
+
+        return filecount;
+    }
+#else
+    static int foreachInDirectory(const char *dirname, const std::function<void(const char *, int64_t)>& fn)
+    {
+        DIR *dir = opendir(dirname);
+        dirent *entry;
+        int filecount = 0;
+        while (nullptr != (entry = readdir(dir)))
+        {
+            if (0 == strncmp(entry->d_name, ".", 1))
+            {
+                continue;
+            }
+
+            filecount++;
+
+            char filename[AERON_MAX_PATH];
+            snprintf(filename, sizeof(filename), "%s/%s", dirname, entry->d_name);
+
+            struct stat statbuf = {};
+            stat(filename, &statbuf);
+            const off_t file_length = statbuf.st_size;
+
+            fn(filename, file_length);
+        }
+        closedir(dir);
+
+        return filecount;
+    }
+#endif
 };
 
 TEST_F(DriverAgentTest, allLoggingEventsShouldHaveUniqueNames)
@@ -1495,19 +1606,31 @@ TEST_F(DriverAgentTest, dissecLogStartShouldFormatNanoTimeWithMicrosecondPrecisi
 {
     int64_t time_ns = 55555001234567;
     int64_t time_ms = 1234567890987;
+    char *buf = nullptr;
 
-    auto result = std::string(aeron_driver_agent_dissect_log_start(time_ns, time_ms));
+    char filename[AERON_MAX_PATH];
+    snprintf(filename, sizeof(filename), "%s/%s", m_tempDir, "test_file");
+
+    auto logf = static_cast<FILE*>(aeron_open_file_append(filename));
+    aeron_driver_agent_dissect_log_start(logf, time_ns, time_ms);
+    fflush(logf);
+    fclose(logf);
+
+    std::ifstream f(filename);
+    std::string result((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
 
     std::string startString = "[55555.001234567] log started 2009-02-1";
     std::string endString = std::string(", enabled loggers: {DRIVER:")
-    .append(" version=")
-    .append(aeron_driver_version_text())
-    .append(" commit=")
-    .append(aeron_driver_version_git_sha())
-    .append("}");
+        .append(" version=")
+        .append(aeron_driver_version_text())
+        .append(" commit=")
+        .append(aeron_driver_version_git_sha())
+        .append("}");
 
     EXPECT_EQ(0, result.find(startString));
     EXPECT_NE(std::string::npos, result.find(endString, startString.length()));
+
+    free(buf);
 }
 
 TEST_F(DriverAgentTest, dissecLogHeaderShouldFormatNanoTimeWithMicrosecondPrecision)
@@ -1673,4 +1796,48 @@ TEST_F(DriverAgentTest, dissecUknownFrame)
     EXPECT_STREQ(
         "type=unknown frame type (0xfe) version=0xb flags=10101100 frameLength=150",
         aeron_driver_agent_dissect_frame(&buff, sizeof(buff)));
+}
+
+TEST_F(DriverAgentTest, shouldWriteHeaderToLogFile)
+{
+    static aeron_mpsc_rb_t logging_mpsc_rb;
+    ASSERT_NE(-1, aeron_mpsc_rb_init(&logging_mpsc_rb, m_rb_buffer, rb_length));
+
+    char log_filename[4096];
+    snprintf(log_filename, sizeof(log_filename), "%s/%s", m_tempDir, "test-out.log");
+
+    auto out = static_cast<FILE*>(aeron_open_file_append(log_filename));
+
+    constexpr size_t max_file_length = (32 * 1024);
+    aeron_driver_agent_log_state_t state = {
+        log_filename, out, max_file_length, 0, 1
+    };
+
+    aeron_driver_agent_log_reader_do_start(&state);
+    aeron_driver_agent_log_reader_do_work(&state, &logging_mpsc_rb);
+
+    for (int i = 0; i < 100; i++)
+    {
+        writeLogEvent(&logging_mpsc_rb, 13212312);
+        aeron_driver_agent_log_reader_do_work(&state, &logging_mpsc_rb);
+    }
+
+    fclose(state.logfp);
+
+    const int fileCount = foreachInDirectory(
+        m_tempDir,
+        [&](const char* filename, const int64_t file_length)
+        {
+            EXPECT_LT(file_length, max_file_length + 8192) << "file too big: " << filename;
+
+            FILE *f = fopen(filename, "r");
+
+            char buf[8192];
+            const char *header = fgets(buf, sizeof(buf), f);
+            EXPECT_NE(nullptr, strstr(header, "log started"));
+
+            fclose(f);
+        });
+
+    EXPECT_LT(1, fileCount);
 }

@@ -29,6 +29,7 @@ import java.lang.invoke.VarHandle;
 public final class Counter extends AtomicCounter
 {
     private static final VarHandle IS_CLOSED_VH;
+
     static
     {
         try
@@ -42,30 +43,35 @@ public final class Counter extends AtomicCounter
     }
 
     private volatile boolean isClosed;
+    private final long correlationId;
     private final long registrationId;
     private final ClientConductor clientConductor;
+    private boolean clientOwned;
 
     Counter(
+        final long correlationId,
         final long registrationId,
+        final boolean clientOwned,
         final ClientConductor clientConductor,
         final AtomicBuffer buffer,
         final int counterId)
     {
         super(buffer, counterId);
 
+        this.correlationId = correlationId;
         this.registrationId = registrationId;
         this.clientConductor = clientConductor;
+        this.clientOwned = clientOwned;
     }
 
     /**
      * Construct a read-write view of an existing counter.
      *
      * @param countersReader for getting access to the buffers.
-     * @param registrationId assigned by the driver for the counter or {@link Aeron#NULL_VALUE} if not known.
      * @param counterId      for the counter to be viewed.
      * @throws AeronException if the id has for the counter has not been allocated.
      */
-    public Counter(final CountersReader countersReader, final long registrationId, final int counterId)
+    public Counter(final CountersReader countersReader, final int counterId)
     {
         super(countersReader.valuesBuffer(), counterId);
 
@@ -74,14 +80,33 @@ public final class Counter extends AtomicCounter
             throw new AeronException("Counter id is not allocated: " + counterId);
         }
 
-        this.registrationId = registrationId;
-        this.clientConductor = null;
+        correlationId = Aeron.NULL_VALUE;
+        registrationId = countersReader.getCounterRegistrationId(counterId);
+        clientConductor = null;
+        clientOwned = true;
     }
 
     /**
-     * Return the registration id used to register this counter with the media driver.
+     * Return the correlation id of the counter creation command sent to the media driver.
+     *
+     * @return the correlation id of the command or {@link Aeron#NULL_VALUE} if unknown.
+     */
+    public long correlationId()
+    {
+        return correlationId;
+    }
+
+    /**
+     * Return the registration id used to register this counter with the media driver. Can also be retrieved by calling
+     * {@link CountersReader#getCounterRegistrationId(int)}.
+     *
+     * <p>
+     * For non-static counters this is the same as {@link #correlationId()}. For static counters this will be a
+     * user-defined value specified at creation time.
      *
      * @return the registration id used to register this counter with the media driver.
+     * @see #correlationId()
+     * @see CountersReader#getCounterRegistrationId(int)
      */
     public long registrationId()
     {
@@ -100,7 +125,7 @@ public final class Counter extends AtomicCounter
             super.close();
             if (null != clientConductor)
             {
-                clientConductor.releaseCounter(this);
+                clientConductor.removeCounter(this);
             }
         }
     }
@@ -121,8 +146,8 @@ public final class Counter extends AtomicCounter
         isClosed = true;
     }
 
-    ClientConductor clientConductor()
+    boolean clientOwned()
     {
-        return clientConductor;
+        return clientOwned;
     }
 }

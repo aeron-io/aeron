@@ -33,6 +33,11 @@ final class ConfigOption
     static final String LOG_FILENAME = "aeron.event.log.filename";
 
     /**
+     * Event Buffer log file max length system property. If not set then {@link Long#MAX_VALUE} will be used.
+     */
+    static final String LOG_FILE_MAX_LENGTH = "aeron.event.log.file.max.length";
+
+    /**
      * Event reader {@link Agent} which consumes the {@link EventConfiguration#EVENT_RING_BUFFER} to output log events.
      */
     static final String READER_CLASSNAME = "aeron.event.log.reader.classname";

@@ -49,6 +49,13 @@ public class DriverComponentLogger implements ComponentLogger
     }
 
     /**
+     * Create a DriverComponentLogger, used by Java Service API.
+     */
+    public DriverComponentLogger()
+    {
+    }
+
+    /**
      * {@inheritDoc}
      */
     public int typeCode()

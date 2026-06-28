@@ -19,7 +19,6 @@
 
 #include <stddef.h>
 
-int aeron_alloc_no_err(void **ptr, size_t size);
 int aeron_alloc(void **ptr, size_t size);
 int aeron_alloc_aligned(void **ptr, size_t *offset, size_t size, size_t alignment);
 int aeron_reallocf(void **ptr, size_t size);

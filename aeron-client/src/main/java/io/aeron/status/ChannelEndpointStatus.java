@@ -27,8 +27,12 @@ import static org.agrona.concurrent.status.CountersReader.MAX_LABEL_LENGTH;
 /**
  * Status of the Aeron media channel for a {@link io.aeron.Publication} or {@link io.aeron.Subscription}.
  */
-public class ChannelEndpointStatus
+public final class ChannelEndpointStatus
 {
+    private ChannelEndpointStatus()
+    {
+    }
+
     /**
      * Channel is being initialized.
      */

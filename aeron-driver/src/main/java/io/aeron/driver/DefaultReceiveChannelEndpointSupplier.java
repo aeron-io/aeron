@@ -25,6 +25,13 @@ import org.agrona.concurrent.status.AtomicCounter;
 public class DefaultReceiveChannelEndpointSupplier implements ReceiveChannelEndpointSupplier
 {
     /**
+     * Default constructor.
+     */
+    public DefaultReceiveChannelEndpointSupplier()
+    {
+    }
+
+    /**
      * {@inheritDoc}
      */
     public ReceiveChannelEndpoint newInstance(

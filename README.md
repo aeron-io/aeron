@@ -21,20 +21,20 @@ predictable latency of any messaging system. Aeron integrates with
 encoding and decoding performance. Many of the data structures used in the creation of Aeron have been factored out to
 the [Agrona](https://github.com/aeron-io/agrona) project.
 
-For details of usage, protocol specification, FAQ, etc. please check out the
+For details of usage, protocol specification, FAQ, etc., please check out the
 [Wiki](https://github.com/aeron-io/aeron/wiki).
 
-For the latest version information and changes see the [Change Log](https://github.com/aeron-io/aeron/wiki/Change-Log)
+For the latest version information and changes, see the [Change Log](https://github.com/aeron-io/aeron/blob/master/CHANGELOG.adoc)
 with Java **downloads** at [Maven Central](http://search.maven.org/#search%7Cga%7C1%7Caeron).
 
 Aeron is owned and operated by Adaptive Financial Consulting. Originally created by Martin Thompson and Todd Montgomery, the Aeron team joined Adaptive in 2022.
 
 For Business users, to get started with Aeron Premium, please visit [Aeron.io](https://aeron.io)
 
-We provide a range of services including:
+We provide a range of services, including:
 * Training for development and operations with Aeron and Aeron Cluster.
-* Consulting, for example if you’re not sure how to design your system or need help tuning your system.
-* We also offer a number of proprietary enhancements on top of Aeron and Aeron Cluster such as kernel bypass (ef_vi, AWS DPDK, and VMA) for increased performance, and blazing fast encryption with ATS.
+* Consulting, for example, if you’re not sure how to design your system or need help tuning your system.
+* We also offer a number of proprietary enhancements on top of Aeron and Aeron Cluster, such as kernel bypass with DPDK for increased performance, and blazing fast encryption with ATS.
 * If you’re building a new trading system, we have experienced Aeron developers who can help.
 
 Please get in touch at [sales@aeron.io](mailto:sales@aeron.io?subject=Aeron) if you would like to learn more about any of these.

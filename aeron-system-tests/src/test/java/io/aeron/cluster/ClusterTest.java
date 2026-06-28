@@ -22,6 +22,7 @@ import io.aeron.Counter;
 import io.aeron.ExclusivePublication;
 import io.aeron.Image;
 import io.aeron.Publication;
+import io.aeron.RethrowingErrorHandler;
 import io.aeron.Subscription;
 import io.aeron.archive.Archive;
 import io.aeron.archive.ArchiveThreadingMode;
@@ -41,12 +42,14 @@ import io.aeron.cluster.codecs.MessageHeaderDecoder;
 import io.aeron.cluster.codecs.MessageHeaderEncoder;
 import io.aeron.cluster.codecs.SessionMessageHeaderDecoder;
 import io.aeron.cluster.service.ClientSession;
+import io.aeron.cluster.service.Cluster;
 import io.aeron.cluster.service.ClusterCounters;
 import io.aeron.cluster.service.ClusterTerminationException;
 import io.aeron.cluster.service.ClusteredServiceContainer;
 import io.aeron.cluster.service.SnapshotDurationTracker;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
+import io.aeron.driver.ext.DebugReceiveChannelEndpoint;
 import io.aeron.logbuffer.BufferClaim;
 import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.Header;
@@ -65,6 +68,7 @@ import io.aeron.test.Tests;
 import io.aeron.test.cluster.ClusterTests;
 import io.aeron.test.cluster.TestCluster;
 import io.aeron.test.cluster.TestNode;
+import io.aeron.test.driver.StreamIdLossGenerator;
 import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.AsciiEncoding;
 import org.agrona.BitUtil;
@@ -77,8 +81,13 @@ import org.agrona.collections.IntHashSet;
 import org.agrona.collections.MutableBoolean;
 import org.agrona.collections.MutableInteger;
 import org.agrona.collections.MutableLong;
+import org.agrona.concurrent.AgentRunner;
 import org.agrona.concurrent.AgentTerminationException;
+import org.agrona.concurrent.AtomicBuffer;
+import org.agrona.concurrent.SystemEpochClock;
 import org.agrona.concurrent.UnsafeBuffer;
+import org.agrona.concurrent.errors.ErrorConsumer;
+import org.agrona.concurrent.errors.ErrorLogReader;
 import org.agrona.concurrent.status.CountersReader;
 import org.hamcrest.CoreMatchers;
 import org.junit.jupiter.api.Test;
@@ -89,6 +98,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.File;
+import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
@@ -98,8 +109,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntFunction;
 import java.util.function.Predicate;
+import java.util.stream.IntStream;
 import java.util.zip.CRC32;
 
+import static io.aeron.Aeron.NULL_VALUE;
 import static io.aeron.AeronCounters.CLUSTER_CONSENSUS_MODULE_ERROR_COUNT_TYPE_ID;
 import static io.aeron.AeronCounters.CLUSTER_SNAPSHOT_COUNTER_TYPE_ID;
 import static io.aeron.CommonContext.ENDPOINT_PARAM_NAME;
@@ -126,6 +139,7 @@ import static io.aeron.test.cluster.ClusterTests.startPublisherThread;
 import static io.aeron.test.cluster.TestCluster.aCluster;
 import static io.aeron.test.cluster.TestCluster.awaitElectionClosed;
 import static io.aeron.test.cluster.TestCluster.awaitElectionState;
+import static io.aeron.test.cluster.TestCluster.awaitLeaderLogRecording;
 import static io.aeron.test.cluster.TestCluster.ingressEndpoint;
 import static io.aeron.test.cluster.TestNode.atMost;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
@@ -137,15 +151,19 @@ import static org.agrona.concurrent.status.CountersReader.NULL_COUNTER_ID;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.number.OrderingComparison.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.allOf;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.mock;
 
 @SlowTest
 @ExtendWith({ EventLogExtension.class, InterruptingTestCallback.class })
@@ -268,9 +286,10 @@ class ClusterTest
     }
 
     @Test
-    @InterruptAfter(30)
+    @InterruptAfter(10)
     void shouldStopClusteredServicesOnAppropriateMessage()
     {
+        systemTestWatcher.ignoreErrorsMatching((error) -> error.contains("publication is not connected"));
         cluster = aCluster().withStaticNodes(3).start();
         systemTestWatcher.cluster(cluster);
 
@@ -323,9 +342,9 @@ class ClusterTest
         systemTestWatcher.cluster(cluster);
 
         final TestNode leader = cluster.awaitLeader();
-        TestCluster.awaitElectionClosed(cluster.node(0));
-        TestCluster.awaitElectionClosed(cluster.node(1));
-        TestCluster.awaitElectionClosed(cluster.node(2));
+        awaitElectionClosed(cluster.node(0));
+        awaitElectionClosed(cluster.node(1));
+        awaitElectionClosed(cluster.node(2));
 
         cluster.node(0).isTerminationExpected(true);
         cluster.node(1).isTerminationExpected(true);
@@ -984,6 +1003,62 @@ class ClusterTest
 
     @Test
     @InterruptAfter(30)
+    void shouldEnterElectionWhenRecordingStopsUnexpectedlyOnLeaderOfSingleNodeCluster()
+    {
+        cluster = aCluster().withStaticNodes(1).start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode leader = cluster.awaitLeader();
+        cluster.connectClient();
+        cluster.sendAndAwaitMessages(1);
+
+        final AeronArchive.Context archiveCtx = new AeronArchive.Context()
+            .controlRequestChannel(leader.archive().context().localControlChannel())
+            .controlResponseChannel(leader.archive().context().localControlChannel())
+            .controlRequestStreamId(leader.archive().context().localControlStreamId())
+            .aeronDirectoryName(leader.mediaDriver().aeronDirectoryName());
+
+        try (AeronArchive archive = AeronArchive.connect(archiveCtx))
+        {
+            final int firstRecordingIdIsTheClusterLog = 0;
+            assertTrue(archive.tryStopRecordingByIdentity(firstRecordingIdIsTheClusterLog));
+        }
+
+        cluster.awaitNewLeadershipEvent(1);
+        cluster.awaitLeader();
+    }
+
+    @Test
+    @InterruptAfter(30)
+    void shouldEnterElectionWhenLosesQuorumUnexpectedlyOnLeaderOfSingleNodeCluster()
+    {
+        final OffsetMillisecondClusterClock clusterClock = new OffsetMillisecondClusterClock(SystemEpochClock.INSTANCE);
+        cluster = aCluster().withStaticNodes(1).withClusterClock(clusterClock).start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode leader = cluster.awaitLeader();
+        final AeronCluster client = cluster.connectClient();
+        cluster.sendAndAwaitMessages(1);
+
+        final long timeoutMs = NANOSECONDS.toMillis(Math.max(
+            leader.consensusModule().context().sessionTimeoutNs(),
+            leader.consensusModule().context().leaderHeartbeatTimeoutNs()));
+        clusterClock.addOffset(timeoutMs + 1);
+
+        cluster.shouldErrorOnClientClose(false);
+        while (!client.isClosed())
+        {
+            Tests.sleep(1);
+            client.pollEgress();
+        }
+
+        cluster.awaitLeader();
+        cluster.reconnectClient();
+        cluster.sendAndAwaitMessages(1, 2);
+    }
+
+    @Test
+    @InterruptAfter(30)
     void shouldCloseClientOnTimeout()
     {
         cluster = aCluster().withStaticNodes(3).start();
@@ -1375,7 +1450,7 @@ class ClusterTest
         cluster.awaitResponseMessageCount(messageCount * 3);
 
         final TestNode lateJoiningNode = cluster.startStaticNode(originalLeader.index(), true);
-        TestCluster.awaitElectionClosed(lateJoiningNode);
+        awaitElectionClosed(lateJoiningNode);
 
         cluster.awaitServiceMessageCount(lateJoiningNode, messageCount * 3);
     }
@@ -1838,7 +1913,7 @@ class ClusterTest
         final int termCount = 3;
         int totalMessages = 0;
 
-        int partialNode = Aeron.NULL_VALUE;
+        int partialNode = NULL_VALUE;
 
         for (int i = 0; i < termCount; i++)
         {
@@ -1849,7 +1924,7 @@ class ClusterTest
             totalMessages += messageCount;
             cluster.awaitResponseMessageCount(totalMessages);
 
-            if (Aeron.NULL_VALUE == partialNode)
+            if (NULL_VALUE == partialNode)
             {
                 partialNode = (oldLeader.index() + 1) % 4;
                 cluster.stopNode(cluster.node(partialNode));
@@ -1861,11 +1936,11 @@ class ClusterTest
         }
 
         final TestNode lateJoiningNode = cluster.startStaticNode(4, true);
-        TestCluster.awaitElectionClosed(lateJoiningNode);
+        awaitElectionClosed(lateJoiningNode);
         cluster.awaitServiceMessageCount(lateJoiningNode, totalMessages);
 
         final TestNode node = cluster.startStaticNode(partialNode, false);
-        TestCluster.awaitElectionClosed(node);
+        awaitElectionClosed(node);
         cluster.awaitServiceMessageCount(node, totalMessages);
 
         cluster.connectClient();
@@ -2869,6 +2944,185 @@ class ClusterTest
         }
     }
 
+    @Test
+    @InterruptAfter(30)
+    void clientShouldHandleRedirectResponseWhenInInvokerModeUsingConnect()
+    {
+        TestMediaDriver.notSupportedOnCMediaDriver("does not work with ATS enabled");
+
+        cluster = aCluster().withStaticNodes(3).withClusterId(4).start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode leader = cluster.awaitLeader();
+        final String leaderIngressEndpoint =
+            ingressEndpoint(cluster.clusterId(), leader.memberId(), cluster.memberCount());
+
+        final StringBuilder followerIngressEndpoints = new StringBuilder();
+        for (final TestNode node : cluster.followers())
+        {
+            followerIngressEndpoints.append(node.memberId()).append("=")
+                .append(ingressEndpoint(cluster.clusterId(), node.memberId(), cluster.memberCount())).append(",");
+        }
+        followerIngressEndpoints.deleteCharAt(followerIngressEndpoints.length() - 1);
+
+        try (MediaDriver clientDriver = MediaDriver.launch(cluster
+            .newClientMediaDriverContext()
+            .threadingMode(ThreadingMode.INVOKER));
+            Aeron client = Aeron.connect(new Aeron.Context()
+                .aeronDirectoryName(clientDriver.aeronDirectoryName())
+                .driverAgentInvoker(null) // this is on purpose
+                .useConductorAgentInvoker(true)
+                .subscriberErrorHandler(RethrowingErrorHandler.INSTANCE));
+            AeronCluster aeronCluster = AeronCluster.connect(new AeronCluster.Context()
+                .agentInvoker(clientDriver.sharedAgentInvoker())
+                .aeron(client)
+                .ingressChannel("aeron:udp?alias=ingress")
+                .ingressEndpoints(followerIngressEndpoints.toString())
+                .egressChannel("aeron:udp?endpoint=localhost:0|alias=redirect-test")))
+        {
+            assertNull(client.context().driverAgentInvoker());
+
+            final Publication ingressPublication = aeronCluster.ingressPublication();
+            assertNotNull(ingressPublication);
+            assertEquals(
+                leaderIngressEndpoint,
+                ChannelUri.parse(ingressPublication.channel()).get(ENDPOINT_PARAM_NAME));
+        }
+    }
+
+    @Test
+    @InterruptAfter(30)
+    void clientShouldHandleRedirectResponseWhenInInvokerModeUsingAsyncConnect()
+    {
+        TestMediaDriver.notSupportedOnCMediaDriver("does not work with ATS enabled");
+
+        cluster = aCluster().withStaticNodes(3).withClusterId(4).start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode leader = cluster.awaitLeader();
+        final String leaderIngressEndpoint =
+            ingressEndpoint(cluster.clusterId(), leader.memberId(), cluster.memberCount());
+
+        final StringBuilder followerIngressEndpoints = new StringBuilder();
+        for (final TestNode node : cluster.followers())
+        {
+            followerIngressEndpoints.append(node.memberId()).append("=")
+                .append(ingressEndpoint(cluster.clusterId(), node.memberId(), cluster.memberCount())).append(",");
+        }
+        followerIngressEndpoints.deleteCharAt(followerIngressEndpoints.length() - 1);
+
+        try (MediaDriver clientDriver = MediaDriver.launch(cluster
+            .newClientMediaDriverContext()
+            .threadingMode(ThreadingMode.INVOKER));
+            Aeron client = Aeron.connect(new Aeron.Context()
+                .aeronDirectoryName(clientDriver.aeronDirectoryName())
+                .driverAgentInvoker(null) // this is on purpose
+                .useConductorAgentInvoker(true)
+                .subscriberErrorHandler(RethrowingErrorHandler.INSTANCE));
+            AeronCluster.AsyncConnect asyncConnect = AeronCluster.asyncConnect(new AeronCluster.Context()
+                .agentInvoker(clientDriver.sharedAgentInvoker())
+                .aeron(client)
+                .ingressChannel("aeron:udp?alias=ingress")
+                .ingressEndpoints(followerIngressEndpoints.toString())
+                .egressChannel("aeron:udp?endpoint=localhost:0|alias=redirect-test")))
+        {
+            assertNull(client.context().driverAgentInvoker());
+
+            AeronCluster aeronCluster;
+            while (null == (aeronCluster = asyncConnect.poll()))
+            {
+                Tests.yield();
+            }
+
+            final Publication ingressPublication = aeronCluster.ingressPublication();
+            assertNotNull(ingressPublication);
+            assertEquals(
+                leaderIngressEndpoint,
+                ChannelUri.parse(ingressPublication.channel()).get(ENDPOINT_PARAM_NAME));
+        }
+    }
+
+    @Test
+    @InterruptAfter(30)
+    void clientShouldHandleLeadershipChangeWhenInInvokerMode()
+    {
+        TestMediaDriver.notSupportedOnCMediaDriver("does not work with ATS enabled");
+
+        cluster = aCluster().withStaticNodes(3).withClusterId(4).start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode originalLeader = cluster.awaitLeader();
+        final String leaderIngressEndpoint =
+            ingressEndpoint(cluster.clusterId(), originalLeader.memberId(), cluster.memberCount());
+
+        final MutableInteger onNewLeader = new MutableInteger(NULL_VALUE);
+        final EgressListener egressListener = new EgressListener()
+        {
+            public void onMessage(
+                final long clusterSessionId,
+                final long timestamp,
+                final DirectBuffer buffer,
+                final int offset,
+                final int length,
+                final Header header)
+            {
+            }
+
+            public void onNewLeader(
+                final long clusterSessionId,
+                final long leadershipTermId,
+                final int leaderMemberId,
+                final String ingressEndpoints)
+            {
+                onNewLeader.set(leaderMemberId);
+            }
+        };
+
+        try (MediaDriver clientDriver = MediaDriver.launch(cluster
+            .newClientMediaDriverContext()
+            .threadingMode(ThreadingMode.INVOKER));
+            Aeron client = Aeron.connect(new Aeron.Context()
+                .aeronDirectoryName(clientDriver.aeronDirectoryName())
+                .driverAgentInvoker(null) // this is on purpose
+                .useConductorAgentInvoker(true)
+                .subscriberErrorHandler(RethrowingErrorHandler.INSTANCE));
+            AeronCluster aeronCluster = AeronCluster.connect(cluster.clientCtx()
+                .agentInvoker(clientDriver.sharedAgentInvoker())
+                .aeron(client)
+                .ingressChannel("aeron:udp?alias=ingress")
+                .egressChannel("aeron:udp?endpoint=localhost:0")
+                .egressListener(egressListener)))
+        {
+            assertNull(client.context().driverAgentInvoker());
+
+            final Publication originalIngressPublication = aeronCluster.ingressPublication();
+            assertNotNull(originalIngressPublication);
+            assertEquals(
+                leaderIngressEndpoint,
+                ChannelUri.parse(originalIngressPublication.channel()).get(ENDPOINT_PARAM_NAME));
+
+            cluster.stopNode(originalLeader);
+
+            final TestNode newLeader = cluster.awaitLeader();
+
+            while (NULL_VALUE == onNewLeader.get())
+            {
+                aeronCluster.pollEgress();
+                client.conductorAgentInvoker().invoke();
+                clientDriver.sharedAgentInvoker().invoke();
+            }
+            assertEquals(newLeader.memberId(), onNewLeader.get());
+
+            final Publication newIngressPublication = aeronCluster.ingressPublication();
+            assertNotNull(newIngressPublication);
+            assertNotSame(originalIngressPublication, newIngressPublication);
+            assertNotEquals(originalIngressPublication.registrationId(), newIngressPublication.registrationId());
+            assertEquals(
+                ingressEndpoint(cluster.clusterId(), newLeader.memberId(), cluster.memberCount()),
+                ChannelUri.parse(newIngressPublication.channel()).get(ENDPOINT_PARAM_NAME));
+        }
+    }
+
     @ParameterizedTest
     @ValueSource(strings = { "valid", "invalid", "wrong port" })
     @InterruptAfter(30)
@@ -3113,6 +3367,299 @@ class ClusterTest
         cluster.stopAllNodes();
     }
 
+    @Test
+    @InterruptAfter(20)
+    void shouldHandleQuorumPositionGoingBackwards()
+    {
+        TestMediaDriver.notSupportedOnCMediaDriver("manual loss generator");
+
+        final int clusterSize = 3;
+        final List<StreamIdLossGenerator> lossGenerators = IntStream.range(0, clusterSize)
+            .mapToObj(i -> new StreamIdLossGenerator()).toList();
+        cluster = aCluster()
+            .withStaticNodes(clusterSize)
+            .withReceiveChannelEndpointSupplier((memberId) ->
+                (udpChannel, dispatcher, statusIndicator, context) ->
+                {
+                    final StreamIdLossGenerator lossGenerator = lossGenerators.get(memberId);
+                    return new DebugReceiveChannelEndpoint(
+                        udpChannel, dispatcher, statusIndicator, context, lossGenerator, lossGenerator);
+                })
+            .start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode leader = cluster.awaitLeader();
+        final List<TestNode> followers = cluster.followers();
+        TestNode fastFollower = followers.get(0);
+        final TestNode slowFollower = followers.get(1);
+        final ClusterMember[] clusterMembers =
+            ClusterMember.parse(leader.consensusModule().context().clusterMembers());
+
+        cluster.connectClient();
+
+        int sentMessages = cluster.sendAndAwaitMessages(100);
+        final long slowFollowerAppendPosition = slowFollower.appendPosition();
+
+        final StreamIdLossGenerator slowFollowerLossGenerator = lossGenerators.get(slowFollower.memberId());
+        slowFollowerLossGenerator.enable(slowFollower.consensusModule().context().logStreamId());
+
+        sentMessages += cluster.sendMessages(200);
+        cluster.awaitResponseMessageCount(sentMessages);
+        cluster.awaitServiceMessageCount(leader, sentMessages);
+        cluster.awaitServiceMessageCount(fastFollower, sentMessages);
+
+        final long quorumPosition = leader.commitPosition();
+
+        // stop the fast follower to cause quorum position regression
+        fastFollower.isTerminationExpected(true);
+        fastFollower.close();
+
+        sentMessages += cluster.sendMessages(150);
+        final long leaderAppendPosition = awaitLeaderLogRecording(cluster, leader, sentMessages);
+        assertEquals(quorumPosition, leader.commitPosition(), "commit-pos cannot go backwards");
+
+        final AtomicBuffer errorBuffer = leader.consensusModule().context().errorLog().buffer();
+        final String expectedError = "quorum position went backwards: leaderCommitPosition=" + quorumPosition +
+            " quorumPosition=" + slowFollowerAppendPosition;
+        final MutableBoolean found = new MutableBoolean(false);
+        final ErrorConsumer errorConsumer =
+            (observationCount, firstObservationTimestamp, lastObservationTimestamp, encodedException) ->
+            {
+                if (0 != observationCount && encodedException.contains("quorum position went backwards:"))
+                {
+                    assertEquals(1, observationCount);
+                    assertThat(encodedException, containsString(expectedError));
+                    found.set(true);
+                }
+            };
+        while (!found.get())
+        {
+            if (0 == ErrorLogReader.read(errorBuffer, errorConsumer))
+            {
+                Tests.sleep(1);
+            }
+        }
+
+        slowFollowerLossGenerator.disable();
+
+        fastFollower = cluster.startStaticNode(fastFollower.memberId(), false);
+
+        while (slowFollower.appendPosition() < leaderAppendPosition)
+        {
+            assertThat(
+                "leader commit-pos went backwards",
+                leader.commitPosition(),
+                allOf(greaterThanOrEqualTo(quorumPosition), lessThanOrEqualTo(leaderAppendPosition)));
+            assertThat(
+                "follower commit-pos went backwards",
+                slowFollower.commitPosition(),
+                allOf(greaterThanOrEqualTo(slowFollowerAppendPosition), lessThanOrEqualTo(leaderAppendPosition)));
+        }
+
+        awaitElectionClosed(fastFollower);
+        cluster.awaitResponseMessageCount(sentMessages);
+        cluster.awaitServicesMessageCount(sentMessages);
+
+        assertEquals(1, ErrorLogReader.read(errorBuffer, errorConsumer));
+    }
+
+    @Test
+    @InterruptAfter(10)
+    void shouldFormClusterAfterFullPartition()
+    {
+        TestMediaDriver.notSupportedOnCMediaDriver("loss generator");
+
+        final int clusterSize = 3;
+        final List<StreamIdLossGenerator> lossGenerators = IntStream.range(0, clusterSize)
+            .mapToObj(i -> new StreamIdLossGenerator()).toList();
+        cluster = aCluster()
+            .withStaticNodes(clusterSize)
+            .withReceiveChannelEndpointSupplier((memberId) ->
+                (udpChannel, dispatcher, statusIndicator, context) ->
+                {
+                    final StreamIdLossGenerator lossGenerator = lossGenerators.get(memberId);
+                    return new DebugReceiveChannelEndpoint(
+                        udpChannel, dispatcher, statusIndicator, context, lossGenerator, lossGenerator);
+                })
+            .start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode oldLeader = cluster.awaitLeader();
+        cluster.connectClient();
+        cluster.sendAndAwaitMessages(1);
+
+        // stop consensus traffic between the nodes
+        for (int i = 0; i < clusterSize; i++)
+        {
+            final StreamIdLossGenerator lossGenerator = lossGenerators.get(i);
+            lossGenerator.enable(cluster.node(i).consensusModule().context().consensusStreamId());
+        }
+
+        // wait for the next round of elections to start on all nodes
+        Tests.await(() ->
+        {
+            for (int i = 0; i < clusterSize; i++)
+            {
+                if (ElectionState.CLOSED == cluster.node(i).electionState())
+                {
+                    return false;
+                }
+            }
+            return true;
+        });
+
+        // kill old leader to create a dead node in the members list
+        cluster.stopNode(oldLeader);
+
+        // restore consensus traffic so that election can complete
+        for (final StreamIdLossGenerator lossGenerator : lossGenerators)
+        {
+            lossGenerator.disable();
+        }
+
+        final TestNode leader = cluster.awaitLeader(oldLeader.memberId());
+        assertEquals(2, leader.electionCount());
+
+        cluster.reconnectClient();
+        cluster.sendAndAwaitMessages(1);
+    }
+
+    @Test
+    @InterruptAfter(30)
+    void shouldTerminateNodeWithInvalidSnapshotAndRecoveryAfterInvalidation()
+    {
+        cluster = aCluster()
+            .withServiceSupplier((i) -> new TestNode.TestService[] { new ExceptionOnLoadService().index(i) })
+            .start();
+        systemTestWatcher.cluster(cluster);
+        systemTestWatcher.ignoreErrorsMatching(
+            (s) -> s.contains("failed to start service=0") || s.contains("failed to start clustered service(s)"));
+
+        final TestNode leader = cluster.awaitLeader();
+        TestNode follower = cluster.followers().get(0);
+        cluster.connectClient();
+        cluster.sendAndAwaitMessages(10);
+        cluster.takeSnapshot(leader);
+        cluster.awaitSnapshotCount(1);
+
+        cluster.stopNode(follower);
+        cluster.startStaticNode(follower.index(), false);
+        follower = cluster.node(follower.index());
+
+        final AgentRunner clusteredServiceRunner = Tests.getField(follower.container(), "serviceAgentRunner");
+        while (!clusteredServiceRunner.isClosed())
+        {
+            Tests.yield();
+        }
+
+        final AgentRunner conductorRunner = Tests.getField(follower.consensusModule(), "conductorRunner");
+        while (!conductorRunner.isClosed())
+        {
+            Tests.yield();
+        }
+
+        cluster.waitForError(follower, (s) -> s.contains("failed to start service=0"));
+
+        cluster.stopNode(follower);
+        final File followerClusterDir = follower.consensusModule().context().clusterDir();
+        assertTrue(ClusterTool.invalidateLatestSnapshot(mock(PrintStream.class), followerClusterDir));
+
+        cluster.startStaticNode(follower.index(), false);
+        follower = cluster.node(follower.index());
+        assertEquals(2, cluster.followers(2).size());
+    }
+
+    @Test
+    @InterruptAfter(10)
+    void shouldTerminateNodeWithMultipleServicesWithSingleServiceInvalidSnapshot()
+    {
+        cluster = aCluster()
+            .withServiceSupplier((i) -> new TestNode.TestService[]
+                { new TestNode.TestService().index(i), new ExceptionOnLoadService().index(i) })
+            .start();
+        systemTestWatcher.cluster(cluster);
+        systemTestWatcher.ignoreErrorsMatching(
+            (s) -> s.contains("failed to start service=1") || s.contains("failed to start clustered service(s)"));
+
+        final TestNode leader = cluster.awaitLeader();
+        TestNode follower = cluster.followers().get(0);
+        cluster.connectClient();
+        cluster.sendAndAwaitMessages(10);
+        cluster.takeSnapshot(leader);
+        cluster.awaitSnapshotCount(1);
+
+        cluster.stopNode(follower);
+        cluster.startStaticNode(follower.index(), false);
+        follower = cluster.node(follower.index());
+
+        final AgentRunner failingClusteredServiceRunner = Tests.getField(follower.container(1), "serviceAgentRunner");
+        while (!failingClusteredServiceRunner.isClosed())
+        {
+            Tests.yield();
+        }
+
+        final AgentRunner conductorRunner = Tests.getField(follower.consensusModule(), "conductorRunner");
+        while (!conductorRunner.isClosed())
+        {
+            Tests.yield();
+        }
+
+        final AgentRunner healthyClusteredServiceRunner = Tests.getField(follower.container(0), "serviceAgentRunner");
+        while (!healthyClusteredServiceRunner.isClosed())
+        {
+            Tests.yield();
+        }
+
+        cluster.waitForError(follower, (s) -> s.contains("failed to start service=1"));
+    }
+
+    @Test
+    @InterruptAfter(10)
+    void shouldInvalidateSnapshotsThatHaveBeenRemoved()
+    {
+        cluster = aCluster().start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode leader = cluster.awaitLeader();
+        cluster.connectClient();
+        cluster.sendAndAwaitMessages(10);
+        cluster.takeSnapshot(leader);
+        cluster.awaitSnapshotCount(1);
+        cluster.sendAndAwaitMessages(10, 20);
+        cluster.takeSnapshot(leader);
+        cluster.awaitSnapshotCount(2);
+        cluster.sendAndAwaitMessages(10, 30);
+        cluster.takeSnapshot(leader);
+        cluster.awaitSnapshotCount(3);
+
+        final List<TestCluster.SnapshotRecord> snapshots = cluster.snapshots(leader);
+
+        cluster.purgeSnapshot(leader, snapshots.get(0).recordingIds());
+        cluster.purgeSnapshot(leader, snapshots.get(1).recordingIds());
+
+        cluster.backupQueryContainsSnapshot(leader, snapshots.get(0).logPosition(), snapshots.get(0));
+        cluster.backupQueryContainsSnapshot(leader, snapshots.get(1).logPosition(), snapshots.get(1));
+        cluster.backupQueryContainsSnapshot(leader, snapshots.get(2).logPosition(), snapshots.get(2));
+
+        cluster.validateRecordingLog(leader);
+
+        Tests.await(() -> cluster.snapshots(leader).size() == 1);
+
+        cluster.backupQueryContainsSnapshot(leader, snapshots.get(0).logPosition(), snapshots.get(2));
+    }
+
+    private static final class ExceptionOnLoadService extends TestNode.TestService
+    {
+        public void onStart(final Cluster cluster, final Image snapshotImage)
+        {
+            if (null != snapshotImage)
+            {
+                throw new IllegalStateException("this snapshot failed to load");
+            }
+            super.onStart(cluster, snapshotImage);
+        }
+    }
+
     private static List<RuntimeException> terminalExceptions()
     {
         return List.of(
@@ -3131,7 +3678,7 @@ class ClusterTest
             ClusterCounters.CLUSTER_ID_LABEL_SUFFIX + clusterId;
     }
 
-    private long readSnapshot(final TestNode node)
+    static long readSnapshot(final TestNode node)
     {
         final long recordingId;
         try (RecordingLog recordingLog = new RecordingLog(node.consensusModule().context().clusterDir(),
@@ -3183,7 +3730,7 @@ class ClusterTest
 
     private static final class MyConsensusModuleSnapshotListener implements ConsensusModuleSnapshotListener
     {
-        long nextSessionId = Aeron.NULL_VALUE;
+        long nextSessionId = NULL_VALUE;
 
         @Override
         public void onLoadBeginSnapshot(final int appVersion, final TimeUnit timeUnit,

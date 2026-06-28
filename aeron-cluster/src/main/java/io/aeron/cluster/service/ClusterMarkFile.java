@@ -43,7 +43,6 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.function.Consumer;
 
 import static io.aeron.Aeron.NULL_VALUE;
-import static io.aeron.logbuffer.LogBufferDescriptor.PAGE_MIN_SIZE;
 
 /**
  * Used to indicate if a cluster component is running and what configuration it is using. Errors encountered by
@@ -114,27 +113,6 @@ public final class ClusterMarkFile implements AutoCloseable
     private final UnsafeBuffer buffer;
     private final UnsafeBuffer errorBuffer;
     private final int headerOffset;
-
-    /**
-     * Create new {@link MarkFile} for a cluster component but check if an existing component is active.
-     *
-     * @param file              full qualified file to the {@link MarkFile}.
-     * @param type              of cluster component the {@link MarkFile} represents.
-     * @param errorBufferLength for storing the error log.
-     * @param epochClock        for checking liveness against.
-     * @param timeoutMs         for the activity check on an existing {@link MarkFile}.
-     * @deprecated Use {@link #ClusterMarkFile(File, ClusterComponentType, int, EpochClock, long, int)} instead.
-     */
-    @Deprecated(forRemoval = true)
-    public ClusterMarkFile(
-        final File file,
-        final ClusterComponentType type,
-        final int errorBufferLength,
-        final EpochClock epochClock,
-        final long timeoutMs)
-    {
-        this(file, type, errorBufferLength, epochClock, timeoutMs, PAGE_MIN_SIZE);
-    }
 
     /**
      * Create new {@link MarkFile} for a cluster component but check if an existing component is active.

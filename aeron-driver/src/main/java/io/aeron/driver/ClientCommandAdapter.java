@@ -16,20 +16,48 @@
 package io.aeron.driver;
 
 import io.aeron.ErrorCode;
-import io.aeron.command.*;
+import io.aeron.command.CorrelatedMessageFlyweight;
+import io.aeron.command.CounterMessageFlyweight;
+import io.aeron.command.DestinationByIdMessageFlyweight;
+import io.aeron.command.DestinationMessageFlyweight;
+import io.aeron.command.GetNextAvailableSessionIdMessageFlyweight;
+import io.aeron.command.PublicationMessageFlyweight;
+import io.aeron.command.RejectImageFlyweight;
+import io.aeron.command.RemoveCounterFlyweight;
+import io.aeron.command.RemovePublicationFlyweight;
+import io.aeron.command.RemoveSubscriptionFlyweight;
+import io.aeron.command.StaticCounterMessageFlyweight;
+import io.aeron.command.SubscriptionMessageFlyweight;
+import io.aeron.command.TerminateDriverFlyweight;
 import io.aeron.exceptions.ControlProtocolException;
 import io.aeron.exceptions.StorageSpaceException;
 import org.agrona.ErrorHandler;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.ControlledMessageHandler;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
-import org.agrona.concurrent.status.AtomicCounter;
 
 import static io.aeron.ChannelUri.SPY_QUALIFIER;
 import static io.aeron.CommonContext.IPC_CHANNEL;
 import static io.aeron.ErrorCode.GENERIC_ERROR;
 import static io.aeron.ErrorCode.STORAGE_SPACE;
-import static io.aeron.command.ControlProtocolEvents.*;
+import static io.aeron.command.ControlProtocolEvents.ADD_COUNTER;
+import static io.aeron.command.ControlProtocolEvents.ADD_DESTINATION;
+import static io.aeron.command.ControlProtocolEvents.ADD_EXCLUSIVE_PUBLICATION;
+import static io.aeron.command.ControlProtocolEvents.ADD_PUBLICATION;
+import static io.aeron.command.ControlProtocolEvents.ADD_RCV_DESTINATION;
+import static io.aeron.command.ControlProtocolEvents.ADD_STATIC_COUNTER;
+import static io.aeron.command.ControlProtocolEvents.ADD_SUBSCRIPTION;
+import static io.aeron.command.ControlProtocolEvents.CLIENT_CLOSE;
+import static io.aeron.command.ControlProtocolEvents.CLIENT_KEEPALIVE;
+import static io.aeron.command.ControlProtocolEvents.GET_NEXT_AVAILABLE_SESSION_ID;
+import static io.aeron.command.ControlProtocolEvents.REJECT_IMAGE;
+import static io.aeron.command.ControlProtocolEvents.REMOVE_COUNTER;
+import static io.aeron.command.ControlProtocolEvents.REMOVE_DESTINATION;
+import static io.aeron.command.ControlProtocolEvents.REMOVE_DESTINATION_BY_ID;
+import static io.aeron.command.ControlProtocolEvents.REMOVE_PUBLICATION;
+import static io.aeron.command.ControlProtocolEvents.REMOVE_RCV_DESTINATION;
+import static io.aeron.command.ControlProtocolEvents.REMOVE_SUBSCRIPTION;
+import static io.aeron.command.ControlProtocolEvents.TERMINATE_DRIVER;
 
 /**
  * Receives commands from Aeron clients and dispatches them to the {@link DriverConductor} for processing.
@@ -54,17 +82,14 @@ final class ClientCommandAdapter implements ControlledMessageHandler
     private final DriverConductor conductor;
     private final RingBuffer toDriverCommands;
     private final ClientProxy clientProxy;
-    private final AtomicCounter errors;
     private final ErrorHandler errorHandler;
 
     ClientCommandAdapter(
-        final AtomicCounter errors,
         final ErrorHandler errorHandler,
         final RingBuffer toDriverCommands,
         final ClientProxy clientProxy,
         final DriverConductor driverConductor)
     {
-        this.errors = errors;
         this.errorHandler = errorHandler;
         this.toDriverCommands = toDriverCommands;
         this.clientProxy = clientProxy;
@@ -369,25 +394,26 @@ final class ClientCommandAdapter implements ControlledMessageHandler
 
     void onError(final long correlationId, final Exception error)
     {
-        if (!errors.isClosed())
+        if (error instanceof ControlProtocolException cpe)
         {
-            errors.increment();
-        }
-
-        errorHandler.onError(error);
-
-        if (error instanceof ControlProtocolException)
-        {
-            clientProxy.onError(correlationId, ((ControlProtocolException)error).errorCode(), error.getMessage());
-        }
-        else if (StorageSpaceException.isStorageSpaceError(error))
-        {
-            clientProxy.onError(correlationId, STORAGE_SPACE, error.getMessage());
+            if (ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE != cpe.errorCode())
+            {
+                errorHandler.onError(error);
+            }
+            clientProxy.onError(correlationId, cpe.errorCode(), error.getMessage());
         }
         else
         {
-            final String errorMessage = error.getClass().getName() + " : " + error.getMessage();
-            clientProxy.onError(correlationId, GENERIC_ERROR, errorMessage);
+            errorHandler.onError(error);
+            if (StorageSpaceException.isStorageSpaceError(error))
+            {
+                clientProxy.onError(correlationId, STORAGE_SPACE, error.getMessage());
+            }
+            else
+            {
+                final String errorMessage = error.getClass().getName() + " : " + error.getMessage();
+                clientProxy.onError(correlationId, GENERIC_ERROR, errorMessage);
+            }
         }
     }
 }

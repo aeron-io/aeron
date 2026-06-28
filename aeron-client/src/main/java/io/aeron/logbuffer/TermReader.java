@@ -25,8 +25,12 @@ import static io.aeron.protocol.DataHeaderFlyweight.HEADER_LENGTH;
 /**
  * Utility functions for reading a term within a log buffer.
  */
-public class TermReader
+public final class TermReader
 {
+    private TermReader()
+    {
+    }
+
     /**
      * Reads data from a term in a log buffer and updates a passed {@link Position} so progress is not lost in the
      * event of an exception.

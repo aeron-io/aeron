@@ -34,13 +34,6 @@ import org.agrona.concurrent.AgentTerminationException;
 public interface ConsensusModuleExtension extends AutoCloseable
 {
     /**
-     * Schema supported by this extension.
-     *
-     * @return schema id supported.
-     */
-    int supportedSchemaId();
-
-    /**
      * Start event where the extension can perform any initialisation required and load snapshot state.
      * The snapshot image can be null if no previous snapshot exists.
      * <p>

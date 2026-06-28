@@ -35,9 +35,11 @@ import io.aeron.security.AuthorisationService;
 import io.aeron.security.AuthorisationServiceSupplier;
 import io.aeron.security.DefaultAuthenticatorSupplier;
 import io.aeron.security.SessionProxy;
+import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.TestContexts;
 import io.aeron.test.Tests;
 import io.aeron.test.cluster.TestClusterClock;
+import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.BitUtil;
 import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
@@ -51,6 +53,7 @@ import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -76,6 +79,7 @@ import static io.aeron.cluster.ConsensusModule.Configuration.CONSENSUS_MODULE_ST
 import static io.aeron.cluster.ConsensusModule.Configuration.CONTROL_TOGGLE_TYPE_ID;
 import static io.aeron.cluster.ConsensusModule.Configuration.DEFAULT_AUTHORISATION_SERVICE_SUPPLIER;
 import static io.aeron.cluster.ConsensusModule.Configuration.ELECTION_STATE_TYPE_ID;
+import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.MAX_SERVICE_COUNT;
 import static io.aeron.cluster.ConsensusModule.Configuration.SERVICE_ID;
 import static io.aeron.cluster.ConsensusModule.Configuration.SNAPSHOT_COUNTER_TYPE_ID;
 import static io.aeron.cluster.ConsensusModule.Configuration.TIMER_SERVICE_SUPPLIER_PRIORITY_HEAP;
@@ -113,6 +117,8 @@ class ConsensusModuleContextTest
 {
     @TempDir
     File clusterDir;
+    @RegisterExtension
+    final SystemTestWatcher systemTestWatcher = new SystemTestWatcher();
 
     private ConsensusModule.Context context;
     private final CountersManager countersManager = Tests.newCountersManager(16 * 1024);
@@ -156,7 +162,7 @@ class ConsensusModuleContextTest
     private Counter newCounter(final String name, final int typeId)
     {
         final AtomicCounter atomicCounter = countersManager.newCounter(name, typeId);
-        return new Counter(countersManager, ++registrationId, atomicCounter.id());
+        return new Counter(countersManager, atomicCounter.id());
     }
 
     @AfterEach
@@ -977,11 +983,11 @@ class ConsensusModuleContextTest
         Files.createDirectories(aeronDir);
 
         final int filePageSize = 1024 * 1024;
-        try (MediaDriver driver = MediaDriver.launch(new MediaDriver.Context()
+        try (TestMediaDriver driver = TestMediaDriver.launch(new MediaDriver.Context()
             .aeronDirectoryName(aeronDir.toString())
             .dirDeleteOnShutdown(true)
             .threadingMode(ThreadingMode.SHARED)
-            .filePageSize(filePageSize)))
+            .filePageSize(filePageSize), systemTestWatcher))
         {
             final ConsensusModule.Context ctx = TestContexts.localhostConsensusModule()
                 .clusterDir(clusterDir)
@@ -1003,6 +1009,30 @@ class ConsensusModuleContextTest
                 ctx.close();
             }
         }
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {Integer.MIN_VALUE, -1, Integer.MAX_VALUE, MAX_SERVICE_COUNT + 1})
+    void shouldValidateServiceCount(final int serviceCount)
+    {
+        context.serviceCount(serviceCount);
+
+        final ClusterException clusterException = assertThrowsExactly(ClusterException.class, context::conclude);
+        assertEquals("ERROR - service count of range [0, " + MAX_SERVICE_COUNT + "]: " + serviceCount,
+            clusterException.getMessage());
+    }
+
+    @Test
+    void shouldRejectServiceCountZeroWithoutConsensusModuleExtension()
+    {
+        context
+            .serviceCount(0)
+            .consensusModuleExtension(null);
+
+        final ClusterException clusterException = assertThrowsExactly(ClusterException.class, context::conclude);
+        assertEquals(
+            "ERROR - zero services are only supported when ConsensusModuleExtension is enabled",
+            clusterException.getMessage());
     }
 
     public static class TestAuthorisationSupplier implements AuthorisationServiceSupplier

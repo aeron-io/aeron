@@ -30,12 +30,9 @@ final class ReceiverProxy extends CommandProxy
 {
     private Receiver receiver;
 
-    ReceiverProxy(
-        final ThreadingMode threadingMode,
-        final OneToOneConcurrentArrayQueue<Runnable> commandQueue,
-        final AtomicCounter failCount)
+    ReceiverProxy(final OneToOneConcurrentArrayQueue<Runnable> commandQueue, final AtomicCounter failCount)
     {
-        super(threadingMode, commandQueue, failCount);
+        super(commandQueue, failCount);
     }
 
     void receiver(final Receiver receiver)
@@ -50,135 +47,58 @@ final class ReceiverProxy extends CommandProxy
 
     void addSubscription(final ReceiveChannelEndpoint mediaEndpoint, final int streamId)
     {
-        if (notConcurrent())
-        {
-            receiver.onAddSubscription(mediaEndpoint, streamId);
-        }
-        else
-        {
-            offer(() -> receiver.onAddSubscription(mediaEndpoint, streamId));
-        }
+        offer(() -> receiver.onAddSubscription(mediaEndpoint, streamId));
     }
 
     void addSubscription(final ReceiveChannelEndpoint mediaEndpoint, final int streamId, final int sessionId)
     {
-        if (notConcurrent())
-        {
-            receiver.onAddSubscription(mediaEndpoint, streamId, sessionId);
-        }
-        else
-        {
-            offer(() -> receiver.onAddSubscription(mediaEndpoint, streamId, sessionId));
-        }
+        offer(() -> receiver.onAddSubscription(mediaEndpoint, streamId, sessionId));
     }
 
     void removeSubscription(final ReceiveChannelEndpoint mediaEndpoint, final int streamId)
     {
-        if (notConcurrent())
-        {
-            receiver.onRemoveSubscription(mediaEndpoint, streamId);
-        }
-        else
-        {
-            offer(() -> receiver.onRemoveSubscription(mediaEndpoint, streamId));
-        }
+        offer(() -> receiver.onRemoveSubscription(mediaEndpoint, streamId));
     }
 
     void removeSubscription(final ReceiveChannelEndpoint mediaEndpoint, final int streamId, final int sessionId)
     {
-        if (notConcurrent())
-        {
-            receiver.onRemoveSubscription(mediaEndpoint, streamId, sessionId);
-        }
-        else
-        {
-            offer(() -> receiver.onRemoveSubscription(mediaEndpoint, streamId, sessionId));
-        }
+        offer(() -> receiver.onRemoveSubscription(mediaEndpoint, streamId, sessionId));
     }
 
     void newPublicationImage(final ReceiveChannelEndpoint channelEndpoint, final PublicationImage image)
     {
-        if (notConcurrent())
-        {
-            receiver.onNewPublicationImage(channelEndpoint, image);
-        }
-        else
-        {
-            offer(() -> receiver.onNewPublicationImage(channelEndpoint, image));
-        }
+        offer(() -> receiver.onNewPublicationImage(channelEndpoint, image));
     }
 
     void registerReceiveChannelEndpoint(final ReceiveChannelEndpoint channelEndpoint)
     {
-        if (notConcurrent())
-        {
-            receiver.onRegisterReceiveChannelEndpoint(channelEndpoint);
-        }
-        else
-        {
-            offer(() -> receiver.onRegisterReceiveChannelEndpoint(channelEndpoint));
-        }
+        offer(() -> receiver.onRegisterReceiveChannelEndpoint(channelEndpoint));
     }
 
     void closeReceiveChannelEndpoint(final ReceiveChannelEndpoint channelEndpoint)
     {
-        if (notConcurrent())
-        {
-            receiver.onCloseReceiveChannelEndpoint(channelEndpoint);
-        }
-        else
-        {
-            offer(() -> receiver.onCloseReceiveChannelEndpoint(channelEndpoint));
-        }
+        offer(() -> receiver.onCloseReceiveChannelEndpoint(channelEndpoint));
     }
 
     void removeCoolDown(final ReceiveChannelEndpoint channelEndpoint, final int sessionId, final int streamId)
     {
-        if (notConcurrent())
-        {
-            receiver.onRemoveCoolDown(channelEndpoint, sessionId, streamId);
-        }
-        else
-        {
-            offer(() -> receiver.onRemoveCoolDown(channelEndpoint, sessionId, streamId));
-        }
+        offer(() -> receiver.onRemoveCoolDown(channelEndpoint, sessionId, streamId));
     }
 
     void addDestination(final ReceiveChannelEndpoint channelEndpoint, final ReceiveDestinationTransport transport)
     {
-        if (notConcurrent())
-        {
-            receiver.onAddDestination(channelEndpoint, transport);
-        }
-        else
-        {
-            offer(() -> receiver.onAddDestination(channelEndpoint, transport));
-        }
+        offer(() -> receiver.onAddDestination(channelEndpoint, transport));
     }
 
     void removeDestination(final ReceiveChannelEndpoint channelEndpoint, final UdpChannel udpChannel)
     {
-        if (notConcurrent())
-        {
-            receiver.onRemoveDestination(channelEndpoint, udpChannel);
-        }
-        else
-        {
-            offer(() -> receiver.onRemoveDestination(channelEndpoint, udpChannel));
-        }
+        offer(() -> receiver.onRemoveDestination(channelEndpoint, udpChannel));
     }
 
     void onResolutionChange(
         final ReceiveChannelEndpoint channelEndpoint, final UdpChannel udpChannel, final InetSocketAddress newAddress)
     {
-        if (notConcurrent())
-        {
-            receiver.onResolutionChange(channelEndpoint, udpChannel, newAddress);
-        }
-        else
-        {
-            offer(() -> receiver.onResolutionChange(channelEndpoint, udpChannel, newAddress));
-        }
+        offer(() -> receiver.onResolutionChange(channelEndpoint, udpChannel, newAddress));
     }
 
     void requestSetup(
@@ -186,25 +106,11 @@ final class ReceiverProxy extends CommandProxy
         final int streamId,
         final int sessionId)
     {
-        if (notConcurrent())
-        {
-            receiver.onRequestSetup(channelEndpoint, streamId, sessionId);
-        }
-        else
-        {
-            offer(() -> receiver.onRequestSetup(channelEndpoint, streamId, sessionId));
-        }
+        offer(() -> receiver.onRequestSetup(channelEndpoint, streamId, sessionId));
     }
 
     void rejectImage(final long imageCorrelationId, final long position, final String reason)
     {
-        if (notConcurrent())
-        {
-            receiver.onRejectImage(imageCorrelationId, position, reason);
-        }
-        else
-        {
-            offer(() -> receiver.onRejectImage(imageCorrelationId, position, reason));
-        }
+        offer(() -> receiver.onRejectImage(imageCorrelationId, position, reason));
     }
 }

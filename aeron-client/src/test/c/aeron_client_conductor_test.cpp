@@ -35,6 +35,7 @@ extern "C"
 #include "aeron_client_conductor.h"
 #include "aeron_counter.h"
 #include "aeron_counters.h"
+#include "aeron_client.h"
 }
 
 #define CAPACITY (16 * 1024)
@@ -87,7 +88,6 @@ public:
 
     static void on_new_publication(
         void *clientd,
-        aeron_async_add_publication_t *async,
         const char *channel,
         int32_t stream_id,
         int32_t session_id,
@@ -97,13 +97,12 @@ public:
 
         if (conductorTest->m_on_new_publication)
         {
-            conductorTest->m_on_new_publication(async, channel, stream_id, session_id, correlation_id);
+            conductorTest->m_on_new_publication(channel, stream_id, session_id, correlation_id);
         }
     }
 
     static void on_new_exclusive_publication(
         void *clientd,
-        aeron_async_add_exclusive_publication_t *async,
         const char *channel,
         int32_t stream_id,
         int32_t session_id,
@@ -113,13 +112,12 @@ public:
 
         if (conductorTest->m_on_new_exclusive_publication)
         {
-            conductorTest->m_on_new_exclusive_publication(async, channel, stream_id, session_id, correlation_id);
+            conductorTest->m_on_new_exclusive_publication(channel, stream_id, session_id, correlation_id);
         }
     }
 
     static void on_new_subscription(
         void *clientd,
-        aeron_async_add_subscription_t *async,
         const char *channel,
         int32_t stream_id,
         int64_t correlation_id)
@@ -128,7 +126,7 @@ public:
 
         if (conductorTest->m_on_new_subscription)
         {
-            conductorTest->m_on_new_subscription(async, channel, stream_id, correlation_id);
+            conductorTest->m_on_new_subscription(channel, stream_id, correlation_id);
         }
     }
 
@@ -211,7 +209,10 @@ public:
 
     ~ClientConductorTest() override
     {
-        aeron_client_conductor_on_close(&m_conductor);
+        if (!m_conductor_isClosed)
+        {
+            aeron_client_conductor_on_close(&m_conductor);
+        }
         aeron_counters_manager_close(&m_counters_manager);
         m_context->cnc_map.addr = nullptr;
         aeron_context_close(m_context);
@@ -392,6 +393,7 @@ public:
 
 protected:
     aeron_context_t *m_context = nullptr;
+    bool m_conductor_isClosed = false;
     aeron_client_conductor_t m_conductor = {};
     aeron_counters_manager_t m_counters_manager = {};
     aeron_clock_cache_t m_cached_clock = {};
@@ -402,10 +404,9 @@ protected:
 
     std::function<void(int32_t, const void *, size_t)> m_to_driver_handler;
 
-    std::function<void(aeron_async_add_publication_t *, const char *, int32_t, int32_t, int64_t)> m_on_new_publication;
-    std::function<void(aeron_async_add_exclusive_publication_t *, const char *, int32_t, int32_t, int64_t)>
-        m_on_new_exclusive_publication;
-    std::function<void(aeron_async_add_subscription_t *, const char *, int32_t, int64_t)> m_on_new_subscription;
+    std::function<void(const char *, int32_t, int32_t, int64_t)> m_on_new_publication;
+    std::function<void(const char *, int32_t, int32_t, int64_t)> m_on_new_exclusive_publication;
+    std::function<void(const char *, int32_t, int64_t)> m_on_new_subscription;
 };
 
 TEST_F(ClientConductorTest, shouldInitAndClose)
@@ -492,7 +493,7 @@ TEST_F(ClientConductorTest, shouldErrorOnAddPublicationFromDriverTimeout)
     doWorkForNs((m_context->driver_timeout_ms + 1000) * 1000000);
 
     ASSERT_EQ(aeron_async_add_publication_poll(&publication, async), -1);
-    ASSERT_EQ(AERON_CLIENT_ERROR_DRIVER_TIMEOUT, aeron_errcode());
+    ASSERT_EQ(-AERON_CLIENT_ERROR_DRIVER_TIMEOUT, aeron_errcode());
 }
 
 TEST_F(ClientConductorTest, shouldAddExclusivePublicationSuccessfully)
@@ -570,10 +571,10 @@ TEST_F(ClientConductorTest, shouldErrorOnAddExclusivePublicationFromDriverTimeou
     ASSERT_EQ(aeron_async_add_exclusive_publication_poll(&publication, async), 0) << aeron_errmsg();
     ASSERT_TRUE(nullptr == publication);
 
-    doWorkForNs((m_context->driver_timeout_ms + 1000) * 1000000);
+    doWorkForNs((static_cast<int64_t>(m_context->driver_timeout_ms) + 1000) * 1000000);
 
     ASSERT_EQ(aeron_async_add_exclusive_publication_poll(&publication, async), -1);
-    ASSERT_EQ(AERON_CLIENT_ERROR_DRIVER_TIMEOUT, aeron_errcode());
+    ASSERT_EQ(-AERON_CLIENT_ERROR_DRIVER_TIMEOUT, aeron_errcode());
 }
 
 TEST_F(ClientConductorTest, shouldAddSubscriptionSuccessfully)
@@ -656,7 +657,7 @@ TEST_F(ClientConductorTest, shouldErrorOnAddSubscriptionFromDriverTimeout)
     doWorkForNs((m_context->driver_timeout_ms + 1000) * 1000000LL);
 
     ASSERT_EQ(aeron_async_add_subscription_poll(&subscription, async), -1);
-    ASSERT_EQ(AERON_CLIENT_ERROR_DRIVER_TIMEOUT, aeron_errcode());
+    ASSERT_EQ(-AERON_CLIENT_ERROR_DRIVER_TIMEOUT, aeron_errcode());
 }
 
 TEST_F(ClientConductorTest, shouldAddCounterSuccessfully)
@@ -745,7 +746,7 @@ TEST_F(ClientConductorTest, shouldErrorOnAddCounterFromDriverTimeout)
     doWorkForNs((m_context->driver_timeout_ms + 1000) * 1000000LL);
 
     ASSERT_EQ(aeron_async_add_counter_poll(&counter, async), -1);
-    ASSERT_EQ(AERON_CLIENT_ERROR_DRIVER_TIMEOUT, aeron_errcode());
+    ASSERT_EQ(-AERON_CLIENT_ERROR_DRIVER_TIMEOUT, aeron_errcode());
 }
 
 TEST_F(ClientConductorTest, shouldAddPublicationAndHandleOnNewPublication)
@@ -755,9 +756,10 @@ TEST_F(ClientConductorTest, shouldAddPublicationAndHandleOnNewPublication)
     bool was_on_new_publication_called = false;
 
     ASSERT_EQ(aeron_client_conductor_async_add_publication(&async, &m_conductor, URI_RESERVED, STREAM_ID), 0);
+    const int64_t registration_id = aeron_async_add_publication_get_registration_id(async);;
     doWork();
 
-    m_on_new_publication = [&](aeron_async_add_publication_t *async,
+    m_on_new_publication = [&](
         const char *channel,
         int32_t stream_id,
         int32_t session_id,
@@ -766,10 +768,7 @@ TEST_F(ClientConductorTest, shouldAddPublicationAndHandleOnNewPublication)
         EXPECT_EQ(strcmp(channel, URI_RESERVED), 0);
         EXPECT_EQ(stream_id, STREAM_ID);
         EXPECT_EQ(session_id, SESSION_ID);
-        EXPECT_EQ(correlation_id, async->registration_id);
-
-        ASSERT_GT(aeron_async_add_publication_poll(&publication, async), 0) << aeron_errmsg();
-        ASSERT_TRUE(nullptr != publication);
+        EXPECT_EQ(correlation_id, registration_id);
 
         was_on_new_publication_called = true;
     };
@@ -779,6 +778,9 @@ TEST_F(ClientConductorTest, shouldAddPublicationAndHandleOnNewPublication)
     doWork();
 
     EXPECT_TRUE(was_on_new_publication_called);
+
+    EXPECT_GT(aeron_async_add_publication_poll(&publication, async), 0) << aeron_errmsg();
+    EXPECT_NE(nullptr, publication);
 
     // graceful close and reclaim for sanitize
     ASSERT_EQ(aeron_publication_close(publication, nullptr, nullptr), 0);
@@ -792,9 +794,10 @@ TEST_F(ClientConductorTest, shouldAddExclusivePublicationAndHandleOnNewPublicati
     bool was_on_new_exclusive_publication_called = false;
 
     ASSERT_EQ(aeron_client_conductor_async_add_exclusive_publication(&async, &m_conductor, URI_RESERVED, STREAM_ID), 0);
+    const int64_t registrationId = aeron_async_add_exclusive_publication_get_registration_id(async);
     doWork();
 
-    m_on_new_exclusive_publication = [&](aeron_async_add_exclusive_publication_t *async,
+    m_on_new_exclusive_publication = [&](
         const char *channel,
         int32_t stream_id,
         int32_t session_id,
@@ -803,10 +806,7 @@ TEST_F(ClientConductorTest, shouldAddExclusivePublicationAndHandleOnNewPublicati
         EXPECT_EQ(strcmp(channel, URI_RESERVED), 0);
         EXPECT_EQ(stream_id, STREAM_ID);
         EXPECT_EQ(session_id, SESSION_ID);
-        EXPECT_EQ(correlation_id, async->registration_id);
-
-        ASSERT_GT(aeron_async_add_exclusive_publication_poll(&publication, async), 0) << aeron_errmsg();
-        ASSERT_TRUE(nullptr != publication);
+        EXPECT_EQ(correlation_id, registrationId);
 
         was_on_new_exclusive_publication_called = true;
     };
@@ -816,6 +816,9 @@ TEST_F(ClientConductorTest, shouldAddExclusivePublicationAndHandleOnNewPublicati
     doWork();
 
     EXPECT_TRUE(was_on_new_exclusive_publication_called);
+
+    EXPECT_GT(aeron_async_add_exclusive_publication_poll(&publication, async), 0) << aeron_errmsg();
+    EXPECT_NE(nullptr, publication);
 
     // graceful close and reclaim for sanitize
     ASSERT_EQ(aeron_exclusive_publication_close(publication, nullptr, nullptr), 0);
@@ -830,20 +833,17 @@ TEST_F(ClientConductorTest, shouldAddSubscriptionAndHandleOnNewSubscription)
 
     ASSERT_EQ(aeron_client_conductor_async_add_subscription(
         &async, &m_conductor, SUB_URI, STREAM_ID, nullptr, nullptr, nullptr, nullptr), 0);
+    const int64_t registrationId = aeron_async_add_subscription_get_registration_id(async);
     doWork();
 
     m_on_new_subscription = [&](
-        aeron_async_add_subscription_t *async,
         const char *channel,
         int32_t stream_id,
         int64_t correlation_id)
     {
         EXPECT_EQ(strcmp(channel, SUB_URI), 0);
         EXPECT_EQ(stream_id, STREAM_ID);
-        EXPECT_EQ(correlation_id, async->registration_id);
-
-        ASSERT_GT(aeron_async_add_subscription_poll(&subscription, async), 0) << aeron_errmsg();
-        ASSERT_TRUE(nullptr != subscription);
+        EXPECT_EQ(correlation_id, registrationId);
 
         was_on_new_subscription_called = true;
     };
@@ -852,6 +852,9 @@ TEST_F(ClientConductorTest, shouldAddSubscriptionAndHandleOnNewSubscription)
     doWork();
 
     EXPECT_TRUE(was_on_new_subscription_called);
+
+    EXPECT_GT(aeron_async_add_subscription_poll(&subscription, async), 0) << aeron_errmsg();
+    EXPECT_NE(nullptr, subscription);
 
     // graceful close and reclaim for sanitize
     ASSERT_EQ(aeron_subscription_close(subscription, nullptr, nullptr), 0);
@@ -879,7 +882,7 @@ TEST_F(ClientConductorTest, shouldHandlePublicationAddRemoveDestination)
 
     transmitOnOperationSuccess(async_add_dest);
     doWork();
-    ASSERT_EQ(async_add_dest->registration_status, AERON_CLIENT_REGISTERED_MEDIA_DRIVER);
+    ASSERT_EQ(async_add_dest->registration_status, AERON_CLIENT_REGISTRATION_STATUS_REGISTERED);
     ASSERT_EQ(async_add_dest->resource.publication->registration_id, publication->registration_id);
     ASSERT_GT(aeron_publication_async_destination_poll(async_add_dest), 0) << aeron_errmsg();
 
@@ -919,7 +922,7 @@ TEST_F(ClientConductorTest, shouldHandlePublicationAddRemoveDestinationMaxMessag
 
     transmitOnOperationSuccess(async_add_dest);
     doWork();
-    ASSERT_EQ(async_add_dest->registration_status, AERON_CLIENT_REGISTERED_MEDIA_DRIVER);
+    ASSERT_EQ(async_add_dest->registration_status, AERON_CLIENT_REGISTRATION_STATUS_REGISTERED);
     ASSERT_EQ(async_add_dest->resource.publication->registration_id, publication->registration_id);
     ASSERT_GT(aeron_publication_async_destination_poll(async_add_dest), 0) << aeron_errmsg();
 
@@ -958,7 +961,7 @@ TEST_F(ClientConductorTest, shouldHandleExclusivePublicationAddDestination)
 
     transmitOnOperationSuccess(async_dest);
     doWork();
-    ASSERT_EQ(async_dest->registration_status, AERON_CLIENT_REGISTERED_MEDIA_DRIVER);
+    ASSERT_EQ(async_dest->registration_status, AERON_CLIENT_REGISTRATION_STATUS_REGISTERED);
     ASSERT_EQ(async_dest->resource.publication->registration_id, publication->registration_id);
     ASSERT_GT(aeron_exclusive_publication_async_destination_poll(async_dest), 0) << aeron_errmsg();
 
@@ -998,7 +1001,7 @@ TEST_F(ClientConductorTest, shouldHandleExclusivePublicationAddDestinationMaxMes
 
     transmitOnOperationSuccess(async_dest);
     doWork();
-    ASSERT_EQ(async_dest->registration_status, AERON_CLIENT_REGISTERED_MEDIA_DRIVER);
+    ASSERT_EQ(async_dest->registration_status, AERON_CLIENT_REGISTRATION_STATUS_REGISTERED);
     ASSERT_EQ(async_dest->resource.publication->registration_id, publication->registration_id);
     ASSERT_GT(aeron_exclusive_publication_async_destination_poll(async_dest), 0) << aeron_errmsg();
 
@@ -1040,7 +1043,7 @@ TEST_F(ClientConductorTest, shouldHandleSubscriptionAddDestination)
 
     transmitOnOperationSuccess(async_dest);
     doWork();
-    ASSERT_EQ(async_dest->registration_status, AERON_CLIENT_REGISTERED_MEDIA_DRIVER);
+    ASSERT_EQ(async_dest->registration_status, AERON_CLIENT_REGISTRATION_STATUS_REGISTERED);
     ASSERT_EQ(async_dest->resource.subscription->registration_id, subscription->registration_id);
     ASSERT_GT(aeron_subscription_async_destination_poll(async_dest), 0) << aeron_errmsg();
 
@@ -1082,7 +1085,7 @@ TEST_F(ClientConductorTest, shouldHandleSubscriptionAddDestinationMaxMessageSize
 
     transmitOnOperationSuccess(async_dest);
     doWork();
-    ASSERT_EQ(async_dest->registration_status, AERON_CLIENT_REGISTERED_MEDIA_DRIVER);
+    ASSERT_EQ(async_dest->registration_status, AERON_CLIENT_REGISTRATION_STATUS_REGISTERED);
     ASSERT_EQ(async_dest->resource.subscription->registration_id, subscription->registration_id);
     ASSERT_GT(aeron_subscription_async_destination_poll(async_dest), 0) << aeron_errmsg();
 
@@ -1212,7 +1215,7 @@ TEST_F(ClientConductorTest, shouldAddStaticCounterSuccessfully)
 
     const char *label = "first static counter from C";
     const size_t label_length = strlen(label);
-    const int registration_id = 42;
+    const int registration_id = 508;
     ASSERT_EQ(aeron_client_conductor_async_add_static_counter(
         &async, &m_conductor, COUNTER_TYPE_ID, nullptr, 0, label, label_length, registration_id), 0);
     ASSERT_EQ(registration_id, async->counter.registration_id);
@@ -1244,7 +1247,7 @@ TEST_F(ClientConductorTest, shouldReturnRandomSessionIdIfControlProtolVersionNot
     const int32_t streamId = 43;
     ASSERT_EQ(aeron_client_conductor_async_get_next_available_session_id(&async, &m_conductor, streamId), 0);
     ASSERT_EQ(streamId, async->stream_id);
-    ASSERT_EQ(AERON_CLIENT_REGISTERED_MEDIA_DRIVER, async->registration_status);
+    ASSERT_EQ(AERON_CLIENT_REGISTRATION_STATUS_REGISTERED, async->registration_status);
     int32_t nextSessionId = async->resource.next_session_id;
 
     int32_t sessionId;
@@ -1253,69 +1256,251 @@ TEST_F(ClientConductorTest, shouldReturnRandomSessionIdIfControlProtolVersionNot
 
     ASSERT_EQ(aeron_client_conductor_async_get_next_available_session_id(&async, &m_conductor, streamId), 0);
     ASSERT_EQ(streamId, async->stream_id);
-    ASSERT_EQ(AERON_CLIENT_REGISTERED_MEDIA_DRIVER, async->registration_status);
+    ASSERT_EQ(AERON_CLIENT_REGISTRATION_STATUS_REGISTERED, async->registration_status);
     int32_t nextSessionId2 = async->resource.next_session_id;
     ASSERT_EQ(aeron_async_next_session_id_poll(&sessionId, async), 1) << aeron_errmsg();
 
     ASSERT_NE(nextSessionId, nextSessionId2);
 }
 
+TEST_F(ClientConductorTest, shouldNotLeakAsyncResourceWhenCallingNextSessionIdAndWrongControlProtocolVersionInvoker)
+{
+    aeron_async_get_next_available_session_id_t *async = nullptr;
+
+    m_conductor.invoker_mode = true;
+    m_conductor.control_protocol_version = 1;
+
+    const int32_t streamId = 43;
+    ASSERT_EQ(aeron_client_conductor_async_get_next_available_session_id(&async, &m_conductor, streamId), 0);
+    ASSERT_EQ(streamId, async->stream_id);
+    ASSERT_EQ(AERON_CLIENT_REGISTRATION_STATUS_REGISTERED, async->registration_status);
+    ASSERT_NE(0, async->resource.next_session_id);
+}
+
+TEST_F(ClientConductorTest, shouldNotLeakAsyncResourceWhenCallingNextSessionIdAndWrongControlProtocolVersionConductor)
+{
+    aeron_async_get_next_available_session_id_t *async = nullptr;
+
+    m_conductor.invoker_mode = false;
+    m_conductor.control_protocol_version = 1;
+
+    const int32_t streamId = 43;
+    ASSERT_EQ(aeron_client_conductor_async_get_next_available_session_id(&async, &m_conductor, streamId), 0);
+    ASSERT_EQ(streamId, async->stream_id);
+    ASSERT_EQ(AERON_CLIENT_REGISTRATION_STATUS_AWAITING, async->registration_status);
+}
+
+TEST_F(ClientConductorTest, shouldNotLeakAsyncResourceWhenCallingNextSessionIdWithCorrectControlProtocolVersionInvoker)
+{
+    aeron_async_get_next_available_session_id_t *async = nullptr;
+
+    m_conductor.invoker_mode = true;
+    m_conductor.control_protocol_version = aeron_semantic_version_compose(
+        AERON_CONTROL_PROTOCOL_MAJOR_VERSION, AERON_CONTROL_PROTOCOL_MINOR_VERSION, AERON_CONTROL_PROTOCOL_PATCH_VERSION);
+
+    const int32_t streamId = 43;
+    ASSERT_EQ(aeron_client_conductor_async_get_next_available_session_id(&async, &m_conductor, streamId), 0);
+    ASSERT_EQ(streamId, async->stream_id);
+    ASSERT_EQ(AERON_CLIENT_REGISTRATION_STATUS_AWAITING, async->registration_status);
+}
+
+TEST_F(ClientConductorTest, shouldNotLeakAsyncResourceWhenCallingNextSessionIdWithCorrectControlProtocolVersion)
+{
+    aeron_async_get_next_available_session_id_t *async = nullptr;
+
+    m_conductor.invoker_mode = false;
+    m_conductor.control_protocol_version = aeron_semantic_version_compose(
+        AERON_CONTROL_PROTOCOL_MAJOR_VERSION, AERON_CONTROL_PROTOCOL_MINOR_VERSION, AERON_CONTROL_PROTOCOL_PATCH_VERSION);
+
+    const int32_t streamId = 43;
+    ASSERT_EQ(aeron_client_conductor_async_get_next_available_session_id(&async, &m_conductor, streamId), 0);
+    ASSERT_EQ(streamId, async->stream_id);
+    ASSERT_EQ(AERON_CLIENT_REGISTRATION_STATUS_AWAITING, async->registration_status);
+}
+
+TEST_F(ClientConductorTest, asyncPublicationResourceIsAutomaticallyFreedUponClientConductorClose)
+{
+    aeron_async_add_publication_t *async = nullptr;
+    aeron_publication_t *publication = nullptr;
+
+    EXPECT_EQ(aeron_client_conductor_async_add_publication(&async, &m_conductor, URI_RESERVED, STREAM_ID), 0);
+    doWork();
+
+    EXPECT_EQ(aeron_async_add_publication_poll(&publication, async), 0) << aeron_errmsg();
+    EXPECT_EQ(nullptr, publication);
+}
+
+TEST_F(ClientConductorTest, asyncExclusivePublicationResourceIsAutomaticallyFreedUponClientConductorClose)
+{
+    aeron_async_add_exclusive_publication_t *async = nullptr;
+    aeron_exclusive_publication_t *publication = nullptr;
+
+    EXPECT_EQ(aeron_client_conductor_async_add_exclusive_publication(&async, &m_conductor, URI_RESERVED, STREAM_ID), 0);
+    doWork();
+
+    EXPECT_EQ(aeron_async_add_exclusive_publication_poll(&publication, async), 0) << aeron_errmsg();
+    EXPECT_EQ(nullptr, publication);
+}
+
+TEST_F(ClientConductorTest, asyncSubscriptionResourceIsAutomaticallyFreedUponClientConductorClose)
+{
+    aeron_async_add_subscription_t *async = nullptr;
+    aeron_subscription_t *subscription = nullptr;
+
+    EXPECT_EQ(aeron_client_conductor_async_add_subscription(&async, &m_conductor, URI_RESERVED, STREAM_ID, nullptr, nullptr, nullptr, nullptr), 0);
+    doWork();
+
+    EXPECT_EQ(aeron_async_add_subscription_poll(&subscription, async), 0) << aeron_errmsg();
+    EXPECT_EQ(nullptr, subscription);
+}
+
+TEST_F(ClientConductorTest, asyncCounterResourceIsAutomaticallyFreedUponClientConductorClose)
+{
+    aeron_async_add_counter_t *async = nullptr;
+    aeron_counter_t *counter = nullptr;
+
+    EXPECT_EQ(aeron_client_conductor_async_add_counter(&async, &m_conductor, 1000, nullptr, 0, "test", strlen("test")), 0);
+    doWork();
+
+    EXPECT_EQ(aeron_async_add_counter_poll(&counter, async), 0) << aeron_errmsg();
+    EXPECT_EQ(nullptr, counter);
+}
+
+TEST_F(ClientConductorTest, shouldSetIdleStartegy)
+{
+    auto func = m_context->idle_strategy_func;
+    EXPECT_STREQ("sleep-ns", m_context->idle_strategy_name);
+    EXPECT_STREQ("16000000", m_context->idle_strategy_init_args);
+    EXPECT_NE(nullptr, m_context->idle_strategy_state);
+    EXPECT_NE(nullptr, func);
+
+    EXPECT_EQ(-1, aeron_context_set_idle_strategy(m_context, "unknown value"));
+    EXPECT_EQ(nullptr, m_context->idle_strategy_name);
+    EXPECT_EQ(nullptr, m_context->idle_strategy_state);
+    EXPECT_EQ(nullptr, m_context->idle_strategy_func);
+    EXPECT_STREQ("16000000", m_context->idle_strategy_init_args);
+
+    EXPECT_EQ(0, aeron_context_set_idle_strategy_init_args(m_context, nullptr));
+    EXPECT_EQ(nullptr, aeron_context_get_idle_strategy_init_args(m_context));
+
+    EXPECT_EQ(0, aeron_context_set_idle_strategy_init_args(m_context, "200-50-1us-2500ns"));
+    EXPECT_STREQ("200-50-1us-2500ns", aeron_context_get_idle_strategy_init_args(m_context));
+
+    EXPECT_EQ(0, aeron_context_set_idle_strategy(m_context, "backoff"));
+    EXPECT_STREQ("backoff", m_context->idle_strategy_name);
+    EXPECT_NE(nullptr, m_context->idle_strategy_state);
+    EXPECT_NE(func, m_context->idle_strategy_func);
+    EXPECT_STREQ("200-50-1us-2500ns", m_context->idle_strategy_init_args);
+}
+
+TEST_F(ClientConductorTest, shouldRejectCloseHandlerIfClosed)
+{
+    m_conductor.is_closed = true;
+    aeron_t aeron = {};
+    aeron.conductor = m_conductor;
+    aeron_on_close_client_pair_t pair = {};
+
+    EXPECT_EQ(-1, aeron_add_close_handler(&aeron, &pair));
+    EXPECT_EQ(EPERM, aeron_errcode());
+}
+
+TEST_F(ClientConductorTest, shouldRejectRemoveCloseHandlerIfClosed)
+{
+    m_conductor.is_closed = true;
+    aeron_t aeron = {};
+    aeron.conductor = m_conductor;
+    aeron_on_close_client_pair_t pair = {};
+
+    EXPECT_EQ(-1, aeron_remove_close_handler(&aeron, &pair));
+    EXPECT_EQ(EPERM, aeron_errcode());
+}
+
+TEST_F(ClientConductorTest, shouldRejectAddAvailableCounterHandlerIfClosed)
+{
+    m_conductor.is_closed = true;
+    aeron_t aeron = {};
+    aeron.conductor = m_conductor;
+    aeron_on_available_counter_pair_t pair = {};
+
+    EXPECT_EQ(-1, aeron_add_available_counter_handler(&aeron, &pair));
+    EXPECT_EQ(EPERM, aeron_errcode());
+}
+
+TEST_F(ClientConductorTest, shouldRejectRemoveAvailableCounterHandlerIfClosed)
+{
+    m_conductor.is_closed = true;
+    aeron_t aeron = {};
+    aeron.conductor = m_conductor;
+    aeron_on_available_counter_pair_t pair = {};
+
+    EXPECT_EQ(-1, aeron_remove_available_counter_handler(&aeron, &pair));
+    EXPECT_EQ(EPERM, aeron_errcode());
+}
+
+TEST_F(ClientConductorTest, shouldRejectAddUnavailableCounterHandlerIfClosed)
+{
+    m_conductor.is_closed = true;
+    aeron_t aeron = {};
+    aeron.conductor = m_conductor;
+    aeron_on_unavailable_counter_pair_t pair = {};
+
+    EXPECT_EQ(-1, aeron_add_unavailable_counter_handler(&aeron, &pair));
+    EXPECT_EQ(EPERM, aeron_errcode());
+}
+
+TEST_F(ClientConductorTest, shouldRejectRemoveUnavailableCounterHandlerIfClosed)
+{
+    m_conductor.is_closed = true;
+    aeron_t aeron = {};
+    aeron.conductor = m_conductor;
+    aeron_on_unavailable_counter_pair_t pair = {};
+
+    EXPECT_EQ(-1, aeron_remove_unavailable_counter_handler(&aeron, &pair));
+    EXPECT_EQ(EPERM, aeron_errcode());
+}
+
 class ClientConductorIsLengthSufficientTest : public testing::TestWithParam<std::tuple<aeron_mapped_file_t*, bool>>
 {
 };
 
-static aeron_mapped_file_t* mappedFileFrom(size_t length, const aeron_cnc_metadata_t *metadata)
+// cnc_version, to_driver, to_clients, counter_metadata, counter_values, error_log, client_liveness_timeout, start_timestamp, pid, file_page_size
+static aeron_cnc_metadata_t s_metadata[] =
 {
-    aeron_mapped_file_t *mappedFile;
-    if (aeron_alloc(reinterpret_cast<void **>(&mappedFile), sizeof(aeron_mapped_file_t)) < 0)
-    {
-        throw std::runtime_error("failed to allocate aeron_mapped_file_t");
-    }
-    mappedFile->addr = (void*)metadata;
-    mappedFile->length = length;
-    return mappedFile;
-}
+    { 0, (int32_t)TO_DRIVER_RING_BUFFER_LENGTH, 0, 0, 0, 0, 0, 0, 0, 0 },
+    { 0, (int32_t)TO_DRIVER_RING_BUFFER_LENGTH, (int32_t)TO_CLIENTS_BUFFER_LENGTH, 0, 0, 0, 0, 0, 0, 0 },
+    { 0, (int32_t)TO_DRIVER_RING_BUFFER_LENGTH, (int32_t)TO_CLIENTS_BUFFER_LENGTH, (int32_t)COUNTER_METADATA_BUFFER_LENGTH, 0, 0, 0, 0, 0, 0 },
+    { 0, (int32_t)TO_DRIVER_RING_BUFFER_LENGTH, (int32_t)TO_CLIENTS_BUFFER_LENGTH, (int32_t)COUNTER_METADATA_BUFFER_LENGTH, (int32_t)COUNTER_VALUES_BUFFER_LENGTH, 0, 0, 0, 0, 0 },
+    { 0, (int32_t)TO_DRIVER_RING_BUFFER_LENGTH, (int32_t)TO_CLIENTS_BUFFER_LENGTH, (int32_t)COUNTER_METADATA_BUFFER_LENGTH, (int32_t)COUNTER_VALUES_BUFFER_LENGTH, (int32_t)ERROR_BUFFER_LENGTH, 0, 0, 0, 0 },
+    { 0, (int32_t)TO_DRIVER_RING_BUFFER_LENGTH, (int32_t)TO_CLIENTS_BUFFER_LENGTH, (int32_t)COUNTER_METADATA_BUFFER_LENGTH, (int32_t)COUNTER_VALUES_BUFFER_LENGTH, (int32_t)ERROR_BUFFER_LENGTH, 0, 0, 0, 0 },
+    { 0, (int32_t)TO_DRIVER_RING_BUFFER_LENGTH, (int32_t)TO_CLIENTS_BUFFER_LENGTH, (int32_t)COUNTER_METADATA_BUFFER_LENGTH, (int32_t)COUNTER_VALUES_BUFFER_LENGTH, (int32_t)ERROR_BUFFER_LENGTH, 0, 0, 0, 0 },
+};
 
-static aeron_cnc_metadata_t* metadata(
-    int32_t to_driver_buffer_length,
-    int32_t to_clients_buffer_length,
-    int32_t counter_metadata_buffer_length,
-    int32_t counter_values_buffer_length,
-    int32_t error_log_buffer_length)
+static aeron_mapped_file_t s_mapped_files[] =
 {
-    aeron_cnc_metadata_t *metadata;
-    if (aeron_alloc(reinterpret_cast<void **>(&metadata), sizeof(aeron_cnc_metadata_t)) < 0)
-    {
-        throw std::runtime_error("failed to allocate aeron_cnc_metadata_t");
-    }
-    metadata->to_driver_buffer_length = to_driver_buffer_length;
-    metadata->to_clients_buffer_length = to_clients_buffer_length;
-    metadata->counter_metadata_buffer_length = counter_metadata_buffer_length;
-    metadata->counter_values_buffer_length = counter_values_buffer_length;
-    metadata->error_log_buffer_length = error_log_buffer_length;
-    return metadata;
-}
+    { nullptr, 0 },
+    { nullptr, AERON_CNC_VERSION_AND_META_DATA_LENGTH - 1 },
+    { &s_metadata[0], AERON_CNC_VERSION_AND_META_DATA_LENGTH },
+    { &s_metadata[1], AERON_CNC_VERSION_AND_META_DATA_LENGTH + TO_DRIVER_RING_BUFFER_LENGTH },
+    { &s_metadata[2], AERON_CNC_VERSION_AND_META_DATA_LENGTH + TO_DRIVER_RING_BUFFER_LENGTH + TO_CLIENTS_BUFFER_LENGTH },
+    { &s_metadata[3], AERON_CNC_VERSION_AND_META_DATA_LENGTH + TO_DRIVER_RING_BUFFER_LENGTH + TO_CLIENTS_BUFFER_LENGTH + COUNTER_METADATA_BUFFER_LENGTH },
+    { &s_metadata[4], AERON_CNC_VERSION_AND_META_DATA_LENGTH + TO_DRIVER_RING_BUFFER_LENGTH + TO_CLIENTS_BUFFER_LENGTH + COUNTER_METADATA_BUFFER_LENGTH + COUNTER_VALUES_BUFFER_LENGTH },
+    { &s_metadata[5], AERON_CNC_VERSION_AND_META_DATA_LENGTH + TO_DRIVER_RING_BUFFER_LENGTH + TO_CLIENTS_BUFFER_LENGTH + COUNTER_METADATA_BUFFER_LENGTH + COUNTER_VALUES_BUFFER_LENGTH + ERROR_BUFFER_LENGTH },
+    { &s_metadata[6], INT64_MAX },
+};
 
 INSTANTIATE_TEST_SUITE_P(
     ClientConductorIsLengthSufficientTest,
     ClientConductorIsLengthSufficientTest,
     testing::Values(
-        std::make_tuple(mappedFileFrom(0, nullptr), false),
-        std::make_tuple(mappedFileFrom(AERON_CNC_VERSION_AND_META_DATA_LENGTH - 1, nullptr), false),
-        std::make_tuple(mappedFileFrom(AERON_CNC_VERSION_AND_META_DATA_LENGTH,
-            metadata(TO_DRIVER_RING_BUFFER_LENGTH,0,0,0,0)), false),
-        std::make_tuple(mappedFileFrom(AERON_CNC_VERSION_AND_META_DATA_LENGTH + TO_DRIVER_RING_BUFFER_LENGTH,
-            metadata(TO_DRIVER_RING_BUFFER_LENGTH,TO_CLIENTS_BUFFER_LENGTH,0,0,0)), false),
-        std::make_tuple(mappedFileFrom(AERON_CNC_VERSION_AND_META_DATA_LENGTH + TO_DRIVER_RING_BUFFER_LENGTH + TO_CLIENTS_BUFFER_LENGTH,
-            metadata(TO_DRIVER_RING_BUFFER_LENGTH,TO_CLIENTS_BUFFER_LENGTH,COUNTER_METADATA_BUFFER_LENGTH,0,0)), false),
-        std::make_tuple(mappedFileFrom(AERON_CNC_VERSION_AND_META_DATA_LENGTH + TO_DRIVER_RING_BUFFER_LENGTH + TO_CLIENTS_BUFFER_LENGTH + COUNTER_METADATA_BUFFER_LENGTH,
-            metadata(TO_DRIVER_RING_BUFFER_LENGTH,TO_CLIENTS_BUFFER_LENGTH,COUNTER_METADATA_BUFFER_LENGTH,COUNTER_VALUES_BUFFER_LENGTH,0)), false),
-        std::make_tuple(mappedFileFrom(AERON_CNC_VERSION_AND_META_DATA_LENGTH + TO_DRIVER_RING_BUFFER_LENGTH + TO_CLIENTS_BUFFER_LENGTH + COUNTER_METADATA_BUFFER_LENGTH + COUNTER_VALUES_BUFFER_LENGTH,
-            metadata(TO_DRIVER_RING_BUFFER_LENGTH,TO_CLIENTS_BUFFER_LENGTH,COUNTER_METADATA_BUFFER_LENGTH,COUNTER_VALUES_BUFFER_LENGTH,ERROR_BUFFER_LENGTH)), false),
-        std::make_tuple(mappedFileFrom(AERON_CNC_VERSION_AND_META_DATA_LENGTH + TO_DRIVER_RING_BUFFER_LENGTH + TO_CLIENTS_BUFFER_LENGTH + COUNTER_METADATA_BUFFER_LENGTH + COUNTER_VALUES_BUFFER_LENGTH + ERROR_BUFFER_LENGTH,
-            metadata(TO_DRIVER_RING_BUFFER_LENGTH,TO_CLIENTS_BUFFER_LENGTH,COUNTER_METADATA_BUFFER_LENGTH,COUNTER_VALUES_BUFFER_LENGTH,ERROR_BUFFER_LENGTH)), true),
-        std::make_tuple(mappedFileFrom(INT64_MAX,
-            metadata(TO_DRIVER_RING_BUFFER_LENGTH,TO_CLIENTS_BUFFER_LENGTH,COUNTER_METADATA_BUFFER_LENGTH,COUNTER_VALUES_BUFFER_LENGTH,ERROR_BUFFER_LENGTH)), true)
+        std::make_tuple(&s_mapped_files[0], false),
+        std::make_tuple(&s_mapped_files[1], false),
+        std::make_tuple(&s_mapped_files[2], false),
+        std::make_tuple(&s_mapped_files[3], false),
+        std::make_tuple(&s_mapped_files[4], false),
+        std::make_tuple(&s_mapped_files[5], false),
+        std::make_tuple(&s_mapped_files[6], false),
+        std::make_tuple(&s_mapped_files[7], true),
+        std::make_tuple(&s_mapped_files[8], true)
     ));
 
 TEST_P(ClientConductorIsLengthSufficientTest, shouldCheckIfLengthIsSufficient)
@@ -1323,6 +1508,984 @@ TEST_P(ClientConductorIsLengthSufficientTest, shouldCheckIfLengthIsSufficient)
     const auto mappedFile = std::get<0>(GetParam());
     const bool expected = std::get<1>(GetParam());
     ASSERT_EQ(expected, aeron_cnc_is_file_length_sufficient(mappedFile));
-    aeron_free(mappedFile->addr);
-    aeron_free(mappedFile);
+}
+
+TEST_F(ClientConductorTest, shouldAsyncCloseSubscription)
+{
+    aeron_async_add_subscription_t *async = nullptr;
+    aeron_subscription_t *subscription = nullptr;
+    m_conductor.invoker_mode = false;
+
+    const char *uri = "aeron:ipc?term-length=64k";
+    int32_t stream_id = 1000;
+    EXPECT_EQ(aeron_client_conductor_async_add_subscription(
+        &async, &m_conductor, uri, stream_id, nullptr, nullptr, nullptr, nullptr), 0);
+    doWork();
+
+    transmitOnSubscriptionReady(async);
+    doWork();
+
+    const int64_t registration_id = aeron_async_add_subscription_get_registration_id(async);
+    EXPECT_EQ(aeron_async_add_subscription_poll(&subscription, async), 1) << aeron_errmsg();
+    EXPECT_NE(nullptr, subscription);
+
+    std::atomic<bool> on_close_called(false);
+    auto on_close_complete = [](void* clientd)
+    {
+        auto flag = static_cast<std::atomic<bool>*>(clientd);
+        flag->store(true);
+    };
+
+    EXPECT_EQ(
+        0,
+        aeron_client_conductor_async_close_subscription(&m_conductor, subscription, on_close_complete, &on_close_called));
+
+    EXPECT_EQ(subscription, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id));
+    EXPECT_FALSE(subscription->pending_close_action);
+
+    doWork();
+
+    EXPECT_TRUE(on_close_called);
+    EXPECT_EQ(nullptr, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id));
+}
+
+TEST_F(ClientConductorTest, shouldAsyncCloseSubscriptionIfClientBufferIsFull)
+{
+    aeron_async_add_subscription_t *async = nullptr;
+    aeron_subscription_t *subscription = nullptr;
+    m_conductor.invoker_mode = false;
+    m_conductor.control_protocol_version = aeron_semantic_version_compose(
+        AERON_CONTROL_PROTOCOL_MAJOR_VERSION, AERON_CONTROL_PROTOCOL_MINOR_VERSION, AERON_CONTROL_PROTOCOL_PATCH_VERSION);
+
+    const char *uri = "aeron:ipc?term-length=64k";
+    int32_t stream_id = 1000;
+
+    EXPECT_EQ(aeron_client_conductor_async_add_subscription(
+        &async, &m_conductor, uri, stream_id, nullptr, nullptr, nullptr, nullptr), 0);
+    doWork();
+
+    transmitOnSubscriptionReady(async);
+    doWork();
+
+    const int64_t registration_id = aeron_async_add_subscription_get_registration_id(async);
+    EXPECT_EQ(aeron_async_add_subscription_poll(&subscription, async), 1) << aeron_errmsg();
+    EXPECT_NE(nullptr, subscription);
+
+    std::vector<aeron_async_get_next_available_session_id_t *> pending_session_ids;
+    while (true)
+    {
+        aeron_async_get_next_available_session_id_t *next_async;
+        if (aeron_client_conductor_async_get_next_available_session_id(&next_async, &m_conductor, stream_id) < 0)
+        {
+            break;
+        }
+        pending_session_ids.push_back(next_async);
+    }
+
+    std::atomic<bool> on_close_called(false);
+    auto on_close_complete = [](void* clientd)
+    {
+        auto flag = static_cast<std::atomic<bool>*>(clientd);
+        flag->store(true);
+    };
+
+    EXPECT_EQ(
+        0,
+        aeron_client_conductor_async_close_subscription(&m_conductor, subscription, on_close_complete, &on_close_called));
+
+    EXPECT_EQ(subscription, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id));
+    EXPECT_TRUE(subscription->pending_close_action);
+
+    void *res;
+    while (nullptr != (res = aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id)))
+    {
+        EXPECT_EQ(subscription, res);
+        EXPECT_TRUE(subscription->pending_close_action);
+        EXPECT_FALSE(on_close_called);
+        doWorkForNs((int64_t)m_conductor.idle_sleep_duration_ns);
+    }
+
+    EXPECT_TRUE(on_close_called);
+}
+
+TEST_F(ClientConductorTest, shouldAsyncClosePublication)
+{
+    aeron_async_add_publication_t *async = nullptr;
+    aeron_publication_t *publication = nullptr;
+    m_conductor.invoker_mode = false;
+
+    const char *uri = "aeron:ipc?term-length=64k";
+    int32_t stream_id = 1000;
+    EXPECT_EQ(aeron_client_conductor_async_add_publication(&async, &m_conductor, uri, stream_id), 0);
+    doWork();
+
+    transmitOnPublicationReady(async, m_logFileName, false);
+    createLogFile(m_logFileName);
+    doWork();
+
+    const int64_t registration_id = aeron_async_add_publication_get_registration_id(async);
+    EXPECT_EQ(aeron_async_add_publication_poll(&publication, async), 1) << aeron_errmsg();
+    EXPECT_NE(nullptr, publication);
+
+    std::atomic<bool> on_close_called(false);
+    auto on_close_complete = [](void* clientd)
+    {
+        auto flag = static_cast<std::atomic<bool>*>(clientd);
+        flag->store(true);
+    };
+
+    EXPECT_EQ(
+        0,
+        aeron_client_conductor_async_close_publication(&m_conductor, publication, on_close_complete, &on_close_called));
+
+    EXPECT_EQ(publication, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id));
+    EXPECT_FALSE(publication->pending_close_action);
+
+    doWork();
+
+    EXPECT_TRUE(on_close_called);
+    EXPECT_EQ(nullptr, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id));
+}
+
+TEST_F(ClientConductorTest, shouldAsyncClosePublicationIfClientBufferIsFull)
+{
+    aeron_async_add_publication_t *async = nullptr;
+    aeron_publication_t *publication = nullptr;
+    m_conductor.invoker_mode = false;
+    m_conductor.control_protocol_version = aeron_semantic_version_compose(
+        AERON_CONTROL_PROTOCOL_MAJOR_VERSION, AERON_CONTROL_PROTOCOL_MINOR_VERSION, AERON_CONTROL_PROTOCOL_PATCH_VERSION);
+
+    const char *uri = "aeron:ipc?term-length=64k";
+    int32_t stream_id = 1000;
+    EXPECT_EQ(aeron_client_conductor_async_add_publication(&async, &m_conductor, uri, stream_id), 0);
+    doWork();
+
+    transmitOnPublicationReady(async, m_logFileName, false);
+    createLogFile(m_logFileName);
+    doWork();
+
+    const int64_t registration_id = aeron_async_add_publication_get_registration_id(async);
+    EXPECT_EQ(aeron_async_add_publication_poll(&publication, async), 1) << aeron_errmsg();
+    EXPECT_NE(nullptr, publication);
+
+    std::vector<aeron_async_get_next_available_session_id_t *> pending_session_ids;
+    while (true)
+    {
+        aeron_async_get_next_available_session_id_t *next_async;
+        if (aeron_client_conductor_async_get_next_available_session_id(&next_async, &m_conductor, stream_id) < 0)
+        {
+            break;
+        }
+        pending_session_ids.push_back(next_async);
+    }
+
+    std::atomic<bool> on_close_called(false);
+    auto on_close_complete = [](void* clientd)
+    {
+        auto flag = static_cast<std::atomic<bool>*>(clientd);
+        flag->store(true);
+    };
+
+    EXPECT_EQ(
+        0,
+        aeron_client_conductor_async_close_publication(&m_conductor, publication, on_close_complete, &on_close_called));
+
+    EXPECT_EQ(publication, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id));
+    EXPECT_TRUE(publication->pending_close_action);
+
+    void *res;
+    while (nullptr != (res = aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id)))
+    {
+        EXPECT_EQ(publication, res);
+        EXPECT_TRUE(publication->pending_close_action);
+        EXPECT_FALSE(on_close_called);
+        doWorkForNs((int64_t)m_conductor.idle_sleep_duration_ns);
+    }
+
+    EXPECT_TRUE(on_close_called);
+}
+
+TEST_F(ClientConductorTest, shouldAsyncCloseExclusivePublication)
+{
+    aeron_async_add_publication_t *async = nullptr;
+    aeron_exclusive_publication_t *publication = nullptr;
+    m_conductor.invoker_mode = false;
+
+    const char *uri = "aeron:ipc?term-length=64k";
+    int32_t stream_id = 1000;
+    EXPECT_EQ(aeron_client_conductor_async_add_exclusive_publication(&async, &m_conductor, uri, stream_id), 0);
+    doWork();
+
+    transmitOnPublicationReady(async, m_logFileName, true);
+    createLogFile(m_logFileName);
+    doWork();
+
+    const int64_t registration_id = aeron_async_add_exclusive_publication_get_registration_id(async);
+    EXPECT_EQ(aeron_async_add_exclusive_publication_poll(&publication, async), 1) << aeron_errmsg();
+    EXPECT_NE(nullptr, publication);
+
+    std::atomic<bool> on_close_called(false);
+    auto on_close_complete = [](void* clientd)
+    {
+        auto flag = static_cast<std::atomic<bool>*>(clientd);
+        flag->store(true);
+    };
+
+    EXPECT_EQ(
+        0,
+        aeron_client_conductor_async_close_exclusive_publication(&m_conductor, publication, on_close_complete, &on_close_called));
+
+    EXPECT_EQ(publication, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id));
+    EXPECT_FALSE(publication->pending_close_action);
+
+    doWork();
+
+    EXPECT_TRUE(on_close_called);
+    EXPECT_EQ(nullptr, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id));
+}
+
+TEST_F(ClientConductorTest, shouldAsyncCloseExclusivePublicationIfClientBufferIsFull)
+{
+    aeron_async_add_publication_t *async = nullptr;
+    aeron_exclusive_publication_t *publication = nullptr;
+    m_conductor.invoker_mode = false;
+    m_conductor.control_protocol_version = aeron_semantic_version_compose(
+        AERON_CONTROL_PROTOCOL_MAJOR_VERSION, AERON_CONTROL_PROTOCOL_MINOR_VERSION, AERON_CONTROL_PROTOCOL_PATCH_VERSION);
+
+    const char *uri = "aeron:ipc?term-length=64k";
+    int32_t stream_id = 1000;
+    EXPECT_EQ(aeron_client_conductor_async_add_exclusive_publication(&async, &m_conductor, uri, stream_id), 0);
+    doWork();
+
+    transmitOnPublicationReady(async, m_logFileName, true);
+    createLogFile(m_logFileName);
+    doWork();
+
+    const int64_t registration_id = aeron_async_add_exclusive_publication_get_registration_id(async);
+    EXPECT_EQ(aeron_async_add_exclusive_publication_poll(&publication, async), 1) << aeron_errmsg();
+    EXPECT_NE(nullptr, publication);
+
+    std::vector<aeron_async_get_next_available_session_id_t *> pending_session_ids;
+    while (true)
+    {
+        aeron_async_get_next_available_session_id_t *next_async;
+        if (aeron_client_conductor_async_get_next_available_session_id(&next_async, &m_conductor, stream_id) < 0)
+        {
+            break;
+        }
+        pending_session_ids.push_back(next_async);
+    }
+
+    std::atomic<bool> on_close_called(false);
+    auto on_close_complete = [](void* clientd)
+    {
+        auto flag = static_cast<std::atomic<bool>*>(clientd);
+        flag->store(true);
+    };
+
+    EXPECT_EQ(
+        0,
+        aeron_client_conductor_async_close_exclusive_publication(&m_conductor, publication, on_close_complete, &on_close_called));
+
+    EXPECT_EQ(publication, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id));
+    EXPECT_TRUE(publication->pending_close_action);
+
+    void *res;
+    while (nullptr != (res = aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id)))
+    {
+        EXPECT_EQ(publication, res);
+        EXPECT_TRUE(publication->pending_close_action);
+        EXPECT_FALSE(on_close_called);
+        doWorkForNs((int64_t)m_conductor.idle_sleep_duration_ns);
+    }
+
+    EXPECT_TRUE(on_close_called);
+}
+
+TEST_F(ClientConductorTest, shouldAsyncCloseCounter)
+{
+    aeron_async_add_counter_t *async = nullptr;
+    aeron_counter_t *counter = nullptr;
+    m_conductor.invoker_mode = false;
+
+    int32_t type_id = 1000;
+    std::string label = "my counter";
+    EXPECT_EQ(aeron_client_conductor_async_add_counter(
+        &async, &m_conductor, type_id, nullptr, 0, label.c_str(), label.length()), 0);
+    doWork();
+
+    transmitOnCounterReady(async);
+    doWork();
+
+    const int64_t registration_id = aeron_async_add_counter_get_registration_id(async);
+    EXPECT_EQ(aeron_async_add_counter_poll(&counter, async), 1) << aeron_errmsg();
+    EXPECT_NE(nullptr, counter);
+
+    std::atomic<bool> on_close_called(false);
+    auto on_close_complete = [](void* clientd)
+    {
+        auto flag = static_cast<std::atomic<bool>*>(clientd);
+        flag->store(true);
+    };
+
+    EXPECT_EQ(
+        0,
+        aeron_client_conductor_async_close_counter(&m_conductor, counter, on_close_complete, &on_close_called));
+
+    EXPECT_EQ(counter, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id));
+    EXPECT_FALSE(counter->pending_close_action);
+
+    doWork();
+
+    EXPECT_TRUE(on_close_called);
+    EXPECT_EQ(nullptr, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id));
+}
+
+TEST_F(ClientConductorTest, shouldAsyncCloseCounterIfClientBufferIsFull)
+{
+    aeron_async_add_counter_t *async = nullptr;
+    aeron_counter_t *counter = nullptr;
+    m_conductor.invoker_mode = false;
+    m_conductor.control_protocol_version = aeron_semantic_version_compose(
+        AERON_CONTROL_PROTOCOL_MAJOR_VERSION, AERON_CONTROL_PROTOCOL_MINOR_VERSION, AERON_CONTROL_PROTOCOL_PATCH_VERSION);
+
+    int32_t type_id = 1000;
+    std::string label = "my counter";
+    EXPECT_EQ(aeron_client_conductor_async_add_counter(
+        &async, &m_conductor, type_id, nullptr, 0, label.c_str(), label.length()), 0);
+    doWork();
+
+    transmitOnCounterReady(async);
+    doWork();
+
+    const int64_t registration_id = aeron_async_add_counter_get_registration_id(async);
+    EXPECT_EQ(aeron_async_add_counter_poll(&counter, async), 1) << aeron_errmsg();
+    EXPECT_NE(nullptr, counter);
+
+    std::vector<aeron_async_get_next_available_session_id_t *> pending_session_ids;
+    while (true)
+    {
+        aeron_async_get_next_available_session_id_t *next_async;
+        if (aeron_client_conductor_async_get_next_available_session_id(&next_async, &m_conductor, type_id) < 0)
+        {
+            break;
+        }
+        pending_session_ids.push_back(next_async);
+    }
+
+    std::atomic<bool> on_close_called(false);
+    auto on_close_complete = [](void* clientd)
+    {
+        auto flag = static_cast<std::atomic<bool>*>(clientd);
+        flag->store(true);
+    };
+
+    EXPECT_EQ(
+        0,
+        aeron_client_conductor_async_close_counter(&m_conductor, counter, on_close_complete, &on_close_called));
+
+    EXPECT_EQ(counter, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id));
+    EXPECT_TRUE(counter->pending_close_action);
+
+    void *res;
+    while (nullptr != (res = aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id)))
+    {
+        EXPECT_EQ(counter, res);
+        EXPECT_TRUE(counter->pending_close_action);
+        EXPECT_FALSE(on_close_called);
+        doWorkForNs((int64_t)m_conductor.idle_sleep_duration_ns);
+    }
+
+    EXPECT_TRUE(on_close_called);
+}
+
+TEST_F(ClientConductorTest, shouldNotifyOnCloseCompleteWhenClientConductorIsBeingClosedAndCounterIsForcefullyDeleted)
+{
+    aeron_async_add_counter_t *async = nullptr;
+    aeron_counter_t *counter = nullptr;
+    m_conductor.invoker_mode = false;
+
+    int32_t type_id = 1000;
+    std::string label = "my counter";
+    EXPECT_EQ(aeron_client_conductor_async_add_counter(
+        &async, &m_conductor, type_id, nullptr, 0, label.c_str(), label.length()), 0);
+    doWork();
+
+    transmitOnCounterReady(async);
+    doWork();
+
+    const int64_t registration_id = aeron_async_add_counter_get_registration_id(async);
+    EXPECT_EQ(aeron_async_add_counter_poll(&counter, async), 1) << aeron_errmsg();
+    EXPECT_NE(nullptr, counter);
+
+    std::atomic<bool> on_close_called(false);
+    auto on_close_complete = [](void* clientd)
+    {
+        auto flag = static_cast<std::atomic<bool>*>(clientd);
+        flag->store(true);
+    };
+
+    // register `on_close` callback but do not process actual close
+    EXPECT_EQ(
+        0,
+        aeron_client_conductor_async_close_counter(&m_conductor, counter, on_close_complete, &on_close_called));
+    EXPECT_FALSE(on_close_called);
+    EXPECT_EQ(counter, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id));
+
+    aeron_client_conductor_on_close(&m_conductor);
+    m_conductor_isClosed = true;
+
+    EXPECT_TRUE(on_close_called);
+}
+
+TEST_F(ClientConductorTest, shouldAsyncCloseStaticCounter)
+{
+    aeron_async_add_counter_t *async = nullptr;
+    aeron_counter_t *counter = nullptr;
+    m_conductor.invoker_mode = false;
+
+    int32_t type_id = 1000;
+    int64_t registration_id = 437294837249;
+    std::string label = "my counter";
+    EXPECT_EQ(
+        aeron_client_conductor_async_add_static_counter(&async, &m_conductor, type_id, nullptr, 0, label.c_str(), label.length(), registration_id),
+        0);
+    int64_t correlation_id = aeron_async_add_counter_get_registration_id(async);
+    doWork();
+
+    transmitOnStaticCounter(async, 42);
+    doWork();
+
+    EXPECT_EQ(aeron_async_add_counter_poll(&counter, async), 1) << aeron_errmsg();
+    EXPECT_NE(nullptr, counter);
+    EXPECT_EQ(counter, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, correlation_id));
+    EXPECT_EQ(nullptr, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id));
+
+    std::atomic<bool> on_close_called(false);
+    auto on_close_complete = [](void* clientd)
+    {
+        auto flag = static_cast<std::atomic<bool>*>(clientd);
+        flag->store(true);
+    };
+
+    EXPECT_EQ(
+        0,
+        aeron_client_conductor_async_close_counter(&m_conductor, counter, on_close_complete, &on_close_called));
+    EXPECT_FALSE(aeron_counter_is_closed(counter));
+    EXPECT_FALSE(counter->pending_close_action);
+
+    doWork();
+
+    EXPECT_TRUE(on_close_called);
+    EXPECT_EQ(nullptr, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, correlation_id));
+    EXPECT_EQ(nullptr, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id));
+}
+
+TEST_F(ClientConductorTest, shouldAsyncCloseStaticCounterIfClientBufferIsFull)
+{
+    aeron_async_add_counter_t *async = nullptr;
+    aeron_counter_t *counter = nullptr;
+    m_conductor.invoker_mode = false;
+    m_conductor.control_protocol_version = aeron_semantic_version_compose(
+        AERON_CONTROL_PROTOCOL_MAJOR_VERSION, AERON_CONTROL_PROTOCOL_MINOR_VERSION, AERON_CONTROL_PROTOCOL_PATCH_VERSION);
+
+    int32_t type_id = 1000;
+    int64_t registration_id = 437294837249;
+    std::string label = "my counter";
+    EXPECT_EQ(
+        aeron_client_conductor_async_add_static_counter(&async, &m_conductor, type_id, nullptr, 0, label.c_str(), label.length(), registration_id),
+        0);
+    int64_t correlation_id = aeron_async_add_counter_get_registration_id(async);
+    doWork();
+
+    transmitOnStaticCounter(async, 42);
+    doWork();
+
+    EXPECT_EQ(aeron_async_add_counter_poll(&counter, async), 1) << aeron_errmsg();
+    EXPECT_NE(nullptr, counter);
+    EXPECT_EQ(counter, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, correlation_id));
+    EXPECT_EQ(nullptr, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id));
+
+    std::vector<aeron_async_get_next_available_session_id_t *> pending_session_ids;
+    while (true)
+    {
+        aeron_async_get_next_available_session_id_t *next_async;
+        if (aeron_client_conductor_async_get_next_available_session_id(&next_async, &m_conductor, type_id) < 0)
+        {
+            break;
+        }
+        pending_session_ids.push_back(next_async);
+    }
+
+    std::atomic<bool> on_close_called(false);
+    auto on_close_complete = [](void* clientd)
+    {
+        auto flag = static_cast<std::atomic<bool>*>(clientd);
+        flag->store(true);
+    };
+
+    EXPECT_EQ(
+        0,
+        aeron_client_conductor_async_close_counter(&m_conductor, counter, on_close_complete, &on_close_called));
+    EXPECT_FALSE(aeron_counter_is_closed(counter));
+    EXPECT_TRUE(counter->pending_close_action);
+
+    while (!on_close_called)
+    {
+        doWorkForNs((int64_t)m_conductor.idle_sleep_duration_ns);
+    }
+
+    EXPECT_TRUE(on_close_called);
+    EXPECT_EQ(nullptr, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, correlation_id));
+    EXPECT_EQ(nullptr, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id));
+}
+
+TEST_F(ClientConductorTest, shouldNotCloseStaticCounterWhenConductorIsClosed)
+{
+    aeron_async_add_counter_t *async = nullptr;
+    aeron_counter_t *counter = nullptr;
+    m_conductor.invoker_mode = false;
+
+    int32_t type_id = 1000;
+    int64_t registration_id = 437294837249;
+    std::string label = "my counter";
+    EXPECT_EQ(
+        aeron_client_conductor_async_add_static_counter(&async, &m_conductor, type_id, nullptr, 0, label.c_str(), label.length(), registration_id),
+        0);
+    int64_t correlation_id = aeron_async_add_counter_get_registration_id(async);
+    doWork();
+
+    transmitOnStaticCounter(async, 42);
+    doWork();
+
+    EXPECT_EQ(aeron_async_add_counter_poll(&counter, async), 1) << aeron_errmsg();
+    EXPECT_NE(nullptr, counter);
+    EXPECT_EQ(counter, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, correlation_id));
+    EXPECT_EQ(nullptr, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id));
+
+    std::atomic<bool> on_close_called(false);
+    auto on_close_complete = [](void* clientd)
+    {
+        auto flag = static_cast<std::atomic<bool>*>(clientd);
+        flag->store(true);
+    };
+
+    // register `on_close` callback but do not process actual close
+    EXPECT_EQ(
+        0,
+        aeron_client_conductor_async_close_counter(&m_conductor, counter, on_close_complete, &on_close_called));
+    EXPECT_FALSE(on_close_called);
+
+    aeron_client_conductor_on_close(&m_conductor);
+    m_conductor_isClosed = true;
+
+    EXPECT_FALSE(aeron_counter_is_closed(counter));
+    EXPECT_FALSE(on_close_called);
+
+    EXPECT_EQ(0, aeron_counter_delete(counter));
+}
+
+TEST_F(ClientConductorTest, shouldNotifyOnCloseCompleteWhenClientConductorIsBeingClosedAndSubscriptionIsForcefullyDeleted)
+{
+    aeron_async_add_subscription_t *async = nullptr;
+    aeron_subscription_t *subscription = nullptr;
+    m_conductor.invoker_mode = false;
+
+    const char *uri = "aeron:ipc?term-length=64k";
+    int32_t stream_id = 1000;
+    EXPECT_EQ(aeron_client_conductor_async_add_subscription(
+        &async, &m_conductor, uri, stream_id, nullptr, nullptr, nullptr, nullptr), 0);
+    doWork();
+
+    transmitOnSubscriptionReady(async);
+    doWork();
+
+    const int64_t registration_id = aeron_async_add_subscription_get_registration_id(async);
+    EXPECT_EQ(aeron_async_add_subscription_poll(&subscription, async), 1) << aeron_errmsg();
+    EXPECT_NE(nullptr, subscription);
+
+    std::atomic<bool> on_close_called(false);
+    auto on_close_complete = [](void* clientd)
+    {
+        auto flag = static_cast<std::atomic<bool>*>(clientd);
+        flag->store(true);
+    };
+
+    // register `on_close` callback but do not process actual close
+    EXPECT_EQ(
+        0,
+        aeron_client_conductor_async_close_subscription(&m_conductor, subscription, on_close_complete, &on_close_called));
+    EXPECT_FALSE(on_close_called);
+    EXPECT_EQ(subscription, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id));
+
+    aeron_client_conductor_on_close(&m_conductor);
+    m_conductor_isClosed = true;
+
+    EXPECT_TRUE(on_close_called);
+}
+
+TEST_F(ClientConductorTest, shouldNotifyOnCloseCompleteWhenClientConductorIsBeingClosedAndPublicationIsForcefullyDeleted)
+{
+    aeron_async_add_publication_t *async = nullptr;
+    aeron_publication_t *publication = nullptr;
+    m_conductor.invoker_mode = false;
+
+    const char *uri = "aeron:ipc?term-length=64k";
+    int32_t stream_id = 1000;
+    EXPECT_EQ(aeron_client_conductor_async_add_publication(&async, &m_conductor, uri, stream_id), 0);
+    doWork();
+
+    transmitOnPublicationReady(async, m_logFileName, false);
+    createLogFile(m_logFileName);
+    doWork();
+
+    const int64_t registration_id = aeron_async_add_publication_get_registration_id(async);
+    EXPECT_EQ(aeron_async_add_publication_poll(&publication, async), 1) << aeron_errmsg();
+    EXPECT_NE(nullptr, publication);
+
+    std::atomic<bool> on_close_called(false);
+    auto on_close_complete = [](void* clientd)
+    {
+        auto flag = static_cast<std::atomic<bool>*>(clientd);
+        flag->store(true);
+    };
+
+    // register `on_close` callback but do not process actual close
+    EXPECT_EQ(
+        0,
+        aeron_client_conductor_async_close_publication(&m_conductor, publication, on_close_complete, &on_close_called));
+    EXPECT_FALSE(on_close_called);
+    EXPECT_EQ(publication, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id));
+
+    aeron_client_conductor_on_close(&m_conductor);
+    m_conductor_isClosed = true;
+
+    EXPECT_TRUE(on_close_called);
+}
+
+TEST_F(ClientConductorTest, shouldNotifyOnCloseCompleteWhenClientConductorIsBeingClosedAndExclusivePublicationIsForcefullyDeleted)
+{
+    aeron_async_add_publication_t *async = nullptr;
+    aeron_exclusive_publication_t *publication = nullptr;
+    m_conductor.invoker_mode = false;
+
+    const char *uri = "aeron:ipc?term-length=64k";
+    int32_t stream_id = 1000;
+    EXPECT_EQ(aeron_client_conductor_async_add_exclusive_publication(&async, &m_conductor, uri, stream_id), 0);
+    doWork();
+
+    transmitOnPublicationReady(async, m_logFileName, true);
+    createLogFile(m_logFileName);
+    doWork();
+
+    const int64_t registration_id = aeron_async_add_exclusive_publication_get_registration_id(async);
+    EXPECT_EQ(aeron_async_add_exclusive_publication_poll(&publication, async), 1) << aeron_errmsg();
+    EXPECT_NE(nullptr, publication);
+
+    std::atomic<bool> on_close_called(false);
+    auto on_close_complete = [](void* clientd)
+    {
+        auto flag = static_cast<std::atomic<bool>*>(clientd);
+        flag->store(true);
+    };
+
+    // register `on_close` callback but do not process actual close
+    EXPECT_EQ(
+        0,
+        aeron_client_conductor_async_close_exclusive_publication(&m_conductor, publication, on_close_complete, &on_close_called));
+    EXPECT_FALSE(on_close_called);
+    EXPECT_EQ(publication, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id));
+
+    aeron_client_conductor_on_close(&m_conductor);
+    m_conductor_isClosed = true;
+
+    EXPECT_TRUE(on_close_called);
+}
+
+TEST_F(ClientConductorTest, shouldAddMultipleStaticCountersWithTheSameRegistrationId)
+{
+    aeron_async_add_counter_t *async = nullptr, *async2 = nullptr;
+    aeron_counter_t *counter = nullptr, *counter2 = nullptr;
+    m_conductor.invoker_mode = false;
+
+    int64_t registration_id = 437294837249;
+    std::string label = "my counter";
+    EXPECT_EQ(
+        aeron_client_conductor_async_add_static_counter(&async, &m_conductor, 1000, nullptr, 0, label.c_str(), label.length(), registration_id),
+        0);
+    int64_t correlation_id = aeron_async_add_counter_get_registration_id(async);
+    doWork();
+
+    std::string label2 = "my counter";
+    EXPECT_EQ(
+        aeron_client_conductor_async_add_static_counter(&async2, &m_conductor, 2000, nullptr, 0, label2.c_str(), label2.length(), registration_id),
+        0);
+    int64_t correlation_id2 = aeron_async_add_counter_get_registration_id(async2);
+    EXPECT_NE(correlation_id, correlation_id2);
+    doWork();
+
+    transmitOnStaticCounter(async, 42);
+    doWork();
+
+    EXPECT_EQ(aeron_async_add_counter_poll(&counter, async), 1) << aeron_errmsg();
+    EXPECT_NE(nullptr, counter);
+    EXPECT_EQ(counter, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, correlation_id));
+    EXPECT_EQ(nullptr, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id));
+
+    transmitOnStaticCounter(async2, 24);
+    doWork();
+
+    EXPECT_EQ(aeron_async_add_counter_poll(&counter2, async2), 1) << aeron_errmsg();
+    EXPECT_NE(nullptr, counter2);
+    EXPECT_EQ(counter2, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, correlation_id2));
+    EXPECT_EQ(nullptr, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, registration_id));
+    EXPECT_NE(counter->counter_id, counter2->counter_id);
+
+    auto addr1 = aeron_counters_manager_addr(&m_counters_manager, counter->counter_id);
+    auto addr2 = aeron_counters_manager_addr(&m_counters_manager, counter2->counter_id);
+    aeron_counter_set_release(addr1, 1984);
+    aeron_counter_set_release(addr2, 2026);
+    EXPECT_EQ(aeron_counter_get_acquire(addr1), 1984);
+    EXPECT_EQ(aeron_counter_get_acquire(addr2), 2026);
+
+    std::atomic<bool> on_close_called(false);
+    auto on_close_complete = [](void* clientd)
+    {
+        auto flag = static_cast<std::atomic<bool>*>(clientd);
+        flag->store(true);
+    };
+
+    EXPECT_EQ(
+        0,
+        aeron_client_conductor_async_close_counter(&m_conductor, counter, on_close_complete, &on_close_called));
+    EXPECT_FALSE(aeron_counter_is_closed(counter));
+    EXPECT_FALSE(counter->pending_close_action);
+
+    doWork();
+
+    EXPECT_TRUE(on_close_called);
+
+    EXPECT_EQ(aeron_counter_get_acquire(addr2), 2026);
+    EXPECT_FALSE(aeron_counter_is_closed(counter2));
+    EXPECT_EQ(nullptr, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, correlation_id));
+    EXPECT_EQ(counter2, aeron_int64_to_ptr_hash_map_get(&m_conductor.resource_by_id_map, correlation_id2));
+
+    EXPECT_EQ(0, aeron_client_conductor_async_close_counter(&m_conductor, counter2, nullptr, nullptr));
+
+    doWork();
+}
+
+TEST_F(ClientConductorTest, shouldFreeRemoveResourceCmdAfterConductorProcessesIt)
+{
+    m_conductor.invoker_mode = false;
+
+    aeron_async_add_subscription_t *async = nullptr;
+    aeron_subscription_t *subscription = nullptr;
+
+    ASSERT_EQ(aeron_client_conductor_async_add_subscription(
+        &async, &m_conductor, SUB_URI, STREAM_ID, nullptr, nullptr, nullptr, nullptr), 0);
+    doWork();
+
+    transmitOnSubscriptionReady(async);
+    doWork();
+
+    ASSERT_EQ(aeron_async_add_subscription_poll(&subscription, async), 1) << aeron_errmsg();
+    ASSERT_NE(nullptr, subscription);
+    const int64_t registration_id = subscription->registration_id;
+
+    std::atomic<bool> removed(false);
+    auto on_remove = [](void *clientd)
+    {
+        static_cast<std::atomic<bool> *>(clientd)->store(true);
+    };
+
+    ASSERT_EQ(aeron_client_conductor_async_remove_resource(
+        registration_id, AERON_CLIENT_MANAGED_RESOURCE_TYPE_SUBSCRIPTION, &m_conductor, on_remove, &removed), 0);
+
+    EXPECT_FALSE(removed);
+
+    doWork();
+
+    EXPECT_TRUE(removed) << "on_complete should fire after the conductor processes the remove cmd";
+}
+
+TEST_F(ClientConductorTest, shouldFreeUnprocessedRemoveResourceCmdOnClose)
+{
+    m_conductor.invoker_mode = false;
+
+    aeron_async_add_subscription_t *async = nullptr;
+    aeron_subscription_t *subscription = nullptr;
+
+    ASSERT_EQ(aeron_client_conductor_async_add_subscription(
+        &async, &m_conductor, SUB_URI, STREAM_ID, nullptr, nullptr, nullptr, nullptr), 0);
+    doWork();
+
+    transmitOnSubscriptionReady(async);
+    doWork();
+
+    ASSERT_EQ(aeron_async_add_subscription_poll(&subscription, async), 1) << aeron_errmsg();
+    ASSERT_NE(nullptr, subscription);
+    const int64_t registration_id = subscription->registration_id;
+
+    std::atomic<bool> removed(false);
+    auto on_remove = [](void *clientd)
+    {
+        static_cast<std::atomic<bool> *>(clientd)->store(true);
+    };
+
+    ASSERT_EQ(aeron_client_conductor_async_remove_resource(
+        registration_id, AERON_CLIENT_MANAGED_RESOURCE_TYPE_SUBSCRIPTION, &m_conductor, on_remove, &removed), 0);
+
+    /* Intentionally do not doWork() — cmd stays queued. Close should drain it. */
+    aeron_client_conductor_on_close(&m_conductor);
+    m_conductor_isClosed = true;
+
+    EXPECT_TRUE(removed) << "on_complete should fire from the close-time queue drain";
+}
+
+TEST_F(ClientConductorTest, shouldFreeRemoveResourceCmdImmediatelyInInvokerMode)
+{
+    /* Fixture defaults to invoker_mode = true. */
+    ASSERT_TRUE(m_conductor.invoker_mode);
+
+    aeron_async_add_subscription_t *async = nullptr;
+    aeron_subscription_t *subscription = nullptr;
+
+    ASSERT_EQ(aeron_client_conductor_async_add_subscription(
+        &async, &m_conductor, SUB_URI, STREAM_ID, nullptr, nullptr, nullptr, nullptr), 0);
+    transmitOnSubscriptionReady(async);
+    doWork();
+
+    ASSERT_EQ(aeron_async_add_subscription_poll(&subscription, async), 1) << aeron_errmsg();
+    ASSERT_NE(nullptr, subscription);
+    const int64_t registration_id = subscription->registration_id;
+
+    std::atomic<bool> removed(false);
+    auto on_remove = [](void *clientd)
+    {
+        static_cast<std::atomic<bool> *>(clientd)->store(true);
+    };
+
+    ASSERT_EQ(aeron_client_conductor_async_remove_resource(
+        registration_id, AERON_CLIENT_MANAGED_RESOURCE_TYPE_SUBSCRIPTION, &m_conductor, on_remove, &removed), 0);
+
+    EXPECT_TRUE(removed) << "invoker mode processes the remove cmd synchronously in the caller";
+}
+
+TEST_F(ClientConductorTest, shouldSupportConcurrentAsyncRemoveResourceFromMultipleThreads)
+{
+    m_conductor.invoker_mode = false;
+
+    constexpr int kProducerThreads = 4;
+    constexpr int kCmdsPerThread = 32;
+    constexpr int kTotalCmds = kProducerThreads * kCmdsPerThread;
+
+    std::atomic<int> completed(0);
+    auto on_remove = [](void *clientd)
+    {
+        static_cast<std::atomic<int> *>(clientd)->fetch_add(1, std::memory_order_relaxed);
+    };
+
+    std::atomic<bool> go(false);
+    std::vector<std::thread> producers;
+    producers.reserve(kProducerThreads);
+
+    for (size_t t = 0; t < kProducerThreads; t++)
+    {
+        producers.emplace_back([&, t]()
+        {
+            while (!go.load(std::memory_order_acquire))
+            {
+                std::this_thread::yield();
+            }
+            for (int i = 0; i < kCmdsPerThread; i++)
+            {
+                const auto registration_id = static_cast<int64_t>(t * kCmdsPerThread + i);
+                /* No registered resource behind these ids — the remove cmd will be a no-op
+                 * for driver-side work, but the conductor still frees the cmd and fires
+                 * on_complete. Exercises the MPSC offer + tag path from multiple producers. */
+                ASSERT_EQ(aeron_client_conductor_async_remove_resource(
+                    registration_id,
+                    AERON_CLIENT_MANAGED_RESOURCE_TYPE_SUBSCRIPTION,
+                    &m_conductor,
+                    on_remove,
+                    &completed), 0);
+            }
+        });
+    }
+
+    go.store(true, std::memory_order_release);
+
+    int total_work = 0;
+    while (completed.load(std::memory_order_relaxed) < kTotalCmds && total_work < (kTotalCmds * 100))
+    {
+        total_work += doWork();
+        std::this_thread::yield();
+    }
+
+    for (auto &p : producers)
+    {
+        p.join();
+    }
+
+    /* Drain anything still queued. */
+    doWork();
+
+    EXPECT_EQ(kTotalCmds, completed.load());
+}
+
+TEST_F(ClientConductorTest, shouldDrainQueuedRemoveCmdsFromProducerThreadOnClose)
+{
+    m_conductor.invoker_mode = false;
+
+    std::atomic<bool> stop(false);
+    std::atomic<int> offers_succeeded(0);
+    std::atomic<int> callbacks_fired(0);
+
+    auto on_remove = [](void *clientd)
+    {
+        static_cast<std::atomic<int> *>(clientd)->fetch_add(1, std::memory_order_relaxed);
+    };
+
+    /* Producer thread offers remove cmds until the main thread signals stop. Exercises the
+     * MPSC queue's multi-producer offer while the main thread alternates doWork (the
+     * single-consumer path) — mirrors how a user thread would issue async_remove_resource
+     * while the conductor agent drains in production. */
+    std::thread producer([&]()
+    {
+        int64_t next_id = 0;
+        while (!stop.load(std::memory_order_acquire))
+        {
+            if (aeron_client_conductor_async_remove_resource(
+                next_id++,
+                AERON_CLIENT_MANAGED_RESOURCE_TYPE_SUBSCRIPTION,
+                &m_conductor,
+                on_remove,
+                &callbacks_fired) == 0)
+            {
+                offers_succeeded.fetch_add(1, std::memory_order_relaxed);
+            }
+        }
+    });
+
+    /* Interleave processing with production for a short burst. */
+    auto start = std::chrono::steady_clock::now();
+    while (std::chrono::steady_clock::now() - start < std::chrono::milliseconds(5))
+    {
+        doWork();
+    }
+
+    /* Stop the producer and join before triggering close. In production, aeron_close's
+     * internal pthread_join establishes the same ordering guarantee: no producer offers
+     * after the close-path drain starts. */
+    stop.store(true, std::memory_order_release);
+    producer.join();
+
+    /* Close must drain everything the producer left queued. */
+    aeron_client_conductor_on_close(&m_conductor);
+    m_conductor_isClosed = true;
+
+    EXPECT_EQ(offers_succeeded.load(), callbacks_fired.load())
+        << "Every successfully-offered cmd must have had its on_complete fired "
+           "(either by doWork during the burst or by the close-time drain).";
 }

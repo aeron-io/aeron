@@ -23,7 +23,13 @@ import io.aeron.config.Config;
 import io.aeron.driver.buffer.FileStoreLogFactory;
 import io.aeron.driver.buffer.LogFactory;
 import io.aeron.driver.exceptions.ActiveDriverException;
-import io.aeron.driver.media.*;
+import io.aeron.driver.media.ControlTransportPoller;
+import io.aeron.driver.media.DataTransportPoller;
+import io.aeron.driver.media.PortManager;
+import io.aeron.driver.media.ReceiveChannelEndpoint;
+import io.aeron.driver.media.ReceiveChannelEndpointThreadLocals;
+import io.aeron.driver.media.SendChannelEndpoint;
+import io.aeron.driver.media.WildcardPortManager;
 import io.aeron.driver.reports.LossReport;
 import io.aeron.driver.status.DutyCycleStallTracker;
 import io.aeron.driver.status.SystemCounters;
@@ -33,15 +39,47 @@ import io.aeron.exceptions.ConfigurationException;
 import io.aeron.logbuffer.BufferClaim;
 import io.aeron.logbuffer.LogBufferDescriptor;
 import io.aeron.version.Versioned;
-import org.agrona.*;
-import org.agrona.concurrent.*;
+import org.agrona.BitUtil;
+import org.agrona.BufferUtil;
+import org.agrona.CloseHelper;
+import org.agrona.ErrorHandler;
+import org.agrona.IoUtil;
+import org.agrona.LangUtil;
+import org.agrona.MutableDirectBuffer;
+import org.agrona.SemanticVersion;
+import org.agrona.Strings;
+import org.agrona.SystemUtil;
+import org.agrona.concurrent.Agent;
+import org.agrona.concurrent.AgentInvoker;
+import org.agrona.concurrent.AgentRunner;
+import org.agrona.concurrent.CachedEpochClock;
+import org.agrona.concurrent.CachedNanoClock;
+import org.agrona.concurrent.CompositeAgent;
+import org.agrona.concurrent.CountedErrorHandler;
+import org.agrona.concurrent.EpochClock;
+import org.agrona.concurrent.EpochNanoClock;
+import org.agrona.concurrent.HighResolutionTimer;
+import org.agrona.concurrent.IdleStrategy;
+import org.agrona.concurrent.ManyToOneConcurrentLinkedQueue;
+import org.agrona.concurrent.NanoClock;
+import org.agrona.concurrent.OneToOneConcurrentArrayQueue;
+import org.agrona.concurrent.ShutdownSignalBarrier;
+import org.agrona.concurrent.SystemEpochClock;
+import org.agrona.concurrent.SystemEpochNanoClock;
+import org.agrona.concurrent.SystemNanoClock;
+import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.broadcast.BroadcastTransmitter;
 import org.agrona.concurrent.errors.DistinctErrorLog;
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
-import org.agrona.concurrent.status.*;
+import org.agrona.concurrent.status.AtomicCounter;
+import org.agrona.concurrent.status.ConcurrentCountersManager;
+import org.agrona.concurrent.status.CountersManager;
+import org.agrona.concurrent.status.StatusIndicator;
+import org.agrona.concurrent.status.UnsafeBufferStatusIndicator;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -54,15 +92,51 @@ import java.nio.channels.DatagramChannel;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Date;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
-import static io.aeron.CncFileDescriptor.*;
-import static io.aeron.driver.Configuration.*;
+import static io.aeron.CncFileDescriptor.CNC_VERSION;
+import static io.aeron.CncFileDescriptor.META_DATA_LENGTH;
+import static io.aeron.CncFileDescriptor.createCountersMetaDataBuffer;
+import static io.aeron.CncFileDescriptor.createCountersValuesBuffer;
+import static io.aeron.CncFileDescriptor.createErrorLogBuffer;
+import static io.aeron.CncFileDescriptor.createToClientsBuffer;
+import static io.aeron.CncFileDescriptor.createToDriverBuffer;
+import static io.aeron.driver.Configuration.CMD_QUEUE_CAPACITY;
+import static io.aeron.driver.Configuration.CONDUCTOR_BUFFER_LENGTH_DEFAULT;
+import static io.aeron.driver.Configuration.COUNTERS_VALUES_BUFFER_LENGTH_MAX;
+import static io.aeron.driver.Configuration.COUNTERS_VALUES_BUFFER_LENGTH_MIN;
+import static io.aeron.driver.Configuration.ERROR_BUFFER_LENGTH_DEFAULT;
+import static io.aeron.driver.Configuration.LOSS_REPORT_BUFFER_LENGTH_DEFAULT;
+import static io.aeron.driver.Configuration.NAK_UNICAST_DELAY_MIN_VALUE_NS;
+import static io.aeron.driver.Configuration.TO_CLIENTS_BUFFER_LENGTH_DEFAULT;
+import static io.aeron.driver.Configuration.countersMetadataBufferLength;
+import static io.aeron.driver.Configuration.validateInitialWindowLength;
+import static io.aeron.driver.Configuration.validateMtuLength;
+import static io.aeron.driver.Configuration.validatePageSize;
+import static io.aeron.driver.Configuration.validateSessionIdRange;
+import static io.aeron.driver.Configuration.validateSocketBufferLengths;
+import static io.aeron.driver.Configuration.validateUnblockTimeout;
+import static io.aeron.driver.Configuration.validateUntetheredTimeouts;
+import static io.aeron.driver.Configuration.validateValueRange;
 import static io.aeron.driver.reports.LossReportUtil.mapLossReport;
+import static io.aeron.driver.status.SystemCounterDescriptor.AERON_VERSION;
+import static io.aeron.driver.status.SystemCounterDescriptor.NATIVE_RESOURCE_AGENT_PROXY_FAILS;
+import static io.aeron.driver.status.SystemCounterDescriptor.BYTES_CURRENTLY_MAPPED;
+import static io.aeron.driver.status.SystemCounterDescriptor.CONDUCTOR_CYCLE_TIME_THRESHOLD_EXCEEDED;
+import static io.aeron.driver.status.SystemCounterDescriptor.CONDUCTOR_MAX_CYCLE_TIME;
 import static io.aeron.driver.status.SystemCounterDescriptor.CONTROLLABLE_IDLE_STRATEGY;
-import static io.aeron.driver.status.SystemCounterDescriptor.*;
+import static io.aeron.driver.status.SystemCounterDescriptor.CONTROL_PROTOCOL_VERSION;
+import static io.aeron.driver.status.SystemCounterDescriptor.ERRORS;
+import static io.aeron.driver.status.SystemCounterDescriptor.NAME_RESOLVER_MAX_TIME;
+import static io.aeron.driver.status.SystemCounterDescriptor.NAME_RESOLVER_TIME_THRESHOLD_EXCEEDED;
+import static io.aeron.driver.status.SystemCounterDescriptor.RECEIVER_CYCLE_TIME_THRESHOLD_EXCEEDED;
+import static io.aeron.driver.status.SystemCounterDescriptor.RECEIVER_MAX_CYCLE_TIME;
+import static io.aeron.driver.status.SystemCounterDescriptor.RECEIVER_PROXY_FAILS;
+import static io.aeron.driver.status.SystemCounterDescriptor.SENDER_CYCLE_TIME_THRESHOLD_EXCEEDED;
+import static io.aeron.driver.status.SystemCounterDescriptor.SENDER_MAX_CYCLE_TIME;
+import static io.aeron.driver.status.SystemCounterDescriptor.SENDER_PROXY_FAILS;
 import static io.aeron.logbuffer.LogBufferDescriptor.TERM_MAX_LENGTH;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
@@ -85,12 +159,13 @@ import static org.agrona.concurrent.status.CountersReader.METADATA_LENGTH;
 public final class MediaDriver implements AutoCloseable
 {
     private boolean wasHighResTimerEnabled;
+    private final AgentRunner nativeResourceAgentRunner;
+    private final AgentInvoker sharedInvoker;
     private final AgentRunner sharedRunner;
     private final AgentRunner sharedNetworkRunner;
     private final AgentRunner conductorRunner;
     private final AgentRunner receiverRunner;
     private final AgentRunner senderRunner;
-    private final AgentInvoker sharedInvoker;
     private final Context ctx;
 
     /**
@@ -127,46 +202,58 @@ public final class MediaDriver implements AutoCloseable
         {
             ctx.conclude();
             this.ctx = ctx;
+            final SystemCounters systemCounters = ctx.systemCounters();
+            final AtomicCounter errorCounter = systemCounters.get(ERRORS);
+            final ErrorHandler errorHandler = ctx.errorHandler();
+
+            final NativeResourceAgent nativeResourceAgent = new NativeResourceAgent(ctx);
+            ctx.nativeResourceAgentProxy().nativeResourceAgent(nativeResourceAgent);
 
             final DriverConductor conductor = new DriverConductor(ctx);
             final Receiver receiver = new Receiver(ctx);
             final Sender sender = new Sender(ctx);
 
+            ctx.driverConductorProxy().driverConductor(conductor);
             ctx.receiverProxy().receiver(receiver);
             ctx.senderProxy().sender(sender);
-            ctx.driverConductorProxy().driverConductor(conductor);
-
-            final AtomicCounter errorCounter = ctx.systemCounters().get(ERRORS);
-            final ErrorHandler errorHandler = ctx.errorHandler();
 
             switch (ctx.threadingMode())
             {
                 case INVOKER:
+                {
                     sharedInvoker = new AgentInvoker(
                         errorHandler,
                         errorCounter,
-                        new NamedCompositeAgent(ctx.aeronDirectoryName(), sender, receiver, conductor));
+                        new NamedCompositeAgent(
+                            ctx.aeronDirectoryName(), sender, receiver, conductor, nativeResourceAgent));
                     sharedRunner = null;
                     sharedNetworkRunner = null;
                     conductorRunner = null;
                     receiverRunner = null;
                     senderRunner = null;
+                    nativeResourceAgentRunner = null;
                     break;
+                }
 
                 case SHARED:
+                {
                     sharedRunner = new AgentRunner(
                         ctx.sharedIdleStrategy(),
                         errorHandler,
                         errorCounter,
-                        new NamedCompositeAgent(ctx.aeronDirectoryName(), sender, receiver, conductor));
+                        new NamedCompositeAgent(
+                            ctx.aeronDirectoryName(), sender, receiver, conductor, nativeResourceAgent));
                     sharedNetworkRunner = null;
                     conductorRunner = null;
                     receiverRunner = null;
                     senderRunner = null;
                     sharedInvoker = null;
+                    nativeResourceAgentRunner = null;
                     break;
+                }
 
                 case SHARED_NETWORK:
+                {
                     sharedNetworkRunner = new AgentRunner(
                         ctx.sharedNetworkIdleStrategy(),
                         errorHandler,
@@ -174,22 +261,35 @@ public final class MediaDriver implements AutoCloseable
                         new NamedCompositeAgent(ctx.aeronDirectoryName(), sender, receiver));
                     conductorRunner = new AgentRunner(
                         ctx.conductorIdleStrategy(), errorHandler, errorCounter, conductor);
+                    nativeResourceAgentRunner = new AgentRunner(
+                        ctx.nativeResourceAgentIdleStrategy(),
+                        errorHandler,
+                        errorCounter,
+                        nativeResourceAgent);
                     sharedRunner = null;
                     receiverRunner = null;
                     senderRunner = null;
                     sharedInvoker = null;
                     break;
+                }
 
                 case DEDICATED:
                 default:
+                {
                     senderRunner = new AgentRunner(ctx.senderIdleStrategy(), errorHandler, errorCounter, sender);
                     receiverRunner = new AgentRunner(ctx.receiverIdleStrategy(), errorHandler, errorCounter, receiver);
                     conductorRunner = new AgentRunner(
                         ctx.conductorIdleStrategy(), errorHandler, errorCounter, conductor);
+                    nativeResourceAgentRunner = new AgentRunner(
+                        ctx.nativeResourceAgentIdleStrategy(),
+                        errorHandler,
+                        errorCounter,
+                        nativeResourceAgent);
                     sharedNetworkRunner = null;
                     sharedRunner = null;
                     sharedInvoker = null;
                     break;
+                }
             }
         }
         catch (final ConcurrentConcludeException ex)
@@ -267,6 +367,11 @@ public final class MediaDriver implements AutoCloseable
             }
         }
 
+        if (null != mediaDriver.nativeResourceAgentRunner)
+        {
+            AgentRunner.startOnThread(mediaDriver.nativeResourceAgentRunner, ctx.nativeResourceAgentThreadFactory());
+        }
+
         if (null != mediaDriver.conductorRunner)
         {
             AgentRunner.startOnThread(mediaDriver.conductorRunner, ctx.conductorThreadFactory());
@@ -328,7 +433,13 @@ public final class MediaDriver implements AutoCloseable
         try
         {
             CloseHelper.closeAll(
-                sharedRunner, sharedNetworkRunner, receiverRunner, senderRunner, conductorRunner, sharedInvoker);
+                nativeResourceAgentRunner,
+                sharedInvoker,
+                sharedRunner,
+                sharedNetworkRunner,
+                receiverRunner,
+                senderRunner,
+                conductorRunner);
         }
         finally
         {
@@ -367,7 +478,8 @@ public final class MediaDriver implements AutoCloseable
                 {
                     if (CommonContext.isDriverActive(ctx.driverTimeoutMs(), logger, cncByteBuffer))
                     {
-                        throw new ActiveDriverException("active driver detected");
+                        throw new ActiveDriverException("Active media driver detected: " +
+                            new File(ctx.aeronDirectory(), CncFileDescriptor.CNC_FILE));
                     }
 
                     reportExistingErrors(ctx, cncByteBuffer);
@@ -389,7 +501,7 @@ public final class MediaDriver implements AutoCloseable
         try
         {
             final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            final int observations = ctx.saveErrorLog(new PrintStream(baos, false, "US-ASCII"), cncByteBuffer);
+            final int observations = ctx.saveErrorLog(new PrintStream(baos, false, US_ASCII), cncByteBuffer);
             if (observations > 0)
             {
                 final StringBuilder builder = new StringBuilder(ctx.aeronDirectoryName());
@@ -431,6 +543,7 @@ public final class MediaDriver implements AutoCloseable
     public static final class Context extends CommonContext
     {
         private static final VarHandle IS_CLOSED_VH;
+
         static
         {
             try
@@ -504,7 +617,6 @@ public final class MediaDriver implements AutoCloseable
         private int lossReportBufferLength = Configuration.lossReportBufferLength();
         private int sendToStatusMessagePollRatio = Configuration.sendToStatusMessagePollRatio();
         private int resourceFreeLimit = Configuration.resourceFreeLimit();
-        private int asyncTaskExecutorThreads = Configuration.asyncTaskExecutorThreads();
         private int maxResend = Configuration.maxResend();
 
         private Long receiverGroupTag = Configuration.groupTag();
@@ -529,12 +641,13 @@ public final class MediaDriver implements AutoCloseable
         private ThreadFactory receiverThreadFactory;
         private ThreadFactory sharedThreadFactory;
         private ThreadFactory sharedNetworkThreadFactory;
-        private Executor asyncTaskExecutor;
+        private ThreadFactory nativeResourceAgentThreadFactory;
         private IdleStrategy conductorIdleStrategy;
         private IdleStrategy senderIdleStrategy;
         private IdleStrategy receiverIdleStrategy;
         private IdleStrategy sharedNetworkIdleStrategy;
         private IdleStrategy sharedIdleStrategy;
+        private IdleStrategy nativeResourceAgentIdleStrategy;
         private SendChannelEndpointSupplier sendChannelEndpointSupplier;
         private ReceiveChannelEndpointSupplier receiveChannelEndpointSupplier;
         private ReceiveChannelEndpointThreadLocals receiveChannelEndpointThreadLocals;
@@ -549,7 +662,7 @@ public final class MediaDriver implements AutoCloseable
         private FeedbackDelayGenerator retransmitUnicastLingerGenerator;
         private TerminationValidator terminationValidator;
         private Runnable terminationHook;
-        private NameResolver nameResolver;
+        private NameResolverAgent nameResolver;
 
         private DistinctErrorLog errorLog;
         private ErrorHandler errorHandler;
@@ -565,8 +678,10 @@ public final class MediaDriver implements AutoCloseable
         private ManyToOneConcurrentLinkedQueue<Runnable> driverCommandQueue;
         private OneToOneConcurrentArrayQueue<Runnable> receiverCommandQueue;
         private OneToOneConcurrentArrayQueue<Runnable> senderCommandQueue;
+        private OneToOneConcurrentArrayQueue<Runnable> nativeResourceAgentCommandQueue;
         private ReceiverProxy receiverProxy;
         private SenderProxy senderProxy;
+        private NativeResourceAgentProxy nativeResourceAgentProxy;
         private DriverConductorProxy driverConductorProxy;
         private ClientProxy clientProxy;
         private RingBuffer toDriverCommands;
@@ -589,6 +704,18 @@ public final class MediaDriver implements AutoCloseable
         private PortManager senderPortManager;
         private PortManager receiverPortManager;
         private int streamSessionLimit = Configuration.streamSessionLimit();
+        private long resolverNeighbourTimeoutNs = Configuration.resolverNeighborTimeoutNs();
+        private long resolverSelfResolutionIntervalNs = Configuration.resolverSelfResolutionIntervalNs();
+        private long resolverNeighborResolutionIntervalNs = Configuration.resolverNeighborResolutionIntervalNs();
+        private long resolverBootstrapNeighborResolutionIntervalNs =
+            Configuration.resolverBootstrapNeighborResolutionIntervalNs();
+
+        /**
+         * Construct a Context using default values and loading from system properties.
+         */
+        public Context()
+        {
+        }
 
         /**
          * Perform a shallow copy of the object.
@@ -2320,53 +2447,27 @@ public final class MediaDriver implements AutoCloseable
         }
 
         /**
-         * Returns the number of threads for async task executor.
+         * {@return {@link ThreadFactory} to be used for creating agent thread for the {@code NativeResourceAgent}.}
          *
-         * @return number of threads.
-         * @see Configuration#ASYNC_TASK_EXECUTOR_THREADS_PROP_NAME
-         * @since 1.44.0
+         * @since 1.52.0
          */
-        @Config
-        public int asyncTaskExecutorThreads()
+        public ThreadFactory nativeResourceAgentThreadFactory()
         {
-            return asyncTaskExecutorThreads;
+            return nativeResourceAgentThreadFactory;
         }
 
         /**
-         * Sets the number of threads for async task executor.
+         * {@link ThreadFactory} to be used for creating agent thread for the {@code NativeResourceAgent}.
+         * <p>
+         * If none is provided then this will default a simple new operation.
          *
-         * @param asyncTaskExecutorThreads number of async worker threads.
+         * @param factory to be used for creating agent thread.
          * @return this for a fluent API.
-         * @since 1.44.0
+         * @since 1.52.0
          */
-        public Context asyncTaskExecutorThreads(final int asyncTaskExecutorThreads)
+        public Context nativeResourceAgentThreadFactory(final ThreadFactory factory)
         {
-            this.asyncTaskExecutorThreads = asyncTaskExecutorThreads;
-            return this;
-        }
-
-        /**
-         * {@link Executor} to be used for asynchronous task execution in the {@link DriverConductor}.
-         *
-         * @return executor service for asynchronous tasks. If not explicitly assigned uses
-         * {@link #asyncTaskExecutorThreads()} to size the thread pool.
-         * @since 1.44.0
-         */
-        public Executor asyncTaskExecutor()
-        {
-            return asyncTaskExecutor;
-        }
-
-        /**
-         * {@link Executor} to be used for asynchronous task execution in the {@link DriverConductor}.
-         *
-         * @param asyncTaskExecutor to be used for asynchronous task execution in the {@link DriverConductor}.
-         * @return this for a fluent API.
-         * @since 1.44.0
-         */
-        public Context asyncTaskExecutor(final Executor asyncTaskExecutor)
-        {
-            this.asyncTaskExecutor = asyncTaskExecutor;
+            nativeResourceAgentThreadFactory = factory;
             return this;
         }
 
@@ -2406,6 +2507,32 @@ public final class MediaDriver implements AutoCloseable
         public IdleStrategy senderIdleStrategy()
         {
             return senderIdleStrategy;
+        }
+
+        /**
+         * {@link IdleStrategy} to be used by the {@code NativeResourceAgent} when enabled.
+         *
+         * @param strategy to be used.
+         * @return this for a fluent API.
+         * @see Configuration#NATIVE_RESOURCE_AGENT_IDLE_STRATEGY_PROP_NAME
+         * @since 1.52.0
+         */
+        public Context nativeResourceAgentIdleStrategy(final IdleStrategy strategy)
+        {
+            nativeResourceAgentIdleStrategy = strategy;
+            return this;
+        }
+
+        /**
+         * {@return {@link IdleStrategy} to be used by the {@code NativeResourceAgent} when enabled.}
+         *
+         * @see Configuration#NATIVE_RESOURCE_AGENT_IDLE_STRATEGY_PROP_NAME
+         * @since 1.52.0
+         */
+        @Config
+        public IdleStrategy nativeResourceAgentIdleStrategy()
+        {
+            return nativeResourceAgentIdleStrategy;
         }
 
         /**
@@ -3272,7 +3399,7 @@ public final class MediaDriver implements AutoCloseable
          *
          * @return {@link NameResolver} to use for resolving endpoints and control names.
          */
-        public NameResolver nameResolver()
+        public NameResolverAgent nameResolver()
         {
             return nameResolver;
         }
@@ -3283,7 +3410,7 @@ public final class MediaDriver implements AutoCloseable
          * @param nameResolver to use for resolving endpoints and control names.
          * @return this for fluent API.
          */
-        public Context nameResolver(final NameResolver nameResolver)
+        public Context nameResolver(final NameResolverAgent nameResolver)
         {
             this.nameResolver = nameResolver;
             return this;
@@ -3373,6 +3500,102 @@ public final class MediaDriver implements AutoCloseable
         public Context resolverBootstrapNeighbor(final String resolverBootstrapNeighbor)
         {
             this.resolverBootstrapNeighbor = resolverBootstrapNeighbor;
+            return this;
+        }
+
+        /**
+         * Get the time to wait before removing a neighbor entry from the cache if an update for that neighbor has not
+         * been received.
+         *
+         * @return the time to wait before removing a neighbor entry from the cache if an update for that neighbor has
+         * not been received.
+         * @see #resolverNeighborTimeoutNs(long)
+         */
+        public long resolverNeighborTimeoutNs()
+        {
+            return this.resolverNeighbourTimeoutNs;
+        }
+
+        /**
+         * Set the time to wait before removing a neighbor entry from the cache if an update for that neighbor has not
+         * been received.
+         *
+         * @param timeoutNs to wait before removing a neighbor entry from the cache.
+         * @return this for a fluent API.
+         *
+         */
+        public Context resolverNeighborTimeoutNs(final long timeoutNs)
+        {
+            this.resolverNeighbourTimeoutNs = timeoutNs;
+            return this;
+        }
+
+        /**
+         * Get the interval between sending name to address messages for this driver to its neighbors.
+         *
+         * @return the interval between sending name to address messages for this driver to its neighbors.
+         * @see #resolverSelfResolutionIntervalNs(long)
+         */
+        public long resolverSelfResolutionIntervalNs()
+        {
+            return this.resolverSelfResolutionIntervalNs;
+        }
+
+        /**
+         * Set the interval between sending name to address messages for this driver to its neighbors.
+         *
+         * @param intervalNs between sending name to address messages for this driver.
+         * @return this for a fluent API.
+         */
+        public Context resolverSelfResolutionIntervalNs(final long intervalNs)
+        {
+            this.resolverSelfResolutionIntervalNs = intervalNs;
+            return this;
+        }
+
+        /**
+         * Get the interval between sending name to address messages for all known neighbors.
+         *
+         * @return the interval between sending name to address messages for all known neighbors.
+         * @see #resolverNeighborResolutionIntervalNs(long)
+         */
+        public long resolverNeighborResolutionIntervalNs()
+        {
+            return this.resolverNeighborResolutionIntervalNs;
+        }
+
+        /**
+         * Set the interval between sending name to address messages for all known neighbors.
+         *
+         * @param intervalNs between sending name to address messages for all known neighbors.
+         * @return this for a fluent API.
+         */
+        public Context resolverNeighborResolutionIntervalNs(final long intervalNs)
+        {
+            this.resolverNeighborResolutionIntervalNs = intervalNs;
+            return this;
+        }
+
+        /**
+         * Get the interval between resolutions of bootstrap neighbors that are not active.
+         *
+         * @return the interval between resolutions of bootstrap neighbors that are not active.
+         * @see #resolverBootstrapNeighborResolutionIntervalNs(long)
+         */
+        public long resolverBootstrapNeighborResolutionIntervalNs()
+        {
+            return this.resolverBootstrapNeighborResolutionIntervalNs;
+        }
+
+        /**
+         * Set the interval between resolutions of bootstrap neighbors that are not active.
+         *
+         * @param intervalNs between resolutions of bootstrap neighbors that are not active.
+         * @return this for a fluent API.
+         */
+        public Context resolverBootstrapNeighborResolutionIntervalNs(final long intervalNs)
+        {
+            this.resolverBootstrapNeighborResolutionIntervalNs = intervalNs;
             return this;
         }
 
@@ -3842,6 +4065,17 @@ public final class MediaDriver implements AutoCloseable
             return this;
         }
 
+        OneToOneConcurrentArrayQueue<Runnable> nativeResourceAgentCommandQueue()
+        {
+            return nativeResourceAgentCommandQueue;
+        }
+
+        Context nativeResourceAgentCommandQueue(final OneToOneConcurrentArrayQueue<Runnable> commandQueue)
+        {
+            this.nativeResourceAgentCommandQueue = commandQueue;
+            return this;
+        }
+
         ManyToOneConcurrentLinkedQueue<Runnable> driverCommandQueue()
         {
             return driverCommandQueue;
@@ -3938,6 +4172,17 @@ public final class MediaDriver implements AutoCloseable
         Context senderProxy(final SenderProxy senderProxy)
         {
             this.senderProxy = senderProxy;
+            return this;
+        }
+
+        NativeResourceAgentProxy nativeResourceAgentProxy()
+        {
+            return nativeResourceAgentProxy;
+        }
+
+        Context nativeResourceAgentProxy(final NativeResourceAgentProxy nativeResourceAgentProxy)
+        {
+            this.nativeResourceAgentProxy = nativeResourceAgentProxy;
             return this;
         }
 
@@ -4116,6 +4361,11 @@ public final class MediaDriver implements AutoCloseable
                 senderCommandQueue = new OneToOneConcurrentArrayQueue<>(CMD_QUEUE_CAPACITY);
             }
 
+            if (null == nativeResourceAgentCommandQueue)
+            {
+                nativeResourceAgentCommandQueue = new OneToOneConcurrentArrayQueue<>(CMD_QUEUE_CAPACITY);
+            }
+
             if (null == retransmitUnicastDelayGenerator)
             {
                 retransmitUnicastDelayGenerator = new StaticDelayGenerator(retransmitUnicastDelayNs);
@@ -4158,47 +4408,10 @@ public final class MediaDriver implements AutoCloseable
                 channelSendTimestampClock = new SystemEpochNanoClock();
             }
 
-            if (null == asyncTaskExecutor)
-            {
-                if (asyncTaskExecutorThreads <= 0)
-                {
-                    asyncTaskExecutor = CALLER_RUNS_TASK_EXECUTOR;
-                }
-                else
-                {
-                    asyncTaskExecutor = newDefaultAsyncTaskExecutor(asyncTaskExecutorThreads, aeronDirectoryName());
-                }
-            }
-
             if (null != resolverInterface && Strings.isEmpty(resolverName))
             {
                 throw new ConfigurationException("`resolverName` is required when `resolverInterface` is set");
             }
-        }
-
-        private static ThreadPoolExecutor newDefaultAsyncTaskExecutor(final int threadCount, final String dirName)
-        {
-            final AtomicInteger id = new AtomicInteger();
-            final ThreadPoolExecutor executor = new ThreadPoolExecutor(
-                threadCount,
-                threadCount,
-                0L,
-                TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<>(),
-                (r) ->
-                {
-                    String threadName = "async-executor";
-                    if (threadCount > 1)
-                    {
-                        threadName += "-" + id.getAndIncrement();
-                    }
-                    threadName += " " + dirName;
-                    final Thread thread = new Thread(r, threadName);
-                    thread.setDaemon(true);
-                    return thread;
-                });
-            executor.prestartAllCoreThreads();
-            return executor;
         }
 
         private void concludeCounters()
@@ -4276,11 +4489,14 @@ public final class MediaDriver implements AutoCloseable
             }
 
             receiverProxy = new ReceiverProxy(
-                threadingMode, receiverCommandQueue, systemCounters.get(RECEIVER_PROXY_FAILS));
+                receiverCommandQueue, systemCounters.get(RECEIVER_PROXY_FAILS));
             senderProxy = new SenderProxy(
-                threadingMode, senderCommandQueue, systemCounters.get(SENDER_PROXY_FAILS));
+                senderCommandQueue, systemCounters.get(SENDER_PROXY_FAILS));
             driverConductorProxy = new DriverConductorProxy(
-                threadingMode, driverCommandQueue, systemCounters.get(CONDUCTOR_PROXY_FAILS));
+                driverCommandQueue);
+            nativeResourceAgentProxy = new NativeResourceAgentProxy(
+                nativeResourceAgentCommandQueue,
+                systemCounters.get(NATIVE_RESOURCE_AGENT_PROXY_FAILS));
 
             if (null == controlTransportPoller)
             {
@@ -4361,6 +4577,10 @@ public final class MediaDriver implements AutoCloseable
                     WildcardPortManager.parsePortRange(receiverWildcardPortRange), false);
             }
 
+            if (null != resolverInterface)
+            {
+                nameResolver = new DriverNameResolver(this);
+            }
             nameResolver.init(countersManager, countersManager::newCounter);
         }
 
@@ -4394,6 +4614,10 @@ public final class MediaDriver implements AutoCloseable
                     {
                         conductorIdleStrategy = Configuration.conductorIdleStrategy(indicator);
                     }
+                    if (null == nativeResourceAgentThreadFactory)
+                    {
+                        nativeResourceAgentThreadFactory = Thread::new;
+                    }
                     if (null == sharedNetworkThreadFactory)
                     {
                         sharedNetworkThreadFactory = Thread::new;
@@ -4401,6 +4625,10 @@ public final class MediaDriver implements AutoCloseable
                     if (null == sharedNetworkIdleStrategy)
                     {
                         sharedNetworkIdleStrategy = Configuration.sharedNetworkIdleStrategy(indicator);
+                    }
+                    if (null == nativeResourceAgentIdleStrategy)
+                    {
+                        nativeResourceAgentIdleStrategy = Configuration.nativeResourceAgentIdleStrategy(indicator);
                     }
                     break;
 
@@ -4417,6 +4645,10 @@ public final class MediaDriver implements AutoCloseable
                     {
                         receiverThreadFactory = Thread::new;
                     }
+                    if (null == nativeResourceAgentThreadFactory)
+                    {
+                        nativeResourceAgentThreadFactory = Thread::new;
+                    }
                     if (null == conductorIdleStrategy)
                     {
                         conductorIdleStrategy = Configuration.conductorIdleStrategy(indicator);
@@ -4428,6 +4660,10 @@ public final class MediaDriver implements AutoCloseable
                     if (null == receiverIdleStrategy)
                     {
                         receiverIdleStrategy = Configuration.receiverIdleStrategy(indicator);
+                    }
+                    if (null == nativeResourceAgentIdleStrategy)
+                    {
+                        nativeResourceAgentIdleStrategy = Configuration.nativeResourceAgentIdleStrategy(indicator);
                     }
                     break;
             }
@@ -4511,11 +4747,13 @@ public final class MediaDriver implements AutoCloseable
                 "\n    receiverThreadFactory=" + receiverThreadFactory +
                 "\n    sharedThreadFactory=" + sharedThreadFactory +
                 "\n    sharedNetworkThreadFactory=" + sharedNetworkThreadFactory +
+                "\n    nativeResourceAgentThreadFactory=" + nativeResourceAgentThreadFactory +
                 "\n    conductorIdleStrategy=" + conductorIdleStrategy +
                 "\n    senderIdleStrategy=" + senderIdleStrategy +
                 "\n    receiverIdleStrategy=" + receiverIdleStrategy +
                 "\n    sharedNetworkIdleStrategy=" + sharedNetworkIdleStrategy +
                 "\n    sharedIdleStrategy=" + sharedIdleStrategy +
+                "\n    nativeResourceAgentIdleStrategy=" + nativeResourceAgentIdleStrategy +
                 "\n    sendChannelEndpointSupplier=" + sendChannelEndpointSupplier +
                 "\n    receiveChannelEndpointSupplier=" + receiveChannelEndpointSupplier +
                 "\n    receiveChannelEndpointThreadLocals=" + receiveChannelEndpointThreadLocals +
@@ -4560,6 +4798,7 @@ public final class MediaDriver implements AutoCloseable
                 "\n    receiverProxy=" + receiverProxy +
                 "\n    senderProxy=" + senderProxy +
                 "\n    driverConductorProxy=" + driverConductorProxy +
+                "\n    nativeResourceAgentProxy=" + nativeResourceAgentProxy +
                 "\n    clientProxy=" + clientProxy +
                 "\n    toDriverCommands=" + toDriverCommands +
                 "\n    lossReportBuffer=" + lossReportBuffer +
@@ -4575,8 +4814,6 @@ public final class MediaDriver implements AutoCloseable
                 "\n    senderPortManager=" + senderPortManager +
                 "\n    receiverPortManager=" + receiverPortManager +
                 "\n    resourceFreeLimit=" + resourceFreeLimit +
-                "\n    asyncTaskExecutorThreads=" + asyncTaskExecutorThreads +
-                "\n    asyncTaskExecutor=" + asyncTaskExecutor +
                 "\n    maxResend=" + maxResend +
                 "\n}";
         }

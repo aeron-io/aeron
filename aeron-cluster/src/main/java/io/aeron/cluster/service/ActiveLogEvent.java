@@ -28,6 +28,7 @@ class ActiveLogEvent
     final boolean isStartup;
     final Cluster.Role role;
     final String channel;
+    final boolean isStandby;
 
     ActiveLogEvent(
         final long logPosition,
@@ -37,6 +38,7 @@ class ActiveLogEvent
         final int streamId,
         final boolean isStartup,
         final Cluster.Role role,
+        final boolean isStandby,
         final String channel)
     {
         this.logPosition = logPosition;
@@ -47,6 +49,7 @@ class ActiveLogEvent
         this.isStartup = isStartup;
         this.role = role;
         this.channel = channel;
+        this.isStandby = isStandby;
     }
 
     public String toString()
@@ -59,6 +62,7 @@ class ActiveLogEvent
             ", streamId=" + streamId +
             ", isStartup=" + isStartup +
             ", role=" + role +
+            ", isStandby=" + isStandby +
             ", channel='" + channel + '\'' +
             '}';
     }

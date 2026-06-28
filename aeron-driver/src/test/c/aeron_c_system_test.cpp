@@ -20,11 +20,11 @@
 #include <gmock/gmock.h>
 
 #include "aeron_test_base.h"
-#include "aeron_counters.h"
 
 extern "C"
 {
-#include "concurrent/aeron_atomic.h"
+#include "aeron_counters.h"
+#include "aeron_image.h"
 #include "agent/aeron_driver_agent.h"
 #include "aeron_driver_context.h"
 }
@@ -174,6 +174,52 @@ TEST_P(CSystemTest, shouldAddAndClosePublication)
     ASSERT_EQ(0, aeron_subscription_close(subscription, nullptr, nullptr));
 }
 
+TEST_P(CSystemTest, shouldNotifyOnPublicationCreated)
+{
+    std::atomic<int64_t> notifiedRegistrationId(-1);
+    aeron_async_add_publication_t *async = nullptr;
+    aeron_publication_constants_t publication_constants;
+
+    ASSERT_EQ(0, aeron_context_init(&m_context));
+
+    auto on_publication_callback = [](
+        void *clientd,
+        const char *channel,
+        int32_t stream_id,
+        int32_t session_id,
+        int64_t correlation_id)
+    {
+        EXPECT_STREQ(std::get<0>(GetParam()), channel);
+        EXPECT_EQ(STREAM_ID, stream_id);
+        auto registrationId = static_cast<std::atomic<int64_t>*>(clientd);
+        registrationId->store(correlation_id);
+    };
+
+    ASSERT_EQ(0, aeron_context_set_on_new_publication(m_context, on_publication_callback, &notifiedRegistrationId));
+
+    ASSERT_EQ(0, aeron_init(&m_aeron, m_context));
+    ASSERT_EQ(0, aeron_start(m_aeron));
+
+    ASSERT_EQ(aeron_async_add_publication(&async, m_aeron, std::get<0>(GetParam()), STREAM_ID), 0);
+    std::int64_t registration_id = aeron_async_add_publication_get_registration_id(async);
+
+    // await callback notification
+    while (notifiedRegistrationId < 0)
+    {
+        std::this_thread::yield();
+    }
+    EXPECT_EQ(registration_id, notifiedRegistrationId);
+
+    aeron_publication_t *publication;
+    EXPECT_EQ(1, aeron_async_add_publication_poll(&publication, async));
+    EXPECT_TRUE(publication) << aeron_errmsg();
+
+    EXPECT_EQ(0, aeron_publication_constants(publication, &publication_constants)) << aeron_errmsg();
+    EXPECT_EQ(registration_id, publication_constants.registration_id);
+
+    EXPECT_EQ(0, aeron_publication_close(publication, nullptr, nullptr));
+}
+
 TEST_P(CSystemTest, shouldAddAndCloseExclusivePublication)
 {
     std::atomic<bool> publicationClosedFlag(false);
@@ -227,6 +273,52 @@ TEST_P(CSystemTest, shouldAddAndCloseExclusivePublication)
     ASSERT_EQ(0, aeron_subscription_close(subscription, nullptr, nullptr));
 }
 
+TEST_P(CSystemTest, shouldNotifyOnExclusivePublicationCreated)
+{
+    std::atomic<int64_t> notifiedRegistrationId(-1);
+    aeron_async_add_exclusive_publication_t *async = nullptr;
+    aeron_publication_constants_t publication_constants;
+
+    ASSERT_EQ(0, aeron_context_init(&m_context));
+
+    auto on_exclusive_publication_callback = [](
+        void *clientd,
+        const char *channel,
+        int32_t stream_id,
+        int32_t session_id,
+        int64_t correlation_id)
+    {
+        EXPECT_STREQ(std::get<0>(GetParam()), channel);
+        EXPECT_EQ(STREAM_ID, stream_id);
+        auto registrationId = static_cast<std::atomic<int64_t>*>(clientd);
+        registrationId->store(correlation_id);
+    };
+
+    ASSERT_EQ(0, aeron_context_set_on_new_exclusive_publication(m_context, on_exclusive_publication_callback, &notifiedRegistrationId));
+
+    ASSERT_EQ(0, aeron_init(&m_aeron, m_context));
+    ASSERT_EQ(0, aeron_start(m_aeron));
+
+    ASSERT_EQ(aeron_async_add_exclusive_publication(&async, m_aeron, std::get<0>(GetParam()), STREAM_ID), 0);
+    std::int64_t registration_id = aeron_async_add_exclusive_publication_get_registration_id(async);
+
+    // await callback notification
+    while (notifiedRegistrationId < 0)
+    {
+        std::this_thread::yield();
+    }
+    EXPECT_EQ(registration_id, notifiedRegistrationId);
+
+    aeron_exclusive_publication_t *publication;
+    EXPECT_EQ(1, aeron_async_add_exclusive_publication_poll(&publication, async));
+    EXPECT_TRUE(publication) << aeron_errmsg();
+
+    EXPECT_EQ(0, aeron_exclusive_publication_constants(publication, &publication_constants)) << aeron_errmsg();
+    EXPECT_EQ(registration_id, publication_constants.registration_id);
+
+    EXPECT_EQ(0, aeron_exclusive_publication_close(publication, nullptr, nullptr));
+}
+
 TEST_P(CSystemTest, shouldAddAndCloseSubscription)
 {
     std::atomic<bool> subscriptionClosedFlag(false);
@@ -276,6 +368,315 @@ TEST_P(CSystemTest, shouldAddAndCloseSubscription)
     ASSERT_EQ(0, aeron_exclusive_publication_close(publication, nullptr, nullptr));
 }
 
+TEST_P(CSystemTest, shouldNotifyOnSubscriptionCreated)
+{
+    std::atomic<int64_t> notifiedRegistrationId(-1);
+    aeron_async_add_subscription_t *async = nullptr;
+    aeron_subscription_constants_t subscription_constants;
+
+    ASSERT_EQ(0, aeron_context_init(&m_context));
+
+    auto on_subscription_callback = [](
+        void *clientd,
+        const char *channel,
+        int32_t stream_id,
+        int64_t correlation_id)
+    {
+        EXPECT_STREQ(std::get<0>(GetParam()), channel);
+        EXPECT_EQ(STREAM_ID, stream_id);
+        auto registrationId = static_cast<std::atomic<int64_t>*>(clientd);
+        registrationId->store(correlation_id);
+    };
+
+    ASSERT_EQ(0, aeron_context_set_on_new_subscription(m_context, on_subscription_callback, &notifiedRegistrationId));
+
+    ASSERT_EQ(0, aeron_init(&m_aeron, m_context));
+    ASSERT_EQ(0, aeron_start(m_aeron));
+
+    ASSERT_EQ(aeron_async_add_subscription(&async, m_aeron, std::get<0>(GetParam()), STREAM_ID, nullptr, nullptr, nullptr, nullptr), 0);
+    std::int64_t registration_id = aeron_async_add_subscription_get_registration_id(async);
+
+    // await callback notification
+    while (notifiedRegistrationId < 0)
+    {
+        std::this_thread::yield();
+    }
+    EXPECT_EQ(registration_id, notifiedRegistrationId);
+
+    aeron_subscription_t *subscription;
+    EXPECT_EQ(1, aeron_async_add_subscription_poll(&subscription, async));
+    EXPECT_TRUE(subscription) << aeron_errmsg();
+
+    EXPECT_EQ(0, aeron_subscription_constants(subscription, &subscription_constants)) << aeron_errmsg();
+    EXPECT_EQ(registration_id, subscription_constants.registration_id);
+
+    EXPECT_EQ(0, aeron_subscription_close(subscription, nullptr, nullptr));
+}
+
+TEST_P(CSystemTest, shouldCancelAddingSubscriptionAndRemoveByRegistrationId)
+{
+    const auto channel = std::get<0>(GetParam());
+
+    ASSERT_TRUE(connect());
+
+    aeron_async_add_exclusive_publication_t *asyncPub = nullptr;
+    ASSERT_EQ(aeron_async_add_exclusive_publication(&asyncPub, m_aeron, channel, STREAM_ID), 0);
+    aeron_exclusive_publication_t *publication = awaitExclusivePublicationOrError(asyncPub);
+    ASSERT_TRUE(publication) << aeron_errmsg();
+
+    aeron_async_add_subscription_t *async = nullptr;
+    ASSERT_EQ(aeron_async_add_subscription(&async, m_aeron, channel, STREAM_ID, nullptr, nullptr, nullptr, nullptr), 0);
+
+    int64_t subRegistrationId = aeron_async_add_subscription_get_registration_id(async);
+    int32_t receiveChannelCounterId = AERON_NULL_COUNTER_ID;
+    const auto countersReader = aeron_counters_reader(m_aeron);
+    aeron_uri_t uri;
+    ASSERT_EQ(0, aeron_uri_parse(strlen(channel), channel, &uri));
+    while (AERON_URI_UDP == uri.type &&
+        AERON_NULL_COUNTER_ID == (receiveChannelCounterId = aeron_counters_reader_find_by_type_id_and_registration_id(
+        countersReader, AERON_COUNTER_RECEIVE_CHANNEL_STATUS_TYPE_ID, subRegistrationId)))
+    {
+        std::this_thread::yield();
+    }
+
+    ASSERT_EQ(aeron_async_add_subscription_cancel(m_aeron, async), 0);
+
+    while (AERON_NULL_COUNTER_ID != receiveChannelCounterId)
+    {
+        int32_t counter_state;
+        ASSERT_EQ(0, aeron_counters_reader_counter_state(countersReader, receiveChannelCounterId, &counter_state));
+        if (AERON_COUNTER_RECORD_ALLOCATED != counter_state)
+        {
+            break;
+        }
+        std::this_thread::yield();
+    }
+
+    ASSERT_EQ(aeron_async_add_subscription(&async, m_aeron, channel, STREAM_ID, nullptr, nullptr, nullptr, nullptr), 0);
+    aeron_subscription_t *subscription = awaitSubscriptionOrError(async);
+    ASSERT_TRUE(subscription) << aeron_errmsg();
+
+    awaitConnected(publication);
+
+    aeron_subscription_constants_t constants;
+    aeron_subscription_constants(subscription, &constants);
+    std::atomic<bool> removed(false);
+    ASSERT_EQ(aeron_async_remove_subscription(constants.registration_id, m_aeron, setFlagOnClose, &removed), 0);
+    while (!removed)
+    {
+        std::this_thread::yield();
+    }
+
+    while (aeron_exclusive_publication_is_connected(publication))
+    {
+        std::this_thread::yield();
+    }
+
+    ASSERT_EQ(0, aeron_exclusive_publication_close(publication, nullptr, nullptr));
+}
+
+TEST_P(CSystemTest, shouldCancelAddingPublicationAndRemoveByRegistrationId)
+{
+    const auto channel = std::get<0>(GetParam());
+
+    ASSERT_TRUE(connect());
+
+    aeron_async_add_subscription_t *asyncSub = nullptr;
+    ASSERT_EQ(aeron_async_add_subscription(&asyncSub, m_aeron, channel, STREAM_ID, nullptr, nullptr, nullptr, nullptr), 0);
+    aeron_subscription_t *subscription = awaitSubscriptionOrError(asyncSub);
+    ASSERT_TRUE(subscription) << aeron_errmsg();
+
+    aeron_async_add_publication_t *async = nullptr;
+    ASSERT_EQ(aeron_async_add_publication(&async, m_aeron, channel, STREAM_ID), 0);
+    ASSERT_EQ(aeron_async_add_publication_cancel(m_aeron, async), 0);
+
+    ASSERT_EQ(aeron_async_add_publication(&async, m_aeron, channel, STREAM_ID), 0);
+    aeron_publication_t *publication = awaitPublicationOrError(async);
+    ASSERT_TRUE(publication) << aeron_errmsg();
+
+    awaitConnected(subscription);
+
+    aeron_publication_constants_t constants;
+    aeron_publication_constants(publication, &constants);
+    std::atomic<bool> removed(false);
+    ASSERT_EQ(aeron_async_remove_publication(constants.registration_id, m_aeron, setFlagOnClose, &removed), 0);
+    while (!removed)
+    {
+        std::this_thread::yield();
+    }
+
+    while (aeron_subscription_is_connected(subscription))
+    {
+        std::this_thread::yield();
+    }
+
+    ASSERT_EQ(aeron_subscription_close(subscription, nullptr, nullptr), 0);
+}
+
+TEST_P(CSystemTest, shouldCancelAddingExclusivePublicationAndRemoveByRegistrationId)
+{
+    const auto channel = std::get<0>(GetParam());
+
+    ASSERT_TRUE(connect());
+
+    aeron_async_add_subscription_t *asyncSub = nullptr;
+    ASSERT_EQ(aeron_async_add_subscription(&asyncSub, m_aeron, channel, STREAM_ID, nullptr, nullptr, nullptr, nullptr), 0);
+    aeron_subscription_t *subscription = awaitSubscriptionOrError(asyncSub);
+    ASSERT_TRUE(subscription) << aeron_errmsg();
+
+    aeron_async_add_exclusive_publication_t *async = nullptr;
+    ASSERT_EQ(aeron_async_add_exclusive_publication(&async, m_aeron, channel, STREAM_ID), 0);
+    ASSERT_EQ(aeron_async_add_exclusive_publication_cancel(m_aeron, async), 0);
+
+    ASSERT_EQ(aeron_async_add_exclusive_publication(&async, m_aeron, channel, STREAM_ID), 0);
+    aeron_exclusive_publication_t *publication = awaitExclusivePublicationOrError(async);
+    ASSERT_TRUE(publication) << aeron_errmsg();
+
+    awaitConnected(subscription);
+
+    aeron_publication_constants_t constants;
+    aeron_exclusive_publication_constants(publication, &constants);
+    std::atomic<bool> removed(false);
+    ASSERT_EQ(aeron_async_remove_exclusive_publication(constants.registration_id, m_aeron, setFlagOnClose, &removed), 0);
+    while (!removed)
+    {
+        std::this_thread::yield();
+    }
+
+    while (aeron_subscription_is_connected(subscription))
+    {
+        std::this_thread::yield();
+    }
+
+    ASSERT_EQ(aeron_subscription_close(subscription, nullptr, nullptr), 0);
+}
+
+TEST_F(CSystemTest, shouldCancelAddingCounterAndRemoveByRegistrationId)
+{
+    constexpr auto type_id = 55555;
+    constexpr auto static_type_id = 1234;
+
+    ASSERT_TRUE(connect());
+    aeron_counters_reader_t *counters_reader = aeron_counters_reader(m_aeron);
+
+    aeron_async_add_counter_t *async = nullptr;
+    ASSERT_EQ(aeron_async_add_counter(&async, m_aeron, type_id, nullptr, 0, "counter1", strlen("counter1")), 0);
+    int64_t registrationId1 = aeron_async_add_counter_get_registration_id(async);
+    ASSERT_EQ(aeron_async_add_counter_cancel(m_aeron, async), 0);
+    async = nullptr;
+
+    ASSERT_EQ(aeron_async_add_counter(&async, m_aeron, type_id, nullptr, 0, "counter2", strlen("counter2")), 0);
+    int64_t registrationId2 = aeron_async_add_counter_get_registration_id(async);
+    aeron_counter_t *counter2 = awaitCounterOrError(async);
+    ASSERT_TRUE(counter2) << aeron_errmsg();
+
+    std::atomic<bool> removed(false);
+    ASSERT_EQ(aeron_async_remove_counter(registrationId2, m_aeron, setFlagOnClose, &removed), 0);
+    while (!removed)
+    {
+        std::this_thread::yield();
+    }
+
+    ASSERT_EQ(aeron_async_add_static_counter(&async, m_aeron, static_type_id, nullptr, 0, "counter3", strlen("counter3"), 5678), 0);
+    int64_t registrationId3 = aeron_async_add_counter_get_registration_id(async);
+    ASSERT_EQ(aeron_async_add_counter_cancel(m_aeron, async), 0);
+    async = nullptr;
+
+    ASSERT_EQ(aeron_async_add_static_counter(&async, m_aeron, static_type_id, nullptr, 0, "counter4", strlen("counter4"), 9876), 0);
+    int64_t registrationId4 = aeron_async_add_counter_get_registration_id(async);
+    ASSERT_NE(registrationId3, registrationId4);
+    aeron_counter_t *counter4 = awaitCounterOrError(async);
+    ASSERT_TRUE(counter4) << aeron_errmsg();
+
+    removed = false;
+    ASSERT_EQ(aeron_async_remove_counter(registrationId4, m_aeron, setFlagOnClose, &removed), 0);
+    while (!removed)
+    {
+        std::this_thread::yield();
+    }
+
+    while (true)
+    {
+        int counterId1 = aeron_counters_reader_find_by_type_id_and_registration_id(counters_reader, type_id, registrationId1);
+        int counterId2 = aeron_counters_reader_find_by_type_id_and_registration_id(counters_reader, type_id, registrationId2);
+        if (AERON_NULL_COUNTER_ID == counterId1 && AERON_NULL_COUNTER_ID == counterId2)
+        {
+            break;
+        }
+        std::this_thread::yield();
+    }
+
+    EXPECT_EQ(AERON_NULL_COUNTER_ID, aeron_counters_reader_find_by_type_id_and_registration_id(counters_reader, type_id, registrationId1));
+    EXPECT_EQ(AERON_NULL_COUNTER_ID, aeron_counters_reader_find_by_type_id_and_registration_id(counters_reader, type_id, registrationId2));
+    EXPECT_NE(AERON_NULL_COUNTER_ID, aeron_counters_reader_find_by_type_id_and_registration_id(counters_reader, static_type_id, 5678));
+    EXPECT_NE(AERON_NULL_COUNTER_ID, aeron_counters_reader_find_by_type_id_and_registration_id(counters_reader, static_type_id, 9876));
+}
+
+TEST_F(CSystemTest, shouldFreePendingRemoveCmdsOnClose)
+{
+    constexpr int N = 16;
+
+    ASSERT_TRUE(connect());
+
+    aeron_async_add_subscription_t *asyncSubs[N] = {};
+    int64_t registrationIds[N] = {};
+    for (int i = 0; i < N; i++)
+    {
+        ASSERT_EQ(
+            aeron_async_add_subscription(
+                &asyncSubs[i], m_aeron, AERON_IPC_CHANNEL, STREAM_ID, nullptr, nullptr, nullptr, nullptr),
+            0);
+        aeron_subscription_t *subscription = awaitSubscriptionOrError(asyncSubs[i]);
+        ASSERT_TRUE(subscription) << aeron_errmsg();
+        aeron_subscription_constants_t constants;
+        aeron_subscription_constants(subscription, &constants);
+        registrationIds[i] = constants.registration_id;
+    }
+
+    std::atomic<int> completed(0);
+    auto incrementCounter = [](void *clientd)
+    {
+        static_cast<std::atomic<int> *>(clientd)->fetch_add(1);
+    };
+
+    for (int i = 0; i < N; i++)
+    {
+        ASSERT_EQ(
+            aeron_async_remove_subscription(registrationIds[i], m_aeron, incrementCounter, &completed),
+            0);
+    }
+
+    aeron_close(m_aeron);
+    m_aeron = nullptr;
+
+    EXPECT_EQ(N, completed.load())
+        << "Every on_complete should fire exactly once, whether processed by the conductor or "
+           "drained at close.";
+}
+
+TEST_F(CSystemTest, shouldFreePendingCancelCmdsOnClose)
+{
+    constexpr int N = 16;
+
+    ASSERT_TRUE(connect());
+
+    aeron_async_add_publication_t *asyncPubs[N] = {};
+    for (int i = 0; i < N; i++)
+    {
+        ASSERT_EQ(
+            aeron_async_add_publication(&asyncPubs[i], m_aeron, AERON_IPC_CHANNEL, STREAM_ID),
+            0);
+    }
+
+    for (int i = 0; i < N; i++)
+    {
+        ASSERT_EQ(aeron_async_add_publication_cancel(m_aeron, asyncPubs[i]), 0);
+    }
+
+    aeron_close(m_aeron);
+    m_aeron = nullptr;
+}
+
 TEST_F(CSystemTest, shouldAddAndCloseCounter)
 {
     std::atomic<bool> counterClosedFlag(false);
@@ -291,7 +692,9 @@ TEST_F(CSystemTest, shouldAddAndCloseCounter)
     aeron_counter_t *counter = awaitCounterOrError(async);
     ASSERT_TRUE(counter) << aeron_errmsg();
     ASSERT_EQ(0, aeron_counter_constants(counter, &counter_constants));
+    ASSERT_EQ(registration_id, counter_constants.correlation_id);
     ASSERT_EQ(registration_id, counter_constants.registration_id);
+    ASSERT_GT(counter_constants.counter_id, 0);
 
     aeron_counter_close(counter, setFlagOnClose, &counterClosedFlag);
 
@@ -326,20 +729,26 @@ TEST_F(CSystemTest, shouldAddStaticCounter)
     int64_t registration_id = -51515155188822;
     ASSERT_EQ(aeron_async_add_static_counter(
         &async, m_aeron, type_id, (uint8_t *)key, key_length, label, label_length, registration_id), 0);
+    int64_t correlation_id = aeron_async_add_counter_get_registration_id(async);
+    ASSERT_NE(registration_id, correlation_id);
 
     aeron_counter_t *counter = awaitStaticCounterOrError(async);
     ASSERT_TRUE(counter) << aeron_errmsg();
     ASSERT_EQ(0, aeron_counter_constants(counter, &counter_constants));
+    ASSERT_EQ(correlation_id, counter_constants.correlation_id);
     ASSERT_EQ(registration_id, counter_constants.registration_id);
 
     ASSERT_EQ(aeron_async_add_static_counter(
         &async, m_aeron, type_id, nullptr, 0, "test", 4, registration_id), 0);
+    int64_t correlation_id2 = aeron_async_add_counter_get_registration_id(async);
+    ASSERT_NE(correlation_id, correlation_id2);
 
     aeron_counter_t *counter2 = awaitStaticCounterOrError(async);
     ASSERT_TRUE(counter2) << aeron_errmsg();
     ASSERT_EQ(0, aeron_counter_constants(counter2, &counter_constants2));
-    ASSERT_EQ(counter_constants.counter_id, counter_constants2.counter_id);
+    ASSERT_EQ(correlation_id2, counter_constants2.correlation_id);
     ASSERT_EQ(counter_constants.registration_id, counter_constants2.registration_id);
+    ASSERT_EQ(counter_constants.counter_id, counter_constants2.counter_id);
     ASSERT_NE(counter, counter2);
 
     counterClosedFlag = false;
@@ -822,7 +1231,6 @@ TEST_P(CSystemTest, shouldAllowImageToGoUnavailableAndThenRejoin)
     aeron_subscription_t *subscription = awaitSubscriptionOrError(async_sub);
     ASSERT_TRUE(subscription) << aeron_errmsg();
 
-    
     auto createPublicationAndOffer = [&](){
         ASSERT_EQ(aeron_async_add_publication(&async_pub, m_aeron, pubUri.c_str(), STREAM_ID), 0);
         aeron_publication_t *publication = awaitPublicationOrError(async_pub);
@@ -860,12 +1268,6 @@ TEST_P(CSystemTest, shouldAllowImageToGoUnavailableAndThenRejoin)
         {
             std::this_thread::yield();
         }
-
-        poll_handler_t handler = [&](const uint8_t *buffer, size_t length, aeron_header_t *header)
-        {
-        };
-
-        poll(subscription, handler, 1);
     };
 
     createPublicationAndOffer();
@@ -938,7 +1340,92 @@ TEST_P(CSystemTest, shouldAddMultipleSubscriptionsUsingSameImage)
         std::pair<int64_t, int64_t>(id2, id2)));
 }
 
-TEST_P(CSystemTest, shouldSetClientName)
+TEST_F(CSystemTest, shouldNotifyImageGoingUnavailableWhenSubscriptionIsClosed)
+{
+    aeron_async_add_publication_t *async_pub = nullptr;
+    aeron_async_add_subscription_t *async_sub = nullptr;
+    std::atomic<bool> on_available_image_called = { false };
+    std::atomic<bool> on_unavailable_image_called = { false };
+    const char *uri = "aeron:ipc?term-length=64k";
+    size_t num_messages = 3;
+    const char message[37] = "this is a test";
+    int64_t final_position;
+
+    m_onAvailableImage = [&](aeron_subscription_t *, aeron_image_t *)
+    {
+        on_available_image_called = true;
+    };
+
+    m_onUnavailableImage = [&](aeron_subscription_t *, aeron_image_t *image)
+    {
+        EXPECT_EQ(image->final_position, final_position);
+        EXPECT_EQ(image->eos_position, INT64_MAX);
+        EXPECT_FALSE(image->is_eos);
+        EXPECT_TRUE(image->is_closed);
+        on_unavailable_image_called = true;
+    };
+
+    ASSERT_TRUE(connect());
+    ASSERT_EQ(aeron_async_add_publication(&async_pub, m_aeron, uri, STREAM_ID), 0);
+
+    aeron_publication_t *publication = awaitPublicationOrError(async_pub);
+    ASSERT_TRUE(publication) << aeron_errmsg();
+    ASSERT_EQ(aeron_async_add_subscription(
+        &async_sub, m_aeron, uri, STREAM_ID, onAvailableImage, this, onUnavailableImage, this), 0);
+
+    aeron_subscription_t *subscription = awaitSubscriptionOrError(async_sub);
+    ASSERT_TRUE(subscription) << aeron_errmsg();
+    awaitConnected(subscription);
+
+    while (!on_available_image_called)
+    {
+        std::this_thread::yield();
+    }
+
+    for (size_t i = 0; i < num_messages; i++)
+    {
+        while (aeron_publication_offer(
+            publication, (const uint8_t *)message, sizeof(message), nullptr, nullptr) < 0)
+        {
+            std::this_thread::yield();
+        }
+    }
+
+    int poll_result;
+    bool called = false;
+    poll_handler_t handler = [&](const uint8_t *buffer, size_t length, aeron_header_t *header)
+    {
+        EXPECT_EQ(length, sizeof(message));
+        called = true;
+    };
+
+    while ((poll_result = poll(subscription, handler, 1)) == 0)
+    {
+        std::this_thread::yield();
+    }
+    EXPECT_EQ(poll_result, 1);
+    EXPECT_TRUE(called);
+
+    auto image = aeron_subscription_image_at_index(subscription, 0);
+    final_position = aeron_image_position(image);
+    aeron_subscription_image_release(subscription, image);
+
+    std::atomic<bool> subscription_closed = { false };
+    aeron_notification_t on_close = [](void *clientd)
+    {
+        auto flag = reinterpret_cast<std::atomic<bool> *>(clientd);
+        *flag = true;
+    };
+    EXPECT_EQ(aeron_subscription_close(subscription, on_close, &subscription_closed), 0);
+
+    while (!subscription_closed)
+    {
+        std::this_thread::yield();
+    }
+    EXPECT_TRUE(on_unavailable_image_called);
+}
+
+TEST_F(CSystemTest, shouldSetClientName)
 {
     aeron_context_t *context;
     ASSERT_EQ(aeron_context_init(&context), 0);
@@ -949,7 +1436,7 @@ TEST_P(CSystemTest, shouldSetClientName)
     aeron_context_close(context);
 }
 
-TEST_P(CSystemTest, shouldSetNullClientName)
+TEST_F(CSystemTest, shouldSetNullClientName)
 {
     aeron_context_t *context;
     ASSERT_EQ(aeron_context_init(&context), 0);
@@ -958,7 +1445,7 @@ TEST_P(CSystemTest, shouldSetNullClientName)
     aeron_context_close(context);
 }
 
-TEST_P(CSystemTest, shouldSetClientNameOverLong)
+TEST_F(CSystemTest, shouldFailIfClientNameIsTooLong)
 {
     const char *name =
         "this is a very long value that we are hoping with be reject when the value gets "
@@ -968,6 +1455,20 @@ TEST_P(CSystemTest, shouldSetClientNameOverLong)
     ASSERT_EQ(aeron_context_init(&context), 0);
     ASSERT_EQ(-1, aeron_context_set_client_name(context, name));
     ASSERT_EQ(EINVAL, aeron_errcode());
+
+    aeron_context_close(context);
+}
+
+TEST_F(CSystemTest, shouldSetMaxClientName)
+{
+    auto max_name = std::string("").append(AERON_COUNTER_MAX_CLIENT_NAME_LENGTH - 1, 'x').append("a");
+    ASSERT_EQ(AERON_COUNTER_MAX_CLIENT_NAME_LENGTH, max_name.length());
+
+    aeron_context_t *context;
+    ASSERT_EQ(aeron_context_init(&context), 0);
+
+    ASSERT_EQ(0, aeron_context_set_client_name(context, max_name.c_str()));
+    ASSERT_STREQ(max_name.c_str(), aeron_context_get_client_name(context));
 
     aeron_context_close(context);
 }

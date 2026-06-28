@@ -123,6 +123,11 @@ final class RecordingReplication implements AutoCloseable
         }
     }
 
+    long replicationId()
+    {
+        return replicationId;
+    }
+
     long position()
     {
         return position;

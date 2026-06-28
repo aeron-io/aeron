@@ -21,6 +21,8 @@ import io.aeron.RethrowingErrorHandler;
 import io.aeron.cluster.service.ClusterMarkFile;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
+import io.aeron.test.SystemTestWatcher;
+import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.BitUtil;
 import org.agrona.concurrent.SystemEpochClock;
 import org.agrona.concurrent.status.AtomicCounter;
@@ -28,6 +30,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -60,6 +63,8 @@ class ClusterBackupContextTest
     @TempDir
     private File clusterDir;
     private ClusterBackup.Context context;
+    @RegisterExtension
+    final SystemTestWatcher systemTestWatcher = new SystemTestWatcher();
 
     @BeforeEach
     void setUp()
@@ -234,11 +239,11 @@ class ClusterBackupContextTest
         Files.createDirectories(aeronDir);
 
         final int filePageSize = 1024 * 1024;
-        try (MediaDriver driver = MediaDriver.launch(new MediaDriver.Context()
+        try (TestMediaDriver driver = TestMediaDriver.launch(new MediaDriver.Context()
             .aeronDirectoryName(aeronDir.toString())
             .dirDeleteOnShutdown(true)
             .threadingMode(ThreadingMode.SHARED)
-            .filePageSize(filePageSize)))
+            .filePageSize(filePageSize), systemTestWatcher))
         {
             context
                 .aeron(null)

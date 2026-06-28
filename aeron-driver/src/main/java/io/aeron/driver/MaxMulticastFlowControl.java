@@ -44,6 +44,13 @@ public class MaxMulticastFlowControl implements FlowControl
     private int retransmitReceiverWindowMultiple;
 
     /**
+     * Default constructor.
+     */
+    public MaxMulticastFlowControl()
+    {
+    }
+
+    /**
      * {@inheritDoc}
      */
     public void initialize(

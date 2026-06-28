@@ -22,6 +22,7 @@ import io.aeron.ChannelUriStringBuilder;
 import io.aeron.Counter;
 import io.aeron.Image;
 import io.aeron.Publication;
+import io.aeron.RethrowingErrorHandler;
 import io.aeron.Subscription;
 import io.aeron.archive.Archive.Context;
 import io.aeron.archive.checksum.Checksum;
@@ -47,8 +48,10 @@ import io.aeron.status.HeartbeatTimestamp;
 import io.aeron.status.LocalSocketAddressStatus;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
+import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.TestContexts;
 import io.aeron.test.Tests;
+import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
 import org.agrona.ErrorHandler;
@@ -65,6 +68,7 @@ import org.hamcrest.CoreMatchers;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -131,12 +135,17 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(InterruptingTestCallback.class)
+@InterruptAfter(10)
 @SuppressWarnings("try")
 class ArchiveTest
 {
     private static final FragmentHandler NO_OP_FRAGMENT_HANDLER = (buffer, offset, length, header) -> {};
 
-    @TempDir Path tmpDir;
+    @TempDir
+    Path tmpDir;
+
+    @RegisterExtension
+    final SystemTestWatcher systemTestWatcher = new SystemTestWatcher();
 
     @Test
     void shouldGenerateRecordingName()
@@ -477,14 +486,14 @@ class ArchiveTest
             .threadingMode(ThreadingMode.SHARED)
             .aeronDirectoryName(aeronDir.toString());
 
-        try (MediaDriver ignore = MediaDriver.launch(driverCtx);
+        try (TestMediaDriver driver = TestMediaDriver.launch(driverCtx, systemTestWatcher);
             Archive archive1 = Archive.launch(
                 new Archive.Context()
                 .controlChannel(LOCALHOST_CONTROL_REQUEST_CHANNEL)
                 .replicationChannel(LOCALHOST_REPLICATION_CHANNEL)
                 .deleteArchiveOnStart(true)
                 .threadingMode(SHARED)
-                .aeronDirectoryName(aeronDir.toString())
+                .aeronDirectoryName(driver.aeronDirectoryName())
                 .archiveDir(archive1Dir.toFile())
                 .archiveId(42));
             Archive archive2 = Archive.launch(
@@ -496,11 +505,11 @@ class ArchiveTest
                 .aeronDirectoryName(aeronDir.toString())
                 .archiveDir(archive2Dir.toFile()));
             AeronArchive client1 = AeronArchive.connect(new AeronArchive.Context()
-                .aeronDirectoryName(aeronDir.toString())
+                .aeronDirectoryName(driver.aeronDirectoryName())
                 .controlRequestChannel(archive1.context().controlChannel())
                 .controlResponseChannel(LOCALHOST_CONTROL_RESPONSE_CHANNEL));
             AeronArchive client2 = AeronArchive.connect(new AeronArchive.Context()
-                .aeronDirectoryName(aeronDir.toString())
+                .aeronDirectoryName(driver.aeronDirectoryName())
                 .controlRequestChannel(archive2.context().controlChannel())
                 .controlResponseChannel(LOCALHOST_CONTROL_RESPONSE_CHANNEL)))
         {
@@ -816,8 +825,8 @@ class ArchiveTest
         final Path archiveDir1 = root.resolve("archive1");
         final Path archiveDir2 = root.resolve("archive2");
         final long archiveId = -432946792374923L;
-        try (MediaDriver driver =
-            MediaDriver.launch(new MediaDriver.Context().aeronDirectoryName(aeronDir.toString()));
+        try (TestMediaDriver driver = TestMediaDriver.launch(
+            new MediaDriver.Context().aeronDirectoryName(aeronDir.toString()), systemTestWatcher);
             Archive archive = Archive.launch(TestContexts.localhostArchive()
                 .archiveId(archiveId)
                 .archiveDir(archiveDir1.toFile())
@@ -847,8 +856,8 @@ class ArchiveTest
     {
         final Path root = Files.createTempDirectory("test");
         final String aeronDir = root.resolve("media-driver").toString();
-        try (MediaDriver driver =
-            MediaDriver.launch(new MediaDriver.Context().aeronDirectoryName(aeronDir));
+        try (TestMediaDriver driver =
+            TestMediaDriver.launch(new MediaDriver.Context().aeronDirectoryName(aeronDir), systemTestWatcher);
             Archive archive = Archive.launch(TestContexts.localhostArchive()
                 .archiveId(archiveId)
                 .archiveDir(root.resolve("archive1").toFile())
@@ -907,12 +916,12 @@ class ArchiveTest
     {
         final long archiveId = -743746574;
         final ErrorHandler errorHandler = mock(ErrorHandler.class);
-        try (MediaDriver driver = MediaDriver.launch(new MediaDriver.Context()
+        try (TestMediaDriver driver = TestMediaDriver.launch(new MediaDriver.Context()
             .aeronDirectoryName(generateRandomDirName())
             .dirDeleteOnShutdown(true)
             .statusMessageTimeoutNs(TimeUnit.MILLISECONDS.toNanos(80))
             .imageLivenessTimeoutNs(TimeUnit.MILLISECONDS.toNanos(1000))
-            .timerIntervalNs(TimeUnit.MILLISECONDS.toNanos(100)));
+            .timerIntervalNs(TimeUnit.MILLISECONDS.toNanos(100)), systemTestWatcher);
             Archive archive = Archive.launch(TestContexts.localhostArchive()
                 .controlChannel("aeron:udp?endpoint=localhost:8010")
                 .localControlChannel("aeron:ipc?term-length=64k")
@@ -1026,8 +1035,8 @@ class ArchiveTest
     @Test
     void closedArchiveClientShouldBeInStateClosed(@TempDir final Path temp)
     {
-        try (MediaDriver driver =
-            MediaDriver.launch(new MediaDriver.Context().aeronDirectoryName(generateRandomDirName()));
+        try (TestMediaDriver driver = TestMediaDriver.launch(
+            new MediaDriver.Context().aeronDirectoryName(generateRandomDirName()), systemTestWatcher);
             Archive archive = Archive.launch(TestContexts.localhostArchive()
                 .archiveDir(temp.toFile())
                 .archiveId(ThreadLocalRandom.current().nextLong())
@@ -1052,14 +1061,15 @@ class ArchiveTest
     @Test
     void closedArchiveClientShouldBeInStateClosedCustomAeronClient(@TempDir final Path temp)
     {
-        try (MediaDriver driver =
-            MediaDriver.launch(new MediaDriver.Context().aeronDirectoryName(generateRandomDirName()));
+        try (TestMediaDriver driver = TestMediaDriver.launch(
+            new MediaDriver.Context().aeronDirectoryName(generateRandomDirName()), systemTestWatcher);
             Archive archive = Archive.launch(TestContexts.localhostArchive()
                 .archiveDir(temp.toFile())
                 .archiveId(ThreadLocalRandom.current().nextLong())
                 .aeronDirectoryName(driver.context().aeronDirectoryName()));
             Aeron aeron = Aeron.connect(new Aeron.Context()
-                .aeronDirectoryName(driver.context().aeronDirectoryName()));
+                .aeronDirectoryName(driver.context().aeronDirectoryName())
+                .subscriberErrorHandler(RethrowingErrorHandler.INSTANCE));
             AeronArchive aeronArchive = AeronArchive.connect(TestContexts.localhostAeronArchive()
                 .aeronDirectoryName(null)
                 .aeron(aeron)))
@@ -1083,8 +1093,8 @@ class ArchiveTest
     @ValueSource(strings = { "", "test client 5" })
     void shouldCreateControlSessionCounter(final String clientName, @TempDir final Path temp)
     {
-        try (MediaDriver driver =
-            MediaDriver.launch(new MediaDriver.Context().aeronDirectoryName(generateRandomDirName()));
+        try (TestMediaDriver driver = TestMediaDriver.launch(
+            new MediaDriver.Context().aeronDirectoryName(generateRandomDirName()), systemTestWatcher);
             Archive archive = Archive.launch(TestContexts.localhostArchive()
                 .archiveDir(temp.toFile())
                 .archiveId(519)
@@ -1136,8 +1146,8 @@ class ArchiveTest
     @ValueSource(strings = { "", "test client 42" })
     void shouldCreateControlSessionCounterIpcConnection(final String clientName, @TempDir final Path temp)
     {
-        try (MediaDriver driver =
-            MediaDriver.launch(new MediaDriver.Context().aeronDirectoryName(generateRandomDirName()));
+        try (TestMediaDriver driver = TestMediaDriver.launch(
+            new MediaDriver.Context().aeronDirectoryName(generateRandomDirName()), systemTestWatcher);
             Archive archive = Archive.launch(TestContexts.localhostArchive()
                 .archiveDir(temp.toFile())
                 .archiveId(-187)
@@ -1192,6 +1202,50 @@ class ArchiveTest
             aeronArchive.close();
 
             Tests.await(() -> countersReader.getCounterState(counterId) == RECORD_RECLAIMED);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "aeron:udp?endpoint=localhost:0",
+        "aeron:udp?control=localhost:10000|control-mode=response" })
+    void shouldConnectUsingInvokersWithAsyncConnect(final String responseChannel, @TempDir final Path temp)
+    {
+        final String requestChannel = "aeron:udp?endpoint=localhost:8888";
+        try (TestMediaDriver driver = TestMediaDriver.launch(new MediaDriver.Context()
+            .aeronDirectoryName(generateRandomDirName())
+            .threadingMode(ThreadingMode.INVOKER), systemTestWatcher);
+            Archive archive = Archive.launch(new Archive.Context()
+                .threadingMode(ArchiveThreadingMode.INVOKER)
+                .mediaDriverAgentInvoker(driver.sharedAgentInvoker())
+                .archiveDir(temp.toFile())
+                .archiveId(42)
+                .controlChannel(requestChannel)
+                .controlStreamId(1919)
+                .replicationChannel("aeron:udp?endpoint=localhost:0")
+                .aeronDirectoryName(driver.context().aeronDirectoryName()));
+            Aeron aeron = Aeron.connect(new Aeron.Context()
+                .aeronDirectoryName(driver.aeronDirectoryName())
+                .useConductorAgentInvoker(true)
+                .driverAgentInvoker(driver.sharedAgentInvoker())
+                .subscriberErrorHandler(RethrowingErrorHandler.INSTANCE)))
+        {
+            final AeronArchive.AsyncConnect asyncConnect = AeronArchive.asyncConnect(
+                new AeronArchive.Context()
+                    .controlRequestChannel(requestChannel)
+                    .controlRequestStreamId(archive.context().controlStreamId())
+                    .controlResponseChannel(responseChannel)
+                    .controlResponseStreamId(9191)
+                    .aeron(aeron)
+                    .agentInvoker(archive.invoker()));
+
+            AeronArchive aeronArchive;
+            while (null == (aeronArchive = asyncConnect.poll()))
+            {
+                Tests.yield();
+            }
+
+            assertEquals(archive.context().archiveId(), aeronArchive.archiveId());
         }
     }
 

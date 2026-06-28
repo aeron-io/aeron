@@ -53,6 +53,15 @@ public class DestinationByIdMessageFlyweight extends CorrelatedMessageFlyweight
     public static final int MESSAGE_LENGTH = LENGTH + (2 * SIZE_OF_LONG);
 
     /**
+     * An empty flyweight, which should be wrapped over a buffer.
+     *
+     * @see #wrap(MutableDirectBuffer, int)
+     */
+    public DestinationByIdMessageFlyweight()
+    {
+    }
+
+    /**
      * Wrap the buffer at a given offset for updates.
      *
      * @param buffer to wrap.
