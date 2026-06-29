@@ -831,6 +831,7 @@ class Election
             }
             else
             {
+                consensusModuleAgent.replayLogComplete();
                 state(LEADER_INIT, nowNs, "");
             }
 
@@ -846,6 +847,7 @@ class Election
             workCount += logReplay.doWork();
             if (logReplay.isDone())
             {
+                consensusModuleAgent.replayLogComplete();
                 stopReplay();
                 logPosition = appendPosition;
                 state(LEADER_INIT, nowNs, "");
@@ -978,6 +980,7 @@ class Election
             }
             else
             {
+                consensusModuleAgent.replayLogComplete();
                 state(
                     NULL_POSITION != catchupJoinPosition ? FOLLOWER_CATCHUP_INIT : FOLLOWER_LOG_INIT,
                     nowNs,
@@ -990,6 +993,7 @@ class Election
             workCount += logReplay.doWork();
             if (logReplay.isDone())
             {
+                consensusModuleAgent.replayLogComplete();
                 logPosition = logReplay.position();
                 stopReplay();
 

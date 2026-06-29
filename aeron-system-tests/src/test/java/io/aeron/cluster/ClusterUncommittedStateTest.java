@@ -15,14 +15,19 @@
  */
 package io.aeron.cluster;
 
+import io.aeron.Aeron;
 import io.aeron.Counter;
 import io.aeron.ExclusivePublication;
 import io.aeron.Image;
 import io.aeron.cluster.client.AeronCluster;
+import io.aeron.cluster.codecs.CloseReason;
 import io.aeron.cluster.codecs.MessageHeaderDecoder;
 import io.aeron.cluster.codecs.MessageHeaderEncoder;
 import io.aeron.cluster.codecs.NewLeadershipTermEventEncoder;
+import io.aeron.cluster.codecs.SessionCloseEventEncoder;
 import io.aeron.cluster.codecs.SessionOpenEventEncoder;
+import io.aeron.cluster.service.ClientSession;
+import io.aeron.driver.Configuration;
 import io.aeron.driver.DataPacketDispatcher;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ReceiveChannelEndpointSupplier;
@@ -48,6 +53,7 @@ import io.aeron.test.cluster.TestNode;
 import org.agrona.BitUtil;
 import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
+import org.agrona.collections.IntArrayList;
 import org.agrona.collections.LongArrayQueue;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.AtomicCounter;
@@ -63,8 +69,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.IntFunction;
 
+import static io.aeron.cluster.client.AeronCluster.SESSION_HEADER_LENGTH;
 import static io.aeron.protocol.DataHeaderFlyweight.HEADER_LENGTH;
+import static io.aeron.logbuffer.LogBufferDescriptor.computeFragmentedFrameLength;
 import static io.aeron.test.cluster.TestCluster.aCluster;
 import static io.aeron.test.driver.TestMediaDriver.shouldRunJavaMediaDriver;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -76,6 +85,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ClusterUncommittedStateTest
 {
     private static final int NODE_COUNT = 3;
+
+    private static final int EIGHT_MEGABYTES = 8 * 1024 * 1024;
+    private static final int FRAME_LENGTH = Configuration.mtuLength() - DataHeaderFlyweight.HEADER_LENGTH;
+    static final int EIGHT_MEGABYTES_LENGTH = computeFragmentedFrameLength(EIGHT_MEGABYTES, FRAME_LENGTH);
+    static final int SESSION_CLOSE_LENGTH = computeFragmentedFrameLength(
+        MessageHeaderEncoder.ENCODED_LENGTH + SessionCloseEventEncoder.BLOCK_LENGTH, FRAME_LENGTH);
+    static final int SESSION_OPEN_BLOCK_LENGTH = computeFragmentedFrameLength(
+        MessageHeaderEncoder.ENCODED_LENGTH + SessionOpenEventEncoder.BLOCK_LENGTH, FRAME_LENGTH);
+    static final int NEW_LEADERSHIP_TERM_LENGTH = computeFragmentedFrameLength(
+        MessageHeaderEncoder.ENCODED_LENGTH + NewLeadershipTermEventEncoder.BLOCK_LENGTH, FRAME_LENGTH);
 
     @RegisterExtension
     final SystemTestWatcher systemTestWatcher = new SystemTestWatcher();
@@ -377,6 +396,179 @@ public class ClusterUncommittedStateTest
         assertEquals(31, node1Snapshots.get(0));
         assertEquals(31, node2Snapshots.get(0));
     }
+
+    @Test
+    @SlowTest
+    @InterruptAfter(20)
+    void shouldElectionBetweenFragmentedServiceMessageAvoidDuplicateServiceMessage()
+    {
+        assumeTrue(shouldRunJavaMediaDriver());
+
+        final AtomicBoolean waitingToOfferFragmentedMessage = new AtomicBoolean(true);
+        final AtomicBoolean leaderBackPressureLog = new AtomicBoolean(false);
+        final AtomicBoolean followerBackPressureLog = new AtomicBoolean(true);
+        final IntFunction<TestNode.TestService[]> serviceSupplier = (index) ->
+        {
+            if (0 == index)
+            {
+                return new TestNode.TestService[]
+                {
+                    new OfferServiceMessageOnSessionClose(waitingToOfferFragmentedMessage, leaderBackPressureLog)
+                };
+            }
+            else
+            {
+                return new TestNode.TestService[]
+                {
+                    new OfferServiceMessageOnSessionClose(waitingToOfferFragmentedMessage, followerBackPressureLog)
+                };
+            }
+        };
+
+        cluster = aCluster()
+            .withStaticNodes(NODE_COUNT)
+            .withReceiveChannelEndpointSupplier((index) -> toggledLossControls[index])
+            .withSendChannelEndpointSupplier((index) -> toggledLossControls[index])
+            .withAppointedLeader(0)
+            .withLogChannel("aeron:udp?term-length=64m|alias=raft")
+            .withControlChannel("aeron:ipc")
+            .withServiceSupplier(serviceSupplier)
+            .start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode leader = cluster.awaitLeader();
+        final TestNode follower1 = cluster.node(1);
+        final TestNode follower2 = cluster.node(2);
+        final ToggledLossControl leaderLossControl = toggledLossControls[leader.memberId()];
+
+        CloseHelper.close(cluster.connectClient());
+        final long expectedPositionLowerBound =
+            NEW_LEADERSHIP_TERM_LENGTH + SESSION_OPEN_BLOCK_LENGTH + SESSION_CLOSE_LENGTH;
+        Tests.await(() ->
+        {
+            final long leaderCommitPosition = leader.commitPosition();
+            return leaderCommitPosition > expectedPositionLowerBound &&
+                leaderCommitPosition == follower1.commitPosition() &&
+                leaderCommitPosition == follower2.commitPosition();
+        });
+
+        final long commitPositionBeforeFragmentedMessage = leader.commitPosition();
+        waitingToOfferFragmentedMessage.set(false);
+        Tests.await(() ->
+        {
+            final long leaderCommitPosition = leader.commitPosition();
+            return leaderCommitPosition > (commitPositionBeforeFragmentedMessage) &&
+                leaderCommitPosition < (commitPositionBeforeFragmentedMessage + EIGHT_MEGABYTES);
+        });
+
+        final long expectedAppendPosition = commitPositionBeforeFragmentedMessage + EIGHT_MEGABYTES_LENGTH;
+        Tests.await(() -> leader.appendPosition() == expectedAppendPosition);
+
+        leaderLossControl.toggleLoss(true);
+        Tests.await(() -> 0 < leaderLossControl.droppedOutboundFrames.get() &&
+            0 < leaderLossControl.droppedInboundFrames.get());
+
+        Tests.await(() -> ElectionState.CLOSED != leader.electionState());
+        assertTrue(leader.commitPosition() > commitPositionBeforeFragmentedMessage &&
+            leader.commitPosition() < (commitPositionBeforeFragmentedMessage + EIGHT_MEGABYTES));
+
+        leaderLossControl.toggleLoss(false);
+        followerBackPressureLog.set(false);
+
+        CloseHelper.close(cluster.connectClient());
+
+        Tests.await(() ->
+        {
+            for (int i = 0; i < cluster.memberCount(); ++i)
+            {
+                final OfferServiceMessageOnSessionClose service =
+                    (OfferServiceMessageOnSessionClose)cluster.node(i).container(0).context().clusteredService();
+                if (2 != service.lastReceivedServiceMessage.get())
+                {
+                    return false;
+                }
+            }
+            return true;
+        });
+
+        for (int i = 0; i < cluster.memberCount(); ++i)
+        {
+            final OfferServiceMessageOnSessionClose service =
+                (OfferServiceMessageOnSessionClose)cluster.node(i).container(0).context().clusteredService();
+            final IntArrayList sentServiceMessages = service.sentServiceMessages;
+            final IntArrayList receivedServiceMessages = service.receivedServiceMessages;
+            assertEquals(2, sentServiceMessages.size(), "Node " + i + " sent " + sentServiceMessages);
+            assertEquals(2, receivedServiceMessages.size(), "Node " + i + " received " + receivedServiceMessages);
+        }
+    }
+
+    static class OfferServiceMessageOnSessionClose extends TestNode.TestService
+    {
+        private final AtomicBoolean waitingToOfferServiceMessage;
+        private final AtomicBoolean causeBackPressure;
+
+        private final UnsafeBuffer messageBuffer = new UnsafeBuffer(new byte[EIGHT_MEGABYTES - SESSION_HEADER_LENGTH]);
+        private int nextSentMessage = 1;
+        private final IntArrayList sentServiceMessages = new IntArrayList(8, Aeron.NULL_VALUE);
+        private final IntArrayList receivedServiceMessages = new IntArrayList(8, Aeron.NULL_VALUE);
+        private final AtomicInteger lastReceivedServiceMessage = new AtomicInteger(0);
+
+
+        OfferServiceMessageOnSessionClose(
+            final AtomicBoolean waitingToOfferServiceMessage,
+            final AtomicBoolean causeBackPressure)
+        {
+            this.waitingToOfferServiceMessage = waitingToOfferServiceMessage;
+            this.causeBackPressure = causeBackPressure;
+        }
+
+        public void onSessionOpen(final ClientSession session, final long timestamp)
+        {
+        }
+
+        public void onSessionClose(final ClientSession session, final long timestamp, final CloseReason closeReason)
+        {
+            cluster.idleStrategy().reset();
+            while (waitingToOfferServiceMessage.get())
+            {
+                cluster.idleStrategy().idle();
+            }
+
+            messageBuffer.putInt(0, nextSentMessage, MessageHeaderEncoder.BYTE_ORDER);
+            while (0 > cluster.offer(messageBuffer, 0, messageBuffer.capacity()))
+            {
+                cluster.idleStrategy().idle();
+            }
+            sentServiceMessages.add(nextSentMessage++);
+
+            while (causeBackPressure.get())
+            {
+                cluster.idleStrategy().idle();
+            }
+        }
+
+        public void onSessionMessage(
+            final ClientSession session,
+            final long timestamp,
+            final DirectBuffer buffer,
+            final int offset,
+            final int length,
+            final Header header)
+        {
+            final int receiveMessage = buffer.getInt(offset, MessageHeaderEncoder.BYTE_ORDER);
+            receivedServiceMessages.add(receiveMessage);
+            lastReceivedServiceMessage.set(receiveMessage);
+        }
+
+        public void onTimerEvent(final long correlationId, final long timestamp)
+        {
+        }
+
+        public void onTakeSnapshot(final ExclusivePublication snapshotPublication)
+        {
+        }
+    }
+
 
     private static final class TestCounterExtension extends TestNode.TestConsensusModuleExtension
     {
