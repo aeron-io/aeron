@@ -171,6 +171,11 @@ TEST_F(DriverConfigurationTest, shouldParseContinuationWithBlankLine)
     EXPECT_EQ(m_value, "propertyValue");
 }
 
+TEST_F(DriverConfigurationTest, shouldIgnoreMissingPropertiesFile)
+{
+    EXPECT_EQ(aeron_properties_file_load("/tmp/aeron-nonexistent-properties-file.properties"), 0);
+}
+
 TEST_F(DriverConfigurationTest, DISABLED_shouldHttpRetrieve)
 {
     aeron_http_response_t *response = nullptr;
