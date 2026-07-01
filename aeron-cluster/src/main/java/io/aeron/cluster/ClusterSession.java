@@ -18,6 +18,7 @@ package io.aeron.cluster;
 import io.aeron.Aeron;
 import io.aeron.AeronCounters;
 import io.aeron.Counter;
+import io.aeron.ErrorCode;
 import io.aeron.Image;
 import io.aeron.Publication;
 import io.aeron.archive.client.AeronArchive;
@@ -245,8 +246,24 @@ final class ClusterSession implements ClusterClientSession
         {
             if (!aeron.isCommandActive(responsePublicationId))
             {
-                responsePublication = aeron.getPublication(responsePublicationId);
-                responsePublicationId = NULL_VALUE;
+                try
+                {
+                    responsePublication = aeron.getPublication(responsePublicationId);
+                    responsePublicationId = NULL_VALUE;
+                }
+                catch (final RegistrationException ex)
+                {
+                    if (ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE == ex.errorCode())
+                    {
+                        responsePublicationId = aeron.asyncAddPublication(responseChannel, responseStreamId);
+                        return false;
+                    }
+                    else
+                    {
+                        responsePublicationId = NULL_VALUE;
+                        throw ex;
+                    }
+                }
 
                 counter = aeron.getCounter(counterRegistrationId);
                 counterRegistrationId = NULL_VALUE;
