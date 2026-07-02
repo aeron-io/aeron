@@ -18,7 +18,9 @@ package io.aeron.cluster;
 import io.aeron.Aeron;
 import io.aeron.ConcurrentPublication;
 import io.aeron.Counter;
+import io.aeron.ErrorCode;
 import io.aeron.Image;
+import io.aeron.exceptions.RegistrationException;
 import io.aeron.logbuffer.Header;
 import io.aeron.security.AuthorisationService;
 import io.aeron.security.DefaultAuthenticatorSupplier;
@@ -38,6 +40,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -161,6 +164,45 @@ class SessionManagerTest
         sessionManager.processPendingStandbySnapshotNotifications(100, clock.time());
 
         verifyNoMoreInteractions(mockRecordingLog);
+    }
+
+    @Test
+    void shouldRetryCreatingResponsePublicationWhenResourceTemporarilyUnavailable()
+    {
+        setupSessionManager(0);
+
+        final long firstRegistrationId = 100;
+        final long secondRegistrationId = 200;
+
+        when(mockAeron.asyncAddPublication(anyString(), anyInt()))
+            .thenReturn(firstRegistrationId, secondRegistrationId);
+        when(mockAeron.getPublication(firstRegistrationId)).thenThrow(new RegistrationException(
+            firstRegistrationId,
+            ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE.value(),
+            ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE,
+            "WARN - SendChannelEndpoint found in CLOSING state, please retry"));
+        when(mockAeron.getPublication(secondRegistrationId)).thenReturn(mockPublication);
+
+        sessionManager.onBackupQuery(
+            0,
+            0,
+            0,
+            0,
+            "aeron:udp?endpoint=localhost:0",
+            new byte[0],
+            mockHeader);
+
+        verify(mockAeron, times(1)).asyncAddPublication(anyString(), anyInt());
+
+        sessionManager.processPendingBackupSessions(clock.time(), 0, 0);
+
+        verify(mockAeron).getPublication(firstRegistrationId);
+        verify(mockAeron, times(2)).asyncAddPublication(anyString(), anyInt());
+
+        sessionManager.processPendingBackupSessions(clock.time(), 0, 0);
+
+        verify(mockAeron).getPublication(secondRegistrationId);
+        verify(mockAeron, times(2)).asyncAddPublication(anyString(), anyInt());
     }
 
     @Test
