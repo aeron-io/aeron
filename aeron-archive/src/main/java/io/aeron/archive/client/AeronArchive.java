@@ -20,6 +20,7 @@ import io.aeron.AeronCounters;
 import io.aeron.AvailableImageHandler;
 import io.aeron.ChannelUri;
 import io.aeron.ChannelUriStringBuilder;
+import io.aeron.ErrorCode;
 import io.aeron.ExclusivePublication;
 import io.aeron.Image;
 import io.aeron.Publication;
@@ -35,6 +36,7 @@ import io.aeron.config.DefaultType;
 import io.aeron.exceptions.AeronException;
 import io.aeron.exceptions.ConcurrentConcludeException;
 import io.aeron.exceptions.ConfigurationException;
+import io.aeron.exceptions.RegistrationException;
 import io.aeron.exceptions.TimeoutException;
 import io.aeron.security.CredentialsSupplier;
 import io.aeron.security.NullCredentialsSupplier;
@@ -3839,19 +3841,6 @@ public final class AeronArchive implements AutoCloseable
                 this.ctx = ctx;
                 final Aeron aeron = ctx.aeron();
 
-                subscriptionRegistrationId = aeron.asyncAddSubscription(
-                    ctx.controlResponseChannel(),
-                    ctx.controlResponseStreamId(),
-                    null,
-                    (image) ->
-                    {
-                        final AeronArchive client = aeronArchive;
-                        if (null != client)
-                        {
-                            client.state(AeronArchive.State.DISCONNECTED);
-                        }
-                    });
-
                 state = State.AWAIT_SUBSCRIPTION;
                 deadlineNs = aeron.context().nanoClock().nanoTime() + ctx.messageTimeoutNs();
             }
@@ -4002,7 +3991,37 @@ public final class AeronArchive implements AutoCloseable
 
         private void awaitSubscription()
         {
-            final Subscription subscription = ctx.aeron().getSubscription(subscriptionRegistrationId);
+            final Aeron aeron = ctx.aeron();
+            if (NULL_VALUE == subscriptionRegistrationId)
+            {
+                subscriptionRegistrationId = aeron.asyncAddSubscription(
+                    ctx.controlResponseChannel(),
+                    ctx.controlResponseStreamId(),
+                    null,
+                    (image) ->
+                    {
+                        final AeronArchive client = aeronArchive;
+                        if (null != client)
+                        {
+                            client.state(AeronArchive.State.DISCONNECTED);
+                        }
+                    });
+            }
+
+            Subscription subscription = null;
+            try
+            {
+                subscription = aeron.getSubscription(subscriptionRegistrationId);
+            }
+            catch (final RegistrationException exception)
+            {
+                subscriptionRegistrationId = NULL_VALUE;
+                if (ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE != exception.errorCode())
+                {
+                    throw exception;
+                }
+            }
+
             if (null != subscription)
             {
                 if (ChannelUri.isControlModeResponse(ctx.controlResponseChannel()))
@@ -4027,7 +4046,20 @@ public final class AeronArchive implements AutoCloseable
                     ctx.controlRequestChannel(), ctx.controlRequestStreamId());
             }
 
-            final ExclusivePublication publication = aeron.getExclusivePublication(publicationRegistrationId);
+            ExclusivePublication publication = null;
+            try
+            {
+                publication = aeron.getExclusivePublication(publicationRegistrationId);
+            }
+            catch (final RegistrationException exception)
+            {
+                publicationRegistrationId = NULL_VALUE;
+                if (ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE != exception.errorCode())
+                {
+                    throw exception;
+                }
+            }
+
             if (null != publication)
             {
                 final String clientInfo = "name=" + ctx.clientName() + " " +

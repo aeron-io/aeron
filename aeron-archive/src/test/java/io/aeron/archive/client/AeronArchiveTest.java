@@ -18,13 +18,17 @@ package io.aeron.archive.client;
 import io.aeron.Aeron;
 import io.aeron.AvailableImageHandler;
 import io.aeron.ChannelUri;
+import io.aeron.ErrorCode;
+import io.aeron.ExclusivePublication;
 import io.aeron.Publication;
 import io.aeron.Subscription;
 import io.aeron.UnavailableImageHandler;
 import io.aeron.archive.client.AeronArchive.Context;
 import io.aeron.exceptions.ConfigurationException;
+import io.aeron.exceptions.RegistrationException;
 import org.agrona.BitUtil;
 import org.agrona.ErrorHandler;
+import org.agrona.concurrent.NanoClock;
 import org.agrona.concurrent.NoOpIdleStrategy;
 import org.agrona.concurrent.NoOpLock;
 import org.agrona.concurrent.SystemNanoClock;
@@ -33,6 +37,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InOrder;
+
+import java.util.concurrent.TimeUnit;
 
 import static io.aeron.Aeron.NULL_VALUE;
 import static io.aeron.CommonContext.MTU_LENGTH_PARAM_NAME;
@@ -46,12 +52,14 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyLong;
 import static org.mockito.Mockito.argThat;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.nullable;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -79,47 +87,75 @@ class AeronArchiveTest
     }
 
     @Test
-    void asyncConnectedShouldCloseContext()
+    void asyncConnectedShouldCloseResourceInCaseOfExceptionUponStartup()
     {
-        final String responseChannel = "aeron:udp?endpoint=localhost:1234";
-        final int responseStreamId = 49;
         final Context ctx = mock(Context.class);
         when(ctx.aeron()).thenReturn(aeron);
-        when(ctx.controlResponseChannel()).thenReturn(responseChannel);
-        when(ctx.controlResponseStreamId()).thenReturn(responseStreamId);
-        final RuntimeException error = new RuntimeException("subscription");
-        when(aeron.asyncAddSubscription(
-            eq(responseChannel),
-            eq(responseStreamId),
-            nullable(AvailableImageHandler.class),
-            any(UnavailableImageHandler.class))).thenThrow(error);
+        final Aeron.Context aeronCtx = mock(Aeron.Context.class);
+        when(aeron.context()).thenReturn(aeronCtx);
+        final NanoClock nanoClock = mock(NanoClock.class);
+        when(aeronCtx.nanoClock()).thenReturn(nanoClock);
+        final RuntimeException expectedException = new RuntimeException("TEST");
+        when(nanoClock.nanoTime()).thenThrow(expectedException);
 
-        final RuntimeException actualException =
-            assertThrowsExactly(RuntimeException.class, () -> AeronArchive.asyncConnect(ctx));
-        assertSame(error, actualException);
+        final RuntimeException actualException = assertThrowsExactly(RuntimeException.class, () ->
+        {
+            //noinspection resource
+            AeronArchive.asyncConnect(ctx);
+        });
 
-        final InOrder inOrder = inOrder(ctx, aeron);
-        inOrder.verify(ctx).conclude();
-        inOrder.verify(ctx).aeron();
-        inOrder.verify(ctx).controlResponseChannel();
-        inOrder.verify(ctx).controlResponseStreamId();
-        inOrder.verify(aeron).asyncAddSubscription(
-            eq(responseChannel),
-            eq(responseStreamId),
-            nullable(AvailableImageHandler.class),
-            any(UnavailableImageHandler.class));
+        assertSame(expectedException, actualException);
+
+        final InOrder inOrder = inOrder(ctx, nanoClock);
+        inOrder.verify(nanoClock).nanoTime();
         inOrder.verify(ctx).close();
         inOrder.verifyNoMoreInteractions();
     }
 
     @Test
-    void asyncConnectedShouldCloseResourceInCaseOfExceptionUponStartup()
+    void shouldReleasePendingSubscriptionWhenClosedBeforeConnected()
     {
         final String responseChannel = "aeron:udp?endpoint=localhost:0";
-        final int responseStreamId = 49;
+        final int responseStreamId = 42;
+        final long registrationId = 43L;
+
+        final Context ctx = mock(Context.class);
+        when(ctx.aeron()).thenReturn(aeron);
+        when(ctx.controlResponseChannel()).thenReturn(responseChannel);
+        when(ctx.controlResponseStreamId()).thenReturn(responseStreamId);
+        when(ctx.messageTimeoutNs()).thenReturn(TimeUnit.MINUTES.toNanos(1));
+        when(ctx.ownsAeronClient()).thenReturn(false);
+
+        final Aeron.Context aeronContext = mock(Aeron.Context.class);
+        when(aeronContext.nanoClock()).thenReturn(SystemNanoClock.INSTANCE);
+        when(aeron.context()).thenReturn(aeronContext);
+
+        when(aeron.asyncAddSubscription(
+            eq(responseChannel),
+            eq(responseStreamId),
+            nullable(AvailableImageHandler.class),
+            any(UnavailableImageHandler.class))).thenReturn(registrationId);
+
+        when(aeron.getSubscription(registrationId)).thenReturn(null);
+
+        try (AeronArchive.AsyncConnect asyncConnect = AeronArchive.asyncConnect(ctx))
+        {
+            assertNull(asyncConnect.poll());
+            assertEquals(AeronArchive.AsyncConnect.State.AWAIT_SUBSCRIPTION, asyncConnect.state());
+        }
+
+        verify(aeron, times(1)).asyncRemoveSubscription(registrationId);
+        verify(ctx, times(1)).close();
+    }
+
+    @Test
+    void shouldReleasePendingPublicationWhenClosedBeforeConnected()
+    {
+        final String responseChannel = "aeron:udp?endpoint=localhost:0";
+        final int responseStreamId = 42;
         final String requestChannel = "aeron:udp?endpoint=localhost:1234";
-        final int requestStreamId = -15;
-        final long subscriptionId = -3275938475934759L;
+        final int requestStreamId = 43;
+        final long pubRegistrationId = 45L;
 
         final Context ctx = mock(Context.class);
         when(ctx.aeron()).thenReturn(aeron);
@@ -127,31 +163,100 @@ class AeronArchiveTest
         when(ctx.controlResponseStreamId()).thenReturn(responseStreamId);
         when(ctx.controlRequestChannel()).thenReturn(requestChannel);
         when(ctx.controlRequestStreamId()).thenReturn(requestStreamId);
+        when(ctx.messageTimeoutNs()).thenReturn(TimeUnit.MINUTES.toNanos(1));
+        when(ctx.ownsAeronClient()).thenReturn(false);
+
+        final Aeron.Context aeronContext = mock(Aeron.Context.class);
+        when(aeronContext.nanoClock()).thenReturn(SystemNanoClock.INSTANCE);
+        when(aeron.context()).thenReturn(aeronContext);
+
         when(aeron.asyncAddSubscription(
             eq(responseChannel),
             eq(responseStreamId),
             nullable(AvailableImageHandler.class),
-            any(UnavailableImageHandler.class))).thenReturn(subscriptionId);
-        final IndexOutOfBoundsException error = new IndexOutOfBoundsException("exception");
-        when(aeron.context()).thenThrow(error);
+            any(UnavailableImageHandler.class))).thenReturn(44L);
+        final Subscription subscription = mock(Subscription.class);
+        when(aeron.getSubscription(anyLong())).thenReturn(subscription);
+        when(aeron.asyncAddExclusivePublication(requestChannel, requestStreamId)).thenReturn(pubRegistrationId);
+        when(aeron.getExclusivePublication(anyLong())).thenReturn(null);
 
-        final IndexOutOfBoundsException actualException =
-            assertThrowsExactly(IndexOutOfBoundsException.class, () -> AeronArchive.asyncConnect(ctx));
-        assertSame(error, actualException);
+        try (AeronArchive.AsyncConnect asyncConnect = AeronArchive.asyncConnect(ctx))
+        {
+            assertEquals(AeronArchive.AsyncConnect.State.AWAIT_SUBSCRIPTION, asyncConnect.state());
+            assertNull(asyncConnect.poll());
+            assertEquals(AeronArchive.AsyncConnect.State.ADD_PUBLICATION, asyncConnect.state());
+            assertNull(asyncConnect.poll());
+            assertEquals(AeronArchive.AsyncConnect.State.ADD_PUBLICATION, asyncConnect.state());
+        }
 
-        final InOrder inOrder = inOrder(ctx, aeron);
-        inOrder.verify(ctx).conclude();
-        inOrder.verify(ctx).aeron();
-        inOrder.verify(ctx).controlResponseChannel();
-        inOrder.verify(ctx).controlResponseStreamId();
-        inOrder.verify(aeron).asyncAddSubscription(
+        verify(subscription, times(1)).close();
+        verify(aeron, times(1)).asyncRemovePublication(pubRegistrationId);
+        verify(ctx, times(1)).close();
+    }
+
+    @Test
+    void shouldRetryAddingResourcesWhenResourceTemporarilyUnavailable()
+    {
+        final String responseChannel = "aeron:udp?endpoint=localhost:0";
+        final int responseStreamId = 42;
+        final String requestChannel = "aeron:udp?endpoint=localhost:1234";
+        final int requestStreamId = 43;
+
+        final Context ctx = mock(Context.class);
+        when(ctx.aeron()).thenReturn(aeron);
+        when(ctx.controlResponseChannel()).thenReturn(responseChannel);
+        when(ctx.controlResponseStreamId()).thenReturn(responseStreamId);
+        when(ctx.controlRequestChannel()).thenReturn(requestChannel);
+        when(ctx.controlRequestStreamId()).thenReturn(requestStreamId);
+        when(ctx.messageTimeoutNs()).thenReturn(TimeUnit.MINUTES.toNanos(1));
+        when(ctx.ownsAeronClient()).thenReturn(false);
+
+        final Aeron.Context aeronContext = mock(Aeron.Context.class);
+        when(aeronContext.nanoClock()).thenReturn(SystemNanoClock.INSTANCE);
+        when(aeron.context()).thenReturn(aeronContext);
+
+        final RegistrationException resourceUnavailable = new RegistrationException(
+            1,
+            ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE.value(),
+            ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE,
+            "WARN - resource temporarily unavailable, please retry");
+
+        when(aeron.asyncAddSubscription(
             eq(responseChannel),
             eq(responseStreamId),
             nullable(AvailableImageHandler.class),
-            any(UnavailableImageHandler.class));
-        inOrder.verify(aeron).asyncRemoveSubscription(subscriptionId);
-        inOrder.verify(ctx).close();
-        inOrder.verifyNoMoreInteractions();
+            any(UnavailableImageHandler.class))).thenReturn(1L, 44L);
+        final Subscription subscription = mock(Subscription.class);
+        when(aeron.getSubscription(anyLong())).thenThrow(resourceUnavailable).thenReturn(subscription);
+        when(aeron.asyncAddExclusivePublication(requestChannel, requestStreamId)).thenReturn(3L, 45L);
+        final ExclusivePublication publication = mock(ExclusivePublication.class);
+        when(aeron.getExclusivePublication(anyLong())).thenThrow(resourceUnavailable).thenReturn(publication);
+
+        try (AeronArchive.AsyncConnect asyncConnect = AeronArchive.asyncConnect(ctx))
+        {
+            assertEquals(AeronArchive.AsyncConnect.State.AWAIT_SUBSCRIPTION, asyncConnect.state());
+            assertNull(asyncConnect.poll());
+            assertEquals(AeronArchive.AsyncConnect.State.AWAIT_SUBSCRIPTION, asyncConnect.state());
+            assertNull(asyncConnect.poll());
+            assertEquals(AeronArchive.AsyncConnect.State.ADD_PUBLICATION, asyncConnect.state());
+            assertNull(asyncConnect.poll());
+            assertEquals(AeronArchive.AsyncConnect.State.ADD_PUBLICATION, asyncConnect.state());
+            assertNull(asyncConnect.poll());
+            assertEquals(AeronArchive.AsyncConnect.State.AWAIT_PUBLICATION_CONNECTED, asyncConnect.state());
+
+            verify(aeron, times(2)).asyncAddSubscription(
+                eq(responseChannel),
+                eq(responseStreamId),
+                nullable(AvailableImageHandler.class),
+                any(UnavailableImageHandler.class));
+            verify(aeron, times(2)).getSubscription(anyLong());
+            verify(aeron, times(2)).asyncAddExclusivePublication(requestChannel, requestStreamId);
+            verify(aeron, times(2)).getExclusivePublication(anyLong());
+        }
+
+        verify(subscription, times(1)).close();
+        verify(publication, times(1)).close();
+        verify(ctx, times(1)).close();
     }
 
     @Test
