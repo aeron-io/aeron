@@ -16,9 +16,13 @@
 package io.aeron.archive;
 
 import io.aeron.Aeron;
+import io.aeron.AeronCounters;
+import io.aeron.Counter;
+import io.aeron.ErrorCode;
 import io.aeron.ExclusivePublication;
 import io.aeron.archive.client.ArchiveEvent;
 import io.aeron.exceptions.AeronException;
+import io.aeron.exceptions.RegistrationException;
 import io.aeron.security.Authenticator;
 import io.aeron.security.AuthorisationService;
 import org.agrona.concurrent.CachedEpochClock;
@@ -30,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.MockedStatic;
 
 import java.util.concurrent.TimeUnit;
 
@@ -41,6 +46,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -85,7 +92,6 @@ class ControlSessionTest
             CORRELATION_ID,
             CONNECT_TIMEOUT_MS,
             SESSION_LIVENESS_CHECK_INTERVAL_NS,
-            CONTROL_PUBLICATION_ID,
             COUNTER_REGISTRATION_ID,
             CONTROL_PUBLICATION_CHANNEL,
             CONTROL_PUBLICATION_STREAM_ID,
@@ -98,6 +104,8 @@ class ControlSessionTest
             mockAuthenticator,
             mockSessionProxy);
 
+        when(mockAeron.asyncAddExclusivePublication(CONTROL_PUBLICATION_CHANNEL, CONTROL_PUBLICATION_STREAM_ID))
+            .thenReturn(CONTROL_PUBLICATION_ID);
         when(mockAeron.getExclusivePublication(CONTROL_PUBLICATION_ID)).thenReturn(mockControlPublication);
     }
 
@@ -129,6 +137,67 @@ class ControlSessionTest
         session.doWork();
         assertEquals(DONE, session.state());
         assertTrue(session.isDone());
+    }
+
+    @Test
+    void shouldRetryAddingControlPublicationWhenResourceTemporarilyUnavailable()
+    {
+        final RegistrationException resourceUnavailable = new RegistrationException(
+            1,
+            ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE.value(),
+            ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE,
+            "WARN - resource temporarily unavailable, please retry");
+
+        when(mockAeron.asyncAddExclusivePublication(CONTROL_PUBLICATION_CHANNEL, CONTROL_PUBLICATION_STREAM_ID))
+            .thenReturn(CONTROL_PUBLICATION_ID, CONTROL_PUBLICATION_ID + 1);
+
+        when(mockAeron.getExclusivePublication(CONTROL_PUBLICATION_ID))
+            .thenReturn(null)
+            .thenThrow(resourceUnavailable);
+
+        when(mockAeron.getExclusivePublication(CONTROL_PUBLICATION_ID + 1))
+            .thenReturn(null)
+            .thenReturn(mockControlPublication);
+
+        final Counter counter = mock(Counter.class);
+        when(mockAeron.getCounter(COUNTER_REGISTRATION_ID)).thenReturn(null, counter);
+
+        assertEquals(ControlSession.State.INIT, session.state());
+
+        session.doWork();
+        verify(mockAeron, times(1))
+            .asyncAddExclusivePublication(CONTROL_PUBLICATION_CHANNEL, CONTROL_PUBLICATION_STREAM_ID);
+        verify(mockAeron, times(1)).getExclusivePublication(CONTROL_PUBLICATION_ID);
+        assertEquals(ControlSession.State.INIT, session.state());
+
+        session.doWork();
+        verify(mockAeron, times(1))
+            .asyncAddExclusivePublication(CONTROL_PUBLICATION_CHANNEL, CONTROL_PUBLICATION_STREAM_ID);
+        verify(mockAeron, times(2)).getExclusivePublication(CONTROL_PUBLICATION_ID);
+        assertEquals(ControlSession.State.INIT, session.state());
+
+        session.doWork();
+        verify(mockAeron, times(2))
+            .asyncAddExclusivePublication(CONTROL_PUBLICATION_CHANNEL, CONTROL_PUBLICATION_STREAM_ID);
+        verify(mockAeron, times(1)).getExclusivePublication(CONTROL_PUBLICATION_ID + 1);
+        assertEquals(ControlSession.State.INIT, session.state());
+
+        try (MockedStatic<AeronCounters> mockedCountersUtil = mockStatic(AeronCounters.class))
+        {
+            final int counterId = 444;
+            when(counter.id()).thenReturn(counterId);
+            when(mockAeron.context()).thenReturn(mock(Aeron.Context.class));
+            when(mockControlPublication.registrationId()).thenReturn(CONTROL_PUBLICATION_ID + 2);
+
+            session.doWork();
+            verify(mockAeron, times(2))
+                .asyncAddExclusivePublication(CONTROL_PUBLICATION_CHANNEL, CONTROL_PUBLICATION_STREAM_ID);
+            verify(mockAeron, times(2)).getExclusivePublication(CONTROL_PUBLICATION_ID + 1);
+            assertEquals(ControlSession.State.CONNECTING, session.state());
+
+            mockedCountersUtil.verify(() ->
+                AeronCounters.setReferenceId(null, null, counterId, CONTROL_PUBLICATION_ID + 2), times(1));
+        }
     }
 
     @Test

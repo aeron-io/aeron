@@ -462,7 +462,6 @@ abstract class ArchiveConductor
         }
 
         final long controlSessionId = nextSessionId++;
-        final long controlPublicationRegistrationId = aeron.asyncAddExclusivePublication(responseChannel, streamId);
 
         final String imageInfo = "sourceIdentity=" + image.sourceIdentity() + " sessionId=" + image.sessionId();
         final long sessionCounterRegistrationId = ControlSessionCounter.allocate(
@@ -477,7 +476,6 @@ abstract class ArchiveConductor
             correlationId,
             connectTimeoutMs,
             sessionLivenessCheckIntervalMs,
-            controlPublicationRegistrationId,
             sessionCounterRegistrationId,
             responseChannel,
             streamId,

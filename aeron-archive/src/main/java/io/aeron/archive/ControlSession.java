@@ -18,12 +18,14 @@ package io.aeron.archive;
 import io.aeron.Aeron;
 import io.aeron.AeronCounters;
 import io.aeron.Counter;
+import io.aeron.ErrorCode;
 import io.aeron.ExclusivePublication;
 import io.aeron.Subscription;
 import io.aeron.archive.client.ArchiveEvent;
 import io.aeron.archive.codecs.ControlResponseCode;
 import io.aeron.archive.codecs.RecordingSignal;
 import io.aeron.archive.codecs.SourceLocation;
+import io.aeron.exceptions.RegistrationException;
 import io.aeron.security.Authenticator;
 import org.agrona.CloseHelper;
 import org.agrona.concurrent.CachedEpochClock;
@@ -33,6 +35,7 @@ import org.agrona.concurrent.UnsafeBuffer;
 import java.util.ArrayDeque;
 import java.util.function.BooleanSupplier;
 
+import static io.aeron.Aeron.NULL_VALUE;
 import static io.aeron.archive.client.ArchiveException.AUTHENTICATION_REJECTED;
 import static io.aeron.archive.codecs.ControlResponseCode.ERROR;
 import static io.aeron.archive.codecs.ControlResponseCode.OK;
@@ -63,7 +66,6 @@ final class ControlSession implements Session
     private final long controlSessionId;
     private final long connectTimeoutMs;
     private final long sessionLivenessCheckIntervalMs;
-    private final long controlPublicationRegistrationId;
     private final long sessionCounterRegistrationId;
     private final Aeron aeron;
     private final ArchiveConductor conductor;
@@ -79,6 +81,7 @@ final class ControlSession implements Session
     private final String controlPublicationChannel;
     private final String invalidVersionMessage;
     private State state = State.INIT;
+    private long controlPublicationRegistrationId = NULL_VALUE;
     private long correlationId;
     private long resendDeadlineMs;
     private long activityDeadlineMs;
@@ -92,7 +95,6 @@ final class ControlSession implements Session
         final long correlationId,
         final long connectTimeoutMs,
         final long sessionLivenessCheckIntervalMs,
-        final long controlPublicationRegistrationId,
         final long sessionCounterRegistrationId,
         final String controlPublicationChannel,
         final int controlPublicationStreamId,
@@ -114,7 +116,6 @@ final class ControlSession implements Session
         this.invalidVersionMessage = invalidVersionMessage;
         this.controlSessionAdapter = controlSessionAdapter;
         this.aeron = aeron;
-        this.controlPublicationRegistrationId = controlPublicationRegistrationId;
         this.sessionCounterRegistrationId = sessionCounterRegistrationId;
         this.conductor = conductor;
         this.cachedEpochClock = cachedEpochClock;
@@ -155,14 +156,14 @@ final class ControlSession implements Session
      */
     public void close()
     {
-        if (null == controlPublication)
-        {
-            aeron.asyncRemovePublication(controlPublicationRegistrationId);
-        }
-        else
+        if (null != controlPublication)
         {
             controlPublication.revokeOnClose();
             CloseHelper.close(conductor.context().countedErrorHandler(), controlPublication);
+        }
+        else if (NULL_VALUE != controlPublicationRegistrationId)
+        {
+            aeron.asyncRemovePublication(controlPublicationRegistrationId);
         }
 
         if (null == sessionCounter)
@@ -708,7 +709,7 @@ final class ControlSession implements Session
         }
         else
         {
-            activityDeadlineMs = Aeron.NULL_VALUE;
+            activityDeadlineMs = NULL_VALUE;
         }
     }
 
@@ -737,7 +738,7 @@ final class ControlSession implements Session
         }
         else
         {
-            activityDeadlineMs = Aeron.NULL_VALUE;
+            activityDeadlineMs = NULL_VALUE;
         }
         return sent;
     }
@@ -753,7 +754,7 @@ final class ControlSession implements Session
         }
         else
         {
-            activityDeadlineMs = Aeron.NULL_VALUE;
+            activityDeadlineMs = NULL_VALUE;
         }
         return sent;
     }
@@ -787,7 +788,7 @@ final class ControlSession implements Session
         }
         else
         {
-            activityDeadlineMs = Aeron.NULL_VALUE;
+            activityDeadlineMs = NULL_VALUE;
         }
     }
 
@@ -804,7 +805,7 @@ final class ControlSession implements Session
     void authenticate(final byte[] encodedPrincipal)
     {
         this.encodedPrincipal = encodedPrincipal;
-        activityDeadlineMs = Aeron.NULL_VALUE;
+        activityDeadlineMs = NULL_VALUE;
         state(State.AUTHENTICATED, "authenticated");
     }
 
@@ -838,10 +839,30 @@ final class ControlSession implements Session
     {
         int workCount = 0;
 
+        if (NULL_VALUE == controlPublicationRegistrationId)
+        {
+            controlPublicationRegistrationId = aeron.asyncAddExclusivePublication(
+                controlPublicationChannel,
+                controlPublicationStreamId
+            );
+        }
+
         if (null == controlPublication)
         {
+            ExclusivePublication publication = null;
+            try
+            {
+                publication = aeron.getExclusivePublication(controlPublicationRegistrationId);
+            }
+            catch (final RegistrationException registrationException)
+            {
+                controlPublicationRegistrationId = NULL_VALUE;
+                if (ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE != registrationException.errorCode())
+                {
+                    throw registrationException;
+                }
+            }
 
-            final ExclusivePublication publication = aeron.getExclusivePublication(controlPublicationRegistrationId);
             if (null != publication)
             {
                 controlPublication = publication;
@@ -851,25 +872,23 @@ final class ControlSession implements Session
 
         if (null == sessionCounter)
         {
-            final Counter counter = aeron.getCounter(sessionCounterRegistrationId);
-            if (null != counter)
-            {
-                final Aeron.Context context = aeron.context();
-                AeronCounters.setReferenceId(
-                    context.countersMetaDataBuffer(),
-                    context.countersValuesBuffer(),
-                    counter.id(),
-                    controlPublicationRegistrationId);
-                counter.setRelease(controlSessionId);
-                sessionCounter = counter;
-                workCount++;
-            }
+            sessionCounter = aeron.getCounter(sessionCounterRegistrationId);
+            workCount++;
         }
 
         if (null != controlPublication && null != sessionCounter)
         {
+            final Aeron.Context context = aeron.context();
+            AeronCounters.setReferenceId(
+                context.countersMetaDataBuffer(),
+                context.countersValuesBuffer(),
+                sessionCounter.id(),
+                controlPublication.registrationId());
+            sessionCounter.setRelease(controlSessionId);
+
             activityDeadlineMs = nowMs + connectTimeoutMs;
             state(State.CONNECTING, "connecting");
+            workCount++;
         }
 
         return workCount;
@@ -937,7 +956,7 @@ final class ControlSession implements Session
                 null,
                 this))
             {
-                activityDeadlineMs = Aeron.NULL_VALUE;
+                activityDeadlineMs = NULL_VALUE;
                 workCount += 1;
             }
         }
@@ -956,7 +975,7 @@ final class ControlSession implements Session
             }
             else
             {
-                activityDeadlineMs = Aeron.NULL_VALUE;
+                activityDeadlineMs = NULL_VALUE;
             }
             return 1;
         }
@@ -979,7 +998,7 @@ final class ControlSession implements Session
                 if (syncResponseQueue.peekFirst().getAsBoolean())
                 {
                     syncResponseQueue.pollFirst();
-                    activityDeadlineMs = Aeron.NULL_VALUE;
+                    activityDeadlineMs = NULL_VALUE;
                     workCount++;
                 }
             }
@@ -990,7 +1009,7 @@ final class ControlSession implements Session
                 if (response.getAsBoolean())
                 {
                     asyncResponseQueue.poll();
-                    activityDeadlineMs = Aeron.NULL_VALUE;
+                    activityDeadlineMs = NULL_VALUE;
                     workCount++;
                 }
                 else
@@ -1021,12 +1040,12 @@ final class ControlSession implements Session
 
     private boolean hasNoActivity(final long nowMs)
     {
-        return Aeron.NULL_VALUE != activityDeadlineMs && nowMs > activityDeadlineMs;
+        return NULL_VALUE != activityDeadlineMs && nowMs > activityDeadlineMs;
     }
 
     private void updateActivityDeadline(final long nowMs)
     {
-        if (Aeron.NULL_VALUE == activityDeadlineMs)
+        if (NULL_VALUE == activityDeadlineMs)
         {
             activityDeadlineMs = nowMs + connectTimeoutMs;
         }
