@@ -29,6 +29,7 @@ import io.aeron.exceptions.RegistrationException;
 import io.aeron.security.Authenticator;
 import org.agrona.CloseHelper;
 import org.agrona.concurrent.CachedEpochClock;
+import org.agrona.concurrent.CountedErrorHandler;
 import org.agrona.concurrent.ManyToOneConcurrentLinkedQueue;
 import org.agrona.concurrent.UnsafeBuffer;
 
@@ -156,23 +157,24 @@ final class ControlSession implements Session
      */
     public void close()
     {
+        final CountedErrorHandler errorHandler = conductor.errorHandler;
         if (null != controlPublication)
         {
             controlPublication.revokeOnClose();
-            CloseHelper.close(conductor.context().countedErrorHandler(), controlPublication);
+            CloseHelper.close(errorHandler, controlPublication);
         }
         else if (NULL_VALUE != controlPublicationRegistrationId)
         {
             aeron.asyncRemovePublication(controlPublicationRegistrationId);
         }
 
-        if (null == sessionCounter)
+        if (null != sessionCounter)
+        {
+            CloseHelper.close(errorHandler, sessionCounter);
+        }
+        else if (NULL_VALUE != sessionCounterRegistrationId)
         {
             aeron.asyncRemoveCounter(sessionCounterRegistrationId);
-        }
-        else
-        {
-            CloseHelper.close(conductor.context().countedErrorHandler(), sessionCounter);
         }
 
         final boolean sessionAborted = null != abortReason &&
@@ -183,7 +185,7 @@ final class ControlSession implements Session
 
         if (sessionAborted)
         {
-            conductor.errorHandler.onError(new ArchiveEvent(
+            errorHandler.onError(new ArchiveEvent(
                 "controlSessionId=" + controlSessionId + " (controlResponseStreamId=" + controlPublicationStreamId +
                 " controlResponseChannel=" + controlPublicationChannel + ") terminated: " + abortReason));
         }
@@ -213,41 +215,49 @@ final class ControlSession implements Session
             workCount++;
         }
 
-        switch (state)
+        try
         {
-            case INIT:
-                workCount += init(nowMs);
-                break;
-
-            case CONNECTING:
-                workCount += waitForConnection(nowMs);
-                break;
-
-            case CONNECTED:
-                workCount += sendConnectResponse(nowMs);
-                break;
-
-            case CHALLENGED:
-                workCount += waitForChallengeResponse(nowMs);
-                break;
-
-            case AUTHENTICATED:
-                workCount += waitForRequest(nowMs);
-                break;
-
-            case ACTIVE:
+            switch (state)
             {
-                workCount += performLivenessCheck(nowMs);
-                workCount += sendResponses(nowMs);
-                break;
+                case INIT:
+                    workCount += init(nowMs);
+                    break;
+
+                case CONNECTING:
+                    workCount += waitForConnection(nowMs);
+                    break;
+
+                case CONNECTED:
+                    workCount += sendConnectResponse(nowMs);
+                    break;
+
+                case CHALLENGED:
+                    workCount += waitForChallengeResponse(nowMs);
+                    break;
+
+                case AUTHENTICATED:
+                    workCount += waitForRequest(nowMs);
+                    break;
+
+                case ACTIVE:
+                {
+                    workCount += performLivenessCheck(nowMs);
+                    workCount += sendResponses(nowMs);
+                    break;
+                }
+
+                case REJECTED:
+                    workCount += sendReject(nowMs);
+                    break;
+
+                case DONE:
+                    break;
             }
-
-            case REJECTED:
-                workCount += sendReject(nowMs);
-                break;
-
-            case DONE:
-                break;
+        }
+        catch (final Exception ex)
+        {
+            abort("failed with exception: " + ex.getMessage());
+            throw ex;
         }
 
         return workCount;

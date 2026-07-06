@@ -39,11 +39,13 @@ import org.mockito.MockedStatic;
 import java.util.concurrent.TimeUnit;
 
 import static io.aeron.archive.ControlSession.State.DONE;
+import static io.aeron.archive.ControlSession.State.INIT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
@@ -335,5 +337,35 @@ class ControlSessionTest
         session.close();
 
         verifyNoInteractions(mockErrorHandler);
+    }
+
+    @Test
+    void shouldAbortSessionIfPublicationCreationFails()
+    {
+        final IllegalStateException expected = new IllegalStateException("Haha");
+        when(mockAeron.getExclusivePublication(CONTROL_PUBLICATION_ID)).thenThrow(expected);
+        assertEquals(INIT, session.state());
+
+        final IllegalStateException actual = assertThrowsExactly(IllegalStateException.class, session::doWork);
+        assertSame(expected, actual);
+
+        assertTrue(session.isDone());
+        assertEquals(DONE, session.state());
+        assertEquals("failed with exception: Haha", session.abortReason());
+    }
+
+    @Test
+    void shouldAbortSessionIfCounterCreationFails()
+    {
+        final NumberFormatException expected = new NumberFormatException("xxx");
+        when(mockAeron.getCounter(COUNTER_REGISTRATION_ID)).thenThrow(expected);
+        assertEquals(INIT, session.state());
+
+        final NumberFormatException actual = assertThrowsExactly(NumberFormatException.class, session::doWork);
+        assertSame(expected, actual);
+
+        assertTrue(session.isDone());
+        assertEquals(DONE, session.state());
+        assertEquals("failed with exception: xxx", session.abortReason());
     }
 }
