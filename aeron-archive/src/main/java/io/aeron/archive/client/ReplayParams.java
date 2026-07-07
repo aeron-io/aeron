@@ -31,6 +31,7 @@ public class ReplayParams
     private long length;
     private long replayToken;
     private long subscriptionRegistrationId;
+    private long maxReplayBytesPerSecond;
 
     /**
      * Default, initialise all values to "null".
@@ -54,6 +55,7 @@ public class ReplayParams
         length = AeronArchive.REPLAY_ALL_AND_FOLLOW;
         replayToken = Aeron.NULL_VALUE;
         subscriptionRegistrationId = Aeron.NULL_VALUE;
+        maxReplayBytesPerSecond = 0;
         return this;
     }
 
@@ -156,6 +158,32 @@ public class ReplayParams
     public int fileIoMaxLength()
     {
         return this.fileIoMaxLength;
+    }
+
+    /**
+     * Limit the throughput of this replay to at most the given number of bytes per second, so a large or
+     * catch-up replay (e.g. a snapshot replication to a cluster node) can be trickled out without saturating the
+     * archive's I/O or media driver and disturbing latency-sensitive work sharing the host. A value of {@code 0}
+     * (the default) or negative means unlimited.
+     *
+     * @param maxReplayBytesPerSecond maximum replay throughput in bytes per second, or {@code 0} for unlimited.
+     * @return this for a fluent API.
+     */
+    public ReplayParams maxReplayBytesPerSecond(final long maxReplayBytesPerSecond)
+    {
+        this.maxReplayBytesPerSecond = maxReplayBytesPerSecond;
+        return this;
+    }
+
+    /**
+     * The maximum replay throughput in bytes per second, or {@code 0} for unlimited (the default).
+     *
+     * @return maximum replay throughput in bytes per second.
+     * @see #maxReplayBytesPerSecond(long)
+     */
+    public long maxReplayBytesPerSecond()
+    {
+        return maxReplayBytesPerSecond;
     }
 
     /**

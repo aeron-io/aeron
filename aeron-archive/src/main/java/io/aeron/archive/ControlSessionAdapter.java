@@ -36,6 +36,7 @@ class ControlSessionAdapter implements FragmentHandler
     private static final int SESSION_ID_VERSION = 8;
     private static final int ENCODED_CREDENTIALS_VERSION = 8;
     private static final int REPLAY_TOKEN_VERSION = 10;
+    private static final int MAX_REPLAY_BYTES_PER_SECOND_VERSION = 14;
 
     private final ControlRequestDecoders decoders;
     private final AuthorisationService authorisationService;
@@ -197,6 +198,8 @@ class ControlSessionAdapter implements FragmentHandler
                 final int replayStreamId = decoder.replayStreamId();
                 final long replayToken = REPLAY_TOKEN_VERSION <= headerDecoder.version() ?
                     decoder.replayToken() : Aeron.NULL_VALUE;
+                final long maxReplayBytesPerSecond = MAX_REPLAY_BYTES_PER_SECOND_VERSION <= headerDecoder.version() ?
+                    decoder.maxReplayBytesPerSecond() : 0;
 
                 final String replayChannel = decoder.replayChannel();
                 final ChannelUri channelUri = ChannelUri.parse(replayChannel);
@@ -218,6 +221,7 @@ class ControlSessionAdapter implements FragmentHandler
                         position,
                         replayLength,
                         fileIoMaxLength,
+                        maxReplayBytesPerSecond,
                         replayStreamId,
                         channelUri.toString());
                 }
@@ -494,6 +498,8 @@ class ControlSessionAdapter implements FragmentHandler
                     decoder.fileIoMaxLength() : Aeron.NULL_VALUE;
                 final long replayToken = REPLAY_TOKEN_VERSION <= headerDecoder.version() ?
                     decoder.replayToken() : Aeron.NULL_VALUE;
+                final long maxReplayBytesPerSecond = MAX_REPLAY_BYTES_PER_SECOND_VERSION <= headerDecoder.version() ?
+                    decoder.maxReplayBytesPerSecond() : 0;
 
                 final String replayChannel = decoder.replayChannel();
 
@@ -518,6 +524,7 @@ class ControlSessionAdapter implements FragmentHandler
                         replayLength,
                         limitCounterId,
                         fileIoMaxLength,
+                        maxReplayBytesPerSecond,
                         replayStreamId,
                         channelUri.toString());
                 }
@@ -573,7 +580,8 @@ class ControlSessionAdapter implements FragmentHandler
                         decoder.liveDestination(),
                         "",
                         NullCredentialsSupplier.NULL_CREDENTIAL,
-                        "");
+                        "",
+                        0L);
                 }
                 break;
             }
@@ -838,7 +846,8 @@ class ControlSessionAdapter implements FragmentHandler
                         decoder.liveDestination(),
                         "",
                         NullCredentialsSupplier.NULL_CREDENTIAL,
-                        "");
+                        "",
+                        0L);
                 }
                 break;
             }
@@ -933,6 +942,9 @@ class ControlSessionAdapter implements FragmentHandler
                 final int sessionId = SESSION_ID_VERSION <= headerDecoder.version() ?
                     decoder.replicationSessionId() : Aeron.NULL_VALUE;
 
+                final long maxReplayBytesPerSecond = MAX_REPLAY_BYTES_PER_SECOND_VERSION <= headerDecoder.version() ?
+                    decoder.maxReplayBytesPerSecond() : 0;
+
                 final String srcControlChannel = decoder.srcControlChannel();
                 final String liveDestination = decoder.liveDestination();
                 final String replicationChannel = decoder.replicationChannel();
@@ -964,7 +976,8 @@ class ControlSessionAdapter implements FragmentHandler
                         liveDestination,
                         replicationChannel,
                         encodedCredentials,
-                        srcResponseChannel);
+                        srcResponseChannel,
+                        maxReplayBytesPerSecond);
                 }
                 break;
             }

@@ -785,6 +785,7 @@ class ReplaySessionTest
             mockCountersReader,
             recordingPositionCounter,
             checksum,
+            0L,
             mock(ArchiveConductor.Replayer.class));
     }
 

@@ -103,7 +103,8 @@ class ControlSessionAdapterV6Test
             expected.liveDestination(),
             expected.replicationChannel(),
             encodedCredentials,
-            "");
+            "",
+            0L);
     }
 
     @Test
@@ -146,6 +147,7 @@ class ControlSessionAdapterV6Test
             expected.position(),
             expected.length(),
             fileIoMaxLength,
+            0L,
             expected.replayStreamId(),
             expected.replayChannel());
     }
@@ -190,6 +192,7 @@ class ControlSessionAdapterV6Test
             expected.length(),
             expected.limitCounterId(),
             Aeron.NULL_VALUE,
+            0L,
             expected.replayStreamId(),
             expected.replayChannel());
     }

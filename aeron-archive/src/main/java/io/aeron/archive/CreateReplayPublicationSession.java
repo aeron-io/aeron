@@ -37,6 +37,7 @@ final class CreateReplayPublicationSession implements Session
     private final String replayChannel;
     private final int replayStreamId;
     private final int fileIoMaxLength;
+    private final long maxReplayBytesPerSecond;
     private final Aeron aeron;
     private final Counter limitPositionCounter;
     private final ControlSession controlSession;
@@ -57,6 +58,7 @@ final class CreateReplayPublicationSession implements Session
         final String replayChannel,
         final int replayStreamId,
         final int fileIoMaxLength,
+        final long maxReplayBytesPerSecond,
         final Counter limitPositionCounter,
         final Aeron aeron,
         final ControlSession controlSession,
@@ -74,6 +76,7 @@ final class CreateReplayPublicationSession implements Session
         this.replayChannel = replayChannel;
         this.replayStreamId = replayStreamId;
         this.fileIoMaxLength = fileIoMaxLength;
+        this.maxReplayBytesPerSecond = maxReplayBytesPerSecond;
         this.limitPositionCounter = limitPositionCounter;
         this.aeron = aeron;
         this.controlSession = controlSession;
@@ -168,6 +171,7 @@ final class CreateReplayPublicationSession implements Session
                     termBufferLength,
                     streamId,
                     fileIoMaxLength,
+                    maxReplayBytesPerSecond,
                     controlSession,
                     limitPositionCounter,
                     publication);

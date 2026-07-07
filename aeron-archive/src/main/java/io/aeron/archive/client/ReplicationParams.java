@@ -37,6 +37,7 @@ public class ReplicationParams
     private int replicationSessionId;
     private byte[] encodedCredentials;
     private String srcResponseChannel;
+    private long maxReplayBytesPerSecond;
 
     /**
      * Initialise all parameters to defaults.
@@ -64,6 +65,7 @@ public class ReplicationParams
         replicationSessionId = Aeron.NULL_VALUE;
         encodedCredentials = NullCredentialsSupplier.NULL_CREDENTIAL;
         srcResponseChannel = null;
+        maxReplayBytesPerSecond = 0;
 
         return this;
     }
@@ -297,6 +299,32 @@ public class ReplicationParams
     }
 
     /**
+     * Limit the throughput of this replication to at most the given number of bytes per second, so a large or
+     * catch-up replication (e.g. a standby snapshot pulled onto a cluster node) is trickled in without saturating
+     * the archive I/O or media driver and disturbing latency-sensitive work on the host. Enforced by the source
+     * archive's replay. A value of {@code 0} (the default) or negative means unlimited.
+     *
+     * @param maxReplayBytesPerSecond maximum replication throughput in bytes per second, or {@code 0} for unlimited.
+     * @return this for a fluent API.
+     */
+    public ReplicationParams maxReplayBytesPerSecond(final long maxReplayBytesPerSecond)
+    {
+        this.maxReplayBytesPerSecond = maxReplayBytesPerSecond;
+        return this;
+    }
+
+    /**
+     * The maximum replication throughput in bytes per second, or {@code 0} for unlimited (the default).
+     *
+     * @return maximum replication throughput in bytes per second.
+     * @see #maxReplayBytesPerSecond(long)
+     */
+    public long maxReplayBytesPerSecond()
+    {
+        return maxReplayBytesPerSecond;
+    }
+
+    /**
      * {@inheritDoc}
      */
     public boolean equals(final Object o)
@@ -313,6 +341,7 @@ public class ReplicationParams
         return stopPosition == that.stopPosition && dstRecordingId == that.dstRecordingId &&
             channelTagId == that.channelTagId && subscriptionTagId == that.subscriptionTagId &&
             fileIoMaxLength == that.fileIoMaxLength && replicationSessionId == that.replicationSessionId &&
+            maxReplayBytesPerSecond == that.maxReplayBytesPerSecond &&
             Objects.equals(liveDestination, that.liveDestination) &&
             Objects.equals(replicationChannel, that.replicationChannel);
     }
@@ -324,7 +353,7 @@ public class ReplicationParams
     {
         return Objects.hash(
             stopPosition, dstRecordingId, liveDestination, replicationChannel, channelTagId, subscriptionTagId,
-            fileIoMaxLength, replicationSessionId);
+            fileIoMaxLength, replicationSessionId, maxReplayBytesPerSecond);
     }
 
     /**
@@ -341,6 +370,7 @@ public class ReplicationParams
             ", subscriptionTagId=" + subscriptionTagId +
             ", fileIoMaxLength=" + fileIoMaxLength +
             ", replicationSessionId=" + replicationSessionId +
+            ", maxReplayBytesPerSecond=" + maxReplayBytesPerSecond +
             '}';
     }
 }

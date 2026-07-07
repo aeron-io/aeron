@@ -96,6 +96,9 @@ class ReplaySession implements Session, AutoCloseable
 
     private final long replayBufferAddress;
     private final Checksum checksum;
+    private final long maxReplayBytesPerSecond;
+    private long throttleWindowStartNs;
+    private long throttleBytesInWindow;
 
     private final ExclusivePublication publication;
     private final ControlSession controlSession;
@@ -136,6 +139,7 @@ class ReplaySession implements Session, AutoCloseable
         final CountersReader countersReader,
         final Counter replayLimitPosition,
         final Checksum checksum,
+        final long maxReplayBytesPerSecond,
         final ArchiveConductor.Replayer replayer)
     {
         this.controlSession = controlSession;
@@ -156,6 +160,7 @@ class ReplaySession implements Session, AutoCloseable
         this.checksum = checksum;
         this.startPosition = startPosition;
         this.stopPosition = stopPosition;
+        this.maxReplayBytesPerSecond = maxReplayBytesPerSecond;
         this.replayer = replayer;
 
         segmentFileBasePosition = AeronArchive.segmentFileBasePosition(
@@ -378,6 +383,11 @@ class ReplaySession implements Session, AutoCloseable
         int workCount = 0;
         if (publication.availableWindow() > 0)
         {
+            if (maxReplayBytesPerSecond > 0 && isReplayRateExceeded())
+            {
+                return 0;
+            }
+
             final long startNs = nanoClock.nanoTime();
             final int bytesRead = readRecording(stopPosition - replayPosition);
             if (bytesRead > 0)
@@ -433,6 +443,7 @@ class ReplaySession implements Session, AutoCloseable
                     if (hasPublicationAdvanced(position, batchOffset))
                     {
                         workCount++;
+                        throttleBytesInWindow += batchOffset;
                     }
                     else
                     {
@@ -452,6 +463,27 @@ class ReplaySession implements Session, AutoCloseable
         }
 
         return workCount;
+    }
+
+    /**
+     * Per-second token bucket used to cap replay throughput at {@code maxReplayBytesPerSecond} so a large or
+     * catch-up replay can be trickled out without saturating archive I/O or the media driver. This is a coarse
+     * limiter: because the gate is checked before a whole block is read/offered, a window may overshoot the cap
+     * by up to one offered block (bounded by {@code fileIoMaxLength}), so the effective rate can exceed the cap
+     * by up to roughly one block per second. Set the cap accordingly.
+     *
+     * @return {@code true} if the current one-second window's byte budget has been used up.
+     */
+    private boolean isReplayRateExceeded()
+    {
+        final long nowNs = nanoClock.nanoTime();
+        if (nowNs - throttleWindowStartNs >= 1_000_000_000L)
+        {
+            throttleWindowStartNs = nowNs;
+            throttleBytesInWindow = 0;
+        }
+
+        return throttleBytesInWindow >= maxReplayBytesPerSecond;
     }
 
     private String framePosition(final int frameOffset)

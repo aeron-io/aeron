@@ -911,6 +911,21 @@ public final class ConsensusModule implements AutoCloseable
         public static final int FILE_SYNC_LEVEL_DEFAULT = 0;
 
         /**
+         * Maximum throughput, in bytes per second, at which standby snapshots are replicated onto this node, so a
+         * (leader) node can pull snapshots without the replication I/O disturbing latency-sensitive consensus work.
+         * A value of {@code 0} (the default) means unlimited.
+         */
+        @Config(existsInC = false)
+        public static final String SNAPSHOT_REPLICATION_BYTES_PER_SECOND_PROP_NAME =
+            "aeron.cluster.snapshot.replication.bytes.per.second";
+
+        /**
+         * Default maximum standby-snapshot replication throughput: {@code 0} (unlimited).
+         */
+        @Config(existsInC = false)
+        public static final long SNAPSHOT_REPLICATION_BYTES_PER_SECOND_DEFAULT = 0;
+
+        /**
          * {@link TimerServiceSupplier} to be used for creating the {@link TimerService} used by consensus module.
          */
         @Config
@@ -1446,6 +1461,19 @@ public final class ConsensusModule implements AutoCloseable
         }
 
         /**
+         * The maximum throughput, in bytes per second, at which standby snapshots are replicated onto this node,
+         * or {@code 0} for unlimited.
+         *
+         * @return maximum standby-snapshot replication throughput in bytes per second.
+         * @see #SNAPSHOT_REPLICATION_BYTES_PER_SECOND_PROP_NAME
+         */
+        public static long snapshotReplicationBytesPerSecond()
+        {
+            return Long.getLong(
+                SNAPSHOT_REPLICATION_BYTES_PER_SECOND_PROP_NAME, SNAPSHOT_REPLICATION_BYTES_PER_SECOND_DEFAULT);
+        }
+
+        /**
          * The name of the {@link TimerServiceSupplier} to use for supplying the {@link TimerService}.
          *
          * @return {@link #TIMER_SERVICE_SUPPLIER_DEFAULT} or system property.
@@ -1588,6 +1616,7 @@ public final class ConsensusModule implements AutoCloseable
         private ClusterMarkFile markFile;
         private NodeStateFile nodeStateFile;
         private int fileSyncLevel = Archive.Configuration.fileSyncLevel();
+        private long snapshotReplicationBytesPerSecond = Configuration.snapshotReplicationBytesPerSecond();
 
         private int appVersion = SemanticVersion.compose(0, 0, 1);
         private int clusterId = ClusteredServiceContainer.Configuration.clusterId();
@@ -2385,6 +2414,34 @@ public final class ConsensusModule implements AutoCloseable
         public Context fileSyncLevel(final int syncLevel)
         {
             this.fileSyncLevel = syncLevel;
+            return this;
+        }
+
+        /**
+         * The maximum throughput, in bytes per second, at which standby snapshots are replicated onto this node,
+         * or {@code 0} for unlimited.
+         *
+         * @return maximum standby-snapshot replication throughput in bytes per second.
+         * @see Configuration#SNAPSHOT_REPLICATION_BYTES_PER_SECOND_PROP_NAME
+         */
+        @Config(existsInC = false)
+        public long snapshotReplicationBytesPerSecond()
+        {
+            return snapshotReplicationBytesPerSecond;
+        }
+
+        /**
+         * Set the maximum throughput, in bytes per second, at which standby snapshots are replicated onto this node.
+         * A value of {@code 0} means unlimited. Trickling replication in keeps a (leader) node's consensus and client
+         * serving undisturbed while it pulls a standby snapshot.
+         *
+         * @param snapshotReplicationBytesPerSecond maximum replication throughput in bytes per second, or {@code 0}.
+         * @return this for a fluent API.
+         * @see Configuration#SNAPSHOT_REPLICATION_BYTES_PER_SECOND_PROP_NAME
+         */
+        public Context snapshotReplicationBytesPerSecond(final long snapshotReplicationBytesPerSecond)
+        {
+            this.snapshotReplicationBytesPerSecond = snapshotReplicationBytesPerSecond;
             return this;
         }
 

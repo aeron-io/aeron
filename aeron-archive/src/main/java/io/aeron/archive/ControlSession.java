@@ -398,6 +398,7 @@ final class ControlSession implements Session
         final long position,
         final long length,
         final int fileIoMaxLength,
+        final long maxReplayBytesPerSecond,
         final int replayStreamId,
         final String replayChannel)
     {
@@ -410,6 +411,7 @@ final class ControlSession implements Session
                 position,
                 length,
                 fileIoMaxLength,
+                maxReplayBytesPerSecond,
                 replayStreamId,
                 replayChannel,
                 null,
@@ -424,6 +426,7 @@ final class ControlSession implements Session
         final long length,
         final int limitCounterId,
         final int fileIoMaxLength,
+        final long maxReplayBytesPerSecond,
         final int replayStreamId,
         final String replayChannel)
     {
@@ -437,6 +440,7 @@ final class ControlSession implements Session
                 length,
                 limitCounterId,
                 fileIoMaxLength,
+                maxReplayBytesPerSecond,
                 replayStreamId,
                 replayChannel,
                 this);
@@ -575,7 +579,8 @@ final class ControlSession implements Session
         final String liveDestination,
         final String replicationChannel,
         final byte[] encodedCredentials,
-        final String srcResponseChannel)
+        final String srcResponseChannel,
+        final long maxReplayBytesPerSecond)
     {
         attemptToActivate();
         if (State.ACTIVE == state)
@@ -595,6 +600,7 @@ final class ControlSession implements Session
                 replicationSessionId,
                 encodedCredentials,
                 srcResponseChannel,
+                maxReplayBytesPerSecond,
                 this);
         }
     }

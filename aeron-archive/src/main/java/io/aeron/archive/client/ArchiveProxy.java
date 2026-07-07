@@ -530,7 +530,8 @@ public final class ArchiveProxy
                 correlationId,
                 controlSessionId,
                 replayParams.fileIoMaxLength(),
-                replayParams.replayToken());
+                replayParams.replayToken(),
+                replayParams.maxReplayBytesPerSecond());
         }
         else
         {
@@ -543,7 +544,8 @@ public final class ArchiveProxy
                 correlationId,
                 controlSessionId,
                 replayParams.fileIoMaxLength(),
-                replayParams.replayToken());
+                replayParams.replayToken(),
+                replayParams.maxReplayBytesPerSecond());
         }
     }
 
@@ -577,7 +579,8 @@ public final class ArchiveProxy
             correlationId,
             controlSessionId,
             Aeron.NULL_VALUE,
-            Aeron.NULL_VALUE);
+            Aeron.NULL_VALUE,
+            0L);
     }
 
     /**
@@ -613,7 +616,8 @@ public final class ArchiveProxy
             correlationId,
             controlSessionId,
             Aeron.NULL_VALUE,
-            Aeron.NULL_VALUE);
+            Aeron.NULL_VALUE,
+            0L);
     }
 
     /**
@@ -1050,7 +1054,8 @@ public final class ArchiveProxy
             Aeron.NULL_VALUE,
             Aeron.NULL_VALUE,
             NullCredentialsSupplier.NULL_CREDENTIAL,
-            null);
+            null,
+            0L);
     }
 
     /**
@@ -1104,7 +1109,8 @@ public final class ArchiveProxy
             Aeron.NULL_VALUE,
             Aeron.NULL_VALUE,
             NullCredentialsSupplier.NULL_CREDENTIAL,
-            null);
+            null,
+            0L);
     }
 
     /**
@@ -1157,7 +1163,8 @@ public final class ArchiveProxy
             Aeron.NULL_VALUE,
             Aeron.NULL_VALUE,
             NullCredentialsSupplier.NULL_CREDENTIAL,
-            null);
+            null,
+            0L);
     }
 
     /**
@@ -1215,7 +1222,8 @@ public final class ArchiveProxy
             Aeron.NULL_VALUE,
             Aeron.NULL_VALUE,
             NullCredentialsSupplier.NULL_CREDENTIAL,
-            null);
+            null,
+            0L);
     }
 
     /**
@@ -1268,7 +1276,8 @@ public final class ArchiveProxy
             replicationParams.fileIoMaxLength(),
             replicationParams.replicationSessionId(),
             replicationParams.encodedCredentials(),
-            replicationParams.srcResponseChannel());
+            replicationParams.srcResponseChannel(),
+            replicationParams.maxReplayBytesPerSecond());
     }
 
     /**
@@ -1550,7 +1559,8 @@ public final class ArchiveProxy
         final long correlationId,
         final long controlSessionId,
         final int fileIoMaxLength,
-        final long replayToken)
+        final long replayToken,
+        final long maxReplayBytesPerSecond)
     {
         replayRequest
             .wrapAndApplyHeader(buffer, 0, messageHeader)
@@ -1562,6 +1572,7 @@ public final class ArchiveProxy
             .replayStreamId(replayStreamId)
             .fileIoMaxLength(fileIoMaxLength)
             .replayToken(replayToken)
+            .maxReplayBytesPerSecond(maxReplayBytesPerSecond)
             .replayChannel(replayChannel);
 
         return offer(replayRequest.encodedLength());
@@ -1577,7 +1588,8 @@ public final class ArchiveProxy
         final long correlationId,
         final long controlSessionId,
         final int fileIoMaxLength,
-        final long replayToken)
+        final long replayToken,
+        final long maxReplayBytesPerSecond)
     {
         boundedReplayRequest
             .wrapAndApplyHeader(buffer, 0, messageHeader)
@@ -1590,6 +1602,7 @@ public final class ArchiveProxy
             .replayStreamId(replayStreamId)
             .fileIoMaxLength(fileIoMaxLength)
             .replayToken(replayToken)
+            .maxReplayBytesPerSecond(maxReplayBytesPerSecond)
             .replayChannel(replayChannel);
 
         return offer(boundedReplayRequest.encodedLength());
@@ -1610,7 +1623,8 @@ public final class ArchiveProxy
         final int fileIoMaxLength,
         final int replicationSessionId,
         final byte[] encodedCredentials,
-        final String srcResponseChannel)
+        final String srcResponseChannel,
+        final long maxReplayBytesPerSecond)
     {
         replicateRequest
             .wrapAndApplyHeader(buffer, 0, messageHeader)
@@ -1623,10 +1637,11 @@ public final class ArchiveProxy
             .subscriptionTagId(subscriptionTagId)
             .srcControlStreamId(srcControlStreamId)
             .fileIoMaxLength(fileIoMaxLength)
+            .replicationSessionId(replicationSessionId)
+            .maxReplayBytesPerSecond(maxReplayBytesPerSecond)
             .srcControlChannel(srcControlChannel)
             .liveDestination(liveDestination)
             .replicationChannel(replicationChannel)
-            .replicationSessionId(replicationSessionId)
             .putEncodedCredentials(encodedCredentials, 0, encodedCredentials.length)
             .srcResponseChannel(srcResponseChannel);
 

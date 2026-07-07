@@ -112,7 +112,7 @@ class StandbySnapshotReplicatorTest
             {
                 staticMockReplication
                     .when(() -> MultipleRecordingReplication.newInstance(
-                        any(), anyInt(), any(), any(), anyLong(), anyLong()))
+                        any(), anyInt(), any(), any(), anyLong(), anyLong(), anyLong()))
                     .thenReturn(mockMultipleRecordingReplication0);
                 staticMockArchive.when(() -> AeronArchive.connect(any())).thenReturn(mockArchive);
 
@@ -125,7 +125,8 @@ class StandbySnapshotReplicatorTest
                     archiveControlStreamId,
                     replicationChannel,
                     fileSyncLevel,
-                    snapshotCounter);
+                    snapshotCounter,
+                    0L);
 
                 when(mockMultipleRecordingReplication0.isComplete()).thenReturn(true);
 
@@ -140,7 +141,8 @@ class StandbySnapshotReplicatorTest
                     contains(endpoint0),
                     eq(replicationChannel),
                     eq(progressTimeoutNs),
-                    eq(intervalTimeoutNs)));
+                    eq(intervalTimeoutNs),
+                    eq(0L)));
 
                 verify(mockMultipleRecordingReplication0).addRecording(1L, NULL_RECORDING_ID, NULL_POSITION);
                 verify(mockMultipleRecordingReplication0).addRecording(2L, NULL_RECORDING_ID, NULL_POSITION);
@@ -177,7 +179,7 @@ class StandbySnapshotReplicatorTest
 
             staticMockReplication
                 .when(() -> MultipleRecordingReplication.newInstance(
-                    any(), anyInt(), any(), any(), anyLong(), anyLong()))
+                    any(), anyInt(), any(), any(), anyLong(), anyLong(), anyLong()))
                 .thenReturn(mockMultipleRecordingReplication0);
             staticMockArchive.when(() -> AeronArchive.connect(any())).thenReturn(mockArchive);
 
@@ -190,7 +192,8 @@ class StandbySnapshotReplicatorTest
                 archiveControlStreamId,
                 replicationChannel,
                 fileSyncLevel,
-                snapshotCounter);
+                snapshotCounter,
+                0L);
 
             standbySnapshotReplicator.poll(0);
             verify(mockArchive).pollForRecordingSignals();
@@ -198,6 +201,52 @@ class StandbySnapshotReplicatorTest
 
             verify(mockMultipleRecordingReplication0).onSignal(11, 23, 37, RecordingSignal.START);
             verifyNoInteractions(snapshotCounter);
+        }
+    }
+
+    @Test
+    void shouldPassMaxReplayBytesPerSecondToReplication()
+    {
+        final long maxReplayBytesPerSecond = 5L * 1024 * 1024;
+
+        try (RecordingLog recordingLog = new RecordingLog(clusterDir, true);
+            MockedStatic<MultipleRecordingReplication> staticMockReplication = mockStatic(
+                MultipleRecordingReplication.class);
+            MockedStatic<AeronArchive> staticMockArchive = mockStatic(AeronArchive.class))
+        {
+            recordingLog.appendStandbySnapshot(1, 0, 0, 1000, 1_000_000_000L, SERVICE_ID, endpoint0);
+            recordingLog.appendStandbySnapshot(2, 0, 0, 1000, 1_000_000_000L, 0, endpoint0);
+
+            staticMockReplication
+                .when(() -> MultipleRecordingReplication.newInstance(
+                    any(), anyInt(), any(), any(), anyLong(), anyLong(), anyLong()))
+                .thenReturn(mockMultipleRecordingReplication0);
+            staticMockArchive.when(() -> AeronArchive.connect(any())).thenReturn(mockArchive);
+
+            final StandbySnapshotReplicator standbySnapshotReplicator = StandbySnapshotReplicator.newInstance(
+                memberId,
+                ctx,
+                recordingLog,
+                1,
+                archiveControlChannel,
+                archiveControlStreamId,
+                replicationChannel,
+                fileSyncLevel,
+                snapshotCounter,
+                maxReplayBytesPerSecond);
+
+            standbySnapshotReplicator.poll(0);
+
+            // the configured throttle propagates to the replication (which sets it on the ReplicationParams,
+            // ultimately capping the source archive's replay rate)
+            staticMockReplication.verify(() -> MultipleRecordingReplication.newInstance(
+                eq(mockArchive),
+                eq(archiveControlStreamId),
+                contains(endpoint0),
+                eq(replicationChannel),
+                anyLong(),
+                anyLong(),
+                eq(maxReplayBytesPerSecond)));
         }
     }
 
@@ -211,7 +260,7 @@ class StandbySnapshotReplicatorTest
         {
             staticMockReplication
                 .when(() -> MultipleRecordingReplication.newInstance(
-                    any(), anyInt(), any(), any(), anyLong(), anyLong()))
+                    any(), anyInt(), any(), any(), anyLong(), anyLong(), anyLong()))
                 .thenReturn(mockMultipleRecordingReplication0);
             staticMockArchive.when(() -> AeronArchive.connect(any())).thenReturn(mockArchive);
 
@@ -223,7 +272,7 @@ class StandbySnapshotReplicatorTest
                 archiveControlChannel,
                 archiveControlStreamId,
                 replicationChannel,
-                fileSyncLevel, snapshotCounter);
+                fileSyncLevel, snapshotCounter, 0L);
 
             standbySnapshotReplicator.poll(0);
             assertTrue(standbySnapshotReplicator.isComplete());
@@ -259,12 +308,12 @@ class StandbySnapshotReplicatorTest
         {
             staticMockReplication
                 .when(() -> MultipleRecordingReplication.newInstance(
-                    any(), anyInt(), contains("host0"), any(), anyLong(), anyLong()))
+                    any(), anyInt(), contains("host0"), any(), anyLong(), anyLong(), anyLong()))
                 .thenReturn(mockMultipleRecordingReplication0);
 
             staticMockReplication
                 .when(() -> MultipleRecordingReplication.newInstance(
-                    any(), anyInt(), contains("host1"), any(), anyLong(), anyLong()))
+                    any(), anyInt(), contains("host1"), any(), anyLong(), anyLong(), anyLong()))
                 .thenReturn(mockMultipleRecordingReplication1);
 
             staticMockArchive.when(() -> AeronArchive.connect(any())).thenReturn(mockArchive);
@@ -278,7 +327,8 @@ class StandbySnapshotReplicatorTest
                 archiveControlStreamId,
                 replicationChannel,
                 fileSyncLevel,
-                snapshotCounter);
+                snapshotCounter,
+                0L);
 
             when(mockMultipleRecordingReplication0.poll(anyLong())).thenThrow(new ClusterException("fail"));
             when(mockMultipleRecordingReplication1.isComplete()).thenReturn(true);
@@ -322,12 +372,12 @@ class StandbySnapshotReplicatorTest
         {
             staticMockReplication
                 .when(() -> MultipleRecordingReplication.newInstance(
-                    any(), anyInt(), contains("host0"), any(), anyLong(), anyLong()))
+                    any(), anyInt(), contains("host0"), any(), anyLong(), anyLong(), anyLong()))
                 .thenReturn(mockMultipleRecordingReplication0);
 
             staticMockReplication
                 .when(() -> MultipleRecordingReplication.newInstance(
-                    any(), anyInt(), contains("host1"), any(), anyLong(), anyLong()))
+                    any(), anyInt(), contains("host1"), any(), anyLong(), anyLong(), anyLong()))
                 .thenReturn(mockMultipleRecordingReplication1);
 
             staticMockArchive.when(() -> AeronArchive.connect(any())).thenReturn(mockArchive);
@@ -342,7 +392,8 @@ class StandbySnapshotReplicatorTest
                 archiveControlStreamId,
                 replicationChannel,
                 fileSyncLevel,
-                snapshotCounter);
+                snapshotCounter,
+                0L);
 
             when(mockMultipleRecordingReplication1.isComplete()).thenReturn(true);
 
@@ -385,12 +436,12 @@ class StandbySnapshotReplicatorTest
         {
             staticMockReplication
                 .when(() -> MultipleRecordingReplication.newInstance(
-                    any(), anyInt(), contains("host0"), any(), anyLong(), anyLong()))
+                    any(), anyInt(), contains("host0"), any(), anyLong(), anyLong(), anyLong()))
                 .thenReturn(mockMultipleRecordingReplication0);
 
             staticMockReplication
                 .when(() -> MultipleRecordingReplication.newInstance(
-                    any(), anyInt(), contains("host1"), any(), anyLong(), anyLong()))
+                    any(), anyInt(), contains("host1"), any(), anyLong(), anyLong(), anyLong()))
                 .thenReturn(mockMultipleRecordingReplication1);
 
             staticMockArchive.when(() -> AeronArchive.connect(any())).thenReturn(mockArchive);
@@ -407,7 +458,8 @@ class StandbySnapshotReplicatorTest
                 archiveControlStreamId,
                 replicationChannel,
                 fileSyncLevel,
-                snapshotCounter);
+                snapshotCounter,
+                0L);
 
             standbySnapshotReplicator.poll(nowNs);
             standbySnapshotReplicator.poll(nowNs);
@@ -447,12 +499,12 @@ class StandbySnapshotReplicatorTest
         {
             staticMockReplication
                 .when(() -> MultipleRecordingReplication.newInstance(
-                    any(), anyInt(), contains("host0"), any(), anyLong(), anyLong()))
+                    any(), anyInt(), contains("host0"), any(), anyLong(), anyLong(), anyLong()))
                 .thenReturn(mockMultipleRecordingReplication0);
 
             staticMockReplication
                 .when(() -> MultipleRecordingReplication.newInstance(
-                    any(), anyInt(), contains("host1"), any(), anyLong(), anyLong()))
+                    any(), anyInt(), contains("host1"), any(), anyLong(), anyLong(), anyLong()))
                 .thenReturn(mockMultipleRecordingReplication1);
 
             staticMockArchive.when(() -> AeronArchive.connect(any())).thenReturn(mockArchive);
@@ -467,7 +519,8 @@ class StandbySnapshotReplicatorTest
                 archiveControlStreamId,
                 replicationChannel,
                 fileSyncLevel,
-                snapshotCounter);
+                snapshotCounter,
+                0L);
 
             standbySnapshotReplicator.poll(nowNs);
             standbySnapshotReplicator.poll(nowNs);
@@ -501,7 +554,7 @@ class StandbySnapshotReplicatorTest
         {
             staticMockReplication
                 .when(() -> MultipleRecordingReplication.newInstance(
-                    any(), anyInt(), any(), any(), anyLong(), anyLong()))
+                    any(), anyInt(), any(), any(), anyLong(), anyLong(), anyLong()))
                 .thenReturn(mockMultipleRecordingReplication0);
 
             staticMockArchive.when(() -> AeronArchive.connect(any())).thenReturn(mockArchive);
@@ -515,7 +568,8 @@ class StandbySnapshotReplicatorTest
                 archiveControlStreamId,
                 replicationChannel,
                 fileSyncLevel,
-                snapshotCounter);
+                snapshotCounter,
+                0L);
 
             standbySnapshotReplicator.poll(nowNs);
             standbySnapshotReplicator.poll(nowNs);

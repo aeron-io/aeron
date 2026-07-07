@@ -2615,7 +2615,8 @@ final class ConsensusModuleAgent
                     ctx.archiveContext().controlRequestStreamId(),
                     ctx.replicationChannel(),
                     ctx.fileSyncLevel(),
-                    ctx.snapshotCounter());
+                    ctx.snapshotCounter(),
+                    ctx.snapshotReplicationBytesPerSecond());
             }
 
             NodeControl.ToggleState.reset(nodeControlToggle);
@@ -3553,7 +3554,8 @@ final class ConsensusModuleAgent
             ctx.archiveContext().controlRequestStreamId(),
             ctx.replicationChannel(),
             ctx.fileSyncLevel(),
-            ctx.snapshotCounter()))
+            ctx.snapshotCounter(),
+            ctx.snapshotReplicationBytesPerSecond()))
         {
             idleStrategy.reset();
             while (!standbySnapshotReplicator.isComplete())

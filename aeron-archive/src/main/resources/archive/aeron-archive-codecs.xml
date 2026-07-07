@@ -2,7 +2,7 @@
 <sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
                    package="io.aeron.archive.codecs"
                    id="101"
-                   version="13"
+                   version="14"
                    semanticVersion="5.2"
                    description="Message Codecs for communicating with an Aeron Archive."
                    byteOrder="littleEndian">
@@ -198,6 +198,7 @@
         <field name="replayStreamId"       id="6" type="int32"/>
         <field name="fileIoMaxLength"      id="8" type="int32" sinceVersion="7"/>
         <field name="replayToken"          id="9" type="int64" sinceVersion="10"/>
+        <field name="maxReplayBytesPerSecond" id="10" type="int64" sinceVersion="14"/>
         <data  name="replayChannel"        id="7" type="varAsciiEncoding"/>
     </sbe:message>
 
@@ -316,6 +317,7 @@
         <field name="replayStreamId"       id="7" type="int32"/>
         <field name="fileIoMaxLength"      id="9" type="int32" sinceVersion="7"/>
         <field name="replayToken"          id="10" type="int64" sinceVersion="10"/>
+        <field name="maxReplayBytesPerSecond" id="11" type="int64" sinceVersion="14"/>
         <data  name="replayChannel"        id="8" type="varAsciiEncoding"/>
     </sbe:message>
 
@@ -561,6 +563,7 @@
         <field name="srcControlStreamId"   id="8" type="int32"/>
         <field name="fileIoMaxLength"      id="12" type="int32" sinceVersion="7"/>
         <field name="replicationSessionId" id="13" type="int32" sinceVersion="8"/>
+        <field name="maxReplayBytesPerSecond" id="16" type="int64" sinceVersion="14"/>
         <data  name="srcControlChannel"    id="9" type="varAsciiEncoding"/>
         <data  name="liveDestination"      id="10" type="varAsciiEncoding"/>
         <data  name="replicationChannel"   id="11" type="varAsciiEncoding"/>

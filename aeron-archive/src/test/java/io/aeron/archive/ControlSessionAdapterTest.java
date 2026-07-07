@@ -103,7 +103,8 @@ class ControlSessionAdapterTest
             expected.liveDestination(),
             expected.replicationChannel(),
             encodedCredentials(expected),
-            expected.srcResponseChannel());
+            expected.srcResponseChannel(),
+            expected.maxReplayBytesPerSecond());
     }
 
     private static byte[] encodedCredentials(final ReplicateRequest2Decoder decoder)
@@ -152,6 +153,7 @@ class ControlSessionAdapterTest
             expected.position(),
             expected.length(),
             expected.fileIoMaxLength(),
+            expected.maxReplayBytesPerSecond(),
             expected.replayStreamId(),
             expected.replayChannel());
     }
@@ -197,6 +199,7 @@ class ControlSessionAdapterTest
             expected.length(),
             expected.limitCounterId(),
             expected.fileIoMaxLength(),
+            expected.maxReplayBytesPerSecond(),
             expected.replayStreamId(),
             expected.replayChannel());
     }

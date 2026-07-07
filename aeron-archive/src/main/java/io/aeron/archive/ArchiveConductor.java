@@ -747,6 +747,7 @@ abstract class ArchiveConductor
         final long position,
         final long length,
         final int fileIoMaxLength,
+        final long maxReplayBytesPerSecond,
         final int replayStreamId,
         final String replayChannel,
         final Counter limitPositionCounter,
@@ -893,6 +894,7 @@ abstract class ArchiveConductor
                 channelBuilder.build(),
                 replayStreamId,
                 fileIoMaxLength,
+                maxReplayBytesPerSecond,
                 replayLimitPositionCounter,
                 aeron,
                 controlSession,
@@ -929,6 +931,7 @@ abstract class ArchiveConductor
         final int termBufferLength,
         final int streamId,
         final int fileIoMaxLength,
+        final long maxReplayBytesPerSecond,
         final ControlSession controlSession,
         final Counter replayLimitPosition,
         final ExclusivePublication replayPublication)
@@ -966,6 +969,7 @@ abstract class ArchiveConductor
             aeron.countersReader(),
             replayLimitPosition,
             ctx.replayChecksum(),
+            maxReplayBytesPerSecond,
             replayer);
 
         replaySessionByIdMap.put(replaySessionId, replaySession);
@@ -980,6 +984,7 @@ abstract class ArchiveConductor
         final long length,
         final int limitCounterId,
         final int fileIoMaxLength,
+        final long maxReplayBytesPerSecond,
         final int replayStreamId,
         final String replayChannel,
         final ControlSession controlSession)
@@ -1008,6 +1013,7 @@ abstract class ArchiveConductor
             position,
             length,
             fileIoMaxLength,
+            maxReplayBytesPerSecond,
             replayStreamId,
             replayChannel,
             replayLimitCounter,
@@ -1379,6 +1385,7 @@ abstract class ArchiveConductor
         final int replicationSessionId,
         final byte[] encodedCredentials,
         final String srcResponseChannel,
+        final long maxReplayBytesPerSecond,
         final ControlSession controlSession)
     {
         final String replicationChannel0 = Strings.isEmpty(replicationChannel) ?
@@ -1447,6 +1454,7 @@ abstract class ArchiveConductor
             replicationChannel0,
             fileIoMaxLength,
             replicationSessionId,
+            maxReplayBytesPerSecond,
             hasRecording ? recordingSummary : null,
             remoteArchiveContext,
             cachedEpochClock,

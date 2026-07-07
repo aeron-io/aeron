@@ -35,6 +35,7 @@ final class MultipleRecordingReplication implements AutoCloseable
     private final Long2LongHashMap recordingsCompleted = new Long2LongHashMap(Aeron.NULL_VALUE);
     private final long progressTimeoutNs;
     private final long progressIntervalNs;
+    private final long maxReplayBytesPerSecond;
     private int recordingCursor = 0;
     private RecordingReplication recordingReplication = null;
     private EventListener eventListener = null;
@@ -46,7 +47,8 @@ final class MultipleRecordingReplication implements AutoCloseable
         final String replicationChannel,
         final String srcResponseChannel,
         final long replicationProgressTimeoutNs,
-        final long replicationProgressIntervalNs)
+        final long replicationProgressIntervalNs,
+        final long maxReplayBytesPerSecond)
     {
         this.archive = archive;
         this.srcControlStreamId = srcControlStreamId;
@@ -55,6 +57,7 @@ final class MultipleRecordingReplication implements AutoCloseable
         this.srcResponseChannel = srcResponseChannel;
         this.progressTimeoutNs = replicationProgressTimeoutNs;
         this.progressIntervalNs = replicationProgressIntervalNs;
+        this.maxReplayBytesPerSecond = maxReplayBytesPerSecond;
     }
 
     static MultipleRecordingReplication newInstance(
@@ -72,7 +75,8 @@ final class MultipleRecordingReplication implements AutoCloseable
             replicationChannel,
             null,
             replicationProgressTimeoutNs,
-            replicationProgressIntervalNs);
+            replicationProgressIntervalNs,
+            0);
     }
 
     static MultipleRecordingReplication newInstance(
@@ -91,7 +95,28 @@ final class MultipleRecordingReplication implements AutoCloseable
             replicationChannel,
             srcResponseChannel,
             replicationProgressTimeoutNs,
-            replicationProgressIntervalNs);
+            replicationProgressIntervalNs,
+            0);
+    }
+
+    static MultipleRecordingReplication newInstance(
+        final AeronArchive archive,
+        final int srcControlStreamId,
+        final String srcControlChannel,
+        final String replicationChannel,
+        final long replicationProgressTimeoutNs,
+        final long replicationProgressIntervalNs,
+        final long maxReplayBytesPerSecond)
+    {
+        return new MultipleRecordingReplication(
+            archive,
+            srcControlStreamId,
+            srcControlChannel,
+            replicationChannel,
+            null,
+            replicationProgressTimeoutNs,
+            replicationProgressIntervalNs,
+            maxReplayBytesPerSecond);
     }
 
     void addRecording(final long srcRecordingId, final long dstRecordingId, final long stopPosition)
@@ -203,6 +228,7 @@ final class MultipleRecordingReplication implements AutoCloseable
             .stopPosition(recordingInfo.stopPosition)
             .replicationChannel(replicationChannel)
             .srcResponseChannel(srcResponseChannel)
+            .maxReplayBytesPerSecond(maxReplayBytesPerSecond)
             .replicationSessionId((int)archive.context().aeron().nextCorrelationId());
 
         recordingReplication = new RecordingReplication(

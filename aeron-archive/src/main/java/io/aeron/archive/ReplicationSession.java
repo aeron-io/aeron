@@ -100,6 +100,7 @@ class ReplicationSession implements Session, RecordingDescriptorConsumer
     private final ControlSession controlSession;
     private final Catalog catalog;
     private final int fileIoMaxLength;
+    private final long maxReplayBytesPerSecond;
     private final Aeron aeron;
     private final AeronArchive.Context context;
     private AeronArchive.AsyncConnect asyncConnect;
@@ -124,6 +125,7 @@ class ReplicationSession implements Session, RecordingDescriptorConsumer
         final String replicationChannel,
         final int fileIoMaxLength,
         final int replicationSessionId,
+        final long maxReplayBytesPerSecond,
         final RecordingSummary recordingSummary,
         final AeronArchive.Context context,
         final CachedEpochClock epochClock,
@@ -137,6 +139,7 @@ class ReplicationSession implements Session, RecordingDescriptorConsumer
         this.replicationChannel = replicationChannel;
         this.fileIoMaxLength = fileIoMaxLength;
         this.replicationSessionId = replicationSessionId;
+        this.maxReplayBytesPerSecond = maxReplayBytesPerSecond;
         this.aeron = context.aeron();
         this.context = context;
         this.catalog = catalog;
@@ -704,7 +707,8 @@ class ReplicationSession implements Session, RecordingDescriptorConsumer
                 .position(replayPosition)
                 .length(NULL_POSITION == dstStopPosition ? AeronArchive.NULL_LENGTH : dstStopPosition - replayPosition)
                 .fileIoMaxLength(fileIoMaxLength)
-                .replayToken(replayToken);
+                .replayToken(replayToken)
+                .maxReplayBytesPerSecond(maxReplayBytesPerSecond);
 
             final ArchiveProxy archiveProxy = null != responseArchiveProxy ?
                 responseArchiveProxy : srcArchive.archiveProxy();

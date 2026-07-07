@@ -109,7 +109,7 @@ class ArchiveConductorTest
         final ControlSession mockControlSession = mock(ControlSession.class);
         final long correlationId = 1L;
 
-        conductor.startReplay(correlationId, 0L, 0L, 0L, 0, 1, "aeron:ipc", null, mockControlSession);
+        conductor.startReplay(correlationId, 0L, 0L, 0L, 0, 0L, 1, "aeron:ipc", null, mockControlSession);
 
         verify(mockControlSession).sendErrorResponse(
             eq(correlationId), eq((long)ArchiveException.MAX_REPLAYS), anyString());
@@ -163,7 +163,7 @@ class ArchiveConductorTest
         final Counter mockLimitCounter = mock(Counter.class);
         when(mockLimitCounter.get()).thenReturn(originalStopPosition);
 
-        conductor.startReplay(2L, recordingId, 0L, 2L * segmentLength, 0, 1, "aeron:ipc",
+        conductor.startReplay(2L, recordingId, 0L, 2L * segmentLength, 0, 0L, 1, "aeron:ipc",
             mockLimitCounter, mockControlSession);
 
         final ArgumentCaptor<String> errorCaptor = ArgumentCaptor.forClass(String.class);
