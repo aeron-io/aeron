@@ -420,6 +420,8 @@ class PublicationParamsTest
     @ValueSource(strings = { "aeron:ipc?mtu=4k", "aeron:udp?endpoint=localhost:5555" })
     void shouldSetUntetheredWindowLimitTimeout(final String uri)
     {
+        ctx.timerIntervalNs(1);
+
         final long timeoutUs = 456;
 
         final ChannelUri channelUri = ChannelUri.parse(uri + "|untethered-window-limit-timeout=" + timeoutUs + "us");
@@ -460,6 +462,8 @@ class PublicationParamsTest
     @ValueSource(strings = { "aeron:ipc?mtu=4k", "aeron:udp?endpoint=localhost:5555" })
     void shouldSetUntetheredRestingTimeout(final String uri)
     {
+        ctx.timerIntervalNs(1);
+
         final long timeoutNs = 456;
 
         final ChannelUri channelUri = ChannelUri.parse(uri + "|untethered-resting-timeout=" + timeoutNs);
