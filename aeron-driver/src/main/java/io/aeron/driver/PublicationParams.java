@@ -500,6 +500,13 @@ final class PublicationParams
     {
         untetheredWindowLimitTimeoutNs = getTimeoutNs(
             channelUri, UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME, ctx.untetheredWindowLimitTimeoutNs());
+
+        if (untetheredWindowLimitTimeoutNs <= ctx.timerIntervalNs())
+        {
+            throw new InvalidChannelException(
+                UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME + "=" + untetheredWindowLimitTimeoutNs +
+                " <= timerIntervalNs=" + ctx.timerIntervalNs());
+        }
     }
 
     private void getUntetheredLingerTimeout(final ChannelUri channelUri, final MediaDriver.Context ctx)
@@ -510,12 +517,26 @@ final class PublicationParams
         {
             untetheredLingerTimeoutNs = untetheredWindowLimitTimeoutNs;
         }
+
+        if (untetheredLingerTimeoutNs <= ctx.timerIntervalNs())
+        {
+            throw new InvalidChannelException(
+                UNTETHERED_LINGER_TIMEOUT_PARAM_NAME + "=" + untetheredLingerTimeoutNs +
+                " <= timerIntervalNs=" + ctx.timerIntervalNs());
+        }
     }
 
     private void getUntetheredRestingTimeout(final ChannelUri channelUri, final MediaDriver.Context ctx)
     {
         untetheredRestingTimeoutNs = getTimeoutNs(
             channelUri, UNTETHERED_RESTING_TIMEOUT_PARAM_NAME, ctx.untetheredRestingTimeoutNs());
+
+        if (untetheredRestingTimeoutNs <= ctx.timerIntervalNs())
+        {
+            throw new InvalidChannelException(
+                UNTETHERED_RESTING_TIMEOUT_PARAM_NAME + "=" + untetheredRestingTimeoutNs +
+                " <= timerIntervalNs=" + ctx.timerIntervalNs());
+        }
     }
 
     private void getMaxResend(final ChannelUri channelUri, final MediaDriver.Context ctx)
