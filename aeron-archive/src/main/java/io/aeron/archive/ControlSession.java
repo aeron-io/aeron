@@ -849,16 +849,16 @@ final class ControlSession implements Session
     {
         int workCount = 0;
 
-        if (NULL_VALUE == controlPublicationRegistrationId)
-        {
-            controlPublicationRegistrationId = aeron.asyncAddExclusivePublication(
-                controlPublicationChannel,
-                controlPublicationStreamId
-            );
-        }
-
         if (null == controlPublication)
         {
+            if (NULL_VALUE == controlPublicationRegistrationId)
+            {
+                controlPublicationRegistrationId = aeron.asyncAddExclusivePublication(
+                    controlPublicationChannel,
+                    controlPublicationStreamId);
+                workCount++;
+            }
+
             ExclusivePublication publication = null;
             try
             {
@@ -876,14 +876,13 @@ final class ControlSession implements Session
             if (null != publication)
             {
                 controlPublication = publication;
-                workCount++;
+                controlPublicationRegistrationId = NULL_VALUE;
             }
         }
 
         if (null == sessionCounter)
         {
             sessionCounter = aeron.getCounter(sessionCounterRegistrationId);
-            workCount++;
         }
 
         if (null != controlPublication && null != sessionCounter)
