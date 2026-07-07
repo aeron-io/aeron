@@ -401,6 +401,33 @@ TEST_F(DriverUriTest, shouldFailWithPublicationWindowMoreThanHalfTermLength)
     EXPECT_THAT(std::string(aeron_errmsg()), ::testing::HasSubstr("pub-wnd=262144 must not exceed half the term-length=65536"));
 }
 
+TEST_F(DriverUriTest, shouldFailWithTooSmallUntetheredWindowLimitTimeout)
+{
+    aeron_driver_uri_publication_params_t params;
+
+    EXPECT_EQ(AERON_URI_PARSE("aeron:udp?endpoint=127.0.0.1|untethered-window-limit-timeout=1", &m_uri), 0);
+    EXPECT_EQ(aeron_diver_uri_publication_params(&m_uri, &params, &m_conductor, false), -1);
+    EXPECT_THAT(std::string(aeron_errmsg()), ::testing::HasSubstr("untethered-window-limit-timeout=1 <= timer_interval_ns=1000000000"));
+}
+
+TEST_F(DriverUriTest, shouldFailWithTooSmallUntetheredLingerTimeout)
+{
+    aeron_driver_uri_publication_params_t params;
+
+    EXPECT_EQ(AERON_URI_PARSE("aeron:ipc?untethered-linger-timeout=1", &m_uri), 0);
+    EXPECT_EQ(aeron_diver_uri_publication_params(&m_uri, &params, &m_conductor, false), -1);
+    EXPECT_THAT(std::string(aeron_errmsg()), ::testing::HasSubstr("untethered-linger-timeout=1 <= timer_interval_ns=1000000000"));
+}
+
+TEST_F(DriverUriTest, shouldFailWithTooSmallUntetheredRestingTimeout)
+{
+    aeron_driver_uri_publication_params_t params;
+
+    EXPECT_EQ(AERON_URI_PARSE("aeron:udp?endpoint=127.0.0.1|untethered-resting-timeout=1", &m_uri), 0);
+    EXPECT_EQ(aeron_diver_uri_publication_params(&m_uri, &params, &m_conductor, false), -1);
+    EXPECT_THAT(std::string(aeron_errmsg()), ::testing::HasSubstr("untethered-resting-timeout=1 <= timer_interval_ns=1000000000"));
+}
+
 TEST_F(DriverUriTest, ipcResponseChannels)
 {
     EXPECT_EQ(0, AERON_URI_PARSE("aeron:ipc?control-mode=response|alias=client1", &m_uri));
