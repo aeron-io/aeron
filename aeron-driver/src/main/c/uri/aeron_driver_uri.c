@@ -423,6 +423,17 @@ int aeron_diver_uri_publication_params(
         return -1;
     }
 
+    if (params->untethered_window_limit_timeout_ns <= context->timer_interval_ns)
+    {
+        AERON_SET_ERR(
+            EINVAL,
+            "%s=%" PRIu64 " <= timerIntervalNs=%" PRIu64,
+            AERON_URI_UNTETHERED_WINDOW_LIMIT_TIMEOUT_KEY,
+            params->untethered_window_limit_timeout_ns,
+            context->timer_interval_ns);
+        return -1;
+    }
+
     uint64_t cur_val = 0;
     if (aeron_uri_get_timeout(
             uri_params,
@@ -442,12 +453,34 @@ int aeron_diver_uri_publication_params(
         params->untethered_linger_timeout_ns = (int64_t)params->untethered_window_limit_timeout_ns;
     }
 
+    if ((uint64_t)params->untethered_linger_timeout_ns <= context->timer_interval_ns)
+    {
+        AERON_SET_ERR(
+            EINVAL,
+            "%s=%" PRIi64 " <= timerIntervalNs=%" PRIu64,
+            AERON_URI_UNTETHERED_LINGER_TIMEOUT_KEY,
+            params->untethered_linger_timeout_ns,
+            context->timer_interval_ns);
+        return -1;
+    }
+
     if (aeron_uri_get_timeout(
         uri_params,
         AERON_URI_UNTETHERED_RESTING_TIMEOUT_KEY,
         &params->untethered_resting_timeout_ns) < 0)
     {
         AERON_APPEND_ERR("%s", "");
+        return -1;
+    }
+
+    if (params->untethered_resting_timeout_ns <= context->timer_interval_ns)
+    {
+        AERON_SET_ERR(
+            EINVAL,
+            "%s=%" PRIu64 " <= timerIntervalNs=%" PRIu64,
+            AERON_URI_UNTETHERED_RESTING_TIMEOUT_KEY,
+            params->untethered_resting_timeout_ns,
+            context->timer_interval_ns);
         return -1;
     }
 
