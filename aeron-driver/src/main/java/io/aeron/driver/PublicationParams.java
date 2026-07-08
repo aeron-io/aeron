@@ -355,6 +355,42 @@ final class PublicationParams
                 existingChannel,
                 channelUri.toString()));
         }
+
+        final long untetheredWindowLimitTimeout = LogBufferDescriptor.untetheredWindowLimitTimeoutNs(rawLog.metaData());
+        if (channelUri.containsKey(UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME) &&
+            untetheredWindowLimitTimeout != params.untetheredWindowLimitTimeoutNs)
+        {
+            throw new IllegalStateException(formatMatchError(
+                UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME,
+                String.valueOf(untetheredWindowLimitTimeout),
+                String.valueOf(params.untetheredWindowLimitTimeoutNs),
+                existingChannel,
+                channelUri.toString()));
+        }
+
+        final long untetheredLingerTimeout = LogBufferDescriptor.untetheredLingerTimeoutNs(rawLog.metaData());
+        if (channelUri.containsKey(UNTETHERED_LINGER_TIMEOUT_PARAM_NAME) &&
+            untetheredLingerTimeout != params.untetheredLingerTimeoutNs)
+        {
+            throw new IllegalStateException(formatMatchError(
+                UNTETHERED_LINGER_TIMEOUT_PARAM_NAME,
+                String.valueOf(untetheredLingerTimeout),
+                String.valueOf(params.untetheredLingerTimeoutNs),
+                existingChannel,
+                channelUri.toString()));
+        }
+
+        final long untetheredRestingTimeout = LogBufferDescriptor.untetheredRestingTimeoutNs(rawLog.metaData());
+        if (channelUri.containsKey(UNTETHERED_RESTING_TIMEOUT_PARAM_NAME) &&
+            untetheredRestingTimeout != params.untetheredRestingTimeoutNs)
+        {
+            throw new IllegalStateException(formatMatchError(
+                UNTETHERED_RESTING_TIMEOUT_PARAM_NAME,
+                String.valueOf(untetheredRestingTimeout),
+                String.valueOf(params.untetheredRestingTimeoutNs),
+                existingChannel,
+                channelUri.toString()));
+        }
     }
 
     static void validateSpiesSimulateConnection(
@@ -500,6 +536,13 @@ final class PublicationParams
     {
         untetheredWindowLimitTimeoutNs = getTimeoutNs(
             channelUri, UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME, ctx.untetheredWindowLimitTimeoutNs());
+
+        if (untetheredWindowLimitTimeoutNs <= ctx.timerIntervalNs())
+        {
+            throw new InvalidChannelException(
+                UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME + "=" + untetheredWindowLimitTimeoutNs +
+                " <= timerIntervalNs=" + ctx.timerIntervalNs());
+        }
     }
 
     private void getUntetheredLingerTimeout(final ChannelUri channelUri, final MediaDriver.Context ctx)
@@ -510,12 +553,26 @@ final class PublicationParams
         {
             untetheredLingerTimeoutNs = untetheredWindowLimitTimeoutNs;
         }
+
+        if (untetheredLingerTimeoutNs <= ctx.timerIntervalNs())
+        {
+            throw new InvalidChannelException(
+                UNTETHERED_LINGER_TIMEOUT_PARAM_NAME + "=" + untetheredLingerTimeoutNs +
+                " <= timerIntervalNs=" + ctx.timerIntervalNs());
+        }
     }
 
     private void getUntetheredRestingTimeout(final ChannelUri channelUri, final MediaDriver.Context ctx)
     {
         untetheredRestingTimeoutNs = getTimeoutNs(
             channelUri, UNTETHERED_RESTING_TIMEOUT_PARAM_NAME, ctx.untetheredRestingTimeoutNs());
+
+        if (untetheredRestingTimeoutNs <= ctx.timerIntervalNs())
+        {
+            throw new InvalidChannelException(
+                UNTETHERED_RESTING_TIMEOUT_PARAM_NAME + "=" + untetheredRestingTimeoutNs +
+                " <= timerIntervalNs=" + ctx.timerIntervalNs());
+        }
     }
 
     private void getMaxResend(final ChannelUri channelUri, final MediaDriver.Context ctx)

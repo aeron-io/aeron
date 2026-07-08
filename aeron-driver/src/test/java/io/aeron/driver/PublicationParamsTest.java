@@ -420,12 +420,30 @@ class PublicationParamsTest
     @ValueSource(strings = { "aeron:ipc?mtu=4k", "aeron:udp?endpoint=localhost:5555" })
     void shouldSetUntetheredWindowLimitTimeout(final String uri)
     {
+        ctx.timerIntervalNs(1);
+
         final long timeoutUs = 456;
 
         final ChannelUri channelUri = ChannelUri.parse(uri + "|untethered-window-limit-timeout=" + timeoutUs + "us");
         final PublicationParams params =
             PublicationParams.getPublicationParams(channelUri, ctx, conductor, 1, channelUri.media());
         assertEquals(MICROSECONDS.toNanos(timeoutUs), params.untetheredWindowLimitTimeoutNs);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "aeron:ipc?mtu=4k", "aeron:udp?endpoint=localhost:5555" })
+    void shouldValidateUntetheredWindowLimitTimeout(final String uri)
+    {
+        ctx.timerIntervalNs(SECONDS.toNanos(1));
+
+        final long timeoutNs = 1;
+
+        final ChannelUri channelUri = ChannelUri.parse(uri + "|untethered-window-limit-timeout=" + timeoutNs);
+
+        final InvalidChannelException exception = assertThrowsExactly(InvalidChannelException.class,
+            () -> PublicationParams.getPublicationParams(channelUri, ctx, conductor, 42, channelUri.media()));
+        assertEquals(
+            "ERROR - untethered-window-limit-timeout=1 <= timerIntervalNs=1000000000", exception.getMessage());
     }
 
     @ParameterizedTest
@@ -444,12 +462,30 @@ class PublicationParamsTest
     @ValueSource(strings = { "aeron:ipc?mtu=4k", "aeron:udp?endpoint=localhost:5555" })
     void shouldSetUntetheredRestingTimeout(final String uri)
     {
+        ctx.timerIntervalNs(1);
+
         final long timeoutNs = 456;
 
         final ChannelUri channelUri = ChannelUri.parse(uri + "|untethered-resting-timeout=" + timeoutNs);
         final PublicationParams params =
             PublicationParams.getPublicationParams(channelUri, ctx, conductor, 1, channelUri.media());
         assertEquals(timeoutNs, params.untetheredRestingTimeoutNs);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "aeron:ipc?mtu=4k", "aeron:udp?endpoint=localhost:5555" })
+    void shouldValidateUntetheredRestingTimeout(final String uri)
+    {
+        ctx.timerIntervalNs(SECONDS.toNanos(1));
+
+        final long timeoutNs = 1;
+
+        final ChannelUri channelUri = ChannelUri.parse(uri + "|untethered-resting-timeout=" + timeoutNs);
+
+        final InvalidChannelException exception = assertThrowsExactly(InvalidChannelException.class,
+            () -> PublicationParams.getPublicationParams(channelUri, ctx, conductor, 42, channelUri.media()));
+        assertEquals(
+            "ERROR - untethered-resting-timeout=1 <= timerIntervalNs=1000000000", exception.getMessage());
     }
 
     @Test
@@ -492,6 +528,22 @@ class PublicationParamsTest
             PublicationParams.getPublicationParams(channelUri, ctx, conductor, 1, channelUri.media());
         assertEquals(TimeUnit.MILLISECONDS.toNanos(444), params.untetheredWindowLimitTimeoutNs);
         assertEquals(TimeUnit.MILLISECONDS.toNanos(333), params.untetheredLingerTimeoutNs);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "aeron:ipc?mtu=4k", "aeron:udp?endpoint=localhost:5555" })
+    void shouldValidateUntetheredLingerTimeout(final String uri)
+    {
+        ctx.timerIntervalNs(SECONDS.toNanos(1));
+
+        final long timeoutNs = 1;
+
+        final ChannelUri channelUri = ChannelUri.parse(uri + "|untethered-linger-timeout=" + timeoutNs);
+
+        final InvalidChannelException exception = assertThrowsExactly(InvalidChannelException.class,
+            () -> PublicationParams.getPublicationParams(channelUri, ctx, conductor, 42, channelUri.media()));
+        assertEquals(
+            "ERROR - untethered-linger-timeout=1 <= timerIntervalNs=1000000000", exception.getMessage());
     }
 
     @Test

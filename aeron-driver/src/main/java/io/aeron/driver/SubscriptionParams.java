@@ -18,6 +18,7 @@ package io.aeron.driver;
 import io.aeron.Aeron;
 import io.aeron.ChannelUri;
 import io.aeron.CommonContext;
+import io.aeron.driver.exceptions.InvalidChannelException;
 import io.aeron.driver.media.UdpChannel;
 import io.aeron.logbuffer.FrameDescriptor;
 import io.aeron.logbuffer.LogBufferDescriptor;
@@ -139,24 +140,63 @@ final class SubscriptionParams
 
     private void getUntetheredWindowLimitTimeout(final ChannelUri channelUri, final MediaDriver.Context ctx)
     {
-        untetheredWindowLimitTimeoutNs = getTimeoutNs(
+        untetheredWindowLimitTimeoutNs = untetheredWindowLimitTimeout(channelUri, ctx);
+
+        if (untetheredWindowLimitTimeoutNs <= ctx.timerIntervalNs())
+        {
+            throw new InvalidChannelException(
+                UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME + "=" + untetheredWindowLimitTimeoutNs +
+                " <= timerIntervalNs=" + ctx.timerIntervalNs());
+        }
+    }
+
+    private static long untetheredWindowLimitTimeout(final ChannelUri channelUri, final MediaDriver.Context ctx)
+    {
+        return getTimeoutNs(
             channelUri, UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME, ctx.untetheredWindowLimitTimeoutNs());
     }
 
     private void getUntetheredLingerTimeout(final ChannelUri channelUri, final MediaDriver.Context ctx)
     {
-        untetheredLingerTimeoutNs =
+        untetheredLingerTimeoutNs = untetheredLingerTimeout(channelUri, untetheredWindowLimitTimeoutNs, ctx);
+
+        if (untetheredLingerTimeoutNs <= ctx.timerIntervalNs())
+        {
+            throw new InvalidChannelException(
+                UNTETHERED_LINGER_TIMEOUT_PARAM_NAME + "=" + untetheredLingerTimeoutNs +
+                " <= timerIntervalNs=" + ctx.timerIntervalNs());
+        }
+    }
+
+    private static long untetheredLingerTimeout(
+        final ChannelUri channelUri,
+        final long untetheredWindowLimitTimeoutNs,
+        final MediaDriver.Context ctx)
+    {
+        final long untetheredLingerTimeoutNs =
             getTimeoutNs(channelUri, UNTETHERED_LINGER_TIMEOUT_PARAM_NAME, ctx.untetheredLingerTimeoutNs());
         if (Aeron.NULL_VALUE == untetheredLingerTimeoutNs)
         {
-            untetheredLingerTimeoutNs = untetheredWindowLimitTimeoutNs;
+            return untetheredWindowLimitTimeoutNs;
         }
+        return untetheredLingerTimeoutNs;
     }
 
     private void getUntetheredRestingTimeout(final ChannelUri channelUri, final MediaDriver.Context ctx)
     {
-        untetheredRestingTimeoutNs = getTimeoutNs(
-            channelUri, UNTETHERED_RESTING_TIMEOUT_PARAM_NAME, ctx.untetheredRestingTimeoutNs());
+        untetheredRestingTimeoutNs = untetheredRestingTimeout(channelUri, ctx);
+
+        if (untetheredRestingTimeoutNs <= ctx.timerIntervalNs())
+        {
+            throw new InvalidChannelException(
+                UNTETHERED_RESTING_TIMEOUT_PARAM_NAME + "=" + untetheredRestingTimeoutNs +
+                " <= timerIntervalNs=" + ctx.timerIntervalNs());
+        }
+    }
+
+    private static long untetheredRestingTimeout(final ChannelUri channelUri, final MediaDriver.Context ctx)
+    {
+        return getTimeoutNs(channelUri, UNTETHERED_RESTING_TIMEOUT_PARAM_NAME, ctx.untetheredRestingTimeoutNs());
     }
 
     private static long getTimeoutNs(final ChannelUri channelUri, final String paramName, final long defaultValue)
@@ -185,6 +225,60 @@ final class SubscriptionParams
                 "Initial window greater than SO_RCVBUF for channel: rcv-wnd=" + params.receiverWindowLength +
                 " so-rcvbuf=" + ctx.osDefaultSocketRcvbufLength() + " (OS default)" +
                 (null == existingChannel ? "" : (" existingChannel=" + existingChannel)) + " channel=" + channel);
+        }
+    }
+
+    static void validateUntetheredTimeouts(
+        final SubscriptionParams params,
+        final UdpChannel udpChannel,
+        final UdpChannel existingUdpChannel,
+        final MediaDriver.Context ctx)
+    {
+        final ChannelUri channelUri = udpChannel.channelUri();
+        final ChannelUri existingChannelUri = existingUdpChannel.channelUri();
+        final long untetheredWindowLimitTimeout = untetheredWindowLimitTimeout(existingChannelUri, ctx);
+        final long untetheredLingerTimeoutNs = untetheredLingerTimeout(
+            existingChannelUri, untetheredWindowLimitTimeout, ctx);
+        final long untetheredRestingTimeoutNs = untetheredRestingTimeout(existingChannelUri, ctx);
+        final String channel = udpChannel.originalUriString();
+        final String existingChannel = existingUdpChannel.originalUriString();
+
+        validateExistingValues(
+            channelUri,
+            UNTETHERED_WINDOW_LIMIT_TIMEOUT_PARAM_NAME,
+            params.untetheredWindowLimitTimeoutNs,
+            untetheredWindowLimitTimeout,
+            channel,
+            existingChannel);
+        validateExistingValues(
+            channelUri,
+            UNTETHERED_LINGER_TIMEOUT_PARAM_NAME,
+            params.untetheredLingerTimeoutNs,
+            untetheredLingerTimeoutNs,
+            channel,
+            existingChannel);
+        validateExistingValues(
+            channelUri,
+            UNTETHERED_RESTING_TIMEOUT_PARAM_NAME,
+            params.untetheredRestingTimeoutNs,
+            untetheredRestingTimeoutNs,
+            channel,
+            existingChannel);
+    }
+
+    private static void validateExistingValues(
+        final ChannelUri channelUri,
+        final String paramName,
+        final long newValue,
+        final long existingValue,
+        final String channel,
+        final String existingChannel)
+    {
+        if (channelUri.containsKey(paramName) && newValue != existingValue)
+        {
+            throw new InvalidChannelException(
+                paramName + "=" + newValue + " does not match existing value of " + existingValue +
+                ": existingChannel=" + existingChannel + " channel=" + channel);
         }
     }
 

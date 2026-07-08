@@ -105,6 +105,7 @@ import static io.aeron.driver.PublicationParams.getPublicationParams;
 import static io.aeron.driver.PublicationParams.validateMtuForSndbuf;
 import static io.aeron.driver.PublicationParams.validateSpiesSimulateConnection;
 import static io.aeron.driver.SubscriptionParams.validateInitialWindowForRcvBuf;
+import static io.aeron.driver.SubscriptionParams.validateUntetheredTimeouts;
 import static io.aeron.driver.status.SystemCounterDescriptor.IMAGES_REJECTED;
 import static io.aeron.driver.status.SystemCounterDescriptor.INVALID_PACKETS;
 import static io.aeron.driver.status.SystemCounterDescriptor.RESOLUTION_CHANGES;
@@ -1797,6 +1798,11 @@ public final class DriverConductor implements Agent
             channelEndpoint.socketSndbufLength(),
             udpChannel.originalUriString(),
             channelEndpoint.originalUriString());
+
+        if (!params.isTether)
+        {
+            validateUntetheredTimeouts(params, udpChannel, channelEndpoint.subscriptionUdpChannel(), ctx);
+        }
     }
 
     private ReceiveChannelEndpoint findExistingReceiveChannelEndpoint(final UdpChannel udpChannel)
