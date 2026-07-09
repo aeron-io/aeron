@@ -717,10 +717,6 @@ void aeron_driver_context_print_configuration(aeron_driver_context_t *context)
 void aeron_driver_shared_on_start(void *state, const char *role_name)
 {
     aeron_driver_t *driver = (aeron_driver_t *)state;
-    if (NULL != driver->context->agent_on_start_func)
-    {
-        driver->context->agent_on_start_func(driver->context->agent_on_start_state, role_name);
-    }
     aeron_driver_native_resource_agent_on_start(&driver->native_resource_agent, role_name);
 }
 

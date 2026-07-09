@@ -205,6 +205,11 @@ void aeron_driver_native_resource_agent_on_start(void *state, const char *role_n
 {
     aeron_driver_native_resource_agent_t *native_resource_agent = (aeron_driver_native_resource_agent_t *)state;
 
+    if (NULL != native_resource_agent->context->agent_on_start_func)
+    {
+        native_resource_agent->context->agent_on_start_func(native_resource_agent->context->agent_on_start_state, role_name);
+    }
+
     if (NULL != native_resource_agent->name_resolver.start_func &&
         native_resource_agent->name_resolver.start_func(&native_resource_agent->name_resolver) < 0)
     {
