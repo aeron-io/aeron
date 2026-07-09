@@ -280,7 +280,7 @@ class StandbySnapshotReplicator implements AutoCloseable
 
     public void close()
     {
-        CloseHelper.quietClose(localArchive);
+        CloseHelper.quietCloseAll(localArchive, asyncConnect);
     }
 
     private static final class SnapshotReplicationEntry
