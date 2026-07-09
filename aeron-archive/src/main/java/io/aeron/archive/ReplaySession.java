@@ -97,8 +97,7 @@ class ReplaySession implements Session, AutoCloseable
     private final long replayBufferAddress;
     private final Checksum checksum;
     private final long maxReplayBytesPerSecond;
-    private long throttleWindowStartNs;
-    private long throttleBytesInWindow;
+    private long throttleNextAllowedNs;
 
     private final ExclusivePublication publication;
     private final ControlSession controlSession;
@@ -443,7 +442,7 @@ class ReplaySession implements Session, AutoCloseable
                     if (hasPublicationAdvanced(position, batchOffset))
                     {
                         workCount++;
-                        throttleBytesInWindow += batchOffset;
+                        throttleAfterOffer(batchOffset);
                     }
                     else
                     {
@@ -466,24 +465,37 @@ class ReplaySession implements Session, AutoCloseable
     }
 
     /**
-     * Per-second token bucket used to cap replay throughput at {@code maxReplayBytesPerSecond} so a large or
-     * catch-up replay can be trickled out without saturating archive I/O or the media driver. This is a coarse
-     * limiter: because the gate is checked before a whole block is read/offered, a window may overshoot the cap
-     * by up to one offered block (bounded by {@code fileIoMaxLength}), so the effective rate can exceed the cap
-     * by up to roughly one block per second. Set the cap accordingly.
+     * Leaky-bucket rate limiter that paces replay to {@code maxReplayBytesPerSecond} so a large or catch-up replay
+     * is trickled out smoothly without momentarily saturating archive I/O or the media driver. Unlike a per-second
+     * budget (which bursts at full speed until the budget is spent then idles, capping only the <em>average</em>
+     * rate while leaving the instantaneous rate unbounded), this paces each offered block: after a block of
+     * {@code n} bytes is offered, the next offer is withheld until {@code n / rate} seconds have elapsed. Idle time
+     * is not accumulated into a burst (see {@link #throttleAfterOffer(int)}), so the instantaneous rate stays
+     * bounded. The granularity floor is one offered block (bounded by {@code fileIoMaxLength}); rates finer than one
+     * block per interval emit a single block then wait.
      *
-     * @return {@code true} if the current one-second window's byte budget has been used up.
+     * @return {@code true} if replay must wait before offering the next block to stay within the rate.
      */
     private boolean isReplayRateExceeded()
     {
-        final long nowNs = nanoClock.nanoTime();
-        if (nowNs - throttleWindowStartNs >= 1_000_000_000L)
-        {
-            throttleWindowStartNs = nowNs;
-            throttleBytesInWindow = 0;
-        }
+        return nanoClock.nanoTime() < throttleNextAllowedNs;
+    }
 
-        return throttleBytesInWindow >= maxReplayBytesPerSecond;
+    /**
+     * Advance the leaky-bucket pacer after {@code bytesOffered} bytes have been offered. The next offer is withheld
+     * until enough time has elapsed to cover those bytes at {@code maxReplayBytesPerSecond}. Measuring the delay from
+     * {@code max(now, nextAllowed)} rather than {@code nextAllowed} alone means idle intervals do not build up credit
+     * that would later be spent as a burst, so the rate is smoothed rather than just averaged.
+     *
+     * @param bytesOffered in the block just offered to the publication.
+     */
+    private void throttleAfterOffer(final int bytesOffered)
+    {
+        if (maxReplayBytesPerSecond > 0)
+        {
+            final long base = Math.max(nanoClock.nanoTime(), throttleNextAllowedNs);
+            throttleNextAllowedNs = base + ((long)bytesOffered * 1_000_000_000L) / maxReplayBytesPerSecond;
+        }
     }
 
     private String framePosition(final int frameOffset)

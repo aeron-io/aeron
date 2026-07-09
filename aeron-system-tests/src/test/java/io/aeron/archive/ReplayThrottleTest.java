@@ -146,24 +146,35 @@ class ReplayThrottleTest
         Tests.await(() -> aeronArchive.getStopPosition(recordingId) == stopPosition);
 
         // unthrottled baseline
-        final long unthrottledNs = timeReplay(recordingId, stopPosition, 0);
+        final long unthrottledNs = timeReplay(recordingId, stopPosition, 0)[0];
         // throttled to THROTTLE_BYTES_PER_SECOND
-        final long throttledNs = timeReplay(recordingId, stopPosition, THROTTLE_BYTES_PER_SECOND);
+        final long[] throttled = timeReplay(recordingId, stopPosition, THROTTLE_BYTES_PER_SECOND);
+        final long throttledNs = throttled[0];
+        final long throttledHalfwayNs = throttled[1];
 
         final double throttledSeconds = throttledNs / 1_000_000_000.0;
         final double achievedBytesPerSecond = stopPosition / throttledSeconds;
 
-        // Achieved rate must be bounded near the cap. The per-second token bucket is coarse: a window can
-        // overshoot by up to one offerBlock (<= fileIoMaxLength), so allow up to 3x the configured cap.
+        // Achieved rate must be close to the cap. The leaky-bucket pacer overshoots by at most one initial block
+        // (bounded by fileIoMaxLength) amortised over the whole replay, so allow up to 1.5x the configured cap.
+        // (A per-second budget would need 3x here because it bursts a full block per window.)
         assertTrue(
-            achievedBytesPerSecond <= THROTTLE_BYTES_PER_SECOND * 3.0,
-            () -> "achieved " + (long)achievedBytesPerSecond + " B/s exceeds 3x cap " +
+            achievedBytesPerSecond <= THROTTLE_BYTES_PER_SECOND * 1.5,
+            () -> "achieved " + (long)achievedBytesPerSecond + " B/s exceeds 1.5x cap " +
                 THROTTLE_BYTES_PER_SECOND + " (throttled=" + throttledSeconds + "s)");
 
         // Throttled replay must be markedly slower than the unthrottled baseline of the same recording.
         assertTrue(
             throttledNs > unthrottledNs * 2,
             () -> "throttled=" + throttledNs + "ns not > 2x unthrottled=" + unthrottledNs + "ns");
+
+        // Smoothness: the pacer must trickle rather than burst. A per-second budget delivers the first half in one
+        // early burst (halfway reached almost immediately); the leaky bucket spreads delivery, so reaching the
+        // halfway position should take a substantial fraction of the total time. Require at least 30%.
+        assertTrue(
+            throttledHalfwayNs >= (long)(throttledNs * 0.3),
+            () -> "throttled replay bursty: reached halfway in " + throttledHalfwayNs + "ns of " + throttledNs +
+                "ns total (< 30% => not trickling)");
     }
 
     private static long publishAtLeast(final ExclusivePublication publication, final long targetBytes)
@@ -181,7 +192,7 @@ class ReplayThrottleTest
         return publication.position();
     }
 
-    private long timeReplay(final long recordingId, final long stopPosition, final long maxReplayBytesPerSecond)
+    private long[] timeReplay(final long recordingId, final long stopPosition, final long maxReplayBytesPerSecond)
     {
         final ReplayParams replayParams = new ReplayParams()
             .position(0)
@@ -201,6 +212,7 @@ class ReplayThrottleTest
             final Image image = subscription.imageAtIndex(0);
 
             final long startNs = System.nanoTime();
+            long halfwayNs = 0;
             while (image.position() < stopPosition)
             {
                 if (0 == image.poll((buffer, offset, length, header) -> {}, 128))
@@ -212,9 +224,14 @@ class ReplayThrottleTest
                     }
                     Tests.yield();
                 }
+
+                if (0 == halfwayNs && image.position() >= stopPosition / 2)
+                {
+                    halfwayNs = System.nanoTime() - startNs;
+                }
             }
 
-            return System.nanoTime() - startNs;
+            return new long[] { System.nanoTime() - startNs, halfwayNs };
         }
     }
 }
