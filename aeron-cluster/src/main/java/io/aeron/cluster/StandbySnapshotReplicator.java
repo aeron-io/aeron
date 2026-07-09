@@ -107,14 +107,14 @@ class StandbySnapshotReplicator implements AutoCloseable
     {
         int workCount = 0;
 
-        if (null == asyncConnect)
-        {
-            asyncConnect = AeronArchive.asyncConnect(archiveCtx);
-            workCount += 1;
-        }
-
         if (null == localArchive)
         {
+            if (null == asyncConnect)
+            {
+                asyncConnect = AeronArchive.asyncConnect(archiveCtx);
+                workCount += 1;
+            }
+
             final int step = asyncConnect.step();
             final AeronArchive aeronArchive = asyncConnect.poll();
 
@@ -132,7 +132,7 @@ class StandbySnapshotReplicator implements AutoCloseable
                 workCount += 1;
             }
 
-            workCount++;
+            return workCount;
         }
 
         if (null == recordingReplication)
@@ -165,7 +165,7 @@ class StandbySnapshotReplicator implements AutoCloseable
             final long progressIntervalNs = progressTimeoutNs / 10;
 
             recordingReplication = MultipleRecordingReplication.newInstance(
-                    localArchive,
+                localArchive,
                 archiveControlStreamId,
                 srcChannel,
                 replicationChannel,

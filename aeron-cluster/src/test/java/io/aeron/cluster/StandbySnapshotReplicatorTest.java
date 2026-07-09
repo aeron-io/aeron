@@ -61,6 +61,7 @@ class StandbySnapshotReplicatorTest
     private final AeronArchive.Context ctx = new AeronArchive.Context();
     private final int memberId = 12;
     private final int fileSyncLevel = 1;
+    private final int pollsForActiveArchive = 3;
 
     private final AeronArchive.AsyncConnect mockConnect = mock(AeronArchive.AsyncConnect.class);
     private final AeronArchive mockArchive = mock(AeronArchive.class);
@@ -74,7 +75,7 @@ class StandbySnapshotReplicatorTest
     void setUp()
     {
         when(mockArchive.context()).thenReturn(ctx);
-        when(mockConnect.poll()).thenReturn(mockArchive);
+        when(mockConnect.poll()).thenReturn(null, null, mockArchive);
     }
 
     @TempDir
@@ -132,6 +133,7 @@ class StandbySnapshotReplicatorTest
 
                 when(mockMultipleRecordingReplication0.isComplete()).thenReturn(true);
 
+                fastForwardSnapshotReplicatorToHaveArchiveClient(standbySnapshotReplicator, nowNs);
                 assertNotEquals(0, standbySnapshotReplicator.poll(nowNs));
                 assertTrue(standbySnapshotReplicator.isComplete());
 
@@ -197,6 +199,7 @@ class StandbySnapshotReplicatorTest
                 snapshotCounter,
                 0L);
 
+            fastForwardSnapshotReplicatorToHaveArchiveClient(standbySnapshotReplicator, 0);
             standbySnapshotReplicator.poll(0);
             verify(mockArchive).pollForRecordingSignals();
             standbySnapshotReplicator.onSignal(2, 11, 23, 29, 37, RecordingSignal.START);
@@ -237,6 +240,7 @@ class StandbySnapshotReplicatorTest
                 snapshotCounter,
                 maxReplayBytesPerSecond);
 
+            fastForwardSnapshotReplicatorToHaveArchiveClient(standbySnapshotReplicator, 0);
             standbySnapshotReplicator.poll(0);
 
             // the configured throttle propagates to the replication (which sets it on the ReplicationParams,
@@ -264,7 +268,7 @@ class StandbySnapshotReplicatorTest
                 .when(() -> MultipleRecordingReplication.newInstance(
                     any(), anyInt(), any(), any(), anyLong(), anyLong(), anyLong()))
                 .thenReturn(mockMultipleRecordingReplication0);
-            staticMockArchive.when(() -> AeronArchive.connect(any())).thenReturn(mockArchive);
+            staticMockArchive.when(() -> AeronArchive.asyncConnect(any())).thenReturn(mockConnect);
 
             final StandbySnapshotReplicator standbySnapshotReplicator = StandbySnapshotReplicator.newInstance(
                 memberId,
@@ -276,6 +280,7 @@ class StandbySnapshotReplicatorTest
                 replicationChannel,
                 fileSyncLevel, snapshotCounter, 0L);
 
+            fastForwardSnapshotReplicatorToHaveArchiveClient(standbySnapshotReplicator, 0);
             standbySnapshotReplicator.poll(0);
             assertTrue(standbySnapshotReplicator.isComplete());
             verifyNoInteractions(snapshotCounter);
@@ -335,6 +340,7 @@ class StandbySnapshotReplicatorTest
             when(mockMultipleRecordingReplication0.poll(anyLong())).thenThrow(new ClusterException("fail"));
             when(mockMultipleRecordingReplication1.isComplete()).thenReturn(true);
 
+            fastForwardSnapshotReplicatorToHaveArchiveClient(standbySnapshotReplicator, nowNs);
             standbySnapshotReplicator.poll(nowNs);
             standbySnapshotReplicator.poll(nowNs);
 
@@ -399,6 +405,7 @@ class StandbySnapshotReplicatorTest
 
             when(mockMultipleRecordingReplication1.isComplete()).thenReturn(true);
 
+            fastForwardSnapshotReplicatorToHaveArchiveClient(standbySnapshotReplicator, nowNs);
             standbySnapshotReplicator.poll(nowNs);
             standbySnapshotReplicator.poll(nowNs);
 
@@ -463,6 +470,7 @@ class StandbySnapshotReplicatorTest
                 snapshotCounter,
                 0L);
 
+            fastForwardSnapshotReplicatorToHaveArchiveClient(standbySnapshotReplicator, nowNs);
             standbySnapshotReplicator.poll(nowNs);
             standbySnapshotReplicator.poll(nowNs);
             assertThrows(ClusterException.class, () -> standbySnapshotReplicator.poll(nowNs));
@@ -524,6 +532,7 @@ class StandbySnapshotReplicatorTest
                 snapshotCounter,
                 0L);
 
+            fastForwardSnapshotReplicatorToHaveArchiveClient(standbySnapshotReplicator, nowNs);
             standbySnapshotReplicator.poll(nowNs);
             standbySnapshotReplicator.poll(nowNs);
             assertThrows(ClusterException.class, () -> standbySnapshotReplicator.poll(nowNs));
@@ -573,11 +582,21 @@ class StandbySnapshotReplicatorTest
                 snapshotCounter,
                 0L);
 
+            fastForwardSnapshotReplicatorToHaveArchiveClient(standbySnapshotReplicator, nowNs);
             standbySnapshotReplicator.poll(nowNs);
             standbySnapshotReplicator.poll(nowNs);
 
             verify(mockMultipleRecordingReplication0, never()).poll(anyLong());
             verifyNoInteractions(snapshotCounter);
+        }
+    }
+
+    private void fastForwardSnapshotReplicatorToHaveArchiveClient(
+            final StandbySnapshotReplicator standbySnapshotReplicator, final long nowNs)
+    {
+        for (int i = 0; i < pollsForActiveArchive; ++i)
+        {
+            standbySnapshotReplicator.poll(nowNs);
         }
     }
 }
