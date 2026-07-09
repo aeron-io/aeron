@@ -3564,7 +3564,7 @@ final class ConsensusModuleAgent
                 {
                     idleStrategy.idle(standbySnapshotReplicator.poll(ctx.clusterClock().timeNanos()));
                 }
-                catch (final ClusterException ex)
+                catch (final AeronException ex)
                 {
                     ctx.countedErrorHandler().onError(ex);
                     break;
@@ -3597,7 +3597,7 @@ final class ConsensusModuleAgent
                     standbySnapshotReplicator = null;
                 }
             }
-            catch (final ClusterException ex)
+            catch (final AeronException ex)
             {
                 ctx.countedErrorHandler().onError(ex);
                 CloseHelper.quietClose(standbySnapshotReplicator);

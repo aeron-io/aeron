@@ -62,6 +62,7 @@ class StandbySnapshotReplicatorTest
     private final int memberId = 12;
     private final int fileSyncLevel = 1;
 
+    private final AeronArchive.AsyncConnect mockConnect = mock(AeronArchive.AsyncConnect.class);
     private final AeronArchive mockArchive = mock(AeronArchive.class);
     private final MultipleRecordingReplication mockMultipleRecordingReplication0 = mock(
         MultipleRecordingReplication.class, "host0");
@@ -73,6 +74,7 @@ class StandbySnapshotReplicatorTest
     void setUp()
     {
         when(mockArchive.context()).thenReturn(ctx);
+        when(mockConnect.poll()).thenReturn(mockArchive);
     }
 
     @TempDir
@@ -114,7 +116,7 @@ class StandbySnapshotReplicatorTest
                     .when(() -> MultipleRecordingReplication.newInstance(
                         any(), anyInt(), any(), any(), anyLong(), anyLong(), anyLong()))
                     .thenReturn(mockMultipleRecordingReplication0);
-                staticMockArchive.when(() -> AeronArchive.connect(any())).thenReturn(mockArchive);
+                staticMockArchive.when(() -> AeronArchive.asyncConnect(any())).thenReturn(mockConnect);
 
                 final StandbySnapshotReplicator standbySnapshotReplicator = StandbySnapshotReplicator.newInstance(
                     memberId,
@@ -181,7 +183,7 @@ class StandbySnapshotReplicatorTest
                 .when(() -> MultipleRecordingReplication.newInstance(
                     any(), anyInt(), any(), any(), anyLong(), anyLong(), anyLong()))
                 .thenReturn(mockMultipleRecordingReplication0);
-            staticMockArchive.when(() -> AeronArchive.connect(any())).thenReturn(mockArchive);
+            staticMockArchive.when(() -> AeronArchive.asyncConnect(any())).thenReturn(mockConnect);
 
             final StandbySnapshotReplicator standbySnapshotReplicator = StandbySnapshotReplicator.newInstance(
                 memberId,
@@ -221,7 +223,7 @@ class StandbySnapshotReplicatorTest
                 .when(() -> MultipleRecordingReplication.newInstance(
                     any(), anyInt(), any(), any(), anyLong(), anyLong(), anyLong()))
                 .thenReturn(mockMultipleRecordingReplication0);
-            staticMockArchive.when(() -> AeronArchive.connect(any())).thenReturn(mockArchive);
+            staticMockArchive.when(() -> AeronArchive.asyncConnect(any())).thenReturn(mockConnect);
 
             final StandbySnapshotReplicator standbySnapshotReplicator = StandbySnapshotReplicator.newInstance(
                 memberId,
@@ -316,7 +318,7 @@ class StandbySnapshotReplicatorTest
                     any(), anyInt(), contains("host1"), any(), anyLong(), anyLong(), anyLong()))
                 .thenReturn(mockMultipleRecordingReplication1);
 
-            staticMockArchive.when(() -> AeronArchive.connect(any())).thenReturn(mockArchive);
+            staticMockArchive.when(() -> AeronArchive.asyncConnect(any())).thenReturn(mockConnect);
 
             final StandbySnapshotReplicator standbySnapshotReplicator = StandbySnapshotReplicator.newInstance(
                 memberId,
@@ -380,7 +382,7 @@ class StandbySnapshotReplicatorTest
                     any(), anyInt(), contains("host1"), any(), anyLong(), anyLong(), anyLong()))
                 .thenReturn(mockMultipleRecordingReplication1);
 
-            staticMockArchive.when(() -> AeronArchive.connect(any())).thenReturn(mockArchive);
+            staticMockArchive.when(() -> AeronArchive.asyncConnect(any())).thenReturn(mockConnect);
             when(mockArchive.pollForRecordingSignals()).thenThrow(new ArchiveException("fail")).thenReturn(1);
 
             final StandbySnapshotReplicator standbySnapshotReplicator = StandbySnapshotReplicator.newInstance(
@@ -444,7 +446,7 @@ class StandbySnapshotReplicatorTest
                     any(), anyInt(), contains("host1"), any(), anyLong(), anyLong(), anyLong()))
                 .thenReturn(mockMultipleRecordingReplication1);
 
-            staticMockArchive.when(() -> AeronArchive.connect(any())).thenReturn(mockArchive);
+            staticMockArchive.when(() -> AeronArchive.asyncConnect(any())).thenReturn(mockConnect);
 
             when(mockMultipleRecordingReplication0.poll(anyLong())).thenThrow(new ClusterException("fail"));
             when(mockMultipleRecordingReplication1.poll(anyLong())).thenThrow(new ClusterException("fail"));
@@ -507,7 +509,7 @@ class StandbySnapshotReplicatorTest
                     any(), anyInt(), contains("host1"), any(), anyLong(), anyLong(), anyLong()))
                 .thenReturn(mockMultipleRecordingReplication1);
 
-            staticMockArchive.when(() -> AeronArchive.connect(any())).thenReturn(mockArchive);
+            staticMockArchive.when(() -> AeronArchive.asyncConnect(any())).thenReturn(mockConnect);
             when(mockArchive.pollForRecordingSignals()).thenThrow(new ArchiveException("fail"));
 
             final StandbySnapshotReplicator standbySnapshotReplicator = StandbySnapshotReplicator.newInstance(
@@ -557,7 +559,7 @@ class StandbySnapshotReplicatorTest
                     any(), anyInt(), any(), any(), anyLong(), anyLong(), anyLong()))
                 .thenReturn(mockMultipleRecordingReplication0);
 
-            staticMockArchive.when(() -> AeronArchive.connect(any())).thenReturn(mockArchive);
+            staticMockArchive.when(() -> AeronArchive.asyncConnect(any())).thenReturn(mockConnect);
 
             final StandbySnapshotReplicator standbySnapshotReplicator = StandbySnapshotReplicator.newInstance(
                 memberId,

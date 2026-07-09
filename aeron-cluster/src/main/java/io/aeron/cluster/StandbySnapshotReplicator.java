@@ -35,7 +35,7 @@ import static io.aeron.archive.status.RecordingPos.NULL_RECORDING_ID;
 class StandbySnapshotReplicator implements AutoCloseable
 {
     private final int memberId;
-    private final AeronArchive archive;
+    private final AeronArchive.Context archiveCtx;
     private final RecordingLog recordingLog;
     private final int serviceCount;
     private final String archiveControlChannel;
@@ -45,6 +45,8 @@ class StandbySnapshotReplicator implements AutoCloseable
     private final Counter snapshotCounter;
     private final long maxReplayBytesPerSecond;
     private final Object2ObjectHashMap<String, String> errorsByEndpoint = new Object2ObjectHashMap<>();
+    private AeronArchive.AsyncConnect asyncConnect;
+    private AeronArchive localArchive;
     private MultipleRecordingReplication recordingReplication;
     private ArrayList<SnapshotReplicationEntry> snapshotsToReplicate;
     private SnapshotReplicationEntry currentSnapshotToReplicate;
@@ -52,7 +54,7 @@ class StandbySnapshotReplicator implements AutoCloseable
 
     StandbySnapshotReplicator(
         final int memberId,
-        final AeronArchive archive,
+        final AeronArchive.Context archiveCtx,
         final RecordingLog recordingLog,
         final int serviceCount,
         final String archiveControlChannel,
@@ -63,7 +65,7 @@ class StandbySnapshotReplicator implements AutoCloseable
         final long maxReplayBytesPerSecond)
     {
         this.memberId = memberId;
-        this.archive = archive;
+        this.archiveCtx = archiveCtx;
         this.recordingLog = recordingLog;
         this.serviceCount = serviceCount;
         this.archiveControlChannel = archiveControlChannel;
@@ -84,10 +86,10 @@ class StandbySnapshotReplicator implements AutoCloseable
         final String replicationChannel,
         final int fileSyncLevel, final Counter snapshotCounter, final long maxReplayBytesPerSecond)
     {
-        final AeronArchive archive = AeronArchive.connect(archiveCtx.clone().errorHandler(null));
+        final AeronArchive.Context replicatorArchiveCtx = archiveCtx.clone().errorHandler(null);
         final StandbySnapshotReplicator standbySnapshotReplicator = new StandbySnapshotReplicator(
             memberId,
-            archive,
+            replicatorArchiveCtx,
             recordingLog,
             serviceCount,
             archiveControlChannel,
@@ -96,13 +98,42 @@ class StandbySnapshotReplicator implements AutoCloseable
             fileSyncLevel,
             snapshotCounter,
             maxReplayBytesPerSecond);
-        archive.context().recordingSignalConsumer(standbySnapshotReplicator::onSignal);
+        replicatorArchiveCtx.recordingSignalConsumer(standbySnapshotReplicator::onSignal);
         return standbySnapshotReplicator;
     }
 
+    @SuppressWarnings("methodLength")
     int poll(final long nowNs)
     {
         int workCount = 0;
+
+        if (null == asyncConnect)
+        {
+            asyncConnect = AeronArchive.asyncConnect(archiveCtx);
+            workCount += 1;
+        }
+
+        if (null == localArchive)
+        {
+            final int step = asyncConnect.step();
+            final AeronArchive aeronArchive = asyncConnect.poll();
+
+            if (null == aeronArchive)
+            {
+                if (asyncConnect.step() != step)
+                {
+                    workCount += 1;
+                }
+            }
+            else
+            {
+                localArchive = aeronArchive;
+                asyncConnect = null;
+                workCount += 1;
+            }
+
+            workCount++;
+        }
 
         if (null == recordingReplication)
         {
@@ -130,11 +161,11 @@ class StandbySnapshotReplicator implements AutoCloseable
             final String srcChannel = ChannelUri.createDestinationUri(
                 archiveControlChannel, currentSnapshotToReplicate.endpoint);
 
-            final long progressTimeoutNs = archive.context().messageTimeoutNs() * 2;
+            final long progressTimeoutNs = localArchive.context().messageTimeoutNs() * 2;
             final long progressIntervalNs = progressTimeoutNs / 10;
 
             recordingReplication = MultipleRecordingReplication.newInstance(
-                archive,
+                    localArchive,
                 archiveControlStreamId,
                 srcChannel,
                 replicationChannel,
@@ -155,7 +186,7 @@ class StandbySnapshotReplicator implements AutoCloseable
         try
         {
             workCount += recordingReplication.poll(nowNs);
-            archive.pollForRecordingSignals();
+            localArchive.pollForRecordingSignals();
         }
         catch (final ArchiveException | ClusterException ex)
         {
@@ -249,7 +280,7 @@ class StandbySnapshotReplicator implements AutoCloseable
 
     public void close()
     {
-        CloseHelper.quietClose(archive);
+        CloseHelper.quietClose(localArchive);
     }
 
     private static final class SnapshotReplicationEntry
