@@ -353,7 +353,7 @@ subprojects {
                     include 'element-list', 'package-list'
                 }
                 options.linksOffline(
-                    "https://www.javadoc.io/doc/${id.group}/${id.name}/${id.version}/",
+                    "https://www.javadoc.io/static/${id.group}/${id.name}/${id.version}/",
                     destDir.absolutePath
                 )
             }

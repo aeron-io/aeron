@@ -2,7 +2,7 @@ Aeron
 =====
 
 [![GitHub](https://img.shields.io/github/license/aeron-io/Aeron.svg)](https://github.com/aeron-io/aeron/blob/master/LICENSE)
-[![Javadocs](https://www.javadoc.io/badge/io.aeron/aeron-all.svg)](https://www.javadoc.io/doc/io.aeron/aeron-all)
+[![Javadocs](https://www.javadoc.io/badge/io.aeron/aeron-all.svg)](https://www.javadoc.io/static/io.aeron/aeron-all)
 
 [![Actions Status](https://github.com/aeron-io/aeron/workflows/Continuous%20Integration/badge.svg)](https://github.com/aeron-io/aeron/actions)
 [![CodeQL Status](https://github.com/aeron-io/aeron/workflows/CodeQL/badge.svg)](https://github.com/aeron-io/aeron/actions)
