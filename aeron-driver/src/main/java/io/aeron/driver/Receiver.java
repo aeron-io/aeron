@@ -145,7 +145,6 @@ public final class Receiver implements Agent
         {
             reResolutionDeadlineNs = nowNs + reResolutionCheckIntervalNs;
             dataTransportPoller.checkForReResolutions(nowNs, conductorProxy);
-            workCount++;
         }
 
         return workCount + bytesReceived;
