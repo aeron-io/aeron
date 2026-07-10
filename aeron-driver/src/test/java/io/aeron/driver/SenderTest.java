@@ -52,6 +52,8 @@ import static org.agrona.BitUtil.align;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.core.Is.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.mock;
@@ -495,17 +497,17 @@ class SenderTest
 
         appendUnfragmentedMessage(rawLog, 0, INITIAL_TERM_ID, 0, headerWriter, buffer, 0, PAYLOAD.length);
 
-        sender.doWork();
+        assertNotEquals(0, sender.doWork());
 
         assertThat(receivedFrames.size(), is(1));  // should send ticks
         receivedFrames.remove();                   // skip data (heartbeat) frame
 
         nanoClock.advance(Configuration.PUBLICATION_HEARTBEAT_TIMEOUT_NS - 1);
-        sender.doWork();
+        assertEquals(0, sender.doWork());
         assertThat(receivedFrames.size(), is(0));  // should not send yet
 
         nanoClock.advance(10);
-        sender.doWork();
+        assertNotEquals(0, sender.doWork());
         assertThat(receivedFrames.size(), greaterThanOrEqualTo(1));  // should send ticks
 
         dataHeader.wrap(receivedFrames.remove());
@@ -513,11 +515,11 @@ class SenderTest
         assertThat(dataHeader.termOffset(), is(offsetOfMessage(2)));
 
         nanoClock.advance(Configuration.PUBLICATION_HEARTBEAT_TIMEOUT_NS - 1);
-        sender.doWork();
+        assertEquals(0, sender.doWork());
         assertThat(receivedFrames.size(), is(0));  // should not send yet
 
         nanoClock.advance(10);
-        sender.doWork();
+        assertNotEquals(0, sender.doWork());
         assertThat(receivedFrames.size(), greaterThanOrEqualTo(1));  // should send ticks
 
         dataHeader.wrap(receivedFrames.remove());

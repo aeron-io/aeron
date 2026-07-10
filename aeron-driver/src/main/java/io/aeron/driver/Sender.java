@@ -128,27 +128,26 @@ public final class Sender extends SenderRhsPadding implements Agent
 
         final long shortSendsBefore = shortSends.get();
         final int bytesSent = doSend(nowNs);
+        int bytesReceived = 0;
 
         if (0 == bytesSent ||
             ++dutyCycleCounter >= dutyCycleRatio ||
             (controlPollDeadlineNs - nowNs < 0) ||
             shortSendsBefore < shortSends.get())
         {
-            controlTransportPoller.pollTransports();
+            bytesReceived = controlTransportPoller.pollTransports();
 
             dutyCycleCounter = 0;
             controlPollDeadlineNs = nowNs + statusMessageReadTimeoutNs;
-            workCount++;
         }
 
         if (reResolutionCheckIntervalNs > 0 && (reResolutionDeadlineNs - nowNs) < 0)
         {
             reResolutionDeadlineNs = nowNs + reResolutionCheckIntervalNs;
             controlTransportPoller.checkForReResolutions(nowNs, conductorProxy);
-            workCount++;
         }
 
-        return workCount + bytesSent;
+        return workCount + bytesSent + bytesReceived;
     }
 
     /**
