@@ -1188,6 +1188,17 @@ int aeron_driver_start(aeron_driver_t *driver, bool manual_main_loop)
         return -1;
     }
 
+    for (int i = AERON_AGENT_RUNNER_MAX - 1; i >= 1; i--)
+    {
+        if (AERON_AGENT_STATE_INITED == driver->runners[i].state)
+        {
+            if (aeron_agent_start(&driver->runners[i]) < 0)
+            {
+                return -1;
+            }
+        }
+    }
+
     if (!manual_main_loop)
     {
         if (AERON_THREADING_MODE_INVOKER == driver->context->threading_mode)
@@ -1210,17 +1221,6 @@ int aeron_driver_start(aeron_driver_t *driver, bool manual_main_loop)
         }
 
         first_runner.state = AERON_AGENT_STATE_MANUAL;
-    }
-
-    for (int i = 1; i < AERON_AGENT_RUNNER_MAX; i++)
-    {
-        if (AERON_AGENT_STATE_INITED == driver->runners[i].state)
-        {
-            if (aeron_agent_start(&driver->runners[i]) < 0)
-            {
-                return -1;
-            }
-        }
     }
 
     return 0;
