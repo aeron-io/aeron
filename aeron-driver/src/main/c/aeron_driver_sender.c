@@ -175,7 +175,6 @@ int aeron_driver_sender_do_work(void *clientd)
             AERON_APPEND_ERR("%s", "sender poller_poll");
             aeron_driver_sender_log_error(sender);
         }
-        work_count += (poll_result < 0 ? 0 : poll_result);
 
         sender->duty_cycle_counter = 0;
         sender->control_poll_timeout_ns = now_ns + sender->status_message_read_timeout_ns;
