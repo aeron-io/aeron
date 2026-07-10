@@ -165,8 +165,6 @@ int aeron_driver_receiver_do_work(void *clientd)
         aeron_driver_receiver_log_error(receiver);
     }
 
-    work_count += (int)bytes_received;
-
     aeron_counter_get_and_add_release(receiver->total_bytes_received_counter, bytes_received);
 
     for (size_t i = 0, length = receiver->images.length; i < length; i++)
@@ -228,6 +226,7 @@ int aeron_driver_receiver_do_work(void *clientd)
                     (size_t)last_index);
                 last_index--;
                 receiver->pending_setups.length--;
+                work_count++;
             }
             else if (aeron_receive_channel_endpoint_should_elicit_setup_message(entry->endpoint))
             {
@@ -247,6 +246,7 @@ int aeron_driver_receiver_do_work(void *clientd)
                 }
 
                 entry->time_of_status_message_ns = now_ns;
+                work_count++;
             }
         }
     }
@@ -258,7 +258,7 @@ int aeron_driver_receiver_do_work(void *clientd)
             &receiver->poller, now_ns, receiver->context->conductor_proxy);
     }
 
-    return work_count;
+    return work_count + (int)bytes_received;
 }
 
 void aeron_driver_receiver_on_close(void *clientd)
