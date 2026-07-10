@@ -3592,7 +3592,10 @@ final class ConsensusModuleAgent
 
                 if (standbySnapshotReplicator.isComplete())
                 {
-                    recoveryPlan = recordingLog.createRecoveryPlan(archive, ctx.serviceCount(), Aeron.NULL_VALUE);
+                    // TEMPORARY TEST!  don't commit to master without confirming this isn't needed or inserting this
+                    // work back in a deferred manner
+                    
+                    // recoveryPlan = recordingLog.createRecoveryPlan(archive, ctx.serviceCount(), Aeron.NULL_VALUE);
                     CloseHelper.quietClose(standbySnapshotReplicator);
                     standbySnapshotReplicator = null;
                 }
