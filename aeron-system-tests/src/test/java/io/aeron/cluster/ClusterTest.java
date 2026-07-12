@@ -199,6 +199,25 @@ class ClusterTest
     }
 
     @Test
+    @InterruptAfter(30)
+    void shouldStopFollowerAndRestartFollowerGracefully()
+    {
+        cluster = aCluster().withStaticNodes(3).start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode leader = cluster.awaitLeader();
+        assertEquals(1, leader.consensusModule().context().electionCounter().get());
+        final TestNode follower = cluster.followers().get(0);
+        assertEquals(1, follower.consensusModule().context().electionCounter().get());
+        awaitElectionClosed(follower);
+
+        cluster.connectClient();
+        cluster.sendAndAwaitMessages(10);
+        cluster.stopNodeGracefully(follower);
+        cluster.waitForServiceTermination(follower);
+    }
+
+    @Test
     @InterruptAfter(40)
     void shouldNotifyClientOfNewLeader()
     {
