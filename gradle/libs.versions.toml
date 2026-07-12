@@ -1,5 +1,5 @@
 [versions]
-agrona = "2.5.0"
+agrona = "2.6.0-SNAPSHOT"
 asciidoctorj = "2.5.13"
 asm = "9.10.1"
 byteBuddy = "1.18.11"

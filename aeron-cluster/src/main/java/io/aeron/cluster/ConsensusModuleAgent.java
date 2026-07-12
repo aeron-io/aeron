@@ -282,6 +282,30 @@ final class ConsensusModuleAgent
     {
         if (!aeron.isClosed())
         {
+            final long logPosition = commitPosition.get();
+            serviceProxy.terminationPosition(logPosition, ctx.countedErrorHandler());
+
+//            try
+//            {
+//                idleStrategy.reset();
+//                while (!ServiceAck.hasReached(logPosition, serviceAckId, serviceAckQueues))
+//                {
+//                    final int workCount = consensusModuleAdapter.poll();
+//                    if (Thread.currentThread().isInterrupted())
+//                    {
+//                        throw new InterruptedException();
+//                    }
+//                    aeronClientInvoker.invoke();
+//
+//                    idleStrategy.idle(workCount);
+//                }
+//                ++serviceAckId;
+//            }
+//            catch (final InterruptedException ex)
+//            {
+//                ctx.countedErrorHandler().onError(ex);
+//            }
+
             aeron.removeUnavailableCounterHandler(unavailableCounterHandlerRegistrationId);
 
             final CountedErrorHandler errorHandler = ctx.countedErrorHandler();
