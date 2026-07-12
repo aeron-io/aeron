@@ -31,6 +31,7 @@ public class StubClusteredService implements ClusteredService
 {
     protected Cluster cluster;
     protected IdleStrategy idleStrategy;
+    private volatile boolean isTerminated;
 
     public void onStart(final Cluster cluster, final Image snapshotImage)
     {
@@ -70,6 +71,7 @@ public class StubClusteredService implements ClusteredService
 
     public void onTerminate(final Cluster cluster)
     {
+        isTerminated = true;
     }
 
     protected long serviceCorrelationId(final int correlationId)
@@ -99,5 +101,10 @@ public class StubClusteredService implements ClusteredService
                     Publication.errorString(result) + ", clusterSessionId=" + session.id());
             }
         }
+    }
+
+    public boolean isTerminated()
+    {
+        return isTerminated;
     }
 }
