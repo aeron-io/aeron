@@ -20,7 +20,9 @@ import io.aeron.version.Versioned;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.Object2ObjectHashMap;
 
+import java.util.Collections;
 import java.util.EnumSet;
+import java.util.Set;
 
 /**
  * Implementation of the {@link ModuleLogger} to handle logging and decode of Archive log events.
@@ -31,27 +33,31 @@ public class ArchiveModuleLogger implements ModuleLogger
     private static final Object2ObjectHashMap<String, EnumSet<ArchiveEventCode>> SPECIAL_EVENTS =
         new Object2ObjectHashMap<>();
 
-    static final EnumSet<ArchiveEventCode> ENABLED_EVENT_CODES;
+    static final Set<ArchiveEventCode> ENABLED_EVENT_CODES;
 
     static
     {
         SPECIAL_EVENTS.put("all", EnumSet.allOf(ArchiveEventCode.class));
         final String enabledEventCodes = System.getProperty("aeron.event.archive.log");
         final String disabledEventCodes = System.getProperty("aeron.event.archive.log.disable");
+
         final EnumSet<ArchiveEventCode> disabledEventCodeSet = EventConfiguration.parseEventCodes(
             ArchiveEventCode.class,
             disabledEventCodes,
             SPECIAL_EVENTS,
             ArchiveEventCode::get,
             ArchiveEventCode::valueOf);
-        ENABLED_EVENT_CODES = EventConfiguration.parseEventCodes(
+
+        final EnumSet<ArchiveEventCode> enabledEventCodeSet = EventConfiguration.parseEventCodes(
             ArchiveEventCode.class,
             enabledEventCodes,
             SPECIAL_EVENTS,
             ArchiveEventCode::get,
             ArchiveEventCode::valueOf);
 
-        ENABLED_EVENT_CODES.removeAll(disabledEventCodeSet);
+        enabledEventCodeSet.removeAll(disabledEventCodeSet);
+
+        ENABLED_EVENT_CODES = Collections.unmodifiableSet(enabledEventCodeSet);
     }
 
     /**
