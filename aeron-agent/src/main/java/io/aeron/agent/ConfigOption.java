@@ -25,7 +25,7 @@ import java.util.Properties;
 /**
  * A set of configuration options.
  */
-final class ConfigOption
+public final class ConfigOption
 {
     /**
      * Event Buffer log file name system property. If not set then output will default to {@link System#out}.
