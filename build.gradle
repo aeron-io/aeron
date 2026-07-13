@@ -274,6 +274,8 @@ subprojects {
             'io.aeron.shadow.net.bytebuddy.safe': 'true',
             'java.net.preferIPv4Stack': 'true',
             'aeron.fallback.logger': 'no_op',
+            // NOTE: This is a workaround for the disable flag
+            'aeron.event.cluster.log': 'all',
             'aeron.test.system.aeronmd.path': System.getProperty('aeron.test.system.aeronmd.path'),
             'aeron.test.system.binding.remote.host': System.getProperty('aeron.test.system.binding.remote.host'),
             'aeron.test.system.binding.local.host': System.getProperty('aeron.test.system.binding.local.host'),

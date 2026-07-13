@@ -15,15 +15,20 @@
  */
 package io.aeron.agent;
 
+import org.agrona.CloseHelper;
 import org.agrona.Strings;
+import org.agrona.concurrent.Agent;
 import org.agrona.concurrent.AgentRunner;
 import org.agrona.concurrent.SleepingMillisIdleStrategy;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
 
+import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.ServiceLoader;
 import java.util.function.Function;
 import java.util.function.IntFunction;
@@ -65,36 +70,82 @@ public final class EventConfiguration
      */
     public static final ManyToOneRingBuffer EVENT_RING_BUFFER;
 
+    private static final String READER_CLASSNAME = "aeron.event.log.reader.classname";
+    private static final String READER_CLASSNAME_DEFAULT
+        = "io.aeron.agent.ModuleLoggerReaderAgent";
+    private static Thread readerThread;
+    private static AgentRunner readerAgentRunner;
+
     static
     {
         EVENT_RING_BUFFER = new ManyToOneRingBuffer(new UnsafeBuffer(allocateDirectAligned(
             getSizeAsInt(BUFFER_LENGTH_PROP_NAME, BUFFER_LENGTH_DEFAULT) + TRAILER_LENGTH, CACHE_LINE_LENGTH)));
+        startReader(System.getProperties());
+    }
 
+    /**
+     * @param properties Restart the reader with the new properties.
+     */
+    public static void restartReader(final Properties properties)
+    {
+        readerThread = null;
+        CloseHelper.close(readerAgentRunner);
+        EVENT_RING_BUFFER.unblock();
+        startReader(properties);
+    }
+
+    private static void startReader(final Properties properties)
+    {
+        final ArrayList<ModuleLogger> loggers = new ArrayList<>();
         try
         {
-            final ArrayList<ModuleLogger> loggers = new ArrayList<>();
+
             for (final ModuleLogger componentLogger : ServiceLoader.load(ModuleLogger.class))
             {
                 loggers.add(componentLogger);
             }
 
-            final ModuleLoggerReaderAgent moduleLoggerReaderAgent = new ModuleLoggerReaderAgent(
-                System.getProperties(), loggers);
 
-            final AgentRunner readerAgentRunner = new AgentRunner(
+            final Agent moduleLoggerReaderAgent = newReaderAgent(properties, loggers);
+
+            readerAgentRunner = new AgentRunner(
                 new SleepingMillisIdleStrategy(1L),
                 Throwable::printStackTrace,
                 null,
                 moduleLoggerReaderAgent);
 
-            final Thread thread = new Thread(readerAgentRunner);
-            thread.setName("event-log-reader");
-            thread.setDaemon(true);
-            thread.start();
+            readerThread = new Thread(readerAgentRunner);
+            readerThread.setName("event-log-reader");
+            readerThread.setDaemon(true);
+            readerThread.start();
         }
         catch (final Exception ex)
         {
             ex.printStackTrace(System.err);
+        }
+    }
+
+    private static Agent newReaderAgent(final Properties configOptions, final List<ModuleLogger> loggers)
+    {
+        try
+        {
+            final Class<?> aClass = Class.forName(
+                configOptions.getProperty(READER_CLASSNAME, READER_CLASSNAME_DEFAULT));
+
+            try
+            {
+                final Constructor<?> constructor = aClass.getDeclaredConstructor(Properties.class, List.class);
+                return (Agent)constructor.newInstance(configOptions, loggers);
+            }
+            catch (final NoSuchMethodException ignore)
+            {
+            }
+
+            return (Agent)aClass.getDeclaredConstructor().newInstance();
+        }
+        catch (final Exception ex)
+        {
+            throw new RuntimeException(ex);
         }
     }
 

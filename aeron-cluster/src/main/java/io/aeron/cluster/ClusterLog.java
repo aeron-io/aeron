@@ -145,7 +145,6 @@ class ClusterLog
         {
             return;
         }
-
         ClusterEventLogger.LOGGER.logStateChange(ClusterEventCode.ROLE_CHANGE, memberId, oldRole, newRole, "");
     }
 

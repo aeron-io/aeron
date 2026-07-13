@@ -13,16 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.aeron.agent;
+package io.aeron.cluster;
 
 import io.aeron.CommonContext;
 import io.aeron.Counter;
+import io.aeron.agent.ClusterEventCode;
+import io.aeron.agent.EventConfiguration;
 import io.aeron.archive.Archive;
 import io.aeron.archive.ArchiveThreadingMode;
 import io.aeron.archive.client.AeronArchive;
-import io.aeron.cluster.ClusteredMediaDriver;
-import io.aeron.cluster.ConsensusModule;
-import io.aeron.cluster.ElectionState;
 import io.aeron.cluster.client.AeronCluster;
 import io.aeron.cluster.service.ClusteredService;
 import io.aeron.cluster.service.ClusteredServiceContainer;
@@ -39,14 +38,12 @@ import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.Agent;
 import org.agrona.concurrent.MessageHandler;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.File;
 import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.function.Supplier;
 
@@ -67,11 +64,11 @@ import static org.agrona.BitUtil.SIZE_OF_LONG;
 import static org.mockito.Mockito.mock;
 
 @ExtendWith(InterruptingTestCallback.class)
-@Disabled
-class ClusterLoggingAgentTest
+public class ClusterLoggingAgentTest
 {
     private static final Set<ClusterEventCode> WAIT_LIST = synchronizedSet(EnumSet.noneOf(ClusterEventCode.class));
-
+    private static final String READER_CLASSNAME = "aeron.event.log.reader.classname";
+    private static final String ENABLED_CLUSTER_EVENT_CODES = "aeron.event.cluster.log";
     private File testDir;
     private ClusteredMediaDriver clusteredMediaDriver;
     private ClusteredServiceContainer container;
@@ -80,7 +77,7 @@ class ClusterLoggingAgentTest
     void after()
     {
         CloseHelper.closeAll(clusteredMediaDriver.consensusModule(), container, clusteredMediaDriver);
-        AgentTests.stopLogging();
+//        AgentTests.stopLogging();
 
         if (testDir != null && testDir.exists())
         {
@@ -195,11 +192,10 @@ class ClusterLoggingAgentTest
 
     private void before(final String enabledEvents, final EnumSet<ClusterEventCode> expectedEvents)
     {
-        final Map<String, String> configOptions = new HashMap<>();
-        configOptions.put(ConfigOption.READER_CLASSNAME, StubEventLogReaderAgent.class.getName());
-        configOptions.put(ConfigOption.ENABLED_CLUSTER_EVENT_CODES, enabledEvents);
-        AgentTests.startLogging(configOptions);
-
+        final Properties configOptions = new Properties();
+        configOptions.put(READER_CLASSNAME, StubEventLogReaderAgent.class.getName());
+        configOptions.put(ENABLED_CLUSTER_EVENT_CODES, enabledEvents);
+        EventConfiguration.restartReader(configOptions);
         WAIT_LIST.clear();
         WAIT_LIST.addAll(expectedEvents);
 
@@ -210,8 +206,12 @@ class ClusterLoggingAgentTest
         }
     }
 
-    static final class StubEventLogReaderAgent implements Agent, MessageHandler
+    public static final class StubEventLogReaderAgent implements Agent, MessageHandler
     {
+        public StubEventLogReaderAgent()
+        {
+        }
+
         public String roleName()
         {
             return "event-log-reader";
@@ -225,7 +225,6 @@ class ClusterLoggingAgentTest
         public void onMessage(final int msgTypeId, final MutableDirectBuffer buffer, final int index, final int length)
         {
             final ClusterEventCode eventCode = fromEventCodeId(msgTypeId);
-
             switch (eventCode)
             {
                 case ROLE_CHANGE:
