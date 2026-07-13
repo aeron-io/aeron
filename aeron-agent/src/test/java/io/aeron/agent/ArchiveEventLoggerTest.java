@@ -79,7 +79,7 @@ class ArchiveEventLoggerTest
     @AfterEach
     void after()
     {
-        ArchiveComponentLogger.ENABLED_EVENTS.clear();
+        ArchiveModuleLogger.ENABLED_EVENT_CODES.clear();
         EventConfiguration.EVENT_RING_BUFFER.unblock();
     }
 
@@ -96,7 +96,7 @@ class ArchiveEventLoggerTest
         })
     void logControlRequest(final ArchiveEventCode eventCode)
     {
-        ArchiveComponentLogger.ENABLED_EVENTS.add(eventCode);
+        ArchiveModuleLogger.ENABLED_EVENT_CODES.add(eventCode);
         final int srcOffset = 100;
         final int length = MAX_EVENT_LENGTH * 2;
         new MessageHeaderEncoder().wrap(srcBuffer, srcOffset).templateId(eventCode.templateId());
@@ -360,7 +360,7 @@ class ArchiveEventLoggerTest
     void logMaxRecordedPosition()
     {
         final ArchiveEventCode eventCode = CMD_IN_MAX_RECORDED_POSITION;
-        ArchiveComponentLogger.ENABLED_EVENTS.add(eventCode);
+        ArchiveModuleLogger.ENABLED_EVENT_CODES.add(eventCode);
 
         final long controlSessionId = 0x777777;
         final long recordingId = -99999999999999123L;

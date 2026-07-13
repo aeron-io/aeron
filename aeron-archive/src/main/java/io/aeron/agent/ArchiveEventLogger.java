@@ -44,7 +44,11 @@ public final class ArchiveEventLogger
      */
     public static final ArchiveEventLogger LOGGER = new ArchiveEventLogger(EVENT_RING_BUFFER);
 
-    static final EnumSet<ArchiveEventCode> CONTROL_REQUEST_EVENTS = complementOf(of(
+    /**
+     * Set of event codes that represent an incoming control request, i.e. everything {@link #logControlRequest}
+     * may be asked to log.
+     */
+    public static final EnumSet<ArchiveEventCode> CONTROL_REQUEST_EVENTS = complementOf(of(
         CMD_OUT_RESPONSE,
         REPLICATION_SESSION_STATE_CHANGE,
         CONTROL_SESSION_STATE_CHANGE,
@@ -76,7 +80,7 @@ public final class ArchiveEventLogger
 
         final int templateId = headerDecoder.templateId();
         final ArchiveEventCode eventCode = getByTemplateId(templateId);
-        if (eventCode != null && ArchiveComponentLogger.ENABLED_EVENTS.contains(eventCode))
+        if (eventCode != null && ArchiveModuleLogger.isEnabled(eventCode))
         {
             log(eventCode, buffer, offset, length);
         }
