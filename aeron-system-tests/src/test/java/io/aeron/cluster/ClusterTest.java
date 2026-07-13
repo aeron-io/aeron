@@ -252,6 +252,19 @@ class ClusterTest
     }
 
     @Test
+    @InterruptAfter(30)
+    void shouldConnectAndDisconnectClient()
+    {
+        cluster = aCluster().withStaticNodes(3).start();
+        systemTestWatcher.cluster(cluster);
+
+        final TestNode leader = cluster.awaitLeader();
+        cluster.connectClient();
+        cluster.sendAndAwaitMessages(1);
+        cluster.closeClient();
+    }
+
+    @Test
     @InterruptAfter(10)
     void shouldNotSnapshotOnPrimaryClusterWhenStandbySnapshotIsRequested()
     {
@@ -774,6 +787,8 @@ class ClusterTest
         cluster.awaitServiceMessageCount(followerA, messageCount);
         cluster.awaitServiceMessageCount(followerB, messageCount);
     }
+
+
 
     @Test
     @InterruptAfter(60)
