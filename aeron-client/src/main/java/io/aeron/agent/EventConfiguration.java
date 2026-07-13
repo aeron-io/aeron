@@ -16,11 +16,15 @@
 package io.aeron.agent;
 
 import org.agrona.Strings;
+import org.agrona.concurrent.AgentRunner;
+import org.agrona.concurrent.SleepingMillisIdleStrategy;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
 
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.Map;
+import java.util.ServiceLoader;
 import java.util.function.Function;
 import java.util.function.IntFunction;
 
@@ -65,6 +69,33 @@ public final class EventConfiguration
     {
         EVENT_RING_BUFFER = new ManyToOneRingBuffer(new UnsafeBuffer(allocateDirectAligned(
             getSizeAsInt(BUFFER_LENGTH_PROP_NAME, BUFFER_LENGTH_DEFAULT) + TRAILER_LENGTH, CACHE_LINE_LENGTH)));
+
+        try
+        {
+            final ArrayList<ModuleLogger> loggers = new ArrayList<>();
+            for (final ModuleLogger componentLogger : ServiceLoader.load(ModuleLogger.class))
+            {
+                loggers.add(componentLogger);
+            }
+
+            final ModuleLoggerReaderAgent moduleLoggerReaderAgent = new ModuleLoggerReaderAgent(
+                System.getProperties(), loggers);
+
+            final AgentRunner readerAgentRunner = new AgentRunner(
+                new SleepingMillisIdleStrategy(1L),
+                Throwable::printStackTrace,
+                null,
+                moduleLoggerReaderAgent);
+
+            final Thread thread = new Thread(readerAgentRunner);
+            thread.setName("event-log-reader");
+            thread.setDaemon(true);
+            thread.start();
+        }
+        catch (Exception ex)
+        {
+            ex.printStackTrace(System.err);
+        }
     }
 
     private EventConfiguration()

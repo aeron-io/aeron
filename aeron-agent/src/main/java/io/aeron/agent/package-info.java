@@ -22,6 +22,6 @@
  * {@link org.agrona.concurrent.ringbuffer.RingBuffer} which is consumed
  * and appended asynchronously to a log as defined by the class
  * {@link io.aeron.agent.EventLogAgent#READER_CLASSNAME_PROP_NAME} which defaults to
- * {@link io.aeron.agent.EventLogReaderAgent}.
+ * {@link io.aeron.agent.ModuleLoggerReaderAgent}.
  */
 package io.aeron.agent;
