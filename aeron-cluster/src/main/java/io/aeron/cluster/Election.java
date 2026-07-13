@@ -618,6 +618,18 @@ class Election
         final long oldPosition,
         final long newPosition)
     {
+        ClusterLog.logOnTruncateLogEntry(
+            memberId,
+            state,
+            logLeadershipTermId,
+            leadershipTermId,
+            candidateTermId,
+            commitPosition,
+            logPosition,
+            appendPosition,
+            oldPosition,
+            newPosition);
+
         consensusModuleAgent.truncateLogEntry(logLeadershipTermId, newPosition);
         this.appendPosition = newPosition;
         throw new ClusterEvent("Truncating Cluster Log - memberId=" + memberId +
@@ -1557,18 +1569,18 @@ class Election
         final long catchupPosition,
         final String reason)
     {
-        /*
-        System.out.println("Election: memberId=" + memberId + " " + oldState + " -> " + newState +
-            " leaderId=" + leaderId +
-            " candidateTermId=" + candidateTermId +
-            " leadershipTermId=" + leadershipTermId +
-            " logPosition=" + logPosition +
-            " logLeadershipTermId=" + logLeadershipTermId +
-            " appendPosition=" + appendPosition +
-            " catchupPosition=" + catchupPosition +
-            " notifiedCommitPosition=" + notifiedCommitPosition +
-            " reason=" + reason);
-         */
+        ClusterLog.logElectionStateChange(
+            memberId,
+            oldState,
+            newState,
+            leaderId,
+            candidateTermId,
+            leadershipTermId,
+            logPosition,
+            logLeadershipTermId,
+            appendPosition,
+            catchupPosition,
+            reason);
     }
 
     private void prepareForNewLeadership(final long nowNs)

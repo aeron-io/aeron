@@ -123,5 +123,6 @@ class RecordingLogValidator implements AutoCloseable
         final long logPosition,
         final int serviceId)
     {
+        ClusterLog.logSnapshotEntryInvalidation(memberId, entryIndex, recordingId, logPosition, serviceId);
     }
 }

@@ -530,8 +530,7 @@ final class ClusterSession implements ClusterClientSession
         final State newState,
         final String reason)
     {
-//        System.out.println("ClusterSession: memberId=" + memberId + " id=" + sessionId + " action=" + action + " " +
-//            oldState + " -> " + newState + " " + reason);
+        ClusterLog.logClusterSessionStateChange(memberId, sessionId, action, oldState, newState, reason);
     }
 
     static void checkEncodedPrincipalLength(final byte[] encodedPrincipal)
