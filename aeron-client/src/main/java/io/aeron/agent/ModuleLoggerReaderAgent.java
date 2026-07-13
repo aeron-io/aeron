@@ -37,7 +37,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;import java.util.Properties;
+import java.util.Objects;
+import java.util.Properties;
 
 import static io.aeron.agent.CommonEventDissector.dissectLogStartMessage;
 import static io.aeron.agent.EventConfiguration.EVENT_READER_FRAME_LIMIT;

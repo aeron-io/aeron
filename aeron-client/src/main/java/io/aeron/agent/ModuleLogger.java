@@ -17,8 +17,6 @@ package io.aeron.agent;
 
 import org.agrona.MutableDirectBuffer;
 
-import java.util.Map;
-
 /**
  * Interface that describes a logger for a given Aeron component.
  */
