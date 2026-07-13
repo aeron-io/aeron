@@ -274,8 +274,10 @@ subprojects {
             'io.aeron.shadow.net.bytebuddy.safe': 'true',
             'java.net.preferIPv4Stack': 'true',
             'aeron.fallback.logger': 'no_op',
-            // NOTE: This is a workaround for the disable flag
+            // NOTE: This is a workaround for the disable flag, will remove if decision is made
             'aeron.event.cluster.log': 'all',
+            // NOTE: The REPLICATION_ENDED log  has an NPE that surfaced, consider fixing
+            'aeron.event.cluster.log.disable': 'REPLICATION_ENDED',
             'aeron.test.system.aeronmd.path': System.getProperty('aeron.test.system.aeronmd.path'),
             'aeron.test.system.binding.remote.host': System.getProperty('aeron.test.system.binding.remote.host'),
             'aeron.test.system.binding.local.host': System.getProperty('aeron.test.system.binding.local.host'),
