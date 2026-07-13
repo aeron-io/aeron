@@ -115,7 +115,7 @@ public class ClusterComponentLogger implements ComponentLogger
         return tempBuilder;
     }
 
-    /**
+    /**ClusterLog
      * {@inheritDoc}
      */
     public void reset()
