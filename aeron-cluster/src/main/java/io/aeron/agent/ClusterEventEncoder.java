@@ -22,11 +22,8 @@ import org.agrona.concurrent.UnsafeBuffer;
 import java.util.concurrent.TimeUnit;
 
 import static io.aeron.agent.CommonEventEncoder.LOG_HEADER_LENGTH;
-import static io.aeron.agent.CommonEventEncoder.encodeLogHeader;
 import static io.aeron.agent.CommonEventEncoder.encodeTrailingString;
 import static io.aeron.agent.CommonEventEncoder.enumName;
-import static io.aeron.agent.CommonEventEncoder.stateTransitionStringLength;
-import static io.aeron.agent.CommonEventEncoder.trailingStringLength;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static org.agrona.BitUtil.SIZE_OF_BYTE;
 import static org.agrona.BitUtil.SIZE_OF_INT;
@@ -136,8 +133,8 @@ public final class ClusterEventEncoder
 
         encodedLength += CommonEventEncoder.encodeStateChange(encodingBuffer, offset + encodedLength, from, to);
 
-        encodedLength += CommonEventEncoder.encodeTrailingString(encodingBuffer, offset + encodedLength,
-            captureLength + CommonEventEncoder.LOG_HEADER_LENGTH - encodedLength, reason);
+        encodedLength += encodeTrailingString(encodingBuffer, offset + encodedLength,
+            captureLength + LOG_HEADER_LENGTH - encodedLength, reason);
 
         return encodedLength;
     }
@@ -151,7 +148,7 @@ public final class ClusterEventEncoder
         final A action, final S from, final S to, final String reason)
     {
         return SIZE_OF_LONG + SIZE_OF_INT + CommonEventEncoder.stateTransitionStringLength(from, to) + SIZE_OF_INT +
-            CommonEventEncoder.enumName(action).length() + SIZE_OF_INT + reason.length() + SIZE_OF_INT;
+            enumName(action).length() + SIZE_OF_INT + reason.length() + SIZE_OF_INT;
     }
 
     static <E extends Enum<E>> int encodeElectionStateChange(
@@ -199,8 +196,8 @@ public final class ClusterEventEncoder
 
         encodedLength += CommonEventEncoder.encodeStateChange(encodingBuffer, offset + encodedLength, from, to);
 
-        encodedLength += CommonEventEncoder.encodeTrailingString(
-            encodingBuffer, offset + encodedLength, captureLength + CommonEventEncoder.LOG_HEADER_LENGTH - encodedLength, reason);
+        encodedLength += encodeTrailingString(
+            encodingBuffer, offset + encodedLength, captureLength + LOG_HEADER_LENGTH - encodedLength, reason);
 
         return encodedLength;
     }
@@ -352,7 +349,7 @@ public final class ClusterEventEncoder
         encodingBuffer.putInt(bodyOffset + bodyLength, memberId, LITTLE_ENDIAN);
         bodyLength += SIZE_OF_INT;
 
-        bodyLength += CommonEventEncoder.encodeTrailingString(
+        bodyLength += encodeTrailingString(
             encodingBuffer, bodyOffset + bodyLength, captureLength - bodyLength, catchupEndpoint);
 
         return logHeaderLength + bodyLength;
@@ -433,7 +430,7 @@ public final class ClusterEventEncoder
         encodingBuffer.putInt(offset + encodedLength, memberId, LITTLE_ENDIAN);
         encodedLength += SIZE_OF_INT;
 
-        encodedLength += encodingBuffer.putStringAscii(offset + encodedLength, CommonEventEncoder.enumName(state), LITTLE_ENDIAN);
+        encodedLength += encodingBuffer.putStringAscii(offset + encodedLength, enumName(state), LITTLE_ENDIAN);
 
         return encodedLength;
     }
@@ -477,7 +474,7 @@ public final class ClusterEventEncoder
         encodingBuffer.putByte(bodyOffset + bodyLength, (byte)(isInElection ? 1 : 0));
         bodyLength += SIZE_OF_BYTE;
 
-        final String unit = CommonEventEncoder.enumName(timeUnit);
+        final String unit = enumName(timeUnit);
         encodingBuffer.putStringAscii(bodyOffset + bodyLength, unit, LITTLE_ENDIAN);
         bodyLength += SIZE_OF_INT + unit.length();
 
@@ -553,13 +550,13 @@ public final class ClusterEventEncoder
 
     static int appendSessionCloseLength(final CloseReason closeReason, final TimeUnit timeUnit)
     {
-        return 3 * SIZE_OF_LONG + SIZE_OF_INT + (SIZE_OF_INT + CommonEventEncoder.enumName(closeReason).length()) +
-            (SIZE_OF_INT + CommonEventEncoder.enumName(timeUnit).length());
+        return 3 * SIZE_OF_LONG + SIZE_OF_INT + (SIZE_OF_INT + enumName(closeReason).length()) +
+            (SIZE_OF_INT + enumName(timeUnit).length());
     }
 
     static int appendSessionOpenLength(final TimeUnit timeUnit)
     {
-        return 4 * SIZE_OF_LONG + SIZE_OF_INT + (SIZE_OF_INT + CommonEventEncoder.enumName(timeUnit).length());
+        return 4 * SIZE_OF_LONG + SIZE_OF_INT + (SIZE_OF_INT + enumName(timeUnit).length());
     }
 
     static int encodeAppendSessionClose(
@@ -590,9 +587,9 @@ public final class ClusterEventEncoder
         encodingBuffer.putInt(bodyOffset + bodyLength, memberId, LITTLE_ENDIAN);
         bodyLength += SIZE_OF_INT;
 
-        bodyLength += encodingBuffer.putStringAscii(bodyOffset + bodyLength, CommonEventEncoder.enumName(closeReason), LITTLE_ENDIAN);
+        bodyLength += encodingBuffer.putStringAscii(bodyOffset + bodyLength, enumName(closeReason), LITTLE_ENDIAN);
 
-        bodyLength += encodingBuffer.putStringAscii(bodyOffset + bodyLength, CommonEventEncoder.enumName(timeUnit), LITTLE_ENDIAN);
+        bodyLength += encodingBuffer.putStringAscii(bodyOffset + bodyLength, enumName(timeUnit), LITTLE_ENDIAN);
 
         return logHeaderLength + bodyLength;
     }
@@ -628,7 +625,7 @@ public final class ClusterEventEncoder
         encodingBuffer.putInt(bodyOffset + bodyLength, memberId, LITTLE_ENDIAN);
         bodyLength += SIZE_OF_INT;
 
-        bodyLength += encodingBuffer.putStringAscii(bodyOffset + bodyLength, CommonEventEncoder.enumName(timeUnit), LITTLE_ENDIAN);
+        bodyLength += encodingBuffer.putStringAscii(bodyOffset + bodyLength, enumName(timeUnit), LITTLE_ENDIAN);
 
         return logHeaderLength + bodyLength;
     }
@@ -699,7 +696,7 @@ public final class ClusterEventEncoder
 
     static int serviceAckLength(final TimeUnit timeUnit)
     {
-        return (2 * SIZE_OF_INT) + (4 * SIZE_OF_LONG) + (SIZE_OF_INT + CommonEventEncoder.enumName(timeUnit).length());
+        return (2 * SIZE_OF_INT) + (4 * SIZE_OF_LONG) + (SIZE_OF_INT + enumName(timeUnit).length());
     }
 
     static int encodeServiceAck(
@@ -737,7 +734,7 @@ public final class ClusterEventEncoder
         encodingBuffer.putInt(bodyOffset + bodyLength, serviceId, LITTLE_ENDIAN);
         bodyLength += SIZE_OF_INT;
 
-        bodyLength += encodingBuffer.putStringAscii(bodyOffset + bodyLength, CommonEventEncoder.enumName(timeUnit), LITTLE_ENDIAN);
+        bodyLength += encodingBuffer.putStringAscii(bodyOffset + bodyLength, enumName(timeUnit), LITTLE_ENDIAN);
 
         return logHeaderLength + bodyLength;
     }
@@ -781,7 +778,7 @@ public final class ClusterEventEncoder
         bodyLength += SIZE_OF_BYTE;
 
         bodyLength += encodingBuffer.putStringAscii(bodyOffset + bodyLength, purpose, LITTLE_ENDIAN);
-        bodyLength += CommonEventEncoder.encodeTrailingString(
+        bodyLength += encodeTrailingString(
             encodingBuffer, bodyOffset + bodyLength, captureLength - bodyLength, channel);
 
         return logHeaderLength + bodyLength;
@@ -834,7 +831,7 @@ public final class ClusterEventEncoder
         bodyLength += SIZE_OF_INT;
 
         bodyLength += encodingBuffer.putStringAscii(bodyOffset + bodyLength, timeUnit.name(), LITTLE_ENDIAN);
-        bodyLength += CommonEventEncoder.encodeTrailingString(
+        bodyLength += encodeTrailingString(
             encodingBuffer, bodyOffset + bodyLength, captureLength - bodyLength, archiveEndpoint);
 
         return logHeaderLength + bodyLength;
@@ -872,7 +869,7 @@ public final class ClusterEventEncoder
         encodingBuffer.putInt(bodyOffset + bodyLength, memberId, LITTLE_ENDIAN);
         bodyLength += SIZE_OF_INT;
 
-        CommonEventEncoder.encodeTrailingString(encodingBuffer, bodyOffset + bodyLength, captureLength - bodyLength, reason);
+        encodeTrailingString(encodingBuffer, bodyOffset + bodyLength, captureLength - bodyLength, reason);
 
         return logHeaderLength + bodyLength;
     }
@@ -897,12 +894,12 @@ public final class ClusterEventEncoder
         encodingBuffer.putInt(offset + encodedLength, memberId, LITTLE_ENDIAN);
         encodedLength += SIZE_OF_INT;
 
-        encodedLength += encodingBuffer.putStringAscii(offset + encodedLength, CommonEventEncoder.enumName(action), LITTLE_ENDIAN);
+        encodedLength += encodingBuffer.putStringAscii(offset + encodedLength, enumName(action), LITTLE_ENDIAN);
 
         encodedLength += CommonEventEncoder.encodeStateChange(encodingBuffer, offset + encodedLength, from, to);
 
-        CommonEventEncoder.encodeTrailingString(
-            encodingBuffer, offset + encodedLength, captureLength + CommonEventEncoder.LOG_HEADER_LENGTH - encodedLength, reason);
+        encodeTrailingString(
+            encodingBuffer, offset + encodedLength, captureLength + LOG_HEADER_LENGTH - encodedLength, reason);
     }
 
     static int snapshotEntryInvalidationLength()

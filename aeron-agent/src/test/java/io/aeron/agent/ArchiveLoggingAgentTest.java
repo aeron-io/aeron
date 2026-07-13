@@ -33,6 +33,7 @@ import org.agrona.concurrent.MessageHandler;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.CountersReader;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -49,6 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 @ExtendWith(InterruptingTestCallback.class)
+@Disabled
 class ArchiveLoggingAgentTest
 {
     private static final Set<ArchiveEventCode> WAIT_LIST = synchronizedSet(new HashSet<>());

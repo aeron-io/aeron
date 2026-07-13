@@ -24,7 +24,6 @@ import org.agrona.concurrent.UnsafeBuffer;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 
-import static io.aeron.agent.EventConfiguration.MAX_EVENT_LENGTH;
 import static java.lang.Math.min;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static org.agrona.BitUtil.SIZE_OF_INT;
