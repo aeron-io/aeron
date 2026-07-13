@@ -18,6 +18,7 @@ package io.aeron.cluster;
 import io.aeron.CommonContext;
 import io.aeron.Counter;
 import io.aeron.agent.ClusterEventCode;
+import io.aeron.agent.EventCodeType;
 import io.aeron.agent.EventConfiguration;
 import io.aeron.archive.Archive;
 import io.aeron.archive.ArchiveThreadingMode;
@@ -54,7 +55,6 @@ import static io.aeron.agent.ClusterEventCode.ELECTION_STATE_CHANGE;
 import static io.aeron.agent.ClusterEventCode.NEW_ELECTION;
 import static io.aeron.agent.ClusterEventCode.ROLE_CHANGE;
 import static io.aeron.agent.ClusterEventCode.STATE_CHANGE;
-import static io.aeron.agent.ClusterEventCode.fromEventCodeId;
 import static io.aeron.agent.CommonEventEncoder.LOG_HEADER_LENGTH;
 import static io.aeron.agent.EventConfiguration.EVENT_READER_FRAME_LIMIT;
 import static io.aeron.agent.EventConfiguration.EVENT_RING_BUFFER;
@@ -224,7 +224,13 @@ public class ClusterLoggingAgentTest
 
         public void onMessage(final int msgTypeId, final MutableDirectBuffer buffer, final int index, final int length)
         {
-            final ClusterEventCode eventCode = fromEventCodeId(msgTypeId);
+            final int eventCodeTypeId = msgTypeId >> 16;
+            if (EventCodeType.CLUSTER.getTypeCode() != eventCodeTypeId)
+            {
+                return;
+            }
+
+            final ClusterEventCode eventCode = ClusterEventCode.fromEventCodeId(msgTypeId);
             switch (eventCode)
             {
                 case ROLE_CHANGE:
