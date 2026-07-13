@@ -52,13 +52,21 @@ public class ClusterModuleLogger implements ModuleLogger
     {
         SPECIAL_EVENTS.put("all", EnumSet.allOf(ClusterEventCode.class));
         final String enabledEventCodes = System.getProperty("aeron.event.cluster.log");
-
+        final String disabledEventCodes = System.getProperty("aeron.event.cluster.log.disable");
+        final EnumSet<ClusterEventCode> disabledEventCodeSet = EventConfiguration.parseEventCodes(
+            ClusterEventCode.class,
+            disabledEventCodes,
+            SPECIAL_EVENTS,
+            ClusterEventCode::get,
+            ClusterEventCode::valueOf);
         ENABLED_EVENT_CODES = EventConfiguration.parseEventCodes(
             ClusterEventCode.class,
             enabledEventCodes,
             SPECIAL_EVENTS,
             ClusterEventCode::get,
             ClusterEventCode::valueOf);
+
+        ENABLED_EVENT_CODES.removeAll(disabledEventCodeSet);
     }
 
     /**
