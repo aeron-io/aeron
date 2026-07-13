@@ -84,11 +84,11 @@ public final class ClusterEventLogger
     /**
      * Logger for writing into the {@link EventConfiguration#EVENT_RING_BUFFER}.
      */
-    public static final ClusterEventLogger LOGGER = new ClusterEventLogger(EVENT_RING_BUFFER);
+    public static final ClusterEventLogger LOGGER = new ClusterEventLogger(EventConfiguration.EVENT_RING_BUFFER);
 
     private final ManyToOneRingBuffer ringBuffer;
 
-    ClusterEventLogger(final ManyToOneRingBuffer eventRingBuffer)
+    public ClusterEventLogger(final ManyToOneRingBuffer eventRingBuffer)
     {
         ringBuffer = eventRingBuffer;
     }
@@ -129,9 +129,9 @@ public final class ClusterEventLogger
         final int appVersion,
         final boolean isStartup)
     {
-        final int length = newLeaderShipTermLength();
-        final int captureLength = captureLength(length);
-        final int encodedLength = encodedLength(captureLength);
+        final int length = ClusterEventEncoder.newLeaderShipTermLength();
+        final int captureLength = CommonEventEncoder.captureLength(length);
+        final int encodedLength = CommonEventEncoder.encodedLength(captureLength);
         final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
         final int index = ringBuffer.tryClaim(NEW_LEADERSHIP_TERM.toEventCodeId(), encodedLength);
 
@@ -139,7 +139,7 @@ public final class ClusterEventLogger
         {
             try
             {
-                encodeOnNewLeadershipTerm(
+                ClusterEventEncoder.encodeOnNewLeadershipTerm(
                     (UnsafeBuffer)ringBuffer.buffer(),
                     index,
                     captureLength,
@@ -180,9 +180,9 @@ public final class ClusterEventLogger
     public <E extends Enum<E>> void logStateChange(
         final ClusterEventCode eventCode, final int memberId, final E oldState, final E newState, final String reason)
     {
-        final int length = stateChangeLength(oldState, newState, reason);
-        final int captureLength = captureLength(length);
-        final int encodedLength = encodedLength(captureLength);
+        final int length = ClusterEventEncoder.stateChangeLength(oldState, newState, reason);
+        final int captureLength = CommonEventEncoder.captureLength(length);
+        final int encodedLength = CommonEventEncoder.encodedLength(captureLength);
         final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
         final int index = ringBuffer.tryClaim(eventCode.toEventCodeId(), encodedLength);
 
@@ -190,7 +190,7 @@ public final class ClusterEventLogger
         {
             try
             {
-                encodeStateChange(
+                ClusterEventEncoder.encodeStateChange(
                     (UnsafeBuffer)ringBuffer.buffer(),
                     index,
                     captureLength,
@@ -236,9 +236,9 @@ public final class ClusterEventLogger
         final long catchupPosition,
         final String reason)
     {
-        final int length = electionStateChangeLength(oldState, newState, reason);
-        final int captureLength = captureLength(length);
-        final int encodedLength = encodedLength(captureLength);
+        final int length = ClusterEventEncoder.electionStateChangeLength(oldState, newState, reason);
+        final int captureLength = CommonEventEncoder.captureLength(length);
+        final int encodedLength = CommonEventEncoder.encodedLength(captureLength);
         final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
         final int index = ringBuffer.tryClaim(ELECTION_STATE_CHANGE.toEventCodeId(), encodedLength);
 
@@ -246,7 +246,7 @@ public final class ClusterEventLogger
         {
             try
             {
-                encodeElectionStateChange(
+                ClusterEventEncoder.encodeElectionStateChange(
                     (UnsafeBuffer)ringBuffer.buffer(),
                     index,
                     captureLength,
@@ -288,9 +288,9 @@ public final class ClusterEventLogger
         final int followerMemberId,
         final int protocolVersion)
     {
-        final int length = canvassPositionLength();
-        final int captureLength = captureLength(length);
-        final int encodedLength = encodedLength(captureLength);
+        final int length = ClusterEventEncoder.canvassPositionLength();
+        final int captureLength = CommonEventEncoder.captureLength(length);
+        final int encodedLength = CommonEventEncoder.encodedLength(captureLength);
         final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
         final int index = ringBuffer.tryClaim(CANVASS_POSITION.toEventCodeId(), encodedLength);
 
@@ -298,7 +298,7 @@ public final class ClusterEventLogger
         {
             try
             {
-                encodeOnCanvassPosition(
+                ClusterEventEncoder.encodeOnCanvassPosition(
                     (UnsafeBuffer)ringBuffer.buffer(),
                     index,
                     captureLength,
@@ -336,8 +336,8 @@ public final class ClusterEventLogger
         final int protocolVersion)
     {
         final int length = 3 * SIZE_OF_LONG + 3 * SIZE_OF_INT;
-        final int captureLength = captureLength(length);
-        final int encodedLength = encodedLength(captureLength);
+        final int captureLength = CommonEventEncoder.captureLength(length);
+        final int encodedLength = CommonEventEncoder.encodedLength(captureLength);
         final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
         final int index = ringBuffer.tryClaim(REQUEST_VOTE.toEventCodeId(), encodedLength);
 
@@ -345,7 +345,7 @@ public final class ClusterEventLogger
         {
             try
             {
-                encodeOnRequestVote(
+                ClusterEventEncoder.encodeOnRequestVote(
                     (UnsafeBuffer)ringBuffer.buffer(),
                     index,
                     captureLength,
@@ -385,8 +385,8 @@ public final class ClusterEventLogger
         final boolean vote)
     {
         final int length = 3 * SIZE_OF_LONG + 3 * SIZE_OF_INT + SIZE_OF_BYTE;
-        final int captureLength = captureLength(length);
-        final int encodedLength = encodedLength(captureLength);
+        final int captureLength = CommonEventEncoder.captureLength(length);
+        final int encodedLength = CommonEventEncoder.encodedLength(captureLength);
         final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
         final int index = ringBuffer.tryClaim(VOTE.toEventCodeId(), encodedLength);
 
@@ -394,7 +394,7 @@ public final class ClusterEventLogger
         {
             try
             {
-                encodeOnVote(
+                ClusterEventEncoder.encodeOnVote(
                     (UnsafeBuffer)ringBuffer.buffer(),
                     index,
                     captureLength,
@@ -430,9 +430,9 @@ public final class ClusterEventLogger
         final int followerMemberId,
         final String catchupEndpoint)
     {
-        final int length = catchupPositionLength(catchupEndpoint);
-        final int captureLength = captureLength(length);
-        final int encodedLength = encodedLength(captureLength);
+        final int length = ClusterEventEncoder.catchupPositionLength(catchupEndpoint);
+        final int captureLength = CommonEventEncoder.captureLength(length);
+        final int encodedLength = CommonEventEncoder.encodedLength(captureLength);
         final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
         final int index = ringBuffer.tryClaim(CATCHUP_POSITION.toEventCodeId(), encodedLength);
 
@@ -440,7 +440,7 @@ public final class ClusterEventLogger
         {
             try
             {
-                encodeOnCatchupPosition(
+                ClusterEventEncoder.encodeOnCatchupPosition(
                     (UnsafeBuffer)ringBuffer.buffer(),
                     index,
                     captureLength,
@@ -469,7 +469,7 @@ public final class ClusterEventLogger
         final int memberId, final long leadershipTermId, final int followerMemberId)
     {
         final int length = SIZE_OF_LONG + 2 * SIZE_OF_INT;
-        final int encodedLength = encodedLength(length);
+        final int encodedLength = CommonEventEncoder.encodedLength(length);
         final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
         final int index = ringBuffer.tryClaim(STOP_CATCHUP.toEventCodeId(), encodedLength);
 
@@ -477,7 +477,7 @@ public final class ClusterEventLogger
         {
             try
             {
-                encodeOnStopCatchup(
+                ClusterEventEncoder.encodeOnStopCatchup(
                     (UnsafeBuffer)ringBuffer.buffer(),
                     index,
                     length,
@@ -520,9 +520,9 @@ public final class ClusterEventLogger
         final long oldPosition,
         final long newPosition)
     {
-        final int length = SIZE_OF_INT + enumName(state).length() + SIZE_OF_INT + 8 * SIZE_OF_LONG;
-        final int captureLength = captureLength(length);
-        final int encodedLength = encodedLength(captureLength);
+        final int length = SIZE_OF_INT + CommonEventEncoder.enumName(state).length() + SIZE_OF_INT + 8 * SIZE_OF_LONG;
+        final int captureLength = CommonEventEncoder.captureLength(length);
+        final int encodedLength = CommonEventEncoder.encodedLength(captureLength);
         final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
         final int index = ringBuffer.tryClaim(TRUNCATE_LOG_ENTRY.toEventCodeId(), encodedLength);
 
@@ -530,7 +530,7 @@ public final class ClusterEventLogger
         {
             try
             {
-                encodeTruncateLogEntry(
+                ClusterEventEncoder.encodeTruncateLogEntry(
                     (UnsafeBuffer)ringBuffer.buffer(),
                     index,
                     captureLength,
@@ -575,9 +575,9 @@ public final class ClusterEventLogger
         final TimeUnit timeUnit,
         final int appVersion)
     {
-        final int length = replayNewLeadershipTermEventLength(timeUnit);
-        final int captureLength = captureLength(length);
-        final int encodedLength = encodedLength(captureLength);
+        final int length = ClusterEventEncoder.replayNewLeadershipTermEventLength(timeUnit);
+        final int captureLength = CommonEventEncoder.captureLength(length);
+        final int encodedLength = CommonEventEncoder.encodedLength(captureLength);
         final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
         final int index = ringBuffer.tryClaim(REPLAY_NEW_LEADERSHIP_TERM.toEventCodeId(), encodedLength);
 
@@ -585,7 +585,7 @@ public final class ClusterEventLogger
         {
             try
             {
-                encodeOnReplayNewLeadershipTermEvent(
+                ClusterEventEncoder.encodeOnReplayNewLeadershipTermEvent(
                     (UnsafeBuffer)ringBuffer.buffer(),
                     index,
                     captureLength,
@@ -623,7 +623,7 @@ public final class ClusterEventLogger
         final short flags)
     {
         final int length = 2 * SIZE_OF_LONG + 2 * SIZE_OF_INT + SIZE_OF_BYTE;
-        final int encodedLength = encodedLength(length);
+        final int encodedLength = CommonEventEncoder.encodedLength(length);
         final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
         final int index = ringBuffer.tryClaim(APPEND_POSITION.toEventCodeId(), encodedLength);
 
@@ -664,7 +664,7 @@ public final class ClusterEventLogger
         final int leaderId)
     {
         final int length = 2 * SIZE_OF_LONG + 2 * SIZE_OF_INT;
-        final int encodedLength = encodedLength(length);
+        final int encodedLength = CommonEventEncoder.encodedLength(length);
         final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
         final int index = ringBuffer.tryClaim(COMMIT_POSITION.toEventCodeId(), encodedLength);
 
@@ -707,9 +707,9 @@ public final class ClusterEventLogger
         final long timestamp,
         final TimeUnit timeUnit)
     {
-        final int length = appendSessionCloseLength(closeReason, timeUnit);
-        final int captureLength = captureLength(length);
-        final int encodedLength = encodedLength(captureLength);
+        final int length = ClusterEventEncoder.appendSessionCloseLength(closeReason, timeUnit);
+        final int captureLength = CommonEventEncoder.captureLength(length);
+        final int encodedLength = CommonEventEncoder.encodedLength(captureLength);
         final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
         final int index = ringBuffer.tryClaim(APPEND_SESSION_CLOSE.toEventCodeId(), encodedLength);
 
@@ -754,9 +754,9 @@ public final class ClusterEventLogger
         final long timestamp,
         final TimeUnit timeUnit)
     {
-        final int length = appendSessionOpenLength(timeUnit);
-        final int captureLength = captureLength(length);
-        final int encodedLength = encodedLength(captureLength);
+        final int length = ClusterEventEncoder.appendSessionOpenLength(timeUnit);
+        final int captureLength = CommonEventEncoder.captureLength(length);
+        final int encodedLength = CommonEventEncoder.encodedLength(captureLength);
         final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
         final int index = ringBuffer.tryClaim(APPEND_SESSION_OPEN.toEventCodeId(), encodedLength);
 
@@ -795,9 +795,9 @@ public final class ClusterEventLogger
         final long logLeadershipTermId,
         final long logPosition)
     {
-        final int length = terminationPositionLength();
-        final int captureLength = captureLength(length);
-        final int encodedLength = encodedLength(captureLength);
+        final int length = ClusterEventEncoder.terminationPositionLength();
+        final int captureLength = CommonEventEncoder.captureLength(length);
+        final int encodedLength = CommonEventEncoder.encodedLength(captureLength);
         final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
         final int index = ringBuffer.tryClaim(TERMINATION_POSITION.toEventCodeId(), encodedLength);
 
@@ -836,8 +836,8 @@ public final class ClusterEventLogger
         final int senderMemberId)
     {
         final int length = ClusterEventEncoder.terminationAckLength();
-        final int captureLength = captureLength(length);
-        final int encodedLength = encodedLength(captureLength);
+        final int captureLength = CommonEventEncoder.captureLength(length);
+        final int encodedLength = CommonEventEncoder.encodedLength(captureLength);
         final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
         final int index = ringBuffer.tryClaim(TERMINATION_ACK.toEventCodeId(), encodedLength);
 
@@ -883,8 +883,8 @@ public final class ClusterEventLogger
         final int serviceId)
     {
         final int length = ClusterEventEncoder.serviceAckLength(timeUnit);
-        final int captureLength = captureLength(length);
-        final int encodedLength = encodedLength(captureLength);
+        final int captureLength = CommonEventEncoder.captureLength(length);
+        final int encodedLength = CommonEventEncoder.encodedLength(captureLength);
         final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
         final int index = ringBuffer.tryClaim(SERVICE_ACK.toEventCodeId(), encodedLength);
 
@@ -933,8 +933,8 @@ public final class ClusterEventLogger
         final boolean hasSynced)
     {
         final int length = ClusterEventEncoder.replicationEndedLength(purpose, channel);
-        final int captureLength = captureLength(length);
-        final int encodedLength = encodedLength(captureLength);
+        final int captureLength = CommonEventEncoder.captureLength(length);
+        final int encodedLength = CommonEventEncoder.encodedLength(captureLength);
         final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
         final int index = ringBuffer.tryClaim(REPLICATION_ENDED.toEventCodeId(), encodedLength);
 
@@ -987,8 +987,8 @@ public final class ClusterEventLogger
         final String archiveEndpoint)
     {
         final int length = ClusterEventEncoder.standbySnapshotNotificationLength(timeUnit, archiveEndpoint);
-        final int captureLength = captureLength(length);
-        final int encodedLength = encodedLength(captureLength);
+        final int captureLength = CommonEventEncoder.captureLength(length);
+        final int encodedLength = CommonEventEncoder.encodedLength(captureLength);
         final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
         final int index = ringBuffer.tryClaim(STANDBY_SNAPSHOT_NOTIFICATION.toEventCodeId(), encodedLength);
 
@@ -1035,8 +1035,8 @@ public final class ClusterEventLogger
         final String reason)
     {
         final int length = ClusterEventEncoder.newElectionLength(reason);
-        final int captureLength = captureLength(length);
-        final int encodedLength = encodedLength(captureLength);
+        final int captureLength = CommonEventEncoder.captureLength(length);
+        final int encodedLength = CommonEventEncoder.encodedLength(captureLength);
         final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
         final int index = ringBuffer.tryClaim(NEW_ELECTION.toEventCodeId(), encodedLength);
 
@@ -1082,9 +1082,9 @@ public final class ClusterEventLogger
         final S newState,
         final String reason)
     {
-        final int length = clusterSessionStateChangeLength(action, oldState, newState, reason);
-        final int captureLength = captureLength(length);
-        final int encodedLength = encodedLength(captureLength);
+        final int length = ClusterEventEncoder.clusterSessionStateChangeLength(action, oldState, newState, reason);
+        final int captureLength = CommonEventEncoder.captureLength(length);
+        final int encodedLength = CommonEventEncoder.encodedLength(captureLength);
         final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
         final int index = ringBuffer.tryClaim(CLUSTER_SESSION_STATE_CHANGE.toEventCodeId(), encodedLength);
 
@@ -1092,7 +1092,7 @@ public final class ClusterEventLogger
         {
             try
             {
-                encodeClusterSessionStateChange(
+                ClusterEventEncoder.encodeClusterSessionStateChange(
                     (UnsafeBuffer)ringBuffer.buffer(),
                     index,
                     captureLength,
@@ -1127,9 +1127,9 @@ public final class ClusterEventLogger
         final long logPosition,
         final int serviceId)
     {
-        final int length = snapshotEntryInvalidationLength();
-        final int captureLength = captureLength(length);
-        final int encodedLength = encodedLength(captureLength);
+        final int length = ClusterEventEncoder.snapshotEntryInvalidationLength();
+        final int captureLength = CommonEventEncoder.captureLength(length);
+        final int encodedLength = CommonEventEncoder.encodedLength(captureLength);
         final ManyToOneRingBuffer ringBuffer = this.ringBuffer;
         final int index = ringBuffer.tryClaim(SNAPSHOT_ENTRY_INVALIDATION.toEventCodeId(), encodedLength);
 
@@ -1137,7 +1137,7 @@ public final class ClusterEventLogger
         {
             try
             {
-                encodeSnapshotEntryInvalidation(
+                ClusterEventEncoder.encodeSnapshotEntryInvalidation(
                     ringBuffer.buffer(),
                     index,
                     captureLength,

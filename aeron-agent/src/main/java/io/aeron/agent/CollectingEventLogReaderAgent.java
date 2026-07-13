@@ -37,7 +37,7 @@ import java.util.List;
 
 import static io.aeron.agent.EventConfiguration.EVENT_READER_FRAME_LIMIT;
 import static io.aeron.agent.EventConfiguration.MAX_EVENT_LENGTH;
-import static io.aeron.agent.EventLogReaderAgent.decodeLogEvent;
+import static io.aeron.agent.ModuleLoggerReaderAgent.decodeLogEvent;
 import static org.agrona.BitUtil.SIZE_OF_INT;
 
 /**
@@ -228,8 +228,8 @@ public final class CollectingEventLogReaderAgent implements Agent, CollectingEve
                 final int eventCodeId = msgTypeId & 0xFFFF;
 
                 decodeBuffer.setLength(0);
-                decodeLogEvent(
-                    collectingBuffer, readingPosition, eventCodeTypeId, eventCodeId, loggers, decodeBuffer);
+//                decodeLogEvent(
+//                    collectingBuffer, readingPosition, eventCodeTypeId, eventCodeId, loggers, decodeBuffer);
                 readingPosition += length;
 
                 out.print(decodeBuffer);

@@ -163,7 +163,7 @@ public enum ClusterEventCode implements EventCode
     SNAPSHOT_ENTRY_INVALIDATION(26, ClusterEventDissector::dissectSnapshotEntryInvalidation);
 
     static final int EVENT_CODE_TYPE = EventCodeType.CLUSTER.getTypeCode();
-    private static final ClusterEventCode[] EVENT_CODE_BY_ID;
+    static final ClusterEventCode[] EVENT_CODE_BY_ID;
 
     private final int id;
     private final DissectFunction<ClusterEventCode> dissector;
@@ -192,7 +192,7 @@ public enum ClusterEventCode implements EventCode
         this.dissector = dissector;
     }
 
-    static ClusterEventCode get(final int id)
+    public static ClusterEventCode get(final int id)
     {
         if (id < 0 || id >= EVENT_CODE_BY_ID.length)
         {

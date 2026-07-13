@@ -37,10 +37,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
+import java.util.Objects;import java.util.Properties;
 
 import static io.aeron.agent.CommonEventDissector.dissectLogStartMessage;
-import static io.aeron.agent.ConfigOption.LOG_FILE_MAX_LENGTH;
 import static io.aeron.agent.EventConfiguration.EVENT_READER_FRAME_LIMIT;
 import static io.aeron.agent.EventConfiguration.MAX_EVENT_LENGTH;
 import static java.lang.System.lineSeparator;
@@ -58,12 +57,16 @@ import static org.agrona.SystemUtil.parseSize;
  * Simple reader of {@link EventConfiguration#EVENT_RING_BUFFER} that appends to {@link System#out} by default
  * or to file if {@link #LOG_FILENAME_PROP_NAME} System property is set.
  */
-public final class EventLogReaderAgent implements Agent
+public final class ModuleLoggerReaderAgent implements Agent
 {
     /**
      * Event Buffer length system property name. If not set then output will default to {@link System#out}.
      */
-    public static final String LOG_FILENAME_PROP_NAME = ConfigOption.LOG_FILENAME;
+    public static final String LOG_FILENAME_PROP_NAME = "aeron.event.log.filename";
+    /**
+     * Event Buffer log file max length system property. If not set then {@link Long#MAX_VALUE} will be used.
+     */
+    static final String LOG_FILE_MAX_LENGTH = "aeron.event.log.file.max.length";
 
     /**
      * Length of the buffer used for writing rendered messages to the log file.
@@ -74,7 +77,7 @@ public final class EventLogReaderAgent implements Agent
     private final StringBuilder builder = new StringBuilder(MAX_EVENT_LENGTH);
     private final MessageHandler messageHandler = this::onMessage;
     private final ByteBuffer byteBuffer;
-    private final Int2ObjectHashMap<ComponentLogger> loggers = new Int2ObjectHashMap<>();
+    private final Int2ObjectHashMap<ModuleLogger> loggers = new Int2ObjectHashMap<>();
     private final PrintStream out;
     private final NanoClock nanoClock;
     private final EpochClock epochClock;
@@ -85,12 +88,7 @@ public final class EventLogReaderAgent implements Agent
 
     private FileChannel fileChannel;
 
-    EventLogReaderAgent(final String filename, final List<ComponentLogger> loggers)
-    {
-        this(filename, System.out, SystemNanoClock.INSTANCE, SystemEpochClock.INSTANCE, loggers);
-    }
-
-    EventLogReaderAgent(final Map<String, String> configOptions, final List<ComponentLogger> loggers)
+    ModuleLoggerReaderAgent(final Properties configOptions, final List<ModuleLogger> loggers)
     {
         this(
             configOptions,
@@ -100,30 +98,20 @@ public final class EventLogReaderAgent implements Agent
             loggers);
     }
 
-    EventLogReaderAgent(
-        final String filename,
+    ModuleLoggerReaderAgent(
+        final Properties configOptions,
         final PrintStream out,
         final NanoClock nanoClock,
         final EpochClock epochClock,
-        final List<ComponentLogger> loggers)
+        final List<ModuleLogger> loggers)
     {
-        this(asConfigOptions(filename), out, nanoClock, epochClock, loggers);
-    }
-
-    EventLogReaderAgent(
-        final Map<String, String> configOptions,
-        final PrintStream out,
-        final NanoClock nanoClock,
-        final EpochClock epochClock,
-        final List<ComponentLogger> loggers)
-    {
-        filename = configOptions.get(LOG_FILENAME_PROP_NAME);
+        filename = configOptions.getProperty(LOG_FILENAME_PROP_NAME);
         logFilePath = null != filename ? Path.of(filename) : null;
         maxFileLength = getMaxFileLength(configOptions);
 
         this.nanoClock = Objects.requireNonNull(nanoClock);
         this.epochClock = Objects.requireNonNull(epochClock);
-        for (final ComponentLogger componentLogger : loggers)
+        for (final ModuleLogger componentLogger : loggers)
         {
             this.loggers.put(componentLogger.typeCode(), componentLogger);
         }
@@ -222,10 +210,10 @@ public final class EventLogReaderAgent implements Agent
         final int index,
         final int eventCodeTypeId,
         final int eventCodeId,
-        final Int2ObjectHashMap<ComponentLogger> loggers,
+        final Int2ObjectHashMap<ModuleLogger> loggers,
         final StringBuilder builder)
     {
-        final ComponentLogger componentLogger = loggers.get(eventCodeTypeId);
+        final ModuleLogger componentLogger = loggers.get(eventCodeTypeId);
         if (null != componentLogger)
         {
             componentLogger.decode(buffer, index, eventCodeId, builder);
@@ -293,18 +281,16 @@ public final class EventLogReaderAgent implements Agent
         return null != filename ? Map.of(LOG_FILENAME_PROP_NAME, filename) : Map.of();
     }
 
-    private long getMaxFileLength(final Map<String, String> configOptions)
+    private long getMaxFileLength(final Properties configOptions)
     {
-        final String maxFileLengthStr = configOptions.get(LOG_FILE_MAX_LENGTH);
+        final String maxFileLengthStr = configOptions.getProperty(LOG_FILE_MAX_LENGTH);
         try
         {
-            return null != maxFileLengthStr ?
-                parseSize(LOG_FILE_MAX_LENGTH, maxFileLengthStr) : Long.MAX_VALUE;
+            return null != maxFileLengthStr ? parseSize(LOG_FILE_MAX_LENGTH, maxFileLengthStr) : Long.MAX_VALUE;
         }
         catch (final NumberFormatException ex)
         {
-            System.err.println(
-                "Disabling log rotation, invalid '" + LOG_FILE_MAX_LENGTH + "' - " + ex.getMessage());
+            System.err.println("Disabling log rotation, invalid '" + LOG_FILE_MAX_LENGTH + "' - " + ex.getMessage());
             return Long.MAX_VALUE;
         }
     }
@@ -351,7 +337,7 @@ public final class EventLogReaderAgent implements Agent
         for (final EventCodeType type : eventCodeTypes)
         {
             visited.add(type.getTypeCode());
-            final ComponentLogger logger = loggers.get(type.getTypeCode());
+            final ModuleLogger logger = loggers.get(type.getTypeCode());
             if (null != logger)
             {
                 builder.append(type).append(": ").append(logger.version()).append(", ");

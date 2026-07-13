@@ -42,7 +42,7 @@ import static io.aeron.agent.EventConfiguration.EVENT_RING_BUFFER;
  * A Java agent which when attached to a JVM will weave byte code to intercept events as defined by
  * {@link DriverEventCode}. Events are recorded to an in-memory {@link org.agrona.concurrent.ringbuffer.RingBuffer}
  * which is consumed and appended asynchronous to a log as defined by the class {@link #READER_CLASSNAME_PROP_NAME}
- * which defaults to {@link EventLogReaderAgent}.
+ * which defaults to {@link ModuleLoggerReaderAgent}.
  */
 public final class EventLogAgent
 {

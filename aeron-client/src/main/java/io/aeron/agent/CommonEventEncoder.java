@@ -43,7 +43,7 @@ public final class CommonEventEncoder
     /**
      * Max capture length.
      */
-    public static final int MAX_CAPTURE_LENGTH = MAX_EVENT_LENGTH - LOG_HEADER_LENGTH;
+    public static final int MAX_CAPTURE_LENGTH = EventConfiguration.MAX_EVENT_LENGTH - LOG_HEADER_LENGTH;
 
     /**
      * State transition separator.

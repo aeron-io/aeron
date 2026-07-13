@@ -2153,6 +2153,7 @@ final class ConsensusModuleAgent
         final long timestamp,
         final TimeUnit timeUnit)
     {
+        ClusterLog.logAppendSessionClose(memberId, id, closeReason, leadershipTermId, timestamp, timeUnit);
     }
 
     private static void logOnReplayNewLeadershipTermEvent(
