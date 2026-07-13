@@ -291,7 +291,7 @@ class ReplaySession implements Session, AutoCloseable
     @SuppressWarnings("unused")
     void onPendingError(final long sessionId, final long recordingId, final String errorMessage)
     {
-        // Hook for Agent logging
+        ArchiveLog.logReplaySessionError(sessionId, recordingId, errorMessage);
     }
 
     private int init() throws IOException
@@ -642,7 +642,7 @@ class ReplaySession implements Session, AutoCloseable
         final long position,
         final String reason)
     {
-        //System.out.println("ReplaySession: " + state + " -> " + newState);
+        ArchiveLog.logReplaySessionStateChange(oldState, newState, sessionId, recordingId, position, reason);
     }
 
     static boolean isInvalidHeader(

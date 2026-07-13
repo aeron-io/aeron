@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2025 Real Logic Limited.
+ * Copyright 2014-2026 Real Logic Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,12 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.aeron.agent;
+package io.aeron.archive;
 
 import io.aeron.ExclusivePublication;
-import io.aeron.archive.Archive;
-import io.aeron.archive.ArchiveThreadingMode;
-import io.aeron.archive.ArchivingMediaDriver;
+import io.aeron.agent.ArchiveEventCode;
+import io.aeron.agent.EventConfiguration;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.status.RecordingPos;
 import io.aeron.driver.MediaDriver;
@@ -33,13 +32,15 @@ import org.agrona.concurrent.MessageHandler;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.CountersReader;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.File;
 import java.nio.file.Paths;
-import java.util.*;
+import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
 import static io.aeron.agent.ArchiveEventCode.*;
@@ -50,17 +51,18 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 @ExtendWith(InterruptingTestCallback.class)
-@Disabled
-class ArchiveLoggingAgentTest
+public class ArchiveLoggingAgentTest
 {
     private static final Set<ArchiveEventCode> WAIT_LIST = synchronizedSet(new HashSet<>());
+    private static final String READER_CLASSNAME = "aeron.event.log.reader.classname";
+    private static final String ENABLED_ARCHIVE_EVENT_CODES = "aeron.event.archive.log";
 
     private File testDir;
 
     @AfterEach
     void after()
     {
-        AgentTests.stopLogging();
+//        AgentTests.stopLogging();
 
         if (testDir != null && testDir.exists())
         {
@@ -154,10 +156,10 @@ class ArchiveLoggingAgentTest
 
     private void before(final String enabledEvents, final EnumSet<ArchiveEventCode> expectedEvents)
     {
-        final Map<String, String> configOptions = new HashMap<>();
-        configOptions.put(ConfigOption.READER_CLASSNAME, StubEventLogReaderAgent.class.getName());
-        configOptions.put(ConfigOption.ENABLED_ARCHIVE_EVENT_CODES, enabledEvents);
-        AgentTests.startLogging(configOptions);
+        final Properties configOptions = new Properties();
+        configOptions.put(READER_CLASSNAME, StubEventLogReaderAgent.class.getName());
+        configOptions.put(ENABLED_ARCHIVE_EVENT_CODES, enabledEvents);
+        EventConfiguration.restartReader(configOptions);
 
         WAIT_LIST.clear();
         WAIT_LIST.addAll(expectedEvents);
@@ -169,8 +171,12 @@ class ArchiveLoggingAgentTest
         }
     }
 
-    static final class StubEventLogReaderAgent implements Agent, MessageHandler
+    public static final class StubEventLogReaderAgent implements Agent, MessageHandler
     {
+        public StubEventLogReaderAgent()
+        {
+        }
+
         public String roleName()
         {
             return "event-log-reader";

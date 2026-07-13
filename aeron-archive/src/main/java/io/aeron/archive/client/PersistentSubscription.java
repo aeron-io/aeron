@@ -28,6 +28,7 @@ import io.aeron.ImageControlledFragmentAssembler;
 import io.aeron.ImageFragmentAssembler;
 import io.aeron.RethrowingErrorHandler;
 import io.aeron.Subscription;
+import io.aeron.archive.ArchiveLog;
 import io.aeron.archive.codecs.ControlResponseCode;
 import io.aeron.exceptions.AeronEvent;
 import io.aeron.exceptions.ConcurrentConcludeException;
@@ -1368,7 +1369,8 @@ public final class PersistentSubscription implements AutoCloseable
         final String liveChannel,
         final int liveStreamId)
     {
-//        System.out.println("State: " + oldState + " -> " + newState);
+        ArchiveLog.logPersistentSubscriptionStateChange(
+            oldState, newState, recordingId, replayChannel, replayStreamId, liveChannel, liveStreamId);
     }
 
     private void logJoinedLive(
@@ -1380,6 +1382,8 @@ public final class PersistentSubscription implements AutoCloseable
         final int liveSessionId,
         final long joinPosition)
     {
+        ArchiveLog.logPersistentSubscriptionJoinedLive(
+            recordingId, replayChannel, replayStreamId, liveChannel, liveStreamId, liveSessionId, joinPosition);
     }
 
     private void logLeftLive(
@@ -1390,6 +1394,8 @@ public final class PersistentSubscription implements AutoCloseable
         final int liveStreamId,
         final long livePosition)
     {
+        ArchiveLog.logPersistentSubscriptionLeftLive(
+            recordingId, replayChannel, replayStreamId, liveChannel, liveStreamId, livePosition);
     }
 
     private void onLiveJoined()

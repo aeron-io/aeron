@@ -295,6 +295,6 @@ class RecordingSession implements Session
         final long position,
         final String reason)
     {
-        //System.out.println("RecordingSession: " + state + " -> " + newState);
+        ArchiveLog.logRecordingSessionStateChange(oldState, newState, recordingId, position, reason);
     }
 }

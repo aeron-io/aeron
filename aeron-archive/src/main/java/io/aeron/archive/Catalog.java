@@ -920,7 +920,7 @@ final class Catalog implements AutoCloseable
 
     void catalogResized(final long oldCapacity, final long newCapacity)
     {
-//        System.out.println("Catalog capacity changed: " + oldCapacity + " bytes => " + newCapacity + " bytes");
+        ArchiveLog.logCatalogResize(oldCapacity, newCapacity);
     }
 
     private static void validateCapacity(final long catalogCapacity)
