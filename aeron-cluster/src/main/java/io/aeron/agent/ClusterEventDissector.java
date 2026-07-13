@@ -19,6 +19,8 @@ import io.aeron.protocol.HeaderFlyweight;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.SemanticVersion;
 
+import static io.aeron.agent.ClusterEventCode.ELECTION_STATE_CHANGE;
+import static io.aeron.agent.ClusterEventCode.NEW_LEADERSHIP_TERM;
 import static io.aeron.agent.CommonEventDissector.dissectLogHeader;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static org.agrona.BitUtil.*;
@@ -35,7 +37,7 @@ final class ClusterEventDissector
         final MutableDirectBuffer buffer, final int offset, final StringBuilder builder)
     {
         int absoluteOffset = offset;
-        absoluteOffset += dissectLogHeader(CONTEXT, ClusterEventCode.NEW_LEADERSHIP_TERM, buffer, absoluteOffset, builder);
+        absoluteOffset += dissectLogHeader(CONTEXT, NEW_LEADERSHIP_TERM, buffer, absoluteOffset, builder);
 
         final long logLeadershipTermId = buffer.getLong(absoluteOffset, LITTLE_ENDIAN);
         absoluteOffset += SIZE_OF_LONG;
@@ -144,7 +146,7 @@ final class ClusterEventDissector
         final StringBuilder builder)
     {
         int absoluteOffset = offset;
-        absoluteOffset += dissectLogHeader(CONTEXT, ClusterEventCode.ELECTION_STATE_CHANGE, buffer, absoluteOffset, builder);
+        absoluteOffset += dissectLogHeader(CONTEXT, ELECTION_STATE_CHANGE, buffer, absoluteOffset, builder);
 
         final long candidateTermId = buffer.getLong(absoluteOffset, LITTLE_ENDIAN);
         absoluteOffset += SIZE_OF_LONG;

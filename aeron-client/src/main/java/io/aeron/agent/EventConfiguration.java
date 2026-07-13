@@ -92,7 +92,7 @@ public final class EventConfiguration
             thread.setDaemon(true);
             thread.start();
         }
-        catch (Exception ex)
+        catch (final Exception ex)
         {
             ex.printStackTrace(System.err);
         }

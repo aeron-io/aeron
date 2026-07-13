@@ -44,33 +44,6 @@ import static io.aeron.agent.ClusterEventCode.TERMINATION_ACK;
 import static io.aeron.agent.ClusterEventCode.TERMINATION_POSITION;
 import static io.aeron.agent.ClusterEventCode.TRUNCATE_LOG_ENTRY;
 import static io.aeron.agent.ClusterEventCode.VOTE;
-import static io.aeron.agent.ClusterEventEncoder.appendSessionCloseLength;
-import static io.aeron.agent.ClusterEventEncoder.appendSessionOpenLength;
-import static io.aeron.agent.ClusterEventEncoder.canvassPositionLength;
-import static io.aeron.agent.ClusterEventEncoder.catchupPositionLength;
-import static io.aeron.agent.ClusterEventEncoder.clusterSessionStateChangeLength;
-import static io.aeron.agent.ClusterEventEncoder.electionStateChangeLength;
-import static io.aeron.agent.ClusterEventEncoder.encodeClusterSessionStateChange;
-import static io.aeron.agent.ClusterEventEncoder.encodeElectionStateChange;
-import static io.aeron.agent.ClusterEventEncoder.encodeOnCanvassPosition;
-import static io.aeron.agent.ClusterEventEncoder.encodeOnCatchupPosition;
-import static io.aeron.agent.ClusterEventEncoder.encodeOnNewLeadershipTerm;
-import static io.aeron.agent.ClusterEventEncoder.encodeOnReplayNewLeadershipTermEvent;
-import static io.aeron.agent.ClusterEventEncoder.encodeOnRequestVote;
-import static io.aeron.agent.ClusterEventEncoder.encodeOnStopCatchup;
-import static io.aeron.agent.ClusterEventEncoder.encodeOnVote;
-import static io.aeron.agent.ClusterEventEncoder.encodeSnapshotEntryInvalidation;
-import static io.aeron.agent.ClusterEventEncoder.encodeStateChange;
-import static io.aeron.agent.ClusterEventEncoder.encodeTruncateLogEntry;
-import static io.aeron.agent.ClusterEventEncoder.newLeaderShipTermLength;
-import static io.aeron.agent.ClusterEventEncoder.replayNewLeadershipTermEventLength;
-import static io.aeron.agent.ClusterEventEncoder.snapshotEntryInvalidationLength;
-import static io.aeron.agent.ClusterEventEncoder.stateChangeLength;
-import static io.aeron.agent.ClusterEventEncoder.terminationPositionLength;
-import static io.aeron.agent.CommonEventEncoder.captureLength;
-import static io.aeron.agent.CommonEventEncoder.encodedLength;
-import static io.aeron.agent.CommonEventEncoder.enumName;
-import static io.aeron.agent.EventConfiguration.EVENT_RING_BUFFER;
 import static org.agrona.BitUtil.SIZE_OF_BYTE;
 import static org.agrona.BitUtil.SIZE_OF_INT;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
@@ -88,7 +61,7 @@ public final class ClusterEventLogger
 
     private final ManyToOneRingBuffer ringBuffer;
 
-    public ClusterEventLogger(final ManyToOneRingBuffer eventRingBuffer)
+    ClusterEventLogger(final ManyToOneRingBuffer eventRingBuffer)
     {
         ringBuffer = eventRingBuffer;
     }

@@ -37,7 +37,6 @@ import java.util.List;
 
 import static io.aeron.agent.EventConfiguration.EVENT_READER_FRAME_LIMIT;
 import static io.aeron.agent.EventConfiguration.MAX_EVENT_LENGTH;
-import static io.aeron.agent.ModuleLoggerReaderAgent.decodeLogEvent;
 import static org.agrona.BitUtil.SIZE_OF_INT;
 
 /**

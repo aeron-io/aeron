@@ -192,6 +192,11 @@ public enum ClusterEventCode implements EventCode
         this.dissector = dissector;
     }
 
+    /**
+     * Get the ClusterEventCode enum value from the identifier.
+     * @param id to look up.
+     * @return the resolved enum value.
+     */
     public static ClusterEventCode get(final int id)
     {
         if (id < 0 || id >= EVENT_CODE_BY_ID.length)

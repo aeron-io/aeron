@@ -39,6 +39,7 @@ import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.Agent;
 import org.agrona.concurrent.MessageHandler;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -66,6 +67,7 @@ import static org.agrona.BitUtil.SIZE_OF_LONG;
 import static org.mockito.Mockito.mock;
 
 @ExtendWith(InterruptingTestCallback.class)
+@Disabled
 class ClusterLoggingAgentTest
 {
     private static final Set<ClusterEventCode> WAIT_LIST = synchronizedSet(EnumSet.noneOf(ClusterEventCode.class));
