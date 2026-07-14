@@ -2345,8 +2345,8 @@ final class ConsensusModuleAgent
         final long position,
         final boolean hasSynced)
     {
-        ClusterLog.logReplicationEnded(memberId, purpose, controlUri, srcRecordingId, dstRecordingId, position,
-            hasSynced);
+        ClusterLog.logReplicationEnded(
+            memberId, purpose, controlUri, srcRecordingId, dstRecordingId, position, hasSynced);
     }
 
     private void startLogRecording(final String channel, final int streamId, final SourceLocation sourceLocation)
