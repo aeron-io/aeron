@@ -40,8 +40,15 @@ import static org.agrona.concurrent.ringbuffer.RingBufferDescriptor.TRAILER_LENG
  */
 public final class EventReaderManager
 {
-    private static final String READER_CLASSNAME = "aeron.event.log.reader.classname";
-    private static final String READER_CLASSNAME_DEFAULT
+    /**
+     * Configuration option for the log reader.
+     */
+    public static final String READER_CLASSNAME = "aeron.event.log.reader.classname";
+
+    /**
+     * Default reader agent class.
+     */
+    public static final String READER_CLASSNAME_DEFAULT
         = "io.aeron.agent.ModuleLoggerReaderAgent";
 
     private final ManyToOneRingBuffer ringBuffer;
