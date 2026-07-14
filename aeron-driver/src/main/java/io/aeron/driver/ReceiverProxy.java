@@ -72,11 +72,13 @@ final class ReceiverProxy extends CommandProxy
 
     void registerReceiveChannelEndpoint(final ReceiveChannelEndpoint channelEndpoint)
     {
+        DriverLog.logReceiveChannelCreation(channelEndpoint.udpChannel().description());
         offer(() -> receiver.onRegisterReceiveChannelEndpoint(channelEndpoint));
     }
 
     void closeReceiveChannelEndpoint(final ReceiveChannelEndpoint channelEndpoint)
     {
+        DriverLog.logReceiveChannelClose(channelEndpoint.udpChannel().description());
         offer(() -> receiver.onCloseReceiveChannelEndpoint(channelEndpoint));
     }
 

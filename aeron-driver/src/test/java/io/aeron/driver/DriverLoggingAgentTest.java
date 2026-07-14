@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2025 Real Logic Limited.
+ * Copyright 2014-2026 Real Logic Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.aeron.agent;
+package io.aeron.driver;
 
 import io.aeron.Aeron;
 import io.aeron.AvailableImageHandler;
@@ -22,8 +22,9 @@ import io.aeron.Image;
 import io.aeron.Publication;
 import io.aeron.Subscription;
 import io.aeron.UnavailableImageHandler;
-import io.aeron.driver.MediaDriver;
-import io.aeron.driver.ThreadingMode;
+import io.aeron.agent.DriverEventCode;
+import io.aeron.agent.EventCodeType;
+import io.aeron.agent.EventConfiguration;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
@@ -33,16 +34,13 @@ import org.agrona.collections.MutableInteger;
 import org.agrona.concurrent.Agent;
 import org.agrona.concurrent.MessageHandler;
 import org.agrona.concurrent.UnsafeBuffer;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -85,9 +83,11 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 
 @ExtendWith(InterruptingTestCallback.class)
-@Disabled
-class DriverLoggingAgentTest
+public class DriverLoggingAgentTest
 {
+    private static final String READER_CLASSNAME = "aeron.event.log.reader.classname";
+    private static final String ENABLED_DRIVER_EVENT_CODES = "aeron.event.log";
+
     private static final String NETWORK_CHANNEL =
         "aeron:udp?control-mode=dynamic|control=localhost:20550|fc=min,t:1ns";
     private static final int STREAM_ID = 1777;
@@ -96,12 +96,6 @@ class DriverLoggingAgentTest
 
     private final AvailableImageHandler availableImageHandler = mock(AvailableImageHandler.class);
     private final UnavailableImageHandler unavailableImageHandler = mock(UnavailableImageHandler.class);
-
-    @AfterEach
-    void after()
-    {
-        AgentTests.stopLogging();
-    }
 
     @Test
     @InterruptAfter(10)
@@ -334,17 +328,21 @@ class DriverLoggingAgentTest
 
     private void before(final String enabledEvents, final EnumSet<DriverEventCode> expectedEvents)
     {
-        final Map<String, String> configOptions = new HashMap<>();
-        configOptions.put(ConfigOption.READER_CLASSNAME, StubEventLogReaderAgent.class.getName());
-        configOptions.put(ConfigOption.ENABLED_DRIVER_EVENT_CODES, enabledEvents);
-        AgentTests.startLogging(configOptions);
+        final Properties configOptions = new Properties();
+        configOptions.put(READER_CLASSNAME, StubEventLogReaderAgent.class.getName());
+        configOptions.put(ENABLED_DRIVER_EVENT_CODES, enabledEvents);
+        EventConfiguration.restartReader(configOptions);
 
         WAIT_LIST.clear();
         WAIT_LIST.addAll(expectedEvents);
     }
 
-    static final class StubEventLogReaderAgent implements Agent, MessageHandler
+    public static final class StubEventLogReaderAgent implements Agent, MessageHandler
     {
+        public StubEventLogReaderAgent()
+        {
+        }
+
         public String roleName()
         {
             return "event-log-reader";
@@ -355,9 +353,16 @@ class DriverLoggingAgentTest
             return EVENT_RING_BUFFER.read(this, EVENT_READER_FRAME_LIMIT);
         }
 
-        public void onMessage(final int msgTypeId, final MutableDirectBuffer buffer, final int index, final int length)
+        public void onMessage(
+            final int msgTypeId, final MutableDirectBuffer buffer, final int index, final int length)
         {
-            WAIT_LIST.remove(DriverEventCode.get(msgTypeId));
+            final int eventCodeTypeId = msgTypeId >>> 16;
+            if (eventCodeTypeId != EventCodeType.DRIVER.getTypeCode())
+            {
+                return;
+            }
+
+            WAIT_LIST.remove(DriverEventCode.fromEventCodeId(msgTypeId));
         }
     }
 }

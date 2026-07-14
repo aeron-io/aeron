@@ -1321,5 +1321,6 @@ public final class NetworkPublication
         final int streamId,
         final String channel)
     {
+        DriverLog.logPublicationRevoke(revokedPos, sessionId, streamId, channel);
     }
 }

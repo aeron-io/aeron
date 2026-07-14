@@ -41,11 +41,13 @@ final class SenderProxy extends CommandProxy
 
     void registerSendChannelEndpoint(final SendChannelEndpoint channelEndpoint)
     {
+        DriverLog.logSendChannelCreation(channelEndpoint.udpChannel().description());
         offer(() -> sender.onRegisterSendChannelEndpoint(channelEndpoint));
     }
 
     void closeSendChannelEndpoint(final SendChannelEndpoint channelEndpoint)
     {
+        DriverLog.logSendChannelClose(channelEndpoint.udpChannel().description());
         offer(() -> sender.onCloseSendChannelEndpoint(channelEndpoint));
     }
 
