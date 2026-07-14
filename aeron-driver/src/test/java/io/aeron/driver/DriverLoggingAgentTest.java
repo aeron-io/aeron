@@ -74,7 +74,7 @@ import static io.aeron.agent.DriverEventCode.REMOVE_PUBLICATION_CLEANUP;
 import static io.aeron.agent.DriverEventCode.SEND_CHANNEL_CLOSE;
 import static io.aeron.agent.DriverEventCode.SEND_CHANNEL_CREATION;
 import static io.aeron.agent.EventConfiguration.EVENT_READER_FRAME_LIMIT;
-import static io.aeron.agent.EventConfiguration.EVENT_RING_BUFFER;
+import static io.aeron.agent.EventConfiguration.eventReader;
 import static java.util.Collections.synchronizedSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -369,7 +369,7 @@ public class DriverLoggingAgentTest
 
         public int doWork()
         {
-            return EVENT_RING_BUFFER.read(this, EVENT_READER_FRAME_LIMIT);
+            return eventReader().ringBuffer().read(this, EVENT_READER_FRAME_LIMIT);
         }
 
         public void onMessage(

@@ -38,7 +38,7 @@ import static org.agrona.concurrent.ringbuffer.RingBufferDescriptor.TRAILER_LENG
 /**
  * Manages the lifecycle of the reader agent and its associated runner.
  */
-final class EventReaderManager
+public final class EventReaderManager
 {
     private static final String READER_CLASSNAME = "aeron.event.log.reader.classname";
     private static final String READER_CLASSNAME_DEFAULT
@@ -54,7 +54,12 @@ final class EventReaderManager
             getSizeAsInt(BUFFER_LENGTH_PROP_NAME, BUFFER_LENGTH_DEFAULT) + TRAILER_LENGTH, CACHE_LINE_LENGTH)));
     }
 
-    ManyToOneRingBuffer ringBuffer()
+    /**
+     * The ring buffer used for logging that will be read by the reader agent.
+     *
+     * @return the ring buffer.
+     */
+    public ManyToOneRingBuffer ringBuffer()
     {
         return ringBuffer;
     }

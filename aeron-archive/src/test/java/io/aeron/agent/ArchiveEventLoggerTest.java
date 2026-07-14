@@ -77,7 +77,7 @@ class ArchiveEventLoggerTest
     void after()
     {
 //        ArchiveModuleLogger.ENABLED_EVENT_CODES.clear();
-        EventConfiguration.EVENT_RING_BUFFER.unblock();
+        EventConfiguration.eventReader().ringBuffer().unblock();
     }
 
     @ParameterizedTest
