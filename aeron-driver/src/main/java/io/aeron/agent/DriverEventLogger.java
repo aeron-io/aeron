@@ -39,7 +39,7 @@ import static org.agrona.BitUtil.*;
 public final class DriverEventLogger
 {
     /**
-     * Logger for writing into the {@link EventConfiguration#EVENT_RING_BUFFER}.
+     * Logger for writing into the {@link EventReaderManager#ringBuffer()}.
      */
     public static final DriverEventLogger LOGGER = new DriverEventLogger(eventReader().ringBuffer());
 

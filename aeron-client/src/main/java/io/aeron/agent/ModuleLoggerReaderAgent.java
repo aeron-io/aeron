@@ -55,7 +55,7 @@ import static org.agrona.BufferUtil.allocateDirectAligned;
 import static org.agrona.SystemUtil.parseSize;
 
 /**
- * Simple reader of {@link EventConfiguration#EVENT_RING_BUFFER} that appends to {@link System#out} by default
+ * Simple reader of {@link EventReaderManager#ringBuffer()} that appends to {@link System#out} by default
  * or to file if {@link #LOG_FILENAME_PROP_NAME} System property is set.
  */
 public final class ModuleLoggerReaderAgent implements Agent

@@ -51,6 +51,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.IOException;
+import java.net.BindException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
@@ -185,7 +186,14 @@ class ReceiverTest
         receiverProxy.receiver(receiver);
 
         senderChannel = DatagramChannel.open();
-        senderChannel.bind(senderAddress);
+        try
+        {
+            senderChannel.bind(senderAddress);
+        }
+        catch (final BindException ex)
+        {
+            throw new RuntimeException("Address=" + senderAddress, ex);
+        }
         senderChannel.configureBlocking(false);
 
         termBuffers = rawLog.termBuffers();

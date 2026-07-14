@@ -66,6 +66,13 @@ public class DriverModuleLogger implements ModuleLogger
     }
 
     /**
+     * Default constructor.
+     */
+    public DriverModuleLogger()
+    {
+    }
+
+    /**
      * Determine if a given event code is configured/enabled for logging.
      *
      * @param driverEventCode to check for enablement.
