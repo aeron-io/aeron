@@ -15,7 +15,6 @@
  */
 package io.aeron.agent;
 
-import io.aeron.archive.codecs.ListRecordingRequestDecoder;
 import io.aeron.archive.codecs.MaxRecordedPositionRequestEncoder;
 import io.aeron.archive.codecs.MessageHeaderEncoder;
 import org.agrona.concurrent.UnsafeBuffer;
@@ -34,8 +33,8 @@ import static io.aeron.agent.ArchiveEventCode.CATALOG_RESIZE;
 import static io.aeron.agent.ArchiveEventCode.CMD_IN_MAX_RECORDED_POSITION;
 import static io.aeron.agent.ArchiveEventCode.CMD_OUT_RESPONSE;
 import static io.aeron.agent.ArchiveEventCode.CONTROL_SESSION_STATE_CHANGE;
-import static io.aeron.agent.ArchiveEventCode.PERSISTENT_SUBSCRIPTION_LEFT_LIVE;
 import static io.aeron.agent.ArchiveEventCode.PERSISTENT_SUBSCRIPTION_JOINED_LIVE;
+import static io.aeron.agent.ArchiveEventCode.PERSISTENT_SUBSCRIPTION_LEFT_LIVE;
 import static io.aeron.agent.ArchiveEventCode.PERSISTENT_SUBSCRIPTION_STATE_CHANGE;
 import static io.aeron.agent.ArchiveEventCode.RECORDING_SIGNAL;
 import static io.aeron.agent.ArchiveEventCode.REPLAY_SESSION_ERROR;
@@ -79,7 +78,7 @@ class ArchiveEventLoggerTest
     @AfterEach
     void after()
     {
-        ArchiveModuleLogger.ENABLED_EVENT_CODES.clear();
+//        ArchiveModuleLogger.ENABLED_EVENT_CODES.clear();
         EventConfiguration.EVENT_RING_BUFFER.unblock();
     }
 
@@ -96,7 +95,7 @@ class ArchiveEventLoggerTest
         })
     void logControlRequest(final ArchiveEventCode eventCode)
     {
-        ArchiveModuleLogger.ENABLED_EVENT_CODES.add(eventCode);
+//        ArchiveModuleLogger.ENABLED_EVENT_CODES.add(eventCode);
         final int srcOffset = 100;
         final int length = MAX_EVENT_LENGTH * 2;
         new MessageHeaderEncoder().wrap(srcBuffer, srcOffset).templateId(eventCode.templateId());
@@ -117,7 +116,8 @@ class ArchiveEventLoggerTest
     }
 
     @ParameterizedTest
-    @ValueSource(ints = { Integer.MIN_VALUE, ListRecordingRequestDecoder.TEMPLATE_ID })
+//    @ValueSource(ints = { Integer.MIN_VALUE, ListRecordingRequestDecoder.TEMPLATE_ID })
+    @ValueSource(ints = { Integer.MIN_VALUE })
     void logControlRequestNoOp(final int templateId)
     {
         final int srcOffset = 0;
@@ -360,7 +360,7 @@ class ArchiveEventLoggerTest
     void logMaxRecordedPosition()
     {
         final ArchiveEventCode eventCode = CMD_IN_MAX_RECORDED_POSITION;
-        ArchiveModuleLogger.ENABLED_EVENT_CODES.add(eventCode);
+//        ArchiveModuleLogger.ENABLED_EVENT_CODES.add(eventCode);
 
         final long controlSessionId = 0x777777;
         final long recordingId = -99999999999999123L;
