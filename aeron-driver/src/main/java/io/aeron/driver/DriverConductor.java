@@ -582,6 +582,8 @@ public final class DriverConductor implements Agent
 
     void cleanupPublication(final NetworkPublication publication)
     {
+        DriverLog.logPublicationRemoval(publication.channel(), publication.sessionId(), publication.streamId());
+
         senderProxy.removeNetworkPublication(publication);
 
         final SendChannelEndpoint channelEndpoint = publication.channelEndpoint();
@@ -605,6 +607,9 @@ public final class DriverConductor implements Agent
 
     void cleanupSubscriptionLink(final SubscriptionLink subscription)
     {
+        DriverLog.logSubscriptionRemoval(
+            subscription.channel(), subscription.streamId(), subscription.registrationId());
+
         final ReceiveChannelEndpoint channelEndpoint = subscription.channelEndpoint();
         if (null != channelEndpoint)
         {
@@ -668,6 +673,8 @@ public final class DriverConductor implements Agent
 
     void cleanupImage(final PublicationImage image)
     {
+        DriverLog.logImageRemoval(image.channel(), image.sessionId(), image.streamId(), image.correlationId());
+
         for (int i = 0, size = subscriptionLinks.size(); i < size; i++)
         {
             subscriptionLinks.get(i).unlink(image);
@@ -676,6 +683,8 @@ public final class DriverConductor implements Agent
 
     void cleanupIpcPublication(final IpcPublication publication)
     {
+        DriverLog.logPublicationRemoval(publication.channel(), publication.sessionId(), publication.streamId());
+
         for (int i = 0, size = subscriptionLinks.size(); i < size; i++)
         {
             subscriptionLinks.get(i).unlink(publication);
