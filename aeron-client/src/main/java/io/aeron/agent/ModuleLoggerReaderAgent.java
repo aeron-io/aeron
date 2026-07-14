@@ -74,7 +74,7 @@ public final class ModuleLoggerReaderAgent implements Agent
      */
     public static final int BUFFER_LENGTH = (MAX_EVENT_LENGTH + lineSeparator().length()) * 2;
 
-    private final ManyToOneRingBuffer ringBuffer = EventConfiguration.EVENT_RING_BUFFER;
+    private final ManyToOneRingBuffer ringBuffer = EventConfiguration.eventReader().ringBuffer();
     private final StringBuilder builder = new StringBuilder(MAX_EVENT_LENGTH);
     private final MessageHandler messageHandler = this::onMessage;
     private final ByteBuffer byteBuffer;

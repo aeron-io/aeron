@@ -16,7 +16,6 @@
 package io.aeron.agent;
 
 import org.agrona.Strings;
-import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
 
 import java.util.EnumSet;
 import java.util.Map;
@@ -52,18 +51,23 @@ public final class EventConfiguration
      */
     public static final int EVENT_READER_FRAME_LIMIT = 20;
 
-    /**
-     * Ring Buffer to use for logging that will be read by {@link ConfigOption#READER_CLASSNAME}.
-     */
-    public static final ManyToOneRingBuffer EVENT_RING_BUFFER;
-
     private static final EventReaderManager EVENT_READER;
 
     static
     {
         EVENT_READER = new EventReaderManager();
-        EVENT_RING_BUFFER = EVENT_READER.ringBuffer();
         EVENT_READER.start(System.getProperties());
+    }
+
+    /**
+     * The manager owning the event log ring buffer and the background reader agent that drains it, to be read by
+     * {@link ConfigOption#READER_CLASSNAME}.
+     *
+     * @return the event reader manager.
+     */
+    public static EventReaderManager eventReader()
+    {
+        return EVENT_READER;
     }
 
     /**
