@@ -28,6 +28,7 @@ import io.aeron.agent.EventConfiguration;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
+import io.aeron.test.LoggingTest;
 import io.aeron.test.Tests;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.MutableInteger;
@@ -83,6 +84,8 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 
 @ExtendWith(InterruptingTestCallback.class)
+@LoggingTest(
+    readerClassname = DriverLoggingAgentTest.StubEventLogReaderAgent.class, enabledEventsKey = "aeron.event.log")
 public class DriverLoggingAgentTest
 {
     private static final String READER_CLASSNAME = "aeron.event.log.reader.classname";
@@ -101,7 +104,7 @@ public class DriverLoggingAgentTest
     @InterruptAfter(10)
     void logAllNetworkChannel()
     {
-        testLogMediaDriverEvents(NETWORK_CHANNEL, "all", EnumSet.of(
+        testLogMediaDriverEvents(NETWORK_CHANNEL, EnumSet.of(
             FRAME_IN,
             FRAME_OUT,
             CMD_IN_ADD_PUBLICATION,
@@ -129,7 +132,7 @@ public class DriverLoggingAgentTest
     @InterruptAfter(10)
     void logAllExclusivePublicationNetworkChannel()
     {
-        testLogExclusivePublicationMediaDriverEvents(NETWORK_CHANNEL, "all", EnumSet.of(
+        testLogExclusivePublicationMediaDriverEvents(NETWORK_CHANNEL, EnumSet.of(
             FRAME_IN,
             FRAME_OUT,
             CMD_IN_ADD_EXCLUSIVE_PUBLICATION,
@@ -159,7 +162,7 @@ public class DriverLoggingAgentTest
     @InterruptAfter(10)
     void logAllIpcChannel()
     {
-        testLogMediaDriverEvents(IPC_CHANNEL, "all", EnumSet.of(
+        testLogMediaDriverEvents(IPC_CHANNEL, EnumSet.of(
             CMD_IN_ADD_PUBLICATION,
             CMD_IN_REMOVE_PUBLICATION,
             CMD_IN_ADD_SUBSCRIPTION,
@@ -178,7 +181,7 @@ public class DriverLoggingAgentTest
     @InterruptAfter(10)
     void logAllExclusivePublicationIpcChannel()
     {
-        testLogExclusivePublicationMediaDriverEvents(IPC_CHANNEL, "all", EnumSet.of(
+        testLogExclusivePublicationMediaDriverEvents(IPC_CHANNEL, EnumSet.of(
             CMD_IN_ADD_EXCLUSIVE_PUBLICATION,
             CMD_IN_REMOVE_PUBLICATION,
             CMD_IN_ADD_SUBSCRIPTION,
@@ -227,7 +230,13 @@ public class DriverLoggingAgentTest
     private void testLogMediaDriverEvents(
         final String channel, final String enabledEvents, final EnumSet<DriverEventCode> expectedEvents)
     {
-        before(enabledEvents, expectedEvents);
+        restartReaderWithEvents(enabledEvents);
+        testLogMediaDriverEvents(channel, expectedEvents);
+    }
+
+    private void testLogMediaDriverEvents(final String channel, final EnumSet<DriverEventCode> expectedEvents)
+    {
+        setupExpectedEvents(expectedEvents);
 
         final MediaDriver.Context driverCtx = new MediaDriver.Context()
             .threadingMode(ThreadingMode.SHARED)
@@ -270,7 +279,14 @@ public class DriverLoggingAgentTest
     private void testLogExclusivePublicationMediaDriverEvents(
         final String channel, final String enabledEvents, final EnumSet<DriverEventCode> expectedEvents)
     {
-        before(enabledEvents, expectedEvents);
+        restartReaderWithEvents(enabledEvents);
+        testLogExclusivePublicationMediaDriverEvents(channel, expectedEvents);
+    }
+
+    private void testLogExclusivePublicationMediaDriverEvents(
+        final String channel, final EnumSet<DriverEventCode> expectedEvents)
+    {
+        setupExpectedEvents(expectedEvents);
 
         final MediaDriver.Context driverCtx = new MediaDriver.Context()
             .errorHandler(Tests::onError)
@@ -326,13 +342,16 @@ public class DriverLoggingAgentTest
         }
     }
 
-    private void before(final String enabledEvents, final EnumSet<DriverEventCode> expectedEvents)
+    private void restartReaderWithEvents(final String enabledEvents)
     {
         final Properties configOptions = new Properties();
         configOptions.put(READER_CLASSNAME, StubEventLogReaderAgent.class.getName());
         configOptions.put(ENABLED_DRIVER_EVENT_CODES, enabledEvents);
         EventConfiguration.restartReader(configOptions);
+    }
 
+    private void setupExpectedEvents(final EnumSet<DriverEventCode> expectedEvents)
+    {
         WAIT_LIST.clear();
         WAIT_LIST.addAll(expectedEvents);
     }
