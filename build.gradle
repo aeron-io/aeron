@@ -240,7 +240,8 @@ subprojects {
                 "-XX:ErrorFile=${baseLogFileName}-crash.log")
 
         useJUnitPlatform {
-            if (test.name != 'slowTest' && test.name != 'bindingsTest' && test.name != 'topologyTest')
+            if (test.name != 'slowTest' && test.name != 'bindingsTest'
+                    && test.name != 'topologyTest' && test.name != 'loggingTest')
             {
                 excludeTags 'any()'
             }
@@ -342,6 +343,18 @@ subprojects {
         systemProperty 'aeron.event.log', 'admin'
         systemProperty 'aeron.debug.timeout', '3600s'
         systemProperty 'aeron.event.log.reader.classname', 'io.aeron.agent.CollectingEventLogReaderAgent'
+    }
+
+    tasks.register('loggingTest', Test) {
+        group = 'verification'
+        forkEvery = 1
+        useJUnitPlatform {
+            includeTags 'logging'
+        }
+    }
+
+    tasks.named('check') {
+        dependsOn 'loggingTest'
     }
 
     javadoc {

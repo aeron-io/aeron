@@ -30,6 +30,7 @@ import io.aeron.driver.MediaDriver.Context;
 import io.aeron.driver.ThreadingMode;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
+import io.aeron.test.LoggingTest;
 import io.aeron.test.TestContexts;
 import io.aeron.test.Tests;
 import io.aeron.test.cluster.ClusterTests;
@@ -64,6 +65,9 @@ import static org.agrona.BitUtil.SIZE_OF_LONG;
 import static org.mockito.Mockito.mock;
 
 @ExtendWith(InterruptingTestCallback.class)
+@LoggingTest(
+    readerClassname = ClusterLoggingAgentTest.StubEventLogReaderAgent.class,
+    enabledEventsKey = "aeron.event.cluster.log")
 public class ClusterLoggingAgentTest
 {
     private static final Set<ClusterEventCode> WAIT_LIST = synchronizedSet(EnumSet.noneOf(ClusterEventCode.class));
@@ -90,7 +94,6 @@ public class ClusterLoggingAgentTest
     void logAll()
     {
         testClusterEventsLogging(
-            "all",
             EnumSet.of(
                 ROLE_CHANGE,
                 STATE_CHANGE,
@@ -125,7 +128,13 @@ public class ClusterLoggingAgentTest
     private void testClusterEventsLogging(
         final String enabledEvents, final EnumSet<ClusterEventCode> expectedEvents)
     {
-        before(enabledEvents, expectedEvents);
+        restartReaderWithEvents(enabledEvents);
+        testClusterEventsLogging(expectedEvents);
+    }
+
+    private void testClusterEventsLogging(final EnumSet<ClusterEventCode> expectedEvents)
+    {
+        setupExpectedEvents(expectedEvents);
 
         final Context mediaDriverCtx = new Context()
             .errorHandler(Tests::onError)
@@ -190,12 +199,16 @@ public class ClusterLoggingAgentTest
         Tests.await(WAIT_LIST::isEmpty);
     }
 
-    private void before(final String enabledEvents, final EnumSet<ClusterEventCode> expectedEvents)
+    private void restartReaderWithEvents(final String enabledEvents)
     {
         final Properties configOptions = new Properties();
         configOptions.put(READER_CLASSNAME, StubEventLogReaderAgent.class.getName());
         configOptions.put(ENABLED_CLUSTER_EVENT_CODES, enabledEvents);
         EventConfiguration.restartReader(configOptions);
+    }
+
+    private void setupExpectedEvents(final EnumSet<ClusterEventCode> expectedEvents)
+    {
         WAIT_LIST.clear();
         WAIT_LIST.addAll(expectedEvents);
 

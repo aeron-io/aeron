@@ -24,6 +24,7 @@ import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
+import io.aeron.test.LoggingTest;
 import io.aeron.test.Tests;
 import org.agrona.IoUtil;
 import org.agrona.MutableDirectBuffer;
@@ -51,6 +52,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 @ExtendWith(InterruptingTestCallback.class)
+@LoggingTest(
+    readerClassname = ArchiveLoggingAgentTest.StubEventLogReaderAgent.class,
+    enabledEventsKey = "aeron.event.archive.log")
 public class ArchiveLoggingAgentTest
 {
     private static final Set<ArchiveEventCode> WAIT_LIST = synchronizedSet(new HashSet<>());
@@ -74,7 +78,7 @@ public class ArchiveLoggingAgentTest
     @InterruptAfter(10)
     void logAll()
     {
-        testArchiveLogging("all", EnumSet.of(
+        testArchiveLogging(EnumSet.of(
             CMD_OUT_RESPONSE, CMD_IN_AUTH_CONNECT, CMD_IN_KEEP_ALIVE, CMD_IN_START_RECORDING,
             CMD_IN_FIND_LAST_MATCHING_RECORD, CMD_IN_MAX_RECORDED_POSITION, CMD_IN_STOP_RECORDING));
     }
@@ -94,10 +98,16 @@ public class ArchiveLoggingAgentTest
         testArchiveLogging(CMD_OUT_RESPONSE.name(), EnumSet.of(CMD_OUT_RESPONSE));
     }
 
-    @SuppressWarnings("try")
     private void testArchiveLogging(final String enabledEvents, final EnumSet<ArchiveEventCode> expectedEvents)
     {
-        before(enabledEvents, expectedEvents);
+        restartReaderWithEvents(enabledEvents);
+        testArchiveLogging(expectedEvents);
+    }
+
+    @SuppressWarnings("try")
+    private void testArchiveLogging(final EnumSet<ArchiveEventCode> expectedEvents)
+    {
+        setupExpectedEvents(expectedEvents);
 
         final MediaDriver.Context mediaDriverCtx = new MediaDriver.Context()
             .errorHandler(Tests::onError)
@@ -154,13 +164,16 @@ public class ArchiveLoggingAgentTest
         }
     }
 
-    private void before(final String enabledEvents, final EnumSet<ArchiveEventCode> expectedEvents)
+    private void restartReaderWithEvents(final String enabledEvents)
     {
         final Properties configOptions = new Properties();
         configOptions.put(READER_CLASSNAME, StubEventLogReaderAgent.class.getName());
         configOptions.put(ENABLED_ARCHIVE_EVENT_CODES, enabledEvents);
         EventConfiguration.restartReader(configOptions);
+    }
 
+    private void setupExpectedEvents(final EnumSet<ArchiveEventCode> expectedEvents)
+    {
         WAIT_LIST.clear();
         WAIT_LIST.addAll(expectedEvents);
 
