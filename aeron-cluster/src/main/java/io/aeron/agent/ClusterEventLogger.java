@@ -890,7 +890,7 @@ public final class ClusterEventLogger
      *
      * @param memberId       memberId running the replication.
      * @param purpose        the reason for the replication.
-     * @param channel        the channel used to connect to the source archive.
+     * @param channelOrNull  the channel used to connect to the source archive.
      * @param srcRecordingId source recording id.
      * @param dstRecordingId destination recording id.
      * @param position       the position where the recording ended.
@@ -899,12 +899,13 @@ public final class ClusterEventLogger
     public void logReplicationEnded(
         final int memberId,
         final String purpose,
-        final String channel,
+        final String channelOrNull,
         final long srcRecordingId,
         final long dstRecordingId,
         final long position,
         final boolean hasSynced)
     {
+        final String channel = null != channelOrNull ? channelOrNull : "null";
         final int length = ClusterEventEncoder.replicationEndedLength(purpose, channel);
         final int captureLength = CommonEventEncoder.captureLength(length);
         final int encodedLength = CommonEventEncoder.encodedLength(captureLength);
