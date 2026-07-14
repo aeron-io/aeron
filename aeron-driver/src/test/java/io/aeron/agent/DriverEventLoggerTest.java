@@ -61,7 +61,7 @@ class DriverEventLoggerTest
     void after()
     {
 //        DriverComponentLogger.ENABLED_EVENTS.clear();
-        EventConfiguration.EVENT_RING_BUFFER.unblock();
+        EventConfiguration.eventReader().ringBuffer().unblock();
     }
 
     @ParameterizedTest

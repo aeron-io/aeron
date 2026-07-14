@@ -29,7 +29,7 @@ import static io.aeron.agent.CommonEventEncoder.*;
 import static io.aeron.agent.DriverEventCode.*;
 import static io.aeron.agent.DriverEventEncoder.encode;
 import static io.aeron.agent.DriverEventEncoder.*;
-import static io.aeron.agent.EventConfiguration.EVENT_RING_BUFFER;
+import static io.aeron.agent.EventConfiguration.eventReader;
 import static org.agrona.BitUtil.*;
 
 /**
@@ -41,7 +41,7 @@ public final class DriverEventLogger
     /**
      * Logger for writing into the {@link EventConfiguration#EVENT_RING_BUFFER}.
      */
-    public static final DriverEventLogger LOGGER = new DriverEventLogger(EVENT_RING_BUFFER);
+    public static final DriverEventLogger LOGGER = new DriverEventLogger(eventReader().ringBuffer());
 
     /**
      * Maximum length of a host name.

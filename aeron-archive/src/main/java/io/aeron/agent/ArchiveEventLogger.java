@@ -27,7 +27,7 @@ import java.util.EnumSet;
 import static io.aeron.agent.ArchiveEventCode.*;
 import static io.aeron.agent.ArchiveEventEncoder.*;
 import static io.aeron.agent.CommonEventEncoder.*;
-import static io.aeron.agent.EventConfiguration.EVENT_RING_BUFFER;
+import static io.aeron.agent.EventConfiguration.eventReader;
 import static java.util.EnumSet.complementOf;
 import static java.util.EnumSet.of;
 import static org.agrona.BitUtil.SIZE_OF_INT;
@@ -42,7 +42,7 @@ public final class ArchiveEventLogger
     /**
      * Logger for writing into the {@link EventConfiguration#EVENT_RING_BUFFER}.
      */
-    public static final ArchiveEventLogger LOGGER = new ArchiveEventLogger(EVENT_RING_BUFFER);
+    public static final ArchiveEventLogger LOGGER = new ArchiveEventLogger(eventReader().ringBuffer());
 
     /**
      * Set of event codes that represent an incoming control request, i.e. everything {@link #logControlRequest}

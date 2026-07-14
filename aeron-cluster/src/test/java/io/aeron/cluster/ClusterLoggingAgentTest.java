@@ -58,7 +58,7 @@ import static io.aeron.agent.ClusterEventCode.ROLE_CHANGE;
 import static io.aeron.agent.ClusterEventCode.STATE_CHANGE;
 import static io.aeron.agent.CommonEventEncoder.LOG_HEADER_LENGTH;
 import static io.aeron.agent.EventConfiguration.EVENT_READER_FRAME_LIMIT;
-import static io.aeron.agent.EventConfiguration.EVENT_RING_BUFFER;
+import static io.aeron.agent.EventConfiguration.eventReader;
 import static java.util.Collections.synchronizedSet;
 import static org.agrona.BitUtil.SIZE_OF_INT;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
@@ -232,7 +232,7 @@ public class ClusterLoggingAgentTest
 
         public int doWork()
         {
-            return EVENT_RING_BUFFER.read(this, EVENT_READER_FRAME_LIMIT);
+            return eventReader().ringBuffer().read(this, EVENT_READER_FRAME_LIMIT);
         }
 
         public void onMessage(final int msgTypeId, final MutableDirectBuffer buffer, final int index, final int length)

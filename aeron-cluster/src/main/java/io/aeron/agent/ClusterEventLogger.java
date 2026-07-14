@@ -57,7 +57,8 @@ public final class ClusterEventLogger
     /**
      * Logger for writing into the {@link EventConfiguration#EVENT_RING_BUFFER}.
      */
-    public static final ClusterEventLogger LOGGER = new ClusterEventLogger(EventConfiguration.EVENT_RING_BUFFER);
+    public static final ClusterEventLogger LOGGER =
+        new ClusterEventLogger(EventConfiguration.eventReader().ringBuffer());
 
     private final ManyToOneRingBuffer ringBuffer;
 

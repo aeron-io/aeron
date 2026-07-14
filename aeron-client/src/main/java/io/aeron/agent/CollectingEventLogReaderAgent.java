@@ -61,7 +61,7 @@ public final class CollectingEventLogReaderAgent implements Agent, CollectingEve
         COLLECTING, IGNORING
     }
 
-    private final ManyToOneRingBuffer ringBuffer = EventConfiguration.EVENT_RING_BUFFER;
+    private final ManyToOneRingBuffer ringBuffer = EventConfiguration.eventReader().ringBuffer();
     private final ExpandableArrayBuffer collectingBuffer = new ExpandableArrayBuffer();
     private final MessageHandler messageHandler = this::onMessage;
     private final Object mutex = new Object();
