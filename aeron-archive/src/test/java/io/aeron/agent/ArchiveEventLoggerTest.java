@@ -19,8 +19,10 @@ import io.aeron.archive.codecs.MaxRecordedPositionRequestEncoder;
 import io.aeron.archive.codecs.MessageHeaderEncoder;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
+import org.hamcrest.MatcherAssert;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -28,7 +30,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.temporal.ChronoUnit;
 
-import static io.aeron.agent.AgentTests.verifyLogHeader;
 import static io.aeron.agent.ArchiveEventCode.CATALOG_RESIZE;
 import static io.aeron.agent.ArchiveEventCode.CMD_IN_MAX_RECORDED_POSITION;
 import static io.aeron.agent.ArchiveEventCode.CMD_OUT_RESPONSE;
@@ -48,6 +49,7 @@ import static io.aeron.agent.CommonEventEncoder.MAX_CAPTURE_LENGTH;
 import static io.aeron.agent.CommonEventEncoder.STATE_SEPARATOR;
 import static io.aeron.agent.EventConfiguration.MAX_EVENT_LENGTH;
 import static io.aeron.archive.codecs.MessageHeaderEncoder.ENCODED_LENGTH;
+import static io.aeron.test.agent.AgentTests.verifyLogHeader;
 import static java.nio.ByteBuffer.allocateDirect;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static org.agrona.BitUtil.CACHE_LINE_LENGTH;
@@ -61,12 +63,8 @@ import static org.agrona.concurrent.ringbuffer.RecordDescriptor.lengthOffset;
 import static org.agrona.concurrent.ringbuffer.RingBufferDescriptor.HEAD_CACHE_POSITION_OFFSET;
 import static org.agrona.concurrent.ringbuffer.RingBufferDescriptor.TAIL_POSITION_OFFSET;
 import static org.agrona.concurrent.ringbuffer.RingBufferDescriptor.TRAILER_LENGTH;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.params.provider.EnumSource.Mode.EXCLUDE;
-import static org.junit.jupiter.params.provider.EnumSource.Mode.INCLUDE;
+import static org.junit.jupiter.params.provider.EnumSource.Mode.*;
 
 class ArchiveEventLoggerTest
 {
@@ -185,7 +183,7 @@ class ArchiveEventLoggerTest
             "RECORDING_SESSION_STATE_CHANGE" })
     void controlRequestEvents(final ArchiveEventCode eventCode)
     {
-        assertTrue(CONTROL_REQUEST_EVENTS.contains(eventCode));
+        Assertions.assertTrue(CONTROL_REQUEST_EVENTS.contains(eventCode));
     }
 
     @ParameterizedTest
@@ -197,7 +195,7 @@ class ArchiveEventLoggerTest
             "CONTROL_SESSION_STATE_CHANGE", "REPLAY_SESSION_ERROR", "CATALOG_RESIZE" })
     void nonControlRequestEvents(final ArchiveEventCode eventCode)
     {
-        assertFalse(CONTROL_REQUEST_EVENTS.contains(eventCode));
+        Assertions.assertFalse(CONTROL_REQUEST_EVENTS.contains(eventCode));
     }
 
     @Test
@@ -310,7 +308,7 @@ class ArchiveEventLoggerTest
             " dstRecordingId=" + dstRecordingId + " dstStopPosition=" + dstStopPosition + " position=" + position +
             " isClosed=" + isClosed + " isEndOfStream=" + isEndOfStream + " isSynced=" + isSynced;
 
-        assertThat(sb.toString(), Matchers.matchesPattern(expectedMessagePattern));
+        MatcherAssert.assertThat(sb.toString(), Matchers.matchesPattern(expectedMessagePattern));
     }
 
     @Test
@@ -353,7 +351,7 @@ class ArchiveEventLoggerTest
             " dstRecordingId=" + dstRecordingId + " position=" + position +
             " " + oldState.name() + " -> " + newState.name() + " reason=\"" + reason + "\"";
 
-        assertThat(sb.toString(), Matchers.matchesPattern(expectedMessagePattern));
+        MatcherAssert.assertThat(sb.toString(), Matchers.matchesPattern(expectedMessagePattern));
     }
 
     @Test
@@ -391,7 +389,7 @@ class ArchiveEventLoggerTest
                 \\[[0-9]+\\.[0-9]+] ARCHIVE: CMD_IN_MAX_RECORDED_POSITION \\[32/32]:\
                  controlSessionId=7829367 correlationId=286331153 recordingId=-99999999999999123""";
 
-        assertThat(sb.toString(), Matchers.matchesPattern(expectedMessagePattern));
+        MatcherAssert.assertThat(sb.toString(), Matchers.matchesPattern(expectedMessagePattern));
     }
 
     @Test
