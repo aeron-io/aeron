@@ -110,7 +110,7 @@ inline void aeron_udp_channel_transport_set_interceptor_clientd(
 inline void aeron_udp_channel_transport_log_error(aeron_udp_channel_transport_t *transport)
 {
     aeron_distinct_error_log_record(transport->error_log, aeron_errcode(), aeron_errmsg());
-    aeron_counter_increment(transport->errors_counter);
+    aeron_counter_increment_opaque(transport->errors_counter);
     aeron_err_clear();
 }
 

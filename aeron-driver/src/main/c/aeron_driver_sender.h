@@ -82,7 +82,7 @@ aeron_driver_sender_t;
 inline void aeron_driver_sender_log_error(aeron_driver_sender_t *sender)
 {
     aeron_distinct_error_log_record(sender->error_log, aeron_errcode(), aeron_errmsg());
-    aeron_counter_increment(sender->errors_counter);
+    aeron_counter_increment_opaque(sender->errors_counter);
     aeron_err_clear();
 }
 
