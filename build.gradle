@@ -218,7 +218,7 @@ subprojects {
     tasks.withType(Test).configureEach { test ->
         jvmArgs('--add-opens', 'java.base/jdk.internal.misc=ALL-UNNAMED')
         jvmArgs('--add-opens', 'java.base/java.util.zip=ALL-UNNAMED')
-        jvmArgs("-javaagent:${mockitoAgent.asPath}")
+//        jvmArgs("-javaagent:${mockitoAgent.asPath}")
         if (buildJavaVersion >= 21) {
             jvmArgs('-XX:+EnableDynamicAgentLoading')
         }
@@ -274,12 +274,6 @@ subprojects {
             'io.aeron.shadow.net.bytebuddy.safe': 'true',
             'java.net.preferIPv4Stack': 'true',
             'aeron.fallback.logger': 'no_op',
-            // NOTE: This is a workaround for the disable flag, will remove if decision is made
-            'aeron.event.cluster.log': 'all',
-            // NOTE: The REPLICATION_ENDED log  has an NPE that surfaced, consider fixing
-            'aeron.event.cluster.log.disable': 'REPLICATION_ENDED',
-            // NOTE: This is a workaround for the disable flag, will remove if decision is made
-            'aeron.event.archive.log': 'all',
             'aeron.test.system.aeronmd.path': System.getProperty('aeron.test.system.aeronmd.path'),
             'aeron.test.system.binding.remote.host': System.getProperty('aeron.test.system.binding.remote.host'),
             'aeron.test.system.binding.local.host': System.getProperty('aeron.test.system.binding.local.host'),
@@ -304,7 +298,7 @@ subprojects {
             includeTags 'slow'
         }
 
-        jvmArgs("-javaagent:${aeronLoggingAgent}")
+//        jvmArgs("-javaagent:${aeronLoggingAgent}")
 
         systemProperties(
             'aeron.event.cluster.log': 'all',
@@ -325,7 +319,7 @@ subprojects {
             includeTags 'bindings'
         }
 
-        jvmArgs("-javaagent:${aeronLoggingAgent}")
+//        jvmArgs("-javaagent:${aeronLoggingAgent}")
         systemProperty 'aeron.event.cluster.log', 'all'
         systemProperty 'aeron.event.cluster.log.disable', 'CANVASS_POSITION,APPEND_POSITION,COMMIT_POSITION'
         systemProperty 'aeron.event.archive.log', 'all'
@@ -341,7 +335,7 @@ subprojects {
             includeTags 'topology'
         }
 
-        jvmArgs("-javaagent:${aeronLoggingAgent}")
+//        jvmArgs("-javaagent:${aeronLoggingAgent}")
         systemProperty 'aeron.event.cluster.log', 'all'
         systemProperty 'aeron.event.cluster.log.disable', 'CANVASS_POSITION,APPEND_POSITION,COMMIT_POSITION'
         systemProperty 'aeron.event.archive.log', 'all'
@@ -663,6 +657,10 @@ project(':aeron-archive') {
         }
     }
 
+    tasks.withType(Test).configureEach {
+        systemProperty 'aeron.event.archive.log', 'all'
+    }
+
     def codecsFile = 'src/main/resources/archive/aeron-archive-codecs.xml'
     def markCodecsFile = 'src/main/resources/archive/aeron-archive-mark-codecs.xml'
     def sbeFile = 'src/main/resources/archive/fpl/sbe.xsd'
@@ -875,6 +873,13 @@ project(':aeron-cluster') {
         }
     }
 
+    tasks.withType(Test).configureEach {
+        // NOTE: This is a workaround for the disable flag, will remove if decision is made
+        systemProperty 'aeron.event.cluster.log', 'all'
+        // NOTE: The REPLICATION_ENDED log  has an NPE that surfaced, consider fixing
+        systemProperty 'aeron.event.cluster.log.disable', 'REPLICATION_ENDED'
+    }
+
     def codecsFile = 'src/main/resources/cluster/aeron-cluster-codecs.xml'
     def markCodecsFile = 'src/main/resources/cluster/aeron-cluster-mark-codecs.xml'
     def nodeStateCodecsFile = 'src/main/resources/cluster/aeron-cluster-node-state-codecs.xml'
@@ -1043,6 +1048,10 @@ project(':aeron-agent') {
         testImplementation project(':aeron-test-support')
     }
 
+    tasks.withType(Test).configureEach {
+        systemProperty 'aeron.event.archive.log', 'all'
+    }
+
     shadowJar {
         archiveClassifier.set('')
 
@@ -1183,7 +1192,7 @@ project(':aeron-samples') {
             project.file("../aeron-agent/build/libs/aeron-agent-${aeronVersion}.jar").absolutePath
         }
 
-        jvmArgs '-javaagent:' + agentFilename()
+//        jvmArgs '-javaagent:' + agentFilename()
         systemProperty 'aeron.event.cluster.log', 'all'
         systemProperty 'aeron.event.cluster.log.disable', 'CANVASS_POSITION,APPEND_POSITION,COMMIT_POSITION'
         systemProperty 'aeron.event.archive.log', 'all'
@@ -1230,7 +1239,7 @@ project(':aeron-system-tests') {
             project.file("../aeron-agent/build/libs/aeron-agent-${aeronVersion}.jar").absolutePath
         }
 
-        jvmArgs '-javaagent:' + agentFilename()
+//        jvmArgs '-javaagent:' + agentFilename()
         systemProperty 'aeron.event.cluster.log', 'all'
         systemProperty 'aeron.event.cluster.log.disable', 'CANVASS_POSITION,APPEND_POSITION,COMMIT_POSITION'
         systemProperty 'aeron.event.archive.log', 'all'

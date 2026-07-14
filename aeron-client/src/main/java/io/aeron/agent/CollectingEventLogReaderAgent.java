@@ -34,9 +34,11 @@ import java.io.PrintStream;
 import java.lang.management.ManagementFactory;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Properties;
 
 import static io.aeron.agent.EventConfiguration.EVENT_READER_FRAME_LIMIT;
 import static io.aeron.agent.EventConfiguration.MAX_EVENT_LENGTH;
+import static io.aeron.agent.ModuleLoggerReaderAgent.decodeLogEvent;
 import static org.agrona.BitUtil.SIZE_OF_INT;
 
 /**
@@ -50,7 +52,7 @@ public final class CollectingEventLogReaderAgent implements Agent, CollectingEve
      * MBean name for this logging agent.
      */
     public static final String LOGGING_MBEAN_NAME = "io.aeron:type=logging";
-    private final Int2ObjectHashMap<ComponentLogger> loggers = new Int2ObjectHashMap<>();
+    private final Int2ObjectHashMap<ModuleLogger> loggers = new Int2ObjectHashMap<>();
     private String startMessage;
 
     @SuppressWarnings("JavadocVariable")
@@ -68,9 +70,9 @@ public final class CollectingEventLogReaderAgent implements Agent, CollectingEve
     private volatile State state = State.IGNORING;
     private int bufferPosition = 0;
 
-    CollectingEventLogReaderAgent(final String fileName, final List<ComponentLogger> loggers)
+    CollectingEventLogReaderAgent(final Properties configOptions, final List<ModuleLogger> loggers)
     {
-        for (final ComponentLogger componentLogger : loggers)
+        for (final ModuleLogger componentLogger : loggers)
         {
             this.loggers.put(componentLogger.typeCode(), componentLogger);
         }
@@ -227,8 +229,8 @@ public final class CollectingEventLogReaderAgent implements Agent, CollectingEve
                 final int eventCodeId = msgTypeId & 0xFFFF;
 
                 decodeBuffer.setLength(0);
-//                decodeLogEvent(
-//                    collectingBuffer, readingPosition, eventCodeTypeId, eventCodeId, loggers, decodeBuffer);
+                decodeLogEvent(
+                    collectingBuffer, readingPosition, eventCodeTypeId, eventCodeId, loggers, decodeBuffer);
                 readingPosition += length;
 
                 out.print(decodeBuffer);
