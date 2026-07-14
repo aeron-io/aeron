@@ -734,6 +734,7 @@ class ElectionTest
         final ClusterMember liveLeader = clusterMembers[0];
         final int leaderId = liveLeader.id();
         final RecordingReplication logReplication = mock(RecordingReplication.class);
+        when(logReplication.srcArchiveChannel()).thenReturn("aeron:udp?endpoint=localhost:8008");
 
         when(consensusModuleAgent.role()).thenReturn(Cluster.Role.FOLLOWER);
         when(consensusModuleAgent.prepareForNewLeadership(anyLong(), anyLong())).thenReturn(term1BaseLogPosition);
@@ -1189,6 +1190,7 @@ class ElectionTest
         final ClusterMember liveLeader = clusterMembers[0];
         final int leaderId = liveLeader.id();
         final RecordingReplication logReplication = mock(RecordingReplication.class);
+        when(logReplication.srcArchiveChannel()).thenReturn("aeron:udp?endpoint=localhost:8008");
 
         when(consensusModuleAgent.role()).thenReturn(Cluster.Role.FOLLOWER);
 
@@ -1271,6 +1273,7 @@ class ElectionTest
         final ClusterMember liveLeader = clusterMembers[0];
         final int leaderId = liveLeader.id();
         final RecordingReplication logReplication = mock(RecordingReplication.class);
+        when(logReplication.srcArchiveChannel()).thenReturn("aeron:udp?endpoint=localhost:8008");
 
         when(consensusModuleAgent.role()).thenReturn(Cluster.Role.FOLLOWER);
 
@@ -1349,6 +1352,7 @@ class ElectionTest
         final ClusterMember liveLeader = clusterMembers[0];
         final int leaderId = liveLeader.id();
         final RecordingReplication logReplication = mock(RecordingReplication.class);
+        when(logReplication.srcArchiveChannel()).thenReturn("aeron:udp?endpoint=localhost:8008");
 
         when(consensusModuleAgent.role()).thenReturn(Cluster.Role.FOLLOWER);
 

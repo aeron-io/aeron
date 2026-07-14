@@ -874,10 +874,7 @@ project(':aeron-cluster') {
     }
 
     tasks.withType(Test).configureEach {
-        // NOTE: This is a workaround for the disable flag, will remove if decision is made
         systemProperty 'aeron.event.cluster.log', 'all'
-        // NOTE: The REPLICATION_ENDED log  has an NPE that surfaced, consider fixing
-        systemProperty 'aeron.event.cluster.log.disable', 'REPLICATION_ENDED'
     }
 
     def codecsFile = 'src/main/resources/cluster/aeron-cluster-codecs.xml'
