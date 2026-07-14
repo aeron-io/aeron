@@ -321,6 +321,7 @@ public class ArchiveException extends AeronException
             case UNKNOWN_REPLICATION -> "UNKNOWN_REPLICATION";
             case UNAUTHORISED_ACTION -> "UNAUTHORISED_ACTION";
             case REPLICATION_CONNECTION_FAILURE -> "REPLICATION_CONNECTION_FAILURE";
+            case EMPTY_RECORDING -> "EMPTY_RECORDING";
             case INVALID_POSITION -> "INVALID_POSITION";
             default -> "unknown error code: " + errorCode;
         };
