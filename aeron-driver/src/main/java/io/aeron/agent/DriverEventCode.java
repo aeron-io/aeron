@@ -296,6 +296,17 @@ public enum DriverEventCode implements EventCode
         return code;
     }
 
+    /**
+     * Get {@link DriverEventCode} from its event code id.
+     *
+     * @param eventCodeId to convert.
+     * @return {@link DriverEventCode} from its event code id.
+     */
+    public static DriverEventCode fromEventCodeId(final int eventCodeId)
+    {
+        return get(eventCodeId - (EVENT_CODE_TYPE << 16));
+    }
+
     static DriverEventCode get(final String name)
     {
         if ("SEND_NAK_MESSAGE".equals(name))

@@ -623,6 +623,10 @@ project(':aeron-driver') {
         classpath project(':aeron-annotations').sourceSets.main.runtimeClasspath
         args = [configInfoFile, generatedDocFile]
     }
+
+    tasks.withType(Test).configureEach {
+        systemProperty 'aeron.event.log', 'all'
+    }
 }
 
 project(':aeron-archive') {
@@ -1047,6 +1051,7 @@ project(':aeron-agent') {
 
     tasks.withType(Test).configureEach {
         systemProperty 'aeron.event.archive.log', 'all'
+        systemProperty 'aeron.event.log', 'admin'
     }
 
     shadowJar {

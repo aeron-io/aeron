@@ -70,7 +70,7 @@ public final class DriverEventLogger
      */
     public void log(final DriverEventCode code, final DirectBuffer buffer, final int offset, final int length)
     {
-        if (DriverComponentLogger.ENABLED_EVENTS.contains(code))
+        if (DriverModuleLogger.isEnabled(code))
         {
             final int captureLength = captureLength(length);
             final int encodedLength = encodedLength(captureLength);
@@ -388,19 +388,20 @@ public final class DriverEventLogger
     /**
      * Log a resolution for a resolver and the associated result.
      *
-     * @param resolverName simple class name of the resolver
-     * @param durationNs   of the call in nanoseconds.
-     * @param name         host name being resolved.
-     * @param isReLookup   address that was resolved to, can be null.
-     * @param resolvedName address that was resolved to, can be null.
+     * @param resolverName       simple class name of the resolver
+     * @param durationNs         of the call in nanoseconds.
+     * @param name               host name being resolved.
+     * @param isReLookup         address that was resolved to, can be null.
+     * @param resolvedNameOrNull address that was resolved to, can be null.
      */
     public void logLookup(
         final String resolverName,
         final long durationNs,
         final String name,
         final boolean isReLookup,
-        final String resolvedName)
+        final String resolvedNameOrNull)
     {
+        final String resolvedName = null != resolvedNameOrNull ? resolvedNameOrNull : "null";
         final int length = SIZE_OF_LONG + trailingStringLength(resolverName, MAX_HOST_NAME_LENGTH) +
             trailingStringLength(name, MAX_HOST_NAME_LENGTH) + SIZE_OF_BOOLEAN +
             trailingStringLength(resolvedName, MAX_HOST_NAME_LENGTH);

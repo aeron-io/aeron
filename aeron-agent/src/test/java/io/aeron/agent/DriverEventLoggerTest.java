@@ -59,7 +59,7 @@ class DriverEventLoggerTest
     @AfterEach
     void after()
     {
-        DriverComponentLogger.ENABLED_EVENTS.clear();
+//        DriverComponentLogger.ENABLED_EVENTS.clear();
         EventConfiguration.EVENT_RING_BUFFER.unblock();
     }
 
@@ -75,7 +75,7 @@ class DriverEventLoggerTest
     {
         buffer.setMemory(20, 100, (byte)5);
 
-        logger.log(CMD_OUT_ERROR, buffer, 20, 100);
+        logger.log(FRAME_IN, buffer, 20, 100);
 
         assertEquals(0, logBuffer.getInt(lengthOffset(0), LITTLE_ENDIAN));
     }
@@ -84,7 +84,7 @@ class DriverEventLoggerTest
     void log()
     {
         final DriverEventCode eventCode = CMD_IN_TERMINATE_DRIVER;
-        DriverComponentLogger.ENABLED_EVENTS.add(eventCode);
+//        DriverComponentLogger.ENABLED_EVENTS.add(eventCode);
         final int recordOffset = align(13, ALIGNMENT);
         logBuffer.putLong(CAPACITY + TAIL_POSITION_OFFSET, recordOffset);
         final int length = 100;

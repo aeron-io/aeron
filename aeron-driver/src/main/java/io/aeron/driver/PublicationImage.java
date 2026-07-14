@@ -700,6 +700,7 @@ public final class PublicationImage
         final int streamId,
         final String channel)
     {
+        DriverLog.logPublicationImageRevoke(revokedPos, sessionId, streamId, channel);
     }
 
     /**

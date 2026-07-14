@@ -658,5 +658,6 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         final int streamId,
         final String channel)
     {
+        DriverLog.logPublicationRevoke(revokedPos, sessionId, streamId, channel);
     }
 }

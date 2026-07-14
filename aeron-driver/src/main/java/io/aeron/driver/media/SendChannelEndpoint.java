@@ -20,6 +20,7 @@ import io.aeron.ChannelUri;
 import io.aeron.CommonContext;
 import io.aeron.ErrorCode;
 import io.aeron.driver.DriverConductorProxy;
+import io.aeron.driver.DriverLog;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.NetworkPublication;
 import io.aeron.driver.Sender;
@@ -465,6 +466,15 @@ public class SendChannelEndpoint extends UdpChannelTransport
         final int length,
         final InetSocketAddress srcAddress)
     {
+        DriverLog.logNakReceived(
+            srcAddress,
+            msg.sessionId(),
+            msg.streamId(),
+            msg.termId(),
+            msg.termOffset(),
+            msg.length(),
+            originalUriString());
+
         final long key = compoundKey(msg.sessionId(), msg.streamId());
         final NetworkPublication publication = publicationBySessionAndStreamId.get(key);
 
