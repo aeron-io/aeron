@@ -55,10 +55,10 @@ class CommonEventDissectorTest
         internalEncodeLogHeader(buffer, 0, 100, 222, () -> 1234567890);
 
         final int decodedLength = CommonEventDissector
-            .dissectLogHeader("test ctx", ArchiveEventCode.CMD_OUT_RESPONSE, buffer, 0, builder);
+            .dissectLogHeader("test ctx", EventCodeType.ARCHIVE, buffer, 0, builder);
 
         assertEquals(LOG_HEADER_LENGTH, decodedLength);
-        assertEquals("[1.234567890] test ctx: CMD_OUT_RESPONSE [100/222]", builder.toString());
+        assertEquals("[1.234567890] test ctx: ARCHIVE [100/222]", builder.toString());
     }
 
     @Test

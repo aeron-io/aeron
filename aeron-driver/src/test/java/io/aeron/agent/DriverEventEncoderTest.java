@@ -15,7 +15,6 @@
  */
 package io.aeron.agent;
 
-import io.aeron.cluster.codecs.ClusterTimeUnit;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.Test;
 
@@ -167,8 +166,8 @@ class DriverEventEncoderTest
     @Test
     void untetheredSubscriptionStateChangeLengthComputesLengthBasedOnProvidedState()
     {
-        final ClusterTimeUnit from = ClusterTimeUnit.MILLIS;
-        final ClusterTimeUnit to = ClusterTimeUnit.NANOS;
+        final ChronoField from = ChronoField.MILLI_OF_SECOND;
+        final ChronoField to = ChronoField.NANO_OF_SECOND;
 
         assertEquals(stateTransitionStringLength(from, to) + SIZE_OF_LONG + 2 * SIZE_OF_INT,
             untetheredSubscriptionStateChangeLength(from, to));

@@ -31,7 +31,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
-import static io.aeron.agent.AgentTests.verifyLogHeader;
 import static io.aeron.agent.ClusterEventCode.APPEND_POSITION;
 import static io.aeron.agent.ClusterEventCode.APPEND_SESSION_CLOSE;
 import static io.aeron.agent.ClusterEventCode.APPEND_SESSION_OPEN;
@@ -71,6 +70,7 @@ import static io.aeron.agent.CommonEventEncoder.LOG_HEADER_LENGTH;
 import static io.aeron.agent.CommonEventEncoder.STATE_SEPARATOR;
 import static io.aeron.agent.CommonEventEncoder.enumName;
 import static io.aeron.agent.EventConfiguration.BUFFER_LENGTH_DEFAULT;
+import static io.aeron.test.agent.AgentTests.verifyLogHeader;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
