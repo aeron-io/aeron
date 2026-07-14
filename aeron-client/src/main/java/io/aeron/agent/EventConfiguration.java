@@ -15,30 +15,17 @@
  */
 package io.aeron.agent;
 
-import org.agrona.CloseHelper;
 import org.agrona.Strings;
-import org.agrona.concurrent.Agent;
-import org.agrona.concurrent.AgentRunner;
-import org.agrona.concurrent.SleepingMillisIdleStrategy;
-import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
 
-import java.lang.reflect.Constructor;
-import java.util.ArrayList;
 import java.util.EnumSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.ServiceLoader;
 import java.util.function.Function;
 import java.util.function.IntFunction;
 
 import static java.lang.System.err;
 import static java.lang.System.lineSeparator;
-import static org.agrona.BitUtil.CACHE_LINE_LENGTH;
-import static org.agrona.BufferUtil.allocateDirectAligned;
-import static org.agrona.SystemUtil.getSizeAsInt;
-import static org.agrona.concurrent.ringbuffer.RingBufferDescriptor.TRAILER_LENGTH;
 
 /**
  * Common configuration elements between event loggers and event reader side.
@@ -70,17 +57,13 @@ public final class EventConfiguration
      */
     public static final ManyToOneRingBuffer EVENT_RING_BUFFER;
 
-    private static final String READER_CLASSNAME = "aeron.event.log.reader.classname";
-    private static final String READER_CLASSNAME_DEFAULT
-        = "io.aeron.agent.ModuleLoggerReaderAgent";
-    private static Thread readerThread;
-    private static AgentRunner readerAgentRunner;
+    private static final EventReaderManager EVENT_READER;
 
     static
     {
-        EVENT_RING_BUFFER = new ManyToOneRingBuffer(new UnsafeBuffer(allocateDirectAligned(
-            getSizeAsInt(BUFFER_LENGTH_PROP_NAME, BUFFER_LENGTH_DEFAULT) + TRAILER_LENGTH, CACHE_LINE_LENGTH)));
-        startReader(System.getProperties());
+        EVENT_READER = new EventReaderManager();
+        EVENT_RING_BUFFER = EVENT_READER.ringBuffer();
+        EVENT_READER.start(System.getProperties());
     }
 
     /**
@@ -88,65 +71,7 @@ public final class EventConfiguration
      */
     public static void restartReader(final Properties properties)
     {
-        readerThread = null;
-        CloseHelper.close(readerAgentRunner);
-        EVENT_RING_BUFFER.unblock();
-        startReader(properties);
-    }
-
-    private static void startReader(final Properties properties)
-    {
-        final ArrayList<ModuleLogger> loggers = new ArrayList<>();
-        try
-        {
-
-            for (final ModuleLogger componentLogger : ServiceLoader.load(ModuleLogger.class))
-            {
-                loggers.add(componentLogger);
-            }
-
-
-            final Agent moduleLoggerReaderAgent = newReaderAgent(properties, loggers);
-
-            readerAgentRunner = new AgentRunner(
-                new SleepingMillisIdleStrategy(1L),
-                Throwable::printStackTrace,
-                null,
-                moduleLoggerReaderAgent);
-
-            readerThread = new Thread(readerAgentRunner);
-            readerThread.setName("event-log-reader");
-            readerThread.setDaemon(true);
-            readerThread.start();
-        }
-        catch (final Exception ex)
-        {
-            ex.printStackTrace(System.err);
-        }
-    }
-
-    private static Agent newReaderAgent(final Properties configOptions, final List<ModuleLogger> loggers)
-    {
-        try
-        {
-            final Class<?> aClass = Class.forName(
-                configOptions.getProperty(READER_CLASSNAME, READER_CLASSNAME_DEFAULT));
-
-            try
-            {
-                final Constructor<?> constructor = aClass.getDeclaredConstructor(Properties.class, List.class);
-                return (Agent)constructor.newInstance(configOptions, loggers);
-            }
-            catch (final NoSuchMethodException ignore)
-            {
-            }
-
-            return (Agent)aClass.getDeclaredConstructor().newInstance();
-        }
-        catch (final Exception ex)
-        {
-            throw new RuntimeException(ex);
-        }
+        EVENT_READER.restart(properties);
     }
 
     private EventConfiguration()
