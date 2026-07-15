@@ -1,3 +1,5 @@
+import io.aeron.build.LoggingTest
+
 /*
  * Copyright 2014-2025 Real Logic Limited.
  *
@@ -565,57 +567,8 @@ project(':aeron-driver') {
         systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
     }
 
-    tasks.register('loggingTestAll', Test) {
-        group = 'verification'
-        forkEvery = 1
-        include '**/DriverEventEnablementTest.class'
-        useJUnitPlatform {
-            includeTags 'logging'
-        }
-        systemProperty 'aeron.event.log', 'all'
-        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
-    }
-
-    tasks.register('loggingTestNone', Test) {
-        group = 'verification'
-        forkEvery = 1
-        include '**/DriverEventEnablementTest.class'
-        useJUnitPlatform {
-            includeTags 'logging'
-        }
-        systemProperty 'aeron.event.log', 'none'
-        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
-    }
-
-    tasks.register('loggingTestDisabled', Test) {
-        group = 'verification'
-        forkEvery = 1
-        include '**/DriverEventEnablementTest.class'
-        useJUnitPlatform {
-            includeTags 'logging'
-        }
-        systemProperty 'aeron.event.log', 'all'
-        systemProperty 'aeron.event.log.disable', 'TEXT_DATA,CMD_IN_ADD_PUBLICATION'
-        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
-    }
-
-    tasks.register('loggingTestConfigured', Test) {
-        group = 'verification'
-        forkEvery = 1
-        include '**/DriverEventEnablementTest.class'
-        useJUnitPlatform {
-            includeTags 'logging'
-        }
-        systemProperty 'aeron.event.log', 'TEXT_DATA,CMD_IN_ADD_PUBLICATION'
-        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
-    }
-
-    tasks.named('check') {
-        dependsOn 'loggingTestAll'
-        dependsOn 'loggingTestNone'
-        dependsOn 'loggingTestConfigured'
-        dependsOn 'loggingTestDisabled'
-    }
+    LoggingTest.configureLoggingTests(project, 'DriverEventEnablementTest', 'aeron.event.log', 'aeron.event.log.disable',
+        'TEXT_DATA,CMD_IN_ADD_PUBLICATION')
 
     javadoc {
         source += project(':aeron-annotations').sourceSets.main.allJava
@@ -711,57 +664,8 @@ project(':aeron-archive') {
         systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
     }
 
-    tasks.register('loggingTestAll', Test) {
-        group = 'verification'
-        forkEvery = 1
-        include '**/ArchiveEventEnablementTest.class'
-        useJUnitPlatform {
-            includeTags 'logging'
-        }
-        systemProperty 'aeron.event.archive.log', 'all'
-        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
-    }
-
-    tasks.register('loggingTestNone', Test) {
-        group = 'verification'
-        forkEvery = 1
-        include '**/ArchiveEventEnablementTest.class'
-        useJUnitPlatform {
-            includeTags 'logging'
-        }
-        systemProperty 'aeron.event.archive.log', 'none'
-        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
-    }
-
-    tasks.register('loggingTestDisabled', Test) {
-        group = 'verification'
-        forkEvery = 1
-        include '**/ArchiveEventEnablementTest.class'
-        useJUnitPlatform {
-            includeTags 'logging'
-        }
-        systemProperty 'aeron.event.archive.log', 'all'
-        systemProperty 'aeron.event.archive.log.disable', 'CATALOG_RESIZE,CMD_IN_CONNECT'
-        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
-    }
-
-    tasks.register('loggingTestConfigured', Test) {
-        group = 'verification'
-        forkEvery = 1
-        include '**/ArchiveEventEnablementTest.class'
-        useJUnitPlatform {
-            includeTags 'logging'
-        }
-        systemProperty 'aeron.event.archive.log', 'CATALOG_RESIZE,CMD_IN_CONNECT'
-        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
-    }
-
-    tasks.named('check') {
-        dependsOn 'loggingTestAll'
-        dependsOn 'loggingTestNone'
-        dependsOn 'loggingTestConfigured'
-        dependsOn 'loggingTestDisabled'
-    }
+    LoggingTest.configureLoggingTests(project, 'ArchiveEventEnablementTest', 'aeron.event.archive.log',
+        'aeron.event.archive.log.disable', 'CATALOG_RESIZE,CMD_IN_CONNECT')
 
     def codecsFile = 'src/main/resources/archive/aeron-archive-codecs.xml'
     def markCodecsFile = 'src/main/resources/archive/aeron-archive-mark-codecs.xml'
@@ -980,57 +884,8 @@ project(':aeron-cluster') {
         systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
     }
 
-    tasks.register('loggingTestAll', Test) {
-        group = 'verification'
-        forkEvery = 1
-        include '**/ClusterEventEnablementTest.class'
-        useJUnitPlatform {
-            includeTags 'logging'
-        }
-        systemProperty 'aeron.event.cluster.log', 'all'
-        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
-    }
-
-    tasks.register('loggingTestNone', Test) {
-        group = 'verification'
-        forkEvery = 1
-        include '**/ClusterEventEnablementTest.class'
-        useJUnitPlatform {
-            includeTags 'logging'
-        }
-        systemProperty 'aeron.event.cluster.log', 'none'
-        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
-    }
-
-    tasks.register('loggingTestDisabled', Test) {
-        group = 'verification'
-        forkEvery = 1
-        include '**/ClusterEventEnablementTest.class'
-        useJUnitPlatform {
-            includeTags 'logging'
-        }
-        systemProperty 'aeron.event.cluster.log', 'all'
-        systemProperty 'aeron.event.cluster.log.disable', 'CANVASS_POSITION,COMMIT_POSITION'
-        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
-    }
-
-    tasks.register('loggingTestConfigured', Test) {
-        group = 'verification'
-        forkEvery = 1
-        include '**/ClusterEventEnablementTest.class'
-        useJUnitPlatform {
-            includeTags 'logging'
-        }
-        systemProperty 'aeron.event.cluster.log', 'CANVASS_POSITION,COMMIT_POSITION'
-        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
-    }
-
-    tasks.named('check') {
-        dependsOn 'loggingTestAll'
-        dependsOn 'loggingTestNone'
-        dependsOn 'loggingTestConfigured'
-        dependsOn 'loggingTestDisabled'
-    }
+    LoggingTest.configureLoggingTests(project, 'ClusterEventEnablementTest', 'aeron.event.cluster.log',
+        'aeron.event.cluster.log.disable', 'CANVASS_POSITION,COMMIT_POSITION')
 
     def codecsFile = 'src/main/resources/cluster/aeron-cluster-codecs.xml'
     def markCodecsFile = 'src/main/resources/cluster/aeron-cluster-mark-codecs.xml'
