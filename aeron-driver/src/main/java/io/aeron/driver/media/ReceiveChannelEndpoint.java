@@ -874,14 +874,7 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
         final int length)
     {
         // TODO: Review for optimization (Mike Barker and Emil Lopez)
-        for (final ImageConnection connection : controlAddresses)
-        {
-            if (null != connection)
-            {
-                DriverLog.logNakSent(
-                    connection.controlAddress, sessionId, streamId, termId, termOffset, length, originalUriString());
-            }
-        }
+        DriverLog.logNaksSent(controlAddresses, sessionId, streamId, termId, termOffset, length, originalUriString());
 
         nakBuffer.clear();
         nakFlyweight
