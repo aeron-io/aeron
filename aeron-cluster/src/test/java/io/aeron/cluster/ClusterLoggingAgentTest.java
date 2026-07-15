@@ -18,8 +18,8 @@ package io.aeron.cluster;
 import io.aeron.CommonContext;
 import io.aeron.Counter;
 import io.aeron.agent.ClusterEventCode;
-import io.aeron.agent.EventCodeType;
 import io.aeron.agent.EventConfiguration;
+import io.aeron.agent.EventReaderManager;
 import io.aeron.archive.Archive;
 import io.aeron.archive.ArchiveThreadingMode;
 import io.aeron.archive.client.AeronArchive;
@@ -32,20 +32,21 @@ import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
 import io.aeron.test.TestContexts;
 import io.aeron.test.Tests;
+import io.aeron.test.agent.CountingEventReaderAgent;
 import io.aeron.test.cluster.ClusterTests;
 import org.agrona.CloseHelper;
 import org.agrona.IoUtil;
-import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.Agent;
-import org.agrona.concurrent.MessageHandler;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.EnumSet;
-import java.util.Properties;
-import java.util.Set;
+import java.util.List;
 import java.util.function.Supplier;
 
 import static io.aeron.agent.ClusterEventCode.APPEND_SESSION_CLOSE;
@@ -55,29 +56,31 @@ import static io.aeron.agent.ClusterEventCode.ELECTION_STATE_CHANGE;
 import static io.aeron.agent.ClusterEventCode.NEW_ELECTION;
 import static io.aeron.agent.ClusterEventCode.ROLE_CHANGE;
 import static io.aeron.agent.ClusterEventCode.STATE_CHANGE;
-import static io.aeron.agent.CommonEventEncoder.LOG_HEADER_LENGTH;
-import static io.aeron.agent.EventConfiguration.EVENT_READER_FRAME_LIMIT;
-import static io.aeron.agent.EventConfiguration.eventReader;
-import static java.util.Collections.synchronizedSet;
-import static org.agrona.BitUtil.SIZE_OF_INT;
-import static org.agrona.BitUtil.SIZE_OF_LONG;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.Mockito.mock;
 
 @ExtendWith(InterruptingTestCallback.class)
 public class ClusterLoggingAgentTest
 {
-    private static final Set<ClusterEventCode> WAIT_LIST = synchronizedSet(EnumSet.noneOf(ClusterEventCode.class));
-    private static final String READER_CLASSNAME = "aeron.event.log.reader.classname";
-    private static final String ENABLED_CLUSTER_EVENT_CODES = "aeron.event.cluster.log";
     private File testDir;
     private ClusteredMediaDriver clusteredMediaDriver;
     private ClusteredServiceContainer container;
 
+    @BeforeEach
+    void setUp()
+    {
+        assumeTrue("all".equals(System.getProperty(CommonContext.CLUSTER_EVENT_LOG)));
+        final String readerClass = System.getProperty(EventReaderManager.READER_CLASSNAME);
+        assumeTrue(CountingEventReaderAgent.class.getName().equals(readerClass));
+    }
+
     @AfterEach
     void after()
     {
-        CloseHelper.closeAll(clusteredMediaDriver.consensusModule(), container, clusteredMediaDriver);
-//        AgentTests.stopLogging();
+        if (null != clusteredMediaDriver)
+        {
+            CloseHelper.closeAll(clusteredMediaDriver.consensusModule(), container, clusteredMediaDriver);
+        }
 
         if (testDir != null && testDir.exists())
         {
@@ -89,48 +92,11 @@ public class ClusterLoggingAgentTest
     @InterruptAfter(20)
     void logAll()
     {
-        testClusterEventsLogging(
-            EnumSet.of(
-                ROLE_CHANGE,
-                STATE_CHANGE,
-                ELECTION_STATE_CHANGE,
-                NEW_ELECTION,
-                APPEND_SESSION_OPEN,
-                APPEND_SESSION_CLOSE,
-                CLUSTER_SESSION_STATE_CHANGE));
-    }
-
-    @Test
-    @InterruptAfter(20)
-    void logRoleChange()
-    {
-        testClusterEventsLogging(ROLE_CHANGE.name(), EnumSet.of(ROLE_CHANGE));
-    }
-
-    @Test
-    @InterruptAfter(20)
-    void logStateChange()
-    {
-        testClusterEventsLogging(STATE_CHANGE.name(), EnumSet.of(STATE_CHANGE));
-    }
-
-    @Test
-    @InterruptAfter(20)
-    void logElectionStateChange()
-    {
-        testClusterEventsLogging(ELECTION_STATE_CHANGE.name(), EnumSet.of(ELECTION_STATE_CHANGE));
-    }
-
-    private void testClusterEventsLogging(
-        final String enabledEvents, final EnumSet<ClusterEventCode> expectedEvents)
-    {
-        restartReaderWithEvents(enabledEvents);
-        testClusterEventsLogging(expectedEvents);
-    }
-
-    private void testClusterEventsLogging(final EnumSet<ClusterEventCode> expectedEvents)
-    {
-        setupExpectedEvents(expectedEvents);
+        testDir = new File(IoUtil.tmpDirName(), "cluster-test");
+        if (testDir.exists())
+        {
+            IoUtil.delete(testDir, false);
+        }
 
         final Context mediaDriverCtx = new Context()
             .errorHandler(Tests::onError)
@@ -192,128 +158,29 @@ public class ClusterLoggingAgentTest
 
         aeronCluster.close();
 
-        Tests.await(WAIT_LIST::isEmpty);
+        verifyExpectedEvents(EnumSet.of(
+            ROLE_CHANGE,
+            STATE_CHANGE,
+            ELECTION_STATE_CHANGE,
+            NEW_ELECTION,
+            APPEND_SESSION_OPEN,
+            APPEND_SESSION_CLOSE,
+            CLUSTER_SESSION_STATE_CHANGE));
     }
 
-    private void restartReaderWithEvents(final String enabledEvents)
+    private static void verifyExpectedEvents(final EnumSet<ClusterEventCode> expectedEvents)
     {
-        final Properties configOptions = new Properties();
-        configOptions.put(READER_CLASSNAME, StubEventLogReaderAgent.class.getName());
-        configOptions.put(ENABLED_CLUSTER_EVENT_CODES, enabledEvents);
-        EventConfiguration.restartReader(configOptions);
-    }
+        final Agent agent = EventConfiguration.eventReader().agent();
+        Assertions.assertInstanceOf(CountingEventReaderAgent.class, agent);
+        final CountingEventReaderAgent countingAgent = (CountingEventReaderAgent)agent;
 
-    private void setupExpectedEvents(final EnumSet<ClusterEventCode> expectedEvents)
-    {
-        WAIT_LIST.clear();
-        WAIT_LIST.addAll(expectedEvents);
+        final List<ClusterEventCode> pendingList = new ArrayList<>(expectedEvents);
 
-        testDir = new File(IoUtil.tmpDirName(), "cluster-test");
-        if (testDir.exists())
+        final Supplier<String> errorMessage = () -> "Pending events: " + pendingList;
+        while (!pendingList.isEmpty())
         {
-            IoUtil.delete(testDir, false);
-        }
-    }
-
-    public static final class StubEventLogReaderAgent implements Agent, MessageHandler
-    {
-        public StubEventLogReaderAgent()
-        {
-        }
-
-        public String roleName()
-        {
-            return "event-log-reader";
-        }
-
-        public int doWork()
-        {
-            return eventReader().ringBuffer().read(this, EVENT_READER_FRAME_LIMIT);
-        }
-
-        public void onMessage(final int msgTypeId, final MutableDirectBuffer buffer, final int index, final int length)
-        {
-            final int eventCodeTypeId = msgTypeId >> 16;
-            if (EventCodeType.CLUSTER.getTypeCode() != eventCodeTypeId)
-            {
-                return;
-            }
-
-            final ClusterEventCode eventCode = ClusterEventCode.fromEventCodeId(msgTypeId);
-            switch (eventCode)
-            {
-                case ROLE_CHANGE:
-                {
-                    final int offset = index + LOG_HEADER_LENGTH + SIZE_OF_INT;
-                    final String role = buffer.getStringAscii(offset);
-                    if (role.contains("LEADER"))
-                    {
-                        WAIT_LIST.remove(eventCode);
-                    }
-                    break;
-                }
-
-                case STATE_CHANGE:
-                {
-                    final int offset = index + LOG_HEADER_LENGTH + SIZE_OF_INT;
-                    final String state = buffer.getStringAscii(offset);
-                    if (state.contains("ACTIVE"))
-                    {
-                        WAIT_LIST.remove(eventCode);
-                    }
-                    break;
-                }
-
-                case ELECTION_STATE_CHANGE:
-                {
-                    final int offset = index + LOG_HEADER_LENGTH + 2 * SIZE_OF_INT + 6 * SIZE_OF_LONG;
-                    final String state = buffer.getStringAscii(offset);
-                    if (state.contains("CLOSED"))
-                    {
-                        WAIT_LIST.remove(eventCode);
-                    }
-                    break;
-                }
-
-                case APPEND_SESSION_CLOSE:
-                {
-                    final int offset = index + LOG_HEADER_LENGTH + 3 * SIZE_OF_LONG + SIZE_OF_INT;
-                    final String closeReason = buffer.getStringAscii(offset);
-                    if ("CLIENT_ACTION".equals(closeReason))
-                    {
-                        WAIT_LIST.remove(eventCode);
-                    }
-                    break;
-                }
-
-                case APPEND_SESSION_OPEN:
-                {
-                    final int offset = index + LOG_HEADER_LENGTH + SIZE_OF_LONG;
-                    if (buffer.getLong(offset + SIZE_OF_LONG) > buffer.getLong(offset))
-                    {
-                        WAIT_LIST.remove(eventCode);
-                    }
-                    break;
-                }
-
-                case CLUSTER_SESSION_STATE_CHANGE:
-                {
-                    final int offset = index + LOG_HEADER_LENGTH + SIZE_OF_LONG + SIZE_OF_INT;
-                    final String action = buffer.getStringAscii(offset);
-                    final String stateTransition = buffer.getStringAscii(offset + SIZE_OF_INT + action.length());
-                    final String reason = buffer.getStringAscii(
-                        offset + SIZE_OF_INT + action.length() + SIZE_OF_INT + stateTransition.length());
-                    if ("CLIENT_ACTION".equals(reason))
-                    {
-                        WAIT_LIST.remove(eventCode);
-                    }
-                    break;
-                }
-
-                default:
-                    WAIT_LIST.remove(eventCode);
-                    break;
-            }
+            pendingList.removeIf(code -> 0 < countingAgent.countClusterEvent(code.toEventCodeId()));
+            Tests.sleep(1, errorMessage);
         }
     }
 }

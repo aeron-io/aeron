@@ -204,6 +204,11 @@ public class CommonContext implements Cloneable
     public static final String ARCHIVE_EVENT_LOG = "aeron.event.archive.log";
 
     /**
+     * Configuration property for the cluster event settings.
+     */
+    public static final String CLUSTER_EVENT_LOG = "aeron.event.cluster.log";
+
+    /**
      * Media type used for IPC shared memory from {@link Publication} to {@link Subscription} channels.
      */
     public static final String IPC_MEDIA = "ipc";
