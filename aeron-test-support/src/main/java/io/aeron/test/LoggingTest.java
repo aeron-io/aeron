@@ -31,26 +31,4 @@ import java.lang.annotation.Target;
 @Tag("logging")
 public @interface LoggingTest
 {
-    /**
-     * The class name of the event log reader agent to install, e.g. a test-local stub reader.
-     *
-     * @return the event log reader agent class.
-     */
-    Class<?> readerClassname();
-
-    /**
-     * The system property key used to enable events for this test class, e.g. {@code aeron.event.log} for driver
-     * events, {@code aeron.event.archive.log} for archive events, or {@code aeron.event.cluster.log} for cluster
-     * events.
-     *
-     * @return the enabled-events system property key.
-     */
-    String enabledEventsKey();
-
-    /**
-     * The value assigned to {@link #enabledEventsKey()}.
-     *
-     * @return the enabled-events value.
-     */
-    String enabledEvents() default "all";
 }

@@ -50,8 +50,7 @@ import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @ExtendWith(InterruptingTestCallback.class)
-@LoggingTest(
-    readerClassname = CountingEventReaderAgent.class, enabledEventsKey = "aeron.event.log", enabledEvents = "all")
+@LoggingTest
 public class DriverEventEnablementTest
 {
     private final Map<Class<?>, Object> defaultValues = new HashMap<>();
