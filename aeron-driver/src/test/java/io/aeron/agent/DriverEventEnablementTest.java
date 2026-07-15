@@ -17,6 +17,7 @@ package io.aeron.agent;
 
 import io.aeron.command.ControlProtocolEvents;
 import io.aeron.driver.DriverLog;
+import io.aeron.driver.media.ImageConnection;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
 import io.aeron.test.LoggingTest;
@@ -72,6 +73,9 @@ public class DriverEventEnablementTest
         defaultValues.put(DirectBuffer.class, new ExpandableArrayBuffer(0));
         defaultValues.put(Enum.class, TimeUnit.MINUTES);
         defaultValues.put(InetAddress.class, InetAddress.getLoopbackAddress());
+        defaultValues.put(
+            ImageConnection[].class,
+            new ImageConnection[]{ new ImageConnection(0, new InetSocketAddress("localhost", 0)) });
     }
 
     @Test
@@ -222,7 +226,7 @@ public class DriverEventEnablementTest
         for (int i = 0; i < parameters.length; i++)
         {
             final Parameter parameter = parameters[i];
-            params[i] = requireNonNull(defaultValues.get(parameter.getType()));
+            params[i] = requireNonNull(defaultValues.get(parameter.getType()), logMethod.toString());
         }
 
         try

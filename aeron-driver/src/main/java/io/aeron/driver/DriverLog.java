@@ -17,6 +17,7 @@ package io.aeron.driver;
 
 import io.aeron.agent.DriverEventCode;
 import io.aeron.agent.DriverEventLogger;
+import io.aeron.driver.media.ImageConnection;
 import org.agrona.DirectBuffer;
 
 import java.net.InetAddress;
@@ -390,8 +391,32 @@ public final class DriverLog
      * @param nakLength  of the NAK.
      * @param channel    of the NAK.
      */
-    public static void logNakSent(
+    private static void logNakSent(
         final InetSocketAddress address,
+        final int sessionId,
+        final int streamId,
+        final int termId,
+        final int termOffset,
+        final int nakLength,
+        final String channel)
+    {
+        DriverEventLogger.LOGGER.logNakMessage(
+            NAK_SENT, address, sessionId, streamId, termId, termOffset, nakLength, channel);
+    }
+
+    /**
+     * Log all the naks send for the connections for a single image.
+     *
+     * @param controlAddresses  NAK UDP destinations.
+     * @param sessionId         of the NAK.
+     * @param streamId          of the NAK.
+     * @param termId            of the NAK.
+     * @param termOffset        of the NAK.
+     * @param nakLength         of the NAK.
+     * @param channel           of the NAK.
+     */
+    public static void logNaksSent(
+        final ImageConnection[] controlAddresses,
         final int sessionId,
         final int streamId,
         final int termId,
@@ -404,8 +429,14 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logNakMessage(
-            NAK_SENT, address, sessionId, streamId, termId, termOffset, nakLength, channel);
+        for (final ImageConnection connection : controlAddresses)
+        {
+            if (null != connection)
+            {
+                logNakSent(
+                    connection.controlAddress, sessionId, streamId, termId, termOffset, nakLength, channel);
+            }
+        }
     }
 
     /**
