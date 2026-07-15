@@ -54,6 +54,7 @@ public final class EventReaderManager
     private final ManyToOneRingBuffer ringBuffer;
     private Thread readerThread;
     private AgentRunner readerAgentRunner;
+    private volatile Agent moduleLoggerReaderAgent;
 
     EventReaderManager()
     {
@@ -99,7 +100,7 @@ public final class EventReaderManager
             }
 
 
-            final Agent moduleLoggerReaderAgent = newReaderAgent(properties, loggers);
+            moduleLoggerReaderAgent = newReaderAgent(properties, loggers);
 
             readerAgentRunner = new AgentRunner(
                 new SleepingMillisIdleStrategy(1L),
@@ -140,5 +141,13 @@ public final class EventReaderManager
         {
             throw new RuntimeException(ex);
         }
+    }
+
+    /**
+     * {@return the install logging agent}
+     */
+    public Agent agent()
+    {
+        return moduleLoggerReaderAgent;
     }
 }
