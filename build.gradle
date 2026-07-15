@@ -240,7 +240,7 @@ subprojects {
 
         useJUnitPlatform {
             if (test.name != 'slowTest' && test.name != 'bindingsTest'
-                    && test.name != 'topologyTest' && test.name != 'loggingTest')
+                    && test.name != 'topologyTest' && !test.name.startsWith('loggingTest'))
             {
                 excludeTags 'any()'
             }
@@ -708,7 +708,59 @@ project(':aeron-archive') {
 
     tasks.withType(Test).configureEach {
         systemProperty 'aeron.event.archive.log', 'all'
-        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.agent.CollectingEventLogReaderAgent'
+        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
+    }
+
+    tasks.register('loggingTestAll', Test) {
+        group = 'verification'
+        forkEvery = 1
+        include '**/ArchiveEventEnablementTest.class'
+        useJUnitPlatform {
+            includeTags 'logging'
+        }
+        systemProperty 'aeron.event.archive.log', 'all'
+        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
+    }
+
+    tasks.register('loggingTestNone', Test) {
+        group = 'verification'
+        forkEvery = 1
+        include '**/ArchiveEventEnablementTest.class'
+        useJUnitPlatform {
+            includeTags 'logging'
+        }
+        systemProperty 'aeron.event.archive.log', 'none'
+        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
+    }
+
+    tasks.register('loggingTestDisabled', Test) {
+        group = 'verification'
+        forkEvery = 1
+        include '**/ArchiveEventEnablementTest.class'
+        useJUnitPlatform {
+            includeTags 'logging'
+        }
+        systemProperty 'aeron.event.archive.log', 'all'
+        systemProperty 'aeron.event.archive.log.disable', 'CATALOG_RESIZE,CMD_IN_CONNECT'
+        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
+    }
+
+    tasks.register('loggingTestConfigured', Test) {
+        group = 'verification'
+        forkEvery = 1
+        include '**/ArchiveEventEnablementTest.class'
+        useJUnitPlatform {
+            includeTags 'logging'
+        }
+        systemProperty 'aeron.event.archive.log', 'CATALOG_RESIZE,CMD_IN_CONNECT'
+        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
+    }
+
+    tasks.named('check') {
+        dependsOn 'loggingTestAll'
+        dependsOn 'loggingTestNone'
+        dependsOn 'loggingTestConfigured'
+        dependsOn 'loggingTestDisabled'
     }
 
     def codecsFile = 'src/main/resources/archive/aeron-archive-codecs.xml'

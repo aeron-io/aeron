@@ -15,7 +15,6 @@
  */
 package io.aeron.test.agent;
 
-import io.aeron.agent.DriverEventCode;
 import io.aeron.agent.EventCodeType;
 import io.aeron.agent.EventConfiguration;
 import org.agrona.MutableDirectBuffer;
@@ -41,10 +40,20 @@ public class CountingEventReaderAgent implements Agent
         return "test-counting-event-reader";
     }
 
-    public long count(final DriverEventCode driverEventCode)
+    private long count(final int eventCodeId, final EventCodeType eventCodeType)
     {
-        final int msgTypeId = EventCodeType.DRIVER.getTypeCode() << 16 | (driverEventCode.id() & 0xFFFF);
+        final int msgTypeId = eventCodeType.getTypeCode() << 16 | (eventCodeId & 0xFFFF);
         return eventCounts.getOrDefault(msgTypeId, zeroCount).get();
+    }
+
+    public long countDriverEvent(final int driverEventCodeId)
+    {
+        return count(driverEventCodeId, EventCodeType.DRIVER);
+    }
+
+    public long countArchiveEvent(final int archiveEventCodeId)
+    {
+        return count(archiveEventCodeId, EventCodeType.ARCHIVE);
     }
 
     private void onMessage(final int msgTypeId, final MutableDirectBuffer buffer, final int index, final int length)
