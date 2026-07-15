@@ -255,7 +255,8 @@ public class DriverLoggingAgentTest
         final Supplier<String> errorMessage = () -> "Pending events: " + pendingList;
         while (!pendingList.isEmpty())
         {
-            pendingList.removeIf(driverEventCode -> 0 < countingAgent.count(driverEventCode));
+            pendingList.removeIf(
+                driverEventCode -> 0 < countingAgent.countDriverEvent(driverEventCode.toEventCodeId()));
             Tests.sleep(1, errorMessage);
         }
     }

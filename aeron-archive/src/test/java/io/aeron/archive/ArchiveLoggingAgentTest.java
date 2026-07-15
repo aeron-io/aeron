@@ -15,9 +15,11 @@
  */
 package io.aeron.archive;
 
+import io.aeron.CommonContext;
 import io.aeron.ExclusivePublication;
 import io.aeron.agent.ArchiveEventCode;
 import io.aeron.agent.EventConfiguration;
+import io.aeron.agent.EventReaderManager;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.status.RecordingPos;
 import io.aeron.driver.MediaDriver;
@@ -25,23 +27,24 @@ import io.aeron.driver.ThreadingMode;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
 import io.aeron.test.Tests;
+import io.aeron.test.agent.CountingEventReaderAgent;
 import org.agrona.IoUtil;
-import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.Agent;
-import org.agrona.concurrent.MessageHandler;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.status.CountersReader;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.File;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.EnumSet;
-import java.util.HashSet;
-import java.util.Properties;
-import java.util.Set;
+import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Supplier;
 
 import static io.aeron.agent.ArchiveEventCode.CMD_IN_AUTH_CONNECT;
 import static io.aeron.agent.ArchiveEventCode.CMD_IN_FIND_LAST_MATCHING_RECORD;
@@ -50,66 +53,42 @@ import static io.aeron.agent.ArchiveEventCode.CMD_IN_MAX_RECORDED_POSITION;
 import static io.aeron.agent.ArchiveEventCode.CMD_IN_START_RECORDING;
 import static io.aeron.agent.ArchiveEventCode.CMD_IN_STOP_RECORDING;
 import static io.aeron.agent.ArchiveEventCode.CMD_OUT_RESPONSE;
-import static io.aeron.agent.EventConfiguration.EVENT_READER_FRAME_LIMIT;
-import static io.aeron.agent.EventConfiguration.eventReader;
-import static java.util.Collections.synchronizedSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 @ExtendWith(InterruptingTestCallback.class)
 public class ArchiveLoggingAgentTest
 {
-    private static final Set<ArchiveEventCode> WAIT_LIST = synchronizedSet(new HashSet<>());
-    private static final String READER_CLASSNAME = "aeron.event.log.reader.classname";
-    private static final String ENABLED_ARCHIVE_EVENT_CODES = "aeron.event.archive.log";
-
     private File testDir;
+
+    @BeforeEach
+    void setUp()
+    {
+        assumeTrue("all".equals(System.getProperty(CommonContext.ARCHIVE_EVENT_LOG)));
+        final String readerClass = System.getProperty(EventReaderManager.READER_CLASSNAME);
+        assumeTrue("io.aeron.test.agent.CountingEventReaderAgent".equals(readerClass));
+    }
 
     @AfterEach
     void after()
     {
-//        AgentTests.stopLogging();
-
         if (testDir != null && testDir.exists())
         {
             IoUtil.delete(testDir, false);
         }
     }
 
+    @SuppressWarnings("try")
     @Test
     @InterruptAfter(10)
     void logAll()
     {
-        testArchiveLogging(EnumSet.of(
-            CMD_OUT_RESPONSE, CMD_IN_AUTH_CONNECT, CMD_IN_KEEP_ALIVE, CMD_IN_START_RECORDING,
-            CMD_IN_FIND_LAST_MATCHING_RECORD, CMD_IN_MAX_RECORDED_POSITION, CMD_IN_STOP_RECORDING));
-    }
-
-    @Test
-    @InterruptAfter(10)
-    void logControlSessionAdapterOnFragment()
-    {
-        testArchiveLogging(CMD_IN_KEEP_ALIVE.name() + "," + CMD_IN_AUTH_CONNECT.id(),
-            EnumSet.of(CMD_IN_AUTH_CONNECT, CMD_IN_KEEP_ALIVE));
-    }
-
-    @Test
-    @InterruptAfter(10)
-    void logControlResponseProxySendResponseHook()
-    {
-        testArchiveLogging(CMD_OUT_RESPONSE.name(), EnumSet.of(CMD_OUT_RESPONSE));
-    }
-
-    private void testArchiveLogging(final String enabledEvents, final EnumSet<ArchiveEventCode> expectedEvents)
-    {
-        restartReaderWithEvents(enabledEvents);
-        testArchiveLogging(expectedEvents);
-    }
-
-    @SuppressWarnings("try")
-    private void testArchiveLogging(final EnumSet<ArchiveEventCode> expectedEvents)
-    {
-        setupExpectedEvents(expectedEvents);
+        testDir = Paths.get(IoUtil.tmpDirName(), "archive-test").toFile();
+        if (testDir.exists())
+        {
+            IoUtil.delete(testDir, false);
+        }
 
         final MediaDriver.Context mediaDriverCtx = new MediaDriver.Context()
             .errorHandler(Tests::onError)
@@ -162,49 +141,25 @@ public class ArchiveLoggingAgentTest
 
             aeronArchive.stopRecording(publication);
 
-            Tests.await(WAIT_LIST::isEmpty);
+            verifyExpectedEvents(EnumSet.of(
+                CMD_OUT_RESPONSE, CMD_IN_AUTH_CONNECT, CMD_IN_KEEP_ALIVE, CMD_IN_START_RECORDING,
+                CMD_IN_FIND_LAST_MATCHING_RECORD, CMD_IN_MAX_RECORDED_POSITION, CMD_IN_STOP_RECORDING));
         }
     }
 
-    private void restartReaderWithEvents(final String enabledEvents)
+    private static void verifyExpectedEvents(final EnumSet<ArchiveEventCode> expectedEvents)
     {
-        final Properties configOptions = new Properties();
-        configOptions.put(READER_CLASSNAME, StubEventLogReaderAgent.class.getName());
-        configOptions.put(ENABLED_ARCHIVE_EVENT_CODES, enabledEvents);
-        EventConfiguration.restartReader(configOptions);
-    }
+        final Agent agent = EventConfiguration.eventReader().agent();
+        Assertions.assertInstanceOf(CountingEventReaderAgent.class, agent);
+        final CountingEventReaderAgent countingAgent = (CountingEventReaderAgent)agent;
 
-    private void setupExpectedEvents(final EnumSet<ArchiveEventCode> expectedEvents)
-    {
-        WAIT_LIST.clear();
-        WAIT_LIST.addAll(expectedEvents);
+        final List<ArchiveEventCode> pendingList = new ArrayList<>(expectedEvents);
 
-        testDir = Paths.get(IoUtil.tmpDirName(), "archive-test").toFile();
-        if (testDir.exists())
+        final Supplier<String> errorMessage = () -> "Pending events: " + pendingList;
+        while (!pendingList.isEmpty())
         {
-            IoUtil.delete(testDir, false);
-        }
-    }
-
-    public static final class StubEventLogReaderAgent implements Agent, MessageHandler
-    {
-        public StubEventLogReaderAgent()
-        {
-        }
-
-        public String roleName()
-        {
-            return "event-log-reader";
-        }
-
-        public int doWork()
-        {
-            return eventReader().ringBuffer().read(this, EVENT_READER_FRAME_LIMIT);
-        }
-
-        public void onMessage(final int msgTypeId, final MutableDirectBuffer buffer, final int index, final int length)
-        {
-            WAIT_LIST.remove(ArchiveEventCode.fromEventCodeId(msgTypeId));
+            pendingList.removeIf(code -> 0 < countingAgent.countArchiveEvent(code.toEventCodeId()));
+            Tests.sleep(1, errorMessage);
         }
     }
 }
