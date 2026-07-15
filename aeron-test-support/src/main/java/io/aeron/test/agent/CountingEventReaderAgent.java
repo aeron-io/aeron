@@ -56,6 +56,11 @@ public class CountingEventReaderAgent implements Agent
         return count(archiveEventCodeId, EventCodeType.ARCHIVE);
     }
 
+    public long countClusterEvent(final int clusterEventCodeId)
+    {
+        return count(clusterEventCodeId, EventCodeType.CLUSTER);
+    }
+
     private void onMessage(final int msgTypeId, final MutableDirectBuffer buffer, final int index, final int length)
     {
         eventCounts.computeIfAbsent(msgTypeId, (ignore) -> new AtomicLong(0)).incrementAndGet();

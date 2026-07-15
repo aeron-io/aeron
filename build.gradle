@@ -977,7 +977,59 @@ project(':aeron-cluster') {
 
     tasks.withType(Test).configureEach {
         systemProperty 'aeron.event.cluster.log', 'all'
-        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.agent.CollectingEventLogReaderAgent'
+        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
+    }
+
+    tasks.register('loggingTestAll', Test) {
+        group = 'verification'
+        forkEvery = 1
+        include '**/ClusterEventEnablementTest.class'
+        useJUnitPlatform {
+            includeTags 'logging'
+        }
+        systemProperty 'aeron.event.cluster.log', 'all'
+        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
+    }
+
+    tasks.register('loggingTestNone', Test) {
+        group = 'verification'
+        forkEvery = 1
+        include '**/ClusterEventEnablementTest.class'
+        useJUnitPlatform {
+            includeTags 'logging'
+        }
+        systemProperty 'aeron.event.cluster.log', 'none'
+        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
+    }
+
+    tasks.register('loggingTestDisabled', Test) {
+        group = 'verification'
+        forkEvery = 1
+        include '**/ClusterEventEnablementTest.class'
+        useJUnitPlatform {
+            includeTags 'logging'
+        }
+        systemProperty 'aeron.event.cluster.log', 'all'
+        systemProperty 'aeron.event.cluster.log.disable', 'CANVASS_POSITION,COMMIT_POSITION'
+        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
+    }
+
+    tasks.register('loggingTestConfigured', Test) {
+        group = 'verification'
+        forkEvery = 1
+        include '**/ClusterEventEnablementTest.class'
+        useJUnitPlatform {
+            includeTags 'logging'
+        }
+        systemProperty 'aeron.event.cluster.log', 'CANVASS_POSITION,COMMIT_POSITION'
+        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
+    }
+
+    tasks.named('check') {
+        dependsOn 'loggingTestAll'
+        dependsOn 'loggingTestNone'
+        dependsOn 'loggingTestConfigured'
+        dependsOn 'loggingTestDisabled'
     }
 
     def codecsFile = 'src/main/resources/cluster/aeron-cluster-codecs.xml'
