@@ -24,9 +24,13 @@ import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
 
 import java.lang.reflect.Constructor;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.ServiceLoader;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 import static io.aeron.agent.EventConfiguration.BUFFER_LENGTH_DEFAULT;
 import static io.aeron.agent.EventConfiguration.BUFFER_LENGTH_PROP_NAME;
@@ -93,12 +97,15 @@ public final class EventReaderManager
         final ArrayList<ModuleLogger> loggers = new ArrayList<>();
         try
         {
+            if (!isLoggingEnabled(System.getProperties()))
+            {
+                return;
+            }
 
             for (final ModuleLogger componentLogger : ServiceLoader.load(ModuleLogger.class))
             {
                 loggers.add(componentLogger);
             }
-
 
             moduleLoggerReaderAgent = newReaderAgent(properties, loggers);
 
@@ -117,6 +124,33 @@ public final class EventReaderManager
         {
             ex.printStackTrace(System.err);
         }
+    }
+
+    static boolean isLoggingEnabled(final Properties properties)
+    {
+        if (properties.containsKey(EventReaderManager.READER_CLASSNAME))
+        {
+            return true;
+        }
+
+        final Pattern p = Pattern.compile("aeron.event.*log");
+        final HashMap<String, String> enabledLoggers = new HashMap<>();
+
+        final Set<Map.Entry<Object, Object>> entries = properties.entrySet();
+        for (final Map.Entry<Object, Object> entry : entries)
+        {
+            final String propertyName = (String)entry.getKey();
+            if (p.matcher(propertyName).matches())
+            {
+                final String value = (String)entry.getValue();
+                if (!"none".equalsIgnoreCase(value))
+                {
+                    enabledLoggers.put(propertyName, value);
+                }
+            }
+        }
+
+        return !enabledLoggers.isEmpty();
     }
 
     private Agent newReaderAgent(final Properties configOptions, final List<ModuleLogger> loggers)

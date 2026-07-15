@@ -143,7 +143,7 @@ public final class EventConfiguration
                 {
                     eventCodeSet.add(code);
                 }
-                else
+                else if (!"none".equalsIgnoreCase(codeId))
                 {
                     err.println("unknown event code: " + codeId);
                 }
