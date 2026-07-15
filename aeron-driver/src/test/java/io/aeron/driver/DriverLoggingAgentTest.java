@@ -17,32 +17,33 @@ package io.aeron.driver;
 
 import io.aeron.Aeron;
 import io.aeron.AvailableImageHandler;
+import io.aeron.CommonContext;
 import io.aeron.ExclusivePublication;
 import io.aeron.Image;
 import io.aeron.Publication;
 import io.aeron.Subscription;
 import io.aeron.UnavailableImageHandler;
 import io.aeron.agent.DriverEventCode;
-import io.aeron.agent.EventCodeType;
 import io.aeron.agent.EventConfiguration;
+import io.aeron.agent.EventReaderManager;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
-import io.aeron.test.LoggingTest;
 import io.aeron.test.Tests;
-import org.agrona.MutableDirectBuffer;
+import io.aeron.test.agent.CountingEventReaderAgent;
 import org.agrona.collections.MutableInteger;
 import org.agrona.concurrent.Agent;
-import org.agrona.concurrent.MessageHandler;
 import org.agrona.concurrent.UnsafeBuffer;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+import java.util.ArrayList;
 import java.util.EnumSet;
-import java.util.Properties;
-import java.util.Set;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
@@ -73,32 +74,31 @@ import static io.aeron.agent.DriverEventCode.REMOVE_IMAGE_CLEANUP;
 import static io.aeron.agent.DriverEventCode.REMOVE_PUBLICATION_CLEANUP;
 import static io.aeron.agent.DriverEventCode.SEND_CHANNEL_CLOSE;
 import static io.aeron.agent.DriverEventCode.SEND_CHANNEL_CREATION;
-import static io.aeron.agent.EventConfiguration.EVENT_READER_FRAME_LIMIT;
-import static io.aeron.agent.EventConfiguration.eventReader;
-import static java.util.Collections.synchronizedSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.params.provider.EnumSource.Mode.INCLUDE;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 
 @ExtendWith(InterruptingTestCallback.class)
-@LoggingTest(
-    readerClassname = DriverLoggingAgentTest.StubEventLogReaderAgent.class, enabledEventsKey = "aeron.event.log")
 public class DriverLoggingAgentTest
 {
-    private static final String READER_CLASSNAME = "aeron.event.log.reader.classname";
-    private static final String ENABLED_DRIVER_EVENT_CODES = "aeron.event.log";
-
     private static final String NETWORK_CHANNEL =
         "aeron:udp?control-mode=dynamic|control=localhost:20550|fc=min,t:1ns";
     private static final int STREAM_ID = 1777;
 
-    private static final Set<DriverEventCode> WAIT_LIST = synchronizedSet(EnumSet.noneOf(DriverEventCode.class));
-
     private final AvailableImageHandler availableImageHandler = mock(AvailableImageHandler.class);
     private final UnavailableImageHandler unavailableImageHandler = mock(UnavailableImageHandler.class);
+
+    @BeforeEach
+    void setUp()
+    {
+        assumeTrue("all".equals(System.getProperty(CommonContext.EVENT_LOG)));
+        final String readerClass = System.getProperty(EventReaderManager.READER_CLASSNAME);
+        assumeTrue("io.aeron.test.agent.CountingEventReaderAgent".equals(readerClass));
+    }
 
     @Test
     @InterruptAfter(10)
@@ -199,45 +199,17 @@ public class DriverLoggingAgentTest
 
     @ParameterizedTest
     @EnumSource(value = DriverEventCode.class, mode = INCLUDE, names = {
-        "REMOVE_IMAGE_CLEANUP",
-        "REMOVE_PUBLICATION_CLEANUP",
-        "SEND_CHANNEL_CREATION",
-        "SEND_CHANNEL_CLOSE",
-        "RECEIVE_CHANNEL_CREATION",
-        "RECEIVE_CHANNEL_CLOSE",
-        "FRAME_IN",
-        "FRAME_OUT",
-        "CMD_IN_ADD_SUBSCRIPTION",
-        "CMD_OUT_AVAILABLE_IMAGE"
-    })
-    @InterruptAfter(10)
-    void logIndividualEvents(final DriverEventCode eventCode)
-    {
-        testLogMediaDriverEvents(NETWORK_CHANNEL, eventCode.name(), EnumSet.of(eventCode));
-    }
-
-    @ParameterizedTest
-    @EnumSource(value = DriverEventCode.class, mode = INCLUDE, names = {
         "PUBLICATION_REVOKE",
         "PUBLICATION_IMAGE_REVOKE"
     })
     @InterruptAfter(10)
     void logIndividualExclusivePublicationEvents(final DriverEventCode eventCode)
     {
-        testLogExclusivePublicationMediaDriverEvents(NETWORK_CHANNEL, eventCode.name(), EnumSet.of(eventCode));
-    }
-
-    private void testLogMediaDriverEvents(
-        final String channel, final String enabledEvents, final EnumSet<DriverEventCode> expectedEvents)
-    {
-        restartReaderWithEvents(enabledEvents);
-        testLogMediaDriverEvents(channel, expectedEvents);
+        testLogExclusivePublicationMediaDriverEvents(NETWORK_CHANNEL, EnumSet.of(eventCode));
     }
 
     private void testLogMediaDriverEvents(final String channel, final EnumSet<DriverEventCode> expectedEvents)
     {
-        setupExpectedEvents(expectedEvents);
-
         final MediaDriver.Context driverCtx = new MediaDriver.Context()
             .threadingMode(ThreadingMode.SHARED)
             .errorHandler(Tests::onError)
@@ -265,29 +237,33 @@ public class DriverLoggingAgentTest
                     Tests.yield();
                 }
 
-                assertEquals(counter.get(), 1);
+                assertEquals(1, counter.get());
             }
 
-            final Supplier<String> errorMessage = () -> "Pending events: " + WAIT_LIST;
-            while (!WAIT_LIST.isEmpty())
-            {
-                Tests.yieldingIdle(errorMessage);
-            }
+            verifyExpectedEvents(expectedEvents);
+        }
+    }
+
+    private static void verifyExpectedEvents(final EnumSet<DriverEventCode> expectedEvents)
+    {
+        final Agent agent = EventConfiguration.eventReader().agent();
+        Assertions.assertInstanceOf(CountingEventReaderAgent.class, agent);
+        final CountingEventReaderAgent countingAgent = (CountingEventReaderAgent)agent;
+
+        final List<DriverEventCode> pendingList = new ArrayList<>(expectedEvents);
+
+        final Supplier<String> errorMessage = () -> "Pending events: " + pendingList;
+        while (!pendingList.isEmpty())
+        {
+            pendingList.removeIf(driverEventCode -> 0 < countingAgent.count(driverEventCode));
+            Tests.sleep(1, errorMessage);
         }
     }
 
     private void testLogExclusivePublicationMediaDriverEvents(
-        final String channel, final String enabledEvents, final EnumSet<DriverEventCode> expectedEvents)
+        final String channel,
+        final EnumSet<DriverEventCode> expectedEvents)
     {
-        restartReaderWithEvents(enabledEvents);
-        testLogExclusivePublicationMediaDriverEvents(channel, expectedEvents);
-    }
-
-    private void testLogExclusivePublicationMediaDriverEvents(
-        final String channel, final EnumSet<DriverEventCode> expectedEvents)
-    {
-        setupExpectedEvents(expectedEvents);
-
         final MediaDriver.Context driverCtx = new MediaDriver.Context()
             .errorHandler(Tests::onError)
             .publicationLingerTimeoutNs(3_000_000_000L)
@@ -324,7 +300,7 @@ public class DriverLoggingAgentTest
                     Tests.yield();
                 }
 
-                assertEquals(counter.get(), 1);
+                assertEquals(1, counter.get());
 
                 publication.revoke();
 
@@ -334,54 +310,7 @@ public class DriverLoggingAgentTest
                 }
             }
 
-            final Supplier<String> errorMessage = () -> "Pending events: " + WAIT_LIST;
-            while (!WAIT_LIST.isEmpty())
-            {
-                Tests.yieldingIdle(errorMessage);
-            }
-        }
-    }
-
-    private void restartReaderWithEvents(final String enabledEvents)
-    {
-        final Properties configOptions = new Properties();
-        configOptions.put(READER_CLASSNAME, StubEventLogReaderAgent.class.getName());
-        configOptions.put(ENABLED_DRIVER_EVENT_CODES, enabledEvents);
-        EventConfiguration.restartReader(configOptions);
-    }
-
-    private void setupExpectedEvents(final EnumSet<DriverEventCode> expectedEvents)
-    {
-        WAIT_LIST.clear();
-        WAIT_LIST.addAll(expectedEvents);
-    }
-
-    public static final class StubEventLogReaderAgent implements Agent, MessageHandler
-    {
-        public StubEventLogReaderAgent()
-        {
-        }
-
-        public String roleName()
-        {
-            return "event-log-reader";
-        }
-
-        public int doWork()
-        {
-            return eventReader().ringBuffer().read(this, EVENT_READER_FRAME_LIMIT);
-        }
-
-        public void onMessage(
-            final int msgTypeId, final MutableDirectBuffer buffer, final int index, final int length)
-        {
-            final int eventCodeTypeId = msgTypeId >>> 16;
-            if (eventCodeTypeId != EventCodeType.DRIVER.getTypeCode())
-            {
-                return;
-            }
-
-            WAIT_LIST.remove(DriverEventCode.fromEventCodeId(msgTypeId));
+            verifyExpectedEvents(expectedEvents);
         }
     }
 }

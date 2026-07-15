@@ -24,7 +24,6 @@ import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
-import io.aeron.test.LoggingTest;
 import io.aeron.test.Tests;
 import org.agrona.IoUtil;
 import org.agrona.MutableDirectBuffer;
@@ -44,7 +43,13 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
-import static io.aeron.agent.ArchiveEventCode.*;
+import static io.aeron.agent.ArchiveEventCode.CMD_IN_AUTH_CONNECT;
+import static io.aeron.agent.ArchiveEventCode.CMD_IN_FIND_LAST_MATCHING_RECORD;
+import static io.aeron.agent.ArchiveEventCode.CMD_IN_KEEP_ALIVE;
+import static io.aeron.agent.ArchiveEventCode.CMD_IN_MAX_RECORDED_POSITION;
+import static io.aeron.agent.ArchiveEventCode.CMD_IN_START_RECORDING;
+import static io.aeron.agent.ArchiveEventCode.CMD_IN_STOP_RECORDING;
+import static io.aeron.agent.ArchiveEventCode.CMD_OUT_RESPONSE;
 import static io.aeron.agent.EventConfiguration.EVENT_READER_FRAME_LIMIT;
 import static io.aeron.agent.EventConfiguration.eventReader;
 import static java.util.Collections.synchronizedSet;
@@ -52,9 +57,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 @ExtendWith(InterruptingTestCallback.class)
-@LoggingTest(
-    readerClassname = ArchiveLoggingAgentTest.StubEventLogReaderAgent.class,
-    enabledEventsKey = "aeron.event.archive.log")
 public class ArchiveLoggingAgentTest
 {
     private static final Set<ArchiveEventCode> WAIT_LIST = synchronizedSet(new HashSet<>());
