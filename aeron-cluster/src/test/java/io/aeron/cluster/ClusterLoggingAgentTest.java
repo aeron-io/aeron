@@ -30,7 +30,6 @@ import io.aeron.driver.MediaDriver.Context;
 import io.aeron.driver.ThreadingMode;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
-import io.aeron.test.LoggingTest;
 import io.aeron.test.TestContexts;
 import io.aeron.test.Tests;
 import io.aeron.test.cluster.ClusterTests;
@@ -65,9 +64,6 @@ import static org.agrona.BitUtil.SIZE_OF_LONG;
 import static org.mockito.Mockito.mock;
 
 @ExtendWith(InterruptingTestCallback.class)
-@LoggingTest(
-    readerClassname = ClusterLoggingAgentTest.StubEventLogReaderAgent.class,
-    enabledEventsKey = "aeron.event.cluster.log")
 public class ClusterLoggingAgentTest
 {
     private static final Set<ClusterEventCode> WAIT_LIST = synchronizedSet(EnumSet.noneOf(ClusterEventCode.class));

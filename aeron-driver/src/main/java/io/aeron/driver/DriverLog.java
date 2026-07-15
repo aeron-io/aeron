@@ -59,6 +59,7 @@ public final class DriverLog
     private static final boolean LOG_RESEND_ENABLED = isEnabled(RESEND);
     private static final boolean LOG_PUBLICATION_REVOKE_ENABLED = isEnabled(PUBLICATION_REVOKE);
     private static final boolean LOG_PUBLICATION_IMAGE_REVOKE_ENABLED = isEnabled(PUBLICATION_IMAGE_REVOKE);
+    private static final boolean LOG_TEXT_DATA_ENABLED = isEnabled(TEXT_DATA);
 
     private DriverLog()
     {
@@ -515,6 +516,21 @@ public final class DriverLog
         {
             DriverEventLogger.LOGGER.log(code, buffer, index, length);
         }
+    }
+
+    /**
+     * Log a simple text input.
+     *
+     * @param text to be logged.
+     */
+    public static void logText(final String text)
+    {
+        if (!LOG_TEXT_DATA_ENABLED)
+        {
+            return;
+        }
+
+        DriverEventLogger.LOGGER.logString(TEXT_DATA, text);
     }
 
     private static DriverEventCode cmdEventCode(final int msgTypeId)

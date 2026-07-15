@@ -194,6 +194,11 @@ public class CommonContext implements Cloneable
     public static final String FALLBACK_LOGGER_PROP_NAME = "aeron.fallback.logger";
 
     /**
+     * Configuration property for the driver event settings.
+     */
+    public static final String EVENT_LOG = "aeron.event.log";
+
+    /**
      * Media type used for IPC shared memory from {@link Publication} to {@link Subscription} channels.
      */
     public static final String IPC_MEDIA = "ipc";
