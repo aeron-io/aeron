@@ -178,12 +178,30 @@ public class CborUtil
         final byte keyType = createTypeByte(BYTE_STRING_TYPE, key.length());
         buffer.putByte(offset, keyType);
         buffer.putStringWithoutLengthAscii(offset + 1, key);
-        final byte valueType = createTypeByte(TEXT_STRING_TYPE, value.length());
-        buffer.putByte(offset + 1 + key.length() , valueType);
-        buffer.putStringWithoutLengthAscii(offset + 1 + key.length() + 1, value);
-        encodingState.incrementOffset( 1 + key.length() + 1 + value.length());
+        encodingState.incrementOffset(1 + key.length());
+
+        if (value.length() >= 0b11111)
+        {
+            encodeIndefiniteLengthString(encodingState, value);
+        }
+        else
+        {
+            final int valueStartOffset = encodingState.offset();
+            final byte valueType = createTypeByte(TEXT_STRING_TYPE, value.length());
+            buffer.putByte(valueStartOffset, valueType);
+            buffer.putStringWithoutLengthAscii(valueStartOffset + 1, value);
+            encodingState.incrementOffset( 1 + value.length());
+        }
 
         return 1;
+    }
+
+    private static void encodeIndefiniteLengthString(
+        final EncodingState encodingState,
+        final CharSequence value
+    )
+    {
+        // TODO: Implement indefinite length string encoding
     }
 
     public static int headerLength(final ClusterEventCode clusterEventCode, final long timestamp)
