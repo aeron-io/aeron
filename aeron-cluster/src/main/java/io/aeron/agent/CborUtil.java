@@ -52,23 +52,23 @@ public class CborUtil
         else
         {
             // Encode
-            if (value < Byte.MAX_VALUE)
+            if (value < 256)
             {
-                // Case 24
+                // Case 24: 1 extra byte
                 buffer.putByte(offset, (byte)(0b000_11000 | negativeMask));
                 buffer.putByte(offset + 1, (byte)value);
                 encodingState.incrementOffset(1 + BitUtil.SIZE_OF_BYTE);
             }
-            else if (value < Short.MAX_VALUE)
+            else if (value < 65536)
             {
-                // Case 25
+                // Case 25: 2 extra bytes
                 buffer.putByte(offset, (byte)(0b000_11001 | negativeMask));
                 buffer.putShort(offset + 1, (short)value, BIG_ENDIAN);
                 encodingState.incrementOffset(1 + BitUtil.SIZE_OF_SHORT);
             }
-            else if (value < Integer.MAX_VALUE)
+            else
             {
-                // Case 26
+                // Case 26: 4 extra bytes
                 buffer.putByte(offset, (byte)(0b000_11010 | negativeMask));
                 buffer.putInt(offset + 1, value, BIG_ENDIAN);
                 encodingState.incrementOffset(1 + BitUtil.SIZE_OF_INT);
