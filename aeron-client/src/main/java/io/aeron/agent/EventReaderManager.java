@@ -15,6 +15,7 @@
  */
 package io.aeron.agent;
 
+import io.aeron.CommonContext;
 import org.agrona.CloseHelper;
 import org.agrona.concurrent.Agent;
 import org.agrona.concurrent.AgentRunner;
@@ -44,10 +45,6 @@ import static org.agrona.concurrent.ringbuffer.RingBufferDescriptor.TRAILER_LENG
  */
 public final class EventReaderManager
 {
-    private static final String READER_CLASSNAME = "aeron.event.log.reader.classname";
-    private static final String READER_CLASSNAME_DEFAULT
-        = "io.aeron.agent.ModuleLoggerReaderAgent";
-
     private final ManyToOneRingBuffer ringBuffer;
     private Thread readerThread;
     private AgentRunner readerAgentRunner;
@@ -121,7 +118,7 @@ public final class EventReaderManager
 
     static boolean isLoggingEnabled(final Properties properties)
     {
-        if (properties.containsKey(EventReaderManager.READER_CLASSNAME))
+        if (properties.containsKey(CommonContext.EVENT_LOG_READER_CLASSNAME_PROP_NAME))
         {
             return true;
         }
@@ -151,7 +148,7 @@ public final class EventReaderManager
         try
         {
             final Class<?> aClass = Class.forName(
-                configOptions.getProperty(READER_CLASSNAME, READER_CLASSNAME_DEFAULT));
+                configOptions.getProperty(CommonContext.EVENT_LOG_READER_CLASSNAME_PROP_NAME, CommonContext.EVENT_LOG_READER_CLASSNAME_DEFAULT));
 
             try
             {
