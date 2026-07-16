@@ -14,6 +14,8 @@ public class CborUtil
     private final static byte BYTE_STRING_TYPE = 0b010_00000;
     private final static byte TEXT_STRING_TYPE = 0b011_00000;
 
+    private final static int BYTES_PER_CHUNK = 0x17;
+
     public static int length(final CharSequence key, final int value)
     {
         final int keyBytes = 1 + key.length();
@@ -206,7 +208,28 @@ public class CborUtil
         final CharSequence value
     )
     {
-        // TODO: Implement indefinite length string encoding
+        int offset = encodingState.offset();
+        final int valueLength = value.length();
+        final MutableDirectBuffer buffer = encodingState.buffer();
+
+        final byte indefiniteStringType = createTypeByte(TEXT_STRING_TYPE, 0b11111);
+        buffer.putByte(offset++, indefiniteStringType);
+        encodingState.incrementOffset(1);
+
+        for (int i = 0; i <= valueLength / BYTES_PER_CHUNK; i++)
+        {
+            final int lowerBound = i * BYTES_PER_CHUNK;
+            final int upperBound = Math.min((i + 1) * BYTES_PER_CHUNK, valueLength);
+            final byte definiteStringType = createTypeByte(TEXT_STRING_TYPE, upperBound - lowerBound);
+            buffer.putByte(offset++, definiteStringType);
+            encodingState.incrementOffset(1);
+            buffer.putStringWithoutLengthAscii(offset, value, lowerBound, upperBound);
+            offset += upperBound - lowerBound;
+            encodingState.incrementOffset(upperBound - lowerBound);
+        }
+        buffer.putByte(offset, (byte)0xFF);
+        encodingState.incrementOffset(1);
+
     }
 
     public static int headerLength(final ClusterEventCode clusterEventCode, final long timestamp)
