@@ -4,6 +4,9 @@ import org.agrona.BitUtil;
 import org.agrona.MutableDirectBuffer;
 
 import static java.nio.ByteOrder.BIG_ENDIAN;
+import static org.agrona.BitUtil.SIZE_OF_BYTE;
+import static org.agrona.BitUtil.SIZE_OF_INT;
+import static org.agrona.BitUtil.SIZE_OF_SHORT;
 
 public class CborUtil
 {
@@ -19,8 +22,8 @@ public class CborUtil
         {
             return 1 + keyBytes;
         }
-        final int valueBytes = (magnitude >>> 16) != 0 ? BitUtil.SIZE_OF_INT :
-            (magnitude >>> 8) != 0 ? BitUtil.SIZE_OF_SHORT : BitUtil.SIZE_OF_BYTE;
+        final int valueBytes = (magnitude >>> 16) != 0 ? SIZE_OF_INT :
+            (magnitude >>> 8) != 0 ? SIZE_OF_SHORT : SIZE_OF_BYTE;
 
         return keyBytes + 1 + valueBytes;
     }
@@ -50,6 +53,7 @@ public class CborUtil
         int value
         )
     {
+        // TODO: handle long (8 byte) case either here or through a new method
         final int offset = encodingState.offset();
         final MutableDirectBuffer buffer = encodingState.buffer();
 
@@ -69,27 +73,27 @@ public class CborUtil
         }
         else
         {
-            // Encode
+            // Encode based on minimum number of bytes required
             if (value < 256)
             {
-                // Case 24: 1 extra byte
+                // 1 extra byte case (24)
                 buffer.putByte(offset, (byte)(0b000_11000 | negativeMask));
                 buffer.putByte(offset + 1, (byte)value);
-                encodingState.incrementOffset(1 + BitUtil.SIZE_OF_BYTE);
+                encodingState.incrementOffset(1 + SIZE_OF_BYTE);
             }
             else if (value < 65536)
             {
-                // Case 25: 2 extra bytes
+                // 2 extra bytes case (25)
                 buffer.putByte(offset, (byte)(0b000_11001 | negativeMask));
                 buffer.putShort(offset + 1, (short)value, BIG_ENDIAN);
-                encodingState.incrementOffset(1 + BitUtil.SIZE_OF_SHORT);
+                encodingState.incrementOffset(1 + SIZE_OF_SHORT);
             }
             else
             {
-                // Case 26: 4 extra bytes
+                // 4 extra bytes case (26)
                 buffer.putByte(offset, (byte)(0b000_11010 | negativeMask));
                 buffer.putInt(offset + 1, value, BIG_ENDIAN);
-                encodingState.incrementOffset(1 + BitUtil.SIZE_OF_INT);
+                encodingState.incrementOffset(1 + SIZE_OF_INT);
             }
         }
     }
@@ -186,6 +190,7 @@ public class CborUtil
         }
         else
         {
+            // Definite length string case
             final int valueStartOffset = encodingState.offset();
             final byte valueType = createTypeByte(TEXT_STRING_TYPE, value.length());
             buffer.putByte(valueStartOffset, valueType);
