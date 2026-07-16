@@ -7,6 +7,10 @@ import static java.nio.ByteOrder.BIG_ENDIAN;
 
 public class CborUtil
 {
+    // Base bytes for major types
+    private final static byte BYTE_STRING_TYPE = 0b010_00000;
+    private final static byte TEXT_STRING_TYPE = 0b011_00000;
+
     public static int length(final CharSequence key, final int value)
     {
         final int keyBytes = 1 + key.length();
@@ -34,6 +38,11 @@ public class CborUtil
     public static <E extends Enum<E>> int length(final CharSequence key, final CharSequence value)
     {
         return 0;
+    }
+
+    private static byte createTypeByte(final byte majorType, final int modifier)
+    {
+        return (byte)(majorType | modifier);
     }
 
     private static void encodeNumber(
@@ -145,7 +154,7 @@ public class CborUtil
         return 1;
     }
 
-    public static <E extends Enum<E>> int encode(
+    public static int encode(
         final EncodingState encodingState,
         final CharSequence key,
         final CharSequence value)
@@ -154,6 +163,25 @@ public class CborUtil
         {
             return 0;
         }
+
+        final int length = length(key, value);
+
+        if (encodingState.remaining() < length)
+        {
+            encodingState.reachedLimit(true);
+            return 0;
+        }
+
+        final int offset = encodingState.offset();
+        final MutableDirectBuffer buffer = encodingState.buffer();
+
+        final byte keyType = createTypeByte(BYTE_STRING_TYPE, key.length());
+        buffer.putByte(offset, keyType);
+        buffer.putStringWithoutLengthAscii(offset + 1, key);
+        final byte valueType = createTypeByte(TEXT_STRING_TYPE, value.length());
+        buffer.putByte(offset + 1 + key.length() , valueType);
+        buffer.putStringWithoutLengthAscii(offset + 1 + key.length() + 1, value);
+        encodingState.incrementOffset( 1 + key.length() + 1 + value.length());
 
         return 1;
     }
