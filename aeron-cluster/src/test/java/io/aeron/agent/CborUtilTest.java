@@ -20,7 +20,7 @@ class CborUtilTest
         0x12345678, 0x7FFFFFFF, 0x80000000,
         -2, -25, -0xFF,
         -0x1234, -0xFFFF,
-        -0x12345678, -0xFFFFFFFE})
+        -0x12345678, -0x7FFFFFFE})
     void shouldEncodeMessage(final int memberId)
     {
         final int offset = 0;
@@ -33,7 +33,11 @@ class CborUtilTest
         encodingState.reset(buffer, offset, length);
 
         CborUtil.encodeHeader(encodingState, ClusterEventCode.ELECTION_STATE_CHANGE, timestamp);
+        final int startOffset = encodingState.offset();
         CborUtil.encode(encodingState, "memberId", memberId);
+        assertEquals(
+            CborUtil.length("memberId", memberId),
+            encodingState.offset() - startOffset);
         CborUtil.encodeFooter(encodingState);
 
         final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());

@@ -9,7 +9,16 @@ public class CborUtil
 {
     public static int length(final CharSequence key, final int value)
     {
-        return 0;
+        final int keyBytes = 1 + key.length();
+        final int magnitude = value < 0 ? ~value : value;
+        if (magnitude < 24)
+        {
+            return 1 + keyBytes;
+        }
+        final int valueBytes = (magnitude >>> 16) != 0 ? BitUtil.SIZE_OF_INT :
+            (magnitude >>> 8) != 0 ? BitUtil.SIZE_OF_SHORT : BitUtil.SIZE_OF_BYTE;
+
+        return keyBytes + 1 + valueBytes;
     }
 
     public static int length(final CharSequence key, final long value)
