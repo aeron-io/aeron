@@ -61,13 +61,6 @@ public class ArchiveModuleLogger implements ModuleLogger
     }
 
     /**
-     * Default constructor.
-     */
-    public ArchiveModuleLogger()
-    {
-    }
-
-    /**
      * Determine if a given event code is configured/enabled for logging.
      *
      * @param archiveEventCode to check for enablement.

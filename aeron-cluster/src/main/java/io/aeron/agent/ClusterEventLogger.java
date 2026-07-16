@@ -55,7 +55,7 @@ import static org.agrona.BitUtil.SIZE_OF_LONG;
 public final class ClusterEventLogger
 {
     /**
-     * Logger for writing into the {@link EventReaderManager#ringBuffer()}.
+     * Logger for writing into the {@link EventConfiguration#EVENT_RING_BUFFER}.
      */
     public static final ClusterEventLogger LOGGER =
         new ClusterEventLogger(EventConfiguration.eventReader().ringBuffer());

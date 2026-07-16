@@ -22,7 +22,7 @@ import java.util.Arrays;
 import static io.aeron.agent.DriverEventDissector.*;
 
 /**
- * Events and codecs for encoding/decoding events recorded to the {@link EventReaderManager#ringBuffer()}.
+ * Events and codecs for encoding/decoding events recorded to the {@link EventConfiguration#EVENT_RING_BUFFER}.
  */
 public enum DriverEventCode implements EventCode
 {
