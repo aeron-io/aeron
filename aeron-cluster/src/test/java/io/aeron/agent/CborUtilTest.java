@@ -1,12 +1,11 @@
 package io.aeron.agent;
 
-import org.agrona.ExpandableArrayBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.dataformat.cbor.CBORFactory;
-import tools.jackson.dataformat.cbor.CBORMapper;
 
 import java.util.Map;
 
@@ -14,14 +13,20 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class CborUtilTest
 {
-    @Test
-    void shouldEncodeMessage()
+    @ParameterizedTest
+    @ValueSource(ints = {
+        2, 25, 0x7F, 0x100,
+        0x1234, 0x7FFF, 0x10000,
+        0x12345678, 0x7FFFFFFF
+        -2, -25, -0xFF,
+        -0x1234, -0xFFFF,
+        -0x12345678, -0xFFFFFFFE})
+    void shouldEncodeMessage(final int memberId)
     {
         final int offset = 0;
         final int length = 1024;
         final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
 
-        final int memberId = 2;
         final long timestamp = 12643263L;
 
         final EncodingState encodingState = new EncodingState();
@@ -46,4 +51,5 @@ class CborUtilTest
 
         System.out.println(stringObjectMap);
     }
+
 }

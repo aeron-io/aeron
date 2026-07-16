@@ -1,6 +1,9 @@
 package io.aeron.agent;
 
+import org.agrona.BitUtil;
 import org.agrona.MutableDirectBuffer;
+
+import static java.nio.ByteOrder.BIG_ENDIAN;
 
 public class CborUtil
 {
@@ -24,17 +27,54 @@ public class CborUtil
         return 0;
     }
 
-//    private int encode(final MutableDirectBuffer buffer, int value)
-//    {
-//        if (value < 0)
-//        {
-//
-//        }
-//        else if (value < 24)
-//        {
-//
-//        }
-//    }
+    private static void encodeNumber(
+        final EncodingState encodingState,
+        int value
+        )
+    {
+        final int offset = encodingState.offset();
+        final MutableDirectBuffer buffer = encodingState.buffer();
+
+        byte negativeMask = 0b000_00000;
+        if (value < 0)
+        {
+            // Reference: https://datatracker.ietf.org/doc/html/rfc8949#section-3.1-2.4
+            negativeMask = 0b1 << 5;
+            value = -(value + 1);
+        }
+
+        // Reference: https://datatracker.ietf.org/doc/html/rfc8949#name-specification-of-the-cbor-e
+        if (value < 24)
+        {
+            buffer.putByte(offset, (byte)(value | negativeMask));
+            encodingState.incrementOffset(1);
+        }
+        else
+        {
+            // Encode
+            if (value < Byte.MAX_VALUE)
+            {
+                // Case 24
+                buffer.putByte(offset, (byte)(0b000_11000 | negativeMask));
+                buffer.putByte(offset + 1, (byte)value);
+                encodingState.incrementOffset(1 + BitUtil.SIZE_OF_BYTE);
+            }
+            else if (value < Short.MAX_VALUE)
+            {
+                // Case 25
+                buffer.putByte(offset, (byte)(0b000_11001 | negativeMask));
+                buffer.putShort(offset + 1, (short)value, BIG_ENDIAN);
+                encodingState.incrementOffset(1 + BitUtil.SIZE_OF_SHORT);
+            }
+            else if (value < Integer.MAX_VALUE)
+            {
+                // Case 26
+                buffer.putByte(offset, (byte)(0b000_11010 | negativeMask));
+                buffer.putInt(offset + 1, value, BIG_ENDIAN);
+                encodingState.incrementOffset(1 + BitUtil.SIZE_OF_INT);
+            }
+        }
+    }
 
     public static int encode(
         final EncodingState encodingState,
@@ -63,7 +103,9 @@ public class CborUtil
         encodingState.buffer().putStringWithoutLengthAscii(offset + 1, key);
         encodingState.buffer().putByte(offset + 1 + key.length(), intValue);
 
-        encodingState.incrementOffset(1 + key.length() + 1);
+        encodingState.incrementOffset(1 + key.length());
+
+        encodeNumber(encodingState, value);
 
         return 1;
     }
