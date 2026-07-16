@@ -21,7 +21,7 @@ class CborUtilTest
         -2, -25, -0xFF,
         -0x1234, -0xFFFF,
         -0x12345678, -0x7FFFFFFE})
-    void shouldEncodeMessage(final int memberId)
+    void shouldEncodeIntegerMessage(final int memberId)
     {
         final int offset = 0;
         final int length = 1024;
@@ -52,6 +52,42 @@ class CborUtilTest
             });
 
         assertEquals(memberId, (Integer)stringObjectMap.get("memberId"));
+
+        System.out.println(stringObjectMap);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "qwertyuiop\n",
+        "qwertyuiop\najsjifjojrjrjjeojwokfelkfdjff"
+    })
+    void shouldEncodeCharSequenceMessage(final String reason)
+    {
+        final int offset = 0;
+        final int length = 1024;
+        final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
+
+        final long timestamp = 12643263L;
+
+        final EncodingState encodingState = new EncodingState();
+        encodingState.reset(buffer, offset, length);
+
+        CborUtil.encodeHeader(encodingState, ClusterEventCode.ELECTION_STATE_CHANGE, timestamp);
+        CborUtil.encode(encodingState, "reason", reason);
+        CborUtil.encodeFooter(encodingState);
+
+        final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());
+
+        final byte[] data = new byte[encodingState.offset()];
+        encodingState.buffer().getBytes(0, data);
+
+        final Map<String, Object> stringObjectMap = cborObjectMapper.readValue(
+            data,
+            new TypeReference<>()
+            {
+            });
+
+        assertEquals(reason, stringObjectMap.get("reason").toString());
 
         System.out.println(stringObjectMap);
     }
