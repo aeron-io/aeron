@@ -40,7 +40,7 @@ public class CborUtil
         {
             // Reference: https://datatracker.ietf.org/doc/html/rfc8949#section-3.1-2.4
             negativeMask = 0b1 << 5;
-            value = -(value + 1);
+            value = ~value;
         }
 
         // Reference: https://datatracker.ietf.org/doc/html/rfc8949#name-specification-of-the-cbor-e
