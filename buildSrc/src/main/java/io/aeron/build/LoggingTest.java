@@ -34,7 +34,8 @@ public abstract class LoggingTest extends Test
         setGroup("verification");
         setForkEvery(1L);
         useJUnitPlatform(options -> options.includeTags("logging"));
-        systemProperty("aeron.event.log.reader.classname",
+        systemProperty(
+            "aeron.event.log.reader.classname",
             "io.aeron.test.agent.CountingEventReaderAgent");
     }
 
@@ -70,8 +71,12 @@ public abstract class LoggingTest extends Test
      * @param disabledEventsKey system property key used to disable specific events for this module.
      * @param eventSubset       comma-separated event codes used for configuration
      */
-    public static void configureLoggingTests(final Project targetProject, final String testClass,
-        final String enabledEventsKey, final String disabledEventsKey, final String eventSubset)
+    public static void configureLoggingTests(
+        final Project targetProject,
+        final String testClass,
+        final String enabledEventsKey,
+        final String disabledEventsKey,
+        final String eventSubset)
     {
         targetProject.getTasks().register("loggingTestAll", LoggingTest.class, task ->
         {
