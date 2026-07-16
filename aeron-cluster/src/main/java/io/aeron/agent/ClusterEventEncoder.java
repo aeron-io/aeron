@@ -108,6 +108,8 @@ public final class ClusterEventEncoder
         encodingBuffer.putByte(offset + encodedLength, (byte)(isStartup ? 1 : 0));
         encodedLength += SIZE_OF_BYTE;
 
+        encodingBuffer.putStringAscii(offset + encodedLength, "lots of text");
+
         return encodedLength;
     }
 
@@ -383,6 +385,11 @@ public final class ClusterEventEncoder
         bodyLength += SIZE_OF_INT;
 
         return logHeaderLength + bodyLength;
+    }
+
+    static <E extends Enum<E>> int truncateLogEntryLength(final E state)
+    {
+        return SIZE_OF_INT + enumName(state).length() + SIZE_OF_INT + 8 * SIZE_OF_LONG;
     }
 
     static <E extends Enum<E>> int encodeTruncateLogEntry(
@@ -739,10 +746,11 @@ public final class ClusterEventEncoder
         return logHeaderLength + bodyLength;
     }
 
-    static int replicationEndedLength(final String purpose, final String controlUri)
+    static int replicationEndedLength(final String purpose, final String channelOrNull)
     {
+        final String channel = null != channelOrNull ? channelOrNull : "null";
         return (3 * SIZE_OF_LONG) + (SIZE_OF_INT) + (SIZE_OF_BYTE) + (SIZE_OF_INT + purpose.length()) +
-            (SIZE_OF_INT + controlUri.length());
+            (SIZE_OF_INT + channel.length());
     }
 
     static int encodeReplicationEnded(
@@ -752,12 +760,13 @@ public final class ClusterEventEncoder
         final int length,
         final int memberId,
         final String purpose,
-        final String channel,
+        final String channelOrNull,
         final long srcRecordingId,
         final long dstRecordingId,
         final long position,
         final boolean hasSynced)
     {
+        final String channel = null != channelOrNull ? channelOrNull : "null";
         final int logHeaderLength = CommonEventEncoder.encodeLogHeader(encodingBuffer, offset, captureLength, length);
         final int bodyOffset = offset + logHeaderLength;
         int bodyLength = 0;

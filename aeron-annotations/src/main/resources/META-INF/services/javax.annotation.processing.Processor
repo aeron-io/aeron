@@ -1,3 +1,4 @@
 io.aeron.version.VersionProcessor
 io.aeron.config.ConfigProcessor
 io.aeron.counter.CounterProcessor
+io.aeron.eventlog.EventLoggerProcessor
