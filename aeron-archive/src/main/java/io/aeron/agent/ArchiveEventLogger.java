@@ -40,7 +40,7 @@ import static org.agrona.BitUtil.SIZE_OF_LONG;
 public final class ArchiveEventLogger
 {
     /**
-     * Logger for writing into the {@link EventReaderManager#ringBuffer()}.
+     * Logger for writing into the {@link EventConfiguration#EVENT_RING_BUFFER}.
      */
     public static final ArchiveEventLogger LOGGER = new ArchiveEventLogger(eventReader().ringBuffer());
 
