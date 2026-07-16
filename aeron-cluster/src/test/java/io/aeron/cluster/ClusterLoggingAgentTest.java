@@ -19,7 +19,6 @@ import io.aeron.CommonContext;
 import io.aeron.Counter;
 import io.aeron.agent.ClusterEventCode;
 import io.aeron.agent.EventConfiguration;
-import io.aeron.agent.EventReaderManager;
 import io.aeron.archive.Archive;
 import io.aeron.archive.ArchiveThreadingMode;
 import io.aeron.archive.client.AeronArchive;
@@ -70,7 +69,7 @@ public class ClusterLoggingAgentTest
     void setUp()
     {
         assumeTrue("all".equals(System.getProperty(CommonContext.CLUSTER_EVENT_LOG)));
-        final String readerClass = System.getProperty(EventReaderManager.READER_CLASSNAME);
+        final String readerClass = System.getProperty(CommonContext.EVENT_LOG_READER_CLASSNAME_PROP_NAME);
         assumeTrue(CountingEventReaderAgent.class.getName().equals(readerClass));
     }
 

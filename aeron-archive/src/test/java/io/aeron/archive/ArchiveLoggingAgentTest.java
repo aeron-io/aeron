@@ -19,7 +19,6 @@ import io.aeron.CommonContext;
 import io.aeron.ExclusivePublication;
 import io.aeron.agent.ArchiveEventCode;
 import io.aeron.agent.EventConfiguration;
-import io.aeron.agent.EventReaderManager;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.status.RecordingPos;
 import io.aeron.driver.MediaDriver;
@@ -66,7 +65,7 @@ public class ArchiveLoggingAgentTest
     void setUp()
     {
         assumeTrue("all".equals(System.getProperty(CommonContext.ARCHIVE_EVENT_LOG)));
-        final String readerClass = System.getProperty(EventReaderManager.READER_CLASSNAME);
+        final String readerClass = System.getProperty(CommonContext.EVENT_LOG_READER_CLASSNAME_PROP_NAME);
         assumeTrue("io.aeron.test.agent.CountingEventReaderAgent".equals(readerClass));
     }
 

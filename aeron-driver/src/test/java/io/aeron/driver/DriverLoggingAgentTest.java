@@ -25,7 +25,6 @@ import io.aeron.Subscription;
 import io.aeron.UnavailableImageHandler;
 import io.aeron.agent.DriverEventCode;
 import io.aeron.agent.EventConfiguration;
-import io.aeron.agent.EventReaderManager;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
@@ -96,7 +95,7 @@ public class DriverLoggingAgentTest
     void setUp()
     {
         assumeTrue("all".equals(System.getProperty(CommonContext.EVENT_LOG)));
-        final String readerClass = System.getProperty(EventReaderManager.READER_CLASSNAME);
+        final String readerClass = System.getProperty(CommonContext.EVENT_LOG_READER_CLASSNAME_PROP_NAME);
         assumeTrue("io.aeron.test.agent.CountingEventReaderAgent".equals(readerClass));
     }
 
