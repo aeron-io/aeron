@@ -873,7 +873,6 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
         final int termOffset,
         final int length)
     {
-        // TODO: Review for optimization (Mike Barker and Emil Lopez)
         DriverLog.logNaksSent(controlAddresses, sessionId, streamId, termId, termOffset, length, originalUriString());
 
         nakBuffer.clear();
