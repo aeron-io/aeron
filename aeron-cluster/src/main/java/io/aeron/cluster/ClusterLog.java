@@ -95,7 +95,8 @@ class ClusterLog
         final long nextTermBaseLogPosition,
         final long nextLogPosition,
         final long leadershipTermId,
-        final long termBaseLogPosition,
+        final long termBaseLogPosition, //----
+        // termination
         final long logPosition,
         final long commitPosition,
         final long leaderRecordingId,
@@ -145,6 +146,7 @@ class ClusterLog
         {
             return;
         }
+
         ClusterEventLogger.LOGGER.logStateChange(ClusterEventCode.ROLE_CHANGE, memberId, oldRole, newRole, "");
     }
 

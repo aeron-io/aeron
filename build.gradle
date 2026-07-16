@@ -871,6 +871,7 @@ project(':aeron-cluster') {
         annotationProcessor project(':aeron-annotations')
         testImplementation project(':aeron-test-support')
         testImplementation files("${layout.buildDirectory.get()}/classes/java/generatedTest")
+        testImplementation libs.jackson.cbor
     }
 
     def generatedSrcDir = file("${layout.buildDirectory.get()}/generated-src")

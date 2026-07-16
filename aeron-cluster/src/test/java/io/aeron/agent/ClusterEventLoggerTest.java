@@ -93,7 +93,7 @@ class ClusterEventLoggerTest
     private static final int CAPACITY = align(BUFFER_LENGTH_DEFAULT, CACHE_LINE_LENGTH);
     private final UnsafeBuffer logBuffer = new UnsafeBuffer(
         ByteBuffer.allocateDirect(BUFFER_LENGTH_DEFAULT + TRAILER_LENGTH));
-    private final ClusterEventLogger logger = new ClusterEventLogger(new ManyToOneRingBuffer(logBuffer));
+    private final ClusterEventLogger logger = new ClusterEventLoggerImpl(new ManyToOneRingBuffer(logBuffer));
 
     @Test
     void logOnNewLeadershipTerm()

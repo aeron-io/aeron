@@ -18,6 +18,7 @@ plexus = "3.3.0"
 sbe = "1.39.0"
 shadow = "9.5.1"
 versions = "0.54.0"
+jackson-cbor = "3.2.1"
 
 [libraries]
 agrona = { group = "org.agrona", name = "agrona", version.ref = "agrona" }
@@ -41,6 +42,7 @@ junit-bom = { group = "org.junit", name = "junit-bom", version.ref = "junit" }
 mockito = { group = "org.mockito", name = "mockito-core", version.ref = "mockito" }
 plexus-utils = { group = "org.codehaus.plexus", name = "plexus-utils", version.ref = "plexus" }
 sbe = { group = "uk.co.real-logic", name = "sbe-tool", version.ref = "sbe" }
+jackson-cbor = { group = "tools.jackson.dataformat", name = "jackson-dataformat-cbor", version.ref = "jackson-cbor" }
 
 [plugins]
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
