@@ -41,6 +41,7 @@ class ConsensusAdapter implements FragmentHandler, AutoCloseable
     private final NewLeadershipTermDecoder newLeadershipTermDecoder = new NewLeadershipTermDecoder();
     private final AppendPositionDecoder appendPositionDecoder = new AppendPositionDecoder();
     private final CommitPositionDecoder commitPositionDecoder = new CommitPositionDecoder();
+    private final LeadershipConfirmAckDecoder leadershipConfirmAckDecoder = new LeadershipConfirmAckDecoder();
     private final CatchupPositionDecoder catchupPositionDecoder = new CatchupPositionDecoder();
     private final StopCatchupDecoder stopCatchupDecoder = new StopCatchupDecoder();
 
@@ -193,7 +194,21 @@ class ConsensusAdapter implements FragmentHandler, AutoCloseable
                 consensusModuleAgent.onCommitPosition(
                     commitPositionDecoder.leadershipTermId(),
                     commitPositionDecoder.logPosition(),
-                    commitPositionDecoder.leaderMemberId());
+                    commitPositionDecoder.leaderMemberId(),
+                    commitPositionDecoder.confirmationCounter());
+                break;
+
+            case LeadershipConfirmAckDecoder.TEMPLATE_ID:
+                leadershipConfirmAckDecoder.wrap(
+                    buffer,
+                    offset + MessageHeaderDecoder.ENCODED_LENGTH,
+                    messageHeaderDecoder.blockLength(),
+                    messageHeaderDecoder.version());
+
+                consensusModuleAgent.onLeadershipConfirmAck(
+                    leadershipConfirmAckDecoder.leadershipTermId(),
+                    leadershipConfirmAckDecoder.followerMemberId(),
+                    leadershipConfirmAckDecoder.confirmationCounter());
                 break;
 
             case CatchupPositionDecoder.TEMPLATE_ID:

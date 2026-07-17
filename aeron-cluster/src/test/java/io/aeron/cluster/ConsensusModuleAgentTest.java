@@ -85,6 +85,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -137,6 +138,13 @@ class ConsensusModuleAgentTest
     {
         final AtomicCounter atomicCounter = countersManager.newCounter(name, typeId);
         return new Counter(countersManager, atomicCounter.id());
+    }
+
+    // Mirrors the leadership-confirmation token packing in ConsensusModuleAgent (term in the high 32 bits,
+    // counter in the low 32 bits).
+    private static long confirmationToken(final long leadershipTermId, final int confirmationCounter)
+    {
+        return (leadershipTermId << 32) | (confirmationCounter & 0xFFFF_FFFFL);
     }
 
     @BeforeEach
@@ -484,7 +492,8 @@ class ConsensusModuleAgentTest
 
         clock.increment(444);
 
-        consensusModuleAgent.onCommitPosition(leadershipTermId, 555, 0);
+        consensusModuleAgent.onCommitPosition(
+            leadershipTermId, 555, 0, ConsensusModuleAgent.NULL_CONFIRMATION_COUNTER);
 
         assertEquals(444, consensusModuleAgent.timeOfLastLeaderUpdateNs());
     }
@@ -576,47 +585,278 @@ class ConsensusModuleAgentTest
         assertEquals(0, agent.notifiedCommitPosition());
 
         clock.increment(1);
-        agent.onCommitPosition(leadershipTermId, 100, leader.id());
+        agent.onCommitPosition(leadershipTermId, 100, leader.id(), ConsensusModuleAgent.NULL_CONFIRMATION_COUNTER);
         assertEquals(100, agent.notifiedCommitPosition());
         assertEquals(clock.timeNanos(), agent.timeOfLastLogUpdateNs());
 
         clock.increment(1);
-        agent.onCommitPosition(leadershipTermId, 200, leader.id());
+        agent.onCommitPosition(leadershipTermId, 200, leader.id(), ConsensusModuleAgent.NULL_CONFIRMATION_COUNTER);
         assertEquals(200, agent.notifiedCommitPosition());
         assertEquals(clock.timeNanos(), agent.timeOfLastLogUpdateNs());
 
         clock.increment(1);
-        agent.onCommitPosition(leadershipTermId, 50, leader.id());
+        agent.onCommitPosition(leadershipTermId, 50, leader.id(), ConsensusModuleAgent.NULL_CONFIRMATION_COUNTER);
         assertEquals(200, agent.notifiedCommitPosition());
         assertEquals(clock.timeNanos(), agent.timeOfLastLogUpdateNs());
 
         clock.increment(1);
-        agent.onCommitPosition(leadershipTermId, -1, leader.id());
+        agent.onCommitPosition(leadershipTermId, -1, leader.id(), ConsensusModuleAgent.NULL_CONFIRMATION_COUNTER);
         assertEquals(200, agent.notifiedCommitPosition());
         assertEquals(clock.timeNanos(), agent.timeOfLastLogUpdateNs());
 
         final long lastUpdateNs = clock.timeNanos();
         clock.increment(1);
-        agent.onCommitPosition(leadershipTermId - 1, 5000, leader.id());
+        agent.onCommitPosition(leadershipTermId - 1, 5000, leader.id(), ConsensusModuleAgent.NULL_CONFIRMATION_COUNTER);
         assertEquals(200, agent.notifiedCommitPosition());
         assertEquals(lastUpdateNs, agent.timeOfLastLogUpdateNs());
 
         clock.increment(5);
-        agent.onCommitPosition(leadershipTermId, 700, -100);
+        agent.onCommitPosition(leadershipTermId, 700, -100, ConsensusModuleAgent.NULL_CONFIRMATION_COUNTER);
         assertEquals(200, agent.notifiedCommitPosition());
         assertEquals(lastUpdateNs, agent.timeOfLastLogUpdateNs());
 
         clock.increment(3);
         agent.role(Cluster.Role.CANDIDATE);
-        agent.onCommitPosition(leadershipTermId, 555, leader.id());
+        agent.onCommitPosition(leadershipTermId, 555, leader.id(), ConsensusModuleAgent.NULL_CONFIRMATION_COUNTER);
         assertEquals(200, agent.notifiedCommitPosition());
         assertEquals(lastUpdateNs, agent.timeOfLastLogUpdateNs());
 
         clock.increment(2);
         agent.role(Cluster.Role.LEADER);
-        agent.onCommitPosition(leadershipTermId, 999, leader.id());
+        agent.onCommitPosition(leadershipTermId, 999, leader.id(), ConsensusModuleAgent.NULL_CONFIRMATION_COUNTER);
         assertEquals(200, agent.notifiedCommitPosition());
         assertEquals(lastUpdateNs, agent.timeOfLastLogUpdateNs());
+    }
+
+    @Test
+    void followerEchoesAdvancedConfirmationCounterOncePerRound() throws Exception
+    {
+        final TestClusterClock clock = new TestClusterClock(TimeUnit.MILLISECONDS);
+        ctx.epochClock(clock.asEpochClock()).clusterClock(clock);
+
+        final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
+        agent.state(ConsensusModule.State.ACTIVE, "");
+        agent.role(Cluster.Role.FOLLOWER);
+        final long leadershipTermId = 42;
+        agent.leadershipTermId(leadershipTermId);
+        final ClusterMember leader = new ClusterMember(1, "", "", "", "", "", "");
+        Tests.setField(agent, "leaderMember", leader);
+        Tests.setField(agent, "appendPosition", mock(ReadableCounter.class));
+
+        final ConsensusPublisher mockPublisher = mock(ConsensusPublisher.class);
+        when(mockPublisher.leadershipConfirmAck(any(), anyLong(), anyInt(), anyInt())).thenReturn(TRUE);
+        Tests.setField(agent, "consensusPublisher", mockPublisher);
+
+        final java.lang.reflect.Method sendFollowerPosition =
+            ConsensusModuleAgent.class.getDeclaredMethod("updateFollowerPosition", long.class);
+        sendFollowerPosition.setAccessible(true);
+
+        // A commit-position carrying an advanced counter from the current leader is echoed once, tagged with the
+        // follower's own current term and member id.
+        agent.onCommitPosition(leadershipTermId, 100, leader.id(), 7);
+        sendFollowerPosition.invoke(agent, clock.timeNanos());
+        verify(mockPublisher).leadershipConfirmAck(any(), eq(leadershipTermId), eq(0), eq(7));
+
+        // The same counter arriving again (e.g. on plain commit traffic) must not be echoed again -> no amplification.
+        reset(mockPublisher);
+        when(mockPublisher.leadershipConfirmAck(any(), anyLong(), anyInt(), anyInt())).thenReturn(TRUE);
+        agent.onCommitPosition(leadershipTermId, 200, leader.id(), 7);
+        sendFollowerPosition.invoke(agent, clock.timeNanos());
+        verify(mockPublisher, never()).leadershipConfirmAck(any(), anyLong(), anyInt(), anyInt());
+
+        // A pre-v17 leader (null counter) is never echoed.
+        agent.onCommitPosition(leadershipTermId, 300, leader.id(), ConsensusModuleAgent.NULL_CONFIRMATION_COUNTER);
+        sendFollowerPosition.invoke(agent, clock.timeNanos());
+        verify(mockPublisher, never()).leadershipConfirmAck(any(), anyLong(), anyInt(), anyInt());
+    }
+
+    @Test
+    void leaderConfirmsLeadershipOnlyWhenAQuorumEchoesBeyondTheToken()
+    {
+        final TestClusterClock clock = new TestClusterClock(TimeUnit.MILLISECONDS);
+        ctx.epochClock(clock.asEpochClock()).clusterClock(clock);
+
+        final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
+        agent.state(ConsensusModule.State.ACTIVE, "");
+        agent.role(Cluster.Role.LEADER);
+        final long leadershipTermId = 42;
+        agent.leadershipTermId(leadershipTermId);
+
+        final ClusterMember[] members = new ClusterMember[]
+        {
+            new ClusterMember(0, "", "", "", "", "", ""), // self (ctx.clusterMemberId == 0)
+            new ClusterMember(1, "", "", "", "", "", ""),
+            new ClusterMember(2, "", "", "", "", "", "")
+        };
+        final org.agrona.collections.Int2ObjectHashMap<ClusterMember> map =
+            new org.agrona.collections.Int2ObjectHashMap<>();
+        ClusterMember.addClusterMemberIds(members, map);
+        Tests.setField(agent, "activeMembers", members);
+        Tests.setField(agent, "clusterMemberByIdMap", map);
+
+        // Only self so far -> below quorum of 2.
+        assertFalse(agent.isLeadershipConfirmedSince(confirmationToken(leadershipTermId, 4)));
+
+        // Follower 1 echoes counter 5 in the current term -> self + follower 1 = quorum.
+        agent.onLeadershipConfirmAck(leadershipTermId, 1, 5);
+        assertTrue(agent.isLeadershipConfirmedSince(confirmationToken(leadershipTermId, 4)));
+        // ...but a token at or beyond what was echoed is not yet confirmed (in-flight/older acks cannot fake it).
+        assertFalse(agent.isLeadershipConfirmedSince(confirmationToken(leadershipTermId, 5)));
+
+        // An echo from a prior term must not be counted.
+        agent.onLeadershipConfirmAck(leadershipTermId - 1, 2, 1000);
+        assertFalse(agent.isLeadershipConfirmedSince(confirmationToken(leadershipTermId, 5)));
+
+        // Follower 2 echoes beyond the token in the current term -> confirmed again.
+        agent.onLeadershipConfirmAck(leadershipTermId, 2, 6);
+        assertTrue(agent.isLeadershipConfirmedSince(confirmationToken(leadershipTermId, 5)));
+    }
+
+    @Test
+    void confirmationIsUnavailableWhileAnElectionIsInProgress()
+    {
+        final TestClusterClock clock = new TestClusterClock(TimeUnit.MILLISECONDS);
+        ctx.epochClock(clock.asEpochClock()).clusterClock(clock);
+
+        final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
+        agent.state(ConsensusModule.State.ACTIVE, "");
+        agent.role(Cluster.Role.LEADER);
+        final long leadershipTermId = 42;
+        agent.leadershipTermId(leadershipTermId);
+
+        final ClusterMember[] members = new ClusterMember[]
+        {
+            new ClusterMember(0, "", "", "", "", "", ""),
+            new ClusterMember(1, "", "", "", "", "", "")
+        };
+        final org.agrona.collections.Int2ObjectHashMap<ClusterMember> map =
+            new org.agrona.collections.Int2ObjectHashMap<>();
+        ClusterMember.addClusterMemberIds(members, map);
+        Tests.setField(agent, "activeMembers", members);
+        Tests.setField(agent, "clusterMemberByIdMap", map);
+
+        final ConsensusPublisher mockPublisher = mock(ConsensusPublisher.class);
+        Tests.setField(agent, "consensusPublisher", mockPublisher);
+        // A stale counter from a prior leadership that must not leak into the new term.
+        Tests.setField(agent, "confirmationCounter", 500);
+
+        // During an election: no token is handed out, and the stale counter is replaced by the absent sentinel
+        // on the wire so a follower cannot echo it and confirm before a post-election round.
+        Tests.setField(agent, "election", mock(Election.class));
+        assertEquals(Aeron.NULL_VALUE, agent.triggerQuorumConfirmation());
+        agent.publishCommitPosition(1000L, leadershipTermId);
+        verify(mockPublisher).commitPosition(
+            any(), eq(leadershipTermId), eq(1000L), eq(0), eq(ConsensusModuleAgent.NULL_CONFIRMATION_COUNTER));
+
+        // Once the election completes, the real counter is both handed out and broadcast.
+        reset(mockPublisher);
+        Tests.setField(agent, "election", null);
+        // The token packs the term with the counter; the wire counter is still the raw int (unaffected).
+        assertEquals(confirmationToken(leadershipTermId, 500), agent.triggerQuorumConfirmation());
+        agent.publishCommitPosition(1000L, leadershipTermId);
+        verify(mockPublisher).commitPosition(any(), eq(leadershipTermId), eq(1000L), eq(0), eq(500));
+    }
+
+    @Test
+    void isLeadershipConfirmedSinceRejectsReservedSentinelTokens()
+    {
+        final TestClusterClock clock = new TestClusterClock(TimeUnit.MILLISECONDS);
+        ctx.epochClock(clock.asEpochClock()).clusterClock(clock);
+
+        final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
+        agent.state(ConsensusModule.State.ACTIVE, "");
+        agent.role(Cluster.Role.LEADER);
+        final long leadershipTermId = 42;
+        agent.leadershipTermId(leadershipTermId);
+
+        final ClusterMember[] members = new ClusterMember[]
+        {
+            new ClusterMember(0, "", "", "", "", "", ""),
+            new ClusterMember(1, "", "", "", "", "", "")
+        };
+        final org.agrona.collections.Int2ObjectHashMap<ClusterMember> map =
+            new org.agrona.collections.Int2ObjectHashMap<>();
+        ClusterMember.addClusterMemberIds(members, map);
+        Tests.setField(agent, "activeMembers", members);
+        Tests.setField(agent, "clusterMemberByIdMap", map);
+
+        // A follower has echoed a high counter, so a real token confirms...
+        agent.onLeadershipConfirmAck(leadershipTermId, 1, 1000);
+        assertTrue(agent.isLeadershipConfirmedSince(confirmationToken(leadershipTermId, 5)));
+
+        // ...but the reserved sentinels must never confirm, even though every echo compares "beyond" them.
+        assertFalse(agent.isLeadershipConfirmedSince(Aeron.NULL_VALUE));
+        assertFalse(agent.isLeadershipConfirmedSince(ConsensusModuleAgent.NULL_CONFIRMATION_COUNTER));
+    }
+
+    @Test
+    void tokenFromAnEarlierTermDoesNotConfirmAfterReElection()
+    {
+        final TestClusterClock clock = new TestClusterClock(TimeUnit.MILLISECONDS);
+        ctx.epochClock(clock.asEpochClock()).clusterClock(clock);
+
+        final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
+        agent.state(ConsensusModule.State.ACTIVE, "");
+        agent.role(Cluster.Role.LEADER);
+        final long termA = 42;
+        agent.leadershipTermId(termA);
+
+        final ClusterMember[] members = new ClusterMember[]
+        {
+            new ClusterMember(0, "", "", "", "", "", ""),
+            new ClusterMember(1, "", "", "", "", "", "")
+        };
+        final org.agrona.collections.Int2ObjectHashMap<ClusterMember> map =
+            new org.agrona.collections.Int2ObjectHashMap<>();
+        ClusterMember.addClusterMemberIds(members, map);
+        Tests.setField(agent, "activeMembers", members);
+        Tests.setField(agent, "clusterMemberByIdMap", map);
+
+        // Capture a token in term A; a quorum confirms it in term A. (confirmationCounter is 0 after
+        // electionComplete; set it here since this test does not run a full election.)
+        Tests.setField(agent, "confirmationCounter", 0);
+        final long tokenTermA = agent.triggerQuorumConfirmation();
+        agent.onLeadershipConfirmAck(termA, 1, 1000);
+        assertTrue(agent.isLeadershipConfirmedSince(tokenTermA));
+
+        // This node is deposed and re-elected (a later term); a quorum confirms in the new term.
+        final long termB = termA + 2;
+        agent.leadershipTermId(termB);
+        agent.onLeadershipConfirmAck(termB, 1, 1000);
+
+        // The stale term-A token must NOT confirm in term B, even though a quorum has echoed in term B.
+        assertFalse(agent.isLeadershipConfirmedSince(tokenTermA));
+        // A fresh term-B token does confirm.
+        assertTrue(agent.isLeadershipConfirmedSince(confirmationToken(termB, 0)));
+    }
+
+    @Test
+    void confirmationTokenUsesUnsignedTermBits()
+    {
+        final TestClusterClock clock = new TestClusterClock(TimeUnit.MILLISECONDS);
+        ctx.epochClock(clock.asEpochClock()).clusterClock(clock);
+
+        final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
+        agent.state(ConsensusModule.State.ACTIVE, "");
+        agent.role(Cluster.Role.LEADER);
+        // A term whose low 32 bits have the sign bit set: extraction must be unsigned (>>> not >>).
+        final long leadershipTermId = 0x1_8000_0000L;
+        agent.leadershipTermId(leadershipTermId);
+
+        final ClusterMember[] members = new ClusterMember[]
+        {
+            new ClusterMember(0, "", "", "", "", "", ""),
+            new ClusterMember(1, "", "", "", "", "", "")
+        };
+        final org.agrona.collections.Int2ObjectHashMap<ClusterMember> map =
+            new org.agrona.collections.Int2ObjectHashMap<>();
+        ClusterMember.addClusterMemberIds(members, map);
+        Tests.setField(agent, "activeMembers", members);
+        Tests.setField(agent, "clusterMemberByIdMap", map);
+
+        final long token = confirmationToken(leadershipTermId, 5);
+        agent.onLeadershipConfirmAck(leadershipTermId, 1, 6);
+        assertTrue(agent.isLeadershipConfirmedSince(token));
     }
 
     @Test

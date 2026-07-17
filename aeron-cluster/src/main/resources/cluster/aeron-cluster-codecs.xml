@@ -2,7 +2,7 @@
 <sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
                    package="io.aeron.cluster.codecs"
                    id="111"
-                   version="16"
+                   version="17"
                    semanticVersion="5.4"
                    description="Message Codecs for communicating with, and within, an Aeron Cluster."
                    byteOrder="littleEndian">
@@ -507,6 +507,10 @@
         <field name="leadershipTermId"         id="1" type="int64"/>
         <field name="logPosition"              id="2" type="int64"/>
         <field name="leaderMemberId"           id="3" type="int32"/>
+        <!-- Monotonic leader-minted round counter for ReadIndex-style leadership confirmation. Advances only
+             on a confirmation round; echoed by followers in LeadershipConfirmAck. int32 (not int64) keeps this
+             message within the 24-byte body / single 64-byte Aeron frame; compared wrap-safe. -->
+        <field name="confirmationCounter"      id="4" type="int32" sinceVersion="17"/>
     </sbe:message>
 
     <sbe:message name="CatchupPosition"
@@ -523,6 +527,15 @@
                  description="The leader informs the follower it can stop the catchup process.">
         <field name="leadershipTermId"         id="1" type="int64"/>
         <field name="followerMemberId"         id="2" type="int32"/>
+    </sbe:message>
+
+    <sbe:message name="LeadershipConfirmAck"
+                 id="58"
+                 description="A follower echoes the leader's confirmation counter to prove it recognises the
+                              current leader in the current term, supporting ReadIndex-style linearizable reads.">
+        <field name="leadershipTermId"         id="1" type="int64"/>
+        <field name="followerMemberId"         id="2" type="int32"/>
+        <field name="confirmationCounter"      id="3" type="int32"/>
     </sbe:message>
 
     <sbe:message name="AddPassiveMember"

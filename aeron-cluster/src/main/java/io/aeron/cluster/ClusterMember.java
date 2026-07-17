@@ -53,6 +53,11 @@ public final class ClusterMember
     private long changeCorrelationId = NULL_VALUE;
     private long logPosition = NULL_POSITION;
     private long timeOfLastAppendPositionNs = NULL_VALUE;
+    // ReadIndex leadership confirmation: the highest counter this member echoed (LeadershipConfirmAck) and the
+    // term it echoed it in. The term gate is essential -- a leftover counter from a prior leadership must never
+    // count towards a confirmation in the current term. Compared wrap-safe.
+    private int confirmationCounter;
+    private long confirmationCounterTermId = NULL_VALUE;
     private ExclusivePublication publication;
     private String consensusChannel;
     private final String consensusEndpoint;
@@ -146,6 +151,7 @@ public final class ClusterMember
         candidateTermId = NULL_VALUE;
         leadershipTermId = NULL_VALUE;
         logPosition = NULL_POSITION;
+        confirmationCounterTermId = NULL_VALUE;
     }
 
     /**
@@ -892,6 +898,80 @@ public final class ClusterMember
         }
 
         return rankedPositions[length - 1];
+    }
+
+    /**
+     * Set the confirmation counter a member has echoed (via {@code LeadershipConfirmAck}) together with the term
+     * it echoed in. Only a value stored against the current leadership term counts towards a confirmation.
+     *
+     * @param confirmationCounter echoed by the member.
+     * @param leadershipTermId    the term in which the member echoed the counter.
+     * @return this for a fluent API.
+     */
+    public ClusterMember confirmationCounter(final int confirmationCounter, final long leadershipTermId)
+    {
+        this.confirmationCounter = confirmationCounter;
+        this.confirmationCounterTermId = leadershipTermId;
+        return this;
+    }
+
+    /**
+     * The highest confirmation counter this member has echoed.
+     *
+     * @return the highest confirmation counter this member has echoed.
+     */
+    public int confirmationCounter()
+    {
+        return confirmationCounter;
+    }
+
+    /**
+     * The leadership term in which the member last echoed its {@link #confirmationCounter()}.
+     *
+     * @return the leadership term of the last echoed confirmation counter, or {@link Aeron#NULL_VALUE} if none.
+     */
+    public long confirmationCounterTermId()
+    {
+        return confirmationCounterTermId;
+    }
+
+    /**
+     * Has a quorum confirmed the leader is still the leader strictly after the point captured by
+     * {@code confirmationToken}? The hosting member ({@code leaderMemberId}) is always counted; a non-self member
+     * counts iff it echoed a confirmation counter in {@code leadershipTermId} that is strictly beyond
+     * {@code confirmationToken} (wrap-safe). Because a counter is minted by the leader and only advances on a
+     * confirmation round, an acknowledgement in flight before the token was captured carries an older counter and
+     * cannot count -- so, unlike a receive-time check, this cannot be faked by a stale in-flight message.
+     *
+     * @param members          of the cluster (typically the active members, including the hosting node).
+     * @param leadershipTermId the term a non-self member must have echoed in to be counted.
+     * @param leaderMemberId   id of the hosting (leader) member, which is always counted.
+     * @param confirmationToken counter captured (e.g. from {@code triggerQuorumConfirmation}); a member must have
+     *                          echoed a strictly greater counter (wrap-safe) to be counted.
+     * @return {@code true} if a quorum (counting the hosting member) qualifies, otherwise {@code false}.
+     */
+    public static boolean hasQuorumConfirmedSince(
+        final ClusterMember[] members,
+        final long leadershipTermId,
+        final int leaderMemberId,
+        final int confirmationToken)
+    {
+        final int quorum = quorumThreshold(members.length);
+        int confirmed = 0;
+        for (final ClusterMember member : members)
+        {
+            if (member.id == leaderMemberId ||
+                (member.confirmationCounterTermId == leadershipTermId &&
+                0 < (member.confirmationCounter - confirmationToken)))
+            {
+                if (++confirmed >= quorum)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
