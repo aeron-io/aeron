@@ -61,21 +61,21 @@ public interface ClusterEventLogger
      */
     @LoggerMethod(eventCode = "NEW_LEADERSHIP_TERM", lengthMethod = "newLeaderShipTermLength")
     default void logOnNewLeadershipTerm(
-        int memberId,
-        long logLeadershipTermId,
-        long nextLeadershipTermId,
-        long nextTermBaseLogPosition,
-        long nextLogPosition,
-        long leadershipTermId,
-        long termBaseLogPosition,
-        long logPosition,
-        long commitPosition,
-        long leaderRecordingId,
-        long timestamp,
-        int leaderId,
-        int logSessionId,
-        int appVersion,
-        boolean isStartup)
+        final int memberId,
+        final long logLeadershipTermId,
+        final long nextLeadershipTermId,
+        final long nextTermBaseLogPosition,
+        final long nextLogPosition,
+        final long leadershipTermId,
+        final long termBaseLogPosition,
+        final long logPosition,
+        final long commitPosition,
+        final long leaderRecordingId,
+        final long timestamp,
+        final int leaderId,
+        final int logSessionId,
+        final int appVersion,
+        final boolean isStartup)
     {
     }
 
@@ -92,7 +92,7 @@ public interface ClusterEventLogger
     @LoggerMethod(lengthMethod = "stateChangeLength", lengthArgs = { "oldState", "newState", "reason" },
         encodeArgs = { "memberId", "oldState", "newState", "reason" })
     default <E extends Enum<E>> void logStateChange(
-        ClusterEventCode eventCode, int memberId, E oldState, E newState, String reason)
+        final ClusterEventCode eventCode, final int memberId, final E oldState, final E newState, final String reason)
     {
     }
 
@@ -115,17 +115,17 @@ public interface ClusterEventLogger
     @LoggerMethod(eventCode = "ELECTION_STATE_CHANGE", lengthMethod = "electionStateChangeLength",
         lengthArgs = { "oldState", "newState", "reason" })
     default <E extends Enum<E>> void logElectionStateChange(
-        int memberId,
-        E oldState,
-        E newState,
-        int leaderId,
-        long candidateTermId,
-        long leadershipTermId,
-        long logPosition,
-        long logLeadershipTermId,
-        long appendPosition,
-        long catchupPosition,
-        String reason)
+        final int memberId,
+        final E oldState,
+        final E newState,
+        final int leaderId,
+        final long candidateTermId,
+        final long leadershipTermId,
+        final long logPosition,
+        final long logLeadershipTermId,
+        final long appendPosition,
+        final long catchupPosition,
+        final String reason)
     {
     }
 
@@ -141,12 +141,12 @@ public interface ClusterEventLogger
      */
     @LoggerMethod(eventCode = "CANVASS_POSITION", lengthMethod = "canvassPositionLength")
     default void logOnCanvassPosition(
-        int memberId,
-        long logLeadershipTermId,
-        long logPosition,
-        long leadershipTermId,
-        int followerMemberId,
-        int protocolVersion)
+        final int memberId,
+        final long logLeadershipTermId,
+        final long logPosition,
+        final long leadershipTermId,
+        final int followerMemberId,
+        final int protocolVersion)
     {
     }
 
@@ -162,12 +162,12 @@ public interface ClusterEventLogger
      */
     @LoggerMethod(eventCode = "REQUEST_VOTE", fixedLength = 3 * SIZE_OF_LONG + 3 * SIZE_OF_INT)
     default void logOnRequestVote(
-        int memberId,
-        long logLeadershipTermId,
-        long logPosition,
-        long candidateTermId,
-        int candidateId,
-        int protocolVersion)
+        final int memberId,
+        final long logLeadershipTermId,
+        final long logPosition,
+        final long candidateTermId,
+        final int candidateId,
+        final int protocolVersion)
     {
     }
 
@@ -186,13 +186,13 @@ public interface ClusterEventLogger
         encodeArgs = {
             "memberId", "candidateTermId", "logLeadershipTermId", "logPosition", "candidateId", "voterId", "vote" })
     default void logOnVote(
-        int memberId,
-        long logLeadershipTermId,
-        long logPosition,
-        long candidateTermId,
-        int candidateId,
-        int voterId,
-        boolean vote)
+        final int memberId,
+        final long logLeadershipTermId,
+        final long logPosition,
+        final long candidateTermId,
+        final int candidateId,
+        final int voterId,
+        final boolean vote)
     {
     }
 
@@ -208,11 +208,11 @@ public interface ClusterEventLogger
     @LoggerMethod(eventCode = "CATCHUP_POSITION", lengthMethod = "catchupPositionLength",
         lengthArgs = { "catchupEndpoint" })
     default void logOnCatchupPosition(
-        int memberId,
-        long leadershipTermId,
-        long logPosition,
-        int followerMemberId,
-        String catchupEndpoint)
+        final int memberId,
+        final long leadershipTermId,
+        final long logPosition,
+        final int followerMemberId,
+        final String catchupEndpoint)
     {
     }
 
@@ -224,7 +224,7 @@ public interface ClusterEventLogger
      * @param followerMemberId id of follower currently catching up.
      */
     @LoggerMethod(eventCode = "STOP_CATCHUP", fixedLength = SIZE_OF_LONG + 2 * SIZE_OF_INT, skipCaptureLength = true)
-    default void logOnStopCatchup(int memberId, long leadershipTermId, int followerMemberId)
+    default void logOnStopCatchup(final int memberId, final long leadershipTermId, final int followerMemberId)
     {
     }
 
@@ -246,16 +246,16 @@ public interface ClusterEventLogger
     @LoggerMethod(eventCode = "TRUNCATE_LOG_ENTRY", lengthMethod = "truncateLogEntryLength", lengthArgs = { "state" },
         encodeMethod = "encodeTruncateLogEntry")
     default <E extends Enum<E>> void logOnTruncateLogEntry(
-        int memberId,
-        E state,
-        long logLeadershipTermId,
-        long leadershipTermId,
-        long candidateTermId,
-        long commitPosition,
-        long logPosition,
-        long appendPosition,
-        long oldPosition,
-        long newPosition)
+        final int memberId,
+        final E state,
+        final long logLeadershipTermId,
+        final long leadershipTermId,
+        final long candidateTermId,
+        final long commitPosition,
+        final long logPosition,
+        final long appendPosition,
+        final long oldPosition,
+        final long newPosition)
     {
     }
 
@@ -274,14 +274,14 @@ public interface ClusterEventLogger
     @LoggerMethod(eventCode = "REPLAY_NEW_LEADERSHIP_TERM", lengthMethod = "replayNewLeadershipTermEventLength",
         lengthArgs = { "timeUnit" })
     default void logOnReplayNewLeadershipTermEvent(
-        int memberId,
-        boolean isInElection,
-        long leadershipTermId,
-        long logPosition,
-        long timestamp,
-        long termBaseLogPosition,
-        TimeUnit timeUnit,
-        int appVersion)
+        final int memberId,
+        final boolean isInElection,
+        final long leadershipTermId,
+        final long logPosition,
+        final long timestamp,
+        final long termBaseLogPosition,
+        final TimeUnit timeUnit,
+        final int appVersion)
     {
     }
 
@@ -297,11 +297,11 @@ public interface ClusterEventLogger
     @LoggerMethod(eventCode = "APPEND_POSITION",
         fixedLength = 2 * SIZE_OF_LONG + 2 * SIZE_OF_INT + SIZE_OF_BYTE, skipCaptureLength = true)
     default void logOnAppendPosition(
-        int memberId,
-        long leadershipTermId,
-        long logPosition,
-        int followerMemberId,
-        short flags)
+        final int memberId,
+        final long leadershipTermId,
+        final long logPosition,
+        final int followerMemberId,
+        final short flags)
     {
     }
 
@@ -315,7 +315,8 @@ public interface ClusterEventLogger
      */
     @LoggerMethod(eventCode = "COMMIT_POSITION", fixedLength = 2 * SIZE_OF_LONG + 2 * SIZE_OF_INT,
         skipCaptureLength = true)
-    default void logOnCommitPosition(int memberId, long leadershipTermId, long logPosition, int leaderId)
+    default void logOnCommitPosition(
+        final int memberId, final long leadershipTermId, final long logPosition, final int leaderId)
     {
     }
 
@@ -332,12 +333,12 @@ public interface ClusterEventLogger
     @LoggerMethod(eventCode = "APPEND_SESSION_CLOSE", lengthMethod = "appendSessionCloseLength",
         lengthArgs = { "closeReason", "timeUnit" })
     default void logAppendSessionClose(
-        int memberId,
-        long sessionId,
-        CloseReason closeReason,
-        long leadershipTermId,
-        long timestamp,
-        TimeUnit timeUnit)
+        final int memberId,
+        final long sessionId,
+        final CloseReason closeReason,
+        final long leadershipTermId,
+        final long timestamp,
+        final TimeUnit timeUnit)
     {
     }
 
@@ -354,12 +355,12 @@ public interface ClusterEventLogger
     @LoggerMethod(eventCode = "APPEND_SESSION_OPEN", lengthMethod = "appendSessionOpenLength",
         lengthArgs = { "timeUnit" })
     default void logAppendSessionOpen(
-        int memberId,
-        long sessionId,
-        long leadershipTermId,
-        long logPosition,
-        long timestamp,
-        TimeUnit timeUnit)
+        final int memberId,
+        final long sessionId,
+        final long leadershipTermId,
+        final long logPosition,
+        final long timestamp,
+        final TimeUnit timeUnit)
     {
     }
 
@@ -371,7 +372,7 @@ public interface ClusterEventLogger
      * @param logPosition         position to terminate at.
      */
     @LoggerMethod(eventCode = "TERMINATION_POSITION", lengthMethod = "terminationPositionLength")
-    default void logTerminationPosition(int memberId, long logLeadershipTermId, long logPosition)
+    default void logTerminationPosition(final int memberId, final long logLeadershipTermId, final long logPosition)
     {
     }
 
@@ -384,7 +385,8 @@ public interface ClusterEventLogger
      * @param senderMemberId      member sending the ack.
      */
     @LoggerMethod(eventCode = "TERMINATION_ACK", lengthMethod = "terminationAckLength")
-    default void logTerminationAck(int memberId, long logLeadershipTermId, long logPosition, int senderMemberId)
+    default void logTerminationAck(
+        final int memberId, final long logLeadershipTermId, final long logPosition, final int senderMemberId)
     {
     }
 
@@ -401,13 +403,13 @@ public interface ClusterEventLogger
      */
     @LoggerMethod(eventCode = "SERVICE_ACK", lengthMethod = "serviceAckLength", lengthArgs = { "timeUnit" })
     default void logServiceAck(
-        int memberId,
-        long logPosition,
-        long timestamp,
-        TimeUnit timeUnit,
-        long ackId,
-        long relevantId,
-        int serviceId)
+        final int memberId,
+        final long logPosition,
+        final long timestamp,
+        final TimeUnit timeUnit,
+        final long ackId,
+        final long relevantId,
+        final int serviceId)
     {
     }
 
@@ -425,13 +427,13 @@ public interface ClusterEventLogger
     @LoggerMethod(eventCode = "REPLICATION_ENDED", lengthMethod = "replicationEndedLength",
         lengthArgs = { "purpose", "channelOrNull" })
     default void logReplicationEnded(
-        int memberId,
-        String purpose,
-        String channelOrNull,
-        long srcRecordingId,
-        long dstRecordingId,
-        long position,
-        boolean hasSynced)
+        final int memberId,
+        final String purpose,
+        final String channelOrNull,
+        final long srcRecordingId,
+        final long dstRecordingId,
+        final long position,
+        final boolean hasSynced)
     {
     }
 
@@ -451,15 +453,15 @@ public interface ClusterEventLogger
     @LoggerMethod(eventCode = "STANDBY_SNAPSHOT_NOTIFICATION", lengthMethod = "standbySnapshotNotificationLength",
         lengthArgs = { "timeUnit", "archiveEndpoint" })
     default void logStandbySnapshotNotification(
-        int memberId,
-        long recordingId,
-        long leadershipTermId,
-        long termBaseLogPosition,
-        long logPosition,
-        long timestamp,
-        TimeUnit timeUnit,
-        int serviceId,
-        String archiveEndpoint)
+        final int memberId,
+        final long recordingId,
+        final long leadershipTermId,
+        final long termBaseLogPosition,
+        final long logPosition,
+        final long timestamp,
+        final TimeUnit timeUnit,
+        final int serviceId,
+        final String archiveEndpoint)
     {
     }
 
@@ -473,7 +475,9 @@ public interface ClusterEventLogger
      * @param reason           for election to be started.
      */
     @LoggerMethod(eventCode = "NEW_ELECTION", lengthMethod = "newElectionLength", lengthArgs = { "reason" })
-    default void logNewElection(int memberId, long leadershipTermId, long logPosition, long appendPosition, String reason)
+    default void logNewElection(
+        final int memberId, final long leadershipTermId, final long logPosition, final long appendPosition,
+        final String reason)
     {
     }
 
@@ -492,12 +496,12 @@ public interface ClusterEventLogger
     @LoggerMethod(eventCode = "CLUSTER_SESSION_STATE_CHANGE", lengthMethod = "clusterSessionStateChangeLength",
         lengthArgs = { "action", "oldState", "newState", "reason" })
     default <A extends Enum<A>, S extends Enum<S>> void logClusterSessionStateChange(
-        int memberId,
-        long sessionId,
-        A action,
-        S oldState,
-        S newState,
-        String reason)
+        final int memberId,
+        final long sessionId,
+        final A action,
+        final S oldState,
+        final S newState,
+        final String reason)
     {
     }
 
@@ -512,11 +516,11 @@ public interface ClusterEventLogger
      */
     @LoggerMethod(eventCode = "SNAPSHOT_ENTRY_INVALIDATION", lengthMethod = "snapshotEntryInvalidationLength")
     default void logSnapshotEntryInvalidation(
-        int memberId,
-        int entryIndex,
-        long recordingId,
-        long logPosition,
-        int serviceId)
+        final int memberId,
+        final int entryIndex,
+        final long recordingId,
+        final long logPosition,
+        final int serviceId)
     {
     }
 }

@@ -1,9 +1,25 @@
+/*
+ * Copyright 2014-2026 Real Logic Limited.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.aeron.agent;
 
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
 
-import javax.sound.sampled.AudioFormat;
-
+/**
+ * CBOR implementation of {@link ClusterEventLogger}.
+ */
 public class CborClusterEventLogger implements ClusterEventLogger
 {
     private static final int HEADER_LENGTH = 16;
@@ -12,11 +28,28 @@ public class CborClusterEventLogger implements ClusterEventLogger
     private final ManyToOneRingBuffer ringBuffer;
     private final ThreadLocal<EncodingState> encodingStateThreadLocal = ThreadLocal.withInitial(EncodingState::new);
 
+    /**
+     * @param ringBuffer to be used by the logger to write encoded events to.
+     */
     public CborClusterEventLogger(final ManyToOneRingBuffer ringBuffer)
     {
         this.ringBuffer = ringBuffer;
     }
 
+    /**
+     * @param memberId            on which the change has taken place.
+     * @param oldState            before the change.
+     * @param newState            after the change.
+     * @param leaderId            of the cluster.
+     * @param candidateTermId     of the node.
+     * @param leadershipTermId    of the node.
+     * @param logPosition         of the node.
+     * @param logLeadershipTermId of the node.
+     * @param appendPosition      of the node.
+     * @param catchupPosition     of the node.
+     * @param reason              for the state transition to occur.
+     * @param <E>
+     */
     public <E extends Enum<E>> void logElectionStateChange(
         final int memberId,
         final E oldState,
