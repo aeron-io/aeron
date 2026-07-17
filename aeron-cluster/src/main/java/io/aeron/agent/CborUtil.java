@@ -52,8 +52,7 @@ public class CborUtil
 
     private static void encodeNumber(
         final EncodingState encodingState,
-        int value
-        )
+        int value)
     {
         // TODO: handle long (8 byte) case either here or through a new method
         final int offset = encodingState.offset();
@@ -119,13 +118,11 @@ public class CborUtil
         }
 
         final byte byteStringType = (byte)((2 << 5 | key.length()) & 0xFF);
-        final byte intValue = (byte)(value & 0xFF);
 
         final int offset = encodingState.offset();
 
         encodingState.buffer().putByte(offset, byteStringType);
         encodingState.buffer().putStringWithoutLengthAscii(offset + 1, key);
-        encodingState.buffer().putByte(offset + 1 + key.length(), intValue);
 
         encodingState.incrementOffset(1 + key.length());
 
@@ -197,7 +194,7 @@ public class CborUtil
             final byte valueType = createTypeByte(TEXT_STRING_TYPE, value.length());
             buffer.putByte(valueStartOffset, valueType);
             buffer.putStringWithoutLengthAscii(valueStartOffset + 1, value);
-            encodingState.incrementOffset( 1 + value.length());
+            encodingState.incrementOffset(1 + value.length());
         }
 
         return 1;
@@ -205,8 +202,7 @@ public class CborUtil
 
     private static void encodeIndefiniteLengthString(
         final EncodingState encodingState,
-        final CharSequence value
-    )
+        final CharSequence value)
     {
         int offset = encodingState.offset();
         final int valueLength = value.length();
