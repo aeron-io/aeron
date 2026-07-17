@@ -185,10 +185,6 @@ public class CborUtil
         final CharSequence key,
         final long value)
     {
-        if (encodingState.isReachedLimit())
-        {
-            return;
-        }
 
         final int length = length(key, value);
 
@@ -230,10 +226,6 @@ public class CborUtil
         final CharSequence key,
         final CharSequence value)
     {
-        if (encodingState.isReachedLimit())
-        {
-            return;
-        }
 
         final int length = length(key, value);
 
