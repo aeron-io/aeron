@@ -66,6 +66,13 @@ public class DriverModuleLogger implements ModuleLogger
     }
 
     /**
+     * Create a DriverModuleLogger, used by java service API.
+     */
+    public DriverModuleLogger()
+    {
+    }
+
+    /**
      * Determine if a given event code is configured/enabled for logging.
      *
      * @param driverEventCode to check for enablement.

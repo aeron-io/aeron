@@ -42,9 +42,9 @@ import static io.aeron.agent.ModuleLoggerReaderAgent.decodeLogEvent;
 import static org.agrona.BitUtil.SIZE_OF_INT;
 
 /**
- * Simple reader of {@link EventConfiguration#EVENT_RING_BUFFER} that is useful for testing. It will register
- * itself into JMX and allow users to switch on and off capture of log events in memory and allows the user
- * to periodically write them to a file.
+ * Simple reader of {@link ManyToOneRingBuffer} held by {@link EventConfiguration#eventReader} that is useful for testing.
+ * It will register itself into JMX and allow users to switch on and off capture of log events in memory
+ * and allows the user to periodically write them to a file.
  */
 public final class CollectingEventLogReaderAgent implements Agent, CollectingEventLogReaderAgentMBean
 {
