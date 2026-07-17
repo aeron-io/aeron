@@ -71,17 +71,6 @@ public class CborUtil
         }
     }
 
-    /**
-     * calculates the total length of the encoded string-int pair.
-     *
-     * @param key   the key to be encoded.
-     * @param value the int value to be encoded.
-     * @return the total length of the encoded string-int pair.
-     */
-    public static int length(final CharSequence key, final int value)
-    {
-        return lengthString(key) + lengthNumber(value);
-    }
 
     /**
      * calculates the total length of the encoded string-long pair.
@@ -92,7 +81,7 @@ public class CborUtil
      */
     public static int length(final CharSequence key, final long value)
     {
-        return 0;
+        return lengthString(key) + lengthNumber(value);
     }
 
     /**
@@ -103,7 +92,7 @@ public class CborUtil
      */
     public static <E extends Enum<E>> int length(final CharSequence key, final E value)
     {
-        return 0;
+        return length(key, value.name());
     }
 
     /**
@@ -226,10 +215,7 @@ public class CborUtil
         final CharSequence key,
         final E value)
     {
-        if (encodingState.isReachedLimit())
-        {
-            return;
-        }
+        encode(encodingState, key, value.name());
     }
 
     /**
