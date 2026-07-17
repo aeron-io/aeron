@@ -509,8 +509,7 @@ Let's look briefly how the script launches the code.
 include::{sampleBaseDir}/scripts/cluster/basic-auction-cluster[tag=start_jvm]
 ----
 
-The `-javaagent:../../../aeron-agent/build/libs/aeron-agent-${VERSION}-all.jar` allows the weaving of the Aeron's
-logging agent into the running code. Specifying `-Daeron.event.cluster.log=all` tells the agent to log all the events
+Specifying `-Daeron.event.cluster.log=all` tells the agent to log all the events
 relating to the cluster operation.
 
 == Using a Cluster Client

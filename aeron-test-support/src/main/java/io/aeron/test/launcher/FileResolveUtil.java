@@ -45,11 +45,6 @@ public class FileResolveUtil
         return resolveAeronJar("aeron-all", false);
     }
 
-    public static File resolveAeronAgentJar()
-    {
-        return resolveAeronJar("aeron-agent", true);
-    }
-
     private static File resolveAeronJar(final String moduleName, final boolean allowMultipleFiles)
     {
         final File projectRoot = resolveProjectRoot();

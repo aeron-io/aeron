@@ -224,7 +224,6 @@ subprojects {
     tasks.withType(Test).configureEach { test ->
         jvmArgs('--add-opens', 'java.base/jdk.internal.misc=ALL-UNNAMED')
         jvmArgs('--add-opens', 'java.base/java.util.zip=ALL-UNNAMED')
-//        jvmArgs("-javaagent:${mockitoAgent.asPath}")
         if (buildJavaVersion >= 21) {
             jvmArgs('-XX:+EnableDynamicAgentLoading')
         }
@@ -305,8 +304,6 @@ subprojects {
             includeTags 'slow'
         }
 
-//        jvmArgs("-javaagent:${aeronLoggingAgent}")
-
         systemProperties(
             'aeron.event.cluster.log': 'all',
             'aeron.event.cluster.log.disable': 'CANVASS_POSITION,APPEND_POSITION,COMMIT_POSITION',
@@ -326,7 +323,6 @@ subprojects {
             includeTags 'bindings'
         }
 
-//        jvmArgs("-javaagent:${aeronLoggingAgent}")
         systemProperty 'aeron.event.cluster.log', 'all'
         systemProperty 'aeron.event.cluster.log.disable', 'CANVASS_POSITION,APPEND_POSITION,COMMIT_POSITION'
         systemProperty 'aeron.event.archive.log', 'all'
@@ -342,7 +338,6 @@ subprojects {
             includeTags 'topology'
         }
 
-//        jvmArgs("-javaagent:${aeronLoggingAgent}")
         systemProperty 'aeron.event.cluster.log', 'all'
         systemProperty 'aeron.event.cluster.log.disable', 'CANVASS_POSITION,APPEND_POSITION,COMMIT_POSITION'
         systemProperty 'aeron.event.archive.log', 'all'
@@ -1217,7 +1212,6 @@ project(':aeron-samples') {
             project.file("../aeron-agent/build/libs/aeron-agent-${aeronVersion}.jar").absolutePath
         }
 
-//        jvmArgs '-javaagent:' + agentFilename()
         systemProperty 'aeron.event.cluster.log', 'all'
         systemProperty 'aeron.event.cluster.log.disable', 'CANVASS_POSITION,APPEND_POSITION,COMMIT_POSITION'
         systemProperty 'aeron.event.archive.log', 'all'
@@ -1264,7 +1258,6 @@ project(':aeron-system-tests') {
             project.file("../aeron-agent/build/libs/aeron-agent-${aeronVersion}.jar").absolutePath
         }
 
-//        jvmArgs '-javaagent:' + agentFilename()
         systemProperty 'aeron.event.cluster.log', 'all'
         systemProperty 'aeron.event.cluster.log.disable', 'CANVASS_POSITION,APPEND_POSITION,COMMIT_POSITION'
         systemProperty 'aeron.event.archive.log', 'all'
