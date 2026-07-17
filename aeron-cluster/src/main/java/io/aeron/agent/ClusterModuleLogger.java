@@ -62,6 +62,13 @@ public class ClusterModuleLogger implements ModuleLogger
     }
 
     /**
+     * Create a ClusterModuleLogger, used by java service API.
+     */
+    public ClusterModuleLogger()
+    {
+    }
+
+    /**
      * Determine if a given event code is configured/enabled for logging.
      *
      * @param clusterEventCode to check for enablement.

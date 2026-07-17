@@ -60,8 +60,7 @@ public final class EventConfiguration
     }
 
     /**
-     * The manager owning the event log ring buffer and the background reader agent that drains it, to be read by
-     * {@link ConfigOption#READER_CLASSNAME}.
+     * The manager owning the event log ring buffer and the background reader agent that drains it.
      *
      * @return the event reader manager.
      */
@@ -71,6 +70,7 @@ public final class EventConfiguration
     }
 
     /**
+     * Restart the event reader with new properties.
      * @param properties Restart the reader with the new properties.
      */
     public static void restartReader(final Properties properties)
