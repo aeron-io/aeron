@@ -239,6 +239,42 @@ class CborUtilTest
         assertEquals(expectedMessageKeySet, stringObjectMap.keySet());
     }
 
+    @Test
+    void shouldPartiallyEncodeExtensiveMultikeyMessageThatIsTooLong()
+    {
+        final int offset = 0;
+        // A relatively large buffer that comfortably fits every key except the oversized
+        // "candidateTermIdentifierValue" string value, which alone needs ~5KB and is dropped
+        // independently of the other keys, which still get encoded after it.
+        final int length = 512;
+        final Set<String> expectedMessageKeySet = Set.of(
+            "veryLongMemberIdentifierKey",
+            "leadershipTermTimestampNanos",
+            "logPositionSnapshotState",
+            "appendPositionCatchupTarget",
+            "negativeCatchupOffsetValue");
+        final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
 
+        final EncodingState encodingState = new EncodingState();
+        encodingState.reset(buffer, offset, length);
+        CborUtil.encodeHeader(encodingState, ClusterEventCode.ELECTION_STATE_CHANGE, 12643263L);
+        CborUtil.encode(encodingState, "veryLongMemberIdentifierKey", Long.MAX_VALUE);
+        CborUtil.encode(encodingState, "candidateTermIdentifierValue", "R".repeat(5_000));
+        CborUtil.encode(encodingState, "leadershipTermTimestampNanos", -123_456_789_012_345L);
+        CborUtil.encode(encodingState, "logPositionSnapshotState", TimeUnit.NANOSECONDS);
+        CborUtil.encode(encodingState, "appendPositionCatchupTarget", 42L);
+        CborUtil.encode(encodingState, "negativeCatchupOffsetValue", -0x12345678L);
+        CborUtil.encodeFooter(encodingState);
+        final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());
 
+        final byte[] data = new byte[encodingState.offset()];
+        encodingState.buffer().getBytes(0, data);
+
+        final Map<String, Object> stringObjectMap = cborObjectMapper.readValue(
+            data,
+            new TypeReference<>()
+            {
+            });
+        assertEquals(expectedMessageKeySet, stringObjectMap.keySet());
+    }
 }
