@@ -28,6 +28,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.dataformat.cbor.CBORFactory;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
@@ -178,5 +179,66 @@ class CborUtilTest
 
         assertEquals(TimeUnit.DAYS.name(), stringObjectMap.get("enum").toString());
     }
+
+    @Test
+    void shouldPartiallyEncodeMultikeyMessageThatIsTooLong()
+    {
+        final int offset = 0;
+        // Based on by-hand calculation, around 22 bytes are needed for key1 and key3 preservation
+        final int length = 26;
+        final Set<String> expectedMessageKeySet = Set.of("key1", "key3");
+        final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
+
+        final EncodingState encodingState = new EncodingState();
+        encodingState.reset(buffer, offset, length);
+        CborUtil.encodeHeader(encodingState, ClusterEventCode.ELECTION_STATE_CHANGE, 12643263L);
+        CborUtil.encode(encodingState, "key1", 1_000_000_000L);
+        CborUtil.encode(encodingState, "key2", "S".repeat(1_000_000));
+        CborUtil.encode(encodingState, "key3", TimeUnit.DAYS);
+        CborUtil.encodeFooter(encodingState);
+        final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());
+
+        final byte[] data = new byte[encodingState.offset()];
+        encodingState.buffer().getBytes(0, data);
+
+        final Map<String, Object> stringObjectMap = cborObjectMapper.readValue(
+            data,
+            new TypeReference<>()
+            {
+            });
+        assertEquals(expectedMessageKeySet, stringObjectMap.keySet());
+    }
+
+    @Test
+    void shouldPartiallyEncodeMultikeyMessageThatIsTooLongForFooter()
+    {
+        final int offset = 0;
+        // key3 should be dropped here, because the footer cannot fit.
+        // This may break if the footer schema is changed.
+        final int length = 21;
+        final Set<String> expectedMessageKeySet = Set.of("key1");
+        final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
+
+        final EncodingState encodingState = new EncodingState();
+        encodingState.reset(buffer, offset, length);
+        CborUtil.encodeHeader(encodingState, ClusterEventCode.ELECTION_STATE_CHANGE, 12643263L);
+        CborUtil.encode(encodingState, "key1", 1_000_000_000L);
+        CborUtil.encode(encodingState, "key2", "S".repeat(1_000_000));
+        CborUtil.encode(encodingState, "key3", TimeUnit.DAYS);
+        CborUtil.encodeFooter(encodingState);
+        final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());
+
+        final byte[] data = new byte[encodingState.offset()];
+        encodingState.buffer().getBytes(0, data);
+
+        final Map<String, Object> stringObjectMap = cborObjectMapper.readValue(
+            data,
+            new TypeReference<>()
+            {
+            });
+        assertEquals(expectedMessageKeySet, stringObjectMap.keySet());
+    }
+
+
 
 }

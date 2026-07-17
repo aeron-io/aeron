@@ -26,6 +26,7 @@ public class EncodingState
     private MutableDirectBuffer buffer;
     private int offset;
     private int length;
+    private int reservedFooterLength;
 
     /**
      * @param buffer to write the encoded data to.
@@ -37,6 +38,7 @@ public class EncodingState
         this.buffer = buffer;
         this.offset = offset;
         this.length = length;
+        this.reservedFooterLength = 1;
         reachedLimit = false;
     }
 
@@ -53,6 +55,8 @@ public class EncodingState
      */
     public void reachedLimit(final boolean value)
     {
+        // Reserve space for the footer tag.
+        // if (!reachedLimit) incrementReservedFooterLength(3);
         reachedLimit = value;
     }
 
@@ -85,7 +89,7 @@ public class EncodingState
      */
     public int remaining()
     {
-        return length - offset;
+        return length - offset - reservedFooterLength;
     }
 
     /**
@@ -94,6 +98,19 @@ public class EncodingState
     public void incrementOffset(final int length)
     {
         offset += length;
+    }
+
+    /**
+     * @return the current footer length reserved.
+     */
+    public int reservedFooterLength()
+    {
+        return reservedFooterLength;
+    }
+
+    void incrementReservedFooterLength(final int length)
+    {
+        this.reservedFooterLength += length;
     }
 
     /**
