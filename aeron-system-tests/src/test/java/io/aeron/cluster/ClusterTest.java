@@ -258,7 +258,7 @@ class ClusterTest
         cluster = aCluster().withStaticNodes(3).start();
         systemTestWatcher.cluster(cluster);
 
-        final TestNode leader = cluster.awaitLeader();
+        cluster.awaitLeader();
         cluster.connectClient();
         cluster.sendAndAwaitMessages(1);
         cluster.closeClient();
