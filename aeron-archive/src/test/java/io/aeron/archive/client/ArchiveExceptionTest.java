@@ -39,7 +39,9 @@ class ArchiveExceptionTest
         "11,STORAGE_SPACE",
         "12,UNKNOWN_REPLICATION",
         "13,UNAUTHORISED_ACTION",
-        "14,REPLICATION_CONNECTION_FAILURE" })
+        "14,REPLICATION_CONNECTION_FAILURE",
+        "15,EMPTY_RECORDING",
+        "16,INVALID_POSITION" })
     void errorCodeAsString(final int errorCode, final String expected)
     {
         assertEquals(expected, ArchiveException.errorCodeAsString(errorCode));
