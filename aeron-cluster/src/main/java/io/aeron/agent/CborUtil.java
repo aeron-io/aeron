@@ -30,7 +30,18 @@ import static org.agrona.BitUtil.SIZE_OF_SHORT;
 public class CborUtil
 {
     // Base bytes for major types
-    private static final byte TEXT_STRING_TYPE = 0b011_00000;
+    private static final int UNSIGNED_INTEGER_MAJOR_TYPE = 0;
+    private static final int NEGATIVE_INTEGER_MAJOR_TYPE = 1 << 5;
+    private static final int TEXT_STRING_MAJOR_TYPE = 3 << 5;
+    private static final int MAP_MAJOR_TYPE = 5 << 5;
+
+    public static final int ADDITIONAL_CONTENT_1_BYTE = 24;
+    public static final int ADDITIONAL_CONTENT_2_BYTE = 25;
+    public static final int ADDITIONAL_CONTENT_4_BYTE = 26;
+    public static final int ADDITIONAL_CONTENT_8_BYTE = 27;
+    public static final int ADDITIONAL_CONTENT_INDEFINITE = 31;
+
+    public static final int BREAK = 0xFF;
 
     static int lengthNumber(final long value)
     {
@@ -71,12 +82,16 @@ public class CborUtil
         }
     }
 
+    private static byte typeByte(final int majorType, final int modifier)
+    {
+        return (byte)((0b111_00000 & majorType) | (0b000_11111 & modifier));
+    }
 
     /**
-     * calculates the total length of the encoded string-long pair.
+     * Calculates the total length of an encoded string-long pair.
      *
-     * @param key   the key to be encoded.
-     * @param value the long value to be encoded.
+     * @param key   to be encoded.
+     * @param value to be encoded.
      * @return the total length of the encoded string-long pair.
      */
     public static int length(final CharSequence key, final long value)
@@ -85,8 +100,10 @@ public class CborUtil
     }
 
     /**
-     * @param key   the key to be encoded.
-     * @param value the enum value to be encoded.
+     * Calculates the total length of an encoded string-enum pair.
+     *
+     * @param key   to be encoded.
+     * @param value to be encoded.
      * @param <E>   the type of the enum to be encoded.
      * @return the total length of the encoded string-enum pair.
      */
@@ -96,20 +113,15 @@ public class CborUtil
     }
 
     /**
-     * calculates the total length of the encoded string-string pair.
+     * Calculates the total length of the encoded string-string pair.
      *
-     * @param key   the key to be encoded.
-     * @param value the value to be encoded.
+     * @param key   to be encoded.
+     * @param value to be encoded.
      * @return the total length of the encoded string-string pair.
      */
     public static int length(final CharSequence key, final CharSequence value)
     {
         return lengthString(key) + lengthString(value);
-    }
-
-    private static byte createTypeByte(final byte majorType, final int modifier)
-    {
-        return (byte)(majorType | modifier);
     }
 
     private static void encodeNumber(
@@ -120,53 +132,50 @@ public class CborUtil
         final int offset = encodingState.offset();
         final MutableDirectBuffer buffer = encodingState.buffer();
 
-        byte negativeMask = 0b000_00000;
+        final int majorType;
         final long magnitude;
         if (value < 0)
         {
             // Reference: https://datatracker.ietf.org/doc/html/rfc8949#section-3.1-2.4
-            negativeMask = 0b1 << 5;
+            majorType = NEGATIVE_INTEGER_MAJOR_TYPE;
             magnitude = ~value;
         }
         else
         {
+            majorType = UNSIGNED_INTEGER_MAJOR_TYPE;
             magnitude = value;
         }
 
         // Reference: https://datatracker.ietf.org/doc/html/rfc8949#name-specification-of-the-cbor-e
-        if (magnitude < 24)
+        if (magnitude < ADDITIONAL_CONTENT_1_BYTE)
         {
-            buffer.putByte(offset, (byte)(magnitude | negativeMask));
+            buffer.putByte(offset, typeByte(majorType, (int)magnitude));
             encodingState.incrementOffset(1);
         }
         else
         {
             // Encode based on minimum number of bytes required
-            if (magnitude < 256)
+            if (magnitude < (1 << 8))
             {
-                // 1 extra byte case (24)
-                buffer.putByte(offset, (byte)(0b000_11000 | negativeMask));
+                buffer.putByte(offset, typeByte(majorType, ADDITIONAL_CONTENT_1_BYTE));
                 buffer.putByte(offset + 1, (byte)magnitude);
                 encodingState.incrementOffset(1 + SIZE_OF_BYTE);
             }
-            else if (magnitude < 65536)
+            else if (magnitude < (1 << 16))
             {
-                // 2 extra bytes case (25)
-                buffer.putByte(offset, (byte)(0b000_11001 | negativeMask));
+                buffer.putByte(offset, typeByte(majorType, ADDITIONAL_CONTENT_2_BYTE));
                 buffer.putShort(offset + 1, (short)magnitude, BIG_ENDIAN);
                 encodingState.incrementOffset(1 + SIZE_OF_SHORT);
             }
             else if (magnitude < (1L << 32))
             {
-                // 4 extra bytes case (26)
-                buffer.putByte(offset, (byte)(0b000_11010 | negativeMask));
+                buffer.putByte(offset, typeByte(majorType, ADDITIONAL_CONTENT_4_BYTE));
                 buffer.putInt(offset + 1, (int)magnitude, BIG_ENDIAN);
                 encodingState.incrementOffset(1 + SIZE_OF_INT);
             }
             else
             {
-                // 8 extra bytes case (27)
-                buffer.putByte(offset, (byte)(0b000_11011 | negativeMask));
+                buffer.putByte(offset, typeByte(majorType, ADDITIONAL_CONTENT_8_BYTE));
                 buffer.putLong(offset + 1, magnitude, BIG_ENDIAN);
                 encodingState.incrementOffset(1 + SIZE_OF_LONG);
             }
@@ -199,7 +208,7 @@ public class CborUtil
     }
 
     /**
-     * encodes a key-value pair of a string and an enum.
+     * Encodes a key-value pair of a string and an enum.
      *
      * @param encodingState tracks the current state of the encoding.
      * @param key           the key to be encoded.
@@ -215,7 +224,7 @@ public class CborUtil
     }
 
     /**
-     * encodes a key-value pair of a string and a string.
+     * Encodes a key-value pair of a string and a string.
      *
      * @param encodingState tracks the current state of the encoding.
      * @param key           the key to be encoded.
@@ -226,7 +235,6 @@ public class CborUtil
         final CharSequence key,
         final CharSequence value)
     {
-
         final int length = length(key, value);
 
         if (encodingState.remaining() < length)
@@ -241,17 +249,17 @@ public class CborUtil
     private static void encodeString(final EncodingState encodingState, final CharSequence value)
     {
         final MutableDirectBuffer buffer = encodingState.buffer();
-        if (value.length() < 24)
+        if (value.length() < ADDITIONAL_CONTENT_1_BYTE)
         {
             final int valueStartOffset = encodingState.offset();
-            final byte valueType = createTypeByte(TEXT_STRING_TYPE, value.length());
+            final byte valueType = typeByte(TEXT_STRING_MAJOR_TYPE, value.length());
             buffer.putByte(valueStartOffset, valueType);
             buffer.putStringWithoutLengthAscii(valueStartOffset + 1, value);
             encodingState.incrementOffset(1 + value.length());
         }
         else if (value.length() < (1 << 8))
         {
-            final byte valueType = createTypeByte(TEXT_STRING_TYPE, (byte)24);
+            final byte valueType = typeByte(TEXT_STRING_MAJOR_TYPE, ADDITIONAL_CONTENT_1_BYTE);
             buffer.putByte(encodingState.offset(), valueType);
             buffer.putByte(encodingState.offset() + 1, (byte)value.length());
             buffer.putStringWithoutLengthAscii(encodingState.offset() + 2, value);
@@ -259,7 +267,7 @@ public class CborUtil
         }
         else if (value.length() < (1 << 16))
         {
-            final byte valueType = createTypeByte(TEXT_STRING_TYPE, (byte)25);
+            final byte valueType = typeByte(TEXT_STRING_MAJOR_TYPE, ADDITIONAL_CONTENT_2_BYTE);
             buffer.putByte(encodingState.offset(), valueType);
             buffer.putShort(encodingState.offset() + 1, (short)value.length(), BIG_ENDIAN);
             buffer.putStringWithoutLengthAscii(encodingState.offset() + 1 + SIZE_OF_SHORT, value);
@@ -267,7 +275,7 @@ public class CborUtil
         }
         else
         {
-            final byte valueType = createTypeByte(TEXT_STRING_TYPE, (byte)26);
+            final byte valueType = typeByte(TEXT_STRING_MAJOR_TYPE, ADDITIONAL_CONTENT_4_BYTE);
             buffer.putByte(encodingState.offset(), valueType);
             buffer.putInt(encodingState.offset() + 1, value.length(), BIG_ENDIAN);
             buffer.putStringWithoutLengthAscii(encodingState.offset() + 1 + SIZE_OF_INT, value);
@@ -276,15 +284,16 @@ public class CborUtil
 
     }
 
-
     /**
-     * @param clusterEventCode
-     * @param timestamp
+     * Calculate the length of the header of the Cbor message.
+     *
+     * @param clusterEventCode  for this message.
+     * @param timestamp         of this message.
      * @return the length of the header of the Cbor message.
      */
     public static int headerLength(final ClusterEventCode clusterEventCode, final long timestamp)
     {
-        return 0;
+        return 1;
     }
 
     /**
@@ -299,8 +308,7 @@ public class CborUtil
         final ClusterEventCode clusterEventCode,
         final long timestamp)
     {
-        final byte mapType = (byte)0xBF;
-        encodingState.buffer().putByte(encodingState.offset(), mapType);
+        encodingState.buffer().putByte(encodingState.offset(), typeByte(MAP_MAJOR_TYPE, ADDITIONAL_CONTENT_INDEFINITE));
         encodingState.incrementOffset(1);
     }
 
@@ -309,8 +317,7 @@ public class CborUtil
      */
     public static void encodeFooter(final EncodingState encodingState)
     {
-        final byte terminal = (byte)0b111_11111;
-        encodingState.buffer().putByte(encodingState.offset(), terminal);
+        encodingState.buffer().putByte(encodingState.offset(), (byte)BREAK);
         encodingState.incrementOffset(1);
     }
 }

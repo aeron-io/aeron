@@ -27,6 +27,7 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.dataformat.cbor.CBORFactory;
 
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -72,10 +73,7 @@ class CborUtilTest
             });
 
         assertEquals(memberId, ((Number)stringObjectMap.get("memberId")).longValue());
-
-        System.out.println(stringObjectMap);
     }
-
 
     static Stream<Arguments> generateBigStrings()
     {
@@ -115,8 +113,6 @@ class CborUtilTest
             });
 
         assertEquals(reason, stringObjectMap.get("reason").toString());
-
-        System.out.println(stringObjectMap);
     }
 
     @ParameterizedTest
