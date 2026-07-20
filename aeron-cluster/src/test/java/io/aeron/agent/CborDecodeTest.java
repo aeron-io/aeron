@@ -33,6 +33,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
@@ -174,6 +175,79 @@ class CborDecodeTest
         verify(loggerEventCallback).onValue("key1", 1_000_000_000L);
         verify(loggerEventCallback).onValue("key2", "S".repeat(50));
         verify(loggerEventCallback).onValue("key3", TimeUnit.DAYS.name());
+        verify(loggerEventCallback).onFooter(false);
+    }
+
+    @Test
+    void shouldDecodeExtensiveMultikeyMessage()
+    {
+        final int offset = 0;
+        // Generously sized so that every key below, including the ~1000-char string, encodes fully.
+        final int length = 8192;
+        final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
+        final LoggerEventCallback loggerEventCallback = mock(LoggerEventCallback.class);
+
+        final long negativeCatchupOffsetValue = -0x12345678L;
+        final long leadershipTermTimestampNanos = -123_456_789_012_345L;
+        final long appendPositionCatchupTarget = 42L;
+        final String candidateTermIdentifierValue = "R".repeat(1000);
+        final String shortStringBoundary = "T".repeat(23);
+        final String oneByteLengthBoundary = "T".repeat(24);
+        final String twoByteLengthBoundary = "T".repeat(256);
+
+        final EncodingState encodingState = new EncodingState();
+        encodingState.reset(buffer, offset, length);
+        CborUtil.encodeHeader(encodingState, ClusterEventCode.ELECTION_STATE_CHANGE, 12643263L);
+        CborUtil.encode(encodingState, "veryLongMemberIdentifierKey", Long.MAX_VALUE);
+        CborUtil.encode(encodingState, "candidateTermIdentifierValue", candidateTermIdentifierValue);
+        CborUtil.encode(encodingState, "leadershipTermTimestampNanos", leadershipTermTimestampNanos);
+        CborUtil.encode(encodingState, "logPositionSnapshotState", TimeUnit.DAYS.name());
+        CborUtil.encode(encodingState, "appendPositionCatchupTarget", appendPositionCatchupTarget);
+        CborUtil.encode(encodingState, "negativeCatchupOffsetValue", negativeCatchupOffsetValue);
+        CborUtil.encode(encodingState, "smallPositiveBoundary", 0x7FL);
+        CborUtil.encode(encodingState, "oneByteBoundary", 0x100L);
+        CborUtil.encode(encodingState, "twoBytePositiveBoundary", 0x7FFFL);
+        CborUtil.encode(encodingState, "twoByteBoundary", 0x10000L);
+        CborUtil.encode(encodingState, "fourBytePositiveBoundary", 0x7FFFFFFFL);
+        CborUtil.encode(encodingState, "fourByteBoundary", 0x80000000L);
+        CborUtil.encode(encodingState, "smallNegativeBoundary", -2L);
+        CborUtil.encode(encodingState, "twoByteNegativeBoundary", -0xFFFFL);
+        CborUtil.encode(encodingState, "shortStringBoundary", shortStringBoundary);
+        CborUtil.encode(encodingState, "oneByteLengthBoundary", oneByteLengthBoundary);
+        CborUtil.encode(encodingState, "twoByteLengthBoundary", twoByteLengthBoundary);
+        CborUtil.encode(encodingState, "replicationUnit", TimeUnit.NANOSECONDS.name());
+        CborUtil.encodeFooter(encodingState);
+
+        assertFalse(encodingState.isReachedLimit());
+
+        CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(loggerEventCallback)));
+        cborDecode.onMessage(
+            ClusterEventCode.ELECTION_STATE_CHANGE.toEventCodeId(),
+            encodingState.buffer(), 0, encodingState.offset());
+
+        verify(loggerEventCallback).onHeader(
+            EventCodeType.CLUSTER.getTypeCode(),
+            ClusterEventCode.ELECTION_STATE_CHANGE.toEventCodeId(),
+            0L);
+
+        verify(loggerEventCallback).onValue("veryLongMemberIdentifierKey", Long.MAX_VALUE);
+        verify(loggerEventCallback).onValue("candidateTermIdentifierValue", candidateTermIdentifierValue);
+        verify(loggerEventCallback).onValue("leadershipTermTimestampNanos", leadershipTermTimestampNanos);
+        verify(loggerEventCallback).onValue("logPositionSnapshotState", TimeUnit.DAYS.name());
+        verify(loggerEventCallback).onValue("appendPositionCatchupTarget", appendPositionCatchupTarget);
+        verify(loggerEventCallback).onValue("negativeCatchupOffsetValue", negativeCatchupOffsetValue);
+        verify(loggerEventCallback).onValue("smallPositiveBoundary", 0x7FL);
+        verify(loggerEventCallback).onValue("oneByteBoundary", 0x100L);
+        verify(loggerEventCallback).onValue("twoBytePositiveBoundary", 0x7FFFL);
+        verify(loggerEventCallback).onValue("twoByteBoundary", 0x10000L);
+        verify(loggerEventCallback).onValue("fourBytePositiveBoundary", 0x7FFFFFFFL);
+        verify(loggerEventCallback).onValue("fourByteBoundary", 0x80000000L);
+        verify(loggerEventCallback).onValue("smallNegativeBoundary", -2L);
+        verify(loggerEventCallback).onValue("twoByteNegativeBoundary", -0xFFFFL);
+        verify(loggerEventCallback).onValue("shortStringBoundary", shortStringBoundary);
+        verify(loggerEventCallback).onValue("oneByteLengthBoundary", oneByteLengthBoundary);
+        verify(loggerEventCallback).onValue("twoByteLengthBoundary", twoByteLengthBoundary);
+        verify(loggerEventCallback).onValue("replicationUnit", TimeUnit.NANOSECONDS.name());
         verify(loggerEventCallback).onFooter(false);
     }
 //    @Test
