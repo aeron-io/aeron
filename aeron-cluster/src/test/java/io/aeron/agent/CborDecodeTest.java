@@ -17,6 +17,7 @@
 package io.aeron.agent;
 
 import org.agrona.concurrent.UnsafeBuffer;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -27,6 +28,8 @@ import tools.jackson.dataformat.cbor.CBORFactory;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -141,37 +144,38 @@ class CborDecodeTest
         verify(loggerEventCallback).onValue("reason", reason);
         verify(loggerEventCallback).onFooter(false);
     }
-//
-//    @ParameterizedTest
-//    @CsvSource({
-//        "10,1",
-//        "0x1F,2",
-//        "0x1234,3",
-//        "0x12345678,5",
-//        "0x123456781234567, 9"
-//    })
-//    void shouldGetCorrectLengthForNumber(final long number, final int expectedLength)
-//    {
-//        assertEquals(expectedLength, CborUtil.lengthNumber(number));
-//    }
-//
-//    static Stream<Arguments> generateBigStringsForLengthCalculation()
-//    {
-//        return Stream.of(
-//            Arguments.of("A".repeat(10), 11),
-//            Arguments.of("A".repeat(100), 102),
-//            Arguments.of("A".repeat(1000), 1003),
-//            Arguments.of("A".repeat(100_000), 100_005)
-//        );
-//    }
-//
-//    @ParameterizedTest
-//    @MethodSource("generateBigStringsForLengthCalculation")
-//    void shouldGetCorrectLengthForCharSequence(final CharSequence text, final int expectedLength)
-//    {
-//        assertEquals(expectedLength, CborUtil.lengthString(text));
-//    }
-//
+
+    @Test
+    void shouldDecodeMultikeyMessage()
+    {
+        final int offset = 0;
+        final int length = 1000;
+        final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
+        final LoggerEventCallback loggerEventCallback = mock(LoggerEventCallback.class);
+
+        final EncodingState encodingState = new EncodingState();
+        encodingState.reset(buffer, offset, length);
+        CborUtil.encodeHeader(encodingState, ClusterEventCode.ELECTION_STATE_CHANGE, 12643263L);
+        CborUtil.encode(encodingState, "key1", 1_000_000_000L);
+        CborUtil.encode(encodingState, "key2", "S".repeat(50));
+        CborUtil.encode(encodingState, "key3", TimeUnit.DAYS.name());
+        CborUtil.encodeFooter(encodingState);
+
+        CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(loggerEventCallback)));
+        cborDecode.onMessage(
+            ClusterEventCode.ELECTION_STATE_CHANGE.toEventCodeId(),
+            encodingState.buffer(), 0, encodingState.offset());
+
+        verify(loggerEventCallback).onHeader(
+            EventCodeType.CLUSTER.getTypeCode(),
+            ClusterEventCode.ELECTION_STATE_CHANGE.toEventCodeId(),
+            0L);
+
+        verify(loggerEventCallback).onValue("key1", 1_000_000_000L);
+        verify(loggerEventCallback).onValue("key2", "S".repeat(50));
+        verify(loggerEventCallback).onValue("key3", TimeUnit.DAYS.name());
+        verify(loggerEventCallback).onFooter(false);
+    }
 //    @Test
 //    void shouldPartiallyEncodeMultikeyMessageThatIsTooLong()
 //    {
