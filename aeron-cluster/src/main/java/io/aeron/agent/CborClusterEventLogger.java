@@ -48,7 +48,7 @@ public class CborClusterEventLogger implements ClusterEventLogger
      * @param appendPosition      of the node.
      * @param catchupPosition     of the node.
      * @param reason              for the state transition to occur.
-     * @param <E>
+     * @param <E>                 the type of the state enum.
      */
     public <E extends Enum<E>> void logElectionStateChange(
         final int memberId,
