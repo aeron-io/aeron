@@ -19,6 +19,7 @@ import io.aeron.cluster.ConsensusModule;
 import io.aeron.cluster.codecs.CloseReason;
 import io.aeron.eventlog.GeneratedLogger;
 import io.aeron.eventlog.LoggerMethod;
+import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
 
 import java.util.concurrent.TimeUnit;

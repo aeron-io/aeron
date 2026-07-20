@@ -208,22 +208,6 @@ public class CborUtil
     }
 
     /**
-     * Encodes a key-value pair of a string and an enum.
-     *
-     * @param encodingState tracks the current state of the encoding.
-     * @param key           the key to be encoded.
-     * @param value         the value to be encoded.
-     * @param <E>           the type of the enum to be encoded.
-     */
-    public static <E extends Enum<E>> void encode(
-        final EncodingState encodingState,
-        final CharSequence key,
-        final E value)
-    {
-        encode(encodingState, key, value.name());
-    }
-
-    /**
      * Encodes a key-value pair of a string and a string.
      *
      * @param encodingState tracks the current state of the encoding.

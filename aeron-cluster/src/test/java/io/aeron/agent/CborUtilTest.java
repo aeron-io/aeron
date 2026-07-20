@@ -27,7 +27,6 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.dataformat.cbor.CBORFactory;
 
-import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -145,37 +144,6 @@ class CborUtilTest
         assertEquals(expectedLength, CborUtil.lengthString(text));
     }
 
-
-    @Test
-    void shouldEncodeEnumMessage()
-    {
-        final int offset = 0;
-        final int length = 200_000;
-        final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
-
-        final long timestamp = 12643263L;
-
-        final EncodingState encodingState = new EncodingState();
-        encodingState.reset(buffer, offset, length);
-
-        CborUtil.encodeHeader(encodingState, ClusterEventCode.ELECTION_STATE_CHANGE, timestamp);
-        CborUtil.encode(encodingState, "enum", TimeUnit.DAYS);
-        CborUtil.encodeFooter(encodingState);
-
-        final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());
-
-        final byte[] data = new byte[encodingState.offset()];
-        encodingState.buffer().getBytes(0, data);
-
-        final Map<String, Object> stringObjectMap = cborObjectMapper.readValue(
-            data,
-            new TypeReference<>()
-            {
-            });
-
-        assertEquals(TimeUnit.DAYS.name(), stringObjectMap.get("enum").toString());
-    }
-
     @Test
     void shouldPartiallyEncodeMultikeyMessageThatIsTooLong()
     {
@@ -190,7 +158,7 @@ class CborUtilTest
         CborUtil.encodeHeader(encodingState, ClusterEventCode.ELECTION_STATE_CHANGE, 12643263L);
         CborUtil.encode(encodingState, "key1", 1_000_000_000L);
         CborUtil.encode(encodingState, "key2", "S".repeat(1_000_000));
-        CborUtil.encode(encodingState, "key3", TimeUnit.DAYS);
+        CborUtil.encode(encodingState, "key3", TimeUnit.DAYS.name());
         CborUtil.encodeFooter(encodingState);
         final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());
 
@@ -220,7 +188,7 @@ class CborUtilTest
         CborUtil.encodeHeader(encodingState, ClusterEventCode.ELECTION_STATE_CHANGE, 12643263L);
         CborUtil.encode(encodingState, "key1", 1_000_000_000L);
         CborUtil.encode(encodingState, "key2", "S".repeat(1_000_000));
-        CborUtil.encode(encodingState, "key3", TimeUnit.DAYS);
+        CborUtil.encode(encodingState, "key3", TimeUnit.DAYS.name());
         CborUtil.encodeFooter(encodingState);
         final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());
 
@@ -257,7 +225,7 @@ class CborUtilTest
         CborUtil.encode(encodingState, "veryLongMemberIdentifierKey", Long.MAX_VALUE);
         CborUtil.encode(encodingState, "candidateTermIdentifierValue", "R".repeat(5_000));
         CborUtil.encode(encodingState, "leadershipTermTimestampNanos", -123_456_789_012_345L);
-        CborUtil.encode(encodingState, "logPositionSnapshotState", TimeUnit.NANOSECONDS);
+        CborUtil.encode(encodingState, "logPositionSnapshotState", TimeUnit.NANOSECONDS.name());
         CborUtil.encode(encodingState, "appendPositionCatchupTarget", 42L);
         CborUtil.encode(encodingState, "negativeCatchupOffsetValue", -0x12345678L);
         CborUtil.encodeFooter(encodingState);
