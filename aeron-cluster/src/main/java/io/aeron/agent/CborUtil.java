@@ -43,7 +43,7 @@ public class CborUtil
 
     public static final int BREAK = 0xFF;
 
-    private static final String TRUNCATION_TEXT = "...";
+    private static final String TRUNC_END = "...";
 
     static int lengthNumber(final long value)
     {
@@ -235,105 +235,75 @@ public class CborUtil
 
     private static void encodeString(final EncodingState encodingState, final CharSequence value)
     {
-        final int remaining = encodingState.remaining();
-        final MutableDirectBuffer buffer = encodingState.buffer();
-        final int offset = encodingState.offset();
+        final int valueLength = value.length();
 
-        if (value.length() < ADDITIONAL_CONTENT_1_BYTE)
+        final int lengthFieldBytes;
+        final int additionalContent;
+        if (valueLength < ADDITIONAL_CONTENT_1_BYTE)
         {
-            final int length = Math.min(value.length(), remaining - 1);
-            final boolean truncated = length < value.length();
-            if (truncated && length < TRUNCATION_TEXT.length())
-            {
-                encodingState.reachedLimit(true);
-                return;
-            }
-            buffer.putByte(offset, typeByte(TEXT_STRING_MAJOR_TYPE, length));
-            if (truncated)
-            {
-                final int prefixLength = length - TRUNCATION_TEXT.length();
-                buffer.putStringWithoutLengthAscii(offset + 1, value, 0, prefixLength);
-                buffer.putStringWithoutLengthAscii(offset + 1 + prefixLength, TRUNCATION_TEXT);
-                encodingState.reachedLimit(true);
-            }
-            else
-            {
-                buffer.putStringWithoutLengthAscii(offset + 1, value);
-            }
-            encodingState.incrementOffset(1 + length);
+            lengthFieldBytes = 0;
+            additionalContent = 0;
         }
-        else if (value.length() < (1 << 8))
+        else if (valueLength < (1 << 8))
         {
-            final int length = Math.min(value.length(), remaining - 2);
-            final boolean truncated = length < value.length();
-            if (truncated && length < TRUNCATION_TEXT.length())
-            {
-                encodingState.reachedLimit(true);
-                return;
-            }
-            buffer.putByte(offset, typeByte(TEXT_STRING_MAJOR_TYPE, ADDITIONAL_CONTENT_1_BYTE));
-            buffer.putByte(offset + 1, (byte)length);
-            if (truncated)
-            {
-                final int prefixLength = length - TRUNCATION_TEXT.length();
-                buffer.putStringWithoutLengthAscii(offset + 2, value, 0, prefixLength);
-                buffer.putStringWithoutLengthAscii(offset + 2 + prefixLength, TRUNCATION_TEXT);
-                encodingState.reachedLimit(true);
-            }
-            else
-            {
-                buffer.putStringWithoutLengthAscii(offset + 2, value);
-            }
-            encodingState.incrementOffset(2 + length);
+            lengthFieldBytes = SIZE_OF_BYTE;
+            additionalContent = ADDITIONAL_CONTENT_1_BYTE;
         }
-        else if (value.length() < (1 << 16))
+        else if (valueLength < (1 << 16))
         {
-            final int length = Math.min(value.length(), remaining - (1 + SIZE_OF_SHORT));
-            final boolean truncated = length < value.length();
-            if (truncated && length < TRUNCATION_TEXT.length())
-            {
-                encodingState.reachedLimit(true);
-                return;
-            }
-            buffer.putByte(offset, typeByte(TEXT_STRING_MAJOR_TYPE, ADDITIONAL_CONTENT_2_BYTE));
-            buffer.putShort(offset + 1, (short)length, BIG_ENDIAN);
-            if (truncated)
-            {
-                final int prefixLength = length - TRUNCATION_TEXT.length();
-                buffer.putStringWithoutLengthAscii(offset + 1 + SIZE_OF_SHORT, value, 0, prefixLength);
-                buffer.putStringWithoutLengthAscii(offset + 1 + SIZE_OF_SHORT + prefixLength, TRUNCATION_TEXT);
-                encodingState.reachedLimit(true);
-            }
-            else
-            {
-                buffer.putStringWithoutLengthAscii(offset + 1 + SIZE_OF_SHORT, value);
-            }
-            encodingState.incrementOffset(1 + SIZE_OF_SHORT + length);
+            lengthFieldBytes = SIZE_OF_SHORT;
+            additionalContent = ADDITIONAL_CONTENT_2_BYTE;
         }
         else
         {
-            final int length = Math.min(value.length(), remaining - (1 + SIZE_OF_INT));
-            final boolean truncated = length < value.length();
-            if (truncated && length < TRUNCATION_TEXT.length())
-            {
-                encodingState.reachedLimit(true);
-                return;
-            }
-            buffer.putByte(offset, typeByte(TEXT_STRING_MAJOR_TYPE, ADDITIONAL_CONTENT_4_BYTE));
-            buffer.putInt(offset + 1, length, BIG_ENDIAN);
-            if (truncated)
-            {
-                final int prefixLength = length - TRUNCATION_TEXT.length();
-                buffer.putStringWithoutLengthAscii(offset + 1 + SIZE_OF_INT, value, 0, prefixLength);
-                buffer.putStringWithoutLengthAscii(offset + 1 + SIZE_OF_INT + prefixLength, TRUNCATION_TEXT);
-                encodingState.reachedLimit(true);
-            }
-            else
-            {
-                buffer.putStringWithoutLengthAscii(offset + 1 + SIZE_OF_INT, value);
-            }
-            encodingState.incrementOffset(1 + SIZE_OF_INT + length);
+            lengthFieldBytes = SIZE_OF_INT;
+            additionalContent = ADDITIONAL_CONTENT_4_BYTE;
         }
+
+        // included string length + ellipsis (if truncated)
+        final int finalLength = Math.min(
+            valueLength,
+            encodingState.remaining() - (1 + lengthFieldBytes));
+
+        final MutableDirectBuffer buffer = encodingState.buffer();
+        final int offset = encodingState.offset();
+        if (lengthFieldBytes > 0)
+        {
+            buffer.putByte(offset, typeByte(TEXT_STRING_MAJOR_TYPE, additionalContent));
+            switch (lengthFieldBytes)
+            {
+                case SIZE_OF_BYTE -> buffer.putByte(offset + 1, (byte)finalLength);
+                case SIZE_OF_SHORT -> buffer.putShort(offset + 1, (short)finalLength, BIG_ENDIAN);
+                case SIZE_OF_INT -> buffer.putInt(offset + 1, finalLength, BIG_ENDIAN);
+            }
+        }
+        else
+        {
+            buffer.putByte(offset, typeByte(TEXT_STRING_MAJOR_TYPE, finalLength));
+        }
+
+        encodingState.incrementOffset(1 + lengthFieldBytes);
+        if (finalLength < valueLength)
+        {
+            // Truncated case
+            final int includedValueLength = finalLength - TRUNC_END.length();
+            buffer.putStringWithoutLengthAscii(
+                encodingState.offset(),
+                value,
+                0,
+                includedValueLength);
+
+            buffer.putStringWithoutLengthAscii(
+                encodingState.offset() + includedValueLength,
+                TRUNC_END);
+            encodingState.reachedLimit(true);
+        }
+        else
+        {
+            // Regular case
+            buffer.putStringWithoutLengthAscii(encodingState.offset(), value);
+        }
+        encodingState.incrementOffset(finalLength);
     }
 
     /**
@@ -369,6 +339,7 @@ public class CborUtil
      */
     public static void encodeFooter(final EncodingState encodingState)
     {
+        // TODO: Decide how truncation flag should be handled here
         encodingState.buffer().putByte(encodingState.offset(), (byte)BREAK);
         encodingState.incrementOffset(1);
     }
