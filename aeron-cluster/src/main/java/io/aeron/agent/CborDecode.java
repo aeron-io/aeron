@@ -131,7 +131,7 @@ public class CborDecode implements MessageHandler
         }
         else if (ADDITIONAL_CONTENT_4_BYTE == valueAdditionalContent)
         {
-            value = state.buffer().getInt(state.position(), BIG_ENDIAN);
+            value = 0xFFFFFFFFL & state.buffer().getInt(state.position(), BIG_ENDIAN);
             state.incrementPosition(4);
         }
         else if (ADDITIONAL_CONTENT_8_BYTE == valueAdditionalContent)
