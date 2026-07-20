@@ -88,8 +88,8 @@ public class CborClusterEventLogger implements ClusterEventLogger
             CborUtil.encodeHeader(encodingState, ClusterEventCode.ELECTION_STATE_CHANGE, timestamp);
 
             CborUtil.encode(encodingState, "memberId", memberId);
-            CborUtil.encode(encodingState, "oldState", oldState);
-            CborUtil.encode(encodingState, "newState", newState);
+            CborUtil.encode(encodingState, "oldState", oldState.name());
+            CborUtil.encode(encodingState, "newState", newState.name());
             CborUtil.encode(encodingState, "leaderId", leaderId);
             CborUtil.encode(encodingState, "candidateTermId", candidateTermId);
             CborUtil.encode(encodingState, "leadershipTermId", leadershipTermId);
