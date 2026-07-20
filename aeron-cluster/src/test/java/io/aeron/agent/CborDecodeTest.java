@@ -17,10 +17,8 @@
 package io.aeron.agent;
 
 import org.agrona.concurrent.UnsafeBuffer;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.core.type.TypeReference;
@@ -29,8 +27,6 @@ import tools.jackson.dataformat.cbor.CBORFactory;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -106,45 +102,45 @@ class CborDecodeTest
         verify(loggerEventCallback).onFooter(false);
     }
 
-//    static Stream<Arguments> generateBigStrings()
-//    {
-//        return Stream.of(
-//            Arguments.of("A".repeat(10)),
-//            Arguments.of("A".repeat(1000)),
-//            Arguments.of("A".repeat(100_000))
-//        );
-//    }
-//
-//    @ParameterizedTest
-//    @MethodSource("generateBigStrings")
-//    void shouldEncodeCharSequenceMessage(final String reason)
-//    {
-//        final int offset = 0;
-//        final int length = 200_000;
-//        final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
-//
-//        final long timestamp = 12643263L;
-//
-//        final EncodingState encodingState = new EncodingState();
-//        encodingState.reset(buffer, offset, length);
-//
-//        CborUtil.encodeHeader(encodingState, ClusterEventCode.ELECTION_STATE_CHANGE, timestamp);
-//        CborUtil.encode(encodingState, "reason", reason);
-//        CborUtil.encodeFooter(encodingState);
-//
-//        final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());
-//
-//        final byte[] data = new byte[encodingState.offset()];
-//        encodingState.buffer().getBytes(0, data);
-//
-//        final Map<String, Object> stringObjectMap = cborObjectMapper.readValue(
-//            data,
-//            new TypeReference<>()
-//            {
-//            });
-//
-//        assertEquals(reason, stringObjectMap.get("reason").toString());
-//    }
+    static Stream<Arguments> generateBigStrings()
+    {
+        return Stream.of(
+            Arguments.of("A".repeat(10)),
+            Arguments.of("A".repeat(1000)),
+            Arguments.of("A".repeat(100_000))
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("generateBigStrings")
+    void shouldDecodeCharSequences(final String reason)
+    {
+        final int offset = 0;
+        final int length = 200_000;
+        final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
+        final LoggerEventCallback loggerEventCallback = mock(LoggerEventCallback.class);
+        final long timestamp = 12643263L;
+
+        final EncodingState encodingState = new EncodingState();
+        encodingState.reset(buffer, offset, length);
+
+        CborUtil.encodeHeader(encodingState, ClusterEventCode.ELECTION_STATE_CHANGE, timestamp);
+        CborUtil.encode(encodingState, "reason", reason);
+        CborUtil.encodeFooter(encodingState);
+
+        CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(loggerEventCallback)));
+        cborDecode.onMessage(
+            ClusterEventCode.ELECTION_STATE_CHANGE.toEventCodeId(),
+            encodingState.buffer(),0, encodingState.offset());
+
+        verify(loggerEventCallback).onHeader(
+            EventCodeType.CLUSTER.getTypeCode(),
+            ClusterEventCode.ELECTION_STATE_CHANGE.toEventCodeId(),
+            0L);
+
+        verify(loggerEventCallback).onValue("reason", reason);
+        verify(loggerEventCallback).onFooter(false);
+    }
 //
 //    @ParameterizedTest
 //    @CsvSource({
