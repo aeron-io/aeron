@@ -30,10 +30,10 @@ import static org.agrona.BitUtil.SIZE_OF_SHORT;
 public class CborUtil
 {
     // Base bytes for major types
-    private static final int UNSIGNED_INTEGER_MAJOR_TYPE = 0;
-    private static final int NEGATIVE_INTEGER_MAJOR_TYPE = 1 << 5;
-    private static final int TEXT_STRING_MAJOR_TYPE = 3 << 5;
-    private static final int MAP_MAJOR_TYPE = 5 << 5;
+    static final int UNSIGNED_INTEGER_MAJOR_TYPE = 0;
+    static final int NEGATIVE_INTEGER_MAJOR_TYPE = 1 << 5;
+    static final int TEXT_STRING_MAJOR_TYPE = 3 << 5;
+    static final int MAP_MAJOR_TYPE = 5 << 5;
 
     public static final int ADDITIONAL_CONTENT_1_BYTE = 24;
     public static final int ADDITIONAL_CONTENT_2_BYTE = 25;
@@ -82,7 +82,7 @@ public class CborUtil
         }
     }
 
-    private static byte typeByte(final int majorType, final int modifier)
+    static byte typeByte(final int majorType, final int modifier)
     {
         return (byte)((0b111_00000 & majorType) | (0b000_11111 & modifier));
     }
