@@ -282,27 +282,16 @@ public class CborUtil
         }
 
         encodingState.incrementOffset(1 + lengthFieldBytes);
+        int toWriteLength = finalLength < valueLength ? finalLength - TRUNC_END.length() : value.length();
+        buffer.putStringWithoutLengthAscii(encodingState.offset(), value, 0, toWriteLength);
+        encodingState.incrementOffset(toWriteLength);
+
         if (finalLength < valueLength)
         {
-            // Truncated case
-            final int includedValueLength = finalLength - TRUNC_END.length();
-            buffer.putStringWithoutLengthAscii(
-                encodingState.offset(),
-                value,
-                0,
-                includedValueLength);
-
-            buffer.putStringWithoutLengthAscii(
-                encodingState.offset() + includedValueLength,
-                TRUNC_END);
+            buffer.putStringWithoutLengthAscii(encodingState.offset(), TRUNC_END);
+            encodingState.incrementOffset(TRUNC_END.length());
             encodingState.reachedLimit(true);
         }
-        else
-        {
-            // Regular case
-            buffer.putStringWithoutLengthAscii(encodingState.offset(), value);
-        }
-        encodingState.incrementOffset(finalLength);
     }
 
     /**
