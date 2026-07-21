@@ -74,18 +74,50 @@ class CborUtilTest
         assertEquals(memberId, ((Number)stringObjectMap.get("memberId")).longValue());
     }
 
-    static Stream<Arguments> generateBigStrings()
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    void shouldEncodeBooleans(final boolean val)
+    {
+        final int offset = 0;
+        final int length = 1024;
+        final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
+
+        final long timestamp = 12643263L;
+
+        final EncodingState encodingState = new EncodingState();
+        encodingState.reset(buffer, offset, length);
+
+        CborUtil.encodeHeader(encodingState, ClusterEventCode.ELECTION_STATE_CHANGE, timestamp);
+        CborUtil.encode(encodingState, "boolean", val);
+        CborUtil.encodeFooter(encodingState);
+
+        final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());
+
+        final byte[] data = new byte[encodingState.offset()];
+        encodingState.buffer().getBytes(0, data);
+
+        final Map<String, Object> stringObjectMap = cborObjectMapper.readValue(
+            data,
+            new TypeReference<>()
+            {
+            });
+
+        assertEquals(val, stringObjectMap.get("boolean"));
+    }
+
+    static Stream<Arguments> generateStringsAndNull()
     {
         return Stream.of(
             Arguments.of("A".repeat(10)),
             Arguments.of("A".repeat(1000)),
-            Arguments.of("A".repeat(100_000))
+            Arguments.of("A".repeat(100_000)),
+            Arguments.of((String)null)
         );
     }
 
     @ParameterizedTest
-    @MethodSource("generateBigStrings")
-    void shouldEncodeCharSequenceMessage(final String reason)
+    @MethodSource("generateStringsAndNull")
+    void shouldEncodeCharSequenceMessageOrNull(final String reason)
     {
         final int offset = 0;
         final int length = 200_000;
@@ -111,7 +143,7 @@ class CborUtilTest
             {
             });
 
-        assertEquals(reason, stringObjectMap.get("reason").toString());
+        assertEquals(reason, stringObjectMap.get("reason"));
     }
 
     @ParameterizedTest
