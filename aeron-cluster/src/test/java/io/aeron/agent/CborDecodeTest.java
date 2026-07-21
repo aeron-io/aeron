@@ -22,17 +22,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import tools.jackson.core.type.TypeReference;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.dataformat.cbor.CBORFactory;
 
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -68,6 +62,7 @@ class CborDecodeTest
             this.delegate.onFooter(truncated);
         }
     }
+
     @ParameterizedTest
     @ValueSource(longs = {
         2, 25, 0x7F, 0x100,
@@ -92,10 +87,10 @@ class CborDecodeTest
         CborUtil.encode(encodingState, "memberId", memberId);
         CborUtil.encodeFooter(encodingState);
 
-        CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(loggerEventCallback)));
+        final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(loggerEventCallback)));
         cborDecode.onMessage(
             ClusterEventCode.ELECTION_STATE_CHANGE.toEventCodeId(),
-            encodingState.buffer(),0, encodingState.offset());
+            encodingState.buffer(), 0, encodingState.offset());
 
         verify(loggerEventCallback).onHeader(
             EventCodeType.CLUSTER.getTypeCode(),
@@ -132,10 +127,10 @@ class CborDecodeTest
         CborUtil.encode(encodingState, "reason", reason);
         CborUtil.encodeFooter(encodingState);
 
-        CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(loggerEventCallback)));
+        final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(loggerEventCallback)));
         cborDecode.onMessage(
             ClusterEventCode.ELECTION_STATE_CHANGE.toEventCodeId(),
-            encodingState.buffer(),0, encodingState.offset());
+            encodingState.buffer(), 0, encodingState.offset());
 
         verify(loggerEventCallback).onHeader(
             EventCodeType.CLUSTER.getTypeCode(),
@@ -162,7 +157,7 @@ class CborDecodeTest
         CborUtil.encode(encodingState, "key3", TimeUnit.DAYS.name());
         CborUtil.encodeFooter(encodingState);
 
-        CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(loggerEventCallback)));
+        final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(loggerEventCallback)));
         cborDecode.onMessage(
             ClusterEventCode.ELECTION_STATE_CHANGE.toEventCodeId(),
             encodingState.buffer(), 0, encodingState.offset());
@@ -220,7 +215,7 @@ class CborDecodeTest
 
         assertFalse(encodingState.isReachedLimit());
 
-        CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(loggerEventCallback)));
+        final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(loggerEventCallback)));
         cborDecode.onMessage(
             ClusterEventCode.ELECTION_STATE_CHANGE.toEventCodeId(),
             encodingState.buffer(), 0, encodingState.offset());
