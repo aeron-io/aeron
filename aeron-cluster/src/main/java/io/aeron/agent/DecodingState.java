@@ -51,7 +51,7 @@ class DecodingState
         }
     }
 
-    int position()
+    int offset()
     {
         return offset;
     }
