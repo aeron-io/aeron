@@ -331,4 +331,12 @@ public class CborUtil
         encodingState.buffer().putByte(encodingState.offset(), (byte)BREAK);
         encodingState.incrementOffset(1);
     }
+
+    /**
+     * {@return the length of the footer in bytes}
+     */
+    public static int footerLength()
+    {
+        return 1;
+    }
 }

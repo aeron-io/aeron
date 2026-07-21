@@ -15,7 +15,7 @@
  */
 package io.aeron.agent;
 
-import io.aeron.exceptions.AeronEvent;
+import io.aeron.exceptions.AeronException;
 import org.agrona.AsciiSequenceView;
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
@@ -41,12 +41,12 @@ import static java.nio.ByteOrder.BIG_ENDIAN;
  */
 public class CborDecode implements MessageHandler
 {
-    private final List<LoggerEventCallback> loggers;
+    private final List<? extends LoggerEventCallback> loggers;
     private final AsciiSequenceView keyAsciiView = new AsciiSequenceView();
     private final AsciiSequenceView valueAsciiView = new AsciiSequenceView();
     private final DecodingState decodingState = new DecodingState();
 
-    static class InvalidMessage extends AeronEvent
+    static class InvalidMessage extends AeronException
     {
         @Serial
         private static final long serialVersionUID = 2520658673245952222L;
@@ -61,7 +61,7 @@ public class CborDecode implements MessageHandler
      *
      * @param loggers to delegate messages to.
      */
-    public CborDecode(final List<LoggerEventCallback> loggers)
+    public CborDecode(final List<? extends LoggerEventCallback> loggers)
     {
         this.loggers = loggers;
     }
@@ -78,13 +78,14 @@ public class CborDecode implements MessageHandler
             for (int i = 0, n = loggers.size(); i < n; i++)
             {
                 final LoggerEventCallback logger = loggers.get(i);
-                logger.onHeader(EventCodeType.CLUSTER.getTypeCode(), msgTypeId, 0L);
+                logger.onHeader((0xFFFF_0000 & msgTypeId) >>> 16, (0xFFFF & msgTypeId), 0L);
             }
 
             parseMap(decodingState);
         }
-        catch (final InvalidMessage e)
+        catch (final InvalidMessage ex)
         {
+            throw new RuntimeException(ex);
             // TODO: Put something here
         }
 
@@ -101,7 +102,7 @@ public class CborDecode implements MessageHandler
         final int keyTypeByte = (0xFF) & state.buffer().getByte(state.position());
         final int keyMajorType = (0xFF) & (0b111_00000 & keyTypeByte);
         final int keyAdditionalContent = (0b000_11111) & keyTypeByte;
-        state.incrementPosition(1);
+        state.incrementOffset(1);
         // key handling
         if (TEXT_STRING_MAJOR_TYPE == keyMajorType)
         {
@@ -112,7 +113,7 @@ public class CborDecode implements MessageHandler
         final int valueTypeByte = (0xFF) & buffer.getByte(state.position());
         final int valueMajorType = 0b111_00000 & valueTypeByte;
         final int valueAdditionalContent = 0b000_11111 & valueTypeByte;
-        state.incrementPosition(1);
+        state.incrementOffset(1);
         switch (valueMajorType)
         {
             case NEGATIVE_INTEGER_MAJOR_TYPE:
@@ -157,22 +158,22 @@ public class CborDecode implements MessageHandler
         else if (ADDITIONAL_CONTENT_1_BYTE == valueAdditionalContent)
         {
             value = 0xFF & state.buffer().getByte(state.position());
-            state.incrementPosition(1);
+            state.incrementOffset(1);
         }
         else if (ADDITIONAL_CONTENT_2_BYTE == valueAdditionalContent)
         {
             value = 0xFFFF & state.buffer().getShort(state.position(), BIG_ENDIAN);
-            state.incrementPosition(2);
+            state.incrementOffset(2);
         }
         else if (ADDITIONAL_CONTENT_4_BYTE == valueAdditionalContent)
         {
             value = 0xFFFFFFFFL & state.buffer().getInt(state.position(), BIG_ENDIAN);
-            state.incrementPosition(4);
+            state.incrementOffset(4);
         }
         else if (ADDITIONAL_CONTENT_8_BYTE == valueAdditionalContent)
         {
             value = state.buffer().getLong(state.position(), BIG_ENDIAN);
-            state.incrementPosition(8);
+            state.incrementOffset(8);
         }
         else
         {
@@ -195,25 +196,25 @@ public class CborDecode implements MessageHandler
         if (keyAdditionalContent < ADDITIONAL_CONTENT_1_BYTE)
         {
             targetView.wrap(state.buffer(), state.position(), keyAdditionalContent);
-            state.incrementPosition(keyAdditionalContent);
+            state.incrementOffset(keyAdditionalContent);
         }
         else if (ADDITIONAL_CONTENT_1_BYTE == keyAdditionalContent)
         {
             final int length = 0xFF & state.buffer().getByte(state.position());
             targetView.wrap(state.buffer(), state.position() + 1, length);
-            state.incrementPosition(1 + length);
+            state.incrementOffset(1 + length);
         }
         else if (ADDITIONAL_CONTENT_2_BYTE == keyAdditionalContent)
         {
             final int length = 0xFFFF & state.buffer().getShort(state.position(), BIG_ENDIAN);
             targetView.wrap(state.buffer(), state.position() + 2, length);
-            state.incrementPosition(2 + length);
+            state.incrementOffset(2 + length);
         }
         else if (ADDITIONAL_CONTENT_4_BYTE == keyAdditionalContent)
         {
             final int length = state.buffer().getInt(state.position(), BIG_ENDIAN);
             targetView.wrap(state.buffer(), state.position() + 4, length);
-            state.incrementPosition(4 + length);
+            state.incrementOffset(4 + length);
         }
         else
         {
@@ -237,7 +238,7 @@ public class CborDecode implements MessageHandler
 
         if ((MAP_MAJOR_TYPE | ADDITIONAL_CONTENT_INDEFINITE) == typeByte)
         {
-            state.incrementPosition(1);
+            state.incrementOffset(1);
             while (!state.isTerminated())
             {
                 // peek at current position
@@ -246,7 +247,11 @@ public class CborDecode implements MessageHandler
             }
 
             // TODO: Implement the truncation check
-            loggers.forEach(logger -> logger.onFooter(false));
+            for (int i = 0, n = loggers.size(); i < n; i++)
+            {
+                final LoggerEventCallback logger = loggers.get(i);
+                logger.onFooter(false);
+            }
         }
     }
 }
