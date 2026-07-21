@@ -1,22 +1,46 @@
+/*
+ * Copyright 2014-2026 Real Logic Limited.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.aeron.agent;
 
 import org.agrona.DirectBuffer;
 
-public class DecodingState
+class DecodingState
 {
     private DirectBuffer buffer;
     private int position;
     private int length;
     private boolean terminated = false;
 
-    public DecodingState(final DirectBuffer buffer, final int initialPosition, final int length)
+    DecodingState()
+    {
+    }
+
+    void wrap(final DirectBuffer buffer, final int initialPosition, final int length)
     {
         this.buffer = buffer;
         this.position = initialPosition;
         this.length = length;
     }
 
-    public void incrementPosition(int increment)
+    void reset()
+    {
+        wrap(null, 0, 0);
+    }
+
+    void incrementPosition(final int increment)
     {
         this.position += increment;
         if (this.position > this.length)
@@ -25,22 +49,22 @@ public class DecodingState
         }
     }
 
-    public int position()
+    int position()
     {
         return position;
     }
 
-    public DirectBuffer buffer()
+    DirectBuffer buffer()
     {
         return this.buffer;
     }
 
-    public boolean isTerminated()
+    boolean isTerminated()
     {
         return terminated;
     }
 
-    public void terminate()
+    void terminate()
     {
         this.terminated = true;
     }

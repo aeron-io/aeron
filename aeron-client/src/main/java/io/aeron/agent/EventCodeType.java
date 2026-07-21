@@ -66,9 +66,4 @@ public enum EventCodeType
     {
         return typeCode;
     }
-
-    public static EventCodeType fromTypeCode(final int typeCode)
-    {
-        return null;
-    }
 }

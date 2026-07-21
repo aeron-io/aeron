@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package io.aeron.agent;
 
 import org.agrona.MutableDirectBuffer;
@@ -35,13 +34,13 @@ public class CborUtil
     static final int TEXT_STRING_MAJOR_TYPE = 3 << 5;
     static final int MAP_MAJOR_TYPE = 5 << 5;
 
-    public static final int ADDITIONAL_CONTENT_1_BYTE = 24;
-    public static final int ADDITIONAL_CONTENT_2_BYTE = 25;
-    public static final int ADDITIONAL_CONTENT_4_BYTE = 26;
-    public static final int ADDITIONAL_CONTENT_8_BYTE = 27;
-    public static final int ADDITIONAL_CONTENT_INDEFINITE = 31;
+    static final int ADDITIONAL_CONTENT_1_BYTE = 24;
+    static final int ADDITIONAL_CONTENT_2_BYTE = 25;
+    static final int ADDITIONAL_CONTENT_4_BYTE = 26;
+    static final int ADDITIONAL_CONTENT_8_BYTE = 27;
+    static final int ADDITIONAL_CONTENT_INDEFINITE = 31;
 
-    public static final int BREAK = 0xFF;
+    static final int BREAK = 0xFF;
 
     private static final String TRUNC_END = "...";
 

@@ -1,10 +1,25 @@
+/*
+ * Copyright 2014-2026 Real Logic Limited.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.aeron.agent;
 
 import io.aeron.cluster.ElectionState;
 
 import java.util.List;
 
-public class LogElectionStateChangeFlyweight implements LoggerEventCallback
+class LogElectionStateChangeFlyweight implements LoggerEventCallback
 {
     private final List<ClusterEventLogger> loggers;
     private int memberId;
@@ -20,134 +35,144 @@ public class LogElectionStateChangeFlyweight implements LoggerEventCallback
     private String reason;
     private boolean truncated;
 
-    public LogElectionStateChangeFlyweight(final List<ClusterEventLogger> loggers)
+    LogElectionStateChangeFlyweight(final List<ClusterEventLogger> loggers)
     {
         this.loggers = loggers;
     }
 
-    public int memberId()
+    int memberId()
     {
         return memberId;
     }
 
-    public void memberId(final int memberId)
+    void memberId(final int memberId)
     {
         this.memberId = memberId;
     }
 
-    public ElectionState oldState()
+    ElectionState oldState()
     {
         return oldState;
     }
 
-    public void oldState(final ElectionState oldState)
+    void oldState(final ElectionState oldState)
     {
         this.oldState = oldState;
     }
 
-    public ElectionState newState()
+    ElectionState newState()
     {
         return newState;
     }
 
-    public void newState(final ElectionState newState)
+    void newState(final ElectionState newState)
     {
         this.newState = newState;
     }
 
-    public int leaderId()
+    int leaderId()
     {
         return leaderId;
     }
 
-    public void leaderId(final int leaderId)
+    void leaderId(final int leaderId)
     {
         this.leaderId = leaderId;
     }
 
-    public long candidateTermId()
+    long candidateTermId()
     {
         return candidateTermId;
     }
 
-    public void candidateTermId(final long candidateTermId)
+    void candidateTermId(final long candidateTermId)
     {
         this.candidateTermId = candidateTermId;
     }
 
-    public long leadershipTermId()
+    long leadershipTermId()
     {
         return leadershipTermId;
     }
 
-    public void leadershipTermId(final long leadershipTermId)
+    void leadershipTermId(final long leadershipTermId)
     {
         this.leadershipTermId = leadershipTermId;
     }
 
-    public long logPosition()
+    long logPosition()
     {
         return logPosition;
     }
 
-    public void logPosition(final long logPosition)
+    void logPosition(final long logPosition)
     {
         this.logPosition = logPosition;
     }
 
-    public long logLeadershipTermId()
+    long logLeadershipTermId()
     {
         return logLeadershipTermId;
     }
 
-    public void logLeadershipTermId(final long logLeadershipTermId)
+    void logLeadershipTermId(final long logLeadershipTermId)
     {
         this.logLeadershipTermId = logLeadershipTermId;
     }
 
-    public long appendPosition()
+    long appendPosition()
     {
         return appendPosition;
     }
 
-    public void appendPosition(final long appendPosition)
+    void appendPosition(final long appendPosition)
     {
         this.appendPosition = appendPosition;
     }
 
-    public long catchupPosition()
+    long catchupPosition()
     {
         return catchupPosition;
     }
 
-    public void catchupPosition(final long catchupPosition)
+    void catchupPosition(final long catchupPosition)
     {
         this.catchupPosition = catchupPosition;
     }
 
-    public String reason()
+    String reason()
     {
         return reason;
     }
 
-    public void reason(final String reason)
+    void reason(final String reason)
     {
         this.reason = reason;
     }
 
+    /**
+     * {@inheritDoc}
+     */
     public void onHeader(final int eventType, final int eventCode, final long timestamp)
     {
 
     }
 
+    /**
+     * {@inheritDoc}
+     */
     public void onFooter(final boolean truncated)
     {
-        for (ClusterEventLogger logger : loggers)
+        for (int i = 0, n = loggers.size(); i < n; i++)
         {
+            final ClusterEventLogger logger = loggers.get(i);
             dispatch(logger);
         }
     }
 
+    /**
+     * {@inheritDoc}
+     */
     public void onValue(final CharSequence name, final CharSequence value)
     {
         switch (name.toString())
@@ -170,6 +195,9 @@ public class LogElectionStateChangeFlyweight implements LoggerEventCallback
         }
     }
 
+    /**
+     * {@inheritDoc}
+     */
     public void onValue(final CharSequence name, final long value)
     {
         switch (name.toString())
