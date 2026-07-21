@@ -71,6 +71,10 @@ public class CborUtil
 
     static int lengthString(final CharSequence value)
     {
+        if (null == value)
+        {
+            return 1;
+        }
         if (value.length() < 24)
         {
             return 1 + value.length();

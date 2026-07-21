@@ -165,7 +165,8 @@ class CborUtilTest
             Arguments.of("A".repeat(10), 11),
             Arguments.of("A".repeat(100), 102),
             Arguments.of("A".repeat(1000), 1003),
-            Arguments.of("A".repeat(100_000), 100_005)
+            Arguments.of("A".repeat(100_000), 100_005),
+            Arguments.of(null, 1)
         );
     }
 
