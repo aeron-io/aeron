@@ -28,7 +28,10 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
@@ -290,11 +293,42 @@ class CborDecodeTest
         verify(loggerEventCallback).onFooter(false);
     }
 
-    @Test
-    @Disabled
-    void shouldReceiveIllegalMessageIfEndOfBufferIsReachedBeforeTermination()
+    @ParameterizedTest
+    // NOTE: These values are expected to change as the header expands,
+    // Some cutoffs actually produce valid messages or are currently silently ignored.
+    @ValueSource(ints = {2, 5, 18, 40, 74, 76})
+    void shouldReceiveInvalidMessageIfEndOfBufferIsReachedBeforeTermination(final int cutoffPoint)
     {
+        final int offset = 0;
+        final int length = 1000;
+        final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
+        final LoggerEventCallback loggerEventCallback = mock(LoggerEventCallback.class);
 
+        final EncodingState encodingState = new EncodingState();
+        encodingState.reset(buffer, offset, length);
+        CborUtil.encodeHeader(encodingState, ClusterEventCode.ELECTION_STATE_CHANGE, 12643263L);
+        CborUtil.encode(encodingState, "key1", 1_000_000_000L);
+        CborUtil.encode(encodingState, "key2", "S".repeat(50));
+        CborUtil.encode(encodingState, "key3", TimeUnit.DAYS.name());
+        CborUtil.encodeFooter(encodingState);
+
+        final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(loggerEventCallback)));
+        final byte[] partialBytes = new byte[cutoffPoint];
+        buffer.getBytes(0, partialBytes, 0, cutoffPoint);
+        final UnsafeBuffer partialBuffer = new UnsafeBuffer(partialBytes);
+
+        // TODO: Might change this whole assertion block to something less implementation-specific
+        final RuntimeException exception = assertThrows(RuntimeException.class, () ->
+            cborDecode.onMessage(
+                ClusterEventCode.ELECTION_STATE_CHANGE.toEventCodeId(),
+                partialBuffer,
+                0,
+                cutoffPoint
+            )
+        );
+        final Throwable cause = exception.getCause();
+        assertInstanceOf(CborDecode.InvalidMessage.class, cause);
+        assertEquals("ERROR - Terminated prematurely", cause.getMessage());
     }
 
     @Test
