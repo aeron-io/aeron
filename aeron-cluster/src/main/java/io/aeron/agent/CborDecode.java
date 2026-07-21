@@ -90,7 +90,7 @@ public class CborDecode implements MessageHandler
         catch (final InvalidMessage ex)
         {
             throw new RuntimeException(ex);
-            // TODO: Put something here
+            // TODO: Put something here (Maybe onError callback?)
         }
 
     }
