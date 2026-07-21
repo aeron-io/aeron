@@ -47,15 +47,9 @@ public class CborUtil
     static final int ADDITIONAL_CONTENT_TRUE = 21;
 
     // Simple values
-    static final byte NULL_VALUE = typeByte(
-        SIMPLE_VALUE_MAJOR_TYPE,
-        ADDITIONAL_CONTENT_NULL);
-    static final byte FALSE_VALUE = typeByte(
-        SIMPLE_VALUE_MAJOR_TYPE,
-        ADDITIONAL_CONTENT_FALSE);
-    static final byte TRUE_VALUE = typeByte(
-        SIMPLE_VALUE_MAJOR_TYPE,
-        ADDITIONAL_CONTENT_TRUE);
+    static final byte NULL_VALUE = typeByte(SIMPLE_VALUE_MAJOR_TYPE, ADDITIONAL_CONTENT_NULL);
+    static final byte FALSE_VALUE = typeByte(SIMPLE_VALUE_MAJOR_TYPE, ADDITIONAL_CONTENT_FALSE);
+    static final byte TRUE_VALUE = typeByte(SIMPLE_VALUE_MAJOR_TYPE, ADDITIONAL_CONTENT_TRUE);
     static final int BREAK = 0xFF;
 
     private static final String TRUNC_END = "...";
