@@ -94,7 +94,7 @@ class CborDecodeTest
 
         verify(loggerEventCallback).onHeader(
             EventCodeType.CLUSTER.getTypeCode(),
-            ClusterEventCode.ELECTION_STATE_CHANGE.toEventCodeId(),
+            ClusterEventCode.ELECTION_STATE_CHANGE.id(),
             0L);
 
         verify(loggerEventCallback).onValue("memberId", memberId);
@@ -134,7 +134,7 @@ class CborDecodeTest
 
         verify(loggerEventCallback).onHeader(
             EventCodeType.CLUSTER.getTypeCode(),
-            ClusterEventCode.ELECTION_STATE_CHANGE.toEventCodeId(),
+            ClusterEventCode.ELECTION_STATE_CHANGE.id(),
             0L);
 
         verify(loggerEventCallback).onValue("reason", reason);
@@ -164,7 +164,7 @@ class CborDecodeTest
 
         verify(loggerEventCallback).onHeader(
             EventCodeType.CLUSTER.getTypeCode(),
-            ClusterEventCode.ELECTION_STATE_CHANGE.toEventCodeId(),
+            ClusterEventCode.ELECTION_STATE_CHANGE.id(),
             0L);
 
         verify(loggerEventCallback).onValue("key1", 1_000_000_000L);
@@ -222,7 +222,7 @@ class CborDecodeTest
 
         verify(loggerEventCallback).onHeader(
             EventCodeType.CLUSTER.getTypeCode(),
-            ClusterEventCode.ELECTION_STATE_CHANGE.toEventCodeId(),
+            ClusterEventCode.ELECTION_STATE_CHANGE.id(),
             0L);
 
         verify(loggerEventCallback).onValue("veryLongMemberIdentifierKey", Long.MAX_VALUE);
