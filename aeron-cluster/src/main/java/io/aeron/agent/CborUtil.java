@@ -33,6 +33,8 @@ public class CborUtil
     static final int NEGATIVE_INTEGER_MAJOR_TYPE = 1 << 5;
     static final int TEXT_STRING_MAJOR_TYPE = 3 << 5;
     static final int MAP_MAJOR_TYPE = 5 << 5;
+    // NOTE: This major type actually includes floats and simple values
+    static final int SIMPLE_VALUE_MAJOR_TYPE = 7 << 5;
 
     static final int ADDITIONAL_CONTENT_1_BYTE = 24;
     static final int ADDITIONAL_CONTENT_2_BYTE = 25;
@@ -40,6 +42,10 @@ public class CborUtil
     static final int ADDITIONAL_CONTENT_8_BYTE = 27;
     static final int ADDITIONAL_CONTENT_INDEFINITE = 31;
 
+    // Simple values
+    static final byte NULL_VALUE = typeByte(SIMPLE_VALUE_MAJOR_TYPE, 22);
+    static final byte FALSE_VALUE = typeByte(SIMPLE_VALUE_MAJOR_TYPE, 20);
+    static final byte TRUE_VALUE = typeByte(SIMPLE_VALUE_MAJOR_TYPE, 21);
     static final int BREAK = 0xFF;
 
     private static final String TRUNC_END = "...";
@@ -229,6 +235,12 @@ public class CborUtil
             return;
         }
         encodeString(encodingState, key);
+
+        if (null == value)
+        {
+            encodeNull(encodingState);
+            return;
+        }
         encodeString(encodingState, value);
     }
 
@@ -294,6 +306,20 @@ public class CborUtil
         }
     }
 
+    private static void encodeNull(final EncodingState encodingState)
+    {
+        encodingState.buffer().putByte(encodingState.offset(), NULL_VALUE);
+        encodingState.incrementOffset(1);
+    }
+
+    private static void encodeBoolean(final EncodingState encodingState, final boolean value)
+    {
+        encodingState.buffer().putByte(
+            encodingState.offset(),
+            value ? TRUE_VALUE : FALSE_VALUE);
+        encodingState.incrementOffset(1);
+    }
+
     /**
      * Calculate the length of the header of the Cbor message.
      *
@@ -330,6 +356,19 @@ public class CborUtil
         // TODO: Decide how truncation flag should be handled here
         encodingState.buffer().putByte(encodingState.offset(), (byte)BREAK);
         encodingState.incrementOffset(1);
+    }
+
+    public static void encode(
+        final EncodingState encodingState,
+        final CharSequence key,
+        final boolean value)
+    {
+        if (encodingState.isReachedLimit())
+        {
+            return;
+        }
+        encodeString(encodingState, key);
+        encodeBoolean(encodingState, value);
     }
 
     /**
