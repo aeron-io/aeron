@@ -245,6 +245,14 @@ class LogElectionStateChangeFlyweight implements LoggerEventCallback
         }
     }
 
+    /**
+     * {@inheritDoc}
+     */
+    public void onValue(final CharSequence name, final boolean value)
+    {
+
+    }
+
     void dispatch(final ClusterEventLogger logger)
     {
         logger.logElectionStateChange(

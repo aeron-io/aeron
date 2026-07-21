@@ -59,6 +59,16 @@ public interface LoggerEventCallback
     void onValue(CharSequence name, long value);
 
     /**
+     * A boolean value of the logging event.
+     *
+     * @param name  of the event, note that the supplied {@link CharSequence} is reused across multiple calls, it
+     *              is the user's responsibility to copy this value if required as the value is only valid for the
+     *              scope of the call.
+     * @param value of the event.
+     */
+    void onValue(CharSequence name, boolean value);
+
+    /**
      * Indicates that the message is complete, and will determine if any fields were dropped due to truncation.
      *
      * @param truncated if this message was truncated when writing.
