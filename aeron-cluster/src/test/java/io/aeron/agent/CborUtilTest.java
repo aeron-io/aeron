@@ -360,4 +360,84 @@ class CborUtilTest
         assertEquals(-0x12345678L, ((Number)stringObjectMap.get("negativeCatchupOffsetValue")).longValue());
 
     }
+
+    @Test
+    void shouldEncodeEmptyString()
+    {
+        final int offset = 0;
+        final int length = 1024;
+        final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
+
+        final EncodingState encodingState = new EncodingState();
+        encodingState.reset(buffer, offset, length);
+
+        CborUtil.encodeHeader(encodingState, ClusterEventCode.ELECTION_STATE_CHANGE, 12643263L);
+        CborUtil.encode(encodingState, "reason", "");
+        CborUtil.encodeFooter(encodingState);
+
+        final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());
+
+        final byte[] data = new byte[encodingState.offset()];
+        encodingState.buffer().getBytes(0, data);
+
+        final Map<String, Object> stringObjectMap = cborObjectMapper.readValue(
+            data,
+            new TypeReference<>()
+            {
+            });
+
+        assertEquals("", stringObjectMap.get("reason"));
+    }
+
+    @Test
+    void shouldSilentlyDropEntryWhenRemainingSpaceCannotFitLengthByte()
+    {
+        final UnsafeBuffer buffer = new UnsafeBuffer(new byte[64]);
+
+        final EncodingState encodingState = new EncodingState();
+        encodingState.reset(buffer, 0, 7);
+        CborUtil.encodeHeader(encodingState, ClusterEventCode.ELECTION_STATE_CHANGE, 12643263L);
+        CborUtil.encode(encodingState, "a", "S".repeat(100_000));
+        CborUtil.encodeFooter(encodingState);
+
+        final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());
+        final byte[] data = new byte[encodingState.offset()];
+        encodingState.buffer().getBytes(0, data);
+
+        final Map<String, Object> stringObjectMap = cborObjectMapper.readValue(
+            data,
+            new TypeReference<>()
+            {
+            });
+        // The entry should have been dropped properly
+        assertFalse(stringObjectMap.containsKey("a"));
+    }
+
+    @Test
+    void shouldDropBooleanFieldWhenItCannotFit()
+    {
+        final int length = 4;
+        final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
+
+        final EncodingState encodingState = new EncodingState();
+        encodingState.reset(buffer, 0, length);
+        CborUtil.encodeHeader(encodingState, ClusterEventCode.ELECTION_STATE_CHANGE, 12643263L);
+        CborUtil.encode(encodingState, "k", true);
+
+        // Footer should be written properly since k should be dropped completely
+        CborUtil.encodeFooter(encodingState);
+        assertTrue(encodingState.isReachedLimit());
+        final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());
+        final byte[] data = new byte[encodingState.offset()];
+        encodingState.buffer().getBytes(0, data);
+
+        final Map<String, Object> stringObjectMap = cborObjectMapper.readValue(
+            data,
+            new TypeReference<>()
+            {
+            });
+
+        assertFalse(stringObjectMap.containsKey("k"));
+
+    }
 }
