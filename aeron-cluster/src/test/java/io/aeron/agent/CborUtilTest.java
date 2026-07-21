@@ -308,4 +308,56 @@ class CborUtilTest
         assertTrue(truncatedValue.length() < 5_000);
         assertTrue(reason.startsWith(truncatedValue.substring(0, truncatedValue.length() - 3)));
     }
+
+    @Test
+    void shouldDropNonTruncatableLongKeyInMultiKeyMessage()
+    {
+        final int offset = 0;
+
+        // A relatively large buffer that comfortably fits every key except the oversized
+        // "candidateTermIdentifierValue" string value, which alone needs ~5KB and gets
+        // truncated. It is encoded last to keep buffer-size reasoning simple.
+        final int length = 512;
+        final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
+
+        final String reason = "R".repeat(5_000);
+
+        final EncodingState encodingState = new EncodingState();
+        encodingState.reset(buffer, offset, length);
+        CborUtil.encodeHeader(encodingState, ClusterEventCode.ELECTION_STATE_CHANGE, 12643263L);
+        CborUtil.encode(encodingState, "veryLongMemberIdentifierKey", Long.MAX_VALUE);
+        CborUtil.encode(encodingState, "leadershipTermTimestampNanos", -123_456_789_012_345L);
+        CborUtil.encode(encodingState, "logPositionSnapshotState", TimeUnit.NANOSECONDS.name());
+        CborUtil.encode(encodingState, "appendPositionCatchupTarget", 42L);
+        CborUtil.encode(encodingState, "negativeCatchupOffsetValue", -0x12345678L);
+        // Explicitly canTruncate = false to test that the key is dropped
+        CborUtil.encode(encodingState, "reason", reason, false);
+        CborUtil.encodeFooter(encodingState);
+        final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());
+
+        final byte[] data = new byte[encodingState.offset()];
+        encodingState.buffer().getBytes(0, data);
+
+        final Map<String, Object> stringObjectMap = cborObjectMapper.readValue(
+            data,
+            new TypeReference<>()
+            {
+            });
+
+        // Should have dropped reason
+        assertEquals(Set.of(
+            "veryLongMemberIdentifierKey",
+            "leadershipTermTimestampNanos",
+            "logPositionSnapshotState",
+            "appendPositionCatchupTarget",
+            "negativeCatchupOffsetValue"
+        ), stringObjectMap.keySet());
+        assertEquals(Long.MAX_VALUE, ((Number)stringObjectMap.get("veryLongMemberIdentifierKey")).longValue());
+        assertEquals(
+            -123_456_789_012_345L, ((Number)stringObjectMap.get("leadershipTermTimestampNanos")).longValue());
+        assertEquals(TimeUnit.NANOSECONDS.name(), stringObjectMap.get("logPositionSnapshotState"));
+        assertEquals(42L, ((Number)stringObjectMap.get("appendPositionCatchupTarget")).longValue());
+        assertEquals(-0x12345678L, ((Number)stringObjectMap.get("negativeCatchupOffsetValue")).longValue());
+
+    }
 }
