@@ -28,10 +28,14 @@ import static io.aeron.agent.CborUtil.ADDITIONAL_CONTENT_1_BYTE;
 import static io.aeron.agent.CborUtil.ADDITIONAL_CONTENT_2_BYTE;
 import static io.aeron.agent.CborUtil.ADDITIONAL_CONTENT_4_BYTE;
 import static io.aeron.agent.CborUtil.ADDITIONAL_CONTENT_8_BYTE;
+import static io.aeron.agent.CborUtil.ADDITIONAL_CONTENT_FALSE;
 import static io.aeron.agent.CborUtil.ADDITIONAL_CONTENT_INDEFINITE;
+import static io.aeron.agent.CborUtil.ADDITIONAL_CONTENT_NULL;
+import static io.aeron.agent.CborUtil.ADDITIONAL_CONTENT_TRUE;
 import static io.aeron.agent.CborUtil.BREAK;
 import static io.aeron.agent.CborUtil.MAP_MAJOR_TYPE;
 import static io.aeron.agent.CborUtil.NEGATIVE_INTEGER_MAJOR_TYPE;
+import static io.aeron.agent.CborUtil.SIMPLE_VALUE_MAJOR_TYPE;
 import static io.aeron.agent.CborUtil.TEXT_STRING_MAJOR_TYPE;
 import static io.aeron.agent.CborUtil.UNSIGNED_INTEGER_MAJOR_TYPE;
 import static java.nio.ByteOrder.BIG_ENDIAN;
@@ -91,6 +95,32 @@ public class CborDecode implements MessageHandler
 
     }
 
+    private void parseSimpleValue(
+        final DecodingState state,
+        final int additionalContent)
+    {
+        switch (additionalContent)
+        {
+            case ADDITIONAL_CONTENT_FALSE:
+            case ADDITIONAL_CONTENT_TRUE:
+                for (int i = 0, n = loggers.size(); i < n; i++)
+                {
+                    final LoggerEventCallback logger = loggers.get(i);
+                    logger.onValue(keyAsciiView, additionalContent == ADDITIONAL_CONTENT_TRUE);
+                }
+                break;
+            case ADDITIONAL_CONTENT_NULL:
+                for (int i = 0, n = loggers.size(); i < n; i++)
+                {
+                    final LoggerEventCallback logger = loggers.get(i);
+                    logger.onValue(keyAsciiView, null);
+                }
+                break;
+            default:
+                throw new InvalidMessage("Invalid simple value");
+        }
+    }
+
     private void parseEntry(final DecodingState state)
     {
         if (state.isTerminated())
@@ -140,6 +170,9 @@ public class CborDecode implements MessageHandler
 
                 break;
             }
+            case SIMPLE_VALUE_MAJOR_TYPE:
+                parseSimpleValue(state, valueAdditionalContent);
+                break;
             default:
                 throw new InvalidMessage("Invalid value type");
         }

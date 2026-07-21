@@ -49,10 +49,21 @@ class CborDecodeTest
 
         public void onValue(final CharSequence name, final CharSequence value)
         {
+            if (value == null)
+            {
+                this.delegate.onValue(name.toString(), null);
+                return;
+            }
+
             this.delegate.onValue(name.toString(), value.toString());
         }
 
         public void onValue(final CharSequence name, final long value)
+        {
+            this.delegate.onValue(name.toString(), value);
+        }
+
+        public void onValue(final CharSequence name, final boolean value)
         {
             this.delegate.onValue(name.toString(), value);
         }
@@ -101,18 +112,50 @@ class CborDecodeTest
         verify(loggerEventCallback).onFooter(false);
     }
 
-    static Stream<Arguments> generateBigStrings()
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    void shouldDecodeBooleanMessage(final boolean booleanValue)
+    {
+        final int offset = 0;
+        final int length = 1024;
+        final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
+        final LoggerEventCallback loggerEventCallback = mock(LoggerEventCallback.class);
+        final long timestamp = 12643263L;
+
+        final EncodingState encodingState = new EncodingState();
+        encodingState.reset(buffer, offset, length);
+
+        CborUtil.encodeHeader(encodingState, ClusterEventCode.ELECTION_STATE_CHANGE, timestamp);
+        CborUtil.encode(encodingState, "booleanValue", booleanValue);
+        CborUtil.encodeFooter(encodingState);
+
+        final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(loggerEventCallback)));
+        cborDecode.onMessage(
+            ClusterEventCode.ELECTION_STATE_CHANGE.toEventCodeId(),
+            encodingState.buffer(), 0, encodingState.offset());
+
+        verify(loggerEventCallback).onHeader(
+            EventCodeType.CLUSTER.getTypeCode(),
+            ClusterEventCode.ELECTION_STATE_CHANGE.id(),
+            0L);
+
+        verify(loggerEventCallback).onValue("booleanValue", booleanValue);
+        verify(loggerEventCallback).onFooter(false);
+    }
+
+    static Stream<Arguments> generateStringsAndNull()
     {
         return Stream.of(
             Arguments.of("A".repeat(10)),
             Arguments.of("A".repeat(1000)),
-            Arguments.of("A".repeat(100_000))
+            Arguments.of("A".repeat(100_000)),
+            Arguments.of((CharSequence)null)
         );
     }
 
     @ParameterizedTest
-    @MethodSource("generateBigStrings")
-    void shouldDecodeCharSequences(final String reason)
+    @MethodSource("generateStringsAndNull")
+    void shouldDecodeCharSequencesAndNull(final String reason)
     {
         final int offset = 0;
         final int length = 200_000;
@@ -245,101 +288,4 @@ class CborDecodeTest
         verify(loggerEventCallback).onValue("replicationUnit", TimeUnit.NANOSECONDS.name());
         verify(loggerEventCallback).onFooter(false);
     }
-//    @Test
-//    void shouldPartiallyEncodeMultikeyMessageThatIsTooLong()
-//    {
-//        final int offset = 0;
-//        // Based on by-hand calculation, around 22 bytes are needed for key1 and key3 preservation
-//        final int length = 26;
-//        final Set<String> expectedMessageKeySet = Set.of("key1", "key3");
-//        final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
-//
-//        final EncodingState encodingState = new EncodingState();
-//        encodingState.reset(buffer, offset, length);
-//        CborUtil.encodeHeader(encodingState, ClusterEventCode.ELECTION_STATE_CHANGE, 12643263L);
-//        CborUtil.encode(encodingState, "key1", 1_000_000_000L);
-//        CborUtil.encode(encodingState, "key2", "S".repeat(1_000_000));
-//        CborUtil.encode(encodingState, "key3", TimeUnit.DAYS.name());
-//        CborUtil.encodeFooter(encodingState);
-//        final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());
-//
-//        final byte[] data = new byte[encodingState.offset()];
-//        encodingState.buffer().getBytes(0, data);
-//
-//        final Map<String, Object> stringObjectMap = cborObjectMapper.readValue(
-//            data,
-//            new TypeReference<>()
-//            {
-//            });
-//        assertEquals(expectedMessageKeySet, stringObjectMap.keySet());
-//    }
-//
-//    @Test
-//    void shouldPartiallyEncodeMultikeyMessageThatIsTooLongForFooter()
-//    {
-//        final int offset = 0;
-//        // key3 should be dropped here, because the footer cannot fit.
-//        // This may break if the footer schema is changed.
-//        final int length = 21;
-//        final Set<String> expectedMessageKeySet = Set.of("key1");
-//        final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
-//
-//        final EncodingState encodingState = new EncodingState();
-//        encodingState.reset(buffer, offset, length);
-//        CborUtil.encodeHeader(encodingState, ClusterEventCode.ELECTION_STATE_CHANGE, 12643263L);
-//        CborUtil.encode(encodingState, "key1", 1_000_000_000L);
-//        CborUtil.encode(encodingState, "key2", "S".repeat(1_000_000));
-//        CborUtil.encode(encodingState, "key3", TimeUnit.DAYS.name());
-//        CborUtil.encodeFooter(encodingState);
-//        final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());
-//
-//        final byte[] data = new byte[encodingState.offset()];
-//        encodingState.buffer().getBytes(0, data);
-//
-//        final Map<String, Object> stringObjectMap = cborObjectMapper.readValue(
-//            data,
-//            new TypeReference<>()
-//            {
-//            });
-//        assertEquals(expectedMessageKeySet, stringObjectMap.keySet());
-//    }
-//
-//    @Test
-//    void shouldPartiallyEncodeExtensiveMultikeyMessageThatIsTooLong()
-//    {
-//        final int offset = 0;
-//        // A relatively large buffer that comfortably fits every key except the oversized
-//        // "candidateTermIdentifierValue" string value, which alone needs ~5KB and is dropped
-//        // independently of the other keys, which still get encoded after it.
-//        final int length = 512;
-//        final Set<String> expectedMessageKeySet = Set.of(
-//            "veryLongMemberIdentifierKey",
-//            "leadershipTermTimestampNanos",
-//            "logPositionSnapshotState",
-//            "appendPositionCatchupTarget",
-//            "negativeCatchupOffsetValue");
-//        final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
-//
-//        final EncodingState encodingState = new EncodingState();
-//        encodingState.reset(buffer, offset, length);
-//        CborUtil.encodeHeader(encodingState, ClusterEventCode.ELECTION_STATE_CHANGE, 12643263L);
-//        CborUtil.encode(encodingState, "veryLongMemberIdentifierKey", Long.MAX_VALUE);
-//        CborUtil.encode(encodingState, "candidateTermIdentifierValue", "R".repeat(5_000));
-//        CborUtil.encode(encodingState, "leadershipTermTimestampNanos", -123_456_789_012_345L);
-//        CborUtil.encode(encodingState, "logPositionSnapshotState", TimeUnit.NANOSECONDS.name());
-//        CborUtil.encode(encodingState, "appendPositionCatchupTarget", 42L);
-//        CborUtil.encode(encodingState, "negativeCatchupOffsetValue", -0x12345678L);
-//        CborUtil.encodeFooter(encodingState);
-//        final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());
-//
-//        final byte[] data = new byte[encodingState.offset()];
-//        encodingState.buffer().getBytes(0, data);
-//
-//        final Map<String, Object> stringObjectMap = cborObjectMapper.readValue(
-//            data,
-//            new TypeReference<>()
-//            {
-//            });
-//        assertEquals(expectedMessageKeySet, stringObjectMap.keySet());
-//    }
 }

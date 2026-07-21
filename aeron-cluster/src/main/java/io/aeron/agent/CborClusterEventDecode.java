@@ -93,6 +93,19 @@ public class CborClusterEventDecode implements LoggerEventCallback
     /**
      * {@inheritDoc}
      */
+    public void onValue(final CharSequence name, final boolean value)
+    {
+        if (null == currentDecoder)
+        {
+            return;
+        }
+
+        currentDecoder.onValue(name, value);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
     public void onFooter(final boolean truncated)
     {
         if (null == currentDecoder)
