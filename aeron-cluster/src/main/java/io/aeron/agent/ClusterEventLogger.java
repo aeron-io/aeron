@@ -477,7 +477,10 @@ public interface ClusterEventLogger
      */
     @LoggerMethod(eventCode = "NEW_ELECTION", lengthMethod = "newElectionLength", lengthArgs = { "reason" })
     default void logNewElection(
-        final int memberId, final long leadershipTermId, final long logPosition, final long appendPosition,
+        final int memberId,
+        final long leadershipTermId,
+        final long logPosition,
+        final long appendPosition,
         final String reason)
     {
     }
