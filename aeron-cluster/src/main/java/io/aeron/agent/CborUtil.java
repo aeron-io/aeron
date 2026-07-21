@@ -265,20 +265,51 @@ public class CborUtil
         {
             return;
         }
-        // TODO: if length() is adjusted to include truncation, this needs to be adjusted.
-        final int maxLength = length(key, value);
-        // Pre-check if the key and value can fit if truncation is not allowed.
-        if (!allowTruncate && encodingState.remaining() < maxLength)
+        encodeEntry(encodingState, key, value, allowTruncate);
+    }
+
+    private static void encodeEntry(
+        final EncodingState encodingState,
+        final CharSequence key,
+        final CharSequence value,
+        final boolean allowTruncate)
+    {
+        final int keyLength = lengthString(key);
+        // Key pre-check
+        if (encodingState.remaining() < keyLength)
         {
             encodingState.reachedLimit(true);
             return;
         }
-        encodeString(encodingState, key, false);
+
+        final int remainingBytes = encodingState.remaining() - keyLength;
         if (null == value)
         {
+            if (remainingBytes <= 0)
+            {
+                encodingState.reachedLimit(true);
+                return;
+            }
+            encodeString(encodingState, key, false);
             encodeNull(encodingState);
             return;
         }
+
+        final int valueLengthFieldBytes = lengthFieldBytes(value.length());
+        final int finalValueLength = Math.min(
+            value.length(),
+            remainingBytes - (1 + valueLengthFieldBytes));
+        final boolean needsTruncation = finalValueLength < value.length();
+        if (needsTruncation && (
+                !allowTruncate || finalValueLength < TRUNC_END.length()
+            )
+        )
+        {
+            encodingState.reachedLimit(true);
+            return;
+        }
+
+        encodeString(encodingState, key, false);
         encodeString(encodingState, value, allowTruncate);
     }
 
@@ -290,6 +321,26 @@ public class CborUtil
         encodeString(encodingState, value, false);
     }
 
+    private static int lengthFieldBytes(final int valueLength)
+    {
+        if (valueLength < ADDITIONAL_CONTENT_1_BYTE)
+        {
+            return 0;
+        }
+        else if (valueLength < (1 << 8))
+        {
+            return SIZE_OF_BYTE;
+        }
+        else if (valueLength < (1 << 16))
+        {
+            return SIZE_OF_SHORT;
+        }
+        else
+        {
+            return SIZE_OF_INT;
+        }
+    }
+
     private static void encodeString(
         final EncodingState encodingState,
         final CharSequence value,
@@ -297,28 +348,7 @@ public class CborUtil
     {
         final int valueLength = value.length();
 
-        final int lengthFieldBytes;
-        final int additionalContent;
-        if (valueLength < ADDITIONAL_CONTENT_1_BYTE)
-        {
-            lengthFieldBytes = 0;
-            additionalContent = 0;
-        }
-        else if (valueLength < (1 << 8))
-        {
-            lengthFieldBytes = SIZE_OF_BYTE;
-            additionalContent = ADDITIONAL_CONTENT_1_BYTE;
-        }
-        else if (valueLength < (1 << 16))
-        {
-            lengthFieldBytes = SIZE_OF_SHORT;
-            additionalContent = ADDITIONAL_CONTENT_2_BYTE;
-        }
-        else
-        {
-            lengthFieldBytes = SIZE_OF_INT;
-            additionalContent = ADDITIONAL_CONTENT_4_BYTE;
-        }
+        final int lengthFieldBytes = lengthFieldBytes(valueLength);
 
         // included string length + ellipsis (if truncated)
         final int finalLength = Math.min(
@@ -326,9 +356,8 @@ public class CborUtil
             encodingState.remaining() - (1 + lengthFieldBytes));
 
         final boolean needsTruncation = finalLength < valueLength;
-        if (needsTruncation && !allowTruncate)
+        if (needsTruncation && (!allowTruncate || finalLength < TRUNC_END.length()))
         {
-            // This value must be dropped regardless
             encodingState.reachedLimit(true);
             return;
         }
@@ -337,12 +366,23 @@ public class CborUtil
         final int offset = encodingState.offset();
         if (lengthFieldBytes > 0)
         {
-            buffer.putByte(offset, typeByte(TEXT_STRING_MAJOR_TYPE, additionalContent));
             switch (lengthFieldBytes)
             {
-                case SIZE_OF_BYTE -> buffer.putByte(offset + 1, (byte)finalLength);
-                case SIZE_OF_SHORT -> buffer.putShort(offset + 1, (short)finalLength, BIG_ENDIAN);
-                case SIZE_OF_INT -> buffer.putInt(offset + 1, finalLength, BIG_ENDIAN);
+                case SIZE_OF_BYTE ->
+                {
+                    buffer.putByte(offset, typeByte(TEXT_STRING_MAJOR_TYPE, ADDITIONAL_CONTENT_1_BYTE));
+                    buffer.putByte(offset + 1, (byte)finalLength);
+                }
+                case SIZE_OF_SHORT ->
+                {
+                    buffer.putByte(offset, typeByte(TEXT_STRING_MAJOR_TYPE, ADDITIONAL_CONTENT_2_BYTE));
+                    buffer.putShort(offset + 1, (short)finalLength, BIG_ENDIAN);
+                }
+                case SIZE_OF_INT ->
+                {
+                    buffer.putByte(offset, typeByte(TEXT_STRING_MAJOR_TYPE, ADDITIONAL_CONTENT_4_BYTE));
+                    buffer.putInt(offset + 1, finalLength, BIG_ENDIAN);
+                }
             }
         }
         else
@@ -429,6 +469,14 @@ public class CborUtil
         {
             return;
         }
+
+        final int keyLength = lengthString(key);
+        if (encodingState.remaining() < keyLength + 1)
+        {
+            encodingState.reachedLimit(true);
+            return;
+        }
+
         encodeString(encodingState, key, false);
         encodeBoolean(encodingState, value);
     }
