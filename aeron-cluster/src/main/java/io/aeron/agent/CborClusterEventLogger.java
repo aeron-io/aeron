@@ -76,9 +76,10 @@ public class CborClusterEventLogger implements ClusterEventLogger
         length += CborUtil.length("appendPosition", appendPosition);
         length += CborUtil.length("catchupPosition", catchupPosition);
         length += CborUtil.length("reason", reason);
+        length += CborUtil.footerLength();
 
         final int bufferLength = Math.min(length, MAX_BUFFER_LENGTH);
-        final int index = ringBuffer.tryClaim(ClusterEventCode.ELECTION_STATE_CHANGE.id(), bufferLength);
+        final int index = ringBuffer.tryClaim(ClusterEventCode.ELECTION_STATE_CHANGE.toEventCodeId(), bufferLength);
 
         final EncodingState encodingState = encodingStateThreadLocal.get();
         encodingState.reset(ringBuffer.buffer(), index, bufferLength);

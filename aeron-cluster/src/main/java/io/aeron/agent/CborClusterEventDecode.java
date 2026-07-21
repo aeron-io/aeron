@@ -40,13 +40,13 @@ public class CborClusterEventDecode implements LoggerEventCallback
      */
     public void onHeader(final int eventType, final int eventCode, final long timestamp)
     {
-        if (EventCodeType.CLUSTER.getTypeCode() != eventCode)
+        if (EventCodeType.CLUSTER.getTypeCode() != eventType)
         {
             currentDecoder = null;
             return;
         }
 
-        final ClusterEventCode clusterEventCode = ClusterEventCode.fromEventCodeId(eventCode);
+        final ClusterEventCode clusterEventCode = ClusterEventCode.get(eventCode);
         switch (clusterEventCode)
         {
             case ELECTION_STATE_CHANGE:

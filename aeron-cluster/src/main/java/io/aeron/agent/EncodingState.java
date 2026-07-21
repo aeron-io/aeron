@@ -27,6 +27,7 @@ public class EncodingState
     private int offset;
     private int length;
     private int reservedFooterLength;
+    private int limit;
 
     /**
      * @param buffer to write the encoded data to.
@@ -38,6 +39,7 @@ public class EncodingState
         this.buffer = buffer;
         this.offset = offset;
         this.length = length;
+        this.limit = offset + length;
         this.reservedFooterLength = 1;
         reachedLimit = false;
     }
@@ -89,7 +91,7 @@ public class EncodingState
      */
     public int remaining()
     {
-        return length - (offset + reservedFooterLength);
+        return limit - (offset + reservedFooterLength);
     }
 
     /**

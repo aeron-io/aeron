@@ -20,19 +20,21 @@ import org.agrona.DirectBuffer;
 class DecodingState
 {
     private DirectBuffer buffer;
-    private int position;
+    private int offset;
     private int length;
+    private int limit;
     private boolean terminated = false;
 
     DecodingState()
     {
     }
 
-    void wrap(final DirectBuffer buffer, final int initialPosition, final int length)
+    void wrap(final DirectBuffer buffer, final int initialOffset, final int length)
     {
         this.buffer = buffer;
-        this.position = initialPosition;
+        this.offset = initialOffset;
         this.length = length;
+        this.limit = offset + length;
     }
 
     void reset()
@@ -40,10 +42,10 @@ class DecodingState
         wrap(null, 0, 0);
     }
 
-    void incrementPosition(final int increment)
+    void incrementOffset(final int increment)
     {
-        this.position += increment;
-        if (this.position > this.length)
+        this.offset += increment;
+        if (this.limit < this.offset)
         {
             throw new CborDecode.InvalidMessage("Terminated prematurely");
         }
@@ -51,7 +53,7 @@ class DecodingState
 
     int position()
     {
-        return position;
+        return offset;
     }
 
     DirectBuffer buffer()
