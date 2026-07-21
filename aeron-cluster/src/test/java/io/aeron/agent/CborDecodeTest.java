@@ -17,6 +17,7 @@
 package io.aeron.agent;
 
 import org.agrona.concurrent.UnsafeBuffer;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -287,5 +288,37 @@ class CborDecodeTest
         verify(loggerEventCallback).onValue("twoByteLengthBoundary", twoByteLengthBoundary);
         verify(loggerEventCallback).onValue("replicationUnit", TimeUnit.NANOSECONDS.name());
         verify(loggerEventCallback).onFooter(false);
+    }
+
+    @Test
+    @Disabled
+    void shouldReceiveIllegalMessageIfEndOfBufferIsReachedBeforeTermination()
+    {
+
+    }
+
+    @Test
+    @Disabled
+    void shouldTriggerTruncatedFooterFlagWhenMessageWasTruncatedDuringEncode()
+    {
+        final int offset = 0;
+        final int length = 40;
+        final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
+        final LoggerEventCallback loggerEventCallback = mock(LoggerEventCallback.class);
+
+        final EncodingState encodingState = new EncodingState();
+        encodingState.reset(buffer, offset, length);
+        CborUtil.encodeHeader(encodingState, ClusterEventCode.ELECTION_STATE_CHANGE, 12643263L);
+        CborUtil.encode(encodingState, "key1", 1_000_000_000L);
+        CborUtil.encode(encodingState, "key3", TimeUnit.DAYS.name());
+        CborUtil.encode(encodingState, "key2", "S".repeat(1_000_000));
+        CborUtil.encodeFooter(encodingState);
+
+        final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(loggerEventCallback)));
+        cborDecode.onMessage(
+            ClusterEventCode.ELECTION_STATE_CHANGE.toEventCodeId(),
+            encodingState.buffer(), 0, encodingState.offset());
+
+        verify(loggerEventCallback).onFooter(true);
     }
 }
