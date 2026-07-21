@@ -218,8 +218,23 @@ public class CborUtil
             return;
         }
 
-        encodeString(encodingState, key);
+        encodeString(encodingState, key, false);
         encodeNumber(encodingState, value);
+    }
+
+    /**
+     * @see #encode(EncodingState, CharSequence, CharSequence, boolean)
+     * @param encodingState tracks the current state of the encoding.
+     * @param key           the key to be encoded.
+     * @param value         the value to be encoded.
+     */
+    public static void encode(
+        final EncodingState encodingState,
+        final CharSequence key,
+        final CharSequence value
+    )
+    {
+        encode(encodingState, key, value, true);
     }
 
     /**
@@ -228,27 +243,47 @@ public class CborUtil
      * @param encodingState tracks the current state of the encoding.
      * @param key           the key to be encoded.
      * @param value         the value to be encoded.
+     * @param allowTruncate   whether the value can be truncated (or is just dropped).
      */
     public static void encode(
         final EncodingState encodingState,
         final CharSequence key,
-        final CharSequence value)
+        final CharSequence value,
+        final boolean allowTruncate)
     {
         if (encodingState.isReachedLimit())
         {
             return;
         }
-        encodeString(encodingState, key);
-
+        // TODO: if length() is adjusted to include truncation, this needs to be adjusted.
+        final int maxLength = length(key, value);
+        // Pre-check if the key and value can fit if truncation is not allowed.
+        if (!allowTruncate && encodingState.remaining() < maxLength)
+        {
+            encodingState.reachedLimit(true);
+            return;
+        }
+        encodeString(encodingState, key, false);
         if (null == value)
         {
             encodeNull(encodingState);
             return;
         }
-        encodeString(encodingState, value);
+        encodeString(encodingState, value, allowTruncate);
     }
 
-    private static void encodeString(final EncodingState encodingState, final CharSequence value)
+    private static void encodeString(
+        final EncodingState encodingState,
+        final CharSequence value
+    )
+    {
+        encodeString(encodingState, value, false);
+    }
+
+    private static void encodeString(
+        final EncodingState encodingState,
+        final CharSequence value,
+        final boolean allowTruncate)
     {
         final int valueLength = value.length();
 
@@ -280,6 +315,14 @@ public class CborUtil
             valueLength,
             encodingState.remaining() - (1 + lengthFieldBytes));
 
+        final boolean needsTruncation = finalLength < valueLength;
+        if (needsTruncation && !allowTruncate)
+        {
+            // This value must be dropped regardless
+            encodingState.reachedLimit(true);
+            return;
+        }
+
         final MutableDirectBuffer buffer = encodingState.buffer();
         final int offset = encodingState.offset();
         if (lengthFieldBytes > 0)
@@ -298,11 +341,11 @@ public class CborUtil
         }
 
         encodingState.incrementOffset(1 + lengthFieldBytes);
-        int toWriteLength = finalLength < valueLength ? finalLength - TRUNC_END.length() : value.length();
+        int toWriteLength = needsTruncation ? finalLength - TRUNC_END.length() : value.length();
         buffer.putStringWithoutLengthAscii(encodingState.offset(), value, 0, toWriteLength);
         encodingState.incrementOffset(toWriteLength);
 
-        if (finalLength < valueLength)
+        if (needsTruncation)
         {
             buffer.putStringWithoutLengthAscii(encodingState.offset(), TRUNC_END);
             encodingState.incrementOffset(TRUNC_END.length());
@@ -362,6 +405,11 @@ public class CborUtil
         encodingState.incrementOffset(1);
     }
 
+    /**
+     * @param encodingState tracks the current state of the encoding.
+     * @param key           the key to be encoded.
+     * @param value         the boolean value to be encoded.
+     */
     public static void encode(
         final EncodingState encodingState,
         final CharSequence key,
@@ -371,7 +419,7 @@ public class CborUtil
         {
             return;
         }
-        encodeString(encodingState, key);
+        encodeString(encodingState, key, false);
         encodeBoolean(encodingState, value);
     }
 
