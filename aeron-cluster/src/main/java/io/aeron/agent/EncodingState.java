@@ -89,7 +89,7 @@ public class EncodingState
      */
     public int remaining()
     {
-        return length - offset - reservedFooterLength;
+        return length - (offset + reservedFooterLength);
     }
 
     /**

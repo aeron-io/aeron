@@ -108,8 +108,6 @@ public final class ClusterEventEncoder
         encodingBuffer.putByte(offset + encodedLength, (byte)(isStartup ? 1 : 0));
         encodedLength += SIZE_OF_BYTE;
 
-        encodingBuffer.putStringAscii(offset + encodedLength, "lots of text");
-
         return encodedLength;
     }
 
