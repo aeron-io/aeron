@@ -341,7 +341,7 @@ public class CborUtil
         }
 
         encodingState.incrementOffset(1 + lengthFieldBytes);
-        int toWriteLength = needsTruncation ? finalLength - TRUNC_END.length() : value.length();
+        final int toWriteLength = needsTruncation ? finalLength - TRUNC_END.length() : value.length();
         buffer.putStringWithoutLengthAscii(encodingState.offset(), value, 0, toWriteLength);
         encodingState.incrementOffset(toWriteLength);
 
