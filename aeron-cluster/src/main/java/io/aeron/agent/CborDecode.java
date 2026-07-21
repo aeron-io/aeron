@@ -129,7 +129,7 @@ public class CborDecode implements MessageHandler
         }
 
         final DirectBuffer buffer = state.buffer();
-        final int keyTypeByte = (0xFF) & state.buffer().getByte(state.position());
+        final int keyTypeByte = (0xFF) & state.buffer().getByte(state.offset());
         final int keyMajorType = (0xFF) & (0b111_00000 & keyTypeByte);
         final int keyAdditionalContent = (0b000_11111) & keyTypeByte;
         state.incrementOffset(1);
@@ -140,7 +140,7 @@ public class CborDecode implements MessageHandler
         }
 
         // value handling
-        final int valueTypeByte = (0xFF) & buffer.getByte(state.position());
+        final int valueTypeByte = (0xFF) & buffer.getByte(state.offset());
         final int valueMajorType = 0b111_00000 & valueTypeByte;
         final int valueAdditionalContent = 0b000_11111 & valueTypeByte;
         state.incrementOffset(1);
@@ -190,22 +190,22 @@ public class CborDecode implements MessageHandler
         }
         else if (ADDITIONAL_CONTENT_1_BYTE == valueAdditionalContent)
         {
-            value = 0xFF & state.buffer().getByte(state.position());
+            value = 0xFF & state.buffer().getByte(state.offset());
             state.incrementOffset(1);
         }
         else if (ADDITIONAL_CONTENT_2_BYTE == valueAdditionalContent)
         {
-            value = 0xFFFF & state.buffer().getShort(state.position(), BIG_ENDIAN);
+            value = 0xFFFF & state.buffer().getShort(state.offset(), BIG_ENDIAN);
             state.incrementOffset(2);
         }
         else if (ADDITIONAL_CONTENT_4_BYTE == valueAdditionalContent)
         {
-            value = 0xFFFFFFFFL & state.buffer().getInt(state.position(), BIG_ENDIAN);
+            value = 0xFFFFFFFFL & state.buffer().getInt(state.offset(), BIG_ENDIAN);
             state.incrementOffset(4);
         }
         else if (ADDITIONAL_CONTENT_8_BYTE == valueAdditionalContent)
         {
-            value = state.buffer().getLong(state.position(), BIG_ENDIAN);
+            value = state.buffer().getLong(state.offset(), BIG_ENDIAN);
             state.incrementOffset(8);
         }
         else
@@ -228,25 +228,25 @@ public class CborDecode implements MessageHandler
     {
         if (keyAdditionalContent < ADDITIONAL_CONTENT_1_BYTE)
         {
-            targetView.wrap(state.buffer(), state.position(), keyAdditionalContent);
+            targetView.wrap(state.buffer(), state.offset(), keyAdditionalContent);
             state.incrementOffset(keyAdditionalContent);
         }
         else if (ADDITIONAL_CONTENT_1_BYTE == keyAdditionalContent)
         {
-            final int length = 0xFF & state.buffer().getByte(state.position());
-            targetView.wrap(state.buffer(), state.position() + 1, length);
+            final int length = 0xFF & state.buffer().getByte(state.offset());
+            targetView.wrap(state.buffer(), state.offset() + 1, length);
             state.incrementOffset(1 + length);
         }
         else if (ADDITIONAL_CONTENT_2_BYTE == keyAdditionalContent)
         {
-            final int length = 0xFFFF & state.buffer().getShort(state.position(), BIG_ENDIAN);
-            targetView.wrap(state.buffer(), state.position() + 2, length);
+            final int length = 0xFFFF & state.buffer().getShort(state.offset(), BIG_ENDIAN);
+            targetView.wrap(state.buffer(), state.offset() + 2, length);
             state.incrementOffset(2 + length);
         }
         else if (ADDITIONAL_CONTENT_4_BYTE == keyAdditionalContent)
         {
-            final int length = state.buffer().getInt(state.position(), BIG_ENDIAN);
-            targetView.wrap(state.buffer(), state.position() + 4, length);
+            final int length = state.buffer().getInt(state.offset(), BIG_ENDIAN);
+            targetView.wrap(state.buffer(), state.offset() + 4, length);
             state.incrementOffset(4 + length);
         }
         else
@@ -257,7 +257,7 @@ public class CborDecode implements MessageHandler
 
     private void checkTermination(final DecodingState state)
     {
-        final int currentByte = (0xFF) & (state.buffer().getByte(state.position()));
+        final int currentByte = (0xFF) & (state.buffer().getByte(state.offset()));
 
         if (BREAK == currentByte)
         {
@@ -267,7 +267,7 @@ public class CborDecode implements MessageHandler
 
     private void parseMap(final DecodingState state)
     {
-        final int typeByte = (0xFF) & state.buffer().getByte(state.position());
+        final int typeByte = (0xFF) & state.buffer().getByte(state.offset());
 
         if ((MAP_MAJOR_TYPE | ADDITIONAL_CONTENT_INDEFINITE) == typeByte)
         {
