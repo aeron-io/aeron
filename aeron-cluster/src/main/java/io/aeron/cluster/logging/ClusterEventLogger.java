@@ -43,6 +43,9 @@ public interface ClusterEventLogger
      * Logger for writing into the {@link ManyToOneRingBuffer} held by {@link EventConfiguration#eventReader}.
      */
     ClusterEventLogger LOGGER = new ClusterEventLoggerImpl(EventConfiguration.eventReader().ringBuffer());
+    /**
+     * CBOR-specific logger.
+     */
     ClusterEventLogger CBOR_LOGGER = new CborClusterEventLogger(EventConfiguration.eventReader().ringBuffer());
 
     /**

@@ -27,5 +27,10 @@ public interface EventCode
      */
     int id();
 
+    /**
+     * Get module specific {@link EventCode#id()} from {@link #id()}.
+     *
+     * @return get module specific  {@link EventCode#id()} from {@link #id()}.
+     */
     int toEventCodeId();
 }
