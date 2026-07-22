@@ -1636,7 +1636,7 @@ bool aeron_is_driver_active(const char *dirname, int64_t timeout_ms, aeron_log_f
             return false;
         }
 
-        if (aeron_map_existing_file(&cnc_map, filename) < 0)
+        if (aeron_map_existing_file(&cnc_map, filename, false) < 0)
         {
             if (ENOENT == aeron_errcode())
             {

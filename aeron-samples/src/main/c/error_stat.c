@@ -146,7 +146,7 @@ int main(int argc, char **argv)
     {
         aeron_mapped_file_t error_mmap;
 
-        if (aeron_map_existing_file(&error_mmap, settings.error_file) < 0)
+        if (aeron_map_existing_file(&error_mmap, settings.error_file, true) < 0)
         {
             aeron_error_stat_print_error_and_usage(aeron_errmsg());
             return EXIT_FAILURE;

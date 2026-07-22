@@ -52,7 +52,7 @@ static bool aeron_cnc_map_file_is_retry_err(int err)
 }
 
 aeron_cnc_load_result_t aeron_cnc_map_file_and_load_metadata(
-    const char *dir, aeron_mapped_file_t *cnc_mmap, aeron_cnc_metadata_t **metadata)
+    const char *dir, aeron_mapped_file_t *cnc_mmap, aeron_cnc_metadata_t **metadata, bool read_only)
 {
     if (NULL == metadata)
     {
@@ -72,7 +72,7 @@ aeron_cnc_load_result_t aeron_cnc_map_file_and_load_metadata(
         return AERON_CNC_LOAD_AWAIT_FILE;
     }
 
-    if (aeron_map_existing_file(cnc_mmap, filename) < 0)
+    if (aeron_map_existing_file(cnc_mmap, filename, read_only) < 0)
     {
         if (aeron_cnc_map_file_is_retry_err(aeron_errcode()))
         {

@@ -54,7 +54,7 @@ int aeron_cnc_init(aeron_cnc_t **aeron_cnc, const char *base_path, int64_t timeo
     while (true)
     {
         aeron_cnc_load_result_t result = aeron_cnc_map_file_and_load_metadata(
-            base_path, &_aeron_cnc->cnc_mmap, &_aeron_cnc->metadata);
+            base_path, &_aeron_cnc->cnc_mmap, &_aeron_cnc->metadata, true);
 
         if (AERON_CNC_LOAD_SUCCESS == result)
         {
@@ -172,7 +172,7 @@ int aeron_cnc_loss_reporter_read(
     }
 
     aeron_mapped_file_t loss_mmap;
-    if (aeron_map_existing_file(&loss_mmap, loss_report_filename) < 0) 
+    if (aeron_map_existing_file(&loss_mmap, loss_report_filename, true) < 0)
     {
         AERON_APPEND_ERR("%s", "Failed to map loss report");
         return -1;

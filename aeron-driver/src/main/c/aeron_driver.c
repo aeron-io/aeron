@@ -166,7 +166,7 @@ int aeron_driver_ensure_dir_is_recreated(aeron_driver_context_t *context)
                 return -1;
             }
 
-            if (aeron_map_existing_file(&cnc_mmap, filename) < 0)
+            if (aeron_map_existing_file(&cnc_mmap, filename, false) < 0)
             {
                 if (ENOENT == aeron_errcode())
                 {
