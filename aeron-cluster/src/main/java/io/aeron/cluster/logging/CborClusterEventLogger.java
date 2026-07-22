@@ -31,6 +31,8 @@ public class CborClusterEventLogger implements ClusterEventLogger
     private final ThreadLocal<EncodingState> encodingStateThreadLocal = ThreadLocal.withInitial(EncodingState::new);
 
     /**
+     * Construct with a ring buffer to write messages to.
+     *
      * @param ringBuffer to be used by the logger to write encoded events to.
      */
     public CborClusterEventLogger(final ManyToOneRingBuffer ringBuffer)
