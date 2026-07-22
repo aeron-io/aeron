@@ -35,6 +35,7 @@ class DecodingState
         this.offset = initialOffset;
         this.length = length;
         this.limit = offset + length;
+        this.terminated = false;
     }
 
     void reset()

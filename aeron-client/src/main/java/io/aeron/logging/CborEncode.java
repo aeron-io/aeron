@@ -32,6 +32,7 @@ public class CborEncode
     static final int UNSIGNED_INTEGER_MAJOR_TYPE = 0;
     static final int NEGATIVE_INTEGER_MAJOR_TYPE = 1 << 5;
     static final int TEXT_STRING_MAJOR_TYPE = 3 << 5;
+    static final int ARRAY_MAJOR_TYPE = 4 << 5;
     static final int MAP_MAJOR_TYPE = 5 << 5;
     // NOTE: This major type actually includes floats and simple values
     static final int SIMPLE_VALUE_MAJOR_TYPE = 7 << 5;
@@ -53,6 +54,7 @@ public class CborEncode
     static final int BREAK = 0xFF;
 
     private static final String TRUNC_END = "...";
+    static final int ENTRIES_LENGTH = 3;
 
     private CborEncode()
     {
@@ -422,7 +424,7 @@ public class CborEncode
      */
     public static int headerLength(final EventCode eventCode, final long timestamp)
     {
-        return 1;
+        return 1 + lengthNumber(timestamp) + lengthNumber(eventCode.toEventCodeId()) + 1;
     }
 
     /**
@@ -437,6 +439,10 @@ public class CborEncode
         final EventCode clusterEventCode,
         final long timestamp)
     {
+        encodingState.buffer().putByte(encodingState.offset(), typeByte(ARRAY_MAJOR_TYPE, ENTRIES_LENGTH));
+        encodingState.incrementOffset(1);
+        encodeNumber(encodingState, timestamp);
+        encodeNumber(encodingState, clusterEventCode.toEventCodeId());
         encodingState.buffer().putByte(encodingState.offset(), typeByte(MAP_MAJOR_TYPE, ADDITIONAL_CONTENT_INDEFINITE));
         encodingState.incrementOffset(1);
     }

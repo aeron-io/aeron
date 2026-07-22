@@ -30,7 +30,9 @@ import static io.aeron.logging.CborEncode.ADDITIONAL_CONTENT_FALSE;
 import static io.aeron.logging.CborEncode.ADDITIONAL_CONTENT_INDEFINITE;
 import static io.aeron.logging.CborEncode.ADDITIONAL_CONTENT_NULL;
 import static io.aeron.logging.CborEncode.ADDITIONAL_CONTENT_TRUE;
+import static io.aeron.logging.CborEncode.ARRAY_MAJOR_TYPE;
 import static io.aeron.logging.CborEncode.BREAK;
+import static io.aeron.logging.CborEncode.ENTRIES_LENGTH;
 import static io.aeron.logging.CborEncode.MAP_MAJOR_TYPE;
 import static io.aeron.logging.CborEncode.NEGATIVE_INTEGER_MAJOR_TYPE;
 import static io.aeron.logging.CborEncode.SIMPLE_VALUE_MAJOR_TYPE;
@@ -67,13 +69,7 @@ public class CborDecode implements MessageHandler
         {
             decodingState.wrap(buffer, index, length);
 
-            for (int i = 0, n = loggers.size(); i < n; i++)
-            {
-                final LoggerEventCallback logger = loggers.get(i);
-                logger.onHeader((0xFFFF_0000 & msgTypeId) >>> 16, (0xFFFF & msgTypeId), 0L);
-            }
-
-            parseMap(decodingState);
+            parseMessage(decodingState);
         }
         catch (final InvalidMessage ex)
         {
@@ -83,9 +79,42 @@ public class CborDecode implements MessageHandler
 
     }
 
-    private void parseSimpleValue(
-        final DecodingState state,
-        final int additionalContent)
+    private void parseMessage(final DecodingState state)
+    {
+        final int typeByte = (0xFF) & state.buffer().getByte(state.offset());
+        state.incrementOffset(1);
+
+        if ((ARRAY_MAJOR_TYPE | ENTRIES_LENGTH) == typeByte)
+        {
+            final long timestamp = parseLong(state);
+            final int eventCode = (int)parseLong(state);
+
+            for (int i = 0, n = loggers.size(); i < n; i++)
+            {
+                final LoggerEventCallback logger = loggers.get(i);
+                logger.onHeader((0xFFFF_0000 & eventCode) >>> 16, (0xFFFF & eventCode), timestamp);
+            }
+
+            parseMap(decodingState);
+        }
+    }
+
+    private long parseLong(final DecodingState state)
+    {
+        final int typeByte = (0xFF) & state.buffer().getByte(state.offset());
+        state.incrementOffset(1);
+        final int majorType = (0xFF) & (0b111_00000 & typeByte);
+        final int additionalContent = (0b000_11111) & typeByte;
+
+        if (NEGATIVE_INTEGER_MAJOR_TYPE != majorType && UNSIGNED_INTEGER_MAJOR_TYPE != majorType)
+        {
+            throw new InvalidMessage("Expected timestamp");
+        }
+
+        return parseNumber(state, majorType, additionalContent);
+    }
+
+    private void parseSimpleValue(final DecodingState state, final int additionalContent)
     {
         switch (additionalContent)
         {
@@ -137,7 +166,7 @@ public class CborDecode implements MessageHandler
             case NEGATIVE_INTEGER_MAJOR_TYPE:
             case UNSIGNED_INTEGER_MAJOR_TYPE:
             {
-                final long finalValue = parseNumber(state, valueAdditionalContent, valueMajorType);
+                final long finalValue = parseNumber(state, valueMajorType, valueAdditionalContent);
                 for (int i = 0, n = loggers.size(); i < n; i++)
                 {
                     final LoggerEventCallback loggerEventCallback = loggers.get(i);
@@ -158,9 +187,11 @@ public class CborDecode implements MessageHandler
 
                 break;
             }
+
             case SIMPLE_VALUE_MAJOR_TYPE:
                 parseSimpleValue(state, valueAdditionalContent);
                 break;
+
             default:
                 throw new InvalidMessage("Invalid value type");
         }
@@ -168,8 +199,8 @@ public class CborDecode implements MessageHandler
 
     private static long parseNumber(
         final DecodingState state,
-        final int valueAdditionalContent,
-        final int valueMajorType)
+        final int valueMajorType,
+        final int valueAdditionalContent)
     {
         long value;
         if (valueAdditionalContent < ADDITIONAL_CONTENT_1_BYTE)

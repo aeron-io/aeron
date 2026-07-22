@@ -67,12 +67,16 @@ class CborEncodeTest
         final byte[] data = new byte[encodingState.offset()];
         encodingState.buffer().getBytes(0, data);
 
-        final Map<String, Object> stringObjectMap = cborObjectMapper.readValue(
-            data,
-            new TypeReference<>()
-            {
-            });
+        final Object[] entries = cborObjectMapper.readValue(data, new TypeReference<>()
+        {
+        });
 
+        final long actualTimestamp = ((Number)entries[0]).longValue();
+        final int actualEventCode = ((Number)entries[1]).intValue();
+        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap = (Map<String, Object>)entries[2];
+
+        assertEquals(timestamp, actualTimestamp);
+        assertEquals(TEST_EVENT_CODE.toEventCodeId(), actualEventCode);
         assertEquals(memberId, ((Number)stringObjectMap.get("memberId")).longValue());
     }
 
@@ -98,11 +102,11 @@ class CborEncodeTest
         final byte[] data = new byte[encodingState.offset()];
         encodingState.buffer().getBytes(0, data);
 
-        final Map<String, Object> stringObjectMap = cborObjectMapper.readValue(
-            data,
-            new TypeReference<>()
-            {
-            });
+        final Object[] entries = cborObjectMapper.readValue(data, new TypeReference<>()
+        {
+        });
+
+        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap = (Map<String, Object>)entries[2];
 
         assertEquals(val, stringObjectMap.get("boolean"));
     }
@@ -139,11 +143,11 @@ class CborEncodeTest
         final byte[] data = new byte[encodingState.offset()];
         encodingState.buffer().getBytes(0, data);
 
-        final Map<String, Object> stringObjectMap = cborObjectMapper.readValue(
-            data,
-            new TypeReference<>()
-            {
-            });
+        final Object[] entries = cborObjectMapper.readValue(data, new TypeReference<>()
+        {
+        });
+
+        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap = (Map<String, Object>)entries[2];
 
         assertEquals(reason, stringObjectMap.get("reason"));
     }
@@ -199,11 +203,11 @@ class CborEncodeTest
         final byte[] data = new byte[encodingState.offset()];
         encodingState.buffer().getBytes(0, data);
 
-        final Map<String, Object> stringObjectMap = cborObjectMapper.readValue(
-            data,
-            new TypeReference<>()
-            {
-            });
+        final Object[] entries = cborObjectMapper.readValue(data, new TypeReference<>()
+        {
+        });
+
+        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap = (Map<String, Object>)entries[2];
 
         assertEquals(Set.of("key1", "key2", "key3"), stringObjectMap.keySet());
         assertEquals(1_000_000_000L, ((Number)stringObjectMap.get("key1")).longValue());
@@ -222,12 +226,13 @@ class CborEncodeTest
         // key1 and key3 fit fully; the remaining space is only enough for key2's
         // key plus a handful of characters, forcing its huge value to truncate,
         // while the footer still has room to be written.
-        final int length = 40;
+        final long timestamp = 12643263L;
+        final int length = 39 + CborEncode.headerLength(TEST_EVENT_CODE, timestamp);
         final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
 
         final EncodingState encodingState = new EncodingState();
         encodingState.reset(buffer, offset, length);
-        CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, 12643263L);
+        CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, timestamp);
         CborEncode.encode(encodingState, "key1", 1_000_000_000L);
         CborEncode.encode(encodingState, "key3", TimeUnit.DAYS.name());
         CborEncode.encode(encodingState, "key2", "S".repeat(1_000_000));
@@ -237,11 +242,11 @@ class CborEncodeTest
         final byte[] data = new byte[encodingState.offset()];
         encodingState.buffer().getBytes(0, data);
 
-        final Map<String, Object> stringObjectMap = cborObjectMapper.readValue(
-            data,
-            new TypeReference<>()
-            {
-            });
+        final Object[] entries = cborObjectMapper.readValue(data, new TypeReference<>()
+        {
+        });
+
+        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap = (Map<String, Object>)entries[2];
 
         assertEquals(Set.of("key1", "key2", "key3"), stringObjectMap.keySet());
         assertEquals(1_000_000_000L, ((Number)stringObjectMap.get("key1")).longValue());
@@ -285,11 +290,11 @@ class CborEncodeTest
         final byte[] data = new byte[encodingState.offset()];
         encodingState.buffer().getBytes(0, data);
 
-        final Map<String, Object> stringObjectMap = cborObjectMapper.readValue(
-            data,
-            new TypeReference<>()
-            {
-            });
+        final Object[] entries = cborObjectMapper.readValue(data, new TypeReference<>()
+        {
+        });
+
+        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap = (Map<String, Object>)entries[2];
 
         assertEquals(Set.of(
             "veryLongMemberIdentifierKey",
@@ -340,11 +345,11 @@ class CborEncodeTest
         final byte[] data = new byte[encodingState.offset()];
         encodingState.buffer().getBytes(0, data);
 
-        final Map<String, Object> stringObjectMap = cborObjectMapper.readValue(
-            data,
-            new TypeReference<>()
-            {
-            });
+        final Object[] entries = cborObjectMapper.readValue(data, new TypeReference<>()
+        {
+        });
+
+        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap = (Map<String, Object>)entries[2];
 
         // Should have dropped reason
         assertEquals(Set.of(
@@ -382,11 +387,11 @@ class CborEncodeTest
         final byte[] data = new byte[encodingState.offset()];
         encodingState.buffer().getBytes(0, data);
 
-        final Map<String, Object> stringObjectMap = cborObjectMapper.readValue(
-            data,
-            new TypeReference<>()
-            {
-            });
+        final Object[] entries = cborObjectMapper.readValue(data, new TypeReference<>()
+        {
+        });
+
+        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap = (Map<String, Object>)entries[2];
 
         assertEquals("", stringObjectMap.get("reason"));
     }
@@ -406,24 +411,25 @@ class CborEncodeTest
         final byte[] data = new byte[encodingState.offset()];
         encodingState.buffer().getBytes(0, data);
 
-        final Map<String, Object> stringObjectMap = cborObjectMapper.readValue(
-            data,
-            new TypeReference<>()
-            {
-            });
-        // The entry should have been dropped properly
+        final Object[] entries = cborObjectMapper.readValue(data, new TypeReference<>()
+        {
+        });
+
+        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap = (Map<String, Object>)entries[2];
+
         assertFalse(stringObjectMap.containsKey("a"));
     }
 
     @Test
     void shouldDropBooleanFieldWhenItCannotFit()
     {
-        final int length = 4;
+        final long timestamp = 12643263L;
+        final int length = 3 + CborEncode.headerLength(TEST_EVENT_CODE, timestamp);
         final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
 
         final EncodingState encodingState = new EncodingState();
         encodingState.reset(buffer, 0, length);
-        CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, 12643263L);
+        CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, timestamp);
         CborEncode.encode(encodingState, "k", true);
 
         // Footer should be written properly since k should be dropped completely
@@ -433,11 +439,11 @@ class CborEncodeTest
         final byte[] data = new byte[encodingState.offset()];
         encodingState.buffer().getBytes(0, data);
 
-        final Map<String, Object> stringObjectMap = cborObjectMapper.readValue(
-            data,
-            new TypeReference<>()
-            {
-            });
+        final Object[] entries = cborObjectMapper.readValue(data, new TypeReference<>()
+        {
+        });
+
+        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap = (Map<String, Object>)entries[2];
 
         assertFalse(stringObjectMap.containsKey("k"));
 
