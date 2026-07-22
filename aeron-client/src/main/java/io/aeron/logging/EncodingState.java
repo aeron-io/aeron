@@ -30,6 +30,15 @@ public class EncodingState
     private int limit;
 
     /**
+     * Default constructor.
+     */
+    public EncodingState()
+    {
+    }
+
+    /**
+     * Reset the encoding state with a new buffer.
+     *
      * @param buffer to write the encoded data to.
      * @param offset to start writing at.
      * @param length of the {@code buffer}.
@@ -45,7 +54,7 @@ public class EncodingState
     }
 
     /**
-     * @return true if the writing has reached the buffer limit.
+     * {@return true if the writing has reached the buffer limit}
      */
     public boolean isReachedLimit()
     {
@@ -53,6 +62,8 @@ public class EncodingState
     }
 
     /**
+     * Indicate that the encoding state has reached the current limit.
+     *
      * @param value to set the reached limit flag to.
      */
     public void reachedLimit(final boolean value)
@@ -63,7 +74,7 @@ public class EncodingState
     }
 
     /**
-     * @return the most recently written offset.
+     * {@return the most recently written offset}
      */
     public int offset()
     {
@@ -71,6 +82,8 @@ public class EncodingState
     }
 
     /**
+     * Set the offste for the encoding state.
+     *
      * @param offset to set the most recently written offset to.
      */
     public void offset(final int offset)
@@ -79,7 +92,7 @@ public class EncodingState
     }
 
     /**
-     * @return the length of the buffer.
+     * {@return the length of the buffer}
      */
     public int length()
     {
@@ -87,7 +100,7 @@ public class EncodingState
     }
 
     /**
-     * @return the remaining length of the buffer.
+     * {@return the remaining length of the buffer}
      */
     public int remaining()
     {
@@ -95,6 +108,8 @@ public class EncodingState
     }
 
     /**
+     * Increment the current offset.
+     *
      * @param length to increment the offset by.
      */
     public void incrementOffset(final int length)
@@ -103,20 +118,25 @@ public class EncodingState
     }
 
     /**
-     * @return the current footer length reserved.
+     * {@return the current footer length reserved}
      */
     public int reservedFooterLength()
     {
         return reservedFooterLength;
     }
 
+    /**
+     * Increment the reserved footer length.
+     *
+     * @param length to increment by.
+     */
     void incrementReservedFooterLength(final int length)
     {
         this.reservedFooterLength += length;
     }
 
     /**
-     * @return the buffer.
+     * {@return the buffer}
      */
     public MutableDirectBuffer buffer()
     {

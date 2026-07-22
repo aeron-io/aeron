@@ -54,6 +54,10 @@ public class CborEncode
 
     private static final String TRUNC_END = "...";
 
+    private CborEncode()
+    {
+    }
+
     static int lengthNumber(final long value)
     {
         final long magnitude = value < 0 ? ~value : value;
@@ -227,6 +231,8 @@ public class CborEncode
     }
 
     /**
+     * Encode a key/string pair.
+     *
      * @see #encode(EncodingState, CharSequence, CharSequence, boolean)
      * @param encodingState tracks the current state of the encoding.
      * @param key           the key to be encoded.
@@ -440,6 +446,8 @@ public class CborEncode
     }
 
     /**
+     * Encode the footer.
+     *
      * @param encodingState tracks the current state of the encoding.
      */
     public static void encodeFooter(final EncodingState encodingState)
@@ -450,6 +458,8 @@ public class CborEncode
     }
 
     /**
+     * Encode a key/boolean pair.
+     *
      * @param encodingState tracks the current state of the encoding.
      * @param key           the key to be encoded.
      * @param value         the boolean value to be encoded.
