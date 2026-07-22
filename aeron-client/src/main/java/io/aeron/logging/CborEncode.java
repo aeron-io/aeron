@@ -26,7 +26,7 @@ import static org.agrona.BitUtil.SIZE_OF_SHORT;
 /**
  * Utility class for CBOR encoding.
  */
-public class CborEncode
+public final class CborEncode
 {
     // Base bytes for major types
     static final int UNSIGNED_INTEGER_MAJOR_TYPE = 0;
