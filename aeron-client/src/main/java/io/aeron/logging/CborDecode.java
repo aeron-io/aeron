@@ -81,6 +81,7 @@ public class CborDecode implements MessageHandler
 
     private void parseMessage(final DecodingState state)
     {
+        state.ensureRemaining(1);
         final int typeByte = (0xFF) & state.buffer().getByte(state.offset());
         state.incrementOffset(1);
 
@@ -101,6 +102,7 @@ public class CborDecode implements MessageHandler
 
     private long parseLong(final DecodingState state)
     {
+        state.ensureRemaining(1);
         final int typeByte = (0xFF) & state.buffer().getByte(state.offset());
         state.incrementOffset(1);
         final int majorType = majorType(typeByte);
@@ -146,6 +148,7 @@ public class CborDecode implements MessageHandler
         }
 
         final DirectBuffer buffer = state.buffer();
+        state.ensureRemaining(1);
         final int keyTypeByte = (0xFF) & state.buffer().getByte(state.offset());
         final int keyMajorType = majorType(keyTypeByte);
         final int keyAdditionalContent = additionalContent(keyTypeByte);
@@ -157,6 +160,7 @@ public class CborDecode implements MessageHandler
         }
 
         // value handling
+        state.ensureRemaining(1);
         final int valueTypeByte = (0xFF) & buffer.getByte(state.offset());
         final int valueMajorType = majorType(valueTypeByte);
         final int valueAdditionalContent = additionalContent(valueTypeByte);
@@ -219,21 +223,25 @@ public class CborDecode implements MessageHandler
         }
         else if (ADDITIONAL_CONTENT_1_BYTE == valueAdditionalContent)
         {
+            state.ensureRemaining(1);
             value = 0xFF & state.buffer().getByte(state.offset());
             state.incrementOffset(1);
         }
         else if (ADDITIONAL_CONTENT_2_BYTE == valueAdditionalContent)
         {
+            state.ensureRemaining(2);
             value = 0xFFFF & state.buffer().getShort(state.offset(), BIG_ENDIAN);
             state.incrementOffset(2);
         }
         else if (ADDITIONAL_CONTENT_4_BYTE == valueAdditionalContent)
         {
+            state.ensureRemaining(4);
             value = 0xFFFFFFFFL & state.buffer().getInt(state.offset(), BIG_ENDIAN);
             state.incrementOffset(4);
         }
         else if (ADDITIONAL_CONTENT_8_BYTE == valueAdditionalContent)
         {
+            state.ensureRemaining(8);
             value = state.buffer().getLong(state.offset(), BIG_ENDIAN);
             state.incrementOffset(8);
         }
@@ -262,18 +270,21 @@ public class CborDecode implements MessageHandler
         }
         else if (ADDITIONAL_CONTENT_1_BYTE == keyAdditionalContent)
         {
+            state.ensureRemaining(1);
             final int length = 0xFF & state.buffer().getByte(state.offset());
             targetView.wrap(state.buffer(), state.offset() + 1, length);
             state.incrementOffset(1 + length);
         }
         else if (ADDITIONAL_CONTENT_2_BYTE == keyAdditionalContent)
         {
+            state.ensureRemaining(2);
             final int length = 0xFFFF & state.buffer().getShort(state.offset(), BIG_ENDIAN);
             targetView.wrap(state.buffer(), state.offset() + 2, length);
             state.incrementOffset(2 + length);
         }
         else if (ADDITIONAL_CONTENT_4_BYTE == keyAdditionalContent)
         {
+            state.ensureRemaining(4);
             final int length = state.buffer().getInt(state.offset(), BIG_ENDIAN);
             targetView.wrap(state.buffer(), state.offset() + 4, length);
             state.incrementOffset(4 + length);
@@ -286,6 +297,7 @@ public class CborDecode implements MessageHandler
 
     private void checkTermination(final DecodingState state)
     {
+        state.ensureRemaining(1);
         final int currentByte = (0xFF) & (state.buffer().getByte(state.offset()));
 
         if (BREAK == currentByte)
@@ -296,6 +308,7 @@ public class CborDecode implements MessageHandler
 
     private void parseMap(final DecodingState state)
     {
+        state.ensureRemaining(1);
         final int typeByte = (0xFF) & state.buffer().getByte(state.offset());
 
         if ((MAP_MAJOR_TYPE | ADDITIONAL_CONTENT_INDEFINITE) == typeByte)
