@@ -52,6 +52,19 @@ class DecodingState
         }
     }
 
+    int remaining()
+    {
+        return this.limit - this.offset;
+    }
+
+    void ensureRemaining(final int count)
+    {
+        if (this.remaining() < count)
+        {
+            throw new InvalidMessage("Terminated prematurely");
+        }
+    }
+
     int offset()
     {
         return offset;
