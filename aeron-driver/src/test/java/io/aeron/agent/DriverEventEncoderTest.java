@@ -20,9 +20,12 @@ import org.junit.jupiter.api.Test;
 
 import java.time.temporal.ChronoField;
 
-import static io.aeron.agent.CommonEventEncoder.*;
 import static io.aeron.agent.DriverEventEncoder.*;
-import static io.aeron.agent.EventConfiguration.MAX_EVENT_LENGTH;
+import static io.aeron.logging.CommonEventEncoder.LOG_HEADER_LENGTH;
+import static io.aeron.logging.CommonEventEncoder.STATE_SEPARATOR;
+import static io.aeron.logging.CommonEventEncoder.captureLength;
+import static io.aeron.logging.CommonEventEncoder.stateTransitionStringLength;
+import static io.aeron.logging.EventConfiguration.MAX_EVENT_LENGTH;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static java.util.Arrays.fill;
 import static org.agrona.BitUtil.SIZE_OF_INT;

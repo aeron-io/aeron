@@ -24,7 +24,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static io.aeron.agent.CommonEventEncoder.LOG_HEADER_LENGTH;
+import static io.aeron.logging.CommonEventEncoder.LOG_HEADER_LENGTH;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static org.agrona.BitUtil.SIZE_OF_INT;
 import static org.agrona.concurrent.ringbuffer.RecordDescriptor.HEADER_LENGTH;

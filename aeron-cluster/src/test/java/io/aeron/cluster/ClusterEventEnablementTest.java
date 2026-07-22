@@ -16,8 +16,8 @@
 package io.aeron.cluster;
 
 import io.aeron.CommonContext;
-import io.aeron.agent.ClusterEventCode;
-import io.aeron.agent.EventConfiguration;
+import io.aeron.cluster.logging.ClusterEventCode;
+import io.aeron.logging.EventConfiguration;
 import io.aeron.cluster.codecs.CloseReason;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
@@ -41,7 +41,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
-import static io.aeron.agent.ClusterEventCode.DYNAMIC_JOIN_STATE_CHANGE_UNUSED;
+import static io.aeron.cluster.logging.ClusterEventCode.DYNAMIC_JOIN_STATE_CHANGE_UNUSED;
 import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 

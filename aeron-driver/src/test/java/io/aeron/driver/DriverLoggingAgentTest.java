@@ -24,7 +24,7 @@ import io.aeron.Publication;
 import io.aeron.Subscription;
 import io.aeron.UnavailableImageHandler;
 import io.aeron.agent.DriverEventCode;
-import io.aeron.agent.EventConfiguration;
+import io.aeron.logging.EventConfiguration;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;

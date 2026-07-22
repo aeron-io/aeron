@@ -17,24 +17,34 @@ package io.aeron.agent;
 
 import io.aeron.ErrorCode;
 import io.aeron.command.*;
+import io.aeron.logging.CommonEventEncoder;
 import io.aeron.protocol.*;
 import org.agrona.DirectBuffer;
+import org.agrona.MutableDirectBuffer;
+import org.agrona.concurrent.NanoClock;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 
-import static io.aeron.agent.CommonEventEncoder.*;
 import static io.aeron.agent.DriverEventCode.*;
 import static io.aeron.agent.DriverEventDissector.*;
 import static io.aeron.agent.DriverEventLogger.MAX_CHANNEL_URI_LENGTH;
 import static io.aeron.agent.DriverEventLogger.MAX_HOST_NAME_LENGTH;
-import static io.aeron.agent.EventConfiguration.MAX_EVENT_LENGTH;
+import static io.aeron.logging.CommonEventEncoder.LOG_HEADER_LENGTH;
+import static io.aeron.logging.CommonEventEncoder.encodeSocketAddress;
+import static io.aeron.logging.CommonEventEncoder.inetAddressLength;
+import static io.aeron.logging.CommonEventEncoder.trailingStringLength;
+import static io.aeron.logging.EventConfiguration.MAX_EVENT_LENGTH;
 import static io.aeron.protocol.HeaderFlyweight.*;
+import static java.lang.invoke.MethodHandles.privateLookupIn;
+import static java.lang.invoke.MethodType.methodType;
 import static java.nio.ByteBuffer.allocate;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static org.agrona.BitUtil.*;
@@ -46,6 +56,23 @@ class DriverEventDissectorTest
 {
     private final UnsafeBuffer buffer = new UnsafeBuffer(new byte[MAX_EVENT_LENGTH]);
     private final StringBuilder builder = new StringBuilder();
+    private final MethodHandle handle;
+
+    DriverEventDissectorTest()
+    {
+        try
+        {
+            final MethodHandles.Lookup lookup = privateLookupIn(CommonEventEncoder.class, MethodHandles.lookup());
+            handle = lookup.findStatic(
+                CommonEventEncoder.class,
+                "internalEncodeLogHeader",
+                methodType(int.class, MutableDirectBuffer.class, int.class, int.class, int.class, NanoClock.class));
+        }
+        catch (final IllegalAccessException | NoSuchMethodException ex)
+        {
+            throw new RuntimeException(ex);
+        }
+    }
 
     @Test
     void dissectRemovePublicationCleanup()
@@ -889,5 +916,22 @@ class DriverEventDissectorTest
         final UnsafeBuffer buffer = new UnsafeBuffer(allocate(bytes.length));
         buffer.putBytes(0, bytes);
         return buffer;
+    }
+
+    private int internalEncodeLogHeader(
+        final MutableDirectBuffer encodingBuffer,
+        final int offset,
+        final int captureLength,
+        final int length,
+        final NanoClock nanoClock)
+    {
+        try
+        {
+            return (int)handle.invokeExact(encodingBuffer, offset, captureLength, length, nanoClock);
+        }
+        catch (final Throwable ex)
+        {
+            throw new RuntimeException(ex);
+        }
     }
 }

@@ -16,13 +16,13 @@
 package io.aeron.cluster;
 
 import io.aeron.Aeron;
-import io.aeron.agent.ClusterEventCode;
-import io.aeron.agent.ClusterEventLogger;
+import io.aeron.cluster.logging.ClusterEventCode;
+import io.aeron.cluster.logging.ClusterEventLogger;
 import io.aeron.cluster.codecs.CloseReason;
 
 import java.util.concurrent.TimeUnit;
 
-import static io.aeron.agent.ClusterModuleLogger.isEnabled;
+import static io.aeron.cluster.logging.ClusterModuleLogger.isEnabled;
 
 class ClusterLog
 {

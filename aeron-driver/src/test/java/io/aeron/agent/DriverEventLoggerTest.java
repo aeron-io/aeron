@@ -15,6 +15,7 @@
  */
 package io.aeron.agent;
 
+import io.aeron.logging.EventConfiguration;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
 import org.hamcrest.Matchers;
@@ -31,12 +32,18 @@ import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.TimeUnit;
 
-import static io.aeron.agent.CommonEventEncoder.*;
 import static io.aeron.agent.DriverEventCode.*;
 import static io.aeron.agent.DriverEventEncoder.untetheredSubscriptionStateChangeLength;
 import static io.aeron.agent.DriverEventLogger.MAX_HOST_NAME_LENGTH;
 import static io.aeron.agent.DriverEventLogger.toEventCodeId;
-import static io.aeron.agent.EventConfiguration.MAX_EVENT_LENGTH;
+import static io.aeron.logging.CommonEventEncoder.LOG_HEADER_LENGTH;
+import static io.aeron.logging.CommonEventEncoder.MAX_CAPTURE_LENGTH;
+import static io.aeron.logging.CommonEventEncoder.STATE_SEPARATOR;
+import static io.aeron.logging.CommonEventEncoder.captureLength;
+import static io.aeron.logging.CommonEventEncoder.inetAddressLength;
+import static io.aeron.logging.CommonEventEncoder.socketAddressLength;
+import static io.aeron.logging.CommonEventEncoder.trailingStringLength;
+import static io.aeron.logging.EventConfiguration.MAX_EVENT_LENGTH;
 import static io.aeron.test.agent.AgentTests.verifyLogHeader;
 import static io.aeron.test.Tests.generateStringWithSuffix;
 import static java.nio.ByteBuffer.allocate;

@@ -16,6 +16,9 @@
 package io.aeron.agent;
 
 import io.aeron.AeronCounters;
+import io.aeron.logging.EventCodeType;
+import io.aeron.logging.EventConfiguration;
+import io.aeron.logging.ModuleLogger;
 import io.aeron.version.Versioned;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.collections.Object2ObjectHashMap;
