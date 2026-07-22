@@ -26,4 +26,6 @@ public interface EventCode
      * @return the unique event identifier withing an {@link EventCodeType}.
      */
     int id();
+
+    int toEventCodeId();
 }
