@@ -60,7 +60,7 @@ public:
         aeron_mapped_file_t mapped_file = {};
         mapped_file.length = offset + length;
 
-        if (aeron_map_existing_file(&mapped_file, filename) < 0)
+        if (aeron_map_existing_file(&mapped_file, filename, readOnly) < 0)
         {
             throw IOException(
                 std::string("failed to open existing file: ") + filename + " " + aeron_errmsg(), SOURCEINFO);

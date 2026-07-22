@@ -82,7 +82,7 @@ int aeron_client_connect_to_driver(aeron_mapped_file_t *cnc_mmap, aeron_context_
     while (true)
     {
         aeron_cnc_metadata_t *metadata;
-        aeron_cnc_load_result_t result = aeron_cnc_map_file_and_load_metadata(context->aeron_dir, cnc_mmap, &metadata);
+        aeron_cnc_load_result_t result = aeron_cnc_map_file_and_load_metadata(context->aeron_dir, cnc_mmap, &metadata, false);
         switch (result)
         {
             case AERON_CNC_LOAD_FAILED:

@@ -42,7 +42,7 @@ int aeron_delete_directory(const char *directory);
 int aeron_mkdir_recursive(const char *pathname, int permission);
 
 int aeron_map_new_file(aeron_mapped_file_t *mapped_file, const char *path, bool fill_with_zeroes);
-int aeron_map_existing_file(aeron_mapped_file_t *mapped_file, const char *path);
+int aeron_map_existing_file(aeron_mapped_file_t *mapped_file, const char *path, bool read_only);
 int aeron_unmap(aeron_mapped_file_t *mapped_file);
 
 int aeron_msync(void *addr, size_t length);

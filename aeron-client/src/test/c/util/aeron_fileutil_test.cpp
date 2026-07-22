@@ -181,7 +181,7 @@ TEST_F(FileUtilTest, mapExistingFileShouldHandleFilesBiggerThan2GB)
     ASSERT_EQ(0, aeron_map_new_file(&mapped_file, file, false)) << aeron_errmsg();
     ASSERT_EQ(0, aeron_unmap(&mapped_file)) << aeron_errmsg();
 
-    ASSERT_EQ(0, aeron_map_existing_file(&mapped_file, file)) << aeron_errmsg();
+    ASSERT_EQ(0, aeron_map_existing_file(&mapped_file, file, false)) << aeron_errmsg();
 
     EXPECT_NE(nullptr, mapped_file.addr);
     EXPECT_EQ(file_length, mapped_file.length);
