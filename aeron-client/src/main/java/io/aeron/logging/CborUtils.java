@@ -1,6 +1,21 @@
+/*
+ * Copyright 2014-2026 Real Logic Limited.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.aeron.logging;
 
-public class CborUtils
+class CborUtils
 {
     // Base bytes for major types
     static final int UNSIGNED_INTEGER_MAJOR_TYPE = 0;
@@ -8,6 +23,7 @@ public class CborUtils
     static final int TEXT_STRING_MAJOR_TYPE = 3 << 5;
     static final int ARRAY_MAJOR_TYPE = 4 << 5;
     static final int MAP_MAJOR_TYPE = 5 << 5;
+    static final int TAG_MAJOR_TYPE = 6 << 5;
     // NOTE: This major type actually includes floats and simple values
     static final int SIMPLE_VALUE_MAJOR_TYPE = 7 << 5;
     static final int ADDITIONAL_CONTENT_1_BYTE = 24;
@@ -24,6 +40,17 @@ public class CborUtils
     static final byte TRUE_VALUE = typeByte(SIMPLE_VALUE_MAJOR_TYPE, ADDITIONAL_CONTENT_TRUE);
     static final int BREAK = 0xFF;
     static final int ENTRIES_LENGTH = 4;
+
+    // Tags
+    static final int NO_TAG = 0;
+    // Example only
+    static final int ENUM_TAG = 2 << 1;
+
+    // This might be useful for checking if a tag is present
+    static boolean hasTag(final byte inputTags, final int checkedTag)
+    {
+        return (inputTags & checkedTag) != 0;
+    }
 
     static byte typeByte(final int majorType, final int modifier)
     {
