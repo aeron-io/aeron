@@ -409,20 +409,18 @@ public class CborEncode
 
     private static void encodeBoolean(final EncodingState encodingState, final boolean value)
     {
-        encodingState.buffer().putByte(
-            encodingState.offset(),
-            value ? TRUE_VALUE : FALSE_VALUE);
+        encodingState.buffer().putByte(encodingState.offset(), value ? TRUE_VALUE : FALSE_VALUE);
         encodingState.incrementOffset(1);
     }
 
     /**
      * Calculate the length of the header of the Cbor message.
      *
-     * @param clusterEventCode  for this message.
-     * @param timestamp         of this message.
+     * @param eventCode  for this message.
+     * @param timestamp  of this message.
      * @return the length of the header of the Cbor message.
      */
-    public static int headerLength(final EventCode clusterEventCode, final long timestamp)
+    public static int headerLength(final EventCode eventCode, final long timestamp)
     {
         return 1;
     }
