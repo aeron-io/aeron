@@ -29,6 +29,7 @@ import static io.aeron.logging.CborUtils.FALSE_VALUE;
 import static io.aeron.logging.CborUtils.MAP_MAJOR_TYPE;
 import static io.aeron.logging.CborUtils.NEGATIVE_INTEGER_MAJOR_TYPE;
 import static io.aeron.logging.CborUtils.NULL_VALUE;
+import static io.aeron.logging.CborUtils.TAG_MAJOR_TYPE;
 import static io.aeron.logging.CborUtils.TEXT_STRING_MAJOR_TYPE;
 import static io.aeron.logging.CborUtils.TRUE_VALUE;
 import static io.aeron.logging.CborUtils.UNSIGNED_INTEGER_MAJOR_TYPE;
@@ -94,6 +95,12 @@ public final class CborEncode
         }
     }
 
+    static int lengthTag(final long tag)
+    {
+        // A tag is encoded the same way as numbers
+        return lengthNumber(tag);
+    }
+
     /**
      * Calculates the total length of an encoded string-long pair.
      *
@@ -131,14 +138,8 @@ public final class CborEncode
         return lengthString(key) + lengthString(value);
     }
 
-    private static void encodeNumber(
-        final EncodingState encodingState,
-        final long value)
+    private static void encodeNumber(final EncodingState encodingState, final long value)
     {
-        // TODO: handle long (8 byte) case either here or through a new method
-        final int offset = encodingState.offset();
-        final MutableDirectBuffer buffer = encodingState.buffer();
-
         final int majorType;
         final long magnitude;
         if (value < 0)
@@ -152,6 +153,28 @@ public final class CborEncode
             majorType = UNSIGNED_INTEGER_MAJOR_TYPE;
             magnitude = value;
         }
+        encodeNumberLikeFormat(encodingState, magnitude, majorType);
+    }
+
+    /**
+     * encodes a tag.
+     * @param state of the encoding operation.
+     * @param tags to encode.
+     */
+    public static void encodeTag(final EncodingState state, final long tags)
+    {
+        encodeNumberLikeFormat(state, tags, TAG_MAJOR_TYPE);
+    }
+
+    private static void encodeNumberLikeFormat(
+        final EncodingState encodingState,
+        final long magnitude,
+        final int majorType)
+    {
+        // TODO: handle long (8 byte) case either here or through a new method
+        final int offset = encodingState.offset();
+        final MutableDirectBuffer buffer = encodingState.buffer();
+
 
         // Reference: https://datatracker.ietf.org/doc/html/rfc8949#name-specification-of-the-cbor-e
         if (magnitude < ADDITIONAL_CONTENT_1_BYTE)

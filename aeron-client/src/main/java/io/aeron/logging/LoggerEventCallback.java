@@ -44,8 +44,11 @@ public interface LoggerEventCallback
      * @param value of the event, note that the supplied {@link CharSequence} is reused across multiple calls, it
      *              is the user's responsibility to copy this value if required as the value is only valid for the
      *              scope of the call.
+     * @param tags  of the event, note that the supplied {@link CharSequence} is reused across multiple calls, it
+     *              is the user's responsibility to copy this value if required as the value is only valid for the
+     *              scope of the call.
      */
-    void onValue(CharSequence name, CharSequence value);
+    void onValue(CharSequence name, CharSequence value, long tags);
 
     /**
      * A number value of the logging event. Could be of any numeric length (e.g. byte, short, int, long).
@@ -54,8 +57,9 @@ public interface LoggerEventCallback
      *              is the user's responsibility to copy this value if required as the value is only valid for the
      *              scope of the call.
      * @param value of the event.
+     * @param tags  of the event.
      */
-    void onValue(CharSequence name, long value);
+    void onValue(CharSequence name, long value, long tags);
 
     /**
      * A boolean value of the logging event.
@@ -64,8 +68,9 @@ public interface LoggerEventCallback
      *              is the user's responsibility to copy this value if required as the value is only valid for the
      *              scope of the call.
      * @param value of the event.
+     * @param tags  of the event.
      */
-    void onValue(CharSequence name, boolean value);
+    void onValue(CharSequence name, boolean value, long tags);
 
     /**
      * Indicates that the message is complete, and will determine if any fields were dropped due to truncation.
