@@ -295,7 +295,7 @@ class CborDecodeTest
     }
 
     @ParameterizedTest
-    @ValueSource(ints = {14, 35, 60, 78, 82, 87})
+    @ValueSource(ints = {0, 2, 6, 9, 12, 14, 18, 27, 35, 60, 78, 82, 87, 89})
     void shouldReceiveInvalidMessageIfEndOfBufferIsReachedBeforeTermination(final int cutoffPoint)
     {
         final int offset = 0;
