@@ -71,9 +71,15 @@
 #define S_IROTH 0
 #define S_IWOTH 0
 
-static int aeron_mmap(aeron_mapped_file_t *mapping, int fd, bool pre_touch)
+static int aeron_mmap(aeron_mapped_file_t *mapping, int fd, bool pre_touch, bool read_only)
 {
-    HANDLE hmap = CreateFileMapping((HANDLE)_get_osfhandle(fd), 0, PAGE_READWRITE, 0, 0, 0);
+    HANDLE hmap = CreateFileMapping(
+        (HANDLE)_get_osfhandle(fd),
+        0,
+        read_only ? PAGE_READONLY : PAGE_READWRITE,
+        0,
+        0,
+        0);
 
     if (!hmap)
     {
@@ -81,7 +87,13 @@ static int aeron_mmap(aeron_mapped_file_t *mapping, int fd, bool pre_touch)
         return -1;
     }
 
-    mapping->addr = MapViewOfFileEx(hmap, FILE_MAP_WRITE, 0, 0, mapping->length, NULL);
+    mapping->addr = MapViewOfFileEx(
+        hmap,
+        read_only ? FILE_MAP_READ : FILE_MAP_WRITE,
+        0,
+        0,
+        mapping->length,
+        NULL);
 
     if (!mapping->addr)
     {
@@ -684,12 +696,12 @@ error:
     return -1;
 }
 
-int aeron_open_file_rw(const char *path)
+static int aeron_open_file(const char *path, bool read_only)
 {
     HANDLE hfile = CreateFile(
             path,
-            FILE_GENERIC_READ | FILE_GENERIC_WRITE | DELETE,
-            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            read_only ? FILE_GENERIC_READ | DELETE : FILE_GENERIC_READ | FILE_GENERIC_WRITE | DELETE,
+            read_only ? FILE_SHARE_READ | FILE_SHARE_DELETE : FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
             NULL,
             OPEN_EXISTING,
             FILE_ATTRIBUTE_NORMAL | FILE_FLAG_POSIX_SEMANTICS,
@@ -701,7 +713,7 @@ int aeron_open_file_rw(const char *path)
         return -1;
     }
 
-    int fd = _open_osfhandle((intptr_t)hfile, _O_RDWR);
+    int fd = _open_osfhandle((intptr_t)hfile, read_only ? _O_RDONLY : _O_RDWR);
     if (fd < 0)
     {
         AERON_SET_ERR_WIN(GetLastError(), "Failed to obtain file descriptor: %s", path);
