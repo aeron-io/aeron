@@ -443,6 +443,7 @@ public final class CborEncode
         // TODO: Decide how truncation flag should be handled here
         encodingState.buffer().putByte(encodingState.offset(), (byte)BREAK);
         encodingState.incrementOffset(1);
+        encodeBoolean(encodingState, encodingState.isReachedLimit());
     }
 
     /**
@@ -478,6 +479,6 @@ public final class CborEncode
      */
     public static int footerLength()
     {
-        return 1;
+        return 2;
     }
 }

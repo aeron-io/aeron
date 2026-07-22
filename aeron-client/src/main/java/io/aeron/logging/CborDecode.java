@@ -116,6 +116,23 @@ public class CborDecode implements MessageHandler
         return parseNumber(state, majorType, additionalContent);
     }
 
+    private boolean parseBoolean(final DecodingState state)
+    {
+        state.ensureRemaining(1);
+        final int typeByte = (0xFF) & state.buffer().getByte(state.offset());
+        state.incrementOffset(1);
+        final int majorType = majorType(typeByte);
+        final int additionalContent = additionalContent(typeByte);
+
+        if (SIMPLE_VALUE_MAJOR_TYPE != majorType ||
+            (ADDITIONAL_CONTENT_TRUE != additionalContent && ADDITIONAL_CONTENT_FALSE != additionalContent))
+        {
+            throw new InvalidMessage("Expected boolean");
+        }
+
+        return additionalContent == ADDITIONAL_CONTENT_TRUE;
+    }
+
     private void parseSimpleValue(final DecodingState state, final int additionalContent)
     {
         switch (additionalContent)
@@ -302,6 +319,7 @@ public class CborDecode implements MessageHandler
 
         if (BREAK == currentByte)
         {
+            state.incrementOffset(1);
             state.terminate();
         }
     }
@@ -321,11 +339,10 @@ public class CborDecode implements MessageHandler
                 parseEntry(state);
             }
 
-            // TODO: Implement the truncation check
             for (int i = 0, n = loggers.size(); i < n; i++)
             {
                 final LoggerEventCallback logger = loggers.get(i);
-                logger.onFooter(false);
+                logger.onFooter(parseBoolean(state));
             }
         }
     }

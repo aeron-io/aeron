@@ -18,7 +18,6 @@ package io.aeron.logging;
 
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -331,11 +330,10 @@ class CborDecodeTest
     }
 
     @Test
-    @Disabled
     void shouldTriggerTruncatedFooterFlagWhenMessageWasTruncatedDuringEncode()
     {
         final int offset = 0;
-        final int length = 40;
+        final int length = 100;
         final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
         final LoggerEventCallback loggerEventCallback = mock(LoggerEventCallback.class);
 
