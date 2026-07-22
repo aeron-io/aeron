@@ -295,9 +295,7 @@ class CborDecodeTest
     }
 
     @ParameterizedTest
-    // NOTE: These values are expected to change as the header expands,
-    // Some cutoffs actually produce valid messages or are currently silently ignored.
-    @ValueSource(ints = {2, 5, 18, 40, 74, 76})
+    @ValueSource(ints = {14, 35, 60, 78, 82, 87})
     void shouldReceiveInvalidMessageIfEndOfBufferIsReachedBeforeTermination(final int cutoffPoint)
     {
         final int offset = 0;
