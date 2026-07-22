@@ -74,7 +74,7 @@ class ClusterLog
             return;
         }
 
-        ClusterEventLogger.LOGGER.logElectionStateChange(
+        ClusterEventLogger.CBOR_LOGGER.logElectionStateChange(
             memberId,
             oldState,
             newState,

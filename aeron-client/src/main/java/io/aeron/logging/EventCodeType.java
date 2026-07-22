@@ -66,4 +66,25 @@ public enum EventCodeType
     {
         return typeCode;
     }
+
+    /**
+     * Get the EventTypeCode based on the matching typeCode value.
+     *
+     * @param typeCode used to resolve the EventTypeCode.
+     * @return the resolved EventTypeCode.
+     * @throws IllegalArgumentException if the typeCode does not match one of the enum values.
+     */
+    public static EventCodeType get(final int typeCode)
+    {
+        return switch (typeCode)
+        {
+            case 0 -> DRIVER;
+            case 1 -> ARCHIVE;
+            case 2 -> CLUSTER;
+            case 3 -> STANDBY;
+            case 4 -> SEQUENCER;
+            case 0xFFFF -> USER;
+            default -> throw new IllegalArgumentException("Invalid typeCode=" + typeCode);
+        };
+    }
 }
