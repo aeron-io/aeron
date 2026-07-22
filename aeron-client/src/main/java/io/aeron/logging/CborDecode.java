@@ -103,8 +103,8 @@ public class CborDecode implements MessageHandler
     {
         final int typeByte = (0xFF) & state.buffer().getByte(state.offset());
         state.incrementOffset(1);
-        final int majorType = (0xFF) & (0b111_00000 & typeByte);
-        final int additionalContent = (0b000_11111) & typeByte;
+        final int majorType = majorType(typeByte);
+        final int additionalContent = additionalContent(typeByte);
 
         if (NEGATIVE_INTEGER_MAJOR_TYPE != majorType && UNSIGNED_INTEGER_MAJOR_TYPE != majorType)
         {
@@ -147,8 +147,8 @@ public class CborDecode implements MessageHandler
 
         final DirectBuffer buffer = state.buffer();
         final int keyTypeByte = (0xFF) & state.buffer().getByte(state.offset());
-        final int keyMajorType = (0xFF) & (0b111_00000 & keyTypeByte);
-        final int keyAdditionalContent = (0b000_11111) & keyTypeByte;
+        final int keyMajorType = majorType(keyTypeByte);
+        final int keyAdditionalContent = additionalContent(keyTypeByte);
         state.incrementOffset(1);
         // key handling
         if (TEXT_STRING_MAJOR_TYPE == keyMajorType)
@@ -158,8 +158,8 @@ public class CborDecode implements MessageHandler
 
         // value handling
         final int valueTypeByte = (0xFF) & buffer.getByte(state.offset());
-        final int valueMajorType = 0b111_00000 & valueTypeByte;
-        final int valueAdditionalContent = 0b000_11111 & valueTypeByte;
+        final int valueMajorType = majorType(valueTypeByte);
+        final int valueAdditionalContent = additionalContent(valueTypeByte);
         state.incrementOffset(1);
         switch (valueMajorType)
         {
@@ -195,6 +195,16 @@ public class CborDecode implements MessageHandler
             default:
                 throw new InvalidMessage("Invalid value type");
         }
+    }
+
+    private static int additionalContent(final int keyTypeByte)
+    {
+        return (0b000_11111) & keyTypeByte;
+    }
+
+    private static int majorType(final int fullTypeByte)
+    {
+        return (0xFF) & (0b111_00000 & fullTypeByte);
     }
 
     private static long parseNumber(
