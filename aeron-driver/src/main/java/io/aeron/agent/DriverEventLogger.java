@@ -15,6 +15,7 @@
  */
 package io.aeron.agent;
 
+import io.aeron.logging.EventConfiguration;
 import org.agrona.DirectBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
@@ -24,12 +25,16 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 
-import static io.aeron.agent.CommonEventEncoder.encode;
-import static io.aeron.agent.CommonEventEncoder.*;
+import static io.aeron.logging.CommonEventEncoder.captureLength;
+import static io.aeron.logging.CommonEventEncoder.encode;
 import static io.aeron.agent.DriverEventCode.*;
 import static io.aeron.agent.DriverEventEncoder.encode;
 import static io.aeron.agent.DriverEventEncoder.*;
-import static io.aeron.agent.EventConfiguration.eventReader;
+import static io.aeron.logging.CommonEventEncoder.encodedLength;
+import static io.aeron.logging.CommonEventEncoder.inetAddressLength;
+import static io.aeron.logging.CommonEventEncoder.socketAddressLength;
+import static io.aeron.logging.CommonEventEncoder.trailingStringLength;
+import static io.aeron.logging.EventConfiguration.eventReader;
 import static org.agrona.BitUtil.*;
 
 /**

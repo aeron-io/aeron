@@ -206,7 +206,7 @@ public class CommonContext implements Cloneable
     /**
      * Default logging agent.
      */
-    public static final String EVENT_LOG_READER_CLASSNAME_DEFAULT = "io.aeron.agent.ModuleLoggerReaderAgent";
+    public static final String EVENT_LOG_READER_CLASSNAME_DEFAULT = "io.aeron.logging.agent.ModuleLoggerReaderAgent";
 
     /**
      * Configuration property for the archive event settings.

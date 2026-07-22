@@ -15,8 +15,8 @@
  */
 package io.aeron.test.agent;
 
-import io.aeron.agent.EventCodeType;
-import io.aeron.agent.EventConfiguration;
+import io.aeron.logging.EventCodeType;
+import io.aeron.logging.EventConfiguration;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.Agent;
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;

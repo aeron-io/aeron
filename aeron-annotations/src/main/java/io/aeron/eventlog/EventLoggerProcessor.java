@@ -48,7 +48,7 @@ public class EventLoggerProcessor extends AbstractProcessor
 {
     private static final String MANY_TO_ONE_RING_BUFFER_TYPE = "org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer";
     private static final String UNSAFE_BUFFER_TYPE = "org.agrona.concurrent.UnsafeBuffer";
-    private static final String COMMON_EVENT_ENCODER_TYPE = "io.aeron.agent.CommonEventEncoder";
+    private static final String COMMON_EVENT_ENCODER_TYPE = "io.aeron.logging.CommonEventEncoder";
 
     /**
      * Default constructor.

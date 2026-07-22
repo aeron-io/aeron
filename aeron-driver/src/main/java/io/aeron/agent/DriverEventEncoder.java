@@ -22,8 +22,13 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 
-import static io.aeron.agent.CommonEventEncoder.*;
 import static io.aeron.agent.DriverEventLogger.MAX_HOST_NAME_LENGTH;
+import static io.aeron.logging.CommonEventEncoder.encodeInetAddress;
+import static io.aeron.logging.CommonEventEncoder.encodeLogHeader;
+import static io.aeron.logging.CommonEventEncoder.encodeSocketAddress;
+import static io.aeron.logging.CommonEventEncoder.encodeTrailingStateChange;
+import static io.aeron.logging.CommonEventEncoder.encodeTrailingString;
+import static io.aeron.logging.CommonEventEncoder.stateTransitionStringLength;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static org.agrona.BitUtil.*;
 

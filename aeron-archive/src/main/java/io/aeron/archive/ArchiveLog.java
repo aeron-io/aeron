@@ -15,12 +15,12 @@
  */
 package io.aeron.archive;
 
-import io.aeron.agent.ArchiveEventCode;
-import io.aeron.agent.ArchiveEventLogger;
-import io.aeron.agent.ArchiveModuleLogger;
+import io.aeron.archive.logging.ArchiveEventCode;
+import io.aeron.archive.logging.ArchiveEventLogger;
+import io.aeron.archive.logging.ArchiveModuleLogger;
 import org.agrona.DirectBuffer;
 
-import static io.aeron.agent.ArchiveModuleLogger.isEnabled;
+import static io.aeron.archive.logging.ArchiveModuleLogger.isEnabled;
 
 /**
  * Facade used to log Archive events directly, without requiring the ByteBuddy Java agent to be attached.
