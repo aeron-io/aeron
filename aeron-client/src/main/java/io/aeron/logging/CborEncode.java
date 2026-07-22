@@ -300,10 +300,8 @@ public class CborEncode
             value.length(),
             remainingBytes - (1 + valueLengthFieldBytes));
         final boolean needsTruncation = finalValueLength < value.length();
-        if (needsTruncation && (
-                !allowTruncate || finalValueLength < TRUNC_END.length()
-            )
-        )
+
+        if (needsTruncation && (!allowTruncate || finalValueLength < TRUNC_END.length()))
         {
             encodingState.reachedLimit(true);
             return;
