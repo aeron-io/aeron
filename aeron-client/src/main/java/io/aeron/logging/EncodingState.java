@@ -49,7 +49,7 @@ public class EncodingState
         this.offset = offset;
         this.length = length;
         this.limit = offset + length;
-        this.reservedFooterLength = 1;
+        this.reservedFooterLength = 2;
         reachedLimit = false;
     }
 

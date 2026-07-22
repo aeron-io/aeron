@@ -23,7 +23,7 @@ public class CborUtils
     static final int ADDITIONAL_CONTENT_TRUE = 21;
     static final byte TRUE_VALUE = typeByte(SIMPLE_VALUE_MAJOR_TYPE, ADDITIONAL_CONTENT_TRUE);
     static final int BREAK = 0xFF;
-    static final int ENTRIES_LENGTH = 3;
+    static final int ENTRIES_LENGTH = 4;
 
     static byte typeByte(final int majorType, final int modifier)
     {
