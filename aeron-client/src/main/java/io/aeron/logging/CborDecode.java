@@ -22,22 +22,22 @@ import org.agrona.concurrent.MessageHandler;
 
 import java.util.List;
 
-import static io.aeron.logging.CborEncode.ADDITIONAL_CONTENT_1_BYTE;
-import static io.aeron.logging.CborEncode.ADDITIONAL_CONTENT_2_BYTE;
-import static io.aeron.logging.CborEncode.ADDITIONAL_CONTENT_4_BYTE;
-import static io.aeron.logging.CborEncode.ADDITIONAL_CONTENT_8_BYTE;
-import static io.aeron.logging.CborEncode.ADDITIONAL_CONTENT_FALSE;
-import static io.aeron.logging.CborEncode.ADDITIONAL_CONTENT_INDEFINITE;
-import static io.aeron.logging.CborEncode.ADDITIONAL_CONTENT_NULL;
-import static io.aeron.logging.CborEncode.ADDITIONAL_CONTENT_TRUE;
-import static io.aeron.logging.CborEncode.ARRAY_MAJOR_TYPE;
-import static io.aeron.logging.CborEncode.BREAK;
-import static io.aeron.logging.CborEncode.ENTRIES_LENGTH;
-import static io.aeron.logging.CborEncode.MAP_MAJOR_TYPE;
-import static io.aeron.logging.CborEncode.NEGATIVE_INTEGER_MAJOR_TYPE;
-import static io.aeron.logging.CborEncode.SIMPLE_VALUE_MAJOR_TYPE;
-import static io.aeron.logging.CborEncode.TEXT_STRING_MAJOR_TYPE;
-import static io.aeron.logging.CborEncode.UNSIGNED_INTEGER_MAJOR_TYPE;
+import static io.aeron.logging.CborUtils.ADDITIONAL_CONTENT_1_BYTE;
+import static io.aeron.logging.CborUtils.ADDITIONAL_CONTENT_2_BYTE;
+import static io.aeron.logging.CborUtils.ADDITIONAL_CONTENT_4_BYTE;
+import static io.aeron.logging.CborUtils.ADDITIONAL_CONTENT_8_BYTE;
+import static io.aeron.logging.CborUtils.ADDITIONAL_CONTENT_FALSE;
+import static io.aeron.logging.CborUtils.ADDITIONAL_CONTENT_INDEFINITE;
+import static io.aeron.logging.CborUtils.ADDITIONAL_CONTENT_NULL;
+import static io.aeron.logging.CborUtils.ADDITIONAL_CONTENT_TRUE;
+import static io.aeron.logging.CborUtils.ARRAY_MAJOR_TYPE;
+import static io.aeron.logging.CborUtils.BREAK;
+import static io.aeron.logging.CborUtils.ENTRIES_LENGTH;
+import static io.aeron.logging.CborUtils.MAP_MAJOR_TYPE;
+import static io.aeron.logging.CborUtils.NEGATIVE_INTEGER_MAJOR_TYPE;
+import static io.aeron.logging.CborUtils.SIMPLE_VALUE_MAJOR_TYPE;
+import static io.aeron.logging.CborUtils.TEXT_STRING_MAJOR_TYPE;
+import static io.aeron.logging.CborUtils.UNSIGNED_INTEGER_MAJOR_TYPE;
 import static java.nio.ByteOrder.BIG_ENDIAN;
 
 /**
