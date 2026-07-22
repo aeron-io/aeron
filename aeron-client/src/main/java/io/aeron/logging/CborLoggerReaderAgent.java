@@ -35,6 +35,7 @@ public final class CborLoggerReaderAgent implements Agent
     {
 
     }
+
     /**
      * {@inheritDoc}
      */

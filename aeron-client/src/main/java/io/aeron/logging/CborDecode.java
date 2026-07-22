@@ -35,7 +35,9 @@ import static io.aeron.logging.CborUtils.BREAK;
 import static io.aeron.logging.CborUtils.ENTRIES_LENGTH;
 import static io.aeron.logging.CborUtils.MAP_MAJOR_TYPE;
 import static io.aeron.logging.CborUtils.NEGATIVE_INTEGER_MAJOR_TYPE;
+import static io.aeron.logging.CborUtils.NO_TAG;
 import static io.aeron.logging.CborUtils.SIMPLE_VALUE_MAJOR_TYPE;
+import static io.aeron.logging.CborUtils.TAG_MAJOR_TYPE;
 import static io.aeron.logging.CborUtils.TEXT_STRING_MAJOR_TYPE;
 import static io.aeron.logging.CborUtils.UNSIGNED_INTEGER_MAJOR_TYPE;
 import static java.nio.ByteOrder.BIG_ENDIAN;
@@ -142,14 +144,14 @@ public class CborDecode implements MessageHandler
                 for (int i = 0, n = loggers.size(); i < n; i++)
                 {
                     final LoggerEventCallback logger = loggers.get(i);
-                    logger.onValue(keyAsciiView, additionalContent == ADDITIONAL_CONTENT_TRUE);
+                    logger.onValue(keyAsciiView, additionalContent == ADDITIONAL_CONTENT_TRUE, NO_TAG);
                 }
                 break;
             case ADDITIONAL_CONTENT_NULL:
                 for (int i = 0, n = loggers.size(); i < n; i++)
                 {
                     final LoggerEventCallback logger = loggers.get(i);
-                    logger.onValue(keyAsciiView, null);
+                    logger.onValue(keyAsciiView, null, NO_TAG);
                 }
                 break;
             default:
@@ -165,6 +167,17 @@ public class CborDecode implements MessageHandler
         }
 
         final DirectBuffer buffer = state.buffer();
+        // look ahead for tag
+        state.ensureRemaining(1);
+        final int lookAheadByte = (0xFF) & buffer.getByte(state.offset());
+        final int lookAheadMajorType = majorType(lookAheadByte);
+        long tags = NO_TAG;
+        if (TAG_MAJOR_TYPE == lookAheadMajorType)
+        {
+            state.incrementOffset(1);
+            tags = parseNumber(state, lookAheadMajorType, additionalContent(lookAheadByte));
+        }
+
         state.ensureRemaining(1);
         final int keyTypeByte = (0xFF) & state.buffer().getByte(state.offset());
         final int keyMajorType = majorType(keyTypeByte);
@@ -175,6 +188,7 @@ public class CborDecode implements MessageHandler
         {
             parseString(state, keyAsciiView, keyAdditionalContent);
         }
+
 
         // value handling
         state.ensureRemaining(1);
@@ -191,7 +205,7 @@ public class CborDecode implements MessageHandler
                 for (int i = 0, n = loggers.size(); i < n; i++)
                 {
                     final LoggerEventCallback loggerEventCallback = loggers.get(i);
-                    loggerEventCallback.onValue(keyAsciiView, finalValue);
+                    loggerEventCallback.onValue(keyAsciiView, finalValue, tags);
                 }
 
                 break;
@@ -203,7 +217,7 @@ public class CborDecode implements MessageHandler
                 for (int i = 0, n = loggers.size(); i < n; i++)
                 {
                     final LoggerEventCallback logger = loggers.get(i);
-                    logger.onValue(keyAsciiView, valueAsciiView);
+                    logger.onValue(keyAsciiView, valueAsciiView, tags);
                 }
 
                 break;
