@@ -17,11 +17,14 @@ package io.aeron.agent;
 
 import io.aeron.command.*;
 import io.aeron.logbuffer.FrameDescriptor;
+import io.aeron.logging.CommonEventEncoder;
 import io.aeron.protocol.*;
 import org.agrona.MutableDirectBuffer;
 
-import static io.aeron.agent.CommonEventDissector.*;
 import static io.aeron.agent.DriverEventCode.*;
+import static io.aeron.logging.CommonEventDissector.dissectInetAddress;
+import static io.aeron.logging.CommonEventDissector.dissectLogHeader;
+import static io.aeron.logging.CommonEventDissector.dissectSocketAddress;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static org.agrona.BitUtil.*;
 

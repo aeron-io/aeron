@@ -15,6 +15,10 @@
  */
 package io.aeron.agent;
 
+import io.aeron.logging.DissectFunction;
+import io.aeron.logging.EventCode;
+import io.aeron.logging.EventCodeType;
+import io.aeron.logging.EventConfiguration;
 import org.agrona.MutableDirectBuffer;
 
 import java.util.Arrays;

@@ -17,8 +17,8 @@ package io.aeron.cluster;
 
 import io.aeron.CommonContext;
 import io.aeron.Counter;
-import io.aeron.agent.ClusterEventCode;
-import io.aeron.agent.EventConfiguration;
+import io.aeron.cluster.logging.ClusterEventCode;
+import io.aeron.logging.EventConfiguration;
 import io.aeron.archive.Archive;
 import io.aeron.archive.ArchiveThreadingMode;
 import io.aeron.archive.client.AeronArchive;
@@ -48,13 +48,13 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.function.Supplier;
 
-import static io.aeron.agent.ClusterEventCode.APPEND_SESSION_CLOSE;
-import static io.aeron.agent.ClusterEventCode.APPEND_SESSION_OPEN;
-import static io.aeron.agent.ClusterEventCode.CLUSTER_SESSION_STATE_CHANGE;
-import static io.aeron.agent.ClusterEventCode.ELECTION_STATE_CHANGE;
-import static io.aeron.agent.ClusterEventCode.NEW_ELECTION;
-import static io.aeron.agent.ClusterEventCode.ROLE_CHANGE;
-import static io.aeron.agent.ClusterEventCode.STATE_CHANGE;
+import static io.aeron.cluster.logging.ClusterEventCode.APPEND_SESSION_CLOSE;
+import static io.aeron.cluster.logging.ClusterEventCode.APPEND_SESSION_OPEN;
+import static io.aeron.cluster.logging.ClusterEventCode.CLUSTER_SESSION_STATE_CHANGE;
+import static io.aeron.cluster.logging.ClusterEventCode.ELECTION_STATE_CHANGE;
+import static io.aeron.cluster.logging.ClusterEventCode.NEW_ELECTION;
+import static io.aeron.cluster.logging.ClusterEventCode.ROLE_CHANGE;
+import static io.aeron.cluster.logging.ClusterEventCode.STATE_CHANGE;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.Mockito.mock;
 
