@@ -1,3 +1,5 @@
+import io.aeron.build.LoggingTest
+
 /*
  * Copyright 2014-2025 Real Logic Limited.
  *
@@ -222,7 +224,6 @@ subprojects {
     tasks.withType(Test).configureEach { test ->
         jvmArgs('--add-opens', 'java.base/jdk.internal.misc=ALL-UNNAMED')
         jvmArgs('--add-opens', 'java.base/java.util.zip=ALL-UNNAMED')
-        jvmArgs("-javaagent:${mockitoAgent.asPath}")
         if (buildJavaVersion >= 21) {
             jvmArgs('-XX:+EnableDynamicAgentLoading')
         }
@@ -244,7 +245,8 @@ subprojects {
                 "-XX:ErrorFile=${baseLogFileName}-crash.log")
 
         useJUnitPlatform {
-            if (test.name != 'slowTest' && test.name != 'bindingsTest' && test.name != 'topologyTest')
+            if (test.name != 'slowTest' && test.name != 'bindingsTest'
+                    && test.name != 'topologyTest' && !test.name.startsWith('loggingTest'))
             {
                 excludeTags 'any()'
             }
@@ -302,13 +304,14 @@ subprojects {
             includeTags 'slow'
         }
 
-        jvmArgs("-javaagent:${aeronLoggingAgent}")
-        systemProperty 'aeron.event.cluster.log', 'all'
-        systemProperty 'aeron.event.cluster.log.disable', 'CANVASS_POSITION,APPEND_POSITION,COMMIT_POSITION'
-        systemProperty 'aeron.event.archive.log', 'all'
-        systemProperty 'aeron.event.log', 'admin'
-        systemProperty 'aeron.debug.timeout', '3600s'
-        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.agent.CollectingEventLogReaderAgent'
+        systemProperties(
+            'aeron.event.cluster.log': 'all',
+            'aeron.event.cluster.log.disable': 'CANVASS_POSITION,APPEND_POSITION,COMMIT_POSITION',
+            'aeron.event.archive.log': 'all',
+            'aeron.event.log': 'admin',
+            'aeron.debug.timeout': '3600s',
+            'aeron.event.log.reader.classname': 'io.aeron.agent.CollectingEventLogReaderAgent',
+            'aeron.fallback.logger': 'no_op')
     }
 
     tasks.register('bindingsTest', Test) {
@@ -320,7 +323,6 @@ subprojects {
             includeTags 'bindings'
         }
 
-        jvmArgs("-javaagent:${aeronLoggingAgent}")
         systemProperty 'aeron.event.cluster.log', 'all'
         systemProperty 'aeron.event.cluster.log.disable', 'CANVASS_POSITION,APPEND_POSITION,COMMIT_POSITION'
         systemProperty 'aeron.event.archive.log', 'all'
@@ -336,7 +338,6 @@ subprojects {
             includeTags 'topology'
         }
 
-        jvmArgs("-javaagent:${aeronLoggingAgent}")
         systemProperty 'aeron.event.cluster.log', 'all'
         systemProperty 'aeron.event.cluster.log.disable', 'CANVASS_POSITION,APPEND_POSITION,COMMIT_POSITION'
         systemProperty 'aeron.event.archive.log', 'all'
@@ -569,6 +570,14 @@ project(':aeron-driver') {
         withJavadocJar()
     }
 
+    tasks.withType(Test).configureEach {
+        systemProperty 'aeron.event.log', 'all'
+        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
+    }
+
+    LoggingTest.configureLoggingTests(project, 'DriverEventEnablementTest', 'aeron.event.log', 'aeron.event.log.disable',
+        'TEXT_DATA,CMD_IN_ADD_PUBLICATION')
+
     javadoc {
         source += project(':aeron-annotations').sourceSets.main.allJava
         source += project(':aeron-client').sourceSets.main.allJava
@@ -624,6 +633,10 @@ project(':aeron-driver') {
         classpath project(':aeron-annotations').sourceSets.main.runtimeClasspath
         args = [configInfoFile, generatedDocFile]
     }
+
+    tasks.withType(Test).configureEach {
+        systemProperty 'aeron.event.log', 'all'
+    }
 }
 
 project(':aeron-archive') {
@@ -657,6 +670,14 @@ project(':aeron-archive') {
             compileClasspath += configurations.codecGeneration
         }
     }
+
+    tasks.withType(Test).configureEach {
+        systemProperty 'aeron.event.archive.log', 'all'
+        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
+    }
+
+    LoggingTest.configureLoggingTests(project, 'ArchiveEventEnablementTest', 'aeron.event.archive.log',
+        'aeron.event.archive.log.disable', 'CATALOG_RESIZE,CMD_IN_CONNECT')
 
     def codecsFile = 'src/main/resources/archive/aeron-archive-codecs.xml'
     def markCodecsFile = 'src/main/resources/archive/aeron-archive-mark-codecs.xml'
@@ -870,6 +891,14 @@ project(':aeron-cluster') {
         }
     }
 
+    tasks.withType(Test).configureEach {
+        systemProperty 'aeron.event.cluster.log', 'all'
+        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
+    }
+
+    LoggingTest.configureLoggingTests(project, 'ClusterEventEnablementTest', 'aeron.event.cluster.log',
+        'aeron.event.cluster.log.disable', 'CANVASS_POSITION,COMMIT_POSITION')
+
     def codecsFile = 'src/main/resources/cluster/aeron-cluster-codecs.xml'
     def markCodecsFile = 'src/main/resources/cluster/aeron-cluster-mark-codecs.xml'
     def nodeStateCodecsFile = 'src/main/resources/cluster/aeron-cluster-node-state-codecs.xml'
@@ -1022,20 +1051,9 @@ project(':aeron-agent') {
     apply plugin: 'signing'
     apply plugin: 'com.gradleup.shadow'
 
-    def aeronClientProject = project(':aeron-client')
-    def aeronDriverProject = project(':aeron-driver')
-    def aeronArchiveProject = project(':aeron-archive')
-    def aeronClusterProject = project(':aeron-cluster')
-
-    dependencies {
-        implementation project(':aeron-cluster')
-        implementation libs.byteBuddy
-        implementation libs.byteBuddy.agent
-        implementation project(':aeron-annotations')
-        annotationProcessor project(':aeron-annotations')
-        compileOnly libs.findbugs.annotations
-        testCompileOnly libs.findbugs.annotations
-        testImplementation project(':aeron-test-support')
+    tasks.withType(Test).configureEach {
+        systemProperty 'aeron.event.archive.log', 'all'
+        systemProperty 'aeron.event.log', 'admin'
     }
 
     shadowJar {
@@ -1058,35 +1076,17 @@ project(':aeron-agent') {
             "Can-Redefine-Classes": "true",
             "Can-Retransform-Classes": "true"
         )
-
-        relocate 'net.bytebuddy', 'io.aeron.shadow.net.bytebuddy'
     }
 
     jar.enabled = false
 
     tasks.register('sourcesJar', Jar) {
-        dependsOn ':aeron-archive:generateCodecs', ':aeron-cluster:generateCodecs'
         archiveClassifier.set('sources')
-        from files(
-            aeronClientProject.sourceSets.main.allSource,
-            aeronDriverProject.sourceSets.main.allSource,
-            aeronArchiveProject.sourceSets.main.allSource,
-            aeronArchiveProject.sourceSets.generated.allSource,
-            aeronClusterProject.sourceSets.main.allSource,
-            aeronClusterProject.sourceSets.generated.allSource)
+        from sourceSets.main.allSource
     }
 
     javadoc {
-        source += project(':aeron-annotations').sourceSets.main.allJava
-        source += aeronClientProject.sourceSets.main.allJava
-        source += aeronDriverProject.sourceSets.main.allJava
-        source += aeronArchiveProject.sourceSets.main.allJava
-        source += aeronArchiveProject.sourceSets.generated.allJava
-        source += aeronClusterProject.sourceSets.main.allJava
-        source += aeronClusterProject.sourceSets.generated.allJava
     }
-
-    javadoc.dependsOn ':aeron-archive:generateCodecs', ':aeron-cluster:generateCodecs'
 
     tasks.register('javadocJar', Jar) {
         dependsOn 'javadoc'
@@ -1178,7 +1178,6 @@ project(':aeron-samples') {
             project.file("../aeron-agent/build/libs/aeron-agent-${aeronVersion}.jar").absolutePath
         }
 
-        jvmArgs '-javaagent:' + agentFilename()
         systemProperty 'aeron.event.cluster.log', 'all'
         systemProperty 'aeron.event.cluster.log.disable', 'CANVASS_POSITION,APPEND_POSITION,COMMIT_POSITION'
         systemProperty 'aeron.event.archive.log', 'all'
@@ -1225,7 +1224,6 @@ project(':aeron-system-tests') {
             project.file("../aeron-agent/build/libs/aeron-agent-${aeronVersion}.jar").absolutePath
         }
 
-        jvmArgs '-javaagent:' + agentFilename()
         systemProperty 'aeron.event.cluster.log', 'all'
         systemProperty 'aeron.event.cluster.log.disable', 'CANVASS_POSITION,APPEND_POSITION,COMMIT_POSITION'
         systemProperty 'aeron.event.archive.log', 'all'
@@ -1344,13 +1342,13 @@ project(':aeron-all') {
             'Implementation-Version': aeronVersion
         )
 
-        relocate 'net.bytebuddy', 'io.aeron.shadow.net.bytebuddy'
         relocate 'org.HdrHistogram', 'io.aeron.shadow.org.HdrHistogram'
     }
 
     jar.finalizedBy shadowJar
 
     tasks.register('sourcesJar', Jar) {
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE // exclude duplicate files by default
         dependsOn ':aeron-archive:generateCodecs', ':aeron-cluster:generateCodecs'
         archiveClassifier.set('sources')
         from files(

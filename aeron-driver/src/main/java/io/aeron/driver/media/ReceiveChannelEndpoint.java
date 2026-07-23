@@ -19,6 +19,7 @@ import io.aeron.CommonContext;
 import io.aeron.ErrorCode;
 import io.aeron.driver.DataPacketDispatcher;
 import io.aeron.driver.DriverConductorProxy;
+import io.aeron.driver.DriverLog;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.status.SystemCounterDescriptor;
 import io.aeron.exceptions.AeronException;
@@ -878,6 +879,8 @@ public class ReceiveChannelEndpoint extends ReceiveChannelEndpointRhsPadding
         final int termOffset,
         final int length)
     {
+        DriverLog.logNaksSent(controlAddresses, sessionId, streamId, termId, termOffset, length, originalUriString());
+
         nakBuffer.clear();
         nakFlyweight
             .streamId(streamId)

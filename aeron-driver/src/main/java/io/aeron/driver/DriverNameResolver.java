@@ -638,16 +638,14 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
             this.timeOfLastActivityMs = nowMs;
         }
 
-        @SuppressWarnings("unused")
         static void neighborAdded(final long nowMs, final InetSocketAddress address)
         {
-//            System.out.println(nowMs + " neighbor added: " + address);
+            DriverLog.logNeighborAdded(address);
         }
 
-        @SuppressWarnings("unused")
         static void neighborRemoved(final long nowMs, final InetSocketAddress address)
         {
-//            System.out.println(nowMs + " neighbor removed: " + address);
+            DriverLog.logNeighborRemoved(address);
         }
     }
 

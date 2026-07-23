@@ -79,6 +79,8 @@ class ControlSessionAdapter implements FragmentHandler
     @SuppressWarnings("MethodLength")
     public void onFragment(final DirectBuffer buffer, final int offset, final int length, final Header header)
     {
+        ArchiveLog.logControlRequest(buffer, offset, length);
+
         final MessageHeaderDecoder headerDecoder = decoders.header;
         headerDecoder.wrap(buffer, offset);
 

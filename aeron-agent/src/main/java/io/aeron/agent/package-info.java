@@ -14,14 +14,7 @@
  * limitations under the License.
  */
 /**
- * A Java agent which when attached to a JVM will weave byte code to intercept and log events as defined by
- * implementations of {@link io.aeron.agent.EventCode} which include {@link io.aeron.agent.DriverEventCode},
- * {@link io.aeron.agent.ArchiveEventCode}, and {@link io.aeron.agent.ClusterEventCode}.
- * <p>
- * Events are recorded to an in-memory
- * {@link org.agrona.concurrent.ringbuffer.RingBuffer} which is consumed
- * and appended asynchronously to a log as defined by the class
- * {@link io.aeron.agent.EventLogAgent#READER_CLASSNAME_PROP_NAME} which defaults to
- * {@link io.aeron.agent.EventLogReaderAgent}.
+ * A Java agent which is now deprecated and no longer does any real work as the logging configuration is managed
+ * within the code directly.
  */
 package io.aeron.agent;

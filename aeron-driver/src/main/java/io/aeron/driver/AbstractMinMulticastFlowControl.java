@@ -430,17 +430,13 @@ public abstract class AbstractMinMulticastFlowControl
     private void receiverAdded(
         final long receiverId, final int sessionId, final int streamId, final String channel, final int receiverCount)
     {
-//        System.out.println("Receiver added: receiverCount=" + receiverCount +
-//            ", receiverId=" + receiverId + ", sessionId=" + sessionId + ", streamId=" + streamId +
-//            ", channel=" + channel);
+        DriverLog.logFlowControlReceiverAdded(receiverId, sessionId, streamId, channel, receiverCount);
     }
 
     private void receiverRemoved(
         final long receiverId, final int sessionId, final int streamId, final String channel, final int receiverCount)
     {
-//        System.out.println("Receiver removed: receiverCount=" + receiverCount +
-//            ", receiverId=" + receiverId + ", sessionId=" + sessionId + ", streamId=" + streamId +
-//            ", channel=" + channel);
+        DriverLog.logFlowControlReceiverRemoved(receiverId, sessionId, streamId, channel, receiverCount);
     }
 
     private long lastSetupSenderLimit(final long nowNs)

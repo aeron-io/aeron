@@ -1037,7 +1037,7 @@ public final class ClusterBackupAgent implements Agent
     private void logStateChange(
         final ClusterBackup.State oldState, final ClusterBackup.State newState, final long nowMs)
     {
-        //System.out.println("ClusterBackup: " + oldState + " -> " + newState + " nowMs=" + nowMs);
+        ClusterLog.logClusterBackupStateChange(oldState, newState, nowMs);
     }
 
     private int pollBackupArchiveEvents()

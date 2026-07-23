@@ -54,7 +54,6 @@ class UntetheredSubscription
         final int sessionId,
         final long nowNs)
     {
-//        System.out.println(nowNs + ": subscriptionId=" + subscriptionId + ", streamId=" + streamId +
-//            ", sessionId=" + sessionId + ", " + oldState + " -> " + newState);
+        DriverLog.logUntetheredSubscriptionStateChange(oldState, newState, subscriptionId, streamId, sessionId);
     }
 }

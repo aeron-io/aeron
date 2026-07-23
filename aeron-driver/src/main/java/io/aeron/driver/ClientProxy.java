@@ -215,6 +215,7 @@ final class ClientProxy
 
     private void transmit(final int msgTypeId, final DirectBuffer buffer, final int index, final int length)
     {
+        DriverLog.logCmd(msgTypeId, buffer, index, length);
         transmitter.transmit(msgTypeId, buffer, index, length);
     }
 

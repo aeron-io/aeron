@@ -123,6 +123,7 @@ final class TimeTrackingNameResolver implements NameResolverAgent
 
     static void logHostName(final long durationNs, final String hostName)
     {
+        DriverLog.logHostName(durationNs, hostName);
     }
 
     private static void logResolve(
@@ -132,6 +133,7 @@ final class TimeTrackingNameResolver implements NameResolverAgent
         final boolean isReResolution,
         final InetAddress resolvedAddress)
     {
+        DriverLog.logResolve(resolverName, durationNs, name, isReResolution, resolvedAddress);
     }
 
     private static void logLookup(
@@ -141,5 +143,6 @@ final class TimeTrackingNameResolver implements NameResolverAgent
         final boolean isReLookup,
         final String resolvedName)
     {
+        DriverLog.logLookup(resolverName, durationNs, name, isReLookup, resolvedName);
     }
 }

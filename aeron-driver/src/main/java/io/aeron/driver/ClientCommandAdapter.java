@@ -108,6 +108,8 @@ final class ClientCommandAdapter implements ControlledMessageHandler
     public ControlledMessageHandler.Action onMessage(
         final int msgTypeId, final MutableDirectBuffer buffer, final int index, final int length)
     {
+        DriverLog.logCmd(msgTypeId, buffer, index, length);
+
         long correlationId = 0;
 
         if (conductor.notAcceptingClientCommands())

@@ -194,6 +194,31 @@ public class CommonContext implements Cloneable
     public static final String FALLBACK_LOGGER_PROP_NAME = "aeron.fallback.logger";
 
     /**
+     * Configuration property for the driver event settings.
+     */
+    public static final String EVENT_LOG = "aeron.event.log";
+
+    /**
+     * Configuration property for the agnet class used for logging.
+     */
+    public static final String EVENT_LOG_READER_CLASSNAME_PROP_NAME = "aeron.event.log.reader.classname";
+
+    /**
+     * Default logging agent.
+     */
+    public static final String EVENT_LOG_READER_CLASSNAME_DEFAULT = "io.aeron.agent.ModuleLoggerReaderAgent";
+
+    /**
+     * Configuration property for the archive event settings.
+     */
+    public static final String ARCHIVE_EVENT_LOG = "aeron.event.archive.log";
+
+    /**
+     * Configuration property for the cluster event settings.
+     */
+    public static final String CLUSTER_EVENT_LOG = "aeron.event.cluster.log";
+
+    /**
      * Media type used for IPC shared memory from {@link Publication} to {@link Subscription} channels.
      */
     public static final String IPC_MEDIA = "ipc";

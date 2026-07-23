@@ -23,7 +23,6 @@ mkdir -p logs
 function startNode() {
     ${JAVA_HOME}/bin/java \
         -cp ../../../aeron-all/build/libs/aeron-all-${VERSION}.jar \
-        -javaagent:../../../aeron-agent/build/libs/aeron-agent-${VERSION}.jar \
         -XX:+UnlockExperimentalVMOptions \
         -XX:+TrustFinalNonStaticFields \
         -XX:+UnlockDiagnosticVMOptions \

@@ -1077,7 +1077,7 @@ final class ControlSession implements Session
     private void logStateChange(
         final State oldState, final State newState, final long controlSessionId, final String reason)
     {
-//        System.out.println(controlSessionId + ": " + oldState + " -> " + newState + ", reason=\"" + reason + "\"");
+        ArchiveLog.logControlSessionStateChange(oldState, newState, controlSessionId, reason);
     }
 
     String abortReason()
