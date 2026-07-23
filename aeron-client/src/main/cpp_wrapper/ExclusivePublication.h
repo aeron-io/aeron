@@ -444,7 +444,10 @@ public:
         BufferIterator lastBuffer,
         const on_reserved_value_supplier_t &reservedValueSupplier = DEFAULT_RESERVED_VALUE_SUPPLIER)
     {
-        std::vector<aeron_iovec_t> iov;
+        static constexpr std::size_t IOVEC_STACK_CAPACITY = 16;
+        std::array<aeron_iovec_t, IOVEC_STACK_CAPACITY> stackIov;
+        std::vector<aeron_iovec_t> overflowIov;
+        std::size_t iovCount = 0;
         std::size_t length = 0;
         for (BufferIterator it = startBuffer; it != lastBuffer; ++it)
         {
@@ -459,11 +462,27 @@ public:
             aeron_iovec_t buf;
             buf.iov_base = it->buffer();
             buf.iov_len = it->capacity();
-            iov.push_back(buf);
+
+            if (iovCount < IOVEC_STACK_CAPACITY)
+            {
+                stackIov[iovCount] = buf;
+            }
+            else
+            {
+                if (overflowIov.empty())
+                {
+                    overflowIov.reserve(IOVEC_STACK_CAPACITY * 2);
+                    overflowIov.insert(overflowIov.end(), stackIov.begin(), stackIov.end());
+                }
+                overflowIov.push_back(buf);
+            }
+            iovCount++;
         }
 
+        aeron_iovec_t *iov = 0 == iovCount ?
+            nullptr : (iovCount <= IOVEC_STACK_CAPACITY ? stackIov.data() : overflowIov.data());
         const std::int64_t position = aeron_exclusive_publication_offerv(
-            m_publication, iov.data(), iov.size(), reservedValueSupplierCallback, (void *)&reservedValueSupplier);
+            m_publication, iov, iovCount, reservedValueSupplierCallback, (void *)&reservedValueSupplier);
 
         if (AERON_PUBLICATION_ERROR == position)
         {
