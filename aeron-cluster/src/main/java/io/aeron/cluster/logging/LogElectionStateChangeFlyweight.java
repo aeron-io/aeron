@@ -154,7 +154,11 @@ class LogElectionStateChangeFlyweight implements LoggerEventCallback
     /**
      * {@inheritDoc}
      */
-    public void onHeader(final int eventType, final int eventCode, final long timestamp)
+    public void onHeader(
+        final int eventType,
+        final int eventCode,
+        final CharSequence eventCodeName,
+        final long timestamp)
     {
 
     }

@@ -71,8 +71,8 @@ class CborClusterEventCodecTest
         verify(mockLoggingCallback).onHeader(
             eq(EventCodeType.CLUSTER.getTypeCode()),
             eq(ClusterEventCode.ELECTION_STATE_CHANGE.id()),
-            anyLong()
-        );
+            eq(ClusterEventCode.ELECTION_STATE_CHANGE.name()),
+            anyLong());
         verify(mockLoggingCallback).onValue("memberId", NO_TAG, 12L);
         verify(mockLoggingCallback).onValue("oldState", ENUM_TAG, "CANVASS");
         verify(mockLoggingCallback).onValue("newState", ENUM_TAG, "CLOSED");
