@@ -34,7 +34,11 @@ class PrintLoggerEventCallback implements LoggerEventCallback
         this.out = out;
     }
 
-    public void onHeader(final int eventType, final int eventCode, final long timestamp)
+    public void onHeader(
+        final int eventType,
+        final int eventCode,
+        final CharSequence eventCodeName,
+        final long timestamp)
     {
         final EventCodeType eventCodeType = EventCodeType.get(eventType);
 
@@ -42,7 +46,7 @@ class PrintLoggerEventCallback implements LoggerEventCallback
 
         LogUtil.appendTimestamp(sb, timestamp);
         sb.append(eventCodeType.name()).append(": ");
-        sb.append(eventCode);
+        sb.append(eventCodeName);
     }
 
     public void onValue(final CharSequence name, final long tags, final CharSequence value)

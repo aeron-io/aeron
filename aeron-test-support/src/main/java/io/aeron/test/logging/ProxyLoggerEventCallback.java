@@ -26,9 +26,13 @@ public class ProxyLoggerEventCallback implements LoggerEventCallback
         this.delegate = delegate;
     }
 
-    public void onHeader(final int eventType, final int eventCode, final long timestamp)
+    public void onHeader(
+        final int eventType,
+        final int eventCode,
+        final CharSequence eventCodeName,
+        final long timestamp)
     {
-        this.delegate.onHeader(eventType, eventCode, timestamp);
+        this.delegate.onHeader(eventType, eventCode, eventCodeName.toString(), timestamp);
     }
 
     public void onValue(final CharSequence name, final long tags, final CharSequence value)

@@ -21,4 +21,9 @@ record TestEventCode(int eventCode, int id) implements EventCode
     {
         return eventCode << 16 | id & 0xFFFF;
     }
+
+    public String name()
+    {
+        return "TestEventCode";
+    }
 }

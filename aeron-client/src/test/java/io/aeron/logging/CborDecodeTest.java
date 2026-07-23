@@ -72,6 +72,7 @@ class CborDecodeTest
         verify(loggerEventCallback).onHeader(
             TEST_EVENT_CODE.eventCode(),
             TEST_EVENT_CODE.id(),
+            TEST_EVENT_CODE.name(),
             timestamp);
 
         verify(loggerEventCallback).onValue("memberId", NO_TAG, memberId);
@@ -103,6 +104,7 @@ class CborDecodeTest
         verify(loggerEventCallback).onHeader(
             TEST_EVENT_CODE.eventCode(),
             TEST_EVENT_CODE.id(),
+            TEST_EVENT_CODE.name(),
             timestamp);
 
         verify(loggerEventCallback).onValue("booleanValue", NO_TAG, booleanValue);
@@ -144,6 +146,7 @@ class CborDecodeTest
         verify(loggerEventCallback).onHeader(
             TEST_EVENT_CODE.eventCode(),
             TEST_EVENT_CODE.id(),
+            TEST_EVENT_CODE.name(),
             timestamp);
 
         verify(loggerEventCallback).onValue("reason", NO_TAG, reason);
@@ -176,6 +179,7 @@ class CborDecodeTest
         verify(loggerEventCallback).onHeader(
             TEST_EVENT_CODE.eventCode(),
             TEST_EVENT_CODE.id(),
+            TEST_EVENT_CODE.name(),
             timestamp);
 
         verify(loggerEventCallback).onValue("key1", NO_TAG, 1_000_000_000L);
@@ -209,6 +213,7 @@ class CborDecodeTest
         verify(loggerEventCallback).onHeader(
             TEST_EVENT_CODE.eventCode(),
             TEST_EVENT_CODE.id(),
+            TEST_EVENT_CODE.name(),
             timestamp);
 
         verify(loggerEventCallback).onValue("key1", ENUM_TAG, 1_000_000_000L);
@@ -239,31 +244,19 @@ class CborDecodeTest
         final long timestamp = 12643263L;
         CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, timestamp);
         CborEncode.encode(encodingState, "veryLongMemberIdentifierKey", NO_TAG, Long.MAX_VALUE);
-
         CborEncode.encode(encodingState, "candidateTermIdentifierValue", NO_TAG, candidateTermIdentifierValue, true);
         CborEncode.encode(encodingState, "leadershipTermTimestampNanos", NO_TAG, leadershipTermTimestampNanos);
-
         CborEncode.encode(encodingState, "logPositionSnapshotState", NO_TAG, TimeUnit.DAYS.name(), true);
         CborEncode.encode(encodingState, "appendPositionCatchupTarget", NO_TAG, appendPositionCatchupTarget);
-
         CborEncode.encode(encodingState, "negativeCatchupOffsetValue", NO_TAG, negativeCatchupOffsetValue);
-
         CborEncode.encode(encodingState, "smallPositiveBoundary", NO_TAG, 0x7FL);
-
         CborEncode.encode(encodingState, "oneByteBoundary", NO_TAG, 0x100L);
-
         CborEncode.encode(encodingState, "twoBytePositiveBoundary", NO_TAG, 0x7FFFL);
-
         CborEncode.encode(encodingState, "twoByteBoundary", NO_TAG, 0x10000L);
-
         CborEncode.encode(encodingState, "fourBytePositiveBoundary", NO_TAG, 0x7FFFFFFFL);
-
         CborEncode.encode(encodingState, "fourByteBoundary", NO_TAG, 0x80000000L);
-
         CborEncode.encode(encodingState, "smallNegativeBoundary", NO_TAG, -2L);
-
         CborEncode.encode(encodingState, "twoByteNegativeBoundary", NO_TAG, -0xFFFFL);
-
         CborEncode.encode(encodingState, "shortStringBoundary", NO_TAG, shortStringBoundary, true);
         CborEncode.encode(encodingState, "oneByteLengthBoundary", NO_TAG, oneByteLengthBoundary, true);
         CborEncode.encode(encodingState, "twoByteLengthBoundary", NO_TAG, twoByteLengthBoundary, true);
@@ -280,6 +273,7 @@ class CborDecodeTest
         verify(loggerEventCallback).onHeader(
             TEST_EVENT_CODE.eventCode(),
             TEST_EVENT_CODE.id(),
+            TEST_EVENT_CODE.name(),
             timestamp);
 
         verify(loggerEventCallback).onValue("veryLongMemberIdentifierKey", NO_TAG, Long.MAX_VALUE);

@@ -41,7 +41,11 @@ public class CborClusterEventDecode implements LoggerEventCallback
     /**
      * {@inheritDoc}
      */
-    public void onHeader(final int eventType, final int eventCode, final long timestamp)
+    public void onHeader(
+        final int eventType,
+        final int eventCode,
+        final CharSequence eventCodeName,
+        final long timestamp)
     {
         if (EventCodeType.CLUSTER.getTypeCode() != eventType)
         {
@@ -64,7 +68,7 @@ public class CborClusterEventDecode implements LoggerEventCallback
             return;
         }
 
-        currentDecoder.onHeader(eventType, eventCode, timestamp);
+        currentDecoder.onHeader(eventType, eventCode, eventCodeName, timestamp);
     }
 
     /**

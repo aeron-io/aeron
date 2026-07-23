@@ -48,6 +48,7 @@ import static java.nio.ByteOrder.BIG_ENDIAN;
 public class CborDecode implements MessageHandler
 {
     private final List<? extends LoggerEventCallback> loggers;
+    private final AsciiSequenceView eventCodeNameView = new AsciiSequenceView();
     private final AsciiSequenceView keyAsciiView = new AsciiSequenceView();
     private final AsciiSequenceView valueAsciiView = new AsciiSequenceView();
     private final DecodingState decodingState = new DecodingState();
@@ -91,15 +92,24 @@ public class CborDecode implements MessageHandler
         {
             final long timestamp = parseLong(state);
             final int eventCode = (int)parseLong(state);
+            parseString(state, eventCodeNameView);
 
             for (int i = 0, n = loggers.size(); i < n; i++)
             {
                 final LoggerEventCallback logger = loggers.get(i);
-                logger.onHeader((0xFFFF_0000 & eventCode) >>> 16, (0xFFFF & eventCode), timestamp);
+                logger.onHeader((0xFFFF_0000 & eventCode) >>> 16, (0xFFFF & eventCode), eventCodeNameView, timestamp);
             }
 
             parseMap(decodingState);
         }
+    }
+
+    private void parseString(final DecodingState state, final AsciiSequenceView asciiSequenceView)
+    {
+        state.ensureRemaining(1);
+        final int eventCodeNameTypeByte = (0xFF) & state.buffer().getByte(state.offset());
+        state.incrementOffset(1);
+        parseString(state, asciiSequenceView, additionalContent(eventCodeNameTypeByte));
     }
 
     private long parseLong(final DecodingState state)

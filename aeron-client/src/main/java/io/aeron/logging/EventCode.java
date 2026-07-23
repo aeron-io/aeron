@@ -33,4 +33,11 @@ public interface EventCode
      * @return get module specific  {@link EventCode#id()} from {@link #id()}.
      */
     int toEventCodeId();
+
+    /**
+     * Get the name of the event.
+     *
+     * @return the name of the event.
+     */
+    String name();
 }

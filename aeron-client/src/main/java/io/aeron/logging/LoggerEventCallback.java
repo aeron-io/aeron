@@ -29,11 +29,12 @@ public interface LoggerEventCallback
     /**
      * Header of the message being decoded.
      *
-     * @param eventType of {@link EventCodeType}.
-     * @param eventCode of the specific event type, will be the id of the specific event code.
-     * @param timestamp of the event.
+     * @param eventType     of {@link EventCodeType}.
+     * @param eventCode     of the specific event type, will be the id of the specific event code.
+     * @param eventCodeName of the specific event type, will be the string name of the specific event code.
+     * @param timestamp     of the event.
      */
-    void onHeader(int eventType, int eventCode, long timestamp);
+    void onHeader(int eventType, int eventCode, CharSequence eventCodeName, long timestamp);
 
     /**
      * A string value of the logging event. Could refer to a string or an enum value.

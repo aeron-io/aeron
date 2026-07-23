@@ -33,8 +33,13 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
+import static io.aeron.logging.CborEncode.headerLength;
+import static io.aeron.logging.CborUtils.DATA_INDEX;
 import static io.aeron.logging.CborUtils.ENUM_TAG;
+import static io.aeron.logging.CborUtils.EVENT_CODE_INT_INDEX;
+import static io.aeron.logging.CborUtils.EVENT_CODE_STRING_INDEX;
 import static io.aeron.logging.CborUtils.NO_TAG;
+import static io.aeron.logging.CborUtils.TIMESTAMP_INDEX;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 
@@ -76,12 +81,15 @@ class CborEncodeTest
         {
         });
 
-        final long actualTimestamp = ((Number)entries[0]).longValue();
-        final int actualEventCode = ((Number)entries[1]).intValue();
-        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap = (Map<String, Object>)entries[2];
+        final long actualTimestamp = ((Number)entries[TIMESTAMP_INDEX]).longValue();
+        final int actualEventCode = ((Number)entries[EVENT_CODE_INT_INDEX]).intValue();
+        final String actualEventCodeName = (String)entries[EVENT_CODE_STRING_INDEX];
+        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap =
+            (Map<String, Object>)entries[DATA_INDEX];
 
         assertEquals(timestamp, actualTimestamp);
         assertEquals(TEST_EVENT_CODE.toEventCodeId(), actualEventCode);
+        assertEquals(TEST_EVENT_CODE.name(), actualEventCodeName);
         assertEquals(memberId, ((Number)stringObjectMap.get("memberId")).longValue());
     }
 
@@ -111,7 +119,8 @@ class CborEncodeTest
         {
         });
 
-        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap = (Map<String, Object>)entries[2];
+        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap =
+            (Map<String, Object>)entries[DATA_INDEX];
 
         assertEquals(val, stringObjectMap.get("boolean"));
     }
@@ -152,7 +161,8 @@ class CborEncodeTest
         {
         });
 
-        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap = (Map<String, Object>)entries[2];
+        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap =
+            (Map<String, Object>)entries[DATA_INDEX];
 
         assertEquals(reason, stringObjectMap.get("reason"));
     }
@@ -213,7 +223,8 @@ class CborEncodeTest
         {
         });
 
-        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap = (Map<String, Object>)entries[2];
+        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap =
+            (Map<String, Object>)entries[DATA_INDEX];
 
         assertEquals(Set.of("key1", "key2", "key3"), stringObjectMap.keySet());
         assertEquals(1_000_000_000L, ((Number)stringObjectMap.get("key1")).longValue());
@@ -233,7 +244,7 @@ class CborEncodeTest
         // key plus a handful of characters, forcing its huge value to truncate,
         // while the footer still has room to be written.
         final long timestamp = 12643263L;
-        final int length = 39 + CborEncode.headerLength(TEST_EVENT_CODE, timestamp);
+        final int length = 39 + headerLength(TEST_EVENT_CODE, timestamp);
         final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
 
         final EncodingState encodingState = new EncodingState();
@@ -253,7 +264,8 @@ class CborEncodeTest
         {
         });
 
-        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap = (Map<String, Object>)entries[2];
+        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap =
+            (Map<String, Object>)entries[DATA_INDEX];
 
         assertEquals(Set.of("key1", "key2", "key3"), stringObjectMap.keySet());
         assertEquals(1_000_000_000L, ((Number)stringObjectMap.get("key1")).longValue());
@@ -305,7 +317,8 @@ class CborEncodeTest
         {
         });
 
-        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap = (Map<String, Object>)entries[2];
+        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap =
+            (Map<String, Object>)entries[DATA_INDEX];
 
         assertEquals(Set.of(
             "veryLongMemberIdentifierKey",
@@ -364,7 +377,8 @@ class CborEncodeTest
         {
         });
 
-        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap = (Map<String, Object>)entries[2];
+        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap =
+            (Map<String, Object>)entries[DATA_INDEX];
 
         // Should have dropped reason
         assertEquals(Set.of(
@@ -406,7 +420,8 @@ class CborEncodeTest
         {
         });
 
-        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap = (Map<String, Object>)entries[2];
+        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap =
+            (Map<String, Object>)entries[DATA_INDEX];
 
         assertEquals("", stringObjectMap.get("reason"));
     }
@@ -417,8 +432,9 @@ class CborEncodeTest
         final UnsafeBuffer buffer = new UnsafeBuffer(new byte[64]);
 
         final EncodingState encodingState = new EncodingState();
-        encodingState.reset(buffer, 0, 7);
-        CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, 12643263L);
+        final long timestamp = 12643263L;
+        encodingState.reset(buffer, 0, 7 + headerLength(TEST_EVENT_CODE, timestamp));
+        CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, timestamp);
         CborEncode.encode(encodingState, "a", NO_TAG, "S".repeat(100_000), true);
         CborEncode.encodeFooter(encodingState);
 
@@ -430,7 +446,8 @@ class CborEncodeTest
         {
         });
 
-        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap = (Map<String, Object>)entries[2];
+        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap =
+            (Map<String, Object>)entries[DATA_INDEX];
 
         assertFalse(stringObjectMap.containsKey("a"));
     }
@@ -439,7 +456,7 @@ class CborEncodeTest
     void shouldDropBooleanFieldWhenItCannotFit()
     {
         final long timestamp = 12643263L;
-        final int length = 3 + CborEncode.headerLength(TEST_EVENT_CODE, timestamp);
+        final int length = 3 + headerLength(TEST_EVENT_CODE, timestamp);
         final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
 
         final EncodingState encodingState = new EncodingState();
@@ -458,7 +475,8 @@ class CborEncodeTest
         {
         });
 
-        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap = (Map<String, Object>)entries[2];
+        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap =
+            (Map<String, Object>)entries[DATA_INDEX];
 
         assertFalse(stringObjectMap.containsKey("k"));
     }
