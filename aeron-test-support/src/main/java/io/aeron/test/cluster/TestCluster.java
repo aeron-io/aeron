@@ -2548,6 +2548,23 @@ public final class TestCluster implements AutoCloseable
         }
     }
 
+    public void stopNodeGracefully(final TestNode follower)
+    {
+        follower.consensusModule().close();
+    }
+
+    public void waitForServiceTermination(final TestNode follower)
+    {
+        final TestNode.TestService[] services = follower.services();
+        for (final TestNode.TestService service : services)
+        {
+            while (!service.isTerminated())
+            {
+                Tests.sleep(1);
+            }
+        }
+    }
+
     private class BackupQueryRunner implements AutoCloseable
     {
         private final ExpandableArrayBuffer expandableArrayBuffer = new ExpandableArrayBuffer(128);
