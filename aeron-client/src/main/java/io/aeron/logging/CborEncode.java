@@ -45,7 +45,6 @@ import static org.agrona.BitUtil.SIZE_OF_SHORT;
  */
 public final class CborEncode
 {
-
     private static final String TRUNC_END = "...";
 
     private CborEncode()
@@ -153,7 +152,7 @@ public final class CborEncode
             majorType = UNSIGNED_INTEGER_MAJOR_TYPE;
             magnitude = value;
         }
-        encodeNumberLikeFormat(encodingState, magnitude, majorType);
+        encodeNumberLikeFormat(encodingState, majorType, magnitude);
     }
 
     /**
@@ -163,13 +162,13 @@ public final class CborEncode
      */
     public static void encodeTag(final EncodingState state, final long tags)
     {
-        encodeNumberLikeFormat(state, tags, TAG_MAJOR_TYPE);
+        encodeNumberLikeFormat(state, TAG_MAJOR_TYPE, tags);
     }
 
     private static void encodeNumberLikeFormat(
         final EncodingState encodingState,
-        final long magnitude,
-        final int majorType)
+        final int majorType,
+        final long magnitude)
     {
         // TODO: handle long (8 byte) case either here or through a new method
         final int offset = encodingState.offset();

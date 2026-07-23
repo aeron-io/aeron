@@ -27,12 +27,17 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.dataformat.cbor.CBORFactory;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
+import static io.aeron.logging.CborUtils.NO_TAG;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 class CborEncodeTest
 {
@@ -446,6 +451,37 @@ class CborEncodeTest
         @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap = (Map<String, Object>)entries[2];
 
         assertFalse(stringObjectMap.containsKey("k"));
+    }
 
+    @Test
+    void shouldEncodeMultikeyMessageWithTags()
+    {
+        final int offset = 0;
+        final int length = 1000;
+        final long lowerBitTag = 1 << 5;
+        final long higherBitTag = 1 << 20;
+        final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
+        final LoggerEventCallback loggerEventCallback = mock(LoggerEventCallback.class);
+
+        final EncodingState encodingState = new EncodingState();
+        encodingState.reset(buffer, offset, length);
+        final long timestamp = 12643263L;
+        CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, timestamp);
+        CborEncode.encodeTag(encodingState, lowerBitTag);
+        CborEncode.encode(encodingState, "key1", 1_000_000_000L);
+        CborEncode.encodeTag(encodingState, higherBitTag);
+        CborEncode.encode(encodingState, "key2", "S".repeat(50));
+        CborEncode.encode(encodingState, "key3", TimeUnit.DAYS.name());
+        CborEncode.encodeFooter(encodingState);
+
+        final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());
+        final byte[] data = new byte[encodingState.offset()];
+        encodingState.buffer().getBytes(0, data);
+
+        final Object[] entries = cborObjectMapper.readValue(data, new TypeReference<>()
+        {
+        });
+
+        System.out.println(Arrays.toString(entries));
     }
 }
