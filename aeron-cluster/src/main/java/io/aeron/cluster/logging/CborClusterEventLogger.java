@@ -20,13 +20,13 @@ import io.aeron.logging.EncodingState;
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
 
 import static io.aeron.logging.CborUtils.ENUM_TAG;
+import static io.aeron.logging.CborUtils.NO_TAG;
 
 /**
  * CBOR implementation of {@link ClusterEventLogger}.
  */
 public class CborClusterEventLogger implements ClusterEventLogger
 {
-    private static final int HEADER_LENGTH = 16;
     private static final int MAX_BUFFER_LENGTH = 4096;
 
     private final ManyToOneRingBuffer ringBuffer;
@@ -71,17 +71,17 @@ public class CborClusterEventLogger implements ClusterEventLogger
     {
         final long timestamp = System.nanoTime();
         int length = CborEncode.headerLength(ClusterEventCode.ELECTION_STATE_CHANGE, timestamp);
-        length += CborEncode.length("memberId", memberId);
+        length += CborEncode.length("memberId", NO_TAG, memberId);
         length += CborEncode.length("oldState", ENUM_TAG, oldState.name());
         length += CborEncode.length("newState", ENUM_TAG, newState.name());
-        length += CborEncode.length("leaderId", leaderId);
-        length += CborEncode.length("candidateTermId", candidateTermId);
-        length += CborEncode.length("leadershipTermId", leadershipTermId);
-        length += CborEncode.length("logPosition", logPosition);
-        length += CborEncode.length("logLeadershipTermId", logLeadershipTermId);
-        length += CborEncode.length("appendPosition", appendPosition);
-        length += CborEncode.length("catchupPosition", catchupPosition);
-        length += CborEncode.length("reason", reason);
+        length += CborEncode.length("leaderId", NO_TAG, leaderId);
+        length += CborEncode.length("candidateTermId", NO_TAG, candidateTermId);
+        length += CborEncode.length("leadershipTermId", NO_TAG, leadershipTermId);
+        length += CborEncode.length("logPosition", NO_TAG, logPosition);
+        length += CborEncode.length("logLeadershipTermId", NO_TAG, logLeadershipTermId);
+        length += CborEncode.length("appendPosition", NO_TAG, appendPosition);
+        length += CborEncode.length("catchupPosition", NO_TAG, catchupPosition);
+        length += CborEncode.length("reason", NO_TAG, reason);
         length += CborEncode.footerLength();
 
         final int bufferLength = Math.min(length, MAX_BUFFER_LENGTH);
@@ -93,19 +93,17 @@ public class CborClusterEventLogger implements ClusterEventLogger
         try
         {
             CborEncode.encodeHeader(encodingState, ClusterEventCode.ELECTION_STATE_CHANGE, timestamp);
-
-            CborEncode.encode(encodingState, "memberId", memberId);
+            CborEncode.encode(encodingState, "memberId", NO_TAG, memberId);
             CborEncode.encode(encodingState, "oldState", ENUM_TAG, oldState.name(), false);
             CborEncode.encode(encodingState, "newState", ENUM_TAG, newState.name(), false);
-            CborEncode.encode(encodingState, "leaderId", leaderId);
-            CborEncode.encode(encodingState, "candidateTermId", candidateTermId);
-            CborEncode.encode(encodingState, "leadershipTermId", leadershipTermId);
-            CborEncode.encode(encodingState, "logPosition", logPosition);
-            CborEncode.encode(encodingState, "logLeadershipTermId", logLeadershipTermId);
-            CborEncode.encode(encodingState, "appendPosition", appendPosition);
-            CborEncode.encode(encodingState, "catchupPosition", catchupPosition);
-            CborEncode.encode(encodingState, "reason", reason);
-
+            CborEncode.encode(encodingState, "leaderId", NO_TAG, leaderId);
+            CborEncode.encode(encodingState, "candidateTermId", NO_TAG, candidateTermId);
+            CborEncode.encode(encodingState, "leadershipTermId", NO_TAG, leadershipTermId);
+            CborEncode.encode(encodingState, "logPosition", NO_TAG, logPosition);
+            CborEncode.encode(encodingState, "logLeadershipTermId", NO_TAG, logLeadershipTermId);
+            CborEncode.encode(encodingState, "appendPosition", NO_TAG, appendPosition);
+            CborEncode.encode(encodingState, "catchupPosition", NO_TAG, catchupPosition);
+            CborEncode.encode(encodingState, "reason", NO_TAG, reason, true);
             CborEncode.encodeFooter(encodingState);
         }
         finally

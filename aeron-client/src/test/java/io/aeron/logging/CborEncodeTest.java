@@ -34,6 +34,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 import static io.aeron.logging.CborUtils.ENUM_TAG;
+import static io.aeron.logging.CborUtils.NO_TAG;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 
@@ -62,7 +63,8 @@ class CborEncodeTest
         encodingState.reset(buffer, offset, length);
 
         CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, timestamp);
-        CborEncode.encode(encodingState, "memberId", memberId);
+        CborEncode.encode(encodingState, "memberId", NO_TAG, memberId);
+
         CborEncode.encodeFooter(encodingState);
 
         final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());
@@ -138,7 +140,7 @@ class CborEncodeTest
         encodingState.reset(buffer, offset, length);
 
         CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, timestamp);
-        CborEncode.encode(encodingState, "reason", reason);
+        CborEncode.encode(encodingState, "reason", NO_TAG, reason, true);
         CborEncode.encodeFooter(encodingState);
 
         final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());
@@ -196,9 +198,10 @@ class CborEncodeTest
         final EncodingState encodingState = new EncodingState();
         encodingState.reset(buffer, offset, length);
         CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, 12643263L);
-        CborEncode.encode(encodingState, "key1", 1_000_000_000L);
-        CborEncode.encode(encodingState, "key2", TimeUnit.DAYS.name());
-        CborEncode.encode(encodingState, "key3", "S".repeat(1_000_000));
+        CborEncode.encode(encodingState, "key1", NO_TAG, 1_000_000_000L);
+
+        CborEncode.encode(encodingState, "key2", NO_TAG, TimeUnit.DAYS.name(), true);
+        CborEncode.encode(encodingState, "key3", NO_TAG, "S".repeat(1_000_000), true);
 
         CborEncode.encodeFooter(encodingState);
         final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());
@@ -236,9 +239,10 @@ class CborEncodeTest
         final EncodingState encodingState = new EncodingState();
         encodingState.reset(buffer, offset, length);
         CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, timestamp);
-        CborEncode.encode(encodingState, "key1", 1_000_000_000L);
-        CborEncode.encode(encodingState, "key3", TimeUnit.DAYS.name());
-        CborEncode.encode(encodingState, "key2", "S".repeat(1_000_000));
+        CborEncode.encode(encodingState, "key1", NO_TAG, 1_000_000_000L);
+
+        CborEncode.encode(encodingState, "key3", NO_TAG, TimeUnit.DAYS.name(), true);
+        CborEncode.encode(encodingState, "key2", NO_TAG, "S".repeat(1_000_000), true);
         CborEncode.encodeFooter(encodingState);
         final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());
 
@@ -281,12 +285,16 @@ class CborEncodeTest
         final EncodingState encodingState = new EncodingState();
         encodingState.reset(buffer, offset, length);
         CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, 12643263L);
-        CborEncode.encode(encodingState, "veryLongMemberIdentifierKey", Long.MAX_VALUE);
-        CborEncode.encode(encodingState, "leadershipTermTimestampNanos", -123_456_789_012_345L);
-        CborEncode.encode(encodingState, "logPositionSnapshotState", TimeUnit.NANOSECONDS.name());
-        CborEncode.encode(encodingState, "appendPositionCatchupTarget", 42L);
-        CborEncode.encode(encodingState, "negativeCatchupOffsetValue", -0x12345678L);
-        CborEncode.encode(encodingState, "reason", reason);
+        CborEncode.encode(encodingState, "veryLongMemberIdentifierKey", NO_TAG, Long.MAX_VALUE);
+
+        CborEncode.encode(encodingState, "leadershipTermTimestampNanos", NO_TAG, -123_456_789_012_345L);
+
+        CborEncode.encode(encodingState, "logPositionSnapshotState", NO_TAG, TimeUnit.NANOSECONDS.name(), true);
+        CborEncode.encode(encodingState, "appendPositionCatchupTarget", NO_TAG, 42L);
+
+        CborEncode.encode(encodingState, "negativeCatchupOffsetValue", NO_TAG, -0x12345678L);
+
+        CborEncode.encode(encodingState, "reason", NO_TAG, reason, true);
         CborEncode.encodeFooter(encodingState);
         final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());
 
@@ -335,13 +343,17 @@ class CborEncodeTest
         final EncodingState encodingState = new EncodingState();
         encodingState.reset(buffer, offset, length);
         CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, 12643263L);
-        CborEncode.encode(encodingState, "veryLongMemberIdentifierKey", Long.MAX_VALUE);
-        CborEncode.encode(encodingState, "leadershipTermTimestampNanos", -123_456_789_012_345L);
-        CborEncode.encode(encodingState, "logPositionSnapshotState", TimeUnit.NANOSECONDS.name());
-        CborEncode.encode(encodingState, "appendPositionCatchupTarget", 42L);
-        CborEncode.encode(encodingState, "negativeCatchupOffsetValue", -0x12345678L);
+        CborEncode.encode(encodingState, "veryLongMemberIdentifierKey", NO_TAG, Long.MAX_VALUE);
+
+        CborEncode.encode(encodingState, "leadershipTermTimestampNanos", NO_TAG, -123_456_789_012_345L);
+
+        CborEncode.encode(encodingState, "logPositionSnapshotState", NO_TAG, TimeUnit.NANOSECONDS.name(), true);
+        CborEncode.encode(encodingState, "appendPositionCatchupTarget", NO_TAG, 42L);
+
+        CborEncode.encode(encodingState, "negativeCatchupOffsetValue", NO_TAG, -0x12345678L);
+
         // Explicitly canTruncate = false to test that the key is dropped
-        CborEncode.encode(encodingState, "reason", reason, false);
+        CborEncode.encode(encodingState, "reason", NO_TAG, reason, false);
         CborEncode.encodeFooter(encodingState);
         final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());
 
@@ -382,7 +394,7 @@ class CborEncodeTest
         encodingState.reset(buffer, offset, length);
 
         CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, 12643263L);
-        CborEncode.encode(encodingState, "reason", "");
+        CborEncode.encode(encodingState, "reason", NO_TAG, "", true);
         CborEncode.encodeFooter(encodingState);
 
         final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());
@@ -407,7 +419,7 @@ class CborEncodeTest
         final EncodingState encodingState = new EncodingState();
         encodingState.reset(buffer, 0, 7);
         CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, 12643263L);
-        CborEncode.encode(encodingState, "a", "S".repeat(100_000));
+        CborEncode.encode(encodingState, "a", NO_TAG, "S".repeat(100_000), true);
         CborEncode.encodeFooter(encodingState);
 
         final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());
@@ -465,7 +477,7 @@ class CborEncodeTest
         CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, timestamp);
         CborEncode.encode(encodingState, "key1", ENUM_TAG, 1_000_000_000L);
         CborEncode.encode(encodingState, "key2", ENUM_TAG, "S".repeat(50), true);
-        CborEncode.encode(encodingState, "key3", TimeUnit.DAYS.name());
+        CborEncode.encode(encodingState, "key3", NO_TAG, TimeUnit.DAYS.name(), true);
         CborEncode.encodeFooter(encodingState);
 
         final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());

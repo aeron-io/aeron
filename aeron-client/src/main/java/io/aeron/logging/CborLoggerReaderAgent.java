@@ -31,7 +31,10 @@ public final class CborLoggerReaderAgent implements Agent
     private final ManyToOneRingBuffer ringBuffer = EventConfiguration.eventReader().ringBuffer();
     private final CborDecode messageHandler = new CborDecode(List.of(new PrintLoggerEventCallback(System.out)));
 
-    private CborLoggerReaderAgent()
+    /**
+     * Default constructor.
+     */
+    public CborLoggerReaderAgent()
     {
 
     }
