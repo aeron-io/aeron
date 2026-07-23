@@ -17,6 +17,7 @@ package io.aeron.cluster.logging;
 
 import io.aeron.logging.EventCodeType;
 import io.aeron.logging.LoggerEventCallback;
+import org.agrona.DirectBuffer;
 
 import java.util.List;
 
@@ -107,6 +108,18 @@ public class CborClusterEventDecode implements LoggerEventCallback
             return;
         }
 
+        currentDecoder.onValue(name, tags, value);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public void onValue(final CharSequence name, final long tags, final DirectBuffer value)
+    {
+        if (null == currentDecoder)
+        {
+            return;
+        }
         currentDecoder.onValue(name, tags, value);
     }
 

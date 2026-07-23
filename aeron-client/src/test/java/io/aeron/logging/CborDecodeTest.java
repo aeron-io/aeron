@@ -17,6 +17,7 @@
 package io.aeron.logging;
 
 import io.aeron.test.logging.ProxyLoggerEventCallback;
+import org.agrona.DirectBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -31,6 +32,8 @@ import java.util.stream.Stream;
 
 import static io.aeron.logging.CborUtils.ENUM_TAG;
 import static io.aeron.logging.CborUtils.NO_TAG;
+import static io.aeron.logging.CborUtils.UINT8_TYPED_ARRAY_TAG;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
@@ -150,6 +153,49 @@ class CborDecodeTest
             timestamp);
 
         verify(loggerEventCallback).onValue("reason", NO_TAG, reason);
+        verify(loggerEventCallback).onFooter(false);
+    }
+
+    static Stream<Arguments> generateByteArrays()
+    {
+        return Stream.of(
+            Arguments.of((Object)"A".repeat(10).getBytes(UTF_8)),
+            Arguments.of((Object)"A".repeat(1000).getBytes(UTF_8)),
+            Arguments.of((Object)"A".repeat(100_000).getBytes(UTF_8))
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("generateByteArrays")
+    void shouldDecodeByteArrays(final byte[] rawBytes)
+    {
+        final int offset = 0;
+        final int length = 200_000;
+        final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
+        final LoggerEventCallback loggerEventCallback = mock(LoggerEventCallback.class);
+        final long timestamp = 12643263L;
+
+        final EncodingState encodingState = new EncodingState();
+        encodingState.reset(buffer, offset, length);
+
+        CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, timestamp);
+        CborEncode.encode(
+            encodingState, "bytes", UINT8_TYPED_ARRAY_TAG, null == rawBytes ? null : new UnsafeBuffer(rawBytes), true);
+        CborEncode.encodeFooter(encodingState);
+
+        final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(loggerEventCallback)));
+        cborDecode.onMessage(
+            TEST_EVENT_CODE.toEventCodeId(),
+            encodingState.buffer(), 0, encodingState.offset());
+
+        verify(loggerEventCallback).onHeader(
+            TEST_EVENT_CODE.eventCode(),
+            TEST_EVENT_CODE.id(),
+            TEST_EVENT_CODE.name(),
+            timestamp);
+
+        final DirectBuffer expectedBytes = null == rawBytes ? null : new UnsafeBuffer(rawBytes);
+        verify(loggerEventCallback).onValue("bytes", UINT8_TYPED_ARRAY_TAG, expectedBytes);
         verify(loggerEventCallback).onFooter(false);
     }
 

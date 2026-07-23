@@ -19,6 +19,7 @@ import org.agrona.AsciiSequenceView;
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 import org.agrona.concurrent.MessageHandler;
+import org.agrona.concurrent.UnsafeBuffer;
 
 import java.util.List;
 
@@ -32,6 +33,7 @@ import static io.aeron.logging.CborUtils.ADDITIONAL_CONTENT_NULL;
 import static io.aeron.logging.CborUtils.ADDITIONAL_CONTENT_TRUE;
 import static io.aeron.logging.CborUtils.ARRAY_MAJOR_TYPE;
 import static io.aeron.logging.CborUtils.BREAK;
+import static io.aeron.logging.CborUtils.BYTE_ARRAY_MAJOR_TYPE;
 import static io.aeron.logging.CborUtils.ENTRIES_LENGTH;
 import static io.aeron.logging.CborUtils.MAP_MAJOR_TYPE;
 import static io.aeron.logging.CborUtils.NEGATIVE_INTEGER_MAJOR_TYPE;
@@ -51,6 +53,7 @@ public class CborDecode implements MessageHandler
     private final AsciiSequenceView eventCodeNameView = new AsciiSequenceView();
     private final AsciiSequenceView keyAsciiView = new AsciiSequenceView();
     private final AsciiSequenceView valueAsciiView = new AsciiSequenceView();
+    private final DirectBuffer byteArrayView = new UnsafeBuffer();
     private final DecodingState decodingState = new DecodingState();
 
     /**
@@ -161,7 +164,7 @@ public class CborDecode implements MessageHandler
                 for (int i = 0, n = loggers.size(); i < n; i++)
                 {
                     final LoggerEventCallback logger = loggers.get(i);
-                    logger.onValue(keyAsciiView, NO_TAG, null);
+                    logger.onValue(keyAsciiView, NO_TAG, (CharSequence)null);
                 }
                 break;
             default:
@@ -232,6 +235,14 @@ public class CborDecode implements MessageHandler
 
                 break;
             }
+            case BYTE_ARRAY_MAJOR_TYPE:
+                parseByteArray(state, byteArrayView, valueAdditionalContent);
+                for (int i = 0, n = loggers.size(); i < n; i++)
+                {
+                    final LoggerEventCallback logger = loggers.get(i);
+                    logger.onValue(keyAsciiView, tag, byteArrayView);
+                }
+                break;
 
             case SIMPLE_VALUE_MAJOR_TYPE:
                 parseSimpleValue(state, valueAdditionalContent);
@@ -297,6 +308,43 @@ public class CborDecode implements MessageHandler
         }
 
         return value;
+    }
+
+    private void parseByteArray(
+        final DecodingState state,
+        final DirectBuffer targetBuffer,
+        final int keyAdditionalContent)
+    {
+        if (keyAdditionalContent < ADDITIONAL_CONTENT_1_BYTE)
+        {
+            targetBuffer.wrap(state.buffer(), state.offset(), keyAdditionalContent);
+            state.incrementOffset(keyAdditionalContent);
+        }
+        else if (ADDITIONAL_CONTENT_1_BYTE == keyAdditionalContent)
+        {
+            state.ensureRemaining(1);
+            final int length = 0xFF & state.buffer().getByte(state.offset());
+            targetBuffer.wrap(state.buffer(), state.offset() + 1, length);
+            state.incrementOffset(1 + length);
+        }
+        else if (ADDITIONAL_CONTENT_2_BYTE == keyAdditionalContent)
+        {
+            state.ensureRemaining(2);
+            final int length = 0xFFFF & state.buffer().getShort(state.offset(), BIG_ENDIAN);
+            targetBuffer.wrap(state.buffer(), state.offset() + 2, length);
+            state.incrementOffset(2 + length);
+        }
+        else if (ADDITIONAL_CONTENT_4_BYTE == keyAdditionalContent)
+        {
+            state.ensureRemaining(4);
+            final int length = state.buffer().getInt(state.offset(), BIG_ENDIAN);
+            targetBuffer.wrap(state.buffer(), state.offset() + 4, length);
+            state.incrementOffset(4 + length);
+        }
+        else
+        {
+            throw new InvalidMessage("Invalid key length");
+        }
     }
 
     private void parseString(

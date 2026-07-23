@@ -13,14 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.aeron.agent;
+package io.aeron.driver.logging;
 
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.Test;
 
 import java.time.temporal.ChronoField;
 
-import static io.aeron.agent.DriverEventEncoder.*;
+import static io.aeron.driver.logging.DriverEventEncoder.*;
 import static io.aeron.logging.CommonEventEncoder.LOG_HEADER_LENGTH;
 import static io.aeron.logging.CommonEventEncoder.STATE_SEPARATOR;
 import static io.aeron.logging.CommonEventEncoder.captureLength;

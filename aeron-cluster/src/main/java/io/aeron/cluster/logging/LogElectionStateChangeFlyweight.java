@@ -17,6 +17,7 @@ package io.aeron.cluster.logging;
 
 import io.aeron.cluster.ElectionState;
 import io.aeron.logging.LoggerEventCallback;
+import org.agrona.DirectBuffer;
 
 import java.util.List;
 
@@ -254,6 +255,11 @@ class LogElectionStateChangeFlyweight implements LoggerEventCallback
      * {@inheritDoc}
      */
     public void onValue(final CharSequence name, final long tags, final boolean value)
+    {
+
+    }
+
+    public void onValue(final CharSequence name, final long tags, final DirectBuffer value)
     {
 
     }

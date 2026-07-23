@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.aeron.agent;
+package io.aeron.driver.logging;
 
 import io.aeron.logging.DissectFunction;
 import io.aeron.logging.EventCode;
@@ -23,7 +23,7 @@ import org.agrona.MutableDirectBuffer;
 
 import java.util.Arrays;
 
-import static io.aeron.agent.DriverEventDissector.*;
+import static io.aeron.driver.logging.DriverEventDissector.*;
 
 /**
  * Events and codecs for encoding/decoding events recorded to the ring buffer held by {@link EventConfiguration#eventReader}.

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.aeron.agent;
+package io.aeron.driver.logging;
 
 import io.aeron.AeronCounters;
 import io.aeron.logging.EventCodeType;
@@ -27,8 +27,8 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Set;
 
-import static io.aeron.agent.DriverEventCode.FRAME_IN;
-import static io.aeron.agent.DriverEventCode.FRAME_OUT;
+import static io.aeron.driver.logging.DriverEventCode.FRAME_IN;
+import static io.aeron.driver.logging.DriverEventCode.FRAME_OUT;
 
 /**
  * Implementation of the {@link ModuleLogger} to handle logging and decode of Driver log events.
