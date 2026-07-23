@@ -420,7 +420,8 @@ public final class CborEncode
      */
     public static int headerLength(final EventCode eventCode, final long timestamp)
     {
-        return 1 + lengthNumber(timestamp) + lengthNumber(eventCode.toEventCodeId()) + 1;
+        return 1 + lengthNumber(timestamp) + lengthNumber(eventCode.toEventCodeId()) +
+            lengthString(eventCode.name()) + 1;
     }
 
     /**
@@ -439,6 +440,7 @@ public final class CborEncode
         encodingState.incrementOffset(1);
         encodeNumber(encodingState, timestamp);
         encodeNumber(encodingState, clusterEventCode.toEventCodeId());
+        encodeString(encodingState, clusterEventCode.name(), false);
         encodingState.buffer().putByte(encodingState.offset(), typeByte(MAP_MAJOR_TYPE, ADDITIONAL_CONTENT_INDEFINITE));
         encodingState.incrementOffset(1);
     }

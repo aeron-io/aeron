@@ -48,8 +48,13 @@ public final class CborUtils
     static final int ADDITIONAL_CONTENT_TRUE = 21;
     static final byte TRUE_VALUE = typeByte(SIMPLE_VALUE_MAJOR_TYPE, ADDITIONAL_CONTENT_TRUE);
     static final int BREAK = 0xFF;
-    static final int ENTRIES_LENGTH = 4;
 
+    static final int TIMESTAMP_INDEX = 0;
+    static final int EVENT_CODE_INT_INDEX = TIMESTAMP_INDEX + 1;
+    static final int EVENT_CODE_STRING_INDEX = EVENT_CODE_INT_INDEX + 1;
+    static final int DATA_INDEX = EVENT_CODE_STRING_INDEX + 1;
+    static final int TRUNCATE_FLAG_INDEX = DATA_INDEX + 1;
+    static final int ENTRIES_LENGTH = TRUNCATE_FLAG_INDEX + 1;
     /**
      * Indicates that a value is not present.
      */
