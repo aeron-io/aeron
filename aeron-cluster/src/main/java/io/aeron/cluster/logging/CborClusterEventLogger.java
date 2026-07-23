@@ -19,6 +19,8 @@ import io.aeron.logging.CborEncode;
 import io.aeron.logging.EncodingState;
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
 
+import static io.aeron.logging.CborUtils.ENUM_TAG;
+
 /**
  * CBOR implementation of {@link ClusterEventLogger}.
  */
@@ -70,8 +72,8 @@ public class CborClusterEventLogger implements ClusterEventLogger
         final long timestamp = System.nanoTime();
         int length = CborEncode.headerLength(ClusterEventCode.ELECTION_STATE_CHANGE, timestamp);
         length += CborEncode.length("memberId", memberId);
-        length += CborEncode.length("oldState", oldState);
-        length += CborEncode.length("newState", newState);
+        length += CborEncode.length("oldState", ENUM_TAG, oldState.name());
+        length += CborEncode.length("newState", ENUM_TAG, newState.name());
         length += CborEncode.length("leaderId", leaderId);
         length += CborEncode.length("candidateTermId", candidateTermId);
         length += CborEncode.length("leadershipTermId", leadershipTermId);
@@ -93,8 +95,8 @@ public class CborClusterEventLogger implements ClusterEventLogger
             CborEncode.encodeHeader(encodingState, ClusterEventCode.ELECTION_STATE_CHANGE, timestamp);
 
             CborEncode.encode(encodingState, "memberId", memberId);
-            CborEncode.encode(encodingState, "oldState", oldState.name());
-            CborEncode.encode(encodingState, "newState", newState.name());
+            CborEncode.encode(encodingState, "oldState", ENUM_TAG, oldState.name(), false);
+            CborEncode.encode(encodingState, "newState", ENUM_TAG, newState.name(), false);
             CborEncode.encode(encodingState, "leaderId", leaderId);
             CborEncode.encode(encodingState, "candidateTermId", candidateTermId);
             CborEncode.encode(encodingState, "leadershipTermId", leadershipTermId);
