@@ -43,17 +43,17 @@ class PrintLoggerEventCallback implements LoggerEventCallback
         sb.append(eventCode);
     }
 
-    public void onValue(final CharSequence name, final CharSequence value, final long tags)
+    public void onValue(final CharSequence name, final long tags, final CharSequence value)
     {
         sb.append(' ').append(name).append("=\"").append(value).append("\"");
     }
 
-    public void onValue(final CharSequence name, final long value, final long tags)
+    public void onValue(final CharSequence name, final long tags, final long value)
     {
         sb.append(' ').append(name).append('=').append(value);
     }
 
-    public void onValue(final CharSequence name, final boolean value, final long tags)
+    public void onValue(final CharSequence name, final long tags, final boolean value)
     {
         sb.append(' ').append(name).append('=').append(value);
     }

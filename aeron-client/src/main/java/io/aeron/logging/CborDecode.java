@@ -144,14 +144,14 @@ public class CborDecode implements MessageHandler
                 for (int i = 0, n = loggers.size(); i < n; i++)
                 {
                     final LoggerEventCallback logger = loggers.get(i);
-                    logger.onValue(keyAsciiView, additionalContent == ADDITIONAL_CONTENT_TRUE, NO_TAG);
+                    logger.onValue(keyAsciiView, NO_TAG, additionalContent == ADDITIONAL_CONTENT_TRUE);
                 }
                 break;
             case ADDITIONAL_CONTENT_NULL:
                 for (int i = 0, n = loggers.size(); i < n; i++)
                 {
                     final LoggerEventCallback logger = loggers.get(i);
-                    logger.onValue(keyAsciiView, null, NO_TAG);
+                    logger.onValue(keyAsciiView, NO_TAG, null);
                 }
                 break;
             default:
@@ -167,16 +167,6 @@ public class CborDecode implements MessageHandler
         }
 
         final DirectBuffer buffer = state.buffer();
-        // look ahead for tag
-        state.ensureRemaining(1);
-        final int lookAheadByte = (0xFF) & buffer.getByte(state.offset());
-        final int lookAheadMajorType = majorType(lookAheadByte);
-        long tags = NO_TAG;
-        if (TAG_MAJOR_TYPE == lookAheadMajorType)
-        {
-            state.incrementOffset(1);
-            tags = parseNumber(state, lookAheadMajorType, additionalContent(lookAheadByte));
-        }
 
         state.ensureRemaining(1);
         final int keyTypeByte = (0xFF) & state.buffer().getByte(state.offset());
@@ -189,6 +179,16 @@ public class CborDecode implements MessageHandler
             parseString(state, keyAsciiView, keyAdditionalContent);
         }
 
+        // look ahead for tag
+        state.ensureRemaining(1);
+        final int lookAheadByte = (0xFF) & buffer.getByte(state.offset());
+        final int lookAheadMajorType = majorType(lookAheadByte);
+        long tag = NO_TAG;
+        if (TAG_MAJOR_TYPE == lookAheadMajorType)
+        {
+            state.incrementOffset(1);
+            tag = parseNumber(state, lookAheadMajorType, additionalContent(lookAheadByte));
+        }
 
         // value handling
         state.ensureRemaining(1);
@@ -205,7 +205,7 @@ public class CborDecode implements MessageHandler
                 for (int i = 0, n = loggers.size(); i < n; i++)
                 {
                     final LoggerEventCallback loggerEventCallback = loggers.get(i);
-                    loggerEventCallback.onValue(keyAsciiView, finalValue, tags);
+                    loggerEventCallback.onValue(keyAsciiView, tag, finalValue);
                 }
 
                 break;
@@ -217,7 +217,7 @@ public class CborDecode implements MessageHandler
                 for (int i = 0, n = loggers.size(); i < n; i++)
                 {
                     final LoggerEventCallback logger = loggers.get(i);
-                    logger.onValue(keyAsciiView, valueAsciiView, tags);
+                    logger.onValue(keyAsciiView, tag, valueAsciiView);
                 }
 
                 break;

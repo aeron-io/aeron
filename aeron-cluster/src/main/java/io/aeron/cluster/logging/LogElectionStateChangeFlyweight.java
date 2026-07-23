@@ -174,7 +174,7 @@ class LogElectionStateChangeFlyweight implements LoggerEventCallback
     /**
      * {@inheritDoc}
      */
-    public void onValue(final CharSequence name, final CharSequence value, final long tags)
+    public void onValue(final CharSequence name, final long tags, final CharSequence value)
     {
         switch (name.toString())
         {
@@ -199,7 +199,7 @@ class LogElectionStateChangeFlyweight implements LoggerEventCallback
     /**
      * {@inheritDoc}
      */
-    public void onValue(final CharSequence name, final long value, final long tags)
+    public void onValue(final CharSequence name, final long tags, final long value)
     {
         switch (name.toString())
         {
@@ -249,7 +249,7 @@ class LogElectionStateChangeFlyweight implements LoggerEventCallback
     /**
      * {@inheritDoc}
      */
-    public void onValue(final CharSequence name, final boolean value, final long tags)
+    public void onValue(final CharSequence name, final long tags, final boolean value)
     {
 
     }

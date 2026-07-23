@@ -15,8 +15,17 @@
  */
 package io.aeron.logging;
 
-class CborUtils
+import io.aeron.Aeron;
+
+/**
+ * Utility methods and values for working with CBOR.
+ */
+public final class CborUtils
 {
+    private CborUtils()
+    {
+    }
+
     // Base bytes for major types
     static final int UNSIGNED_INTEGER_MAJOR_TYPE = 0;
     static final int NEGATIVE_INTEGER_MAJOR_TYPE = 1 << 5;
@@ -41,10 +50,16 @@ class CborUtils
     static final int BREAK = 0xFF;
     static final int ENTRIES_LENGTH = 4;
 
+    /**
+     * Indicates that a value is not present.
+     */
     // Tags
-    static final int NO_TAG = 0;
+    public static final long NO_TAG = Aeron.NULL_VALUE;
+    /**
+     * Indicates that a value came from an enum.
+     */
     // Example only
-    static final int ENUM_TAG = 2 << 1;
+    public static final long ENUM_TAG = 44;
 
     // This might be useful for checking if a tag is present
     static boolean hasTag(final byte inputTags, final int checkedTag)

@@ -16,6 +16,7 @@
 
 package io.aeron.logging;
 
+import io.aeron.test.logging.ProxyLoggerEventCallback;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -28,52 +29,13 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
+import static io.aeron.logging.CborUtils.ENUM_TAG;
 import static io.aeron.logging.CborUtils.NO_TAG;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 class CborDecodeTest
 {
-    static class ProxyLoggerEventCallback implements LoggerEventCallback
-    {
-        private final LoggerEventCallback delegate;
-
-        ProxyLoggerEventCallback(final LoggerEventCallback delegate)
-        {
-            this.delegate = delegate;
-        }
-
-        public void onHeader(final int eventType, final int eventCode, final long timestamp)
-        {
-            this.delegate.onHeader(eventType, eventCode, timestamp);
-        }
-
-        public void onValue(final CharSequence name, final CharSequence value, final long tags)
-        {
-            if (value == null)
-            {
-                this.delegate.onValue(name.toString(), null, tags);
-                return;
-            }
-
-            this.delegate.onValue(name.toString(), value.toString(), tags);
-        }
-
-        public void onValue(final CharSequence name, final long value, final long tags)
-        {
-            this.delegate.onValue(name.toString(), value, tags);
-        }
-
-        public void onValue(final CharSequence name, final boolean value, final long tags)
-        {
-            this.delegate.onValue(name.toString(), value, tags);
-        }
-
-        public void onFooter(final boolean truncated)
-        {
-            this.delegate.onFooter(truncated);
-        }
-    }
 
     private static final TestEventCode TEST_EVENT_CODE = new TestEventCode(2, 1);
 
@@ -111,7 +73,7 @@ class CborDecodeTest
             TEST_EVENT_CODE.id(),
             timestamp);
 
-        verify(loggerEventCallback).onValue("memberId", memberId, NO_TAG);
+        verify(loggerEventCallback).onValue("memberId", NO_TAG, memberId);
         verify(loggerEventCallback).onFooter(false);
     }
 
@@ -142,7 +104,7 @@ class CborDecodeTest
             TEST_EVENT_CODE.id(),
             timestamp);
 
-        verify(loggerEventCallback).onValue("booleanValue", booleanValue, NO_TAG);
+        verify(loggerEventCallback).onValue("booleanValue", NO_TAG, booleanValue);
         verify(loggerEventCallback).onFooter(false);
     }
 
@@ -183,7 +145,7 @@ class CborDecodeTest
             TEST_EVENT_CODE.id(),
             timestamp);
 
-        verify(loggerEventCallback).onValue("reason", reason, NO_TAG);
+        verify(loggerEventCallback).onValue("reason", NO_TAG, reason);
         verify(loggerEventCallback).onFooter(false);
     }
 
@@ -214,9 +176,9 @@ class CborDecodeTest
             TEST_EVENT_CODE.id(),
             timestamp);
 
-        verify(loggerEventCallback).onValue("key1", 1_000_000_000L, NO_TAG);
-        verify(loggerEventCallback).onValue("key2", "S".repeat(50), NO_TAG);
-        verify(loggerEventCallback).onValue("key3", TimeUnit.DAYS.name(), NO_TAG);
+        verify(loggerEventCallback).onValue("key1", NO_TAG, 1_000_000_000L);
+        verify(loggerEventCallback).onValue("key2", NO_TAG, "S".repeat(50));
+        verify(loggerEventCallback).onValue("key3", NO_TAG, TimeUnit.DAYS.name());
         verify(loggerEventCallback).onFooter(false);
     }
 
@@ -225,8 +187,6 @@ class CborDecodeTest
     {
         final int offset = 0;
         final int length = 1000;
-        final long lowerBitTag = 1 << 5;
-        final long higherBitTag = 1 << 20;
         final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
         final LoggerEventCallback loggerEventCallback = mock(LoggerEventCallback.class);
 
@@ -234,10 +194,8 @@ class CborDecodeTest
         encodingState.reset(buffer, offset, length);
         final long timestamp = 12643263L;
         CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, timestamp);
-        CborEncode.encodeTag(encodingState, lowerBitTag);
-        CborEncode.encode(encodingState, "key1", 1_000_000_000L);
-        CborEncode.encodeTag(encodingState, higherBitTag);
-        CborEncode.encode(encodingState, "key2", "S".repeat(50));
+        CborEncode.encode(encodingState, "key1", ENUM_TAG, 1_000_000_000L);
+        CborEncode.encode(encodingState, "key2", ENUM_TAG, "S".repeat(50), true);
         CborEncode.encode(encodingState, "key3", TimeUnit.DAYS.name());
         CborEncode.encodeFooter(encodingState);
 
@@ -251,9 +209,9 @@ class CborDecodeTest
             TEST_EVENT_CODE.id(),
             timestamp);
 
-        verify(loggerEventCallback).onValue("key1", 1_000_000_000L, lowerBitTag);
-        verify(loggerEventCallback).onValue("key2", "S".repeat(50), higherBitTag);
-        verify(loggerEventCallback).onValue("key3", TimeUnit.DAYS.name(), NO_TAG);
+        verify(loggerEventCallback).onValue("key1", ENUM_TAG, 1_000_000_000L);
+        verify(loggerEventCallback).onValue("key2", ENUM_TAG, "S".repeat(50));
+        verify(loggerEventCallback).onValue("key3", NO_TAG, TimeUnit.DAYS.name());
         verify(loggerEventCallback).onFooter(false);
     }
 
@@ -310,24 +268,24 @@ class CborDecodeTest
             TEST_EVENT_CODE.id(),
             timestamp);
 
-        verify(loggerEventCallback).onValue("veryLongMemberIdentifierKey", Long.MAX_VALUE, NO_TAG);
-        verify(loggerEventCallback).onValue("candidateTermIdentifierValue", candidateTermIdentifierValue, NO_TAG);
-        verify(loggerEventCallback).onValue("leadershipTermTimestampNanos", leadershipTermTimestampNanos, NO_TAG);
-        verify(loggerEventCallback).onValue("logPositionSnapshotState", TimeUnit.DAYS.name(), NO_TAG);
-        verify(loggerEventCallback).onValue("appendPositionCatchupTarget", appendPositionCatchupTarget, NO_TAG);
-        verify(loggerEventCallback).onValue("negativeCatchupOffsetValue", negativeCatchupOffsetValue, NO_TAG);
-        verify(loggerEventCallback).onValue("smallPositiveBoundary", 0x7FL, NO_TAG);
-        verify(loggerEventCallback).onValue("oneByteBoundary", 0x100L, NO_TAG);
-        verify(loggerEventCallback).onValue("twoBytePositiveBoundary", 0x7FFFL, NO_TAG);
-        verify(loggerEventCallback).onValue("twoByteBoundary", 0x10000L, NO_TAG);
-        verify(loggerEventCallback).onValue("fourBytePositiveBoundary", 0x7FFFFFFFL, NO_TAG);
-        verify(loggerEventCallback).onValue("fourByteBoundary", 0x80000000L, NO_TAG);
-        verify(loggerEventCallback).onValue("smallNegativeBoundary", -2L, NO_TAG);
-        verify(loggerEventCallback).onValue("twoByteNegativeBoundary", -0xFFFFL, NO_TAG);
-        verify(loggerEventCallback).onValue("shortStringBoundary", shortStringBoundary, NO_TAG);
-        verify(loggerEventCallback).onValue("oneByteLengthBoundary", oneByteLengthBoundary, NO_TAG);
-        verify(loggerEventCallback).onValue("twoByteLengthBoundary", twoByteLengthBoundary, NO_TAG);
-        verify(loggerEventCallback).onValue("replicationUnit", TimeUnit.NANOSECONDS.name(), NO_TAG);
+        verify(loggerEventCallback).onValue("veryLongMemberIdentifierKey", NO_TAG, Long.MAX_VALUE);
+        verify(loggerEventCallback).onValue("candidateTermIdentifierValue", NO_TAG, candidateTermIdentifierValue);
+        verify(loggerEventCallback).onValue("leadershipTermTimestampNanos", NO_TAG, leadershipTermTimestampNanos);
+        verify(loggerEventCallback).onValue("logPositionSnapshotState", NO_TAG, TimeUnit.DAYS.name());
+        verify(loggerEventCallback).onValue("appendPositionCatchupTarget", NO_TAG, appendPositionCatchupTarget);
+        verify(loggerEventCallback).onValue("negativeCatchupOffsetValue", NO_TAG, negativeCatchupOffsetValue);
+        verify(loggerEventCallback).onValue("smallPositiveBoundary", NO_TAG, 0x7FL);
+        verify(loggerEventCallback).onValue("oneByteBoundary", NO_TAG, 0x100L);
+        verify(loggerEventCallback).onValue("twoBytePositiveBoundary", NO_TAG, 0x7FFFL);
+        verify(loggerEventCallback).onValue("twoByteBoundary", NO_TAG, 0x10000L);
+        verify(loggerEventCallback).onValue("fourBytePositiveBoundary", NO_TAG, 0x7FFFFFFFL);
+        verify(loggerEventCallback).onValue("fourByteBoundary", NO_TAG, 0x80000000L);
+        verify(loggerEventCallback).onValue("smallNegativeBoundary", NO_TAG, -2L);
+        verify(loggerEventCallback).onValue("twoByteNegativeBoundary", NO_TAG, -0xFFFFL);
+        verify(loggerEventCallback).onValue("shortStringBoundary", NO_TAG, shortStringBoundary);
+        verify(loggerEventCallback).onValue("oneByteLengthBoundary", NO_TAG, oneByteLengthBoundary);
+        verify(loggerEventCallback).onValue("twoByteLengthBoundary", NO_TAG, twoByteLengthBoundary);
+        verify(loggerEventCallback).onValue("replicationUnit", NO_TAG, TimeUnit.NANOSECONDS.name());
         verify(loggerEventCallback).onFooter(false);
     }
 

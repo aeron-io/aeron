@@ -28,16 +28,14 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.dataformat.cbor.CBORFactory;
 
 import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
-import static io.aeron.logging.CborUtils.NO_TAG;
+import static io.aeron.logging.CborUtils.ENUM_TAG;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 
 class CborEncodeTest
 {
@@ -458,8 +456,6 @@ class CborEncodeTest
     {
         final int offset = 0;
         final int length = 1000;
-        final long lowerBitTag = 1 << 5;
-        final long higherBitTag = 1 << 20;
         final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
         final LoggerEventCallback loggerEventCallback = mock(LoggerEventCallback.class);
 
@@ -467,10 +463,8 @@ class CborEncodeTest
         encodingState.reset(buffer, offset, length);
         final long timestamp = 12643263L;
         CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, timestamp);
-        CborEncode.encodeTag(encodingState, lowerBitTag);
-        CborEncode.encode(encodingState, "key1", 1_000_000_000L);
-        CborEncode.encodeTag(encodingState, higherBitTag);
-        CborEncode.encode(encodingState, "key2", "S".repeat(50));
+        CborEncode.encode(encodingState, "key1", ENUM_TAG, 1_000_000_000L);
+        CborEncode.encode(encodingState, "key2", ENUM_TAG, "S".repeat(50), true);
         CborEncode.encode(encodingState, "key3", TimeUnit.DAYS.name());
         CborEncode.encodeFooter(encodingState);
 
