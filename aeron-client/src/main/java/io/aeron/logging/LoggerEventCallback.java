@@ -15,6 +15,8 @@
  */
 package io.aeron.logging;
 
+import org.agrona.DirectBuffer;
+
 /**
  * Primary interface that will receive data from a CBOR logged message. Will callback the appropriate
  * methods on each data item for a single message.
@@ -74,9 +76,24 @@ public interface LoggerEventCallback
     void onValue(CharSequence name, long tags, boolean value);
 
     /**
+     * A byte array value of the logging event.
+     *
+     * @param name  of the event, note that the supplied {@link CharSequence} is reused across multiple calls, it
+     *              is the user's responsibility to copy this value if required as the value is only valid for the
+     *              scope of the call.
+     * @param tags  of the event.
+     * @param value of the event, note that the supplied {@link DirectBuffer} is reused across multiple calls, it
+     *              is the user's responsibility to copy this value if required as the value is only valid for the
+     *              scope of the call.
+     */
+    void onValue(CharSequence name, long tags, DirectBuffer value);
+
+    /**
      * Indicates that the message is complete, and will determine if any fields were dropped due to truncation.
      *
      * @param truncated if this message was truncated when writing.
      */
     void onFooter(boolean truncated);
+
+
 }

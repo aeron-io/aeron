@@ -29,6 +29,7 @@ public final class CborUtils
     // Base bytes for major types
     static final int UNSIGNED_INTEGER_MAJOR_TYPE = 0;
     static final int NEGATIVE_INTEGER_MAJOR_TYPE = 1 << 5;
+    static final int BYTE_ARRAY_MAJOR_TYPE = 2 << 5;
     static final int TEXT_STRING_MAJOR_TYPE = 3 << 5;
     static final int ARRAY_MAJOR_TYPE = 4 << 5;
     static final int MAP_MAJOR_TYPE = 5 << 5;
@@ -63,8 +64,19 @@ public final class CborUtils
     /**
      * Indicates that a value came from an enum.
      */
-    // Example only
     public static final long ENUM_TAG = 44;
+    /**
+     * Indicates that a value is an IPv4 address.
+     */
+    public static final long IPV4_TAG = 52;
+    /**
+     * Indicates that a value is an IPv6 address.
+     */
+    public static final long IPV6_TAG = 54;
+    /**
+     * Indicates that a value is a uint8 typed array.
+     */
+    public static final long UINT8_TYPED_ARRAY_TAG = 64;
 
     // This might be useful for checking if a tag is present
     static boolean hasTag(final byte inputTags, final int checkedTag)

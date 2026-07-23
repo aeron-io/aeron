@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.aeron.agent;
+package io.aeron.driver.logging;
 
 import io.aeron.ErrorCode;
 import io.aeron.command.*;
@@ -33,10 +33,10 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 
-import static io.aeron.agent.DriverEventCode.*;
-import static io.aeron.agent.DriverEventDissector.*;
-import static io.aeron.agent.DriverEventLogger.MAX_CHANNEL_URI_LENGTH;
-import static io.aeron.agent.DriverEventLogger.MAX_HOST_NAME_LENGTH;
+import static io.aeron.driver.logging.DriverEventCode.*;
+import static io.aeron.driver.logging.DriverEventDissector.*;
+import static io.aeron.driver.logging.DriverEventLogger.MAX_CHANNEL_URI_LENGTH;
+import static io.aeron.driver.logging.DriverEventLogger.MAX_HOST_NAME_LENGTH;
 import static io.aeron.logging.CommonEventEncoder.LOG_HEADER_LENGTH;
 import static io.aeron.logging.CommonEventEncoder.encodeSocketAddress;
 import static io.aeron.logging.CommonEventEncoder.inetAddressLength;
