@@ -60,7 +60,8 @@ class CborDecodeTest
         encodingState.reset(buffer, offset, length);
 
         CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, timestamp);
-        CborEncode.encode(encodingState, "memberId", memberId);
+        CborEncode.encode(encodingState, "memberId", NO_TAG, memberId);
+
         CborEncode.encodeFooter(encodingState);
 
         final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(loggerEventCallback)));
@@ -132,7 +133,7 @@ class CborDecodeTest
         encodingState.reset(buffer, offset, length);
 
         CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, timestamp);
-        CborEncode.encode(encodingState, "reason", reason);
+        CborEncode.encode(encodingState, "reason", NO_TAG, reason, true);
         CborEncode.encodeFooter(encodingState);
 
         final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(loggerEventCallback)));
@@ -161,9 +162,10 @@ class CborDecodeTest
         encodingState.reset(buffer, offset, length);
         final long timestamp = 12643263L;
         CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, timestamp);
-        CborEncode.encode(encodingState, "key1", 1_000_000_000L);
-        CborEncode.encode(encodingState, "key2", "S".repeat(50));
-        CborEncode.encode(encodingState, "key3", TimeUnit.DAYS.name());
+        CborEncode.encode(encodingState, "key1", NO_TAG, 1_000_000_000L);
+
+        CborEncode.encode(encodingState, "key2", NO_TAG, "S".repeat(50), true);
+        CborEncode.encode(encodingState, "key3", NO_TAG, TimeUnit.DAYS.name(), true);
         CborEncode.encodeFooter(encodingState);
 
         final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(loggerEventCallback)));
@@ -196,7 +198,7 @@ class CborDecodeTest
         CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, timestamp);
         CborEncode.encode(encodingState, "key1", ENUM_TAG, 1_000_000_000L);
         CborEncode.encode(encodingState, "key2", ENUM_TAG, "S".repeat(50), true);
-        CborEncode.encode(encodingState, "key3", TimeUnit.DAYS.name());
+        CborEncode.encode(encodingState, "key3", NO_TAG, TimeUnit.DAYS.name(), true);
         CborEncode.encodeFooter(encodingState);
 
         final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(loggerEventCallback)));
@@ -236,24 +238,36 @@ class CborDecodeTest
         encodingState.reset(buffer, offset, length);
         final long timestamp = 12643263L;
         CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, timestamp);
-        CborEncode.encode(encodingState, "veryLongMemberIdentifierKey", Long.MAX_VALUE);
-        CborEncode.encode(encodingState, "candidateTermIdentifierValue", candidateTermIdentifierValue);
-        CborEncode.encode(encodingState, "leadershipTermTimestampNanos", leadershipTermTimestampNanos);
-        CborEncode.encode(encodingState, "logPositionSnapshotState", TimeUnit.DAYS.name());
-        CborEncode.encode(encodingState, "appendPositionCatchupTarget", appendPositionCatchupTarget);
-        CborEncode.encode(encodingState, "negativeCatchupOffsetValue", negativeCatchupOffsetValue);
-        CborEncode.encode(encodingState, "smallPositiveBoundary", 0x7FL);
-        CborEncode.encode(encodingState, "oneByteBoundary", 0x100L);
-        CborEncode.encode(encodingState, "twoBytePositiveBoundary", 0x7FFFL);
-        CborEncode.encode(encodingState, "twoByteBoundary", 0x10000L);
-        CborEncode.encode(encodingState, "fourBytePositiveBoundary", 0x7FFFFFFFL);
-        CborEncode.encode(encodingState, "fourByteBoundary", 0x80000000L);
-        CborEncode.encode(encodingState, "smallNegativeBoundary", -2L);
-        CborEncode.encode(encodingState, "twoByteNegativeBoundary", -0xFFFFL);
-        CborEncode.encode(encodingState, "shortStringBoundary", shortStringBoundary);
-        CborEncode.encode(encodingState, "oneByteLengthBoundary", oneByteLengthBoundary);
-        CborEncode.encode(encodingState, "twoByteLengthBoundary", twoByteLengthBoundary);
-        CborEncode.encode(encodingState, "replicationUnit", TimeUnit.NANOSECONDS.name());
+        CborEncode.encode(encodingState, "veryLongMemberIdentifierKey", NO_TAG, Long.MAX_VALUE);
+
+        CborEncode.encode(encodingState, "candidateTermIdentifierValue", NO_TAG, candidateTermIdentifierValue, true);
+        CborEncode.encode(encodingState, "leadershipTermTimestampNanos", NO_TAG, leadershipTermTimestampNanos);
+
+        CborEncode.encode(encodingState, "logPositionSnapshotState", NO_TAG, TimeUnit.DAYS.name(), true);
+        CborEncode.encode(encodingState, "appendPositionCatchupTarget", NO_TAG, appendPositionCatchupTarget);
+
+        CborEncode.encode(encodingState, "negativeCatchupOffsetValue", NO_TAG, negativeCatchupOffsetValue);
+
+        CborEncode.encode(encodingState, "smallPositiveBoundary", NO_TAG, 0x7FL);
+
+        CborEncode.encode(encodingState, "oneByteBoundary", NO_TAG, 0x100L);
+
+        CborEncode.encode(encodingState, "twoBytePositiveBoundary", NO_TAG, 0x7FFFL);
+
+        CborEncode.encode(encodingState, "twoByteBoundary", NO_TAG, 0x10000L);
+
+        CborEncode.encode(encodingState, "fourBytePositiveBoundary", NO_TAG, 0x7FFFFFFFL);
+
+        CborEncode.encode(encodingState, "fourByteBoundary", NO_TAG, 0x80000000L);
+
+        CborEncode.encode(encodingState, "smallNegativeBoundary", NO_TAG, -2L);
+
+        CborEncode.encode(encodingState, "twoByteNegativeBoundary", NO_TAG, -0xFFFFL);
+
+        CborEncode.encode(encodingState, "shortStringBoundary", NO_TAG, shortStringBoundary, true);
+        CborEncode.encode(encodingState, "oneByteLengthBoundary", NO_TAG, oneByteLengthBoundary, true);
+        CborEncode.encode(encodingState, "twoByteLengthBoundary", NO_TAG, twoByteLengthBoundary, true);
+        CborEncode.encode(encodingState, "replicationUnit", NO_TAG, TimeUnit.NANOSECONDS.name(), true);
         CborEncode.encodeFooter(encodingState);
 
         Assertions.assertFalse(encodingState.isReachedLimit());
@@ -301,9 +315,10 @@ class CborDecodeTest
         final EncodingState encodingState = new EncodingState();
         encodingState.reset(buffer, offset, length);
         CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, 12643263L);
-        CborEncode.encode(encodingState, "key1", 1_000_000_000L);
-        CborEncode.encode(encodingState, "key2", "S".repeat(50));
-        CborEncode.encode(encodingState, "key3", TimeUnit.DAYS.name());
+        CborEncode.encode(encodingState, "key1", NO_TAG, 1_000_000_000L);
+
+        CborEncode.encode(encodingState, "key2", NO_TAG, "S".repeat(50), true);
+        CborEncode.encode(encodingState, "key3", NO_TAG, TimeUnit.DAYS.name(), true);
         CborEncode.encodeFooter(encodingState);
 
         final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(loggerEventCallback)));
@@ -336,9 +351,10 @@ class CborDecodeTest
         final EncodingState encodingState = new EncodingState();
         encodingState.reset(buffer, offset, length);
         CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, 12643263L);
-        CborEncode.encode(encodingState, "key1", 1_000_000_000L);
-        CborEncode.encode(encodingState, "key3", TimeUnit.DAYS.name());
-        CborEncode.encode(encodingState, "key2", "S".repeat(1_000_000));
+        CborEncode.encode(encodingState, "key1", NO_TAG, 1_000_000_000L);
+
+        CborEncode.encode(encodingState, "key3", NO_TAG, TimeUnit.DAYS.name(), true);
+        CborEncode.encode(encodingState, "key2", NO_TAG, "S".repeat(1_000_000), true);
         CborEncode.encodeFooter(encodingState);
 
         final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(loggerEventCallback)));

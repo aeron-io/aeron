@@ -18,6 +18,8 @@ package io.aeron.logging;
 
 import java.io.PrintStream;
 
+import static io.aeron.logging.CborUtils.ENUM_TAG;
+
 
 class PrintLoggerEventCallback implements LoggerEventCallback
 {
@@ -45,7 +47,15 @@ class PrintLoggerEventCallback implements LoggerEventCallback
 
     public void onValue(final CharSequence name, final long tags, final CharSequence value)
     {
-        sb.append(' ').append(name).append("=\"").append(value).append("\"");
+        sb.append(' ').append(name).append('=');
+        if (ENUM_TAG == tags)
+        {
+            sb.append(value);
+        }
+        else
+        {
+            sb.append("\"").append(value).append("\"");
+        }
     }
 
     public void onValue(final CharSequence name, final long tags, final long value)

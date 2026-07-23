@@ -119,31 +119,6 @@ public final class CborEncode
     }
 
     /**
-     * Calculates the total length of an encoded string-long pair.
-     *
-     * @param key   to be encoded.
-     * @param value to be encoded.
-     * @return the total length of the encoded string-long pair.
-     */
-    public static int length(final CharSequence key, final long value)
-    {
-        return length(key, NO_TAG, value);
-    }
-
-    /**
-     * Calculates the total length of an encoded string-enum pair.
-     *
-     * @param key   to be encoded.
-     * @param value to be encoded.
-     * @param <E>   the type of the enum to be encoded.
-     * @return the total length of the encoded string-enum pair.
-     */
-    public static <E extends Enum<E>> int length(final CharSequence key, final E value)
-    {
-        return length(key, value.name());
-    }
-
-    /**
      * Calculates the total length of the encoded string-string pair.
      *
      * @param key   to be encoded.
@@ -154,18 +129,6 @@ public final class CborEncode
     public static int length(final CharSequence key, final long tag, final CharSequence value)
     {
         return lengthString(key) + lengthTag(tag) + lengthString(value);
-    }
-
-    /**
-     * Calculates the total length of the encoded string-string pair.
-     *
-     * @param key   to be encoded.
-     * @param value to be encoded.
-     * @return the total length of the encoded string-string pair.
-     */
-    public static int length(final CharSequence key, final CharSequence value)
-    {
-        return length(key, NO_TAG, value);
     }
 
     private static void encodeNumber(final EncodingState encodingState, final long value)
@@ -279,22 +242,6 @@ public final class CborEncode
     }
 
     /**
-     * encodes a key-value pair of a string and an int.
-     *
-     * @param encodingState tracks the current state of the encoding.
-     * @param key           the key to be encoded.
-     * @param value         the value to be encoded.
-     */
-    public static void encode(
-        final EncodingState encodingState,
-        final CharSequence key,
-        final long value)
-    {
-        encode(encodingState, key, NO_TAG, value);
-
-    }
-
-    /**
      * Encode a key/string pair.
      *
      * @param encodingState tracks the current state of the encoding.
@@ -315,40 +262,6 @@ public final class CborEncode
             return;
         }
         encodeEntry(encodingState, key, tag, value, allowTruncate);
-    }
-
-    /**
-     * Encode a key/string pair.
-     *
-     * @see #encode(EncodingState, CharSequence, CharSequence, boolean)
-     * @param encodingState tracks the current state of the encoding.
-     * @param key           the key to be encoded.
-     * @param value         the value to be encoded.
-     */
-    public static void encode(
-        final EncodingState encodingState,
-        final CharSequence key,
-        final CharSequence value
-    )
-    {
-        encode(encodingState, key, NO_TAG, value, true);
-    }
-
-    /**
-     * Encodes a key-value pair of a string and a string.
-     *
-     * @param encodingState tracks the current state of the encoding.
-     * @param key           the key to be encoded.
-     * @param value         the value to be encoded.
-     * @param allowTruncate   whether the value can be truncated (or is just dropped).
-     */
-    public static void encode(
-        final EncodingState encodingState,
-        final CharSequence key,
-        final CharSequence value,
-        final boolean allowTruncate)
-    {
-        encode(encodingState, key, NO_TAG, value, allowTruncate);
     }
 
     private static void encodeEntry(
