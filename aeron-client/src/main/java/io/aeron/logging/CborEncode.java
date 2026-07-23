@@ -15,6 +15,7 @@
  */
 package io.aeron.logging;
 
+import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 
 import static io.aeron.logging.CborUtils.ADDITIONAL_CONTENT_1_BYTE;
@@ -24,6 +25,7 @@ import static io.aeron.logging.CborUtils.ADDITIONAL_CONTENT_8_BYTE;
 import static io.aeron.logging.CborUtils.ADDITIONAL_CONTENT_INDEFINITE;
 import static io.aeron.logging.CborUtils.ARRAY_MAJOR_TYPE;
 import static io.aeron.logging.CborUtils.BREAK;
+import static io.aeron.logging.CborUtils.BYTE_ARRAY_MAJOR_TYPE;
 import static io.aeron.logging.CborUtils.ENTRIES_LENGTH;
 import static io.aeron.logging.CborUtils.FALSE_VALUE;
 import static io.aeron.logging.CborUtils.MAP_MAJOR_TYPE;
@@ -77,21 +79,36 @@ public final class CborEncode
         {
             return 1;
         }
-        if (value.length() < 24)
+        final int length = value.length();
+        return lengthStringLike(length);
+    }
+
+    static int lengthBytes(final DirectBuffer value)
+    {
+        if (null == value)
         {
-            return 1 + value.length();
+            return 1;
         }
-        else if (value.length() < (1 << 8))
+        return lengthStringLike(value.capacity());
+    }
+
+    private static int lengthStringLike(final int length)
+    {
+        if (length < 24)
         {
-            return 1 + SIZE_OF_BYTE + value.length();
+            return 1 + length;
         }
-        else if (value.length() < (1 << 16))
+        else if (length < (1 << 8))
         {
-            return 1 + SIZE_OF_SHORT + value.length();
+            return 1 + SIZE_OF_BYTE + length;
+        }
+        else if (length < (1 << 16))
+        {
+            return 1 + SIZE_OF_SHORT + length;
         }
         else
         {
-            return 1 + SIZE_OF_INT + value.length();
+            return 1 + SIZE_OF_INT + length;
         }
     }
 
@@ -242,6 +259,75 @@ public final class CborEncode
     }
 
     /**
+     * Calculates the total length of an encoded string-bytes pair.
+     *
+     * @param name  to be encoded.
+     * @param tag   to be encoded.
+     * @param value to be encoded.
+     * @return the total length of the encoded string-bytes pair.
+     */
+    public static int length(final String name, final long tag, final DirectBuffer value)
+    {
+        return lengthString(name) + lengthTag(tag) + lengthBytes(value);
+    }
+
+    /**
+     * Encode a key/bytes pair.
+     *
+     * @param encodingState tracks the current state of the encoding.
+     * @param key           the key to be encoded.
+     * @param tag           the tag to be encoded.
+     * @param value         the value to be encoded.
+     * @param allowTruncate whether the value can be truncated (or is just dropped).
+     */
+    public static void encode(
+        final EncodingState encodingState,
+        final String key,
+        final long tag,
+        final DirectBuffer value,
+        final boolean allowTruncate)
+    {
+        // TODO: Consider generalizing this with string encoding
+        final int keyLength = lengthString(key);
+        // Key pre-check
+        if (encodingState.remaining() < keyLength)
+        {
+            encodingState.reachedLimit(true);
+            return;
+        }
+
+        final int remainingBytes = encodingState.remaining() - (keyLength + lengthTag(tag));
+        if (null == value)
+        {
+            if (remainingBytes <= 0)
+            {
+                encodingState.reachedLimit(true);
+                return;
+            }
+            encodeString(encodingState, key, false);
+            encodeNull(encodingState);
+            return;
+        }
+
+        final int valueLengthFieldBytes = lengthFieldBytes(value.capacity());
+        final int finalValueLength = Math.min(
+            value.capacity(),
+            remainingBytes - (1 + valueLengthFieldBytes));
+        final boolean needsTruncation = finalValueLength < value.capacity();
+
+        if (needsTruncation && !allowTruncate)
+        {
+            encodingState.reachedLimit(true);
+            return;
+        }
+
+        encodeString(encodingState, key, false);
+        encodeTag(encodingState, tag);
+        encodeBytes(encodingState, value, allowTruncate);
+    }
+
+
+    /**
      * Encode a key/string pair.
      *
      * @param encodingState tracks the current state of the encoding.
@@ -337,6 +423,76 @@ public final class CborEncode
         }
     }
 
+    private static void encodeBytes(
+        final EncodingState encodingState,
+        final DirectBuffer value,
+        final boolean allowTruncate)
+    {
+        // TODO: Consider generalizing with encodeString
+        final int valueLength = value.capacity();
+
+        final int lengthFieldBytes = lengthFieldBytes(valueLength);
+
+        // included string length + ellipsis (if truncated)
+        final int finalLength = Math.min(
+            valueLength,
+            encodingState.remaining() - (1 + lengthFieldBytes));
+
+        final boolean needsTruncation = finalLength < valueLength;
+        if (needsTruncation && !allowTruncate)
+        {
+            encodingState.reachedLimit(true);
+            return;
+        }
+
+        encodeStringLikeType(encodingState, lengthFieldBytes, BYTE_ARRAY_MAJOR_TYPE, finalLength);
+
+        final MutableDirectBuffer buffer = encodingState.buffer();
+        final int toWriteLength = needsTruncation ? finalLength : valueLength;
+        buffer.putBytes(encodingState.offset(), value, 0, toWriteLength);
+        encodingState.incrementOffset(toWriteLength);
+
+        if (needsTruncation)
+        {
+            encodingState.reachedLimit(true);
+        }
+    }
+
+    private static void encodeStringLikeType(
+        final EncodingState encodingState,
+        final int lengthFieldBytes,
+        final int type,
+        final int finalLength)
+    {
+        if (lengthFieldBytes > 0)
+        {
+            switch (lengthFieldBytes)
+            {
+                case SIZE_OF_BYTE ->
+                {
+                    encodingState.buffer().putByte(encodingState.offset(), typeByte(type, ADDITIONAL_CONTENT_1_BYTE));
+                    encodingState.buffer().putByte(encodingState.offset() + 1, (byte)finalLength);
+                }
+                case SIZE_OF_SHORT ->
+                {
+                    encodingState.buffer().putByte(encodingState.offset(), typeByte(type, ADDITIONAL_CONTENT_2_BYTE));
+                    encodingState.buffer().putShort(encodingState.offset() + 1, (short)finalLength, BIG_ENDIAN);
+                }
+                case SIZE_OF_INT ->
+                {
+                    encodingState.buffer().putByte(encodingState.offset(), typeByte(type, ADDITIONAL_CONTENT_4_BYTE));
+                    encodingState.buffer().putInt(encodingState.offset() + 1, finalLength, BIG_ENDIAN);
+                }
+            }
+        }
+        else
+        {
+            encodingState.buffer().putByte(encodingState.offset(), typeByte(type, finalLength));
+        }
+
+        encodingState.incrementOffset(1 + lengthFieldBytes);
+    }
+
     private static void encodeString(
         final EncodingState encodingState,
         final CharSequence value,
@@ -359,34 +515,7 @@ public final class CborEncode
         }
 
         final MutableDirectBuffer buffer = encodingState.buffer();
-        final int offset = encodingState.offset();
-        if (lengthFieldBytes > 0)
-        {
-            switch (lengthFieldBytes)
-            {
-                case SIZE_OF_BYTE ->
-                {
-                    buffer.putByte(offset, typeByte(TEXT_STRING_MAJOR_TYPE, ADDITIONAL_CONTENT_1_BYTE));
-                    buffer.putByte(offset + 1, (byte)finalLength);
-                }
-                case SIZE_OF_SHORT ->
-                {
-                    buffer.putByte(offset, typeByte(TEXT_STRING_MAJOR_TYPE, ADDITIONAL_CONTENT_2_BYTE));
-                    buffer.putShort(offset + 1, (short)finalLength, BIG_ENDIAN);
-                }
-                case SIZE_OF_INT ->
-                {
-                    buffer.putByte(offset, typeByte(TEXT_STRING_MAJOR_TYPE, ADDITIONAL_CONTENT_4_BYTE));
-                    buffer.putInt(offset + 1, finalLength, BIG_ENDIAN);
-                }
-            }
-        }
-        else
-        {
-            buffer.putByte(offset, typeByte(TEXT_STRING_MAJOR_TYPE, finalLength));
-        }
-
-        encodingState.incrementOffset(1 + lengthFieldBytes);
+        encodeStringLikeType(encodingState, lengthFieldBytes, TEXT_STRING_MAJOR_TYPE, finalLength);
         final int toWriteLength = needsTruncation ? finalLength - TRUNC_END.length() : value.length();
         buffer.putStringWithoutLengthAscii(encodingState.offset(), value, 0, toWriteLength);
         encodingState.incrementOffset(toWriteLength);

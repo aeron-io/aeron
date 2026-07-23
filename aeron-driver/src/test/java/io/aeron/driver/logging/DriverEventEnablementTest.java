@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.aeron.agent;
+package io.aeron.driver.logging;
 
 import io.aeron.command.ControlProtocolEvents;
 import io.aeron.driver.DriverLog;

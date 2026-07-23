@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.aeron.agent;
+package io.aeron.driver.logging;
 
 import io.aeron.logging.EventConfiguration;
 import org.agrona.concurrent.UnsafeBuffer;
@@ -32,10 +32,10 @@ import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.TimeUnit;
 
-import static io.aeron.agent.DriverEventCode.*;
-import static io.aeron.agent.DriverEventEncoder.untetheredSubscriptionStateChangeLength;
-import static io.aeron.agent.DriverEventLogger.MAX_HOST_NAME_LENGTH;
-import static io.aeron.agent.DriverEventLogger.toEventCodeId;
+import static io.aeron.driver.logging.DriverEventCode.*;
+import static io.aeron.driver.logging.DriverEventEncoder.untetheredSubscriptionStateChangeLength;
+import static io.aeron.driver.logging.DriverEventLogger.MAX_HOST_NAME_LENGTH;
+import static io.aeron.driver.logging.DriverEventLogger.toEventCodeId;
 import static io.aeron.logging.CommonEventEncoder.LOG_HEADER_LENGTH;
 import static io.aeron.logging.CommonEventEncoder.MAX_CAPTURE_LENGTH;
 import static io.aeron.logging.CommonEventEncoder.STATE_SEPARATOR;
@@ -61,7 +61,7 @@ class DriverEventLoggerTest
 {
     private static final int CAPACITY = 32 * 1024;
     private final UnsafeBuffer logBuffer = new UnsafeBuffer(allocateDirect(CAPACITY + TRAILER_LENGTH));
-    private final DriverEventLogger logger = new DriverEventLogger(new ManyToOneRingBuffer(logBuffer));
+    private final DriverEventLogger logger = new DriverEventLoggerImpl(new ManyToOneRingBuffer(logBuffer));
     private final UnsafeBuffer buffer = new UnsafeBuffer(allocate(MAX_EVENT_LENGTH * 3));
 
     @AfterEach

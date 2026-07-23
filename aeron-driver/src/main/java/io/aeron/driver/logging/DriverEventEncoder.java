@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.aeron.agent;
+package io.aeron.driver.logging;
 
 import org.agrona.DirectBuffer;
 import org.agrona.concurrent.UnsafeBuffer;
@@ -22,13 +22,16 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 
-import static io.aeron.agent.DriverEventLogger.MAX_HOST_NAME_LENGTH;
+import static io.aeron.driver.logging.DriverEventLogger.MAX_HOST_NAME_LENGTH;
 import static io.aeron.logging.CommonEventEncoder.encodeInetAddress;
 import static io.aeron.logging.CommonEventEncoder.encodeLogHeader;
 import static io.aeron.logging.CommonEventEncoder.encodeSocketAddress;
 import static io.aeron.logging.CommonEventEncoder.encodeTrailingStateChange;
 import static io.aeron.logging.CommonEventEncoder.encodeTrailingString;
+import static io.aeron.logging.CommonEventEncoder.inetAddressLength;
+import static io.aeron.logging.CommonEventEncoder.socketAddressLength;
 import static io.aeron.logging.CommonEventEncoder.stateTransitionStringLength;
+import static io.aeron.logging.CommonEventEncoder.trailingStringLength;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static org.agrona.BitUtil.*;
 
@@ -57,6 +60,44 @@ final class DriverEventEncoder
 
         final int bufferCaptureLength = captureLength - encodedSocketLength;
         encodingBuffer.putBytes(offset + encodedLength, srcBuffer, srcOffset, bufferCaptureLength);
+    }
+
+    static int identityLength(final int length)
+    {
+        return length;
+    }
+
+    static void encode(
+        final UnsafeBuffer encodingBuffer,
+        final int offset,
+        final int captureLength,
+        final int length,
+        final DirectBuffer srcBuffer,
+        final int srcOffset)
+    {
+        final int headerLength = encodeLogHeader(encodingBuffer, offset, captureLength, length);
+        encodingBuffer.putBytes(offset + headerLength, srcBuffer, srcOffset, captureLength);
+    }
+
+    static int frameInLength(final int frameLength, final InetSocketAddress dstAddress)
+    {
+        return frameLength + socketAddressLength(dstAddress);
+    }
+
+    static int frameOutLength(final ByteBuffer buffer, final InetSocketAddress dstAddress)
+    {
+        return buffer.remaining() + socketAddressLength(dstAddress);
+    }
+
+    static void encodeFrameOut(
+        final UnsafeBuffer encodingBuffer,
+        final int offset,
+        final int captureLength,
+        final int length,
+        final ByteBuffer buffer,
+        final InetSocketAddress dstAddress)
+    {
+        encode(encodingBuffer, offset, captureLength, length, buffer, buffer.position(), dstAddress);
     }
 
     static void encode(
@@ -95,6 +136,11 @@ final class DriverEventEncoder
         encodingBuffer.putBytes(offset + encodedLength, srcBuffer, srcOffset, bufferCaptureLength);
     }
 
+    static int stringValueLength(final String value)
+    {
+        return value.length() + SIZE_OF_INT;
+    }
+
     public static void encode(
         final UnsafeBuffer encodingBuffer,
         final int offset,
@@ -106,6 +152,11 @@ final class DriverEventEncoder
         encodeTrailingString(encodingBuffer, offset + encodedLength, captureLength, value);
     }
 
+    static int addressLength(final InetSocketAddress address)
+    {
+        return socketAddressLength(address);
+    }
+
     static void encode(
         final UnsafeBuffer encodingBuffer,
         final int offset,
@@ -115,6 +166,11 @@ final class DriverEventEncoder
     {
         final int encodedLength = encodeLogHeader(encodingBuffer, offset, captureLength, length);
         encodeSocketAddress(encodingBuffer, offset + encodedLength, address);
+    }
+
+    static int publicationRemovalLength(final String channel)
+    {
+        return SIZE_OF_INT * 3 + channel.length();
     }
 
     static void encodePublicationRemoval(
@@ -137,6 +193,11 @@ final class DriverEventEncoder
         encodeTrailingString(encodingBuffer, offset + encodedLength, captureLength - SIZE_OF_INT * 2, channel);
     }
 
+    static int subscriptionRemovalLength(final String channel)
+    {
+        return SIZE_OF_INT * 2 + SIZE_OF_LONG + channel.length();
+    }
+
     static void encodeSubscriptionRemoval(
         final UnsafeBuffer encodingBuffer,
         final int offset,
@@ -156,6 +217,11 @@ final class DriverEventEncoder
 
         encodeTrailingString(
             encodingBuffer, offset + encodedLength, captureLength - SIZE_OF_INT - SIZE_OF_LONG, channel);
+    }
+
+    static int imageRemovalLength(final String channel)
+    {
+        return SIZE_OF_INT * 3 + SIZE_OF_LONG + channel.length();
     }
 
     static void encodeImageRemoval(
@@ -213,6 +279,11 @@ final class DriverEventEncoder
         encodeTrailingStateChange(encodingBuffer, offset, encodedLength, captureLength, from, to);
     }
 
+    static int flowControlReceiverLength(final String channel)
+    {
+        return SIZE_OF_INT * 4 + SIZE_OF_LONG + channel.length();
+    }
+
     static void encodeFlowControlReceiver(
         final UnsafeBuffer encodingBuffer,
         final int offset,
@@ -240,6 +311,14 @@ final class DriverEventEncoder
 
         encodeTrailingString(
             encodingBuffer, offset + encodedLength, captureLength - SIZE_OF_INT * 3 - SIZE_OF_LONG, channel);
+    }
+
+    static int resolveLength(final String resolverName, final String name, final InetAddress address)
+    {
+        return SIZE_OF_BOOLEAN + SIZE_OF_LONG +
+            trailingStringLength(resolverName, MAX_HOST_NAME_LENGTH) +
+            trailingStringLength(name, MAX_HOST_NAME_LENGTH) +
+            inetAddressLength(address);
     }
 
     static void encodeResolve(
@@ -270,6 +349,14 @@ final class DriverEventEncoder
         encodeInetAddress(encodingBuffer, offset + encodedLength, inetAddress);
     }
 
+    static int lookupLength(final String resolverName, final String name, final String resolvedNameOrNull)
+    {
+        final String resolvedName = null != resolvedNameOrNull ? resolvedNameOrNull : "null";
+        return SIZE_OF_LONG + trailingStringLength(resolverName, MAX_HOST_NAME_LENGTH) +
+            trailingStringLength(name, MAX_HOST_NAME_LENGTH) + SIZE_OF_BOOLEAN +
+            trailingStringLength(resolvedName, MAX_HOST_NAME_LENGTH);
+    }
+
     static void encodeLookup(
         final UnsafeBuffer encodingBuffer,
         final int offset,
@@ -279,8 +366,9 @@ final class DriverEventEncoder
         final long durationNs,
         final String name,
         final boolean isReLookup,
-        final String resolvedName)
+        final String resolvedNameOrNull)
     {
+        final String resolvedName = null != resolvedNameOrNull ? resolvedNameOrNull : "null";
         int encodedLength = encodeLogHeader(encodingBuffer, offset, captureLength, length);
 
         encodingBuffer.putByte(offset + encodedLength, (byte)(isReLookup ? 1 : 0));
@@ -299,6 +387,11 @@ final class DriverEventEncoder
             encodingBuffer, offset + encodedLength, SIZE_OF_INT + MAX_HOST_NAME_LENGTH, resolvedName);
     }
 
+    static int hostNameLength(final String hostName)
+    {
+        return SIZE_OF_LONG + trailingStringLength(hostName, MAX_HOST_NAME_LENGTH);
+    }
+
     static void encodeHostName(
         final UnsafeBuffer encodingBuffer,
         final int offset,
@@ -314,6 +407,11 @@ final class DriverEventEncoder
 
         encodedLength += encodeTrailingString(
             encodingBuffer, offset + encodedLength, SIZE_OF_INT + MAX_HOST_NAME_LENGTH, hostName);
+    }
+
+    static int nakMessageLength(final InetSocketAddress address, final String channel)
+    {
+        return socketAddressLength(address) + (SIZE_OF_INT * 6) + channel.length();
     }
 
     static void encodeNakMessage(
@@ -347,6 +445,11 @@ final class DriverEventEncoder
         encodeTrailingString(encodingBuffer, bodyOffset + bodyLength, captureLength - bodyLength, channel);
     }
 
+    static int resendMessageLength(final String channel)
+    {
+        return (SIZE_OF_INT * 6) + channel.length();
+    }
+
     static void encodeResend(
         final UnsafeBuffer encodingBuffer,
         final int offset,
@@ -376,6 +479,11 @@ final class DriverEventEncoder
         encodeTrailingString(encodingBuffer, bodyOffset + bodyLength, captureLength - bodyLength, channel);
     }
 
+    static int publicationRevokeLength(final String channel)
+    {
+        return SIZE_OF_LONG + (SIZE_OF_INT * 3) + channel.length();
+    }
+
     static void encodePublicationRevoke(
         final UnsafeBuffer encodingBuffer,
         final int offset,
@@ -397,6 +505,11 @@ final class DriverEventEncoder
         encodingBuffer.putInt(bodyOffset + bodyLength, streamId, LITTLE_ENDIAN);
         bodyLength += SIZE_OF_INT;
         encodeTrailingString(encodingBuffer, bodyOffset + bodyLength, captureLength - bodyLength, channel);
+    }
+
+    static int publicationImageRevokeLength(final String channel)
+    {
+        return SIZE_OF_LONG + (SIZE_OF_INT * 3) + channel.length();
     }
 
     static void encodePublicationImageRevoke(

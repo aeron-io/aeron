@@ -15,8 +15,8 @@
  */
 package io.aeron.driver;
 
-import io.aeron.agent.DriverEventCode;
-import io.aeron.agent.DriverEventLogger;
+import io.aeron.driver.logging.DriverEventCode;
+import io.aeron.driver.logging.DriverEventLogger;
 import io.aeron.driver.media.ImageConnection;
 import org.agrona.DirectBuffer;
 
@@ -24,8 +24,8 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 
-import static io.aeron.agent.DriverEventCode.*;
-import static io.aeron.agent.DriverModuleLogger.isEnabled;
+import static io.aeron.driver.logging.DriverEventCode.*;
+import static io.aeron.driver.logging.DriverModuleLogger.isEnabled;
 import static io.aeron.command.ControlProtocolEvents.*;
 
 /**
@@ -543,7 +543,7 @@ public final class DriverLog
     public static void logCmd(final int msgTypeId, final DirectBuffer buffer, final int index, final int length)
     {
         final DriverEventCode code = cmdEventCode(msgTypeId);
-        if (null != code)
+        if (null != code && isEnabled(code))
         {
             DriverEventLogger.LOGGER.log(code, buffer, index, length);
         }

@@ -27,6 +27,7 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.dataformat.cbor.CBORFactory;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
@@ -40,6 +41,7 @@ import static io.aeron.logging.CborUtils.EVENT_CODE_INT_INDEX;
 import static io.aeron.logging.CborUtils.EVENT_CODE_STRING_INDEX;
 import static io.aeron.logging.CborUtils.NO_TAG;
 import static io.aeron.logging.CborUtils.TIMESTAMP_INDEX;
+import static io.aeron.logging.CborUtils.UINT8_TYPED_ARRAY_TAG;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 
@@ -165,6 +167,52 @@ class CborEncodeTest
             (Map<String, Object>)entries[DATA_INDEX];
 
         assertEquals(reason, stringObjectMap.get("reason"));
+    }
+
+    @ParameterizedTest
+    @MethodSource("generateStringsAndNull")
+    void shouldEncodeByteArray(final String rawBytes)
+    {
+        final int offset = 0;
+        final int length = 200_000;
+        final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
+        final byte[] byteArray;
+        if (null == rawBytes)
+        {
+            byteArray = null;
+        }
+        else
+        {
+            byteArray = rawBytes.getBytes(StandardCharsets.UTF_8);
+        }
+
+        final long timestamp = 12643263L;
+
+        final EncodingState encodingState = new EncodingState();
+        encodingState.reset(buffer, offset, length);
+
+        CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, timestamp);
+        CborEncode.encode(
+            encodingState,
+            "array",
+            UINT8_TYPED_ARRAY_TAG,
+            null == byteArray ? null : new UnsafeBuffer(byteArray),
+            true);
+        CborEncode.encodeFooter(encodingState);
+
+        final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());
+
+        final byte[] data = new byte[encodingState.offset()];
+        encodingState.buffer().getBytes(0, data);
+
+        final Object[] entries = cborObjectMapper.readValue(data, new TypeReference<>()
+        {
+        });
+
+        @SuppressWarnings("unchecked") final Map<String, Object> stringObjectMap =
+            (Map<String, Object>)entries[DATA_INDEX];
+        final byte[] actualByteArray = (byte[])stringObjectMap.get("array");
+        assertArrayEquals(byteArray, actualByteArray);
     }
 
     @ParameterizedTest

@@ -16,6 +16,8 @@
 package io.aeron.test.logging;
 
 import io.aeron.logging.LoggerEventCallback;
+import org.agrona.DirectBuffer;
+import org.agrona.concurrent.UnsafeBuffer;
 
 public class ProxyLoggerEventCallback implements LoggerEventCallback
 {
@@ -39,7 +41,7 @@ public class ProxyLoggerEventCallback implements LoggerEventCallback
     {
         if (value == null)
         {
-            this.delegate.onValue(name.toString(), tags, null);
+            this.delegate.onValue(name.toString(), tags, (CharSequence)null);
             return;
         }
 
@@ -54,6 +56,19 @@ public class ProxyLoggerEventCallback implements LoggerEventCallback
     public void onValue(final CharSequence name, final long tags, final boolean value)
     {
         this.delegate.onValue(name.toString(), tags, value);
+    }
+
+    public void onValue(final CharSequence name, final long tags, final DirectBuffer value)
+    {
+        if (value == null)
+        {
+            this.delegate.onValue(name.toString(), tags, (DirectBuffer)null);
+            return;
+        }
+
+        final byte[] copy = new byte[value.capacity()];
+        value.getBytes(0, copy);
+        this.delegate.onValue(name.toString(), tags, new UnsafeBuffer(copy));
     }
 
     public void onFooter(final boolean truncated)

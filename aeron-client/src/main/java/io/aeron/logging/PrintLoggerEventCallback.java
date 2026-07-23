@@ -16,6 +16,8 @@
 
 package io.aeron.logging;
 
+import org.agrona.DirectBuffer;
+
 import java.io.PrintStream;
 
 import static io.aeron.logging.CborUtils.ENUM_TAG;
@@ -70,6 +72,11 @@ class PrintLoggerEventCallback implements LoggerEventCallback
     public void onValue(final CharSequence name, final long tags, final boolean value)
     {
         sb.append(' ').append(name).append('=').append(value);
+    }
+
+    public void onValue(final CharSequence name, final long tags, final DirectBuffer value)
+    {
+
     }
 
     public void onFooter(final boolean truncated)

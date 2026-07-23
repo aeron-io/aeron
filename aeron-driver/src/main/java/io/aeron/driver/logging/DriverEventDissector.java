@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.aeron.agent;
+package io.aeron.driver.logging;
 
 import io.aeron.command.*;
 import io.aeron.logbuffer.FrameDescriptor;
@@ -21,7 +21,7 @@ import io.aeron.logging.CommonEventEncoder;
 import io.aeron.protocol.*;
 import org.agrona.MutableDirectBuffer;
 
-import static io.aeron.agent.DriverEventCode.*;
+import static io.aeron.driver.logging.DriverEventCode.*;
 import static io.aeron.logging.CommonEventDissector.dissectInetAddress;
 import static io.aeron.logging.CommonEventDissector.dissectLogHeader;
 import static io.aeron.logging.CommonEventDissector.dissectSocketAddress;
