@@ -17,7 +17,10 @@ package io.aeron.cluster.logging;
 
 import io.aeron.cluster.ElectionState;
 import io.aeron.logging.CborDecode;
+import io.aeron.logging.EventCodeType;
+import io.aeron.logging.LoggerEventCallback;
 import io.aeron.test.Tests;
+import io.aeron.test.logging.ProxyLoggerEventCallback;
 import org.agrona.BufferUtil;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
@@ -25,8 +28,12 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import static io.aeron.logging.CborUtils.ENUM_TAG;
+import static io.aeron.logging.CborUtils.NO_TAG;
 import static org.agrona.BitUtil.CACHE_LINE_LENGTH;
 import static org.agrona.concurrent.ringbuffer.RingBufferDescriptor.TRAILER_LENGTH;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
@@ -38,13 +45,10 @@ class CborClusterEventCodecTest
     @Test
     void encodeDecodeLogElectionStateChange()
     {
-        final ClusterEventLogger mockClusterEventLogger = mock(ClusterEventLogger.class);
-
+        final LoggerEventCallback mockLoggingCallback = mock(LoggerEventCallback.class);
+        final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(mockLoggingCallback)));
         final CborClusterEventLogger cborClusterEventLogger = new CborClusterEventLogger(ringBuffer);
-        final CborClusterEventDecode cborClusterEventDecode = new CborClusterEventDecode(
-            List.of(mockClusterEventLogger));
 
-        final CborDecode cborDecode = new CborDecode(List.of(cborClusterEventDecode));
 
         cborClusterEventLogger.logElectionStateChange(
             12,
@@ -64,17 +68,21 @@ class CborClusterEventCodecTest
             Tests.yield();
         }
 
-        verify(mockClusterEventLogger).logElectionStateChange(
-            12,
-            ElectionState.CANVASS,
-            ElectionState.CLOSED,
-            2342,
-            23434,
-            62354,
-            2789345,
-            87345,
-            345345,
-            2345,
-            "invalid");
+        verify(mockLoggingCallback).onHeader(
+            eq(EventCodeType.CLUSTER.getTypeCode()),
+            eq(ClusterEventCode.ELECTION_STATE_CHANGE.id()),
+            anyLong()
+        );
+        verify(mockLoggingCallback).onValue("memberId", NO_TAG, 12L);
+        verify(mockLoggingCallback).onValue("oldState", ENUM_TAG, "CANVASS");
+        verify(mockLoggingCallback).onValue("newState", ENUM_TAG, "CLOSED");
+        verify(mockLoggingCallback).onValue("candidateTermId", NO_TAG, 23434L);
+        verify(mockLoggingCallback).onValue("leadershipTermId", NO_TAG, 62354L);
+        verify(mockLoggingCallback).onValue("logPosition", NO_TAG, 2789345L);
+        verify(mockLoggingCallback).onValue("logLeadershipTermId", NO_TAG, 87345L);
+        verify(mockLoggingCallback).onValue("appendPosition", NO_TAG, 345345L);
+        verify(mockLoggingCallback).onValue("catchupPosition", NO_TAG, 2345L);
+        verify(mockLoggingCallback).onValue("reason", NO_TAG, "invalid");
+        verify(mockLoggingCallback).onFooter(false);
     }
 }

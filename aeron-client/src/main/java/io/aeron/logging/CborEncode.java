@@ -28,6 +28,7 @@ import static io.aeron.logging.CborUtils.ENTRIES_LENGTH;
 import static io.aeron.logging.CborUtils.FALSE_VALUE;
 import static io.aeron.logging.CborUtils.MAP_MAJOR_TYPE;
 import static io.aeron.logging.CborUtils.NEGATIVE_INTEGER_MAJOR_TYPE;
+import static io.aeron.logging.CborUtils.NO_TAG;
 import static io.aeron.logging.CborUtils.NULL_VALUE;
 import static io.aeron.logging.CborUtils.TAG_MAJOR_TYPE;
 import static io.aeron.logging.CborUtils.TEXT_STRING_MAJOR_TYPE;
@@ -97,7 +98,24 @@ public final class CborEncode
     static int lengthTag(final long tag)
     {
         // A tag is encoded the same way as numbers
+        if (NO_TAG == tag)
+        {
+            return 0;
+        }
         return lengthNumber(tag);
+    }
+
+    /**
+     * Calculates the total length of an encoded string-number pair.
+     *
+     * @param key   to be encoded.
+     * @param tag   to be encoded.
+     * @param value to be encoded.
+     * @return the total length of the encoded string-number pair.
+     */
+    public static int length(final CharSequence key, final long tag, final long value)
+    {
+        return lengthString(key) + lengthTag(tag) + lengthNumber(value);
     }
 
     /**
@@ -109,7 +127,7 @@ public final class CborEncode
      */
     public static int length(final CharSequence key, final long value)
     {
-        return lengthString(key) + lengthNumber(value);
+        return length(key, NO_TAG, value);
     }
 
     /**
@@ -129,12 +147,25 @@ public final class CborEncode
      * Calculates the total length of the encoded string-string pair.
      *
      * @param key   to be encoded.
+     * @param tag   to be encoded.
+     * @param value to be encoded.
+     * @return the total length of the encoded string-string pair.
+     */
+    public static int length(final CharSequence key, final long tag, final CharSequence value)
+    {
+        return lengthString(key) + lengthTag(tag) + lengthString(value);
+    }
+
+    /**
+     * Calculates the total length of the encoded string-string pair.
+     *
+     * @param key   to be encoded.
      * @param value to be encoded.
      * @return the total length of the encoded string-string pair.
      */
     public static int length(final CharSequence key, final CharSequence value)
     {
-        return lengthString(key) + lengthString(value);
+        return length(key, NO_TAG, value);
     }
 
     private static void encodeNumber(final EncodingState encodingState, final long value)
@@ -158,11 +189,15 @@ public final class CborEncode
     /**
      * encodes a tag.
      * @param state of the encoding operation.
-     * @param tags to encode.
+     * @param tag to encode.
      */
-    public static void encodeTag(final EncodingState state, final long tags)
+    public static void encodeTag(final EncodingState state, final long tag)
     {
-        encodeNumberLikeFormat(state, TAG_MAJOR_TYPE, tags);
+        if (NO_TAG == tag)
+        {
+            return;
+        }
+        encodeNumberLikeFormat(state, TAG_MAJOR_TYPE, tag);
     }
 
     private static void encodeNumberLikeFormat(
@@ -212,6 +247,38 @@ public final class CborEncode
     }
 
     /**
+     * Encodes a key-value pair of a string and a number.
+     *
+     * @param encodingState tracks the current state of the encoding.
+     * @param key           the key to be encoded.
+     * @param tag           the tag to be encoded.
+     * @param value         the value to be encoded.
+     */
+    public static void encode(
+        final EncodingState encodingState,
+        final CharSequence key,
+        final long tag,
+        final long value)
+    {
+        if (encodingState.isReachedLimit())
+        {
+            return;
+        }
+
+        final int length = length(key, tag, value);
+
+        if (encodingState.remaining() < length)
+        {
+            encodingState.reachedLimit(true);
+            return;
+        }
+
+        encodeString(encodingState, key, false);
+        encodeTag(encodingState, tag);
+        encodeNumber(encodingState, value);
+    }
+
+    /**
      * encodes a key-value pair of a string and an int.
      *
      * @param encodingState tracks the current state of the encoding.
@@ -223,21 +290,31 @@ public final class CborEncode
         final CharSequence key,
         final long value)
     {
+        encode(encodingState, key, NO_TAG, value);
+
+    }
+
+    /**
+     * Encode a key/string pair.
+     *
+     * @param encodingState tracks the current state of the encoding.
+     * @param key           the key to be encoded.
+     * @param tag           the tag to be encoded.
+     * @param value         the value to be encoded.
+     * @param allowTruncate whether the value can be truncated (or is just dropped).
+     */
+    public static void encode(
+        final EncodingState encodingState,
+        final CharSequence key,
+        final long tag,
+        final CharSequence value,
+        final boolean allowTruncate)
+    {
         if (encodingState.isReachedLimit())
         {
             return;
         }
-
-        final int length = length(key, value);
-
-        if (encodingState.remaining() < length)
-        {
-            encodingState.reachedLimit(true);
-            return;
-        }
-
-        encodeString(encodingState, key, false);
-        encodeNumber(encodingState, value);
+        encodeEntry(encodingState, key, tag, value, allowTruncate);
     }
 
     /**
@@ -254,7 +331,7 @@ public final class CborEncode
         final CharSequence value
     )
     {
-        encode(encodingState, key, value, true);
+        encode(encodingState, key, NO_TAG, value, true);
     }
 
     /**
@@ -271,16 +348,13 @@ public final class CborEncode
         final CharSequence value,
         final boolean allowTruncate)
     {
-        if (encodingState.isReachedLimit())
-        {
-            return;
-        }
-        encodeEntry(encodingState, key, value, allowTruncate);
+        encode(encodingState, key, NO_TAG, value, allowTruncate);
     }
 
     private static void encodeEntry(
         final EncodingState encodingState,
         final CharSequence key,
+        final long tag,
         final CharSequence value,
         final boolean allowTruncate)
     {
@@ -292,7 +366,7 @@ public final class CborEncode
             return;
         }
 
-        final int remainingBytes = encodingState.remaining() - keyLength;
+        final int remainingBytes = encodingState.remaining() - (keyLength + lengthTag(tag));
         if (null == value)
         {
             if (remainingBytes <= 0)
@@ -318,6 +392,7 @@ public final class CborEncode
         }
 
         encodeString(encodingState, key, false);
+        encodeTag(encodingState, tag);
         encodeString(encodingState, value, allowTruncate);
     }
 
