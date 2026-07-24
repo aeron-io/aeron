@@ -250,6 +250,30 @@ TEST_P(PubSubTest, shouldSubscribeExclusivePublish)
                 EXPECT_EQ(initialTermId, header.initialTermId());
             },
             1), invoker);
+
+        std::array<std::uint8_t, 16> partBytes;
+        for (std::size_t i = 0; i < partBytes.size(); i++)
+        {
+            partBytes[i] = static_cast<std::uint8_t>(i);
+        }
+        AtomicBuffer partBuffer(partBytes);
+        std::vector<AtomicBuffer> buffers(17, partBuffer);
+
+        for (std::size_t vectorLength : { std::size_t(16), std::size_t(17) })
+        {
+            POLL_FOR(0 < pub->offer(buffers.begin(), buffers.begin() + vectorLength), invoker);
+            POLL_FOR(0 < sub->poll(
+                [&](concurrent::AtomicBuffer &buffer, util::index_t offset, util::index_t length, Header &)
+                {
+                    EXPECT_EQ(vectorLength * partBytes.size(), static_cast<std::size_t>(length));
+                    for (util::index_t i = 0; i < length; i++)
+                    {
+                        EXPECT_EQ(partBytes[static_cast<std::size_t>(i) % partBytes.size()],
+                            buffer.getUInt8(offset + i));
+                    }
+                },
+                1), invoker);
+        }
     }
 
     invoker.invoke();
@@ -282,6 +306,11 @@ TEST_P(PubSubTest, shouldBlockPollSubscription)
         buffer.putString(0, message);
         AtomicBuffer buffers[]{buffer, buffer, buffer};
         POLL_FOR(0 < pub->offer(buffers, 3), invoker);
+
+        std::array<std::uint8_t, 16> partBytes = {};
+        AtomicBuffer partBuffer(partBytes);
+        std::vector<AtomicBuffer> overflowBuffers(17, partBuffer);
+        POLL_FOR(0 < pub->offer(overflowBuffers.begin(), overflowBuffers.end()), invoker);
 
         std::int64_t bytesReceived = 0;
         std::int64_t bytesConsumed = 0;
