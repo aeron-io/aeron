@@ -73,13 +73,7 @@
 
 static int aeron_mmap(aeron_mapped_file_t *mapping, int fd, bool pre_touch, bool read_only)
 {
-    HANDLE hmap = CreateFileMapping(
-        (HANDLE)_get_osfhandle(fd),
-        0,
-        read_only ? PAGE_READONLY : PAGE_READWRITE,
-        0,
-        0,
-        0);
+    HANDLE hmap = CreateFileMapping((HANDLE)_get_osfhandle(fd), 0, read_only ? PAGE_READONLY : PAGE_READWRITE, 0, 0, 0);
 
     if (!hmap)
     {
@@ -87,13 +81,7 @@ static int aeron_mmap(aeron_mapped_file_t *mapping, int fd, bool pre_touch, bool
         return -1;
     }
 
-    mapping->addr = MapViewOfFileEx(
-        hmap,
-        read_only ? FILE_MAP_READ : FILE_MAP_WRITE,
-        0,
-        0,
-        mapping->length,
-        NULL);
+    mapping->addr = MapViewOfFileEx(hmap, read_only ? FILE_MAP_READ : FILE_MAP_WRITE, 0, 0, mapping->length, NULL);
 
     if (!mapping->addr)
     {
@@ -701,7 +689,7 @@ static int aeron_open_file(const char *path, bool read_only)
     HANDLE hfile = CreateFile(
             path,
             read_only ? FILE_GENERIC_READ | DELETE : FILE_GENERIC_READ | FILE_GENERIC_WRITE | DELETE,
-           FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
             NULL,
             OPEN_EXISTING,
             FILE_ATTRIBUTE_NORMAL | FILE_FLAG_POSIX_SEMANTICS,
