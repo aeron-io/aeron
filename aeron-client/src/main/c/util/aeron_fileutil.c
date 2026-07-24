@@ -701,7 +701,7 @@ static int aeron_open_file(const char *path, bool read_only)
     HANDLE hfile = CreateFile(
             path,
             read_only ? FILE_GENERIC_READ | DELETE : FILE_GENERIC_READ | FILE_GENERIC_WRITE | DELETE,
-            read_only ? FILE_SHARE_READ | FILE_SHARE_DELETE : FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+           FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
             NULL,
             OPEN_EXISTING,
             FILE_ATTRIBUTE_NORMAL | FILE_FLAG_POSIX_SEMANTICS,
