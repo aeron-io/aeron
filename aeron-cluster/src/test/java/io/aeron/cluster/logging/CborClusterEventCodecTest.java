@@ -30,6 +30,8 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
+import org.mockito.Mockito;
 
 import java.util.List;
 import java.util.stream.Stream;
@@ -57,7 +59,6 @@ class CborClusterEventCodecTest
         final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(mockLoggingCallback)));
         final CborClusterEventLogger cborClusterEventLogger = new CborClusterEventLogger(ringBuffer);
 
-
         cborClusterEventLogger.logElectionStateChange(
             12,
             ElectionState.CANVASS,
@@ -76,22 +77,25 @@ class CborClusterEventCodecTest
             Tests.yield();
         }
 
-        verify(mockLoggingCallback).onHeader(
+        final InOrder inOrder = Mockito.inOrder(mockLoggingCallback);
+
+        inOrder.verify(mockLoggingCallback).onHeader(
             eq(EventCodeType.CLUSTER.getTypeCode()),
             eq(ClusterEventCode.ELECTION_STATE_CHANGE.id()),
             eq(ClusterEventCode.ELECTION_STATE_CHANGE.name()),
             anyLong());
-        verify(mockLoggingCallback).onValue("memberId", NO_TAG, 12L);
-        verify(mockLoggingCallback).onValue("oldState", ENUM_TAG, "CANVASS");
-        verify(mockLoggingCallback).onValue("newState", ENUM_TAG, "CLOSED");
-        verify(mockLoggingCallback).onValue("candidateTermId", NO_TAG, 23434L);
-        verify(mockLoggingCallback).onValue("leadershipTermId", NO_TAG, 62354L);
-        verify(mockLoggingCallback).onValue("logPosition", NO_TAG, 2789345L);
-        verify(mockLoggingCallback).onValue("logLeadershipTermId", NO_TAG, 87345L);
-        verify(mockLoggingCallback).onValue("appendPosition", NO_TAG, 345345L);
-        verify(mockLoggingCallback).onValue("catchupPosition", NO_TAG, 2345L);
-        verify(mockLoggingCallback).onValue("reason", NO_TAG, "invalid");
-        verify(mockLoggingCallback).onFooter(false);
+
+        inOrder.verify(mockLoggingCallback).onValue("memberId", NO_TAG, 12L);
+        inOrder.verify(mockLoggingCallback).onValue("oldState", ENUM_TAG, "CANVASS");
+        inOrder.verify(mockLoggingCallback).onValue("newState", ENUM_TAG, "CLOSED");
+        inOrder.verify(mockLoggingCallback).onValue("candidateTermId", NO_TAG, 23434L);
+        inOrder.verify(mockLoggingCallback).onValue("leadershipTermId", NO_TAG, 62354L);
+        inOrder.verify(mockLoggingCallback).onValue("logPosition", NO_TAG, 2789345L);
+        inOrder.verify(mockLoggingCallback).onValue("logLeadershipTermId", NO_TAG, 87345L);
+        inOrder.verify(mockLoggingCallback).onValue("appendPosition", NO_TAG, 345345L);
+        inOrder.verify(mockLoggingCallback).onValue("catchupPosition", NO_TAG, 2345L);
+        inOrder.verify(mockLoggingCallback).onValue("reason", NO_TAG, "invalid");
+        inOrder.verify(mockLoggingCallback).onFooter(false);
     }
 
     @ParameterizedTest
@@ -162,8 +166,8 @@ class CborClusterEventCodecTest
             Tests.yield();
         }
 
-        verify(mockLoggingCallback).onValue("memberId", NO_TAG, (long)value);
-        verify(mockLoggingCallback).onValue("leaderId", NO_TAG, (long)value);
+        verify(mockLoggingCallback).onValue("memberId", NO_TAG, value);
+        verify(mockLoggingCallback).onValue("leaderId", NO_TAG, value);
         verify(mockLoggingCallback).onFooter(false);
     }
 
@@ -266,8 +270,9 @@ class CborClusterEventCodecTest
             new UnsafeBuffer(BufferUtil.allocateDirectAligned(dataCapacity + TRAILER_LENGTH, CACHE_LINE_LENGTH)));
         final CborClusterEventLogger cborClusterEventLogger = new CborClusterEventLogger(smallRingBuffer);
 
-        final IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
-            cborClusterEventLogger.logElectionStateChange(
+        final IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> cborClusterEventLogger.logElectionStateChange(
                 12,
                 ElectionState.CANVASS,
                 ElectionState.CLOSED,
