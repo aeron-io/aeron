@@ -51,9 +51,7 @@ public class CborDriverEventLogger implements DriverEventLogger
     /**
      * {@inheritDoc}
      */
-    public void logFrameOut(
-        final ByteBuffer buffer, final InetSocketAddress dstAddress
-    )
+    public void logFrameOut(final ByteBuffer buffer, final InetSocketAddress dstAddress)
     {
         final long timestamp = System.nanoTime();
 
@@ -62,10 +60,10 @@ public class CborDriverEventLogger implements DriverEventLogger
         final UnsafeBuffer addressView = addressViewThreadLocal.get();
         addressView.wrap(dstAddress.getAddress().getAddress());
 
-        int length = CborEncode.headerLength(DriverEventCode.FRAME_OUT, timestamp);
+        int length = CborEncode.lengthHeader(DriverEventCode.FRAME_OUT, timestamp);
         length += CborEncode.length("buffer", UINT8_TYPED_ARRAY_TAG, bufferView);
         length += CborEncode.length("dstAddress", IPV4_TAG, addressView);
-        length += CborEncode.footerLength();
+        length += CborEncode.lengthFooter();
 
         final int bufferLength = Math.min(length, MAX_BUFFER_LENGTH);
         final int index = ringBuffer.tryClaim(DriverEventCode.FRAME_OUT.toEventCodeId(), bufferLength);

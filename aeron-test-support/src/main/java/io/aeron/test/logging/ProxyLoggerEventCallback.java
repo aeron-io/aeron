@@ -37,38 +37,38 @@ public class ProxyLoggerEventCallback implements LoggerEventCallback
         this.delegate.onHeader(eventType, eventCode, eventCodeName.toString(), timestamp);
     }
 
-    public void onValue(final CharSequence name, final long tags, final CharSequence value)
+    public void onValue(final CharSequence name, final long tag, final CharSequence value)
     {
         if (value == null)
         {
-            this.delegate.onValue(name.toString(), tags, (CharSequence)null);
+            this.delegate.onValue(name.toString(), tag, (CharSequence)null);
             return;
         }
 
-        this.delegate.onValue(name.toString(), tags, value.toString());
+        this.delegate.onValue(name.toString(), tag, value.toString());
     }
 
-    public void onValue(final CharSequence name, final long tags, final long value)
+    public void onValue(final CharSequence name, final long tag, final long value)
     {
-        this.delegate.onValue(name.toString(), tags, value);
+        this.delegate.onValue(name.toString(), tag, value);
     }
 
-    public void onValue(final CharSequence name, final long tags, final boolean value)
+    public void onValue(final CharSequence name, final long tag, final boolean value)
     {
-        this.delegate.onValue(name.toString(), tags, value);
+        this.delegate.onValue(name.toString(), tag, value);
     }
 
-    public void onValue(final CharSequence name, final long tags, final DirectBuffer value)
+    public void onValue(final CharSequence name, final long tag, final DirectBuffer value)
     {
         if (value == null)
         {
-            this.delegate.onValue(name.toString(), tags, (DirectBuffer)null);
+            this.delegate.onValue(name.toString(), tag, (DirectBuffer)null);
             return;
         }
 
         final byte[] copy = new byte[value.capacity()];
         value.getBytes(0, copy);
-        this.delegate.onValue(name.toString(), tags, new UnsafeBuffer(copy));
+        this.delegate.onValue(name.toString(), tag, new UnsafeBuffer(copy));
     }
 
     public void onFooter(final boolean truncated)
