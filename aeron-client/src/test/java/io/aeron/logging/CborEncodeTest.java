@@ -16,6 +16,7 @@
 
 package io.aeron.logging;
 
+import io.aeron.test.logging.ProxyLoggerEventCallback;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -23,18 +24,21 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.InOrder;
+import org.mockito.Mockito;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.dataformat.cbor.CBORFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
-import static io.aeron.logging.CborEncode.headerLength;
+import static io.aeron.logging.CborEncode.lengthHeader;
 import static io.aeron.logging.CborUtils.DATA_INDEX;
 import static io.aeron.logging.CborUtils.ENUM_TAG;
 import static io.aeron.logging.CborUtils.EVENT_CODE_INT_INDEX;
@@ -43,7 +47,9 @@ import static io.aeron.logging.CborUtils.NO_TAG;
 import static io.aeron.logging.CborUtils.TIMESTAMP_INDEX;
 import static io.aeron.logging.CborUtils.UINT8_TYPED_ARRAY_TAG;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 class CborEncodeTest
 {
@@ -292,7 +298,7 @@ class CborEncodeTest
         // key plus a handful of characters, forcing its huge value to truncate,
         // while the footer still has room to be written.
         final long timestamp = 12643263L;
-        final int length = 39 + headerLength(TEST_EVENT_CODE, timestamp);
+        final int length = 39 + lengthHeader(TEST_EVENT_CODE, timestamp);
         final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
 
         final EncodingState encodingState = new EncodingState();
@@ -436,13 +442,13 @@ class CborEncodeTest
             "appendPositionCatchupTarget",
             "negativeCatchupOffsetValue"
         ), stringObjectMap.keySet());
+
         assertEquals(Long.MAX_VALUE, ((Number)stringObjectMap.get("veryLongMemberIdentifierKey")).longValue());
         assertEquals(
             -123_456_789_012_345L, ((Number)stringObjectMap.get("leadershipTermTimestampNanos")).longValue());
         assertEquals(TimeUnit.NANOSECONDS.name(), stringObjectMap.get("logPositionSnapshotState"));
         assertEquals(42L, ((Number)stringObjectMap.get("appendPositionCatchupTarget")).longValue());
         assertEquals(-0x12345678L, ((Number)stringObjectMap.get("negativeCatchupOffsetValue")).longValue());
-
     }
 
     @Test
@@ -481,7 +487,7 @@ class CborEncodeTest
 
         final EncodingState encodingState = new EncodingState();
         final long timestamp = 12643263L;
-        encodingState.reset(buffer, 0, 7 + headerLength(TEST_EVENT_CODE, timestamp));
+        encodingState.reset(buffer, 0, 7 + lengthHeader(TEST_EVENT_CODE, timestamp));
         CborEncode.encodeHeader(encodingState, TEST_EVENT_CODE, timestamp);
         CborEncode.encode(encodingState, "a", NO_TAG, "S".repeat(100_000), true);
         CborEncode.encodeFooter(encodingState);
@@ -504,7 +510,7 @@ class CborEncodeTest
     void shouldDropBooleanFieldWhenItCannotFit()
     {
         final long timestamp = 12643263L;
-        final int length = 3 + headerLength(TEST_EVENT_CODE, timestamp);
+        final int length = 3 + lengthHeader(TEST_EVENT_CODE, timestamp);
         final UnsafeBuffer buffer = new UnsafeBuffer(new byte[length]);
 
         final EncodingState encodingState = new EncodingState();
@@ -550,10 +556,16 @@ class CborEncodeTest
         final byte[] data = new byte[encodingState.offset()];
         encodingState.buffer().getBytes(0, data);
 
-        final Object[] entries = cborObjectMapper.readValue(data, new TypeReference<>()
-        {
-        });
+        final CborDecode decode = new CborDecode(List.of(new ProxyLoggerEventCallback(loggerEventCallback)));
+        decode.onMessage(TEST_EVENT_CODE.toEventCodeId(), new UnsafeBuffer(data), 0, data.length);
 
-        System.out.println(Arrays.toString(entries));
+        InOrder inOrder = inOrder(loggerEventCallback);
+
+        inOrder.verify(loggerEventCallback).onHeader(
+            TEST_EVENT_CODE.eventCode(), TEST_EVENT_CODE.id(), TEST_EVENT_CODE.name(), timestamp);
+        inOrder.verify(loggerEventCallback).onValue("key1", ENUM_TAG, 1_000_000_000L);
+        inOrder.verify(loggerEventCallback).onValue("key2", ENUM_TAG, "S".repeat(50));
+        inOrder.verify(loggerEventCallback).onValue("key3", NO_TAG, TimeUnit.DAYS.name());
+        inOrder.verify(loggerEventCallback).onFooter(false);
     }
 }

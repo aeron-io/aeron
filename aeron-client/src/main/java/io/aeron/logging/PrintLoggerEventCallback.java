@@ -51,10 +51,10 @@ class PrintLoggerEventCallback implements LoggerEventCallback
         sb.append(eventCodeName);
     }
 
-    public void onValue(final CharSequence name, final long tags, final CharSequence value)
+    public void onValue(final CharSequence name, final long tag, final CharSequence value)
     {
         sb.append(' ').append(name).append('=');
-        if (ENUM_TAG == tags)
+        if (ENUM_TAG == tag)
         {
             sb.append(value);
         }
@@ -64,17 +64,17 @@ class PrintLoggerEventCallback implements LoggerEventCallback
         }
     }
 
-    public void onValue(final CharSequence name, final long tags, final long value)
+    public void onValue(final CharSequence name, final long tag, final long value)
     {
         sb.append(' ').append(name).append('=').append(value);
     }
 
-    public void onValue(final CharSequence name, final long tags, final boolean value)
+    public void onValue(final CharSequence name, final long tag, final boolean value)
     {
         sb.append(' ').append(name).append('=').append(value);
     }
 
-    public void onValue(final CharSequence name, final long tags, final DirectBuffer value)
+    public void onValue(final CharSequence name, final long tag, final DirectBuffer value)
     {
 
     }

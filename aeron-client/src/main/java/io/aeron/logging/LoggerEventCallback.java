@@ -44,14 +44,14 @@ public interface LoggerEventCallback
      * @param name  of the event, note that the supplied {@link CharSequence} is reused across multiple calls, it
      *              is the user's responsibility to copy this value if required as the value is only valid for the
      *              scope of the call.
-     * @param tags  of the event, note that the supplied {@link CharSequence} is reused across multiple calls, it
+     * @param tag  of the event, note that the supplied {@link CharSequence} is reused across multiple calls, it
      *              is the user's responsibility to copy this value if required as the value is only valid for the
      *              scope of the call.
      * @param value of the event, note that the supplied {@link CharSequence} is reused across multiple calls, it
      *              is the user's responsibility to copy this value if required as the value is only valid for the
      *              scope of the call.
      */
-    void onValue(CharSequence name, long tags, CharSequence value);
+    void onValue(CharSequence name, long tag, CharSequence value);
 
     /**
      * A number value of the logging event. Could be of any numeric length (e.g. byte, short, int, long).
@@ -59,10 +59,10 @@ public interface LoggerEventCallback
      * @param name  of the event, note that the supplied {@link CharSequence} is reused across multiple calls, it
      *              is the user's responsibility to copy this value if required as the value is only valid for the
      *              scope of the call.
-     * @param tags  of the event.
+     * @param tag  of the event.
      * @param value of the event.
      */
-    void onValue(CharSequence name, long tags, long value);
+    void onValue(CharSequence name, long tag, long value);
 
     /**
      * A boolean value of the logging event.
@@ -70,10 +70,10 @@ public interface LoggerEventCallback
      * @param name  of the event, note that the supplied {@link CharSequence} is reused across multiple calls, it
      *              is the user's responsibility to copy this value if required as the value is only valid for the
      *              scope of the call.
-     * @param tags  of the event.
+     * @param tag  of the event.
      * @param value of the event.
      */
-    void onValue(CharSequence name, long tags, boolean value);
+    void onValue(CharSequence name, long tag, boolean value);
 
     /**
      * A byte array value of the logging event.
@@ -81,12 +81,12 @@ public interface LoggerEventCallback
      * @param name  of the event, note that the supplied {@link CharSequence} is reused across multiple calls, it
      *              is the user's responsibility to copy this value if required as the value is only valid for the
      *              scope of the call.
-     * @param tags  of the event.
+     * @param tag  of the event.
      * @param value of the event, note that the supplied {@link DirectBuffer} is reused across multiple calls, it
      *              is the user's responsibility to copy this value if required as the value is only valid for the
      *              scope of the call.
      */
-    void onValue(CharSequence name, long tags, DirectBuffer value);
+    void onValue(CharSequence name, long tag, DirectBuffer value);
 
     /**
      * Indicates that the message is complete, and will determine if any fields were dropped due to truncation.
@@ -94,6 +94,4 @@ public interface LoggerEventCallback
      * @param truncated if this message was truncated when writing.
      */
     void onFooter(boolean truncated);
-
-
 }

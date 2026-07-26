@@ -54,6 +54,235 @@ public final class CborEncode
     {
     }
 
+    /**
+     * Calculate the length of the header of the Cbor message.
+     *
+     * @param eventCode  for this message.
+     * @param timestamp  of this message.
+     * @return the length of the header of the Cbor message.
+     */
+    public static int lengthHeader(final EventCode eventCode, final long timestamp)
+    {
+        return 1 + lengthNumber(timestamp) + lengthNumber(eventCode.toEventCodeId()) +
+            lengthString(eventCode.name()) + 1;
+    }
+
+    /**
+     * Encode the header of the Cbor message.
+     *
+     * @param encodingState    tracks the current state of the encoding.
+     * @param clusterEventCode the cluster event code.
+     * @param timestamp        the timestamp of the event.
+     */
+    public static void encodeHeader(
+        final EncodingState encodingState,
+        final EventCode clusterEventCode,
+        final long timestamp)
+    {
+        encodingState.buffer().putByte(encodingState.offset(), typeByte(ARRAY_MAJOR_TYPE, ENTRIES_LENGTH));
+        encodingState.incrementOffset(1);
+        encodeNumber(encodingState, timestamp);
+        encodeNumber(encodingState, clusterEventCode.toEventCodeId());
+        encodeString(encodingState, clusterEventCode.name(), false);
+        encodingState.buffer().putByte(encodingState.offset(), typeByte(MAP_MAJOR_TYPE, ADDITIONAL_CONTENT_INDEFINITE));
+        encodingState.incrementOffset(1);
+    }
+
+    /**
+     * {@return the length of the footer in bytes}
+     */
+    public static int lengthFooter()
+    {
+        return 2;
+    }
+
+    /**
+     * Encode the footer.
+     *
+     * @param encodingState tracks the current state of the encoding.
+     */
+    public static void encodeFooter(final EncodingState encodingState)
+    {
+        // TODO: Decide how truncation flag should be handled here
+        encodingState.buffer().putByte(encodingState.offset(), (byte)BREAK);
+        encodingState.incrementOffset(1);
+        encodeBoolean(encodingState, encodingState.isReachedLimit());
+    }
+
+    /**
+     * Calculates the total length of an encoded string-number pair.
+     *
+     * @param key   to be encoded.
+     * @param tag   to be encoded.
+     * @param value to be encoded.
+     * @return the total length of the encoded string-number pair.
+     */
+    public static int length(final CharSequence key, final long tag, final long value)
+    {
+        return lengthString(key) + lengthTag(tag) + lengthNumber(value);
+    }
+
+    /**
+     * Encodes a key-value pair of a string and a number.
+     *
+     * @param encodingState tracks the current state of the encoding.
+     * @param key           the key to be encoded.
+     * @param tag           the tag to be encoded.
+     * @param value         the value to be encoded.
+     */
+    public static void encode(
+        final EncodingState encodingState,
+        final CharSequence key,
+        final long tag,
+        final long value)
+    {
+        if (encodingState.isReachedLimit())
+        {
+            return;
+        }
+
+        final int length = length(key, tag, value);
+
+        if (encodingState.remaining() < length)
+        {
+            encodingState.reachedLimit(true);
+            return;
+        }
+
+        encodeString(encodingState, key, false);
+        encodeTag(encodingState, tag);
+        encodeNumber(encodingState, value);
+    }
+
+    /**
+     * Calculates the total length of the encoded string-string pair.
+     *
+     * @param key   to be encoded.
+     * @param tag   to be encoded.
+     * @param value to be encoded.
+     * @return the total length of the encoded string-string pair.
+     */
+    public static int length(final CharSequence key, final long tag, final CharSequence value)
+    {
+        return lengthString(key) + lengthTag(tag) + lengthString(value);
+    }
+
+    /**
+     * Encode a key/string pair.
+     *
+     * @param encodingState tracks the current state of the encoding.
+     * @param key           the key to be encoded.
+     * @param tag           the tag to be encoded.
+     * @param value         the value to be encoded.
+     * @param allowTruncate whether the value can be truncated (or is just dropped).
+     */
+    public static void encode(
+        final EncodingState encodingState,
+        final CharSequence key,
+        final long tag,
+        final CharSequence value,
+        final boolean allowTruncate)
+    {
+        if (encodingState.isReachedLimit())
+        {
+            return;
+        }
+        encodeEntry(encodingState, key, tag, value, allowTruncate);
+    }
+
+    /**
+     * Calculates the total length of an encoded string-bytes pair.
+     *
+     * @param key  to be encoded.
+     * @param tag   to be encoded.
+     * @param value to be encoded.
+     * @return the total length of the encoded string-bytes pair.
+     */
+    public static int length(final CharSequence key, final long tag, final DirectBuffer value)
+    {
+        return lengthString(key) + lengthTag(tag) + lengthBytes(value);
+    }
+
+    /**
+     * Encode a key/bytes pair.
+     *
+     * @param encodingState tracks the current state of the encoding.
+     * @param key           the key to be encoded.
+     * @param tag           the tag to be encoded.
+     * @param value         the value to be encoded.
+     * @param allowTruncate whether the value can be truncated (or is just dropped).
+     */
+    public static void encode(
+        final EncodingState encodingState,
+        final String key,
+        final long tag,
+        final DirectBuffer value,
+        final boolean allowTruncate)
+    {
+        // TODO: Consider generalizing this with string encoding
+        final int keyLength = lengthString(key);
+        // Key pre-check
+        if (encodingState.remaining() < keyLength)
+        {
+            encodingState.reachedLimit(true);
+            return;
+        }
+
+        final int remainingBytes = encodingState.remaining() - (keyLength + lengthTag(tag));
+        if (null == value)
+        {
+            if (remainingBytes <= 0)
+            {
+                encodingState.reachedLimit(true);
+                return;
+            }
+            encodeString(encodingState, key, false);
+            encodeNull(encodingState);
+            return;
+        }
+
+        final int valueLengthFieldBytes = lengthFieldBytes(value.capacity());
+        final int finalValueLength = Math.min(
+            value.capacity(),
+            remainingBytes - (1 + valueLengthFieldBytes));
+        final boolean needsTruncation = finalValueLength < value.capacity();
+
+        if (needsTruncation && !allowTruncate)
+        {
+            encodingState.reachedLimit(true);
+            return;
+        }
+
+        encodeString(encodingState, key, false);
+        encodeTag(encodingState, tag);
+        encodeBytes(encodingState, value, allowTruncate);
+    }
+
+    /**
+     * Encode a key/boolean pair.
+     *
+     * @param encodingState tracks the current state of the encoding.
+     * @param key           the key to be encoded.
+     * @param value         the boolean value to be encoded.
+     */
+    public static void encode(final EncodingState encodingState, final CharSequence key, final boolean value)
+    {
+        if (encodingState.isReachedLimit())
+        {
+            return;
+        }
+
+        final int keyLength = lengthString(key);
+        if (encodingState.remaining() < keyLength + 1)
+        {
+            encodingState.reachedLimit(true);
+            return;
+        }
+
+        encodeString(encodingState, key, false);
+        encodeBoolean(encodingState, value);
+    }
+
     static int lengthNumber(final long value)
     {
         final long magnitude = value < 0 ? ~value : value;
@@ -122,30 +351,24 @@ public final class CborEncode
         return lengthNumber(tag);
     }
 
-    /**
-     * Calculates the total length of an encoded string-number pair.
-     *
-     * @param key   to be encoded.
-     * @param tag   to be encoded.
-     * @param value to be encoded.
-     * @return the total length of the encoded string-number pair.
-     */
-    public static int length(final CharSequence key, final long tag, final long value)
+    private static int lengthFieldBytes(final int valueLength)
     {
-        return lengthString(key) + lengthTag(tag) + lengthNumber(value);
-    }
-
-    /**
-     * Calculates the total length of the encoded string-string pair.
-     *
-     * @param key   to be encoded.
-     * @param tag   to be encoded.
-     * @param value to be encoded.
-     * @return the total length of the encoded string-string pair.
-     */
-    public static int length(final CharSequence key, final long tag, final CharSequence value)
-    {
-        return lengthString(key) + lengthTag(tag) + lengthString(value);
+        if (valueLength < ADDITIONAL_CONTENT_1_BYTE)
+        {
+            return 0;
+        }
+        else if (valueLength < (1 << 8))
+        {
+            return SIZE_OF_BYTE;
+        }
+        else if (valueLength < (1 << 16))
+        {
+            return SIZE_OF_SHORT;
+        }
+        else
+        {
+            return SIZE_OF_INT;
+        }
     }
 
     private static void encodeNumber(final EncodingState encodingState, final long value)
@@ -166,12 +389,7 @@ public final class CborEncode
         encodeNumberLikeFormat(encodingState, majorType, magnitude);
     }
 
-    /**
-     * encodes a tag.
-     * @param state of the encoding operation.
-     * @param tag to encode.
-     */
-    public static void encodeTag(final EncodingState state, final long tag)
+    private static void encodeTag(final EncodingState state, final long tag)
     {
         if (NO_TAG == tag)
         {
@@ -226,130 +444,6 @@ public final class CborEncode
         }
     }
 
-    /**
-     * Encodes a key-value pair of a string and a number.
-     *
-     * @param encodingState tracks the current state of the encoding.
-     * @param key           the key to be encoded.
-     * @param tag           the tag to be encoded.
-     * @param value         the value to be encoded.
-     */
-    public static void encode(
-        final EncodingState encodingState,
-        final CharSequence key,
-        final long tag,
-        final long value)
-    {
-        if (encodingState.isReachedLimit())
-        {
-            return;
-        }
-
-        final int length = length(key, tag, value);
-
-        if (encodingState.remaining() < length)
-        {
-            encodingState.reachedLimit(true);
-            return;
-        }
-
-        encodeString(encodingState, key, false);
-        encodeTag(encodingState, tag);
-        encodeNumber(encodingState, value);
-    }
-
-    /**
-     * Calculates the total length of an encoded string-bytes pair.
-     *
-     * @param name  to be encoded.
-     * @param tag   to be encoded.
-     * @param value to be encoded.
-     * @return the total length of the encoded string-bytes pair.
-     */
-    public static int length(final String name, final long tag, final DirectBuffer value)
-    {
-        return lengthString(name) + lengthTag(tag) + lengthBytes(value);
-    }
-
-    /**
-     * Encode a key/bytes pair.
-     *
-     * @param encodingState tracks the current state of the encoding.
-     * @param key           the key to be encoded.
-     * @param tag           the tag to be encoded.
-     * @param value         the value to be encoded.
-     * @param allowTruncate whether the value can be truncated (or is just dropped).
-     */
-    public static void encode(
-        final EncodingState encodingState,
-        final String key,
-        final long tag,
-        final DirectBuffer value,
-        final boolean allowTruncate)
-    {
-        // TODO: Consider generalizing this with string encoding
-        final int keyLength = lengthString(key);
-        // Key pre-check
-        if (encodingState.remaining() < keyLength)
-        {
-            encodingState.reachedLimit(true);
-            return;
-        }
-
-        final int remainingBytes = encodingState.remaining() - (keyLength + lengthTag(tag));
-        if (null == value)
-        {
-            if (remainingBytes <= 0)
-            {
-                encodingState.reachedLimit(true);
-                return;
-            }
-            encodeString(encodingState, key, false);
-            encodeNull(encodingState);
-            return;
-        }
-
-        final int valueLengthFieldBytes = lengthFieldBytes(value.capacity());
-        final int finalValueLength = Math.min(
-            value.capacity(),
-            remainingBytes - (1 + valueLengthFieldBytes));
-        final boolean needsTruncation = finalValueLength < value.capacity();
-
-        if (needsTruncation && !allowTruncate)
-        {
-            encodingState.reachedLimit(true);
-            return;
-        }
-
-        encodeString(encodingState, key, false);
-        encodeTag(encodingState, tag);
-        encodeBytes(encodingState, value, allowTruncate);
-    }
-
-
-    /**
-     * Encode a key/string pair.
-     *
-     * @param encodingState tracks the current state of the encoding.
-     * @param key           the key to be encoded.
-     * @param tag           the tag to be encoded.
-     * @param value         the value to be encoded.
-     * @param allowTruncate whether the value can be truncated (or is just dropped).
-     */
-    public static void encode(
-        final EncodingState encodingState,
-        final CharSequence key,
-        final long tag,
-        final CharSequence value,
-        final boolean allowTruncate)
-    {
-        if (encodingState.isReachedLimit())
-        {
-            return;
-        }
-        encodeEntry(encodingState, key, tag, value, allowTruncate);
-    }
-
     private static void encodeEntry(
         final EncodingState encodingState,
         final CharSequence key,
@@ -393,34 +487,6 @@ public final class CborEncode
         encodeString(encodingState, key, false);
         encodeTag(encodingState, tag);
         encodeString(encodingState, value, allowTruncate);
-    }
-
-    private static void encodeString(
-        final EncodingState encodingState,
-        final CharSequence value
-    )
-    {
-        encodeString(encodingState, value, false);
-    }
-
-    private static int lengthFieldBytes(final int valueLength)
-    {
-        if (valueLength < ADDITIONAL_CONTENT_1_BYTE)
-        {
-            return 0;
-        }
-        else if (valueLength < (1 << 8))
-        {
-            return SIZE_OF_BYTE;
-        }
-        else if (valueLength < (1 << 16))
-        {
-            return SIZE_OF_SHORT;
-        }
-        else
-        {
-            return SIZE_OF_INT;
-        }
     }
 
     private static void encodeBytes(
@@ -538,88 +604,5 @@ public final class CborEncode
     {
         encodingState.buffer().putByte(encodingState.offset(), value ? TRUE_VALUE : FALSE_VALUE);
         encodingState.incrementOffset(1);
-    }
-
-    /**
-     * Calculate the length of the header of the Cbor message.
-     *
-     * @param eventCode  for this message.
-     * @param timestamp  of this message.
-     * @return the length of the header of the Cbor message.
-     */
-    public static int headerLength(final EventCode eventCode, final long timestamp)
-    {
-        return 1 + lengthNumber(timestamp) + lengthNumber(eventCode.toEventCodeId()) +
-            lengthString(eventCode.name()) + 1;
-    }
-
-    /**
-     * Encode the header of the Cbor message.
-     *
-     * @param encodingState    tracks the current state of the encoding.
-     * @param clusterEventCode the cluster event code.
-     * @param timestamp        the timestamp of the event.
-     */
-    public static void encodeHeader(
-        final EncodingState encodingState,
-        final EventCode clusterEventCode,
-        final long timestamp)
-    {
-        encodingState.buffer().putByte(encodingState.offset(), typeByte(ARRAY_MAJOR_TYPE, ENTRIES_LENGTH));
-        encodingState.incrementOffset(1);
-        encodeNumber(encodingState, timestamp);
-        encodeNumber(encodingState, clusterEventCode.toEventCodeId());
-        encodeString(encodingState, clusterEventCode.name(), false);
-        encodingState.buffer().putByte(encodingState.offset(), typeByte(MAP_MAJOR_TYPE, ADDITIONAL_CONTENT_INDEFINITE));
-        encodingState.incrementOffset(1);
-    }
-
-    /**
-     * Encode the footer.
-     *
-     * @param encodingState tracks the current state of the encoding.
-     */
-    public static void encodeFooter(final EncodingState encodingState)
-    {
-        // TODO: Decide how truncation flag should be handled here
-        encodingState.buffer().putByte(encodingState.offset(), (byte)BREAK);
-        encodingState.incrementOffset(1);
-        encodeBoolean(encodingState, encodingState.isReachedLimit());
-    }
-
-    /**
-     * Encode a key/boolean pair.
-     *
-     * @param encodingState tracks the current state of the encoding.
-     * @param key           the key to be encoded.
-     * @param value         the boolean value to be encoded.
-     */
-    public static void encode(
-        final EncodingState encodingState,
-        final CharSequence key,
-        final boolean value)
-    {
-        if (encodingState.isReachedLimit())
-        {
-            return;
-        }
-
-        final int keyLength = lengthString(key);
-        if (encodingState.remaining() < keyLength + 1)
-        {
-            encodingState.reachedLimit(true);
-            return;
-        }
-
-        encodeString(encodingState, key, false);
-        encodeBoolean(encodingState, value);
-    }
-
-    /**
-     * {@return the length of the footer in bytes}
-     */
-    public static int footerLength()
-    {
-        return 2;
     }
 }

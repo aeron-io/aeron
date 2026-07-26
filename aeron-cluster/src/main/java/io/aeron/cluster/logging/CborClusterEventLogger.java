@@ -70,7 +70,7 @@ public class CborClusterEventLogger implements ClusterEventLogger
         final String reason)
     {
         final long timestamp = System.nanoTime();
-        int length = CborEncode.headerLength(ClusterEventCode.ELECTION_STATE_CHANGE, timestamp);
+        int length = CborEncode.lengthHeader(ClusterEventCode.ELECTION_STATE_CHANGE, timestamp);
         length += CborEncode.length("memberId", NO_TAG, memberId);
         length += CborEncode.length("oldState", ENUM_TAG, oldState.name());
         length += CborEncode.length("newState", ENUM_TAG, newState.name());
@@ -82,7 +82,7 @@ public class CborClusterEventLogger implements ClusterEventLogger
         length += CborEncode.length("appendPosition", NO_TAG, appendPosition);
         length += CborEncode.length("catchupPosition", NO_TAG, catchupPosition);
         length += CborEncode.length("reason", NO_TAG, reason);
-        length += CborEncode.footerLength();
+        length += CborEncode.lengthFooter();
 
         final int bufferLength = Math.min(length, MAX_BUFFER_LENGTH);
         final int index = ringBuffer.tryClaim(ClusterEventCode.ELECTION_STATE_CHANGE.toEventCodeId(), bufferLength);
