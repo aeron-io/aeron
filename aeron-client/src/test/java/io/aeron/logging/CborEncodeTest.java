@@ -552,7 +552,6 @@ class CborEncodeTest
         CborEncode.encode(encodingState, "key3", NO_TAG, TimeUnit.DAYS.name(), true);
         CborEncode.encodeFooter(encodingState);
 
-        final ObjectMapper cborObjectMapper = new ObjectMapper(new CBORFactory());
         final byte[] data = new byte[encodingState.offset()];
         encodingState.buffer().getBytes(0, data);
 
