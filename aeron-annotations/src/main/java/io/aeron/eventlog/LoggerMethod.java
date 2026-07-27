@@ -40,62 +40,6 @@ public @interface LoggerMethod
     String eventCode() default "";
 
     /**
-     * Bare (unqualified) static method name on {@link GeneratedLogger#encoder()} used to compute the
-     * encoded length. Mutually exclusive with {@link #fixedLength()}; exactly one must be set.
-     *
-     * @return the length method name, or empty string if {@link #fixedLength()} is used instead.
-     */
-    String lengthMethod() default "";
-
-    /**
-     * Bare (unqualified) static method name on {@link GeneratedLogger#encoder()} used to encode the event.
-     * Leave blank to derive it by convention from this method's own name (a {@code logXxx} method derives
-     * {@code encodeXxx}); set explicitly only when the encoder's method name genuinely doesn't follow that
-     * convention.
-     *
-     * @return the encode method name, or empty string to derive it from this method's name.
-     */
-    String encodeMethod() default "";
-
-    /**
-     * Ordered list of this method's own parameter names to forward to {@link #lengthMethod()}. Each
-     * name is validated against this method's real parameter list at compile time. Empty means
-     * {@link #lengthMethod()} is a zero-arg method.
-     *
-     * @return the parameter names, in call order.
-     */
-    String[] lengthArgs() default {};
-
-    /**
-     * A compile-time constant length (e.g. {@code 3 * SIZE_OF_LONG + 3 * SIZE_OF_INT}), used when the
-     * length has no parameter dependency and no dedicated encoder-side length method exists. Resolved
-     * by the Java compiler at the annotation call site, not by the annotation processor. Mutually
-     * exclusive with {@link #lengthMethod()}; exactly one must be set.
-     *
-     * @return the fixed length, or -1 if {@link #lengthMethod()} is used instead.
-     */
-    int fixedLength() default -1;
-
-    /**
-     * When {@code true}, {@code captureLength} is set equal to {@code length} directly instead of being
-     * computed via {@code CommonEventEncoder.captureLength(length)}.
-     *
-     * @return whether to skip the capture-length computation.
-     */
-    boolean skipCaptureLength() default false;
-
-    /**
-     * Ordered list of this method's own parameter names to forward to the {@code encodeXxx} method
-     * (after the fixed {@code buffer, offset, captureLength, length} prefix). Each name is validated
-     * against this method's real parameter list at compile time. Empty means "this method's own
-     * parameters, in declared order" - the common case; set explicitly only when the encoder's
-     * expected argument order genuinely differs from the logger method's declared parameter order.
-     *
-     * @return the parameter names, in call order, or empty to use declared parameter order.
-     */
-    String[] encodeArgs() default {};
-
-    /**
      * Identifies the offset and length parameters (if any) that describe a sub-range of a
      * {@code DirectBuffer}/{@code ByteBuffer}-typed parameter, for the CBOR logger processor
      * ({@code CborEventLoggerProcessor}) only - ignored by the SBE {@code EventLoggerProcessor}.

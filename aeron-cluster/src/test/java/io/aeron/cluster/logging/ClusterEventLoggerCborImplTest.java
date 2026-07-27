@@ -142,8 +142,6 @@ class ClusterEventLoggerCborImplTest
     @Test
     void logOnVoteEncodesBooleanFieldWithNoTagInDeclaredParameterOrder()
     {
-        // Note: the CBOR processor always uses the method's declared parameter order, not the
-        // SBE-only LoggerMethod.encodeArgs() reordering - unlike the generated SBE ClusterEventLoggerImpl.
         logger.logOnVote(1, 10L, 20L, 30L, 2, 3, true);
 
         drain();
