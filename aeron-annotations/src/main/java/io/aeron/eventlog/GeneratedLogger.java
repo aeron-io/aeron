@@ -29,14 +29,6 @@ import java.lang.annotation.Target;
 public @interface GeneratedLogger
 {
     /**
-     * Fully qualified name of the static helper class holding the {@code xxxLength}/{@code encodeXxx}
-     * method pairs referenced by this interface's {@link LoggerMethod}-annotated methods.
-     *
-     * @return the encoder class name.
-     */
-    String encoder();
-
-    /**
      * Fully qualified name of the event-code enum used to identify each event claimed on the ring buffer.
      *
      * @return the event code enum name.

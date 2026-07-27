@@ -111,7 +111,7 @@ class DriverEventLoggerCborImplTest
         final UnsafeBuffer buffer = new UnsafeBuffer(backing);
         final InetSocketAddress address = new InetSocketAddress(InetAddress.getByName("192.168.1.1"), 1234);
 
-        logger.logFrameIn(buffer, 0, backing.length, address);
+        logger.logFrameIn(address, buffer, 0, backing.length);
 
         drain();
 
@@ -121,9 +121,9 @@ class DriverEventLoggerCborImplTest
             eq(DriverEventCode.FRAME_IN.id()),
             eq(DriverEventCode.FRAME_IN.name()),
             anyLong());
-        inOrder.verify(mockLoggingCallback).onValue("buffer", AERON_PROTOCOL_TAG, new UnsafeBuffer(backing));
         inOrder.verify(mockLoggingCallback).onValue(
             "dstAddress", IPV4_TAG, new UnsafeBuffer(address.getAddress().getAddress()));
+        inOrder.verify(mockLoggingCallback).onValue("buffer", AERON_PROTOCOL_TAG, new UnsafeBuffer(backing));
         inOrder.verify(mockLoggingCallback).onFooter(false);
     }
 
@@ -134,7 +134,7 @@ class DriverEventLoggerCborImplTest
         final UnsafeBuffer buffer = new UnsafeBuffer(backing);
         final InetSocketAddress address = new InetSocketAddress(InetAddress.getByName("2001:db8::1"), 1234);
 
-        logger.logFrameIn(buffer, 0, backing.length, address);
+        logger.logFrameIn(address, buffer, 0, backing.length);
 
         drain();
 
@@ -152,7 +152,7 @@ class DriverEventLoggerCborImplTest
         byteBuffer.flip();
         final InetSocketAddress address = new InetSocketAddress("192.168.1.1", 1234);
 
-        logger.logFrameOut(byteBuffer, address);
+        logger.logFrameOut(address, byteBuffer);
 
         drain();
 
@@ -162,9 +162,9 @@ class DriverEventLoggerCborImplTest
             eq(DriverEventCode.FRAME_OUT.id()),
             eq(DriverEventCode.FRAME_OUT.name()),
             anyLong());
-        inOrder.verify(mockLoggingCallback).onValue("buffer", AERON_PROTOCOL_TAG, new UnsafeBuffer(testBytes));
         inOrder.verify(mockLoggingCallback).onValue(
             "dstAddress", IPV4_TAG, new UnsafeBuffer(address.getAddress().getAddress()));
+        inOrder.verify(mockLoggingCallback).onValue("buffer", AERON_PROTOCOL_TAG, new UnsafeBuffer(testBytes));
         inOrder.verify(mockLoggingCallback).onFooter(false);
     }
 

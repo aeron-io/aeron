@@ -69,20 +69,23 @@ public final class DriverLog
     /**
      * Log a frame coming in from the media.
      *
+     * @param dstAddress  for the frame.
      * @param buffer      containing the frame.
      * @param offset      in the buffer at which the frame begins.
      * @param frameLength of the frame.
-     * @param dstAddress  for the frame.
      */
     public static void logFrameIn(
-        final DirectBuffer buffer, final int offset, final int frameLength, final InetSocketAddress dstAddress)
+        final InetSocketAddress dstAddress,
+        final DirectBuffer buffer,
+        final int offset,
+        final int frameLength)
     {
         if (!LOG_FRAME_IN_ENABLED)
         {
             return;
         }
 
-        DriverEventLogger.LOGGER.logFrameIn(buffer, offset, frameLength, dstAddress);
+        DriverEventLogger.LOGGER.logFrameIn(dstAddress, buffer, offset, frameLength);
     }
 
     /**
@@ -98,7 +101,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logFrameOut(buffer, dstAddress);
+        DriverEventLogger.LOGGER.logFrameOut(dstAddress, buffer);
     }
 
     /**

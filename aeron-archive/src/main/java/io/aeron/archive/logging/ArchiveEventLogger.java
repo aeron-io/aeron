@@ -38,9 +38,7 @@ import static java.util.EnumSet.of;
  * {@link io.aeron.archive.Archive} via a Java Agent. The implementation is generated at compile time from the
  * {@link LoggerMethod}-annotated methods below.
  */
-@GeneratedLogger(
-    encoder = "io.aeron.archive.logging.ArchiveEventEncoder",
-    eventCodeType = "io.aeron.archive.logging.ArchiveEventCode")
+@GeneratedLogger(eventCodeType = "io.aeron.archive.logging.ArchiveEventCode")
 public interface ArchiveEventLogger
 {
     /**

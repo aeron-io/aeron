@@ -423,7 +423,7 @@ public abstract class UdpChannelTransport implements AutoCloseable
      */
     public void receiveHook(final UnsafeBuffer buffer, final int length, final InetSocketAddress address)
     {
-        DriverLog.logFrameIn(buffer, 0, length, address);
+        DriverLog.logFrameIn(address, buffer, 0, length);
     }
 
     /**
