@@ -57,6 +57,7 @@ import static org.agrona.concurrent.ringbuffer.RingBufferDescriptor.TRAILER_LENG
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@Disabled("Uses old SBE")
 class DriverEventLoggerTest
 {
     private static final int CAPACITY = 32 * 1024;

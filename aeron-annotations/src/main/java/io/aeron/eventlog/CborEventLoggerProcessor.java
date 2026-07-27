@@ -417,7 +417,8 @@ public class CborEventLoggerProcessor extends AbstractProcessor
 
             case ENUM:
                 return FieldPlan.simple(
-                    param, kind, name + ".name()", tagOrDefault(tagAnnotation, "ENUM_TAG"), allowTruncate);
+                    param, kind, "null != " + name + " ? " + name + ".name() : null",
+                    tagOrDefault(tagAnnotation, "ENUM_TAG"), allowTruncate);
 
             case BUFFER:
                 return buildBufferFieldPlan(param, name, bufferViewSpec, tagAnnotation, allowTruncate);

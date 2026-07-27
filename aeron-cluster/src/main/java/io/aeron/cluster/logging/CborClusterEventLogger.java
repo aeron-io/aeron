@@ -72,8 +72,8 @@ public class CborClusterEventLogger implements ClusterEventLogger
         final long timestamp = System.nanoTime();
         int length = CborEncode.lengthHeader(ClusterEventCode.ELECTION_STATE_CHANGE, timestamp);
         length += CborEncode.length("memberId", NO_TAG, memberId);
-        length += CborEncode.length("oldState", ENUM_TAG, oldState.name());
-        length += CborEncode.length("newState", ENUM_TAG, newState.name());
+        length += CborEncode.length("oldState", ENUM_TAG, null != oldState ? oldState.name() : null);
+        length += CborEncode.length("newState", ENUM_TAG, null != newState ? newState.name() : null);
         length += CborEncode.length("leaderId", NO_TAG, leaderId);
         length += CborEncode.length("candidateTermId", NO_TAG, candidateTermId);
         length += CborEncode.length("leadershipTermId", NO_TAG, leadershipTermId);
@@ -94,8 +94,8 @@ public class CborClusterEventLogger implements ClusterEventLogger
         {
             CborEncode.encodeHeader(encodingState, ClusterEventCode.ELECTION_STATE_CHANGE, timestamp);
             CborEncode.encode(encodingState, "memberId", NO_TAG, memberId);
-            CborEncode.encode(encodingState, "oldState", ENUM_TAG, oldState.name(), false);
-            CborEncode.encode(encodingState, "newState", ENUM_TAG, newState.name(), false);
+            CborEncode.encode(encodingState, "oldState", ENUM_TAG, null != oldState ? oldState.name() : null, false);
+            CborEncode.encode(encodingState, "newState", ENUM_TAG, null != newState ? newState.name() : null, false);
             CborEncode.encode(encodingState, "leaderId", NO_TAG, leaderId);
             CborEncode.encode(encodingState, "candidateTermId", NO_TAG, candidateTermId);
             CborEncode.encode(encodingState, "leadershipTermId", NO_TAG, leadershipTermId);
