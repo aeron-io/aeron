@@ -21,7 +21,10 @@ import org.agrona.DirectBuffer;
 import java.io.PrintStream;
 
 import static io.aeron.logging.CborUtils.ENUM_TAG;
-
+import static io.aeron.logging.CborUtils.IPV4_TAG;
+import static io.aeron.logging.CborUtils.IPV6_TAG;
+import static org.agrona.PrintBufferUtil.appendPrettyHexDump;
+import static org.agrona.PrintBufferUtil.byteToHexStringPadded;
 
 class PrintLoggerEventCallback implements LoggerEventCallback
 {
@@ -30,6 +33,7 @@ class PrintLoggerEventCallback implements LoggerEventCallback
     // logPosition=0 logLeadershipTermId=-1 appendPosition=0 catchupPosition=-1 reason="unanimous leader"
     private final PrintStream out;
     private final StringBuilder sb = new StringBuilder();
+    private final String newLine = String.format("%n");
 
     PrintLoggerEventCallback(final PrintStream out)
     {
@@ -76,7 +80,24 @@ class PrintLoggerEventCallback implements LoggerEventCallback
 
     public void onValue(final CharSequence name, final long tag, final DirectBuffer value)
     {
-
+        sb.append(' ').append(name).append('=');
+        if (IPV4_TAG == tag && 4 == value.capacity())
+        {
+            sb.append(0xFF & value.getByte(0)).append('.');
+            sb.append(0xFF & value.getByte(1)).append('.');
+            sb.append(0xFF & value.getByte(2)).append('.');
+            sb.append(0xFF & value.getByte(3));
+        }
+        else if (IPV6_TAG == tag && 16 == value.capacity())
+        {
+            appendIpV6Address(sb, value);
+        }
+        else
+        {
+            sb.append(newLine);
+            appendPrettyHexDump(sb, value);
+            sb.append(newLine);
+        }
     }
 
     public void onFooter(final boolean truncated)
@@ -86,7 +107,102 @@ class PrintLoggerEventCallback implements LoggerEventCallback
             sb.append("truncated");
         }
 
-        out.println(sb);
+        if (endsWithNewLine(sb))
+        {
+            out.print(sb);
+        }
+        else
+        {
+            out.println(sb);
+        }
+
         sb.delete(0, sb.length());
+    }
+
+    private static int ipV6Group(final DirectBuffer buffer, final int index)
+    {
+        final int byteOffset = (index * 2);
+        return ((buffer.getByte(byteOffset) << 8) & 0xFF00) | (buffer.getByte(byteOffset + 1) & 0xFF);
+    }
+
+    private static void appendIpV6Address(final StringBuilder builder, final DirectBuffer buffer)
+    {
+        int bestStart = -1;
+        int bestLength = 0;
+        int runStart = -1;
+        int runLength = 0;
+
+        for (int i = 0; i < 8; i++)
+        {
+            if (0 == ipV6Group(buffer, i))
+            {
+                if (-1 == runStart)
+                {
+                    runStart = i;
+                }
+                runLength++;
+            }
+            else
+            {
+                if (runLength > bestLength)
+                {
+                    bestStart = runStart;
+                    bestLength = runLength;
+                }
+                runStart = -1;
+                runLength = 0;
+            }
+        }
+
+        if (runLength > bestLength)
+        {
+            bestStart = runStart;
+            bestLength = runLength;
+        }
+
+        if (bestLength < 2)
+        {
+            bestStart = -1;
+        }
+
+        builder.append('[');
+        for (int i = 0; i < 8;)
+        {
+            if (i == bestStart)
+            {
+                builder.append("::");
+                i += bestLength;
+                continue;
+            }
+
+            builder.append(byteToHexStringPadded(0xFF & buffer.getByte(i * 2)));
+            builder.append(byteToHexStringPadded(0xFF & buffer.getByte((i * 2) + 1)));
+
+            i++;
+
+            if (i < 8 && i != bestStart)
+            {
+                builder.append(':');
+            }
+        }
+        builder.append(']');
+    }
+
+    private boolean endsWithNewLine(final StringBuilder sb)
+    {
+        if (sb.length() < newLine.length())
+        {
+            return false;
+        }
+
+        for (int i = newLine.length(); --i != -1;)
+        {
+            if (newLine.charAt(i) != sb.charAt((sb.length() - newLine.length() + i)))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
