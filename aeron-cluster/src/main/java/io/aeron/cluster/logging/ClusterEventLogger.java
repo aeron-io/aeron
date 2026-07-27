@@ -97,9 +97,12 @@ public interface ClusterEventLogger
      * @param newState  after the change.
      * @param reason for state to change.
      */
-    @LoggerMethod(eventCode = "STATE_CHANGE", lengthMethod = "stateChangeLength", lengthArgs = { "oldState", "newState", "reason" },
-        encodeArgs = { "memberId", "oldState", "newState", "reason" })
-    default <E extends Enum<E>> void logStateChange(final int memberId, final E oldState, final E newState, final String reason)
+    @LoggerMethod(eventCode = "STATE_CHANGE")
+    default <E extends Enum<E>> void logStateChange(
+        final int memberId,
+        final E oldState,
+        final E newState,
+        final String reason)
     {
     }
 
@@ -112,9 +115,12 @@ public interface ClusterEventLogger
      * @param newState  after the change.
      * @param reason for state to change.
      */
-    @LoggerMethod(eventCode = "ROLE_CHANGE", lengthMethod = "stateChangeLength", lengthArgs = { "oldState", "newState", "reason" },
-        encodeArgs = { "memberId", "oldState", "newState", "reason" })
-    default <E extends Enum<E>> void logRoleChange(final int memberId, final E oldState, final E newState, final String reason)
+    @LoggerMethod(eventCode = "ROLE_CHANGE")
+    default <E extends Enum<E>> void logRoleChange(
+        final int memberId,
+        final E oldState,
+        final E newState,
+        final String reason)
     {
     }
 
@@ -127,9 +133,12 @@ public interface ClusterEventLogger
      * @param newState  after the change.
      * @param reason for state to change.
      */
-    @LoggerMethod(eventCode = "CLUSTER_BACKUP_STATE_CHANGE", lengthMethod = "stateChangeLength", lengthArgs = { "oldState", "newState", "reason" },
-        encodeArgs = { "memberId", "oldState", "newState", "reason" })
-    default <E extends Enum<E>> void logClusterBackupStateChange(final int memberId, final E oldState, final E newState, final String reason)
+    @LoggerMethod(eventCode = "CLUSTER_BACKUP_STATE_CHANGE")
+    default <E extends Enum<E>> void logClusterBackupStateChange(
+        final int memberId,
+        final E oldState,
+        final E newState,
+        final String reason)
     {
     }
 

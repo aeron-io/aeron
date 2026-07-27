@@ -198,6 +198,7 @@ public interface DriverEventLogger
     /**
      * Log a simple text input.
      *
+     * @param code  for the type of event.
      * @param value of the string to be logged.
      */
     @LoggerMethod(lengthMethod = "stringValueLength", lengthArgs = { "value" },

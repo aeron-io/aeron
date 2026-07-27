@@ -318,7 +318,14 @@ public enum ArchiveEventCode implements EventCode
         return code;
     }
 
-    static ArchiveEventCode getByTemplateId(final int templateId)
+    /**
+     * Get the {@link ArchiveEventCode} whose control-request SBE {@link #templateId()} matches the one given, used
+     * to resolve the event code for a raw incoming control-request message.
+     *
+     * @param templateId of the SBE message to resolve the event code for.
+     * @return the matching {@link ArchiveEventCode}, or {@code null} if none matches.
+     */
+    public static ArchiveEventCode getByTemplateId(final int templateId)
     {
         return templateId >= 0 && templateId < EVENT_CODE_BY_TEMPLATE_ID.length ?
             EVENT_CODE_BY_TEMPLATE_ID[templateId] : null;
