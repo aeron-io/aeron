@@ -573,7 +573,7 @@ project(':aeron-driver') {
 
     tasks.withType(Test).configureEach {
         systemProperty 'aeron.event.log', 'all'
-        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
+        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.logging.CborLoggerReaderAgent'
     }
 
     LoggingTest.configureLoggingTests(project, 'DriverEventEnablementTest', 'aeron.event.log', 'aeron.event.log.disable',
@@ -674,7 +674,7 @@ project(':aeron-archive') {
 
     tasks.withType(Test).configureEach {
         systemProperty 'aeron.event.archive.log', 'all'
-        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
+        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.logging.CborLoggerReaderAgent'
     }
 
     LoggingTest.configureLoggingTests(project, 'ArchiveEventEnablementTest', 'aeron.event.archive.log',
@@ -895,7 +895,7 @@ project(':aeron-cluster') {
 
     tasks.withType(Test).configureEach {
         systemProperty 'aeron.event.cluster.log', 'all'
-        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.test.agent.CountingEventReaderAgent'
+        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.logging.CborLoggerReaderAgent'
     }
 
     LoggingTest.configureLoggingTests(project, 'ClusterEventEnablementTest', 'aeron.event.cluster.log',

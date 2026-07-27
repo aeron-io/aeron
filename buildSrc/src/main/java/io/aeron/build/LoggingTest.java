@@ -99,6 +99,10 @@ public abstract class LoggingTest extends Test
             task.setTestClassName(testClass);
             task.systemProperty(enabledEventsKey, eventSubset);
         });
+        targetProject.getTasks().withType(LoggingTest.class).forEach(task ->
+            task.systemProperty(
+                "aeron.event.log.reader.classname",
+                "io.aeron.test.agent.CountingEventReaderAgent"));
         targetProject.getTasks().register("loggingTest", task ->
             task.dependsOn(targetProject.getTasks().withType(LoggingTest.class)));
         targetProject.getTasks().named("check").configure(task ->
