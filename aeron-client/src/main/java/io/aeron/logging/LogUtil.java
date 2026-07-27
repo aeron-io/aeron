@@ -20,9 +20,13 @@ import org.agrona.AsciiEncoding;
 /**
  * Utility methods for loggers.
  */
-final class LogUtil
+public final class LogUtil
 {
     private static final long NANOS_PER_SECOND = 1_000_000_000;
+
+    private LogUtil()
+    {
+    }
 
     /**
      * Render a nanosecond timestamp to the supplied {@link StringBuilder} in the following format.

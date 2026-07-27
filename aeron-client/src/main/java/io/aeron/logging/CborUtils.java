@@ -34,6 +34,7 @@ public final class CborUtils
     static final int ARRAY_MAJOR_TYPE = 4 << 5;
     static final int MAP_MAJOR_TYPE = 5 << 5;
     static final int TAG_MAJOR_TYPE = 6 << 5;
+
     // NOTE: This major type actually includes floats and simple values
     static final int SIMPLE_VALUE_MAJOR_TYPE = 7 << 5;
     static final int ADDITIONAL_CONTENT_1_BYTE = 24;
@@ -42,6 +43,7 @@ public final class CborUtils
     static final int ADDITIONAL_CONTENT_8_BYTE = 27;
     static final int ADDITIONAL_CONTENT_INDEFINITE = 31;
     static final int ADDITIONAL_CONTENT_NULL = 22;
+
     // Simple values
     static final byte NULL_VALUE = typeByte(SIMPLE_VALUE_MAJOR_TYPE, ADDITIONAL_CONTENT_NULL);
     static final int ADDITIONAL_CONTENT_FALSE = 20;
@@ -56,23 +58,29 @@ public final class CborUtils
     static final int DATA_INDEX = EVENT_CODE_STRING_INDEX + 1;
     static final int TRUNCATE_FLAG_INDEX = DATA_INDEX + 1;
     static final int ENTRIES_LENGTH = TRUNCATE_FLAG_INDEX + 1;
+
+    // Tags
+
     /**
      * Indicates that a value is not present.
      */
-    // Tags
     public static final long NO_TAG = Aeron.NULL_VALUE;
+
     /**
      * Indicates that a value came from an enum.
      */
     public static final long ENUM_TAG = 44;
+
     /**
      * Indicates that a value is an IPv4 address.
      */
     public static final long IPV4_TAG = 52;
+
     /**
      * Indicates that a value is an IPv6 address.
      */
     public static final long IPV6_TAG = 54;
+
     /**
      * Indicates that a value is a uint8 typed array.
      */

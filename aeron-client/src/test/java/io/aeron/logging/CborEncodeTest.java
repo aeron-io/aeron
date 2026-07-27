@@ -25,13 +25,11 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InOrder;
-import org.mockito.Mockito;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.dataformat.cbor.CBORFactory;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -46,10 +44,12 @@ import static io.aeron.logging.CborUtils.EVENT_CODE_STRING_INDEX;
 import static io.aeron.logging.CborUtils.NO_TAG;
 import static io.aeron.logging.CborUtils.TIMESTAMP_INDEX;
 import static io.aeron.logging.CborUtils.UINT8_TYPED_ARRAY_TAG;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 
 class CborEncodeTest
 {
@@ -558,7 +558,7 @@ class CborEncodeTest
         final CborDecode decode = new CborDecode(List.of(new ProxyLoggerEventCallback(loggerEventCallback)));
         decode.onMessage(TEST_EVENT_CODE.toEventCodeId(), new UnsafeBuffer(data), 0, data.length);
 
-        InOrder inOrder = inOrder(loggerEventCallback);
+        final InOrder inOrder = inOrder(loggerEventCallback);
 
         inOrder.verify(loggerEventCallback).onHeader(
             TEST_EVENT_CODE.eventCode(), TEST_EVENT_CODE.id(), TEST_EVENT_CODE.name(), timestamp);
