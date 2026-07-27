@@ -84,7 +84,10 @@ public class EventLoggerProcessor extends AbstractProcessor
             }
         }
 
-        return true;
+        // Returning false leaves @GeneratedLogger unclaimed so that other processors interested in the same
+        // annotation (e.g. CborEventLoggerProcessor) are still invoked for it in this round - per the
+        // Processor.process() contract, returning true would otherwise claim it exclusively.
+        return false;
     }
 
     private void generate(final TypeElement iface)

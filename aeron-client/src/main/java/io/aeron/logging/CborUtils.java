@@ -86,6 +86,16 @@ public final class CborUtils
      */
     public static final long UINT8_TYPED_ARRAY_TAG = 64;
 
+    /**
+     * Indicates that a buffer value is an Aeron protocol frame.
+     */
+    public static final long AERON_PROTOCOL_TAG = 80_000;
+
+    /**
+     * Indicates that a buffer value is an Aeron driver admin command.
+     */
+    public static final long AERON_DRIVER_ADMIN_TAG = 80_001;
+
     // This might be useful for checking if a tag is present
     static boolean hasTag(final byte inputTags, final int checkedTag)
     {
