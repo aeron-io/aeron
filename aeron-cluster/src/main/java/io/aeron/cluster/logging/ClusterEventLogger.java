@@ -26,10 +26,6 @@ import org.agrona.concurrent.ringbuffer.RingBuffer;
 
 import java.util.concurrent.TimeUnit;
 
-import static org.agrona.BitUtil.SIZE_OF_BYTE;
-import static org.agrona.BitUtil.SIZE_OF_INT;
-import static org.agrona.BitUtil.SIZE_OF_LONG;
-
 /**
  * Event logger interface used by interceptors for recording cluster events into a {@link RingBuffer} for a
  * {@link ConsensusModule} events via a Java Agent. The implementation is generated at compile time from the
@@ -68,7 +64,7 @@ public interface ClusterEventLogger
      * @param appVersion              associated with the recorded state.
      * @param isStartup               is the leader starting up fresh.
      */
-    @LoggerMethod(eventCode = "NEW_LEADERSHIP_TERM", lengthMethod = "newLeaderShipTermLength")
+    @LoggerMethod(eventCode = "NEW_LEADERSHIP_TERM")
     default void logOnNewLeadershipTerm(
         final int memberId,
         final long logLeadershipTermId,
@@ -158,8 +154,7 @@ public interface ClusterEventLogger
      * @param catchupPosition     of the node.
      * @param reason              for the state transition to occur.
      */
-    @LoggerMethod(eventCode = "ELECTION_STATE_CHANGE", lengthMethod = "electionStateChangeLength",
-        lengthArgs = { "oldState", "newState", "reason" })
+    @LoggerMethod(eventCode = "ELECTION_STATE_CHANGE")
     default <E extends Enum<E>> void logElectionStateChange(
         final int memberId,
         final E oldState,
@@ -185,7 +180,7 @@ public interface ClusterEventLogger
      * @param followerMemberId    follower node id.
      * @param protocolVersion     of the consensus module.
      */
-    @LoggerMethod(eventCode = "CANVASS_POSITION", lengthMethod = "canvassPositionLength")
+    @LoggerMethod(eventCode = "CANVASS_POSITION")
     default void logOnCanvassPosition(
         final int memberId,
         final long logLeadershipTermId,
@@ -206,7 +201,7 @@ public interface ClusterEventLogger
      * @param candidateId         id of the candidate node.
      * @param protocolVersion     from the request.
      */
-    @LoggerMethod(eventCode = "REQUEST_VOTE", fixedLength = 3 * SIZE_OF_LONG + 3 * SIZE_OF_INT)
+    @LoggerMethod(eventCode = "REQUEST_VOTE")
     default void logOnRequestVote(
         final int memberId,
         final long logLeadershipTermId,
@@ -228,9 +223,7 @@ public interface ClusterEventLogger
      * @param voterId             id of the follower node that voted.
      * @param vote                expressed by the follower node.
      */
-    @LoggerMethod(eventCode = "VOTE", fixedLength = 3 * SIZE_OF_LONG + 3 * SIZE_OF_INT + SIZE_OF_BYTE,
-        encodeArgs = {
-            "memberId", "candidateTermId", "logLeadershipTermId", "logPosition", "candidateId", "voterId", "vote" })
+    @LoggerMethod(eventCode = "VOTE")
     default void logOnVote(
         final int memberId,
         final long logLeadershipTermId,
@@ -251,8 +244,7 @@ public interface ClusterEventLogger
      * @param followerMemberId the id of the follower that is catching up
      * @param catchupEndpoint  the endpoint to send catchup messages
      */
-    @LoggerMethod(eventCode = "CATCHUP_POSITION", lengthMethod = "catchupPositionLength",
-        lengthArgs = { "catchupEndpoint" })
+    @LoggerMethod(eventCode = "CATCHUP_POSITION")
     default void logOnCatchupPosition(
         final int memberId,
         final long leadershipTermId,
@@ -269,7 +261,7 @@ public interface ClusterEventLogger
      * @param leadershipTermId current leadershipTermId.
      * @param followerMemberId id of follower currently catching up.
      */
-    @LoggerMethod(eventCode = "STOP_CATCHUP", fixedLength = SIZE_OF_LONG + 2 * SIZE_OF_INT, skipCaptureLength = true)
+    @LoggerMethod(eventCode = "STOP_CATCHUP")
     default void logOnStopCatchup(final int memberId, final long leadershipTermId, final int followerMemberId)
     {
     }
@@ -289,8 +281,7 @@ public interface ClusterEventLogger
      * @param oldPosition         truncated from.
      * @param newPosition         truncated to.
      */
-    @LoggerMethod(eventCode = "TRUNCATE_LOG_ENTRY", lengthMethod = "truncateLogEntryLength", lengthArgs = { "state" },
-        encodeMethod = "encodeTruncateLogEntry")
+    @LoggerMethod(eventCode = "TRUNCATE_LOG_ENTRY")
     default <E extends Enum<E>> void logOnTruncateLogEntry(
         final int memberId,
         final E state,
@@ -317,8 +308,7 @@ public interface ClusterEventLogger
      * @param timeUnit            cluster time unit.
      * @param appVersion          version of the application.
      */
-    @LoggerMethod(eventCode = "REPLAY_NEW_LEADERSHIP_TERM", lengthMethod = "replayNewLeadershipTermEventLength",
-        lengthArgs = { "timeUnit" })
+    @LoggerMethod(eventCode = "REPLAY_NEW_LEADERSHIP_TERM")
     default void logOnReplayNewLeadershipTermEvent(
         final int memberId,
         final boolean isInElection,
@@ -340,8 +330,7 @@ public interface ClusterEventLogger
      * @param followerMemberId follower member sending the Append position.
      * @param flags            applied to append position by follower.
      */
-    @LoggerMethod(eventCode = "APPEND_POSITION",
-        fixedLength = 2 * SIZE_OF_LONG + 2 * SIZE_OF_INT + SIZE_OF_BYTE, skipCaptureLength = true)
+    @LoggerMethod(eventCode = "APPEND_POSITION")
     default void logOnAppendPosition(
         final int memberId,
         final long leadershipTermId,
@@ -359,8 +348,7 @@ public interface ClusterEventLogger
      * @param logPosition      the current position in the log.
      * @param leaderId         leader member sending the commit position.
      */
-    @LoggerMethod(eventCode = "COMMIT_POSITION", fixedLength = 2 * SIZE_OF_LONG + 2 * SIZE_OF_INT,
-        skipCaptureLength = true)
+    @LoggerMethod(eventCode = "COMMIT_POSITION")
     default void logOnCommitPosition(
         final int memberId, final long leadershipTermId, final long logPosition, final int leaderId)
     {
@@ -376,8 +364,7 @@ public interface ClusterEventLogger
      * @param timestamp        the current timestamp.
      * @param timeUnit         units for the timestamp.
      */
-    @LoggerMethod(eventCode = "APPEND_SESSION_CLOSE", lengthMethod = "appendSessionCloseLength",
-        lengthArgs = { "closeReason", "timeUnit" })
+    @LoggerMethod(eventCode = "APPEND_SESSION_CLOSE")
     default void logAppendSessionClose(
         final int memberId,
         final long sessionId,
@@ -398,8 +385,7 @@ public interface ClusterEventLogger
      * @param timestamp        the current timestamp.
      * @param timeUnit         units for the timestamp.
      */
-    @LoggerMethod(eventCode = "APPEND_SESSION_OPEN", lengthMethod = "appendSessionOpenLength",
-        lengthArgs = { "timeUnit" })
+    @LoggerMethod(eventCode = "APPEND_SESSION_OPEN")
     default void logAppendSessionOpen(
         final int memberId,
         final long sessionId,
@@ -417,7 +403,7 @@ public interface ClusterEventLogger
      * @param logLeadershipTermId leadership term for the supplied position.
      * @param logPosition         position to terminate at.
      */
-    @LoggerMethod(eventCode = "TERMINATION_POSITION", lengthMethod = "terminationPositionLength")
+    @LoggerMethod(eventCode = "TERMINATION_POSITION")
     default void logTerminationPosition(final int memberId, final long logLeadershipTermId, final long logPosition)
     {
     }
@@ -430,7 +416,7 @@ public interface ClusterEventLogger
      * @param logPosition         position to terminate at.
      * @param senderMemberId      member sending the ack.
      */
-    @LoggerMethod(eventCode = "TERMINATION_ACK", lengthMethod = "terminationAckLength")
+    @LoggerMethod(eventCode = "TERMINATION_ACK")
     default void logTerminationAck(
         final int memberId, final long logLeadershipTermId, final long logPosition, final int senderMemberId)
     {
@@ -447,7 +433,7 @@ public interface ClusterEventLogger
      * @param relevantId  associated id used in the ack, e.g. recordingId for snapshot acks.
      * @param serviceId   the id of the service that sent the ack.
      */
-    @LoggerMethod(eventCode = "SERVICE_ACK", lengthMethod = "serviceAckLength", lengthArgs = { "timeUnit" })
+    @LoggerMethod(eventCode = "SERVICE_ACK")
     default void logServiceAck(
         final int memberId,
         final long logPosition,
@@ -470,8 +456,7 @@ public interface ClusterEventLogger
      * @param position       the position where the recording ended.
      * @param hasSynced      was the sync event been received for the replication.
      */
-    @LoggerMethod(eventCode = "REPLICATION_ENDED", lengthMethod = "replicationEndedLength",
-        lengthArgs = { "purpose", "channelOrNull" })
+    @LoggerMethod(eventCode = "REPLICATION_ENDED")
     default void logReplicationEnded(
         final int memberId,
         final String purpose,
@@ -496,8 +481,7 @@ public interface ClusterEventLogger
      * @param serviceId           the serviceId for the snapshot.
      * @param archiveEndpoint     the endpoint holding the standby snapshot.
      */
-    @LoggerMethod(eventCode = "STANDBY_SNAPSHOT_NOTIFICATION", lengthMethod = "standbySnapshotNotificationLength",
-        lengthArgs = { "timeUnit", "archiveEndpoint" })
+    @LoggerMethod(eventCode = "STANDBY_SNAPSHOT_NOTIFICATION")
     default void logStandbySnapshotNotification(
         final int memberId,
         final long recordingId,
@@ -520,7 +504,7 @@ public interface ClusterEventLogger
      * @param appendPosition   the append position.
      * @param reason           for election to be started.
      */
-    @LoggerMethod(eventCode = "NEW_ELECTION", lengthMethod = "newElectionLength", lengthArgs = { "reason" })
+    @LoggerMethod(eventCode = "NEW_ELECTION")
     default void logNewElection(
         final int memberId,
         final long leadershipTermId,
@@ -542,8 +526,7 @@ public interface ClusterEventLogger
      * @param newState  after the change.
      * @param reason    for the change.
      */
-    @LoggerMethod(eventCode = "CLUSTER_SESSION_STATE_CHANGE", lengthMethod = "clusterSessionStateChangeLength",
-        lengthArgs = { "action", "oldState", "newState", "reason" })
+    @LoggerMethod(eventCode = "CLUSTER_SESSION_STATE_CHANGE")
     default <A extends Enum<A>, S extends Enum<S>> void logClusterSessionStateChange(
         final int memberId,
         final long sessionId,
@@ -563,7 +546,7 @@ public interface ClusterEventLogger
      * @param logPosition   of the snapshot.
      * @param serviceId     that took the snapshot.
      */
-    @LoggerMethod(eventCode = "SNAPSHOT_ENTRY_INVALIDATION", lengthMethod = "snapshotEntryInvalidationLength")
+    @LoggerMethod(eventCode = "SNAPSHOT_ENTRY_INVALIDATION")
     default void logSnapshotEntryInvalidation(
         final int memberId,
         final int entryIndex,

@@ -65,8 +65,7 @@ public interface DriverEventLogger
      * @param offset        in the buffer at which the event begins.
      * @param messageLength of the encoded event.
      */
-    @LoggerMethod(lengthMethod = "identityLength", lengthArgs = { "messageLength" }, encodeMethod = "encode",
-        encodeArgs = { "buffer", "offset" }, bufferView = { "buffer", "offset", "messageLength" })
+    @LoggerMethod(bufferView = { "buffer", "offset", "messageLength" })
     default void log(
         final DriverEventCode code,
         @Tag(AERON_DRIVER_ADMIN_TAG) final DirectBuffer buffer,
@@ -83,9 +82,7 @@ public interface DriverEventLogger
      * @param frameLength of the frame.
      * @param dstAddress  for the frame.
      */
-    @LoggerMethod(eventCode = "FRAME_IN", lengthMethod = "frameInLength", lengthArgs = { "frameLength", "dstAddress" },
-        encodeMethod = "encode", encodeArgs = { "buffer", "offset", "dstAddress" },
-        bufferView = { "buffer", "offset", "frameLength" })
+    @LoggerMethod(eventCode = "FRAME_IN", bufferView = { "buffer", "offset", "frameLength" })
     default void logFrameIn(
         @Tag(AERON_PROTOCOL_TAG) @AllowTruncate final DirectBuffer buffer,
         final int offset,
@@ -100,7 +97,7 @@ public interface DriverEventLogger
      * @param buffer     containing the frame.
      * @param dstAddress for the frame.
      */
-    @LoggerMethod(eventCode = "FRAME_OUT", lengthMethod = "frameOutLength", lengthArgs = { "buffer", "dstAddress" })
+    @LoggerMethod(eventCode = "FRAME_OUT")
     default void logFrameOut(
         @Tag(AERON_PROTOCOL_TAG) @AllowTruncate final ByteBuffer buffer,
         final InetSocketAddress dstAddress)
@@ -114,8 +111,7 @@ public interface DriverEventLogger
      * @param sessionId for the publication.
      * @param streamId  within the channel.
      */
-    @LoggerMethod(eventCode = "REMOVE_PUBLICATION_CLEANUP", lengthMethod = "publicationRemovalLength",
-        lengthArgs = { "channel" })
+    @LoggerMethod(eventCode = "REMOVE_PUBLICATION_CLEANUP")
     default void logPublicationRemoval(final String channel, final int sessionId, final int streamId)
     {
     }
@@ -127,8 +123,7 @@ public interface DriverEventLogger
      * @param streamId       within the channel.
      * @param subscriptionId for the subscription.
      */
-    @LoggerMethod(eventCode = "REMOVE_SUBSCRIPTION_CLEANUP", lengthMethod = "subscriptionRemovalLength",
-        lengthArgs = { "channel" })
+    @LoggerMethod(eventCode = "REMOVE_SUBSCRIPTION_CLEANUP")
     default void logSubscriptionRemoval(final String channel, final int streamId, final long subscriptionId)
     {
     }
@@ -141,7 +136,7 @@ public interface DriverEventLogger
      * @param streamId      for the image.
      * @param correlationId for the image.
      */
-    @LoggerMethod(eventCode = "REMOVE_IMAGE_CLEANUP", lengthMethod = "imageRemovalLength", lengthArgs = { "channel" })
+    @LoggerMethod(eventCode = "REMOVE_IMAGE_CLEANUP")
     default void logImageRemoval(
 
         final String channel,
@@ -156,8 +151,7 @@ public interface DriverEventLogger
      *
      * @param value description of the channel.
      */
-    @LoggerMethod(eventCode = "SEND_CHANNEL_CREATION", lengthMethod = "stringValueLength", lengthArgs = { "value" },
-        encodeMethod = "encode", encodeArgs = { "value" })
+    @LoggerMethod(eventCode = "SEND_CHANNEL_CREATION")
     default void logSendChannelCreation(final String value)
     {
     }
@@ -167,8 +161,7 @@ public interface DriverEventLogger
      *
      * @param value description of the channel.
      */
-    @LoggerMethod(eventCode = "SEND_CHANNEL_CLOSE", lengthMethod = "stringValueLength", lengthArgs = { "value" },
-        encodeMethod = "encode", encodeArgs = { "value" })
+    @LoggerMethod(eventCode = "SEND_CHANNEL_CLOSE")
     default void logSendChannelClose(final String value)
     {
     }
@@ -178,8 +171,7 @@ public interface DriverEventLogger
      *
      * @param value description of the channel.
      */
-    @LoggerMethod(eventCode = "RECEIVE_CHANNEL_CREATION", lengthMethod = "stringValueLength", lengthArgs = { "value" },
-        encodeMethod = "encode", encodeArgs = { "value" })
+    @LoggerMethod(eventCode = "RECEIVE_CHANNEL_CREATION")
     default void logReceiveChannelCreation(final String value)
     {
     }
@@ -189,8 +181,7 @@ public interface DriverEventLogger
      *
      * @param value description of the channel.
      */
-    @LoggerMethod(eventCode = "RECEIVE_CHANNEL_CLOSE", lengthMethod = "stringValueLength", lengthArgs = { "value" },
-        encodeMethod = "encode", encodeArgs = { "value" })
+    @LoggerMethod(eventCode = "RECEIVE_CHANNEL_CLOSE")
     default void logReceiveChannelClose(final String value)
     {
     }
@@ -201,8 +192,7 @@ public interface DriverEventLogger
      * @param code  for the type of event.
      * @param value of the string to be logged.
      */
-    @LoggerMethod(lengthMethod = "stringValueLength", lengthArgs = { "value" },
-        encodeMethod = "encode", encodeArgs = { "value" })
+    @LoggerMethod
     default void logString(final DriverEventCode code, final String value)
     {
     }
@@ -217,8 +207,7 @@ public interface DriverEventLogger
      * @param streamId       of the image.
      * @param sessionId      of the image.
      */
-    @LoggerMethod(eventCode = "UNTETHERED_SUBSCRIPTION_STATE_CHANGE",
-        lengthMethod = "untetheredSubscriptionStateChangeLength", lengthArgs = { "oldState", "newState" })
+    @LoggerMethod(eventCode = "UNTETHERED_SUBSCRIPTION_STATE_CHANGE")
     default <E extends Enum<E>> void logUntetheredSubscriptionStateChange(
         final E oldState, final E newState, final long subscriptionId, final int streamId, final int sessionId)
     {
@@ -229,8 +218,7 @@ public interface DriverEventLogger
      *
      * @param address of the neighbor.
      */
-    @LoggerMethod(eventCode = "NAME_RESOLUTION_NEIGHBOR_ADDED", lengthMethod = "addressLength",
-        lengthArgs = { "address" }, encodeMethod = "encode", encodeArgs = { "address" })
+    @LoggerMethod(eventCode = "NAME_RESOLUTION_NEIGHBOR_ADDED")
     default void logNeighborAdded(final InetSocketAddress address)
     {
     }
@@ -240,8 +228,7 @@ public interface DriverEventLogger
      *
      * @param address of the neighbor.
      */
-    @LoggerMethod(eventCode = "NAME_RESOLUTION_NEIGHBOR_REMOVED", lengthMethod = "addressLength",
-        lengthArgs = { "address" }, encodeMethod = "encode", encodeArgs = { "address" })
+    @LoggerMethod(eventCode = "NAME_RESOLUTION_NEIGHBOR_REMOVED")
     default void logNeighborRemoved(final InetSocketAddress address)
     {
     }
@@ -255,8 +242,7 @@ public interface DriverEventLogger
      * @param isReResolution {@code true} if this is a re-resolution or {@code false} if initial resolution.
      * @param address        address that was resolved to, can be {@code null}.
      */
-    @LoggerMethod(eventCode = "NAME_RESOLUTION_RESOLVE", lengthMethod = "resolveLength",
-        lengthArgs = { "resolverName", "name", "address" }, skipCaptureLength = true)
+    @LoggerMethod(eventCode = "NAME_RESOLUTION_RESOLVE")
     default void logResolve(
         final String resolverName,
         final long durationNs,
@@ -275,8 +261,7 @@ public interface DriverEventLogger
      * @param isReLookup         address that was resolved to, can be null.
      * @param resolvedNameOrNull address that was resolved to, can be null.
      */
-    @LoggerMethod(eventCode = "NAME_RESOLUTION_LOOKUP", lengthMethod = "lookupLength",
-        lengthArgs = { "resolverName", "name", "resolvedNameOrNull" }, skipCaptureLength = true)
+    @LoggerMethod(eventCode = "NAME_RESOLUTION_LOOKUP")
     default void logLookup(
         final String resolverName,
         final long durationNs,
@@ -292,8 +277,7 @@ public interface DriverEventLogger
      * @param durationNs of the call in nanoseconds.
      * @param hostName   host name being resolved.
      */
-    @LoggerMethod(eventCode = "NAME_RESOLUTION_HOST_NAME", lengthMethod = "hostNameLength",
-        lengthArgs = { "hostName" }, skipCaptureLength = true)
+    @LoggerMethod(eventCode = "NAME_RESOLUTION_HOST_NAME")
     default void logHostName(final long durationNs, final String hostName)
     {
     }
@@ -307,9 +291,7 @@ public interface DriverEventLogger
      * @param channel       uri of the channel.
      * @param receiverCount number of the receivers after the event.
      */
-    @LoggerMethod(eventCode = "FLOW_CONTROL_RECEIVER_ADDED", lengthMethod = "flowControlReceiverLength",
-        lengthArgs = { "channel" },
-        encodeArgs = { "receiverId", "sessionId", "streamId", "channel", "receiverCount" })
+    @LoggerMethod(eventCode = "FLOW_CONTROL_RECEIVER_ADDED")
     default void logFlowControlReceiverAdded(
         final long receiverId,
         final int sessionId,
@@ -328,9 +310,7 @@ public interface DriverEventLogger
      * @param channel       uri of the channel.
      * @param receiverCount number of the receivers after the event.
      */
-    @LoggerMethod(eventCode = "FLOW_CONTROL_RECEIVER_REMOVED", lengthMethod = "flowControlReceiverLength",
-        lengthArgs = { "channel" },
-        encodeArgs = { "receiverId", "sessionId", "streamId", "channel", "receiverCount" })
+    @LoggerMethod(eventCode = "FLOW_CONTROL_RECEIVER_REMOVED")
     default void logFlowControlReceiverRemoved(
         final long receiverId,
         final int sessionId,
@@ -351,8 +331,7 @@ public interface DriverEventLogger
      * @param nakLength  of the Nak.
      * @param channel    of the Nak.
      */
-    @LoggerMethod(eventCode = "NAK_SENT", lengthMethod = "nakMessageLength", lengthArgs = { "address", "channel" },
-        encodeArgs = { "address", "sessionId", "streamId", "termId", "termOffset", "nakLength", "channel" })
+    @LoggerMethod(eventCode = "NAK_SENT")
     default void logNakSent(
         final InetSocketAddress address,
         final int sessionId,
@@ -375,8 +354,7 @@ public interface DriverEventLogger
      * @param nakLength  of the Nak.
      * @param channel    of the Nak.
      */
-    @LoggerMethod(eventCode = "NAK_RECEIVED", lengthMethod = "nakMessageLength", lengthArgs = { "address", "channel" },
-        encodeArgs = { "address", "sessionId", "streamId", "termId", "termOffset", "nakLength", "channel" })
+    @LoggerMethod(eventCode = "NAK_RECEIVED")
     default void logNakReceived(
         final InetSocketAddress address,
         final int sessionId,
@@ -398,7 +376,7 @@ public interface DriverEventLogger
      * @param resendLength of the Resend.
      * @param channel      of the Resend.
      */
-    @LoggerMethod(eventCode = "RESEND", lengthMethod = "resendMessageLength", lengthArgs = { "channel" })
+    @LoggerMethod(eventCode = "RESEND")
     default void logResend(
         final int sessionId,
         final int streamId,
@@ -417,8 +395,7 @@ public interface DriverEventLogger
      * @param streamId   of the PublicationRevoke
      * @param channel    of the PublicationRevoke
      */
-    @LoggerMethod(eventCode = "PUBLICATION_REVOKE", lengthMethod = "publicationRevokeLength",
-        lengthArgs = { "channel" })
+    @LoggerMethod(eventCode = "PUBLICATION_REVOKE")
     default void logPublicationRevoke(
         final long revokedPos,
         final int sessionId,
@@ -435,8 +412,7 @@ public interface DriverEventLogger
      * @param streamId   of the PublicationImageRevoke
      * @param channel    of the PublicationImageRevoke
      */
-    @LoggerMethod(eventCode = "PUBLICATION_IMAGE_REVOKE", lengthMethod = "publicationImageRevokeLength",
-        lengthArgs = { "channel" })
+    @LoggerMethod(eventCode = "PUBLICATION_IMAGE_REVOKE")
     default void logPublicationImageRevoke(
         final long revokedPos,
         final int sessionId,
