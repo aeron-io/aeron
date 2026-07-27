@@ -20,10 +20,12 @@ import io.aeron.logging.EncodingState;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
 
+import java.net.Inet4Address;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 
 import static io.aeron.logging.CborUtils.IPV4_TAG;
+import static io.aeron.logging.CborUtils.IPV6_TAG;
 import static io.aeron.logging.CborUtils.UINT8_TYPED_ARRAY_TAG;
 
 /**
@@ -60,9 +62,12 @@ public class CborDriverEventLogger implements DriverEventLogger
         final UnsafeBuffer addressView = addressViewThreadLocal.get();
         addressView.wrap(dstAddress.getAddress().getAddress());
 
+        final boolean isIpV4 = dstAddress.getAddress() instanceof Inet4Address;
+        final long addressTag = isIpV4 ? IPV4_TAG : IPV6_TAG;
+
         int length = CborEncode.lengthHeader(DriverEventCode.FRAME_OUT, timestamp);
-        length += CborEncode.length("buffer", UINT8_TYPED_ARRAY_TAG, bufferView);
         length += CborEncode.length("dstAddress", IPV4_TAG, addressView);
+        length += CborEncode.length("buffer", UINT8_TYPED_ARRAY_TAG, bufferView);
         length += CborEncode.lengthFooter();
 
         final int bufferLength = Math.min(length, MAX_BUFFER_LENGTH);
@@ -75,7 +80,7 @@ public class CborDriverEventLogger implements DriverEventLogger
         {
             CborEncode.encodeHeader(encodingState, DriverEventCode.FRAME_OUT, timestamp);
             CborEncode.encode(encodingState, "buffer", UINT8_TYPED_ARRAY_TAG, bufferView, true);
-            CborEncode.encode(encodingState, "dstAddress", IPV4_TAG, addressView, false);
+            CborEncode.encode(encodingState, "dstAddress", addressTag, addressView, false);
             CborEncode.encodeFooter(encodingState);
         }
         finally
