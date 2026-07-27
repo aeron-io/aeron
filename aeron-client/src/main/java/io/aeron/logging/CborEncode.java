@@ -283,6 +283,18 @@ public final class CborEncode
         encodeBoolean(encodingState, value);
     }
 
+    /**
+     * Calculates the total length of an encoded string-boolean pair.
+     *
+     * @param key   to be encoded.
+     * @param value to be encoded.
+     * @return the total length of the encoded string-boolean pair.
+     */
+    public static int length(final CharSequence key, final boolean value)
+    {
+        return lengthString(key) + 1;
+    }
+
     static int lengthNumber(final long value)
     {
         final long magnitude = value < 0 ? ~value : value;

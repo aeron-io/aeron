@@ -15,8 +15,10 @@
  */
 package io.aeron.driver.logging;
 
+import io.aeron.eventlog.AllowTruncate;
 import io.aeron.eventlog.GeneratedLogger;
 import io.aeron.eventlog.LoggerMethod;
+import io.aeron.eventlog.Tag;
 import io.aeron.logging.EventConfiguration;
 import org.agrona.DirectBuffer;
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
@@ -27,6 +29,8 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 
 import static io.aeron.driver.logging.DriverEventCode.EVENT_CODE_TYPE;
+import static io.aeron.logging.CborUtils.AERON_DRIVER_ADMIN_TAG;
+import static io.aeron.logging.CborUtils.AERON_PROTOCOL_TAG;
 
 /**
  * Event logger interface used by interceptors for recording into a {@link RingBuffer} for a
@@ -62,9 +66,12 @@ public interface DriverEventLogger
      * @param messageLength of the encoded event.
      */
     @LoggerMethod(lengthMethod = "identityLength", lengthArgs = { "messageLength" }, encodeMethod = "encode",
-        encodeArgs = { "buffer", "offset" })
+        encodeArgs = { "buffer", "offset" }, bufferView = { "buffer", "offset", "messageLength" })
     default void log(
-        final DriverEventCode code, final DirectBuffer buffer, final int offset, final int messageLength)
+        final DriverEventCode code,
+        @Tag(AERON_DRIVER_ADMIN_TAG) final DirectBuffer buffer,
+        final int offset,
+        final int messageLength)
     {
     }
 
@@ -77,9 +84,13 @@ public interface DriverEventLogger
      * @param dstAddress  for the frame.
      */
     @LoggerMethod(eventCode = "FRAME_IN", lengthMethod = "frameInLength", lengthArgs = { "frameLength", "dstAddress" },
-        encodeMethod = "encode", encodeArgs = { "buffer", "offset", "dstAddress" })
+        encodeMethod = "encode", encodeArgs = { "buffer", "offset", "dstAddress" },
+        bufferView = { "buffer", "offset", "frameLength" })
     default void logFrameIn(
-        final DirectBuffer buffer, final int offset, final int frameLength, final InetSocketAddress dstAddress)
+        @Tag(AERON_PROTOCOL_TAG) @AllowTruncate final DirectBuffer buffer,
+        final int offset,
+        final int frameLength,
+        final InetSocketAddress dstAddress)
     {
     }
 
@@ -90,7 +101,9 @@ public interface DriverEventLogger
      * @param dstAddress for the frame.
      */
     @LoggerMethod(eventCode = "FRAME_OUT", lengthMethod = "frameOutLength", lengthArgs = { "buffer", "dstAddress" })
-    default void logFrameOut(final ByteBuffer buffer, final InetSocketAddress dstAddress)
+    default void logFrameOut(
+        @Tag(AERON_PROTOCOL_TAG) @AllowTruncate final ByteBuffer buffer,
+        final InetSocketAddress dstAddress)
     {
     }
 

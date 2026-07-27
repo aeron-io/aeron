@@ -94,4 +94,19 @@ public @interface LoggerMethod
      * @return the parameter names, in call order, or empty to use declared parameter order.
      */
     String[] encodeArgs() default {};
+
+    /**
+     * Identifies the offset and length parameters (if any) that describe a sub-range of a
+     * {@code DirectBuffer}/{@code ByteBuffer}-typed parameter, for the CBOR logger processor
+     * ({@code CborEventLoggerProcessor}) only - ignored by the SBE {@code EventLoggerProcessor}.
+     * When set, must be exactly {@code {bufferParamName, offsetParamName, lengthParamName}}, each
+     * validated against this method's real parameters (and their types) at compile time. Leave
+     * empty when the {@code DirectBuffer}/{@code ByteBuffer} parameter represents the buffer's own
+     * full extent - its {@code capacity()} for a bare {@code DirectBuffer}, or its
+     * {@code position()}/{@code remaining()} for a bare {@code ByteBuffer}.
+     *
+     * @return {@code {bufferParamName, offsetParamName, lengthParamName}}, or empty to use the
+     * buffer's own extent.
+     */
+    String[] bufferView() default {};
 }

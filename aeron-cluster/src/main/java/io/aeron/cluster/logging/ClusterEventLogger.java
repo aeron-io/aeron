@@ -17,6 +17,7 @@ package io.aeron.cluster.logging;
 
 import io.aeron.cluster.ConsensusModule;
 import io.aeron.cluster.codecs.CloseReason;
+import io.aeron.eventlog.AllowTruncate;
 import io.aeron.eventlog.GeneratedLogger;
 import io.aeron.eventlog.LoggerMethod;
 import io.aeron.logging.EventConfiguration;
@@ -133,7 +134,7 @@ public interface ClusterEventLogger
         final long logLeadershipTermId,
         final long appendPosition,
         final long catchupPosition,
-        final String reason)
+        @AllowTruncate final String reason)
     {
     }
 
