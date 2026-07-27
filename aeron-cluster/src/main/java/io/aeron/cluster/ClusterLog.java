@@ -137,7 +137,7 @@ class ClusterLog
             return;
         }
 
-        ClusterEventLogger.LOGGER.logStateChange(ClusterEventCode.STATE_CHANGE, memberId, oldState, newState, reason);
+        ClusterEventLogger.LOGGER.logStateChange(memberId, oldState, newState, reason);
     }
 
     static <E extends Enum<E>> void logRoleChange(final int memberId, final E oldRole, final E newRole)
@@ -147,7 +147,7 @@ class ClusterLog
             return;
         }
 
-        ClusterEventLogger.LOGGER.logStateChange(ClusterEventCode.ROLE_CHANGE, memberId, oldRole, newRole, "");
+        ClusterEventLogger.LOGGER.logRoleChange(memberId, oldRole, newRole, "");
     }
 
     static void logOnCanvassPosition(
@@ -352,8 +352,7 @@ class ClusterLog
             return;
         }
 
-        ClusterEventLogger.LOGGER.logStateChange(
-            ClusterEventCode.CLUSTER_BACKUP_STATE_CHANGE, Aeron.NULL_VALUE, oldState, newState, "");
+        ClusterEventLogger.LOGGER.logClusterBackupStateChange(Aeron.NULL_VALUE, oldState, newState, "");
     }
 
     static void logTerminationPosition(final int memberId, final long leadershipTermId, final long logPosition)

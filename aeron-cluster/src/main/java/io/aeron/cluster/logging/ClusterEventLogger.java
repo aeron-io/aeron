@@ -43,7 +43,7 @@ public interface ClusterEventLogger
     /**
      * Logger for writing into the {@link ManyToOneRingBuffer} held by {@link EventConfiguration#eventReader}.
      */
-    ClusterEventLogger LOGGER = new ClusterEventLoggerImpl(EventConfiguration.eventReader().ringBuffer());
+    ClusterEventLogger LOGGER = new ClusterEventLoggerCborImpl(EventConfiguration.eventReader().ringBuffer());
     /**
      * CBOR-specific logger.
      */
@@ -92,16 +92,44 @@ public interface ClusterEventLogger
      * Log a state change event for a cluster node.
      *
      * @param <E>       type representing the state change.
-     * @param eventCode for the type of state change.
      * @param memberId  of the current cluster node.
      * @param oldState  before the change.
      * @param newState  after the change.
      * @param reason for state to change.
      */
-    @LoggerMethod(lengthMethod = "stateChangeLength", lengthArgs = { "oldState", "newState", "reason" },
+    @LoggerMethod(eventCode = "STATE_CHANGE", lengthMethod = "stateChangeLength", lengthArgs = { "oldState", "newState", "reason" },
         encodeArgs = { "memberId", "oldState", "newState", "reason" })
-    default <E extends Enum<E>> void logStateChange(
-        final ClusterEventCode eventCode, final int memberId, final E oldState, final E newState, final String reason)
+    default <E extends Enum<E>> void logStateChange(final int memberId, final E oldState, final E newState, final String reason)
+    {
+    }
+
+    /**
+     * Log a state change event for a cluster node.
+     *
+     * @param <E>       type representing the state change.
+     * @param memberId  of the current cluster node.
+     * @param oldState  before the change.
+     * @param newState  after the change.
+     * @param reason for state to change.
+     */
+    @LoggerMethod(eventCode = "ROLE_CHANGE", lengthMethod = "stateChangeLength", lengthArgs = { "oldState", "newState", "reason" },
+        encodeArgs = { "memberId", "oldState", "newState", "reason" })
+    default <E extends Enum<E>> void logRoleChange(final int memberId, final E oldState, final E newState, final String reason)
+    {
+    }
+
+    /**
+     * Log a state change event for a cluster node.
+     *
+     * @param <E>       type representing the state change.
+     * @param memberId  of the current cluster node.
+     * @param oldState  before the change.
+     * @param newState  after the change.
+     * @param reason for state to change.
+     */
+    @LoggerMethod(eventCode = "CLUSTER_BACKUP_STATE_CHANGE", lengthMethod = "stateChangeLength", lengthArgs = { "oldState", "newState", "reason" },
+        encodeArgs = { "memberId", "oldState", "newState", "reason" })
+    default <E extends Enum<E>> void logClusterBackupStateChange(final int memberId, final E oldState, final E newState, final String reason)
     {
     }
 

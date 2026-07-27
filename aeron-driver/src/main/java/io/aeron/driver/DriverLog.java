@@ -166,7 +166,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logString(SEND_CHANNEL_CREATION, description);
+        DriverEventLogger.LOGGER.logSendChannelCreation(description);
     }
 
     /**
@@ -181,7 +181,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logString(SEND_CHANNEL_CLOSE, description);
+        DriverEventLogger.LOGGER.logSendChannelClose(description);
     }
 
     /**
@@ -196,7 +196,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logString(RECEIVE_CHANNEL_CREATION, description);
+        DriverEventLogger.LOGGER.logReceiveChannelCreation(description);
     }
 
     /**
@@ -211,7 +211,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logString(RECEIVE_CHANNEL_CLOSE, description);
+        DriverEventLogger.LOGGER.logReceiveChannelClose(description);
     }
 
     /**
@@ -248,7 +248,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logAddress(NAME_RESOLUTION_NEIGHBOR_ADDED, address);
+        DriverEventLogger.LOGGER.logNeighborAdded(address);
     }
 
     /**
@@ -263,7 +263,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logAddress(NAME_RESOLUTION_NEIGHBOR_REMOVED, address);
+        DriverEventLogger.LOGGER.logNeighborRemoved(address);
     }
 
     /**
@@ -351,8 +351,8 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logFlowControlReceiver(
-            FLOW_CONTROL_RECEIVER_ADDED, receiverId, sessionId, streamId, channel, receiverCount);
+        DriverEventLogger.LOGGER.logFlowControlReceiverAdded(
+            receiverId, sessionId, streamId, channel, receiverCount);
     }
 
     /**
@@ -376,8 +376,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logFlowControlReceiver(
-            FLOW_CONTROL_RECEIVER_REMOVED, receiverId, sessionId, streamId, channel, receiverCount);
+        DriverEventLogger.LOGGER.logFlowControlReceiverRemoved(receiverId, sessionId, streamId, channel, receiverCount);
     }
 
     /**
@@ -400,8 +399,7 @@ public final class DriverLog
         final int nakLength,
         final String channel)
     {
-        DriverEventLogger.LOGGER.logNakMessage(
-            NAK_SENT, address, sessionId, streamId, termId, termOffset, nakLength, channel);
+        DriverEventLogger.LOGGER.logNakSent(address, sessionId, streamId, termId, termOffset, nakLength, channel);
     }
 
     /**
@@ -464,8 +462,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logNakMessage(
-            NAK_RECEIVED, address, sessionId, streamId, termId, termOffset, nakLength, channel);
+        DriverEventLogger.LOGGER.logNakReceived(address, sessionId, streamId, termId, termOffset, nakLength, channel);
     }
 
     /**
