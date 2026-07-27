@@ -167,8 +167,7 @@ class ClusterEventLoggerCborImplTest
     @Test
     void logStateChangeUsesTheDynamicallyPassedEventCodeForTheHeader()
     {
-        logger.logStateChange(ClusterEventCode.STATE_CHANGE, 4, ElectionState.NOMINATE, ElectionState.LEADER_READY,
-            "because");
+        logger.logStateChange(4, ElectionState.NOMINATE, ElectionState.LEADER_READY, "because");
 
         drain();
 

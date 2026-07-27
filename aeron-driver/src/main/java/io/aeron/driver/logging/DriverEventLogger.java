@@ -45,7 +45,7 @@ public interface DriverEventLogger
     /**
      * Logger for writing into the {@link ManyToOneRingBuffer} held by {@link EventConfiguration#eventReader}.
      */
-    DriverEventLogger LOGGER = new DriverEventLoggerImpl(EventConfiguration.eventReader().ringBuffer());
+    DriverEventLogger LOGGER = new DriverEventLoggerCborImpl(EventConfiguration.eventReader().ringBuffer());
 
     /**
      * Maximum length of a host name.
@@ -152,13 +152,56 @@ public interface DriverEventLogger
     }
 
     /**
-     * Log a generic string associated with an event.
+     * Log the creation of a send channel endpoint.
      *
-     * @param code  for the event type.
+     * @param value description of the channel.
+     */
+    @LoggerMethod(eventCode = "SEND_CHANNEL_CREATION", lengthMethod = "stringValueLength", lengthArgs = { "value" },
+        encodeMethod = "encode", encodeArgs = { "value" })
+    default void logSendChannelCreation(final String value)
+    {
+    }
+
+    /**
+     * Log the closing of a send channel endpoint.
+     *
+     * @param value description of the channel.
+     */
+    @LoggerMethod(eventCode = "SEND_CHANNEL_CLOSE", lengthMethod = "stringValueLength", lengthArgs = { "value" },
+        encodeMethod = "encode", encodeArgs = { "value" })
+    default void logSendChannelClose(final String value)
+    {
+    }
+
+    /**
+     * Log the creation of a receive channel endpoint.
+     *
+     * @param value description of the channel.
+     */
+    @LoggerMethod(eventCode = "RECEIVE_CHANNEL_CREATION", lengthMethod = "stringValueLength", lengthArgs = { "value" },
+        encodeMethod = "encode", encodeArgs = { "value" })
+    default void logReceiveChannelCreation(final String value)
+    {
+    }
+
+    /**
+     * Log the closing of a receive channel endpoint.
+     *
+     * @param value description of the channel.
+     */
+    @LoggerMethod(eventCode = "RECEIVE_CHANNEL_CLOSE", lengthMethod = "stringValueLength", lengthArgs = { "value" },
+        encodeMethod = "encode", encodeArgs = { "value" })
+    default void logReceiveChannelClose(final String value)
+    {
+    }
+
+    /**
+     * Log a simple text input.
+     *
      * @param value of the string to be logged.
      */
-    @LoggerMethod(lengthMethod = "stringValueLength", lengthArgs = { "value" }, encodeMethod = "encode",
-        encodeArgs = { "value" })
+    @LoggerMethod(lengthMethod = "stringValueLength", lengthArgs = { "value" },
+        encodeMethod = "encode", encodeArgs = { "value" })
     default void logString(final DriverEventCode code, final String value)
     {
     }
@@ -181,14 +224,24 @@ public interface DriverEventLogger
     }
 
     /**
-     * Log an address with associated event.
+     * Log a neighbor being added for name resolution.
      *
-     * @param code    representing the event type.
-     * @param address to be logged.
+     * @param address of the neighbor.
      */
-    @LoggerMethod(lengthMethod = "addressLength", lengthArgs = { "address" }, encodeMethod = "encode",
-        encodeArgs = { "address" })
-    default void logAddress(final DriverEventCode code, final InetSocketAddress address)
+    @LoggerMethod(eventCode = "NAME_RESOLUTION_NEIGHBOR_ADDED", lengthMethod = "addressLength",
+        lengthArgs = { "address" }, encodeMethod = "encode", encodeArgs = { "address" })
+    default void logNeighborAdded(final InetSocketAddress address)
+    {
+    }
+
+    /**
+     * Log a neighbor being removed for name resolution.
+     *
+     * @param address of the neighbor.
+     */
+    @LoggerMethod(eventCode = "NAME_RESOLUTION_NEIGHBOR_REMOVED", lengthMethod = "addressLength",
+        lengthArgs = { "address" }, encodeMethod = "encode", encodeArgs = { "address" })
+    default void logNeighborRemoved(final InetSocketAddress address)
     {
     }
 
@@ -245,19 +298,18 @@ public interface DriverEventLogger
     }
 
     /**
-     * Log the information about receiver for the corresponding flow control event.
+     * Log a receiver being added to a flow control strategy.
      *
-     * @param code          flow control event type.
      * @param receiverId    of the receiver.
      * @param sessionId     of the image.
      * @param streamId      of the image.
      * @param channel       uri of the channel.
      * @param receiverCount number of the receivers after the event.
      */
-    @LoggerMethod(lengthMethod = "flowControlReceiverLength", lengthArgs = { "channel" },
+    @LoggerMethod(eventCode = "FLOW_CONTROL_RECEIVER_ADDED", lengthMethod = "flowControlReceiverLength",
+        lengthArgs = { "channel" },
         encodeArgs = { "receiverId", "sessionId", "streamId", "channel", "receiverCount" })
-    default void logFlowControlReceiver(
-        final DriverEventCode code,
+    default void logFlowControlReceiverAdded(
         final long receiverId,
         final int sessionId,
         final int streamId,
@@ -267,10 +319,30 @@ public interface DriverEventLogger
     }
 
     /**
-     * Logs a NAK message sent by the receiver for a single control address or received by the sender.
+     * Log a receiver being removed from a flow control strategy.
      *
-     * @param eventCode  to log Nak by.
-     * @param address    Nak UDP destination/source.
+     * @param receiverId    of the receiver.
+     * @param sessionId     of the image.
+     * @param streamId      of the image.
+     * @param channel       uri of the channel.
+     * @param receiverCount number of the receivers after the event.
+     */
+    @LoggerMethod(eventCode = "FLOW_CONTROL_RECEIVER_REMOVED", lengthMethod = "flowControlReceiverLength",
+        lengthArgs = { "channel" },
+        encodeArgs = { "receiverId", "sessionId", "streamId", "channel", "receiverCount" })
+    default void logFlowControlReceiverRemoved(
+        final long receiverId,
+        final int sessionId,
+        final int streamId,
+        final String channel,
+        final int receiverCount)
+    {
+    }
+
+    /**
+     * Logs a NAK message sent by the receiver for a single control address.
+     *
+     * @param address    Nak UDP destination.
      * @param sessionId  of the Nak.
      * @param streamId   of the Nak.
      * @param termId     of the Nak.
@@ -278,10 +350,33 @@ public interface DriverEventLogger
      * @param nakLength  of the Nak.
      * @param channel    of the Nak.
      */
-    @LoggerMethod(lengthMethod = "nakMessageLength", lengthArgs = { "address", "channel" },
+    @LoggerMethod(eventCode = "NAK_SENT", lengthMethod = "nakMessageLength", lengthArgs = { "address", "channel" },
         encodeArgs = { "address", "sessionId", "streamId", "termId", "termOffset", "nakLength", "channel" })
-    default void logNakMessage(
-        final DriverEventCode eventCode,
+    default void logNakSent(
+        final InetSocketAddress address,
+        final int sessionId,
+        final int streamId,
+        final int termId,
+        final int termOffset,
+        final int nakLength,
+        final String channel)
+    {
+    }
+
+    /**
+     * Logs a NAK message received by the sender.
+     *
+     * @param address    Nak UDP source.
+     * @param sessionId  of the Nak.
+     * @param streamId   of the Nak.
+     * @param termId     of the Nak.
+     * @param termOffset of the Nak.
+     * @param nakLength  of the Nak.
+     * @param channel    of the Nak.
+     */
+    @LoggerMethod(eventCode = "NAK_RECEIVED", lengthMethod = "nakMessageLength", lengthArgs = { "address", "channel" },
+        encodeArgs = { "address", "sessionId", "streamId", "termId", "termOffset", "nakLength", "channel" })
+    default void logNakReceived(
         final InetSocketAddress address,
         final int sessionId,
         final int streamId,

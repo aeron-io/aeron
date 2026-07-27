@@ -61,7 +61,7 @@ class DriverEventLoggerTest
 {
     private static final int CAPACITY = 32 * 1024;
     private final UnsafeBuffer logBuffer = new UnsafeBuffer(allocateDirect(CAPACITY + TRAILER_LENGTH));
-    private final DriverEventLogger logger = new DriverEventLoggerImpl(new ManyToOneRingBuffer(logBuffer));
+    private final DriverEventLogger logger = new DriverEventLoggerCborImpl(new ManyToOneRingBuffer(logBuffer));
     private final UnsafeBuffer buffer = new UnsafeBuffer(allocate(MAX_EVENT_LENGTH * 3));
 
     @AfterEach
@@ -166,7 +166,7 @@ class DriverEventLoggerTest
     }
 
     @Test
-    void logString()
+    void logText()
     {
         final int recordOffset = align(100, ALIGNMENT);
         logBuffer.putLong(CAPACITY + TAIL_POSITION_OFFSET, recordOffset);
@@ -277,16 +277,16 @@ class DriverEventLoggerTest
     }
 
     @Test
-    void logAddress()
+    void logNeighborRemoved()
     {
         final int recordOffset = 64;
         logBuffer.putLong(CAPACITY + TAIL_POSITION_OFFSET, recordOffset);
-        final DriverEventCode eventCode = NAME_RESOLUTION_NEIGHBOR_REMOVED;
         final int captureLength = 12;
 
-        logger.logAddress(eventCode, new InetSocketAddress("localhost", 5656));
+        logger.logNeighborRemoved(new InetSocketAddress("localhost", 5656));
 
-        verifyLogHeader(logBuffer, recordOffset, toEventCodeId(eventCode), captureLength, captureLength);
+        verifyLogHeader(
+            logBuffer, recordOffset, toEventCodeId(NAME_RESOLUTION_NEIGHBOR_REMOVED), captureLength, captureLength);
         assertEquals(5656, logBuffer.getInt(encodedMsgOffset(recordOffset + LOG_HEADER_LENGTH), LITTLE_ENDIAN));
         assertEquals(4, logBuffer.getInt(
             encodedMsgOffset(recordOffset + LOG_HEADER_LENGTH + SIZE_OF_INT), LITTLE_ENDIAN));
@@ -399,10 +399,10 @@ class DriverEventLoggerTest
         assertEquals(expectedHostName, logBuffer.getStringAscii(index, LITTLE_ENDIAN));
     }
 
-    @ParameterizedTest
-    @EnumSource(value = DriverEventCode.class, names = { "NAK_SENT", "NAK_RECEIVED" })
-    void logNakMessage(final DriverEventCode eventCode)
+    @Test
+    void logNakSent()
     {
+        final DriverEventCode eventCode = NAK_SENT;
         final InetSocketAddress inetSocketAddress = new InetSocketAddress("192.168.1.1", 10001);
 
         final int sessionId = 9821374;
@@ -416,7 +416,39 @@ class DriverEventLoggerTest
         final int captureLength = socketAddressLength(inetSocketAddress) + (6 * SIZE_OF_INT) + channel.length();
 
         logBuffer.putLong(CAPACITY + TAIL_POSITION_OFFSET, recordOffset);
-        logger.logNakMessage(eventCode, inetSocketAddress, sessionId, streamId, termId, termOffset, length, channel);
+        logger.logNakSent(inetSocketAddress, sessionId, streamId, termId, termOffset, length, channel);
+        verifyLogHeader(
+            logBuffer, recordOffset, toEventCodeId(eventCode), captureLength, captureLength);
+
+        final StringBuilder sb = new StringBuilder();
+        DriverEventDissector.dissectNak(eventCode, logBuffer, encodedMsgOffset(recordOffset), sb);
+
+        final String expectedMessagePattern =
+            "\\[[0-9]+\\.[0-9]+] DRIVER: " + eventCode + " \\[124/124]: address=192.168.1.1:10001 " +
+            "sessionId=9821374 streamId=988234 termId=89324 termOffset=9862314 length=1239 channel=" +
+            "aeron:udp\\?endpoint=localhost:10000\\|term-length=1m\\|init-term-id=0\\|term-id=0\\|term-offset=0";
+
+        assertThat(sb.toString(), Matchers.matchesPattern(expectedMessagePattern));
+    }
+
+    @Test
+    void logNakReceived()
+    {
+        final DriverEventCode eventCode = NAK_RECEIVED;
+        final InetSocketAddress inetSocketAddress = new InetSocketAddress("192.168.1.1", 10001);
+
+        final int sessionId = 9821374;
+        final int streamId = 988234;
+        final int termId = 89324;
+        final int termOffset = 9862314;
+        final int length = 1239;
+        final String channel =
+            "aeron:udp?endpoint=localhost:10000|term-length=1m|init-term-id=0|term-id=0|term-offset=0";
+        final int recordOffset = 64;
+        final int captureLength = socketAddressLength(inetSocketAddress) + (6 * SIZE_OF_INT) + channel.length();
+
+        logBuffer.putLong(CAPACITY + TAIL_POSITION_OFFSET, recordOffset);
+        logger.logNakReceived(inetSocketAddress, sessionId, streamId, termId, termOffset, length, channel);
         verifyLogHeader(
             logBuffer, recordOffset, toEventCodeId(eventCode), captureLength, captureLength);
 

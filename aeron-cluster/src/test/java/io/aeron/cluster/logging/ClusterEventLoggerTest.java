@@ -93,7 +93,7 @@ class ClusterEventLoggerTest
     private static final int CAPACITY = align(BUFFER_LENGTH_DEFAULT, CACHE_LINE_LENGTH);
     private final UnsafeBuffer logBuffer = new UnsafeBuffer(
         ByteBuffer.allocateDirect(BUFFER_LENGTH_DEFAULT + TRAILER_LENGTH));
-    private final ClusterEventLogger logger = new ClusterEventLoggerImpl(new ManyToOneRingBuffer(logBuffer));
+    private final ClusterEventLogger logger = new ClusterEventLoggerCborImpl(new ManyToOneRingBuffer(logBuffer));
 
     @Test
     void logOnNewLeadershipTerm()
@@ -191,7 +191,7 @@ class ClusterEventLoggerTest
         final String reason = "this is the way";
         final int captureLength = ClusterEventEncoder.stateChangeLength(from, to, reason);
 
-        logger.logStateChange(STATE_CHANGE, memberId, from, to, reason);
+        logger.logStateChange(memberId, from, to, reason);
 
         verifyLogHeader(logBuffer, offset, STATE_CHANGE.toEventCodeId(), captureLength, captureLength);
         final int index = encodedMsgOffset(offset) + LOG_HEADER_LENGTH;
