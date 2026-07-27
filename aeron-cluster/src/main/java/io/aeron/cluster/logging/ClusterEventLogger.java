@@ -31,9 +31,7 @@ import java.util.concurrent.TimeUnit;
  * {@link ConsensusModule} events via a Java Agent. The implementation is generated at compile time from the
  * {@link LoggerMethod}-annotated methods below.
  */
-@GeneratedLogger(
-    encoder = "io.aeron.cluster.logging.ClusterEventEncoder",
-    eventCodeType = "io.aeron.cluster.logging.ClusterEventCode")
+@GeneratedLogger(eventCodeType = "io.aeron.cluster.logging.ClusterEventCode")
 public interface ClusterEventLogger
 {
     /**

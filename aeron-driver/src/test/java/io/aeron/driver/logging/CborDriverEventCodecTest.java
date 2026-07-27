@@ -46,7 +46,6 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 
 class CborDriverEventCodecTest
 {
@@ -63,9 +62,9 @@ class CborDriverEventCodecTest
                 Arguments.arguments(IPV6_TAG, Inet6Address.getByName("fe80::54d3:4122:e738:a862"))
             );
         }
-        catch (UnknownHostException e)
+        catch (final UnknownHostException ex)
         {
-            throw new RuntimeException(e);
+            throw new RuntimeException(ex);
         }
     }
 
@@ -80,7 +79,7 @@ class CborDriverEventCodecTest
         final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(mockLoggingCallback)));
         final CborDriverEventLogger cborDriverEventLogger = new CborDriverEventLogger(ringBuffer);
 
-        cborDriverEventLogger.logFrameOut(ByteBuffer.wrap(testBytes), inetSocketAddress);
+        cborDriverEventLogger.logFrameOut(inetSocketAddress, ByteBuffer.wrap(testBytes));
 
         while (0 == ringBuffer.read(cborDecode))
         {

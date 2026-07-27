@@ -32,14 +32,13 @@ import static io.aeron.driver.logging.DriverEventCode.EVENT_CODE_TYPE;
 import static io.aeron.logging.CborUtils.AERON_DRIVER_ADMIN_TAG;
 import static io.aeron.logging.CborUtils.AERON_PROTOCOL_TAG;
 
+
 /**
  * Event logger interface used by interceptors for recording into a {@link RingBuffer} for a
  * {@link io.aeron.driver.MediaDriver} via a Java Agent. The implementation is generated at compile time from the
  * {@link LoggerMethod}-annotated methods below.
  */
-@GeneratedLogger(
-    encoder = "io.aeron.driver.logging.DriverEventEncoder",
-    eventCodeType = "io.aeron.driver.logging.DriverEventCode")
+@GeneratedLogger(eventCodeType = "io.aeron.driver.logging.DriverEventCode")
 public interface DriverEventLogger
 {
     /**
@@ -77,30 +76,30 @@ public interface DriverEventLogger
     /**
      * Log a frame coming in from the media.
      *
+     * @param dstAddress  for the frame.
      * @param buffer      containing the frame.
      * @param offset      in the buffer at which the frame begins.
      * @param frameLength of the frame.
-     * @param dstAddress  for the frame.
      */
     @LoggerMethod(eventCode = "FRAME_IN", bufferView = { "buffer", "offset", "frameLength" })
     default void logFrameIn(
+        final InetSocketAddress dstAddress,
         @Tag(AERON_PROTOCOL_TAG) @AllowTruncate final DirectBuffer buffer,
         final int offset,
-        final int frameLength,
-        final InetSocketAddress dstAddress)
+        final int frameLength)
     {
     }
 
     /**
      * Log a frame being sent out from the driver to the media.
      *
-     * @param buffer     containing the frame.
      * @param dstAddress for the frame.
+     * @param buffer     containing the frame.
      */
     @LoggerMethod(eventCode = "FRAME_OUT")
     default void logFrameOut(
-        @Tag(AERON_PROTOCOL_TAG) @AllowTruncate final ByteBuffer buffer,
-        final InetSocketAddress dstAddress)
+        final InetSocketAddress dstAddress,
+        @Tag(AERON_PROTOCOL_TAG) @AllowTruncate final ByteBuffer buffer)
     {
     }
 
@@ -138,7 +137,6 @@ public interface DriverEventLogger
      */
     @LoggerMethod(eventCode = "REMOVE_IMAGE_CLEANUP")
     default void logImageRemoval(
-
         final String channel,
         final int sessionId,
         final int streamId,

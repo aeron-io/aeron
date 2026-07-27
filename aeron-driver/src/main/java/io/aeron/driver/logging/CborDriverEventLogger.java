@@ -53,7 +53,7 @@ public class CborDriverEventLogger implements DriverEventLogger
     /**
      * {@inheritDoc}
      */
-    public void logFrameOut(final ByteBuffer buffer, final InetSocketAddress dstAddress)
+    public void logFrameOut(final InetSocketAddress dstAddress, final ByteBuffer buffer)
     {
         final long timestamp = System.nanoTime();
 

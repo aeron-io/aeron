@@ -123,7 +123,7 @@ class DriverEventLoggerTest
         buffer.setMemory(srcOffset, MAX_CAPTURE_LENGTH, (byte)3);
         final int encodedSocketLength = 12;
 
-        logger.logFrameIn(buffer, srcOffset, length, new InetSocketAddress("localhost", 5555));
+        logger.logFrameIn(new InetSocketAddress("localhost", 5555), buffer, srcOffset, length);
 
         verifyLogHeader(logBuffer, recordOffset, toEventCodeId(FRAME_IN), captureLength, length + encodedSocketLength);
         assertEquals(5555, logBuffer.getInt(encodedMsgOffset(recordOffset + LOG_HEADER_LENGTH), LITTLE_ENDIAN));
@@ -152,7 +152,7 @@ class DriverEventLoggerTest
         final int length = byteBuffer.remaining() + encodedSocketLength;
         final int arrayCaptureLength = length - encodedSocketLength;
 
-        logger.logFrameOut(byteBuffer, new InetSocketAddress("localhost", 3232));
+        logger.logFrameOut(new InetSocketAddress("localhost", 3232), byteBuffer);
 
         verifyLogHeader(logBuffer, recordOffset, toEventCodeId(FRAME_OUT), length, length);
         assertEquals(3232, logBuffer.getInt(encodedMsgOffset(recordOffset + LOG_HEADER_LENGTH), LITTLE_ENDIAN));
