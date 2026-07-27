@@ -96,6 +96,11 @@ public final class CborUtils
      */
     public static final long AERON_DRIVER_ADMIN_TAG = 80_001;
 
+    /**
+     * Indicates that a buffer value is an Aeron archive control-protocol message.
+     */
+    public static final long AERON_ARCHIVE_ADMIN_TAG = 80_002;
+
     // This might be useful for checking if a tag is present
     static boolean hasTag(final byte inputTags, final int checkedTag)
     {

@@ -15,6 +15,7 @@
  */
 package io.aeron.archive;
 
+import io.aeron.archive.codecs.MessageHeaderDecoder;
 import io.aeron.archive.logging.ArchiveEventCode;
 import io.aeron.archive.logging.ArchiveEventLogger;
 import io.aeron.archive.logging.ArchiveModuleLogger;
@@ -27,6 +28,8 @@ import static io.aeron.archive.logging.ArchiveModuleLogger.isEnabled;
  */
 public final class ArchiveLog
 {
+    private static final MessageHeaderDecoder HEADER_DECODER = new MessageHeaderDecoder();
+
     private static final boolean LOG_ANY_CONTROL_REQUEST_ENABLED =
         ArchiveEventLogger.CONTROL_REQUEST_EVENTS.stream().anyMatch(ArchiveModuleLogger::isEnabled);
     private static final boolean LOG_CONTROL_RESPONSE_ENABLED = isEnabled(ArchiveEventCode.CMD_OUT_RESPONSE);
@@ -69,7 +72,12 @@ public final class ArchiveLog
             return;
         }
 
-        ArchiveEventLogger.LOGGER.logControlRequest(buffer, offset, length);
+        HEADER_DECODER.wrap(buffer, offset);
+        final ArchiveEventCode eventCode = ArchiveEventCode.getByTemplateId(HEADER_DECODER.templateId());
+        if (eventCode != null && isEnabled(eventCode))
+        {
+            ArchiveEventLogger.LOGGER.logControlRequest(eventCode, buffer, offset, length);
+        }
     }
 
     /**
