@@ -1,5 +1,5 @@
 /*
- * Copyright 2014-2025 Real Logic Limited.
+ * Copyright 2014-2026 Real Logic Limited.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,13 +22,9 @@ import org.agrona.concurrent.SleepingMillisIdleStrategy;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
 
-import java.lang.reflect.Constructor;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -85,7 +81,6 @@ public final class EventReaderManager
      */
     public void start(final Properties properties)
     {
-        final ArrayList<ModuleLogger> loggers = new ArrayList<>();
         try
         {
             if (!isLoggingEnabled(System.getProperties()))
@@ -93,12 +88,7 @@ public final class EventReaderManager
                 return;
             }
 
-            for (final ModuleLogger componentLogger : ServiceLoader.load(ModuleLogger.class))
-            {
-                loggers.add(componentLogger);
-            }
-
-            moduleLoggerReaderAgent = newReaderAgent(properties, loggers);
+            moduleLoggerReaderAgent = newReaderAgent(properties);
 
             readerAgentRunner = new AgentRunner(
                 new SleepingMillisIdleStrategy(1L),
@@ -144,21 +134,12 @@ public final class EventReaderManager
         return !enabledLoggers.isEmpty();
     }
 
-    private Agent newReaderAgent(final Properties configOptions, final List<ModuleLogger> loggers)
+    private Agent newReaderAgent(final Properties configOptions)
     {
         try
         {
             final Class<?> aClass = Class.forName(
                 configOptions.getProperty(EVENT_LOG_READER_CLASSNAME_PROP_NAME, EVENT_LOG_READER_CLASSNAME_DEFAULT));
-
-            try
-            {
-                final Constructor<?> constructor = aClass.getDeclaredConstructor(Properties.class, List.class);
-                return (Agent)constructor.newInstance(configOptions, loggers);
-            }
-            catch (final NoSuchMethodException ignore)
-            {
-            }
 
             return (Agent)aClass.getDeclaredConstructor().newInstance();
         }
