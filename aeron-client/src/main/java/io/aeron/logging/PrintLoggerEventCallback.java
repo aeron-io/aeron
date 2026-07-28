@@ -26,6 +26,8 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static io.aeron.CommonContext.EVENT_LOG_FILENAME_PROP_NAME;
+import static io.aeron.CommonContext.EVENT_LOG_FILE_MAX_LENGTH;
 import static io.aeron.logging.CborUtils.ENUM_TAG;
 import static io.aeron.logging.CborUtils.IPV4_TAG;
 import static io.aeron.logging.CborUtils.IPV6_TAG;
@@ -34,6 +36,7 @@ import static java.nio.file.StandardOpenOption.*;
 import static java.nio.file.StandardOpenOption.CREATE;
 import static org.agrona.PrintBufferUtil.appendPrettyHexDump;
 import static org.agrona.PrintBufferUtil.byteToHexStringPadded;
+import static org.agrona.SystemUtil.parseSize;
 
 class PrintLoggerEventCallback implements LoggerEventCallback
 {
@@ -48,10 +51,10 @@ class PrintLoggerEventCallback implements LoggerEventCallback
     private int nextFileIndex = 1;
     private FileChannel mainFileChannel;
     private final String newLine = String.format("%n");
+
     PrintLoggerEventCallback()
     {
-        // TODO: Set things up based on properties // See ModuleLoggerReaderAgent.java
-        this("", 0);
+        this(System.getProperty(EVENT_LOG_FILENAME_PROP_NAME), retrieveMaxFileLength());
     }
 
     PrintLoggerEventCallback(final PrintStream out)
@@ -164,6 +167,10 @@ class PrintLoggerEventCallback implements LoggerEventCallback
         }
         else
         {
+            if (!endsWithNewLine(sb))
+            {
+                sb.append(newLine);
+            }
             try
             {
                 mainFileChannel.write(ByteBuffer.wrap(sb.toString().getBytes()));
@@ -189,6 +196,21 @@ class PrintLoggerEventCallback implements LoggerEventCallback
             }
         }
         sb.delete(0, sb.length());
+    }
+
+    private static long retrieveMaxFileLength()
+    {
+        final String maxFileLengthStr = System.getProperty(EVENT_LOG_FILE_MAX_LENGTH);
+        try
+        {
+            return null != maxFileLengthStr ? parseSize(EVENT_LOG_FILE_MAX_LENGTH, maxFileLengthStr) : Long.MAX_VALUE;
+        }
+        catch (final NumberFormatException ex)
+        {
+            System.err.println(
+                "Disabling log rotation, invalid '" + EVENT_LOG_FILE_MAX_LENGTH + "' - " + ex.getMessage());
+            return Long.MAX_VALUE;
+        }
     }
 
     private static int ipV6Group(final DirectBuffer buffer, final int index)
