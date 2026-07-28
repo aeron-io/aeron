@@ -21,19 +21,12 @@ import org.agrona.DirectBuffer;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.UncheckedIOException;
-import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 import static io.aeron.CommonContext.EVENT_LOG_FILENAME_PROP_NAME;
 import static io.aeron.CommonContext.EVENT_LOG_FILE_MAX_LENGTH;
 import static io.aeron.logging.CborUtils.ENUM_TAG;
 import static io.aeron.logging.CborUtils.IPV4_TAG;
 import static io.aeron.logging.CborUtils.IPV6_TAG;
-import static java.nio.channels.FileChannel.open;
-import static java.nio.file.StandardOpenOption.*;
-import static java.nio.file.StandardOpenOption.CREATE;
 import static org.agrona.PrintBufferUtil.appendPrettyHexDump;
 import static org.agrona.PrintBufferUtil.byteToHexStringPadded;
 import static org.agrona.SystemUtil.parseSize;
@@ -43,14 +36,9 @@ class PrintLoggerEventCallback implements LoggerEventCallback
     // [53609.381133403] CLUSTER: ELECTION_STATE_CHANGE [122/122]:
     // memberId=2 CANDIDATE_BALLOT -> LEADER_LOG_REPLICATION leaderId=2 candidateTermId=0 leadershipTermId=0
     // logPosition=0 logLeadershipTermId=-1 appendPosition=0 catchupPosition=-1 reason="unanimous leader"
-    private final PrintStream out;
-    private final Path logFilePath;
+    private final LoggerEventWriter writer;
     private final StringBuilder sb = new StringBuilder();
-    private final String filename;
-    private final long maxFileLength;
-    private int nextFileIndex = 1;
-    private FileChannel mainFileChannel;
-    private final String newLine = String.format("%n");
+    static final String NEW_LINE = String.format("%n");
 
     PrintLoggerEventCallback()
     {
@@ -59,33 +47,13 @@ class PrintLoggerEventCallback implements LoggerEventCallback
 
     PrintLoggerEventCallback(final PrintStream out)
     {
-        this.out = out;
-        this.filename = null;
-        this.logFilePath = null;
-        this.maxFileLength = 0;
+        this.writer = new StreamEventWriter(out);
     }
 
     PrintLoggerEventCallback(final String filename, final long maxFileLength)
     {
-        this.filename = filename;
-        this.logFilePath = null != filename ? Path.of(filename) : null;
-        this.maxFileLength = maxFileLength;
-        if (null == this.filename)
-        {
-            this.out = System.out;
-        }
-        else
-        {
-            this.out = null;
-            try
-            {
-                this.mainFileChannel = open(this.logFilePath, CREATE, WRITE, APPEND);
-            }
-            catch (final IOException e)
-            {
-                throw new UncheckedIOException(e);
-            }
-        }
+        this.writer = null != filename ?
+            new RollingFileEventWriter(filename, maxFileLength) : new StreamEventWriter(System.out);
     }
 
     public void onHeader(
@@ -142,9 +110,9 @@ class PrintLoggerEventCallback implements LoggerEventCallback
         }
         else
         {
-            sb.append(newLine);
+            sb.append(NEW_LINE);
             appendPrettyHexDump(sb, value);
-            sb.append(newLine);
+            sb.append(NEW_LINE);
         }
     }
 
@@ -154,46 +122,13 @@ class PrintLoggerEventCallback implements LoggerEventCallback
         {
             sb.append("truncated");
         }
-        if (null == mainFileChannel)
+        try
         {
-            if (endsWithNewLine(sb))
-            {
-                out.print(sb);
-            }
-            else
-            {
-                out.println(sb);
-            }
+            writer.write(sb);
         }
-        else
+        catch (final IOException e)
         {
-            if (!endsWithNewLine(sb))
-            {
-                sb.append(newLine);
-            }
-            try
-            {
-                mainFileChannel.write(ByteBuffer.wrap(sb.toString().getBytes()));
-                if (mainFileChannel.position() >= this.maxFileLength)
-                {
-                    mainFileChannel.close();
-                    Path rolledFilePath;
-                    do
-                    {
-                        rolledFilePath = Path.of(filename + "." + nextFileIndex);
-                        nextFileIndex++;
-                    }
-                    while (Files.exists(rolledFilePath));
-                    // move the current log file to rolled file
-                    Files.move(logFilePath, rolledFilePath);
-                    // Re-open the log file (that was previously moved)
-                    mainFileChannel = open(logFilePath, CREATE_NEW, WRITE, APPEND);
-                }
-            }
-            catch (final IOException e)
-            {
-                throw new UncheckedIOException(e);
-            }
+            throw new UncheckedIOException(e);
         }
         sb.delete(0, sb.length());
     }
@@ -282,16 +217,16 @@ class PrintLoggerEventCallback implements LoggerEventCallback
         builder.append(']');
     }
 
-    private boolean endsWithNewLine(final StringBuilder sb)
+    static boolean endsWithNewLine(final StringBuilder sb)
     {
-        if (sb.length() < newLine.length())
+        if (sb.length() < NEW_LINE.length())
         {
             return false;
         }
 
-        for (int i = newLine.length(); --i != -1;)
+        for (int i = NEW_LINE.length(); --i != -1;)
         {
-            if (newLine.charAt(i) != sb.charAt((sb.length() - newLine.length() + i)))
+            if (NEW_LINE.charAt(i) != sb.charAt((sb.length() - NEW_LINE.length() + i)))
             {
                 return false;
             }
