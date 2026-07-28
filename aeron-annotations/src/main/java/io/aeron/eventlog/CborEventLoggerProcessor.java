@@ -777,52 +777,20 @@ public class CborEventLoggerProcessor extends AbstractProcessor
         NUMBER, BOOLEAN, STRING, ENUM, BUFFER, ADDRESS
     }
 
-    private static final class BufferViewSpec
+    private record BufferViewSpec(String bufferParamName, String offsetParamName, String lengthParamName)
     {
-        private final String bufferParamName;
-        private final String offsetParamName;
-        private final String lengthParamName;
-
-        private BufferViewSpec(
-            final String bufferParamName, final String offsetParamName, final String lengthParamName)
-        {
-            this.bufferParamName = bufferParamName;
-            this.offsetParamName = offsetParamName;
-            this.lengthParamName = lengthParamName;
-        }
     }
 
-    private static final class FieldPlan
+    private record FieldPlan(
+        VariableElement param,
+        Kind kind,
+        String valueExpr,
+        String tagExpr,
+        boolean allowTruncate,
+        List<String> preamble,
+        boolean usesBufferField,
+        boolean usesAddressField)
     {
-        private final VariableElement param;
-        private final Kind kind;
-        private final String valueExpr;
-        private final String tagExpr;
-        private final boolean allowTruncate;
-        private final List<String> preamble;
-        private final boolean usesBufferField;
-        private final boolean usesAddressField;
-
-        private FieldPlan(
-            final VariableElement param,
-            final Kind kind,
-            final String valueExpr,
-            final String tagExpr,
-            final boolean allowTruncate,
-            final List<String> preamble,
-            final boolean usesBufferField,
-            final boolean usesAddressField)
-        {
-            this.param = param;
-            this.kind = kind;
-            this.valueExpr = valueExpr;
-            this.tagExpr = tagExpr;
-            this.allowTruncate = allowTruncate;
-            this.preamble = preamble;
-            this.usesBufferField = usesBufferField;
-            this.usesAddressField = usesAddressField;
-        }
-
         private static FieldPlan simple(
             final VariableElement param,
             final Kind kind,
@@ -834,26 +802,12 @@ public class CborEventLoggerProcessor extends AbstractProcessor
         }
     }
 
-    private static final class CborMethodPlan
+    private record CborMethodPlan(
+        ExecutableElement method,
+        String eventCodeExpr,
+        List<FieldPlan> fields,
+        boolean usesBufferField,
+        boolean usesAddressField)
     {
-        private final ExecutableElement method;
-        private final String eventCodeExpr;
-        private final List<FieldPlan> fields;
-        private final boolean usesBufferField;
-        private final boolean usesAddressField;
-
-        private CborMethodPlan(
-            final ExecutableElement method,
-            final String eventCodeExpr,
-            final List<FieldPlan> fields,
-            final boolean usesBufferField,
-            final boolean usesAddressField)
-        {
-            this.method = method;
-            this.eventCodeExpr = eventCodeExpr;
-            this.fields = fields;
-            this.usesBufferField = usesBufferField;
-            this.usesAddressField = usesAddressField;
-        }
     }
 }
