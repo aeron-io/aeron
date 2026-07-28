@@ -565,6 +565,15 @@ public class CommonContext implements Cloneable
     }
 
     /**
+     * Event Buffer length system property name. If not set then output will default to {@link System#out}.
+     */
+    public static final String EVENT_LOG_FILENAME_PROP_NAME = "aeron.event.log.filename";
+    /**
+     * Event Buffer log file max length system property. If not set then {@link Long#MAX_VALUE} will be used.
+     */
+    public static final String EVENT_LOG_FILE_MAX_LENGTH = "aeron.event.log.file.max.length";
+
+    /**
      * Should a component's configuration be printed on start.
      *
      * @return {@code true} if the configuration should be printed on start.
