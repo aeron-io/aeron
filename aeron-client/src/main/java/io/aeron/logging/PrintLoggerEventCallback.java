@@ -43,17 +43,12 @@ public class PrintLoggerEventCallback implements LoggerEventCallback
     private final StringBuilder sb = new StringBuilder();
     static final String NEW_LINE = String.format("%n");
 
-    PrintLoggerEventCallback()
-    {
-        this(System.getProperty(EVENT_LOG_FILENAME_PROP_NAME), retrieveMaxFileLength());
-    }
-
     /**
      * Default Constructor.
      */
     public PrintLoggerEventCallback()
     {
-        this(System.out);
+        this(System.getProperty(EVENT_LOG_FILENAME_PROP_NAME), retrieveMaxFileLength());
     }
 
     PrintLoggerEventCallback(final PrintStream out)
