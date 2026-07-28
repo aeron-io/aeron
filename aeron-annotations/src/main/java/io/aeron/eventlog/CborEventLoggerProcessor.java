@@ -34,6 +34,7 @@ import javax.tools.Diagnostic;
 import javax.tools.JavaFileObject;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -55,12 +56,7 @@ import java.util.Set;
 @SupportedAnnotationTypes("io.aeron.eventlog.GeneratedLogger")
 public class CborEventLoggerProcessor extends AbstractProcessor
 {
-    private static final String MANY_TO_ONE_RING_BUFFER_TYPE = "org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer";
-    private static final String UNSAFE_BUFFER_TYPE = "org.agrona.concurrent.UnsafeBuffer";
-    private static final String ENCODING_STATE_TYPE = "io.aeron.logging.EncodingState";
-    private static final String CBOR_ENCODE_TYPE = "io.aeron.logging.CborEncode";
     private static final String CBOR_UTILS_TYPE = "io.aeron.logging.CborUtils";
-    private static final int MAX_BUFFER_LENGTH = 4096;
     private static final Set<String> RESERVED_LOCAL_NAMES =
         Set.of("timestampNanos", "length", "bufferLength", "index", "encodingState");
 
@@ -121,8 +117,6 @@ public class CborEventLoggerProcessor extends AbstractProcessor
 
         final List<CborMethodPlan> plans = new ArrayList<>();
         boolean ok = true;
-        boolean usesBuffer = false;
-        boolean usesAddress = false;
 
         for (final ExecutableElement method : ElementFilter.methodsIn(iface.getEnclosedElements()))
         {
@@ -140,8 +134,6 @@ public class CborEventLoggerProcessor extends AbstractProcessor
             else
             {
                 plans.add(plan);
-                usesBuffer |= plan.usesBufferField;
-                usesAddress |= plan.usesAddressField;
             }
         }
 
@@ -156,7 +148,7 @@ public class CborEventLoggerProcessor extends AbstractProcessor
                 packageName + "." + implName, iface);
             try (PrintWriter out = new PrintWriter(sourceFile.openWriter()))
             {
-                writeImpl(out, packageName, implName, interfaceName, plans, usesBuffer, usesAddress);
+                writeImpl(out, packageName, implName, interfaceName, plans);
             }
         }
         catch (final IOException e)
@@ -240,14 +232,17 @@ public class CborEventLoggerProcessor extends AbstractProcessor
 
         if (bufferFieldCount > 1)
         {
-            error(method, "at most one DirectBuffer/ByteBuffer body field is supported per method, found " +
-                bufferFieldCount);
+            error(
+                method,
+                "at most one DirectBuffer/ByteBuffer body field is supported per method, found " + bufferFieldCount);
             ok = false;
         }
         if (addressFieldCount > 1)
         {
-            error(method, "at most one InetSocketAddress/InetAddress body field is supported per method, found " +
-                addressFieldCount);
+            error(
+                method,
+                "at most one InetSocketAddress/InetAddress body field is supported per method, found " +
+                    addressFieldCount);
             ok = false;
         }
 
@@ -256,7 +251,7 @@ public class CborEventLoggerProcessor extends AbstractProcessor
             return null;
         }
 
-        return new CborMethodPlan(method, eventCodeExpr, fields, 1 == bufferFieldCount, 1 == addressFieldCount);
+        return new CborMethodPlan(method, eventCodeExpr, fields);
     }
 
     private String resolveEventCode(
@@ -446,14 +441,14 @@ public class CborEventLoggerProcessor extends AbstractProcessor
 
         if (null != bufferViewSpec && bufferViewSpec.bufferParamName.equals(name))
         {
-            preamble.add("final " + UNSAFE_BUFFER_TYPE + " " + name + "View = bufferViewThreadLocal.get();");
+            preamble.add("final UnsafeBuffer " + name + "View = bufferViewThreadLocal.get();");
             preamble.add(name + "View.wrap(" + name + ", " + bufferViewSpec.offsetParamName + ", " +
                 bufferViewSpec.lengthParamName + ");");
             valueExpr = name + "View";
         }
         else if (isByteBuffer)
         {
-            preamble.add("final " + UNSAFE_BUFFER_TYPE + " " + name + "View = bufferViewThreadLocal.get();");
+            preamble.add("final UnsafeBuffer" + " " + name + "View = bufferViewThreadLocal.get();");
             preamble.add(name + "View.wrap(" + name + ", " + name + ".position(), " + name + ".remaining());");
             valueExpr = name + "View";
         }
@@ -474,7 +469,7 @@ public class CborEventLoggerProcessor extends AbstractProcessor
         final boolean dynamicTag = null == tagAnnotation;
 
         final List<String> preamble = new ArrayList<>();
-        preamble.add("final " + UNSAFE_BUFFER_TYPE + " " + name + "View;");
+        preamble.add("final UnsafeBuffer " + name + "View;");
         if (dynamicTag)
         {
             preamble.add("final long " + name + "Tag;");
@@ -597,97 +592,147 @@ public class CborEventLoggerProcessor extends AbstractProcessor
         final String packageName,
         final String implName,
         final String interfaceName,
-        final List<CborMethodPlan> plans,
-        final boolean usesBuffer,
-        final boolean usesAddress)
+        final List<CborMethodPlan> plans)
     {
-        out.printf("package %s;%n%n", packageName);
-        out.printf("final class %s implements %s%n{%n", implName, interfaceName);
-        out.printf("    private static final int MAX_BUFFER_LENGTH = %d;%n%n", MAX_BUFFER_LENGTH);
-        out.printf("    private final %s ringBuffer;%n", MANY_TO_ONE_RING_BUFFER_TYPE);
-        out.printf("    private final ThreadLocal<%s> encodingStateThreadLocal = ThreadLocal.withInitial(%s::new);%n",
-            ENCODING_STATE_TYPE, ENCODING_STATE_TYPE);
-        if (usesBuffer)
-        {
-            out.printf(
-                "    private final ThreadLocal<%s> bufferViewThreadLocal = ThreadLocal.withInitial(%s::new);%n",
-                UNSAFE_BUFFER_TYPE, UNSAFE_BUFFER_TYPE);
-        }
-        if (usesAddress)
-        {
-            out.printf(
-                "    private final ThreadLocal<%s> addressViewThreadLocal = ThreadLocal.withInitial(%s::new);%n",
-                UNSAFE_BUFFER_TYPE, UNSAFE_BUFFER_TYPE);
-        }
-        out.println();
-        out.printf("    %s(final %s eventRingBuffer)%n    {%n", implName, MANY_TO_ONE_RING_BUFFER_TYPE);
-        out.printf("        this.ringBuffer = eventRingBuffer;%n    }%n");
-
+        final StringWriter methods = new StringWriter();
+        final PrintWriter methodWriter = new PrintWriter(methods);
         for (final CborMethodPlan plan : plans)
         {
-            out.println();
-            writeMethod(out, plan);
+            methodWriter.println();
+            writeMethod(methodWriter, plan);
         }
 
-        out.printf("}%n");
+        // CHECKSTYLE:OFF:LineLength
+        // CHECKSTYLE:OFF:Regexp
+        out.printf(
+            """
+            package %s;
+            
+            import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
+            import org.agrona.concurrent.UnsafeBuffer;
+
+            import io.aeron.logging.CborEncode;
+            import io.aeron.logging.EncodingState;
+            
+            final class %s implements %s
+            {
+                private static final int MAX_BUFFER_LENGTH = 4096;
+                private final ManyToOneRingBuffer ringBuffer;
+                private final ThreadLocal<EncodingState> encodingStateThreadLocal = ThreadLocal.withInitial(EncodingState::new);
+                @SuppressWarnings("unused")
+                private final ThreadLocal<UnsafeBuffer> bufferViewThreadLocal = ThreadLocal.withInitial(UnsafeBuffer::new);
+                @SuppressWarnings("unused")
+                private final ThreadLocal<UnsafeBuffer> addressViewThreadLocal = ThreadLocal.withInitial(UnsafeBuffer::new);
+            
+                %s(final ManyToOneRingBuffer eventRingBuffer)
+                {
+                    this.ringBuffer = eventRingBuffer;
+                }
+            %s
+            }
+            """,
+            packageName, implName, interfaceName, implName, methods);
+        // CHECKSTYLE:ON:LineLength
+        // CHECKSTYLE:On:Regexp
     }
 
     private void writeMethod(final PrintWriter out, final CborMethodPlan plan)
     {
         final ExecutableElement method = plan.method;
 
-        out.printf("    @Override%n    public %svoid %s(%s)%n    {%n",
-            renderTypeParameters(method), method.getSimpleName(), renderParameters(method));
-        out.printf("        final long timestampNanos = System.nanoTime();%n");
+        // CHECKSTYLE:OFF:LineLength
+        // CHECKSTYLE:OFF:Regexp
+        out.printf(
+            """
+                @Override
+                public %svoid %s(%s)
+                {
+                    final long timestampNanos = System.nanoTime();
+           
+            %s
+                    int length = CborEncode.lengthHeader(%s, timestampNanos);
+            
+            %s
+                    length += CborEncode.lengthFooter();
 
-        boolean printedPreambleBlank = false;
+                    final int bufferLength = Math.min(length, MAX_BUFFER_LENGTH);
+                    final int index = ringBuffer.tryClaim(%s.toEventCodeId(), bufferLength);
+            
+                    final EncodingState encodingState = encodingStateThreadLocal.get();
+                    encodingState.reset(ringBuffer.buffer(), index, bufferLength);
+
+                    try
+                    {
+                        CborEncode.encodeHeader(encodingState, %s, timestampNanos);
+            
+            %s
+                        CborEncode.encodeFooter(encodingState);
+                    }
+                    finally
+                    {
+                        ringBuffer.commit(index);
+                    }
+                }
+            """,
+            renderTypeParameters(method),
+            method.getSimpleName(),
+            renderParameters(method),
+            renderPreamble(plan),
+            plan.eventCodeExpr,
+            renderLengths(plan),
+            plan.eventCodeExpr,
+            plan.eventCodeExpr,
+            renderValues(plan));
+        // CHECKSTYLE:ON:LineLength
+        // CHECKSTYLE:ON:Regexp
+    }
+
+    private StringWriter renderValues(final CborMethodPlan plan)
+    {
+        final StringWriter values = new StringWriter();
+        final PrintWriter valuesW = new PrintWriter(values);
+
+        for (final FieldPlan field : plan.fields)
+        {
+            valuesW.println("            " + renderEncodeCall(field) + ";");
+        }
+
+        valuesW.flush();
+        return values;
+    }
+
+    private StringWriter renderLengths(final CborMethodPlan plan)
+    {
+        final StringWriter lengths = new StringWriter();
+        final PrintWriter lengthsW = new PrintWriter(lengths);
+
+        for (final FieldPlan field : plan.fields)
+        {
+            lengthsW.println("        length += " + renderLengthCall(field) + ";");
+        }
+
+        lengthsW.flush();
+        return lengths;
+    }
+
+    private static StringWriter renderPreamble(final CborMethodPlan plan)
+    {
+        final StringWriter preamble = new StringWriter();
+        final PrintWriter preambleW = new PrintWriter(preamble);
+
         for (final FieldPlan field : plan.fields)
         {
             if (!field.preamble.isEmpty())
             {
-                if (!printedPreambleBlank)
-                {
-                    out.println();
-                    printedPreambleBlank = true;
-                }
                 for (final String line : field.preamble)
                 {
-                    out.println("        " + line);
+                    preambleW.println("        " + line);
                 }
             }
         }
 
-        out.println();
-        out.printf("        int length = %s.lengthHeader(%s, timestampNanos);%n", CBOR_ENCODE_TYPE,
-            plan.eventCodeExpr);
-        for (final FieldPlan field : plan.fields)
-        {
-            out.println("        length += " + renderLengthCall(field) + ";");
-        }
-        out.printf("        length += %s.lengthFooter();%n", CBOR_ENCODE_TYPE);
-        out.println();
-        out.println("        final int bufferLength = Math.min(length, MAX_BUFFER_LENGTH);");
-        out.printf("        final int index = ringBuffer.tryClaim(%s.toEventCodeId(), bufferLength);%n",
-            plan.eventCodeExpr);
-        out.println();
-        out.printf("        final %s encodingState = encodingStateThreadLocal.get();%n", ENCODING_STATE_TYPE);
-        out.println("        encodingState.reset(ringBuffer.buffer(), index, bufferLength);");
-        out.println();
-        out.println("        try");
-        out.println("        {");
-        out.printf("            %s.encodeHeader(encodingState, %s, timestampNanos);%n", CBOR_ENCODE_TYPE,
-            plan.eventCodeExpr);
-        for (final FieldPlan field : plan.fields)
-        {
-            out.println("            " + renderEncodeCall(field) + ";");
-        }
-        out.printf("            %s.encodeFooter(encodingState);%n", CBOR_ENCODE_TYPE);
-        out.println("        }");
-        out.println("        finally");
-        out.println("        {");
-        out.println("            ringBuffer.commit(index);");
-        out.println("        }");
-        out.println("    }");
+        preambleW.flush();
+        return preamble;
     }
 
     private String renderLengthCall(final FieldPlan field)
@@ -695,9 +740,9 @@ public class CborEventLoggerProcessor extends AbstractProcessor
         final String key = "\"" + field.param.getSimpleName() + "\"";
         if (Kind.BOOLEAN == field.kind)
         {
-            return CBOR_ENCODE_TYPE + ".length(" + key + ", " + field.valueExpr + ")";
+            return "CborEncode.length(" + key + ", " + field.valueExpr + ")";
         }
-        return CBOR_ENCODE_TYPE + ".length(" + key + ", " + field.tagExpr + ", " + field.valueExpr + ")";
+        return "CborEncode.length(" + key + ", " + field.tagExpr + ", " + field.valueExpr + ")";
     }
 
     private String renderEncodeCall(final FieldPlan field)
@@ -705,14 +750,14 @@ public class CborEventLoggerProcessor extends AbstractProcessor
         final String key = "\"" + field.param.getSimpleName() + "\"";
         if (Kind.BOOLEAN == field.kind)
         {
-            return CBOR_ENCODE_TYPE + ".encode(encodingState, " + key + ", " + field.valueExpr + ")";
+            return "CborEncode.encode(encodingState, " + key + ", " + field.valueExpr + ")";
         }
         if (Kind.NUMBER == field.kind)
         {
-            return CBOR_ENCODE_TYPE + ".encode(encodingState, " + key + ", " + field.tagExpr + ", " +
+            return "CborEncode.encode(encodingState, " + key + ", " + field.tagExpr + ", " +
                 field.valueExpr + ")";
         }
-        return CBOR_ENCODE_TYPE + ".encode(encodingState, " + key + ", " + field.tagExpr + ", " + field.valueExpr +
+        return "CborEncode.encode(encodingState, " + key + ", " + field.tagExpr + ", " + field.valueExpr +
             ", " + field.allowTruncate + ")";
     }
 
@@ -802,12 +847,7 @@ public class CborEventLoggerProcessor extends AbstractProcessor
         }
     }
 
-    private record CborMethodPlan(
-        ExecutableElement method,
-        String eventCodeExpr,
-        List<FieldPlan> fields,
-        boolean usesBufferField,
-        boolean usesAddressField)
+    private record CborMethodPlan(ExecutableElement method, String eventCodeExpr, List<FieldPlan> fields)
     {
     }
 }
