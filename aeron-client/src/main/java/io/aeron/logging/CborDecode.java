@@ -411,10 +411,11 @@ public class CborDecode implements MessageHandler
                 parseEntry(state);
             }
 
+            final boolean truncated = parseBoolean(state);
             for (int i = 0, n = loggers.size(); i < n; i++)
             {
                 final LoggerEventCallback logger = loggers.get(i);
-                logger.onFooter(parseBoolean(state));
+                logger.onFooter(truncated);
             }
         }
     }

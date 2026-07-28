@@ -18,7 +18,8 @@ package io.aeron.logging;
 import org.agrona.concurrent.Agent;
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
 
-import java.util.List;
+import java.util.ArrayList;
+import java.util.ServiceLoader;
 
 import static io.aeron.logging.EventConfiguration.EVENT_READER_FRAME_LIMIT;
 
@@ -29,14 +30,21 @@ import static io.aeron.logging.EventConfiguration.EVENT_READER_FRAME_LIMIT;
 public final class CborLoggerReaderAgent implements Agent
 {
     private final ManyToOneRingBuffer ringBuffer = EventConfiguration.eventReader().ringBuffer();
-    private final CborDecode messageHandler = new CborDecode(List.of(new PrintLoggerEventCallback()));
+    private final CborDecode messageHandler;
 
     /**
      * Default constructor.
      */
     public CborLoggerReaderAgent()
     {
+        final ArrayList<LoggerEventCallback> loggers = new ArrayList<>();
+        //noinspection Java9UndeclaredServiceUsage
+        for (final LoggerEventCallback componentLogger : ServiceLoader.load(LoggerEventCallback.class))
+        {
+            loggers.add(componentLogger);
+        }
 
+        messageHandler = new CborDecode(loggers);
     }
 
     /**

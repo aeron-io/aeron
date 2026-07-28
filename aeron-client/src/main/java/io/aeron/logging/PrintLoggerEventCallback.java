@@ -31,7 +31,10 @@ import static org.agrona.PrintBufferUtil.appendPrettyHexDump;
 import static org.agrona.PrintBufferUtil.byteToHexStringPadded;
 import static org.agrona.SystemUtil.parseSize;
 
-class PrintLoggerEventCallback implements LoggerEventCallback
+/**
+ * Main implementation of the Aeron Logger.
+ */
+public class PrintLoggerEventCallback implements LoggerEventCallback
 {
     // [53609.381133403] CLUSTER: ELECTION_STATE_CHANGE [122/122]:
     // memberId=2 CANDIDATE_BALLOT -> LEADER_LOG_REPLICATION leaderId=2 candidateTermId=0 leadershipTermId=0
@@ -45,6 +48,14 @@ class PrintLoggerEventCallback implements LoggerEventCallback
         this(System.getProperty(EVENT_LOG_FILENAME_PROP_NAME), retrieveMaxFileLength());
     }
 
+    /**
+     * Default Constructor.
+     */
+    public PrintLoggerEventCallback()
+    {
+        this(System.out);
+    }
+
     PrintLoggerEventCallback(final PrintStream out)
     {
         this.writer = new StreamEventWriter(out);
@@ -56,6 +67,9 @@ class PrintLoggerEventCallback implements LoggerEventCallback
             new RollingFileEventWriter(filename, maxFileLength) : new StreamEventWriter(System.out);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     public void onHeader(
         final int eventType,
         final int eventCode,
@@ -71,6 +85,9 @@ class PrintLoggerEventCallback implements LoggerEventCallback
         sb.append(eventCodeName);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     public void onValue(final CharSequence name, final long tag, final CharSequence value)
     {
         sb.append(' ').append(name).append('=');
@@ -84,16 +101,25 @@ class PrintLoggerEventCallback implements LoggerEventCallback
         }
     }
 
+    /**
+     * {@inheritDoc}
+     */
     public void onValue(final CharSequence name, final long tag, final long value)
     {
         sb.append(' ').append(name).append('=').append(value);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     public void onValue(final CharSequence name, final long tag, final boolean value)
     {
         sb.append(' ').append(name).append('=').append(value);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     public void onValue(final CharSequence name, final long tag, final DirectBuffer value)
     {
         sb.append(' ').append(name).append('=');
@@ -116,6 +142,9 @@ class PrintLoggerEventCallback implements LoggerEventCallback
         }
     }
 
+    /**
+     * {@inheritDoc}
+     */
     public void onFooter(final boolean truncated)
     {
         if (truncated)

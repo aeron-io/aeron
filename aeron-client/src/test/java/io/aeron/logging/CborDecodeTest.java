@@ -39,7 +39,6 @@ import static org.mockito.Mockito.verify;
 
 class CborDecodeTest
 {
-
     private static final TestEventCode TEST_EVENT_CODE = new TestEventCode(2, 1);
 
     @ParameterizedTest
@@ -67,7 +66,9 @@ class CborDecodeTest
 
         CborEncode.encodeFooter(encodingState);
 
-        final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(loggerEventCallback)));
+        final CborDecode cborDecode = new CborDecode(
+            List.of(new ProxyLoggerEventCallback(loggerEventCallback), new NullLoggerEventCallback()));
+
         cborDecode.onMessage(
             TEST_EVENT_CODE.toEventCodeId(),
             encodingState.buffer(), 0, encodingState.offset());
