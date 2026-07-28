@@ -18,7 +18,6 @@ package io.aeron.logging;
 import org.agrona.ExpandableArrayBuffer;
 import org.agrona.LangUtil;
 import org.agrona.MutableDirectBuffer;
-import org.agrona.collections.Int2ObjectHashMap;
 import org.agrona.concurrent.Agent;
 import org.agrona.concurrent.MessageHandler;
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
@@ -34,11 +33,9 @@ import java.io.PrintStream;
 import java.lang.management.ManagementFactory;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Properties;
 
 import static io.aeron.logging.EventConfiguration.EVENT_READER_FRAME_LIMIT;
 import static io.aeron.logging.EventConfiguration.MAX_EVENT_LENGTH;
-import static io.aeron.logging.ModuleLoggerReaderAgent.decodeLogEvent;
 import static org.agrona.BitUtil.SIZE_OF_INT;
 
 /**
@@ -52,7 +49,6 @@ public final class CollectingEventLogReaderAgent implements Agent, CollectingEve
      * MBean name for this logging agent.
      */
     public static final String LOGGING_MBEAN_NAME = "io.aeron:type=logging";
-    private final Int2ObjectHashMap<ModuleLogger> loggers = new Int2ObjectHashMap<>();
     private String startMessage;
 
     @SuppressWarnings("JavadocVariable")
@@ -61,7 +57,7 @@ public final class CollectingEventLogReaderAgent implements Agent, CollectingEve
         COLLECTING, IGNORING
     }
 
-    private final ManyToOneRingBuffer ringBuffer = EventConfiguration.eventReader().ringBuffer();
+    private final ManyToOneRingBuffer ringBuffer;
     private final ExpandableArrayBuffer collectingBuffer = new ExpandableArrayBuffer();
     private final MessageHandler messageHandler = this::onMessage;
     private final Object mutex = new Object();
@@ -70,12 +66,18 @@ public final class CollectingEventLogReaderAgent implements Agent, CollectingEve
     private volatile State state = State.IGNORING;
     private int bufferPosition = 0;
 
-    CollectingEventLogReaderAgent(final Properties configOptions, final List<ModuleLogger> loggers)
+    /**
+     * Default constructor.
+     */
+    @SuppressWarnings("unused") // Used reflectively
+    public CollectingEventLogReaderAgent()
     {
-        for (final ModuleLogger componentLogger : loggers)
-        {
-            this.loggers.put(componentLogger.typeCode(), componentLogger);
-        }
+        this(EventConfiguration.eventReader().ringBuffer());
+    }
+
+    CollectingEventLogReaderAgent(final ManyToOneRingBuffer ringBuffer)
+    {
+        this.ringBuffer = ringBuffer;
     }
 
     /**
@@ -220,9 +222,14 @@ public final class CollectingEventLogReaderAgent implements Agent, CollectingEve
 
         try (PrintStream out = new PrintStream(filename))
         {
+            final CborDecode decode = new CborDecode(List.of(new PrintLoggerEventCallback(out)));
+
             final int terminalPosition = bufferPosition;
 
-            out.println(startMessage);
+            if (null != startMessage)
+            {
+                out.println(startMessage);
+            }
 
             int readingPosition = 0;
             while (readingPosition < terminalPosition)
@@ -233,15 +240,8 @@ public final class CollectingEventLogReaderAgent implements Agent, CollectingEve
                 final int length = collectingBuffer.getInt(readingPosition);
                 readingPosition += SIZE_OF_INT;
 
-                final int eventCodeTypeId = msgTypeId >> 16;
-                final int eventCodeId = msgTypeId & 0xFFFF;
-
-                decodeBuffer.setLength(0);
-                decodeLogEvent(
-                    collectingBuffer, readingPosition, eventCodeTypeId, eventCodeId, loggers, decodeBuffer);
+                decode.onMessage(msgTypeId, collectingBuffer, readingPosition, length);
                 readingPosition += length;
-
-                out.print(decodeBuffer);
             }
 
             bufferPosition = 0;

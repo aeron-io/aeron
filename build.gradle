@@ -310,7 +310,7 @@ subprojects {
             'aeron.event.archive.log': 'all',
             'aeron.event.log': 'admin',
             'aeron.debug.timeout': '3600s',
-//            'aeron.event.log.reader.classname': 'io.aeron.logging.CollectingEventLogReaderAgent',
+            'aeron.event.log.reader.classname': 'io.aeron.logging.CollectingEventLogReaderAgent',
             'aeron.fallback.logger': 'no_op')
     }
 
@@ -328,7 +328,7 @@ subprojects {
         systemProperty 'aeron.event.archive.log', 'all'
         systemProperty 'aeron.event.log', 'admin'
         systemProperty 'aeron.debug.timeout', '3600s'
-//        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.logging.CollectingEventLogReaderAgent'
+        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.logging.CollectingEventLogReaderAgent'
     }
 
     tasks.register('topologyTest', Test) {
@@ -343,7 +343,7 @@ subprojects {
         systemProperty 'aeron.event.archive.log', 'all'
         systemProperty 'aeron.event.log', 'admin'
         systemProperty 'aeron.debug.timeout', '3600s'
-//        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.logging.CollectingEventLogReaderAgent'
+        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.logging.CollectingEventLogReaderAgent'
     }
 
     javadoc {
@@ -576,7 +576,8 @@ project(':aeron-driver') {
         systemProperty 'aeron.event.log.reader.classname', 'io.aeron.logging.CborLoggerReaderAgent'
     }
 
-    LoggingTest.configureLoggingTests(project, 'DriverEventEnablementTest', 'aeron.event.log', 'aeron.event.log.disable',
+    LoggingTest.configureLoggingTests(
+        project, 'DriverEventEnablementTest', 'aeron.event.log', 'aeron.event.log.disable',
         'TEXT_DATA,CMD_IN_ADD_PUBLICATION')
 
     javadoc {
@@ -1185,7 +1186,7 @@ project(':aeron-samples') {
         systemProperty 'aeron.event.archive.log', 'all'
         systemProperty 'aeron.event.log', 'admin'
         systemProperty 'aeron.debug.timeout', '3600s'
-//        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.logging.CollectingEventLogReaderAgent'
+        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.logging.CollectingEventLogReaderAgent'
     }
 
     tasks.register('asciidoctorGithub', io.aeron.build.AsciidoctorPreprocessTask) {
@@ -1231,7 +1232,7 @@ project(':aeron-system-tests') {
         systemProperty 'aeron.event.archive.log', 'all'
         systemProperty 'aeron.event.log', 'admin'
         systemProperty 'aeron.debug.timeout', '3600s'
-//        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.logging.CollectingEventLogReaderAgent'
+        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.logging.CollectingEventLogReaderAgent'
     }
 
     shadowJar {

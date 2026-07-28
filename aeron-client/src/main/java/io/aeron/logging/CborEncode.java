@@ -71,19 +71,19 @@ public final class CborEncode
      * Encode the header of the Cbor message.
      *
      * @param encodingState    tracks the current state of the encoding.
-     * @param clusterEventCode the cluster event code.
+     * @param eventCode        the cluster event code.
      * @param timestamp        the timestamp of the event.
      */
     public static void encodeHeader(
         final EncodingState encodingState,
-        final EventCode clusterEventCode,
+        final EventCode eventCode,
         final long timestamp)
     {
         encodingState.buffer().putByte(encodingState.offset(), typeByte(ARRAY_MAJOR_TYPE, ENTRIES_LENGTH));
         encodingState.incrementOffset(1);
         encodeNumber(encodingState, timestamp);
-        encodeNumber(encodingState, clusterEventCode.toEventCodeId());
-        encodeString(encodingState, clusterEventCode.name(), false);
+        encodeNumber(encodingState, eventCode.toEventCodeId());
+        encodeString(encodingState, eventCode.name(), false);
         encodingState.buffer().putByte(encodingState.offset(), typeByte(MAP_MAJOR_TYPE, ADDITIONAL_CONTENT_INDEFINITE));
         encodingState.incrementOffset(1);
     }
