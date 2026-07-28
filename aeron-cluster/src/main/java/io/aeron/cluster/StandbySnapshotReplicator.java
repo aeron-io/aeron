@@ -35,7 +35,9 @@ import static io.aeron.archive.status.RecordingPos.NULL_RECORDING_ID;
 class StandbySnapshotReplicator implements AutoCloseable
 {
     private final int memberId;
-    private final AeronArchive archive;
+    private final AeronArchive.Context archiveCtx;
+    private AeronArchive.AsyncConnect asyncConnect;
+    private AeronArchive archive;
     private final RecordingLog recordingLog;
     private final int serviceCount;
     private final String archiveControlChannel;
@@ -51,7 +53,7 @@ class StandbySnapshotReplicator implements AutoCloseable
 
     StandbySnapshotReplicator(
         final int memberId,
-        final AeronArchive archive,
+        final AeronArchive.Context archiveCtx,
         final RecordingLog recordingLog,
         final int serviceCount,
         final String archiveControlChannel,
@@ -61,7 +63,7 @@ class StandbySnapshotReplicator implements AutoCloseable
         final Counter snapshotCounter)
     {
         this.memberId = memberId;
-        this.archive = archive;
+        this.archiveCtx = archiveCtx;
         this.recordingLog = recordingLog;
         this.serviceCount = serviceCount;
         this.archiveControlChannel = archiveControlChannel;
@@ -81,10 +83,10 @@ class StandbySnapshotReplicator implements AutoCloseable
         final String replicationChannel,
         final int fileSyncLevel, final Counter snapshotCounter)
     {
-        final AeronArchive archive = AeronArchive.connect(archiveCtx.clone().errorHandler(null));
+        final AeronArchive.Context localArchiveCtx = archiveCtx.clone().errorHandler(null);
         final StandbySnapshotReplicator standbySnapshotReplicator = new StandbySnapshotReplicator(
             memberId,
-            archive,
+            localArchiveCtx,
             recordingLog,
             serviceCount,
             archiveControlChannel,
@@ -92,13 +94,42 @@ class StandbySnapshotReplicator implements AutoCloseable
             replicationChannel,
             fileSyncLevel,
             snapshotCounter);
-        archive.context().recordingSignalConsumer(standbySnapshotReplicator::onSignal);
+        localArchiveCtx.recordingSignalConsumer(standbySnapshotReplicator::onSignal);
         return standbySnapshotReplicator;
     }
 
+    @SuppressWarnings("methodLength")
     int poll(final long nowNs)
     {
         int workCount = 0;
+
+        if (null == archive)
+        {
+            if (null == asyncConnect)
+            {
+                asyncConnect = AeronArchive.asyncConnect(archiveCtx);
+                workCount += 1;
+            }
+
+            final int step = asyncConnect.step();
+            final AeronArchive aeronArchive = asyncConnect.poll();
+
+            if (null == aeronArchive)
+            {
+                if (asyncConnect.step() != step)
+                {
+                    workCount += 1;
+                }
+            }
+            else
+            {
+                archive = aeronArchive;
+                asyncConnect = null;
+                workCount += 1;
+            }
+
+            return workCount;
+        }
 
         if (null == recordingReplication)
         {
@@ -244,7 +275,7 @@ class StandbySnapshotReplicator implements AutoCloseable
 
     public void close()
     {
-        CloseHelper.quietClose(archive);
+        CloseHelper.quietCloseAll(archive, asyncConnect);
     }
 
     private static final class SnapshotReplicationEntry
