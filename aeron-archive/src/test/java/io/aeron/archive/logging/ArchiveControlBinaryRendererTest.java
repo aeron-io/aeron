@@ -24,12 +24,12 @@ import static io.aeron.logging.EventConfiguration.MAX_EVENT_LENGTH;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-class ArchiveAdminCommandBinaryRendererTest
+class ArchiveControlBinaryRendererTest
 {
     private final UnsafeBuffer buffer = new UnsafeBuffer(new byte[MAX_EVENT_LENGTH]);
     private final StringBuilder sb = new StringBuilder();
     private final MessageHeaderEncoder headerEncoder = new MessageHeaderEncoder();
-    private final ArchiveAdminCommandBinaryRenderer renderer = new ArchiveAdminCommandBinaryRenderer();
+    private final ArchiveControlBinaryRenderer renderer = new ArchiveControlBinaryRenderer();
 
     @Test
     void renderConnect()
