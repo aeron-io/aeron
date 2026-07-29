@@ -1,1 +1,1 @@
-io.aeron.archive.logging.ArchiveAdminCommandBinaryRenderer
+io.aeron.archive.logging.ArchiveControlBinaryRenderer

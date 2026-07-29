@@ -22,7 +22,7 @@ import org.agrona.DirectBuffer;
 /**
  * Binary renderer for the Archive admin commands.
  */
-public class ArchiveAdminCommandBinaryRenderer implements BinaryRenderer
+public class ArchiveControlBinaryRenderer implements BinaryRenderer
 {
     private static final ConnectRequestDecoder CONNECT_REQUEST_DECODER = new ConnectRequestDecoder();
     private static final CloseSessionRequestDecoder CLOSE_SESSION_REQUEST_DECODER = new CloseSessionRequestDecoder();
@@ -129,7 +129,7 @@ public class ArchiveAdminCommandBinaryRenderer implements BinaryRenderer
     /**
      * Default constructor.
      */
-    public ArchiveAdminCommandBinaryRenderer()
+    public ArchiveControlBinaryRenderer()
     {
     }
 
