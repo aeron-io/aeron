@@ -17,10 +17,12 @@
 package io.aeron.logging;
 
 import org.agrona.DirectBuffer;
+import org.agrona.collections.Int2ObjectHashMap;
 
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.UncheckedIOException;
+import java.util.ServiceLoader;
 
 import static io.aeron.CommonContext.EVENT_LOG_FILENAME_PROP_NAME;
 import static io.aeron.CommonContext.EVENT_LOG_FILE_MAX_LENGTH;
@@ -41,6 +43,8 @@ public class PrintLoggerEventCallback implements LoggerEventCallback
     // logPosition=0 logLeadershipTermId=-1 appendPosition=0 catchupPosition=-1 reason="unanimous leader"
     private final LoggerEventWriter writer;
     private final StringBuilder sb = new StringBuilder();
+    private final Int2ObjectHashMap<BinaryRenderer> binaryRenderers = new Int2ObjectHashMap<>();
+    private int msgTypeId;
     static final String NEW_LINE = String.format("%n");
 
     /**
@@ -54,12 +58,25 @@ public class PrintLoggerEventCallback implements LoggerEventCallback
     PrintLoggerEventCallback(final PrintStream out)
     {
         this.writer = new StreamEventWriter(out);
+        this.loadBinaryRenderers();
     }
 
     PrintLoggerEventCallback(final String filename, final long maxFileLength)
     {
         this.writer = null != filename ?
             new RollingFileEventWriter(filename, maxFileLength) : new StreamEventWriter(System.out);
+        this.loadBinaryRenderers();
+    }
+
+    private void loadBinaryRenderers()
+    {
+        for (final BinaryRenderer binaryRenderer : ServiceLoader.load(BinaryRenderer.class))
+        {
+            for (final int msgTypeId : binaryRenderer.supportingMsgTypeIds())
+            {
+                binaryRenderers.put(msgTypeId, binaryRenderer);
+            }
+        }
     }
 
     /**
@@ -71,8 +88,8 @@ public class PrintLoggerEventCallback implements LoggerEventCallback
         final CharSequence eventCodeName,
         final long timestamp)
     {
+        msgTypeId = eventCode;
         final EventCodeType eventCodeType = EventCodeType.get(eventType);
-
         sb.delete(0, sb.length());
 
         LogUtil.appendTimestamp(sb, timestamp);
@@ -128,6 +145,11 @@ public class PrintLoggerEventCallback implements LoggerEventCallback
         else if (IPV6_TAG == tag && 16 == value.capacity())
         {
             appendIpV6Address(sb, value);
+        }
+        else if (binaryRenderers.containsKey(msgTypeId))
+        {
+            final BinaryRenderer renderer = binaryRenderers.get(msgTypeId);
+            renderer.append(sb, msgTypeId, value, 0, value.capacity());
         }
         else
         {
