@@ -57,7 +57,7 @@ public class DriverProtocolBinaryRenderer implements BinaryRenderer
      */
     public int[] supportingMsgTypeIds()
     {
-        return Arrays.copyOf(MSG_TYPE_ID, 0);
+        return Arrays.copyOf(MSG_TYPE_ID, MSG_TYPE_ID.length);
     }
 
     /**

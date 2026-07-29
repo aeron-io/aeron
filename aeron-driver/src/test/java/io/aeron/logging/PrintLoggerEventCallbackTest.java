@@ -63,6 +63,6 @@ class PrintLoggerEventCallbackTest
         sb.append("type=DATA flags=00010111 frameLength=77 sessionId=12 streamId=51 termId=6 termOffset=444");
         sb.append("\n");
 
-        assertEquals(capturingPrintStream.flushAndGetContent(), sb.toString());
+        assertEquals(sb.toString(), capturingPrintStream.flushAndGetContent());
     }
 }
