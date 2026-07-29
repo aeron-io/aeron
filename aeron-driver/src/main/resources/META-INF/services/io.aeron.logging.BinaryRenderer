@@ -1,1 +1,2 @@
 io.aeron.driver.logging.DriverProtocolBinaryRenderer
+io.aeron.driver.logging.DriverAdminCommandBinaryRenderer

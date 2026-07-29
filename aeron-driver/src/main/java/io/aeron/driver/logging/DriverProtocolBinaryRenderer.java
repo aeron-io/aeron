@@ -23,9 +23,6 @@ import org.agrona.DirectBuffer;
 
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 
-/**
- * Binary renderer for driver protocol frames.
- */
 import java.util.Arrays;
 
 /**
