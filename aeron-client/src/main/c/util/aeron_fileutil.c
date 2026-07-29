@@ -1155,7 +1155,7 @@ int aeron_map_new_file(aeron_mapped_file_t *mapped_file, const char *path, bool 
     return 0;
 }
 
-int aeron_map_existing_file(aeron_mapped_file_t *mapped_file, const char *path, bool read_only)
+static int aeron_map_file(aeron_mapped_file_t *mapped_file, const char *path, bool read_only)
 {
     int fd = aeron_open_file(path, read_only);
     if (fd < 0)
@@ -1185,6 +1185,16 @@ int aeron_map_existing_file(aeron_mapped_file_t *mapped_file, const char *path, 
     }
 
     return 0;
+}
+
+int aeron_map_existing_file(aeron_mapped_file_t *mapped_file, const char *path)
+{
+    return aeron_map_file(mapped_file, path, false);
+}
+
+int aeron_map_readonly_file(aeron_mapped_file_t *mapped_file, const char *path)
+{
+    return aeron_map_file(mapped_file, path, true);
 }
 
 uint64_t aeron_usable_fs_space_disabled(const char *path)

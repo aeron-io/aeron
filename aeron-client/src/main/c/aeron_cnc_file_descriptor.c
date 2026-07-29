@@ -72,7 +72,8 @@ aeron_cnc_load_result_t aeron_cnc_map_file_and_load_metadata(
         return AERON_CNC_LOAD_AWAIT_FILE;
     }
 
-    if (aeron_map_existing_file(cnc_mmap, filename, read_only) < 0)
+    int rc = read_only ? aeron_map_readonly_file(cnc_mmap, filename) : aeron_map_existing_file(cnc_mmap, filename);
+    if (rc < 0)
     {
         if (aeron_cnc_map_file_is_retry_err(aeron_errcode()))
         {

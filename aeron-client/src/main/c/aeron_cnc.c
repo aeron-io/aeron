@@ -172,7 +172,7 @@ int aeron_cnc_loss_reporter_read(
     }
 
     aeron_mapped_file_t loss_mmap;
-    if (aeron_map_existing_file(&loss_mmap, loss_report_filename, true) < 0)
+    if (aeron_map_readonly_file(&loss_mmap, loss_report_filename) < 0)
     {
         AERON_APPEND_ERR("%s", "Failed to map loss report");
         return -1;
