@@ -88,7 +88,7 @@ public class PrintLoggerEventCallback implements LoggerEventCallback
         final CharSequence eventCodeName,
         final long timestamp)
     {
-        msgTypeId = eventCode;
+        msgTypeId = (eventType << 16) | eventCode;
         final EventCodeType eventCodeType = EventCodeType.get(eventType);
         sb.delete(0, sb.length());
 
