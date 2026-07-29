@@ -51,7 +51,7 @@ static bool aeron_cnc_map_file_is_retry_err(int err)
 #endif
 }
 
-aeron_cnc_load_result_t aeron_cnc_map_file_and_load_metadata(
+static aeron_cnc_load_result_t aeron_cnc_map_file_and_load_metadata(
     const char *dir, aeron_mapped_file_t *cnc_mmap, aeron_cnc_metadata_t **metadata, bool read_only)
 {
     if (NULL == metadata)
@@ -125,6 +125,18 @@ aeron_cnc_load_result_t aeron_cnc_map_file_and_load_metadata(
     *metadata = _metadata;
 
     return AERON_CNC_LOAD_SUCCESS;
+}
+
+aeron_cnc_load_result_t aeron_cnc_map_existing_file_and_load_metadata(
+    const char *dir, aeron_mapped_file_t *mapped_file, aeron_cnc_metadata_t **metadata)
+{
+    return aeron_cnc_map_file_and_load_metadata(dir, mapped_file, metadata, false);
+}
+
+aeron_cnc_load_result_t aeron_cnc_map_readonly_file_and_load_metadata(
+    const char *dir, aeron_mapped_file_t *mapped_file, aeron_cnc_metadata_t **metadata)
+{
+    return aeron_cnc_map_file_and_load_metadata(dir, mapped_file, metadata, true);
 }
 
 int aeron_cnc_resolve_filename(const char *directory, char *filename_buffer, size_t filename_buffer_length)

@@ -53,8 +53,8 @@ int aeron_cnc_init(aeron_cnc_t **aeron_cnc, const char *base_path, int64_t timeo
     int64_t deadline_ms = aeron_epoch_clock() + timeout_ms;
     while (true)
     {
-        aeron_cnc_load_result_t result = aeron_cnc_map_file_and_load_metadata(
-            base_path, &_aeron_cnc->cnc_mmap, &_aeron_cnc->metadata, true);
+        aeron_cnc_load_result_t result = aeron_cnc_map_readonly_file_and_load_metadata(
+            base_path, &_aeron_cnc->cnc_mmap, &_aeron_cnc->metadata);
 
         if (AERON_CNC_LOAD_SUCCESS == result)
         {
