@@ -17,6 +17,7 @@ package io.aeron.cluster;
 
 import io.aeron.CommonContext;
 import io.aeron.cluster.logging.ClusterEventCode;
+import io.aeron.cluster.logging.ClusterLog;
 import io.aeron.logging.EventConfiguration;
 import io.aeron.cluster.codecs.CloseReason;
 import io.aeron.test.InterruptAfter;

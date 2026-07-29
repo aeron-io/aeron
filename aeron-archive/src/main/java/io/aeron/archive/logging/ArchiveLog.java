@@ -13,15 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.aeron.archive;
+package io.aeron.archive.logging;
 
 import io.aeron.archive.codecs.MessageHeaderDecoder;
-import io.aeron.archive.logging.ArchiveEventCode;
-import io.aeron.archive.logging.ArchiveEventLogger;
-import io.aeron.archive.logging.ArchiveModuleLogger;
+import io.aeron.logging.EventConfiguration;
 import org.agrona.DirectBuffer;
+import org.agrona.collections.Object2ObjectHashMap;
 
-import static io.aeron.archive.logging.ArchiveModuleLogger.isEnabled;
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.Set;
 
 /**
  * Facade used to log Archive events directly, without requiring the ByteBuddy Java agent to be attached.
@@ -29,9 +30,38 @@ import static io.aeron.archive.logging.ArchiveModuleLogger.isEnabled;
 public final class ArchiveLog
 {
     private static final MessageHeaderDecoder HEADER_DECODER = new MessageHeaderDecoder();
+    private static final Object2ObjectHashMap<String, EnumSet<ArchiveEventCode>> SPECIAL_EVENTS =
+        new Object2ObjectHashMap<>();
+
+    static final Set<ArchiveEventCode> ENABLED_EVENT_CODES;
+
+    static
+    {
+        SPECIAL_EVENTS.put("all", EnumSet.allOf(ArchiveEventCode.class));
+        final String enabledEventCodes = System.getProperty("aeron.event.archive.log");
+        final String disabledEventCodes = System.getProperty("aeron.event.archive.log.disable");
+
+        final EnumSet<ArchiveEventCode> disabledEventCodeSet = EventConfiguration.parseEventCodes(
+            ArchiveEventCode.class,
+            disabledEventCodes,
+            SPECIAL_EVENTS,
+            ArchiveEventCode::get,
+            ArchiveEventCode::valueOf);
+
+        final EnumSet<ArchiveEventCode> enabledEventCodeSet = EventConfiguration.parseEventCodes(
+            ArchiveEventCode.class,
+            enabledEventCodes,
+            SPECIAL_EVENTS,
+            ArchiveEventCode::get,
+            ArchiveEventCode::valueOf);
+
+        enabledEventCodeSet.removeAll(disabledEventCodeSet);
+
+        ENABLED_EVENT_CODES = Collections.unmodifiableSet(enabledEventCodeSet);
+    }
 
     private static final boolean LOG_ANY_CONTROL_REQUEST_ENABLED =
-        ArchiveEventLogger.CONTROL_REQUEST_EVENTS.stream().anyMatch(ArchiveModuleLogger::isEnabled);
+        ArchiveEventLogger.CONTROL_REQUEST_EVENTS.stream().anyMatch(ArchiveLog::isEnabled);
     private static final boolean LOG_CONTROL_RESPONSE_ENABLED = isEnabled(ArchiveEventCode.CMD_OUT_RESPONSE);
     private static final boolean LOG_RECORDING_SIGNAL_ENABLED = isEnabled(ArchiveEventCode.RECORDING_SIGNAL);
     private static final boolean LOG_REPLAY_SESSION_STATE_CHANGE_ENABLED =
@@ -56,6 +86,17 @@ public final class ArchiveLog
 
     private ArchiveLog()
     {
+    }
+
+    /**
+     * Determine if a given event code is configured/enabled for logging.
+     *
+     * @param archiveEventCode to check for enablement.
+     * @return <code>true</code> if enabled, <code>false</code> otherwise.
+     */
+    private static boolean isEnabled(final ArchiveEventCode archiveEventCode)
+    {
+        return null != archiveEventCode && ENABLED_EVENT_CODES.contains(archiveEventCode);
     }
 
     /**

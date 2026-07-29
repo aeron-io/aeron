@@ -23,6 +23,7 @@ import io.aeron.Subscription;
 import io.aeron.archive.codecs.RecordingSignal;
 import io.aeron.cluster.client.ClusterEvent;
 import io.aeron.cluster.client.ClusterException;
+import io.aeron.cluster.logging.ClusterLog;
 import io.aeron.cluster.service.Cluster;
 import io.aeron.exceptions.AeronException;
 import io.aeron.exceptions.TimeoutException;

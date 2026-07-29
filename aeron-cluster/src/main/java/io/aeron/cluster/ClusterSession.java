@@ -26,6 +26,7 @@ import io.aeron.cluster.client.ClusterEvent;
 import io.aeron.cluster.client.ClusterException;
 import io.aeron.cluster.codecs.CloseReason;
 import io.aeron.cluster.codecs.EventCode;
+import io.aeron.cluster.logging.ClusterLog;
 import io.aeron.cluster.service.ClusterCounters;
 import io.aeron.exceptions.AeronException;
 import io.aeron.exceptions.RegistrationException;

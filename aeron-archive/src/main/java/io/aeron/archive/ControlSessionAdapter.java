@@ -19,6 +19,7 @@ import io.aeron.*;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.client.ArchiveException;
 import io.aeron.archive.codecs.*;
+import io.aeron.archive.logging.ArchiveLog;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.Header;
 import io.aeron.security.AuthorisationService;

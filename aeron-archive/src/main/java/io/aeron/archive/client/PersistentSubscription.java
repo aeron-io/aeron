@@ -28,7 +28,7 @@ import io.aeron.ImageControlledFragmentAssembler;
 import io.aeron.ImageFragmentAssembler;
 import io.aeron.RethrowingErrorHandler;
 import io.aeron.Subscription;
-import io.aeron.archive.ArchiveLog;
+import io.aeron.archive.logging.ArchiveLog;
 import io.aeron.archive.codecs.ControlResponseCode;
 import io.aeron.exceptions.AeronEvent;
 import io.aeron.exceptions.ConcurrentConcludeException;

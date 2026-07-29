@@ -45,7 +45,7 @@ public final class EventReaderManager
     private final ManyToOneRingBuffer ringBuffer;
     private Thread readerThread;
     private AgentRunner readerAgentRunner;
-    private volatile Agent moduleLoggerReaderAgent;
+    private volatile Agent loggerReaderAgent;
 
     EventReaderManager()
     {
@@ -88,13 +88,13 @@ public final class EventReaderManager
                 return;
             }
 
-            moduleLoggerReaderAgent = newReaderAgent(properties);
+            loggerReaderAgent = newReaderAgent(properties);
 
             readerAgentRunner = new AgentRunner(
                 new SleepingMillisIdleStrategy(1L),
                 Throwable::printStackTrace,
                 null,
-                moduleLoggerReaderAgent);
+                loggerReaderAgent);
 
             readerThread = new Thread(readerAgentRunner);
             readerThread.setName("event-log-reader");
@@ -154,6 +154,6 @@ public final class EventReaderManager
      */
     public Agent agent()
     {
-        return moduleLoggerReaderAgent;
+        return loggerReaderAgent;
     }
 }

@@ -13,19 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.aeron.driver;
+package io.aeron.driver.logging;
 
-import io.aeron.driver.logging.DriverEventCode;
-import io.aeron.driver.logging.DriverEventLogger;
 import io.aeron.driver.media.ImageConnection;
+import io.aeron.logging.EventConfiguration;
 import org.agrona.DirectBuffer;
+import org.agrona.collections.Object2ObjectHashMap;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.Set;
 
 import static io.aeron.driver.logging.DriverEventCode.*;
-import static io.aeron.driver.logging.DriverModuleLogger.isEnabled;
 import static io.aeron.command.ControlProtocolEvents.*;
 
 /**
@@ -34,6 +36,38 @@ import static io.aeron.command.ControlProtocolEvents.*;
  */
 public final class DriverLog
 {
+    private static final Object2ObjectHashMap<String, EnumSet<DriverEventCode>> SPECIAL_EVENTS =
+        new Object2ObjectHashMap<>();
+
+    private static final Set<DriverEventCode> ENABLED_EVENT_CODES;
+
+    static
+    {
+        SPECIAL_EVENTS.put("all", EnumSet.allOf(DriverEventCode.class));
+        SPECIAL_EVENTS.put("admin", EnumSet.complementOf(EnumSet.of(FRAME_IN, FRAME_OUT)));
+
+        final String enabledEventCodes = System.getProperty("aeron.event.log");
+        final String disabledEventCodes = System.getProperty("aeron.event.log.disable");
+
+        final EnumSet<DriverEventCode> disabledEventCodeSet = EventConfiguration.parseEventCodes(
+            DriverEventCode.class,
+            disabledEventCodes,
+            SPECIAL_EVENTS,
+            DriverEventCode::get,
+            DriverEventCode::get);
+
+        final EnumSet<DriverEventCode> enabledEventCodeSet = EventConfiguration.parseEventCodes(
+            DriverEventCode.class,
+            enabledEventCodes,
+            SPECIAL_EVENTS,
+            DriverEventCode::get,
+            DriverEventCode::get);
+
+        enabledEventCodeSet.removeAll(disabledEventCodeSet);
+
+        ENABLED_EVENT_CODES = Collections.unmodifiableSet(enabledEventCodeSet);
+    }
+
     private static final boolean LOG_FRAME_IN_ENABLED = isEnabled(FRAME_IN);
     private static final boolean LOG_FRAME_OUT_ENABLED = isEnabled(FRAME_OUT);
     private static final boolean LOG_REMOVE_PUBLICATION_CLEANUP_ENABLED = isEnabled(REMOVE_PUBLICATION_CLEANUP);
@@ -64,6 +98,17 @@ public final class DriverLog
 
     private DriverLog()
     {
+    }
+
+    /**
+     * Determine if a given event code is configured/enabled for logging.
+     *
+     * @param driverEventCode to check for enablement.
+     * @return <code>true</code> if enabled, <code>false</code> otherwise.
+     */
+    private static boolean isEnabled(final DriverEventCode driverEventCode)
+    {
+        return null != driverEventCode && ENABLED_EVENT_CODES.contains(driverEventCode);
     }
 
     /**

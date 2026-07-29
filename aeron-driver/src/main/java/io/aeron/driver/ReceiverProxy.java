@@ -15,6 +15,7 @@
  */
 package io.aeron.driver;
 
+import io.aeron.driver.logging.DriverLog;
 import io.aeron.driver.media.ReceiveChannelEndpoint;
 import io.aeron.driver.media.ReceiveDestinationTransport;
 import io.aeron.driver.media.UdpChannel;

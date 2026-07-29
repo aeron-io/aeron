@@ -37,6 +37,7 @@ import io.aeron.cluster.codecs.ChallengeDecoder;
 import io.aeron.cluster.codecs.EventCode;
 import io.aeron.cluster.codecs.MessageHeaderDecoder;
 import io.aeron.cluster.codecs.SessionEventDecoder;
+import io.aeron.cluster.logging.ClusterLog;
 import io.aeron.cluster.service.ClusterMarkFile;
 import io.aeron.exceptions.TimeoutException;
 import io.aeron.logbuffer.Header;
@@ -1041,7 +1042,7 @@ public final class ClusterBackupAgent implements Agent
     private void logStateChange(
         final ClusterBackup.State oldState, final ClusterBackup.State newState, final long nowMs)
     {
-        ClusterLog.logClusterBackupStateChange(oldState, newState, nowMs);
+        ClusterLog.logClusterBackupStateChange(oldState, newState);
     }
 
     private int pollBackupArchiveEvents()

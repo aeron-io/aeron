@@ -18,6 +18,7 @@ package io.aeron.driver;
 import io.aeron.Aeron;
 import io.aeron.ErrorCode;
 import io.aeron.command.*;
+import io.aeron.driver.logging.DriverLog;
 import org.agrona.DirectBuffer;
 import org.agrona.ExpandableArrayBuffer;
 import org.agrona.MutableDirectBuffer;

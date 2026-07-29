@@ -25,6 +25,7 @@ import io.aeron.archive.client.ArchiveEvent;
 import io.aeron.archive.codecs.ControlResponseCode;
 import io.aeron.archive.codecs.RecordingSignal;
 import io.aeron.archive.codecs.SourceLocation;
+import io.aeron.archive.logging.ArchiveLog;
 import io.aeron.exceptions.RegistrationException;
 import io.aeron.security.Authenticator;
 import org.agrona.CloseHelper;

@@ -29,6 +29,7 @@ import io.aeron.command.RemoveSubscriptionFlyweight;
 import io.aeron.command.StaticCounterMessageFlyweight;
 import io.aeron.command.SubscriptionMessageFlyweight;
 import io.aeron.command.TerminateDriverFlyweight;
+import io.aeron.driver.logging.DriverLog;
 import io.aeron.exceptions.ControlProtocolException;
 import io.aeron.exceptions.StorageSpaceException;
 import org.agrona.ErrorHandler;

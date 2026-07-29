@@ -16,6 +16,7 @@
 package io.aeron.driver;
 
 import io.aeron.CommonContext;
+import io.aeron.driver.logging.DriverLog;
 import io.aeron.driver.media.UdpChannel;
 import io.aeron.driver.status.FlowControlReceivers;
 import io.aeron.protocol.ErrorFlyweight;

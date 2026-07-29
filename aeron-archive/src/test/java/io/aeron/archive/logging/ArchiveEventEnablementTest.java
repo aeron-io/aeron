@@ -15,7 +15,6 @@
  */
 package io.aeron.archive.logging;
 
-import io.aeron.archive.ArchiveLog;
 import io.aeron.archive.codecs.MessageHeaderEncoder;
 import io.aeron.logging.EventConfiguration;
 import io.aeron.test.InterruptAfter;

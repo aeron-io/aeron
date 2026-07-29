@@ -16,6 +16,7 @@
 package io.aeron.driver;
 
 import io.aeron.ChannelUri;
+import io.aeron.driver.logging.DriverLog;
 import io.aeron.driver.media.SendChannelEndpoint;
 import org.agrona.concurrent.OneToOneConcurrentArrayQueue;
 import org.agrona.concurrent.status.AtomicCounter;

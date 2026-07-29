@@ -41,6 +41,7 @@ import io.aeron.cluster.codecs.CloseReason;
 import io.aeron.cluster.codecs.ClusterAction;
 import io.aeron.cluster.codecs.MessageHeaderDecoder;
 import io.aeron.cluster.codecs.SessionMessageHeaderDecoder;
+import io.aeron.cluster.logging.ClusterLog;
 import io.aeron.cluster.service.Cluster;
 import io.aeron.cluster.service.ClusterClock;
 import io.aeron.cluster.service.ClusterMarkFile;
