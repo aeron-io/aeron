@@ -472,6 +472,6 @@ class PrintLoggerEventCallbackTest
         sb.append(key2).append("=").append("[fe80::54d3:4122:e738:a862]");
         sb.append("\n");
 
-        assertEquals(capturingPrintStream.flushAndGetContent(), sb.toString());
+        assertEquals(sb.toString(), capturingPrintStream.flushAndGetContent());
     }
 }
