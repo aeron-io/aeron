@@ -16,7 +16,6 @@
 package io.aeron.driver.logging;
 
 import io.aeron.command.ControlProtocolEvents;
-import io.aeron.driver.DriverLog;
 import io.aeron.driver.media.ImageConnection;
 import io.aeron.logging.EventConfiguration;
 import io.aeron.test.InterruptAfter;

@@ -20,6 +20,7 @@ import io.aeron.driver.MediaDriver.Context;
 import io.aeron.driver.buffer.RawLog;
 import io.aeron.driver.exceptions.InvalidChannelException;
 import io.aeron.driver.exceptions.UnknownSubscriptionException;
+import io.aeron.driver.logging.DriverLog;
 import io.aeron.driver.media.ControlMode;
 import io.aeron.driver.media.ReceiveChannelEndpoint;
 import io.aeron.driver.media.ReceiveDestinationTransport;

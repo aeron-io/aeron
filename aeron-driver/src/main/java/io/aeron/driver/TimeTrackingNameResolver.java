@@ -16,6 +16,7 @@
 package io.aeron.driver;
 
 import io.aeron.CounterProvider;
+import io.aeron.driver.logging.DriverLog;
 import org.agrona.concurrent.NanoClock;
 import org.agrona.concurrent.status.CountersReader;
 

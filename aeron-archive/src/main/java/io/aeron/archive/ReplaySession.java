@@ -21,6 +21,7 @@ import io.aeron.Publication;
 import io.aeron.archive.checksum.Checksum;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.client.ArchiveException;
+import io.aeron.archive.logging.ArchiveLog;
 import io.aeron.logbuffer.LogBufferDescriptor;
 import org.agrona.CloseHelper;
 import org.agrona.concurrent.CachedEpochClock;

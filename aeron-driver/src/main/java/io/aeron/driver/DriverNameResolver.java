@@ -17,6 +17,7 @@ package io.aeron.driver;
 
 import io.aeron.AeronCounters;
 import io.aeron.CounterProvider;
+import io.aeron.driver.logging.DriverLog;
 import io.aeron.driver.media.NetworkUtil;
 import io.aeron.driver.media.UdpChannel;
 import io.aeron.driver.media.UdpNameResolutionTransport;

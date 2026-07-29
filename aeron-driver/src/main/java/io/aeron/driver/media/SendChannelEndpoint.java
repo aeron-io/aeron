@@ -20,7 +20,7 @@ import io.aeron.ChannelUri;
 import io.aeron.CommonContext;
 import io.aeron.ErrorCode;
 import io.aeron.driver.DriverConductorProxy;
-import io.aeron.driver.DriverLog;
+import io.aeron.driver.logging.DriverLog;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.NetworkPublication;
 import io.aeron.driver.Sender;

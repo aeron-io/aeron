@@ -17,6 +17,7 @@ package io.aeron.archive;
 
 import io.aeron.*;
 import io.aeron.archive.client.ArchiveException;
+import io.aeron.archive.logging.ArchiveLog;
 import org.agrona.CloseHelper;
 import org.agrona.LangUtil;
 import org.agrona.concurrent.CountedErrorHandler;

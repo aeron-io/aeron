@@ -17,6 +17,7 @@ package io.aeron.cluster;
 
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.client.ArchiveException;
+import io.aeron.cluster.logging.ClusterLog;
 import org.agrona.CloseHelper;
 import org.agrona.collections.LongArrayList;
 import org.agrona.collections.LongHashSet;

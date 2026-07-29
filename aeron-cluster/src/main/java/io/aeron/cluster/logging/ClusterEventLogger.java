@@ -38,10 +38,6 @@ public interface ClusterEventLogger
      * Logger for writing into the {@link ManyToOneRingBuffer} held by {@link EventConfiguration#eventReader}.
      */
     ClusterEventLogger LOGGER = new ClusterEventLoggerCborImpl(EventConfiguration.eventReader().ringBuffer());
-    /**
-     * CBOR-specific logger.
-     */
-    ClusterEventLogger CBOR_LOGGER = new CborClusterEventLogger(EventConfiguration.eventReader().ringBuffer());
 
     /**
      * Log a new leadership term event.
@@ -448,7 +444,7 @@ public interface ClusterEventLogger
      *
      * @param memberId       memberId running the replication.
      * @param purpose        the reason for the replication.
-     * @param channelOrNull  the channel used to connect to the source archive.
+     * @param channel        the channel used to connect to the source archive.
      * @param srcRecordingId source recording id.
      * @param dstRecordingId destination recording id.
      * @param position       the position where the recording ended.
@@ -458,7 +454,7 @@ public interface ClusterEventLogger
     default void logReplicationEnded(
         final int memberId,
         final String purpose,
-        final String channelOrNull,
+        final String channel,
         final long srcRecordingId,
         final long dstRecordingId,
         final long position,

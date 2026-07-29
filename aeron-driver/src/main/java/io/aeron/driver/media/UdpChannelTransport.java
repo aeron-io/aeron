@@ -15,7 +15,7 @@
  */
 package io.aeron.driver.media;
 
-import io.aeron.driver.DriverLog;
+import io.aeron.driver.logging.DriverLog;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.status.SystemCounterDescriptor;
 import io.aeron.exceptions.AeronEvent;

@@ -32,6 +32,7 @@ import io.aeron.archive.client.ReplayParams;
 import io.aeron.archive.codecs.ControlResponseCode;
 import io.aeron.archive.codecs.RecordingSignal;
 import io.aeron.archive.codecs.SourceLocation;
+import io.aeron.archive.logging.ArchiveLog;
 import io.aeron.exceptions.AeronException;
 import io.aeron.exceptions.TimeoutException;
 import org.agrona.CloseHelper;

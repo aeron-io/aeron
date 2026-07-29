@@ -15,6 +15,7 @@
  */
 package io.aeron.driver;
 
+import io.aeron.driver.logging.DriverLog;
 import org.agrona.concurrent.status.ReadablePosition;
 
 class UntetheredSubscription
