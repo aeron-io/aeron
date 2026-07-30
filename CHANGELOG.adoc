@@ -23,6 +23,7 @@ executed. (https://github.com/aeron-io/aeron/issues/2092/[#2092])
 * **[Driver/C]** Receiver work count calculation aligned with Java side.
 * **[Java]** Upgrade to `JUnit` 6.1.2.
 * **[Java]** Upgrade to `Shadow` 9.6.0.
+* **[Client/Java]** Access cnc file with read only access for LogInspector and DriverTool
 
 == 1.52.2 (2026-07-10)
 

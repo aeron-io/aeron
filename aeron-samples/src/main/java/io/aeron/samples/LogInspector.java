@@ -131,7 +131,7 @@ public class LogInspector
         final boolean scanOverZeroes,
         final PrintStream out)
     {
-        try (LogBuffers logBuffers = new LogBuffers(logFileName))
+        try (LogBuffers logBuffers = new LogBuffers(logFileName, true))
         {
             out.println("======================================================================");
             out.println(new Date() + " Inspection dump for " + logFileName);

@@ -61,7 +61,9 @@ public class DriverTool
         }
 
         final File cncFile = CommonContext.newDefaultCncFile();
-        final MappedByteBuffer cncByteBuffer = IoUtil.mapExistingFile(cncFile, "cnc");
+        final MappedByteBuffer cncByteBuffer = (printPidOnly || !terminateDriver) ?
+            SamplesUtil.mapExistingFileReadOnly(cncFile) :
+            IoUtil.mapExistingFile(cncFile, "cnc");
         final DirectBuffer cncMetaData = createMetaDataBuffer(cncByteBuffer);
         final int cncVersion = cncMetaData.getInt(cncVersionOffset(0));
 
