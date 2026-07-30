@@ -38,15 +38,15 @@ import static java.nio.ByteOrder.LITTLE_ENDIAN;
  */
 public class DriverProtocolBinaryRenderer implements BinaryRenderer
 {
-    private static final DataHeaderFlyweight DATA_HEADER = new DataHeaderFlyweight();
-    private static final NakFlyweight NAK_HEADER = new NakFlyweight();
-    private static final StatusMessageFlyweight SM_HEADER = new StatusMessageFlyweight();
-    private static final ErrorFlyweight ERROR_HEADER = new ErrorFlyweight();
-    private static final SetupFlyweight SETUP_HEADER = new SetupFlyweight();
-    private static final RttMeasurementFlyweight RTT_MEASUREMENT = new RttMeasurementFlyweight();
-    private static final HeaderFlyweight HEADER = new HeaderFlyweight();
-    private static final ResolutionEntryFlyweight RESOLUTION = new ResolutionEntryFlyweight();
-    private static final ResponseSetupFlyweight RSP_SETUP = new ResponseSetupFlyweight();
+    private final DataHeaderFlyweight dataHeader = new DataHeaderFlyweight();
+    private final NakFlyweight nakHeader = new NakFlyweight();
+    private final StatusMessageFlyweight smHeader = new StatusMessageFlyweight();
+    private final ErrorFlyweight errorHeader = new ErrorFlyweight();
+    private final SetupFlyweight setupHeader = new SetupFlyweight();
+    private final RttMeasurementFlyweight rttMeasurement = new RttMeasurementFlyweight();
+    private final HeaderFlyweight header = new HeaderFlyweight();
+    private final ResolutionEntryFlyweight resolution = new ResolutionEntryFlyweight();
+    private final ResponseSetupFlyweight rspSetup = new ResponseSetupFlyweight();
 
     private static final int[] MSG_TYPE_ID = {
         DriverEventCode.FRAME_IN.toEventCodeId(),
@@ -85,32 +85,32 @@ public class DriverProtocolBinaryRenderer implements BinaryRenderer
         {
             case HeaderFlyweight.HDR_TYPE_PAD:
             case HeaderFlyweight.HDR_TYPE_DATA:
-                DATA_HEADER.wrap(buffer, offset, buffer.capacity() - offset);
+                dataHeader.wrap(buffer, offset, buffer.capacity() - offset);
                 renderDataFrame(sb);
                 break;
 
             case HeaderFlyweight.HDR_TYPE_NAK:
-                NAK_HEADER.wrap(buffer, offset, buffer.capacity() - offset);
+                nakHeader.wrap(buffer, offset, buffer.capacity() - offset);
                 renderNakFrame(sb);
                 break;
 
             case HeaderFlyweight.HDR_TYPE_SM:
-                SM_HEADER.wrap(buffer, offset, buffer.capacity() - offset);
+                smHeader.wrap(buffer, offset, buffer.capacity() - offset);
                 renderStatusFrame(sb);
                 break;
 
             case HeaderFlyweight.HDR_TYPE_ERR:
-                ERROR_HEADER.wrap(buffer, offset, buffer.capacity() - offset);
+                errorHeader.wrap(buffer, offset, buffer.capacity() - offset);
                 renderErrorFrame(sb);
                 break;
 
             case HeaderFlyweight.HDR_TYPE_SETUP:
-                SETUP_HEADER.wrap(buffer, offset, buffer.capacity() - offset);
+                setupHeader.wrap(buffer, offset, buffer.capacity() - offset);
                 renderSetupFrame(sb);
                 break;
 
             case HeaderFlyweight.HDR_TYPE_RTTM:
-                RTT_MEASUREMENT.wrap(buffer, offset, buffer.capacity() - offset);
+                rttMeasurement.wrap(buffer, offset, buffer.capacity() - offset);
                 renderRttFrame(sb);
                 break;
 
@@ -119,7 +119,7 @@ public class DriverProtocolBinaryRenderer implements BinaryRenderer
                 break;
 
             case HeaderFlyweight.HDR_TYPE_RSP_SETUP:
-                RSP_SETUP.wrap(buffer, offset, buffer.capacity() - offset);
+                rspSetup.wrap(buffer, offset, buffer.capacity() - offset);
                 renderRspSetupFrame(sb);
                 break;
 
@@ -134,159 +134,159 @@ public class DriverProtocolBinaryRenderer implements BinaryRenderer
         return buffer.getShort(FrameDescriptor.typeOffset(offset), LITTLE_ENDIAN) & 0xFFFF;
     }
 
-    private static void renderDataFrame(final StringBuilder sb)
+    private void renderDataFrame(final StringBuilder sb)
     {
         sb
             .append("type=")
-            .append(DATA_HEADER.headerType() == HeaderFlyweight.HDR_TYPE_PAD ? "PAD" : "DATA")
+            .append(dataHeader.headerType() == HeaderFlyweight.HDR_TYPE_PAD ? "PAD" : "DATA")
             .append(" flags=");
 
-        HeaderFlyweight.appendFlagsAsChars(DATA_HEADER.flags(), sb);
+        HeaderFlyweight.appendFlagsAsChars(dataHeader.flags(), sb);
 
         sb
             .append(" frameLength=")
-            .append(DATA_HEADER.frameLength())
+            .append(dataHeader.frameLength())
             .append(" sessionId=")
-            .append(DATA_HEADER.sessionId())
+            .append(dataHeader.sessionId())
             .append(" streamId=")
-            .append(DATA_HEADER.streamId())
+            .append(dataHeader.streamId())
             .append(" termId=")
-            .append(DATA_HEADER.termId())
+            .append(dataHeader.termId())
             .append(" termOffset=")
-            .append(DATA_HEADER.termOffset());
+            .append(dataHeader.termOffset());
     }
 
-    private static void renderStatusFrame(final StringBuilder sb)
+    private void renderStatusFrame(final StringBuilder sb)
     {
         sb.append("type=SM flags=");
-        HeaderFlyweight.appendFlagsAsChars(SM_HEADER.flags(), sb);
+        HeaderFlyweight.appendFlagsAsChars(smHeader.flags(), sb);
 
         sb
             .append(" frameLength=")
-            .append(SM_HEADER.frameLength())
+            .append(smHeader.frameLength())
             .append(" sessionId=")
-            .append(SM_HEADER.sessionId())
+            .append(smHeader.sessionId())
             .append(" streamId=")
-            .append(SM_HEADER.streamId())
+            .append(smHeader.streamId())
             .append(" termId=")
-            .append(SM_HEADER.consumptionTermId())
+            .append(smHeader.consumptionTermId())
             .append(" termOffset=")
-            .append(SM_HEADER.consumptionTermOffset())
+            .append(smHeader.consumptionTermOffset())
             .append(" receiverWindowLength=")
-            .append(SM_HEADER.receiverWindowLength())
+            .append(smHeader.receiverWindowLength())
             .append(" receiverId=")
-            .append(SM_HEADER.receiverId());
+            .append(smHeader.receiverId());
     }
 
-    private static void renderNakFrame(final StringBuilder sb)
+    private void renderNakFrame(final StringBuilder sb)
     {
         sb.append("type=NAK flags=");
-        HeaderFlyweight.appendFlagsAsChars(NAK_HEADER.flags(), sb);
+        HeaderFlyweight.appendFlagsAsChars(nakHeader.flags(), sb);
 
         sb
             .append(" frameLength=")
-            .append(NAK_HEADER.frameLength())
+            .append(nakHeader.frameLength())
             .append(" sessionId=")
-            .append(NAK_HEADER.sessionId())
+            .append(nakHeader.sessionId())
             .append(" streamId=")
-            .append(NAK_HEADER.streamId())
+            .append(nakHeader.streamId())
             .append(" termId=")
-            .append(NAK_HEADER.termId())
+            .append(nakHeader.termId())
             .append(" termOffset=")
-            .append(NAK_HEADER.termOffset())
+            .append(nakHeader.termOffset())
             .append(" length=")
-            .append(NAK_HEADER.length());
+            .append(nakHeader.length());
     }
 
-    private static void renderErrorFrame(final StringBuilder sb)
+    private void renderErrorFrame(final StringBuilder sb)
     {
         sb.append("type=ERR flags=");
-        HeaderFlyweight.appendFlagsAsChars(ERROR_HEADER.flags(), sb);
+        HeaderFlyweight.appendFlagsAsChars(errorHeader.flags(), sb);
 
         sb
             .append(" frameLength=")
-            .append(ERROR_HEADER.frameLength())
+            .append(errorHeader.frameLength())
             .append(" sessionId=")
-            .append(ERROR_HEADER.sessionId())
+            .append(errorHeader.sessionId())
             .append(" streamId=")
-            .append(ERROR_HEADER.streamId())
+            .append(errorHeader.streamId())
             .append(" receiverId=")
-            .append(ERROR_HEADER.receiverId())
+            .append(errorHeader.receiverId())
             .append(" groupTag=")
-            .append(ERROR_HEADER.groupTag())
+            .append(errorHeader.groupTag())
             .append(" errorCode=")
-            .append(ERROR_HEADER.errorCode())
+            .append(errorHeader.errorCode())
             .append(" errorMessage=\"")
-            .append(ERROR_HEADER.errorMessage())
+            .append(errorHeader.errorMessage())
             .append('"');
     }
 
-    private static void renderSetupFrame(final StringBuilder sb)
+    private void renderSetupFrame(final StringBuilder sb)
     {
         sb.append("type=SETUP flags=");
-        HeaderFlyweight.appendFlagsAsChars(SETUP_HEADER.flags(), sb);
+        HeaderFlyweight.appendFlagsAsChars(setupHeader.flags(), sb);
 
         sb
             .append(" frameLength=")
-            .append(SETUP_HEADER.frameLength())
+            .append(setupHeader.frameLength())
             .append(" sessionId=")
-            .append(SETUP_HEADER.sessionId())
+            .append(setupHeader.sessionId())
             .append(" streamId=")
-            .append(SETUP_HEADER.streamId())
+            .append(setupHeader.streamId())
             .append(" activeTermId=")
-            .append(SETUP_HEADER.activeTermId())
+            .append(setupHeader.activeTermId())
             .append(" initialTermId=")
-            .append(SETUP_HEADER.initialTermId())
+            .append(setupHeader.initialTermId())
             .append(" termOffset=")
-            .append(SETUP_HEADER.termOffset())
+            .append(setupHeader.termOffset())
             .append(" termLength=")
-            .append(SETUP_HEADER.termLength())
+            .append(setupHeader.termLength())
             .append(" mtu=")
-            .append(SETUP_HEADER.mtuLength())
+            .append(setupHeader.mtuLength())
             .append(" ttl=")
-            .append(SETUP_HEADER.ttl());
+            .append(setupHeader.ttl());
     }
 
-    private static void renderRttFrame(final StringBuilder sb)
+    private void renderRttFrame(final StringBuilder sb)
     {
         sb.append("type=RTT flags=");
-        HeaderFlyweight.appendFlagsAsChars(RTT_MEASUREMENT.flags(), sb);
+        HeaderFlyweight.appendFlagsAsChars(rttMeasurement.flags(), sb);
 
         sb
             .append(" frameLength=")
-            .append(RTT_MEASUREMENT.frameLength())
+            .append(rttMeasurement.frameLength())
             .append(" sessionId=")
-            .append(RTT_MEASUREMENT.sessionId())
+            .append(rttMeasurement.sessionId())
             .append(" streamId=")
-            .append(RTT_MEASUREMENT.streamId())
+            .append(rttMeasurement.streamId())
             .append(" echoTimestampNs=")
-            .append(RTT_MEASUREMENT.echoTimestampNs())
+            .append(rttMeasurement.echoTimestampNs())
             .append(" receptionDelta=")
-            .append(RTT_MEASUREMENT.receptionDelta())
+            .append(rttMeasurement.receptionDelta())
             .append(" receiverId=")
-            .append(RTT_MEASUREMENT.receiverId());
+            .append(rttMeasurement.receiverId());
     }
 
-    private static void renderResFrame(final DirectBuffer buffer, final int offset, final StringBuilder sb)
+    private void renderResFrame(final DirectBuffer buffer, final int offset, final StringBuilder sb)
     {
         int currentOffset = offset;
 
-        HEADER.wrap(buffer, offset, buffer.capacity() - offset);
-        final int length = offset + Math.min(HEADER.frameLength(), CommonEventEncoder.MAX_CAPTURE_LENGTH);
+        header.wrap(buffer, offset, buffer.capacity() - offset);
+        final int length = offset + Math.min(header.frameLength(), CommonEventEncoder.MAX_CAPTURE_LENGTH);
         currentOffset += HeaderFlyweight.MIN_HEADER_LENGTH;
 
         sb.append("type=RES flags=");
-        HeaderFlyweight.appendFlagsAsChars(HEADER.flags(), sb);
+        HeaderFlyweight.appendFlagsAsChars(header.flags(), sb);
 
         sb
             .append(" frameLength=")
-            .append(HEADER.frameLength());
+            .append(header.frameLength());
 
         while (length > currentOffset)
         {
-            RESOLUTION.wrap(buffer, currentOffset, buffer.capacity() - currentOffset);
+            resolution.wrap(buffer, currentOffset, buffer.capacity() - currentOffset);
 
-            if ((length - offset) < RESOLUTION.entryLength())
+            if ((length - offset) < resolution.entryLength())
             {
                 sb.append(" ... ").append(length - offset).append(" bytes left");
                 break;
@@ -294,46 +294,46 @@ public class DriverProtocolBinaryRenderer implements BinaryRenderer
 
             renderResEntry(sb);
 
-            currentOffset += RESOLUTION.entryLength();
+            currentOffset += resolution.entryLength();
         }
     }
 
-    private static void renderRspSetupFrame(final StringBuilder sb)
+    private void renderRspSetupFrame(final StringBuilder sb)
     {
         sb.append("type=RSP_SETUP flags=");
-        HeaderFlyweight.appendFlagsAsChars(RSP_SETUP.flags(), sb);
+        HeaderFlyweight.appendFlagsAsChars(rspSetup.flags(), sb);
 
         sb
             .append(" frameLength=")
-            .append(RSP_SETUP.frameLength())
+            .append(rspSetup.frameLength())
             .append(" sessionId=")
-            .append(RSP_SETUP.sessionId())
+            .append(rspSetup.sessionId())
             .append(" streamId=")
-            .append(RSP_SETUP.streamId())
+            .append(rspSetup.streamId())
             .append(" responseSessionId=")
-            .append(RSP_SETUP.responseSessionId());
+            .append(rspSetup.responseSessionId());
     }
 
-    private static void renderResEntry(final StringBuilder sb)
+    private void renderResEntry(final StringBuilder sb)
     {
         sb
             .append(" [resType=")
-            .append(RESOLUTION.resType())
+            .append(resolution.resType())
             .append(" flags=");
 
-        HeaderFlyweight.appendFlagsAsChars(RESOLUTION.flags(), sb);
+        HeaderFlyweight.appendFlagsAsChars(resolution.flags(), sb);
 
         sb
             .append(" port=")
-            .append(RESOLUTION.udpPort())
+            .append(resolution.udpPort())
             .append(" ageInMs=")
-            .append(RESOLUTION.ageInMs());
+            .append(resolution.ageInMs());
 
         sb.append(" address=");
-        RESOLUTION.appendAddress(sb);
+        resolution.appendAddress(sb);
 
         sb.append(" name=");
-        RESOLUTION.appendName(sb);
+        resolution.appendName(sb);
         sb.append(']');
     }
 }

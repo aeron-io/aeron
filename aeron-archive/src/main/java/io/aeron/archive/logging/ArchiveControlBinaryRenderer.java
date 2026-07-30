@@ -24,66 +24,66 @@ import org.agrona.DirectBuffer;
  */
 public class ArchiveControlBinaryRenderer implements BinaryRenderer
 {
-    private static final ConnectRequestDecoder CONNECT_REQUEST_DECODER = new ConnectRequestDecoder();
-    private static final CloseSessionRequestDecoder CLOSE_SESSION_REQUEST_DECODER = new CloseSessionRequestDecoder();
-    private static final StartRecordingRequestDecoder START_RECORDING_REQUEST_DECODER =
+    private final ConnectRequestDecoder connectRequestDecoder = new ConnectRequestDecoder();
+    private final CloseSessionRequestDecoder closeSessionRequestDecoder = new CloseSessionRequestDecoder();
+    private final StartRecordingRequestDecoder startRecordingRequestDecoder =
         new StartRecordingRequestDecoder();
-    private static final StartRecordingRequest2Decoder START_RECORDING_REQUEST2_DECODER =
+    private final StartRecordingRequest2Decoder startRecordingRequest2Decoder =
         new StartRecordingRequest2Decoder();
-    private static final StopRecordingRequestDecoder STOP_RECORDING_REQUEST_DECODER = new StopRecordingRequestDecoder();
-    private static final ReplayRequestDecoder REPLAY_REQUEST_DECODER = new ReplayRequestDecoder();
-    private static final StopReplayRequestDecoder STOP_REPLAY_REQUEST_DECODER = new StopReplayRequestDecoder();
-    private static final ListRecordingsRequestDecoder LIST_RECORDINGS_REQUEST_DECODER =
+    private final StopRecordingRequestDecoder stopRecordingRequestDecoder = new StopRecordingRequestDecoder();
+    private final ReplayRequestDecoder replayRequestDecoder = new ReplayRequestDecoder();
+    private final StopReplayRequestDecoder stopReplayRequestDecoder = new StopReplayRequestDecoder();
+    private final ListRecordingsRequestDecoder listRecordingsRequestDecoder =
         new ListRecordingsRequestDecoder();
-    private static final ListRecordingsForUriRequestDecoder LIST_RECORDINGS_FOR_URI_REQUEST_DECODER =
+    private final ListRecordingsForUriRequestDecoder listRecordingsForUriRequestDecoder =
         new ListRecordingsForUriRequestDecoder();
-    private static final ListRecordingRequestDecoder LIST_RECORDING_REQUEST_DECODER = new ListRecordingRequestDecoder();
-    private static final ExtendRecordingRequestDecoder EXTEND_RECORDING_REQUEST_DECODER =
+    private final ListRecordingRequestDecoder listRecordingRequestDecoder = new ListRecordingRequestDecoder();
+    private final ExtendRecordingRequestDecoder extendRecordingRequestDecoder =
         new ExtendRecordingRequestDecoder();
-    private static final ExtendRecordingRequest2Decoder EXTEND_RECORDING_REQUEST2_DECODER =
+    private final ExtendRecordingRequest2Decoder extendRecordingRequest2Decoder =
         new ExtendRecordingRequest2Decoder();
-    private static final RecordingPositionRequestDecoder RECORDING_POSITION_REQUEST_DECODER =
+    private final RecordingPositionRequestDecoder recordingPositionRequestDecoder =
         new RecordingPositionRequestDecoder();
-    private static final MaxRecordedPositionRequestDecoder MAX_RECORDED_POSITION_REQUEST_DECODER =
+    private final MaxRecordedPositionRequestDecoder maxRecordedPositionRequestDecoder =
         new MaxRecordedPositionRequestDecoder();
-    private static final TruncateRecordingRequestDecoder TRUNCATE_RECORDING_REQUEST_DECODER =
+    private final TruncateRecordingRequestDecoder truncateRecordingRequestDecoder =
         new TruncateRecordingRequestDecoder();
-    private static final StopRecordingSubscriptionRequestDecoder STOP_RECORDING_SUBSCRIPTION_REQUEST_DECODER =
+    private final StopRecordingSubscriptionRequestDecoder stopRecordingSubscriptionRequestDecoder =
         new StopRecordingSubscriptionRequestDecoder();
-    private static final StopPositionRequestDecoder STOP_POSITION_REQUEST_DECODER = new StopPositionRequestDecoder();
-    private static final FindLastMatchingRecordingRequestDecoder FIND_LAST_MATCHING_RECORDING_REQUEST_DECODER =
+    private final StopPositionRequestDecoder stopPositionRequestDecoder = new StopPositionRequestDecoder();
+    private final FindLastMatchingRecordingRequestDecoder findLastMatchingRecordingRequestDecoder =
         new FindLastMatchingRecordingRequestDecoder();
-    private static final ListRecordingSubscriptionsRequestDecoder LIST_RECORDING_SUBSCRIPTIONS_REQUEST_DECODER =
+    private final ListRecordingSubscriptionsRequestDecoder listRecordingSubscriptionsRequestDecoder =
         new ListRecordingSubscriptionsRequestDecoder();
-    private static final BoundedReplayRequestDecoder BOUNDED_REPLAY_REQUEST_DECODER = new BoundedReplayRequestDecoder();
-    private static final StopAllReplaysRequestDecoder STOP_ALL_REPLAYS_REQUEST_DECODER =
+    private final BoundedReplayRequestDecoder boundedReplayRequestDecoder = new BoundedReplayRequestDecoder();
+    private final StopAllReplaysRequestDecoder stopAllReplaysRequestDecoder =
         new StopAllReplaysRequestDecoder();
-    private static final ReplicateRequestDecoder REPLICATE_REQUEST_DECODER = new ReplicateRequestDecoder();
-    private static final ReplicateRequest2Decoder REPLICATE_REQUEST2_DECODER = new ReplicateRequest2Decoder();
-    private static final StopReplicationRequestDecoder STOP_REPLICATION_REQUEST_DECODER =
+    private final ReplicateRequestDecoder replicateRequestDecoder = new ReplicateRequestDecoder();
+    private final ReplicateRequest2Decoder replicateRequest2Decoder = new ReplicateRequest2Decoder();
+    private final StopReplicationRequestDecoder stopReplicationRequestDecoder =
         new StopReplicationRequestDecoder();
-    private static final StartPositionRequestDecoder START_POSITION_REQUEST_DECODER = new StartPositionRequestDecoder();
-    private static final DetachSegmentsRequestDecoder DETACH_SEGMENTS_REQUEST_DECODER =
+    private final StartPositionRequestDecoder startPositionRequestDecoder = new StartPositionRequestDecoder();
+    private final DetachSegmentsRequestDecoder detachSegmentsRequestDecoder =
         new DetachSegmentsRequestDecoder();
-    private static final DeleteDetachedSegmentsRequestDecoder DELETE_DETACHED_SEGMENTS_REQUEST_DECODER =
+    private final DeleteDetachedSegmentsRequestDecoder deleteDetachedSegmentsRequestDecoder =
         new DeleteDetachedSegmentsRequestDecoder();
-    private static final PurgeSegmentsRequestDecoder PURGE_SEGMENTS_REQUEST_DECODER = new PurgeSegmentsRequestDecoder();
-    private static final AttachSegmentsRequestDecoder ATTACH_SEGMENTS_REQUEST_DECODER =
+    private final PurgeSegmentsRequestDecoder purgeSegmentsRequestDecoder = new PurgeSegmentsRequestDecoder();
+    private final AttachSegmentsRequestDecoder attachSegmentsRequestDecoder =
         new AttachSegmentsRequestDecoder();
-    private static final MigrateSegmentsRequestDecoder MIGRATE_SEGMENTS_REQUEST_DECODER =
+    private final MigrateSegmentsRequestDecoder migrateSegmentsRequestDecoder =
         new MigrateSegmentsRequestDecoder();
-    private static final AuthConnectRequestDecoder AUTH_CONNECT_REQUEST_DECODER = new AuthConnectRequestDecoder();
-    private static final KeepAliveRequestDecoder KEEP_ALIVE_REQUEST_DECODER = new KeepAliveRequestDecoder();
-    private static final TaggedReplicateRequestDecoder TAGGED_REPLICATE_REQUEST_DECODER =
+    private final AuthConnectRequestDecoder authConnectRequestDecoder = new AuthConnectRequestDecoder();
+    private final KeepAliveRequestDecoder keepAliveRequestDecoder = new KeepAliveRequestDecoder();
+    private final TaggedReplicateRequestDecoder taggedReplicateRequestDecoder =
         new TaggedReplicateRequestDecoder();
-    private static final StopRecordingByIdentityRequestDecoder STOP_RECORDING_BY_IDENTITY_REQUEST_DECODER =
+    private final StopRecordingByIdentityRequestDecoder stopRecordingByIdentityRequestDecoder =
         new StopRecordingByIdentityRequestDecoder();
-    private static final PurgeRecordingRequestDecoder PURGE_RECORDING_REQUEST_DECODER =
+    private final PurgeRecordingRequestDecoder purgeRecordingRequestDecoder =
         new PurgeRecordingRequestDecoder();
-    private static final ReplayTokenRequestDecoder REPLAY_TOKEN_REQUEST_DECODER = new ReplayTokenRequestDecoder();
-    private static final ControlResponseDecoder CONTROL_RESPONSE_DECODER = new ControlResponseDecoder();
-    private static final RecordingSignalEventDecoder RECORDING_SIGNAL_EVENT_DECODER = new RecordingSignalEventDecoder();
-    private static final MessageHeaderDecoder HEADER_DECODER = new MessageHeaderDecoder();
+    private final ReplayTokenRequestDecoder replayTokenRequestDecoder = new ReplayTokenRequestDecoder();
+    private final ControlResponseDecoder controlResponseDecoder = new ControlResponseDecoder();
+    private final RecordingSignalEventDecoder recordingSignalEventDecoder = new RecordingSignalEventDecoder();
+    private final MessageHeaderDecoder headerDecoder = new MessageHeaderDecoder();
 
     private static final int[] MSG_TYPE_ID = {
         ArchiveEventCode.CMD_IN_CONNECT.toEventCodeId(),
@@ -154,273 +154,273 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
         final int offset,
         final int length)
     {
-        HEADER_DECODER.wrap(buffer, offset);
+        headerDecoder.wrap(buffer, offset);
         final int payloadOffset = offset + MessageHeaderDecoder.ENCODED_LENGTH;
-        final int blockLength = HEADER_DECODER.blockLength();
-        final int schemaVersion = HEADER_DECODER.version();
+        final int blockLength = headerDecoder.blockLength();
+        final int schemaVersion = headerDecoder.version();
         final ArchiveEventCode code = ArchiveEventCode.fromEventCodeId(msgTypeId);
 
         switch (code)
         {
             case CMD_IN_CONNECT:
-                CONNECT_REQUEST_DECODER.wrap(
+                connectRequestDecoder.wrap(
                     buffer, payloadOffset, blockLength, schemaVersion);
                 renderConnect(sb);
                 break;
 
             case CMD_IN_CLOSE_SESSION:
-                CLOSE_SESSION_REQUEST_DECODER.wrap(
+                closeSessionRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderCloseSession(sb);
                 break;
 
             case CMD_IN_START_RECORDING:
-                START_RECORDING_REQUEST_DECODER.wrap(
+                startRecordingRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderStartRecording(sb);
                 break;
 
             case CMD_IN_START_RECORDING2:
-                START_RECORDING_REQUEST2_DECODER.wrap(
+                startRecordingRequest2Decoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderStartRecording2(sb);
                 break;
 
             case CMD_IN_STOP_RECORDING:
-                STOP_RECORDING_REQUEST_DECODER.wrap(
+                stopRecordingRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderStopRecording(sb);
                 break;
 
             case CMD_IN_REPLAY:
-                REPLAY_REQUEST_DECODER.wrap(
+                replayRequestDecoder.wrap(
                     buffer, payloadOffset, blockLength, schemaVersion);
                 renderReplay(sb);
                 break;
 
             case CMD_IN_STOP_REPLAY:
-                STOP_REPLAY_REQUEST_DECODER.wrap(
+                stopReplayRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderStopReplay(sb);
                 break;
 
             case CMD_IN_LIST_RECORDINGS:
-                LIST_RECORDINGS_REQUEST_DECODER.wrap(
+                listRecordingsRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderListRecordings(sb);
                 break;
 
             case CMD_IN_LIST_RECORDINGS_FOR_URI:
-                LIST_RECORDINGS_FOR_URI_REQUEST_DECODER.wrap(
+                listRecordingsForUriRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderListRecordingsForUri(sb);
                 break;
 
             case CMD_IN_LIST_RECORDING:
-                LIST_RECORDING_REQUEST_DECODER.wrap(
+                listRecordingRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderListRecording(sb);
                 break;
 
             case CMD_IN_EXTEND_RECORDING:
-                EXTEND_RECORDING_REQUEST_DECODER.wrap(
+                extendRecordingRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderExtendRecording(sb);
                 break;
 
             case CMD_IN_EXTEND_RECORDING2:
-                EXTEND_RECORDING_REQUEST2_DECODER.wrap(
+                extendRecordingRequest2Decoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderExtendRecording2(sb);
                 break;
 
             case CMD_IN_RECORDING_POSITION:
-                RECORDING_POSITION_REQUEST_DECODER.wrap(
+                recordingPositionRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderRecordingPosition(sb);
                 break;
 
             case CMD_IN_MAX_RECORDED_POSITION:
-                MAX_RECORDED_POSITION_REQUEST_DECODER.wrap(
+                maxRecordedPositionRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderMaxRecordedPosition(sb);
                 break;
 
             case CMD_IN_TRUNCATE_RECORDING:
-                TRUNCATE_RECORDING_REQUEST_DECODER.wrap(
+                truncateRecordingRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderTruncateRecording(sb);
                 break;
 
             case CMD_IN_STOP_RECORDING_SUBSCRIPTION:
-                STOP_RECORDING_SUBSCRIPTION_REQUEST_DECODER.wrap(
+                stopRecordingSubscriptionRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderStopRecordingSubscription(sb);
                 break;
 
             case CMD_IN_STOP_RECORDING_BY_IDENTITY:
-                STOP_RECORDING_BY_IDENTITY_REQUEST_DECODER.wrap(
+                stopRecordingByIdentityRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderStopRecordingByIdentity(sb);
                 break;
 
             case CMD_IN_STOP_POSITION:
-                STOP_POSITION_REQUEST_DECODER.wrap(
+                stopPositionRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderStopPosition(sb);
                 break;
 
             case CMD_IN_FIND_LAST_MATCHING_RECORD:
-                FIND_LAST_MATCHING_RECORDING_REQUEST_DECODER.wrap(
+                findLastMatchingRecordingRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderFindLastMatchingRecord(sb);
                 break;
 
             case CMD_IN_LIST_RECORDING_SUBSCRIPTIONS:
-                LIST_RECORDING_SUBSCRIPTIONS_REQUEST_DECODER.wrap(
+                listRecordingSubscriptionsRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderListRecordingSubscriptions(sb);
                 break;
 
             case CMD_IN_START_BOUNDED_REPLAY:
-                BOUNDED_REPLAY_REQUEST_DECODER.wrap(
+                boundedReplayRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderStartBoundedReplay(sb);
                 break;
 
             case CMD_IN_STOP_ALL_REPLAYS:
-                STOP_ALL_REPLAYS_REQUEST_DECODER.wrap(
+                stopAllReplaysRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderStopAllReplays(sb);
                 break;
 
             case CMD_IN_REPLICATE:
-                REPLICATE_REQUEST_DECODER.wrap(
+                replicateRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderReplicate(sb);
                 break;
 
             case CMD_IN_REPLICATE2:
-                REPLICATE_REQUEST2_DECODER.wrap(
+                replicateRequest2Decoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderReplicate2(sb);
                 break;
 
             case CMD_IN_STOP_REPLICATION:
-                STOP_REPLICATION_REQUEST_DECODER.wrap(
+                stopReplicationRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderStopReplication(sb);
                 break;
 
             case CMD_IN_START_POSITION:
-                START_POSITION_REQUEST_DECODER.wrap(
+                startPositionRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderStartPosition(sb);
                 break;
 
             case CMD_IN_DETACH_SEGMENTS:
-                DETACH_SEGMENTS_REQUEST_DECODER.wrap(
+                detachSegmentsRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderDetachSegments(sb);
                 break;
 
             case CMD_IN_DELETE_DETACHED_SEGMENTS:
-                DELETE_DETACHED_SEGMENTS_REQUEST_DECODER.wrap(
+                deleteDetachedSegmentsRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderDeleteDetachedSegments(sb);
                 break;
 
             case CMD_IN_PURGE_SEGMENTS:
-                PURGE_SEGMENTS_REQUEST_DECODER.wrap(
+                purgeSegmentsRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderPurgeSegments(sb);
                 break;
 
             case CMD_IN_ATTACH_SEGMENTS:
-                ATTACH_SEGMENTS_REQUEST_DECODER.wrap(
+                attachSegmentsRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderAttachSegments(sb);
                 break;
 
             case CMD_IN_MIGRATE_SEGMENTS:
-                MIGRATE_SEGMENTS_REQUEST_DECODER.wrap(
+                migrateSegmentsRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderMigrateSegments(sb);
                 break;
 
             case CMD_IN_AUTH_CONNECT:
-                AUTH_CONNECT_REQUEST_DECODER.wrap(
+                authConnectRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderAuthConnect(sb);
                 break;
 
             case CMD_IN_KEEP_ALIVE:
-                KEEP_ALIVE_REQUEST_DECODER.wrap(
+                keepAliveRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderKeepAlive(sb);
                 break;
 
             case CMD_IN_TAGGED_REPLICATE:
-                TAGGED_REPLICATE_REQUEST_DECODER.wrap(
+                taggedReplicateRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderTaggedReplicate(sb);
                 break;
 
             case CMD_IN_PURGE_RECORDING:
-                PURGE_RECORDING_REQUEST_DECODER.wrap(
+                purgeRecordingRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderPurgeRecording(sb);
                 break;
 
             case CMD_IN_REQUEST_REPLAY_TOKEN:
-                REPLAY_TOKEN_REQUEST_DECODER.wrap(
+                replayTokenRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderReplayToken(sb);
                 break;
             // Moved from original response method
             case CMD_OUT_RESPONSE:
-                CONTROL_RESPONSE_DECODER.wrap(
+                controlResponseDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderControlResponse(sb);
                 break;
             // Moved from original signal method
             case RECORDING_SIGNAL:
-                RECORDING_SIGNAL_EVENT_DECODER.wrap(
+                recordingSignalEventDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
                 renderRecordingSignal(sb);
@@ -432,374 +432,374 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
         }
     }
 
-    private static void renderConnect(final StringBuilder sb)
+    private void renderConnect(final StringBuilder sb)
     {
-        sb.append("correlationId=").append(CONNECT_REQUEST_DECODER.correlationId())
-            .append(" responseStreamId=").append(CONNECT_REQUEST_DECODER.responseStreamId())
-            .append(" version=").append(CONNECT_REQUEST_DECODER.version())
+        sb.append("correlationId=").append(connectRequestDecoder.correlationId())
+            .append(" responseStreamId=").append(connectRequestDecoder.responseStreamId())
+            .append(" version=").append(connectRequestDecoder.version())
             .append(" responseChannel=");
 
-        CONNECT_REQUEST_DECODER.getResponseChannel(sb);
+        connectRequestDecoder.getResponseChannel(sb);
     }
 
-    private static void renderAuthConnect(final StringBuilder sb)
+    private void renderAuthConnect(final StringBuilder sb)
     {
-        sb.append("correlationId=").append(AUTH_CONNECT_REQUEST_DECODER.correlationId())
-            .append(" responseStreamId=").append(AUTH_CONNECT_REQUEST_DECODER.responseStreamId())
-            .append(" version=").append(AUTH_CONNECT_REQUEST_DECODER.version())
+        sb.append("correlationId=").append(authConnectRequestDecoder.correlationId())
+            .append(" responseStreamId=").append(authConnectRequestDecoder.responseStreamId())
+            .append(" version=").append(authConnectRequestDecoder.version())
             .append(" responseChannel=");
 
-        AUTH_CONNECT_REQUEST_DECODER.getResponseChannel(sb);
+        authConnectRequestDecoder.getResponseChannel(sb);
 
-        sb.append(" encodedCredentialsLength=").append(AUTH_CONNECT_REQUEST_DECODER.encodedCredentialsLength());
+        sb.append(" encodedCredentialsLength=").append(authConnectRequestDecoder.encodedCredentialsLength());
 
-        AUTH_CONNECT_REQUEST_DECODER.skipEncodedCredentials();
+        authConnectRequestDecoder.skipEncodedCredentials();
 
-        sb.append(" clientInfo=").append(AUTH_CONNECT_REQUEST_DECODER.clientInfo());
+        sb.append(" clientInfo=").append(authConnectRequestDecoder.clientInfo());
     }
 
-    private static void renderCloseSession(final StringBuilder sb)
+    private void renderCloseSession(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(CLOSE_SESSION_REQUEST_DECODER.controlSessionId());
+        sb.append("controlSessionId=").append(closeSessionRequestDecoder.controlSessionId());
     }
 
-    private static void renderStartRecording(final StringBuilder sb)
+    private void renderStartRecording(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(START_RECORDING_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(START_RECORDING_REQUEST_DECODER.correlationId())
-            .append(" streamId=").append(START_RECORDING_REQUEST_DECODER.streamId())
-            .append(" sourceLocation=").append(START_RECORDING_REQUEST_DECODER.sourceLocation())
+        sb.append("controlSessionId=").append(startRecordingRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(startRecordingRequestDecoder.correlationId())
+            .append(" streamId=").append(startRecordingRequestDecoder.streamId())
+            .append(" sourceLocation=").append(startRecordingRequestDecoder.sourceLocation())
             .append(" channel=");
 
-        START_RECORDING_REQUEST_DECODER.getChannel(sb);
+        startRecordingRequestDecoder.getChannel(sb);
     }
 
-    private static void renderStartRecording2(final StringBuilder sb)
+    private void renderStartRecording2(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(START_RECORDING_REQUEST2_DECODER.controlSessionId())
-            .append(" correlationId=").append(START_RECORDING_REQUEST2_DECODER.correlationId())
-            .append(" streamId=").append(START_RECORDING_REQUEST2_DECODER.streamId())
-            .append(" sourceLocation=").append(START_RECORDING_REQUEST2_DECODER.sourceLocation())
-            .append(" autoStop=").append(START_RECORDING_REQUEST2_DECODER.autoStop())
+        sb.append("controlSessionId=").append(startRecordingRequest2Decoder.controlSessionId())
+            .append(" correlationId=").append(startRecordingRequest2Decoder.correlationId())
+            .append(" streamId=").append(startRecordingRequest2Decoder.streamId())
+            .append(" sourceLocation=").append(startRecordingRequest2Decoder.sourceLocation())
+            .append(" autoStop=").append(startRecordingRequest2Decoder.autoStop())
             .append(" channel=");
 
-        START_RECORDING_REQUEST2_DECODER.getChannel(sb);
+        startRecordingRequest2Decoder.getChannel(sb);
     }
 
-    private static void renderStopRecording(final StringBuilder sb)
+    private void renderStopRecording(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(STOP_RECORDING_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(STOP_RECORDING_REQUEST_DECODER.correlationId())
-            .append(" streamId=").append(STOP_RECORDING_REQUEST_DECODER.streamId())
+        sb.append("controlSessionId=").append(stopRecordingRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(stopRecordingRequestDecoder.correlationId())
+            .append(" streamId=").append(stopRecordingRequestDecoder.streamId())
             .append(" channel=");
 
-        STOP_RECORDING_REQUEST_DECODER.getChannel(sb);
+        stopRecordingRequestDecoder.getChannel(sb);
     }
 
-    private static void renderReplay(final StringBuilder sb)
+    private void renderReplay(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(REPLAY_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(REPLAY_REQUEST_DECODER.correlationId())
-            .append(" recordingId=").append(REPLAY_REQUEST_DECODER.recordingId())
-            .append(" position=").append(REPLAY_REQUEST_DECODER.position())
-            .append(" length=").append(REPLAY_REQUEST_DECODER.length())
-            .append(" replayStreamId=").append(REPLAY_REQUEST_DECODER.replayStreamId())
+        sb.append("controlSessionId=").append(replayRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(replayRequestDecoder.correlationId())
+            .append(" recordingId=").append(replayRequestDecoder.recordingId())
+            .append(" position=").append(replayRequestDecoder.position())
+            .append(" length=").append(replayRequestDecoder.length())
+            .append(" replayStreamId=").append(replayRequestDecoder.replayStreamId())
             .append(" replayChannel=");
 
-        REPLAY_REQUEST_DECODER.getReplayChannel(sb);
+        replayRequestDecoder.getReplayChannel(sb);
     }
 
-    private static void renderStopReplay(final StringBuilder sb)
+    private void renderStopReplay(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(STOP_REPLAY_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(STOP_REPLAY_REQUEST_DECODER.correlationId())
-            .append(" replaySessionId=").append(STOP_REPLAY_REQUEST_DECODER.replaySessionId());
+        sb.append("controlSessionId=").append(stopReplayRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(stopReplayRequestDecoder.correlationId())
+            .append(" replaySessionId=").append(stopReplayRequestDecoder.replaySessionId());
     }
 
-    private static void renderListRecordings(final StringBuilder sb)
+    private void renderListRecordings(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(LIST_RECORDINGS_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(LIST_RECORDINGS_REQUEST_DECODER.correlationId())
-            .append(" fromRecordingId=").append(LIST_RECORDINGS_REQUEST_DECODER.fromRecordingId())
-            .append(" recordCount=").append(LIST_RECORDINGS_REQUEST_DECODER.recordCount());
+        sb.append("controlSessionId=").append(listRecordingsRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(listRecordingsRequestDecoder.correlationId())
+            .append(" fromRecordingId=").append(listRecordingsRequestDecoder.fromRecordingId())
+            .append(" recordCount=").append(listRecordingsRequestDecoder.recordCount());
     }
 
-    private static void renderListRecording(final StringBuilder sb)
+    private void renderListRecording(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(LIST_RECORDING_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(LIST_RECORDING_REQUEST_DECODER.correlationId())
-            .append(" recordingId=").append(LIST_RECORDING_REQUEST_DECODER.recordingId());
+        sb.append("controlSessionId=").append(listRecordingRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(listRecordingRequestDecoder.correlationId())
+            .append(" recordingId=").append(listRecordingRequestDecoder.recordingId());
     }
 
-    private static void renderListRecordingsForUri(final StringBuilder sb)
+    private void renderListRecordingsForUri(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(LIST_RECORDINGS_FOR_URI_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(LIST_RECORDINGS_FOR_URI_REQUEST_DECODER.correlationId())
-            .append(" fromRecordingId=").append(LIST_RECORDINGS_FOR_URI_REQUEST_DECODER.fromRecordingId())
-            .append(" recordCount=").append(LIST_RECORDINGS_FOR_URI_REQUEST_DECODER.recordCount())
-            .append(" streamId=").append(LIST_RECORDINGS_FOR_URI_REQUEST_DECODER.streamId())
+        sb.append("controlSessionId=").append(listRecordingsForUriRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(listRecordingsForUriRequestDecoder.correlationId())
+            .append(" fromRecordingId=").append(listRecordingsForUriRequestDecoder.fromRecordingId())
+            .append(" recordCount=").append(listRecordingsForUriRequestDecoder.recordCount())
+            .append(" streamId=").append(listRecordingsForUriRequestDecoder.streamId())
             .append(" channel=");
 
-        LIST_RECORDINGS_FOR_URI_REQUEST_DECODER.getChannel(sb);
+        listRecordingsForUriRequestDecoder.getChannel(sb);
     }
 
-    private static void renderExtendRecording(final StringBuilder sb)
+    private void renderExtendRecording(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(EXTEND_RECORDING_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(EXTEND_RECORDING_REQUEST_DECODER.correlationId())
-            .append(" recordingId=").append(EXTEND_RECORDING_REQUEST_DECODER.recordingId())
-            .append(" streamId=").append(EXTEND_RECORDING_REQUEST_DECODER.streamId())
-            .append(" sourceLocation=").append(EXTEND_RECORDING_REQUEST_DECODER.sourceLocation())
+        sb.append("controlSessionId=").append(extendRecordingRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(extendRecordingRequestDecoder.correlationId())
+            .append(" recordingId=").append(extendRecordingRequestDecoder.recordingId())
+            .append(" streamId=").append(extendRecordingRequestDecoder.streamId())
+            .append(" sourceLocation=").append(extendRecordingRequestDecoder.sourceLocation())
             .append(" channel=");
 
-        EXTEND_RECORDING_REQUEST_DECODER.getChannel(sb);
+        extendRecordingRequestDecoder.getChannel(sb);
     }
 
-    private static void renderExtendRecording2(final StringBuilder sb)
+    private void renderExtendRecording2(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(EXTEND_RECORDING_REQUEST2_DECODER.controlSessionId())
-            .append(" correlationId=").append(EXTEND_RECORDING_REQUEST2_DECODER.correlationId())
-            .append(" recordingId=").append(EXTEND_RECORDING_REQUEST2_DECODER.recordingId())
-            .append(" streamId=").append(EXTEND_RECORDING_REQUEST2_DECODER.streamId())
-            .append(" sourceLocation=").append(EXTEND_RECORDING_REQUEST2_DECODER.sourceLocation())
-            .append(" autoStop=").append(EXTEND_RECORDING_REQUEST2_DECODER.autoStop())
+        sb.append("controlSessionId=").append(extendRecordingRequest2Decoder.controlSessionId())
+            .append(" correlationId=").append(extendRecordingRequest2Decoder.correlationId())
+            .append(" recordingId=").append(extendRecordingRequest2Decoder.recordingId())
+            .append(" streamId=").append(extendRecordingRequest2Decoder.streamId())
+            .append(" sourceLocation=").append(extendRecordingRequest2Decoder.sourceLocation())
+            .append(" autoStop=").append(extendRecordingRequest2Decoder.autoStop())
             .append(" channel=");
 
-        EXTEND_RECORDING_REQUEST2_DECODER.getChannel(sb);
+        extendRecordingRequest2Decoder.getChannel(sb);
     }
 
-    private static void renderRecordingPosition(final StringBuilder sb)
+    private void renderRecordingPosition(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(RECORDING_POSITION_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(RECORDING_POSITION_REQUEST_DECODER.correlationId())
-            .append(" recordingId=").append(RECORDING_POSITION_REQUEST_DECODER.recordingId());
+        sb.append("controlSessionId=").append(recordingPositionRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(recordingPositionRequestDecoder.correlationId())
+            .append(" recordingId=").append(recordingPositionRequestDecoder.recordingId());
     }
 
-    private static void renderMaxRecordedPosition(final StringBuilder sb)
+    private void renderMaxRecordedPosition(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(MAX_RECORDED_POSITION_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(MAX_RECORDED_POSITION_REQUEST_DECODER.correlationId())
-            .append(" recordingId=").append(MAX_RECORDED_POSITION_REQUEST_DECODER.recordingId());
+        sb.append("controlSessionId=").append(maxRecordedPositionRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(maxRecordedPositionRequestDecoder.correlationId())
+            .append(" recordingId=").append(maxRecordedPositionRequestDecoder.recordingId());
     }
 
-    private static void renderTruncateRecording(final StringBuilder sb)
+    private void renderTruncateRecording(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(TRUNCATE_RECORDING_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(TRUNCATE_RECORDING_REQUEST_DECODER.correlationId())
-            .append(" recordingId=").append(TRUNCATE_RECORDING_REQUEST_DECODER.recordingId())
-            .append(" position=").append(TRUNCATE_RECORDING_REQUEST_DECODER.position());
+        sb.append("controlSessionId=").append(truncateRecordingRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(truncateRecordingRequestDecoder.correlationId())
+            .append(" recordingId=").append(truncateRecordingRequestDecoder.recordingId())
+            .append(" position=").append(truncateRecordingRequestDecoder.position());
     }
 
-    private static void renderStopRecordingSubscription(final StringBuilder sb)
+    private void renderStopRecordingSubscription(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(STOP_RECORDING_SUBSCRIPTION_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(STOP_RECORDING_SUBSCRIPTION_REQUEST_DECODER.correlationId())
-            .append(" subscriptionId=").append(STOP_RECORDING_SUBSCRIPTION_REQUEST_DECODER.subscriptionId());
+        sb.append("controlSessionId=").append(stopRecordingSubscriptionRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(stopRecordingSubscriptionRequestDecoder.correlationId())
+            .append(" subscriptionId=").append(stopRecordingSubscriptionRequestDecoder.subscriptionId());
     }
 
-    private static void renderStopRecordingByIdentity(final StringBuilder sb)
+    private void renderStopRecordingByIdentity(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(STOP_RECORDING_BY_IDENTITY_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(STOP_RECORDING_BY_IDENTITY_REQUEST_DECODER.correlationId())
-            .append(" recordingId=").append(STOP_RECORDING_BY_IDENTITY_REQUEST_DECODER.recordingId());
+        sb.append("controlSessionId=").append(stopRecordingByIdentityRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(stopRecordingByIdentityRequestDecoder.correlationId())
+            .append(" recordingId=").append(stopRecordingByIdentityRequestDecoder.recordingId());
     }
 
-    private static void renderStopPosition(final StringBuilder sb)
+    private void renderStopPosition(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(STOP_POSITION_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(STOP_POSITION_REQUEST_DECODER.correlationId())
-            .append(" recordingId=").append(STOP_POSITION_REQUEST_DECODER.recordingId());
+        sb.append("controlSessionId=").append(stopPositionRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(stopPositionRequestDecoder.correlationId())
+            .append(" recordingId=").append(stopPositionRequestDecoder.recordingId());
     }
 
-    private static void renderFindLastMatchingRecord(final StringBuilder sb)
+    private void renderFindLastMatchingRecord(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(FIND_LAST_MATCHING_RECORDING_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(FIND_LAST_MATCHING_RECORDING_REQUEST_DECODER.correlationId())
-            .append(" minRecordingId=").append(FIND_LAST_MATCHING_RECORDING_REQUEST_DECODER.minRecordingId())
-            .append(" sessionId=").append(FIND_LAST_MATCHING_RECORDING_REQUEST_DECODER.sessionId())
-            .append(" streamId=").append(FIND_LAST_MATCHING_RECORDING_REQUEST_DECODER.streamId())
+        sb.append("controlSessionId=").append(findLastMatchingRecordingRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(findLastMatchingRecordingRequestDecoder.correlationId())
+            .append(" minRecordingId=").append(findLastMatchingRecordingRequestDecoder.minRecordingId())
+            .append(" sessionId=").append(findLastMatchingRecordingRequestDecoder.sessionId())
+            .append(" streamId=").append(findLastMatchingRecordingRequestDecoder.streamId())
             .append(" channel=");
 
-        FIND_LAST_MATCHING_RECORDING_REQUEST_DECODER.getChannel(sb);
+        findLastMatchingRecordingRequestDecoder.getChannel(sb);
     }
 
-    private static void renderListRecordingSubscriptions(final StringBuilder sb)
+    private void renderListRecordingSubscriptions(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(LIST_RECORDING_SUBSCRIPTIONS_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(LIST_RECORDING_SUBSCRIPTIONS_REQUEST_DECODER.correlationId())
-            .append(" pseudoIndex=").append(LIST_RECORDING_SUBSCRIPTIONS_REQUEST_DECODER.pseudoIndex())
-            .append(" applyStreamId=").append(LIST_RECORDING_SUBSCRIPTIONS_REQUEST_DECODER.applyStreamId())
-            .append(" subscriptionCount=").append(LIST_RECORDING_SUBSCRIPTIONS_REQUEST_DECODER.subscriptionCount())
-            .append(" streamId=").append(LIST_RECORDING_SUBSCRIPTIONS_REQUEST_DECODER.streamId())
+        sb.append("controlSessionId=").append(listRecordingSubscriptionsRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(listRecordingSubscriptionsRequestDecoder.correlationId())
+            .append(" pseudoIndex=").append(listRecordingSubscriptionsRequestDecoder.pseudoIndex())
+            .append(" applyStreamId=").append(listRecordingSubscriptionsRequestDecoder.applyStreamId())
+            .append(" subscriptionCount=").append(listRecordingSubscriptionsRequestDecoder.subscriptionCount())
+            .append(" streamId=").append(listRecordingSubscriptionsRequestDecoder.streamId())
             .append(" channel=");
 
-        LIST_RECORDING_SUBSCRIPTIONS_REQUEST_DECODER.getChannel(sb);
+        listRecordingSubscriptionsRequestDecoder.getChannel(sb);
     }
 
-    private static void renderStartBoundedReplay(final StringBuilder sb)
+    private void renderStartBoundedReplay(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(BOUNDED_REPLAY_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(BOUNDED_REPLAY_REQUEST_DECODER.correlationId())
-            .append(" recordingId=").append(BOUNDED_REPLAY_REQUEST_DECODER.recordingId())
-            .append(" position=").append(BOUNDED_REPLAY_REQUEST_DECODER.position())
-            .append(" length=").append(BOUNDED_REPLAY_REQUEST_DECODER.length())
-            .append(" limitCounterId=").append(BOUNDED_REPLAY_REQUEST_DECODER.limitCounterId())
-            .append(" replayStreamId=").append(BOUNDED_REPLAY_REQUEST_DECODER.replayStreamId())
+        sb.append("controlSessionId=").append(boundedReplayRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(boundedReplayRequestDecoder.correlationId())
+            .append(" recordingId=").append(boundedReplayRequestDecoder.recordingId())
+            .append(" position=").append(boundedReplayRequestDecoder.position())
+            .append(" length=").append(boundedReplayRequestDecoder.length())
+            .append(" limitCounterId=").append(boundedReplayRequestDecoder.limitCounterId())
+            .append(" replayStreamId=").append(boundedReplayRequestDecoder.replayStreamId())
             .append(" replayChannel=");
 
-        BOUNDED_REPLAY_REQUEST_DECODER.getReplayChannel(sb);
+        boundedReplayRequestDecoder.getReplayChannel(sb);
     }
 
-    private static void renderStopAllReplays(final StringBuilder sb)
+    private void renderStopAllReplays(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(STOP_ALL_REPLAYS_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(STOP_ALL_REPLAYS_REQUEST_DECODER.correlationId())
-            .append(" recordingId=").append(STOP_ALL_REPLAYS_REQUEST_DECODER.recordingId());
+        sb.append("controlSessionId=").append(stopAllReplaysRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(stopAllReplaysRequestDecoder.correlationId())
+            .append(" recordingId=").append(stopAllReplaysRequestDecoder.recordingId());
     }
 
-    private static void renderReplicate(final StringBuilder sb)
+    private void renderReplicate(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(REPLICATE_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(REPLICATE_REQUEST_DECODER.correlationId())
-            .append(" srcRecordingId=").append(REPLICATE_REQUEST_DECODER.srcRecordingId())
-            .append(" dstRecordingId=").append(REPLICATE_REQUEST_DECODER.dstRecordingId())
-            .append(" srcControlStreamId=").append(REPLICATE_REQUEST_DECODER.srcControlStreamId())
+        sb.append("controlSessionId=").append(replicateRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(replicateRequestDecoder.correlationId())
+            .append(" srcRecordingId=").append(replicateRequestDecoder.srcRecordingId())
+            .append(" dstRecordingId=").append(replicateRequestDecoder.dstRecordingId())
+            .append(" srcControlStreamId=").append(replicateRequestDecoder.srcControlStreamId())
             .append(" srcControlChannel=");
 
-        REPLICATE_REQUEST_DECODER.getSrcControlChannel(sb);
+        replicateRequestDecoder.getSrcControlChannel(sb);
 
         sb.append(" liveDestination=");
-        REPLICATE_REQUEST_DECODER.getLiveDestination(sb);
+        replicateRequestDecoder.getLiveDestination(sb);
     }
 
-    private static void renderReplicate2(final StringBuilder sb)
+    private void renderReplicate2(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(REPLICATE_REQUEST2_DECODER.controlSessionId())
-            .append(" correlationId=").append(REPLICATE_REQUEST2_DECODER.correlationId())
-            .append(" srcRecordingId=").append(REPLICATE_REQUEST2_DECODER.srcRecordingId())
-            .append(" dstRecordingId=").append(REPLICATE_REQUEST2_DECODER.dstRecordingId())
-            .append(" stopPosition=").append(REPLICATE_REQUEST2_DECODER.stopPosition())
-            .append(" channelTagId=").append(REPLICATE_REQUEST2_DECODER.channelTagId())
-            .append(" subscriptionTagId=").append(REPLICATE_REQUEST2_DECODER.subscriptionTagId())
-            .append(" srcControlStreamId=").append(REPLICATE_REQUEST2_DECODER.srcControlStreamId())
+        sb.append("controlSessionId=").append(replicateRequest2Decoder.controlSessionId())
+            .append(" correlationId=").append(replicateRequest2Decoder.correlationId())
+            .append(" srcRecordingId=").append(replicateRequest2Decoder.srcRecordingId())
+            .append(" dstRecordingId=").append(replicateRequest2Decoder.dstRecordingId())
+            .append(" stopPosition=").append(replicateRequest2Decoder.stopPosition())
+            .append(" channelTagId=").append(replicateRequest2Decoder.channelTagId())
+            .append(" subscriptionTagId=").append(replicateRequest2Decoder.subscriptionTagId())
+            .append(" srcControlStreamId=").append(replicateRequest2Decoder.srcControlStreamId())
             .append(" srcControlChannel=");
 
-        REPLICATE_REQUEST2_DECODER.getSrcControlChannel(sb);
+        replicateRequest2Decoder.getSrcControlChannel(sb);
 
         sb.append(" liveDestination=");
-        REPLICATE_REQUEST2_DECODER.getLiveDestination(sb);
+        replicateRequest2Decoder.getLiveDestination(sb);
 
         sb.append(" replicationChannel=");
-        REPLICATE_REQUEST2_DECODER.getReplicationChannel(sb);
+        replicateRequest2Decoder.getReplicationChannel(sb);
     }
 
-    private static void renderStopReplication(final StringBuilder sb)
+    private void renderStopReplication(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(STOP_REPLICATION_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(STOP_REPLICATION_REQUEST_DECODER.correlationId())
-            .append(" replicationId=").append(STOP_REPLICATION_REQUEST_DECODER.replicationId());
+        sb.append("controlSessionId=").append(stopReplicationRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(stopReplicationRequestDecoder.correlationId())
+            .append(" replicationId=").append(stopReplicationRequestDecoder.replicationId());
     }
 
-    private static void renderStartPosition(final StringBuilder sb)
+    private void renderStartPosition(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(START_POSITION_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(START_POSITION_REQUEST_DECODER.correlationId())
-            .append(" recordingId=").append(START_POSITION_REQUEST_DECODER.recordingId());
+        sb.append("controlSessionId=").append(startPositionRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(startPositionRequestDecoder.correlationId())
+            .append(" recordingId=").append(startPositionRequestDecoder.recordingId());
     }
 
-    private static void renderDetachSegments(final StringBuilder sb)
+    private void renderDetachSegments(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(DETACH_SEGMENTS_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(DETACH_SEGMENTS_REQUEST_DECODER.correlationId())
-            .append(" recordingId=").append(DETACH_SEGMENTS_REQUEST_DECODER.recordingId());
+        sb.append("controlSessionId=").append(detachSegmentsRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(detachSegmentsRequestDecoder.correlationId())
+            .append(" recordingId=").append(detachSegmentsRequestDecoder.recordingId());
     }
 
-    private static void renderDeleteDetachedSegments(final StringBuilder sb)
+    private void renderDeleteDetachedSegments(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(DELETE_DETACHED_SEGMENTS_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(DELETE_DETACHED_SEGMENTS_REQUEST_DECODER.correlationId())
-            .append(" recordingId=").append(DELETE_DETACHED_SEGMENTS_REQUEST_DECODER.recordingId());
+        sb.append("controlSessionId=").append(deleteDetachedSegmentsRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(deleteDetachedSegmentsRequestDecoder.correlationId())
+            .append(" recordingId=").append(deleteDetachedSegmentsRequestDecoder.recordingId());
     }
 
-    private static void renderPurgeSegments(final StringBuilder sb)
+    private void renderPurgeSegments(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(PURGE_SEGMENTS_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(PURGE_SEGMENTS_REQUEST_DECODER.correlationId())
-            .append(" recordingId=").append(PURGE_SEGMENTS_REQUEST_DECODER.recordingId())
-            .append(" newStartPosition=").append(PURGE_SEGMENTS_REQUEST_DECODER.newStartPosition());
+        sb.append("controlSessionId=").append(purgeSegmentsRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(purgeSegmentsRequestDecoder.correlationId())
+            .append(" recordingId=").append(purgeSegmentsRequestDecoder.recordingId())
+            .append(" newStartPosition=").append(purgeSegmentsRequestDecoder.newStartPosition());
     }
 
-    private static void renderAttachSegments(final StringBuilder sb)
+    private void renderAttachSegments(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(ATTACH_SEGMENTS_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(ATTACH_SEGMENTS_REQUEST_DECODER.correlationId())
-            .append(" recordingId=").append(ATTACH_SEGMENTS_REQUEST_DECODER.recordingId());
+        sb.append("controlSessionId=").append(attachSegmentsRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(attachSegmentsRequestDecoder.correlationId())
+            .append(" recordingId=").append(attachSegmentsRequestDecoder.recordingId());
     }
 
-    private static void renderMigrateSegments(final StringBuilder sb)
+    private void renderMigrateSegments(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(MIGRATE_SEGMENTS_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(MIGRATE_SEGMENTS_REQUEST_DECODER.correlationId())
-            .append(" srcRecordingId=").append(MIGRATE_SEGMENTS_REQUEST_DECODER.srcRecordingId())
-            .append(" dstRecordingId=").append(MIGRATE_SEGMENTS_REQUEST_DECODER.dstRecordingId());
+        sb.append("controlSessionId=").append(migrateSegmentsRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(migrateSegmentsRequestDecoder.correlationId())
+            .append(" srcRecordingId=").append(migrateSegmentsRequestDecoder.srcRecordingId())
+            .append(" dstRecordingId=").append(migrateSegmentsRequestDecoder.dstRecordingId());
     }
 
-    private static void renderKeepAlive(final StringBuilder sb)
+    private void renderKeepAlive(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(KEEP_ALIVE_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(KEEP_ALIVE_REQUEST_DECODER.correlationId());
+        sb.append("controlSessionId=").append(keepAliveRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(keepAliveRequestDecoder.correlationId());
     }
 
-    private static void renderTaggedReplicate(final StringBuilder sb)
+    private void renderTaggedReplicate(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(TAGGED_REPLICATE_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(TAGGED_REPLICATE_REQUEST_DECODER.correlationId())
-            .append(" srcRecordingId=").append(TAGGED_REPLICATE_REQUEST_DECODER.srcRecordingId())
-            .append(" dstRecordingId=").append(TAGGED_REPLICATE_REQUEST_DECODER.dstRecordingId())
-            .append(" channelTagId=").append(TAGGED_REPLICATE_REQUEST_DECODER.channelTagId())
-            .append(" subscriptionTagId=").append(TAGGED_REPLICATE_REQUEST_DECODER.subscriptionTagId())
-            .append(" srcControlStreamId=").append(TAGGED_REPLICATE_REQUEST_DECODER.srcControlStreamId())
+        sb.append("controlSessionId=").append(taggedReplicateRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(taggedReplicateRequestDecoder.correlationId())
+            .append(" srcRecordingId=").append(taggedReplicateRequestDecoder.srcRecordingId())
+            .append(" dstRecordingId=").append(taggedReplicateRequestDecoder.dstRecordingId())
+            .append(" channelTagId=").append(taggedReplicateRequestDecoder.channelTagId())
+            .append(" subscriptionTagId=").append(taggedReplicateRequestDecoder.subscriptionTagId())
+            .append(" srcControlStreamId=").append(taggedReplicateRequestDecoder.srcControlStreamId())
             .append(" srcControlChannel=");
 
-        TAGGED_REPLICATE_REQUEST_DECODER.getSrcControlChannel(sb);
+        taggedReplicateRequestDecoder.getSrcControlChannel(sb);
 
         sb.append(" liveDestination=");
-        TAGGED_REPLICATE_REQUEST_DECODER.getLiveDestination(sb);
+        taggedReplicateRequestDecoder.getLiveDestination(sb);
     }
 
-    private static void renderPurgeRecording(final StringBuilder sb)
+    private void renderPurgeRecording(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(PURGE_RECORDING_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(PURGE_RECORDING_REQUEST_DECODER.correlationId())
-            .append(" recordingId=").append(PURGE_RECORDING_REQUEST_DECODER.recordingId());
+        sb.append("controlSessionId=").append(purgeRecordingRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(purgeRecordingRequestDecoder.correlationId())
+            .append(" recordingId=").append(purgeRecordingRequestDecoder.recordingId());
     }
 
-    private static void renderReplayToken(final StringBuilder sb)
+    private void renderReplayToken(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(REPLAY_TOKEN_REQUEST_DECODER.controlSessionId())
-            .append(" correlationId=").append(REPLAY_TOKEN_REQUEST_DECODER.correlationId())
-            .append(" recordingId=").append(REPLAY_TOKEN_REQUEST_DECODER.recordingId());
+        sb.append("controlSessionId=").append(replayTokenRequestDecoder.controlSessionId())
+            .append(" correlationId=").append(replayTokenRequestDecoder.correlationId())
+            .append(" recordingId=").append(replayTokenRequestDecoder.recordingId());
     }
 
-    private static void renderControlResponse(final StringBuilder sb)
+    private void renderControlResponse(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(CONTROL_RESPONSE_DECODER.controlSessionId())
-            .append(" correlationId=").append(CONTROL_RESPONSE_DECODER.correlationId())
-            .append(" relevantId=").append(CONTROL_RESPONSE_DECODER.relevantId())
-            .append(" code=").append(CONTROL_RESPONSE_DECODER.code())
-            .append(" version=").append(CONTROL_RESPONSE_DECODER.version())
+        sb.append("controlSessionId=").append(controlResponseDecoder.controlSessionId())
+            .append(" correlationId=").append(controlResponseDecoder.correlationId())
+            .append(" relevantId=").append(controlResponseDecoder.relevantId())
+            .append(" code=").append(controlResponseDecoder.code())
+            .append(" version=").append(controlResponseDecoder.version())
             .append(" errorMessage=");
 
-        CONTROL_RESPONSE_DECODER.getErrorMessage(sb);
+        controlResponseDecoder.getErrorMessage(sb);
     }
 
-    private static void renderRecordingSignal(final StringBuilder sb)
+    private void renderRecordingSignal(final StringBuilder sb)
     {
-        sb.append("controlSessionId=").append(RECORDING_SIGNAL_EVENT_DECODER.controlSessionId())
-            .append(" correlationId=").append(RECORDING_SIGNAL_EVENT_DECODER.correlationId())
-            .append(" recordingId=").append(RECORDING_SIGNAL_EVENT_DECODER.recordingId())
-            .append(" subscriptionId=").append(RECORDING_SIGNAL_EVENT_DECODER.subscriptionId())
-            .append(" position=").append(RECORDING_SIGNAL_EVENT_DECODER.position())
-            .append(" signal=").append(RECORDING_SIGNAL_EVENT_DECODER.signal());
+        sb.append("controlSessionId=").append(recordingSignalEventDecoder.controlSessionId())
+            .append(" correlationId=").append(recordingSignalEventDecoder.correlationId())
+            .append(" recordingId=").append(recordingSignalEventDecoder.recordingId())
+            .append(" subscriptionId=").append(recordingSignalEventDecoder.subscriptionId())
+            .append(" position=").append(recordingSignalEventDecoder.position())
+            .append(" signal=").append(recordingSignalEventDecoder.signal());
     }
 }
