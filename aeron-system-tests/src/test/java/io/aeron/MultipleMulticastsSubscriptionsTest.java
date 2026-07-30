@@ -24,6 +24,7 @@ import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.Tests;
 import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.CloseHelper;
+import org.agrona.collections.MutableInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,6 +32,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
+
+import java.util.Objects;
 
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
@@ -149,18 +152,24 @@ class MultipleMulticastsSubscriptionsTest
             .aeronDirectoryName(driver.aeronDirectoryName())
             .useConductorAgentInvoker(true);
 
+        final MutableInteger subAImages = new MutableInteger(0);
+        final MutableInteger subBImages = new MutableInteger(0);
         try (Aeron aeron = Aeron.connect(aeronCtx);
-             Subscription subA = aeron.addSubscription(uriA, 9382);
-             Subscription subB = aeron.addSubscription(uriB, 9382);
+             Subscription subA = aeron.addSubscription(uriA, 9382, i -> subAImages.incrementAndGet(), i -> {});
+             Subscription subB = aeron.addSubscription(uriB, 9382, i -> subBImages.incrementAndGet(), i -> {});
              Publication pub = aeron.addPublication(uriB, 9382))
         {
+            Objects.requireNonNull(subA);
+            Objects.requireNonNull(subB);
+            Objects.requireNonNull(pub);
+
             Tests.await(() ->
             {
                 aeron.conductorAgentInvoker().invoke();
-                return subB.isConnected() && pub.isConnected();
+                return subBImages.get() > 0;
             });
 
-            Assertions.assertFalse(subA.isConnected());
+            Assertions.assertEquals(0, subAImages.get());
         }
     }
 }
