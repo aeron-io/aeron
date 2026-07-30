@@ -29,6 +29,7 @@ import java.util.Set;
 
 import static io.aeron.driver.logging.DriverEventCode.*;
 import static io.aeron.command.ControlProtocolEvents.*;
+import static io.aeron.driver.logging.DriverEventLogger.LOGGER;
 
 /**
  * Direct-call entry points for logging {@link io.aeron.driver.MediaDriver} events, replacing the previous
@@ -130,7 +131,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logFrameIn(dstAddress, buffer, offset, frameLength);
+        LOGGER.logFrameIn(dstAddress.getAddress(), dstAddress.getPort(), buffer, offset, frameLength);
     }
 
     /**
@@ -146,7 +147,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logFrameOut(dstAddress, buffer);
+        LOGGER.logFrameOut(dstAddress.getAddress(), dstAddress.getPort(), buffer);
     }
 
     /**
@@ -163,7 +164,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logPublicationRemoval(channel, sessionId, streamId);
+        LOGGER.logPublicationRemoval(channel, sessionId, streamId);
     }
 
     /**
@@ -180,7 +181,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logSubscriptionRemoval(channel, streamId, subscriptionId);
+        LOGGER.logSubscriptionRemoval(channel, streamId, subscriptionId);
     }
 
     /**
@@ -199,7 +200,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logImageRemoval(channel, sessionId, streamId, correlationId);
+        LOGGER.logImageRemoval(channel, sessionId, streamId, correlationId);
     }
 
     /**
@@ -214,7 +215,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logSendChannelCreation(description);
+        LOGGER.logSendChannelCreation(description);
     }
 
     /**
@@ -229,7 +230,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logSendChannelClose(description);
+        LOGGER.logSendChannelClose(description);
     }
 
     /**
@@ -244,7 +245,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logReceiveChannelCreation(description);
+        LOGGER.logReceiveChannelCreation(description);
     }
 
     /**
@@ -259,7 +260,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logReceiveChannelClose(description);
+        LOGGER.logReceiveChannelClose(description);
     }
 
     /**
@@ -280,7 +281,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logUntetheredSubscriptionStateChange(
+        LOGGER.logUntetheredSubscriptionStateChange(
             oldState, newState, subscriptionId, streamId, sessionId);
     }
 
@@ -296,7 +297,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logNeighborAdded(address);
+        LOGGER.logNeighborAdded(address.getAddress(), address.getPort());
     }
 
     /**
@@ -311,7 +312,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logNeighborRemoved(address);
+        LOGGER.logNeighborRemoved(address.getAddress(), address.getPort());
     }
 
     /**
@@ -335,7 +336,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logResolve(resolverName, durationNs, name, isReResolution, address);
+        LOGGER.logResolve(resolverName, durationNs, name, isReResolution, address);
     }
 
     /**
@@ -359,7 +360,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logLookup(resolverName, durationNs, name, isReLookup, resolvedName);
+        LOGGER.logLookup(resolverName, durationNs, name, isReLookup, resolvedName);
     }
 
     /**
@@ -375,7 +376,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logHostName(durationNs, hostName);
+        LOGGER.logHostName(durationNs, hostName);
     }
 
     /**
@@ -399,7 +400,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logFlowControlReceiverAdded(
+        LOGGER.logFlowControlReceiverAdded(
             receiverId, sessionId, streamId, channel, receiverCount);
     }
 
@@ -424,7 +425,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logFlowControlReceiverRemoved(receiverId, sessionId, streamId, channel, receiverCount);
+        LOGGER.logFlowControlReceiverRemoved(receiverId, sessionId, streamId, channel, receiverCount);
     }
 
     /**
@@ -447,7 +448,8 @@ public final class DriverLog
         final int nakLength,
         final String channel)
     {
-        DriverEventLogger.LOGGER.logNakSent(address, sessionId, streamId, termId, termOffset, nakLength, channel);
+        LOGGER.logNakSent(
+            address.getAddress(), address.getPort(), sessionId, streamId, termId, termOffset, nakLength, channel);
     }
 
     /**
@@ -510,7 +512,8 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logNakReceived(address, sessionId, streamId, termId, termOffset, nakLength, channel);
+        LOGGER.logNakReceived(
+            address.getAddress(), address.getPort(), sessionId, streamId, termId, termOffset, nakLength, channel);
     }
 
     /**
@@ -536,7 +539,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logResend(sessionId, streamId, termId, termOffset, resendLength, channel);
+        LOGGER.logResend(sessionId, streamId, termId, termOffset, resendLength, channel);
     }
 
     /**
@@ -555,7 +558,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logPublicationRevoke(revokedPos, sessionId, streamId, channel);
+        LOGGER.logPublicationRevoke(revokedPos, sessionId, streamId, channel);
     }
 
     /**
@@ -574,7 +577,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logPublicationImageRevoke(revokedPos, sessionId, streamId, channel);
+        LOGGER.logPublicationImageRevoke(revokedPos, sessionId, streamId, channel);
     }
 
     /**
@@ -590,7 +593,7 @@ public final class DriverLog
         final DriverEventCode code = cmdEventCode(msgTypeId);
         if (null != code && isEnabled(code))
         {
-            DriverEventLogger.LOGGER.log(code, buffer, index, length);
+            LOGGER.log(code, buffer, index, length);
         }
     }
 
@@ -606,7 +609,7 @@ public final class DriverLog
             return;
         }
 
-        DriverEventLogger.LOGGER.logString(TEXT_DATA, text);
+        LOGGER.logString(TEXT_DATA, text);
     }
 
     private static DriverEventCode cmdEventCode(final int msgTypeId)

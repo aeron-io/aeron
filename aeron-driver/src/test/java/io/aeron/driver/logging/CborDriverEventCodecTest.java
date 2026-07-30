@@ -31,7 +31,6 @@ import org.mockito.InOrder;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -40,6 +39,7 @@ import java.util.stream.Stream;
 import static io.aeron.logging.CborUtils.AERON_PROTOCOL_TAG;
 import static io.aeron.logging.CborUtils.IPV4_TAG;
 import static io.aeron.logging.CborUtils.IPV6_TAG;
+import static io.aeron.logging.CborUtils.NO_TAG;
 import static org.agrona.BitUtil.CACHE_LINE_LENGTH;
 import static org.agrona.concurrent.ringbuffer.RingBufferDescriptor.TRAILER_LENGTH;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -72,14 +72,14 @@ class CborDriverEventCodecTest
     @MethodSource("ipAddresses")
     void encodeDecodeLogFrameOut(final long tag, final InetAddress address)
     {
-        final InetSocketAddress inetSocketAddress = new InetSocketAddress(address, 1234);
+        final int port = 1234;
         final byte[] testBytes = new byte[1024];
 
         final LoggerEventCallback mockLoggingCallback = mock(LoggerEventCallback.class);
         final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(mockLoggingCallback)));
         final DriverEventLoggerCborImpl cborDriverEventLogger = new DriverEventLoggerCborImpl(ringBuffer);
 
-        cborDriverEventLogger.logFrameOut(inetSocketAddress, ByteBuffer.wrap(testBytes));
+        cborDriverEventLogger.logFrameOut(address, port, ByteBuffer.wrap(testBytes));
 
         while (0 == ringBuffer.read(cborDecode))
         {
@@ -93,8 +93,8 @@ class CborDriverEventCodecTest
             eq(DriverEventCode.FRAME_OUT.id()),
             eq(DriverEventCode.FRAME_OUT.name()),
             anyLong());
-        inOrder.verify(mockLoggingCallback).onValue(
-            "dstAddress", tag, new UnsafeBuffer(inetSocketAddress.getAddress().getAddress()));
+        inOrder.verify(mockLoggingCallback).onValue("dstAddress", tag, new UnsafeBuffer(address.getAddress()));
+        inOrder.verify(mockLoggingCallback).onValue("dstPort", NO_TAG, port);
         inOrder.verify(mockLoggingCallback).onValue("buffer", AERON_PROTOCOL_TAG, new UnsafeBuffer(testBytes));
         inOrder.verify(mockLoggingCallback).onFooter(false);
     }
