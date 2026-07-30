@@ -15,15 +15,11 @@
  */
 package io.aeron.cluster.logging;
 
-import io.aeron.logging.DissectFunction;
 import io.aeron.logging.EventCode;
 import io.aeron.logging.EventCodeType;
-import org.agrona.MutableDirectBuffer;
 
 import java.util.Arrays;
 
-import static io.aeron.cluster.logging.ClusterEventDissector.dissectElectionStateChange;
-import static io.aeron.cluster.logging.ClusterEventDissector.dissectNewLeadershipTerm;
 
 /**
  * Events that can be enabled for logging in the cluster module.
@@ -33,143 +29,142 @@ public enum ClusterEventCode implements EventCode
     /**
      * State change events within a cluster election.
      */
-    ELECTION_STATE_CHANGE(1,
-        (eventCode, buffer, offset, builder) -> dissectElectionStateChange(buffer, offset, builder)),
+    ELECTION_STATE_CHANGE(1
+    ),
 
     /**
      * A new term of leadership is to begin for an elected cluster member.
      */
-    NEW_LEADERSHIP_TERM(2, (eventCode, buffer, offset, builder) -> dissectNewLeadershipTerm(buffer, offset, builder)),
+    NEW_LEADERSHIP_TERM(2),
 
     /**
      * State change in the cluster node consensus module.
      */
-    STATE_CHANGE(3, ClusterEventDissector::dissectStateChange),
+    STATE_CHANGE(3),
 
     /**
      * Role change for the cluster member.
      */
-    ROLE_CHANGE(4, ClusterEventDissector::dissectStateChange),
+    ROLE_CHANGE(4),
 
     /**
      * A Canvass position event to notify the state of a member's log before nomination.
      */
-    CANVASS_POSITION(5, ClusterEventDissector::dissectCanvassPosition),
+    CANVASS_POSITION(5),
 
     /**
      * A vote request for new leadership.
      */
-    REQUEST_VOTE(6, ClusterEventDissector::dissectRequestVote),
+    REQUEST_VOTE(6),
 
     /**
      * Notification of a follower's catchup position.
      */
-    CATCHUP_POSITION(7, ClusterEventDissector::dissectCatchupPosition),
+    CATCHUP_POSITION(7),
 
     /**
      * A request to stop follower catchup.
      */
-    STOP_CATCHUP(8, ClusterEventDissector::dissectStopCatchup),
+    STOP_CATCHUP(8),
 
     /**
      * Event when a RecordingLog entry is being truncated.
      */
-    TRUNCATE_LOG_ENTRY(9, ClusterEventDissector::dissectTruncateLogEntry),
+    TRUNCATE_LOG_ENTRY(9),
 
     /**
      * Event when a new leadership term is replayed.
      */
-    REPLAY_NEW_LEADERSHIP_TERM(10, ClusterEventDissector::dissectReplayNewLeadershipTerm),
+    REPLAY_NEW_LEADERSHIP_TERM(10),
 
     /**
      * Event when an append position is received.
      */
-    APPEND_POSITION(11, ClusterEventDissector::dissectAppendPosition),
+    APPEND_POSITION(11),
 
     /**
      * Event when a commit position is received.
      */
-    COMMIT_POSITION(12, ClusterEventDissector::dissectCommitPosition),
+    COMMIT_POSITION(12),
 
     /**
      * Event when a session is closed.
      */
-    APPEND_SESSION_CLOSE(14, ClusterEventDissector::dissectAppendSessionClose),
+    APPEND_SESSION_CLOSE(14),
 
     /**
      * Event when the DynamicJoin changes state (Unused).
      */
-    DYNAMIC_JOIN_STATE_CHANGE_UNUSED(15, ClusterEventDissector::dissectNoOp),
+    DYNAMIC_JOIN_STATE_CHANGE_UNUSED(15),
 
     /**
      * Event when the ClusterBackup changes state.
      */
-    CLUSTER_BACKUP_STATE_CHANGE(16, ClusterEventDissector::dissectStateChange),
+    CLUSTER_BACKUP_STATE_CHANGE(16),
 
     /**
      * Event when a node is instructed to terminate.
      */
-    TERMINATION_POSITION(17, ClusterEventDissector::dissectTerminationPosition),
+    TERMINATION_POSITION(17),
 
     /**
      * Event when a node acks the termination request.
      */
-    TERMINATION_ACK(18, ClusterEventDissector::dissectTerminationAck),
+    TERMINATION_ACK(18),
 
     /**
      * Event when a nodes consensus module receives an ack from a service.
      */
-    SERVICE_ACK(19, ClusterEventDissector::dissectServiceAck),
+    SERVICE_ACK(19),
 
     /**
      * Event when a replication has ended.
      */
-    REPLICATION_ENDED(20, ClusterEventDissector::dissectReplicationEnded),
+    REPLICATION_ENDED(20),
 
     /**
      * Event when a standby snapshot notification has been received by a consensus module.
      */
-    STANDBY_SNAPSHOT_NOTIFICATION(21, ClusterEventDissector::dissectStandbySnapshotNotification),
+    STANDBY_SNAPSHOT_NOTIFICATION(21),
 
     /**
      * Event when a new Election is started.
      *
      * @since 1.44.0
      */
-    NEW_ELECTION(22, ClusterEventDissector::dissectNewElection),
+    NEW_ELECTION(22),
 
     /**
      * Event when a session is opened.
      *
      * @since 1.49.0
      */
-    APPEND_SESSION_OPEN(23, ClusterEventDissector::dissectAppendSessionOpen),
+    APPEND_SESSION_OPEN(23),
 
     /**
      * Event for {@code ClusterSession} state changes.
      *
      * @since 1.49.0
      */
-    CLUSTER_SESSION_STATE_CHANGE(24, ClusterEventDissector::dissectClusterSessionStateChange),
+    CLUSTER_SESSION_STATE_CHANGE(24),
 
     /**
      * An actual vote for new leadership, i.e. response to the {@link #REQUEST_VOTE}.
      *
      * @since 1.50.0
      */
-    VOTE(25, ClusterEventDissector::dissectVote),
+    VOTE(25),
 
     /**
      * Invalidation of an entry in the recording log for snapshot. Occurs when the consensus module runs the recording
      * log validator and finds a snapshot that has been removed from the archive.
      */
-    SNAPSHOT_ENTRY_INVALIDATION(26, ClusterEventDissector::dissectSnapshotEntryInvalidation);
+    SNAPSHOT_ENTRY_INVALIDATION(26);
 
     static final int EVENT_CODE_TYPE = EventCodeType.CLUSTER.getTypeCode();
     static final ClusterEventCode[] EVENT_CODE_BY_ID;
 
     private final int id;
-    private final DissectFunction<ClusterEventCode> dissector;
 
     static
     {
@@ -189,10 +184,9 @@ public enum ClusterEventCode implements EventCode
         }
     }
 
-    ClusterEventCode(final int id, final DissectFunction<ClusterEventCode> dissector)
+    ClusterEventCode(final int id)
     {
         this.id = id;
-        this.dissector = dissector;
     }
 
     /**
@@ -244,17 +238,5 @@ public enum ClusterEventCode implements EventCode
     public static ClusterEventCode fromEventCodeId(final int eventCodeId)
     {
         return get(eventCodeId - (EVENT_CODE_TYPE << 16));
-    }
-
-    /**
-     * Decode an event serialised in a buffer to a provided {@link StringBuilder}.
-     *
-     * @param buffer  containing the encoded event.
-     * @param offset  offset at which the event begins.
-     * @param builder to write the decoded event to.
-     */
-    public void decode(final MutableDirectBuffer buffer, final int offset, final StringBuilder builder)
-    {
-        dissector.dissect(this, buffer, offset, builder);
     }
 }
