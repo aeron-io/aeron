@@ -111,7 +111,7 @@ class DriverEventLoggerCborImplTest
         final UnsafeBuffer buffer = new UnsafeBuffer(backing);
         final InetSocketAddress address = new InetSocketAddress(InetAddress.getByName("192.168.1.1"), 1234);
 
-        logger.logFrameIn(address, buffer, 0, backing.length);
+        logger.logFrameIn(address.getAddress(), address.getPort(), buffer, 0, backing.length);
 
         drain();
 
@@ -134,7 +134,7 @@ class DriverEventLoggerCborImplTest
         final UnsafeBuffer buffer = new UnsafeBuffer(backing);
         final InetSocketAddress address = new InetSocketAddress(InetAddress.getByName("2001:db8::1"), 1234);
 
-        logger.logFrameIn(address, buffer, 0, backing.length);
+        logger.logFrameIn(address.getAddress(), address.getPort(), buffer, 0, backing.length);
 
         drain();
 
@@ -152,7 +152,7 @@ class DriverEventLoggerCborImplTest
         byteBuffer.flip();
         final InetSocketAddress address = new InetSocketAddress("192.168.1.1", 1234);
 
-        logger.logFrameOut(address, byteBuffer);
+        logger.logFrameOut(address.getAddress(), address.getPort(), byteBuffer);
 
         drain();
 

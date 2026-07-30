@@ -25,7 +25,6 @@ import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
 import org.agrona.concurrent.ringbuffer.RingBuffer;
 
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 
 import static io.aeron.driver.logging.DriverEventCode.EVENT_CODE_TYPE;
@@ -77,13 +76,15 @@ public interface DriverEventLogger
      * Log a frame coming in from the media.
      *
      * @param dstAddress  for the frame.
+     * @param dstPort     for the frame.
      * @param buffer      containing the frame.
      * @param offset      in the buffer at which the frame begins.
      * @param frameLength of the frame.
      */
     @LoggerMethod(eventCode = "FRAME_IN", bufferView = { "buffer", "offset", "frameLength" })
     default void logFrameIn(
-        final InetSocketAddress dstAddress,
+        final InetAddress dstAddress,
+        final int dstPort,
         @Tag(AERON_PROTOCOL_TAG) @AllowTruncate final DirectBuffer buffer,
         final int offset,
         final int frameLength)
@@ -94,11 +95,13 @@ public interface DriverEventLogger
      * Log a frame being sent out from the driver to the media.
      *
      * @param dstAddress for the frame.
+     * @param dstPort    for the frame.
      * @param buffer     containing the frame.
      */
     @LoggerMethod(eventCode = "FRAME_OUT")
     default void logFrameOut(
-        final InetSocketAddress dstAddress,
+        final InetAddress dstAddress,
+        final int dstPort,
         @Tag(AERON_PROTOCOL_TAG) @AllowTruncate final ByteBuffer buffer)
     {
     }
@@ -215,9 +218,10 @@ public interface DriverEventLogger
      * Log a neighbor being added for name resolution.
      *
      * @param address of the neighbor.
+     * @param port    of the neighbor.
      */
     @LoggerMethod(eventCode = "NAME_RESOLUTION_NEIGHBOR_ADDED")
-    default void logNeighborAdded(final InetSocketAddress address)
+    default void logNeighborAdded(final InetAddress address, final int port)
     {
     }
 
@@ -225,9 +229,10 @@ public interface DriverEventLogger
      * Log a neighbor being removed for name resolution.
      *
      * @param address of the neighbor.
+     * @param port    of the neighbor.
      */
     @LoggerMethod(eventCode = "NAME_RESOLUTION_NEIGHBOR_REMOVED")
-    default void logNeighborRemoved(final InetSocketAddress address)
+    default void logNeighborRemoved(final InetAddress address, final int port)
     {
     }
 
@@ -256,8 +261,8 @@ public interface DriverEventLogger
      * @param resolverName       simple class name of the resolver
      * @param durationNs         of the call in nanoseconds.
      * @param name               host name being resolved.
-     * @param isReLookup         address that was resolved to, can be null.
-     * @param resolvedNameOrNull address that was resolved to, can be null.
+     * @param isReLookup         if this was a re-resolution.
+     * @param resolvedName       address that was resolved to, can be null.
      */
     @LoggerMethod(eventCode = "NAME_RESOLUTION_LOOKUP")
     default void logLookup(
@@ -265,7 +270,7 @@ public interface DriverEventLogger
         final long durationNs,
         final String name,
         final boolean isReLookup,
-        final String resolvedNameOrNull)
+        final String resolvedName)
     {
     }
 
@@ -322,6 +327,7 @@ public interface DriverEventLogger
      * Logs a NAK message sent by the receiver for a single control address.
      *
      * @param address    Nak UDP destination.
+     * @param port       for the UDP destination.
      * @param sessionId  of the Nak.
      * @param streamId   of the Nak.
      * @param termId     of the Nak.
@@ -331,7 +337,8 @@ public interface DriverEventLogger
      */
     @LoggerMethod(eventCode = "NAK_SENT")
     default void logNakSent(
-        final InetSocketAddress address,
+        final InetAddress address,
+        final int port,
         final int sessionId,
         final int streamId,
         final int termId,
@@ -345,6 +352,7 @@ public interface DriverEventLogger
      * Logs a NAK message received by the sender.
      *
      * @param address    Nak UDP source.
+     * @param port       for the UDP source.
      * @param sessionId  of the Nak.
      * @param streamId   of the Nak.
      * @param termId     of the Nak.
@@ -354,7 +362,8 @@ public interface DriverEventLogger
      */
     @LoggerMethod(eventCode = "NAK_RECEIVED")
     default void logNakReceived(
-        final InetSocketAddress address,
+        final InetAddress address,
+        final int port,
         final int sessionId,
         final int streamId,
         final int termId,
