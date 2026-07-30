@@ -145,7 +145,7 @@ class SendChannelEndpointTest
         flyweight.termOffset(-1);
 
         endpoint.onNakMessage(
-            flyweight, flyweight, NakFlyweight.HEADER_LENGTH, mock(InetSocketAddress.class));
+            flyweight, flyweight, NakFlyweight.HEADER_LENGTH, new InetSocketAddress("192.168.0.10", 2048));
 
         final AtomicCounter invalidPackets = mockSystemCounters.get(SystemCounterDescriptor.INVALID_PACKETS);
         final AtomicCounter nakFramesReceived = mockSystemCounters.get(SystemCounterDescriptor.NAK_MESSAGES_RECEIVED);
