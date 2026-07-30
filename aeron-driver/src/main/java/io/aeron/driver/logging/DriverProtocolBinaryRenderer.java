@@ -18,12 +18,20 @@ package io.aeron.driver.logging;
 import io.aeron.logbuffer.FrameDescriptor;
 import io.aeron.logging.BinaryRenderer;
 import io.aeron.logging.CommonEventEncoder;
-import io.aeron.protocol.*;
+import io.aeron.protocol.DataHeaderFlyweight;
+import io.aeron.protocol.ErrorFlyweight;
+import io.aeron.protocol.HeaderFlyweight;
+import io.aeron.protocol.NakFlyweight;
+import io.aeron.protocol.ResolutionEntryFlyweight;
+import io.aeron.protocol.ResponseSetupFlyweight;
+import io.aeron.protocol.RttMeasurementFlyweight;
+import io.aeron.protocol.SetupFlyweight;
+import io.aeron.protocol.StatusMessageFlyweight;
 import org.agrona.DirectBuffer;
 
-import static java.nio.ByteOrder.LITTLE_ENDIAN;
-
 import java.util.Arrays;
+
+import static java.nio.ByteOrder.LITTLE_ENDIAN;
 
 /**
  * Binary renderer for the Aeron network protocol messages.
@@ -55,6 +63,7 @@ public class DriverProtocolBinaryRenderer implements BinaryRenderer
     /**
      * {@inheritDoc}
      */
+    @Override
     public int[] supportingMsgTypeIds()
     {
         return Arrays.copyOf(MSG_TYPE_ID, MSG_TYPE_ID.length);
@@ -63,6 +72,7 @@ public class DriverProtocolBinaryRenderer implements BinaryRenderer
     /**
      * {@inheritDoc}
      */
+    @Override
     public void append(
         final StringBuilder sb,
         final int msgTypeId,

@@ -50,6 +50,7 @@ public final class CborLoggerReaderAgent implements Agent
     /**
      * {@inheritDoc}
      */
+    @Override
     public int doWork()
     {
         try
@@ -67,6 +68,7 @@ public final class CborLoggerReaderAgent implements Agent
     /**
      * {@inheritDoc}}
      */
+    @Override
     public String roleName()
     {
         return "aeron-event-log-reader";

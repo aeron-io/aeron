@@ -136,6 +136,7 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
     /**
      * {@inheritDoc}
      */
+    @Override
     public int[] supportingMsgTypeIds()
     {
         return MSG_TYPE_ID;
@@ -144,6 +145,7 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
     /**
      * {@inheritDoc}
      */
+    @Override
     @SuppressWarnings("MethodLength")
     public void append(
         final StringBuilder sb,

@@ -82,6 +82,7 @@ public class PrintLoggerEventCallback implements LoggerEventCallback
     /**
      * {@inheritDoc}
      */
+    @Override
     public void onHeader(
         final int eventType,
         final int eventCode,
@@ -100,6 +101,7 @@ public class PrintLoggerEventCallback implements LoggerEventCallback
     /**
      * {@inheritDoc}
      */
+    @Override
     public void onValue(final CharSequence name, final long tag, final CharSequence value)
     {
         sb.append(' ').append(name).append('=');
@@ -116,6 +118,7 @@ public class PrintLoggerEventCallback implements LoggerEventCallback
     /**
      * {@inheritDoc}
      */
+    @Override
     public void onValue(final CharSequence name, final long tag, final long value)
     {
         sb.append(' ').append(name).append('=').append(value);
@@ -124,6 +127,7 @@ public class PrintLoggerEventCallback implements LoggerEventCallback
     /**
      * {@inheritDoc}
      */
+    @Override
     public void onValue(final CharSequence name, final long tag, final boolean value)
     {
         sb.append(' ').append(name).append('=').append(value);
@@ -132,6 +136,7 @@ public class PrintLoggerEventCallback implements LoggerEventCallback
     /**
      * {@inheritDoc}
      */
+    @Override
     public void onValue(final CharSequence name, final long tag, final DirectBuffer value)
     {
         sb.append(' ').append(name).append('=');
@@ -162,6 +167,7 @@ public class PrintLoggerEventCallback implements LoggerEventCallback
     /**
      * {@inheritDoc}
      */
+    @Override
     public void onFooter(final boolean truncated)
     {
         if (truncated)
