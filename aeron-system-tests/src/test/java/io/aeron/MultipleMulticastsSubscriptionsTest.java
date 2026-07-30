@@ -25,6 +25,7 @@ import io.aeron.test.Tests;
 import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.CloseHelper;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.OS;
@@ -132,6 +133,34 @@ class MultipleMulticastsSubscriptionsTest
             Tests.awaitConnected(pubB);
             Tests.awaitConnected(subA);
             Tests.awaitConnected(subB);
+        }
+    }
+
+    @Test
+    @InterruptAfter(10)
+    void shouldMulticastSubscriptionsWithSamePortNotConflict()
+    {
+        launch(context);
+
+        final String uriA = "aeron:udp?endpoint=239.192.181.39:15492|interface=127.0.0.1";
+        final String uriB = "aeron:udp?endpoint=239.192.181.99:15492|interface=127.0.0.1";
+
+        final Aeron.Context aeronCtx = new Aeron.Context()
+            .aeronDirectoryName(driver.aeronDirectoryName())
+            .useConductorAgentInvoker(true);
+
+        try (Aeron aeron = Aeron.connect(aeronCtx);
+             Subscription subA = aeron.addSubscription(uriA, 9382);
+             Subscription subB = aeron.addSubscription(uriB, 9382);
+             Publication pub = aeron.addPublication(uriB, 9382))
+        {
+            Tests.await(() ->
+            {
+                aeron.conductorAgentInvoker().invoke();
+                return subB.isConnected() && pub.isConnected();
+            });
+
+            Assertions.assertFalse(subA.isConnected());
         }
     }
 }
