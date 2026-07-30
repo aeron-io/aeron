@@ -619,6 +619,7 @@ public class CborEventLoggerProcessor extends AbstractProcessor
             final class %s implements %s
             {
                 private static final int MAX_BUFFER_LENGTH = 4096;
+                private static final boolean THROW_LOGGING_EXCEPTIONS = Boolean.getBoolean("aeron.event.log.throw.exceptions");
                 private final ManyToOneRingBuffer ringBuffer;
                 private final ThreadLocal<EncodingState> encodingStateThreadLocal = ThreadLocal.withInitial(EncodingState::new);
                 @SuppressWarnings("unused")
@@ -649,30 +650,40 @@ public class CborEventLoggerProcessor extends AbstractProcessor
                 @Override
                 public %svoid %s(%s)
                 {
-                    final long timestampNanos = System.nanoTime();
-           
-            %s
-                    int length = CborEncode.lengthHeader(%s, timestampNanos);
-            
-            %s
-                    length += CborEncode.lengthFooter();
-
-                    final int bufferLength = Math.min(length, MAX_BUFFER_LENGTH);
-                    final int index = ringBuffer.tryClaim(%s.toEventCodeId(), bufferLength);
-            
-                    final EncodingState encodingState = encodingStateThreadLocal.get();
-                    encodingState.reset(ringBuffer.buffer(), index, bufferLength);
-
                     try
                     {
-                        CborEncode.encodeHeader(encodingState, %s, timestampNanos);
+                        final long timestampNanos = System.nanoTime();
             
             %s
-                        CborEncode.encodeFooter(encodingState);
+                        int length = CborEncode.lengthHeader(%s, timestampNanos);
+            
+            %s
+                        length += CborEncode.lengthFooter();
+
+                        final int bufferLength = Math.min(length, MAX_BUFFER_LENGTH);
+                        final int index = ringBuffer.tryClaim(%s.toEventCodeId(), bufferLength);
+            
+                        final EncodingState encodingState = encodingStateThreadLocal.get();
+                        encodingState.reset(ringBuffer.buffer(), index, bufferLength);
+
+                        try
+                        {
+                            CborEncode.encodeHeader(encodingState, %s, timestampNanos);
+            
+            %s
+                            CborEncode.encodeFooter(encodingState);
+                        }
+                        finally
+                        {
+                            ringBuffer.commit(index);
+                        }
                     }
-                    finally
+                    catch (final Exception ex)
                     {
-                        ringBuffer.commit(index);
+                        if (THROW_LOGGING_EXCEPTIONS)
+                        {
+                            throw ex;
+                        }
                     }
                 }
             """,
@@ -696,7 +707,7 @@ public class CborEventLoggerProcessor extends AbstractProcessor
 
         for (final FieldPlan field : plan.fields)
         {
-            valuesW.println("            " + renderEncodeCall(field) + ";");
+            valuesW.println("                " + renderEncodeCall(field) + ";");
         }
 
         valuesW.flush();
@@ -710,7 +721,7 @@ public class CborEventLoggerProcessor extends AbstractProcessor
 
         for (final FieldPlan field : plan.fields)
         {
-            lengthsW.println("        length += " + renderLengthCall(field) + ";");
+            lengthsW.println("            length += " + renderLengthCall(field) + ";");
         }
 
         lengthsW.flush();
@@ -728,7 +739,7 @@ public class CborEventLoggerProcessor extends AbstractProcessor
             {
                 for (final String line : field.preamble)
                 {
-                    preambleW.println("        " + line);
+                    preambleW.println("            " + line);
                 }
             }
         }
