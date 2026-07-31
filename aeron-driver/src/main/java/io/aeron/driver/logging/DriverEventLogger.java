@@ -43,7 +43,7 @@ public interface DriverEventLogger
     /**
      * Logger for writing into the {@link ManyToOneRingBuffer} held by {@link EventConfiguration#eventReader}.
      */
-    DriverEventLogger LOGGER = new DriverEventLoggerCborImpl(EventConfiguration.eventReader().ringBuffer());
+    DriverEventLogger LOGGER = new CborDriverEventLogger(EventConfiguration.eventReader().ringBuffer());
 
     /**
      * Maximum length of a host name.

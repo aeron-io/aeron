@@ -44,7 +44,7 @@ public interface ArchiveEventLogger
     /**
      * Logger for writing into the {@link ManyToOneRingBuffer} held by {@link EventConfiguration#eventReader}.
      */
-    ArchiveEventLogger LOGGER = new ArchiveEventLoggerCborImpl(eventReader().ringBuffer());
+    ArchiveEventLogger LOGGER = new CborArchiveEventLogger(eventReader().ringBuffer());
 
     /**
      * Set of event codes that represent an incoming control request, i.e. everything a caller resolving a control
