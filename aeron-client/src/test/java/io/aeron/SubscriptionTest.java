@@ -15,6 +15,7 @@
  */
 package io.aeron;
 
+import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.Header;
 import io.aeron.logbuffer.LogBufferDescriptor;
@@ -30,6 +31,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 
 import static io.aeron.Aeron.NULL_VALUE;
 import static io.aeron.status.ChannelEndpointStatus.*;
@@ -156,6 +159,67 @@ class SubscriptionTest
             });
 
         assertEquals(2, subscription.poll(fragmentHandler, FRAGMENT_COUNT_LIMIT));
+    }
+
+    @Test
+    void shouldRoundRobinStartingImageWhenPollingWithExhaustedFragmentLimit()
+    {
+        subscription.addImage(imageOneMock);
+        subscription.addImage(imageTwoMock);
+
+        final List<Image> polledImages = new ArrayList<>();
+        when(imageOneMock.poll(any(FragmentHandler.class), anyInt())).then(
+            (invocation) ->
+            {
+                polledImages.add(imageOneMock);
+                return 1;
+            });
+        when(imageTwoMock.poll(any(FragmentHandler.class), anyInt())).then(
+            (invocation) ->
+            {
+                polledImages.add(imageTwoMock);
+                return 1;
+            });
+
+        for (int i = 0; i < 6; i++)
+        {
+            assertEquals(1, subscription.poll(fragmentHandler, 1));
+        }
+
+        assertEquals(
+            List.of(imageOneMock, imageTwoMock, imageOneMock, imageTwoMock, imageOneMock, imageTwoMock),
+            polledImages);
+    }
+
+    @Test
+    void shouldRoundRobinStartingImageWhenControlledPollingWithExhaustedFragmentLimit()
+    {
+        final ControlledFragmentHandler controlledFragmentHandler = mock(ControlledFragmentHandler.class);
+        subscription.addImage(imageOneMock);
+        subscription.addImage(imageTwoMock);
+
+        final List<Image> polledImages = new ArrayList<>();
+        when(imageOneMock.controlledPoll(any(ControlledFragmentHandler.class), anyInt())).then(
+            (invocation) ->
+            {
+                polledImages.add(imageOneMock);
+                return 1;
+            });
+        when(imageTwoMock.controlledPoll(any(ControlledFragmentHandler.class), anyInt())).then(
+            (invocation) ->
+            {
+                polledImages.add(imageTwoMock);
+                return 1;
+            });
+
+        for (int i = 0; i < 6; i++)
+        {
+            assertEquals(1, subscription.controlledPoll(controlledFragmentHandler, 1));
+        }
+
+        assertEquals(
+            List.of(imageOneMock, imageTwoMock, imageOneMock, imageTwoMock, imageOneMock, imageTwoMock),
+            polledImages);
     }
 
     @ValueSource(longs = { INITIALIZING, ERRORED, CLOSING })

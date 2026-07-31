@@ -441,11 +441,11 @@ int aeron_subscription_poll(
 
     size_t length = image_list->length;
     size_t fragments_read = 0;
-    size_t starting_index = subscription->round_robin_index++;
-    if (starting_index >= length)
+    if (subscription->round_robin_index >= length)
     {
-        subscription->round_robin_index = starting_index = 0;
+        subscription->round_robin_index = 0;
     }
+    size_t starting_index = subscription->round_robin_index++;
 
     for (size_t i = starting_index; i < length && fragments_read < fragment_limit; i++)
     {
@@ -491,11 +491,11 @@ int aeron_subscription_controlled_poll(
 
     size_t length = image_list->length;
     size_t fragments_read = 0;
-    size_t starting_index = subscription->round_robin_index++;
-    if (starting_index >= length)
+    if (subscription->round_robin_index >= length)
     {
-        subscription->round_robin_index = starting_index = 0;
+        subscription->round_robin_index = 0;
     }
+    size_t starting_index = subscription->round_robin_index++;
 
     for (size_t i = starting_index; i < length && fragments_read < fragment_limit; i++)
     {
