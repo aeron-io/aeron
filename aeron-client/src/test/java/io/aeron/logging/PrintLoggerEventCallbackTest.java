@@ -16,6 +16,8 @@
 package io.aeron.logging;
 
 import io.aeron.test.CapturingPrintStream;
+import org.agrona.concurrent.EpochClock;
+import org.agrona.concurrent.NanoClock;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -23,6 +25,9 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.Arrays;
 import java.util.stream.Stream;
 
@@ -34,6 +39,21 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class PrintLoggerEventCallbackTest
 {
+    private final long fixedNanoTime = 123_456_789_987_654_321L;
+    private final long fixedEpochMs = 1_700_000_000_000L;
+    private final NanoClock fixedNanoClock = () -> fixedNanoTime;
+    private final EpochClock fixedEpochClock = () -> fixedEpochMs;
+
+    private String expectedLogStartMessage()
+    {
+        final StringBuilder sb = new StringBuilder();
+        LogUtil.appendTimestamp(sb, fixedNanoTime);
+        sb.append("log started ")
+            .append(RollingFileEventWriter.DATE_TIME_FORMATTER.format(
+                ZonedDateTime.ofInstant(Instant.ofEpochMilli(fixedEpochMs), ZoneId.systemDefault())))
+            .append(PrintLoggerEventCallback.NEW_LINE);
+        return sb.toString();
+    }
 
     @Test
     void shouldWriteBasicValuesToFile(@TempDir final Path testPath) throws IOException
@@ -41,7 +61,9 @@ class PrintLoggerEventCallbackTest
         final Path testFilePath = testPath.resolve("test.log");
         final PrintLoggerEventCallback printLoggerEventCallback = new PrintLoggerEventCallback(
             testFilePath.toString(),
-            Long.MAX_VALUE);
+            Long.MAX_VALUE,
+            fixedNanoClock,
+            fixedEpochClock);
         final int typeCode = EventCodeType.DRIVER.getTypeCode();
         final int eventCode = 1234;
         final String eventName = "SOME_LOG";
@@ -80,7 +102,7 @@ class PrintLoggerEventCallbackTest
         sb.append("\n");
 
         final String expected = sb.toString();
-        assertEquals(expected, Files.readString(testFilePath));
+        assertEquals(expectedLogStartMessage() + expected, Files.readString(testFilePath));
     }
 
     @Test
@@ -123,7 +145,9 @@ class PrintLoggerEventCallbackTest
 
         final PrintLoggerEventCallback printLoggerEventCallback = new PrintLoggerEventCallback(
             testFilePath.toString(),
-            fileSizeLimit);
+            fileSizeLimit,
+            fixedNanoClock,
+            fixedEpochClock);
 
         for (int i = 1; i <= expectedRollingFileCount; i++)
         {
@@ -137,10 +161,10 @@ class PrintLoggerEventCallbackTest
         for (int i = 1; i <= expectedRollingFileCount; i++)
         {
             final Path rollingFilePath = testFilePath.resolveSibling(testFilePath.getFileName() + "." + i);
-            assertEquals(expected, Files.readString(rollingFilePath));
+            assertEquals(expectedLogStartMessage() + expected, Files.readString(rollingFilePath));
         }
 
-        assertEquals(0, Files.size(testFilePath));
+        assertEquals(expectedLogStartMessage(), Files.readString(testFilePath));
 
         try (Stream<Path> paths = Files.list(testPath))
         {
@@ -187,7 +211,9 @@ class PrintLoggerEventCallbackTest
 
         final PrintLoggerEventCallback printLoggerEventCallback = new PrintLoggerEventCallback(
             testFilePath.toString(),
-            fileSizeLimit);
+            fileSizeLimit,
+            fixedNanoClock,
+            fixedEpochClock);
 
         printLoggerEventCallback.onHeader(typeCode, eventCode, eventName, timestamp);
         printLoggerEventCallback.onValue(key1, NO_TAG, value1);
@@ -197,8 +223,8 @@ class PrintLoggerEventCallbackTest
         printLoggerEventCallback.onFooter(false);
 
         final Path rolledFilePath = testFilePath.resolveSibling(testFilePath.getFileName() + ".1");
-        assertEquals(expected, Files.readString(rolledFilePath));
-        assertEquals(0, Files.size(testFilePath));
+        assertEquals(expectedLogStartMessage() + expected, Files.readString(rolledFilePath));
+        assertEquals(expectedLogStartMessage(), Files.readString(testFilePath));
     }
 
     @Test
@@ -245,7 +271,9 @@ class PrintLoggerEventCallbackTest
 
         final PrintLoggerEventCallback printLoggerEventCallback = new PrintLoggerEventCallback(
             testFilePath.toString(),
-            fileSizeLimit);
+            fileSizeLimit,
+            fixedNanoClock,
+            fixedEpochClock);
 
         for (int i = 0; i < entries.length; i++)
         {
@@ -258,12 +286,12 @@ class PrintLoggerEventCallbackTest
         }
 
         final Path rolledFilePath0 = testFilePath.resolveSibling(testFilePath.getFileName() + ".1");
-        assertEquals(entries[0] + entries[1], Files.readString(rolledFilePath0));
+        assertEquals(expectedLogStartMessage() + entries[0] + entries[1], Files.readString(rolledFilePath0));
 
         final Path rolledFilePath1 = testFilePath.resolveSibling(testFilePath.getFileName() + ".2");
-        assertEquals(entries[2] + entries[3], Files.readString(rolledFilePath1));
+        assertEquals(expectedLogStartMessage() + entries[2] + entries[3], Files.readString(rolledFilePath1));
 
-        assertEquals(0, Files.size(testFilePath));
+        assertEquals(expectedLogStartMessage(), Files.readString(testFilePath));
     }
 
     @Test
@@ -305,7 +333,9 @@ class PrintLoggerEventCallbackTest
 
         final PrintLoggerEventCallback printLoggerEventCallback = new PrintLoggerEventCallback(
             testFilePath.toString(),
-            fileSizeLimit);
+            fileSizeLimit,
+            fixedNanoClock,
+            fixedEpochClock);
 
         for (int i = 1; i <= 3; i++)
         {
@@ -318,7 +348,7 @@ class PrintLoggerEventCallbackTest
         }
 
         final String expected = singleEntry + singleEntry + singleEntry;
-        assertEquals(expected, Files.readString(testFilePath));
+        assertEquals(expectedLogStartMessage() + expected, Files.readString(testFilePath));
 
         final Path rolledFilePath = testFilePath.resolveSibling(testFilePath.getFileName() + ".1");
         assertFalse(Files.exists(rolledFilePath));
@@ -367,7 +397,9 @@ class PrintLoggerEventCallbackTest
 
         final PrintLoggerEventCallback printLoggerEventCallback = new PrintLoggerEventCallback(
             testFilePath.toString(),
-            fileSizeLimit);
+            fileSizeLimit,
+            fixedNanoClock,
+            fixedEpochClock);
 
         printLoggerEventCallback.onHeader(typeCode, eventCode, eventName, timestamp);
         printLoggerEventCallback.onValue(key1, NO_TAG, value1);
@@ -379,9 +411,9 @@ class PrintLoggerEventCallbackTest
         assertEquals(preExistingContent, Files.readString(preExistingRolledFilePath));
 
         final Path newRolledFilePath = testFilePath.resolveSibling(testFilePath.getFileName() + ".2");
-        assertEquals(expected, Files.readString(newRolledFilePath));
+        assertEquals(expectedLogStartMessage() + expected, Files.readString(newRolledFilePath));
 
-        assertEquals(0, Files.size(testFilePath));
+        assertEquals(expectedLogStartMessage(), Files.readString(testFilePath));
     }
 
     @Test

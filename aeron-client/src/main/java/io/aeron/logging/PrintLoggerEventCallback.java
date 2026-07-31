@@ -18,6 +18,10 @@ package io.aeron.logging;
 
 import org.agrona.DirectBuffer;
 import org.agrona.collections.Int2ObjectHashMap;
+import org.agrona.concurrent.EpochClock;
+import org.agrona.concurrent.NanoClock;
+import org.agrona.concurrent.SystemEpochClock;
+import org.agrona.concurrent.SystemNanoClock;
 
 import java.io.IOException;
 import java.io.PrintStream;
@@ -63,8 +67,18 @@ public class PrintLoggerEventCallback implements LoggerEventCallback
 
     PrintLoggerEventCallback(final String filename, final long maxFileLength)
     {
+        this(filename, maxFileLength, SystemNanoClock.INSTANCE, SystemEpochClock.INSTANCE);
+    }
+
+    PrintLoggerEventCallback(
+        final String filename,
+        final long maxFileLength,
+        final NanoClock nanoClock,
+        final EpochClock epochClock)
+    {
         this.writer = null != filename ?
-            new RollingFileEventWriter(filename, maxFileLength) : new StreamEventWriter(System.out);
+            new RollingFileEventWriter(filename, maxFileLength, nanoClock, epochClock) :
+            new StreamEventWriter(System.out);
         this.loadBinaryRenderers();
     }
 
