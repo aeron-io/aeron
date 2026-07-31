@@ -37,7 +37,7 @@ public interface ClusterEventLogger
     /**
      * Logger for writing into the {@link ManyToOneRingBuffer} held by {@link EventConfiguration#eventReader}.
      */
-    ClusterEventLogger LOGGER = new ClusterEventLoggerCborImpl(EventConfiguration.eventReader().ringBuffer());
+    ClusterEventLogger LOGGER = new CborClusterEventLogger(EventConfiguration.eventReader().ringBuffer());
 
     /**
      * Log a new leadership term event.

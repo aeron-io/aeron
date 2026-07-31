@@ -20,7 +20,7 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 source "${DIR}/java-common"
 
 exec "${JAVA_HOME}/bin/java" \
-  -cp "${DIR}/../../aeron-all/build/libs/aeron-all-${VERSION}.jar" \
+  -cp "${DIR}/../../aeron-all/build/libs/aeron-all-${VERSION}.jar:/home/mike/sources/custom-logger/build/libs/custom-logger-1.0-SNAPSHOT.jar" \
   ${JAVA_OPTIONS} \
   ${ADD_OPENS} \
   ${JVM_OPTS} \

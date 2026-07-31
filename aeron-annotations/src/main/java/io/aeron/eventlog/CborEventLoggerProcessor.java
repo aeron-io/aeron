@@ -115,7 +115,7 @@ public class CborEventLoggerProcessor extends AbstractProcessor
         final PackageElement packageElement = processingEnv.getElementUtils().getPackageOf(iface);
         final String packageName = packageElement.getQualifiedName().toString();
         final String interfaceName = iface.getSimpleName().toString();
-        final String implName = interfaceName + "CborImpl";
+        final String implName = "Cbor" + interfaceName;
 
         final List<CborMethodPlan> plans = new ArrayList<>();
         boolean ok = true;

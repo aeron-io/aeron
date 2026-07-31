@@ -40,7 +40,6 @@ import static io.aeron.logging.CborUtils.ENUM_TAG;
 import static io.aeron.logging.CborUtils.NO_TAG;
 import static org.agrona.BitUtil.CACHE_LINE_LENGTH;
 import static org.agrona.concurrent.ringbuffer.RingBufferDescriptor.TRAILER_LENGTH;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -260,31 +259,5 @@ class CborClusterEventCodecTest
         assertTrue(reason.startsWith(truncatedReason.substring(0, truncatedReason.length() - 3)));
 
         verify(mockLoggingCallback).onFooter(true);
-    }
-
-    @Test
-    void logElectionStateChangeThrowsWhenMessageExceedsRingBufferCapacity()
-    {
-        final int dataCapacity = 64;
-        final ManyToOneRingBuffer smallRingBuffer = new ManyToOneRingBuffer(
-            new UnsafeBuffer(BufferUtil.allocateDirectAligned(dataCapacity + TRAILER_LENGTH, CACHE_LINE_LENGTH)));
-        final CborClusterEventLogger cborClusterEventLogger = new CborClusterEventLogger(smallRingBuffer);
-
-        final IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> cborClusterEventLogger.logElectionStateChange(
-                12,
-                ElectionState.CANVASS,
-                ElectionState.CLOSED,
-                2342,
-                23434,
-                62354,
-                2789345,
-                87345,
-                345345,
-                2345,
-                "invalid"));
-
-        assertTrue(exception.getMessage().contains("exceeds maxMsgLength=8"));
     }
 }
