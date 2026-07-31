@@ -27,6 +27,8 @@ import org.junit.jupiter.params.provider.EnumSource;
 import java.nio.ByteBuffer;
 
 import static io.aeron.driver.logging.DriverEventCode.*;
+import static java.nio.charset.StandardCharsets.US_ASCII;
+import static org.agrona.PrintBufferUtil.prettyHexDump;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class DriverAdminCommandBinaryRendererTest
@@ -299,6 +301,31 @@ class DriverAdminCommandBinaryRendererTest
     }
 
     @ParameterizedTest
+    @EnumSource(value = DriverEventCode.class, names = { "CMD_IN_ADD_COUNTER" })
+    void renderCommandCounterWithRawBytes(final DriverEventCode eventCode)
+    {
+        final DriverAdminCommandBinaryRenderer rawBytesRenderer = new DriverAdminCommandBinaryRenderer(true);
+        final byte[] keyBytes = "0123456789".getBytes(US_ASCII);
+        final byte[] labelBytes = "counter label".getBytes(US_ASCII);
+        final CounterMessageFlyweight flyweight = new CounterMessageFlyweight();
+        flyweight.wrap(buffer, 0);
+        flyweight.typeId(3);
+        flyweight.keyBuffer(newBuffer(keyBytes), 0, keyBytes.length);
+        flyweight.labelBuffer(newBuffer(labelBytes), 0, labelBytes.length);
+        flyweight.clientId(eventCode.id());
+        flyweight.correlationId(42);
+
+        rawBytesRenderer.append(sb, eventCode.toEventCodeId(), buffer, 0, buffer.capacity());
+
+        assertEquals(
+            "typeId=3 keyBufferOffset=" + flyweight.keyBufferOffset() + " keyBufferLength=" + keyBytes.length +
+            " labelBufferOffset=" + flyweight.labelBufferOffset() + " labelBufferLength=" + labelBytes.length +
+            " clientId=" + eventCode.id() + " correlationId=42 keyBuffer=" + prettyHexDump(newBuffer(keyBytes)) +
+            " label=" + prettyHexDump(newBuffer(labelBytes)),
+            sb.toString());
+    }
+
+    @ParameterizedTest
     @EnumSource(value = DriverEventCode.class, names = { "CMD_OUT_SUBSCRIPTION_READY" })
     void renderCommandSubscriptionReady(final DriverEventCode eventCode)
     {
@@ -351,6 +378,26 @@ class DriverAdminCommandBinaryRendererTest
         renderer.append(sb, eventCode.toEventCodeId(), buffer, 0, buffer.capacity());
 
         assertEquals("clientId=" + eventCode.id() + " tokenBufferLength=11", sb.toString());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = DriverEventCode.class, names = { "CMD_IN_TERMINATE_DRIVER" })
+    void renderCommandTerminateDriverWithRawBytes(final DriverEventCode eventCode)
+    {
+        final DriverAdminCommandBinaryRenderer rawBytesRenderer = new DriverAdminCommandBinaryRenderer(true);
+        final byte[] tokenSource = "xxxxTOKEN-BYTES".getBytes(US_ASCII);
+        final byte[] tokenBytes = "TOKEN-BYTES".getBytes(US_ASCII);
+        final TerminateDriverFlyweight flyweight = new TerminateDriverFlyweight();
+        flyweight.wrap(buffer, 0);
+        flyweight.clientId(eventCode.id());
+        flyweight.tokenBuffer(newBuffer(tokenSource), 4, tokenBytes.length);
+
+        rawBytesRenderer.append(sb, eventCode.toEventCodeId(), buffer, 0, buffer.capacity());
+
+        assertEquals(
+            "clientId=" + eventCode.id() + " tokenBufferLength=" + tokenBytes.length +
+            " tokenBuffer=" + prettyHexDump(newBuffer(tokenBytes)),
+            sb.toString());
     }
 
     @Test

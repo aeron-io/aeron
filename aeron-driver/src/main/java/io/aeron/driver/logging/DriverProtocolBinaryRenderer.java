@@ -32,6 +32,7 @@ import org.agrona.DirectBuffer;
 import java.util.Arrays;
 
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
+import static org.agrona.PrintBufferUtil.appendPrettyHexDump;
 
 /**
  * Binary renderer for the Aeron network protocol messages.
@@ -48,6 +49,8 @@ public class DriverProtocolBinaryRenderer implements BinaryRenderer
     private final ResolutionEntryFlyweight resolution = new ResolutionEntryFlyweight();
     private final ResponseSetupFlyweight rspSetup = new ResponseSetupFlyweight();
 
+    private final boolean renderExtraBytes;
+
     private static final int[] MSG_TYPE_ID = {
         DriverEventCode.FRAME_IN.toEventCodeId(),
         DriverEventCode.FRAME_OUT.toEventCodeId()
@@ -58,6 +61,17 @@ public class DriverProtocolBinaryRenderer implements BinaryRenderer
      */
     public DriverProtocolBinaryRenderer()
     {
+        this(RENDER_EXTRA_CONTENT);
+    }
+
+    /**
+     * Constructor allowing explicit control of raw byte rendering.
+     *
+     * @param renderExtraBytes whether to render raw bytes of otherwise unlogged fields as a pretty hex/ASCII dump.
+     */
+    public DriverProtocolBinaryRenderer(final boolean renderExtraBytes)
+    {
+        this.renderExtraBytes = renderExtraBytes;
     }
 
     /**
@@ -86,7 +100,7 @@ public class DriverProtocolBinaryRenderer implements BinaryRenderer
             case HeaderFlyweight.HDR_TYPE_PAD:
             case HeaderFlyweight.HDR_TYPE_DATA:
                 dataHeader.wrap(buffer, offset, buffer.capacity() - offset);
-                renderDataFrame(sb);
+                renderDataFrame(sb, buffer, offset);
                 break;
 
             case HeaderFlyweight.HDR_TYPE_NAK:
@@ -134,7 +148,7 @@ public class DriverProtocolBinaryRenderer implements BinaryRenderer
         return buffer.getShort(FrameDescriptor.typeOffset(offset), LITTLE_ENDIAN) & 0xFFFF;
     }
 
-    private void renderDataFrame(final StringBuilder sb)
+    private void renderDataFrame(final StringBuilder sb, final DirectBuffer buffer, final int offset)
     {
         sb
             .append("type=")
@@ -154,6 +168,19 @@ public class DriverProtocolBinaryRenderer implements BinaryRenderer
             .append(dataHeader.termId())
             .append(" termOffset=")
             .append(dataHeader.termOffset());
+
+        if (renderExtraBytes)
+        {
+            final int payloadOffset = offset + DataHeaderFlyweight.HEADER_LENGTH;
+            final int payloadEnd = offset + dataHeader.frameLength();
+            final int payloadLength = payloadEnd - payloadOffset;
+
+            if (payloadLength > 0)
+            {
+                sb.append(" payload=");
+                appendPrettyHexDump(sb, buffer, payloadOffset, payloadLength);
+            }
+        }
     }
 
     private void renderStatusFrame(final StringBuilder sb)

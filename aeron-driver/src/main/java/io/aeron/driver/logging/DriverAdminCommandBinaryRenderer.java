@@ -20,6 +20,8 @@ import io.aeron.logging.BinaryRenderer;
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 
+import static org.agrona.PrintBufferUtil.appendPrettyHexDump;
+
 /**
  * Binary renderer for the Driver admin commands.
  */
@@ -44,6 +46,8 @@ public class DriverAdminCommandBinaryRenderer implements BinaryRenderer
     private final TerminateDriverFlyweight terminateDriver = new TerminateDriverFlyweight();
     private final DestinationByIdMessageFlyweight destinationById = new DestinationByIdMessageFlyweight();
     private final RejectImageFlyweight rejectImage = new RejectImageFlyweight();
+
+    private final boolean renderExtraBytes;
 
     private static final int[] MSG_TYPE_ID = {
         DriverEventCode.CMD_IN_ADD_PUBLICATION.toEventCodeId(),
@@ -79,6 +83,17 @@ public class DriverAdminCommandBinaryRenderer implements BinaryRenderer
      */
     public DriverAdminCommandBinaryRenderer()
     {
+        this(RENDER_EXTRA_CONTENT);
+    }
+
+    /**
+     * Constructor allowing explicit control of raw byte rendering.
+     *
+     * @param renderExtraBytes whether to render raw bytes of otherwise unlogged fields as a pretty hex/ASCII dump.
+     */
+    public DriverAdminCommandBinaryRenderer(final boolean renderExtraBytes)
+    {
+        this.renderExtraBytes = renderExtraBytes;
     }
 
     /**
@@ -171,7 +186,7 @@ public class DriverAdminCommandBinaryRenderer implements BinaryRenderer
             case CMD_IN_ADD_COUNTER ->
             {
                 counterMsg.wrap(mutableBuffer, offset);
-                renderCounter(sb);
+                renderCounter(sb, buffer, offset);
             }
             case CMD_OUT_SUBSCRIPTION_READY ->
             {
@@ -191,7 +206,7 @@ public class DriverAdminCommandBinaryRenderer implements BinaryRenderer
             case CMD_IN_TERMINATE_DRIVER ->
             {
                 terminateDriver.wrap(mutableBuffer, offset);
-                renderTerminateDriver(sb);
+                renderTerminateDriver(sb, buffer, offset);
             }
             case CMD_IN_REMOVE_DESTINATION_BY_ID ->
             {
@@ -328,7 +343,7 @@ public class DriverAdminCommandBinaryRenderer implements BinaryRenderer
         errorMsg.appendMessage(sb);
     }
 
-    private void renderCounter(final StringBuilder sb)
+    private void renderCounter(final StringBuilder sb, final DirectBuffer buffer, final int offset)
     {
         sb
             .append("typeId=").append(counterMsg.typeId())
@@ -338,6 +353,23 @@ public class DriverAdminCommandBinaryRenderer implements BinaryRenderer
             .append(" labelBufferLength=").append(counterMsg.labelBufferLength())
             .append(" clientId=").append(counterMsg.clientId())
             .append(" correlationId=").append(counterMsg.correlationId());
+
+        if (renderExtraBytes)
+        {
+            final int keyBufferLength = counterMsg.keyBufferLength();
+            if (keyBufferLength > 0)
+            {
+                sb.append(" keyBuffer=");
+                appendPrettyHexDump(sb, buffer, offset + counterMsg.keyBufferOffset(), keyBufferLength);
+            }
+
+            final int labelBufferLength = counterMsg.labelBufferLength();
+            if (labelBufferLength > 0)
+            {
+                sb.append(" label=");
+                appendPrettyHexDump(sb, buffer, offset + counterMsg.labelBufferOffset(), labelBufferLength);
+            }
+        }
     }
 
     private void renderCounterUpdate(final StringBuilder sb)
@@ -364,11 +396,21 @@ public class DriverAdminCommandBinaryRenderer implements BinaryRenderer
         sb.append("clientId=").append(clientTimeout.clientId());
     }
 
-    private void renderTerminateDriver(final StringBuilder sb)
+    private void renderTerminateDriver(final StringBuilder sb, final DirectBuffer buffer, final int offset)
     {
         sb
             .append("clientId=").append(terminateDriver.clientId())
             .append(" tokenBufferLength=").append(terminateDriver.tokenBufferLength());
+
+        if (renderExtraBytes)
+        {
+            final int tokenBufferLength = terminateDriver.tokenBufferLength();
+            if (tokenBufferLength > 0)
+            {
+                sb.append(" tokenBuffer=");
+                appendPrettyHexDump(sb, buffer, offset + terminateDriver.tokenBufferOffset(), tokenBufferLength);
+            }
+        }
     }
 
     private void renderDestinationById(final StringBuilder sb)
