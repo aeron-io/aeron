@@ -102,8 +102,6 @@ class CollectingEventLogReaderAgentTest
         final List<String> collected = Files.readAllLines(Path.of(collectingFilename));
         final List<String> printed = Files.readAllLines(Path.of(printingFilename));
 
-        collected.forEach(System.out::println);
-
         assertEquals(printed, collected);
     }
 }

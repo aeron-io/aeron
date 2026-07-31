@@ -428,13 +428,7 @@ class PrintLoggerEventCallbackTest
         appendPrettyHexDump(sb, new UnsafeBuffer(value4));
         sb.append("\n");
 
-        final String expected = sb.toString();
-
-        final String content = capturingPrintStream.flushAndGetContent();
-
-        System.out.println(content);
-
-        assertEquals(content, expected);
+        assertEquals(sb.toString(), capturingPrintStream.flushAndGetContent());
     }
 
     @Test
@@ -475,8 +469,6 @@ class PrintLoggerEventCallbackTest
         sb.append(key2).append("=").append("[fe80::54d3:4122:e738:a862]");
         sb.append("\n");
 
-        final String actual = capturingPrintStream.flushAndGetContent();
-        System.out.println(actual);
-        assertEquals(sb.toString(), actual);
+        assertEquals(sb.toString(), capturingPrintStream.flushAndGetContent());
     }
 }
