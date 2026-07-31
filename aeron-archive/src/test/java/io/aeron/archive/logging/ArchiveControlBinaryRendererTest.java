@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import static io.aeron.archive.codecs.ControlResponseCode.NULL_VAL;
 import static io.aeron.logging.EventConfiguration.MAX_EVENT_LENGTH;
 import static java.nio.charset.StandardCharsets.US_ASCII;
+import static org.agrona.PrintBufferUtil.prettyHexDump;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class ArchiveControlBinaryRendererTest
@@ -560,6 +561,30 @@ class ArchiveControlBinaryRendererTest
         assertEquals(
             "correlationId=16 responseStreamId=19 version=2 responseChannel=English Channel " +
             "encodedCredentialsLength=5 clientInfo=my test client \"ABC\" 42",
+            sb.toString());
+    }
+
+    @Test
+    void renderAuthConnectWithRawBytes()
+    {
+        final ArchiveControlBinaryRenderer rawBytesRenderer = new ArchiveControlBinaryRenderer(true);
+        final byte[] credentials = "hello".getBytes(US_ASCII);
+        final AuthConnectRequestEncoder requestEncoder = new AuthConnectRequestEncoder();
+        requestEncoder.wrapAndApplyHeader(buffer, 0, headerEncoder)
+            .correlationId(16)
+            .responseStreamId(19)
+            .version(2)
+            .responseChannel("English Channel")
+            .putEncodedCredentials(credentials, 0, credentials.length)
+            .clientInfo("my test client \"ABC\" 42");
+
+        rawBytesRenderer.append(sb, ArchiveEventCode.CMD_IN_AUTH_CONNECT.toEventCodeId(), buffer, 0, buffer.capacity());
+
+        final UnsafeBuffer credentialsBuffer = new UnsafeBuffer(credentials);
+        assertEquals(
+            "correlationId=16 responseStreamId=19 version=2 responseChannel=English Channel " +
+            "encodedCredentialsLength=5 encodedCredentials=" + prettyHexDump(credentialsBuffer) +
+            " clientInfo=my test client \"ABC\" 42",
             sb.toString());
     }
 

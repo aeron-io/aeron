@@ -21,6 +21,7 @@ import io.aeron.exceptions.AeronException;
 import io.aeron.exceptions.ConcurrentConcludeException;
 import io.aeron.exceptions.DriverTimeoutException;
 import io.aeron.logbuffer.LogBufferDescriptor;
+import io.aeron.logging.BinaryRenderer;
 import org.agrona.BufferUtil;
 import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
@@ -572,6 +573,12 @@ public class CommonContext implements Cloneable
      * Event Buffer log file max length system property. If not set then {@link Long#MAX_VALUE} will be used.
      */
     public static final String EVENT_LOG_FILE_MAX_LENGTH = "aeron.event.log.file.max.length";
+
+    /**
+     * System property to toggle whether {@link BinaryRenderer} implementations render the remaining bytes
+     * of fields that are not part of the header information.
+     */
+    public static final String EVENT_LOG_RENDER_EXTRA_BYTES_PROP_NAME = "aeron.event.log.render.extras";
 
     /**
      * Should a component's configuration be printed on start.
