@@ -17,6 +17,8 @@ package io.aeron.logging;
 
 import io.aeron.test.Tests;
 import org.agrona.ExpandableArrayBuffer;
+import org.agrona.concurrent.EpochClock;
+import org.agrona.concurrent.NanoClock;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
 import org.junit.jupiter.api.Test;
@@ -25,6 +27,9 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.List;
 
 import static io.aeron.logging.CborEncode.encode;
@@ -48,6 +53,22 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class CollectingEventLogReaderAgentTest
 {
+    private final long fixedNanoTime = 123_456_789_987_654_321L;
+    private final long fixedEpochMs = 1_700_000_000_000L;
+    private final NanoClock fixedNanoClock = () -> fixedNanoTime;
+    private final EpochClock fixedEpochClock = () -> fixedEpochMs;
+
+    private String expectedLogStartMessage()
+    {
+        final StringBuilder sb = new StringBuilder();
+        LogUtil.appendTimestamp(sb, fixedNanoTime);
+        sb.append("log started ")
+            .append(RollingFileEventWriter.DATE_TIME_FORMATTER.format(
+                ZonedDateTime.ofInstant(Instant.ofEpochMilli(fixedEpochMs), ZoneId.systemDefault())))
+            .append(PrintLoggerEventCallback.NEW_LINE);
+        return sb.toString();
+    }
+
     @Test
     void shouldWriteLogsToFileWhenTriggered(@TempDir final Path loggingDir) throws IOException
     {
@@ -58,7 +79,8 @@ class CollectingEventLogReaderAgentTest
         final String printingFilename = loggingDir.resolve("printing.log").toString();
 
         final CollectingEventLogReaderAgent collectingAgent = new CollectingEventLogReaderAgent(ringBuffer);
-        final CborDecode decode = new CborDecode(List.of(new PrintLoggerEventCallback(printingFilename, MAX_VALUE)));
+        final CborDecode decode = new CborDecode(List.of(
+            new PrintLoggerEventCallback(printingFilename, MAX_VALUE, fixedNanoClock, fixedEpochClock)));
 
 //        final int base = 1000;
         final EncodingState encodingState = new EncodingState();
@@ -102,6 +124,13 @@ class CollectingEventLogReaderAgentTest
         final List<String> collected = Files.readAllLines(Path.of(collectingFilename));
         final List<String> printed = Files.readAllLines(Path.of(printingFilename));
 
-        assertEquals(printed, collected);
+        // TODO: Discuss whether the file header was originally printed for CollectingEventLogReaderAgent
+        final String startMessage = expectedLogStartMessage();
+        assertEquals(
+            startMessage.substring(
+                0,
+                startMessage.length() - PrintLoggerEventCallback.NEW_LINE.length()),
+            printed.get(0));
+        assertEquals(collected, printed.subList(1, printed.size()));
     }
 }
