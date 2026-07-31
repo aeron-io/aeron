@@ -222,7 +222,8 @@ public final class Sender extends SenderRhsPadding implements Agent
         int startingIndex = roundRobinIndex++;
         if (startingIndex >= length)
         {
-            roundRobinIndex = startingIndex = 0;
+            startingIndex = 0;
+            roundRobinIndex = 1;
         }
 
         for (int i = startingIndex; i < length; i++)

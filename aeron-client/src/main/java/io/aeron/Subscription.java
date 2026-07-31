@@ -191,11 +191,12 @@ public final class Subscription extends SubscriptionFields implements AutoClosea
         final int length = images.length;
         int fragmentsRead = 0;
 
-        if (roundRobinIndex >= length)
+        int startingIndex = roundRobinIndex++;
+        if (startingIndex >= length)
         {
-            roundRobinIndex = 0;
+            startingIndex = 0;
+            roundRobinIndex = 1;
         }
-        final int startingIndex = roundRobinIndex++;
 
         for (int i = startingIndex; i < length && fragmentsRead < fragmentLimit; i++)
         {
@@ -231,11 +232,12 @@ public final class Subscription extends SubscriptionFields implements AutoClosea
         final int length = images.length;
         int fragmentsRead = 0;
 
-        if (roundRobinIndex >= length)
+        int startingIndex = roundRobinIndex++;
+        if (startingIndex >= length)
         {
-            roundRobinIndex = 0;
+            startingIndex = 0;
+            roundRobinIndex = 1;
         }
-        final int startingIndex = roundRobinIndex++;
 
         for (int i = startingIndex; i < length && fragmentsRead < fragmentLimit; i++)
         {

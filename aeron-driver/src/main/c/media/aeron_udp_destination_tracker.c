@@ -114,7 +114,8 @@ int aeron_udp_destination_tracker_send(
     int starting_index = tracker->round_robin_index++;
     if (starting_index >= length)
     {
-        tracker->round_robin_index = starting_index = 0;
+        starting_index = 0;
+        tracker->round_robin_index = 1;
     }
 
     for (int i = starting_index; i < length; i++)
