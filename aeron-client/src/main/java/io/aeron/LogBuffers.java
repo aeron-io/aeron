@@ -35,6 +35,7 @@ import static io.aeron.logbuffer.LogBufferDescriptor.PARTITION_COUNT;
 import static io.aeron.logbuffer.LogBufferDescriptor.TERM_MAX_LENGTH;
 import static io.aeron.logbuffer.LogBufferDescriptor.checkPageSize;
 import static io.aeron.logbuffer.LogBufferDescriptor.checkTermLength;
+import static java.nio.channels.FileChannel.MapMode.READ_ONLY;
 import static java.nio.channels.FileChannel.MapMode.READ_WRITE;
 import static java.nio.file.StandardOpenOption.READ;
 import static java.nio.file.StandardOpenOption.SPARSE;
@@ -47,7 +48,8 @@ import static java.nio.file.StandardOpenOption.WRITE;
  */
 public final class LogBuffers implements AutoCloseable
 {
-    private static final EnumSet<StandardOpenOption> FILE_OPTIONS = EnumSet.of(READ, WRITE, SPARSE);
+    private static final EnumSet<StandardOpenOption> FILE_OPTIONS_R = EnumSet.of(READ);
+    private static final EnumSet<StandardOpenOption> FILE_OPTIONS_RW = EnumSet.of(READ, WRITE, SPARSE);
 
     private long lingerDeadlineNs = Long.MAX_VALUE;
     private int refCount;
@@ -64,6 +66,17 @@ public final class LogBuffers implements AutoCloseable
      */
     public LogBuffers(final String logFileName)
     {
+        this(logFileName, false);
+    }
+
+    /**
+     * Construct the log buffers for a given log file.
+     *
+     * @param logFileName to be mapped.
+     * @param readOnly flag to indicate if mapping should only be read-only.
+     */
+    public LogBuffers(final String logFileName, final boolean readOnly)
+    {
         int termLength = 0;
         FileChannel fileChannel = null;
         UnsafeBuffer logMetaDataBuffer = null;
@@ -71,7 +84,8 @@ public final class LogBuffers implements AutoCloseable
 
         try
         {
-            fileChannel = FileChannel.open(Paths.get(logFileName), FILE_OPTIONS);
+            final EnumSet<StandardOpenOption> fileOptions = readOnly ? FILE_OPTIONS_R : FILE_OPTIONS_RW;
+            fileChannel = FileChannel.open(Paths.get(logFileName), fileOptions);
             final long logLength = fileChannel.size();
             if (logLength < LOG_META_DATA_LENGTH)
             {
@@ -79,9 +93,10 @@ public final class LogBuffers implements AutoCloseable
                     "Log file length less than min length of " + LOG_META_DATA_LENGTH + ": length=" + logLength);
             }
 
+            final FileChannel.MapMode mapMode = readOnly ? READ_ONLY : READ_WRITE;
             if (logLength < Integer.MAX_VALUE)
             {
-                final MappedByteBuffer mappedBuffer = fileChannel.map(READ_WRITE, 0, logLength);
+                final MappedByteBuffer mappedBuffer = fileChannel.map(mapMode, 0, logLength);
                 mappedBuffer.order(ByteOrder.LITTLE_ENDIAN);
                 mappedByteBuffers = new MappedByteBuffer[]{ mappedBuffer };
 
@@ -112,7 +127,7 @@ public final class LogBuffers implements AutoCloseable
                 final long metaDataMappingLength = logLength - metaDataSectionOffset;
 
                 final MappedByteBuffer metaDataMappedBuffer = fileChannel.map(
-                    READ_WRITE, metaDataSectionOffset, metaDataMappingLength);
+                    mapMode, metaDataSectionOffset, metaDataMappingLength);
                 metaDataMappedBuffer.order(ByteOrder.LITTLE_ENDIAN);
 
                 mappedByteBuffers[LOG_META_DATA_SECTION_INDEX] = metaDataMappedBuffer;
@@ -138,7 +153,7 @@ public final class LogBuffers implements AutoCloseable
                 for (int i = 0; i < PARTITION_COUNT; i++)
                 {
                     final long position = assumedTermLength * (long)i;
-                    final MappedByteBuffer mappedBuffer = fileChannel.map(READ_WRITE, position, assumedTermLength);
+                    final MappedByteBuffer mappedBuffer = fileChannel.map(mapMode, position, assumedTermLength);
                     mappedBuffer.order(ByteOrder.LITTLE_ENDIAN);
                     mappedByteBuffers[i] = mappedBuffer;
                     termBuffers[i] = mappedBuffer;
@@ -209,7 +224,14 @@ public final class LogBuffers implements AutoCloseable
 
             for (int i = 0, length = atomicBuffer.capacity(); i < length; i += pageSize)
             {
-                atomicBuffer.compareAndSetInt(i, value, value);
+                if (buffer.isReadOnly())
+                {
+                    atomicBuffer.getIntVolatile(i);
+                }
+                else
+                {
+                    atomicBuffer.compareAndSetInt(i, value, value);
+                }
             }
         }
     }

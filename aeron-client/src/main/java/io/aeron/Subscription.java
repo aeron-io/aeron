@@ -194,7 +194,8 @@ public final class Subscription extends SubscriptionFields implements AutoClosea
         int startingIndex = roundRobinIndex++;
         if (startingIndex >= length)
         {
-            roundRobinIndex = startingIndex = 0;
+            startingIndex = 0;
+            roundRobinIndex = 1;
         }
 
         for (int i = startingIndex; i < length && fragmentsRead < fragmentLimit; i++)
@@ -234,7 +235,8 @@ public final class Subscription extends SubscriptionFields implements AutoClosea
         int startingIndex = roundRobinIndex++;
         if (startingIndex >= length)
         {
-            roundRobinIndex = startingIndex = 0;
+            startingIndex = 0;
+            roundRobinIndex = 1;
         }
 
         for (int i = startingIndex; i < length && fragmentsRead < fragmentLimit; i++)

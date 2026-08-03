@@ -24,6 +24,7 @@ executed. (https://github.com/aeron-io/aeron/issues/2092/[#2092])
 * **[Java]** Upgrade to `JUnit` 6.1.2.
 * **[Java]** Upgrade to `Shadow` 9.6.0.
 * **[Driver/C]** Use IP_MULTICAST_ALL or IPV6_MULTICAST_ALL socket options to avoid receiving data from other multicast addresses with the same port
+* **[Client/Java]** Access cnc file with read only access for LogInspector and DriverTool
 
 == 1.52.2 (2026-07-10)
 

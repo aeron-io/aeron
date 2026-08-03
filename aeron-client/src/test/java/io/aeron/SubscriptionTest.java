@@ -15,6 +15,7 @@
  */
 package io.aeron;
 
+import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.Header;
 import io.aeron.logbuffer.LogBufferDescriptor;
@@ -28,13 +29,27 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.InOrder;
 
 import java.nio.ByteBuffer;
 
 import static io.aeron.Aeron.NULL_VALUE;
-import static io.aeron.status.ChannelEndpointStatus.*;
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static io.aeron.status.ChannelEndpointStatus.ACTIVE;
+import static io.aeron.status.ChannelEndpointStatus.CLOSING;
+import static io.aeron.status.ChannelEndpointStatus.ERRORED;
+import static io.aeron.status.ChannelEndpointStatus.INITIALIZING;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class SubscriptionTest
 {
@@ -156,6 +171,55 @@ class SubscriptionTest
             });
 
         assertEquals(2, subscription.poll(fragmentHandler, FRAGMENT_COUNT_LIMIT));
+    }
+
+    @Test
+    void shouldRoundRobinStartingImageWhenPollingWithExhaustedFragmentLimit()
+    {
+        subscription.addImage(imageOneMock);
+        subscription.addImage(imageTwoMock);
+
+        when(imageOneMock.poll(any(), anyInt())).then((invocation) -> 1);
+        when(imageTwoMock.poll(any(), anyInt())).then((invocation) -> 1);
+
+        final InOrder inOrder = inOrder(imageOneMock, imageTwoMock);
+
+        for (int i = 0; i < 6; i++)
+        {
+            assertEquals(1, subscription.poll(fragmentHandler, 1));
+        }
+
+        inOrder.verify(imageOneMock).poll(any(), anyInt());
+        inOrder.verify(imageTwoMock).poll(any(), anyInt());
+        inOrder.verify(imageOneMock).poll(any(), anyInt());
+        inOrder.verify(imageTwoMock).poll(any(), anyInt());
+        inOrder.verify(imageOneMock).poll(any(), anyInt());
+        inOrder.verify(imageTwoMock).poll(any(), anyInt());
+    }
+
+    @Test
+    void shouldRoundRobinStartingImageWhenControlledPollingWithExhaustedFragmentLimit()
+    {
+        final ControlledFragmentHandler controlledFragmentHandler = mock(ControlledFragmentHandler.class);
+        subscription.addImage(imageOneMock);
+        subscription.addImage(imageTwoMock);
+
+        when(imageOneMock.controlledPoll(any(), anyInt())).then((invocation) -> 1);
+        when(imageTwoMock.controlledPoll(any(), anyInt())).then((invocation) -> 1);
+
+        final InOrder inOrder = inOrder(imageOneMock, imageTwoMock);
+
+        for (int i = 0; i < 6; i++)
+        {
+            assertEquals(1, subscription.controlledPoll(controlledFragmentHandler, 1));
+        }
+
+        inOrder.verify(imageOneMock).controlledPoll(any(), anyInt());
+        inOrder.verify(imageTwoMock).controlledPoll(any(), anyInt());
+        inOrder.verify(imageOneMock).controlledPoll(any(), anyInt());
+        inOrder.verify(imageTwoMock).controlledPoll(any(), anyInt());
+        inOrder.verify(imageOneMock).controlledPoll(any(), anyInt());
+        inOrder.verify(imageTwoMock).controlledPoll(any(), anyInt());
     }
 
     @ValueSource(longs = { INITIALIZING, ERRORED, CLOSING })

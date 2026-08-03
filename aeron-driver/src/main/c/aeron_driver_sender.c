@@ -402,7 +402,8 @@ int aeron_driver_sender_do_send(aeron_driver_sender_t *sender, int64_t now_ns)
 
     if (starting_index >= length)
     {
-        sender->round_robin_index = starting_index = 0;
+        starting_index = 0;
+        sender->round_robin_index = 1;
     }
 
     for (size_t i = starting_index; i < length; i++)

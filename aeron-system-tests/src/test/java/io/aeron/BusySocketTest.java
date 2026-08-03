@@ -257,7 +257,7 @@ class BusySocketTest
             Aeron aeron2 = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver2.aeronDirectoryName())))
         {
             final ExclusivePublication publication = aeron1.addExclusivePublication(
-                channel + "|endpoint=localhost:8888|" + interfaceEndpoint, streamId);
+                channel + "|endpoint=localhost:8888|linger=0s|" + interfaceEndpoint, streamId);
 
             final int channelStatusId = publication.channelStatusId();
             Tests.await(

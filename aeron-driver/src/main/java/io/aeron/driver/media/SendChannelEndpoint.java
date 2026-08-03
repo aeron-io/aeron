@@ -830,7 +830,8 @@ class ManualSndMultiDestination extends MultiSndDestination
         int startingIndex = roundRobinIndex++;
         if (startingIndex >= length)
         {
-            roundRobinIndex = startingIndex = 0;
+            startingIndex = 0;
+            roundRobinIndex = 1;
         }
 
         int result = bytesToSend;
@@ -1011,7 +1012,8 @@ class DynamicSndMultiDestination extends MultiSndDestination
         int startingIndex = roundRobinIndex++;
         if (startingIndex >= length)
         {
-            roundRobinIndex = startingIndex = 0;
+            startingIndex = 0;
+            roundRobinIndex = 1;
         }
 
         int result = bytesToSend;

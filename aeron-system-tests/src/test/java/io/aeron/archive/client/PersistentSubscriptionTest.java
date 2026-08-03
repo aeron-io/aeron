@@ -49,6 +49,7 @@ import io.aeron.test.EventLogExtension;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
 import io.aeron.test.RandomWatcher;
+import io.aeron.test.SlowTest;
 import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.TestContexts;
 import io.aeron.test.Tests;
@@ -3056,12 +3057,13 @@ abstract class PersistentSubscriptionTest
 
     @Test
     @InterruptAfter(30)
+    @SlowTest
     void shouldNotUseStaleNextLivePositionAfterRefreshFromAttemptSwitch() throws Exception
     {
         TestMediaDriver.notSupportedOnCMediaDriver("loss generator");
 
         final String pubChannel =
-            "aeron:udp?term-length=16m|control=localhost:24326|control-mode=dynamic|fc=min";
+            "aeron:udp?term-length=16m|control=localhost:24326|control-mode=dynamic|fc=min,tc:500ms";
         final String subChannel = "aeron:udp?control=localhost:24326|group=true";
 
         final StreamIdLossGenerator lossGenerator = new StreamIdLossGenerator();
@@ -3164,7 +3166,8 @@ abstract class PersistentSubscriptionTest
     {
         TestMediaDriver.notSupportedOnCMediaDriver("loss generator");
 
-        final String pubChannel = "aeron:udp?term-length=16m|control=localhost:24325|control-mode=dynamic|fc=min";
+        final String pubChannel =
+            "aeron:udp?term-length=16m|control=localhost:24325|control-mode=dynamic|fc=min,t:500ms";
         final String subChannel = "aeron:udp?control=localhost:24325|group=true";
 
         final StreamIdLossGenerator lossGenerator = new StreamIdLossGenerator();
@@ -3277,7 +3280,7 @@ abstract class PersistentSubscriptionTest
                 {
                     if (poll(persistentSubscription, handler, 10) == 0)
                     {
-                        checkForInterrupt("interrupted while simulating live channel network problems");
+                        Tests.sleep(1, "interrupted while simulating live channel network problems");
                     }
 
                     if (lossState == LossState.WAITING_TO_START && System.nanoTime() - deadline >= 0)

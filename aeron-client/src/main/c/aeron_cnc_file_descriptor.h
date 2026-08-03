@@ -115,7 +115,9 @@ inline bool aeron_cnc_is_file_length_sufficient(aeron_mapped_file_t *cnc_mmap)
 
 int32_t aeron_cnc_version_volatile(aeron_cnc_metadata_t *metadata);
 
-aeron_cnc_load_result_t aeron_cnc_map_file_and_load_metadata(
+aeron_cnc_load_result_t aeron_cnc_map_existing_file_and_load_metadata(
+    const char *dir, aeron_mapped_file_t *mapped_file, aeron_cnc_metadata_t **metadata);
+aeron_cnc_load_result_t aeron_cnc_map_readonly_file_and_load_metadata(
     const char *dir, aeron_mapped_file_t *mapped_file, aeron_cnc_metadata_t **metadata);
 
 int aeron_cnc_resolve_filename(const char *directory, char *filename_buffer, size_t filename_buffer_length);
