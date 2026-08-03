@@ -16,6 +16,7 @@
 package io.aeron.driver;
 
 import io.aeron.ChannelUri;
+import io.aeron.CommonContext;
 import io.aeron.driver.media.ControlTransportPoller;
 import io.aeron.driver.media.SendChannelEndpoint;
 import org.agrona.collections.ArrayUtil;
@@ -159,7 +160,7 @@ public final class Sender extends SenderRhsPadding implements Agent
     @Override
     public String roleName()
     {
-        return "sender";
+        return CommonContext.threadName("aeron-md-snd", "sender");
     }
 
     void onRegisterSendChannelEndpoint(final SendChannelEndpoint channelEndpoint)

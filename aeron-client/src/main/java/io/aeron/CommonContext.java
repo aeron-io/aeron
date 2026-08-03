@@ -502,6 +502,44 @@ public class CommonContext implements Cloneable
         SystemUtil.isWindows() ? "Windows-PRNG" : "NativePRNGNonBlocking";
 
     /**
+     * Property name to use to set the thread naming mode. Defaults to {@link #THREAD_NAMING_MODE_DEFAULT}.
+     */
+    @Config(defaultType = DefaultType.STRING, defaultString = "classic", existsInC = false)
+    public static final String THREAD_NAMING_MODE_PROP_NAME = "aeron.thread.naming";
+
+    /**
+     * Value of {@link #THREAD_NAMING_MODE_PROP_NAME} that preserves legacy thread names.
+     */
+    public static final String THREAD_NAMING_MODE_CLASSIC = "classic";
+    /**
+     * Value of {@link #THREAD_NAMING_MODE_PROP_NAME} that uses new prefixed names.
+     */
+    public static final String THREAD_NAMING_MODE_NEW = "new";
+    /**
+     * Default value of {@link #THREAD_NAMING_MODE_PROP_NAME}.
+     */
+    public static final String THREAD_NAMING_MODE_DEFAULT = THREAD_NAMING_MODE_CLASSIC;
+
+
+    /**
+     * Choose a thread/role name depending on the configured naming scheme.
+     *
+     * @param prefixedName the new, prefixed name.
+     * @param classicName  the old name.
+     * @return the name to use for the current naming scheme.
+     */
+    public static String threadName(final String prefixedName, final String classicName)
+    {
+        final String mode = System.getProperty(THREAD_NAMING_MODE_PROP_NAME, THREAD_NAMING_MODE_DEFAULT);
+        return switch (mode)
+        {
+            case THREAD_NAMING_MODE_CLASSIC -> classicName;
+            case THREAD_NAMING_MODE_NEW -> prefixedName;
+            default -> throw new IllegalArgumentException("Unknown thread naming mode: " + mode);
+        };
+    }
+
+    /**
      * Should a component's configuration be printed on start.
      *
      * @return {@code true} if the configuration should be printed on start.

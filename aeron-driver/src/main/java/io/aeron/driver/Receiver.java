@@ -15,6 +15,7 @@
  */
 package io.aeron.driver;
 
+import io.aeron.CommonContext;
 import io.aeron.driver.media.DataTransportPoller;
 import io.aeron.driver.media.ReceiveChannelEndpoint;
 import io.aeron.driver.media.ReceiveDestinationTransport;
@@ -97,7 +98,7 @@ public final class Receiver implements Agent
     @Override
     public String roleName()
     {
-        return "receiver";
+        return CommonContext.threadName("aeron-md-rcv", "receiver");
     }
 
     /**
