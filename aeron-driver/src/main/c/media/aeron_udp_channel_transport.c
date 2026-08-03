@@ -197,6 +197,10 @@ int aeron_udp_channel_transport_init(
                         "failed to set IPPROTO_IPV6/IPV6_MULTICAST_ALL option to: %d", ipv6_multicast_all_disabled);
                     goto error;
                 }
+                else
+                {
+                    aeron_err_clear();
+                }
             }
 #endif
 
@@ -254,6 +258,10 @@ int aeron_udp_channel_transport_init(
                     AERON_APPEND_ERR(
                         "failed to set IPPROTO_IP/IP_MULTICAST_ALL option to: %d", ip_multicast_all_disabled);
                     goto error;
+                }
+                else
+                {
+                    aeron_err_clear();
                 }
             }
 #endif
