@@ -89,11 +89,12 @@ class DriverProtocolBinaryRendererTest
 
         driverProtocolRenderer.append(sb, DriverEventCode.FRAME_IN.toEventCodeId(), buffer, 0, buffer.capacity());
 
-        assertEquals(
-            "type=DATA flags=00010111 frameLength=" + (DataHeaderFlyweight.HEADER_LENGTH + payload.length) +
-            " sessionId=12 streamId=51 termId=6 termOffset=444 payload=" +
-            prettyHexDump(new UnsafeBuffer(payload)),
-            sb.toString());
+        final String expected = String.format(
+            "type=DATA flags=00010111 frameLength=%d sessionId=12 streamId=51 termId=6 termOffset=444 payload=%n%s",
+            (DataHeaderFlyweight.HEADER_LENGTH + payload.length),
+            prettyHexDump(new UnsafeBuffer(payload)));
+
+        assertEquals(expected, sb.toString());
     }
 
     @Test

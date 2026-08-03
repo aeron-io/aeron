@@ -317,12 +317,18 @@ class DriverAdminCommandBinaryRendererTest
 
         rawBytesRenderer.append(sb, eventCode.toEventCodeId(), buffer, 0, buffer.capacity());
 
-        assertEquals(
-            "typeId=3 keyBufferOffset=" + flyweight.keyBufferOffset() + " keyBufferLength=" + keyBytes.length +
-            " labelBufferOffset=" + flyweight.labelBufferOffset() + " labelBufferLength=" + labelBytes.length +
-            " clientId=" + eventCode.id() + " correlationId=42 keyBuffer=" + prettyHexDump(newBuffer(keyBytes)) +
-            " label=" + prettyHexDump(newBuffer(labelBytes)),
-            sb.toString());
+        final String expected = String.format(
+            "typeId=3 keyBufferOffset=%d keyBufferLength=%d labelBufferOffset=%d labelBufferLength=%d clientId=%d " +
+            "correlationId=42 keyBuffer=%n%s" +  " label=%n%s",
+            flyweight.keyBufferOffset(),
+            keyBytes.length,
+            flyweight.labelBufferOffset(),
+            labelBytes.length,
+            eventCode.id(),
+            prettyHexDump(newBuffer(keyBytes)),
+            prettyHexDump(newBuffer(labelBytes)));
+
+        assertEquals(expected, sb.toString());
     }
 
     @ParameterizedTest

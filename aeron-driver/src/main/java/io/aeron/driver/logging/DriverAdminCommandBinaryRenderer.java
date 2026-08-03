@@ -78,6 +78,8 @@ public class DriverAdminCommandBinaryRenderer implements BinaryRenderer
         DriverEventCode.CMD_IN_REJECT_IMAGE.toEventCodeId()
     };
 
+    private final String newLine = String.format("%n");
+
     /**
      * Default constructor.
      */
@@ -359,14 +361,14 @@ public class DriverAdminCommandBinaryRenderer implements BinaryRenderer
             final int keyBufferLength = counterMsg.keyBufferLength();
             if (keyBufferLength > 0)
             {
-                sb.append(" keyBuffer=");
+                sb.append(" keyBuffer=").append(newLine);
                 appendPrettyHexDump(sb, buffer, offset + counterMsg.keyBufferOffset(), keyBufferLength);
             }
 
             final int labelBufferLength = counterMsg.labelBufferLength();
             if (labelBufferLength > 0)
             {
-                sb.append(" label=");
+                sb.append(" label=").append(newLine);
                 appendPrettyHexDump(sb, buffer, offset + counterMsg.labelBufferOffset(), labelBufferLength);
             }
         }
