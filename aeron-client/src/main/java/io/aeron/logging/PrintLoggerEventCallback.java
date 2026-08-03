@@ -26,6 +26,7 @@ import org.agrona.concurrent.SystemNanoClock;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.UncheckedIOException;
+import java.time.ZoneId;
 import java.util.ServiceLoader;
 
 import static io.aeron.CommonContext.EVENT_LOG_FILENAME_PROP_NAME;
@@ -33,6 +34,8 @@ import static io.aeron.CommonContext.EVENT_LOG_FILE_MAX_LENGTH;
 import static io.aeron.logging.CborUtils.ENUM_TAG;
 import static io.aeron.logging.CborUtils.IPV4_TAG;
 import static io.aeron.logging.CborUtils.IPV6_TAG;
+import static java.time.Instant.ofEpochMilli;
+import static java.time.ZonedDateTime.ofInstant;
 import static org.agrona.PrintBufferUtil.appendPrettyHexDump;
 import static org.agrona.PrintBufferUtil.byteToHexStringPadded;
 import static org.agrona.SystemUtil.parseSize;
@@ -61,7 +64,12 @@ public class PrintLoggerEventCallback implements LoggerEventCallback
 
     PrintLoggerEventCallback(final PrintStream out)
     {
-        this.writer = new StreamEventWriter(out);
+        this(out, SystemNanoClock.INSTANCE, SystemEpochClock.INSTANCE);
+    }
+
+    PrintLoggerEventCallback(final PrintStream out, final NanoClock nanoClock, final EpochClock epochClock)
+    {
+        this.writer = new StreamEventWriter(out, nanoClock, epochClock);
         this.loadBinaryRenderers();
     }
 
@@ -78,8 +86,21 @@ public class PrintLoggerEventCallback implements LoggerEventCallback
     {
         this.writer = null != filename ?
             new RollingFileEventWriter(filename, maxFileLength, nanoClock, epochClock) :
-            new StreamEventWriter(System.out);
+            new StreamEventWriter(System.out, nanoClock, epochClock);
         this.loadBinaryRenderers();
+    }
+
+    static void appendLogStartMessage(
+        final StringBuilder sb,
+        final long timestampNs,
+        final long timestampMs,
+        final ZoneId zone) throws IOException
+    {
+        sb.setLength(0);
+        LogUtil.appendTimestamp(sb, timestampNs);
+        sb.append("log started ")
+            .append(RollingFileEventWriter.DATE_TIME_FORMATTER.format(ofInstant(ofEpochMilli(timestampMs), zone)))
+            .append(NEW_LINE);
     }
 
     private void loadBinaryRenderers()

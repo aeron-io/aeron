@@ -15,17 +15,34 @@
  */
 package io.aeron.logging;
 
+import org.agrona.concurrent.EpochClock;
+import org.agrona.concurrent.NanoClock;
+
+import java.io.IOException;
 import java.io.PrintStream;
+import java.io.UncheckedIOException;
 
 import static io.aeron.logging.PrintLoggerEventCallback.endsWithNewLine;
+import static io.aeron.logging.PrintLoggerEventCallback.appendLogStartMessage;
+import static java.time.ZoneId.systemDefault;
 
 final class StreamEventWriter implements LoggerEventWriter
 {
     private final PrintStream out;
 
-    StreamEventWriter(final PrintStream out)
+    StreamEventWriter(final PrintStream out, final NanoClock nanoClock, final EpochClock epochClock)
     {
         this.out = out;
+        final StringBuilder tsBuilder = new StringBuilder();
+        try
+        {
+            appendLogStartMessage(tsBuilder, nanoClock.nanoTime(), epochClock.time(), systemDefault());
+            out.print(tsBuilder);
+        }
+        catch (final IOException e)
+        {
+            throw new UncheckedIOException(e);
+        }
     }
 
     public void write(final StringBuilder sb)

@@ -22,7 +22,6 @@ import org.junit.jupiter.api.Test;
 import static io.aeron.archive.codecs.ControlResponseCode.NULL_VAL;
 import static io.aeron.logging.EventConfiguration.MAX_EVENT_LENGTH;
 import static java.nio.charset.StandardCharsets.US_ASCII;
-import static org.agrona.PrintBufferUtil.prettyHexDump;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class ArchiveControlBinaryRendererTest

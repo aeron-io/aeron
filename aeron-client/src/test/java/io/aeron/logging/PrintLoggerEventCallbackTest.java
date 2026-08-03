@@ -421,7 +421,7 @@ class PrintLoggerEventCallbackTest
     {
         final CapturingPrintStream capturingPrintStream = new CapturingPrintStream();
         final PrintLoggerEventCallback printLoggerEventCallback = new PrintLoggerEventCallback(
-            capturingPrintStream.resetAndGetPrintStream());
+            capturingPrintStream.resetAndGetPrintStream(), fixedNanoClock, fixedEpochClock);
 
         final int typeCode = EventCodeType.DRIVER.getTypeCode();
         final int eventCode = 1234;
@@ -460,7 +460,7 @@ class PrintLoggerEventCallbackTest
         appendPrettyHexDump(sb, new UnsafeBuffer(value4));
         sb.append("\n");
 
-        assertEquals(sb.toString(), capturingPrintStream.flushAndGetContent());
+        assertEquals(expectedLogStartMessage() + sb, capturingPrintStream.flushAndGetContent());
     }
 
     @Test
@@ -468,7 +468,7 @@ class PrintLoggerEventCallbackTest
     {
         final CapturingPrintStream capturingPrintStream = new CapturingPrintStream();
         final PrintLoggerEventCallback printLoggerEventCallback = new PrintLoggerEventCallback(
-            capturingPrintStream.resetAndGetPrintStream());
+            capturingPrintStream.resetAndGetPrintStream(), fixedNanoClock, fixedEpochClock);
 
         final int typeCode = EventCodeType.DRIVER.getTypeCode();
         final int eventCode = 1234;
@@ -501,6 +501,6 @@ class PrintLoggerEventCallbackTest
         sb.append(key2).append("=").append("[fe80::54d3:4122:e738:a862]");
         sb.append("\n");
 
-        assertEquals(sb.toString(), capturingPrintStream.flushAndGetContent());
+        assertEquals(expectedLogStartMessage() + sb, capturingPrintStream.flushAndGetContent());
     }
 }

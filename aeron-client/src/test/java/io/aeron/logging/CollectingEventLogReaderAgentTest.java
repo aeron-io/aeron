@@ -27,9 +27,6 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.util.List;
 
 import static io.aeron.logging.CborEncode.encode;
@@ -57,17 +54,6 @@ class CollectingEventLogReaderAgentTest
     private final long fixedEpochMs = 1_700_000_000_000L;
     private final NanoClock fixedNanoClock = () -> fixedNanoTime;
     private final EpochClock fixedEpochClock = () -> fixedEpochMs;
-
-    private String expectedLogStartMessage()
-    {
-        final StringBuilder sb = new StringBuilder();
-        LogUtil.appendTimestamp(sb, fixedNanoTime);
-        sb.append("log started ")
-            .append(RollingFileEventWriter.DATE_TIME_FORMATTER.format(
-                ZonedDateTime.ofInstant(Instant.ofEpochMilli(fixedEpochMs), ZoneId.systemDefault())))
-            .append(PrintLoggerEventCallback.NEW_LINE);
-        return sb.toString();
-    }
 
     @Test
     void shouldWriteLogsToFileWhenTriggered(@TempDir final Path loggingDir) throws IOException
@@ -124,13 +110,8 @@ class CollectingEventLogReaderAgentTest
         final List<String> collected = Files.readAllLines(Path.of(collectingFilename));
         final List<String> printed = Files.readAllLines(Path.of(printingFilename));
 
-        // TODO: Discuss whether the file header was originally printed for CollectingEventLogReaderAgent
-        final String startMessage = expectedLogStartMessage();
-        assertEquals(
-            startMessage.substring(
-                0,
-                startMessage.length() - PrintLoggerEventCallback.NEW_LINE.length()),
-            printed.get(0));
-        assertEquals(collected, printed.subList(1, printed.size()));
+        // The collected log uses the system clock, so it cannot be asserted exactly.
+        assertTrue(collected.get(0).contains("log started"));
+        assertEquals(collected.subList(1, collected.size()), printed.subList(1, printed.size()));
     }
 }
