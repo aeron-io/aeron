@@ -19,20 +19,42 @@ import io.aeron.driver.logging.DriverEventCode;
 import io.aeron.protocol.DataHeaderFlyweight;
 import io.aeron.protocol.HeaderFlyweight;
 import io.aeron.test.CapturingPrintStream;
+import org.agrona.concurrent.EpochClock;
+import org.agrona.concurrent.NanoClock;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.Test;
+
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 
 import static io.aeron.logging.CborUtils.NO_TAG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class PrintLoggerEventCallbackTest
 {
+    private final long fixedNanoTime = 123_456_789_987_654_321L;
+    private final long fixedEpochMs = 1_700_000_000_000L;
+    private final NanoClock fixedNanoClock = () -> fixedNanoTime;
+    private final EpochClock fixedEpochClock = () -> fixedEpochMs;
+
+    private String expectedLogStartMessage()
+    {
+        final StringBuilder sb = new StringBuilder();
+        LogUtil.appendTimestamp(sb, fixedNanoTime);
+        sb.append("log started ")
+            .append(RollingFileEventWriter.DATE_TIME_FORMATTER.format(
+                ZonedDateTime.ofInstant(Instant.ofEpochMilli(fixedEpochMs), ZoneId.systemDefault())))
+            .append(PrintLoggerEventCallback.NEW_LINE);
+        return sb.toString();
+    }
+
     @Test
     void shouldRenderProtocolFrameUsingDriverBinaryRenderer()
     {
         final CapturingPrintStream capturingPrintStream = new CapturingPrintStream();
         final PrintLoggerEventCallback printLoggerEventCallback = new PrintLoggerEventCallback(
-            capturingPrintStream.resetAndGetPrintStream());
+            capturingPrintStream.resetAndGetPrintStream(), fixedNanoClock, fixedEpochClock);
 
         final int typeCode = EventCodeType.DRIVER.getTypeCode();
         final int eventCode = DriverEventCode.FRAME_IN.toEventCodeId();
@@ -63,6 +85,6 @@ class PrintLoggerEventCallbackTest
         sb.append("type=DATA flags=00010111 frameLength=77 sessionId=12 streamId=51 termId=6 termOffset=444");
         sb.append("\n");
 
-        assertEquals(sb.toString(), capturingPrintStream.flushAndGetContent());
+        assertEquals(expectedLogStartMessage() + sb, capturingPrintStream.flushAndGetContent());
     }
 }

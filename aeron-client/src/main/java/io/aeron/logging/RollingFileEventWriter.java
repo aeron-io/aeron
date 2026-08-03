@@ -26,18 +26,16 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 
 import static io.aeron.logging.PrintLoggerEventCallback.NEW_LINE;
 import static io.aeron.logging.PrintLoggerEventCallback.endsWithNewLine;
+import static io.aeron.logging.PrintLoggerEventCallback.appendLogStartMessage;
 import static java.nio.channels.FileChannel.open;
 import static java.nio.file.StandardOpenOption.APPEND;
 import static java.nio.file.StandardOpenOption.CREATE;
 import static java.nio.file.StandardOpenOption.CREATE_NEW;
 import static java.nio.file.StandardOpenOption.WRITE;
-import static java.time.Instant.ofEpochMilli;
-import static java.time.ZonedDateTime.ofInstant;
 import static java.time.ZoneId.systemDefault;
 import static java.time.format.DateTimeFormatter.ofPattern;
 
@@ -72,22 +70,12 @@ final class RollingFileEventWriter implements LoggerEventWriter
         try
         {
             this.fileChannel = open(this.logFilePath, CREATE, WRITE, APPEND);
-            this.writeLogFileStartMessage(nanoClock.nanoTime(), epochClock.time(), systemDefault());
+            writeLogFileHeader();
         }
         catch (final IOException e)
         {
             throw new UncheckedIOException(e);
         }
-    }
-
-    void writeLogFileStartMessage(final long timestampNs, final long timestampMs, final ZoneId zone) throws IOException
-    {
-        tsBuilder.setLength(0);
-        LogUtil.appendTimestamp(tsBuilder, timestampNs);
-        tsBuilder.append("log started ")
-            .append(DATE_TIME_FORMATTER.format(ofInstant(ofEpochMilli(timestampMs), zone)))
-            .append(NEW_LINE);
-        fileChannel.write(ByteBuffer.wrap(tsBuilder.toString().getBytes()));
     }
 
     public void write(final StringBuilder sb) throws IOException
@@ -111,7 +99,17 @@ final class RollingFileEventWriter implements LoggerEventWriter
             Files.move(logFilePath, rolledFilePath);
             // Re-open the log file (that was previously moved)
             fileChannel = open(logFilePath, CREATE_NEW, WRITE, APPEND);
-            writeLogFileStartMessage(nanoClock.nanoTime(), epochClock.time(), systemDefault());
+            writeLogFileHeader();
         }
+    }
+
+    private void writeLogFileHeader() throws IOException
+    {
+        appendLogStartMessage(
+            tsBuilder,
+            nanoClock.nanoTime(),
+            epochClock.time(),
+            systemDefault());
+        fileChannel.write(ByteBuffer.wrap(tsBuilder.toString().getBytes()));
     }
 }

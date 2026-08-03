@@ -19,8 +19,6 @@ import io.aeron.archive.codecs.*;
 import io.aeron.logging.BinaryRenderer;
 import org.agrona.DirectBuffer;
 
-import static org.agrona.PrintBufferUtil.appendPrettyHexDump;
-
 /**
  * Binary renderer for the Archive admin commands.
  */

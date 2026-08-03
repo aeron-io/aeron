@@ -319,7 +319,7 @@ class DriverAdminCommandBinaryRendererTest
 
         final String expected = String.format(
             "typeId=3 keyBufferOffset=%d keyBufferLength=%d labelBufferOffset=%d labelBufferLength=%d clientId=%d " +
-            "correlationId=42 keyBuffer=%n%s" +  " label=%n%s",
+            "correlationId=42 keyBuffer=%n%s" + " label=%n%s",
             flyweight.keyBufferOffset(),
             keyBytes.length,
             flyweight.labelBufferOffset(),
