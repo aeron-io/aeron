@@ -124,103 +124,92 @@ public class DriverAdminCommandBinaryRenderer implements BinaryRenderer
 
         switch (code)
         {
-            case CMD_IN_ADD_PUBLICATION, CMD_IN_ADD_EXCLUSIVE_PUBLICATION ->
-            {
+            case CMD_IN_ADD_PUBLICATION:
+            case CMD_IN_ADD_EXCLUSIVE_PUBLICATION:
                 pubMsg.wrap(mutableBuffer, offset);
                 renderPublication(sb);
-            }
-            case CMD_IN_ADD_SUBSCRIPTION ->
-            {
+                break;
+            case CMD_IN_ADD_SUBSCRIPTION:
                 subMsg.wrap(mutableBuffer, offset);
                 renderSubscription(sb);
-            }
-            case CMD_IN_REMOVE_PUBLICATION ->
-            {
+                break;
+            case CMD_IN_REMOVE_PUBLICATION:
                 removePublication.wrap(mutableBuffer, offset);
                 renderRemovePublicationEvent(sb, length);
-            }
-            case CMD_IN_REMOVE_SUBSCRIPTION ->
-            {
+                break;
+            case CMD_IN_REMOVE_SUBSCRIPTION:
                 removeSubscription.wrap(mutableBuffer, offset);
                 renderRemoveSubscriptionEvent(sb);
-            }
-            case CMD_IN_REMOVE_COUNTER ->
-            {
+                break;
+            case CMD_IN_REMOVE_COUNTER:
                 removeCounter.wrap(mutableBuffer, offset);
                 renderRemoveCounterEvent(sb);
-            }
-            case CMD_OUT_PUBLICATION_READY, CMD_OUT_EXCLUSIVE_PUBLICATION_READY ->
-            {
+                break;
+            case CMD_OUT_PUBLICATION_READY:
+            case CMD_OUT_EXCLUSIVE_PUBLICATION_READY:
                 pubReady.wrap(mutableBuffer, offset);
                 renderPublicationReady(sb);
-            }
-            case CMD_OUT_AVAILABLE_IMAGE ->
-            {
+                break;
+            case CMD_OUT_AVAILABLE_IMAGE:
                 imageReady.wrap(mutableBuffer, offset);
                 renderImageReady(sb);
-            }
-            case CMD_OUT_ON_OPERATION_SUCCESS ->
-            {
+                break;
+            case CMD_OUT_ON_OPERATION_SUCCESS:
                 operationSucceeded.wrap(mutableBuffer, offset);
                 renderOperationSuccess(sb);
-            }
-            case CMD_IN_KEEPALIVE_CLIENT, CMD_IN_CLIENT_CLOSE ->
-            {
+                break;
+            case CMD_IN_KEEPALIVE_CLIENT:
+            case CMD_IN_CLIENT_CLOSE:
                 correlatedMsg.wrap(mutableBuffer, offset);
                 renderCorrelationEvent(sb);
-            }
-            case CMD_OUT_ON_UNAVAILABLE_IMAGE ->
-            {
+                break;
+            case CMD_OUT_ON_UNAVAILABLE_IMAGE:
                 imageMsg.wrap(mutableBuffer, offset);
                 renderImage(sb);
-            }
-            case CMD_IN_ADD_DESTINATION, CMD_IN_REMOVE_DESTINATION, CMD_IN_ADD_RCV_DESTINATION,
-                 CMD_IN_REMOVE_RCV_DESTINATION ->
-            {
+                break;
+            case CMD_IN_ADD_DESTINATION:
+            case CMD_IN_REMOVE_DESTINATION:
+            case CMD_IN_ADD_RCV_DESTINATION:
+            case CMD_IN_REMOVE_RCV_DESTINATION:
                 destinationMsg.wrap(mutableBuffer, offset);
                 renderDestination(sb);
-            }
-            case CMD_OUT_ERROR ->
-            {
+                break;
+            case CMD_OUT_ERROR:
                 errorMsg.wrap(mutableBuffer, offset);
                 renderError(sb);
-            }
-            case CMD_IN_ADD_COUNTER ->
-            {
+                break;
+            case CMD_IN_ADD_COUNTER:
                 counterMsg.wrap(mutableBuffer, offset);
                 renderCounter(sb, buffer, offset);
-            }
-            case CMD_OUT_SUBSCRIPTION_READY ->
-            {
+                break;
+            case CMD_OUT_SUBSCRIPTION_READY:
                 subscriptionReady.wrap(mutableBuffer, offset);
                 renderSubscriptionReady(sb);
-            }
-            case CMD_OUT_COUNTER_READY, CMD_OUT_ON_UNAVAILABLE_COUNTER ->
-            {
+                break;
+            case CMD_OUT_COUNTER_READY:
+            case CMD_OUT_ON_UNAVAILABLE_COUNTER:
                 counterUpdate.wrap(mutableBuffer, offset);
                 renderCounterUpdate(sb);
-            }
-            case CMD_OUT_ON_CLIENT_TIMEOUT ->
-            {
+                break;
+            case CMD_OUT_ON_CLIENT_TIMEOUT:
                 clientTimeout.wrap(mutableBuffer, offset);
                 renderClientTimeout(sb);
-            }
-            case CMD_IN_TERMINATE_DRIVER ->
-            {
+                break;
+            case CMD_IN_TERMINATE_DRIVER:
                 terminateDriver.wrap(mutableBuffer, offset);
                 renderTerminateDriver(sb, buffer, offset);
-            }
-            case CMD_IN_REMOVE_DESTINATION_BY_ID ->
-            {
+                break;
+            case CMD_IN_REMOVE_DESTINATION_BY_ID:
                 destinationById.wrap(mutableBuffer, offset);
                 renderDestinationById(sb);
-            }
-            case CMD_IN_REJECT_IMAGE ->
-            {
+                break;
+            case CMD_IN_REJECT_IMAGE:
                 rejectImage.wrap(mutableBuffer, offset);
                 renderRejectImage(sb);
-            }
-            default -> sb.append("COMMAND_UNKNOWN: ").append(code);
+                break;
+            default:
+                sb.append("COMMAND_UNKNOWN: ").append(code);
+                break;
         }
     }
 
