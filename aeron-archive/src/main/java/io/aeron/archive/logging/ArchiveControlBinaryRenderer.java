@@ -87,9 +87,7 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
     private final RecordingSignalEventDecoder recordingSignalEventDecoder = new RecordingSignalEventDecoder();
     private final MessageHeaderDecoder headerDecoder = new MessageHeaderDecoder();
 
-    private final boolean renderExtraBytes;
-
-    private static final int[] MSG_TYPE_ID = {
+    private static final int[] MSG_TYPE_IDS = {
         ArchiveEventCode.CMD_IN_CONNECT.toEventCodeId(),
         ArchiveEventCode.CMD_IN_CLOSE_SESSION.toEventCodeId(),
         ArchiveEventCode.CMD_IN_START_RECORDING.toEventCodeId(),
@@ -135,17 +133,6 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
      */
     public ArchiveControlBinaryRenderer()
     {
-        this(BinaryRenderer.RENDER_EXTRA_CONTENT);
-    }
-
-    /**
-     * Constructor allowing explicit control of raw byte rendering.
-     *
-     * @param renderExtraBytes whether to render raw bytes of otherwise unlogged fields as a pretty hex/ASCII dump.
-     */
-    public ArchiveControlBinaryRenderer(final boolean renderExtraBytes)
-    {
-        this.renderExtraBytes = renderExtraBytes;
     }
 
     /**
@@ -154,7 +141,7 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
     @Override
     public int[] supportingMsgTypeIds()
     {
-        return MSG_TYPE_ID;
+        return MSG_TYPE_IDS;
     }
 
     /**
@@ -473,12 +460,6 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
         sb.append(" encodedCredentialsLength=").append(credentialsLength);
 
         authConnectRequestDecoder.skipEncodedCredentials();
-
-        if (renderExtraBytes && credentialsLength > 0)
-        {
-            sb.append(" encodedCredentials=");
-            appendPrettyHexDump(sb, authConnectRequestDecoder.buffer(), credentialsOffset, credentialsLength);
-        }
 
         sb.append(" clientInfo=").append(authConnectRequestDecoder.clientInfo());
     }

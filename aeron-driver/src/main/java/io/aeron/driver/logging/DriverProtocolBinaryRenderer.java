@@ -56,6 +56,8 @@ public class DriverProtocolBinaryRenderer implements BinaryRenderer
         DriverEventCode.FRAME_OUT.toEventCodeId()
     };
 
+    private final String newLine = String.format("%n");
+
     /**
      * Default constructor.
      */
@@ -177,7 +179,7 @@ public class DriverProtocolBinaryRenderer implements BinaryRenderer
 
             if (payloadLength > 0)
             {
-                sb.append(" payload=");
+                sb.append(" payload=").append(newLine);
                 appendPrettyHexDump(sb, buffer, payloadOffset, payloadLength);
             }
         }
