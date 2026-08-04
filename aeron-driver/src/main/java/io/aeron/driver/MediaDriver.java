@@ -847,11 +847,11 @@ public final class MediaDriver implements AutoCloseable
 
                 final long cncFileLength = BitUtil.align(
                     (long)META_DATA_LENGTH +
-                        conductorBufferLength +
-                        toClientsBufferLength +
-                        countersMetadataBufferLength(counterValuesBufferLength) +
-                        counterValuesBufferLength +
-                        errorBufferLength,
+                    conductorBufferLength +
+                    toClientsBufferLength +
+                    countersMetadataBufferLength(counterValuesBufferLength) +
+                    counterValuesBufferLength +
+                    errorBufferLength,
                     filePageSize);
                 validateValueRange(cncFileLength, 0, Integer.MAX_VALUE, "CnC file length");
                 cncByteBuffer = mapNewFile(cncFile(), cncFileLength);
@@ -4345,7 +4345,7 @@ public final class MediaDriver implements AutoCloseable
                     {
                         throw new IllegalArgumentException(
                             "applicationSpecificFeedback length must be equal to " + SIZE_OF_LONG +
-                                " bytes: length=" + applicationSpecificFeedback.length);
+                            " bytes: length=" + applicationSpecificFeedback.length);
                     }
 
                     final UnsafeBuffer buffer = new UnsafeBuffer(applicationSpecificFeedback);
