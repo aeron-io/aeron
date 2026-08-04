@@ -38,6 +38,7 @@ import java.util.function.BooleanSupplier;
 
 import static io.aeron.Aeron.NULL_VALUE;
 import static io.aeron.archive.client.ArchiveException.AUTHENTICATION_REJECTED;
+import static io.aeron.archive.client.ArchiveException.GENERIC;
 import static io.aeron.archive.codecs.ControlResponseCode.ERROR;
 import static io.aeron.archive.codecs.ControlResponseCode.OK;
 import static io.aeron.archive.codecs.ControlResponseCode.RECORDING_UNKNOWN;
@@ -689,7 +690,7 @@ final class ControlSession implements Session
 
     void sendErrorResponse(final long correlationId, final String errorMessage)
     {
-        sendResponse(correlationId, 0L, ERROR, errorMessage);
+        sendResponse(correlationId, GENERIC, ERROR, errorMessage);
     }
 
     void sendErrorResponse(
