@@ -1170,7 +1170,7 @@ public class CommonContext implements Cloneable
         else
         {
             out.println();
-            out.println("O distinct errors observed");
+            out.println("0 distinct errors observed");
         }
 
         return distinctErrorCount;
