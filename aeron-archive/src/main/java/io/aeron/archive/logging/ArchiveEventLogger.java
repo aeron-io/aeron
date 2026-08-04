@@ -317,4 +317,15 @@ public interface ArchiveEventLogger
     default void logCatalogResize(final long oldCatalogLength, final long newCatalogLength)
     {
     }
+
+    /**
+     * Log starting the archive.
+     *
+     * @param version   of the archive.
+     */
+    @LoggerMethod(eventCode = "START")
+    default void logStart(final String version)
+    {
+
+    }
 }

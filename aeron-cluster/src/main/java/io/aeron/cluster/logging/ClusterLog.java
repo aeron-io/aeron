@@ -90,6 +90,7 @@ public final class ClusterLog
     static final boolean LOG_VOTE_ENABLED = isEnabled(ClusterEventCode.VOTE);
     static final boolean LOG_SNAPSHOT_ENTRY_INVALIDATION_ENABLED =
         isEnabled(ClusterEventCode.SNAPSHOT_ENTRY_INVALIDATION);
+    static final boolean LOG_START = !ENABLED_EVENT_CODES.isEmpty();
 
     private ClusterLog()
     {
@@ -788,5 +789,20 @@ public final class ClusterLog
 
         ClusterEventLogger.LOGGER.logSnapshotEntryInvalidation(
             memberId, entryIndex, recordingId, logPosition, serviceId);
+    }
+
+    /**
+     * Log cluster start.
+     *
+     * @param version   of the cluster.
+     */
+    public static void logStart(final String version)
+    {
+        if (!LOG_START)
+        {
+            return;
+        }
+
+        ClusterEventLogger.LOGGER.logStart(version);
     }
 }

@@ -83,6 +83,7 @@ public final class ArchiveLog
         isEnabled(ArchiveEventCode.PERSISTENT_SUBSCRIPTION_JOINED_LIVE);
     private static final boolean LOG_PERSISTENT_SUBSCRIPTION_LEFT_LIVE_ENABLED =
         isEnabled(ArchiveEventCode.PERSISTENT_SUBSCRIPTION_LEFT_LIVE);
+    private static final boolean LOG_START = !ENABLED_EVENT_CODES.isEmpty();
 
     private ArchiveLog()
     {
@@ -427,5 +428,20 @@ public final class ArchiveLog
 
         ArchiveEventLogger.LOGGER.logPersistentSubscriptionLeftLive(
             recordingId, replayChannel, replayStreamId, liveChannel, liveStreamId, livePosition);
+    }
+
+    /**
+     * Log the archive start.
+     *
+     * @param version   of the archive.
+     */
+    public static void logStart(final String version)
+    {
+        if (!LOG_START)
+        {
+            return;
+        }
+
+        ArchiveEventLogger.LOGGER.logStart(version);
     }
 }

@@ -231,14 +231,17 @@ public enum DriverEventCode implements EventCode
     /**
      * Publication revoked.
      */
-    PUBLICATION_REVOKE(59
-    ),
+    PUBLICATION_REVOKE(59),
 
     /**
      * Publication Image revoked.
      */
-    PUBLICATION_IMAGE_REVOKE(60
-    );
+    PUBLICATION_IMAGE_REVOKE(60),
+
+    /**
+     * The driver starts.
+     */
+    START(61);
 
     static final int EVENT_CODE_TYPE = EventCodeType.DRIVER.getTypeCode();
 
