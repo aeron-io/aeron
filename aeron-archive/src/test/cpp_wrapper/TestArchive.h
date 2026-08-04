@@ -56,7 +56,6 @@ public:
                 "--add-opens",
                 "java.base/java.util.zip=ALL-UNNAMED",
 #if ENABLE_AGENT_DEBUG_LOGGING
-                m_aeronAgentJar.c_str(),
                 "-Daeron.event.log=admin",
                 "-Daeron.event.archive.log=all",
 #endif
@@ -185,7 +184,6 @@ public:
 private:
     const std::string m_java = JAVA_EXECUTABLE;
     const std::string m_aeronAllJar = AERON_ALL_JAR;
-    const std::string m_aeronAgentJar = "-javaagent:" AERON_AGENT_JAR;
     const std::string m_archiveDir;
     const std::string m_aeronDir;
     std::ostream &m_stream;

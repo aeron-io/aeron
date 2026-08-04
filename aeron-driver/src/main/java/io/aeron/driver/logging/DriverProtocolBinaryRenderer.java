@@ -63,7 +63,7 @@ public class DriverProtocolBinaryRenderer implements BinaryRenderer
      */
     public DriverProtocolBinaryRenderer()
     {
-        this(RENDER_EXTRA_CONTENT);
+        this(RENDER_DATA_CONTENT);
     }
 
     /**

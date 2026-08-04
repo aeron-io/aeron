@@ -26,7 +26,7 @@ public interface BinaryRenderer
     /**
      * Whether {@link BinaryRenderer} implementations should render extra bytes as a pretty hex/ASCII dump.
      */
-    boolean RENDER_EXTRA_CONTENT = Boolean.getBoolean(CommonContext.EVENT_LOG_RENDER_EXTRA_BYTES_PROP_NAME);
+    boolean RENDER_DATA_CONTENT = Boolean.getBoolean(CommonContext.EVENT_LOG_RENDER_DATA_PROP_NAME);
 
     /**
      * {@return the message type ids that this renderer supports}

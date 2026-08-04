@@ -372,7 +372,6 @@ if (BUILD_AERON_ARCHIVE_API)
     add_subdirectory(${AERON_ARCHIVE_WRAPPER_SOURCE_PATH})
     add_subdirectory(${AERON_C_ARCHIVE_SOURCE_PATH})
     set(AERON_ALL_JAR "${CMAKE_CURRENT_SOURCE_DIR}/aeron-all/build/libs/aeron-all-${AERON_VERSION_TXT}.jar")
-    set(AERON_AGENT_JAR "${CMAKE_CURRENT_SOURCE_DIR}/aeron-agent/build/libs/aeron-agent-${AERON_VERSION_TXT}.jar")
 
     file(GLOB_RECURSE AERON_ALL_SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}}/aeron-archive/src/main/java/*.java")
