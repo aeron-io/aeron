@@ -16,7 +16,6 @@
 package io.aeron.driver;
 
 import io.aeron.ChannelUri;
-import io.aeron.CommonContext;
 import io.aeron.driver.MediaDriver.Context;
 import io.aeron.driver.buffer.RawLog;
 import io.aeron.driver.exceptions.InvalidChannelException;
@@ -96,6 +95,7 @@ import static io.aeron.CommonContext.RECEIVER_WINDOW_LENGTH_PARAM_NAME;
 import static io.aeron.CommonContext.RESPONSE_CORRELATION_ID_PARAM_NAME;
 import static io.aeron.CommonContext.SOCKET_RCVBUF_PARAM_NAME;
 import static io.aeron.CommonContext.SOCKET_SNDBUF_PARAM_NAME;
+import static io.aeron.CommonContext.threadName;
 import static io.aeron.ErrorCode.GENERIC_ERROR;
 import static io.aeron.ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE;
 import static io.aeron.ErrorCode.UNKNOWN_COUNTER;
@@ -214,6 +214,7 @@ public final class DriverConductor implements Agent
     private final DataHeaderFlyweight defaultDataHeader = new DataHeaderFlyweight(createDefaultHeader(0, 0, 0));
     private ClientCommand clientCommand;
     private Command driverCommand;
+    private String roleName;
 
     DriverConductor(final Context ctx)
     {
@@ -240,6 +241,8 @@ public final class DriverConductor implements Agent
         clientCommandAdapter = new ClientCommandAdapter(ctx.countedErrorHandler(), toDriverCommands, clientProxy, this);
 
         lastCommandConsumerPosition = toDriverCommands.consumerPosition();
+        roleName = threadName(AERON_DRIVER_CONDUCTOR_THREAD_NAME, AERON_DRIVER_CONDUCTOR_THREAD_NAME_CLASSIC);
+
     }
 
     /**
@@ -291,7 +294,7 @@ public final class DriverConductor implements Agent
     @Override
     public String roleName()
     {
-        return CommonContext.threadName(AERON_DRIVER_CONDUCTOR_THREAD_NAME, AERON_DRIVER_CONDUCTOR_THREAD_NAME_CLASSIC);
+        return roleName;
     }
 
     /**

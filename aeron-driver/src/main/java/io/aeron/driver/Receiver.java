@@ -15,7 +15,6 @@
  */
 package io.aeron.driver;
 
-import io.aeron.CommonContext;
 import io.aeron.driver.media.DataTransportPoller;
 import io.aeron.driver.media.ReceiveChannelEndpoint;
 import io.aeron.driver.media.ReceiveDestinationTransport;
@@ -31,6 +30,7 @@ import org.agrona.concurrent.status.AtomicCounter;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 
+import static io.aeron.CommonContext.threadName;
 import static io.aeron.driver.Configuration.PENDING_SETUPS_TIMEOUT_NS;
 import static io.aeron.driver.DataPacketDispatcher.SessionState.INIT_IN_PROGRESS;
 import static io.aeron.driver.DataPacketDispatcher.SessionState.ON_COOL_DOWN;
@@ -59,6 +59,7 @@ public final class Receiver implements Agent
     private final ArrayList<PendingSetupMessageFromSource> pendingSetupMessages = new ArrayList<>();
     private final DriverConductorProxy conductorProxy;
     private final DutyCycleTracker dutyCycleTracker;
+    private final String roleName;
 
     Receiver(final MediaDriver.Context ctx)
     {
@@ -71,6 +72,7 @@ public final class Receiver implements Agent
         conductorProxy = ctx.driverConductorProxy();
         reResolutionCheckIntervalNs = ctx.reResolutionCheckIntervalNs();
         dutyCycleTracker = ctx.receiverDutyCycleTracker();
+        roleName = threadName(AERON_DRIVER_RECEIVER_THREAD_NAME, AERON_DRIVER_RECEIVER_THREAD_NAME_CLASSIC);
     }
 
     /**
@@ -100,7 +102,7 @@ public final class Receiver implements Agent
     @Override
     public String roleName()
     {
-        return CommonContext.threadName(AERON_DRIVER_RECEIVER_THREAD_NAME, AERON_DRIVER_RECEIVER_THREAD_NAME_CLASSIC);
+        return roleName;
     }
 
     /**
