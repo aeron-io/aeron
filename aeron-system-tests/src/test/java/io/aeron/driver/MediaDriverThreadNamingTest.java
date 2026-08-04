@@ -128,6 +128,7 @@ public class MediaDriverThreadNamingTest
         final String threadNamingMode,
         final String[] expectedThreadNames)
     {
+        TestMediaDriver.notSupportedOnCMediaDriver("the test uses JMX to check the thread names");
         System.setProperty(THREAD_NAMING_MODE_PROP_NAME, threadNamingMode);
         try
         {
