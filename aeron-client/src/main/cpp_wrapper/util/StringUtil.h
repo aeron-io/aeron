@@ -90,7 +90,7 @@ valueType parse(const std::string &input)
 
     if (stream.fail() || !stream.eof())
     {
-        throw ParseException(std::string("failed to parse: ") + input, SOURCEINFO);
+        throw ParseException(std::string("failed to parse: ") + input, SOURCEINFO, EINVAL);
     }
 
     return value;

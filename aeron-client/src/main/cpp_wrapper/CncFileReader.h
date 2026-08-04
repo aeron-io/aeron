@@ -37,7 +37,8 @@ public:
         aeron_cnc_t *aeron_cnc;
         if (aeron_cnc_init(&aeron_cnc, baseDirectory, 10000) < 0)
         {
-            throw IOException(std::string("failed to open existing file cnc file in: ") + baseDirectory, SOURCEINFO);
+            throw IOException(
+                std::string("failed to open existing file cnc file in: ") + baseDirectory, SOURCEINFO, EINVAL);
         }
 
         return { aeron_cnc };

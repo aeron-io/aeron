@@ -17,6 +17,7 @@
 #define AERON_ARCHIVE_WRAPPER_UTIL_EXCEPTIONS_H
 
 #include "util/Exceptions.h"
+#include "aeronc.h"
 
 namespace aeron { namespace util
 {

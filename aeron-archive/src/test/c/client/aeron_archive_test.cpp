@@ -4619,7 +4619,7 @@ TEST_F(AeronCArchiveTest, shouldExitOnEmptyRecording)
         replay_stream_id,
         &replay_params));
 
-    ASSERT_EQ(-AERON_ERROR_CODE_GENERIC_ERROR, aeron_errcode());
+    ASSERT_EQ(-ARCHIVE_ERROR_CODE_EMPTY_RECORDING, aeron_errcode());
 }
 
 
@@ -4737,7 +4737,7 @@ TEST_F(AeronCArchiveTest, shouldExitOnEmptyLiveRecording)
         replay_stream_id,
         &replay_params));
 
-    ASSERT_EQ(-AERON_ERROR_CODE_GENERIC_ERROR, aeron_errcode());
+    ASSERT_EQ(-ARCHIVE_ERROR_CODE_EMPTY_RECORDING, aeron_errcode());
 
     ASSERT_EQ_ERR(0, aeron_publication_close(publication, nullptr, nullptr));
 }

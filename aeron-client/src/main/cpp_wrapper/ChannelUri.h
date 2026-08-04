@@ -117,7 +117,7 @@ public:
     {
         if (media != IPC_MEDIA && media != UDP_MEDIA)
         {
-            throw IllegalArgumentException("unknown media: " + media, SOURCEINFO);
+            throw IllegalArgumentException("unknown media: " + media, SOURCEINFO, EINVAL);
         }
         m_media = media;
         return *this;
@@ -236,7 +236,7 @@ public:
 
         if (!startsWith(uri, position, AERON_PREFIX))
         {
-            throw IllegalArgumentException("Aeron URIs must start with 'aeron:', found: " + uri, SOURCEINFO);
+            throw IllegalArgumentException("Aeron URIs must start with 'aeron:', found: " + uri, SOURCEINFO, EINVAL);
         }
         else
         {
@@ -270,7 +270,7 @@ public:
                         case '=':
                             throw IllegalStateException(
                                 "encountered '" + std::to_string(c) + "' within media definition at index " +
-                                    std::to_string(i) + " in " + uri, SOURCEINFO);
+                                    std::to_string(i) + " in " + uri, SOURCEINFO, EINVAL);
 
                         default:
                             builder += c;
@@ -283,7 +283,7 @@ public:
                         if (0 == builder.length())
                         {
                             throw IllegalStateException(
-                                "empty key not allowed at index " + std::to_string(i) + " in " + uri, SOURCEINFO);
+                                "empty key not allowed at index " + std::to_string(i) + " in " + uri, SOURCEINFO, EINVAL);
 
                         }
                         key = builder;
@@ -295,7 +295,7 @@ public:
                         if (c == '|')
                         {
                             throw IllegalStateException(
-                                "invalid end of key at index " + std::to_string(i) + " in " + uri, SOURCEINFO);
+                                "invalid end of key at index " + std::to_string(i) + " in " + uri, SOURCEINFO, EINVAL);
                         }
 
                         builder += c;
@@ -323,7 +323,7 @@ public:
                 media = builder;
                 if (media != IPC_MEDIA && media != UDP_MEDIA)
                 {
-                    throw IllegalArgumentException("unknown media: " + media, SOURCEINFO);
+                    throw IllegalArgumentException("unknown media: " + media, SOURCEINFO, EINVAL);
                 }
                 break;
 
@@ -332,7 +332,7 @@ public:
                 break;
 
             default:
-                throw IllegalArgumentException("no more input found, state=" + std::to_string(state), SOURCEINFO);
+                throw IllegalArgumentException("no more input found, state=" + std::to_string(state), SOURCEINFO, EINVAL);
         }
 
         return std::make_shared<ChannelUri>(prefix, media, std::move(params));

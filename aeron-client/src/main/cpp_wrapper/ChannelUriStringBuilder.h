@@ -82,7 +82,7 @@ public:
     {
         if (!prefix.empty() && prefix != SPY_QUALIFIER)
         {
-            throw IllegalArgumentException("invalid prefix: " + prefix, SOURCEINFO);
+            throw IllegalArgumentException("invalid prefix: " + prefix, SOURCEINFO, EINVAL);
         }
 
         m_prefix.reset(new std::string(prefix));
@@ -99,7 +99,7 @@ public:
     {
         if (media != UDP_MEDIA && media != IPC_MEDIA)
         {
-            throw IllegalArgumentException("invalid media: " + media, SOURCEINFO);
+            throw IllegalArgumentException("invalid media: " + media, SOURCEINFO, EINVAL);
         }
 
         m_media.reset(new std::string(media));
@@ -130,7 +130,7 @@ public:
             controlMode != MDC_CONTROL_MODE_DYNAMIC &&
             controlMode != CONTROL_MODE_RESPONSE)
         {
-            throw IllegalArgumentException("invalid control mode: " + controlMode, SOURCEINFO);
+            throw IllegalArgumentException("invalid control mode: " + controlMode, SOURCEINFO, EINVAL);
         }
 
         m_controlMode.reset(new std::string(controlMode));
@@ -189,13 +189,13 @@ public:
     {
         if (mtu < 32 || mtu > 65504)
         {
-            throw IllegalArgumentException("MTU not in range 32-65504: " + std::to_string(mtu), SOURCEINFO);
+            throw IllegalArgumentException("MTU not in range 32-65504: " + std::to_string(mtu), SOURCEINFO, EINVAL);
         }
 
         if (0 != (mtu & static_cast<std::uint32_t>(concurrent::logbuffer::FrameDescriptor::FRAME_ALIGNMENT - 1)))
         {
             throw IllegalArgumentException(
-                "MTU not a multiple of FRAME_ALIGNMENT: mtu=" + std::to_string(mtu), SOURCEINFO);
+                "MTU not a multiple of FRAME_ALIGNMENT: mtu=" + std::to_string(mtu), SOURCEINFO, EINVAL);
         }
 
         m_mtu.reset(new Value(mtu));
@@ -225,13 +225,13 @@ public:
     {
         if (termOffset > concurrent::logbuffer::LogBufferDescriptor::TERM_MAX_LENGTH)
         {
-            throw IllegalArgumentException("term offset not in range 0-1g: " + std::to_string(termOffset), SOURCEINFO);
+            throw IllegalArgumentException("term offset not in range 0-1g: " + std::to_string(termOffset), SOURCEINFO, EINVAL);
         }
 
         if (0 != (termOffset & static_cast<std::uint32_t>(concurrent::logbuffer::FrameDescriptor::FRAME_ALIGNMENT - 1)))
         {
             throw IllegalArgumentException(
-                "term offset not multiple of FRAME_ALIGNMENT: " + std::to_string(termOffset), SOURCEINFO);
+                "term offset not multiple of FRAME_ALIGNMENT: " + std::to_string(termOffset), SOURCEINFO, EINVAL);
         }
 
         m_termOffset.reset(new Value(termOffset));
@@ -248,7 +248,7 @@ public:
     {
         if (lingerNs < 0)
         {
-            throw IllegalArgumentException("linger value cannot be negative: " + std::to_string(lingerNs), SOURCEINFO);
+            throw IllegalArgumentException("linger value cannot be negative: " + std::to_string(lingerNs), SOURCEINFO, EINVAL);
         }
 
         m_linger.reset(new Value(lingerNs));
@@ -350,7 +350,7 @@ public:
         if (position < 0 || 0 != (position & (aeron::concurrent::logbuffer::FrameDescriptor::FRAME_ALIGNMENT - 1)))
         {
             throw IllegalArgumentException(
-                "position not multiple of FRAME_ALIGNMENT: " + std::to_string(position), SOURCEINFO);
+                "position not multiple of FRAME_ALIGNMENT: " + std::to_string(position), SOURCEINFO, EINVAL);
         }
 
         aeron::concurrent::logbuffer::LogBufferDescriptor::checkTermLength(termLength);

@@ -39,7 +39,7 @@ public:
         {
             throw IllegalArgumentException(
                 "initialCapacity outside range 0 - " + std::to_string(BUFFER_BUILDER_MAX_CAPACITY) +
-                ": capacity=" + std::to_string(m_capacity), SOURCEINFO);
+                ": capacity=" + std::to_string(m_capacity), SOURCEINFO, EINVAL);
         }
     }
 
@@ -72,7 +72,7 @@ public:
         {
             throw IllegalArgumentException(
                 "limit outside range: capacity=" + std::to_string(m_capacity) + " limit=" + std::to_string(limit),
-                SOURCEINFO);
+                SOURCEINFO, EINVAL);
         }
 
         m_limit = limit;
@@ -163,7 +163,7 @@ private:
             if (requiredCapacity > BUFFER_BUILDER_MAX_CAPACITY)
             {
                 throw util::IllegalStateException(
-                    "max capacity reached: " + std::to_string(BUFFER_BUILDER_MAX_CAPACITY), SOURCEINFO);
+                    "max capacity reached: " + std::to_string(BUFFER_BUILDER_MAX_CAPACITY), SOURCEINFO, EINVAL);
             }
 
             const std::uint32_t newCapacity = findSuitableCapacity(m_capacity, requiredCapacity);

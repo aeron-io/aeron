@@ -104,7 +104,7 @@ private:
                 break;
         }
 
-        throw IllegalArgumentException("unknown action", SOURCEINFO);
+        throw IllegalArgumentException("unknown action", SOURCEINFO, EINVAL);
     }
 
     ControlledPollAction onFragment(AtomicBuffer &buffer, util::index_t offset, util::index_t length, Header &header)
@@ -131,7 +131,7 @@ private:
                 break;
         }
 
-        throw IllegalArgumentException("unknown action", SOURCEINFO);
+        throw IllegalArgumentException("unknown action", SOURCEINFO, EINVAL);
     }
 };
 

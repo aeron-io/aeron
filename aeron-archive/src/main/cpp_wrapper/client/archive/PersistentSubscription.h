@@ -364,7 +364,7 @@ public:
         {
             if (nullptr == m_aeronArchiveContext)
             {
-                throw IllegalArgumentException("archive context must be set", SOURCEINFO);
+                throw IllegalArgumentException("archive context must be set", SOURCEINFO, EINVAL);
             }
 
             if (aeron_archive_persistent_subscription_context_set_archive_context(context,
@@ -398,7 +398,7 @@ public:
 
             if (m_liveChannel.empty())
             {
-                throw IllegalArgumentException("live channel must be set", SOURCEINFO);
+                throw IllegalArgumentException("live channel must be set", SOURCEINFO, EINVAL);
             }
 
             if (aeron_archive_persistent_subscription_context_set_live_channel(context, m_liveChannel.c_str()) < 0)
@@ -413,7 +413,7 @@ public:
 
             if (m_replayChannel.empty())
             {
-                throw IllegalArgumentException("replay channel must be set", SOURCEINFO);
+                throw IllegalArgumentException("replay channel must be set", SOURCEINFO, EINVAL);
             }
 
             if (aeron_archive_persistent_subscription_context_set_replay_channel(context, m_replayChannel.c_str()) < 0)

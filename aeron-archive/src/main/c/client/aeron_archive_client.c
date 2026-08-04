@@ -164,7 +164,7 @@ static int aeron_archive_poll_for_response_allowing_error(
 
                 // got an error, and the correlation ids match
                 AERON_SET_ERR(
-                    -AERON_ERROR_CODE_GENERIC_ERROR,
+                    -poller->relevant_id,
                     "response for correlationId=%" PRIi64 ", errorCode=%" PRIi64 ", error: %s",
                     correlation_id,
                     poller->relevant_id,
@@ -411,7 +411,7 @@ int aeron_archive_poll_for_recording_signals(int32_t *count_p, aeron_archive_t *
             if (NULL == aeron_archive->ctx->error_handler)
             {
                 AERON_SET_ERR(
-                    -AERON_ERROR_CODE_GENERIC_ERROR,
+                    -poller->relevant_id,
                     "response for correlationId=%" PRIi64 ", errorCode=%" PRIi64 ", error: %s",
                     poller->correlation_id,
                     poller->relevant_id,
@@ -532,7 +532,7 @@ int aeron_archive_check_for_error_response(aeron_archive_t *aeron_archive)
             if (NULL == aeron_archive->ctx->error_handler)
             {
                 AERON_SET_ERR(
-                    -AERON_ERROR_CODE_GENERIC_ERROR,
+                    -poller->relevant_id,
                     "response for correlationId=%" PRIi64 ", errorCode=%" PRIi64 ", error: %s",
                     poller->correlation_id,
                     poller->relevant_id,
@@ -2098,7 +2098,7 @@ int aeron_archive_poll_for_response(
             {
                 // got an error, and the correlation ids match
                 AERON_SET_ERR(
-                    -AERON_ERROR_CODE_GENERIC_ERROR,
+                    -poller->relevant_id,
                     "response for correlationId=%" PRIi64 ", errorCode=%" PRIi64 ", error: %s",
                     correlation_id,
                     poller->relevant_id,
