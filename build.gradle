@@ -293,11 +293,8 @@ subprojects {
         javaLauncher.set(toolchainLauncher)
     }
 
-    def aeronLoggingAgent = project.file("../aeron-agent/build/libs/aeron-agent-${aeronVersion}.jar").absolutePath
-
     tasks.register('slowTest', Test) {
         group = 'verification'
-        dependsOn ':aeron-agent:shadowJar'
 
         maxParallelForks = 1
         useJUnitPlatform {
@@ -316,7 +313,6 @@ subprojects {
 
     tasks.register('bindingsTest', Test) {
         group = 'verification'
-        dependsOn ':aeron-agent:shadowJar'
 
         maxParallelForks = 1
         useJUnitPlatform {
@@ -1049,82 +1045,6 @@ project(':aeron-cluster') {
     }
 }
 
-project(':aeron-agent') {
-    apply plugin: 'maven-publish'
-    apply plugin: 'signing'
-    apply plugin: 'com.gradleup.shadow'
-
-    tasks.withType(Test).configureEach {
-        systemProperty 'aeron.event.archive.log', 'all'
-        systemProperty 'aeron.event.log', 'admin'
-    }
-
-    shadowJar {
-        archiveClassifier.set('')
-
-        duplicatesStrategy = DuplicatesStrategy.EXCLUDE // exclude duplicate files by default
-
-        mergeServiceFiles('META-INF/services') // merge service files into a single file
-        filesMatching('META-INF/services/**') {
-            duplicatesStrategy = DuplicatesStrategy.INCLUDE // copy all services across
-        }
-
-        manifest.attributes(
-            'Automatic-Module-Name': 'io.aeron.agent',
-            'Implementation-Title': 'Aeron',
-            'Implementation-Vendor': 'Adaptive Financial Consulting Limited',
-            'Implementation-Version': aeronVersion,
-            "Premain-Class": "io.aeron.agent.EventLogAgent",
-            "Agent-Class": "io.aeron.agent.EventLogAgent",
-            "Can-Redefine-Classes": "true",
-            "Can-Retransform-Classes": "true"
-        )
-    }
-
-    jar.enabled = false
-
-    tasks.register('sourcesJar', Jar) {
-        archiveClassifier.set('sources')
-        from sourceSets.main.allSource
-    }
-
-    javadoc {
-    }
-
-    tasks.register('javadocJar', Jar) {
-        dependsOn 'javadoc'
-        archiveClassifier.set('javadoc')
-        from javadoc.destinationDir
-    }
-
-    publishing {
-        publications {
-            aeronAgent(MavenPublication) {
-                artifact shadowJar
-                artifact sourcesJar
-                artifact javadocJar
-                pom(projectPom)
-            }
-        }
-        repositories {
-            maven {
-                url = !isReleaseVersion ? sonatypeCentralPortalSnapshotsRepoUrl : sonatypeCentralPortalReleasesRepoUrl
-                credentials {
-                    username = sonatypeCentralPortalUsername
-                    password = sonatypeCentralPortalPassword
-                }
-            }
-        }
-    }
-
-    signing {
-        if (signingKey != null) {
-            useInMemoryPgpKeys(signingKey, signingPassword)
-        }
-        sign publishing.publications.aeronAgent
-    }
-}
-
 project(':aeron-samples') {
     apply plugin: 'maven-publish'
     apply plugin: 'signing'
@@ -1175,12 +1095,6 @@ project(':aeron-samples') {
     }
 
     tasks.named('test').configure {
-        dependsOn ':aeron-agent:shadowJar'
-
-        ext.agentFilename = {
-            project.file("../aeron-agent/build/libs/aeron-agent-${aeronVersion}.jar").absolutePath
-        }
-
         systemProperty 'aeron.event.cluster.log', 'all'
         systemProperty 'aeron.event.cluster.log.disable', 'CANVASS_POSITION,APPEND_POSITION,COMMIT_POSITION'
         systemProperty 'aeron.event.archive.log', 'all'
@@ -1221,12 +1135,6 @@ project(':aeron-system-tests') {
     }
 
     tasks.named('test').configure {
-        dependsOn ':aeron-agent:shadowJar'
-
-        ext.agentFilename = {
-            project.file("../aeron-agent/build/libs/aeron-agent-${aeronVersion}.jar").absolutePath
-        }
-
         systemProperty 'aeron.event.cluster.log', 'all'
         systemProperty 'aeron.event.cluster.log.disable', 'CANVASS_POSITION,APPEND_POSITION,COMMIT_POSITION'
         systemProperty 'aeron.event.archive.log', 'all'

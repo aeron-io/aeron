@@ -578,7 +578,7 @@ public class CommonContext implements Cloneable
      * System property to toggle whether {@link BinaryRenderer} implementations render the remaining bytes
      * of fields that are not part of the header information.
      */
-    public static final String EVENT_LOG_RENDER_EXTRA_BYTES_PROP_NAME = "aeron.event.log.render.extras";
+    public static final String EVENT_LOG_RENDER_DATA_PROP_NAME = "aeron.event.log.render.data";
 
     /**
      * Should a component's configuration be printed on start.

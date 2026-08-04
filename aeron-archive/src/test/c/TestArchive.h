@@ -86,7 +86,6 @@ public:
         };
 
 #if ENABLE_AGENT_DEBUG_LOGGING
-        args.push_back(m_aeronAgentJar);
         args.emplace_back("-Daeron.event.log=admin");
         args.emplace_back("-Daeron.event.archive.log=all");
 #endif
@@ -219,7 +218,6 @@ public:
 private:
     const std::string m_java = JAVA_EXECUTABLE;          // Defined in CMakeLists.txt
     const std::string m_aeronAllJar = AERON_ALL_JAR;     // Defined in CMakeLists.txt
-    const std::string m_aeronAgentJar = "-javaagent:" AERON_AGENT_JAR; // Defined in CMakeLists.txt
     const std::string m_archiveDir;
     const std::string m_aeronDir;
     std::ostream &m_stream;
