@@ -27,6 +27,8 @@ import org.agrona.concurrent.status.AtomicCounter;
 import java.net.InetSocketAddress;
 import java.util.ArrayDeque;
 
+import static io.aeron.driver.MediaDriver.AERON_DRIVER_NATIVE_RESOURCE_THREAD_NAME;
+
 final class NativeResourceAgent implements Agent
 {
     private final ArrayDeque<RawLog> logBuffersToFree = new ArrayDeque<>();
@@ -94,7 +96,7 @@ final class NativeResourceAgent implements Agent
     @Override
     public String roleName()
     {
-        return "aeron-md-nra";
+        return AERON_DRIVER_NATIVE_RESOURCE_THREAD_NAME;
     }
 
     void onParseChannel(final CommandResult<UdpChannel> result, final String channel, final boolean isDestination)

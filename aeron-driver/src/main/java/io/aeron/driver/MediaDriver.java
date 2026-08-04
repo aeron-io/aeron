@@ -158,6 +158,18 @@ import static org.agrona.concurrent.status.CountersReader.METADATA_LENGTH;
 @Versioned
 public final class MediaDriver implements AutoCloseable
 {
+    static final String AERON_DRIVER_SENDER_THREAD_NAME = "aeron-md-snd";
+    static final String AERON_DRIVER_RECEIVER_THREAD_NAME = "aeron-md-rcv";
+
+    static final String AERON_DRIVER_SHARED_THREAD_NAME = "aeron-md-shd";
+    static final String AERON_DRIVER_CONDUCTOR_THREAD_NAME = "aeron-md-cnd";
+    static final String AERON_DRIVER_SHARED_NETWORK_THREAD_NAME = "aeron-md-ntw";
+    static final String AERON_DRIVER_NATIVE_RESOURCE_THREAD_NAME = "aeron-md-nra";
+
+    static final String AERON_DRIVER_SENDER_THREAD_NAME_CLASSIC = "sender";
+    static final String AERON_DRIVER_RECEIVER_THREAD_NAME_CLASSIC = "receiver";
+    static final String AERON_DRIVER_CONDUCTOR_THREAD_NAME_CLASSIC = "driver-conductor";
+
     private boolean wasHighResTimerEnabled;
     private final AgentRunner nativeResourceAgentRunner;
     private final AgentInvoker sharedInvoker;
@@ -241,7 +253,8 @@ public final class MediaDriver implements AutoCloseable
                         ctx.sharedIdleStrategy(),
                         errorHandler,
                         errorCounter,
-                        new NamedCompositeAgent(
+                        new FixedNameCompositionAgent(
+                            AERON_DRIVER_SHARED_THREAD_NAME,
                             ctx.aeronDirectoryName(), sender, receiver, nativeResourceAgent, conductor));
                     sharedInvoker = null;
                     sharedNetworkRunner = null;
@@ -258,7 +271,9 @@ public final class MediaDriver implements AutoCloseable
                         ctx.sharedNetworkIdleStrategy(),
                         errorHandler,
                         errorCounter,
-                        new NamedCompositeAgent(ctx.aeronDirectoryName(), sender, receiver));
+                        new FixedNameCompositionAgent(
+                            AERON_DRIVER_SHARED_NETWORK_THREAD_NAME,
+                            ctx.aeronDirectoryName(), sender, receiver));
                     conductorRunner = new AgentRunner(
                         ctx.conductorIdleStrategy(), errorHandler, errorCounter, conductor);
                     nativeResourceAgentRunner = new AgentRunner(
@@ -832,11 +847,11 @@ public final class MediaDriver implements AutoCloseable
 
                 final long cncFileLength = BitUtil.align(
                     (long)META_DATA_LENGTH +
-                    conductorBufferLength +
-                    toClientsBufferLength +
-                    countersMetadataBufferLength(counterValuesBufferLength) +
-                    counterValuesBufferLength +
-                    errorBufferLength,
+                        conductorBufferLength +
+                        toClientsBufferLength +
+                        countersMetadataBufferLength(counterValuesBufferLength) +
+                        counterValuesBufferLength +
+                        errorBufferLength,
                     filePageSize);
                 validateValueRange(cncFileLength, 0, Integer.MAX_VALUE, "CnC file length");
                 cncByteBuffer = mapNewFile(cncFile(), cncFileLength);
@@ -4330,7 +4345,7 @@ public final class MediaDriver implements AutoCloseable
                     {
                         throw new IllegalArgumentException(
                             "applicationSpecificFeedback length must be equal to " + SIZE_OF_LONG +
-                            " bytes: length=" + applicationSpecificFeedback.length);
+                                " bytes: length=" + applicationSpecificFeedback.length);
                     }
 
                     final UnsafeBuffer buffer = new UnsafeBuffer(applicationSpecificFeedback);

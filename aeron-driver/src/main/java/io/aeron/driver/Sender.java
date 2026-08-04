@@ -28,6 +28,8 @@ import org.agrona.concurrent.status.AtomicCounter;
 
 import java.net.InetSocketAddress;
 
+import static io.aeron.driver.MediaDriver.AERON_DRIVER_SENDER_THREAD_NAME;
+import static io.aeron.driver.MediaDriver.AERON_DRIVER_SENDER_THREAD_NAME_CLASSIC;
 import static io.aeron.driver.status.SystemCounterDescriptor.*;
 
 class SenderLhsPadding
@@ -160,7 +162,7 @@ public final class Sender extends SenderRhsPadding implements Agent
     @Override
     public String roleName()
     {
-        return CommonContext.threadName("aeron-md-snd", "sender");
+        return CommonContext.threadName(AERON_DRIVER_SENDER_THREAD_NAME, AERON_DRIVER_SENDER_THREAD_NAME_CLASSIC);
     }
 
     void onRegisterSendChannelEndpoint(final SendChannelEndpoint channelEndpoint)

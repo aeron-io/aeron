@@ -34,6 +34,8 @@ import java.util.ArrayList;
 import static io.aeron.driver.Configuration.PENDING_SETUPS_TIMEOUT_NS;
 import static io.aeron.driver.DataPacketDispatcher.SessionState.INIT_IN_PROGRESS;
 import static io.aeron.driver.DataPacketDispatcher.SessionState.ON_COOL_DOWN;
+import static io.aeron.driver.MediaDriver.AERON_DRIVER_RECEIVER_THREAD_NAME;
+import static io.aeron.driver.MediaDriver.AERON_DRIVER_RECEIVER_THREAD_NAME_CLASSIC;
 import static io.aeron.driver.status.SystemCounterDescriptor.BYTES_RECEIVED;
 import static io.aeron.driver.status.SystemCounterDescriptor.RESOLUTION_CHANGES;
 
@@ -98,7 +100,7 @@ public final class Receiver implements Agent
     @Override
     public String roleName()
     {
-        return CommonContext.threadName("aeron-md-rcv", "receiver");
+        return CommonContext.threadName(AERON_DRIVER_RECEIVER_THREAD_NAME, AERON_DRIVER_RECEIVER_THREAD_NAME_CLASSIC);
     }
 
     /**

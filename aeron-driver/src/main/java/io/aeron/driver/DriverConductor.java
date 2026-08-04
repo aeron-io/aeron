@@ -16,6 +16,7 @@
 package io.aeron.driver;
 
 import io.aeron.ChannelUri;
+import io.aeron.CommonContext;
 import io.aeron.driver.MediaDriver.Context;
 import io.aeron.driver.buffer.RawLog;
 import io.aeron.driver.exceptions.InvalidChannelException;
@@ -99,6 +100,8 @@ import static io.aeron.ErrorCode.GENERIC_ERROR;
 import static io.aeron.ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE;
 import static io.aeron.ErrorCode.UNKNOWN_COUNTER;
 import static io.aeron.ErrorCode.UNKNOWN_PUBLICATION;
+import static io.aeron.driver.MediaDriver.AERON_DRIVER_CONDUCTOR_THREAD_NAME;
+import static io.aeron.driver.MediaDriver.AERON_DRIVER_CONDUCTOR_THREAD_NAME_CLASSIC;
 import static io.aeron.driver.PublicationParams.PROTOTYPE_VALUE_CORRELATION_ID;
 import static io.aeron.driver.PublicationParams.confirmMatch;
 import static io.aeron.driver.PublicationParams.getPublicationParams;
@@ -288,7 +291,7 @@ public final class DriverConductor implements Agent
     @Override
     public String roleName()
     {
-        return "driver-conductor";
+        return CommonContext.threadName(AERON_DRIVER_CONDUCTOR_THREAD_NAME, AERON_DRIVER_CONDUCTOR_THREAD_NAME_CLASSIC);
     }
 
     /**
