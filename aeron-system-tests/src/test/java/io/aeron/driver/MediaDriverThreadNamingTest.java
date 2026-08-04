@@ -21,6 +21,7 @@ import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.CloseHelper;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -49,6 +50,7 @@ public class MediaDriverThreadNamingTest
 {
     private static final String TEST_AERON_DIR = CommonContext.generateRandomDirName();
 
+    @RegisterExtension
     final SystemTestWatcher systemTestWatcher = new SystemTestWatcher();
     private TestMediaDriver driver;
 

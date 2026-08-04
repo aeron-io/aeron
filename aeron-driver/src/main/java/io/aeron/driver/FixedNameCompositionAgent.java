@@ -41,7 +41,7 @@ class FixedNameCompositionAgent extends CompositeAgent
     FixedNameCompositionAgent(final String newName, final String classicName, final List<? extends Agent> agents)
     {
         super(agents);
-        this.name = CommonContext.threadName(newName, super.roleName());
+        this.name = CommonContext.threadName(newName, generateClassicName(classicName));
     }
 
     public String roleName()
