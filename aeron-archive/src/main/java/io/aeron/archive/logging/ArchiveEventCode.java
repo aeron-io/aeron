@@ -246,8 +246,11 @@ public enum ArchiveEventCode implements EventCode
     /**
      * Archive logging event for {@link PersistentSubscription} leaving live.
      */
-    PERSISTENT_SUBSCRIPTION_LEFT_LIVE(48, -1
-    );
+    PERSISTENT_SUBSCRIPTION_LEFT_LIVE(48, -1),
+    /**
+     * Archive logging event for starting the archive.
+     */
+    START(49, -1);
 
     static final int EVENT_CODE_TYPE = EventCodeType.ARCHIVE.getTypeCode();
     private static final ArchiveEventCode[] EVENT_CODE_BY_ID;

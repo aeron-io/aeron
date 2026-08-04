@@ -320,6 +320,8 @@ final class ConsensusModuleAgent
     @Override
     public void onStart()
     {
+        ClusterLog.logStart(ConsensusModuleVersion.VERSION);
+
         archive = AeronArchive.connect(ctx.archiveContext().clone());
         recordingSignalPoller = new RecordingSignalPoller(
             archive.controlSessionId(), archive.controlResponsePoller().subscription());

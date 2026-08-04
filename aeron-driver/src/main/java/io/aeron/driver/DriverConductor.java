@@ -246,6 +246,8 @@ public final class DriverConductor implements Agent
     @Override
     public void onStart()
     {
+        DriverLog.logStart(MediaDriverVersion.VERSION);
+
         final long nowNs = nanoClock.nanoTime();
         cachedNanoClock.update(nowNs);
         cachedEpochClock.update(epochClock.time());

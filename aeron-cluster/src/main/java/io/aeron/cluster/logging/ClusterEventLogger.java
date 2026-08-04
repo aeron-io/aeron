@@ -549,4 +549,14 @@ public interface ClusterEventLogger
         final int serviceId)
     {
     }
+
+    /**
+     * Log the cluster start.
+     *
+     * @param version   of the cluster.
+     */
+    @LoggerMethod(eventCode = "START")
+    default void logStart(final String version)
+    {
+    }
 }

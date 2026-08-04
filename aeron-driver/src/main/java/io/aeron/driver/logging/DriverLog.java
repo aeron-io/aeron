@@ -96,6 +96,7 @@ public final class DriverLog
     private static final boolean LOG_PUBLICATION_REVOKE_ENABLED = isEnabled(PUBLICATION_REVOKE);
     private static final boolean LOG_PUBLICATION_IMAGE_REVOKE_ENABLED = isEnabled(PUBLICATION_IMAGE_REVOKE);
     private static final boolean LOG_TEXT_DATA_ENABLED = isEnabled(TEXT_DATA);
+    private static final boolean LOG_DRIVER_START = !ENABLED_EVENT_CODES.isEmpty();
 
     private DriverLog()
     {
@@ -610,6 +611,21 @@ public final class DriverLog
         }
 
         LOGGER.logString(TEXT_DATA, text);
+    }
+
+    /**
+     * Log the driver start.
+     *
+     * @param version   of the driver.
+     */
+    public static void logStart(final String version)
+    {
+        if (!LOG_DRIVER_START)
+        {
+            return;
+        }
+
+        LOGGER.logStart(version);
     }
 
     private static DriverEventCode cmdEventCode(final int msgTypeId)

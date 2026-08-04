@@ -429,6 +429,16 @@ public interface DriverEventLogger
     }
 
     /**
+     * Logs the driver starting.
+     *
+     * @param version   of the driver.
+     */
+    @LoggerMethod(eventCode = "START")
+    default void logStart(final String version)
+    {
+    }
+
+    /**
      * Compute the full event code id for a {@link DriverEventCode}.
      *
      * @param code to convert.
