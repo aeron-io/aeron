@@ -524,17 +524,17 @@ public class CommonContext implements Cloneable
     /**
      * Choose a thread/role name depending on the configured naming scheme.
      *
-     * @param prefixedName the new, prefixed name.
+     * @param newName the new, prefixed name.
      * @param classicName  the old name.
      * @return the name to use for the current naming scheme.
      */
-    public static String threadName(final String prefixedName, final String classicName)
+    public static String threadName(final String newName, final String classicName)
     {
         final String mode = System.getProperty(THREAD_NAMING_MODE_PROP_NAME, THREAD_NAMING_MODE_DEFAULT);
         return switch (mode)
         {
             case THREAD_NAMING_MODE_CLASSIC -> classicName;
-            case THREAD_NAMING_MODE_NEW -> prefixedName;
+            case THREAD_NAMING_MODE_NEW -> newName;
             default -> throw new IllegalArgumentException("Unknown thread naming mode: " + mode);
         };
     }
