@@ -29,6 +29,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.lang.management.ThreadInfo;
 import java.lang.management.ThreadMXBean;
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.stream.Stream;
 
 import static io.aeron.CommonContext.THREAD_NAMING_MODE_CLASSIC;
@@ -136,7 +137,6 @@ public class MediaDriverThreadNamingTest
                 .dirDeleteOnStart(true)
                 .dirDeleteOnShutdown(true)
                 .threadingMode(threadingMode);
-
             driver = TestMediaDriver.launch(context, systemTestWatcher);
             systemTestWatcher.dataCollector().add(driver.context().aeronDirectory());
 
@@ -144,6 +144,7 @@ public class MediaDriverThreadNamingTest
             final long[] threadIds = threadBean.getAllThreadIds();
             final ThreadInfo[] threadInfos = threadBean.getThreadInfo(threadIds, 0);
             final String[] desiredThreads = Arrays.stream(threadInfos)
+                .filter(Objects::nonNull)
                 .map(ThreadInfo::getThreadName)
                 .filter(threadName -> Arrays.asList(expectedThreadNames).contains(threadName))
                 .sorted()
