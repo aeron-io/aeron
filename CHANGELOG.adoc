@@ -11,6 +11,7 @@
 * **Breaking** **[Logging]** The aeron-agent jar has been removed so setting -javaagent:<file name> is not longer required. The existing configuration options are still supported.
 ** The option `aeron.event.log.render.data` allows for the data portion of frame in and frame out messages to be printed.
 ** Dynamic enablement of logging is no longer supported.
+** Some of the logging messages are formatted differently.
 
 === Changelog
 
