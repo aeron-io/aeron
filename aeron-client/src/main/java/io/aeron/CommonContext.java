@@ -502,23 +502,23 @@ public class CommonContext implements Cloneable
         SystemUtil.isWindows() ? "Windows-PRNG" : "NativePRNGNonBlocking";
 
     /**
-     * Property name to use to set the thread naming mode. Defaults to {@link #THREAD_NAMING_MODE_DEFAULT}.
+     * Property name to use to set the thread naming mode. Defaults to {@link #THREAD_NAMING_DEFAULT}.
      */
     @Config(defaultType = DefaultType.STRING, defaultString = "classic")
-    public static final String THREAD_NAMING_MODE_PROP_NAME = "aeron.thread.naming";
+    public static final String THREAD_NAMING_PROP_NAME = "aeron.thread.naming";
 
     /**
-     * Value of {@link #THREAD_NAMING_MODE_PROP_NAME} that preserves legacy thread names.
+     * Value of {@link #THREAD_NAMING_PROP_NAME} that preserves legacy thread names.
      */
-    public static final String THREAD_NAMING_MODE_CLASSIC = "classic";
+    public static final String THREAD_NAMING_CLASSIC = "classic";
     /**
-     * Value of {@link #THREAD_NAMING_MODE_PROP_NAME} that uses new prefixed names.
+     * Value of {@link #THREAD_NAMING_PROP_NAME} that uses new prefixed names.
      */
-    public static final String THREAD_NAMING_MODE_NEW = "new";
+    public static final String THREAD_NAMING_NEW = "new";
     /**
-     * Default value of {@link #THREAD_NAMING_MODE_PROP_NAME}.
+     * Default value of {@link #THREAD_NAMING_PROP_NAME}.
      */
-    public static final String THREAD_NAMING_MODE_DEFAULT = THREAD_NAMING_MODE_CLASSIC;
+    public static final String THREAD_NAMING_DEFAULT = THREAD_NAMING_CLASSIC;
 
 
     /**
@@ -530,11 +530,11 @@ public class CommonContext implements Cloneable
      */
     public static String threadName(final String newName, final String classicName)
     {
-        final String mode = System.getProperty(THREAD_NAMING_MODE_PROP_NAME, THREAD_NAMING_MODE_DEFAULT);
+        final String mode = System.getProperty(THREAD_NAMING_PROP_NAME, THREAD_NAMING_DEFAULT);
         return switch (mode)
         {
-            case THREAD_NAMING_MODE_CLASSIC -> classicName;
-            case THREAD_NAMING_MODE_NEW -> newName;
+            case THREAD_NAMING_CLASSIC -> classicName;
+            case THREAD_NAMING_NEW -> newName;
             default -> throw new IllegalArgumentException("Unknown thread naming mode: " + mode);
         };
     }

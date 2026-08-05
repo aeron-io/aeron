@@ -214,7 +214,7 @@ public final class DriverConductor implements Agent
     private final DataHeaderFlyweight defaultDataHeader = new DataHeaderFlyweight(createDefaultHeader(0, 0, 0));
     private ClientCommand clientCommand;
     private Command driverCommand;
-    private String roleName;
+    private final String roleName;
 
     DriverConductor(final Context ctx)
     {

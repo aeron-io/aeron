@@ -253,7 +253,7 @@ public final class MediaDriver implements AutoCloseable
                         ctx.sharedIdleStrategy(),
                         errorHandler,
                         errorCounter,
-                        new FixedNameCompositionAgent(
+                        new FixedNameCompositeAgent(
                             AERON_DRIVER_SHARED_THREAD_NAME,
                             ctx.aeronDirectoryName(), sender, receiver, nativeResourceAgent, conductor));
                     sharedInvoker = null;
@@ -271,7 +271,7 @@ public final class MediaDriver implements AutoCloseable
                         ctx.sharedNetworkIdleStrategy(),
                         errorHandler,
                         errorCounter,
-                        new FixedNameCompositionAgent(
+                        new FixedNameCompositeAgent(
                             AERON_DRIVER_SHARED_NETWORK_THREAD_NAME,
                             ctx.aeronDirectoryName(), sender, receiver));
                     conductorRunner = new AgentRunner(

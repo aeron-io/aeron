@@ -17,11 +17,7 @@
 package io.aeron.driver;
 
 import io.aeron.CommonContext;
-import io.aeron.test.SystemTestWatcher;
 import io.aeron.test.driver.TestMediaDriver;
-import org.agrona.CloseHelper;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -32,9 +28,9 @@ import java.util.Arrays;
 import java.util.Objects;
 import java.util.stream.Stream;
 
-import static io.aeron.CommonContext.THREAD_NAMING_MODE_CLASSIC;
-import static io.aeron.CommonContext.THREAD_NAMING_MODE_NEW;
-import static io.aeron.CommonContext.THREAD_NAMING_MODE_PROP_NAME;
+import static io.aeron.CommonContext.THREAD_NAMING_CLASSIC;
+import static io.aeron.CommonContext.THREAD_NAMING_NEW;
+import static io.aeron.CommonContext.THREAD_NAMING_PROP_NAME;
 import static io.aeron.driver.MediaDriver.AERON_DRIVER_CONDUCTOR_THREAD_NAME;
 import static io.aeron.driver.MediaDriver.AERON_DRIVER_CONDUCTOR_THREAD_NAME_CLASSIC;
 import static io.aeron.driver.MediaDriver.AERON_DRIVER_NATIVE_RESOURCE_THREAD_NAME;
@@ -51,22 +47,12 @@ public class MediaDriverThreadNamingTest
 {
     private static final String TEST_AERON_DIR = CommonContext.generateRandomDirName();
 
-    @RegisterExtension
-    final SystemTestWatcher systemTestWatcher = new SystemTestWatcher();
-    private TestMediaDriver driver;
-
-    @AfterEach
-    void after()
-    {
-        CloseHelper.close(driver);
-    }
-
     private static Stream<Arguments> expectedNamePerThreadingMode()
     {
         return Stream.of(
             Arguments.of(
                 ThreadingMode.DEDICATED,
-                THREAD_NAMING_MODE_CLASSIC,
+                THREAD_NAMING_CLASSIC,
                 new String[]{
                     AERON_DRIVER_SENDER_THREAD_NAME_CLASSIC,
                     AERON_DRIVER_RECEIVER_THREAD_NAME_CLASSIC,
@@ -75,7 +61,7 @@ public class MediaDriverThreadNamingTest
                 }),
             Arguments.of(
                 ThreadingMode.DEDICATED,
-                THREAD_NAMING_MODE_NEW,
+                THREAD_NAMING_NEW,
                 new String[]{
                     AERON_DRIVER_SENDER_THREAD_NAME,
                     AERON_DRIVER_RECEIVER_THREAD_NAME,
@@ -84,7 +70,7 @@ public class MediaDriverThreadNamingTest
                 }),
             Arguments.of(
                 ThreadingMode.SHARED_NETWORK,
-                THREAD_NAMING_MODE_CLASSIC,
+                THREAD_NAMING_CLASSIC,
                 new String[]{
                     AERON_DRIVER_CONDUCTOR_THREAD_NAME_CLASSIC,
                     AERON_DRIVER_NATIVE_RESOURCE_THREAD_NAME,
@@ -95,7 +81,7 @@ public class MediaDriverThreadNamingTest
                 }),
             Arguments.of(
                 ThreadingMode.SHARED_NETWORK,
-                THREAD_NAMING_MODE_NEW,
+                THREAD_NAMING_NEW,
                 new String[]{
                     AERON_DRIVER_CONDUCTOR_THREAD_NAME,
                     AERON_DRIVER_NATIVE_RESOURCE_THREAD_NAME,
@@ -103,7 +89,7 @@ public class MediaDriverThreadNamingTest
                 }),
             Arguments.of(
                 ThreadingMode.SHARED,
-                THREAD_NAMING_MODE_CLASSIC,
+                THREAD_NAMING_CLASSIC,
                 new String[]{
                     String.format("%s [%s,%s,%s,%s]",
                         TEST_AERON_DIR,
@@ -114,7 +100,7 @@ public class MediaDriverThreadNamingTest
                 }),
             Arguments.of(
                 ThreadingMode.SHARED,
-                THREAD_NAMING_MODE_NEW,
+                THREAD_NAMING_NEW,
                 new String[]{
                     AERON_DRIVER_SHARED_THREAD_NAME
                 })
@@ -123,40 +109,41 @@ public class MediaDriverThreadNamingTest
 
     @ParameterizedTest
     @MethodSource("expectedNamePerThreadingMode")
+    @SuppressWarnings("try")
     void testThreadNamesByMode(
         final ThreadingMode threadingMode,
         final String threadNamingMode,
         final String[] expectedThreadNames)
     {
         TestMediaDriver.notSupportedOnCMediaDriver("the test uses JMX to check the thread names");
-        System.setProperty(THREAD_NAMING_MODE_PROP_NAME, threadNamingMode);
+        System.setProperty(THREAD_NAMING_PROP_NAME, threadNamingMode);
         try
         {
-
             final MediaDriver.Context context = new MediaDriver.Context()
                 .aeronDirectoryName(TEST_AERON_DIR)
                 .dirDeleteOnStart(true)
                 .dirDeleteOnShutdown(true)
                 .threadingMode(threadingMode);
-            driver = TestMediaDriver.launch(context, systemTestWatcher);
-            systemTestWatcher.dataCollector().add(driver.context().aeronDirectory());
 
-            final ThreadMXBean threadBean = getThreadMXBean();
-            final long[] threadIds = threadBean.getAllThreadIds();
-            final ThreadInfo[] threadInfos = threadBean.getThreadInfo(threadIds, 0);
-            final String[] desiredThreads = Arrays.stream(threadInfos)
-                .filter(Objects::nonNull)
-                .map(ThreadInfo::getThreadName)
-                .filter(threadName -> Arrays.asList(expectedThreadNames).contains(threadName))
-                .sorted()
-                .toArray(String[]::new);
+            try (TestMediaDriver driver = TestMediaDriver.launch(context, null))
+            {
+                final ThreadMXBean threadBean = getThreadMXBean();
+                final long[] threadIds = threadBean.getAllThreadIds();
+                final ThreadInfo[] threadInfos = threadBean.getThreadInfo(threadIds, 0);
+                final String[] desiredThreads = Arrays.stream(threadInfos)
+                    .filter(Objects::nonNull)
+                    .map(ThreadInfo::getThreadName)
+                    .filter(threadName -> Arrays.asList(expectedThreadNames).contains(threadName))
+                    .sorted()
+                    .toArray(String[]::new);
 
-            Arrays.sort(expectedThreadNames);
-            assertArrayEquals(expectedThreadNames, desiredThreads);
+                Arrays.sort(expectedThreadNames);
+                assertArrayEquals(expectedThreadNames, desiredThreads);
+            }
         }
         finally
         {
-            System.clearProperty(THREAD_NAMING_MODE_PROP_NAME);
+            System.clearProperty(THREAD_NAMING_PROP_NAME);
         }
     }
 }
