@@ -123,7 +123,7 @@ public class MediaDriverThreadNamingTest
 
     @ParameterizedTest
     @MethodSource("expectedNamePerThreadingMode")
-    void testSenderThreadName(
+    void testThreadNamesByMode(
         final ThreadingMode threadingMode,
         final String threadNamingMode,
         final String[] expectedThreadNames)
