@@ -223,6 +223,8 @@ public final class TestCluster implements AutoCloseable
     private String logChannel;
     private String ingressChannel;
     private String egressChannel;
+    private String consensusModuleAgentRoleName;
+    private String clusterServiceName;
     private AuthorisationServiceSupplier authorisationServiceSupplier;
     private AuthenticatorSupplier authenticationSupplier;
     private TimerServiceSupplier timerServiceSupplier;
@@ -445,6 +447,7 @@ public final class TestCluster implements AutoCloseable
         context.extensionSupplier = extensionSupplier;
         context.errorCounterSupplier = errorCounterSupplier;
         context.snapshotCounterSupplier = snapshotCounterSupplier;
+        context.clusterServiceName = clusterServiceName;
 
         context.aeronArchiveContext
             .lock(NoOpLock.INSTANCE)
@@ -495,6 +498,7 @@ public final class TestCluster implements AutoCloseable
             .clusterDir(new File(baseDirName, "consensus-module"))
             .ingressChannel(ingressChannel)
             .logChannel(logChannel)
+            .agentRoleName(consensusModuleAgentRoleName)
             .consensusChannel(CONSENSUS_CHANNEL)
             .replicationChannel(clusterReplicationChannel(index))
             .archiveContext(context.aeronArchiveContext.clone()
@@ -754,6 +758,16 @@ public final class TestCluster implements AutoCloseable
     public void egressChannel(final String egressChannel)
     {
         this.egressChannel = egressChannel;
+    }
+
+    public void consensusModuleAgentRoleName(final String consensusModuleAgentRoleName)
+    {
+        this.consensusModuleAgentRoleName = consensusModuleAgentRoleName;
+    }
+
+    public void clusterServiceName(final String serviceName)
+    {
+        this.clusterServiceName = serviceName;
     }
 
     public void egressListener(final EgressListener egressListener)
@@ -2701,6 +2715,8 @@ public final class TestCluster implements AutoCloseable
         private String logChannel = LOG_CHANNEL;
         private String ingressChannel = INGRESS_CHANNEL;
         private String egressChannel = EGRESS_CHANNEL;
+        private String consensusModuleAgentRoleName;
+        private String clusterServiceName;
         private AuthorisationServiceSupplier authorisationServiceSupplier;
         private AuthenticatorSupplier authenticationSupplier = new DefaultAuthenticatorSupplier();
         private TimerServiceSupplier timerServiceSupplier;
@@ -2819,6 +2835,18 @@ public final class TestCluster implements AutoCloseable
         public Builder withEgressChannel(final String egressChannel)
         {
             this.egressChannel = egressChannel;
+            return this;
+        }
+
+        public Builder withConsensusModuleAgentRoleName(final String consensusModuleAgentRoleName)
+        {
+            this.consensusModuleAgentRoleName = consensusModuleAgentRoleName;
+            return this;
+        }
+
+        public Builder withClusterServiceName(final String clusterServiceName)
+        {
+            this.clusterServiceName = clusterServiceName;
             return this;
         }
 
@@ -2961,6 +2989,8 @@ public final class TestCluster implements AutoCloseable
             testCluster.logChannel(logChannel);
             testCluster.ingressChannel(ingressChannel);
             testCluster.egressChannel(egressChannel);
+            testCluster.consensusModuleAgentRoleName(consensusModuleAgentRoleName);
+            testCluster.clusterServiceName(clusterServiceName);
             testCluster.authenticationSupplier(authenticationSupplier);
             testCluster.authorisationServiceSupplier(authorisationServiceSupplier);
             testCluster.timerServiceSupplier(timerServiceSupplier);

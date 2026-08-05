@@ -200,7 +200,9 @@ public final class TestNode implements AutoCloseable
                     .markFileDir(context.consensusModuleContext.markFileDir())
                     .clusteredService(services[i])
                     .snapshotDurationThresholdNs(TimeUnit.MILLISECONDS.toNanos(100))
-                    .serviceName("clustered-service-" + clusterId + "-" + memberId + "-" + i)
+                    .serviceName(null != context.clusterServiceName ?
+                        context.clusterServiceName :
+                        "clustered-service-" + clusterId + "-" + memberId + "-" + i)
                     .serviceId(i);
                 containers[i] = ClusteredServiceContainer.launch(ctx);
             }
@@ -1342,6 +1344,7 @@ public final class TestNode implements AutoCloseable
         Supplier<ConsensusModuleExtension> extensionSupplier;
         Function<Aeron, Counter> errorCounterSupplier;
         Function<Aeron, Counter> snapshotCounterSupplier;
+        String clusterServiceName;
 
         Context(final TestService[] services, final String hostName, final String nodeMappings)
         {

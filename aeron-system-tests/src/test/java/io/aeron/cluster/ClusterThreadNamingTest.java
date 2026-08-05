@@ -22,11 +22,15 @@ import io.aeron.cluster.service.ClusteredService;
 import io.aeron.cluster.service.ClusteredServiceContainer;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
+import io.aeron.test.EventLogExtension;
+import io.aeron.test.InterruptingTestCallback;
 import io.aeron.test.TestContexts;
 import io.aeron.test.Tests;
 import io.aeron.test.cluster.ClusterTests;
 import io.aeron.test.cluster.StubClusteredService;
+import io.aeron.test.cluster.TestCluster;
 import io.aeron.test.driver.TestMediaDriver;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -46,148 +50,84 @@ import static io.aeron.CommonContext.THREAD_NAMING_PROP_NAME;
 import static io.aeron.cluster.ClusterBackup.AERON_CLUSTER_BACKUP_THREAD_NAME;
 import static io.aeron.cluster.ClusterBackup.AERON_CLUSTER_BACKUP_THREAD_NAME_CLASSIC;
 import static io.aeron.cluster.ConsensusModule.AERON_CLUSTER_CONSENSUS_THREAD_NAME;
-import static io.aeron.test.TestContexts.LOCALHOST_SINGLE_HOST_CLUSTER_MEMBERS;
+import static io.aeron.test.cluster.TestCluster.aCluster;
 import static java.lang.management.ManagementFactory.getThreadMXBean;
 
+@ExtendWith({ EventLogExtension.class, InterruptingTestCallback.class })
 public class ClusterThreadNamingTest
 {
-
-    private static Stream<Arguments> clusterBackupThreadNamingModes()
+    private static Stream<Arguments> threadNamingModes()
     {
+        // NOTE: The following cases do not cover the clustered service defaults.
         return Stream.of(
-            Arguments.of(THREAD_NAMING_CLASSIC, AERON_CLUSTER_BACKUP_THREAD_NAME_CLASSIC),
-            Arguments.of(THREAD_NAMING_NEW, AERON_CLUSTER_BACKUP_THREAD_NAME));
+            Arguments.of(
+                THREAD_NAMING_CLASSIC, null, null,
+                new String[]{
+                    AERON_CLUSTER_BACKUP_THREAD_NAME_CLASSIC,
+                    "consensus-module-0-0"
+                }),
+            Arguments.of(
+                THREAD_NAMING_NEW, null, null,
+                new String[]{
+                    AERON_CLUSTER_BACKUP_THREAD_NAME,
+                    AERON_CLUSTER_CONSENSUS_THREAD_NAME
+                }),
+            Arguments.of(
+                THREAD_NAMING_CLASSIC, "consensus-override", "clustered-service-override",
+                new String[]{
+                    AERON_CLUSTER_BACKUP_THREAD_NAME_CLASSIC,
+                    "consensus-override",
+                    "clustered-service-override" }),
+            Arguments.of(
+                THREAD_NAMING_NEW, "consensus-override", "clustered-service-override",
+                new String[]{
+                    AERON_CLUSTER_BACKUP_THREAD_NAME,
+                    "consensus-override",
+                    "clustered-service-override" }));
     }
 
     @ParameterizedTest
-    @MethodSource("clusterBackupThreadNamingModes")
+    @MethodSource("threadNamingModes")
+    void shouldUseCorrectThreadNamesByNamingMode(
+        final String threadNamingMode,
+        final String consensusAgentRoleNameOverride,
+        final String clusterServiceNameOverride,
+        final String[] expectedThreadNames)
+    {
+        System.setProperty(THREAD_NAMING_PROP_NAME, threadNamingMode);
+        try
+        {
+            try (
+                TestCluster cluster = aCluster()
+                    .withStaticNodes(3)
+                    .withConsensusModuleAgentRoleName(consensusAgentRoleNameOverride)
+                    .withClusterServiceName(clusterServiceNameOverride)
+                    .start())
+            {
+                cluster.awaitLeader();
+                cluster.startClusterBackupNode(true);
+                awaitThreads(expectedThreadNames);
+            }
+
+        }
+        finally
+        {
+            System.clearProperty(THREAD_NAMING_PROP_NAME);
+        }
+    }
+
+    private static Stream<Arguments> clusteredServiceDefaultThreadNamingModes()
+    {
+        return Stream.of(
+            Arguments.of(THREAD_NAMING_CLASSIC, "clustered-service-0-0"),
+            Arguments.of(THREAD_NAMING_NEW, "aeron-cl-cs-0"));
+    }
+
+    @ParameterizedTest
+    @MethodSource("clusteredServiceDefaultThreadNamingModes")
     @SuppressWarnings("try")
-    void shouldUseCorrectClusterBackupThreadName(
+    void shouldUseCorrectDefaultClusteredServiceThreadNamesPerMode(
         final String threadNamingMode, final String expectedName, @TempDir final Path tmpDir)
-    {
-        System.setProperty(THREAD_NAMING_PROP_NAME, threadNamingMode);
-        try
-        {
-            final String aeronDirectoryName = tmpDir.resolve("aeron").toString();
-            try (TestMediaDriver mediaDriver = TestMediaDriver.launch(new MediaDriver.Context()
-                    .aeronDirectoryName(aeronDirectoryName)
-                    .threadingMode(ThreadingMode.SHARED)
-                    .termBufferSparseFile(true)
-                    .dirDeleteOnStart(true), null);
-                Archive archive = Archive.launch(TestContexts.localhostArchive()
-                    .aeronDirectoryName(aeronDirectoryName)
-                    .archiveDir(tmpDir.resolve("archive").toFile())
-                    .threadingMode(ArchiveThreadingMode.SHARED)
-                    .deleteArchiveOnStart(true)))
-            {
-
-                try (ClusterBackup clusterBackup = ClusterBackup.launch(new ClusterBackup.Context()
-                    .aeronDirectoryName(aeronDirectoryName)
-                    .clusterDir(tmpDir.resolve("cluster").toFile())
-                    .errorHandler(ClusterTests.errorHandler(0))
-                    .consensusChannel("aeron:udp?endpoint=localhost:0")
-                    .clusterConsensusEndpoints("localhost:20001")
-                    .catchupEndpoint("localhost:0")
-                    .deleteDirOnStart(true)))
-                {
-                    awaitThread(expectedName);
-                }
-            }
-        }
-        finally
-        {
-            System.clearProperty(THREAD_NAMING_PROP_NAME);
-        }
-    }
-
-    private static Stream<Arguments> consensusModuleThreadNamingModes()
-    {
-        return Stream.of(
-            Arguments.of(THREAD_NAMING_CLASSIC, null, "consensus-module-0-0"),
-            Arguments.of(THREAD_NAMING_NEW, null, AERON_CLUSTER_CONSENSUS_THREAD_NAME),
-            Arguments.of(THREAD_NAMING_CLASSIC, "consensus-override", "consensus-override"),
-            Arguments.of(THREAD_NAMING_NEW, "consensus-override", "consensus-override"));
-    }
-
-    @ParameterizedTest
-    @MethodSource("consensusModuleThreadNamingModes")
-    @SuppressWarnings("try")
-    void shouldUseCorrectConsensusModuleThreadName(
-        final String threadNamingMode,
-        final String agentRoleNameOverride,
-        final String expectedName,
-        @TempDir final Path tmpDir)
-    {
-        System.setProperty(THREAD_NAMING_PROP_NAME, threadNamingMode);
-        try
-        {
-            final String aeronDirectoryName = tmpDir.resolve("aeron").toString();
-            final ConsensusModule.Context context = TestContexts.localhostConsensusModule()
-                .aeronDirectoryName(aeronDirectoryName)
-                .clusterDir(tmpDir.resolve("cluster").toFile())
-                .errorHandler(ClusterTests.errorHandler(0))
-                .terminationHook(ClusterTests.NOOP_TERMINATION_HOOK)
-                .logChannel("aeron:ipc")
-                .replicationChannel("aeron:udp?endpoint=localhost:0")
-                .ingressChannel("aeron:udp")
-                .clusterId(0)
-                .clusterMemberId(0)
-                .deleteDirOnStart(true);
-            if (null != agentRoleNameOverride)
-            {
-                context.agentRoleName(agentRoleNameOverride);
-            }
-
-            try (TestMediaDriver mediaDriver = TestMediaDriver.launch(new MediaDriver.Context()
-                    .aeronDirectoryName(aeronDirectoryName)
-                    .threadingMode(ThreadingMode.SHARED)
-                    .termBufferSparseFile(true)
-                    .dirDeleteOnStart(true), null);
-                Archive archive = Archive.launch(TestContexts.localhostArchive()
-                    .aeronDirectoryName(aeronDirectoryName)
-                    .archiveDir(tmpDir.resolve("archive").toFile())
-                    .threadingMode(ArchiveThreadingMode.SHARED)
-                    .deleteArchiveOnStart(true));
-                ConsensusModule consensusModule = ConsensusModule.launch(context))
-            {
-
-                final ClusteredService clusteredService = new StubClusteredService();
-                try (ClusteredServiceContainer container = ClusteredServiceContainer.launch(
-                    new ClusteredServiceContainer.Context()
-                        .aeronDirectoryName(aeronDirectoryName)
-                        .clusterDir(tmpDir.resolve("cluster").toFile())
-                        .clusteredService(clusteredService)
-                        .errorHandler(ClusterTests.errorHandler(0))
-                        .clusterId(0)
-                        .serviceId(0)))
-                {
-                    awaitThread(expectedName);
-                }
-            }
-        }
-        finally
-        {
-            System.clearProperty(THREAD_NAMING_PROP_NAME);
-        }
-    }
-
-    private static Stream<Arguments> clusteredServiceThreadNamingModes()
-    {
-        return Stream.of(
-            Arguments.of(THREAD_NAMING_CLASSIC, null, "clustered-service-0-0"),
-            Arguments.of(THREAD_NAMING_NEW, null, "aeron-cl-cs-0"),
-            Arguments.of(THREAD_NAMING_CLASSIC, "clustered-service-override", "clustered-service-override"),
-            Arguments.of(THREAD_NAMING_NEW, "clustered-service-override", "clustered-service-override"));
-    }
-
-    @ParameterizedTest
-    @MethodSource("clusteredServiceThreadNamingModes")
-    @SuppressWarnings("try")
-    void shouldUseCorrectClusteredServiceThreadName(
-        final String threadNamingMode,
-        final String serviceNameOverride,
-        final String expectedName,
-        @TempDir final Path tmpDir)
     {
         System.setProperty(THREAD_NAMING_PROP_NAME, threadNamingMode);
         try
@@ -201,38 +141,36 @@ public class ClusterThreadNamingTest
                 .errorHandler(ClusterTests.errorHandler(0))
                 .clusterId(0)
                 .serviceId(0);
-            if (null != serviceNameOverride)
-            {
-                context.serviceName(serviceNameOverride);
-            }
 
-            try (TestMediaDriver mediaDriver = TestMediaDriver.launch(new MediaDriver.Context()
-                    .aeronDirectoryName(aeronDirectoryName)
-                    .threadingMode(ThreadingMode.SHARED)
-                    .termBufferSparseFile(true)
-                    .dirDeleteOnStart(true), null);
-                Archive archive = Archive.launch(TestContexts.localhostArchive()
-                    .aeronDirectoryName(aeronDirectoryName)
-                    .archiveDir(tmpDir.resolve("archive").toFile())
-                    .threadingMode(ArchiveThreadingMode.SHARED)
-                    .deleteArchiveOnStart(true));
-                ConsensusModule consensusModule = ConsensusModule.launch(new ConsensusModule.Context()
-                    .aeronDirectoryName(aeronDirectoryName)
-                    .clusterDir(tmpDir.resolve("cluster").toFile())
-                    .errorHandler(ClusterTests.errorHandler(0))
-                    .terminationHook(ClusterTests.NOOP_TERMINATION_HOOK)
-                    .logChannel("aeron:ipc")
-                    .replicationChannel("aeron:udp?endpoint=localhost:0")
-                    .ingressChannel("aeron:udp")
-                    .clusterMembers(LOCALHOST_SINGLE_HOST_CLUSTER_MEMBERS)
-                    .clusterId(0)
-                    .clusterMemberId(0)
-                    .deleteDirOnStart(true)))
+            try (TestMediaDriver mediaDriver = TestMediaDriver.launch(
+                    new MediaDriver.Context()
+                        .aeronDirectoryName(aeronDirectoryName)
+                        .threadingMode(ThreadingMode.SHARED)
+                        .termBufferSparseFile(true)
+                        .dirDeleteOnStart(true), null);
+                Archive archive = Archive.launch(
+                    TestContexts.localhostArchive()
+                        .aeronDirectoryName(aeronDirectoryName)
+                        .archiveDir(tmpDir.resolve("archive").toFile())
+                        .threadingMode(ArchiveThreadingMode.SHARED)
+                        .deleteArchiveOnStart(true));
+                ConsensusModule consensusModule = ConsensusModule.launch(
+                    TestContexts.localhostConsensusModule()
+                        .aeronDirectoryName(aeronDirectoryName)
+                        .clusterDir(tmpDir.resolve("cluster").toFile())
+                        .errorHandler(ClusterTests.errorHandler(0))
+                        .terminationHook(ClusterTests.NOOP_TERMINATION_HOOK)
+                        .logChannel("aeron:ipc")
+                        .replicationChannel("aeron:udp?endpoint=localhost:0")
+                        .ingressChannel("aeron:udp")
+                        .clusterId(0)
+                        .clusterMemberId(0)
+                        .deleteDirOnStart(true)))
             {
 
                 try (ClusteredServiceContainer container = ClusteredServiceContainer.launch(context))
                 {
-                    awaitThread(expectedName);
+                    awaitThreads(expectedName);
                 }
             }
         }
@@ -242,20 +180,26 @@ public class ClusterThreadNamingTest
         }
     }
 
-    private static void awaitThread(final String expectedName)
+    private static void awaitThreads(final String... expectedThreadNames)
     {
         final ThreadMXBean threadBean = getThreadMXBean();
+        final String[] sortedExpected = expectedThreadNames.clone();
+        Arrays.sort(sortedExpected);
 
         Tests.await(
             () ->
             {
                 final long[] threadIds = threadBean.getAllThreadIds();
                 final ThreadInfo[] threadInfos = threadBean.getThreadInfo(threadIds, 0);
-                return Arrays.stream(threadInfos)
+                final String[] actual = Arrays.stream(threadInfos)
                     .filter(Objects::nonNull)
                     .map(ThreadInfo::getThreadName)
-                    .anyMatch(expectedName::equals);
+                    .filter(name -> Arrays.binarySearch(sortedExpected, name) >= 0)
+                    .distinct()
+                    .sorted()
+                    .toArray(String[]::new);
+                return Arrays.equals(sortedExpected, actual);
             },
-            TimeUnit.SECONDS.toNanos(1));
+            TimeUnit.SECONDS.toNanos(5));
     }
 }
