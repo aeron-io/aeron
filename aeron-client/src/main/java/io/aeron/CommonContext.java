@@ -504,7 +504,7 @@ public class CommonContext implements Cloneable
     /**
      * Property name to use to set the thread naming mode. Defaults to {@link #THREAD_NAMING_DEFAULT}.
      */
-    @Config(defaultType = DefaultType.STRING, defaultString = "classic")
+    @Config(defaultType = DefaultType.STRING, defaultString = "classic", existsInC = false)
     public static final String THREAD_NAMING_PROP_NAME = "aeron.thread.naming";
 
     /**
