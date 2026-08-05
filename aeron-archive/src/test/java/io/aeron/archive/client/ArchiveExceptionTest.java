@@ -25,7 +25,6 @@ class ArchiveExceptionTest
 {
     @ParameterizedTest
     @CsvSource({
-        "0,GENERIC",
         "1,ACTIVE_LISTING",
         "2,ACTIVE_RECORDING",
         "3,ACTIVE_SUBSCRIPTION",
@@ -41,7 +40,9 @@ class ArchiveExceptionTest
         "13,UNAUTHORISED_ACTION",
         "14,REPLICATION_CONNECTION_FAILURE",
         "15,EMPTY_RECORDING",
-        "16,INVALID_POSITION" })
+        "16,INVALID_POSITION",
+        "17,GENERIC"
+    })
     void errorCodeAsString(final int errorCode, final String expected)
     {
         assertEquals(expected, ArchiveException.errorCodeAsString(errorCode));
