@@ -101,6 +101,7 @@ import static io.aeron.CommonContext.TERM_OFFSET_PARAM_NAME;
 import static io.aeron.CommonContext.UDP_CHANNEL;
 import static io.aeron.CommonContext.driverFilePageSize;
 import static io.aeron.CommonContext.fallbackLogger;
+import static io.aeron.CommonContext.threadName;
 import static io.aeron.cluster.ConsensusModule.Configuration.CLUSTER_CLIENT_TIMEOUT_COUNT_TYPE_ID;
 import static io.aeron.cluster.ConsensusModule.Configuration.CLUSTER_CLOCK_PROP_NAME;
 import static io.aeron.cluster.ConsensusModule.Configuration.CLUSTER_NODE_ROLE_TYPE_ID;
@@ -276,6 +277,8 @@ public final class ConsensusModule implements AutoCloseable
     private final ConsensusModuleAgent conductor;
     private final AgentRunner conductorRunner;
     private final AgentInvoker conductorInvoker;
+
+    static final String AERON_CLUSTER_CONSENSUS_THREAD_NAME = "aeron-cl-cm";
 
     ConsensusModule(final Context ctx)
     {
@@ -1848,7 +1851,8 @@ public final class ConsensusModule implements AutoCloseable
 
             if (Strings.isEmpty(agentRoleName))
             {
-                agentRoleName = "consensus-module-" + clusterId + "-" + clusterMemberId;
+                agentRoleName = threadName(
+                    AERON_CLUSTER_CONSENSUS_THREAD_NAME, "consensus-module-" + clusterId + "-" + clusterMemberId);
             }
 
             final ExpandableArrayBuffer buffer = new ExpandableArrayBuffer();

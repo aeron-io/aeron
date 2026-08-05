@@ -70,6 +70,7 @@ import java.util.function.Supplier;
 
 import static io.aeron.ChannelUri.addAliasIfAbsent;
 import static io.aeron.CommonContext.driverFilePageSize;
+import static io.aeron.CommonContext.threadName;
 import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.LIVENESS_TIMEOUT_MS;
 import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.MAX_SERVICE_COUNT;
 import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.SERVICE_NAME_PROP_NAME;
@@ -107,6 +108,8 @@ public final class ClusteredServiceContainer implements AutoCloseable
 
     private final Context ctx;
     private final AgentRunner serviceAgentRunner;
+
+    static final String AERON_CLUSTER_CLUSTERED_SERVICE_THREAD_NAME_PREFIX = "aeron-cl-cs-";
 
     private ClusteredServiceContainer(final Context ctx)
     {
@@ -920,7 +923,9 @@ public final class ClusteredServiceContainer implements AutoCloseable
 
             if (Strings.isEmpty(serviceName))
             {
-                serviceName = "clustered-service-" + clusterId + "-" + serviceId;
+                serviceName = threadName(
+                    AERON_CLUSTER_CLUSTERED_SERVICE_THREAD_NAME_PREFIX + serviceId,
+                    "clustered-service-" + clusterId + "-" + serviceId);
             }
 
             if (null == aeron)

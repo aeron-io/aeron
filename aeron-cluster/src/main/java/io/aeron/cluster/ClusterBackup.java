@@ -222,6 +222,9 @@ public final class ClusterBackup implements AutoCloseable
     private final AgentInvoker agentInvoker;
     private final AgentRunner agentRunner;
 
+    static final String AERON_CLUSTER_BACKUP_THREAD_NAME = "aeron-cl-bu";
+    static final String AERON_CLUSTER_BACKUP_THREAD_NAME_CLASSIC = "cluster-backup";
+
     private ClusterBackup(final ClusterBackup.Context ctx)
     {
         try

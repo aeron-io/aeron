@@ -61,6 +61,8 @@ import static io.aeron.archive.client.AeronArchive.NULL_LENGTH;
 import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
 import static io.aeron.archive.client.AeronArchive.NULL_TIMESTAMP;
 import static io.aeron.archive.codecs.SourceLocation.REMOTE;
+import static io.aeron.cluster.ClusterBackup.AERON_CLUSTER_BACKUP_THREAD_NAME;
+import static io.aeron.cluster.ClusterBackup.AERON_CLUSTER_BACKUP_THREAD_NAME_CLASSIC;
 import static io.aeron.cluster.ClusterBackup.State.BACKING_UP;
 import static io.aeron.cluster.ClusterBackup.State.BACKUP_QUERY;
 import static io.aeron.cluster.ClusterBackup.State.CLOSED;
@@ -107,6 +109,7 @@ public final class ClusterBackupAgent implements Agent
     private final long unavailableCounterHandlerRegistrationId;
     private final PublicationGroup<ExclusivePublication> consensusPublicationGroup;
     private final LogSourceValidator logSourceValidator;
+    private final String roleName;
 
     private ClusterBackup.State state = BACKUP_QUERY;
 
@@ -172,6 +175,7 @@ public final class ClusterBackupAgent implements Agent
         liveLogPositionCounter = ctx.liveLogPositionCounter();
         nextQueryDeadlineMsCounter = ctx.nextQueryDeadlineMsCounter();
         logSourceValidator = new LogSourceValidator(ctx.sourceType());
+        roleName = threadName(AERON_CLUSTER_BACKUP_THREAD_NAME, AERON_CLUSTER_BACKUP_THREAD_NAME_CLASSIC);
     }
 
     /**
@@ -315,7 +319,7 @@ public final class ClusterBackupAgent implements Agent
     @Override
     public String roleName()
     {
-        return "cluster-backup";
+        return roleName;
     }
 
     private void reset()
