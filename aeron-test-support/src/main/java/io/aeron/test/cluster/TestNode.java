@@ -193,6 +193,7 @@ public final class TestNode implements AutoCloseable
 
                 ctx.aeronDirectoryName(aeronDirectoryName)
                     .clusterId(clusterId)
+                    .controlChannel(context.consensusModuleContext.controlChannel())
                     .archiveContext(archiveContext.clone())
                     .terminationHook(ClusterTests.terminationHook(
                         context.isTerminationExpected, context.hasServiceTerminated[i]))
