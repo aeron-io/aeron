@@ -23,6 +23,7 @@ import io.aeron.cluster.service.ClusteredServiceContainer;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
 import io.aeron.test.EventLogExtension;
+import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
 import io.aeron.test.TestContexts;
 import io.aeron.test.Tests;
@@ -41,7 +42,6 @@ import java.lang.management.ThreadMXBean;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Objects;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 import static io.aeron.CommonContext.THREAD_NAMING_CLASSIC;
@@ -88,6 +88,7 @@ public class ClusterThreadNamingTest
 
     @ParameterizedTest
     @MethodSource("threadNamingModes")
+    @InterruptAfter(5)
     void shouldUseCorrectThreadNamesByNamingMode(
         final String threadNamingMode,
         final String consensusAgentRoleNameOverride,
@@ -125,6 +126,7 @@ public class ClusterThreadNamingTest
 
     @ParameterizedTest
     @MethodSource("clusteredServiceDefaultThreadNamingModes")
+    @InterruptAfter(5)
     @SuppressWarnings("try")
     void shouldUseCorrectDefaultClusteredServiceThreadNamesPerMode(
         final String threadNamingMode, final String expectedName, @TempDir final Path tmpDir)
@@ -165,13 +167,12 @@ public class ClusterThreadNamingTest
                         .ingressChannel("aeron:udp")
                         .clusterId(0)
                         .clusterMemberId(0)
-                        .deleteDirOnStart(true)))
+                        .deleteDirOnStart(true));
+                ClusteredServiceContainer container = ClusteredServiceContainer.launch(context))
             {
-
-                try (ClusteredServiceContainer container = ClusteredServiceContainer.launch(context))
-                {
-                    awaitThreads(expectedName);
-                }
+                Tests.await(() ->
+                    ElectionState.CLOSED == ElectionState.get(consensusModule.context().electionStateCounter()));
+                awaitThreads(expectedName);
             }
         }
         finally
@@ -199,7 +200,6 @@ public class ClusterThreadNamingTest
                     .sorted()
                     .toArray(String[]::new);
                 return Arrays.equals(sortedExpected, actual);
-            },
-            TimeUnit.SECONDS.toNanos(5));
+            });
     }
 }
