@@ -22,6 +22,10 @@ import org.agrona.concurrent.status.AtomicCounter;
 
 import java.util.concurrent.CountDownLatch;
 
+import static io.aeron.CommonContext.threadName;
+import static io.aeron.archive.Archive.AERON_ARCHIVE_CONDUCTOR_THREAD_NAME;
+import static io.aeron.archive.Archive.AERON_ARCHIVE_CONDUCTOR_THREAD_NAME_CLASSIC;
+
 final class DedicatedModeArchiveConductor extends ArchiveConductor
 {
     private static final int COMMAND_LIMIT = 10;
@@ -32,7 +36,7 @@ final class DedicatedModeArchiveConductor extends ArchiveConductor
 
     DedicatedModeArchiveConductor(final Archive.Context ctx)
     {
-        super(ctx);
+        super(ctx, threadName(AERON_ARCHIVE_CONDUCTOR_THREAD_NAME, AERON_ARCHIVE_CONDUCTOR_THREAD_NAME_CLASSIC));
         closeQueue = new ManyToOneConcurrentLinkedQueue<>();
     }
 

@@ -84,6 +84,12 @@ import static io.aeron.CommonContext.MTU_LENGTH_PARAM_NAME;
 import static io.aeron.CommonContext.SPARSE_PARAM_NAME;
 import static io.aeron.CommonContext.SPY_PREFIX;
 import static io.aeron.CommonContext.TERM_LENGTH_PARAM_NAME;
+import static io.aeron.CommonContext.threadName;
+import static io.aeron.archive.Archive.AERON_ARCHIVE_CONDUCTOR_THREAD_NAME_CLASSIC;
+import static io.aeron.archive.Archive.AERON_ARCHIVE_RECORDER_THREAD_NAME;
+import static io.aeron.archive.Archive.AERON_ARCHIVE_RECORDER_THREAD_NAME_CLASSIC;
+import static io.aeron.archive.Archive.AERON_ARCHIVE_REPLAYER_THREAD_NAME;
+import static io.aeron.archive.Archive.AERON_ARCHIVE_REPLAYER_THREAD_NAME_CLASSIC;
 import static io.aeron.archive.Archive.Configuration.MARK_FILE_UPDATE_INTERVAL_MS;
 import static io.aeron.archive.Archive.Configuration.RECORDING_SEGMENT_SUFFIX;
 import static io.aeron.archive.Archive.segmentFileName;
@@ -174,7 +180,12 @@ abstract class ArchiveConductor
 
     ArchiveConductor(final Archive.Context ctx)
     {
-        super("archive-conductor", ctx.countedErrorHandler());
+        this(ctx, AERON_ARCHIVE_CONDUCTOR_THREAD_NAME_CLASSIC);
+    }
+
+    ArchiveConductor(final Archive.Context ctx, final String roleName)
+    {
+        super(roleName, ctx.countedErrorHandler());
 
         this.ctx = ctx;
 
@@ -2690,7 +2701,8 @@ abstract class ArchiveConductor
 
         Recorder(final CountedErrorHandler errorHandler, final Archive.Context context)
         {
-            super("archive-recorder", errorHandler);
+            super(threadName(
+                AERON_ARCHIVE_RECORDER_THREAD_NAME, AERON_ARCHIVE_RECORDER_THREAD_NAME_CLASSIC), errorHandler);
             totalWriteBytesCounter = context.totalWriteBytesCounter();
             totalWriteTimeCounter = context.totalWriteTimeCounter();
             maxWriteTimeCounter = context.maxWriteTimeCounter();
@@ -2736,7 +2748,8 @@ abstract class ArchiveConductor
 
         Replayer(final CountedErrorHandler errorHandler, final Archive.Context context)
         {
-            super("archive-replayer", errorHandler);
+            super(threadName(
+                AERON_ARCHIVE_REPLAYER_THREAD_NAME, AERON_ARCHIVE_REPLAYER_THREAD_NAME_CLASSIC), errorHandler);
             totalReadBytesCounter = context.totalReadBytesCounter();
             totalReadTimeCounter = context.totalReadTimeCounter();
             maxReadTimeCounter = context.maxReadTimeCounter();

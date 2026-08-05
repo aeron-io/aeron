@@ -121,6 +121,17 @@ import static org.agrona.SystemUtil.loadPropertiesFiles;
 @Versioned
 public final class Archive implements AutoCloseable
 {
+    static final String AERON_ARCHIVE_RECORDER_THREAD_NAME = "aeron-ar-rec";
+    static final String AERON_ARCHIVE_REPLAYER_THREAD_NAME = "aeron-ar-rep";
+    static final String AERON_ARCHIVE_CONDUCTOR_THREAD_NAME = "aeron-ar-cnd";
+    static final String AERON_ARCHIVE_SHARED_THREAD_NAME = "aeron-ar-shd";
+
+    static final String AERON_ARCHIVE_RECORDER_THREAD_NAME_CLASSIC = "archive-recorder";
+    static final String AERON_ARCHIVE_REPLAYER_THREAD_NAME_CLASSIC = "archive-replayer";
+    static final String AERON_ARCHIVE_CONDUCTOR_THREAD_NAME_CLASSIC = "archive-conductor";
+    static final String AERON_ARCHIVE_SHARED_THREAD_NAME_CLASSIC = "archive-conductor";
+
+
     private final Context ctx;
     private final AgentRunner conductorRunner;
     private final AgentInvoker conductorInvoker;

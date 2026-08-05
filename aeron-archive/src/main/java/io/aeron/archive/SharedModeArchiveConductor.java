@@ -19,6 +19,10 @@ import org.agrona.CloseHelper;
 import org.agrona.concurrent.AgentInvoker;
 import org.agrona.concurrent.CountedErrorHandler;
 
+import static io.aeron.CommonContext.threadName;
+import static io.aeron.archive.Archive.AERON_ARCHIVE_SHARED_THREAD_NAME;
+import static io.aeron.archive.Archive.AERON_ARCHIVE_SHARED_THREAD_NAME_CLASSIC;
+
 final class SharedModeArchiveConductor extends ArchiveConductor
 {
     private AgentInvoker replayerAgentInvoker;
@@ -26,7 +30,7 @@ final class SharedModeArchiveConductor extends ArchiveConductor
 
     SharedModeArchiveConductor(final Archive.Context ctx)
     {
-        super(ctx);
+        super(ctx, threadName(AERON_ARCHIVE_SHARED_THREAD_NAME, AERON_ARCHIVE_SHARED_THREAD_NAME_CLASSIC));
     }
 
     public void onStart()
