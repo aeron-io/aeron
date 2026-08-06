@@ -26,6 +26,7 @@ import java.lang.management.ThreadInfo;
 import java.lang.management.ThreadMXBean;
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.stream.Stream;
 
 import static io.aeron.CommonContext.THREAD_NAMING_CLASSIC;
@@ -40,6 +41,8 @@ import static io.aeron.driver.MediaDriver.AERON_DRIVER_SENDER_THREAD_NAME;
 import static io.aeron.driver.MediaDriver.AERON_DRIVER_SENDER_THREAD_NAME_CLASSIC;
 import static io.aeron.driver.MediaDriver.AERON_DRIVER_SHARED_NETWORK_THREAD_NAME;
 import static io.aeron.driver.MediaDriver.AERON_DRIVER_SHARED_THREAD_NAME;
+import static io.aeron.test.TestPropertiesUtil.backupAndOverrideSystemProperties;
+import static io.aeron.test.TestPropertiesUtil.restoreSystemProperties;
 import static java.lang.management.ManagementFactory.getThreadMXBean;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
@@ -116,7 +119,9 @@ public class MediaDriverThreadNamingTest
         final String[] expectedThreadNames)
     {
         TestMediaDriver.notSupportedOnCMediaDriver("the test uses JMX to check the thread names");
-        System.setProperty(THREAD_NAMING_PROP_NAME, threadNamingMode);
+        final Properties testProperties = new Properties();
+        testProperties.setProperty(THREAD_NAMING_PROP_NAME, threadNamingMode);
+        final Properties backup = backupAndOverrideSystemProperties(new Properties(), testProperties);
         try
         {
             final MediaDriver.Context context = new MediaDriver.Context()
@@ -143,7 +148,7 @@ public class MediaDriverThreadNamingTest
         }
         finally
         {
-            System.clearProperty(THREAD_NAMING_PROP_NAME);
+            restoreSystemProperties(backup);
         }
     }
 }

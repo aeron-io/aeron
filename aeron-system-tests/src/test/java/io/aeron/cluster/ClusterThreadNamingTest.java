@@ -42,6 +42,7 @@ import java.lang.management.ThreadMXBean;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.stream.Stream;
 
 import static io.aeron.CommonContext.THREAD_NAMING_CLASSIC;
@@ -50,6 +51,8 @@ import static io.aeron.CommonContext.THREAD_NAMING_PROP_NAME;
 import static io.aeron.cluster.ClusterBackup.AERON_CLUSTER_BACKUP_THREAD_NAME;
 import static io.aeron.cluster.ClusterBackup.AERON_CLUSTER_BACKUP_THREAD_NAME_CLASSIC;
 import static io.aeron.cluster.ConsensusModule.AERON_CLUSTER_CONSENSUS_THREAD_NAME;
+import static io.aeron.test.TestPropertiesUtil.backupAndOverrideSystemProperties;
+import static io.aeron.test.TestPropertiesUtil.restoreSystemProperties;
 import static io.aeron.test.cluster.TestCluster.aCluster;
 import static java.lang.management.ManagementFactory.getThreadMXBean;
 
@@ -95,7 +98,9 @@ public class ClusterThreadNamingTest
         final String clusterServiceNameOverride,
         final String[] expectedThreadNames)
     {
-        System.setProperty(THREAD_NAMING_PROP_NAME, threadNamingMode);
+        final Properties testProperties = new Properties();
+        testProperties.setProperty(THREAD_NAMING_PROP_NAME, threadNamingMode);
+        final Properties backup = backupAndOverrideSystemProperties(new Properties(), testProperties);
         try
         {
             try (
@@ -113,7 +118,7 @@ public class ClusterThreadNamingTest
         }
         finally
         {
-            System.clearProperty(THREAD_NAMING_PROP_NAME);
+            restoreSystemProperties(backup);
         }
     }
 
@@ -131,7 +136,9 @@ public class ClusterThreadNamingTest
     void shouldUseCorrectDefaultClusteredServiceThreadNamesPerMode(
         final String threadNamingMode, final String expectedName, @TempDir final Path tmpDir)
     {
-        System.setProperty(THREAD_NAMING_PROP_NAME, threadNamingMode);
+        final Properties testProperties = new Properties();
+        testProperties.setProperty(THREAD_NAMING_PROP_NAME, threadNamingMode);
+        final Properties backup = backupAndOverrideSystemProperties(new Properties(), testProperties);
         try
         {
             final String aeronDirectoryName = tmpDir.resolve("aeron").toString();
@@ -177,7 +184,7 @@ public class ClusterThreadNamingTest
         }
         finally
         {
-            System.clearProperty(THREAD_NAMING_PROP_NAME);
+            restoreSystemProperties(backup);
         }
     }
 

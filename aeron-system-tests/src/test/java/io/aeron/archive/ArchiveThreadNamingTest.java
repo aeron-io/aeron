@@ -32,6 +32,7 @@ import java.lang.management.ThreadInfo;
 import java.lang.management.ThreadMXBean;
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
@@ -47,6 +48,8 @@ import static io.aeron.archive.Archive.AERON_ARCHIVE_SHARED_THREAD_NAME;
 import static io.aeron.archive.Archive.AERON_ARCHIVE_SHARED_THREAD_NAME_CLASSIC;
 import static io.aeron.archive.ArchiveSystemTests.CATALOG_CAPACITY;
 import static io.aeron.archive.ArchiveSystemTests.TERM_LENGTH;
+import static io.aeron.test.TestPropertiesUtil.backupAndOverrideSystemProperties;
+import static io.aeron.test.TestPropertiesUtil.restoreSystemProperties;
 import static java.lang.management.ManagementFactory.getThreadMXBean;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
@@ -96,7 +99,9 @@ public class ArchiveThreadNamingTest
         final String threadNaming,
         final String[] expectedThreadNames)
     {
-        System.setProperty(CommonContext.THREAD_NAMING_PROP_NAME, threadNaming);
+        final Properties testProperties = new Properties();
+        testProperties.setProperty(CommonContext.THREAD_NAMING_PROP_NAME, threadNaming);
+        final Properties backup = backupAndOverrideSystemProperties(new Properties(), testProperties);
         try
         {
             final String aeronDirectoryName = CommonContext.generateRandomDirName();
@@ -146,7 +151,7 @@ public class ArchiveThreadNamingTest
         }
         finally
         {
-            System.clearProperty(CommonContext.THREAD_NAMING_PROP_NAME);
+            restoreSystemProperties(backup);
         }
     }
 }
