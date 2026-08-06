@@ -18,6 +18,8 @@ package io.aeron.archive.logging;
 import io.aeron.archive.codecs.*;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static io.aeron.archive.codecs.ControlResponseCode.NULL_VAL;
 import static io.aeron.logging.EventConfiguration.MAX_EVENT_LENGTH;
@@ -660,5 +662,18 @@ class ArchiveControlBinaryRendererTest
             sb, ArchiveEventCode.REPLICATION_SESSION_DONE.toEventCodeId(), buffer, 0, buffer.capacity());
 
         assertEquals("unknown command", sb.toString());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = { MessageHeaderDecoder.ENCODED_LENGTH - 1, MessageHeaderDecoder.ENCODED_LENGTH + 1 })
+    void renderDoesNotThrowWhenBufferIsShort(final int bufferLength)
+    {
+        final UnsafeBuffer shortBuffer = new UnsafeBuffer(new byte[bufferLength]);
+
+        for (final int msgTypeId : renderer.supportingMsgTypeIds())
+        {
+            sb.setLength(0);
+            renderer.append(sb, msgTypeId, shortBuffer, 0, shortBuffer.capacity());
+        }
     }
 }

@@ -19,6 +19,9 @@ import io.aeron.archive.codecs.*;
 import io.aeron.logging.BinaryRenderer;
 import org.agrona.DirectBuffer;
 
+import static io.aeron.archive.codecs.MessageHeaderDecoder.ENCODED_LENGTH;
+import static io.aeron.logging.BinaryRenderer.renderTruncated;
+
 /**
  * Binary renderer for the Archive admin commands.
  */
@@ -154,8 +157,14 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
         final int offset,
         final int length)
     {
+        if (length < ENCODED_LENGTH)
+        {
+            renderTruncated(sb);
+            return;
+        }
+
         headerDecoder.wrap(buffer, offset);
-        final int payloadOffset = offset + MessageHeaderDecoder.ENCODED_LENGTH;
+        final int payloadOffset = offset + ENCODED_LENGTH;
         final int blockLength = headerDecoder.blockLength();
         final int schemaVersion = headerDecoder.version();
         final ArchiveEventCode code = ArchiveEventCode.fromEventCodeId(msgTypeId);
@@ -163,12 +172,24 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
         switch (code)
         {
             case CMD_IN_CONNECT:
+                if (length < ENCODED_LENGTH + ConnectRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 connectRequestDecoder.wrap(
                     buffer, payloadOffset, blockLength, schemaVersion);
                 renderConnect(sb);
                 break;
 
             case CMD_IN_CLOSE_SESSION:
+                if (length < ENCODED_LENGTH + CloseSessionRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 closeSessionRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -176,6 +197,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_START_RECORDING:
+                if (length < ENCODED_LENGTH + StartRecordingRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 startRecordingRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -183,6 +210,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_START_RECORDING2:
+                if (length < ENCODED_LENGTH + StartRecordingRequest2Decoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 startRecordingRequest2Decoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -190,6 +223,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_STOP_RECORDING:
+                if (length < ENCODED_LENGTH + StopRecordingRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 stopRecordingRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -197,12 +236,24 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_REPLAY:
+                if (length < ENCODED_LENGTH + ReplayRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 replayRequestDecoder.wrap(
                     buffer, payloadOffset, blockLength, schemaVersion);
                 renderReplay(sb);
                 break;
 
             case CMD_IN_STOP_REPLAY:
+                if (length < ENCODED_LENGTH + StopReplayRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 stopReplayRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -210,6 +261,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_LIST_RECORDINGS:
+                if (length < ENCODED_LENGTH + ListRecordingsRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 listRecordingsRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -217,6 +274,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_LIST_RECORDINGS_FOR_URI:
+                if (length < ENCODED_LENGTH + ListRecordingsForUriRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 listRecordingsForUriRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -224,6 +287,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_LIST_RECORDING:
+                if (length < ENCODED_LENGTH + ListRecordingRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 listRecordingRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -231,6 +300,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_EXTEND_RECORDING:
+                if (length < ENCODED_LENGTH + ExtendRecordingRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 extendRecordingRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -238,6 +313,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_EXTEND_RECORDING2:
+                if (length < ENCODED_LENGTH + ExtendRecordingRequest2Decoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 extendRecordingRequest2Decoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -245,6 +326,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_RECORDING_POSITION:
+                if (length < ENCODED_LENGTH + RecordingPositionRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 recordingPositionRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -252,6 +339,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_MAX_RECORDED_POSITION:
+                if (length < ENCODED_LENGTH + MaxRecordedPositionRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 maxRecordedPositionRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -259,6 +352,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_TRUNCATE_RECORDING:
+                if (length < ENCODED_LENGTH + TruncateRecordingRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 truncateRecordingRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -266,6 +365,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_STOP_RECORDING_SUBSCRIPTION:
+                if (length < ENCODED_LENGTH + StopRecordingSubscriptionRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 stopRecordingSubscriptionRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -273,6 +378,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_STOP_RECORDING_BY_IDENTITY:
+                if (length < ENCODED_LENGTH + StopRecordingByIdentityRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 stopRecordingByIdentityRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -280,6 +391,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_STOP_POSITION:
+                if (length < ENCODED_LENGTH + StopPositionRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 stopPositionRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -287,6 +404,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_FIND_LAST_MATCHING_RECORD:
+                if (length < ENCODED_LENGTH + FindLastMatchingRecordingRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 findLastMatchingRecordingRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -294,6 +417,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_LIST_RECORDING_SUBSCRIPTIONS:
+                if (length < ENCODED_LENGTH + ListRecordingSubscriptionsRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 listRecordingSubscriptionsRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -301,6 +430,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_START_BOUNDED_REPLAY:
+                if (length < ENCODED_LENGTH + BoundedReplayRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 boundedReplayRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -308,6 +443,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_STOP_ALL_REPLAYS:
+                if (length < ENCODED_LENGTH + StopAllReplaysRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 stopAllReplaysRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -315,6 +456,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_REPLICATE:
+                if (length < ENCODED_LENGTH + ReplicateRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 replicateRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -322,6 +469,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_REPLICATE2:
+                if (length < ENCODED_LENGTH + ReplicateRequest2Decoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 replicateRequest2Decoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -329,6 +482,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_STOP_REPLICATION:
+                if (length < ENCODED_LENGTH + StopReplicationRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 stopReplicationRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -336,6 +495,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_START_POSITION:
+                if (length < ENCODED_LENGTH + StartPositionRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 startPositionRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -343,6 +508,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_DETACH_SEGMENTS:
+                if (length < ENCODED_LENGTH + DetachSegmentsRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 detachSegmentsRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -350,6 +521,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_DELETE_DETACHED_SEGMENTS:
+                if (length < ENCODED_LENGTH + DeleteDetachedSegmentsRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 deleteDetachedSegmentsRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -357,6 +534,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_PURGE_SEGMENTS:
+                if (length < ENCODED_LENGTH + PurgeSegmentsRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 purgeSegmentsRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -364,6 +547,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_ATTACH_SEGMENTS:
+                if (length < ENCODED_LENGTH + AttachSegmentsRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 attachSegmentsRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -371,6 +560,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_MIGRATE_SEGMENTS:
+                if (length < ENCODED_LENGTH + MigrateSegmentsRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 migrateSegmentsRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -378,6 +573,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_AUTH_CONNECT:
+                if (length < ENCODED_LENGTH + AuthConnectRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 authConnectRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -385,6 +586,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_KEEP_ALIVE:
+                if (length < ENCODED_LENGTH + KeepAliveRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 keepAliveRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -392,6 +599,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_TAGGED_REPLICATE:
+                if (length < ENCODED_LENGTH + TaggedReplicateRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 taggedReplicateRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -399,6 +612,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_PURGE_RECORDING:
+                if (length < ENCODED_LENGTH + PurgeRecordingRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 purgeRecordingRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -406,6 +625,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
 
             case CMD_IN_REQUEST_REPLAY_TOKEN:
+                if (length < ENCODED_LENGTH + ReplayTokenRequestDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 replayTokenRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -413,6 +638,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
             // Moved from original response method
             case CMD_OUT_RESPONSE:
+                if (length < ENCODED_LENGTH + ControlResponseDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 controlResponseDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
@@ -420,6 +651,12 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 break;
             // Moved from original signal method
             case RECORDING_SIGNAL:
+                if (length < ENCODED_LENGTH + RecordingSignalEventDecoder.BLOCK_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 recordingSignalEventDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
