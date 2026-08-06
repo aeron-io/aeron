@@ -16,10 +16,14 @@
 package io.aeron.driver.logging;
 
 import io.aeron.command.*;
+import io.aeron.exceptions.ControlProtocolException;
 import io.aeron.logging.BinaryRenderer;
 import org.agrona.DirectBuffer;
 import org.agrona.MutableDirectBuffer;
 
+import static io.aeron.logging.BinaryRenderer.renderTruncated;
+import static org.agrona.BitUtil.SIZE_OF_INT;
+import static org.agrona.BitUtil.SIZE_OF_LONG;
 import static org.agrona.PrintBufferUtil.appendPrettyHexDump;
 
 /**
@@ -80,6 +84,12 @@ public class DriverAdminCommandBinaryRenderer implements BinaryRenderer
 
     private final String newLine = String.format("%n");
 
+    // Calculated based on flyweight structure
+    private static final int PUBLICATION_BUFFERS_READY_MINIMUM_LENGTH = (2 * SIZE_OF_LONG) + (5 * SIZE_OF_INT);
+    private static final int IMAGE_BUFFERS_READY_MINIMUM_LENGTH = (2 * SIZE_OF_LONG) + (4 * SIZE_OF_INT);
+    private static final int IMAGE_MESSAGE_MINIMUM_LENGTH = (2 * SIZE_OF_LONG) + (2 * SIZE_OF_INT);
+    private static final int ERROR_RESPONSE_MINIMUM_LENGTH = SIZE_OF_LONG + (2 * SIZE_OF_INT);
+
     /**
      * Default constructor.
      */
@@ -122,94 +132,152 @@ public class DriverAdminCommandBinaryRenderer implements BinaryRenderer
         final MutableDirectBuffer mutableBuffer = (MutableDirectBuffer)buffer;
         final DriverEventCode code = DriverEventCode.fromEventCodeId(msgTypeId);
 
-        switch (code)
+        try
         {
-            case CMD_IN_ADD_PUBLICATION:
-            case CMD_IN_ADD_EXCLUSIVE_PUBLICATION:
-                pubMsg.wrap(mutableBuffer, offset);
-                renderPublication(sb);
-                break;
-            case CMD_IN_ADD_SUBSCRIPTION:
-                subMsg.wrap(mutableBuffer, offset);
-                renderSubscription(sb);
-                break;
-            case CMD_IN_REMOVE_PUBLICATION:
-                removePublication.wrap(mutableBuffer, offset);
-                renderRemovePublicationEvent(sb, length);
-                break;
-            case CMD_IN_REMOVE_SUBSCRIPTION:
-                removeSubscription.wrap(mutableBuffer, offset);
-                renderRemoveSubscriptionEvent(sb);
-                break;
-            case CMD_IN_REMOVE_COUNTER:
-                removeCounter.wrap(mutableBuffer, offset);
-                renderRemoveCounterEvent(sb);
-                break;
-            case CMD_OUT_PUBLICATION_READY:
-            case CMD_OUT_EXCLUSIVE_PUBLICATION_READY:
-                pubReady.wrap(mutableBuffer, offset);
-                renderPublicationReady(sb);
-                break;
-            case CMD_OUT_AVAILABLE_IMAGE:
-                imageReady.wrap(mutableBuffer, offset);
-                renderImageReady(sb);
-                break;
-            case CMD_OUT_ON_OPERATION_SUCCESS:
-                operationSucceeded.wrap(mutableBuffer, offset);
-                renderOperationSuccess(sb);
-                break;
-            case CMD_IN_KEEPALIVE_CLIENT:
-            case CMD_IN_CLIENT_CLOSE:
-                correlatedMsg.wrap(mutableBuffer, offset);
-                renderCorrelationEvent(sb);
-                break;
-            case CMD_OUT_ON_UNAVAILABLE_IMAGE:
-                imageMsg.wrap(mutableBuffer, offset);
-                renderImage(sb);
-                break;
-            case CMD_IN_ADD_DESTINATION:
-            case CMD_IN_REMOVE_DESTINATION:
-            case CMD_IN_ADD_RCV_DESTINATION:
-            case CMD_IN_REMOVE_RCV_DESTINATION:
-                destinationMsg.wrap(mutableBuffer, offset);
-                renderDestination(sb);
-                break;
-            case CMD_OUT_ERROR:
-                errorMsg.wrap(mutableBuffer, offset);
-                renderError(sb);
-                break;
-            case CMD_IN_ADD_COUNTER:
-                counterMsg.wrap(mutableBuffer, offset);
-                renderCounter(sb, buffer, offset);
-                break;
-            case CMD_OUT_SUBSCRIPTION_READY:
-                subscriptionReady.wrap(mutableBuffer, offset);
-                renderSubscriptionReady(sb);
-                break;
-            case CMD_OUT_COUNTER_READY:
-            case CMD_OUT_ON_UNAVAILABLE_COUNTER:
-                counterUpdate.wrap(mutableBuffer, offset);
-                renderCounterUpdate(sb);
-                break;
-            case CMD_OUT_ON_CLIENT_TIMEOUT:
-                clientTimeout.wrap(mutableBuffer, offset);
-                renderClientTimeout(sb);
-                break;
-            case CMD_IN_TERMINATE_DRIVER:
-                terminateDriver.wrap(mutableBuffer, offset);
-                renderTerminateDriver(sb, buffer, offset);
-                break;
-            case CMD_IN_REMOVE_DESTINATION_BY_ID:
-                destinationById.wrap(mutableBuffer, offset);
-                renderDestinationById(sb);
-                break;
-            case CMD_IN_REJECT_IMAGE:
-                rejectImage.wrap(mutableBuffer, offset);
-                renderRejectImage(sb);
-                break;
-            default:
-                sb.append("COMMAND_UNKNOWN: ").append(code);
-                break;
+            switch (code)
+            {
+                case CMD_IN_ADD_PUBLICATION:
+                case CMD_IN_ADD_EXCLUSIVE_PUBLICATION:
+                    pubMsg.wrap(mutableBuffer, offset);
+                    pubMsg.validateLength(msgTypeId, length);
+                    renderPublication(sb);
+                    break;
+                case CMD_IN_ADD_SUBSCRIPTION:
+                    subMsg.wrap(mutableBuffer, offset);
+                    subMsg.validateLength(msgTypeId, length);
+                    renderSubscription(sb);
+                    break;
+                case CMD_IN_REMOVE_PUBLICATION:
+                    removePublication.wrap(mutableBuffer, offset);
+                    removePublication.validateLength(msgTypeId, length);
+                    renderRemovePublicationEvent(sb, length);
+                    break;
+                case CMD_IN_REMOVE_SUBSCRIPTION:
+                    removeSubscription.wrap(mutableBuffer, offset);
+                    removeSubscription.validateLength(msgTypeId, length);
+                    renderRemoveSubscriptionEvent(sb);
+                    break;
+                case CMD_IN_REMOVE_COUNTER:
+                    removeCounter.wrap(mutableBuffer, offset);
+                    removeCounter.validateLength(msgTypeId, length);
+                    renderRemoveCounterEvent(sb);
+                    break;
+                case CMD_OUT_PUBLICATION_READY:
+                case CMD_OUT_EXCLUSIVE_PUBLICATION_READY:
+                    if (length < PUBLICATION_BUFFERS_READY_MINIMUM_LENGTH)
+                    {
+                        renderTruncated(sb);
+                        break;
+                    }
+                    pubReady.wrap(mutableBuffer, offset);
+                    renderPublicationReady(sb);
+                    break;
+                case CMD_OUT_AVAILABLE_IMAGE:
+                    if (length < IMAGE_BUFFERS_READY_MINIMUM_LENGTH)
+                    {
+                        renderTruncated(sb);
+                        break;
+                    }
+                    imageReady.wrap(mutableBuffer, offset);
+                    renderImageReady(sb);
+                    break;
+                case CMD_OUT_ON_OPERATION_SUCCESS:
+                    if (length < OperationSucceededFlyweight.LENGTH)
+                    {
+                        renderTruncated(sb);
+                        break;
+                    }
+                    operationSucceeded.wrap(mutableBuffer, offset);
+                    renderOperationSuccess(sb);
+                    break;
+                case CMD_IN_KEEPALIVE_CLIENT:
+                case CMD_IN_CLIENT_CLOSE:
+                    correlatedMsg.wrap(mutableBuffer, offset);
+                    correlatedMsg.validateLength(msgTypeId, length);
+                    renderCorrelationEvent(sb);
+                    break;
+                case CMD_OUT_ON_UNAVAILABLE_IMAGE:
+                    if (length < IMAGE_MESSAGE_MINIMUM_LENGTH)
+                    {
+                        renderTruncated(sb);
+                        break;
+                    }
+                    imageMsg.wrap(mutableBuffer, offset);
+                    renderImage(sb);
+                    break;
+                case CMD_IN_ADD_DESTINATION:
+                case CMD_IN_REMOVE_DESTINATION:
+                case CMD_IN_ADD_RCV_DESTINATION:
+                case CMD_IN_REMOVE_RCV_DESTINATION:
+                    destinationMsg.wrap(mutableBuffer, offset);
+                    destinationMsg.validateLength(msgTypeId, length);
+                    renderDestination(sb);
+                    break;
+                case CMD_OUT_ERROR:
+                    if (length < ERROR_RESPONSE_MINIMUM_LENGTH)
+                    {
+                        renderTruncated(sb);
+                        break;
+                    }
+                    errorMsg.wrap(mutableBuffer, offset);
+                    renderError(sb);
+                    break;
+                case CMD_IN_ADD_COUNTER:
+                    counterMsg.wrap(mutableBuffer, offset);
+                    counterMsg.validateLength(msgTypeId, length);
+                    renderCounter(sb, buffer, offset);
+                    break;
+                case CMD_OUT_SUBSCRIPTION_READY:
+                    if (length < SubscriptionReadyFlyweight.LENGTH)
+                    {
+                        renderTruncated(sb);
+                        break;
+                    }
+                    subscriptionReady.wrap(mutableBuffer, offset);
+                    renderSubscriptionReady(sb);
+                    break;
+                case CMD_OUT_COUNTER_READY:
+                case CMD_OUT_ON_UNAVAILABLE_COUNTER:
+                    if (length < CounterUpdateFlyweight.LENGTH)
+                    {
+                        renderTruncated(sb);
+                        break;
+                    }
+                    counterUpdate.wrap(mutableBuffer, offset);
+                    renderCounterUpdate(sb);
+                    break;
+                case CMD_OUT_ON_CLIENT_TIMEOUT:
+                    if (length < ClientTimeoutFlyweight.LENGTH)
+                    {
+                        renderTruncated(sb);
+                        break;
+                    }
+                    clientTimeout.wrap(mutableBuffer, offset);
+                    renderClientTimeout(sb);
+                    break;
+                case CMD_IN_TERMINATE_DRIVER:
+                    terminateDriver.wrap(mutableBuffer, offset);
+                    terminateDriver.validateLength(msgTypeId, length);
+                    renderTerminateDriver(sb, buffer, offset);
+                    break;
+                case CMD_IN_REMOVE_DESTINATION_BY_ID:
+                    destinationById.wrap(mutableBuffer, offset);
+                    destinationById.validateLength(msgTypeId, length);
+                    renderDestinationById(sb);
+                    break;
+                case CMD_IN_REJECT_IMAGE:
+                    rejectImage.wrap(mutableBuffer, offset);
+                    rejectImage.validateLength(msgTypeId, length);
+                    renderRejectImage(sb);
+                    break;
+                default:
+                    sb.append("COMMAND_UNKNOWN: ").append(code);
+                    break;
+            }
+        }
+        catch (final ControlProtocolException ex)
+        {
+            renderTruncated(sb);
         }
     }
 

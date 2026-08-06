@@ -31,6 +31,7 @@ import org.agrona.DirectBuffer;
 
 import java.util.Arrays;
 
+import static io.aeron.logging.BinaryRenderer.renderTruncated;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static org.agrona.PrintBufferUtil.appendPrettyHexDump;
 
@@ -96,45 +97,93 @@ public class DriverProtocolBinaryRenderer implements BinaryRenderer
         final int offset,
         final int length)
     {
+        if (length < HeaderFlyweight.MIN_HEADER_LENGTH)
+        {
+            renderTruncated(sb);
+            return;
+        }
+
         final int frameType = frameType(buffer, offset);
         switch (frameType)
         {
             case HeaderFlyweight.HDR_TYPE_PAD:
             case HeaderFlyweight.HDR_TYPE_DATA:
+                if (length < DataHeaderFlyweight.HEADER_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 dataHeader.wrap(buffer, offset, buffer.capacity() - offset);
                 renderDataFrame(sb, buffer, offset);
                 break;
 
             case HeaderFlyweight.HDR_TYPE_NAK:
+                if (length < NakFlyweight.HEADER_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 nakHeader.wrap(buffer, offset, buffer.capacity() - offset);
                 renderNakFrame(sb);
                 break;
 
             case HeaderFlyweight.HDR_TYPE_SM:
+                if (length < StatusMessageFlyweight.HEADER_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 smHeader.wrap(buffer, offset, buffer.capacity() - offset);
                 renderStatusFrame(sb);
                 break;
 
             case HeaderFlyweight.HDR_TYPE_ERR:
+                if (length < ErrorFlyweight.HEADER_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 errorHeader.wrap(buffer, offset, buffer.capacity() - offset);
                 renderErrorFrame(sb);
                 break;
 
             case HeaderFlyweight.HDR_TYPE_SETUP:
+                if (length < SetupFlyweight.HEADER_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 setupHeader.wrap(buffer, offset, buffer.capacity() - offset);
                 renderSetupFrame(sb);
                 break;
 
             case HeaderFlyweight.HDR_TYPE_RTTM:
+                if (length < RttMeasurementFlyweight.HEADER_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 rttMeasurement.wrap(buffer, offset, buffer.capacity() - offset);
                 renderRttFrame(sb);
                 break;
 
             case HeaderFlyweight.HDR_TYPE_RES:
-                renderResFrame(buffer, offset, sb);
+                renderResFrame(buffer, offset, length, sb);
                 break;
 
             case HeaderFlyweight.HDR_TYPE_RSP_SETUP:
+                if (length < ResponseSetupFlyweight.HEADER_LENGTH)
+                {
+                    renderTruncated(sb);
+                    break;
+                }
+
                 rspSetup.wrap(buffer, offset, buffer.capacity() - offset);
                 renderRspSetupFrame(sb);
                 break;
@@ -296,12 +345,15 @@ public class DriverProtocolBinaryRenderer implements BinaryRenderer
             .append(rttMeasurement.receiverId());
     }
 
-    private void renderResFrame(final DirectBuffer buffer, final int offset, final StringBuilder sb)
+    private void renderResFrame(
+        final DirectBuffer buffer, final int offset, final int length, final StringBuilder sb)
     {
         int currentOffset = offset;
 
         header.wrap(buffer, offset, buffer.capacity() - offset);
-        final int length = offset + Math.min(header.frameLength(), CommonEventEncoder.MAX_CAPTURE_LENGTH);
+        final int availableEnd = offset + length;
+        final int declaredEnd = offset + Math.min(header.frameLength(), CommonEventEncoder.MAX_CAPTURE_LENGTH);
+        final int entriesEnd = Math.min(declaredEnd, availableEnd);
         currentOffset += HeaderFlyweight.MIN_HEADER_LENGTH;
 
         sb.append("type=RES flags=");
@@ -311,13 +363,36 @@ public class DriverProtocolBinaryRenderer implements BinaryRenderer
             .append(" frameLength=")
             .append(header.frameLength());
 
-        while (length > currentOffset)
+        while (entriesEnd > currentOffset)
         {
+            final int remaining = availableEnd - currentOffset;
+            if (remaining < ResolutionEntryFlyweight.MIN_IPV4_FRAME_LENGTH)
+            {
+                sb.append(" ... ").append(remaining).append(" bytes left");
+                break;
+            }
+
             resolution.wrap(buffer, currentOffset, buffer.capacity() - currentOffset);
 
-            if ((length - offset) < resolution.entryLength())
+            final byte resType = resolution.resType();
+            if (ResolutionEntryFlyweight.RES_TYPE_NAME_TO_IP4_MD != resType &&
+                ResolutionEntryFlyweight.RES_TYPE_NAME_TO_IP6_MD != resType)
             {
-                sb.append(" ... ").append(length - offset).append(" bytes left");
+                sb.append(" ... invalid resType=").append(resType);
+                break;
+            }
+
+            final int minFrameLength = ResolutionEntryFlyweight.RES_TYPE_NAME_TO_IP4_MD == resType ?
+                ResolutionEntryFlyweight.MIN_IPV4_FRAME_LENGTH : ResolutionEntryFlyweight.MIN_IPV6_FRAME_LENGTH;
+            if (remaining < minFrameLength)
+            {
+                sb.append(" ... ").append(remaining).append(" bytes left");
+                break;
+            }
+
+            if ((entriesEnd - offset) < resolution.entryLength())
+            {
+                sb.append(" ... ").append(entriesEnd - offset).append(" bytes left");
                 break;
             }
 

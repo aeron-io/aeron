@@ -15,11 +15,15 @@
  */
 package io.aeron.driver.logging;
 
+import io.aeron.logbuffer.FrameDescriptor;
 import io.aeron.protocol.*;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static io.aeron.protocol.HeaderFlyweight.*;
+import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.agrona.PrintBufferUtil.prettyHexDump;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -221,5 +225,26 @@ class DriverProtocolBinaryRendererTest
         renderer.append(sb, DriverEventCode.FRAME_IN.toEventCodeId(), buffer, 0, buffer.capacity());
 
         assertEquals("type=UNKNOWN(65535)", sb.toString());
+    }
+
+
+    @ParameterizedTest
+    @ValueSource(ints = { MIN_HEADER_LENGTH - 1, MIN_HEADER_LENGTH + 1 })
+    void renderDoesNotThrowWhenBufferIsShort(final int bufferLength)
+    {
+        final int[] frameTypes = {
+            HDR_TYPE_PAD, HDR_TYPE_DATA, HDR_TYPE_NAK, HDR_TYPE_SM, HDR_TYPE_ERR,
+            HDR_TYPE_SETUP, HDR_TYPE_RTTM, HDR_TYPE_RES, HDR_TYPE_RSP_SETUP, Integer.MAX_VALUE };
+        for (final int frameType : frameTypes)
+        {
+            final UnsafeBuffer shortBuffer = new UnsafeBuffer(new byte[bufferLength]);
+            if (bufferLength >= FrameDescriptor.typeOffset(0) + Short.BYTES)
+            {
+                shortBuffer.putShort(FrameDescriptor.typeOffset(0), (short)frameType, LITTLE_ENDIAN);
+            }
+
+            sb.setLength(0);
+            renderer.append(sb, DriverEventCode.FRAME_IN.toEventCodeId(), shortBuffer, 0, shortBuffer.capacity());
+        }
     }
 }

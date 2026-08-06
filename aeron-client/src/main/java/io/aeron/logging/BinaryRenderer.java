@@ -43,4 +43,14 @@ public interface BinaryRenderer
      * @param length    of the message.
      */
     void append(StringBuilder sb, int msgTypeId, DirectBuffer buffer, int offset, int length);
+
+    /**
+     * Render that the message was truncated.
+     *
+     * @param sb to append to.
+     */
+    static void renderTruncated(final StringBuilder sb)
+    {
+        sb.append("truncated");
+    }
 }

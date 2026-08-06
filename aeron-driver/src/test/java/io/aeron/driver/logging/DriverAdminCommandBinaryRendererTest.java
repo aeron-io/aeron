@@ -23,6 +23,7 @@ import org.agrona.concurrent.UnsafeBuffer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
 
@@ -421,5 +422,18 @@ class DriverAdminCommandBinaryRendererTest
         final UnsafeBuffer buf = new UnsafeBuffer(ByteBuffer.allocate(bytes.length));
         buf.putBytes(0, bytes);
         return buf;
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = { CorrelatedMessageFlyweight.LENGTH - 1, CorrelatedMessageFlyweight.LENGTH + 1 })
+    void renderDoesNotThrowWhenBufferIsShort(final int bufferLength)
+    {
+        final UnsafeBuffer shortBuffer = new UnsafeBuffer(new byte[bufferLength]);
+
+        for (final int msgTypeId : renderer.supportingMsgTypeIds())
+        {
+            sb.setLength(0);
+            renderer.append(sb, msgTypeId, shortBuffer, 0, shortBuffer.capacity());
+        }
     }
 }
