@@ -9,6 +9,14 @@
 ** `aeron_image_controlled_peek` and `aeron_image_set_position`.
 ** `aeron::Image::controlledPeek` and `aeron::Image::position`.
 
+* **[Java]** Introduce more distinct Aeron-specific thread names across all modules,
+configurable via the new `aeron.thread.naming` system property:
++
+--
+** `classic`(default) - use old names (e.g. sender, conductor)
+** `new` - use new standardized names (e.g. aeron-md-snd, aeron-md-rcv)
+--
+
 === Changelog
 
 * **[Client/Java]** Remove `Image#controlledPeek` APIs.
