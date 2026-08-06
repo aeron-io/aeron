@@ -26,7 +26,7 @@ public class ArchiveException extends AeronException
     /**
      * Unused error code.
      */
-    public static final int UNUSED = 0;
+    public static final int GENERIC = 0;
 
     /**
      * An active listing of recordings is currently in operation on the session.
@@ -107,11 +107,6 @@ public class ArchiveException extends AeronException
      * The position specified for the operation is not valid, e.g. not frame-aligned, below start, or above stop.
      */
     public static final int INVALID_POSITION = 16;
-
-    /**
-     * Generic archive error with detail likely in the message.
-     */
-    public static final int GENERIC = 17;
 
     private static final long serialVersionUID = 386758252787901080L;
 

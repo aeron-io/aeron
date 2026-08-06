@@ -25,7 +25,8 @@
 #include <errno.h>
 
 #include "aeronc.h"
-#include "command/aeron_control_protocol.h"
+#include "aeron_client_error.h"
+#include "aeron_archive_client_error.h"
 #include "concurrent/aeron_thread.h"
 #include "util/aeron_error.h"
 
@@ -247,6 +248,57 @@ const char *aeron_error_code_str(int errcode)
 
         case AERON_CLIENT_ERROR_DRIVER_BUFFER_FULL:
             return "driver command buffer full";
+
+        case AERON_ARCHIVE_ERROR_CODE_GENERIC:
+            return "generic error, see message";
+
+        case AERON_ARCHIVE_ERROR_CODE_ACTIVE_LISTING:
+            return "an active listing is already running";
+
+        case AERON_ARCHIVE_ERROR_CODE_ACTIVE_RECORDING:
+            return "an active recording is already running";
+
+        case AERON_ARCHIVE_ERROR_CODE_ACTIVE_SUBSCRIPTION:
+            return "an active subscription is already running";
+
+        case AERON_ARCHIVE_ERROR_CODE_UNKNOWN_SUBSCRIPTION:
+            return "unknown subscription";
+
+        case AERON_ARCHIVE_ERROR_CODE_UNKNOWN_RECORDING:
+            return "unknown recording";
+
+        case AERON_ARCHIVE_ERROR_CODE_UNKNOWN_REPLAY:
+            return "unknown replay";
+
+        case AERON_ARCHIVE_ERROR_CODE_MAX_REPLAYS:
+            return "max replays exceeded";
+
+        case AERON_ARCHIVE_ERROR_CODE_MAX_RECORDINGS:
+            return "max recordings exceeded";
+
+        case AERON_ARCHIVE_ERROR_CODE_INVALID_EXTENSION:
+            return "invalid recording extension";
+
+        case AERON_ARCHIVE_ERROR_CODE_AUTHENTICATION_REJECTED:
+            return "authentication rejected";
+
+        case AERON_ARCHIVE_ERROR_CODE_STORAGE_SPACE:
+            return "insufficient storage space";
+
+        case AERON_ARCHIVE_ERROR_CODE_UNKNOWN_REPLICATION:
+            return "unknown replication";
+
+        case AERON_ARCHIVE_ERROR_CODE_UNAUTHORISED_ACTION:
+            return "unauthorised action";
+
+        case AERON_ARCHIVE_ERROR_CODE_REPLICATION_CONNECTION_FAILURE:
+            return "failed to connect for replication";
+
+        case AERON_ARCHIVE_ERROR_CODE_EMPTY_RECORDING:
+            return "recording is empty";
+
+        case AERON_ARCHIVE_ERROR_CODE_INVALID_POSITION:
+            return "invalid position";
 
         default:
             return "unknown error code";

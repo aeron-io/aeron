@@ -541,7 +541,7 @@ TEST_F(AeronArchiveAsyncClientTest, testAeronArchiveAsyncClient)
         ASSERT_TRUE(aeron_archive_async_client_try_send_max_recorded_position_request(client, 2, 11));
         auto controlResponse2 = pollUntilControlResponseReceived(client, listener, 2);
         ASSERT_EQ(2, controlResponse2->correlation_id);
-        ASSERT_EQ(ARCHIVE_ERROR_CODE_UNKNOWN_RECORDING, controlResponse2->relevant_id);
+        ASSERT_EQ(AERON_ARCHIVE_ERROR_CODE_UNKNOWN_RECORDING, controlResponse2->relevant_id);
         ASSERT_EQ(aeron_archive_client_controlResponseCode_ERROR, controlResponse2->code);
         ASSERT_EQ("unknown recording id: 11", controlResponse2->error_message);
 
@@ -550,7 +550,7 @@ TEST_F(AeronArchiveAsyncClientTest, testAeronArchiveAsyncClient)
         ASSERT_TRUE(aeron_archive_async_client_try_send_replay_request(client, nullptr, 3, 12, "aeron:ipc", 2000, &replay_params));
         auto controlResponse3 = pollUntilControlResponseReceived(client, listener, 3);
         ASSERT_EQ(3, controlResponse3->correlation_id);
-        ASSERT_EQ(ARCHIVE_ERROR_CODE_UNKNOWN_RECORDING, controlResponse3->relevant_id);
+        ASSERT_EQ(AERON_ARCHIVE_ERROR_CODE_UNKNOWN_RECORDING, controlResponse3->relevant_id);
         ASSERT_EQ(aeron_archive_client_controlResponseCode_ERROR, controlResponse3->code);
         ASSERT_EQ("unknown recording id: 12", controlResponse3->error_message);
 

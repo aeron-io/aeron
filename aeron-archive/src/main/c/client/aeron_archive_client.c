@@ -32,6 +32,28 @@
 #include "uri/aeron_uri_string_builder.h"
 #include "command/aeron_control_protocol.h"
 
+// Error codes used and emitted via the Archive protocol. Note that these
+// are not the on client API, they are translated to prevent clashes with
+// existing Aeron error codes.  See aeron_archive_client_error.h for the
+// client error codes.
+#define ARCHIVE_ERROR_CODE_GENERIC (0)
+#define ARCHIVE_ERROR_CODE_ACTIVE_LISTING (1)
+#define ARCHIVE_ERROR_CODE_ACTIVE_RECORDING (2)
+#define ARCHIVE_ERROR_CODE_ACTIVE_SUBSCRIPTION (3)
+#define ARCHIVE_ERROR_CODE_UNKNOWN_SUBSCRIPTION (4)
+#define ARCHIVE_ERROR_CODE_UNKNOWN_RECORDING (5)
+#define ARCHIVE_ERROR_CODE_UNKNOWN_REPLAY (6)
+#define ARCHIVE_ERROR_CODE_MAX_REPLAYS (7)
+#define ARCHIVE_ERROR_CODE_MAX_RECORDINGS (8)
+#define ARCHIVE_ERROR_CODE_INVALID_EXTENSION (9)
+#define ARCHIVE_ERROR_CODE_AUTHENTICATION_REJECTED (10)
+#define ARCHIVE_ERROR_CODE_STORAGE_SPACE (11)
+#define ARCHIVE_ERROR_CODE_UNKNOWN_REPLICATION (12)
+#define ARCHIVE_ERROR_CODE_UNAUTHORISED_ACTION (13)
+#define ARCHIVE_ERROR_CODE_REPLICATION_CONNECTION_FAILURE (14)
+#define ARCHIVE_ERROR_CODE_EMPTY_RECORDING (15)
+#define ARCHIVE_ERROR_CODE_INVALID_POSITION (16)
+
 #define ENSURE_NOT_REENTRANT_CHECK_RETURN(_aa, _rc) \
 do { \
     if ((_aa)->is_in_callback) \
@@ -164,7 +186,7 @@ static int aeron_archive_poll_for_response_allowing_error(
 
                 // got an error, and the correlation ids match
                 AERON_SET_ERR(
-                    -poller->relevant_id,
+                    -aeron_archive_client_map_archive_to_client_error_code(poller->relevant_id),
                     "response for correlationId=%" PRIi64 ", errorCode=%" PRIi64 ", error: %s",
                     correlation_id,
                     poller->relevant_id,
@@ -411,7 +433,7 @@ int aeron_archive_poll_for_recording_signals(int32_t *count_p, aeron_archive_t *
             if (NULL == aeron_archive->ctx->error_handler)
             {
                 AERON_SET_ERR(
-                    -poller->relevant_id,
+                    -aeron_archive_client_map_archive_to_client_error_code(poller->relevant_id),
                     "response for correlationId=%" PRIi64 ", errorCode=%" PRIi64 ", error: %s",
                     poller->correlation_id,
                     poller->relevant_id,
@@ -532,7 +554,7 @@ int aeron_archive_check_for_error_response(aeron_archive_t *aeron_archive)
             if (NULL == aeron_archive->ctx->error_handler)
             {
                 AERON_SET_ERR(
-                    -poller->relevant_id,
+                    -aeron_archive_client_map_archive_to_client_error_code(poller->relevant_id),
                     "response for correlationId=%" PRIi64 ", errorCode=%" PRIi64 ", error: %s",
                     poller->correlation_id,
                     poller->relevant_id,
@@ -2098,7 +2120,7 @@ int aeron_archive_poll_for_response(
             {
                 // got an error, and the correlation ids match
                 AERON_SET_ERR(
-                    -poller->relevant_id,
+                    -aeron_archive_client_map_archive_to_client_error_code(poller->relevant_id),
                     "response for correlationId=%" PRIi64 ", errorCode=%" PRIi64 ", error: %s",
                     correlation_id,
                     poller->relevant_id,
@@ -2582,4 +2604,14 @@ int aeron_archive_channel_with_session_id(char *out, size_t out_len, const char 
     aeron_uri_string_builder_close(&builder);
 
     return rc;
+}
+
+int aeron_archive_client_map_archive_to_client_error_code(const int error_code)
+{
+    if (ARCHIVE_ERROR_CODE_GENERIC <= error_code && error_code <= ARCHIVE_ERROR_CODE_INVALID_POSITION)
+    {
+        return error_code + 200;
+    }
+
+    return error_code;
 }

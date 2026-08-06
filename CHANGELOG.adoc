@@ -9,6 +9,14 @@
 ** `aeron_image_controlled_peek` and `aeron_image_set_position`.
 ** `aeron::Image::controlledPeek` and `aeron::Image::position`.
 
+* **Breaking:** **[C/C++ Client]** Surface the specific archive error codes to the C/C++ user API.
+** Add new `AERON_ARCHIVE_*_ERROR_CODE` constants and move `ARCHIVE_*_ERROR_CODE` constants to the
+`aeron_archive_client.c` file to hide from clients. This may cause compilation errors for clients.
+** Add `errorCode()` to C++ exceptions to allow access to the error code from the API in both the transport and
+archive clients.
+** Add additional error code to user string conversion in the `aeron_error.c` implementation.
+** Translate the Archive error codes to the user error codes in the C aeron archive client and async client.
+
 * **[Java]** Introduce more distinct Aeron-specific thread names across all modules,
 configurable via the new `aeron.thread.naming` system property:
 +

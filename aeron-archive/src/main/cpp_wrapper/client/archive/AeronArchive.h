@@ -32,87 +32,87 @@ namespace aeron { namespace archive { namespace client
         /**
          * Generic archive error with detail likely in the message.
          */
-        constexpr int GENERIC = ARCHIVE_ERROR_CODE_GENERIC;
+        constexpr int GENERIC = AERON_ARCHIVE_ERROR_CODE_GENERIC;
 
         /**
          * An active listing of recordings is currently in operation on the session.
          */
-        constexpr int ACTIVE_LISTING = ARCHIVE_ERROR_CODE_ACTIVE_LISTING;
+        constexpr int ACTIVE_LISTING = AERON_ARCHIVE_ERROR_CODE_ACTIVE_LISTING;
 
         /**
          * The recording is currently active so the requested operation is not valid.
          */
-        constexpr int ACTIVE_RECORDING = ARCHIVE_ERROR_CODE_ACTIVE_RECORDING;
+        constexpr int ACTIVE_RECORDING = AERON_ARCHIVE_ERROR_CODE_ACTIVE_RECORDING;
 
         /**
          * A subscription is currently active for the requested channel and stream id which would clash.
          */
-        constexpr int ACTIVE_SUBSCRIPTION = ARCHIVE_ERROR_CODE_ACTIVE_SUBSCRIPTION;
+        constexpr int ACTIVE_SUBSCRIPTION = AERON_ARCHIVE_ERROR_CODE_ACTIVE_SUBSCRIPTION;
 
         /**
          * The subscription for the requested operation is not known to the archive.
          */
-        constexpr int UNKNOWN_SUBSCRIPTION = ARCHIVE_ERROR_CODE_UNKNOWN_SUBSCRIPTION;
+        constexpr int UNKNOWN_SUBSCRIPTION = AERON_ARCHIVE_ERROR_CODE_UNKNOWN_SUBSCRIPTION;
 
         /**
          * The recording identity for the operation is not know to the archive.
          */
-        constexpr int UNKNOWN_RECORDING = ARCHIVE_ERROR_CODE_UNKNOWN_RECORDING;
+        constexpr int UNKNOWN_RECORDING = AERON_ARCHIVE_ERROR_CODE_UNKNOWN_RECORDING;
 
         /**
          * The replay identity for the operation is not known to the archive.
          */
-        constexpr int UNKNOWN_REPLAY = ARCHIVE_ERROR_CODE_UNKNOWN_REPLAY;
+        constexpr int UNKNOWN_REPLAY = AERON_ARCHIVE_ERROR_CODE_UNKNOWN_REPLAY;
 
         /**
          * The archive has reached its maximum concurrent replay sessions.
          */
-        constexpr int MAX_REPLAYS = ARCHIVE_ERROR_CODE_MAX_REPLAYS;
+        constexpr int MAX_REPLAYS = AERON_ARCHIVE_ERROR_CODE_MAX_REPLAYS;
 
         /**
          * The archive has reached its maximum concurrent recording sessions.
          */
-        constexpr int MAX_RECORDINGS = ARCHIVE_ERROR_CODE_MAX_RECORDINGS;
+        constexpr int MAX_RECORDINGS = AERON_ARCHIVE_ERROR_CODE_MAX_RECORDINGS;
 
         /**
          * The extend-recording operation is not valid for the existing recording.
          */
-        constexpr int INVALID_EXTENSION = ARCHIVE_ERROR_CODE_INVALID_EXTENSION;
+        constexpr int INVALID_EXTENSION = AERON_ARCHIVE_ERROR_CODE_INVALID_EXTENSION;
 
         /**
          * The archive is rejecting the session because of failed authentication.
          */
-        constexpr int AUTHENTICATION_REJECTED = ARCHIVE_ERROR_CODE_AUTHENTICATION_REJECTED;
+        constexpr int AUTHENTICATION_REJECTED = AERON_ARCHIVE_ERROR_CODE_AUTHENTICATION_REJECTED;
 
         /**
          * The archive storage is at minimum threshold or exhausted.
          */
-        constexpr int STORAGE_SPACE = ARCHIVE_ERROR_CODE_STORAGE_SPACE;
+        constexpr int STORAGE_SPACE = AERON_ARCHIVE_ERROR_CODE_STORAGE_SPACE;
 
         /**
          * The replication identity for this operation is not known to the archive.
          */
-        constexpr int UNKNOWN_REPLICATION = ARCHIVE_ERROR_CODE_UNKNOWN_REPLICATION;
+        constexpr int UNKNOWN_REPLICATION = AERON_ARCHIVE_ERROR_CODE_UNKNOWN_REPLICATION;
 
         /**
          * The principle was not authorised to take the requested action.
          */
-        constexpr int UNAUTHORISED_ACTION = ARCHIVE_ERROR_CODE_UNAUTHORISED_ACTION;
+        constexpr int UNAUTHORISED_ACTION = AERON_ARCHIVE_ERROR_CODE_UNAUTHORISED_ACTION;
 
         /**
          * The replication session failed to connect to the source archive.
          */
-        constexpr int REPLICATION_CONNECTION_FAILURE = ARCHIVE_ERROR_CODE_REPLICATION_CONNECTION_FAILURE;
+        constexpr int REPLICATION_CONNECTION_FAILURE = AERON_ARCHIVE_ERROR_CODE_REPLICATION_CONNECTION_FAILURE;
 
         /**
          * The recording specified for replay is empty.
          */
-        constexpr int EMPTY_RECORDING = ARCHIVE_ERROR_CODE_EMPTY_RECORDING;
+        constexpr int EMPTY_RECORDING = AERON_ARCHIVE_ERROR_CODE_EMPTY_RECORDING;
 
         /**
          * The position specified for the operation is not valid, e.g. not frame-aligned, below start, or above stop.
          */
-        constexpr int INVALID_POSITION = ARCHIVE_ERROR_CODE_INVALID_POSITION;
+        constexpr int INVALID_POSITION = AERON_ARCHIVE_ERROR_CODE_INVALID_POSITION;
     }
 
 constexpr const std::int64_t NULL_POSITION = aeron::NULL_VALUE;

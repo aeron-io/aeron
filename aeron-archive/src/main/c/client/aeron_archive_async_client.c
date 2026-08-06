@@ -452,10 +452,14 @@ static aeron_controlled_fragment_handler_action_t poll_handler(
                     error_message[error_message_len] = '\0';
                 }
 
+                const int64_t _relevant_id = aeron_archive_client_controlResponseCode_ERROR == code
+                    ? aeron_archive_client_map_archive_to_client_error_code((int)relevant_id)
+                    : relevant_id;
+
                 client->listener->on_control_response(
                     client->listener->clientd,
                     correlation_id,
-                    relevant_id,
+                    _relevant_id,
                     code,
                     error_message != NULL ? error_message : "");
 
