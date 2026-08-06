@@ -25,7 +25,7 @@ import java.lang.annotation.Target;
  * implementation class generated at compile time by {@code EventLoggerProcessor}.
  */
 @Target(ElementType.TYPE)
-@Retention(RetentionPolicy.SOURCE)
+@Retention(RetentionPolicy.RUNTIME)
 public @interface GeneratedLogger
 {
     /**

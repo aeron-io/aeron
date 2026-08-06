@@ -213,7 +213,7 @@ subprojects {
         options.deprecation = true
         options.compilerArgs.add('--release')
         options.compilerArgs.add(java.sourceCompatibility.majorVersion)
-        options.compilerArgs.addAll(['-Xlint:all,-processing', '-Werror']) // Enable all warnings and treat them as errors
+        options.compilerArgs.addAll(['-Xlint:all,-processing', '-Werror', '-parameters']) // Enable all warnings and treat them as errors
         options.compilerArgs.add("-Aio.aeron.version=${aeronVersion}")
         options.compilerArgs.add("-Aio.aeron.gitsha=${gitCommitHash}")
     }
@@ -1173,6 +1173,7 @@ project(':aeron-test-support') {
         implementation project(':aeron-client')
         implementation project(':aeron-cluster')
         implementation project(':aeron-samples')
+        implementation project(':aeron-annotations')
         implementation platform(libs.junit.bom)
         implementation "org.junit.jupiter:junit-jupiter-api"
         implementation "org.junit.jupiter:junit-jupiter-params"

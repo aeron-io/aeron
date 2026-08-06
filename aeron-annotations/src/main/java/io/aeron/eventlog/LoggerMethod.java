@@ -27,7 +27,7 @@ import java.lang.annotation.Target;
  * snippet pasted verbatim.
  */
 @Target(ElementType.METHOD)
-@Retention(RetentionPolicy.SOURCE)
+@Retention(RetentionPolicy.RUNTIME)
 public @interface LoggerMethod
 {
     /**
