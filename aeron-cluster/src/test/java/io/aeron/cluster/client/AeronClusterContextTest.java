@@ -19,6 +19,7 @@ import io.aeron.Aeron;
 import io.aeron.RethrowingErrorHandler;
 import io.aeron.exceptions.ConfigurationException;
 import io.aeron.test.Tests;
+import org.agrona.concurrent.AgentInvoker;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -26,8 +27,10 @@ import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class AeronClusterContextTest
@@ -122,5 +125,40 @@ class AeronClusterContextTest
         assertEquals(
             "ERROR - AeronCluster.Context.clientName length must be <= " + Aeron.Configuration.MAX_CLIENT_NAME_LENGTH,
             exception.getMessage());
+    }
+
+    @Test
+    void clonePreservesConfiguredContextValues()
+    {
+        final AgentInvoker agentInvoker = mock(AgentInvoker.class);
+
+        context
+            .messageTimeoutNs(42)
+            .newLeaderTimeoutNs(43)
+            .aeronDirectoryName("custom-dir")
+            .agentInvoker(agentInvoker);
+
+        final AeronCluster.Context clone = context.clone();
+
+        assertEquals(42, clone.messageTimeoutNs());
+        assertEquals(43, clone.newLeaderTimeoutNs());
+        assertEquals("custom-dir", clone.aeronDirectoryName());
+        assertSame(agentInvoker, clone.agentInvoker());
+    }
+
+    @Test
+    void runAgentInvokersInvokesConductorAndConfiguredInvoker()
+    {
+        final AgentInvoker conductorAgentInvoker = mock(AgentInvoker.class);
+        final AgentInvoker agentInvoker = mock(AgentInvoker.class);
+        when(aeron.conductorAgentInvoker()).thenReturn(conductorAgentInvoker);
+        when(conductorAgentInvoker.invoke()).thenReturn(1);
+        when(agentInvoker.invoke()).thenReturn(2);
+
+        context.agentInvoker(agentInvoker);
+
+        assertEquals(3, context.runAgentInvokers());
+        verify(conductorAgentInvoker).invoke();
+        verify(agentInvoker).invoke();
     }
 }
