@@ -85,7 +85,7 @@ bool aeron_retransmit_handler_is_invalid(aeron_retransmit_handler_t *handler, in
 
     if (is_invalid)
     {
-        aeron_counter_increment(handler->invalid_packets_counter);
+        aeron_counter_increment_opaque(handler->invalid_packets_counter);
     }
 
     return is_invalid;

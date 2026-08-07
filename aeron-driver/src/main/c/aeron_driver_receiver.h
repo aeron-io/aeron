@@ -91,7 +91,7 @@ aeron_driver_receiver_t;
 inline void aeron_driver_receiver_log_error(aeron_driver_receiver_t *receiver)
 {
     aeron_distinct_error_log_record(receiver->error_log, aeron_errcode(), aeron_errmsg());
-    aeron_counter_increment(receiver->errors_counter);
+    aeron_counter_increment_opaque(receiver->errors_counter);
     aeron_err_clear();
 }
 
