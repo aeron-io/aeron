@@ -142,7 +142,7 @@ inline int aeron_number_of_trailing_zeroes_u64(uint64_t value)
 #elif defined(_MSC_VER)
     unsigned long r;
 
-	#if defined(AERON_CPU_X86)
+    #if defined(AERON_CPU_X86)
     aeron_bit_scan_forward64_x86(&r, value);
     #else
     _BitScanForward64(&r, (__int64)value);
