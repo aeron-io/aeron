@@ -113,13 +113,7 @@ inline int aeron_number_of_trailing_zeroes(int32_t value)
     return __builtin_ctz(value);
 #elif defined(_MSC_VER)
     unsigned long r;
-
-    #if defined(AERON_CPU_X86)
-    aeron_bit_scan_forward64_x86(&r, value);
-    #else
-    _BitScanForward64(&r, (__int64)value);
-    #endif
-
+    _BitScanForward(&r, (unsigned long)value);
     return (int)r;
 #else
     // Hacker's Delight. Figure 5-26.
@@ -147,8 +141,14 @@ inline int aeron_number_of_trailing_zeroes_u64(uint64_t value)
     return __builtin_ctzll(value);
 #elif defined(_MSC_VER)
     unsigned long r;
+
+	#if defined(AERON_CPU_X86)
+    aeron_bit_scan_forward64_x86(&r, value);
+    #else
     _BitScanForward64(&r, (__int64)value);
-    return (int)r;
+    #endif
+
+	return (int)r;
 #else
     int lower_tzc = aeron_number_of_trailing_zeroes((int32_t) (value & UINT64_C(0xFFFFFFFF)));
     if (32 != lower_tzc)
