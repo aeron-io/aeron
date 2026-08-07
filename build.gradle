@@ -241,7 +241,8 @@ subprojects {
                 "-XX:HeapDumpPath=${baseLogFileName}-heap.hprof",
                 "-XX:+UseParallelGC",
                 "-Xlog:gc*,safepoint=info,arguments=info:file=${baseLogFileName}-gc.log:time",
-                "-XX:ErrorFile=${baseLogFileName}-crash.log")
+                "-XX:ErrorFile=${baseLogFileName}-crash.log",
+                "-Xshare:off")
 
         useJUnitPlatform {
             if (test.name != 'slowTest' && test.name != 'bindingsTest' && test.name != 'topologyTest')
