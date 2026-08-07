@@ -605,6 +605,38 @@ TEST_F(AeronArchiveWrapperTest, shouldRecordPublicationAndFindRecording)
     EXPECT_EQ(count, 1);
 }
 
+TEST_F(AeronArchiveWrapperTest, shouldErrorStopRecordingWithUnknowSubscription)
+{
+    std::shared_ptr<AeronArchive> aeronArchive = AeronArchive::connect(m_context);
+
+    try
+    {
+        constexpr std::int64_t invalidSubscriptionId = 98374982734;
+        aeronArchive->stopRecording(invalidSubscriptionId);
+        FAIL();
+    }
+    catch (ArchiveException &ex)
+    {
+        EXPECT_EQ(-error::UNKNOWN_SUBSCRIPTION, ex.errorCode());
+    }
+}
+
+TEST_F(AeronArchiveWrapperTest, shouldErrorTryStopRecordingWithUnknowSubscription)
+{
+    std::shared_ptr<AeronArchive> aeronArchive = AeronArchive::connect(m_context);
+
+    try
+    {
+        constexpr std::int64_t invalidSubscriptionId = 98374982734;
+        aeronArchive->tryStopRecordingByIdentity(invalidSubscriptionId);
+        FAIL();
+    }
+    catch (ArchiveException &ex)
+    {
+        EXPECT_EQ(-error::UNKNOWN_RECORDING, ex.errorCode());
+    }
+}
+
 TEST_F(AeronArchiveWrapperTest, shouldRecordPublicationAndTryStopById)
 {
     const std::string messagePrefix = "Message ";
@@ -1756,6 +1788,88 @@ TEST_F(AeronArchiveWrapperTest, shouldRecordReplicateThenReplay)
     EXPECT_EQ(stopPosition, subscription->imageByIndex(0)->position());
 }
 
+TEST_F(AeronArchiveWrapperTest, shouldCatchErrorPollingForRecordingSignals)
+{
+    startDestArchive();
+
+    std::set<std::int32_t> signals;
+
+    auto signalConsumer = [&](RecordingSignal recordingSignal) -> void
+    {
+        signals.insert(recordingSignal.m_recordingSignalCode);
+    };
+
+    m_destContext.recordingSignalConsumer(signalConsumer);
+
+    std::shared_ptr<AeronArchive> srcAeronArchive = AeronArchive::connect(m_context);
+    std::shared_ptr<AeronArchive> dstAeronArchive = AeronArchive::connect(m_destContext);
+
+    YieldingIdleStrategy idleStrategy;
+
+    auto credentials = std::make_pair("admin:admin", 11);
+
+    ReplicationParams params;
+    params.encodedCredentials(credentials);
+
+    dstAeronArchive->replicate(
+        873645, m_context.controlRequestStreamId(), m_context.controlRequestChannel(), params);
+
+    while (0 == signals.count(RecordingSignal::Value::SYNC))
+    {
+        try
+        {
+            dstAeronArchive->pollForRecordingSignals();
+            idleStrategy.idle();
+        }
+        catch (ArchiveException &ex)
+        {
+            EXPECT_EQ(-error::UNKNOWN_RECORDING, ex.errorCode());
+            break;
+        }
+    }
+}
+
+TEST_F(AeronArchiveWrapperTest, shouldCatchErrorPollingForErrors)
+{
+    startDestArchive();
+
+    std::set<std::int32_t> signals;
+
+    auto signalConsumer = [&](RecordingSignal recordingSignal) -> void
+    {
+        signals.insert(recordingSignal.m_recordingSignalCode);
+    };
+
+    m_destContext.recordingSignalConsumer(signalConsumer);
+
+    std::shared_ptr<AeronArchive> srcAeronArchive = AeronArchive::connect(m_context);
+    std::shared_ptr<AeronArchive> dstAeronArchive = AeronArchive::connect(m_destContext);
+
+    YieldingIdleStrategy idleStrategy;
+
+    auto credentials = std::make_pair("admin:admin", 11);
+
+    ReplicationParams params;
+    params.encodedCredentials(credentials);
+
+    dstAeronArchive->replicate(
+        873645, m_context.controlRequestStreamId(), m_context.controlRequestChannel(), params);
+
+    while (0 == signals.count(RecordingSignal::Value::SYNC))
+    {
+        try
+        {
+            dstAeronArchive->checkForErrorResponse();
+            idleStrategy.idle();
+        }
+        catch (ArchiveException &ex)
+        {
+            EXPECT_EQ(-error::UNKNOWN_RECORDING, ex.errorCode());
+            break;
+        }
+    }
+}
+
 TEST_P(AeronArchiveWrapperParamTest, shouldRecordReplicateThenStop)
 {
     bool tryStop = GetParam();
@@ -2327,6 +2441,7 @@ TEST_P(AeronArchiveWrapperParamTest, shouldRecordAndExtend)
 
     ASSERT_EQ(stopPosition, replaySubscription->imageByIndex(0)->position());
 }
+
 
 #define TERM_LENGTH AERON_LOGBUFFER_TERM_MIN_LENGTH
 #define SEGMENT_LENGTH (TERM_LENGTH * 2)

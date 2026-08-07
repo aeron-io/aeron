@@ -237,7 +237,9 @@ set(HEADERS
     aeron_windows.h
     aeronc.h)
 
-add_library(aeron SHARED ${SOURCE} ${HEADERS})
+add_library(aeron SHARED ${SOURCE} ${HEADERS}
+    aeron_client_error.h
+    aeron_archive_client_error.h)
 add_library(aeron::aeron ALIAS aeron)
 target_include_directories(aeron
     PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>" "$<INSTALL_INTERFACE:include/aeron>")

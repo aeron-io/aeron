@@ -2193,7 +2193,7 @@ static int aeron_archive_persistent_subscription_await_live(
 
                     aeron_archive_persistent_subscription_on_terminal_error(
                         persistent_subscription,
-                        ARCHIVE_ERROR_CODE_GENERIC,
+                        -AERON_ARCHIVE_ERROR_CODE_GENERIC,
                         message);
 
                     return 1;

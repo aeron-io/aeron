@@ -380,7 +380,7 @@ public:
         auto search = m_pendingDestinations.find(correlationId);
         if (search == m_pendingDestinations.end())
         {
-            throw IllegalArgumentException("Unknown correlation id", SOURCEINFO);
+            throw IllegalArgumentException("Unknown correlation id", SOURCEINFO, EINVAL);
         }
 
         auto async = search->second;

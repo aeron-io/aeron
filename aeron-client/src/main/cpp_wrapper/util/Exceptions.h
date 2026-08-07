@@ -74,6 +74,7 @@ private:
     const std::string m_where;
     const std::string m_what;
     const ExceptionCategory m_category;
+    const std::int32_t m_errorCode;
 
 public:
     SourcedException(
@@ -81,10 +82,12 @@ public:
         const std::string &what,
         const std::string &function,
         const std::string &file,
-        const int line) :
+        const int line,
+        const std::int32_t errorCode = 0) :
         m_where(function + " : " + file + " : " + std::to_string(line)),
         m_what(what),
-        m_category(category)
+        m_category(category),
+        m_errorCode(errorCode)
     {
     }
 
@@ -107,21 +110,27 @@ public:
     {
         return m_category;
     }
+
+    std::int32_t errorCode() const noexcept
+    {
+        return m_errorCode;
+    }
 };
 
-#define AERON_DECLARE_SOURCED_EXCEPTION(exceptionName, category) \
-class exceptionName : public aeron::util::SourcedException       \
-{                                                                \
-public:                                                          \
-    exceptionName(                                               \
-        const std::string &what,                                 \
-        const std::string &function,                             \
-        const std::string &file,                                 \
-        const int line) :                                        \
-        SourcedException(category, what, function, file, line)   \
-    {                                                            \
-    }                                                            \
-}                                                                \
+#define AERON_DECLARE_SOURCED_EXCEPTION(exceptionName, category)            \
+class exceptionName : public aeron::util::SourcedException                  \
+{                                                                           \
+public:                                                                     \
+    exceptionName(                                                          \
+        const std::string &what,                                            \
+        const std::string &function,                                        \
+        const std::string &file,                                            \
+        const int line,                                                     \
+        const int errorCode) :                                              \
+        SourcedException(category, what, function, file, line, errorCode)   \
+    {                                                                       \
+    }                                                                       \
+}                                                                           \
 
 AERON_DECLARE_SOURCED_EXCEPTION(IOException, ExceptionCategory::EXCEPTION_CATEGORY_ERROR);
 AERON_DECLARE_SOURCED_EXCEPTION(FormatException, ExceptionCategory::EXCEPTION_CATEGORY_ERROR);
@@ -144,29 +153,29 @@ do                                                                              
     switch ((code))                                                                            \
     {                                                                                          \
         case EINVAL:                                                                           \
-            throw IllegalArgumentException((message), SOURCEINFO);                             \
+            throw IllegalArgumentException((message), SOURCEINFO, (code));                     \
                                                                                                \
         case EPERM:                                                                            \
         case -AERON_CLIENT_ERROR_BUFFER_FULL:                                                  \
         case -AERON_CLIENT_ERROR_DRIVER_BUFFER_FULL:                                           \
-            throw IllegalStateException((message), SOURCEINFO);                                \
+            throw IllegalStateException((message), SOURCEINFO, (code));                        \
                                                                                                \
         case EIO:                                                                              \
         case ENOENT:                                                                           \
-            throw IOException((message), SOURCEINFO);                                          \
+            throw IOException((message), SOURCEINFO, (code));                                  \
                                                                                                \
         case -AERON_CLIENT_ERROR_DRIVER_TIMEOUT:                                               \
-            throw DriverTimeoutException((message), SOURCEINFO);                               \
+            throw DriverTimeoutException((message), SOURCEINFO, (code));                       \
                                                                                                \
         case -AERON_CLIENT_ERROR_CLIENT_TIMEOUT:                                               \
-            throw ClientTimeoutException((message), SOURCEINFO);                               \
+            throw ClientTimeoutException((message), SOURCEINFO, (code));                       \
                                                                                                \
         case -AERON_CLIENT_ERROR_CONDUCTOR_SERVICE_TIMEOUT:                                    \
-            throw ConductorServiceTimeoutException((message), SOURCEINFO);                     \
+            throw ConductorServiceTimeoutException((message), SOURCEINFO, (code));             \
                                                                                                \
         case ETIMEDOUT:                                                                        \
         default:                                                                               \
-            throw defaultException((message), SOURCEINFO);                                     \
+            throw defaultException((message), SOURCEINFO, (code));                             \
     }                                                                                          \
 }                                                                                              \
 while (0)
@@ -177,9 +186,6 @@ while (0)
 
 class RegistrationException : public SourcedException
 {
-private:
-    std::int32_t m_errorCode;
-
 public:
     RegistrationException(
         std::int32_t errorCode,
@@ -188,14 +194,8 @@ public:
         const std::string &function,
         const std::string &file,
         const int line) :
-        SourcedException(exceptionCategory, what, function, file, line),
-        m_errorCode(errorCode)
+        SourcedException(exceptionCategory, what, function, file, line, errorCode)
     {
-    }
-
-    std::int32_t errorCode() const
-    {
-        return m_errorCode;
     }
 };
 
@@ -207,7 +207,7 @@ public:
         const std::string &function,
         const std::string &file,
         const int line) :
-        AeronException(what, function, file, line)
+        AeronException(what, function, file, line, 0)
     {
     }
 };
@@ -224,7 +224,7 @@ public:
         const std::string &function,
         const std::string &file,
         const int line) :
-        AeronException(what, function, file, line),
+        AeronException(what, function, file, line, 0),
         m_statusIndicatorCounterId(statusIndicatorCounterId)
     {
     }

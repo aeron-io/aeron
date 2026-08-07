@@ -24,24 +24,7 @@ extern "C"
 
 #include "aeronc.h"
 #include "aeron_common.h"
-
-#define ARCHIVE_ERROR_CODE_GENERIC (0)
-#define ARCHIVE_ERROR_CODE_ACTIVE_LISTING (1)
-#define ARCHIVE_ERROR_CODE_ACTIVE_RECORDING (2)
-#define ARCHIVE_ERROR_CODE_ACTIVE_SUBSCRIPTION (3)
-#define ARCHIVE_ERROR_CODE_UNKNOWN_SUBSCRIPTION (4)
-#define ARCHIVE_ERROR_CODE_UNKNOWN_RECORDING (5)
-#define ARCHIVE_ERROR_CODE_UNKNOWN_REPLAY (6)
-#define ARCHIVE_ERROR_CODE_MAX_REPLAYS (7)
-#define ARCHIVE_ERROR_CODE_MAX_RECORDINGS (8)
-#define ARCHIVE_ERROR_CODE_INVALID_EXTENSION (9)
-#define ARCHIVE_ERROR_CODE_AUTHENTICATION_REJECTED (10)
-#define ARCHIVE_ERROR_CODE_STORAGE_SPACE (11)
-#define ARCHIVE_ERROR_CODE_UNKNOWN_REPLICATION (12)
-#define ARCHIVE_ERROR_CODE_UNAUTHORISED_ACTION (13)
-#define ARCHIVE_ERROR_CODE_REPLICATION_CONNECTION_FAILURE (14)
-#define ARCHIVE_ERROR_CODE_EMPTY_RECORDING (15)
-#define ARCHIVE_ERROR_CODE_INVALID_POSITION (16)
+#include "aeron_archive_client_error.h"
 
 #define AERON_NULL_POSITION AERON_NULL_VALUE
 
@@ -1805,6 +1788,14 @@ bool aeron_archive_persistent_subscription_failure_reason(
     aeron_archive_persistent_subscription_t *persistent_subscription,
     int *out_errcode,
     const char **out_message);
+
+/**
+ * Maps the existing archive's non-unique error code to a unique one for all C/C++ clients.
+ *
+ * @param error_code from the archive.
+ * @return a C/C++ client unique error code
+ */
+int aeron_archive_client_map_archive_to_client_error_code(int error_code);
 
 #ifdef __cplusplus
 }

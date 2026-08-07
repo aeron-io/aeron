@@ -408,7 +408,7 @@ public:
     {
         if (value < 0)
         {
-            throw IllegalArgumentException("timeout less than 0", SOURCEINFO);
+            throw IllegalArgumentException("timeout less than 0", SOURCEINFO, EINVAL);
         }
 
         m_mediaDriverTimeout = value;
@@ -438,7 +438,7 @@ public:
     {
         if (value < 0)
         {
-            throw IllegalArgumentException("timeout less than 0", SOURCEINFO);
+            throw IllegalArgumentException("timeout less than 0", SOURCEINFO, EINVAL);
         }
 
         m_resourceLingerTimeout = value;
@@ -467,7 +467,7 @@ public:
     {
         if (value < 0)
         {
-            throw IllegalArgumentException("idle sleep less than 0", SOURCEINFO);
+            throw IllegalArgumentException("idle sleep less than 0", SOURCEINFO, EINVAL);
         }
 
         m_idleSleepDuration = value;
@@ -534,7 +534,7 @@ public:
         if (result < 0)
         {
             std::string errMsg = std::string("Failed to get default path, result: ") += std::to_string(result);
-            throw IllegalStateException(errMsg, SOURCEINFO);
+            throw IllegalStateException(errMsg, SOURCEINFO, EINVAL);
         }
         else if (AERON_MAX_PATH <= static_cast<std::size_t>(result))
         {
@@ -545,7 +545,7 @@ public:
             errMsg += ", truncated path: ";
             errMsg += std::string(path, 0, AERON_MAX_PATH);
 
-            throw IllegalStateException(errMsg, SOURCEINFO);
+            throw IllegalStateException(errMsg, SOURCEINFO, EINVAL);
         }
 
         return { path, 0, (std::size_t)result };
@@ -575,39 +575,39 @@ private:
     {
         if (aeron_context_set_dir(context, m_dirName.c_str()) < 0)
         {
-            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO);
+            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO, EINVAL);
         }
 
         if (aeron_context_set_client_name(context, m_clientName.c_str()) < 0)
         {
-            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO);
+            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO, EINVAL);
         }
 
         if (aeron_context_set_driver_timeout_ms(context, static_cast<std::uint64_t>(m_mediaDriverTimeout)) < 0)
         {
-            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO);
+            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO, EINVAL);
         }
 
         std::uint64_t resource_duration_ns = static_cast<std::uint64_t>(m_resourceLingerTimeout) * 1000000;
         if (aeron_context_set_resource_linger_duration_ns(context, resource_duration_ns) < 0)
         {
-            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO);
+            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO, EINVAL);
         }
 
         std::uint64_t sleep_duration_ns = static_cast<std::uint64_t>(m_idleSleepDuration) * 1000000;
         if (aeron_context_set_idle_sleep_duration_ns(context, sleep_duration_ns) < 0)
         {
-            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO);
+            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO, EINVAL);
         }
 
         if (aeron_context_set_idle_strategy_init_args(context, std::to_string(sleep_duration_ns).c_str()) < 0)
         {
-            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO);
+            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO, EINVAL);
         }
 
         if (aeron_context_set_idle_strategy(context, "sleep-ns") < 0)
         {
-            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO);
+            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO, EINVAL);
         }
 
         aeron_context_set_use_conductor_agent_invoker(context, m_useConductorAgentInvoker);
@@ -618,7 +618,7 @@ private:
             errorHandlerCallback,
             const_cast<void *>(reinterpret_cast<const void *>(&m_exceptionHandler))) < 0)
         {
-            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO);
+            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO, EINVAL);
         }
 
         if (aeron_context_set_on_new_publication(
@@ -626,7 +626,7 @@ private:
             newPublicationHandlerCallback,
             const_cast<void *>(reinterpret_cast<const void *>(&m_onNewPublicationHandler))) < 0)
         {
-            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO);
+            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO, EINVAL);
         }
 
         if (aeron_context_set_on_new_exclusive_publication(
@@ -634,7 +634,7 @@ private:
             newPublicationHandlerCallback,
             const_cast<void *>(reinterpret_cast<const void *>(&m_onNewExclusivePublicationHandler))) < 0)
         {
-            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO);
+            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO, EINVAL);
         }
 
         if (aeron_context_set_on_available_counter(
@@ -642,7 +642,7 @@ private:
             availableCounterHandlerCallback,
             const_cast<void *>(reinterpret_cast<const void *>(&m_onAvailableCounterHandler))) < 0)
         {
-            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO);
+            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO, EINVAL);
         }
 
         if (aeron_context_set_on_unavailable_counter(
@@ -650,7 +650,7 @@ private:
             availableCounterHandlerCallback,
             const_cast<void *>(reinterpret_cast<const void *>(&m_onUnavailableCounterHandler))) < 0)
         {
-            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO);
+            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO, EINVAL);
         }
 
         if (aeron_context_set_on_close_client(
@@ -658,7 +658,7 @@ private:
             closeClientHandlerCallback,
             const_cast<void *>(reinterpret_cast<const void *>(&m_onCloseClientHandler))) < 0)
         {
-            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO);
+            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO, EINVAL);
         }
 
         if (aeron_context_set_on_new_subscription(
@@ -666,7 +666,7 @@ private:
             newSubscriptionHandlerCallback,
             const_cast<void *>(reinterpret_cast<const void *>(&m_onNewSubscriptionHandler))) < 0)
         {
-            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO);
+            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO, EINVAL);
         }
 
         if (aeron_context_set_publication_error_frame_handler(
@@ -674,7 +674,7 @@ private:
             errorFrameHandlerCallback,
             const_cast<void *>(reinterpret_cast<const void *>(&m_onErrorFrameHandler))) < 0)
         {
-            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO);
+            throw IllegalArgumentException(std::string(aeron_errmsg()), SOURCEINFO, EINVAL);
         }
     }
 

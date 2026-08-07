@@ -24,7 +24,7 @@ import io.aeron.exceptions.AeronException;
 public class ArchiveException extends AeronException
 {
     /**
-     * Generic archive error with detail likely in the message.
+     * Unused error code.
      */
     public static final int GENERIC = 0;
 
@@ -102,7 +102,6 @@ public class ArchiveException extends AeronException
      * The recording specified for replay is empty.
      */
     public static final short EMPTY_RECORDING = 15;
-
 
     /**
      * The position specified for the operation is not valid, e.g. not frame-aligned, below start, or above stop.

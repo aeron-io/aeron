@@ -48,7 +48,7 @@ private:
         if (index > m_params.size())
         {
             throw CommandOptionException(
-                std::string("Internal Error: index out of range for option: ") + m_optionChar, SOURCEINFO);
+                std::string("Internal Error: index out of range for option: ") + m_optionChar, SOURCEINFO, EINVAL);
         }
     }
 
@@ -90,13 +90,13 @@ public:
         if (m_params.size() > m_maxParams)
         {
             throw CommandOptionException(
-                std::string("option -") + m_optionChar + " has too many parameters specified.", SOURCEINFO);
+                std::string("option -") + m_optionChar + " has too many parameters specified.", SOURCEINFO, EINVAL);
         }
 
         if (m_params.size() < m_minParams)
         {
             throw CommandOptionException(
-                std::string("option -") + m_optionChar + " has too few parameters specified.", SOURCEINFO);
+                std::string("option -") + m_optionChar + " has too few parameters specified.", SOURCEINFO, EINVAL);
         }
     }
 
@@ -144,7 +144,7 @@ public:
         catch (const ParseException &)
         {
             throw CommandOptionException(
-                std::string("invalid numeric value: \"") + param + "\" on option -" + m_optionChar, SOURCEINFO);
+                std::string("invalid numeric value: \"") + param + "\" on option -" + m_optionChar, SOURCEINFO, EINVAL);
         }
     }
 
@@ -160,7 +160,7 @@ public:
         catch (const ParseException &)
         {
             throw CommandOptionException(
-                std::string("invalid numeric value: \"") + param + "\" on option -" + m_optionChar, SOURCEINFO);
+                std::string("invalid numeric value: \"") + param + "\" on option -" + m_optionChar, SOURCEINFO, EINVAL);
         }
     }
 
@@ -177,7 +177,7 @@ public:
             throw CommandOptionException(
                 std::string("value \"") + toString(value) + "\" out of range: [" +
                 toString(minValue) + ".." + toString(maxValue) + "] on option -" + m_optionChar,
-                SOURCEINFO);
+                SOURCEINFO, EINVAL);
         }
 
         return value;
@@ -196,7 +196,7 @@ public:
             throw CommandOptionException(
                 std::string("value \"") + toString(value) + "\" out of range: [" +
                 toString(minValue) + ".." + toString(maxValue) + "] on option -" + m_optionChar,
-                SOURCEINFO);
+                SOURCEINFO, EINVAL);
         }
 
         return value;

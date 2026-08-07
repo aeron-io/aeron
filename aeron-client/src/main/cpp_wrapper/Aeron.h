@@ -193,7 +193,7 @@ public:
         if (search == m_pendingPublications.end())
         {
             throw IllegalArgumentException(
-                std::string("Unknown registration id: ").append(std::to_string(registrationId)), SOURCEINFO);
+                std::string("Unknown registration id: ").append(std::to_string(registrationId)), SOURCEINFO, EINVAL);
         }
 
         try
@@ -327,7 +327,7 @@ public:
         if (search == m_pendingExclusivePublications.end())
         {
             throw IllegalArgumentException(
-                std::string("Unknown registration id: ").append(std::to_string(registrationId)), SOURCEINFO);
+                std::string("Unknown registration id: ").append(std::to_string(registrationId)), SOURCEINFO, EINVAL);
         }
 
         try
@@ -485,7 +485,7 @@ public:
         if (search == m_pendingSubscriptions.end())
         {
             throw IllegalArgumentException(
-                std::string("Unknown registration id: ").append(std::to_string(registrationId)), SOURCEINFO);
+                std::string("Unknown registration id: ").append(std::to_string(registrationId)), SOURCEINFO, EINVAL);
         }
 
         AsyncAddSubscription* addSubscription = search->second;
@@ -684,7 +684,7 @@ public:
         if (search == m_pendingCounters.end())
         {
             throw IllegalArgumentException(
-                std::string("Unknown registration id: ").append(std::to_string(registrationId)), SOURCEINFO);
+                std::string("Unknown registration id: ").append(std::to_string(registrationId)), SOURCEINFO, EINVAL);
         }
 
         try
@@ -1032,7 +1032,7 @@ public:
     {
         if (!usesAgentInvoker())
         {
-            throw IllegalStateException("Not configured to use agent invoker", SOURCEINFO);
+            throw IllegalStateException("Not configured to use agent invoker", SOURCEINFO, EINVAL);
         }
 
         m_conductorInvoker.start();

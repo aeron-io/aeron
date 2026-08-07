@@ -47,7 +47,7 @@ public:
         if (aeron_map_new_file(&mapped_file, filename, false) < 0)
         {
             throw IOException(
-                std::string("failed to map new file: ") + filename + " " + aeron_errmsg(), SOURCEINFO);
+                std::string("failed to map new file: ") + filename + " " + aeron_errmsg(), SOURCEINFO, EIO);
         }
 
         mapped_file.addr = static_cast<void *>(static_cast<std::uint8_t *>(mapped_file.addr) + offset);
@@ -64,7 +64,7 @@ public:
         if (rc < 0)
         {
             throw IOException(
-                std::string("failed to open existing file: ") + filename + " " + aeron_errmsg(), SOURCEINFO);
+                std::string("failed to open existing file: ") + filename + " " + aeron_errmsg(), SOURCEINFO, EIO);
         }
 
         mapped_file.addr = static_cast<void *>(static_cast<std::uint8_t *>(mapped_file.addr) + offset);

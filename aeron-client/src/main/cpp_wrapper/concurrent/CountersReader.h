@@ -191,7 +191,7 @@ public:
             throw util::IllegalArgumentException(
                 "counter id " + std::to_string(id) +
                 " out of range: maxCounterId=" + std::to_string(maxCounterId()),
-                SOURCEINFO);
+                SOURCEINFO, EINVAL);
         }
 
         return state;
@@ -205,7 +205,7 @@ public:
             throw util::IllegalArgumentException(
                 "counter id " + std::to_string(id) +
                 " out of range: maxCounterId=" + std::to_string(maxCounterId()),
-                SOURCEINFO);
+                SOURCEINFO, EINVAL);
         }
 
         return typeId;
@@ -219,7 +219,7 @@ public:
             throw util::IllegalArgumentException(
                 "counter id " + std::to_string(id) +
                 " out of range: maxCounterId=" + std::to_string(maxCounterId()),
-                SOURCEINFO);
+                SOURCEINFO, EINVAL);
         }
 
         return deadline;
@@ -234,7 +234,7 @@ public:
             throw util::IllegalArgumentException(
                 "counter id " + std::to_string(id) +
                 " out of range: maxCounterId=" + std::to_string(maxCounterId()),
-                SOURCEINFO);
+                SOURCEINFO, EINVAL);
         }
 
         return { buffer, static_cast<std::size_t>(length) };
@@ -297,7 +297,7 @@ protected:
             throw util::IllegalArgumentException(
                 "counter id " + std::to_string(counterId) +
                 " out of range: maxCounterId=" + std::to_string(maxCounterId()),
-                SOURCEINFO);
+                SOURCEINFO, EINVAL);
         }
     }
 

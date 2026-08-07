@@ -56,7 +56,7 @@ public:
                     if (m_options.end() == opt)
                     {
                         throw CommandOptionException(
-                            std::string("-") + currentOption + " is not a valid command option", SOURCEINFO);
+                            std::string("-") + currentOption + " is not a valid command option", SOURCEINFO, EINVAL);
                     }
                     else
                     {
@@ -89,7 +89,7 @@ public:
         if (m_options.end() == opt)
         {
             throw CommandOptionException(
-                std::string("CommandOptionParser::getOption invalid option lookup: ") + optionChar, SOURCEINFO);
+                std::string("CommandOptionParser::getOption invalid option lookup: ") + optionChar, SOURCEINFO, EINVAL);
         }
 
         return opt->second;

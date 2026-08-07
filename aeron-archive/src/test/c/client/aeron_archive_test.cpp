@@ -19,6 +19,8 @@
 #include "gtest/gtest.h"
 #include <gmock/gmock-matchers.h>
 
+#include "aeron_archive_client_error.h"
+
 extern "C"
 {
 #include <inttypes.h>
@@ -4619,7 +4621,7 @@ TEST_F(AeronCArchiveTest, shouldExitOnEmptyRecording)
         replay_stream_id,
         &replay_params));
 
-    ASSERT_EQ(-AERON_ERROR_CODE_GENERIC_ERROR, aeron_errcode());
+    ASSERT_EQ(-AERON_ARCHIVE_ERROR_CODE_EMPTY_RECORDING, aeron_errcode());
 }
 
 
@@ -4737,7 +4739,7 @@ TEST_F(AeronCArchiveTest, shouldExitOnEmptyLiveRecording)
         replay_stream_id,
         &replay_params));
 
-    ASSERT_EQ(-AERON_ERROR_CODE_GENERIC_ERROR, aeron_errcode());
+    ASSERT_EQ(-AERON_ARCHIVE_ERROR_CODE_EMPTY_RECORDING, aeron_errcode());
 
     ASSERT_EQ_ERR(0, aeron_publication_close(publication, nullptr, nullptr));
 }
@@ -4843,3 +4845,67 @@ TEST_F(AeronArchiveClientNameTest, shouldFailIfClientNameIsTooLong)
 
     ASSERT_EQ_ERR(0, aeron_archive_context_close(m_ctx));
 }
+
+TEST_F(AeronArchiveClientNameTest, shouldMapErrorCodes)
+{
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_GENERIC, aeron_archive_client_map_archive_to_client_error_code(0));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_ACTIVE_LISTING, aeron_archive_client_map_archive_to_client_error_code(1));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_ACTIVE_RECORDING, aeron_archive_client_map_archive_to_client_error_code(2));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_ACTIVE_SUBSCRIPTION, aeron_archive_client_map_archive_to_client_error_code(3));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_UNKNOWN_SUBSCRIPTION, aeron_archive_client_map_archive_to_client_error_code(4));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_UNKNOWN_RECORDING, aeron_archive_client_map_archive_to_client_error_code(5));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_UNKNOWN_REPLAY, aeron_archive_client_map_archive_to_client_error_code(6));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_MAX_REPLAYS, aeron_archive_client_map_archive_to_client_error_code(7));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_MAX_RECORDINGS, aeron_archive_client_map_archive_to_client_error_code(8));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_INVALID_EXTENSION, aeron_archive_client_map_archive_to_client_error_code(9));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_AUTHENTICATION_REJECTED, aeron_archive_client_map_archive_to_client_error_code(10));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_STORAGE_SPACE, aeron_archive_client_map_archive_to_client_error_code(11));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_UNKNOWN_REPLICATION, aeron_archive_client_map_archive_to_client_error_code(12));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_UNAUTHORISED_ACTION, aeron_archive_client_map_archive_to_client_error_code(13));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_REPLICATION_CONNECTION_FAILURE, aeron_archive_client_map_archive_to_client_error_code(14));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_EMPTY_RECORDING, aeron_archive_client_map_archive_to_client_error_code(15));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_INVALID_POSITION, aeron_archive_client_map_archive_to_client_error_code(16));
+}
+
+TEST_F(AeronArchiveClientNameTest, shouldNotMapActualErrorCodes)
+{
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_GENERIC, aeron_archive_client_map_archive_to_client_error_code(AERON_ARCHIVE_ERROR_CODE_GENERIC));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_ACTIVE_LISTING, aeron_archive_client_map_archive_to_client_error_code(AERON_ARCHIVE_ERROR_CODE_ACTIVE_LISTING));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_ACTIVE_RECORDING, aeron_archive_client_map_archive_to_client_error_code(AERON_ARCHIVE_ERROR_CODE_ACTIVE_RECORDING));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_ACTIVE_SUBSCRIPTION, aeron_archive_client_map_archive_to_client_error_code(AERON_ARCHIVE_ERROR_CODE_ACTIVE_SUBSCRIPTION));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_UNKNOWN_SUBSCRIPTION, aeron_archive_client_map_archive_to_client_error_code(AERON_ARCHIVE_ERROR_CODE_UNKNOWN_SUBSCRIPTION));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_UNKNOWN_RECORDING, aeron_archive_client_map_archive_to_client_error_code(AERON_ARCHIVE_ERROR_CODE_UNKNOWN_RECORDING));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_UNKNOWN_REPLAY, aeron_archive_client_map_archive_to_client_error_code(AERON_ARCHIVE_ERROR_CODE_UNKNOWN_REPLAY));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_MAX_REPLAYS, aeron_archive_client_map_archive_to_client_error_code(AERON_ARCHIVE_ERROR_CODE_MAX_REPLAYS));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_MAX_RECORDINGS, aeron_archive_client_map_archive_to_client_error_code(AERON_ARCHIVE_ERROR_CODE_MAX_RECORDINGS));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_INVALID_EXTENSION, aeron_archive_client_map_archive_to_client_error_code(AERON_ARCHIVE_ERROR_CODE_INVALID_EXTENSION));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_AUTHENTICATION_REJECTED, aeron_archive_client_map_archive_to_client_error_code(AERON_ARCHIVE_ERROR_CODE_AUTHENTICATION_REJECTED));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_STORAGE_SPACE, aeron_archive_client_map_archive_to_client_error_code(AERON_ARCHIVE_ERROR_CODE_STORAGE_SPACE));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_UNKNOWN_REPLICATION, aeron_archive_client_map_archive_to_client_error_code(AERON_ARCHIVE_ERROR_CODE_UNKNOWN_REPLICATION));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_UNAUTHORISED_ACTION, aeron_archive_client_map_archive_to_client_error_code(AERON_ARCHIVE_ERROR_CODE_UNAUTHORISED_ACTION));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_REPLICATION_CONNECTION_FAILURE, aeron_archive_client_map_archive_to_client_error_code(AERON_ARCHIVE_ERROR_CODE_REPLICATION_CONNECTION_FAILURE));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_EMPTY_RECORDING, aeron_archive_client_map_archive_to_client_error_code(AERON_ARCHIVE_ERROR_CODE_EMPTY_RECORDING));
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_INVALID_POSITION, aeron_archive_client_map_archive_to_client_error_code(AERON_ARCHIVE_ERROR_CODE_INVALID_POSITION));
+}
+
+TEST_F(AeronArchiveClientNameTest, shouldHaveErrorMessagesForArchiveErrorCodes)
+{
+    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_GENERIC));
+    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_ACTIVE_LISTING));
+    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_ACTIVE_RECORDING));
+    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_ACTIVE_SUBSCRIPTION));
+    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_UNKNOWN_SUBSCRIPTION));
+    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_UNKNOWN_RECORDING));
+    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_UNKNOWN_REPLAY));
+    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_MAX_REPLAYS));
+    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_MAX_RECORDINGS));
+    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_INVALID_EXTENSION));
+    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_AUTHENTICATION_REJECTED));
+    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_STORAGE_SPACE));
+    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_UNKNOWN_REPLICATION));
+    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_UNAUTHORISED_ACTION));
+    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_REPLICATION_CONNECTION_FAILURE));
+    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_EMPTY_RECORDING));
+    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_INVALID_POSITION));
+}
+

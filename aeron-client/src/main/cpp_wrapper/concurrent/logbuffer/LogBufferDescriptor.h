@@ -115,20 +115,20 @@ inline void checkTermLength(std::int32_t termLength)
     {
         throw util::IllegalStateException(
             "term length less than min size of " + std::to_string(TERM_MIN_LENGTH) +
-            ", length=" + std::to_string(termLength), SOURCEINFO);
+            ", length=" + std::to_string(termLength), SOURCEINFO, EINVAL);
     }
 
     if (termLength > TERM_MAX_LENGTH)
     {
         throw util::IllegalStateException(
             "term length greater than max size of " + std::to_string(TERM_MAX_LENGTH) +
-            ", length=" + std::to_string(termLength), SOURCEINFO);
+            ", length=" + std::to_string(termLength), SOURCEINFO, EINVAL);
     }
 
     if (!util::BitUtil::isPowerOfTwo(termLength))
     {
         throw util::IllegalStateException(
-            "term length not a power of 2, length=" + std::to_string(termLength), SOURCEINFO);
+            "term length not a power of 2, length=" + std::to_string(termLength), SOURCEINFO, EINVAL);
     }
 }
 

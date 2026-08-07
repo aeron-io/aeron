@@ -106,13 +106,13 @@ public:
     {
         if (m_isClosed.load(std::memory_order_acquire))
         {
-            throw util::IllegalStateException(std::string("AgentRunner closed"), SOURCEINFO);
+            throw util::IllegalStateException(std::string("AgentRunner closed"), SOURCEINFO, EINVAL);
         }
 
         bool expected = false;
         if (!m_isStarted.compare_exchange_strong(expected, true, std::memory_order_seq_cst))
         {
-            throw util::IllegalStateException(std::string("AgentRunner already started"), SOURCEINFO);
+            throw util::IllegalStateException(std::string("AgentRunner already started"), SOURCEINFO, EINVAL);
         }
 
         m_thread = std::thread(

@@ -456,7 +456,7 @@ public:
                 throw aeron::util::IllegalStateException(
                     "length overflow: " + std::to_string(length) + " + " + std::to_string(it->capacity()) +
                     " > " + std::to_string(length + it->capacity()),
-                    SOURCEINFO);
+                    SOURCEINFO, EINVAL);
             }
 
             aeron_iovec_t buf;
@@ -771,7 +771,7 @@ public:
         auto search = m_pendingDestinations.find(correlationId);
         if (search == m_pendingDestinations.end())
         {
-            throw IllegalArgumentException("Unknown correlation id", SOURCEINFO);
+            throw IllegalArgumentException("Unknown correlation id", SOURCEINFO, EINVAL);
         }
 
         auto async = search->second;
