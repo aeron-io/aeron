@@ -91,17 +91,42 @@ inline void putInt64Ordered(volatile std::int64_t *address, std::int64_t value)
 
 inline void putInt64Atomic(volatile std::int64_t *address, std::int64_t value)
 {
-    _InterlockedExchange64(address, value);
+    std::int64_t expected = *address;
+
+    while (_InterlockedCompareExchange64(address, value, expected) != expected)
+    {
+        expected = *address;
+    }
 }
 
 inline void putInt64Volatile(volatile std::int64_t *address, std::int64_t value)
 {
-    _InterlockedExchange64(address, value);
+    std::int64_t expected = *address;
+
+    while (_InterlockedCompareExchange64(address, value, expected) != expected)
+    {
+        expected = *address;
+    }
 }
 
 inline std::int64_t getAndAddInt64(volatile std::int64_t *address, std::int64_t value)
 {
-    return _InterlockedExchangeAdd64(address, value);
+    std::int64_t expected = *address;
+
+    for (;;)
+    {
+        std::int64_t desired = expected + value;
+
+        std::int64_t original =
+            _InterlockedCompareExchange64(address, desired, expected);
+
+        if (original == expected)
+        {
+            return original;
+        }
+
+        expected = original;
+    }
 }
 
 inline std::int32_t getAndAddInt32(volatile std::int32_t *address, std::int32_t value)
@@ -116,7 +141,20 @@ inline std::int32_t xchg(volatile std::int32_t *address, std::int32_t value)
 
 inline std::int64_t xchg(volatile std::int64_t *address, std::int64_t value)
 {
-    return _InterlockedExchange64(address, value);
+    std::int64_t expected = *address;
+
+    for (;;)
+    {
+        std::int64_t original =
+            _InterlockedCompareExchange64(address, value, expected);
+
+        if (original == expected)
+        {
+            return original;
+        }
+
+        expected = original;
+    }
 }
 
 inline std::int32_t cmpxchg(volatile std::int32_t *address, std::int32_t expected, std::int32_t desired)
