@@ -26,8 +26,58 @@
 #include <intrin.h>
 #pragma intrinsic(_BitScanForward)
 #pragma intrinsic(_BitScanReverse)
+#if defined(AERON_CPU_X64) || defined(AERON_CPU_ARM)
 #pragma intrinsic(_BitScanForward64)
 #pragma intrinsic(_BitScanReverse64)
+#endif
+#endif
+
+#if defined(_MSC_VER) && defined(AERON_CPU_X86)
+
+inline unsigned char aeron_bit_scan_forward64_x86(unsigned long *index, uint64_t value)
+{
+    uint32_t low = (uint32_t)value;
+
+    if (0 != low)
+    {
+        return _BitScanForward(index, (unsigned long)low);
+    }
+
+    uint32_t high = (uint32_t)(value >> 32u);
+
+    if (0 != high)
+    {
+        unsigned long high_index;
+        _BitScanForward(&high_index, (unsigned long)high);
+        *index = high_index + 32u;
+        return 1;
+    }
+
+    return 0;
+}
+
+inline unsigned char aeron_bit_scan_reverse64_x86(unsigned long *index, uint64_t value)
+{
+    uint32_t high = (uint32_t)(value >> 32u);
+
+    if (0 != high)
+    {
+        unsigned long high_index;
+        _BitScanReverse(&high_index, (unsigned long)high);
+        *index = high_index + 32u;
+        return 1;
+    }
+
+    uint32_t low = (uint32_t)value;
+
+    if (0 != low)
+    {
+        return _BitScanReverse(index, (unsigned long)low);
+    }
+
+    return 0;
+}
+
 #endif
 
 #define AERON_CACHE_LINE_LENGTH (64u)
@@ -63,7 +113,13 @@ inline int aeron_number_of_trailing_zeroes(int32_t value)
     return __builtin_ctz(value);
 #elif defined(_MSC_VER)
     unsigned long r;
-    _BitScanForward(&r, (unsigned long)value);
+
+    #if defined(AERON_CPU_X86)
+    aeron_bit_scan_forward64_x86(&r, value);
+    #else
+    _BitScanForward64(&r, (__int64)value);
+    #endif
+
     return (int)r;
 #else
     // Hacker's Delight. Figure 5-26.
@@ -147,7 +203,11 @@ inline int aeron_number_of_leading_zeroes_u64(uint64_t value)
     return __builtin_clzll(value);
 #elif defined(_MSC_VER)
     unsigned long r;
+    #if defined(AERON_CPU_X86)
+    aeron_bit_scan_reverse64_x86(&r, value);
+    #else
     _BitScanReverse64(&r, (__int64)value);
+    #endif
     return 63 - (int)r;
 #else
     int upper_lzc = aeron_number_of_leading_zeroes((int32_t) ((value >> 32u) & UINT64_C(0xFFFFFFFF)));
