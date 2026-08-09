@@ -45,6 +45,9 @@ import static org.agrona.SystemUtil.parseSize;
  */
 public class PrintLoggerEventCallback implements LoggerEventCallback
 {
+    /**
+     * Cross-platform new line.
+     */
     public static final String NEW_LINE = String.format("%n");
 
     // [53609.381133403] CLUSTER: ELECTION_STATE_CHANGE [122/122]:
