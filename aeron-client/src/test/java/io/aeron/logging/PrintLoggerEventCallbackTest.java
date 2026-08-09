@@ -34,6 +34,7 @@ import java.util.stream.Stream;
 import static io.aeron.logging.CborUtils.IPV4_TAG;
 import static io.aeron.logging.CborUtils.IPV6_TAG;
 import static io.aeron.logging.CborUtils.NO_TAG;
+import static io.aeron.logging.PrintLoggerEventCallback.NEW_LINE;
 import static org.agrona.PrintBufferUtil.appendPrettyHexDump;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -51,7 +52,7 @@ class PrintLoggerEventCallbackTest
         sb.append("log started ")
             .append(RollingFileEventWriter.DATE_TIME_FORMATTER.format(
                 ZonedDateTime.ofInstant(Instant.ofEpochMilli(fixedEpochMs), ZoneId.systemDefault())))
-            .append(PrintLoggerEventCallback.NEW_LINE);
+            .append(NEW_LINE);
         return sb.toString();
     }
 
@@ -97,9 +98,9 @@ class PrintLoggerEventCallbackTest
         sb.append(key1).append("=").append(value1).append(" ");
         sb.append(key2).append("=\"").append(value2).append("\" ");
         sb.append(key3).append("=").append(value3).append(" ");
-        sb.append(key4).append("=\n");
+        sb.append(key4).append("=").append(NEW_LINE);
         appendPrettyHexDump(sb, new UnsafeBuffer(value4));
-        sb.append("\n");
+        sb.append(NEW_LINE);
 
         final String expected = sb.toString();
         assertEquals(expectedLogStartMessage() + expected, Files.readString(testFilePath));
@@ -136,9 +137,9 @@ class PrintLoggerEventCallbackTest
         sb.append(key1).append("=").append(value1).append(" ");
         sb.append(key2).append("=\"").append(value2).append("\" ");
         sb.append(key3).append("=").append(value3).append(" ");
-        sb.append(key4).append("=\n");
+        sb.append(key4).append("=").append(NEW_LINE);
         appendPrettyHexDump(sb, new UnsafeBuffer(value4));
-        sb.append("\n");
+        sb.append(NEW_LINE);
 
         final String expected = sb.toString();
         final int fileSizeLimit = expected.length() - 1;
@@ -202,9 +203,9 @@ class PrintLoggerEventCallbackTest
         sb.append(key1).append("=").append(value1).append(" ");
         sb.append(key2).append("=\"").append(value2).append("\" ");
         sb.append(key3).append("=").append(value3).append(" ");
-        sb.append(key4).append("=\n");
+        sb.append(key4).append("=").append(NEW_LINE);
         appendPrettyHexDump(sb, new UnsafeBuffer(value4));
-        sb.append("\n");
+        sb.append(NEW_LINE);
 
         final String expected = sb.toString();
         final int fileSizeLimit = expected.length();
@@ -260,9 +261,9 @@ class PrintLoggerEventCallbackTest
             sb.append(key1).append("=").append(value1Base + i).append(" ");
             sb.append(key2).append("=\"").append(value2).append("\" ");
             sb.append(key3).append("=").append(value3).append(" ");
-            sb.append(key4).append("=\n");
+            sb.append(key4).append("=").append(NEW_LINE);
             appendPrettyHexDump(sb, new UnsafeBuffer(value4));
-            sb.append("\n");
+            sb.append(NEW_LINE);
 
             entries[i] = sb.toString();
         }
@@ -324,9 +325,9 @@ class PrintLoggerEventCallbackTest
         sb.append(key1).append("=").append(value1).append(" ");
         sb.append(key2).append("=\"").append(value2).append("\" ");
         sb.append(key3).append("=").append(value3).append(" ");
-        sb.append(key4).append("=\n");
+        sb.append(key4).append("=").append(NEW_LINE);
         appendPrettyHexDump(sb, new UnsafeBuffer(value4));
-        sb.append("\n");
+        sb.append(NEW_LINE);
 
         final String singleEntry = sb.toString();
         final int fileSizeLimit = 100 * singleEntry.length();
@@ -388,9 +389,9 @@ class PrintLoggerEventCallbackTest
         sb.append(key1).append("=").append(value1).append(" ");
         sb.append(key2).append("=\"").append(value2).append("\" ");
         sb.append(key3).append("=").append(value3).append(" ");
-        sb.append(key4).append("=\n");
+        sb.append(key4).append("=").append(NEW_LINE);
         appendPrettyHexDump(sb, new UnsafeBuffer(value4));
-        sb.append("\n");
+        sb.append(NEW_LINE);
 
         final String expected = sb.toString();
         final int fileSizeLimit = expected.length() - 1;
@@ -456,9 +457,9 @@ class PrintLoggerEventCallbackTest
         sb.append(key1).append("=").append(value1).append(" ");
         sb.append(key2).append("=\"").append(value2).append("\" ");
         sb.append(key3).append("=").append(value3).append(" ");
-        sb.append(key4).append("=\n");
+        sb.append(key4).append("=").append(NEW_LINE);
         appendPrettyHexDump(sb, new UnsafeBuffer(value4));
-        sb.append("\n");
+        sb.append(NEW_LINE);
 
         assertEquals(expectedLogStartMessage() + sb, capturingPrintStream.flushAndGetContent());
     }
@@ -499,7 +500,7 @@ class PrintLoggerEventCallbackTest
         sb.append(eventName).append(" ");
         sb.append(key1).append("=").append("192.168.0.10").append(" ");
         sb.append(key2).append("=").append("[fe80::54d3:4122:e738:a862]");
-        sb.append("\n");
+        sb.append(NEW_LINE);
 
         assertEquals(expectedLogStartMessage() + sb, capturingPrintStream.flushAndGetContent());
     }
