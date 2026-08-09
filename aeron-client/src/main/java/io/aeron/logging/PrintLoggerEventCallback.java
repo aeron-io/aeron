@@ -45,6 +45,8 @@ import static org.agrona.SystemUtil.parseSize;
  */
 public class PrintLoggerEventCallback implements LoggerEventCallback
 {
+    public static final String NEW_LINE = String.format("%n");
+
     // [53609.381133403] CLUSTER: ELECTION_STATE_CHANGE [122/122]:
     // memberId=2 CANDIDATE_BALLOT -> LEADER_LOG_REPLICATION leaderId=2 candidateTermId=0 leadershipTermId=0
     // logPosition=0 logLeadershipTermId=-1 appendPosition=0 catchupPosition=-1 reason="unanimous leader"
@@ -52,7 +54,6 @@ public class PrintLoggerEventCallback implements LoggerEventCallback
     private final StringBuilder sb = new StringBuilder();
     private final Int2ObjectHashMap<BinaryRenderer> binaryRenderers = new Int2ObjectHashMap<>();
     private int msgTypeId;
-    static final String NEW_LINE = String.format("%n");
 
     /**
      * Default Constructor.

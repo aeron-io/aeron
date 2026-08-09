@@ -29,6 +29,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 
 import static io.aeron.logging.CborUtils.NO_TAG;
+import static io.aeron.logging.PrintLoggerEventCallback.NEW_LINE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class PrintLoggerEventCallbackTest
@@ -45,7 +46,7 @@ class PrintLoggerEventCallbackTest
         sb.append("log started ")
             .append(RollingFileEventWriter.DATE_TIME_FORMATTER.format(
                 ZonedDateTime.ofInstant(Instant.ofEpochMilli(fixedEpochMs), ZoneId.systemDefault())))
-            .append(PrintLoggerEventCallback.NEW_LINE);
+            .append(NEW_LINE);
         return sb.toString();
     }
 
@@ -83,7 +84,7 @@ class PrintLoggerEventCallbackTest
         sb.append(eventName).append(" ");
         sb.append(key).append("=");
         sb.append("type=DATA flags=00010111 frameLength=77 sessionId=12 streamId=51 termId=6 termOffset=444");
-        sb.append("\n");
+        sb.append(NEW_LINE);
 
         assertEquals(expectedLogStartMessage() + sb, capturingPrintStream.flushAndGetContent());
     }
