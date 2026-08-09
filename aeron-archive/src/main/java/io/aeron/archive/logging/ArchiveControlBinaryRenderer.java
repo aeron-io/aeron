@@ -689,8 +689,6 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
         authConnectRequestDecoder.getResponseChannel(sb);
 
         final int credentialsLength = authConnectRequestDecoder.encodedCredentialsLength();
-        final int credentialsOffset =
-            authConnectRequestDecoder.limit() + AuthConnectRequestDecoder.encodedCredentialsHeaderLength();
 
         sb.append(" encodedCredentialsLength=").append(credentialsLength);
 
