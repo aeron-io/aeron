@@ -662,6 +662,10 @@ public class CborEventLoggerProcessor extends AbstractProcessor
 
                         final int bufferLength = Math.min(length, MAX_BUFFER_LENGTH);
                         final int index = ringBuffer.tryClaim(%s.toEventCodeId(), bufferLength);
+                        if (index < 0)
+                        {
+                            return;
+                        }
             
                         final EncodingState encodingState = encodingStateThreadLocal.get();
                         encodingState.reset(ringBuffer.buffer(), index, bufferLength);
