@@ -29,7 +29,8 @@ import java.util.Set;
  */
 public final class ArchiveLog
 {
-    private static final MessageHeaderDecoder HEADER_DECODER = new MessageHeaderDecoder();
+    private static final ThreadLocal<MessageHeaderDecoder> HEADER_DECODER = ThreadLocal.withInitial(
+        MessageHeaderDecoder::new);
     private static final Object2ObjectHashMap<String, EnumSet<ArchiveEventCode>> SPECIAL_EVENTS =
         new Object2ObjectHashMap<>();
 
@@ -114,9 +115,9 @@ public final class ArchiveLog
             return;
         }
 
-        HEADER_DECODER.wrap(buffer, offset);
-        final ArchiveEventCode eventCode = ArchiveEventCode.getByTemplateId(HEADER_DECODER.templateId());
-        if (eventCode != null && isEnabled(eventCode))
+        final MessageHeaderDecoder messageHeaderDecoder = HEADER_DECODER.get().wrap(buffer, offset);
+        final ArchiveEventCode eventCode = ArchiveEventCode.getByTemplateId(messageHeaderDecoder.templateId());
+        if (isEnabled(eventCode))
         {
             ArchiveEventLogger.LOGGER.logControlRequest(eventCode, buffer, offset, length);
         }
