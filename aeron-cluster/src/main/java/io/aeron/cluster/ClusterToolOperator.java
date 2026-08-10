@@ -596,7 +596,7 @@ public class ClusterToolOperator
             final long correlationId = aeron.nextCorrelationId();
             id.set(correlationId);
 
-            while (!clusterControlAdapter.isBound() && publication.availableWindow() <= 0)
+            while (!clusterControlAdapter.isBound() || publication.availableWindow() <= 0)
             {
                 if (System.currentTimeMillis() > deadlineMs)
                 {
