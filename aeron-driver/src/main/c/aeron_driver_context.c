@@ -3397,18 +3397,23 @@ void aeron_set_thread_affinity_on_start(void *state, const char *role_name)
     int result = 0;
     if (0 <= context->conductor_cpu_affinity_no &&
        (0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_CONDUCTOR, role_name) ||
-        0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_SHARED, role_name)))
+        0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_CONDUCTOR_NEW, role_name) ||
+        0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_SHARED, role_name) ||
+        0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_SHARED_NEW, role_name)))
     {
         result = aeron_thread_set_affinity(role_name, (uint8_t)context->conductor_cpu_affinity_no);
     }
     else if (0 <= context->sender_cpu_affinity_no &&
             (0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_SENDER, role_name) ||
-             0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_SHARED_NETWORK, role_name)))
+             0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_SENDER_NEW, role_name) ||
+             0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_SHARED_NETWORK, role_name) ||
+             0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_SHARED_NETWORK_NEW, role_name)))
     {
         result = aeron_thread_set_affinity(role_name, (uint8_t)context->sender_cpu_affinity_no);
     }
     else if (0 <= context->receiver_cpu_affinity_no &&
-             0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_RECEIVER, role_name))
+             (0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_RECEIVER, role_name) ||
+              0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_RECEIVER_NEW, role_name)))
     {
         result = aeron_thread_set_affinity(role_name, (uint8_t)context->receiver_cpu_affinity_no);
     }
