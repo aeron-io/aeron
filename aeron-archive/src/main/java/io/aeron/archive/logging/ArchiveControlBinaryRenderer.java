@@ -136,6 +136,11 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
     {
     }
 
+    private static boolean cannotFit(final int capacity, final int dataOffset, final int dataLength)
+    {
+        return dataOffset + dataLength > capacity;
+    }
+
     /**
      * {@inheritDoc}
      */
@@ -180,7 +185,7 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
 
                 connectRequestDecoder.wrap(
                     buffer, payloadOffset, blockLength, schemaVersion);
-                renderConnect(sb);
+                renderConnect(sb, length);
                 break;
 
             case CMD_IN_CLOSE_SESSION:
@@ -206,7 +211,7 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 startRecordingRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
-                renderStartRecording(sb);
+                renderStartRecording(sb, length);
                 break;
 
             case CMD_IN_START_RECORDING2:
@@ -219,7 +224,7 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 startRecordingRequest2Decoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
-                renderStartRecording2(sb);
+                renderStartRecording2(sb, length);
                 break;
 
             case CMD_IN_STOP_RECORDING:
@@ -232,7 +237,7 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 stopRecordingRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
-                renderStopRecording(sb);
+                renderStopRecording(sb, length);
                 break;
 
             case CMD_IN_REPLAY:
@@ -244,7 +249,7 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
 
                 replayRequestDecoder.wrap(
                     buffer, payloadOffset, blockLength, schemaVersion);
-                renderReplay(sb);
+                renderReplay(sb, length);
                 break;
 
             case CMD_IN_STOP_REPLAY:
@@ -283,7 +288,7 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 listRecordingsForUriRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
-                renderListRecordingsForUri(sb);
+                renderListRecordingsForUri(sb, length);
                 break;
 
             case CMD_IN_LIST_RECORDING:
@@ -309,7 +314,7 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 extendRecordingRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
-                renderExtendRecording(sb);
+                renderExtendRecording(sb, length);
                 break;
 
             case CMD_IN_EXTEND_RECORDING2:
@@ -322,7 +327,7 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 extendRecordingRequest2Decoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
-                renderExtendRecording2(sb);
+                renderExtendRecording2(sb, length);
                 break;
 
             case CMD_IN_RECORDING_POSITION:
@@ -413,7 +418,7 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 findLastMatchingRecordingRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
-                renderFindLastMatchingRecord(sb);
+                renderFindLastMatchingRecord(sb, length);
                 break;
 
             case CMD_IN_LIST_RECORDING_SUBSCRIPTIONS:
@@ -426,7 +431,7 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 listRecordingSubscriptionsRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
-                renderListRecordingSubscriptions(sb);
+                renderListRecordingSubscriptions(sb, length);
                 break;
 
             case CMD_IN_START_BOUNDED_REPLAY:
@@ -439,7 +444,7 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 boundedReplayRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
-                renderStartBoundedReplay(sb);
+                renderStartBoundedReplay(sb, length);
                 break;
 
             case CMD_IN_STOP_ALL_REPLAYS:
@@ -465,7 +470,7 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 replicateRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
-                renderReplicate(sb);
+                renderReplicate(sb, length);
                 break;
 
             case CMD_IN_REPLICATE2:
@@ -478,7 +483,7 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 replicateRequest2Decoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
-                renderReplicate2(sb);
+                renderReplicate2(sb, length);
                 break;
 
             case CMD_IN_STOP_REPLICATION:
@@ -582,7 +587,7 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 authConnectRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
-                renderAuthConnect(sb);
+                renderAuthConnect(sb, length);
                 break;
 
             case CMD_IN_KEEP_ALIVE:
@@ -608,7 +613,7 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 taggedReplicateRequestDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
-                renderTaggedReplicate(sb);
+                renderTaggedReplicate(sb, length);
                 break;
 
             case CMD_IN_PURGE_RECORDING:
@@ -647,7 +652,7 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
                 controlResponseDecoder.wrap(
                     buffer, payloadOffset,
                     blockLength, schemaVersion);
-                renderControlResponse(sb);
+                renderControlResponse(sb, length);
                 break;
             // Moved from original signal method
             case RECORDING_SIGNAL:
@@ -669,31 +674,63 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
         }
     }
 
-    private void renderConnect(final StringBuilder sb)
+    private void renderConnect(final StringBuilder sb, final int capacity)
     {
         sb.append("correlationId=").append(connectRequestDecoder.correlationId())
             .append(" responseStreamId=").append(connectRequestDecoder.responseStreamId())
             .append(" version=").append(connectRequestDecoder.version())
             .append(" responseChannel=");
 
+        if (cannotFit(
+            capacity,
+            connectRequestDecoder.limit() + ConnectRequestDecoder.responseChannelHeaderLength(),
+            connectRequestDecoder.responseChannelLength()))
+        {
+            renderTruncated(sb);
+            return;
+        }
         connectRequestDecoder.getResponseChannel(sb);
     }
 
-    private void renderAuthConnect(final StringBuilder sb)
+    private void renderAuthConnect(final StringBuilder sb, final int capacity)
     {
         sb.append("correlationId=").append(authConnectRequestDecoder.correlationId())
             .append(" responseStreamId=").append(authConnectRequestDecoder.responseStreamId())
             .append(" version=").append(authConnectRequestDecoder.version())
             .append(" responseChannel=");
 
+        if (cannotFit(
+            capacity,
+            authConnectRequestDecoder.limit() + AuthConnectRequestDecoder.responseChannelHeaderLength(),
+            authConnectRequestDecoder.responseChannelLength()))
+        {
+            renderTruncated(sb);
+            return;
+        }
         authConnectRequestDecoder.getResponseChannel(sb);
 
+        if (cannotFit(
+            capacity,
+            authConnectRequestDecoder.limit() + AuthConnectRequestDecoder.encodedCredentialsHeaderLength(),
+            authConnectRequestDecoder.encodedCredentialsLength()))
+        {
+            renderTruncated(sb);
+            return;
+        }
         final int credentialsLength = authConnectRequestDecoder.encodedCredentialsLength();
 
         sb.append(" encodedCredentialsLength=").append(credentialsLength);
 
         authConnectRequestDecoder.skipEncodedCredentials();
 
+        if (cannotFit(
+            capacity,
+            authConnectRequestDecoder.limit() + AuthConnectRequestDecoder.clientInfoHeaderLength(),
+            authConnectRequestDecoder.clientInfoLength()))
+        {
+            renderTruncated(sb);
+            return;
+        }
         sb.append(" clientInfo=").append(authConnectRequestDecoder.clientInfo());
     }
 
@@ -702,7 +739,7 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
         sb.append("controlSessionId=").append(closeSessionRequestDecoder.controlSessionId());
     }
 
-    private void renderStartRecording(final StringBuilder sb)
+    private void renderStartRecording(final StringBuilder sb, final int capacity)
     {
         sb.append("controlSessionId=").append(startRecordingRequestDecoder.controlSessionId())
             .append(" correlationId=").append(startRecordingRequestDecoder.correlationId())
@@ -710,10 +747,18 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
             .append(" sourceLocation=").append(startRecordingRequestDecoder.sourceLocation())
             .append(" channel=");
 
+        if (cannotFit(
+            capacity,
+            startRecordingRequestDecoder.limit() + StartRecordingRequestDecoder.channelHeaderLength(),
+            startRecordingRequestDecoder.channelLength()))
+        {
+            renderTruncated(sb);
+            return;
+        }
         startRecordingRequestDecoder.getChannel(sb);
     }
 
-    private void renderStartRecording2(final StringBuilder sb)
+    private void renderStartRecording2(final StringBuilder sb, final int capacity)
     {
         sb.append("controlSessionId=").append(startRecordingRequest2Decoder.controlSessionId())
             .append(" correlationId=").append(startRecordingRequest2Decoder.correlationId())
@@ -722,20 +767,36 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
             .append(" autoStop=").append(startRecordingRequest2Decoder.autoStop())
             .append(" channel=");
 
+        if (cannotFit(
+            capacity,
+            startRecordingRequest2Decoder.limit() + StartRecordingRequest2Decoder.channelHeaderLength(),
+            startRecordingRequest2Decoder.channelLength()))
+        {
+            renderTruncated(sb);
+            return;
+        }
         startRecordingRequest2Decoder.getChannel(sb);
     }
 
-    private void renderStopRecording(final StringBuilder sb)
+    private void renderStopRecording(final StringBuilder sb, final int capacity)
     {
         sb.append("controlSessionId=").append(stopRecordingRequestDecoder.controlSessionId())
             .append(" correlationId=").append(stopRecordingRequestDecoder.correlationId())
             .append(" streamId=").append(stopRecordingRequestDecoder.streamId())
             .append(" channel=");
 
+        if (cannotFit(
+            capacity,
+            stopRecordingRequestDecoder.limit() + StopRecordingRequestDecoder.channelHeaderLength(),
+            stopRecordingRequestDecoder.channelLength()))
+        {
+            renderTruncated(sb);
+            return;
+        }
         stopRecordingRequestDecoder.getChannel(sb);
     }
 
-    private void renderReplay(final StringBuilder sb)
+    private void renderReplay(final StringBuilder sb, final int capacity)
     {
         sb.append("controlSessionId=").append(replayRequestDecoder.controlSessionId())
             .append(" correlationId=").append(replayRequestDecoder.correlationId())
@@ -745,6 +806,14 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
             .append(" replayStreamId=").append(replayRequestDecoder.replayStreamId())
             .append(" replayChannel=");
 
+        if (cannotFit(
+            capacity,
+            replayRequestDecoder.limit() + ReplayRequestDecoder.replayChannelHeaderLength(),
+            replayRequestDecoder.replayChannelLength()))
+        {
+            renderTruncated(sb);
+            return;
+        }
         replayRequestDecoder.getReplayChannel(sb);
     }
 
@@ -770,7 +839,7 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
             .append(" recordingId=").append(listRecordingRequestDecoder.recordingId());
     }
 
-    private void renderListRecordingsForUri(final StringBuilder sb)
+    private void renderListRecordingsForUri(final StringBuilder sb, final int capacity)
     {
         sb.append("controlSessionId=").append(listRecordingsForUriRequestDecoder.controlSessionId())
             .append(" correlationId=").append(listRecordingsForUriRequestDecoder.correlationId())
@@ -779,10 +848,18 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
             .append(" streamId=").append(listRecordingsForUriRequestDecoder.streamId())
             .append(" channel=");
 
+        if (cannotFit(
+            capacity,
+            listRecordingsForUriRequestDecoder.limit() + ListRecordingsForUriRequestDecoder.channelHeaderLength(),
+            listRecordingsForUriRequestDecoder.channelLength()))
+        {
+            renderTruncated(sb);
+            return;
+        }
         listRecordingsForUriRequestDecoder.getChannel(sb);
     }
 
-    private void renderExtendRecording(final StringBuilder sb)
+    private void renderExtendRecording(final StringBuilder sb, final int capacity)
     {
         sb.append("controlSessionId=").append(extendRecordingRequestDecoder.controlSessionId())
             .append(" correlationId=").append(extendRecordingRequestDecoder.correlationId())
@@ -791,10 +868,18 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
             .append(" sourceLocation=").append(extendRecordingRequestDecoder.sourceLocation())
             .append(" channel=");
 
+        if (cannotFit(
+            capacity,
+            extendRecordingRequestDecoder.limit() + ExtendRecordingRequestDecoder.channelHeaderLength(),
+            extendRecordingRequestDecoder.channelLength()))
+        {
+            renderTruncated(sb);
+            return;
+        }
         extendRecordingRequestDecoder.getChannel(sb);
     }
 
-    private void renderExtendRecording2(final StringBuilder sb)
+    private void renderExtendRecording2(final StringBuilder sb, final int capacity)
     {
         sb.append("controlSessionId=").append(extendRecordingRequest2Decoder.controlSessionId())
             .append(" correlationId=").append(extendRecordingRequest2Decoder.correlationId())
@@ -804,6 +889,14 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
             .append(" autoStop=").append(extendRecordingRequest2Decoder.autoStop())
             .append(" channel=");
 
+        if (cannotFit(
+            capacity,
+            extendRecordingRequest2Decoder.limit() + ExtendRecordingRequest2Decoder.channelHeaderLength(),
+            extendRecordingRequest2Decoder.channelLength()))
+        {
+            renderTruncated(sb);
+            return;
+        }
         extendRecordingRequest2Decoder.getChannel(sb);
     }
 
@@ -850,7 +943,7 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
             .append(" recordingId=").append(stopPositionRequestDecoder.recordingId());
     }
 
-    private void renderFindLastMatchingRecord(final StringBuilder sb)
+    private void renderFindLastMatchingRecord(final StringBuilder sb, final int capacity)
     {
         sb.append("controlSessionId=").append(findLastMatchingRecordingRequestDecoder.controlSessionId())
             .append(" correlationId=").append(findLastMatchingRecordingRequestDecoder.correlationId())
@@ -859,10 +952,19 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
             .append(" streamId=").append(findLastMatchingRecordingRequestDecoder.streamId())
             .append(" channel=");
 
+        if (cannotFit(
+            capacity,
+            findLastMatchingRecordingRequestDecoder.limit() +
+                FindLastMatchingRecordingRequestDecoder.channelHeaderLength(),
+            findLastMatchingRecordingRequestDecoder.channelLength()))
+        {
+            renderTruncated(sb);
+            return;
+        }
         findLastMatchingRecordingRequestDecoder.getChannel(sb);
     }
 
-    private void renderListRecordingSubscriptions(final StringBuilder sb)
+    private void renderListRecordingSubscriptions(final StringBuilder sb, final int capacity)
     {
         sb.append("controlSessionId=").append(listRecordingSubscriptionsRequestDecoder.controlSessionId())
             .append(" correlationId=").append(listRecordingSubscriptionsRequestDecoder.correlationId())
@@ -872,10 +974,19 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
             .append(" streamId=").append(listRecordingSubscriptionsRequestDecoder.streamId())
             .append(" channel=");
 
+        if (cannotFit(
+            capacity,
+            listRecordingSubscriptionsRequestDecoder.limit() +
+                ListRecordingSubscriptionsRequestDecoder.channelHeaderLength(),
+            listRecordingSubscriptionsRequestDecoder.channelLength()))
+        {
+            renderTruncated(sb);
+            return;
+        }
         listRecordingSubscriptionsRequestDecoder.getChannel(sb);
     }
 
-    private void renderStartBoundedReplay(final StringBuilder sb)
+    private void renderStartBoundedReplay(final StringBuilder sb, final int capacity)
     {
         sb.append("controlSessionId=").append(boundedReplayRequestDecoder.controlSessionId())
             .append(" correlationId=").append(boundedReplayRequestDecoder.correlationId())
@@ -886,6 +997,14 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
             .append(" replayStreamId=").append(boundedReplayRequestDecoder.replayStreamId())
             .append(" replayChannel=");
 
+        if (cannotFit(
+            capacity,
+            boundedReplayRequestDecoder.limit() + BoundedReplayRequestDecoder.replayChannelHeaderLength(),
+            boundedReplayRequestDecoder.replayChannelLength()))
+        {
+            renderTruncated(sb);
+            return;
+        }
         boundedReplayRequestDecoder.getReplayChannel(sb);
     }
 
@@ -896,7 +1015,7 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
             .append(" recordingId=").append(stopAllReplaysRequestDecoder.recordingId());
     }
 
-    private void renderReplicate(final StringBuilder sb)
+    private void renderReplicate(final StringBuilder sb, final int capacity)
     {
         sb.append("controlSessionId=").append(replicateRequestDecoder.controlSessionId())
             .append(" correlationId=").append(replicateRequestDecoder.correlationId())
@@ -905,13 +1024,29 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
             .append(" srcControlStreamId=").append(replicateRequestDecoder.srcControlStreamId())
             .append(" srcControlChannel=");
 
+        if (cannotFit(
+            capacity,
+            replicateRequestDecoder.limit() + ReplicateRequestDecoder.srcControlChannelHeaderLength(),
+            replicateRequestDecoder.srcControlChannelLength()))
+        {
+            renderTruncated(sb);
+            return;
+        }
         replicateRequestDecoder.getSrcControlChannel(sb);
 
         sb.append(" liveDestination=");
+        if (cannotFit(
+            capacity,
+            replicateRequestDecoder.limit() + ReplicateRequestDecoder.liveDestinationHeaderLength(),
+            replicateRequestDecoder.liveDestinationLength()))
+        {
+            renderTruncated(sb);
+            return;
+        }
         replicateRequestDecoder.getLiveDestination(sb);
     }
 
-    private void renderReplicate2(final StringBuilder sb)
+    private void renderReplicate2(final StringBuilder sb, final int capacity)
     {
         sb.append("controlSessionId=").append(replicateRequest2Decoder.controlSessionId())
             .append(" correlationId=").append(replicateRequest2Decoder.correlationId())
@@ -923,12 +1058,36 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
             .append(" srcControlStreamId=").append(replicateRequest2Decoder.srcControlStreamId())
             .append(" srcControlChannel=");
 
+        if (cannotFit(
+            capacity,
+            replicateRequest2Decoder.limit() + ReplicateRequest2Decoder.srcControlChannelHeaderLength(),
+            replicateRequest2Decoder.srcControlChannelLength()))
+        {
+            renderTruncated(sb);
+            return;
+        }
         replicateRequest2Decoder.getSrcControlChannel(sb);
 
         sb.append(" liveDestination=");
+        if (cannotFit(
+            capacity,
+            replicateRequest2Decoder.limit() + ReplicateRequest2Decoder.liveDestinationHeaderLength(),
+            replicateRequest2Decoder.liveDestinationLength()))
+        {
+            renderTruncated(sb);
+            return;
+        }
         replicateRequest2Decoder.getLiveDestination(sb);
 
         sb.append(" replicationChannel=");
+        if (cannotFit(
+            capacity,
+            replicateRequest2Decoder.limit() + ReplicateRequest2Decoder.replicationChannelHeaderLength(),
+            replicateRequest2Decoder.replicationChannelLength()))
+        {
+            renderTruncated(sb);
+            return;
+        }
         replicateRequest2Decoder.getReplicationChannel(sb);
     }
 
@@ -989,7 +1148,7 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
             .append(" correlationId=").append(keepAliveRequestDecoder.correlationId());
     }
 
-    private void renderTaggedReplicate(final StringBuilder sb)
+    private void renderTaggedReplicate(final StringBuilder sb, final int capacity)
     {
         sb.append("controlSessionId=").append(taggedReplicateRequestDecoder.controlSessionId())
             .append(" correlationId=").append(taggedReplicateRequestDecoder.correlationId())
@@ -1000,9 +1159,25 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
             .append(" srcControlStreamId=").append(taggedReplicateRequestDecoder.srcControlStreamId())
             .append(" srcControlChannel=");
 
+        if (cannotFit(
+            capacity,
+            taggedReplicateRequestDecoder.limit() + TaggedReplicateRequestDecoder.srcControlChannelHeaderLength(),
+            taggedReplicateRequestDecoder.srcControlChannelLength()))
+        {
+            renderTruncated(sb);
+            return;
+        }
         taggedReplicateRequestDecoder.getSrcControlChannel(sb);
 
         sb.append(" liveDestination=");
+        if (cannotFit(
+            capacity,
+            taggedReplicateRequestDecoder.limit() + TaggedReplicateRequestDecoder.liveDestinationHeaderLength(),
+            taggedReplicateRequestDecoder.liveDestinationLength()))
+        {
+            renderTruncated(sb);
+            return;
+        }
         taggedReplicateRequestDecoder.getLiveDestination(sb);
     }
 
@@ -1020,7 +1195,7 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
             .append(" recordingId=").append(replayTokenRequestDecoder.recordingId());
     }
 
-    private void renderControlResponse(final StringBuilder sb)
+    private void renderControlResponse(final StringBuilder sb, final int capacity)
     {
         sb.append("controlSessionId=").append(controlResponseDecoder.controlSessionId())
             .append(" correlationId=").append(controlResponseDecoder.correlationId())
@@ -1029,6 +1204,14 @@ public class ArchiveControlBinaryRenderer implements BinaryRenderer
             .append(" version=").append(controlResponseDecoder.version())
             .append(" errorMessage=");
 
+        if (cannotFit(
+            capacity,
+            controlResponseDecoder.limit() + ControlResponseDecoder.errorMessageHeaderLength(),
+            controlResponseDecoder.errorMessageLength()))
+        {
+            renderTruncated(sb);
+            return;
+        }
         controlResponseDecoder.getErrorMessage(sb);
     }
 

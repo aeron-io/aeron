@@ -51,6 +51,6 @@ public interface BinaryRenderer
      */
     static void renderTruncated(final StringBuilder sb)
     {
-        sb.append("truncated");
+        sb.append("...");
     }
 }

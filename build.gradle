@@ -1141,7 +1141,20 @@ project(':aeron-system-tests') {
         systemProperty 'aeron.event.log', 'admin'
         systemProperty 'aeron.debug.timeout', '3600s'
         systemProperty 'aeron.event.log.reader.classname', 'io.aeron.logging.CollectingEventLogReaderAgent'
+        exclude '**/DriverLoggingSystemTest.class'
     }
+
+    tasks.register('driverLoggingSystemTest', Test) {
+        group = 'verification'
+        useJUnitPlatform()
+        include '**/DriverLoggingSystemTest.class'
+        systemProperty 'aeron.event.log', 'all'
+        systemProperty 'aeron.event.log.render.data', 'true'
+        systemProperty 'aeron.debug.timeout', '3600s'
+        systemProperty 'aeron.event.log.reader.classname', 'io.aeron.logging.CollectingEventLogReaderAgent'
+    }
+
+    check.dependsOn 'driverLoggingSystemTest'
 
     shadowJar {
         archiveClassifier.set('tests')
