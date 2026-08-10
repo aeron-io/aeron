@@ -22,6 +22,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.Arrays;
+
 import static io.aeron.protocol.HeaderFlyweight.*;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -100,6 +102,38 @@ class DriverProtocolBinaryRendererTest
 
         assertEquals(expected, sb.toString());
     }
+
+    @Test
+    void renderFrameTypeDataWithExtraBytesClampsToAvailableLength()
+    {
+        final DriverProtocolBinaryRenderer driverProtocolRenderer = new DriverProtocolBinaryRenderer(true);
+        final byte[] payload = "TestPayload".getBytes(UTF_8);
+        final int capturedPayloadLength = 5;
+
+        final DataHeaderFlyweight flyweight = new DataHeaderFlyweight();
+        flyweight.wrap(buffer, 0, 300);
+        flyweight.headerType(HDR_TYPE_DATA);
+        flyweight.flags((short)23);
+        flyweight.frameLength(DataHeaderFlyweight.HEADER_LENGTH + payload.length);
+        flyweight.sessionId(12);
+        flyweight.streamId(51);
+        flyweight.termId(6);
+        flyweight.termOffset(444);
+        buffer.putBytes(DataHeaderFlyweight.HEADER_LENGTH, payload);
+
+        final int capturedLength = DataHeaderFlyweight.HEADER_LENGTH + capturedPayloadLength;
+        driverProtocolRenderer.append(sb, DriverEventCode.FRAME_IN.toEventCodeId(), buffer, 0, capturedLength);
+
+        final String expected = String.format(
+            "type=DATA flags=00010111 frameLength=%d sessionId=12 streamId=51 " +
+                "termId=6 termOffset=444 payload=%n%s...%d bytes truncated",
+            (DataHeaderFlyweight.HEADER_LENGTH + payload.length),
+            prettyHexDump(new UnsafeBuffer(Arrays.copyOf(payload, capturedPayloadLength))),
+            payload.length - capturedPayloadLength);
+
+        assertEquals(expected, sb.toString());
+    }
+
 
     @Test
     void renderFrameTypeStatusMessage()

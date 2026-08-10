@@ -115,7 +115,7 @@ public class DriverProtocolBinaryRenderer implements BinaryRenderer
                 }
 
                 dataHeader.wrap(buffer, offset, buffer.capacity() - offset);
-                renderDataFrame(sb, buffer, offset);
+                renderDataFrame(sb, buffer, offset, length);
                 break;
 
             case HeaderFlyweight.HDR_TYPE_NAK:
@@ -199,7 +199,11 @@ public class DriverProtocolBinaryRenderer implements BinaryRenderer
         return buffer.getShort(FrameDescriptor.typeOffset(offset), LITTLE_ENDIAN) & 0xFFFF;
     }
 
-    private void renderDataFrame(final StringBuilder sb, final DirectBuffer buffer, final int offset)
+    private void renderDataFrame(
+        final StringBuilder sb,
+        final DirectBuffer buffer,
+        final int offset,
+        final int length)
     {
         sb
             .append("type=")
@@ -223,13 +227,18 @@ public class DriverProtocolBinaryRenderer implements BinaryRenderer
         if (renderExtraBytes)
         {
             final int payloadOffset = offset + DataHeaderFlyweight.HEADER_LENGTH;
-            final int payloadEnd = offset + dataHeader.frameLength();
+            final int frameEnd = offset + dataHeader.frameLength();
+            final int payloadEnd = offset + Math.min(length, dataHeader.frameLength());
             final int payloadLength = payloadEnd - payloadOffset;
 
             if (payloadLength > 0)
             {
                 sb.append(" payload=").append(newLine);
                 appendPrettyHexDump(sb, buffer, payloadOffset, payloadLength);
+                if (payloadEnd < frameEnd)
+                {
+                    sb.append("...").append(frameEnd - payloadEnd).append(" bytes truncated");
+                }
             }
         }
     }
