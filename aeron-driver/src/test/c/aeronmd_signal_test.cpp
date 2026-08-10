@@ -55,7 +55,7 @@ TEST_F(AeronmdSignalTest, shouldSupportSigTerm)
     aeron_close(aeron);
     aeron_context_close(context);
 
-    FILE *psgrepOutput = popen("/usr/bin/pgrep -xn aeronmd", "r");
+    FILE *psgrepOutput = popen("/usr/bin/pgrep -xn conductor", "r");
 
     char buf[1024] = {};
     if (nullptr == fgets(buf, sizeof(buf) - 1, psgrepOutput))
