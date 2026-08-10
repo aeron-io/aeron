@@ -1755,6 +1755,18 @@ aeron_threading_mode_t aeron_driver_context_get_threading_mode(aeron_driver_cont
     return NULL != context ? context->threading_mode : AERON_THREADING_MODE_DEFAULT;
 }
 
+int aeron_driver_context_set_thread_naming(aeron_driver_context_t *context, aeron_thread_naming_t naming)
+{
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+
+    context->thread_naming = naming;
+    return 0;
+}
+aeron_thread_naming_t aeron_driver_context_get_thread_naming(aeron_driver_context_t *context)
+{
+    return NULL != context ? context->thread_naming : AERON_THREAD_NAMING_DEFAULT;
+}
+
 int aeron_driver_context_set_dir_delete_on_start(aeron_driver_context_t *context, bool value)
 {
     AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);

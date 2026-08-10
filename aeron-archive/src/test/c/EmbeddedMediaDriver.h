@@ -122,6 +122,7 @@ protected:
         aeron_driver_context_set_dir_delete_on_start(m_context, true);
         aeron_driver_context_set_dir_delete_on_shutdown(m_context, true);
         aeron_driver_context_set_threading_mode(m_context, AERON_THREADING_MODE_SHARED);
+        aeron_driver_context_set_thread_naming(m_context, AERON_THREAD_NAMING_CLASSIC);
         aeron_driver_context_set_shared_idle_strategy(m_context, "sleep-ns");
         aeron_driver_context_set_term_buffer_sparse_file(m_context, true);
         aeron_driver_context_set_term_buffer_length(m_context, 64 * 1024);
