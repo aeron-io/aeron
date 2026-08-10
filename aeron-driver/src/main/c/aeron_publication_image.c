@@ -380,6 +380,7 @@ int aeron_publication_image_create(
     _image->time_of_last_packet_ns = now_ns;
     _image->next_sm_deadline_ns = 0;
     _image->is_sm_enabled = true;
+    _image->is_next_sm_deadline_reset_requested = false;
     _image->conductor_fields.clean_position = initial_position;
     _image->conductor_fields.time_of_last_state_change_ns = now_ns;
 
@@ -756,6 +757,15 @@ int aeron_publication_image_send_pending_status_message(aeron_publication_image_
     int work_count = 0;
     int64_t change_number;
     AERON_GET_ACQUIRE(change_number, image->end_sm_change);
+
+    bool is_next_sm_deadline_reset_requested;
+    AERON_GET_ACQUIRE(is_next_sm_deadline_reset_requested, image->is_next_sm_deadline_reset_requested);
+    if (is_next_sm_deadline_reset_requested)
+    {
+        AERON_SET_RELEASE(image->is_next_sm_deadline_reset_requested, false);
+        image->next_sm_deadline_ns = now_ns - 1;
+    }
+
     const bool has_sm_timed_out = image->is_sm_enabled && image->next_sm_deadline_ns < now_ns;
 
     if (NULL != image->invalidation_reason)
@@ -1227,7 +1237,7 @@ void aeron_publication_image_on_time_event(
                 {
                     AERON_SET_RELEASE(image->is_sending_eos_sm, true);
 
-                    image->next_sm_deadline_ns = now_ns - 1;
+                    aeron_publication_image_request_next_sm_deadline_reset(image);
                 }
 
                 image->conductor_fields.state = AERON_PUBLICATION_IMAGE_STATE_LINGER;
@@ -1315,5 +1325,7 @@ extern bool aeron_publication_image_has_send_response_setup(aeron_publication_im
 
 void aeron_publication_image_set_response_session_id(
     aeron_publication_image_t *image, int64_t response_session_id);
+
+extern void aeron_publication_image_request_next_sm_deadline_reset(aeron_publication_image_t *image);
 
 extern int64_t aeron_publication_image_join_position(aeron_publication_image_t *image);

@@ -137,6 +137,7 @@ public final class PublicationImage
     private static final VarHandle END_SM_CHANGE_VH;
     private static final VarHandle BEGIN_LOSS_CHANGE_VH;
     private static final VarHandle END_LOSS_CHANGE_VH;
+    private static final VarHandle IS_NEXT_SM_DEADLINE_RESET_REQUESTED_VH;
 
     static
     {
@@ -151,6 +152,8 @@ public final class PublicationImage
                 .findVarHandle(PublicationImage.class, "beginLossChange", long.class);
             END_LOSS_CHANGE_VH = lookup
                 .findVarHandle(PublicationImage.class, "endLossChange", long.class);
+            IS_NEXT_SM_DEADLINE_RESET_REQUESTED_VH = lookup
+                .findVarHandle(PublicationImage.class, "isNextSmDeadlineResetRequested", boolean.class);
         }
         catch (final ReflectiveOperationException ex)
         {
@@ -167,6 +170,8 @@ public final class PublicationImage
     private long lastSmPosition;
     private long lastOverrunThreshold;
     private long nextSmDeadlineNs;
+    @SuppressWarnings("unused") // accessed via IS_NEXT_SM_DEADLINE_RESET_REQUESTED_VH
+    private boolean isNextSmDeadlineResetRequested;
     private final long smTimeoutNs;
     private final long maxReceiverWindowLength;
 
@@ -849,6 +854,13 @@ public final class PublicationImage
     {
         int workCount = 0;
         final long changeNumber = (long)END_SM_CHANGE_VH.getAcquire(this);
+
+        if ((boolean)IS_NEXT_SM_DEADLINE_RESET_REQUESTED_VH.getAcquire(this))
+        {
+            IS_NEXT_SM_DEADLINE_RESET_REQUESTED_VH.setOpaque(this, false);
+            nextSmDeadlineNs = nowNs - 1;
+        }
+
         final boolean hasSmTimedOut = smEnabled && nextSmDeadlineNs - nowNs < 0;
 
         if (null != rejectionReason)
@@ -1026,6 +1038,23 @@ public final class PublicationImage
     }
 
     /**
+     * Request that the status message deadline be expired so frames which ride the status message timer, such as a
+     * Response Setup, are sent on the next {@link Receiver} duty cycle rather than waiting out the remainder of the
+     * current status message interval.
+     * <p>
+     * The deadline itself is owned by the {@link Receiver}, so only a request is recorded here and the
+     * {@link Receiver} applies it in {@link #sendPendingStatusMessage(long)}. The release store publishes any writes
+     * made before it, such as {@link #responseSessionId(Integer)}, to the {@link Receiver} which reads this with
+     * acquire semantics.
+     * <p>
+     * May be called from any thread.
+     */
+    void requestNextSmDeadlineReset()
+    {
+        IS_NEXT_SM_DEADLINE_RESET_REQUESTED_VH.setRelease(this, true);
+    }
+
+    /**
      * {@inheritDoc}
      */
     @Override
@@ -1054,7 +1083,7 @@ public final class PublicationImage
                         isRebuilding = false;
                         isSendingEosSm = true;
 
-                        nextSmDeadlineNs = timeNs - 1;
+                        requestNextSmDeadlineReset();
                     }
 
                     conductor.transitionToLinger(this);

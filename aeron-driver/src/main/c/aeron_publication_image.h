@@ -144,6 +144,8 @@ typedef struct aeron_publication_image_stct
 
     bool is_sm_enabled;
 
+    volatile bool is_next_sm_deadline_reset_requested;
+
     volatile int64_t response_session_id;
 
     volatile bool is_end_of_stream;
@@ -349,6 +351,22 @@ inline void aeron_publication_image_set_response_session_id(
     aeron_publication_image_t *image, int64_t response_session_id)
 {
     AERON_SET_RELEASE(image->response_session_id, response_session_id);
+}
+
+/*
+ * Request that the status message deadline be expired so frames which ride the status message timer, such as a
+ * Response Setup, are sent on the next receiver duty cycle rather than waiting out the remainder of the current
+ * status message interval.
+ *
+ * The deadline itself is owned by the receiver, so only a request is recorded here and the receiver applies it in
+ * aeron_publication_image_send_pending_status_message(). The release store publishes any writes made before it,
+ * such as the response session id, to the receiver which reads this with acquire semantics.
+ *
+ * May be called from any thread.
+ */
+inline void aeron_publication_image_request_next_sm_deadline_reset(aeron_publication_image_t *image)
+{
+    AERON_SET_RELEASE(image->is_next_sm_deadline_reset_requested, true);
 }
 
 void aeron_publication_image_remove_response_session_id(aeron_publication_image_t *image);

@@ -4204,6 +4204,7 @@ aeron_driver_conductor_command_state_t aeron_driver_conductor_execute_add_networ
     {
         aeron_publication_image_set_response_session_id(
             async_command->response_publication_image, (int64_t)publication->session_id);
+        aeron_publication_image_request_next_sm_deadline_reset(async_command->response_publication_image);
     }
 
     return AERON_DRIVER_CONDUCTOR_COMMAND_STATE_DONE;
