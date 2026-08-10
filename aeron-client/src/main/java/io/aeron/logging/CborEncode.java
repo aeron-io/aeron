@@ -219,6 +219,11 @@ public final class CborEncode
         final DirectBuffer value,
         final boolean allowTruncate)
     {
+        if (encodingState.isReachedLimit())
+        {
+            return;
+        }
+
         // TODO: Consider generalizing this with string encoding
         final int keyLength = lengthString(key);
         // Key pre-check
