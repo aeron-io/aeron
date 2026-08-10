@@ -41,6 +41,13 @@
 #define AERON_DRIVER_AGENT_ROLE_NAME_SHARED_NETWORK "[sender, receiver]"
 #define AERON_DRIVER_AGENT_ROLE_NAME_SHARED "[conductor, sender, receiver]"
 
+#define AERON_DRIVER_AGENT_ROLE_NAME_CONDUCTOR_NEW "aeron-md-cnd"
+#define AERON_DRIVER_AGENT_ROLE_NAME_RECEIVER_NEW "aeron-md-rcv"
+#define AERON_DRIVER_AGENT_ROLE_NAME_SENDER_NEW "aeron-md-snd"
+#define AERON_DRIVER_AGENT_ROLE_NAME_SHARED_NETWORK_NEW "aeron-md-ntw"
+#define AERON_DRIVER_AGENT_ROLE_NAME_SHARED_NEW "aeron-md-shd"
+
+
 #define AERON_COMMAND_RB_CAPACITY (128 * 1024)
 #define AERON_COMMAND_RB_RESERVE (1024)
 #define AERON_COMMAND_DRAIN_LIMIT (1)
@@ -163,6 +170,7 @@ typedef struct aeron_driver_context_stct
 {
     char aeron_dir[AERON_MAX_PATH];                         /* aeron.dir */
     aeron_threading_mode_t threading_mode;                  /* aeron.threading.mode = DEDICATED */
+    aeron_thread_naming_t thread_naming;                    /* aeron.thread.naming = classic */
     aeron_inferable_boolean_t receiver_group_consideration; /* aeron.receiver.group.consideration = INFER */
     bool dirs_delete_on_start;                              /* aeron.dir.delete.on.start = false */
     bool dirs_delete_on_shutdown;                           /* aeron.dir.delete.on.shutdown = false */

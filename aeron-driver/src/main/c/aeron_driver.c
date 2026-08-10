@@ -977,13 +977,36 @@ int aeron_driver_init(aeron_driver_t **driver, aeron_driver_context_t *context)
         aeron_driver_context_print_configuration(_driver->context);
     }
 
+    const char *conductor_thread_name;
+    const char *sender_thread_name;
+    const char *receiver_thread_name;
+    const char *shared_network_thread_name;
+    const char *shared_thread_name;
+    if (AERON_THREAD_NAMING_NEW == _driver->context->thread_naming)
+    {
+        conductor_thread_name = AERON_DRIVER_AGENT_ROLE_NAME_CONDUCTOR_NEW;
+        sender_thread_name = AERON_DRIVER_AGENT_ROLE_NAME_SENDER_NEW;
+        receiver_thread_name = AERON_DRIVER_AGENT_ROLE_NAME_RECEIVER_NEW;
+        shared_network_thread_name = AERON_DRIVER_AGENT_ROLE_NAME_SHARED_NETWORK_NEW;
+        shared_thread_name = AERON_DRIVER_AGENT_ROLE_NAME_SHARED_NEW;
+    }
+    else
+    {
+        conductor_thread_name = AERON_DRIVER_AGENT_ROLE_NAME_CONDUCTOR;
+        sender_thread_name = AERON_DRIVER_AGENT_ROLE_NAME_SENDER;
+        receiver_thread_name = AERON_DRIVER_AGENT_ROLE_NAME_RECEIVER;
+        shared_network_thread_name = AERON_DRIVER_AGENT_ROLE_NAME_SHARED_NETWORK;
+        shared_thread_name = AERON_DRIVER_AGENT_ROLE_NAME_SHARED;
+    }
+
+
     switch (_driver->context->threading_mode)
     {
         case AERON_THREADING_MODE_INVOKER:
         case AERON_THREADING_MODE_SHARED:
             if (aeron_agent_init(
                 &_driver->runners[AERON_AGENT_RUNNER_SHARED],
-                AERON_DRIVER_AGENT_ROLE_NAME_SHARED,
+                shared_thread_name,
                 _driver,
                 aeron_driver_shared_on_start,
                 _driver,
@@ -999,7 +1022,7 @@ int aeron_driver_init(aeron_driver_t **driver, aeron_driver_context_t *context)
         case AERON_THREADING_MODE_SHARED_NETWORK:
             if (aeron_agent_init(
                 &_driver->runners[AERON_AGENT_RUNNER_CONDUCTOR],
-                AERON_DRIVER_AGENT_ROLE_NAME_CONDUCTOR,
+                conductor_thread_name,
                 &_driver->conductor,
                 _driver->context->agent_on_start_func,
                 _driver->context->agent_on_start_state,
@@ -1027,7 +1050,7 @@ int aeron_driver_init(aeron_driver_t **driver, aeron_driver_context_t *context)
 
             if (aeron_agent_init(
                 &_driver->runners[AERON_AGENT_RUNNER_SHARED_NETWORK],
-                AERON_DRIVER_AGENT_ROLE_NAME_SHARED_NETWORK,
+                shared_network_thread_name,
                 _driver,
                 _driver->context->agent_on_start_func,
                 _driver->context->agent_on_start_state,
@@ -1044,7 +1067,7 @@ int aeron_driver_init(aeron_driver_t **driver, aeron_driver_context_t *context)
         default:
             if (aeron_agent_init(
                 &_driver->runners[AERON_AGENT_RUNNER_CONDUCTOR],
-                AERON_DRIVER_AGENT_ROLE_NAME_CONDUCTOR,
+                conductor_thread_name,
                 &_driver->conductor,
                 _driver->context->agent_on_start_func,
                 _driver->context->agent_on_start_state,
@@ -1072,7 +1095,7 @@ int aeron_driver_init(aeron_driver_t **driver, aeron_driver_context_t *context)
 
             if (aeron_agent_init(
                 &_driver->runners[AERON_AGENT_RUNNER_SENDER],
-                AERON_DRIVER_AGENT_ROLE_NAME_SENDER,
+                sender_thread_name,
                 &_driver->sender,
                 _driver->context->agent_on_start_func,
                 _driver->context->agent_on_start_state,
@@ -1086,7 +1109,7 @@ int aeron_driver_init(aeron_driver_t **driver, aeron_driver_context_t *context)
 
             if (aeron_agent_init(
                 &_driver->runners[AERON_AGENT_RUNNER_RECEIVER],
-                AERON_DRIVER_AGENT_ROLE_NAME_RECEIVER,
+                receiver_thread_name,
                 &_driver->receiver,
                 _driver->context->agent_on_start_func,
                 _driver->context->agent_on_start_state,

@@ -157,6 +157,8 @@ int main(int argc, char **argv)
         goto cleanup;
     }
 
+    aeron_thread_set_name(driver->runners[AERON_AGENT_RUNNER_CONDUCTOR].role_name);
+
     while (is_running())
     {
         aeron_driver_main_idle_strategy(driver, aeron_driver_main_do_work(driver));
