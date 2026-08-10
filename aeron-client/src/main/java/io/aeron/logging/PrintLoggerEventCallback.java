@@ -59,8 +59,9 @@ public class PrintLoggerEventCallback implements LoggerEventCallback
     private int msgTypeId;
 
     /**
-     * Default Constructor.
+     * Default Constructor. Used by Java Services API.
      */
+    @SuppressWarnings("unused")
     public PrintLoggerEventCallback()
     {
         this(System.getProperty(EVENT_LOG_FILENAME_PROP_NAME), retrieveMaxFileLength());
@@ -109,6 +110,7 @@ public class PrintLoggerEventCallback implements LoggerEventCallback
 
     private void loadBinaryRenderers()
     {
+        //noinspection Java9UndeclaredServiceUsage
         for (final BinaryRenderer binaryRenderer : ServiceLoader.load(BinaryRenderer.class))
         {
             for (final int msgTypeId : binaryRenderer.supportingMsgTypeIds())
@@ -211,7 +213,7 @@ public class PrintLoggerEventCallback implements LoggerEventCallback
     {
         if (truncated)
         {
-            sb.append("truncated");
+            sb.append(" (truncated)");
         }
         try
         {

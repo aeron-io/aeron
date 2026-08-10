@@ -504,4 +504,46 @@ class PrintLoggerEventCallbackTest
 
         assertEquals(expectedLogStartMessage() + sb, capturingPrintStream.flushAndGetContent());
     }
+
+    @Test
+    void shouldHandleTruncatedMessage()
+    {
+        final CapturingPrintStream capturingPrintStream = new CapturingPrintStream();
+        final PrintLoggerEventCallback printLoggerEventCallback = new PrintLoggerEventCallback(
+            capturingPrintStream.resetAndGetPrintStream(), fixedNanoClock, fixedEpochClock);
+
+        final int typeCode = EventCodeType.DRIVER.getTypeCode();
+        final int eventCode = 1234;
+        final String eventName = "SOME_LOG";
+        final long timestamp = 2827937432L;
+
+        final String key1 = "key1";
+        final byte[] value1 = {(byte)192, (byte)168, 0, 10};
+
+        final String key2 = "key2";
+        // fe80::54d3:4122:e738:a862
+        final byte[] value2 = {
+            (byte)0xfe, (byte)0x80, (byte)0x00, (byte)0x00,
+            (byte)0x00, (byte)0x00, (byte)0x00, (byte)0x00,
+            (byte)0x54, (byte)0xd3, (byte)0x41, (byte)0x22,
+            (byte)0xe7, (byte)0x38, (byte)0xa8, (byte)0x62
+        };
+
+        printLoggerEventCallback.onHeader(typeCode, eventCode, eventName, timestamp);
+        printLoggerEventCallback.onValue(key1, IPV4_TAG, new UnsafeBuffer(value1));
+        printLoggerEventCallback.onValue(key2, IPV6_TAG, new UnsafeBuffer(value2));
+        printLoggerEventCallback.onFooter(true);
+
+        final StringBuilder sb = new StringBuilder();
+
+        LogUtil.appendTimestamp(sb, timestamp);
+        sb.append(EventCodeType.DRIVER.name()).append(": ");
+        sb.append(eventName).append(" ");
+        sb.append(key1).append("=").append("192.168.0.10").append(" ");
+        sb.append(key2).append("=").append("[fe80::54d3:4122:e738:a862]");
+        sb.append(" (truncated)");
+        sb.append(NEW_LINE);
+
+        assertEquals(expectedLogStartMessage() + sb, capturingPrintStream.flushAndGetContent());
+    }
 }
