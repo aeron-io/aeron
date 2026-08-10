@@ -195,7 +195,7 @@ class ArchiveLoggingSystemTest
             final Path logFile = tempDir.resolve("archive.log");
             reader.writeToFile(logFile.toString());
             final String content = Files.readString(logFile);
-            assertTrue(content.contains("replayChannel=...truncated"));
+            assertTrue(content.contains("replayChannel=... (truncated)"));
             assertTrue(content.contains("CMD_IN_START_RECORDING "));
             assertTrue(content.contains("CMD_OUT_RESPONSE"));
             assertTrue(content.contains("CMD_IN_STOP_RECORDING"));
