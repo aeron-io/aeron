@@ -133,6 +133,13 @@ int main(int argc, char **argv)
         goto cleanup;
     }
 
+    if (aeron_driver_validate_affinity(context) < 0)
+    {
+        AERON_FPRINTF(stderr, "ERROR: validate affinity %s\n", aeron_errmsg());
+        AERON_SET_RELEASE(exit_status, EXIT_FAILURE);
+        goto cleanup;
+    }
+
     // preserve overridden start function and state
     context->agent_on_start_func_delegate = context->agent_on_start_func;
     context->agent_on_start_state_delegate = context->agent_on_start_state;

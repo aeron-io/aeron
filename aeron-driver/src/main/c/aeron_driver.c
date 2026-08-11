@@ -1207,8 +1207,46 @@ error:
     return -1;
 }
 
+static int aeron_driver_validate_affinity_pair(
+    const int32_t a,
+    const int32_t b,
+    const char *a_name,
+    const char *b_name,
+    FILE *output)
+{
+    if (AERON_NULL_VALUE != a && AERON_NULL_VALUE != b && a == b)
+    {
+        fprintf(output, "WARN: %s and %s are sharing cpu affinity=%" PRId32 "\n", a_name, b_name, a);
+        return 1;
+    }
+
+    return 0;
+}
+
+int aeron_driver_validate_unshared_affinity(aeron_driver_context_t* context, FILE *output)
+{
+    int warnings = 0;
+
+    warnings += aeron_driver_validate_affinity_pair(
+        context->conductor_cpu_affinity_no, context->sender_cpu_affinity_no, "conductor", "sender", output);
+    warnings += aeron_driver_validate_affinity_pair(
+        context->conductor_cpu_affinity_no, context->receiver_cpu_affinity_no, "conductor", "receiver", output);
+    warnings += aeron_driver_validate_affinity_pair(
+        context->conductor_cpu_affinity_no, context->native_resource_agent_cpu_affinity_no, "conductor", "native_resource_agent", output);
+    warnings += aeron_driver_validate_affinity_pair(
+        context->sender_cpu_affinity_no, context->receiver_cpu_affinity_no, "sender", "receiver", output);
+    warnings += aeron_driver_validate_affinity_pair(
+        context->sender_cpu_affinity_no, context->native_resource_agent_cpu_affinity_no, "sender", "native_resource_agent", output);
+    warnings += aeron_driver_validate_affinity_pair(
+        context->receiver_cpu_affinity_no, context->native_resource_agent_cpu_affinity_no, "receiver", "native_resource_agent", output);
+
+    return warnings;
+}
+
 int aeron_driver_validate_affinity(aeron_driver_context_t *context)
 {
+    aeron_driver_validate_unshared_affinity(context, stderr);
+
     // Check for overlapping configuration.
 
     // Check all are in the same die.
