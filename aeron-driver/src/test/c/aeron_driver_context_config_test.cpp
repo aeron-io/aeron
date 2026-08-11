@@ -330,10 +330,14 @@ TEST_F(DriverContextConfigTest, shouldApplyCpusetAffinity)
     int cpus[5] = { 9, 11, 13, 17, 19 };
     EXPECT_EQ(0, aeron_driver_context_apply_cpuset_affinity(context, cpus, 5)) << aeron_errmsg();
 
-    EXPECT_EQ(11, aeron_driver_context_get_conductor_cpu_affinity(context));
-    EXPECT_EQ(13, aeron_driver_context_get_sender_cpu_affinity(context));
-    EXPECT_EQ(17, aeron_driver_context_get_receiver_cpu_affinity(context));
-    EXPECT_EQ(19, aeron_driver_context_get_native_resource_agent_cpu_affinity(context));
+    EXPECT_EQ(1, aeron_driver_context_get_conductor_cpu_affinity(context));
+    EXPECT_EQ(11, context->conductor_cpu_affinity_resolved);
+    EXPECT_EQ(2, aeron_driver_context_get_sender_cpu_affinity(context));
+    EXPECT_EQ(13, context->sender_cpu_affinity_resolved);
+    EXPECT_EQ(3, aeron_driver_context_get_receiver_cpu_affinity(context));
+    EXPECT_EQ(17, context->receiver_cpu_affinity_resolved);
+    EXPECT_EQ(4, aeron_driver_context_get_native_resource_agent_cpu_affinity(context));
+    EXPECT_EQ(19, context->native_resource_agent_cpu_affinity_resolved);
 
     aeron_driver_context_close(context);
 }

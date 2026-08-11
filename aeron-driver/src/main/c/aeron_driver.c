@@ -1187,12 +1187,6 @@ int aeron_driver_apply_cpuset_affinity(aeron_driver_context_t *context)
     const int total_warnings_count =
         alignment_warnings_count + cluster_locality_warnings_count + l3_locality_warnings_count;
 
-    if (context->cpuset_warnings_as_errors && 0 < total_warnings_count)
-    {
-        AERON_SET_ERR(EINVAL, "cpuset warnings as errors, %d warnings", total_warnings_count);
-        goto error;
-    }
-
     if (aeron_driver_context_apply_cpuset_affinity(context, cpus, cpu_count) < 0)
     {
         AERON_APPEND_ERR("%s", "failed to apply cpuset affinity");
@@ -1200,7 +1194,7 @@ int aeron_driver_apply_cpuset_affinity(aeron_driver_context_t *context)
     }
 
     aeron_free(cpus);
-    return 0;
+    return total_warnings_count;
 
 error:
     aeron_free(cpus);
@@ -1243,17 +1237,34 @@ int aeron_driver_validate_unshared_affinity(aeron_driver_context_t* context, FIL
     return warnings;
 }
 
-int aeron_driver_validate_affinity(aeron_driver_context_t *context)
+int aeron_driver_validate_and_apply_affinity_configuration(aeron_driver_context_t *context)
 {
-    aeron_driver_validate_unshared_affinity(context, stderr);
+    int unshared_affinity_warnings;
+    if ((unshared_affinity_warnings = aeron_driver_validate_unshared_affinity(context, stderr)) < 0)
+    {
+        AERON_APPEND_ERR("%s", "failed to validate unshared affinity");
+        goto error;
+    }
 
-    // Check for overlapping configuration.
+    int cpuset_warnings = 0;
+    if ((cpuset_warnings = aeron_driver_apply_cpuset_affinity(context)) < 0)
+    {
+        AERON_APPEND_ERR("%s", "failed to apply cpuset affinity");
+        goto error;
+    }
 
-    // Check all are in the same die.
+    const int total_warnings_count = unshared_affinity_warnings + cpuset_warnings;
 
-    // Check all are in the same L3.
+    if (context->cpuset_warnings_as_errors && 0 < total_warnings_count)
+    {
+        AERON_SET_ERR(EINVAL, "cpuset warnings as errors, %d warnings", total_warnings_count);
+        goto error;
+    }
 
     return 0;
+
+error:
+    return -1;
 }
 
 int aeron_driver_start(aeron_driver_t *driver, bool manual_main_loop)

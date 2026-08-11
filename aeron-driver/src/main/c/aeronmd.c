@@ -126,16 +126,9 @@ int main(int argc, char **argv)
         goto cleanup;
     }
 
-    if (aeron_driver_apply_cpuset_affinity(context) < 0)
+    if (aeron_driver_validate_and_apply_affinity_configuration(context) < 0)
     {
-        AERON_FPRINTF(stderr, "ERROR: apply cpuset affinity %s\n", aeron_errmsg());
-        AERON_SET_RELEASE(exit_status, EXIT_FAILURE);
-        goto cleanup;
-    }
-
-    if (aeron_driver_validate_affinity(context) < 0)
-    {
-        AERON_FPRINTF(stderr, "ERROR: validate affinity %s\n", aeron_errmsg());
+        AERON_FPRINTF(stderr, "ERROR: applying cpuset and affinity configuration: %s\n", aeron_errmsg());
         AERON_SET_RELEASE(exit_status, EXIT_FAILURE);
         goto cleanup;
     }
