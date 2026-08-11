@@ -47,4 +47,6 @@ bool aeron_is_driver_active_with_cnc(
 
 int aeron_driver_apply_cpuset_affinity(aeron_driver_context_t *context);
 
+int aeron_driver_validate_affinity(aeron_driver_context_t *context);
+
 #endif //AERON_DRIVER_H

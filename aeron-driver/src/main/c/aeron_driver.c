@@ -578,10 +578,14 @@ void aeron_driver_context_print_configuration(aeron_driver_context_t *context)
         (uint64_t)context->network_publication_max_messages_per_send);
     AERON_FPRINTF(fpout, "\n    resource_free_limit=%" PRIu32, context->resource_free_limit);
     AERON_FPRINTF(fpout, "\n    conductor_cpu_affinity_no=%" PRId32, context->conductor_cpu_affinity_no);
+    AERON_FPRINTF(fpout, "\n    conductor_cpu_affinity_resolved=%" PRId32, context->conductor_cpu_affinity_resolved);
     AERON_FPRINTF(fpout, "\n    receiver_cpu_affinity_no=%" PRId32, context->receiver_cpu_affinity_no);
+    AERON_FPRINTF(fpout, "\n    receiver_cpu_affinity_resolved=%" PRId32, context->receiver_cpu_affinity_resolved);
     AERON_FPRINTF(fpout, "\n    sender_cpu_affinity_no=%" PRId32, context->sender_cpu_affinity_no);
+    AERON_FPRINTF(fpout, "\n    sender_cpu_affinity_resolved=%" PRId32, context->sender_cpu_affinity_resolved);
     AERON_FPRINTF(fpout, "\n    native_resource_agent_cpu_affinity_no=%" PRId32, context->native_resource_agent_cpu_affinity_no);
-    AERON_FPRINTF(fpout, "\n    cpuset_affinity=%" PRId32, context->cpuset_affinity);
+    AERON_FPRINTF(fpout, "\n    native_resource_agent_cpu_affinity_resolved=%" PRId32, context->native_resource_agent_cpu_affinity_resolved);
+    AERON_FPRINTF(fpout, "\n    cpuset_affinity=%s", context->cpuset_affinity ? "true" : "false");
     AERON_FPRINTF(fpout, "\n    cpuset_warnings_as_errors=%" PRId32, context->cpuset_warnings_as_errors);
 
     AERON_FPRINTF(fpout, "\n    epoch_clock=%s",
@@ -1201,6 +1205,17 @@ int aeron_driver_apply_cpuset_affinity(aeron_driver_context_t *context)
 error:
     aeron_free(cpus);
     return -1;
+}
+
+int aeron_driver_validate_affinity(aeron_driver_context_t *context)
+{
+    // Check for overlapping configuration.
+
+    // Check all are in the same die.
+
+    // Check all are in the same L3.
+
+    return 0;
 }
 
 int aeron_driver_start(aeron_driver_t *driver, bool manual_main_loop)
