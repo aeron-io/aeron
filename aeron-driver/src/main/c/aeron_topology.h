@@ -20,6 +20,7 @@
 #include <stdio.h>
 
 #define AERON_TOPOLOGY_SYS_CPU_PATH "/sys/devices/system/cpu"
+#define AERON_TOPOLOGY_MAX_CPU_ID 8192
 
 /**
  * The set of logical CPU siblings that share a physical core, filtered to
@@ -116,6 +117,17 @@ int aeron_topology_check_die_locality(const char* sys_cpu_root, const int *cpus,
  * @return the count of the number of warnings or -1 on error.
  */
 int aeron_topology_check_l3_locality(const char* sys_cpu_root, const int *cpus, int cpu_count, FILE* output);
+
+/**
+ * Read the set of CPUs that share an L3 cache domain with cpu (including cpu itself).
+ *
+ * @param sys_cpu_root of the sys fs filesystem to access cpu information.
+ * @param cpu logical CPU id to inspect.
+ * @param peers output array allocated within this function
+ * @param peer_count number of entries in peers.
+ * @return 0 on success, -1 on failure.
+ */
+int aeron_topology_read_l3_peers(const char *sys_cpu_root, int cpu, int **peers, int *peer_count);
 
 /**
  * Free an array of cores allocated by aeron_topology_read.

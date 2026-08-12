@@ -27,7 +27,6 @@
 
 #include "aeronc.h"
 
-#define AERON_TOPOLOGY_MAX_CPU_ID 8192
 #define AERON_TOPOLOGY_FILE_BUF_SIZE 4096
 
 typedef struct aeron_topology_core_group_stct
@@ -103,7 +102,7 @@ static int aeron_topology_read_sibling(const char *sys_cpu_root, int cpu, int **
     return 0;
 }
 
-static int aeron_topology_read_l3_peers(const char *sys_cpu_root, int cpu, int **peers, int *peer_count)
+int aeron_topology_read_l3_peers(const char *sys_cpu_root, int cpu, int **peers, int *peer_count)
 {
     char buf[AERON_TOPOLOGY_FILE_BUF_SIZE];
     if (aeron_topology_read_sysfs_cpu_file(sys_cpu_root, cpu, "cache/index3/shared_cpu_list", buf, sizeof(buf)) < 0)
