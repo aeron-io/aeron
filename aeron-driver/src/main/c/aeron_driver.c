@@ -1307,37 +1307,6 @@ int aeron_driver_validate_l3_locality(
     return warnings;
 }
 
-static int aeron_driver_build_l3_peer_table(
-    const char *sys_cpu_root,
-    aeron_driver_context_t *context,
-    int *l3_peers[AERON_TOPOLOGY_MAX_CPU_ID],
-    int l3_peer_counts[AERON_TOPOLOGY_MAX_CPU_ID])
-{
-    const int32_t resolved[4] = {
-        context->conductor_cpu_affinity_resolved,
-        context->sender_cpu_affinity_resolved,
-        context->receiver_cpu_affinity_resolved,
-        context->native_resource_agent_cpu_affinity_resolved
-    };
-
-    for (int i = 0; i < 4; i++)
-    {
-        const int32_t cpu = resolved[i];
-        if (AERON_NULL_VALUE == cpu || NULL != l3_peers[cpu])
-        {
-            continue;
-        }
-
-        if (aeron_topology_read_l3_peers(sys_cpu_root, cpu, &l3_peers[cpu], &l3_peer_counts[cpu]) < 0)
-        {
-            AERON_APPEND_ERR("failed to read L3 peers for cpu %" PRId32, cpu);
-            return -1;
-        }
-    }
-
-    return 0;
-}
-
 int aeron_driver_validate_and_apply_affinity_configuration(aeron_driver_context_t *context)
 {
     int unshared_affinity_warnings;
@@ -1359,7 +1328,15 @@ int aeron_driver_validate_and_apply_affinity_configuration(aeron_driver_context_
     int *l3_peers[AERON_TOPOLOGY_MAX_CPU_ID] = { NULL };
     int l3_peer_counts[AERON_TOPOLOGY_MAX_CPU_ID] = { 0 };
 
-    if (aeron_driver_build_l3_peer_table(AERON_TOPOLOGY_SYS_CPU_PATH, context, l3_peers, l3_peer_counts) < 0)
+    const int32_t resolved_cpus[4] = {
+        context->conductor_cpu_affinity_resolved,
+        context->sender_cpu_affinity_resolved,
+        context->receiver_cpu_affinity_resolved,
+        context->native_resource_agent_cpu_affinity_resolved
+    };
+
+    if (aeron_topology_build_l3_peer_table(
+        AERON_TOPOLOGY_SYS_CPU_PATH, resolved_cpus, 4, l3_peers, l3_peer_counts) < 0)
     {
         AERON_APPEND_ERR("%s", "failed to build l3 peer table");
         goto error;

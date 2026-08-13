@@ -130,6 +130,45 @@ int aeron_topology_check_l3_locality(const char* sys_cpu_root, const int *cpus, 
 int aeron_topology_read_l3_peers(const char *sys_cpu_root, int cpu, int **peers, int *peer_count);
 
 /**
+ * Build a table of L3 cache peers for each distinct CPU in cpus, skipping AERON_NULL_VALUE
+ * entries and any CPU already populated in l3_peers.
+ *
+ * @param sys_cpu_root of the sys fs filesystem to access cpu information.
+ * @param cpus input array of resolved CPU ids (entries may be AERON_NULL_VALUE to skip).
+ * @param cpu_count number of entries in cpus.
+ * @param l3_peers output table indexed by CPU id; entries allocated within this function.
+ * @param l3_peer_counts output table indexed by CPU id, parallel to l3_peers.
+ * @return 0 on success, -1 on failure.
+ */
+int aeron_topology_build_l3_peer_table(
+    const char *sys_cpu_root,
+    const int *cpus,
+    int cpu_count,
+    const int *l3_peers[AERON_TOPOLOGY_MAX_CPU_ID],
+    int l3_peer_counts[AERON_TOPOLOGY_MAX_CPU_ID]);
+
+/**
+ * Partition CPUs by L3 cache domain.
+ *
+ * @param cpus input array of resolved CPU ids.
+ * @param cpu_count number of entries in cpus.
+ * @param l3_peers table indexed by CPU id, as built by aeron_topology_build_l3_peer_table.
+ * @param l3_peer_counts table indexed by CPU id, parallel to l3_peers.
+ * @param l3_group_members output array of per-group CPU id arrays
+ * @param l3_group_member_count output array of per-group member counts
+ * @param l3_group_count output number of groups written.
+ * @return 0 on success, -1 on failure.
+ */
+int aeron_topology_build_l3_group_table(
+    const int *cpus,
+    int cpu_count,
+    const int **l3_peers,
+    const int *l3_peer_counts,
+    int ***l3_group_members,
+    int **l3_group_member_count,
+    int *l3_group_count);
+
+/**
  * Free an array of cores allocated by aeron_topology_read.
  */
 void aeron_topology_cores_free(aeron_topology_core_t *cores, int core_count);
