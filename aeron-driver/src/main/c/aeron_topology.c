@@ -20,7 +20,6 @@
 #include "util/aeron_error.h"
 
 #include <errno.h>
-#include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -556,107 +555,56 @@ int aeron_topology_check_l3_locality(const char* sys_cpu_root, const int *cpus, 
 }
 
 
-int aeron_topology_build_l3_group_table(
-    const int32_t *cpus,
-    const int cpu_count,
-    const int **l3_peers,
-    const int *l3_peer_counts,
-    int ***l3_group_members,
-    int **l3_group_member_count,
-    int *l3_group_count)
+int aeron_topology_build_l3_group_table(aeron_topology_cpu_info_t *info)
 {
-    int *valid_cpus = NULL;
+    const int cpu_count = info->cpu_count;
     int *groups = NULL;
-    int **group_members = NULL;
-    int *group_member_count = NULL;
-    int sorted_count = 0;
-
-    *l3_group_count = 0;
-
-    if (0 < cpu_count && aeron_alloc((void **)&valid_cpus, sizeof(int) * cpu_count) < 0)
-    {
-        AERON_APPEND_ERR("%s", "");
-        goto error;
-    }
+    int max_cpu = -1;
+    int next_group_id = 0;
 
     for (int i = 0; i < cpu_count; i++)
     {
-        const int32_t cpu = cpus[i];
-        if (AERON_NULL_VALUE == cpu)
+        info->cpus[i].group_id = AERON_NULL_VALUE;
+        if (AERON_NULL_VALUE != info->cpus[i].cpu && info->cpus[i].cpu > max_cpu)
         {
-            continue;
+            max_cpu = info->cpus[i].cpu;
         }
-        if (cpu < 0 || AERON_TOPOLOGY_MAX_CPU_ID <= cpu)
-        {
-            AERON_SET_ERR(EINVAL, "cpu id %" PRId32 " is out of range", cpu);
-            goto error;
-        }
-        valid_cpus[sorted_count++] = (int)cpu;
     }
 
-    if (0 == sorted_count)
+    if (max_cpu < 0)
     {
-        aeron_free(valid_cpus);
-        *l3_group_members = NULL;
-        *l3_group_member_count = NULL;
+        info->group_count = 0;
         return 0;
-    }
-
-    qsort(valid_cpus, sorted_count, sizeof(int), aeron_topology_cmp_int);
-
-    int max_cpu = valid_cpus[sorted_count - 1];
-
-    if (aeron_alloc((void **)&group_members, sizeof(int *) * sorted_count) < 0)
-    {
-        AERON_APPEND_ERR("%s", "");
-        goto error;
-    }
-
-    if (aeron_alloc((void **)&group_member_count, sizeof(int) * sorted_count) < 0)
-    {
-        AERON_APPEND_ERR("%s", "");
-        goto error;
-    }
-
-    for (int i = 0; i < sorted_count; i++)
-    {
-        if (aeron_alloc((void **)&group_members[i], sizeof(int) * sorted_count) < 0)
-        {
-            AERON_APPEND_ERR("%s", "");
-            goto error;
-        }
     }
 
     if (aeron_alloc((void **)&groups, sizeof(int) * (max_cpu + 1)) < 0)
     {
         AERON_APPEND_ERR("%s", "");
-        goto error;
+        return -1;
     }
     memset(groups, AERON_NULL_VALUE, sizeof(int) * (max_cpu + 1));
 
-    for (int i = 0; i < sorted_count; i++)
+    for (int i = 0; i < cpu_count; i++)
     {
-        const int cpu = valid_cpus[i];
-        if (AERON_NULL_VALUE != groups[cpu])
+        const int cpu = info->cpus[i].cpu;
+        if (AERON_NULL_VALUE == cpu)
         {
             continue;
         }
 
-        bool found_group = false;
-        for (int j = 0; j < l3_peer_counts[cpu]; j++)
+        if (AERON_NULL_VALUE != groups[cpu])
         {
-            const int peer = l3_peers[cpu][j];
-            // Since order is guaranteed here
-            if (peer > cpu)
-            {
-                break;
-            }
+            info->cpus[i].group_id = groups[cpu];
+            continue;
+        }
+
+        bool found_group = false;
+        for (int j = 0; j < info->peer_count[i]; j++)
+        {
+            const int peer = info->peers[i][j];
             if (AERON_NULL_VALUE != groups[peer])
             {
-                // Add to group
-                int peer_group = groups[peer];
-                group_members[peer_group][group_member_count[peer_group]++] = cpu;
-                groups[cpu] = peer_group;
+                groups[cpu] = groups[peer];
                 found_group = true;
                 break;
             }
@@ -664,64 +612,50 @@ int aeron_topology_build_l3_group_table(
 
         if (!found_group)
         {
-            // Create the new group
-            group_members[*l3_group_count][group_member_count[*l3_group_count]++] = cpu;
-            groups[cpu] = (*l3_group_count)++;
+            groups[cpu] = next_group_id++;
         }
-    }
-    for (int i = *l3_group_count; i < sorted_count; i++)
-    {
-        aeron_free(group_members[i]);
-        group_members[i] = NULL;
-    }
-    aeron_reallocf((void**) group_members, (*l3_group_count) * sizeof(int *));
-    aeron_free(valid_cpus);
-    aeron_free(groups);
-    *l3_group_members = group_members;
-    *l3_group_member_count = group_member_count;
 
+        info->cpus[i].group_id = groups[cpu];
+    }
+
+    aeron_free(groups);
+    info->group_count = next_group_id;
     return 0;
-
-error:
-    aeron_free(valid_cpus);
-    aeron_free(groups);
-    if (NULL != group_members)
-    {
-        for (int i = 0; i < sorted_count; i++)
-        {
-            aeron_free(group_members[i]);
-        }
-        aeron_free(group_members);
-    }
-    aeron_free(group_member_count);
-    *l3_group_count = 0;
-    return -1;
 }
 
 
-int aeron_topology_build_l3_peer_table(
-    const char *sys_cpu_root,
-    const int32_t *cpus,
-    const int cpu_count,
-    const int *l3_peers[AERON_TOPOLOGY_MAX_CPU_ID],
-    int l3_peer_counts[AERON_TOPOLOGY_MAX_CPU_ID])
+int aeron_topology_build_l3_peer_table(const char *sys_cpu_root, aeron_topology_cpu_info_t *info)
 {
-    for (int i = 0; i < cpu_count; i++)
+    for (int i = 0; i < info->cpu_count; i++)
     {
-        const int32_t cpu = cpus[i];
-        if (AERON_NULL_VALUE == cpu || NULL != l3_peers[cpu])
+        const int cpu = info->cpus[i].cpu;
+        if (AERON_NULL_VALUE == cpu)
         {
             continue;
         }
 
-        if (aeron_topology_read_l3_peers(sys_cpu_root, cpu, &l3_peers[cpu], &l3_peer_counts[cpu]) < 0)
+        if (aeron_topology_read_l3_peers(sys_cpu_root, cpu, &info->peers[i], &info->peer_count[i]) < 0)
         {
-            AERON_APPEND_ERR("failed to read L3 peers for cpu %" PRId32, cpu);
+            AERON_APPEND_ERR("failed to read L3 peers for cpu %d", cpu);
             return -1;
         }
     }
 
     return 0;
+}
+
+void aeron_topology_cpu_info_free(aeron_topology_cpu_info_t *info)
+{
+    if (NULL == info || NULL == info->peers)
+    {
+        return;
+    }
+
+    for (int i = 0; i < info->cpu_count; i++)
+    {
+        aeron_free(info->peers[i]);
+        info->peers[i] = NULL;
+    }
 }
 
 int aeron_topology_check_die_locality(const char* sys_cpu_root, const int *cpus, int cpu_count, FILE* output)

@@ -25,6 +25,7 @@
 extern "C"
 {
 #include "aeron_alloc.h"
+#include "aeronc.h"
 #include "aeron_cpuset.h"
 #include "aeron_topology.h"
 #include "util/aeron_error.h"
@@ -234,40 +235,28 @@ TEST_F(TopologyTest, shouldGenerateL3Groupings)
     ASSERT_NE(nullptr, m_output);
 
     constexpr int cpu_count = 4;
-    const int cpus[cpu_count] = {0, 1, 7, 8};
+    int groupA[] = {0, 1, 2, 3};
+    int groupC[] = {7, 8};
 
-    constexpr int groupA[] = {0, 1, 2, 3};
-    constexpr int groupC[] = {7, 8};
-    const int *l3Peers[9] = {groupA, groupA, groupA, groupA, nullptr, nullptr, nullptr, groupC, groupC};
-    const int l3PeerCounts[9] = {4, 4, 4, 4, 0, 0, 0, 2, 2};
-    int **l3_group_members = nullptr;
-    int *l3_group_member_count = nullptr;
-    int l3_group_count = 0;
-    const int result = aeron_topology_build_l3_group_table(
-        cpus,
-        cpu_count,
-        l3Peers,
-        l3PeerCounts,
-        &l3_group_members,
-        &l3_group_member_count,
-        &l3_group_count);
+    aeron_topology_cpu_group_t cpus[cpu_count] = {
+        {0, AERON_NULL_VALUE, nullptr},
+        {1, AERON_NULL_VALUE, nullptr},
+        {7, AERON_NULL_VALUE, nullptr},
+        {8, AERON_NULL_VALUE, nullptr}
+    };
+    int *peers[cpu_count] = {groupA, groupA, groupC, groupC};
+    int peer_count[cpu_count] = {4, 4, 2, 2};
+    aeron_topology_cpu_info_t cpu_info = { cpus, cpu_count, peers, peer_count, 0 };
+
+    const int result = aeron_topology_build_l3_group_table(&cpu_info);
     ASSERT_NE(-1, result);
-    ASSERT_EQ(2, l3_group_count);
-    for (int i = 0; i < l3_group_count; i++)
-    {
-        for (int j = 0; j < l3_group_member_count[i]; j++)
-        {
-            constexpr int expected_groups[2][2] = {{0, 1}, {7, 8}};
-            ASSERT_EQ(l3_group_members[i][j], expected_groups[i][j]);
-        }
-    }
 
-    for (int i = 0; i < l3_group_count; i++)
-    {
-        aeron_free(l3_group_members[i]);
-    }
-    aeron_free(l3_group_members);
-    aeron_free(l3_group_member_count);
+    EXPECT_EQ(2, cpu_info.group_count);
+    EXPECT_NE(AERON_NULL_VALUE, cpu_info.cpus[0].group_id);
+    EXPECT_EQ(cpu_info.cpus[0].group_id, cpu_info.cpus[1].group_id);
+    EXPECT_NE(AERON_NULL_VALUE, cpu_info.cpus[2].group_id);
+    EXPECT_EQ(cpu_info.cpus[2].group_id, cpu_info.cpus[3].group_id);
+    EXPECT_NE(cpu_info.cpus[0].group_id, cpu_info.cpus[2].group_id);
 }
 
 TEST_F(TopologyTest, shouldBuildL3GroupTableFromPeerTable)
@@ -284,45 +273,29 @@ TEST_F(TopologyTest, shouldBuildL3GroupTableFromPeerTable)
     };
     setupL3Shared(sysfsRoot, a);
 
-    const int32_t cpus[4] = {8, 0, 7, 1};
+    constexpr int cpu_count = 4;
+    aeron_topology_cpu_group_t cpus[cpu_count] = {
+        {8, AERON_NULL_VALUE, nullptr},
+        {0, AERON_NULL_VALUE, nullptr},
+        {7, AERON_NULL_VALUE, nullptr},
+        {1, AERON_NULL_VALUE, nullptr}
+    };
+    int *peers[cpu_count] = { nullptr, nullptr, nullptr, nullptr };
+    int peer_count[cpu_count] = { 0, 0, 0, 0 };
+    aeron_topology_cpu_info_t cpu_info = { cpus, cpu_count, peers, peer_count, 0 };
 
-    const int* l3_peers[AERON_TOPOLOGY_MAX_CPU_ID] = {nullptr};
-    int l3_peer_counts[AERON_TOPOLOGY_MAX_CPU_ID] = { 0 };
-    ASSERT_NE(-1, aeron_topology_build_l3_peer_table(sysfsRoot.c_str(), cpus, 4, l3_peers, l3_peer_counts))
+    ASSERT_NE(-1, aeron_topology_build_l3_peer_table(sysfsRoot.c_str(), &cpu_info))
         << aeron_errmsg();
 
-    int **l3_group_members = nullptr;
-    int *l3_group_member_count = nullptr;
-    int l3_group_count = 0;
-    const int result = aeron_topology_build_l3_group_table(
-        cpus,
-        4,
-        l3_peers,
-        l3_peer_counts,
-        &l3_group_members,
-        &l3_group_member_count,
-        &l3_group_count);
+    const int result = aeron_topology_build_l3_group_table(&cpu_info);
     ASSERT_NE(-1, result) << aeron_errmsg();
-    ASSERT_EQ(2, l3_group_count);
 
-    constexpr int expected_groups[2][2] = {{0, 1}, {7, 8}};
-    for (int i = 0; i < l3_group_count; i++)
-    {
-        ASSERT_EQ(2, l3_group_member_count[i]);
-        for (int j = 0; j < l3_group_member_count[i]; j++)
-        {
-            ASSERT_EQ(l3_group_members[i][j], expected_groups[i][j]);
-        }
-    }
+    EXPECT_EQ(2, cpu_info.group_count);
+    EXPECT_NE(AERON_NULL_VALUE, cpu_info.cpus[0].group_id);
+    EXPECT_EQ(cpu_info.cpus[0].group_id, cpu_info.cpus[2].group_id);
+    EXPECT_NE(AERON_NULL_VALUE, cpu_info.cpus[1].group_id);
+    EXPECT_EQ(cpu_info.cpus[1].group_id, cpu_info.cpus[3].group_id);
+    EXPECT_NE(cpu_info.cpus[0].group_id, cpu_info.cpus[1].group_id);
 
-    for (int cpu : {0, 1, 7, 8})
-    {
-        aeron_free((void*)l3_peers[cpu]);
-    }
-    for (int i = 0; i < l3_group_count; i++)
-    {
-        aeron_free(l3_group_members[i]);
-    }
-    aeron_free(l3_group_members);
-    aeron_free(l3_group_member_count);
+    aeron_topology_cpu_info_free(&cpu_info);
 }

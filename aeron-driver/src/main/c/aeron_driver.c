@@ -1237,74 +1237,31 @@ int aeron_driver_validate_unshared_affinity(aeron_driver_context_t* context, FIL
     return warnings;
 }
 
-static int aeron_driver_validate_l3_locality_pair(
-    const int32_t a_resolved,
-    const int32_t a_original,
-    const int32_t b_resolved,
-    const int32_t b_original,
-    const char *a_name,
-    const char *b_name,
-    const int * const *l3_peers,
-    const int *l3_peer_counts,
-    FILE *output)
+int aeron_driver_validate_l3_locality(const aeron_topology_cpu_info_t *cpu_info, FILE *output)
 {
-    if (AERON_NULL_VALUE == a_resolved || AERON_NULL_VALUE == b_resolved)
+    if (cpu_info->group_count <= 1)
     {
         return 0;
     }
 
-    const int *aPeers = l3_peers[a_resolved];
-    const int count = l3_peer_counts[a_resolved];
-    for (int i = 0; i < count; i++)
+    fprintf(output, "WARN: cpu affinities span %d L3 cache domains:\n", cpu_info->group_count);
+    for (int g = 0; g < cpu_info->group_count; g++)
     {
-        if (aPeers[i] == b_resolved)
+        fprintf(output, "  domain %d:", g);
+        for (int i = 0; i < cpu_info->cpu_count; i++)
         {
-            return 0;
+            const aeron_topology_cpu_group_t *entry = &cpu_info->cpus[i];
+            if (entry->group_id == g)
+            {
+                fprintf(
+                    output, " %s (cpu=%d [configured=%d])",
+                    entry->extra_info->name, entry->cpu, entry->extra_info->original_cpu);
+            }
         }
+        fprintf(output, "\n");
     }
 
-    fprintf(
-        output,
-        "WARN: %s and %s do not share an L3 cache domain "
-        "(cpu=%" PRId32 " [configured=%" PRId32 "], cpu=%" PRId32 " [configured=%" PRId32 "])\n",
-        a_name, b_name, a_resolved, a_original, b_resolved, b_original);
     return 1;
-}
-
-int aeron_driver_validate_l3_locality(
-    aeron_driver_context_t *context,
-    const int **l3_peers,
-    const int *l3_peer_counts,
-    FILE *output)
-{
-    int warnings = 0;
-
-    warnings += aeron_driver_validate_l3_locality_pair(
-        context->conductor_cpu_affinity_resolved, context->conductor_cpu_affinity_no,
-        context->sender_cpu_affinity_resolved, context->sender_cpu_affinity_no,
-        "conductor", "sender", l3_peers, l3_peer_counts, output);
-    warnings += aeron_driver_validate_l3_locality_pair(
-        context->conductor_cpu_affinity_resolved, context->conductor_cpu_affinity_no,
-        context->receiver_cpu_affinity_resolved, context->receiver_cpu_affinity_no,
-        "conductor", "receiver", l3_peers, l3_peer_counts, output);
-    warnings += aeron_driver_validate_l3_locality_pair(
-        context->conductor_cpu_affinity_resolved, context->conductor_cpu_affinity_no,
-        context->native_resource_agent_cpu_affinity_resolved, context->native_resource_agent_cpu_affinity_no,
-        "conductor", "native_resource_agent", l3_peers, l3_peer_counts, output);
-    warnings += aeron_driver_validate_l3_locality_pair(
-        context->sender_cpu_affinity_resolved, context->sender_cpu_affinity_no,
-        context->receiver_cpu_affinity_resolved, context->receiver_cpu_affinity_no,
-        "sender", "receiver", l3_peers, l3_peer_counts, output);
-    warnings += aeron_driver_validate_l3_locality_pair(
-        context->sender_cpu_affinity_resolved, context->sender_cpu_affinity_no,
-        context->native_resource_agent_cpu_affinity_resolved, context->native_resource_agent_cpu_affinity_no,
-        "sender", "native_resource_agent", l3_peers, l3_peer_counts, output);
-    warnings += aeron_driver_validate_l3_locality_pair(
-        context->receiver_cpu_affinity_resolved, context->receiver_cpu_affinity_no,
-        context->native_resource_agent_cpu_affinity_resolved, context->native_resource_agent_cpu_affinity_no,
-        "receiver", "native_resource_agent", l3_peers, l3_peer_counts, output);
-
-    return warnings;
 }
 
 int aeron_driver_validate_and_apply_affinity_configuration(aeron_driver_context_t *context)
@@ -1325,24 +1282,37 @@ int aeron_driver_validate_and_apply_affinity_configuration(aeron_driver_context_
 
     int l3_locality_warnings = 0;
 #ifdef __linux__
-    int *l3_peers[AERON_TOPOLOGY_MAX_CPU_ID] = { NULL };
-    int l3_peer_counts[AERON_TOPOLOGY_MAX_CPU_ID] = { 0 };
-
-    const int32_t resolved_cpus[4] = {
-        context->conductor_cpu_affinity_resolved,
-        context->sender_cpu_affinity_resolved,
-        context->receiver_cpu_affinity_resolved,
-        context->native_resource_agent_cpu_affinity_resolved
+    aeron_topology_extra_info_t extra_info[4] = {
+        { "conductor", context->conductor_cpu_affinity_no },
+        { "sender", context->sender_cpu_affinity_no },
+        { "receiver", context->receiver_cpu_affinity_no },
+        { "native_resource_agent", context->native_resource_agent_cpu_affinity_no }
     };
+    aeron_topology_cpu_group_t cpu_groups[4] = {
+        { context->conductor_cpu_affinity_resolved, AERON_NULL_VALUE, &extra_info[0] },
+        { context->sender_cpu_affinity_resolved, AERON_NULL_VALUE, &extra_info[1] },
+        { context->receiver_cpu_affinity_resolved, AERON_NULL_VALUE, &extra_info[2] },
+        { context->native_resource_agent_cpu_affinity_resolved, AERON_NULL_VALUE, &extra_info[3] }
+    };
+    int *peers[4] = { NULL, NULL, NULL, NULL };
+    int peer_count[4] = { 0, 0, 0, 0 };
+    aeron_topology_cpu_info_t cpu_info = { cpu_groups, 4, peers, peer_count, 0 };
 
-    if (aeron_topology_build_l3_peer_table(
-        AERON_TOPOLOGY_SYS_CPU_PATH, resolved_cpus, 4, l3_peers, l3_peer_counts) < 0)
+    if (aeron_topology_build_l3_peer_table(AERON_TOPOLOGY_SYS_CPU_PATH, &cpu_info) < 0)
     {
         AERON_APPEND_ERR("%s", "failed to build l3 peer table");
+        aeron_topology_cpu_info_free(&cpu_info);
         goto error;
     }
-    l3_locality_warnings = aeron_driver_validate_l3_locality(context, l3_peers, l3_peer_counts, stderr);
 
+    if (aeron_topology_build_l3_group_table(&cpu_info) < 0)
+    {
+        AERON_APPEND_ERR("%s", "failed to build l3 group table");
+        aeron_topology_cpu_info_free(&cpu_info);
+        goto error;
+    }
+    l3_locality_warnings = aeron_driver_validate_l3_locality(&cpu_info, stderr);
+    aeron_topology_cpu_info_free(&cpu_info);
 #endif
 
     const int total_warnings_count = unshared_affinity_warnings + cpuset_warnings + l3_locality_warnings;
