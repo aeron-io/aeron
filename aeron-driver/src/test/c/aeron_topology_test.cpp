@@ -231,7 +231,6 @@ TEST_F(TopologyTest, shouldCheckClusterLocality)
 
 TEST_F(TopologyTest, shouldGenerateL3Groupings)
 {
-
     ASSERT_NE(nullptr, m_output);
 
     constexpr int cpu_count = 4;
@@ -253,9 +252,11 @@ TEST_F(TopologyTest, shouldGenerateL3Groupings)
 
     EXPECT_EQ(2, cpu_info.group_count);
     EXPECT_NE(AERON_NULL_VALUE, cpu_info.cpus[0].group_id);
-    EXPECT_EQ(cpu_info.cpus[0].group_id, cpu_info.cpus[1].group_id);
     EXPECT_NE(AERON_NULL_VALUE, cpu_info.cpus[2].group_id);
+
+    EXPECT_EQ(cpu_info.cpus[0].group_id, cpu_info.cpus[1].group_id);
     EXPECT_EQ(cpu_info.cpus[2].group_id, cpu_info.cpus[3].group_id);
+
     EXPECT_NE(cpu_info.cpus[0].group_id, cpu_info.cpus[2].group_id);
 }
 
@@ -291,10 +292,13 @@ TEST_F(TopologyTest, shouldBuildL3GroupTableFromPeerTable)
     ASSERT_NE(-1, result) << aeron_errmsg();
 
     EXPECT_EQ(2, cpu_info.group_count);
+
     EXPECT_NE(AERON_NULL_VALUE, cpu_info.cpus[0].group_id);
-    EXPECT_EQ(cpu_info.cpus[0].group_id, cpu_info.cpus[2].group_id);
     EXPECT_NE(AERON_NULL_VALUE, cpu_info.cpus[1].group_id);
+
+    EXPECT_EQ(cpu_info.cpus[0].group_id, cpu_info.cpus[2].group_id);
     EXPECT_EQ(cpu_info.cpus[1].group_id, cpu_info.cpus[3].group_id);
+
     EXPECT_NE(cpu_info.cpus[0].group_id, cpu_info.cpus[1].group_id);
 
     aeron_topology_cpu_info_free(&cpu_info);
