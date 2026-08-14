@@ -626,6 +626,9 @@ int aeron_topology_build_l3_group_table(aeron_topology_cpu_info_t *info)
 
 int aeron_topology_build_l3_peer_table(const char *sys_cpu_root, aeron_topology_cpu_info_t *info)
 {
+    // TODO: Reconsider making this a full table again (every row corresponds to a real CPU, not just the listed ones).
+    //       This would require the grouping logic to change (I think this is a fairly simple change).
+    //       What this could do is make this reusable for both the cpuset and the affinity validations.
     for (int i = 0; i < info->cpu_count; i++)
     {
         const int cpu = info->cpus[i].cpu;
