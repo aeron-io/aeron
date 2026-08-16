@@ -1237,21 +1237,29 @@ int aeron_driver_validate_unshared_affinity(aeron_driver_context_t* context, FIL
     return warnings;
 }
 
-int aeron_driver_validate_l3_locality(const aeron_topology_cpu_info_t *cpu_info, FILE *output)
+int aeron_driver_validate_group_locality(
+    const aeron_topology_cpu_info_t *cpu_info,
+    const char *sysfs_prop_descriptor,
+    FILE *output)
 {
     if (cpu_info->group_count <= 1)
     {
         return 0;
     }
 
-    fprintf(output, "WARN: cpu affinities span %d L3 cache domains:\n", cpu_info->group_count);
+    fprintf(output, "WARN: cpu affinities span %d %s:\n", cpu_info->group_count, sysfs_prop_descriptor);
+    // TODO: Consider alternative, which is just to print all group IDs individually in a list
+    //       This will allow us to remove the group_ids array processing
+    //       Another possibility is to pre-sort the cpu list by group ID instead of having a list for them
     for (int g = 0; g < cpu_info->group_count; g++)
     {
-        fprintf(output, "  domain %d:", g);
+        // If group IDs were not listed, just use the index (e.g., in L3 cache case)
+        const int current_group = NULL != cpu_info->group_ids ? cpu_info->group_ids[g] : g;
+        fprintf(output, "  group %d:", current_group);
         for (int i = 0; i < cpu_info->cpu_count; i++)
         {
             const aeron_topology_cpu_group_t *entry = &cpu_info->cpus[i];
-            if (entry->group_id == g)
+            if (current_group == entry->group_id)
             {
                 fprintf(
                     output, " %s (cpu=%d [configured=%d])",
@@ -1281,6 +1289,7 @@ int aeron_driver_validate_and_apply_affinity_configuration(aeron_driver_context_
     }
 
     int l3_locality_warnings = 0;
+    int die_locality_warnings = 0;
 #ifdef __linux__
     aeron_topology_extra_info_t extra_info[4] = {
         { "conductor", context->conductor_cpu_affinity_no },
@@ -1296,8 +1305,8 @@ int aeron_driver_validate_and_apply_affinity_configuration(aeron_driver_context_
     };
     int *peers[4] = { NULL, NULL, NULL, NULL };
     int peer_count[4] = { 0, 0, 0, 0 };
-    aeron_topology_cpu_info_t cpu_info = { cpu_groups, 4, peers, peer_count, 0 };
-
+    aeron_topology_cpu_info_t cpu_info = { cpu_groups, 4, peers, peer_count, NULL, 0 };
+    // TODO: Consider combining with aeron_topology_build_l3_group_table to minimize calls here
     if (aeron_topology_build_l3_peer_table(AERON_TOPOLOGY_SYS_CPU_PATH, &cpu_info) < 0)
     {
         AERON_APPEND_ERR("%s", "failed to build l3 peer table");
@@ -1311,11 +1320,21 @@ int aeron_driver_validate_and_apply_affinity_configuration(aeron_driver_context_
         aeron_topology_cpu_info_free(&cpu_info);
         goto error;
     }
-    l3_locality_warnings = aeron_driver_validate_l3_locality(&cpu_info, stderr);
+    l3_locality_warnings = aeron_driver_validate_group_locality(&cpu_info, "L3 cache domain", stderr);
+
+    if (aeron_topology_build_die_locality_group_table(AERON_TOPOLOGY_SYS_CPU_PATH, &cpu_info) < 0)
+    {
+        AERON_APPEND_ERR("%s", "failed to build die locality group table");
+        aeron_topology_cpu_info_free(&cpu_info);
+        goto error;
+    }
+    die_locality_warnings = aeron_driver_validate_group_locality(&cpu_info, "dies", stderr);
+
     aeron_topology_cpu_info_free(&cpu_info);
 #endif
 
-    const int total_warnings_count = unshared_affinity_warnings + cpuset_warnings + l3_locality_warnings;
+    const int total_warnings_count =
+        unshared_affinity_warnings + cpuset_warnings + l3_locality_warnings + die_locality_warnings;
 
     if (context->cpuset_warnings_as_errors && 0 < total_warnings_count)
     {

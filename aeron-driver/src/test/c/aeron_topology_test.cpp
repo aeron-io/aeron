@@ -245,7 +245,7 @@ TEST_F(TopologyTest, shouldGenerateL3Groupings)
     };
     int *peers[cpu_count] = {groupA, groupA, groupC, groupC};
     int peer_count[cpu_count] = {4, 4, 2, 2};
-    aeron_topology_cpu_info_t cpu_info = { cpus, cpu_count, peers, peer_count, 0 };
+    aeron_topology_cpu_info_t cpu_info = { cpus, cpu_count, peers, peer_count, nullptr, 0 };
 
     const int result = aeron_topology_build_l3_group_table(&cpu_info);
     ASSERT_NE(-1, result);
@@ -283,7 +283,7 @@ TEST_F(TopologyTest, shouldBuildL3GroupTableFromPeerTable)
     };
     int *peers[cpu_count] = { nullptr, nullptr, nullptr, nullptr };
     int peer_count[cpu_count] = { 0, 0, 0, 0 };
-    aeron_topology_cpu_info_t cpu_info = { cpus, cpu_count, peers, peer_count, 0 };
+    aeron_topology_cpu_info_t cpu_info = { cpus, cpu_count, peers, peer_count, nullptr, 0 };
 
     ASSERT_NE(-1, aeron_topology_build_l3_peer_table(sysfsRoot.c_str(), &cpu_info))
         << aeron_errmsg();
@@ -300,6 +300,41 @@ TEST_F(TopologyTest, shouldBuildL3GroupTableFromPeerTable)
     EXPECT_EQ(cpu_info.cpus[1].group_id, cpu_info.cpus[3].group_id);
 
     EXPECT_NE(cpu_info.cpus[0].group_id, cpu_info.cpus[1].group_id);
+
+    aeron_topology_cpu_info_free(&cpu_info);
+}
+
+// aeron_topology_build_die_locality_group_table
+TEST_F(TopologyTest, shouldBuildDieLocalityGroupTable)
+{
+    ASSERT_NE(nullptr, m_output);
+
+    std::string sysfsRoot = std::string(m_tempDir) + "/sysfs";
+    std::vector<int> a = {
+        65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535,
+        0, 0, 0, 0, 0, 0, 0, 0
+    };
+    setupClusterShared(sysfsRoot, a);
+    constexpr int cpu_count = 4;
+    aeron_topology_cpu_group_t cpus[cpu_count] = {
+        {8, AERON_NULL_VALUE, nullptr},
+        {0, AERON_NULL_VALUE, nullptr},
+        {9, AERON_NULL_VALUE, nullptr},
+        {1, AERON_NULL_VALUE, nullptr}
+    };
+    aeron_topology_cpu_info_t cpu_info = { cpus, cpu_count, nullptr, nullptr, nullptr, 0 };
+    ASSERT_NE(-1, aeron_topology_build_die_locality_group_table(sysfsRoot.c_str(), &cpu_info))
+        << aeron_errmsg();
+
+    EXPECT_EQ(0, cpu_info.cpus[0].group_id);
+    EXPECT_EQ(65535, cpu_info.cpus[1].group_id);
+    EXPECT_EQ(0, cpu_info.cpus[2].group_id);
+    EXPECT_EQ(65535, cpu_info.cpus[3].group_id);
+
+    EXPECT_EQ(2, cpu_info.group_count);
+    ASSERT_NE(nullptr, cpu_info.group_ids);
+    EXPECT_EQ(0, cpu_info.group_ids[0]);
+    EXPECT_EQ(65535, cpu_info.group_ids[1]);
 
     aeron_topology_cpu_info_free(&cpu_info);
 }

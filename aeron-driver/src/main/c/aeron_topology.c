@@ -623,12 +623,66 @@ int aeron_topology_build_l3_group_table(aeron_topology_cpu_info_t *info)
     return 0;
 }
 
+int aeron_topology_build_die_locality_group_table(const char *sys_cpu_root, aeron_topology_cpu_info_t *info)
+{
+    int *group_ids = NULL;
+    int group_capacity = 0;
+    int group_count = 0;
+
+    for (int i = 0; i < info->cpu_count; i++)
+    {
+        const int cpu = info->cpus[i].cpu;
+        int cluster_id = AERON_NULL_VALUE;
+        if (aeron_topology_read_die_id(sys_cpu_root, cpu, &cluster_id) < 0)
+        {
+            aeron_free(group_ids);
+            break;
+        }
+        info->cpus[i].group_id = cluster_id;
+        bool found = false;
+        for (int j = 0; j < group_count; j++)
+        {
+            if (group_ids[j] == cluster_id)
+            {
+                found = true;
+                break;
+            }
+        }
+
+        if (!found)
+        {
+            if (group_count == group_capacity)
+            {
+                group_capacity = 0 == group_capacity ? 8 : group_capacity * 2;
+                if (aeron_reallocf((void **)&group_ids, sizeof(int) * group_capacity) < 0)
+                {
+                    AERON_APPEND_ERR("%s", "");
+                    aeron_free(group_ids);
+                    return -1;
+                }
+            }
+            group_ids[group_count++] = cluster_id;
+        }
+    }
+
+    if (group_count > 0)
+    {
+        qsort(group_ids, group_count, sizeof(int), aeron_topology_cmp_int);
+    }
+
+    aeron_free(info->group_ids);
+    info->group_ids = group_ids;
+    info->group_count = group_count;
+    return 0;
+}
 
 int aeron_topology_build_l3_peer_table(const char *sys_cpu_root, aeron_topology_cpu_info_t *info)
 {
     // TODO: Reconsider making this a full table again (every row corresponds to a real CPU, not just the listed ones).
     //       This would require the grouping logic to change (I think this is a fairly simple change).
     //       What this could do is make this reusable for both the cpuset and the affinity validations.
+
+    // TODO: Consider calling from within group table method instead.
     for (int i = 0; i < info->cpu_count; i++)
     {
         const int cpu = info->cpus[i].cpu;
@@ -649,16 +703,22 @@ int aeron_topology_build_l3_peer_table(const char *sys_cpu_root, aeron_topology_
 
 void aeron_topology_cpu_info_free(aeron_topology_cpu_info_t *info)
 {
-    if (NULL == info || NULL == info->peers)
+    if (NULL == info)
     {
         return;
     }
 
-    for (int i = 0; i < info->cpu_count; i++)
+    if (NULL != info->peers)
     {
-        aeron_free(info->peers[i]);
-        info->peers[i] = NULL;
+        for (int i = 0; i < info->cpu_count; i++)
+        {
+            aeron_free(info->peers[i]);
+            info->peers[i] = NULL;
+        }
     }
+
+    aeron_free(info->group_ids);
+    info->group_ids = NULL;
 }
 
 int aeron_topology_check_die_locality(const char* sys_cpu_root, const int *cpus, int cpu_count, FILE* output)

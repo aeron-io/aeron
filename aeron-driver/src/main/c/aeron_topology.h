@@ -60,8 +60,11 @@ typedef struct aeron_topology_cpu_info_stct
 {
     aeron_topology_cpu_group_t *cpus;
     int cpu_count;
+    // TODO: Peers are not a general concept, currently only useful for L3 cache domains
+    //       Move this to a different, more specific struct?
     int **peers;
     int *peer_count;
+    int *group_ids;
     int group_count;
 }
 aeron_topology_cpu_info_t;
@@ -149,6 +152,17 @@ int aeron_topology_check_die_locality(const char* sys_cpu_root, const int *cpus,
  * @return the count of the number of warnings or -1 on error.
  */
 int aeron_topology_check_l3_locality(const char* sys_cpu_root, const int *cpus, int cpu_count, FILE* output);
+
+/**
+ * Build a table of CPUs that share the same die. Populates info->cpus[i].group_id with the raw die id
+ * for each CPU, info->group_ids with the sorted, distinct die ids observed, and info->group_count with
+ * the number of distinct die ids. info->group_ids is heap-allocated; free with aeron_topology_cpu_info_free.
+ *
+ * @param sys_cpu_root of the sys fs filesystem to access cpu information.
+ * @param info contains the cpu list to be grouped
+ * @return 0 on success, -1 on failure.
+ */
+int aeron_topology_build_die_locality_group_table(const char *sys_cpu_root, aeron_topology_cpu_info_t *info);
 
 /**
  * Read the set of CPUs that share an L3 cache domain with cpu (including cpu itself).
