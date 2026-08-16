@@ -229,37 +229,6 @@ TEST_F(TopologyTest, shouldCheckClusterLocality)
     aeron_free(cpus);
 }
 
-TEST_F(TopologyTest, shouldGenerateL3Groupings)
-{
-    ASSERT_NE(nullptr, m_output);
-
-    constexpr int cpu_count = 4;
-    int groupA[] = {0, 1, 2, 3};
-    int groupC[] = {7, 8};
-
-    aeron_topology_cpu_group_t cpus[cpu_count] = {
-        {0, AERON_NULL_VALUE, nullptr},
-        {1, AERON_NULL_VALUE, nullptr},
-        {7, AERON_NULL_VALUE, nullptr},
-        {8, AERON_NULL_VALUE, nullptr}
-    };
-    int *peers[cpu_count] = {groupA, groupA, groupC, groupC};
-    int peer_count[cpu_count] = {4, 4, 2, 2};
-    aeron_topology_cpu_info_t cpu_info = { cpus, cpu_count, peers, peer_count, nullptr, 0 };
-
-    const int result = aeron_topology_build_l3_group_table(&cpu_info);
-    ASSERT_NE(-1, result);
-
-    EXPECT_EQ(2, cpu_info.group_count);
-    EXPECT_NE(AERON_NULL_VALUE, cpu_info.cpus[0].group_id);
-    EXPECT_NE(AERON_NULL_VALUE, cpu_info.cpus[2].group_id);
-
-    EXPECT_EQ(cpu_info.cpus[0].group_id, cpu_info.cpus[1].group_id);
-    EXPECT_EQ(cpu_info.cpus[2].group_id, cpu_info.cpus[3].group_id);
-
-    EXPECT_NE(cpu_info.cpus[0].group_id, cpu_info.cpus[2].group_id);
-}
-
 TEST_F(TopologyTest, shouldBuildL3GroupTableFromPeerTable)
 {
 #ifndef __linux__
@@ -285,10 +254,7 @@ TEST_F(TopologyTest, shouldBuildL3GroupTableFromPeerTable)
     int peer_count[cpu_count] = { 0, 0, 0, 0 };
     aeron_topology_cpu_info_t cpu_info = { cpus, cpu_count, peers, peer_count, nullptr, 0 };
 
-    ASSERT_NE(-1, aeron_topology_build_l3_peer_table(sysfsRoot.c_str(), &cpu_info))
-        << aeron_errmsg();
-
-    const int result = aeron_topology_build_l3_group_table(&cpu_info);
+    const int result = aeron_topology_build_l3_group_table(sysfsRoot.c_str(), &cpu_info);
     ASSERT_NE(-1, result) << aeron_errmsg();
 
     EXPECT_EQ(2, cpu_info.group_count);

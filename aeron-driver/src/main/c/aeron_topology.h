@@ -176,21 +176,13 @@ int aeron_topology_build_die_locality_group_table(const char *sys_cpu_root, aero
 int aeron_topology_read_l3_peers(const char *sys_cpu_root, int cpu, int **peers, int *peer_count);
 
 /**
- * Fill the L3 peer list for each CPU.
- *
- * @param sys_cpu_root of the sys fs filesystem to access cpu information.
- * @param info cpu_info with cpus/cpu_count/peers/peer_count pre-allocated by the caller.
- * @return 0 on success, -1 on failure.
- */
-int aeron_topology_build_l3_peer_table(const char *sys_cpu_root, aeron_topology_cpu_info_t *info);
-
-/**
  * Fill the L3 group ID for each CPU based on the L3 peer list.
  *
+ * @param sys_cpu_root of the sys fs filesystem to access cpu information.
  * @param info cpu_info with cpus/peers/peer_count already populated.
  * @return 0 on success, -1 on failure.
  */
-int aeron_topology_build_l3_group_table(aeron_topology_cpu_info_t *info);
+int aeron_topology_build_l3_group_table(const char *sys_cpu_root, aeron_topology_cpu_info_t *info);
 
 /**
  * Free the allocated memory inside an aeron_topology_cpu_info_t object.

@@ -1306,15 +1306,8 @@ int aeron_driver_validate_and_apply_affinity_configuration(aeron_driver_context_
     int *peers[4] = { NULL, NULL, NULL, NULL };
     int peer_count[4] = { 0, 0, 0, 0 };
     aeron_topology_cpu_info_t cpu_info = { cpu_groups, 4, peers, peer_count, NULL, 0 };
-    // TODO: Consider combining with aeron_topology_build_l3_group_table to minimize calls here
-    if (aeron_topology_build_l3_peer_table(AERON_TOPOLOGY_SYS_CPU_PATH, &cpu_info) < 0)
-    {
-        AERON_APPEND_ERR("%s", "failed to build l3 peer table");
-        aeron_topology_cpu_info_free(&cpu_info);
-        goto error;
-    }
 
-    if (aeron_topology_build_l3_group_table(&cpu_info) < 0)
+    if (aeron_topology_build_l3_group_table(AERON_TOPOLOGY_SYS_CPU_PATH, &cpu_info) < 0)
     {
         AERON_APPEND_ERR("%s", "failed to build l3 group table");
         aeron_topology_cpu_info_free(&cpu_info);

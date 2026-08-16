@@ -554,9 +554,39 @@ int aeron_topology_check_l3_locality(const char* sys_cpu_root, const int *cpus, 
     return warnings;
 }
 
-
-int aeron_topology_build_l3_group_table(aeron_topology_cpu_info_t *info)
+static int aeron_topology_build_l3_peer_table(const char *sys_cpu_root, aeron_topology_cpu_info_t *info)
 {
+    // TODO: Reconsider making this a full table again (every row corresponds to a real CPU, not just the listed ones).
+    //       This would require the grouping logic to change (I think this is a fairly simple change).
+    //       What this could do is make this reusable for both the cpuset and the affinity validations.
+
+    // TODO: Consider calling from within group table method instead.
+    for (int i = 0; i < info->cpu_count; i++)
+    {
+        const int cpu = info->cpus[i].cpu;
+        if (AERON_NULL_VALUE == cpu)
+        {
+            continue;
+        }
+
+        if (aeron_topology_read_l3_peers(sys_cpu_root, cpu, &info->peers[i], &info->peer_count[i]) < 0)
+        {
+            AERON_APPEND_ERR("failed to read L3 peers for cpu %d", cpu);
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+int aeron_topology_build_l3_group_table(const char *sys_cpu_root, aeron_topology_cpu_info_t *info)
+{
+    if (aeron_topology_build_l3_peer_table(sys_cpu_root, info) < 0)
+    {
+        AERON_APPEND_ERR("%s", "failed to build l3 peer table");
+        aeron_topology_cpu_info_free(info);
+        return -1;
+    }
     const int cpu_count = info->cpu_count;
     int *groups = NULL;
     int max_cpu = -1;
@@ -673,31 +703,6 @@ int aeron_topology_build_die_locality_group_table(const char *sys_cpu_root, aero
     aeron_free(info->group_ids);
     info->group_ids = group_ids;
     info->group_count = group_count;
-    return 0;
-}
-
-int aeron_topology_build_l3_peer_table(const char *sys_cpu_root, aeron_topology_cpu_info_t *info)
-{
-    // TODO: Reconsider making this a full table again (every row corresponds to a real CPU, not just the listed ones).
-    //       This would require the grouping logic to change (I think this is a fairly simple change).
-    //       What this could do is make this reusable for both the cpuset and the affinity validations.
-
-    // TODO: Consider calling from within group table method instead.
-    for (int i = 0; i < info->cpu_count; i++)
-    {
-        const int cpu = info->cpus[i].cpu;
-        if (AERON_NULL_VALUE == cpu)
-        {
-            continue;
-        }
-
-        if (aeron_topology_read_l3_peers(sys_cpu_root, cpu, &info->peers[i], &info->peer_count[i]) < 0)
-        {
-            AERON_APPEND_ERR("failed to read L3 peers for cpu %d", cpu);
-            return -1;
-        }
-    }
-
     return 0;
 }
 
