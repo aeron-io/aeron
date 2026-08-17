@@ -632,6 +632,11 @@ int aeron_topology_build_l3_group_table(const char *sys_cpu_root, aeron_topology
         for (int j = 0; j < info->peer_count[i]; j++)
         {
             const int peer = info->peers[i][j];
+            if (peer > max_cpu)
+            {
+                // Can be freely skipped, since any CPU over max_cpu is not part of the grouping.
+                continue;
+            }
             if (AERON_NULL_VALUE != groups[peer])
             {
                 groups[cpu] = groups[peer];
@@ -663,10 +668,19 @@ int aeron_topology_build_die_locality_group_table(const char *sys_cpu_root, aero
     {
         const int cpu = info->cpus[i].cpu;
         int cluster_id = AERON_NULL_VALUE;
+
+        if (AERON_NULL_VALUE == cpu)
+        {
+            continue;
+        }
         if (aeron_topology_read_die_id(sys_cpu_root, cpu, &cluster_id) < 0)
         {
             aeron_free(group_ids);
             break;
+        }
+        if (AERON_NULL_VALUE == cluster_id)
+        {
+            continue;
         }
         info->cpus[i].group_id = cluster_id;
         bool found = false;
