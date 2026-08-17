@@ -229,7 +229,7 @@ TEST_F(TopologyTest, shouldCheckClusterLocality)
     aeron_free(cpus);
 }
 
-TEST_F(TopologyTest, shouldBuildL3GroupTableFromPeerTable)
+TEST_F(TopologyTest, shouldBuildL3GroupTable)
 {
 #ifndef __linux__
     GTEST_SKIP() << "CGroups only supported on Linux";
@@ -270,6 +270,57 @@ TEST_F(TopologyTest, shouldBuildL3GroupTableFromPeerTable)
     aeron_topology_cpu_info_free(&cpu_info);
 }
 
+TEST_F(TopologyTest, shouldBuildL3GroupTableWhenCpusNotSet)
+{
+#ifndef __linux__
+    GTEST_SKIP() << "CGroups only supported on Linux";
+#endif
+
+    ASSERT_NE(nullptr, m_output);
+
+    std::string sysfsRoot = std::string(m_tempDir) + "/sysfs";
+    std::vector<std::pair<int, int>> a = {
+        {0, 3}, {0, 3}, {0, 3}, {0, 3}, {4, 6}, {4, 6}, {4, 6}, {7, 8}, {7, 8}
+    };
+    setupL3Shared(sysfsRoot, a);
+
+    constexpr int cpu_count = 8;
+    aeron_topology_cpu_group_t cpus[cpu_count] = {
+        {8, AERON_NULL_VALUE, nullptr},
+        {AERON_NULL_VALUE, AERON_NULL_VALUE, nullptr},
+        {AERON_NULL_VALUE, AERON_NULL_VALUE, nullptr},
+        {1, AERON_NULL_VALUE, nullptr},
+        {2, AERON_NULL_VALUE, nullptr},
+        {3, AERON_NULL_VALUE, nullptr},
+        {5, AERON_NULL_VALUE, nullptr},
+        {6, AERON_NULL_VALUE, nullptr}
+    };
+    int *peers[cpu_count] = { nullptr };
+    int peer_count[cpu_count] = { 0 };
+    aeron_topology_cpu_info_t cpu_info = { cpus, cpu_count, peers, peer_count, nullptr, 0 };
+
+    const int result = aeron_topology_build_l3_group_table(sysfsRoot.c_str(), &cpu_info);
+    ASSERT_NE(-1, result) << aeron_errmsg();
+
+    EXPECT_EQ(3, cpu_info.group_count);
+
+    EXPECT_EQ(AERON_NULL_VALUE, cpu_info.cpus[1].group_id);
+    EXPECT_EQ(AERON_NULL_VALUE, cpu_info.cpus[2].group_id);
+
+    EXPECT_NE(AERON_NULL_VALUE, cpu_info.cpus[0].group_id);
+    EXPECT_NE(AERON_NULL_VALUE, cpu_info.cpus[3].group_id);
+    EXPECT_NE(AERON_NULL_VALUE, cpu_info.cpus[6].group_id);
+
+    EXPECT_EQ(cpu_info.cpus[3].group_id, cpu_info.cpus[4].group_id);
+    EXPECT_EQ(cpu_info.cpus[3].group_id, cpu_info.cpus[5].group_id);
+
+    EXPECT_EQ(cpu_info.cpus[6].group_id, cpu_info.cpus[7].group_id);
+
+
+    aeron_topology_cpu_info_free(&cpu_info);
+}
+
+
 // aeron_topology_build_die_locality_group_table
 TEST_F(TopologyTest, shouldBuildDieLocalityGroupTable)
 {
@@ -295,6 +346,40 @@ TEST_F(TopologyTest, shouldBuildDieLocalityGroupTable)
     EXPECT_EQ(0, cpu_info.cpus[0].group_id);
     EXPECT_EQ(65535, cpu_info.cpus[1].group_id);
     EXPECT_EQ(0, cpu_info.cpus[2].group_id);
+    EXPECT_EQ(65535, cpu_info.cpus[3].group_id);
+
+    EXPECT_EQ(2, cpu_info.group_count);
+    ASSERT_NE(nullptr, cpu_info.group_ids);
+    EXPECT_EQ(0, cpu_info.group_ids[0]);
+    EXPECT_EQ(65535, cpu_info.group_ids[1]);
+
+    aeron_topology_cpu_info_free(&cpu_info);
+}
+
+TEST_F(TopologyTest, shouldBuildDieLocalityGroupTableWithEmptyCpus)
+{
+    ASSERT_NE(nullptr, m_output);
+
+    std::string sysfsRoot = std::string(m_tempDir) + "/sysfs";
+    std::vector<int> a = {
+        65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535,
+        0, 0, 0, 0, 0, 0, 0, 0
+    };
+    setupClusterShared(sysfsRoot, a);
+    constexpr int cpu_count = 4;
+    aeron_topology_cpu_group_t cpus[cpu_count] = {
+        {8, AERON_NULL_VALUE, nullptr},
+        {AERON_NULL_VALUE, AERON_NULL_VALUE, nullptr},
+        {AERON_NULL_VALUE, AERON_NULL_VALUE, nullptr},
+        {1, AERON_NULL_VALUE, nullptr}
+    };
+    aeron_topology_cpu_info_t cpu_info = { cpus, cpu_count, nullptr, nullptr, nullptr, 0 };
+    ASSERT_NE(-1, aeron_topology_build_die_locality_group_table(sysfsRoot.c_str(), &cpu_info))
+        << aeron_errmsg();
+
+    EXPECT_EQ(0, cpu_info.cpus[0].group_id);
+    EXPECT_EQ(AERON_NULL_VALUE, cpu_info.cpus[1].group_id);
+    EXPECT_EQ(AERON_NULL_VALUE, cpu_info.cpus[2].group_id);
     EXPECT_EQ(65535, cpu_info.cpus[3].group_id);
 
     EXPECT_EQ(2, cpu_info.group_count);
