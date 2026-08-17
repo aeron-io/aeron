@@ -1274,6 +1274,7 @@ int aeron_driver_validate_group_locality(
 
 int aeron_driver_validate_and_apply_affinity_configuration(aeron_driver_context_t *context)
 {
+#ifdef __linux__
     int unshared_affinity_warnings;
     if ((unshared_affinity_warnings = aeron_driver_validate_unshared_affinity(context, stderr)) < 0)
     {
@@ -1290,7 +1291,6 @@ int aeron_driver_validate_and_apply_affinity_configuration(aeron_driver_context_
 
     int l3_locality_warnings = 0;
     int die_locality_warnings = 0;
-#ifdef __linux__
     aeron_topology_extra_info_t extra_info[4] = {
         { "conductor", context->conductor_cpu_affinity_no },
         { "sender", context->sender_cpu_affinity_no },
@@ -1303,28 +1303,29 @@ int aeron_driver_validate_and_apply_affinity_configuration(aeron_driver_context_
         { context->receiver_cpu_affinity_resolved, AERON_NULL_VALUE, &extra_info[2] },
         { context->native_resource_agent_cpu_affinity_resolved, AERON_NULL_VALUE, &extra_info[3] }
     };
-    int *peers[4] = { NULL, NULL, NULL, NULL };
-    int peer_count[4] = { 0, 0, 0, 0 };
+    int *peers[4] = { 0 };
+    int peer_count[4] = { 0 };
     aeron_topology_cpu_info_t cpu_info = { cpu_groups, 4, peers, peer_count, NULL, 0 };
 
-    if (aeron_topology_build_l3_group_table(AERON_TOPOLOGY_SYS_CPU_PATH, &cpu_info) < 0)
+    if (0 <= aeron_topology_build_l3_group_table(AERON_TOPOLOGY_SYS_CPU_PATH, &cpu_info))
     {
-        AERON_APPEND_ERR("%s", "failed to build l3 group table");
-        aeron_topology_cpu_info_free(&cpu_info);
-        goto error;
+        l3_locality_warnings = aeron_driver_validate_group_locality(&cpu_info, "L3 cache domain", stderr);
     }
-    l3_locality_warnings = aeron_driver_validate_group_locality(&cpu_info, "L3 cache domain", stderr);
-
-    if (aeron_topology_build_die_locality_group_table(AERON_TOPOLOGY_SYS_CPU_PATH, &cpu_info) < 0)
+    else
     {
-        AERON_APPEND_ERR("%s", "failed to build die locality group table");
-        aeron_topology_cpu_info_free(&cpu_info);
-        goto error;
+        aeron_err_clear();
     }
-    die_locality_warnings = aeron_driver_validate_group_locality(&cpu_info, "dies", stderr);
-
     aeron_topology_cpu_info_free(&cpu_info);
-#endif
+
+    if (0 <= aeron_topology_build_die_locality_group_table(AERON_TOPOLOGY_SYS_CPU_PATH, &cpu_info))
+    {
+        die_locality_warnings = aeron_driver_validate_group_locality(&cpu_info, "dies", stderr);
+    }
+    else
+    {
+        aeron_err_clear();
+    }
+    aeron_topology_cpu_info_free(&cpu_info);
 
     const int total_warnings_count =
         unshared_affinity_warnings + cpuset_warnings + l3_locality_warnings + die_locality_warnings;
@@ -1339,6 +1340,8 @@ int aeron_driver_validate_and_apply_affinity_configuration(aeron_driver_context_
 
 error:
     return -1;
+#endif
+    return 0;
 }
 
 int aeron_driver_start(aeron_driver_t *driver, bool manual_main_loop)
