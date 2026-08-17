@@ -52,6 +52,8 @@ protected:
 
     void TearDown() override
     {
+        fclose(m_output);
+        free(m_output_ptr);
     }
 
     FILE *m_output;
