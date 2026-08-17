@@ -1143,6 +1143,10 @@ int aeron_driver_apply_cpuset_affinity(aeron_driver_context_t *context)
 {
     if (!context->cpuset_affinity)
     {
+        context->conductor_cpu_affinity_resolved = context->conductor_cpu_affinity_no;
+        context->sender_cpu_affinity_resolved = context->sender_cpu_affinity_no;
+        context->receiver_cpu_affinity_resolved = context->receiver_cpu_affinity_no;
+        context->native_resource_agent_cpu_affinity_resolved = context->native_resource_agent_cpu_affinity_no;
         return 0;
     }
 
