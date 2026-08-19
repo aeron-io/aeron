@@ -380,6 +380,7 @@
                  id="42"
                  description="Consensus Module instructing a service to terminate at a given position.">
         <field name="logPosition"              id="1" type="int64"/>
+        <field name="ackRequired"              id="2" type="BooleanType"/>
     </sbe:message>
 
     <sbe:message name="ClusterMembersExtendedResponse"

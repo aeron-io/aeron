@@ -189,7 +189,7 @@ final class ServiceProxy implements AutoCloseable
         throw new ClusterException("failed to send cluster members extended response: result=" + result);
     }
 
-    void terminationPosition(final long logPosition, final ErrorHandler errorHandler)
+    void terminationPosition(final long logPosition, final boolean ackRequired, final ErrorHandler errorHandler)
     {
         if (!publication.isClosed())
         {
@@ -204,7 +204,8 @@ final class ServiceProxy implements AutoCloseable
                 {
                     serviceTerminationPositionEncoder
                         .wrapAndApplyHeader(bufferClaim.buffer(), bufferClaim.offset(), messageHeaderEncoder)
-                        .logPosition(logPosition);
+                        .logPosition(logPosition)
+                        .ackRequired(ackRequired ? BooleanType.TRUE : BooleanType.FALSE);
 
                     bufferClaim.commit();
 

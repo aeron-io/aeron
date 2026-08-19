@@ -91,7 +91,9 @@ final class ServiceAdapter implements AutoCloseable
                     messageHeaderDecoder.blockLength(),
                     messageHeaderDecoder.version());
 
-                clusteredServiceAgent.onServiceTerminationPosition(serviceTerminationPositionDecoder.logPosition());
+                clusteredServiceAgent.onServiceTerminationPosition(
+                    serviceTerminationPositionDecoder.logPosition(),
+                    BooleanType.TRUE == serviceTerminationPositionDecoder.ackRequired());
                 break;
 
             case RequestServiceAckDecoder.TEMPLATE_ID:

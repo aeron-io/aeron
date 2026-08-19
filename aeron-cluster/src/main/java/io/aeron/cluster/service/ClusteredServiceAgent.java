@@ -133,6 +133,7 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
     private long closeHandlerRegistrationId;
     private long ackId = 0;
     private long terminationPosition = NULL_POSITION;
+    private boolean terminationAckRequired = true;
     private long markFileUpdateDeadlineMs;
     private long lastSlowTickNs;
     private long clusterTime;
@@ -469,9 +470,10 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
             logChannel);
     }
 
-    void onServiceTerminationPosition(final long logPosition)
+    void onServiceTerminationPosition(final long logPosition, final boolean ackRequired)
     {
         terminationPosition = logPosition;
+        terminationAckRequired = ackRequired;
     }
 
     void onRequestServiceAck(final long logPosition)
@@ -1173,7 +1175,7 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
                     "service terminate: logPosition=" + logPosition + " > terminationPosition=" + terminationPosition));
             }
 
-            terminate(logPosition == terminationPosition);
+            terminate(logPosition == terminationPosition, terminationAckRequired);
         }
 
         if (NULL_POSITION != requestedAckPosition && logPosition >= requestedAckPosition)
@@ -1196,7 +1198,7 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
         return workCount;
     }
 
-    private void terminate(final boolean isTerminationExpected)
+    private void terminate(final boolean isTerminationExpected, final boolean terminationAckRequired)
     {
         isServiceActive = false;
         activeLifecycleCallback = LIFECYCLE_CALLBACK_ON_TERMINATE;
@@ -1213,22 +1215,25 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
             activeLifecycleCallback = LIFECYCLE_CALLBACK_NONE;
         }
 
-        try
+        if (terminationAckRequired)
         {
-            int attempts = 5;
-            final long id = ackId++;
-            while (!consensusModuleProxy.ack(logPosition, clusterTime, id, NULL_VALUE, serviceId))
+            try
             {
-                if (0 == --attempts)
+                int attempts = 5;
+                final long id = ackId++;
+                while (!consensusModuleProxy.ack(logPosition, clusterTime, id, NULL_VALUE, serviceId))
                 {
-                    break;
+                    if (0 == --attempts)
+                    {
+                        break;
+                    }
+                    idle();
                 }
-                idle();
             }
-        }
-        catch (final Exception ex)
-        {
-            ctx.countedErrorHandler().onError(ex);
+            catch (final Exception ex)
+            {
+                ctx.countedErrorHandler().onError(ex);
+            }
         }
 
         terminationPosition = NULL_VALUE;
