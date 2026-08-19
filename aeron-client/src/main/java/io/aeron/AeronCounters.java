@@ -1284,6 +1284,79 @@ public final class AeronCounters
     public static final int SEQUENCER_REPLAY_INDEX_INITIAL_SEQUENCE_LOG_POSITION_COUNTER_TYPE_ID = 525;
 
     /**
+     * Counter type id containing the greatest committed message id that has been communicated by the
+     * Sequencer to the Application.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_APPLICATION_GREATEST_COMMITTED_MESSAGE_ID_COUNTER_TYPE_ID = 526;
+
+    /**
+     * Counter type id containing the number of active replay sessions within the replay service.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_REPLAY_SERVICE_SESSION_COUNT_TYPE_ID = 531;
+
+    /**
+     * Counter type id containing the number of terms indexed by the cache for the replay service.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_REPLAY_SERVICE_INDEXED_TERM_COUNT_TYPE_ID = 535;
+
+    /**
+     * Counter type id containing the total number of terms known to the cache in the replay service.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_REPLAY_SERVICE_TOTAL_TERM_COUNT_TYPE_ID = 536;
+
+    /**
+     * Counter type id for the replay job.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_REPLAY_SERVICE_REPLAY_JOB_TYPE_ID = 537;
+
+    /**
+     * Counter type id containing the number of active snapshot store operations for the snapshot service.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_SNAPSHOT_SERVICE_ACTIVE_STORE_OPERATIONS_COUNTER_TYPE_ID = 538;
+
+    /**
+     * Counter type id containing the number of active snapshot load operations for the snapshot service.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_SNAPSHOT_SERVICE_ACTIVE_LOAD_OPERATIONS_COUNTER_TYPE_ID = 539;
+
+    /**
+     * Counter type id containing the number of active snapshot replication operations for the snapshot service.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_SNAPSHOT_SERVICE_REPLICATING_COUNT_TYPE_ID = 540;
+
+    /**
+     * Counter type id containing the log timestamp of the last message processed by the Application.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_APPLICATION_LAST_READ_TIMESTAMP_COUNTER_TYPE_ID = 541;
+
+    /**
+     * Counter type id containing the sequence index read by the log replay client.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_REPLAY_CLIENT_LOG_REPLAY_SEQUENCE_INDEX_TYPE_ID = 542;
+
+    /**
+     * Counter type id containing the state of the replay service.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_REPLAY_SERVICE_STATE_TYPE_ID = 543;
+
+    /**
+     * Counter type id containing the state of the snapshot service.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_SNAPSHOT_SERVICE_STATE_TYPE_ID = 544;
+
+    /**
      * Counter id used for keeping track of the max duty cycle time of the replay-service agent.
      */
     @AeronCounter
