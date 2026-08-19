@@ -1309,6 +1309,142 @@ public final class AeronCounters
     @AeronCounter
     public static final int SEQUENCER_SNAPSHOT_SERVICE_CYCLE_TIME_THRESHOLD_EXCEEDED_TYPE_ID = 548;
 
+    /**
+     * Counter type id for the number of currently connected sessions on the snapshot service.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_SNAPSHOT_SERVICE_ACTIVE_SESSIONS_COUNTER_TYPE_ID = 549;
+
+    /**
+     * Counter type id for the number of active snapshot admin operations (delete / invalidate / revalidate) for the
+     * snapshot service.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_SNAPSHOT_SERVICE_ACTIVE_ADMIN_OPERATIONS_COUNTER_TYPE_ID = 550;
+
+    /**
+     * Counter type id for the number of operations queued but not yet started across all sessions on the
+     * snapshot service.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_SNAPSHOT_SERVICE_QUEUED_OPERATIONS_TYPE_ID = 551;
+
+    /**
+     * Counter type id for the number of terminal store-operation errors on the snapshot service.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_SNAPSHOT_SERVICE_STORE_ERROR_COUNT_TYPE_ID = 552;
+
+    /**
+     * Counter type id for the number of terminal load-operation errors on the snapshot service.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_SNAPSHOT_SERVICE_LOAD_ERROR_COUNT_TYPE_ID = 553;
+
+    /**
+     * Counter type id for the number of terminal list-operation errors on the snapshot service.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_SNAPSHOT_SERVICE_LIST_ERROR_COUNT_TYPE_ID = 554;
+
+    /**
+     * Counter type id for the number of terminal admin-operation (delete / invalidate / revalidate) errors on
+     * the snapshot service.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_SNAPSHOT_SERVICE_ADMIN_ERROR_COUNT_TYPE_ID = 555;
+
+    /**
+     * Counter type id for the number of storage-module errors surfaced to the snapshot service.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_SNAPSHOT_SERVICE_STORAGE_MODULE_ERROR_COUNT_TYPE_ID = 556;
+
+    /**
+     * Counter type id for the sequence index of the last snapshot stored by the application.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_APPLICATION_SNAPSHOT_LAST_STORED_SEQUENCE_INDEX_TYPE_ID = 557;
+
+    /**
+     * Counter type id for the sequence index of the last snapshot loaded by the application.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_APPLICATION_SNAPSHOT_LAST_LOADED_SEQUENCE_INDEX_TYPE_ID = 558;
+
+    /**
+     * Counter type id for the application's current snapshot activity state (0 = idle, 1 = storing, 2 = loading).
+     */
+    @AeronCounter
+    public static final int SEQUENCER_APPLICATION_SNAPSHOT_ACTIVITY_STATE_TYPE_ID = 559;
+
+    /**
+     * Counter type id for the number of snapshot load failures observed by the application.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_APPLICATION_SNAPSHOT_LOAD_ERROR_COUNT_TYPE_ID = 560;
+
+    /**
+     * Counter type id for the total number of snapshot store operations requested on the snapshot service.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_SNAPSHOT_SERVICE_TOTAL_STORE_OPERATIONS_COUNTER_TYPE_ID = 561;
+
+    /**
+     * Counter type id for the total number of snapshot load operations requested on the snapshot service.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_SNAPSHOT_SERVICE_TOTAL_LOAD_OPERATIONS_COUNTER_TYPE_ID = 562;
+
+    /**
+     * Counter type id for the total number of snapshot list operations requested on the snapshot service.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_SNAPSHOT_SERVICE_TOTAL_LIST_OPERATIONS_COUNTER_TYPE_ID = 563;
+
+    /**
+     * Counter type id for the total number of snapshot find-latest operations requested on the snapshot service.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_SNAPSHOT_SERVICE_TOTAL_FIND_LATEST_OPERATIONS_COUNTER_TYPE_ID = 564;
+
+    /**
+     * Counter type id for the total number of snapshot admin operations (delete / invalidate / revalidate) requested
+     * on the snapshot service.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_SNAPSHOT_SERVICE_TOTAL_ADMIN_OPERATIONS_COUNTER_TYPE_ID = 565;
+
+    /**
+     * Counter type id containing the number of active snapshot list operations for the snapshot service.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_SNAPSHOT_SERVICE_ACTIVE_LIST_OPERATIONS_COUNTER_TYPE_ID = 566;
+
+    /**
+     * Counter type id containing the number of active snapshot find-latest operations for the snapshot service.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_SNAPSHOT_SERVICE_ACTIVE_FIND_LATEST_OPERATIONS_COUNTER_TYPE_ID = 567;
+
+    /**
+     * Counter type id of the counter tracking the number of active describe operations in the snapshot service.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_SNAPSHOT_SERVICE_ACTIVE_DESCRIBE_OPERATIONS_COUNTER_TYPE_ID = 568;
+
+    /**
+     * Counter type id of the counter tracking the total number of describe operations in the snapshot service.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_SNAPSHOT_SERVICE_TOTAL_DESCRIBE_OPERATIONS_COUNTER_TYPE_ID = 569;
+
+    /**
+     * Counter type id for the number of terminal describe-operation errors on the snapshot service.
+     */
+    @AeronCounter
+    public static final int SEQUENCER_SNAPSHOT_SERVICE_DESCRIBE_ERROR_COUNT_TYPE_ID = 570;
+
     private AeronCounters()
     {
     }
