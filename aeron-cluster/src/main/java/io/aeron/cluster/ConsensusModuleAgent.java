@@ -285,7 +285,10 @@ final class ConsensusModuleAgent
         if (!aeron.isClosed())
         {
             final long logPosition = commitPosition.get();
-            serviceProxy.terminationPosition(logPosition, ctx.countedErrorHandler());
+            if (0 < ctx.serviceCount())
+            {
+                serviceProxy.terminationPosition(logPosition, ctx.countedErrorHandler());
+            }
 
             aeron.removeUnavailableCounterHandler(unavailableCounterHandlerRegistrationId);
 
