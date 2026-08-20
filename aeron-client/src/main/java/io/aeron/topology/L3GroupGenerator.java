@@ -1,0 +1,75 @@
+/*
+ * Copyright 2014-2026 Real Logic Limited.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package io.aeron.topology;
+
+import org.agrona.collections.Int2ObjectHashMap;
+import org.agrona.collections.IntArrayList;
+import org.agrona.collections.IntHashSet;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.stream.Collectors;
+
+public class L3GroupGenerator
+{
+    public static final String SHARED_CPU_LIST_DIRECTORY = "cache/index3/shared_cpu_list";
+
+    private final Path sysfsRoot;
+    private final Int2ObjectHashMap<IntHashSet> sharedCpuListCache = new Int2ObjectHashMap<>();
+
+    public L3GroupGenerator(final Path sysfsRoot)
+    {
+        this.sysfsRoot = sysfsRoot;
+    }
+
+    private IntHashSet loadCpuList(final int cpu)
+    {
+        final Path cpuListPath = sysfsRoot.resolve("cpu%d".formatted(cpu)).resolve(SHARED_CPU_LIST_DIRECTORY);
+        final String cpuList;
+        try
+        {
+            cpuList = Files.readString(cpuListPath);
+        }
+        catch (IOException e)
+        {
+            // This should be checked before this.
+            throw new UncheckedIOException("Invalid CPU", e);
+        }
+        return AffinityParser.parse(cpuList, IntHashSet::new);
+    }
+
+    private IntHashSet sharedCpuList(final int cpu)
+    {
+        IntHashSet cpuList = sharedCpuListCache.get(cpu);
+        if (null == cpuList)
+        {
+            cpuList = this.loadCpuList(cpu);
+            sharedCpuListCache.put(cpu, cpuList);
+        }
+        return cpuList;
+    }
+
+    public List<IntArrayList> group(final IntArrayList cpuList)
+    {
+        return cpuList.stream().collect(
+            Collectors.groupingBy(
+                this::sharedCpuList, Collectors.toCollection(IntArrayList::new))).values().stream().toList();
+    }
+}

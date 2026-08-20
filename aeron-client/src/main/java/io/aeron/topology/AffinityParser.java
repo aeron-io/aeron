@@ -17,12 +17,21 @@
 package io.aeron.topology;
 
 import org.agrona.collections.IntArrayList;
+import org.agrona.collections.IntHashSet;
+
+import java.util.Collection;
+import java.util.function.Supplier;
 
 public class AffinityParser
 {
     public static IntArrayList parse(final String affinity)
     {
-        final IntArrayList result = new IntArrayList();
+        return parse(affinity, IntArrayList::new);
+    }
+
+    public static <T extends Collection<Integer>> T parse(final String affinity, Supplier<T> collectionSupplier)
+    {
+        final T result = collectionSupplier.get();
         for (String part : affinity.split(","))
         {
             part = part.trim();
