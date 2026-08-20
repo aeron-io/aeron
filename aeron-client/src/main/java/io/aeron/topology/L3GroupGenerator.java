@@ -24,7 +24,9 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -50,23 +52,15 @@ public class L3GroupGenerator
         this.sysfsRoot = sysfsRoot;
     }
 
-    private IntHashSet loadCpuList(final int cpu)
+    private IntHashSet loadCpuList(final int cpu) throws IOException
     {
         final Path cpuListPath = sysfsRoot.resolve("cpu%d".formatted(cpu)).resolve(SHARED_CPU_LIST_DIRECTORY);
         final String cpuList;
-        try
-        {
-            cpuList = Files.readString(cpuListPath);
-        }
-        catch (final IOException e)
-        {
-            // This should be checked before this.
-            throw new UncheckedIOException("Invalid CPU", e);
-        }
+        cpuList = Files.readString(cpuListPath);
         return AffinityParser.parse(cpuList, IntHashSet::new);
     }
 
-    private IntHashSet sharedCpuList(final int cpu)
+    private IntHashSet sharedCpuList(final int cpu) throws IOException
     {
         IntHashSet cpuList = sharedCpuListCache.get(cpu);
         if (null == cpuList)
@@ -83,10 +77,15 @@ public class L3GroupGenerator
      * @param cpuList the CPU ids to group.
      * @return one list per L3 cache group, each containing the CPU ids that share that cache.
      */
-    public List<IntArrayList> group(final IntArrayList cpuList)
+    public List<IntArrayList> group(final IntArrayList cpuList) throws IOException
     {
-        return cpuList.stream().collect(
-            Collectors.groupingBy(
-                this::sharedCpuList, Collectors.toCollection(IntArrayList::new))).values().stream().toList();
+        // TODO: Make this more efficient.
+        Map<IntHashSet, IntArrayList> map = new HashMap<>();
+        for (int i = 0; i < cpuList.size(); i++)
+        {
+            final int cpu = cpuList.get(i);
+            map.computeIfAbsent(sharedCpuList(cpu), k -> new IntArrayList()).add(cpu);
+        }
+        return map.values().stream().toList();
     }
 }
