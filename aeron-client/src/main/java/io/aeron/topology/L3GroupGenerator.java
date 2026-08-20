@@ -21,13 +21,11 @@ import org.agrona.collections.IntArrayList;
 import org.agrona.collections.IntHashSet;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * Groups CPU ids by the L3 cache they share, based on the {@code sysfs} CPU topology information.
@@ -62,7 +60,7 @@ public class L3GroupGenerator
 
     private IntHashSet sharedCpuList(final int cpu) throws IOException
     {
-        IntHashSet cpuList = sharedCpuListCache.get(cpu);
+        final IntHashSet cpuList = sharedCpuListCache.get(cpu);
         if (null == cpuList)
         {
             final IntHashSet loadedCpuList = this.loadCpuList(cpu);
@@ -78,6 +76,7 @@ public class L3GroupGenerator
      *
      * @param cpuList the CPU ids to group.
      * @return one list per L3 cache group, each containing the CPU ids that share that cache.
+     * @throws IOException if a CPU's shared cache list cannot be read.
      */
     public List<IntArrayList> group(final IntArrayList cpuList) throws IOException
     {
