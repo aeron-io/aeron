@@ -21,13 +21,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+import static io.aeron.topology.DieLocalityGroupGenerator.DIE_ID_DIRECTORY;
 import static io.aeron.topology.L3GroupGenerator.SHARED_CPU_LIST_DIRECTORY;
 
-public class TopologyTestUtils
+class TopologyTestUtils
 {
-    static void setupL3Peers(
-        final Path sysfsPath,
-        final List<Pair> peers) throws IOException
+    static void setupL3Peers(final Path sysfsPath, final List<Pair> peers) throws IOException
     {
         for (int cpu = 0; cpu < peers.size(); cpu++)
         {
@@ -35,6 +34,17 @@ public class TopologyTestUtils
             final Path sharedCpuPath = sysfsPath.resolve("cpu%d".formatted(cpu)).resolve(SHARED_CPU_LIST_DIRECTORY);
             Files.createDirectories(sharedCpuPath.getParent());
             Files.writeString(sharedCpuPath, "%d,%d".formatted(peer.first, peer.second));
+        }
+    }
+
+    static void setupDieLocality(final Path sysfsPath, final List<Integer> dieIds) throws IOException
+    {
+        for (int cpu = 0; cpu < dieIds.size(); cpu++)
+        {
+            final int dieId = dieIds.get(cpu);
+            final Path sharedCpuPath = sysfsPath.resolve("cpu%d".formatted(cpu)).resolve(DIE_ID_DIRECTORY);
+            Files.createDirectories(sharedCpuPath.getParent());
+            Files.writeString(sharedCpuPath, Integer.toString(dieId));
         }
     }
 
