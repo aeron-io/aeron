@@ -21,14 +21,17 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.stream.Stream;
 
-import static java.nio.channels.FileChannel.open;
-
-
+/**
+ * Reads the effective CPU set of a process from a cgroup v2 {@code cpuset.cpus.effective} file.
+ */
 public class CpusetV2Reader
 {
     private final Path procRoot;
     private final Path cgroupRoot;
 
+    /**
+     * Creates a reader using the standard {@code /proc} and {@code /sys/fs/cgroup} paths.
+     */
     public CpusetV2Reader()
     {
         // TODO: Move to constants
@@ -60,17 +63,28 @@ public class CpusetV2Reader
             final String cpuGroups = Files.readString(effectiveCgroupFilePath);
             return new Cpuset(AffinityParser.parse(cpuGroups));
         }
-        catch (IOException e)
+        catch (final IOException e)
         {
             throw new RuntimeException(e);
         }
     }
 
+    /**
+     * Reads the effective CPU set of the current process.
+     *
+     * @return the current process's effective CPU set.
+     */
     public Cpuset readCpuSet()
     {
         return readCpuSet("self");
     }
 
+    /**
+     * Reads the effective CPU set of the given process.
+     *
+     * @param pid the process id to read the effective CPU set of.
+     * @return the process's effective CPU set.
+     */
     public Cpuset readCpuSet(final int pid)
     {
         return readCpuSet(Integer.toString(pid));

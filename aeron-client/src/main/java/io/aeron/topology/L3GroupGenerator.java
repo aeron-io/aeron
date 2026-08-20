@@ -27,13 +27,24 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Groups CPU ids by the L3 cache they share, based on the {@code sysfs} CPU topology information.
+ */
 public class L3GroupGenerator
 {
+    /**
+     * Path, relative to a per-CPU {@code sysfs} directory, of the file listing the CPUs that share an L3 cache.
+     */
     public static final String SHARED_CPU_LIST_DIRECTORY = "cache/index3/shared_cpu_list";
 
     private final Path sysfsRoot;
     private final Int2ObjectHashMap<IntHashSet> sharedCpuListCache = new Int2ObjectHashMap<>();
 
+    /**
+     * Creates a generator that reads CPU topology information from the given {@code sysfs} root.
+     *
+     * @param sysfsRoot the root {@code sysfs} CPU topology directory, e.g. {@code /sys/devices/system/cpu}.
+     */
     public L3GroupGenerator(final Path sysfsRoot)
     {
         this.sysfsRoot = sysfsRoot;
@@ -47,7 +58,7 @@ public class L3GroupGenerator
         {
             cpuList = Files.readString(cpuListPath);
         }
-        catch (IOException e)
+        catch (final IOException e)
         {
             // This should be checked before this.
             throw new UncheckedIOException("Invalid CPU", e);
@@ -66,6 +77,12 @@ public class L3GroupGenerator
         return cpuList;
     }
 
+    /**
+     * Groups the given CPU ids by the L3 cache they share.
+     *
+     * @param cpuList the CPU ids to group.
+     * @return one list per L3 cache group, each containing the CPU ids that share that cache.
+     */
     public List<IntArrayList> group(final IntArrayList cpuList)
     {
         return cpuList.stream().collect(

@@ -17,7 +17,6 @@
 package io.aeron.topology;
 
 import org.agrona.collections.IntArrayList;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -37,7 +36,7 @@ class L3GroupGeneratorTest
 {
     public static Stream<Arguments> l3CacheTests()
     {
-        List<Pair> commonPeers = List.of(
+        final List<Pair> commonPeers = List.of(
             new Pair(0, 1), new Pair(0, 1),
             new Pair(2, 3), new Pair(2, 3),
             new Pair(4, 5), new Pair(4, 5),
@@ -56,7 +55,9 @@ class L3GroupGeneratorTest
         );
     }
 
-    public record Pair(int first, int second) {}
+    public record Pair(int first, int second)
+    {
+    }
 
     private void setupL3Peers(
         final Path sysfsPath,
@@ -78,12 +79,12 @@ class L3GroupGeneratorTest
         final int expectedGroupCount,
         final List<Pair> peers,
         final int[][] expectedGroups,
-        @TempDir Path sysfsTestDir) throws IOException
+        @TempDir final Path sysfsTestDir) throws IOException
     {
-        IntArrayList cpuList = new IntArrayList();
+        final IntArrayList cpuList = new IntArrayList();
         cpuList.wrap(rawCpuList, rawCpuList.length);
         setupL3Peers(sysfsTestDir, peers);
-        L3GroupGenerator l3GroupGenerator = new L3GroupGenerator(sysfsTestDir);
+        final L3GroupGenerator l3GroupGenerator = new L3GroupGenerator(sysfsTestDir);
         final var groups = l3GroupGenerator.group(cpuList);
         assertEquals(expectedGroupCount, groups.size());
         for (int i = 0; i < expectedGroups.length; i++)
