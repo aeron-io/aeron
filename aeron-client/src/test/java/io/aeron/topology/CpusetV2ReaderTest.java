@@ -16,9 +16,6 @@
 
 package io.aeron.topology;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -30,7 +27,6 @@ import java.nio.file.Path;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class CpusetV2ReaderTest
 {
@@ -65,13 +61,13 @@ class CpusetV2ReaderTest
     void readCpuSet(
         final String cpuset,
         final int[] expectedCpus,
-        @TempDir Path testProcPath,
-        @TempDir Path testCgroupPath) throws IOException
+        @TempDir final Path testProcPath,
+        @TempDir final Path testCgroupPath) throws IOException
     {
         final int pid = 1234;
         setupCpuSet(testProcPath, testCgroupPath, pid, cpuset);
         final CpusetV2Reader reader = new CpusetV2Reader(testProcPath, testCgroupPath);
-        Cpuset resultCpuset = reader.readCpuSet(pid);
+        final Cpuset resultCpuset = reader.readCpuSet(pid);
         assertArrayEquals(expectedCpus, resultCpuset.cpus().toIntArray());
     }
 }

@@ -18,6 +18,11 @@ package io.aeron.topology;
 
 import org.agrona.collections.IntArrayList;
 
+/**
+ * The cpuset of a process.
+ *
+ * @param cpus the CPU ids in the set.
+ */
 public record Cpuset(IntArrayList cpus)
 {
 }

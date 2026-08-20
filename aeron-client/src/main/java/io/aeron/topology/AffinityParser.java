@@ -17,24 +17,44 @@
 package io.aeron.topology;
 
 import org.agrona.collections.IntArrayList;
-import org.agrona.collections.IntHashSet;
 
 import java.util.Collection;
 import java.util.function.Supplier;
 
-public class AffinityParser
+/**
+ * Parses a Linux-style CPU affinity/CPU list string into a collection of CPU ids.
+ */
+public final class AffinityParser
 {
+    private AffinityParser()
+    {
+    }
+
+    /**
+     * Parses a CPU affinity list into an {@link IntArrayList}.
+     *
+     * @param affinity the CPU affinity list, e.g. {@code "0-3,7"}.
+     * @return the parsed CPU ids.
+     */
     public static IntArrayList parse(final String affinity)
     {
         return parse(affinity, IntArrayList::new);
     }
 
-    public static <T extends Collection<Integer>> T parse(final String affinity, Supplier<T> collectionSupplier)
+    /**
+     * Parses a CPU affinity list into a collection created by the given supplier.
+     *
+     * @param affinity the CPU affinity list, e.g. {@code "0-3,7"}.
+     * @param collectionSupplier supplies the collection instance to populate.
+     * @param <T> the type of collection to return.
+     * @return the parsed CPU ids.
+     */
+    public static <T extends Collection<Integer>> T parse(final String affinity, final Supplier<T> collectionSupplier)
     {
         final T result = collectionSupplier.get();
-        for (String part : affinity.split(","))
+        for (final String rawPart : affinity.split(","))
         {
-            part = part.trim();
+            final String part = rawPart.trim();
             if (part.contains("-"))
             {
                 final String[] range = part.split("-");
