@@ -41,7 +41,7 @@ public class CpusetV2Reader
         this.cgroupRoot = cgroupRoot;
     }
 
-    private Path retrieveEffectiveCgroupFilePath(final int pid) throws IOException
+    private Path retrieveEffectiveCgroupFilePath(final String pid) throws IOException
     {
         final Path procCgroupFilePath = procRoot.resolve(pid + "/cgroup");
         try (Stream<String> lines = Files.lines(procCgroupFilePath))
@@ -52,7 +52,7 @@ public class CpusetV2Reader
         }
     }
 
-    public Cpuset readCpuSet(final int pid)
+    private Cpuset readCpuSet(final String pid)
     {
         try
         {
@@ -64,6 +64,16 @@ public class CpusetV2Reader
         {
             throw new RuntimeException(e);
         }
+    }
+
+    public Cpuset readCpuSet()
+    {
+        return readCpuSet("self");
+    }
+
+    public Cpuset readCpuSet(final int pid)
+    {
+        return readCpuSet(Integer.toString(pid));
     }
 
 }
