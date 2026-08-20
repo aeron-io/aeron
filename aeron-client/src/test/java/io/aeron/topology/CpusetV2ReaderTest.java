@@ -22,10 +22,10 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.stream.Stream;
 
+import static io.aeron.topology.TopologyTestUtils.setupCpuSet;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
 class CpusetV2ReaderTest
@@ -39,21 +39,6 @@ class CpusetV2ReaderTest
             Arguments.of("0-3,5", new int[] {0, 1, 2, 3, 5}),
             Arguments.of("0-3,5-7", new int[] {0, 1, 2, 3, 5, 6, 7})
         );
-    }
-
-    private void setupCpuSet(
-        final Path testProcPath,
-        final Path testCgroupPath,
-        final int pid,
-        final String cpuset) throws IOException
-    {
-        final Path procCgroupFilePath = testProcPath.resolve(pid + "/cgroup");
-        Files.createDirectories(procCgroupFilePath.getParent());
-        Files.writeString(procCgroupFilePath, "0::/user.slice/cpuset.cpus.effective");
-
-        final Path effectiveCgroupFilePath = testCgroupPath.resolve("user.slice/cpuset.cpus.effective");
-        Files.createDirectories(effectiveCgroupFilePath.getParent());
-        Files.writeString(effectiveCgroupFilePath, cpuset);
     }
 
     @ParameterizedTest

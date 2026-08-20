@@ -16,6 +16,7 @@
 
 package io.aeron.topology;
 
+import io.aeron.topology.TopologyTestUtils.Pair;
 import org.agrona.collections.IntArrayList;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -23,12 +24,11 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.stream.Stream;
 
-import static io.aeron.topology.L3GroupGenerator.SHARED_CPU_LIST_DIRECTORY;
+import static io.aeron.topology.TopologyTestUtils.setupL3Peers;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -53,23 +53,6 @@ class L3GroupGeneratorTest
                 commonPeers,
                 new int[][]{{0, 1}, {4}, {6}})
         );
-    }
-
-    public record Pair(int first, int second)
-    {
-    }
-
-    private void setupL3Peers(
-        final Path sysfsPath,
-        final List<Pair> peers) throws IOException
-    {
-        for (int cpu = 0; cpu < peers.size(); cpu++)
-        {
-            final Pair peer = peers.get(cpu);
-            final Path sharedCpuPath = sysfsPath.resolve("cpu%d".formatted(cpu)).resolve(SHARED_CPU_LIST_DIRECTORY);
-            Files.createDirectories(sharedCpuPath.getParent());
-            Files.writeString(sharedCpuPath, "%d,%d".formatted(peer.first, peer.second));
-        }
     }
 
     @ParameterizedTest
