@@ -65,8 +65,10 @@ public class L3GroupGenerator
         IntHashSet cpuList = sharedCpuListCache.get(cpu);
         if (null == cpuList)
         {
-            cpuList = this.loadCpuList(cpu);
-            sharedCpuListCache.put(cpu, cpuList);
+            final IntHashSet loadedCpuList = this.loadCpuList(cpu);
+            loadedCpuList.forEachInt((i) -> sharedCpuListCache.put(i, loadedCpuList));
+            sharedCpuListCache.put(cpu, loadedCpuList);
+            return loadedCpuList;
         }
         return cpuList;
     }
@@ -80,7 +82,7 @@ public class L3GroupGenerator
     public List<IntArrayList> group(final IntArrayList cpuList) throws IOException
     {
         // TODO: Make this more efficient.
-        Map<IntHashSet, IntArrayList> map = new HashMap<>();
+        final Map<IntHashSet, IntArrayList> map = new HashMap<>();
         for (int i = 0; i < cpuList.size(); i++)
         {
             final int cpu = cpuList.get(i);
