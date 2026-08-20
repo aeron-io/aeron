@@ -23,12 +23,16 @@ import org.agrona.collections.IntHashSet;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
+/**
+ * Groups CPU ids by the die they belong to, based on the {@code sysfs} CPU topology information.
+ */
 public class DieLocalityGroupGenerator
 {
+    /**
+     * Path, relative to a per-CPU {@code sysfs} directory, of the file containing the CPU's die id.
+     */
     public static final String DIE_ID_DIRECTORY = "topology/die_id";
     private final Path sysfsRoot;
     private final Int2ObjectHashMap<IntHashSet> sharedCpuListCache = new Int2ObjectHashMap<>();
@@ -40,12 +44,23 @@ public class DieLocalityGroupGenerator
         return Integer.parseInt(dieId);
     }
 
+    /**
+     * Creates a generator that reads CPU topology information from the given {@code sysfs} root.
+     *
+     * @param sysfsRoot the root {@code sysfs} CPU topology directory, e.g. {@code /sys/devices/system/cpu}.
+     */
     public DieLocalityGroupGenerator(final Path sysfsRoot)
     {
         this.sysfsRoot = sysfsRoot;
     }
 
-
+    /**
+     * Groups the given CPU ids by the die they belong to.
+     *
+     * @param cpuList the CPU ids to group.
+     * @return one list per die, each containing the CPU ids belonging to that die.
+     * @throws IOException if a CPU's die id cannot be read.
+     */
     public List<IntArrayList> group(final IntArrayList cpuList) throws IOException
     {
         final Int2ObjectHashMap<IntArrayList> map = new Int2ObjectHashMap<>();

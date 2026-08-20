@@ -65,7 +65,7 @@ class DieLocalityValidationTest
         setupDieLocality(sysfsTestDir, dieIds);
         final DieLocalityGroupGenerator dieLocalityGroupGenerator = new DieLocalityGroupGenerator(sysfsTestDir);
         final var groups = dieLocalityGroupGenerator.group(cpuList);
-        var sortedGroups = groups.stream().sorted(Comparator.comparing(a -> a.get(0))).toList();
+        final var sortedGroups = groups.stream().sorted(Comparator.comparing(a -> a.get(0))).toList();
         assertEquals(expectedGroupCount, groups.size());
         for (int i = 0; i < expectedGroups.length; i++)
         {
@@ -107,7 +107,7 @@ class DieLocalityValidationTest
         setupDieLocality(sysfsTestDir, dieIds);
         final DieLocalityGroupGenerator dieLocalityGroupGenerator = new DieLocalityGroupGenerator(sysfsTestDir);
         final var groups = dieLocalityGroupGenerator.group(resultCpuset.cpus());
-        var sortedGroups = groups.stream().sorted(Comparator.comparing(a -> a.get(0))).toList();
+        final var sortedGroups = groups.stream().sorted(Comparator.comparing(a -> a.get(0))).toList();
         assertEquals(expectedGroupCount, groups.size());
         for (int i = 0; i < expectedGroups.length; i++)
         {
