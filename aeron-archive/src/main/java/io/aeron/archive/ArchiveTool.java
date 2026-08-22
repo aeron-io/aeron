@@ -576,15 +576,21 @@ public final class ArchiveTool
             };
 
             catalog.forEach(
-                (recordingDescriptorOffset, headerEncoder, headerDecoder, descriptorEncoder, descriptorDecoder) -> dump(
-                out,
-                archiveDir,
-                catalog,
-                fragmentCountLimit,
-                confirmActionOnFragmentCountLimit,
-                headerDecoder,
-                descriptorDecoder,
-                fragmentHandler));
+                (recordingDescriptorOffset, headerEncoder, headerDecoder, descriptorEncoder, descriptorDecoder) ->
+                {
+                    if (headerDecoder.state() == VALID)
+                    {
+                        dump(
+                            out,
+                            archiveDir,
+                            catalog,
+                            fragmentCountLimit,
+                            confirmActionOnFragmentCountLimit,
+                            headerDecoder,
+                            descriptorDecoder,
+                            fragmentHandler);
+                    }
+                });
         }
     }
 
