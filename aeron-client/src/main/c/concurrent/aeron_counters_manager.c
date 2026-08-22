@@ -553,7 +553,8 @@ extern int64_t aeron_counter_get_acquire(volatile int64_t *addr);
 
 extern int64_t aeron_counter_increment(volatile int64_t *addr);
 extern int64_t aeron_counter_increment_release(volatile int64_t *addr);
-extern int64_t aeron_counter_increment_plain(volatile int64_t *addr);
+extern int64_t aeron_counter_increment_plain(int64_t *addr);
+extern int64_t aeron_counter_increment_opaque(volatile int64_t *addr);
 
 extern int64_t aeron_counter_get_and_add(volatile int64_t *addr, int64_t value);
 extern int64_t aeron_counter_get_and_add_release(volatile int64_t *addr, int64_t value);
