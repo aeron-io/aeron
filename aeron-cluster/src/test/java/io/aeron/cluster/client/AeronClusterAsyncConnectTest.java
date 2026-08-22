@@ -18,6 +18,7 @@ package io.aeron.cluster.client;
 import io.aeron.Aeron;
 import io.aeron.ConcurrentPublication;
 import io.aeron.ControlledFragmentAssembler;
+import io.aeron.ErrorCode;
 import io.aeron.ExclusivePublication;
 import io.aeron.Image;
 import io.aeron.Subscription;
@@ -25,6 +26,7 @@ import io.aeron.cluster.ConsensusModule;
 import io.aeron.cluster.codecs.EventCode;
 import io.aeron.cluster.codecs.MessageHeaderEncoder;
 import io.aeron.cluster.codecs.SessionEventEncoder;
+import io.aeron.exceptions.RegistrationException;
 import io.aeron.logbuffer.BufferClaim;
 import io.aeron.logbuffer.ControlledFragmentHandler;
 import io.aeron.logbuffer.Header;
@@ -266,6 +268,55 @@ class AeronClusterAsyncConnectTest
         verify(aeron, never()).asyncRemoveSubscription(subscriptionId);
         verify(aeron, never()).asyncRemovePublication(publicationId1);
         verify(aeron, never()).asyncRemovePublication(publicationId2);
+    }
+
+    @Test
+    public void shouldRetryMemberIngressPublicationWhenSendChannelEndpointIsClosing()
+    {
+        final long subscriptionId = 42;
+        when(aeron.asyncAddSubscription(context.egressChannel(), context.egressStreamId())).thenReturn(subscriptionId);
+        final Subscription subscription = mock(Subscription.class);
+        when(subscription.tryResolveChannelEndpointPort()).thenReturn("aeron:udp?endpoint=localhost:8888");
+        when(aeron.getSubscription(subscriptionId)).thenReturn(subscription);
+
+        final int ingressStreamId = 878;
+        context
+            .isIngressExclusive(true)
+            .ingressEndpoints("0=localhost:20000")
+            .ingressStreamId(ingressStreamId);
+
+        final long publicationId = -6342756432L;
+        final ExclusivePublication publication = mock(ExclusivePublication.class);
+        when(publication.isConnected()).thenReturn(true);
+        when(aeron.asyncAddExclusivePublication("aeron:udp?endpoint=localhost:20000", ingressStreamId))
+            .thenReturn(publicationId);
+
+        when(aeron.getExclusivePublication(publicationId))
+            .thenThrow(new RegistrationException(
+                publicationId,
+                ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE.value(),
+                ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE,
+                "send_channel_endpoint found in CLOSING state, please retry"))
+            .thenReturn(publication);
+
+        final AeronCluster.AsyncConnect asyncConnect = new AeronCluster.AsyncConnect(
+            context, aeronContext.nanoClock().nanoTime() + TimeUnit.HOURS.toNanos(1));
+
+        assertNull(asyncConnect.poll());
+        assertEquals(CREATE_INGRESS_PUBLICATIONS, asyncConnect.state());
+
+        assertNull(asyncConnect.poll());
+        assertEquals(AWAIT_PUBLICATION_CONNECTED, asyncConnect.state());
+
+        assertNull(asyncConnect.poll());
+        assertEquals(AWAIT_PUBLICATION_CONNECTED, asyncConnect.state());
+
+        assertNull(asyncConnect.poll());
+        assertEquals(SEND_MESSAGE, asyncConnect.state());
+
+        verify(aeron, times(2)).getExclusivePublication(publicationId);
+
+        asyncConnect.close();
     }
 
     @Test
