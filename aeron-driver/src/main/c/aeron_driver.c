@@ -578,10 +578,14 @@ void aeron_driver_context_print_configuration(aeron_driver_context_t *context)
         (uint64_t)context->network_publication_max_messages_per_send);
     AERON_FPRINTF(fpout, "\n    resource_free_limit=%" PRIu32, context->resource_free_limit);
     AERON_FPRINTF(fpout, "\n    conductor_cpu_affinity_no=%" PRId32, context->conductor_cpu_affinity_no);
+    AERON_FPRINTF(fpout, "\n    conductor_cpu_affinity_resolved=%" PRId32, context->conductor_cpu_affinity_resolved);
     AERON_FPRINTF(fpout, "\n    receiver_cpu_affinity_no=%" PRId32, context->receiver_cpu_affinity_no);
+    AERON_FPRINTF(fpout, "\n    receiver_cpu_affinity_resolved=%" PRId32, context->receiver_cpu_affinity_resolved);
     AERON_FPRINTF(fpout, "\n    sender_cpu_affinity_no=%" PRId32, context->sender_cpu_affinity_no);
+    AERON_FPRINTF(fpout, "\n    sender_cpu_affinity_resolved=%" PRId32, context->sender_cpu_affinity_resolved);
     AERON_FPRINTF(fpout, "\n    native_resource_agent_cpu_affinity_no=%" PRId32, context->native_resource_agent_cpu_affinity_no);
-    AERON_FPRINTF(fpout, "\n    cpuset_affinity=%" PRId32, context->cpuset_affinity);
+    AERON_FPRINTF(fpout, "\n    native_resource_agent_cpu_affinity_resolved=%" PRId32, context->native_resource_agent_cpu_affinity_resolved);
+    AERON_FPRINTF(fpout, "\n    cpuset_affinity=%s", context->cpuset_affinity ? "true" : "false");
     AERON_FPRINTF(fpout, "\n    cpuset_warnings_as_errors=%" PRId32, context->cpuset_warnings_as_errors);
 
     AERON_FPRINTF(fpout, "\n    epoch_clock=%s",
@@ -1139,6 +1143,10 @@ int aeron_driver_apply_cpuset_affinity(aeron_driver_context_t *context)
 {
     if (!context->cpuset_affinity)
     {
+        context->conductor_cpu_affinity_resolved = context->conductor_cpu_affinity_no;
+        context->sender_cpu_affinity_resolved = context->sender_cpu_affinity_no;
+        context->receiver_cpu_affinity_resolved = context->receiver_cpu_affinity_no;
+        context->native_resource_agent_cpu_affinity_resolved = context->native_resource_agent_cpu_affinity_no;
         return 0;
     }
 
@@ -1183,12 +1191,6 @@ int aeron_driver_apply_cpuset_affinity(aeron_driver_context_t *context)
     const int total_warnings_count =
         alignment_warnings_count + cluster_locality_warnings_count + l3_locality_warnings_count;
 
-    if (context->cpuset_warnings_as_errors && 0 < total_warnings_count)
-    {
-        AERON_SET_ERR(EINVAL, "cpuset warnings as errors, %d warnings", total_warnings_count);
-        goto error;
-    }
-
     if (aeron_driver_context_apply_cpuset_affinity(context, cpus, cpu_count) < 0)
     {
         AERON_APPEND_ERR("%s", "failed to apply cpuset affinity");
@@ -1196,11 +1198,154 @@ int aeron_driver_apply_cpuset_affinity(aeron_driver_context_t *context)
     }
 
     aeron_free(cpus);
-    return 0;
+    return total_warnings_count;
 
 error:
     aeron_free(cpus);
     return -1;
+}
+
+static int aeron_driver_validate_affinity_pair(
+    const int32_t a,
+    const int32_t b,
+    const char *a_name,
+    const char *b_name,
+    FILE *output)
+{
+    if (AERON_NULL_VALUE != a && AERON_NULL_VALUE != b && a == b)
+    {
+        fprintf(output, "WARN: %s and %s are sharing cpu affinity=%" PRId32 "\n", a_name, b_name, a);
+        return 1;
+    }
+
+    return 0;
+}
+
+int aeron_driver_validate_unshared_affinity(aeron_driver_context_t* context, FILE *output)
+{
+    int warnings = 0;
+
+    warnings += aeron_driver_validate_affinity_pair(
+        context->conductor_cpu_affinity_no, context->sender_cpu_affinity_no, "conductor", "sender", output);
+    warnings += aeron_driver_validate_affinity_pair(
+        context->conductor_cpu_affinity_no, context->receiver_cpu_affinity_no, "conductor", "receiver", output);
+    warnings += aeron_driver_validate_affinity_pair(
+        context->conductor_cpu_affinity_no, context->native_resource_agent_cpu_affinity_no, "conductor", "native_resource_agent", output);
+    warnings += aeron_driver_validate_affinity_pair(
+        context->sender_cpu_affinity_no, context->receiver_cpu_affinity_no, "sender", "receiver", output);
+    warnings += aeron_driver_validate_affinity_pair(
+        context->sender_cpu_affinity_no, context->native_resource_agent_cpu_affinity_no, "sender", "native_resource_agent", output);
+    warnings += aeron_driver_validate_affinity_pair(
+        context->receiver_cpu_affinity_no, context->native_resource_agent_cpu_affinity_no, "receiver", "native_resource_agent", output);
+
+    return warnings;
+}
+
+int aeron_driver_validate_group_locality(
+    const aeron_topology_cpu_info_t *cpu_info,
+    const char *sysfs_prop_descriptor,
+    FILE *output)
+{
+    if (cpu_info->group_count <= 1)
+    {
+        return 0;
+    }
+
+    fprintf(output, "WARN: cpu affinities span %d %s:\n", cpu_info->group_count, sysfs_prop_descriptor);
+    // TODO: Consider alternative, which is just to print all group IDs individually in a list
+    //       This will allow us to remove the group_ids array processing
+    //       Another possibility is to pre-sort the cpu list by group ID instead of having a list for them
+    for (int g = 0; g < cpu_info->group_count; g++)
+    {
+        // If group IDs were not listed, just use the index (e.g., in L3 cache case)
+        const int current_group = NULL != cpu_info->group_ids ? cpu_info->group_ids[g] : g;
+        fprintf(output, "  group %d:", current_group);
+        for (int i = 0; i < cpu_info->cpu_count; i++)
+        {
+            const aeron_topology_cpu_group_t *entry = &cpu_info->cpus[i];
+            if (current_group == entry->group_id)
+            {
+                fprintf(
+                    output, " %s (cpu=%d [configured=%d])",
+                    entry->extra_info->name, entry->cpu, entry->extra_info->original_cpu);
+            }
+        }
+        fprintf(output, "\n");
+    }
+
+    return 1;
+}
+
+int aeron_driver_validate_and_apply_affinity_configuration(aeron_driver_context_t *context)
+{
+#ifdef __linux__
+    int unshared_affinity_warnings;
+    if ((unshared_affinity_warnings = aeron_driver_validate_unshared_affinity(context, stderr)) < 0)
+    {
+        AERON_APPEND_ERR("%s", "failed to validate unshared affinity");
+        goto error;
+    }
+
+    int cpuset_warnings = 0;
+    if ((cpuset_warnings = aeron_driver_apply_cpuset_affinity(context)) < 0)
+    {
+        AERON_APPEND_ERR("%s", "failed to apply cpuset affinity");
+        goto error;
+    }
+
+    int l3_locality_warnings = 0;
+    int die_locality_warnings = 0;
+    aeron_topology_extra_info_t extra_info[4] = {
+        { "conductor", context->conductor_cpu_affinity_no },
+        { "sender", context->sender_cpu_affinity_no },
+        { "receiver", context->receiver_cpu_affinity_no },
+        { "native_resource_agent", context->native_resource_agent_cpu_affinity_no }
+    };
+    aeron_topology_cpu_group_t cpu_groups[4] = {
+        { context->conductor_cpu_affinity_resolved, AERON_NULL_VALUE, &extra_info[0] },
+        { context->sender_cpu_affinity_resolved, AERON_NULL_VALUE, &extra_info[1] },
+        { context->receiver_cpu_affinity_resolved, AERON_NULL_VALUE, &extra_info[2] },
+        { context->native_resource_agent_cpu_affinity_resolved, AERON_NULL_VALUE, &extra_info[3] }
+    };
+    int *peers[4] = { 0 };
+    int peer_count[4] = { 0 };
+    aeron_topology_cpu_info_t cpu_info = { cpu_groups, 4, peers, peer_count, NULL, 0 };
+
+    if (0 <= aeron_topology_build_l3_group_table(AERON_TOPOLOGY_SYS_CPU_PATH, &cpu_info))
+    {
+        l3_locality_warnings = aeron_driver_validate_group_locality(&cpu_info, "L3 cache domain", stderr);
+    }
+    else
+    {
+        aeron_err_clear();
+    }
+    aeron_topology_cpu_info_free(&cpu_info);
+
+    if (0 <= aeron_topology_build_die_locality_group_table(AERON_TOPOLOGY_SYS_CPU_PATH, &cpu_info))
+    {
+        die_locality_warnings = aeron_driver_validate_group_locality(&cpu_info, "dies", stderr);
+    }
+    else
+    {
+        aeron_err_clear();
+    }
+    aeron_topology_cpu_info_free(&cpu_info);
+
+    const int total_warnings_count =
+        unshared_affinity_warnings + cpuset_warnings + l3_locality_warnings + die_locality_warnings;
+
+    if (context->cpuset_warnings_as_errors && 0 < total_warnings_count)
+    {
+        AERON_SET_ERR(EINVAL, "cpuset warnings as errors, %d warnings", total_warnings_count);
+        goto error;
+    }
+
+    return 0;
+
+error:
+    return -1;
+#endif
+    return 0;
 }
 
 int aeron_driver_start(aeron_driver_t *driver, bool manual_main_loop)

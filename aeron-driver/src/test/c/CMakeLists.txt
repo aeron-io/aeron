@@ -139,6 +139,7 @@ if (AERON_UNIT_TESTS)
         aeron_driver_test(aeronmd_signal_test aeronmd_signal_test.cpp $<TARGET_FILE:aeronmd>)
         aeron_driver_test(cpuset_test aeron_cpuset_test.cpp)
         aeron_driver_test(topology_test aeron_topology_test.cpp)
+        aeron_driver_test(driver_test aeron_driver_test.cpp)
     endif ()
 
 endif ()

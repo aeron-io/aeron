@@ -778,24 +778,31 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
         _context->conductor_cpu_affinity_no,
         -1,
         255);
+    _context->conductor_cpu_affinity_resolved = _context->conductor_cpu_affinity_no;
+
     _context->receiver_cpu_affinity_no = aeron_config_parse_int32(
         AERON_RECEIVER_CPU_AFFINITY_ENV_VAR,
         getenv(AERON_RECEIVER_CPU_AFFINITY_ENV_VAR),
         _context->receiver_cpu_affinity_no,
         -1,
         255);
+    _context->receiver_cpu_affinity_resolved = _context->receiver_cpu_affinity_no;
+
     _context->sender_cpu_affinity_no = aeron_config_parse_int32(
         AERON_SENDER_CPU_AFFINITY_ENV_VAR,
         getenv(AERON_SENDER_CPU_AFFINITY_ENV_VAR),
         _context->sender_cpu_affinity_no,
         -1,
         255);
+    _context->sender_cpu_affinity_resolved = _context->sender_cpu_affinity_no;
+
     _context->native_resource_agent_cpu_affinity_no = aeron_config_parse_int32(
         AERON_DRIVER_NATIVE_RESOURCE_AGENT_CPU_AFFINITY_ENV_VAR,
         getenv(AERON_DRIVER_NATIVE_RESOURCE_AGENT_CPU_AFFINITY_ENV_VAR),
         _context->native_resource_agent_cpu_affinity_no,
         -1,
         255);
+    _context->native_resource_agent_cpu_affinity_resolved = _context->native_resource_agent_cpu_affinity_no;
 
     _context->cpuset_affinity = aeron_parse_bool(
         getenv(AERON_DRIVER_CPUSET_AFFINITY_ENV_VAR), AERON_DRIVER_CPUSET_AFFINITY_DEFAULT);
@@ -3407,32 +3414,32 @@ void aeron_set_thread_affinity_on_start(void *state, const char *role_name)
 {
     aeron_driver_context_t *context = (aeron_driver_context_t *)state;
     int result = 0;
-    if (0 <= context->conductor_cpu_affinity_no &&
+    if (0 <= context->conductor_cpu_affinity_resolved &&
        (0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_CONDUCTOR, role_name) ||
         0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_CONDUCTOR_NEW, role_name) ||
         0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_SHARED, role_name) ||
         0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_SHARED_NEW, role_name)))
     {
-        result = aeron_thread_set_affinity(role_name, (uint8_t)context->conductor_cpu_affinity_no);
+        result = aeron_thread_set_affinity(role_name, (uint8_t)context->conductor_cpu_affinity_resolved);
     }
-    else if (0 <= context->sender_cpu_affinity_no &&
+    else if (0 <= context->sender_cpu_affinity_resolved &&
             (0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_SENDER, role_name) ||
              0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_SENDER_NEW, role_name) ||
              0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_SHARED_NETWORK, role_name) ||
              0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_SHARED_NETWORK_NEW, role_name)))
     {
-        result = aeron_thread_set_affinity(role_name, (uint8_t)context->sender_cpu_affinity_no);
+        result = aeron_thread_set_affinity(role_name, (uint8_t)context->sender_cpu_affinity_resolved);
     }
-    else if (0 <= context->receiver_cpu_affinity_no &&
+    else if (0 <= context->receiver_cpu_affinity_resolved &&
              (0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_RECEIVER, role_name) ||
               0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_RECEIVER_NEW, role_name)))
     {
-        result = aeron_thread_set_affinity(role_name, (uint8_t)context->receiver_cpu_affinity_no);
+        result = aeron_thread_set_affinity(role_name, (uint8_t)context->receiver_cpu_affinity_resolved);
     }
-    else if (0 <= context->native_resource_agent_cpu_affinity_no &&
+    else if (0 <= context->native_resource_agent_cpu_affinity_resolved &&
              0 == strcmp(AERON_DRIVER_AGENT_ROLE_NAME_NATIVE_RESOURCE_AGENT, role_name))
     {
-        result = aeron_thread_set_affinity(role_name, (uint8_t)context->native_resource_agent_cpu_affinity_no);
+        result = aeron_thread_set_affinity(role_name, (uint8_t)context->native_resource_agent_cpu_affinity_resolved);
     }
 
     if (result < 0)
@@ -3538,9 +3545,8 @@ bool aeron_driver_context_get_cpuset_warnings_as_errors(aeron_driver_context_t *
 }
 
 static int aeron_driver_context_apply_cpuset_affinity_per_cpu(
-    const int *cpus, int cpu_count, const char *name, int32_t *affinity_ptr)
+    const int *cpus, int cpu_count, const char *name, int32_t affinity, int32_t *affinity_out)
 {
-    const int32_t affinity = *affinity_ptr;
     if (cpu_count <= affinity)
     {
         AERON_SET_ERR(
@@ -3551,7 +3557,7 @@ static int aeron_driver_context_apply_cpuset_affinity_per_cpu(
     if (-1 < affinity)
     {
         const int32_t cpuset_conductor_affinity = cpus[(int)affinity];
-        *affinity_ptr = cpuset_conductor_affinity;
+        *affinity_out = cpuset_conductor_affinity;
     }
 
     return 0;
@@ -3560,28 +3566,32 @@ static int aeron_driver_context_apply_cpuset_affinity_per_cpu(
 int aeron_driver_context_apply_cpuset_affinity(aeron_driver_context_t *context, const int *cpus, int cpu_count)
 {
     if (aeron_driver_context_apply_cpuset_affinity_per_cpu(
-        cpus, cpu_count, AERON_DRIVER_AGENT_ROLE_NAME_CONDUCTOR, &context->conductor_cpu_affinity_no))
+        cpus, cpu_count, AERON_DRIVER_AGENT_ROLE_NAME_CONDUCTOR,
+        context->conductor_cpu_affinity_no, &context->conductor_cpu_affinity_resolved))
     {
         AERON_APPEND_ERR("%s", "");
         return -1;
     }
 
     if (aeron_driver_context_apply_cpuset_affinity_per_cpu(
-        cpus, cpu_count, AERON_DRIVER_AGENT_ROLE_NAME_RECEIVER, &context->receiver_cpu_affinity_no))
+        cpus, cpu_count, AERON_DRIVER_AGENT_ROLE_NAME_RECEIVER,
+        context->receiver_cpu_affinity_no, &context->receiver_cpu_affinity_resolved))
     {
         AERON_APPEND_ERR("%s", "");
         return -1;
     }
 
     if (aeron_driver_context_apply_cpuset_affinity_per_cpu(
-        cpus, cpu_count, AERON_DRIVER_AGENT_ROLE_NAME_SENDER, &context->sender_cpu_affinity_no))
+        cpus, cpu_count, AERON_DRIVER_AGENT_ROLE_NAME_SENDER,
+        context->sender_cpu_affinity_no, &context->sender_cpu_affinity_resolved))
     {
         AERON_APPEND_ERR("%s", "");
         return -1;
     }
 
     if (aeron_driver_context_apply_cpuset_affinity_per_cpu(
-        cpus, cpu_count, AERON_DRIVER_AGENT_ROLE_NAME_NATIVE_RESOURCE_AGENT, &context->native_resource_agent_cpu_affinity_no))
+        cpus, cpu_count, AERON_DRIVER_AGENT_ROLE_NAME_NATIVE_RESOURCE_AGENT,
+        context->native_resource_agent_cpu_affinity_no, &context->native_resource_agent_cpu_affinity_resolved))
     {
         AERON_APPEND_ERR("%s", "");
         return -1;

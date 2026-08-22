@@ -27,7 +27,6 @@
 
 #include "aeronc.h"
 
-#define AERON_TOPOLOGY_MAX_CPU_ID 8192
 #define AERON_TOPOLOGY_FILE_BUF_SIZE 4096
 
 typedef struct aeron_topology_core_group_stct
@@ -103,7 +102,7 @@ static int aeron_topology_read_sibling(const char *sys_cpu_root, int cpu, int **
     return 0;
 }
 
-static int aeron_topology_read_l3_peers(const char *sys_cpu_root, int cpu, int **peers, int *peer_count)
+int aeron_topology_read_l3_peers(const char *sys_cpu_root, int cpu, int **peers, int *peer_count)
 {
     char buf[AERON_TOPOLOGY_FILE_BUF_SIZE];
     if (aeron_topology_read_sysfs_cpu_file(sys_cpu_root, cpu, "cache/index3/shared_cpu_list", buf, sizeof(buf)) < 0)
@@ -553,6 +552,192 @@ int aeron_topology_check_l3_locality(const char* sys_cpu_root, const int *cpus, 
 
     aeron_free(peers);
     return warnings;
+}
+
+static int aeron_topology_build_l3_peer_table(const char *sys_cpu_root, aeron_topology_cpu_info_t *info)
+{
+    // TODO: Reconsider making this a full table again (every row corresponds to a real CPU, not just the listed ones).
+    //       This would require the grouping logic to change (I think this is a fairly simple change).
+    //       What this could do is make this reusable for both the cpuset and the affinity validations.
+
+    // TODO: Consider calling from within group table method instead.
+    for (int i = 0; i < info->cpu_count; i++)
+    {
+        const int cpu = info->cpus[i].cpu;
+        if (AERON_NULL_VALUE == cpu)
+        {
+            continue;
+        }
+
+        if (aeron_topology_read_l3_peers(sys_cpu_root, cpu, &info->peers[i], &info->peer_count[i]) < 0)
+        {
+            AERON_APPEND_ERR("failed to read L3 peers for cpu %d", cpu);
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+int aeron_topology_build_l3_group_table(const char *sys_cpu_root, aeron_topology_cpu_info_t *info)
+{
+    if (aeron_topology_build_l3_peer_table(sys_cpu_root, info) < 0)
+    {
+        AERON_APPEND_ERR("%s", "failed to build l3 peer table");
+        aeron_topology_cpu_info_free(info);
+        return -1;
+    }
+    const int cpu_count = info->cpu_count;
+    int *groups = NULL;
+    int max_cpu = -1;
+    int next_group_id = 0;
+
+    for (int i = 0; i < cpu_count; i++)
+    {
+        info->cpus[i].group_id = AERON_NULL_VALUE;
+        if (AERON_NULL_VALUE != info->cpus[i].cpu && info->cpus[i].cpu > max_cpu)
+        {
+            max_cpu = info->cpus[i].cpu;
+        }
+    }
+
+    if (max_cpu < 0)
+    {
+        info->group_count = 0;
+        return 0;
+    }
+
+    if (aeron_alloc((void **)&groups, sizeof(int) * (max_cpu + 1)) < 0)
+    {
+        AERON_APPEND_ERR("%s", "");
+        return -1;
+    }
+    memset(groups, AERON_NULL_VALUE, sizeof(int) * (max_cpu + 1));
+
+    for (int i = 0; i < cpu_count; i++)
+    {
+        const int cpu = info->cpus[i].cpu;
+        if (AERON_NULL_VALUE == cpu)
+        {
+            continue;
+        }
+
+        if (AERON_NULL_VALUE != groups[cpu])
+        {
+            info->cpus[i].group_id = groups[cpu];
+            continue;
+        }
+
+        bool found_group = false;
+        for (int j = 0; j < info->peer_count[i]; j++)
+        {
+            const int peer = info->peers[i][j];
+            if (peer > max_cpu)
+            {
+                // Can be freely skipped, since any CPU over max_cpu is not part of the grouping.
+                continue;
+            }
+            if (AERON_NULL_VALUE != groups[peer])
+            {
+                groups[cpu] = groups[peer];
+                found_group = true;
+                break;
+            }
+        }
+
+        if (!found_group)
+        {
+            groups[cpu] = next_group_id++;
+        }
+
+        info->cpus[i].group_id = groups[cpu];
+    }
+
+    aeron_free(groups);
+    info->group_count = next_group_id;
+    return 0;
+}
+
+int aeron_topology_build_die_locality_group_table(const char *sys_cpu_root, aeron_topology_cpu_info_t *info)
+{
+    int *group_ids = NULL;
+    int group_capacity = 0;
+    int group_count = 0;
+
+    for (int i = 0; i < info->cpu_count; i++)
+    {
+        const int cpu = info->cpus[i].cpu;
+        int cluster_id = AERON_NULL_VALUE;
+
+        if (AERON_NULL_VALUE == cpu)
+        {
+            continue;
+        }
+        if (aeron_topology_read_die_id(sys_cpu_root, cpu, &cluster_id) < 0)
+        {
+            aeron_free(group_ids);
+            break;
+        }
+        if (AERON_NULL_VALUE == cluster_id)
+        {
+            continue;
+        }
+        info->cpus[i].group_id = cluster_id;
+        bool found = false;
+        for (int j = 0; j < group_count; j++)
+        {
+            if (group_ids[j] == cluster_id)
+            {
+                found = true;
+                break;
+            }
+        }
+
+        if (!found)
+        {
+            if (group_count == group_capacity)
+            {
+                group_capacity = 0 == group_capacity ? 8 : group_capacity * 2;
+                if (aeron_reallocf((void **)&group_ids, sizeof(int) * group_capacity) < 0)
+                {
+                    AERON_APPEND_ERR("%s", "");
+                    aeron_free(group_ids);
+                    return -1;
+                }
+            }
+            group_ids[group_count++] = cluster_id;
+        }
+    }
+
+    if (group_count > 0)
+    {
+        qsort(group_ids, group_count, sizeof(int), aeron_topology_cmp_int);
+    }
+
+    aeron_free(info->group_ids);
+    info->group_ids = group_ids;
+    info->group_count = group_count;
+    return 0;
+}
+
+void aeron_topology_cpu_info_free(aeron_topology_cpu_info_t *info)
+{
+    if (NULL == info)
+    {
+        return;
+    }
+
+    if (NULL != info->peers)
+    {
+        for (int i = 0; i < info->cpu_count; i++)
+        {
+            aeron_free(info->peers[i]);
+            info->peers[i] = NULL;
+        }
+    }
+
+    aeron_free(info->group_ids);
+    info->group_ids = NULL;
 }
 
 int aeron_topology_check_die_locality(const char* sys_cpu_root, const int *cpus, int cpu_count, FILE* output)

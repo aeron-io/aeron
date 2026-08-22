@@ -20,6 +20,7 @@
 #include <stdio.h>
 
 #define AERON_TOPOLOGY_SYS_CPU_PATH "/sys/devices/system/cpu"
+#define AERON_TOPOLOGY_MAX_CPU_ID 8192
 
 /**
  * The set of logical CPU siblings that share a physical core, filtered to
@@ -32,6 +33,41 @@ typedef struct aeron_topology_core_stct
     int cpu_count;
 }
 aeron_topology_core_t;
+
+
+typedef struct aeron_topology_extra_info_stct
+{
+    const char *name;
+    int original_cpu;
+}
+aeron_topology_extra_info_t;
+
+/**
+ * Holds information about a single CPU's group.
+ */
+typedef struct aeron_topology_cpu_group_stct
+{
+    int cpu;
+    int group_id;
+    aeron_topology_extra_info_t *extra_info;
+}
+aeron_topology_cpu_group_t;
+
+/**
+ * Holds information about the CPU topology for validation purposes.
+ */
+typedef struct aeron_topology_cpu_info_stct
+{
+    aeron_topology_cpu_group_t *cpus;
+    int cpu_count;
+    // TODO: Peers are not a general concept, currently only useful for L3 cache domains
+    //       Move this to a different, more specific struct?
+    int **peers;
+    int *peer_count;
+    int *group_ids;
+    int group_count;
+}
+aeron_topology_cpu_info_t;
 
 /**
  * Read one Core per physical core that has at least one CPU in cpus.
@@ -116,6 +152,45 @@ int aeron_topology_check_die_locality(const char* sys_cpu_root, const int *cpus,
  * @return the count of the number of warnings or -1 on error.
  */
 int aeron_topology_check_l3_locality(const char* sys_cpu_root, const int *cpus, int cpu_count, FILE* output);
+
+/**
+ * Build a table of CPUs that share the same die. Populates info->cpus[i].group_id with the raw die id
+ * for each CPU, info->group_ids with the sorted, distinct die ids observed, and info->group_count with
+ * the number of distinct die ids. info->group_ids is heap-allocated; free with aeron_topology_cpu_info_free.
+ *
+ * @param sys_cpu_root of the sys fs filesystem to access cpu information.
+ * @param info contains the cpu list to be grouped
+ * @return 0 on success, -1 on failure.
+ */
+int aeron_topology_build_die_locality_group_table(const char *sys_cpu_root, aeron_topology_cpu_info_t *info);
+
+/**
+ * Read the set of CPUs that share an L3 cache domain with cpu (including cpu itself).
+ *
+ * @param sys_cpu_root of the sys fs filesystem to access cpu information.
+ * @param cpu logical CPU id to inspect.
+ * @param peers output array allocated within this function
+ * @param peer_count number of entries in peers.
+ * @return 0 on success, -1 on failure.
+ */
+int aeron_topology_read_l3_peers(const char *sys_cpu_root, int cpu, int **peers, int *peer_count);
+
+/**
+ * Fill the L3 group ID for each CPU based on the L3 peer list.
+ *
+ * @param sys_cpu_root of the sys fs filesystem to access cpu information.
+ * @param info cpu_info with cpus/peers/peer_count already populated.
+ * @return 0 on success, -1 on failure.
+ */
+int aeron_topology_build_l3_group_table(const char *sys_cpu_root, aeron_topology_cpu_info_t *info);
+
+/**
+ * Free the allocated memory inside an aeron_topology_cpu_info_t object.
+ *
+ * @param info holding the memory to be freed.
+ * @return 0 on success, -1 on failure.
+ */
+void aeron_topology_cpu_info_free(aeron_topology_cpu_info_t *info);
 
 /**
  * Free an array of cores allocated by aeron_topology_read.
