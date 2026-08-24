@@ -523,15 +523,15 @@ public final class NetworkPublication
      */
     public boolean isValidStatusMessage(final StatusMessageFlyweight msg)
     {
-        final long smPosition = computePosition(
+        final long smPos = computePosition(
             msg.consumptionTermId(),
             msg.consumptionTermOffset(),
             positionBitsToShift,
             initialTermId);
 
         final long sndPos = senderPosition.get();
-        final int maxTransmissionWindow = termBufferLength >> 1;
-        return smPosition >= sndPos - maxTransmissionWindow && smPosition <= sndPos + maxTransmissionWindow;
+        final int termLength = termBufferLength;
+        return smPos >= (sndPos - (termLength >> 1)) && smPos <= (sndPos + termLength);
     }
 
     /**
