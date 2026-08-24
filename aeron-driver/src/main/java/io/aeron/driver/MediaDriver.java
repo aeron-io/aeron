@@ -230,7 +230,7 @@ public final class MediaDriver implements AutoCloseable
             ctx.receiverProxy().receiver(receiver);
             ctx.senderProxy().sender(sender);
 
-            if (ctx.driverCpusetAffinity())
+            if (SystemUtil.isLinux() && ctx.driverCpusetAffinity())
             {
                 new CGroupValidator().validate(ctx.driverCpusetWarningsAsErrors());
             }
