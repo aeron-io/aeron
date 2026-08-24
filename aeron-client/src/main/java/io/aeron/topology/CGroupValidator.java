@@ -107,7 +107,7 @@ public class CGroupValidator
             }
             return 0;
         }
-        catch (final IOException ex)
+        catch (final IOException | NumberFormatException ex)
         {
             // NOTE: This is not a CGroup violation, it will be printed directly to stderr.
             System.err.println(
@@ -128,7 +128,7 @@ public class CGroupValidator
             }
             return 0;
         }
-        catch (final IOException ex)
+        catch (final IOException | NumberFormatException ex)
         {
             // NOTE: This is not a CGroup violation, it will be printed directly to stderr.
             System.err.println("WARNING: skipping die locality check for cpuset " + cpuList + ": " + ex.getMessage());
@@ -149,7 +149,7 @@ public class CGroupValidator
             }
             return 0;
         }
-        catch (final IOException ex)
+        catch (final IOException | NumberFormatException ex)
         {
             // NOTE: This is not a CGroup violation, it will be printed directly to stderr.
             System.err.println("WARNING: skipping L3 locality check for cpuset " + cpuList + ": " + ex.getMessage());
