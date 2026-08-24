@@ -25,6 +25,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -70,10 +71,11 @@ class L3ValidationTest
         setupL3Peers(sysfsTestDir, peers);
         final L3GroupGenerator l3GroupGenerator = new L3GroupGenerator(sysfsTestDir);
         final var groups = l3GroupGenerator.group(cpuList);
+        final var sortedGroups = groups.stream().sorted(Comparator.comparing(a -> a.get(0))).toList();
         assertEquals(expectedGroupCount, groups.size());
         for (int i = 0; i < expectedGroups.length; i++)
         {
-            assertArrayEquals(expectedGroups[i], groups.get(i).toIntArray());
+            assertArrayEquals(expectedGroups[i], sortedGroups.get(i).toIntArray());
         }
     }
 
@@ -94,7 +96,16 @@ class L3ValidationTest
                 "0,1,4,6",
                 3,
                 commonPeers,
-                new int[][]{{0, 1}, {4}, {6}})
+                new int[][]{{0, 1}, {4}, {6}}),
+            Arguments.of(
+                "0,1,4,6",
+                2,
+                List.of(
+                    new Pair(0, 3), new Pair(0, 3), new Pair(0, 3), new Pair(0, 3),
+                    new Pair(4, 7), new Pair(4, 7), new Pair(4, 7), new Pair(4, 7)
+                ),
+                new int[][]{{0, 1}, {4, 6}}
+            )
         );
     }
 
@@ -116,10 +127,11 @@ class L3ValidationTest
         setupL3Peers(sysfsTestDir, peers);
         final L3GroupGenerator l3GroupGenerator = new L3GroupGenerator(sysfsTestDir);
         final var groups = l3GroupGenerator.group(resultCpuset.cpus());
+        final var sortedGroups = groups.stream().sorted(Comparator.comparing(a -> a.get(0))).toList();
         assertEquals(expectedGroupCount, groups.size());
         for (int i = 0; i < expectedGroups.length; i++)
         {
-            assertArrayEquals(expectedGroups[i], groups.get(i).toIntArray());
+            assertArrayEquals(expectedGroups[i], sortedGroups.get(i).toIntArray());
         }
     }
 }

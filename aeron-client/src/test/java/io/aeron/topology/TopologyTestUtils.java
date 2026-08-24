@@ -33,7 +33,7 @@ class TopologyTestUtils
             final Pair peer = peers.get(cpu);
             final Path sharedCpuPath = sysfsPath.resolve("cpu%d".formatted(cpu)).resolve(SHARED_CPU_LIST_DIRECTORY);
             Files.createDirectories(sharedCpuPath.getParent());
-            Files.writeString(sharedCpuPath, "%d,%d".formatted(peer.first, peer.second));
+            Files.writeString(sharedCpuPath, "%d-%d".formatted(peer.first, peer.second));
         }
     }
 
