@@ -26,14 +26,14 @@ import java.util.stream.Stream;
  */
 public class CpusetV2Reader
 {
-    private final static Path DEFAULT_PROC_ROOT = Path.of("/proc");
-    private final static Path DEFAULT_CGROUP_ROOT = Path.of("/sys/fs/cgroup");
+    private static final Path DEFAULT_PROC_ROOT = Path.of("/proc");
+    private static final Path DEFAULT_CGROUP_ROOT = Path.of("/sys/fs/cgroup");
 
     private final Path procRoot;
     private final Path cgroupRoot;
 
     /**
-     * Creates a reader using default paths
+     * Creates a reader using default paths.
      */
     public CpusetV2Reader()
     {

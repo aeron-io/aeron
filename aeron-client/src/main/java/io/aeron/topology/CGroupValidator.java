@@ -110,7 +110,8 @@ public class CGroupValidator
         catch (final IOException ex)
         {
             // NOTE: This is not a CGroup violation, it will be printed directly to stderr.
-            System.err.println("WARNING: skipping thread alignment check for cpuset " + cpuList + ": " + ex.getMessage());
+            System.err.println(
+                "WARNING: skipping thread alignment check for cpuset " + cpuList + ": " + ex.getMessage());
             return 0;
         }
     }
