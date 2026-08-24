@@ -40,15 +40,19 @@ void aeron_driver_native_resource_agent_on_start(void *state, const char *role_n
 void aeron_driver_native_resource_agent_on_close(void *clientd);
 
 void aeron_driver_native_resource_agent_on_resolve_address(
-    aeron_driver_native_resource_agent_t *native_resource_agent, aeron_driver_native_resource_agent_proxy_cmd_t *cmd);
+    aeron_driver_native_resource_agent_t *native_resource_agent,
+    aeron_driver_native_resource_agent_proxy_cmd_resolve_address_t *cmd);
 
 void aeron_driver_native_resource_agent_on_parse_udp_channel(
-    aeron_driver_native_resource_agent_t *native_resource_agent, aeron_driver_native_resource_agent_proxy_cmd_t *cmd);
+    aeron_driver_native_resource_agent_t *native_resource_agent,
+    aeron_driver_native_resource_agent_proxy_cmd_parse_channel_t *cmd);
 
 void aeron_driver_native_resource_agent_on_free_log_buffer(
-    aeron_driver_native_resource_agent_t *native_resource_agent, aeron_driver_native_resource_agent_proxy_cmd_t *cmd);
+    aeron_driver_native_resource_agent_t *native_resource_agent,
+    aeron_driver_native_resource_agent_proxy_cmd_free_log_buffer_t *cmd);
 
 void aeron_driver_native_resource_agent_on_map_log_buffer(
-    aeron_driver_native_resource_agent_t *native_resource_agent, aeron_driver_native_resource_agent_proxy_cmd_t *cmd);
+    aeron_driver_native_resource_agent_t *native_resource_agent,
+    aeron_driver_native_resource_agent_proxy_cmd_map_log_buffer_t *cmd);
 
 #endif //AERON_DRIVER_NATIVE_RESOURCE_AGENT_H

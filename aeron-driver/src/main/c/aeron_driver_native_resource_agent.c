@@ -127,11 +127,9 @@ static void aeron_driver_native_resource_agent_signal_error(
 
     if (aeron_alloc((void **)&result->payload.error.message, errmsg_len + 1) < 0)
     {
-        // FIXME: It over-writes the original error message/code
-        AERON_APPEND_ERR("failed to allocate error message: %s", aeron_errmsg());
+        AERON_APPEND_ERR("%s", "failed to allocate error message");
         aeron_distinct_error_log_record(
-            native_resource_agent->context->error_log, errcode, errmsg); // will be freed....
-        aeron_err_clear();
+            native_resource_agent->context->error_log, errcode, "command failed, error message unknown");
     }
     else
     {
@@ -156,8 +154,29 @@ static void aeron_driver_native_resource_agent_on_command(
     int32_t msg_type_id, const void *message, size_t size, void *clientd)
 {
     aeron_driver_native_resource_agent_t *native_resource_agent = (aeron_driver_native_resource_agent_t *)clientd;
-    aeron_driver_native_resource_agent_proxy_cmd_t *cmd = (aeron_driver_native_resource_agent_proxy_cmd_t *)message;
-    cmd->execute(native_resource_agent, cmd);
+    switch (msg_type_id)
+    {
+        case AERON_DRIVER_NATIVE_RESOURCE_AGENT_COMMAND_TYPE_RESOLVE_ADDRESS:
+            aeron_driver_native_resource_agent_on_resolve_address(
+                native_resource_agent, (aeron_driver_native_resource_agent_proxy_cmd_resolve_address_t *)message);
+            break;
+        case AERON_DRIVER_NATIVE_RESOURCE_AGENT_COMMAND_TYPE_PARSE_CHANNEL:
+            aeron_driver_native_resource_agent_on_parse_udp_channel(
+                native_resource_agent, (aeron_driver_native_resource_agent_proxy_cmd_parse_channel_t *)message);
+            break;
+        case AERON_DRIVER_NATIVE_RESOURCE_AGENT_COMMAND_TYPE_FREE_LOG_BUFFER:
+            aeron_driver_native_resource_agent_on_free_log_buffer(
+                native_resource_agent, (aeron_driver_native_resource_agent_proxy_cmd_free_log_buffer_t *)message);
+            break;
+        case AERON_DRIVER_NATIVE_RESOURCE_AGENT_COMMAND_TYPE_MAP_LOG_BUFFER:
+            aeron_driver_native_resource_agent_on_map_log_buffer(
+                native_resource_agent, (aeron_driver_native_resource_agent_proxy_cmd_map_log_buffer_t *)message);
+            break;
+        default:
+            aeron_distinct_error_log_record(
+               native_resource_agent->context->error_log, EINVAL, "unknown command");
+            break;
+    }
 }
 
 static void aeron_driver_native_resource_agent_on_log_buffer_free(
@@ -185,16 +204,17 @@ static int aeron_driver_native_resource_agent_free_log_buffers(
             break;
         }
 
-        if (!native_resource_agent->context->raw_log_free_func(log_buffer.mapped_raw_log, log_buffer.log_file_name))
-        {
-            int64_t *counter = aeron_system_counter_addr(native_resource_agent->context->system_counters, AERON_SYSTEM_COUNTER_FREE_FAILS);
-            aeron_counter_increment_release(counter);
-            aeron_deque_add_last(&native_resource_agent->log_buffers_queue, (void *)&log_buffer);
-        }
-        else
+        if (native_resource_agent->context->raw_log_free_func(log_buffer.mapped_raw_log, log_buffer.log_file_name))
         {
             aeron_driver_native_resource_agent_on_log_buffer_free(
                 native_resource_agent, log_buffer.mapped_raw_log, log_buffer.log_file_name);
+        }
+        else
+        {
+            int64_t *counter = aeron_system_counter_addr(
+                native_resource_agent->context->system_counters, AERON_SYSTEM_COUNTER_FREE_FAILS);
+            aeron_counter_increment_release(counter);
+            aeron_deque_add_last(&native_resource_agent->log_buffers_queue, (void *)&log_buffer);
         }
     }
 
@@ -295,6 +315,29 @@ int aeron_driver_native_resource_agent_init(
     return 0;
 }
 
+static void aeron_driver_native_resource_agent_free_log_buffer(
+    aeron_driver_native_resource_agent_t *native_resource_agent,
+    aeron_mapped_raw_log_t *mapped_raw_log,
+    const char *log_file_name)
+{
+    native_resource_agent->context->raw_log_free_func(mapped_raw_log, log_file_name);
+    aeron_free(mapped_raw_log);
+    aeron_free((char *)log_file_name);
+}
+
+static void aeron_driver_native_resource_agent_drain_pending_free_buffer_commands(
+    int32_t msg_type_id, const void *message, size_t size, void *clientd)
+{
+    if (AERON_DRIVER_NATIVE_RESOURCE_AGENT_COMMAND_TYPE_FREE_LOG_BUFFER == msg_type_id)
+    {
+        aeron_driver_native_resource_agent_t *native_resource_agent = (aeron_driver_native_resource_agent_t *)clientd;
+        aeron_driver_native_resource_agent_proxy_cmd_free_log_buffer_t *cmd =
+            (aeron_driver_native_resource_agent_proxy_cmd_free_log_buffer_t *)message;
+        aeron_driver_native_resource_agent_free_log_buffer(
+            native_resource_agent, cmd->mapped_raw_log, cmd->log_file_name);
+    }
+}
+
 void aeron_driver_native_resource_agent_on_close(void *clientd)
 {
     aeron_driver_native_resource_agent_t *native_resource_agent = (aeron_driver_native_resource_agent_t *)clientd;
@@ -303,59 +346,62 @@ void aeron_driver_native_resource_agent_on_close(void *clientd)
     aeron_driver_native_resource_agent_log_buffer_t log_buffer;
     while (0 != aeron_deque_remove_first(&native_resource_agent->log_buffers_queue, &log_buffer))
     {
-        native_resource_agent->context->raw_log_free_func(log_buffer.mapped_raw_log, log_buffer.log_file_name);
+        aeron_driver_native_resource_agent_free_log_buffer(
+            native_resource_agent, log_buffer.mapped_raw_log, log_buffer.log_file_name);
     }
     aeron_deque_close(&native_resource_agent->log_buffers_queue);
+
+    aeron_spsc_rb_read(
+        native_resource_agent->native_resource_agent_proxy.command_queue,
+        aeron_driver_native_resource_agent_drain_pending_free_buffer_commands,
+        native_resource_agent,
+    SIZE_MAX);
 }
 
 void aeron_driver_native_resource_agent_on_resolve_address(
-    aeron_driver_native_resource_agent_t *native_resource_agent, aeron_driver_native_resource_agent_proxy_cmd_t *cmd)
+    aeron_driver_native_resource_agent_t *native_resource_agent,
+    aeron_driver_native_resource_agent_proxy_cmd_resolve_address_t *cmd)
 {
-    aeron_driver_native_resource_agent_proxy_cmd_resolve_address_t *resolve_cmd =
-        (aeron_driver_native_resource_agent_proxy_cmd_resolve_address_t *)cmd;
     if (aeron_name_resolver_resolve_host_and_port(
         &native_resource_agent->name_resolver,
-        resolve_cmd->address_resolution_params->endpoint_name,
-        resolve_cmd->address_resolution_params->uri_param_name,
-        resolve_cmd->address_resolution_params->is_re_resolution,
-        &resolve_cmd->address_resolution_params->resolved_address) < 0)
+        cmd->address_resolution_params->endpoint_name,
+        cmd->address_resolution_params->uri_param_name,
+        cmd->address_resolution_params->is_re_resolution,
+        &cmd->address_resolution_params->resolved_address) < 0)
     {
         AERON_APPEND_ERR("%s", "address re-resolution failed");
-        aeron_driver_native_resource_agent_signal_error(native_resource_agent, resolve_cmd->result);
+        aeron_driver_native_resource_agent_signal_error(native_resource_agent, cmd->result);
     }
     else
     {
         // FIXME: Store resolved address in the success state instead of `aeron_name_resolver_async_resolve_t->resolved_address`
-        AERON_SET_RELEASE(resolve_cmd->result->state, AERON_DRIVER_NATIVE_RESOURCE_AGENT_COMMAND_STATE_SUCCEEDED);
+        AERON_SET_RELEASE(cmd->result->state, AERON_DRIVER_NATIVE_RESOURCE_AGENT_COMMAND_STATE_SUCCEEDED);
     }
 }
 
 void aeron_driver_native_resource_agent_on_parse_udp_channel(
-    aeron_driver_native_resource_agent_t *native_resource_agent, aeron_driver_native_resource_agent_proxy_cmd_t *cmd)
+    aeron_driver_native_resource_agent_t *native_resource_agent,
+    aeron_driver_native_resource_agent_proxy_cmd_parse_channel_t *cmd)
 {
-    aeron_driver_native_resource_agent_proxy_cmd_parse_channel_t *channel_cmd =
-        (aeron_driver_native_resource_agent_proxy_cmd_parse_channel_t *)cmd;
-    if (aeron_udp_channel_finish_parse(&native_resource_agent->name_resolver, channel_cmd->async_parse) < 0)
+    if (aeron_udp_channel_finish_parse(&native_resource_agent->name_resolver, cmd->async_parse) < 0)
     {
         AERON_APPEND_ERR("%s", "failed to parse channel");
-        aeron_driver_native_resource_agent_signal_error(native_resource_agent, channel_cmd->result);
+        aeron_driver_native_resource_agent_signal_error(native_resource_agent, cmd->result);
     }
     else
     {
-        AERON_SET_RELEASE(channel_cmd->result->state, AERON_DRIVER_NATIVE_RESOURCE_AGENT_COMMAND_STATE_SUCCEEDED);
+        AERON_SET_RELEASE(cmd->result->state, AERON_DRIVER_NATIVE_RESOURCE_AGENT_COMMAND_STATE_SUCCEEDED);
     }
 }
 
 void aeron_driver_native_resource_agent_on_free_log_buffer(
-    aeron_driver_native_resource_agent_t *native_resource_agent, aeron_driver_native_resource_agent_proxy_cmd_t *cmd)
+    aeron_driver_native_resource_agent_t *native_resource_agent,
+    aeron_driver_native_resource_agent_proxy_cmd_free_log_buffer_t *cmd)
 {
-    aeron_driver_native_resource_agent_proxy_cmd_free_log_buffer_t *free_cmd =
-        (aeron_driver_native_resource_agent_proxy_cmd_free_log_buffer_t *)cmd;
-
-    if (native_resource_agent->context->raw_log_free_func(free_cmd->mapped_raw_log, free_cmd->log_file_name))
+    if (native_resource_agent->context->raw_log_free_func(cmd->mapped_raw_log, cmd->log_file_name))
     {
         aeron_driver_native_resource_agent_on_log_buffer_free(
-            native_resource_agent, free_cmd->mapped_raw_log, free_cmd->log_file_name);
+            native_resource_agent, cmd->mapped_raw_log, cmd->log_file_name);
         return;
     }
 
@@ -363,8 +409,8 @@ void aeron_driver_native_resource_agent_on_free_log_buffer(
     aeron_counter_increment_release(counter);
 
     aeron_driver_native_resource_agent_log_buffer_t log_buffer;
-    log_buffer.mapped_raw_log = free_cmd->mapped_raw_log;
-    log_buffer.log_file_name = free_cmd->log_file_name;
+    log_buffer.mapped_raw_log = cmd->mapped_raw_log;
+    log_buffer.log_file_name = cmd->log_file_name;
 
     if (aeron_deque_add_last(&native_resource_agent->log_buffers_queue, &log_buffer) < 0)
     {
@@ -373,23 +419,21 @@ void aeron_driver_native_resource_agent_on_free_log_buffer(
             native_resource_agent->context->error_log,
             aeron_errcode(),
             aeron_errmsg());
-        aeron_free(free_cmd->mapped_raw_log);
-        aeron_free((void *)free_cmd->log_file_name);
+        aeron_free(cmd->mapped_raw_log);
+        aeron_free((void *)cmd->log_file_name);
     }
 }
 
 void aeron_driver_native_resource_agent_on_map_log_buffer(
-    aeron_driver_native_resource_agent_t *native_resource_agent, aeron_driver_native_resource_agent_proxy_cmd_t *cmd)
+    aeron_driver_native_resource_agent_t *native_resource_agent,
+    aeron_driver_native_resource_agent_proxy_cmd_map_log_buffer_t *cmd)
 {
-    aeron_driver_native_resource_agent_proxy_cmd_map_log_buffer_t *map_cmd =
-        (aeron_driver_native_resource_agent_proxy_cmd_map_log_buffer_t *)cmd;
-
     const uint64_t log_length =
-        aeron_logbuffer_compute_log_length(map_cmd->term_length, native_resource_agent->context->file_page_size);
+        aeron_logbuffer_compute_log_length(cmd->term_length, native_resource_agent->context->file_page_size);
     if (aeron_driver_context_run_storage_checks(native_resource_agent->context, log_length) < 0)
     {
         AERON_APPEND_ERR("%s", "");
-        aeron_driver_native_resource_agent_signal_error(native_resource_agent, map_cmd->result);
+        aeron_driver_native_resource_agent_signal_error(native_resource_agent, cmd->result);
         return;
     }
 
@@ -397,20 +441,20 @@ void aeron_driver_native_resource_agent_on_map_log_buffer(
     if (aeron_alloc((void **)&mapped_raw_log, sizeof(aeron_mapped_raw_log_t)) < 0)
     {
         AERON_APPEND_ERR("%s", "failed to allocate aeron_mapped_raw_log_t");
-        aeron_driver_native_resource_agent_signal_error(native_resource_agent, map_cmd->result);
+        aeron_driver_native_resource_agent_signal_error(native_resource_agent, cmd->result);
         return;
     }
 
     if (native_resource_agent->context->raw_log_map_func(
         mapped_raw_log,
-        map_cmd->log_file_name,
-        map_cmd->is_sparse,
-        map_cmd->term_length,
+        cmd->log_file_name,
+        cmd->is_sparse,
+        cmd->term_length,
         native_resource_agent->context->file_page_size) < 0)
     {
-        AERON_APPEND_ERR("error mapping log buffer file: %s", map_cmd->log_file_name);
+        AERON_APPEND_ERR("error mapping log buffer file: %s", cmd->log_file_name);
         aeron_free(mapped_raw_log);
-        aeron_driver_native_resource_agent_signal_error(native_resource_agent, map_cmd->result);
+        aeron_driver_native_resource_agent_signal_error(native_resource_agent, cmd->result);
         return;
     }
 
@@ -418,6 +462,6 @@ void aeron_driver_native_resource_agent_on_map_log_buffer(
         native_resource_agent->context->system_counters, AERON_SYSTEM_COUNTER_BYTES_CURRENTLY_MAPPED);
     aeron_counter_get_and_add_release(mapped_bytes_counter, (int64_t)log_length);
 
-    map_cmd->result->payload.success = mapped_raw_log;
-    AERON_SET_RELEASE(map_cmd->result->state, AERON_DRIVER_NATIVE_RESOURCE_AGENT_COMMAND_STATE_SUCCEEDED);
+    cmd->result->payload.success = mapped_raw_log;
+    AERON_SET_RELEASE(cmd->result->state, AERON_DRIVER_NATIVE_RESOURCE_AGENT_COMMAND_STATE_SUCCEEDED);
 }

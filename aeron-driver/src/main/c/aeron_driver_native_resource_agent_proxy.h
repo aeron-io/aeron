@@ -32,6 +32,15 @@ typedef enum aeron_driver_native_resource_agent_command_state_enum
 }
 aeron_driver_native_resource_agent_command_state_t;
 
+typedef enum aeron_driver_native_resource_agent_command_type_enum
+{
+    AERON_DRIVER_NATIVE_RESOURCE_AGENT_COMMAND_TYPE_RESOLVE_ADDRESS = 1,
+    AERON_DRIVER_NATIVE_RESOURCE_AGENT_COMMAND_TYPE_PARSE_CHANNEL = 2,
+    AERON_DRIVER_NATIVE_RESOURCE_AGENT_COMMAND_TYPE_FREE_LOG_BUFFER = 3,
+    AERON_DRIVER_NATIVE_RESOURCE_AGENT_COMMAND_TYPE_MAP_LOG_BUFFER = 4
+}
+aeron_driver_native_resource_agent_command_type_t;
+
 typedef struct aeron_driver_native_resource_agent_command_result_stct
 {
     volatile aeron_driver_native_resource_agent_command_state_t state;
@@ -57,15 +66,8 @@ typedef struct aeron_driver_native_resource_agent_proxy_stct
 }
 aeron_driver_native_resource_agent_proxy_t;
 
-typedef struct aeron_driver_native_resource_agent_proxy_cmd_stct
-{
-    void (*execute)(aeron_driver_native_resource_agent_t *native_resource_agent, struct aeron_driver_native_resource_agent_proxy_cmd_stct *cmd);
-}
-aeron_driver_native_resource_agent_proxy_cmd_t;
-
 typedef struct aeron_driver_native_resource_agent_proxy_cmd_resolve_address_stct
 {
-    aeron_driver_native_resource_agent_proxy_cmd_t base;
     aeron_name_resolver_async_resolve_t *address_resolution_params;
     aeron_driver_native_resource_agent_command_result_t *result;
 }
@@ -73,7 +75,6 @@ aeron_driver_native_resource_agent_proxy_cmd_resolve_address_t;
 
 typedef struct aeron_driver_native_resource_agent_proxy_cmd_parse_channel_stct
 {
-    aeron_driver_native_resource_agent_proxy_cmd_t base;
     aeron_udp_channel_async_parse_t *async_parse;
     aeron_driver_native_resource_agent_command_result_t *result;
 }
@@ -81,7 +82,6 @@ aeron_driver_native_resource_agent_proxy_cmd_parse_channel_t;
 
 typedef struct aeron_driver_native_resource_agent_proxy_cmd_free_log_buffer_stct
 {
-    aeron_driver_native_resource_agent_proxy_cmd_t base;
     aeron_mapped_raw_log_t *mapped_raw_log;
     const char *log_file_name;
 }
@@ -89,7 +89,6 @@ aeron_driver_native_resource_agent_proxy_cmd_free_log_buffer_t;
 
 typedef struct aeron_driver_native_resource_agent_proxy_cmd_map_log_buffer_stct
 {
-    aeron_driver_native_resource_agent_proxy_cmd_t base;
     const char *log_file_name;
     size_t term_length;
     bool is_sparse;
