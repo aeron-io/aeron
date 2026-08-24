@@ -1209,6 +1209,41 @@ public final class Configuration
         "aeron.driver.resolver.bootstrap.neighbor.resolution.interval";
 
     /**
+     * Name of the system property to enable cgroup/cpuset-derived CPU affinity for the Media Driver's threads.
+     */
+    @Config(defaultType = DefaultType.BOOLEAN, defaultBoolean = false)
+    public static final String DRIVER_CPUSET_AFFINITY_PROP_NAME = "aeron.driver.cpuset.affinity";
+
+    /**
+     * Name of the system property to treat cpuset topology validation warnings (thread-sibling misalignment,
+     * L3 cache, or die locality violations) as fatal {@link ConfigurationException}s instead of warnings.
+     */
+    @Config(defaultType = DefaultType.BOOLEAN, defaultBoolean = false)
+    public static final String DRIVER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME = "aeron.driver.cpuset.warnings.as.errors";
+
+    /**
+     * Should cgroup/cpuset-derived CPU affinity be applied to the Media Driver's threads.
+     *
+     * @return true if cgroup/cpuset-derived CPU affinity should be applied.
+     * @see #DRIVER_CPUSET_AFFINITY_PROP_NAME
+     */
+    public static boolean driverCpusetAffinityEnabled()
+    {
+        return Boolean.parseBoolean(getProperty(DRIVER_CPUSET_AFFINITY_PROP_NAME));
+    }
+
+    /**
+     * Should cpuset topology validation warnings be treated as fatal errors.
+     *
+     * @return true if cpuset topology validation warnings should be treated as fatal errors.
+     * @see #DRIVER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
+     */
+    public static boolean driverCpusetWarningsAsErrors()
+    {
+        return Boolean.parseBoolean(getProperty(DRIVER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME));
+    }
+
+    /**
      * Default interval between resolutions of bootstrap neighbors that are not active.
      */
     public static final long RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_DEFAULT_NS = TimeUnit.SECONDS.toNanos(10);

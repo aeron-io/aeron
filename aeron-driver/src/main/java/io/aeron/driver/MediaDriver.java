@@ -38,6 +38,7 @@ import io.aeron.exceptions.ConcurrentConcludeException;
 import io.aeron.exceptions.ConfigurationException;
 import io.aeron.logbuffer.BufferClaim;
 import io.aeron.logbuffer.LogBufferDescriptor;
+import io.aeron.topology.CGroupValidator;
 import io.aeron.version.Versioned;
 import org.agrona.BitUtil;
 import org.agrona.BufferUtil;
@@ -209,6 +210,10 @@ public final class MediaDriver implements AutoCloseable
 
         ensureDirectoryIsRecreated(ctx);
         validateSocketBufferLengths(ctx);
+        if (ctx.driverCpusetAffinity())
+        {
+            new CGroupValidator().validate(ctx.driverCpusetWarningsAsErrors());
+        }
 
         try
         {
@@ -644,6 +649,9 @@ public final class MediaDriver implements AutoCloseable
         private String resolverBootstrapNeighbor = Configuration.resolverBootstrapNeighbor();
         private String senderWildcardPortRange = Configuration.senderWildcardPortRange();
         private String receiverWildcardPortRange = Configuration.receiverWildcardPortRange();
+
+        private boolean cpusetAffinity = Configuration.driverCpusetAffinityEnabled();
+        private boolean cpusetWarningsAsErrors = Configuration.driverCpusetWarningsAsErrors();
 
         private EpochClock epochClock;
         private NanoClock nanoClock;
@@ -4045,6 +4053,44 @@ public final class MediaDriver implements AutoCloseable
         }
 
         /**
+         * Should cgroup/cpuset-derived CPU affinity be applied to the Media Driver's threads.
+         *
+         * @return true if cgroup/cpuset-derived CPU affinity should be applied.
+         * @see Configuration#DRIVER_CPUSET_AFFINITY_PROP_NAME
+         */
+        @Config
+        public boolean driverCpusetAffinity()
+        {
+            return this.cpusetAffinity;
+        }
+
+        /**
+         * Should cpuset topology validation warnings be treated as fatal errors.
+         *
+         * @return true if cpuset topology validation warnings should be treated as fatal errors.
+         * @see Configuration#DRIVER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
+         */
+        @Config
+        public boolean driverCpusetWarningsAsErrors()
+        {
+            return this.cpusetWarningsAsErrors;
+        }
+
+        /**
+         * Should cpuset topology validation warnings be treated as fatal errors.
+         *
+         * @param cpusetWarningsAsErrors true if cpuset topology validation warnings should be treated as fatal
+         *                               errors.
+         * @return this for a fluent API.
+         * @see Configuration#DRIVER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
+         */
+        public Context driverCpusetWarningsAsErrors(final boolean cpusetWarningsAsErrors)
+        {
+            this.cpusetWarningsAsErrors = cpusetWarningsAsErrors;
+            return this;
+        }
+
+        /**
          * {@inheritDoc}
          */
         @Override
@@ -4714,6 +4760,8 @@ public final class MediaDriver implements AutoCloseable
                 "\n    useWindowsHighResTimer=" + useWindowsHighResTimer +
                 "\n    warnIfDirectoryExists=" + warnIfDirectoryExists +
                 "\n    dirDeleteOnStart=" + dirDeleteOnStart +
+                "\n    cpusetAffinity=" + cpusetAffinity +
+                "\n    cpusetWarningsAsErrors=" + cpusetWarningsAsErrors +
                 "\n    dirDeleteOnShutdown=" + dirDeleteOnShutdown +
                 "\n    termBufferSparseFile=" + termBufferSparseFile +
                 "\n    performStorageChecks=" + performStorageChecks +
