@@ -16,7 +16,6 @@
 
 package io.aeron.topology;
 
-import org.agrona.collections.Int2ObjectHashMap;
 import org.agrona.collections.IntArrayList;
 import org.agrona.collections.IntHashSet;
 
