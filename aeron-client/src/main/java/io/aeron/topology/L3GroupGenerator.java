@@ -21,7 +21,8 @@ import org.agrona.collections.IntHashSet;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -55,13 +56,12 @@ public class L3GroupGenerator
      */
     public List<IntArrayList> group(final IntArrayList cpuList) throws IOException
     {
-        // TODO: Make this more efficient.
-        final Map<IntHashSet, IntArrayList> map = new HashMap<>();
+        final Map<IntHashSet, IntArrayList> map = new IdentityHashMap<>();
         for (int i = 0; i < cpuList.size(); i++)
         {
             final int cpu = cpuList.get(i);
             map.computeIfAbsent(perCpuListReader.loadCpuList(cpu), k -> new IntArrayList()).add(cpu);
         }
-        return map.values().stream().toList();
+        return new ArrayList<>(map.values());
     }
 }

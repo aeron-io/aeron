@@ -38,9 +38,10 @@ class PerCpuListReader
     private IntHashSet loadCpuListFile(final int cpu) throws IOException
     {
         final Path cpuListPath = sysfsRoot.resolve("cpu%d".formatted(cpu)).resolve(cpuListDirectory);
-        final String cpuList;
-        cpuList = Files.readString(cpuListPath);
-        return AffinityParser.parse(cpuList, IntHashSet::new);
+        final String cpuList = Files.readString(cpuListPath);
+        final IntHashSet result = new IntHashSet();
+        AffinityParser.parse(cpuList, result::add);
+        return result;
     }
 
     IntHashSet loadCpuList(final int cpu) throws IOException

@@ -18,8 +18,7 @@ package io.aeron.topology;
 
 import org.agrona.collections.IntArrayList;
 
-import java.util.Collection;
-import java.util.function.Supplier;
+import java.util.function.IntConsumer;
 
 /**
  * Parses a Linux-style CPU affinity/CPU list string into a collection of CPU ids.
@@ -38,38 +37,36 @@ public final class AffinityParser
      */
     public static IntArrayList parse(final String affinity)
     {
-        return parse(affinity, IntArrayList::new);
+        final IntArrayList result = new IntArrayList();
+        parse(affinity, result::addInt);
+        return result;
     }
 
     /**
-     * Parses a CPU affinity list into a collection created by the given supplier.
+     * Parses a CPU affinity list, passing each CPU id to the given consumer.
      *
      * @param affinity the CPU affinity list, e.g. {@code "0-3,7"}.
-     * @param collectionSupplier supplies the collection instance to populate.
-     * @param <T> the type of collection to return.
-     * @return the parsed CPU ids.
+     * @param consumer receives each parsed CPU id.
      */
-    public static <T extends Collection<Integer>> T parse(final String affinity, final Supplier<T> collectionSupplier)
+    public static void parse(final String affinity, final IntConsumer consumer)
     {
-        final T result = collectionSupplier.get();
         for (final String rawPart : affinity.split(","))
         {
             final String part = rawPart.trim();
-            if (part.contains("-"))
+            final int dashIndex = part.indexOf('-');
+            if (-1 != dashIndex)
             {
-                final String[] range = part.split("-");
-                final int start = Integer.parseInt(range[0]);
-                final int end = Integer.parseInt(range[1]);
-                for (int cpu = start; cpu < end + 1; cpu++)
+                final int start = Integer.parseInt(part, 0, dashIndex, 10);
+                final int end = Integer.parseInt(part, dashIndex + 1, part.length(), 10);
+                for (int cpu = start; cpu <= end; cpu++)
                 {
-                    result.add(cpu);
+                    consumer.accept(cpu);
                 }
             }
             else
             {
-                result.add(Integer.parseInt(part));
+                consumer.accept(Integer.parseInt(part));
             }
         }
-        return result;
     }
 }
