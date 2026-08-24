@@ -20,6 +20,8 @@ import org.agrona.collections.IntArrayList;
 
 import java.util.function.IntConsumer;
 
+import static org.agrona.AsciiEncoding.parseIntAscii;
+
 /**
  * Parses a Linux-style CPU affinity/CPU list string into a collection of CPU ids.
  */
@@ -56,8 +58,8 @@ public final class AffinityParser
             final int dashIndex = part.indexOf('-');
             if (-1 != dashIndex)
             {
-                final int start = Integer.parseInt(part, 0, dashIndex, 10);
-                final int end = Integer.parseInt(part, dashIndex + 1, part.length(), 10);
+                final int start = parseIntAscii(part, 0, dashIndex);
+                final int end = parseIntAscii(part, dashIndex + 1, part.length() - (dashIndex + 1));
                 for (int cpu = start; cpu <= end; cpu++)
                 {
                     consumer.accept(cpu);
