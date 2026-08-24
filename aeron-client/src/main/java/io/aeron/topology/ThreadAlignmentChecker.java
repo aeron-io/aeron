@@ -36,7 +36,7 @@ public class ThreadAlignmentChecker
     /**
      * Creates a {@link ThreadAlignmentChecker} that reads CPU topology information from the given {@code sysfs} root.
      *
-     * @param sysfsRoot the root {@code sysfs} CPU topology directory, e.g. {@code /sys/devices/system/cpu}.
+     * @param sysfsRoot the root {@code sysfs} CPU topology directory.
      */
     public ThreadAlignmentChecker(final Path sysfsRoot)
     {
