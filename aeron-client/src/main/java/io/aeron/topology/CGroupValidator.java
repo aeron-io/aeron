@@ -30,7 +30,7 @@ import java.util.List;
  */
 public class CGroupValidator
 {
-    static final Path DEFAULT_SYSFS_ROOT = Path.of("/sys/fs");
+    static final Path DEFAULT_SYSFS_ROOT = Path.of("/sys/devices/system/cpu");
 
     private final L3GroupGenerator l3GroupGenerator;
     private final DieLocalityGroupGenerator dieLocalityGroupGenerator;
