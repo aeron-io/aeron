@@ -22,6 +22,7 @@ import org.agrona.collections.IntArrayList;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -67,6 +68,6 @@ public class DieLocalityGroupGenerator
             final int cpu = cpuList.get(i);
             map.computeIfAbsent(loadDieId(cpu), k -> new IntArrayList()).add(cpu);
         }
-        return map.values().stream().toList();
+        return new ArrayList<>(map.values());
     }
 }
