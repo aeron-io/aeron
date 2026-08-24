@@ -81,18 +81,10 @@ public class CGroupValidator
             return;
         }
 
-        final int warnings;
-        try
-        {
-            final int alignmentWarnings = checkAlignment(cpuList, out);
-            final int dieLocalityWarnings = checkDieLocality(cpuList, out);
-            final int l3LocalityWarnings = checkL3Locality(cpuList, out);
-            warnings = alignmentWarnings + dieLocalityWarnings + l3LocalityWarnings;
-        }
-        catch (final IOException ex)
-        {
-            throw new ConfigurationException("failed to validate cpu topology: %s".formatted(ex.getMessage()));
-        }
+        final int alignmentWarnings = checkAlignment(cpuList, out);
+        final int dieLocalityWarnings = checkDieLocality(cpuList, out);
+        final int l3LocalityWarnings = checkL3Locality(cpuList, out);
+        final int warnings = alignmentWarnings + dieLocalityWarnings + l3LocalityWarnings;
 
         if (warningsAsErrors && 0 < warnings)
         {
@@ -101,38 +93,66 @@ public class CGroupValidator
         }
     }
 
-    private int checkAlignment(final IntArrayList cpuList, final PrintStream out) throws IOException
+    private int checkAlignment(final IntArrayList cpuList, final PrintStream out)
     {
-        final IntArrayList missingThreads = threadAlignmentChecker.identifyMissingThreads(cpuList);
-        if (!missingThreads.isEmpty())
+        try
         {
-            out.printf(
-                "WARNING: cpuset %s is missing thread sibling CPU(s) %s (partial physical core(s) in cpuset)%n",
-                cpuList, missingThreads);
-            return 1;
+            final IntArrayList missingThreads = threadAlignmentChecker.identifyMissingThreads(cpuList);
+            if (!missingThreads.isEmpty())
+            {
+                out.printf(
+                    "WARNING: cpuset %s is missing thread sibling CPU(s) %s (partial physical core(s) in cpuset)%n",
+                    cpuList, missingThreads);
+                return 1;
+            }
+            return 0;
         }
-        return 0;
+        catch (final IOException ex)
+        {
+            // NOTE: This is not a CGroup violation, it will be printed directly to stderr.
+            System.err.println("WARNING: skipping thread alignment check for cpuset " + cpuList + ": " + ex.getMessage());
+            return 0;
+        }
     }
 
-    private int checkDieLocality(final IntArrayList cpuList, final PrintStream out) throws IOException
+    private int checkDieLocality(final IntArrayList cpuList, final PrintStream out)
     {
-        final List<IntArrayList> groups = dieLocalityGroupGenerator.group(cpuList);
-        if (1 < groups.size())
+        try
         {
-            out.println("WARNING: cpuset " + cpuList + " spans " + groups.size() + " CPU die(s): " + groups);
-            return 1;
+            final List<IntArrayList> groups = dieLocalityGroupGenerator.group(cpuList);
+            if (1 < groups.size())
+            {
+                out.println("WARNING: cpuset " + cpuList + " spans " + groups.size() + " CPU die(s): " + groups);
+                return 1;
+            }
+            return 0;
         }
-        return 0;
+        catch (final IOException ex)
+        {
+            // NOTE: This is not a CGroup violation, it will be printed directly to stderr.
+            System.err.println("WARNING: skipping die locality check for cpuset " + cpuList + ": " + ex.getMessage());
+            return 0;
+        }
     }
 
-    private int checkL3Locality(final IntArrayList cpuList, final PrintStream out) throws IOException
+    private int checkL3Locality(final IntArrayList cpuList, final PrintStream out)
     {
-        final List<IntArrayList> groups = l3GroupGenerator.group(cpuList);
-        if (1 < groups.size())
+        try
         {
-            out.println("WARNING: cpuset " + cpuList + " spans " + groups.size() + " L3 cache domain(s): " + groups);
-            return 1;
+            final List<IntArrayList> groups = l3GroupGenerator.group(cpuList);
+            if (1 < groups.size())
+            {
+                out.println(
+                    "WARNING: cpuset " + cpuList + " spans " + groups.size() + " L3 cache domain(s): " + groups);
+                return 1;
+            }
+            return 0;
         }
-        return 0;
+        catch (final IOException ex)
+        {
+            // NOTE: This is not a CGroup violation, it will be printed directly to stderr.
+            System.err.println("WARNING: skipping L3 locality check for cpuset " + cpuList + ": " + ex.getMessage());
+            return 0;
+        }
     }
 }
