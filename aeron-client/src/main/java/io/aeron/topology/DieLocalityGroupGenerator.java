@@ -35,7 +35,6 @@ public class DieLocalityGroupGenerator
      */
     public static final String DIE_ID_DIRECTORY = "topology/die_id";
     private final Path sysfsRoot;
-    private final Int2ObjectHashMap<IntHashSet> sharedCpuListCache = new Int2ObjectHashMap<>();
 
     private int loadDieId(final int cpu) throws IOException
     {
@@ -47,7 +46,7 @@ public class DieLocalityGroupGenerator
     /**
      * Creates a generator that reads CPU topology information from the given {@code sysfs} root.
      *
-     * @param sysfsRoot the root {@code sysfs} CPU topology directory, e.g. {@code /sys/devices/system/cpu}.
+     * @param sysfsRoot the root {@code sysfs} CPU topology directory.
      */
     public DieLocalityGroupGenerator(final Path sysfsRoot)
     {

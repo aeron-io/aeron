@@ -36,12 +36,11 @@ public class L3GroupGenerator
      */
     public static final String SHARED_CPU_LIST_DIRECTORY = "cache/index3/shared_cpu_list";
     private final PerCpuListReader perCpuListReader;
-    private final Int2ObjectHashMap<IntHashSet> sharedCpuListCache = new Int2ObjectHashMap<>();
 
     /**
      * Creates a generator that reads CPU topology information from the given {@code sysfs} root.
      *
-     * @param sysfsRoot the root {@code sysfs} CPU topology directory, e.g. {@code /sys/devices/system/cpu}.
+     * @param sysfsRoot the root {@code sysfs} CPU topology directory.
      */
     public L3GroupGenerator(final Path sysfsRoot)
     {
