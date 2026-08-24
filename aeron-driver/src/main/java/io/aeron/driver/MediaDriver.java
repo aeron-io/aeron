@@ -210,10 +210,6 @@ public final class MediaDriver implements AutoCloseable
 
         ensureDirectoryIsRecreated(ctx);
         validateSocketBufferLengths(ctx);
-        if (ctx.driverCpusetAffinity())
-        {
-            new CGroupValidator().validate(ctx.driverCpusetWarningsAsErrors());
-        }
 
         try
         {
@@ -233,6 +229,11 @@ public final class MediaDriver implements AutoCloseable
             ctx.driverConductorProxy().driverConductor(conductor);
             ctx.receiverProxy().receiver(receiver);
             ctx.senderProxy().sender(sender);
+
+            if (ctx.driverCpusetAffinity())
+            {
+                new CGroupValidator().validate(ctx.driverCpusetWarningsAsErrors());
+            }
 
             switch (ctx.threadingMode())
             {
