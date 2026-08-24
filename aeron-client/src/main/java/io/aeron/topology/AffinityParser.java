@@ -67,7 +67,7 @@ public final class AffinityParser
             }
             else
             {
-                consumer.accept(Integer.parseInt(part));
+                consumer.accept(parseIntAscii(part, 0, part.length()));
             }
         }
     }
