@@ -138,16 +138,14 @@ class CGroupValidatorTest
     }
 
     @Test
-    void validateWrapsIOExceptionAsConfigurationException(@TempDir final Path sysfsTestDir)
+    void validateIgnoresPerCheckIOExceptionAndSkipsThatCheck(@TempDir final Path sysfsTestDir)
     {
-        assertThrows(ConfigurationException.class, () ->
-        {
-            final IntArrayList cpuList = new IntArrayList();
-            cpuList.wrap(new int[]{0, 1}, 2);
-            final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-            final CGroupValidator validator = new CGroupValidator(sysfsTestDir);
-            validator.validate(cpuList, false, new PrintStream(buffer));
-        });
+        final IntArrayList cpuList = new IntArrayList();
+        cpuList.wrap(new int[]{0, 1}, 2);
+        final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        final CGroupValidator validator = new CGroupValidator(sysfsTestDir);
+
+        assertDoesNotThrow(() -> validator.validate(cpuList, true, new PrintStream(buffer)));
     }
 
     private static int countWarnings(final String output)
