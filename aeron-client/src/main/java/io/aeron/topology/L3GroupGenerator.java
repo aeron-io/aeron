@@ -21,7 +21,6 @@ import org.agrona.collections.IntArrayList;
 import org.agrona.collections.IntHashSet;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
@@ -36,8 +35,7 @@ public class L3GroupGenerator
      * Path, relative to a per-CPU {@code sysfs} directory, of the file listing the CPUs that share an L3 cache.
      */
     public static final String SHARED_CPU_LIST_DIRECTORY = "cache/index3/shared_cpu_list";
-
-    private final Path sysfsRoot;
+    private final PerCpuListReader perCpuListReader;
     private final Int2ObjectHashMap<IntHashSet> sharedCpuListCache = new Int2ObjectHashMap<>();
 
     /**
@@ -47,28 +45,7 @@ public class L3GroupGenerator
      */
     public L3GroupGenerator(final Path sysfsRoot)
     {
-        this.sysfsRoot = sysfsRoot;
-    }
-
-    private IntHashSet loadCpuList(final int cpu) throws IOException
-    {
-        final Path cpuListPath = sysfsRoot.resolve("cpu%d".formatted(cpu)).resolve(SHARED_CPU_LIST_DIRECTORY);
-        final String cpuList;
-        cpuList = Files.readString(cpuListPath);
-        return AffinityParser.parse(cpuList, IntHashSet::new);
-    }
-
-    private IntHashSet sharedCpuList(final int cpu) throws IOException
-    {
-        final IntHashSet cpuList = sharedCpuListCache.get(cpu);
-        if (null == cpuList)
-        {
-            final IntHashSet loadedCpuList = this.loadCpuList(cpu);
-            loadedCpuList.forEachInt((i) -> sharedCpuListCache.put(i, loadedCpuList));
-            sharedCpuListCache.put(cpu, loadedCpuList);
-            return loadedCpuList;
-        }
-        return cpuList;
+        this.perCpuListReader = new PerCpuListReader(sysfsRoot, SHARED_CPU_LIST_DIRECTORY);
     }
 
     /**
@@ -85,7 +62,7 @@ public class L3GroupGenerator
         for (int i = 0; i < cpuList.size(); i++)
         {
             final int cpu = cpuList.get(i);
-            map.computeIfAbsent(sharedCpuList(cpu), k -> new IntArrayList()).add(cpu);
+            map.computeIfAbsent(perCpuListReader.loadCpuList(cpu), k -> new IntArrayList()).add(cpu);
         }
         return map.values().stream().toList();
     }

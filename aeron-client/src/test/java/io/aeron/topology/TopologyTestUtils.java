@@ -23,9 +23,21 @@ import java.util.List;
 
 import static io.aeron.topology.DieLocalityGroupGenerator.DIE_ID_DIRECTORY;
 import static io.aeron.topology.L3GroupGenerator.SHARED_CPU_LIST_DIRECTORY;
+import static io.aeron.topology.ThreadAlignmentChecker.THREAD_SIBLING_LIST;
 
 class TopologyTestUtils
 {
+    static void setupSiblingThreads(final Path sysfsPath, final List<Pair> siblings) throws IOException
+    {
+        for (int cpu = 0; cpu < siblings.size(); cpu++)
+        {
+            final Pair siblingPair = siblings.get(cpu);
+            final Path threadSiblingListPath = sysfsPath.resolve("cpu%d".formatted(cpu)).resolve(THREAD_SIBLING_LIST);
+            Files.createDirectories(threadSiblingListPath.getParent());
+            Files.writeString(threadSiblingListPath, "%d-%d".formatted(siblingPair.first, siblingPair.second));
+        }
+    }
+
     static void setupL3Peers(final Path sysfsPath, final List<Pair> peers) throws IOException
     {
         for (int cpu = 0; cpu < peers.size(); cpu++)
