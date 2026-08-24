@@ -25,6 +25,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.agrona.AsciiEncoding.parseIntAscii;
+
 /**
  * Groups CPU ids by the die they belong to, based on the {@code sysfs} CPU topology information.
  */
@@ -40,7 +42,7 @@ public class DieLocalityGroupGenerator
     {
         final Path cpuListPath = sysfsRoot.resolve("cpu%d".formatted(cpu)).resolve(DIE_ID_DIRECTORY);
         final String dieId = Files.readString(cpuListPath);
-        return Integer.parseInt(dieId);
+        return parseIntAscii(dieId, 0, dieId.length());
     }
 
     /**
