@@ -1922,6 +1922,7 @@ static int aeron_client_conductor_on_cmd_add_publication(void *clientd, void *it
         const char* msg = "failed to send command to the driver";
         aeron_client_conductor_on_resource_registration_error(
             async, AERON_CLIENT_ERROR_DRIVER_BUFFER_FULL, strlen(msg), msg);
+        return -1;
     }
 
     uint8_t *ptr = (conductor->to_driver_buffer.buffer + offset);
@@ -1955,6 +1956,7 @@ static int aeron_client_conductor_on_cmd_add_exclusive_publication(void *clientd
         const char* msg = "failed to send command to the driver";
         aeron_client_conductor_on_resource_registration_error(
             async, AERON_CLIENT_ERROR_DRIVER_BUFFER_FULL, strlen(msg), msg);
+        return -1;
     }
 
     uint8_t *ptr = (conductor->to_driver_buffer.buffer + offset);
@@ -1990,6 +1992,7 @@ static int aeron_client_conductor_on_cmd_add_subscription(void *clientd, void *i
         const char* msg = "failed to send command to the driver";
         aeron_client_conductor_on_resource_registration_error(
             async, AERON_CLIENT_ERROR_DRIVER_BUFFER_FULL, strlen(msg), msg);
+        return -1;
     }
 
     uint8_t *ptr = (conductor->to_driver_buffer.buffer + offset);
@@ -2029,6 +2032,7 @@ static int aeron_client_conductor_on_cmd_add_counter(void *clientd, void *item)
         const char* msg = "failed to send command to the driver";
         aeron_client_conductor_on_resource_registration_error(
             async, AERON_CLIENT_ERROR_DRIVER_BUFFER_FULL, strlen(msg), msg);
+        return -1;
     }
 
     uint8_t *ptr = (conductor->to_driver_buffer.buffer + offset);
@@ -2076,6 +2080,7 @@ static int aeron_client_conductor_on_cmd_add_static_counter(void *clientd, void 
         const char* msg = "failed to send command to the driver";
         aeron_client_conductor_on_resource_registration_error(
             async, AERON_CLIENT_ERROR_DRIVER_BUFFER_FULL, strlen(msg), msg);
+        return -1;
     }
 
     uint8_t *ptr = (conductor->to_driver_buffer.buffer + offset);
@@ -2158,6 +2163,7 @@ static int aeron_client_conductor_on_cmd_destination(const void *clientd, const 
         const char* msg = "failed to send command to the driver";
         aeron_client_conductor_on_resource_registration_error(
             async, AERON_CLIENT_ERROR_DRIVER_BUFFER_FULL, strlen(msg), msg);
+        return -1;
     }
 
     uint8_t *ptr = (conductor->to_driver_buffer.buffer + offset);
@@ -2196,6 +2202,7 @@ static int aeron_client_conductor_on_cmd_destination_by_id(const void *clientd, 
         const char* msg = "failed to send command to the driver";
         aeron_client_conductor_on_resource_registration_error(
             async, AERON_CLIENT_ERROR_DRIVER_BUFFER_FULL, strlen(msg), msg);
+        return -1;
     }
 
     uint8_t *ptr = (conductor->to_driver_buffer.buffer + offset);
@@ -2343,6 +2350,7 @@ static int aeron_client_conductor_on_cmd_get_next_available_session_id(void *cli
             const char* msg = "failed to send command to the driver";
             aeron_client_conductor_on_resource_registration_error(
                 async, AERON_CLIENT_ERROR_DRIVER_BUFFER_FULL, strlen(msg), msg);
+            return -1;
         }
 
         uint8_t *ptr = (conductor->to_driver_buffer.buffer + offset);
