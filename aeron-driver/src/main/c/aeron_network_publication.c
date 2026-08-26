@@ -850,8 +850,9 @@ bool aeron_network_publication_is_valid_status_message(
         publication->initial_term_id);
 
     int64_t snd_pos = aeron_counter_get_plain(publication->snd_pos_position.value_addr);
-    return sm_position >= snd_pos - (publication->term_buffer_length >> 1) &&
-        sm_position <= snd_pos + publication->term_buffer_length;
+    int64_t half_term = publication->term_buffer_length >> 1;
+    return sm_position >= (snd_pos - half_term) &&
+        sm_position <= (snd_pos + publication->term_buffer_length + half_term);
 }
 
 void aeron_network_publication_on_error(
