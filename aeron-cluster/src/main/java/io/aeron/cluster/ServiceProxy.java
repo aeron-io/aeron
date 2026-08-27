@@ -25,7 +25,7 @@ import org.agrona.*;
 
 final class ServiceProxy implements AutoCloseable
 {
-    private static final int SEND_ATTEMPTS = 5;
+    static final int SEND_ATTEMPTS = 5;
 
     private final BufferClaim bufferClaim = new BufferClaim();
     private final MessageHeaderEncoder messageHeaderEncoder = new MessageHeaderEncoder();
@@ -38,10 +38,12 @@ final class ServiceProxy implements AutoCloseable
     private final RequestServiceAckEncoder requestServiceAckEncoder = new RequestServiceAckEncoder();
     private final ExpandableArrayBuffer expandableArrayBuffer = new ExpandableArrayBuffer();
     private final Publication publication;
+    private final ErrorHandler errorHandler;
 
-    ServiceProxy(final Publication publication)
+    ServiceProxy(final Publication publication, final ErrorHandler errorHandler)
     {
         this.publication = publication;
+        this.errorHandler = errorHandler;
     }
 
     public void close()
@@ -132,7 +134,8 @@ final class ServiceProxy implements AutoCloseable
         }
         while (--attempts > 0);
 
-        throw new ClusterException("failed to send cluster members response: result=" + result);
+        errorHandler.onError(new ClusterEvent("failed to send cluster members response: result=" +
+            Publication.errorString(result)));
     }
 
     void clusterMembersExtendedResponse(
@@ -186,10 +189,11 @@ final class ServiceProxy implements AutoCloseable
         }
         while (--attempts > 0);
 
-        throw new ClusterException("failed to send cluster members extended response: result=" + result);
+        errorHandler.onError(new ClusterEvent("failed to send cluster members extended response: result=" +
+            Publication.errorString(result)));
     }
 
-    void terminationPosition(final long logPosition, final boolean ackRequired, final ErrorHandler errorHandler)
+    void terminationPosition(final long logPosition, final boolean ackRequired)
     {
         if (!publication.isClosed())
         {

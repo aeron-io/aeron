@@ -262,7 +262,8 @@ final class ConsensusModuleAgent
 
         consensusModuleAdapter = new ConsensusModuleAdapter(
             aeron.addSubscription(ctx.controlChannel(), ctx.consensusModuleStreamId()), this);
-        serviceProxy = new ServiceProxy(aeron.addPublication(ctx.controlChannel(), ctx.serviceStreamId()));
+        serviceProxy = new ServiceProxy(
+            aeron.addPublication(ctx.controlChannel(), ctx.serviceStreamId()), ctx.countedErrorHandler());
 
         authorisationService = sessionManager.authorisationService();
 
@@ -287,7 +288,7 @@ final class ConsensusModuleAgent
             final long logPosition = commitPosition.get();
             if (0 < ctx.serviceCount())
             {
-                serviceProxy.terminationPosition(logPosition, false, ctx.countedErrorHandler());
+                serviceProxy.terminationPosition(logPosition, false);
             }
 
             aeron.removeUnavailableCounterHandler(unavailableCounterHandlerRegistrationId);
@@ -2504,7 +2505,7 @@ final class ConsensusModuleAgent
                     state(ConsensusModule.State.TERMINATING, "terminationPosition=" + terminationPosition);
                     if (serviceCount > 0)
                     {
-                        serviceProxy.terminationPosition(terminationPosition, true, ctx.countedErrorHandler());
+                        serviceProxy.terminationPosition(terminationPosition, true);
                     }
                     else
                     {
@@ -2617,7 +2618,7 @@ final class ConsensusModuleAgent
                     terminationLeadershipTermId = leadershipTermId;
                     if (serviceCount > 0)
                     {
-                        serviceProxy.terminationPosition(terminationPosition, true, errorHandler);
+                        serviceProxy.terminationPosition(terminationPosition, true);
                     }
                     else
                     {
@@ -3125,7 +3126,7 @@ final class ConsensusModuleAgent
         {
             if (serviceCount > 0)
             {
-                serviceProxy.terminationPosition(terminationPosition, true, ctx.countedErrorHandler());
+                serviceProxy.terminationPosition(terminationPosition, true);
             }
             else
             {
@@ -3298,7 +3299,7 @@ final class ConsensusModuleAgent
         aeron.removeUnavailableCounterHandler(unavailableCounterHandlerRegistrationId);
         if (serviceCount > 0)
         {
-            serviceProxy.terminationPosition(0, true, ctx.countedErrorHandler());
+            serviceProxy.terminationPosition(0, true);
         }
         tryStopLogRecording();
         state(ConsensusModule.State.CLOSED, terminationReason);
