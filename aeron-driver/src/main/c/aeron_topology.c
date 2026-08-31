@@ -244,7 +244,7 @@ void aeron_topology_free(aeron_topology_t *topology)
 }
 
 int aeron_topology_check_alignment(
-    aeron_topology_t *topology, const int *cpus, const int cpu_count, FILE *output)
+    const aeron_topology_t *topology, const int *cpus, const int cpu_count, FILE *output)
 {
     int warnings = 0;
 
@@ -281,7 +281,7 @@ int aeron_topology_check_alignment(
 }
 
 int aeron_topology_check_l3_locality(
-    aeron_topology_t *topology, const int *cpus, int cpu_count, FILE *output)
+    const aeron_topology_t *topology, const int *cpus, int cpu_count, FILE *output)
 {
     if (0 == cpu_count)
     {
@@ -308,7 +308,7 @@ int aeron_topology_check_l3_locality(
     return warnings;
 }
 
-int aeron_topology_check_die_locality(aeron_topology_t *topology, const int *cpus, int cpu_count, FILE *output)
+int aeron_topology_check_die_locality(const aeron_topology_t *topology, const int *cpus, int cpu_count, FILE *output)
 {
     if (0 == cpu_count)
     {

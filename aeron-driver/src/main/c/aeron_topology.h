@@ -67,7 +67,7 @@ void aeron_topology_free(aeron_topology_t *topology);
  * @return the count of the number of warnings or -1 on error.
  */
 int aeron_topology_check_alignment(
-    aeron_topology_t *topology, const int *cpus, int cpu_count, FILE *output);
+    const aeron_topology_t *topology, const int *cpus, int cpu_count, FILE *output);
 
 /**
  * Check that all CPUs in cpus share the same die.
@@ -79,7 +79,7 @@ int aeron_topology_check_alignment(
  * @return the count of the number of warnings or -1 on error.
  */
 int aeron_topology_check_l3_locality(
-    aeron_topology_t *topology, const int *cpus, int cpu_count, FILE *output);
+    const aeron_topology_t *topology, const int *cpus, int cpu_count, FILE *output);
 
 /**
  * Check that all CPUs in cpus share the same L3 cache.
@@ -90,7 +90,7 @@ int aeron_topology_check_l3_locality(
  * @param output        buffer to write the warning to, if any. Will be length 0 if no warnings.
  * @return the count of the number of warnings or -1 on error.
  */
-int aeron_topology_check_die_locality(aeron_topology_t *topology, const int *cpus, int cpu_count, FILE *output);
+int aeron_topology_check_die_locality(const aeron_topology_t *topology, const int *cpus, int cpu_count, FILE *output);
 
 
 #endif //AERON_TOPOLOGY_H
