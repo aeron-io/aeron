@@ -1139,6 +1139,43 @@ error:
     return -1;
 }
 
+static int aeron_driver_validate_affinity_pair(
+    const int32_t a,
+    const int32_t b,
+    const char *a_name,
+    const char *b_name,
+    FILE *output)
+{
+    if (AERON_NULL_VALUE != a && AERON_NULL_VALUE != b && a == b)
+    {
+        fprintf(output, "WARN: %s and %s are sharing cpu affinity=%" PRId32 "\n", a_name, b_name, a);
+        return 1;
+    }
+
+    return 0;
+}
+
+int aeron_driver_validate_unshared_affinity(aeron_driver_context_t* context, FILE *output)
+{
+    int warnings = 0;
+
+    warnings += aeron_driver_validate_affinity_pair(
+        context->conductor_cpu_affinity_no, context->sender_cpu_affinity_no, "conductor", "sender", output);
+    warnings += aeron_driver_validate_affinity_pair(
+        context->conductor_cpu_affinity_no, context->receiver_cpu_affinity_no, "conductor", "receiver", output);
+    warnings += aeron_driver_validate_affinity_pair(
+        context->conductor_cpu_affinity_no, context->native_resource_agent_cpu_affinity_no, "conductor", "native_resource_agent", output);
+    warnings += aeron_driver_validate_affinity_pair(
+        context->sender_cpu_affinity_no, context->receiver_cpu_affinity_no, "sender", "receiver", output);
+    warnings += aeron_driver_validate_affinity_pair(
+        context->sender_cpu_affinity_no, context->native_resource_agent_cpu_affinity_no, "sender", "native_resource_agent", output);
+    warnings += aeron_driver_validate_affinity_pair(
+        context->receiver_cpu_affinity_no, context->native_resource_agent_cpu_affinity_no, "receiver", "native_resource_agent", output);
+
+    return warnings;
+}
+
+#ifdef __linux__
 static int aeron_driver_apply_cpuset_affinity(aeron_driver_context_t *context, aeron_topology_t *topology)
 {
     if (!context->cpuset_affinity)
@@ -1182,48 +1219,12 @@ static int aeron_driver_apply_cpuset_affinity(aeron_driver_context_t *context, a
     aeron_free(cpus);
     return total_warnings_count;
 
-error:
-    aeron_free(cpus);
+    error:
+        aeron_free(cpus);
     return -1;
 }
 
-static int aeron_driver_validate_affinity_pair(
-    const int32_t a,
-    const int32_t b,
-    const char *a_name,
-    const char *b_name,
-    FILE *output)
-{
-    if (AERON_NULL_VALUE != a && AERON_NULL_VALUE != b && a == b)
-    {
-        fprintf(output, "WARN: %s and %s are sharing cpu affinity=%" PRId32 "\n", a_name, b_name, a);
-        return 1;
-    }
-
-    return 0;
-}
-
-int aeron_driver_validate_unshared_affinity(aeron_driver_context_t* context, FILE *output)
-{
-    int warnings = 0;
-
-    warnings += aeron_driver_validate_affinity_pair(
-        context->conductor_cpu_affinity_no, context->sender_cpu_affinity_no, "conductor", "sender", output);
-    warnings += aeron_driver_validate_affinity_pair(
-        context->conductor_cpu_affinity_no, context->receiver_cpu_affinity_no, "conductor", "receiver", output);
-    warnings += aeron_driver_validate_affinity_pair(
-        context->conductor_cpu_affinity_no, context->native_resource_agent_cpu_affinity_no, "conductor", "native_resource_agent", output);
-    warnings += aeron_driver_validate_affinity_pair(
-        context->sender_cpu_affinity_no, context->receiver_cpu_affinity_no, "sender", "receiver", output);
-    warnings += aeron_driver_validate_affinity_pair(
-        context->sender_cpu_affinity_no, context->native_resource_agent_cpu_affinity_no, "sender", "native_resource_agent", output);
-    warnings += aeron_driver_validate_affinity_pair(
-        context->receiver_cpu_affinity_no, context->native_resource_agent_cpu_affinity_no, "receiver", "native_resource_agent", output);
-
-    return warnings;
-}
-
-static int aeron_driver_add_affinity_cpu(int *cpus, int index, int cpu)
+static int aeron_driver_add_affinity_cpu(int *cpus, const int index, const int cpu)
 {
     if (AERON_NULL_VALUE != cpu)
     {
@@ -1232,6 +1233,7 @@ static int aeron_driver_add_affinity_cpu(int *cpus, int index, int cpu)
 
     return index + 1;
 }
+#endif
 
 int aeron_driver_validate_and_apply_affinity_configuration(aeron_driver_context_t *context)
 {
