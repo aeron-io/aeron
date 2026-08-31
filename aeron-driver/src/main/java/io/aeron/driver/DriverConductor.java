@@ -242,7 +242,8 @@ public final class DriverConductor implements Agent
         clientCommandAdapter = new ClientCommandAdapter(ctx.countedErrorHandler(), toDriverCommands, clientProxy, this);
 
         lastCommandConsumerPosition = toDriverCommands.consumerPosition();
-        roleName = threadName(AERON_DRIVER_CONDUCTOR_THREAD_NAME, AERON_DRIVER_CONDUCTOR_THREAD_NAME_CLASSIC);
+        roleName = threadName(
+            ctx.properties(), AERON_DRIVER_CONDUCTOR_THREAD_NAME, AERON_DRIVER_CONDUCTOR_THREAD_NAME_CLASSIC);
 
     }
 
@@ -368,14 +369,14 @@ public final class DriverConductor implements Agent
     {
         recordError(new AeronEvent(
             "onPublicationError: " +
-            "registrationId=" + registrationId +
-            ", destinationRegistrationId=" + destinationRegistrationId +
-            ", sessionId=" + sessionId +
-            ", streamId=" + streamId +
-            ", receiverId=" + receiverId +
-            ", groupId=" + groupId +
-            ", errorCode=" + errorCode +
-            ", errorMessage=" + errorMessage,
+                "registrationId=" + registrationId +
+                ", destinationRegistrationId=" + destinationRegistrationId +
+                ", sessionId=" + sessionId +
+                ", streamId=" + streamId +
+                ", receiverId=" + receiverId +
+                ", groupId=" + groupId +
+                ", errorCode=" + errorCode +
+                ", errorMessage=" + errorMessage,
             AeronException.Category.WARN));
         clientProxy.onPublicationErrorFrame(
             registrationId,

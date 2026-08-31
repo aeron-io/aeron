@@ -102,7 +102,8 @@ public class ArchiveMarkFile implements AutoCloseable
             alignedTotalFileLength(ctx),
             ctx.errorBufferLength(),
             ctx.epochClock(),
-            LIVENESS_TIMEOUT_MS);
+            LIVENESS_TIMEOUT_MS,
+            CommonContext.fallbackLogger(ctx.properties()));
 
         encode(ctx);
     }
@@ -113,6 +114,17 @@ public class ArchiveMarkFile implements AutoCloseable
         final int errorBufferLength,
         final EpochClock epochClock,
         final long timeoutMs)
+    {
+        this(file, totalFileLength, errorBufferLength, epochClock, timeoutMs, CommonContext.fallbackLogger());
+    }
+
+    ArchiveMarkFile(
+        final File file,
+        final int totalFileLength,
+        final int errorBufferLength,
+        final EpochClock epochClock,
+        final long timeoutMs,
+        final PrintStream fallbackLogger)
     {
         final MessageHeaderDecoder messageHeaderDecoder = new MessageHeaderDecoder();
 
@@ -148,7 +160,7 @@ public class ArchiveMarkFile implements AutoCloseable
                 final UnsafeBuffer existingErrorBuffer = new UnsafeBuffer(
                     existingBuffer, headerDecoder.headerLength(), existingErrorBufferLength);
 
-                saveExistingErrors(file, existingErrorBuffer, CommonContext.fallbackLogger());
+                saveExistingErrors(file, existingErrorBuffer, fallbackLogger);
                 existingErrorBuffer.setMemory(0, existingErrorBufferLength, (byte)0);
             }
 
@@ -452,12 +464,12 @@ public class ArchiveMarkFile implements AutoCloseable
     {
         final int headerLength =
             HEADER_OFFSET +
-            MarkFileHeaderEncoder.BLOCK_LENGTH +
-            (4 * VarAsciiEncodingEncoder.lengthEncodingLength()) +
-            (null != ctx.controlChannel() ? ctx.controlChannel().length() : 0) +
-            ctx.localControlChannel().length() +
-            (null != ctx.recordingEventsChannel() ? ctx.recordingEventsChannel().length() : 0) +
-            ctx.aeronDirectoryName().length();
+                MarkFileHeaderEncoder.BLOCK_LENGTH +
+                (4 * VarAsciiEncodingEncoder.lengthEncodingLength()) +
+                (null != ctx.controlChannel() ? ctx.controlChannel().length() : 0) +
+                ctx.localControlChannel().length() +
+                (null != ctx.recordingEventsChannel() ? ctx.recordingEventsChannel().length() : 0) +
+                ctx.aeronDirectoryName().length();
 
         if (headerLength > HEADER_LENGTH)
         {
@@ -510,7 +522,7 @@ public class ArchiveMarkFile implements AutoCloseable
         {
             throw new IllegalArgumentException(
                 "mark file (" + markFile.getAbsolutePath() + ") major version " + SemanticVersion.major(version) +
-                " does not match software: " + MAJOR_VERSION);
+                    " does not match software: " + MAJOR_VERSION);
         }
     }
 

@@ -27,11 +27,26 @@ import static io.aeron.driver.Configuration.UNICAST_FLOW_CONTROL_STRATEGY;
  */
 public class DefaultUnicastFlowControlSupplier implements FlowControlSupplier
 {
+    private final String flowControlStrategyClassName;
+
     /**
      * Default constructor.
      */
     public DefaultUnicastFlowControlSupplier()
     {
+        this(UNICAST_FLOW_CONTROL_STRATEGY);
+    }
+
+    /**
+     * Construct a supplier for a given flow control strategy, allowing the strategy to be resolved from a context's
+     * own configuration rather than from a system property.
+     *
+     * @param flowControlStrategyClassName name of the {@link FlowControl} class to supply.
+     * @see Configuration#UNICAST_FLOW_CONTROL_STRATEGY_PROP_NAME
+     */
+    public DefaultUnicastFlowControlSupplier(final String flowControlStrategyClassName)
+    {
+        this.flowControlStrategyClassName = flowControlStrategyClassName;
     }
 
     /**
@@ -48,14 +63,14 @@ public class DefaultUnicastFlowControlSupplier implements FlowControlSupplier
             throw new IllegalArgumentException("unsupported unicast flow control strategy: fc=" + fcStr);
         }
 
-        if (UnicastFlowControl.class.getName().equals(UNICAST_FLOW_CONTROL_STRATEGY))
+        if (UnicastFlowControl.class.getName().equals(flowControlStrategyClassName))
         {
             return new UnicastFlowControl();
         }
 
         try
         {
-            flowControl = (FlowControl)Class.forName(UNICAST_FLOW_CONTROL_STRATEGY)
+            flowControl = (FlowControl)Class.forName(flowControlStrategyClassName)
                 .getConstructor()
                 .newInstance();
         }
@@ -74,6 +89,6 @@ public class DefaultUnicastFlowControlSupplier implements FlowControlSupplier
     public String toString()
     {
         return "DefaultUnicastFlowControlSupplier{flowControlClass=" +
-            UNICAST_FLOW_CONTROL_STRATEGY + "}";
+            flowControlStrategyClassName + "}";
     }
 }

@@ -2670,7 +2670,7 @@ abstract class ArchiveConductor
     {
         //noinspection Java8CollectionRemoveIf
         for (Long2ObjectHashMap<SessionForReplay>.ValueIterator it = controlSessionByReplayToken.values().iterator();
-            it.hasNext();)
+             it.hasNext(); )
         {
             final SessionForReplay sessionForReplay = it.next();
             if (sessionForReplay.controlSession.sessionId() == sessionId)
@@ -2684,7 +2684,7 @@ abstract class ArchiveConductor
     {
         //noinspection Java8CollectionRemoveIf
         for (Long2ObjectHashMap<SessionForReplay>.ValueIterator it = controlSessionByReplayToken.values().iterator();
-            it.hasNext();)
+             it.hasNext(); )
         {
             final SessionForReplay sessionForReplay = it.next();
             if (sessionForReplay.deadlineNs <= nowNs)
@@ -2707,7 +2707,7 @@ abstract class ArchiveConductor
 
         Recorder(final CountedErrorHandler errorHandler, final Archive.Context context)
         {
-            super(threadName(
+            super(threadName(context.properties(),
                 AERON_ARCHIVE_RECORDER_THREAD_NAME, AERON_ARCHIVE_RECORDER_THREAD_NAME_CLASSIC), errorHandler);
             totalWriteBytesCounter = context.totalWriteBytesCounter();
             totalWriteTimeCounter = context.totalWriteTimeCounter();
@@ -2754,7 +2754,7 @@ abstract class ArchiveConductor
 
         Replayer(final CountedErrorHandler errorHandler, final Archive.Context context)
         {
-            super(threadName(
+            super(threadName(context.properties(),
                 AERON_ARCHIVE_REPLAYER_THREAD_NAME, AERON_ARCHIVE_REPLAYER_THREAD_NAME_CLASSIC), errorHandler);
             totalReadBytesCounter = context.totalReadBytesCounter();
             totalReadTimeCounter = context.totalReadTimeCounter();

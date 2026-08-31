@@ -59,6 +59,7 @@ import java.nio.file.NoSuchFileException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Map;
+import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -68,8 +69,9 @@ import static io.aeron.CncFileDescriptor.CNC_FILE;
 import static io.aeron.CncFileDescriptor.TO_DRIVER_BUFFER_LENGTH_FIELD_OFFSET;
 import static io.aeron.CncFileDescriptor.cncVersionOffset;
 import static io.aeron.CncFileDescriptor.createToDriverBuffer;
+import static io.aeron.PropertiesUtil.getBoolean;
+import static io.aeron.PropertiesUtil.getLong;
 import static java.lang.Long.getLong;
-import static java.lang.System.getProperty;
 import static java.nio.channels.FileChannel.MapMode.READ_WRITE;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static java.nio.file.StandardOpenOption.READ;
@@ -550,13 +552,26 @@ public class CommonContext implements Cloneable
     /**
      * Choose a thread/role name depending on the configured naming scheme.
      *
-     * @param newName the new, prefixed name.
-     * @param classicName  the old name.
+     * @param newName     the new, prefixed name.
+     * @param classicName the old name.
      * @return the name to use for the current naming scheme.
      */
     public static String threadName(final String newName, final String classicName)
     {
-        final String mode = System.getProperty(THREAD_NAMING_PROP_NAME, THREAD_NAMING_DEFAULT);
+        return threadName(System.getProperties(), newName, classicName);
+    }
+
+    /**
+     * Get the name to use for a thread based on the configured naming scheme.
+     *
+     * @param properties  to read the configuration from.
+     * @param newName     the new, prefixed name.
+     * @param classicName the old name.
+     * @return the name to use for the current naming scheme.
+     */
+    public static String threadName(final Properties properties, final String newName, final String classicName)
+    {
+        final String mode = properties.getProperty(THREAD_NAMING_PROP_NAME, THREAD_NAMING_DEFAULT);
         return switch (mode)
         {
             case THREAD_NAMING_CLASSIC -> classicName;
@@ -588,7 +603,19 @@ public class CommonContext implements Cloneable
      */
     public static boolean shouldPrintConfigurationOnStart()
     {
-        return "true".equals(getProperty(PRINT_CONFIGURATION_ON_START_PROP_NAME));
+        return shouldPrintConfigurationOnStart(System.getProperties());
+    }
+
+    /**
+     * Should a component's configuration be printed on start.
+     *
+     * @param properties to read the configuration from.
+     * @return {@code true} if the configuration should be printed on start.
+     * @see #PRINT_CONFIGURATION_ON_START_PROP_NAME
+     */
+    public static boolean shouldPrintConfigurationOnStart(final Properties properties)
+    {
+        return "true".equals(properties.getProperty(PRINT_CONFIGURATION_ON_START_PROP_NAME));
     }
 
     /**
@@ -600,7 +627,20 @@ public class CommonContext implements Cloneable
      */
     public static String getSecureRandomAlgorithm()
     {
-        return System.getProperty(SECURE_RANDOM_ALGORITHM_PROP_NAME, SECURE_RANDOM_ALGORITHM_DEFAULT);
+        return getSecureRandomAlgorithm(System.getProperties());
+    }
+
+    /**
+     * Get the configured value for the secure random algorithm, falling back to the default if not supplied.
+     *
+     * @param properties to read the configuration from.
+     * @return the secure random algorithm
+     * @see #SECURE_RANDOM_ALGORITHM_PROP_NAME
+     * @see #SECURE_RANDOM_ALGORITHM_DEFAULT
+     */
+    public static String getSecureRandomAlgorithm(final Properties properties)
+    {
+        return properties.getProperty(SECURE_RANDOM_ALGORITHM_PROP_NAME, SECURE_RANDOM_ALGORITHM_DEFAULT);
     }
 
     /**
@@ -611,7 +651,18 @@ public class CommonContext implements Cloneable
     @Config
     public static PrintStream fallbackLogger()
     {
-        final String fallbackLoggerName = getProperty(FALLBACK_LOGGER_PROP_NAME, "stderr");
+        return fallbackLogger(System.getProperties());
+    }
+
+    /**
+     * Get the current fallback logger based on the supplied properties.
+     *
+     * @param properties to read the configuration from.
+     * @return the configured PrintStream.
+     */
+    public static PrintStream fallbackLogger(final Properties properties)
+    {
+        final String fallbackLoggerName = properties.getProperty(FALLBACK_LOGGER_PROP_NAME, "stderr");
         return switch (fallbackLoggerName)
         {
             case "stdout" -> System.out;
@@ -644,13 +695,14 @@ public class CommonContext implements Cloneable
     }
 
     private volatile boolean isConcluded;
-    private long driverTimeoutMs = DRIVER_TIMEOUT_MS;
-    private String aeronDirectoryName = getAeronDirectoryName();
+    private final Properties properties;
+    private long driverTimeoutMs;
+    private String aeronDirectoryName;
     private File aeronDirectory;
     private File cncFile;
     private UnsafeBuffer countersMetaDataBuffer;
     private UnsafeBuffer countersValuesBuffer;
-    private boolean enableExperimentalFeatures = Boolean.getBoolean(ENABLE_EXPERIMENTAL_FEATURES_PROP_NAME);
+    private boolean enableExperimentalFeatures;
 
     static
     {
@@ -678,6 +730,32 @@ public class CommonContext implements Cloneable
      */
     public CommonContext()
     {
+        this(System.getProperties());
+    }
+
+    /**
+     * Construct a CommonContext using default values loaded from the supplied properties. This allows several
+     * independently configured Aeron stacks to coexist in a single JVM.
+     *
+     * @param properties to load the configuration from.
+     */
+    public CommonContext(final Properties properties)
+    {
+        this.properties = properties;
+
+        driverTimeoutMs = getLong(properties, DRIVER_TIMEOUT_PROP_NAME, DEFAULT_DRIVER_TIMEOUT_MS);
+        aeronDirectoryName = getAeronDirectoryName(properties);
+        enableExperimentalFeatures = getBoolean(properties, ENABLE_EXPERIMENTAL_FEATURES_PROP_NAME);
+    }
+
+    /**
+     * The properties this context was constructed from, to be propagated to any context it creates.
+     *
+     * @return the properties this context was constructed from.
+     */
+    public Properties properties()
+    {
+        return properties;
     }
 
     /**
@@ -706,7 +784,19 @@ public class CommonContext implements Cloneable
     @Config(id = "AERON_DIR")
     public static String getAeronDirectoryName()
     {
-        return getProperty(AERON_DIR_PROP_NAME, AERON_DIR_PROP_DEFAULT);
+        return getAeronDirectoryName(System.getProperties());
+    }
+
+    /**
+     * Get the default directory name to be used if {@link #aeronDirectoryName(String)} is not set. This will take
+     * the {@link #AERON_DIR_PROP_NAME} if set and if not then {@link #AERON_DIR_PROP_DEFAULT}.
+     *
+     * @param properties to read the configuration from.
+     * @return the default directory name to be used if {@link #aeronDirectoryName(String)} is not set.
+     */
+    public static String getAeronDirectoryName(final Properties properties)
+    {
+        return properties.getProperty(AERON_DIR_PROP_NAME, AERON_DIR_PROP_DEFAULT);
     }
 
     /**
@@ -814,7 +904,18 @@ public class CommonContext implements Cloneable
      */
     public static File newDefaultCncFile()
     {
-        return new File(getProperty(AERON_DIR_PROP_NAME, AERON_DIR_PROP_DEFAULT), CncFileDescriptor.CNC_FILE);
+        return newDefaultCncFile(System.getProperties());
+    }
+
+    /**
+     * Create a new command and control file in the administration directory.
+     *
+     * @param properties to read the configuration from.
+     * @return The newly created File.
+     */
+    public static File newDefaultCncFile(final Properties properties)
+    {
+        return new File(getAeronDirectoryName(properties), CncFileDescriptor.CNC_FILE);
     }
 
     /**
@@ -903,7 +1004,7 @@ public class CommonContext implements Cloneable
     @Config(id = "DRIVER_TIMEOUT")
     public long driverTimeoutMs()
     {
-        return checkDebugTimeout(driverTimeoutMs, TimeUnit.MILLISECONDS);
+        return checkDebugTimeout(properties, driverTimeoutMs, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -945,7 +1046,22 @@ public class CommonContext implements Cloneable
      */
     public static long checkDebugTimeout(final long timeout, final TimeUnit timeUnit)
     {
-        return checkDebugTimeout(timeout, timeUnit, 1.0);
+        return checkDebugTimeout(System.getProperties(), timeout, timeUnit, 1.0);
+    }
+
+    /**
+     * Override the supplied timeout with the debug value if it has been set, and we are in debug mode.
+     *
+     * @param properties to read the configuration from.
+     * @param timeout    The timeout value currently in use.
+     * @param timeUnit   The units of the timeout value. Debug timeout is specified in ns, so will be converted to
+     *                   this unit.
+     * @return The debug timeout if specified, and we are being debugged or the supplied value if not. Will be in
+     * timeUnit units.
+     */
+    public static long checkDebugTimeout(final Properties properties, final long timeout, final TimeUnit timeUnit)
+    {
+        return checkDebugTimeout(properties, timeout, timeUnit, 1.0);
     }
 
     /**
@@ -961,7 +1077,25 @@ public class CommonContext implements Cloneable
      */
     public static long checkDebugTimeout(final long timeout, final TimeUnit timeUnit, final double factor)
     {
-        final String debugTimeoutString = getProperty(DEBUG_TIMEOUT_PROP_NAME);
+        return checkDebugTimeout(System.getProperties(), timeout, timeUnit, factor);
+    }
+
+    /**
+     * Override the supplied timeout with the debug value if it has been set, and we are in debug mode.
+     *
+     * @param properties to read the configuration from.
+     * @param timeout    The timeout value currently in use.
+     * @param timeUnit   The units of the timeout value. Debug timeout is specified in ns, so will be converted to
+     *                   this unit.
+     * @param factor     to multiply the debug timeout by. Required when some timeouts need to be larger than others
+     *                   in order to pass validation. E.g. clientLiveness and publicationUnblock.
+     * @return The debug timeout if specified, and we are being debugged or the supplied value if not. Will be in
+     * timeUnit units.
+     */
+    public static long checkDebugTimeout(
+        final Properties properties, final long timeout, final TimeUnit timeUnit, final double factor)
+    {
+        final String debugTimeoutString = properties.getProperty(DEBUG_TIMEOUT_PROP_NAME);
         if (null == debugTimeoutString || !SystemUtil.isDebuggerAttached())
         {
             return timeout;
@@ -1326,6 +1460,20 @@ public class CommonContext implements Cloneable
     }
 
     /**
+     * Wrap a user ErrorHandler so that error will continue to write to the errorLog.
+     *
+     * @param properties       to resolve the fallback logger from.
+     * @param userErrorHandler the user specified ErrorHandler, can be null.
+     * @param errorLog         the configured errorLog, either the default or user supplied.
+     * @return an error handler that will delegate to both the userErrorHandler and the errorLog.
+     */
+    public static ErrorHandler setupErrorHandler(
+        final Properties properties, final ErrorHandler userErrorHandler, final DistinctErrorLog errorLog)
+    {
+        return setupErrorHandler(userErrorHandler, errorLog, fallbackLogger(properties));
+    }
+
+    /**
      * Connect to the media driver and extract file page size from the C'n'C file.
      *
      * @param aeronDirectory where driver is running.
@@ -1365,7 +1513,7 @@ public class CommonContext implements Cloneable
         {
             final int correlationIdOffset =
                 metadata.getInt(TO_DRIVER_BUFFER_LENGTH_FIELD_OFFSET) - RingBufferDescriptor.TRAILER_LENGTH +
-                RingBufferDescriptor.CORRELATION_COUNTER_OFFSET;
+                    RingBufferDescriptor.CORRELATION_COUNTER_OFFSET;
             final UnsafeBuffer toDriverBuffer = createToDriverBuffer(metadata.byteBuffer(), metadata);
             return toDriverBuffer.getAndAddLong(correlationIdOffset, 1);
         }
