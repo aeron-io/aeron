@@ -1159,26 +1159,9 @@ static int aeron_driver_apply_cpuset_affinity(aeron_driver_context_t *context, a
         goto error;
     }
 
-    int alignment_warnings_count;
-    if ((alignment_warnings_count = aeron_topology_check_alignment(topology, cpus, cpu_count, stderr)) < 0)
-    {
-        AERON_APPEND_ERR("%s", "failed to check cpu alignment");
-        goto error;
-    }
-
-    int cluster_locality_warnings_count;
-    if ((cluster_locality_warnings_count = aeron_topology_check_die_locality(topology, cpus, cpu_count, stderr)) < 0)
-    {
-        AERON_APPEND_ERR("%s", "failed to check cpu cluster locality");
-        goto error;
-    }
-
-    int l3_locality_warnings_count;
-    if ((l3_locality_warnings_count = aeron_topology_check_l3_locality(topology, cpus, cpu_count, stderr)) < 0)
-    {
-        AERON_APPEND_ERR("%s", "failed to check cpu l3 cache locality");
-        goto error;
-    }
+    const int alignment_warnings_count = aeron_topology_check_alignment(topology, cpus, cpu_count, stderr);
+    const int cluster_locality_warnings_count = aeron_topology_check_die_locality(topology, cpus, cpu_count, stderr);
+    const int l3_locality_warnings_count = aeron_topology_check_l3_locality(topology, cpus, cpu_count, stderr);
 
     const int total_warnings_count =
         alignment_warnings_count + cluster_locality_warnings_count + l3_locality_warnings_count;
