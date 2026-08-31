@@ -516,34 +516,36 @@ public final class RecordingLog implements AutoCloseable
                 return result;
             }
 
-            result = Integer.compare(e1.type, e2.type);
-            if (0 != result)
+            if (e1.type != e2.type)
             {
-                if (ENTRY_TYPE_SNAPSHOT == e1.type)
-                {
-                    return 1;
-                }
-                else if (ENTRY_TYPE_SNAPSHOT == e2.type)
+                if (ENTRY_TYPE_TERM == e1.type)
                 {
                     return -1;
                 }
-                return result;
+                else if (ENTRY_TYPE_TERM == e2.type)
+                {
+                    return 1;
+                }
             }
-
-            if (ENTRY_TYPE_TERM == e1.type)
+            else if (ENTRY_TYPE_TERM == e1.type)
             {
                 return Integer.compare(e1.entryIndex, e2.entryIndex);
             }
-            else
-            {
-                result = Long.compare(e1.logPosition, e2.logPosition);
-                if (0 != result)
-                {
-                    return result;
-                }
 
-                return Integer.compare(e2.serviceId, e1.serviceId); // reverse serviceId order
+            // only ENTRY_TYPE_STANDBY_SNAPSHOT and ENTRY_TYPE_SNAPSHOT at this stage
+            result = Long.compare(e1.logPosition, e2.logPosition);
+            if (0 != result)
+            {
+                return result;
             }
+
+            result = Integer.compare(e2.type, e1.type); // reverse entry type order
+            if (0 != result)
+            {
+                return result;
+            }
+
+            return Integer.compare(e2.serviceId, e1.serviceId); // reverse serviceId order
         };
 
     private long termRecordingId = NULL_VALUE;
