@@ -157,7 +157,14 @@ TEST_F(TopologyTest, shouldCheckAlignment)
     ASSERT_NE(-1, aeron_cpuset_cgroup_read_v2(mountRoot.c_str(), cgroupFilename.c_str(), &cgroup_cpus, &cgroup_cpu_count))
         << aeron_errmsg();
 
-    const int warnings = aeron_topology_check_alignment(topology, cgroup_cpus, cgroup_cpu_count, m_output);
+    char buf[4096];
+    aeron_cpuset_format_cpulist(cgroup_cpus, cgroup_cpu_count, buf, sizeof(buf));
+
+    const aeron_topology_query_t query = {
+        cgroup_cpus, cgroup_cpu_count, "cpuset", buf
+    };
+
+    const int warnings = aeron_topology_check_alignment(topology, &query, m_output);
     ASSERT_NE(-1, warnings) << aeron_errmsg();
     EXPECT_EQ(2, warnings);
     fflush(m_output);
@@ -205,7 +212,14 @@ TEST_F(TopologyTest, shouldCheckL3Locality)
     ASSERT_NE(-1, aeron_cpuset_cgroup_read_v2(mountRoot.c_str(), cgroupFilename.c_str(), &cgroup_cpus, &cgroup_cpu_count))
         << aeron_errmsg();
 
-    const int warnings = aeron_topology_check_l3_locality(topology, cgroup_cpus, cgroup_cpu_count, m_output);
+    char buf[4096];
+    aeron_cpuset_format_cpulist(cgroup_cpus, cgroup_cpu_count, buf, sizeof(buf));
+
+    const aeron_topology_query_t query = {
+        cgroup_cpus, cgroup_cpu_count, "cpuset", buf
+    };
+
+    const int warnings = aeron_topology_check_l3_locality(topology, &query, m_output);
     ASSERT_NE(-1, warnings) << aeron_errmsg();
     EXPECT_EQ(1, warnings);
     fflush(m_output);
@@ -251,13 +265,20 @@ TEST_F(TopologyTest, shouldCheckDieLocality)
     ASSERT_NE(-1, aeron_cpuset_cgroup_read_v2(mountRoot.c_str(), cgroupFilename.c_str(), &cgroup_cpus, &cgroup_cpu_count))
         << aeron_errmsg();
 
-    const int warnings = aeron_topology_check_die_locality(topology, cgroup_cpus, cgroup_cpu_count, m_output);
+    char buf[4096];
+    aeron_cpuset_format_cpulist(cgroup_cpus, cgroup_cpu_count, buf, sizeof(buf));
+
+    const aeron_topology_query_t query = {
+        cgroup_cpus, cgroup_cpu_count, "cpuset", buf
+    };
+
+    const int warnings = aeron_topology_check_die_locality(topology, &query, m_output);
     ASSERT_NE(-1, warnings) << aeron_errmsg();
     EXPECT_EQ(1, warnings);
     fflush(m_output);
 
     ASSERT_NE(nullptr, m_output_ptr);
-    EXPECT_NE(nullptr, strstr(m_output_ptr, "cpuset spans multiple CPU clusters"));
+    EXPECT_NE(nullptr, strstr(m_output_ptr, "cpuset spans multiple CPU dies"));
 
     aeron_free(online_cpus);
     aeron_free(cgroup_cpus);

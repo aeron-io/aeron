@@ -37,6 +37,14 @@ typedef struct aeron_topology_stct
 }
 aeron_topology_t;
 
+typedef struct aeron_topology_query_stct
+{
+    int *cpus;
+    int cpu_count;
+    const char *name;
+    const char *description;
+}
+aeron_topology_query_t;
 
 /**
  *  Build a cpu topology structure based on the set of online cpus.  Will read up to the highest online cpu supplied.
@@ -61,36 +69,34 @@ void aeron_topology_free(aeron_topology_t *topology);
  * core.
  *
  * @param topology      the loaded system topology.
- * @param cpus          input array of CPU IDs
- * @param cpu_count     number of entries in cpus
+ * @param query         containing the information used to validate against the topology.
  * @param output        to write the warnings to.
  * @return the count of the number of warnings or -1 on error.
  */
 int aeron_topology_check_alignment(
-    const aeron_topology_t *topology, const int *cpus, int cpu_count, FILE *output);
+    const aeron_topology_t *topology, const aeron_topology_query_t *query, FILE *output);
 
 /**
  * Check that all CPUs in cpus share the same die.
  *
  * @param topology      the loaded system topology.
- * @param cpus          input array of CPU IDs
- * @param cpu_count     number of entries in cpus
+ * @param query         containing the information used to validate against the topology.
  * @param output        buffer to write the warning to, if any. Will be length 0 if no warnings.
  * @return the count of the number of warnings or -1 on error.
  */
 int aeron_topology_check_l3_locality(
-    const aeron_topology_t *topology, const int *cpus, int cpu_count, FILE *output);
+    const aeron_topology_t *topology, const aeron_topology_query_t *query, FILE *output);
 
 /**
  * Check that all CPUs in cpus share the same L3 cache.
  *
  * @param topology      the loaded system topology.
- * @param cpus          input array of CPU IDs
- * @param cpu_count     number of entries in cpus
+ * @param query         containing the information used to validate against the topology.
  * @param output        buffer to write the warning to, if any. Will be length 0 if no warnings.
  * @return the count of the number of warnings or -1 on error.
  */
-int aeron_topology_check_die_locality(const aeron_topology_t *topology, const int *cpus, int cpu_count, FILE *output);
+int aeron_topology_check_die_locality(
+    const aeron_topology_t *topology, const aeron_topology_query_t *query, FILE *output);
 
 
 #endif //AERON_TOPOLOGY_H

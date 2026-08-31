@@ -244,13 +244,18 @@ void aeron_topology_free(aeron_topology_t *topology)
 }
 
 int aeron_topology_check_alignment(
-    const aeron_topology_t *topology, const int *cpus, const int cpu_count, FILE *output)
+    const aeron_topology_t *topology, const aeron_topology_query_t *query, FILE *output)
 {
+    if (NULL == topology || 0 == query->cpu_count)
+    {
+        return 0;
+    }
+
     int warnings = 0;
 
-    for (int i = 0; i < cpu_count; i++)
+    for (int i = 0; i < query->cpu_count; i++)
     {
-        const int cpu = cpus[i];
+        const int cpu = query->cpus[i];
 
         for (int j = 0; j < topology->sibling_count; j++)
         {
@@ -259,9 +264,9 @@ int aeron_topology_check_alignment(
             {
                 const int sibling_cpu = j;
                 bool found = false;
-                for (int k = 0; k < cpu_count; k++)
+                for (int k = 0; k < query->cpu_count; k++)
                 {
-                    if (cpus[k] == sibling_cpu)
+                    if (query->cpus[k] == sibling_cpu)
                     {
                         found = true;
                         break;
@@ -271,7 +276,10 @@ int aeron_topology_check_alignment(
                 if (!found)
                 {
                     warnings++;
-                    fprintf(output, "cpuset is missing sibling CPU(s) %d\n", sibling_cpu);
+                    AERON_FPRINTF(
+                        output,
+                        "WARNING: %s is missing sibling CPU(s) %d of the core containing CPU %d (partial core in cpuset)\n",
+                        query->name, sibling_cpu, cpu);
                 }
             }
         }
@@ -281,26 +289,28 @@ int aeron_topology_check_alignment(
 }
 
 int aeron_topology_check_l3_locality(
-    const aeron_topology_t *topology, const int *cpus, int cpu_count, FILE *output)
+    const aeron_topology_t *topology, const aeron_topology_query_t *query, FILE *output)
 {
-    if (0 == cpu_count)
+    if (0 == query->cpu_count)
     {
         return 0;
     }
 
     int warnings = 0;
 
-    const int cpu = cpus[0];
-    for (int i = 1; i < cpu_count; i++)
+    const int cpu = query->cpus[0];
+    for (int i = 1; i < query->cpu_count; i++)
     {
-        const int sibling_cpu = cpus[i];
+        const int sibling_cpu = query->cpus[i];
 
         const bool found = topology->l3_peer_table[cpu * topology->l3_peer_count + sibling_cpu];
 
         if (!found)
         {
             warnings++;
-            fprintf(output, "cpuset spans multiple L3 cache domains");
+            AERON_FPRINTF(
+                output, "WARNING: %s spans multiple L3 cache domains, configuration: %s\n",
+                query->name, query->description);
             break;
         }
     }
@@ -308,27 +318,31 @@ int aeron_topology_check_l3_locality(
     return warnings;
 }
 
-int aeron_topology_check_die_locality(const aeron_topology_t *topology, const int *cpus, int cpu_count, FILE *output)
+int aeron_topology_check_die_locality(
+    const aeron_topology_t *topology, const aeron_topology_query_t *query, FILE *output)
 {
-    if (0 == cpu_count)
+    if (NULL == query || 0 == query->cpu_count)
     {
         return 0;
     }
 
     int warnings = 0;
 
-    const int cpu = cpus[0];
+    const int cpu = query->cpus[0];
     const int die_id = topology->die_ids[cpu];
 
-    for (int i = 1; i < cpu_count; i++)
+    for (int i = 1; i < query->cpu_count; i++)
     {
-        const int other_cpu = cpus[i];
+        const int other_cpu = query->cpus[i];
         const int other_die_id = topology->die_ids[other_cpu];
 
         if (die_id != other_die_id)
         {
             warnings++;
-            fprintf(output, "cpuset spans multiple CPU clusters");
+            AERON_FPRINTF(
+                output,
+                "WARNING: %s spans multiple CPU dies, configuration: %s\n",
+                query->name, query->description);
             break;
         }
     }

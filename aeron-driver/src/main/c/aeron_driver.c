@@ -1159,12 +1159,19 @@ static int aeron_driver_apply_cpuset_affinity(aeron_driver_context_t *context, a
         goto error;
     }
 
-    const int alignment_warnings_count = aeron_topology_check_alignment(topology, cpus, cpu_count, stderr);
-    const int cluster_locality_warnings_count = aeron_topology_check_die_locality(topology, cpus, cpu_count, stderr);
-    const int l3_locality_warnings_count = aeron_topology_check_l3_locality(topology, cpus, cpu_count, stderr);
+    char buf[4096];
+    aeron_cpuset_format_cpulist(cpus, cpu_count, buf, sizeof(buf));
+
+    const aeron_topology_query_t query = {
+        cpus, cpu_count, "cpuset", buf
+    };
+
+    const int alignment_warnings_count = aeron_topology_check_alignment(topology, &query, stderr);
+    const int die_locality_warnings_count = aeron_topology_check_die_locality(topology, &query, stderr);
+    const int l3_locality_warnings_count = aeron_topology_check_l3_locality(topology, &query, stderr);
 
     const int total_warnings_count =
-        alignment_warnings_count + cluster_locality_warnings_count + l3_locality_warnings_count;
+        alignment_warnings_count + die_locality_warnings_count + l3_locality_warnings_count;
 
     if (aeron_driver_context_apply_cpuset_affinity(context, cpus, cpu_count) < 0)
     {
@@ -1271,10 +1278,22 @@ int aeron_driver_validate_and_apply_affinity_configuration(aeron_driver_context_
     affinity_cpus_count = aeron_driver_add_affinity_cpu(
         affinity_cpus, affinity_cpus_count, context->native_resource_agent_cpu_affinity_resolved);
 
-    const int l3_locality_warnings = aeron_topology_check_l3_locality(
-        topology, affinity_cpus, affinity_cpus_count, stderr);
-    const int die_locality_warnings = aeron_topology_check_die_locality(
-        topology, affinity_cpus, affinity_cpus_count, stderr);
+    char buf[4096];
+    snprintf(
+        buf,
+        sizeof(buf),
+        "sender=%d (%d), receiver= %d(%d), conductor=%d (%d), native_resource_agent=%d (%d)",
+        context->sender_cpu_affinity_no, context->sender_cpu_affinity_resolved,
+        context->receiver_cpu_affinity_no, context->receiver_cpu_affinity_resolved,
+        context->conductor_cpu_affinity_no, context->conductor_cpu_affinity_resolved,
+        context->native_resource_agent_cpu_affinity_no, context->native_resource_agent_cpu_affinity_resolved);
+
+    const aeron_topology_query_t query = {
+        affinity_cpus, affinity_cpus_count, "affinity", buf
+    };
+
+    const int l3_locality_warnings = aeron_topology_check_l3_locality(topology, &query, stderr);
+    const int die_locality_warnings = aeron_topology_check_die_locality(topology, &query, stderr);
 
     const int total_warnings_count =
         unshared_affinity_warnings + cpuset_warnings + l3_locality_warnings + die_locality_warnings;
