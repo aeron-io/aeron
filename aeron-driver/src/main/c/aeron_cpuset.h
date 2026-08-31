@@ -22,6 +22,8 @@
 #define AERON_CPUSET_CGROUP_MOUNT_V1 "/sys/fs/cgroup/cpuset"
 #define AERON_CPUSET_PROC_SELF_CGROUP "/proc/self/cgroup"
 
+#include <stdlib.h>
+
 /**
  * Parse a list of cpus, e.g. '1,3,4,5-19'.
  *
@@ -32,6 +34,10 @@
  */
 int aeron_cpuset_parse_cpulist(const char *cpulist_data, int **cpus, int *cpu_count);
 
-int aeron_cpuset_cgroup_read_v2(const char *proc_cgroup_file, const char *mount_root, int **cpus, int *cpu_count);
+int aeron_cpuset_format_cpulist(const int *cpus, int cpu_count, char *buf, size_t buf_size);
+
+int aeron_cpuset_read_online(const char *mount_root, const char *proc_cgroup_file, int **cpus, int *cpu_count);
+
+int aeron_cpuset_cgroup_read_v2(const char *mount_root, const char *proc_cgroup_file, int **cpus, int *cpu_count);
 
 #endif //AERON_CPUSET_H

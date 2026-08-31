@@ -348,7 +348,82 @@ int aeron_cpuset_parse_cpulist_from_file(const char *cgroup_path, int **cpus, in
     return 0;
 }
 
-int aeron_cpuset_cgroup_read_v2(const char *proc_cgroup_file, const char *mount_root, int **cpus, int *cpu_count)
+int aeron_cpuset_format_cpulist(const int *cpus, int cpu_count, char *buf, size_t buf_size)
+{
+    int written = 0;
+    int i = 0;
+    while (i < cpu_count)
+    {
+        int j = i;
+        while (j + 1 < cpu_count && cpus[j + 1] == cpus[j] + 1)
+        {
+            j++;
+        }
+
+        if (written > 0)
+        {
+            if ((size_t)(written + 1) >= buf_size)
+            {
+                return -1;
+            }
+            buf[written++] = ',';
+        }
+
+        int n;
+        if (i == j)
+        {
+            n = snprintf(buf + written, buf_size - (size_t)written, "%d", cpus[i]);
+        }
+        else
+        {
+            n = snprintf(buf + written, buf_size - (size_t)written, "%d-%d", cpus[i], cpus[j]);
+        }
+
+        if (n < 0 || (size_t)(written + n) >= buf_size)
+        {
+            return -1;
+        }
+        written += n;
+        i = j + 1;
+    }
+    return written;
+}
+
+
+int aeron_cpuset_read_online(const char *mount_root, const char *online_cpus_path, int **cpus, int *cpu_count)
+{
+    if (NULL == online_cpus_path)
+    {
+        AERON_SET_ERR(EINVAL, "%s", "online_cpus_path is NULL");
+        return -1;
+    }
+
+    if (NULL == mount_root)
+    {
+        AERON_SET_ERR(EINVAL, "%s", "mount_root is NULL");
+        return -1;
+    }
+
+    char file_path[AERON_MAX_PATH];
+    snprintf(file_path, AERON_MAX_PATH - 1, "%s/%s", mount_root, online_cpus_path);
+
+    if (!aeron_file_exists(file_path))
+    {
+        AERON_SET_ERR(EINVAL, "'%s' does not exist", file_path);
+        return -1;
+    }
+
+    if (aeron_cpuset_parse_cpulist_from_file(file_path, cpus, cpu_count) < 0)
+    {
+        AERON_APPEND_ERR("%s", "");
+        return -1;
+    }
+
+    return 0;
+}
+
+
+int aeron_cpuset_cgroup_read_v2(const char *mount_root, const char *proc_cgroup_file, int **cpus, int *cpu_count)
 {
     char *cgroup_path = (char *)aeron_cpuset_find_cgroup_path(proc_cgroup_file);
     if (NULL == cgroup_path)

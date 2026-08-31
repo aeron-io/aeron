@@ -1139,7 +1139,7 @@ error:
     return -1;
 }
 
-int aeron_driver_apply_cpuset_affinity(aeron_driver_context_t *context)
+static int aeron_driver_apply_cpuset_affinity(aeron_driver_context_t *context, aeron_topology_t *topology)
 {
     if (!context->cpuset_affinity)
     {
@@ -1150,39 +1150,31 @@ int aeron_driver_apply_cpuset_affinity(aeron_driver_context_t *context)
         return 0;
     }
 
-#ifndef __linux__
-    AERON_SET_ERR(EPERM, "%s", "Cpuset affinity is only supported on Linux");
-    return -1;
-#endif
-
     int *cpus = NULL;
     int cpu_count = 0;
 
-    if (aeron_cpuset_cgroup_read_v2(AERON_CPUSET_PROC_SELF_CGROUP, AERON_CPUSET_CGROUP_MOUNT_V2, &cpus, &cpu_count) < 0)
+    if (aeron_cpuset_cgroup_read_v2(AERON_CPUSET_CGROUP_MOUNT_V2, AERON_CPUSET_PROC_SELF_CGROUP, &cpus, &cpu_count) < 0)
     {
         AERON_APPEND_ERR("%s", "cpuset affinity enabled and failed to properly read cgroups and cpuset information");
         goto error;
     }
 
     int alignment_warnings_count;
-    if ((alignment_warnings_count = aeron_topology_check_alignment(
-        AERON_TOPOLOGY_SYS_CPU_PATH, cpus, cpu_count, stderr)) < 0)
+    if ((alignment_warnings_count = aeron_topology_check_alignment(topology, cpus, cpu_count, stderr)) < 0)
     {
         AERON_APPEND_ERR("%s", "failed to check cpu alignment");
         goto error;
     }
 
     int cluster_locality_warnings_count;
-    if ((cluster_locality_warnings_count = aeron_topology_check_die_locality(
-        AERON_TOPOLOGY_SYS_CPU_PATH, cpus, cpu_count, stderr)) < 0)
+    if ((cluster_locality_warnings_count = aeron_topology_check_die_locality(topology, cpus, cpu_count, stderr)) < 0)
     {
         AERON_APPEND_ERR("%s", "failed to check cpu cluster locality");
         goto error;
     }
 
     int l3_locality_warnings_count;
-    if ((l3_locality_warnings_count = aeron_topology_check_l3_locality(
-        AERON_TOPOLOGY_SYS_CPU_PATH, cpus, cpu_count, stderr)) < 0)
+    if ((l3_locality_warnings_count = aeron_topology_check_l3_locality(topology, cpus, cpu_count, stderr)) < 0)
     {
         AERON_APPEND_ERR("%s", "failed to check cpu l3 cache locality");
         goto error;
@@ -1241,95 +1233,65 @@ int aeron_driver_validate_unshared_affinity(aeron_driver_context_t* context, FIL
     return warnings;
 }
 
-int aeron_driver_validate_group_locality(
-    const aeron_topology_cpu_info_t *cpu_info,
-    const char *sysfs_prop_descriptor,
-    FILE *output)
+static int aeron_driver_add_affinity_cpu(int *cpus, int index, int cpu)
 {
-    if (cpu_info->group_count <= 1)
+    if (AERON_NULL_VALUE != cpu)
     {
-        return 0;
+        cpus[index] = cpu;
     }
 
-    fprintf(output, "WARN: cpu affinities span %d %s:\n", cpu_info->group_count, sysfs_prop_descriptor);
-    // TODO: Consider alternative, which is just to print all group IDs individually in a list
-    //       This will allow us to remove the group_ids array processing
-    //       Another possibility is to pre-sort the cpu list by group ID instead of having a list for them
-    for (int g = 0; g < cpu_info->group_count; g++)
-    {
-        // If group IDs were not listed, just use the index (e.g., in L3 cache case)
-        const int current_group = NULL != cpu_info->group_ids ? cpu_info->group_ids[g] : g;
-        fprintf(output, "  group %d:", current_group);
-        for (int i = 0; i < cpu_info->cpu_count; i++)
-        {
-            const aeron_topology_cpu_group_t *entry = &cpu_info->cpus[i];
-            if (current_group == entry->group_id)
-            {
-                fprintf(
-                    output, " %s (cpu=%d [configured=%d])",
-                    entry->extra_info->name, entry->cpu, entry->extra_info->original_cpu);
-            }
-        }
-        fprintf(output, "\n");
-    }
-
-    return 1;
+    return index + 1;
 }
 
 int aeron_driver_validate_and_apply_affinity_configuration(aeron_driver_context_t *context)
 {
 #ifdef __linux__
     int unshared_affinity_warnings;
+    aeron_topology_t *topology = NULL;
+    int *online_cpus = NULL;
+    int online_cpus_count = 0;
+
     if ((unshared_affinity_warnings = aeron_driver_validate_unshared_affinity(context, stderr)) < 0)
     {
         AERON_APPEND_ERR("%s", "failed to validate unshared affinity");
         goto error;
     }
 
+    if (aeron_cpuset_read_online("/sys", "devices/system/cpu/online", &online_cpus, &online_cpus_count) < 0)
+    {
+        AERON_APPEND_ERR("%s", "failed to get online cpus");
+        goto error;
+    }
+
+    if (aeron_topology_init(AERON_TOPOLOGY_SYS_CPU_PATH, online_cpus, online_cpus_count, &topology) < 0)
+    {
+        AERON_APPEND_ERR("%s", "failed to build cpu topology");
+        goto error;
+    }
+
     int cpuset_warnings = 0;
-    if ((cpuset_warnings = aeron_driver_apply_cpuset_affinity(context)) < 0)
+    if ((cpuset_warnings = aeron_driver_apply_cpuset_affinity(context, topology)) < 0)
     {
         AERON_APPEND_ERR("%s", "failed to apply cpuset affinity");
         goto error;
     }
 
-    int l3_locality_warnings = 0;
-    int die_locality_warnings = 0;
-    aeron_topology_extra_info_t extra_info[4] = {
-        { "conductor", context->conductor_cpu_affinity_no },
-        { "sender", context->sender_cpu_affinity_no },
-        { "receiver", context->receiver_cpu_affinity_no },
-        { "native_resource_agent", context->native_resource_agent_cpu_affinity_no }
-    };
-    aeron_topology_cpu_group_t cpu_groups[4] = {
-        { context->conductor_cpu_affinity_resolved, AERON_NULL_VALUE, &extra_info[0] },
-        { context->sender_cpu_affinity_resolved, AERON_NULL_VALUE, &extra_info[1] },
-        { context->receiver_cpu_affinity_resolved, AERON_NULL_VALUE, &extra_info[2] },
-        { context->native_resource_agent_cpu_affinity_resolved, AERON_NULL_VALUE, &extra_info[3] }
-    };
-    int *peers[4] = { 0 };
-    int peer_count[4] = { 0 };
-    aeron_topology_cpu_info_t cpu_info = { cpu_groups, 4, peers, peer_count, NULL, 0 };
+    int affinity_cpus[4] = { 0 };
+    int affinity_cpus_count = 0;
 
-    if (0 <= aeron_topology_build_l3_group_table(AERON_TOPOLOGY_SYS_CPU_PATH, &cpu_info))
-    {
-        l3_locality_warnings = aeron_driver_validate_group_locality(&cpu_info, "L3 cache domain", stderr);
-    }
-    else
-    {
-        aeron_err_clear();
-    }
-    aeron_topology_cpu_info_free(&cpu_info);
+    affinity_cpus_count = aeron_driver_add_affinity_cpu(
+        affinity_cpus, affinity_cpus_count, context->conductor_cpu_affinity_resolved);
+    affinity_cpus_count = aeron_driver_add_affinity_cpu(
+        affinity_cpus, affinity_cpus_count, context->sender_cpu_affinity_resolved);
+    affinity_cpus_count = aeron_driver_add_affinity_cpu(
+        affinity_cpus, affinity_cpus_count, context->receiver_cpu_affinity_resolved);
+    affinity_cpus_count = aeron_driver_add_affinity_cpu(
+        affinity_cpus, affinity_cpus_count, context->native_resource_agent_cpu_affinity_resolved);
 
-    if (0 <= aeron_topology_build_die_locality_group_table(AERON_TOPOLOGY_SYS_CPU_PATH, &cpu_info))
-    {
-        die_locality_warnings = aeron_driver_validate_group_locality(&cpu_info, "dies", stderr);
-    }
-    else
-    {
-        aeron_err_clear();
-    }
-    aeron_topology_cpu_info_free(&cpu_info);
+    const int l3_locality_warnings = aeron_topology_check_l3_locality(
+        topology, affinity_cpus, affinity_cpus_count, stderr);
+    const int die_locality_warnings = aeron_topology_check_die_locality(
+        topology, affinity_cpus, affinity_cpus_count, stderr);
 
     const int total_warnings_count =
         unshared_affinity_warnings + cpuset_warnings + l3_locality_warnings + die_locality_warnings;
@@ -1340,10 +1302,15 @@ int aeron_driver_validate_and_apply_affinity_configuration(aeron_driver_context_
         goto error;
     }
 
+    aeron_free(online_cpus);
+    aeron_topology_free(topology);
     return 0;
 
 error:
+    aeron_free(online_cpus);
+    aeron_topology_free(topology);
     return -1;
+
 #endif
     return 0;
 }

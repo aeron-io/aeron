@@ -20,8 +20,7 @@
 #include <string>
 
 
-extern "C"
-{
+extern "C" {
 #include "aeron_alloc.h"
 #include "util/aeron_error.h"
 #include "util/aeron_fileutil.h"
@@ -29,10 +28,6 @@ extern "C"
 #include "aeron_topology.h"
 
 int aeron_driver_validate_unshared_affinity(aeron_driver_context_t* context, FILE *output);
-int aeron_driver_validate_group_locality(
-    const aeron_topology_cpu_info_t *cpu_info,
-    const char *sysfs_prop_descriptor,
-    FILE *output);
 }
 
 using namespace testing;
@@ -167,121 +162,122 @@ TEST_F(DriverTest, shouldHaveTwoWarningsIfTwoPairShareCpus)
     EXPECT_STRNE(nullptr, strstr(m_output_ptr, "receiver and native_resource_agent"));
 }
 
-TEST_F(DriverTest, shouldHaveNoL3WarningsIfAllUnset)
-{
-    aeron_topology_extra_info_t extraInfo[4] = {
-        {"conductor", AERON_NULL_VALUE}, {"sender", AERON_NULL_VALUE},
-        {"receiver", AERON_NULL_VALUE}, {"native_resource_agent", AERON_NULL_VALUE}
-    };
-    aeron_topology_cpu_group_t cpus[4] = {
-        {AERON_NULL_VALUE, AERON_NULL_VALUE, &extraInfo[0]},
-        {AERON_NULL_VALUE, AERON_NULL_VALUE, &extraInfo[1]},
-        {AERON_NULL_VALUE, AERON_NULL_VALUE, &extraInfo[2]},
-        {AERON_NULL_VALUE, AERON_NULL_VALUE, &extraInfo[3]}
-    };
-    const aeron_topology_cpu_info_t cpuInfo = {
-        cpus, 4, nullptr, nullptr, nullptr, 0
-    };
-
-    EXPECT_EQ(0, aeron_driver_validate_group_locality(&cpuInfo, "L3 cache domains", m_output));
-    fflush(m_output);
-
-    EXPECT_EQ(0, m_output_size);
-}
-
-TEST_F(DriverTest, shouldHaveNoL3WarningsWhenAllShareL3)
-{
-    aeron_topology_extra_info_t extraInfo[4] = {
-        {"conductor", 0}, {"sender", 1}, {"receiver", 2}, {"native_resource_agent", 3}
-    };
-    aeron_topology_cpu_group_t cpus[4] = {
-        {0, 0, &extraInfo[0]},
-        {1, 0, &extraInfo[1]},
-        {2, 0, &extraInfo[2]},
-        {3, 0, &extraInfo[3]}
-    };
-    const aeron_topology_cpu_info_t cpuInfo = {
-        cpus, 4, nullptr, nullptr, nullptr, 1
-    };
-
-    EXPECT_EQ(0, aeron_driver_validate_group_locality(&cpuInfo, "L3 cache domains", m_output));
-    fflush(m_output);
-
-    EXPECT_EQ(0, m_output_size);
-}
-
-TEST_F(DriverTest, shouldHaveOneL3WarningWhenTwoHaveNonL3SharedAffinities)
-{
-    aeron_topology_extra_info_t extraInfo[4] = {
-        {"conductor", 1}, {"sender", 2}, {"receiver", AERON_NULL_VALUE}, {"native_resource_agent", AERON_NULL_VALUE}
-    };
-    aeron_topology_cpu_group_t cpus[4] = {
-        {0, 0, &extraInfo[0]},
-        {4, 1, &extraInfo[1]},
-        {AERON_NULL_VALUE, AERON_NULL_VALUE, &extraInfo[2]},
-        {AERON_NULL_VALUE, AERON_NULL_VALUE, &extraInfo[3]}
-    };
-    aeron_topology_cpu_info_t cpuInfo = {
-        cpus, 4, nullptr, nullptr, nullptr, 2
-    };
-
-    EXPECT_EQ(1, aeron_driver_validate_group_locality(&cpuInfo, "L3 cache domains", m_output));
-    fflush(m_output);
-
-    EXPECT_NE(0, m_output_size);
-    EXPECT_STRNE(nullptr, strstr(m_output_ptr, "group 0: conductor (cpu=0 [configured=1])"));
-    EXPECT_STRNE(nullptr, strstr(m_output_ptr, "group 1: sender (cpu=4 [configured=2])"));
-}
-
-TEST_F(DriverTest, shouldHaveOneL3WarningWhenOneIsIsolated)
-{
-    aeron_topology_extra_info_t extraInfo[4] = {
-        {"conductor", 0}, {"sender", 4}, {"receiver", 5}, {"native_resource_agent", 6}
-    };
-    aeron_topology_cpu_group_t cpus[4] = {
-        {0, 0, &extraInfo[0]},
-        {4, 1, &extraInfo[1]},
-        {5, 1, &extraInfo[2]},
-        {6, 1, &extraInfo[3]}
-    };
-    aeron_topology_cpu_info_t cpuInfo = {
-        cpus, 4, nullptr, nullptr, nullptr, 2
-    };
-
-    EXPECT_EQ(1, aeron_driver_validate_group_locality(&cpuInfo, "L3 cache domains", m_output));
-    fflush(m_output);
-
-    EXPECT_NE(0, m_output_size);
-    EXPECT_STRNE(nullptr, strstr(m_output_ptr, "span 2 L3 cache domains"));
-    EXPECT_STRNE(nullptr, strstr(m_output_ptr, "group 0: conductor (cpu=0 [configured=0])"));
-    EXPECT_STRNE(nullptr, strstr(
-            m_output_ptr,
-            "group 1: sender (cpu=4 [configured=4]) receiver (cpu=5 [configured=5]) "
-            "native_resource_agent (cpu=6 [configured=6])"));
-}
-
-TEST_F(DriverTest, shouldHaveOneDieWarningWhenOneIsIsolated)
-{
-    aeron_topology_extra_info_t extraInfo[4] = {
-        {"conductor", 0}, {"sender", 4}, {"receiver", 5}, {"native_resource_agent", 6}
-    };
-    aeron_topology_cpu_group_t cpus[4] = {
-        {0, 0, &extraInfo[0]},
-        {4, 0, &extraInfo[1]},
-        {5, 65535, &extraInfo[2]},
-        {6, 65535, &extraInfo[3]}
-    };
-    int group_ids[2] = {65535, 0};
-    aeron_topology_cpu_info_t cpuInfo = {
-        cpus, 4, nullptr, nullptr, group_ids, 2
-    };
-
-    EXPECT_EQ(1, aeron_driver_validate_group_locality(&cpuInfo, "dies", m_output));
-    fflush(m_output);
-
-    EXPECT_NE(0, m_output_size);
-    EXPECT_STRNE(nullptr, strstr(m_output_ptr, "span 2 dies"));
-    EXPECT_STRNE(nullptr, strstr(m_output_ptr, "0: conductor (cpu=0 [configured=0]) sender (cpu=4 [configured=4])"));
-    EXPECT_STRNE(nullptr, strstr(
-            m_output_ptr, "65535: receiver (cpu=5 [configured=5]) native_resource_agent (cpu=6 [configured=6])"));
-}
+//
+// TEST_F(DriverTest, shouldHaveNoL3WarningsIfAllUnset)
+// {
+//     aeron_topology_extra_info_t extraInfo[4] = {
+//         {"conductor", AERON_NULL_VALUE}, {"sender", AERON_NULL_VALUE},
+//         {"receiver", AERON_NULL_VALUE}, {"native_resource_agent", AERON_NULL_VALUE}
+//     };
+//     aeron_topology_cpu_group_t cpus[4] = {
+//         {AERON_NULL_VALUE, AERON_NULL_VALUE, &extraInfo[0]},
+//         {AERON_NULL_VALUE, AERON_NULL_VALUE, &extraInfo[1]},
+//         {AERON_NULL_VALUE, AERON_NULL_VALUE, &extraInfo[2]},
+//         {AERON_NULL_VALUE, AERON_NULL_VALUE, &extraInfo[3]}
+//     };
+//     const aeron_topology_cpu_info_t cpuInfo = {
+//         cpus, 4, nullptr, nullptr, nullptr, 0
+//     };
+//
+//     EXPECT_EQ(0, aeron_driver_validate_group_locality(&cpuInfo, "L3 cache domains", m_output));
+//     fflush(m_output);
+//
+//     EXPECT_EQ(0, m_output_size);
+// }
+//
+// TEST_F(DriverTest, shouldHaveNoL3WarningsWhenAllShareL3)
+// {
+//     aeron_topology_extra_info_t extraInfo[4] = {
+//         {"conductor", 0}, {"sender", 1}, {"receiver", 2}, {"native_resource_agent", 3}
+//     };
+//     aeron_topology_cpu_group_t cpus[4] = {
+//         {0, 0, &extraInfo[0]},
+//         {1, 0, &extraInfo[1]},
+//         {2, 0, &extraInfo[2]},
+//         {3, 0, &extraInfo[3]}
+//     };
+//     const aeron_topology_cpu_info_t cpuInfo = {
+//         cpus, 4, nullptr, nullptr, nullptr, 1
+//     };
+//
+//     EXPECT_EQ(0, aeron_driver_validate_group_locality(&cpuInfo, "L3 cache domains", m_output));
+//     fflush(m_output);
+//
+//     EXPECT_EQ(0, m_output_size);
+// }
+//
+// TEST_F(DriverTest, shouldHaveOneL3WarningWhenTwoHaveNonL3SharedAffinities)
+// {
+//     aeron_topology_extra_info_t extraInfo[4] = {
+//         {"conductor", 1}, {"sender", 2}, {"receiver", AERON_NULL_VALUE}, {"native_resource_agent", AERON_NULL_VALUE}
+//     };
+//     aeron_topology_cpu_group_t cpus[4] = {
+//         {0, 0, &extraInfo[0]},
+//         {4, 1, &extraInfo[1]},
+//         {AERON_NULL_VALUE, AERON_NULL_VALUE, &extraInfo[2]},
+//         {AERON_NULL_VALUE, AERON_NULL_VALUE, &extraInfo[3]}
+//     };
+//     aeron_topology_cpu_info_t cpuInfo = {
+//         cpus, 4, nullptr, nullptr, nullptr, 2
+//     };
+//
+//     EXPECT_EQ(1, aeron_driver_validate_group_locality(&cpuInfo, "L3 cache domains", m_output));
+//     fflush(m_output);
+//
+//     EXPECT_NE(0, m_output_size);
+//     EXPECT_STRNE(nullptr, strstr(m_output_ptr, "group 0: conductor (cpu=0 [configured=1])"));
+//     EXPECT_STRNE(nullptr, strstr(m_output_ptr, "group 1: sender (cpu=4 [configured=2])"));
+// }
+//
+// TEST_F(DriverTest, shouldHaveOneL3WarningWhenOneIsIsolated)
+// {
+//     aeron_topology_extra_info_t extraInfo[4] = {
+//         {"conductor", 0}, {"sender", 4}, {"receiver", 5}, {"native_resource_agent", 6}
+//     };
+//     aeron_topology_cpu_group_t cpus[4] = {
+//         {0, 0, &extraInfo[0]},
+//         {4, 1, &extraInfo[1]},
+//         {5, 1, &extraInfo[2]},
+//         {6, 1, &extraInfo[3]}
+//     };
+//     aeron_topology_cpu_info_t cpuInfo = {
+//         cpus, 4, nullptr, nullptr, nullptr, 2
+//     };
+//
+//     EXPECT_EQ(1, aeron_driver_validate_group_locality(&cpuInfo, "L3 cache domains", m_output));
+//     fflush(m_output);
+//
+//     EXPECT_NE(0, m_output_size);
+//     EXPECT_STRNE(nullptr, strstr(m_output_ptr, "span 2 L3 cache domains"));
+//     EXPECT_STRNE(nullptr, strstr(m_output_ptr, "group 0: conductor (cpu=0 [configured=0])"));
+//     EXPECT_STRNE(nullptr, strstr(
+//             m_output_ptr,
+//             "group 1: sender (cpu=4 [configured=4]) receiver (cpu=5 [configured=5]) "
+//             "native_resource_agent (cpu=6 [configured=6])"));
+// }
+//
+// TEST_F(DriverTest, shouldHaveOneDieWarningWhenOneIsIsolated)
+// {
+//     aeron_topology_extra_info_t extraInfo[4] = {
+//         {"conductor", 0}, {"sender", 4}, {"receiver", 5}, {"native_resource_agent", 6}
+//     };
+//     aeron_topology_cpu_group_t cpus[4] = {
+//         {0, 0, &extraInfo[0]},
+//         {4, 0, &extraInfo[1]},
+//         {5, 65535, &extraInfo[2]},
+//         {6, 65535, &extraInfo[3]}
+//     };
+//     int group_ids[2] = {65535, 0};
+//     aeron_topology_cpu_info_t cpuInfo = {
+//         cpus, 4, nullptr, nullptr, group_ids, 2
+//     };
+//
+//     EXPECT_EQ(1, aeron_driver_validate_group_locality(&cpuInfo, "dies", m_output));
+//     fflush(m_output);
+//
+//     EXPECT_NE(0, m_output_size);
+//     EXPECT_STRNE(nullptr, strstr(m_output_ptr, "span 2 dies"));
+//     EXPECT_STRNE(nullptr, strstr(m_output_ptr, "0: conductor (cpu=0 [configured=0]) sender (cpu=4 [configured=4])"));
+//     EXPECT_STRNE(nullptr, strstr(
+//             m_output_ptr, "65535: receiver (cpu=5 [configured=5]) native_resource_agent (cpu=6 [configured=6])"));
+// }

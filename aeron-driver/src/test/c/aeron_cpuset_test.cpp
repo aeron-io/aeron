@@ -101,7 +101,7 @@ TEST_F(CpusetTest, shouldReadV2Cgroups)
     int *cpus = nullptr;
     int cpu_count = 0;
 
-    aeron_cpuset_cgroup_read_v2(cgroupFilename.c_str(), mountRoot.c_str(), &cpus, &cpu_count);
+    aeron_cpuset_cgroup_read_v2(mountRoot.c_str(), cgroupFilename.c_str(), &cpus, &cpu_count);
     ASSERT_NE(nullptr, cpus) << aeron_errmsg();
 
     std::vector<int> actual{cpus, cpus + cpu_count};
@@ -134,7 +134,7 @@ TEST_F(CpusetTest, shouldReadV2CgroupsInParent)
     int *cpus = nullptr;
     int cpu_count = 0;
 
-    aeron_cpuset_cgroup_read_v2(cgroupFilename.c_str(), mountRoot.c_str(), &cpus, &cpu_count);
+    aeron_cpuset_cgroup_read_v2(mountRoot.c_str(), cgroupFilename.c_str(), &cpus, &cpu_count);
     ASSERT_NE(nullptr, cpus) << aeron_errmsg();
 
     std::vector<int> actual{cpus, cpus + cpu_count};
@@ -162,7 +162,7 @@ TEST_F(CpusetTest, shouldErrorIfNotFoundReadV2Cgroups)
     int *cpus = nullptr;
     int cpu_count = 0;
 
-    EXPECT_EQ(-1, aeron_cpuset_cgroup_read_v2(cgroupFilename.c_str(), mountRoot.c_str(), &cpus, &cpu_count));
+    EXPECT_EQ(-1, aeron_cpuset_cgroup_read_v2(mountRoot.c_str(), cgroupFilename.c_str(), &cpus, &cpu_count));
     EXPECT_EQ(nullptr, cpus);
 }
 
@@ -215,3 +215,43 @@ TEST_F(CpusetTest, shouldNotParseCpulist)
     EXPECT_THAT(aeron_errmsg(), ContainsRegex("range end less than start"));
 }
 
+TEST_F(CpusetTest, shouldReadOnlineCpus)
+{
+#ifndef __linux__
+    GTEST_SKIP() << "CGroups only supported on Linux";
+#endif
+    std::string mountRoot = std::string(m_tempDir);
+    std::string onlineFile = "online";
+    std::string onlineCpus = mountRoot + "/" + onlineFile;
+
+    std::ofstream onlineCpusFile(onlineCpus.c_str(), std::ios::out);
+    onlineCpusFile << "5-10" << std::endl;
+    onlineCpusFile.close();
+
+    int *cpus = nullptr;
+    int cpu_count = 0;
+
+    ASSERT_NE(-1, aeron_cpuset_read_online(mountRoot.c_str(), onlineFile.c_str(), &cpus, &cpu_count)) << aeron_errmsg();
+
+    std::vector<int> actual{cpus, cpus + cpu_count};
+    EXPECT_THAT(actual, ElementsAre(5, 6, 7, 8, 9, 10));
+}
+
+// Useful for testing on a real system.
+TEST_F(CpusetTest, DISABLED_shouldReadOnlineCpusFromRealSystem)
+{
+#ifndef __linux__
+    GTEST_SKIP() << "Topology only supported on Linux";
+#endif
+    std::string mountRoot = "/sys";
+    std::string onlineFile = "devices/system/cpu/online";
+    std::string onlineCpus = mountRoot + "/" + onlineFile;
+
+    int *cpus = nullptr;
+    int cpu_count = 0;
+
+    ASSERT_NE(-1, aeron_cpuset_read_online(onlineFile.c_str(), mountRoot.c_str(), &cpus, &cpu_count)) << aeron_errmsg();
+
+    std::vector<int> actual{cpus, cpus + cpu_count};
+    EXPECT_THAT(actual, ElementsAre(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15));
+}
