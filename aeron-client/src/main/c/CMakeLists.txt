@@ -125,6 +125,7 @@ set(SOURCE
     concurrent/aeron_term_scanner.c
     concurrent/aeron_term_unblocker.c
     concurrent/aeron_thread.c
+    jni/topology/io_aeron_topology_ThreadAffinity.c
     protocol/aeron_udp_protocol.c
     reports/aeron_loss_reporter.c
     status/aeron_local_sockaddr.c
@@ -197,6 +198,7 @@ set(HEADERS
     concurrent/aeron_term_scanner.h
     concurrent/aeron_term_unblocker.h
     concurrent/aeron_thread.h
+    jni/topology/io_aeron_topology_ThreadAffinity.h
     protocol/aeron_udp_protocol.h
     reports/aeron_loss_reporter.h
     status/aeron_local_sockaddr.h
@@ -242,12 +244,14 @@ add_library(aeron SHARED ${SOURCE} ${HEADERS}
     aeron_archive_client_error.h)
 add_library(aeron::aeron ALIAS aeron)
 target_include_directories(aeron
-    PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>" "$<INSTALL_INTERFACE:include/aeron>")
+    PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>" "$<INSTALL_INTERFACE:include/aeron>"
+    PRIVATE ${JNI_INCLUDE_DIRS})
 
 add_library(aeron_static STATIC ${SOURCE} ${HEADERS})
 add_library(aeron::aeron_static ALIAS aeron_static)
 target_include_directories(aeron_static
-    PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>" "$<INSTALL_INTERFACE:include/aeron>")
+    PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>" "$<INSTALL_INTERFACE:include/aeron>"
+    PRIVATE ${JNI_INCLUDE_DIRS})
 
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -DDISABLE_BOUNDS_CHECKS")
 

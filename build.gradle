@@ -1,4 +1,6 @@
 import io.aeron.build.LoggingTest
+import org.gradle.nativeplatform.platform.OperatingSystem
+
 
 /*
  * Copyright 2014-2025 Real Logic Limited.
@@ -532,6 +534,45 @@ project(':aeron-client') {
         mainClass.set('io.aeron.counter.validation.ValidateCounterExpectationsTask')
         classpath project(':aeron-annotations').sourceSets.main.runtimeClasspath
         args = [counterInfoFile, sourceDir]
+    }
+
+
+    def isLinux = System.getProperty('os.name').toLowerCase().contains('linux')
+    if (isLinux) {
+        def nativeBuildDir = "${layout.buildDirectory.get()}/native".toString()
+
+        def cmakeExecutable = "${rootDir}/cppbuild/cmake/bin/cmake"
+
+        tasks.register('configureNativeAffinity', Exec) {
+            inputs.file("${rootDir}/CMakeLists.txt")
+            inputs.file("${projectDir}/src/main/c/CMakeLists.txt")
+            outputs.dir(nativeBuildDir)
+
+            commandLine cmakeExecutable,
+                    '-S', rootDir,
+                    '-B', nativeBuildDir,
+                    "-DJAVA_HOME=${System.getProperty('java.home')}",
+                    '-DCMAKE_BUILD_TYPE=Release',
+                    '-DBUILD_AERON_DRIVER=OFF',
+                    '-DBUILD_AERON_ARCHIVE_API=OFF',
+                    '-DAERON_TESTS=OFF',
+                    '-DAERON_UNIT_TESTS=OFF',
+                    '-DAERON_SYSTEM_TESTS=OFF',
+                    '-DAERON_BUILD_SAMPLES=OFF'
+        }
+
+        tasks.register('buildNativeAffinity', Exec) {
+            dependsOn tasks.named('configureNativeAffinity')
+            inputs.dir("${projectDir}/src/main/c")
+            outputs.dir("${nativeBuildDir}/lib")
+
+            commandLine cmakeExecutable, '--build', nativeBuildDir, '--target', 'aeron', '--config', 'Release'
+        }
+
+        tasks.withType(Test).configureEach {
+            dependsOn tasks.named('buildNativeAffinity')
+            systemProperty 'java.library.path', "${nativeBuildDir}/lib"
+        }
     }
 }
 

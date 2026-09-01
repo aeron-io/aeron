@@ -78,6 +78,7 @@ endif (NOT CMAKE_BUILD_TYPE)
 # Platform flags, etc.
 
 find_package(Threads)
+find_package(JNI REQUIRED)
 
 ##########################################################
 # Doxygen for generating doc
