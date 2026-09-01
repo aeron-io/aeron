@@ -16,16 +16,22 @@
 
 package io.aeron.topology;
 
+import org.agrona.collections.Int2IntHashMap;
 import org.agrona.collections.Int2ObjectHashMap;
+import org.agrona.collections.IntArrayList;
 import org.agrona.collections.IntHashSet;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static org.agrona.AsciiEncoding.parseIntAscii;
+
 class PerCpuListReader
 {
-    private final Int2ObjectHashMap<IntHashSet> cpuListCache = new Int2ObjectHashMap<>();
+    // TODO: Rework this to pre-load entire CPU list
+    private final Int2ObjectHashMap<IntHashSet> cpuToCpuListMap = new Int2ObjectHashMap<>();
+    private final Int2IntHashMap cpuToIdMap = new Int2IntHashMap(-1);
     private final Path sysfsRoot;
     private final String cpuListDirectory;
 
@@ -35,7 +41,7 @@ class PerCpuListReader
         this.cpuListDirectory = cpuListDirectory;
     }
 
-    private IntHashSet loadCpuListFile(final int cpu) throws IOException
+    private IntHashSet loadCpuList(final int cpu) throws IOException
     {
         final Path cpuListPath = sysfsRoot.resolve("cpu%d".formatted(cpu)).resolve(cpuListDirectory);
         final String cpuList = Files.readString(cpuListPath);
@@ -44,17 +50,39 @@ class PerCpuListReader
         return result;
     }
 
-    IntHashSet loadCpuList(final int cpu) throws IOException
+    Int2ObjectHashMap<IntHashSet> loadCpuList(final IntArrayList cpus) throws IOException
     {
-        final IntHashSet cpuList = cpuListCache.get(cpu);
-        if (null == cpuList)
+        if (cpuToCpuListMap.isEmpty())
         {
-            final IntHashSet loadedCpuList = this.loadCpuListFile(cpu);
-            loadedCpuList.forEachInt((i) -> cpuListCache.put(i, loadedCpuList));
-            cpuListCache.put(cpu, loadedCpuList);
-            return loadedCpuList;
+            for (int i = 0, size = cpus.size(); i < size; i++)
+            {
+                final int cpu = cpus.get(i);
+                final IntHashSet loadedCpuList = this.loadCpuList(cpu);
+                loadedCpuList.forEachInt((j) -> cpuToCpuListMap.put(j, loadedCpuList));
+                cpuToCpuListMap.put(cpu, loadedCpuList);
+            }
         }
-        return cpuList;
+        return cpuToCpuListMap;
     }
 
+    private int loadId(final int cpu) throws IOException
+    {
+        final Path cpuListPath = sysfsRoot.resolve("cpu%d".formatted(cpu)).resolve(cpuListDirectory);
+        final String id = Files.readString(cpuListPath);
+        return parseIntAscii(id, 0, id.length());
+    }
+
+
+    Int2IntHashMap loadIds(final IntArrayList cpus) throws IOException
+    {
+        if (cpuToIdMap.isEmpty())
+        {
+            for (int i = 0, size = cpus.size(); i < size; i++)
+            {
+                final int cpu = cpus.get(i);
+                cpuToIdMap.put(cpu, this.loadId(cpu));
+            }
+        }
+        return cpuToIdMap;
+    }
 }

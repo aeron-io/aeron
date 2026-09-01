@@ -16,14 +16,15 @@
 
 package io.aeron.topology;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
-import static io.aeron.topology.DieLocalityGroupGenerator.DIE_ID_DIRECTORY;
-import static io.aeron.topology.L3GroupGenerator.SHARED_CPU_LIST_DIRECTORY;
-import static io.aeron.topology.ThreadAlignmentChecker.THREAD_SIBLING_LIST;
+import static io.aeron.topology.DieLocalityValidator.DIE_ID_DIRECTORY;
+import static io.aeron.topology.L3TopologyValidator.SHARED_CPU_LIST_DIRECTORY;
+import static io.aeron.topology.ThreadAlignmentValidator.THREAD_SIBLING_LIST;
 
 class TopologyTestUtils
 {
@@ -73,6 +74,16 @@ class TopologyTestUtils
         final Path effectiveCgroupFilePath = testCgroupPath.resolve("user.slice/cpuset.cpus.effective");
         Files.createDirectories(effectiveCgroupFilePath.getParent());
         Files.writeString(effectiveCgroupFilePath, cpuset);
+    }
+
+    static long countWarnings(final ByteArrayOutputStream byteStream)
+    {
+        final String output = byteStream.toString();
+        if (output.isEmpty())
+        {
+            return 0;
+        }
+        return output.lines().count();
     }
 
     public record Pair(int first, int second)

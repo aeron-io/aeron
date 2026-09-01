@@ -32,6 +32,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.stream.Stream;
 
+import static io.aeron.topology.TopologyTestUtils.countWarnings;
 import static io.aeron.topology.TopologyTestUtils.setupDieLocality;
 import static io.aeron.topology.TopologyTestUtils.setupL3Peers;
 import static io.aeron.topology.TopologyTestUtils.setupSiblingThreads;
@@ -66,7 +67,7 @@ class CGroupValidatorTest
                     new Pair(0, 7), new Pair(0, 7), new Pair(0, 7), new Pair(0, 7),
                     new Pair(0, 7), new Pair(0, 7), new Pair(0, 7), new Pair(0, 7)),
                 List.of(0, 0, 0, 0, 0, 0, 0),
-                1),
+                2),
             Arguments.of(
                 new int[]{0, 1, 4, 6},
                 List.of(
@@ -76,7 +77,7 @@ class CGroupValidatorTest
                     new Pair(0, 1), new Pair(0, 1), new Pair(2, 3), new Pair(2, 3),
                     new Pair(4, 5), new Pair(4, 5), new Pair(6, 7), new Pair(6, 7)),
                 List.of(0, 0, 0, 0, 0, 0, 0),
-                2),
+                3),
             Arguments.of(
                 new int[]{0, 1, 4, 6},
                 List.of(
@@ -86,7 +87,7 @@ class CGroupValidatorTest
                     new Pair(0, 7), new Pair(0, 7), new Pair(0, 7), new Pair(0, 7),
                     new Pair(0, 7), new Pair(0, 7), new Pair(0, 7), new Pair(0, 7)),
                 List.of(1, 1, 25, 25, 30, 30, 5000, 5000),
-                2),
+                3),
             Arguments.of(
                 new int[]{0, 1, 4, 6},
                 List.of(
@@ -96,7 +97,7 @@ class CGroupValidatorTest
                     new Pair(0, 1), new Pair(0, 1), new Pair(2, 3), new Pair(2, 3),
                     new Pair(4, 5), new Pair(4, 5), new Pair(6, 7), new Pair(6, 7)),
                 List.of(1, 1, 25, 25, 30, 30, 5000, 5000),
-                3));
+                4));
     }
 
     @ParameterizedTest
@@ -118,9 +119,7 @@ class CGroupValidatorTest
 
         final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         new CGroupValidator(sysfsTestDir).validate(cpuList, false, new PrintStream(buffer));
-        final String output = buffer.toString();
-
-        assertEquals(expectedWarningCount, countWarnings(output));
+        assertEquals(expectedWarningCount, countWarnings(buffer));
 
         if (0 < expectedWarningCount)
         {
@@ -144,16 +143,7 @@ class CGroupValidatorTest
         cpuList.wrap(new int[]{0, 1}, 2);
         final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         final CGroupValidator validator = new CGroupValidator(sysfsTestDir);
-
-        assertDoesNotThrow(() -> validator.validate(cpuList, true, new PrintStream(buffer)));
+        assertThrows(ConfigurationException.class, () -> validator.validate(cpuList, true, new PrintStream(buffer)));
     }
 
-    private static int countWarnings(final String output)
-    {
-        if (output.isEmpty())
-        {
-            return 0;
-        }
-        return (int)output.lines().count();
-    }
 }

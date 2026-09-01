@@ -20,46 +20,41 @@ import org.agrona.collections.IntArrayList;
 import org.agrona.collections.IntHashSet;
 
 import java.io.IOException;
+import java.io.PrintStream;
 import java.nio.file.Path;
 
-/**
- * Checks for missing thread siblings according to the {@link ThreadAlignmentChecker#THREAD_SIBLING_LIST} file.
- */
-public class ThreadAlignmentChecker
+import static io.aeron.topology.CGroupValidator.DEFAULT_SYSFS_ROOT;
+
+class ThreadAlignmentValidator implements TopologyValidator
 {
+
     /**
      * Path, relative to a per-CPU {@code sysfs} directory, of the file listing the CPUs that are siblings.
      */
     public static final String THREAD_SIBLING_LIST = "topology/thread_siblings_list";
     private final PerCpuListReader perCpuListReader;
 
-    /**
-     * Creates a {@link ThreadAlignmentChecker} that reads CPU topology information from the given {@code sysfs} root.
-     *
-     * @param sysfsRoot the root {@code sysfs} CPU topology directory.
-     */
-    public ThreadAlignmentChecker(final Path sysfsRoot)
+    ThreadAlignmentValidator()
+    {
+        this(DEFAULT_SYSFS_ROOT);
+    }
+
+    ThreadAlignmentValidator(final Path sysfsRoot)
     {
         perCpuListReader = new PerCpuListReader(sysfsRoot, THREAD_SIBLING_LIST);
     }
 
-    /**
-     * Lists missing thread siblings according to the {@link ThreadAlignmentChecker#THREAD_SIBLING_LIST} file.
-     *
-     * @param cpuList the list of CPUs to check for missing siblings
-     * @return the list of missing threads
-     * @throws IOException if an I/O error occurs while reading the thread sibling list
-     */
-    public IntArrayList identifyMissingThreads(final IntArrayList cpuList) throws IOException
+    IntArrayList identifyMissingThreads(final IntArrayList cpuList) throws IOException
     {
         final IntHashSet requiredThreads = new IntHashSet();
         final IntHashSet presentThreads = new IntHashSet();
         final IntArrayList missingThreads = new IntArrayList();
+        final var siblingMap = perCpuListReader.loadCpuList(cpuList);
         for (int i = 0; i < cpuList.size(); i++)
         {
             final int cpu = cpuList.get(i);
             presentThreads.add(cpu);
-            final IntHashSet siblings = perCpuListReader.loadCpuList(cpu);
+            final IntHashSet siblings = siblingMap.get(cpu);
             requiredThreads.addAll(siblings);
         }
         final IntHashSet difference = requiredThreads.difference(presentThreads);
@@ -69,5 +64,24 @@ public class ThreadAlignmentChecker
         }
         difference.forEachInt(missingThreads::add);
         return missingThreads;
+    }
+
+    public int validate(final IntArrayList cpuList, final PrintStream warningStream)
+    {
+        try
+        {
+            final IntArrayList missingThreads = identifyMissingThreads(cpuList);
+            for (int i = 0; i < missingThreads.size(); i++)
+            {
+                final int missingThread = missingThreads.get(i);
+                warningStream.printf("cpuset is missing sibling(s) %d%n", missingThread);
+            }
+            return missingThreads.size();
+        }
+        catch (final IOException e)
+        {
+            warningStream.println("Could not load CPU sibling list");
+        }
+        return 0;
     }
 }
