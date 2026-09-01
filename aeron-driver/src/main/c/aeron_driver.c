@@ -1226,12 +1226,15 @@ static int aeron_driver_apply_cpuset_affinity(aeron_driver_context_t *context, a
 
 static int aeron_driver_add_affinity_cpu(int *cpus, const int index, const int cpu)
 {
+    int result = index;
+
     if (AERON_NULL_VALUE != cpu)
     {
         cpus[index] = cpu;
+        result++;
     }
 
-    return index + 1;
+    return result;
 }
 #endif
 

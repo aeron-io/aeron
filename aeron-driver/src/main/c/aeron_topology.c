@@ -291,7 +291,7 @@ int aeron_topology_check_alignment(
 int aeron_topology_check_l3_locality(
     const aeron_topology_t *topology, const aeron_topology_query_t *query, FILE *output)
 {
-    if (0 == query->cpu_count)
+    if (NULL == query || 0 == query->cpu_count)
     {
         return 0;
     }

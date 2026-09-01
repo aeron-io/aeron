@@ -206,6 +206,18 @@ TEST_F(TopologyTest, shouldCheckCgroupConfiguration)
     aeron_topology_free(topology);
 }
 
+TEST_F(TopologyTest, shouldBuildHandle)
+{
+    int *cpus = nullptr;
+    int cpu_count = 0;
+    aeron_cpuset_read_online("/sys", "devices/system/cpu/online", &cpus, &cpu_count);
+
+    aeron_topology_t *cpu = nullptr;
+
+    aeron_topology_init(AERON_TOPOLOGY_SYS_CPU_PATH, cpus, cpu_count, &cpu);
+}
+
+
 TEST_F(TopologyTest, DISABLE_shouldBuildTopologyFromRealSystem)
 {
     int *cpus = nullptr;
