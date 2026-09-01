@@ -19,7 +19,6 @@ package io.aeron.topology;
 import io.aeron.exceptions.ConfigurationException;
 import org.agrona.collections.IntArrayList;
 
-import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Path;
 import java.util.List;
@@ -30,11 +29,9 @@ import java.util.List;
  */
 public class CGroupValidator
 {
+    // TODO: Move this somewhere more general
     static final Path DEFAULT_SYSFS_ROOT = Path.of("/sys/devices/system/cpu");
-
-    private final L3GroupGenerator l3GroupGenerator;
-    private final DieLocalityGroupGenerator dieLocalityGroupGenerator;
-    private final ThreadAlignmentChecker threadAlignmentChecker;
+    private final List<TopologyValidator> topologyValidators;
     private final CpusetV2Reader cpusetV2Reader;
 
     /**
@@ -57,10 +54,14 @@ public class CGroupValidator
 
     CGroupValidator(final Path sysfsRoot, final CpusetV2Reader cpusetV2Reader)
     {
-        this.l3GroupGenerator = new L3GroupGenerator(sysfsRoot);
-        this.dieLocalityGroupGenerator = new DieLocalityGroupGenerator(sysfsRoot);
-        this.threadAlignmentChecker = new ThreadAlignmentChecker(sysfsRoot);
         this.cpusetV2Reader = cpusetV2Reader;
+        // TODO: Reconsider using ServiceLoader.
+        //  However, this would require a sysfsRoot set method in the interface level
+        this.topologyValidators = List.of(
+            new DieLocalityValidator(sysfsRoot),
+            new L3TopologyValidator(sysfsRoot),
+            new ThreadAlignmentValidator(sysfsRoot)
+        );
     }
 
     /**
@@ -81,79 +82,21 @@ public class CGroupValidator
             return;
         }
 
-        final int alignmentWarnings = checkAlignment(cpuList, out);
-        final int dieLocalityWarnings = checkDieLocality(cpuList, out);
-        final int l3LocalityWarnings = checkL3Locality(cpuList, out);
-        final int warnings = alignmentWarnings + dieLocalityWarnings + l3LocalityWarnings;
+        int warnings = 0;
+        for (final TopologyValidator validator : topologyValidators)
+        {
+            warnings += validator.validate(cpuList, out);
+        }
+        //noinspection Java9UndeclaredServiceUsage
+//        for (TopologyValidator validator : ServiceLoader.load(TopologyValidator.class))
+//        {
+//            warnings += validator.validate(cpuList, out);
+//        }
 
         if (warningsAsErrors && 0 < warnings)
         {
             throw new ConfigurationException(
                 "cpuset topology warnings as errors, %d warning(s) found".formatted(warnings));
-        }
-    }
-
-    private int checkAlignment(final IntArrayList cpuList, final PrintStream out)
-    {
-        try
-        {
-            final IntArrayList missingThreads = threadAlignmentChecker.identifyMissingThreads(cpuList);
-            if (!missingThreads.isEmpty())
-            {
-                out.printf(
-                    "WARNING: cpuset %s is missing thread sibling CPU(s) %s (partial physical core(s) in cpuset)%n",
-                    cpuList, missingThreads);
-                return 1;
-            }
-            return 0;
-        }
-        catch (final IOException | NumberFormatException ex)
-        {
-            // NOTE: This is not a CGroup violation, it will be printed directly to stderr.
-            System.err.println(
-                "WARNING: skipping thread alignment check for cpuset " + cpuList + ": " + ex.getMessage());
-            return 0;
-        }
-    }
-
-    private int checkDieLocality(final IntArrayList cpuList, final PrintStream out)
-    {
-        try
-        {
-            final List<IntArrayList> groups = dieLocalityGroupGenerator.group(cpuList);
-            if (1 < groups.size())
-            {
-                out.println("WARNING: cpuset " + cpuList + " spans " + groups.size() + " CPU die(s): " + groups);
-                return 1;
-            }
-            return 0;
-        }
-        catch (final IOException | NumberFormatException ex)
-        {
-            // NOTE: This is not a CGroup violation, it will be printed directly to stderr.
-            System.err.println("WARNING: skipping die locality check for cpuset " + cpuList + ": " + ex.getMessage());
-            return 0;
-        }
-    }
-
-    private int checkL3Locality(final IntArrayList cpuList, final PrintStream out)
-    {
-        try
-        {
-            final List<IntArrayList> groups = l3GroupGenerator.group(cpuList);
-            if (1 < groups.size())
-            {
-                out.println(
-                    "WARNING: cpuset " + cpuList + " spans " + groups.size() + " L3 cache domain(s): " + groups);
-                return 1;
-            }
-            return 0;
-        }
-        catch (final IOException | NumberFormatException ex)
-        {
-            // NOTE: This is not a CGroup violation, it will be printed directly to stderr.
-            System.err.println("WARNING: skipping L3 locality check for cpuset " + cpuList + ": " + ex.getMessage());
-            return 0;
         }
     }
 }

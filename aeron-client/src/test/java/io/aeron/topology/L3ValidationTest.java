@@ -23,15 +23,16 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.nio.file.Path;
-import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Stream;
 
+import static io.aeron.topology.TopologyTestUtils.countWarnings;
 import static io.aeron.topology.TopologyTestUtils.setupCpuSet;
 import static io.aeron.topology.TopologyTestUtils.setupL3Peers;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class L3ValidationTest
@@ -46,14 +47,16 @@ class L3ValidationTest
         return Stream.of(
             Arguments.of(
                 new int[]{0, 1, 2, 3, 4, 5, 6, 7},
-                4,
                 commonPeers,
-                new int[][]{{0, 1}, {2, 3}, {4, 5}, {6, 7}}),
+                1L),
             Arguments.of(
                 new int[]{0, 1, 4, 6},
-                3,
                 commonPeers,
-                new int[][]{{0, 1}, {4}, {6}})
+                1L),
+            Arguments.of(
+                new int[]{0, 1},
+                commonPeers,
+                0L)
         );
     }
 
@@ -61,22 +64,21 @@ class L3ValidationTest
     @MethodSource("l3CacheTests")
     void testL3CacheGrouping(
         final int[] rawCpuList,
-        final int expectedGroupCount,
         final List<Pair> peers,
-        final int[][] expectedGroups,
+        final long expectedWarningCount,
         @TempDir final Path sysfsTestDir) throws IOException
     {
         final IntArrayList cpuList = new IntArrayList();
         cpuList.wrap(rawCpuList, rawCpuList.length);
         setupL3Peers(sysfsTestDir, peers);
-        final L3GroupGenerator l3GroupGenerator = new L3GroupGenerator(sysfsTestDir);
-        final var groups = l3GroupGenerator.group(cpuList);
-        final var sortedGroups = groups.stream().sorted(Comparator.comparing(a -> a.get(0))).toList();
-        assertEquals(expectedGroupCount, groups.size());
-        for (int i = 0; i < expectedGroups.length; i++)
-        {
-            assertArrayEquals(expectedGroups[i], sortedGroups.get(i).toIntArray());
-        }
+        final L3TopologyValidator l3TopologyValidator = new L3TopologyValidator(sysfsTestDir);
+
+        final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        final PrintStream out = new PrintStream(buffer);
+        final int actualWarningCount = l3TopologyValidator.validate(cpuList, out);
+        assertEquals(expectedWarningCount, actualWarningCount);
+        assertEquals(expectedWarningCount, countWarnings(buffer));
+
     }
 
     public static Stream<Arguments> l3CacheAndCGroupsTests()
@@ -89,22 +91,27 @@ class L3ValidationTest
         return Stream.of(
             Arguments.of(
                 "0-7",
-                4,
                 commonPeers,
-                new int[][]{{0, 1}, {2, 3}, {4, 5}, {6, 7}}),
+                1L),
             Arguments.of(
                 "0,1,4,6",
-                3,
                 commonPeers,
-                new int[][]{{0, 1}, {4}, {6}}),
+                1L),
             Arguments.of(
                 "0,1,4,6",
-                2,
                 List.of(
                     new Pair(0, 3), new Pair(0, 3), new Pair(0, 3), new Pair(0, 3),
                     new Pair(4, 7), new Pair(4, 7), new Pair(4, 7), new Pair(4, 7)
                 ),
-                new int[][]{{0, 1}, {4, 6}}
+                1L
+            ),
+            Arguments.of(
+                "0,1,4,6",
+                List.of(
+                    new Pair(0, 7), new Pair(0, 7), new Pair(0, 7), new Pair(0, 7),
+                    new Pair(0, 7), new Pair(0, 7), new Pair(0, 7), new Pair(0, 7)
+                ),
+                0L
             )
         );
     }
@@ -113,9 +120,8 @@ class L3ValidationTest
     @MethodSource("l3CacheAndCGroupsTests")
     void testL3CacheGroupingAgainstCGroups(
         final String cpuset,
-        final int expectedGroupCount,
         final List<Pair> peers,
-        final int[][] expectedGroups,
+        final long expectedWarningCount,
         @TempDir final Path testProcPath,
         @TempDir final Path testCgroupPath,
         @TempDir final Path sysfsTestDir) throws IOException
@@ -125,13 +131,13 @@ class L3ValidationTest
         final CpusetV2Reader reader = new CpusetV2Reader(testProcPath, testCgroupPath);
         final Cpuset resultCpuset = reader.readCpuSet(pid);
         setupL3Peers(sysfsTestDir, peers);
-        final L3GroupGenerator l3GroupGenerator = new L3GroupGenerator(sysfsTestDir);
-        final var groups = l3GroupGenerator.group(resultCpuset.cpus());
-        final var sortedGroups = groups.stream().sorted(Comparator.comparing(a -> a.get(0))).toList();
-        assertEquals(expectedGroupCount, groups.size());
-        for (int i = 0; i < expectedGroups.length; i++)
-        {
-            assertArrayEquals(expectedGroups[i], sortedGroups.get(i).toIntArray());
-        }
+
+        final L3TopologyValidator l3TopologyValidator = new L3TopologyValidator(sysfsTestDir);
+
+        final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        final PrintStream out = new PrintStream(buffer);
+        final int actualWarningCount = l3TopologyValidator.validate(resultCpuset.cpus(), out);
+        assertEquals(expectedWarningCount, actualWarningCount);
+        assertEquals(expectedWarningCount, countWarnings(buffer));
     }
 }

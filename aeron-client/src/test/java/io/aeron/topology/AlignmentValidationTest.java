@@ -22,12 +22,14 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.nio.file.Path;
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
 
+import static io.aeron.topology.TopologyTestUtils.countWarnings;
 import static io.aeron.topology.TopologyTestUtils.setupCpuSet;
 import static io.aeron.topology.TopologyTestUtils.setupSiblingThreads;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -83,11 +85,14 @@ public class AlignmentValidationTest
         final CpusetV2Reader reader = new CpusetV2Reader(testProcPath, testCgroupPath);
         final Cpuset resultCpuset = reader.readCpuSet(pid);
         setupSiblingThreads(sysfsTestDir, siblings);
-        final ThreadAlignmentChecker threadAlignmentChecker = new ThreadAlignmentChecker(sysfsTestDir);
-        final var missingThreads = threadAlignmentChecker.identifyMissingThreads(resultCpuset.cpus()).toIntArray();
-        final var sortedMissingThreads = Arrays.stream(missingThreads).sorted().toArray();
-        assertEquals(expectedMissingThreads.length, missingThreads.length);
-        assertArrayEquals(expectedMissingThreads, sortedMissingThreads);
 
+        final ThreadAlignmentValidator validator = new ThreadAlignmentValidator(sysfsTestDir);
+        final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        final int[] missingThreadArray = validator.identifyMissingThreads(resultCpuset.cpus()).toIntArray();
+        assertArrayEquals(expectedMissingThreads, missingThreadArray);
+        final PrintStream out = new PrintStream(buffer);
+        final int actualWarningCount = validator.validate(resultCpuset.cpus(), out);
+        assertEquals(expectedMissingThreads.length, actualWarningCount);
+        assertEquals(expectedMissingThreads.length, countWarnings(buffer));
     }
 }
