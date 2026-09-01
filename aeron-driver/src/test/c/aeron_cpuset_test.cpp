@@ -235,6 +235,7 @@ TEST_F(CpusetTest, shouldReadOnlineCpus)
 
     std::vector<int> actual{cpus, cpus + cpu_count};
     EXPECT_THAT(actual, ElementsAre(5, 6, 7, 8, 9, 10));
+    aeron_free(cpus);
 }
 
 // Useful for testing on a real system.
