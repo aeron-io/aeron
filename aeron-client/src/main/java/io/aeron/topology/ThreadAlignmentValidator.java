@@ -49,12 +49,11 @@ class ThreadAlignmentValidator implements TopologyValidator
         final IntHashSet requiredThreads = new IntHashSet();
         final IntHashSet presentThreads = new IntHashSet();
         final IntArrayList missingThreads = new IntArrayList();
-        final var siblingMap = perCpuListReader.loadCpuList(cpuList);
         for (int i = 0; i < cpuList.size(); i++)
         {
             final int cpu = cpuList.get(i);
             presentThreads.add(cpu);
-            final IntHashSet siblings = siblingMap.get(cpu);
+            final IntHashSet siblings = perCpuListReader.loadCpuList(cpu);
             requiredThreads.addAll(siblings);
         }
         final IntHashSet difference = requiredThreads.difference(presentThreads);

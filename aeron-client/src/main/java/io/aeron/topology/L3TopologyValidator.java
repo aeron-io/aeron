@@ -16,7 +16,6 @@
 
 package io.aeron.topology;
 
-import org.agrona.collections.Int2ObjectHashMap;
 import org.agrona.collections.IntArrayList;
 import org.agrona.collections.IntHashSet;
 
@@ -49,8 +48,7 @@ class L3TopologyValidator implements TopologyValidator
     {
         try
         {
-            final Int2ObjectHashMap<IntHashSet> perCpuL3Peers = this.perCpuListReader.loadCpuList(cpuList);
-            final IntHashSet expectedPeers = perCpuL3Peers.get(cpuList.get(0));
+            final IntHashSet expectedPeers = this.perCpuListReader.loadCpuList(cpuList.get(0));
             final Optional<Integer> missing = cpuList
                 .stream()
                 .filter(cpu -> !expectedPeers.contains(cpu))

@@ -16,13 +16,11 @@
 
 package io.aeron.topology;
 
-import org.agrona.collections.Int2IntHashMap;
 import org.agrona.collections.IntArrayList;
 
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Path;
-import java.util.Optional;
 
 import static io.aeron.topology.CGroupValidator.DEFAULT_SYSFS_ROOT;
 
@@ -53,17 +51,16 @@ class DieLocalityValidator implements TopologyValidator
     {
         try
         {
-            final Int2IntHashMap dieIdMap = this.perCpuListReader.loadIds(cpuList);
-            final int expectedDieId = dieIdMap.get(cpuList.get(0));
-            final Optional<Integer> separated = cpuList
-                .stream()
-                .filter(cpu -> dieIdMap.get(cpu) != expectedDieId)
-                .findFirst();
-            if (separated.isPresent())
+            final int expectedDieId = this.perCpuListReader.loadId(cpuList.get(0));
+            for (int i = 0; i < cpuList.size(); i++)
             {
-                // TODO: Match with C warning
-                warningStream.printf("CPU list %s does not contain all cores in the same die %n", cpuList);
-                return 1;
+                final int cpu = cpuList.get(i);
+                if (this.perCpuListReader.loadId(cpu) != expectedDieId)
+                {
+                    // TODO: Match with C warning
+                    warningStream.printf("CPU list %s does not contain all cores in the same die %n", cpuList);
+                    return 1;
+                }
             }
         }
         catch (final IOException e)
