@@ -96,8 +96,7 @@ class SpySimulatedConnectionTest
             .threadingMode(threadingMode)
             .senderIdleStrategy(NoOpIdleStrategy.INSTANCE)
             .receiverIdleStrategy(NoOpIdleStrategy.INSTANCE)
-            .conductorIdleStrategy(NoOpIdleStrategy.INSTANCE)
-            .nativeResourceAgentIdleStrategy(NoOpIdleStrategy.INSTANCE);
+            .conductorIdleStrategy(NoOpIdleStrategy.INSTANCE);
 
         driver = TestMediaDriver.launch(driverContext, watcher);
         watcher.dataCollector().add(driver.context().aeronDirectory());
