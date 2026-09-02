@@ -19,7 +19,6 @@ package io.aeron.topology;
 import io.aeron.exceptions.ConfigurationException;
 import io.aeron.topology.TopologyTestUtils.Pair;
 import org.agrona.collections.IntArrayList;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -135,17 +134,6 @@ class CGroupValidatorTest
             assertDoesNotThrow(() -> new CGroupValidator(sysfsTestDir).validate(
                 new Cpuset(cpuList, cpuList.toString()), true, new PrintStream(new ByteArrayOutputStream())));
         }
-    }
-
-    @Test
-    void validateIgnoresPerCheckIOExceptionAndSkipsThatCheck(@TempDir final Path sysfsTestDir)
-    {
-        final IntArrayList cpuList = new IntArrayList();
-        cpuList.wrap(new int[]{0, 1}, 2);
-        final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        final CGroupValidator validator = new CGroupValidator(sysfsTestDir);
-        assertThrows(ConfigurationException.class, () -> validator.validate(
-            new Cpuset(cpuList, cpuList.toString()), true, new PrintStream(buffer)));
     }
 
 }

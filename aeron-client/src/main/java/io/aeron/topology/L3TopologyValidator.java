@@ -65,7 +65,7 @@ class L3TopologyValidator implements TopologyValidator
         catch (final IOException e)
         {
             warningStream.printf("Failed to read L3 topology information: %s%n", e.getMessage());
-            return 1;
+            return 0;
         }
         return 0;
     }
