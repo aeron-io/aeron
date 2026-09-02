@@ -56,6 +56,8 @@ public class CGroupValidator
         this.cpusetV2Reader = cpusetV2Reader;
         // TODO: Reconsider using ServiceLoader.
         //  However, this would require a sysfsRoot set method in the interface level
+        //  This should also be dependency injected into the class eventually,
+        //  as they have internal caching that can be used for the affinity checks eventually.
         this.topologyValidators = List.of(
             new DieLocalityValidator(sysfsRoot),
             new L3TopologyValidator(sysfsRoot),
