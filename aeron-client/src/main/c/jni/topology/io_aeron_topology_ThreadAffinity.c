@@ -26,7 +26,7 @@ JNIEXPORT void JNICALL Java_io_aeron_topology_ThreadAffinity_setAffinity(JNIEnv 
         return;
     }
 
-    if (aeron_thread_set_affinity("aaaaa", (uint8_t)cpu) < 0)
+    if (aeron_thread_set_affinity("java_thread", (uint8_t)cpu) < 0)
     {
         (*env)->ThrowNew(env, (*env)->FindClass(env, "io/aeron/exceptions/AeronException"), aeron_errmsg());
         return;

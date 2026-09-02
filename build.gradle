@@ -543,7 +543,7 @@ project(':aeron-client') {
 
         def cmakeExecutable = "${rootDir}/cppbuild/cmake/bin/cmake"
 
-        tasks.register('configureNativeAffinity', Exec) {
+        tasks.register('configureNativeJniBuild', Exec) {
             inputs.file("${rootDir}/CMakeLists.txt")
             inputs.file("${projectDir}/src/main/c/CMakeLists.txt")
             outputs.dir(nativeBuildDir)
@@ -561,8 +561,8 @@ project(':aeron-client') {
                     '-DAERON_BUILD_SAMPLES=OFF'
         }
 
-        tasks.register('buildNativeAffinity', Exec) {
-            dependsOn tasks.named('configureNativeAffinity')
+        tasks.register('buildNativeJniSharedLibraries', Exec) {
+            dependsOn tasks.named('configureNativeJniBuild')
             inputs.dir("${projectDir}/src/main/c")
             outputs.dir("${nativeBuildDir}/lib")
 
@@ -570,7 +570,7 @@ project(':aeron-client') {
         }
 
         tasks.withType(Test).configureEach {
-            dependsOn tasks.named('buildNativeAffinity')
+            dependsOn tasks.named('buildNativeJniSharedLibraries')
             systemProperty 'java.library.path', "${nativeBuildDir}/lib"
         }
     }
