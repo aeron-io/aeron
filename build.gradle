@@ -547,7 +547,8 @@ project(':aeron-client') {
             inputs.file("${rootDir}/CMakeLists.txt")
             inputs.file("${projectDir}/src/main/c/CMakeLists.txt")
             outputs.dir(nativeBuildDir)
-
+            // TODO: Simplify to a simple gcc build (?). To make this simpler, an independent implementation of
+            //  sched_setaffinity is needed in the C code
             commandLine cmakeExecutable,
                     '-S', rootDir,
                     '-B', nativeBuildDir,
