@@ -118,7 +118,8 @@ class CGroupValidatorTest
         cpuList.wrap(cpus, cpus.length);
 
         final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        new CGroupValidator(sysfsTestDir).validate(new Cpuset(cpuList, cpuList.toString()), false, new PrintStream(buffer));
+        new CGroupValidator(sysfsTestDir).validate(
+            new Cpuset(cpuList, cpuList.toString()), false, new PrintStream(buffer));
         assertEquals(expectedWarningCount, countWarnings(buffer));
 
         if (0 < expectedWarningCount)
