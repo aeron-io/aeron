@@ -52,15 +52,16 @@ class PerCpuListReader
 
     Int2ObjectHashMap<IntHashSet> loadCpuList(final IntArrayList cpus) throws IOException
     {
-        if (cpuToCpuListMap.isEmpty())
+        for (int i = 0, size = cpus.size(); i < size; i++)
         {
-            for (int i = 0, size = cpus.size(); i < size; i++)
+            final int cpu = cpus.get(i);
+            if (cpuToCpuListMap.containsKey(cpu))
             {
-                final int cpu = cpus.get(i);
-                final IntHashSet loadedCpuList = this.loadCpuList(cpu);
-                loadedCpuList.forEachInt((j) -> cpuToCpuListMap.put(j, loadedCpuList));
-                cpuToCpuListMap.put(cpu, loadedCpuList);
+                continue;
             }
+            final IntHashSet loadedCpuList = this.loadCpuList(cpu);
+            loadedCpuList.forEachInt((j) -> cpuToCpuListMap.put(j, loadedCpuList));
+            cpuToCpuListMap.put(cpu, loadedCpuList);
         }
         return cpuToCpuListMap;
     }
@@ -75,14 +76,16 @@ class PerCpuListReader
 
     Int2IntHashMap loadIds(final IntArrayList cpus) throws IOException
     {
-        if (cpuToIdMap.isEmpty())
+        for (int i = 0, size = cpus.size(); i < size; i++)
         {
-            for (int i = 0, size = cpus.size(); i < size; i++)
+            final int cpu = cpus.get(i);
+            if (cpuToIdMap.containsKey(cpu))
             {
-                final int cpu = cpus.get(i);
-                cpuToIdMap.put(cpu, this.loadId(cpu));
+                continue;
             }
+            cpuToIdMap.put(cpu, this.loadId(cpu));
         }
+
         return cpuToIdMap;
     }
 }
