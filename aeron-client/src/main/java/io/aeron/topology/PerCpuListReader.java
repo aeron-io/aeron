@@ -61,7 +61,6 @@ class PerCpuListReader
             }
             final IntHashSet loadedCpuList = this.loadCpuList(cpu);
             loadedCpuList.forEachInt((j) -> cpuToCpuListMap.put(j, loadedCpuList));
-            cpuToCpuListMap.put(cpu, loadedCpuList);
         }
         return cpuToCpuListMap;
     }
