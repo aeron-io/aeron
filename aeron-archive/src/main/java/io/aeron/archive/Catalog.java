@@ -19,7 +19,7 @@ import io.aeron.Aeron;
 import io.aeron.archive.checksum.Checksum;
 import io.aeron.archive.client.ArchiveException;
 import io.aeron.archive.codecs.*;
-import io.aeron.archive.logging.ArchiveLog;
+import io.aeron.archive.logging.ArchiveTracing;
 import org.agrona.*;
 import org.agrona.collections.Long2ObjectHashMap;
 import org.agrona.concurrent.EpochClock;
@@ -921,7 +921,7 @@ final class Catalog implements AutoCloseable
 
     void catalogResized(final long oldCapacity, final long newCapacity)
     {
-        ArchiveLog.logCatalogResize(oldCapacity, newCapacity);
+        ArchiveTracing.traceCatalogResize(oldCapacity, newCapacity);
     }
 
     private static void validateCapacity(final long catalogCapacity)

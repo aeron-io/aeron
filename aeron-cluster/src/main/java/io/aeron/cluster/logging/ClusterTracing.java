@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Logging entry points for the cluster.
  */
-public final class ClusterLog
+public final class ClusterTracing
 {
     private static final Object2ObjectHashMap<String, EnumSet<ClusterEventCode>> SPECIAL_EVENTS =
         new Object2ObjectHashMap<>();
@@ -92,7 +92,7 @@ public final class ClusterLog
         isEnabled(ClusterEventCode.SNAPSHOT_ENTRY_INVALIDATION);
     static final boolean LOG_START = !ENABLED_EVENT_CODES.isEmpty();
 
-    private ClusterLog()
+    private ClusterTracing()
     {
     }
 
@@ -123,7 +123,7 @@ public final class ClusterLog
      * @param catchupPosition     of the node.
      * @param reason              for the state transition to occur.
      */
-    public static <E extends Enum<E>> void logElectionStateChange(
+    public static <E extends Enum<E>> void traceElectionStateChange(
         final int memberId,
         final E oldState,
         final E newState,
@@ -174,7 +174,7 @@ public final class ClusterLog
      * @param appVersion              associated with the recorded state.
      * @param isStartup               is the leader starting up fresh.
      */
-    public static void logOnNewLeadershipTerm(
+    public static void traceOnNewLeadershipTerm(
         final int memberId,
         final long logLeadershipTermId,
         final long nextLeadershipTermId,
@@ -224,7 +224,7 @@ public final class ClusterLog
      * @param reason   for the state change.
      * @param <E>      type of state.
      */
-    public static <E extends Enum<E>> void logStateChange(
+    public static <E extends Enum<E>> void traceStateChange(
         final int memberId, final E oldState, final E newState, final String reason)
     {
         if (!LOG_STATE_CHANGE_ENABLED)
@@ -243,7 +243,7 @@ public final class ClusterLog
      * @param newRole   role after the change.
      * @param <E>       type of the role.
      */
-    public static <E extends Enum<E>> void logRoleChange(final int memberId, final E oldRole, final E newRole)
+    public static <E extends Enum<E>> void traceRoleChange(final int memberId, final E oldRole, final E newRole)
     {
         if (!LOG_ROLE_CHANGE_ENABLED)
         {
@@ -263,7 +263,7 @@ public final class ClusterLog
      * @param followerMemberId    follower node id.
      * @param protocolVersion     of the consensus module.
      */
-    public static void logOnCanvassPosition(
+    public static void traceOnCanvassPosition(
         final int memberId,
         final long logLeadershipTermId,
         final long logPosition,
@@ -290,7 +290,7 @@ public final class ClusterLog
      * @param candidateId         id of the candidate node.
      * @param protocolVersion     from the request.
      */
-    public static void logOnRequestVote(
+    public static void traceOnRequestVote(
         final int memberId,
         final long logLeadershipTermId,
         final long logPosition,
@@ -318,7 +318,7 @@ public final class ClusterLog
      * @param voterId             id of the follower node that voted.
      * @param vote                expressed by the follower node.
      */
-    public static void logOnVote(
+    public static void traceOnVote(
         final int memberId,
         final long logLeadershipTermId,
         final long logPosition,
@@ -345,7 +345,7 @@ public final class ClusterLog
      * @param followerMemberId the id of the follower that is catching up
      * @param catchupEndpoint  the endpoint to send catchup messages
      */
-    public static void logOnCatchupPosition(
+    public static void traceOnCatchupPosition(
         final int memberId,
         final long leadershipTermId,
         final long logPosition,
@@ -368,7 +368,7 @@ public final class ClusterLog
      * @param leadershipTermId current leadershipTermId.
      * @param followerMemberId id of follower currently catching up.
      */
-    public static void logOnStopCatchup(final int memberId, final long leadershipTermId, final int followerMemberId)
+    public static void traceOnStopCatchup(final int memberId, final long leadershipTermId, final int followerMemberId)
     {
         if (!LOG_STOP_CATCHUP_ENABLED)
         {
@@ -393,7 +393,7 @@ public final class ClusterLog
      * @param oldPosition         truncated from.
      * @param newPosition         truncated to.
      */
-    public static <E extends Enum<E>> void logOnTruncateLogEntry(
+    public static <E extends Enum<E>> void traceOnTruncateLogEntry(
         final int memberId,
         final E state,
         final long logLeadershipTermId,
@@ -435,7 +435,7 @@ public final class ClusterLog
      * @param timeUnit            cluster time unit.
      * @param appVersion          version of the application.
      */
-    public static void logOnReplayNewLeadershipTermEvent(
+    public static void traceOnReplayNewLeadershipTermEvent(
         final int memberId,
         final boolean isInElection,
         final long leadershipTermId,
@@ -470,7 +470,7 @@ public final class ClusterLog
      * @param followerMemberId follower member sending the Append position.
      * @param flags            applied to append position by follower.
      */
-    public static void logOnAppendPosition(
+    public static void traceOnAppendPosition(
         final int memberId,
         final long leadershipTermId,
         final long logPosition,
@@ -494,7 +494,7 @@ public final class ClusterLog
      * @param logPosition      the current position in the log.
      * @param leaderMemberId   leader member sending the commit position.
      */
-    public static void logOnCommitPosition(
+    public static void traceOnCommitPosition(
         final int memberId, final long leadershipTermId, final long logPosition, final int leaderMemberId)
     {
         if (!LOG_COMMIT_POSITION_ENABLED)
@@ -515,7 +515,7 @@ public final class ClusterLog
      * @param timestamp        the current timestamp.
      * @param timeUnit         units for the timestamp.
      */
-    public static void logAppendSessionClose(
+    public static void traceAppendSessionClose(
         final int memberId,
         final long sessionId,
         final CloseReason closeReason,
@@ -542,7 +542,7 @@ public final class ClusterLog
      * @param timestamp        the current timestamp.
      * @param timeUnit         units for the timestamp.
      */
-    public static void logAppendSessionOpen(
+    public static void traceAppendSessionOpen(
         final int memberId,
         final long sessionId,
         final long leadershipTermId,
@@ -566,7 +566,7 @@ public final class ClusterLog
      * @param oldState  before the change.
      * @param newState  after the change.
      */
-    public static <E extends Enum<E>> void logClusterBackupStateChange(
+    public static <E extends Enum<E>> void traceClusterBackupStateChange(
         final E oldState,
         final E newState)
     {
@@ -585,7 +585,7 @@ public final class ClusterLog
      * @param leadershipTermId    leadership term for the supplied position.
      * @param logPosition         position to terminate at.
      */
-    public static void logTerminationPosition(final int memberId, final long leadershipTermId, final long logPosition)
+    public static void traceTerminationPosition(final int memberId, final long leadershipTermId, final long logPosition)
     {
         if (!LOG_TERMINATION_POSITION_ENABLED)
         {
@@ -603,7 +603,7 @@ public final class ClusterLog
      * @param logPosition         position to terminate at.
      * @param senderMemberId      member sending the ack.
      */
-    public static void logTerminationAck(
+    public static void traceTerminationAck(
         final int memberId, final long leadershipTermId, final long logPosition, final int senderMemberId)
     {
         if (!LOG_TERMINATION_ACK_ENABLED)
@@ -625,7 +625,7 @@ public final class ClusterLog
      * @param relevantId  associated id used in the ack, e.g. recordingId for snapshot acks.
      * @param serviceId   the id of the service that sent the ack.
      */
-    public static void logServiceAck(
+    public static void traceServiceAck(
         final int memberId,
         final long logPosition,
         final long timestamp,
@@ -654,7 +654,7 @@ public final class ClusterLog
      * @param position       the position where the recording ended.
      * @param hasSynced      was the sync event been received for the replication.
      */
-    public static void logReplicationEnded(
+    public static void traceReplicationEnded(
         final int memberId,
         final String purpose,
         final String channel,
@@ -685,7 +685,7 @@ public final class ClusterLog
      * @param serviceId           the serviceId for the snapshot.
      * @param archiveEndpoint     the endpoint holding the standby snapshot.
      */
-    public static void logStandbySnapshotNotification(
+    public static void traceStandbySnapshotNotification(
         final int memberId,
         final long recordingId,
         final long leadershipTermId,
@@ -722,7 +722,7 @@ public final class ClusterLog
      * @param appendPosition   the append position.
      * @param reason           for election to be started.
      */
-    public static void logNewElection(
+    public static void traceNewElection(
         final int memberId,
         final long leadershipTermId,
         final long logPosition,
@@ -749,7 +749,7 @@ public final class ClusterLog
      * @param newState  after the change.
      * @param reason    for the change.
      */
-    public static <A extends Enum<A>, S extends Enum<S>> void logClusterSessionStateChange(
+    public static <A extends Enum<A>, S extends Enum<S>> void traceClusterSessionStateChange(
         final int memberId,
         final long sessionId,
         final A action,
@@ -775,7 +775,7 @@ public final class ClusterLog
      * @param logPosition   of the snapshot.
      * @param serviceId     that took the snapshot.
      */
-    public static void logSnapshotEntryInvalidation(
+    public static void traceSnapshotEntryInvalidation(
         final int memberId,
         final int entryIndex,
         final long recordingId,
@@ -796,7 +796,7 @@ public final class ClusterLog
      *
      * @param version   of the cluster.
      */
-    public static void logStart(final String version)
+    public static void traceStart(final String version)
     {
         if (!LOG_START)
         {

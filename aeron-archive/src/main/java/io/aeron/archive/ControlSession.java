@@ -25,7 +25,7 @@ import io.aeron.archive.client.ArchiveEvent;
 import io.aeron.archive.codecs.ControlResponseCode;
 import io.aeron.archive.codecs.RecordingSignal;
 import io.aeron.archive.codecs.SourceLocation;
-import io.aeron.archive.logging.ArchiveLog;
+import io.aeron.archive.logging.ArchiveTracing;
 import io.aeron.exceptions.RegistrationException;
 import io.aeron.security.Authenticator;
 import org.agrona.CloseHelper;
@@ -1084,7 +1084,7 @@ final class ControlSession implements Session
     private void logStateChange(
         final State oldState, final State newState, final long controlSessionId, final String reason)
     {
-        ArchiveLog.logControlSessionStateChange(oldState, newState, controlSessionId, reason);
+        ArchiveTracing.traceControlSessionStateChange(oldState, newState, controlSessionId, reason);
     }
 
     String abortReason()

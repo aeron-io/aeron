@@ -27,7 +27,7 @@ import java.util.Set;
 /**
  * Facade used to log Archive events directly, without requiring the ByteBuddy Java agent to be attached.
  */
-public final class ArchiveLog
+public final class ArchiveTracing
 {
     private static final ThreadLocal<MessageHeaderDecoder> HEADER_DECODER = ThreadLocal.withInitial(
         MessageHeaderDecoder::new);
@@ -62,7 +62,7 @@ public final class ArchiveLog
     }
 
     private static final boolean LOG_ANY_CONTROL_REQUEST_ENABLED =
-        ArchiveEventLogger.CONTROL_REQUEST_EVENTS.stream().anyMatch(ArchiveLog::isEnabled);
+        ArchiveEventLogger.CONTROL_REQUEST_EVENTS.stream().anyMatch(ArchiveTracing::isEnabled);
     private static final boolean LOG_CONTROL_RESPONSE_ENABLED = isEnabled(ArchiveEventCode.CMD_OUT_RESPONSE);
     private static final boolean LOG_RECORDING_SIGNAL_ENABLED = isEnabled(ArchiveEventCode.RECORDING_SIGNAL);
     private static final boolean LOG_REPLAY_SESSION_STATE_CHANGE_ENABLED =
@@ -86,7 +86,7 @@ public final class ArchiveLog
         isEnabled(ArchiveEventCode.PERSISTENT_SUBSCRIPTION_LEFT_LIVE);
     private static final boolean LOG_START = !ENABLED_EVENT_CODES.isEmpty();
 
-    private ArchiveLog()
+    private ArchiveTracing()
     {
     }
 
@@ -108,7 +108,7 @@ public final class ArchiveLog
      * @param offset in the buffer at which the request begins.
      * @param length of the request in the buffer.
      */
-    public static void logControlRequest(final DirectBuffer buffer, final int offset, final int length)
+    public static void traceControlRequest(final DirectBuffer buffer, final int offset, final int length)
     {
         if (!LOG_ANY_CONTROL_REQUEST_ENABLED)
         {
@@ -130,7 +130,7 @@ public final class ArchiveLog
      * @param offset at which response message begins.
      * @param length of the response in the buffer.
      */
-    public static void logControlResponse(final DirectBuffer buffer, final int offset, final int length)
+    public static void traceControlResponse(final DirectBuffer buffer, final int offset, final int length)
     {
         if (!LOG_CONTROL_RESPONSE_ENABLED)
         {
@@ -147,7 +147,7 @@ public final class ArchiveLog
      * @param offset at which response message begins.
      * @param length of the response in the buffer.
      */
-    public static void logRecordingSignal(final DirectBuffer buffer, final int offset, final int length)
+    public static void traceRecordingSignal(final DirectBuffer buffer, final int offset, final int length)
     {
         if (!LOG_RECORDING_SIGNAL_ENABLED)
         {
@@ -168,7 +168,7 @@ public final class ArchiveLog
      * @param position    position of state change.
      * @param reason      a string indicating the reason for the state change.
      */
-    public static <E extends Enum<E>> void logReplaySessionStateChange(
+    public static <E extends Enum<E>> void traceReplaySessionStateChange(
         final E oldState,
         final E newState,
         final long sessionId,
@@ -192,7 +192,7 @@ public final class ArchiveLog
      * @param recordingId  to which the error applies.
      * @param errorMessage which resulted.
      */
-    public static void logReplaySessionError(final long sessionId, final long recordingId, final String errorMessage)
+    public static void traceReplaySessionError(final long sessionId, final long recordingId, final String errorMessage)
     {
         if (!LOG_REPLAY_SESSION_ERROR_ENABLED)
         {
@@ -212,7 +212,7 @@ public final class ArchiveLog
      * @param position    position of state change.
      * @param reason      a string indicating the reason for the state change.
      */
-    public static <E extends Enum<E>> void logRecordingSessionStateChange(
+    public static <E extends Enum<E>> void traceRecordingSessionStateChange(
         final E oldState,
         final E newState,
         final long recordingId,
@@ -239,7 +239,7 @@ public final class ArchiveLog
      * @param position       position of state change.
      * @param reason         a string indicating the reason for the state change.
      */
-    public static <E extends Enum<E>> void logReplicationSessionStateChange(
+    public static <E extends Enum<E>> void traceReplicationSessionStateChange(
         final E oldState,
         final E newState,
         final long replicationId,
@@ -273,7 +273,7 @@ public final class ArchiveLog
      * @param isSynced         has the destination recording position reached the stop position of the source
      *                         recording.
      */
-    public static void logReplicationSessionDone(
+    public static void traceReplicationSessionDone(
         final long controlSessionId,
         final long replicationId,
         final long srcRecordingId,
@@ -314,7 +314,7 @@ public final class ArchiveLog
      * @param controlSessionId identity for the control session on the Archive.
      * @param reason           a string indicating the reason for the state change.
      */
-    public static <E extends Enum<E>> void logControlSessionStateChange(
+    public static <E extends Enum<E>> void traceControlSessionStateChange(
         final E oldState,
         final E newState,
         final long controlSessionId,
@@ -334,7 +334,7 @@ public final class ArchiveLog
      * @param oldCatalogLength before the resize.
      * @param newCatalogLength after the resize.
      */
-    public static void logCatalogResize(final long oldCatalogLength, final long newCatalogLength)
+    public static void traceCatalogResize(final long oldCatalogLength, final long newCatalogLength)
     {
         if (!LOG_CATALOG_RESIZE_ENABLED)
         {
@@ -356,7 +356,7 @@ public final class ArchiveLog
      * @param liveChannel    the live channel used by the {@link io.aeron.archive.client.PersistentSubscription}.
      * @param liveStreamId   the live stream id used by the {@link io.aeron.archive.client.PersistentSubscription}.
      */
-    public static <E extends Enum<E>> void logPersistentSubscriptionStateChange(
+    public static <E extends Enum<E>> void tracePersistentSubscriptionStateChange(
         final E oldState,
         final E newState,
         final long recordingId,
@@ -386,7 +386,7 @@ public final class ArchiveLog
      * @param joinPosition   the position the {@link io.aeron.archive.client.PersistentSubscription} joined the
      *                       live stream at.
      */
-    public static void logPersistentSubscriptionJoinedLive(
+    public static void tracePersistentSubscriptionJoinedLive(
         final long recordingId,
         final String replayChannel,
         final int replayStreamId,
@@ -414,7 +414,7 @@ public final class ArchiveLog
      * @param liveStreamId   the live stream id used by the {@link io.aeron.archive.client.PersistentSubscription}.
      * @param livePosition   the live position when the {@link io.aeron.archive.client.PersistentSubscription} left.
      */
-    public static void logPersistentSubscriptionLeftLive(
+    public static void tracePersistentSubscriptionLeftLive(
         final long recordingId,
         final String replayChannel,
         final int replayStreamId,
@@ -436,7 +436,7 @@ public final class ArchiveLog
      *
      * @param version   of the archive.
      */
-    public static void logStart(final String version)
+    public static void traceStart(final String version)
     {
         if (!LOG_START)
         {

@@ -17,7 +17,7 @@ package io.aeron.cluster;
 
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.client.ArchiveException;
-import io.aeron.cluster.logging.ClusterLog;
+import io.aeron.cluster.logging.ClusterTracing;
 import org.agrona.CloseHelper;
 import org.agrona.collections.LongArrayList;
 import org.agrona.collections.LongHashSet;
@@ -124,6 +124,6 @@ class RecordingLogValidator implements AutoCloseable
         final long logPosition,
         final int serviceId)
     {
-        ClusterLog.logSnapshotEntryInvalidation(memberId, entryIndex, recordingId, logPosition, serviceId);
+        ClusterTracing.traceSnapshotEntryInvalidation(memberId, entryIndex, recordingId, logPosition, serviceId);
     }
 }

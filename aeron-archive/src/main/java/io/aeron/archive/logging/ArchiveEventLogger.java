@@ -48,7 +48,7 @@ public interface ArchiveEventLogger
 
     /**
      * Set of event codes that represent an incoming control request, i.e. everything a caller resolving a control
-     * request's event code (see {@code ArchiveLog#logControlRequest}) may be asked to log.
+     * request's event code (see {@code ArchiveTracing#traceControlRequest}) may be asked to log.
      */
     EnumSet<ArchiveEventCode> CONTROL_REQUEST_EVENTS = complementOf(of(
         CMD_OUT_RESPONSE,

@@ -16,7 +16,7 @@
 package io.aeron.driver;
 
 import io.aeron.CommonContext;
-import io.aeron.driver.logging.DriverLog;
+import io.aeron.driver.logging.DriverTracing;
 import io.aeron.driver.media.UdpChannel;
 import io.aeron.driver.status.FlowControlReceivers;
 import io.aeron.protocol.ErrorFlyweight;
@@ -436,13 +436,13 @@ public abstract class AbstractMinMulticastFlowControl
     private void receiverAdded(
         final long receiverId, final int sessionId, final int streamId, final String channel, final int receiverCount)
     {
-        DriverLog.logFlowControlReceiverAdded(receiverId, sessionId, streamId, channel, receiverCount);
+        DriverTracing.traceFlowControlReceiverAdded(receiverId, sessionId, streamId, channel, receiverCount);
     }
 
     private void receiverRemoved(
         final long receiverId, final int sessionId, final int streamId, final String channel, final int receiverCount)
     {
-        DriverLog.logFlowControlReceiverRemoved(receiverId, sessionId, streamId, channel, receiverCount);
+        DriverTracing.traceFlowControlReceiverRemoved(receiverId, sessionId, streamId, channel, receiverCount);
     }
 
     private long lastSetupSenderLimit(final long nowNs)

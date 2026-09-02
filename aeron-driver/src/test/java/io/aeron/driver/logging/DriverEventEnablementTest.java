@@ -165,7 +165,7 @@ public class DriverEventEnablementTest
                 {
                     final Field declaredField = ControlProtocolEvents.class.getDeclaredField(protocolName);
                     final int msgTypeId = (int)(Integer)declaredField.get(null);
-                    DriverLog.logCmd(msgTypeId, new ExpandableArrayBuffer(0), 0, 0);
+                    DriverTracing.traceCmd(msgTypeId, new ExpandableArrayBuffer(0), 0, 0);
                 }
                 catch (final NoSuchFieldException | IllegalAccessException ignore)
                 {
@@ -174,7 +174,7 @@ public class DriverEventEnablementTest
             }
         }
 
-        DriverLog.logCmd(ControlProtocolEvents.CLIENT_KEEPALIVE, new ExpandableArrayBuffer(0), 0, 0);
+        DriverTracing.traceCmd(ControlProtocolEvents.CLIENT_KEEPALIVE, new ExpandableArrayBuffer(0), 0, 0);
     }
 
     private static void callCmdOutLogMethods()
@@ -192,7 +192,7 @@ public class DriverEventEnablementTest
                 {
                     final Field declaredField = ControlProtocolEvents.class.getDeclaredField(protocolName);
                     final int msgTypeId = (int)(Integer)declaredField.get(null);
-                    DriverLog.logCmd(msgTypeId, new ExpandableArrayBuffer(0), 0, 0);
+                    DriverTracing.traceCmd(msgTypeId, new ExpandableArrayBuffer(0), 0, 0);
                 }
                 catch (final NoSuchFieldException | IllegalAccessException ignore)
                 {
@@ -204,10 +204,10 @@ public class DriverEventEnablementTest
 
     private void callGeneralLogMethods()
     {
-        final List<Method> logMethods = Arrays.stream(DriverLog.class.getMethods())
-            .filter((m) -> m.getName().startsWith("log"))
+        final List<Method> logMethods = Arrays.stream(DriverTracing.class.getMethods())
+            .filter((m) -> m.getName().startsWith("trace"))
             .filter((m) -> 0 != (m.getModifiers() & Modifier.STATIC))
-            .filter((m) -> !"logCmd".equals(m.getName()))
+            .filter((m) -> !"traceCmd".equals(m.getName()))
             .toList();
 
         for (final Method logMethod : logMethods)

@@ -15,7 +15,7 @@
  */
 package io.aeron.driver.media;
 
-import io.aeron.driver.logging.DriverLog;
+import io.aeron.driver.logging.DriverTracing;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.status.SystemCounterDescriptor;
 import io.aeron.exceptions.AeronEvent;
@@ -411,7 +411,7 @@ public abstract class UdpChannelTransport implements AutoCloseable
      */
     public void sendHook(final ByteBuffer buffer, final InetSocketAddress address)
     {
-        DriverLog.logFrameOut(buffer, address);
+        DriverTracing.traceFrameOut(buffer, address);
     }
 
     /**
@@ -423,7 +423,7 @@ public abstract class UdpChannelTransport implements AutoCloseable
      */
     public void receiveHook(final UnsafeBuffer buffer, final int length, final InetSocketAddress address)
     {
-        DriverLog.logFrameIn(address, buffer, 0, length);
+        DriverTracing.traceFrameIn(address, buffer, 0, length);
     }
 
     /**
@@ -438,7 +438,7 @@ public abstract class UdpChannelTransport implements AutoCloseable
     public void resendHook(
         final int sessionId, final int streamId, final int termId, final int termOffset, final int length)
     {
-        DriverLog.logResend(sessionId, streamId, termId, termOffset, length, udpChannel.originalUriString());
+        DriverTracing.traceResend(sessionId, streamId, termId, termOffset, length, udpChannel.originalUriString());
     }
 
     /**

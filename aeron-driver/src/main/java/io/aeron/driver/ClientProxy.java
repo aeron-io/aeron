@@ -18,7 +18,7 @@ package io.aeron.driver;
 import io.aeron.Aeron;
 import io.aeron.ErrorCode;
 import io.aeron.command.*;
-import io.aeron.driver.logging.DriverLog;
+import io.aeron.driver.logging.DriverTracing;
 import org.agrona.DirectBuffer;
 import org.agrona.ExpandableArrayBuffer;
 import org.agrona.MutableDirectBuffer;
@@ -216,7 +216,7 @@ final class ClientProxy
 
     private void transmit(final int msgTypeId, final DirectBuffer buffer, final int index, final int length)
     {
-        DriverLog.logCmd(msgTypeId, buffer, index, length);
+        DriverTracing.traceCmd(msgTypeId, buffer, index, length);
         transmitter.transmit(msgTypeId, buffer, index, length);
     }
 

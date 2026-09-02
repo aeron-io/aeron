@@ -15,7 +15,7 @@
  */
 package io.aeron.driver;
 
-import io.aeron.driver.logging.DriverLog;
+import io.aeron.driver.logging.DriverTracing;
 import org.agrona.concurrent.status.ReadablePosition;
 
 class UntetheredSubscription
@@ -55,6 +55,6 @@ class UntetheredSubscription
         final int sessionId,
         final long nowNs)
     {
-        DriverLog.logUntetheredSubscriptionStateChange(oldState, newState, subscriptionId, streamId, sessionId);
+        DriverTracing.traceUntetheredSubscriptionStateChange(oldState, newState, subscriptionId, streamId, sessionId);
     }
 }

@@ -26,7 +26,7 @@ import io.aeron.cluster.client.ClusterEvent;
 import io.aeron.cluster.client.ClusterException;
 import io.aeron.cluster.codecs.CloseReason;
 import io.aeron.cluster.codecs.EventCode;
-import io.aeron.cluster.logging.ClusterLog;
+import io.aeron.cluster.logging.ClusterTracing;
 import io.aeron.cluster.service.ClusterCounters;
 import io.aeron.exceptions.AeronException;
 import io.aeron.exceptions.RegistrationException;
@@ -531,7 +531,7 @@ final class ClusterSession implements ClusterClientSession
         final State newState,
         final String reason)
     {
-        ClusterLog.logClusterSessionStateChange(memberId, sessionId, action, oldState, newState, reason);
+        ClusterTracing.traceClusterSessionStateChange(memberId, sessionId, action, oldState, newState, reason);
     }
 
     static void checkEncodedPrincipalLength(final byte[] encodedPrincipal)

@@ -18,7 +18,7 @@ package io.aeron.driver;
 import io.aeron.Aeron;
 import io.aeron.CommonContext;
 import io.aeron.driver.buffer.RawLog;
-import io.aeron.driver.logging.DriverLog;
+import io.aeron.driver.logging.DriverTracing;
 import io.aeron.driver.status.SystemCounters;
 import io.aeron.logbuffer.LogBufferDescriptor;
 import io.aeron.logbuffer.LogBufferUnblocker;
@@ -665,6 +665,6 @@ public final class IpcPublication implements DriverManagedResource, Subscribable
         final int streamId,
         final String channel)
     {
-        DriverLog.logPublicationRevoke(revokedPos, sessionId, streamId, channel);
+        DriverTracing.tracePublicationRevoke(revokedPos, sessionId, streamId, channel);
     }
 }

@@ -33,7 +33,7 @@ import io.aeron.archive.client.ArchiveException;
 import io.aeron.archive.codecs.RecordingDescriptorDecoder;
 import io.aeron.archive.codecs.RecordingSignal;
 import io.aeron.archive.codecs.SourceLocation;
-import io.aeron.archive.logging.ArchiveLog;
+import io.aeron.archive.logging.ArchiveTracing;
 import io.aeron.archive.status.RecordingPos;
 import io.aeron.driver.DutyCycleTracker;
 import io.aeron.exceptions.AeronException;
@@ -245,7 +245,7 @@ abstract class ArchiveConductor
 
     public void onStart()
     {
-        ArchiveLog.logStart(ArchiveVersion.VERSION);
+        ArchiveTracing.traceStart(ArchiveVersion.VERSION);
 
         recorder = newRecorder();
         replayer = newReplayer();

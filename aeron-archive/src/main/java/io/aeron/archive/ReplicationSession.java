@@ -32,7 +32,7 @@ import io.aeron.archive.client.ReplayParams;
 import io.aeron.archive.codecs.ControlResponseCode;
 import io.aeron.archive.codecs.RecordingSignal;
 import io.aeron.archive.codecs.SourceLocation;
-import io.aeron.archive.logging.ArchiveLog;
+import io.aeron.archive.logging.ArchiveTracing;
 import io.aeron.exceptions.AeronException;
 import io.aeron.exceptions.TimeoutException;
 import org.agrona.CloseHelper;
@@ -1010,7 +1010,7 @@ class ReplicationSession implements Session, RecordingDescriptorConsumer
         final long position,
         final String reason)
     {
-        ArchiveLog.logReplicationSessionStateChange(
+        ArchiveTracing.traceReplicationSessionStateChange(
             oldState, newState, replicationId, srcRecordingId, dstRecordingId, position, reason);
     }
 
@@ -1027,7 +1027,7 @@ class ReplicationSession implements Session, RecordingDescriptorConsumer
         final boolean isEndOfStream,
         final boolean isSynced)
     {
-        ArchiveLog.logReplicationSessionDone(
+        ArchiveTracing.traceReplicationSessionDone(
             controlSessionId,
             replicationId,
             srcRecordingId,

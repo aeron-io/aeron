@@ -20,7 +20,7 @@ import io.aeron.driver.MediaDriver.Context;
 import io.aeron.driver.buffer.RawLog;
 import io.aeron.driver.exceptions.InvalidChannelException;
 import io.aeron.driver.exceptions.UnknownSubscriptionException;
-import io.aeron.driver.logging.DriverLog;
+import io.aeron.driver.logging.DriverTracing;
 import io.aeron.driver.media.ControlMode;
 import io.aeron.driver.media.ReceiveChannelEndpoint;
 import io.aeron.driver.media.ReceiveDestinationTransport;
@@ -252,7 +252,7 @@ public final class DriverConductor implements Agent
     @Override
     public void onStart()
     {
-        DriverLog.logStart(MediaDriverVersion.VERSION);
+        DriverTracing.traceStart(MediaDriverVersion.VERSION);
 
         final long nowNs = nanoClock.nanoTime();
         cachedNanoClock.update(nowNs);
@@ -585,7 +585,7 @@ public final class DriverConductor implements Agent
 
     void cleanupPublication(final NetworkPublication publication)
     {
-        DriverLog.logPublicationRemoval(publication.channel(), publication.sessionId(), publication.streamId());
+        DriverTracing.tracePublicationRemoval(publication.channel(), publication.sessionId(), publication.streamId());
 
         senderProxy.removeNetworkPublication(publication);
 
@@ -610,7 +610,7 @@ public final class DriverConductor implements Agent
 
     void cleanupSubscriptionLink(final SubscriptionLink subscription)
     {
-        DriverLog.logSubscriptionRemoval(
+        DriverTracing.traceSubscriptionRemoval(
             subscription.channel(), subscription.streamId(), subscription.registrationId());
 
         final ReceiveChannelEndpoint channelEndpoint = subscription.channelEndpoint();
@@ -676,7 +676,7 @@ public final class DriverConductor implements Agent
 
     void cleanupImage(final PublicationImage image)
     {
-        DriverLog.logImageRemoval(image.channel(), image.sessionId(), image.streamId(), image.correlationId());
+        DriverTracing.traceImageRemoval(image.channel(), image.sessionId(), image.streamId(), image.correlationId());
 
         for (int i = 0, size = subscriptionLinks.size(); i < size; i++)
         {
@@ -686,7 +686,7 @@ public final class DriverConductor implements Agent
 
     void cleanupIpcPublication(final IpcPublication publication)
     {
-        DriverLog.logPublicationRemoval(publication.channel(), publication.sessionId(), publication.streamId());
+        DriverTracing.tracePublicationRemoval(publication.channel(), publication.sessionId(), publication.streamId());
 
         for (int i = 0, size = subscriptionLinks.size(); i < size; i++)
         {

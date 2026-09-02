@@ -23,7 +23,7 @@ import io.aeron.Subscription;
 import io.aeron.archive.codecs.RecordingSignal;
 import io.aeron.cluster.client.ClusterEvent;
 import io.aeron.cluster.client.ClusterException;
-import io.aeron.cluster.logging.ClusterLog;
+import io.aeron.cluster.logging.ClusterTracing;
 import io.aeron.cluster.service.Cluster;
 import io.aeron.exceptions.AeronException;
 import io.aeron.exceptions.TimeoutException;
@@ -619,7 +619,7 @@ class Election
         final long oldPosition,
         final long newPosition)
     {
-        ClusterLog.logOnTruncateLogEntry(
+        ClusterTracing.traceOnTruncateLogEntry(
             memberId,
             state,
             logLeadershipTermId,
@@ -1570,7 +1570,7 @@ class Election
         final long catchupPosition,
         final String reason)
     {
-        ClusterLog.logElectionStateChange(
+        ClusterTracing.traceElectionStateChange(
             memberId,
             oldState,
             newState,

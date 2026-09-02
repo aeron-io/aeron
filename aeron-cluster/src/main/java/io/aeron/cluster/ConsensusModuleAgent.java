@@ -41,7 +41,7 @@ import io.aeron.cluster.codecs.CloseReason;
 import io.aeron.cluster.codecs.ClusterAction;
 import io.aeron.cluster.codecs.MessageHeaderDecoder;
 import io.aeron.cluster.codecs.SessionMessageHeaderDecoder;
-import io.aeron.cluster.logging.ClusterLog;
+import io.aeron.cluster.logging.ClusterTracing;
 import io.aeron.cluster.service.Cluster;
 import io.aeron.cluster.service.ClusterClock;
 import io.aeron.cluster.service.ClusterMarkFile;
@@ -327,7 +327,7 @@ final class ConsensusModuleAgent
     @Override
     public void onStart()
     {
-        ClusterLog.logStart(ConsensusModuleVersion.VERSION);
+        ClusterTracing.traceStart(ConsensusModuleVersion.VERSION);
 
         archive = AeronArchive.connect(ctx.archiveContext().clone());
         recordingSignalPoller = new RecordingSignalPoller(
@@ -1331,7 +1331,7 @@ final class ConsensusModuleAgent
         final ConsensusModule.State newState,
         final String reason)
     {
-        ClusterLog.logStateChange(memberId, oldState, newState, reason);
+        ClusterTracing.traceStateChange(memberId, oldState, newState, reason);
     }
 
     void role(final Cluster.Role newRole)
@@ -1349,7 +1349,7 @@ final class ConsensusModuleAgent
 
     private void logRoleChange(final int memberId, final Cluster.Role oldRole, final Cluster.Role newRole)
     {
-        ClusterLog.logRoleChange(memberId, oldRole, newRole);
+        ClusterTracing.traceRoleChange(memberId, oldRole, newRole);
     }
 
     Cluster.Role role()
@@ -2158,7 +2158,7 @@ final class ConsensusModuleAgent
         final int appVersion,
         final boolean isStartup)
     {
-        ClusterLog.logOnNewLeadershipTerm(
+        ClusterTracing.traceOnNewLeadershipTerm(
             memberId,
             logLeadershipTermId,
             nextLeadershipTermId,
@@ -2182,7 +2182,7 @@ final class ConsensusModuleAgent
         final long logPosition,
         final int leaderMemberId)
     {
-        ClusterLog.logOnCommitPosition(memberId, leadershipTermId, logPosition, leaderMemberId);
+        ClusterTracing.traceOnCommitPosition(memberId, leadershipTermId, logPosition, leaderMemberId);
     }
 
     static void logAppendSessionOpen(
@@ -2193,7 +2193,7 @@ final class ConsensusModuleAgent
         final long timestamp,
         final TimeUnit timeUnit)
     {
-        ClusterLog.logAppendSessionOpen(memberId, id, leadershipTermId, logPosition, timestamp, timeUnit);
+        ClusterTracing.traceAppendSessionOpen(memberId, id, leadershipTermId, logPosition, timestamp, timeUnit);
     }
 
     static void logAppendSessionClose(
@@ -2204,7 +2204,7 @@ final class ConsensusModuleAgent
         final long timestamp,
         final TimeUnit timeUnit)
     {
-        ClusterLog.logAppendSessionClose(memberId, id, closeReason, leadershipTermId, timestamp, timeUnit);
+        ClusterTracing.traceAppendSessionClose(memberId, id, closeReason, leadershipTermId, timestamp, timeUnit);
     }
 
     private static void logOnReplayNewLeadershipTermEvent(
@@ -2217,7 +2217,7 @@ final class ConsensusModuleAgent
         final TimeUnit timeUnit,
         final int appVersion)
     {
-        ClusterLog.logOnReplayNewLeadershipTermEvent(
+        ClusterTracing.traceOnReplayNewLeadershipTermEvent(
             memberId, isInElection, leadershipTermId, logPosition, timestamp, termBaseLogPosition, timeUnit,
             appVersion);
     }
@@ -2230,7 +2230,7 @@ final class ConsensusModuleAgent
         final int candidateId,
         final int protocolVersion)
     {
-        ClusterLog.logOnRequestVote(
+        ClusterTracing.traceOnRequestVote(
             memberId, logLeadershipTermId, logPosition, candidateTermId, candidateId, protocolVersion);
     }
 
@@ -2243,7 +2243,7 @@ final class ConsensusModuleAgent
         final int voterId,
         final boolean vote)
     {
-        ClusterLog.logOnVote(
+        ClusterTracing.traceOnVote(
             memberId, logLeadershipTermId, logPosition, candidateTermId, candidateId, voterId, vote);
     }
 
@@ -2254,7 +2254,7 @@ final class ConsensusModuleAgent
         final int followerMemberId,
         final short flags)
     {
-        ClusterLog.logOnAppendPosition(memberId, leadershipTermId, logPosition, followerMemberId, flags);
+        ClusterTracing.traceOnAppendPosition(memberId, leadershipTermId, logPosition, followerMemberId, flags);
     }
 
     private static void logOnCanvassPosition(
@@ -2265,7 +2265,7 @@ final class ConsensusModuleAgent
         final int followerMemberId,
         final int protocolVersion)
     {
-        ClusterLog.logOnCanvassPosition(
+        ClusterTracing.traceOnCanvassPosition(
             memberId, logLeadershipTermId, logPosition, leadershipTermId, followerMemberId, protocolVersion);
     }
 
@@ -2280,7 +2280,7 @@ final class ConsensusModuleAgent
         final int serviceId,
         final String archiveEndpoint)
     {
-        ClusterLog.logStandbySnapshotNotification(
+        ClusterTracing.traceStandbySnapshotNotification(
             memberId,
             recordingId,
             leadershipTermId,
@@ -2294,7 +2294,7 @@ final class ConsensusModuleAgent
 
     private static void logOnStopCatchup(final int memberId, final long leadershipTermId, final int followerMemberId)
     {
-        ClusterLog.logOnStopCatchup(memberId, leadershipTermId, followerMemberId);
+        ClusterTracing.traceOnStopCatchup(memberId, leadershipTermId, followerMemberId);
     }
 
     private static void logOnCatchupPosition(
@@ -2304,7 +2304,8 @@ final class ConsensusModuleAgent
         final int followerMemberId,
         final String catchupEndpoint)
     {
-        ClusterLog.logOnCatchupPosition(memberId, leadershipTermId, logPosition, followerMemberId, catchupEndpoint);
+        ClusterTracing.traceOnCatchupPosition(
+            memberId, leadershipTermId, logPosition, followerMemberId, catchupEndpoint);
     }
 
     private static void logOnTerminationPosition(
@@ -2312,7 +2313,7 @@ final class ConsensusModuleAgent
         final long logLeadershipTermId,
         final long logPosition)
     {
-        ClusterLog.logTerminationPosition(memberId, logLeadershipTermId, logPosition);
+        ClusterTracing.traceTerminationPosition(memberId, logLeadershipTermId, logPosition);
     }
 
     private static void logOnTerminationAck(
@@ -2321,7 +2322,7 @@ final class ConsensusModuleAgent
         final long logPosition,
         final int senderMemberId)
     {
-        ClusterLog.logTerminationAck(memberId, logLeadershipTermId, logPosition, senderMemberId);
+        ClusterTracing.traceTerminationAck(memberId, logLeadershipTermId, logPosition, senderMemberId);
     }
 
     private static void logOnServiceAck(
@@ -2333,7 +2334,7 @@ final class ConsensusModuleAgent
         final long relevantId,
         final int serviceId)
     {
-        ClusterLog.logServiceAck(memberId, logPosition, timestamp, timeUnit, ackId, relevantId, serviceId);
+        ClusterTracing.traceServiceAck(memberId, logPosition, timestamp, timeUnit, ackId, relevantId, serviceId);
     }
 
     private static void logNewElection(
@@ -2343,7 +2344,7 @@ final class ConsensusModuleAgent
         final long appendedPosition,
         final String reason)
     {
-        ClusterLog.logNewElection(memberId, logLeadershipTermId, logPosition, appendedPosition, reason);
+        ClusterTracing.traceNewElection(memberId, logLeadershipTermId, logPosition, appendedPosition, reason);
     }
 
     static void logReplicationEnded(
@@ -2355,7 +2356,7 @@ final class ConsensusModuleAgent
         final long position,
         final boolean hasSynced)
     {
-        ClusterLog.logReplicationEnded(
+        ClusterTracing.traceReplicationEnded(
             memberId, purpose, controlUri, srcRecordingId, dstRecordingId, position, hasSynced);
     }
 

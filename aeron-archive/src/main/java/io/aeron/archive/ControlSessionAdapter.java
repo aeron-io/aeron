@@ -63,7 +63,7 @@ import io.aeron.archive.codecs.StopReplicationRequestDecoder;
 import io.aeron.archive.codecs.TaggedReplicateRequestDecoder;
 import io.aeron.archive.codecs.TruncateRecordingRequestDecoder;
 import io.aeron.archive.codecs.UpdateChannelRequestDecoder;
-import io.aeron.archive.logging.ArchiveLog;
+import io.aeron.archive.logging.ArchiveTracing;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.Header;
 import io.aeron.security.AuthorisationService;
@@ -125,7 +125,7 @@ class ControlSessionAdapter implements FragmentHandler
     @SuppressWarnings("MethodLength")
     public void onFragment(final DirectBuffer buffer, final int offset, final int length, final Header header)
     {
-        ArchiveLog.logControlRequest(buffer, offset, length);
+        ArchiveTracing.traceControlRequest(buffer, offset, length);
 
         final MessageHeaderDecoder headerDecoder = decoders.header;
         headerDecoder.wrap(buffer, offset);

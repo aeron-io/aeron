@@ -18,7 +18,7 @@ package io.aeron.driver;
 import io.aeron.Aeron;
 import io.aeron.CommonContext;
 import io.aeron.driver.buffer.RawLog;
-import io.aeron.driver.logging.DriverLog;
+import io.aeron.driver.logging.DriverTracing;
 import io.aeron.driver.media.SendChannelEndpoint;
 import io.aeron.driver.status.SystemCounters;
 import io.aeron.logbuffer.FrameDescriptor;
@@ -1322,6 +1322,6 @@ public final class NetworkPublication
         final int streamId,
         final String channel)
     {
-        DriverLog.logPublicationRevoke(revokedPos, sessionId, streamId, channel);
+        DriverTracing.tracePublicationRevoke(revokedPos, sessionId, streamId, channel);
     }
 }
