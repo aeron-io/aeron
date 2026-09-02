@@ -16,12 +16,14 @@
 
 package io.aeron.topology;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.stream.Stream;
 
@@ -55,4 +57,24 @@ class CpusetV2ReaderTest
         final Cpuset resultCpuset = reader.readCpuSet(pid);
         assertArrayEquals(expectedCpus, resultCpuset.cpus().toIntArray());
     }
+
+    @Test
+    void readCpuSetWalksUpCgroupHierarchy(
+        @TempDir final Path testProcPath,
+        @TempDir final Path testCgroupPath) throws IOException
+    {
+        final int pid = 1234;
+        final Path procCgroupFilePath = testProcPath.resolve(pid + "/cgroup");
+        Files.createDirectories(procCgroupFilePath.getParent());
+        Files.writeString(procCgroupFilePath, "0::/user.slice/app.scope");
+
+        final Path parentCpusetFile = testCgroupPath.resolve("user.slice/cpuset.cpus.effective");
+        Files.createDirectories(parentCpusetFile.getParent());
+        Files.writeString(parentCpusetFile, "0-3");
+
+        final CpusetV2Reader reader = new CpusetV2Reader(testProcPath, testCgroupPath);
+        final Cpuset resultCpuset = reader.readCpuSet(pid);
+        assertArrayEquals(new int[]{0, 1, 2, 3}, resultCpuset.cpus().toIntArray());
+    }
+
 }

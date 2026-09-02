@@ -28,6 +28,7 @@ public class CpusetV2Reader
 {
     private static final Path DEFAULT_PROC_ROOT = Path.of("/proc");
     private static final Path DEFAULT_CGROUP_ROOT = Path.of("/sys/fs/cgroup");
+    private static final String CPUSET_CPUS_EFFECTIVE = "cpuset.cpus.effective";
 
     private final Path procRoot;
     private final Path cgroupRoot;
@@ -46,14 +47,36 @@ public class CpusetV2Reader
         this.cgroupRoot = cgroupRoot;
     }
 
-    private Path retrieveEffectiveCgroupFilePath(final String pid) throws IOException
+    private String resolveCgroupPath(final String pid) throws IOException
     {
         final Path procCgroupFilePath = procRoot.resolve(pid + "/cgroup");
         try (Stream<String> lines = Files.lines(procCgroupFilePath))
         {
-            final String effectiveCgroupPathStr = lines.filter(
-                line -> line.startsWith("0::/")).findFirst().orElseThrow();
-            return cgroupRoot.resolve(effectiveCgroupPathStr.substring(4));
+            final String line = lines.filter(l -> l.startsWith("0::/")).findFirst().orElseThrow();
+            return line.substring(3);
+        }
+    }
+
+    private Path retrieveEffectiveCgroupFilePath(final String pid) throws IOException
+    {
+        final String cgroupPath = resolveCgroupPath(pid);
+        Path directory = cgroupRoot.resolve(cgroupPath.substring(1));
+
+        while (true)
+        {
+            final Path candidate = directory.resolve(CPUSET_CPUS_EFFECTIVE);
+            if (Files.exists(candidate))
+            {
+                return candidate;
+            }
+
+            if (directory.equals(cgroupRoot))
+            {
+                throw new IOException(
+                    "unable to find '" + CPUSET_CPUS_EFFECTIVE + "' in path '" + cgroupRoot + "'");
+            }
+
+            directory = directory.getParent();
         }
     }
 

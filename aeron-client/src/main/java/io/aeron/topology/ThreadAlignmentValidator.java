@@ -22,6 +22,8 @@ import org.agrona.collections.IntHashSet;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 import static io.aeron.topology.CGroupValidator.DEFAULT_SYSFS_ROOT;
 
@@ -44,55 +46,46 @@ class ThreadAlignmentValidator implements TopologyValidator
         perCpuListReader = new PerCpuListReader(sysfsRoot, THREAD_SIBLING_LIST);
     }
 
-    IntArrayList identifyMissingThreads(final IntArrayList cpuList) throws IOException
+    record MissingSibling(int siblingCpu, int coreCpu)
     {
-        final IntHashSet requiredThreads = new IntHashSet();
-        final IntHashSet presentThreads = new IntHashSet();
-        final IntArrayList missingThreads = new IntArrayList();
-        for (int i = 0; i < cpuList.size(); i++)
-        {
-            final int cpu = cpuList.get(i);
-            presentThreads.add(cpu);
-            final IntHashSet siblings = perCpuListReader.loadCpuList(cpu);
-            requiredThreads.addAll(siblings);
-        }
-        final IntHashSet difference = requiredThreads.difference(presentThreads);
-        if (null == difference)
-        {
-            return missingThreads;
-        }
-        difference.forEachInt(missingThreads::add);
-        return missingThreads;
     }
 
-    private int findCoreCpu(final IntArrayList cpuList, final int missingSibling) throws IOException
+    List<MissingSibling> findMissingSiblings(final IntArrayList cpuList) throws IOException
     {
+        final IntHashSet presentCpus = new IntHashSet();
+        for (int i = 0; i < cpuList.size(); i++)
+        {
+            presentCpus.add(cpuList.get(i));
+        }
+
+        final List<MissingSibling> missingSiblings = new ArrayList<>();
         for (int i = 0; i < cpuList.size(); i++)
         {
             final int cpu = cpuList.get(i);
-            if (perCpuListReader.loadCpuList(cpu).contains(missingSibling))
+            perCpuListReader.loadCpuList(cpu).forEachInt((siblingCpu) ->
             {
-                return cpu;
-            }
+                if (!presentCpus.contains(siblingCpu))
+                {
+                    missingSiblings.add(new MissingSibling(siblingCpu, cpu));
+                }
+            });
         }
-        return -1;
+        return missingSiblings;
     }
 
     public int validate(final Cpuset cpuset, final PrintStream warningStream)
     {
         try
         {
-            final IntArrayList cpuList = cpuset.cpus();
-            final IntArrayList missingThreads = identifyMissingThreads(cpuList);
-            for (int i = 0; i < missingThreads.size(); i++)
+            final List<MissingSibling> missingSiblings = findMissingSiblings(cpuset.cpus());
+            for (final MissingSibling missing : missingSiblings)
             {
-                final int missingThread = missingThreads.get(i);
-                final int coreCpu = findCoreCpu(cpuList, missingThread);
                 warningStream.printf(
-                    "WARNING: %s is missing sibling CPU(s) %d of the core containing CPU %d (partial core in cpuset)%n",
-                    "cpuset", missingThread, coreCpu);
+                    "WARNING: cpuset is missing sibling CPU(s) %d of the " +
+                        "core containing CPU %d (partial core in cpuset)%n",
+                    missing.siblingCpu(), missing.coreCpu());
             }
-            return missingThreads.size();
+            return missingSiblings.size();
         }
         catch (final IOException e)
         {

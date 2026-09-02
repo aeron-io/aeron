@@ -69,7 +69,7 @@ class TopologyTestUtils
     {
         final Path procCgroupFilePath = testProcPath.resolve(pid + "/cgroup");
         Files.createDirectories(procCgroupFilePath.getParent());
-        Files.writeString(procCgroupFilePath, "0::/user.slice/cpuset.cpus.effective");
+        Files.writeString(procCgroupFilePath, "0::/user.slice");
 
         final Path effectiveCgroupFilePath = testCgroupPath.resolve("user.slice/cpuset.cpus.effective");
         Files.createDirectories(effectiveCgroupFilePath.getParent());

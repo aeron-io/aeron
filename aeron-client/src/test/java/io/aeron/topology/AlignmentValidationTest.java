@@ -88,8 +88,14 @@ public class AlignmentValidationTest
 
         final ThreadAlignmentValidator validator = new ThreadAlignmentValidator(sysfsTestDir);
         final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        final int[] missingThreadArray = validator.identifyMissingThreads(resultCpuset.cpus()).toIntArray();
-        assertArrayEquals(expectedMissingThreads, missingThreadArray);
+        final List<ThreadAlignmentValidator.MissingSibling> missingSiblings =
+            validator.findMissingSiblings(resultCpuset.cpus());
+        final int[] missingSiblingCpus = new int[missingSiblings.size()];
+        for (int i = 0; i < missingSiblings.size(); i++)
+        {
+            missingSiblingCpus[i] = missingSiblings.get(i).siblingCpu();
+        }
+        assertArrayEquals(expectedMissingThreads, missingSiblingCpus);
         final PrintStream out = new PrintStream(buffer);
         final int actualWarningCount = validator.validate(resultCpuset, out);
         assertEquals(expectedMissingThreads.length, actualWarningCount);
