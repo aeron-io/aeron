@@ -30,7 +30,7 @@ class DieLocalityValidator implements TopologyValidator
      * Path, relative to a per-CPU {@code sysfs} directory, of the file listing the CPU's die id.
      */
     public static final String DIE_ID_DIRECTORY = "topology/die_id";
-    private final PerCpuListReader perCpuListReader;
+    private final PerCpuIdReader perCpuIdReader;
 
     DieLocalityValidator()
     {
@@ -44,7 +44,7 @@ class DieLocalityValidator implements TopologyValidator
      */
     DieLocalityValidator(final Path sysfsRoot)
     {
-        this.perCpuListReader = new PerCpuListReader(sysfsRoot, DIE_ID_DIRECTORY);
+        this.perCpuIdReader = new PerCpuIdReader(sysfsRoot, DIE_ID_DIRECTORY);
     }
 
     public int validate(final Cpuset cpuset, final PrintStream warningStream)
@@ -52,11 +52,11 @@ class DieLocalityValidator implements TopologyValidator
         try
         {
             final IntArrayList cpuList = cpuset.cpus();
-            final int expectedDieId = this.perCpuListReader.loadId(cpuList.get(0));
+            final int expectedDieId = this.perCpuIdReader.loadId(cpuList.get(0));
             for (int i = 0; i < cpuList.size(); i++)
             {
                 final int cpu = cpuList.get(i);
-                if (this.perCpuListReader.loadId(cpu) != expectedDieId)
+                if (this.perCpuIdReader.loadId(cpu) != expectedDieId)
                 {
                     warningStream.printf(
                         "WARNING: %s spans multiple CPU dies, configuration: %s%n",

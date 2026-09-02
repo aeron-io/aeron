@@ -16,7 +16,6 @@
 
 package io.aeron.topology;
 
-import org.agrona.collections.Int2IntHashMap;
 import org.agrona.collections.Int2ObjectHashMap;
 import org.agrona.collections.IntHashSet;
 
@@ -24,12 +23,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import static org.agrona.AsciiEncoding.parseIntAscii;
-
 class PerCpuListReader
 {
     private final Int2ObjectHashMap<IntHashSet> cpuListCache = new Int2ObjectHashMap<>();
-    private final Int2IntHashMap idCache = new Int2IntHashMap(-1);
     private final Path sysfsRoot;
     private final String cpuListDirectory;
 
@@ -58,24 +54,5 @@ class PerCpuListReader
             return loadedCpuList;
         }
         return cpuList;
-    }
-
-    private int loadIdFile(final int cpu) throws IOException
-    {
-        final Path idPath = sysfsRoot.resolve("cpu%d".formatted(cpu)).resolve(cpuListDirectory);
-        final String id = Files.readString(idPath);
-        return parseIntAscii(id, 0, id.length());
-    }
-
-    int loadId(final int cpu) throws IOException
-    {
-        final int id = idCache.get(cpu);
-        if (idCache.missingValue() == id)
-        {
-            final int loadedId = this.loadIdFile(cpu);
-            idCache.put(cpu, loadedId);
-            return loadedId;
-        }
-        return id;
     }
 }
