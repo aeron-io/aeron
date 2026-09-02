@@ -21,8 +21,9 @@ import org.agrona.collections.IntArrayList;
 /**
  * The cpuset of a process.
  *
- * @param cpus the CPU ids in the set.
+ * @param cpus          the CPU ids in the set.
+ * @param formattedCpus the CPU ids in the set, formatted as a compact range list (e.g. {@code "0-3,5,7"}).
  */
-public record Cpuset(IntArrayList cpus)
+public record Cpuset(IntArrayList cpus, String formattedCpus)
 {
 }

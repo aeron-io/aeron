@@ -70,7 +70,7 @@ class DieLocalityValidationTest
         final PrintStream out = new PrintStream(buffer);
 
         final DieLocalityValidator dieLocalityValidator = new DieLocalityValidator(sysfsTestDir);
-        final int actualWarningCount = dieLocalityValidator.validate(cpuList, out);
+        final int actualWarningCount = dieLocalityValidator.validate(new Cpuset(cpuList, cpuList.toString()), out);
         assertEquals(expectedWarningCount, actualWarningCount);
         assertEquals(expectedWarningCount, countWarnings(buffer));
 
@@ -114,7 +114,7 @@ class DieLocalityValidationTest
         final PrintStream out = new PrintStream(buffer);
 
         final DieLocalityValidator dieLocalityValidator = new DieLocalityValidator(sysfsTestDir);
-        final int actualWarningCount = dieLocalityValidator.validate(resultCpuset.cpus(), out);
+        final int actualWarningCount = dieLocalityValidator.validate(resultCpuset, out);
         assertEquals(expectedWarningCount, actualWarningCount);
         assertEquals(expectedWarningCount, countWarnings(buffer));
     }

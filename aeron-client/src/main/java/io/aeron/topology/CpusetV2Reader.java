@@ -62,8 +62,8 @@ public class CpusetV2Reader
         try
         {
             final Path effectiveCgroupFilePath = retrieveEffectiveCgroupFilePath(pid);
-            final String cpuGroups = Files.readString(effectiveCgroupFilePath);
-            return new Cpuset(AffinityParser.parse(cpuGroups));
+            final String formattedCpus = Files.readString(effectiveCgroupFilePath).strip();
+            return new Cpuset(AffinityParser.parse(formattedCpus), formattedCpus);
         }
         catch (final IOException e)
         {

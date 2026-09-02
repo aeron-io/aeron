@@ -65,15 +65,32 @@ class ThreadAlignmentValidator implements TopologyValidator
         return missingThreads;
     }
 
-    public int validate(final IntArrayList cpuList, final PrintStream warningStream)
+    private int findCoreCpu(final IntArrayList cpuList, final int missingSibling) throws IOException
+    {
+        for (int i = 0; i < cpuList.size(); i++)
+        {
+            final int cpu = cpuList.get(i);
+            if (perCpuListReader.loadCpuList(cpu).contains(missingSibling))
+            {
+                return cpu;
+            }
+        }
+        return -1;
+    }
+
+    public int validate(final Cpuset cpuset, final PrintStream warningStream)
     {
         try
         {
+            final IntArrayList cpuList = cpuset.cpus();
             final IntArrayList missingThreads = identifyMissingThreads(cpuList);
             for (int i = 0; i < missingThreads.size(); i++)
             {
                 final int missingThread = missingThreads.get(i);
-                warningStream.printf("cpuset is missing sibling(s) %d%n", missingThread);
+                final int coreCpu = findCoreCpu(cpuList, missingThread);
+                warningStream.printf(
+                    "WARNING: %s is missing sibling CPU(s) %d of the core containing CPU %d (partial core in cpuset)%n",
+                    "cpuset", missingThread, coreCpu);
             }
             return missingThreads.size();
         }

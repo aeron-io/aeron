@@ -16,18 +16,16 @@
 
 package io.aeron.topology;
 
-import org.agrona.collections.IntArrayList;
-
 import java.io.PrintStream;
 
 interface TopologyValidator
 {
     /**
-     * Validates the given CPU list based on a specific topology constraint.
+     * Validates the given cpuset based on a specific topology constraint.
      *
-     * @param cpuList       to validate.
+     * @param cpuset        to validate.
      * @param warningStream to write warnings to.
      * @return number of warnings.
      */
-    int validate(IntArrayList cpuList, PrintStream warningStream);
+    int validate(Cpuset cpuset, PrintStream warningStream);
 }

@@ -47,18 +47,20 @@ class DieLocalityValidator implements TopologyValidator
         this.perCpuListReader = new PerCpuListReader(sysfsRoot, DIE_ID_DIRECTORY);
     }
 
-    public int validate(final IntArrayList cpuList, final PrintStream warningStream)
+    public int validate(final Cpuset cpuset, final PrintStream warningStream)
     {
         try
         {
+            final IntArrayList cpuList = cpuset.cpus();
             final int expectedDieId = this.perCpuListReader.loadId(cpuList.get(0));
             for (int i = 0; i < cpuList.size(); i++)
             {
                 final int cpu = cpuList.get(i);
                 if (this.perCpuListReader.loadId(cpu) != expectedDieId)
                 {
-                    // TODO: Match with C warning
-                    warningStream.printf("CPU list %s does not contain all cores in the same die %n", cpuList);
+                    warningStream.printf(
+                        "WARNING: %s spans multiple CPU dies, configuration: %s%n",
+                        "cpuset", cpuset.formattedCpus());
                     return 1;
                 }
             }

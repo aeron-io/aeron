@@ -17,7 +17,6 @@
 package io.aeron.topology;
 
 import io.aeron.exceptions.ConfigurationException;
-import org.agrona.collections.IntArrayList;
 
 import java.io.PrintStream;
 import java.nio.file.Path;
@@ -72,12 +71,12 @@ public class CGroupValidator
      */
     public void validate(final boolean warningsAsErrors)
     {
-        validate(cpusetV2Reader.readCpuSet().cpus(), warningsAsErrors, System.err);
+        validate(cpusetV2Reader.readCpuSet(), warningsAsErrors, System.err);
     }
 
-    void validate(final IntArrayList cpuList, final boolean warningsAsErrors, final PrintStream out)
+    void validate(final Cpuset cpuset, final boolean warningsAsErrors, final PrintStream out)
     {
-        if (cpuList.size() < 2)
+        if (cpuset.cpus().size() < 2)
         {
             return;
         }
@@ -85,18 +84,12 @@ public class CGroupValidator
         int warnings = 0;
         for (final TopologyValidator validator : topologyValidators)
         {
-            warnings += validator.validate(cpuList, out);
+            warnings += validator.validate(cpuset, out);
         }
-        //noinspection Java9UndeclaredServiceUsage
-//        for (TopologyValidator validator : ServiceLoader.load(TopologyValidator.class))
-//        {
-//            warnings += validator.validate(cpuList, out);
-//        }
 
         if (warningsAsErrors && 0 < warnings)
         {
-            throw new ConfigurationException(
-                "cpuset topology warnings as errors, %d warning(s) found".formatted(warnings));
+            throw new ConfigurationException("cpuset warnings as errors, %d warnings".formatted(warnings));
         }
     }
 }

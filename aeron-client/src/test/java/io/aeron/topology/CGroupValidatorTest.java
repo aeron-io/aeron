@@ -118,7 +118,7 @@ class CGroupValidatorTest
         cpuList.wrap(cpus, cpus.length);
 
         final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        new CGroupValidator(sysfsTestDir).validate(cpuList, false, new PrintStream(buffer));
+        new CGroupValidator(sysfsTestDir).validate(new Cpuset(cpuList, cpuList.toString()), false, new PrintStream(buffer));
         assertEquals(expectedWarningCount, countWarnings(buffer));
 
         if (0 < expectedWarningCount)
@@ -126,13 +126,13 @@ class CGroupValidatorTest
             final ConfigurationException ex = assertThrows(
                 ConfigurationException.class,
                 () -> new CGroupValidator(sysfsTestDir).validate(
-                    cpuList, true, new PrintStream(new ByteArrayOutputStream())));
-            assertTrue(ex.getMessage().contains(expectedWarningCount + " warning(s)"));
+                    new Cpuset(cpuList, cpuList.toString()), true, new PrintStream(new ByteArrayOutputStream())));
+            assertTrue(ex.getMessage().contains(expectedWarningCount + " warnings"));
         }
         else
         {
             assertDoesNotThrow(() -> new CGroupValidator(sysfsTestDir).validate(
-                cpuList, true, new PrintStream(new ByteArrayOutputStream())));
+                new Cpuset(cpuList, cpuList.toString()), true, new PrintStream(new ByteArrayOutputStream())));
         }
     }
 
@@ -143,7 +143,8 @@ class CGroupValidatorTest
         cpuList.wrap(new int[]{0, 1}, 2);
         final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         final CGroupValidator validator = new CGroupValidator(sysfsTestDir);
-        assertThrows(ConfigurationException.class, () -> validator.validate(cpuList, true, new PrintStream(buffer)));
+        assertThrows(ConfigurationException.class, () -> validator.validate(
+            new Cpuset(cpuList, cpuList.toString()), true, new PrintStream(buffer)));
     }
 
 }

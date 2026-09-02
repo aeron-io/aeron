@@ -91,7 +91,7 @@ public class AlignmentValidationTest
         final int[] missingThreadArray = validator.identifyMissingThreads(resultCpuset.cpus()).toIntArray();
         assertArrayEquals(expectedMissingThreads, missingThreadArray);
         final PrintStream out = new PrintStream(buffer);
-        final int actualWarningCount = validator.validate(resultCpuset.cpus(), out);
+        final int actualWarningCount = validator.validate(resultCpuset, out);
         assertEquals(expectedMissingThreads.length, actualWarningCount);
         assertEquals(expectedMissingThreads.length, countWarnings(buffer));
     }

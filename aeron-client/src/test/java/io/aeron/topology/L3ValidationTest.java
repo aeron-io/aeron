@@ -75,7 +75,7 @@ class L3ValidationTest
 
         final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         final PrintStream out = new PrintStream(buffer);
-        final int actualWarningCount = l3TopologyValidator.validate(cpuList, out);
+        final int actualWarningCount = l3TopologyValidator.validate(new Cpuset(cpuList, cpuList.toString()), out);
         assertEquals(expectedWarningCount, actualWarningCount);
         assertEquals(expectedWarningCount, countWarnings(buffer));
 
@@ -136,7 +136,7 @@ class L3ValidationTest
 
         final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         final PrintStream out = new PrintStream(buffer);
-        final int actualWarningCount = l3TopologyValidator.validate(resultCpuset.cpus(), out);
+        final int actualWarningCount = l3TopologyValidator.validate(resultCpuset, out);
         assertEquals(expectedWarningCount, actualWarningCount);
         assertEquals(expectedWarningCount, countWarnings(buffer));
     }

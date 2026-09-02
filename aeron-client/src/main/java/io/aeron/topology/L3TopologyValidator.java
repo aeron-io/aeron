@@ -44,10 +44,11 @@ class L3TopologyValidator implements TopologyValidator
         this.perCpuListReader = new PerCpuListReader(sysfsRoot, SHARED_CPU_LIST_DIRECTORY);
     }
 
-    public int validate(final IntArrayList cpuList, final PrintStream warningStream)
+    public int validate(final Cpuset cpuset, final PrintStream warningStream)
     {
         try
         {
+            final IntArrayList cpuList = cpuset.cpus();
             final IntHashSet expectedPeers = this.perCpuListReader.loadCpuList(cpuList.get(0));
             final Optional<Integer> missing = cpuList
                 .stream()
@@ -55,8 +56,9 @@ class L3TopologyValidator implements TopologyValidator
                 .findFirst();
             if (missing.isPresent())
             {
-                // TODO: Match with C warning
-                warningStream.printf("CPU list %s does not contain all L3 peers %s%n", cpuList, expectedPeers);
+                warningStream.printf(
+                    "WARNING: %s spans multiple L3 cache domains, configuration: %s%n",
+                    "cpuset", cpuset.formattedCpus());
                 return 1;
             }
         }
