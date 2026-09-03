@@ -69,34 +69,34 @@ public final class DriverTracing
         ENABLED_EVENT_CODES = Collections.unmodifiableSet(enabledEventCodeSet);
     }
 
-    private static final boolean LOG_FRAME_IN_ENABLED = isEnabled(FRAME_IN);
-    private static final boolean LOG_FRAME_OUT_ENABLED = isEnabled(FRAME_OUT);
-    private static final boolean LOG_REMOVE_PUBLICATION_CLEANUP_ENABLED = isEnabled(REMOVE_PUBLICATION_CLEANUP);
-    private static final boolean LOG_REMOVE_SUBSCRIPTION_CLEANUP_ENABLED = isEnabled(REMOVE_SUBSCRIPTION_CLEANUP);
-    private static final boolean LOG_REMOVE_IMAGE_CLEANUP_ENABLED = isEnabled(REMOVE_IMAGE_CLEANUP);
-    private static final boolean LOG_SEND_CHANNEL_CREATION_ENABLED = isEnabled(SEND_CHANNEL_CREATION);
-    private static final boolean LOG_SEND_CHANNEL_CLOSE_ENABLED = isEnabled(SEND_CHANNEL_CLOSE);
-    private static final boolean LOG_RECEIVE_CHANNEL_CREATION_ENABLED = isEnabled(RECEIVE_CHANNEL_CREATION);
-    private static final boolean LOG_RECEIVE_CHANNEL_CLOSE_ENABLED = isEnabled(RECEIVE_CHANNEL_CLOSE);
-    private static final boolean LOG_UNTETHERED_SUBSCRIPTION_STATE_CHANGE_ENABLED =
+    private static final boolean TRACE_FRAME_IN_ENABLED = isEnabled(FRAME_IN);
+    private static final boolean TRACE_FRAME_OUT_ENABLED = isEnabled(FRAME_OUT);
+    private static final boolean TRACE_REMOVE_PUBLICATION_CLEANUP_ENABLED = isEnabled(REMOVE_PUBLICATION_CLEANUP);
+    private static final boolean TRACE_REMOVE_SUBSCRIPTION_CLEANUP_ENABLED = isEnabled(REMOVE_SUBSCRIPTION_CLEANUP);
+    private static final boolean TRACE_REMOVE_IMAGE_CLEANUP_ENABLED = isEnabled(REMOVE_IMAGE_CLEANUP);
+    private static final boolean TRACE_SEND_CHANNEL_CREATION_ENABLED = isEnabled(SEND_CHANNEL_CREATION);
+    private static final boolean TRACE_SEND_CHANNEL_CLOSE_ENABLED = isEnabled(SEND_CHANNEL_CLOSE);
+    private static final boolean TRACE_RECEIVE_CHANNEL_CREATION_ENABLED = isEnabled(RECEIVE_CHANNEL_CREATION);
+    private static final boolean TRACE_RECEIVE_CHANNEL_CLOSE_ENABLED = isEnabled(RECEIVE_CHANNEL_CLOSE);
+    private static final boolean TRACE_UNTETHERED_SUBSCRIPTION_STATE_CHANGE_ENABLED =
         isEnabled(UNTETHERED_SUBSCRIPTION_STATE_CHANGE);
-    private static final boolean LOG_NAME_RESOLUTION_NEIGHBOR_ADDED_ENABLED =
+    private static final boolean TRACE_NAME_RESOLUTION_NEIGHBOR_ADDED_ENABLED =
         isEnabled(NAME_RESOLUTION_NEIGHBOR_ADDED);
-    private static final boolean LOG_NAME_RESOLUTION_NEIGHBOR_REMOVED_ENABLED =
+    private static final boolean TRACE_NAME_RESOLUTION_NEIGHBOR_REMOVED_ENABLED =
         isEnabled(NAME_RESOLUTION_NEIGHBOR_REMOVED);
-    private static final boolean LOG_NAME_RESOLUTION_RESOLVE_ENABLED = isEnabled(NAME_RESOLUTION_RESOLVE);
-    private static final boolean LOG_NAME_RESOLUTION_LOOKUP_ENABLED = isEnabled(NAME_RESOLUTION_LOOKUP);
-    private static final boolean LOG_NAME_RESOLUTION_HOST_NAME_ENABLED = isEnabled(NAME_RESOLUTION_HOST_NAME);
-    private static final boolean LOG_FLOW_CONTROL_RECEIVER_ADDED_ENABLED = isEnabled(FLOW_CONTROL_RECEIVER_ADDED);
-    private static final boolean LOG_FLOW_CONTROL_RECEIVER_REMOVED_ENABLED =
+    private static final boolean TRACE_NAME_RESOLUTION_RESOLVE_ENABLED = isEnabled(NAME_RESOLUTION_RESOLVE);
+    private static final boolean TRACE_NAME_RESOLUTION_LOOKUP_ENABLED = isEnabled(NAME_RESOLUTION_LOOKUP);
+    private static final boolean TRACE_NAME_RESOLUTION_HOST_NAME_ENABLED = isEnabled(NAME_RESOLUTION_HOST_NAME);
+    private static final boolean TRACE_FLOW_CONTROL_RECEIVER_ADDED_ENABLED = isEnabled(FLOW_CONTROL_RECEIVER_ADDED);
+    private static final boolean TRACE_FLOW_CONTROL_RECEIVER_REMOVED_ENABLED =
         isEnabled(FLOW_CONTROL_RECEIVER_REMOVED);
-    private static final boolean LOG_NAK_SENT_ENABLED = isEnabled(NAK_SENT);
-    private static final boolean LOG_NAK_RECEIVED_ENABLED = isEnabled(NAK_RECEIVED);
-    private static final boolean LOG_RESEND_ENABLED = isEnabled(RESEND);
-    private static final boolean LOG_PUBLICATION_REVOKE_ENABLED = isEnabled(PUBLICATION_REVOKE);
-    private static final boolean LOG_PUBLICATION_IMAGE_REVOKE_ENABLED = isEnabled(PUBLICATION_IMAGE_REVOKE);
-    private static final boolean LOG_TEXT_DATA_ENABLED = isEnabled(TEXT_DATA);
-    private static final boolean LOG_DRIVER_START = !ENABLED_EVENT_CODES.isEmpty();
+    private static final boolean TRACE_NAK_SENT_ENABLED = isEnabled(NAK_SENT);
+    private static final boolean TRACE_NAK_RECEIVED_ENABLED = isEnabled(NAK_RECEIVED);
+    private static final boolean TRACE_RESEND_ENABLED = isEnabled(RESEND);
+    private static final boolean TRACE_PUBLICATION_REVOKE_ENABLED = isEnabled(PUBLICATION_REVOKE);
+    private static final boolean TRACE_PUBLICATION_IMAGE_REVOKE_ENABLED = isEnabled(PUBLICATION_IMAGE_REVOKE);
+    private static final boolean TRACE_TEXT_DATA_ENABLED = isEnabled(TEXT_DATA);
+    private static final boolean TRACE_DRIVER_START = !ENABLED_EVENT_CODES.isEmpty();
 
     private DriverTracing()
     {
@@ -127,7 +127,7 @@ public final class DriverTracing
         final int offset,
         final int frameLength)
     {
-        if (!LOG_FRAME_IN_ENABLED)
+        if (!TRACE_FRAME_IN_ENABLED)
         {
             return;
         }
@@ -143,7 +143,7 @@ public final class DriverTracing
      */
     public static void traceFrameOut(final ByteBuffer buffer, final InetSocketAddress dstAddress)
     {
-        if (!LOG_FRAME_OUT_ENABLED)
+        if (!TRACE_FRAME_OUT_ENABLED)
         {
             return;
         }
@@ -160,7 +160,7 @@ public final class DriverTracing
      */
     public static void tracePublicationRemoval(final String channel, final int sessionId, final int streamId)
     {
-        if (!LOG_REMOVE_PUBLICATION_CLEANUP_ENABLED)
+        if (!TRACE_REMOVE_PUBLICATION_CLEANUP_ENABLED)
         {
             return;
         }
@@ -177,7 +177,7 @@ public final class DriverTracing
      */
     public static void traceSubscriptionRemoval(final String channel, final int streamId, final long subscriptionId)
     {
-        if (!LOG_REMOVE_SUBSCRIPTION_CLEANUP_ENABLED)
+        if (!TRACE_REMOVE_SUBSCRIPTION_CLEANUP_ENABLED)
         {
             return;
         }
@@ -196,7 +196,7 @@ public final class DriverTracing
     public static void traceImageRemoval(
         final String channel, final int sessionId, final int streamId, final long correlationId)
     {
-        if (!LOG_REMOVE_IMAGE_CLEANUP_ENABLED)
+        if (!TRACE_REMOVE_IMAGE_CLEANUP_ENABLED)
         {
             return;
         }
@@ -211,7 +211,7 @@ public final class DriverTracing
      */
     public static void traceSendChannelCreation(final String description)
     {
-        if (!LOG_SEND_CHANNEL_CREATION_ENABLED)
+        if (!TRACE_SEND_CHANNEL_CREATION_ENABLED)
         {
             return;
         }
@@ -226,7 +226,7 @@ public final class DriverTracing
      */
     public static void traceSendChannelClose(final String description)
     {
-        if (!LOG_SEND_CHANNEL_CLOSE_ENABLED)
+        if (!TRACE_SEND_CHANNEL_CLOSE_ENABLED)
         {
             return;
         }
@@ -241,7 +241,7 @@ public final class DriverTracing
      */
     public static void traceReceiveChannelCreation(final String description)
     {
-        if (!LOG_RECEIVE_CHANNEL_CREATION_ENABLED)
+        if (!TRACE_RECEIVE_CHANNEL_CREATION_ENABLED)
         {
             return;
         }
@@ -256,7 +256,7 @@ public final class DriverTracing
      */
     public static void traceReceiveChannelClose(final String description)
     {
-        if (!LOG_RECEIVE_CHANNEL_CLOSE_ENABLED)
+        if (!TRACE_RECEIVE_CHANNEL_CLOSE_ENABLED)
         {
             return;
         }
@@ -277,7 +277,7 @@ public final class DriverTracing
     public static <E extends Enum<E>> void traceUntetheredSubscriptionStateChange(
         final E oldState, final E newState, final long subscriptionId, final int streamId, final int sessionId)
     {
-        if (!LOG_UNTETHERED_SUBSCRIPTION_STATE_CHANGE_ENABLED)
+        if (!TRACE_UNTETHERED_SUBSCRIPTION_STATE_CHANGE_ENABLED)
         {
             return;
         }
@@ -293,7 +293,7 @@ public final class DriverTracing
      */
     public static void traceNeighborAdded(final InetSocketAddress address)
     {
-        if (!LOG_NAME_RESOLUTION_NEIGHBOR_ADDED_ENABLED)
+        if (!TRACE_NAME_RESOLUTION_NEIGHBOR_ADDED_ENABLED)
         {
             return;
         }
@@ -308,7 +308,7 @@ public final class DriverTracing
      */
     public static void traceNeighborRemoved(final InetSocketAddress address)
     {
-        if (!LOG_NAME_RESOLUTION_NEIGHBOR_REMOVED_ENABLED)
+        if (!TRACE_NAME_RESOLUTION_NEIGHBOR_REMOVED_ENABLED)
         {
             return;
         }
@@ -332,7 +332,7 @@ public final class DriverTracing
         final boolean isReResolution,
         final InetAddress address)
     {
-        if (!LOG_NAME_RESOLUTION_RESOLVE_ENABLED)
+        if (!TRACE_NAME_RESOLUTION_RESOLVE_ENABLED)
         {
             return;
         }
@@ -356,7 +356,7 @@ public final class DriverTracing
         final boolean isReLookup,
         final String resolvedName)
     {
-        if (!LOG_NAME_RESOLUTION_LOOKUP_ENABLED)
+        if (!TRACE_NAME_RESOLUTION_LOOKUP_ENABLED)
         {
             return;
         }
@@ -372,7 +372,7 @@ public final class DriverTracing
      */
     public static void traceHostName(final long durationNs, final String hostName)
     {
-        if (!LOG_NAME_RESOLUTION_HOST_NAME_ENABLED)
+        if (!TRACE_NAME_RESOLUTION_HOST_NAME_ENABLED)
         {
             return;
         }
@@ -396,7 +396,7 @@ public final class DriverTracing
         final String channel,
         final int receiverCount)
     {
-        if (!LOG_FLOW_CONTROL_RECEIVER_ADDED_ENABLED)
+        if (!TRACE_FLOW_CONTROL_RECEIVER_ADDED_ENABLED)
         {
             return;
         }
@@ -421,7 +421,7 @@ public final class DriverTracing
         final String channel,
         final int receiverCount)
     {
-        if (!LOG_FLOW_CONTROL_RECEIVER_REMOVED_ENABLED)
+        if (!TRACE_FLOW_CONTROL_RECEIVER_REMOVED_ENABLED)
         {
             return;
         }
@@ -473,7 +473,7 @@ public final class DriverTracing
         final int nakLength,
         final String channel)
     {
-        if (!LOG_NAK_SENT_ENABLED)
+        if (!TRACE_NAK_SENT_ENABLED)
         {
             return;
         }
@@ -508,7 +508,7 @@ public final class DriverTracing
         final int nakLength,
         final String channel)
     {
-        if (!LOG_NAK_RECEIVED_ENABLED)
+        if (!TRACE_NAK_RECEIVED_ENABLED)
         {
             return;
         }
@@ -535,7 +535,7 @@ public final class DriverTracing
         final int resendLength,
         final String channel)
     {
-        if (!LOG_RESEND_ENABLED)
+        if (!TRACE_RESEND_ENABLED)
         {
             return;
         }
@@ -554,7 +554,7 @@ public final class DriverTracing
     public static void tracePublicationRevoke(
         final long revokedPos, final int sessionId, final int streamId, final String channel)
     {
-        if (!LOG_PUBLICATION_REVOKE_ENABLED)
+        if (!TRACE_PUBLICATION_REVOKE_ENABLED)
         {
             return;
         }
@@ -573,7 +573,7 @@ public final class DriverTracing
     public static void tracePublicationImageRevoke(
         final long revokedPos, final int sessionId, final int streamId, final String channel)
     {
-        if (!LOG_PUBLICATION_IMAGE_REVOKE_ENABLED)
+        if (!TRACE_PUBLICATION_IMAGE_REVOKE_ENABLED)
         {
             return;
         }
@@ -605,7 +605,7 @@ public final class DriverTracing
      */
     public static void traceText(final String text)
     {
-        if (!LOG_TEXT_DATA_ENABLED)
+        if (!TRACE_TEXT_DATA_ENABLED)
         {
             return;
         }
@@ -620,7 +620,7 @@ public final class DriverTracing
      */
     public static void traceStart(final String version)
     {
-        if (!LOG_DRIVER_START)
+        if (!TRACE_DRIVER_START)
         {
             return;
         }

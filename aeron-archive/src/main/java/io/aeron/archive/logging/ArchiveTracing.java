@@ -61,30 +61,30 @@ public final class ArchiveTracing
         ENABLED_EVENT_CODES = Collections.unmodifiableSet(enabledEventCodeSet);
     }
 
-    private static final boolean LOG_ANY_CONTROL_REQUEST_ENABLED =
+    private static final boolean TRACE_ANY_CONTROL_REQUEST_ENABLED =
         ArchiveEventLogger.CONTROL_REQUEST_EVENTS.stream().anyMatch(ArchiveTracing::isEnabled);
-    private static final boolean LOG_CONTROL_RESPONSE_ENABLED = isEnabled(ArchiveEventCode.CMD_OUT_RESPONSE);
-    private static final boolean LOG_RECORDING_SIGNAL_ENABLED = isEnabled(ArchiveEventCode.RECORDING_SIGNAL);
-    private static final boolean LOG_REPLAY_SESSION_STATE_CHANGE_ENABLED =
+    private static final boolean TRACE_CONTROL_RESPONSE_ENABLED = isEnabled(ArchiveEventCode.CMD_OUT_RESPONSE);
+    private static final boolean TRACE_RECORDING_SIGNAL_ENABLED = isEnabled(ArchiveEventCode.RECORDING_SIGNAL);
+    private static final boolean TRACE_REPLAY_SESSION_STATE_CHANGE_ENABLED =
         isEnabled(ArchiveEventCode.REPLAY_SESSION_STATE_CHANGE);
-    private static final boolean LOG_REPLAY_SESSION_ERROR_ENABLED =
+    private static final boolean TRACE_REPLAY_SESSION_ERROR_ENABLED =
         isEnabled(ArchiveEventCode.REPLAY_SESSION_ERROR);
-    private static final boolean LOG_RECORDING_SESSION_STATE_CHANGE_ENABLED =
+    private static final boolean TRACE_RECORDING_SESSION_STATE_CHANGE_ENABLED =
         isEnabled(ArchiveEventCode.RECORDING_SESSION_STATE_CHANGE);
-    private static final boolean LOG_REPLICATION_SESSION_STATE_CHANGE_ENABLED =
+    private static final boolean TRACE_REPLICATION_SESSION_STATE_CHANGE_ENABLED =
         isEnabled(ArchiveEventCode.REPLICATION_SESSION_STATE_CHANGE);
-    private static final boolean LOG_REPLICATION_SESSION_DONE_ENABLED =
+    private static final boolean TRACE_REPLICATION_SESSION_DONE_ENABLED =
         isEnabled(ArchiveEventCode.REPLICATION_SESSION_DONE);
-    private static final boolean LOG_CONTROL_SESSION_STATE_CHANGE_ENABLED =
+    private static final boolean TRACE_CONTROL_SESSION_STATE_CHANGE_ENABLED =
         isEnabled(ArchiveEventCode.CONTROL_SESSION_STATE_CHANGE);
-    private static final boolean LOG_CATALOG_RESIZE_ENABLED = isEnabled(ArchiveEventCode.CATALOG_RESIZE);
-    private static final boolean LOG_PERSISTENT_SUBSCRIPTION_STATE_CHANGE_ENABLED =
+    private static final boolean TRACE_CATALOG_RESIZE_ENABLED = isEnabled(ArchiveEventCode.CATALOG_RESIZE);
+    private static final boolean TRACE_PERSISTENT_SUBSCRIPTION_STATE_CHANGE_ENABLED =
         isEnabled(ArchiveEventCode.PERSISTENT_SUBSCRIPTION_STATE_CHANGE);
-    private static final boolean LOG_PERSISTENT_SUBSCRIPTION_JOINED_LIVE_ENABLED =
+    private static final boolean TRACE_PERSISTENT_SUBSCRIPTION_JOINED_LIVE_ENABLED =
         isEnabled(ArchiveEventCode.PERSISTENT_SUBSCRIPTION_JOINED_LIVE);
-    private static final boolean LOG_PERSISTENT_SUBSCRIPTION_LEFT_LIVE_ENABLED =
+    private static final boolean TRACE_PERSISTENT_SUBSCRIPTION_LEFT_LIVE_ENABLED =
         isEnabled(ArchiveEventCode.PERSISTENT_SUBSCRIPTION_LEFT_LIVE);
-    private static final boolean LOG_START = !ENABLED_EVENT_CODES.isEmpty();
+    private static final boolean TRACE_START = !ENABLED_EVENT_CODES.isEmpty();
 
     private ArchiveTracing()
     {
@@ -110,7 +110,7 @@ public final class ArchiveTracing
      */
     public static void traceControlRequest(final DirectBuffer buffer, final int offset, final int length)
     {
-        if (!LOG_ANY_CONTROL_REQUEST_ENABLED)
+        if (!TRACE_ANY_CONTROL_REQUEST_ENABLED)
         {
             return;
         }
@@ -132,7 +132,7 @@ public final class ArchiveTracing
      */
     public static void traceControlResponse(final DirectBuffer buffer, final int offset, final int length)
     {
-        if (!LOG_CONTROL_RESPONSE_ENABLED)
+        if (!TRACE_CONTROL_RESPONSE_ENABLED)
         {
             return;
         }
@@ -149,7 +149,7 @@ public final class ArchiveTracing
      */
     public static void traceRecordingSignal(final DirectBuffer buffer, final int offset, final int length)
     {
-        if (!LOG_RECORDING_SIGNAL_ENABLED)
+        if (!TRACE_RECORDING_SIGNAL_ENABLED)
         {
             return;
         }
@@ -176,7 +176,7 @@ public final class ArchiveTracing
         final long position,
         final String reason)
     {
-        if (!LOG_REPLAY_SESSION_STATE_CHANGE_ENABLED)
+        if (!TRACE_REPLAY_SESSION_STATE_CHANGE_ENABLED)
         {
             return;
         }
@@ -194,7 +194,7 @@ public final class ArchiveTracing
      */
     public static void traceReplaySessionError(final long sessionId, final long recordingId, final String errorMessage)
     {
-        if (!LOG_REPLAY_SESSION_ERROR_ENABLED)
+        if (!TRACE_REPLAY_SESSION_ERROR_ENABLED)
         {
             return;
         }
@@ -219,7 +219,7 @@ public final class ArchiveTracing
         final long position,
         final String reason)
     {
-        if (!LOG_RECORDING_SESSION_STATE_CHANGE_ENABLED)
+        if (!TRACE_RECORDING_SESSION_STATE_CHANGE_ENABLED)
         {
             return;
         }
@@ -248,7 +248,7 @@ public final class ArchiveTracing
         final long position,
         final String reason)
     {
-        if (!LOG_REPLICATION_SESSION_STATE_CHANGE_ENABLED)
+        if (!TRACE_REPLICATION_SESSION_STATE_CHANGE_ENABLED)
         {
             return;
         }
@@ -286,7 +286,7 @@ public final class ArchiveTracing
         final boolean isEndOfStream,
         final boolean isSynced)
     {
-        if (!LOG_REPLICATION_SESSION_DONE_ENABLED)
+        if (!TRACE_REPLICATION_SESSION_DONE_ENABLED)
         {
             return;
         }
@@ -320,7 +320,7 @@ public final class ArchiveTracing
         final long controlSessionId,
         final String reason)
     {
-        if (!LOG_CONTROL_SESSION_STATE_CHANGE_ENABLED)
+        if (!TRACE_CONTROL_SESSION_STATE_CHANGE_ENABLED)
         {
             return;
         }
@@ -336,7 +336,7 @@ public final class ArchiveTracing
      */
     public static void traceCatalogResize(final long oldCatalogLength, final long newCatalogLength)
     {
-        if (!LOG_CATALOG_RESIZE_ENABLED)
+        if (!TRACE_CATALOG_RESIZE_ENABLED)
         {
             return;
         }
@@ -365,7 +365,7 @@ public final class ArchiveTracing
         final String liveChannel,
         final int liveStreamId)
     {
-        if (!LOG_PERSISTENT_SUBSCRIPTION_STATE_CHANGE_ENABLED)
+        if (!TRACE_PERSISTENT_SUBSCRIPTION_STATE_CHANGE_ENABLED)
         {
             return;
         }
@@ -395,7 +395,7 @@ public final class ArchiveTracing
         final int liveSessionId,
         final long joinPosition)
     {
-        if (!LOG_PERSISTENT_SUBSCRIPTION_JOINED_LIVE_ENABLED)
+        if (!TRACE_PERSISTENT_SUBSCRIPTION_JOINED_LIVE_ENABLED)
         {
             return;
         }
@@ -422,7 +422,7 @@ public final class ArchiveTracing
         final int liveStreamId,
         final long livePosition)
     {
-        if (!LOG_PERSISTENT_SUBSCRIPTION_LEFT_LIVE_ENABLED)
+        if (!TRACE_PERSISTENT_SUBSCRIPTION_LEFT_LIVE_ENABLED)
         {
             return;
         }
@@ -438,7 +438,7 @@ public final class ArchiveTracing
      */
     public static void traceStart(final String version)
     {
-        if (!LOG_START)
+        if (!TRACE_START)
         {
             return;
         }

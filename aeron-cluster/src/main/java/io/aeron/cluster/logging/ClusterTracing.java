@@ -61,36 +61,36 @@ public final class ClusterTracing
         ENABLED_EVENT_CODES = Collections.unmodifiableSet(enabledEventCodeSet);
     }
 
-    static final boolean LOG_ELECTION_STATE_CHANGE_ENABLED = isEnabled(ClusterEventCode.ELECTION_STATE_CHANGE);
-    static final boolean LOG_NEW_LEADERSHIP_TERM_ENABLED = isEnabled(ClusterEventCode.NEW_LEADERSHIP_TERM);
-    static final boolean LOG_STATE_CHANGE_ENABLED = isEnabled(ClusterEventCode.STATE_CHANGE);
-    static final boolean LOG_ROLE_CHANGE_ENABLED = isEnabled(ClusterEventCode.ROLE_CHANGE);
-    static final boolean LOG_CANVASS_POSITION_ENABLED = isEnabled(ClusterEventCode.CANVASS_POSITION);
-    static final boolean LOG_REQUEST_VOTE_ENABLED = isEnabled(ClusterEventCode.REQUEST_VOTE);
-    static final boolean LOG_CATCHUP_POSITION_ENABLED = isEnabled(ClusterEventCode.CATCHUP_POSITION);
-    static final boolean LOG_STOP_CATCHUP_ENABLED = isEnabled(ClusterEventCode.STOP_CATCHUP);
-    static final boolean LOG_TRUNCATE_LOG_ENTRY_ENABLED = isEnabled(ClusterEventCode.TRUNCATE_LOG_ENTRY);
-    static final boolean LOG_REPLAY_NEW_LEADERSHIP_TERM_ENABLED =
+    static final boolean TRACE_ELECTION_STATE_CHANGE_ENABLED = isEnabled(ClusterEventCode.ELECTION_STATE_CHANGE);
+    static final boolean TRACE_NEW_LEADERSHIP_TERM_ENABLED = isEnabled(ClusterEventCode.NEW_LEADERSHIP_TERM);
+    static final boolean TRACE_STATE_CHANGE_ENABLED = isEnabled(ClusterEventCode.STATE_CHANGE);
+    static final boolean TRACE_ROLE_CHANGE_ENABLED = isEnabled(ClusterEventCode.ROLE_CHANGE);
+    static final boolean TRACE_CANVASS_POSITION_ENABLED = isEnabled(ClusterEventCode.CANVASS_POSITION);
+    static final boolean TRACE_REQUEST_VOTE_ENABLED = isEnabled(ClusterEventCode.REQUEST_VOTE);
+    static final boolean TRACE_CATCHUP_POSITION_ENABLED = isEnabled(ClusterEventCode.CATCHUP_POSITION);
+    static final boolean TRACE_STOP_CATCHUP_ENABLED = isEnabled(ClusterEventCode.STOP_CATCHUP);
+    static final boolean TRACE_TRUNCATE_LOG_ENTRY_ENABLED = isEnabled(ClusterEventCode.TRUNCATE_LOG_ENTRY);
+    static final boolean TRACE_REPLAY_NEW_LEADERSHIP_TERM_ENABLED =
         isEnabled(ClusterEventCode.REPLAY_NEW_LEADERSHIP_TERM);
-    static final boolean LOG_APPEND_POSITION_ENABLED = isEnabled(ClusterEventCode.APPEND_POSITION);
-    static final boolean LOG_COMMIT_POSITION_ENABLED = isEnabled(ClusterEventCode.COMMIT_POSITION);
-    static final boolean LOG_APPEND_SESSION_CLOSE_ENABLED = isEnabled(ClusterEventCode.APPEND_SESSION_CLOSE);
-    static final boolean LOG_CLUSTER_BACKUP_STATE_CHANGE_ENABLED =
+    static final boolean TRACE_APPEND_POSITION_ENABLED = isEnabled(ClusterEventCode.APPEND_POSITION);
+    static final boolean TRACE_COMMIT_POSITION_ENABLED = isEnabled(ClusterEventCode.COMMIT_POSITION);
+    static final boolean TRACE_APPEND_SESSION_CLOSE_ENABLED = isEnabled(ClusterEventCode.APPEND_SESSION_CLOSE);
+    static final boolean TRACE_CLUSTER_BACKUP_STATE_CHANGE_ENABLED =
         isEnabled(ClusterEventCode.CLUSTER_BACKUP_STATE_CHANGE);
-    static final boolean LOG_TERMINATION_POSITION_ENABLED = isEnabled(ClusterEventCode.TERMINATION_POSITION);
-    static final boolean LOG_TERMINATION_ACK_ENABLED = isEnabled(ClusterEventCode.TERMINATION_ACK);
-    static final boolean LOG_SERVICE_ACK_ENABLED = isEnabled(ClusterEventCode.SERVICE_ACK);
-    static final boolean LOG_REPLICATION_ENDED_ENABLED = isEnabled(ClusterEventCode.REPLICATION_ENDED);
-    static final boolean LOG_STANDBY_SNAPSHOT_NOTIFICATION_ENABLED =
+    static final boolean TRACE_TERMINATION_POSITION_ENABLED = isEnabled(ClusterEventCode.TERMINATION_POSITION);
+    static final boolean TRACE_TERMINATION_ACK_ENABLED = isEnabled(ClusterEventCode.TERMINATION_ACK);
+    static final boolean TRACE_SERVICE_ACK_ENABLED = isEnabled(ClusterEventCode.SERVICE_ACK);
+    static final boolean TRACE_REPLICATION_ENDED_ENABLED = isEnabled(ClusterEventCode.REPLICATION_ENDED);
+    static final boolean TRACE_STANDBY_SNAPSHOT_NOTIFICATION_ENABLED =
         isEnabled(ClusterEventCode.STANDBY_SNAPSHOT_NOTIFICATION);
-    static final boolean LOG_NEW_ELECTION_ENABLED = isEnabled(ClusterEventCode.NEW_ELECTION);
-    static final boolean LOG_APPEND_SESSION_OPEN_ENABLED = isEnabled(ClusterEventCode.APPEND_SESSION_OPEN);
-    static final boolean LOG_CLUSTER_SESSION_STATE_CHANGE_ENABLED =
+    static final boolean TRACE_NEW_ELECTION_ENABLED = isEnabled(ClusterEventCode.NEW_ELECTION);
+    static final boolean TRACE_APPEND_SESSION_OPEN_ENABLED = isEnabled(ClusterEventCode.APPEND_SESSION_OPEN);
+    static final boolean TRACE_CLUSTER_SESSION_STATE_CHANGE_ENABLED =
         isEnabled(ClusterEventCode.CLUSTER_SESSION_STATE_CHANGE);
-    static final boolean LOG_VOTE_ENABLED = isEnabled(ClusterEventCode.VOTE);
-    static final boolean LOG_SNAPSHOT_ENTRY_INVALIDATION_ENABLED =
+    static final boolean TRACE_VOTE_ENABLED = isEnabled(ClusterEventCode.VOTE);
+    static final boolean TRACE_SNAPSHOT_ENTRY_INVALIDATION_ENABLED =
         isEnabled(ClusterEventCode.SNAPSHOT_ENTRY_INVALIDATION);
-    static final boolean LOG_START = !ENABLED_EVENT_CODES.isEmpty();
+    static final boolean TRACE_START = !ENABLED_EVENT_CODES.isEmpty();
 
     private ClusterTracing()
     {
@@ -136,7 +136,7 @@ public final class ClusterTracing
         final long catchupPosition,
         final String reason)
     {
-        if (!LOG_ELECTION_STATE_CHANGE_ENABLED)
+        if (!TRACE_ELECTION_STATE_CHANGE_ENABLED)
         {
             return;
         }
@@ -192,7 +192,7 @@ public final class ClusterTracing
         final int appVersion,
         final boolean isStartup)
     {
-        if (!LOG_NEW_LEADERSHIP_TERM_ENABLED)
+        if (!TRACE_NEW_LEADERSHIP_TERM_ENABLED)
         {
             return;
         }
@@ -227,7 +227,7 @@ public final class ClusterTracing
     public static <E extends Enum<E>> void traceStateChange(
         final int memberId, final E oldState, final E newState, final String reason)
     {
-        if (!LOG_STATE_CHANGE_ENABLED)
+        if (!TRACE_STATE_CHANGE_ENABLED)
         {
             return;
         }
@@ -245,7 +245,7 @@ public final class ClusterTracing
      */
     public static <E extends Enum<E>> void traceRoleChange(final int memberId, final E oldRole, final E newRole)
     {
-        if (!LOG_ROLE_CHANGE_ENABLED)
+        if (!TRACE_ROLE_CHANGE_ENABLED)
         {
             return;
         }
@@ -271,7 +271,7 @@ public final class ClusterTracing
         final int followerMemberId,
         final int protocolVersion)
     {
-        if (!LOG_CANVASS_POSITION_ENABLED)
+        if (!TRACE_CANVASS_POSITION_ENABLED)
         {
             return;
         }
@@ -298,7 +298,7 @@ public final class ClusterTracing
         final int candidateId,
         final int protocolVersion)
     {
-        if (!LOG_REQUEST_VOTE_ENABLED)
+        if (!TRACE_REQUEST_VOTE_ENABLED)
         {
             return;
         }
@@ -327,7 +327,7 @@ public final class ClusterTracing
         final int voterId,
         final boolean vote)
     {
-        if (!LOG_VOTE_ENABLED)
+        if (!TRACE_VOTE_ENABLED)
         {
             return;
         }
@@ -352,7 +352,7 @@ public final class ClusterTracing
         final int followerMemberId,
         final String catchupEndpoint)
     {
-        if (!LOG_CATCHUP_POSITION_ENABLED)
+        if (!TRACE_CATCHUP_POSITION_ENABLED)
         {
             return;
         }
@@ -370,7 +370,7 @@ public final class ClusterTracing
      */
     public static void traceOnStopCatchup(final int memberId, final long leadershipTermId, final int followerMemberId)
     {
-        if (!LOG_STOP_CATCHUP_ENABLED)
+        if (!TRACE_STOP_CATCHUP_ENABLED)
         {
             return;
         }
@@ -405,7 +405,7 @@ public final class ClusterTracing
         final long oldPosition,
         final long newPosition)
     {
-        if (!LOG_TRUNCATE_LOG_ENTRY_ENABLED)
+        if (!TRACE_TRUNCATE_LOG_ENTRY_ENABLED)
         {
             return;
         }
@@ -445,7 +445,7 @@ public final class ClusterTracing
         final TimeUnit timeUnit,
         final int appVersion)
     {
-        if (!LOG_REPLAY_NEW_LEADERSHIP_TERM_ENABLED)
+        if (!TRACE_REPLAY_NEW_LEADERSHIP_TERM_ENABLED)
         {
             return;
         }
@@ -477,7 +477,7 @@ public final class ClusterTracing
         final int followerMemberId,
         final short flags)
     {
-        if (!LOG_APPEND_POSITION_ENABLED)
+        if (!TRACE_APPEND_POSITION_ENABLED)
         {
             return;
         }
@@ -497,7 +497,7 @@ public final class ClusterTracing
     public static void traceOnCommitPosition(
         final int memberId, final long leadershipTermId, final long logPosition, final int leaderMemberId)
     {
-        if (!LOG_COMMIT_POSITION_ENABLED)
+        if (!TRACE_COMMIT_POSITION_ENABLED)
         {
             return;
         }
@@ -523,7 +523,7 @@ public final class ClusterTracing
         final long timestamp,
         final TimeUnit timeUnit)
     {
-        if (!LOG_APPEND_SESSION_CLOSE_ENABLED)
+        if (!TRACE_APPEND_SESSION_CLOSE_ENABLED)
         {
             return;
         }
@@ -550,7 +550,7 @@ public final class ClusterTracing
         final long timestamp,
         final TimeUnit timeUnit)
     {
-        if (!LOG_APPEND_SESSION_OPEN_ENABLED)
+        if (!TRACE_APPEND_SESSION_OPEN_ENABLED)
         {
             return;
         }
@@ -570,7 +570,7 @@ public final class ClusterTracing
         final E oldState,
         final E newState)
     {
-        if (!LOG_CLUSTER_BACKUP_STATE_CHANGE_ENABLED)
+        if (!TRACE_CLUSTER_BACKUP_STATE_CHANGE_ENABLED)
         {
             return;
         }
@@ -587,7 +587,7 @@ public final class ClusterTracing
      */
     public static void traceTerminationPosition(final int memberId, final long leadershipTermId, final long logPosition)
     {
-        if (!LOG_TERMINATION_POSITION_ENABLED)
+        if (!TRACE_TERMINATION_POSITION_ENABLED)
         {
             return;
         }
@@ -606,7 +606,7 @@ public final class ClusterTracing
     public static void traceTerminationAck(
         final int memberId, final long leadershipTermId, final long logPosition, final int senderMemberId)
     {
-        if (!LOG_TERMINATION_ACK_ENABLED)
+        if (!TRACE_TERMINATION_ACK_ENABLED)
         {
             return;
         }
@@ -634,7 +634,7 @@ public final class ClusterTracing
         final long relevantId,
         final int serviceId)
     {
-        if (!LOG_SERVICE_ACK_ENABLED)
+        if (!TRACE_SERVICE_ACK_ENABLED)
         {
             return;
         }
@@ -663,7 +663,7 @@ public final class ClusterTracing
         final long position,
         final boolean hasSynced)
     {
-        if (!LOG_REPLICATION_ENDED_ENABLED)
+        if (!TRACE_REPLICATION_ENDED_ENABLED)
         {
             return;
         }
@@ -696,7 +696,7 @@ public final class ClusterTracing
         final int serviceId,
         final String archiveEndpoint)
     {
-        if (!LOG_STANDBY_SNAPSHOT_NOTIFICATION_ENABLED)
+        if (!TRACE_STANDBY_SNAPSHOT_NOTIFICATION_ENABLED)
         {
             return;
         }
@@ -729,7 +729,7 @@ public final class ClusterTracing
         final long appendPosition,
         final String reason)
     {
-        if (!LOG_NEW_ELECTION_ENABLED)
+        if (!TRACE_NEW_ELECTION_ENABLED)
         {
             return;
         }
@@ -757,7 +757,7 @@ public final class ClusterTracing
         final S newState,
         final String reason)
     {
-        if (!LOG_CLUSTER_SESSION_STATE_CHANGE_ENABLED)
+        if (!TRACE_CLUSTER_SESSION_STATE_CHANGE_ENABLED)
         {
             return;
         }
@@ -782,7 +782,7 @@ public final class ClusterTracing
         final long logPosition,
         final int serviceId)
     {
-        if (!LOG_SNAPSHOT_ENTRY_INVALIDATION_ENABLED)
+        if (!TRACE_SNAPSHOT_ENTRY_INVALIDATION_ENABLED)
         {
             return;
         }
@@ -798,7 +798,7 @@ public final class ClusterTracing
      */
     public static void traceStart(final String version)
     {
-        if (!LOG_START)
+        if (!TRACE_START)
         {
             return;
         }
