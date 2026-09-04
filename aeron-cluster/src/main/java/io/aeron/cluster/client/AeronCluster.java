@@ -75,12 +75,14 @@ import org.agrona.concurrent.UnsafeBuffer;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 import static io.aeron.Aeron.NULL_VALUE;
 import static io.aeron.CommonContext.REJOIN_PARAM_NAME;
-import static org.agrona.SystemUtil.getDurationInNanos;
-import static org.agrona.SystemUtil.getProperty;
+import static io.aeron.PropertiesUtil.getDurationInNanos;
+import static io.aeron.PropertiesUtil.getInteger;
+import static io.aeron.PropertiesUtil.getProperty;
 
 /**
  * Client for interacting with an Aeron Cluster.
@@ -540,8 +542,8 @@ public final class AeronCluster implements AutoCloseable
 
         final int length =
             MessageHeaderEncoder.ENCODED_LENGTH +
-            AdminRequestEncoder.BLOCK_LENGTH +
-            AdminRequestEncoder.payloadHeaderLength();
+                AdminRequestEncoder.BLOCK_LENGTH +
+                AdminRequestEncoder.payloadHeaderLength();
 
         while (true)
         {
@@ -649,7 +651,7 @@ public final class AeronCluster implements AutoCloseable
     {
         if (State.PENDING_CLOSE == state ||
             ((State.AWAIT_NEW_LEADER == state || State.AWAIT_NEW_LEADER_CONNECTION == state) &&
-            0 <= nanoClock.nanoTime() - stateDeadline))
+                0 <= nanoClock.nanoTime() - stateDeadline))
         {
             close();
 
@@ -1335,7 +1337,19 @@ public final class AeronCluster implements AutoCloseable
          */
         public static long messageTimeoutNs()
         {
-            return getDurationInNanos(MESSAGE_TIMEOUT_PROP_NAME, MESSAGE_TIMEOUT_DEFAULT_NS);
+            return messageTimeoutNs(System.getProperties());
+        }
+
+        /**
+         * The timeout in nanoseconds to wait for a message.
+         *
+         * @param properties to read the configuration from.
+         * @return timeout in nanoseconds to wait for a message.
+         * @see #MESSAGE_TIMEOUT_PROP_NAME
+         */
+        public static long messageTimeoutNs(final Properties properties)
+        {
+            return getDurationInNanos(properties, MESSAGE_TIMEOUT_PROP_NAME, MESSAGE_TIMEOUT_DEFAULT_NS);
         }
 
         /**
@@ -1345,7 +1359,18 @@ public final class AeronCluster implements AutoCloseable
          */
         public static String ingressEndpoints()
         {
-            return System.getProperty(INGRESS_ENDPOINTS_PROP_NAME, INGRESS_ENDPOINTS_DEFAULT);
+            return ingressEndpoints(System.getProperties());
+        }
+
+        /**
+         * The value {@link #INGRESS_ENDPOINTS_DEFAULT} or system property {@link #INGRESS_ENDPOINTS_PROP_NAME} if set.
+         *
+         * @param properties to read the configuration from.
+         * @return {@link #INGRESS_ENDPOINTS_DEFAULT} or system property {@link #INGRESS_ENDPOINTS_PROP_NAME} if set.
+         */
+        public static String ingressEndpoints(final Properties properties)
+        {
+            return properties.getProperty(INGRESS_ENDPOINTS_PROP_NAME, INGRESS_ENDPOINTS_DEFAULT);
         }
 
         /**
@@ -1355,7 +1380,18 @@ public final class AeronCluster implements AutoCloseable
          */
         public static String ingressChannel()
         {
-            return System.getProperty(INGRESS_CHANNEL_PROP_NAME, INGRESS_CHANNEL_DEFAULT);
+            return ingressChannel(System.getProperties());
+        }
+
+        /**
+         * The value {@link #INGRESS_CHANNEL_DEFAULT} or system property {@link #INGRESS_CHANNEL_PROP_NAME} if set.
+         *
+         * @param properties to read the configuration from.
+         * @return {@link #INGRESS_CHANNEL_DEFAULT} or system property {@link #INGRESS_CHANNEL_PROP_NAME} if set.
+         */
+        public static String ingressChannel(final Properties properties)
+        {
+            return properties.getProperty(INGRESS_CHANNEL_PROP_NAME, INGRESS_CHANNEL_DEFAULT);
         }
 
         /**
@@ -1365,7 +1401,18 @@ public final class AeronCluster implements AutoCloseable
          */
         public static int ingressStreamId()
         {
-            return Integer.getInteger(INGRESS_STREAM_ID_PROP_NAME, INGRESS_STREAM_ID_DEFAULT);
+            return ingressStreamId(System.getProperties());
+        }
+
+        /**
+         * The value {@link #INGRESS_STREAM_ID_DEFAULT} or system property {@link #INGRESS_STREAM_ID_PROP_NAME} if set.
+         *
+         * @param properties to read the configuration from.
+         * @return {@link #INGRESS_STREAM_ID_DEFAULT} or system property {@link #INGRESS_STREAM_ID_PROP_NAME} if set.
+         */
+        public static int ingressStreamId(final Properties properties)
+        {
+            return getInteger(properties, INGRESS_STREAM_ID_PROP_NAME, INGRESS_STREAM_ID_DEFAULT);
         }
 
         /**
@@ -1375,7 +1422,18 @@ public final class AeronCluster implements AutoCloseable
          */
         public static String egressChannel()
         {
-            return System.getProperty(EGRESS_CHANNEL_PROP_NAME, EGRESS_CHANNEL_DEFAULT);
+            return egressChannel(System.getProperties());
+        }
+
+        /**
+         * The value {@link #EGRESS_CHANNEL_DEFAULT} or system property {@link #EGRESS_CHANNEL_PROP_NAME} if set.
+         *
+         * @param properties to read the configuration from.
+         * @return {@link #EGRESS_CHANNEL_DEFAULT} or system property {@link #EGRESS_CHANNEL_PROP_NAME} if set.
+         */
+        public static String egressChannel(final Properties properties)
+        {
+            return properties.getProperty(EGRESS_CHANNEL_PROP_NAME, EGRESS_CHANNEL_DEFAULT);
         }
 
         /**
@@ -1385,7 +1443,18 @@ public final class AeronCluster implements AutoCloseable
          */
         public static int egressStreamId()
         {
-            return Integer.getInteger(EGRESS_STREAM_ID_PROP_NAME, EGRESS_STREAM_ID_DEFAULT);
+            return egressStreamId(System.getProperties());
+        }
+
+        /**
+         * The value {@link #EGRESS_STREAM_ID_DEFAULT} or system property {@link #EGRESS_STREAM_ID_PROP_NAME} if set.
+         *
+         * @param properties to read the configuration from.
+         * @return {@link #EGRESS_STREAM_ID_DEFAULT} or system property {@link #EGRESS_STREAM_ID_PROP_NAME} if set.
+         */
+        public static int egressStreamId(final Properties properties)
+        {
+            return getInteger(properties, EGRESS_STREAM_ID_PROP_NAME, EGRESS_STREAM_ID_DEFAULT);
         }
 
         /**
@@ -1397,7 +1466,20 @@ public final class AeronCluster implements AutoCloseable
          */
         public static String clientName()
         {
-            return getProperty(CLIENT_NAME_PROP_NAME, "");
+            return clientName(System.getProperties());
+        }
+
+        /**
+         * Get the configured client name.
+         *
+         * @param properties to read the configuration from.
+         * @return specified client name or empty string if not set.
+         * @see #CLIENT_NAME_PROP_NAME
+         * @since 1.49.0
+         */
+        public static String clientName(final Properties properties)
+        {
+            return getProperty(properties, CLIENT_NAME_PROP_NAME, "");
         }
     }
 
@@ -1420,32 +1502,73 @@ public final class AeronCluster implements AutoCloseable
             }
         }
 
+        private final Properties properties;
         private volatile boolean isConcluded;
-        private long messageTimeoutNs = Configuration.messageTimeoutNs();
-        private long newLeaderTimeoutNs = NULL_VALUE;
-        private String ingressEndpoints = Configuration.ingressEndpoints();
-        private String ingressChannel = Configuration.ingressChannel();
-        private int ingressStreamId = Configuration.ingressStreamId();
-        private String egressChannel = Configuration.egressChannel();
-        private int egressStreamId = Configuration.egressStreamId();
+        private long messageTimeoutNs;
+        private long newLeaderTimeoutNs;
+        private String ingressEndpoints;
+        private String ingressChannel;
+        private int ingressStreamId;
+        private String egressChannel;
+        private int egressStreamId;
         private IdleStrategy idleStrategy;
-        private String aeronDirectoryName = CommonContext.getAeronDirectoryName();
+        private String aeronDirectoryName;
         private Aeron aeron;
         private CredentialsSupplier credentialsSupplier;
-        private boolean ownsAeronClient = false;
-        private boolean isIngressExclusive = true;
-        private ErrorHandler errorHandler = Aeron.Configuration.DEFAULT_ERROR_HANDLER;
-        private boolean isDirectAssemblers = false;
+        private boolean ownsAeronClient;
+        private boolean isIngressExclusive;
+        private ErrorHandler errorHandler;
+        private boolean isDirectAssemblers;
         private EgressListener egressListener;
         private ControlledEgressListener controlledEgressListener;
         private AgentInvoker agentInvoker;
-        private String clientName = Configuration.clientName();
+        private String clientName;
 
         /**
          * Construct a Context using default values and loading from system properties.
          */
         public Context()
         {
+            this(System.getProperties());
+        }
+
+        /**
+         * Construct a Context using default values loaded from the supplied properties.
+         *
+         * @param properties to load the configuration from.
+         */
+        public Context(final Properties properties)
+        {
+            this.properties = properties;
+            applyDefaults(properties);
+        }
+
+        /**
+         * The properties this context was constructed from, to be propagated to any context it
+         * creates.
+         *
+         * @return the properties this context was constructed from.
+         */
+        public Properties properties()
+        {
+            return properties;
+        }
+
+        private void applyDefaults(final Properties properties)
+        {
+            messageTimeoutNs = Configuration.messageTimeoutNs(properties);
+            newLeaderTimeoutNs = NULL_VALUE;
+            ingressEndpoints = Configuration.ingressEndpoints(properties);
+            ingressChannel = Configuration.ingressChannel(properties);
+            ingressStreamId = Configuration.ingressStreamId(properties);
+            egressChannel = Configuration.egressChannel(properties);
+            egressStreamId = Configuration.egressStreamId(properties);
+            aeronDirectoryName = CommonContext.getAeronDirectoryName(properties);
+            ownsAeronClient = false;
+            isIngressExclusive = true;
+            errorHandler = Aeron.Configuration.DEFAULT_ERROR_HANDLER;
+            isDirectAssemblers = false;
+            clientName = Configuration.clientName(properties);
         }
 
         /**
@@ -1510,7 +1633,7 @@ public final class AeronCluster implements AutoCloseable
             if (null == aeron)
             {
                 aeron = Aeron.connect(
-                    new Aeron.Context()
+                    new Aeron.Context(properties)
                         .aeronDirectoryName(aeronDirectoryName)
                         .errorHandler(errorHandler)
                         .subscriberErrorHandler(RethrowingErrorHandler.INSTANCE)
@@ -1582,7 +1705,7 @@ public final class AeronCluster implements AutoCloseable
         @Config
         public long messageTimeoutNs()
         {
-            return CommonContext.checkDebugTimeout(messageTimeoutNs, TimeUnit.NANOSECONDS);
+            return CommonContext.checkDebugTimeout(properties, messageTimeoutNs, TimeUnit.NANOSECONDS);
         }
 
         /**
@@ -1612,7 +1735,7 @@ public final class AeronCluster implements AutoCloseable
          */
         public long newLeaderTimeoutNs()
         {
-            return CommonContext.checkDebugTimeout(newLeaderTimeoutNs, TimeUnit.NANOSECONDS);
+            return CommonContext.checkDebugTimeout(properties, newLeaderTimeoutNs, TimeUnit.NANOSECONDS);
         }
 
         /**
@@ -2326,12 +2449,12 @@ public final class AeronCluster implements AutoCloseable
                     egressSubscription.tryResolveChannelEndpointPort() : "<unknown>";
                 final TimeoutException ex = new TimeoutException(
                     "cluster connect timeout: state=" + state +
-                    " messageTimeout=" + SystemUtil.formatDuration(ctx.messageTimeoutNs()) +
-                    " ingressChannel=" + ctx.ingressChannel() +
-                    " ingressEndpoints=" + ctx.ingressEndpoints() +
-                    " ingressPublication=" + ingressPublication +
-                    " egress.isConnected=" + isConnected +
-                    " responseChannel=" + egressChannel);
+                        " messageTimeout=" + SystemUtil.formatDuration(ctx.messageTimeoutNs()) +
+                        " ingressChannel=" + ctx.ingressChannel() +
+                        " ingressEndpoints=" + ctx.ingressEndpoints() +
+                        " ingressPublication=" + ingressPublication +
+                        " egress.isConnected=" + isConnected +
+                        " responseChannel=" + egressChannel);
 
                 for (final MemberIngress member : memberByIdMap.values())
                 {

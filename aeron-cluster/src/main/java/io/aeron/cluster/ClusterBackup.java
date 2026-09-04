@@ -57,6 +57,7 @@ import java.io.File;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Arrays;
+import java.util.Properties;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
@@ -64,11 +65,10 @@ import java.util.function.Supplier;
 import static io.aeron.AeronCounters.CLUSTER_BACKUP_SNAPSHOT_RETRIEVE_COUNT_TYPE_ID;
 import static io.aeron.CommonContext.ENDPOINT_PARAM_NAME;
 import static io.aeron.CommonContext.driverFilePageSize;
+import static io.aeron.PropertiesUtil.getDurationInNanos;
 import static io.aeron.cluster.ConsensusModule.Configuration.SERVICE_ID;
 import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.LIVENESS_TIMEOUT_MS;
-import static java.lang.System.getProperty;
 import static java.nio.charset.StandardCharsets.US_ASCII;
-import static org.agrona.SystemUtil.getDurationInNanos;
 
 /**
  * Backup component which can run remote from a cluster which polls for snapshots and replicates the log.
@@ -416,14 +416,27 @@ public final class ClusterBackup implements AutoCloseable
          */
         public static String catchupEndpoint()
         {
-            String configuredCatchupEndpoint = System.getProperty(CLUSTER_BACKUP_CATCHUP_ENDPOINT_PROP_NAME);
+            return catchupEndpoint(System.getProperties());
+        }
 
-            if (null == configuredCatchupEndpoint && null != ConsensusModule.Configuration.clusterMembers())
+        /**
+         * The value of system property {@link #CLUSTER_BACKUP_CATCHUP_ENDPOINT_PROP_NAME} if set, otherwise it will
+         * try to derive the catchup endpoint from {@link ConsensusModule.Configuration#clusterMembers()} and
+         * {@link ConsensusModule.Configuration#clusterMemberId()}. Failing that null will be returned.
+         *
+         * @param properties to read the configuration from.
+         * @return system property {@link #CLUSTER_BACKUP_CATCHUP_ENDPOINT_PROP_NAME}, the derived value, or null.
+         */
+        public static String catchupEndpoint(final Properties properties)
+        {
+            String configuredCatchupEndpoint = properties.getProperty(CLUSTER_BACKUP_CATCHUP_ENDPOINT_PROP_NAME);
+
+            if (null == configuredCatchupEndpoint && null != ConsensusModule.Configuration.clusterMembers(properties))
             {
                 final ClusterMember member = ClusterMember.determineMember(
-                    ClusterMember.parse(ConsensusModule.Configuration.clusterMembers()),
-                    ConsensusModule.Configuration.clusterMemberId(),
-                    ConsensusModule.Configuration.memberEndpoints());
+                    ClusterMember.parse(ConsensusModule.Configuration.clusterMembers(properties)),
+                    ConsensusModule.Configuration.clusterMemberId(properties),
+                    ConsensusModule.Configuration.memberEndpoints(properties));
 
                 configuredCatchupEndpoint = member.catchupEndpoint();
             }
@@ -440,7 +453,21 @@ public final class ClusterBackup implements AutoCloseable
          */
         public static String catchupChannel()
         {
-            return System.getProperty(CLUSTER_BACKUP_CATCHUP_CHANNEL_PROP_NAME, CLUSTER_BACKUP_CATCHUP_CHANNEL_DEFAULT);
+            return catchupChannel(System.getProperties());
+        }
+
+        /**
+         * The value {@link #CLUSTER_BACKUP_CATCHUP_CHANNEL_DEFAULT} or system property
+         * {@link #CLUSTER_BACKUP_CATCHUP_CHANNEL_PROP_NAME} if set.
+         *
+         * @param properties to read the configuration from.
+         * @return {@link #CLUSTER_BACKUP_CATCHUP_CHANNEL_DEFAULT} or system property
+         * {@link #CLUSTER_BACKUP_CATCHUP_CHANNEL_PROP_NAME} if set.
+         */
+        public static String catchupChannel(final Properties properties)
+        {
+            return properties.getProperty(
+                CLUSTER_BACKUP_CATCHUP_CHANNEL_PROP_NAME, CLUSTER_BACKUP_CATCHUP_CHANNEL_DEFAULT);
         }
 
         /**
@@ -453,17 +480,31 @@ public final class ClusterBackup implements AutoCloseable
          */
         public static String consensusChannel()
         {
-            String consensusChannel = ConsensusModule.Configuration.consensusChannel();
+            return consensusChannel(System.getProperties());
+        }
 
-            if (null != consensusChannel && null != ConsensusModule.Configuration.clusterMembers())
+        /**
+         * The value of system property {@link ConsensusModule.Configuration#consensusChannel()} if set. If that channel
+         * does not have an endpoint set, then this will try to derive one using
+         * {@link ConsensusModule.Configuration#clusterMembers()} and
+         * {@link ConsensusModule.Configuration#clusterMemberId()}.
+         *
+         * @param properties to read the configuration from.
+         * @return system property {@link #CLUSTER_BACKUP_CATCHUP_CHANNEL_PROP_NAME}, the derived value, or null.
+         */
+        public static String consensusChannel(final Properties properties)
+        {
+            String consensusChannel = ConsensusModule.Configuration.consensusChannel(properties);
+
+            if (null != consensusChannel && null != ConsensusModule.Configuration.clusterMembers(properties))
             {
                 final ChannelUri consensusUri = ChannelUri.parse(consensusChannel);
                 if (!consensusUri.containsKey(ENDPOINT_PARAM_NAME))
                 {
                     final ClusterMember member = ClusterMember.determineMember(
-                        ClusterMember.parse(ConsensusModule.Configuration.clusterMembers()),
-                        ConsensusModule.Configuration.clusterMemberId(),
-                        ConsensusModule.Configuration.memberEndpoints());
+                        ClusterMember.parse(ConsensusModule.Configuration.clusterMembers(properties)),
+                        ConsensusModule.Configuration.clusterMemberId(properties),
+                        ConsensusModule.Configuration.memberEndpoints(properties));
 
                     consensusUri.put(ENDPOINT_PARAM_NAME, member.consensusEndpoint());
                     consensusChannel = consensusUri.toString();
@@ -481,7 +522,20 @@ public final class ClusterBackup implements AutoCloseable
          */
         public static long clusterBackupIntervalNs()
         {
-            return getDurationInNanos(CLUSTER_BACKUP_INTERVAL_PROP_NAME, CLUSTER_BACKUP_INTERVAL_DEFAULT_NS);
+            return clusterBackupIntervalNs(System.getProperties());
+        }
+
+        /**
+         * Interval at which a cluster backup will send backup queries.
+         *
+         * @param properties to read the configuration from.
+         * @return Interval at which a cluster backup will send backup queries.
+         * @see #CLUSTER_BACKUP_INTERVAL_PROP_NAME
+         */
+        public static long clusterBackupIntervalNs(final Properties properties)
+        {
+            return getDurationInNanos(
+                properties, CLUSTER_BACKUP_INTERVAL_PROP_NAME, CLUSTER_BACKUP_INTERVAL_DEFAULT_NS);
         }
 
         /**
@@ -492,8 +546,20 @@ public final class ClusterBackup implements AutoCloseable
          */
         public static long clusterBackupResponseTimeoutNs()
         {
+            return clusterBackupResponseTimeoutNs(System.getProperties());
+        }
+
+        /**
+         * Timeout within which a cluster backup will expect a response from a backup query.
+         *
+         * @param properties to read the configuration from.
+         * @return timeout within which a cluster backup will expect a response from a backup query.
+         * @see #CLUSTER_BACKUP_RESPONSE_TIMEOUT_PROP_NAME
+         */
+        public static long clusterBackupResponseTimeoutNs(final Properties properties)
+        {
             return getDurationInNanos(
-                CLUSTER_BACKUP_RESPONSE_TIMEOUT_PROP_NAME, CLUSTER_BACKUP_RESPONSE_TIMEOUT_DEFAULT_NS);
+                properties, CLUSTER_BACKUP_RESPONSE_TIMEOUT_PROP_NAME, CLUSTER_BACKUP_RESPONSE_TIMEOUT_DEFAULT_NS);
         }
 
         /**
@@ -504,8 +570,20 @@ public final class ClusterBackup implements AutoCloseable
          */
         public static long clusterBackupProgressTimeoutNs()
         {
+            return clusterBackupProgressTimeoutNs(System.getProperties());
+        }
+
+        /**
+         * Timeout within which a cluster backup will expect progress.
+         *
+         * @param properties to read the configuration from.
+         * @return timeout within which a cluster backup will expect progress.
+         * @see #CLUSTER_BACKUP_PROGRESS_TIMEOUT_PROP_NAME
+         */
+        public static long clusterBackupProgressTimeoutNs(final Properties properties)
+        {
             return getDurationInNanos(
-                CLUSTER_BACKUP_PROGRESS_TIMEOUT_PROP_NAME, CLUSTER_BACKUP_PROGRESS_TIMEOUT_DEFAULT_NS);
+                properties, CLUSTER_BACKUP_PROGRESS_TIMEOUT_PROP_NAME, CLUSTER_BACKUP_PROGRESS_TIMEOUT_DEFAULT_NS);
         }
 
         /**
@@ -516,8 +594,20 @@ public final class ClusterBackup implements AutoCloseable
          */
         public static long clusterBackupCoolDownIntervalNs()
         {
+            return clusterBackupCoolDownIntervalNs(System.getProperties());
+        }
+
+        /**
+         * Interval at which the cluster backup is re-initialised after an exception has been thrown.
+         *
+         * @param properties to read the configuration from.
+         * @return interval at which the cluster backup is re-initialised after an exception has been thrown.
+         * @see #CLUSTER_BACKUP_COOL_DOWN_INTERVAL_PROP_NAME
+         */
+        public static long clusterBackupCoolDownIntervalNs(final Properties properties)
+        {
             return getDurationInNanos(
-                CLUSTER_BACKUP_COOL_DOWN_INTERVAL_PROP_NAME, CLUSTER_BACKUP_COOL_DOWN_INTERVAL_DEFAULT_NS);
+                properties, CLUSTER_BACKUP_COOL_DOWN_INTERVAL_PROP_NAME, CLUSTER_BACKUP_COOL_DOWN_INTERVAL_DEFAULT_NS);
         }
 
         /**
@@ -529,7 +619,20 @@ public final class ClusterBackup implements AutoCloseable
          */
         public static String clusterBackupSourceType()
         {
-            return System.getProperty(CLUSTER_BACKUP_SOURCE_TYPE_PROP_NAME, CLUSTER_BACKUP_SOURCE_TYPE_DEFAULT);
+            return clusterBackupSourceType(System.getProperties());
+        }
+
+        /**
+         * Returns the string representation of the {@link SourceType} that this backup instance will use depending on
+         * the value of the {@link #CLUSTER_BACKUP_CATCHUP_CHANNEL_PROP_NAME} system property if set or
+         * {@link #CLUSTER_BACKUP_SOURCE_TYPE_DEFAULT} if not.
+         *
+         * @param properties to read the configuration from.
+         * @return the configured source type.
+         */
+        public static String clusterBackupSourceType(final Properties properties)
+        {
+            return properties.getProperty(CLUSTER_BACKUP_SOURCE_TYPE_PROP_NAME, CLUSTER_BACKUP_SOURCE_TYPE_DEFAULT);
         }
 
         /**
@@ -568,7 +671,19 @@ public final class ClusterBackup implements AutoCloseable
          */
         public static ReplayStart clusterInitialReplayStart()
         {
-            final String propertyValue = getProperty(CLUSTER_INITIAL_REPLAY_START_PROP_NAME);
+            return clusterInitialReplayStart(System.getProperties());
+        }
+
+        /**
+         * Get the initial value for the cluster relay start.
+         *
+         * @param properties to read the configuration from.
+         * @return enum to determine where to start replaying the log from.
+         * @see #CLUSTER_INITIAL_REPLAY_START_PROP_NAME
+         */
+        public static ReplayStart clusterInitialReplayStart(final Properties properties)
+        {
+            final String propertyValue = properties.getProperty(CLUSTER_INITIAL_REPLAY_START_PROP_NAME);
             if (null == propertyValue)
             {
                 return CLUSTER_INITIAL_REPLAY_START_DEFAULT;
@@ -597,33 +712,34 @@ public final class ClusterBackup implements AutoCloseable
             }
         }
 
+        private final Properties properties;
         private volatile boolean isConcluded;
-        private boolean ownsAeronClient = false;
-        private String aeronDirectoryName = CommonContext.getAeronDirectoryName();
+        private boolean ownsAeronClient;
+        private String aeronDirectoryName;
         private Aeron aeron;
 
-        private int clusterId = ClusteredServiceContainer.Configuration.clusterId();
-        private String consensusChannel = Configuration.consensusChannel();
-        private int consensusStreamId = ConsensusModule.Configuration.consensusStreamId();
-        private int consensusModuleSnapshotStreamId = ConsensusModule.Configuration.snapshotStreamId();
-        private int serviceSnapshotStreamId = ClusteredServiceContainer.Configuration.snapshotStreamId();
-        private int logStreamId = ConsensusModule.Configuration.logStreamId();
-        private String catchupEndpoint = Configuration.catchupEndpoint();
-        private String catchupChannel = Configuration.catchupChannel();
+        private int clusterId;
+        private String consensusChannel;
+        private int consensusStreamId;
+        private int consensusModuleSnapshotStreamId;
+        private int serviceSnapshotStreamId;
+        private int logStreamId;
+        private String catchupEndpoint;
+        private String catchupChannel;
 
-        private long clusterBackupIntervalNs = Configuration.clusterBackupIntervalNs();
-        private long clusterBackupResponseTimeoutNs = Configuration.clusterBackupResponseTimeoutNs();
-        private long clusterBackupProgressTimeoutNs = Configuration.clusterBackupProgressTimeoutNs();
-        private long clusterBackupCoolDownIntervalNs = Configuration.clusterBackupCoolDownIntervalNs();
-        private int errorBufferLength = ConsensusModule.Configuration.errorBufferLength();
+        private long clusterBackupIntervalNs;
+        private long clusterBackupResponseTimeoutNs;
+        private long clusterBackupProgressTimeoutNs;
+        private long clusterBackupCoolDownIntervalNs;
+        private int errorBufferLength;
 
-        private boolean deleteDirOnStart = false;
-        private boolean useAgentInvoker = false;
-        private String clusterDirectoryName = ClusteredServiceContainer.Configuration.clusterDirName();
+        private boolean deleteDirOnStart;
+        private boolean useAgentInvoker;
+        private String clusterDirectoryName;
         private File clusterDir;
         private File markFileDir;
         private ClusterMarkFile markFile;
-        private String clusterConsensusEndpoints = ConsensusModule.Configuration.clusterConsensusEndpoints();
+        private String clusterConsensusEndpoints;
         private ThreadFactory threadFactory;
         private EpochClock epochClock;
         private Supplier<IdleStrategy> idleStrategySupplier;
@@ -642,16 +758,68 @@ public final class ClusterBackup implements AutoCloseable
         private Runnable terminationHook;
         private ClusterBackupEventsListener eventsListener;
         private CredentialsSupplier credentialsSupplier;
-        private String sourceType = Configuration.clusterBackupSourceType();
-        private long replicationProgressTimeoutNs = ConsensusModule.Configuration.replicationProgressTimeoutNs();
-        private long replicationProgressIntervalNs = ConsensusModule.Configuration.replicationProgressIntervalNs();
-        private Configuration.ReplayStart initialReplayStart = Configuration.clusterInitialReplayStart();
+        private String sourceType;
+        private long replicationProgressTimeoutNs;
+        private long replicationProgressIntervalNs;
+        private Configuration.ReplayStart initialReplayStart;
 
         /**
          * Construct a Context using default values and loading from system properties.
          */
         public Context()
         {
+            this(System.getProperties());
+        }
+
+        /**
+         * Construct a Context using default values loaded from the supplied properties.
+         *
+         * @param properties to load the configuration from.
+         */
+        public Context(final Properties properties)
+        {
+            this.properties = properties;
+            applyDefaults(properties);
+        }
+
+        /**
+         * The properties this context was constructed from, to be propagated to any context it
+         * creates.
+         *
+         * @return the properties this context was constructed from.
+         */
+        public Properties properties()
+        {
+            return properties;
+        }
+
+        private void applyDefaults(final Properties properties)
+        {
+            ownsAeronClient = false;
+            aeronDirectoryName = CommonContext.getAeronDirectoryName(properties);
+            clusterId = ClusteredServiceContainer.Configuration.clusterId(properties);
+            consensusChannel = Configuration.consensusChannel(properties);
+            consensusStreamId = ConsensusModule.Configuration.consensusStreamId(properties);
+            consensusModuleSnapshotStreamId = ConsensusModule.Configuration.snapshotStreamId(properties);
+            serviceSnapshotStreamId = ClusteredServiceContainer.Configuration.snapshotStreamId(properties);
+            logStreamId = ConsensusModule.Configuration.logStreamId(properties);
+            catchupEndpoint = Configuration.catchupEndpoint(properties);
+            catchupChannel = Configuration.catchupChannel(properties);
+
+            clusterBackupIntervalNs = Configuration.clusterBackupIntervalNs(properties);
+            clusterBackupResponseTimeoutNs = Configuration.clusterBackupResponseTimeoutNs(properties);
+            clusterBackupProgressTimeoutNs = Configuration.clusterBackupProgressTimeoutNs(properties);
+            clusterBackupCoolDownIntervalNs = Configuration.clusterBackupCoolDownIntervalNs(properties);
+            errorBufferLength = ConsensusModule.Configuration.errorBufferLength(properties);
+
+            deleteDirOnStart = false;
+            useAgentInvoker = false;
+            clusterDirectoryName = ClusteredServiceContainer.Configuration.clusterDirName(properties);
+            clusterConsensusEndpoints = ConsensusModule.Configuration.clusterConsensusEndpoints(properties);
+            sourceType = Configuration.clusterBackupSourceType(properties);
+            replicationProgressTimeoutNs = ConsensusModule.Configuration.replicationProgressTimeoutNs(properties);
+            replicationProgressIntervalNs = ConsensusModule.Configuration.replicationProgressIntervalNs(properties);
+            initialReplayStart = Configuration.clusterInitialReplayStart(properties);
         }
 
         /**
@@ -710,7 +878,7 @@ public final class ClusterBackup implements AutoCloseable
 
             if (null == markFileDir)
             {
-                final String dir = ClusteredServiceContainer.Configuration.markFileDir();
+                final String dir = ClusteredServiceContainer.Configuration.markFileDir(properties);
                 markFileDir = Strings.isEmpty(dir) ? clusterDir : new File(dir);
             }
 
@@ -739,7 +907,8 @@ public final class ClusterBackup implements AutoCloseable
                     errorBufferLength,
                     epochClock,
                     LIVENESS_TIMEOUT_MS,
-                    filePageSize);
+                    filePageSize,
+                    CommonContext.fallbackLogger(properties));
             }
 
             MarkFile.ensureMarkFileLink(
@@ -752,7 +921,7 @@ public final class ClusterBackup implements AutoCloseable
                 errorLog = new DistinctErrorLog(markFile.errorBuffer(), epochClock, US_ASCII);
             }
 
-            errorHandler = CommonContext.setupErrorHandler(errorHandler, errorLog);
+            errorHandler = CommonContext.setupErrorHandler(properties, errorHandler, errorLog);
 
             final String clientName = "cluster-backup clusterId=" + clusterId;
             if (null == aeron)
@@ -760,7 +929,7 @@ public final class ClusterBackup implements AutoCloseable
                 ownsAeronClient = true;
 
                 aeron = Aeron.connect(
-                    new Aeron.Context()
+                    new Aeron.Context(properties)
                         .aeronDirectoryName(aeronDirectoryName)
                         .errorHandler(errorHandler)
                         .epochClock(epochClock)
@@ -842,15 +1011,15 @@ public final class ClusterBackup implements AutoCloseable
 
             if (null == idleStrategySupplier)
             {
-                idleStrategySupplier = ClusteredServiceContainer.Configuration.idleStrategySupplier(null);
+                idleStrategySupplier = ClusteredServiceContainer.Configuration.idleStrategySupplier(properties, null);
             }
 
             if (null == archiveContext)
             {
-                archiveContext = new AeronArchive.Context()
-                    .controlRequestChannel(AeronArchive.Configuration.localControlChannel())
-                    .controlResponseChannel(AeronArchive.Configuration.localControlChannel())
-                    .controlRequestStreamId(AeronArchive.Configuration.localControlStreamId());
+                archiveContext = new AeronArchive.Context(properties)
+                    .controlRequestChannel(AeronArchive.Configuration.localControlChannel(properties))
+                    .controlResponseChannel(AeronArchive.Configuration.localControlChannel(properties))
+                    .controlRequestStreamId(AeronArchive.Configuration.localControlStreamId(properties));
             }
 
             archiveContext
@@ -872,7 +1041,7 @@ public final class ClusterBackup implements AutoCloseable
 
             if (null == clusterArchiveContext)
             {
-                clusterArchiveContext = new AeronArchive.Context();
+                clusterArchiveContext = new AeronArchive.Context(properties);
             }
 
             clusterArchiveContext
@@ -899,7 +1068,7 @@ public final class ClusterBackup implements AutoCloseable
             {
                 throw new ConfigurationException(
                     "ClusterBackup.Context.sourceType=" + sourceType + " is not valid. Must be one of: " +
-                    Arrays.toString(SourceType.values()));
+                        Arrays.toString(SourceType.values()));
             }
 
             concludeMarkFile();
@@ -2030,12 +2199,12 @@ public final class ClusterBackup implements AutoCloseable
 
             markFile.encoder()
                 .archiveStreamId(archiveContext.controlRequestStreamId())
-                .serviceStreamId(ClusteredServiceContainer.Configuration.serviceStreamId())
-                .consensusModuleStreamId(ClusteredServiceContainer.Configuration.consensusModuleStreamId())
-                .ingressStreamId(AeronCluster.Configuration.ingressStreamId())
+                .serviceStreamId(ClusteredServiceContainer.Configuration.serviceStreamId(properties))
+                .consensusModuleStreamId(ClusteredServiceContainer.Configuration.consensusModuleStreamId(properties))
+                .ingressStreamId(AeronCluster.Configuration.ingressStreamId(properties))
                 .memberId(-1)
                 .serviceId(SERVICE_ID)
-                .clusterId(ClusteredServiceContainer.Configuration.clusterId())
+                .clusterId(ClusteredServiceContainer.Configuration.clusterId(properties))
                 .aeronDirectory(aeron.context().aeronDirectoryName())
                 .controlChannel(null)
                 .ingressChannel(null)
