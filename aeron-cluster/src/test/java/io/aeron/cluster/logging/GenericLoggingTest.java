@@ -25,7 +25,7 @@ import static org.agrona.BitUtil.CACHE_LINE_LENGTH;
 import static org.agrona.concurrent.ringbuffer.RingBufferDescriptor.TRAILER_LENGTH;
 
 /**
- * Reflectively drives every {@link ClusterEventLogger} method with a range of nominal, boundary, and {@code null}
+ * Reflectively drives every {@link ClusterTracer} method with a range of nominal, boundary, and {@code null}
  * values and verifies (via {@link io.aeron.logging.CborDecode}) that they all survive the CBOR round trip.
  */
 class GenericLoggingTest
@@ -35,8 +35,8 @@ class GenericLoggingTest
     {
         final ManyToOneRingBuffer ringBuffer = new ManyToOneRingBuffer(
             new UnsafeBuffer(BufferUtil.allocateDirectAligned(64 * 1024 + TRAILER_LENGTH, CACHE_LINE_LENGTH)));
-        final ClusterEventLogger logger = new CborClusterEventLogger(ringBuffer);
+        final ClusterTracer logger = new CborClusterTracer(ringBuffer);
 
-        GenericLoggerEventVerifier.verifyAllLogMethods(ClusterEventLogger.class, logger, ringBuffer);
+        GenericLoggerEventVerifier.verifyAllLogMethods(ClusterTracer.class, logger, ringBuffer);
     }
 }

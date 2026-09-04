@@ -51,7 +51,7 @@ class ArchiveEventLoggerCborImplTest
 
     private final LoggerEventCallback mockLoggingCallback = mock(LoggerEventCallback.class);
     private final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(mockLoggingCallback)));
-    private final ArchiveEventLogger logger = new CborArchiveEventLogger(ringBuffer);
+    private final ArchiveTracer logger = new CborArchiveTracer(ringBuffer);
 
     private void drain()
     {

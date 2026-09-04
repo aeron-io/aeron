@@ -29,7 +29,7 @@ import java.util.Set;
 
 import static io.aeron.driver.logging.DriverEventCode.*;
 import static io.aeron.command.ControlProtocolEvents.*;
-import static io.aeron.driver.logging.DriverEventLogger.LOGGER;
+import static io.aeron.driver.logging.DriverTracer.LOGGER;
 
 /**
  * Direct-call entry points for logging {@link io.aeron.driver.MediaDriver} events, replacing the previous

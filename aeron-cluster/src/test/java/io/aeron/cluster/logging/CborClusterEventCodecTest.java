@@ -56,7 +56,7 @@ class CborClusterEventCodecTest
     {
         final LoggerEventCallback mockLoggingCallback = mock(LoggerEventCallback.class);
         final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(mockLoggingCallback)));
-        final CborClusterEventLogger cborClusterEventLogger = new CborClusterEventLogger(ringBuffer);
+        final CborClusterTracer cborClusterEventLogger = new CborClusterTracer(ringBuffer);
 
         cborClusterEventLogger.logElectionStateChange(
             12,
@@ -110,7 +110,7 @@ class CborClusterEventCodecTest
     {
         final LoggerEventCallback mockLoggingCallback = mock(LoggerEventCallback.class);
         final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(mockLoggingCallback)));
-        final CborClusterEventLogger cborClusterEventLogger = new CborClusterEventLogger(ringBuffer);
+        final CborClusterTracer cborClusterEventLogger = new CborClusterTracer(ringBuffer);
 
         cborClusterEventLogger.logElectionStateChange(
             12,
@@ -145,7 +145,7 @@ class CborClusterEventCodecTest
     {
         final LoggerEventCallback mockLoggingCallback = mock(LoggerEventCallback.class);
         final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(mockLoggingCallback)));
-        final CborClusterEventLogger cborClusterEventLogger = new CborClusterEventLogger(ringBuffer);
+        final CborClusterTracer cborClusterEventLogger = new CborClusterTracer(ringBuffer);
 
         cborClusterEventLogger.logElectionStateChange(
             value,
@@ -189,7 +189,7 @@ class CborClusterEventCodecTest
     {
         final LoggerEventCallback mockLoggingCallback = mock(LoggerEventCallback.class);
         final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(mockLoggingCallback)));
-        final CborClusterEventLogger cborClusterEventLogger = new CborClusterEventLogger(ringBuffer);
+        final CborClusterTracer cborClusterEventLogger = new CborClusterTracer(ringBuffer);
 
         cborClusterEventLogger.logElectionStateChange(
             12,
@@ -218,7 +218,7 @@ class CborClusterEventCodecTest
     {
         final LoggerEventCallback mockLoggingCallback = mock(LoggerEventCallback.class);
         final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(mockLoggingCallback)));
-        final CborClusterEventLogger cborClusterEventLogger = new CborClusterEventLogger(ringBuffer);
+        final CborClusterTracer cborClusterEventLogger = new CborClusterTracer(ringBuffer);
 
         final String reason = "R".repeat(10_000);
 

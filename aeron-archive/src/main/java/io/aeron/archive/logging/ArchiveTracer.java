@@ -39,12 +39,12 @@ import static java.util.EnumSet.of;
  * {@link LoggerMethod}-annotated methods below.
  */
 @GeneratedLogger(eventCodeType = "io.aeron.archive.logging.ArchiveEventCode")
-public interface ArchiveEventLogger
+public interface ArchiveTracer
 {
     /**
      * Logger for writing into the {@link ManyToOneRingBuffer} held by {@link EventConfiguration#eventReader}.
      */
-    ArchiveEventLogger LOGGER = new CborArchiveEventLogger(eventReader().ringBuffer());
+    ArchiveTracer LOGGER = new CborArchiveTracer(eventReader().ringBuffer());
 
     /**
      * Set of event codes that represent an incoming control request, i.e. everything a caller resolving a control

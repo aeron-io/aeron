@@ -32,12 +32,12 @@ import java.util.concurrent.TimeUnit;
  * {@link LoggerMethod}-annotated methods below.
  */
 @GeneratedLogger(eventCodeType = "io.aeron.cluster.logging.ClusterEventCode")
-public interface ClusterEventLogger
+public interface ClusterTracer
 {
     /**
      * Logger for writing into the {@link ManyToOneRingBuffer} held by {@link EventConfiguration#eventReader}.
      */
-    ClusterEventLogger LOGGER = new CborClusterEventLogger(EventConfiguration.eventReader().ringBuffer());
+    ClusterTracer LOGGER = new CborClusterTracer(EventConfiguration.eventReader().ringBuffer());
 
     /**
      * Log a new leadership term event.

@@ -54,7 +54,7 @@ class DriverEventLoggerCborImplTest
 
     private final LoggerEventCallback mockLoggingCallback = mock(LoggerEventCallback.class);
     private final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(mockLoggingCallback)));
-    private final DriverEventLogger logger = new CborDriverEventLogger(ringBuffer);
+    private final DriverTracer logger = new CborDriverTracer(ringBuffer);
 
     private void drain()
     {

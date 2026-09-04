@@ -50,7 +50,7 @@ class ClusterEventLoggerCborImplTest
 
     private final LoggerEventCallback mockLoggingCallback = mock(LoggerEventCallback.class);
     private final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(mockLoggingCallback)));
-    private final ClusterEventLogger logger = new CborClusterEventLogger(ringBuffer);
+    private final ClusterTracer logger = new CborClusterTracer(ringBuffer);
 
     private void drain()
     {

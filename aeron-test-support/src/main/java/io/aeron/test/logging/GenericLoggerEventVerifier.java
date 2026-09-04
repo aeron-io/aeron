@@ -50,7 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Reflectively drives every {@link LoggerMethod}-annotated method on a {@link GeneratedLogger}-annotated event
- * logger interface (e.g. {@code DriverEventLogger}, {@code ClusterEventLogger}, {@code ArchiveEventLogger|}) with
+ * logger interface (e.g. {@code DriverTracer}, {@code ClusterTracer}, {@code ArchiveTracer|}) with
  * a range of representative, boundary, and {@code null} argument values, decodes the resulting CBOR message with
  * {@link CborDecode}, and asserts that every value survived the round trip unchanged.
  * <p>
@@ -84,7 +84,7 @@ public final class GenericLoggerEventVerifier
      * Reflectively exercises every {@code log*} method on {@code loggerInterface}, invoking it on
      * {@code loggerImpl} and verifying the resulting CBOR message decodes back to the values supplied.
      *
-     * @param loggerInterface the {@link GeneratedLogger}-annotated interface, e.g. {@code DriverEventLogger.class}.
+     * @param loggerInterface the {@link GeneratedLogger}-annotated interface, e.g. {@code DriverTracer.class}.
      * @param loggerImpl      an instance implementing {@code loggerInterface}, backed by {@code ringBuffer}.
      * @param ringBuffer      the ring buffer {@code loggerImpl} writes into and this method reads back from.
      */

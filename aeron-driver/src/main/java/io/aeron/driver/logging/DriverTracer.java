@@ -38,12 +38,12 @@ import static io.aeron.logging.CborUtils.AERON_PROTOCOL_TAG;
  * {@link LoggerMethod}-annotated methods below.
  */
 @GeneratedLogger(eventCodeType = "io.aeron.driver.logging.DriverEventCode")
-public interface DriverEventLogger
+public interface DriverTracer
 {
     /**
      * Logger for writing into the {@link ManyToOneRingBuffer} held by {@link EventConfiguration#eventReader}.
      */
-    DriverEventLogger LOGGER = new CborDriverEventLogger(EventConfiguration.eventReader().ringBuffer());
+    DriverTracer LOGGER = new CborDriverTracer(EventConfiguration.eventReader().ringBuffer());
 
     /**
      * Maximum length of a host name.
