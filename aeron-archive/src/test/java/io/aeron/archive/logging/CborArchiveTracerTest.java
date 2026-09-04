@@ -44,7 +44,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-class ArchiveEventLoggerCborImplTest
+class CborArchiveTracerTest
 {
     private final ManyToOneRingBuffer ringBuffer = new ManyToOneRingBuffer(
         new UnsafeBuffer(BufferUtil.allocateDirectAligned(64 * 1024 + TRAILER_LENGTH, CACHE_LINE_LENGTH)));

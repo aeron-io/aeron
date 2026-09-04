@@ -47,7 +47,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-class DriverEventLoggerCborImplTest
+class CborDriverTracerTest
 {
     private final ManyToOneRingBuffer ringBuffer = new ManyToOneRingBuffer(
         new UnsafeBuffer(BufferUtil.allocateDirectAligned(64 * 1024 + TRAILER_LENGTH, CACHE_LINE_LENGTH)));

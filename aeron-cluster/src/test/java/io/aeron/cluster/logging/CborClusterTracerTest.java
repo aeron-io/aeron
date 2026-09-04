@@ -43,7 +43,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-class ClusterEventLoggerCborImplTest
+class CborClusterTracerTest
 {
     private final ManyToOneRingBuffer ringBuffer = new ManyToOneRingBuffer(
         new UnsafeBuffer(BufferUtil.allocateDirectAligned(64 * 1024 + TRAILER_LENGTH, CACHE_LINE_LENGTH)));
