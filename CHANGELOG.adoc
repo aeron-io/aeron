@@ -39,6 +39,9 @@ NOTE: The corresponding logging event `CMD_IN_CONNECT` was also removed.
 
 === Changelog
 
+* **[Client/C]** Add `aeron_archive_persistent_subscription_get_persistent_subscription_context` and
+`aeron_archive_persistent_subscription_get_and_own_persistent_subscription_context` to allow the caller to take
+ownership of the persistent subscription context, in the same way as `aeron_archive_get_and_own_archive_context`.
 * **[Client/Java]** Remove `Image#controlledPeek` APIs.
 * **[Client/C/C{plus}{plus} Wrapper]** Remove `aeron_image_set_position` and `aeron_image_controlled_peek` APIs.
 * **[Archive]** Abort `ControlSession` on non-recoverable exception.
