@@ -2076,21 +2076,21 @@ int aeron_subscription_local_sockaddrs(
  * Retrieves the first local socket address for this subscription. If this is not MDS then it will be the one
  * representing endpoint for this subscription.
  *
- * @see aeron_subscription_local_sockaddrs
- * @param subscription to query
- * @param address for the received address
+ * @param subscription to query.
+ * @param address buffer to hold the resolved endooint.
  * @param address_len available length for the copied address.
  * @return -1 on error, 0 if address not found, 1 if address is found.
+ * @see aeron_subscription_local_sockaddrs
  */
-int aeron_subscription_resolved_endpoint(aeron_subscription_t *subscription, const char *address, size_t address_len);
+int aeron_subscription_resolved_endpoint(aeron_subscription_t *subscription, char *address, size_t address_len);
 
 /**
  * Retrieves the channel URI for this subscription with any wildcard ports filled in. If the channel is not UDP or
  * does not have a wildcard port (<code>0</code>), then it will return the original URI.
  *
- * @param subscription to query
- * @param uri buffer to hold the resolved uri
- * @param uri_len length of the buffer
+ * @param subscription to query.
+ * @param uri buffer to hold the resolved uri.
+ * @param uri_len length of the buffer.
  * @return -1 on failure or the number of bytes written to the buffer (excluding the NULL terminator). Writing is done
  * on a per key basis, so if the buffer was truncated before writing completed, it will only include the byte count up
  * to the key that overflowed. However, the invariant that if the number returned >= uri_len, then output will have been
