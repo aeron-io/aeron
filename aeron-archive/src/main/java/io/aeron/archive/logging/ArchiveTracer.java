@@ -74,7 +74,7 @@ public interface ArchiveTracer
      * @param messageLength of the encoded event.
      */
     @LoggerMethod(bufferView = { "buffer", "offset", "messageLength" })
-    default void logControlRequest(
+    default void traceControlRequest(
         final ArchiveEventCode eventCode,
         @Tag(AERON_ARCHIVE_ADMIN_TAG) @AllowTruncate final DirectBuffer buffer,
         final int offset,
@@ -90,7 +90,7 @@ public interface ArchiveTracer
      * @param messageLength of the response in the buffer.
      */
     @LoggerMethod(eventCode = "CMD_OUT_RESPONSE", bufferView = { "buffer", "offset", "messageLength" })
-    default void logControlResponse(
+    default void traceControlResponse(
         @Tag(AERON_ARCHIVE_ADMIN_TAG) @AllowTruncate final DirectBuffer buffer,
         final int offset,
         final int messageLength)
@@ -105,7 +105,7 @@ public interface ArchiveTracer
      * @param messageLength of the response in the buffer.
      */
     @LoggerMethod(eventCode = "RECORDING_SIGNAL", bufferView = { "buffer", "offset", "messageLength" })
-    default void logRecordingSignal(
+    default void traceRecordingSignal(
         @Tag(AERON_ARCHIVE_ADMIN_TAG) @AllowTruncate final DirectBuffer buffer,
         final int offset,
         final int messageLength)
@@ -125,7 +125,7 @@ public interface ArchiveTracer
      * @param reason      a string indicating the reason for the state change.
      */
     @LoggerMethod(eventCode = "REPLAY_SESSION_STATE_CHANGE")
-    default <E extends Enum<E>> void logReplaySessionStateChange(
+    default <E extends Enum<E>> void traceReplaySessionStateChange(
         final E oldState,
         final E newState,
         final long sessionId,
@@ -148,7 +148,7 @@ public interface ArchiveTracer
      * @param liveStreamId   the live stream id used by the {@link PersistentSubscription}.
      */
     @LoggerMethod(eventCode = "PERSISTENT_SUBSCRIPTION_STATE_CHANGE")
-    default <E extends Enum<E>> void logPersistentSubscriptionStateChange(
+    default <E extends Enum<E>> void tracePersistentSubscriptionStateChange(
         final E oldState,
         final E newState,
         final long recordingId,
@@ -171,7 +171,7 @@ public interface ArchiveTracer
      * @param joinPosition   the position the {@link PersistentSubscription} joined the live stream at.
      */
     @LoggerMethod(eventCode = "PERSISTENT_SUBSCRIPTION_JOINED_LIVE")
-    default void logPersistentSubscriptionJoinedLive(
+    default void tracePersistentSubscriptionJoinedLive(
         final long recordingId,
         final String replayChannel,
         final int replayStreamId,
@@ -193,7 +193,7 @@ public interface ArchiveTracer
      * @param livePosition   the live position when the {@link PersistentSubscription} left.
      */
     @LoggerMethod(eventCode = "PERSISTENT_SUBSCRIPTION_LEFT_LIVE")
-    default void logPersistentSubscriptionLeftLive(
+    default void tracePersistentSubscriptionLeftLive(
         final long recordingId,
         final String replayChannel,
         final int replayStreamId,
@@ -215,7 +215,7 @@ public interface ArchiveTracer
      * @param reason      a string indicating the reason for the state change.
      */
     @LoggerMethod(eventCode = "RECORDING_SESSION_STATE_CHANGE")
-    default <E extends Enum<E>> void logRecordingSessionStateChange(
+    default <E extends Enum<E>> void traceRecordingSessionStateChange(
         final E oldState,
         final E newState,
         final long recordingId,
@@ -238,7 +238,7 @@ public interface ArchiveTracer
      * @param reason         a string indicating the reason for the state change.
      */
     @LoggerMethod(eventCode = "REPLICATION_SESSION_STATE_CHANGE")
-    default <E extends Enum<E>> void logReplicationSessionStateChange(
+    default <E extends Enum<E>> void traceReplicationSessionStateChange(
         final E oldState,
         final E newState,
         final long replicationId,
@@ -259,7 +259,7 @@ public interface ArchiveTracer
      * @param reason           a string indicating the reason for the state change.
      */
     @LoggerMethod(eventCode = "CONTROL_SESSION_STATE_CHANGE")
-    default <E extends Enum<E>> void logControlSessionStateChange(
+    default <E extends Enum<E>> void traceControlSessionStateChange(
         final E oldState,
         final E newState,
         final long controlSessionId,
@@ -284,7 +284,7 @@ public interface ArchiveTracer
      *                         recording.
      */
     @LoggerMethod(eventCode = "REPLICATION_SESSION_DONE")
-    default void logReplicationSessionDone(
+    default void traceReplicationSessionDone(
         final long controlSessionId,
         final long replicationId,
         final long srcRecordingId,
@@ -307,7 +307,7 @@ public interface ArchiveTracer
      * @param errorMessage which resulted.
      */
     @LoggerMethod(eventCode = "REPLAY_SESSION_ERROR")
-    default void logReplaySessionError(final long sessionId, final long recordingId, final String errorMessage)
+    default void traceReplaySessionError(final long sessionId, final long recordingId, final String errorMessage)
     {
     }
 
@@ -318,7 +318,7 @@ public interface ArchiveTracer
      * @param newCatalogLength after the resize.
      */
     @LoggerMethod(eventCode = "CATALOG_RESIZE")
-    default void logCatalogResize(final long oldCatalogLength, final long newCatalogLength)
+    default void traceCatalogResize(final long oldCatalogLength, final long newCatalogLength)
     {
     }
 
@@ -328,7 +328,7 @@ public interface ArchiveTracer
      * @param version   of the archive.
      */
     @LoggerMethod(eventCode = "START")
-    default void logStart(final String version)
+    default void traceStart(final String version)
     {
 
     }

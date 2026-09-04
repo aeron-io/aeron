@@ -79,7 +79,7 @@ class CborDriverEventCodecTest
         final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(mockLoggingCallback)));
         final CborDriverTracer cborDriverEventLogger = new CborDriverTracer(ringBuffer);
 
-        cborDriverEventLogger.logFrameOut(address, port, ByteBuffer.wrap(testBytes));
+        cborDriverEventLogger.traceFrameOut(address, port, ByteBuffer.wrap(testBytes));
 
         while (0 == ringBuffer.read(cborDecode))
         {

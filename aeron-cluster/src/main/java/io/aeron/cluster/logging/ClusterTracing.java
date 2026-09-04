@@ -141,7 +141,7 @@ public final class ClusterTracing
             return;
         }
 
-        ClusterTracer.TRACER.logElectionStateChange(
+        ClusterTracer.TRACER.traceElectionStateChange(
             memberId,
             oldState,
             newState,
@@ -197,7 +197,7 @@ public final class ClusterTracing
             return;
         }
 
-        ClusterTracer.TRACER.logOnNewLeadershipTerm(
+        ClusterTracer.TRACER.traceOnNewLeadershipTerm(
             memberId,
             logLeadershipTermId,
             nextLeadershipTermId,
@@ -232,7 +232,7 @@ public final class ClusterTracing
             return;
         }
 
-        ClusterTracer.TRACER.logStateChange(memberId, oldState, newState, reason);
+        ClusterTracer.TRACER.traceStateChange(memberId, oldState, newState, reason);
     }
 
     /**
@@ -250,7 +250,7 @@ public final class ClusterTracing
             return;
         }
 
-        ClusterTracer.TRACER.logRoleChange(memberId, oldRole, newRole, "");
+        ClusterTracer.TRACER.traceRoleChange(memberId, oldRole, newRole, "");
     }
 
     /**
@@ -276,7 +276,7 @@ public final class ClusterTracing
             return;
         }
 
-        ClusterTracer.TRACER.logOnCanvassPosition(
+        ClusterTracer.TRACER.traceOnCanvassPosition(
             memberId, logLeadershipTermId, logPosition, leadershipTermId, followerMemberId, protocolVersion);
     }
 
@@ -303,7 +303,7 @@ public final class ClusterTracing
             return;
         }
 
-        ClusterTracer.TRACER.logOnRequestVote(
+        ClusterTracer.TRACER.traceOnRequestVote(
             memberId, logLeadershipTermId, logPosition, candidateTermId, candidateId, protocolVersion);
     }
 
@@ -332,7 +332,7 @@ public final class ClusterTracing
             return;
         }
 
-        ClusterTracer.TRACER.logOnVote(
+        ClusterTracer.TRACER.traceOnVote(
             memberId, logLeadershipTermId, logPosition, candidateTermId, candidateId, voterId, vote);
     }
 
@@ -357,7 +357,7 @@ public final class ClusterTracing
             return;
         }
 
-        ClusterTracer.TRACER.logOnCatchupPosition(
+        ClusterTracer.TRACER.traceOnCatchupPosition(
             memberId, leadershipTermId, logPosition, followerMemberId, catchupEndpoint);
     }
 
@@ -375,7 +375,7 @@ public final class ClusterTracing
             return;
         }
 
-        ClusterTracer.TRACER.logOnStopCatchup(memberId, leadershipTermId, followerMemberId);
+        ClusterTracer.TRACER.traceOnStopCatchup(memberId, leadershipTermId, followerMemberId);
     }
 
     /**
@@ -410,7 +410,7 @@ public final class ClusterTracing
             return;
         }
 
-        ClusterTracer.TRACER.logOnTruncateLogEntry(
+        ClusterTracer.TRACER.traceOnTruncateLogEntry(
             memberId,
             state,
             logLeadershipTermId,
@@ -450,7 +450,7 @@ public final class ClusterTracing
             return;
         }
 
-        ClusterTracer.TRACER.logOnReplayNewLeadershipTermEvent(
+        ClusterTracer.TRACER.traceOnReplayNewLeadershipTermEvent(
             memberId,
             isInElection,
             leadershipTermId,
@@ -482,7 +482,7 @@ public final class ClusterTracing
             return;
         }
 
-        ClusterTracer.TRACER.logOnAppendPosition(
+        ClusterTracer.TRACER.traceOnAppendPosition(
             memberId, leadershipTermId, logPosition, followerMemberId, flags);
     }
 
@@ -502,7 +502,7 @@ public final class ClusterTracing
             return;
         }
 
-        ClusterTracer.TRACER.logOnCommitPosition(memberId, leadershipTermId, logPosition, leaderMemberId);
+        ClusterTracer.TRACER.traceOnCommitPosition(memberId, leadershipTermId, logPosition, leaderMemberId);
     }
 
     /**
@@ -528,7 +528,7 @@ public final class ClusterTracing
             return;
         }
 
-        ClusterTracer.TRACER.logAppendSessionClose(
+        ClusterTracer.TRACER.traceAppendSessionClose(
             memberId, sessionId, closeReason, leadershipTermId, timestamp, timeUnit);
     }
 
@@ -555,7 +555,7 @@ public final class ClusterTracing
             return;
         }
 
-        ClusterTracer.TRACER.logAppendSessionOpen(
+        ClusterTracer.TRACER.traceAppendSessionOpen(
             memberId, sessionId, leadershipTermId, logPosition, timestamp, timeUnit);
     }
 
@@ -575,7 +575,7 @@ public final class ClusterTracing
             return;
         }
 
-        ClusterTracer.TRACER.logClusterBackupStateChange(Aeron.NULL_VALUE, oldState, newState, "");
+        ClusterTracer.TRACER.traceClusterBackupStateChange(Aeron.NULL_VALUE, oldState, newState, "");
     }
 
     /**
@@ -592,7 +592,7 @@ public final class ClusterTracing
             return;
         }
 
-        ClusterTracer.TRACER.logTerminationPosition(memberId, leadershipTermId, logPosition);
+        ClusterTracer.TRACER.traceTerminationPosition(memberId, leadershipTermId, logPosition);
     }
 
     /**
@@ -611,7 +611,7 @@ public final class ClusterTracing
             return;
         }
 
-        ClusterTracer.TRACER.logTerminationAck(memberId, leadershipTermId, logPosition, senderMemberId);
+        ClusterTracer.TRACER.traceTerminationAck(memberId, leadershipTermId, logPosition, senderMemberId);
     }
 
     /**
@@ -639,7 +639,7 @@ public final class ClusterTracing
             return;
         }
 
-        ClusterTracer.TRACER.logServiceAck(
+        ClusterTracer.TRACER.traceServiceAck(
             memberId, logPosition, timestamp, timeUnit, ackId, relevantId, serviceId);
     }
 
@@ -668,7 +668,7 @@ public final class ClusterTracing
             return;
         }
 
-        ClusterTracer.TRACER.logReplicationEnded(
+        ClusterTracer.TRACER.traceReplicationEnded(
             memberId, purpose, channel, srcRecordingId, dstRecordingId, position, hasSynced);
     }
 
@@ -701,7 +701,7 @@ public final class ClusterTracing
             return;
         }
 
-        ClusterTracer.TRACER.logStandbySnapshotNotification(
+        ClusterTracer.TRACER.traceStandbySnapshotNotification(
             memberId,
             recordingId,
             leadershipTermId,
@@ -734,7 +734,7 @@ public final class ClusterTracing
             return;
         }
 
-        ClusterTracer.TRACER.logNewElection(memberId, leadershipTermId, logPosition, appendPosition, reason);
+        ClusterTracer.TRACER.traceNewElection(memberId, leadershipTermId, logPosition, appendPosition, reason);
     }
 
     /**
@@ -762,7 +762,7 @@ public final class ClusterTracing
             return;
         }
 
-        ClusterTracer.TRACER.logClusterSessionStateChange(
+        ClusterTracer.TRACER.traceClusterSessionStateChange(
             memberId, sessionId, action, oldState, newState, reason);
     }
 
@@ -787,7 +787,7 @@ public final class ClusterTracing
             return;
         }
 
-        ClusterTracer.TRACER.logSnapshotEntryInvalidation(
+        ClusterTracer.TRACER.traceSnapshotEntryInvalidation(
             memberId, entryIndex, recordingId, logPosition, serviceId);
     }
 
@@ -803,6 +803,6 @@ public final class ClusterTracing
             return;
         }
 
-        ClusterTracer.TRACER.logStart(version);
+        ClusterTracer.TRACER.traceStart(version);
     }
 }

@@ -63,7 +63,7 @@ class ClusterEventLoggerCborImplTest
     @Test
     void logElectionStateChangeMatchesTheHandWrittenTemplateShape()
     {
-        logger.logElectionStateChange(
+        logger.traceElectionStateChange(
             12,
             ElectionState.CANVASS,
             ElectionState.CLOSED,
@@ -103,7 +103,7 @@ class ClusterEventLoggerCborImplTest
     {
         final String reason = "R".repeat(10_000);
 
-        logger.logElectionStateChange(
+        logger.traceElectionStateChange(
             12, ElectionState.CANVASS, ElectionState.CLOSED, 2342, 23434, 62354, 2789345, 87345, 345345, 2345,
             reason);
 
@@ -120,7 +120,7 @@ class ClusterEventLoggerCborImplTest
     @Test
     void logAppendSessionCloseEncodesCloseReasonAndTimeUnitAsEnumTag()
     {
-        logger.logAppendSessionClose(7, 555L, CloseReason.CLIENT_ACTION, 99L, 123456789L, TimeUnit.MICROSECONDS);
+        logger.traceAppendSessionClose(7, 555L, CloseReason.CLIENT_ACTION, 99L, 123456789L, TimeUnit.MICROSECONDS);
 
         drain();
 
@@ -142,7 +142,7 @@ class ClusterEventLoggerCborImplTest
     @Test
     void logOnVoteEncodesBooleanFieldWithNoTagInDeclaredParameterOrder()
     {
-        logger.logOnVote(1, 10L, 20L, 30L, 2, 3, true);
+        logger.traceOnVote(1, 10L, 20L, 30L, 2, 3, true);
 
         drain();
 
@@ -165,7 +165,7 @@ class ClusterEventLoggerCborImplTest
     @Test
     void logStateChangeUsesTheDynamicallyPassedEventCodeForTheHeader()
     {
-        logger.logStateChange(4, ElectionState.NOMINATE, ElectionState.LEADER_READY, "because");
+        logger.traceStateChange(4, ElectionState.NOMINATE, ElectionState.LEADER_READY, "because");
 
         drain();
 

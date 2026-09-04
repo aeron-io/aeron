@@ -59,7 +59,7 @@ public interface ClusterTracer
      * @param isStartup               is the leader starting up fresh.
      */
     @LoggerMethod(eventCode = "NEW_LEADERSHIP_TERM")
-    default void logOnNewLeadershipTerm(
+    default void traceOnNewLeadershipTerm(
         final int memberId,
         final long logLeadershipTermId,
         final long nextLeadershipTermId,
@@ -88,7 +88,7 @@ public interface ClusterTracer
      * @param reason for state to change.
      */
     @LoggerMethod(eventCode = "STATE_CHANGE")
-    default <E extends Enum<E>> void logStateChange(
+    default <E extends Enum<E>> void traceStateChange(
         final int memberId,
         final E oldState,
         final E newState,
@@ -106,7 +106,7 @@ public interface ClusterTracer
      * @param reason for state to change.
      */
     @LoggerMethod(eventCode = "ROLE_CHANGE")
-    default <E extends Enum<E>> void logRoleChange(
+    default <E extends Enum<E>> void traceRoleChange(
         final int memberId,
         final E oldState,
         final E newState,
@@ -124,7 +124,7 @@ public interface ClusterTracer
      * @param reason for state to change.
      */
     @LoggerMethod(eventCode = "CLUSTER_BACKUP_STATE_CHANGE")
-    default <E extends Enum<E>> void logClusterBackupStateChange(
+    default <E extends Enum<E>> void traceClusterBackupStateChange(
         final int memberId,
         final E oldState,
         final E newState,
@@ -149,7 +149,7 @@ public interface ClusterTracer
      * @param reason              for the state transition to occur.
      */
     @LoggerMethod(eventCode = "ELECTION_STATE_CHANGE")
-    default <E extends Enum<E>> void logElectionStateChange(
+    default <E extends Enum<E>> void traceElectionStateChange(
         final int memberId,
         final E oldState,
         final E newState,
@@ -175,7 +175,7 @@ public interface ClusterTracer
      * @param protocolVersion     of the consensus module.
      */
     @LoggerMethod(eventCode = "CANVASS_POSITION")
-    default void logOnCanvassPosition(
+    default void traceOnCanvassPosition(
         final int memberId,
         final long logLeadershipTermId,
         final long logPosition,
@@ -196,7 +196,7 @@ public interface ClusterTracer
      * @param protocolVersion     from the request.
      */
     @LoggerMethod(eventCode = "REQUEST_VOTE")
-    default void logOnRequestVote(
+    default void traceOnRequestVote(
         final int memberId,
         final long logLeadershipTermId,
         final long logPosition,
@@ -218,7 +218,7 @@ public interface ClusterTracer
      * @param vote                expressed by the follower node.
      */
     @LoggerMethod(eventCode = "VOTE")
-    default void logOnVote(
+    default void traceOnVote(
         final int memberId,
         final long logLeadershipTermId,
         final long logPosition,
@@ -239,7 +239,7 @@ public interface ClusterTracer
      * @param catchupEndpoint  the endpoint to send catchup messages
      */
     @LoggerMethod(eventCode = "CATCHUP_POSITION")
-    default void logOnCatchupPosition(
+    default void traceOnCatchupPosition(
         final int memberId,
         final long leadershipTermId,
         final long logPosition,
@@ -256,7 +256,7 @@ public interface ClusterTracer
      * @param followerMemberId id of follower currently catching up.
      */
     @LoggerMethod(eventCode = "STOP_CATCHUP")
-    default void logOnStopCatchup(final int memberId, final long leadershipTermId, final int followerMemberId)
+    default void traceOnStopCatchup(final int memberId, final long leadershipTermId, final int followerMemberId)
     {
     }
 
@@ -276,7 +276,7 @@ public interface ClusterTracer
      * @param newPosition         truncated to.
      */
     @LoggerMethod(eventCode = "TRUNCATE_LOG_ENTRY")
-    default <E extends Enum<E>> void logOnTruncateLogEntry(
+    default <E extends Enum<E>> void traceOnTruncateLogEntry(
         final int memberId,
         final E state,
         final long logLeadershipTermId,
@@ -303,7 +303,7 @@ public interface ClusterTracer
      * @param appVersion          version of the application.
      */
     @LoggerMethod(eventCode = "REPLAY_NEW_LEADERSHIP_TERM")
-    default void logOnReplayNewLeadershipTermEvent(
+    default void traceOnReplayNewLeadershipTermEvent(
         final int memberId,
         final boolean isInElection,
         final long leadershipTermId,
@@ -325,7 +325,7 @@ public interface ClusterTracer
      * @param flags            applied to append position by follower.
      */
     @LoggerMethod(eventCode = "APPEND_POSITION")
-    default void logOnAppendPosition(
+    default void traceOnAppendPosition(
         final int memberId,
         final long leadershipTermId,
         final long logPosition,
@@ -343,7 +343,7 @@ public interface ClusterTracer
      * @param leaderId         leader member sending the commit position.
      */
     @LoggerMethod(eventCode = "COMMIT_POSITION")
-    default void logOnCommitPosition(
+    default void traceOnCommitPosition(
         final int memberId, final long leadershipTermId, final long logPosition, final int leaderId)
     {
     }
@@ -359,7 +359,7 @@ public interface ClusterTracer
      * @param timeUnit         units for the timestamp.
      */
     @LoggerMethod(eventCode = "APPEND_SESSION_CLOSE")
-    default void logAppendSessionClose(
+    default void traceAppendSessionClose(
         final int memberId,
         final long sessionId,
         final CloseReason closeReason,
@@ -380,7 +380,7 @@ public interface ClusterTracer
      * @param timeUnit         units for the timestamp.
      */
     @LoggerMethod(eventCode = "APPEND_SESSION_OPEN")
-    default void logAppendSessionOpen(
+    default void traceAppendSessionOpen(
         final int memberId,
         final long sessionId,
         final long leadershipTermId,
@@ -398,7 +398,7 @@ public interface ClusterTracer
      * @param logPosition         position to terminate at.
      */
     @LoggerMethod(eventCode = "TERMINATION_POSITION")
-    default void logTerminationPosition(final int memberId, final long logLeadershipTermId, final long logPosition)
+    default void traceTerminationPosition(final int memberId, final long logLeadershipTermId, final long logPosition)
     {
     }
 
@@ -411,7 +411,7 @@ public interface ClusterTracer
      * @param senderMemberId      member sending the ack.
      */
     @LoggerMethod(eventCode = "TERMINATION_ACK")
-    default void logTerminationAck(
+    default void traceTerminationAck(
         final int memberId, final long logLeadershipTermId, final long logPosition, final int senderMemberId)
     {
     }
@@ -428,7 +428,7 @@ public interface ClusterTracer
      * @param serviceId   the id of the service that sent the ack.
      */
     @LoggerMethod(eventCode = "SERVICE_ACK")
-    default void logServiceAck(
+    default void traceServiceAck(
         final int memberId,
         final long logPosition,
         final long timestamp,
@@ -451,7 +451,7 @@ public interface ClusterTracer
      * @param hasSynced      was the sync event been received for the replication.
      */
     @LoggerMethod(eventCode = "REPLICATION_ENDED")
-    default void logReplicationEnded(
+    default void traceReplicationEnded(
         final int memberId,
         final String purpose,
         final String channel,
@@ -476,7 +476,7 @@ public interface ClusterTracer
      * @param archiveEndpoint     the endpoint holding the standby snapshot.
      */
     @LoggerMethod(eventCode = "STANDBY_SNAPSHOT_NOTIFICATION")
-    default void logStandbySnapshotNotification(
+    default void traceStandbySnapshotNotification(
         final int memberId,
         final long recordingId,
         final long leadershipTermId,
@@ -499,7 +499,7 @@ public interface ClusterTracer
      * @param reason           for election to be started.
      */
     @LoggerMethod(eventCode = "NEW_ELECTION")
-    default void logNewElection(
+    default void traceNewElection(
         final int memberId,
         final long leadershipTermId,
         final long logPosition,
@@ -521,7 +521,7 @@ public interface ClusterTracer
      * @param reason    for the change.
      */
     @LoggerMethod(eventCode = "CLUSTER_SESSION_STATE_CHANGE")
-    default <A extends Enum<A>, S extends Enum<S>> void logClusterSessionStateChange(
+    default <A extends Enum<A>, S extends Enum<S>> void traceClusterSessionStateChange(
         final int memberId,
         final long sessionId,
         final A action,
@@ -541,7 +541,7 @@ public interface ClusterTracer
      * @param serviceId     that took the snapshot.
      */
     @LoggerMethod(eventCode = "SNAPSHOT_ENTRY_INVALIDATION")
-    default void logSnapshotEntryInvalidation(
+    default void traceSnapshotEntryInvalidation(
         final int memberId,
         final int entryIndex,
         final long recordingId,
@@ -556,7 +556,7 @@ public interface ClusterTracer
      * @param version   of the cluster.
      */
     @LoggerMethod(eventCode = "START")
-    default void logStart(final String version)
+    default void traceStart(final String version)
     {
     }
 }

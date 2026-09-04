@@ -76,7 +76,7 @@ class ArchiveEventLoggerCborImplTest
         Arrays.fill(subRange, (byte)0xAA);
         final UnsafeBuffer buffer = new UnsafeBuffer(backing);
 
-        logger.logControlRequest(ArchiveEventCode.CMD_IN_AUTH_CONNECT, buffer, 100, 16);
+        logger.traceControlRequest(ArchiveEventCode.CMD_IN_AUTH_CONNECT, buffer, 100, 16);
 
         drain();
 
@@ -97,7 +97,7 @@ class ArchiveEventLoggerCborImplTest
         Arrays.fill(backing, (byte)0x11);
         final UnsafeBuffer buffer = new UnsafeBuffer(backing);
 
-        logger.logControlRequest(ArchiveEventCode.CMD_IN_AUTH_CONNECT, buffer, 0, backing.length);
+        logger.traceControlRequest(ArchiveEventCode.CMD_IN_AUTH_CONNECT, buffer, 0, backing.length);
 
         drain();
 
@@ -113,7 +113,7 @@ class ArchiveEventLoggerCborImplTest
         Arrays.fill(backing, (byte)0x1);
         final UnsafeBuffer buffer = new UnsafeBuffer(backing);
 
-        logger.logControlResponse(buffer, 4, 60);
+        logger.traceControlResponse(buffer, 4, 60);
 
         drain();
 
@@ -136,7 +136,7 @@ class ArchiveEventLoggerCborImplTest
         Arrays.fill(backing, (byte)0x3);
         final UnsafeBuffer buffer = new UnsafeBuffer(backing);
 
-        logger.logRecordingSignal(buffer, 10, 31);
+        logger.traceRecordingSignal(buffer, 10, 31);
 
         drain();
 
@@ -153,7 +153,7 @@ class ArchiveEventLoggerCborImplTest
         final ChronoUnit oldState = ChronoUnit.CENTURIES;
         final ChronoUnit newState = ChronoUnit.MICROS;
 
-        logger.logReplaySessionStateChange(oldState, newState, 111L, 222L, 333L, "a reason");
+        logger.traceReplaySessionStateChange(oldState, newState, 111L, 222L, 333L, "a reason");
 
         drain();
 
@@ -178,7 +178,7 @@ class ArchiveEventLoggerCborImplTest
         final ChronoUnit oldState = ChronoUnit.CENTURIES;
         final ChronoUnit newState = ChronoUnit.MICROS;
 
-        logger.logPersistentSubscriptionStateChange(
+        logger.tracePersistentSubscriptionStateChange(
             oldState, newState, 555L, "replay-channel", 10, "live-channel", 11);
 
         drain();
@@ -197,7 +197,7 @@ class ArchiveEventLoggerCborImplTest
     @Test
     void logPersistentSubscriptionJoinedLive()
     {
-        logger.logPersistentSubscriptionJoinedLive(
+        logger.tracePersistentSubscriptionJoinedLive(
             555L, "replay-channel", 10, "live-channel", 11, 5, 128L);
 
         drain();
@@ -216,7 +216,7 @@ class ArchiveEventLoggerCborImplTest
     @Test
     void logPersistentSubscriptionLeftLive()
     {
-        logger.logPersistentSubscriptionLeftLive(555L, "replay-channel", 10, "live-channel", 11, 256L);
+        logger.tracePersistentSubscriptionLeftLive(555L, "replay-channel", 10, "live-channel", 11, 256L);
 
         drain();
 
@@ -236,7 +236,7 @@ class ArchiveEventLoggerCborImplTest
         final ChronoUnit oldState = ChronoUnit.ERAS;
         final ChronoUnit newState = ChronoUnit.MILLENNIA;
 
-        logger.logRecordingSessionStateChange(oldState, newState, 42L, 84L, "a reason");
+        logger.traceRecordingSessionStateChange(oldState, newState, 42L, 84L, "a reason");
 
         drain();
 
@@ -255,7 +255,7 @@ class ArchiveEventLoggerCborImplTest
         final ChronoUnit oldState = ChronoUnit.ERAS;
         final ChronoUnit newState = ChronoUnit.MILLENNIA;
 
-        logger.logReplicationSessionStateChange(oldState, newState, 1L, 2L, 3L, 4L, "some text goes here");
+        logger.traceReplicationSessionStateChange(oldState, newState, 1L, 2L, 3L, 4L, "some text goes here");
 
         drain();
 
@@ -276,7 +276,7 @@ class ArchiveEventLoggerCborImplTest
         final ChronoUnit oldState = ChronoUnit.CENTURIES;
         final ChronoUnit newState = ChronoUnit.MICROS;
 
-        logger.logControlSessionStateChange(oldState, newState, 555_000_000_000L, "test reason to check");
+        logger.traceControlSessionStateChange(oldState, newState, 555_000_000_000L, "test reason to check");
 
         drain();
 
@@ -291,7 +291,7 @@ class ArchiveEventLoggerCborImplTest
     @Test
     void logReplicationSessionDone()
     {
-        logger.logReplicationSessionDone(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, true, true, false);
+        logger.traceReplicationSessionDone(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, true, true, false);
 
         drain();
 
@@ -313,7 +313,7 @@ class ArchiveEventLoggerCborImplTest
     @Test
     void logReplaySessionError()
     {
-        logger.logReplaySessionError(123L, Long.MIN_VALUE, "the error");
+        logger.traceReplaySessionError(123L, Long.MIN_VALUE, "the error");
 
         drain();
 
@@ -327,7 +327,7 @@ class ArchiveEventLoggerCborImplTest
     @Test
     void logCatalogResize()
     {
-        logger.logCatalogResize(42L, 142L);
+        logger.traceCatalogResize(42L, 142L);
 
         drain();
 

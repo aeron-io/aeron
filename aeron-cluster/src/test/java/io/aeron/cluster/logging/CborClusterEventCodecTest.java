@@ -58,7 +58,7 @@ class CborClusterEventCodecTest
         final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(mockLoggingCallback)));
         final CborClusterTracer cborClusterEventLogger = new CborClusterTracer(ringBuffer);
 
-        cborClusterEventLogger.logElectionStateChange(
+        cborClusterEventLogger.traceElectionStateChange(
             12,
             ElectionState.CANVASS,
             ElectionState.CLOSED,
@@ -112,7 +112,7 @@ class CborClusterEventCodecTest
         final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(mockLoggingCallback)));
         final CborClusterTracer cborClusterEventLogger = new CborClusterTracer(ringBuffer);
 
-        cborClusterEventLogger.logElectionStateChange(
+        cborClusterEventLogger.traceElectionStateChange(
             12,
             ElectionState.CANVASS,
             ElectionState.CLOSED,
@@ -147,7 +147,7 @@ class CborClusterEventCodecTest
         final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(mockLoggingCallback)));
         final CborClusterTracer cborClusterEventLogger = new CborClusterTracer(ringBuffer);
 
-        cborClusterEventLogger.logElectionStateChange(
+        cborClusterEventLogger.traceElectionStateChange(
             value,
             ElectionState.CANVASS,
             ElectionState.CLOSED,
@@ -191,7 +191,7 @@ class CborClusterEventCodecTest
         final CborDecode cborDecode = new CborDecode(List.of(new ProxyLoggerEventCallback(mockLoggingCallback)));
         final CborClusterTracer cborClusterEventLogger = new CborClusterTracer(ringBuffer);
 
-        cborClusterEventLogger.logElectionStateChange(
+        cborClusterEventLogger.traceElectionStateChange(
             12,
             ElectionState.CANVASS,
             ElectionState.CLOSED,
@@ -222,7 +222,7 @@ class CborClusterEventCodecTest
 
         final String reason = "R".repeat(10_000);
 
-        cborClusterEventLogger.logElectionStateChange(
+        cborClusterEventLogger.traceElectionStateChange(
             12,
             ElectionState.CANVASS,
             ElectionState.CLOSED,

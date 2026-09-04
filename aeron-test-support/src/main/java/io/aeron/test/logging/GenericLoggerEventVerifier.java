@@ -81,7 +81,7 @@ public final class GenericLoggerEventVerifier
     }
 
     /**
-     * Reflectively exercises every {@code log*} method on {@code loggerInterface}, invoking it on
+     * Reflectively exercises every {@code trace*} method on {@code loggerInterface}, invoking it on
      * {@code loggerImpl} and verifying the resulting CBOR message decodes back to the values supplied.
      *
      * @param loggerInterface the {@link GeneratedLogger}-annotated interface, e.g. {@code DriverTracer.class}.
@@ -108,7 +108,7 @@ public final class GenericLoggerEventVerifier
         assertTrue(0 < eventCodeConstants.length, eventCodeClass.getName() + " has no enum constants");
 
         final Method[] logMethods = Arrays.stream(loggerInterface.getMethods())
-            .filter(method -> method.getName().startsWith("log"))
+            .filter(method -> method.getName().startsWith("trace"))
             .filter(method -> null != method.getAnnotation(LoggerMethod.class))
             .toArray(Method[]::new);
 

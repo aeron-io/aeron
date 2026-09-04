@@ -73,7 +73,7 @@ class DriverEventLoggerCborImplTest
         Arrays.fill(subRange, (byte)0xAA);
         final UnsafeBuffer buffer = new UnsafeBuffer(backing);
 
-        logger.log(DriverEventCode.CMD_IN_ADD_PUBLICATION, buffer, 100, 16);
+        logger.trace(DriverEventCode.CMD_IN_ADD_PUBLICATION, buffer, 100, 16);
 
         drain();
 
@@ -94,7 +94,7 @@ class DriverEventLoggerCborImplTest
         Arrays.fill(backing, (byte)0x11);
         final UnsafeBuffer buffer = new UnsafeBuffer(backing);
 
-        logger.log(DriverEventCode.CMD_IN_ADD_PUBLICATION, buffer, 0, backing.length);
+        logger.trace(DriverEventCode.CMD_IN_ADD_PUBLICATION, buffer, 0, backing.length);
 
         drain();
 
@@ -111,7 +111,7 @@ class DriverEventLoggerCborImplTest
         final UnsafeBuffer buffer = new UnsafeBuffer(backing);
         final InetSocketAddress address = new InetSocketAddress(InetAddress.getByName("192.168.1.1"), 1234);
 
-        logger.logFrameIn(address.getAddress(), address.getPort(), buffer, 0, backing.length);
+        logger.traceFrameIn(address.getAddress(), address.getPort(), buffer, 0, backing.length);
 
         drain();
 
@@ -134,7 +134,7 @@ class DriverEventLoggerCborImplTest
         final UnsafeBuffer buffer = new UnsafeBuffer(backing);
         final InetSocketAddress address = new InetSocketAddress(InetAddress.getByName("2001:db8::1"), 1234);
 
-        logger.logFrameIn(address.getAddress(), address.getPort(), buffer, 0, backing.length);
+        logger.traceFrameIn(address.getAddress(), address.getPort(), buffer, 0, backing.length);
 
         drain();
 
@@ -152,7 +152,7 @@ class DriverEventLoggerCborImplTest
         byteBuffer.flip();
         final InetSocketAddress address = new InetSocketAddress("192.168.1.1", 1234);
 
-        logger.logFrameOut(address.getAddress(), address.getPort(), byteBuffer);
+        logger.traceFrameOut(address.getAddress(), address.getPort(), byteBuffer);
 
         drain();
 
@@ -171,7 +171,7 @@ class DriverEventLoggerCborImplTest
     @Test
     void logResolveHandlesANullAddressAndEncodesTheBooleanWithNoTag()
     {
-        logger.logResolve("DefaultNameResolver", 42L, "host.example.com", true, null);
+        logger.traceResolve("DefaultNameResolver", 42L, "host.example.com", true, null);
 
         drain();
 
@@ -196,7 +196,7 @@ class DriverEventLoggerCborImplTest
     {
         final InetAddress address = InetAddress.getByName("10.0.0.1");
 
-        logger.logResolve("DefaultNameResolver", 42L, "host.example.com", false, address);
+        logger.traceResolve("DefaultNameResolver", 42L, "host.example.com", false, address);
 
         drain();
 

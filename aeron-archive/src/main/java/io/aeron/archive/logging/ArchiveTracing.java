@@ -119,7 +119,7 @@ public final class ArchiveTracing
         final ArchiveEventCode eventCode = ArchiveEventCode.getByTemplateId(messageHeaderDecoder.templateId());
         if (isEnabled(eventCode))
         {
-            ArchiveTracer.TRACER.logControlRequest(eventCode, buffer, offset, length);
+            ArchiveTracer.TRACER.traceControlRequest(eventCode, buffer, offset, length);
         }
     }
 
@@ -137,7 +137,7 @@ public final class ArchiveTracing
             return;
         }
 
-        ArchiveTracer.TRACER.logControlResponse(buffer, offset, length);
+        ArchiveTracer.TRACER.traceControlResponse(buffer, offset, length);
     }
 
     /**
@@ -154,7 +154,7 @@ public final class ArchiveTracing
             return;
         }
 
-        ArchiveTracer.TRACER.logRecordingSignal(buffer, offset, length);
+        ArchiveTracer.TRACER.traceRecordingSignal(buffer, offset, length);
     }
 
     /**
@@ -181,7 +181,7 @@ public final class ArchiveTracing
             return;
         }
 
-        ArchiveTracer.TRACER.logReplaySessionStateChange(oldState, newState, sessionId, recordingId,
+        ArchiveTracer.TRACER.traceReplaySessionStateChange(oldState, newState, sessionId, recordingId,
             position, reason);
     }
 
@@ -199,7 +199,7 @@ public final class ArchiveTracing
             return;
         }
 
-        ArchiveTracer.TRACER.logReplaySessionError(sessionId, recordingId, errorMessage);
+        ArchiveTracer.TRACER.traceReplaySessionError(sessionId, recordingId, errorMessage);
     }
 
     /**
@@ -224,7 +224,7 @@ public final class ArchiveTracing
             return;
         }
 
-        ArchiveTracer.TRACER.logRecordingSessionStateChange(oldState, newState, recordingId, position, reason);
+        ArchiveTracer.TRACER.traceRecordingSessionStateChange(oldState, newState, recordingId, position, reason);
     }
 
     /**
@@ -253,7 +253,7 @@ public final class ArchiveTracing
             return;
         }
 
-        ArchiveTracer.TRACER.logReplicationSessionStateChange(
+        ArchiveTracer.TRACER.traceReplicationSessionStateChange(
             oldState, newState, replicationId, srcRecordingId, dstRecordingId, position, reason);
     }
 
@@ -291,7 +291,7 @@ public final class ArchiveTracing
             return;
         }
 
-        ArchiveTracer.TRACER.logReplicationSessionDone(
+        ArchiveTracer.TRACER.traceReplicationSessionDone(
             controlSessionId,
             replicationId,
             srcRecordingId,
@@ -325,7 +325,7 @@ public final class ArchiveTracing
             return;
         }
 
-        ArchiveTracer.TRACER.logControlSessionStateChange(oldState, newState, controlSessionId, reason);
+        ArchiveTracer.TRACER.traceControlSessionStateChange(oldState, newState, controlSessionId, reason);
     }
 
     /**
@@ -341,7 +341,7 @@ public final class ArchiveTracing
             return;
         }
 
-        ArchiveTracer.TRACER.logCatalogResize(oldCatalogLength, newCatalogLength);
+        ArchiveTracer.TRACER.traceCatalogResize(oldCatalogLength, newCatalogLength);
     }
 
     /**
@@ -370,7 +370,7 @@ public final class ArchiveTracing
             return;
         }
 
-        ArchiveTracer.TRACER.logPersistentSubscriptionStateChange(
+        ArchiveTracer.TRACER.tracePersistentSubscriptionStateChange(
             oldState, newState, recordingId, replayChannel, replayStreamId, liveChannel, liveStreamId);
     }
 
@@ -400,7 +400,7 @@ public final class ArchiveTracing
             return;
         }
 
-        ArchiveTracer.TRACER.logPersistentSubscriptionJoinedLive(
+        ArchiveTracer.TRACER.tracePersistentSubscriptionJoinedLive(
             recordingId, replayChannel, replayStreamId, liveChannel, liveStreamId, liveSessionId, joinPosition);
     }
 
@@ -427,7 +427,7 @@ public final class ArchiveTracing
             return;
         }
 
-        ArchiveTracer.TRACER.logPersistentSubscriptionLeftLive(
+        ArchiveTracer.TRACER.tracePersistentSubscriptionLeftLive(
             recordingId, replayChannel, replayStreamId, liveChannel, liveStreamId, livePosition);
     }
 
@@ -443,6 +443,6 @@ public final class ArchiveTracing
             return;
         }
 
-        ArchiveTracer.TRACER.logStart(version);
+        ArchiveTracer.TRACER.traceStart(version);
     }
 }

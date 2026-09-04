@@ -64,7 +64,7 @@ public interface DriverTracer
      * @param messageLength of the encoded event.
      */
     @LoggerMethod(bufferView = { "buffer", "offset", "messageLength" })
-    default void log(
+    default void trace(
         final DriverEventCode code,
         @Tag(AERON_DRIVER_ADMIN_TAG) final DirectBuffer buffer,
         final int offset,
@@ -82,7 +82,7 @@ public interface DriverTracer
      * @param frameLength of the frame.
      */
     @LoggerMethod(eventCode = "FRAME_IN", bufferView = { "buffer", "offset", "frameLength" })
-    default void logFrameIn(
+    default void traceFrameIn(
         final InetAddress srcAddress,
         final int srcPort,
         @Tag(AERON_PROTOCOL_TAG) @AllowTruncate final DirectBuffer buffer,
@@ -99,7 +99,7 @@ public interface DriverTracer
      * @param buffer     containing the frame.
      */
     @LoggerMethod(eventCode = "FRAME_OUT")
-    default void logFrameOut(
+    default void traceFrameOut(
         final InetAddress dstAddress,
         final int dstPort,
         @Tag(AERON_PROTOCOL_TAG) @AllowTruncate final ByteBuffer buffer)
@@ -114,7 +114,7 @@ public interface DriverTracer
      * @param streamId  within the channel.
      */
     @LoggerMethod(eventCode = "REMOVE_PUBLICATION_CLEANUP")
-    default void logPublicationRemoval(final String channel, final int sessionId, final int streamId)
+    default void tracePublicationRemoval(final String channel, final int sessionId, final int streamId)
     {
     }
 
@@ -126,7 +126,7 @@ public interface DriverTracer
      * @param subscriptionId for the subscription.
      */
     @LoggerMethod(eventCode = "REMOVE_SUBSCRIPTION_CLEANUP")
-    default void logSubscriptionRemoval(final String channel, final int streamId, final long subscriptionId)
+    default void traceSubscriptionRemoval(final String channel, final int streamId, final long subscriptionId)
     {
     }
 
@@ -139,7 +139,7 @@ public interface DriverTracer
      * @param correlationId for the image.
      */
     @LoggerMethod(eventCode = "REMOVE_IMAGE_CLEANUP")
-    default void logImageRemoval(
+    default void traceImageRemoval(
         final String channel,
         final int sessionId,
         final int streamId,
@@ -153,7 +153,7 @@ public interface DriverTracer
      * @param value description of the channel.
      */
     @LoggerMethod(eventCode = "SEND_CHANNEL_CREATION")
-    default void logSendChannelCreation(final String value)
+    default void traceSendChannelCreation(final String value)
     {
     }
 
@@ -163,7 +163,7 @@ public interface DriverTracer
      * @param value description of the channel.
      */
     @LoggerMethod(eventCode = "SEND_CHANNEL_CLOSE")
-    default void logSendChannelClose(final String value)
+    default void traceSendChannelClose(final String value)
     {
     }
 
@@ -173,7 +173,7 @@ public interface DriverTracer
      * @param value description of the channel.
      */
     @LoggerMethod(eventCode = "RECEIVE_CHANNEL_CREATION")
-    default void logReceiveChannelCreation(final String value)
+    default void traceReceiveChannelCreation(final String value)
     {
     }
 
@@ -183,7 +183,7 @@ public interface DriverTracer
      * @param value description of the channel.
      */
     @LoggerMethod(eventCode = "RECEIVE_CHANNEL_CLOSE")
-    default void logReceiveChannelClose(final String value)
+    default void traceReceiveChannelClose(final String value)
     {
     }
 
@@ -194,7 +194,7 @@ public interface DriverTracer
      * @param value of the string to be logged.
      */
     @LoggerMethod
-    default void logString(final DriverEventCode code, final String value)
+    default void traceString(final DriverEventCode code, final String value)
     {
     }
 
@@ -209,7 +209,7 @@ public interface DriverTracer
      * @param sessionId      of the image.
      */
     @LoggerMethod(eventCode = "UNTETHERED_SUBSCRIPTION_STATE_CHANGE")
-    default <E extends Enum<E>> void logUntetheredSubscriptionStateChange(
+    default <E extends Enum<E>> void traceUntetheredSubscriptionStateChange(
         final E oldState, final E newState, final long subscriptionId, final int streamId, final int sessionId)
     {
     }
@@ -221,7 +221,7 @@ public interface DriverTracer
      * @param port    of the neighbor.
      */
     @LoggerMethod(eventCode = "NAME_RESOLUTION_NEIGHBOR_ADDED")
-    default void logNeighborAdded(final InetAddress address, final int port)
+    default void traceNeighborAdded(final InetAddress address, final int port)
     {
     }
 
@@ -232,7 +232,7 @@ public interface DriverTracer
      * @param port    of the neighbor.
      */
     @LoggerMethod(eventCode = "NAME_RESOLUTION_NEIGHBOR_REMOVED")
-    default void logNeighborRemoved(final InetAddress address, final int port)
+    default void traceNeighborRemoved(final InetAddress address, final int port)
     {
     }
 
@@ -246,7 +246,7 @@ public interface DriverTracer
      * @param address        address that was resolved to, can be {@code null}.
      */
     @LoggerMethod(eventCode = "NAME_RESOLUTION_RESOLVE")
-    default void logResolve(
+    default void traceResolve(
         final String resolverName,
         final long durationNs,
         final String name,
@@ -265,7 +265,7 @@ public interface DriverTracer
      * @param resolvedName       address that was resolved to, can be null.
      */
     @LoggerMethod(eventCode = "NAME_RESOLUTION_LOOKUP")
-    default void logLookup(
+    default void traceLookup(
         final String resolverName,
         final long durationNs,
         final String name,
@@ -281,7 +281,7 @@ public interface DriverTracer
      * @param hostName   host name being resolved.
      */
     @LoggerMethod(eventCode = "NAME_RESOLUTION_HOST_NAME")
-    default void logHostName(final long durationNs, final String hostName)
+    default void traceHostName(final long durationNs, final String hostName)
     {
     }
 
@@ -295,7 +295,7 @@ public interface DriverTracer
      * @param receiverCount number of the receivers after the event.
      */
     @LoggerMethod(eventCode = "FLOW_CONTROL_RECEIVER_ADDED")
-    default void logFlowControlReceiverAdded(
+    default void traceFlowControlReceiverAdded(
         final long receiverId,
         final int sessionId,
         final int streamId,
@@ -314,7 +314,7 @@ public interface DriverTracer
      * @param receiverCount number of the receivers after the event.
      */
     @LoggerMethod(eventCode = "FLOW_CONTROL_RECEIVER_REMOVED")
-    default void logFlowControlReceiverRemoved(
+    default void traceFlowControlReceiverRemoved(
         final long receiverId,
         final int sessionId,
         final int streamId,
@@ -336,7 +336,7 @@ public interface DriverTracer
      * @param channel    of the Nak.
      */
     @LoggerMethod(eventCode = "NAK_SENT")
-    default void logNakSent(
+    default void traceNakSent(
         final InetAddress address,
         final int port,
         final int sessionId,
@@ -361,7 +361,7 @@ public interface DriverTracer
      * @param channel    of the Nak.
      */
     @LoggerMethod(eventCode = "NAK_RECEIVED")
-    default void logNakReceived(
+    default void traceNakReceived(
         final InetAddress address,
         final int port,
         final int sessionId,
@@ -384,7 +384,7 @@ public interface DriverTracer
      * @param channel      of the Resend.
      */
     @LoggerMethod(eventCode = "RESEND")
-    default void logResend(
+    default void traceResend(
         final int sessionId,
         final int streamId,
         final int termId,
@@ -403,7 +403,7 @@ public interface DriverTracer
      * @param channel    of the PublicationRevoke
      */
     @LoggerMethod(eventCode = "PUBLICATION_REVOKE")
-    default void logPublicationRevoke(
+    default void tracePublicationRevoke(
         final long revokedPos,
         final int sessionId,
         final int streamId,
@@ -420,7 +420,7 @@ public interface DriverTracer
      * @param channel    of the PublicationImageRevoke
      */
     @LoggerMethod(eventCode = "PUBLICATION_IMAGE_REVOKE")
-    default void logPublicationImageRevoke(
+    default void tracePublicationImageRevoke(
         final long revokedPos,
         final int sessionId,
         final int streamId,
@@ -434,7 +434,7 @@ public interface DriverTracer
      * @param version   of the driver.
      */
     @LoggerMethod(eventCode = "START")
-    default void logStart(final String version)
+    default void traceStart(final String version)
     {
     }
 
