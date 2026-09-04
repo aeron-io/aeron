@@ -58,7 +58,7 @@ while (false)
 
 #endif
 
-#if !defined(AERON_CPU_X64) && !defined(AERON_CPU_ARM) && !defined(AERON_CPU_PPC64)
+#if !defined(AERON_CPU_X64) && !defined(AERON_CPU_X86) && !defined(AERON_CPU_ARM) && !defined(AERON_CPU_PPC64)
     #error Unsupported CPU type!
 #endif
 

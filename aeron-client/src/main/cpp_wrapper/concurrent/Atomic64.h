@@ -24,7 +24,7 @@
     #include "concurrent/atomic/Atomic64_gcc_cpp11.h"
 #elif defined(AERON_COMPILER_GCC) && defined(AERON_CPU_PPC64)
     #include "concurrent/atomic/Atomic64_gcc_cpp11.h"
-#elif defined(AERON_COMPILER_MSVC) && defined(AERON_CPU_X64)
+#elif defined(AERON_COMPILER_MSVC) && (defined(AERON_CPU_X64) || defined(AERON_CPU_X86))
     #include "concurrent/atomic/Atomic64_msvc.h"
 #elif defined(AERON_COMPILER_MSVC) && defined(AERON_CPU_ARM)
     #include "concurrent/atomic/Atomic64_msvc.h"
