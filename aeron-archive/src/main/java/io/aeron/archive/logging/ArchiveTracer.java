@@ -44,7 +44,7 @@ public interface ArchiveTracer
     /**
      * Logger for writing into the {@link ManyToOneRingBuffer} held by {@link EventConfiguration#eventReader}.
      */
-    ArchiveTracer LOGGER = new CborArchiveTracer(eventReader().ringBuffer());
+    ArchiveTracer TRACER = new CborArchiveTracer(eventReader().ringBuffer());
 
     /**
      * Set of event codes that represent an incoming control request, i.e. everything a caller resolving a control

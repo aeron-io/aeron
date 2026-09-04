@@ -43,7 +43,7 @@ public interface DriverTracer
     /**
      * Logger for writing into the {@link ManyToOneRingBuffer} held by {@link EventConfiguration#eventReader}.
      */
-    DriverTracer LOGGER = new CborDriverTracer(EventConfiguration.eventReader().ringBuffer());
+    DriverTracer TRACER = new CborDriverTracer(EventConfiguration.eventReader().ringBuffer());
 
     /**
      * Maximum length of a host name.

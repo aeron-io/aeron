@@ -29,7 +29,7 @@ import java.util.Set;
 
 import static io.aeron.driver.logging.DriverEventCode.*;
 import static io.aeron.command.ControlProtocolEvents.*;
-import static io.aeron.driver.logging.DriverTracer.LOGGER;
+import static io.aeron.driver.logging.DriverTracer.TRACER;
 
 /**
  * Direct-call entry points for logging {@link io.aeron.driver.MediaDriver} events, replacing the previous
@@ -132,7 +132,7 @@ public final class DriverTracing
             return;
         }
 
-        LOGGER.logFrameIn(srcAddress.getAddress(), srcAddress.getPort(), buffer, offset, frameLength);
+        TRACER.logFrameIn(srcAddress.getAddress(), srcAddress.getPort(), buffer, offset, frameLength);
     }
 
     /**
@@ -148,7 +148,7 @@ public final class DriverTracing
             return;
         }
 
-        LOGGER.logFrameOut(dstAddress.getAddress(), dstAddress.getPort(), buffer);
+        TRACER.logFrameOut(dstAddress.getAddress(), dstAddress.getPort(), buffer);
     }
 
     /**
@@ -165,7 +165,7 @@ public final class DriverTracing
             return;
         }
 
-        LOGGER.logPublicationRemoval(channel, sessionId, streamId);
+        TRACER.logPublicationRemoval(channel, sessionId, streamId);
     }
 
     /**
@@ -182,7 +182,7 @@ public final class DriverTracing
             return;
         }
 
-        LOGGER.logSubscriptionRemoval(channel, streamId, subscriptionId);
+        TRACER.logSubscriptionRemoval(channel, streamId, subscriptionId);
     }
 
     /**
@@ -201,7 +201,7 @@ public final class DriverTracing
             return;
         }
 
-        LOGGER.logImageRemoval(channel, sessionId, streamId, correlationId);
+        TRACER.logImageRemoval(channel, sessionId, streamId, correlationId);
     }
 
     /**
@@ -216,7 +216,7 @@ public final class DriverTracing
             return;
         }
 
-        LOGGER.logSendChannelCreation(description);
+        TRACER.logSendChannelCreation(description);
     }
 
     /**
@@ -231,7 +231,7 @@ public final class DriverTracing
             return;
         }
 
-        LOGGER.logSendChannelClose(description);
+        TRACER.logSendChannelClose(description);
     }
 
     /**
@@ -246,7 +246,7 @@ public final class DriverTracing
             return;
         }
 
-        LOGGER.logReceiveChannelCreation(description);
+        TRACER.logReceiveChannelCreation(description);
     }
 
     /**
@@ -261,7 +261,7 @@ public final class DriverTracing
             return;
         }
 
-        LOGGER.logReceiveChannelClose(description);
+        TRACER.logReceiveChannelClose(description);
     }
 
     /**
@@ -282,7 +282,7 @@ public final class DriverTracing
             return;
         }
 
-        LOGGER.logUntetheredSubscriptionStateChange(
+        TRACER.logUntetheredSubscriptionStateChange(
             oldState, newState, subscriptionId, streamId, sessionId);
     }
 
@@ -298,7 +298,7 @@ public final class DriverTracing
             return;
         }
 
-        LOGGER.logNeighborAdded(address.getAddress(), address.getPort());
+        TRACER.logNeighborAdded(address.getAddress(), address.getPort());
     }
 
     /**
@@ -313,7 +313,7 @@ public final class DriverTracing
             return;
         }
 
-        LOGGER.logNeighborRemoved(address.getAddress(), address.getPort());
+        TRACER.logNeighborRemoved(address.getAddress(), address.getPort());
     }
 
     /**
@@ -337,7 +337,7 @@ public final class DriverTracing
             return;
         }
 
-        LOGGER.logResolve(resolverName, durationNs, name, isReResolution, address);
+        TRACER.logResolve(resolverName, durationNs, name, isReResolution, address);
     }
 
     /**
@@ -361,7 +361,7 @@ public final class DriverTracing
             return;
         }
 
-        LOGGER.logLookup(resolverName, durationNs, name, isReLookup, resolvedName);
+        TRACER.logLookup(resolverName, durationNs, name, isReLookup, resolvedName);
     }
 
     /**
@@ -377,7 +377,7 @@ public final class DriverTracing
             return;
         }
 
-        LOGGER.logHostName(durationNs, hostName);
+        TRACER.logHostName(durationNs, hostName);
     }
 
     /**
@@ -401,7 +401,7 @@ public final class DriverTracing
             return;
         }
 
-        LOGGER.logFlowControlReceiverAdded(
+        TRACER.logFlowControlReceiverAdded(
             receiverId, sessionId, streamId, channel, receiverCount);
     }
 
@@ -426,7 +426,7 @@ public final class DriverTracing
             return;
         }
 
-        LOGGER.logFlowControlReceiverRemoved(receiverId, sessionId, streamId, channel, receiverCount);
+        TRACER.logFlowControlReceiverRemoved(receiverId, sessionId, streamId, channel, receiverCount);
     }
 
     /**
@@ -449,7 +449,7 @@ public final class DriverTracing
         final int nakLength,
         final String channel)
     {
-        LOGGER.logNakSent(
+        TRACER.logNakSent(
             address.getAddress(), address.getPort(), sessionId, streamId, termId, termOffset, nakLength, channel);
     }
 
@@ -513,7 +513,7 @@ public final class DriverTracing
             return;
         }
 
-        LOGGER.logNakReceived(
+        TRACER.logNakReceived(
             address.getAddress(), address.getPort(), sessionId, streamId, termId, termOffset, nakLength, channel);
     }
 
@@ -540,7 +540,7 @@ public final class DriverTracing
             return;
         }
 
-        LOGGER.logResend(sessionId, streamId, termId, termOffset, resendLength, channel);
+        TRACER.logResend(sessionId, streamId, termId, termOffset, resendLength, channel);
     }
 
     /**
@@ -559,7 +559,7 @@ public final class DriverTracing
             return;
         }
 
-        LOGGER.logPublicationRevoke(revokedPos, sessionId, streamId, channel);
+        TRACER.logPublicationRevoke(revokedPos, sessionId, streamId, channel);
     }
 
     /**
@@ -578,7 +578,7 @@ public final class DriverTracing
             return;
         }
 
-        LOGGER.logPublicationImageRevoke(revokedPos, sessionId, streamId, channel);
+        TRACER.logPublicationImageRevoke(revokedPos, sessionId, streamId, channel);
     }
 
     /**
@@ -594,7 +594,7 @@ public final class DriverTracing
         final DriverEventCode code = cmdEventCode(msgTypeId);
         if (null != code && isEnabled(code))
         {
-            LOGGER.log(code, buffer, index, length);
+            TRACER.log(code, buffer, index, length);
         }
     }
 
@@ -610,7 +610,7 @@ public final class DriverTracing
             return;
         }
 
-        LOGGER.logString(TEXT_DATA, text);
+        TRACER.logString(TEXT_DATA, text);
     }
 
     /**
@@ -625,7 +625,7 @@ public final class DriverTracing
             return;
         }
 
-        LOGGER.logStart(version);
+        TRACER.logStart(version);
     }
 
     private static DriverEventCode cmdEventCode(final int msgTypeId)
