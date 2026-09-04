@@ -1,0 +1,118 @@
+/*
+ * Copyright 2014-2026 Real Logic Limited.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package io.aeron.topology;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.stream.Stream;
+
+/**
+ * Reads the effective CPU set of a process from a cgroup v2 {@code cpuset.cpus.effective} file.
+ */
+public class CpusetV2Reader
+{
+    private static final Path DEFAULT_PROC_ROOT = Path.of("/proc");
+    private static final Path DEFAULT_CGROUP_ROOT = Path.of("/sys/fs/cgroup");
+    private static final String CPUSET_CPUS_EFFECTIVE = "cpuset.cpus.effective";
+
+    private final Path procRoot;
+    private final Path cgroupRoot;
+
+    /**
+     * Creates a reader using default paths.
+     */
+    public CpusetV2Reader()
+    {
+        this(DEFAULT_PROC_ROOT, DEFAULT_CGROUP_ROOT);
+    }
+
+    CpusetV2Reader(final Path procRoot, final Path cgroupRoot)
+    {
+        this.procRoot = procRoot;
+        this.cgroupRoot = cgroupRoot;
+    }
+
+    private String resolveCgroupPath(final String pid) throws IOException
+    {
+        final Path procCgroupFilePath = procRoot.resolve(pid + "/cgroup");
+        try (Stream<String> lines = Files.lines(procCgroupFilePath))
+        {
+            final String line = lines.filter(l -> l.startsWith("0::/")).findFirst().orElseThrow();
+            return line.substring(3);
+        }
+    }
+
+    private Path retrieveEffectiveCgroupFilePath(final String pid) throws IOException
+    {
+        final String cgroupPath = resolveCgroupPath(pid);
+        Path directory = cgroupRoot.resolve(cgroupPath.substring(1));
+
+        while (true)
+        {
+            final Path candidate = directory.resolve(CPUSET_CPUS_EFFECTIVE);
+            if (Files.exists(candidate))
+            {
+                return candidate;
+            }
+
+            if (directory.equals(cgroupRoot))
+            {
+                throw new IOException(
+                    "unable to find '" + CPUSET_CPUS_EFFECTIVE + "' in path '" + cgroupRoot + "'");
+            }
+
+            directory = directory.getParent();
+        }
+    }
+
+    private Cpuset readCpuSet(final String pid)
+    {
+        try
+        {
+            final Path effectiveCgroupFilePath = retrieveEffectiveCgroupFilePath(pid);
+            final String formattedCpus = Files.readString(effectiveCgroupFilePath).strip();
+            return new Cpuset(AffinityParser.parse(formattedCpus), formattedCpus);
+        }
+        catch (final IOException e)
+        {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Reads the effective CPU set of the current process.
+     *
+     * @return the current process's effective CPU set.
+     */
+    public Cpuset readCpuSet()
+    {
+        return readCpuSet("self");
+    }
+
+    /**
+     * Reads the effective CPU set of the given process.
+     *
+     * @param pid the process id to read the effective CPU set of.
+     * @return the process's effective CPU set.
+     */
+    public Cpuset readCpuSet(final int pid)
+    {
+        return readCpuSet(Integer.toString(pid));
+    }
+
+}
