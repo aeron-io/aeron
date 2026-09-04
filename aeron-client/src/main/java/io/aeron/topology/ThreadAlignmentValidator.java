@@ -53,10 +53,7 @@ class ThreadAlignmentValidator implements TopologyValidator
     List<MissingSibling> findMissingSiblings(final IntArrayList cpuList) throws IOException
     {
         final IntHashSet presentCpus = new IntHashSet();
-        for (int i = 0; i < cpuList.size(); i++)
-        {
-            presentCpus.add(cpuList.get(i));
-        }
+        presentCpus.addAll(cpuList);
 
         final List<MissingSibling> missingSiblings = new ArrayList<>();
         for (int i = 0; i < cpuList.size(); i++)
