@@ -934,6 +934,43 @@ TEST_F(AeronArchivePersistentSubscriptionTest, shouldUseUserProvidedCounters)
     aeron_archive_context_close(archive_ctx);
 }
 
+TEST_F(AeronArchivePersistentSubscriptionTest, shouldNotCloseContextWhenOwnershipIsTransferredToCaller)
+{
+    TestArchive archive = createArchive(m_aeronDir);
+
+    AeronResource aeron(m_aeronDir);
+
+    aeron_archive_context_t *archive_ctx = createArchiveContext();
+    ArchiveContextGuard archive_ctx_guard(archive_ctx);
+    aeron_archive_persistent_subscription_context_t *context = createDefaultPersistentSubscriptionContext(
+        aeron.aeron(),
+        archive_ctx,
+        123);
+
+    PersistentSubscriptionContextGuard context_guard(context);
+    aeron_archive_persistent_subscription_t *persistent_subscription;
+    ASSERT_EQ(0, aeron_archive_persistent_subscription_create(&persistent_subscription, context)) << aeron_errmsg();
+    context_guard.release();
+
+    ASSERT_EQ(context, aeron_archive_persistent_subscription_get_persistent_subscription_context(persistent_subscription));
+    ASSERT_EQ(context, aeron_archive_persistent_subscription_get_and_own_persistent_subscription_context(persistent_subscription));
+
+    aeron_counter_t *state_counter = aeron_archive_persistent_subscription_context_get_state_counter(context);
+    ASSERT_NE(nullptr, state_counter);
+
+    ASSERT_EQ(0, aeron_archive_persistent_subscription_close(persistent_subscription)) << aeron_errmsg();
+
+    // The context, and therefore the counters it owns, must survive closing the persistent subscription.
+    ASSERT_FALSE(aeron_counter_is_closed(state_counter));
+    ASSERT_EQ(123, aeron_archive_persistent_subscription_context_get_recording_id(context));
+
+    ASSERT_EQ(0, aeron_archive_persistent_subscription_context_close(context)) << aeron_errmsg();
+    ASSERT_TRUE(aeron_counter_is_closed(state_counter));
+
+    archive_ctx_guard.release();
+    aeron_archive_context_close(archive_ctx);
+}
+
 struct FragmentLimitAndChannel
 {
     int fragment_limit;
