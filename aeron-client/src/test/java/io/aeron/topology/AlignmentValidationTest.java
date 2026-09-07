@@ -16,15 +16,14 @@
 
 package io.aeron.topology;
 
+import io.aeron.test.CapturingPrintStream;
 import io.aeron.topology.TopologyTestUtils.Pair;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.PrintStream;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.stream.Stream;
@@ -45,18 +44,9 @@ public class AlignmentValidationTest
             new Pair(4, 5), new Pair(4, 5),
             new Pair(6, 7), new Pair(6, 7));
         return Stream.of(
-            Arguments.of(
-                "0-7",
-                commonSiblings,
-                new int[]{}),
-            Arguments.of(
-                "0,1,4,6",
-                commonSiblings,
-                new int[]{5, 7}),
-            Arguments.of(
-                "0-3,5-6",
-                commonSiblings,
-                new int[]{4, 7}),
+            Arguments.of("0-7", commonSiblings, new int[0]),
+            Arguments.of("0,1,4,6", commonSiblings, new int[]{ 5, 7 }),
+            Arguments.of("0-3,5-6", commonSiblings, new int[]{ 4, 7 }),
             Arguments.of(
                 "5-10",
                 List.of(
@@ -65,7 +55,7 @@ public class AlignmentValidationTest
                     new Pair(8, 9), new Pair(8, 9), new Pair(10, 11), new Pair(10, 11),
                     new Pair(12, 13), new Pair(12, 13), new Pair(14, 15), new Pair(14, 15)
                 ),
-                new int[]{4, 11}
+                new int[]{ 4, 11 }
             )
         );
     }
@@ -87,7 +77,7 @@ public class AlignmentValidationTest
         setupSiblingThreads(sysfsTestDir, siblings);
 
         final ThreadAlignmentValidator validator = new ThreadAlignmentValidator(sysfsTestDir);
-        final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        final CapturingPrintStream out = new CapturingPrintStream();
         final List<ThreadAlignmentValidator.MissingSibling> missingSiblings =
             validator.findMissingSiblings(resultCpuset.cpus());
         final int[] missingSiblingCpus = new int[missingSiblings.size()];
@@ -96,9 +86,8 @@ public class AlignmentValidationTest
             missingSiblingCpus[i] = missingSiblings.get(i).siblingCpu();
         }
         assertArrayEquals(expectedMissingThreads, missingSiblingCpus);
-        final PrintStream out = new PrintStream(buffer);
-        final int actualWarningCount = validator.validate(resultCpuset, out);
+        final int actualWarningCount = validator.validate(resultCpuset, out.resetAndGetPrintStream());
         assertEquals(expectedMissingThreads.length, actualWarningCount);
-        assertEquals(expectedMissingThreads.length, countWarnings(buffer));
+        assertEquals(expectedMissingThreads.length, countWarnings(out.flushAndGetContent()));
     }
 }

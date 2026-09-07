@@ -16,15 +16,14 @@
 
 package io.aeron.topology;
 
+import io.aeron.test.CapturingPrintStream;
 import org.agrona.collections.IntArrayList;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.PrintStream;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.stream.Stream;
@@ -36,24 +35,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class DieLocalityValidationTest
 {
-    public static Stream<Arguments> dieLocalityTestSetup()
-    {
-        return Stream.of(
-            Arguments.of(
-                new int[]{0, 1, 2, 3, 4, 5, 6, 7},
-                List.of(1, 1, 25, 25, 30, 30, 5000, 5000),
-                1L),
-            Arguments.of(
-                new int[]{0, 1, 4, 6},
-                List.of(1, 1, 25, 25, 30, 30, 5000, 5000),
-                1L),
-            Arguments.of(
-                new int[]{0, 1, 2, 3},
-                List.of(1, 1, 1, 1, 30, 30, 5000, 5000),
-                0L)
-        );
-    }
-
     @ParameterizedTest
     @MethodSource("dieLocalityTestSetup")
     void testDieLocalityGrouping(
@@ -66,32 +47,13 @@ class DieLocalityValidationTest
         cpuList.wrap(rawCpuList, rawCpuList.length);
         setupDieLocality(sysfsTestDir, dieIds);
 
-        final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        final PrintStream out = new PrintStream(buffer);
+        final CapturingPrintStream out = new CapturingPrintStream();
 
         final DieLocalityValidator dieLocalityValidator = new DieLocalityValidator(sysfsTestDir);
-        final int actualWarningCount = dieLocalityValidator.validate(new Cpuset(cpuList, cpuList.toString()), out);
+        final int actualWarningCount = dieLocalityValidator.validate(
+            new Cpuset(cpuList, cpuList.toString()), out.resetAndGetPrintStream());
         assertEquals(expectedWarningCount, actualWarningCount);
-        assertEquals(expectedWarningCount, countWarnings(buffer));
-
-    }
-
-    public static Stream<Arguments> dieLocalityAndCGroupTests()
-    {
-        return Stream.of(
-            Arguments.of(
-                "0-7",
-                List.of(1, 1, 25, 25, 30, 30, 5000, 5000),
-                1L),
-            Arguments.of(
-                "0,1,4,6",
-                List.of(1, 1, 25, 25, 30, 30, 5000, 5000),
-                1L),
-            Arguments.of(
-                "0-1,2-3",
-                List.of(1, 1, 1, 1, 100, 100, 100, 100),
-                0L)
-        );
+        assertEquals(expectedWarningCount, countWarnings(out.flushAndGetContent()));
     }
 
     @ParameterizedTest
@@ -110,12 +72,46 @@ class DieLocalityValidationTest
         final Cpuset resultCpuset = reader.readCpuSet(pid);
         setupDieLocality(sysfsTestDir, dieIds);
 
-        final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        final PrintStream out = new PrintStream(buffer);
-
+        final CapturingPrintStream out = new CapturingPrintStream();
         final DieLocalityValidator dieLocalityValidator = new DieLocalityValidator(sysfsTestDir);
-        final int actualWarningCount = dieLocalityValidator.validate(resultCpuset, out);
+        final int actualWarningCount = dieLocalityValidator.validate(resultCpuset, out.resetAndGetPrintStream());
         assertEquals(expectedWarningCount, actualWarningCount);
-        assertEquals(expectedWarningCount, countWarnings(buffer));
+        assertEquals(expectedWarningCount, countWarnings(out.flushAndGetContent()));
+    }
+
+    private static Stream<Arguments> dieLocalityAndCGroupTests()
+    {
+        return Stream.of(
+            Arguments.of(
+                "0-7",
+                List.of(1, 1, 25, 25, 30, 30, 5000, 5000),
+                1L),
+            Arguments.of(
+                "0,1,4,6",
+                List.of(1, 1, 25, 25, 30, 30, 5000, 5000),
+                1L),
+            Arguments.of(
+                "0-1,2-3",
+                List.of(1, 1, 1, 1, 100, 100, 100, 100),
+                0L)
+        );
+    }
+
+    private static Stream<Arguments> dieLocalityTestSetup()
+    {
+        return Stream.of(
+            Arguments.of(
+                new int[]{0, 1, 2, 3, 4, 5, 6, 7},
+                List.of(1, 1, 25, 25, 30, 30, 5000, 5000),
+                1L),
+            Arguments.of(
+                new int[]{0, 1, 4, 6},
+                List.of(1, 1, 25, 25, 30, 30, 5000, 5000),
+                1L),
+            Arguments.of(
+                new int[]{0, 1, 2, 3},
+                List.of(1, 1, 1, 1, 30, 30, 5000, 5000),
+                0L)
+        );
     }
 }

@@ -17,6 +17,7 @@
 package io.aeron.topology;
 
 import io.aeron.exceptions.ConfigurationException;
+import io.aeron.test.CapturingPrintStream;
 import io.aeron.topology.TopologyTestUtils.Pair;
 import org.agrona.collections.IntArrayList;
 import org.junit.jupiter.api.io.TempDir;
@@ -42,63 +43,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CGroupValidatorTest
 {
-
-
-    static Stream<Arguments> validationScenarios()
-    {
-        return Stream.of(
-            Arguments.of(
-                new int[]{0, 1, 2, 3},
-                List.of(
-                    new Pair(0, 1), new Pair(0, 1), new Pair(2, 3), new Pair(2, 3),
-                    new Pair(4, 5), new Pair(4, 5), new Pair(6, 7), new Pair(6, 7)),
-                List.of(
-                    new Pair(0, 3), new Pair(0, 3), new Pair(0, 3), new Pair(0, 3),
-                    new Pair(4, 7), new Pair(4, 7), new Pair(4, 7), new Pair(4, 7)),
-                List.of(0, 0, 0, 0, 0, 0, 0),
-                0),
-            Arguments.of(
-                new int[]{0, 1, 4, 6},
-                List.of(
-                    new Pair(0, 1), new Pair(0, 1), new Pair(2, 3), new Pair(2, 3),
-                    new Pair(4, 5), new Pair(4, 5), new Pair(6, 7), new Pair(6, 7)),
-                List.of(
-                    new Pair(0, 7), new Pair(0, 7), new Pair(0, 7), new Pair(0, 7),
-                    new Pair(0, 7), new Pair(0, 7), new Pair(0, 7), new Pair(0, 7)),
-                List.of(0, 0, 0, 0, 0, 0, 0),
-                2),
-            Arguments.of(
-                new int[]{0, 1, 4, 6},
-                List.of(
-                    new Pair(0, 1), new Pair(0, 1), new Pair(2, 3), new Pair(2, 3),
-                    new Pair(4, 5), new Pair(4, 5), new Pair(6, 7), new Pair(6, 7)),
-                List.of(
-                    new Pair(0, 1), new Pair(0, 1), new Pair(2, 3), new Pair(2, 3),
-                    new Pair(4, 5), new Pair(4, 5), new Pair(6, 7), new Pair(6, 7)),
-                List.of(0, 0, 0, 0, 0, 0, 0),
-                3),
-            Arguments.of(
-                new int[]{0, 1, 4, 6},
-                List.of(
-                    new Pair(0, 1), new Pair(0, 1), new Pair(2, 3), new Pair(2, 3),
-                    new Pair(4, 5), new Pair(4, 5), new Pair(6, 7), new Pair(6, 7)),
-                List.of(
-                    new Pair(0, 7), new Pair(0, 7), new Pair(0, 7), new Pair(0, 7),
-                    new Pair(0, 7), new Pair(0, 7), new Pair(0, 7), new Pair(0, 7)),
-                List.of(1, 1, 25, 25, 30, 30, 5000, 5000),
-                3),
-            Arguments.of(
-                new int[]{0, 1, 4, 6},
-                List.of(
-                    new Pair(0, 1), new Pair(0, 1), new Pair(2, 3), new Pair(2, 3),
-                    new Pair(4, 5), new Pair(4, 5), new Pair(6, 7), new Pair(6, 7)),
-                List.of(
-                    new Pair(0, 1), new Pair(0, 1), new Pair(2, 3), new Pair(2, 3),
-                    new Pair(4, 5), new Pair(4, 5), new Pair(6, 7), new Pair(6, 7)),
-                List.of(1, 1, 25, 25, 30, 30, 5000, 5000),
-                4));
-    }
-
     @ParameterizedTest
     @MethodSource("validationScenarios")
     void validateReportsWarningsAndThrowsWhenConfigured(
@@ -116,10 +60,10 @@ class CGroupValidatorTest
         final IntArrayList cpuList = new IntArrayList();
         cpuList.wrap(cpus, cpus.length);
 
-        final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        final CapturingPrintStream out = new CapturingPrintStream();
         new CGroupValidator(sysfsTestDir).validate(
-            new Cpuset(cpuList, cpuList.toString()), false, new PrintStream(buffer));
-        assertEquals(expectedWarningCount, countWarnings(buffer));
+            new Cpuset(cpuList, cpuList.toString()), false, out.resetAndGetPrintStream());
+        assertEquals(expectedWarningCount, countWarnings(out.flushAndGetContent()));
 
         if (0 < expectedWarningCount)
         {
@@ -136,4 +80,58 @@ class CGroupValidatorTest
         }
     }
 
+    private static Stream<Arguments> validationScenarios()
+    {
+        return Stream.of(
+            Arguments.of(
+                new int[]{ 0, 1, 2, 3 },
+                List.of(
+                    new Pair(0, 1), new Pair(0, 1), new Pair(2, 3), new Pair(2, 3),
+                    new Pair(4, 5), new Pair(4, 5), new Pair(6, 7), new Pair(6, 7)),
+                List.of(
+                    new Pair(0, 3), new Pair(0, 3), new Pair(0, 3), new Pair(0, 3),
+                    new Pair(4, 7), new Pair(4, 7), new Pair(4, 7), new Pair(4, 7)),
+                List.of(0, 0, 0, 0, 0, 0, 0),
+                0),
+            Arguments.of(
+                new int[]{ 0, 1, 4, 6 },
+                List.of(
+                    new Pair(0, 1), new Pair(0, 1), new Pair(2, 3), new Pair(2, 3),
+                    new Pair(4, 5), new Pair(4, 5), new Pair(6, 7), new Pair(6, 7)),
+                List.of(
+                    new Pair(0, 7), new Pair(0, 7), new Pair(0, 7), new Pair(0, 7),
+                    new Pair(0, 7), new Pair(0, 7), new Pair(0, 7), new Pair(0, 7)),
+                List.of(0, 0, 0, 0, 0, 0, 0),
+                2),
+            Arguments.of(
+                new int[]{ 0, 1, 4, 6 },
+                List.of(
+                    new Pair(0, 1), new Pair(0, 1), new Pair(2, 3), new Pair(2, 3),
+                    new Pair(4, 5), new Pair(4, 5), new Pair(6, 7), new Pair(6, 7)),
+                List.of(
+                    new Pair(0, 1), new Pair(0, 1), new Pair(2, 3), new Pair(2, 3),
+                    new Pair(4, 5), new Pair(4, 5), new Pair(6, 7), new Pair(6, 7)),
+                List.of(0, 0, 0, 0, 0, 0, 0),
+                3),
+            Arguments.of(
+                new int[]{ 0, 1, 4, 6 },
+                List.of(
+                    new Pair(0, 1), new Pair(0, 1), new Pair(2, 3), new Pair(2, 3),
+                    new Pair(4, 5), new Pair(4, 5), new Pair(6, 7), new Pair(6, 7)),
+                List.of(
+                    new Pair(0, 7), new Pair(0, 7), new Pair(0, 7), new Pair(0, 7),
+                    new Pair(0, 7), new Pair(0, 7), new Pair(0, 7), new Pair(0, 7)),
+                List.of(1, 1, 25, 25, 30, 30, 5000, 5000),
+                3),
+            Arguments.of(
+                new int[]{ 0, 1, 4, 6 },
+                List.of(
+                    new Pair(0, 1), new Pair(0, 1), new Pair(2, 3), new Pair(2, 3),
+                    new Pair(4, 5), new Pair(4, 5), new Pair(6, 7), new Pair(6, 7)),
+                List.of(
+                    new Pair(0, 1), new Pair(0, 1), new Pair(2, 3), new Pair(2, 3),
+                    new Pair(4, 5), new Pair(4, 5), new Pair(6, 7), new Pair(6, 7)),
+                List.of(1, 1, 25, 25, 30, 30, 5000, 5000),
+                4));
+    }
 }

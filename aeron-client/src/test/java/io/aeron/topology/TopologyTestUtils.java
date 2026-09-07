@@ -78,7 +78,11 @@ class TopologyTestUtils
 
     static long countWarnings(final ByteArrayOutputStream byteStream)
     {
-        final String output = byteStream.toString();
+        return countWarnings(byteStream.toString());
+    }
+
+    static long countWarnings(final String output)
+    {
         if (output.isEmpty())
         {
             return 0;
