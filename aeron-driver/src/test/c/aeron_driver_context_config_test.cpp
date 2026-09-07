@@ -26,7 +26,7 @@ using namespace aeron;
 
 static const uint32_t DEFAULT_VALUE = UINT32_C(4);
 static const uint32_t MIN_VALUE = UINT32_C(1);
-static const uint32_t MAX_VALUE = UINT32_C(16);
+static const uint32_t MAX_VALUE = UINT32_C(64);
 
 class DriverContextConfigTest : public testing::Test
 {
@@ -48,9 +48,9 @@ TEST_F(DriverContextConfigTest, shouldValidateReceiverIoVectorCapacity)
     EXPECT_EQ(MIN_VALUE, aeron_driver_context_get_receiver_io_vector_capacity(context));
     aeron_driver_context_set_receiver_io_vector_capacity(context, 2);
     EXPECT_EQ(2, aeron_driver_context_get_receiver_io_vector_capacity(context));
-    aeron_driver_context_set_receiver_io_vector_capacity(context, 16);
+    aeron_driver_context_set_receiver_io_vector_capacity(context, MAX_VALUE);
     EXPECT_EQ(MAX_VALUE, aeron_driver_context_get_receiver_io_vector_capacity(context));
-    aeron_driver_context_set_receiver_io_vector_capacity(context, 17);
+    aeron_driver_context_set_receiver_io_vector_capacity(context, MAX_VALUE);
     EXPECT_EQ(MAX_VALUE, aeron_driver_context_get_receiver_io_vector_capacity(context));
 
     aeron_driver_context_close(context);
@@ -65,7 +65,7 @@ TEST_F(DriverContextConfigTest, shouldValidateReceiverIoVectorCapacity)
     EXPECT_EQ(MIN_VALUE, aeron_driver_context_get_receiver_io_vector_capacity(context));
     aeron_driver_context_close(context);
 
-    aeron_env_set(AERON_RECEIVER_IO_VECTOR_CAPACITY_ENV_VAR, "17");
+    aeron_env_set(AERON_RECEIVER_IO_VECTOR_CAPACITY_ENV_VAR, "1000");
     EXPECT_EQ(0, aeron_driver_context_init(&context));
     EXPECT_EQ(MAX_VALUE, aeron_driver_context_get_receiver_io_vector_capacity(context));
     aeron_driver_context_close(context);
@@ -75,7 +75,7 @@ TEST_F(DriverContextConfigTest, shouldValidateReceiverIoVectorCapacity)
     EXPECT_EQ(MIN_VALUE, aeron_driver_context_get_receiver_io_vector_capacity(context));
     aeron_driver_context_close(context);
 
-    aeron_env_set(AERON_RECEIVER_IO_VECTOR_CAPACITY_ENV_VAR, "16");
+    aeron_env_set(AERON_RECEIVER_IO_VECTOR_CAPACITY_ENV_VAR, "666");
     ASSERT_EQ(0, aeron_driver_context_init(&context));
     EXPECT_EQ(MAX_VALUE, aeron_driver_context_get_receiver_io_vector_capacity(context));
     aeron_driver_context_close(context);
@@ -92,9 +92,9 @@ TEST_F(DriverContextConfigTest, shouldValidateSenderIoVectorCapacity)
     EXPECT_EQ(MIN_VALUE, aeron_driver_context_get_sender_io_vector_capacity(context));
     aeron_driver_context_set_sender_io_vector_capacity(context, 2);
     EXPECT_EQ(2, aeron_driver_context_get_sender_io_vector_capacity(context));
-    aeron_driver_context_set_sender_io_vector_capacity(context, 16);
+    aeron_driver_context_set_sender_io_vector_capacity(context, MAX_VALUE);
     EXPECT_EQ(MAX_VALUE, aeron_driver_context_get_sender_io_vector_capacity(context));
-    aeron_driver_context_set_sender_io_vector_capacity(context, 17);
+    aeron_driver_context_set_sender_io_vector_capacity(context, MAX_VALUE + 1);
     EXPECT_EQ(MAX_VALUE, aeron_driver_context_get_sender_io_vector_capacity(context));
     aeron_driver_context_close(context);
 
@@ -108,7 +108,7 @@ TEST_F(DriverContextConfigTest, shouldValidateSenderIoVectorCapacity)
     EXPECT_EQ(MIN_VALUE, aeron_driver_context_get_sender_io_vector_capacity(context));
     aeron_driver_context_close(context);
 
-    aeron_env_set(AERON_SENDER_IO_VECTOR_CAPACITY_ENV_VAR, "17");
+    aeron_env_set(AERON_SENDER_IO_VECTOR_CAPACITY_ENV_VAR, "1117");
     EXPECT_EQ(0, aeron_driver_context_init(&context));
     EXPECT_EQ(MAX_VALUE, aeron_driver_context_get_sender_io_vector_capacity(context));
     aeron_driver_context_close(context);
@@ -118,7 +118,7 @@ TEST_F(DriverContextConfigTest, shouldValidateSenderIoVectorCapacity)
     EXPECT_EQ(MIN_VALUE, aeron_driver_context_get_sender_io_vector_capacity(context));
     aeron_driver_context_close(context);
 
-    aeron_env_set(AERON_SENDER_IO_VECTOR_CAPACITY_ENV_VAR, "16");
+    aeron_env_set(AERON_SENDER_IO_VECTOR_CAPACITY_ENV_VAR, "64");
     ASSERT_EQ(0, aeron_driver_context_init(&context));
     EXPECT_EQ(MAX_VALUE, aeron_driver_context_get_sender_io_vector_capacity(context));
     aeron_driver_context_close(context);
@@ -134,9 +134,9 @@ TEST_F(DriverContextConfigTest, shouldValidateMaxMessagesPerSendBuffers)
     EXPECT_EQ(MIN_VALUE, aeron_driver_context_get_network_publication_max_messages_per_send(context));
     aeron_driver_context_set_network_publication_max_messages_per_send(context, 2);
     EXPECT_EQ(2, aeron_driver_context_get_network_publication_max_messages_per_send(context));
-    aeron_driver_context_set_network_publication_max_messages_per_send(context, 16);
+    aeron_driver_context_set_network_publication_max_messages_per_send(context, MAX_VALUE);
     EXPECT_EQ(MAX_VALUE, aeron_driver_context_get_network_publication_max_messages_per_send(context));
-    aeron_driver_context_set_network_publication_max_messages_per_send(context, 17);
+    aeron_driver_context_set_network_publication_max_messages_per_send(context, MAX_VALUE + 1);
     EXPECT_EQ(MAX_VALUE, aeron_driver_context_get_network_publication_max_messages_per_send(context));
     aeron_driver_context_close(context);
 
@@ -150,7 +150,7 @@ TEST_F(DriverContextConfigTest, shouldValidateMaxMessagesPerSendBuffers)
     EXPECT_EQ(MIN_VALUE, aeron_driver_context_get_network_publication_max_messages_per_send(context));
     aeron_driver_context_close(context);
 
-    aeron_env_set(AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND_ENV_VAR, "17");
+    aeron_env_set(AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND_ENV_VAR, "777");
     EXPECT_EQ(0, aeron_driver_context_init(&context));
     EXPECT_EQ(MAX_VALUE, aeron_driver_context_get_network_publication_max_messages_per_send(context));
     aeron_driver_context_close(context);
@@ -160,7 +160,7 @@ TEST_F(DriverContextConfigTest, shouldValidateMaxMessagesPerSendBuffers)
     EXPECT_EQ(MIN_VALUE, aeron_driver_context_get_network_publication_max_messages_per_send(context));
     aeron_driver_context_close(context);
 
-    aeron_env_set(AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND_ENV_VAR, "16");
+    aeron_env_set(AERON_NETWORK_PUBLICATION_MAX_MESSAGES_PER_SEND_ENV_VAR, "64");
     ASSERT_EQ(0, aeron_driver_context_init(&context));
     EXPECT_EQ(MAX_VALUE, aeron_driver_context_get_network_publication_max_messages_per_send(context));
     aeron_driver_context_close(context);
