@@ -4356,9 +4356,7 @@ public final class AeronArchive implements AutoCloseable
                 throw new ArchiveException("failed to send replay request");
             }
 
-            pollForResponse(lastCorrelationId);
-
-            return lastCorrelationId;
+            return pollForResponse(lastCorrelationId);
         }
     }
 
