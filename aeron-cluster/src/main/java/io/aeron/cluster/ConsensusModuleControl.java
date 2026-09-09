@@ -127,23 +127,30 @@ public interface ConsensusModuleControl
 
     /**
      * Is this node still the leader, confirmed by a quorum of members that recognise the current leadership term
-     * and have acknowledged at or after {@code sinceNs}? {@code false} if this node is not the leader or fewer
-     * than a quorum have done so.
+     * and have echoed a confirmation counter strictly beyond {@code confirmationToken}? {@code false} if this node
+     * is not the leader or fewer than a quorum have done so.
      *
-     * <p>Non-blocking; poll from {@link ConsensusModuleExtension#consensusWork(long)}. Across a multi-poll wait,
-     * also track the leadership term (via
-     * {@link ConsensusModuleExtension#onNewLeadershipTerm(ConsensusControlState)} /
-     * {@link ConsensusModuleExtension#onElectionComplete(ConsensusControlState)}) to reject a term change.
+     * <p>The token encodes a logical counter (not a clock time), so confirmation cannot be faked by an
+     * acknowledgement that was already in flight before the token was captured -- such a message carries an older
+     * counter. The token is also scoped to the leadership term in which it was issued: a token minted in an
+     * earlier term never confirms after a re-election, so this returns {@code false} rather than a stale result.
+     * Capture the token from {@link #triggerQuorumConfirmation()} after the read point, then poll this method.
      *
-     * @param sinceNs cluster-clock time at or after which a quorum must have acknowledged.
+     * <p>Non-blocking; poll from {@link ConsensusModuleExtension#consensusWork(long)}.
+     *
+     * @param confirmationToken captured from {@link #triggerQuorumConfirmation()} in the current leadership term;
+     *                          a quorum must have echoed a strictly greater counter (wrap-safe) in that term.
      * @return {@code true} if leadership is confirmed by a fresh quorum, otherwise {@code false}.
      */
-    boolean isLeadershipConfirmedSince(long sinceNs);
+    boolean isLeadershipConfirmedSince(long confirmationToken);
 
     /**
-     * Trigger an immediate leader heartbeat so followers acknowledge promptly, letting
+     * Request a coalesced leader confirmation round so followers acknowledge promptly, letting
      * {@link #isLeadershipConfirmedSince(long)} confirm leadership in ~1 RTT rather than waiting for the periodic
-     * keep-alive. No-op unless this node is the leader.
+     * keep-alive. Multiple calls within a duty cycle share a single round.
+     *
+     * @return a term-scoped confirmation token to pass to {@link #isLeadershipConfirmedSince(long)}, or
+     *         {@link io.aeron.Aeron#NULL_VALUE} if this node is not the leader or an election is in progress.
      */
-    void triggerQuorumConfirmation();
+    long triggerQuorumConfirmation();
 }

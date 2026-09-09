@@ -39,6 +39,7 @@ final class ConsensusPublisher
     private final NewLeadershipTermEncoder newLeadershipTermEncoder = new NewLeadershipTermEncoder();
     private final AppendPositionEncoder appendPositionEncoder = new AppendPositionEncoder();
     private final CommitPositionEncoder commitPositionEncoder = new CommitPositionEncoder();
+    private final LeadershipConfirmAckEncoder leadershipConfirmAckEncoder = new LeadershipConfirmAckEncoder();
     private final CatchupPositionEncoder catchupPositionEncoder = new CatchupPositionEncoder();
     private final StopCatchupEncoder stopCatchupEncoder = new StopCatchupEncoder();
     private final TerminationPositionEncoder terminationPositionEncoder = new TerminationPositionEncoder();
@@ -274,7 +275,8 @@ final class ConsensusPublisher
         final ExclusivePublication publication,
         final long leadershipTermId,
         final long logPosition,
-        final int leaderMemberId)
+        final int leaderMemberId,
+        final int confirmationCounter)
     {
         if (null == publication)
         {
@@ -293,7 +295,8 @@ final class ConsensusPublisher
                     .wrapAndApplyHeader(bufferClaim.buffer(), bufferClaim.offset(), messageHeaderEncoder)
                     .leadershipTermId(leadershipTermId)
                     .logPosition(logPosition)
-                    .leaderMemberId(leaderMemberId);
+                    .leaderMemberId(leaderMemberId)
+                    .confirmationCounter(confirmationCounter);
 
                 bufferClaim.commit();
 
@@ -303,6 +306,43 @@ final class ConsensusPublisher
             checkResult(position, publication);
         }
         while (--attempts > 0);
+    }
+
+    boolean leadershipConfirmAck(
+        final ExclusivePublication publication,
+        final long leadershipTermId,
+        final int followerMemberId,
+        final int confirmationCounter)
+    {
+        if (null == publication)
+        {
+            return false;
+        }
+
+        final int length = MessageHeaderEncoder.ENCODED_LENGTH + LeadershipConfirmAckEncoder.BLOCK_LENGTH;
+
+        int attempts = SEND_ATTEMPTS;
+        do
+        {
+            final long position = publication.tryClaim(length, bufferClaim);
+            if (position > 0)
+            {
+                leadershipConfirmAckEncoder
+                    .wrapAndApplyHeader(bufferClaim.buffer(), bufferClaim.offset(), messageHeaderEncoder)
+                    .leadershipTermId(leadershipTermId)
+                    .followerMemberId(followerMemberId)
+                    .confirmationCounter(confirmationCounter);
+
+                bufferClaim.commit();
+
+                return true;
+            }
+
+            checkResult(position, publication);
+        }
+        while (--attempts > 0);
+
+        return false;
     }
 
     boolean catchupPosition(
