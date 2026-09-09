@@ -751,6 +751,92 @@ TEST_F(PubSubTest, shouldFragmentAndReassembleMessagesIfNeeded)
     invoker.invoke();
 }
 
+TEST_F(PubSubTest, shouldDeliverHeaderValuesForAssembledMessages)
+{
+    const int32_t streamId = 1001;
+    const int32_t sessionId = 987654321;
+    const int64_t reservedValue = INT64_C(0x0102030405060708);
+
+    ChannelUriStringBuilder uriBuilder;
+    const std::string channel = uriBuilder.media("ipc").sessionId(sessionId).build();
+
+    Context ctx;
+    ctx.useConductorAgentInvoker(true);
+    std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
+    int64_t subscriptionId = aeron->addSubscription(channel, streamId);
+    int64_t publicationId = aeron->addExclusivePublication(channel, streamId);
+    AgentInvoker<ClientConductor> &invoker = aeron->conductorAgentInvoker();
+
+    {
+        POLL_FOR_NON_NULL(subscription, aeron->findSubscription(subscriptionId), invoker);
+        POLL_FOR_NON_NULL(publication, aeron->findExclusivePublication(publicationId), invoker);
+        POLL_FOR(publication->isConnected() && subscription->isConnected(), invoker);
+
+        on_reserved_value_supplier_t reservedValueSupplier =
+            [=](AtomicBuffer &, index_t, index_t)
+            {
+                return reservedValue;
+            };
+
+        int count = 0;
+        int64_t offerPosition = 0;
+        std::vector<uint8_t> sent;
+
+        fragment_handler_t innerHandler =
+            [&](AtomicBuffer &b, index_t offset, index_t length, Header &header)
+            {
+                count++;
+                ASSERT_EQ(static_cast<index_t>(sent.size()), length);
+                ASSERT_EQ(0, memcmp(b.buffer() + offset, sent.data(), static_cast<size_t>(length)));
+                EXPECT_EQ(sessionId, header.sessionId());
+                EXPECT_EQ(streamId, header.streamId());
+                EXPECT_EQ(publication->initialTermId(), header.initialTermId());
+                EXPECT_EQ(dataHeaderLength + length, header.frameLength());
+                EXPECT_EQ(FrameDescriptor::UNFRAGMENTED, header.flags());
+                EXPECT_EQ(DataFrameHeader::HDR_TYPE_DATA, header.type());
+                EXPECT_EQ(reservedValue, header.reservedValue());
+                EXPECT_EQ(offerPosition, header.position());
+            };
+
+        FragmentAssembler assembler(innerHandler);
+        fragment_handler_t handler = assembler.handler();
+
+        const index_t lengths[] =
+            {
+                32,
+                publication->maxPayloadLength(),
+                publication->maxPayloadLength() + 1,
+                publication->maxPayloadLength() * 3
+            };
+
+        for (const index_t length : lengths)
+        {
+            sent.assign(static_cast<size_t>(length), 0);
+            for (index_t i = 0; i < length; i++)
+            {
+                sent[static_cast<size_t>(i)] = static_cast<uint8_t>(i);
+            }
+
+            AtomicBuffer sendBuffer(sent.data(), sent.size());
+            POLL_FOR(0 < (offerPosition = publication->offer(sendBuffer, 0, length, reservedValueSupplier)), invoker);
+
+            count = 0;
+            int64_t t0 = aeron_epoch_clock();
+            while (0 == count)
+            {
+                invoker.invoke();
+                subscription->poll(handler, 10);
+                ASSERT_LT(aeron_epoch_clock() - t0, AERON_TEST_TIMEOUT) << "Failed waiting for length: " << length;
+                std::this_thread::yield();
+            }
+
+            ASSERT_EQ(1, count);
+        }
+    }
+
+    invoker.invoke();
+}
+
 class PubSubTestInvokerTest : public testing::TestWithParam<bool>
 {
 public:
