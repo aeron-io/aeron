@@ -28,7 +28,7 @@ import static io.aeron.cluster.ClusterMember.isQuorumCandidate;
 import static io.aeron.cluster.ClusterMember.isQuorumLeader;
 import static io.aeron.cluster.ClusterMember.isUnanimousCandidate;
 import static io.aeron.cluster.ClusterMember.isUnanimousLeader;
-import static io.aeron.cluster.ClusterMember.hasQuorumAckedSince;
+import static io.aeron.cluster.ClusterMember.hasQuorumConfirmedSince;
 import static io.aeron.cluster.ClusterMember.quorumPosition;
 import static io.aeron.cluster.ClusterMember.quorumThreshold;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -236,71 +236,213 @@ class ClusterMemberTest
     }
 
     @Test
-    void hasQuorumAckedSinceShouldConfirmWhenAQuorumAcknowledgesCurrentTermSinceT0()
+    void hasQuorumConfirmedSinceShouldConfirmWhenAQuorumEchoedBeyondTokenInCurrentTerm()
     {
         final int leaderId = 0;
         final long term = 5;
-        final long t0 = 100;
+        final int token = 100;
         final ClusterMember[] members = new ClusterMember[]
         {
-            newMember(leaderId, term, 1000, 250), // self (leader) -- always counted
-            newMember(1, term, 900, 150),         // follower acked the current term at/after t0
-            newMember(2, term, 800, 50)           // follower acked BEFORE t0 -- does not count
+            newMember(leaderId, term).confirmationCounter(100, term), // self (leader) -- always counted
+            newMember(1, term).confirmationCounter(101, term),        // echoed a later round in the current term
+            newMember(2, term).confirmationCounter(100, term)         // only echoed up to the token -- not beyond
         };
 
         // self + member1 = quorum of 2 -> confirmed
-        assertTrue(hasQuorumAckedSince(members, term, leaderId, t0));
+        assertTrue(hasQuorumConfirmedSince(members, term, leaderId, token));
     }
 
     @Test
-    void hasQuorumAckedSinceShouldDeclineWhenOnlySelfIsFresh()
+    void hasQuorumConfirmedSinceShouldDeclineWhenOnlySelfIsBeyondToken()
     {
         final int leaderId = 0;
         final long term = 5;
-        final long t0 = 100;
+        final int token = 100;
         final ClusterMember[] members = new ClusterMember[]
         {
-            newMember(leaderId, term, 1000, 250),
-            newMember(1, term, 900, 50),  // stale (before t0)
-            newMember(2, term, 800, 50)   // stale (before t0)
+            newMember(leaderId, term).confirmationCounter(101, term),
+            newMember(1, term).confirmationCounter(100, term), // echoed only up to the token
+            newMember(2, term).confirmationCounter(99, term)   // echoed before the token
         };
 
         // only self qualifies (1 < quorum of 2) -> fail safe (caller falls back to a barrier)
-        assertFalse(hasQuorumAckedSince(members, term, leaderId, t0));
+        assertFalse(hasQuorumConfirmedSince(members, term, leaderId, token));
     }
 
     @Test
-    void hasQuorumAckedSinceShouldNotCountStaleTermAcknowledgements()
+    void hasQuorumConfirmedSinceShouldNotCountStaleInFlightAcknowledgement()
     {
+        // Bug-1 regression: a follower that echoed in the CURRENT term but only up to the captured token (i.e. an
+        // acknowledgement that was in flight before the token was captured, carrying an older counter) must NOT be
+        // counted. A receive-time check would wrongly count it and could serve a stale read.
         final int leaderId = 0;
         final long term = 5;
-        final long t0 = 100;
+        final int token = 100;
         final ClusterMember[] members = new ClusterMember[]
         {
-            newMember(leaderId, term, 1000, 250),
-            newMember(1, term - 1, 900, 200), // fresh, but acknowledges a STALE term -> must not count
-            newMember(2, term - 1, 800, 200)  // fresh, stale term -> must not count
+            newMember(leaderId, term).confirmationCounter(101, term),
+            newMember(1, term).confirmationCounter(100, term), // counter == token -> in flight before capture
+            newMember(2, term).confirmationCounter(100, term)
         };
 
-        // followers ack the wrong term, so only self qualifies -> decline. The linearizability-critical guard.
-        assertFalse(hasQuorumAckedSince(members, term, leaderId, t0));
+        assertFalse(hasQuorumConfirmedSince(members, term, leaderId, token));
     }
 
     @Test
-    void hasQuorumAckedSinceShouldConfirmWithMultipleFreshFollowers()
+    void hasQuorumConfirmedSinceShouldNotCountEchoesFromAPriorTerm()
     {
         final int leaderId = 0;
         final long term = 5;
-        final long t0 = 100;
+        final int token = 100;
         final ClusterMember[] members = new ClusterMember[]
         {
-            newMember(leaderId, term, 1000, 250),
-            newMember(1, term, 900, 150),
+            newMember(leaderId, term).confirmationCounter(101, term),
+            // beyond token but PRIOR term -> must not count
+            newMember(1, term).confirmationCounter(1_000_000, term - 1),
+            newMember(2, term).confirmationCounter(1_000_000, term - 1)
+        };
+
+        assertFalse(hasQuorumConfirmedSince(members, term, leaderId, token));
+    }
+
+    @Test
+    void hasQuorumConfirmedSinceShouldNotCountAMemberThatNeverEchoedInThisTerm()
+    {
+        // A member's leadershipTermId is written by a normal AppendPosition, but confirmation must gate on the term
+        // it actually ECHOED a counter in. A current-term member that never sent a LeadershipConfirmAck (default
+        // confirmationCounterTermId == NULL_VALUE) must not be counted.
+        final int leaderId = 0;
+        final long term = 5;
+        final int token = 100;
+        final ClusterMember[] members = new ClusterMember[]
+        {
+            newMember(leaderId, term).confirmationCounter(101, term),
+            newMember(1, term, 900, 150), // current term via AppendPosition, but never echoed a confirmation
             newMember(2, term, 800, 200)
         };
 
-        // self + two fresh current-term followers -> well past quorum -> confirmed
-        assertTrue(hasQuorumAckedSince(members, term, leaderId, t0));
+        assertFalse(hasQuorumConfirmedSince(members, term, leaderId, token));
+    }
+
+    @Test
+    void hasQuorumConfirmedSinceShouldConfirmWithMultipleEchoingFollowers()
+    {
+        final int leaderId = 0;
+        final long term = 5;
+        final int token = 100;
+        final ClusterMember[] members = new ClusterMember[]
+        {
+            newMember(leaderId, term).confirmationCounter(101, term),
+            newMember(1, term).confirmationCounter(101, term),
+            newMember(2, term).confirmationCounter(102, term)
+        };
+
+        // self + two current-term followers beyond the token -> well past quorum -> confirmed
+        assertTrue(hasQuorumConfirmedSince(members, term, leaderId, token));
+    }
+
+    @Test
+    void hasQuorumConfirmedSinceShouldBeWrapSafeAroundIntegerBoundary()
+    {
+        final int leaderId = 0;
+        final long term = 5;
+
+        // token near MAX_VALUE; a follower whose counter wrapped past it (MIN_VALUE + 1) is still "beyond".
+        final int token = Integer.MAX_VALUE;
+        final ClusterMember[] beyond = new ClusterMember[]
+        {
+            newMember(leaderId, term).confirmationCounter(Integer.MIN_VALUE + 1, term),
+            newMember(1, term).confirmationCounter(Integer.MIN_VALUE + 1, term),
+            newMember(2, term).confirmationCounter(Integer.MAX_VALUE, term) // only up to token -> not beyond
+        };
+        assertTrue(hasQuorumConfirmedSince(beyond, term, leaderId, token));
+
+        // a follower still at the token (not wrapped beyond) must not count
+        final ClusterMember[] atToken = new ClusterMember[]
+        {
+            newMember(leaderId, term).confirmationCounter(Integer.MIN_VALUE + 1, term),
+            newMember(1, term).confirmationCounter(Integer.MAX_VALUE, term),
+            newMember(2, term).confirmationCounter(Integer.MAX_VALUE, term)
+        };
+        assertFalse(hasQuorumConfirmedSince(atToken, term, leaderId, token));
+    }
+
+    @Test
+    void hasQuorumConfirmedSinceShouldConfirmOnASingleNodeClusterWithoutAnyEcho()
+    {
+        // Quorum of a 1-node cluster is 1 and the hosting member is always counted, so a solo leader confirms
+        // immediately: there is nobody to echo, and a linearizable read must not deadlock waiting for one.
+        final int leaderId = 0;
+        final long term = 5;
+        final ClusterMember[] members = new ClusterMember[]{ newMember(leaderId, term) };
+
+        assertEquals(1, quorumThreshold(members.length));
+        assertTrue(hasQuorumConfirmedSince(members, term, leaderId, 100));
+    }
+
+    @Test
+    void hasQuorumConfirmedSinceShouldRequireAnEchoOnATwoNodeCluster()
+    {
+        // Quorum of a 2-node cluster is 2, so self alone is never sufficient: the single follower must echo.
+        final int leaderId = 0;
+        final long term = 5;
+        final int token = 100;
+
+        assertEquals(2, quorumThreshold(2));
+
+        final ClusterMember[] selfOnly = new ClusterMember[]
+        {
+            newMember(leaderId, term).confirmationCounter(101, term),
+            newMember(1, term).confirmationCounter(100, term) // only up to the token
+        };
+        assertFalse(hasQuorumConfirmedSince(selfOnly, term, leaderId, token));
+
+        final ClusterMember[] withEcho = new ClusterMember[]
+        {
+            newMember(leaderId, term).confirmationCounter(101, term),
+            newMember(1, term).confirmationCounter(101, term)
+        };
+        assertTrue(hasQuorumConfirmedSince(withEcho, term, leaderId, token));
+    }
+
+    @Test
+    void hasQuorumConfirmedSinceShouldNotCountTheLeaderTwiceWhenItAlsoEchoed()
+    {
+        // The hosting member is counted via the id branch; a stale self-echo must not add a second vote and
+        // must not let a 3-node cluster confirm on the leader alone.
+        final int leaderId = 0;
+        final long term = 5;
+        final ClusterMember[] members = new ClusterMember[]
+        {
+            newMember(leaderId, term).confirmationCounter(1_000_000, term),
+            newMember(1, term).confirmationCounter(99, term),
+            newMember(2, term).confirmationCounter(99, term)
+        };
+
+        assertFalse(hasQuorumConfirmedSince(members, term, leaderId, 100));
+    }
+
+    @Test
+    void resetShouldClearTheConfirmationTermGate()
+    {
+        // reset() is called when a member's state is invalidated (e.g. entering an election). A leftover
+        // confirmationCounter must not be able to count towards a confirmation afterwards, which is enforced by
+        // clearing the term it was echoed in.
+        final long term = 5;
+        final ClusterMember member = newMember(1, term).confirmationCounter(1_000_000, term);
+        assertEquals(term, member.confirmationCounterTermId());
+
+        member.reset();
+
+        assertEquals(NULL_VALUE, member.confirmationCounterTermId());
+
+        final ClusterMember[] members = new ClusterMember[]
+        {
+            newMember(0, term).confirmationCounter(1_000_000, term),
+            member,
+            newMember(2, term)
+        };
+        assertFalse(hasQuorumConfirmedSince(members, term, 0, 100));
     }
 
     @Test
@@ -633,6 +775,11 @@ class ClusterMemberTest
             .leadershipTermId(leadershipTermId)
             .logPosition(logPosition)
             .timeOfLastAppendPositionNs(timeOfLastAppendPositionNs);
+    }
+
+    private static ClusterMember newMember(final int id, final long leadershipTermId)
+    {
+        return newMember(id).leadershipTermId(leadershipTermId);
     }
 
     private static ClusterMember newMember(final int id)
