@@ -850,7 +850,10 @@ class ConsensusModuleAgentTest
             sourceException);
         when(mockAeron.addSubscription(anyString(), anyInt())).thenReturn(subscription);
         final Runnable terminationHook = mock(Runnable.class);
-        ctx.terminationHook(terminationHook).clusterClock(new TestClusterClock());
+        final ExtendedTerminationHook extendedTerminationHook = mock(ExtendedTerminationHook.class);
+        ctx.terminationHook(terminationHook)
+            .extendedTerminationHook(extendedTerminationHook)
+            .clusterClock(new TestClusterClock());
 
         final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
 
@@ -859,9 +862,11 @@ class ConsensusModuleAgentTest
         assertFalse(exception.isExpected());
         assertEquals("unexpected termination", exception.getMessage());
 
-        final InOrder inOrder = inOrder(ctx.countedErrorHandler(), subscription, terminationHook);
+        final InOrder inOrder =
+            inOrder(ctx.countedErrorHandler(), subscription, terminationHook, extendedTerminationHook);
         inOrder.verify(subscription).poll(any(), anyInt());
         inOrder.verify(ctx.countedErrorHandler()).onError(sourceException);
+        inOrder.verify(extendedTerminationHook).run(exception);
         inOrder.verify(terminationHook).run();
         inOrder.verifyNoMoreInteractions();
     }
@@ -875,7 +880,10 @@ class ConsensusModuleAgentTest
             sourceException);
         when(mockAeron.addSubscription(anyString(), anyInt())).thenReturn(subscription);
         final Runnable terminationHook = mock(Runnable.class);
-        ctx.terminationHook(terminationHook).clusterClock(new TestClusterClock());
+        final ExtendedTerminationHook extendedTerminationHook = mock(ExtendedTerminationHook.class);
+        ctx.terminationHook(terminationHook)
+            .extendedTerminationHook(extendedTerminationHook)
+            .clusterClock(new TestClusterClock());
 
         final AeronArchive aeronArchive = mock(AeronArchive.class);
         when(aeronArchive.state()).thenReturn(AeronArchive.State.CLOSED);
@@ -891,15 +899,17 @@ class ConsensusModuleAgentTest
         assertFalse(exception.isExpected());
         assertEquals("unexpected termination", exception.getMessage());
 
-        final InOrder inOrder = inOrder(ctx.countedErrorHandler(), subscription, terminationHook, election);
+        final InOrder inOrder =
+            inOrder(ctx.countedErrorHandler(), subscription, terminationHook, extendedTerminationHook, election);
         inOrder.verify(subscription).poll(any(), anyInt());
         inOrder.verify(ctx.countedErrorHandler()).onError(sourceException);
+        inOrder.verify(extendedTerminationHook).run(exception);
         inOrder.verify(terminationHook).run();
         inOrder.verifyNoMoreInteractions();
     }
 
     @Test
-    void shouldPropagateAgentTerminationExceptionAndRunTerminationHook()
+    void shouldPropagateAgentTerminationExceptionAndRunTerminationHooks()
     {
         final Subscription subscription = mock(Subscription.class);
         final AgentTerminationException sourceException = new AgentTerminationException("test");
@@ -907,7 +917,10 @@ class ConsensusModuleAgentTest
             sourceException);
         when(mockAeron.addSubscription(anyString(), anyInt())).thenReturn(subscription);
         final Runnable terminationHook = mock(Runnable.class);
-        ctx.terminationHook(terminationHook).clusterClock(new TestClusterClock());
+        final ExtendedTerminationHook extendedTerminationHook = mock(ExtendedTerminationHook.class);
+        ctx.terminationHook(terminationHook)
+            .extendedTerminationHook(extendedTerminationHook)
+            .clusterClock(new TestClusterClock());
 
         final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
 
@@ -915,8 +928,10 @@ class ConsensusModuleAgentTest
             assertThrowsExactly(AgentTerminationException.class, agent::doWork);
         assertSame(sourceException, exception);
 
-        final InOrder inOrder = inOrder(ctx.countedErrorHandler(), subscription, terminationHook);
+        final InOrder inOrder =
+            inOrder(ctx.countedErrorHandler(), subscription, terminationHook, extendedTerminationHook);
         inOrder.verify(subscription).poll(any(), anyInt());
+        inOrder.verify(extendedTerminationHook).run(sourceException);
         inOrder.verify(terminationHook).run();
         inOrder.verifyNoMoreInteractions();
     }
