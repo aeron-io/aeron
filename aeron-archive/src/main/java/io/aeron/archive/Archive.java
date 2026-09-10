@@ -78,6 +78,7 @@ import java.nio.file.Files;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -97,6 +98,10 @@ import static io.aeron.AeronCounters.ARCHIVE_REPLAY_SESSION_COUNT_TYPE_ID;
 import static io.aeron.AeronCounters.validateCounterTypeId;
 import static io.aeron.CommonContext.ENDPOINT_PARAM_NAME;
 import static io.aeron.CommonContext.fallbackLogger;
+import static io.aeron.PropertiesUtil.getDurationInNanos;
+import static io.aeron.PropertiesUtil.getInteger;
+import static io.aeron.PropertiesUtil.getSizeAsInt;
+import static io.aeron.PropertiesUtil.getSizeAsLong;
 import static io.aeron.archive.Archive.Configuration.ERROR_BUFFER_LENGTH_DEFAULT;
 import static io.aeron.archive.Archive.Configuration.SESSION_LIVENESS_CHECK_INTERVAL_DEFAULT_NS;
 import static io.aeron.archive.Archive.Configuration.SESSION_LIVENESS_CHECK_INTERVAL_PROP_NAME;
@@ -105,14 +110,10 @@ import static io.aeron.exceptions.AeronException.Category.ERROR;
 import static io.aeron.logbuffer.LogBufferDescriptor.TERM_MAX_LENGTH;
 import static io.aeron.logbuffer.LogBufferDescriptor.TERM_MIN_LENGTH;
 import static io.aeron.logbuffer.LogBufferDescriptor.checkTermLength;
-import static java.lang.System.getProperty;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.agrona.BitUtil.CACHE_LINE_LENGTH;
 import static org.agrona.BitUtil.isPowerOfTwo;
 import static org.agrona.BufferUtil.allocateDirectAligned;
-import static org.agrona.SystemUtil.getDurationInNanos;
-import static org.agrona.SystemUtil.getSizeAsInt;
-import static org.agrona.SystemUtil.getSizeAsLong;
 import static org.agrona.SystemUtil.loadPropertiesFiles;
 
 /**
@@ -679,7 +680,18 @@ public final class Archive implements AutoCloseable
          */
         public static String archiveDirName()
         {
-            return System.getProperty(ARCHIVE_DIR_PROP_NAME, ARCHIVE_DIR_DEFAULT);
+            return archiveDirName(System.getProperties());
+        }
+
+        /**
+         * Get the directory name to be used for storing the archive.
+         *
+         * @param properties to read the configuration from.
+         * @return the directory name to be used for storing the archive.
+         */
+        public static String archiveDirName(final Properties properties)
+        {
+            return properties.getProperty(ARCHIVE_DIR_PROP_NAME, ARCHIVE_DIR_DEFAULT);
         }
 
         /**
@@ -689,7 +701,18 @@ public final class Archive implements AutoCloseable
          */
         public static String markFileDir()
         {
-            return System.getProperty(MARK_FILE_DIR_PROP_NAME);
+            return markFileDir(System.getProperties());
+        }
+
+        /**
+         * Get the alternative directory to be used for storing the archive mark file.
+         *
+         * @param properties to read the configuration from.
+         * @return the directory to be used for storing the archive mark file.
+         */
+        public static String markFileDir(final Properties properties)
+        {
+            return properties.getProperty(MARK_FILE_DIR_PROP_NAME);
         }
 
         /**
@@ -699,7 +722,18 @@ public final class Archive implements AutoCloseable
          */
         public static int fileIoMaxLength()
         {
-            return getSizeAsInt(FILE_IO_MAX_LENGTH_PROP_NAME, FILE_IO_MAX_LENGTH_DEFAULT);
+            return fileIoMaxLength(System.getProperties());
+        }
+
+        /**
+         * The maximum length of a file IO operation.
+         *
+         * @param properties to read the configuration from.
+         * @return the maximum length of a file IO operation.
+         */
+        public static int fileIoMaxLength(final Properties properties)
+        {
+            return getSizeAsInt(properties, FILE_IO_MAX_LENGTH_PROP_NAME, FILE_IO_MAX_LENGTH_DEFAULT);
         }
 
         /**
@@ -711,7 +745,20 @@ public final class Archive implements AutoCloseable
          */
         public static int segmentFileLength()
         {
-            return getSizeAsInt(SEGMENT_FILE_LENGTH_PROP_NAME, SEGMENT_FILE_LENGTH_DEFAULT);
+            return segmentFileLength(System.getProperties());
+        }
+
+        /**
+         * The length of file to be used for storing recording segments that must be a power of 2.
+         * <p>
+         * If the {@link Image#termBufferLength()} is greater than this will take priority.
+         *
+         * @param properties to read the configuration from.
+         * @return length of file to be used for storing recording segments.
+         */
+        public static int segmentFileLength(final Properties properties)
+        {
+            return getSizeAsInt(properties, SEGMENT_FILE_LENGTH_PROP_NAME, SEGMENT_FILE_LENGTH_DEFAULT);
         }
 
         /**
@@ -721,7 +768,19 @@ public final class Archive implements AutoCloseable
          */
         public static long lowStorageSpaceThreshold()
         {
-            return getSizeAsLong(LOW_STORAGE_SPACE_THRESHOLD_PROP_NAME, LOW_STORAGE_SPACE_THRESHOLD_DEFAULT);
+            return lowStorageSpaceThreshold(System.getProperties());
+        }
+
+        /**
+         * The low storage space threshold beyond which the archive will reject new requests to record streams.
+         *
+         * @param properties to read the configuration from.
+         * @return threshold beyond which the archive will reject new requests to record streams.
+         */
+        public static long lowStorageSpaceThreshold(final Properties properties)
+        {
+            return getSizeAsLong(
+                properties, LOW_STORAGE_SPACE_THRESHOLD_PROP_NAME, LOW_STORAGE_SPACE_THRESHOLD_DEFAULT);
         }
 
         /**
@@ -737,7 +796,24 @@ public final class Archive implements AutoCloseable
          */
         public static int fileSyncLevel()
         {
-            return Integer.getInteger(FILE_SYNC_LEVEL_PROP_NAME, FILE_SYNC_LEVEL_DEFAULT);
+            return fileSyncLevel(System.getProperties());
+        }
+
+        /**
+         * The level at which files should be sync'ed to disk.
+         * <ul>
+         * <li>0 - normal writes.</li>
+         * <li>1 - sync file data.</li>
+         * <li>2 - sync file data + metadata.</li>
+         * </ul>
+         *
+         * @param properties to read the configuration from.
+         * @return level at which files should be sync'ed to disk.
+         * @see #FILE_SYNC_LEVEL_PROP_NAME
+         */
+        public static int fileSyncLevel(final Properties properties)
+        {
+            return getInteger(properties, FILE_SYNC_LEVEL_PROP_NAME, FILE_SYNC_LEVEL_DEFAULT);
         }
 
         /**
@@ -753,7 +829,24 @@ public final class Archive implements AutoCloseable
          */
         public static int catalogFileSyncLevel()
         {
-            return Integer.getInteger(CATALOG_FILE_SYNC_LEVEL_PROP_NAME, CATALOG_FILE_SYNC_LEVEL_DEFAULT);
+            return catalogFileSyncLevel(System.getProperties());
+        }
+
+        /**
+         * The level at which the catalog file and directory should be sync'ed to disk.
+         * <ul>
+         * <li>0 - normal writes.</li>
+         * <li>1 - sync file data.</li>
+         * <li>2 - sync file data + metadata.</li>
+         * </ul>
+         *
+         * @param properties to read the configuration from.
+         * @return level at which files should be sync'ed to disk.
+         * @see #CATALOG_FILE_SYNC_LEVEL_PROP_NAME
+         */
+        public static int catalogFileSyncLevel(final Properties properties)
+        {
+            return getInteger(properties, CATALOG_FILE_SYNC_LEVEL_PROP_NAME, CATALOG_FILE_SYNC_LEVEL_DEFAULT);
         }
 
         /**
@@ -763,7 +856,18 @@ public final class Archive implements AutoCloseable
          */
         public static ArchiveThreadingMode threadingMode()
         {
-            return ArchiveThreadingMode.valueOf(System.getProperty(THREADING_MODE_PROP_NAME, DEDICATED.name()));
+            return threadingMode(System.getProperties());
+        }
+
+        /**
+         * The threading mode to be employed by the archive.
+         *
+         * @param properties to read the configuration from.
+         * @return the threading mode to be employed by the archive.
+         */
+        public static ArchiveThreadingMode threadingMode(final Properties properties)
+        {
+            return ArchiveThreadingMode.valueOf(properties.getProperty(THREADING_MODE_PROP_NAME, DEDICATED.name()));
         }
 
         /**
@@ -775,9 +879,22 @@ public final class Archive implements AutoCloseable
          */
         public static Supplier<IdleStrategy> idleStrategySupplier(final StatusIndicator controllableStatus)
         {
+            return idleStrategySupplier(System.getProperties(), controllableStatus);
+        }
+
+        /**
+         * Create a supplier of {@link IdleStrategy}s for the {@link #ARCHIVE_IDLE_STRATEGY_PROP_NAME} property.
+         *
+         * @param properties         to read the configuration from.
+         * @param controllableStatus if a {@link org.agrona.concurrent.ControllableIdleStrategy} is required.
+         * @return the new idle strategy {@link Supplier}.
+         */
+        public static Supplier<IdleStrategy> idleStrategySupplier(
+            final Properties properties, final StatusIndicator controllableStatus)
+        {
             return () ->
             {
-                final String name = System.getProperty(ARCHIVE_IDLE_STRATEGY_PROP_NAME, DEFAULT_IDLE_STRATEGY);
+                final String name = properties.getProperty(ARCHIVE_IDLE_STRATEGY_PROP_NAME, DEFAULT_IDLE_STRATEGY);
                 return io.aeron.driver.Configuration.agentIdleStrategy(name, controllableStatus);
             };
         }
@@ -791,7 +908,21 @@ public final class Archive implements AutoCloseable
          */
         public static Supplier<IdleStrategy> recorderIdleStrategySupplier(final StatusIndicator controllableStatus)
         {
-            final String name = System.getProperty(ARCHIVE_RECORDER_IDLE_STRATEGY_PROP_NAME);
+            return recorderIdleStrategySupplier(System.getProperties(), controllableStatus);
+        }
+
+        /**
+         * Create a supplier of {@link IdleStrategy}s for the {@link #ARCHIVE_RECORDER_IDLE_STRATEGY_PROP_NAME}
+         * property.
+         *
+         * @param properties         to read the configuration from.
+         * @param controllableStatus if a {@link org.agrona.concurrent.ControllableIdleStrategy} is required.
+         * @return the new idle strategy {@link Supplier}.
+         */
+        public static Supplier<IdleStrategy> recorderIdleStrategySupplier(
+            final Properties properties, final StatusIndicator controllableStatus)
+        {
+            final String name = properties.getProperty(ARCHIVE_RECORDER_IDLE_STRATEGY_PROP_NAME);
             if (null == name)
             {
                 return null;
@@ -809,7 +940,21 @@ public final class Archive implements AutoCloseable
          */
         public static Supplier<IdleStrategy> replayerIdleStrategySupplier(final StatusIndicator controllableStatus)
         {
-            final String name = System.getProperty(ARCHIVE_REPLAYER_IDLE_STRATEGY_PROP_NAME);
+            return replayerIdleStrategySupplier(System.getProperties(), controllableStatus);
+        }
+
+        /**
+         * Create a supplier of {@link IdleStrategy}s for the {@link #ARCHIVE_REPLAYER_IDLE_STRATEGY_PROP_NAME}
+         * property.
+         *
+         * @param properties         to read the configuration from.
+         * @param controllableStatus if a {@link org.agrona.concurrent.ControllableIdleStrategy} is required.
+         * @return the new idle strategy {@link Supplier}.
+         */
+        public static Supplier<IdleStrategy> replayerIdleStrategySupplier(
+            final Properties properties, final StatusIndicator controllableStatus)
+        {
+            final String name = properties.getProperty(ARCHIVE_REPLAYER_IDLE_STRATEGY_PROP_NAME);
             if (null == name)
             {
                 return null;
@@ -825,7 +970,18 @@ public final class Archive implements AutoCloseable
          */
         public static int maxConcurrentRecordings()
         {
-            return Integer.getInteger(MAX_CONCURRENT_RECORDINGS_PROP_NAME, MAX_CONCURRENT_RECORDINGS_DEFAULT);
+            return maxConcurrentRecordings(System.getProperties());
+        }
+
+        /**
+         * The maximum number of recordings that can operate concurrently after which new requests will be rejected.
+         *
+         * @param properties to read the configuration from.
+         * @return the maximum number of recordings that can operate concurrently.
+         */
+        public static int maxConcurrentRecordings(final Properties properties)
+        {
+            return getInteger(properties, MAX_CONCURRENT_RECORDINGS_PROP_NAME, MAX_CONCURRENT_RECORDINGS_DEFAULT);
         }
 
         /**
@@ -835,7 +991,18 @@ public final class Archive implements AutoCloseable
          */
         public static int maxConcurrentReplays()
         {
-            return Integer.getInteger(MAX_CONCURRENT_REPLAYS_PROP_NAME, MAX_CONCURRENT_REPLAYS_DEFAULT);
+            return maxConcurrentReplays(System.getProperties());
+        }
+
+        /**
+         * The maximum number of replays that can operate concurrently after which new requests will be rejected.
+         *
+         * @param properties to read the configuration from.
+         * @return the maximum number of replays that can operate concurrently.
+         */
+        public static int maxConcurrentReplays(final Properties properties)
+        {
+            return getInteger(properties, MAX_CONCURRENT_REPLAYS_PROP_NAME, MAX_CONCURRENT_REPLAYS_DEFAULT);
         }
 
         /**
@@ -848,7 +1015,21 @@ public final class Archive implements AutoCloseable
         @Deprecated
         public static long maxCatalogEntries()
         {
-            return SystemUtil.getSizeAsLong(MAX_CATALOG_ENTRIES_PROP_NAME, MAX_CATALOG_ENTRIES_DEFAULT);
+            return maxCatalogEntries(System.getProperties());
+        }
+
+        /**
+         * Maximum number of catalog entries to allocate for the catalog file.
+         *
+         * @param properties to read the configuration from.
+         * @return the maximum number of catalog entries to support for the catalog file.
+         * @see #catalogCapacity()
+         * @deprecated Use {@link #catalogCapacity()} instead.
+         */
+        @Deprecated
+        public static long maxCatalogEntries(final Properties properties)
+        {
+            return getSizeAsLong(properties, MAX_CATALOG_ENTRIES_PROP_NAME, MAX_CATALOG_ENTRIES_DEFAULT);
         }
 
         /**
@@ -858,7 +1039,18 @@ public final class Archive implements AutoCloseable
          */
         public static long catalogCapacity()
         {
-            return SystemUtil.getSizeAsLong(CATALOG_CAPACITY_PROP_NAME, CATALOG_CAPACITY_DEFAULT);
+            return catalogCapacity(System.getProperties());
+        }
+
+        /**
+         * Default capacity (size) in bytes for the catalog file.
+         *
+         * @param properties to read the configuration from.
+         * @return default size of the catalog file in bytes.
+         */
+        public static long catalogCapacity(final Properties properties)
+        {
+            return getSizeAsLong(properties, CATALOG_CAPACITY_PROP_NAME, CATALOG_CAPACITY_DEFAULT);
         }
 
         /**
@@ -869,7 +1061,19 @@ public final class Archive implements AutoCloseable
          */
         public static long connectTimeoutNs()
         {
-            return getDurationInNanos(CONNECT_TIMEOUT_PROP_NAME, CONNECT_TIMEOUT_DEFAULT_NS);
+            return connectTimeoutNs(System.getProperties());
+        }
+
+        /**
+         * The timeout in nanoseconds to wait for a connection.
+         *
+         * @param properties to read the configuration from.
+         * @return timeout in nanoseconds to wait for a connection.
+         * @see #CONNECT_TIMEOUT_PROP_NAME
+         */
+        public static long connectTimeoutNs(final Properties properties)
+        {
+            return getDurationInNanos(properties, CONNECT_TIMEOUT_PROP_NAME, CONNECT_TIMEOUT_DEFAULT_NS);
         }
 
         /**
@@ -881,7 +1085,20 @@ public final class Archive implements AutoCloseable
          */
         public static long replayLingerTimeoutNs()
         {
-            return getDurationInNanos(REPLAY_LINGER_TIMEOUT_PROP_NAME, REPLAY_LINGER_TIMEOUT_DEFAULT_NS);
+            return replayLingerTimeoutNs(System.getProperties());
+        }
+
+        /**
+         * The timeout in nanoseconds to for a replay network publication to linger after draining.
+         *
+         * @param properties to read the configuration from.
+         * @return timeout in nanoseconds for a replay network publication to wait in linger.
+         * @see #REPLAY_LINGER_TIMEOUT_PROP_NAME
+         * @see io.aeron.driver.Configuration#PUBLICATION_LINGER_PROP_NAME
+         */
+        public static long replayLingerTimeoutNs(final Properties properties)
+        {
+            return getDurationInNanos(properties, REPLAY_LINGER_TIMEOUT_PROP_NAME, REPLAY_LINGER_TIMEOUT_DEFAULT_NS);
         }
 
         /**
@@ -891,7 +1108,19 @@ public final class Archive implements AutoCloseable
          */
         public static long conductorCycleThresholdNs()
         {
-            return getDurationInNanos(CONDUCTOR_CYCLE_THRESHOLD_PROP_NAME, CONDUCTOR_CYCLE_THRESHOLD_DEFAULT_NS);
+            return conductorCycleThresholdNs(System.getProperties());
+        }
+
+        /**
+         * Get threshold value for the conductor work cycle threshold to track for being exceeded.
+         *
+         * @param properties to read the configuration from.
+         * @return threshold value in nanoseconds.
+         */
+        public static long conductorCycleThresholdNs(final Properties properties)
+        {
+            return getDurationInNanos(
+                properties, CONDUCTOR_CYCLE_THRESHOLD_PROP_NAME, CONDUCTOR_CYCLE_THRESHOLD_DEFAULT_NS);
         }
 
         /**
@@ -901,7 +1130,19 @@ public final class Archive implements AutoCloseable
          */
         public static long recorderCycleThresholdNs()
         {
-            return getDurationInNanos(RECORDER_CYCLE_THRESHOLD_PROP_NAME, RECORDER_CYCLE_THRESHOLD_DEFAULT_NS);
+            return recorderCycleThresholdNs(System.getProperties());
+        }
+
+        /**
+         * Get threshold value for the recorder work cycle threshold to track for being exceeded.
+         *
+         * @param properties to read the configuration from.
+         * @return threshold value in nanoseconds.
+         */
+        public static long recorderCycleThresholdNs(final Properties properties)
+        {
+            return getDurationInNanos(
+                properties, RECORDER_CYCLE_THRESHOLD_PROP_NAME, RECORDER_CYCLE_THRESHOLD_DEFAULT_NS);
         }
 
         /**
@@ -911,7 +1152,19 @@ public final class Archive implements AutoCloseable
          */
         public static long replayerCycleThresholdNs()
         {
-            return getDurationInNanos(REPLAYER_CYCLE_THRESHOLD_PROP_NAME, REPLAYER_CYCLE_THRESHOLD_DEFAULT_NS);
+            return replayerCycleThresholdNs(System.getProperties());
+        }
+
+        /**
+         * Get threshold value for the replayer work cycle threshold to track for being exceeded.
+         *
+         * @param properties to read the configuration from.
+         * @return threshold value in nanoseconds.
+         */
+        public static long replayerCycleThresholdNs(final Properties properties)
+        {
+            return getDurationInNanos(
+                properties, REPLAYER_CYCLE_THRESHOLD_PROP_NAME, REPLAYER_CYCLE_THRESHOLD_DEFAULT_NS);
         }
 
         /**
@@ -922,7 +1175,19 @@ public final class Archive implements AutoCloseable
          */
         public static boolean deleteArchiveOnStart()
         {
-            return "true".equals(getProperty(ARCHIVE_DIR_DELETE_ON_START_PROP_NAME, "false"));
+            return deleteArchiveOnStart(System.getProperties());
+        }
+
+        /**
+         * Whether to delete directory on start or not.
+         *
+         * @param properties to read the configuration from.
+         * @return whether to delete directory on start or not.
+         * @see #ARCHIVE_DIR_DELETE_ON_START_PROP_NAME
+         */
+        public static boolean deleteArchiveOnStart(final Properties properties)
+        {
+            return "true".equals(properties.getProperty(ARCHIVE_DIR_DELETE_ON_START_PROP_NAME, "false"));
         }
 
         /**
@@ -932,7 +1197,18 @@ public final class Archive implements AutoCloseable
          */
         public static String replicationChannel()
         {
-            return System.getProperty(REPLICATION_CHANNEL_PROP_NAME);
+            return replicationChannel(System.getProperties());
+        }
+
+        /**
+         * The system property {@link #REPLICATION_CHANNEL_PROP_NAME} if set, null otherwise.
+         *
+         * @param properties to read the configuration from.
+         * @return system property {@link #REPLICATION_CHANNEL_PROP_NAME} if set.
+         */
+        public static String replicationChannel(final Properties properties)
+        {
+            return properties.getProperty(REPLICATION_CHANNEL_PROP_NAME);
         }
 
         /**
@@ -943,7 +1219,19 @@ public final class Archive implements AutoCloseable
          */
         public static int errorBufferLength()
         {
-            return getSizeAsInt(ERROR_BUFFER_LENGTH_PROP_NAME, ERROR_BUFFER_LENGTH_DEFAULT);
+            return errorBufferLength(System.getProperties());
+        }
+
+        /**
+         * Size in bytes of the error buffer in the mark file.
+         *
+         * @param properties to read the configuration from.
+         * @return length of error buffer in bytes.
+         * @see #ERROR_BUFFER_LENGTH_PROP_NAME
+         */
+        public static int errorBufferLength(final Properties properties)
+        {
+            return getSizeAsInt(properties, ERROR_BUFFER_LENGTH_PROP_NAME, ERROR_BUFFER_LENGTH_DEFAULT);
         }
 
         /**
@@ -955,7 +1243,20 @@ public final class Archive implements AutoCloseable
          */
         public static AuthenticatorSupplier authenticatorSupplier()
         {
-            final String supplierClassName = System.getProperty(
+            return authenticatorSupplier(System.getProperties());
+        }
+
+        /**
+         * The value {@link #AUTHENTICATOR_SUPPLIER_DEFAULT} or system property
+         * {@link #AUTHENTICATOR_SUPPLIER_PROP_NAME} if set.
+         *
+         * @param properties to read the configuration from.
+         * @return {@link #AUTHENTICATOR_SUPPLIER_DEFAULT} or system property
+         * {@link #AUTHENTICATOR_SUPPLIER_PROP_NAME} if set.
+         */
+        public static AuthenticatorSupplier authenticatorSupplier(final Properties properties)
+        {
+            final String supplierClassName = properties.getProperty(
                 AUTHENTICATOR_SUPPLIER_PROP_NAME, AUTHENTICATOR_SUPPLIER_DEFAULT);
 
             AuthenticatorSupplier supplier = null;
@@ -981,7 +1282,21 @@ public final class Archive implements AutoCloseable
          */
         public static AuthorisationServiceSupplier authorisationServiceSupplier()
         {
-            final String supplierClassName = System.getProperty(AUTHORISATION_SERVICE_SUPPLIER_PROP_NAME);
+            return authorisationServiceSupplier(System.getProperties());
+        }
+
+        /**
+         * The {@link AuthorisationServiceSupplier} specified in the
+         * {@link #AUTHORISATION_SERVICE_SUPPLIER_PROP_NAME} system property or the
+         * {@link #DEFAULT_AUTHORISATION_SERVICE_SUPPLIER}.
+         *
+         * @param properties to read the configuration from.
+         * @return system property {@link #AUTHORISATION_SERVICE_SUPPLIER_PROP_NAME} if set or
+         * {@link #DEFAULT_AUTHORISATION_SERVICE_SUPPLIER} otherwise.
+         */
+        public static AuthorisationServiceSupplier authorisationServiceSupplier(final Properties properties)
+        {
+            final String supplierClassName = properties.getProperty(AUTHORISATION_SERVICE_SUPPLIER_PROP_NAME);
             if (Strings.isEmpty(supplierClassName))
             {
                 return DEFAULT_AUTHORISATION_SERVICE_SUPPLIER;
@@ -992,7 +1307,8 @@ public final class Archive implements AutoCloseable
             }
             else if (AuthorisationService.ALLOW_ALL_NAME.equals(supplierClassName))
             {
-                fallbackLogger().println("Warning: Cluster authorisation service set to allow all requests");
+                fallbackLogger(properties).println(
+                    "Warning: Cluster authorisation service set to allow all requests");
                 return () -> AuthorisationService.ALLOW_ALL;
             }
 
@@ -1016,7 +1332,20 @@ public final class Archive implements AutoCloseable
          */
         public static String recordChecksum()
         {
-            return getProperty(RECORD_CHECKSUM_PROP_NAME);
+            return recordChecksum(System.getProperties());
+        }
+
+        /**
+         * Fully qualified class name of the {@link io.aeron.archive.checksum.Checksum} implementation to use during
+         * recording to compute checksums. Non-empty value means that checksum is enabled for recording.
+         *
+         * @param properties to read the configuration from.
+         * @return class that implements {@link io.aeron.archive.checksum.Checksum} interface
+         * @see Configuration#RECORD_CHECKSUM_PROP_NAME
+         */
+        public static String recordChecksum(final Properties properties)
+        {
+            return properties.getProperty(RECORD_CHECKSUM_PROP_NAME);
         }
 
         /**
@@ -1028,7 +1357,20 @@ public final class Archive implements AutoCloseable
          */
         public static String replayChecksum()
         {
-            return getProperty(REPLAY_CHECKSUM_PROP_NAME);
+            return replayChecksum(System.getProperties());
+        }
+
+        /**
+         * Fully qualified class name of the {@link io.aeron.archive.checksum.Checksum} implementation to use during
+         * replay for the checksum. Non-empty value means that checksum is enabled for replay.
+         *
+         * @param properties to read the configuration from.
+         * @return class that implements {@link io.aeron.archive.checksum.Checksum} interface
+         * @see Configuration#REPLAY_CHECKSUM_PROP_NAME
+         */
+        public static String replayChecksum(final Properties properties)
+        {
+            return properties.getProperty(REPLAY_CHECKSUM_PROP_NAME);
         }
 
         /**
@@ -1039,7 +1381,19 @@ public final class Archive implements AutoCloseable
          */
         public static boolean controlChannelEnabled()
         {
-            return "true".equals(System.getProperty(CONTROL_CHANNEL_ENABLED_PROP_NAME, "true"));
+            return controlChannelEnabled(System.getProperties());
+        }
+
+        /**
+         * Should the network (UDP) control channel be enabled.
+         *
+         * @param properties to read the configuration from.
+         * @return {@code true} if the network control channel to be enabled.
+         * @see #CONTROL_CHANNEL_ENABLED_PROP_NAME
+         */
+        public static boolean controlChannelEnabled(final Properties properties)
+        {
+            return "true".equals(properties.getProperty(CONTROL_CHANNEL_ENABLED_PROP_NAME, "true"));
         }
 
         /**
@@ -1050,7 +1404,19 @@ public final class Archive implements AutoCloseable
          */
         public static long archiveId()
         {
-            final String prop = getProperty(Configuration.ARCHIVE_ID_PROP_NAME);
+            return archiveId(System.getProperties());
+        }
+
+        /**
+         * Return configured id for the Archive.
+         *
+         * @param properties to read the configuration from.
+         * @return id for the Archive or {@link Aeron#NULL_VALUE}.
+         * @see #ARCHIVE_ID_PROP_NAME
+         */
+        public static long archiveId(final Properties properties)
+        {
+            final String prop = properties.getProperty(Configuration.ARCHIVE_ID_PROP_NAME);
             if (!Strings.isEmpty(prop))
             {
                 return AsciiEncoding.parseLongAscii(prop, 0, prop.length());
@@ -1081,14 +1447,15 @@ public final class Archive implements AutoCloseable
             }
         }
 
+        private final Properties properties;
         private volatile boolean isConcluded;
-        private boolean deleteArchiveOnStart = Configuration.deleteArchiveOnStart();
-        private boolean ownsAeronClient = false;
-        private String aeronDirectoryName = CommonContext.getAeronDirectoryName();
+        private boolean deleteArchiveOnStart;
+        private boolean ownsAeronClient;
+        private String aeronDirectoryName;
         private Aeron aeron;
         private File archiveDir;
         private File markFileDir;
-        private String archiveDirectoryName = Configuration.archiveDirName();
+        private String archiveDirectoryName;
         private FileChannel archiveDirChannel;
         private FileStore archiveFileStore;
         private Catalog catalog;
@@ -1096,36 +1463,35 @@ public final class Archive implements AutoCloseable
         private AeronArchive.Context archiveClientContext;
         private AgentInvoker mediaDriverAgentInvoker;
 
-        private boolean controlChannelEnabled = Configuration.controlChannelEnabled();
-        private String controlChannel = AeronArchive.Configuration.controlChannel();
-        private int controlStreamId = AeronArchive.Configuration.controlStreamId();
-        private String localControlChannel = AeronArchive.Configuration.localControlChannel();
-        private int localControlStreamId = AeronArchive.Configuration.localControlStreamId();
-        private boolean controlTermBufferSparse = AeronArchive.Configuration.controlTermBufferSparse();
-        private int controlTermBufferLength = AeronArchive.Configuration.controlTermBufferLength();
-        private int controlMtuLength = AeronArchive.Configuration.controlMtuLength();
-        private String recordingEventsChannel = AeronArchive.Configuration.recordingEventsChannel();
-        private int recordingEventsStreamId = AeronArchive.Configuration.recordingEventsStreamId();
-        private boolean recordingEventsEnabled = AeronArchive.Configuration.recordingEventsEnabled();
-        private String replicationChannel = Configuration.replicationChannel();
+        private boolean controlChannelEnabled;
+        private String controlChannel;
+        private int controlStreamId;
+        private String localControlChannel;
+        private int localControlStreamId;
+        private boolean controlTermBufferSparse;
+        private int controlTermBufferLength;
+        private int controlMtuLength;
+        private String recordingEventsChannel;
+        private int recordingEventsStreamId;
+        private boolean recordingEventsEnabled;
+        private String replicationChannel;
 
-        private long connectTimeoutNs = Configuration.connectTimeoutNs();
-        private long sessionLivenessCheckIntervalNs =
-            getDurationInNanos(SESSION_LIVENESS_CHECK_INTERVAL_PROP_NAME, SESSION_LIVENESS_CHECK_INTERVAL_DEFAULT_NS);
-        private long replayLingerTimeoutNs = Configuration.replayLingerTimeoutNs();
-        private long conductorCycleThresholdNs = Configuration.conductorCycleThresholdNs();
-        private long recorderCycleThresholdNs = Configuration.recorderCycleThresholdNs();
-        private long replayerCycleThresholdNs = Configuration.replayerCycleThresholdNs();
-        private long catalogCapacity = Configuration.catalogCapacity();
-        private long lowStorageSpaceThreshold = Configuration.lowStorageSpaceThreshold();
-        private int segmentFileLength = Configuration.segmentFileLength();
-        private int fileSyncLevel = Configuration.fileSyncLevel();
-        private int catalogFileSyncLevel = Configuration.catalogFileSyncLevel();
-        private int maxConcurrentRecordings = Configuration.maxConcurrentRecordings();
-        private int maxConcurrentReplays = Configuration.maxConcurrentReplays();
-        private int fileIoMaxLength = Configuration.fileIoMaxLength();
-        private long archiveId = Configuration.archiveId();
-        private ArchiveThreadingMode threadingMode = Configuration.threadingMode();
+        private long connectTimeoutNs;
+        private long sessionLivenessCheckIntervalNs;
+        private long replayLingerTimeoutNs;
+        private long conductorCycleThresholdNs;
+        private long recorderCycleThresholdNs;
+        private long replayerCycleThresholdNs;
+        private long catalogCapacity;
+        private long lowStorageSpaceThreshold;
+        private int segmentFileLength;
+        private int fileSyncLevel;
+        private int catalogFileSyncLevel;
+        private int maxConcurrentRecordings;
+        private int maxConcurrentReplays;
+        private int fileIoMaxLength;
+        private long archiveId;
+        private ArchiveThreadingMode threadingMode;
         private ThreadFactory threadFactory;
         private ThreadFactory recorderThreadFactory;
         private ThreadFactory replayerThreadFactory;
@@ -1141,7 +1507,7 @@ public final class Archive implements AutoCloseable
         private Counter controlSessionsCounter;
         private Counter recordingSessionCounter;
         private Counter replaySessionCounter;
-        private int errorBufferLength = Configuration.errorBufferLength();
+        private int errorBufferLength;
         private ErrorHandler errorHandler;
         private AtomicCounter errorCounter;
         private CountedErrorHandler countedErrorHandler;
@@ -1162,13 +1528,76 @@ public final class Archive implements AutoCloseable
         private Counter totalReadBytesCounter;
         private Counter totalReadTimeCounter;
         private Counter maxReadTimeCounter;
-        private String secureRandomAlgorithm = CommonContext.getSecureRandomAlgorithm();
+        private String secureRandomAlgorithm;
 
         /**
          * Construct a Context using default values and loading from system properties.
          */
         public Context()
         {
+            this(System.getProperties());
+        }
+
+        /**
+         * Construct a Context using default values loaded from the supplied properties.
+         *
+         * @param properties to load the configuration from.
+         */
+        public Context(final Properties properties)
+        {
+            this.properties = properties;
+            applyDefaults(properties);
+        }
+
+        /**
+         * The properties this context was constructed from, to be propagated to any context it
+         * creates.
+         *
+         * @return the properties this context was constructed from.
+         */
+        public Properties properties()
+        {
+            return properties;
+        }
+
+        private void applyDefaults(final Properties properties)
+        {
+            deleteArchiveOnStart = Configuration.deleteArchiveOnStart(properties);
+            ownsAeronClient = false;
+            aeronDirectoryName = CommonContext.getAeronDirectoryName(properties);
+            archiveDirectoryName = Configuration.archiveDirName(properties);
+            controlChannelEnabled = Configuration.controlChannelEnabled(properties);
+            controlChannel = AeronArchive.Configuration.controlChannel(properties);
+            controlStreamId = AeronArchive.Configuration.controlStreamId(properties);
+            localControlChannel = AeronArchive.Configuration.localControlChannel(properties);
+            localControlStreamId = AeronArchive.Configuration.localControlStreamId(properties);
+            controlTermBufferSparse = AeronArchive.Configuration.controlTermBufferSparse(properties);
+            controlTermBufferLength = AeronArchive.Configuration.controlTermBufferLength(properties);
+            controlMtuLength = AeronArchive.Configuration.controlMtuLength(properties);
+            recordingEventsChannel = AeronArchive.Configuration.recordingEventsChannel(properties);
+            recordingEventsStreamId = AeronArchive.Configuration.recordingEventsStreamId(properties);
+            recordingEventsEnabled = AeronArchive.Configuration.recordingEventsEnabled(properties);
+            replicationChannel = Configuration.replicationChannel(properties);
+
+            connectTimeoutNs = Configuration.connectTimeoutNs(properties);
+            sessionLivenessCheckIntervalNs = getDurationInNanos(
+                properties, SESSION_LIVENESS_CHECK_INTERVAL_PROP_NAME, SESSION_LIVENESS_CHECK_INTERVAL_DEFAULT_NS);
+            replayLingerTimeoutNs = Configuration.replayLingerTimeoutNs(properties);
+            conductorCycleThresholdNs = Configuration.conductorCycleThresholdNs(properties);
+            recorderCycleThresholdNs = Configuration.recorderCycleThresholdNs(properties);
+            replayerCycleThresholdNs = Configuration.replayerCycleThresholdNs(properties);
+            catalogCapacity = Configuration.catalogCapacity(properties);
+            lowStorageSpaceThreshold = Configuration.lowStorageSpaceThreshold(properties);
+            segmentFileLength = Configuration.segmentFileLength(properties);
+            fileSyncLevel = Configuration.fileSyncLevel(properties);
+            catalogFileSyncLevel = Configuration.catalogFileSyncLevel(properties);
+            maxConcurrentRecordings = Configuration.maxConcurrentRecordings(properties);
+            maxConcurrentReplays = Configuration.maxConcurrentReplays(properties);
+            fileIoMaxLength = Configuration.fileIoMaxLength(properties);
+            archiveId = Configuration.archiveId(properties);
+            threadingMode = Configuration.threadingMode(properties);
+            errorBufferLength = Configuration.errorBufferLength(properties);
+            secureRandomAlgorithm = CommonContext.getSecureRandomAlgorithm(properties);
         }
 
         /**
@@ -1241,14 +1670,14 @@ public final class Archive implements AutoCloseable
             {
                 throw new ConfigurationException(
                     "Archive.Context.recordingEventsChannel must be set if " +
-                    "Archive.Context.recordingEventsEnabled is true");
+                        "Archive.Context.recordingEventsEnabled is true");
             }
 
             if (null != mediaDriverAgentInvoker && ArchiveThreadingMode.INVOKER != threadingMode)
             {
                 throw new ConfigurationException(
                     "Archive.Context.threadingMode(ArchiveThreadingMode.INVOKER) must be set if " +
-                    "Archive.Context.mediaDriverAgentInvoker is set");
+                        "Archive.Context.mediaDriverAgentInvoker is set");
             }
 
             if (null == archiveDir)
@@ -1258,7 +1687,7 @@ public final class Archive implements AutoCloseable
 
             if (null == markFileDir)
             {
-                final String markFileDirPath = Configuration.markFileDir();
+                final String markFileDirPath = Configuration.markFileDir(properties);
                 markFileDir = !Strings.isEmpty(markFileDirPath) ? new File(markFileDirPath) : archiveDir;
             }
 
@@ -1329,6 +1758,7 @@ public final class Archive implements AutoCloseable
                 ArchiveMarkFile.LINK_FILENAME);
 
             errorHandler = CommonContext.setupErrorHandler(
+                properties,
                 errorHandler, new DistinctErrorLog(markFile.errorBuffer(), epochClock, US_ASCII));
 
             final ExpandableArrayBuffer tempBuffer = new ExpandableArrayBuffer();
@@ -1339,7 +1769,7 @@ public final class Archive implements AutoCloseable
                 ownsAeronClient = true;
 
                 aeron = Aeron.connect(
-                    new Aeron.Context()
+                    new Aeron.Context(properties)
                         .aeronDirectoryName(aeronDirectoryName)
                         .epochClock(epochClock)
                         .nanoClock(nanoClock)
@@ -1396,7 +1826,7 @@ public final class Archive implements AutoCloseable
 
             if (null == idleStrategySupplier)
             {
-                idleStrategySupplier = Configuration.idleStrategySupplier(null);
+                idleStrategySupplier = Configuration.idleStrategySupplier(properties, null);
             }
 
             if (null == conductorDutyCycleTracker)
@@ -1422,7 +1852,7 @@ public final class Archive implements AutoCloseable
             {
                 if (null == recorderIdleStrategySupplier)
                 {
-                    recorderIdleStrategySupplier = Configuration.recorderIdleStrategySupplier(null);
+                    recorderIdleStrategySupplier = Configuration.recorderIdleStrategySupplier(properties, null);
                     if (null == recorderIdleStrategySupplier)
                     {
                         recorderIdleStrategySupplier = idleStrategySupplier;
@@ -1431,7 +1861,7 @@ public final class Archive implements AutoCloseable
 
                 if (null == replayerIdleStrategySupplier)
                 {
-                    replayerIdleStrategySupplier = Configuration.replayerIdleStrategySupplier(null);
+                    replayerIdleStrategySupplier = Configuration.replayerIdleStrategySupplier(properties, null);
                     if (null == replayerIdleStrategySupplier)
                     {
                         replayerIdleStrategySupplier = idleStrategySupplier;
@@ -1488,12 +1918,12 @@ public final class Archive implements AutoCloseable
 
             if (null == authenticatorSupplier)
             {
-                authenticatorSupplier = Configuration.authenticatorSupplier();
+                authenticatorSupplier = Configuration.authenticatorSupplier(properties);
             }
 
             if (null == authorisationServiceSupplier)
             {
-                authorisationServiceSupplier = Configuration.authorisationServiceSupplier();
+                authorisationServiceSupplier = Configuration.authorisationServiceSupplier(properties);
             }
 
             concludeRecordChecksum();
@@ -1513,7 +1943,7 @@ public final class Archive implements AutoCloseable
 
             if (null == archiveClientContext)
             {
-                archiveClientContext = new AeronArchive.Context();
+                archiveClientContext = new AeronArchive.Context(properties);
             }
 
             if (null == archiveClientContext.controlResponseChannel())
@@ -1664,7 +2094,7 @@ public final class Archive implements AutoCloseable
 
             markFile.signalReady(epochClock.time());
 
-            if (CommonContext.shouldPrintConfigurationOnStart())
+            if (CommonContext.shouldPrintConfigurationOnStart(properties))
             {
                 System.out.println(this);
             }
@@ -3665,7 +4095,7 @@ public final class Archive implements AutoCloseable
         {
             if (null == recordChecksum)
             {
-                final String checksumClass = Configuration.recordChecksum();
+                final String checksumClass = Configuration.recordChecksum(properties);
                 if (!Strings.isEmpty(checksumClass))
                 {
                     recordChecksum = Checksums.newInstance(checksumClass);
@@ -3677,7 +4107,7 @@ public final class Archive implements AutoCloseable
         {
             if (null == replayChecksum)
             {
-                final String checksumClass = Configuration.replayChecksum();
+                final String checksumClass = Configuration.replayChecksum(properties);
                 if (!Strings.isEmpty(checksumClass))
                 {
                     replayChecksum = Checksums.newInstance(checksumClass);

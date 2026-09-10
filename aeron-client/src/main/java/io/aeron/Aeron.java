@@ -54,14 +54,15 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.nio.ByteBuffer;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static io.aeron.Aeron.Configuration.MAX_CLIENT_NAME_LENGTH;
-import static org.agrona.SystemUtil.getDurationInNanos;
-import static org.agrona.SystemUtil.getProperty;
+import static io.aeron.PropertiesUtil.getDurationInNanos;
+import static io.aeron.PropertiesUtil.getProperty;
 
 /**
  * Aeron entry point for communicating to the Media Driver for creating {@link Publication}s and {@link Subscription}s.
@@ -1033,7 +1034,19 @@ public final class Aeron implements AutoCloseable
         @Config
         public static long idleSleepDurationNs()
         {
-            return getDurationInNanos(IDLE_SLEEP_DURATION_PROP_NAME, IDLE_SLEEP_DEFAULT_NS);
+            return idleSleepDurationNs(System.getProperties());
+        }
+
+        /**
+         * Duration in nanoseconds for which the client conductor will sleep between work cycles when idle.
+         *
+         * @param properties to read the configuration from.
+         * @return duration in nanoseconds to wait when idle in client conductor.
+         * @see #IDLE_SLEEP_DURATION_PROP_NAME
+         */
+        public static long idleSleepDurationNs(final Properties properties)
+        {
+            return getDurationInNanos(properties, IDLE_SLEEP_DURATION_PROP_NAME, IDLE_SLEEP_DEFAULT_NS);
         }
 
         /**
@@ -1046,7 +1059,21 @@ public final class Aeron implements AutoCloseable
         @Config
         public static long resourceLingerDurationNs()
         {
-            return getDurationInNanos(RESOURCE_LINGER_DURATION_PROP_NAME, RESOURCE_LINGER_DURATION_DEFAULT_NS);
+            return resourceLingerDurationNs(System.getProperties());
+        }
+
+        /**
+         * Duration to wait while lingering an entity such as an {@link Image} before deleting underlying resources
+         * such as memory mapped files.
+         *
+         * @param properties to read the configuration from.
+         * @return duration in nanoseconds to wait before deleting an expired resource.
+         * @see #RESOURCE_LINGER_DURATION_PROP_NAME
+         */
+        public static long resourceLingerDurationNs(final Properties properties)
+        {
+            return getDurationInNanos(
+                properties, RESOURCE_LINGER_DURATION_PROP_NAME, RESOURCE_LINGER_DURATION_DEFAULT_NS);
         }
 
         /**
@@ -1059,7 +1086,20 @@ public final class Aeron implements AutoCloseable
         @Config
         public static long closeLingerDurationNs()
         {
-            return getDurationInNanos(CLOSE_LINGER_DURATION_PROP_NAME, CLOSE_LINGER_DURATION_DEFAULT_NS);
+            return closeLingerDurationNs(System.getProperties());
+        }
+
+        /**
+         * Duration to wait while lingering an entity such as an {@link Image} before deleting underlying resources
+         * such as memory mapped files.
+         *
+         * @param properties to read the configuration from.
+         * @return duration in nanoseconds to wait before deleting an expired resource.
+         * @see #RESOURCE_LINGER_DURATION_PROP_NAME
+         */
+        public static long closeLingerDurationNs(final Properties properties)
+        {
+            return getDurationInNanos(properties, CLOSE_LINGER_DURATION_PROP_NAME, CLOSE_LINGER_DURATION_DEFAULT_NS);
         }
 
         /**
@@ -1071,7 +1111,19 @@ public final class Aeron implements AutoCloseable
         @Config
         public static boolean preTouchMappedMemory()
         {
-            final String value = System.getProperty(PRE_TOUCH_MAPPED_MEMORY_PROP_NAME);
+            return preTouchMappedMemory(System.getProperties());
+        }
+
+        /**
+         * Should memory-mapped files be pre-touched so that they are already faulted into a process.
+         *
+         * @param properties to read the configuration from.
+         * @return true if memory mappings should be pre-touched, otherwise false.
+         * @see #PRE_TOUCH_MAPPED_MEMORY_PROP_NAME
+         */
+        public static boolean preTouchMappedMemory(final Properties properties)
+        {
+            final String value = properties.getProperty(PRE_TOUCH_MAPPED_MEMORY_PROP_NAME);
             if (null != value)
             {
                 return Boolean.parseBoolean(value);
@@ -1089,7 +1141,19 @@ public final class Aeron implements AutoCloseable
         @Config
         public static String clientName()
         {
-            return getProperty(CLIENT_NAME_PROP_NAME, "");
+            return clientName(System.getProperties());
+        }
+
+        /**
+         * Get the configured client name.
+         *
+         * @param properties to read the configuration from.
+         * @return specified client name or empty string if not set.
+         * @see #CLIENT_NAME_PROP_NAME
+         */
+        public static String clientName(final Properties properties)
+        {
+            return getProperty(properties, CLIENT_NAME_PROP_NAME, "");
         }
 
         /**
@@ -1114,9 +1178,9 @@ public final class Aeron implements AutoCloseable
     public static final class Context extends CommonContext
     {
         private long clientId;
-        private String clientName = Configuration.clientName();
-        private boolean useConductorAgentInvoker = false;
-        private boolean preTouchMappedMemory = Configuration.preTouchMappedMemory();
+        private String clientName;
+        private boolean useConductorAgentInvoker;
+        private boolean preTouchMappedMemory;
         private AgentInvoker driverAgentInvoker;
         private Lock clientLock;
         private EpochClock epochClock;
@@ -1135,22 +1199,43 @@ public final class Aeron implements AutoCloseable
         private UnavailableImageHandler unavailableImageHandler;
         private AvailableCounterHandler availableCounterHandler;
         private UnavailableCounterHandler unavailableCounterHandler;
-        private PublicationErrorFrameHandler publicationErrorFrameHandler = PublicationErrorFrameHandler.NO_OP;
+        private PublicationErrorFrameHandler publicationErrorFrameHandler;
         private Runnable closeHandler;
-        private long keepAliveIntervalNs = Configuration.KEEPALIVE_INTERVAL_NS;
+        private long keepAliveIntervalNs;
         private long interServiceTimeoutNs;
-        private long idleSleepDurationNs = Configuration.idleSleepDurationNs();
-        private long resourceLingerDurationNs = Configuration.resourceLingerDurationNs();
-        private long closeLingerDurationNs = Configuration.closeLingerDurationNs();
+        private long idleSleepDurationNs;
+        private long resourceLingerDurationNs;
+        private long closeLingerDurationNs;
         private int filePageSize;
 
-        private ThreadFactory threadFactory = Thread::new;
+        private ThreadFactory threadFactory;
 
         /**
          * Construct a Context using default values and loading from system properties.
          */
         public Context()
         {
+            this(System.getProperties());
+        }
+
+        /**
+         * Construct a Context using default values loaded from the supplied properties.
+         *
+         * @param properties to load the configuration from.
+         */
+        public Context(final Properties properties)
+        {
+            super(properties);
+
+            clientName = Configuration.clientName(properties);
+            useConductorAgentInvoker = false;
+            preTouchMappedMemory = Configuration.preTouchMappedMemory(properties);
+            publicationErrorFrameHandler = PublicationErrorFrameHandler.NO_OP;
+            keepAliveIntervalNs = Configuration.KEEPALIVE_INTERVAL_NS;
+            idleSleepDurationNs = Configuration.idleSleepDurationNs(properties);
+            resourceLingerDurationNs = Configuration.resourceLingerDurationNs(properties);
+            closeLingerDurationNs = Configuration.closeLingerDurationNs(properties);
+            threadFactory = Thread::new;
         }
 
         /**
@@ -1183,14 +1268,14 @@ public final class Aeron implements AutoCloseable
             {
                 throw new ConfigurationException(
                     "Must use Aeron.Context.useConductorAgentInvoker(true) when Aeron.Context.clientLock(...) " +
-                    "is using a NoOpLock");
+                        "is using a NoOpLock");
             }
 
             if (null != driverAgentInvoker && !useConductorAgentInvoker)
             {
                 throw new ConfigurationException(
                     "Must use Aeron.Context.useConductorAgentInvoker(true) when Aeron.Context.driverAgentInvoker() " +
-                    "is set");
+                        "is set");
             }
 
             if (clientName.length() > MAX_CLIENT_NAME_LENGTH)
@@ -1821,7 +1906,7 @@ public final class Aeron implements AutoCloseable
          */
         public long interServiceTimeoutNs()
         {
-            return CommonContext.checkDebugTimeout(interServiceTimeoutNs, TimeUnit.NANOSECONDS);
+            return CommonContext.checkDebugTimeout(properties(), interServiceTimeoutNs, TimeUnit.NANOSECONDS);
         }
 
         /**

@@ -57,7 +57,13 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static io.aeron.Aeron.NULL_VALUE;
-import static io.aeron.CommonContext.*;
+import static io.aeron.CommonContext.CONTROL_MODE_RESPONSE;
+import static io.aeron.CommonContext.ENDPOINT_PARAM_NAME;
+import static io.aeron.CommonContext.MDC_CONTROL_MODE_PARAM_NAME;
+import static io.aeron.CommonContext.MDC_CONTROL_PARAM_NAME;
+import static io.aeron.CommonContext.SESSION_ID_PARAM_NAME;
+import static io.aeron.CommonContext.TAGS_PARAM_NAME;
+import static io.aeron.CommonContext.threadName;
 import static io.aeron.archive.client.AeronArchive.NULL_LENGTH;
 import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
 import static io.aeron.archive.client.AeronArchive.NULL_TIMESTAMP;
@@ -176,7 +182,8 @@ public final class ClusterBackupAgent implements Agent
         liveLogPositionCounter = ctx.liveLogPositionCounter();
         nextQueryDeadlineMsCounter = ctx.nextQueryDeadlineMsCounter();
         logSourceValidator = new LogSourceValidator(ctx.sourceType());
-        roleName = threadName(AERON_CLUSTER_BACKUP_THREAD_NAME, AERON_CLUSTER_BACKUP_THREAD_NAME_CLASSIC);
+        roleName = threadName(
+            ctx.properties(), AERON_CLUSTER_BACKUP_THREAD_NAME, AERON_CLUSTER_BACKUP_THREAD_NAME_CLASSIC);
     }
 
     /**
