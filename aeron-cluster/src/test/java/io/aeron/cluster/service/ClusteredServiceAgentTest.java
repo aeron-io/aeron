@@ -15,7 +15,13 @@
  */
 package io.aeron.cluster.service;
 
-import io.aeron.*;
+import io.aeron.Aeron;
+import io.aeron.CommonContext;
+import io.aeron.ConcurrentPublication;
+import io.aeron.Publication;
+import io.aeron.Subscription;
+import io.aeron.UnavailableCounterHandler;
+import io.aeron.cluster.ExtendedTerminationHook;
 import io.aeron.cluster.client.AeronCluster;
 import io.aeron.cluster.codecs.CloseReason;
 import io.aeron.driver.DutyCycleTracker;
@@ -25,13 +31,21 @@ import io.aeron.test.Tests;
 import org.agrona.DirectBuffer;
 import org.agrona.ErrorHandler;
 import org.agrona.MutableDirectBuffer;
-import org.agrona.concurrent.*;
+import org.agrona.concurrent.AgentTerminationException;
+import org.agrona.concurrent.CachedEpochClock;
+import org.agrona.concurrent.CachedNanoClock;
+import org.agrona.concurrent.CountedErrorHandler;
+import org.agrona.concurrent.SystemEpochClock;
+import org.agrona.concurrent.SystemNanoClock;
+import org.agrona.concurrent.UnsafeBuffer;
+import org.agrona.concurrent.YieldingIdleStrategy;
 import org.agrona.concurrent.errors.DistinctErrorLog;
 import org.agrona.concurrent.errors.ErrorLogReader;
 import org.agrona.concurrent.status.AtomicCounter;
 import org.agrona.concurrent.status.CountersManager;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.TimeUnit;
@@ -40,9 +54,15 @@ import static io.aeron.Aeron.NULL_VALUE;
 import static io.aeron.AeronCounters.CLUSTER_COMMIT_POSITION_TYPE_ID;
 import static io.aeron.AeronCounters.CLUSTER_RECOVERY_STATE_TYPE_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class ClusteredServiceAgentTest
 {
@@ -112,7 +132,8 @@ class ClusteredServiceAgentTest
             .dutyCycleTracker(new DutyCycleTracker())
             .idleStrategySupplier(() -> YieldingIdleStrategy.INSTANCE)
             .errorLog(mock(DistinctErrorLog.class))
-            .terminationHook(() -> {});
+            .terminationHook(() -> {})
+            .extendedTerminationHook(t -> {});
         final ClusteredServiceAgent clusteredServiceAgent = new ClusteredServiceAgent(ctx);
 
         clusteredServiceAgent.onStart();
@@ -149,5 +170,32 @@ class ClusteredServiceAgentTest
 
         assertEquals(originalErrorCount + 1, errorCounter.get());
         assertTrue(ErrorLogReader.hasErrors(distinctErrorLog.buffer()));
+    }
+
+    @Test
+    void shouldRunTerminationHooksWhenTerminating()
+    {
+        final Aeron aeron = mock(Aeron.class);
+        when(aeron.isClosed()).thenReturn(true);
+
+        final Runnable terminationHook = mock(Runnable.class);
+        final ExtendedTerminationHook extendedTerminationHook = mock(ExtendedTerminationHook.class);
+
+        final ClusteredServiceContainer.Context ctx = new ClusteredServiceContainer.Context()
+            .aeron(aeron)
+            .idleStrategySupplier(() -> YieldingIdleStrategy.INSTANCE)
+            .nanoClock(SystemNanoClock.INSTANCE)
+            .dutyCycleTracker(new DutyCycleTracker())
+            .terminationHook(terminationHook)
+            .extendedTerminationHook(extendedTerminationHook);
+
+        final ClusteredServiceAgent clusteredServiceAgent = new ClusteredServiceAgent(ctx);
+
+        final AgentTerminationException terminationException =
+            assertThrows(AgentTerminationException.class, clusteredServiceAgent::doWork);
+
+        final InOrder inOrder = inOrder(terminationHook, extendedTerminationHook);
+        inOrder.verify(extendedTerminationHook).run(terminationException);
+        inOrder.verify(terminationHook).run();
     }
 }

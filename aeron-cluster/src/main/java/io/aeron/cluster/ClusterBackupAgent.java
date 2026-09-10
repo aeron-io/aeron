@@ -298,7 +298,7 @@ public final class ClusterBackupAgent implements Agent
         }
         catch (final AgentTerminationException ex)
         {
-            runTerminationHook(ex);
+            runTerminationHooks(ex);
         }
         catch (final Exception ex)
         {
@@ -1153,8 +1153,16 @@ public final class ClusterBackupAgent implements Agent
         return replayStartPosition;
     }
 
-    private void runTerminationHook(final AgentTerminationException ex)
+    private void runTerminationHooks(final AgentTerminationException ex)
     {
+        try
+        {
+            ctx.extendedTerminationHook().run(ex);
+        }
+        catch (final Exception e)
+        {
+            ctx.countedErrorHandler().onError(e);
+        }
         try
         {
             ctx.terminationHook().run();

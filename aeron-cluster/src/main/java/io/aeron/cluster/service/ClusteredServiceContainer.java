@@ -22,6 +22,7 @@ import io.aeron.RethrowingErrorHandler;
 import io.aeron.Subscription;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.cluster.AppVersionValidator;
+import io.aeron.cluster.ExtendedTerminationHook;
 import io.aeron.cluster.VersionValidator;
 import io.aeron.cluster.client.ClusterException;
 import io.aeron.cluster.codecs.mark.ClusterComponentType;
@@ -788,6 +789,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
 
         private ClusteredService clusteredService;
         private Runnable terminationHook;
+        private ExtendedTerminationHook extendedTerminationHook;
         private ClusterMarkFile markFile;
 
         /**
@@ -1042,6 +1044,11 @@ public final class ClusteredServiceContainer implements AutoCloseable
             if (null == terminationHook)
             {
                 terminationHook = () -> {};
+            }
+
+            if (null == extendedTerminationHook)
+            {
+                extendedTerminationHook = cause -> {};
             }
 
             if (null == clusteredService)
@@ -1776,8 +1783,10 @@ public final class ClusteredServiceContainer implements AutoCloseable
 
         /**
          * Set the {@link Runnable} that is called when container is instructed to terminate.
+         * <p>
+         * Both extendedTerminationHook and terminationHook run on termination, in that order.
          *
-         * @param terminationHook that can be used to terminate a service container.
+         * @param terminationHook that is called when container is instructed to terminate.
          * @return this for a fluent API.
          */
         public Context terminationHook(final Runnable terminationHook)
@@ -1788,12 +1797,44 @@ public final class ClusteredServiceContainer implements AutoCloseable
 
         /**
          * Get the {@link Runnable} that is called when container is instructed to terminate.
+         * <p>
+         * Both extendedTerminationHook and terminationHook run on termination, in that order.
          *
-         * @return the {@link Runnable} that can be used to terminate a service container.
+         * @return the {@link Runnable} that is called when container is instructed to terminate.
          */
         public Runnable terminationHook()
         {
             return terminationHook;
+        }
+
+        /**
+         * Set the {@link ExtendedTerminationHook} that is called when container is instructed to terminate.
+         * <p>
+         * Identical to {@link #terminationHook(Runnable)}, but receives information about the termination cause.
+         * <p>
+         * Both extendedTerminationHook and terminationHook run on termination, in that order.
+         *
+         * @param extendedTerminationHook that is called when container is instructed to terminate.
+         * @return this for a fluent API.
+         */
+        public Context extendedTerminationHook(final ExtendedTerminationHook extendedTerminationHook)
+        {
+            this.extendedTerminationHook = extendedTerminationHook;
+            return this;
+        }
+
+        /**
+         * Get the {@link ExtendedTerminationHook} that is called when container is instructed to terminate.
+         * <p>
+         * Identical to {@link #terminationHook()}, but receives information about the termination cause.
+         * <p>
+         * Both extendedTerminationHook and terminationHook run on termination, in that order.
+         *
+         * @return the {@link ExtendedTerminationHook} that is called when container is instructed to terminate.
+         */
+        public ExtendedTerminationHook extendedTerminationHook()
+        {
+            return extendedTerminationHook;
         }
 
         /**
@@ -2106,6 +2147,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
                 "\n    countedErrorHandler=" + countedErrorHandler +
                 "\n    clusteredService=" + clusteredService +
                 "\n    terminationHook=" + terminationHook +
+                "\n    extendedTerminationHook=" + extendedTerminationHook +
                 "\n    cycleThresholdNs=" + cycleThresholdNs +
                 "\n    dutyCyleTracker=" + dutyCycleTracker +
                 "\n    snapshotDurationThresholdNs=" + snapshotDurationThresholdNs +

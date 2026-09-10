@@ -640,6 +640,7 @@ public final class ClusterBackup implements AutoCloseable
         private AeronArchive.Context archiveContext;
         private AeronArchive.Context clusterArchiveContext;
         private Runnable terminationHook;
+        private ExtendedTerminationHook extendedTerminationHook;
         private ClusterBackupEventsListener eventsListener;
         private CredentialsSupplier credentialsSupplier;
         private String sourceType = Configuration.clusterBackupSourceType();
@@ -884,6 +885,11 @@ public final class ClusterBackup implements AutoCloseable
             if (null == terminationHook)
             {
                 terminationHook = () -> {};
+            }
+
+            if (null == extendedTerminationHook)
+            {
+                extendedTerminationHook = cause -> {};
             }
 
             if (null == credentialsSupplier)
@@ -1594,8 +1600,10 @@ public final class ClusterBackup implements AutoCloseable
 
         /**
          * Set the {@link Runnable} that is called when the {@link ClusterBackup} processes a termination action.
+         * <p>
+         * Both extendedTerminationHook and terminationHook run on termination, in that order.
          *
-         * @param terminationHook that can be used to terminate.
+         * @param terminationHook that is called when the {@link ClusterBackup} processes a termination action.
          * @return this for a fluent API.
          */
         public Context terminationHook(final Runnable terminationHook)
@@ -1606,12 +1614,47 @@ public final class ClusterBackup implements AutoCloseable
 
         /**
          * Get the {@link Runnable} that is called when the {@link ClusterBackup} processes a termination action.
+         * <p>
+         * Both extendedTerminationHook and terminationHook run on termination, in that order.
          *
-         * @return the {@link Runnable} that can be used to terminate.
+         * @return the {@link Runnable} that is called when the {@link ClusterBackup} processes a termination action.
          */
         public Runnable terminationHook()
         {
             return terminationHook;
+        }
+
+        /**
+         * Set the {@link ExtendedTerminationHook} that is called when the {@link ClusterBackup} processes
+         * a termination action.
+         * <p>
+         * Identical to {@link #terminationHook(Runnable)}, but receives information about the termination cause.
+         * <p>
+         * Both extendedTerminationHook and terminationHook run on termination, in that order.
+         *
+         * @param extendedTerminationHook that is called when the {@link ClusterBackup} processes a termination action.
+         * @return this for a fluent API.
+         */
+        public Context extendedTerminationHook(final ExtendedTerminationHook extendedTerminationHook)
+        {
+            this.extendedTerminationHook = extendedTerminationHook;
+            return this;
+        }
+
+        /**
+         * Get the {@link ExtendedTerminationHook} that is called when the {@link ClusterBackup} processes
+         * a termination action.
+         * <p>
+         * Identical to {@link #terminationHook(Runnable)}, but receives information about the termination cause.
+         * <p>
+         * Both extendedTerminationHook and terminationHook run on termination, in that order.
+         *
+         * @return the {@link ExtendedTerminationHook} that is called when the {@link ClusterBackup} processes
+         * a termination action.
+         */
+        public ExtendedTerminationHook extendedTerminationHook()
+        {
+            return extendedTerminationHook;
         }
 
         /**
@@ -2019,6 +2062,7 @@ public final class ClusterBackup implements AutoCloseable
                 "\n    archiveContext=" + archiveContext +
                 "\n    clusterArchiveContext=" + clusterArchiveContext +
                 "\n    terminationHook=" + terminationHook +
+                "\n    extendedTerminationHook=" + extendedTerminationHook +
                 "\n    eventsListener=" + eventsListener +
                 "\n}";
         }

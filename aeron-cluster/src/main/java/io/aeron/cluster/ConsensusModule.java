@@ -1677,6 +1677,7 @@ public final class ConsensusModule implements AutoCloseable
         private Counter electionCounter;
         private Counter leadershipTermId;
         private Runnable terminationHook;
+        private ExtendedTerminationHook extendedTerminationHook;
 
         private AeronArchive.Context archiveContext;
         private AuthenticatorSupplier authenticatorSupplier;
@@ -2108,6 +2109,11 @@ public final class ConsensusModule implements AutoCloseable
             if (null == terminationHook)
             {
                 terminationHook = () -> {};
+            }
+
+            if (null == extendedTerminationHook)
+            {
+                extendedTerminationHook = cause -> {};
             }
 
             if (null == authenticatorSupplier)
@@ -4089,8 +4095,10 @@ public final class ConsensusModule implements AutoCloseable
 
         /**
          * Set the {@link Runnable} that is called when the {@link ConsensusModule} processes a termination action.
+         * <p>
+         * Both extendedTerminationHook and terminationHook run on termination, in that order.
          *
-         * @param terminationHook that can be used to terminate a consensus module.
+         * @param terminationHook that is called when the {@link ConsensusModule} processes a termination action.
          * @return this for a fluent API.
          */
         public Context terminationHook(final Runnable terminationHook)
@@ -4101,12 +4109,48 @@ public final class ConsensusModule implements AutoCloseable
 
         /**
          * Get the {@link Runnable} that is called when the {@link ConsensusModule} processes a termination action.
+         * <p>
+         * Both extendedTerminationHook and terminationHook run on termination, in that order.
          *
-         * @return the {@link Runnable} that can be used to terminate a consensus module.
+         * @return the {@link Runnable} that is called when the {@link ConsensusModule} processes a termination action.
          */
         public Runnable terminationHook()
         {
             return terminationHook;
+        }
+
+        /**
+         * Set the {@link ExtendedTerminationHook} that is called when the {@link ConsensusModule} processes
+         * a termination action.
+         * <p>
+         * Identical to {@link #terminationHook(Runnable)}, but receives information about the termination cause.
+         * <p>
+         * Both extendedTerminationHook and terminationHook run on termination, in that order.
+         *
+         * @param extendedTerminationHook that is called when the {@link ConsensusModule} processes
+         *                                a termination action.
+         * @return this for a fluent API.
+         */
+        public Context extendedTerminationHook(final ExtendedTerminationHook extendedTerminationHook)
+        {
+            this.extendedTerminationHook = extendedTerminationHook;
+            return this;
+        }
+
+        /**
+         * Get the {@link ExtendedTerminationHook} that is called when the {@link ConsensusModule} processes
+         * a termination action.
+         * <p>
+         * Identical to {@link #terminationHook(Runnable)}, but receives information about the termination cause.
+         * <p>
+         * Both extendedTerminationHook and terminationHook run on termination, in that order.
+         *
+         * @return the {@link ExtendedTerminationHook} that is called when the {@link ConsensusModule} processes
+         * a termination action.
+         */
+        public ExtendedTerminationHook extendedTerminationHook()
+        {
+            return extendedTerminationHook;
         }
 
         /**
@@ -4653,6 +4697,7 @@ public final class ConsensusModule implements AutoCloseable
                 "\n    electionCounter=" + electionCounter +
                 "\n    leadershipTermId=" + leadershipTermId +
                 "\n    terminationHook=" + terminationHook +
+                "\n    extendedTerminationHook=" + extendedTerminationHook +
                 "\n    archiveContext=" + archiveContext +
                 "\n    authenticatorSupplier=" + authenticatorSupplier +
                 "\n    authorisationServiceSupplier=" + authorisationServiceSupplier +
