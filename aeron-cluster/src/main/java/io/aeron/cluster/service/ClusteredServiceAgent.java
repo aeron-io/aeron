@@ -273,7 +273,7 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
         }
         catch (final AgentTerminationException ex)
         {
-            runTerminationHook();
+            runTerminationHooks(ex);
             throw ex;
         }
 
@@ -1291,8 +1291,16 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
         }
     }
 
-    private void runTerminationHook()
+    private void runTerminationHooks(final AgentTerminationException cause)
     {
+        try
+        {
+            ctx.extendedTerminationHook().run(cause);
+        }
+        catch (final Exception ex)
+        {
+            ctx.countedErrorHandler().onError(ex);
+        }
         try
         {
             ctx.terminationHook().run();
