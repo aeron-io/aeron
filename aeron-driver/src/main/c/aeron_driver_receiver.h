@@ -26,6 +26,14 @@
 
 #define AERON_DRIVER_RECEIVER_PENDING_SETUP_TIMEOUT_NS (1000 * 1000 * 1000LL)
 
+#if !defined(HAVE_STRUCT_MMSGHDR)
+struct mmsghdr
+{
+    struct msghdr msg_hdr;
+    unsigned int msg_len;
+};
+#endif
+
 typedef struct aeron_driver_receiver_image_entry_stct
 {
     aeron_publication_image_t *image;
@@ -73,6 +81,7 @@ typedef struct aeron_driver_receiver_stct
     }
     pending_setups;
 
+    struct mmsghdr mmsghdr[AERON_DRIVER_RECEIVER_IO_VECTOR_LENGTH_MAX];
     aeron_udp_channel_data_paths_t data_paths;
 
     aeron_driver_context_t *context;
