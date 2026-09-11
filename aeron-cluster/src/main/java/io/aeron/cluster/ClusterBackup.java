@@ -1601,7 +1601,7 @@ public final class ClusterBackup implements AutoCloseable
         /**
          * Set the {@link Runnable} that is called when the {@link ClusterBackup} processes a termination action.
          * <p>
-         * Both extendedTerminationHook and terminationHook run on termination, in that order.
+         * Both {@link #extendedTerminationHook()} and {@link #terminationHook()} run on termination, in that order.
          *
          * @param terminationHook that is called when the {@link ClusterBackup} processes a termination action.
          * @return this for a fluent API.
@@ -1615,7 +1615,7 @@ public final class ClusterBackup implements AutoCloseable
         /**
          * Get the {@link Runnable} that is called when the {@link ClusterBackup} processes a termination action.
          * <p>
-         * Both extendedTerminationHook and terminationHook run on termination, in that order.
+         * Both {@link #extendedTerminationHook()} and {@link #terminationHook()} run on termination, in that order.
          *
          * @return the {@link Runnable} that is called when the {@link ClusterBackup} processes a termination action.
          */
@@ -1630,7 +1630,7 @@ public final class ClusterBackup implements AutoCloseable
          * <p>
          * Identical to {@link #terminationHook(Runnable)}, but receives information about the termination cause.
          * <p>
-         * Both extendedTerminationHook and terminationHook run on termination, in that order.
+         * Both {@link #extendedTerminationHook()} and {@link #terminationHook()} run on termination, in that order.
          *
          * @param extendedTerminationHook that is called when the {@link ClusterBackup} processes a termination action.
          * @return this for a fluent API.
@@ -1647,7 +1647,7 @@ public final class ClusterBackup implements AutoCloseable
          * <p>
          * Identical to {@link #terminationHook(Runnable)}, but receives information about the termination cause.
          * <p>
-         * Both extendedTerminationHook and terminationHook run on termination, in that order.
+         * Both {@link #extendedTerminationHook()} and {@link #terminationHook()} run on termination, in that order.
          *
          * @return the {@link ExtendedTerminationHook} that is called when the {@link ClusterBackup} processes
          * a termination action.
