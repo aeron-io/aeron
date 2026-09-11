@@ -47,6 +47,7 @@ jobs:
           echo "TEMP=$env:RUNNER_TEMP" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Disable CPU hogs (Windows)
         if: runner.os == 'Windows'
+        continue-on-error: true
         run: |
           Set-MpPreference -DisableRealtimeMonitoring $true -Force
           Add-MpPreference -ExclusionPath "C:\" -Force
