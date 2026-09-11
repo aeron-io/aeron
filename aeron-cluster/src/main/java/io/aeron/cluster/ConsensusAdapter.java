@@ -205,12 +205,7 @@ class ConsensusAdapter implements FragmentHandler, AutoCloseable
                 consensusModuleAgent.onCommitPosition(
                     commitPositionDecoder.leadershipTermId(),
                     commitPositionDecoder.logPosition(),
-                    commitPositionDecoder.leaderMemberId(),
-                    commitPositionDecoder.confirmationCounter());
-                break;
-
-            case LeadershipConfirmAckDecoder.TEMPLATE_ID:
-                // A 32-bit echo cannot establish freshness for the full-width confirmation protocol.
+                    commitPositionDecoder.leaderMemberId());
                 break;
 
             case ConsensusConnectionDecoder.TEMPLATE_ID:

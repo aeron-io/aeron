@@ -138,8 +138,7 @@ class CompactConsensusTest
         assertEquals(24, CompactCommitPositionEncoder.BLOCK_LENGTH);
         assertEquals(20, CompactLeadershipConfirmAckEncoder.BLOCK_LENGTH);
         assertEquals(8, CompactLeadershipConfirmAckEncoder.confirmationCounterEncodingOffset());
-        assertEquals(24, CommitPositionEncoder.BLOCK_LENGTH);
-        assertEquals(16, LeadershipConfirmAckEncoder.BLOCK_LENGTH);
+        assertEquals(20, CommitPositionEncoder.BLOCK_LENGTH);
         final long next = pair.leader.agent.triggerQuorumConfirmation();
         assertFalse(pair.leader.agent.isLeadershipConfirmedSince(next));
     }
@@ -173,12 +172,6 @@ class CompactConsensusTest
         pair.leader.agent.onCompactLeadershipConfirmAck(41, 1, token + 1, pair.toLeader.image);
         pair.leader.agent.onCompactLeadershipConfirmAck(42 + (1L << 32), 1, token + 1, pair.toLeader.image);
         pair.leader.agent.onCompactLeadershipConfirmAck(42, 1, token + 2, pair.toLeader.image);
-        final UnsafeBuffer legacyAck = new UnsafeBuffer(new byte[64]);
-        new LeadershipConfirmAckEncoder().wrapAndApplyHeader(legacyAck, 0, new MessageHeaderEncoder())
-            .leadershipTermId(42).followerMemberId(1).confirmationCounter((int)token + 1);
-        pair.toLeader.adapter.onFragment(legacyAck, 0,
-            MessageHeaderEncoder.ENCODED_LENGTH + LeadershipConfirmAckEncoder.BLOCK_LENGTH,
-            new Header(0, 0, pair.toLeader.image));
         assertFalse(pair.leader.agent.isLeadershipConfirmedSince(token));
         when(pair.toLeader.image.isClosed()).thenReturn(true);
         pair.leader.agent.onCompactLeadershipConfirmAck(42, 1, token + 1, pair.toLeader.image);
@@ -217,7 +210,7 @@ class CompactConsensusTest
     }
 
     @Test
-    void shouldKeepReplicationButNotCreditLegacyPeers()
+    void shouldKeepReplicationButNotCreditPeersWithoutCompactSupport()
     {
         final Pair pair = new Pair();
         pair.leader.agent.onConsensusPeerImage(1, mock(Image.class));

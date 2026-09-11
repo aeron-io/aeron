@@ -137,7 +137,6 @@ final class ConsensusModuleAgent
     private long terminationLeadershipTermId = NULL_VALUE;
     private long notifiedCommitPosition = 0;
     private long lastAppendPosition = NULL_POSITION;
-    private final LegacyConfirmation legacyConfirmation = new LegacyConfirmation();
     private final CompactConfirmation compactConfirmation = new CompactConfirmation();
     private final IdentityHashMap<Image, ClusterMember> consensusImageMembers = new IdentityHashMap<>();
     private boolean leaderAnnouncementRequested;
@@ -702,7 +701,7 @@ final class ConsensusModuleAgent
             if (null != sender && clusterMemberByIdMap.get(sender.id()) == sender)
             {
                 // Retain election and newer-term handling from the ordinary commit-position path.
-                onCommitPosition(term, position, sender.id(), LegacyConfirmation.NULL_COUNTER);
+                onCommitPosition(term, position, sender.id());
                 if (null == election && Cluster.Role.FOLLOWER == role && term == leadershipTermId &&
                     sender == leaderMember)
                 {
@@ -1233,8 +1232,7 @@ final class ConsensusModuleAgent
             .timeOfLastAppendPositionNs(clusterClock.timeNanos());
     }
 
-    void onCommitPosition(
-        final long leadershipTermId, final long logPosition, final int leaderMemberId, final int confirmationCounter)
+    void onCommitPosition(final long leadershipTermId, final long logPosition, final int leaderMemberId)
     {
         logOnCommitPosition(memberId, leadershipTermId, logPosition, leaderMemberId);
 
@@ -1254,7 +1252,6 @@ final class ConsensusModuleAgent
             {
                 notifiedCommitPosition = max(notifiedCommitPosition, logPosition);
                 timeOfLastLogUpdateNs = nowNs;
-                legacyConfirmation.onCommitPosition(confirmationCounter);
             }
         }
         else if (leadershipTermId > this.leadershipTermId)
@@ -2036,7 +2033,6 @@ final class ConsensusModuleAgent
     {
         leadershipTermId(election.leadershipTermId());
         // Neither a requested round nor a pending follower echo may carry over into the new term.
-        legacyConfirmation.onElectionComplete();
         compactConfirmation.onElectionComplete();
         leaderAnnouncementRequested = false;
 
@@ -2889,7 +2885,7 @@ final class ConsensusModuleAgent
     {
         final ExclusivePublication publication = leaderMember.publication();
         announceConsensusConnection(leaderMember);
-        final boolean sendConfirmAckFirst = compactConfirmation.priority() || legacyConfirmation.hasAckPriority();
+        final boolean sendConfirmAckFirst = compactConfirmation.priority();
         int workCount = sendConfirmAckFirst ? sendPendingConfirmationAck(publication) : 0;
 
         final long recordedPosition = null != appendPosition ? appendPosition.get() : logRecordingStopPosition;
@@ -2913,17 +2909,6 @@ final class ConsensusModuleAgent
                     publication, leadershipTermId, memberId, compactConfirmation.followerRound());
             compactConfirmation.onAck(sent);
             return sent ? 1 : 0;
-        }
-        if (legacyConfirmation.isAckPending())
-        {
-            if (consensusPublisher.leadershipConfirmAck(
-                publication, leadershipTermId, memberId, legacyConfirmation.followerRound()))
-            {
-                legacyConfirmation.onAckSent();
-                return 1;
-            }
-
-            legacyConfirmation.onAckBackPressured();
         }
 
         return 0;
@@ -3136,8 +3121,7 @@ final class ConsensusModuleAgent
                 else
                 {
                     consensusPublisher.commitPosition(
-                        member.publication(), leadershipTermId, commitPosition, memberId,
-                        LegacyConfirmation.NULL_COUNTER);
+                        member.publication(), leadershipTermId, commitPosition, memberId);
                 }
             }
         }

@@ -17,13 +17,12 @@ package io.aeron.cluster;
 
 import io.aeron.Subscription;
 import io.aeron.cluster.codecs.CommitPositionEncoder;
-import io.aeron.cluster.codecs.LeadershipConfirmAckEncoder;
 import io.aeron.cluster.codecs.MessageHeaderEncoder;
 import org.agrona.ExpandableArrayBuffer;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
@@ -34,41 +33,18 @@ class ConsensusAdapterTest
     private final ExpandableArrayBuffer buffer = new ExpandableArrayBuffer();
 
     @ParameterizedTest
-    @ValueSource(ints = { 16, 17 })
-    void shouldDecodeCommitPositionWithoutConfirmationFromOlderSchemas(final int version)
+    @ValueSource(ints = { 16, 17, 18 })
+    void shouldDecodeOrdinaryCommitPositionAcrossSchemaVersions(final int version)
     {
         final MessageHeaderEncoder header = new MessageHeaderEncoder();
-        new CommitPositionEncoder().wrapAndApplyHeader(buffer, 0, header)
-            .leadershipTermId(42).logPosition(100).leaderMemberId(1).confirmationCounter(7);
-        // Older messages end before the new field. The bytes beyond the message must not become a counter.
-        header.version(version).blockLength(20);
-
-        adapter.onFragment(buffer, 0, MessageHeaderEncoder.ENCODED_LENGTH + 20, null);
-
-        verify(agent).onCommitPosition(42, 100, 1, LegacyConfirmation.NULL_COUNTER);
-    }
-
-    @Test
-    void shouldDecodeCommitPositionWithConfirmationFromTheCurrentSchema()
-    {
         final CommitPositionEncoder encoder = new CommitPositionEncoder();
-        encoder.wrapAndApplyHeader(buffer, 0, new MessageHeaderEncoder())
-            .leadershipTermId(42).logPosition(100).leaderMemberId(1).confirmationCounter(7);
+        encoder.wrapAndApplyHeader(buffer, 0, header)
+            .leadershipTermId(42).logPosition(100).leaderMemberId(1);
+        header.version(version);
+        assertEquals(20, encoder.encodedLength());
 
         adapter.onFragment(buffer, 0, MessageHeaderEncoder.ENCODED_LENGTH + encoder.encodedLength(), null);
 
-        verify(agent).onCommitPosition(42, 100, 1, 7);
-    }
-
-    @Test
-    void shouldIgnoreLegacyLeadershipConfirmationAcknowledgements()
-    {
-        final LeadershipConfirmAckEncoder encoder = new LeadershipConfirmAckEncoder();
-        encoder.wrapAndApplyHeader(buffer, 0, new MessageHeaderEncoder())
-            .leadershipTermId(42).followerMemberId(2).confirmationCounter(7);
-
-        adapter.onFragment(buffer, 0, MessageHeaderEncoder.ENCODED_LENGTH + encoder.encodedLength(), null);
-
-        org.mockito.Mockito.verifyNoInteractions(agent);
+        verify(agent).onCommitPosition(42, 100, 1);
     }
 }
