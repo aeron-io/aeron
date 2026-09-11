@@ -45,7 +45,7 @@ class ConsensusAdapterTest
 
         adapter.onFragment(buffer, 0, MessageHeaderEncoder.ENCODED_LENGTH + 20, null);
 
-        verify(agent).onCommitPosition(42, 100, 1, ConsensusModuleAgent.NULL_CONFIRMATION_COUNTER);
+        verify(agent).onCommitPosition(42, 100, 1, LegacyConfirmation.NULL_COUNTER);
     }
 
     @Test
@@ -61,7 +61,7 @@ class ConsensusAdapterTest
     }
 
     @Test
-    void shouldDecodeLeadershipConfirmationAcknowledgements()
+    void shouldIgnoreLegacyLeadershipConfirmationAcknowledgements()
     {
         final LeadershipConfirmAckEncoder encoder = new LeadershipConfirmAckEncoder();
         encoder.wrapAndApplyHeader(buffer, 0, new MessageHeaderEncoder())
@@ -69,6 +69,6 @@ class ConsensusAdapterTest
 
         adapter.onFragment(buffer, 0, MessageHeaderEncoder.ENCODED_LENGTH + encoder.encodedLength(), null);
 
-        verify(agent).onLeadershipConfirmAck(42, 2, 7);
+        org.mockito.Mockito.verifyNoInteractions(agent);
     }
 }

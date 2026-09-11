@@ -2,7 +2,7 @@
 <sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
                    package="io.aeron.cluster.codecs"
                    id="111"
-                   version="18"
+                   version="19"
                    semanticVersion="5.4"
                    description="Message Codecs for communicating with, and within, an Aeron Cluster."
                    byteOrder="littleEndian">
@@ -498,6 +498,7 @@
         <field name="leadershipTermId"         id="1" type="int64"/>
         <field name="logPosition"              id="2" type="int64"/>
         <field name="followerMemberId"         id="3" type="int32"/>
+        <!-- Bit 0: catchup; bit 1: request a ConsensusConnection announcement for Image recovery. -->
         <field name="flags"                    id="4" type="uint8" sinceVersion="8"/>
     </sbe:message>
 
@@ -538,6 +539,26 @@
         <field name="leadershipTermId"         id="1" type="int64"/>
         <field name="followerMemberId"         id="2" type="int32"/>
         <field name="confirmationCounter"      id="3" type="int32"/>
+    </sbe:message>
+
+    <!-- Full-width confirmation templates. Existing templates retain their exact layout. -->
+    <sbe:message name="ConsensusConnection" id="59" sinceVersion="19"
+                 description="Bind this publication image to a configured member and advertise compact support.">
+        <field name="memberId" id="1" type="int32"/>
+    </sbe:message>
+
+    <sbe:message name="CompactCommitPosition" id="60" sinceVersion="19"
+                 description="Commit and confirmation from the leader bound to this image; one 64-byte frame.">
+        <field name="leadershipTermId" id="1" type="int64"/>
+        <field name="logPosition" id="2" type="int64"/>
+        <field name="confirmationCounter" id="3" type="int64"/>
+    </sbe:message>
+
+    <sbe:message name="CompactLeadershipConfirmAck" id="61" sinceVersion="19"
+                 description="Full-width echo in the full leadership term; one 64-byte aligned frame.">
+        <field name="leadershipTermId" id="1" type="int64"/>
+        <field name="confirmationCounter" id="2" type="int64"/>
+        <field name="followerMemberId" id="3" type="int32"/>
     </sbe:message>
 
     <sbe:message name="AddPassiveMember"

@@ -17,6 +17,7 @@ package io.aeron.cluster;
 
 import io.aeron.Aeron;
 import io.aeron.FragmentAssembler;
+import io.aeron.Image;
 import io.aeron.Subscription;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.cluster.client.ClusterException;
@@ -34,6 +35,12 @@ class ConsensusAdapter implements FragmentHandler, AutoCloseable
 {
     static final int FRAGMENT_LIMIT = 10;
 
+    private final ConsensusConnectionDecoder consensusConnectionDecoder =
+        new ConsensusConnectionDecoder();
+    private final CompactCommitPositionDecoder compactCommitPositionDecoder =
+        new CompactCommitPositionDecoder();
+    private final CompactLeadershipConfirmAckDecoder compactLeadershipConfirmAckDecoder =
+        new CompactLeadershipConfirmAckDecoder();
     private final MessageHeaderDecoder messageHeaderDecoder = new MessageHeaderDecoder();
     private final CanvassPositionDecoder canvassPositionDecoder = new CanvassPositionDecoder();
     private final RequestVoteDecoder requestVoteDecoder = new RequestVoteDecoder();
@@ -41,7 +48,6 @@ class ConsensusAdapter implements FragmentHandler, AutoCloseable
     private final NewLeadershipTermDecoder newLeadershipTermDecoder = new NewLeadershipTermDecoder();
     private final AppendPositionDecoder appendPositionDecoder = new AppendPositionDecoder();
     private final CommitPositionDecoder commitPositionDecoder = new CommitPositionDecoder();
-    private final LeadershipConfirmAckDecoder leadershipConfirmAckDecoder = new LeadershipConfirmAckDecoder();
     private final CatchupPositionDecoder catchupPositionDecoder = new CatchupPositionDecoder();
     private final StopCatchupDecoder stopCatchupDecoder = new StopCatchupDecoder();
 
@@ -181,6 +187,11 @@ class ConsensusAdapter implements FragmentHandler, AutoCloseable
                     appendPositionDecoder.logPosition(),
                     appendPositionDecoder.followerMemberId(),
                     flags);
+                if (null != header && header.context() instanceof Image)
+                {
+                    consensusModuleAgent.onConsensusPeerImage(
+                        appendPositionDecoder.followerMemberId(), (Image)header.context());
+                }
 
                 break;
 
@@ -199,16 +210,38 @@ class ConsensusAdapter implements FragmentHandler, AutoCloseable
                 break;
 
             case LeadershipConfirmAckDecoder.TEMPLATE_ID:
-                leadershipConfirmAckDecoder.wrap(
-                    buffer,
-                    offset + MessageHeaderDecoder.ENCODED_LENGTH,
-                    messageHeaderDecoder.blockLength(),
-                    messageHeaderDecoder.version());
+                // A 32-bit echo cannot establish freshness for the full-width confirmation protocol.
+                break;
 
-                consensusModuleAgent.onLeadershipConfirmAck(
-                    leadershipConfirmAckDecoder.leadershipTermId(),
-                    leadershipConfirmAckDecoder.followerMemberId(),
-                    leadershipConfirmAckDecoder.confirmationCounter());
+            case ConsensusConnectionDecoder.TEMPLATE_ID:
+                consensusConnectionDecoder.wrap(
+                    buffer, offset + MessageHeaderDecoder.ENCODED_LENGTH,
+                    messageHeaderDecoder.blockLength(), messageHeaderDecoder.version());
+                consensusModuleAgent.onConsensusConnection(
+                    consensusConnectionDecoder.memberId(),
+                    null != header && header.context() instanceof Image ? (Image)header.context() : null);
+                break;
+
+            case CompactCommitPositionDecoder.TEMPLATE_ID:
+                compactCommitPositionDecoder.wrap(
+                    buffer, offset + MessageHeaderDecoder.ENCODED_LENGTH,
+                    messageHeaderDecoder.blockLength(), messageHeaderDecoder.version());
+                consensusModuleAgent.onCompactCommitPosition(
+                    compactCommitPositionDecoder.leadershipTermId(),
+                    compactCommitPositionDecoder.logPosition(),
+                    compactCommitPositionDecoder.confirmationCounter(),
+                    null != header && header.context() instanceof Image ? (Image)header.context() : null);
+                break;
+
+            case CompactLeadershipConfirmAckDecoder.TEMPLATE_ID:
+                compactLeadershipConfirmAckDecoder.wrap(
+                    buffer, offset + MessageHeaderDecoder.ENCODED_LENGTH,
+                    messageHeaderDecoder.blockLength(), messageHeaderDecoder.version());
+                consensusModuleAgent.onCompactLeadershipConfirmAck(
+                    compactLeadershipConfirmAckDecoder.leadershipTermId(),
+                    compactLeadershipConfirmAckDecoder.followerMemberId(),
+                    compactLeadershipConfirmAckDecoder.confirmationCounter(),
+                    null != header && header.context() instanceof Image ? (Image)header.context() : null);
                 break;
 
             case CatchupPositionDecoder.TEMPLATE_ID:

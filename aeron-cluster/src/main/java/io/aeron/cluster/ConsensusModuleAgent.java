@@ -74,6 +74,7 @@ import org.agrona.concurrent.status.CountersReader;
 
 import java.util.ArrayDeque;
 import java.util.Arrays;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -124,9 +125,7 @@ final class ConsensusModuleAgent
     static final long SLOW_TICK_INTERVAL_NS = MILLISECONDS.toNanos(10);
     static final short APPEND_POSITION_FLAG_NONE = 0;
     static final short APPEND_POSITION_FLAG_CATCHUP = 1;
-    // Reserved "absent" sentinel for the ReadIndex confirmation counter (matches the SBE int32 nullValue). A
-    // leader never mints this value, so it unambiguously marks a pre-v18 peer or an un-received counter.
-    static final int NULL_CONFIRMATION_COUNTER = Integer.MIN_VALUE;
+    static final short APPEND_POSITION_FLAG_REQUEST_ANNOUNCEMENT = 2;
 
     private final long leaderHeartbeatIntervalNs;
     private final long leaderHeartbeatTimeoutNs;
@@ -138,16 +137,10 @@ final class ConsensusModuleAgent
     private long terminationLeadershipTermId = NULL_VALUE;
     private long notifiedCommitPosition = 0;
     private long lastAppendPosition = NULL_POSITION;
-    // Leader: monotonic per-leadership round counter for ReadIndex-style leadership confirmation. Advances only
-    // when a confirmation round is broadcast (see triggerQuorumConfirmation), never on a plain commit-advance
-    // broadcast, so a follower acks at most once per round. Compared wrap-safe.
-    private int confirmationCounter = NULL_CONFIRMATION_COUNTER;
-    // Leader: a linearizable-read caller requested a confirmation round; coalesced to <=1 broadcast per duty cycle.
-    private boolean confirmationRoundPending = false;
-    // Follower: highest confirmation counter received from the current leader, echoed back once (per advance) via
-    // LeadershipConfirmAck so the leader confirms leadership after a captured token without receive-time races.
-    private int lastReceivedConfirmationCounter = NULL_CONFIRMATION_COUNTER;
-    private boolean confirmAckPending = false;
+    private final LegacyConfirmation legacyConfirmation = new LegacyConfirmation();
+    private final CompactConfirmation compactConfirmation = new CompactConfirmation();
+    private final IdentityHashMap<Image, ClusterMember> consensusImageMembers = new IdentityHashMap<>();
+    private boolean leaderAnnouncementRequested;
     private long lastQuorumBacktrackCommitPosition = NULL_POSITION;
     private long timeOfLastLogUpdateNs = 0;
     private long timeOfLastAppendPositionUpdateNs = 0;
@@ -648,20 +641,12 @@ final class ConsensusModuleAgent
     @Override
     public long triggerQuorumConfirmation()
     {
-        // Not leader, or still in election: no confirmation is possible yet (confirmationCounter is not a valid
-        // token until electionComplete resets it and publishCommitPosition stops sending the absent sentinel).
         if (Cluster.Role.LEADER != role || null != election)
         {
             return NULL_VALUE;
         }
 
-        // Request a coalesced confirmation round. The duty cycle broadcasts at most one CommitPosition per cycle
-        // carrying an advanced counter, which followers echo via LeadershipConfirmAck. A quorum echoing strictly
-        // beyond the returned token proves leadership was recognised after this call, giving a ~1 RTT
-        // linearizable read without a log barrier.
-        confirmationRoundPending = true;
-
-        return packConfirmationToken(leadershipTermId, confirmationCounter);
+        return compactConfirmation.request();
     }
 
     /**
@@ -670,120 +655,99 @@ final class ConsensusModuleAgent
     @Override
     public boolean isLeadershipConfirmedSince(final long confirmationToken)
     {
-        // Not the confirmed leader, in an election, or the not-leader sentinel: cannot confirm.
-        if (Cluster.Role.LEADER != role || null != election || NULL_VALUE == confirmationToken)
+        return Cluster.Role.LEADER == role && null == election && compactConfirmation.valid(confirmationToken) &&
+            ClusterMember.hasQuorumConfirmedSince(activeMembers, leadershipTermId, memberId, confirmationToken);
+    }
+
+    void onConsensusConnection(final int peerId, final Image image)
+    {
+        if (null != image && !image.isClosed())
         {
-            return false;
-        }
-
-        // A token minted in a different term must never confirm -- this guards against reusing a token captured
-        // before a deposition against a later re-election of this node.
-        if (confirmationTokenTermId(confirmationToken) != termIdBits(leadershipTermId))
-        {
-            return false;
-        }
-
-        final int tokenCounter = confirmationTokenCounter(confirmationToken);
-        if (NULL_CONFIRMATION_COUNTER == tokenCounter)
-        {
-            return false;
-        }
-
-        return ClusterMember.hasQuorumConfirmedSince(activeMembers, leadershipTermId, memberId, tokenCounter);
-    }
-
-    /**
-     * Pack a leadership confirmation token from the leadership term (high 32 bits) and the confirmation counter
-     * (low 32 bits), so a token can only ever confirm within the term it was minted in.
-     *
-     * @param leadershipTermId    the term the token is scoped to.
-     * @param confirmationCounter the leader's current round counter.
-     * @return the packed token.
-     */
-    static long packConfirmationToken(final long leadershipTermId, final int confirmationCounter)
-    {
-        return (leadershipTermId << 32) | (confirmationCounter & 0xFFFF_FFFFL);
-    }
-
-    /**
-     * The leadership term bits a token was minted in. Compare against {@link #termIdBits(long)} of the current
-     * term; only the low 32 bits of the term are carried, so terms 2^32 apart alias (unreachable in practice).
-     *
-     * @param confirmationToken to extract from.
-     * @return the term bits, extracted unsigned.
-     */
-    static long confirmationTokenTermId(final long confirmationToken)
-    {
-        return confirmationToken >>> 32;
-    }
-
-    /**
-     * The confirmation counter a token was minted at.
-     *
-     * @param confirmationToken to extract from.
-     * @return the counter.
-     */
-    static int confirmationTokenCounter(final long confirmationToken)
-    {
-        return (int)confirmationToken;
-    }
-
-    /**
-     * The bits of a leadership term id that a confirmation token carries.
-     *
-     * @param leadershipTermId to reduce.
-     * @return the low 32 bits, as an unsigned value comparable with {@link #confirmationTokenTermId(long)}.
-     */
-    static long termIdBits(final long leadershipTermId)
-    {
-        return leadershipTermId & 0xFFFF_FFFFL;
-    }
-
-    void onLeadershipConfirmAck(final long leadershipTermId, final int followerMemberId, final int confirmationCounter)
-    {
-        if (null == election && Cluster.Role.LEADER == role && leadershipTermId == this.leadershipTermId &&
-            NULL_CONFIRMATION_COUNTER != confirmationCounter)
-        {
-            final ClusterMember follower = clusterMemberByIdMap.get(followerMemberId);
-            if (null != follower)
+            final ClusterMember peer = clusterMemberByIdMap.get(peerId);
+            final ClusterMember previous = consensusImageMembers.get(image);
+            if (null != peer && peerId != memberId && (null == previous || previous == peer))
             {
-                // Record only a strictly newer counter within the same term, so an acknowledgement seen out of
-                // order cannot walk a member's recorded counter backwards and un-confirm an already-confirmed
-                // token. A counter for a term the member has not echoed in yet always establishes that term.
-                if (follower.confirmationCounterTermId() != leadershipTermId ||
-                    isNewerConfirmationCounter(confirmationCounter, follower.confirmationCounter()))
+                // Binding has the existing protocol's non-Byzantine trust model, not authentication.
+                consensusImageMembers.keySet().removeIf(Image::isClosed);
+                consensusImageMembers.put(image, peer);
+                peer.compactConfirmation.onImage(image, true);
+                if (Cluster.Role.FOLLOWER == role && peer == leaderMember)
                 {
-                    follower.confirmationCounter(confirmationCounter, leadershipTermId);
+                    leaderAnnouncementRequested = false;
+                    // Reply even on an unchanged Image: our outgoing Image may have been recreated at the leader.
+                    // Only followers reply unconditionally, so announcements cannot ping-pong indefinitely.
+                    peer.compactConfirmation.requestAnnouncement();
                 }
             }
         }
     }
 
-    /**
-     * Is {@code counter} a strictly later confirmation round than {@code previous}? Compared wrap-safe, so the
-     * counter may run the full width of an int. {@link #NULL_CONFIRMATION_COUNTER} means "none seen yet", and
-     * cannot be compared arithmetically (it is {@link Integer#MIN_VALUE}), so anything is newer than it.
-     *
-     * @param counter  newly observed.
-     * @param previous highest previously observed, or {@link #NULL_CONFIRMATION_COUNTER} if none.
-     * @return {@code true} if {@code counter} is a later round.
-     */
-    private static boolean isNewerConfirmationCounter(final int counter, final int previous)
+    void onConsensusPeerImage(final int peerId, final Image image)
     {
-        if (NULL_CONFIRMATION_COUNTER == counter)
+        if (null != image && !image.isClosed())
         {
-            return false;
+            final ClusterMember peer = clusterMemberByIdMap.get(peerId);
+            if (null != peer && peerId != memberId)
+            {
+                peer.compactConfirmation.onImage(image, consensusImageMembers.get(image) == peer);
+            }
         }
-
-        return NULL_CONFIRMATION_COUNTER == previous || 0 < (counter - previous);
     }
 
-    private int nextConfirmationCounter(final int counter)
+    void onCompactCommitPosition(final long term, final long position, final long round, final Image image)
     {
-        final int next = counter + 1;
-        // Skip the reserved sentinels so a live token is never confused with "absent" (NULL_CONFIRMATION_COUNTER)
-        // or the not-leader signal (NULL_VALUE) returned by triggerQuorumConfirmation.
-        return (NULL_CONFIRMATION_COUNTER == next || NULL_VALUE == next) ? next + 1 : next;
+        if (null != image && !image.isClosed() && round >= 0)
+        {
+            final ClusterMember sender = consensusImageMembers.get(image);
+            if (null != sender && clusterMemberByIdMap.get(sender.id()) == sender)
+            {
+                // Retain election and newer-term handling from the ordinary commit-position path.
+                onCommitPosition(term, position, sender.id(), LegacyConfirmation.NULL_COUNTER);
+                if (null == election && Cluster.Role.FOLLOWER == role && term == leadershipTermId &&
+                    sender == leaderMember)
+                {
+                    compactConfirmation.onCommit(round);
+                }
+            }
+            else if (null == sender && null == election && Cluster.Role.FOLLOWER == role &&
+                term == leadershipTermId && null != leaderMember)
+            {
+                // Request identity over the existing append-position channel; never infer or bind an unknown sender.
+                if (!leaderAnnouncementRequested)
+                {
+                    leaderAnnouncementRequested = true;
+                    timeOfLastAppendPositionSendNs = clusterClock.timeNanos() - leaderHeartbeatIntervalNs;
+                }
+            }
+        }
+    }
+
+    void onCompactLeadershipConfirmAck(
+        final long term, final int peerId, final long round, final Image image)
+    {
+        if (null != image && !image.isClosed() && null == election &&
+            Cluster.Role.LEADER == role && term == leadershipTermId && compactConfirmation.valid(round))
+        {
+            final ClusterMember peer = clusterMemberByIdMap.get(peerId);
+            if (null != peer && consensusImageMembers.get(image) == peer)
+            {
+                peer.compactConfirmation.onAck(term, round);
+            }
+        }
+    }
+
+    private boolean announceConsensusConnection(final ClusterMember peer)
+    {
+        final ExclusivePublication publication = peer.publication();
+        if (peer.compactConfirmation.needsAnnouncement(publication))
+        {
+            if (!consensusPublisher.consensusConnection(publication, memberId))
+            {
+                return false;
+            }
+            peer.compactConfirmation.announced(publication);
+        }
+        return true;
     }
 
     public void onLoadBeginSnapshot(
@@ -1250,6 +1214,13 @@ final class ConsensusModuleAgent
             {
                 updateMemberLogPosition(follower, leadershipTermId, logPosition);
                 trackCatchupCompletion(follower, leadershipTermId, flags);
+                if (leadershipTermId == this.leadershipTermId && followerMemberId != memberId &&
+                    0 != (APPEND_POSITION_FLAG_REQUEST_ANNOUNCEMENT & flags))
+                {
+                    follower.compactConfirmation.requestAnnouncement();
+                    // A recovery request must not wait for log progress or the next scheduled heartbeat.
+                    timeOfLastLogUpdateNs = clusterClock.timeNanos() - leaderHeartbeatIntervalNs;
+                }
             }
         }
     }
@@ -1283,15 +1254,7 @@ final class ConsensusModuleAgent
             {
                 notifiedCommitPosition = max(notifiedCommitPosition, logPosition);
                 timeOfLastLogUpdateNs = nowNs;
-                // Echo an advanced confirmation counter once, so a leader-triggered round confirms leadership in
-                // ~1 RTT (see updateFollowerPosition -> LeadershipConfirmAck). An unchanged counter sends nothing,
-                // so plain commit traffic is not amplified. Only a strictly newer counter is echoed (wrap-safe), so
-                // a counter seen out of order can never walk this back and re-echo an older round.
-                if (isNewerConfirmationCounter(confirmationCounter, lastReceivedConfirmationCounter))
-                {
-                    lastReceivedConfirmationCounter = confirmationCounter;
-                    confirmAckPending = true;
-                }
+                legacyConfirmation.onCommitPosition(confirmationCounter);
             }
         }
         else if (leadershipTermId > this.leadershipTermId)
@@ -2072,6 +2035,10 @@ final class ConsensusModuleAgent
     void electionComplete(final long nowNs)
     {
         leadershipTermId(election.leadershipTermId());
+        // Neither a requested round nor a pending follower echo may carry over into the new term.
+        legacyConfirmation.onElectionComplete();
+        compactConfirmation.onElectionComplete();
+        leaderAnnouncementRequested = false;
 
         if (Cluster.Role.LEADER == role)
         {
@@ -2079,9 +2046,6 @@ final class ConsensusModuleAgent
             timerService.currentTime(clusterTimeUnit.convert(nowNs, NANOSECONDS));
             ClusterControl.ToggleState.activate(controlToggle);
             sessionManager.prepareSessionsForNewTerm(election.isLeaderStartup());
-            // Fresh confirmation epoch for this leadership; per-member echoes are gated on the current term.
-            confirmationCounter = 0;
-            confirmationRoundPending = false;
         }
         else
         {
@@ -2089,9 +2053,6 @@ final class ConsensusModuleAgent
             timeOfLastAppendPositionUpdateNs = nowNs;
             timeOfLastAppendPositionSendNs = nowNs;
             localLogChannel = null;
-            // Drop any pending confirmation echo from a prior term so it cannot be sent against the new leader.
-            lastReceivedConfirmationCounter = NULL_CONFIRMATION_COUNTER;
-            confirmAckPending = false;
         }
         NodeControl.ToggleState.activate(nodeControlToggle);
 
@@ -2924,23 +2885,48 @@ final class ConsensusModuleAgent
         return true;
     }
 
-    private int updateFollowerPosition(final long nowNs)
+    int updateFollowerPosition(final long nowNs)
     {
-        final long recordedPosition = null != appendPosition ? appendPosition.get() : logRecordingStopPosition;
-        int workCount = updateFollowerPosition(
-            leaderMember.publication(), nowNs, leadershipTermId, recordedPosition, APPEND_POSITION_FLAG_NONE);
+        final ExclusivePublication publication = leaderMember.publication();
+        announceConsensusConnection(leaderMember);
+        final boolean sendConfirmAckFirst = compactConfirmation.priority() || legacyConfirmation.hasAckPriority();
+        int workCount = sendConfirmAckFirst ? sendPendingConfirmationAck(publication) : 0;
 
-        // Echo the leader's confirmation counter (ReadIndex round). Sent only when a new counter arrived, so this
-        // adds no traffic outside active linearizable-read confirmation.
-        if (confirmAckPending &&
-            consensusPublisher.leadershipConfirmAck(
-                leaderMember.publication(), leadershipTermId, memberId, lastReceivedConfirmationCounter))
+        final long recordedPosition = null != appendPosition ? appendPosition.get() : logRecordingStopPosition;
+        workCount += updateFollowerPosition(
+            publication, nowNs, leadershipTermId, recordedPosition, APPEND_POSITION_FLAG_NONE);
+
+        if (!sendConfirmAckFirst)
         {
-            confirmAckPending = false;
-            workCount += 1;
+            workCount += sendPendingConfirmationAck(publication);
         }
 
         return workCount;
+    }
+
+    private int sendPendingConfirmationAck(final ExclusivePublication publication)
+    {
+        if (compactConfirmation.pending())
+        {
+            final boolean sent = announceConsensusConnection(leaderMember) &&
+                consensusPublisher.compactLeadershipConfirmAck(
+                    publication, leadershipTermId, memberId, compactConfirmation.followerRound());
+            compactConfirmation.onAck(sent);
+            return sent ? 1 : 0;
+        }
+        if (legacyConfirmation.isAckPending())
+        {
+            if (consensusPublisher.leadershipConfirmAck(
+                publication, leadershipTermId, memberId, legacyConfirmation.followerRound()))
+            {
+                legacyConfirmation.onAckSent();
+                return 1;
+            }
+
+            legacyConfirmation.onAckBackPressured();
+        }
+
+        return 0;
     }
 
     private int updateFollowerPosition(
@@ -2954,7 +2940,12 @@ final class ConsensusModuleAgent
         if (position > lastAppendPosition ||
             nowNs >= (timeOfLastAppendPositionSendNs + leaderHeartbeatIntervalNs))
         {
-            if (consensusPublisher.appendPosition(publication, leadershipTermId, position, memberId, flags))
+            // Check bindings only when sending an ordinary append, not on every idle follower poll.
+            // Catchup supplies its own flags and does not participate in this handshake.
+            final short flagsToSend = APPEND_POSITION_FLAG_NONE == flags &&
+                (leaderAnnouncementRequested || !leaderMember.compactConfirmation.hasBoundImage()) ?
+                APPEND_POSITION_FLAG_REQUEST_ANNOUNCEMENT : flags;
+            if (consensusPublisher.appendPosition(publication, leadershipTermId, position, memberId, flagsToSend))
             {
                 if (position > lastAppendPosition)
                 {
@@ -3102,7 +3093,7 @@ final class ConsensusModuleAgent
 
         final long leaderCommitPosition = commitPosition.getPlain();
         if (quorumPosition > leaderCommitPosition ||
-            confirmationRoundPending ||
+            compactConfirmation.requested() ||
             nowNs >= (timeOfLastLogUpdateNs + leaderHeartbeatIntervalNs))
         {
             if (quorumPosition < leaderCommitPosition && leaderCommitPosition > lastQuorumBacktrackCommitPosition)
@@ -3112,13 +3103,7 @@ final class ConsensusModuleAgent
                     "leaderCommitPosition=" + leaderCommitPosition + " quorumPosition=" + quorumPosition));
             }
 
-            // Advance the confirmation counter only when a round was requested, so followers ack once per round
-            // rather than on every commit-position broadcast.
-            if (confirmationRoundPending)
-            {
-                confirmationCounter = nextConfirmationCounter(confirmationCounter);
-                confirmationRoundPending = false;
-            }
+            compactConfirmation.broadcast();
 
             publishCommitPosition(quorumPosition, leadershipTermId);
 
@@ -3134,17 +3119,26 @@ final class ConsensusModuleAgent
 
     void publishCommitPosition(final long commitPosition, final long leadershipTermId)
     {
-        // During an election this is broadcast under the new term while confirmationCounter may still hold a
-        // prior leadership's value (it is reset in electionComplete, which runs after these election-phase
-        // broadcasts). Send the "absent" sentinel until the election completes so a follower cannot echo a
-        // counter that would confirm leadership before a post-election confirmation round.
-        final int counterToSend = null == election ? confirmationCounter : NULL_CONFIRMATION_COUNTER;
+        // Election-phase commit broadcasts must not request echoes for the previous leadership's round.
         for (final ClusterMember member : activeMembers)
         {
             if (member.id() != memberId)
             {
-                consensusPublisher.commitPosition(
-                    member.publication(), leadershipTermId, commitPosition, memberId, counterToSend);
+                if (null == election && announceConsensusConnection(member) &&
+                    member.compactConfirmation.ready(member.publication()))
+                {
+                    if (consensusPublisher.compactCommitPosition(
+                        member.publication(), leadershipTermId, commitPosition, compactConfirmation.round()))
+                    {
+                        member.compactConfirmation.onSent(leadershipTermId, compactConfirmation.round());
+                    }
+                }
+                else
+                {
+                    consensusPublisher.commitPosition(
+                        member.publication(), leadershipTermId, commitPosition, memberId,
+                        LegacyConfirmation.NULL_COUNTER);
+                }
             }
         }
     }
