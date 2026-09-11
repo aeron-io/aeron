@@ -140,6 +140,7 @@ final class ConsensusModuleAgent
     private final CompactConfirmation compactConfirmation = new CompactConfirmation();
     private final IdentityHashMap<Image, ClusterMember> consensusImageMembers = new IdentityHashMap<>();
     private boolean leaderAnnouncementRequested;
+    private boolean confirmationSendPending;
     private long lastQuorumBacktrackCommitPosition = NULL_POSITION;
     private long timeOfLastLogUpdateNs = 0;
     private long timeOfLastAppendPositionUpdateNs = 0;
@@ -676,20 +677,22 @@ final class ConsensusModuleAgent
                     // Reply even on an unchanged Image: our outgoing Image may have been recreated at the leader.
                     // Only followers reply unconditionally, so announcements cannot ping-pong indefinitely.
                     peer.compactConfirmation.requestAnnouncement();
+                    compactConfirmation.retryAckAfterRecovery();
+                }
+                else if (Cluster.Role.LEADER == role && null == election)
+                {
+                    confirmationSendPending = true;
                 }
             }
         }
     }
 
-    void onConsensusPeerImage(final int peerId, final Image image)
+    private void observeConsensusPeerImage(final ClusterMember peer, final Image image)
     {
-        if (null != image && !image.isClosed())
+        if (null != peer && peer.id() != memberId && null != image && !image.isClosed() &&
+            !peer.compactConfirmation.observesImage(image))
         {
-            final ClusterMember peer = clusterMemberByIdMap.get(peerId);
-            if (null != peer && peerId != memberId)
-            {
-                peer.compactConfirmation.onImage(image, consensusImageMembers.get(image) == peer);
-            }
+            peer.compactConfirmation.onImage(image, consensusImageMembers.get(image) == peer);
         }
     }
 
@@ -722,7 +725,7 @@ final class ConsensusModuleAgent
     }
 
     void onCompactLeadershipConfirmAck(
-        final long term, final int peerId, final long round, final Image image)
+        final long term, final long round, final int peerId, final Image image)
     {
         if (null != image && !image.isClosed() && null == election &&
             Cluster.Role.LEADER == role && term == leadershipTermId && compactConfirmation.valid(round))
@@ -730,23 +733,25 @@ final class ConsensusModuleAgent
             final ClusterMember peer = clusterMemberByIdMap.get(peerId);
             if (null != peer && consensusImageMembers.get(image) == peer)
             {
-                peer.compactConfirmation.onAck(term, round);
+                peer.compactConfirmation.onAckReceived(term, round);
             }
         }
     }
 
-    private boolean announceConsensusConnection(final ClusterMember peer)
+    // -1: backpressured, 0: already announced, 1: announcement sent.
+    private int announceConsensusConnection(final ClusterMember peer)
     {
         final ExclusivePublication publication = peer.publication();
         if (peer.compactConfirmation.needsAnnouncement(publication))
         {
             if (!consensusPublisher.consensusConnection(publication, memberId))
             {
-                return false;
+                return -1;
             }
             peer.compactConfirmation.announced(publication);
+            return 1;
         }
-        return true;
+        return 0;
     }
 
     public void onLoadBeginSnapshot(
@@ -1201,6 +1206,17 @@ final class ConsensusModuleAgent
         final int followerMemberId,
         final short flags)
     {
+        onAppendPosition(leadershipTermId, logPosition, followerMemberId, flags, null);
+    }
+
+    void onAppendPosition(
+        final long leadershipTermId,
+        final long logPosition,
+        final int followerMemberId,
+        final short flags,
+        final Image image)
+    {
+        final ClusterMember follower = clusterMemberByIdMap.get(followerMemberId);
         logOnAppendPosition(memberId, leadershipTermId, logPosition, followerMemberId, flags);
         if (null != election)
         {
@@ -1208,7 +1224,6 @@ final class ConsensusModuleAgent
         }
         else if (leadershipTermId <= this.leadershipTermId && Cluster.Role.LEADER == role)
         {
-            final ClusterMember follower = clusterMemberByIdMap.get(followerMemberId);
             if (null != follower)
             {
                 updateMemberLogPosition(follower, leadershipTermId, logPosition);
@@ -1222,6 +1237,8 @@ final class ConsensusModuleAgent
                 }
             }
         }
+        // Image discovery must also run during election and non-leader states.
+        observeConsensusPeerImage(follower, image);
     }
 
     void updateMemberLogPosition(final ClusterMember member, final long leadershipTermId, final long logPosition)
@@ -2035,6 +2052,7 @@ final class ConsensusModuleAgent
         // Neither a requested round nor a pending follower echo may carry over into the new term.
         compactConfirmation.onElectionComplete();
         leaderAnnouncementRequested = false;
+        confirmationSendPending = false;
 
         if (Cluster.Role.LEADER == role)
         {
@@ -2884,9 +2902,13 @@ final class ConsensusModuleAgent
     int updateFollowerPosition(final long nowNs)
     {
         final ExclusivePublication publication = leaderMember.publication();
-        announceConsensusConnection(leaderMember);
-        final boolean sendConfirmAckFirst = compactConfirmation.priority();
-        int workCount = sendConfirmAckFirst ? sendPendingConfirmationAck(publication) : 0;
+        final int announcement = announceConsensusConnection(leaderMember);
+        final boolean sendConfirmAckFirst = compactConfirmation.retryAckFirst();
+        int workCount = Math.max(0, announcement);
+        if (sendConfirmAckFirst)
+        {
+            workCount += sendPendingConfirmationAck(publication, announcement >= 0);
+        }
 
         final long recordedPosition = null != appendPosition ? appendPosition.get() : logRecordingStopPosition;
         workCount += updateFollowerPosition(
@@ -2894,20 +2916,20 @@ final class ConsensusModuleAgent
 
         if (!sendConfirmAckFirst)
         {
-            workCount += sendPendingConfirmationAck(publication);
+            workCount += sendPendingConfirmationAck(publication, announcement >= 0);
         }
 
         return workCount;
     }
 
-    private int sendPendingConfirmationAck(final ExclusivePublication publication)
+    private int sendPendingConfirmationAck(final ExclusivePublication publication, final boolean announced)
     {
-        if (compactConfirmation.pending())
+        if (compactConfirmation.ackPending())
         {
-            final boolean sent = announceConsensusConnection(leaderMember) &&
+            final boolean sent = announced &&
                 consensusPublisher.compactLeadershipConfirmAck(
-                    publication, leadershipTermId, memberId, compactConfirmation.followerRound());
-            compactConfirmation.onAck(sent);
+                    publication, leadershipTermId, compactConfirmation.followerRound(), memberId);
+            compactConfirmation.onAckOffer(sent);
             return sent ? 1 : 0;
         }
 
@@ -3078,7 +3100,7 @@ final class ConsensusModuleAgent
 
         final long leaderCommitPosition = commitPosition.getPlain();
         if (quorumPosition > leaderCommitPosition ||
-            compactConfirmation.requested() ||
+            compactConfirmation.roundRequested() ||
             nowNs >= (timeOfLastLogUpdateNs + leaderHeartbeatIntervalNs))
         {
             if (quorumPosition < leaderCommitPosition && leaderCommitPosition > lastQuorumBacktrackCommitPosition)
@@ -3088,7 +3110,7 @@ final class ConsensusModuleAgent
                     "leaderCommitPosition=" + leaderCommitPosition + " quorumPosition=" + quorumPosition));
             }
 
-            compactConfirmation.broadcast();
+            compactConfirmation.advanceRequestedRound();
 
             publishCommitPosition(quorumPosition, leadershipTermId);
 
@@ -3099,29 +3121,72 @@ final class ConsensusModuleAgent
             return 1;
         }
 
-        return 0;
+        return confirmationSendPending ? retryConfirmationSends(quorumPosition) : 0;
+    }
+
+    private int retryConfirmationSends(final long commitPosition)
+    {
+        confirmationSendPending = false;
+        int workCount = 0;
+        for (final ClusterMember member : activeMembers)
+        {
+            final CompactConfirmation.Peer peer = member.compactConfirmation;
+            if (member.id() != memberId && peer.hasBoundImage() &&
+                peer.needsRound(leadershipTermId, compactConfirmation.round()))
+            {
+                final int announcement = announceConsensusConnection(member);
+                workCount += Math.max(0, announcement);
+                if (announcement >= 0 && sendCompactCommitPosition(member, commitPosition, leadershipTermId))
+                {
+                    workCount++;
+                }
+                else
+                {
+                    confirmationSendPending = true;
+                }
+            }
+        }
+        return workCount;
+    }
+
+    private boolean sendCompactCommitPosition(
+        final ClusterMember member, final long commitPosition, final long term)
+    {
+        if (consensusPublisher.compactCommitPosition(
+            member.publication(), term, commitPosition, compactConfirmation.round()))
+        {
+            member.compactConfirmation.onSent(term, compactConfirmation.round());
+            return true;
+        }
+        return false;
     }
 
     void publishCommitPosition(final long commitPosition, final long leadershipTermId)
     {
         // Election-phase commit broadcasts must not request echoes for the previous leadership's round.
+        confirmationSendPending = false;
         for (final ClusterMember member : activeMembers)
         {
             if (member.id() != memberId)
             {
-                if (null == election && announceConsensusConnection(member) &&
+                if (null == election && announceConsensusConnection(member) >= 0 &&
                     member.compactConfirmation.ready(member.publication()))
                 {
-                    if (consensusPublisher.compactCommitPosition(
-                        member.publication(), leadershipTermId, commitPosition, compactConfirmation.round()))
+                    if (!sendCompactCommitPosition(member, commitPosition, leadershipTermId) &&
+                        member.compactConfirmation.needsRound(leadershipTermId, compactConfirmation.round()))
                     {
-                        member.compactConfirmation.onSent(leadershipTermId, compactConfirmation.round());
+                        confirmationSendPending = true;
                     }
                 }
                 else
                 {
                     consensusPublisher.commitPosition(
                         member.publication(), leadershipTermId, commitPosition, memberId);
+                    if (null == election && member.compactConfirmation.hasBoundImage() &&
+                        member.compactConfirmation.needsRound(leadershipTermId, compactConfirmation.round()))
+                    {
+                        confirmationSendPending = true;
+                    }
                 }
             }
         }

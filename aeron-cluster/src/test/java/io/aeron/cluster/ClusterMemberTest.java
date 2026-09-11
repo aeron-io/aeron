@@ -24,11 +24,11 @@ import static io.aeron.Aeron.NULL_VALUE;
 import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
 import static io.aeron.cluster.ClusterMember.compareLog;
 import static io.aeron.cluster.ClusterMember.hasQuorumAtPosition;
+import static io.aeron.cluster.ClusterMember.hasQuorumConfirmedSince;
 import static io.aeron.cluster.ClusterMember.isQuorumCandidate;
 import static io.aeron.cluster.ClusterMember.isQuorumLeader;
 import static io.aeron.cluster.ClusterMember.isUnanimousCandidate;
 import static io.aeron.cluster.ClusterMember.isUnanimousLeader;
-import static io.aeron.cluster.ClusterMember.hasQuorumConfirmedSince;
 import static io.aeron.cluster.ClusterMember.quorumPosition;
 import static io.aeron.cluster.ClusterMember.quorumThreshold;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -455,12 +455,31 @@ class ClusterMemberTest
         assertFalse(hasQuorumConfirmedSince(members, term, 0, 100));
     }
 
+    @Test
+    void hasQuorumConfirmedSinceShouldRequireTwoFollowersInFiveMemberCluster()
+    {
+        final ClusterMember[] members =
+        {
+            newMember(0, 42), newMember(1, 42), newMember(2, 42), newMember(3, 42), newMember(4, 42)
+        };
+        for (int mask = 0; mask < 16; mask++)
+        {
+            for (int i = 1; i < members.length; i++)
+            {
+                members[i].reset();
+                members[i].compactConfirmation.onSent(42, 8);
+                members[i].compactConfirmation.onAckReceived(42, 0 != (mask & (1 << (i - 1))) ? 8 : 7);
+            }
+            assertEquals(Integer.bitCount(mask) >= 2, hasQuorumConfirmedSince(members, 42, 0, 7));
+        }
+    }
+
     private static ClusterMember confirmedMember(
         final int memberId, final long term, final long round, final long echoTerm)
     {
         final ClusterMember member = newMember(memberId, term);
         member.compactConfirmation.onSent(echoTerm, round);
-        member.compactConfirmation.onAck(echoTerm, round);
+        member.compactConfirmation.onAckReceived(echoTerm, round);
         return member;
     }
 

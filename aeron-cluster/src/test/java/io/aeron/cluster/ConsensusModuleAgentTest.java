@@ -15,6 +15,10 @@
  */
 package io.aeron.cluster;
 
+import static io.aeron.cluster.CompactConsensusTestSupport.completeElection;
+import static io.aeron.cluster.CompactConsensusTestSupport.newContext;
+import static io.aeron.cluster.CompactConsensusTestSupport.setActiveMembers;
+
 import io.aeron.Aeron;
 import io.aeron.ChannelUri;
 import io.aeron.ConcurrentPublication;
@@ -493,8 +497,7 @@ class ConsensusModuleAgentTest
 
         clock.increment(444);
 
-        consensusModuleAgent.onCommitPosition(
-            leadershipTermId, 555, 0);
+        consensusModuleAgent.onCommitPosition(leadershipTermId, 555, 0);
 
         assertEquals(444, consensusModuleAgent.timeOfLastLeaderUpdateNs());
     }
@@ -778,21 +781,21 @@ class ConsensusModuleAgentTest
         final long token = leader.agent.triggerQuorumConfirmation();
         leader.broadcastTo(follower);
         final long round = leader.lastBroadcastRound;
-        leader.agent.onCompactLeadershipConfirmAck(42, 99, round, leader.followerImages[1]);
-        leader.agent.onCompactLeadershipConfirmAck(41, 1, round, leader.followerImages[1]);
-        leader.agent.onCompactLeadershipConfirmAck(42, 1, Aeron.NULL_VALUE, leader.followerImages[1]);
+        leader.agent.onCompactLeadershipConfirmAck(42, round, 99, leader.followerImages[1]);
+        leader.agent.onCompactLeadershipConfirmAck(41, round, 1, leader.followerImages[1]);
+        leader.agent.onCompactLeadershipConfirmAck(42, Aeron.NULL_VALUE, 1, leader.followerImages[1]);
         assertFalse(leader.agent.isLeadershipConfirmedSince(token));
         assertFalse(leader.members[1].compactConfirmation.confirmed(42, token));
 
         Tests.setField(leader.agent, "election", mock(Election.class));
-        leader.agent.onCompactLeadershipConfirmAck(42, 1, round, leader.followerImages[1]);
+        leader.agent.onCompactLeadershipConfirmAck(42, round, 1, leader.followerImages[1]);
         assertEquals(Aeron.NULL_VALUE, leader.agent.triggerQuorumConfirmation());
         assertFalse(leader.agent.isLeadershipConfirmedSince(token));
         Tests.setField(leader.agent, "election", null);
         for (final Cluster.Role role : new Cluster.Role[]{ Cluster.Role.FOLLOWER, Cluster.Role.CANDIDATE })
         {
             leader.agent.role(role);
-            leader.agent.onCompactLeadershipConfirmAck(42, 1, round, leader.followerImages[1]);
+            leader.agent.onCompactLeadershipConfirmAck(42, round, 1, leader.followerImages[1]);
             assertEquals(Aeron.NULL_VALUE, leader.agent.triggerQuorumConfirmation());
             assertFalse(leader.agent.isLeadershipConfirmedSince(token));
         }
@@ -822,7 +825,7 @@ class ConsensusModuleAgentTest
         leader.broadcastTo(follower);
         assertEquals(1, follower.update(1));
         follower.deliverLastAckTo(leader);
-        leader.agent.onCompactLeadershipConfirmAck(42, 1, firstRound, leader.followerImages[1]);
+        leader.agent.onCompactLeadershipConfirmAck(42, firstRound, 1, leader.followerImages[1]);
         assertTrue(leader.members[1].compactConfirmation.confirmed(42, next));
         assertTrue(leader.agent.isLeadershipConfirmedSince(first));
         assertTrue(leader.agent.isLeadershipConfirmedSince(next));
@@ -886,23 +889,6 @@ class ConsensusModuleAgentTest
         follower.deliverLastAckTo(leader);
         assertTrue(leader.agent.isLeadershipConfirmedSince(freshToken));
         assertFalse(leader.agent.isLeadershipConfirmedSince(oldToken));
-    }
-
-    private static ClusterMember[] setActiveMembers(final ConsensusModuleAgent agent, final int... ids)
-    {
-        final ClusterMember[] members = new ClusterMember[ids.length];
-        for (int i = 0; i < ids.length; i++)
-        {
-            members[i] = new ClusterMember(ids[i], "", "", "", "", "", "");
-        }
-
-        final org.agrona.collections.Int2ObjectHashMap<ClusterMember> map =
-            new org.agrona.collections.Int2ObjectHashMap<>();
-        ClusterMember.addClusterMemberIds(members, map);
-        Tests.setField(agent, "activeMembers", members);
-        Tests.setField(agent, "clusterMemberByIdMap", map);
-
-        return members;
     }
 
     @Test
@@ -1245,16 +1231,6 @@ class ConsensusModuleAgentTest
         inOrder.verifyNoMoreInteractions();
     }
 
-    private static void completeElection(
-        final ConsensusModuleAgent agent, final long term, final ClusterMember leader, final long nowNs)
-    {
-        final Election election = mock(Election.class);
-        when(election.leadershipTermId()).thenReturn(term);
-        when(election.leader()).thenReturn(leader);
-        Tests.setField(agent, "election", election);
-        agent.electionComplete(nowNs);
-    }
-
     private final class LeaderConfirmationFixture
     {
         private final ConsensusModuleAgent agent;
@@ -1267,7 +1243,7 @@ class ConsensusModuleAgentTest
         private LeaderConfirmationFixture()
         {
             final TestClusterClock clock = new TestClusterClock(TimeUnit.MILLISECONDS);
-            final ConsensusModule.Context context = ctx.clone()
+            final ConsensusModule.Context context = newContext()
                 .clusterMemberId(0).epochClock(clock.asEpochClock()).clusterClock(clock)
                 .recordingLog(mock(RecordingLog.class)).ingressChannel("aeron:udp");
             agent = new ConsensusModuleAgent(context);
@@ -1331,7 +1307,7 @@ class ConsensusModuleAgentTest
         {
             this.memberId = memberId;
             final TestClusterClock clock = new TestClusterClock(TimeUnit.MILLISECONDS);
-            final ConsensusModule.Context context = ctx.clone()
+            final ConsensusModule.Context context = newContext()
                 .clusterMemberId(memberId)
                 .clusterMembers(
                     memberId + ",localhost:20000,localhost:20001,localhost:20002,localhost:0,localhost:8010")
@@ -1371,7 +1347,7 @@ class ConsensusModuleAgentTest
             beginTerm(LEADERSHIP_TERM_ID);
         }
 
-        private void requestConfirmation(final int counter)
+        private void requestConfirmation(final long counter)
         {
             agent.onCompactCommitPosition(term, recordedPosition, counter, leaderImage);
         }
@@ -1394,7 +1370,7 @@ class ConsensusModuleAgentTest
                 new CompactLeadershipConfirmAckDecoder().wrapAndApplyHeader(
                     messages.get(messages.size() - 1), DataHeaderFlyweight.HEADER_LENGTH, new MessageHeaderDecoder());
             target.agent.onCompactLeadershipConfirmAck(
-                ack.leadershipTermId(), ack.followerMemberId(), ack.confirmationCounter(),
+                ack.leadershipTermId(), ack.confirmationCounter(), ack.followerMemberId(),
                 target.followerImages[memberId]);
         }
 
@@ -1411,7 +1387,7 @@ class ConsensusModuleAgentTest
             assertEquals(position, decoder.logPosition());
         }
 
-        private void assertConfirmationAck(final int index, final int counter)
+        private void assertConfirmationAck(final int index, final long counter)
         {
             final UnsafeBuffer buffer = messages.get(index);
             final MessageHeaderDecoder header =

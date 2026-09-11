@@ -218,6 +218,66 @@ class LeadershipConfirmationSystemTest
         }
     }
 
+    @Test
+    @InterruptAfter(90)
+    void shouldRecoverPendingReadAfterOfferedEchoesAreLostAndImagesRecreated()
+    {
+        assumeTrue(shouldRunJavaMediaDriver());
+        for (int i = 0; i < 3; i++)
+        {
+            DropConfirmationAck.DROPPED_ROUNDS.set(i, -1);
+        }
+        final ClusterInstrumentor instrumentor = new ClusterInstrumentor(
+            DropConfirmationAck.class, "ConsensusModuleAgent", "onCompactLeadershipConfirmAck");
+        try
+        {
+            final TestCluster cluster = aCluster().withStaticNodes(3)
+                .withClusterBaseDir(directory.resolve("cluster").toString())
+                .withAeronBaseDir(directory.resolve("aeron").toString())
+                .withExtensionSuppler(ConfirmationExtension::new)
+                .withServiceSupplier(index -> new TestNode.TestService[0]).start();
+            systemTestWatcher.cluster(cluster);
+            final TestNode leader = cluster.awaitLeader();
+            final ConfirmationExtension extension = extension(leader);
+            appendAndAwaitCommit(leader);
+            final long term = extension.leadershipTerm();
+            DropConfirmationAck.drop = true;
+            final long token = extension.requestRound();
+            for (final TestNode follower : cluster.followers())
+            {
+                Tests.await(() -> DropConfirmationAck.DROPPED_ROUNDS.get(follower.memberId()) > token);
+            }
+            assertFalse(extension.isConfirmed(token));
+            // Offers succeeded at the followers, but neither ACK reached the confirmation state machine.
+            DropConfirmationAck.drop = false;
+            extension.recreateConsensusSubscription();
+            Tests.await(() -> extension.isConfirmed(token));
+            assertEquals(term, extension.leadershipTerm());
+        }
+        finally
+        {
+            DropConfirmationAck.drop = false;
+            instrumentor.reset();
+        }
+    }
+
+    public static class DropConfirmationAck
+    {
+        public static volatile boolean drop;
+        public static final AtomicLongArray DROPPED_ROUNDS = new AtomicLongArray(new long[]{ -1, -1, -1 });
+
+        @Advice.OnMethodEnter(skipOn = Advice.OnNonDefaultValue.class)
+        static boolean drop(@Advice.Argument(1) final long round, @Advice.Argument(2) final int memberId)
+        {
+            if (drop)
+            {
+                DROPPED_ROUNDS.set(memberId, round);
+                return true;
+            }
+            return false;
+        }
+    }
+
     private static void appendAndAwaitCommit(final TestNode leader)
     {
         long position;
@@ -250,7 +310,7 @@ class LeadershipConfirmationSystemTest
             new long[]{ -1, -1, -1 });
 
         @Advice.OnMethodEnter(skipOn = Advice.OnNonDefaultValue.class)
-        static boolean delay(@Advice.Argument(2) final int memberId, @Advice.Argument(3) final long round)
+        static boolean delay(@Advice.Argument(3) final int memberId, @Advice.Argument(2) final long round)
         {
             if (0 != (blockedMembers & (1 << memberId)))
             {

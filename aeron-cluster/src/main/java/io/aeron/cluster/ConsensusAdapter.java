@@ -178,20 +178,14 @@ class ConsensusAdapter implements FragmentHandler, AutoCloseable
                     messageHeaderDecoder.blockLength(),
                     messageHeaderDecoder.version());
 
+                final long term = appendPositionDecoder.leadershipTermId();
+                final long position = appendPositionDecoder.logPosition();
+                final int followerId = appendPositionDecoder.followerMemberId();
                 final short flagsDecodedValue = appendPositionDecoder.flags();
                 final short flags = AppendPositionDecoder.flagsNullValue() == flagsDecodedValue ?
                     ConsensusModuleAgent.APPEND_POSITION_FLAG_NONE : flagsDecodedValue;
 
-                consensusModuleAgent.onAppendPosition(
-                    appendPositionDecoder.leadershipTermId(),
-                    appendPositionDecoder.logPosition(),
-                    appendPositionDecoder.followerMemberId(),
-                    flags);
-                if (null != header && header.context() instanceof Image)
-                {
-                    consensusModuleAgent.onConsensusPeerImage(
-                        appendPositionDecoder.followerMemberId(), (Image)header.context());
-                }
+                consensusModuleAgent.onAppendPosition(term, position, followerId, flags, image(header));
 
                 break;
 
@@ -214,7 +208,7 @@ class ConsensusAdapter implements FragmentHandler, AutoCloseable
                     messageHeaderDecoder.blockLength(), messageHeaderDecoder.version());
                 consensusModuleAgent.onConsensusConnection(
                     consensusConnectionDecoder.memberId(),
-                    null != header && header.context() instanceof Image ? (Image)header.context() : null);
+                    image(header));
                 break;
 
             case CompactCommitPositionDecoder.TEMPLATE_ID:
@@ -225,7 +219,7 @@ class ConsensusAdapter implements FragmentHandler, AutoCloseable
                     compactCommitPositionDecoder.leadershipTermId(),
                     compactCommitPositionDecoder.logPosition(),
                     compactCommitPositionDecoder.confirmationCounter(),
-                    null != header && header.context() instanceof Image ? (Image)header.context() : null);
+                    image(header));
                 break;
 
             case CompactLeadershipConfirmAckDecoder.TEMPLATE_ID:
@@ -234,9 +228,9 @@ class ConsensusAdapter implements FragmentHandler, AutoCloseable
                     messageHeaderDecoder.blockLength(), messageHeaderDecoder.version());
                 consensusModuleAgent.onCompactLeadershipConfirmAck(
                     compactLeadershipConfirmAckDecoder.leadershipTermId(),
-                    compactLeadershipConfirmAckDecoder.followerMemberId(),
                     compactLeadershipConfirmAckDecoder.confirmationCounter(),
-                    null != header && header.context() instanceof Image ? (Image)header.context() : null);
+                    compactLeadershipConfirmAckDecoder.followerMemberId(),
+                    image(header));
                 break;
 
             case CatchupPositionDecoder.TEMPLATE_ID:
@@ -428,5 +422,10 @@ class ConsensusAdapter implements FragmentHandler, AutoCloseable
                     header);
             }
         }
+    }
+
+    private static Image image(final Header header)
+    {
+        return null != header && header.context() instanceof Image ? (Image)header.context() : null;
     }
 }

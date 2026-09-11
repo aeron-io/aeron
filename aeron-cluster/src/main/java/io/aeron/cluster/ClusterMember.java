@@ -899,7 +899,7 @@ public final class ClusterMember
     /**
      * Has a quorum echoed a round after {@code confirmationToken} in {@code leadershipTermId}?
      * The leader counts itself. Other members must have echoed a successfully sent full-width round
-     * in the current term. Legacy acknowledgements never contribute to this quorum.
+     * in the current term. Members without Compact support do not contribute to this quorum.
      *
      * @param members           cluster members, including the leader.
      * @param leadershipTermId  the full term a non-self member must have echoed in.

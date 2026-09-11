@@ -30,37 +30,37 @@ final class CompactConfirmation
     private long round;
     // Lowest token valid in this leadership epoch; round identities remain monotonic across elections.
     private long firstRound;
-    private boolean requested;
+    private boolean roundRequested;
     private long followerRound = -1;
-    private boolean pending;
-    private boolean priority;
+    private boolean ackPending;
+    private boolean retryAckFirst;
 
     void onElectionComplete()
     {
         firstRound = round = Math.incrementExact(round);
-        requested = false;
+        roundRequested = false;
         followerRound = -1;
-        pending = false;
-        priority = false;
+        ackPending = false;
+        retryAckFirst = false;
     }
 
     long request()
     {
-        requested = true;
+        roundRequested = true;
         return round;
     }
 
-    boolean requested()
+    boolean roundRequested()
     {
-        return requested;
+        return roundRequested;
     }
 
-    void broadcast()
+    void advanceRequestedRound()
     {
-        if (requested)
+        if (roundRequested)
         {
             round = Math.incrementExact(round);
-            requested = false;
+            roundRequested = false;
         }
     }
 
@@ -79,7 +79,16 @@ final class CompactConfirmation
         if (receivedRound > followerRound)
         {
             followerRound = receivedRound;
-            pending = true;
+            ackPending = true;
+        }
+    }
+
+    // A local offer can be lost when the receiving Image is replaced.
+    void retryAckAfterRecovery()
+    {
+        if (followerRound >= 0)
+        {
+            ackPending = true;
         }
     }
 
@@ -88,21 +97,21 @@ final class CompactConfirmation
         return followerRound;
     }
 
-    boolean pending()
+    boolean ackPending()
     {
-        return pending;
+        return ackPending;
     }
 
-    boolean priority()
+    boolean retryAckFirst()
     {
-        return priority;
+        return retryAckFirst;
     }
 
     // A failed follower echo gets priority next cycle; success restores append-position priority.
-    void onAck(final boolean sent)
+    void onAckOffer(final boolean sent)
     {
-        pending = !sent;
-        priority = !sent;
+        ackPending = !sent;
+        retryAckFirst = !sent;
     }
 
     /**
@@ -128,6 +137,11 @@ final class CompactConfirmation
                 announce = true;
             }
             capable = supportsCompact;
+        }
+
+        boolean observesImage(final Image currentImage)
+        {
+            return image == currentImage;
         }
 
         void requestAnnouncement()
@@ -173,12 +187,17 @@ final class CompactConfirmation
             sentRound = round;
         }
 
-        void onAck(final long term, final long round)
+        void onAckReceived(final long term, final long round)
         {
             if (term == sentTerm && round >= 0 && round <= sentRound && round > confirmedRound)
             {
                 confirmedRound = round;
             }
+        }
+
+        boolean needsRound(final long term, final long round)
+        {
+            return sentTerm != term || sentRound < round;
         }
 
         boolean confirmed(final long term, final long token)

@@ -34,18 +34,18 @@ class CompactConfirmationTest
         state.onElectionComplete();
         final long token = state.request();
         assertEquals(token, state.request());
-        state.broadcast();
+        state.advanceRequestedRound();
         assertEquals(token + 1, state.round());
-        state.broadcast();
+        state.advanceRequestedRound();
         assertEquals(token + 1, state.round());
         assertTrue(state.valid(token));
         state.onCommit(12);
-        state.onAck(false);
+        state.onAckOffer(false);
         state.onElectionComplete();
         assertFalse(state.valid(token));
-        assertFalse(state.pending());
-        assertFalse(state.priority());
-        assertFalse(state.requested());
+        assertFalse(state.ackPending());
+        assertFalse(state.retryAckFirst());
+        assertFalse(state.roundRequested());
         assertFalse(state.valid(-1));
         assertFalse(state.valid(state.round() + 1));
     }
@@ -56,7 +56,7 @@ class CompactConfirmationTest
         final CompactConfirmation state = new CompactConfirmation();
         Tests.setField(state, "round", Long.MAX_VALUE);
         state.request();
-        assertThrows(ArithmeticException.class, state::broadcast);
+        assertThrows(ArithmeticException.class, state::advanceRequestedRound);
         assertThrows(ArithmeticException.class, state::onElectionComplete);
     }
 
@@ -66,14 +66,14 @@ class CompactConfirmationTest
     {
         final CompactConfirmation.Peer peer = new CompactConfirmation.Peer();
         peer.onSent(42, 1);
-        peer.onAck(42, 1);
+        peer.onAckReceived(42, 1);
         peer.onSent(42, round + 1);
         assertFalse(peer.confirmed(42, round));
-        peer.onAck(42, 1);
+        peer.onAckReceived(42, 1);
         assertFalse(peer.confirmed(42, round));
-        peer.onAck(42, round + 1);
+        peer.onAckReceived(42, round + 1);
         assertTrue(peer.confirmed(42, round));
-        peer.onAck(42, 1);
+        peer.onAckReceived(42, 1);
         assertTrue(peer.confirmed(42, round));
         assertFalse(peer.confirmed(43, round));
     }
@@ -82,14 +82,14 @@ class CompactConfirmationTest
     void shouldRejectUnsentAndWrongTermEchoes()
     {
         final CompactConfirmation.Peer peer = new CompactConfirmation.Peer();
-        peer.onAck(42, 10);
+        peer.onAckReceived(42, 10);
         assertFalse(peer.confirmed(42, 9));
         peer.onSent(42, 10);
-        peer.onAck(41, 10);
-        peer.onAck(42, 11);
-        peer.onAck(42, -1);
+        peer.onAckReceived(41, 10);
+        peer.onAckReceived(42, 11);
+        peer.onAckReceived(42, -1);
         assertFalse(peer.confirmed(42, 9));
-        peer.onAck(42, 10);
+        peer.onAckReceived(42, 10);
         assertTrue(peer.confirmed(42, 9));
         peer.onSent(43, 12);
         assertFalse(peer.confirmed(43, 9));
@@ -122,14 +122,14 @@ class CompactConfirmationTest
     {
         final CompactConfirmation state = new CompactConfirmation();
         state.onCommit(1L << 34);
-        state.onAck(false);
+        state.onAckOffer(false);
         state.onCommit(7);
         assertEquals(1L << 34, state.followerRound());
-        assertTrue(state.priority());
+        assertTrue(state.retryAckFirst());
         state.onCommit((1L << 34) + 1);
-        state.onAck(true);
+        state.onAckOffer(true);
         state.onCommit(1L << 34);
-        assertFalse(state.pending());
-        assertFalse(state.priority());
+        assertFalse(state.ackPending());
+        assertFalse(state.retryAckFirst());
     }
 }

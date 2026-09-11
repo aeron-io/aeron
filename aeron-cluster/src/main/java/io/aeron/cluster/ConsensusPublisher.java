@@ -366,7 +366,7 @@ final class ConsensusPublisher
     }
 
     boolean compactLeadershipConfirmAck(
-        final ExclusivePublication publication, final long leadershipTermId, final int memberId, final long round)
+        final ExclusivePublication publication, final long leadershipTermId, final long round, final int memberId)
     {
         if (null == publication)
         {
@@ -382,8 +382,8 @@ final class ConsensusPublisher
                 compactLeadershipConfirmAckEncoder
                     .wrapAndApplyHeader(bufferClaim.buffer(), bufferClaim.offset(), messageHeaderEncoder)
                     .leadershipTermId(leadershipTermId)
-                    .followerMemberId(memberId)
-                    .confirmationCounter(round);
+                    .confirmationCounter(round)
+                    .followerMemberId(memberId);
                 bufferClaim.commit();
                 return true;
             }

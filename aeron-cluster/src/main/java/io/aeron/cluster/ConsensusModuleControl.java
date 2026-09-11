@@ -134,9 +134,11 @@ public interface ConsensusModuleControl
      * from {@link ConsensusModuleExtension#consensusWork(long)}. Discard it on any leadership change; do not
      * persist it, transfer it to another control instance, or reuse it in a later leadership epoch.
      * Compact confirmation uses full-width generations and checks the full leadership term on the wire.
-     * A quorum, including the leader, must support compact confirmation. Legacy followers still participate
-     * in log replication but their 32-bit acknowledgements cannot confirm a read. Tokens captured before
+     * A quorum, including the leader, must support compact confirmation. Members without Compact support
+     * still participate in log replication but cannot supply a confirmation acknowledgement. Tokens captured before
      * election completion are invalidated, and round exhaustion fails closed instead of wrapping.
+     *
+     * <p>Call on the consensus agent thread.
      *
      * @param confirmationToken captured in the current leadership epoch.
      * @return {@code true} if leadership is confirmed by a fresh quorum, otherwise {@code false}.
@@ -147,6 +149,8 @@ public interface ConsensusModuleControl
      * Request a coalesced leader confirmation round so followers acknowledge promptly, letting
      * {@link #isLeadershipConfirmedSince(long)} confirm leadership in ~1 RTT rather than waiting for the periodic
      * keep-alive. Multiple calls within a duty cycle share a single round.
+     *
+     * <p>Call on the consensus agent thread.
      *
      * @return an opaque, short-lived confirmation token to pass to {@link #isLeadershipConfirmedSince(long)}, or
      *         {@link io.aeron.Aeron#NULL_VALUE} if this node is not the leader or an election is in progress.
