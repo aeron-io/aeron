@@ -2515,8 +2515,8 @@ public final class ConsensusModule implements AutoCloseable
          *     <li><em><strong>log:port</strong></em> - a Cluster-internal endpoint for Raft log.</li>
          *     <li><em><strong>catchup:port</strong></em> - a Cluster-internal endpoint for follower catch up during
          *     election.</li>
-         *     <li><em><strong>archive:port</strong></em> - a Cluster-internal endpoint on which nodes's Archive is
-         *     reachable.</li>
+         *     <li><em><strong>archive:port</strong></em> - an externally advertised endpoint on which node's Archive
+         *     is reachable. Used by other Cluster nodes, {@link ClusterBackup} and {@code ClusterStandby}.</li>
          * </ul>
          *
          * @param clusterMembers info for all nodes.
@@ -2546,8 +2546,8 @@ public final class ConsensusModule implements AutoCloseable
          * Set the ingress channel URI, i.e. where this Cluster node listens for the ingress traffic.
          * <p>
          * <em><strong>Note:</strong> if UDP media is used (i.e. {@code aeron:udp}) and the channel
-         * <strong>does not</strong> specify an {@code endpoint} parameter then it will be set from an ingress endpoint
-         * of the {@link #clusterMembers()} list.</em>
+         * <strong>does not</strong> specify an {@code endpoint} parameter then it will be set using an ingress endpoint
+         * from the {@link #clusterMembers()} list.</em>
          *
          * @param channel parameter for the ingress channel.
          * @return this for a fluent API.
