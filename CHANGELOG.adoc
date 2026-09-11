@@ -20,6 +20,24 @@ ownership of the persistent subscription context, in the same way as `aeron_arch
 (https://github.com/aeron-io/aeron/pull/2132[#2132])
 * **[C]** Upgrade to `CMake` 4.4.3.
 
+== 1.53.1 (2026-09-11)
+
+* **[Cluster]** Treat Cluster membership query errors as warnings.
+* **[Cluster]** Sort snapshot entries in the `recoding.log` by `logPosition` within the same `leadershipTermId` before
+sorting by snapshot entry type.
+* **[Cluster]** Provide detailed description for `clusterMembers` list entries and emphasise that `ingress:port` is
+public facing.
+* **[Cluster]** Optimise sending egress responses, i.e. use `tryClaim` if small and `offer` if message is too big.
+* **[Cluster]** Introduce `ClusteredServiceContainer.Context.extendedTerminationHook(ExtendedTerminationHook)`,
+`ConsensusModule.Context.extendedTerminationHook(ExtendedTerminationHook)`,
+and `ClusterBackup.Context.extendedTerminationHook(ExtendedTerminationHook)`.
+* **[Client/C]** Fix `aeron_subscription_resolved_endpoint` signature, i.e. remove const from the out parameter `address`.
+(https://github.com/aeron-io/aeron/issues/2130[#2130])
+* **[Archive/C]** Add `aeron_archive_persistent_subscription_get_persistent_subscription_context` and
+`aeron_archive_persistent_subscription_get_and_own_persistent_subscription_context` to allow the caller to take
+ownership of the persistent subscription context, in the same way as `aeron_archive_get_and_own_archive_context` does.
+(https://github.com/aeron-io/aeron/pull/2132[#2132])
+
 == 1.53.0 (2026-08-26)
 
 === New & Noteworthy
