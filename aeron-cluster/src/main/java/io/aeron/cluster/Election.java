@@ -424,7 +424,8 @@ class Election
         final int logSessionId,
         final boolean isStartup)
     {
-        if (INIT == state)
+        // A delayed message from an old leader must not undo a newer vote or leadership term.
+        if (INIT == state || leadershipTermId < candidateTermId)
         {
             return;
         }
