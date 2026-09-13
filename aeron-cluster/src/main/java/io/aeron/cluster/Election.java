@@ -101,6 +101,7 @@ class Election
     private boolean isFirstInit = true;
     private boolean isLeaderStartup;
     private boolean isExtendedCanvass;
+    private boolean isStaleLeaderHeard;
     private ClusterMember leaderMember = null;
     private ElectionState state = INIT;
     private Subscription logSubscription = null;
@@ -424,9 +425,16 @@ class Election
         final int logSessionId,
         final boolean isStartup)
     {
-        // A delayed message from an old leader must not undo a newer vote or leadership term.
-        if (INIT == state || leadershipTermId < candidateTermId)
+        if (INIT == state)
         {
+            return;
+        }
+
+        // A leader of an older term than this member has voted in must be ignored, or a newer term can be undone.
+        // Remember that it was heard: it will not step down on its own while this member's canvass keeps it active.
+        if (leadershipTermId < candidateTermId)
+        {
+            isStaleLeaderHeard = true;
             return;
         }
 
@@ -718,8 +726,11 @@ class Election
             return workCount;
         }
 
+        // Having heard only a stale leader for a full heartbeat timeout, nominate even without a known quorum: the
+        // vote request is what makes the stale leader enter an election, after which the best log wins the term.
         if (ClusterMember.isUnanimousCandidate(clusterMembers, thisMember, gracefulClosedLeaderId) ||
-            (nowNs >= deadlineNs && ClusterMember.isQuorumCandidate(clusterMembers, thisMember)))
+            (nowNs >= deadlineNs && ClusterMember.isQuorumCandidate(clusterMembers, thisMember)) ||
+            (isStaleLeaderHeard && nowNs >= (timeOfLastStateChangeNs + ctx.leaderHeartbeatTimeoutNs())))
         {
             final long delayNs = (long)(ctx.random().nextDouble() * (ctx.electionTimeoutNs() >> 1));
             nominationDeadlineNs = nowNs + delayNs;
@@ -1396,6 +1407,7 @@ class Election
             {
                 case CANVASS:
                     resetMembers();
+                    isStaleLeaderHeard = false;
                     consensusModuleAgent.role(Cluster.Role.FOLLOWER);
                     break;
 
