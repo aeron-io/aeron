@@ -748,6 +748,42 @@ class ElectionTest
         verify(electionStateCounter).setRelease(ElectionState.FOLLOWER_REPLAY.code());
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = { false, true })
+    void shouldNominateAfterHearingOnlyStaleLeaderWhileCanvassing(final boolean isStaleLeaderHeard)
+    {
+        final ClusterMember[] clusterMembers = prepareClusterMembers();
+        final Election election = newElection(0, 0, clusterMembers, clusterMembers[1]);
+
+        election.doWork(clock.nanoTime());
+        election.onRequestVote(0, 0, 1, 0, VERSION);
+        clock.increment(ctx.electionTimeoutNs());
+        election.doWork(clock.nanoTime());
+        verify(electionStateCounter, times(2)).setRelease(ElectionState.CANVASS.code());
+        reset(electionStateCounter);
+
+        if (isStaleLeaderHeard)
+        {
+            election.onNewLeadershipTerm(
+                0, NULL_VALUE, NULL_POSITION, NULL_POSITION, 0, 0, 2048, 1024,
+                RECORDING_ID, clock.nanoTime(), 2, LOG_SESSION_ID + 1, false);
+            assertEquals(0, election.leadershipTermId());
+        }
+
+        clock.increment(ctx.leaderHeartbeatTimeoutNs());
+        election.doWork(clock.nanoTime());
+
+        if (isStaleLeaderHeard)
+        {
+            // The stale leader only learns of the newer term from a vote request, so nominate without a known quorum.
+            verify(electionStateCounter).setRelease(ElectionState.NOMINATE.code());
+        }
+        else
+        {
+            verifyNoInteractions(electionStateCounter);
+        }
+    }
+
     @Test
     void shouldBecomeFollowerIfEnteringNewElection()
     {
