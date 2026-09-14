@@ -19,6 +19,7 @@ and `ClusterBackup.Context.extendedTerminationHook(ExtendedTerminationHook)`.
 ownership of the persistent subscription context, in the same way as `aeron_archive_get_and_own_archive_context` does.
 (https://github.com/aeron-io/aeron/pull/2132[#2132])
 * **[C]** Upgrade to `CMake` 4.4.3.
+* **[C]** Fix c-ats-dpdk driver (https://github.com/aeron-io/aeron/pull/2140[#2140])
 
 == 1.53.1 (2026-09-11)
 

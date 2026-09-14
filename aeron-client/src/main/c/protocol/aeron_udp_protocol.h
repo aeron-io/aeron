@@ -255,6 +255,9 @@ inline bool aeron_is_frame_valid(const aeron_frame_header_t *header, const size_
                 frame_length <= packet_length;
             case AERON_HDR_TYPE_RSP_SETUP:
                 return packet_length >= sizeof(aeron_response_setup_header_t) && frame_length <= packet_length;
+            case AERON_HDR_TYPE_ATS_SM:
+                // encrypted: nothing beyond the header can be checked until ATS has decrypted it
+                return true;
             default:
                 return false;
         }

@@ -243,6 +243,24 @@ TEST_P(NonDataFrameValidationTest, shouldValidateNonDataFrames)
 }
 
 
+TEST_F(UdpChannelTest, shouldValidateAtsStatusMessageFrame)
+{
+    aeron_frame_header_t header = {};
+    header.frame_length = 0;
+    header.type = AERON_HDR_TYPE_ATS_SM;
+    header.version = AERON_FRAME_HEADER_VERSION;
+
+    // length is below min size
+    EXPECT_FALSE(aeron_is_frame_valid(&header, AERON_FRAME_HEADER_LENGTH - 1));
+
+    // frame_length is outside of the packet boundaries, the frame is encrypted until ATS decrypts it
+    header.frame_length = 1408;
+    EXPECT_TRUE(aeron_is_frame_valid(&header, AERON_FRAME_HEADER_LENGTH));
+
+    header.frame_length = 64;
+    EXPECT_TRUE(aeron_is_frame_valid(&header, 64));
+}
+
 class UnsupportedFrameTypeValidationTest :
     public testing::TestWithParam<int16_t>,
     public UdpChannelTestBase
@@ -252,7 +270,7 @@ class UnsupportedFrameTypeValidationTest :
 INSTANTIATE_TEST_SUITE_P(
     UnsupportedFrameTypeValidationTests,
     UnsupportedFrameTypeValidationTest,
-    testing::Values(AERON_HDR_TYPE_ATS_DATA, AERON_HDR_TYPE_ATS_SM, AERON_HDR_TYPE_ATS_SETUP, AERON_HDR_TYPE_EXT));
+    testing::Values(AERON_HDR_TYPE_ATS_DATA, AERON_HDR_TYPE_ATS_SETUP, AERON_HDR_TYPE_EXT));
 
 TEST_P(UnsupportedFrameTypeValidationTest, shouldRejectFramesWithUnsupportedType)
 {
