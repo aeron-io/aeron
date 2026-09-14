@@ -1125,6 +1125,43 @@ static void aeron_touch_pages(volatile uint8_t *base, size_t length, size_t page
         *first_page_byte = 0;
     }
 }
+
+static bool aeron_prefault_hint(void *addr, size_t length)
+{
+#if defined(MADV_WILLNEED)
+    return 0 == madvise(addr, length, MADV_WILLNEED);
+#else
+    (void)addr;
+    (void)length;
+    return false;
+#endif
+}
+
+static void aeron_prefault_pages(volatile uint8_t *base, size_t length, size_t page_size, bool read_only)
+{
+    for (size_t i = 0; i < length; i += page_size)
+    {
+        volatile uint8_t *first_page_byte = base + i;
+
+        if (read_only)
+        {
+            (void)*first_page_byte;
+        }
+        else
+        {
+            uint8_t expected = *first_page_byte;
+            __atomic_compare_exchange_n(first_page_byte, &expected, expected, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+        }
+    }
+}
+
+static void aeron_prefault_mapping(void *base, size_t length, size_t page_size, bool read_only)
+{
+    if (!aeron_prefault_hint(base, length))
+    {
+        aeron_prefault_pages(base, length, page_size, read_only);
+    }
+}
 #endif
 
 int aeron_map_new_file(aeron_mapped_file_t *mapped_file, const char *path, bool fill_with_zeroes)
@@ -1360,7 +1397,7 @@ int aeron_raw_log_map_existing(aeron_mapped_raw_log_t *mapped_raw_log, const cha
 #ifndef AERON_NATIVE_PRETOUCH
     if (pre_touch)
     {
-        aeron_touch_pages(mapped_raw_log->mapped_file.addr, (size_t)file_length, (size_t)page_size);
+        aeron_prefault_mapping(mapped_raw_log->mapped_file.addr, (size_t)file_length, (size_t)page_size, false);
     }
 #endif
 
