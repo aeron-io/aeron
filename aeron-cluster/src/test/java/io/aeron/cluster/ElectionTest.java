@@ -17,10 +17,10 @@ package io.aeron.cluster;
 
 import io.aeron.Aeron;
 import io.aeron.Counter;
-import io.aeron.cluster.client.ClusterEvent;
 import io.aeron.ExclusivePublication;
 import io.aeron.Image;
 import io.aeron.Subscription;
+import io.aeron.cluster.client.ClusterEvent;
 import io.aeron.cluster.service.Cluster;
 import io.aeron.cluster.service.ClusterMarkFile;
 import io.aeron.exceptions.TimeoutException;
@@ -33,8 +33,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
 
@@ -207,24 +207,99 @@ class ElectionTest
         verify(consensusModuleAgent).electionComplete(clock.nanoTime());
     }
 
+    @Test
+    void shouldReportNewTermPositionAfterPartialReplay()
+    {
+        final ClusterMember[] followerMembers = prepareClusterMembers();
+        final Election follower = newElection(5, 0, followerMembers, followerMembers[1]);
+        Tests.setField(follower, "appendPosition", 128L);
+        follower.doWork(clock.nanoTime());
+
+        // A previous leader advertised only part of the recorded tail as committed. Replay that prefix.
+        follower.onNewLeadershipTerm(
+            5, NULL_VALUE, NULL_POSITION, NULL_POSITION, 6, 128, 128, 64,
+            RECORDING_ID, clock.nanoTime(), 0, LOG_SESSION_ID, false);
+        final LogReplay replay = mock(LogReplay.class);
+        when(consensusModuleAgent.newLogReplay(0, 64)).thenReturn(replay);
+        when(replay.isDone()).thenReturn(true);
+        when(replay.position()).thenReturn(64L);
+        follower.doWork(clock.nanoTime());
+        follower.doWork(clock.nanoTime());
+        assertEquals(ElectionState.CANVASS, Tests.getField(follower, "state"));
+        assertEquals(64, follower.notifiedCommitPosition());
+
+        // The returning leader wins a newer ballot with this follower; the third member is unavailable.
+        follower.onRequestVote(5, 128, 7, 0, VERSION);
+        verify(consensusPublisher).placeVote(followerMembers[0].publication(), 7, 5, 128, 0, 1, true);
+        final ClusterMember[] leaderMembers = prepareClusterMembers();
+        leaderMembers[0].leadershipTermId(7).logPosition(128).timeOfLastAppendPositionNs(clock.nanoTime());
+        leaderMembers[1].leadershipTermId(5).logPosition(128).timeOfLastAppendPositionNs(clock.nanoTime());
+        final long[] rankedPositions = new long[2];
+        doAnswer(invocation ->
+        {
+            leaderMembers[1].leadershipTermId(invocation.getArgument(1))
+                .logPosition(invocation.getArgument(2)).timeOfLastAppendPositionNs(clock.nanoTime());
+            return true;
+        }).when(consensusPublisher).appendPosition(
+            eq(followerMembers[0].publication()), anyLong(), anyLong(), eq(1), anyShort());
+
+        for (int i = 0; i < 5; i++)
+        {
+            final long quorum = ClusterMember.quorumPosition(
+                leaderMembers, rankedPositions, 7, clock.nanoTime(), ctx.leaderHeartbeatTimeoutNs());
+            follower.onNewLeadershipTerm(
+                5, NULL_VALUE, NULL_POSITION, NULL_POSITION, 7, 128, 128, quorum,
+                RECORDING_ID, clock.nanoTime(), 0, LOG_SESSION_ID, false);
+            follower.doWork(clock.increment(1));
+        }
+
+        assertEquals(128, ClusterMember.quorumPosition(
+            leaderMembers, rankedPositions, 7, clock.nanoTime(), ctx.leaderHeartbeatTimeoutNs()),
+            "leader cannot commit its recorded prefix without a current-term report from its voter");
+        follower.onCommitPosition(7, 128, 0);
+        follower.doWork(clock.increment(1));
+        verify(consensusModuleAgent).newLogReplay(64, 128);
+    }
+
     @ParameterizedTest
-    @ValueSource(booleans = { false, true })
-    void shouldUseElectionTermWhenAnsweringOlderLogReports(final boolean isCanvass)
+    @ValueSource(longs = { 0, 64 })
+    void shouldRestartElectionWhenReplayCommitPositionDoesNotAdvance(final long notifiedCommitPosition)
+    {
+        final ClusterMember[] clusterMembers = prepareClusterMembers();
+        final Election election = newElection(5, 64, clusterMembers, clusterMembers[1]);
+        Tests.setField(election, "appendPosition", 128L);
+        election.doWork(clock.nanoTime());
+        election.onNewLeadershipTerm(
+            5, NULL_VALUE, NULL_POSITION, NULL_POSITION, 6, 128, 128, notifiedCommitPosition,
+            RECORDING_ID, clock.nanoTime(), 0, LOG_SESSION_ID, false);
+        election.doWork(clock.nanoTime());
+        verify(consensusPublisher).appendPosition(
+            clusterMembers[0].publication(), 6, 128, 1, APPEND_POSITION_FLAG_NONE);
+
+        final TimeoutException error = assertThrows(
+            TimeoutException.class, () -> election.doWork(clock.increment(ctx.leaderHeartbeatTimeoutNs())));
+        when(commitPositionCounter.getPlain()).thenReturn(64L);
+        when(consensusModuleAgent.prepareForNewLeadership(anyLong(), anyLong())).thenReturn(128L);
+        election.handleError(clock.nanoTime(), error);
+        election.doWork(clock.nanoTime());
+
+        assertEquals(ElectionState.CANVASS, Tests.getField(election, "state"));
+        assertEquals(0, election.notifiedCommitPosition());
+        election.onRequestVote(5, 128, 7, 2, VERSION);
+        verify(consensusPublisher).placeVote(clusterMembers[2].publication(), 7, 5, 128, 2, 1, true);
+    }
+
+    @Test
+    void shouldUseElectionTermWhenAnsweringOlderCanvassPosition()
     {
         final ClusterMember[] clusterMembers = prepareClusterMembers();
         final Election election = newElection(5, 128, clusterMembers, clusterMembers[0]);
         Tests.setField(election, "leadershipTermId", 6L);
+        Tests.setField(election, "candidateTermId", 6L);
         Tests.setField(election, "state", ElectionState.LEADER_LOG_REPLICATION);
         when(consensusModuleAgent.role()).thenReturn(Cluster.Role.LEADER);
 
-        if (isCanvass)
-        {
-            election.onCanvassPosition(5, 64, 5, 1, VERSION);
-        }
-        else
-        {
-            election.onRequestVote(5, 64, 6, 1, VERSION);
-        }
+        election.onCanvassPosition(5, 64, 5, 1, VERSION);
 
         verify(consensusModuleAgent).quorumPositionBoundedByLeaderLog(6, 128, clock.nanoTime());
     }
