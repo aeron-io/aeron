@@ -19,6 +19,8 @@
 #define _GNU_SOURCE
 #endif
 
+#include "aeron_platform.h"
+
 #if defined(__linux__) || defined(AERON_COMPILER_MSVC)
 #define AERON_NATIVE_PRETOUCH
 #endif
@@ -29,7 +31,6 @@
 #include <stdlib.h>
 #include <errno.h>
 
-#include "aeron_platform.h"
 #include "aeron_error.h"
 #include "aeron_fileutil.h"
 
