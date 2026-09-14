@@ -368,16 +368,6 @@ class Election
 
             placeVote(candidateTermId, candidateId, false);
 
-            final ClusterMember candidateMember = clusterMemberByIdMap.get(candidateId);
-            if (null != candidateMember && Cluster.Role.LEADER == consensusModuleAgent.role())
-            {
-                final long nowNs = nowNs(ctx);
-                publishNewLeadershipTerm(
-                    candidateMember,
-                    logLeadershipTermId,
-                    consensusModuleAgent.quorumPositionBoundedByLeaderLog(leadershipTermId, appendPosition, nowNs),
-                    nanosToTimestamp(ctx, nowNs));
-            }
         }
         else if (CANVASS == state || NOMINATE == state || CANDIDATE_BALLOT == state || FOLLOWER_BALLOT == state)
         {
@@ -991,15 +981,16 @@ class Election
         {
             if (logPosition < appendPosition)
             {
-                if (0 == notifiedCommitPosition)
+                if (logPosition >= notifiedCommitPosition)
                 {
+                    // The leader needs our recorded position in its term before it can commit this prefix.
+                    // A nonzero commit notification can survive a previous partial replay and canvass.
+                    if (nowNs >= (timeOfLastStateChangeNs + ctx.leaderHeartbeatTimeoutNs()))
+                    {
+                        throw new TimeoutException(
+                            "timeout awaiting commit position during replay", AeronException.Category.WARN);
+                    }
                     return publishFollowerAppendPosition(nowNs);
-                }
-                else if (logPosition >= notifiedCommitPosition)
-                {
-                    state(CANVASS, nowNs, "log replay rejected: logPosition=" + logPosition + " is " +
-                        (logPosition > notifiedCommitPosition ? "greater than" : "equal to") +
-                        " quorumPosition=" + notifiedCommitPosition);
                 }
                 else
                 {
