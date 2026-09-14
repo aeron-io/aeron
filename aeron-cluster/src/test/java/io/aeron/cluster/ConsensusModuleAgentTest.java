@@ -69,6 +69,7 @@ import static io.aeron.cluster.ClusterControl.ToggleState.STANDBY_SNAPSHOT;
 import static io.aeron.cluster.ClusterControl.ToggleState.SUSPEND;
 import static io.aeron.cluster.ConsensusModule.CLUSTER_ACTION_FLAGS_STANDBY_SNAPSHOT;
 import static io.aeron.cluster.ConsensusModule.Configuration.SESSION_LIMIT_MSG;
+import static io.aeron.cluster.ConsensusModuleAgent.APPEND_POSITION_FLAG_CATCHUP;
 import static io.aeron.cluster.ConsensusModuleAgent.SLOW_TICK_INTERVAL_NS;
 import static io.aeron.cluster.client.AeronCluster.Configuration.PROTOCOL_SEMANTIC_VERSION;
 import static java.lang.Boolean.TRUE;
@@ -160,6 +161,57 @@ class ConsensusModuleAgentTest
             .thenReturn(mock(Subscription.class));
         when(mockResponsePublication.isConnected()).thenReturn(TRUE);
         when(mockResponsePublication.availableWindow()).thenReturn(Long.MAX_VALUE);
+    }
+
+    @Test
+    void shouldUseElectionTermToBoundQuorumPositionBeforeJoiningLeaderLog()
+    {
+        final TestClusterClock clock = new TestClusterClock(TimeUnit.NANOSECONDS);
+        ctx.clusterClock(clock).epochClock(clock.asEpochClock()).clusterMembers(
+            "0,localhost:20110,localhost:20111,localhost:20112,localhost:20113,localhost:20114|" +
+            "1,localhost:20210,localhost:20211,localhost:20212,localhost:20213,localhost:20214|" +
+            "2,localhost:20310,localhost:20311,localhost:20312,localhost:20313,localhost:20314");
+        final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
+        final ClusterMember[] members = Tests.getField(agent, "activeMembers");
+        assertEquals(Aeron.NULL_VALUE, (long)Tests.getField(agent, "leadershipTermId"));
+        members[0].leadershipTermId(7).logPosition(300).timeOfLastAppendPositionNs(1);
+        members[1].leadershipTermId(7).logPosition(100).timeOfLastAppendPositionNs(1);
+        members[2].leadershipTermId(6).logPosition(300).timeOfLastAppendPositionNs(1);
+
+        assertEquals(100, agent.quorumPositionBoundedByLeaderLog(7, 300, 1));
+
+        members[2].leadershipTermId(7).logPosition(400);
+        assertEquals(300, agent.quorumPositionBoundedByLeaderLog(7, 300, 1));
+        assertEquals(150, agent.quorumPositionBoundedByLeaderLog(7, 150, 1));
+    }
+
+    @Test
+    void shouldReportCatchupPositionInAcceptedElectionTermBeforeReplayingItsTermEvent()
+    {
+        final TestClusterClock clock = new TestClusterClock(TimeUnit.NANOSECONDS);
+        ctx.clusterClock(clock).epochClock(clock.asEpochClock());
+        final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
+        final ConsensusPublisher publisher = mock(ConsensusPublisher.class);
+        final Election election = mock(Election.class);
+        final ClusterMember leader = mock(ClusterMember.class);
+        final LogAdapter logAdapter = mock(LogAdapter.class);
+        final ReadableCounter appendPosition = mock(ReadableCounter.class);
+        Tests.setField(agent, "consensusPublisher", publisher);
+        Tests.setField(agent, "election", election);
+        Tests.setField(agent, "logAdapter", logAdapter);
+        Tests.setField(agent, "appendPosition", appendPosition);
+        Tests.setField(agent, "leadershipTermId", 5L);
+        when(election.leadershipTermId()).thenReturn(7L);
+        when(election.leader()).thenReturn(leader);
+        when(leader.publication()).thenReturn(mockExclusivePublication);
+        when(appendPosition.get()).thenReturn(300L);
+        when(logAdapter.position()).thenReturn(100L);
+        agent.state(ConsensusModule.State.ACTIVE, "");
+
+        agent.catchupPoll(100, 1);
+
+        verify(publisher).appendPosition(mockExclusivePublication, 7, 300, 0, APPEND_POSITION_FLAG_CATCHUP);
+        assertEquals(5, (long)Tests.getField(agent, "leadershipTermId"));
     }
 
     @Test

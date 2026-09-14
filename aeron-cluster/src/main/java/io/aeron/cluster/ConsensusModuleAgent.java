@@ -1994,10 +1994,12 @@ final class ConsensusModuleAgent
                     "unexpected image close during catchup: position=" + logAdapter.position());
             }
 
+            // The agent term follows replay, which can be waiting for this recorded position to commit.
+            // Report in the accepted election term so the leader can count this replica before replay catches up.
             workCount += updateFollowerPosition(
                 election.leader().publication(),
                 nowNs,
-                leadershipTermId,
+                election.leadershipTermId(),
                 currentAppendPosition,
                 APPEND_POSITION_FLAG_CATCHUP);
             commitPosition.proposeMaxRelease(logAdapter.position());
@@ -2890,16 +2892,20 @@ final class ConsensusModuleAgent
         {
             final long leaderAppendPosition = appendPosition.get();
             return updateLeaderPosition(
-                nowNs, leaderAppendPosition, quorumPositionBoundedByLeaderLog(leaderAppendPosition, nowNs));
+                nowNs,
+                leaderAppendPosition,
+                quorumPositionBoundedByLeaderLog(leadershipTermId, leaderAppendPosition, nowNs));
         }
 
         return 0;
     }
 
-    long quorumPositionBoundedByLeaderLog(final long leaderAppendPosition, final long nowNs)
+    long quorumPositionBoundedByLeaderLog(
+        final long leadershipTermId, final long leaderAppendPosition, final long nowNs)
     {
         final long quorumPosition =
-            ClusterMember.quorumPosition(activeMembers, rankedPositions, nowNs, leaderHeartbeatTimeoutNs);
+            ClusterMember.quorumPosition(
+                activeMembers, rankedPositions, leadershipTermId, nowNs, leaderHeartbeatTimeoutNs);
         // there are two main cases here:
         // 1) `quorumPosition <= leaderAppendPosition` - followers track leader
         // 2) `quorumPosition > leaderAppendPosition` - leader's Archive is slow so that followers are able to persist

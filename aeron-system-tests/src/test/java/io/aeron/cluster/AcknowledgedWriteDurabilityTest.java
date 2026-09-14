@@ -175,8 +175,8 @@ class AcknowledgedWriteDurabilityTest
             cluster.stopNode(cluster.node(deadMemberId));
             releaseNewLeader = true;
 
-            // A write to the stale leader is appended in its old term and is dropped with that term, unless it
-            // arrives once the leader is already in the election. Its fate is not asserted.
+            // A write appended to the stale leader can survive replay or be discarded by the next election.
+            // Its fate is not asserted.
             sendWrite(cluster, TARGET_WRITE);
             final long deadlineNs = System.nanoTime() + 5 * LEADER_HEARTBEAT_TIMEOUT_NS;
             while (!hasNewerTermLeader(cluster, deadMemberId) && System.nanoTime() < deadlineNs)
