@@ -378,3 +378,29 @@ TEST_F(FileUtilTest, recursiveMkdir)
     ASSERT_EQ(0, aeron_mkdir_recursive(dirY, S_IRWXU | S_IRWXG | S_IRWXO));
     ASSERT_EQ(0, aeron_mkdir_recursive(dirZ, S_IRWXU | S_IRWXG | S_IRWXO));
 }
+
+TEST_F(FileUtilTest, rawLogMapExistingShouldNotModifyTheLogWhenPreTouching)
+{
+    aeron_mapped_raw_log_t log = {};
+    const char *file = "test_raw_log_map_existing_pre_touch.log";
+    const size_t term_length = AERON_LOGBUFFER_TERM_MIN_LENGTH;
+    const size_t page_size = AERON_PAGE_MIN_SIZE;
+    aeron_delete_file(file); // sweep up any stale file
+
+    ASSERT_EQ(0, aeron_raw_log_map(&log, file, false, term_length, page_size)) << aeron_errmsg();
+    auto *meta = (aeron_logbuffer_metadata_t *)log.log_meta_data.addr;
+    meta->term_length = (int32_t)term_length;
+    meta->page_size = (int32_t)page_size;
+    meta->term_tail_counters[0] = 0x1122334455667788LL;
+    log.term_buffers[0].addr[0] = 0x5A;
+    ASSERT_TRUE(aeron_raw_log_free(&log, nullptr)) << aeron_errmsg(); // unmap, keep the file
+
+    aeron_mapped_raw_log_t existing = {};
+    ASSERT_EQ(0, aeron_raw_log_map_existing(&existing, file, true)) << aeron_errmsg();
+
+    EXPECT_EQ(0x5A, (int)existing.term_buffers[0].addr[0]) << "pre-touch wrote into the term buffer";
+    const auto *existing_meta = (aeron_logbuffer_metadata_t *)existing.log_meta_data.addr;
+    EXPECT_EQ(0x1122334455667788LL, existing_meta->term_tail_counters[0]) << "pre-touch cleared the low byte of term_tail_counters[0]";
+
+    ASSERT_TRUE(aeron_raw_log_free(&existing, file)) << aeron_errmsg();
+}
