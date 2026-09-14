@@ -154,7 +154,7 @@ class ClusterMemberTest
     @Test
     void shouldRankClusterStart()
     {
-        assertThat(quorumPosition(members, rankedPositions, 0, 10), is(0L));
+        assertThat(quorumPosition(members, rankedPositions, NULL_VALUE, 0, 10), is(0L));
     }
 
     @ParameterizedTest
@@ -183,7 +183,7 @@ class ClusterMemberTest
         members[1].logPosition(member1LogPosition);
         members[2].logPosition(member2LogPosition);
 
-        final long quorumPosition = quorumPosition(members, rankedPositions, 0, 10);
+        final long quorumPosition = quorumPosition(members, rankedPositions, NULL_VALUE, 0, 10);
         assertEquals(expectedQuorumPosition, quorumPosition);
     }
 
@@ -230,8 +230,25 @@ class ClusterMemberTest
         };
         final long[] positions = new long[quorumThreshold(clusterMembers.length)];
 
-        final long quorumPosition = quorumPosition(clusterMembers, positions, nowNs, timeoutNs);
+        final long quorumPosition = quorumPosition(clusterMembers, positions, 0, nowNs, timeoutNs);
         assertEquals(expectedQuorumPosition, quorumPosition);
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = { NULL_VALUE, 6, 8 })
+    void shouldIgnorePositionsFromOtherLeadershipTerms(final long otherTermId)
+    {
+        members[0].leadershipTermId(7).logPosition(300).timeOfLastAppendPositionNs(1);
+        members[1].leadershipTermId(7).logPosition(100).timeOfLastAppendPositionNs(1);
+        members[2].leadershipTermId(otherTermId).logPosition(300).timeOfLastAppendPositionNs(1);
+
+        assertEquals(100, quorumPosition(members, rankedPositions, 7, 1, 10));
+
+        members[2].leadershipTermId(7).logPosition(200);
+        assertEquals(200, quorumPosition(members, rankedPositions, 7, 1, 10));
+
+        members[2].leadershipTermId(otherTermId);
+        assertEquals(100, quorumPosition(members, rankedPositions, 7, 1, 10));
     }
 
     @Test
