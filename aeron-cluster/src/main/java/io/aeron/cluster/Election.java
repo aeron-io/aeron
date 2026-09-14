@@ -313,7 +313,7 @@ class Election
                         follower,
                         logLeadershipTermId,
                         consensusModuleAgent.quorumPositionBoundedByLeaderLog(
-                            appendPosition, nowNs),
+                            this.leadershipTermId, appendPosition, nowNs),
                         nanosToTimestamp(ctx, nowNs));
                 }
             }
@@ -349,6 +349,14 @@ class Election
             return;
         }
 
+        // Match the closed leader's response to a newer ballot. Otherwise an elected leader can remain
+        // stuck before closing while its voters have moved on and reject its older leadership term.
+        if (candidateTermId > leadershipTermId && Cluster.Role.LEADER == consensusModuleAgent.role())
+        {
+            throw new ClusterEvent("unexpected vote request:" +
+                " this.leadershipTermId=" + leadershipTermId + " candidateTermId=" + candidateTermId);
+        }
+
         if (candidateTermId <= this.candidateTermId)
         {
             placeVote(candidateTermId, candidateId, false);
@@ -367,7 +375,7 @@ class Election
                 publishNewLeadershipTerm(
                     candidateMember,
                     logLeadershipTermId,
-                    consensusModuleAgent.quorumPositionBoundedByLeaderLog(appendPosition, nowNs),
+                    consensusModuleAgent.quorumPositionBoundedByLeaderLog(leadershipTermId, appendPosition, nowNs),
                     nanosToTimestamp(ctx, nowNs));
             }
         }
@@ -726,8 +734,8 @@ class Election
             return workCount;
         }
 
-        // Having heard only a stale leader for a full heartbeat timeout, nominate even without a known quorum: the
-        // vote request is what makes the stale leader enter an election, after which the best log wins the term.
+        // If a stale leader was heard and this canvass has lasted a heartbeat timeout, nominate even without a
+        // known quorum so a vote request can make the stale leader enter an election.
         if (ClusterMember.isUnanimousCandidate(clusterMembers, thisMember, gracefulClosedLeaderId) ||
             (nowNs >= deadlineNs && ClusterMember.isQuorumCandidate(clusterMembers, thisMember)) ||
             (isStaleLeaderHeard && nowNs >= (timeOfLastStateChangeNs + ctx.leaderHeartbeatTimeoutNs())))
@@ -822,9 +830,13 @@ class Election
     {
         int workCount = 0;
 
-        thisMember.logPosition(appendPosition).timeOfLastAppendPositionNs(nowNs);
+        thisMember
+            .leadershipTermId(leadershipTermId)
+            .logPosition(appendPosition)
+            .timeOfLastAppendPositionNs(nowNs);
 
-        final long quorumPosition = consensusModuleAgent.quorumPositionBoundedByLeaderLog(appendPosition, nowNs);
+        final long quorumPosition =
+            consensusModuleAgent.quorumPositionBoundedByLeaderLog(leadershipTermId, appendPosition, nowNs);
         workCount += publishNewLeadershipTermOnInterval(quorumPosition, nowNs);
         workCount += publishCommitPositionOnInterval(quorumPosition, nowNs);
 
@@ -870,7 +882,8 @@ class Election
             }
         }
 
-        final long quorumPosition = consensusModuleAgent.quorumPositionBoundedByLeaderLog(appendPosition, nowNs);
+        final long quorumPosition =
+            consensusModuleAgent.quorumPositionBoundedByLeaderLog(leadershipTermId, appendPosition, nowNs);
         workCount += publishNewLeadershipTermOnInterval(quorumPosition, nowNs);
         workCount += publishCommitPositionOnInterval(quorumPosition, nowNs);
 
@@ -888,7 +901,8 @@ class Election
 
     private int leaderReady(final long nowNs)
     {
-        final long quorumPosition = consensusModuleAgent.quorumPositionBoundedByLeaderLog(appendPosition, nowNs);
+        final long quorumPosition =
+            consensusModuleAgent.quorumPositionBoundedByLeaderLog(leadershipTermId, appendPosition, nowNs);
         int workCount = consensusModuleAgent.updateLeaderPosition(nowNs, appendPosition, quorumPosition);
         workCount += publishNewLeadershipTermOnInterval(quorumPosition, nowNs);
 
@@ -1459,7 +1473,7 @@ class Election
     private void resetMembers()
     {
         ClusterMember.reset(clusterMembers);
-        thisMember.leadershipTermId(leadershipTermId).logPosition(appendPosition);
+        thisMember.leadershipTermId(logLeadershipTermId).logPosition(appendPosition);
         leaderMember = null;
     }
 
