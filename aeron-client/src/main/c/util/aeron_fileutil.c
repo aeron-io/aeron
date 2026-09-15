@@ -26,6 +26,7 @@
 #include <errno.h>
 #include <inttypes.h>
 
+#include "aeron_platform.h"
 #include "aeron_error.h"
 #include "aeron_fileutil.h"
 
