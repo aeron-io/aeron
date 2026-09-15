@@ -18,6 +18,7 @@ and `ClusterBackup.Context.extendedTerminationHook(ExtendedTerminationHook)`.
 `aeron_archive_persistent_subscription_get_and_own_persistent_subscription_context` to allow the caller to take
 ownership of the persistent subscription context, in the same way as `aeron_archive_get_and_own_archive_context` does.
 (https://github.com/aeron-io/aeron/pull/2132[#2132])
+* **[C]** Accept `AERON_HDR_TYPE_ATS_SM` along `AERON_HDR_TYPE_SM` frames in order to support DPDK/ATS setup where raw frames are checked before forwarding them to the `sender` thread.
 * **[C]** Upgrade to `CMake` 4.4.3.
 
 == 1.53.1 (2026-09-11)

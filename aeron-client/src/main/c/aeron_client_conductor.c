@@ -2210,7 +2210,7 @@ static int aeron_client_conductor_on_cmd_destination_by_id(const void *clientd, 
     command->correlated.correlation_id = async->registration_id;
     command->correlated.client_id = conductor->client_id;
     command->resource_registration_id = resource_registration_id;
-    command->destination_registration_id = resource_registration_id;
+    command->destination_registration_id = async->destination_registration_id;
 
     aeron_mpsc_rb_commit(&conductor->to_driver_buffer, offset);
     return 0;

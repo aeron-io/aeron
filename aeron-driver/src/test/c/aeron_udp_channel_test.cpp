@@ -205,6 +205,7 @@ INSTANTIATE_TEST_SUITE_P(
     testing::Values(
         std::make_tuple(AERON_HDR_TYPE_NAK, sizeof(aeron_nak_header_t)),
         std::make_tuple(AERON_HDR_TYPE_SM, sizeof(aeron_status_message_header_t)),
+        std::make_tuple(AERON_HDR_TYPE_ATS_SM, sizeof(aeron_status_message_header_t)),
         std::make_tuple(AERON_HDR_TYPE_ERR, sizeof(aeron_error_header_t)),
         std::make_tuple(AERON_HDR_TYPE_SETUP, sizeof(aeron_setup_header_t)),
         std::make_tuple(AERON_HDR_TYPE_RTTM, sizeof(aeron_rttm_header_t)),
@@ -242,7 +243,6 @@ TEST_P(NonDataFrameValidationTest, shouldValidateNonDataFrames)
     EXPECT_TRUE(aeron_is_frame_valid(&header, 200));
 }
 
-
 class UnsupportedFrameTypeValidationTest :
     public testing::TestWithParam<int16_t>,
     public UdpChannelTestBase
@@ -252,7 +252,7 @@ class UnsupportedFrameTypeValidationTest :
 INSTANTIATE_TEST_SUITE_P(
     UnsupportedFrameTypeValidationTests,
     UnsupportedFrameTypeValidationTest,
-    testing::Values(AERON_HDR_TYPE_ATS_DATA, AERON_HDR_TYPE_ATS_SM, AERON_HDR_TYPE_ATS_SETUP, AERON_HDR_TYPE_EXT));
+    testing::Values(AERON_HDR_TYPE_ATS_DATA, AERON_HDR_TYPE_ATS_SETUP, AERON_HDR_TYPE_EXT));
 
 TEST_P(UnsupportedFrameTypeValidationTest, shouldRejectFramesWithUnsupportedType)
 {

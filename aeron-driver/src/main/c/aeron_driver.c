@@ -310,7 +310,7 @@ int aeron_driver_create_cnc_file(aeron_driver_t *driver)
         return -1;
     }
 
-    if (aeron_map_new_file(&driver->context->cnc_map, path, true) < 0)
+    if (aeron_map_new_file(&driver->context->cnc_map, path, true, driver->context->file_page_size) < 0)
     {
         AERON_APPEND_ERR("CnC file: %s", path);
         return -1;
@@ -335,7 +335,7 @@ int aeron_driver_create_loss_report_file(aeron_driver_t *driver)
         return -1;
     }
 
-    if (aeron_map_new_file(&driver->context->loss_report, buffer, true) < 0)
+    if (aeron_map_new_file(&driver->context->loss_report, buffer, true, driver->context->file_page_size) < 0)
     {
         AERON_APPEND_ERR("could not map loss report file: %s", buffer);
         return -1;
