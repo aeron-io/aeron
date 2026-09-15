@@ -168,12 +168,18 @@ public class ArchiveResponseClientTest
             final ReplayParams replayParams = new ReplayParams();
             replayParams.subscriptionRegistrationId(replay.registrationId());
 
-            aeronArchive.startReplay(recordingResult.recordingId(), responseChannel, replayStreamId, replayParams);
+            final long replaySessionId =
+                aeronArchive.startReplay(recordingResult.recordingId(), responseChannel, replayStreamId, replayParams);
+            assertEquals(aeronArchive.controlResponsePoller().relevantId(), replaySessionId);
 
             final MutableLong replayPosition = new MutableLong();
             while (replayPosition.get() < recordingResult.position())
             {
-                if (0 == replay.poll((buffer, offset, length, header) -> replayPosition.set(header.position()), 10))
+                if (0 == replay.poll((buffer, offset, length, header) ->
+                {
+                    assertEquals((int)replaySessionId, header.sessionId());
+                    replayPosition.set(header.position());
+                }, 10))
                 {
                     Tests.yield();
                 }
@@ -204,12 +210,18 @@ public class ArchiveResponseClientTest
                 .boundingLimitCounterId(testBoundedCounter.id())
                 .subscriptionRegistrationId(replay.registrationId());
 
-            aeronArchive.startReplay(recordingResult.recordingId(), responseChannel, replayStreamId, replayParams);
+            final long replaySessionId =
+                aeronArchive.startReplay(recordingResult.recordingId(), responseChannel, replayStreamId, replayParams);
+            assertEquals(aeronArchive.controlResponsePoller().relevantId(), replaySessionId);
 
             final MutableLong replayPosition = new MutableLong();
             while (replayPosition.get() < recordingResult.halfwayPosition())
             {
-                if (0 == replay.poll((buffer, offset, length, header) -> replayPosition.set(header.position()), 10))
+                if (0 == replay.poll((buffer, offset, length, header) ->
+                {
+                    assertEquals((int)replaySessionId, header.sessionId());
+                    replayPosition.set(header.position());
+                }, 10))
                 {
                     Tests.yield();
                 }
