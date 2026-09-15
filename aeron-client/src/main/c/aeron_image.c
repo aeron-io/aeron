@@ -293,9 +293,9 @@ int aeron_image_poll(aeron_image_t *image, aeron_fragment_handler_t handler, voi
 
         if (AERON_HDR_TYPE_PAD != frame->frame_header.type)
         {
-            aeron_header_t header =
+            aeron_header_internal_t header =
                 {
-                    frame,
+                    { frame },
                     image->metadata->initial_term_id,
                     image->position_bits_to_shift,
                     AERON_NULL_VALUE,
@@ -307,7 +307,7 @@ int aeron_image_poll(aeron_image_t *image, aeron_fragment_handler_t handler, voi
                 clientd,
                 term_buffer + frame_offset + AERON_DATA_HEADER_LENGTH,
                 frame_length - AERON_DATA_HEADER_LENGTH,
-                &header);
+                &header.base);
         }
     }
 
@@ -379,9 +379,9 @@ int aeron_image_controlled_poll(
             continue;
         }
 
-        aeron_header_t header =
+        aeron_header_internal_t header =
             {
-                frame,
+                { frame },
                 image->metadata->initial_term_id,
                 image->position_bits_to_shift,
                 AERON_NULL_VALUE,
@@ -393,7 +393,7 @@ int aeron_image_controlled_poll(
             clientd,
             term_buffer + frame_offset + AERON_DATA_HEADER_LENGTH,
             frame_length - AERON_DATA_HEADER_LENGTH,
-            &header);
+            &header.base);
 
         if (AERON_ACTION_ABORT == action)
         {
@@ -494,9 +494,9 @@ int aeron_image_bounded_poll(
 
         if (AERON_HDR_TYPE_PAD != frame->frame_header.type)
         {
-            aeron_header_t header =
+            aeron_header_internal_t header =
                 {
-                    frame,
+                    { frame },
                     image->metadata->initial_term_id,
                     image->position_bits_to_shift,
                     AERON_NULL_VALUE,
@@ -508,7 +508,7 @@ int aeron_image_bounded_poll(
                 clientd,
                 term_buffer + frame_offset + AERON_DATA_HEADER_LENGTH,
                 frame_length - AERON_DATA_HEADER_LENGTH,
-                &header);
+                &header.base);
         }
     }
 
@@ -591,9 +591,9 @@ int aeron_image_bounded_controlled_poll(
             continue;
         }
 
-        aeron_header_t header =
+        aeron_header_internal_t header =
             {
-                frame,
+                { frame },
                 image->metadata->initial_term_id,
                 image->position_bits_to_shift,
                 AERON_NULL_VALUE,
@@ -605,7 +605,7 @@ int aeron_image_bounded_controlled_poll(
             clientd,
             term_buffer + frame_offset + AERON_DATA_HEADER_LENGTH,
             frame_length - AERON_DATA_HEADER_LENGTH,
-            &header);
+            &header.base);
 
         if (AERON_ACTION_ABORT == action)
         {

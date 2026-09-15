@@ -566,8 +566,8 @@ int aeron_header_values(aeron_header_t *header, aeron_header_values_t *values)
     }
 
     memcpy(&values->frame, header->frame, sizeof(aeron_header_values_frame_t));
-    values->initial_term_id = header->initial_term_id;
-    values->position_bits_to_shift = header->position_bits_to_shift;
+    values->initial_term_id = AERON_HEADER_INTERNAL(header)->initial_term_id;
+    values->position_bits_to_shift = AERON_HEADER_INTERNAL(header)->position_bits_to_shift;
 
     return 0;
 }
@@ -576,25 +576,34 @@ int64_t aeron_header_position(aeron_header_t *header)
 {
     const int32_t next_term_offset = aeron_header_next_term_offset(header);
     return aeron_logbuffer_compute_position(
-        header->frame->term_id, next_term_offset, header->position_bits_to_shift, header->initial_term_id);
+        header->frame->term_id,
+        next_term_offset,
+        AERON_HEADER_INTERNAL(header)->position_bits_to_shift,
+        AERON_HEADER_INTERNAL(header)->initial_term_id);
+}
+
+int32_t aeron_header_initial_term_id(aeron_header_t *header)
+{
+    return AERON_HEADER_INTERNAL(header)->initial_term_id;
 }
 
 size_t aeron_header_position_bits_to_shift(aeron_header_t *header)
 {
-    return header->position_bits_to_shift;
+    return AERON_HEADER_INTERNAL(header)->position_bits_to_shift;
 }
 
 int32_t aeron_header_next_term_offset(aeron_header_t *header)
 {
-    const int32_t term_occupancy_length = header->fragmented_frame_length < header->frame->frame_header.frame_length ?
-        header->frame->frame_header.frame_length : header->fragmented_frame_length;
+    const int32_t fragmented_frame_length = AERON_HEADER_INTERNAL(header)->fragmented_frame_length;
+    const int32_t term_occupancy_length = fragmented_frame_length < header->frame->frame_header.frame_length ?
+        header->frame->frame_header.frame_length : fragmented_frame_length;
     return AERON_ALIGN(
         header->frame->term_offset + term_occupancy_length, AERON_LOGBUFFER_FRAME_ALIGNMENT);
 }
 
 void *aeron_header_context(aeron_header_t *header)
 {
-    return header->context;
+    return AERON_HEADER_INTERNAL(header)->context;
 }
 
 int aeron_subscription_local_sockaddrs(

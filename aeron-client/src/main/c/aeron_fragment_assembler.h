@@ -30,7 +30,7 @@ typedef struct aeron_buffer_builder_stct
     size_t limit;
     int32_t next_term_offset;
     int32_t first_frame_length;
-    aeron_header_t header;
+    aeron_header_internal_t header;
 }
 aeron_buffer_builder_t;
 
@@ -99,16 +99,16 @@ inline int aeron_buffer_builder_append(
 
 inline void aeron_buffer_builder_capture_header(aeron_buffer_builder_t *buffer_builder, aeron_header_t *header)
 {
-    buffer_builder->header.initial_term_id = header->initial_term_id;
-    buffer_builder->header.position_bits_to_shift = header->position_bits_to_shift;
+    buffer_builder->header.initial_term_id = AERON_HEADER_INTERNAL(header)->initial_term_id;
+    buffer_builder->header.position_bits_to_shift = AERON_HEADER_INTERNAL(header)->position_bits_to_shift;
     buffer_builder->first_frame_length = header->frame->frame_header.frame_length;
-    memcpy(buffer_builder->header.frame, header->frame, sizeof(aeron_data_header_t));
+    memcpy(buffer_builder->header.base.frame, header->frame, sizeof(aeron_data_header_t));
 }
 
 inline aeron_header_t* aeron_buffer_builder_complete_header(aeron_buffer_builder_t *buffer_builder, aeron_header_t *header)
 {
-    buffer_builder->header.context = header->context;
-    aeron_frame_header_t *frame_header = &buffer_builder->header.frame->frame_header;
+    buffer_builder->header.context = AERON_HEADER_INTERNAL(header)->context;
+    aeron_frame_header_t *frame_header = &buffer_builder->header.base.frame->frame_header;
 
     int32_t max_payload_length = buffer_builder->first_frame_length - (int32_t)AERON_DATA_HEADER_LENGTH;
     int32_t fragmented_frame_length = (int32_t)aeron_logbuffer_compute_fragmented_length(
@@ -118,7 +118,7 @@ inline aeron_header_t* aeron_buffer_builder_complete_header(aeron_buffer_builder
     frame_header->frame_length = (int32_t)AERON_DATA_HEADER_LENGTH + (int32_t)buffer_builder->limit;
     frame_header->flags |= header->frame->frame_header.flags;
 
-    return &buffer_builder->header;
+    return &buffer_builder->header.base;
 }
 
 #endif //AERON_C_IMAGE_FRAGMENT_ASSEMBLER_H

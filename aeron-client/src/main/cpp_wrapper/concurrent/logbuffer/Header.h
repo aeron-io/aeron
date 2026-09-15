@@ -25,6 +25,11 @@
 
 #include "aeronc.h"
 
+extern "C"
+{
+#include "protocol/aeron_udp_protocol.h"
+}
+
 namespace aeron { namespace concurrent { namespace logbuffer {
 
 using namespace aeron::util;
@@ -37,9 +42,9 @@ class Header
 public:
     explicit Header(aeron_header_t *header) : m_header(header)
     {
-        if (aeron_header_values(m_header, &m_headerValues) < 0)
+        if (nullptr == m_header)
         {
-            AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
+            throw IllegalArgumentException("header must not be null", SOURCEINFO, EINVAL);
         }
     }
 
@@ -50,7 +55,7 @@ public:
      */
     inline std::int32_t initialTermId() const
     {
-        return m_headerValues.initial_term_id;
+        return aeron_header_initial_term_id(m_header);
     }
 
     /**
@@ -60,7 +65,7 @@ public:
      */
     inline std::int32_t frameLength() const
     {
-        return m_headerValues.frame.frame_length;
+        return m_header->frame->frame_header.frame_length;
     }
 
     /**
@@ -70,7 +75,7 @@ public:
      */
     inline std::int32_t sessionId() const
     {
-        return m_headerValues.frame.session_id;
+        return m_header->frame->session_id;
     }
 
     /**
@@ -80,7 +85,7 @@ public:
      */
     inline std::int32_t streamId() const
     {
-        return m_headerValues.frame.stream_id;
+        return m_header->frame->stream_id;
     }
 
     /**
@@ -90,7 +95,7 @@ public:
      */
     inline std::int32_t termId() const
     {
-        return m_headerValues.frame.term_id;
+        return m_header->frame->term_id;
     }
 
     /**
@@ -100,7 +105,7 @@ public:
      */
     inline std::int32_t termOffset() const
     {
-        return m_headerValues.frame.term_offset;
+        return m_header->frame->term_offset;
     }
 
     /**
@@ -111,7 +116,7 @@ public:
     inline std::uint16_t type() const
     {
         // C and Java API declare this as int16_t.
-        return static_cast<std::uint16_t>(m_headerValues.frame.type);
+        return static_cast<std::uint16_t>(m_header->frame->frame_header.type);
     }
 
     /**
@@ -123,7 +128,7 @@ public:
      */
     inline std::uint8_t flags() const
     {
-        return m_headerValues.frame.flags;
+        return m_header->frame->frame_header.flags;
     }
 
     /**
@@ -143,7 +148,7 @@ public:
      */
     inline std::int32_t positionBitsToShift() const
     {
-        return static_cast<std::int32_t>(m_headerValues.position_bits_to_shift);
+        return static_cast<std::int32_t>(aeron_header_position_bits_to_shift(m_header));
     }
 
     /**
@@ -153,7 +158,7 @@ public:
      */
     inline std::int64_t reservedValue() const
     {
-        return m_headerValues.frame.reserved_value;
+        return m_header->frame->reserved_value;
     }
 
     /**
@@ -174,7 +179,6 @@ public:
 
 private:
     aeron_header_t *m_header = nullptr;
-    aeron_header_values_t m_headerValues = {};
 };
 
 }}}

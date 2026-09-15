@@ -44,6 +44,23 @@ typedef struct aeron_stct aeron_t;
 typedef struct aeron_buffer_claim_stct aeron_buffer_claim_t;
 typedef struct aeron_publication_stct aeron_publication_t;
 typedef struct aeron_exclusive_publication_stct aeron_exclusive_publication_t;
+typedef struct aeron_data_header_stct aeron_data_header_t;
+
+/**
+ * Public view of a data frame delivered to a fragment handler.
+ *
+ * Only the frame pointer is part of the public contract. It references the log buffer directly and is
+ * valid for the duration of the poll callback only. The layout of aeron_data_header_stct is public in
+ * protocol/aeron_udp_protocol.h, so a binding may overlay the frame instead of copying it out with
+ * aeron_header_values.
+ *
+ * The client allocates a larger object behind this one. Never declare or allocate an aeron_header_t
+ * yourself; only ever use the pointer handed to a fragment handler.
+ */
+struct aeron_header_stct
+{
+    aeron_data_header_t *frame;
+};
 typedef struct aeron_header_stct aeron_header_t;
 
 #pragma pack(push)
@@ -1789,6 +1806,13 @@ int64_t aeron_header_position(aeron_header_t *header);
  * @return number of times to left shift the term count to multiply by term length.
  */
 size_t aeron_header_position_bits_to_shift(aeron_header_t *header);
+
+/**
+ * Get the initial term id of the stream this frame belongs to.
+ *
+ * @return the initial term id of the stream.
+ */
+int32_t aeron_header_initial_term_id(aeron_header_t *header);
 
 /**
  * Calculates the offset of the frame immediately after this one.

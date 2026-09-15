@@ -41,7 +41,7 @@ public:
     ControlledFragmentAssemblerTest()
     {
         m_fragment.fill(0);
-        m_header.frame = (aeron_data_header_t *)m_fragment.data();
+        m_header.base.frame = (aeron_data_header_t *)m_fragment.data();
         m_header.context = (void*)"controlled fragment assembler test";
 
         if (aeron_controlled_fragment_assembler_create(&m_assembler, fragment_handler, this) < 0)
@@ -125,12 +125,12 @@ public:
     {
         m_handler = handler;
         uint8_t *buffer = m_fragment.data() + AERON_DATA_HEADER_LENGTH;
-        return ::aeron_controlled_fragment_assembler_handler(m_assembler, buffer, length, &m_header);
+        return ::aeron_controlled_fragment_assembler_handler(m_assembler, buffer, length, &m_header.base);
     }
 
 protected:
     AERON_DECL_ALIGNED(fragment_buffer_t m_fragment, 16) = {};
-    aeron_header_t m_header = {};
+    aeron_header_internal_t m_header = {};
     std::function<aeron_controlled_fragment_handler_action_t(const uint8_t *, size_t, aeron_header_t *)> m_handler = nullptr;
     aeron_controlled_fragment_assembler_t *m_assembler = nullptr;
 };
@@ -144,8 +144,8 @@ TEST_F(ControlledFragmentAssemblerTest, shouldPassThroughUnfragmentedMessage)
     {
         isCalled = true;
         EXPECT_EQ(length, fragmentLength);
-        EXPECT_NE(nullptr, header->context);
-        EXPECT_EQ(m_header.context, header->context);
+        EXPECT_NE(nullptr, AERON_HEADER_INTERNAL(header)->context);
+        EXPECT_EQ(m_header.context, AERON_HEADER_INTERNAL(header)->context);
         aeron_header_values_t header_values;
         EXPECT_EQ(0, aeron_header_values(header, &header_values));
         EXPECT_EQ(SESSION_ID, header_values.frame.session_id);
@@ -181,8 +181,8 @@ TEST_F(ControlledFragmentAssemblerTest, shouldReassembleFromTwoFragments)
 
         isCalled = true;
         EXPECT_EQ(length, fragmentLength * 2);
-        EXPECT_NE(nullptr, header->context);
-        EXPECT_EQ(m_header.context, header->context);
+        EXPECT_NE(nullptr, AERON_HEADER_INTERNAL(header)->context);
+        EXPECT_EQ(m_header.context, AERON_HEADER_INTERNAL(header)->context);
         aeron_header_values_t header_values;
         EXPECT_EQ(0, aeron_header_values(header, &header_values));
         EXPECT_EQ(initialTermId, header_values.initial_term_id);
@@ -259,8 +259,8 @@ TEST_F(ControlledFragmentAssemblerTest, shouldReassembleFromThreeFragments)
 
         isCalled = true;
         EXPECT_EQ(length, fragmentLength * 2 + lastFragmentLength);
-        EXPECT_NE(nullptr, header->context);
-        EXPECT_EQ(m_header.context, header->context);
+        EXPECT_NE(nullptr, AERON_HEADER_INTERNAL(header)->context);
+        EXPECT_EQ(m_header.context, AERON_HEADER_INTERNAL(header)->context);
         aeron_header_values_t header_values;
         EXPECT_EQ(0, aeron_header_values(header, &header_values));
         EXPECT_EQ(AERON_DATA_HEADER_LENGTH + length, header_values.frame.frame_length);
@@ -428,8 +428,8 @@ TEST_F(ControlledFragmentAssemblerTest, testHeaderAfterAbortingFragmentedMessage
         EXPECT_EQ(0, aeron_header_values(header, &header_values));
         EXPECT_EQ(ACTIVE_TERM_ID, header_values.frame.term_id);
         EXPECT_EQ(0, header_values.frame.term_offset);
-        EXPECT_EQ(INITIAL_TERM_ID, header->initial_term_id);
-        EXPECT_EQ(POSITION_BITS_TO_SHIFT, header->position_bits_to_shift);
+        EXPECT_EQ(INITIAL_TERM_ID, AERON_HEADER_INTERNAL(header)->initial_term_id);
+        EXPECT_EQ(POSITION_BITS_TO_SHIFT, AERON_HEADER_INTERNAL(header)->position_bits_to_shift);
         EXPECT_EQ(AERON_DATA_HEADER_LENGTH + 2 * fragmentLength, header_values.frame.frame_length);
         EXPECT_EQ(((ACTIVE_TERM_ID - INITIAL_TERM_ID) * TERM_LENGTH) + 2 * MTU_LENGTH, aeron_header_position(header));
         EXPECT_EQ(SESSION_ID, header_values.frame.session_id);

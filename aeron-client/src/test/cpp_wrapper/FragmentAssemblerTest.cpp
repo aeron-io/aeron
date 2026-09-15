@@ -23,19 +23,19 @@ extern "C"
 
 void initHeader(std::uint8_t *buffer, size_t length, Header **header)
 {
-    auto *aeronHeader = new aeron_header_t{};
-    aeronHeader->frame = reinterpret_cast<aeron_data_header_t *>(buffer);
+    auto *aeronHeader = new aeron_header_internal_t{};
+    aeronHeader->base.frame = reinterpret_cast<aeron_data_header_t *>(buffer);
     aeronHeader->fragmented_frame_length = NULL_VALUE;
     aeronHeader->initial_term_id = INITIAL_TERM_ID;
     aeronHeader->position_bits_to_shift = POSITION_BITS_TO_SHIFT;
     aeronHeader->context = (void*)"test context";
 
-    *header = new Header{aeronHeader};
+    *header = new Header{&aeronHeader->base};
 }
 
 void freeHeader(Header *header)
 {
-    delete header->hdr();
+    delete AERON_HEADER_INTERNAL(header->hdr());
     delete header;
 }
 

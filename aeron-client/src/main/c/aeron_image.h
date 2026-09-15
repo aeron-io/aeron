@@ -62,15 +62,21 @@ typedef struct aeron_image_stct
 }
 aeron_image_t;
 
-typedef struct aeron_header_stct
+/*
+ * Private extension of aeron_header_t. aeron_header_t must remain the first member so that a
+ * pointer to one is a pointer to the other.
+ */
+typedef struct aeron_header_internal_stct
 {
-    aeron_data_header_t *frame;
+    aeron_header_t base;
     int32_t initial_term_id;
     size_t position_bits_to_shift;
     int32_t fragmented_frame_length;
     void *context;
 }
-aeron_header_t;
+aeron_header_internal_t;
+
+#define AERON_HEADER_INTERNAL(h) ((aeron_header_internal_t *)(h))
 
 int aeron_image_create(
     aeron_image_t **image,

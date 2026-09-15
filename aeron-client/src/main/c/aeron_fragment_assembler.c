@@ -40,7 +40,7 @@ int aeron_buffer_builder_create(aeron_buffer_builder_t **buffer_builder)
     _buffer_builder->buffer_length = 0;
     _buffer_builder->limit = 0;
     _buffer_builder->next_term_offset = -1;
-    _buffer_builder->header.frame = _frame;
+    _buffer_builder->header.base.frame = _frame;
 
     *buffer_builder = _buffer_builder;
     return 0;
@@ -107,7 +107,7 @@ void aeron_buffer_builder_delete(aeron_buffer_builder_t *buffer_builder)
     if (buffer_builder)
     {
         aeron_free(buffer_builder->buffer);
-        aeron_free(buffer_builder->header.frame);
+        aeron_free(buffer_builder->header.base.frame);
         aeron_free(buffer_builder);
     }
 }
