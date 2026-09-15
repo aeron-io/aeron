@@ -19,21 +19,22 @@
 #define _GNU_SOURCE
 #endif
 
-#if defined(__linux__) || defined(AERON_COMPILER_MSVC)
-#define AERON_NATIVE_PRETOUCH
-#endif
-
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <inttypes.h>
 
 #include "aeron_platform.h"
 #include "aeron_error.h"
 #include "aeron_fileutil.h"
 
 #include "aeron_alloc.h"
+
+#if defined(__linux__) || defined(AERON_COMPILER_MSVC)
+#define AERON_NATIVE_PRETOUCH
+#endif
 
 #ifdef _MSC_VER
 #define AERON_FILE_SEP '\\'
@@ -1112,22 +1113,24 @@ int aeron_mkdir_recursive(const char *pathname, int permission)
     return -1;
 }
 
-#include <inttypes.h>
-
-#define AERON_BLOCK_SIZE (4 * 1024)
-
 #ifndef AERON_NATIVE_PRETOUCH
+typedef struct aeron_touch_pages_cas_int32_stct
+{
+    int32_t value;
+}
+aeron_touch_pages_cas_int32_t;
+
 static void aeron_touch_pages(volatile uint8_t *base, size_t length, size_t page_size)
 {
     for (size_t i = 0; i < length; i += page_size)
     {
-        volatile uint8_t *first_page_byte = base + i;
-        *first_page_byte = 0;
+        aeron_touch_pages_cas_int32_t *page_hdr = (aeron_touch_pages_cas_int32_t *)(base + i);
+        aeron_cas_int32(&page_hdr->value, 0, 0);
     }
 }
 #endif
 
-int aeron_map_new_file(aeron_mapped_file_t *mapped_file, const char *path, bool fill_with_zeroes)
+int aeron_map_new_file(aeron_mapped_file_t *mapped_file, const char *path, bool fill_with_zeroes, uint64_t page_size)
 {
     int fd = aeron_create_file(path, mapped_file->length, !fill_with_zeroes);
     if (-1 == fd)
@@ -1148,7 +1151,7 @@ int aeron_map_new_file(aeron_mapped_file_t *mapped_file, const char *path, bool 
 #ifndef AERON_NATIVE_PRETOUCH
     if (fill_with_zeroes)
     {
-        aeron_touch_pages(mapped_file->addr, mapped_file->length, AERON_BLOCK_SIZE);
+        aeron_touch_pages(mapped_file->addr, mapped_file->length, page_size);
     }
 #endif
 
