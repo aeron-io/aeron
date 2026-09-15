@@ -147,6 +147,51 @@ class MinMulticastFlowControlTest
         assertEquals(termOffset2 + WINDOW_LENGTH, onStatusMessage(flowControl, 3, termOffset2, senderLimit));
     }
 
+    @Test
+    void shouldRemoveOnlyTimedOutReceiversWhenTheLastReceiverHasAlsoTimedOut()
+    {
+        final UdpChannel udpChannel = UdpChannel.parse(
+            "aeron:udp?endpoint=224.20.30.39:24326|interface=localhost|fc=min,g:/1,t:100ms");
+
+        flowControl.initialize(
+            newContext(), countersManager, udpChannel, 0, 0, 0, 0, 0);
+
+        final long senderLimit = 5000;
+        final int termOffsetOne = 1000;
+        final int termOffsetTwo = 2000;
+        final int termOffsetThree = 3000;
+
+        onStatusMessage(flowControl, 1, termOffsetOne, senderLimit, 0);
+        onStatusMessage(flowControl, 2, termOffsetTwo, senderLimit, 0);
+        onStatusMessage(flowControl, 3, termOffsetThree, senderLimit, 0);
+
+        onStatusMessage(flowControl, 2, termOffsetTwo, senderLimit, 50_000_000);
+
+        // receivers one and three have timed out, receiver two has not
+        assertEquals(termOffsetTwo + WINDOW_LENGTH, flowControl.onIdle(100_000_001, senderLimit, 0, false));
+
+        // receiver two must be the receiver that survived the removal pass
+        assertEquals(termOffsetTwo + WINDOW_LENGTH, flowControl.onIdle(100_000_002, senderLimit, 0, false));
+    }
+
+    private long onStatusMessage(
+        final MinMulticastFlowControl flowControl,
+        final long receiverId,
+        final int termOffset,
+        final long senderLimit,
+        final long timeNs)
+    {
+        final StatusMessageFlyweight statusMessageFlyweight = new StatusMessageFlyweight();
+        statusMessageFlyweight.wrap(new byte[1024]);
+
+        statusMessageFlyweight.receiverId(receiverId);
+        statusMessageFlyweight.consumptionTermId(0);
+        statusMessageFlyweight.consumptionTermOffset(termOffset);
+        statusMessageFlyweight.receiverWindowLength(WINDOW_LENGTH);
+
+        return flowControl.onStatusMessage(statusMessageFlyweight, null, senderLimit, 0, 0, timeNs);
+    }
+
     private long onStatusMessage(
         final MinMulticastFlowControl flowControl, final long receiverId, final int termOffset, final long senderLimit)
     {
