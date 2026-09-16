@@ -898,6 +898,27 @@ class ArchiveToolTests
         Mockito.verify(out).println("(recordingId=" + recordingId + ") skipping: " + skipState);
     }
 
+    @Test
+    void dumpShouldSkipRecordingsInNonValidStates()
+    {
+        try (ArchiveMarkFile markFile = new ArchiveMarkFile(
+            new File(archiveDir, ArchiveMarkFile.FILENAME), 1024 * 1024, 8096, epochClock, 0))
+        {
+            markFile.signalReady(epochClock.time()); // dump() requires a mark file; this fixture has none
+        }
+        assertFalse(verify(out, archiveDir, emptySet(), null, epochClock, (file) -> false));
+        try (Catalog catalog = openCatalogReadWrite(archiveDir, epochClock, MIN_CAPACITY, null, null))
+        {
+            assertTrue(catalog.changeState(validRecording0, DELETED));
+        }
+
+        dump(out, archiveDir, 1, (fragmentCount) -> false);
+
+        Mockito.verify(out).println("Recording " + validRecording3);
+        Mockito.verify(out, Mockito.never()).println("Recording " + validRecording0);
+        Mockito.verify(out, Mockito.never()).println("Recording " + invalidRecording0);
+    }
+
     @ParameterizedTest
     @ValueSource(longs = {-1000, Long.MAX_VALUE})
     void verifyRecordingShouldThrowExceptionIfRecordingIsUnknown(final long recordingId)
