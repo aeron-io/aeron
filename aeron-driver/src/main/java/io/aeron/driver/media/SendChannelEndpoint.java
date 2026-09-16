@@ -1116,10 +1116,7 @@ class DynamicSndMultiDestination extends MultiSndDestination
             final Destination destination = destinations[i];
             if ((destination.timeOfLastActivityNs + DESTINATION_TIMEOUT) - nowNs < 0)
             {
-                if (i != lastIndex)
-                {
-                    destinations[i] = destinations[lastIndex--];
-                }
+                destinations[i] = destinations[lastIndex--];
                 removedCount++;
             }
         }
