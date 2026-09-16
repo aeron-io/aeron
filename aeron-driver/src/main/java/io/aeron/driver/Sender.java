@@ -30,7 +30,9 @@ import java.net.InetSocketAddress;
 import static io.aeron.CommonContext.threadName;
 import static io.aeron.driver.MediaDriver.AERON_DRIVER_SENDER_THREAD_NAME;
 import static io.aeron.driver.MediaDriver.AERON_DRIVER_SENDER_THREAD_NAME_CLASSIC;
-import static io.aeron.driver.status.SystemCounterDescriptor.*;
+import static io.aeron.driver.status.SystemCounterDescriptor.BYTES_SENT;
+import static io.aeron.driver.status.SystemCounterDescriptor.RESOLUTION_CHANGES;
+import static io.aeron.driver.status.SystemCounterDescriptor.SHORT_SENDS;
 
 class SenderLhsPadding
 {
@@ -92,7 +94,8 @@ public final class Sender extends SenderRhsPadding implements Agent
         dutyCycleRatio = ctx.sendToStatusMessagePollRatio();
         conductorProxy = ctx.driverConductorProxy();
         dutyCycleTracker = ctx.senderDutyCycleTracker();
-        roleName = threadName(AERON_DRIVER_SENDER_THREAD_NAME, AERON_DRIVER_SENDER_THREAD_NAME_CLASSIC);
+        roleName = threadName(
+            ctx.properties(), AERON_DRIVER_SENDER_THREAD_NAME, AERON_DRIVER_SENDER_THREAD_NAME_CLASSIC);
     }
 
     /**

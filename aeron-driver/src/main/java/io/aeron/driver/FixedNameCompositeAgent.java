@@ -20,6 +20,8 @@ import org.agrona.Strings;
 import org.agrona.concurrent.Agent;
 import org.agrona.concurrent.CompositeAgent;
 
+import java.util.Properties;
+
 class FixedNameCompositeAgent extends CompositeAgent
 {
     private final String name;
@@ -30,10 +32,11 @@ class FixedNameCompositeAgent extends CompositeAgent
         return prefix + super.roleName();
     }
 
-    FixedNameCompositeAgent(final String newName, final String classicName, final Agent... agents)
+    FixedNameCompositeAgent(
+        final Properties properties, final String newName, final String classicName, final Agent... agents)
     {
         super(agents);
-        this.name = CommonContext.threadName(newName, generateClassicName(classicName));
+        this.name = CommonContext.threadName(properties, newName, generateClassicName(classicName));
     }
 
     public String roleName()

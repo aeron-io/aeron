@@ -30,7 +30,8 @@ final class SharedModeArchiveConductor extends ArchiveConductor
 
     SharedModeArchiveConductor(final Archive.Context ctx)
     {
-        super(ctx, threadName(AERON_ARCHIVE_SHARED_THREAD_NAME, AERON_ARCHIVE_SHARED_THREAD_NAME_CLASSIC));
+        super(ctx, threadName(
+            ctx.properties(), AERON_ARCHIVE_SHARED_THREAD_NAME, AERON_ARCHIVE_SHARED_THREAD_NAME_CLASSIC));
     }
 
     public void onStart()
