@@ -175,8 +175,9 @@ public abstract class AbstractMinMulticastFlowControl
             {
                 if (i != lastIndex)
                 {
-                    receivers[i] = receivers[lastIndex--];
+                    receivers[i] = receivers[lastIndex];
                 }
+                lastIndex--;
                 removed++;
                 receiverRemoved(
                     receiver.receiverId, receiver.sessionId, receiver.streamId, channel, receivers.length - removed);
