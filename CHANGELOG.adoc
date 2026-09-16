@@ -20,6 +20,8 @@ ownership of the persistent subscription context, in the same way as `aeron_arch
 (https://github.com/aeron-io/aeron/pull/2132[#2132])
 * **[Driver/C]** Accept `AERON_HDR_TYPE_ATS_SM` along `AERON_HDR_TYPE_SM` frames in order to support DPDK/ATS setup
 where raw frames are checked before forwarding them to the `sender` thread.
+* **[Driver/C]** Fix potential destination leak upon driver termination, i.e. drain pending receiver and sender
+destination commands. (https://github.com/aeron-io/aeron/pull/2143[#2143])
 * **[Client/C]** Fix log buffer corruption when pre-touch is used and the native pre-touch is not available
 (`AERON_NATIVE_PRETOUCH`). (https://github.com/aeron-io/aeron/issues/2139[#2139])
 * **[Client/C]** Fix remove destination by id (`aeron_publication_async_remove_destination_by_id` and
@@ -30,12 +32,18 @@ where raw frames are checked before forwarding them to the `sender` thread.
 (https://github.com/aeron-io/aeron/pull/2135[#2135])
 * **[Archive/Java]** Return replay session id when starting a replay via a response channel.
 (https://github.com/aeron-io/aeron/pull/2134[#2134])
+* **[Archive]** Add support for `control-mode=response` and `session-id` specified together in the replay channel
+to `PersistentSubscription`. (https://github.com/aeron-io/aeron/issues/2137[#2137])
+* **[Archive]** Add support for `control-mode=response` and `session-id` specified together in the replay channel to
+`AeronArchive`.
 * **[C]** Upgrade to `CMake` 4.4.3.
 
-== 1.53.2 (2026-09-16)
+== 1.53.2 (unreleased)
 
 * **[Driver/C]** Accept `AERON_HDR_TYPE_ATS_SM` along `AERON_HDR_TYPE_SM` frames in order to support DPDK/ATS setup
 where raw frames are checked before forwarding them to the `sender` thread.
+* **[Driver/C]** Fix potential destination leak upon driver termination, i.e. drain pending receiver and sender
+destination commands. (https://github.com/aeron-io/aeron/pull/2143[#2143])
 * **[Client/C]** Fix log buffer corruption when pre-touch is used and the native pre-touch is not available
 (`AERON_NATIVE_PRETOUCH`). (https://github.com/aeron-io/aeron/issues/2139[#2139])
 * **[Client/C]** Fix remove destination by id (`aeron_publication_async_remove_destination_by_id` and
@@ -46,6 +54,10 @@ where raw frames are checked before forwarding them to the `sender` thread.
 (https://github.com/aeron-io/aeron/pull/2135[#2135])
 * **[Archive/Java]** Return replay session id when starting a replay via a response channel.
 (https://github.com/aeron-io/aeron/pull/2134[#2134])
+* **[Archive]** Add support for `control-mode=response` and `session-id` specified together in the replay channel
+to `PersistentSubscription`. (https://github.com/aeron-io/aeron/issues/2137[#2137])
+* **[Archive]** Add support for `control-mode=response` and `session-id` specified together in the replay channel to
+`AeronArchive`.
 
 == 1.53.1 (2026-09-11)
 
