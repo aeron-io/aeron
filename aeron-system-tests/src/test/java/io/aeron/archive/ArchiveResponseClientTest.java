@@ -44,6 +44,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.File;
 
 import static io.aeron.CommonContext.RESPONSE_CORRELATION_ID_PARAM_NAME;
+import static io.aeron.CommonContext.SESSION_ID_PARAM_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
@@ -67,7 +68,9 @@ public class ArchiveResponseClientTest
             .sharedIdleStrategy(YieldingIdleStrategy.INSTANCE)
             .spiesSimulateConnection(true)
             .dirDeleteOnStart(true)
-            .dirDeleteOnShutdown(true);
+            .dirDeleteOnShutdown(true)
+            .publicationReservedSessionIdLow(0)
+            .publicationReservedSessionIdHigh(1000);
 
         final Archive.Context archiveContext = TestContexts.localhostArchive()
             .aeronDirectoryName(driverCtx.aeronDirectoryName())
@@ -92,9 +95,14 @@ public class ArchiveResponseClientTest
         CloseHelper.closeAll(archive, driver);
     }
 
-    @Test
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "aeron:udp?control-mode=response|control=localhost:10002",
+        "aeron:udp?control-mode=response|control=localhost:10003|session-id=5",
+        "aeron:udp?control-mode=response|control=localhost:10002|session-id=42"
+    })
     @InterruptAfter(10)
-    void shouldReplayUsingResponseChannel()
+    void shouldReplayUsingUdpResponseChannel(final String replayChannel)
     {
         final AeronArchive.Context aeronArchiveCtx = new AeronArchive.Context()
             .controlRequestChannel(archive.context().controlChannel())
@@ -104,8 +112,38 @@ public class ArchiveResponseClientTest
             final ArchiveSystemTests.RecordingResult recordingResult = ArchiveSystemTests.recordData(aeronArchive);
 
             final Subscription replay = aeronArchive.replay(
-                recordingResult.recordingId(), "aeron:udp?control-mode=response|control=localhost:10002", 10001,
-                new ReplayParams());
+                recordingResult.recordingId(), replayChannel, 10001, new ReplayParams());
+
+            final MutableLong replayPosition = new MutableLong();
+            while (replayPosition.get() < recordingResult.position())
+            {
+                if (0 == replay.poll((buffer, offset, length, header) -> replayPosition.set(header.position()), 10))
+                {
+                    Tests.yield();
+                }
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "aeron:ipc?control-mode=response",
+        "aeron:ipc?control-mode=response|session-id=5",
+        "aeron:ipc?control-mode=response|session-id=42"
+    })
+    @InterruptAfter(10)
+    void shouldReplayUsingIpcResponseChannel(final String replayChannel)
+    {
+        final AeronArchive.Context aeronArchiveCtx = new AeronArchive.Context()
+            .controlRequestChannel(archive.context().localControlChannel())
+            .controlRequestStreamId(archive.context().localControlStreamId())
+            .controlResponseChannel("aeron:ipc?control-mode=response");
+        try (AeronArchive aeronArchive = AeronArchive.connect(aeronArchiveCtx))
+        {
+            final ArchiveSystemTests.RecordingResult recordingResult = ArchiveSystemTests.recordData(aeronArchive);
+
+            final Subscription replay = aeronArchive.replay(
+                recordingResult.recordingId(), replayChannel, 10001, new ReplayParams());
 
             final MutableLong replayPosition = new MutableLong();
             while (replayPosition.get() < recordingResult.position())
@@ -151,25 +189,31 @@ public class ArchiveResponseClientTest
         }
     }
 
-    @Test
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "aeron:udp?control-mode=response|control=localhost:10002",
+        "aeron:udp?control-mode=response|control=localhost:10003|session-id=5",
+    })
     @InterruptAfter(10)
-    void shouldStartReplayUsingResponseChannel()
+    void shouldStartReplayUsingResponseChannel(final String replayChannel)
     {
-        final String responseChannel = "aeron:udp?control-mode=response|control=localhost:10002";
         final int replayStreamId = 10001;
+        final ChannelUri uri = ChannelUri.parse(replayChannel);
+        uri.remove(SESSION_ID_PARAM_NAME);
+        final String sanitisedChannel = uri.toString();
 
         final AeronArchive.Context aeronArchiveCtx = new AeronArchive.Context()
             .controlRequestChannel(archive.context().controlChannel())
-            .controlResponseChannel(responseChannel);
+            .controlResponseChannel("aeron:udp?control-mode=response|control=localhost:10002");
         try (AeronArchive aeronArchive = AeronArchive.connect(aeronArchiveCtx);
-            Subscription replay = aeronArchive.context().aeron().addSubscription(responseChannel, replayStreamId))
+            Subscription replay = aeronArchive.context().aeron().addSubscription(sanitisedChannel, replayStreamId))
         {
             final ArchiveSystemTests.RecordingResult recordingResult = ArchiveSystemTests.recordData(aeronArchive);
             final ReplayParams replayParams = new ReplayParams();
             replayParams.subscriptionRegistrationId(replay.registrationId());
 
             final long replaySessionId =
-                aeronArchive.startReplay(recordingResult.recordingId(), responseChannel, replayStreamId, replayParams);
+                aeronArchive.startReplay(recordingResult.recordingId(), replayChannel, replayStreamId, replayParams);
             assertEquals(aeronArchive.controlResponsePoller().relevantId(), replaySessionId);
 
             final MutableLong replayPosition = new MutableLong();
@@ -187,19 +231,25 @@ public class ArchiveResponseClientTest
         }
     }
 
-    @Test
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "aeron:udp?control-mode=response|control=localhost:10002",
+        "aeron:udp?control-mode=response|control=localhost:10003|session-id=5",
+    })
     @InterruptAfter(10)
-    void shouldStartBoundedReplayUsingResponseChannel()
+    void shouldStartBoundedReplayUsingResponseChannel(final String replayChannel)
     {
-        final String responseChannel = "aeron:udp?control-mode=response|control=localhost:10002";
         final int replayStreamId = 10001;
+        final ChannelUri uri = ChannelUri.parse(replayChannel);
+        uri.remove(SESSION_ID_PARAM_NAME);
+        final String sanitisedChannel = uri.toString();
 
         final AeronArchive.Context aeronArchiveCtx = new AeronArchive.Context()
             .controlRequestChannel(archive.context().controlChannel())
-            .controlResponseChannel(responseChannel);
+            .controlResponseChannel("aeron:udp?control-mode=response|control=localhost:10002");
 
         try (AeronArchive aeronArchive = AeronArchive.connect(aeronArchiveCtx);
-            Subscription replay = aeronArchive.context().aeron().addSubscription(responseChannel, replayStreamId))
+            Subscription replay = aeronArchive.context().aeron().addSubscription(sanitisedChannel, replayStreamId))
         {
             final ArchiveSystemTests.RecordingResult recordingResult = ArchiveSystemTests.recordData(aeronArchive);
             final Counter testBoundedCounter = aeronArchive.context().aeron().addCounter(10001, "test bounded counter");
@@ -211,7 +261,7 @@ public class ArchiveResponseClientTest
                 .subscriptionRegistrationId(replay.registrationId());
 
             final long replaySessionId =
-                aeronArchive.startReplay(recordingResult.recordingId(), responseChannel, replayStreamId, replayParams);
+                aeronArchive.startReplay(recordingResult.recordingId(), replayChannel, replayStreamId, replayParams);
             assertEquals(aeronArchive.controlResponsePoller().relevantId(), replaySessionId);
 
             final MutableLong replayPosition = new MutableLong();
