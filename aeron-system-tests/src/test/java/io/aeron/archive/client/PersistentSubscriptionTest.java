@@ -151,7 +151,9 @@ abstract class PersistentSubscriptionTest
         .untetheredWindowLimitTimeoutNs(TimeUnit.SECONDS.toNanos(1))
         .untetheredLingerTimeoutNs(TimeUnit.SECONDS.toNanos(1))
         .publicationLingerTimeoutNs(TimeUnit.SECONDS.toNanos(1))
-        .spiesSimulateConnection(true);
+        .spiesSimulateConnection(true)
+        .publicationReservedSessionIdLow(0)
+        .publicationReservedSessionIdHigh(1000);
 
     private final Aeron.Context aeronCtxTpl = new Aeron.Context()
         .subscriberErrorHandler(RethrowingErrorHandler.INSTANCE);
@@ -343,7 +345,7 @@ abstract class PersistentSubscriptionTest
         final String archiveControlResponseChannel)
     {
         final PersistentPublication persistentPublication =
-            PersistentPublication.create(aeronArchive, IPC_CHANNEL, STREAM_ID);
+            PersistentPublication.create(aeronArchive, "aeron:ipc?session-id=555|alias=publisher", STREAM_ID);
 
         final List<byte[]> payloads = generateRandomPayloads(5);
         persistentPublication.persist(payloads);
@@ -373,7 +375,9 @@ abstract class PersistentSubscriptionTest
                     final int streamId = keyBuffer.getInt(STREAM_ID_OFFSET);
                     if (streamId == replayStreamId)
                     {
-                        assertEquals(replayChannel, removeExtraFields(keyBuffer.getStringAscii(CHANNEL_OFFSET)));
+                        assertEquals(
+                            removeExtraFields(replayChannel),
+                            removeExtraFields(keyBuffer.getStringAscii(CHANNEL_OFFSET)));
                         replaySubPos.set(counters.getCounterValue(counterId1));
                     }
                 }
@@ -2327,7 +2331,7 @@ abstract class PersistentSubscriptionTest
 
                 executeUntil(
                     () -> fragmentHandler.hasReceivedPayloads(firstMessageBatch.size()) &&
-                          persistentSubscription.isLive(),
+                        persistentSubscription.isLive(),
                     () -> poll(persistentSubscription, fragmentHandler, 10));
 
                 assertPayloads(
@@ -2661,7 +2665,7 @@ abstract class PersistentSubscriptionTest
         {
             executeUntil(
                 () -> fragmentHandler.hasReceivedPayloads(persistentPublication.publishedMessageCount()) &&
-                      persistentSubscription.isLive(),
+                    persistentSubscription.isLive(),
                 () -> poll(persistentSubscription, fragmentHandler, 10));
 
             archive.close();
@@ -3884,6 +3888,12 @@ abstract class PersistentSubscriptionTest
                 "aeron:udp?control-mode=response|control=localhost:10002"
             ),
             arguments(
+                "aeron:udp?control=localhost:10001|control-mode=response|session-id=555",
+                -11,
+                LOCALHOST_CONTROL_REQUEST_CHANNEL,
+                "aeron:udp?control-mode=response|control=localhost:10002"
+            ),
+            arguments(
                 "aeron:udp?control=localhost:10001|control-mode=response|endpoint=localhost:5006",
                 -11,
                 LOCALHOST_CONTROL_REQUEST_CHANNEL,
@@ -3894,7 +3904,11 @@ abstract class PersistentSubscriptionTest
                 -11,
                 LOCALHOST_CONTROL_REQUEST_CHANNEL,
                 "aeron:udp?control-mode=response|control=localhost:10002"),
-            arguments("aeron:ipc?control-mode=response", -11, "aeron:ipc", "aeron:ipc?control-mode=response")
+            arguments("aeron:ipc?control-mode=response", -11, "aeron:ipc", "aeron:ipc?control-mode=response"),
+            arguments(
+                "aeron:ipc?control-mode=response|session-id=42", -11, "aeron:ipc", "aeron:ipc?control-mode=response"),
+            arguments(
+                "aeron:ipc?control-mode=response|session-id=555", -555, "aeron:ipc", "aeron:ipc?control-mode=response")
         );
     }
 
