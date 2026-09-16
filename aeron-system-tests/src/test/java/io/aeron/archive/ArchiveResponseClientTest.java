@@ -100,8 +100,6 @@ public class ArchiveResponseClientTest
         "aeron:udp?endpoint=localhost:4042",
         "aeron:udp?endpoint=localhost:4042|session=119",
         "aeron:udp?control-mode=response|control=localhost:10002",
-        "aeron:udp?control-mode=response|control=localhost:10002",
-        "aeron:udp?control-mode=response|control=localhost:10002",
         "aeron:udp?control-mode=response|control=localhost:10003|session-id=5",
         "aeron:udp?control-mode=response|control=localhost:10002|session-id=42"
     })
@@ -134,7 +132,6 @@ public class ArchiveResponseClientTest
         "aeron:ipc",
         "aeron:ipc?session-id=1",
         "aeron:ipc?control-mode=response",
-        "aeron:ipc?control-mode=response|session-id=5",
         "aeron:ipc?control-mode=response|session-id=42"
     })
     @InterruptAfter(10)
