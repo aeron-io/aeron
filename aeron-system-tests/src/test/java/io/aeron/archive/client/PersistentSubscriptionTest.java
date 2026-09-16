@@ -3880,7 +3880,20 @@ abstract class PersistentSubscriptionTest
                 LOCALHOST_CONTROL_REQUEST_CHANNEL,
                 LOCALHOST_CONTROL_RESPONSE_CHANNEL
             ),
+            arguments("aeron:udp?endpoint=localhost:0|session-id=6",
+                -10,
+                LOCALHOST_CONTROL_REQUEST_CHANNEL,
+                LOCALHOST_CONTROL_RESPONSE_CHANNEL
+            ),
+            arguments(
+                "aeron:udp?endpoint=localhost:10001|session-id=901",
+                -11,
+                LOCALHOST_CONTROL_REQUEST_CHANNEL,
+                LOCALHOST_CONTROL_RESPONSE_CHANNEL
+            ),
             arguments("aeron:ipc", -12, LOCALHOST_CONTROL_REQUEST_CHANNEL, LOCALHOST_CONTROL_RESPONSE_CHANNEL),
+            arguments(
+                "aeron:ipc?session-id=8", -12, LOCALHOST_CONTROL_REQUEST_CHANNEL, LOCALHOST_CONTROL_RESPONSE_CHANNEL),
             arguments(
                 "aeron:udp?control=localhost:10001|control-mode=response",
                 -11,

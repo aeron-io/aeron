@@ -97,12 +97,16 @@ public class ArchiveResponseClientTest
 
     @ParameterizedTest
     @ValueSource(strings = {
+        "aeron:udp?endpoint=localhost:4042",
+        "aeron:udp?endpoint=localhost:4042|session=119",
+        "aeron:udp?control-mode=response|control=localhost:10002",
+        "aeron:udp?control-mode=response|control=localhost:10002",
         "aeron:udp?control-mode=response|control=localhost:10002",
         "aeron:udp?control-mode=response|control=localhost:10003|session-id=5",
         "aeron:udp?control-mode=response|control=localhost:10002|session-id=42"
     })
     @InterruptAfter(10)
-    void shouldReplayUsingUdpResponseChannel(final String replayChannel)
+    void shouldReplayUsingUdpReplayChannel(final String replayChannel)
     {
         final AeronArchive.Context aeronArchiveCtx = new AeronArchive.Context()
             .controlRequestChannel(archive.context().controlChannel())
@@ -127,12 +131,14 @@ public class ArchiveResponseClientTest
 
     @ParameterizedTest
     @ValueSource(strings = {
+        "aeron:ipc",
+        "aeron:ipc?session-id=1",
         "aeron:ipc?control-mode=response",
         "aeron:ipc?control-mode=response|session-id=5",
         "aeron:ipc?control-mode=response|session-id=42"
     })
     @InterruptAfter(10)
-    void shouldReplayUsingIpcResponseChannel(final String replayChannel)
+    void shouldReplayUsingIpcReplayChannel(final String replayChannel)
     {
         final AeronArchive.Context aeronArchiveCtx = new AeronArchive.Context()
             .controlRequestChannel(archive.context().localControlChannel())
