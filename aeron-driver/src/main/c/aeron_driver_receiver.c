@@ -261,9 +261,35 @@ int aeron_driver_receiver_do_work(void *clientd)
     return work_count + (int)bytes_received;
 }
 
+static void aeron_driver_receiver_drain_pending_commands_on_close(
+    int32_t msg_type_id, const void *message, size_t size, void *clientd)
+{
+    aeron_driver_receiver_t *receiver = (aeron_driver_receiver_t *)clientd;
+    aeron_command_base_t *cmd = (aeron_command_base_t *)message;
+
+    if (aeron_driver_receiver_on_add_destination == cmd->func)
+    {
+        aeron_receive_destination_t *destination =
+            ((aeron_command_add_rcv_destination_t *)message)->destination;
+
+        receiver->context->udp_channel_transport_bindings->close_func(&destination->transport);
+        aeron_receive_destination_delete(destination, receiver->context->counters_manager);
+    }
+    else if (aeron_driver_receiver_on_remove_destination == cmd->func)
+    {
+        aeron_udp_channel_delete(((aeron_command_remove_rcv_destination_t *)message)->channel);
+    }
+}
+
 void aeron_driver_receiver_on_close(void *clientd)
 {
     aeron_driver_receiver_t *receiver = (aeron_driver_receiver_t *)clientd;
+
+    aeron_spsc_rb_read(
+        receiver->receiver_proxy.command_queue,
+        aeron_driver_receiver_drain_pending_commands_on_close,
+        receiver,
+        SIZE_MAX);
 
     for (size_t i = 0; i < receiver->recv_buffers.vector_capacity; i++)
     {
