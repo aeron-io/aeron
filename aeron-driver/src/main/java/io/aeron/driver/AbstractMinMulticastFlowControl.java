@@ -173,11 +173,7 @@ public abstract class AbstractMinMulticastFlowControl
             final Receiver receiver = receivers[i];
             if ((receiver.timeOfLastStatusMessageNs + receiverTimeoutNs) - timeNs < 0 || receiver.eosFlagged)
             {
-                if (i != lastIndex)
-                {
-                    receivers[i] = receivers[lastIndex];
-                }
-                lastIndex--;
+                receivers[i] = receivers[lastIndex--];
                 removed++;
                 receiverRemoved(
                     receiver.receiverId, receiver.sessionId, receiver.streamId, channel, receivers.length - removed);
