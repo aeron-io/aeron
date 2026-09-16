@@ -1,6 +1,71 @@
 = Aeron Releases
 
-== 1.53.0 (unreleased)
+== 1.54.0 (unreleased)
+
+* **[Cluster]** Treat Cluster membership query errors as warnings.
+* **[Cluster]** Sort snapshot entries in the `recoding.log` by `logPosition` within the same `leadershipTermId` before
+sorting by snapshot entry type.
+* **[Cluster]** Provide detailed description for `clusterMembers` list entries and emphasise that `ingress:port` is
+public facing.
+* **[Cluster]** Optimise sending egress responses, i.e. use `tryClaim` if small and `offer` if message is too big.
+* **[Cluster]** Introduce `ClusteredServiceContainer.Context.extendedTerminationHook(ExtendedTerminationHook)`,
+`ConsensusModule.Context.extendedTerminationHook(ExtendedTerminationHook)`,
+and `ClusterBackup.Context.extendedTerminationHook(ExtendedTerminationHook)`.
+* **[Client/C]** Fix `aeron_subscription_resolved_endpoint` signature, i.e. remove const from the out parameter `address`.
+(https://github.com/aeron-io/aeron/issues/2130[#2130])
+* **[Tracing]** Renaming the concept of `EventLogging` to `Tracing`. (https://github.com/aeron-io/aeron/pull/2131[#2131])
+* **[Archive/C]** Add `aeron_archive_persistent_subscription_get_persistent_subscription_context` and
+`aeron_archive_persistent_subscription_get_and_own_persistent_subscription_context` to allow the caller to take
+ownership of the persistent subscription context, in the same way as `aeron_archive_get_and_own_archive_context` does.
+(https://github.com/aeron-io/aeron/pull/2132[#2132])
+* **[Driver/C]** Accept `AERON_HDR_TYPE_ATS_SM` along `AERON_HDR_TYPE_SM` frames in order to support DPDK/ATS setup
+where raw frames are checked before forwarding them to the `sender` thread.
+* **[Client/C]** Fix log buffer corruption when pre-touch is used and the native pre-touch is not available
+(`AERON_NATIVE_PRETOUCH`). (https://github.com/aeron-io/aeron/issues/2139[#2139])
+* **[Client/C]** Fix remove destination by id (`aeron_publication_async_remove_destination_by_id` and
+`aeron_exclusive_publication_async_remove_destination_by_id`), i.e. pass correct destination id to the driver.
+(https://github.com/aeron-io/aeron/issues/2138[#2138])
+* **[C{plus}{plus} Wrapper]** Remove `LossStat.cpp` sample in favor of `loss_stat.c`.
+* **[C{plus}{plus} Wrapper]** Read data frame header values lazily in the wrapper Header.
+(https://github.com/aeron-io/aeron/pull/2135[#2135])
+* **[Archive/Java]** Return replay session id when starting a replay via a response channel.
+(https://github.com/aeron-io/aeron/pull/2134[#2134])
+* **[C]** Upgrade to `CMake` 4.4.3.
+
+== 1.53.2 (2026-09-16)
+
+* **[Driver/C]** Accept `AERON_HDR_TYPE_ATS_SM` along `AERON_HDR_TYPE_SM` frames in order to support DPDK/ATS setup
+where raw frames are checked before forwarding them to the `sender` thread.
+* **[Client/C]** Fix log buffer corruption when pre-touch is used and the native pre-touch is not available
+(`AERON_NATIVE_PRETOUCH`). (https://github.com/aeron-io/aeron/issues/2139[#2139])
+* **[Client/C]** Fix remove destination by id (`aeron_publication_async_remove_destination_by_id` and
+`aeron_exclusive_publication_async_remove_destination_by_id`), i.e. pass correct destination id to the driver.
+(https://github.com/aeron-io/aeron/issues/2138[#2138])
+* **[C{plus}{plus} Wrapper]** Remove `LossStat.cpp` sample in favor of `loss_stat.c`.
+* **[C{plus}{plus} Wrapper]** Read data frame header values lazily in the wrapper Header.
+(https://github.com/aeron-io/aeron/pull/2135[#2135])
+* **[Archive/Java]** Return replay session id when starting a replay via a response channel.
+(https://github.com/aeron-io/aeron/pull/2134[#2134])
+
+== 1.53.1 (2026-09-11)
+
+* **[Cluster]** Treat Cluster membership query errors as warnings.
+* **[Cluster]** Sort snapshot entries in the `recoding.log` by `logPosition` within the same `leadershipTermId` before
+sorting by snapshot entry type.
+* **[Cluster]** Provide detailed description for `clusterMembers` list entries and emphasise that `ingress:port` is
+public facing.
+* **[Cluster]** Optimise sending egress responses, i.e. use `tryClaim` if small and `offer` if message is too big.
+* **[Cluster]** Introduce `ClusteredServiceContainer.Context.extendedTerminationHook(ExtendedTerminationHook)`,
+`ConsensusModule.Context.extendedTerminationHook(ExtendedTerminationHook)`,
+and `ClusterBackup.Context.extendedTerminationHook(ExtendedTerminationHook)`.
+* **[Client/C]** Fix `aeron_subscription_resolved_endpoint` signature, i.e. remove const from the out parameter `address`.
+(https://github.com/aeron-io/aeron/issues/2130[#2130])
+* **[Archive/C]** Add `aeron_archive_persistent_subscription_get_persistent_subscription_context` and
+`aeron_archive_persistent_subscription_get_and_own_persistent_subscription_context` to allow the caller to take
+ownership of the persistent subscription context, in the same way as `aeron_archive_get_and_own_archive_context` does.
+(https://github.com/aeron-io/aeron/pull/2132[#2132])
+
+== 1.53.0 (2026-08-26)
 
 === New & Noteworthy
 
@@ -23,6 +88,12 @@ archive clients.
 ** Add additional error code to user string conversion in the `aeron_error.c` implementation.
 ** Translate the Archive error codes to the user error codes in the C aeron archive client and async client.
 
+* **Breaking:** **[Archive]** Remove support for `ConnectRequest` (`templateId = 2`) message which allowed
+unauthenticated login to Archive. This message was not used by official Archive clients used since
+<<1.24.0 (2019-11-24)>>.
++
+NOTE: The corresponding logging event `CMD_IN_CONNECT` was also removed.
+
 * Introduce more distinct Aeron-specific thread names across all modules/components,
 configurable via the new `aeron.thread.naming` system property:
 +
@@ -31,17 +102,20 @@ configurable via the new `aeron.thread.naming` system property:
 ** `new` - use new standardized names (e.g. `aeron-md-snd`, `aeron-md-rcv`, `aeron-md-cnd`)
 --
 
-* **Breaking:** **[Archive]** Remove support for `ConnectRequest` (`templateId = 2`) message which allowed
-unauthenticated login to Archive. This message was not used by official Archive clients used since
-<<1.24.0 (2019-11-24)>>.
+* **[Driver]** https://github.com/aeron-io/aeron/wiki/Channel-Configuration#timestamps[Outgoing and incoming timestamps]
+(`media-rcv-ts-offset`, `channel-rcv-ts-offset`,`channel-snd-ts-offset`) are now applied to all messages within a packet
+sent/received not just the first message.
+
+=== Known issues
+
+* **[Driver/C]** Using ATS with DPDK stopped working due to packet validation changes.
 +
-NOTE: The corresponding logging event `CMD_IN_CONNECT` was also removed.
+Affects <<1.53.0 (2026-08-26)>> and <<1.53.1 (2026-09-11)>>.
++
+Fixed in <<1.53.2 (2026-09-16)>>.
 
 === Changelog
 
-* **[Client/C]** Add `aeron_archive_persistent_subscription_get_persistent_subscription_context` and
-`aeron_archive_persistent_subscription_get_and_own_persistent_subscription_context` to allow the caller to take
-ownership of the persistent subscription context, in the same way as `aeron_archive_get_and_own_archive_context`.
 * **[Client/Java]** Remove `Image#controlledPeek` APIs.
 * **[Client/C/C{plus}{plus} Wrapper]** Remove `aeron_image_set_position` and `aeron_image_controlled_peek` APIs.
 * **[Archive]** Abort `ControlSession` on non-recoverable exception.
@@ -106,6 +180,12 @@ behavior with the C driver.
 * **[Archive]** Enforce max concurrent recordings based on the successful calls to `startRecording/extendRecording`
 rather than the number of the `RecordingSessions` which are created lazily when publication connects.
 * **[Client/Java]** Move to zero garbage printing of IP addresses for Resolution frames.
+* **[Driver]** Adjust strict `SM` validation, i.e. allow positions with half a term behind and up to 1.5 terms ahead of
+the `snd-pos`.
+* **[Driver/C]** Return early if adding command failed due to full driver command buffer.
+* **[Driver/C]** Fix potential log buffer memory leak upon driver termination, i.e. drain pending free log buffer
+commands.
+* **[Driver/C]** Reduce the command buffer length to 128k as the previous size (128m) was unnecessarily large.
 * **[Java]** Upgrade to https://github.com/aeron-io/agrona/releases/tag/2.6.0[Agrona 2.6.0].
 * **[Java]** Upgrade to https://github.com/aeron-io/simple-binary-encoding/releases/tag/1.40.1[SBE 1.40.1].
 * **[Java]** Upgrade to `Gradle` 9.7.1.
@@ -114,6 +194,15 @@ rather than the number of the `RecordingSessions` which are created lazily when 
 * **[Java]** Upgrade to `Shadow` 9.6.1.
 * **[Java]** Upgrade to `Versions` 0.61.0.
 * **[Java]** Upgrade to `jackson-dataformat-cbor` 3.2.2.
+
+== 1.52.3 (2026-08-27)
+
+* **[Driver]** Adjust strict `SM` validation, i.e. allow positions with half a term behind and up to 1.5 terms ahead of
+the `snd-pos`.
+* **[Driver/C]** Return early if adding command failed due to full driver command buffer.
+* **[Driver/C]** Fix potential log buffer memory leak upon driver termination, i.e. drain pending free log buffer
+commands.
+* **[Driver/C]** Reduce the command buffer length to 128k as the previous size (128m) was unnecessarily large.
 
 == 1.52.2 (2026-07-10)
 
@@ -545,7 +634,15 @@ but is now explicitly enforced via the ClusteredServiceContainer.Configuration.M
 * **[Java]** Upgrade to `Versions` 0.54.0.
 * **[C]** Upgrade to `CMake` 4.3.2.
 
+== 1.50.5 (2026-09-02)
+
+* **[Driver/Java]** Fix a race condition when there are only spies and spies simulate connection, i.e. adding/removing
+spies mutated the array that the sender thread was iterating over.
+* **[Driver/C]** Fix a race condition when there are only spies and spies simulate connection, i.e. adding/removing
+spies mutated the array that the sender thread was iterating over.
+
 == 1.50.4 (2026-03-20)
+
 * **[Breaking]**: **[Client/C{plus}{plus} Wrapper]** Remove `close()` method from `Publication/ExclusivePublication`,
 i.e. the underlying `aeron_publication_t/aeron_exclusive_publication_t` will be closed when the corresponding C{plus}{plus}
 object is destroyed.
