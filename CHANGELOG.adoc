@@ -37,6 +37,7 @@ to `PersistentSubscription`. (https://github.com/aeron-io/aeron/issues/2137[#213
 * **[Driver/Java]** Fix `AbstractMinMulticastFlowControl#onIdle` that could drop live receivers.
 (https://github.com/aeron-io/aeron/pull/2144[#2144])
 * **[Driver/Java]** Fix inactive destination removal bug for dynamic MDC.
+* **[Java]** Upgrade to https://github.com/aeron-io/agrona/releases/tag/2.6.1[Agrona 2.6.1].
 * **[C]** Upgrade to `CMake` 4.4.3.
 
 == 1.53.2 (unreleased)
@@ -60,6 +61,9 @@ to `PersistentSubscription`. (https://github.com/aeron-io/aeron/issues/2137[#213
 * **[Driver/Java]** Fix `AbstractMinMulticastFlowControl#onIdle` that could drop live receivers.
 (https://github.com/aeron-io/aeron/pull/2144[#2144])
 * **[Driver/Java]** Fix inactive destination removal bug for dynamic MDC.
+* **[Java]** Upgrade to https://github.com/aeron-io/agrona/releases/tag/2.6.1[Agrona 2.6.1].
+* **[Java]** Upgrade to `ByteBuddy` 1.18.14.
+* **[Java]** Upgrade to `Versions` 0.64.0.
 
 == 1.53.1 (2026-09-11)
 
@@ -126,7 +130,7 @@ sent/received not just the first message.
 +
 Affects <<1.53.0 (2026-08-26)>> and <<1.53.1 (2026-09-11)>>.
 +
-Fixed in <<1.53.2 (2026-09-16)>>.
+Fixed in <<1.53.2 (2026-09-17)>>.
 
 === Changelog
 
