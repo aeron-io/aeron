@@ -32,10 +32,11 @@ destination commands. (https://github.com/aeron-io/aeron/pull/2143[#2143])
 (https://github.com/aeron-io/aeron/pull/2135[#2135])
 * **[Archive/Java]** Return replay session id when starting a replay via a response channel.
 (https://github.com/aeron-io/aeron/pull/2134[#2134])
-* **[Archive]** Add support for `control-mode=response` and `session-id` specified together in the replay channel
+* **[Driver]** Add support for `control-mode=response` and `session-id` specified together in the replay channel
 to `PersistentSubscription`. (https://github.com/aeron-io/aeron/issues/2137[#2137])
-* **[Archive]** Add support for `control-mode=response` and `session-id` specified together in the replay channel to
-`AeronArchive`.
+* **[Driver/Java]** Fix `AbstractMinMulticastFlowControl#onIdle` that could drop live receivers.
+(https://github.com/aeron-io/aeron/pull/2144[#2144])
+* **[Driver/Java]** Fix inactive destination removal bug for dynamic MDC.
 * **[C]** Upgrade to `CMake` 4.4.3.
 
 == 1.53.2 (unreleased)
@@ -54,10 +55,11 @@ destination commands. (https://github.com/aeron-io/aeron/pull/2143[#2143])
 (https://github.com/aeron-io/aeron/pull/2135[#2135])
 * **[Archive/Java]** Return replay session id when starting a replay via a response channel.
 (https://github.com/aeron-io/aeron/pull/2134[#2134])
-* **[Archive]** Add support for `control-mode=response` and `session-id` specified together in the replay channel
+* **[Driver]** Add support for `control-mode=response` and `session-id` specified together in the replay channel
 to `PersistentSubscription`. (https://github.com/aeron-io/aeron/issues/2137[#2137])
-* **[Archive]** Add support for `control-mode=response` and `session-id` specified together in the replay channel to
-`AeronArchive`.
+* **[Driver/Java]** Fix `AbstractMinMulticastFlowControl#onIdle` that could drop live receivers.
+(https://github.com/aeron-io/aeron/pull/2144[#2144])
+* **[Driver/Java]** Fix inactive destination removal bug for dynamic MDC.
 
 == 1.53.1 (2026-09-11)
 
