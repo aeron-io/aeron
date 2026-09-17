@@ -882,7 +882,7 @@ public class ResponseChannelsTest
                 });
             }
 
-            assertEquals(usePrototype, firstSendChannelLabel.get().equals(secondSendChannelLabel.get()));
+            assertEquals(firstSendChannelLabel.get(), secondSendChannelLabel.get());
         }
     }
 
@@ -940,25 +940,31 @@ public class ResponseChannelsTest
         final int reqStreamId = 22201;
         final int rspStreamId = 22202;
 
-        final String requestChannel = "aeron:udp?endpoint=localhost:10001";
-        final String responseChannel = "aeron:udp?control=localhost:10002|control-mode=response";
+        final String reqChannel = "aeron:udp?endpoint=localhost:10001";
+        final String rspChannel = "aeron:udp?control=localhost:10002|control-mode=response";
 
         try (Aeron server = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver2.aeronDirectoryName()));
             Aeron client = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver1.aeronDirectoryName()));
-            Subscription reqSub = server.addSubscription(requestChannel, reqStreamId);
-            Subscription rspSub = client.addSubscription(responseChannel + "|session-id=42", rspStreamId);
+            Subscription reqSub = server.addSubscription(reqChannel, reqStreamId);
+            Subscription rspSub = client.addSubscription(rspChannel + "|session-id=42", rspStreamId);
             Publication reqPub = client.addExclusivePublication(
-                requestChannel + "|response-correlation-id=" + rspSub.registrationId(), reqStreamId))
+                reqChannel + "|response-correlation-id=" + rspSub.registrationId(), reqStreamId))
         {
             Tests.awaitConnected(reqSub);
             Tests.awaitConnected(reqPub);
 
             final Image image = reqSub.imageAtIndex(0);
             final String url =
-                responseChannel + "|response-correlation-id=" + image.correlationId() + "|session-id=555";
+                rspChannel + "|response-correlation-id=" + image.correlationId() + "|session-id=555";
 
-            server.addExclusivePublication(url, rspStreamId);
-            Tests.awaitCounterDelta(client.countersReader(), SystemCounterDescriptor.ERRORS.id(), 1);
+            final ExclusivePublication rspPub = server.addExclusivePublication(url, rspStreamId);
+            while (client.countersReader().getCounterValue(SystemCounterDescriptor.ERRORS.id()) != 1)
+            {
+                Tests.sleep(1);
+            }
+
+            assertFalse(rspPub.isConnected());
+            assertFalse(rspSub.isConnected());
         }
     }
 
@@ -972,22 +978,22 @@ public class ResponseChannelsTest
         final int reqStreamId = 22201;
         final int rspStreamId = 22202;
 
-        final String requestChannel = "aeron:ipc?alias=request";
-        final String responseChannel = "aeron:ipc?control=localhost:10002|control-mode=response";
+        final String reqChannel = "aeron:ipc?alias=request";
+        final String rspChannel = "aeron:ipc?control=localhost:10002|control-mode=response";
 
         try (Aeron server = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver1.aeronDirectoryName()));
             Aeron client = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver1.aeronDirectoryName()));
-            Subscription reqSub = server.addSubscription(requestChannel, reqStreamId);
-            Subscription rspSub = client.addSubscription(responseChannel + "|session-id=42", rspStreamId);
+            Subscription reqSub = server.addSubscription(reqChannel, reqStreamId);
+            Subscription rspSub = client.addSubscription(rspChannel + "|session-id=42", rspStreamId);
             Publication reqPub = client.addExclusivePublication(
-                requestChannel + "|response-correlation-id=" + rspSub.registrationId(), reqStreamId))
+                reqChannel + "|response-correlation-id=" + rspSub.registrationId(), reqStreamId))
         {
             Tests.awaitConnected(reqSub);
             Tests.awaitConnected(reqPub);
 
             final Image image = reqSub.imageAtIndex(0);
             final String url =
-                responseChannel + "|response-correlation-id=" + image.correlationId() + "|session-id=555";
+                rspChannel + "|response-correlation-id=" + image.correlationId() + "|session-id=555";
 
             final RegistrationException exception = assertThrowsExactly(
                 RegistrationException.class, () -> server.addExclusivePublication(url, rspStreamId));
