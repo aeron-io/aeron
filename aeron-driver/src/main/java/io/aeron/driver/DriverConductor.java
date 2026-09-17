@@ -514,7 +514,7 @@ public final class DriverConductor implements Agent
                         recordError(new AeronEvent(
                             "failed to setup response subscription (" +
                             "registrationId=" + link.registrationId() +
-                            ", channel=" + link.channel() + "), because its URI contains " +
+                            ", channel=" + link.channel() + "), because it contains " +
                             "`session-id` parameter that does not match `session-id=" +
                                 responseSessionId + "` of the response publication",
                             AeronException.Category.ERROR));
@@ -1974,7 +1974,7 @@ public final class DriverConductor implements Agent
                                     ", channel=" + responsePublication.channel() + "), " +
                                     "because response subscription (" +
                                     "registrationId=" + subscriptionLink.registrationId() +
-                                    ", channel=" + subscriptionLink.channel() + ") URI contains " +
+                                    ", channel=" + subscriptionLink.channel() + ") uses " +
                                     "`session-id` parameter that does not match `session-id=" +
                                         responsePublication.sessionId() + "` of the response publication",
                                     AeronException.Category.ERROR);
