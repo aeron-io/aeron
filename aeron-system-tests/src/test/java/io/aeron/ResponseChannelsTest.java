@@ -785,6 +785,7 @@ public class ResponseChannelsTest
     @ParameterizedTest
     @CsvSource({ "true", "false" })
     @InterruptAfter(10)
+    @SuppressWarnings("MethodLength")
     void shouldCreateNewSendChannelWithoutPrototype(final boolean usePrototype) throws Exception
     {
         final IdleStrategy idleStrategy = YieldingIdleStrategy.INSTANCE;
@@ -882,7 +883,14 @@ public class ResponseChannelsTest
                 });
             }
 
-            assertEquals(firstSendChannelLabel.get(), secondSendChannelLabel.get());
+            if (usePrototype)
+            {
+                assertEquals(firstSendChannelLabel.get(), secondSendChannelLabel.get());
+            }
+            else
+            {
+                assertNotEquals(firstSendChannelLabel.get(), secondSendChannelLabel.get());
+            }
         }
     }
 
