@@ -1708,29 +1708,47 @@ void aeron_driver_conductor_on_check_managed_resources(
         conductor, conductor->lingering_resources, aeron_linger_resource_entry_t, now_ns, now_ms)
 }
 
-static void aeron_driver_conductor_find_and_update_ipc_response_subscription(
-    const aeron_driver_conductor_t *conductor,
-    int64_t response_correlation_id,
-    int32_t response_pub_session_id)
+static int aeron_driver_conductor_find_and_update_ipc_response_subscription(
+    const aeron_driver_conductor_t *conductor, const aeron_ipc_publication_t *response_pub)
 {
+    int64_t response_correlation_id = response_pub->conductor_fields.response_correlation_id;
     if (AERON_NULL_VALUE != response_correlation_id)
     {
         for (size_t i = 0, pub_n = conductor->ipc_publications.length; i < pub_n; i++)
         {
-            aeron_ipc_publication_t *potential_request_pub = conductor->ipc_publications.array[i].publication;
-            int64_t ipc_registration_id = potential_request_pub->conductor_fields.managed_resource.registration_id;
+            aeron_ipc_publication_t *request_pub = conductor->ipc_publications.array[i].publication;
+            int64_t ipc_registration_id = request_pub->conductor_fields.managed_resource.registration_id;
 
             if (ipc_registration_id == response_correlation_id)
             {
-                int64_t request_pub_response_correlation_id = potential_request_pub->conductor_fields.response_correlation_id;
+                int64_t request_pub_response_correlation_id = request_pub->conductor_fields.response_correlation_id;
 
                 for (size_t j = 0, sub_n = conductor->ipc_subscriptions.length; j < sub_n; j++)
                 {
-                    aeron_subscription_link_t *potential_response_sub = &conductor->ipc_subscriptions.array[j];
-                    if (request_pub_response_correlation_id == potential_response_sub->registration_id)
+                    aeron_subscription_link_t *response_sub = &conductor->ipc_subscriptions.array[j];
+                    if (request_pub_response_correlation_id == response_sub->registration_id)
                     {
-                        potential_response_sub->has_session_id = true;
-                        potential_response_sub->session_id = response_pub_session_id;
+                        if (response_sub->has_session_id &&
+                            response_pub->session_id != response_sub->session_id)
+                        {
+                            AERON_SET_ERR(
+                                -AERON_ERROR_CODE_GENERIC_ERROR,
+                                "failed to create response publication (registrationId=%" PRIi64 ", channel=%.*s), "
+                                "because response subscription (registrationId=%" PRIi64 ", channel=%.*s) "
+                                "uses `session-id` parameter that does not match `session-id=%" PRIi32
+                                "` of the response publication",
+                                response_pub->conductor_fields.managed_resource.registration_id,
+                                response_pub->channel_length,
+                                response_pub->channel,
+                                response_sub->registration_id,
+                                response_sub->channel_length,
+                                response_sub->channel,
+                                response_pub->session_id);
+                            return -1;
+                        }
+
+                        response_sub->has_session_id = true;
+                        response_sub->session_id = response_pub->session_id;
 
                         break;
                     }
@@ -1740,6 +1758,8 @@ static void aeron_driver_conductor_find_and_update_ipc_response_subscription(
             }
         }
     }
+
+    return 0;
 }
 
 aeron_ipc_publication_t* aeron_driver_conductor_find_shared_ipc_publication(
@@ -3872,6 +3892,13 @@ aeron_driver_conductor_command_state_t aeron_driver_conductor_execute_add_ipc_pu
         goto error;
     }
 
+    if (aeron_driver_conductor_find_and_update_ipc_response_subscription(conductor, publication) < 0)
+    {
+        AERON_APPEND_ERR("%s", "");
+        aeron_ipc_publication_close(&conductor->counters_manager, publication);
+        return AERON_DRIVER_CONDUCTOR_COMMAND_STATE_ERROR;
+    }
+
     aeron_ipc_publication_entry_t *entry = &conductor->ipc_publications.array[conductor->ipc_publications.length++];
     entry->publication = publication;
     entry->mapped_raw_log = command->mapped_raw_log;
@@ -3880,9 +3907,6 @@ aeron_driver_conductor_command_state_t aeron_driver_conductor_execute_add_ipc_pu
     command->log_file_name = NULL;
     publication->conductor_fields.managed_resource.time_of_last_state_change_ns =
         aeron_clock_cached_nano_time(conductor->context->cached_clock);
-
-    aeron_driver_conductor_find_and_update_ipc_response_subscription(
-        conductor, publication->conductor_fields.response_correlation_id, publication->session_id);
 
     return aeron_driver_conductor_execute_add_ipc_publication_link_publication(conductor, command, publication);
 
@@ -5084,6 +5108,7 @@ aeron_driver_conductor_command_state_t aeron_driver_conductor_execute_add_networ
         link->is_tether = params.is_tether;
         link->is_rejoin = params.is_rejoin;
         link->is_response = params.is_response;
+        link->setup_status = AERON_SUBSCRIPTION_LINK_SETUP_STATUS_PENDING;
         link->group = params.group;
         link->subscribable_list.length = 0;
         link->subscribable_list.capacity = 0;
@@ -7042,9 +7067,10 @@ void aeron_driver_conductor_on_response_setup(void *clientd, void *item)
     for (size_t i = 0, length = conductor->network_subscriptions.length; i < length; i++)
     {
         aeron_subscription_link_t *subscription_link = &conductor->network_subscriptions.array[i];
-        if (subscription_link->registration_id == response_correlation_id)
+        if (subscription_link->registration_id == response_correlation_id &&
+            AERON_SUBSCRIPTION_LINK_SETUP_STATUS_ERROR != subscription_link->setup_status)
         {
-            if (subscription_link->has_session_id)
+            if (AERON_SUBSCRIPTION_LINK_SETUP_STATUS_COMPLETE == subscription_link->setup_status)
             {
                 aeron_driver_receiver_proxy_on_request_setup(
                     subscription_link->endpoint->receiver_proxy,
@@ -7054,9 +7080,27 @@ void aeron_driver_conductor_on_response_setup(void *clientd, void *item)
             }
             else
             {
+                if (subscription_link->has_session_id && response_session_id != subscription_link->session_id)
+                {
+                    AERON_SET_ERR(
+                        -AERON_ERROR_CODE_GENERIC_ERROR,
+                        "failed to setup response subscription (registrationId=%" PRIi64 ", channel=%.*s), "
+                        "because it contains `session-id` parameter that does not match `session-id=%" PRIi32
+                        "` of the response publication",
+                        subscription_link->registration_id,
+                        subscription_link->channel_length,
+                        subscription_link->channel,
+                        response_session_id);
+                    aeron_driver_conductor_log_error(conductor);
+                    subscription_link->has_session_id = false;
+                    subscription_link->setup_status = AERON_SUBSCRIPTION_LINK_SETUP_STATUS_ERROR;
+                    return;
+                }
+
                 subscription_link->has_session_id = true;
                 subscription_link->session_id = response_session_id;
                 subscription_link->is_response = false;
+                subscription_link->setup_status = AERON_SUBSCRIPTION_LINK_SETUP_STATUS_COMPLETE;
 
                 aeron_driver_conductor_add_network_subscription_to_receiver(
                     subscription_link->endpoint,
