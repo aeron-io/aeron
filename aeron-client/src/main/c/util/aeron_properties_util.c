@@ -202,6 +202,11 @@ int aeron_properties_parse_file(const char *filename, aeron_properties_file_hand
     FILE *fpin = fopen(filename, "r");
     if (NULL == fpin)
     {
+        if (ENOENT == errno)
+        {
+            return 0;
+        }
+
         AERON_SET_ERR(errno, "could not open properties file: %s", filename);
         return -1;
     }
