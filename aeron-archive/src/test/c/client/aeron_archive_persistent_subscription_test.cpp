@@ -1958,12 +1958,19 @@ INSTANTIATE_TEST_SUITE_P(
     AeronArchivePersistentSubscriptionReplayOverConfiguredChannelTest,
     testing::Values(
         ReplayChannelAndStream{"aeron:udp?endpoint=localhost:0", -10, LOCALHOST_CONTROL_REQUEST_CHANNEL, LOCALHOST_CONTROL_RESPONSE_CHANNEL},
+        ReplayChannelAndStream{"aeron:udp?endpoint=localhost:0|session-id=6", -10, LOCALHOST_CONTROL_REQUEST_CHANNEL, LOCALHOST_CONTROL_RESPONSE_CHANNEL},
         ReplayChannelAndStream{"aeron:udp?endpoint=localhost:10001", -11, LOCALHOST_CONTROL_REQUEST_CHANNEL, LOCALHOST_CONTROL_RESPONSE_CHANNEL},
+        ReplayChannelAndStream{"aeron:udp?endpoint=localhost:10001|session=9", -11, LOCALHOST_CONTROL_REQUEST_CHANNEL, LOCALHOST_CONTROL_RESPONSE_CHANNEL},
         ReplayChannelAndStream{"aeron:ipc", -12, LOCALHOST_CONTROL_REQUEST_CHANNEL, LOCALHOST_CONTROL_RESPONSE_CHANNEL},
+        ReplayChannelAndStream{"aeron:ipc?session-id=17", -12, LOCALHOST_CONTROL_REQUEST_CHANNEL, LOCALHOST_CONTROL_RESPONSE_CHANNEL},
         ReplayChannelAndStream{"aeron:udp?control=localhost:10001|control-mode=response", -11, LOCALHOST_CONTROL_REQUEST_CHANNEL, "aeron:udp?control-mode=response|control=localhost:10002"},
+        ReplayChannelAndStream{"aeron:udp?control=localhost:10001|control-mode=response|session-id=4", -11, LOCALHOST_CONTROL_REQUEST_CHANNEL, "aeron:udp?control-mode=response|control=localhost:10002"},
         ReplayChannelAndStream{"aeron:udp?control=localhost:10001|control-mode=response|endpoint=localhost:5006", -11, LOCALHOST_CONTROL_REQUEST_CHANNEL, "aeron:udp?control-mode=response|control=localhost:10002"},
+        ReplayChannelAndStream{"aeron:udp?control=localhost:10001|control-mode=response|endpoint=localhost:5006|session-id=3", -11, LOCALHOST_CONTROL_REQUEST_CHANNEL, "aeron:udp?control-mode=response|control=localhost:10002"},
         ReplayChannelAndStream{"aeron:udp?control=localhost:10001|control-mode=response|endpoint=localhost:0", -11, LOCALHOST_CONTROL_REQUEST_CHANNEL, "aeron:udp?control-mode=response|control=localhost:10002"},
-        ReplayChannelAndStream{"aeron:ipc?control-mode=response", -11, "aeron:ipc", "aeron:ipc?control-mode=response"}
+        ReplayChannelAndStream{"aeron:udp?control=localhost:10001|control-mode=response|endpoint=localhost:0|session-id=-100", -11, LOCALHOST_CONTROL_REQUEST_CHANNEL, "aeron:udp?control-mode=response|control=localhost:10002"},
+        ReplayChannelAndStream{"aeron:ipc?control-mode=response", -11, "aeron:ipc", "aeron:ipc?control-mode=response"},
+        ReplayChannelAndStream{"aeron:ipc?control-mode=response|session-id=42", -11, "aeron:ipc", "aeron:ipc?control-mode=response"}
     ));
 
 TEST_P(AeronArchivePersistentSubscriptionReplayOverConfiguredChannelTest, shouldReplayOverConfiguredChannel)
