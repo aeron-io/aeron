@@ -1009,8 +1009,8 @@ public final class AeronArchive implements AutoCloseable
      * 64-bits are required to uniquely identify the replay when calling {@link #stopReplay(long)}. The lower 32-bits
      * can be obtained by casting the {@code long} value to an {@code int}.
      * <p>
-     * <strong>NB:</strong> To support response channels ({@code control-mode=response}) in the {@code replayChannel} use
-     * {@link #startReplay(long, String, int, ReplayParams)} overload instead.
+     * <strong>NB:</strong> To enable response channels support ({@code control-mode=response}) for the
+     * {@code replayChannel} use {@link #startReplay(long, String, int, ReplayParams)} overload instead.
      *
      * @param recordingId    to be replayed.
      * @param position       from which the replay should begin or {@link #NULL_POSITION} if from the start.
@@ -1066,8 +1066,8 @@ public final class AeronArchive implements AutoCloseable
      * 64-bits are required to uniquely identify the replay when calling {@link #stopReplay(long)}. The lower 32-bits
      * can be obtained by casting the {@code long} value to an {@code int}.
      * <p>
-     * <strong>NB:</strong> To support response channels ({@code control-mode=response}) in the {@code replayChannel} use
-     * {@link #startReplay(long, String, int, ReplayParams)} overload instead.
+     * <strong>NB:</strong> To enable response channels support ({@code control-mode=response}) for the
+     * {@code replayChannel} use {@link #startReplay(long, String, int, ReplayParams)} overload instead.
      *
      * @param recordingId    to be replayed.
      * @param position       from which the replay should begin or {@link #NULL_POSITION} if from the start.
@@ -1123,11 +1123,6 @@ public final class AeronArchive implements AutoCloseable
      *
      * @param recordingId    to be replayed.
      * @param replayChannel  to which the replay should be sent.
-     *                       <p>
-     *                       <em><strong>NB:</strong> If {@code replayChannel} uses UDP media ({@code aeron:udp}), has
-     *                       both {@code control-mode=response} and {@code session-id} parameters specified, then when
-     *                       creating the corresponding replay subscription the {@code session-id} parameter must be
-     *                       removed. Otherwise the subscription won't be able connect.</em>
      * @param replayStreamId to which the replay should be sent.
      * @param replayParams   optional parameters for the replay
      * @return the id of the replay session which will be the same as the {@link Image#sessionId()} of the received
@@ -1234,7 +1229,7 @@ public final class AeronArchive implements AutoCloseable
      * Replay a length in bytes of a recording from a position and for convenience create a {@link Subscription}
      * to receive the replay. If the position is {@link #NULL_POSITION} then the stream will be replayed from the start.
      * <p>
-     * <strong>NB:</strong> To support response channels ({@code control-mode=response}) in the {@code replayChannel} use
+     * <strong>NB:</strong> To enable response channels support ({@code control-mode=response}) for the {@code replayChannel} use
      * {@link #replay(long, String, int, ReplayParams)} overload instead.
      *
      * @param recordingId    to be replayed.
@@ -1290,7 +1285,7 @@ public final class AeronArchive implements AutoCloseable
      * Replay a length in bytes of a recording from a position and for convenience create a {@link Subscription}
      * to receive the replay. If the position is {@link #NULL_POSITION} then the stream will be replayed from the start.
      * <p>
-     * <strong>NB:</strong> To support response channels ({@code control-mode=response}) in the {@code replayChannel} use
+     * <strong>NB:</strong> To enable response channels support ({@code control-mode=response}) for the {@code replayChannel} use
      * {@link #replay(long, String, int, ReplayParams)} overload instead.
      *
      * @param recordingId             to be replayed.
@@ -4262,27 +4257,20 @@ public final class AeronArchive implements AutoCloseable
         }
 
         final long replayToken = pollForResponse(lastCorrelationId);
-
         replayParams.replayToken(replayToken);
-        // Workaround for replay channels with `control-mode=response` and `session-id` specified
-        final ChannelUri subscriberUri = ChannelUri.parse(replayChannel);
-        if (subscriberUri.isUdp())
-        {
-            subscriberUri.remove(SESSION_ID_PARAM_NAME);
-        }
 
-        final Subscription replaySubscription = aeron.addSubscription(subscriberUri.toString(), replayStreamId);
+        final Subscription replaySubscription = aeron.addSubscription(replayChannel, replayStreamId);
+
         final ChannelUriStringBuilder uriBuilder = new ChannelUriStringBuilder(context.controlRequestChannel())
             .sessionId((Integer)null)
             .responseCorrelationId(replaySubscription.registrationId())
             .termId((Integer)null).initialTermId((Integer)null).termOffset((Integer)null)
             .termLength(64 * 1024)
             .spiesSimulateConnection(false);
-
-        final String channel = uriBuilder.build();
+        final String requestChannel = uriBuilder.build();
 
         try (ExclusivePublication publication =
-            aeron.addExclusivePublication(channel, context().controlRequestStreamId()))
+            aeron.addExclusivePublication(requestChannel, context().controlRequestStreamId()))
         {
             final ArchiveProxy responseArchiveProxy = new ArchiveProxy(publication);
 

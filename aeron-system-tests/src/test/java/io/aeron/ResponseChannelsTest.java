@@ -17,6 +17,7 @@ package io.aeron;
 
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
+import io.aeron.driver.status.SystemCounterDescriptor;
 import io.aeron.exceptions.RegistrationException;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.Header;
@@ -38,8 +39,6 @@ import org.agrona.concurrent.Agent;
 import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.YieldingIdleStrategy;
-import org.hamcrest.CoreMatchers;
-import org.hamcrest.MatcherAssert;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -56,10 +55,20 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static io.aeron.AeronCounters.DRIVER_PUBLISHER_POS_TYPE_ID;
-import static io.aeron.CommonContext.*;
+import static io.aeron.CommonContext.CONTROL_MODE_RESPONSE;
+import static io.aeron.CommonContext.MDC_CONTROL_MODE_PARAM_NAME;
+import static io.aeron.CommonContext.generateRandomDirName;
 import static io.aeron.driver.status.SendChannelStatus.SEND_CHANNEL_STATUS_TYPE_ID;
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(InterruptingTestCallback.class)
 public class ResponseChannelsTest
@@ -84,7 +93,9 @@ public class ResponseChannelsTest
             .dirDeleteOnShutdown(true)
             .publicationTermBufferLength(DEFAULT_TERM_LENGTH)
             .ipcTermBufferLength(DEFAULT_TERM_LENGTH)
-            .threadingMode(ThreadingMode.SHARED);
+            .threadingMode(ThreadingMode.SHARED)
+            .publicationReservedSessionIdLow(0)
+            .publicationReservedSessionIdHigh(1000);
 
         driver1 = TestMediaDriver.launch(
             context.clone()
@@ -170,16 +181,20 @@ public class ResponseChannelsTest
         }
     }
 
-    @Test
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "aeron:udp?control-mode=response|control=localhost:10002",
+        "aeron:udp?control-mode=response|control=localhost:10002|session-id=71",
+    })
     @InterruptAfter(15)
-    void shouldConnectResponsePublicationUsingImage()
+    void shouldConnectResponsePublicationUsingImage(final String responseChannel)
     {
-        try (Aeron server = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver1.aeronDirectoryName()));
+        try (Aeron server = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver2.aeronDirectoryName()));
             Aeron client = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver1.aeronDirectoryName()));
             Subscription subReq = server.addSubscription(
                 "aeron:udp?endpoint=localhost:10001", REQUEST_STREAM_ID);
             Subscription subRsp = client.addSubscription(
-                "aeron:udp?control-mode=response|control=localhost:10002", RESPONSE_STREAM_ID);
+                responseChannel, RESPONSE_STREAM_ID);
             Publication pubReq = client.addPublication(
                 "aeron:udp?endpoint=localhost:10001|response-correlation-id=" + subRsp.registrationId(),
                 REQUEST_STREAM_ID))
@@ -189,8 +204,7 @@ public class ResponseChannelsTest
             Objects.requireNonNull(subRsp);
 
             final Image image = subReq.imageAtIndex(0);
-            final String url = "aeron:udp?control-mode=response|control=localhost:10002|response-correlation-id=" +
-                image.correlationId();
+            final String url = responseChannel + "|response-correlation-id=" + image.correlationId();
 
             try (Publication pubRsp = server.addPublication(url, RESPONSE_STREAM_ID))
             {
@@ -202,35 +216,43 @@ public class ResponseChannelsTest
 
     @ParameterizedTest
     @InterruptAfter(10)
-    @ValueSource(booleans = { true, false })
-    void shouldConnectResponsePublicationUsingImageAndIpc(final boolean useExclusive)
+    @CsvSource({
+        "false,aeron:ipc?control-mode=response",
+        "false,aeron:ipc?control-mode=response|session-id=43",
+        "true,aeron:ipc?control-mode=response",
+        "true,aeron:ipc?control-mode=response|session-id=-19",
+    })
+    void shouldConnectResponsePublicationUsingImageAndIpc(
+        final boolean useExclusive, final String responseChannel)
     {
         CloseHelper.quietClose(driver2);
 
         try (Aeron server = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver1.aeronDirectoryName()));
             Aeron client = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver1.aeronDirectoryName()));
-            Subscription subReq = server.addSubscription("aeron:ipc", REQUEST_STREAM_ID))
+            Subscription subReq = server.addSubscription("aeron:ipc", REQUEST_STREAM_ID);
+            Subscription subRsp1 = client.addSubscription(
+                responseChannel + "|alias=client1", RESPONSE_STREAM_ID);
+            Publication pubReq1 = newPublication(
+                useExclusive,
+                client,
+                "aeron:ipc?response-correlation-id=" + subRsp1.registrationId(),
+                REQUEST_STREAM_ID);)
         {
-            try (Subscription subRsp1 = client.addSubscription(
-                "aeron:ipc?control-mode=response|alias=client1", RESPONSE_STREAM_ID);
-                Publication pubReq1 = newPublication(
-                    useExclusive,
-                    client,
-                    "aeron:ipc?response-correlation-id=" + subRsp1.registrationId(),
-                    REQUEST_STREAM_ID);
-                Subscription subRsp2 = client.addSubscription(
-                    "aeron:ipc?control-mode=response|alias=client2", RESPONSE_STREAM_ID);
+            Tests.awaitConnected(pubReq1);
+            Tests.await(() -> 1 == subReq.imageCount());
+
+            try (Subscription subRsp2 = client.addSubscription(
+                "aeron:ipc?control-mode=response|alias=client2", RESPONSE_STREAM_ID);
                 Publication pubReq2 = newPublication(
                     useExclusive,
                     client,
                     "aeron:ipc?response-correlation-id=" + subRsp2.registrationId(),
                     REQUEST_STREAM_ID))
             {
-                Tests.awaitConnected(pubReq1);
                 Tests.awaitConnected(pubReq2);
                 Tests.await(() -> 2 == subReq.imageCount());
 
-                final String url1 = "aeron:ipc?control-mode=response|response-correlation-id=" +
+                final String url1 = responseChannel + "|response-correlation-id=" +
                     subReq.imageAtIndex(0).correlationId();
                 final String url2 = "aeron:ipc?control-mode=response|response-correlation-id=" +
                     subReq.imageAtIndex(1).correlationId();
@@ -735,9 +757,9 @@ public class ResponseChannelsTest
 
             final RegistrationException exception =
                 assertThrowsExactly(RegistrationException.class, () -> aeron.addSubscription(channel2, streamId));
-            MatcherAssert.assertThat(
+            assertThat(
                 exception.getMessage(),
-                CoreMatchers.containsString(
+                containsString(
                 "option conflicts with existing subscription: isResponse=" +
                 CONTROL_MODE_RESPONSE.equals(ChannelUri.parse(channel2).get(MDC_CONTROL_MODE_PARAM_NAME)) +
                 " existingChannel=" + channel1 + " channel=" + channel2));
@@ -906,6 +928,70 @@ public class ResponseChannelsTest
                 assertEquals(termLength, pubRsp.termBufferLength());
                 assertEquals(termLength, subRsp.imageAtIndex(0).termBufferLength());
             }
+        }
+    }
+
+    @Test
+    @InterruptAfter(10)
+    void shouldErrorCompletingUdpResponseSubscriptionSetupOnSessionMismatch()
+    {
+        watcher.ignoreErrorsMatching(s -> s.contains("failed to setup response subscription"));
+
+        final int reqStreamId = 22201;
+        final int rspStreamId = 22202;
+
+        final String requestChannel = "aeron:udp?endpoint=localhost:10001";
+        final String responseChannel = "aeron:udp?control=localhost:10002|control-mode=response";
+
+        try (Aeron server = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver2.aeronDirectoryName()));
+            Aeron client = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver1.aeronDirectoryName()));
+            Subscription reqSub = server.addSubscription(requestChannel, reqStreamId);
+            Subscription rspSub = client.addSubscription(responseChannel + "|session-id=42", rspStreamId);
+            Publication reqPub = client.addExclusivePublication(
+                requestChannel + "|response-correlation-id=" + rspSub.registrationId(), reqStreamId))
+        {
+            Tests.awaitConnected(reqSub);
+            Tests.awaitConnected(reqPub);
+
+            final Image image = reqSub.imageAtIndex(0);
+            final String url =
+                responseChannel + "|response-correlation-id=" + image.correlationId() + "|session-id=555";
+
+            server.addExclusivePublication(url, rspStreamId);
+            Tests.awaitCounterDelta(client.countersReader(), SystemCounterDescriptor.ERRORS.id(), 1);
+        }
+    }
+
+    @Test
+    @InterruptAfter(10)
+    void shouldErrorAddingResponseIpcPublicationOnSessionMismatch()
+    {
+        CloseHelper.close(driver2);
+        watcher.ignoreErrorsMatching(s -> s.contains("failed to create response publication"));
+
+        final int reqStreamId = 22201;
+        final int rspStreamId = 22202;
+
+        final String requestChannel = "aeron:ipc?alias=request";
+        final String responseChannel = "aeron:ipc?control=localhost:10002|control-mode=response";
+
+        try (Aeron server = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver1.aeronDirectoryName()));
+            Aeron client = Aeron.connect(new Aeron.Context().aeronDirectoryName(driver1.aeronDirectoryName()));
+            Subscription reqSub = server.addSubscription(requestChannel, reqStreamId);
+            Subscription rspSub = client.addSubscription(responseChannel + "|session-id=42", rspStreamId);
+            Publication reqPub = client.addExclusivePublication(
+                requestChannel + "|response-correlation-id=" + rspSub.registrationId(), reqStreamId))
+        {
+            Tests.awaitConnected(reqSub);
+            Tests.awaitConnected(reqPub);
+
+            final Image image = reqSub.imageAtIndex(0);
+            final String url =
+                responseChannel + "|response-correlation-id=" + image.correlationId() + "|session-id=555";
+
+            final RegistrationException exception = assertThrowsExactly(
+                RegistrationException.class, () -> server.addExclusivePublication(url, rspStreamId));
+            assertThat(exception.getMessage(), containsString("failed to create response publication"));
         }
     }
 

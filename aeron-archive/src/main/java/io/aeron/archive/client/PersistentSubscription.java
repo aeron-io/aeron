@@ -52,8 +52,6 @@ import static io.aeron.AeronCounters.PERSISTENT_SUBSCRIPTION_LIVE_JOINED_COUNT_T
 import static io.aeron.AeronCounters.PERSISTENT_SUBSCRIPTION_LIVE_LEFT_COUNT_TYPE_ID;
 import static io.aeron.AeronCounters.PERSISTENT_SUBSCRIPTION_STATE_TYPE_ID;
 import static io.aeron.CommonContext.ENDPOINT_PARAM_NAME;
-import static io.aeron.CommonContext.IPC_CHANNEL;
-import static io.aeron.CommonContext.SESSION_ID_PARAM_NAME;
 import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
 import static io.aeron.archive.client.AeronArchive.REPLAY_ALL_AND_FOLLOW;
 import static io.aeron.archive.codecs.ControlResponseCode.OK;
@@ -745,7 +743,7 @@ public final class PersistentSubscription implements AutoCloseable
         {
             case SESSION_SPECIFIC ->
             {
-                replayChannelUri.put(SESSION_ID_PARAM_NAME, Integer.toString((int)replaySessionId));
+                replayChannelUri.put(CommonContext.SESSION_ID_PARAM_NAME, Integer.toString((int)replaySessionId));
 
                 state(State.ADD_REPLAY_SUBSCRIPTION);
 
@@ -774,25 +772,11 @@ public final class PersistentSubscription implements AutoCloseable
 
     private int addReplaySubscription()
     {
-        // A workaround to allow replay channel to be configured with an explicit `session-id` parameter, i.e.
-        // create subscription without `session-id` parameter to allow proper lining in the media driver.
-        final String channel;
-        if (ReplayChannelType.RESPONSE_CHANNEL == replayChannelType &&
-            !replayChannel.startsWith(IPC_CHANNEL) &&
-            replayChannel.contains(SESSION_ID_PARAM_NAME))
+        final String channel = switch (replayChannelType)
         {
-            final ChannelUri uri = ChannelUri.parse(replayChannel);
-            uri.remove(SESSION_ID_PARAM_NAME);
-            channel = uri.toString();
-        }
-        else
-        {
-            channel = switch (replayChannelType)
-            {
-                case SESSION_SPECIFIC -> replayChannelUri.toString();
-                case DYNAMIC_PORT, RESPONSE_CHANNEL -> replayChannel;
-            };
-        }
+            case SESSION_SPECIFIC -> replayChannelUri.toString();
+            case DYNAMIC_PORT, RESPONSE_CHANNEL -> replayChannel;
+        };
 
         replaySubscriptionId = aeron.asyncAddSubscription(channel, replayStreamId);
 
