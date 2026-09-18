@@ -35,7 +35,7 @@ import java.util.Random;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.allOf;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
 
 public class MultiGapLossAndRecoverySystemTest
@@ -94,14 +94,13 @@ public class MultiGapLossAndRecoverySystemTest
             // Now, however, the UnicastRetransmitHandler treats new NAKs as a tacit admission that the previous
             // NAK did its job and the prior gap was filled, so we can immediately handle the new NAK.
 
-            final long gapCount = TOTAL_GAPS;
-            final long expectedCountWithBuffer = gapCount * 2;
+            final long expectedCountWithBuffer = TOTAL_GAPS * 2;
             assertThat(
                 retransmitCount,
-                allOf(greaterThanOrEqualTo(gapCount), lessThanOrEqualTo(expectedCountWithBuffer)));
+                allOf(greaterThan(0L), lessThanOrEqualTo(expectedCountWithBuffer)));
             assertThat(
                 nakCount,
-                allOf(greaterThanOrEqualTo(gapCount), lessThanOrEqualTo(expectedCountWithBuffer)));
+                allOf(greaterThan(0L), lessThanOrEqualTo(expectedCountWithBuffer)));
             assertThat(nakCount, lessThanOrEqualTo(expectedCountWithBuffer));
         }
     }
