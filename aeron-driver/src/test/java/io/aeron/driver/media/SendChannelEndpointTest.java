@@ -26,6 +26,7 @@ import io.aeron.protocol.ErrorFlyweight;
 import io.aeron.protocol.NakFlyweight;
 import io.aeron.protocol.StatusMessageFlyweight;
 import org.agrona.CloseHelper;
+import org.agrona.ErrorHandler;
 import org.agrona.concurrent.CachedNanoClock;
 import org.agrona.concurrent.EpochNanoClock;
 import org.agrona.concurrent.UnsafeBuffer;
@@ -480,5 +481,37 @@ class SendChannelEndpointTest
 
         verify(sendTimestampClock).nanoTime();
         verifyNoMoreInteractions(sendTimestampClock);
+    }
+
+    @SuppressWarnings("auxiliaryclass")
+    @Test
+    void shouldRemoveOnlyInactiveDestinationsWhenTheLastOneIsAlsoInactive()
+    {
+        final CachedNanoClock clock = new CachedNanoClock();
+        final DynamicSndMultiDestination destinations =
+            new DynamicSndMultiDestination(clock, mock(ErrorHandler.class));
+        destinations.destinationsCounter = mock(AtomicCounter.class);
+
+        final StatusMessageFlyweight sm = new StatusMessageFlyweight(
+            new UnsafeBuffer(ByteBuffer.allocateDirect(StatusMessageFlyweight.HEADER_LENGTH)));
+        final InetSocketAddress one = InetSocketAddress.createUnresolved("localhost", 10001);
+        final InetSocketAddress two = InetSocketAddress.createUnresolved("localhost", 10002);
+        final InetSocketAddress three = InetSocketAddress.createUnresolved("localhost", 10003);
+
+        clock.update(0);
+        destinations.onStatusMessage(sm.receiverId(1), one);
+        destinations.onStatusMessage(sm.receiverId(2), two);
+        destinations.onStatusMessage(sm.receiverId(3), three);
+        assertEquals(3, destinations.destinations.length);
+
+        clock.update(DESTINATION_TIMEOUT);
+        destinations.onStatusMessage(sm.receiverId(2), two);
+
+        // one and three have timed out, two has not
+        clock.update(DESTINATION_TIMEOUT * 2);
+        destinations.send(null, ByteBuffer.allocateDirect(64), null, 64);
+
+        assertEquals(1, destinations.destinations.length);
+        assertEquals(2, destinations.destinations[0].receiverId);
     }
 }
