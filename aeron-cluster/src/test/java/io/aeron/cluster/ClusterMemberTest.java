@@ -154,7 +154,7 @@ class ClusterMemberTest
     @Test
     void shouldRankClusterStart()
     {
-        assertThat(quorumPosition(members, rankedPositions, 0, 10), is(0L));
+        assertThat(quorumPosition(members, rankedPositions, 0, 10, NULL_VALUE), is(0L));
     }
 
     @ParameterizedTest
@@ -183,8 +183,20 @@ class ClusterMemberTest
         members[1].logPosition(member1LogPosition);
         members[2].logPosition(member2LogPosition);
 
-        final long quorumPosition = quorumPosition(members, rankedPositions, 0, 10);
+        final long quorumPosition = quorumPosition(members, rankedPositions, 0, 10, NULL_VALUE);
         assertEquals(expectedQuorumPosition, quorumPosition);
+    }
+
+    @Test
+    void shouldNotCountMembersReportingAnOlderLeadershipTermTowardsTheQuorumPosition()
+    {
+        // member two is still reporting term 4; entries past 100 in that term were truncated when term 5 began,
+        // so its position must not count towards what a quorum of term 5 holds
+        members[0].leadershipTermId(5).logPosition(500);
+        members[1].leadershipTermId(5).logPosition(100);
+        members[2].leadershipTermId(4).logPosition(500);
+
+        assertEquals(100, quorumPosition(members, rankedPositions, 0, 10, 5));
     }
 
     @ParameterizedTest
@@ -230,7 +242,7 @@ class ClusterMemberTest
         };
         final long[] positions = new long[quorumThreshold(clusterMembers.length)];
 
-        final long quorumPosition = quorumPosition(clusterMembers, positions, nowNs, timeoutNs);
+        final long quorumPosition = quorumPosition(clusterMembers, positions, nowNs, timeoutNs, 0);
         assertEquals(expectedQuorumPosition, quorumPosition);
     }
 

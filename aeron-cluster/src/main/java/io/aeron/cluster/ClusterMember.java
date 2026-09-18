@@ -858,14 +858,19 @@ public final class ClusterMember
     /**
      * Calculate the position reached by a quorum of cluster members.
      *
-     * @param members         of the cluster.
-     * @param rankedPositions temp array to be used for sorting the positions to avoid allocation.
-     * @param nowNs           for the current time.
-     * @param timeoutNs       after which a member is not considered active.
+     * @param members          of the cluster.
+     * @param rankedPositions  temp array to be used for sorting the positions to avoid allocation.
+     * @param nowNs            for the current time.
+     * @param timeoutNs        after which a member is not considered active.
+     * @param leadershipTermId of the current term; members reporting an older term are not counted.
      * @return the position reached by a quorum of active cluster members.
      */
     public static long quorumPosition(
-        final ClusterMember[] members, final long[] rankedPositions, final long nowNs, final long timeoutNs)
+        final ClusterMember[] members,
+        final long[] rankedPositions,
+        final long nowNs,
+        final long timeoutNs,
+        final long leadershipTermId)
     {
         final int length = rankedPositions.length;
         for (int i = 0; i < length; i++)
@@ -875,7 +880,9 @@ public final class ClusterMember
 
         for (final ClusterMember member : members)
         {
-            if (member.isActive(nowNs, timeoutNs))
+            // a position reported for an older term may have been truncated since, so it says nothing about
+            // what this member holds in the current term and must not count towards the commit quorum
+            if (member.isActive(nowNs, timeoutNs) && leadershipTermId == member.leadershipTermId)
             {
                 long newPosition = member.logPosition;
                 for (int i = 0; i < length; i++)
