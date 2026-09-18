@@ -497,6 +497,42 @@ TEST_F(MinFlowControlTest, shouldTimeoutWithMinStrategy)
     ASSERT_EQ(sender_limit, m_strategy->on_idle(m_strategy->state, 701 * 1000000, sender_limit, 0, false));
 }
 
+static std::vector<int64_t> removed_receiver_ids;
+
+static void test_flow_control_on_receiver_removed(
+    int64_t receiver_id,
+    int32_t session_id,
+    int32_t stream_id,
+    size_t channel_length,
+    const char *channel,
+    size_t receiver_count)
+{
+    removed_receiver_ids.push_back(receiver_id);
+}
+
+TEST_F(MinFlowControlTest, shouldReportTheTimedOutReceiverWhenItIsNotTheLastOne)
+{
+    const int64_t sender_limit = 5000;
+    initialise_channel("aeron:udp?endpoint=224.20.30.39:24326|interface=localhost|fc=min,t:500ms");
+
+    removed_receiver_ids.clear();
+    context->log.flow_control_on_receiver_removed = test_flow_control_on_receiver_removed;
+
+    ASSERT_EQ(0, aeron_default_multicast_flow_control_strategy_supplier(
+        &m_strategy, context, &m_counters_manager, m_channel,
+        1001, 1001, 1001, 0, 64 * 1024));
+    ASSERT_NE(nullptr, m_strategy);
+
+    apply_status_message(m_strategy, 1, 1000, 0, 0);
+    apply_status_message(m_strategy, 2, 2000, 0, 300 * 1000000);
+    apply_status_message(m_strategy, 3, 3000, 0, 0);
+
+    // receivers one and three have timed out, receiver two has not
+    m_strategy->on_idle(m_strategy->state, 501 * 1000000, sender_limit, 0, false);
+
+    ASSERT_EQ(std::vector<int64_t>({ 3, 1 }), removed_receiver_ids);
+}
+
 TEST_F(MaxFlowControlTest, shouldFallbackToMaxStrategy)
 {
     initialise_channel("aeron:udp?endpoint=224.20.30.39:24326|interface=localhost");
