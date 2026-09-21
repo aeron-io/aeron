@@ -192,15 +192,21 @@ int aeron_udp_transport_poller_poll(
         for (size_t i = 0, length = poller->transports.length; i < length; i++)
         {
             aeron_udp_channel_transport_t *transport = poller->transports.array[i].transport;
-            int recv_result = recvmmsg_func(transport, msgvec, vlen, bytes_rcved, recv_func, clientd);
-            if (recv_result < 0)
+            for (int j = 0; j < AERON_UDP_TRANSPORT_POLLER_PER_SOCKET_POLL_LIMIT; j++)
             {
-                AERON_APPEND_ERR("%s", "aeron_udp_transport_poller_poll");
-                aeron_udp_channel_transport_log_error(transport);
-            }
-            else
-            {
+                int recv_result = recvmmsg_func(transport, msgvec, vlen, bytes_rcved, recv_func, clientd);
+                if (recv_result < 0)
+                {
+                    AERON_APPEND_ERR("%s", "aeron_udp_transport_poller_poll");
+                    aeron_udp_channel_transport_log_error(transport);
+                    break;
+                }
+
                 work_count += recv_result;
+                if (recv_result != (int)vlen)
+                {
+                    break;
+                }
             }
         }
     }
@@ -233,16 +239,21 @@ int aeron_udp_transport_poller_poll(
                 if (epoll_events[i].events & EPOLLIN)
                 {
                     aeron_udp_channel_transport_t *transport = epoll_events[i].data.ptr;
-                    int recv_result = recvmmsg_func( transport, msgvec, vlen, bytes_rcved, recv_func, clientd);
+                    for (int j = 0; j < AERON_UDP_TRANSPORT_POLLER_PER_SOCKET_POLL_LIMIT; j++)
+                    {
+                        int recv_result = recvmmsg_func(transport, msgvec, vlen, bytes_rcved, recv_func, clientd);
+                        if (recv_result < 0)
+                        {
+                            AERON_APPEND_ERR("%s", "aeron_udp_transport_poller_poll");
+                            aeron_udp_channel_transport_log_error(transport);
+                            break;
+                        }
 
-                    if (recv_result < 0)
-                    {
-                        AERON_APPEND_ERR("%s", "aeron_udp_transport_poller_poll");
-                        aeron_udp_channel_transport_log_error(transport);
-                    }
-                    else
-                    {
                         work_count += recv_result;
+                        if (recv_result != (int)vlen)
+                        {
+                            break;
+                        }
                     }
                 }
 
@@ -270,16 +281,21 @@ int aeron_udp_transport_poller_poll(
                 if (pollfds[i].revents & POLLIN)
                 {
                     aeron_udp_channel_transport_t *transport = poller->transports.array[i].transport;
-                    int recv_result = recvmmsg_func(
-                        transport, msgvec, vlen, bytes_rcved, recv_func, clientd);
-                    if (recv_result < 0)
+                    for (int j = 0; j < AERON_UDP_TRANSPORT_POLLER_PER_SOCKET_POLL_LIMIT; j++)
                     {
-                        AERON_APPEND_ERR("%s", "aeron_udp_transport_poller_poll");
-                        aeron_udp_channel_transport_log_error(transport);
-                    }
-                    else
-                    {
+                        int recv_result = recvmmsg_func(transport, msgvec, vlen, bytes_rcved, recv_func, clientd);
+                        if (recv_result < 0)
+                        {
+                            AERON_APPEND_ERR("%s", "aeron_udp_transport_poller_poll");
+                            aeron_udp_channel_transport_log_error(transport);
+                            break;
+                        }
+
                         work_count += recv_result;
+                        if (recv_result != (int)vlen)
+                        {
+                            break;
+                        }
                     }
                 }
 

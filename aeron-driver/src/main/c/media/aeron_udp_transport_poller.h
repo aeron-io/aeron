@@ -20,6 +20,7 @@
 #include "aeron_driver_conductor.h"
 
 #define AERON_UDP_TRANSPORT_POLLER_ITERATION_THRESHOLD (5)
+#define AERON_UDP_TRANSPORT_POLLER_PER_SOCKET_POLL_LIMIT (4)
 
 typedef struct aeron_udp_channel_transport_entry_stct
 {
