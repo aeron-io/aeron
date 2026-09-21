@@ -48,20 +48,21 @@ import org.agrona.concurrent.status.StatusIndicator;
 
 import java.net.InetSocketAddress;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
+import static io.aeron.PropertiesUtil.getDurationInNanos;
+import static io.aeron.PropertiesUtil.getInteger;
+import static io.aeron.PropertiesUtil.getLong;
+import static io.aeron.PropertiesUtil.getSizeAsInt;
+import static io.aeron.PropertiesUtil.getSizeAsLong;
 import static io.aeron.driver.ThreadingMode.DEDICATED;
 import static io.aeron.logbuffer.LogBufferDescriptor.PAGE_MAX_SIZE;
 import static io.aeron.logbuffer.LogBufferDescriptor.PAGE_MIN_SIZE;
-import static java.lang.Integer.getInteger;
-import static java.lang.Long.getLong;
 import static java.lang.System.getProperty;
 import static java.nio.ByteOrder.LITTLE_ENDIAN;
 import static org.agrona.BitUtil.fromHex;
-import static org.agrona.SystemUtil.getDurationInNanos;
-import static org.agrona.SystemUtil.getSizeAsInt;
-import static org.agrona.SystemUtil.getSizeAsLong;
 
 /**
  * Configuration options for the {@link MediaDriver}.
@@ -596,7 +597,7 @@ public final class Configuration
     public static final String MULTICAST_FLOW_CONTROL_STRATEGY_PROP_NAME = "aeron.multicast.flow.control.strategy";
 
     /**
-     *  Default flow control strategy for multicast.
+     * Default flow control strategy for multicast.
      */
     @Config
     public static final String MULTICAST_FLOW_CONTROL_STRATEGY_DEFAULT = "io.aeron.driver.MaxMulticastFlowControl";
@@ -1261,7 +1262,19 @@ public final class Configuration
      */
     public static boolean useWindowsHighResTimer()
     {
-        return "true".equals(getProperty(USE_WINDOWS_HIGH_RES_TIMER_PROP_NAME));
+        return useWindowsHighResTimer(System.getProperties());
+    }
+
+    /**
+     * Should the high-resolution timer be used when running on Windows.
+     *
+     * @param properties to read the configuration from.
+     * @return true if the high-resolution timer be used when running on Windows.
+     * @see #USE_WINDOWS_HIGH_RES_TIMER_PROP_NAME
+     */
+    public static boolean useWindowsHighResTimer(final Properties properties)
+    {
+        return "true".equals(properties.getProperty(USE_WINDOWS_HIGH_RES_TIMER_PROP_NAME));
     }
 
     /**
@@ -1272,7 +1285,19 @@ public final class Configuration
      */
     public static boolean warnIfDirExists()
     {
-        return "true".equals(getProperty(DIR_WARN_IF_EXISTS_PROP_NAME));
+        return warnIfDirExists(System.getProperties());
+    }
+
+    /**
+     * Should a warning be printed if the aeron directory exist when starting.
+     *
+     * @param properties to read the configuration from.
+     * @return true if a warning be printed if the aeron directory exist when starting.
+     * @see #DIR_WARN_IF_EXISTS_PROP_NAME
+     */
+    public static boolean warnIfDirExists(final Properties properties)
+    {
+        return "true".equals(properties.getProperty(DIR_WARN_IF_EXISTS_PROP_NAME));
     }
 
     /**
@@ -1284,7 +1309,20 @@ public final class Configuration
      */
     public static boolean dirDeleteOnStart()
     {
-        return "true".equals(getProperty(DIR_DELETE_ON_START_PROP_NAME));
+        return dirDeleteOnStart(System.getProperties());
+    }
+
+    /**
+     * Should driver attempt to an immediate forced delete of {@link CommonContext#AERON_DIR_PROP_NAME} on start
+     * if it exists.
+     *
+     * @param properties to read the configuration from.
+     * @return true if the aeron directory be deleted on start without checking if active.
+     * @see #DIR_DELETE_ON_START_PROP_NAME
+     */
+    public static boolean dirDeleteOnStart(final Properties properties)
+    {
+        return "true".equals(properties.getProperty(DIR_DELETE_ON_START_PROP_NAME));
     }
 
     /**
@@ -1295,7 +1333,19 @@ public final class Configuration
      */
     public static boolean dirDeleteOnShutdown()
     {
-        return "true".equals(getProperty(DIR_DELETE_ON_SHUTDOWN_PROP_NAME));
+        return dirDeleteOnShutdown(System.getProperties());
+    }
+
+    /**
+     * Should driver attempt to delete {@link CommonContext#AERON_DIR_PROP_NAME} on shutdown.
+     *
+     * @param properties to read the configuration from.
+     * @return true if driver should attempt to delete {@link CommonContext#AERON_DIR_PROP_NAME} on shutdown.
+     * @see #DIR_DELETE_ON_SHUTDOWN_PROP_NAME
+     */
+    public static boolean dirDeleteOnShutdown(final Properties properties)
+    {
+        return "true".equals(properties.getProperty(DIR_DELETE_ON_SHUTDOWN_PROP_NAME));
     }
 
     /**
@@ -1306,7 +1356,19 @@ public final class Configuration
      */
     public static boolean termBufferSparseFile()
     {
-        return "true".equals(getProperty(TERM_BUFFER_SPARSE_FILE_PROP_NAME, "true"));
+        return termBufferSparseFile(System.getProperties());
+    }
+
+    /**
+     * Should term buffers be created as sparse files. This can save space at the expense of latency when required.
+     *
+     * @param properties to read the configuration from.
+     * @return true if term buffers should be created as sparse files.
+     * @see #TERM_BUFFER_SPARSE_FILE_PROP_NAME
+     */
+    public static boolean termBufferSparseFile(final Properties properties)
+    {
+        return "true".equals(properties.getProperty(TERM_BUFFER_SPARSE_FILE_PROP_NAME, "true"));
     }
 
     /**
@@ -1317,7 +1379,19 @@ public final class Configuration
      */
     public static boolean tetherSubscriptions()
     {
-        return "true".equals(getProperty(TETHER_SUBSCRIPTIONS_PROP_NAME, "true"));
+        return tetherSubscriptions(System.getProperties());
+    }
+
+    /**
+     * Default for if subscriptions should be tethered.
+     *
+     * @param properties to read the configuration from.
+     * @return true if the default subscriptions should be tethered.
+     * @see #TETHER_SUBSCRIPTIONS_PROP_NAME
+     */
+    public static boolean tetherSubscriptions(final Properties properties)
+    {
+        return "true".equals(properties.getProperty(TETHER_SUBSCRIPTIONS_PROP_NAME, "true"));
     }
 
     /**
@@ -1328,7 +1402,19 @@ public final class Configuration
      */
     public static boolean reliableStream()
     {
-        return "true".equals(getProperty(RELIABLE_STREAM_PROP_NAME, "true"));
+        return reliableStream(System.getProperties());
+    }
+
+    /**
+     * Default boolean value for if a stream is reliable. True to NAK, false to gap fill.
+     *
+     * @param properties to read the configuration from.
+     * @return true if NAK is default or false to gap fill.
+     * @see #RELIABLE_STREAM_PROP_NAME
+     */
+    public static boolean reliableStream(final Properties properties)
+    {
+        return "true".equals(properties.getProperty(RELIABLE_STREAM_PROP_NAME, "true"));
     }
 
     /**
@@ -1339,7 +1425,19 @@ public final class Configuration
      */
     public static boolean performStorageChecks()
     {
-        return "true".equals(getProperty(PERFORM_STORAGE_CHECKS_PROP_NAME, "true"));
+        return performStorageChecks(System.getProperties());
+    }
+
+    /**
+     * Should storage checks should be performed before allocating files.
+     *
+     * @param properties to read the configuration from.
+     * @return true of storage checks should be performed before allocating files.
+     * @see #PERFORM_STORAGE_CHECKS_PROP_NAME
+     */
+    public static boolean performStorageChecks(final Properties properties)
+    {
+        return "true".equals(properties.getProperty(PERFORM_STORAGE_CHECKS_PROP_NAME, "true"));
     }
 
     /**
@@ -1352,7 +1450,21 @@ public final class Configuration
      */
     public static boolean spiesSimulateConnection()
     {
-        return "true".equals(getProperty(SPIES_SIMULATE_CONNECTION_PROP_NAME, "false"));
+        return spiesSimulateConnection(System.getProperties());
+    }
+
+    /**
+     * Should spy subscriptions simulate a connection to a network publication.
+     * <p>
+     * If true then this will override the min group size of the min and tagged flow control strategies.
+     *
+     * @param properties to read the configuration from.
+     * @return true if spy subscriptions should simulate a connection to a network publication.
+     * @see #SPIES_SIMULATE_CONNECTION_PROP_NAME
+     */
+    public static boolean spiesSimulateConnection(final Properties properties)
+    {
+        return "true".equals(properties.getProperty(SPIES_SIMULATE_CONNECTION_PROP_NAME, "false"));
     }
 
     /**
@@ -1363,7 +1475,19 @@ public final class Configuration
      */
     public static CommonContext.InferableBoolean receiverGroupConsideration()
     {
-        return CommonContext.InferableBoolean.parse(getProperty(GROUP_RECEIVER_CONSIDERATION_PROP_NAME));
+        return receiverGroupConsideration(System.getProperties());
+    }
+
+    /**
+     * Should subscriptions should be considered a group member or individual connection, e.g. multicast vs unicast.
+     *
+     * @param properties to read the configuration from.
+     * @return FORCE_TRUE if subscriptions should be considered a group member or false if individual.
+     * @see #GROUP_RECEIVER_CONSIDERATION_PROP_NAME
+     */
+    public static CommonContext.InferableBoolean receiverGroupConsideration(final Properties properties)
+    {
+        return CommonContext.InferableBoolean.parse(properties.getProperty(GROUP_RECEIVER_CONSIDERATION_PROP_NAME));
     }
 
     /**
@@ -1374,7 +1498,19 @@ public final class Configuration
      */
     public static int conductorBufferLength()
     {
-        return getSizeAsInt(CONDUCTOR_BUFFER_LENGTH_PROP_NAME, CONDUCTOR_BUFFER_LENGTH_DEFAULT);
+        return conductorBufferLength(System.getProperties());
+    }
+
+    /**
+     * Length (in bytes) of the conductor buffer for control commands from the clients to the media driver conductor.
+     *
+     * @param properties to read the configuration from.
+     * @return length (in bytes) of the conductor buffer for control commands from the clients to the media driver.
+     * @see #CONDUCTOR_BUFFER_LENGTH_PROP_NAME
+     */
+    public static int conductorBufferLength(final Properties properties)
+    {
+        return getSizeAsInt(properties, CONDUCTOR_BUFFER_LENGTH_PROP_NAME, CONDUCTOR_BUFFER_LENGTH_DEFAULT);
     }
 
     /**
@@ -1385,7 +1521,19 @@ public final class Configuration
      */
     public static int toClientsBufferLength()
     {
-        return getSizeAsInt(TO_CLIENTS_BUFFER_LENGTH_PROP_NAME, TO_CLIENTS_BUFFER_LENGTH_DEFAULT);
+        return toClientsBufferLength(System.getProperties());
+    }
+
+    /**
+     * Length (in bytes) of the broadcast buffers from the media driver to the clients.
+     *
+     * @param properties to read the configuration from.
+     * @return length (in bytes) of the broadcast buffers from the media driver to the clients.
+     * @see #TO_CLIENTS_BUFFER_LENGTH_PROP_NAME
+     */
+    public static int toClientsBufferLength(final Properties properties)
+    {
+        return getSizeAsInt(properties, TO_CLIENTS_BUFFER_LENGTH_PROP_NAME, TO_CLIENTS_BUFFER_LENGTH_DEFAULT);
     }
 
     /**
@@ -1398,7 +1546,21 @@ public final class Configuration
      */
     public static int counterValuesBufferLength()
     {
-        return getSizeAsInt(COUNTERS_VALUES_BUFFER_LENGTH_PROP_NAME, COUNTERS_VALUES_BUFFER_LENGTH_DEFAULT);
+        return counterValuesBufferLength(System.getProperties());
+    }
+
+    /**
+     * Length of the buffer for the counters.
+     * <p>
+     * Each counter uses {@link org.agrona.concurrent.status.CountersReader#COUNTER_LENGTH} bytes.
+     *
+     * @param properties to read the configuration from.
+     * @return Length of the buffer for the counters.
+     * @see #COUNTERS_VALUES_BUFFER_LENGTH_PROP_NAME
+     */
+    public static int counterValuesBufferLength(final Properties properties)
+    {
+        return getSizeAsInt(properties, COUNTERS_VALUES_BUFFER_LENGTH_PROP_NAME, COUNTERS_VALUES_BUFFER_LENGTH_DEFAULT);
     }
 
     /**
@@ -1408,7 +1570,18 @@ public final class Configuration
      */
     public static int errorBufferLength()
     {
-        return getSizeAsInt(ERROR_BUFFER_LENGTH_PROP_NAME, ERROR_BUFFER_LENGTH_DEFAULT);
+        return errorBufferLength(System.getProperties());
+    }
+
+    /**
+     * Length of the memory mapped buffer for the distinct error log.
+     *
+     * @param properties to read the configuration from.
+     * @return length of the memory mapped buffer for the distinct error log.
+     */
+    public static int errorBufferLength(final Properties properties)
+    {
+        return getSizeAsInt(properties, ERROR_BUFFER_LENGTH_PROP_NAME, ERROR_BUFFER_LENGTH_DEFAULT);
     }
 
     /**
@@ -1419,7 +1592,19 @@ public final class Configuration
      */
     public static int nakMulticastGroupSize()
     {
-        return getInteger(NAK_MULTICAST_GROUP_SIZE_PROP_NAME, NAK_MULTICAST_GROUP_SIZE_DEFAULT);
+        return nakMulticastGroupSize(System.getProperties());
+    }
+
+    /**
+     * Expected size of typical multicast receiver groups.
+     *
+     * @param properties to read the configuration from.
+     * @return expected size of typical multicast receiver groups.
+     * @see #NAK_MULTICAST_GROUP_SIZE_PROP_NAME
+     */
+    public static int nakMulticastGroupSize(final Properties properties)
+    {
+        return getInteger(properties, NAK_MULTICAST_GROUP_SIZE_PROP_NAME, NAK_MULTICAST_GROUP_SIZE_DEFAULT);
     }
 
     /**
@@ -1430,7 +1615,19 @@ public final class Configuration
      */
     public static long nakMulticastMaxBackoffNs()
     {
-        return getDurationInNanos(NAK_MULTICAST_MAX_BACKOFF_PROP_NAME, NAK_MAX_BACKOFF_DEFAULT_NS);
+        return nakMulticastMaxBackoffNs(System.getProperties());
+    }
+
+    /**
+     * Max backoff time for multicast NAK delay randomisation in nanoseconds.
+     *
+     * @param properties to read the configuration from.
+     * @return max backoff time for multicast NAK delay randomisation in nanoseconds.
+     * @see #NAK_MULTICAST_MAX_BACKOFF_PROP_NAME
+     */
+    public static long nakMulticastMaxBackoffNs(final Properties properties)
+    {
+        return getDurationInNanos(properties, NAK_MULTICAST_MAX_BACKOFF_PROP_NAME, NAK_MAX_BACKOFF_DEFAULT_NS);
     }
 
     /**
@@ -1441,7 +1638,19 @@ public final class Configuration
      */
     public static long nakUnicastDelayNs()
     {
-        return getDurationInNanos(NAK_UNICAST_DELAY_PROP_NAME, NAK_UNICAST_DELAY_DEFAULT_NS);
+        return nakUnicastDelayNs(System.getProperties());
+    }
+
+    /**
+     * Unicast NAK delay in nanoseconds.
+     *
+     * @param properties to read the configuration from.
+     * @return unicast NAK delay in nanoseconds.
+     * @see #NAK_UNICAST_DELAY_PROP_NAME
+     */
+    public static long nakUnicastDelayNs(final Properties properties)
+    {
+        return getDurationInNanos(properties, NAK_UNICAST_DELAY_PROP_NAME, NAK_UNICAST_DELAY_DEFAULT_NS);
     }
 
     /**
@@ -1452,7 +1661,20 @@ public final class Configuration
      */
     public static long nakUnicastRetryDelayRatio()
     {
-        return getSizeAsLong(NAK_UNICAST_RETRY_DELAY_RATIO_PROP_NAME, NAK_UNICAST_RETRY_DELAY_RATIO_DEFAULT);
+        return nakUnicastRetryDelayRatio(System.getProperties());
+    }
+
+    /**
+     * Unicast NAK retry delay ratio.
+     *
+     * @param properties to read the configuration from.
+     * @return unicast NAK delay in nanoseconds.
+     * @see #NAK_UNICAST_DELAY_PROP_NAME
+     */
+    public static long nakUnicastRetryDelayRatio(final Properties properties)
+    {
+        return getSizeAsLong(
+            properties, NAK_UNICAST_RETRY_DELAY_RATIO_PROP_NAME, NAK_UNICAST_RETRY_DELAY_RATIO_DEFAULT);
     }
 
     /**
@@ -1463,7 +1685,19 @@ public final class Configuration
      */
     public static long timerIntervalNs()
     {
-        return getDurationInNanos(TIMER_INTERVAL_PROP_NAME, DEFAULT_TIMER_INTERVAL_NS);
+        return timerIntervalNs(System.getProperties());
+    }
+
+    /**
+     * Interval between checks for timers and timeouts.
+     *
+     * @param properties to read the configuration from.
+     * @return interval between checks for timers and timeouts.
+     * @see #TIMER_INTERVAL_PROP_NAME
+     */
+    public static long timerIntervalNs(final Properties properties)
+    {
+        return getDurationInNanos(properties, TIMER_INTERVAL_PROP_NAME, DEFAULT_TIMER_INTERVAL_NS);
     }
 
     /**
@@ -1475,7 +1709,21 @@ public final class Configuration
      */
     public static long lowStorageWarningThreshold()
     {
-        return getSizeAsLong(LOW_FILE_STORE_WARNING_THRESHOLD_PROP_NAME, LOW_FILE_STORE_WARNING_THRESHOLD_DEFAULT);
+        return lowStorageWarningThreshold(System.getProperties());
+    }
+
+    /**
+     * Low file storage warning threshold in bytes for when performing storage checks.
+     *
+     * @param properties to read the configuration from.
+     * @return Low file storage warning threshold for when performing storage checks.
+     * @see #LOW_FILE_STORE_WARNING_THRESHOLD_PROP_NAME
+     * @see #PERFORM_STORAGE_CHECKS_PROP_NAME
+     */
+    public static long lowStorageWarningThreshold(final Properties properties)
+    {
+        return getSizeAsLong(
+            properties, LOW_FILE_STORE_WARNING_THRESHOLD_PROP_NAME, LOW_FILE_STORE_WARNING_THRESHOLD_DEFAULT);
     }
 
     /**
@@ -1486,7 +1734,19 @@ public final class Configuration
      */
     public static int publicationTermWindowLength()
     {
-        return getSizeAsInt(PUBLICATION_TERM_WINDOW_LENGTH_PROP_NAME, 0);
+        return publicationTermWindowLength(System.getProperties());
+    }
+
+    /**
+     * The window limit on UDP {@link Publication} side by which the publisher can get ahead of consumers.
+     *
+     * @param properties to read the configuration from.
+     * @return window limit on UDP {@link Publication} side by which the publisher can get ahead of consumers.
+     * @see #PUBLICATION_TERM_WINDOW_LENGTH_PROP_NAME
+     */
+    public static int publicationTermWindowLength(final Properties properties)
+    {
+        return getSizeAsInt(properties, PUBLICATION_TERM_WINDOW_LENGTH_PROP_NAME, 0);
     }
 
     /**
@@ -1497,7 +1757,19 @@ public final class Configuration
      */
     public static int ipcPublicationTermWindowLength()
     {
-        return getSizeAsInt(IPC_PUBLICATION_TERM_WINDOW_LENGTH_PROP_NAME, 0);
+        return ipcPublicationTermWindowLength(System.getProperties());
+    }
+
+    /**
+     * The window limit on IPC {@link Publication} side by which the publisher can get ahead of consumers.
+     *
+     * @param properties to read the configuration from.
+     * @return window limit on IPC {@link Publication} side by which the publisher can get ahead of consumers.
+     * @see #IPC_PUBLICATION_TERM_WINDOW_LENGTH_PROP_NAME
+     */
+    public static int ipcPublicationTermWindowLength(final Properties properties)
+    {
+        return getSizeAsInt(properties, IPC_PUBLICATION_TERM_WINDOW_LENGTH_PROP_NAME, 0);
     }
 
     /**
@@ -1511,8 +1783,23 @@ public final class Configuration
      */
     public static long untetheredWindowLimitTimeoutNs()
     {
+        return untetheredWindowLimitTimeoutNs(System.getProperties());
+    }
+
+    /**
+     * The timeout for when an untethered subscription that is outside the window limit will participate in local
+     * flow control.
+     *
+     * @param properties to read the configuration from.
+     * @return the timeout for when an untethered subscription that is outside the window limit will be included.
+     * @see #UNTETHERED_WINDOW_LIMIT_TIMEOUT_PROP_NAME
+     * @see #UNTETHERED_RESTING_TIMEOUT_PROP_NAME
+     * @see #TETHER_SUBSCRIPTIONS_PROP_NAME
+     */
+    public static long untetheredWindowLimitTimeoutNs(final Properties properties)
+    {
         return getDurationInNanos(
-            UNTETHERED_WINDOW_LIMIT_TIMEOUT_PROP_NAME, UNTETHERED_WINDOW_LIMIT_TIMEOUT_DEFAULT_NS);
+            properties, UNTETHERED_WINDOW_LIMIT_TIMEOUT_PROP_NAME, UNTETHERED_WINDOW_LIMIT_TIMEOUT_DEFAULT_NS);
     }
 
     /**
@@ -1524,7 +1811,20 @@ public final class Configuration
      */
     public static long untetheredLingerTimeoutNs()
     {
-        return getDurationInNanos(UNTETHERED_LINGER_TIMEOUT_PROP_NAME, Aeron.NULL_VALUE);
+        return untetheredLingerTimeoutNs(System.getProperties());
+    }
+
+    /**
+     * The timeout for an untethered subscription to remain in the linger state.
+     *
+     * @param properties to read the configuration from.
+     * @return the timeout for an untethered subscription to remain in the linger state.
+     * @see #UNTETHERED_LINGER_TIMEOUT_PROP_NAME
+     * @since 1.48.0
+     */
+    public static long untetheredLingerTimeoutNs(final Properties properties)
+    {
+        return getDurationInNanos(properties, UNTETHERED_LINGER_TIMEOUT_PROP_NAME, Aeron.NULL_VALUE);
     }
 
     /**
@@ -1538,7 +1838,23 @@ public final class Configuration
      */
     public static long untetheredRestingTimeoutNs()
     {
-        return getDurationInNanos(UNTETHERED_RESTING_TIMEOUT_PROP_NAME, UNTETHERED_RESTING_TIMEOUT_DEFAULT_NS);
+        return untetheredRestingTimeoutNs(System.getProperties());
+    }
+
+    /**
+     * The timeout for when an untethered subscription is resting after not being able to keep up before it is allowed
+     * to rejoin a stream.
+     *
+     * @param properties to read the configuration from.
+     * @return The timeout for when an untethered subscription is resting before rejoining a stream.
+     * @see #UNTETHERED_RESTING_TIMEOUT_PROP_NAME
+     * @see #UNTETHERED_WINDOW_LIMIT_TIMEOUT_PROP_NAME
+     * @see #TETHER_SUBSCRIPTIONS_PROP_NAME
+     */
+    public static long untetheredRestingTimeoutNs(final Properties properties)
+    {
+        return getDurationInNanos(
+            properties, UNTETHERED_RESTING_TIMEOUT_PROP_NAME, UNTETHERED_RESTING_TIMEOUT_DEFAULT_NS);
     }
 
     /**
@@ -1549,8 +1865,20 @@ public final class Configuration
      */
     public static int maxResend()
     {
+        return maxResend(System.getProperties());
+    }
+
+    /**
+     * Max number of active retransmissions tracked for udp streams with group semantics.
+     *
+     * @param properties to read the configuration from.
+     * @return max retransmits
+     * @see #MAX_RESEND_PROP_NAME
+     */
+    public static int maxResend(final Properties properties)
+    {
         return Integer.min(
-            Integer.max(getInteger(MAX_RESEND_PROP_NAME, MAX_RESEND_DEFAULT), 1),
+            Integer.max(getInteger(properties, MAX_RESEND_PROP_NAME, MAX_RESEND_DEFAULT), 1),
             MAX_RESEND_MAX);
     }
 
@@ -1562,7 +1890,19 @@ public final class Configuration
      */
     public static boolean rejoinStream()
     {
-        return "true".equalsIgnoreCase(getProperty(REJOIN_STREAM_PROP_NAME, "true"));
+        return rejoinStream(System.getProperties());
+    }
+
+    /**
+     * Default boolean value for if a stream can be rejoined. True to allow stream rejoin, false to not.
+     *
+     * @param properties to read the configuration from.
+     * @return boolean value for if a stream can be rejoined. True to allow stream rejoin, false to not.
+     * @see #REJOIN_STREAM_PROP_NAME
+     */
+    public static boolean rejoinStream(final Properties properties)
+    {
+        return "true".equalsIgnoreCase(properties.getProperty(REJOIN_STREAM_PROP_NAME, "true"));
     }
 
     /**
@@ -1573,7 +1913,19 @@ public final class Configuration
      */
     public static Long groupTag()
     {
-        return getLong(RECEIVER_GROUP_TAG_PROP_NAME, null);
+        return groupTag(System.getProperties());
+    }
+
+    /**
+     * Default group tag (gtag) to send in all Status Messages. If not provided then no gtag is sent.
+     *
+     * @param properties to read the configuration from.
+     * @return Default group tag (gtag) to send in all Status Messages.
+     * @see #RECEIVER_GROUP_TAG_PROP_NAME
+     */
+    public static Long groupTag(final Properties properties)
+    {
+        return getLong(properties, RECEIVER_GROUP_TAG_PROP_NAME, null);
     }
 
     /**
@@ -1582,14 +1934,26 @@ public final class Configuration
      * @return group tag (gtag) used by the tagged flow control strategy to group receivers.
      * @see #FLOW_CONTROL_GROUP_TAG_PROP_NAME
      */
-    @SuppressWarnings("deprecation")
     public static long flowControlGroupTag()
     {
-        final String propertyValue = getProperty(
+        return flowControlGroupTag(System.getProperties());
+    }
+
+    /**
+     * Default group tag (gtag) used by the tagged flow control strategy to group receivers.
+     *
+     * @param properties to read the configuration from.
+     * @return group tag (gtag) used by the tagged flow control strategy to group receivers.
+     * @see #FLOW_CONTROL_GROUP_TAG_PROP_NAME
+     */
+    @SuppressWarnings("deprecation")
+    public static long flowControlGroupTag(final Properties properties)
+    {
+        final String propertyValue = properties.getProperty(
             PreferredMulticastFlowControl.PREFERRED_ASF_PROP_NAME, PreferredMulticastFlowControl.PREFERRED_ASF_DEFAULT);
         final long legacyAsfValue = new UnsafeBuffer(BitUtil.fromHex(propertyValue)).getLong(0, LITTLE_ENDIAN);
 
-        return getLong(FLOW_CONTROL_GROUP_TAG_PROP_NAME, legacyAsfValue);
+        return getLong(properties, FLOW_CONTROL_GROUP_TAG_PROP_NAME, legacyAsfValue);
     }
 
     /**
@@ -1600,7 +1964,19 @@ public final class Configuration
      */
     public static int flowControlGroupMinSize()
     {
-        return getInteger(FLOW_CONTROL_GROUP_MIN_SIZE_PROP_NAME, 0);
+        return flowControlGroupMinSize(System.getProperties());
+    }
+
+    /**
+     * Default minimum group size used by flow control strategies to determine connectivity.
+     *
+     * @param properties to read the configuration from.
+     * @return default minimum group size used by flow control strategies to determine connectivity.
+     * @see #FLOW_CONTROL_GROUP_MIN_SIZE_PROP_NAME
+     */
+    public static int flowControlGroupMinSize(final Properties properties)
+    {
+        return getInteger(properties, FLOW_CONTROL_GROUP_MIN_SIZE_PROP_NAME, 0);
     }
 
     /**
@@ -1611,7 +1987,20 @@ public final class Configuration
      */
     public static long flowControlReceiverTimeoutNs()
     {
-        return getDurationInNanos(FLOW_CONTROL_RECEIVER_TIMEOUT_PROP_NAME, FLOW_CONTROL_RECEIVER_TIMEOUT_DEFAULT_NS);
+        return flowControlReceiverTimeoutNs(System.getProperties());
+    }
+
+    /**
+     * Flow control timeout after which with no status messages the receiver is considered gone.
+     *
+     * @param properties to read the configuration from.
+     * @return flow control timeout after which with no status messages the receiver is considered gone.
+     * @see #FLOW_CONTROL_RECEIVER_TIMEOUT_PROP_NAME
+     */
+    public static long flowControlReceiverTimeoutNs(final Properties properties)
+    {
+        return getDurationInNanos(
+            properties, FLOW_CONTROL_RECEIVER_TIMEOUT_PROP_NAME, FLOW_CONTROL_RECEIVER_TIMEOUT_DEFAULT_NS);
     }
 
     /**
@@ -1622,7 +2011,19 @@ public final class Configuration
      */
     public static int unicastFlowControlRetransmitReceiverWindowMultiple()
     {
-        return getInteger(UNICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE_PROP_NAME, 16);
+        return unicastFlowControlRetransmitReceiverWindowMultiple(System.getProperties());
+    }
+
+    /**
+     * Retransmit receiver window multiple used by the unicast flow control strategy to determine the maximum
+     * amount of data to retransmit.
+     *
+     * @param properties to read the configuration from.
+     * @return multiple.
+     */
+    public static int unicastFlowControlRetransmitReceiverWindowMultiple(final Properties properties)
+    {
+        return getInteger(properties, UNICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE_PROP_NAME, 16);
     }
 
     /**
@@ -1633,7 +2034,19 @@ public final class Configuration
      */
     public static int multicastFlowControlRetransmitReceiverWindowMultiple()
     {
-        return getInteger(MULTICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE_PROP_NAME, 4);
+        return multicastFlowControlRetransmitReceiverWindowMultiple(System.getProperties());
+    }
+
+    /**
+     * Retransmit receiver window multiple used by multicast flow control strategies to determine the maximum
+     * amount of data to retransmit.
+     *
+     * @param properties to read the configuration from.
+     * @return multiple.
+     */
+    public static int multicastFlowControlRetransmitReceiverWindowMultiple(final Properties properties)
+    {
+        return getInteger(properties, MULTICAST_FLOW_CONTROL_RETRANSMIT_RECEIVER_WINDOW_MULTIPLE_PROP_NAME, 4);
     }
 
     /**
@@ -1644,7 +2057,19 @@ public final class Configuration
      */
     public static String resolverName()
     {
-        return getProperty(RESOLVER_NAME_PROP_NAME);
+        return resolverName(System.getProperties());
+    }
+
+    /**
+     * Resolver name of the Media Driver used in name resolution.
+     *
+     * @param properties to read the configuration from.
+     * @return resolver name of the Media Driver used in name resolution.
+     * @see #RESOLVER_NAME_PROP_NAME
+     */
+    public static String resolverName(final Properties properties)
+    {
+        return properties.getProperty(RESOLVER_NAME_PROP_NAME);
     }
 
     /**
@@ -1655,7 +2080,19 @@ public final class Configuration
      */
     public static String resolverInterface()
     {
-        return getProperty(RESOLVER_INTERFACE_PROP_NAME);
+        return resolverInterface(System.getProperties());
+    }
+
+    /**
+     * Property name for resolver interface to which network connections are made, format is hostname:port.
+     *
+     * @param properties to read the configuration from.
+     * @return resolver interface to which network connections are made, format is hostname:port.
+     * @see #RESOLVER_INTERFACE_PROP_NAME
+     */
+    public static String resolverInterface(final Properties properties)
+    {
+        return properties.getProperty(RESOLVER_INTERFACE_PROP_NAME);
     }
 
     /**
@@ -1667,7 +2104,20 @@ public final class Configuration
      */
     public static String resolverBootstrapNeighbor()
     {
-        return getProperty(RESOLVER_BOOTSTRAP_NEIGHBOR_PROP_NAME);
+        return resolverBootstrapNeighbor(System.getProperties());
+    }
+
+    /**
+     * Resolver bootstrap neighbor for which it can bootstrap naming, format is hostname:port.
+     *
+     * @param properties to read the configuration from.
+     * @return resolver bootstrap neighbor for which it can bootstrap naming, format is hostname:port.
+     * @see #RESOLVER_BOOTSTRAP_NEIGHBOR_PROP_NAME
+     * @see #RESOLVER_INTERFACE_PROP_NAME
+     */
+    public static String resolverBootstrapNeighbor(final Properties properties)
+    {
+        return properties.getProperty(RESOLVER_BOOTSTRAP_NEIGHBOR_PROP_NAME);
     }
 
     /**
@@ -1681,7 +2131,23 @@ public final class Configuration
      */
     public static long resolverNeighborTimeoutNs()
     {
-        return getDurationInNanos(RESOLVER_NEIGHBOR_TIMEOUT_PROP_NAME, RESOLVER_NEIGHBOR_TIMEOUT_DEFAULT_NS);
+        return resolverNeighborTimeoutNs(System.getProperties());
+    }
+
+    /**
+     * Resolve configuration for time to wait before removing a neighbor entry from the cache if an update for that
+     * neighbor has not been received.
+     *
+     * @param properties to read the configuration from.
+     * @return time to wait before removing a neighbor entry from the cache if an update for that * neighbor has not
+     * been received.
+     * @see #RESOLVER_NEIGHBOR_TIMEOUT_DEFAULT_NS
+     * @see #RESOLVER_NEIGHBOR_TIMEOUT_PROP_NAME
+     */
+    public static long resolverNeighborTimeoutNs(final Properties properties)
+    {
+        return getDurationInNanos(
+            properties, RESOLVER_NEIGHBOR_TIMEOUT_PROP_NAME, RESOLVER_NEIGHBOR_TIMEOUT_DEFAULT_NS);
     }
 
     /**
@@ -1693,8 +2159,21 @@ public final class Configuration
      */
     public static long resolverSelfResolutionIntervalNs()
     {
+        return resolverSelfResolutionIntervalNs(System.getProperties());
+    }
+
+    /**
+     * Resolve configuration for the interval between sending name to address messages for this driver to its neighbors.
+     *
+     * @param properties to read the configuration from.
+     * @return interval between sending name to address messages for this driver to its neighbors.
+     * @see #RESOLVER_SELF_RESOLUTION_INTERVAL_DEFAULT_NS
+     * @see #RESOLVER_SELF_RESOLUTION_INTERVAL_PROP_NAME
+     */
+    public static long resolverSelfResolutionIntervalNs(final Properties properties)
+    {
         return getDurationInNanos(
-            RESOLVER_SELF_RESOLUTION_INTERVAL_PROP_NAME, RESOLVER_SELF_RESOLUTION_INTERVAL_DEFAULT_NS);
+            properties, RESOLVER_SELF_RESOLUTION_INTERVAL_PROP_NAME, RESOLVER_SELF_RESOLUTION_INTERVAL_DEFAULT_NS);
     }
 
     /**
@@ -1706,8 +2185,23 @@ public final class Configuration
      */
     public static long resolverNeighborResolutionIntervalNs()
     {
+        return resolverNeighborResolutionIntervalNs(System.getProperties());
+    }
+
+    /**
+     * Resolve configuration for the interval between sending name to address messages for all known neighbors.
+     *
+     * @param properties to read the configuration from.
+     * @return interval between sending name to address messages for all known neighbors.
+     * @see #RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_DEFAULT_NS
+     * @see #RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_PROP_NAME
+     */
+    public static long resolverNeighborResolutionIntervalNs(final Properties properties)
+    {
         return getDurationInNanos(
-            RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_PROP_NAME, RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_DEFAULT_NS);
+            properties,
+            RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_PROP_NAME,
+            RESOLVER_NEIGHBOR_RESOLUTION_INTERVAL_DEFAULT_NS);
     }
 
     /**
@@ -1719,8 +2213,21 @@ public final class Configuration
      */
     public static long resolverBootstrapNeighborResolutionIntervalNs()
     {
+        return resolverBootstrapNeighborResolutionIntervalNs(System.getProperties());
+    }
+
+    /**
+     * Resolve configuration for the interval between resolutions of bootstrap neighbors that are not active.
+     *
+     * @param properties to read the configuration from.
+     * @return interval between sending name to address messages for all known neighbors.
+     * @see #RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_DEFAULT_NS
+     * @see #RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_PROP_NAME
+     */
+    public static long resolverBootstrapNeighborResolutionIntervalNs(final Properties properties)
+    {
         return getDurationInNanos(
-            RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_PROP_NAME,
+            properties, RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_PROP_NAME,
             RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_DEFAULT_NS);
     }
 
@@ -1732,7 +2239,20 @@ public final class Configuration
      */
     public static long reResolutionCheckIntervalNs()
     {
-        return getDurationInNanos(RE_RESOLUTION_CHECK_INTERVAL_PROP_NAME, RE_RESOLUTION_CHECK_INTERVAL_DEFAULT_NS);
+        return reResolutionCheckIntervalNs(System.getProperties());
+    }
+
+    /**
+     * Re-resolution check interval for resolving names to IP address when they may have changed.
+     *
+     * @param properties to read the configuration from.
+     * @return re-resolution check interval for resolving names to IP address when they may have changed.
+     * @see #RE_RESOLUTION_CHECK_INTERVAL_PROP_NAME
+     */
+    public static long reResolutionCheckIntervalNs(final Properties properties)
+    {
+        return getDurationInNanos(
+            properties, RE_RESOLUTION_CHECK_INTERVAL_PROP_NAME, RE_RESOLUTION_CHECK_INTERVAL_DEFAULT_NS);
     }
 
     /**
@@ -1774,7 +2294,19 @@ public final class Configuration
      */
     public static int termBufferLength()
     {
-        return getSizeAsInt(TERM_BUFFER_LENGTH_PROP_NAME, TERM_BUFFER_LENGTH_DEFAULT);
+        return termBufferLength(System.getProperties());
+    }
+
+    /**
+     * Length (in bytes) of the log buffers for UDP publication terms.
+     *
+     * @param properties to read the configuration from.
+     * @return length (in bytes) of the log buffers for UDP publication terms.
+     * @see #TERM_BUFFER_LENGTH_PROP_NAME
+     */
+    public static int termBufferLength(final Properties properties)
+    {
+        return getSizeAsInt(properties, TERM_BUFFER_LENGTH_PROP_NAME, TERM_BUFFER_LENGTH_DEFAULT);
     }
 
     /**
@@ -1785,7 +2317,19 @@ public final class Configuration
      */
     public static int ipcTermBufferLength()
     {
-        return getSizeAsInt(IPC_TERM_BUFFER_LENGTH_PROP_NAME, TERM_BUFFER_IPC_LENGTH_DEFAULT);
+        return ipcTermBufferLength(System.getProperties());
+    }
+
+    /**
+     * Length (in bytes) of the log buffers for IPC publication terms.
+     *
+     * @param properties to read the configuration from.
+     * @return length (in bytes) of the log buffers for IPC publication terms.
+     * @see #IPC_TERM_BUFFER_LENGTH_PROP_NAME
+     */
+    public static int ipcTermBufferLength(final Properties properties)
+    {
+        return getSizeAsInt(properties, IPC_TERM_BUFFER_LENGTH_PROP_NAME, TERM_BUFFER_IPC_LENGTH_DEFAULT);
     }
 
     /**
@@ -1796,7 +2340,19 @@ public final class Configuration
      */
     public static int initialWindowLength()
     {
-        return getSizeAsInt(INITIAL_WINDOW_LENGTH_PROP_NAME, INITIAL_WINDOW_LENGTH_DEFAULT);
+        return initialWindowLength(System.getProperties());
+    }
+
+    /**
+     * Length of the initial window which must be sufficient for Bandwidth Delay Product (BDP).
+     *
+     * @param properties to read the configuration from.
+     * @return length of the initial window which must be sufficient for Bandwidth Delay Product (BDP).
+     * @see #INITIAL_WINDOW_LENGTH_PROP_NAME
+     */
+    public static int initialWindowLength(final Properties properties)
+    {
+        return getSizeAsInt(properties, INITIAL_WINDOW_LENGTH_PROP_NAME, INITIAL_WINDOW_LENGTH_DEFAULT);
     }
 
     /**
@@ -1807,7 +2363,19 @@ public final class Configuration
      */
     public static int socketSndbufLength()
     {
-        return getSizeAsInt(SOCKET_SNDBUF_LENGTH_PROP_NAME, SOCKET_SNDBUF_LENGTH_DEFAULT);
+        return socketSndbufLength(System.getProperties());
+    }
+
+    /**
+     * SO_SNDBUF setting on UDP sockets which must be sufficient for Bandwidth Delay Product (BDP).
+     *
+     * @param properties to read the configuration from.
+     * @return SO_SNDBUF setting on UDP sockets which must be sufficient for Bandwidth Delay Product (BDP).
+     * @see #SOCKET_SNDBUF_LENGTH_PROP_NAME
+     */
+    public static int socketSndbufLength(final Properties properties)
+    {
+        return getSizeAsInt(properties, SOCKET_SNDBUF_LENGTH_PROP_NAME, SOCKET_SNDBUF_LENGTH_DEFAULT);
     }
 
     /**
@@ -1818,7 +2386,19 @@ public final class Configuration
      */
     public static int socketRcvbufLength()
     {
-        return getSizeAsInt(SOCKET_RCVBUF_LENGTH_PROP_NAME, SOCKET_RCVBUF_LENGTH_DEFAULT);
+        return socketRcvbufLength(System.getProperties());
+    }
+
+    /**
+     * SO_RCVBUF setting on UDP sockets which must be sufficient for Bandwidth Delay Product (BDP).
+     *
+     * @param properties to read the configuration from.
+     * @return SO_RCVBUF setting on UDP sockets which must be sufficient for Bandwidth Delay Product (BDP).
+     * @see #SOCKET_RCVBUF_LENGTH_PROP_NAME
+     */
+    public static int socketRcvbufLength(final Properties properties)
+    {
+        return getSizeAsInt(properties, SOCKET_RCVBUF_LENGTH_PROP_NAME, SOCKET_RCVBUF_LENGTH_DEFAULT);
     }
 
     /**
@@ -1830,7 +2410,20 @@ public final class Configuration
      */
     public static int mtuLength()
     {
-        return getSizeAsInt(MTU_LENGTH_PROP_NAME, MTU_LENGTH_DEFAULT);
+        return mtuLength(System.getProperties());
+    }
+
+    /**
+     * Length of the maximum transmission unit of the media driver's protocol. If this is greater
+     * than the network MTU for UDP then the packet will be fragmented and can amplify the impact of loss.
+     *
+     * @param properties to read the configuration from.
+     * @return length of the maximum transmission unit of the media driver's protocol.
+     * @see #MTU_LENGTH_PROP_NAME
+     */
+    public static int mtuLength(final Properties properties)
+    {
+        return getSizeAsInt(properties, MTU_LENGTH_PROP_NAME, MTU_LENGTH_DEFAULT);
     }
 
     /**
@@ -1842,7 +2435,20 @@ public final class Configuration
      */
     public static int ipcMtuLength()
     {
-        return getSizeAsInt(IPC_MTU_LENGTH_PROP_NAME, IPC_MTU_LENGTH_DEFAULT);
+        return ipcMtuLength(System.getProperties());
+    }
+
+    /**
+     * Length of the maximum transmission unit of the media driver's protocol for IPC. This can be larger than the
+     * UDP version but if recorded replay needs to be considered.
+     *
+     * @param properties to read the configuration from.
+     * @return length of the maximum transmission unit of the media driver's protocol for IPC.
+     * @see #IPC_MTU_LENGTH_PROP_NAME
+     */
+    public static int ipcMtuLength(final Properties properties)
+    {
+        return getSizeAsInt(properties, IPC_MTU_LENGTH_PROP_NAME, IPC_MTU_LENGTH_DEFAULT);
     }
 
     /**
@@ -1853,7 +2459,19 @@ public final class Configuration
      */
     public static int socketMulticastTtl()
     {
-        return getInteger(SOCKET_MULTICAST_TTL_PROP_NAME, SOCKET_MULTICAST_TTL_DEFAULT);
+        return socketMulticastTtl(System.getProperties());
+    }
+
+    /**
+     * IP_MULTICAST_TTL setting on UDP sockets.
+     *
+     * @param properties to read the configuration from.
+     * @return IP_MULTICAST_TTL setting on UDP sockets.
+     * @see #SOCKET_MULTICAST_TTL_PROP_NAME
+     */
+    public static int socketMulticastTtl(final Properties properties)
+    {
+        return getInteger(properties, SOCKET_MULTICAST_TTL_PROP_NAME, SOCKET_MULTICAST_TTL_DEFAULT);
     }
 
     /**
@@ -1864,7 +2482,19 @@ public final class Configuration
      */
     public static int filePageSize()
     {
-        return getSizeAsInt(FILE_PAGE_SIZE_PROP_NAME, FILE_PAGE_SIZE_DEFAULT);
+        return filePageSize(System.getProperties());
+    }
+
+    /**
+     * Page size in bytes to align all files to. The file system must support the requested size.
+     *
+     * @param properties to read the configuration from.
+     * @return page size in bytes to align all files to.
+     * @see #FILE_PAGE_SIZE_PROP_NAME
+     */
+    public static int filePageSize(final Properties properties)
+    {
+        return getSizeAsInt(properties, FILE_PAGE_SIZE_PROP_NAME, FILE_PAGE_SIZE_DEFAULT);
     }
 
     /**
@@ -1875,7 +2505,20 @@ public final class Configuration
      */
     public static int publicationReservedSessionIdLow()
     {
-        return getInteger(PUBLICATION_RESERVED_SESSION_ID_LOW_PROP_NAME, PUBLICATION_RESERVED_SESSION_ID_LOW_DEFAULT);
+        return publicationReservedSessionIdLow(System.getProperties());
+    }
+
+    /**
+     * Low-end of the publication reserved session-id range which will not be automatically assigned.
+     *
+     * @param properties to read the configuration from.
+     * @return low-end of the publication reserved session-id range which will not be automatically assigned.
+     * @see #PUBLICATION_RESERVED_SESSION_ID_LOW_PROP_NAME
+     */
+    public static int publicationReservedSessionIdLow(final Properties properties)
+    {
+        return getInteger(
+            properties, PUBLICATION_RESERVED_SESSION_ID_LOW_PROP_NAME, PUBLICATION_RESERVED_SESSION_ID_LOW_DEFAULT);
     }
 
     /**
@@ -1886,7 +2529,20 @@ public final class Configuration
      */
     public static int publicationReservedSessionIdHigh()
     {
-        return getInteger(PUBLICATION_RESERVED_SESSION_ID_HIGH_PROP_NAME, PUBLICATION_RESERVED_SESSION_ID_HIGH_DEFAULT);
+        return publicationReservedSessionIdHigh(System.getProperties());
+    }
+
+    /**
+     * High-end of the publication reserved session-id range which will not be automatically assigned.
+     *
+     * @param properties to read the configuration from.
+     * @return high-end of the publication reserved session-id range which will not be automatically assigned.
+     * @see #PUBLICATION_RESERVED_SESSION_ID_HIGH_PROP_NAME
+     */
+    public static int publicationReservedSessionIdHigh(final Properties properties)
+    {
+        return getInteger(
+            properties, PUBLICATION_RESERVED_SESSION_ID_HIGH_PROP_NAME, PUBLICATION_RESERVED_SESSION_ID_HIGH_DEFAULT);
     }
 
     /**
@@ -1897,7 +2553,19 @@ public final class Configuration
      */
     public static long statusMessageTimeoutNs()
     {
-        return getDurationInNanos(STATUS_MESSAGE_TIMEOUT_PROP_NAME, STATUS_MESSAGE_TIMEOUT_DEFAULT_NS);
+        return statusMessageTimeoutNs(System.getProperties());
+    }
+
+    /**
+     * Status message timeout in nanoseconds after which one will be sent when data flow has not triggered one.
+     *
+     * @param properties to read the configuration from.
+     * @return status message timeout in nanoseconds after which one will be sent.
+     * @see #STATUS_MESSAGE_TIMEOUT_PROP_NAME
+     */
+    public static long statusMessageTimeoutNs(final Properties properties)
+    {
+        return getDurationInNanos(properties, STATUS_MESSAGE_TIMEOUT_PROP_NAME, STATUS_MESSAGE_TIMEOUT_DEFAULT_NS);
     }
 
     /**
@@ -1908,7 +2576,19 @@ public final class Configuration
      */
     public static int sendToStatusMessagePollRatio()
     {
-        return getInteger(SEND_TO_STATUS_POLL_RATIO_PROP_NAME, SEND_TO_STATUS_POLL_RATIO_DEFAULT);
+        return sendToStatusMessagePollRatio(System.getProperties());
+    }
+
+    /**
+     * Ratio of sending data to polling status messages in the {@link Sender}.
+     *
+     * @param properties to read the configuration from.
+     * @return ratio of sending data to polling status messages in the {@link Sender}.
+     * @see #SEND_TO_STATUS_POLL_RATIO_PROP_NAME
+     */
+    public static int sendToStatusMessagePollRatio(final Properties properties)
+    {
+        return getInteger(properties, SEND_TO_STATUS_POLL_RATIO_PROP_NAME, SEND_TO_STATUS_POLL_RATIO_DEFAULT);
     }
 
     /**
@@ -1920,7 +2600,20 @@ public final class Configuration
      */
     public static int resourceFreeLimit()
     {
-        return getInteger(RESOURCE_FREE_LIMIT_PROP_NAME, RESOURCE_FREE_LIMIT_DEFAULT);
+        return resourceFreeLimit(System.getProperties());
+    }
+
+    /**
+     * Limit the number of driver managed resources that can be freed in the same duty cycle.
+     *
+     * @param properties to read the configuration from.
+     * @return limit of the number of resources.
+     * @see #RESOURCE_FREE_LIMIT_PROP_NAME
+     * @see #RESOURCE_FREE_LIMIT_DEFAULT
+     */
+    public static int resourceFreeLimit(final Properties properties)
+    {
+        return getInteger(properties, RESOURCE_FREE_LIMIT_PROP_NAME, RESOURCE_FREE_LIMIT_DEFAULT);
     }
 
     /**
@@ -1931,7 +2624,20 @@ public final class Configuration
      */
     public static long counterFreeToReuseTimeoutNs()
     {
-        return getDurationInNanos(COUNTER_FREE_TO_REUSE_TIMEOUT_PROP_NAME, DEFAULT_COUNTER_FREE_TO_REUSE_TIMEOUT_NS);
+        return counterFreeToReuseTimeoutNs(System.getProperties());
+    }
+
+    /**
+     * Timeout between a counter being freed and being available to be reused.
+     *
+     * @param properties to read the configuration from.
+     * @return timeout between a counter being freed and being available to be reused.
+     * @see #COUNTER_FREE_TO_REUSE_TIMEOUT_PROP_NAME
+     */
+    public static long counterFreeToReuseTimeoutNs(final Properties properties)
+    {
+        return getDurationInNanos(
+            properties, COUNTER_FREE_TO_REUSE_TIMEOUT_PROP_NAME, DEFAULT_COUNTER_FREE_TO_REUSE_TIMEOUT_NS);
     }
 
     /**
@@ -1942,7 +2648,19 @@ public final class Configuration
      */
     public static long clientLivenessTimeoutNs()
     {
-        return getDurationInNanos(CLIENT_LIVENESS_TIMEOUT_PROP_NAME, CLIENT_LIVENESS_TIMEOUT_DEFAULT_NS);
+        return clientLivenessTimeoutNs(System.getProperties());
+    }
+
+    /**
+     * {@link Aeron} client liveness timeout after which it is considered not alive.
+     *
+     * @param properties to read the configuration from.
+     * @return {@link Aeron} client liveness timeout after which it is considered not alive.
+     * @see #CLIENT_LIVENESS_TIMEOUT_PROP_NAME
+     */
+    public static long clientLivenessTimeoutNs(final Properties properties)
+    {
+        return getDurationInNanos(properties, CLIENT_LIVENESS_TIMEOUT_PROP_NAME, CLIENT_LIVENESS_TIMEOUT_DEFAULT_NS);
     }
 
     /**
@@ -1955,7 +2673,21 @@ public final class Configuration
      */
     public static long imageLivenessTimeoutNs()
     {
-        return getDurationInNanos(IMAGE_LIVENESS_TIMEOUT_PROP_NAME, IMAGE_LIVENESS_TIMEOUT_DEFAULT_NS);
+        return imageLivenessTimeoutNs(System.getProperties());
+    }
+
+    /**
+     * {@link Image} liveness timeout for how long it stays active without heartbeats or lingers around after being
+     * drained.
+     *
+     * @param properties to read the configuration from.
+     * @return {@link Image} liveness timeout for how long it stays active without heartbeats or lingers around after
+     * being drained.
+     * @see #IMAGE_LIVENESS_TIMEOUT_PROP_NAME
+     */
+    public static long imageLivenessTimeoutNs(final Properties properties)
+    {
+        return getDurationInNanos(properties, IMAGE_LIVENESS_TIMEOUT_PROP_NAME, IMAGE_LIVENESS_TIMEOUT_DEFAULT_NS);
     }
 
     /**
@@ -1970,7 +2702,24 @@ public final class Configuration
      */
     public static long publicationUnblockTimeoutNs()
     {
-        return getDurationInNanos(PUBLICATION_UNBLOCK_TIMEOUT_PROP_NAME, PUBLICATION_UNBLOCK_TIMEOUT_DEFAULT_NS);
+        return publicationUnblockTimeoutNs(System.getProperties());
+    }
+
+    /**
+     * {@link Publication} unblock timeout due to client crash or untimely commit.
+     * <p>
+     * A publication can become blocked if the client crashes while publishing or if
+     * {@link io.aeron.Publication#tryClaim(int, BufferClaim)} is used without following up by calling
+     * {@link BufferClaim#commit()} or {@link BufferClaim#abort()}.
+     *
+     * @param properties to read the configuration from.
+     * @return {@link Publication} unblock timeout due to client crash or untimely commit.
+     * @see #PUBLICATION_UNBLOCK_TIMEOUT_PROP_NAME
+     */
+    public static long publicationUnblockTimeoutNs(final Properties properties)
+    {
+        return getDurationInNanos(
+            properties, PUBLICATION_UNBLOCK_TIMEOUT_PROP_NAME, PUBLICATION_UNBLOCK_TIMEOUT_DEFAULT_NS);
     }
 
     /**
@@ -1981,7 +2730,20 @@ public final class Configuration
      */
     public static long publicationConnectionTimeoutNs()
     {
-        return getDurationInNanos(PUBLICATION_CONNECTION_TIMEOUT_PROP_NAME, PUBLICATION_CONNECTION_TIMEOUT_DEFAULT_NS);
+        return publicationConnectionTimeoutNs(System.getProperties());
+    }
+
+    /**
+     * {@link Publication} timeout due to lack of status messages which indicate a connection.
+     *
+     * @param properties to read the configuration from.
+     * @return {@link Publication} timeout due to lack of status messages which indicate a connection.
+     * @see #PUBLICATION_CONNECTION_TIMEOUT_PROP_NAME
+     */
+    public static long publicationConnectionTimeoutNs(final Properties properties)
+    {
+        return getDurationInNanos(
+            properties, PUBLICATION_CONNECTION_TIMEOUT_PROP_NAME, PUBLICATION_CONNECTION_TIMEOUT_DEFAULT_NS);
     }
 
     /**
@@ -1992,7 +2754,19 @@ public final class Configuration
      */
     public static long publicationLingerTimeoutNs()
     {
-        return getDurationInNanos(PUBLICATION_LINGER_PROP_NAME, PUBLICATION_LINGER_DEFAULT_NS);
+        return publicationLingerTimeoutNs(System.getProperties());
+    }
+
+    /**
+     * Linger timeout after draining on {@link Publication}s so they can respond to NAKs.
+     *
+     * @param properties to read the configuration from.
+     * @return linger timeout after draining on {@link Publication}s so they can respond to NAKs.
+     * @see #PUBLICATION_LINGER_PROP_NAME
+     */
+    public static long publicationLingerTimeoutNs(final Properties properties)
+    {
+        return getDurationInNanos(properties, PUBLICATION_LINGER_PROP_NAME, PUBLICATION_LINGER_DEFAULT_NS);
     }
 
     /**
@@ -2003,7 +2777,19 @@ public final class Configuration
      */
     public static long retransmitUnicastDelayNs()
     {
-        return getDurationInNanos(RETRANSMIT_UNICAST_DELAY_PROP_NAME, RETRANSMIT_UNICAST_DELAY_DEFAULT_NS);
+        return retransmitUnicastDelayNs(System.getProperties());
+    }
+
+    /**
+     * Setting how long to delay before sending a retransmit after receiving a NAK.
+     *
+     * @param properties to read the configuration from.
+     * @return setting how long to delay before sending a retransmit after receiving a NAK.
+     * @see #RETRANSMIT_UNICAST_DELAY_PROP_NAME
+     */
+    public static long retransmitUnicastDelayNs(final Properties properties)
+    {
+        return getDurationInNanos(properties, RETRANSMIT_UNICAST_DELAY_PROP_NAME, RETRANSMIT_UNICAST_DELAY_DEFAULT_NS);
     }
 
     /**
@@ -2014,7 +2800,20 @@ public final class Configuration
      */
     public static long retransmitUnicastLingerNs()
     {
-        return getDurationInNanos(RETRANSMIT_UNICAST_LINGER_PROP_NAME, RETRANSMIT_UNICAST_LINGER_DEFAULT_NS);
+        return retransmitUnicastLingerNs(System.getProperties());
+    }
+
+    /**
+     * Setting how long to linger after delay on a NAK before responding to another NAK.
+     *
+     * @param properties to read the configuration from.
+     * @return setting how long to linger after delay on a NAK before responding to another NAK.
+     * @see #RETRANSMIT_UNICAST_LINGER_PROP_NAME
+     */
+    public static long retransmitUnicastLingerNs(final Properties properties)
+    {
+        return getDurationInNanos(
+            properties, RETRANSMIT_UNICAST_LINGER_PROP_NAME, RETRANSMIT_UNICAST_LINGER_DEFAULT_NS);
     }
 
     /**
@@ -2025,7 +2824,19 @@ public final class Configuration
      */
     public static int lossReportBufferLength()
     {
-        return getSizeAsInt(LOSS_REPORT_BUFFER_LENGTH_PROP_NAME, LOSS_REPORT_BUFFER_LENGTH_DEFAULT);
+        return lossReportBufferLength(System.getProperties());
+    }
+
+    /**
+     * Length of the memory mapped buffer for the {@link io.aeron.driver.reports.LossReport}.
+     *
+     * @param properties to read the configuration from.
+     * @return length of the memory mapped buffer for the {@link io.aeron.driver.reports.LossReport}.
+     * @see #LOSS_REPORT_BUFFER_LENGTH_PROP_NAME
+     */
+    public static int lossReportBufferLength(final Properties properties)
+    {
+        return getSizeAsInt(properties, LOSS_REPORT_BUFFER_LENGTH_PROP_NAME, LOSS_REPORT_BUFFER_LENGTH_DEFAULT);
     }
 
     /**
@@ -2037,7 +2848,20 @@ public final class Configuration
      */
     public static ThreadingMode threadingMode()
     {
-        final String propertyValue = getProperty(THREADING_MODE_PROP_NAME);
+        return threadingMode(System.getProperties());
+    }
+
+    /**
+     * {@link ThreadingMode} to be used by the Aeron {@link MediaDriver}. This allows for CPU resource to be traded
+     * against throughput and latency.
+     *
+     * @param properties to read the configuration from.
+     * @return {@link ThreadingMode} to be used by the Aeron {@link MediaDriver}.
+     * @see #THREADING_MODE_PROP_NAME
+     */
+    public static ThreadingMode threadingMode(final Properties properties)
+    {
+        final String propertyValue = properties.getProperty(THREADING_MODE_PROP_NAME);
         if (null == propertyValue)
         {
             return DEDICATED;
@@ -2053,7 +2877,19 @@ public final class Configuration
      */
     public static long conductorCycleThresholdNs()
     {
-        return getDurationInNanos(CONDUCTOR_CYCLE_THRESHOLD_PROP_NAME, CONDUCTOR_CYCLE_THRESHOLD_DEFAULT_NS);
+        return conductorCycleThresholdNs(System.getProperties());
+    }
+
+    /**
+     * Get threshold value for the conductor work cycle threshold to track for being exceeded.
+     *
+     * @param properties to read the configuration from.
+     * @return threshold value in nanoseconds.
+     */
+    public static long conductorCycleThresholdNs(final Properties properties)
+    {
+        return getDurationInNanos(
+            properties, CONDUCTOR_CYCLE_THRESHOLD_PROP_NAME, CONDUCTOR_CYCLE_THRESHOLD_DEFAULT_NS);
     }
 
     /**
@@ -2063,7 +2899,18 @@ public final class Configuration
      */
     public static long senderCycleThresholdNs()
     {
-        return getDurationInNanos(SENDER_CYCLE_THRESHOLD_PROP_NAME, SENDER_CYCLE_THRESHOLD_DEFAULT_NS);
+        return senderCycleThresholdNs(System.getProperties());
+    }
+
+    /**
+     * Get threshold value for the sender work cycle threshold to track for being exceeded.
+     *
+     * @param properties to read the configuration from.
+     * @return threshold value in nanoseconds.
+     */
+    public static long senderCycleThresholdNs(final Properties properties)
+    {
+        return getDurationInNanos(properties, SENDER_CYCLE_THRESHOLD_PROP_NAME, SENDER_CYCLE_THRESHOLD_DEFAULT_NS);
     }
 
     /**
@@ -2073,7 +2920,18 @@ public final class Configuration
      */
     public static long receiverCycleThresholdNs()
     {
-        return getDurationInNanos(RECEIVER_CYCLE_THRESHOLD_PROP_NAME, RECEIVER_CYCLE_THRESHOLD_DEFAULT_NS);
+        return receiverCycleThresholdNs(System.getProperties());
+    }
+
+    /**
+     * Get threshold value for the receiver work cycle threshold to track for being exceeded.
+     *
+     * @param properties to read the configuration from.
+     * @return threshold value in nanoseconds.
+     */
+    public static long receiverCycleThresholdNs(final Properties properties)
+    {
+        return getDurationInNanos(properties, RECEIVER_CYCLE_THRESHOLD_PROP_NAME, RECEIVER_CYCLE_THRESHOLD_DEFAULT_NS);
     }
 
     /**
@@ -2083,7 +2941,18 @@ public final class Configuration
      */
     public static long nameResolverThresholdNs()
     {
-        return getDurationInNanos(NAME_RESOLVER_THRESHOLD_PROP_NAME, NAME_RESOLVER_THRESHOLD_DEFAULT_NS);
+        return nameResolverThresholdNs(System.getProperties());
+    }
+
+    /**
+     * Get threshold value for the name resolution time threshold to track for being exceeded.
+     *
+     * @param properties to read the configuration from.
+     * @return threshold value in nanoseconds.
+     */
+    public static long nameResolverThresholdNs(final Properties properties)
+    {
+        return getDurationInNanos(properties, NAME_RESOLVER_THRESHOLD_PROP_NAME, NAME_RESOLVER_THRESHOLD_DEFAULT_NS);
     }
 
     /**
@@ -2093,7 +2962,18 @@ public final class Configuration
      */
     public static String senderWildcardPortRange()
     {
-        return getProperty(SENDER_WILDCARD_PORT_RANGE_PROP_NAME);
+        return senderWildcardPortRange(System.getProperties());
+    }
+
+    /**
+     * Get wildcard port range in use for the Sender.
+     *
+     * @param properties to read the configuration from.
+     * @return port range as string with the format "low high"
+     */
+    public static String senderWildcardPortRange(final Properties properties)
+    {
+        return properties.getProperty(SENDER_WILDCARD_PORT_RANGE_PROP_NAME);
     }
 
     /**
@@ -2103,7 +2983,18 @@ public final class Configuration
      */
     public static String receiverWildcardPortRange()
     {
-        return getProperty(RECEIVER_WILDCARD_PORT_RANGE_PROP_NAME);
+        return receiverWildcardPortRange(System.getProperties());
+    }
+
+    /**
+     * Get wildcard port range in use for the Receiver.
+     *
+     * @param properties to read the configuration from.
+     * @return port range as string with the format "low high"
+     */
+    public static String receiverWildcardPortRange(final Properties properties)
+    {
+        return properties.getProperty(RECEIVER_WILDCARD_PORT_RANGE_PROP_NAME);
     }
 
     /**
@@ -2115,7 +3006,21 @@ public final class Configuration
      */
     public static IdleStrategy nativeResourceAgentIdleStrategy(final StatusIndicator controllableStatus)
     {
-        final String idleStategyName = getProperty(NATIVE_RESOURCE_AGENT_IDLE_STRATEGY_PROP_NAME);
+        return nativeResourceAgentIdleStrategy(System.getProperties(), controllableStatus);
+    }
+
+    /**
+     * {@return {@link IdleStrategy} to be employed by the async executor when enabled.}
+     *
+     * @param properties         to read the configuration from.
+     * @param controllableStatus to allow control of {@link ControllableIdleStrategy}, which can be null if not used.
+     * @see #NATIVE_RESOURCE_AGENT_IDLE_STRATEGY_PROP_NAME
+     * @since 1.51.0
+     */
+    public static IdleStrategy nativeResourceAgentIdleStrategy(
+        final Properties properties, final StatusIndicator controllableStatus)
+    {
+        final String idleStategyName = properties.getProperty(NATIVE_RESOURCE_AGENT_IDLE_STRATEGY_PROP_NAME);
         if (Strings.isEmpty(idleStategyName))
         {
             return new SleepingIdleStrategy(TimeUnit.MILLISECONDS.toNanos(1));
@@ -2187,8 +3092,22 @@ public final class Configuration
      */
     public static IdleStrategy senderIdleStrategy(final StatusIndicator controllableStatus)
     {
+        return senderIdleStrategy(System.getProperties(), controllableStatus);
+    }
+
+    /**
+     * {@link IdleStrategy} to be employed by {@link Sender} for {@link ThreadingMode#DEDICATED}.
+     *
+     * @param properties         to read the configuration from.
+     * @param controllableStatus to allow control of {@link ControllableIdleStrategy}, which can be null if not used.
+     * @return {@link IdleStrategy} to be employed by {@link Sender} for {@link ThreadingMode#DEDICATED}.
+     * @see #SENDER_IDLE_STRATEGY_PROP_NAME
+     */
+    public static IdleStrategy senderIdleStrategy(
+        final Properties properties, final StatusIndicator controllableStatus)
+    {
         return agentIdleStrategy(
-            getProperty(SENDER_IDLE_STRATEGY_PROP_NAME, SENDER_IDLE_STRATEGY_DEFAULT), controllableStatus);
+            properties.getProperty(SENDER_IDLE_STRATEGY_PROP_NAME, SENDER_IDLE_STRATEGY_DEFAULT), controllableStatus);
     }
 
     /**
@@ -2200,8 +3119,23 @@ public final class Configuration
      */
     public static IdleStrategy receiverIdleStrategy(final StatusIndicator controllableStatus)
     {
+        return receiverIdleStrategy(System.getProperties(), controllableStatus);
+    }
+
+    /**
+     * {@link IdleStrategy} to be employed by {@link Receiver} for {@link ThreadingMode#DEDICATED}.
+     *
+     * @param properties         to read the configuration from.
+     * @param controllableStatus to allow control of {@link ControllableIdleStrategy}, which can be null if not used.
+     * @return {@link IdleStrategy} to be employed by {@link Receiver} for {@link ThreadingMode#DEDICATED}.
+     * @see #RECEIVER_IDLE_STRATEGY_PROP_NAME
+     */
+    public static IdleStrategy receiverIdleStrategy(
+        final Properties properties, final StatusIndicator controllableStatus)
+    {
         return agentIdleStrategy(
-            getProperty(RECEIVER_IDLE_STRATEGY_PROP_NAME, RECEIVER_IDLE_STRATEGY_DEFAULT), controllableStatus);
+            properties.getProperty(RECEIVER_IDLE_STRATEGY_PROP_NAME, RECEIVER_IDLE_STRATEGY_DEFAULT),
+            controllableStatus);
     }
 
     /**
@@ -2215,8 +3149,25 @@ public final class Configuration
      */
     public static IdleStrategy conductorIdleStrategy(final StatusIndicator controllableStatus)
     {
+        return conductorIdleStrategy(System.getProperties(), controllableStatus);
+    }
+
+    /**
+     * {@link IdleStrategy} to be employed by {@link DriverConductor} for {@link ThreadingMode#DEDICATED} and
+     * {@link ThreadingMode#SHARED_NETWORK}.
+     *
+     * @param properties         to read the configuration from.
+     * @param controllableStatus to allow control of {@link ControllableIdleStrategy}, which can be null if not used.
+     * @return {@link IdleStrategy} to be employed by {@link DriverConductor} for {@link ThreadingMode#DEDICATED}
+     * and {@link ThreadingMode#SHARED_NETWORK}..
+     * @see #CONDUCTOR_IDLE_STRATEGY_PROP_NAME
+     */
+    public static IdleStrategy conductorIdleStrategy(
+        final Properties properties, final StatusIndicator controllableStatus)
+    {
         return agentIdleStrategy(
-            getProperty(CONDUCTOR_IDLE_STRATEGY_PROP_NAME, CONDUCTOR_IDLE_STRATEGY_DEFAULT), controllableStatus);
+            properties.getProperty(CONDUCTOR_IDLE_STRATEGY_PROP_NAME, CONDUCTOR_IDLE_STRATEGY_DEFAULT),
+            controllableStatus);
     }
 
     /**
@@ -2230,7 +3181,23 @@ public final class Configuration
      */
     public static IdleStrategy sharedNetworkIdleStrategy(final StatusIndicator controllableStatus)
     {
-        return agentIdleStrategy(getProperty(SHARED_NETWORK_IDLE_STRATEGY_PROP_NAME,
+        return sharedNetworkIdleStrategy(System.getProperties(), controllableStatus);
+    }
+
+    /**
+     * {@link IdleStrategy} to be employed by {@link Sender} and {@link Receiver} for
+     * {@link ThreadingMode#SHARED_NETWORK}.
+     *
+     * @param properties         to read the configuration from.
+     * @param controllableStatus to allow control of {@link ControllableIdleStrategy}, which can be null if not used.
+     * @return {@link IdleStrategy} to be employed by {@link Sender} and {@link Receiver} for
+     * {@link ThreadingMode#SHARED_NETWORK}.
+     * @see #SHARED_NETWORK_IDLE_STRATEGY_PROP_NAME
+     */
+    public static IdleStrategy sharedNetworkIdleStrategy(
+        final Properties properties, final StatusIndicator controllableStatus)
+    {
+        return agentIdleStrategy(properties.getProperty(SHARED_NETWORK_IDLE_STRATEGY_PROP_NAME,
             SHARED_NETWORK_IDLE_STRATEGY_DEFAULT), controllableStatus);
     }
 
@@ -2245,8 +3212,24 @@ public final class Configuration
      */
     public static IdleStrategy sharedIdleStrategy(final StatusIndicator controllableStatus)
     {
+        return sharedIdleStrategy(System.getProperties(), controllableStatus);
+    }
+
+    /**
+     * {@link IdleStrategy} to be employed by {@link Sender}, {@link Receiver}, and {@link DriverConductor} for
+     * {@link ThreadingMode#SHARED}.
+     *
+     * @param properties         to read the configuration from.
+     * @param controllableStatus to allow control of {@link ControllableIdleStrategy}, which can be null if not used.
+     * @return {@link IdleStrategy} to be employed by {@link Sender}, {@link Receiver}, and {@link DriverConductor} for
+     * {@link ThreadingMode#SHARED}.
+     * @see #SHARED_IDLE_STRATEGY_PROP_NAME
+     */
+    public static IdleStrategy sharedIdleStrategy(
+        final Properties properties, final StatusIndicator controllableStatus)
+    {
         return agentIdleStrategy(
-            getProperty(SHARED_IDLE_STRATEGY_PROP_NAME, SHARED_IDLE_STRATEGY_DEFAULT), controllableStatus);
+            properties.getProperty(SHARED_IDLE_STRATEGY_PROP_NAME, SHARED_IDLE_STRATEGY_DEFAULT), controllableStatus);
     }
 
     /**
@@ -2257,7 +3240,19 @@ public final class Configuration
     @Deprecated
     public static byte[] applicationSpecificFeedback()
     {
-        final String propertyValue = getProperty(SM_APPLICATION_SPECIFIC_FEEDBACK_PROP_NAME);
+        return applicationSpecificFeedback(System.getProperties());
+    }
+
+    /**
+     * @param properties to read the configuration from.
+     * @return Application Specific Feedback added to Status Messages by the driver for flow control.
+     * @see #SM_APPLICATION_SPECIFIC_FEEDBACK_PROP_NAME
+     * @deprecated see {@link #groupTag()}.
+     */
+    @Deprecated
+    public static byte[] applicationSpecificFeedback(final Properties properties)
+    {
+        final String propertyValue = properties.getProperty(SM_APPLICATION_SPECIFIC_FEEDBACK_PROP_NAME);
         if (null == propertyValue)
         {
             return ArrayUtil.EMPTY_BYTE_ARRAY;
@@ -2274,10 +3269,22 @@ public final class Configuration
      */
     public static SendChannelEndpointSupplier sendChannelEndpointSupplier()
     {
+        return sendChannelEndpointSupplier(System.getProperties());
+    }
+
+    /**
+     * Get the supplier of {@link SendChannelEndpoint}s which can be used for
+     * debugging, monitoring, or modifying the behaviour when sending to the channel.
+     *
+     * @param properties to read the configuration from.
+     * @return the {@link SendChannelEndpointSupplier}.
+     */
+    public static SendChannelEndpointSupplier sendChannelEndpointSupplier(final Properties properties)
+    {
         SendChannelEndpointSupplier supplier = null;
         try
         {
-            final String className = getProperty(SEND_CHANNEL_ENDPOINT_SUPPLIER_PROP_NAME);
+            final String className = properties.getProperty(SEND_CHANNEL_ENDPOINT_SUPPLIER_PROP_NAME);
             if (null == className)
             {
                 return new DefaultSendChannelEndpointSupplier();
@@ -2301,10 +3308,22 @@ public final class Configuration
      */
     public static ReceiveChannelEndpointSupplier receiveChannelEndpointSupplier()
     {
+        return receiveChannelEndpointSupplier(System.getProperties());
+    }
+
+    /**
+     * Get the supplier of {@link ReceiveChannelEndpoint}s which can be used for
+     * debugging, monitoring, or modifying the behaviour when receiving from the channel.
+     *
+     * @param properties to read the configuration from.
+     * @return the {@link SendChannelEndpointSupplier}.
+     */
+    public static ReceiveChannelEndpointSupplier receiveChannelEndpointSupplier(final Properties properties)
+    {
         ReceiveChannelEndpointSupplier supplier = null;
         try
         {
-            final String className = getProperty(RECEIVE_CHANNEL_ENDPOINT_SUPPLIER_PROP_NAME);
+            final String className = properties.getProperty(RECEIVE_CHANNEL_ENDPOINT_SUPPLIER_PROP_NAME);
             if (null == className)
             {
                 return new DefaultReceiveChannelEndpointSupplier();
@@ -2328,13 +3347,26 @@ public final class Configuration
      */
     public static FlowControlSupplier unicastFlowControlSupplier()
     {
+        return unicastFlowControlSupplier(System.getProperties());
+    }
+
+    /**
+     * Get the supplier of {@link FlowControl}s which can be used for changing behavior of flow control for unicast
+     * publications.
+     *
+     * @param properties to read the configuration from.
+     * @return the {@link FlowControlSupplier}.
+     */
+    public static FlowControlSupplier unicastFlowControlSupplier(final Properties properties)
+    {
         FlowControlSupplier supplier = null;
         try
         {
-            final String className = getProperty(UNICAST_FLOW_CONTROL_STRATEGY_SUPPLIER_PROP_NAME);
+            final String className = properties.getProperty(UNICAST_FLOW_CONTROL_STRATEGY_SUPPLIER_PROP_NAME);
             if (null == className)
             {
-                return new DefaultUnicastFlowControlSupplier();
+                return new DefaultUnicastFlowControlSupplier(properties.getProperty(
+                    UNICAST_FLOW_CONTROL_STRATEGY_PROP_NAME, UNICAST_FLOW_CONTROL_STRATEGY_DEFAULT));
             }
 
             supplier = (FlowControlSupplier)Class.forName(className).getConstructor().newInstance();
@@ -2355,13 +3387,26 @@ public final class Configuration
      */
     public static FlowControlSupplier multicastFlowControlSupplier()
     {
+        return multicastFlowControlSupplier(System.getProperties());
+    }
+
+    /**
+     * Get the supplier of {@link FlowControl}s which can be used for changing behavior of flow control for multicast
+     * publications.
+     *
+     * @param properties to read the configuration from.
+     * @return the {@link FlowControlSupplier}.
+     */
+    public static FlowControlSupplier multicastFlowControlSupplier(final Properties properties)
+    {
         FlowControlSupplier supplier = null;
         try
         {
-            final String className = getProperty(MULTICAST_FLOW_CONTROL_STRATEGY_SUPPLIER_PROP_NAME);
+            final String className = properties.getProperty(MULTICAST_FLOW_CONTROL_STRATEGY_SUPPLIER_PROP_NAME);
             if (null == className)
             {
-                return new DefaultMulticastFlowControlSupplier();
+                return new DefaultMulticastFlowControlSupplier(properties.getProperty(
+                    MULTICAST_FLOW_CONTROL_STRATEGY_PROP_NAME, MULTICAST_FLOW_CONTROL_STRATEGY_DEFAULT));
             }
 
             supplier = (FlowControlSupplier)Class.forName(className).getConstructor().newInstance();
@@ -2381,10 +3426,21 @@ public final class Configuration
      */
     public static CongestionControlSupplier congestionControlSupplier()
     {
+        return congestionControlSupplier(System.getProperties());
+    }
+
+    /**
+     * Get the supplier of {@link CongestionControl} implementations which can be used for receivers.
+     *
+     * @param properties to read the configuration from.
+     * @return the {@link CongestionControlSupplier}
+     */
+    public static CongestionControlSupplier congestionControlSupplier(final Properties properties)
+    {
         CongestionControlSupplier supplier = null;
         try
         {
-            final String className = getProperty(CONGESTION_CONTROL_STRATEGY_SUPPLIER_PROP_NAME);
+            final String className = properties.getProperty(CONGESTION_CONTROL_STRATEGY_SUPPLIER_PROP_NAME);
             if (null == className)
             {
                 return new DefaultCongestionControlSupplier();
@@ -2409,7 +3465,20 @@ public final class Configuration
      */
     public static int streamSessionLimit()
     {
-        final String streamSessionLimitString = getProperty(STREAM_SESSION_LIMIT_PROP_NAME);
+        return streamSessionLimit(System.getProperties());
+    }
+
+    /**
+     * Get the configured limit for the number of streams per session.
+     *
+     * @param properties to read the configuration from.
+     * @return configured session limit
+     * @throws AsciiNumberFormatException if the property referenced by {@link #STREAM_SESSION_LIMIT_PROP_NAME} is not
+     *                                    a valid number
+     */
+    public static int streamSessionLimit(final Properties properties)
+    {
+        final String streamSessionLimitString = properties.getProperty(STREAM_SESSION_LIMIT_PROP_NAME);
         try
         {
             return Strings.isEmpty(streamSessionLimitString) ?
@@ -2473,10 +3542,22 @@ public final class Configuration
      */
     public static TerminationValidator terminationValidator()
     {
+        return terminationValidator(System.getProperties());
+    }
+
+    /**
+     * Get the {@link TerminationValidator} implementations which can be used for validating a termination request
+     * sent to the driver to ensure the client has the right to terminate a driver.
+     *
+     * @param properties to read the configuration from.
+     * @return the {@link TerminationValidator}
+     */
+    public static TerminationValidator terminationValidator(final Properties properties)
+    {
         TerminationValidator validator = null;
         try
         {
-            final String className = getProperty(TERMINATION_VALIDATOR_PROP_NAME);
+            final String className = properties.getProperty(TERMINATION_VALIDATOR_PROP_NAME);
             if (null == className)
             {
                 return new DefaultDenyTerminationValidator();
@@ -2503,14 +3584,14 @@ public final class Configuration
         {
             System.err.println(
                 "WARNING: Could not set desired SO_SNDBUF, adjust OS to allow " + SOCKET_SNDBUF_LENGTH_PROP_NAME +
-                " attempted=" + ctx.socketSndbufLength() + ", actual=" + ctx.osMaxSocketSndbufLength());
+                    " attempted=" + ctx.socketSndbufLength() + ", actual=" + ctx.osMaxSocketSndbufLength());
         }
 
         if (ctx.osMaxSocketRcvbufLength() < ctx.socketRcvbufLength())
         {
             System.err.println(
                 "WARNING: Could not set desired SO_RCVBUF, adjust OS to allow " + SOCKET_RCVBUF_LENGTH_PROP_NAME +
-                " attempted=" + ctx.socketRcvbufLength() + ", actual=" + ctx.osMaxSocketRcvbufLength());
+                    " attempted=" + ctx.socketRcvbufLength() + ", actual=" + ctx.osMaxSocketRcvbufLength());
         }
 
         final int soSndBuf = 0 == ctx.socketSndbufLength() ?
@@ -2520,7 +3601,7 @@ public final class Configuration
         {
             throw new ConfigurationException(
                 "mtuLength=" + ctx.mtuLength() + " > SO_SNDBUF=" + soSndBuf +
-                ", increase " + SOCKET_SNDBUF_LENGTH_PROP_NAME + " to match MTU");
+                    ", increase " + SOCKET_SNDBUF_LENGTH_PROP_NAME + " to match MTU");
         }
 
         final int soRcvBuf = 0 == ctx.socketRcvbufLength() ?
@@ -2530,7 +3611,7 @@ public final class Configuration
         {
             throw new ConfigurationException(
                 "initialWindowLength=" + ctx.initialWindowLength() + " > SO_RCVBUF=" + soRcvBuf +
-                ", increase " + SOCKET_RCVBUF_LENGTH_PROP_NAME + " limits to match initialWindowLength");
+                    ", increase " + SOCKET_RCVBUF_LENGTH_PROP_NAME + " limits to match initialWindowLength");
         }
     }
 
@@ -2597,14 +3678,14 @@ public final class Configuration
         {
             throw new ConfigurationException(
                 "publicationUnblockTimeoutNs=" + publicationUnblockTimeoutNs +
-                " <= clientLivenessTimeoutNs=" + clientLivenessTimeoutNs);
+                    " <= clientLivenessTimeoutNs=" + clientLivenessTimeoutNs);
         }
 
         if (clientLivenessTimeoutNs <= timerIntervalNs)
         {
             throw new ConfigurationException(
                 "clientLivenessTimeoutNs=" + clientLivenessTimeoutNs +
-                " <= timerIntervalNs=" + timerIntervalNs);
+                    " <= timerIntervalNs=" + timerIntervalNs);
         }
     }
 
@@ -2627,14 +3708,14 @@ public final class Configuration
         {
             throw new ConfigurationException(
                 "untetheredWindowLimitTimeoutNs=" + untetheredWindowLimitTimeoutNs +
-                " <= timerIntervalNs=" + timerIntervalNs);
+                    " <= timerIntervalNs=" + timerIntervalNs);
         }
 
         if (untetheredRestingTimeoutNs <= timerIntervalNs)
         {
             throw new ConfigurationException(
                 "untetheredRestingTimeoutNs=" + untetheredRestingTimeoutNs +
-                " <= timerIntervalNs=" + timerIntervalNs);
+                    " <= timerIntervalNs=" + timerIntervalNs);
         }
 
         if (Aeron.NULL_VALUE != untetheredLingerTimeoutNs && untetheredLingerTimeoutNs <= timerIntervalNs)
