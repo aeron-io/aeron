@@ -129,27 +129,38 @@ public class ArchiveMarkFile implements AutoCloseable
                 epochClock,
                 (version) -> validateVersion(file, version),
                 null);
-
             final UnsafeBuffer existingBuffer = existingMarkFile.buffer();
 
-            if (0 != currentHeaderOffset)
+            try
             {
-                headerDecoder.wrapAndApplyHeader(existingBuffer, 0, messageHeaderDecoder);
-            }
-            else
-            {
-                headerDecoder.wrap(
-                    existingBuffer, 0, MarkFileHeaderDecoder.BLOCK_LENGTH, MarkFileHeaderDecoder.SCHEMA_VERSION);
-            }
+                if (0 != currentHeaderOffset)
+                {
+                    headerDecoder.wrapAndApplyHeader(existingBuffer, 0, messageHeaderDecoder);
+                }
+                else
+                {
+                    headerDecoder.wrap(
+                        existingBuffer, 0, MarkFileHeaderDecoder.BLOCK_LENGTH, MarkFileHeaderDecoder.SCHEMA_VERSION);
+                }
 
-            final int existingErrorBufferLength = headerDecoder.errorBufferLength();
-            if (existingErrorBufferLength > 0)
-            {
-                final UnsafeBuffer existingErrorBuffer = new UnsafeBuffer(
-                    existingBuffer, headerDecoder.headerLength(), existingErrorBufferLength);
+                final int existingErrorBufferLength = headerDecoder.errorBufferLength();
+                if (existingErrorBufferLength > 0 &&
+                    headerDecoder.headerLength() > 0 &&
+                    headerDecoder.headerLength() + (long)existingErrorBufferLength <= file.length())
+                {
+                    final UnsafeBuffer existingErrorBuffer = new UnsafeBuffer(
+                        existingBuffer, headerDecoder.headerLength(), existingErrorBufferLength);
 
-                saveExistingErrors(file, existingErrorBuffer, CommonContext.fallbackLogger());
-                existingErrorBuffer.setMemory(0, existingErrorBufferLength, (byte)0);
+                    saveExistingErrors(file, existingErrorBuffer, CommonContext.fallbackLogger());
+                    existingErrorBuffer.setMemory(0, existingErrorBufferLength, (byte)0);
+                }
+            }
+            catch (final RuntimeException ex)
+            {
+                existingMarkFile.timestampRelease(NULL_VALUE);
+                existingMarkFile.mappedByteBuffer().force();
+                CloseHelper.close(existingMarkFile);
+                throw ex;
             }
 
             if (0 != currentHeaderOffset)
