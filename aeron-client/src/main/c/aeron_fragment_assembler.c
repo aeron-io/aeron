@@ -392,6 +392,21 @@ void aeron_fragment_assembler_handler(
     }
 }
 
+bool aeron_fragment_assembler_delete_session_buffer(aeron_fragment_assembler_t *assembler, int32_t session_id)
+{
+    aeron_buffer_builder_t *buffer_builder = aeron_int64_to_ptr_hash_map_remove(
+        &assembler->builder_by_session_id_map, session_id);
+
+    if (NULL == buffer_builder)
+    {
+        return false;
+    }
+
+    aeron_buffer_builder_delete(buffer_builder);
+
+    return true;
+}
+
 int aeron_controlled_fragment_assembler_create(
     aeron_controlled_fragment_assembler_t **assembler,
     aeron_controlled_fragment_handler_t delegate,
@@ -509,6 +524,22 @@ aeron_controlled_fragment_handler_action_t aeron_controlled_fragment_assembler_h
     }
 
     return action;
+}
+
+bool aeron_controlled_fragment_assembler_delete_session_buffer(
+    aeron_controlled_fragment_assembler_t *assembler, int32_t session_id)
+{
+    aeron_buffer_builder_t *buffer_builder = aeron_int64_to_ptr_hash_map_remove(
+        &assembler->builder_by_session_id_map, session_id);
+
+    if (NULL == buffer_builder)
+    {
+        return false;
+    }
+
+    aeron_buffer_builder_delete(buffer_builder);
+
+    return true;
 }
 
 extern void aeron_buffer_builder_reset(aeron_buffer_builder_t *buffer_builder);

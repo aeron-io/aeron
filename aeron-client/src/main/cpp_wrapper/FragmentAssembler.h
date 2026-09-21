@@ -85,10 +85,11 @@ public:
      * large messages are expected.
      *
      * @param sessionId to have its buffer freed
+     * @return true if a buffer has been freed otherwise false.
      */
-    void deleteSessionBuffer(std::int32_t sessionId)
+    bool deleteSessionBuffer(std::int32_t sessionId)
     {
-        // No-op???
+        return aeron_fragment_assembler_delete_session_buffer(m_fragment_assembler, sessionId);
     }
 
 private:

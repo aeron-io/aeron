@@ -296,3 +296,29 @@ TEST_P(FragmentAssemblerParameterisedTest, shouldReassembleTwoMessagesFromFourFr
 }
 
 #endif //AERON_FRAGMENTASSEMBLERTESTFIXTURE_H
+
+TEST_P(FragmentAssemblerParameterisedTest, shouldDeleteSessionBuffer)
+{
+    util::index_t fragmentLength = MTU_LENGTH - DataFrameHeader::LENGTH;
+    bool isCalled = false;
+    auto handler =
+        [&](AtomicBuffer &buffer, util::index_t offset, util::index_t length, Header &header)
+        {
+            isCalled = true;
+        };
+
+    FragmentAssembler assembler(handler);
+    AtomicBuffer buf{m_buffer};
+
+    EXPECT_FALSE(assembler.deleteSessionBuffer(SESSION_ID));
+
+    fillFrame(TERM_OFFSET, FrameDescriptor::BEGIN_FRAG, 0, fragmentLength, 0);
+    assembler.handler()(buf, 0, fragmentLength, *m_header);
+
+    fillFrame(TERM_OFFSET + MTU_LENGTH, FrameDescriptor::END_FRAG, MTU_LENGTH, fragmentLength, fragmentLength % 256);
+    assembler.handler()(buf, MTU_LENGTH, fragmentLength, *m_header);
+    ASSERT_TRUE(isCalled);
+
+    EXPECT_TRUE(assembler.deleteSessionBuffer(SESSION_ID));
+    EXPECT_FALSE(assembler.deleteSessionBuffer(SESSION_ID));
+}
