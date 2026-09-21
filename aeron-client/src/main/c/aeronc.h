@@ -2424,6 +2424,16 @@ void aeron_fragment_assembler_handler(
     void *clientd, const uint8_t *buffer, size_t length, aeron_header_t *header);
 
 /**
+ * Free an existing session buffer to reduce memory pressure when an image goes inactive or no more
+ * large messages are expected.
+ *
+ * @param assembler holding the session buffer.
+ * @param session_id to have its buffer freed.
+ * @return true if a buffer has been freed otherwise false.
+ */
+bool aeron_fragment_assembler_delete_session_buffer(aeron_fragment_assembler_t *assembler, int32_t session_id);
+
+/**
  * Create a controlled fragment assembler for use with a subscription.
  *
  * @param assembler to be set when created successfully.
@@ -2455,6 +2465,17 @@ int aeron_controlled_fragment_assembler_delete(aeron_controlled_fragment_assembl
  */
 aeron_controlled_fragment_handler_action_t aeron_controlled_fragment_assembler_handler(
     void *clientd, const uint8_t *buffer, size_t length, aeron_header_t *header);
+
+/**
+ * Free an existing session buffer to reduce memory pressure when an image goes inactive or no more
+ * large messages are expected.
+ *
+ * @param assembler holding the session buffer.
+ * @param session_id to have its buffer freed.
+ * @return true if a buffer has been freed otherwise false.
+ */
+bool aeron_controlled_fragment_assembler_delete_session_buffer(
+    aeron_controlled_fragment_assembler_t *assembler, int32_t session_id);
 
 /**
  * Counter functions
