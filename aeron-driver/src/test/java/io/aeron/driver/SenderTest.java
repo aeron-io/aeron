@@ -162,6 +162,8 @@ class SenderTest
             false);
 
         assertTrue(senderCommandQueue.offer(() -> sender.onNewNetworkPublication(publication)));
+
+        sender.doWork(); // process command
     }
 
     @AfterEach
