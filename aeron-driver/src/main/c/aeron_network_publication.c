@@ -31,14 +31,6 @@
 #include "aeron_driver_conductor.h"
 #include "concurrent/aeron_logbuffer_unblocker.h"
 
-#if !defined(HAVE_STRUCT_MMSGHDR)
-struct mmsghdr
-{
-    struct msghdr msg_hdr;
-    unsigned int msg_len;
-};
-#endif
-
 static inline bool aeron_network_publication_liveness_on_remote_close(
     aeron_network_publication_t *publication,
     int64_t receiver_id)

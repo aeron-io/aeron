@@ -21,14 +21,6 @@ extern "C"
 #include "media/aeron_udp_channel_transport.h"
 #include "media/aeron_udp_channel_transport_loss.h"
 #include "protocol/aeron_udp_protocol.h"
-
-#if !defined(HAVE_STRUCT_MMSGHDR)
-struct mmsghdr
-{
-    struct msghdr msg_hdr;
-    unsigned int msg_len;
-};
-#endif
 }
 
 #define TEMP_URL_LEN (128)

@@ -27,14 +27,6 @@
 #include "aeron_driver_conductor.h"
 #include "media/aeron_udp_destination_tracker.h"
 
-#if !defined(HAVE_STRUCT_MMSGHDR)
-struct mmsghdr
-{
-    struct msghdr msg_hdr;
-    unsigned int msg_len;
-};
-#endif
-
 int aeron_udp_destination_tracker_init(
     aeron_udp_destination_tracker_t *tracker,
     aeron_udp_channel_data_paths_t *data_paths,

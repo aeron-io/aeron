@@ -92,6 +92,14 @@ typedef SSIZE_T ssize_t;
 #error Unsupported platform!
 #endif
 
+#if !defined(HAVE_STRUCT_MMSGHDR)
+struct mmsghdr
+{
+    struct msghdr msg_hdr;
+    unsigned int msg_len;
+};
+#endif
+
 int aeron_set_socket_non_blocking(aeron_socket_t fd);
 
 aeron_socket_t aeron_socket(int domain, int type, int protocol);

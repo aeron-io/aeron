@@ -46,14 +46,6 @@
 #include <linux/sockios.h>
 #endif
 
-#if !defined(HAVE_STRUCT_MMSGHDR)
-struct mmsghdr
-{
-    struct msghdr msg_hdr;
-    unsigned int msg_len;
-};
-#endif
-
 static int aeron_udp_channel_transport_setup_media_rcv_timestamps(aeron_udp_channel_transport_t *transport)
 {
 #if defined(HAS_MEDIA_RCV_TIMESTAMPS)

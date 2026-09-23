@@ -37,14 +37,6 @@
 #include "util/aeron_strutil.h"
 #include "aeron_windows.h"
 
-#if !defined(HAVE_STRUCT_MMSGHDR)
-struct mmsghdr
-{
-    struct msghdr msg_hdr;
-    unsigned int msg_len;
-};
-#endif
-
 #define AERON_DRIVER_AGENT_EVENT_TYPE_UNKNOWN (0)
 #define AERON_DRIVER_AGENT_EVENT_TYPE_CMD_IN (1)
 #define AERON_DRIVER_AGENT_EVENT_TYPE_CMD_OUT (2)

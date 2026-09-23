@@ -42,14 +42,6 @@
 #include "aeron_name_resolver_cache.h"
 #include "aeron_driver_name_resolver.h"
 
-#if !defined(HAVE_STRUCT_MMSGHDR)
-struct mmsghdr
-{
-    struct msghdr msg_hdr;
-    unsigned int msg_len;
-};
-#endif
-
 #define AERON_NAME_RESOLVER_DRIVER_DUTY_CYCLE_MS (10)
 #define AERON_NAME_RESOLVER_DRIVER_NUM_RECV_BUFFERS (1)
 

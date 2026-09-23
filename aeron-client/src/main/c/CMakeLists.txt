@@ -13,6 +13,7 @@
 # limitations under the License.
 
 include(CheckSymbolExists)
+include(CheckTypeSize)
 
 if ("${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
     set(CMAKE_REQUIRED_DEFINITIONS "-D_GNU_SOURCE")
@@ -64,6 +65,10 @@ else ()
     check_symbol_exists(reallocf "bsd/stdlib.h" REALLOCF_PROTOTYPE_EXISTS)
 endif ()
 
+set(CMAKE_EXTRA_INCLUDE_FILES sys/socket.h)
+check_type_size("struct mmsghdr" STRUCT_MMSGHDR_TYPE_EXISTS)
+set(CMAKE_EXTRA_INCLUDE_FILES)
+
 check_symbol_exists(fallocate "fcntl.h" FALLOCATE_PROTOTYPE_EXISTS)
 check_symbol_exists(posix_fallocate "fcntl.h" POSIX_FALLOCATE_PROTOTYPE_EXISTS)
 check_symbol_exists(F_PREALLOCATE "fcntl.h" F_PREALLOCATE_PROTOTYPE_EXISTS)
@@ -97,6 +102,10 @@ endif ()
 
 if (REALLOCF_PROTOTYPE_EXISTS)
     add_definitions(-DHAVE_REALLOCF)
+endif ()
+
+if (STRUCT_MMSGHDR_TYPE_EXISTS)
+    add_definitions(-DHAVE_STRUCT_MMSGHDR)
 endif ()
 
 set(SOURCE

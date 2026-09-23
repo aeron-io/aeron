@@ -24,15 +24,6 @@
 #include "aeron_network_publication.h"
 #include "concurrent/aeron_distinct_error_log.h"
 
-#if !defined(HAVE_STRUCT_MMSGHDR)
-#define HAVE_STRUCT_MMSGHDR
-struct mmsghdr
-{
-    struct msghdr msg_hdr;
-    unsigned int msg_len;
-};
-#endif
-
 typedef struct aeron_driver_sender_network_publication_entry_stct
 {
     aeron_network_publication_t *publication;

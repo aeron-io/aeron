@@ -18,6 +18,10 @@ if (MSVC AND "${CMAKE_SYSTEM_NAME}" MATCHES "Windows")
     set(AERON_LIB_WINSOCK_LIBS wsock32 ws2_32 Iphlpapi)
 endif ()
 
+set(CMAKE_EXTRA_INCLUDE_FILES sys/socket.h)
+check_type_size("struct mmsghdr" STRUCT_MMSGHDR_TYPE_EXISTS)
+set(CMAKE_EXTRA_INCLUDE_FILES)
+
 include_directories(${AERON_C_CLIENT_SOURCE_PATH})
 
 set(TEST_HEADERS
@@ -28,6 +32,9 @@ function(aeron_c_client_test name file)
         add_dependencies(${name} gmock)
         target_link_libraries(${name} aeron gmock_main ${CMAKE_THREAD_LIBS_INIT} ${AERON_LIB_WINSOCK_LIBS})
         target_compile_definitions(${name} PUBLIC "_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING")
+        if (STRUCT_MMSGHDR_TYPE_EXISTS)
+            target_compile_definitions(${name} PUBLIC -DHAVE_STRUCT_MMSGHDR)
+        endif ()
         add_test(NAME ${name} COMMAND ${name})
 endfunction()
 
