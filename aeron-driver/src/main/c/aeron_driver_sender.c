@@ -22,14 +22,6 @@
 #include <aeron_socket.h>
 #include <stdio.h>
 
-#if !defined(HAVE_STRUCT_MMSGHDR)
-struct mmsghdr
-{
-    struct msghdr msg_hdr;
-    unsigned int msg_len;
-};
-#endif
-
 #include "util/aeron_arrayutil.h"
 #include "media/aeron_send_channel_endpoint.h"
 #include "aeron_driver_sender.h"
@@ -63,6 +55,16 @@ int aeron_driver_sender_init(
         sender->recv_buffers.iov[i].iov_base = sender->recv_buffers.buffers[i] + offset;
         sender->recv_buffers.iov[i].iov_len = (uint32_t)context->mtu_length;
     }
+
+    struct mmsghdr *mmsghdr = &sender->control_msgvec[0];
+    mmsghdr->msg_hdr.msg_name = &sender->recv_buffers.addrs[0];
+    mmsghdr->msg_hdr.msg_namelen = sizeof(sender->recv_buffers.addrs[0]);
+    mmsghdr->msg_hdr.msg_iov = &sender->recv_buffers.iov[0];
+    mmsghdr->msg_hdr.msg_iovlen = 1;
+    mmsghdr->msg_hdr.msg_flags = 0;
+    mmsghdr->msg_hdr.msg_control = NULL;
+    mmsghdr->msg_hdr.msg_controllen = 0;
+    mmsghdr->msg_len = 0;
 
     if (aeron_udp_channel_data_paths_init(
         &sender->data_paths,
@@ -128,6 +130,42 @@ static void aeron_driver_sender_on_rb_command_queue(
     cmd->func(clientd, cmd);
 }
 
+static int aeron_driver_sender_slow_tick_work(aeron_driver_sender_t *sender, int64_t now_ns)
+{
+    int work_count = (int)aeron_mpsc_rb_read(
+        sender->sender_proxy.command_queue, aeron_driver_sender_on_rb_command_queue, sender, AERON_COMMAND_DRAIN_LIMIT);
+
+    int64_t bytes_received = 0;
+    int poll_result = sender->poller_poll_func(
+        &sender->poller,
+        sender->control_msgvec,
+        1,
+        &bytes_received,
+        sender->data_paths.recv_func,
+        sender->recvmmsg_func,
+        sender);
+    work_count += (int)bytes_received;
+
+    if (poll_result < 0)
+    {
+        AERON_APPEND_ERR("%s", "sender poller_poll");
+        aeron_driver_sender_log_error(sender);
+    }
+
+    sender->duty_cycle_counter = 0;
+    sender->control_poll_timeout_ns = now_ns + sender->status_message_read_timeout_ns;
+
+    if (sender->context->re_resolution_check_interval_ns > 0 && (sender->re_resolution_deadline_ns - now_ns) < 0)
+    {
+        sender->re_resolution_deadline_ns = (int64_t)(now_ns + sender->context->re_resolution_check_interval_ns);
+        aeron_udp_transport_poller_check_send_endpoint_re_resolutions(
+                &sender->poller, now_ns, sender->context->conductor_proxy);
+        work_count++;
+    }
+
+    return work_count;
+}
+
 int aeron_driver_sender_do_work(void *clientd)
 {
     aeron_driver_sender_t *sender = (aeron_driver_sender_t *)clientd;
@@ -138,56 +176,18 @@ int aeron_driver_sender_do_work(void *clientd)
     aeron_duty_cycle_tracker_t *tracker = sender->context->sender_duty_cycle_tracker;
     tracker->measure_and_update(tracker->state, now_ns);
 
-    int work_count = (int)aeron_mpsc_rb_read(
-        sender->sender_proxy.command_queue, aeron_driver_sender_on_rb_command_queue, sender, AERON_COMMAND_DRAIN_LIMIT);
-
-    int64_t bytes_received = 0;
     int64_t short_sends_before = aeron_counter_get_plain(sender->short_sends_counter);
-    int bytes_sent = aeron_driver_sender_do_send(sender, now_ns);
+    int work_count = aeron_driver_sender_do_send(sender, now_ns);
 
-    if (0 == bytes_sent ||
+    if (0 == work_count ||
         ++sender->duty_cycle_counter >= sender->duty_cycle_ratio ||
         now_ns > sender->control_poll_timeout_ns ||
         short_sends_before < aeron_counter_get_plain(sender->short_sends_counter))
     {
-        struct mmsghdr mmsghdr[1];
-        mmsghdr[0].msg_hdr.msg_name = &sender->recv_buffers.addrs[0];
-        mmsghdr[0].msg_hdr.msg_namelen = sizeof(sender->recv_buffers.addrs[0]);
-        mmsghdr[0].msg_hdr.msg_iov = &sender->recv_buffers.iov[0];
-        mmsghdr[0].msg_hdr.msg_iovlen = 1;
-        mmsghdr[0].msg_hdr.msg_flags = 0;
-        mmsghdr[0].msg_hdr.msg_control = NULL;
-        mmsghdr[0].msg_hdr.msg_controllen = 0;
-        mmsghdr[0].msg_len = 0;
-
-        int poll_result = sender->poller_poll_func(
-            &sender->poller,
-            mmsghdr,
-            1,
-            &bytes_received,
-            sender->data_paths.recv_func,
-            sender->recvmmsg_func,
-            sender);
-
-        if (poll_result < 0)
-        {
-            AERON_APPEND_ERR("%s", "sender poller_poll");
-            aeron_driver_sender_log_error(sender);
-        }
-        work_count += (poll_result < 0 ? 0 : poll_result);
-
-        sender->duty_cycle_counter = 0;
-        sender->control_poll_timeout_ns = now_ns + sender->status_message_read_timeout_ns;
+        work_count += aeron_driver_sender_slow_tick_work(sender, now_ns);
     }
 
-    if (sender->context->re_resolution_check_interval_ns > 0 && (sender->re_resolution_deadline_ns - now_ns) < 0)
-    {
-        sender->re_resolution_deadline_ns = (int64_t)(now_ns + sender->context->re_resolution_check_interval_ns);
-        aeron_udp_transport_poller_check_send_endpoint_re_resolutions(
-                &sender->poller, now_ns, sender->context->conductor_proxy);
-    }
-
-    return work_count + bytes_sent + (int)bytes_received;
+    return work_count;
 }
 
 void aeron_driver_sender_on_close(void *clientd)

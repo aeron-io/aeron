@@ -28,14 +28,6 @@
 #include "aeron_position.h"
 #include "aeron_timestamps.h"
 
-#if !defined(HAVE_STRUCT_MMSGHDR)
-struct mmsghdr
-{
-    struct msghdr msg_hdr;
-    unsigned int msg_len;
-};
-#endif
-
 static void aeron_send_channel_endpoint_handle_managed_resource_event(aeron_driver_managed_resource_event_t event, void *clientd);
 
 int aeron_send_channel_endpoint_create(

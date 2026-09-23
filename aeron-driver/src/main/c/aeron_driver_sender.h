@@ -24,6 +24,15 @@
 #include "aeron_network_publication.h"
 #include "concurrent/aeron_distinct_error_log.h"
 
+#if !defined(HAVE_STRUCT_MMSGHDR)
+#define HAVE_STRUCT_MMSGHDR
+struct mmsghdr
+{
+    struct msghdr msg_hdr;
+    unsigned int msg_len;
+};
+#endif
+
 typedef struct aeron_driver_sender_network_publication_entry_stct
 {
     aeron_network_publication_t *publication;
@@ -51,6 +60,8 @@ typedef struct aeron_driver_sender_stct
         struct sockaddr_storage addrs[AERON_DRIVER_SENDER_IO_VECTOR_LENGTH_MAX];
     }
     recv_buffers;
+
+    struct mmsghdr control_msgvec[1];
 
     aeron_udp_channel_data_paths_t data_paths;
 
