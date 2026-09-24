@@ -23,6 +23,17 @@
 
 #define AERON_UDP_CHANNEL_TRANSPORT_MAX_INTERCEPTORS (2)
 
+#if !defined(HAVE_STRUCT_MMSGHDR)
+#define HAVE_STRUCT_MMSGHDR
+struct mmsghdr
+{
+    struct msghdr msg_hdr;
+    unsigned int msg_len;
+};
+#else
+struct mmsghdr;
+#endif
+
 typedef enum aeron_udp_channel_transport_affinity_en
 {
     AERON_UDP_CHANNEL_TRANSPORT_AFFINITY_SENDER,
@@ -31,7 +42,6 @@ typedef enum aeron_udp_channel_transport_affinity_en
 }
 aeron_udp_channel_transport_affinity_t;
 
-struct mmsghdr;
 typedef struct aeron_udp_channel_transport_params_stct aeron_udp_channel_transport_params_t;
 typedef struct aeron_udp_channel_transport_stct aeron_udp_channel_transport_t;
 typedef struct aeron_network_publication_stct aeron_network_publication_t;

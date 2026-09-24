@@ -20,10 +20,6 @@ set(TEST_HEADERS
 
 include_directories(${AERON_CLIENT_WRAPPER_SOURCE_PATH})
 
-set(CMAKE_EXTRA_INCLUDE_FILES sys/socket.h)
-check_type_size("struct mmsghdr" STRUCT_MMSGHDR_TYPE_EXISTS)
-set(CMAKE_EXTRA_INCLUDE_FILES)
-
 function(aeron_client_native_test name file)
     add_executable(${name} ${file} ${TEST_HEADERS})
     add_dependencies(${name} gmock)
@@ -38,9 +34,6 @@ function(aeron_client_wrapper_test name file)
     add_dependencies(${wrapper_name} gmock)
     target_link_libraries(${wrapper_name} aeron_client_wrapper aeron_driver gmock_main ${CMAKE_THREAD_LIBS_INIT})
     target_compile_definitions(${wrapper_name} PUBLIC "_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING")
-    if (STRUCT_MMSGHDR_TYPE_EXISTS)
-        target_compile_definitions(${wrapper_name} PUBLIC -DHAVE_STRUCT_MMSGHDR)
-    endif ()
     add_test(NAME ${wrapper_name} COMMAND ${wrapper_name})
 endfunction()
 
