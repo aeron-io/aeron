@@ -4569,6 +4569,7 @@ public final class MediaDriver implements AutoCloseable
                 "\n    resolverInterface='" + resolverInterface + '\'' +
                 "\n    resolverBootstrapNeighbor='" + resolverBootstrapNeighbor + '\'' +
                 "\n    sendToStatusMessagePollRatio=" + sendToStatusMessagePollRatio +
+                "\n    receivePollToSlowWorkRatio=" + receivePollToSlowWorkRatio +
                 "\n    unicastFeedbackDelayGenerator=" + unicastFeedbackDelayGenerator +
                 "\n    multicastFeedbackDelayGenerator=" + multicastFeedbackDelayGenerator +
                 "\n    retransmitUnicastDelayGenerator=" + retransmitUnicastDelayGenerator +
