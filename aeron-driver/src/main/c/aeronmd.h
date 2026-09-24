@@ -251,6 +251,15 @@ int aeron_driver_context_set_send_to_status_poll_ratio(aeron_driver_context_t *c
 size_t aeron_driver_context_get_send_to_status_poll_ratio(aeron_driver_context_t *context);
 
 /**
+ * Ratio of receiving data to slow work (e.g. draining command queue, sending pending status messages etc.) in the
+ * Receiver.
+ */
+#define AERON_RECEIVE_POLL_TO_SLOW_WORK_RATIO_ENV_VAR "AERON_DRIVER_RECEIVE_POLL_TO_SLOW_WORK_RATIO"
+
+int aeron_driver_context_set_receive_poll_to_slow_work_ratio(aeron_driver_context_t *context, size_t value);
+size_t aeron_driver_context_get_receive_poll_to_slow_work_ratio(aeron_driver_context_t *context);
+
+/**
  * Status Message timeout in nanoseconds.
  */
 #define AERON_RCV_STATUS_MESSAGE_TIMEOUT_ENV_VAR "AERON_RCV_STATUS_MESSAGE_TIMEOUT"

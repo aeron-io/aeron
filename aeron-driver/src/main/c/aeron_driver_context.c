@@ -172,6 +172,7 @@ static void aeron_driver_untethered_subscription_state_change_null(
 #define AERON_FLOW_CONTROL_GROUP_MIN_SIZE_DEFAULT (0)
 #define AERON_FLOW_CONTROL_RECEIVER_TIMEOUT_NS_DEFAULT (5 * 1000 * 1000 * INT64_C(1000))
 #define AERON_SEND_TO_STATUS_POLL_RATIO_DEFAULT (6)
+#define AERON_RECEIVE_POLL_TO_SLOW_WORK_RATIO_DEFAULT (10)
 #define AERON_RCV_STATUS_MESSAGE_TIMEOUT_NS_DEFAULT (200 * 1000 * INT64_C(1000))
 #define AERON_MULTICAST_FLOWCONTROL_SUPPLIER_DEFAULT ("aeron_max_multicast_flow_control_strategy_supplier")
 #define AERON_UNICAST_FLOWCONTROL_SUPPLIER_DEFAULT ("aeron_unicast_flow_control_strategy_supplier")
@@ -409,6 +410,7 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
     _context->flow_control.group_min_size = AERON_FLOW_CONTROL_GROUP_MIN_SIZE_DEFAULT;
     _context->flow_control.receiver_timeout_ns = AERON_FLOW_CONTROL_RECEIVER_TIMEOUT_NS_DEFAULT;
     _context->send_to_sm_poll_ratio = AERON_SEND_TO_STATUS_POLL_RATIO_DEFAULT;
+    _context->receive_poll_to_slow_work_ratio = AERON_RECEIVE_POLL_TO_SLOW_WORK_RATIO_DEFAULT;
     _context->status_message_timeout_ns = AERON_RCV_STATUS_MESSAGE_TIMEOUT_NS_DEFAULT;
     _context->image_liveness_timeout_ns = AERON_IMAGE_LIVENESS_TIMEOUT_NS_DEFAULT;
     _context->initial_window_length = AERON_RCV_INITIAL_WINDOW_LENGTH_DEFAULT;
@@ -686,6 +688,13 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
         AERON_SEND_TO_STATUS_POLL_RATIO_ENV_VAR,
         getenv(AERON_SEND_TO_STATUS_POLL_RATIO_ENV_VAR),
         _context->send_to_sm_poll_ratio,
+        1,
+        INT32_MAX);
+
+    _context->receive_poll_to_slow_work_ratio = (uint8_t)aeron_config_parse_uint64(
+        AERON_RECEIVE_POLL_TO_SLOW_WORK_RATIO_ENV_VAR,
+        getenv(AERON_RECEIVE_POLL_TO_SLOW_WORK_RATIO_ENV_VAR),
+        _context->receive_poll_to_slow_work_ratio,
         1,
         INT32_MAX);
 
@@ -1924,6 +1933,19 @@ int aeron_driver_context_set_send_to_status_poll_ratio(aeron_driver_context_t *c
 size_t aeron_driver_context_get_send_to_status_poll_ratio(aeron_driver_context_t *context)
 {
     return NULL != context ? context->send_to_sm_poll_ratio : AERON_SEND_TO_STATUS_POLL_RATIO_DEFAULT;
+}
+
+int aeron_driver_context_set_receive_poll_to_slow_work_ratio(aeron_driver_context_t *context, size_t value)
+{
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+
+    context->receive_poll_to_slow_work_ratio = value;
+    return 0;
+}
+
+size_t aeron_driver_context_get_receive_poll_to_slow_work_ratio(aeron_driver_context_t *context)
+{
+    return NULL != context ? context->receive_poll_to_slow_work_ratio : AERON_RECEIVE_POLL_TO_SLOW_WORK_RATIO_DEFAULT;
 }
 
 int aeron_driver_context_set_rcv_status_message_timeout_ns(aeron_driver_context_t *context, uint64_t value)

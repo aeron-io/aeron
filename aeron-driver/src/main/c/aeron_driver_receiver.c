@@ -24,6 +24,8 @@
 #include "media/aeron_receive_channel_endpoint.h"
 #include "aeron_driver_receiver.h"
 
+#define AERON_DRIVER_RECEIVER_IMAGES_PER_CYCLE_LIMIT (INT16_C(16))
+
 int aeron_driver_receiver_init(
     aeron_driver_receiver_t *receiver,
     aeron_driver_context_t *context,
@@ -88,6 +90,12 @@ int aeron_driver_receiver_init(
     receiver->recvmmsg_func = context->udp_channel_transport_bindings->recvmmsg_func;
     receiver->error_log = error_log;
 
+    receiver->duty_cycle_counter = 0;
+    receiver->duty_cycle_ratio = context->receive_poll_to_slow_work_ratio;
+    receiver->status_message_send_timeout_ns = (int64_t)(context->status_message_timeout_ns >> 1);
+    receiver->slow_tick_work_deadline_ns = 0;
+    receiver->next_image_index = -1;
+
     receiver->receiver_proxy.command_queue = &context->receiver_command_queue;
     receiver->receiver_proxy.fail_counter = aeron_system_counter_addr(
         system_counters, AERON_SYSTEM_COUNTER_RECEIVER_PROXY_FAILS);
@@ -121,45 +129,23 @@ static void aeron_driver_receiver_on_rb_command_queue(
     cmd->func(clientd, cmd);
 }
 
-int aeron_driver_receiver_do_work(void *clientd)
+static int aeron_driver_receiver_slow_tick_work(aeron_driver_receiver_t *receiver, int64_t now_ns)
 {
-    aeron_driver_receiver_t *receiver = (aeron_driver_receiver_t *)clientd;
-
-    int64_t now_ns = receiver->context->nano_clock();
-    aeron_clock_update_cached_nano_time(receiver->context->receiver_cached_clock, now_ns);
-
-    aeron_duty_cycle_tracker_t *tracker = receiver->context->receiver_duty_cycle_tracker;
-    tracker->measure_and_update(tracker->state, now_ns);
-
     int work_count = (int)aeron_mpsc_rb_read(
         receiver->receiver_proxy.command_queue,
         aeron_driver_receiver_on_rb_command_queue,
         receiver,
         AERON_COMMAND_DRAIN_LIMIT);
 
-    int64_t bytes_received = 0;
-    int poll_result = receiver->poller_poll_func(
-        &receiver->poller,
-        receiver->mmsghdr,
-        receiver->recv_buffers.vector_capacity,
-        &bytes_received,
-        receiver->data_paths.recv_func,
-        receiver->recvmmsg_func,
-        receiver);
-
-    if (poll_result < 0)
+    int next = receiver->next_image_index;
+    if (next < 0)
     {
-        AERON_APPEND_ERR("%s", "receiver poller_poll");
-        aeron_driver_receiver_log_error(receiver);
+        next = (int)receiver->images.length - 1;
     }
 
-    work_count += (int)bytes_received;
-
-    aeron_counter_get_and_add_release(receiver->total_bytes_received_counter, bytes_received);
-
-    for (size_t i = 0, length = receiver->images.length; i < length; i++)
+    for (int limit = AERON_DRIVER_RECEIVER_IMAGES_PER_CYCLE_LIMIT; next >= 0 && limit > 0; next--, limit--)
     {
-        aeron_publication_image_t *image = receiver->images.array[i].image;
+        aeron_publication_image_t *image = receiver->images.array[next].image;
 
         if (NULL != image->endpoint)
         {
@@ -198,6 +184,10 @@ int aeron_driver_receiver_do_work(void *clientd)
         }
     }
 
+    receiver->next_image_index = next;
+    receiver->duty_cycle_counter = 0;
+    receiver->slow_tick_work_deadline_ns = now_ns + receiver->status_message_send_timeout_ns;
+
     for (int last_index = (int)receiver->pending_setups.length - 1, i = last_index; i >= 0; i--)
     {
         aeron_driver_receiver_pending_setup_entry_t *entry = &receiver->pending_setups.array[i];
@@ -216,6 +206,7 @@ int aeron_driver_receiver_do_work(void *clientd)
                     (size_t)last_index);
                 last_index--;
                 receiver->pending_setups.length--;
+                work_count++;
             }
             else if (aeron_receive_channel_endpoint_should_elicit_setup_message(entry->endpoint))
             {
@@ -235,6 +226,7 @@ int aeron_driver_receiver_do_work(void *clientd)
                 }
 
                 entry->time_of_status_message_ns = now_ns;
+                work_count++;
             }
         }
     }
@@ -244,6 +236,47 @@ int aeron_driver_receiver_do_work(void *clientd)
         receiver->re_resolution_deadline_ns = now_ns + (int64_t)receiver->context->re_resolution_check_interval_ns;
         aeron_udp_transport_poller_check_receive_endpoint_re_resolutions(
             &receiver->poller, now_ns, receiver->context->conductor_proxy);
+        work_count++;
+    }
+
+    return work_count;
+}
+
+int aeron_driver_receiver_do_work(void *clientd)
+{
+    aeron_driver_receiver_t *receiver = (aeron_driver_receiver_t *)clientd;
+
+    int64_t now_ns = receiver->context->nano_clock();
+    aeron_clock_update_cached_nano_time(receiver->context->receiver_cached_clock, now_ns);
+
+    aeron_duty_cycle_tracker_t *tracker = receiver->context->receiver_duty_cycle_tracker;
+    tracker->measure_and_update(tracker->state, now_ns);
+
+    int64_t bytes_received = 0;
+    int poll_result = receiver->poller_poll_func(
+        &receiver->poller,
+        receiver->mmsghdr,
+        receiver->recv_buffers.vector_capacity,
+        &bytes_received,
+        receiver->data_paths.recv_func,
+        receiver->recvmmsg_func,
+        receiver);
+
+    if (poll_result < 0)
+    {
+        AERON_APPEND_ERR("%s", "receiver poller_poll");
+        aeron_driver_receiver_log_error(receiver);
+    }
+
+    aeron_counter_get_and_add_release(receiver->total_bytes_received_counter, bytes_received);
+
+    int work_count = (int)bytes_received;
+
+    if (0 == bytes_received ||
+        ++receiver->duty_cycle_counter >= receiver->duty_cycle_ratio ||
+        receiver->slow_tick_work_deadline_ns <= now_ns)
+    {
+        work_count += aeron_driver_receiver_slow_tick_work(receiver, now_ns);
     }
 
     return work_count;

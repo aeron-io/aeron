@@ -81,6 +81,11 @@ typedef struct aeron_driver_receiver_stct
     aeron_udp_channel_transport_recvmmsg_func_t recvmmsg_func;
     aeron_distinct_error_log_t *error_log;
     int64_t re_resolution_deadline_ns;
+    int64_t slow_tick_work_deadline_ns;
+    int64_t status_message_send_timeout_ns;
+    size_t duty_cycle_counter;
+    size_t duty_cycle_ratio;
+    int next_image_index;
 
     int64_t *errors_counter;
     int64_t *invalid_frames_counter;
