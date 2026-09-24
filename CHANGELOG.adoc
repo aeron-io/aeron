@@ -2,6 +2,14 @@
 
 == 1.54.0 (unreleased)
 
+* **[Cluster]** Retry joining the active log in `ClusteredServiceAgent` after a `RegistrationException` instead of
+dropping the `ActiveLogEvent`. (https://github.com/aeron-io/aeron/pull/2150[#2150])
+* **[Cluster]** Close `RecordingLogValidator` upon completion. (https://github.com/aeron-io/aeron/pull/2151[#2151])
+* **[C]** Ignore missing properties files in `aeron_properties_file_load`. (https://github.com/aeron-io/aeron/pull/2088[#2088])
+* **[C/C{plus}{plus} Wrapper]** Implement `deleteSessionBuffer` for the fragment assemblers. (https://github.com/aeron-io/aeron/pull/2149[#2149])
+* **[Archive/Java]** Reset activity timestamp of the `ArchiveMarkFile` if creation fails partway. (https://github.com/aeron-io/aeron/issues/2148[#2148])
+* **[Cluster]** Reset activity timestamp of the `ClusterMarkFile` if creation fails partway. (https://github.com/aeron-io/aeron/issues/2148[#2148])
+* **[Java/C]** Handle I/O errors while saving existing errors from CnC/mark files. (https://github.com/aeron-io/aeron/issues/2148[#2148])
 * **[Cluster]** Treat Cluster membership query errors as warnings.
 * **[Cluster]** Sort snapshot entries in the `recoding.log` by `logPosition` within the same `leadershipTermId` before
 sorting by snapshot entry type.
@@ -22,6 +30,12 @@ ownership of the persistent subscription context, in the same way as `aeron_arch
 where raw frames are checked before forwarding them to the `sender` thread.
 * **[Driver/C]** Fix potential destination leak upon driver termination, i.e. drain pending receiver and sender
 destination commands. (https://github.com/aeron-io/aeron/pull/2143[#2143])
+* **[Driver]** Add support for `control-mode=response` and `session-id` specified together in the response subscription
+channel (e.g. replay channel for Archive). (https://github.com/aeron-io/aeron/issues/2137[#2137])
+* **[Driver/Java]** Fix `AbstractMinMulticastFlowControl#onIdle` that could drop live receivers.
+(https://github.com/aeron-io/aeron/pull/2144[#2144])
+* **[Driver/Java]** Fix inactive destination removal bug for dynamic MDC.
+* **[Driver/C]** Min flow control reports the wrong receiver when one times out. (https://github.com/aeron-io/aeron/pull/2146[#2146])
 * **[Client/C]** Fix log buffer corruption when pre-touch is used and the native pre-touch is not available
 (`AERON_NATIVE_PRETOUCH`). (https://github.com/aeron-io/aeron/issues/2139[#2139])
 * **[Client/C]** Fix remove destination by id (`aeron_publication_async_remove_destination_by_id` and
@@ -32,21 +46,24 @@ destination commands. (https://github.com/aeron-io/aeron/pull/2143[#2143])
 (https://github.com/aeron-io/aeron/pull/2135[#2135])
 * **[Archive/Java]** Return replay session id when starting a replay via a response channel.
 (https://github.com/aeron-io/aeron/pull/2134[#2134])
-* **[Driver]** Add support for `control-mode=response` and `session-id` specified together in the response subscription
-channel (e.g. replay channel for Archive). (https://github.com/aeron-io/aeron/issues/2137[#2137])
-* **[Driver/Java]** Fix `AbstractMinMulticastFlowControl#onIdle` that could drop live receivers.
-(https://github.com/aeron-io/aeron/pull/2144[#2144])
-* **[Driver/Java]** Fix inactive destination removal bug for dynamic MDC.
 * **[Java]** Upgrade to https://github.com/aeron-io/agrona/releases/tag/2.6.1[Agrona 2.6.1].
 * **[Java]** Upgrade to https://github.com/aeron-io/simple-binary-encoding/releases/tag/1.40.2[SBE 1.40.2].
+* **[Java]** Upgrade to `ByteBuddy` 1.18.14.
+* **[Java]** Upgrade to `Versions` 0.64.0.
 * **[C]** Upgrade to `CMake` 4.4.3.
 
-== 1.53.2 (unreleased)
+== 1.53.2 (2026-09-18)
 
 * **[Driver/C]** Accept `AERON_HDR_TYPE_ATS_SM` along `AERON_HDR_TYPE_SM` frames in order to support DPDK/ATS setup
 where raw frames are checked before forwarding them to the `sender` thread.
 * **[Driver/C]** Fix potential destination leak upon driver termination, i.e. drain pending receiver and sender
 destination commands. (https://github.com/aeron-io/aeron/pull/2143[#2143])
+* **[Driver]** Add support for `control-mode=response` and `session-id` specified together in the response subscription
+channel (e.g. replay channel for Archive). (https://github.com/aeron-io/aeron/issues/2137[#2137])
+* **[Driver/Java]** Fix `AbstractMinMulticastFlowControl#onIdle` that could drop live receivers.
+(https://github.com/aeron-io/aeron/pull/2144[#2144])
+* **[Driver/Java]** Fix inactive destination removal bug for dynamic MDC.
+* **[Driver/C]** Min flow control reports the wrong receiver when one times out. (https://github.com/aeron-io/aeron/pull/2146[#2146])
 * **[Client/C]** Fix log buffer corruption when pre-touch is used and the native pre-touch is not available
 (`AERON_NATIVE_PRETOUCH`). (https://github.com/aeron-io/aeron/issues/2139[#2139])
 * **[Client/C]** Fix remove destination by id (`aeron_publication_async_remove_destination_by_id` and
@@ -57,11 +74,6 @@ destination commands. (https://github.com/aeron-io/aeron/pull/2143[#2143])
 (https://github.com/aeron-io/aeron/pull/2135[#2135])
 * **[Archive/Java]** Return replay session id when starting a replay via a response channel.
 (https://github.com/aeron-io/aeron/pull/2134[#2134])
-* **[Driver]** Add support for `control-mode=response` and `session-id` specified together in the response subscription
-channel (e.g. replay channel for Archive). (https://github.com/aeron-io/aeron/issues/2137[#2137])
-* **[Driver/Java]** Fix `AbstractMinMulticastFlowControl#onIdle` that could drop live receivers.
-(https://github.com/aeron-io/aeron/pull/2144[#2144])
-* **[Driver/Java]** Fix inactive destination removal bug for dynamic MDC.
 * **[Java]** Upgrade to https://github.com/aeron-io/agrona/releases/tag/2.6.1[Agrona 2.6.1].
 * **[Java]** Upgrade to https://github.com/aeron-io/simple-binary-encoding/releases/tag/1.40.2[SBE 1.40.2].
 * **[Java]** Upgrade to `ByteBuddy` 1.18.14.
@@ -124,7 +136,7 @@ configurable via the new `aeron.thread.naming` system property:
 
 * **[Driver]** https://github.com/aeron-io/aeron/wiki/Channel-Configuration#timestamps[Outgoing and incoming timestamps]
 (`media-rcv-ts-offset`, `channel-rcv-ts-offset`,`channel-snd-ts-offset`) are now applied to all messages within a packet
-sent/received not just the first message.
+sent/received not just the first frame.
 
 === Known issues
 
@@ -132,7 +144,7 @@ sent/received not just the first message.
 +
 Affects <<1.53.0 (2026-08-26)>> and <<1.53.1 (2026-09-11)>>.
 +
-Fixed in <<1.53.2 (2026-09-17)>>.
+Fixed in <<1.53.2 (2026-09-18)>>.
 
 === Changelog
 
@@ -543,9 +555,9 @@ codes defined by Aeron will be passed to the handler and OS error codes will be 
 to use its copy of the source files instead. (https://github.com/aeron-io/aeron/pull/1972[#1972])
 * **[C]** Improved Windows implementation of `aeron_dlopen/aeron_dlsym`. (https://github.com/aeron-io/aeron/pull/1976[#1976])
 * **[C]** `aeron_connect` for MSCV unwanted printf. (https://github.com/aeron-io/aeron/pull/1979[#1979])
-* **[C]** Fix `aeron_udp_channel_transport_sendv` NULL address dereference. (https://github.com/aeron-io/aeron/pull/1982[#1982])
+* **[Driver/C]** Fix `aeron_udp_channel_transport_sendv` NULL address dereference. (https://github.com/aeron-io/aeron/pull/1982[#1982])
 * **[C]** `aeron_udp_channel_transport_init` `recv_fd` init bug. (https://github.com/aeron-io/aeron/pull/1978[#1978])
-* **[C]** Fixes a memory leak in the `aeron_udp_channel_transport_close`. (https://github.com/aeron-io/aeron/pull/1977[#1977])
+* **[Driver/C]** Fix a memory leak in the `aeron_udp_channel_transport_close`. (https://github.com/aeron-io/aeron/pull/1977[#1977])
 * **[C/C{plus}{plus} Wrapper]** Added support for C/C{plus}{plus} builds using MSVC on Windows ARM. (https://github.com/aeron-io/aeron/pull/1975[#1975])
 * **[Client/Java/C]** Use `aeron-client` as a name for client conductor thread, i.e. shorter name to fit the 15 characters
 limit of the `pthread_setname_np` API.
@@ -653,6 +665,22 @@ but is now explicitly enforced via the ClusteredServiceContainer.Configuration.M
 * **[Java]** Upgrade to `Shadow` 9.4.1.
 * **[Java]** Upgrade to `Versions` 0.54.0.
 * **[C]** Upgrade to `CMake` 4.3.2.
+
+== 1.50.7 (2026-09-24)
+
+* **[C]** Move `struct mmsghdr` declaration to the driver module.
+
+== 1.50.6 (2026-09-24)
+
+* **[Driver/C]** Fix `aeron_udp_channel_transport_sendv` NULL address dereference. (https://github.com/aeron-io/aeron/pull/1982[#1982])
+* **[Driver/C]** Fix a memory leak in the `aeron_udp_channel_transport_close`. (https://github.com/aeron-io/aeron/pull/1977[#1977])
+* **[C]** Move `struct mmsghdr` declaration to `aeron_socket.h`, i.e. declare it once.
+* **[Driver/C]** Increase max number of packets that can be sent/received in one go to 64.
+* **[Driver/C]** Move `mmsghdr` array creation to initialization time (`aeron_driver_receiver_init`), i.e. avoid paying
+allocation costs on every duty cycle.
+* **[Driver/C]** Poll each socket up to `AERON_UDP_TRANSPORT_POLLER_PER_SOCKET_POLL_LIMIT` times if there is more data to read.
+* **[Driver]** Optimize message send path by moving everything else to slow tick work.
+* **[Driver]** Optimize message receive path by moving everything else to slow tick work.
 
 == 1.50.5 (2026-09-02)
 

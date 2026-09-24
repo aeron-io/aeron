@@ -1163,15 +1163,13 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
 
         if (null != activeLogEvent && null == logAdapter.image())
         {
-            final ActiveLogEvent event = activeLogEvent;
-            activeLogEvent = null;
             try
             {
-                joinActiveLog(event);
+                joinActiveLog(activeLogEvent);
+                activeLogEvent = null;
             }
             catch (final RegistrationException ex)
             {
-                activeLogEvent = event;
                 ctx.countedErrorHandler().onError(new ClusterEvent(
                     "failed to join active log, will retry: " + ex.getMessage()));
             }
