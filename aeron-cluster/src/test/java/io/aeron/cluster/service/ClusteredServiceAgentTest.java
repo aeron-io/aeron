@@ -18,13 +18,16 @@ package io.aeron.cluster.service;
 import io.aeron.Aeron;
 import io.aeron.CommonContext;
 import io.aeron.ConcurrentPublication;
+import io.aeron.ErrorCode;
 import io.aeron.Publication;
 import io.aeron.Subscription;
 import io.aeron.UnavailableCounterHandler;
 import io.aeron.cluster.ExtendedTerminationHook;
 import io.aeron.cluster.client.AeronCluster;
+import io.aeron.cluster.client.ClusterEvent;
 import io.aeron.cluster.codecs.CloseReason;
 import io.aeron.driver.DutyCycleTracker;
+import io.aeron.exceptions.RegistrationException;
 import io.aeron.logbuffer.BufferClaim;
 import io.aeron.test.CountersAnswer;
 import io.aeron.test.Tests;
@@ -59,8 +62,11 @@ import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.argThat;
+import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -146,6 +152,64 @@ class ClusteredServiceAgentTest
 
         nanoClock.advance(TimeUnit.MILLISECONDS.toNanos(2));
         assertThrowsExactly(ClusterTerminationException.class, clusteredServiceAgent::doWork);
+    }
+
+    @Test
+    void shouldRetryJoinActiveLogAfterRegistrationException()
+    {
+        final String logChannel = "aeron:udp?endpoint=unresolved.invalid:20002";
+        final UnsafeBuffer claimBuffer = new UnsafeBuffer(new byte[64 * 1024]);
+        final Aeron aeron = mock(Aeron.class);
+        final ConcurrentPublication publication = mock(ConcurrentPublication.class);
+        final Subscription subscription = mock(Subscription.class);
+        when(aeron.addPublication(any(), anyInt())).thenReturn(publication);
+        when(publication.tryClaim(anyInt(), any())).thenAnswer(
+            (invocation) ->
+            {
+                final BufferClaim claim = invocation.getArgument(1, BufferClaim.class);
+                claim.wrap(claimBuffer, 0, claimBuffer.capacity());
+                return invocation.getArgument(0, Integer.class).longValue();
+            });
+        when(aeron.addSubscription(any(), anyInt())).thenReturn(subscription);
+        when(aeron.addSubscription(argThat((channel) -> null != channel && channel.contains("unresolved.invalid")),
+            anyInt()))
+            .thenThrow(new RegistrationException(1, 0, ErrorCode.INVALID_CHANNEL, "unknown host"));
+        final CountersManager countersManager = Tests.newCountersManager(64 * 1024);
+        when(aeron.addCounter(anyInt(), any(), anyInt(), anyInt(), any(), anyInt(), anyInt()))
+            .then(CountersAnswer.mapTo(countersManager));
+        RecoveryState.allocate(aeron, NULL_VALUE, 0, 0, 0, 0);
+        countersManager.allocate("commit-pos", CLUSTER_COMMIT_POSITION_TYPE_ID);
+        final int recoveryStateCounterId = countersManager.allocate("recovery-state", CLUSTER_RECOVERY_STATE_TYPE_ID);
+        countersManager.setCounterValue(recoveryStateCounterId, NULL_VALUE);
+        when(aeron.countersReader()).thenReturn(countersManager);
+
+        final CountedErrorHandler countedErrorHandler = mock(CountedErrorHandler.class);
+        final CachedNanoClock nanoClock = new CachedNanoClock();
+        final ClusteredServiceContainer.Context ctx = new ClusteredServiceContainer.Context()
+            .aeron(aeron)
+            .nanoClock(nanoClock)
+            .epochClock(new CachedEpochClock())
+            .clusterMarkFile(mock(ClusterMarkFile.class))
+            .clusteredService(mock(ClusteredService.class))
+            .dutyCycleTracker(new DutyCycleTracker())
+            .idleStrategySupplier(() -> YieldingIdleStrategy.INSTANCE)
+            .errorLog(mock(DistinctErrorLog.class))
+            .countedErrorHandler(countedErrorHandler)
+            .terminationHook(() -> {})
+            .extendedTerminationHook(t -> {});
+        final ClusteredServiceAgent clusteredServiceAgent = new ClusteredServiceAgent(ctx);
+
+        clusteredServiceAgent.onStart();
+        clusteredServiceAgent.onJoinLog(0, Long.MAX_VALUE, 0, 1, 2, false, Cluster.Role.FOLLOWER, false, logChannel);
+
+        nanoClock.advance(TimeUnit.MILLISECONDS.toNanos(2));
+        clusteredServiceAgent.doWork();
+        nanoClock.advance(TimeUnit.MILLISECONDS.toNanos(2));
+        clusteredServiceAgent.doWork();
+
+        verify(aeron, times(2)).addSubscription(
+            argThat((channel) -> null != channel && channel.contains("unresolved.invalid")), eq(2));
+        verify(countedErrorHandler, times(2)).onError(any(ClusterEvent.class));
     }
 
     @Test
