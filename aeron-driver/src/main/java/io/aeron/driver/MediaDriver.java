@@ -64,6 +64,7 @@ import static io.aeron.driver.reports.LossReportUtil.mapLossReport;
 import static io.aeron.driver.status.SystemCounterDescriptor.CONTROLLABLE_IDLE_STRATEGY;
 import static io.aeron.driver.status.SystemCounterDescriptor.*;
 import static io.aeron.logbuffer.LogBufferDescriptor.TERM_MAX_LENGTH;
+import static java.lang.Integer.getInteger;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
 import static org.agrona.IoUtil.mapNewFile;
@@ -503,6 +504,8 @@ public final class MediaDriver implements AutoCloseable
         private int publicationReservedSessionIdHigh = Configuration.publicationReservedSessionIdHigh();
         private int lossReportBufferLength = Configuration.lossReportBufferLength();
         private int sendToStatusMessagePollRatio = Configuration.sendToStatusMessagePollRatio();
+        private int receivePollToSlowWorkRatio =
+            getInteger(RECEIVE_POLL_TO_SLOW_WORK_RATIO_PROP_NAME, RECEIVE_POLL_TO_SLOW_WORK_RATIO_DEFAULT);
         private int resourceFreeLimit = Configuration.resourceFreeLimit();
         private int asyncTaskExecutorThreads = Configuration.asyncTaskExecutorThreads();
         private int maxResend = Configuration.maxResend();
@@ -3189,6 +3192,31 @@ public final class MediaDriver implements AutoCloseable
         public Context sendToStatusMessagePollRatio(final int ratio)
         {
             this.sendToStatusMessagePollRatio = ratio;
+            return this;
+        }
+
+        /**
+         * Get the ratio for receiving data to slow work (e.g. draining command queue, sending pending status messages
+         * etc.) in the {@link Receiver}.
+         *
+         * @return ratio for receiving data to slow work (e.g. draining command queue, sending pending status messages
+         * etc.) in the {@link Receiver}.
+         */
+        public int receivePollToSlowWorkRatio()
+        {
+            return receivePollToSlowWorkRatio;
+        }
+
+        /**
+         * Set the ratio for receiving data to slow work (e.g. draining command queue, sending pending status messages
+         * etc.) in the {@link Receiver}.
+         *
+         * @param ratio to use.
+         * @return this for fluent API.
+         */
+        public Context receivePollToSlowWorkRatio(final int ratio)
+        {
+            this.receivePollToSlowWorkRatio = ratio;
             return this;
         }
 

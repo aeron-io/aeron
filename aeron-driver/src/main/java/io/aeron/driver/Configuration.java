@@ -300,6 +300,21 @@ public final class Configuration
     public static final int SEND_TO_STATUS_POLL_RATIO_DEFAULT = 6;
 
     /**
+     * Property name for ratio for receiving data to slow work (e.g. draining command queue, sending pending status
+     * messages etc.) in the {@link Receiver}.
+     */
+    @Config
+    public static final String RECEIVE_POLL_TO_SLOW_WORK_RATIO_PROP_NAME =
+        "aeron.driver.receive.poll.to.slow.work.ratio";
+
+    /**
+     * The ratio for receiving data to slow work (e.g. draining command queue, sending pending status messages etc.) in
+     * the {@link Receiver}.
+     */
+    @Config
+    public static final int RECEIVE_POLL_TO_SLOW_WORK_RATIO_DEFAULT = 10;
+
+    /**
      * Property name for the limit of the number of driver managed resources that can be freed in a single duty cycle.
      */
     @Config

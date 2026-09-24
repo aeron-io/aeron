@@ -40,20 +40,25 @@ import static io.aeron.driver.status.SystemCounterDescriptor.RESOLUTION_CHANGES;
  */
 public final class Receiver implements Agent
 {
-    private static final PublicationImage[] EMPTY_IMAGES = new PublicationImage[0];
+    private static final int IMAGES_PER_CYCLE_LIMIT = 16;
 
+    private final long statusMessageSendTimeoutNs;
     private final long reResolutionCheckIntervalNs;
-    private long reResolutionDeadlineNs;
     private final DataTransportPoller dataTransportPoller;
     private final OneToOneConcurrentArrayQueue<Runnable> commandQueue;
     private final AtomicCounter totalBytesReceived;
     private final AtomicCounter resolutionChanges;
     private final NanoClock nanoClock;
     private final CachedNanoClock cachedNanoClock;
-    private PublicationImage[] publicationImages = EMPTY_IMAGES;
     private final ArrayList<PendingSetupMessageFromSource> pendingSetupMessages = new ArrayList<>();
     private final DriverConductorProxy conductorProxy;
     private final DutyCycleTracker dutyCycleTracker;
+    private final ArrayList<PublicationImage> publicationImages = new ArrayList<>();
+    private final int dutyCycleRatio;
+    private long slowTickWorkDeadlineNs;
+    private long reResolutionDeadlineNs;
+    int dutyCycleCounter;
+    int nextImageIndex = -1;
 
     Receiver(final MediaDriver.Context ctx)
     {
@@ -66,6 +71,8 @@ public final class Receiver implements Agent
         conductorProxy = ctx.driverConductorProxy();
         reResolutionCheckIntervalNs = ctx.reResolutionCheckIntervalNs();
         dutyCycleTracker = ctx.receiverDutyCycleTracker();
+        statusMessageSendTimeoutNs = ctx.statusMessageTimeoutNs() >> 1;
+        dutyCycleRatio = ctx.receivePollToSlowWorkRatio();
     }
 
     /**
@@ -104,41 +111,19 @@ public final class Receiver implements Agent
         cachedNanoClock.update(nowNs);
         dutyCycleTracker.measureAndUpdate(nowNs);
 
-        int workCount = commandQueue.drain(CommandProxy.RUN_TASK, Configuration.COMMAND_DRAIN_LIMIT);
-
         final int bytesReceived = dataTransportPoller.pollTransports();
         totalBytesReceived.getAndAddOrdered(bytesReceived);
 
-        final PublicationImage[] publicationImages = this.publicationImages;
-        for (int lastIndex = publicationImages.length - 1, i = lastIndex; i >= 0; i--)
-        {
-            final PublicationImage image = publicationImages[i];
-            if (image.isConnected(nowNs))
-            {
-                image.checkEosForDrainTransition(nowNs);
+        int workCount = bytesReceived;
 
-                workCount += image.sendPendingStatusMessage(nowNs);
-                workCount += image.processPendingLoss();
-                workCount += image.initiateAnyRttMeasurements(nowNs);
-            }
-            else
-            {
-                this.publicationImages = 1 == this.publicationImages.length ?
-                    EMPTY_IMAGES : ArrayUtil.remove(this.publicationImages, i);
-                image.removeFromDispatcher();
-                image.receiverRelease();
-            }
+        if (0 == bytesReceived ||
+            ++dutyCycleCounter >= dutyCycleRatio ||
+            slowTickWorkDeadlineNs <= nowNs)
+        {
+            workCount += slowTickWork(nowNs);
         }
 
-        checkPendingSetupMessages(nowNs);
-
-        if (reResolutionCheckIntervalNs > 0 && (reResolutionDeadlineNs - nowNs) < 0)
-        {
-            reResolutionDeadlineNs = nowNs + reResolutionCheckIntervalNs;
-            dataTransportPoller.checkForReResolutions(nowNs, conductorProxy);
-        }
-
-        return workCount + bytesReceived;
+        return workCount;
     }
 
     void addPendingSetupMessage(
@@ -207,7 +192,7 @@ public final class Receiver implements Agent
     void onNewPublicationImage(final ReceiveChannelEndpoint channelEndpoint, final PublicationImage image)
     {
         disconnectInactiveImage(channelEndpoint, image.streamId(), image.sessionId());
-        publicationImages = ArrayUtil.add(publicationImages, image);
+        publicationImages.add(image);
         channelEndpoint.dispatcher().addPublicationImage(image);
     }
 
@@ -296,10 +281,8 @@ public final class Receiver implements Agent
     {
         final int transportIndex = channelEndpoint.hasDestinationControl() ? channelEndpoint.destination(channel) : 0;
 
-        for (int i = 0, size = pendingSetupMessages.size(); i < size; i++)
+        for (final PendingSetupMessageFromSource pending : pendingSetupMessages)
         {
-            final PendingSetupMessageFromSource pending = pendingSetupMessages.get(i);
-
             if (pending.channelEndpoint() == channelEndpoint &&
                 pending.isPeriodic() &&
                 pending.transportIndex() == transportIndex)
@@ -324,8 +307,57 @@ public final class Receiver implements Agent
         }
     }
 
-    private void checkPendingSetupMessages(final long nowNs)
+    private int slowTickWork(final long nowNs)
     {
+        int workCount = commandQueue.drain(CommandProxy.RUN_TASK, Configuration.COMMAND_DRAIN_LIMIT);
+
+        final ArrayList<PublicationImage> publicationImages = this.publicationImages;
+        int last = publicationImages.size() - 1;
+        int next = nextImageIndex;
+        if (next < 0)
+        {
+            nextImageIndex = next = last;
+        }
+
+        for (int limit = IMAGES_PER_CYCLE_LIMIT; next >= 0 && limit > 0; next--, limit--)
+        {
+            final PublicationImage image = publicationImages.get(next);
+            if (image.isConnected(nowNs))
+            {
+                image.checkEosForDrainTransition(nowNs);
+
+                workCount += image.sendPendingStatusMessage(nowNs);
+                workCount += image.processPendingLoss();
+                workCount += image.initiateAnyRttMeasurements(nowNs);
+            }
+            else
+            {
+                ArrayListUtil.fastUnorderedRemove(publicationImages, next, last--);
+                image.removeFromDispatcher();
+                image.receiverRelease();
+                workCount++;
+            }
+        }
+
+        nextImageIndex = next;
+        dutyCycleCounter = 0;
+        slowTickWorkDeadlineNs = nowNs + statusMessageSendTimeoutNs;
+
+        workCount += checkPendingSetupMessages(nowNs);
+
+        if (reResolutionCheckIntervalNs > 0 && (reResolutionDeadlineNs - nowNs) < 0)
+        {
+            reResolutionDeadlineNs = nowNs + reResolutionCheckIntervalNs;
+            dataTransportPoller.checkForReResolutions(nowNs, conductorProxy);
+            workCount++;
+        }
+
+        return workCount;
+    }
+
+    private int checkPendingSetupMessages(final long nowNs)
+    {
+        int workCount = 0;
         for (int lastIndex = pendingSetupMessages.size() - 1, i = lastIndex; i >= 0; i--)
         {
             final PendingSetupMessageFromSource pending = pendingSetupMessages.get(i);
@@ -336,15 +368,18 @@ public final class Receiver implements Agent
                 {
                     ArrayListUtil.fastUnorderedRemove(pendingSetupMessages, i, lastIndex--);
                     pending.removeFromDataPacketDispatcher();
+                    workCount++;
                 }
                 else if (pending.shouldElicitSetupMessage())
                 {
                     pending.timeOfStatusMessageNs(nowNs);
                     pending.channelEndpoint().sendSetupElicitingStatusMessage(
                         pending.transportIndex(), pending.controlAddress(), pending.sessionId(), pending.streamId());
+                    workCount++;
                 }
             }
         }
+        return workCount;
     }
 
     void disconnectInactiveImage(
