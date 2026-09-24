@@ -2471,6 +2471,7 @@ final class ConsensusModuleAgent
 
             if (recordingLogValidator.isComplete())
             {
+                CloseHelper.quietClose(recordingLogValidator);
                 recordingLogValidator = null;
             }
         }
