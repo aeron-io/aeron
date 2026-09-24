@@ -36,6 +36,7 @@ import io.aeron.driver.Configuration;
 import io.aeron.driver.DutyCycleTracker;
 import io.aeron.exceptions.AeronEvent;
 import io.aeron.exceptions.AeronException;
+import io.aeron.exceptions.RegistrationException;
 import io.aeron.exceptions.TimeoutException;
 import io.aeron.logbuffer.BufferClaim;
 import io.aeron.logbuffer.Header;
@@ -1164,7 +1165,16 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
         {
             final ActiveLogEvent event = activeLogEvent;
             activeLogEvent = null;
-            joinActiveLog(event);
+            try
+            {
+                joinActiveLog(event);
+            }
+            catch (final RegistrationException ex)
+            {
+                activeLogEvent = event;
+                ctx.countedErrorHandler().onError(new ClusterEvent(
+                    "failed to join active log, will retry: " + ex.getMessage()));
+            }
         }
 
         if (NULL_POSITION != terminationPosition && logPosition >= terminationPosition)
