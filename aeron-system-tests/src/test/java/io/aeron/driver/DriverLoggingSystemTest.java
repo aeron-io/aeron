@@ -41,8 +41,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.ThreadLocalRandom;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 @ExtendWith(InterruptingTestCallback.class)
@@ -68,7 +69,10 @@ class DriverLoggingSystemTest
     @AfterEach
     void after()
     {
-        reader.reset();
+        if (null != reader)
+        {
+            reader.reset();
+        }
     }
 
     @Test
@@ -121,11 +125,10 @@ class DriverLoggingSystemTest
         final Path logFile = tempDir.resolve("driver.log");
         reader.writeToFile(logFile.toString());
         final String content = Files.readString(logFile);
-        assertTrue(content.contains("(truncated)"));
-        assertTrue(content.contains("FRAME_IN"));
-        assertTrue(content.contains("FRAME_OUT"));
-        assertTrue(content.contains("CMD_IN_REMOVE_PUBLICATION"));
-        assertTrue(content.contains("CMD_OUT_ON_OPERATION_SUCCESS"));
-
+        assertThat(content, containsString("(truncated)"));
+        assertThat(content, containsString("FRAME_IN"));
+        assertThat(content, containsString("FRAME_OUT"));
+        assertThat(content, containsString("CMD_IN_REMOVE_PUBLICATION"));
+        assertThat(content, containsString("CMD_OUT_ON_OPERATION_SUCCESS"));
     }
 }
