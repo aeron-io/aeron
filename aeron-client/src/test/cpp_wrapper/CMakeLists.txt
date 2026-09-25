@@ -48,5 +48,6 @@ if (AERON_UNIT_TESTS)
     aeron_client_cpp_test(imageControlledFragmentAssemblerTest ImageControlledFragmentAssemblerTest.cpp)
     aeron_client_cpp_test(rejectImageTest RejectImageTest.cpp)
     aeron_client_cpp_test(publicationRevokeTest PublicationRevokeTest.cpp)
+    aeron_client_cpp_test(agentRunnerTest AgentRunnerTest.cpp)
 
 endif ()
