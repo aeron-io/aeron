@@ -1121,8 +1121,8 @@ TEST_F(AeronCArchiveTest, shouldCallErrorHandlerOnError)
         &found_start_position, archive, "AeronArchive::getStartPosition", 2222));
 
     EXPECT_TRUE(ehc.called);
-    EXPECT_EQ(AERON_ERROR_CODE_GENERIC_ERROR, ehc.err_code);
-    EXPECT_STREQ("response for correlationId=1000, errorCode=5, error: unknown recording id: 12345", ehc.message);
+    EXPECT_EQ(AERON_ARCHIVE_ERROR_CODE_UNKNOWN_RECORDING, ehc.err_code);
+    EXPECT_STREQ("response for correlationId=1000, errorCode=205, error: unknown recording id: 12345", ehc.message);
 
     EXPECT_EQ(0, aeron_archive_close(archive));
     EXPECT_EQ(0, aeron_archive_context_close(ctx));
@@ -4890,22 +4890,21 @@ TEST_F(AeronArchiveClientNameTest, shouldNotMapActualErrorCodes)
 
 TEST_F(AeronArchiveClientNameTest, shouldHaveErrorMessagesForArchiveErrorCodes)
 {
-    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_GENERIC));
-    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_ACTIVE_LISTING));
-    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_ACTIVE_RECORDING));
-    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_ACTIVE_SUBSCRIPTION));
-    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_UNKNOWN_SUBSCRIPTION));
-    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_UNKNOWN_RECORDING));
-    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_UNKNOWN_REPLAY));
-    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_MAX_REPLAYS));
-    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_MAX_RECORDINGS));
-    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_INVALID_EXTENSION));
-    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_AUTHENTICATION_REJECTED));
-    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_STORAGE_SPACE));
-    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_UNKNOWN_REPLICATION));
-    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_UNAUTHORISED_ACTION));
-    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_REPLICATION_CONNECTION_FAILURE));
-    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_EMPTY_RECORDING));
-    EXPECT_STRNE("unknown error code", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_INVALID_POSITION));
+    EXPECT_STREQ("generic error, see message", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_GENERIC));
+    EXPECT_STREQ("an active listing is already running", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_ACTIVE_LISTING));
+    EXPECT_STREQ("an active recording is already running", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_ACTIVE_RECORDING));
+    EXPECT_STREQ("an active subscription is already running", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_ACTIVE_SUBSCRIPTION));
+    EXPECT_STREQ("unknown subscription", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_UNKNOWN_SUBSCRIPTION));
+    EXPECT_STREQ("unknown recording", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_UNKNOWN_RECORDING));
+    EXPECT_STREQ("unknown replay", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_UNKNOWN_REPLAY));
+    EXPECT_STREQ("max replays exceeded", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_MAX_REPLAYS));
+    EXPECT_STREQ("max recordings exceeded", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_MAX_RECORDINGS));
+    EXPECT_STREQ("invalid recording extension", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_INVALID_EXTENSION));
+    EXPECT_STREQ("authentication rejected", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_AUTHENTICATION_REJECTED));
+    EXPECT_STREQ("insufficient storage space", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_STORAGE_SPACE));
+    EXPECT_STREQ("unknown replication", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_UNKNOWN_REPLICATION));
+    EXPECT_STREQ("unauthorised action", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_UNAUTHORISED_ACTION));
+    EXPECT_STREQ("failed to connect for replication", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_REPLICATION_CONNECTION_FAILURE));
+    EXPECT_STREQ("recording is empty", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_EMPTY_RECORDING));
+    EXPECT_STREQ("invalid position", aeron_error_code_str(AERON_ARCHIVE_ERROR_CODE_INVALID_POSITION));
 }
-
