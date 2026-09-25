@@ -65,6 +65,12 @@ public class CGroupValidator
         );
     }
 
+    CGroupValidator(final List<TopologyValidator> topologyValidators, final CpusetV2Reader cpusetV2Reader)
+    {
+        this.cpusetV2Reader = cpusetV2Reader;
+        this.topologyValidators = topologyValidators;
+    }
+
     /**
      * Validates the current process's effective cgroup cpuset for various conditions.
      *
