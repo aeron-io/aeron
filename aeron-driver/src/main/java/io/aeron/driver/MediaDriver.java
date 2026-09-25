@@ -69,6 +69,7 @@ import org.agrona.concurrent.SystemEpochClock;
 import org.agrona.concurrent.SystemEpochNanoClock;
 import org.agrona.concurrent.SystemNanoClock;
 import org.agrona.concurrent.UnsafeBuffer;
+import org.agrona.concurrent.affinity.ThreadAffinity;
 import org.agrona.concurrent.broadcast.BroadcastTransmitter;
 import org.agrona.concurrent.errors.DistinctErrorLog;
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
@@ -385,32 +386,38 @@ public final class MediaDriver implements AutoCloseable
 
         if (null != mediaDriver.nativeResourceAgentRunner)
         {
-            AgentRunner.startOnThread(mediaDriver.nativeResourceAgentRunner, ctx.nativeResourceAgentThreadFactory());
+            AgentRunner.startOnThread(
+                mediaDriver.nativeResourceAgentRunner,
+                ctx.nativeResourceAgentThreadFactory(),
+                ctx.nativeResourceAgentCpuAffinity());
         }
 
         if (null != mediaDriver.conductorRunner)
         {
-            AgentRunner.startOnThread(mediaDriver.conductorRunner, ctx.conductorThreadFactory());
+            AgentRunner.startOnThread(
+                mediaDriver.conductorRunner, ctx.conductorThreadFactory(), ctx.conductorCpuAffinity());
         }
 
         if (null != mediaDriver.senderRunner)
         {
-            AgentRunner.startOnThread(mediaDriver.senderRunner, ctx.senderThreadFactory());
+            AgentRunner.startOnThread(mediaDriver.senderRunner, ctx.senderThreadFactory(), ctx.senderCpuAffinity());
         }
 
         if (null != mediaDriver.receiverRunner)
         {
-            AgentRunner.startOnThread(mediaDriver.receiverRunner, ctx.receiverThreadFactory());
+            AgentRunner.startOnThread(
+                mediaDriver.receiverRunner, ctx.receiverThreadFactory(), ctx.receiverCpuAffinity());
         }
 
         if (null != mediaDriver.sharedNetworkRunner)
         {
-            AgentRunner.startOnThread(mediaDriver.sharedNetworkRunner, ctx.sharedNetworkThreadFactory());
+            AgentRunner.startOnThread(
+                mediaDriver.sharedNetworkRunner, ctx.sharedNetworkThreadFactory(), ctx.conductorCpuAffinity());
         }
 
         if (null != mediaDriver.sharedRunner)
         {
-            AgentRunner.startOnThread(mediaDriver.sharedRunner, ctx.sharedThreadFactory());
+            AgentRunner.startOnThread(mediaDriver.sharedRunner, ctx.sharedThreadFactory(), ctx.conductorCpuAffinity());
         }
 
         if (null != mediaDriver.sharedInvoker)
@@ -701,6 +708,10 @@ public final class MediaDriver implements AutoCloseable
         private long resolverNeighborResolutionIntervalNs = Configuration.resolverNeighborResolutionIntervalNs();
         private long resolverBootstrapNeighborResolutionIntervalNs =
             Configuration.resolverBootstrapNeighborResolutionIntervalNs();
+        private int conductorCpuAffinity = Configuration.conductorCpuAffinity();
+        private int senderCpuAffinity = Configuration.senderCpuAffinity();
+        private int receiverCpuAffinity = Configuration.receiverCpuAffinity();
+        private int nativeResourceAgentCpuAffinity = Configuration.nativeResourceAgentCpuAffinity();
 
         /**
          * Construct a Context using default values and loading from system properties.
@@ -4021,6 +4032,108 @@ public final class MediaDriver implements AutoCloseable
         }
 
         /**
+         * CPU core id the conductor agent thread is pinned to. Also applies to the shared and shared-network
+         * agent threads.
+         *
+         * @return CPU core id or {@link ThreadAffinity#NO_AFFINITY}.
+         * @see Configuration#CONDUCTOR_CPU_AFFINITY_PROP_NAME
+         */
+        @Config
+        public int conductorCpuAffinity()
+        {
+            return this.conductorCpuAffinity;
+        }
+
+        /**
+         * CPU core id the conductor agent thread is pinned to. Also applies to the shared and shared-network
+         * agent threads.
+         *
+         * @param conductorCpuAffinity CPU core id or {@link ThreadAffinity#NO_AFFINITY}.
+         * @return this for a fluent API.
+         * @see Configuration#CONDUCTOR_CPU_AFFINITY_PROP_NAME
+         */
+        public Context conductorCpuAffinity(final int conductorCpuAffinity)
+        {
+            this.conductorCpuAffinity = conductorCpuAffinity;
+            return this;
+        }
+
+        /**
+         * CPU core id the sender agent thread is pinned to.
+         *
+         * @return CPU core id or {@link ThreadAffinity#NO_AFFINITY}.
+         * @see Configuration#SENDER_CPU_AFFINITY_PROP_NAME
+         */
+        @Config
+        public int senderCpuAffinity()
+        {
+            return this.senderCpuAffinity;
+        }
+
+        /**
+         * CPU core id the sender agent thread is pinned to.
+         *
+         * @param senderCpuAffinity CPU core id or {@link ThreadAffinity#NO_AFFINITY}.
+         * @return this for a fluent API.
+         * @see Configuration#SENDER_CPU_AFFINITY_PROP_NAME
+         */
+        public Context senderCpuAffinity(final int senderCpuAffinity)
+        {
+            this.senderCpuAffinity = senderCpuAffinity;
+            return this;
+        }
+
+        /**
+         * CPU core id the receiver agent thread is pinned to.
+         *
+         * @return CPU core id or {@link ThreadAffinity#NO_AFFINITY}.
+         * @see Configuration#RECEIVER_CPU_AFFINITY_PROP_NAME
+         */
+        @Config
+        public int receiverCpuAffinity()
+        {
+            return this.receiverCpuAffinity;
+        }
+
+        /**
+         * CPU core id the receiver agent thread is pinned to.
+         *
+         * @param receiverCpuAffinity CPU core id or {@link ThreadAffinity#NO_AFFINITY}.
+         * @return this for a fluent API.
+         * @see Configuration#RECEIVER_CPU_AFFINITY_PROP_NAME
+         */
+        public Context receiverCpuAffinity(final int receiverCpuAffinity)
+        {
+            this.receiverCpuAffinity = receiverCpuAffinity;
+            return this;
+        }
+
+        /**
+         * CPU core id the native resource agent agent thread is pinned to.
+         *
+         * @return CPU core id or {@link ThreadAffinity#NO_AFFINITY}.
+         * @see Configuration#NATIVE_RESOURCE_AGENT_CPU_AFFINITY_PROP_NAME
+         */
+        @Config
+        public int nativeResourceAgentCpuAffinity()
+        {
+            return this.nativeResourceAgentCpuAffinity;
+        }
+
+        /**
+         * CPU core id the native resource agent agent thread is pinned to.
+         *
+         * @param nativeResourceAgentCpuAffinity CPU core id or {@link ThreadAffinity#NO_AFFINITY}.
+         * @return this for a fluent API.
+         * @see Configuration#NATIVE_RESOURCE_AGENT_CPU_AFFINITY_PROP_NAME
+         */
+        public Context nativeResourceAgentCpuAffinity(final int nativeResourceAgentCpuAffinity)
+        {
+            this.nativeResourceAgentCpuAffinity = nativeResourceAgentCpuAffinity;
+            return this;
+        }
+
+        /**
          * Should cgroup/cpuset-derived CPU affinity be applied to the Media Driver's threads.
          *
          * @return true if cgroup/cpuset-derived CPU affinity should be applied.
@@ -4030,6 +4143,19 @@ public final class MediaDriver implements AutoCloseable
         public boolean driverCpusetAffinity()
         {
             return this.cpusetAffinity;
+        }
+
+        /**
+         * Should cgroup/cpuset-derived CPU affinity be applied to the Media Driver's threads.
+         *
+         * @param cpusetAffinity true if cgroup/cpuset-derived CPU affinity should be applied.
+         * @return this for a fluent API.
+         * @see Configuration#DRIVER_CPUSET_AFFINITY_PROP_NAME
+         */
+        public Context driverCpusetAffinity(final boolean cpusetAffinity)
+        {
+            this.cpusetAffinity = cpusetAffinity;
+            return this;
         }
 
         /**
@@ -4729,6 +4855,10 @@ public final class MediaDriver implements AutoCloseable
                 "\n    warnIfDirectoryExists=" + warnIfDirectoryExists +
                 "\n    dirDeleteOnStart=" + dirDeleteOnStart +
                 "\n    cpusetAffinity=" + cpusetAffinity +
+                "\n    conductorCpuAffinity=" + conductorCpuAffinity +
+                "\n    senderCpuAffinity=" + senderCpuAffinity +
+                "\n    receiverCpuAffinity=" + receiverCpuAffinity +
+                "\n    nativeResourceAgentCpuAffinity=" + nativeResourceAgentCpuAffinity +
                 "\n    cpusetWarningsAsErrors=" + cpusetWarningsAsErrors +
                 "\n    dirDeleteOnShutdown=" + dirDeleteOnShutdown +
                 "\n    termBufferSparseFile=" + termBufferSparseFile +

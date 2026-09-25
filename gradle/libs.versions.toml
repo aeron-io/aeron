@@ -1,5 +1,6 @@
 [versions]
-agrona = "2.6.1"
+# TODO: Change to next Agrona release version or the latest snapshot once that work is done
+agrona = "2.7.0-SNAPSHOT"
 asciidoctorj = "2.5.13"
 asm = "9.10.1"
 byteBuddy = "1.18.14"
