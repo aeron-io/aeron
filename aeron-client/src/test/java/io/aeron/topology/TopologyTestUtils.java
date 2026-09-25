@@ -67,7 +67,15 @@ class TopologyTestUtils
         final int pid,
         final String cpuset) throws IOException
     {
-        final Path procCgroupFilePath = testProcPath.resolve(pid + "/cgroup");
+        final Path procCgroupFilePath;
+        if (0 == pid)
+        {
+            procCgroupFilePath = testProcPath.resolve("self/cgroup");
+        }
+        else
+        {
+            procCgroupFilePath = testProcPath.resolve(pid + "/cgroup");
+        }
         Files.createDirectories(procCgroupFilePath.getParent());
         Files.writeString(procCgroupFilePath, "0::/user.slice");
 
