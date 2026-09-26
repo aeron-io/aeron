@@ -43,8 +43,25 @@ protected:
         aeron_env_unset(AERON_LOW_FILE_STORE_WARNING_THRESHOLD_ENV_VAR);
         aeron_env_unset(AERON_NAK_UNICAST_DELAY_ENV_VAR);
         aeron_env_unset(AERON_NAK_UNICAST_RETRY_DELAY_RATIO_ENV_VAR);
+        aeron_env_unset(AERON_SOCKET_TOS_ENV_VAR);
     }
 };
+
+TEST_F(DriverContextConfigTest, shouldConfigureSocketTos)
+{
+    aeron_driver_context_t *context;
+
+    ASSERT_EQ(0, aeron_driver_context_init(&context));
+    EXPECT_EQ(AERON_NULL_VALUE, aeron_driver_context_get_socket_tos(context));
+    EXPECT_EQ(0, aeron_driver_context_set_socket_tos(context, 184));
+    EXPECT_EQ(184, aeron_driver_context_get_socket_tos(context));
+    aeron_driver_context_close(context);
+
+    aeron_env_set(AERON_SOCKET_TOS_ENV_VAR, "46");
+    ASSERT_EQ(0, aeron_driver_context_init(&context));
+    EXPECT_EQ(46, aeron_driver_context_get_socket_tos(context));
+    aeron_driver_context_close(context);
+}
 
 TEST_F(DriverContextConfigTest, shouldValidateReceiverIoVectorCapacity)
 {

@@ -55,6 +55,7 @@ const char * const AERON_DRIVER_CONDUCTOR_INVALID_DESTINATION_KEYS[] =
     AERON_URI_RECEIVER_WINDOW_KEY,
     AERON_URI_SOCKET_RCVBUF_KEY,
     AERON_URI_SOCKET_SNDBUF_KEY,
+    AERON_URI_SOCKET_TOS_KEY,
     AERON_URI_RESPONSE_CORRELATION_ID_KEY,
     NULL
 };
@@ -554,6 +555,47 @@ static int aeron_driver_conductor_validate_channel_buffer_length(
                 param_name,
                 (uint64_t)new_length,
                 (uint64_t)existing_length,
+                (int)existing_channel->uri_length,
+                existing_channel->original_uri,
+                (int)channel->uri_length,
+                channel->original_uri);
+        }
+
+        return -1;
+    }
+
+    return 0;
+}
+
+static int aeron_driver_conductor_validate_channel_socket_tos(
+    int32_t socket_tos,
+    int32_t existing_socket_tos,
+    aeron_udp_channel_t *channel,
+    aeron_udp_channel_t *existing_channel)
+{
+    if (AERON_NULL_VALUE != socket_tos && socket_tos != existing_socket_tos)
+    {
+        if (AERON_NULL_VALUE == existing_socket_tos)
+        {
+            AERON_SET_ERR(
+                EINVAL,
+                "%s=%" PRId32 " does not match existing value of OS default: existingChannel=%.*s channel=%.*s",
+                AERON_URI_SOCKET_TOS_KEY,
+                socket_tos,
+                (int)existing_channel->uri_length,
+                existing_channel->original_uri,
+                (int)channel->uri_length,
+                channel->original_uri);
+        }
+        else
+        {
+            AERON_SET_ERR(
+                EINVAL,
+                "%s=%" PRId32 " does not match existing value of %" PRId32
+                ": existingChannel=%.*s channel=%.*s",
+                AERON_URI_SOCKET_TOS_KEY,
+                socket_tos,
+                existing_socket_tos,
                 (int)existing_channel->uri_length,
                 existing_channel->original_uri,
                 (int)channel->uri_length,
@@ -1944,6 +1986,16 @@ int aeron_driver_conductor_validate_channel_against_send_channel_endpoint(
         return -1;
     }
 
+    if (aeron_driver_conductor_validate_channel_socket_tos(
+        channel->socket_tos,
+        aeron_udp_channel_socket_tos(endpoint->conductor_fields.udp_channel, conductor->context->socket_tos),
+        channel,
+        endpoint->conductor_fields.udp_channel) < 0)
+    {
+        AERON_APPEND_ERR("%s", "");
+        return -1;
+    }
+
     if (aeron_driver_conductor_validate_channel_buffer_length(
         AERON_URI_SOCKET_SNDBUF_KEY,
         channel->socket_sndbuf_length,
@@ -2187,6 +2239,8 @@ aeron_receive_channel_endpoint_t *aeron_driver_conductor_get_or_add_receive_chan
                 endpoint->conductor_fields.udp_channel, conductor->context->socket_sndbuf);
             const size_t socket_rcvbuf_existing = aeron_udp_channel_socket_so_rcvbuf(
                 endpoint->conductor_fields.udp_channel, conductor->context->socket_rcvbuf);
+            const int32_t socket_tos_existing = aeron_udp_channel_socket_tos(
+                endpoint->conductor_fields.udp_channel, conductor->context->socket_tos);
 
             if (aeron_driver_conductor_validate_initial_window_for_rcvbuf(
                 params,
@@ -2203,6 +2257,16 @@ aeron_receive_channel_endpoint_t *aeron_driver_conductor_get_or_add_receive_chan
                 AERON_URI_SOCKET_SNDBUF_KEY,
                 socket_sndbuf,
                 socket_sndbuf_existing,
+                channel,
+                endpoint->conductor_fields.udp_channel) < 0)
+            {
+                AERON_APPEND_ERR("%s", "");
+                goto error_cleanup;
+            }
+
+            if (aeron_driver_conductor_validate_channel_socket_tos(
+                channel->socket_tos,
+                socket_tos_existing,
                 channel,
                 endpoint->conductor_fields.udp_channel) < 0)
             {

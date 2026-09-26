@@ -352,6 +352,18 @@ public final class Configuration
     public static final int SOCKET_MULTICAST_TTL_DEFAULT = 0;
 
     /**
+     * Property name for the IP_TOS setting on UDP sockets.
+     */
+    @Config(uriParam = CommonContext.SOCKET_TOS_PARAM_NAME)
+    public static final String SOCKET_TOS_PROP_NAME = "aeron.socket.tos";
+
+    /**
+     * Default IP_TOS value, {@link Aeron#NULL_VALUE} means use the OS default.
+     */
+    @Config(configType = Config.Type.DEFAULT)
+    public static final int SOCKET_TOS_DEFAULT = Aeron.NULL_VALUE;
+
+    /**
      * Property name for linger timeout after draining on {@link Publication}s so they can respond to NAKs.
      */
     @Config(uriParam = CommonContext.LINGER_PARAM_NAME)
@@ -1854,6 +1866,17 @@ public final class Configuration
     public static int socketMulticastTtl()
     {
         return getInteger(SOCKET_MULTICAST_TTL_PROP_NAME, SOCKET_MULTICAST_TTL_DEFAULT);
+    }
+
+    /**
+     * IP_TOS setting on UDP sockets.
+     *
+     * @return IP_TOS setting on UDP sockets.
+     * @see #SOCKET_TOS_PROP_NAME
+     */
+    public static int socketTos()
+    {
+        return getInteger(SOCKET_TOS_PROP_NAME, SOCKET_TOS_DEFAULT);
     }
 
     /**

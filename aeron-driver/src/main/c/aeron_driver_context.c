@@ -191,6 +191,7 @@ static void aeron_driver_untethered_subscription_state_change_null(
 #define AERON_SOCKET_SO_RCVBUF_DEFAULT (128 * 1024)
 #define AERON_SOCKET_SO_SNDBUF_DEFAULT (0)
 #define AERON_SOCKET_MULTICAST_TTL_DEFAULT (0)
+#define AERON_SOCKET_TOS_DEFAULT (AERON_NULL_VALUE)
 #define AERON_RECEIVER_GROUP_TAG_IS_PRESENT_DEFAULT (false)
 #define AERON_RECEIVER_GROUP_TAG_VALUE_DEFAULT (-1)
 #define AERON_FLOW_CONTROL_GROUP_TAG_DEFAULT (-1)
@@ -478,6 +479,7 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
     _context->socket_rcvbuf = AERON_SOCKET_SO_RCVBUF_DEFAULT;
     _context->socket_sndbuf = AERON_SOCKET_SO_SNDBUF_DEFAULT;
     _context->multicast_ttl = AERON_SOCKET_MULTICAST_TTL_DEFAULT;
+    _context->socket_tos = AERON_SOCKET_TOS_DEFAULT;
     _context->receiver_group_tag.is_present = AERON_RECEIVER_GROUP_TAG_IS_PRESENT_DEFAULT;
     _context->receiver_group_tag.value = AERON_RECEIVER_GROUP_TAG_VALUE_DEFAULT;
     _context->flow_control.group_tag = AERON_FLOW_CONTROL_GROUP_TAG_DEFAULT;
@@ -770,6 +772,13 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
         getenv(AERON_SOCKET_MULTICAST_TTL_ENV_VAR),
         _context->multicast_ttl,
         0,
+        255);
+
+    _context->socket_tos = aeron_config_parse_int32(
+        AERON_SOCKET_TOS_ENV_VAR,
+        getenv(AERON_SOCKET_TOS_ENV_VAR),
+        _context->socket_tos,
+        AERON_SOCKET_TOS_DEFAULT,
         255);
 
     _context->conductor_cpu_affinity_no = aeron_config_parse_int32(
@@ -2059,6 +2068,25 @@ int aeron_driver_context_set_socket_multicast_ttl(aeron_driver_context_t *contex
 uint8_t aeron_driver_context_get_socket_multicast_ttl(aeron_driver_context_t *context)
 {
     return NULL != context ? context->multicast_ttl : AERON_SOCKET_MULTICAST_TTL_DEFAULT;
+}
+
+int aeron_driver_context_set_socket_tos(aeron_driver_context_t *context, int32_t value)
+{
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+
+    if (value < AERON_SOCKET_TOS_DEFAULT || value > 255)
+    {
+        AERON_SET_ERR(EINVAL, "socket TOS must be between -1 and 255 inclusive: %" PRId32, value);
+        return -1;
+    }
+
+    context->socket_tos = value;
+    return 0;
+}
+
+int32_t aeron_driver_context_get_socket_tos(aeron_driver_context_t *context)
+{
+    return NULL != context ? context->socket_tos : AERON_SOCKET_TOS_DEFAULT;
 }
 
 int aeron_driver_context_set_send_to_status_poll_ratio(aeron_driver_context_t *context, size_t value)

@@ -124,6 +124,7 @@ int aeron_send_channel_endpoint_create(
     aeron_udp_channel_transport_params_t transport_params = {
         _endpoint->conductor_fields.socket_rcvbuf,
         _endpoint->conductor_fields.socket_sndbuf,
+        aeron_udp_channel_socket_tos(channel, context->socket_tos),
         params->mtu_length,
         channel->interface_index,
         0 != channel->multicast_ttl ? channel->multicast_ttl : context->multicast_ttl,

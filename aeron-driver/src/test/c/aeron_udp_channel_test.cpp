@@ -588,6 +588,28 @@ TEST_F(UdpChannelTest, shouldParseSocketBufferParameters)
     ASSERT_EQ(4096u, m_channel->socket_rcvbuf_length);
 }
 
+TEST_F(UdpChannelTest, shouldParseSocketTos)
+{
+    const char *uri = "aeron:udp?interface=localhost|endpoint=224.10.9.9:40124|so-tos=184";
+    ASSERT_EQ(parse_udp_channel(uri), 0) << aeron_errmsg();
+
+    ASSERT_EQ(184, m_channel->socket_tos);
+}
+
+TEST_F(UdpChannelTest, shouldDefaultSocketTosToNullValue)
+{
+    const char *uri = "aeron:udp?interface=localhost|endpoint=224.10.9.9:40124";
+    ASSERT_EQ(parse_udp_channel(uri), 0) << aeron_errmsg();
+
+    ASSERT_EQ(AERON_NULL_VALUE, m_channel->socket_tos);
+}
+
+TEST_F(UdpChannelTest, shouldRejectSocketTosOutsideValidRange)
+{
+    ASSERT_EQ(-1, parse_udp_channel("aeron:udp?endpoint=localhost:40124|so-tos=-1"));
+    ASSERT_EQ(-1, parse_udp_channel("aeron:udp?endpoint=localhost:40124|so-tos=256"));
+}
+
 TEST_F(UdpChannelTest, shouldParseReceiverWindow)
 {
     const char *uri = "aeron:udp?interface=localhost|endpoint=224.10.9.9:40124|rcv-wnd=8k";

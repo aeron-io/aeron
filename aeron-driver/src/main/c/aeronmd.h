@@ -252,6 +252,14 @@ int aeron_driver_context_set_socket_multicast_ttl(aeron_driver_context_t *contex
 uint8_t aeron_driver_context_get_socket_multicast_ttl(aeron_driver_context_t *context);
 
 /**
+ * IP_TOS setting on outgoing UDP sockets. A value of -1 uses the OS default.
+ */
+#define AERON_SOCKET_TOS_ENV_VAR "AERON_SOCKET_TOS"
+
+int aeron_driver_context_set_socket_tos(aeron_driver_context_t *context, int32_t value);
+int32_t aeron_driver_context_get_socket_tos(aeron_driver_context_t *context);
+
+/**
  * Ratio of sending data to polling status messages in the Sender.
  */
 #define AERON_SEND_TO_STATUS_POLL_RATIO_ENV_VAR "AERON_SEND_TO_STATUS_POLL_RATIO"

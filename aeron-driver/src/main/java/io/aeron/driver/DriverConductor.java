@@ -26,6 +26,7 @@ import io.aeron.driver.media.ReceiveChannelEndpoint;
 import io.aeron.driver.media.ReceiveDestinationTransport;
 import io.aeron.driver.media.SendChannelEndpoint;
 import io.aeron.driver.media.UdpChannel;
+import io.aeron.driver.media.UdpChannelTransport;
 import io.aeron.driver.status.ClientHeartbeatTimestamp;
 import io.aeron.driver.status.PublisherLimit;
 import io.aeron.driver.status.PublisherPos;
@@ -97,6 +98,7 @@ import static io.aeron.CommonContext.RECEIVER_WINDOW_LENGTH_PARAM_NAME;
 import static io.aeron.CommonContext.RESPONSE_CORRELATION_ID_PARAM_NAME;
 import static io.aeron.CommonContext.SOCKET_RCVBUF_PARAM_NAME;
 import static io.aeron.CommonContext.SOCKET_SNDBUF_PARAM_NAME;
+import static io.aeron.CommonContext.SOCKET_TOS_PARAM_NAME;
 import static io.aeron.CommonContext.threadName;
 import static io.aeron.ErrorCode.GENERIC_ERROR;
 import static io.aeron.ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE;
@@ -173,6 +175,7 @@ public final class DriverConductor implements Agent
         RECEIVER_WINDOW_LENGTH_PARAM_NAME,
         SOCKET_RCVBUF_PARAM_NAME,
         SOCKET_SNDBUF_PARAM_NAME,
+        SOCKET_TOS_PARAM_NAME,
         RESPONSE_CORRELATION_ID_PARAM_NAME
     };
 
@@ -1529,6 +1532,7 @@ public final class DriverConductor implements Agent
             channelEndpoint.socketSndbufLength(),
             udpChannel.originalUriString(),
             channelEndpoint.originalUriString());
+        validateChannelSocketTos(udpChannel, channelEndpoint);
     }
 
     private static void validateChannelSendTimestampOffset(
@@ -1833,6 +1837,7 @@ public final class DriverConductor implements Agent
             channelEndpoint.socketSndbufLength(),
             udpChannel.originalUriString(),
             channelEndpoint.originalUriString());
+        validateChannelSocketTos(udpChannel, channelEndpoint);
     }
 
     private ReceiveChannelEndpoint findExistingReceiveChannelEndpoint(final UdpChannel udpChannel)
@@ -2350,6 +2355,21 @@ public final class DriverConductor implements Agent
             throw new InvalidChannelException(
                 paramName + "=" + newLength + " does not match existing value of " + existingValue +
                     ": existingChannel=" + existingChannel + " channel=" + channel);
+        }
+    }
+
+    private static void validateChannelSocketTos(
+        final UdpChannel udpChannel, final UdpChannelTransport channelEndpoint)
+    {
+        final int socketTos = udpChannel.socketTos();
+        if (NULL_VALUE != socketTos && socketTos != channelEndpoint.socketTos())
+        {
+            final Object existingValue = NULL_VALUE == channelEndpoint.socketTos() ?
+                "OS default" : channelEndpoint.socketTos();
+            throw new InvalidChannelException(
+                SOCKET_TOS_PARAM_NAME + "=" + socketTos + " does not match existing value of " + existingValue +
+                ": existingChannel=" + channelEndpoint.originalUriString() + " channel=" +
+                udpChannel.originalUriString());
         }
     }
 

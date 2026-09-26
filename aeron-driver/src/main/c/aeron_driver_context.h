@@ -217,6 +217,7 @@ typedef struct aeron_driver_context_stct
     size_t publication_window_length;                       /* aeron.publication.term.window.length = 0 */
     size_t socket_rcvbuf;                                   /* aeron.socket.so_rcvbuf = 128 * 1024 */
     size_t socket_sndbuf;                                   /* aeron.socket.so_sndbuf = 0 */
+    int32_t socket_tos;                                     /* aeron.socket.tos = -1 */
     size_t send_to_sm_poll_ratio;                           /* aeron.send.to.status.poll.ratio = 6 */
     size_t initial_window_length;                           /* aeron.rcv.initial.window.length = 128KB */
     size_t loss_report_length;                              /* aeron.loss.report.buffer.length = 1MB */
