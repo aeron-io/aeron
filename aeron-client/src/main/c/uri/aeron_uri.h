@@ -72,6 +72,7 @@ aeron_uri_params_t;
 #define AERON_URI_ATS_KEY "ats"
 #define AERON_URI_SOCKET_SNDBUF_KEY "so-sndbuf"
 #define AERON_URI_SOCKET_RCVBUF_KEY "so-rcvbuf"
+#define AERON_URI_SOCKET_TOS_KEY "so-tos"
 #define AERON_URI_RECEIVER_WINDOW_KEY "rcv-wnd"
 #define AERON_URI_MEDIA_RCV_TIMESTAMP_OFFSET_KEY "media-rcv-ts-offset"
 #define AERON_URI_CHANNEL_RCV_TIMESTAMP_OFFSET_KEY "channel-rcv-ts-offset"

@@ -97,6 +97,7 @@ import static io.aeron.CommonContext.RECEIVER_WINDOW_LENGTH_PARAM_NAME;
 import static io.aeron.CommonContext.RESPONSE_CORRELATION_ID_PARAM_NAME;
 import static io.aeron.CommonContext.SOCKET_RCVBUF_PARAM_NAME;
 import static io.aeron.CommonContext.SOCKET_SNDBUF_PARAM_NAME;
+import static io.aeron.CommonContext.SOCKET_TOS_PARAM_NAME;
 import static io.aeron.CommonContext.threadName;
 import static io.aeron.ErrorCode.GENERIC_ERROR;
 import static io.aeron.ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE;
@@ -173,6 +174,7 @@ public final class DriverConductor implements Agent
         RECEIVER_WINDOW_LENGTH_PARAM_NAME,
         SOCKET_RCVBUF_PARAM_NAME,
         SOCKET_SNDBUF_PARAM_NAME,
+        SOCKET_TOS_PARAM_NAME,
         RESPONSE_CORRELATION_ID_PARAM_NAME
     };
 
@@ -1529,6 +1531,9 @@ public final class DriverConductor implements Agent
             channelEndpoint.socketSndbufLength(),
             udpChannel.originalUriString(),
             channelEndpoint.originalUriString());
+        validateChannelSocketTos(
+            udpChannel.socketTos(), channelEndpoint.socketTos(),
+            udpChannel.originalUriString(), channelEndpoint.originalUriString());
     }
 
     private static void validateChannelSendTimestampOffset(
@@ -1833,6 +1838,9 @@ public final class DriverConductor implements Agent
             channelEndpoint.socketSndbufLength(),
             udpChannel.originalUriString(),
             channelEndpoint.originalUriString());
+        validateChannelSocketTos(
+            udpChannel.socketTos(), channelEndpoint.socketTos(),
+            udpChannel.originalUriString(), channelEndpoint.originalUriString());
     }
 
     private ReceiveChannelEndpoint findExistingReceiveChannelEndpoint(final UdpChannel udpChannel)
@@ -2350,6 +2358,18 @@ public final class DriverConductor implements Agent
             throw new InvalidChannelException(
                 paramName + "=" + newLength + " does not match existing value of " + existingValue +
                     ": existingChannel=" + existingChannel + " channel=" + channel);
+        }
+    }
+
+    private static void validateChannelSocketTos(
+        final int socketTos, final int existingSocketTos, final String channel, final String existingChannel)
+    {
+        if (NULL_VALUE != socketTos && socketTos != existingSocketTos)
+        {
+            final Object existingValue = NULL_VALUE == existingSocketTos ? "OS default" : existingSocketTos;
+            throw new InvalidChannelException(
+                SOCKET_TOS_PARAM_NAME + "=" + socketTos + " does not match existing value of " + existingValue +
+                ": existingChannel=" + existingChannel + " channel=" + channel);
         }
     }
 

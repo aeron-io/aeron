@@ -35,6 +35,7 @@ struct aeron_udp_channel_transport_params_stct
 {
     size_t socket_rcvbuf;
     size_t socket_sndbuf;
+    int32_t socket_tos;
     size_t mtu_length;
     unsigned int multicast_if_index;
     uint8_t ttl;

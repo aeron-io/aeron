@@ -598,6 +598,7 @@ public final class MediaDriver implements AutoCloseable
         private int socketSndbufLength = Configuration.socketSndbufLength();
         private int socketRcvbufLength = Configuration.socketRcvbufLength();
         private int socketMulticastTtl = Configuration.socketMulticastTtl();
+        private int socketTos = Configuration.socketTos();
         private int mtuLength = Configuration.mtuLength();
         private int ipcMtuLength = Configuration.ipcMtuLength();
         private int filePageSize = Configuration.filePageSize();
@@ -792,6 +793,7 @@ public final class MediaDriver implements AutoCloseable
                     publicationTermWindowLength, 0, TERM_MAX_LENGTH, "publicationTermWindowLength");
                 validateValueRange(
                     ipcPublicationTermWindowLength, 0, TERM_MAX_LENGTH, "ipcPublicationTermWindowLength");
+                validateValueRange(socketTos, Aeron.NULL_VALUE, 255, "socketTos");
 
                 validateValueRange(
                     nakUnicastDelayNs, NAK_UNICAST_DELAY_MIN_VALUE_NS, Long.MAX_VALUE, "nakUnicastDelayNs");
@@ -2083,6 +2085,31 @@ public final class MediaDriver implements AutoCloseable
         public Context socketMulticastTtl(final int ttl)
         {
             socketMulticastTtl = ttl;
+            return this;
+        }
+
+        /**
+         * The IP_TOS value to be used for UDP sockets.
+         *
+         * @return IP_TOS value to be used for UDP sockets.
+         * @see Configuration#SOCKET_TOS_PROP_NAME
+         */
+        @Config
+        public int socketTos()
+        {
+            return socketTos;
+        }
+
+        /**
+         * Set the IP_TOS value to be used for UDP sockets.
+         *
+         * @param socketTos value to be used for UDP sockets.
+         * @return this for a fluent API.
+         * @see Configuration#SOCKET_TOS_PROP_NAME
+         */
+        public Context socketTos(final int socketTos)
+        {
+            this.socketTos = socketTos;
             return this;
         }
 
@@ -4770,6 +4797,7 @@ public final class MediaDriver implements AutoCloseable
                 "\n    socketSndbufLength=" + socketSndbufLength +
                 "\n    socketRcvbufLength=" + socketRcvbufLength +
                 "\n    socketMulticastTtl=" + socketMulticastTtl +
+                "\n    socketTos=" + socketTos +
                 "\n    mtuLength=" + mtuLength +
                 "\n    ipcMtuLength=" + ipcMtuLength +
                 "\n    filePageSize=" + filePageSize +

@@ -580,6 +580,7 @@ void aeron_driver_context_print_configuration(aeron_driver_context_t *context)
     AERON_FPRINTF(fpout, "\n    socket_sndbuf_length=%" PRIu64, (uint64_t)context->socket_sndbuf);
     AERON_FPRINTF(fpout, "\n    socket_rcvbuf_length=%" PRIu64, (uint64_t)context->socket_rcvbuf);
     AERON_FPRINTF(fpout, "\n    multicast_ttl=%" PRIu8, context->multicast_ttl);
+    AERON_FPRINTF(fpout, "\n    socket_tos=%" PRId32, context->socket_tos);
     AERON_FPRINTF(fpout, "\n    mtu_length=%" PRIu64, (uint64_t)context->mtu_length);
     AERON_FPRINTF(fpout, "\n    ipc_mtu_length=%" PRIu64, (uint64_t)context->ipc_mtu_length);
     AERON_FPRINTF(fpout, "\n    file_page_size=%" PRIu64, (uint64_t)context->file_page_size);

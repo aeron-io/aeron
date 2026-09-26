@@ -56,6 +56,7 @@ typedef struct aeron_udp_channel_stct
     aeron_uri_ats_status_t ats_status;
     size_t socket_sndbuf_length;
     size_t socket_rcvbuf_length;
+    int32_t socket_tos;
     size_t receiver_window_length;
     int32_t media_rcv_timestamp_offset;
     int32_t channel_rcv_timestamp_offset;
@@ -124,6 +125,11 @@ inline size_t aeron_udp_channel_socket_so_sndbuf(aeron_udp_channel_t *channel, s
 inline size_t aeron_udp_channel_socket_so_rcvbuf(aeron_udp_channel_t *channel, size_t default_so_rcvbuf)
 {
     return 0 != channel->socket_rcvbuf_length ? channel->socket_rcvbuf_length : default_so_rcvbuf;
+}
+
+inline int32_t aeron_udp_channel_socket_tos(aeron_udp_channel_t *channel, int32_t default_socket_tos)
+{
+    return AERON_NULL_VALUE != channel->socket_tos ? channel->socket_tos : default_socket_tos;
 }
 
 inline bool aeron_udp_channel_is_media_rcv_timestamps_enabled(aeron_udp_channel_t *channel)

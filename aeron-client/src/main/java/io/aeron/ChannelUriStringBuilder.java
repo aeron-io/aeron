@@ -72,6 +72,7 @@ public final class ChannelUriStringBuilder
     private Integer termOffset;
     private Integer socketSndbufLength;
     private Integer socketRcvbufLength;
+    private Integer socketTos;
     private Integer receiverWindowLength;
     private Integer maxResend;
     private Integer streamId;
@@ -140,6 +141,7 @@ public final class ChannelUriStringBuilder
         spiesSimulateConnection(channelUri);
         socketRcvbufLength(channelUri);
         socketSndbufLength(channelUri);
+        socketTos(channelUri);
         receiverWindowLength(channelUri);
         mediaReceiveTimestampOffset(channelUri);
         channelReceiveTimestampOffset(channelUri);
@@ -190,6 +192,7 @@ public final class ChannelUriStringBuilder
         isSessionIdTagged = false;
         socketRcvbufLength = null;
         socketSndbufLength = null;
+        socketTos = null;
         receiverWindowLength = null;
         mediaReceiveTimestampOffset = null;
         channelReceiveTimestampOffset = null;
@@ -1696,6 +1699,48 @@ public final class ChannelUriStringBuilder
     }
 
     /**
+     * Set the IP_TOS value for the underlying OS socket.
+     *
+     * @param socketTos parameter to be passed as IP_TOS value.
+     * @return this for a fluent API.
+     * @see CommonContext#SOCKET_TOS_PARAM_NAME
+     */
+    public ChannelUriStringBuilder socketTos(final Integer socketTos)
+    {
+        if (null != socketTos && (socketTos < 0 || socketTos > 255))
+        {
+            throw new IllegalArgumentException("socketTos must be between 0 and 255 inclusive: " + socketTos);
+        }
+
+        this.socketTos = socketTos;
+        return this;
+    }
+
+    /**
+     * Set the IP_TOS value from an existing {@link ChannelUri}.
+     *
+     * @param channelUri to read the value from.
+     * @return this for a fluent API.
+     * @see CommonContext#SOCKET_TOS_PARAM_NAME
+     */
+    public ChannelUriStringBuilder socketTos(final ChannelUri channelUri)
+    {
+        final String value = channelUri.get(SOCKET_TOS_PARAM_NAME);
+        return socketTos(null == value ? null : Integer.valueOf(value));
+    }
+
+    /**
+     * Get the IP_TOS value for the underlying OS socket.
+     *
+     * @return IP_TOS value or null if not specified.
+     * @see CommonContext#SOCKET_TOS_PARAM_NAME
+     */
+    public Integer socketTos()
+    {
+        return socketTos;
+    }
+
+    /**
      * Set the underlying OS receive buffer length.
      *
      * @param socketRcvbufLength parameter to be passed as SO_RCVBUF value.
@@ -2490,6 +2535,7 @@ public final class ChannelUriStringBuilder
         appendParameter(sb, SPIES_SIMULATE_CONNECTION_PARAM_NAME, ssc);
         appendSize(sb, SOCKET_SNDBUF_PARAM_NAME, socketSndbufLength);
         appendSize(sb, SOCKET_RCVBUF_PARAM_NAME, socketRcvbufLength);
+        appendParameter(sb, SOCKET_TOS_PARAM_NAME, socketTos);
         appendSize(sb, RECEIVER_WINDOW_LENGTH_PARAM_NAME, receiverWindowLength);
         appendParameter(sb, MEDIA_RCV_TIMESTAMP_OFFSET_PARAM_NAME, mediaReceiveTimestampOffset);
         appendParameter(sb, CHANNEL_RECEIVE_TIMESTAMP_OFFSET_PARAM_NAME, channelReceiveTimestampOffset);
