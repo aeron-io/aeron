@@ -26,7 +26,6 @@ import io.aeron.driver.media.ReceiveChannelEndpoint;
 import io.aeron.driver.media.ReceiveDestinationTransport;
 import io.aeron.driver.media.SendChannelEndpoint;
 import io.aeron.driver.media.UdpChannel;
-import io.aeron.driver.media.UdpChannelTransport;
 import io.aeron.driver.status.ClientHeartbeatTimestamp;
 import io.aeron.driver.status.PublisherLimit;
 import io.aeron.driver.status.PublisherPos;
@@ -1532,7 +1531,9 @@ public final class DriverConductor implements Agent
             channelEndpoint.socketSndbufLength(),
             udpChannel.originalUriString(),
             channelEndpoint.originalUriString());
-        validateChannelSocketTos(udpChannel, channelEndpoint);
+        validateChannelSocketTos(
+            udpChannel.socketTos(), channelEndpoint.socketTos(),
+            udpChannel.originalUriString(), channelEndpoint.originalUriString());
     }
 
     private static void validateChannelSendTimestampOffset(
@@ -1837,7 +1838,9 @@ public final class DriverConductor implements Agent
             channelEndpoint.socketSndbufLength(),
             udpChannel.originalUriString(),
             channelEndpoint.originalUriString());
-        validateChannelSocketTos(udpChannel, channelEndpoint);
+        validateChannelSocketTos(
+            udpChannel.socketTos(), channelEndpoint.socketTos(),
+            udpChannel.originalUriString(), channelEndpoint.originalUriString());
     }
 
     private ReceiveChannelEndpoint findExistingReceiveChannelEndpoint(final UdpChannel udpChannel)
@@ -2359,17 +2362,14 @@ public final class DriverConductor implements Agent
     }
 
     private static void validateChannelSocketTos(
-        final UdpChannel udpChannel, final UdpChannelTransport channelEndpoint)
+        final int socketTos, final int existingSocketTos, final String channel, final String existingChannel)
     {
-        final int socketTos = udpChannel.socketTos();
-        if (NULL_VALUE != socketTos && socketTos != channelEndpoint.socketTos())
+        if (NULL_VALUE != socketTos && socketTos != existingSocketTos)
         {
-            final Object existingValue = NULL_VALUE == channelEndpoint.socketTos() ?
-                "OS default" : channelEndpoint.socketTos();
+            final Object existingValue = NULL_VALUE == existingSocketTos ? "OS default" : existingSocketTos;
             throw new InvalidChannelException(
                 SOCKET_TOS_PARAM_NAME + "=" + socketTos + " does not match existing value of " + existingValue +
-                ": existingChannel=" + channelEndpoint.originalUriString() + " channel=" +
-                udpChannel.originalUriString());
+                ": existingChannel=" + existingChannel + " channel=" + channel);
         }
     }
 
