@@ -19,6 +19,7 @@ package io.aeron.topology;
 import io.aeron.exceptions.ConfigurationException;
 import io.aeron.test.CapturingPrintStream;
 import io.aeron.topology.TopologyTestUtils.Pair;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -37,6 +38,7 @@ import static io.aeron.topology.TopologyTestUtils.setupCpuSet;
 import static io.aeron.topology.TopologyTestUtils.setupDieLocality;
 import static io.aeron.topology.TopologyTestUtils.setupL3Peers;
 import static io.aeron.topology.TopologyTestUtils.setupSiblingThreads;
+import static org.agrona.concurrent.affinity.ThreadAffinity.NO_AFFINITY;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -95,6 +97,36 @@ class AffinityRegistryTest
         }
     }
 
+    @Test
+    void noAffinityThreadsAreNotPinnedAndCpusetIsNotRead(
+        @TempDir final Path sysfsTestDir,
+        @TempDir final Path emptyProcPath,
+        @TempDir final Path emptyCgroupPath)
+    {
+        final CpusetV2Reader reader = new CpusetV2Reader(emptyProcPath, emptyCgroupPath);
+        final AffinityRegistry affinityRegistry = new AffinityRegistry(sysfsTestDir, reader);
+        affinityRegistry.addAffinity("aaa", NO_AFFINITY);
+        affinityRegistry.addAffinity("bbb", NO_AFFINITY);
+
+        assertDoesNotThrow(affinityRegistry::conclude);
+        assertEquals(NO_AFFINITY, affinityRegistry.mappedAffinityValue("aaa"));
+        assertEquals(NO_AFFINITY, affinityRegistry.mappedAffinityValue("bbb"));
+        assertDoesNotThrow(() -> affinityRegistry.validate(true, new PrintStream(new ByteArrayOutputStream())));
+    }
+
+    @Test
+    void mappedAffinityValueThrowsForUnregisteredName(
+        @TempDir final Path sysfsTestDir,
+        @TempDir final Path emptyProcPath,
+        @TempDir final Path emptyCgroupPath)
+    {
+        final CpusetV2Reader reader = new CpusetV2Reader(emptyProcPath, emptyCgroupPath);
+        final AffinityRegistry affinityRegistry = new AffinityRegistry(sysfsTestDir, reader);
+        affinityRegistry.conclude();
+
+        assertThrows(IllegalArgumentException.class, () -> affinityRegistry.mappedAffinityValue("aaa"));
+    }
+
     private static Stream<Arguments> validationScenarios()
     {
         return Stream.of(
@@ -114,6 +146,18 @@ class AffinityRegistryTest
                 "3-5",
                 Map.of("aaa", 1, "bbb", 2, "ccc", 3),
                 Map.of("aaa", 3, "bbb", 4, "ccc", 5),
+                List.of(
+                    new Pair(0, 1), new Pair(0, 1), new Pair(2, 3), new Pair(2, 3),
+                    new Pair(4, 5), new Pair(4, 5), new Pair(6, 7), new Pair(6, 7)),
+                List.of(
+                    new Pair(0, 7), new Pair(0, 7), new Pair(0, 7), new Pair(0, 7),
+                    new Pair(0, 7), new Pair(0, 7), new Pair(0, 7), new Pair(0, 7)),
+                List.of(0, 0, 0, 0, 0, 0, 0),
+                0),
+            Arguments.of(
+                "3-5",
+                Map.of("aaa", NO_AFFINITY, "bbb", 2, "ccc", 1),
+                Map.of("aaa", NO_AFFINITY, "bbb", 4, "ccc", 3),
                 List.of(
                     new Pair(0, 1), new Pair(0, 1), new Pair(2, 3), new Pair(2, 3),
                     new Pair(4, 5), new Pair(4, 5), new Pair(6, 7), new Pair(6, 7)),
