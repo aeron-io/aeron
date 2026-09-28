@@ -28,8 +28,11 @@ import java.util.List;
  */
 public class CGroupValidator
 {
+    /**
+     * The standard sys directory for CPU topology information.
+     */
     // TODO: Move this somewhere more general
-    static final Path DEFAULT_SYSFS_ROOT = Path.of("/sys/devices/system/cpu");
+    public static final Path DEFAULT_SYSFS_ROOT = Path.of("/sys/devices/system/cpu");
     private final List<TopologyValidator> topologyValidators;
     private final CpusetV2Reader cpusetV2Reader;
 

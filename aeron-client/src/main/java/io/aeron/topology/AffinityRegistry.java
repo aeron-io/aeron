@@ -23,10 +23,13 @@ import org.agrona.concurrent.affinity.ThreadAffinity;
 
 import java.io.PrintStream;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.agrona.concurrent.affinity.ThreadAffinity.NO_AFFINITY;
 
 /**
  * Registry mapping named thread affinities onto the CPUs of the process's effective cgroup cpuset.
@@ -39,7 +42,7 @@ public class AffinityRegistry
     private final CpusetV2Reader cpusetV2Reader;
     private boolean isConcluded = false;
     private final Path sysfsRoot;
-    private final Cpuset realCpuset;
+    private Cpuset realCpuset;
 
     /**
      * An affinity as requested and as remapped onto the effective cpuset.
@@ -61,10 +64,9 @@ public class AffinityRegistry
     public AffinityRegistry(final Path sysfsRoot, final CpusetV2Reader cpusetV2Reader)
     {
         this.cpusetV2Reader = cpusetV2Reader;
-        this.nameToAffinityMap = new Object2IntHashMap<>(ThreadAffinity.NO_AFFINITY);
+        this.nameToAffinityMap = new Object2IntHashMap<>(Integer.MIN_VALUE);
         this.finalizedNameToAffinityMap = new Object2ObjectHashMap<>();
         this.sysfsRoot = sysfsRoot;
-        this.realCpuset = cpusetV2Reader.readCpuSet();
         this.isConcluded = false;
     }
 
@@ -72,7 +74,8 @@ public class AffinityRegistry
      * Registers the requested affinity for a named thread.
      *
      * @param name     the name of the thread.
-     * @param affinity the CPU requested for the thread.
+     * @param affinity the CPU requested for the thread, or {@link ThreadAffinity#NO_AFFINITY} to leave the
+     *                 thread unpinned.
      * @throws IllegalStateException if called after {@link #conclude()}.
      */
     public void addAffinity(final String name, final int affinity)
@@ -88,8 +91,10 @@ public class AffinityRegistry
      * Gets the remapped affinity for a named thread.
      *
      * @param name the name of the thread.
-     * @return the CPU from the effective cpuset that the thread's affinity maps to.
-     * @throws IllegalStateException if called before {@link #conclude()}.
+     * @return the CPU from the effective cpuset that the thread's affinity maps to, or
+     * {@link ThreadAffinity#NO_AFFINITY} if the thread was registered without an affinity.
+     * @throws IllegalStateException    if called before {@link #conclude()}.
+     * @throws IllegalArgumentException if no affinity was registered for the name.
      */
     public int mappedAffinityValue(final String name)
     {
@@ -97,7 +102,12 @@ public class AffinityRegistry
         {
             throw new IllegalStateException("Cannot get affinity value before conclusion");
         }
-        return finalizedNameToAffinityMap.get(name).remappedAffinity();
+        final AffinityValue affinityValue = finalizedNameToAffinityMap.get(name);
+        if (null == affinityValue)
+        {
+            throw new IllegalArgumentException("No affinity registered for " + name);
+        }
+        return affinityValue.remappedAffinity();
     }
 
     /**
@@ -106,9 +116,26 @@ public class AffinityRegistry
      */
     public void conclude()
     {
+        final List<Map.Entry<String, Integer>> pinnedEntries = new ArrayList<>();
+        nameToAffinityMap.forEach((key, value) -> {
+            final int affinity = value;
+            if (NO_AFFINITY == affinity)
+            {
+                finalizedNameToAffinityMap.put(key, new AffinityValue(NO_AFFINITY, NO_AFFINITY));
+            }
+            else
+            {
+                pinnedEntries.add(Map.entry(key, affinity));
+            }
+        });
+
+        if (!pinnedEntries.isEmpty())
+        {
+            realCpuset = cpusetV2Reader.readCpuSet();
+        }
+
         final AtomicInteger currentIndex = new AtomicInteger(0);
-        nameToAffinityMap.entrySet().stream()
-            .map(e -> Map.entry(e.getKey(), e.getValue()))
+        pinnedEntries.stream()
             .sorted(Comparator.comparingInt(Map.Entry::getValue))
             .forEach(e ->
             {

@@ -38,7 +38,9 @@ import io.aeron.exceptions.ConcurrentConcludeException;
 import io.aeron.exceptions.ConfigurationException;
 import io.aeron.logbuffer.BufferClaim;
 import io.aeron.logbuffer.LogBufferDescriptor;
+import io.aeron.topology.AffinityRegistry;
 import io.aeron.topology.CGroupValidator;
+import io.aeron.topology.CpusetV2Reader;
 import io.aeron.version.Versioned;
 import org.agrona.BitUtil;
 import org.agrona.BufferUtil;
@@ -135,6 +137,7 @@ import static io.aeron.driver.status.SystemCounterDescriptor.SENDER_CYCLE_TIME_T
 import static io.aeron.driver.status.SystemCounterDescriptor.SENDER_MAX_CYCLE_TIME;
 import static io.aeron.driver.status.SystemCounterDescriptor.SENDER_PROXY_FAILS;
 import static io.aeron.logbuffer.LogBufferDescriptor.TERM_MAX_LENGTH;
+import static io.aeron.topology.CGroupValidator.DEFAULT_SYSFS_ROOT;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
 import static org.agrona.IoUtil.mapNewFile;
@@ -175,6 +178,7 @@ public final class MediaDriver implements AutoCloseable
     private final AgentRunner conductorRunner;
     private final AgentRunner receiverRunner;
     private final AgentRunner senderRunner;
+    private final AffinityRegistry affinityRegistry;
     private final Context ctx;
 
     /**
@@ -231,6 +235,8 @@ public final class MediaDriver implements AutoCloseable
                 new CGroupValidator().validate(ctx.driverCpusetWarningsAsErrors());
             }
 
+            affinityRegistry = new AffinityRegistry(DEFAULT_SYSFS_ROOT, new CpusetV2Reader());
+
             switch (ctx.threadingMode())
             {
                 case INVOKER:
@@ -251,6 +257,7 @@ public final class MediaDriver implements AutoCloseable
 
                 case SHARED:
                 {
+                    affinityRegistry.addAffinity(AERON_DRIVER_SHARED_THREAD_NAME, ctx.conductorCpuAffinity());
                     sharedRunner = new AgentRunner(
                         ctx.sharedIdleStrategy(),
                         errorHandler,
@@ -269,6 +276,9 @@ public final class MediaDriver implements AutoCloseable
 
                 case SHARED_NETWORK:
                 {
+                    affinityRegistry.addAffinity(AERON_DRIVER_SHARED_NETWORK_THREAD_NAME, ctx.senderCpuAffinity());
+                    affinityRegistry.addAffinity(conductor.roleName(), ctx.conductorCpuAffinity());
+                    affinityRegistry.addAffinity(nativeResourceAgent.roleName(), ctx.nativeResourceAgentCpuAffinity());
                     sharedNetworkRunner = new AgentRunner(
                         ctx.sharedNetworkIdleStrategy(),
                         errorHandler,
@@ -293,6 +303,10 @@ public final class MediaDriver implements AutoCloseable
                 case DEDICATED:
                 default:
                 {
+                    affinityRegistry.addAffinity(nativeResourceAgent.roleName(), ctx.nativeResourceAgentCpuAffinity());
+                    affinityRegistry.addAffinity(sender.roleName(), ctx.senderCpuAffinity());
+                    affinityRegistry.addAffinity(receiver.roleName(), ctx.receiverCpuAffinity());
+                    affinityRegistry.addAffinity(conductor.roleName(), ctx.conductorCpuAffinity());
                     senderRunner = new AgentRunner(ctx.senderIdleStrategy(), errorHandler, errorCounter, sender);
                     receiverRunner = new AgentRunner(ctx.receiverIdleStrategy(), errorHandler, errorCounter, receiver);
                     conductorRunner = new AgentRunner(
@@ -308,6 +322,7 @@ public final class MediaDriver implements AutoCloseable
                     break;
                 }
             }
+            affinityRegistry.conclude();
         }
         catch (final ConcurrentConcludeException ex)
         {
@@ -389,35 +404,48 @@ public final class MediaDriver implements AutoCloseable
             AgentRunner.startOnThread(
                 mediaDriver.nativeResourceAgentRunner,
                 ctx.nativeResourceAgentThreadFactory(),
-                ctx.nativeResourceAgentCpuAffinity());
+                mediaDriver.affinityRegistry.mappedAffinityValue(
+                    mediaDriver.nativeResourceAgentRunner.agent().roleName()));
         }
 
         if (null != mediaDriver.conductorRunner)
         {
             AgentRunner.startOnThread(
-                mediaDriver.conductorRunner, ctx.conductorThreadFactory(), ctx.conductorCpuAffinity());
+                mediaDriver.conductorRunner,
+                ctx.conductorThreadFactory(),
+                mediaDriver.affinityRegistry.mappedAffinityValue(mediaDriver.conductorRunner.agent().roleName()));
         }
 
         if (null != mediaDriver.senderRunner)
         {
-            AgentRunner.startOnThread(mediaDriver.senderRunner, ctx.senderThreadFactory(), ctx.senderCpuAffinity());
+            AgentRunner.startOnThread(
+                mediaDriver.senderRunner,
+                ctx.senderThreadFactory(),
+                mediaDriver.affinityRegistry.mappedAffinityValue(mediaDriver.senderRunner.agent().roleName()));
         }
 
         if (null != mediaDriver.receiverRunner)
         {
             AgentRunner.startOnThread(
-                mediaDriver.receiverRunner, ctx.receiverThreadFactory(), ctx.receiverCpuAffinity());
+                mediaDriver.receiverRunner,
+                ctx.receiverThreadFactory(),
+                mediaDriver.affinityRegistry.mappedAffinityValue(mediaDriver.receiverRunner.agent().roleName()));
         }
 
         if (null != mediaDriver.sharedNetworkRunner)
         {
             AgentRunner.startOnThread(
-                mediaDriver.sharedNetworkRunner, ctx.sharedNetworkThreadFactory(), ctx.conductorCpuAffinity());
+                mediaDriver.sharedNetworkRunner,
+                ctx.sharedNetworkThreadFactory(),
+                mediaDriver.affinityRegistry.mappedAffinityValue(AERON_DRIVER_SHARED_NETWORK_THREAD_NAME));
         }
 
         if (null != mediaDriver.sharedRunner)
         {
-            AgentRunner.startOnThread(mediaDriver.sharedRunner, ctx.sharedThreadFactory(), ctx.conductorCpuAffinity());
+            AgentRunner.startOnThread(
+                mediaDriver.sharedRunner,
+                ctx.sharedThreadFactory(),
+                mediaDriver.affinityRegistry.mappedAffinityValue(AERON_DRIVER_SHARED_THREAD_NAME));
         }
 
         if (null != mediaDriver.sharedInvoker)
