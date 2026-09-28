@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.nio.file.Path;
@@ -934,6 +935,30 @@ class RecordingLogTest
         assertEquals(-1, termEntry1.logPosition);
 
         assertEquals(2, log.entries().size());
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = { 1024, 4096, 8192 })
+    void shouldPreserveExistingTermBaseWhenCatchupRejoinsLaterPosition(
+        final long joinPosition, @TempDir final Path tempDir)
+    {
+        final long termId = 5;
+        final long termBasePosition = 1024;
+        final long nowNs = 1_000_000;
+        try (RecordingLog log = new RecordingLog(tempDir.toFile(), true))
+        {
+            log.appendTerm(RECORDING_ID, termId, termBasePosition, nowNs);
+
+            // Election.updateRecordingLog supplies the current join position. A known term must retain its base.
+            log.ensureCoherent(
+                RECORDING_ID, 0, 0, termId, joinPosition, NULL_POSITION, nowNs, nowNs, 1);
+            log.reload();
+
+            final RecordingLog.Entry term = requireNonNull(log.findTermEntry(termId));
+            assertEquals(termBasePosition, term.termBaseLogPosition);
+            assertEquals(NULL_POSITION, term.logPosition);
+            assertEquals(1, log.entries().size());
+        }
     }
 
     @Test
