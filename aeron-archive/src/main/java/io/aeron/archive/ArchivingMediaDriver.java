@@ -17,8 +17,10 @@ package io.aeron.archive;
 
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.status.SystemCounterDescriptor;
+import io.aeron.topology.AffinityRegistry;
 import org.agrona.CloseHelper;
 import org.agrona.ErrorHandler;
+import org.agrona.SystemUtil;
 import org.agrona.concurrent.ShutdownSignalBarrier;
 import org.agrona.concurrent.status.AtomicCounter;
 
@@ -71,6 +73,11 @@ public class ArchivingMediaDriver implements AutoCloseable
 
     /**
      * Launch a new {@link ArchivingMediaDriver} with provided contexts.
+     * <p>
+     * Unless an {@link AffinityRegistry} has been supplied to either context, a single registry is shared by both
+     * components so their pinned threads are remapped onto distinct CPUs of the effective cpuset. Topology
+     * validation runs once if either component enables it, and warnings are fatal if a component that enables
+     * validation treats them as errors.
      *
      * @param driverCtx  for configuring the {@link MediaDriver}.
      * @param archiveCtx for configuring the {@link Archive}.
@@ -82,6 +89,7 @@ public class ArchivingMediaDriver implements AutoCloseable
         Archive archive = null;
         try
         {
+            shareAffinityRegistry(driverCtx, archiveCtx);
             driver = MediaDriver.launch(driverCtx);
 
             final int errorCounterId = SystemCounterDescriptor.ERRORS.id();
@@ -103,6 +111,27 @@ public class ArchivingMediaDriver implements AutoCloseable
             CloseHelper.quietCloseAll(archive, driver);
             throw ex;
         }
+    }
+
+    private static void shareAffinityRegistry(final MediaDriver.Context driverCtx, final Archive.Context archiveCtx)
+    {
+        if (null != driverCtx.affinityRegistry() || null != archiveCtx.affinityRegistry())
+        {
+            return;
+        }
+
+        final AffinityRegistry registry = AffinityRegistry.newDefault();
+        driverCtx.registerThreadAffinities(registry);
+        archiveCtx.registerThreadAffinities(registry);
+
+        final boolean validateTopology = driverCtx.driverCpusetAffinity() || archiveCtx.archiveCpusetAffinity();
+        final boolean warningsAsErrors =
+            (driverCtx.driverCpusetAffinity() && driverCtx.driverCpusetWarningsAsErrors()) ||
+            (archiveCtx.archiveCpusetAffinity() && archiveCtx.archiveCpusetWarningsAsErrors());
+        registry.conclude(SystemUtil.isLinux() && validateTopology, warningsAsErrors);
+
+        driverCtx.affinityRegistry(registry);
+        archiveCtx.affinityRegistry(registry);
     }
 
     /**

@@ -26,12 +26,14 @@ import io.aeron.exceptions.ConfigurationException;
 import io.aeron.security.AuthorisationService;
 import io.aeron.security.AuthorisationServiceSupplier;
 import io.aeron.test.TestContexts;
+import io.aeron.topology.AffinityRegistry;
 import org.agrona.DirectBuffer;
 import org.agrona.ErrorHandler;
 import org.agrona.collections.MutableInteger;
 import org.agrona.concurrent.AgentInvoker;
 import org.agrona.concurrent.CountedErrorHandler;
 import org.agrona.concurrent.SystemEpochClock;
+import org.agrona.concurrent.affinity.ThreadAffinity;
 import org.agrona.concurrent.status.AtomicCounter;
 import org.agrona.concurrent.status.CountersReader;
 import org.junit.jupiter.api.AfterEach;
@@ -97,6 +99,9 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.withSettings;
 
@@ -163,6 +168,75 @@ class ArchiveContextTest
     void defaultAuthorisationServiceSupplierReturnsAnAllowAllAuthorisationService()
     {
         assertSame(AuthorisationService.ALLOW_ALL, DEFAULT_AUTHORISATION_SERVICE_SUPPLIER.get());
+    }
+
+    @Test
+    void shouldReadCpuAffinitySystemProperties()
+    {
+        System.setProperty(Archive.Configuration.CONDUCTOR_CPU_AFFINITY_PROP_NAME, "3");
+        System.setProperty(Archive.Configuration.RECORDER_CPU_AFFINITY_PROP_NAME, "4");
+        System.setProperty(Archive.Configuration.REPLAYER_CPU_AFFINITY_PROP_NAME, "5");
+        System.setProperty(Archive.Configuration.ARCHIVE_CPUSET_AFFINITY_PROP_NAME, "true");
+        System.setProperty(Archive.Configuration.ARCHIVE_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME, "true");
+        try
+        {
+            final Archive.Context ctx = new Archive.Context();
+            assertEquals(3, ctx.conductorCpuAffinity());
+            assertEquals(4, ctx.recorderCpuAffinity());
+            assertEquals(5, ctx.replayerCpuAffinity());
+            assertTrue(ctx.archiveCpusetAffinity());
+            assertTrue(ctx.archiveCpusetWarningsAsErrors());
+        }
+        finally
+        {
+            System.clearProperty(Archive.Configuration.CONDUCTOR_CPU_AFFINITY_PROP_NAME);
+            System.clearProperty(Archive.Configuration.RECORDER_CPU_AFFINITY_PROP_NAME);
+            System.clearProperty(Archive.Configuration.REPLAYER_CPU_AFFINITY_PROP_NAME);
+            System.clearProperty(Archive.Configuration.ARCHIVE_CPUSET_AFFINITY_PROP_NAME);
+            System.clearProperty(Archive.Configuration.ARCHIVE_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME);
+        }
+    }
+
+    @Test
+    void shouldDefaultToNoCpuAffinity()
+    {
+        final Archive.Context ctx = new Archive.Context();
+        assertEquals(ThreadAffinity.NO_AFFINITY, ctx.conductorCpuAffinity());
+        assertEquals(ThreadAffinity.NO_AFFINITY, ctx.recorderCpuAffinity());
+        assertEquals(ThreadAffinity.NO_AFFINITY, ctx.replayerCpuAffinity());
+        assertFalse(ctx.archiveCpusetAffinity());
+        assertFalse(ctx.archiveCpusetWarningsAsErrors());
+    }
+
+    @Test
+    void shouldRegisterThreadAffinitiesForThreadingMode()
+    {
+        final AffinityRegistry dedicated = mock(AffinityRegistry.class);
+        new Archive.Context()
+            .threadingMode(ArchiveThreadingMode.DEDICATED)
+            .conductorCpuAffinity(1)
+            .recorderCpuAffinity(2)
+            .replayerCpuAffinity(3)
+            .registerThreadAffinities(dedicated);
+        verify(dedicated).addAffinity(Archive.AERON_ARCHIVE_CONDUCTOR_THREAD_NAME, 1);
+        verify(dedicated).addAffinity(Archive.AERON_ARCHIVE_RECORDER_THREAD_NAME, 2);
+        verify(dedicated).addAffinity(Archive.AERON_ARCHIVE_REPLAYER_THREAD_NAME, 3);
+        verifyNoMoreInteractions(dedicated);
+
+        final AffinityRegistry shared = mock(AffinityRegistry.class);
+        new Archive.Context()
+            .threadingMode(ArchiveThreadingMode.SHARED)
+            .conductorCpuAffinity(1)
+            .registerThreadAffinities(shared);
+        verify(shared).addAffinity(Archive.AERON_ARCHIVE_SHARED_THREAD_NAME, 1);
+        verifyNoMoreInteractions(shared);
+
+        final AffinityRegistry invoker = mock(AffinityRegistry.class);
+        new Archive.Context()
+            .threadingMode(ArchiveThreadingMode.INVOKER)
+            .conductorCpuAffinity(1)
+            .registerThreadAffinities(invoker);
+        verifyNoInteractions(invoker);
     }
 
     @Test

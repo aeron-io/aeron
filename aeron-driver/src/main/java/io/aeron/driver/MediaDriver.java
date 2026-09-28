@@ -39,8 +39,6 @@ import io.aeron.exceptions.ConfigurationException;
 import io.aeron.logbuffer.BufferClaim;
 import io.aeron.logbuffer.LogBufferDescriptor;
 import io.aeron.topology.AffinityRegistry;
-import io.aeron.topology.CGroupValidator;
-import io.aeron.topology.CpusetV2Reader;
 import io.aeron.version.Versioned;
 import org.agrona.BitUtil;
 import org.agrona.BufferUtil;
@@ -137,7 +135,6 @@ import static io.aeron.driver.status.SystemCounterDescriptor.SENDER_CYCLE_TIME_T
 import static io.aeron.driver.status.SystemCounterDescriptor.SENDER_MAX_CYCLE_TIME;
 import static io.aeron.driver.status.SystemCounterDescriptor.SENDER_PROXY_FAILS;
 import static io.aeron.logbuffer.LogBufferDescriptor.TERM_MAX_LENGTH;
-import static io.aeron.topology.CGroupValidator.DEFAULT_SYSFS_ROOT;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
 import static org.agrona.IoUtil.mapNewFile;
@@ -230,12 +227,12 @@ public final class MediaDriver implements AutoCloseable
             ctx.receiverProxy().receiver(receiver);
             ctx.senderProxy().sender(sender);
 
-            if (SystemUtil.isLinux() && ctx.driverCpusetAffinity())
-            {
-                new CGroupValidator().validate(ctx.driverCpusetWarningsAsErrors());
-            }
-
-            affinityRegistry = new AffinityRegistry(DEFAULT_SYSFS_ROOT, new CpusetV2Reader());
+            affinityRegistry = AffinityRegistry.resolve(
+                ctx.affinityRegistry(),
+                ctx::registerThreadAffinities,
+                SystemUtil.isLinux() && ctx.driverCpusetAffinity(),
+                ctx.driverCpusetWarningsAsErrors());
+            ctx.affinityRegistry(affinityRegistry);
 
             switch (ctx.threadingMode())
             {
@@ -257,7 +254,6 @@ public final class MediaDriver implements AutoCloseable
 
                 case SHARED:
                 {
-                    affinityRegistry.addAffinity(AERON_DRIVER_SHARED_THREAD_NAME, ctx.conductorCpuAffinity());
                     sharedRunner = new AgentRunner(
                         ctx.sharedIdleStrategy(),
                         errorHandler,
@@ -276,9 +272,6 @@ public final class MediaDriver implements AutoCloseable
 
                 case SHARED_NETWORK:
                 {
-                    affinityRegistry.addAffinity(AERON_DRIVER_SHARED_NETWORK_THREAD_NAME, ctx.senderCpuAffinity());
-                    affinityRegistry.addAffinity(conductor.roleName(), ctx.conductorCpuAffinity());
-                    affinityRegistry.addAffinity(nativeResourceAgent.roleName(), ctx.nativeResourceAgentCpuAffinity());
                     sharedNetworkRunner = new AgentRunner(
                         ctx.sharedNetworkIdleStrategy(),
                         errorHandler,
@@ -303,10 +296,6 @@ public final class MediaDriver implements AutoCloseable
                 case DEDICATED:
                 default:
                 {
-                    affinityRegistry.addAffinity(nativeResourceAgent.roleName(), ctx.nativeResourceAgentCpuAffinity());
-                    affinityRegistry.addAffinity(sender.roleName(), ctx.senderCpuAffinity());
-                    affinityRegistry.addAffinity(receiver.roleName(), ctx.receiverCpuAffinity());
-                    affinityRegistry.addAffinity(conductor.roleName(), ctx.conductorCpuAffinity());
                     senderRunner = new AgentRunner(ctx.senderIdleStrategy(), errorHandler, errorCounter, sender);
                     receiverRunner = new AgentRunner(ctx.receiverIdleStrategy(), errorHandler, errorCounter, receiver);
                     conductorRunner = new AgentRunner(
@@ -322,7 +311,6 @@ public final class MediaDriver implements AutoCloseable
                     break;
                 }
             }
-            affinityRegistry.conclude();
         }
         catch (final ConcurrentConcludeException ex)
         {
@@ -404,8 +392,7 @@ public final class MediaDriver implements AutoCloseable
             AgentRunner.startOnThread(
                 mediaDriver.nativeResourceAgentRunner,
                 ctx.nativeResourceAgentThreadFactory(),
-                mediaDriver.affinityRegistry.mappedAffinityValue(
-                    mediaDriver.nativeResourceAgentRunner.agent().roleName()));
+                mediaDriver.affinityRegistry.mappedAffinityValue(AERON_DRIVER_NATIVE_RESOURCE_THREAD_NAME));
         }
 
         if (null != mediaDriver.conductorRunner)
@@ -413,7 +400,7 @@ public final class MediaDriver implements AutoCloseable
             AgentRunner.startOnThread(
                 mediaDriver.conductorRunner,
                 ctx.conductorThreadFactory(),
-                mediaDriver.affinityRegistry.mappedAffinityValue(mediaDriver.conductorRunner.agent().roleName()));
+                mediaDriver.affinityRegistry.mappedAffinityValue(AERON_DRIVER_CONDUCTOR_THREAD_NAME));
         }
 
         if (null != mediaDriver.senderRunner)
@@ -421,7 +408,7 @@ public final class MediaDriver implements AutoCloseable
             AgentRunner.startOnThread(
                 mediaDriver.senderRunner,
                 ctx.senderThreadFactory(),
-                mediaDriver.affinityRegistry.mappedAffinityValue(mediaDriver.senderRunner.agent().roleName()));
+                mediaDriver.affinityRegistry.mappedAffinityValue(AERON_DRIVER_SENDER_THREAD_NAME));
         }
 
         if (null != mediaDriver.receiverRunner)
@@ -429,7 +416,7 @@ public final class MediaDriver implements AutoCloseable
             AgentRunner.startOnThread(
                 mediaDriver.receiverRunner,
                 ctx.receiverThreadFactory(),
-                mediaDriver.affinityRegistry.mappedAffinityValue(mediaDriver.receiverRunner.agent().roleName()));
+                mediaDriver.affinityRegistry.mappedAffinityValue(AERON_DRIVER_RECEIVER_THREAD_NAME));
         }
 
         if (null != mediaDriver.sharedNetworkRunner)
@@ -741,6 +728,7 @@ public final class MediaDriver implements AutoCloseable
         private int senderCpuAffinity = Configuration.senderCpuAffinity();
         private int receiverCpuAffinity = Configuration.receiverCpuAffinity();
         private int nativeResourceAgentCpuAffinity = Configuration.nativeResourceAgentCpuAffinity();
+        private AffinityRegistry affinityRegistry;
 
         /**
          * Construct a Context using default values and loading from system properties.
@@ -4185,6 +4173,67 @@ public final class MediaDriver implements AutoCloseable
         public Context nativeResourceAgentCpuAffinity(final int nativeResourceAgentCpuAffinity)
         {
             this.nativeResourceAgentCpuAffinity = nativeResourceAgentCpuAffinity;
+            return this;
+        }
+
+        /**
+         * Registers the CPU affinities of the agent threads the configured {@link #threadingMode()} will start.
+         * <p>
+         * Used by launchers that run several components in one process so that all their threads are remapped onto
+         * the effective cpuset by a single {@link AffinityRegistry}.
+         *
+         * @param registry to register the affinities with.
+         */
+        public void registerThreadAffinities(final AffinityRegistry registry)
+        {
+            // May be called before conclude, when the threading mode has not been defaulted yet.
+            switch (null != threadingMode ? threadingMode : Configuration.threadingMode())
+            {
+                case INVOKER:
+                    break;
+
+                case SHARED:
+                    registry.addAffinity(AERON_DRIVER_SHARED_THREAD_NAME, conductorCpuAffinity());
+                    break;
+
+                case SHARED_NETWORK:
+                    registry.addAffinity(AERON_DRIVER_SHARED_NETWORK_THREAD_NAME, senderCpuAffinity());
+                    registry.addAffinity(AERON_DRIVER_CONDUCTOR_THREAD_NAME, conductorCpuAffinity());
+                    registry.addAffinity(AERON_DRIVER_NATIVE_RESOURCE_THREAD_NAME, nativeResourceAgentCpuAffinity());
+                    break;
+
+                case DEDICATED:
+                default:
+                    registry.addAffinity(AERON_DRIVER_NATIVE_RESOURCE_THREAD_NAME, nativeResourceAgentCpuAffinity());
+                    registry.addAffinity(AERON_DRIVER_SENDER_THREAD_NAME, senderCpuAffinity());
+                    registry.addAffinity(AERON_DRIVER_RECEIVER_THREAD_NAME, receiverCpuAffinity());
+                    registry.addAffinity(AERON_DRIVER_CONDUCTOR_THREAD_NAME, conductorCpuAffinity());
+                    break;
+            }
+        }
+
+        /**
+         * The {@link AffinityRegistry} used to pin the agent threads. If not supplied, the driver creates, concludes
+         * and validates its own registry on launch.
+         *
+         * @return the registry used to pin the agent threads, or null if not yet set.
+         */
+        public AffinityRegistry affinityRegistry()
+        {
+            return affinityRegistry;
+        }
+
+        /**
+         * Supply a concluded {@link AffinityRegistry} shared with other components in the same process. The
+         * supplier is responsible for registering the driver's affinities with
+         * {@link #registerThreadAffinities(AffinityRegistry)} and for concluding and validating the registry.
+         *
+         * @param affinityRegistry the concluded registry to use to pin the agent threads.
+         * @return this for a fluent API.
+         */
+        public Context affinityRegistry(final AffinityRegistry affinityRegistry)
+        {
+            this.affinityRegistry = affinityRegistry;
             return this;
         }
 
