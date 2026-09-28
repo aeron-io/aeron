@@ -1082,6 +1082,10 @@ class Election
             verifyLogJoinPosition("followerCatchupAwait", image.joinPosition());
             if (consensusModuleAgent.tryJoinLogAsFollower(image, isLeaderStartup, nowNs))
             {
+                // Catch-up reports recorded positions in the accepted term before replay reaches its term event.
+                // Preserve that term in recording metadata first, so a restart or another election cannot
+                // treat an acknowledged new-term tail as belonging to the previous term.
+                updateRecordingLog(nowNs);
                 state(FOLLOWER_CATCHUP, nowNs, "");
                 workCount++;
             }
