@@ -40,6 +40,7 @@ import io.aeron.test.TestContexts;
 import io.aeron.test.Tests;
 import io.aeron.test.cluster.TestClusterClock;
 import io.aeron.test.driver.TestMediaDriver;
+import io.aeron.topology.AffinityRegistry;
 import org.agrona.BitUtil;
 import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
@@ -257,6 +258,39 @@ class ConsensusModuleContextTest
     void defaultAuthorisationServiceSupplierAllowsBackupAndStandby()
     {
         assertSame(AllowBackupAndStandbyAuthorisationService.INSTANCE, DEFAULT_AUTHORISATION_SERVICE_SUPPLIER.get());
+    }
+
+    @Test
+    void shouldReadCpuAffinitySystemProperties()
+    {
+        System.setProperty(ConsensusModule.Configuration.CLUSTER_CPU_AFFINITY_PROP_NAME, "3");
+        System.setProperty(ConsensusModule.Configuration.CLUSTER_CPUSET_AFFINITY_PROP_NAME, "true");
+        System.setProperty(ConsensusModule.Configuration.CLUSTER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME, "true");
+        try
+        {
+            final ConsensusModule.Context ctx = new ConsensusModule.Context();
+            assertEquals(3, ctx.clusterCpuAffinity());
+            assertTrue(ctx.clusterCpusetAffinity());
+            assertTrue(ctx.clusterCpusetWarningsAsErrors());
+        }
+        finally
+        {
+            System.clearProperty(ConsensusModule.Configuration.CLUSTER_CPU_AFFINITY_PROP_NAME);
+            System.clearProperty(ConsensusModule.Configuration.CLUSTER_CPUSET_AFFINITY_PROP_NAME);
+            System.clearProperty(ConsensusModule.Configuration.CLUSTER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME);
+        }
+    }
+
+    @Test
+    void shouldRegisterConductorAffinityUnlessUsingAgentInvoker()
+    {
+        final AffinityRegistry runner = mock(AffinityRegistry.class);
+        new ConsensusModule.Context().clusterCpuAffinity(2).registerThreadAffinities(runner);
+        verify(runner).addAffinity(ConsensusModule.AERON_CLUSTER_CONSENSUS_THREAD_NAME, 2);
+
+        final AffinityRegistry invoker = mock(AffinityRegistry.class);
+        new ConsensusModule.Context().clusterCpuAffinity(2).useAgentInvoker(true).registerThreadAffinities(invoker);
+        verify(invoker, never()).addAffinity(anyString(), anyInt());
     }
 
     @Test

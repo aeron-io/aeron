@@ -16,6 +16,7 @@
 
 package io.aeron.topology;
 
+import io.aeron.exceptions.ConfigurationException;
 import org.agrona.collections.IntArrayList;
 import org.agrona.collections.Object2IntHashMap;
 import org.agrona.collections.Object2ObjectHashMap;
@@ -28,11 +29,17 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 import static org.agrona.concurrent.affinity.ThreadAffinity.NO_AFFINITY;
 
 /**
  * Registry mapping named thread affinities onto the CPUs of the process's effective cgroup cpuset.
+ * <p>
+ * Requested affinities are remapped by rank: the lowest requested CPU is assigned the first CPU of the effective
+ * cpuset, the next lowest the second, and so on. For the remapping to avoid collisions, all components running in
+ * a process (e.g. the Media Driver, Archive and Consensus Module) should register with the same registry before it
+ * is concluded. Components in separate processes sharing one cpuset remap independently and may collide.
  */
 public class AffinityRegistry
 {
@@ -68,6 +75,52 @@ public class AffinityRegistry
         this.finalizedNameToAffinityMap = new Object2ObjectHashMap<>();
         this.sysfsRoot = sysfsRoot;
         this.isConcluded = false;
+    }
+
+    /**
+     * Creates a registry for the process's effective cgroup cpuset using the default {@code sysfs} and cgroup
+     * paths.
+     *
+     * @return a new, unconcluded registry.
+     */
+    public static AffinityRegistry newDefault()
+    {
+        return new AffinityRegistry(CGroupValidator.DEFAULT_SYSFS_ROOT, new CpusetV2Reader());
+    }
+
+    /**
+     * Resolves the registry a component should use to pin its threads.
+     * <p>
+     * If {@code existing} is null a new registry is created, the component's affinities are registered with it
+     * and it is concluded with {@link #conclude(boolean, boolean)}. Otherwise {@code existing} is assumed to be
+     * shared with other components and owned, concluded and validated by whoever supplied it.
+     *
+     * @param existing         the registry supplied to the component, or null if it should own its own.
+     * @param registrar        registers the component's thread affinities when a new registry is created.
+     * @param validateTopology passed to {@link #conclude(boolean, boolean)} when a new registry is created.
+     * @param warningsAsErrors passed to {@link #conclude(boolean, boolean)} when a new registry is created.
+     * @return the concluded registry to use.
+     * @throws IllegalStateException if {@code existing} has not been concluded.
+     */
+    public static AffinityRegistry resolve(
+        final AffinityRegistry existing,
+        final Consumer<AffinityRegistry> registrar,
+        final boolean validateTopology,
+        final boolean warningsAsErrors)
+    {
+        if (null != existing)
+        {
+            if (!existing.isConcluded())
+            {
+                throw new IllegalStateException("supplied AffinityRegistry must be concluded before launch");
+            }
+            return existing;
+        }
+
+        final AffinityRegistry registry = newDefault();
+        registrar.accept(registry);
+        registry.conclude(validateTopology, warningsAsErrors);
+        return registry;
     }
 
     /**
@@ -111,13 +164,63 @@ public class AffinityRegistry
     }
 
     /**
+     * Has {@link #conclude()} been called on this registry.
+     *
+     * @return true if the registry has been concluded.
+     */
+    public boolean isConcluded()
+    {
+        return isConcluded;
+    }
+
+    /**
+     * Remaps the registered affinities and optionally validates both the effective cpuset and the remapped
+     * affinities against the CPU topology. This is the common entry point used by all components so the same
+     * validations are applied regardless of which component owns the registry.
+     *
+     * @param validateTopology if true, validate the effective cpuset and the remapped affinities.
+     * @param warningsAsErrors if true, throw a {@link ConfigurationException} instead of warning when any
+     *                         violation is found.
+     * @throws IllegalStateException  if the registry has already been concluded.
+     * @throws ConfigurationException if more threads are pinned than there are CPUs in the effective cpuset, or
+     *                                if a violation is found and {@code warningsAsErrors} is set.
+     */
+    public void conclude(final boolean validateTopology, final boolean warningsAsErrors)
+    {
+        conclude(validateTopology, warningsAsErrors, System.err);
+    }
+
+    void conclude(final boolean validateTopology, final boolean warningsAsErrors, final PrintStream out)
+    {
+        conclude();
+        if (validateTopology)
+        {
+            new CGroupValidator(sysfsRoot, cpusetV2Reader).validate(
+                cpusetV2Reader.readCpuSet(), warningsAsErrors, out);
+            if (!finalAffinityList.isEmpty())
+            {
+                validate(warningsAsErrors, out);
+            }
+        }
+    }
+
+    /**
      * Remaps the registered affinities, in ascending order, onto the CPUs of the effective cpuset and freezes
      * the registry so no further affinities can be added.
+     *
+     * @throws IllegalStateException  if the registry has already been concluded.
+     * @throws ConfigurationException if more threads are pinned than there are CPUs in the effective cpuset.
      */
     public void conclude()
     {
+        if (isConcluded)
+        {
+            throw new IllegalStateException("AffinityRegistry already concluded");
+        }
+
         final List<Map.Entry<String, Integer>> pinnedEntries = new ArrayList<>();
-        nameToAffinityMap.forEach((key, value) -> {
+        nameToAffinityMap.forEach((key, value) ->
+        {
             final int affinity = value;
             if (NO_AFFINITY == affinity)
             {
@@ -132,6 +235,14 @@ public class AffinityRegistry
         if (!pinnedEntries.isEmpty())
         {
             realCpuset = cpusetV2Reader.readCpuSet();
+            if (pinnedEntries.size() > realCpuset.cpus().size())
+            {
+                throw new ConfigurationException(
+                    "cannot pin " + pinnedEntries.size() + " threads " +
+                    pinnedEntries.stream().map(Map.Entry::getKey).sorted().toList() +
+                    " to the " + realCpuset.cpus().size() + " CPUs of the effective cpuset " +
+                    realCpuset.formattedCpus());
+            }
         }
 
         final AtomicInteger currentIndex = new AtomicInteger(0);
