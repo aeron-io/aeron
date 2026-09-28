@@ -9,6 +9,10 @@ correction: advance recording metadata before catch-up reports positions in
 the accepted term. See [FOLLOW-UP.md](FOLLOW-UP.md) for the reproductions,
 correction, and the new models' precise scope.
 
+[SYSTEM-REGRESSIONS.md](SYSTEM-REGRESSIONS.md) describes the additional real-cluster
+tests and isolated Java source controls for the smaller term-accounting,
+nomination, unfinished-leader, and replay corrections.
+
 Run the entire matrix with Java and a local TLC jar:
 
 ```sh
