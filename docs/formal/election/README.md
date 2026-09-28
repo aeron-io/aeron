@@ -1,232 +1,175 @@
-# Focused election checks
+# Election models and regressions
 
-These seven models replace one large search with separate, bounded checks of
-election handoffs, ballots, position ranking, nomination, stale-leader escape,
-and replay dependencies. The original five describe `cluster-election-fix` at
-`0861a99a81`, compared with the preceding implementation at `6d60124e15`.
-The follow-up found **another acknowledged-write-loss defect** and added a Java
-correction: advance recording metadata before catch-up reports positions in
-the accepted term. See [FOLLOW-UP.md](FOLLOW-UP.md) for the reproductions,
-correction, and the new models' precise scope.
+These seven TLA+ models check specific Aeron Cluster election failure mechanisms:
+competing ballots, stale leadership messages, quorum accounting, nomination,
+replay progress, and preservation of acknowledged writes across failover.
+Separating these obligations keeps the state spaces small enough for completed
+bounded checks, with controls that reproduce the corresponding incorrect
+behaviour. Java system tests exercise the same mechanisms in real clusters.
 
-[SYSTEM-REGRESSIONS.md](SYSTEM-REGRESSIONS.md) describes the additional real-cluster
-tests and isolated Java source controls for the smaller term-accounting,
-nomination, unfinished-leader, and replay corrections.
+## Running the models
 
-Run the entire matrix with Java and a local TLC jar:
+From the repository root, with Python 3, Java, and a local `tla2tools.jar`:
 
 ```sh
+# Run all checks.
 python3 docs/formal/election/run.py --jar /path/to/tla2tools.jar
+
+# List checks and their expected outcomes; no jar is needed.
+python3 docs/formal/election/run.py --list
+
+# Run a corrected case and its defect control.
+python3 docs/formal/election/run.py --jar /path/to/tla2tools.jar \
+  handoff-base-0 handoff-old-guard
 ```
 
-`--list` describes the cases. Supply names to select cases, for example
-`handoff-base-0 handoff-old-guard`. Defaults are one worker, a 1 GiB heap, and a
-120-second limit **per case**. A timeout, parser failure, unexpected invariant,
-or nonempty queue on a claimed success fails the run. The timeout is an
-operational limit, not a model bound or a successful verification result.
+`TLA2TOOLS_JAR` can supply the jar path. `--java` or `TLC_JAVA` selects the Java
+executable. Defaults are one TLC worker, a 1 GiB heap, and a 120-second timeout
+**per check**. Use `--workers` and `--timeout` to change the worker count and
+time limit. The timeout is an operational limit, not a model bound.
 
-The runner creates a new results directory for each invocation, retaining all
-TLC output, counterexample traces, exact generated `.cfg` files, frozen model
-inputs, hashes, commands, exit codes, and timings. It also pins the Java commit,
-tracked changes, and relevant source hashes at the beginning and end. This is
-correspondence evidence, not an automatic proof of correspondence. See [RESULTS.md](RESULTS.md)
-for measured results. Results and scratch files are excluded from git.
+[run.py](run.py) defines the configurations and expected outcomes. The matrix
+contains 22 positive checks, 15 defect or persistence controls, and 10 witnesses.
+Positive checks must finish without errors and with an empty search queue.
+Controls must produce the specified invariant or temporal counterexample.
+Witnesses deliberately negate a reachable event or fair successful execution;
+their counterexamples show that the intended scenario can occur. Expected
+counterexamples are not safety passes. Timeouts, parse errors, and unexpected
+failures fail the runner.
 
-## Why the earlier search is expensive
+Each invocation creates an ignored `results/<run>/` directory containing
+`summary.json`, TLC logs and traces, generated configurations, frozen inputs,
+hashes, commands, timings, and Java source revision information. Check every
+case's `matched` field and the `inputs_unchanged` and `implementation_unchanged`
+flags when interpreting a run. Keep run-specific evidence there rather than
+adding logs, local paths, or result tables to the source documentation.
 
-The local copy of `reduced-20260915-clean` still extends the full
-`AeronElection.tla`: approximately 20 protocol variables, including a log per
-node, a matrix of each node's cached peer positions, votes, accepted and
-candidate terms, six replay-related fields, and a set of pending messages.
-Every combination of message contents, recipient, delivery order, election
-phase, log, and replay progress contributes states. Even `MaxTerm = 1` leaves
-that product. A pending-message constraint removes some congested behaviors
-but still leaves many subsets of the message alphabet.
+## What the models cover
 
-The earlier VIEW normalizes some unused fields and removes delivery history;
-the baseline symmetry only swaps the two followers. Those are useful
-reductions of the same large protocol, but do not separate unrelated proof
-obligations. More elapsed time with a growing BFS frontier is not evidence of
-proximity to completion.
-
-The files inspected locally are under
-`~/cruft/design/tla/reduced-20260915-clean`. The user identified the active runs
-as `ube:/home/ericb/tlc-checkpoints/aeron-sequencer-docs/internal/design/tla/reduced-20260915-clean`.
-SSH authentication failed during this work, so the active runs, their latest
-progress, and remote file equality were **not** verified or changed. The local
-full-model SHA-256 is
-`e0c3ab17b63bc30b689677057c198bdaf244a9781b58298859d451ae0ee6954b`;
-the wrapper hash is
-`77207eb7d71b511ed41553f7f2be9a501d5f5b0f9f4d3b1774292176d5991fd5`.
-
-## Models and code correspondence
-
-| Model | What is checked | Corresponding implementation |
+| Model | Checked behaviour | Corresponding Java code |
 |---|---|---|
-| [Ballots.tla](Ballots.tla) | Competing candidates, persistent voting, delayed requests, and crash recovery | `Election.nominate` / `onRequestVote` / `init`, `NodeStateFile`, startup recovery |
-| [Consecutive.tla](Consecutive.tla) | Historical acknowledgement survives two elected terms, delayed messages, metadata/replay boundaries, and one crash | Ballot log comparison; catch-up/live join; term-filtered commitment; truncation |
-| [Handoff.tla](Handoff.tla) | Acknowledged entry identities remain on a quorum and are never truncated, across a delayed winner and old leader | `Election.onNewLeadershipTerm`, truncation, follower recording, `ConsensusModuleAgent.onCanvassPosition` / `onAppendPosition` / `updateLeaderPosition` |
-| [Quorum.tla](Quorum.tla) | Ranked positions have a current-term, active majority; result is maximal and bounded by the leader's recording | `ClusterMember.quorumPosition`, `ConsensusModuleAgent.quorumPositionBoundedByLeaderLog` |
-| [Nomination.tla](Nomination.tla) | A cached self term does not predict votes that the actual log comparison would reject | `Election.resetMembers`, `ClusterMember.willVoteFor` / `isQuorumCandidate` / `isUnanimousCandidate` |
-| [StaleRecovery.tla](StaleRecovery.tla) | A stale incumbent eventually enters an election when a surviving voter has promised a newer term | `Election.canvass` / `onRequestVote`; closed-leader `ConsensusModuleAgent.onRequestVote` |
-| [Replay.tla](Replay.tla) | A stable quorum commits and applies a fresh write; loss of the leader releases a waiting follower to CANVASS | `Election.leaderLogReplication` / `followerReplay`, `ConsensusModuleAgent.catchupPoll`, election quorum call sites |
+| [Ballots](Ballots.tla) | At most one vote per member/term and one leader per term, with competing candidates and crash recovery. | `Election.nominate`, `onRequestVote`, `init`; `NodeStateFile` |
+| [Consecutive](Consecutive.tla) | Historical acknowledgements survive two successive elected terms, delayed messages, metadata changes, and one crash. | Ballot log comparison; catch-up/live join; commitment and truncation |
+| [Handoff](Handoff.tla) | A delayed winner and an old leader cannot lose or truncate acknowledged entries. | `Election.onNewLeadershipTerm`; position reporting, quorum commitment, and truncation |
+| [Quorum](Quorum.tla) | Ranked positions have current-term, active majority support and are maximal within the leader's recording bound. | `ClusterMember.quorumPosition`; `ConsensusModuleAgent.quorumPositionBoundedByLeaderLog` |
+| [Nomination](Nomination.tla) | Self-term stamping agrees with the log comparison used to assess candidates. | `Election.resetMembers`; `ClusterMember.willVoteFor`, `isQuorumCandidate`, `isUnanimousCandidate` |
+| [StaleRecovery](StaleRecovery.tla) | A stale incumbent opens an election after a surviving voter has promised a newer term. | `Election.canvass`, `onRequestVote`; `ConsensusModuleAgent.onRequestVote` |
+| [Replay](Replay.tla) | A stable quorum commits and applies a fresh write; leader loss releases a waiting follower to CANVASS. | `Election.leaderLogReplication`, `followerReplay`; `ConsensusModuleAgent.catchupPoll`; election quorum call sites |
 
-Each defect has a negative control: disable **only** its correction and require
-the corresponding invariant or temporal property to fail. Additional cases
-deliberately negate successful acknowledgement, stale-message rejection, and
-fair recovery to obtain witnesses. An expected counterexample is labeled as
-such, not counted as a safety pass.
+### Bounds and assumptions
 
-### Handoff: preserve the race, remove the unrelated election histories
+- **Ballots:** three equally log-eligible members, two terms, and one crash at
+  member 0. Requests and positive votes remain deliverable; omitting negative
+  replies increases opportunities to win. Removing ballot persistence tests an
+  essential protocol assumption, not an additional Java bug.
+- **Consecutive:** three members, fixed candidates for two successive terms,
+  one client entry, one nomination per candidate/term, and one crash/restart.
+  Separate cases choose each crash target. One real position report may be
+  retained across both handoffs; other reports arrive directly. This is a
+  bound on message history, not arbitrary delayed transport. Compatible prefix
+  copying is atomic. The second-handoff witness reaches the second leader's
+  term event after quorum support for its base; it does not require a second
+  client acknowledgement or recovery at every node.
+- **Handoff:** starts after a valid winning ballot with a safe immutable prefix
+  of zero, one, or two old entries. The winner cannot crash. All enabled
+  interleavings after that cut are explored. Per-source, per-term publication
+  maxima allow any lower position to arrive repeatedly, even after restart or
+  truncation, overapproximating stale position reports. The model simplifies
+  metadata to recorded term events and assumes a persisted newer vote at the
+  stale recipient; it does not establish arbitrary crash or next-ballot safety.
+- **Quorum:** enumerates one and three members with positions 0–2, and five
+  members with positions 0–1. It includes inactive members and mismatched terms.
+  A zero result does not establish an active quorum. This checks accounting,
+  not whether callers supplied truthful reports.
+- **Nomination:** enumerates three- and five-member views, unknown peers, and
+  bounded log terms and positions. It checks log suitability, not whether
+  cached reports remain current or peers will actually grant votes.
+- **StaleRecovery:** assumes a persisted newer vote, an eligible nominating
+  survivor, successful request publication before ballot timeout, and eventual
+  reliable delivery. It omits the appointed-leader gate. Operation-level weak
+  fairness establishes election entry at the incumbent, not eventual service.
+- **Replay:** separates recorded, notified, applied, accepted, and agent-term
+  state, with one outstanding message per report/commit link. Healthy cases
+  assume a stable leader and quorum, eventually serviced operations, and no
+  recovery deadline expiry. Separate leader-loss cases allow the deadline to
+  expire. These are dependency checks, not arbitrary transport or failover
+  liveness.
 
-The starting cut is immediately after member 1 wins a newer term with member
-2's vote, before its leadership announcement. Member 0 still leads the old
-term. This is the cut used by `AcknowledgedWriteDurabilityTest` and the older
-`TruncationWitness`; an old leader with two extra entries also recreates the
-older `StaleWriteWitness` mechanism.
+`Consecutive` keeps persistent ballot promises, volatile acceptance, recording
+metadata, and physical entries separate. In particular, a catch-up follower
+must advance metadata before its accepted-term position reports support a
+commitment. Otherwise a later ballot can prefer a shorter recording with newer
+metadata and discard an acknowledged write. The `StampCatchupMetadata` control
+preserves this failure path. Live join and catch-up have distinct ordering;
+replay timing is checked separately by `Replay`.
 
-There are three families, with 0, 1, or 2 old entries at the winning candidate.
-The voter may have any shorter prefix; its vote is valid because the
-candidate's log is at least as recent. The old leader may have a longer tail.
-The common committed prefix before these entries is omitted. Initially
-acknowledged entries are on every member and included in the elected prefix.
-These cuts are scenario assumptions, not states inferred by a new ballot
-protocol. An independent refinement/reachability proof for every cut is not
-provided.
+These are bounded diagnostic models, with no checked refinement from Java or
+composition proof between models. Passing them does not prove arbitrary
+histories, membership changes, snapshots, multi-term metadata repair, partial
+archive writes, or machine/power-loss durability. Model crashes retain files;
+Java regressions use orderly retained-file stop/restart. Safety does not assume
+fairness, and deadlock checking is disabled for the finite/stuttering models;
+progress claims come only from the explicit temporal properties. The checks
+use no state/action constraints, VIEW, or symmetry reduction. Review model/code
+correspondence when changing the implementation; hashes record what was checked
+but do not establish that correspondence.
 
-After the cut, TLC explores **all enabled interleavings** of old/new writes,
-follower restarts, old and new leadership messages, truncation, recording,
-position publication, position delivery, election completion, and client
-acknowledgement. There is no script counter. The winner's base is immutable;
-accepting its leadership and recording its entries are separate actions.
-Acknowledgements are historical, even if the acknowledging leader later steps
-down. Entries distinguish `old-a`, `old-b`, the new term event, and `new-write`.
+## Running the Java regressions
 
-Instead of a combinatorial message bag, `published[node][term]` records the
-highest position that source has published in that term. Delivery may choose
-**any lower or equal position at any later time**, including after restart or
-truncation. Published history is never consumed. This intentionally includes
-duplicates and out-of-order stale reports; it does not overwrite old messages
-with the latest one. Lower positions need not actually have been sent, so this
-is an overapproximation for these position-only safety checks. Report caches
-still overwrite their previous term and position, just as Java does.
+Use the repository's Gradle build environment. For example, with JDK 21:
 
-Leadership announcements abstract their transport separately: the old term
-can be heard repeatedly while the voter canvasses; the elected newer term can
-be heard after the election cut. Archive/log compatibility is represented by
-the immutable prefix and truncation boundary. It is not a complete model of
-recording-log metadata or all fields in `NewLeadershipTerm`.
+```sh
+export JAVA_HOME=/path/to/jdk-21
+export BUILD_JAVA_HOME="$JAVA_HOME"
+export BUILD_JAVA_VERSION=21
 
-All cached reports may remain active; this increases opportunities for unsafe
-commitment. The ranking model separately exercises inactive members. The
-handoff assumes the fixed leader self stamp and abstracts successful replay
-before election completion; the replay model checks those dependencies.
-
-This model does **not** cover arbitrary future elections, winner crashes,
-membership changes, snapshots, disk durability, or every possible log shape.
-Three values of `Base` are different cuts, not three successive elections.
-There is no claim that these cuts are an exhaustive quotient of the earlier
-full protocol. Their value is exhaustive scheduling of the specific competing
-leader mechanisms, with two independent defect controls.
-
-This original model equates metadata term with presence of a recorded term
-event and assumes a persisted newer vote at the checked stale recipient.
-Those simplifications must not be generalized to arbitrary crashes or leader
-acceptance. `Consecutive` separates those states; the independent review
-explains the boundary in [INDEPENDENT-REVIEW.md](INDEPENDENT-REVIEW.md).
-
-### Ranking and nomination: exhaustive local contracts
-
-`Quorum` models the descending-array insertion used in Java, then checks it
-against an independently expressed set-cardinality contract. All input
-combinations include ties, inactive members, stale/current terms, and an
-independent bound from the leader's recording. It checks 1 and 3 members with
-positions 0–2, and 5 members with positions 0–1. The latter represents positions
-below versus at/above a threshold. Only term equality matters here, so one
-nonmatching term represents old, future, and unset values. This is a check of
-the accounting function, not evidence that callers supplied truthful reports;
-`Handoff` supplies the causal reporting scenario.
-
-`Nomination` enumerates 3- and 5-member views, known and unknown peers, log
-terms 0–2, positions 0–2, and a self accepted term that may exceed its log term.
-It checks both quorum and unanimous assessments against the request-vote log
-comparison. It says nothing about whether a peer's cached position is current,
-or whether a candidate will actually win a ballot. The stale-leader companion
-is allowed to nominate without a known quorum; this contract concerns the
-ordinary quorum/unanimity predicates, not that separate escape condition.
-
-### Progress: state the healthy suffix and check temporal properties
-
-`StaleRecovery` models the dead winner's two survivors. It keeps canvass,
-leadership announcement, and one-shot vote-request delivery separate, allows
-the ballot to time out before request delivery, and measures the stale-leader
-deadline from entry into CANVASS. The deadline can expire before or after the
-stale announcement. It checks closed and unfinished incumbents independently.
-Weak fairness applies to individual timer, send, receive, and nomination
-actions. A reliable delivery suffix is assumed. The property is deliberately
-**opening an election at the incumbent**, not eventual service under arbitrary
-competing ballots. The consumed first request does not also grant a vote.
-Subsequent ballots and their higher terms are outside this model.
-
-The first request must be successfully published before its modeled ballot
-timeout; Java publication backpressure can violate that premise. The appointed
-leader gate is omitted. These are additional assumptions of this one-shot
-progress cut, not consequences of delivery fairness.
-
-`Replay` has separate recorded, notified, applied, accepted, and agent-term
-state. The accepted election term is normalized to 1; the agent remains in 0
-until replay/join. Replay start captures a stop position, and completion is a
-separate action, so a newer commit notification can arrive during a partial
-replay. Partial completion returns to CANVASS while retaining the notification.
-Each report and commit link has one outstanding message: sending, delivery,
-commitment, recording, and application remain separate transitions.
-
-```mermaid
-flowchart LR
-    A[Recorded prefix] --> B[Report in accepted election term]
-    B --> C[Leader counts current-term quorum]
-    C --> D[Commit notification]
-    D --> E[Replay advances]
-    E --> F[Agent learns new term]
+./gradlew :aeron-system-tests:slowTest \
+  --tests '*ElectionTermProgressTest' --tests '*ElectionReplayProgressTest' \
+  --tests '*StalePositionQuorumTest' --tests '*AcknowledgedWriteDurabilityTest'
 ```
 
-The fixed report can be sent before the agent learns the term. The old
-catch-up report uses the agent term and leaves that dependency cycle stuck.
-The retained-notification mutation instead alternates CANVASS and replay
-without reporting the recorded prefix.
+These tests cover quorum/term accounting, unfinished-leader ballots, replay
+reporting and timeout recovery, nomination, and acknowledged-write preservation.
+They use real consensus agents, services, transports, and archives. Probes
+observe production decisions; fault injection drops selected incoming messages
+or pauses selected work. The fixtures do not fabricate log bytes, terms, votes,
+or positions. Some assertions identify an incorrect decision rather than
+inevitable data loss or permanent unavailability.
 
-Healthy replay/catch-up checks assume a stable elected leader and quorum,
-eventually serviced operations, and no deadline expiry during recovery. The
-one-message links model backpressure and finite delay in that suffix; this is
-not arbitrary lossy, reordered transport. Weak fairness is on operations,
-never on the desired result. A fresh client write at position 4 must actually
-commit and be applied; election closure alone is insufficient. Separate
-single-node, zero-notification, retained-notification, partial-replay, and
-already-available-prefix cases are checked.
+[run-system-controls.py](run-system-controls.py) runs a fixed implementation
+and a single-fix revert for each selected control:
 
-Leader-loss cases intentionally have no incoming progress and do allow the
-deadline to expire. They check return to CANVASS with zero and nonzero retained
-notifications. Clearing `notified` does not undo already applied data, which is
-why the position invariant allows `applied > notified` in CANVASS.
+```sh
+# All nine controls, with one fixed/reverted pair each.
+python3 docs/formal/election/run-system-controls.py
 
-## Interpreting the evidence
+# Repeat one control three times.
+python3 docs/formal/election/run-system-controls.py \
+  --case partial-replay-report --repeat 3
+```
 
-These are bounded diagnostic models with explicit scenario boundaries, not a
-proof of the Java implementation or of the full consensus protocol. The
-models share assumptions; their individual passes do not constitute a
-mechanical composition proof. In particular, the new handoff cut assumes a
-valid winning ballot and persistent candidate terms, and the progress models
-assume a healthy suffix or a specific leader-loss boundary.
+| Control | Correction removed |
+|---|---|
+| `early-self-term` | Stamp the leader's own recorded position with the accepted term before joining its log. |
+| `replication-quorum-term` | Use the election term for quorum accounting during leader log replication. |
+| `replay-quorum-term` | Use the election term for quorum accounting during leader replay. |
+| `canvass-quorum-term` | Use the election term when answering an old canvass. |
+| `catchup-report-term` | Report catch-up recording progress in the accepted term. |
+| `unfinished-leader` | Restart an unfinished leader on a newer ballot. |
+| `partial-replay-report` | Report the recorded tail while awaiting commitment after partial replay. |
+| `replay-commit-timeout` | Leave replay wait when the leader stops making progress. |
+| `nomination-log-term` | Assess nomination using the recorded log term. |
 
-The checks avoid `CONSTRAINT`, `ACTION_CONSTRAINT`, VIEW, and symmetry. Safety
-does not assume fairness. Temporal properties are checked directly, including
-fair successful executions to guard against vacuous specifications. The
-[Toolbox documentation](https://tla.msr-inria.inria.fr/tlatoolbox/doc/model/model-values.html)
-also cautions against symmetry reduction for liveness checks.
+The runner inherits the JDK environment, creates a private detached worktree,
+and overlays snapshots of the relevant current Java sources before each run.
+Each revert must match its source anchor exactly once and fail its designated
+assertion. Build errors, timeouts, skipped cases, cached test tasks, and unrelated
+failures do not count as reproductions. The default deadline is 240 seconds per
+Gradle invocation; `--timeout` changes it. Runs are sequential because the tests
+share ports; avoid running another system-test process alongside them.
 
-Use these as a fast regression suite and reviewable explanation of the fixes.
-Keep the Java regressions and original models for broader exploration. The
-follow-up adds actual ballots, consecutive handoffs, and crash cuts, but still
-does not prove arbitrary elections or compose every model into one protocol
-proof. Its discovery of another real defect demonstrates why that distinction
-matters.
+Results go to ignored `results/system-controls-<run>/`, or a fresh directory
+chosen with `--output`. Evidence includes source snapshots, patches, commands,
+logs, JUnit XML, diagnostics, and `summary.json`. Require `complete`, every
+result's `valid`, and `caller_sources_unchanged` to be true. The runner removes
+its private worktree afterwards and leaves the caller's Java sources unchanged.
