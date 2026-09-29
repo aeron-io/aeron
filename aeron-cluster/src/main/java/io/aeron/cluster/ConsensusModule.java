@@ -50,7 +50,6 @@ import io.aeron.security.AuthenticatorSupplier;
 import io.aeron.security.AuthorisationService;
 import io.aeron.security.AuthorisationServiceSupplier;
 import io.aeron.security.DefaultAuthenticatorSupplier;
-import io.aeron.topology.AffinityRegistry;
 import io.aeron.version.Versioned;
 import org.agrona.CloseHelper;
 import org.agrona.ErrorHandler;
@@ -71,7 +70,6 @@ import org.agrona.concurrent.NoOpLock;
 import org.agrona.concurrent.ShutdownSignalBarrier;
 import org.agrona.concurrent.SystemEpochClock;
 import org.agrona.concurrent.YieldingIdleStrategy;
-import org.agrona.concurrent.affinity.ThreadAffinity;
 import org.agrona.concurrent.errors.DistinctErrorLog;
 import org.agrona.concurrent.status.AtomicCounter;
 import org.agrona.concurrent.status.CountersReader;
@@ -279,7 +277,6 @@ public final class ConsensusModule implements AutoCloseable
     private final ConsensusModuleAgent conductor;
     private final AgentRunner conductorRunner;
     private final AgentInvoker conductorInvoker;
-    private final AffinityRegistry affinityRegistry;
 
     static final String AERON_CLUSTER_CONSENSUS_THREAD_NAME = "aeron-cl-cm";
 
@@ -289,13 +286,6 @@ public final class ConsensusModule implements AutoCloseable
         {
             ctx.conclude();
             this.ctx = ctx;
-
-            affinityRegistry = AffinityRegistry.resolve(
-                ctx.affinityRegistry(),
-                ctx::registerThreadAffinities,
-                SystemUtil.isLinux() && ctx.clusterCpusetAffinity(),
-                ctx.clusterCpusetWarningsAsErrors());
-            ctx.affinityRegistry(affinityRegistry);
 
             conductor = new ConsensusModuleAgent(ctx);
 
@@ -350,10 +340,7 @@ public final class ConsensusModule implements AutoCloseable
 
         if (null != consensusModule.conductorRunner)
         {
-            AgentRunner.startOnThread(
-                consensusModule.conductorRunner,
-                ctx.threadFactory(),
-                consensusModule.affinityRegistry.mappedAffinityValue(AERON_CLUSTER_CONSENSUS_THREAD_NAME));
+            AgentRunner.startOnThread(consensusModule.conductorRunner, ctx.threadFactory());
         }
         else
         {
@@ -1065,61 +1052,6 @@ public final class ConsensusModule implements AutoCloseable
         }
 
         /**
-         * Property name for the CPU core id the consensus module conductor thread is pinned to. Defaults to
-         * {@link ThreadAffinity#NO_AFFINITY}.
-         */
-        @Config(defaultType = DefaultType.INT, defaultInt = ThreadAffinity.NO_AFFINITY)
-        public static final String CLUSTER_CPU_AFFINITY_PROP_NAME = "aeron.cluster.cpu.affinity";
-
-        /**
-         * Name of the system property to enable cgroup/cpuset topology validation for the consensus module's
-         * threads.
-         */
-        @Config(defaultType = DefaultType.BOOLEAN, defaultBoolean = false)
-        public static final String CLUSTER_CPUSET_AFFINITY_PROP_NAME = "aeron.cluster.cpuset.affinity";
-
-        /**
-         * Name of the system property to treat cpuset topology validation warnings as fatal
-         * {@link ConfigurationException}s instead of warnings.
-         */
-        @Config(defaultType = DefaultType.BOOLEAN, defaultBoolean = false)
-        public static final String CLUSTER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME =
-            "aeron.cluster.cpuset.warnings.as.errors";
-
-        /**
-         * CPU core id the consensus module conductor thread should be pinned to.
-         *
-         * @return CPU core id or {@link ThreadAffinity#NO_AFFINITY}.
-         * @see #CLUSTER_CPU_AFFINITY_PROP_NAME
-         */
-        public static int clusterCpuAffinity()
-        {
-            return Integer.getInteger(CLUSTER_CPU_AFFINITY_PROP_NAME, ThreadAffinity.NO_AFFINITY);
-        }
-
-        /**
-         * Should cgroup/cpuset topology validation be applied to the consensus module's threads.
-         *
-         * @return true if cgroup/cpuset topology validation should be applied.
-         * @see #CLUSTER_CPUSET_AFFINITY_PROP_NAME
-         */
-        public static boolean clusterCpusetAffinityEnabled()
-        {
-            return Boolean.getBoolean(CLUSTER_CPUSET_AFFINITY_PROP_NAME);
-        }
-
-        /**
-         * Should cpuset topology validation warnings be treated as fatal errors.
-         *
-         * @return true if cpuset topology validation warnings should be treated as fatal errors.
-         * @see #CLUSTER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
-         */
-        public static boolean clusterCpusetWarningsAsErrors()
-        {
-            return Boolean.getBoolean(CLUSTER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME);
-        }
-
-        /**
          * The value {@link #CLUSTER_MEMBER_ID_DEFAULT} or system property
          * {@link #CLUSTER_MEMBER_ID_PROP_NAME} if set.
          *
@@ -1757,10 +1689,6 @@ public final class ConsensusModule implements AutoCloseable
         private VersionValidator appVersionValidator;
         private boolean isLogMdc;
         private boolean useAgentInvoker = false;
-        private int clusterCpuAffinity = Configuration.clusterCpuAffinity();
-        private boolean cpusetAffinity = Configuration.clusterCpusetAffinityEnabled();
-        private boolean cpusetWarningsAsErrors = Configuration.clusterCpusetWarningsAsErrors();
-        private AffinityRegistry affinityRegistry;
         private ConsensusModuleStateExport bootstrapState = null;
         private boolean acceptStandbySnapshots = Configuration.acceptStandbySnapshots();
         private boolean enableControlOnConsensusChannel = Configuration.enableControlOnConsensusChannel();
@@ -4166,123 +4094,6 @@ public final class ConsensusModule implements AutoCloseable
         }
 
         /**
-         * CPU core id the consensus module conductor thread is pinned to.
-         *
-         * @return CPU core id or {@link ThreadAffinity#NO_AFFINITY}.
-         * @see Configuration#CLUSTER_CPU_AFFINITY_PROP_NAME
-         */
-        @Config
-        public int clusterCpuAffinity()
-        {
-            return clusterCpuAffinity;
-        }
-
-        /**
-         * CPU core id the consensus module conductor thread is pinned to.
-         *
-         * @param clusterCpuAffinity CPU core id or {@link ThreadAffinity#NO_AFFINITY}.
-         * @return this for a fluent API.
-         * @see Configuration#CLUSTER_CPU_AFFINITY_PROP_NAME
-         */
-        public ConsensusModule.Context clusterCpuAffinity(final int clusterCpuAffinity)
-        {
-            this.clusterCpuAffinity = clusterCpuAffinity;
-            return this;
-        }
-
-        /**
-         * Should cgroup/cpuset topology validation be applied to the consensus module's threads.
-         *
-         * @return true if cgroup/cpuset topology validation should be applied.
-         * @see Configuration#CLUSTER_CPUSET_AFFINITY_PROP_NAME
-         */
-        @Config
-        public boolean clusterCpusetAffinity()
-        {
-            return cpusetAffinity;
-        }
-
-        /**
-         * Should cgroup/cpuset topology validation be applied to the consensus module's threads.
-         *
-         * @param cpusetAffinity true if cgroup/cpuset topology validation should be applied.
-         * @return this for a fluent API.
-         * @see Configuration#CLUSTER_CPUSET_AFFINITY_PROP_NAME
-         */
-        public ConsensusModule.Context clusterCpusetAffinity(final boolean cpusetAffinity)
-        {
-            this.cpusetAffinity = cpusetAffinity;
-            return this;
-        }
-
-        /**
-         * Should cpuset topology validation warnings be treated as fatal errors.
-         *
-         * @return true if cpuset topology validation warnings should be treated as fatal errors.
-         * @see Configuration#CLUSTER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
-         */
-        @Config
-        public boolean clusterCpusetWarningsAsErrors()
-        {
-            return cpusetWarningsAsErrors;
-        }
-
-        /**
-         * Should cpuset topology validation warnings be treated as fatal errors.
-         *
-         * @param cpusetWarningsAsErrors true if cpuset topology validation warnings should be treated as fatal
-         *                               errors.
-         * @return this for a fluent API.
-         * @see Configuration#CLUSTER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
-         */
-        public ConsensusModule.Context clusterCpusetWarningsAsErrors(final boolean cpusetWarningsAsErrors)
-        {
-            this.cpusetWarningsAsErrors = cpusetWarningsAsErrors;
-            return this;
-        }
-
-        /**
-         * Registers the CPU affinity of the conductor thread, unless {@link #useAgentInvoker()} is set.
-         * <p>
-         * Used by launchers that run several components in one process so that all their threads are remapped onto
-         * the effective cpuset by a single {@link AffinityRegistry}.
-         *
-         * @param registry to register the affinities with.
-         */
-        public void registerThreadAffinities(final AffinityRegistry registry)
-        {
-            if (!useAgentInvoker)
-            {
-                registry.addAffinity(AERON_CLUSTER_CONSENSUS_THREAD_NAME, clusterCpuAffinity);
-            }
-        }
-
-        /**
-         * The {@link AffinityRegistry} used to pin the conductor thread. If not supplied, the consensus module
-         * creates, concludes and validates its own registry on launch.
-         *
-         * @return the registry used to pin the conductor thread, or null if not yet set.
-         */
-        public AffinityRegistry affinityRegistry()
-        {
-            return affinityRegistry;
-        }
-
-        /**
-         * Supply a concluded {@link AffinityRegistry} shared with other components in the same process. The
-         * supplier is responsible for registering the consensus module's affinities with
-         * {@link #registerThreadAffinities(AffinityRegistry)} and for concluding and validating the registry.
-         *
-         * @param affinityRegistry the concluded registry to use to pin the conductor thread.
-         * @return this for a fluent API.
-         */
-        public ConsensusModule.Context affinityRegistry(final AffinityRegistry affinityRegistry)
-        {
-            this.affinityRegistry = affinityRegistry;
-            return this;
-        }
-
-        /**
          * Set the {@link Runnable} that is called when the {@link ConsensusModule} processes a termination action.
          * <p>
          * Both {@link #extendedTerminationHook()} and {@link #terminationHook()} run on termination, in that order.
@@ -4894,9 +4705,6 @@ public final class ConsensusModule implements AutoCloseable
                 "\n    egressPublisher=" + egressPublisher +
                 "\n    isLogMdc=" + isLogMdc +
                 "\n    useAgentInvoker=" + useAgentInvoker +
-                "\n    clusterCpuAffinity=" + clusterCpuAffinity +
-                "\n    cpusetAffinity=" + cpusetAffinity +
-                "\n    cpusetWarningsAsErrors=" + cpusetWarningsAsErrors +
                 "\n    cycleThresholdNs=" + cycleThresholdNs +
                 "\n    dutyCycleTracker=" + dutyCycleTracker +
                 "\n    totalSnapshotDurationThresholdNs=" + totalSnapshotDurationThresholdNs +

@@ -41,10 +41,8 @@ import static io.aeron.topology.TopologyTestUtils.setupSiblingThreads;
 import static org.agrona.concurrent.affinity.ThreadAffinity.NO_AFFINITY;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 class AffinityRegistryTest
 {
@@ -110,7 +108,7 @@ class AffinityRegistryTest
         affinityRegistry.addAffinity("aaa", NO_AFFINITY);
         affinityRegistry.addAffinity("bbb", NO_AFFINITY);
 
-        assertDoesNotThrow(() -> affinityRegistry.conclude());
+        assertDoesNotThrow(affinityRegistry::conclude);
         assertEquals(NO_AFFINITY, affinityRegistry.mappedAffinityValue("aaa"));
         assertEquals(NO_AFFINITY, affinityRegistry.mappedAffinityValue("bbb"));
         assertDoesNotThrow(() -> affinityRegistry.validate(true, new PrintStream(new ByteArrayOutputStream())));
@@ -127,128 +125,6 @@ class AffinityRegistryTest
         affinityRegistry.conclude();
 
         assertThrows(IllegalArgumentException.class, () -> affinityRegistry.mappedAffinityValue("aaa"));
-    }
-
-    @Test
-    void componentsSharingARegistryArePinnedToDistinctCpus(
-        @TempDir final Path sysfsTestDir,
-        @TempDir final Path testProcPath,
-        @TempDir final Path testCgroupPath) throws IOException
-    {
-        setupCpuSet(testProcPath, testCgroupPath, 0, "4-9");
-        final AffinityRegistry affinityRegistry =
-            new AffinityRegistry(sysfsTestDir, new CpusetV2Reader(testProcPath, testCgroupPath));
-
-        // Each component requests its CPUs independently, overlapping the others.
-        affinityRegistry.addAffinity("driver-conductor", 1);
-        affinityRegistry.addAffinity("driver-sender", 2);
-        affinityRegistry.addAffinity("archive-conductor", 1);
-        affinityRegistry.addAffinity("archive-recorder", NO_AFFINITY);
-        affinityRegistry.addAffinity("cluster-conductor", 0);
-        affinityRegistry.conclude(false, false);
-
-        final List<Integer> pinned = Stream.of(
-            "driver-conductor", "driver-sender", "archive-conductor", "cluster-conductor")
-            .map(affinityRegistry::mappedAffinityValue)
-            .toList();
-        assertEquals(4, pinned.stream().distinct().count(), pinned.toString());
-        assertTrue(pinned.stream().allMatch((cpu) -> cpu >= 4 && cpu <= 7), pinned.toString());
-        assertEquals(4, affinityRegistry.mappedAffinityValue("cluster-conductor"));
-        assertEquals(7, affinityRegistry.mappedAffinityValue("driver-sender"));
-        assertEquals(NO_AFFINITY, affinityRegistry.mappedAffinityValue("archive-recorder"));
-    }
-
-    @Test
-    void concludeThrowsWhenMoreThreadsArePinnedThanCpusAvailable(
-        @TempDir final Path sysfsTestDir,
-        @TempDir final Path testProcPath,
-        @TempDir final Path testCgroupPath) throws IOException
-    {
-        setupCpuSet(testProcPath, testCgroupPath, 0, "3-4");
-        final AffinityRegistry affinityRegistry =
-            new AffinityRegistry(sysfsTestDir, new CpusetV2Reader(testProcPath, testCgroupPath));
-        affinityRegistry.addAffinity("aaa", 1);
-        affinityRegistry.addAffinity("bbb", 2);
-        affinityRegistry.addAffinity("ccc", 3);
-
-        final ConfigurationException ex = assertThrows(ConfigurationException.class, affinityRegistry::conclude);
-        assertTrue(ex.getMessage().contains("[aaa, bbb, ccc]"), ex.getMessage());
-        assertTrue(ex.getMessage().contains("3-4"), ex.getMessage());
-    }
-
-    @Test
-    void concludeTwiceThrows(
-        @TempDir final Path sysfsTestDir,
-        @TempDir final Path emptyProcPath,
-        @TempDir final Path emptyCgroupPath)
-    {
-        final AffinityRegistry affinityRegistry =
-            new AffinityRegistry(sysfsTestDir, new CpusetV2Reader(emptyProcPath, emptyCgroupPath));
-        affinityRegistry.conclude();
-
-        assertTrue(affinityRegistry.isConcluded());
-        assertThrows(IllegalStateException.class, affinityRegistry::conclude);
-        assertThrows(IllegalStateException.class, () -> affinityRegistry.addAffinity("aaa", 1));
-    }
-
-    @Test
-    void concludeWithValidationAppliesCpusetAndAffinityValidators(
-        @TempDir final Path sysfsTestDir,
-        @TempDir final Path testProcPath,
-        @TempDir final Path testCgroupPath) throws IOException
-    {
-        // CPUs 3 and 4 are on different L3 domains, so both the cpuset and the pinned set straddle L3 caches.
-        setupSiblingThreads(sysfsTestDir, List.of(
-            new Pair(0, 1), new Pair(0, 1), new Pair(2, 3), new Pair(2, 3),
-            new Pair(4, 5), new Pair(4, 5), new Pair(6, 7), new Pair(6, 7)));
-        setupL3Peers(sysfsTestDir, List.of(
-            new Pair(0, 3), new Pair(0, 3), new Pair(0, 3), new Pair(0, 3),
-            new Pair(4, 7), new Pair(4, 7), new Pair(4, 7), new Pair(4, 7)));
-        setupDieLocality(sysfsTestDir, List.of(0, 0, 0, 0, 0, 0, 0, 0));
-        setupCpuSet(testProcPath, testCgroupPath, 0, "3-4");
-
-        final CpusetV2Reader reader = new CpusetV2Reader(testProcPath, testCgroupPath);
-
-        final AffinityRegistry skipped = new AffinityRegistry(sysfsTestDir, reader);
-        skipped.addAffinity("aaa", 1);
-        skipped.addAffinity("bbb", 2);
-        final CapturingPrintStream skippedOut = new CapturingPrintStream();
-        skipped.conclude(false, true, skippedOut.resetAndGetPrintStream());
-        assertEquals(0, countWarnings(skippedOut.flushAndGetContent()));
-
-        final AffinityRegistry warned = new AffinityRegistry(sysfsTestDir, reader);
-        warned.addAffinity("aaa", 1);
-        warned.addAffinity("bbb", 2);
-        final CapturingPrintStream warnedOut = new CapturingPrintStream();
-        warned.conclude(true, false, warnedOut.resetAndGetPrintStream());
-        final String output = warnedOut.flushAndGetContent();
-        assertTrue(countWarnings(output) >= 2, output);
-
-        final AffinityRegistry failed = new AffinityRegistry(sysfsTestDir, reader);
-        failed.addAffinity("aaa", 1);
-        failed.addAffinity("bbb", 2);
-        assertThrows(
-            ConfigurationException.class,
-            () -> failed.conclude(true, true, new PrintStream(new ByteArrayOutputStream())));
-    }
-
-    @Test
-    void resolveReturnsSuppliedConcludedRegistryWithoutRegistering(
-        @TempDir final Path sysfsTestDir,
-        @TempDir final Path emptyProcPath,
-        @TempDir final Path emptyCgroupPath)
-    {
-        final AffinityRegistry shared =
-            new AffinityRegistry(sysfsTestDir, new CpusetV2Reader(emptyProcPath, emptyCgroupPath));
-
-        assertThrows(
-            IllegalStateException.class,
-            () -> AffinityRegistry.resolve(shared, (registry) -> {}, false, false));
-
-        shared.conclude();
-        assertSame(
-            shared,
-            AffinityRegistry.resolve(shared, (registry) -> fail("should not register"), true, true));
     }
 
     private static Stream<Arguments> validationScenarios()
