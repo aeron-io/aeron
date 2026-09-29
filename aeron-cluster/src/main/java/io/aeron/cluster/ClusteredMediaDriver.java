@@ -18,10 +18,8 @@ package io.aeron.cluster;
 import io.aeron.archive.Archive;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.status.SystemCounterDescriptor;
-import io.aeron.topology.AffinityRegistry;
 import org.agrona.CloseHelper;
 import org.agrona.ErrorHandler;
-import org.agrona.SystemUtil;
 import org.agrona.concurrent.ShutdownSignalBarrier;
 import org.agrona.concurrent.status.AtomicCounter;
 
@@ -77,11 +75,6 @@ public class ClusteredMediaDriver implements AutoCloseable
 
     /**
      * Launch a new {@link ClusteredMediaDriver} with provided contexts.
-     * <p>
-     * Unless an {@link AffinityRegistry} has been supplied to any of the contexts, a single registry is shared by
-     * all components so their pinned threads are remapped onto distinct CPUs of the effective cpuset. Topology
-     * validation runs once if any component enables it, and warnings are fatal if any component that enables
-     * validation treats them as errors.
      *
      * @param driverCtx          for configuring the {@link MediaDriver}.
      * @param archiveCtx         for configuring the {@link Archive}.
@@ -99,7 +92,6 @@ public class ClusteredMediaDriver implements AutoCloseable
 
         try
         {
-            shareAffinityRegistry(driverCtx, archiveCtx, consensusModuleCtx);
             driver = MediaDriver.launch(driverCtx);
 
             final int errorCounterId = SystemCounterDescriptor.ERRORS.id();
@@ -124,37 +116,6 @@ public class ClusteredMediaDriver implements AutoCloseable
             CloseHelper.quietCloseAll(consensusModule, archive, driver);
             throw ex;
         }
-    }
-
-    private static void shareAffinityRegistry(
-        final MediaDriver.Context driverCtx,
-        final Archive.Context archiveCtx,
-        final ConsensusModule.Context consensusModuleCtx)
-    {
-        if (null != driverCtx.affinityRegistry() ||
-            null != archiveCtx.affinityRegistry() ||
-            null != consensusModuleCtx.affinityRegistry())
-        {
-            return;
-        }
-
-        final AffinityRegistry registry = AffinityRegistry.newDefault();
-        driverCtx.registerThreadAffinities(registry);
-        archiveCtx.registerThreadAffinities(registry);
-        consensusModuleCtx.registerThreadAffinities(registry);
-
-        final boolean validateTopology = driverCtx.driverCpusetAffinity() ||
-            archiveCtx.archiveCpusetAffinity() ||
-            consensusModuleCtx.clusterCpusetAffinity();
-        final boolean warningsAsErrors =
-            (driverCtx.driverCpusetAffinity() && driverCtx.driverCpusetWarningsAsErrors()) ||
-            (archiveCtx.archiveCpusetAffinity() && archiveCtx.archiveCpusetWarningsAsErrors()) ||
-            (consensusModuleCtx.clusterCpusetAffinity() && consensusModuleCtx.clusterCpusetWarningsAsErrors());
-        registry.conclude(SystemUtil.isLinux() && validateTopology, warningsAsErrors);
-
-        driverCtx.affinityRegistry(registry);
-        archiveCtx.affinityRegistry(registry);
-        consensusModuleCtx.affinityRegistry(registry);
     }
 
     /**
