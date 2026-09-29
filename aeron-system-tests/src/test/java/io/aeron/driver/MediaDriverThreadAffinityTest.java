@@ -16,6 +16,8 @@
 package io.aeron.driver;
 
 import io.aeron.CommonContext;
+import io.aeron.test.InterruptAfter;
+import io.aeron.test.SlowTest;
 import io.aeron.test.Tests;
 import io.aeron.test.driver.TestMediaDriver;
 import io.aeron.topology.AffinityParser;
@@ -51,6 +53,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 @EnabledOnOs(OS.LINUX)
+@SlowTest
 class MediaDriverThreadAffinityTest
 {
     // NOTE: There is a weirdness to this test in that it relies on Unix/Linux behavior and the cpu count of the
@@ -66,7 +69,7 @@ class MediaDriverThreadAffinityTest
                 AERON_DRIVER_NATIVE_RESOURCE_THREAD_NAME, 4)),
             Arguments.of(ThreadingMode.SHARED_NETWORK, Map.of(
                 AERON_DRIVER_CONDUCTOR_THREAD_NAME, 1,
-                AERON_DRIVER_SHARED_NETWORK_THREAD_NAME, 1,
+                AERON_DRIVER_SHARED_NETWORK_THREAD_NAME, 2,
                 AERON_DRIVER_NATIVE_RESOURCE_THREAD_NAME, 4)),
             Arguments.of(ThreadingMode.SHARED, Map.of(
                 AERON_DRIVER_SHARED_THREAD_NAME, 1)));
@@ -75,6 +78,7 @@ class MediaDriverThreadAffinityTest
     @ParameterizedTest
     @MethodSource("threadingModes")
     @SuppressWarnings("try")
+    @InterruptAfter(10)
     void shouldPinAgentThreadsToConfiguredCpus(
         final ThreadingMode threadingMode, final Map<String, Integer> expectedCpuIndexByThreadName) throws IOException
     {
@@ -88,7 +92,6 @@ class MediaDriverThreadAffinityTest
             .orElseThrow());
         assumeTrue(cpus.size() >= 5, "requires at least 5 allowed CPUs");
 
-        // Short thread names match the 15 char truncated native thread names.
         final Properties overrides = new Properties();
         overrides.setProperty(THREAD_NAMING_PROP_NAME, THREAD_NAMING_NEW);
         final Properties backup = backupAndOverrideSystemProperties(new Properties(), overrides);

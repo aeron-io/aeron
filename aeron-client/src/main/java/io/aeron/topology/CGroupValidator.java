@@ -31,8 +31,7 @@ public class CGroupValidator
     /**
      * The standard sys directory for CPU topology information.
      */
-    // TODO: Move this somewhere more general
-    public static final Path DEFAULT_SYSFS_ROOT = Path.of("/sys/devices/system/cpu");
+    public static final Path DEFAULT_SYSFS_ROOT = AffinityRegistry.DEFAULT_SYSFS_ROOT;
     private final List<TopologyValidator> topologyValidators;
     private final CpusetV2Reader cpusetV2Reader;
 
@@ -87,9 +86,18 @@ public class CGroupValidator
 
     void validate(final Cpuset cpuset, final boolean warningsAsErrors, final PrintStream out)
     {
+        final int warnings = check(cpuset, out);
+        if (warningsAsErrors && 0 < warnings)
+        {
+            throw new ConfigurationException("cpuset warnings as errors, %d warnings".formatted(warnings));
+        }
+    }
+
+    int check(final Cpuset cpuset, final PrintStream out)
+    {
         if (cpuset.cpus().size() < 2)
         {
-            return;
+            return 0;
         }
 
         int warnings = 0;
@@ -98,9 +106,6 @@ public class CGroupValidator
             warnings += validator.validate(cpuset, out);
         }
 
-        if (warningsAsErrors && 0 < warnings)
-        {
-            throw new ConfigurationException("cpuset warnings as errors, %d warnings".formatted(warnings));
-        }
+        return warnings;
     }
 }
