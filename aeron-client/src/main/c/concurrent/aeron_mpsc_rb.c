@@ -104,6 +104,7 @@ inline static int32_t aeron_mpsc_rb_claim_capacity(aeron_mpsc_rb_t *ring_buffer,
         aeron_rb_record_descriptor_t *record_header =
             (aeron_rb_record_descriptor_t *)(ring_buffer->buffer + tail_index);
         AERON_SET_RELEASE(record_header->length, -(int32_t)padding);
+        aeron_release();
 
         record_header->msg_type_id = AERON_RB_PADDING_MSG_TYPE_ID;
         AERON_SET_RELEASE(record_header->length, (int32_t)padding);
@@ -129,6 +130,7 @@ aeron_rb_write_result_t aeron_mpsc_rb_write(
         aeron_rb_record_descriptor_t *record_header =
             (aeron_rb_record_descriptor_t *)(ring_buffer->buffer + record_index);
         AERON_SET_RELEASE(record_header->length, -(int32_t)record_length);
+        aeron_release();
 
         memcpy(ring_buffer->buffer + AERON_RB_MESSAGE_OFFSET(record_index), msg, length);
         record_header->msg_type_id = msg_type_id;
@@ -154,6 +156,7 @@ int32_t aeron_mpsc_rb_try_claim(aeron_mpsc_rb_t *ring_buffer, int32_t msg_type_i
         aeron_rb_record_descriptor_t *record_header =
             (aeron_rb_record_descriptor_t *)(ring_buffer->buffer + record_index);
         AERON_SET_RELEASE(record_header->length, -(int32_t)record_length);
+        aeron_release();
         record_header->msg_type_id = msg_type_id;
 
         return AERON_RB_MESSAGE_OFFSET(record_index);
