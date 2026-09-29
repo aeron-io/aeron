@@ -39,8 +39,6 @@ import io.aeron.exceptions.ConfigurationException;
 import io.aeron.logbuffer.BufferClaim;
 import io.aeron.logbuffer.LogBufferDescriptor;
 import io.aeron.topology.AffinityRegistry;
-import io.aeron.topology.CGroupValidator;
-import io.aeron.topology.CpusetV2Reader;
 import io.aeron.version.Versioned;
 import org.agrona.BitUtil;
 import org.agrona.BufferUtil;
@@ -137,7 +135,6 @@ import static io.aeron.driver.status.SystemCounterDescriptor.SENDER_CYCLE_TIME_T
 import static io.aeron.driver.status.SystemCounterDescriptor.SENDER_MAX_CYCLE_TIME;
 import static io.aeron.driver.status.SystemCounterDescriptor.SENDER_PROXY_FAILS;
 import static io.aeron.logbuffer.LogBufferDescriptor.TERM_MAX_LENGTH;
-import static io.aeron.topology.CGroupValidator.DEFAULT_SYSFS_ROOT;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static org.agrona.BitUtil.SIZE_OF_LONG;
 import static org.agrona.IoUtil.mapNewFile;
@@ -230,12 +227,7 @@ public final class MediaDriver implements AutoCloseable
             ctx.receiverProxy().receiver(receiver);
             ctx.senderProxy().sender(sender);
 
-            if (SystemUtil.isLinux() && ctx.driverCpusetAffinity())
-            {
-                new CGroupValidator().validate(ctx.driverCpusetWarningsAsErrors());
-            }
-
-            affinityRegistry = new AffinityRegistry(DEFAULT_SYSFS_ROOT, new CpusetV2Reader());
+            affinityRegistry = new AffinityRegistry();
 
             switch (ctx.threadingMode())
             {
@@ -322,7 +314,10 @@ public final class MediaDriver implements AutoCloseable
                     break;
                 }
             }
-            affinityRegistry.conclude();
+            final CountersManager countersManager = ctx.countersManager();
+            affinityRegistry.conclude(
+                ctx.driverCpusetAffinity(), ctx.driverCpusetWarningsAsErrors(), countersManager);
+            affinityRegistry.publish(countersManager::newCounter);
         }
         catch (final ConcurrentConcludeException ex)
         {
