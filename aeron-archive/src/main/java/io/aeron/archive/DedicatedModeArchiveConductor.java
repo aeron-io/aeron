@@ -25,6 +25,8 @@ import java.util.concurrent.CountDownLatch;
 import static io.aeron.CommonContext.threadName;
 import static io.aeron.archive.Archive.AERON_ARCHIVE_CONDUCTOR_THREAD_NAME;
 import static io.aeron.archive.Archive.AERON_ARCHIVE_CONDUCTOR_THREAD_NAME_CLASSIC;
+import static io.aeron.archive.Archive.AERON_ARCHIVE_RECORDER_THREAD_NAME;
+import static io.aeron.archive.Archive.AERON_ARCHIVE_REPLAYER_THREAD_NAME;
 
 final class DedicatedModeArchiveConductor extends ArchiveConductor
 {
@@ -51,8 +53,14 @@ final class DedicatedModeArchiveConductor extends ArchiveConductor
         recorderAgentRunner = new AgentRunner(ctx.recorderIdleStrategy(), errorHandler, ctx.errorCounter(), recorder);
         replayerAgentRunner = new AgentRunner(ctx.replayerIdleStrategy(), errorHandler, ctx.errorCounter(), replayer);
 
-        AgentRunner.startOnThread(recorderAgentRunner, ctx.recorderThreadFactory());
-        AgentRunner.startOnThread(replayerAgentRunner, ctx.replayerThreadFactory());
+        AgentRunner.startOnThread(
+            recorderAgentRunner,
+            ctx.recorderThreadFactory(),
+            ctx.affinityRegistry().mappedAffinityValue(AERON_ARCHIVE_RECORDER_THREAD_NAME));
+        AgentRunner.startOnThread(
+            replayerAgentRunner,
+            ctx.replayerThreadFactory(),
+            ctx.affinityRegistry().mappedAffinityValue(AERON_ARCHIVE_REPLAYER_THREAD_NAME));
     }
 
     /**
