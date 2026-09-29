@@ -29,6 +29,7 @@ import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.client.ArchiveException;
 import io.aeron.config.Config;
 import io.aeron.config.DefaultType;
+import io.aeron.topology.AffinityRegistry;
 import io.aeron.driver.DutyCycleTracker;
 import io.aeron.driver.status.DutyCycleStallTracker;
 import io.aeron.exceptions.AeronException;
@@ -52,6 +53,7 @@ import org.agrona.SystemUtil;
 import org.agrona.concurrent.Agent;
 import org.agrona.concurrent.AgentInvoker;
 import org.agrona.concurrent.AgentRunner;
+import org.agrona.concurrent.affinity.ThreadAffinity;
 import org.agrona.concurrent.AgentTerminationException;
 import org.agrona.concurrent.CountedErrorHandler;
 import org.agrona.concurrent.EpochClock;
@@ -260,7 +262,11 @@ public final class Archive implements AutoCloseable
         }
         else
         {
-            AgentRunner.startOnThread(archive.conductorRunner, ctx.threadFactory());
+            AgentRunner.startOnThread(
+                archive.conductorRunner,
+                ctx.threadFactory(),
+                ctx.affinityRegistry().mappedAffinityValue(DEDICATED == ctx.threadingMode() ?
+                    AERON_ARCHIVE_CONDUCTOR_THREAD_NAME : AERON_ARCHIVE_SHARED_THREAD_NAME));
         }
 
         return archive;
@@ -392,6 +398,28 @@ public final class Archive implements AutoCloseable
          */
         @Config(defaultType = DefaultType.STRING, defaultString = "DEDICATED")
         public static final String THREADING_MODE_PROP_NAME = "aeron.archive.threading.mode";
+
+        /**
+         * CPU the conductor thread is pinned to, also used for the shared thread in
+         * {@link ArchiveThreadingMode#SHARED}. An index into the effective cgroup cpuset when
+         * {@link AffinityRegistry#CPUSET_AFFINITY_PROP_NAME} is set.
+         */
+        @Config(defaultType = DefaultType.INT, defaultInt = ThreadAffinity.NO_AFFINITY)
+        public static final String CONDUCTOR_CPU_AFFINITY_PROP_NAME = "aeron.archive.conductor.cpu.affinity";
+
+        /**
+         * CPU the recorder thread is pinned to in {@link ArchiveThreadingMode#DEDICATED}. An index into the
+         * effective cgroup cpuset when {@link AffinityRegistry#CPUSET_AFFINITY_PROP_NAME} is set.
+         */
+        @Config(defaultType = DefaultType.INT, defaultInt = ThreadAffinity.NO_AFFINITY)
+        public static final String RECORDER_CPU_AFFINITY_PROP_NAME = "aeron.archive.recorder.cpu.affinity";
+
+        /**
+         * CPU the replayer thread is pinned to in {@link ArchiveThreadingMode#DEDICATED}. An index into the
+         * effective cgroup cpuset when {@link AffinityRegistry#CPUSET_AFFINITY_PROP_NAME} is set.
+         */
+        @Config(defaultType = DefaultType.INT, defaultInt = ThreadAffinity.NO_AFFINITY)
+        public static final String REPLAYER_CPU_AFFINITY_PROP_NAME = "aeron.archive.replayer.cpu.affinity";
 
         /**
          * Default {@link IdleStrategy} to be used for the archive {@link Agent}s when not busy.
@@ -767,6 +795,39 @@ public final class Archive implements AutoCloseable
         }
 
         /**
+         * CPU the conductor thread is pinned to.
+         *
+         * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
+         * @see #CONDUCTOR_CPU_AFFINITY_PROP_NAME
+         */
+        public static int conductorCpuAffinity()
+        {
+            return Integer.getInteger(CONDUCTOR_CPU_AFFINITY_PROP_NAME, ThreadAffinity.NO_AFFINITY);
+        }
+
+        /**
+         * CPU the recorder thread is pinned to.
+         *
+         * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
+         * @see #RECORDER_CPU_AFFINITY_PROP_NAME
+         */
+        public static int recorderCpuAffinity()
+        {
+            return Integer.getInteger(RECORDER_CPU_AFFINITY_PROP_NAME, ThreadAffinity.NO_AFFINITY);
+        }
+
+        /**
+         * CPU the replayer thread is pinned to.
+         *
+         * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
+         * @see #REPLAYER_CPU_AFFINITY_PROP_NAME
+         */
+        public static int replayerCpuAffinity()
+        {
+            return Integer.getInteger(REPLAYER_CPU_AFFINITY_PROP_NAME, ThreadAffinity.NO_AFFINITY);
+        }
+
+        /**
          * Create a supplier of {@link IdleStrategy}s for the {@link #ARCHIVE_IDLE_STRATEGY_PROP_NAME}
          * system property.
          *
@@ -1126,6 +1187,13 @@ public final class Archive implements AutoCloseable
         private int fileIoMaxLength = Configuration.fileIoMaxLength();
         private long archiveId = Configuration.archiveId();
         private ArchiveThreadingMode threadingMode = Configuration.threadingMode();
+        private int conductorCpuAffinity = Configuration.conductorCpuAffinity();
+        private int recorderCpuAffinity = Configuration.recorderCpuAffinity();
+        private int replayerCpuAffinity = Configuration.replayerCpuAffinity();
+        private boolean cpusetAffinity = AffinityRegistry.cpusetAffinity();
+        private boolean cpusetWarningsAsErrors = AffinityRegistry.cpusetWarningsAsErrors();
+        private AffinityRegistry affinityRegistry;
+        private AffinityRegistry.Claims affinityClaims;
         private ThreadFactory threadFactory;
         private ThreadFactory recorderThreadFactory;
         private ThreadFactory replayerThreadFactory;
@@ -1393,6 +1461,8 @@ public final class Archive implements AutoCloseable
             {
                 replayerThreadFactory = threadFactory;
             }
+
+            concludeAffinity();
 
             if (null == idleStrategySupplier)
             {
@@ -2725,6 +2795,164 @@ public final class Archive implements AutoCloseable
         }
 
         /**
+         * Get the CPU the conductor thread is pinned to, also used for the shared thread in
+         * {@link ArchiveThreadingMode#SHARED}.
+         *
+         * @return CPU, or cpuset index if {@link #cpusetAffinity()}, or {@link ThreadAffinity#NO_AFFINITY}.
+         * @see Configuration#CONDUCTOR_CPU_AFFINITY_PROP_NAME
+         */
+        @Config
+        public int conductorCpuAffinity()
+        {
+            return conductorCpuAffinity;
+        }
+
+        /**
+         * Set the CPU the conductor thread is pinned to, also used for the shared thread in
+         * {@link ArchiveThreadingMode#SHARED}.
+         *
+         * @param conductorCpuAffinity CPU, or cpuset index if {@link #cpusetAffinity()}, or
+         *                             {@link ThreadAffinity#NO_AFFINITY}.
+         * @return this for a fluent API.
+         * @see Configuration#CONDUCTOR_CPU_AFFINITY_PROP_NAME
+         */
+        public Context conductorCpuAffinity(final int conductorCpuAffinity)
+        {
+            this.conductorCpuAffinity = conductorCpuAffinity;
+            return this;
+        }
+
+        /**
+         * Get the CPU the recorder thread is pinned to in {@link ArchiveThreadingMode#DEDICATED}.
+         *
+         * @return CPU, or cpuset index if {@link #cpusetAffinity()}, or {@link ThreadAffinity#NO_AFFINITY}.
+         * @see Configuration#RECORDER_CPU_AFFINITY_PROP_NAME
+         */
+        @Config
+        public int recorderCpuAffinity()
+        {
+            return recorderCpuAffinity;
+        }
+
+        /**
+         * Set the CPU the recorder thread is pinned to in {@link ArchiveThreadingMode#DEDICATED}.
+         *
+         * @param recorderCpuAffinity CPU, or cpuset index if {@link #cpusetAffinity()}, or
+         *                            {@link ThreadAffinity#NO_AFFINITY}.
+         * @return this for a fluent API.
+         * @see Configuration#RECORDER_CPU_AFFINITY_PROP_NAME
+         */
+        public Context recorderCpuAffinity(final int recorderCpuAffinity)
+        {
+            this.recorderCpuAffinity = recorderCpuAffinity;
+            return this;
+        }
+
+        /**
+         * Get the CPU the replayer thread is pinned to in {@link ArchiveThreadingMode#DEDICATED}.
+         *
+         * @return CPU, or cpuset index if {@link #cpusetAffinity()}, or {@link ThreadAffinity#NO_AFFINITY}.
+         * @see Configuration#REPLAYER_CPU_AFFINITY_PROP_NAME
+         */
+        @Config
+        public int replayerCpuAffinity()
+        {
+            return replayerCpuAffinity;
+        }
+
+        /**
+         * Set the CPU the replayer thread is pinned to in {@link ArchiveThreadingMode#DEDICATED}.
+         *
+         * @param replayerCpuAffinity CPU, or cpuset index if {@link #cpusetAffinity()}, or
+         *                            {@link ThreadAffinity#NO_AFFINITY}.
+         * @return this for a fluent API.
+         * @see Configuration#REPLAYER_CPU_AFFINITY_PROP_NAME
+         */
+        public Context replayerCpuAffinity(final int replayerCpuAffinity)
+        {
+            this.replayerCpuAffinity = replayerCpuAffinity;
+            return this;
+        }
+
+        /**
+         * Are the CPU affinities indices into the effective cgroup cpuset, which is then also validated.
+         *
+         * @return true if the CPU affinities are indices into the effective cgroup cpuset.
+         * @see AffinityRegistry#CPUSET_AFFINITY_PROP_NAME
+         */
+        public boolean cpusetAffinity()
+        {
+            return cpusetAffinity;
+        }
+
+        /**
+         * Should the CPU affinities be indices into the effective cgroup cpuset, which is then also validated.
+         *
+         * @param cpusetAffinity true if the CPU affinities are indices into the effective cgroup cpuset.
+         * @return this for a fluent API.
+         * @see AffinityRegistry#CPUSET_AFFINITY_PROP_NAME
+         */
+        public Context cpusetAffinity(final boolean cpusetAffinity)
+        {
+            this.cpusetAffinity = cpusetAffinity;
+            return this;
+        }
+
+        /**
+         * Are CPU affinity and topology warnings treated as errors.
+         *
+         * @return true if CPU affinity and topology warnings are treated as errors.
+         * @see AffinityRegistry#CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
+         */
+        public boolean cpusetWarningsAsErrors()
+        {
+            return cpusetWarningsAsErrors;
+        }
+
+        /**
+         * Should CPU affinity and topology warnings be treated as errors.
+         *
+         * @param cpusetWarningsAsErrors true if CPU affinity and topology warnings are treated as errors.
+         * @return this for a fluent API.
+         * @see AffinityRegistry#CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
+         */
+        public Context cpusetWarningsAsErrors(final boolean cpusetWarningsAsErrors)
+        {
+            this.cpusetWarningsAsErrors = cpusetWarningsAsErrors;
+            return this;
+        }
+
+        AffinityRegistry affinityRegistry()
+        {
+            return affinityRegistry;
+        }
+
+        private void concludeAffinity()
+        {
+            affinityRegistry = new AffinityRegistry();
+            switch (threadingMode)
+            {
+                case INVOKER:
+                    break;
+
+                case SHARED:
+                    affinityRegistry.addAffinity(AERON_ARCHIVE_SHARED_THREAD_NAME, conductorCpuAffinity);
+                    break;
+
+                case DEDICATED:
+                default:
+                    affinityRegistry
+                        .addAffinity(AERON_ARCHIVE_CONDUCTOR_THREAD_NAME, conductorCpuAffinity)
+                        .addAffinity(AERON_ARCHIVE_RECORDER_THREAD_NAME, recorderCpuAffinity)
+                        .addAffinity(AERON_ARCHIVE_REPLAYER_THREAD_NAME, replayerCpuAffinity);
+                    break;
+            }
+
+            affinityRegistry.conclude(cpusetAffinity, cpusetWarningsAsErrors, aeron.countersReader());
+            affinityClaims = affinityRegistry.publish(aeron::addCounter);
+        }
+
+        /**
          * Get the thread factory used for creating threads in {@link ArchiveThreadingMode#SHARED} and
          * {@link ArchiveThreadingMode#DEDICATED} threading modes.
          *
@@ -3755,6 +3983,7 @@ public final class Archive implements AutoCloseable
          */
         public void close()
         {
+            CloseHelper.close(countedErrorHandler, affinityClaims);
             CloseHelper.close(countedErrorHandler, catalog);
             CloseHelper.close(countedErrorHandler, archiveDirChannel);
 
@@ -3858,6 +4087,11 @@ public final class Archive implements AutoCloseable
                 "\n    maxConcurrentReplays=" + maxConcurrentReplays +
                 "\n    fileIoMaxLength=" + fileIoMaxLength +
                 "\n    threadingMode=" + threadingMode +
+                "\n    conductorCpuAffinity=" + conductorCpuAffinity +
+                "\n    recorderCpuAffinity=" + recorderCpuAffinity +
+                "\n    replayerCpuAffinity=" + replayerCpuAffinity +
+                "\n    cpusetAffinity=" + cpusetAffinity +
+                "\n    cpusetWarningsAsErrors=" + cpusetWarningsAsErrors +
                 "\n    threadFactory=" + threadFactory +
                 "\n    abortLatch=" + abortLatch +
                 "\n    idleStrategySupplier=" + idleStrategySupplier +
