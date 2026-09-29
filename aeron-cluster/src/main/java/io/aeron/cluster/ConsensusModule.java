@@ -40,6 +40,7 @@ import io.aeron.cluster.service.ClusteredServiceContainer;
 import io.aeron.cluster.service.SnapshotDurationTracker;
 import io.aeron.config.Config;
 import io.aeron.config.DefaultType;
+import io.aeron.topology.AffinityRegistry;
 import io.aeron.driver.DutyCycleTracker;
 import io.aeron.driver.NameResolver;
 import io.aeron.driver.status.DutyCycleStallTracker;
@@ -63,6 +64,7 @@ import org.agrona.SystemUtil;
 import org.agrona.concurrent.Agent;
 import org.agrona.concurrent.AgentInvoker;
 import org.agrona.concurrent.AgentRunner;
+import org.agrona.concurrent.affinity.ThreadAffinity;
 import org.agrona.concurrent.CountedErrorHandler;
 import org.agrona.concurrent.EpochClock;
 import org.agrona.concurrent.IdleStrategy;
@@ -340,7 +342,10 @@ public final class ConsensusModule implements AutoCloseable
 
         if (null != consensusModule.conductorRunner)
         {
-            AgentRunner.startOnThread(consensusModule.conductorRunner, ctx.threadFactory());
+            AgentRunner.startOnThread(
+                consensusModule.conductorRunner,
+                ctx.threadFactory(),
+                ctx.affinityRegistry.mappedAffinityValue(ctx.agentRoleName()));
         }
         else
         {
@@ -961,6 +966,13 @@ public final class ConsensusModule implements AutoCloseable
             "aeron.cluster.consensus.module.agent.role.name";
 
         /**
+         * CPU the consensus module thread is pinned to. An index into the effective cgroup cpuset when
+         * {@link AffinityRegistry#CPUSET_AFFINITY_PROP_NAME} is set.
+         */
+        @Config(defaultType = DefaultType.INT, defaultInt = ThreadAffinity.NO_AFFINITY)
+        public static final String CLUSTER_CPU_AFFINITY_PROP_NAME = "aeron.cluster.cpu.affinity";
+
+        /**
          * Property name for replication progress timeout.
          *
          * @since 1.41.0
@@ -1486,6 +1498,17 @@ public final class ConsensusModule implements AutoCloseable
         }
 
         /**
+         * CPU the consensus module thread is pinned to.
+         *
+         * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
+         * @see #CLUSTER_CPU_AFFINITY_PROP_NAME
+         */
+        public static int cpuAffinity()
+        {
+            return Integer.getInteger(CLUSTER_CPU_AFFINITY_PROP_NAME, ThreadAffinity.NO_AFFINITY);
+        }
+
+        /**
          * The amount of time to wait to time out an archive replication when progress has stalled.
          *
          * @return system property {@link #CLUSTER_REPLICATION_PROGRESS_TIMEOUT_PROP_NAME} or
@@ -1689,6 +1712,11 @@ public final class ConsensusModule implements AutoCloseable
         private VersionValidator appVersionValidator;
         private boolean isLogMdc;
         private boolean useAgentInvoker = false;
+        private int cpuAffinity = Configuration.cpuAffinity();
+        private boolean cpusetAffinity = AffinityRegistry.cpusetAffinity();
+        private boolean cpusetWarningsAsErrors = AffinityRegistry.cpusetWarningsAsErrors();
+        private AffinityRegistry affinityRegistry;
+        private AffinityRegistry.Claims affinityClaims;
         private ConsensusModuleStateExport bootstrapState = null;
         private boolean acceptStandbySnapshots = Configuration.acceptStandbySnapshots();
         private boolean enableControlOnConsensusChannel = Configuration.enableControlOnConsensusChannel();
@@ -2057,6 +2085,14 @@ public final class ConsensusModule implements AutoCloseable
             {
                 threadFactory = Thread::new;
             }
+
+            affinityRegistry = new AffinityRegistry();
+            if (!useAgentInvoker)
+            {
+                affinityRegistry.addAffinity(agentRoleName, cpuAffinity);
+            }
+            affinityRegistry.conclude(cpusetAffinity, cpusetWarningsAsErrors, aeron.countersReader());
+            affinityClaims = affinityRegistry.publish(aeron::addCounter);
 
             if (null == idleStrategySupplier)
             {
@@ -4094,6 +4130,79 @@ public final class ConsensusModule implements AutoCloseable
         }
 
         /**
+         * Get the CPU the consensus module thread is pinned to.
+         *
+         * @return CPU, or cpuset index if {@link #cpusetAffinity()}, or {@link ThreadAffinity#NO_AFFINITY}.
+         * @see Configuration#CLUSTER_CPU_AFFINITY_PROP_NAME
+         */
+        @Config(id = "CLUSTER_CPU_AFFINITY")
+        public int cpuAffinity()
+        {
+            return cpuAffinity;
+        }
+
+        /**
+         * Set the CPU the consensus module thread is pinned to.
+         *
+         * @param cpuAffinity CPU, or cpuset index if {@link #cpusetAffinity()}, or {@link ThreadAffinity#NO_AFFINITY}.
+         * @return this for a fluent API.
+         * @see Configuration#CLUSTER_CPU_AFFINITY_PROP_NAME
+         */
+        public Context cpuAffinity(final int cpuAffinity)
+        {
+            this.cpuAffinity = cpuAffinity;
+            return this;
+        }
+
+        /**
+         * Are the CPU affinities indices into the effective cgroup cpuset, which is then also validated.
+         *
+         * @return true if the CPU affinities are indices into the effective cgroup cpuset.
+         * @see AffinityRegistry#CPUSET_AFFINITY_PROP_NAME
+         */
+        public boolean cpusetAffinity()
+        {
+            return cpusetAffinity;
+        }
+
+        /**
+         * Should the CPU affinities be indices into the effective cgroup cpuset, which is then also validated.
+         *
+         * @param cpusetAffinity true if the CPU affinities are indices into the effective cgroup cpuset.
+         * @return this for a fluent API.
+         * @see AffinityRegistry#CPUSET_AFFINITY_PROP_NAME
+         */
+        public Context cpusetAffinity(final boolean cpusetAffinity)
+        {
+            this.cpusetAffinity = cpusetAffinity;
+            return this;
+        }
+
+        /**
+         * Are CPU affinity and topology warnings treated as errors.
+         *
+         * @return true if CPU affinity and topology warnings are treated as errors.
+         * @see AffinityRegistry#CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
+         */
+        public boolean cpusetWarningsAsErrors()
+        {
+            return cpusetWarningsAsErrors;
+        }
+
+        /**
+         * Should CPU affinity and topology warnings be treated as errors.
+         *
+         * @param cpusetWarningsAsErrors true if CPU affinity and topology warnings are treated as errors.
+         * @return this for a fluent API.
+         * @see AffinityRegistry#CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
+         */
+        public Context cpusetWarningsAsErrors(final boolean cpusetWarningsAsErrors)
+        {
+            this.cpusetWarningsAsErrors = cpusetWarningsAsErrors;
+            return this;
+        }
+
+        /**
          * Set the {@link Runnable} that is called when the {@link ConsensusModule} processes a termination action.
          * <p>
          * Both {@link #extendedTerminationHook()} and {@link #terminationHook()} run on termination, in that order.
@@ -4492,6 +4601,7 @@ public final class ConsensusModule implements AutoCloseable
          */
         public void close()
         {
+            CloseHelper.close(countedErrorHandler, affinityClaims);
             CloseHelper.close(countedErrorHandler, recordingLog);
             CloseHelper.close(countedErrorHandler, nodeStateFile);
             CloseHelper.close(countedErrorHandler, markFile);
@@ -4705,6 +4815,9 @@ public final class ConsensusModule implements AutoCloseable
                 "\n    egressPublisher=" + egressPublisher +
                 "\n    isLogMdc=" + isLogMdc +
                 "\n    useAgentInvoker=" + useAgentInvoker +
+                "\n    cpuAffinity=" + cpuAffinity +
+                "\n    cpusetAffinity=" + cpusetAffinity +
+                "\n    cpusetWarningsAsErrors=" + cpusetWarningsAsErrors +
                 "\n    cycleThresholdNs=" + cycleThresholdNs +
                 "\n    dutyCycleTracker=" + dutyCycleTracker +
                 "\n    totalSnapshotDurationThresholdNs=" + totalSnapshotDurationThresholdNs +
