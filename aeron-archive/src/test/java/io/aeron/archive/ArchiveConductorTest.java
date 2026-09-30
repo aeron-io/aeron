@@ -20,6 +20,7 @@ import io.aeron.ChannelUri;
 import io.aeron.ChannelUriStringBuilder;
 import io.aeron.Counter;
 import io.aeron.Subscription;
+import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.client.ArchiveException;
 import io.aeron.archive.codecs.SourceLocation;
 import io.aeron.security.Authenticator;
@@ -199,6 +200,67 @@ class ArchiveConductorTest
         assertEquals(
             "cannot start replay of recording " + recordingId + " due to an outstanding delete operation",
             errorCaptor.getValue());
+    }
+
+    @Test
+    void startReplayShouldSendErrorAndNotStartReplayOfEmptyRecording()
+    {
+        createTestConductor();
+
+        final long recordingId = 42L;
+        when(mockCatalog.hasRecording(recordingId)).thenReturn(true);
+        doAnswer(invocation ->
+        {
+            final RecordingSummary summary = invocation.getArgument(1);
+            summary.startPosition = 0L;
+            summary.stopPosition = 0L;
+            summary.segmentFileLength = Archive.Configuration.SEGMENT_FILE_LENGTH_DEFAULT;
+            summary.termBufferLength = 64 * 1024;
+            return summary;
+        }).when(mockCatalog).recordingSummary(eq(recordingId), any(RecordingSummary.class));
+
+        final ControlSession mockControlSession = mock(ControlSession.class);
+        final long correlationId = 1L;
+
+        conductor.startReplay(correlationId, recordingId, AeronArchive.NULL_POSITION,
+            AeronArchive.REPLAY_ALL_AND_STOP, 0, 1, "aeron:ipc", null, mockControlSession);
+
+        verify(mockControlSession).sendErrorResponse(
+            eq(correlationId), eq((long)ArchiveException.EMPTY_RECORDING), anyString());
+        assertTrue(conductor.capturedSessions.isEmpty());
+    }
+
+    @Test
+    void startReplayOfEmptyRecordingShouldNotTakeReplaySlot()
+    {
+        maxConcurrentReplays = 1;
+        createTestConductor();
+
+        final long recordingId = 42L;
+        when(mockCatalog.hasRecording(recordingId)).thenReturn(true);
+        doAnswer(invocation ->
+        {
+            final RecordingSummary summary = invocation.getArgument(1);
+            summary.startPosition = 0L;
+            summary.stopPosition = 0L;
+            summary.segmentFileLength = Archive.Configuration.SEGMENT_FILE_LENGTH_DEFAULT;
+            summary.termBufferLength = 64 * 1024;
+            return summary;
+        }).when(mockCatalog).recordingSummary(eq(recordingId), any(RecordingSummary.class));
+
+        final ControlSession mockControlSession = mock(ControlSession.class);
+
+        conductor.startReplay(1L, recordingId, AeronArchive.NULL_POSITION,
+            AeronArchive.REPLAY_ALL_AND_STOP, 0, 1, "aeron:ipc", null, mockControlSession);
+        conductor.startReplay(2L, recordingId, AeronArchive.NULL_POSITION,
+            AeronArchive.REPLAY_ALL_AND_STOP, 0, 1, "aeron:ipc", null, mockControlSession);
+
+        verify(mockControlSession).sendErrorResponse(
+            eq(1L), eq((long)ArchiveException.EMPTY_RECORDING), anyString());
+        verify(mockControlSession).sendErrorResponse(
+            eq(2L), eq((long)ArchiveException.EMPTY_RECORDING), anyString());
+        verify(mockControlSession, never()).sendErrorResponse(
+            anyLong(), eq((long)ArchiveException.MAX_REPLAYS), anyString());
     }
 
     @Test

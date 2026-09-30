@@ -333,6 +333,31 @@ TEST_F(ImageFragmentAssemblerTest, shouldNotReassembleIfMissingBegin)
     EXPECT_FALSE(isCalled);
 }
 
+TEST_F(ImageFragmentAssemblerTest, shouldNotReassembleIfAppendFails)
+{
+    size_t fragmentLength = MTU_LENGTH - AERON_DATA_HEADER_LENGTH;
+    int32_t termOffset = 0;
+    bool isCalled = false;
+    auto handler = [&](const uint8_t *buffer, size_t length, aeron_header_t *header)
+    {
+        isCalled = true;
+    };
+
+    fillFrame(AERON_DATA_HEADER_BEGIN_FLAG, termOffset, fragmentLength, 0);
+    handle_fragment(handler, fragmentLength);
+    EXPECT_FALSE(isCalled);
+
+    termOffset += MTU_LENGTH;
+    fillFrame(0, termOffset, fragmentLength, fragmentLength % 256);
+    handle_fragment(handler, (size_t)INT32_MAX);
+    EXPECT_FALSE(isCalled);
+
+    termOffset += MTU_LENGTH;
+    fillFrame(AERON_DATA_HEADER_END_FLAG, termOffset, fragmentLength, (fragmentLength * 2) % 256);
+    handle_fragment(handler, fragmentLength);
+    EXPECT_FALSE(isCalled);
+}
+
 TEST_F(ImageFragmentAssemblerTest, shouldReassembleTwoMessagesFromFourFrames)
 {
     size_t fragmentLength = MTU_LENGTH - AERON_DATA_HEADER_LENGTH;
