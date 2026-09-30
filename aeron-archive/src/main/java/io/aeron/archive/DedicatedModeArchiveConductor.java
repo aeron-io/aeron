@@ -50,17 +50,21 @@ final class DedicatedModeArchiveConductor extends ArchiveConductor
     {
         super.onStart();
 
-        recorderAgentRunner = new AgentRunner(ctx.recorderIdleStrategy(), errorHandler, ctx.errorCounter(), recorder);
-        replayerAgentRunner = new AgentRunner(ctx.replayerIdleStrategy(), errorHandler, ctx.errorCounter(), replayer);
-
-        AgentRunner.startOnThread(
-            recorderAgentRunner,
-            ctx.recorderThreadFactory(),
+        recorderAgentRunner = new AgentRunner(
+            ctx.recorderIdleStrategy(),
+            errorHandler,
+            ctx.errorCounter(),
+            recorder,
             ctx.affinityRegistry().mappedAffinityValue(AERON_ARCHIVE_RECORDER_THREAD_NAME));
-        AgentRunner.startOnThread(
-            replayerAgentRunner,
-            ctx.replayerThreadFactory(),
+        replayerAgentRunner = new AgentRunner(
+            ctx.replayerIdleStrategy(),
+            errorHandler,
+            ctx.errorCounter(),
+            replayer,
             ctx.affinityRegistry().mappedAffinityValue(AERON_ARCHIVE_REPLAYER_THREAD_NAME));
+
+        AgentRunner.startOnThread(recorderAgentRunner, ctx.recorderThreadFactory());
+        AgentRunner.startOnThread(replayerAgentRunner, ctx.replayerThreadFactory());
     }
 
     /**

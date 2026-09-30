@@ -135,7 +135,12 @@ public final class ClusteredServiceContainer implements AutoCloseable
         }
 
         final ClusteredServiceAgent agent = new ClusteredServiceAgent(ctx);
-        serviceAgentRunner = new AgentRunner(ctx.idleStrategy(), ctx.errorHandler(), ctx.errorCounter(), agent);
+        serviceAgentRunner = new AgentRunner(
+            ctx.idleStrategy(),
+            ctx.errorHandler(),
+            ctx.errorCounter(),
+            agent,
+            ctx.affinityRegistry.mappedAffinityValue(ctx.serviceName()));
     }
 
     /**
@@ -157,10 +162,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
     public static ClusteredServiceContainer launch(final Context ctx)
     {
         final ClusteredServiceContainer clusteredServiceContainer = new ClusteredServiceContainer(ctx);
-        AgentRunner.startOnThread(
-            clusteredServiceContainer.serviceAgentRunner,
-            ctx.threadFactory(),
-            ctx.affinityRegistry.mappedAffinityValue(ctx.serviceName()));
+        AgentRunner.startOnThread(clusteredServiceContainer.serviceAgentRunner, ctx.threadFactory());
 
         return clusteredServiceContainer;
     }
