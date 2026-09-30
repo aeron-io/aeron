@@ -93,16 +93,19 @@ class PropertiesUtilTest
     void getLongDecodesAndFallsBackLikeLongGetLong()
     {
         assertEquals(42L, getLong(properties, NAME, 42L));
-        assertNull(getLong(properties, NAME, (Long)null));
+        assertNull(getLong(properties, NAME));
 
         properties.setProperty(NAME, "0x10");
         assertEquals(16L, getLong(properties, NAME, 42L));
+        assertEquals(16L, getLong(properties, NAME));
 
         properties.setProperty(NAME, "not a number");
         assertEquals(42L, getLong(properties, NAME, 42L));
+        assertNull(getLong(properties, NAME));
 
         System.setProperty(NAME, "7");
         assertEquals(Long.getLong(NAME, 42L), getLong(System.getProperties(), NAME, 42L));
+        assertEquals(Long.getLong(NAME), getLong(System.getProperties(), NAME));
     }
 
     @Test

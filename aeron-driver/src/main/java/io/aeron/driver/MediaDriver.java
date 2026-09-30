@@ -4477,7 +4477,7 @@ public final class MediaDriver implements AutoCloseable
 
             if (null == applicationSpecificFeedback)
             {
-                applicationSpecificFeedback = Configuration.applicationSpecificFeedback(properties());
+                applicationSpecificFeedback = defaultApplicationSpecificFeedback();
             }
 
             if (null == receiverGroupTag)
@@ -4577,6 +4577,19 @@ public final class MediaDriver implements AutoCloseable
             {
                 throw new ConfigurationException("`resolverName` is required when `resolverInterface` is set");
             }
+        }
+
+        /**
+         * Resolve the legacy application specific feedback (ASF) which is still honoured for backwards
+         * compatibility. Deprecated so that the deprecated read is contained in one place.
+         *
+         * @return the configured application specific feedback.
+         * @deprecated see {@link Configuration#groupTag(Properties)}.
+         */
+        @Deprecated
+        private byte[] defaultApplicationSpecificFeedback()
+        {
+            return Configuration.applicationSpecificFeedback(properties());
         }
 
         private void concludeCounters()

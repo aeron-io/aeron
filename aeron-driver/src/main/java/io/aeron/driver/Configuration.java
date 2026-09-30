@@ -1962,7 +1962,7 @@ public final class Configuration
      */
     public static Long groupTag(final Properties properties)
     {
-        return getLong(properties, RECEIVER_GROUP_TAG_PROP_NAME, null);
+        return getLong(properties, RECEIVER_GROUP_TAG_PROP_NAME);
     }
 
     /**

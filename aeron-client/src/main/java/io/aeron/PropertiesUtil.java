@@ -144,17 +144,16 @@ public final class PropertiesUtil
     }
 
     /**
-     * Get a long value from a property, allowing a {@code null} default value to represent an unset property. The
+     * Get a long value from a property, or {@code null} if the property is not present or cannot be decoded. The
      * value is decoded as per {@link Long#decode(String)} so hexadecimal, octal, and decimal representations are all
-     * supported. The default value is used if the property is not present or cannot be decoded.
+     * supported.
      *
      * @param properties   to look up the value in.
      * @param propertyName to get the value for.
-     * @param defaultValue to be used if the property is not present or cannot be decoded, may be {@code null}.
      * @return the {@link Long} value which may be {@code null}.
-     * @see Long#getLong(String, Long)
+     * @see Long#getLong(String)
      */
-    public static Long getLong(final Properties properties, final String propertyName, final Long defaultValue)
+    public static Long getLong(final Properties properties, final String propertyName)
     {
         final String propertyValue = properties.getProperty(propertyName);
         if (null != propertyValue)
@@ -165,11 +164,11 @@ public final class PropertiesUtil
             }
             catch (final NumberFormatException ignore)
             {
-                // fall through to the default value, as per Long.getLong(String, Long)
+                // fall through to null, as per Long.getLong(String)
             }
         }
 
-        return defaultValue;
+        return null;
     }
 
     /**
