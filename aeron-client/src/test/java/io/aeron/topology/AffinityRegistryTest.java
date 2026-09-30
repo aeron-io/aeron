@@ -83,6 +83,7 @@ class AffinityRegistryTest
     {
         setupSiblingThreads(sysfsTestDir, ALIGNED_SIBLINGS);
         setupDieLocality(sysfsTestDir, SINGLE_DIE);
+        setupCpuSet(testProcPath, testCgroupPath, 0, "0-7");
     }
 
     @ParameterizedTest
@@ -118,7 +119,7 @@ class AffinityRegistryTest
     }
 
     @Test
-    void shouldUseRawCpuIdsWithoutReadingCpusetWhenCpusetAffinityDisabled() throws IOException
+    void shouldUseRawCpuIdsWhenCpusetAffinityDisabled() throws IOException
     {
         setupL3Peers(sysfsTestDir, SHARED_L3);
 
@@ -141,6 +142,20 @@ class AffinityRegistryTest
             ConfigurationException.class, () -> registry.conclude(true, false, countersManager, discard()));
 
         assertTrue(ex.getMessage().contains("aaa affinity 4 must be less than cpuset count 4"), ex.getMessage());
+    }
+
+    @Test
+    void shouldRejectRawCpuOutsideCpusetWhenCpusetAffinityDisabled() throws IOException
+    {
+        setupL3Peers(sysfsTestDir, SHARED_L3);
+        setupCpuSet(testProcPath, testCgroupPath, 0, "2-5");
+
+        final AffinityRegistry registry = newRegistry(Map.of("aaa", 6));
+        final ConfigurationException ex = assertThrows(
+            ConfigurationException.class, () -> registry.conclude(false, false, countersManager, discard()));
+
+        assertTrue(ex.getMessage().contains("aaa affinity 6 is not in cpuset: 2-5"), ex.getMessage());
+        assertDoesNotThrow(() -> newRegistry(Map.of("aaa", 3)).conclude(false, false, countersManager, discard()));
     }
 
     @Test

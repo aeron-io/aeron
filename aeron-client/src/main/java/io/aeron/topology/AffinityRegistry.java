@@ -209,7 +209,8 @@ public final class AffinityRegistry
      * @param warningsAsErrors if true, throw a {@link ConfigurationException} instead of warning.
      * @param countersReader   to read the CPUs claimed by other components from, may be null.
      * @throws IllegalStateException  if already concluded.
-     * @throws ConfigurationException if an index is outside the cpuset, or a warning is found and
+     * @throws ConfigurationException if an index, or a raw CPU id when {@code cpusetAffinity} is not set, is
+     *                                outside the cpuset, or a warning is found and
      *                                {@code warningsAsErrors} is set.
      */
     public void conclude(
@@ -239,6 +240,10 @@ public final class AffinityRegistry
         }
         else
         {
+            if (topologyAvailable && hasPinnedAffinity())
+            {
+                validateRawAgainstCpuset(cpusetV2Reader.readCpuSet());
+            }
             resolvedAffinityByName.putAll(requestedAffinityByName);
         }
 
@@ -348,6 +353,32 @@ public final class AffinityRegistry
             else
             {
                 resolvedAffinityByName.put(name, cpus.getInt(index));
+            }
+        });
+    }
+
+    private boolean hasPinnedAffinity()
+    {
+        for (final int affinity : requestedAffinityByName.values())
+        {
+            if (NO_AFFINITY != affinity)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void validateRawAgainstCpuset(final Cpuset cpuset)
+    {
+        final IntArrayList cpus = cpuset.cpus();
+        requestedAffinityByName.forEach((name, cpu) ->
+        {
+            if (NO_AFFINITY != cpu && !cpus.containsInt(cpu))
+            {
+                throw new ConfigurationException(
+                    name + " affinity " + cpu + " is not in cpuset: " + cpuset.formattedCpus());
             }
         });
     }
