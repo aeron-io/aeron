@@ -27,6 +27,7 @@ import io.aeron.exceptions.RegistrationException;
 import io.aeron.exceptions.TimeoutException;
 import org.agrona.DirectBuffer;
 import org.agrona.LangUtil;
+import org.agrona.SystemUtil;
 import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.SleepingMillisIdleStrategy;
 import org.agrona.concurrent.UnsafeBuffer;
@@ -34,6 +35,7 @@ import org.agrona.concurrent.YieldingIdleStrategy;
 import org.agrona.concurrent.status.AtomicCounter;
 import org.agrona.concurrent.status.CountersManager;
 import org.agrona.concurrent.status.CountersReader;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.TestWatcher;
 import org.mockito.stubbing.Answer;
@@ -53,6 +55,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -65,6 +68,8 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import static io.aeron.Aeron.NULL_VALUE;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.doAnswer;
 
 /**
@@ -887,6 +892,44 @@ public class Tests
         }
 
         return existingError;
+    }
+
+    public static void markImmutable(final Path path) throws Exception
+    {
+        if (SystemUtil.isLinux())
+        {
+            assertEquals(0, execute(List.of("chattr", "+i", path.toString())));
+        }
+        else if (SystemUtil.isMac())
+        {
+            assertEquals(0, execute(List.of("chflags", "uchg", path.toString())));
+        }
+        else
+        {
+            fail("Unsupported OS: " + OS.current());
+        }
+    }
+
+    public static void unmarkImmutable(final Path path) throws Exception
+    {
+        if (SystemUtil.isLinux())
+        {
+            assertEquals(0, execute(List.of("chattr", "-i", path.toString())));
+        }
+        else if (SystemUtil.isMac())
+        {
+            assertEquals(0, execute(List.of("chflags", "nouchg", path.toString())));
+        }
+        else
+        {
+            fail("Unsupported OS: " + OS.current());
+        }
+    }
+
+    private static int execute(final List<String> command) throws Exception
+    {
+        final Process process = new ProcessBuilder(command).inheritIO().start();
+        return process.waitFor();
     }
 
     private static void pad(final int indent, final PrintStream out)

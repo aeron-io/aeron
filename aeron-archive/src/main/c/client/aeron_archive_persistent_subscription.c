@@ -1010,6 +1010,7 @@ int aeron_archive_persistent_subscription_create(
     }
 
     _persistent_subscription->context = context;
+    _persistent_subscription->owns_context = true;
     _persistent_subscription->listener = context->listener;
     _persistent_subscription->message_timeout_ns = aeron_archive_context_get_message_timeout_ns(context->archive_context);
     _persistent_subscription->replay_session_id = AERON_NULL_VALUE;
@@ -1079,13 +1080,31 @@ int aeron_archive_persistent_subscription_close(aeron_archive_persistent_subscri
         aeron_archive_persistent_subscription_clean_up_replay(persistent_subscription);
         aeron_archive_persistent_subscription_clean_up_replay_subscription(persistent_subscription);
         aeron_archive_async_client_destroy(persistent_subscription->archive);
-        aeron_archive_persistent_subscription_context_close(persistent_subscription->context);
+        if (persistent_subscription->owns_context)
+        {
+            aeron_archive_persistent_subscription_context_close(persistent_subscription->context);
+        }
+        persistent_subscription->context = NULL;
         aeron_image_fragment_assembler_delete(persistent_subscription->uncontrolled_assembler);
         aeron_image_controlled_fragment_assembler_delete(persistent_subscription->assembler);
         aeron_free(persistent_subscription);
     }
 
     return 0;
+}
+
+aeron_archive_persistent_subscription_context_t *aeron_archive_persistent_subscription_get_persistent_subscription_context(
+    aeron_archive_persistent_subscription_t *persistent_subscription)
+{
+    return persistent_subscription->context;
+}
+
+aeron_archive_persistent_subscription_context_t *aeron_archive_persistent_subscription_get_and_own_persistent_subscription_context(
+    aeron_archive_persistent_subscription_t *persistent_subscription)
+{
+    persistent_subscription->owns_context = false;
+
+    return persistent_subscription->context;
 }
 
 static int aeron_archive_persistent_subscription_await_archive_connection(

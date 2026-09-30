@@ -235,5 +235,24 @@ public:
     }
 };
 
+class AgentTerminationException : public SourcedException
+{
+private:
+    bool m_expected;
+public:
+    AgentTerminationException(
+        const bool expected,
+        const std::string &what) :
+        SourcedException(ExceptionCategory::EXCEPTION_CATEGORY_FATAL, what, SOURCEINFO),
+        m_expected(expected)
+    {
+    }
+
+    bool isExpected() const
+    {
+        return m_expected;
+    }
+};
+
 }}
 #endif

@@ -22,6 +22,8 @@
 #define AERON_CPUSET_CGROUP_MOUNT_V1 "/sys/fs/cgroup/cpuset"
 #define AERON_CPUSET_PROC_SELF_CGROUP "/proc/self/cgroup"
 
+#include <stdlib.h>
+
 /**
  * Parse a list of cpus, e.g. '1,3,4,5-19'.
  *
@@ -32,6 +34,30 @@
  */
 int aeron_cpuset_parse_cpulist(const char *cpulist_data, int **cpus, int *cpu_count);
 
-int aeron_cpuset_cgroup_read_v2(const char *proc_cgroup_file, const char *mount_root, int **cpus, int *cpu_count);
+int aeron_cpuset_format_cpulist(const int *cpus, int cpu_count, char *buf, size_t buf_size);
+
+/**
+ * Read a list of the online CPUs. Will allocate into the cpus parameter and the user will
+ * need to use `aeron_free` when done with it.
+ *
+ * @param mount_root base file system path to read from.
+ * @param online_cpu_file the online cpu file to read.
+ * @param cpus out parameter to allocate and fill with cpu ids
+ * @param cpu_count out parameter to count the number of cpus.
+ * @return -1 on failure, 0 on success.
+ */
+int aeron_cpuset_read_online(const char *mount_root, const char *online_cpu_file, int **cpus, int *cpu_count);
+
+/**
+ * Read the cpuset that this cgroup has been set up with. Will allocate into the cpus parameter and the user will
+ * need to use `aeron_free` when done with it.
+ *
+ * @param mount_root base file system path to read from.
+ * @param proc_cgroup_file the cgroup file to read.
+ * @param cpus out pararmeter to allocate and fill with cpu ids
+ * @param cpu_count out parameter to count the number of cpus
+ * @return -1 on failure, 0 on success.
+ */
+int aeron_cpuset_cgroup_read_v2(const char *mount_root, const char *proc_cgroup_file, int **cpus, int *cpu_count);
 
 #endif //AERON_CPUSET_H

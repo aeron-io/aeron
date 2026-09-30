@@ -625,7 +625,7 @@ int aeron_subscription_local_sockaddrs(
 }
 
 int aeron_subscription_resolved_endpoint(
-    aeron_subscription_t *subscription, const char *address, size_t address_len)
+    aeron_subscription_t *subscription, char *address, size_t address_len)
 {
     if (NULL == subscription || NULL == address)
     {

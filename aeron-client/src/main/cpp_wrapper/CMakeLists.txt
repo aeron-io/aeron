@@ -72,7 +72,6 @@ SET(HEADERS
     ${CMAKE_CURRENT_SOURCE_DIR}/util/Index.h
     ${CMAKE_CURRENT_SOURCE_DIR}/util/LangUtil.h
     ${CMAKE_CURRENT_SOURCE_DIR}/util/MacroUtil.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/util/MemoryMappedFile.h
     ${CMAKE_CURRENT_SOURCE_DIR}/util/Platform.h
     ${CMAKE_CURRENT_SOURCE_DIR}/util/ScopeUtils.h
     ${CMAKE_CURRENT_SOURCE_DIR}/util/StringUtil.h)

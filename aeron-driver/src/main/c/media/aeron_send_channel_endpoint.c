@@ -124,6 +124,7 @@ int aeron_send_channel_endpoint_create(
     aeron_udp_channel_transport_params_t transport_params = {
         _endpoint->conductor_fields.socket_rcvbuf,
         _endpoint->conductor_fields.socket_sndbuf,
+        aeron_udp_channel_socket_tos(channel, context->socket_tos),
         params->mtu_length,
         channel->interface_index,
         0 != channel->multicast_ttl ? channel->multicast_ttl : context->multicast_ttl,
@@ -354,7 +355,7 @@ static void aeron_send_channel_apply_timestamps(
             size_t offset = 0;
             do
             {
-                aeron_data_header_t *data_header = ((aeron_data_header_t *)iovec.iov_base + offset);
+                aeron_data_header_t *data_header = (aeron_data_header_t *)((uint8_t *)iovec.iov_base + offset);
                 if (data_header->frame_header.frame_length <= 0)
                 {
                     break;

@@ -1182,14 +1182,6 @@ static void aeron_client_conductor_on_driver_response(int32_t type_id, uint8_t *
             result = aeron_client_conductor_on_next_available_session_id(conductor, response);
             break;
         }
-
-        default:
-        {
-            snprintf(error_message, sizeof(error_message) - 1, "response=0x%x unknown", type_id);
-            conductor->error_handler(
-                conductor->error_handler_clientd, AERON_ERROR_CODE_UNKNOWN_COMMAND_TYPE_ID, error_message);
-            break;
-        }
     }
 
     if (result < 0)
@@ -2210,7 +2202,7 @@ static int aeron_client_conductor_on_cmd_destination_by_id(const void *clientd, 
     command->correlated.correlation_id = async->registration_id;
     command->correlated.client_id = conductor->client_id;
     command->resource_registration_id = resource_registration_id;
-    command->destination_registration_id = resource_registration_id;
+    command->destination_registration_id = async->destination_registration_id;
 
     aeron_mpsc_rb_commit(&conductor->to_driver_buffer, offset);
     return 0;

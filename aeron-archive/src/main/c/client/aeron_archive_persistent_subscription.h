@@ -121,6 +121,7 @@ aeron_archive_persistent_subscription_list_recording_request_t;
 struct aeron_archive_persistent_subscription_stct
 {
     aeron_archive_persistent_subscription_context_t *context;
+    bool owns_context;
     aeron_archive_persistent_subscription_listener_t listener;
     uint64_t message_timeout_ns;
     aeron_archive_async_client_t *archive;

@@ -20,7 +20,7 @@ import io.aeron.driver.MediaDriver.Context;
 import io.aeron.driver.buffer.RawLog;
 import io.aeron.driver.exceptions.InvalidChannelException;
 import io.aeron.driver.exceptions.UnknownSubscriptionException;
-import io.aeron.driver.logging.DriverLog;
+import io.aeron.driver.logging.DriverTracing;
 import io.aeron.driver.media.ControlMode;
 import io.aeron.driver.media.ReceiveChannelEndpoint;
 import io.aeron.driver.media.ReceiveDestinationTransport;
@@ -92,10 +92,12 @@ import static io.aeron.CommonContext.MDC_CONTROL_MODE_PARAM_NAME;
 import static io.aeron.CommonContext.MDC_CONTROL_PARAM_NAME;
 import static io.aeron.CommonContext.MEDIA_RCV_TIMESTAMP_OFFSET_PARAM_NAME;
 import static io.aeron.CommonContext.MTU_LENGTH_PARAM_NAME;
+import static io.aeron.CommonContext.NULL_SESSION_ID;
 import static io.aeron.CommonContext.RECEIVER_WINDOW_LENGTH_PARAM_NAME;
 import static io.aeron.CommonContext.RESPONSE_CORRELATION_ID_PARAM_NAME;
 import static io.aeron.CommonContext.SOCKET_RCVBUF_PARAM_NAME;
 import static io.aeron.CommonContext.SOCKET_SNDBUF_PARAM_NAME;
+import static io.aeron.CommonContext.SOCKET_TOS_PARAM_NAME;
 import static io.aeron.CommonContext.threadName;
 import static io.aeron.ErrorCode.GENERIC_ERROR;
 import static io.aeron.ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE;
@@ -172,6 +174,7 @@ public final class DriverConductor implements Agent
         RECEIVER_WINDOW_LENGTH_PARAM_NAME,
         SOCKET_RCVBUF_PARAM_NAME,
         SOCKET_SNDBUF_PARAM_NAME,
+        SOCKET_TOS_PARAM_NAME,
         RESPONSE_CORRELATION_ID_PARAM_NAME
     };
 
@@ -253,7 +256,7 @@ public final class DriverConductor implements Agent
     @Override
     public void onStart()
     {
-        DriverLog.logStart(MediaDriverVersion.VERSION);
+        DriverTracing.traceStart(MediaDriverVersion.VERSION);
 
         final long nowNs = nanoClock.nanoTime();
         cachedNanoClock.update(nowNs);
@@ -496,20 +499,35 @@ public final class DriverConductor implements Agent
 
     void responseSetup(final long responseCorrelationId, final int responseSessionId)
     {
-        for (int i = 0, subscriptionLinksSize = subscriptionLinks.size(); i < subscriptionLinksSize; i++)
+        for (final SubscriptionLink subscriptionLink : subscriptionLinks)
         {
-            final SubscriptionLink subscriptionLink = subscriptionLinks.get(i);
             if (subscriptionLink.registrationId() == responseCorrelationId &&
-                subscriptionLink instanceof final NetworkSubscriptionLink link)
+                subscriptionLink instanceof final NetworkSubscriptionLink link &&
+                NetworkSubscriptionLink.ResponseSetupState.ERROR != link.responseSetupState())
             {
-                if (subscriptionLink.hasSessionId())
+                if (NetworkSubscriptionLink.ResponseSetupState.COMPLETE == link.responseSetupState())
                 {
                     receiverProxy.requestSetup(
                         subscriptionLink.channelEndpoint(), subscriptionLink.streamId(), subscriptionLink.sessionId());
                 }
                 else
                 {
-                    link.sessionId(responseSessionId);
+                    if (link.hasSessionId() && link.sessionId() != responseSessionId)
+                    {
+                        recordError(new AeronEvent(
+                            "failed to setup response subscription (" +
+                            "registrationId=" + link.registrationId() +
+                            ", channel=" + link.channel() + "), because it contains " +
+                            "`session-id` parameter that does not match `session-id=" +
+                                responseSessionId + "` of the response publication",
+                            AeronException.Category.ERROR));
+                        link.sessionId(NULL_SESSION_ID, false);
+                        link.responseSetupState(NetworkSubscriptionLink.ResponseSetupState.ERROR);
+                        break;
+                    }
+
+                    link.sessionId(responseSessionId, true);
+                    link.responseSetupState(NetworkSubscriptionLink.ResponseSetupState.COMPLETE);
                     addNetworkSubscriptionToReceiver(link);
                     link.channelEndpoint().decResponseRefToStream(subscriptionLink.streamId);
                 }
@@ -586,7 +604,7 @@ public final class DriverConductor implements Agent
 
     void cleanupPublication(final NetworkPublication publication)
     {
-        DriverLog.logPublicationRemoval(publication.channel(), publication.sessionId(), publication.streamId());
+        DriverTracing.tracePublicationRemoval(publication.channel(), publication.sessionId(), publication.streamId());
 
         senderProxy.removeNetworkPublication(publication);
 
@@ -611,7 +629,7 @@ public final class DriverConductor implements Agent
 
     void cleanupSubscriptionLink(final SubscriptionLink subscription)
     {
-        DriverLog.logSubscriptionRemoval(
+        DriverTracing.traceSubscriptionRemoval(
             subscription.channel(), subscription.streamId(), subscription.registrationId());
 
         final ReceiveChannelEndpoint channelEndpoint = subscription.channelEndpoint();
@@ -677,7 +695,7 @@ public final class DriverConductor implements Agent
 
     void cleanupImage(final PublicationImage image)
     {
-        DriverLog.logImageRemoval(image.channel(), image.sessionId(), image.streamId(), image.correlationId());
+        DriverTracing.traceImageRemoval(image.channel(), image.sessionId(), image.streamId(), image.correlationId());
 
         for (int i = 0, size = subscriptionLinks.size(); i < size; i++)
         {
@@ -687,7 +705,7 @@ public final class DriverConductor implements Agent
 
     void cleanupIpcPublication(final IpcPublication publication)
     {
-        DriverLog.logPublicationRemoval(publication.channel(), publication.sessionId(), publication.streamId());
+        DriverTracing.tracePublicationRemoval(publication.channel(), publication.sessionId(), publication.streamId());
 
         for (int i = 0, size = subscriptionLinks.size(); i < size; i++)
         {
@@ -1514,6 +1532,9 @@ public final class DriverConductor implements Agent
             channelEndpoint.socketSndbufLength(),
             udpChannel.originalUriString(),
             channelEndpoint.originalUriString());
+        validateChannelSocketTos(
+            udpChannel.socketTos(), channelEndpoint.socketTos(),
+            udpChannel.originalUriString(), channelEndpoint.originalUriString());
     }
 
     private static void validateChannelSendTimestampOffset(
@@ -1818,6 +1839,9 @@ public final class DriverConductor implements Agent
             channelEndpoint.socketSndbufLength(),
             udpChannel.originalUriString(),
             channelEndpoint.originalUriString());
+        validateChannelSocketTos(
+            udpChannel.socketTos(), channelEndpoint.socketTos(),
+            udpChannel.originalUriString(), channelEndpoint.originalUriString());
     }
 
     private ReceiveChannelEndpoint findExistingReceiveChannelEndpoint(final UdpChannel udpChannel)
@@ -1933,21 +1957,38 @@ public final class DriverConductor implements Agent
         }
     }
 
-    private void findAndUpdateResponseIpcSubscription(final PublicationParams params, final IpcPublication publication)
+    private void findAndUpdateResponseIpcSubscription(
+        final PublicationParams params, final IpcPublication responsePublication)
     {
-        if (NULL_VALUE != params.responseCorrelationId)
+        if (NULL_VALUE != params.responseCorrelationId) // responseCorrelationId is `Image.correlationId`
         {
-            for (final IpcPublication ipcPublication : ipcPublications)
+            for (final IpcPublication requestPublication : ipcPublications)
             {
-                if (ipcPublication.registrationId() == params.responseCorrelationId)
+                // for IPC case `Image.correlationId` is the same as `IpcPublication.registrationId`, i.e. it directly
+                // points at the publisher log buffer
+                if (requestPublication.registrationId() == params.responseCorrelationId)
                 {
-                    for (int i = 0, n = subscriptionLinks.size(); i < n; i++)
+                    for (final SubscriptionLink subscriptionLink : subscriptionLinks)
                     {
-                        final SubscriptionLink subscriptionLink = subscriptionLinks.get(i);
-                        if (ipcPublication.responseCorrelationId() == subscriptionLink.registrationId &&
+                        // request publication points at response subscription
+                        if (requestPublication.responseCorrelationId() == subscriptionLink.registrationId &&
                             subscriptionLink instanceof IpcSubscriptionLink)
                         {
-                            subscriptionLink.sessionId(publication.sessionId());
+                            if (subscriptionLink.hasSessionId() &&
+                                subscriptionLink.sessionId() != responsePublication.sessionId())
+                            {
+                                throw new AeronEvent(
+                                    "failed to create response publication (" +
+                                    "registrationId=" + requestPublication.registrationId() +
+                                    ", channel=" + responsePublication.channel() + "), " +
+                                    "because response subscription (" +
+                                    "registrationId=" + subscriptionLink.registrationId() +
+                                    ", channel=" + subscriptionLink.channel() + ") uses " +
+                                    "`session-id` parameter that does not match `session-id=" +
+                                        responsePublication.sessionId() + "` of the response publication",
+                                    AeronException.Category.ERROR);
+                            }
+                            subscriptionLink.sessionId(responsePublication.sessionId(), true);
                             break;
                         }
                     }
@@ -2318,6 +2359,18 @@ public final class DriverConductor implements Agent
             throw new InvalidChannelException(
                 paramName + "=" + newLength + " does not match existing value of " + existingValue +
                     ": existingChannel=" + existingChannel + " channel=" + channel);
+        }
+    }
+
+    private static void validateChannelSocketTos(
+        final int socketTos, final int existingSocketTos, final String channel, final String existingChannel)
+    {
+        if (NULL_VALUE != socketTos && socketTos != existingSocketTos)
+        {
+            final Object existingValue = NULL_VALUE == existingSocketTos ? "OS default" : existingSocketTos;
+            throw new InvalidChannelException(
+                SOCKET_TOS_PARAM_NAME + "=" + socketTos + " does not match existing value of " + existingValue +
+                ": existingChannel=" + existingChannel + " channel=" + channel);
         }
     }
 

@@ -36,6 +36,7 @@ import io.aeron.driver.Configuration;
 import io.aeron.driver.DutyCycleTracker;
 import io.aeron.exceptions.AeronEvent;
 import io.aeron.exceptions.AeronException;
+import io.aeron.exceptions.RegistrationException;
 import io.aeron.exceptions.TimeoutException;
 import io.aeron.logbuffer.BufferClaim;
 import io.aeron.logbuffer.Header;
@@ -273,7 +274,7 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
         }
         catch (final AgentTerminationException ex)
         {
-            runTerminationHook();
+            runTerminationHooks(ex);
             throw ex;
         }
 
@@ -1162,9 +1163,16 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
 
         if (null != activeLogEvent && null == logAdapter.image())
         {
-            final ActiveLogEvent event = activeLogEvent;
-            activeLogEvent = null;
-            joinActiveLog(event);
+            try
+            {
+                joinActiveLog(activeLogEvent);
+                activeLogEvent = null;
+            }
+            catch (final RegistrationException ex)
+            {
+                ctx.countedErrorHandler().onError(new ClusterEvent(
+                    "failed to join active log, will retry: " + ex.getMessage()));
+            }
         }
 
         if (NULL_POSITION != terminationPosition && logPosition >= terminationPosition)
@@ -1291,8 +1299,16 @@ final class ClusteredServiceAgent extends ClusteredServiceAgentRhsPadding implem
         }
     }
 
-    private void runTerminationHook()
+    private void runTerminationHooks(final AgentTerminationException cause)
     {
+        try
+        {
+            ctx.extendedTerminationHook().run(cause);
+        }
+        catch (final Exception ex)
+        {
+            ctx.countedErrorHandler().onError(ex);
+        }
         try
         {
             ctx.terminationHook().run();

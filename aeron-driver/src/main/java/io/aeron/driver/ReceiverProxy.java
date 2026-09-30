@@ -15,7 +15,7 @@
  */
 package io.aeron.driver;
 
-import io.aeron.driver.logging.DriverLog;
+import io.aeron.driver.logging.DriverTracing;
 import io.aeron.driver.media.ReceiveChannelEndpoint;
 import io.aeron.driver.media.ReceiveDestinationTransport;
 import io.aeron.driver.media.UdpChannel;
@@ -73,13 +73,13 @@ final class ReceiverProxy extends CommandProxy
 
     void registerReceiveChannelEndpoint(final ReceiveChannelEndpoint channelEndpoint)
     {
-        DriverLog.logReceiveChannelCreation(channelEndpoint.udpChannel().description());
+        DriverTracing.traceReceiveChannelCreation(channelEndpoint.udpChannel().description());
         offer(() -> receiver.onRegisterReceiveChannelEndpoint(channelEndpoint));
     }
 
     void closeReceiveChannelEndpoint(final ReceiveChannelEndpoint channelEndpoint)
     {
-        DriverLog.logReceiveChannelClose(channelEndpoint.udpChannel().description());
+        DriverTracing.traceReceiveChannelClose(channelEndpoint.udpChannel().description());
         offer(() -> receiver.onCloseReceiveChannelEndpoint(channelEndpoint));
     }
 

@@ -20,7 +20,7 @@ import io.aeron.ChannelUri;
 import io.aeron.CommonContext;
 import io.aeron.ErrorCode;
 import io.aeron.driver.DriverConductorProxy;
-import io.aeron.driver.logging.DriverLog;
+import io.aeron.driver.logging.DriverTracing;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.NetworkPublication;
 import io.aeron.driver.Sender;
@@ -480,7 +480,7 @@ public class SendChannelEndpoint extends UdpChannelTransport
         final int length,
         final InetSocketAddress srcAddress)
     {
-        DriverLog.logNakReceived(
+        DriverTracing.traceNakReceived(
             srcAddress,
             msg.sessionId(),
             msg.streamId(),
@@ -1116,10 +1116,7 @@ class DynamicSndMultiDestination extends MultiSndDestination
             final Destination destination = destinations[i];
             if ((destination.timeOfLastActivityNs + DESTINATION_TIMEOUT) - nowNs < 0)
             {
-                if (i != lastIndex)
-                {
-                    destinations[i] = destinations[lastIndex--];
-                }
+                destinations[i] = destinations[lastIndex--];
                 removedCount++;
             }
         }

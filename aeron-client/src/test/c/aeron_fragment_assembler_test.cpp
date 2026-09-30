@@ -370,3 +370,24 @@ TEST_F(CFragmentAssemblerTest, shouldReassembleTwoMessagesFromFourFrames)
     handle_fragment(handler, fragmentLength);
     EXPECT_TRUE(isCalled);
 }
+
+TEST_F(CFragmentAssemblerTest, shouldDeleteSessionBuffer)
+{
+    size_t fragmentLength = MTU_LENGTH - AERON_DATA_HEADER_LENGTH;
+    bool isCalled = false;
+    auto handler = [&](const uint8_t *buffer, size_t length, aeron_header_t *header)
+    {
+        isCalled = true;
+    };
+
+    EXPECT_FALSE(aeron_fragment_assembler_delete_session_buffer(m_assembler, SESSION_ID));
+
+    fillFrame(AERON_DATA_HEADER_BEGIN_FLAG, 0, fragmentLength, 0);
+    handle_fragment(handler, fragmentLength);
+    fillFrame(AERON_DATA_HEADER_END_FLAG, MTU_LENGTH, fragmentLength, fragmentLength % 256);
+    handle_fragment(handler, fragmentLength);
+    EXPECT_TRUE(isCalled);
+
+    EXPECT_TRUE(aeron_fragment_assembler_delete_session_buffer(m_assembler, SESSION_ID));
+    EXPECT_FALSE(aeron_fragment_assembler_delete_session_buffer(m_assembler, SESSION_ID));
+}

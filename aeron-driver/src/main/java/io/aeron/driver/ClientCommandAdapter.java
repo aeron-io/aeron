@@ -29,7 +29,7 @@ import io.aeron.command.RemoveSubscriptionFlyweight;
 import io.aeron.command.StaticCounterMessageFlyweight;
 import io.aeron.command.SubscriptionMessageFlyweight;
 import io.aeron.command.TerminateDriverFlyweight;
-import io.aeron.driver.logging.DriverLog;
+import io.aeron.driver.logging.DriverTracing;
 import io.aeron.exceptions.ControlProtocolException;
 import io.aeron.exceptions.StorageSpaceException;
 import org.agrona.ErrorHandler;
@@ -110,7 +110,7 @@ final class ClientCommandAdapter implements ControlledMessageHandler
     public ControlledMessageHandler.Action onMessage(
         final int msgTypeId, final MutableDirectBuffer buffer, final int index, final int length)
     {
-        DriverLog.logCmd(msgTypeId, buffer, index, length);
+        DriverTracing.traceCmd(msgTypeId, buffer, index, length);
 
         long correlationId = 0;
 

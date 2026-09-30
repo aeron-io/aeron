@@ -546,7 +546,7 @@ aeron_archive_context_t *aeron_archive_get_archive_context(aeron_archive_t *aero
  * Retrieve the underlying aeron_archive_context_t used to configure the provided aeron_archive_t.
  * <p>
  * Additionally, calling this function transfers ownership of the returned aeron_archive_context_t to the caller.
- * i.e. it is now the the caller's responsibility to close the context.
+ * i.e. it is now the caller's responsibility to close the context.
  * This is useful when wrapping the C library in other, higher level languages.
  */
 aeron_archive_context_t *aeron_archive_get_and_own_archive_context(aeron_archive_t *aeron_archive);
@@ -1685,7 +1685,8 @@ aeron_counter_t *aeron_archive_persistent_subscription_context_get_live_joined_c
  * Create a persistent subscription.
  * <p>
  * If creating a subscription succeeds, then the subscription will own the context. And closing the
- * subscription, will close the context.
+ * subscription, will close the context. Ownership of the context can be transferred to the caller
+ * via aeron_archive_persistent_subscription_get_and_own_persistent_subscription_context.
  * <p>
  * If no Aeron client is set on the context, one will be created and owned by the context,
  * and will be closed when the context is closed via aeron_archive_persistent_subscription_context_close.
@@ -1700,11 +1701,33 @@ int aeron_archive_persistent_subscription_create(
 
 /**
  * Close a persistent subscription and dispose of all resources and memory held by it.
+ * <p>
+ * The context is closed as well, unless ownership of it was transferred to the caller via
+ * aeron_archive_persistent_subscription_get_and_own_persistent_subscription_context.
  *
  * @param persistent_subscription to close.
  * @return 0 on success, -1 on error.
  */
 int aeron_archive_persistent_subscription_close(
+    aeron_archive_persistent_subscription_t *persistent_subscription);
+
+/**
+ * Retrieve the underlying aeron_archive_persistent_subscription_context_t used to configure the provided
+ * aeron_archive_persistent_subscription_t.
+ */
+aeron_archive_persistent_subscription_context_t *aeron_archive_persistent_subscription_get_persistent_subscription_context(
+    aeron_archive_persistent_subscription_t *persistent_subscription);
+
+/**
+ * Retrieve the underlying aeron_archive_persistent_subscription_context_t used to configure the provided
+ * aeron_archive_persistent_subscription_t.
+ * <p>
+ * Additionally, calling this function transfers ownership of the returned aeron_archive_persistent_subscription_context_t
+ * to the caller. i.e. it is now the caller's responsibility to close the context, which must be done after
+ * the persistent subscription has been closed.
+ * This is useful when wrapping the C library in other, higher level languages.
+ */
+aeron_archive_persistent_subscription_context_t *aeron_archive_persistent_subscription_get_and_own_persistent_subscription_context(
     aeron_archive_persistent_subscription_t *persistent_subscription);
 
 /**

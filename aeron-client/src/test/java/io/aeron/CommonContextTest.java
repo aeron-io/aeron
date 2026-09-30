@@ -16,24 +16,47 @@
 package io.aeron;
 
 import io.aeron.exceptions.ConcurrentConcludeException;
+import io.aeron.test.Tests;
 import org.agrona.ErrorHandler;
+import org.agrona.concurrent.AtomicBuffer;
 import org.agrona.concurrent.SystemEpochClock;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.errors.DistinctErrorLog;
 import org.agrona.concurrent.errors.LoggingErrorHandler;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.util.Arrays;
+import java.util.List;
 
+import static io.aeron.CommonContext.DATE_TIME_FORMATTER;
 import static io.aeron.CommonContext.FALLBACK_LOGGER_PROP_NAME;
+import static io.aeron.CommonContext.FILE_NAME_FORMATTER;
 import static java.nio.ByteBuffer.allocateDirect;
+import static java.nio.charset.StandardCharsets.US_ASCII;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.allOf;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.endsWith;
+import static org.hamcrest.Matchers.startsWith;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -43,14 +66,13 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.AdditionalMatchers.and;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.endsWith;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.startsWith;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -166,6 +188,11 @@ class CommonContextTest
 
         CommonContext.saveExistingErrors(markFile, errorBuffer, logger, errorFilePrefix);
 
+        final File[] files = tempDir.toFile().listFiles(
+            (dir, name) -> name.endsWith("-error.log") && name.startsWith(errorFilePrefix));
+        assertNotNull(files);
+        assertEquals(0, files.length);
+
         verifyNoInteractions(logger);
     }
 
@@ -185,9 +212,115 @@ class CommonContextTest
             (dir, name) -> name.endsWith("-error.log") && name.startsWith(errorFilePrefix));
         assertNotNull(files);
         assertEquals(1, files.length);
+        final File file = files[0];
 
-        verify(logger).println(and(startsWith("WARNING: existing errors saved to: "), endsWith("-error.log")));
+        verify(logger).println("WARNING: existing errors saved to: " + file.getAbsolutePath());
         verifyNoMoreInteractions(logger);
+    }
+
+    @Test
+    void saveExistingErrorsFailsWithNullPointerExceptionIfMarkFileIsNull()
+    {
+        assertThrowsExactly(
+            NullPointerException.class,
+            () -> CommonContext.saveExistingErrors(
+                null,
+                mock(AtomicBuffer.class),
+                mock(PrintStream.class),
+                ""));
+    }
+
+    @Test
+    void saveExistingErrorsFailsWithNullPointerExceptionIfErrorBufferIsNull()
+    {
+        assertThrowsExactly(
+            NullPointerException.class,
+            () -> CommonContext.saveExistingErrors(
+                new File("test.dat"),
+                null,
+                mock(PrintStream.class),
+                ""));
+    }
+
+    @Test
+    void saveExistingErrorsFailsWithNullPointerExceptionIfLoggerIsNull()
+    {
+        assertThrowsExactly(
+            NullPointerException.class,
+            () -> CommonContext.saveExistingErrors(
+                new File("test.dat"),
+                mock(AtomicBuffer.class),
+                null,
+                ""));
+    }
+
+    @Test
+    void saveExistingErrorsFailsWithNullPointerExceptionIfErrorFilePrefixIsNull()
+    {
+        assertThrowsExactly(
+            NullPointerException.class,
+            () -> CommonContext.saveExistingErrors(
+                new File("test.dat"),
+                mock(AtomicBuffer.class),
+                mock(PrintStream.class),
+                null));
+    }
+
+    @Test
+    @EnabledOnOs(OS.MAC)
+    void saveExistingErrorsShouldDumpErrorsToLoggerIfSavingToFileFails() throws Exception
+    {
+        final File markFile = tempDir.resolve("test.dat").toFile();
+        final DistinctErrorLog errorLog =
+            new DistinctErrorLog(new UnsafeBuffer(allocateDirect(16 * 1024)), SystemEpochClock.INSTANCE);
+        final IndexOutOfBoundsException customError = new IndexOutOfBoundsException("test me");
+        assertTrue(errorLog.record(customError));
+        final PrintStream logger = mock(PrintStream.class);
+        final String errorFilePrefix = "test";
+
+        Tests.markImmutable(tempDir);
+        try
+        {
+            CommonContext.saveExistingErrors(markFile, errorLog.buffer(), logger, errorFilePrefix);
+        }
+        finally
+        {
+            Tests.unmarkImmutable(tempDir);
+        }
+
+        final InOrder inOrder = inOrder(logger);
+        final ArgumentCaptor<String> fileNameCaptor = ArgumentCaptor.forClass(String.class);
+        inOrder.verify(logger).println(fileNameCaptor.capture());
+        final String msg = fileNameCaptor.getValue();
+        assertThat(msg, startsWith("ERROR: Failed to save existing errors to: "));
+        final Path errorFilePath = Paths.get(msg.substring(msg.lastIndexOf(": ") + 2));
+        assertEquals(tempDir, errorFilePath.getParent());
+        final String errorFileName = errorFilePath.getFileName().toString();
+        assertThat(
+            errorFileName,
+            allOf(startsWith(errorFilePrefix + "-"), endsWith("-error.log")));
+
+        final ArgumentCaptor<Object> exceptionCaptor = ArgumentCaptor.forClass(Object.class);
+        inOrder.verify(logger, atLeastOnce()).println(exceptionCaptor.capture());
+        final String errorMessage = exceptionCaptor.getAllValues().get(0).toString();
+        assertThat(errorMessage, containsString(": "));
+        final Class<?> actualIoErrorClass = Class.forName(errorMessage.substring(0, errorMessage.indexOf(": ")));
+        assertTrue(IOException.class.isAssignableFrom(actualIoErrorClass));
+
+        inOrder.verify(logger).println();
+        inOrder.verify(logger).println("Dumping errors here:");
+        inOrder.verify(logger).println();
+
+        final ArgumentCaptor<byte[]> savedErrorsCaptor = ArgumentCaptor.forClass(byte[].class);
+        inOrder.verify(logger).write(savedErrorsCaptor.capture(), anyInt(), anyInt());
+        final byte[] buff = savedErrorsCaptor.getValue();
+
+        final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        CommonContext.printErrorLog(errorLog.buffer(), new PrintStream(baos, false, US_ASCII));
+        final byte[] expected = baos.toByteArray();
+        assertEquals(
+            -1,
+            Arrays.mismatch(expected, 0, expected.length, buff, 0, expected.length));
     }
 
     @Test
@@ -274,5 +407,45 @@ class CommonContextTest
         assertEquals(
             tempDir.resolve("one/three/four/x/y/z").toFile().getCanonicalFile(),
             commonContext.aeronDirectory());
+    }
+
+    @ParameterizedTest
+    @MethodSource("fileNameFormats")
+    void fileNameFormatter(final long epochTimestampMs, final ZoneId zone, final String expected)
+    {
+        assertEquals(
+            expected,
+            FILE_NAME_FORMATTER.format(OffsetDateTime.ofInstant(Instant.ofEpochMilli(epochTimestampMs), zone)));
+    }
+
+    @ParameterizedTest
+    @MethodSource("timestampFormats")
+    void timestampFormatter(final long epochTimestampMs, final ZoneId zone, final String expected)
+    {
+        assertEquals(
+            expected,
+            DATE_TIME_FORMATTER.format(OffsetDateTime.ofInstant(Instant.ofEpochMilli(epochTimestampMs), zone)));
+    }
+
+    private static List<Arguments> fileNameFormats()
+    {
+        return List.of(
+          Arguments.arguments(0L, ZoneOffset.UTC, "1970-01-01-00-00-00-000000+0000"),
+          Arguments.arguments(1L, ZoneOffset.UTC, "1970-01-01-00-00-00-001000+0000"),
+          Arguments.arguments(372492374937L, ZoneOffset.UTC, "1981-10-21-06-06-14-937000+0000"),
+          Arguments.arguments(458398503485L, ZoneOffset.ofHours(5), "1984-07-11-17-55-03-485000+0500"),
+          Arguments.arguments(372492374937L, ZoneOffset.ofHours(-4), "1981-10-21-02-06-14-937000-0400"),
+          Arguments.arguments(1790011478302L, ZoneOffset.ofHours(1), "2026-09-21-18-24-38-302000+0100"));
+    }
+
+    private static List<Arguments> timestampFormats()
+    {
+        return List.of(
+          Arguments.arguments(0L, ZoneOffset.UTC, "1970-01-01 00:00:00.000000+0000"),
+          Arguments.arguments(1L, ZoneOffset.UTC, "1970-01-01 00:00:00.001000+0000"),
+          Arguments.arguments(372492374937L, ZoneOffset.UTC, "1981-10-21 06:06:14.937000+0000"),
+          Arguments.arguments(2458398503485L, ZoneOffset.ofHours(5), "2047-11-26 21:28:23.485000+0500"),
+          Arguments.arguments(372492374937L, ZoneOffset.ofHours(-4), "1981-10-21 02:06:14.937000-0400"),
+          Arguments.arguments(1790011478302L, ZoneOffset.ofHours(1), "2026-09-21 18:24:38.302000+0100"));
     }
 }

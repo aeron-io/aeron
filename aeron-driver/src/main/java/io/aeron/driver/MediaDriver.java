@@ -38,6 +38,7 @@ import io.aeron.exceptions.ConcurrentConcludeException;
 import io.aeron.exceptions.ConfigurationException;
 import io.aeron.logbuffer.BufferClaim;
 import io.aeron.logbuffer.LogBufferDescriptor;
+import io.aeron.topology.CGroupValidator;
 import io.aeron.version.Versioned;
 import org.agrona.BitUtil;
 import org.agrona.BufferUtil;
@@ -78,20 +79,15 @@ import org.agrona.concurrent.status.CountersManager;
 import org.agrona.concurrent.status.StatusIndicator;
 import org.agrona.concurrent.status.UnsafeBufferStatusIndicator;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.PrintStream;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.net.StandardSocketOptions;
 import java.nio.ByteOrder;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.DatagramChannel;
-import java.text.SimpleDateFormat;
 import java.util.Arrays;
-import java.util.Date;
 import java.util.Properties;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -229,6 +225,11 @@ public final class MediaDriver implements AutoCloseable
             ctx.driverConductorProxy().driverConductor(conductor);
             ctx.receiverProxy().receiver(receiver);
             ctx.senderProxy().sender(sender);
+
+            if (SystemUtil.isLinux() && ctx.driverCpusetAffinity())
+            {
+                new CGroupValidator().validate(ctx.driverCpusetWarningsAsErrors());
+            }
 
             switch (ctx.threadingMode())
             {
@@ -492,19 +493,19 @@ public final class MediaDriver implements AutoCloseable
             {
                 final Consumer<String> logger = ctx.warnIfDirectoryExists() ? System.err::println : (s) -> {};
                 final MappedByteBuffer cncByteBuffer = ctx.mapExistingCncFile(logger);
-                try
+                if (null != cncByteBuffer)
                 {
+                    final File cncFile = new File(ctx.aeronDirectory(), CncFileDescriptor.CNC_FILE);
                     if (CommonContext.isDriverActive(ctx.driverTimeoutMs(), logger, cncByteBuffer))
                     {
-                        throw new ActiveDriverException("Active media driver detected: " +
-                            new File(ctx.aeronDirectory(), CncFileDescriptor.CNC_FILE));
+                        throw new ActiveDriverException("Active media driver detected: " + cncFile);
                     }
 
-                    reportExistingErrors(ctx, cncByteBuffer);
-                }
-                finally
-                {
-                    BufferUtil.free(cncByteBuffer);
+                    CommonContext.saveExistingErrors(
+                        cncFile,
+                        CommonContext.errorLogBuffer(cncByteBuffer),
+                        CommonContext.fallbackLogger(),
+                        "driver");
                 }
             }
 
@@ -512,34 +513,6 @@ public final class MediaDriver implements AutoCloseable
         }
 
         IoUtil.ensureDirectoryExists(ctx.aeronDirectory(), "aeron");
-    }
-
-    private static void reportExistingErrors(final Context ctx, final MappedByteBuffer cncByteBuffer)
-    {
-        try
-        {
-            final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            final int observations = ctx.saveErrorLog(new PrintStream(baos, false, US_ASCII), cncByteBuffer);
-            if (observations > 0)
-            {
-                final StringBuilder builder = new StringBuilder(ctx.aeronDirectoryName());
-                IoUtil.removeTrailingSlashes(builder);
-
-                final SimpleDateFormat dateFormat = new SimpleDateFormat("-yyyy-MM-dd-HH-mm-ss-SSSZ");
-                builder.append(dateFormat.format(new Date())).append("-error.log");
-                final String errorLogFilename = builder.toString();
-
-                System.err.println("WARNING: Existing errors saved to: " + errorLogFilename);
-                try (FileOutputStream out = new FileOutputStream(errorLogFilename))
-                {
-                    baos.writeTo(out);
-                }
-            }
-        }
-        catch (final Exception ex)
-        {
-            LangUtil.rethrowUnchecked(ex);
-        }
     }
 
     /**
@@ -626,6 +599,7 @@ public final class MediaDriver implements AutoCloseable
         private int socketSndbufLength;
         private int socketRcvbufLength;
         private int socketMulticastTtl;
+        private int socketTos;
         private int mtuLength;
         private int ipcMtuLength;
         private int filePageSize;
@@ -645,6 +619,9 @@ public final class MediaDriver implements AutoCloseable
         private String resolverBootstrapNeighbor;
         private String senderWildcardPortRange;
         private String receiverWildcardPortRange;
+
+        private boolean cpusetAffinity;
+        private boolean cpusetWarningsAsErrors;
 
         private EpochClock epochClock;
         private NanoClock nanoClock;
@@ -758,6 +735,8 @@ public final class MediaDriver implements AutoCloseable
             reliableStream = Configuration.reliableStream(properties);
             tetherSubscriptions = Configuration.tetherSubscriptions(properties);
             rejoinStream = Configuration.rejoinStream(properties);
+            cpusetAffinity = Configuration.driverCpusetAffinityEnabled(properties);
+            cpusetWarningsAsErrors = Configuration.driverCpusetWarningsAsErrors(properties);
             lowStorageWarningThreshold = Configuration.lowStorageWarningThreshold(properties);
             timerIntervalNs = Configuration.timerIntervalNs(properties);
             clientLivenessTimeoutNs = Configuration.clientLivenessTimeoutNs(properties);
@@ -799,6 +778,7 @@ public final class MediaDriver implements AutoCloseable
             socketSndbufLength = Configuration.socketSndbufLength(properties);
             socketRcvbufLength = Configuration.socketRcvbufLength(properties);
             socketMulticastTtl = Configuration.socketMulticastTtl(properties);
+            socketTos = Configuration.socketTos(properties);
             mtuLength = Configuration.mtuLength(properties);
             ipcMtuLength = Configuration.ipcMtuLength(properties);
             filePageSize = Configuration.filePageSize(properties);
@@ -914,6 +894,7 @@ public final class MediaDriver implements AutoCloseable
                     publicationTermWindowLength, 0, TERM_MAX_LENGTH, "publicationTermWindowLength");
                 validateValueRange(
                     ipcPublicationTermWindowLength, 0, TERM_MAX_LENGTH, "ipcPublicationTermWindowLength");
+                validateValueRange(socketTos, Aeron.NULL_VALUE, 255, "socketTos");
 
                 validateValueRange(
                     nakUnicastDelayNs, NAK_UNICAST_DELAY_MIN_VALUE_NS, Long.MAX_VALUE, "nakUnicastDelayNs");
@@ -2206,6 +2187,31 @@ public final class MediaDriver implements AutoCloseable
         public Context socketMulticastTtl(final int ttl)
         {
             socketMulticastTtl = ttl;
+            return this;
+        }
+
+        /**
+         * The IP_TOS value to be used for UDP sockets.
+         *
+         * @return IP_TOS value to be used for UDP sockets.
+         * @see Configuration#SOCKET_TOS_PROP_NAME
+         */
+        @Config
+        public int socketTos()
+        {
+            return socketTos;
+        }
+
+        /**
+         * Set the IP_TOS value to be used for UDP sockets.
+         *
+         * @param socketTos value to be used for UDP sockets.
+         * @return this for a fluent API.
+         * @see Configuration#SOCKET_TOS_PROP_NAME
+         */
+        public Context socketTos(final int socketTos)
+        {
+            this.socketTos = socketTos;
             return this;
         }
 
@@ -4144,6 +4150,44 @@ public final class MediaDriver implements AutoCloseable
         }
 
         /**
+         * Should cgroup/cpuset-derived CPU affinity be applied to the Media Driver's threads.
+         *
+         * @return true if cgroup/cpuset-derived CPU affinity should be applied.
+         * @see Configuration#DRIVER_CPUSET_AFFINITY_PROP_NAME
+         */
+        @Config
+        public boolean driverCpusetAffinity()
+        {
+            return this.cpusetAffinity;
+        }
+
+        /**
+         * Should cpuset topology validation warnings be treated as fatal errors.
+         *
+         * @return true if cpuset topology validation warnings should be treated as fatal errors.
+         * @see Configuration#DRIVER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
+         */
+        @Config
+        public boolean driverCpusetWarningsAsErrors()
+        {
+            return this.cpusetWarningsAsErrors;
+        }
+
+        /**
+         * Should cpuset topology validation warnings be treated as fatal errors.
+         *
+         * @param cpusetWarningsAsErrors true if cpuset topology validation warnings should be treated as fatal
+         *                               errors.
+         * @return this for a fluent API.
+         * @see Configuration#DRIVER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
+         */
+        public Context driverCpusetWarningsAsErrors(final boolean cpusetWarningsAsErrors)
+        {
+            this.cpusetWarningsAsErrors = cpusetWarningsAsErrors;
+            return this;
+        }
+
+        /**
          * {@inheritDoc}
          */
         @Override
@@ -4815,6 +4859,8 @@ public final class MediaDriver implements AutoCloseable
                 "\n    useWindowsHighResTimer=" + useWindowsHighResTimer +
                 "\n    warnIfDirectoryExists=" + warnIfDirectoryExists +
                 "\n    dirDeleteOnStart=" + dirDeleteOnStart +
+                "\n    cpusetAffinity=" + cpusetAffinity +
+                "\n    cpusetWarningsAsErrors=" + cpusetWarningsAsErrors +
                 "\n    dirDeleteOnShutdown=" + dirDeleteOnShutdown +
                 "\n    termBufferSparseFile=" + termBufferSparseFile +
                 "\n    performStorageChecks=" + performStorageChecks +
@@ -4855,6 +4901,7 @@ public final class MediaDriver implements AutoCloseable
                 "\n    socketSndbufLength=" + socketSndbufLength +
                 "\n    socketRcvbufLength=" + socketRcvbufLength +
                 "\n    socketMulticastTtl=" + socketMulticastTtl +
+                "\n    socketTos=" + socketTos +
                 "\n    mtuLength=" + mtuLength +
                 "\n    ipcMtuLength=" + ipcMtuLength +
                 "\n    filePageSize=" + filePageSize +

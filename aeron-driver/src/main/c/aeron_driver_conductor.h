@@ -91,6 +91,14 @@ typedef struct aeron_subscribable_list_entry_stct
 }
 aeron_subscribable_list_entry_t;
 
+typedef enum aeron_subscription_link_setup_status_enum
+{
+    AERON_SUBSCRIPTION_LINK_SETUP_STATUS_PENDING,
+    AERON_SUBSCRIPTION_LINK_SETUP_STATUS_COMPLETE,
+    AERON_SUBSCRIPTION_LINK_SETUP_STATUS_ERROR
+}
+aeron_subscription_link_setup_status_t;
+
 typedef struct aeron_subscription_link_stct
 {
     char channel[AERON_URI_MAX_LENGTH];
@@ -100,6 +108,8 @@ typedef struct aeron_subscription_link_stct
     bool is_rejoin;
     bool has_session_id;
     bool is_response;
+    bool is_setup_complete;
+    aeron_subscription_link_setup_status_t setup_status;
     aeron_inferable_boolean_t group;
     int32_t stream_id;
     int32_t session_id;

@@ -19,12 +19,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdatomic.h>
-
-#if defined(__clang__)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wc11-extensions"
-#endif
 
 #define AERON_GET_ACQUIRE(dst, src)                                           \
 do                                                                            \
@@ -33,7 +27,7 @@ do                                                                            \
         src,                                                                  \
         "AERON_GET_ACQUIRE: src must be a volatile lvalue"); \
     dst = (src);                                                              \
-    atomic_thread_fence(memory_order_acquire);                                \
+    __atomic_thread_fence(__ATOMIC_ACQUIRE);                                  \
 }                                                                             \
 while (false)
 
@@ -43,7 +37,7 @@ do                                                                            \
     AERON_ATOMIC_ASSERT_VOLATILE_LVALUE(                                      \
         dst,                                                                  \
         "AERON_SET_RELEASE: dst must be a volatile lvalue"); \
-    atomic_thread_fence(memory_order_release);                                \
+    __atomic_thread_fence(__ATOMIC_RELEASE);                                  \
     (dst) = (src);                                                            \
 }                                                                             \
 while (false)
@@ -51,46 +45,44 @@ while (false)
 #define AERON_GET_AND_ADD_INT64(original, dst, value)                         \
 do                                                                            \
 {                                                                             \
-    original = atomic_fetch_add((_Atomic(int64_t) *)&dst, value);             \
+    original = __atomic_fetch_add(&(dst), value, __ATOMIC_SEQ_CST);           \
 }                                                                             \
 while (false)                                                                 \
 
 #define AERON_GET_AND_ADD_INT32(original, dst, value)                         \
 do                                                                            \
 {                                                                             \
-    original = atomic_fetch_add((_Atomic(int32_t) *)&dst, value);             \
+    original = __atomic_fetch_add(&(dst), value, __ATOMIC_SEQ_CST);           \
 }                                                                             \
 while (false)                                                                 \
 
 inline bool aeron_cas_int64(volatile int64_t *dst, int64_t expected, int64_t desired)
 {
-    return atomic_compare_exchange_strong((_Atomic(int64_t) *)dst, &expected, desired);
+    return __atomic_compare_exchange_n(
+        dst, &expected, desired, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
 }
 
 inline bool aeron_cas_uint64(volatile uint64_t *dst, uint64_t expected, uint64_t desired)
 {
-    return atomic_compare_exchange_strong((_Atomic(uint64_t) *)dst, &expected, desired);
+    return __atomic_compare_exchange_n(
+        dst, &expected, desired, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
 }
 
 inline bool aeron_cas_int32(volatile int32_t *dst, int32_t expected, int32_t desired)
 {
-    return atomic_compare_exchange_strong((_Atomic(int32_t) *)dst, &expected, desired);
+    return __atomic_compare_exchange_n(
+        dst, &expected, desired, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
 }
 
 inline void aeron_acquire(void)
 {
-    atomic_thread_fence(memory_order_acquire);
+    __atomic_thread_fence(__ATOMIC_ACQUIRE);
 }
 
 inline void aeron_release(void)
 {
-    atomic_thread_fence(memory_order_release);
+    __atomic_thread_fence(__ATOMIC_RELEASE);
 }
-
-// intentionally commented out, but kept in if we ever make the GET_AND_FETCH into inline functions, then can be used.
-//#if defined(__clang__)
-//#pragma clang diagnostic pop
-//#endif
 
 /*-------------------------------------
  *  Alignment

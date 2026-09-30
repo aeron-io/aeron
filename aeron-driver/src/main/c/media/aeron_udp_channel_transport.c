@@ -144,6 +144,20 @@ int aeron_udp_channel_transport_init(
     is_multicast = aeron_is_addr_multicast(bind_addr);
     socklen_t bind_addr_len = is_ipv6 ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in);
 
+    if (AERON_NULL_VALUE != params->socket_tos)
+    {
+        const int level = is_ipv6 ? IPPROTO_IPV6 : IPPROTO_IP;
+        const int option = is_ipv6 ? IPV6_TCLASS : IP_TOS;
+        if (aeron_setsockopt(transport->fd, level, option, &params->socket_tos, sizeof(params->socket_tos)) < 0)
+        {
+            AERON_APPEND_ERR(
+                "failed to set %s option to: %" PRId32,
+                is_ipv6 ? "IPPROTO_IPV6/IPV6_TCLASS" : "IPPROTO_IP/IP_TOS",
+                params->socket_tos);
+            goto error;
+        }
+    }
+
     if (!is_multicast)
     {
         if (aeron_bind(transport->recv_fd, (struct sockaddr *)bind_addr, bind_addr_len) < 0)

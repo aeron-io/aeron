@@ -899,6 +899,46 @@ TEST_F(ClientConductorTest, shouldHandlePublicationAddRemoveDestination)
     doWork();
 }
 
+TEST_F(ClientConductorTest, shouldRemovePublicationDestinationById)
+{
+    aeron_async_add_publication_t *async_pub = nullptr;
+    aeron_async_destination_t *async_add_dest = nullptr;
+    aeron_async_destination_t *async_remove_dest = nullptr;
+    aeron_publication_t *publication = nullptr;
+
+    ASSERT_EQ(aeron_client_conductor_async_add_publication(&async_pub, &m_conductor, URI_RESERVED, STREAM_ID), 0);
+    doWork();
+
+    transmitOnPublicationReady(async_pub, m_logFileName, false);
+    createLogFile(m_logFileName);
+    doWork();
+    ASSERT_GT(aeron_async_add_publication_poll(&publication, async_pub), 0) << aeron_errmsg();
+
+    ASSERT_EQ(
+        aeron_client_conductor_async_add_publication_destination(&async_add_dest, &m_conductor, publication, DEST_URI),
+        0);
+
+    transmitOnOperationSuccess(async_add_dest);
+    doWork();
+    ASSERT_EQ(async_add_dest->registration_status, AERON_CLIENT_REGISTRATION_STATUS_REGISTERED);
+    ASSERT_EQ(async_add_dest->resource.publication->registration_id, publication->registration_id);
+    ASSERT_GE(async_add_dest->destination_registration_id, 0);
+    ASSERT_NE(async_add_dest->destination_registration_id, publication->registration_id);
+    ASSERT_GT(aeron_publication_async_destination_poll(async_add_dest), 0) << aeron_errmsg();
+
+    ASSERT_EQ(
+        aeron_client_conductor_async_remove_publication_destination_by_id(
+            &async_remove_dest, &m_conductor, publication, async_add_dest->destination_registration_id),
+        0);
+    transmitOnOperationSuccess(async_remove_dest);
+    doWork();
+    ASSERT_GT(aeron_publication_async_destination_poll(async_remove_dest), 0) << aeron_errmsg();
+
+    // graceful close and reclaim for sanitize
+    ASSERT_EQ(aeron_publication_close(publication, nullptr, nullptr), 0);
+    doWork();
+}
+
 TEST_F(ClientConductorTest, shouldHandlePublicationAddRemoveDestinationMaxMessageSize)
 {
     aeron_async_add_publication_t *async_pub = nullptr;
@@ -968,6 +1008,46 @@ TEST_F(ClientConductorTest, shouldHandleExclusivePublicationAddDestination)
     ASSERT_EQ(
         aeron_client_conductor_async_remove_exclusive_publication_destination(
             &async_dest, &m_conductor, publication, DEST_URI),
+        0);
+    transmitOnOperationSuccess(async_dest);
+    doWork();
+    ASSERT_GT(aeron_exclusive_publication_async_destination_poll(async_dest), 0) << aeron_errmsg();
+
+    // graceful close and reclaim for sanitize
+    ASSERT_EQ(aeron_exclusive_publication_close(publication, nullptr, nullptr), 0);
+    doWork();
+}
+
+TEST_F(ClientConductorTest, shouldRemoveExclusivePublicationDestinationById)
+{
+    aeron_async_add_publication_t *async_pub = nullptr;
+    aeron_async_destination_t *async_dest = nullptr;
+    aeron_exclusive_publication_t *publication = nullptr;
+
+    ASSERT_EQ(aeron_client_conductor_async_add_exclusive_publication(&async_pub, &m_conductor, URI_RESERVED, STREAM_ID), 0);
+    doWork();
+
+    transmitOnPublicationReady(async_pub, m_logFileName, false);
+    createLogFile(m_logFileName);
+    doWork();
+    ASSERT_GT(aeron_async_add_exclusive_publication_poll(&publication, async_pub), 0) << aeron_errmsg();
+
+    ASSERT_EQ(
+        aeron_client_conductor_async_add_exclusive_publication_destination(
+            &async_dest, &m_conductor, publication, DEST_URI),
+        0);
+
+    transmitOnOperationSuccess(async_dest);
+    doWork();
+    ASSERT_EQ(async_dest->registration_status, AERON_CLIENT_REGISTRATION_STATUS_REGISTERED);
+    ASSERT_EQ(async_dest->resource.publication->registration_id, publication->registration_id);
+    ASSERT_GE(async_dest->destination_registration_id, 0);
+    ASSERT_NE(async_dest->destination_registration_id, publication->registration_id);
+    ASSERT_GT(aeron_exclusive_publication_async_destination_poll(async_dest), 0) << aeron_errmsg();
+
+    ASSERT_EQ(
+        aeron_client_conductor_async_remove_exclusive_publication_destination_by_id(
+            &async_dest, &m_conductor, publication, async_dest->destination_registration_id),
         0);
     transmitOnOperationSuccess(async_dest);
     doWork();

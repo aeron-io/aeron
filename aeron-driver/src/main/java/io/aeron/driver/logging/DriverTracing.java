@@ -29,13 +29,13 @@ import java.util.Set;
 
 import static io.aeron.driver.logging.DriverEventCode.*;
 import static io.aeron.command.ControlProtocolEvents.*;
-import static io.aeron.driver.logging.DriverEventLogger.LOGGER;
+import static io.aeron.driver.logging.DriverTracer.TRACER;
 
 /**
  * Direct-call entry points for logging {@link io.aeron.driver.MediaDriver} events, replacing the previous
  * ByteBuddy-based instrumentation.
  */
-public final class DriverLog
+public final class DriverTracing
 {
     private static final Object2ObjectHashMap<String, EnumSet<DriverEventCode>> SPECIAL_EVENTS =
         new Object2ObjectHashMap<>();
@@ -69,36 +69,36 @@ public final class DriverLog
         ENABLED_EVENT_CODES = Collections.unmodifiableSet(enabledEventCodeSet);
     }
 
-    private static final boolean LOG_FRAME_IN_ENABLED = isEnabled(FRAME_IN);
-    private static final boolean LOG_FRAME_OUT_ENABLED = isEnabled(FRAME_OUT);
-    private static final boolean LOG_REMOVE_PUBLICATION_CLEANUP_ENABLED = isEnabled(REMOVE_PUBLICATION_CLEANUP);
-    private static final boolean LOG_REMOVE_SUBSCRIPTION_CLEANUP_ENABLED = isEnabled(REMOVE_SUBSCRIPTION_CLEANUP);
-    private static final boolean LOG_REMOVE_IMAGE_CLEANUP_ENABLED = isEnabled(REMOVE_IMAGE_CLEANUP);
-    private static final boolean LOG_SEND_CHANNEL_CREATION_ENABLED = isEnabled(SEND_CHANNEL_CREATION);
-    private static final boolean LOG_SEND_CHANNEL_CLOSE_ENABLED = isEnabled(SEND_CHANNEL_CLOSE);
-    private static final boolean LOG_RECEIVE_CHANNEL_CREATION_ENABLED = isEnabled(RECEIVE_CHANNEL_CREATION);
-    private static final boolean LOG_RECEIVE_CHANNEL_CLOSE_ENABLED = isEnabled(RECEIVE_CHANNEL_CLOSE);
-    private static final boolean LOG_UNTETHERED_SUBSCRIPTION_STATE_CHANGE_ENABLED =
+    private static final boolean TRACE_FRAME_IN_ENABLED = isEnabled(FRAME_IN);
+    private static final boolean TRACE_FRAME_OUT_ENABLED = isEnabled(FRAME_OUT);
+    private static final boolean TRACE_REMOVE_PUBLICATION_CLEANUP_ENABLED = isEnabled(REMOVE_PUBLICATION_CLEANUP);
+    private static final boolean TRACE_REMOVE_SUBSCRIPTION_CLEANUP_ENABLED = isEnabled(REMOVE_SUBSCRIPTION_CLEANUP);
+    private static final boolean TRACE_REMOVE_IMAGE_CLEANUP_ENABLED = isEnabled(REMOVE_IMAGE_CLEANUP);
+    private static final boolean TRACE_SEND_CHANNEL_CREATION_ENABLED = isEnabled(SEND_CHANNEL_CREATION);
+    private static final boolean TRACE_SEND_CHANNEL_CLOSE_ENABLED = isEnabled(SEND_CHANNEL_CLOSE);
+    private static final boolean TRACE_RECEIVE_CHANNEL_CREATION_ENABLED = isEnabled(RECEIVE_CHANNEL_CREATION);
+    private static final boolean TRACE_RECEIVE_CHANNEL_CLOSE_ENABLED = isEnabled(RECEIVE_CHANNEL_CLOSE);
+    private static final boolean TRACE_UNTETHERED_SUBSCRIPTION_STATE_CHANGE_ENABLED =
         isEnabled(UNTETHERED_SUBSCRIPTION_STATE_CHANGE);
-    private static final boolean LOG_NAME_RESOLUTION_NEIGHBOR_ADDED_ENABLED =
+    private static final boolean TRACE_NAME_RESOLUTION_NEIGHBOR_ADDED_ENABLED =
         isEnabled(NAME_RESOLUTION_NEIGHBOR_ADDED);
-    private static final boolean LOG_NAME_RESOLUTION_NEIGHBOR_REMOVED_ENABLED =
+    private static final boolean TRACE_NAME_RESOLUTION_NEIGHBOR_REMOVED_ENABLED =
         isEnabled(NAME_RESOLUTION_NEIGHBOR_REMOVED);
-    private static final boolean LOG_NAME_RESOLUTION_RESOLVE_ENABLED = isEnabled(NAME_RESOLUTION_RESOLVE);
-    private static final boolean LOG_NAME_RESOLUTION_LOOKUP_ENABLED = isEnabled(NAME_RESOLUTION_LOOKUP);
-    private static final boolean LOG_NAME_RESOLUTION_HOST_NAME_ENABLED = isEnabled(NAME_RESOLUTION_HOST_NAME);
-    private static final boolean LOG_FLOW_CONTROL_RECEIVER_ADDED_ENABLED = isEnabled(FLOW_CONTROL_RECEIVER_ADDED);
-    private static final boolean LOG_FLOW_CONTROL_RECEIVER_REMOVED_ENABLED =
+    private static final boolean TRACE_NAME_RESOLUTION_RESOLVE_ENABLED = isEnabled(NAME_RESOLUTION_RESOLVE);
+    private static final boolean TRACE_NAME_RESOLUTION_LOOKUP_ENABLED = isEnabled(NAME_RESOLUTION_LOOKUP);
+    private static final boolean TRACE_NAME_RESOLUTION_HOST_NAME_ENABLED = isEnabled(NAME_RESOLUTION_HOST_NAME);
+    private static final boolean TRACE_FLOW_CONTROL_RECEIVER_ADDED_ENABLED = isEnabled(FLOW_CONTROL_RECEIVER_ADDED);
+    private static final boolean TRACE_FLOW_CONTROL_RECEIVER_REMOVED_ENABLED =
         isEnabled(FLOW_CONTROL_RECEIVER_REMOVED);
-    private static final boolean LOG_NAK_SENT_ENABLED = isEnabled(NAK_SENT);
-    private static final boolean LOG_NAK_RECEIVED_ENABLED = isEnabled(NAK_RECEIVED);
-    private static final boolean LOG_RESEND_ENABLED = isEnabled(RESEND);
-    private static final boolean LOG_PUBLICATION_REVOKE_ENABLED = isEnabled(PUBLICATION_REVOKE);
-    private static final boolean LOG_PUBLICATION_IMAGE_REVOKE_ENABLED = isEnabled(PUBLICATION_IMAGE_REVOKE);
-    private static final boolean LOG_TEXT_DATA_ENABLED = isEnabled(TEXT_DATA);
-    private static final boolean LOG_DRIVER_START = !ENABLED_EVENT_CODES.isEmpty();
+    private static final boolean TRACE_NAK_SENT_ENABLED = isEnabled(NAK_SENT);
+    private static final boolean TRACE_NAK_RECEIVED_ENABLED = isEnabled(NAK_RECEIVED);
+    private static final boolean TRACE_RESEND_ENABLED = isEnabled(RESEND);
+    private static final boolean TRACE_PUBLICATION_REVOKE_ENABLED = isEnabled(PUBLICATION_REVOKE);
+    private static final boolean TRACE_PUBLICATION_IMAGE_REVOKE_ENABLED = isEnabled(PUBLICATION_IMAGE_REVOKE);
+    private static final boolean TRACE_TEXT_DATA_ENABLED = isEnabled(TEXT_DATA);
+    private static final boolean TRACE_DRIVER_START = !ENABLED_EVENT_CODES.isEmpty();
 
-    private DriverLog()
+    private DriverTracing()
     {
     }
 
@@ -121,18 +121,18 @@ public final class DriverLog
      * @param offset      in the buffer at which the frame begins.
      * @param frameLength of the frame.
      */
-    public static void logFrameIn(
+    public static void traceFrameIn(
         final InetSocketAddress srcAddress,
         final DirectBuffer buffer,
         final int offset,
         final int frameLength)
     {
-        if (!LOG_FRAME_IN_ENABLED)
+        if (!TRACE_FRAME_IN_ENABLED)
         {
             return;
         }
 
-        LOGGER.logFrameIn(srcAddress.getAddress(), srcAddress.getPort(), buffer, offset, frameLength);
+        TRACER.traceFrameIn(srcAddress.getAddress(), srcAddress.getPort(), buffer, offset, frameLength);
     }
 
     /**
@@ -141,14 +141,14 @@ public final class DriverLog
      * @param buffer     containing the frame.
      * @param dstAddress for the frame.
      */
-    public static void logFrameOut(final ByteBuffer buffer, final InetSocketAddress dstAddress)
+    public static void traceFrameOut(final ByteBuffer buffer, final InetSocketAddress dstAddress)
     {
-        if (!LOG_FRAME_OUT_ENABLED)
+        if (!TRACE_FRAME_OUT_ENABLED)
         {
             return;
         }
 
-        LOGGER.logFrameOut(dstAddress.getAddress(), dstAddress.getPort(), buffer);
+        TRACER.traceFrameOut(dstAddress.getAddress(), dstAddress.getPort(), buffer);
     }
 
     /**
@@ -158,14 +158,14 @@ public final class DriverLog
      * @param sessionId for the publication.
      * @param streamId  within the channel.
      */
-    public static void logPublicationRemoval(final String channel, final int sessionId, final int streamId)
+    public static void tracePublicationRemoval(final String channel, final int sessionId, final int streamId)
     {
-        if (!LOG_REMOVE_PUBLICATION_CLEANUP_ENABLED)
+        if (!TRACE_REMOVE_PUBLICATION_CLEANUP_ENABLED)
         {
             return;
         }
 
-        LOGGER.logPublicationRemoval(channel, sessionId, streamId);
+        TRACER.tracePublicationRemoval(channel, sessionId, streamId);
     }
 
     /**
@@ -175,14 +175,14 @@ public final class DriverLog
      * @param streamId       within the channel.
      * @param subscriptionId for the subscription.
      */
-    public static void logSubscriptionRemoval(final String channel, final int streamId, final long subscriptionId)
+    public static void traceSubscriptionRemoval(final String channel, final int streamId, final long subscriptionId)
     {
-        if (!LOG_REMOVE_SUBSCRIPTION_CLEANUP_ENABLED)
+        if (!TRACE_REMOVE_SUBSCRIPTION_CLEANUP_ENABLED)
         {
             return;
         }
 
-        LOGGER.logSubscriptionRemoval(channel, streamId, subscriptionId);
+        TRACER.traceSubscriptionRemoval(channel, streamId, subscriptionId);
     }
 
     /**
@@ -193,15 +193,15 @@ public final class DriverLog
      * @param streamId      for the image.
      * @param correlationId for the image.
      */
-    public static void logImageRemoval(
+    public static void traceImageRemoval(
         final String channel, final int sessionId, final int streamId, final long correlationId)
     {
-        if (!LOG_REMOVE_IMAGE_CLEANUP_ENABLED)
+        if (!TRACE_REMOVE_IMAGE_CLEANUP_ENABLED)
         {
             return;
         }
 
-        LOGGER.logImageRemoval(channel, sessionId, streamId, correlationId);
+        TRACER.traceImageRemoval(channel, sessionId, streamId, correlationId);
     }
 
     /**
@@ -209,14 +209,14 @@ public final class DriverLog
      *
      * @param description of the channel.
      */
-    public static void logSendChannelCreation(final String description)
+    public static void traceSendChannelCreation(final String description)
     {
-        if (!LOG_SEND_CHANNEL_CREATION_ENABLED)
+        if (!TRACE_SEND_CHANNEL_CREATION_ENABLED)
         {
             return;
         }
 
-        LOGGER.logSendChannelCreation(description);
+        TRACER.traceSendChannelCreation(description);
     }
 
     /**
@@ -224,14 +224,14 @@ public final class DriverLog
      *
      * @param description of the channel.
      */
-    public static void logSendChannelClose(final String description)
+    public static void traceSendChannelClose(final String description)
     {
-        if (!LOG_SEND_CHANNEL_CLOSE_ENABLED)
+        if (!TRACE_SEND_CHANNEL_CLOSE_ENABLED)
         {
             return;
         }
 
-        LOGGER.logSendChannelClose(description);
+        TRACER.traceSendChannelClose(description);
     }
 
     /**
@@ -239,14 +239,14 @@ public final class DriverLog
      *
      * @param description of the channel.
      */
-    public static void logReceiveChannelCreation(final String description)
+    public static void traceReceiveChannelCreation(final String description)
     {
-        if (!LOG_RECEIVE_CHANNEL_CREATION_ENABLED)
+        if (!TRACE_RECEIVE_CHANNEL_CREATION_ENABLED)
         {
             return;
         }
 
-        LOGGER.logReceiveChannelCreation(description);
+        TRACER.traceReceiveChannelCreation(description);
     }
 
     /**
@@ -254,14 +254,14 @@ public final class DriverLog
      *
      * @param description of the channel.
      */
-    public static void logReceiveChannelClose(final String description)
+    public static void traceReceiveChannelClose(final String description)
     {
-        if (!LOG_RECEIVE_CHANNEL_CLOSE_ENABLED)
+        if (!TRACE_RECEIVE_CHANNEL_CLOSE_ENABLED)
         {
             return;
         }
 
-        LOGGER.logReceiveChannelClose(description);
+        TRACER.traceReceiveChannelClose(description);
     }
 
     /**
@@ -274,15 +274,15 @@ public final class DriverLog
      * @param streamId       of the image.
      * @param sessionId      of the image.
      */
-    public static <E extends Enum<E>> void logUntetheredSubscriptionStateChange(
+    public static <E extends Enum<E>> void traceUntetheredSubscriptionStateChange(
         final E oldState, final E newState, final long subscriptionId, final int streamId, final int sessionId)
     {
-        if (!LOG_UNTETHERED_SUBSCRIPTION_STATE_CHANGE_ENABLED)
+        if (!TRACE_UNTETHERED_SUBSCRIPTION_STATE_CHANGE_ENABLED)
         {
             return;
         }
 
-        LOGGER.logUntetheredSubscriptionStateChange(
+        TRACER.traceUntetheredSubscriptionStateChange(
             oldState, newState, subscriptionId, streamId, sessionId);
     }
 
@@ -291,14 +291,14 @@ public final class DriverLog
      *
      * @param address of the neighbor.
      */
-    public static void logNeighborAdded(final InetSocketAddress address)
+    public static void traceNeighborAdded(final InetSocketAddress address)
     {
-        if (!LOG_NAME_RESOLUTION_NEIGHBOR_ADDED_ENABLED)
+        if (!TRACE_NAME_RESOLUTION_NEIGHBOR_ADDED_ENABLED)
         {
             return;
         }
 
-        LOGGER.logNeighborAdded(address.getAddress(), address.getPort());
+        TRACER.traceNeighborAdded(address.getAddress(), address.getPort());
     }
 
     /**
@@ -306,14 +306,14 @@ public final class DriverLog
      *
      * @param address of the neighbor.
      */
-    public static void logNeighborRemoved(final InetSocketAddress address)
+    public static void traceNeighborRemoved(final InetSocketAddress address)
     {
-        if (!LOG_NAME_RESOLUTION_NEIGHBOR_REMOVED_ENABLED)
+        if (!TRACE_NAME_RESOLUTION_NEIGHBOR_REMOVED_ENABLED)
         {
             return;
         }
 
-        LOGGER.logNeighborRemoved(address.getAddress(), address.getPort());
+        TRACER.traceNeighborRemoved(address.getAddress(), address.getPort());
     }
 
     /**
@@ -325,19 +325,19 @@ public final class DriverLog
      * @param isReResolution {@code true} if this is a re-resolution or {@code false} if initial resolution.
      * @param address        address that was resolved to, can be {@code null}.
      */
-    public static void logResolve(
+    public static void traceResolve(
         final String resolverName,
         final long durationNs,
         final String name,
         final boolean isReResolution,
         final InetAddress address)
     {
-        if (!LOG_NAME_RESOLUTION_RESOLVE_ENABLED)
+        if (!TRACE_NAME_RESOLUTION_RESOLVE_ENABLED)
         {
             return;
         }
 
-        LOGGER.logResolve(resolverName, durationNs, name, isReResolution, address);
+        TRACER.traceResolve(resolverName, durationNs, name, isReResolution, address);
     }
 
     /**
@@ -349,19 +349,19 @@ public final class DriverLog
      * @param isReLookup   {@code true} if this is a re-lookup.
      * @param resolvedName address that was resolved to, can be {@code null}.
      */
-    public static void logLookup(
+    public static void traceLookup(
         final String resolverName,
         final long durationNs,
         final String name,
         final boolean isReLookup,
         final String resolvedName)
     {
-        if (!LOG_NAME_RESOLUTION_LOOKUP_ENABLED)
+        if (!TRACE_NAME_RESOLUTION_LOOKUP_ENABLED)
         {
             return;
         }
 
-        LOGGER.logLookup(resolverName, durationNs, name, isReLookup, resolvedName);
+        TRACER.traceLookup(resolverName, durationNs, name, isReLookup, resolvedName);
     }
 
     /**
@@ -370,14 +370,14 @@ public final class DriverLog
      * @param durationNs of the call in nanoseconds.
      * @param hostName   host name being resolved.
      */
-    public static void logHostName(final long durationNs, final String hostName)
+    public static void traceHostName(final long durationNs, final String hostName)
     {
-        if (!LOG_NAME_RESOLUTION_HOST_NAME_ENABLED)
+        if (!TRACE_NAME_RESOLUTION_HOST_NAME_ENABLED)
         {
             return;
         }
 
-        LOGGER.logHostName(durationNs, hostName);
+        TRACER.traceHostName(durationNs, hostName);
     }
 
     /**
@@ -389,19 +389,19 @@ public final class DriverLog
      * @param channel       uri of the channel.
      * @param receiverCount number of the receivers after the event.
      */
-    public static void logFlowControlReceiverAdded(
+    public static void traceFlowControlReceiverAdded(
         final long receiverId,
         final int sessionId,
         final int streamId,
         final String channel,
         final int receiverCount)
     {
-        if (!LOG_FLOW_CONTROL_RECEIVER_ADDED_ENABLED)
+        if (!TRACE_FLOW_CONTROL_RECEIVER_ADDED_ENABLED)
         {
             return;
         }
 
-        LOGGER.logFlowControlReceiverAdded(
+        TRACER.traceFlowControlReceiverAdded(
             receiverId, sessionId, streamId, channel, receiverCount);
     }
 
@@ -414,19 +414,19 @@ public final class DriverLog
      * @param channel       uri of the channel.
      * @param receiverCount number of the receivers after the event.
      */
-    public static void logFlowControlReceiverRemoved(
+    public static void traceFlowControlReceiverRemoved(
         final long receiverId,
         final int sessionId,
         final int streamId,
         final String channel,
         final int receiverCount)
     {
-        if (!LOG_FLOW_CONTROL_RECEIVER_REMOVED_ENABLED)
+        if (!TRACE_FLOW_CONTROL_RECEIVER_REMOVED_ENABLED)
         {
             return;
         }
 
-        LOGGER.logFlowControlReceiverRemoved(receiverId, sessionId, streamId, channel, receiverCount);
+        TRACER.traceFlowControlReceiverRemoved(receiverId, sessionId, streamId, channel, receiverCount);
     }
 
     /**
@@ -440,7 +440,7 @@ public final class DriverLog
      * @param nakLength  of the NAK.
      * @param channel    of the NAK.
      */
-    private static void logNakSent(
+    private static void traceNakSent(
         final InetSocketAddress address,
         final int sessionId,
         final int streamId,
@@ -449,7 +449,7 @@ public final class DriverLog
         final int nakLength,
         final String channel)
     {
-        LOGGER.logNakSent(
+        TRACER.traceNakSent(
             address.getAddress(), address.getPort(), sessionId, streamId, termId, termOffset, nakLength, channel);
     }
 
@@ -464,7 +464,7 @@ public final class DriverLog
      * @param nakLength         of the NAK.
      * @param channel           of the NAK.
      */
-    public static void logNaksSent(
+    public static void traceNaksSent(
         final ImageConnection[] controlAddresses,
         final int sessionId,
         final int streamId,
@@ -473,7 +473,7 @@ public final class DriverLog
         final int nakLength,
         final String channel)
     {
-        if (!LOG_NAK_SENT_ENABLED)
+        if (!TRACE_NAK_SENT_ENABLED)
         {
             return;
         }
@@ -482,7 +482,7 @@ public final class DriverLog
         {
             if (null != connection)
             {
-                logNakSent(
+                traceNakSent(
                     connection.controlAddress, sessionId, streamId, termId, termOffset, nakLength, channel);
             }
         }
@@ -499,7 +499,7 @@ public final class DriverLog
      * @param nakLength  of the NAK.
      * @param channel    of the NAK.
      */
-    public static void logNakReceived(
+    public static void traceNakReceived(
         final InetSocketAddress address,
         final int sessionId,
         final int streamId,
@@ -508,12 +508,12 @@ public final class DriverLog
         final int nakLength,
         final String channel)
     {
-        if (!LOG_NAK_RECEIVED_ENABLED)
+        if (!TRACE_NAK_RECEIVED_ENABLED)
         {
             return;
         }
 
-        LOGGER.logNakReceived(
+        TRACER.traceNakReceived(
             address.getAddress(), address.getPort(), sessionId, streamId, termId, termOffset, nakLength, channel);
     }
 
@@ -527,7 +527,7 @@ public final class DriverLog
      * @param resendLength of the resend.
      * @param channel      of the resend.
      */
-    public static void logResend(
+    public static void traceResend(
         final int sessionId,
         final int streamId,
         final int termId,
@@ -535,12 +535,12 @@ public final class DriverLog
         final int resendLength,
         final String channel)
     {
-        if (!LOG_RESEND_ENABLED)
+        if (!TRACE_RESEND_ENABLED)
         {
             return;
         }
 
-        LOGGER.logResend(sessionId, streamId, termId, termOffset, resendLength, channel);
+        TRACER.traceResend(sessionId, streamId, termId, termOffset, resendLength, channel);
     }
 
     /**
@@ -551,15 +551,15 @@ public final class DriverLog
      * @param streamId   of the publication revoke.
      * @param channel    of the publication revoke.
      */
-    public static void logPublicationRevoke(
+    public static void tracePublicationRevoke(
         final long revokedPos, final int sessionId, final int streamId, final String channel)
     {
-        if (!LOG_PUBLICATION_REVOKE_ENABLED)
+        if (!TRACE_PUBLICATION_REVOKE_ENABLED)
         {
             return;
         }
 
-        LOGGER.logPublicationRevoke(revokedPos, sessionId, streamId, channel);
+        TRACER.tracePublicationRevoke(revokedPos, sessionId, streamId, channel);
     }
 
     /**
@@ -570,15 +570,15 @@ public final class DriverLog
      * @param streamId   of the publication image revoke.
      * @param channel    of the publication image revoke.
      */
-    public static void logPublicationImageRevoke(
+    public static void tracePublicationImageRevoke(
         final long revokedPos, final int sessionId, final int streamId, final String channel)
     {
-        if (!LOG_PUBLICATION_IMAGE_REVOKE_ENABLED)
+        if (!TRACE_PUBLICATION_IMAGE_REVOKE_ENABLED)
         {
             return;
         }
 
-        LOGGER.logPublicationImageRevoke(revokedPos, sessionId, streamId, channel);
+        TRACER.tracePublicationImageRevoke(revokedPos, sessionId, streamId, channel);
     }
 
     /**
@@ -589,12 +589,12 @@ public final class DriverLog
      * @param index     at which the message begins.
      * @param length    of the encoded message.
      */
-    public static void logCmd(final int msgTypeId, final DirectBuffer buffer, final int index, final int length)
+    public static void traceCmd(final int msgTypeId, final DirectBuffer buffer, final int index, final int length)
     {
         final DriverEventCode code = cmdEventCode(msgTypeId);
         if (null != code && isEnabled(code))
         {
-            LOGGER.log(code, buffer, index, length);
+            TRACER.trace(code, buffer, index, length);
         }
     }
 
@@ -603,14 +603,14 @@ public final class DriverLog
      *
      * @param text to be logged.
      */
-    public static void logText(final String text)
+    public static void traceText(final String text)
     {
-        if (!LOG_TEXT_DATA_ENABLED)
+        if (!TRACE_TEXT_DATA_ENABLED)
         {
             return;
         }
 
-        LOGGER.logString(TEXT_DATA, text);
+        TRACER.traceString(TEXT_DATA, text);
     }
 
     /**
@@ -618,14 +618,14 @@ public final class DriverLog
      *
      * @param version   of the driver.
      */
-    public static void logStart(final String version)
+    public static void traceStart(final String version)
     {
-        if (!LOG_DRIVER_START)
+        if (!TRACE_DRIVER_START)
         {
             return;
         }
 
-        LOGGER.logStart(version);
+        TRACER.traceStart(version);
     }
 
     private static DriverEventCode cmdEventCode(final int msgTypeId)

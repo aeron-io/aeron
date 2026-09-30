@@ -205,6 +205,7 @@ INSTANTIATE_TEST_SUITE_P(
     testing::Values(
         std::make_tuple(AERON_HDR_TYPE_NAK, sizeof(aeron_nak_header_t)),
         std::make_tuple(AERON_HDR_TYPE_SM, sizeof(aeron_status_message_header_t)),
+        std::make_tuple(AERON_HDR_TYPE_ATS_SM, sizeof(aeron_status_message_header_t)),
         std::make_tuple(AERON_HDR_TYPE_ERR, sizeof(aeron_error_header_t)),
         std::make_tuple(AERON_HDR_TYPE_SETUP, sizeof(aeron_setup_header_t)),
         std::make_tuple(AERON_HDR_TYPE_RTTM, sizeof(aeron_rttm_header_t)),
@@ -242,7 +243,6 @@ TEST_P(NonDataFrameValidationTest, shouldValidateNonDataFrames)
     EXPECT_TRUE(aeron_is_frame_valid(&header, 200));
 }
 
-
 class UnsupportedFrameTypeValidationTest :
     public testing::TestWithParam<int16_t>,
     public UdpChannelTestBase
@@ -252,7 +252,7 @@ class UnsupportedFrameTypeValidationTest :
 INSTANTIATE_TEST_SUITE_P(
     UnsupportedFrameTypeValidationTests,
     UnsupportedFrameTypeValidationTest,
-    testing::Values(AERON_HDR_TYPE_ATS_DATA, AERON_HDR_TYPE_ATS_SM, AERON_HDR_TYPE_ATS_SETUP, AERON_HDR_TYPE_EXT));
+    testing::Values(AERON_HDR_TYPE_ATS_DATA, AERON_HDR_TYPE_ATS_SETUP, AERON_HDR_TYPE_EXT));
 
 TEST_P(UnsupportedFrameTypeValidationTest, shouldRejectFramesWithUnsupportedType)
 {
@@ -586,6 +586,28 @@ TEST_F(UdpChannelTest, shouldParseSocketBufferParameters)
 
     ASSERT_EQ(8192u, m_channel->socket_sndbuf_length);
     ASSERT_EQ(4096u, m_channel->socket_rcvbuf_length);
+}
+
+TEST_F(UdpChannelTest, shouldParseSocketTos)
+{
+    const char *uri = "aeron:udp?interface=localhost|endpoint=224.10.9.9:40124|so-tos=184";
+    ASSERT_EQ(parse_udp_channel(uri), 0) << aeron_errmsg();
+
+    ASSERT_EQ(184, m_channel->socket_tos);
+}
+
+TEST_F(UdpChannelTest, shouldDefaultSocketTosToNullValue)
+{
+    const char *uri = "aeron:udp?interface=localhost|endpoint=224.10.9.9:40124";
+    ASSERT_EQ(parse_udp_channel(uri), 0) << aeron_errmsg();
+
+    ASSERT_EQ(AERON_NULL_VALUE, m_channel->socket_tos);
+}
+
+TEST_F(UdpChannelTest, shouldRejectSocketTosOutsideValidRange)
+{
+    ASSERT_EQ(-1, parse_udp_channel("aeron:udp?endpoint=localhost:40124|so-tos=-1"));
+    ASSERT_EQ(-1, parse_udp_channel("aeron:udp?endpoint=localhost:40124|so-tos=256"));
 }
 
 TEST_F(UdpChannelTest, shouldParseReceiverWindow)

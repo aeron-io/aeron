@@ -476,18 +476,17 @@ void aeron_archive_context_invoke_error_handler(
     char *formatted_error_message;
     aeron_alloc((void **)&formatted_error_message, formatted_message_length);
 
+    int archive_error_code = aeron_archive_client_map_archive_to_client_error_code(error_code);
+
     snprintf(
         formatted_error_message,
         formatted_message_length,
         "response for correlationId=%" PRIi64 ", errorCode=%" PRIi32 ", error: %s",
         correlation_id,
-        error_code,
+        archive_error_code,
         error_message);
 
-    ctx->error_handler(
-        ctx->error_handler_clientd,
-        AERON_ERROR_CODE_GENERIC_ERROR,
-        formatted_error_message);
+    ctx->error_handler(ctx->error_handler_clientd, archive_error_code, formatted_error_message);
 
     aeron_free(formatted_error_message);
 }

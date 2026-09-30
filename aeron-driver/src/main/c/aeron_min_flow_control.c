@@ -109,6 +109,12 @@ int64_t aeron_min_flow_control_strategy_on_idle(
         if ((receiver->time_of_last_status_message_ns + strategy_state->receiver_timeout_ns) - now_ns < 0 ||
             receiver->eos_flagged)
         {
+            // we need to copy the fields because the aeron_array_fast_unordered_remove will overwrite
+            // the content of receiver
+            const int64_t removed_receiver_id = receiver->receiver_id;
+            const int32_t removed_session_id = receiver->session_id;
+            const int32_t removed_stream_id = receiver->stream_id;
+
             aeron_array_fast_unordered_remove(
                 (uint8_t *)strategy_state->receivers.array,
                 sizeof(aeron_min_flow_control_strategy_receiver_t),
@@ -122,9 +128,9 @@ int64_t aeron_min_flow_control_strategy_on_idle(
             if (NULL != receiver_removed)
             {
                 receiver_removed(
-                    receiver->receiver_id,
-                    receiver->session_id,
-                    receiver->stream_id,
+                    removed_receiver_id,
+                    removed_session_id,
+                    removed_stream_id,
                     strategy_state->channel->uri_length,
                     strategy_state->channel->original_uri,
                     receiver_count);

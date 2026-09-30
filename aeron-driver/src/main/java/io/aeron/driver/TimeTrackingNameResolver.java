@@ -16,7 +16,7 @@
 package io.aeron.driver;
 
 import io.aeron.CounterProvider;
-import io.aeron.driver.logging.DriverLog;
+import io.aeron.driver.logging.DriverTracing;
 import org.agrona.concurrent.NanoClock;
 import org.agrona.concurrent.status.CountersReader;
 
@@ -131,7 +131,7 @@ final class TimeTrackingNameResolver implements NameResolverAgent
 
     static void logHostName(final long durationNs, final String hostName)
     {
-        DriverLog.logHostName(durationNs, hostName);
+        DriverTracing.traceHostName(durationNs, hostName);
     }
 
     private static void logResolve(
@@ -141,7 +141,7 @@ final class TimeTrackingNameResolver implements NameResolverAgent
         final boolean isReResolution,
         final InetAddress resolvedAddress)
     {
-        DriverLog.logResolve(resolverName, durationNs, name, isReResolution, resolvedAddress);
+        DriverTracing.traceResolve(resolverName, durationNs, name, isReResolution, resolvedAddress);
     }
 
     private static void logLookup(
@@ -151,6 +151,6 @@ final class TimeTrackingNameResolver implements NameResolverAgent
         final boolean isReLookup,
         final String resolvedName)
     {
-        DriverLog.logLookup(resolverName, durationNs, name, isReLookup, resolvedName);
+        DriverTracing.traceLookup(resolverName, durationNs, name, isReLookup, resolvedName);
     }
 }

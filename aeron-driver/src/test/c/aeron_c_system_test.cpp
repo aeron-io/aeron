@@ -1526,3 +1526,113 @@ TEST_F(CSystemTest, shouldBeNotifiedWhenClientIsClosed)
     }
     ASSERT_EQ(0, aeron_counter_get_acquire(aeron_counters_reader_addr(countersReader, AERON_SYSTEM_COUNTER_CLIENT_TIMEOUTS)));
 }
+
+TEST_F(CSystemTest, shouldAddAndDeleteDestinations)
+{
+    ASSERT_TRUE(connect());
+    const auto counters = aeron_counters_reader(m_aeron);
+
+    const auto *pub_uri = "aeron:udp?control=localhost:5555|control-mode=manual";
+    const int32_t stream_id = 1001;
+
+    aeron_async_add_publication_t *pub_async = nullptr;
+    ASSERT_EQ(aeron_async_add_publication(&pub_async, m_aeron, pub_uri, stream_id), 0);
+    int64_t pub_reg_id = aeron_async_add_publication_get_registration_id(pub_async);
+    aeron_publication_t *publication = awaitPublicationOrError(pub_async);
+    ASSERT_TRUE(publication) << aeron_errmsg();
+
+    aeron_async_destination_t *dest_async1 = nullptr, *dest_async2 = nullptr;
+    aeron_publication_async_add_destination(&dest_async1, m_aeron, publication, "aeron:udp?endpoint=localhost:7777");
+    int64_t dest_reg_id1 = dest_async1->registration_id;
+    EXPECT_GT(dest_reg_id1, pub_reg_id);
+    aeron_publication_async_add_destination(&dest_async2, m_aeron, publication, "aeron:udp?endpoint=localhost:8888");
+    int64_t dest_reg_id2 = dest_async2->registration_id;
+    EXPECT_GT(dest_reg_id2, dest_async1->registration_id);
+    EXPECT_TRUE(awaitDestinationOrError(dest_async1));
+    EXPECT_TRUE(awaitDestinationOrError(dest_async2));
+
+    int32_t mdc_counter_id = aeron_counters_reader_find_by_type_id_and_registration_id(
+            counters, AERON_COUNTER_CHANNEL_NUM_DESTINATIONS_TYPE_ID, pub_reg_id);
+    EXPECT_NE(AERON_NULL_COUNTER_ID, mdc_counter_id);
+    int64_t *mdc_counter = aeron_counters_reader_addr(counters, mdc_counter_id);
+    EXPECT_EQ(2, aeron_counter_get_acquire(mdc_counter));
+
+    aeron_async_destination_t *del_by_id = nullptr;
+    aeron_publication_async_remove_destination_by_id(&del_by_id, m_aeron, publication, dest_async2->registration_id);
+    EXPECT_EQ(dest_reg_id2, del_by_id->destination_registration_id);
+    EXPECT_TRUE(awaitDestinationOrError(del_by_id));
+
+    // await destination removal by sender thread
+    while (1 != aeron_counter_get_acquire(mdc_counter))
+    {
+        std::this_thread::yield();
+    }
+
+    aeron_async_destination_t *del_by_uri = nullptr;
+    aeron_publication_async_remove_destination(&del_by_uri, m_aeron, publication, "aeron:udp?endpoint=localhost:7777");
+    EXPECT_NE(dest_reg_id1, del_by_uri->destination_registration_id);
+    EXPECT_TRUE(awaitDestinationOrError(del_by_uri));
+
+    // await destination removal by sender thread
+    while (0 != aeron_counter_get_acquire(mdc_counter))
+    {
+        std::this_thread::yield();
+    }
+
+    ASSERT_EQ(aeron_async_remove_publication(pub_reg_id, m_aeron, nullptr, nullptr), 0);
+}
+
+TEST_F(CSystemTest, shouldAddAndDeleteDestinationsExclusive)
+{
+    ASSERT_TRUE(connect());
+    const auto counters = aeron_counters_reader(m_aeron);
+
+    const auto *pub_uri = "aeron:udp?control=localhost:5555|control-mode=manual";
+    const int32_t stream_id = 1001;
+
+    aeron_async_add_exclusive_publication_t *pub_async = nullptr;
+    ASSERT_EQ(aeron_async_add_exclusive_publication(&pub_async, m_aeron, pub_uri, stream_id), 0);
+    int64_t pub_reg_id = aeron_async_add_exclusive_publication_get_registration_id(pub_async);
+    aeron_exclusive_publication_t *publication = awaitExclusivePublicationOrError(pub_async);
+    ASSERT_TRUE(publication) << aeron_errmsg();
+
+    aeron_async_destination_t *dest_async1 = nullptr, *dest_async2 = nullptr;
+    aeron_exclusive_publication_async_add_destination(&dest_async1, m_aeron, publication, "aeron:udp?endpoint=localhost:7777");
+    int64_t dest_reg_id1 = dest_async1->registration_id;
+    EXPECT_GT(dest_reg_id1, pub_reg_id);
+    aeron_exclusive_publication_async_add_destination(&dest_async2, m_aeron, publication, "aeron:udp?endpoint=localhost:8888");
+    int64_t dest_reg_id2 = dest_async2->registration_id;
+    EXPECT_GT(dest_reg_id2, dest_async1->registration_id);
+    EXPECT_TRUE(awaitDestinationOrError(dest_async1));
+    EXPECT_TRUE(awaitDestinationOrError(dest_async2));
+
+    int32_t mdc_counter_id = aeron_counters_reader_find_by_type_id_and_registration_id(
+            counters, AERON_COUNTER_CHANNEL_NUM_DESTINATIONS_TYPE_ID, pub_reg_id);
+    EXPECT_NE(AERON_NULL_COUNTER_ID, mdc_counter_id);
+    int64_t *mdc_counter = aeron_counters_reader_addr(counters, mdc_counter_id);
+    EXPECT_EQ(2, aeron_counter_get_acquire(mdc_counter));
+
+    aeron_async_destination_t *del_by_id = nullptr;
+    aeron_exclusive_publication_async_remove_destination_by_id(&del_by_id, m_aeron, publication, dest_async2->registration_id);
+    EXPECT_EQ(dest_reg_id2, del_by_id->destination_registration_id);
+    EXPECT_TRUE(awaitDestinationOrError(del_by_id));
+
+    // await destination removal by sender thread
+    while (1 != aeron_counter_get_acquire(mdc_counter))
+    {
+        std::this_thread::yield();
+    }
+
+    aeron_async_destination_t *del_by_uri = nullptr;
+    aeron_exclusive_publication_async_remove_destination(&del_by_uri, m_aeron, publication, "aeron:udp?endpoint=localhost:7777");
+    EXPECT_NE(dest_reg_id1, del_by_uri->destination_registration_id);
+    EXPECT_TRUE(awaitDestinationOrError(del_by_uri));
+
+    // await destination removal by sender thread
+    while (0 != aeron_counter_get_acquire(mdc_counter))
+    {
+        std::this_thread::yield();
+    }
+
+    ASSERT_EQ(aeron_async_remove_publication(pub_reg_id, m_aeron, nullptr, nullptr), 0);
+}

@@ -28,8 +28,8 @@ import io.aeron.ImageControlledFragmentAssembler;
 import io.aeron.ImageFragmentAssembler;
 import io.aeron.RethrowingErrorHandler;
 import io.aeron.Subscription;
-import io.aeron.archive.logging.ArchiveLog;
 import io.aeron.archive.codecs.ControlResponseCode;
+import io.aeron.archive.logging.ArchiveTracing;
 import io.aeron.exceptions.AeronEvent;
 import io.aeron.exceptions.ConcurrentConcludeException;
 import io.aeron.exceptions.ConfigurationException;
@@ -205,7 +205,7 @@ public final class PersistentSubscription implements AutoCloseable
      * {@link Aeron.Context#subscriberErrorHandler()} for the Aeron instance.
      *
      * @param fragmentHandler the handler to receive assembled messages if any are available.
-     * @param fragmentLimit the maximum number of fragments to be processed during the poll operation.
+     * @param fragmentLimit   the maximum number of fragments to be processed during the poll operation.
      * @return positive number if work has been done, 0 otherwise.
      */
     public int poll(final FragmentHandler fragmentHandler, final int fragmentLimit)
@@ -234,7 +234,7 @@ public final class PersistentSubscription implements AutoCloseable
      * {@link Aeron.Context#subscriberErrorHandler()} for the Aeron instance.
      *
      * @param fragmentHandler the handler to receive assembled messages if any are available.
-     * @param fragmentLimit the maximum number of fragments to be processed during the poll operation.
+     * @param fragmentLimit   the maximum number of fragments to be processed during the poll operation.
      * @return positive number if work has been done, 0 otherwise.
      */
     public int controlledPoll(final ControlledFragmentHandler fragmentHandler, final int fragmentLimit)
@@ -1370,7 +1370,7 @@ public final class PersistentSubscription implements AutoCloseable
         final String liveChannel,
         final int liveStreamId)
     {
-        ArchiveLog.logPersistentSubscriptionStateChange(
+        ArchiveTracing.tracePersistentSubscriptionStateChange(
             oldState, newState, recordingId, replayChannel, replayStreamId, liveChannel, liveStreamId);
     }
 
@@ -1383,7 +1383,7 @@ public final class PersistentSubscription implements AutoCloseable
         final int liveSessionId,
         final long joinPosition)
     {
-        ArchiveLog.logPersistentSubscriptionJoinedLive(
+        ArchiveTracing.tracePersistentSubscriptionJoinedLive(
             recordingId, replayChannel, replayStreamId, liveChannel, liveStreamId, liveSessionId, joinPosition);
     }
 
@@ -1395,7 +1395,7 @@ public final class PersistentSubscription implements AutoCloseable
         final int liveStreamId,
         final long livePosition)
     {
-        ArchiveLog.logPersistentSubscriptionLeftLive(
+        ArchiveTracing.tracePersistentSubscriptionLeftLive(
             recordingId, replayChannel, replayStreamId, liveChannel, liveStreamId, livePosition);
     }
 

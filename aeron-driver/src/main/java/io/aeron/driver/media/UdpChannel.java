@@ -23,12 +23,34 @@ import io.aeron.driver.exceptions.InvalidChannelException;
 import org.agrona.BitUtil;
 import org.agrona.SystemUtil;
 
-import java.net.*;
+import java.net.Inet6Address;
+import java.net.InetSocketAddress;
+import java.net.NetworkInterface;
+import java.net.ProtocolFamily;
+import java.net.UnknownHostException;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static io.aeron.CommonContext.*;
-import static io.aeron.driver.media.NetworkUtil.*;
+import static io.aeron.CommonContext.CHANNEL_RECEIVE_TIMESTAMP_OFFSET_PARAM_NAME;
+import static io.aeron.CommonContext.CHANNEL_SEND_TIMESTAMP_OFFSET_PARAM_NAME;
+import static io.aeron.CommonContext.CONTROL_MODE_RESPONSE;
+import static io.aeron.CommonContext.ENDPOINT_PARAM_NAME;
+import static io.aeron.CommonContext.GROUP_TAG_PARAM_NAME;
+import static io.aeron.CommonContext.INTERFACE_PARAM_NAME;
+import static io.aeron.CommonContext.MDC_CONTROL_MODE_DYNAMIC;
+import static io.aeron.CommonContext.MDC_CONTROL_MODE_MANUAL;
+import static io.aeron.CommonContext.MDC_CONTROL_MODE_PARAM_NAME;
+import static io.aeron.CommonContext.MDC_CONTROL_PARAM_NAME;
+import static io.aeron.CommonContext.NAK_DELAY_PARAM_NAME;
+import static io.aeron.CommonContext.RECEIVER_WINDOW_LENGTH_PARAM_NAME;
+import static io.aeron.CommonContext.RESERVED_OFFSET;
+import static io.aeron.CommonContext.SOCKET_RCVBUF_PARAM_NAME;
+import static io.aeron.CommonContext.SOCKET_SNDBUF_PARAM_NAME;
+import static io.aeron.CommonContext.SOCKET_TOS_PARAM_NAME;
+import static io.aeron.CommonContext.TTL_PARAM_NAME;
+import static io.aeron.driver.Configuration.SOCKET_TOS_DEFAULT;
+import static io.aeron.driver.media.NetworkUtil.formatAddressAndPort;
+import static io.aeron.driver.media.NetworkUtil.getProtocolFamily;
 import static java.net.InetAddress.getByAddress;
 
 /**
@@ -57,6 +79,7 @@ public final class UdpChannel
     private final int multicastTtl;
     private final int socketRcvbufLength;
     private final int socketSndbufLength;
+    private final int socketTos;
     private final int receiverWindowLength;
     private final long tag;
     private final InetSocketAddress remoteData;
@@ -94,6 +117,7 @@ public final class UdpChannel
         channelUri = context.channelUri;
         socketRcvbufLength = context.socketRcvbufLength;
         socketSndbufLength = context.socketSndbufLength;
+        socketTos = context.socketTos;
         receiverWindowLength = context.receiverWindowLength;
         channelReceiveTimestampOffset = context.channelReceiveTimestampOffset;
         channelSendTimestampOffset = context.channelSendTimestampOffset;
@@ -152,6 +176,8 @@ public final class UdpChannel
 
             final int socketRcvbufLength = parseBufferLength(channelUri, SOCKET_RCVBUF_PARAM_NAME);
             final int socketSndbufLength = parseBufferLength(channelUri, SOCKET_SNDBUF_PARAM_NAME);
+            final String tos = channelUri.get(SOCKET_TOS_PARAM_NAME);
+            final int socketTos = null == tos ? SOCKET_TOS_DEFAULT : ChannelUri.validateSocketTos(tos);
             final int receiverWindowLength = parseBufferLength(
                 channelUri, RECEIVER_WINDOW_LENGTH_PARAM_NAME);
 
@@ -210,6 +236,7 @@ public final class UdpChannel
                 .hasNoDistinguishingCharacteristic(hasNoDistinguishingCharacteristic)
                 .socketRcvbufLength(socketRcvbufLength)
                 .socketSndbufLength(socketSndbufLength)
+                .socketTos(socketTos)
                 .receiverWindowLength(receiverWindowLength)
                 .nakDelayNs(parseOptionalDurationNs(channelUri, NAK_DELAY_PARAM_NAME));
 
@@ -400,9 +427,9 @@ public final class UdpChannel
     /**
      * Parses out a duration from a channel URI and caters for unit suffix information.
      *
-     * @param channelUri    to read the value from
-     * @param paramName     specific field to access in the URI
-     * @return              duration in nanoseconds, null if not present
+     * @param channelUri to read the value from
+     * @param paramName  specific field to access in the URI
+     * @return duration in nanoseconds, null if not present
      */
     public static Long parseOptionalDurationNs(final ChannelUri channelUri, final String paramName)
     {
@@ -740,6 +767,27 @@ public final class UdpChannel
     }
 
     /**
+     * Get the IP_TOS value for the socket.
+     *
+     * @return IP_TOS value or {@link io.aeron.driver.Configuration#SOCKET_TOS_DEFAULT} if not specified.
+     */
+    public int socketTos()
+    {
+        return socketTos;
+    }
+
+    /**
+     * Get the IP_TOS value for the socket.
+     *
+     * @param defaultValue to be used if the value is not specified.
+     * @return IP_TOS value or defaultValue if not specified.
+     */
+    public int socketTosOrDefault(final int defaultValue)
+    {
+        return SOCKET_TOS_DEFAULT != socketTos ? socketTos : defaultValue;
+    }
+
+    /**
      * Get the receiver window length used as the initial window length for congestion control.
      *
      * @return receiver window length or 0 if not specified.
@@ -773,8 +821,8 @@ public final class UdpChannel
     /**
      * Does this channel have a tag match to another channel having INADDR_ANY endpoints.
      *
-     * @param udpChannel to match against.
-     * @param localAddress local address override to use for this channel.
+     * @param udpChannel    to match against.
+     * @param localAddress  local address override to use for this channel.
      * @param remoteAddress remote address override to use for this channel.
      * @return true if there is a match otherwise false.
      */
@@ -1092,6 +1140,7 @@ public final class UdpChannel
         boolean hasNoDistinguishingCharacteristic = false;
         int socketRcvbufLength = 0;
         int socketSndbufLength = 0;
+        int socketTos = SOCKET_TOS_DEFAULT;
         int receiverWindowLength = 0;
         int multicastTtl;
         long tagId;
@@ -1229,6 +1278,12 @@ public final class UdpChannel
         Context socketSndbufLength(final int socketSndbufLength)
         {
             this.socketSndbufLength = socketSndbufLength;
+            return this;
+        }
+
+        Context socketTos(final int socketTos)
+        {
+            this.socketTos = socketTos;
             return this;
         }
 

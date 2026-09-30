@@ -53,6 +53,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
+import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
 import java.util.concurrent.TimeUnit;
@@ -60,6 +61,7 @@ import java.util.function.LongConsumer;
 
 import static io.aeron.AeronCounters.CLUSTER_CONSENSUS_MODULE_STATE_TYPE_ID;
 import static io.aeron.AeronCounters.CLUSTER_CONTROL_TOGGLE_TYPE_ID;
+import static io.aeron.AeronCounters.NODE_CONTROL_TOGGLE_TYPE_ID;
 import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
 import static io.aeron.cluster.ClusterControl.ToggleState.NEUTRAL;
 import static io.aeron.cluster.ClusterControl.ToggleState.RESUME;
@@ -73,6 +75,7 @@ import static java.lang.Boolean.TRUE;
 import static org.agrona.concurrent.status.CountersReader.COUNTER_LENGTH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
@@ -85,6 +88,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -850,7 +854,10 @@ class ConsensusModuleAgentTest
             sourceException);
         when(mockAeron.addSubscription(anyString(), anyInt())).thenReturn(subscription);
         final Runnable terminationHook = mock(Runnable.class);
-        ctx.terminationHook(terminationHook).clusterClock(new TestClusterClock());
+        final ExtendedTerminationHook extendedTerminationHook = mock(ExtendedTerminationHook.class);
+        ctx.terminationHook(terminationHook)
+            .extendedTerminationHook(extendedTerminationHook)
+            .clusterClock(new TestClusterClock());
 
         final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
 
@@ -859,9 +866,11 @@ class ConsensusModuleAgentTest
         assertFalse(exception.isExpected());
         assertEquals("unexpected termination", exception.getMessage());
 
-        final InOrder inOrder = inOrder(ctx.countedErrorHandler(), subscription, terminationHook);
+        final InOrder inOrder =
+            inOrder(ctx.countedErrorHandler(), subscription, terminationHook, extendedTerminationHook);
         inOrder.verify(subscription).poll(any(), anyInt());
         inOrder.verify(ctx.countedErrorHandler()).onError(sourceException);
+        inOrder.verify(extendedTerminationHook).run(exception);
         inOrder.verify(terminationHook).run();
         inOrder.verifyNoMoreInteractions();
     }
@@ -875,7 +884,10 @@ class ConsensusModuleAgentTest
             sourceException);
         when(mockAeron.addSubscription(anyString(), anyInt())).thenReturn(subscription);
         final Runnable terminationHook = mock(Runnable.class);
-        ctx.terminationHook(terminationHook).clusterClock(new TestClusterClock());
+        final ExtendedTerminationHook extendedTerminationHook = mock(ExtendedTerminationHook.class);
+        ctx.terminationHook(terminationHook)
+            .extendedTerminationHook(extendedTerminationHook)
+            .clusterClock(new TestClusterClock());
 
         final AeronArchive aeronArchive = mock(AeronArchive.class);
         when(aeronArchive.state()).thenReturn(AeronArchive.State.CLOSED);
@@ -891,15 +903,17 @@ class ConsensusModuleAgentTest
         assertFalse(exception.isExpected());
         assertEquals("unexpected termination", exception.getMessage());
 
-        final InOrder inOrder = inOrder(ctx.countedErrorHandler(), subscription, terminationHook, election);
+        final InOrder inOrder =
+            inOrder(ctx.countedErrorHandler(), subscription, terminationHook, extendedTerminationHook, election);
         inOrder.verify(subscription).poll(any(), anyInt());
         inOrder.verify(ctx.countedErrorHandler()).onError(sourceException);
+        inOrder.verify(extendedTerminationHook).run(exception);
         inOrder.verify(terminationHook).run();
         inOrder.verifyNoMoreInteractions();
     }
 
     @Test
-    void shouldPropagateAgentTerminationExceptionAndRunTerminationHook()
+    void shouldPropagateAgentTerminationExceptionAndRunTerminationHooks()
     {
         final Subscription subscription = mock(Subscription.class);
         final AgentTerminationException sourceException = new AgentTerminationException("test");
@@ -907,7 +921,10 @@ class ConsensusModuleAgentTest
             sourceException);
         when(mockAeron.addSubscription(anyString(), anyInt())).thenReturn(subscription);
         final Runnable terminationHook = mock(Runnable.class);
-        ctx.terminationHook(terminationHook).clusterClock(new TestClusterClock());
+        final ExtendedTerminationHook extendedTerminationHook = mock(ExtendedTerminationHook.class);
+        ctx.terminationHook(terminationHook)
+            .extendedTerminationHook(extendedTerminationHook)
+            .clusterClock(new TestClusterClock());
 
         final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
 
@@ -915,8 +932,10 @@ class ConsensusModuleAgentTest
             assertThrowsExactly(AgentTerminationException.class, agent::doWork);
         assertSame(sourceException, exception);
 
-        final InOrder inOrder = inOrder(ctx.countedErrorHandler(), subscription, terminationHook);
+        final InOrder inOrder =
+            inOrder(ctx.countedErrorHandler(), subscription, terminationHook, extendedTerminationHook);
         inOrder.verify(subscription).poll(any(), anyInt());
+        inOrder.verify(extendedTerminationHook).run(sourceException);
         inOrder.verify(terminationHook).run();
         inOrder.verifyNoMoreInteractions();
     }
@@ -942,5 +961,41 @@ class ConsensusModuleAgentTest
         inOrder.verify(subscription).poll(any(), anyInt());
         inOrder.verify(election).handleError(anyLong(), eq(sourceException));
         inOrder.verifyNoMoreInteractions();
+    }
+
+    @Test
+    void shouldCloseRecordingLogValidatorArchiveWhenValidationCompletes()
+    {
+        final TestClusterClock clock = new TestClusterClock(TimeUnit.MILLISECONDS);
+        final Counter stateCounter = newCounter("state counter", CLUSTER_CONSENSUS_MODULE_STATE_TYPE_ID);
+        final Counter nodeControlToggle = newCounter("node control toggle", NODE_CONTROL_TOGGLE_TYPE_ID);
+        final AeronArchive mockValidatorArchive = mock(AeronArchive.class);
+
+        NodeControl.ToggleState.activate(nodeControlToggle);
+
+        ctx.moduleStateCounter(stateCounter)
+            .nodeControlToggleCounter(nodeControlToggle)
+            .recordingLog(mock(RecordingLog.class))
+            .epochClock(clock.asEpochClock())
+            .clusterClock(clock);
+
+        final ConsensusModuleAgent agent = new ConsensusModuleAgent(ctx);
+        Tests.setField(agent, "appendPosition", mock(ReadableCounter.class));
+        agent.state(ConsensusModule.State.ACTIVE, "");
+        agent.role(Cluster.Role.LEADER);
+
+        try (MockedStatic<AeronArchive> staticMockArchive = mockStatic(AeronArchive.class))
+        {
+            staticMockArchive.when(() -> AeronArchive.connect(any())).thenReturn(mockValidatorArchive);
+
+            assertTrue(NodeControl.ToggleState.VALIDATE_RECORDING_LOG.toggle(nodeControlToggle));
+            clock.update(SLOW_TICK_INTERVAL_MS, TimeUnit.MILLISECONDS);
+            agent.doWork();
+
+            staticMockArchive.verify(() -> AeronArchive.connect(any()));
+            assertEquals(NodeControl.ToggleState.NEUTRAL.code(), nodeControlToggle.get());
+            assertNull(Tests.getField(agent, "recordingLogValidator"));
+            verify(mockValidatorArchive).close();
+        }
     }
 }

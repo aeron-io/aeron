@@ -136,36 +136,40 @@ public:
     inline void run()
     {
         m_isRunning.store(true, std::memory_order_release);
-        bool isRunning = true;
 
         util::OnScopeExit tidy(
             [&]()
             {
-                m_isRunning.store(false, std::memory_order_release);
+                m_isClosed.store(true, std::memory_order_release);
             });
 
         try
         {
             m_agent.onStart();
         }
-        catch (const util::SourcedException &exception)
+        catch (const std::exception &exception)
         {
-            isRunning = false;
+            m_isRunning.store(false, std::memory_order_release);
             m_exceptionHandler(exception);
         }
 
-        if (isRunning)
+        while (m_isRunning.load(std::memory_order_acquire))
         {
-            while (!m_isClosed.load(std::memory_order_acquire))
+            try
             {
-                try
-                {
-                    m_idleStrategy.idle(m_agent.doWork());
-                }
-                catch (const util::SourcedException &exception)
+                m_idleStrategy.idle(m_agent.doWork());
+            }
+            catch (const util::AgentTerminationException &exception)
+            {
+                m_isRunning.store(false, std::memory_order_release);
+                if (!exception.isExpected())
                 {
                     m_exceptionHandler(exception);
                 }
+            }
+            catch (const std::exception &exception)
+            {
+                m_exceptionHandler(exception);
             }
         }
 
@@ -173,7 +177,7 @@ public:
         {
             m_agent.onClose();
         }
-        catch (const util::SourcedException &exception)
+        catch (const std::exception &exception)
         {
             m_exceptionHandler(exception);
         }
@@ -187,9 +191,22 @@ public:
         bool expected = false;
         if (m_isClosed.compare_exchange_strong(expected, true, std::memory_order_seq_cst))
         {
+            m_isRunning.store(false, std::memory_order_release);
+
             if (m_thread.joinable())
             {
                 m_thread.join();
+            }
+            else
+            {
+                try
+                {
+                    m_agent.onClose();
+                }
+                catch (const std::exception &exception)
+                {
+                    m_exceptionHandler(exception);
+                }
             }
         }
     }

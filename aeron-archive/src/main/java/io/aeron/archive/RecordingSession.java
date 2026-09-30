@@ -17,7 +17,7 @@ package io.aeron.archive;
 
 import io.aeron.*;
 import io.aeron.archive.client.ArchiveException;
-import io.aeron.archive.logging.ArchiveLog;
+import io.aeron.archive.logging.ArchiveTracing;
 import org.agrona.CloseHelper;
 import org.agrona.LangUtil;
 import org.agrona.concurrent.CountedErrorHandler;
@@ -296,6 +296,6 @@ class RecordingSession implements Session
         final long position,
         final String reason)
     {
-        ArchiveLog.logRecordingSessionStateChange(oldState, newState, recordingId, position, reason);
+        ArchiveTracing.traceRecordingSessionStateChange(oldState, newState, recordingId, position, reason);
     }
 }

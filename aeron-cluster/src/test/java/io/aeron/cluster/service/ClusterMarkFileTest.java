@@ -16,6 +16,7 @@
 package io.aeron.cluster.service;
 
 import io.aeron.Aeron;
+import io.aeron.cluster.client.ClusterException;
 import io.aeron.cluster.codecs.mark.ClusterComponentType;
 import io.aeron.cluster.codecs.mark.MarkFileHeaderDecoder;
 import io.aeron.cluster.codecs.mark.MarkFileHeaderEncoder;
@@ -731,6 +732,43 @@ class ClusterMarkFileTest
                 Integer.MAX_VALUE));
 
         assertEquals("Page size more than max size of 1073741824: page size=2147483647", exception.getMessage());
+    }
+
+    @Test
+    void shouldResetActivityTimestampOfTheExistingFileIfInitializationFails()
+    {
+        final File file = tempDir.resolve(ClusterMarkFile.FILENAME).toFile();
+        assertFalse(file.exists());
+
+        final CachedEpochClock epochClock = new CachedEpochClock();
+        epochClock.advance(444444449888888L);
+
+        try (ClusterMarkFile clusterMarkFile =
+            new ClusterMarkFile(
+                file, ClusterComponentType.CONTAINER, ERROR_BUFFER_MIN_LENGTH, epochClock, 1000, PAGE_MIN_SIZE))
+        {
+            assertTrue(file.exists());
+            assertEquals(HEADER_LENGTH + ERROR_BUFFER_MIN_LENGTH, file.length());
+            clusterMarkFile.signalReady(epochClock.time());
+        }
+
+        epochClock.advance(5000);
+
+        final ClusterException exception = assertThrowsExactly(
+            ClusterException.class,
+            () -> new ClusterMarkFile(
+                file, ClusterComponentType.STANDBY, ERROR_BUFFER_MIN_LENGTH, epochClock, 1000, PAGE_MIN_SIZE));
+        assertEquals(
+            "ERROR - existing Mark file type CONTAINER not same as required type STANDBY",
+            exception.getMessage());
+
+        epochClock.advance(5000);
+
+        try (ClusterMarkFile clusterMarkFile =
+            new ClusterMarkFile(file.getParentFile(), ClusterMarkFile.FILENAME, epochClock, 1, (s) -> {}))
+        {
+            assertEquals(Aeron.NULL_VALUE, clusterMarkFile.activityTimestampVolatile());
+        }
     }
 
     private static void verifyMarkFileContents(

@@ -17,7 +17,7 @@ package io.aeron.driver;
 
 import io.aeron.AeronCounters;
 import io.aeron.CounterProvider;
-import io.aeron.driver.logging.DriverLog;
+import io.aeron.driver.logging.DriverTracing;
 import io.aeron.driver.media.NetworkUtil;
 import io.aeron.driver.media.UdpChannel;
 import io.aeron.driver.media.UdpNameResolutionTransport;
@@ -648,12 +648,12 @@ final class DriverNameResolver implements UdpNameResolutionTransport.UdpFrameHan
 
         static void neighborAdded(final long nowMs, final InetSocketAddress address)
         {
-            DriverLog.logNeighborAdded(address);
+            DriverTracing.traceNeighborAdded(address);
         }
 
         static void neighborRemoved(final long nowMs, final InetSocketAddress address)
         {
-            DriverLog.logNeighborRemoved(address);
+            DriverTracing.traceNeighborRemoved(address);
         }
     }
 

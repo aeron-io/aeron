@@ -2076,21 +2076,21 @@ int aeron_subscription_local_sockaddrs(
  * Retrieves the first local socket address for this subscription. If this is not MDS then it will be the one
  * representing endpoint for this subscription.
  *
- * @see aeron_subscription_local_sockaddrs
- * @param subscription to query
- * @param address for the received address
+ * @param subscription to query.
+ * @param address buffer to hold the resolved endooint.
  * @param address_len available length for the copied address.
  * @return -1 on error, 0 if address not found, 1 if address is found.
+ * @see aeron_subscription_local_sockaddrs
  */
-int aeron_subscription_resolved_endpoint(aeron_subscription_t *subscription, const char *address, size_t address_len);
+int aeron_subscription_resolved_endpoint(aeron_subscription_t *subscription, char *address, size_t address_len);
 
 /**
  * Retrieves the channel URI for this subscription with any wildcard ports filled in. If the channel is not UDP or
  * does not have a wildcard port (<code>0</code>), then it will return the original URI.
  *
- * @param subscription to query
- * @param uri buffer to hold the resolved uri
- * @param uri_len length of the buffer
+ * @param subscription to query.
+ * @param uri buffer to hold the resolved uri.
+ * @param uri_len length of the buffer.
  * @return -1 on failure or the number of bytes written to the buffer (excluding the NULL terminator). Writing is done
  * on a per key basis, so if the buffer was truncated before writing completed, it will only include the byte count up
  * to the key that overflowed. However, the invariant that if the number returned >= uri_len, then output will have been
@@ -2424,6 +2424,16 @@ void aeron_fragment_assembler_handler(
     void *clientd, const uint8_t *buffer, size_t length, aeron_header_t *header);
 
 /**
+ * Free an existing session buffer to reduce memory pressure when an image goes inactive or no more
+ * large messages are expected.
+ *
+ * @param assembler holding the session buffer.
+ * @param session_id to have its buffer freed.
+ * @return true if a buffer has been freed otherwise false.
+ */
+bool aeron_fragment_assembler_delete_session_buffer(aeron_fragment_assembler_t *assembler, int32_t session_id);
+
+/**
  * Create a controlled fragment assembler for use with a subscription.
  *
  * @param assembler to be set when created successfully.
@@ -2455,6 +2465,17 @@ int aeron_controlled_fragment_assembler_delete(aeron_controlled_fragment_assembl
  */
 aeron_controlled_fragment_handler_action_t aeron_controlled_fragment_assembler_handler(
     void *clientd, const uint8_t *buffer, size_t length, aeron_header_t *header);
+
+/**
+ * Free an existing session buffer to reduce memory pressure when an image goes inactive or no more
+ * large messages are expected.
+ *
+ * @param assembler holding the session buffer.
+ * @param session_id to have its buffer freed.
+ * @return true if a buffer has been freed otherwise false.
+ */
+bool aeron_controlled_fragment_assembler_delete_session_buffer(
+    aeron_controlled_fragment_assembler_t *assembler, int32_t session_id);
 
 /**
  * Counter functions

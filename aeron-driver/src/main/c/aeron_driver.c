@@ -83,7 +83,6 @@ static void error_log_reader_save_to_file(
 int aeron_report_existing_errors(aeron_mapped_file_t *cnc_map, const char *aeron_dir)
 {
     char buffer[AERON_MAX_PATH];
-    int result = 0;
 
     aeron_cnc_metadata_t *metadata = (aeron_cnc_metadata_t *)cnc_map->addr;
 
@@ -91,7 +90,6 @@ int aeron_report_existing_errors(aeron_mapped_file_t *cnc_map, const char *aeron
         aeron_error_log_exists(aeron_cnc_error_log_buffer(cnc_map->addr), (size_t)metadata->error_log_buffer_length))
     {
         char datestamp[AERON_FORMAT_DATE_MAX_LENGTH];
-        FILE *saved_errors_file = NULL;
 
         aeron_format_date(datestamp, sizeof(datestamp) - 1, aeron_epoch_clock());
         while (true)
@@ -107,28 +105,47 @@ int aeron_report_existing_errors(aeron_mapped_file_t *cnc_map, const char *aeron
 
         snprintf(buffer, sizeof(buffer), "%s-%s-error.log", aeron_dir, datestamp);
 
-        if ((saved_errors_file = fopen(buffer, "w")) != NULL)
+        FILE *error_file = NULL;
+        if (NULL != (error_file = fopen(buffer, "w")))
         {
             uint64_t observations = aeron_error_log_read(
                 aeron_cnc_error_log_buffer(metadata),
                 (size_t)metadata->error_log_buffer_length,
                 error_log_reader_save_to_file,
-                saved_errors_file,
+                error_file,
                 0);
 
-            AERON_FPRINTF(saved_errors_file, "\n%" PRIu64 " distinct errors observed.\n", observations);
-            AERON_FPRINTF(stderr, "WARNING: Existing errors saved to: %s\n", buffer);
+            if (0 != observations)
+            {
+                AERON_FPRINTF(error_file, "\n%" PRIu64 " distinct errors observed.\n", observations);
+                AERON_FPRINTF(stderr, "WARNING: Existing errors saved to: %s\n", buffer);
+            }
 
-            fclose(saved_errors_file);
+            fclose(error_file);
         }
         else
         {
-            AERON_SET_ERR(errno, "Failed to open saved_error_file: %s", buffer);
-            result = -1;
+            AERON_SET_ERR(errno, "Failed to open: %s", buffer);
+
+            FILE *fallback_logger = stderr;
+            AERON_FPRINTF(fallback_logger, "ERROR: Failed to save existing errors to: %s\n", buffer);
+            AERON_FPRINTF(fallback_logger, "%s\n", aeron_errmsg());
+            aeron_err_clear();
+
+            AERON_FPRINTF(fallback_logger, "\n%s\n", "Dumping errors here:");
+
+            uint64_t observations = aeron_error_log_read(
+                aeron_cnc_error_log_buffer(metadata),
+                (size_t)metadata->error_log_buffer_length,
+                error_log_reader_save_to_file,
+                fallback_logger,
+                0);
+
+            AERON_FPRINTF(fallback_logger, "\n%" PRIu64 " distinct errors observed.\n", observations);
         }
     }
 
-    return result;
+    return 0;
 }
 
 int aeron_driver_ensure_dir_is_recreated(aeron_driver_context_t *context)
@@ -310,7 +327,7 @@ int aeron_driver_create_cnc_file(aeron_driver_t *driver)
         return -1;
     }
 
-    if (aeron_map_new_file(&driver->context->cnc_map, path, true) < 0)
+    if (aeron_map_new_file(&driver->context->cnc_map, path, true, driver->context->file_page_size) < 0)
     {
         AERON_APPEND_ERR("CnC file: %s", path);
         return -1;
@@ -335,7 +352,7 @@ int aeron_driver_create_loss_report_file(aeron_driver_t *driver)
         return -1;
     }
 
-    if (aeron_map_new_file(&driver->context->loss_report, buffer, true) < 0)
+    if (aeron_map_new_file(&driver->context->loss_report, buffer, true, driver->context->file_page_size) < 0)
     {
         AERON_APPEND_ERR("could not map loss report file: %s", buffer);
         return -1;
@@ -563,6 +580,7 @@ void aeron_driver_context_print_configuration(aeron_driver_context_t *context)
     AERON_FPRINTF(fpout, "\n    socket_sndbuf_length=%" PRIu64, (uint64_t)context->socket_sndbuf);
     AERON_FPRINTF(fpout, "\n    socket_rcvbuf_length=%" PRIu64, (uint64_t)context->socket_rcvbuf);
     AERON_FPRINTF(fpout, "\n    multicast_ttl=%" PRIu8, context->multicast_ttl);
+    AERON_FPRINTF(fpout, "\n    socket_tos=%" PRId32, context->socket_tos);
     AERON_FPRINTF(fpout, "\n    mtu_length=%" PRIu64, (uint64_t)context->mtu_length);
     AERON_FPRINTF(fpout, "\n    ipc_mtu_length=%" PRIu64, (uint64_t)context->ipc_mtu_length);
     AERON_FPRINTF(fpout, "\n    file_page_size=%" PRIu64, (uint64_t)context->file_page_size);
@@ -578,10 +596,14 @@ void aeron_driver_context_print_configuration(aeron_driver_context_t *context)
         (uint64_t)context->network_publication_max_messages_per_send);
     AERON_FPRINTF(fpout, "\n    resource_free_limit=%" PRIu32, context->resource_free_limit);
     AERON_FPRINTF(fpout, "\n    conductor_cpu_affinity_no=%" PRId32, context->conductor_cpu_affinity_no);
+    AERON_FPRINTF(fpout, "\n    conductor_cpu_affinity_resolved=%" PRId32, context->conductor_cpu_affinity_resolved);
     AERON_FPRINTF(fpout, "\n    receiver_cpu_affinity_no=%" PRId32, context->receiver_cpu_affinity_no);
+    AERON_FPRINTF(fpout, "\n    receiver_cpu_affinity_resolved=%" PRId32, context->receiver_cpu_affinity_resolved);
     AERON_FPRINTF(fpout, "\n    sender_cpu_affinity_no=%" PRId32, context->sender_cpu_affinity_no);
+    AERON_FPRINTF(fpout, "\n    sender_cpu_affinity_resolved=%" PRId32, context->sender_cpu_affinity_resolved);
     AERON_FPRINTF(fpout, "\n    native_resource_agent_cpu_affinity_no=%" PRId32, context->native_resource_agent_cpu_affinity_no);
-    AERON_FPRINTF(fpout, "\n    cpuset_affinity=%" PRId32, context->cpuset_affinity);
+    AERON_FPRINTF(fpout, "\n    native_resource_agent_cpu_affinity_resolved=%" PRId32, context->native_resource_agent_cpu_affinity_resolved);
+    AERON_FPRINTF(fpout, "\n    cpuset_affinity=%s", context->cpuset_affinity ? "true" : "false");
     AERON_FPRINTF(fpout, "\n    cpuset_warnings_as_errors=%" PRId32, context->cpuset_warnings_as_errors);
 
     AERON_FPRINTF(fpout, "\n    epoch_clock=%s",
@@ -1135,59 +1157,76 @@ error:
     return -1;
 }
 
-int aeron_driver_apply_cpuset_affinity(aeron_driver_context_t *context)
+static int aeron_driver_validate_affinity_pair(
+    const int32_t a,
+    const int32_t b,
+    const char *a_name,
+    const char *b_name,
+    FILE *output)
+{
+    if (AERON_NULL_VALUE != a && AERON_NULL_VALUE != b && a == b)
+    {
+        fprintf(output, "WARN: %s and %s are sharing cpu affinity=%" PRId32 "\n", a_name, b_name, a);
+        return 1;
+    }
+
+    return 0;
+}
+
+int aeron_driver_validate_unshared_affinity(aeron_driver_context_t* context, FILE *output)
+{
+    int warnings = 0;
+
+    warnings += aeron_driver_validate_affinity_pair(
+        context->conductor_cpu_affinity_no, context->sender_cpu_affinity_no, "conductor", "sender", output);
+    warnings += aeron_driver_validate_affinity_pair(
+        context->conductor_cpu_affinity_no, context->receiver_cpu_affinity_no, "conductor", "receiver", output);
+    warnings += aeron_driver_validate_affinity_pair(
+        context->conductor_cpu_affinity_no, context->native_resource_agent_cpu_affinity_no, "conductor", "native_resource_agent", output);
+    warnings += aeron_driver_validate_affinity_pair(
+        context->sender_cpu_affinity_no, context->receiver_cpu_affinity_no, "sender", "receiver", output);
+    warnings += aeron_driver_validate_affinity_pair(
+        context->sender_cpu_affinity_no, context->native_resource_agent_cpu_affinity_no, "sender", "native_resource_agent", output);
+    warnings += aeron_driver_validate_affinity_pair(
+        context->receiver_cpu_affinity_no, context->native_resource_agent_cpu_affinity_no, "receiver", "native_resource_agent", output);
+
+    return warnings;
+}
+
+#ifdef __linux__
+static int aeron_driver_apply_cpuset_affinity(aeron_driver_context_t *context, aeron_topology_t *topology)
 {
     if (!context->cpuset_affinity)
     {
+        context->conductor_cpu_affinity_resolved = context->conductor_cpu_affinity_no;
+        context->sender_cpu_affinity_resolved = context->sender_cpu_affinity_no;
+        context->receiver_cpu_affinity_resolved = context->receiver_cpu_affinity_no;
+        context->native_resource_agent_cpu_affinity_resolved = context->native_resource_agent_cpu_affinity_no;
         return 0;
     }
-
-#ifndef __linux__
-    AERON_SET_ERR(EPERM, "%s", "Cpuset affinity is only supported on Linux");
-    return -1;
-#endif
 
     int *cpus = NULL;
     int cpu_count = 0;
 
-    if (aeron_cpuset_cgroup_read_v2(AERON_CPUSET_PROC_SELF_CGROUP, AERON_CPUSET_CGROUP_MOUNT_V2, &cpus, &cpu_count) < 0)
+    if (aeron_cpuset_cgroup_read_v2(AERON_CPUSET_CGROUP_MOUNT_V2, AERON_CPUSET_PROC_SELF_CGROUP, &cpus, &cpu_count) < 0)
     {
         AERON_APPEND_ERR("%s", "cpuset affinity enabled and failed to properly read cgroups and cpuset information");
         goto error;
     }
 
-    int alignment_warnings_count;
-    if ((alignment_warnings_count = aeron_topology_check_alignment(
-        AERON_TOPOLOGY_SYS_CPU_PATH, cpus, cpu_count, stderr)) < 0)
-    {
-        AERON_APPEND_ERR("%s", "failed to check cpu alignment");
-        goto error;
-    }
+    char buf[4096];
+    aeron_cpuset_format_cpulist(cpus, cpu_count, buf, sizeof(buf));
 
-    int cluster_locality_warnings_count;
-    if ((cluster_locality_warnings_count = aeron_topology_check_die_locality(
-        AERON_TOPOLOGY_SYS_CPU_PATH, cpus, cpu_count, stderr)) < 0)
-    {
-        AERON_APPEND_ERR("%s", "failed to check cpu cluster locality");
-        goto error;
-    }
+    const aeron_topology_query_t query = {
+        cpus, cpu_count, "cpuset", buf
+    };
 
-    int l3_locality_warnings_count;
-    if ((l3_locality_warnings_count = aeron_topology_check_l3_locality(
-        AERON_TOPOLOGY_SYS_CPU_PATH, cpus, cpu_count, stderr)) < 0)
-    {
-        AERON_APPEND_ERR("%s", "failed to check cpu l3 cache locality");
-        goto error;
-    }
+    const int alignment_warnings_count = aeron_topology_check_alignment(topology, &query, stderr);
+    const int die_locality_warnings_count = aeron_topology_check_die_locality(topology, &query, stderr);
+    const int l3_locality_warnings_count = aeron_topology_check_l3_locality(topology, &query, stderr);
 
     const int total_warnings_count =
-        alignment_warnings_count + cluster_locality_warnings_count + l3_locality_warnings_count;
-
-    if (context->cpuset_warnings_as_errors && 0 < total_warnings_count)
-    {
-        AERON_SET_ERR(EINVAL, "cpuset warnings as errors, %d warnings", total_warnings_count);
-        goto error;
-    }
+        alignment_warnings_count + die_locality_warnings_count + l3_locality_warnings_count;
 
     if (aeron_driver_context_apply_cpuset_affinity(context, cpus, cpu_count) < 0)
     {
@@ -1196,11 +1235,109 @@ int aeron_driver_apply_cpuset_affinity(aeron_driver_context_t *context)
     }
 
     aeron_free(cpus);
+    return total_warnings_count;
+
+    error:
+        aeron_free(cpus);
+    return -1;
+}
+
+static int aeron_driver_add_affinity_cpu(int *cpus, const int index, const int cpu)
+{
+    int result = index;
+
+    if (AERON_NULL_VALUE != cpu)
+    {
+        cpus[index] = cpu;
+        result++;
+    }
+
+    return result;
+}
+#endif
+
+int aeron_driver_validate_and_apply_affinity_configuration(aeron_driver_context_t *context)
+{
+#ifdef __linux__
+    int unshared_affinity_warnings;
+    aeron_topology_t *topology = NULL;
+    int *online_cpus = NULL;
+    int online_cpus_count = 0;
+
+    if ((unshared_affinity_warnings = aeron_driver_validate_unshared_affinity(context, stderr)) < 0)
+    {
+        AERON_APPEND_ERR("%s", "failed to validate unshared affinity");
+        goto error;
+    }
+
+    if (aeron_cpuset_read_online("/sys", "devices/system/cpu/online", &online_cpus, &online_cpus_count) < 0)
+    {
+        AERON_APPEND_ERR("%s", "failed to get online cpus");
+        goto error;
+    }
+
+    if (aeron_topology_init(AERON_TOPOLOGY_SYS_CPU_PATH, online_cpus, online_cpus_count, &topology) < 0)
+    {
+        AERON_APPEND_ERR("%s", "failed to build cpu topology");
+        goto error;
+    }
+
+    int cpuset_warnings = 0;
+    if ((cpuset_warnings = aeron_driver_apply_cpuset_affinity(context, topology)) < 0)
+    {
+        AERON_APPEND_ERR("%s", "failed to apply cpuset affinity");
+        goto error;
+    }
+
+    int affinity_cpus[4] = { 0 };
+    int affinity_cpus_count = 0;
+
+    affinity_cpus_count = aeron_driver_add_affinity_cpu(
+        affinity_cpus, affinity_cpus_count, context->conductor_cpu_affinity_resolved);
+    affinity_cpus_count = aeron_driver_add_affinity_cpu(
+        affinity_cpus, affinity_cpus_count, context->sender_cpu_affinity_resolved);
+    affinity_cpus_count = aeron_driver_add_affinity_cpu(
+        affinity_cpus, affinity_cpus_count, context->receiver_cpu_affinity_resolved);
+    affinity_cpus_count = aeron_driver_add_affinity_cpu(
+        affinity_cpus, affinity_cpus_count, context->native_resource_agent_cpu_affinity_resolved);
+
+    char buf[4096];
+    snprintf(
+        buf,
+        sizeof(buf),
+        "sender=%d (%d), receiver= %d(%d), conductor=%d (%d), native_resource_agent=%d (%d)",
+        context->sender_cpu_affinity_no, context->sender_cpu_affinity_resolved,
+        context->receiver_cpu_affinity_no, context->receiver_cpu_affinity_resolved,
+        context->conductor_cpu_affinity_no, context->conductor_cpu_affinity_resolved,
+        context->native_resource_agent_cpu_affinity_no, context->native_resource_agent_cpu_affinity_resolved);
+
+    const aeron_topology_query_t query = {
+        affinity_cpus, affinity_cpus_count, "affinity", buf
+    };
+
+    const int l3_locality_warnings = aeron_topology_check_l3_locality(topology, &query, stderr);
+    const int die_locality_warnings = aeron_topology_check_die_locality(topology, &query, stderr);
+
+    const int total_warnings_count =
+        unshared_affinity_warnings + cpuset_warnings + l3_locality_warnings + die_locality_warnings;
+
+    if (context->cpuset_warnings_as_errors && 0 < total_warnings_count)
+    {
+        AERON_SET_ERR(EINVAL, "cpuset warnings as errors, %d warnings", total_warnings_count);
+        goto error;
+    }
+
+    aeron_free(online_cpus);
+    aeron_topology_free(topology);
     return 0;
 
 error:
-    aeron_free(cpus);
+    aeron_free(online_cpus);
+    aeron_topology_free(topology);
     return -1;
+
+#endif
+    return 0;
 }
 
 int aeron_driver_start(aeron_driver_t *driver, bool manual_main_loop)

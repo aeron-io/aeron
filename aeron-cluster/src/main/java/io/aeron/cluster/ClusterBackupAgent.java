@@ -37,7 +37,7 @@ import io.aeron.cluster.codecs.ChallengeDecoder;
 import io.aeron.cluster.codecs.EventCode;
 import io.aeron.cluster.codecs.MessageHeaderDecoder;
 import io.aeron.cluster.codecs.SessionEventDecoder;
-import io.aeron.cluster.logging.ClusterLog;
+import io.aeron.cluster.logging.ClusterTracing;
 import io.aeron.cluster.service.ClusterMarkFile;
 import io.aeron.exceptions.TimeoutException;
 import io.aeron.logbuffer.Header;
@@ -305,7 +305,7 @@ public final class ClusterBackupAgent implements Agent
         }
         catch (final AgentTerminationException ex)
         {
-            runTerminationHook(ex);
+            runTerminationHooks(ex);
         }
         catch (final Exception ex)
         {
@@ -1053,7 +1053,7 @@ public final class ClusterBackupAgent implements Agent
     private void logStateChange(
         final ClusterBackup.State oldState, final ClusterBackup.State newState, final long nowMs)
     {
-        ClusterLog.logClusterBackupStateChange(oldState, newState);
+        ClusterTracing.traceClusterBackupStateChange(oldState, newState);
     }
 
     private int pollBackupArchiveEvents()
@@ -1160,8 +1160,16 @@ public final class ClusterBackupAgent implements Agent
         return replayStartPosition;
     }
 
-    private void runTerminationHook(final AgentTerminationException ex)
+    private void runTerminationHooks(final AgentTerminationException ex)
     {
+        try
+        {
+            ctx.extendedTerminationHook().run(ex);
+        }
+        catch (final Exception e)
+        {
+            ctx.countedErrorHandler().onError(e);
+        }
         try
         {
             ctx.terminationHook().run();

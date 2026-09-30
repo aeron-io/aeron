@@ -36,12 +36,14 @@ import org.agrona.concurrent.AtomicBuffer;
 import org.agrona.concurrent.CachedEpochClock;
 import org.agrona.concurrent.SystemEpochClock;
 import org.agrona.concurrent.UnsafeBuffer;
+import org.agrona.concurrent.errors.DistinctErrorLog;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledForJreRange;
 import org.junit.jupiter.api.condition.JRE;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.InOrder;
+import org.mockito.MockedStatic;
 
 import java.io.File;
 import java.io.IOException;
@@ -59,10 +61,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -564,6 +568,62 @@ class ArchiveMarkFileTest
             ArchiveMarkFile archiveMarkFile = new ArchiveMarkFile(context))
         {
             assertEquals(filePageSize, archiveMarkFile.buffer().capacity());
+        }
+    }
+
+    @Test
+    void shouldResetActivityTimestampIfMarkFileCreationFailsPartway(final @TempDir Path tempDir)
+    {
+        final CachedEpochClock epochClock = new CachedEpochClock();
+        final long originalTimeMs = 1_000_555_000_777L;
+        epochClock.update(originalTimeMs);
+
+        final File file = tempDir.resolve("archive.mark").toFile();
+        try (ArchiveMarkFile markFile = new ArchiveMarkFile(
+            file,
+            ArchiveMarkFile.HEADER_LENGTH + ERROR_BUFFER_LENGTH,
+            ERROR_BUFFER_LENGTH,
+            epochClock,
+            100))
+        {
+            final DistinctErrorLog distinctErrorLog = new DistinctErrorLog(markFile.errorBuffer(), epochClock);
+            distinctErrorLog.record(new IndexOutOfBoundsException("1 != 0"));
+
+            markFile.encoder()
+                .headerLength(ArchiveMarkFile.HEADER_LENGTH)
+                .errorBufferLength(ERROR_BUFFER_LENGTH);
+
+            markFile.signalReady(originalTimeMs);
+        }
+
+        epochClock.advance(5000);
+
+        try (MockedStatic<CommonContext> mockedContext = mockStatic(CommonContext.class))
+        {
+            final IllegalMonitorStateException customError = new IllegalMonitorStateException("test me");
+            mockedContext.when(() -> CommonContext.fallbackLogger()).thenThrow(customError);
+
+            final IllegalMonitorStateException exception = assertThrowsExactly(
+                IllegalMonitorStateException.class,
+                () -> new ArchiveMarkFile(
+                    file,
+                    ArchiveMarkFile.HEADER_LENGTH + ERROR_BUFFER_LENGTH,
+                    ERROR_BUFFER_LENGTH,
+                    epochClock,
+                    1000));
+            assertSame(customError, exception);
+        }
+
+        epochClock.advance(3000);
+
+        try (ArchiveMarkFile markFile = new ArchiveMarkFile(
+            file.getParentFile(),
+            file.getName(),
+            epochClock,
+            1000,
+            (s) -> {}))
+        {
+            assertEquals(NULL_VALUE, markFile.activityTimestampVolatile());
         }
     }
 

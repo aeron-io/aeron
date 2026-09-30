@@ -307,6 +307,25 @@ class ChannelUriTest
         assertEquals("aeron:ipc?alias=foobar", transformAlias("aeron:ipc?alias=foo", fun));
     }
 
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = { "abc", "1.0", "+14x"})
+    void validateSocketTosThrowsIllegalArgumentExceptionIfNotANumber(final String tos)
+    {
+        final IllegalArgumentException exception =
+            assertThrowsExactly(IllegalArgumentException.class, () -> ChannelUri.validateSocketTos(tos));
+        assertEquals("so-tos must be a number", exception.getMessage());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "-1", "256", "1000000"})
+    void validateSocketTosThrowsIllegalArgumentExceptionIfOutOfRange(final String tos)
+    {
+        final IllegalArgumentException exception =
+            assertThrowsExactly(IllegalArgumentException.class, () -> ChannelUri.validateSocketTos(tos));
+        assertEquals("so-tos must be between 0 and 255 inclusive: " + tos, exception.getMessage());
+    }
+
     private static void assertSubstitution(
         final String expected,
         final String originalChannel,

@@ -19,8 +19,14 @@ import io.aeron.driver.media.ReceiveChannelEndpoint;
 
 class NetworkSubscriptionLink extends SubscriptionLink
 {
+    enum ResponseSetupState
+    {
+        PENDING, COMPLETE, ERROR
+    }
+
     private final boolean isReliable;
     private final ReceiveChannelEndpoint channelEndpoint;
+    private ResponseSetupState responseSetupState = ResponseSetupState.PENDING;
 
     NetworkSubscriptionLink(
         final long registrationId,
@@ -34,6 +40,16 @@ class NetworkSubscriptionLink extends SubscriptionLink
 
         this.isReliable = params.isReliable;
         this.channelEndpoint = channelEndpoint;
+    }
+
+    ResponseSetupState responseSetupState()
+    {
+        return responseSetupState;
+    }
+
+    void responseSetupState(final ResponseSetupState state)
+    {
+        responseSetupState = state;
     }
 
     boolean isReliable()

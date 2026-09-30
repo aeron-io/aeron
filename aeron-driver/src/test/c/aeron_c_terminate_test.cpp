@@ -90,7 +90,7 @@ TEST_F(TerminateTest, noOpIfCncFileIsEmpty)
 
     aeron_mapped_file_t mapped_file = {};
     mapped_file.length = AERON_CNC_VERSION_AND_META_DATA_LENGTH / 2;
-    EXPECT_EQ(0, aeron_map_new_file(&mapped_file, filename, true)) << aeron_errmsg();
+    EXPECT_EQ(0, aeron_map_new_file(&mapped_file, filename, true, AERON_PAGE_MIN_SIZE)) << aeron_errmsg();
 
     EXPECT_EQ(0, aeron_context_request_driver_termination(m_driver.directory(), (uint8_t *)TERMINATION_KEY, strlen(TERMINATION_KEY)));
     EXPECT_EQ(0, aeron_errcode());
@@ -109,7 +109,7 @@ TEST_F(TerminateTest, shouldFailIfCncFileHasWrongMajorVersion)
 
     aeron_mapped_file_t mapped_file = {};
     mapped_file.length = AERON_CNC_VERSION_AND_META_DATA_LENGTH + AERON_CACHE_LINE_LENGTH;
-    EXPECT_EQ(0, aeron_map_new_file(&mapped_file, filename, true)) << aeron_errmsg();
+    EXPECT_EQ(0, aeron_map_new_file(&mapped_file, filename, true, AERON_PAGE_MIN_SIZE)) << aeron_errmsg();
 
     auto *metadata = static_cast<aeron_cnc_metadata_t*>(mapped_file.addr);
     metadata->cnc_version = aeron_semantic_version_compose(1, 0, 0);
@@ -131,7 +131,7 @@ TEST_F(TerminateTest, shouldFailIfCncFileMinorVersionIsBelowTheCurrentVersion)
 
     aeron_mapped_file_t mapped_file = {};
     mapped_file.length = AERON_CNC_VERSION_AND_META_DATA_LENGTH + AERON_CACHE_LINE_LENGTH;
-    EXPECT_EQ(0, aeron_map_new_file(&mapped_file, filename, true)) << aeron_errmsg();
+    EXPECT_EQ(0, aeron_map_new_file(&mapped_file, filename, true, AERON_PAGE_MIN_SIZE)) << aeron_errmsg();
 
     auto *metadata = static_cast<aeron_cnc_metadata_t*>(mapped_file.addr);
     metadata->cnc_version = aeron_semantic_version_compose(
@@ -154,7 +154,7 @@ TEST_F(TerminateTest, shouldFailIfCncFileLengthIsInsufficient)
 
     aeron_mapped_file_t mapped_file = {};
     mapped_file.length = AERON_CNC_VERSION_AND_META_DATA_LENGTH + AERON_CACHE_LINE_LENGTH;
-    EXPECT_EQ(0, aeron_map_new_file(&mapped_file, filename, true)) << aeron_errmsg();
+    EXPECT_EQ(0, aeron_map_new_file(&mapped_file, filename, true, AERON_PAGE_MIN_SIZE)) << aeron_errmsg();
 
     auto *metadata = static_cast<aeron_cnc_metadata_t*>(mapped_file.addr);
     metadata->cnc_version = AERON_CNC_VERSION;
@@ -177,7 +177,7 @@ TEST_F(TerminateTest, shouldFailIfRingBufferCapacityIsNotAPowerOfTwo)
     aeron_mapped_file_t mapped_file = {};
     size_t to_driver_buffer_length = 100 + AERON_RB_TRAILER_LENGTH;
     mapped_file.length = AERON_CNC_VERSION_AND_META_DATA_LENGTH + to_driver_buffer_length;
-    EXPECT_EQ(0, aeron_map_new_file(&mapped_file, filename, true)) << aeron_errmsg();
+    EXPECT_EQ(0, aeron_map_new_file(&mapped_file, filename, true, AERON_PAGE_MIN_SIZE)) << aeron_errmsg();
 
     auto *metadata = static_cast<aeron_cnc_metadata_t*>(mapped_file.addr);
     metadata->cnc_version = AERON_CNC_VERSION;
@@ -201,7 +201,7 @@ TEST_F(TerminateTest, shouldFailIfTokenIsLargerThanRingBufferMaxMessageSize)
     aeron_mapped_file_t mapped_file = {};
     size_t to_driver_buffer_length = AERON_MPSC_RB_MIN_CAPACITY + AERON_RB_TRAILER_LENGTH;
     mapped_file.length = AERON_CNC_VERSION_AND_META_DATA_LENGTH + to_driver_buffer_length;
-    EXPECT_EQ(0, aeron_map_new_file(&mapped_file, filename, true)) << aeron_errmsg();
+    EXPECT_EQ(0, aeron_map_new_file(&mapped_file, filename, true, AERON_PAGE_MIN_SIZE)) << aeron_errmsg();
 
     auto *metadata = static_cast<aeron_cnc_metadata_t*>(mapped_file.addr);
     metadata->cnc_version = AERON_CNC_VERSION;
@@ -226,7 +226,7 @@ TEST_F(TerminateTest, shouldFailIfDriverCommandRingBufferIsFull)
     aeron_mapped_file_t mapped_file = {};
     size_t to_driver_buffer_length = AERON_MPSC_RB_MIN_CAPACITY * 128 + AERON_RB_TRAILER_LENGTH;
     mapped_file.length = AERON_CNC_VERSION_AND_META_DATA_LENGTH + to_driver_buffer_length;
-    EXPECT_EQ(0, aeron_map_new_file(&mapped_file, filename, true)) << aeron_errmsg();
+    EXPECT_EQ(0, aeron_map_new_file(&mapped_file, filename, true, AERON_PAGE_MIN_SIZE)) << aeron_errmsg();
 
     auto *metadata = static_cast<aeron_cnc_metadata_t*>(mapped_file.addr);
     metadata->cnc_version = AERON_CNC_VERSION;

@@ -25,6 +25,7 @@
 extern "C"
 {
 #include "aeron_alloc.h"
+#include "aeronc.h"
 #include "aeron_cpuset.h"
 #include "aeron_topology.h"
 #include "util/aeron_error.h"
@@ -57,8 +58,8 @@ protected:
     }
 
     static void setupCgroupCpuset(
-        std::string &procSelfCgroupFilename,
         std::string &cgroupMountRoot,
+        std::string &procSelfCgroupFilename,
         const char *cpuset)
     {
         std::string cgroupRoot = cgroupMountRoot + "/user.slice/user-1000.slice";
@@ -121,7 +122,7 @@ protected:
     size_t m_output_size;
 };
 
-TEST_F(TopologyTest, shouldCheckAlignment)
+TEST_F(TopologyTest, shouldCheckCgroupConfiguration)
 {
 #ifndef __linux__
     GTEST_SKIP() << "CGroups only supported on Linux";
@@ -132,98 +133,86 @@ TEST_F(TopologyTest, shouldCheckAlignment)
     std::string mountRoot = std::string(m_tempDir) + "/cgroup";
     std::string cgroupFilename = std::string(m_tempDir) + "/proc-cgroup";
     std::string sysfsRoot = std::string(m_tempDir) + "/sysfs";
-    setupCgroupCpuset(cgroupFilename, mountRoot, "5-10");
-    std::vector<std::pair<int, int>> a = {
+    std::string onlineFile = "online";
+    std::string onlineCpus = std::string(m_tempDir) + "/" + onlineFile;
+    std::ofstream(onlineCpus.c_str(), std::ios::out) << "0-15" << std::endl;
+    setupCgroupCpuset(mountRoot, cgroupFilename, "5-10");
+
+    std::vector<std::pair<int, int>> siblings = {
         {0, 1}, {0, 1}, {2, 3}, {2, 3}, {4, 5}, {4, 5},
         {6, 7}, {6, 7}, {8, 9}, {8, 9}, {10, 11}, {10, 11},
         {12, 13}, {12, 13}, {14, 15}, {14, 15}
     };
-    setupSiblings(sysfsRoot, a);
+    setupSiblings(sysfsRoot, siblings);
 
-    int *cpus = nullptr;
-    int cpu_count = 8;
+    std::vector<int> dieIds = {
+        65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535,
+        0, 0, 0, 0, 0, 0, 0, 0
+    };
+    setupClusterShared(sysfsRoot, dieIds);
 
-    ASSERT_NE(-1, aeron_cpuset_cgroup_read_v2(cgroupFilename.c_str(), mountRoot.c_str(), &cpus, &cpu_count))
+    std::vector<std::pair<int, int>> l3Peers = {
+        {0, 7}, {0, 7}, {0, 7}, {0, 7}, {0, 7}, {0, 7}, {0, 7}, {0, 7},
+        {8, 15}, {8, 15}, {8, 15}, {8, 15}, {8, 15}, {8, 15}, {8, 15}, {8, 15}
+    };
+    setupL3Shared(sysfsRoot, l3Peers);
+
+    int *online_cpus = nullptr;
+    int online_cpu_count = 8;
+    aeron_topology_t *topology;
+    ASSERT_NE(-1, aeron_cpuset_read_online(m_tempDir, onlineFile.c_str(), &online_cpus, &online_cpu_count))
+        << aeron_errmsg();
+    ASSERT_NE(-1, aeron_topology_init(sysfsRoot.c_str(), online_cpus, online_cpu_count, &topology)) << aeron_errmsg();
+
+    int *cgroup_cpus = nullptr;
+    int cgroup_cpu_count = 8;
+    ASSERT_NE(-1, aeron_cpuset_cgroup_read_v2(mountRoot.c_str(), cgroupFilename.c_str(), &cgroup_cpus, &cgroup_cpu_count))
         << aeron_errmsg();
 
-    const int warnings = aeron_topology_check_alignment(sysfsRoot.c_str(), cpus, cpu_count, m_output);
-    ASSERT_NE(-1, warnings) << aeron_errmsg();
-    EXPECT_EQ(2, warnings);
+    char buf[4096];
+    aeron_cpuset_format_cpulist(cgroup_cpus, cgroup_cpu_count, buf, sizeof(buf));
+
+    const aeron_topology_query_t query = {
+        cgroup_cpus, cgroup_cpu_count, "cpuset", buf
+    };
+
+    const int alignmentWarnings = aeron_topology_check_alignment(topology, &query, m_output);
+    ASSERT_NE(-1, alignmentWarnings) << aeron_errmsg();
+    EXPECT_EQ(2, alignmentWarnings);
     fflush(m_output);
 
     ASSERT_NE(nullptr, m_output_ptr);
     EXPECT_NE(nullptr, strstr(m_output_ptr, "cpuset is missing sibling CPU(s) 4"));
     EXPECT_NE(nullptr, strstr(m_output_ptr, "cpuset is missing sibling CPU(s) 11"));
 
-    aeron_free(cpus);
-}
-
-TEST_F(TopologyTest, shouldCheckL3Locality)
-{
-#ifndef __linux__
-    GTEST_SKIP() << "CGroups only supported on Linux";
-#endif
-
-    ASSERT_NE(nullptr, m_output);
-
-    std::string mountRoot = std::string(m_tempDir) + "/cgroup";
-    std::string cgroupFilename = std::string(m_tempDir) + "/proc-cgroup";
-    std::string sysfsRoot = std::string(m_tempDir) + "/sysfs";
-    setupCgroupCpuset(cgroupFilename, mountRoot, "5-10");
-    std::vector<std::pair<int, int>> a = {
-        {0, 7}, {0, 7}, {0, 7}, {0, 7}, {0, 7}, {0, 7}, {0, 7}, {0, 7},
-        {8, 15}, {8, 15}, {8, 15}, {8, 15}, {8, 15}, {8, 15}, {8, 15}, {8, 15}
-    };
-    setupL3Shared(sysfsRoot, a);
-
-    int *cpus = nullptr;
-    int cpu_count = 8;
-
-    ASSERT_NE(-1, aeron_cpuset_cgroup_read_v2(cgroupFilename.c_str(), mountRoot.c_str(), &cpus, &cpu_count))
-        << aeron_errmsg();
-
-    const int warnings = aeron_topology_check_l3_locality(sysfsRoot.c_str(), cpus, cpu_count, m_output);
-    ASSERT_NE(-1, warnings) << aeron_errmsg();
-    EXPECT_EQ(1, warnings);
+    const int l3Warnings = aeron_topology_check_l3_locality(topology, &query, m_output);
+    ASSERT_NE(-1, l3Warnings) << aeron_errmsg();
+    EXPECT_EQ(1, l3Warnings);
     fflush(m_output);
 
     ASSERT_NE(nullptr, m_output_ptr);
     EXPECT_NE(nullptr, strstr(m_output_ptr, "cpuset spans multiple L3 cache domains"));
 
-    aeron_free(cpus);
-}
-
-TEST_F(TopologyTest, shouldCheckClusterLocality)
-{
-#ifndef __linux__
-    GTEST_SKIP() << "CGroups only supported on Linux";
-#endif
-
-    ASSERT_NE(nullptr, m_output);
-
-    std::string mountRoot = std::string(m_tempDir) + "/cgroup";
-    std::string cgroupFilename = std::string(m_tempDir) + "/proc-cgroup";
-    std::string sysfsRoot = std::string(m_tempDir) + "/sysfs";
-    setupCgroupCpuset(cgroupFilename, mountRoot, "5-10");
-    std::vector<int> a = {
-        65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535,
-        0, 0, 0, 0, 0, 0, 0, 0
-    };
-    setupClusterShared(sysfsRoot, a);
-
-    int *cpus = nullptr;
-    int cpu_count = 8;
-
-    ASSERT_NE(-1, aeron_cpuset_cgroup_read_v2(cgroupFilename.c_str(), mountRoot.c_str(), &cpus, &cpu_count))
-        << aeron_errmsg();
-
-    const int warnings = aeron_topology_check_die_locality(sysfsRoot.c_str(), cpus, cpu_count, m_output);
-    ASSERT_NE(-1, warnings) << aeron_errmsg();
-    EXPECT_EQ(1, warnings);
+    const int dieWarnings = aeron_topology_check_die_locality(topology, &query, m_output);
+    ASSERT_NE(-1, dieWarnings) << aeron_errmsg();
+    EXPECT_EQ(1, dieWarnings);
     fflush(m_output);
 
     ASSERT_NE(nullptr, m_output_ptr);
-    EXPECT_NE(nullptr, strstr(m_output_ptr, "cpuset spans 2 CPU clusters"));
+    EXPECT_NE(nullptr, strstr(m_output_ptr, "cpuset spans multiple CPU dies"));
 
-    aeron_free(cpus);
+    aeron_free(online_cpus);
+    aeron_free(cgroup_cpus);
+    aeron_topology_free(topology);
+}
+
+TEST_F(TopologyTest, DISABLED_shouldBuildTopologyFromRealSystem)
+{
+    int *cpus = nullptr;
+    int cpu_count = 0;
+    aeron_cpuset_read_online("/sys", "devices/system/cpu/online", &cpus, &cpu_count);
+
+    aeron_topology_t *cpu = nullptr;
+
+    aeron_topology_init(AERON_TOPOLOGY_SYS_CPU_PATH, cpus, cpu_count, &cpu);
 }

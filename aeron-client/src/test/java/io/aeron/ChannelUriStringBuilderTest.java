@@ -127,11 +127,29 @@ class ChannelUriStringBuilderTest
             .media("udp")
             .endpoint("address:9999")
             .socketSndbufLength(8192)
-            .socketRcvbufLength(4096);
+            .socketRcvbufLength(4096)
+            .socketTos(184);
 
         assertEquals(
-            "aeron:udp?endpoint=address:9999|so-sndbuf=8k|so-rcvbuf=4k",
+            "aeron:udp?endpoint=address:9999|so-sndbuf=8k|so-rcvbuf=4k|so-tos=184",
             builder.build());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = { -1, 256 })
+    void shouldRejectInvalidSocketTos(final int socketTos)
+    {
+        assertThrows(IllegalArgumentException.class, () -> new ChannelUriStringBuilder().socketTos(socketTos));
+    }
+
+    @Test
+    void shouldCopySocketTosFromChannelUri()
+    {
+        final ChannelUriStringBuilder builder = new ChannelUriStringBuilder(
+            ChannelUri.parse("aeron:udp?endpoint=localhost:9999|so-tos=46"));
+
+        assertEquals(46, builder.socketTos());
+        assertEquals("aeron:udp?endpoint=localhost:9999|so-tos=46", builder.build());
     }
 
     @Test

@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Logging entry points for the cluster.
  */
-public final class ClusterLog
+public final class ClusterTracing
 {
     private static final Object2ObjectHashMap<String, EnumSet<ClusterEventCode>> SPECIAL_EVENTS =
         new Object2ObjectHashMap<>();
@@ -61,38 +61,38 @@ public final class ClusterLog
         ENABLED_EVENT_CODES = Collections.unmodifiableSet(enabledEventCodeSet);
     }
 
-    static final boolean LOG_ELECTION_STATE_CHANGE_ENABLED = isEnabled(ClusterEventCode.ELECTION_STATE_CHANGE);
-    static final boolean LOG_NEW_LEADERSHIP_TERM_ENABLED = isEnabled(ClusterEventCode.NEW_LEADERSHIP_TERM);
-    static final boolean LOG_STATE_CHANGE_ENABLED = isEnabled(ClusterEventCode.STATE_CHANGE);
-    static final boolean LOG_ROLE_CHANGE_ENABLED = isEnabled(ClusterEventCode.ROLE_CHANGE);
-    static final boolean LOG_CANVASS_POSITION_ENABLED = isEnabled(ClusterEventCode.CANVASS_POSITION);
-    static final boolean LOG_REQUEST_VOTE_ENABLED = isEnabled(ClusterEventCode.REQUEST_VOTE);
-    static final boolean LOG_CATCHUP_POSITION_ENABLED = isEnabled(ClusterEventCode.CATCHUP_POSITION);
-    static final boolean LOG_STOP_CATCHUP_ENABLED = isEnabled(ClusterEventCode.STOP_CATCHUP);
-    static final boolean LOG_TRUNCATE_LOG_ENTRY_ENABLED = isEnabled(ClusterEventCode.TRUNCATE_LOG_ENTRY);
-    static final boolean LOG_REPLAY_NEW_LEADERSHIP_TERM_ENABLED =
+    static final boolean TRACE_ELECTION_STATE_CHANGE_ENABLED = isEnabled(ClusterEventCode.ELECTION_STATE_CHANGE);
+    static final boolean TRACE_NEW_LEADERSHIP_TERM_ENABLED = isEnabled(ClusterEventCode.NEW_LEADERSHIP_TERM);
+    static final boolean TRACE_STATE_CHANGE_ENABLED = isEnabled(ClusterEventCode.STATE_CHANGE);
+    static final boolean TRACE_ROLE_CHANGE_ENABLED = isEnabled(ClusterEventCode.ROLE_CHANGE);
+    static final boolean TRACE_CANVASS_POSITION_ENABLED = isEnabled(ClusterEventCode.CANVASS_POSITION);
+    static final boolean TRACE_REQUEST_VOTE_ENABLED = isEnabled(ClusterEventCode.REQUEST_VOTE);
+    static final boolean TRACE_CATCHUP_POSITION_ENABLED = isEnabled(ClusterEventCode.CATCHUP_POSITION);
+    static final boolean TRACE_STOP_CATCHUP_ENABLED = isEnabled(ClusterEventCode.STOP_CATCHUP);
+    static final boolean TRACE_TRUNCATE_LOG_ENTRY_ENABLED = isEnabled(ClusterEventCode.TRUNCATE_LOG_ENTRY);
+    static final boolean TRACE_REPLAY_NEW_LEADERSHIP_TERM_ENABLED =
         isEnabled(ClusterEventCode.REPLAY_NEW_LEADERSHIP_TERM);
-    static final boolean LOG_APPEND_POSITION_ENABLED = isEnabled(ClusterEventCode.APPEND_POSITION);
-    static final boolean LOG_COMMIT_POSITION_ENABLED = isEnabled(ClusterEventCode.COMMIT_POSITION);
-    static final boolean LOG_APPEND_SESSION_CLOSE_ENABLED = isEnabled(ClusterEventCode.APPEND_SESSION_CLOSE);
-    static final boolean LOG_CLUSTER_BACKUP_STATE_CHANGE_ENABLED =
+    static final boolean TRACE_APPEND_POSITION_ENABLED = isEnabled(ClusterEventCode.APPEND_POSITION);
+    static final boolean TRACE_COMMIT_POSITION_ENABLED = isEnabled(ClusterEventCode.COMMIT_POSITION);
+    static final boolean TRACE_APPEND_SESSION_CLOSE_ENABLED = isEnabled(ClusterEventCode.APPEND_SESSION_CLOSE);
+    static final boolean TRACE_CLUSTER_BACKUP_STATE_CHANGE_ENABLED =
         isEnabled(ClusterEventCode.CLUSTER_BACKUP_STATE_CHANGE);
-    static final boolean LOG_TERMINATION_POSITION_ENABLED = isEnabled(ClusterEventCode.TERMINATION_POSITION);
-    static final boolean LOG_TERMINATION_ACK_ENABLED = isEnabled(ClusterEventCode.TERMINATION_ACK);
-    static final boolean LOG_SERVICE_ACK_ENABLED = isEnabled(ClusterEventCode.SERVICE_ACK);
-    static final boolean LOG_REPLICATION_ENDED_ENABLED = isEnabled(ClusterEventCode.REPLICATION_ENDED);
-    static final boolean LOG_STANDBY_SNAPSHOT_NOTIFICATION_ENABLED =
+    static final boolean TRACE_TERMINATION_POSITION_ENABLED = isEnabled(ClusterEventCode.TERMINATION_POSITION);
+    static final boolean TRACE_TERMINATION_ACK_ENABLED = isEnabled(ClusterEventCode.TERMINATION_ACK);
+    static final boolean TRACE_SERVICE_ACK_ENABLED = isEnabled(ClusterEventCode.SERVICE_ACK);
+    static final boolean TRACE_REPLICATION_ENDED_ENABLED = isEnabled(ClusterEventCode.REPLICATION_ENDED);
+    static final boolean TRACE_STANDBY_SNAPSHOT_NOTIFICATION_ENABLED =
         isEnabled(ClusterEventCode.STANDBY_SNAPSHOT_NOTIFICATION);
-    static final boolean LOG_NEW_ELECTION_ENABLED = isEnabled(ClusterEventCode.NEW_ELECTION);
-    static final boolean LOG_APPEND_SESSION_OPEN_ENABLED = isEnabled(ClusterEventCode.APPEND_SESSION_OPEN);
-    static final boolean LOG_CLUSTER_SESSION_STATE_CHANGE_ENABLED =
+    static final boolean TRACE_NEW_ELECTION_ENABLED = isEnabled(ClusterEventCode.NEW_ELECTION);
+    static final boolean TRACE_APPEND_SESSION_OPEN_ENABLED = isEnabled(ClusterEventCode.APPEND_SESSION_OPEN);
+    static final boolean TRACE_CLUSTER_SESSION_STATE_CHANGE_ENABLED =
         isEnabled(ClusterEventCode.CLUSTER_SESSION_STATE_CHANGE);
-    static final boolean LOG_VOTE_ENABLED = isEnabled(ClusterEventCode.VOTE);
-    static final boolean LOG_SNAPSHOT_ENTRY_INVALIDATION_ENABLED =
+    static final boolean TRACE_VOTE_ENABLED = isEnabled(ClusterEventCode.VOTE);
+    static final boolean TRACE_SNAPSHOT_ENTRY_INVALIDATION_ENABLED =
         isEnabled(ClusterEventCode.SNAPSHOT_ENTRY_INVALIDATION);
-    static final boolean LOG_START = !ENABLED_EVENT_CODES.isEmpty();
+    static final boolean TRACE_START = !ENABLED_EVENT_CODES.isEmpty();
 
-    private ClusterLog()
+    private ClusterTracing()
     {
     }
 
@@ -123,7 +123,7 @@ public final class ClusterLog
      * @param catchupPosition     of the node.
      * @param reason              for the state transition to occur.
      */
-    public static <E extends Enum<E>> void logElectionStateChange(
+    public static <E extends Enum<E>> void traceElectionStateChange(
         final int memberId,
         final E oldState,
         final E newState,
@@ -136,12 +136,12 @@ public final class ClusterLog
         final long catchupPosition,
         final String reason)
     {
-        if (!LOG_ELECTION_STATE_CHANGE_ENABLED)
+        if (!TRACE_ELECTION_STATE_CHANGE_ENABLED)
         {
             return;
         }
 
-        ClusterEventLogger.LOGGER.logElectionStateChange(
+        ClusterTracer.TRACER.traceElectionStateChange(
             memberId,
             oldState,
             newState,
@@ -174,7 +174,7 @@ public final class ClusterLog
      * @param appVersion              associated with the recorded state.
      * @param isStartup               is the leader starting up fresh.
      */
-    public static void logOnNewLeadershipTerm(
+    public static void traceOnNewLeadershipTerm(
         final int memberId,
         final long logLeadershipTermId,
         final long nextLeadershipTermId,
@@ -192,12 +192,12 @@ public final class ClusterLog
         final int appVersion,
         final boolean isStartup)
     {
-        if (!LOG_NEW_LEADERSHIP_TERM_ENABLED)
+        if (!TRACE_NEW_LEADERSHIP_TERM_ENABLED)
         {
             return;
         }
 
-        ClusterEventLogger.LOGGER.logOnNewLeadershipTerm(
+        ClusterTracer.TRACER.traceOnNewLeadershipTerm(
             memberId,
             logLeadershipTermId,
             nextLeadershipTermId,
@@ -224,15 +224,15 @@ public final class ClusterLog
      * @param reason   for the state change.
      * @param <E>      type of state.
      */
-    public static <E extends Enum<E>> void logStateChange(
+    public static <E extends Enum<E>> void traceStateChange(
         final int memberId, final E oldState, final E newState, final String reason)
     {
-        if (!LOG_STATE_CHANGE_ENABLED)
+        if (!TRACE_STATE_CHANGE_ENABLED)
         {
             return;
         }
 
-        ClusterEventLogger.LOGGER.logStateChange(memberId, oldState, newState, reason);
+        ClusterTracer.TRACER.traceStateChange(memberId, oldState, newState, reason);
     }
 
     /**
@@ -243,14 +243,14 @@ public final class ClusterLog
      * @param newRole   role after the change.
      * @param <E>       type of the role.
      */
-    public static <E extends Enum<E>> void logRoleChange(final int memberId, final E oldRole, final E newRole)
+    public static <E extends Enum<E>> void traceRoleChange(final int memberId, final E oldRole, final E newRole)
     {
-        if (!LOG_ROLE_CHANGE_ENABLED)
+        if (!TRACE_ROLE_CHANGE_ENABLED)
         {
             return;
         }
 
-        ClusterEventLogger.LOGGER.logRoleChange(memberId, oldRole, newRole, "");
+        ClusterTracer.TRACER.traceRoleChange(memberId, oldRole, newRole, "");
     }
 
     /**
@@ -263,7 +263,7 @@ public final class ClusterLog
      * @param followerMemberId    follower node id.
      * @param protocolVersion     of the consensus module.
      */
-    public static void logOnCanvassPosition(
+    public static void traceOnCanvassPosition(
         final int memberId,
         final long logLeadershipTermId,
         final long logPosition,
@@ -271,12 +271,12 @@ public final class ClusterLog
         final int followerMemberId,
         final int protocolVersion)
     {
-        if (!LOG_CANVASS_POSITION_ENABLED)
+        if (!TRACE_CANVASS_POSITION_ENABLED)
         {
             return;
         }
 
-        ClusterEventLogger.LOGGER.logOnCanvassPosition(
+        ClusterTracer.TRACER.traceOnCanvassPosition(
             memberId, logLeadershipTermId, logPosition, leadershipTermId, followerMemberId, protocolVersion);
     }
 
@@ -290,7 +290,7 @@ public final class ClusterLog
      * @param candidateId         id of the candidate node.
      * @param protocolVersion     from the request.
      */
-    public static void logOnRequestVote(
+    public static void traceOnRequestVote(
         final int memberId,
         final long logLeadershipTermId,
         final long logPosition,
@@ -298,12 +298,12 @@ public final class ClusterLog
         final int candidateId,
         final int protocolVersion)
     {
-        if (!LOG_REQUEST_VOTE_ENABLED)
+        if (!TRACE_REQUEST_VOTE_ENABLED)
         {
             return;
         }
 
-        ClusterEventLogger.LOGGER.logOnRequestVote(
+        ClusterTracer.TRACER.traceOnRequestVote(
             memberId, logLeadershipTermId, logPosition, candidateTermId, candidateId, protocolVersion);
     }
 
@@ -318,7 +318,7 @@ public final class ClusterLog
      * @param voterId             id of the follower node that voted.
      * @param vote                expressed by the follower node.
      */
-    public static void logOnVote(
+    public static void traceOnVote(
         final int memberId,
         final long logLeadershipTermId,
         final long logPosition,
@@ -327,12 +327,12 @@ public final class ClusterLog
         final int voterId,
         final boolean vote)
     {
-        if (!LOG_VOTE_ENABLED)
+        if (!TRACE_VOTE_ENABLED)
         {
             return;
         }
 
-        ClusterEventLogger.LOGGER.logOnVote(
+        ClusterTracer.TRACER.traceOnVote(
             memberId, logLeadershipTermId, logPosition, candidateTermId, candidateId, voterId, vote);
     }
 
@@ -345,19 +345,19 @@ public final class ClusterLog
      * @param followerMemberId the id of the follower that is catching up
      * @param catchupEndpoint  the endpoint to send catchup messages
      */
-    public static void logOnCatchupPosition(
+    public static void traceOnCatchupPosition(
         final int memberId,
         final long leadershipTermId,
         final long logPosition,
         final int followerMemberId,
         final String catchupEndpoint)
     {
-        if (!LOG_CATCHUP_POSITION_ENABLED)
+        if (!TRACE_CATCHUP_POSITION_ENABLED)
         {
             return;
         }
 
-        ClusterEventLogger.LOGGER.logOnCatchupPosition(
+        ClusterTracer.TRACER.traceOnCatchupPosition(
             memberId, leadershipTermId, logPosition, followerMemberId, catchupEndpoint);
     }
 
@@ -368,14 +368,14 @@ public final class ClusterLog
      * @param leadershipTermId current leadershipTermId.
      * @param followerMemberId id of follower currently catching up.
      */
-    public static void logOnStopCatchup(final int memberId, final long leadershipTermId, final int followerMemberId)
+    public static void traceOnStopCatchup(final int memberId, final long leadershipTermId, final int followerMemberId)
     {
-        if (!LOG_STOP_CATCHUP_ENABLED)
+        if (!TRACE_STOP_CATCHUP_ENABLED)
         {
             return;
         }
 
-        ClusterEventLogger.LOGGER.logOnStopCatchup(memberId, leadershipTermId, followerMemberId);
+        ClusterTracer.TRACER.traceOnStopCatchup(memberId, leadershipTermId, followerMemberId);
     }
 
     /**
@@ -393,7 +393,7 @@ public final class ClusterLog
      * @param oldPosition         truncated from.
      * @param newPosition         truncated to.
      */
-    public static <E extends Enum<E>> void logOnTruncateLogEntry(
+    public static <E extends Enum<E>> void traceOnTruncateLogEntry(
         final int memberId,
         final E state,
         final long logLeadershipTermId,
@@ -405,12 +405,12 @@ public final class ClusterLog
         final long oldPosition,
         final long newPosition)
     {
-        if (!LOG_TRUNCATE_LOG_ENTRY_ENABLED)
+        if (!TRACE_TRUNCATE_LOG_ENTRY_ENABLED)
         {
             return;
         }
 
-        ClusterEventLogger.LOGGER.logOnTruncateLogEntry(
+        ClusterTracer.TRACER.traceOnTruncateLogEntry(
             memberId,
             state,
             logLeadershipTermId,
@@ -435,7 +435,7 @@ public final class ClusterLog
      * @param timeUnit            cluster time unit.
      * @param appVersion          version of the application.
      */
-    public static void logOnReplayNewLeadershipTermEvent(
+    public static void traceOnReplayNewLeadershipTermEvent(
         final int memberId,
         final boolean isInElection,
         final long leadershipTermId,
@@ -445,12 +445,12 @@ public final class ClusterLog
         final TimeUnit timeUnit,
         final int appVersion)
     {
-        if (!LOG_REPLAY_NEW_LEADERSHIP_TERM_ENABLED)
+        if (!TRACE_REPLAY_NEW_LEADERSHIP_TERM_ENABLED)
         {
             return;
         }
 
-        ClusterEventLogger.LOGGER.logOnReplayNewLeadershipTermEvent(
+        ClusterTracer.TRACER.traceOnReplayNewLeadershipTermEvent(
             memberId,
             isInElection,
             leadershipTermId,
@@ -470,19 +470,19 @@ public final class ClusterLog
      * @param followerMemberId follower member sending the Append position.
      * @param flags            applied to append position by follower.
      */
-    public static void logOnAppendPosition(
+    public static void traceOnAppendPosition(
         final int memberId,
         final long leadershipTermId,
         final long logPosition,
         final int followerMemberId,
         final short flags)
     {
-        if (!LOG_APPEND_POSITION_ENABLED)
+        if (!TRACE_APPEND_POSITION_ENABLED)
         {
             return;
         }
 
-        ClusterEventLogger.LOGGER.logOnAppendPosition(
+        ClusterTracer.TRACER.traceOnAppendPosition(
             memberId, leadershipTermId, logPosition, followerMemberId, flags);
     }
 
@@ -494,15 +494,15 @@ public final class ClusterLog
      * @param logPosition      the current position in the log.
      * @param leaderMemberId   leader member sending the commit position.
      */
-    public static void logOnCommitPosition(
+    public static void traceOnCommitPosition(
         final int memberId, final long leadershipTermId, final long logPosition, final int leaderMemberId)
     {
-        if (!LOG_COMMIT_POSITION_ENABLED)
+        if (!TRACE_COMMIT_POSITION_ENABLED)
         {
             return;
         }
 
-        ClusterEventLogger.LOGGER.logOnCommitPosition(memberId, leadershipTermId, logPosition, leaderMemberId);
+        ClusterTracer.TRACER.traceOnCommitPosition(memberId, leadershipTermId, logPosition, leaderMemberId);
     }
 
     /**
@@ -515,7 +515,7 @@ public final class ClusterLog
      * @param timestamp        the current timestamp.
      * @param timeUnit         units for the timestamp.
      */
-    public static void logAppendSessionClose(
+    public static void traceAppendSessionClose(
         final int memberId,
         final long sessionId,
         final CloseReason closeReason,
@@ -523,12 +523,12 @@ public final class ClusterLog
         final long timestamp,
         final TimeUnit timeUnit)
     {
-        if (!LOG_APPEND_SESSION_CLOSE_ENABLED)
+        if (!TRACE_APPEND_SESSION_CLOSE_ENABLED)
         {
             return;
         }
 
-        ClusterEventLogger.LOGGER.logAppendSessionClose(
+        ClusterTracer.TRACER.traceAppendSessionClose(
             memberId, sessionId, closeReason, leadershipTermId, timestamp, timeUnit);
     }
 
@@ -542,7 +542,7 @@ public final class ClusterLog
      * @param timestamp        the current timestamp.
      * @param timeUnit         units for the timestamp.
      */
-    public static void logAppendSessionOpen(
+    public static void traceAppendSessionOpen(
         final int memberId,
         final long sessionId,
         final long leadershipTermId,
@@ -550,12 +550,12 @@ public final class ClusterLog
         final long timestamp,
         final TimeUnit timeUnit)
     {
-        if (!LOG_APPEND_SESSION_OPEN_ENABLED)
+        if (!TRACE_APPEND_SESSION_OPEN_ENABLED)
         {
             return;
         }
 
-        ClusterEventLogger.LOGGER.logAppendSessionOpen(
+        ClusterTracer.TRACER.traceAppendSessionOpen(
             memberId, sessionId, leadershipTermId, logPosition, timestamp, timeUnit);
     }
 
@@ -566,16 +566,16 @@ public final class ClusterLog
      * @param oldState  before the change.
      * @param newState  after the change.
      */
-    public static <E extends Enum<E>> void logClusterBackupStateChange(
+    public static <E extends Enum<E>> void traceClusterBackupStateChange(
         final E oldState,
         final E newState)
     {
-        if (!LOG_CLUSTER_BACKUP_STATE_CHANGE_ENABLED)
+        if (!TRACE_CLUSTER_BACKUP_STATE_CHANGE_ENABLED)
         {
             return;
         }
 
-        ClusterEventLogger.LOGGER.logClusterBackupStateChange(Aeron.NULL_VALUE, oldState, newState, "");
+        ClusterTracer.TRACER.traceClusterBackupStateChange(Aeron.NULL_VALUE, oldState, newState, "");
     }
 
     /**
@@ -585,14 +585,14 @@ public final class ClusterLog
      * @param leadershipTermId    leadership term for the supplied position.
      * @param logPosition         position to terminate at.
      */
-    public static void logTerminationPosition(final int memberId, final long leadershipTermId, final long logPosition)
+    public static void traceTerminationPosition(final int memberId, final long leadershipTermId, final long logPosition)
     {
-        if (!LOG_TERMINATION_POSITION_ENABLED)
+        if (!TRACE_TERMINATION_POSITION_ENABLED)
         {
             return;
         }
 
-        ClusterEventLogger.LOGGER.logTerminationPosition(memberId, leadershipTermId, logPosition);
+        ClusterTracer.TRACER.traceTerminationPosition(memberId, leadershipTermId, logPosition);
     }
 
     /**
@@ -603,15 +603,15 @@ public final class ClusterLog
      * @param logPosition         position to terminate at.
      * @param senderMemberId      member sending the ack.
      */
-    public static void logTerminationAck(
+    public static void traceTerminationAck(
         final int memberId, final long leadershipTermId, final long logPosition, final int senderMemberId)
     {
-        if (!LOG_TERMINATION_ACK_ENABLED)
+        if (!TRACE_TERMINATION_ACK_ENABLED)
         {
             return;
         }
 
-        ClusterEventLogger.LOGGER.logTerminationAck(memberId, leadershipTermId, logPosition, senderMemberId);
+        ClusterTracer.TRACER.traceTerminationAck(memberId, leadershipTermId, logPosition, senderMemberId);
     }
 
     /**
@@ -625,7 +625,7 @@ public final class ClusterLog
      * @param relevantId  associated id used in the ack, e.g. recordingId for snapshot acks.
      * @param serviceId   the id of the service that sent the ack.
      */
-    public static void logServiceAck(
+    public static void traceServiceAck(
         final int memberId,
         final long logPosition,
         final long timestamp,
@@ -634,12 +634,12 @@ public final class ClusterLog
         final long relevantId,
         final int serviceId)
     {
-        if (!LOG_SERVICE_ACK_ENABLED)
+        if (!TRACE_SERVICE_ACK_ENABLED)
         {
             return;
         }
 
-        ClusterEventLogger.LOGGER.logServiceAck(
+        ClusterTracer.TRACER.traceServiceAck(
             memberId, logPosition, timestamp, timeUnit, ackId, relevantId, serviceId);
     }
 
@@ -654,7 +654,7 @@ public final class ClusterLog
      * @param position       the position where the recording ended.
      * @param hasSynced      was the sync event been received for the replication.
      */
-    public static void logReplicationEnded(
+    public static void traceReplicationEnded(
         final int memberId,
         final String purpose,
         final String channel,
@@ -663,12 +663,12 @@ public final class ClusterLog
         final long position,
         final boolean hasSynced)
     {
-        if (!LOG_REPLICATION_ENDED_ENABLED)
+        if (!TRACE_REPLICATION_ENDED_ENABLED)
         {
             return;
         }
 
-        ClusterEventLogger.LOGGER.logReplicationEnded(
+        ClusterTracer.TRACER.traceReplicationEnded(
             memberId, purpose, channel, srcRecordingId, dstRecordingId, position, hasSynced);
     }
 
@@ -685,7 +685,7 @@ public final class ClusterLog
      * @param serviceId           the serviceId for the snapshot.
      * @param archiveEndpoint     the endpoint holding the standby snapshot.
      */
-    public static void logStandbySnapshotNotification(
+    public static void traceStandbySnapshotNotification(
         final int memberId,
         final long recordingId,
         final long leadershipTermId,
@@ -696,12 +696,12 @@ public final class ClusterLog
         final int serviceId,
         final String archiveEndpoint)
     {
-        if (!LOG_STANDBY_SNAPSHOT_NOTIFICATION_ENABLED)
+        if (!TRACE_STANDBY_SNAPSHOT_NOTIFICATION_ENABLED)
         {
             return;
         }
 
-        ClusterEventLogger.LOGGER.logStandbySnapshotNotification(
+        ClusterTracer.TRACER.traceStandbySnapshotNotification(
             memberId,
             recordingId,
             leadershipTermId,
@@ -722,19 +722,19 @@ public final class ClusterLog
      * @param appendPosition   the append position.
      * @param reason           for election to be started.
      */
-    public static void logNewElection(
+    public static void traceNewElection(
         final int memberId,
         final long leadershipTermId,
         final long logPosition,
         final long appendPosition,
         final String reason)
     {
-        if (!LOG_NEW_ELECTION_ENABLED)
+        if (!TRACE_NEW_ELECTION_ENABLED)
         {
             return;
         }
 
-        ClusterEventLogger.LOGGER.logNewElection(memberId, leadershipTermId, logPosition, appendPosition, reason);
+        ClusterTracer.TRACER.traceNewElection(memberId, leadershipTermId, logPosition, appendPosition, reason);
     }
 
     /**
@@ -749,7 +749,7 @@ public final class ClusterLog
      * @param newState  after the change.
      * @param reason    for the change.
      */
-    public static <A extends Enum<A>, S extends Enum<S>> void logClusterSessionStateChange(
+    public static <A extends Enum<A>, S extends Enum<S>> void traceClusterSessionStateChange(
         final int memberId,
         final long sessionId,
         final A action,
@@ -757,12 +757,12 @@ public final class ClusterLog
         final S newState,
         final String reason)
     {
-        if (!LOG_CLUSTER_SESSION_STATE_CHANGE_ENABLED)
+        if (!TRACE_CLUSTER_SESSION_STATE_CHANGE_ENABLED)
         {
             return;
         }
 
-        ClusterEventLogger.LOGGER.logClusterSessionStateChange(
+        ClusterTracer.TRACER.traceClusterSessionStateChange(
             memberId, sessionId, action, oldState, newState, reason);
     }
 
@@ -775,19 +775,19 @@ public final class ClusterLog
      * @param logPosition   of the snapshot.
      * @param serviceId     that took the snapshot.
      */
-    public static void logSnapshotEntryInvalidation(
+    public static void traceSnapshotEntryInvalidation(
         final int memberId,
         final int entryIndex,
         final long recordingId,
         final long logPosition,
         final int serviceId)
     {
-        if (!LOG_SNAPSHOT_ENTRY_INVALIDATION_ENABLED)
+        if (!TRACE_SNAPSHOT_ENTRY_INVALIDATION_ENABLED)
         {
             return;
         }
 
-        ClusterEventLogger.LOGGER.logSnapshotEntryInvalidation(
+        ClusterTracer.TRACER.traceSnapshotEntryInvalidation(
             memberId, entryIndex, recordingId, logPosition, serviceId);
     }
 
@@ -796,13 +796,13 @@ public final class ClusterLog
      *
      * @param version   of the cluster.
      */
-    public static void logStart(final String version)
+    public static void traceStart(final String version)
     {
-        if (!LOG_START)
+        if (!TRACE_START)
         {
             return;
         }
 
-        ClusterEventLogger.LOGGER.logStart(version);
+        ClusterTracer.TRACER.traceStart(version);
     }
 }

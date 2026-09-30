@@ -21,7 +21,7 @@ import io.aeron.Publication;
 import io.aeron.archive.checksum.Checksum;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.client.ArchiveException;
-import io.aeron.archive.logging.ArchiveLog;
+import io.aeron.archive.logging.ArchiveTracing;
 import io.aeron.logbuffer.LogBufferDescriptor;
 import org.agrona.CloseHelper;
 import org.agrona.concurrent.CachedEpochClock;
@@ -297,7 +297,7 @@ class ReplaySession implements Session, AutoCloseable
     @SuppressWarnings("unused")
     void onPendingError(final long sessionId, final long recordingId, final String errorMessage)
     {
-        ArchiveLog.logReplaySessionError(sessionId, recordingId, errorMessage);
+        ArchiveTracing.traceReplaySessionError(sessionId, recordingId, errorMessage);
     }
 
     private int init() throws IOException
@@ -648,7 +648,7 @@ class ReplaySession implements Session, AutoCloseable
         final long position,
         final String reason)
     {
-        ArchiveLog.logReplaySessionStateChange(oldState, newState, sessionId, recordingId, position, reason);
+        ArchiveTracing.traceReplaySessionStateChange(oldState, newState, sessionId, recordingId, position, reason);
     }
 
     static boolean isInvalidHeader(

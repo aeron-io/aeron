@@ -190,9 +190,29 @@ int aeron_driver_sender_do_work(void *clientd)
     return work_count + bytes_sent + (int)bytes_received;
 }
 
+static void aeron_driver_sender_drain_pending_commands_on_close(
+    int32_t msg_type_id, const void *message, size_t size, void *clientd)
+{
+    aeron_command_base_t *cmd = (aeron_command_base_t *)message;
+
+    if (aeron_driver_sender_on_add_destination == cmd->func)
+    {
+        aeron_uri_t *uri = (aeron_uri_t *)((aeron_command_destination_t *)message)->uri;
+
+        aeron_uri_close(uri);
+        aeron_free(uri);
+    }
+}
+
 void aeron_driver_sender_on_close(void *clientd)
 {
     aeron_driver_sender_t *sender = (aeron_driver_sender_t *)clientd;
+
+    aeron_spsc_rb_read(
+        sender->sender_proxy.command_queue,
+        aeron_driver_sender_drain_pending_commands_on_close,
+        sender,
+        SIZE_MAX);
 
     for (size_t i = 0; i < sender->recv_buffers.vector_capacity; i++)
     {

@@ -15,8 +15,13 @@
  */
 package io.aeron.cluster;
 
+import io.aeron.Aeron;
 import io.aeron.archive.client.AeronArchive;
+import org.agrona.concurrent.AgentInvoker;
+import org.agrona.concurrent.AgentTerminationException;
+import org.agrona.concurrent.SystemEpochClock;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 
 import java.util.Arrays;
 import java.util.List;
@@ -26,7 +31,9 @@ import static io.aeron.cluster.ClusterBackup.Configuration.ReplayStart;
 import static io.aeron.cluster.ClusterBackupAgent.replayStartPosition;
 import static java.util.Collections.emptyList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -69,5 +76,31 @@ class ClusterBackupAgentTest
         assertEquals(NULL_POSITION, replayStartPosition(null, snapshots, ReplayStart.BEGINNING, mockAeronArchive));
         assertEquals(
             6000, replayStartPosition(null, snapshots, ReplayStart.LATEST_SNAPSHOT, mockAeronArchive));
+    }
+
+    @Test
+    void shouldRunTerminationHooksOnTermination()
+    {
+        final Aeron aeron = mock(Aeron.class);
+        final AgentInvoker clientInvoker = mock(AgentInvoker.class);
+        when(aeron.conductorAgentInvoker()).thenReturn(clientInvoker);
+        when(aeron.isClosed()).thenReturn(true);
+
+        final Runnable terminationHook = mock(Runnable.class);
+        final ExtendedTerminationHook extendedTerminationHook = mock(ExtendedTerminationHook.class);
+
+        final ClusterBackup.Context ctx = new ClusterBackup.Context()
+            .aeron(aeron)
+            .epochClock(SystemEpochClock.INSTANCE)
+            .terminationHook(terminationHook)
+            .extendedTerminationHook(extendedTerminationHook);
+
+        final ClusterBackupAgent agent = new ClusterBackupAgent(ctx);
+
+        final AgentTerminationException ex = assertThrows(AgentTerminationException.class, agent::doWork);
+
+        final InOrder inOrder = inOrder(terminationHook, extendedTerminationHook);
+        inOrder.verify(extendedTerminationHook).run(ex);
+        inOrder.verify(terminationHook).run();
     }
 }

@@ -488,9 +488,23 @@ public final class ConsensusModule implements AutoCloseable
          * 1,ingress:port,consensus:port,log:port,catchup:port,archive:port| ...
          * </code>
          * <p>
-         * The ingress endpoints will be used as the endpoint substituted into the
-         * {@link io.aeron.cluster.client.AeronCluster.Configuration#INGRESS_CHANNEL_PROP_NAME} if the endpoint
-         * is not provided when unicast.
+         * Where:
+         * <ul>
+         *     <li><em><strong>ingress:port</strong></em> - an externally advertised endpoint on which a particular
+         *     Cluster node listens for the ingress traffic. This endpoint information is sent to {@code AeronCluster}
+         *     clients upon a redirect and on leadership change.
+         *     <p>
+         *     On the current Cluster node itself, this endpoint information will be used as the {@code endpoint}
+         *     substituted into the {@link ConsensusModule.Context#ingressChannel()} if that does not have an
+         *     {@code endpoint} parameter defined.
+         *     </li>
+         *     <li><em><strong>consensus:port</strong></em> - a Cluster-internal endpoint for consensus traffic.</li>
+         *     <li><em><strong>log:port</strong></em> - a Cluster-internal endpoint for Raft log.</li>
+         *     <li><em><strong>catchup:port</strong></em> - a Cluster-internal endpoint for follower catch up during
+         *     election.</li>
+         *     <li><em><strong>archive:port</strong></em> - a Cluster-internal endpoint on which node's Archive is
+         *     reachable.</li>
+         * </ul>
          */
         @Config(defaultType = DefaultType.STRING, defaultString = "")
         public static final String CLUSTER_MEMBERS_PROP_NAME = "aeron.cluster.members";
@@ -2203,6 +2217,7 @@ public final class ConsensusModule implements AutoCloseable
         private Counter electionCounter;
         private Counter leadershipTermId;
         private Runnable terminationHook;
+        private ExtendedTerminationHook extendedTerminationHook;
 
         private AeronArchive.Context archiveContext;
         private AuthenticatorSupplier authenticatorSupplier;
@@ -2722,6 +2737,11 @@ public final class ConsensusModule implements AutoCloseable
                 terminationHook = () -> {};
             }
 
+            if (null == extendedTerminationHook)
+            {
+                extendedTerminationHook = cause -> {};
+            }
+
             if (null == authenticatorSupplier)
             {
                 authenticatorSupplier = Configuration.authenticatorSupplier(properties);
@@ -3107,10 +3127,25 @@ public final class ConsensusModule implements AutoCloseable
          * 1,ingress:port,consensus:port,log:port,catchup:port,archive:port| ...
          * </code>
          * <p>
-         * The ingress endpoints will be used as the endpoint substituted into the {@link #ingressChannel()}
-         * if the endpoint is not provided unless it is multicast.
+         * Where:
+         * <ul>
+         *     <li><em><strong>ingress:port</strong></em> - an externally advertised endpoint on which a particular
+         *     Cluster node listens for the ingress traffic. This endpoint information is sent to {@code AeronCluster}
+         *     clients upon a redirect and on leadership change.
+         *     <p>
+         *     On the current Cluster node itself, this endpoint information will be used as the {@code endpoint}
+         *     substituted into the {@link #ingressChannel()} if that does not have an {@code endpoint} parameter
+         *     defined.
+         *     </li>
+         *     <li><em><strong>consensus:port</strong></em> - a Cluster-internal endpoint for consensus traffic.</li>
+         *     <li><em><strong>log:port</strong></em> - a Cluster-internal endpoint for Raft log.</li>
+         *     <li><em><strong>catchup:port</strong></em> - a Cluster-internal endpoint for follower catch up during
+         *     election.</li>
+         *     <li><em><strong>archive:port</strong></em> - an externally advertised endpoint on which node's Archive
+         *     is reachable. Used by other Cluster nodes, {@link ClusterBackup} and {@code ClusterStandby}.</li>
+         * </ul>
          *
-         * @param clusterMembers which are all candidates to be leader.
+         * @param clusterMembers info for all nodes.
          * @return this for a fluent API.
          * @see Configuration#CLUSTER_MEMBERS_PROP_NAME
          */
@@ -3121,13 +3156,11 @@ public final class ConsensusModule implements AutoCloseable
         }
 
         /**
-         * The endpoints representing members of the cluster which are all candidates to be leader.
-         * <p>
-         * The ingress endpoints will be used as the endpoint in {@link #ingressChannel()} if the endpoint is
-         * not provided in that when it is not multicast.
+         * String representing the cluster members. See {@link #clusterMembers(String)} for details.
          *
-         * @return members of the cluster which are all candidates to be leader.
+         * @return info for all nodes.
          * @see Configuration#CLUSTER_MEMBERS_PROP_NAME
+         * @see #clusterMembers(String)
          */
         @Config
         public String clusterMembers()
@@ -3136,11 +3169,16 @@ public final class ConsensusModule implements AutoCloseable
         }
 
         /**
-         * Set the channel parameter for the ingress channel.
+         * Set the ingress channel URI, i.e. where this Cluster node listens for the ingress traffic.
+         * <p>
+         * <em><strong>Note:</strong> if UDP media is used (i.e. {@code aeron:udp}) and the channel
+         * <strong>does not</strong> specify an {@code endpoint} parameter then it will be set using an ingress endpoint
+         * from the {@link #clusterMembers()} list.</em>
          *
          * @param channel parameter for the ingress channel.
          * @return this for a fluent API.
          * @see io.aeron.cluster.client.AeronCluster.Configuration#INGRESS_CHANNEL_PROP_NAME
+         * @see #clusterMembers(String)
          */
         public Context ingressChannel(final String channel)
         {
@@ -4683,8 +4721,10 @@ public final class ConsensusModule implements AutoCloseable
 
         /**
          * Set the {@link Runnable} that is called when the {@link ConsensusModule} processes a termination action.
+         * <p>
+         * Both {@link #extendedTerminationHook()} and {@link #terminationHook()} run on termination, in that order.
          *
-         * @param terminationHook that can be used to terminate a consensus module.
+         * @param terminationHook that is called when the {@link ConsensusModule} processes a termination action.
          * @return this for a fluent API.
          */
         public Context terminationHook(final Runnable terminationHook)
@@ -4695,12 +4735,48 @@ public final class ConsensusModule implements AutoCloseable
 
         /**
          * Get the {@link Runnable} that is called when the {@link ConsensusModule} processes a termination action.
+         * <p>
+         * Both {@link #extendedTerminationHook()} and {@link #terminationHook()} run on termination, in that order.
          *
-         * @return the {@link Runnable} that can be used to terminate a consensus module.
+         * @return the {@link Runnable} that is called when the {@link ConsensusModule} processes a termination action.
          */
         public Runnable terminationHook()
         {
             return terminationHook;
+        }
+
+        /**
+         * Set the {@link ExtendedTerminationHook} that is called when the {@link ConsensusModule} processes
+         * a termination action.
+         * <p>
+         * Identical to {@link #terminationHook(Runnable)}, but receives information about the termination cause.
+         * <p>
+         * Both {@link #extendedTerminationHook()} and {@link #terminationHook()} run on termination, in that order.
+         *
+         * @param extendedTerminationHook that is called when the {@link ConsensusModule} processes
+         *                                a termination action.
+         * @return this for a fluent API.
+         */
+        public Context extendedTerminationHook(final ExtendedTerminationHook extendedTerminationHook)
+        {
+            this.extendedTerminationHook = extendedTerminationHook;
+            return this;
+        }
+
+        /**
+         * Get the {@link ExtendedTerminationHook} that is called when the {@link ConsensusModule} processes
+         * a termination action.
+         * <p>
+         * Identical to {@link #terminationHook(Runnable)}, but receives information about the termination cause.
+         * <p>
+         * Both {@link #extendedTerminationHook()} and {@link #terminationHook()} run on termination, in that order.
+         *
+         * @return the {@link ExtendedTerminationHook} that is called when the {@link ConsensusModule} processes
+         * a termination action.
+         */
+        public ExtendedTerminationHook extendedTerminationHook()
+        {
+            return extendedTerminationHook;
         }
 
         /**
@@ -5247,6 +5323,7 @@ public final class ConsensusModule implements AutoCloseable
                 "\n    electionCounter=" + electionCounter +
                 "\n    leadershipTermId=" + leadershipTermId +
                 "\n    terminationHook=" + terminationHook +
+                "\n    extendedTerminationHook=" + extendedTerminationHook +
                 "\n    archiveContext=" + archiveContext +
                 "\n    authenticatorSupplier=" + authenticatorSupplier +
                 "\n    authorisationServiceSupplier=" + authorisationServiceSupplier +

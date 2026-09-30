@@ -52,6 +52,7 @@ import java.util.Properties;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
+import static io.aeron.PropertiesUtil.getBoolean;
 import static io.aeron.PropertiesUtil.getDurationInNanos;
 import static io.aeron.PropertiesUtil.getInteger;
 import static io.aeron.PropertiesUtil.getLong;
@@ -351,6 +352,18 @@ public final class Configuration
      */
     @Config(configType = Config.Type.DEFAULT)
     public static final int SOCKET_MULTICAST_TTL_DEFAULT = 0;
+
+    /**
+     * Property name for the IP_TOS setting on UDP sockets.
+     */
+    @Config(uriParam = CommonContext.SOCKET_TOS_PARAM_NAME)
+    public static final String SOCKET_TOS_PROP_NAME = "aeron.socket.tos";
+
+    /**
+     * Default IP_TOS value, {@link Aeron#NULL_VALUE} means use the OS default.
+     */
+    @Config(configType = Config.Type.DEFAULT)
+    public static final int SOCKET_TOS_DEFAULT = Aeron.NULL_VALUE;
 
     /**
      * Property name for linger timeout after draining on {@link Publication}s so they can respond to NAKs.
@@ -1208,6 +1221,65 @@ public final class Configuration
     @Config(defaultType = DefaultType.LONG, defaultLong = 10_000_000_000L)
     public static final String RESOLVER_BOOTSTRAP_NEIGHBOR_RESOLUTION_INTERVAL_PROP_NAME =
         "aeron.driver.resolver.bootstrap.neighbor.resolution.interval";
+
+    /**
+     * Name of the system property to enable cgroup/cpuset-derived CPU affinity for the Media Driver's threads.
+     */
+    @Config(defaultType = DefaultType.BOOLEAN, defaultBoolean = false)
+    public static final String DRIVER_CPUSET_AFFINITY_PROP_NAME = "aeron.driver.cpuset.affinity";
+
+    /**
+     * Name of the system property to treat cpuset topology validation warnings (thread-sibling misalignment,
+     * L3 cache, or die locality violations) as fatal {@link ConfigurationException}s instead of warnings.
+     */
+    @Config(defaultType = DefaultType.BOOLEAN, defaultBoolean = false)
+    public static final String DRIVER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME = "aeron.driver.cpuset.warnings.as.errors";
+
+    /**
+     * Should cgroup/cpuset-derived CPU affinity be applied to the Media Driver's threads.
+     *
+     * @return true if cgroup/cpuset-derived CPU affinity should be applied.
+     * @see #DRIVER_CPUSET_AFFINITY_PROP_NAME
+     */
+    public static boolean driverCpusetAffinityEnabled()
+    {
+        return driverCpusetAffinityEnabled(System.getProperties());
+    }
+
+    /**
+     * Should cgroup/cpuset-derived CPU affinity be applied to the Media Driver's threads.
+     *
+     * @param properties to read the configuration from.
+     * @return true if cgroup/cpuset-derived CPU affinity should be applied.
+     * @see #DRIVER_CPUSET_AFFINITY_PROP_NAME
+     */
+    public static boolean driverCpusetAffinityEnabled(final Properties properties)
+    {
+        return getBoolean(properties, DRIVER_CPUSET_AFFINITY_PROP_NAME);
+    }
+
+    /**
+     * Should cpuset topology validation warnings be treated as fatal errors.
+     *
+     * @return true if cpuset topology validation warnings should be treated as fatal errors.
+     * @see #DRIVER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
+     */
+    public static boolean driverCpusetWarningsAsErrors()
+    {
+        return driverCpusetWarningsAsErrors(System.getProperties());
+    }
+
+    /**
+     * Should cpuset topology validation warnings be treated as fatal errors.
+     *
+     * @param properties to read the configuration from.
+     * @return true if cpuset topology validation warnings should be treated as fatal errors.
+     * @see #DRIVER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
+     */
+    public static boolean driverCpusetWarningsAsErrors(final Properties properties)
+    {
+        return getBoolean(properties, DRIVER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME);
+    }
 
     /**
      * Default interval between resolutions of bootstrap neighbors that are not active.
@@ -2437,6 +2509,29 @@ public final class Configuration
     public static int socketMulticastTtl(final Properties properties)
     {
         return getInteger(properties, SOCKET_MULTICAST_TTL_PROP_NAME, SOCKET_MULTICAST_TTL_DEFAULT);
+    }
+
+    /**
+     * IP_TOS setting on UDP sockets.
+     *
+     * @return IP_TOS setting on UDP sockets.
+     * @see #SOCKET_TOS_PROP_NAME
+     */
+    public static int socketTos()
+    {
+        return socketTos(System.getProperties());
+    }
+
+    /**
+     * IP_TOS setting on UDP sockets.
+     *
+     * @param properties to read the configuration from.
+     * @return IP_TOS setting on UDP sockets.
+     * @see #SOCKET_TOS_PROP_NAME
+     */
+    public static int socketTos(final Properties properties)
+    {
+        return getInteger(properties, SOCKET_TOS_PROP_NAME, SOCKET_TOS_DEFAULT);
     }
 
     /**

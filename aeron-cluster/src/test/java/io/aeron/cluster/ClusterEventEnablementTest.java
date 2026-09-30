@@ -17,7 +17,7 @@ package io.aeron.cluster;
 
 import io.aeron.CommonContext;
 import io.aeron.cluster.logging.ClusterEventCode;
-import io.aeron.cluster.logging.ClusterLog;
+import io.aeron.cluster.logging.ClusterTracing;
 import io.aeron.logging.EventConfiguration;
 import io.aeron.cluster.codecs.CloseReason;
 import io.aeron.test.InterruptAfter;
@@ -140,8 +140,8 @@ public class ClusterEventEnablementTest
 
     private void callGeneralLogMethods()
     {
-        final List<Method> logMethods = Arrays.stream(ClusterLog.class.getDeclaredMethods())
-            .filter((m) -> m.getName().startsWith("log"))
+        final List<Method> logMethods = Arrays.stream(ClusterTracing.class.getDeclaredMethods())
+            .filter((m) -> m.getName().startsWith("trace"))
             .filter((m) -> 0 != (m.getModifiers() & Modifier.STATIC))
             .toList();
 

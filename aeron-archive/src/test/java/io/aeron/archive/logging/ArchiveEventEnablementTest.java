@@ -145,17 +145,17 @@ public class ArchiveEventEnablementTest
             if (code.name().startsWith("CMD_IN_"))
             {
                 headerEncoder.wrap(buffer, 0).templateId(code.templateId());
-                ArchiveLog.logControlRequest(buffer, 0, MessageHeaderEncoder.ENCODED_LENGTH);
+                ArchiveTracing.traceControlRequest(buffer, 0, MessageHeaderEncoder.ENCODED_LENGTH);
             }
         }
     }
 
     private void callGeneralLogMethods()
     {
-        final List<Method> logMethods = Arrays.stream(ArchiveLog.class.getMethods())
-            .filter((m) -> m.getName().startsWith("log"))
+        final List<Method> logMethods = Arrays.stream(ArchiveTracing.class.getMethods())
+            .filter((m) -> m.getName().startsWith("trace"))
             .filter((m) -> 0 != (m.getModifiers() & Modifier.STATIC))
-            .filter((m) -> !"logControlRequest".equals(m.getName()))
+            .filter((m) -> !"traceControlRequest".equals(m.getName()))
             .toList();
 
         for (final Method logMethod : logMethods)

@@ -48,7 +48,7 @@ void createLogFile(const std::string &filename, const int32_t term_length, const
     aeron_mapped_file_t mappedFile =
         { nullptr, term_length * 3 + AERON_LOGBUFFER_META_DATA_LENGTH };
 
-    if (aeron_map_new_file(&mappedFile, filename.c_str(), false) < 0)
+    if (aeron_map_new_file(&mappedFile, filename.c_str(), false, FILE_PAGE_SIZE) < 0)
     {
         throw std::runtime_error("could not create log file: " + std::string(aeron_errmsg()));
     }

@@ -413,6 +413,7 @@ int aeron_driver_name_resolver_init(
     aeron_udp_channel_transport_params_t transport_params = {
         context->socket_rcvbuf,
         context->socket_sndbuf,
+        context->socket_tos,
         context->mtu_length,
         0,
         0,

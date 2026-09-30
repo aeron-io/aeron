@@ -502,6 +502,25 @@ class UdpChannelTest
     }
 
     @Test
+    void shouldParseSocketTos()
+    {
+        final UdpChannel channel = UdpChannel.parse("aeron:udp?endpoint=127.0.0.1:9999|so-tos=184");
+        assertEquals(184, channel.socketTos());
+
+        final UdpChannel channelWithoutSocketTos = UdpChannel.parse("aeron:udp?endpoint=127.0.0.1:9999");
+        assertEquals(Configuration.SOCKET_TOS_DEFAULT, channelWithoutSocketTos.socketTos());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "-1", "256", "not-a-number" })
+    void shouldRejectInvalidSocketTos(final String value)
+    {
+        assertThrows(
+            InvalidChannelException.class,
+            () -> UdpChannel.parse("aeron:udp?endpoint=127.0.0.1:9999|so-tos=" + value));
+    }
+
+    @Test
     void shouldParseReceiverWindow()
     {
         final UdpChannel udpChannelWithBufferSizes = UdpChannel.parse("aeron:udp?endpoint=127.0.0.1:9999|rcv-wnd=8192");

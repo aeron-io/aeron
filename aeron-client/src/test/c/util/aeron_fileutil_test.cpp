@@ -157,7 +157,7 @@ TEST_F(FileUtilTest, mapNewFileShouldHandleFilesBiggerThan2GB)
     const char *file = "test_map_new_file_big_size.log";
     const size_t file_length = 3221225472;
     mapped_file.length = file_length;
-    ASSERT_EQ(0, aeron_map_new_file(&mapped_file, file, false)) << aeron_errmsg();
+    ASSERT_EQ(0, aeron_map_new_file(&mapped_file, file, false, AERON_PAGE_MIN_SIZE)) << aeron_errmsg();
 
     EXPECT_NE(nullptr, mapped_file.addr);
     EXPECT_EQ(file_length, mapped_file.length);
@@ -178,7 +178,7 @@ TEST_F(FileUtilTest, mapExistingFileShouldHandleFilesBiggerThan2GB)
     const char *file = "test_map_existing_file_big_size.log";
     const size_t file_length = 2500000000;
     mapped_file.length = file_length;
-    ASSERT_EQ(0, aeron_map_new_file(&mapped_file, file, false)) << aeron_errmsg();
+    ASSERT_EQ(0, aeron_map_new_file(&mapped_file, file, false, AERON_PAGE_MIN_SIZE)) << aeron_errmsg();
     ASSERT_EQ(0, aeron_unmap(&mapped_file)) << aeron_errmsg();
 
     ASSERT_EQ(0, aeron_map_existing_file(&mapped_file, file)) << aeron_errmsg();
@@ -267,7 +267,7 @@ TEST_F(FileUtilTest, mapNewFileShouldCreateANonSparseFile)
     const char *file = "test_map_new_file_non_sparse.log";
     const size_t file_length = 64 * 1024;
     mapped_file.length = file_length;
-    ASSERT_EQ(0, aeron_map_new_file(&mapped_file, file, true)) << aeron_errmsg();
+    ASSERT_EQ(0, aeron_map_new_file(&mapped_file, file, true, AERON_PAGE_MIN_SIZE)) << aeron_errmsg();
 
     EXPECT_NE(nullptr, mapped_file.addr);
     EXPECT_EQ(file_length, mapped_file.length);
@@ -315,7 +315,7 @@ TEST_F(FileUtilTest, shouldMsyncMappedFile)
     const char *file = "test.txt";
     const size_t file_length = 1024 * 512;
     mapped_file.length = file_length;
-    ASSERT_EQ(0, aeron_map_new_file(&mapped_file, file, false)) << aeron_errmsg();
+    ASSERT_EQ(0, aeron_map_new_file(&mapped_file, file, false, AERON_PAGE_MIN_SIZE)) << aeron_errmsg();
 
     EXPECT_NE(nullptr, mapped_file.addr);
     EXPECT_EQ(file_length, mapped_file.length);
@@ -377,4 +377,53 @@ TEST_F(FileUtilTest, recursiveMkdir)
     ASSERT_EQ(0, aeron_mkdir_recursive(dirW, S_IRWXU | S_IRWXG | S_IRWXO));
     ASSERT_EQ(0, aeron_mkdir_recursive(dirY, S_IRWXU | S_IRWXG | S_IRWXO));
     ASSERT_EQ(0, aeron_mkdir_recursive(dirZ, S_IRWXU | S_IRWXG | S_IRWXO));
+}
+
+TEST_F(FileUtilTest, shouldNotDestroyDataWhilePreTouching)
+{
+    aeron_mapped_raw_log_t first_mapping = {};
+    aeron_mapped_raw_log_t second_mapping = {};
+    auto *file_name = "test_pre_touch.dat";
+    int32_t term_length = 64 * 1024;
+
+    ASSERT_EQ(0, aeron_raw_log_map(&first_mapping, file_name, false, term_length, AERON_PAGE_MIN_SIZE));
+    EXPECT_EQ(term_length, first_mapping.term_length);
+    EXPECT_EQ(AERON_LOGBUFFER_META_DATA_LENGTH, first_mapping.log_meta_data.length);
+
+    auto *log_meta_data = (aeron_logbuffer_metadata_t *)first_mapping.log_meta_data.addr;
+    log_meta_data->term_length = term_length;
+    log_meta_data->page_size = AERON_PAGE_MIN_SIZE;
+    log_meta_data->sparse = false;
+    log_meta_data->term_tail_counters[0] = 0xDEADBEEF;
+    log_meta_data->term_tail_counters[1] = 0xCAFEBABE;
+    log_meta_data->term_tail_counters[2] = INT64_MAX;
+
+    for (int i = 0; i < AERON_LOGBUFFER_PARTITION_COUNT; i++)
+    {
+        int *value = reinterpret_cast<int *>(first_mapping.term_buffers[i].addr);
+        *value = 1000000 + i;
+    }
+
+    EXPECT_TRUE(aeron_raw_log_free(&first_mapping, nullptr));
+
+    EXPECT_EQ(0, aeron_raw_log_map_existing(&second_mapping, file_name, true));
+    EXPECT_EQ(term_length, second_mapping.term_length);
+    EXPECT_EQ(AERON_LOGBUFFER_META_DATA_LENGTH, second_mapping.log_meta_data.length);
+
+    auto meta_data = (aeron_logbuffer_metadata_t *)second_mapping.log_meta_data.addr;
+    EXPECT_EQ(term_length, meta_data->term_length);
+    EXPECT_EQ(AERON_PAGE_MIN_SIZE, meta_data->page_size);
+    EXPECT_FALSE(meta_data->sparse);
+    EXPECT_EQ(0xDEADBEEF, meta_data->term_tail_counters[0]);
+    EXPECT_EQ(0xCAFEBABE, meta_data->term_tail_counters[1]);
+    EXPECT_EQ(INT64_MAX, meta_data->term_tail_counters[2]);
+
+    for (int i = 0; i < AERON_LOGBUFFER_PARTITION_COUNT; i++)
+    {
+        int32_t value;
+        memcpy(&value, second_mapping.term_buffers[i].addr, sizeof(int32_t));
+        EXPECT_EQ(1000000 + i, value);
+    }
+
+    EXPECT_TRUE(aeron_raw_log_free(&second_mapping, file_name));
 }

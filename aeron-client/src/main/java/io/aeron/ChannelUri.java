@@ -688,6 +688,31 @@ public final class ChannelUri
         return parse(channelUri).hasControlModeResponse();
     }
 
+    /**
+     * Parse and validate value configured for {@code so-tos} parameter.
+     *
+     * @param value of the {@code so-tos} parameter.
+     * @return parsed value.
+     * @throws IllegalArgumentException if value is invalid.
+     */
+    public static int validateSocketTos(final String value)
+    {
+        try
+        {
+            final int parsed = Integer.parseInt(value);
+            if (parsed < 0 || parsed > 255)
+            {
+                throw new IllegalArgumentException(
+                    SOCKET_TOS_PARAM_NAME + " must be between 0 and 255 inclusive: " + value);
+            }
+            return parsed;
+        }
+        catch (final NumberFormatException ex)
+        {
+            throw new IllegalArgumentException(SOCKET_TOS_PARAM_NAME + " must be a number", ex);
+        }
+    }
+
     private static void validateMedia(final String media)
     {
         if (IPC_MEDIA.equals(media) || UDP_MEDIA.equals(media))

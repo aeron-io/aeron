@@ -295,6 +295,7 @@ int aeron_udp_channel_finish_parse(
     _channel->ats_status = AERON_URI_ATS_STATUS_DEFAULT;
     _channel->socket_rcvbuf_length = 0;
     _channel->socket_sndbuf_length = 0;
+    _channel->socket_tos = AERON_NULL_VALUE;
     _channel->receiver_window_length = 0;
     _channel->media_rcv_timestamp_offset = AERON_NULL_VALUE;
     _channel->channel_rcv_timestamp_offset = AERON_NULL_VALUE;
@@ -403,6 +404,26 @@ int aeron_udp_channel_finish_parse(
         &_channel->socket_rcvbuf_length) < 0)
     {
         goto error_cleanup;
+    }
+
+    if (NULL != aeron_uri_find_param_value(
+        &_channel->uri.params.udp.additional_params, AERON_URI_SOCKET_TOS_KEY))
+    {
+        if (aeron_uri_get_int32(
+            &_channel->uri.params.udp.additional_params, AERON_URI_SOCKET_TOS_KEY, &_channel->socket_tos) < 0)
+        {
+            goto error_cleanup;
+        }
+
+        if (_channel->socket_tos < 0 || _channel->socket_tos > 255)
+        {
+            AERON_SET_ERR(
+                EINVAL,
+                "%s must be between 0 and 255 inclusive: %" PRId32,
+                AERON_URI_SOCKET_TOS_KEY,
+                _channel->socket_tos);
+            goto error_cleanup;
+        }
     }
 
     if (aeron_uri_get_receiver_window_length(
@@ -629,6 +650,8 @@ extern bool aeron_udp_channel_equals(aeron_udp_channel_t *a, aeron_udp_channel_t
 extern size_t aeron_udp_channel_socket_so_sndbuf(aeron_udp_channel_t *channel, size_t default_so_sndbuf);
 
 extern size_t aeron_udp_channel_socket_so_rcvbuf(aeron_udp_channel_t *channel, size_t default_so_rcvbuf);
+
+extern int32_t aeron_udp_channel_socket_tos(aeron_udp_channel_t *channel, int32_t default_socket_tos);
 
 extern size_t aeron_udp_channel_receiver_window(aeron_udp_channel_t *channel, size_t default_receiver_window);
 

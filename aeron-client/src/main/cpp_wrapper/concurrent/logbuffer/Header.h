@@ -37,9 +37,11 @@ class Header
 public:
     explicit Header(aeron_header_t *header) : m_header(header)
     {
-        if (aeron_header_values(m_header, &m_headerValues) < 0)
+        if (nullptr == m_header)
         {
-            AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
+            // Values are read lazily, see values(), so a null header is rejected up front rather than
+            // on first use, keeping the accessors free of null checks.
+            throw IllegalArgumentException("header must not be null", SOURCEINFO, EINVAL);
         }
     }
 
@@ -50,7 +52,7 @@ public:
      */
     inline std::int32_t initialTermId() const
     {
-        return m_headerValues.initial_term_id;
+        return values().initial_term_id;
     }
 
     /**
@@ -60,7 +62,7 @@ public:
      */
     inline std::int32_t frameLength() const
     {
-        return m_headerValues.frame.frame_length;
+        return values().frame.frame_length;
     }
 
     /**
@@ -70,7 +72,7 @@ public:
      */
     inline std::int32_t sessionId() const
     {
-        return m_headerValues.frame.session_id;
+        return values().frame.session_id;
     }
 
     /**
@@ -80,7 +82,7 @@ public:
      */
     inline std::int32_t streamId() const
     {
-        return m_headerValues.frame.stream_id;
+        return values().frame.stream_id;
     }
 
     /**
@@ -90,7 +92,7 @@ public:
      */
     inline std::int32_t termId() const
     {
-        return m_headerValues.frame.term_id;
+        return values().frame.term_id;
     }
 
     /**
@@ -100,7 +102,7 @@ public:
      */
     inline std::int32_t termOffset() const
     {
-        return m_headerValues.frame.term_offset;
+        return values().frame.term_offset;
     }
 
     /**
@@ -111,7 +113,7 @@ public:
     inline std::uint16_t type() const
     {
         // C and Java API declare this as int16_t.
-        return static_cast<std::uint16_t>(m_headerValues.frame.type);
+        return static_cast<std::uint16_t>(values().frame.type);
     }
 
     /**
@@ -123,7 +125,7 @@ public:
      */
     inline std::uint8_t flags() const
     {
-        return m_headerValues.frame.flags;
+        return values().frame.flags;
     }
 
     /**
@@ -143,7 +145,7 @@ public:
      */
     inline std::int32_t positionBitsToShift() const
     {
-        return static_cast<std::int32_t>(m_headerValues.position_bits_to_shift);
+        return static_cast<std::int32_t>(values().position_bits_to_shift);
     }
 
     /**
@@ -153,7 +155,7 @@ public:
      */
     inline std::int64_t reservedValue() const
     {
-        return m_headerValues.frame.reserved_value;
+        return values().frame.reserved_value;
     }
 
     /**
@@ -173,8 +175,25 @@ public:
     }
 
 private:
+    // The frame values are copied out of the log buffer on first use rather than on construction,
+    // because a fragment handler that only needs the payload never reads them. The copy is taken once
+    // and is then stable for the lifetime of this object, which, like the aeron_header_t it wraps, is
+    // the duration of the poll callback.
+    inline const aeron_header_values_t &values() const
+    {
+        if (AERON_COND_EXPECT(!m_valuesLoaded, false))
+        {
+            // Cannot fail: the constructor has already rejected a null header.
+            aeron_header_values(m_header, &m_headerValues);
+            m_valuesLoaded = true;
+        }
+
+        return m_headerValues;
+    }
+
     aeron_header_t *m_header = nullptr;
-    aeron_header_values_t m_headerValues = {};
+    mutable aeron_header_values_t m_headerValues = {};
+    mutable bool m_valuesLoaded = false;
 };
 
 }}}

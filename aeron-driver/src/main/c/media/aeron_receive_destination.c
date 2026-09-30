@@ -60,6 +60,7 @@ int aeron_receive_destination_create(
     aeron_udp_channel_transport_params_t transport_params = {
         socket_rcvbuf,
         socket_sndbuf,
+        aeron_udp_channel_socket_tos(endpoint_channel, context->socket_tos),
         context->mtu_length,
         destination_channel->interface_index,
         0 != destination_channel->multicast_ttl ? destination_channel->multicast_ttl : context->multicast_ttl,

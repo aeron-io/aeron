@@ -34,7 +34,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.IOException;
 import java.net.StandardProtocolFamily;
@@ -254,6 +254,34 @@ class ChannelValidationTest
     }
 
     @Test
+    void publicationCantUseDifferentSocketTosForSharedEndpoint()
+    {
+        launch();
+
+        addPublication("aeron:udp?endpoint=localhost:9999|so-tos=46", 1000);
+
+        assertThrows(
+            RegistrationException.class,
+            () -> addPublication("aeron:udp?endpoint=localhost:9999|so-tos=184", 1001));
+
+        addPublication("aeron:udp?endpoint=localhost:9999|so-tos=46", 1002);
+    }
+
+    @Test
+    void subscriptionCantUseDifferentSocketTosForSharedEndpoint()
+    {
+        launch();
+
+        addSubscription("aeron:udp?endpoint=localhost:9999|so-tos=46", 1000);
+
+        assertThrows(
+            RegistrationException.class,
+            () -> addSubscription("aeron:udp?endpoint=localhost:9999|so-tos=184", 1001));
+
+        addSubscription("aeron:udp?endpoint=localhost:9999|so-tos=46", 1002);
+    }
+
+    @Test
     void shouldValidateMtuAgainstSoSndbufSetViaUri()
     {
         launch();
@@ -384,8 +412,8 @@ class ChannelValidationTest
     }
 
     @ParameterizedTest
-    @ValueSource(strings = { "mtu", "rcv-wnd", "so-rcvbuf", "so-sndbuf" })
-    void shouldNotAllowUriParametersForManualMdc(final String parameter)
+    @CsvSource({ "mtu,4096", "rcv-wnd,4096", "so-rcvbuf,4096", "so-sndbuf,4096", "so-tos,46" })
+    void shouldNotAllowUriParametersForManualMdc(final String parameter, final int value)
     {
         launch();
 
@@ -393,14 +421,14 @@ class ChannelValidationTest
 
         final RegistrationException registrationException = assertThrows(
             RegistrationException.class,
-            () -> publication.addDestination("aeron:udp?endpoint=localhost:9999|" + parameter + "=4096"));
+            () -> publication.addDestination("aeron:udp?endpoint=localhost:9999|" + parameter + "=" + value));
 
         assertThat(registrationException.getMessage(), containsString(parameter));
     }
 
     @ParameterizedTest
-    @ValueSource(strings = { "mtu", "rcv-wnd", "so-rcvbuf", "so-sndbuf" })
-    void shouldNotAllowUriParametersForManualMds(final String parameter)
+    @CsvSource({ "mtu,4096", "rcv-wnd,4096", "so-rcvbuf,4096", "so-sndbuf,4096", "so-tos,46" })
+    void shouldNotAllowUriParametersForManualMds(final String parameter, final int value)
     {
         launch();
 
@@ -408,7 +436,7 @@ class ChannelValidationTest
 
         final RegistrationException registrationException = assertThrows(
             RegistrationException.class,
-            () -> subscription.addDestination("aeron:udp?endpoint=localhost:9999|" + parameter + "=4096"));
+            () -> subscription.addDestination("aeron:udp?endpoint=localhost:9999|" + parameter + "=" + value));
 
         assertThat(registrationException.getMessage(), containsString(parameter));
     }

@@ -133,7 +133,7 @@ public final class ClusterMarkFile implements AutoCloseable
         final long timeoutMs,
         final int filePageSize)
     {
-        this(file, type, errorBufferLength, epochClock, timeoutMs, filePageSize, CommonContext.fallbackLogger());
+        this(file, type, errorBufferLength, epochClock, timeoutMs, filePageSize, null);
     }
 
     /**
@@ -145,7 +145,8 @@ public final class ClusterMarkFile implements AutoCloseable
      * @param epochClock        for checking liveness against.
      * @param timeoutMs         for the activity check on an existing {@link MarkFile}.
      * @param filePageSize      for aligning file length to.
-     * @param fallbackLogger    for reporting errors found in an existing {@link MarkFile}.
+     * @param fallbackLogger    for reporting errors found in an existing {@link MarkFile}, or {@code null} to
+     *                          use {@link CommonContext#fallbackLogger()}.
      */
     public ClusterMarkFile(
         final File file,
@@ -196,33 +197,49 @@ public final class ClusterMarkFile implements AutoCloseable
                 null);
             final UnsafeBuffer existingBuffer = existingMarkFile.buffer();
 
-            if (0 != currentHeaderOffset)
+            try
             {
-                headerDecoder.wrapAndApplyHeader(existingBuffer, 0, messageHeaderDecoder);
-            }
-            else
-            {
-                headerDecoder.wrap(
-                    existingBuffer, 0, MarkFileHeaderDecoder.BLOCK_LENGTH, MarkFileHeaderDecoder.SCHEMA_VERSION);
-            }
-
-            final ClusterComponentType existingType = headerDecoder.componentType();
-            if (existingType != ClusterComponentType.UNKNOWN && existingType != type)
-            {
-                if (existingType != ClusterComponentType.BACKUP || ClusterComponentType.CONSENSUS_MODULE != type)
+                if (0 != currentHeaderOffset)
                 {
-                    throw new ClusterException(
-                        "existing Mark file type " + existingType + " not same as required type " + type);
+                    headerDecoder.wrapAndApplyHeader(existingBuffer, 0, messageHeaderDecoder);
+                }
+                else
+                {
+                    headerDecoder.wrap(
+                        existingBuffer, 0, MarkFileHeaderDecoder.BLOCK_LENGTH, MarkFileHeaderDecoder.SCHEMA_VERSION);
+                }
+
+                final ClusterComponentType existingType = headerDecoder.componentType();
+                if (existingType != ClusterComponentType.UNKNOWN && existingType != type)
+                {
+                    if (existingType != ClusterComponentType.BACKUP || ClusterComponentType.CONSENSUS_MODULE != type)
+                    {
+                        throw new ClusterException(
+                            "existing Mark file type " + existingType + " not same as required type " + type);
+                    }
+                }
+
+                final int existingErrorBufferLength = headerDecoder.errorBufferLength();
+                final int headerLength = headerDecoder.headerLength();
+                if (existingErrorBufferLength > 0 &&
+                    headerLength > 0 &&
+                    headerLength + (long)existingErrorBufferLength <= file.length())
+                {
+                    final UnsafeBuffer existingErrorBuffer =
+                        new UnsafeBuffer(existingBuffer, headerLength, existingErrorBufferLength);
+
+                    saveExistingErrors(file, existingErrorBuffer, type, null != fallbackLogger ?
+                        fallbackLogger : CommonContext.fallbackLogger());
+                    existingErrorBuffer.setMemory(0, existingErrorBufferLength, (byte)0);
                 }
             }
-
-            final int existingErrorBufferLength = headerDecoder.errorBufferLength();
-            final int headerLength = headerDecoder.headerLength();
-            final UnsafeBuffer existingErrorBuffer =
-                new UnsafeBuffer(existingBuffer, headerLength, existingErrorBufferLength);
-
-            saveExistingErrors(file, existingErrorBuffer, type, fallbackLogger);
-            existingErrorBuffer.setMemory(0, existingErrorBufferLength, (byte)0);
+            catch (final RuntimeException ex)
+            {
+                existingMarkFile.timestampRelease(NULL_VALUE);
+                existingMarkFile.mappedByteBuffer().force();
+                CloseHelper.close(existingMarkFile);
+                throw ex;
+            }
 
             candidateTermId = headerDecoder.candidateTermId();
 
@@ -247,7 +264,7 @@ public final class ClusterMarkFile implements AutoCloseable
                     (version) -> {},
                     null);
                 buffer = markFile.buffer();
-                buffer.setMemory(0, headerLength, (byte)0);
+                buffer.setMemory(0, buffer.capacity(), (byte)0);
             }
         }
         else

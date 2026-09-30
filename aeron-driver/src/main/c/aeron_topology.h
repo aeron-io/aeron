@@ -17,109 +17,86 @@
 #ifndef AERON_TOPOLOGY_H
 #define AERON_TOPOLOGY_H
 
+#include <stdbool.h>
 #include <stdio.h>
 
 #define AERON_TOPOLOGY_SYS_CPU_PATH "/sys/devices/system/cpu"
+#define AERON_TOPOLOGY_MAX_CPU_ID 8192
 
 /**
- * The set of logical CPU siblings that share a physical core, filtered to
- * only those present in the cpuset being processed. Sorted ascending;
- * cpus[0] is the prime (lowest-numbered) thread.
+ * The system topology that tracks siblings, l3 locality and die ids.
  */
-typedef struct aeron_topology_core_stct
+typedef struct aeron_topology_stct
+{
+    bool *sibling_table; // Flattened 2-d array
+    int sibling_count;
+    bool *l3_peer_table; // Flattened 2-d array
+    int l3_peer_count;
+    int *die_ids;
+    int die_id_count;
+}
+aeron_topology_t;
+
+typedef struct aeron_topology_query_stct
 {
     int *cpus;
     int cpu_count;
+    const char *name;
+    const char *description;
 }
-aeron_topology_core_t;
+aeron_topology_query_t;
 
 /**
- * Read one Core per physical core that has at least one CPU in cpus.
- * Each returned Core contains only the CPUs from cpus that belong to that
- * physical core, sorted ascending. The returned array is sorted by prime thread.
+ *  Build a cpu topology structure based on the set of online cpus.  Will read up to the highest online cpu supplied.
  *
- * @param sys_cpu_root of the sys fs filesystem to access cpu information.
- * @param cpus input array of logical CPU IDs to inspect
- * @param cpu_count number of entries in cpus
- * @param cores output array allocated within this function; free with aeron_topology_cores_free
- * @param core_count number of entries in cores
- * @return 0 on success, -1 on failure
+ * @param sys_cpu_root root of the sysfs filesystem.
+ * @param cpus list of online cpus.
+ * @param cpu_count number of online cpus.
+ * @param topology allocated cpu structure.
+ * @return -1 on failure 0 on success.
  */
-int aeron_topology_read(
+int aeron_topology_init(
     const char *sys_cpu_root,
     const int *cpus,
     int cpu_count,
-    aeron_topology_core_t **cores,
-    int *core_count);
+    aeron_topology_t** topology);
 
-/**
- * Return the prime (lowest-numbered) sibling of each core.
- *
- * @param cores input array of cores
- * @param core_count number of entries in cores
- * @param primes output array allocated within this function
- * @param prime_count number of entries in primes
- * @return 0 on success, -1 on failure
- */
-int aeron_topology_primes_of(
-    const aeron_topology_core_t *cores,
-    int core_count,
-    int **primes,
-    int *prime_count);
-
-/**
- * Return all logical CPUs across all provided cores, in core-then-sibling order.
- *
- * @param cores input array of cores
- * @param core_count number of entries in cores
- * @param cpus output array allocated within this function
- * @param cpu_count number of entries in cpus
- * @return 0 on success, -1 on failure
- */
-int aeron_topology_all_of(
-    const aeron_topology_core_t *cores,
-    int core_count,
-    int **cpus,
-    int *cpu_count);
+void aeron_topology_free(aeron_topology_t *topology);
 
 /**
  * Check that for every physical core touching cpus, either all or none of its
  * logical sibling threads are in cpus. Returns one warning string per partial
- * core. Best-effort: if sysfs is unavailable warnings will be empty.
+ * core.
  *
- * @param sys_cpu_root of the sys fs filesystem to access cpu information.
- * @param cpus input array of CPU IDs
- * @param cpu_count number of entries in cpus
- * @param output to write the warnings to.
+ * @param topology      the loaded system topology.
+ * @param query         containing the information used to validate against the topology.
+ * @param output        to write the warnings to.
  * @return the count of the number of warnings or -1 on error.
  */
-int aeron_topology_check_alignment(const char* sys_cpu_root, const int *cpus, int cpu_count, FILE *output);
+int aeron_topology_check_alignment(
+    const aeron_topology_t *topology, const aeron_topology_query_t *query, FILE *output);
 
 /**
  * Check that all CPUs in cpus share the same die.
  *
- * @param sys_cpu_root  of the sys fs filesystem to access cpu information.
- * @param cpus          input array of CPU IDs
- * @param cpu_count     number of entries in cpus
+ * @param topology      the loaded system topology.
+ * @param query         containing the information used to validate against the topology.
  * @param output        buffer to write the warning to, if any. Will be length 0 if no warnings.
  * @return the count of the number of warnings or -1 on error.
  */
-int aeron_topology_check_die_locality(const char* sys_cpu_root, const int *cpus, int cpu_count, FILE* output);
+int aeron_topology_check_l3_locality(
+    const aeron_topology_t *topology, const aeron_topology_query_t *query, FILE *output);
 
 /**
  * Check that all CPUs in cpus share the same L3 cache.
  *
- * @param sys_cpu_root of the sys fs filesystem to access cpu information.
- * @param cpus input array of CPU IDs
- * @param cpu_count number of entries in cpus
- * @param output
+ * @param topology      the loaded system topology.
+ * @param query         containing the information used to validate against the topology.
+ * @param output        buffer to write the warning to, if any. Will be length 0 if no warnings.
  * @return the count of the number of warnings or -1 on error.
  */
-int aeron_topology_check_l3_locality(const char* sys_cpu_root, const int *cpus, int cpu_count, FILE* output);
+int aeron_topology_check_die_locality(
+    const aeron_topology_t *topology, const aeron_topology_query_t *query, FILE *output);
 
-/**
- * Free an array of cores allocated by aeron_topology_read.
- */
-void aeron_topology_cores_free(aeron_topology_core_t *cores, int core_count);
 
 #endif //AERON_TOPOLOGY_H

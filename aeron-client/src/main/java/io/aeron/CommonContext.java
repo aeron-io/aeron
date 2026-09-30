@@ -27,7 +27,6 @@ import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
 import org.agrona.ErrorHandler;
 import org.agrona.IoUtil;
-import org.agrona.LangUtil;
 import org.agrona.MarkFile;
 import org.agrona.SemanticVersion;
 import org.agrona.SystemUtil;
@@ -56,9 +55,12 @@ import java.nio.channels.FileChannel;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.FileSystemException;
 import java.nio.file.NoSuchFileException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -414,6 +416,11 @@ public class CommonContext implements Cloneable
     public static final String SOCKET_RCVBUF_PARAM_NAME = "so-rcvbuf";
 
     /**
+     * Parameter name for the underlying OS socket IP type of service.
+     */
+    public static final String SOCKET_TOS_PARAM_NAME = "so-tos";
+
+    /**
      * Parameter name for the congestion control's initial receiver window length.
      */
     public static final String RECEIVER_WINDOW_LENGTH_PARAM_NAME = "rcv-wnd";
@@ -548,7 +555,9 @@ public class CommonContext implements Cloneable
      */
     public static final String THREAD_NAMING_DEFAULT = THREAD_NAMING_CLASSIC;
 
+    static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss.SSSSSSZ");
 
+    static final DateTimeFormatter FILE_NAME_FORMATTER = DateTimeFormatter.ofPattern("uuuu-MM-dd-HH-mm-ss-SSSSSSZ");
     /**
      * Choose a thread/role name depending on the configured naming scheme.
      *
@@ -1364,12 +1373,14 @@ public class CommonContext implements Cloneable
 
         if (ErrorLogReader.hasErrors(errorBuffer))
         {
-            final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSSZ");
             final ErrorConsumer errorConsumer =
                 (count, firstTimestamp, lastTimestamp, encodedException) ->
                 {
-                    final String fromDate = dateFormat.format(new Date(firstTimestamp));
-                    final String toDate = dateFormat.format(new Date(lastTimestamp));
+                    final ZoneId zoneId = ZoneId.systemDefault();
+                    final String fromDate = DATE_TIME_FORMATTER.format(
+                        OffsetDateTime.ofInstant(Instant.ofEpochMilli(firstTimestamp), zoneId));
+                    final String toDate = DATE_TIME_FORMATTER.format(
+                        OffsetDateTime.ofInstant(Instant.ofEpochMilli(lastTimestamp), zoneId));
 
                     out.println();
                     out.println(count + " observations from " + fromDate + " to " + toDate + " for:");
@@ -1390,12 +1401,12 @@ public class CommonContext implements Cloneable
     }
 
     /**
-     * Save the existing errors from a {@link MarkFile} to a file in the same directory as the original {@link MarkFile}
-     * and optionally print location of such file to the supplied {@link PrintStream}.
+     * Save the existing errors from a {@link MarkFile}/CnC file to a separate text file in the same directory as the
+     * original file.
      *
      * @param markFile        which contains the error buffer.
      * @param errorBuffer     which wraps the error log.
-     * @param logger          to which the existing errors will be printed.
+     * @param logger          to which the existing errors will be printed if save to a file fails with an error.
      * @param errorFilePrefix to add to the generated error file.
      */
     public static void saveExistingErrors(
@@ -1404,30 +1415,42 @@ public class CommonContext implements Cloneable
         final PrintStream logger,
         final String errorFilePrefix)
     {
-        try
+        Objects.requireNonNull(markFile, "markFile");
+        Objects.requireNonNull(errorBuffer, "errorBuffer");
+        Objects.requireNonNull(logger, "logger");
+        Objects.requireNonNull(errorFilePrefix, "errorFilePrefix");
+
+        final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        final int observations = printErrorLog(errorBuffer, new PrintStream(baos, false, US_ASCII));
+        if (observations > 0)
         {
-            final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            final int observations = printErrorLog(errorBuffer, new PrintStream(baos, false, US_ASCII));
-            if (observations > 0)
+            final File errorLogFile = new File(
+                markFile.getParentFile(), errorFilePrefix + '-' +
+                FILE_NAME_FORMATTER.format(OffsetDateTime.ofInstant(Instant.now(), ZoneId.systemDefault())) +
+                "-error.log");
+
+            try (FileOutputStream out = new FileOutputStream(errorLogFile))
             {
-                final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSSZ");
-                final File errorLogFile = new File(
-                    markFile.getParentFile(), errorFilePrefix + '-' + dateFormat.format(new Date()) + "-error.log");
+                baos.writeTo(out);
+                logger.println("WARNING: existing errors saved to: " + errorLogFile);
+            }
+            catch (final IOException ex)
+            {
+                logger.println("ERROR: Failed to save existing errors to: " + errorLogFile);
+                ex.printStackTrace(logger);
 
-                if (null != logger)
+                logger.println();
+                logger.println("Dumping errors here:");
+                logger.println();
+                try
                 {
-                    logger.println("WARNING: existing errors saved to: " + errorLogFile);
+                    baos.writeTo(logger);
                 }
-
-                try (FileOutputStream out = new FileOutputStream(errorLogFile))
+                catch (final IOException ex2)
                 {
-                    baos.writeTo(out);
+                    ex2.printStackTrace(logger);
                 }
             }
-        }
-        catch (final Exception ex)
-        {
-            LangUtil.rethrowUnchecked(ex);
         }
     }
 
