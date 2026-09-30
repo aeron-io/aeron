@@ -1717,7 +1717,7 @@ public final class ConsensusModule implements AutoCloseable
         private boolean cpusetAffinity = AffinityRegistry.cpusetAffinity();
         private boolean cpusetWarningsAsErrors = AffinityRegistry.cpusetWarningsAsErrors();
         private AffinityRegistry affinityRegistry;
-        private AffinityRegistry.Claims affinityClaims;
+        private AffinityRegistry.AffinityClaims affinityClaims;
         private ConsensusModuleStateExport bootstrapState = null;
         private boolean acceptStandbySnapshots = Configuration.acceptStandbySnapshots();
         private boolean enableControlOnConsensusChannel = Configuration.enableControlOnConsensusChannel();
@@ -2092,8 +2092,8 @@ public final class ConsensusModule implements AutoCloseable
             {
                 affinityRegistry.addAffinity(agentRoleName, cpuAffinity);
             }
-            affinityRegistry.conclude(cpusetAffinity, cpusetWarningsAsErrors, aeron.countersReader());
-            affinityClaims = affinityRegistry.publish(aeron::addCounter);
+            affinityClaims = affinityRegistry.conclude(
+                cpusetAffinity, cpusetWarningsAsErrors, aeron.countersReader(), aeron::addCounter);
 
             if (null == idleStrategySupplier)
             {
