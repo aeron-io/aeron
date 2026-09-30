@@ -254,8 +254,10 @@ public final class MediaDriver implements AutoCloseable
             }
             final CountersManager countersManager = ctx.countersManager();
             affinityRegistry.conclude(
-                ctx.driverCpusetAffinity(), ctx.driverCpusetWarningsAsErrors(), countersManager);
-            affinityRegistry.publish(countersManager::newCounter);
+                ctx.driverCpusetAffinity(),
+                ctx.driverCpusetWarningsAsErrors(),
+                countersManager,
+                countersManager::newCounter);
 
             switch (ctx.threadingMode())
             {
