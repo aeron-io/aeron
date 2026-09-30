@@ -22,6 +22,7 @@ import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
 import org.agrona.SystemUtil;
 import org.agrona.collections.IntArrayList;
+import org.agrona.collections.IntHashSet;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.affinity.ThreadAffinity;
 import org.agrona.concurrent.status.AtomicCounter;
@@ -110,6 +111,17 @@ public final class AffinityRegistry
         AffinityClaims(final List<AtomicCounter> counters)
         {
             this.counters = counters;
+        }
+
+        IntHashSet counterIds()
+        {
+            final IntHashSet counterIds = new IntHashSet();
+            for (final AtomicCounter counter : counters)
+            {
+                counterIds.add(counter.id());
+            }
+
+            return counterIds;
         }
 
         /**
@@ -254,19 +266,28 @@ public final class AffinityRegistry
             resolvedAffinityByName.putAll(requestedAffinityByName);
         }
 
-        if (topologyAvailable)
-        {
-            warnings += validate(countersReader, out);
-        }
-
         isConcluded = true;
 
-        if (warningsAsErrors && 0 < warnings)
+        final AffinityClaims claims = publish(allocator);
+        try
         {
-            throw new ConfigurationException("cpuset warnings as errors, " + warnings + " warnings");
+            if (topologyAvailable)
+            {
+                warnings += validate(countersReader, claims.counterIds(), out);
+            }
+
+            if (warningsAsErrors && 0 < warnings)
+            {
+                throw new ConfigurationException("cpuset warnings as errors, " + warnings + " warnings");
+            }
+        }
+        catch (final RuntimeException ex)
+        {
+            claims.close();
+            throw ex;
         }
 
-        return publish(allocator);
+        return claims;
     }
 
     private AffinityClaims publish(final CounterAllocator allocator)
@@ -384,7 +405,7 @@ public final class AffinityRegistry
         });
     }
 
-    private int validate(final CountersReader countersReader, final PrintStream out)
+    private int validate(final CountersReader countersReader, final IntHashSet ownCounterIds, final PrintStream out)
     {
         final Map<String, Integer> pinned = new LinkedHashMap<>();
         resolvedAffinityByName.forEach((name, cpu) ->
@@ -400,7 +421,7 @@ public final class AffinityRegistry
             return 0;
         }
 
-        final Map<String, Integer> claimedCpus = readClaims(countersReader);
+        final Map<String, Integer> claimedCpus = readClaims(countersReader, ownCounterIds);
         int warnings = 0;
         for (final Map.Entry<String, Integer> own : pinned.entrySet())
         {
@@ -434,12 +455,17 @@ public final class AffinityRegistry
 
     static Map<String, Integer> readClaims(final CountersReader countersReader)
     {
+        return readClaims(countersReader, new IntHashSet());
+    }
+
+    static Map<String, Integer> readClaims(final CountersReader countersReader, final IntHashSet excludedCounterIds)
+    {
         final Map<String, Integer> claimedCpus = new LinkedHashMap<>();
         if (null != countersReader)
         {
             countersReader.forEach((counterId, typeId, keyBuffer, label) ->
             {
-                if (AeronCounters.CPU_AFFINITY_TYPE_ID == typeId)
+                if (AeronCounters.CPU_AFFINITY_TYPE_ID == typeId && !excludedCounterIds.contains(counterId))
                 {
                     claimedCpus.put(label, keyBuffer.getInt(CPU_OFFSET));
                 }

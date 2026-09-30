@@ -198,6 +198,47 @@ class AffinityRegistryTest
     }
 
     @Test
+    void shouldNotTreatOwnPublishedClaimsAsConflicts() throws IOException
+    {
+        setupL3Peers(sysfsTestDir, SHARED_L3);
+
+        final AffinityRegistry first = newRegistry(Map.of("aaa", 2, "bbb", 3));
+        try (AffinityRegistry.AffinityClaims ignore1 =
+            first.conclude(false, true, countersManager, countersManager::newCounter, out.resetAndGetPrintStream()))
+        {
+            assertEquals(0, countWarnings(out.flushAndGetContent()));
+
+            final AffinityRegistry second = newRegistry(Map.of("ccc", 2));
+            try (AffinityRegistry.AffinityClaims ignore2 = second.conclude(
+                false, false, countersManager, countersManager::newCounter, out.resetAndGetPrintStream()))
+            {
+                final String output = out.flushAndGetContent();
+                assertEquals(1, countWarnings(output), output);
+                assertTrue(output.contains("ccc and cpu-affinity: aaa cpu=2"), output);
+                assertEquals(3, AffinityRegistry.readClaims(countersManager).size());
+            }
+        }
+    }
+
+    @Test
+    void shouldReleaseClaimsWhenValidationAgainstOtherComponentFails() throws IOException
+    {
+        setupL3Peers(sysfsTestDir, SHARED_L3);
+
+        final AffinityRegistry first = newRegistry(Map.of("aaa", 2));
+        try (AffinityRegistry.AffinityClaims ignore =
+            first.conclude(false, true, countersManager, countersManager::newCounter, discard()))
+        {
+            assertThrows(
+                ConfigurationException.class,
+                () -> newRegistry(Map.of("bbb", 2))
+                    .conclude(false, true, countersManager, countersManager::newCounter, discard()));
+
+            assertEquals(1, AffinityRegistry.readClaims(countersManager).size());
+        }
+    }
+
+    @Test
     void shouldValidateLocalityAcrossClaimedCpus() throws IOException
     {
         setupL3Peers(sysfsTestDir, SPLIT_L3);
