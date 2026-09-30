@@ -28,8 +28,11 @@ import java.util.concurrent.TimeUnit;
 import static io.aeron.CommonContext.AERON_DIR_PROP_NAME;
 import static io.aeron.driver.Configuration.CLIENT_LIVENESS_TIMEOUT_PROP_NAME;
 import static io.aeron.driver.Configuration.DIR_DELETE_ON_START_PROP_NAME;
+import static io.aeron.driver.Configuration.DRIVER_CPUSET_AFFINITY_PROP_NAME;
+import static io.aeron.driver.Configuration.DRIVER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME;
 import static io.aeron.driver.Configuration.MTU_LENGTH_PROP_NAME;
 import static io.aeron.driver.Configuration.RESOLVER_NAME_PROP_NAME;
+import static io.aeron.driver.Configuration.SOCKET_TOS_PROP_NAME;
 import static io.aeron.driver.Configuration.TERM_BUFFER_LENGTH_PROP_NAME;
 import static io.aeron.driver.Configuration.THREADING_MODE_PROP_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -113,6 +116,27 @@ class MediaDriverContextPropertiesTest
         assertEquals(Configuration.CLIENT_LIVENESS_TIMEOUT_DEFAULT_NS, context.clientLivenessTimeoutNs());
         assertFalse(context.dirDeleteOnStart());
         assertEquals(CommonContext.AERON_DIR_PROP_DEFAULT, context.aeronDirectoryName());
+    }
+
+    @Test
+    void socketAndCpusetSettingsComeFromTheSuppliedProperties()
+    {
+        final Properties properties = new Properties();
+        properties.setProperty(SOCKET_TOS_PROP_NAME, "72");
+        properties.setProperty(DRIVER_CPUSET_AFFINITY_PROP_NAME, "true");
+        properties.setProperty(DRIVER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME, "true");
+
+        final Context context = new Context(properties);
+
+        assertEquals(72, context.socketTos());
+        assertTrue(context.driverCpusetAffinity());
+        assertTrue(context.driverCpusetWarningsAsErrors());
+
+        final Context defaults = new Context(new Properties());
+
+        assertEquals(Configuration.SOCKET_TOS_DEFAULT, defaults.socketTos());
+        assertFalse(defaults.driverCpusetAffinity());
+        assertFalse(defaults.driverCpusetWarningsAsErrors());
     }
 
     @Test
