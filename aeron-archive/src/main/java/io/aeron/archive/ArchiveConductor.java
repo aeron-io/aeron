@@ -861,6 +861,7 @@ abstract class ArchiveConductor
                 final String msg =
                     "when replaying and stopping the replay length must be non-zero, recordingId=" + recordingId;
                 controlSession.sendErrorResponse(correlationId, EMPTY_RECORDING, msg);
+                return;
             }
         }
         else
