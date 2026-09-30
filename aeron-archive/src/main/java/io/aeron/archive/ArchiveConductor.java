@@ -592,6 +592,7 @@ abstract class ArchiveConductor
 
             if (null != subscription)
             {
+                numActiveRecordings--;
                 abortRecordingSessionAndCloseSubscription(subscription);
 
                 controlSession.sendOkResponse(correlationId);
@@ -1358,7 +1359,6 @@ abstract class ArchiveConductor
         }
         closeSession(session);
         recordingSessionByIdMap.remove(recordingId);
-        numActiveRecordings--;
         ctx.recordingSessionCounter().decrementRelease();
     }
 
@@ -2145,6 +2145,7 @@ abstract class ArchiveConductor
             if (subscription.registrationId() == subscriptionId)
             {
                 iter.remove();
+                numActiveRecordings--;
                 return subscription;
             }
         }

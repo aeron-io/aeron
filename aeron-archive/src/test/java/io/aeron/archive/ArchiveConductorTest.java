@@ -19,6 +19,7 @@ import io.aeron.Aeron;
 import io.aeron.ChannelUri;
 import io.aeron.ChannelUriStringBuilder;
 import io.aeron.Counter;
+import io.aeron.Subscription;
 import io.aeron.archive.client.ArchiveException;
 import io.aeron.archive.codecs.SourceLocation;
 import io.aeron.security.Authenticator;
@@ -30,6 +31,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.file.FileStore;
 import java.util.ArrayList;
@@ -40,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -47,6 +50,7 @@ import org.mockito.ArgumentCaptor;
 
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -127,6 +131,30 @@ class ArchiveConductorTest
 
         verify(mockControlSession).sendErrorResponse(
             eq(correlationId), eq((long)ArchiveException.STORAGE_SPACE), anyString());
+    }
+
+    @Test
+    void stopRecordingWithoutImageShouldReleaseRecordingSlot() throws IOException
+    {
+        maxConcurrentRecordings = 1;
+        createTestConductor();
+
+        final Subscription mockSubscription = mock(Subscription.class);
+        when(mockSubscription.registrationId()).thenReturn(7L);
+        when(mockAeron.addSubscription(anyString(), anyInt(), any(), any())).thenReturn(mockSubscription);
+        when(mockFileStore.getUsableSpace()).thenReturn(Long.MAX_VALUE);
+
+        final ControlSession mockControlSession = mock(ControlSession.class);
+
+        conductor.startRecording(1L, 1, SourceLocation.REMOTE, false, "aeron:ipc", mockControlSession);
+        conductor.stopRecording(2L, 1, "aeron:ipc", mockControlSession);
+        conductor.startRecording(3L, 1, SourceLocation.REMOTE, false, "aeron:ipc", mockControlSession);
+
+        verify(mockControlSession).sendOkResponse(1L, 7L);
+        verify(mockControlSession).sendOkResponse(2L);
+        verify(mockControlSession).sendOkResponse(3L, 7L);
+        verify(mockControlSession, never()).sendErrorResponse(
+            anyLong(), eq((long)ArchiveException.MAX_RECORDINGS), anyString());
     }
 
     @Test
