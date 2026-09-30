@@ -157,7 +157,12 @@ public final class Archive implements AutoCloseable
             {
                 conductorInvoker = null;
                 conductorRunner = new AgentRunner(
-                    ctx.idleStrategy(), ctx.errorHandler(), ctx.errorCounter(), conductor);
+                    ctx.idleStrategy(),
+                    ctx.errorHandler(),
+                    ctx.errorCounter(),
+                    conductor,
+                    ctx.affinityRegistry().mappedAffinityValue(DEDICATED == ctx.threadingMode() ?
+                        AERON_ARCHIVE_CONDUCTOR_THREAD_NAME : AERON_ARCHIVE_SHARED_THREAD_NAME));
             }
         }
         catch (final ConcurrentConcludeException ex)
@@ -262,11 +267,7 @@ public final class Archive implements AutoCloseable
         }
         else
         {
-            AgentRunner.startOnThread(
-                archive.conductorRunner,
-                ctx.threadFactory(),
-                ctx.affinityRegistry().mappedAffinityValue(DEDICATED == ctx.threadingMode() ?
-                    AERON_ARCHIVE_CONDUCTOR_THREAD_NAME : AERON_ARCHIVE_SHARED_THREAD_NAME));
+            AgentRunner.startOnThread(archive.conductorRunner, ctx.threadFactory());
         }
 
         return archive;

@@ -299,7 +299,11 @@ public final class ConsensusModule implements AutoCloseable
             else
             {
                 conductorRunner = new AgentRunner(
-                    ctx.idleStrategy(), ctx.errorHandler(), ctx.errorCounter(), conductor);
+                    ctx.idleStrategy(),
+                    ctx.errorHandler(),
+                    ctx.errorCounter(),
+                    conductor,
+                    ctx.affinityRegistry.mappedAffinityValue(ctx.agentRoleName()));
                 conductorInvoker = null;
             }
         }
@@ -342,10 +346,7 @@ public final class ConsensusModule implements AutoCloseable
 
         if (null != consensusModule.conductorRunner)
         {
-            AgentRunner.startOnThread(
-                consensusModule.conductorRunner,
-                ctx.threadFactory(),
-                ctx.affinityRegistry.mappedAffinityValue(ctx.agentRoleName()));
+            AgentRunner.startOnThread(consensusModule.conductorRunner, ctx.threadFactory());
         }
         else
         {

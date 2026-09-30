@@ -22,6 +22,7 @@ import jdk.jfr.consumer.RecordingStream;
 import org.agrona.collections.IntArrayList;
 import org.agrona.concurrent.affinity.ThreadAffinity;
 
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
@@ -30,7 +31,7 @@ import static io.aeron.CommonContext.THREAD_NAMING_NEW;
 import static io.aeron.CommonContext.THREAD_NAMING_PROP_NAME;
 import static io.aeron.test.TestPropertiesUtil.backupAndOverrideSystemProperties;
 import static io.aeron.test.TestPropertiesUtil.restoreSystemProperties;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
 /**
  * Captures the OS thread ids of started threads via JFR so their CPU affinity can be checked. Enables the "new"
@@ -78,8 +79,8 @@ public final class ThreadAffinityRecording implements AutoCloseable
         Tests.await(() -> osThreadIdByName.containsKey(threadName));
         final int tid = Math.toIntExact(osThreadIdByName.get(threadName));
 
-        Tests.await(() -> expectedCpu == ThreadAffinity.getAffinityFor(tid));
-        assertEquals(expectedCpu, ThreadAffinity.getAffinityFor(tid), threadName);
+        Tests.await(() -> Arrays.equals(new int[]{ expectedCpu }, ThreadAffinity.getAffinity(tid)));
+        assertArrayEquals(new int[]{ expectedCpu }, ThreadAffinity.getAffinity(tid), threadName);
     }
 
     public void close()

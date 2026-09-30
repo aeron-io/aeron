@@ -232,6 +232,34 @@ public final class MediaDriver implements AutoCloseable
             switch (ctx.threadingMode())
             {
                 case INVOKER:
+                    break;
+
+                case SHARED:
+                    affinityRegistry.addAffinity(AERON_DRIVER_SHARED_THREAD_NAME, ctx.conductorCpuAffinity());
+                    break;
+
+                case SHARED_NETWORK:
+                    affinityRegistry.addAffinity(AERON_DRIVER_SHARED_NETWORK_THREAD_NAME, ctx.senderCpuAffinity());
+                    affinityRegistry.addAffinity(conductor.roleName(), ctx.conductorCpuAffinity());
+                    affinityRegistry.addAffinity(nativeResourceAgent.roleName(), ctx.nativeResourceAgentCpuAffinity());
+                    break;
+
+                case DEDICATED:
+                default:
+                    affinityRegistry.addAffinity(nativeResourceAgent.roleName(), ctx.nativeResourceAgentCpuAffinity());
+                    affinityRegistry.addAffinity(sender.roleName(), ctx.senderCpuAffinity());
+                    affinityRegistry.addAffinity(receiver.roleName(), ctx.receiverCpuAffinity());
+                    affinityRegistry.addAffinity(conductor.roleName(), ctx.conductorCpuAffinity());
+                    break;
+            }
+            final CountersManager countersManager = ctx.countersManager();
+            affinityRegistry.conclude(
+                ctx.driverCpusetAffinity(), ctx.driverCpusetWarningsAsErrors(), countersManager);
+            affinityRegistry.publish(countersManager::newCounter);
+
+            switch (ctx.threadingMode())
+            {
+                case INVOKER:
                 {
                     sharedInvoker = new AgentInvoker(
                         errorHandler,
@@ -249,14 +277,14 @@ public final class MediaDriver implements AutoCloseable
 
                 case SHARED:
                 {
-                    affinityRegistry.addAffinity(AERON_DRIVER_SHARED_THREAD_NAME, ctx.conductorCpuAffinity());
                     sharedRunner = new AgentRunner(
                         ctx.sharedIdleStrategy(),
                         errorHandler,
                         errorCounter,
                         new FixedNameCompositeAgent(
                             AERON_DRIVER_SHARED_THREAD_NAME,
-                            ctx.aeronDirectoryName(), sender, receiver, nativeResourceAgent, conductor));
+                            ctx.aeronDirectoryName(), sender, receiver, nativeResourceAgent, conductor),
+                        affinityRegistry.mappedAffinityValue(AERON_DRIVER_SHARED_THREAD_NAME));
                     sharedInvoker = null;
                     sharedNetworkRunner = null;
                     conductorRunner = null;
@@ -268,23 +296,26 @@ public final class MediaDriver implements AutoCloseable
 
                 case SHARED_NETWORK:
                 {
-                    affinityRegistry.addAffinity(AERON_DRIVER_SHARED_NETWORK_THREAD_NAME, ctx.senderCpuAffinity());
-                    affinityRegistry.addAffinity(conductor.roleName(), ctx.conductorCpuAffinity());
-                    affinityRegistry.addAffinity(nativeResourceAgent.roleName(), ctx.nativeResourceAgentCpuAffinity());
                     sharedNetworkRunner = new AgentRunner(
                         ctx.sharedNetworkIdleStrategy(),
                         errorHandler,
                         errorCounter,
                         new FixedNameCompositeAgent(
                             AERON_DRIVER_SHARED_NETWORK_THREAD_NAME,
-                            ctx.aeronDirectoryName(), sender, receiver));
+                            ctx.aeronDirectoryName(), sender, receiver),
+                        affinityRegistry.mappedAffinityValue(AERON_DRIVER_SHARED_NETWORK_THREAD_NAME));
                     conductorRunner = new AgentRunner(
-                        ctx.conductorIdleStrategy(), errorHandler, errorCounter, conductor);
+                        ctx.conductorIdleStrategy(),
+                        errorHandler,
+                        errorCounter,
+                        conductor,
+                        affinityRegistry.mappedAffinityValue(conductor.roleName()));
                     nativeResourceAgentRunner = new AgentRunner(
                         ctx.nativeResourceAgentIdleStrategy(),
                         errorHandler,
                         errorCounter,
-                        nativeResourceAgent);
+                        nativeResourceAgent,
+                        affinityRegistry.mappedAffinityValue(nativeResourceAgent.roleName()));
                     sharedInvoker = null;
                     sharedRunner = null;
                     senderRunner = null;
@@ -295,29 +326,36 @@ public final class MediaDriver implements AutoCloseable
                 case DEDICATED:
                 default:
                 {
-                    affinityRegistry.addAffinity(nativeResourceAgent.roleName(), ctx.nativeResourceAgentCpuAffinity());
-                    affinityRegistry.addAffinity(sender.roleName(), ctx.senderCpuAffinity());
-                    affinityRegistry.addAffinity(receiver.roleName(), ctx.receiverCpuAffinity());
-                    affinityRegistry.addAffinity(conductor.roleName(), ctx.conductorCpuAffinity());
-                    senderRunner = new AgentRunner(ctx.senderIdleStrategy(), errorHandler, errorCounter, sender);
-                    receiverRunner = new AgentRunner(ctx.receiverIdleStrategy(), errorHandler, errorCounter, receiver);
+                    senderRunner = new AgentRunner(
+                        ctx.senderIdleStrategy(),
+                        errorHandler,
+                        errorCounter,
+                        sender,
+                        affinityRegistry.mappedAffinityValue(sender.roleName()));
+                    receiverRunner = new AgentRunner(
+                        ctx.receiverIdleStrategy(),
+                        errorHandler,
+                        errorCounter,
+                        receiver,
+                        affinityRegistry.mappedAffinityValue(receiver.roleName()));
                     conductorRunner = new AgentRunner(
-                        ctx.conductorIdleStrategy(), errorHandler, errorCounter, conductor);
+                        ctx.conductorIdleStrategy(),
+                        errorHandler,
+                        errorCounter,
+                        conductor,
+                        affinityRegistry.mappedAffinityValue(conductor.roleName()));
                     nativeResourceAgentRunner = new AgentRunner(
                         ctx.nativeResourceAgentIdleStrategy(),
                         errorHandler,
                         errorCounter,
-                        nativeResourceAgent);
+                        nativeResourceAgent,
+                        affinityRegistry.mappedAffinityValue(nativeResourceAgent.roleName()));
                     sharedRunner = null;
                     sharedInvoker = null;
                     sharedNetworkRunner = null;
                     break;
                 }
             }
-            final CountersManager countersManager = ctx.countersManager();
-            affinityRegistry.conclude(
-                ctx.driverCpusetAffinity(), ctx.driverCpusetWarningsAsErrors(), countersManager);
-            affinityRegistry.publish(countersManager::newCounter);
         }
         catch (final ConcurrentConcludeException ex)
         {
@@ -396,51 +434,32 @@ public final class MediaDriver implements AutoCloseable
 
         if (null != mediaDriver.nativeResourceAgentRunner)
         {
-            AgentRunner.startOnThread(
-                mediaDriver.nativeResourceAgentRunner,
-                ctx.nativeResourceAgentThreadFactory(),
-                mediaDriver.affinityRegistry.mappedAffinityValue(
-                    mediaDriver.nativeResourceAgentRunner.agent().roleName()));
+            AgentRunner.startOnThread(mediaDriver.nativeResourceAgentRunner, ctx.nativeResourceAgentThreadFactory());
         }
 
         if (null != mediaDriver.conductorRunner)
         {
-            AgentRunner.startOnThread(
-                mediaDriver.conductorRunner,
-                ctx.conductorThreadFactory(),
-                mediaDriver.affinityRegistry.mappedAffinityValue(mediaDriver.conductorRunner.agent().roleName()));
+            AgentRunner.startOnThread(mediaDriver.conductorRunner, ctx.conductorThreadFactory());
         }
 
         if (null != mediaDriver.senderRunner)
         {
-            AgentRunner.startOnThread(
-                mediaDriver.senderRunner,
-                ctx.senderThreadFactory(),
-                mediaDriver.affinityRegistry.mappedAffinityValue(mediaDriver.senderRunner.agent().roleName()));
+            AgentRunner.startOnThread(mediaDriver.senderRunner, ctx.senderThreadFactory());
         }
 
         if (null != mediaDriver.receiverRunner)
         {
-            AgentRunner.startOnThread(
-                mediaDriver.receiverRunner,
-                ctx.receiverThreadFactory(),
-                mediaDriver.affinityRegistry.mappedAffinityValue(mediaDriver.receiverRunner.agent().roleName()));
+            AgentRunner.startOnThread(mediaDriver.receiverRunner, ctx.receiverThreadFactory());
         }
 
         if (null != mediaDriver.sharedNetworkRunner)
         {
-            AgentRunner.startOnThread(
-                mediaDriver.sharedNetworkRunner,
-                ctx.sharedNetworkThreadFactory(),
-                mediaDriver.affinityRegistry.mappedAffinityValue(AERON_DRIVER_SHARED_NETWORK_THREAD_NAME));
+            AgentRunner.startOnThread(mediaDriver.sharedNetworkRunner, ctx.sharedNetworkThreadFactory());
         }
 
         if (null != mediaDriver.sharedRunner)
         {
-            AgentRunner.startOnThread(
-                mediaDriver.sharedRunner,
-                ctx.sharedThreadFactory(),
-                mediaDriver.affinityRegistry.mappedAffinityValue(AERON_DRIVER_SHARED_THREAD_NAME));
+            AgentRunner.startOnThread(mediaDriver.sharedRunner, ctx.sharedThreadFactory());
         }
 
         if (null != mediaDriver.sharedInvoker)

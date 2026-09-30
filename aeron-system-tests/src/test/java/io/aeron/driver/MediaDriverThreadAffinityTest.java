@@ -34,6 +34,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
@@ -49,7 +50,7 @@ import static io.aeron.driver.MediaDriver.AERON_DRIVER_SHARED_NETWORK_THREAD_NAM
 import static io.aeron.driver.MediaDriver.AERON_DRIVER_SHARED_THREAD_NAME;
 import static io.aeron.test.TestPropertiesUtil.backupAndOverrideSystemProperties;
 import static io.aeron.test.TestPropertiesUtil.restoreSystemProperties;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 @EnabledOnOs(OS.LINUX)
@@ -131,8 +132,8 @@ class MediaDriverThreadAffinityTest
                     final int tid = Math.toIntExact(osThreadIdByName.get(threadName));
                     final int expectedCpu = cpus.getInt(cpuIndex);
 
-                    Tests.await(() -> expectedCpu == ThreadAffinity.getAffinityFor(tid));
-                    assertEquals(expectedCpu, ThreadAffinity.getAffinityFor(tid), threadName);
+                    Tests.await(() -> Arrays.equals(new int[]{ expectedCpu }, ThreadAffinity.getAffinity(tid)));
+                    assertArrayEquals(new int[]{ expectedCpu }, ThreadAffinity.getAffinity(tid), threadName);
                 });
             }
         }
