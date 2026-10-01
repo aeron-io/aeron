@@ -29,11 +29,11 @@ import io.aeron.cluster.codecs.mark.ClusterComponentType;
 import io.aeron.cluster.codecs.mark.MarkFileHeaderEncoder;
 import io.aeron.config.Config;
 import io.aeron.config.DefaultType;
-import io.aeron.topology.AffinityRegistry;
 import io.aeron.driver.DutyCycleTracker;
 import io.aeron.driver.status.DutyCycleStallTracker;
 import io.aeron.exceptions.ConcurrentConcludeException;
 import io.aeron.exceptions.ConfigurationException;
+import io.aeron.topology.AffinityRegistry;
 import io.aeron.version.Versioned;
 import org.agrona.CloseHelper;
 import org.agrona.DelegatingErrorHandler;
@@ -47,7 +47,6 @@ import org.agrona.Strings;
 import org.agrona.SystemUtil;
 import org.agrona.concurrent.Agent;
 import org.agrona.concurrent.AgentRunner;
-import org.agrona.concurrent.affinity.ThreadAffinity;
 import org.agrona.concurrent.CountedErrorHandler;
 import org.agrona.concurrent.EpochClock;
 import org.agrona.concurrent.IdleStrategy;
@@ -57,6 +56,7 @@ import org.agrona.concurrent.ShutdownSignalBarrier;
 import org.agrona.concurrent.SystemEpochClock;
 import org.agrona.concurrent.SystemNanoClock;
 import org.agrona.concurrent.YieldingIdleStrategy;
+import org.agrona.concurrent.affinity.ThreadAffinity;
 import org.agrona.concurrent.errors.DistinctErrorLog;
 import org.agrona.concurrent.status.AtomicCounter;
 import org.agrona.concurrent.status.StatusIndicator;
@@ -248,10 +248,11 @@ public final class ClusteredServiceContainer implements AutoCloseable
 
         /**
          * CPU the clustered service thread is pinned to. An index into the effective cgroup cpuset when
-         * {@link AffinityRegistry#CPUSET_AFFINITY_PROP_NAME} is set.
+         * {@link CommonContext#CPUSET_AFFINITY_PROP_NAME} is set.
          */
         @Config(defaultType = DefaultType.INT, defaultInt = ThreadAffinity.NO_AFFINITY)
         public static final String CLUSTER_SERVICE_CPU_AFFINITY_PROP_NAME = "aeron.cluster.service.cpu.affinity";
+
 
         /**
          * Name for a clustered service to be the role of the {@link Agent}.
@@ -779,8 +780,8 @@ public final class ClusteredServiceContainer implements AutoCloseable
         private int serviceId = Configuration.serviceId();
         private String serviceName = System.getProperty(SERVICE_NAME_PROP_NAME);
         private int cpuAffinity = Configuration.cpuAffinity();
-        private boolean cpusetAffinity = AffinityRegistry.cpusetAffinity();
-        private boolean cpusetWarningsAsErrors = AffinityRegistry.cpusetWarningsAsErrors();
+        private boolean cpusetAffinity = CommonContext.cpusetAffinityEnabled();
+        private boolean cpusetWarningsAsErrors = CommonContext.cpusetWarningsAsErrorsEnabled();
         private AffinityRegistry affinityRegistry;
         private String replayChannel = Configuration.replayChannel();
         private int replayStreamId = Configuration.replayStreamId();
@@ -959,6 +960,9 @@ public final class ClusteredServiceContainer implements AutoCloseable
                     "clustered-service-" + clusterId + "-" + serviceId);
             }
 
+            affinityRegistry = new AffinityRegistry().addAffinity(serviceName, cpuAffinity);
+            affinityRegistry.conclude(cpusetAffinity, cpusetWarningsAsErrors);
+
             if (null == aeron)
             {
                 aeron = Aeron.connect(
@@ -992,9 +996,6 @@ public final class ClusteredServiceContainer implements AutoCloseable
                     aeron.context().errorHandler(countedErrorHandler);
                 }
             }
-
-            affinityRegistry = new AffinityRegistry().addAffinity(serviceName, cpuAffinity);
-            affinityRegistry.conclude(cpusetAffinity, cpusetWarningsAsErrors);
 
             if (null == dutyCycleTracker)
             {
@@ -1265,7 +1266,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
          * Are the CPU affinities indices into the effective cgroup cpuset, which is then also validated.
          *
          * @return true if the CPU affinities are indices into the effective cgroup cpuset.
-         * @see AffinityRegistry#CPUSET_AFFINITY_PROP_NAME
+         * @see CommonContext#CPUSET_AFFINITY_PROP_NAME
          */
         public boolean cpusetAffinity()
         {
@@ -1277,7 +1278,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
          *
          * @param cpusetAffinity true if the CPU affinities are indices into the effective cgroup cpuset.
          * @return this for a fluent API.
-         * @see AffinityRegistry#CPUSET_AFFINITY_PROP_NAME
+         * @see CommonContext#CPUSET_AFFINITY_PROP_NAME
          */
         public Context cpusetAffinity(final boolean cpusetAffinity)
         {
@@ -1289,7 +1290,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
          * Are CPU affinity and topology warnings treated as errors.
          *
          * @return true if CPU affinity and topology warnings are treated as errors.
-         * @see AffinityRegistry#CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
+         * @see CommonContext#CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
          */
         public boolean cpusetWarningsAsErrors()
         {
@@ -1301,7 +1302,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
          *
          * @param cpusetWarningsAsErrors true if CPU affinity and topology warnings are treated as errors.
          * @return this for a fluent API.
-         * @see AffinityRegistry#CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
+         * @see CommonContext#CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
          */
         public Context cpusetWarningsAsErrors(final boolean cpusetWarningsAsErrors)
         {

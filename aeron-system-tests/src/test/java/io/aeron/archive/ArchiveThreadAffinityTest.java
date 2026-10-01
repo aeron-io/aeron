@@ -20,6 +20,7 @@ import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
 import io.aeron.exceptions.ConfigurationException;
 import io.aeron.test.InterruptAfter;
+import io.aeron.test.InterruptingTestCallback;
 import io.aeron.test.SlowTest;
 import io.aeron.test.TestContexts;
 import io.aeron.test.ThreadAffinityRecording;
@@ -28,6 +29,7 @@ import org.agrona.collections.IntArrayList;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
@@ -41,6 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 @EnabledOnOs(OS.LINUX)
+@ExtendWith(InterruptingTestCallback.class)
 @SlowTest
 class ArchiveThreadAffinityTest
 {
@@ -52,7 +55,7 @@ class ArchiveThreadAffinityTest
     private final String aeronDirectoryName = CommonContext.generateRandomDirName();
 
     @Test
-    @InterruptAfter(3)
+    @InterruptAfter(10)
     @SuppressWarnings("try")
     void shouldPinDedicatedArchiveThreadsToCpusetIndices()
     {
@@ -73,7 +76,7 @@ class ArchiveThreadAffinityTest
     }
 
     @Test
-    @InterruptAfter(3)
+    @InterruptAfter(10)
     @SuppressWarnings("try")
     void shouldPinSharedArchiveThreadToRawCpu()
     {
@@ -89,7 +92,7 @@ class ArchiveThreadAffinityTest
     }
 
     @Test
-    @InterruptAfter(3)
+    @InterruptAfter(10)
     @SuppressWarnings("try")
     void shouldPinDriverAndArchiveInArchivingMediaDriver()
     {
@@ -113,11 +116,11 @@ class ArchiveThreadAffinityTest
     }
 
     @Test
-    @InterruptAfter(3)
+    @InterruptAfter(10)
     @SuppressWarnings("try")
     void shouldRejectCpuClaimedByDriverWhenWarningsAreErrors()
     {
-        TestMediaDriver.notSupportedOnCMediaDriver("the C Media Driver does not publish its CPU affinity yet");
+        TestMediaDriver.notSupportedOnCMediaDriver("CPU claims of an out of process driver are not visible");
         requireCpus(1);
         try (TestMediaDriver ignore = TestMediaDriver.launch(
             driverContext().driverCpusetAffinity(true).conductorCpuAffinity(0), null))

@@ -18,6 +18,7 @@ package io.aeron.topology;
 
 import io.aeron.exceptions.ConfigurationException;
 import io.aeron.test.CapturingPrintStream;
+import io.aeron.topology.AffinityRegistry.CoreClaim;
 import io.aeron.topology.TopologyTestUtils.Pair;
 import org.agrona.CloseHelper;
 import org.junit.jupiter.api.AfterEach;
@@ -231,7 +232,7 @@ class AffinityRegistryTest
                 ConfigurationException.class,
                 () -> newRegistry(Map.of("bbb", 2)).conclude(false, true, discard()));
 
-            assertEquals(List.of(Map.entry("aaa", 2)), AffinityRegistry.claimedCpus());
+            assertEquals(List.of(new CoreClaim("aaa", 2)), AffinityRegistry.claimedCpus());
         }
     }
 
@@ -261,7 +262,7 @@ class AffinityRegistryTest
         try (AffinityRegistry registry = newRegistry(Map.of("aaa", 1, "bbb", NO_AFFINITY)))
         {
             registry.conclude(true, true, discard());
-            assertEquals(List.of(Map.entry("aaa", 5)), AffinityRegistry.claimedCpus());
+            assertEquals(List.of(new CoreClaim("aaa", 5)), AffinityRegistry.claimedCpus());
         }
 
         assertEquals(List.of(), AffinityRegistry.claimedCpus());
@@ -292,6 +293,32 @@ class AffinityRegistryTest
         assertDoesNotThrow(() -> registry.conclude(false, true, discard()));
         assertEquals(NO_AFFINITY, registry.mappedAffinityValue("aaa"));
         assertEquals(NO_AFFINITY, registry.mappedAffinityValue("bbb"));
+    }
+
+    @Test
+    void shouldRejectPinnedThreadWhenThreadAffinityIsNotSupported(
+        @TempDir final Path emptySysfs, @TempDir final Path emptyProc, @TempDir final Path emptyCgroup)
+    {
+        final AffinityRegistry registry = new AffinityRegistry(
+            emptySysfs, new CpusetV2Reader(emptyProc, emptyCgroup), false)
+            .addAffinity("aaa", 2);
+
+        final ConfigurationException ex = assertThrows(
+            ConfigurationException.class, () -> registry.conclude(false, false, discard()));
+        assertTrue(ex.getMessage().contains("only supported on Linux"), ex.getMessage());
+        assertEquals(List.of(), AffinityRegistry.claimedCpus());
+    }
+
+    @Test
+    void shouldAllowUnpinnedThreadsWhenThreadAffinityIsNotSupported(
+        @TempDir final Path emptySysfs, @TempDir final Path emptyProc, @TempDir final Path emptyCgroup)
+    {
+        final AffinityRegistry registry = new AffinityRegistry(
+            emptySysfs, new CpusetV2Reader(emptyProc, emptyCgroup), false)
+            .addAffinity("aaa", NO_AFFINITY);
+
+        assertDoesNotThrow(() -> registry.conclude(true, true, discard()));
+        assertEquals(NO_AFFINITY, registry.mappedAffinityValue("aaa"));
     }
 
     @Test

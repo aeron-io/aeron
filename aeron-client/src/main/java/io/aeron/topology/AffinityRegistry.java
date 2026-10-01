@@ -25,10 +25,9 @@ import org.agrona.concurrent.affinity.ThreadAffinity;
 import java.io.PrintStream;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
+import java.util.StringJoiner;
 
 import static org.agrona.concurrent.affinity.ThreadAffinity.NO_AFFINITY;
 
@@ -37,23 +36,6 @@ import static org.agrona.concurrent.affinity.ThreadAffinity.NO_AFFINITY;
  */
 public final class AffinityRegistry implements AutoCloseable
 {
-    /**
-     * Name of the system property to treat the requested CPU affinities of the Archive and Cluster threads as
-     * indices into the effective cgroup cpuset, and to validate that cpuset.
-     */
-    public static final String CPUSET_AFFINITY_PROP_NAME = "aeron.cpuset.affinity";
-
-    /**
-     * Name of the system property to treat CPU affinity and topology warnings of the Archive and Cluster as errors.
-     */
-    public static final String CPUSET_WARNINGS_AS_ERRORS_PROP_NAME = "aeron.cpuset.warnings.as.errors";
-
-    /**
-     * The standard sys directory for CPU topology information.
-     */
-    public static final Path DEFAULT_SYSFS_ROOT = Path.of("/sys/devices/system/cpu");
-
-    // Necessary global state to cross-check across threads
     private static final List<CoreClaim> GLOBAL_CORE_CLAIMS = new ArrayList<>();
 
     private final Object2IntHashMap<String> requestedAffinityByName = new Object2IntHashMap<>(Integer.MIN_VALUE);
@@ -64,16 +46,8 @@ public final class AffinityRegistry implements AutoCloseable
     private final List<CoreClaim> ownedCoreClaims = new ArrayList<>();
     private boolean isConcluded = false;
 
-    private static final class CoreClaim
+    record CoreClaim(String name, int cpu)
     {
-        final String name;
-        final int cpu;
-
-        CoreClaim(final String name, final int cpu)
-        {
-            this.name = name;
-            this.cpu = cpu;
-        }
     }
 
     /**
@@ -81,7 +55,7 @@ public final class AffinityRegistry implements AutoCloseable
      */
     public AffinityRegistry()
     {
-        this(DEFAULT_SYSFS_ROOT, new CpusetV2Reader(), SystemUtil.isLinux());
+        this(CGroupValidator.DEFAULT_SYSFS_ROOT, new CpusetV2Reader(), SystemUtil.isLinux());
     }
 
     AffinityRegistry(final Path sysfsRoot, final CpusetV2Reader cpusetV2Reader, final boolean topologyAvailable)
@@ -89,29 +63,6 @@ public final class AffinityRegistry implements AutoCloseable
         this.sysfsRoot = sysfsRoot;
         this.cpusetV2Reader = cpusetV2Reader;
         this.topologyAvailable = topologyAvailable;
-    }
-
-    /**
-     * Should the requested CPU affinities of the Archive and Cluster threads be treated as indices into the effective
-     * cgroup cpuset.
-     *
-     * @return true if cpuset affinity is enabled.
-     * @see #CPUSET_AFFINITY_PROP_NAME
-     */
-    public static boolean cpusetAffinity()
-    {
-        return Boolean.parseBoolean(SystemUtil.getProperty(CPUSET_AFFINITY_PROP_NAME, "false"));
-    }
-
-    /**
-     * Should CPU affinity and topology warnings of the Archive and Cluster be treated as errors.
-     *
-     * @return true if warnings should be treated as errors.
-     * @see #CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
-     */
-    public static boolean cpusetWarningsAsErrors()
-    {
-        return Boolean.parseBoolean(SystemUtil.getProperty(CPUSET_WARNINGS_AS_ERRORS_PROP_NAME, "false"));
     }
 
     /**
@@ -147,8 +98,8 @@ public final class AffinityRegistry implements AutoCloseable
         {
             throw new IllegalStateException("cannot get affinity value before conclusion");
         }
-        final Integer affinity = resolvedAffinityByName.get(name);
-        if (null == affinity)
+        final int affinity = resolvedAffinityByName.getValue(name);
+        if (resolvedAffinityByName.missingValue() == affinity)
         {
             throw new IllegalArgumentException("no affinity registered for " + name);
         }
@@ -156,16 +107,16 @@ public final class AffinityRegistry implements AutoCloseable
     }
 
     /**
-     * Resolves the registered affinities and validates them, including against the CPUs claimed by other components
-     * within the process, writing warnings to {@link System#err}, then claims the CPUs of the pinned threads.
+     * Resolves the registered affinities and validates them, including against the CPUs claimed by other registries
+     * within the JVM, writing warnings to {@link System#err}, then claims the CPUs of the pinned threads.
      *
      * @param cpusetAffinity   if true, requested values are indices into the effective cgroup cpuset which is also
      *                         validated, otherwise they are raw CPU ids.
      * @param warningsAsErrors if true, throw a {@link ConfigurationException} instead of warning.
      * @throws IllegalStateException  if already concluded.
-     * @throws ConfigurationException if an index, or a raw CPU id when {@code cpusetAffinity} is not set, is
-     *                                outside the cpuset, or a warning is found and
-     *                                {@code warningsAsErrors} is set.
+     * @throws ConfigurationException if a thread is pinned on a platform which does not support thread affinity,
+     *                                an index, or a raw CPU id when {@code cpusetAffinity} is not set, is outside
+     *                                the cpuset, or a warning is found and {@code warningsAsErrors} is set.
      */
     public void conclude(final boolean cpusetAffinity, final boolean warningsAsErrors)
     {
@@ -179,6 +130,12 @@ public final class AffinityRegistry implements AutoCloseable
             throw new IllegalStateException("already concluded");
         }
 
+        if (!topologyAvailable && hasPinnedAffinity())
+        {
+            throw new ConfigurationException(
+                "thread affinity is only supported on Linux, requested: " + requestedAffinityByName);
+        }
+
         int warnings = validateUnshared(out);
 
         if (cpusetAffinity && topologyAvailable)
@@ -189,7 +146,7 @@ public final class AffinityRegistry implements AutoCloseable
         }
         else
         {
-            if (topologyAvailable && hasPinnedAffinity())
+            if (hasPinnedAffinity())
             {
                 validateRawAgainstCpuset(cpusetV2Reader.readCpuSet());
             }
@@ -198,28 +155,26 @@ public final class AffinityRegistry implements AutoCloseable
 
         isConcluded = true;
 
-        // This arguably is not fully necessary with current Sequencer usage (as this seems to be executed in the
-        // same thread, but it is still good to have.
+        final List<CoreClaim> pinned = new ArrayList<>();
+        resolvedAffinityByName.forEach((name, cpu) ->
+        {
+            if (NO_AFFINITY != cpu)
+            {
+                pinned.add(new CoreClaim(name, cpu));
+            }
+        });
+
         synchronized (GLOBAL_CORE_CLAIMS)
         {
-            if (topologyAvailable)
-            {
-                warnings += validate(GLOBAL_CORE_CLAIMS, out);
-            }
+            warnings += validateAgainstClaims(pinned, out);
 
             if (warningsAsErrors && 0 < warnings)
             {
                 throw new ConfigurationException("cpuset warnings as errors, " + warnings + " warnings");
             }
 
-            resolvedAffinityByName.forEach((name, cpu) ->
-            {
-                if (NO_AFFINITY != cpu)
-                {
-                    ownedCoreClaims.add(new CoreClaim(name, cpu));
-                }
-            });
-            GLOBAL_CORE_CLAIMS.addAll(ownedCoreClaims);
+            ownedCoreClaims.addAll(pinned);
+            GLOBAL_CORE_CLAIMS.addAll(pinned);
         }
     }
 
@@ -302,45 +257,38 @@ public final class AffinityRegistry implements AutoCloseable
         });
     }
 
-    private int validate(final List<CoreClaim> coreClaims, final PrintStream out)
+    private int validateAgainstClaims(final List<CoreClaim> pinned, final PrintStream out)
     {
-        final Map<String, Integer> pinned = new LinkedHashMap<>();
-        resolvedAffinityByName.forEach((name, cpu) ->
-        {
-            if (NO_AFFINITY != cpu)
-            {
-                pinned.put(name, cpu);
-            }
-        });
-
         if (pinned.isEmpty())
         {
             return 0;
         }
 
         int warnings = 0;
-        for (final Map.Entry<String, Integer> own : pinned.entrySet())
+        for (final CoreClaim own : pinned)
         {
-            for (final CoreClaim coreClaim : coreClaims)
+            for (final CoreClaim coreClaim : GLOBAL_CORE_CLAIMS)
             {
-                if (own.getValue() == coreClaim.cpu)
+                if (own.cpu() == coreClaim.cpu())
                 {
-                    out.printf("WARNING: %s and %s are sharing cpu=%d%n", own.getKey(), coreClaim.name, coreClaim.cpu);
+                    out.printf("WARNING: %s and %s are sharing cpu=%d%n", own.name(), coreClaim.name(), own.cpu());
                     warnings++;
                 }
             }
         }
 
-        final List<CoreClaim> coreClaimUnion = new ArrayList<>(coreClaims);
-        pinned.forEach((name, cpu) -> coreClaimUnion.add(new CoreClaim(name, cpu)));
+        final List<CoreClaim> coreClaimUnion = new ArrayList<>(GLOBAL_CORE_CLAIMS);
+        coreClaimUnion.addAll(pinned);
         if (1 < coreClaimUnion.size())
         {
             final IntArrayList cpus = new IntArrayList();
-            coreClaimUnion.forEach((coreClaim) -> cpus.addInt(coreClaim.cpu));
-            final String formattedCpuset = "affinity " + coreClaimUnion.stream()
-                .map((coreClaim) -> coreClaim.name + "=" + coreClaim.cpu)
-                .collect(Collectors.joining(", ", "[", "]"));
-            final Cpuset affinitySet = new Cpuset(cpus, formattedCpuset);
+            final StringJoiner formattedCpuset = new StringJoiner(", ", "affinity [", "]");
+            for (final CoreClaim coreClaim : coreClaimUnion)
+            {
+                cpus.addInt(coreClaim.cpu());
+                formattedCpuset.add(coreClaim.name() + "=" + coreClaim.cpu());
+            }
+            final Cpuset affinitySet = new Cpuset(cpus, formattedCpuset.toString());
 
             warnings += new L3TopologyValidator(sysfsRoot).validate(affinitySet, out);
             warnings += new DieLocalityValidator(sysfsRoot).validate(affinitySet, out);
@@ -349,13 +297,11 @@ public final class AffinityRegistry implements AutoCloseable
         return warnings;
     }
 
-    static List<Map.Entry<String, Integer>> claimedCpus()
+    static List<CoreClaim> claimedCpus()
     {
         synchronized (GLOBAL_CORE_CLAIMS)
         {
-            return GLOBAL_CORE_CLAIMS.stream()
-                .map((coreClaim) -> Map.entry(coreClaim.name, coreClaim.cpu))
-                .collect(Collectors.toList());
+            return List.copyOf(GLOBAL_CORE_CLAIMS);
         }
     }
 }
