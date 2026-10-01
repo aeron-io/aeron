@@ -19,6 +19,7 @@ package io.aeron.topology;
 import io.aeron.exceptions.ConfigurationException;
 import org.agrona.SystemUtil;
 import org.agrona.collections.IntArrayList;
+import org.agrona.collections.Object2IntHashMap;
 import org.agrona.concurrent.affinity.ThreadAffinity;
 
 import java.io.PrintStream;
@@ -55,8 +56,8 @@ public final class AffinityRegistry implements AutoCloseable
     // Necessary global state to cross-check across threads
     private static final List<CoreClaim> GLOBAL_CORE_CLAIMS = new ArrayList<>();
 
-    private final Map<String, Integer> requestedAffinityByName = new LinkedHashMap<>();
-    private final Map<String, Integer> resolvedAffinityByName = new LinkedHashMap<>();
+    private final Object2IntHashMap<String> requestedAffinityByName = new Object2IntHashMap<>(Integer.MIN_VALUE);
+    private final Object2IntHashMap<String> resolvedAffinityByName = new Object2IntHashMap<>(Integer.MIN_VALUE);
     private final Path sysfsRoot;
     private final CpusetV2Reader cpusetV2Reader;
     private final boolean topologyAvailable;
@@ -197,6 +198,8 @@ public final class AffinityRegistry implements AutoCloseable
 
         isConcluded = true;
 
+        // This arguably is not fully necessary with current Sequencer usage (as this seems to be executed in the
+        // same thread, but it is still good to have.
         synchronized (GLOBAL_CORE_CLAIMS)
         {
             if (topologyAvailable)
