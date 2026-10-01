@@ -41,6 +41,8 @@ int aeron_udp_transport_poller_init(
     poller->transports.length = 0;
     poller->transports.capacity = 0;
 
+    poller->iteration_threshold = context->udp_channel_transport_poller_iteration_threshold;
+
 #if defined(HAVE_EPOLL)
     if ((poller->fd = epoll_create1(0)) < 0)
     {
@@ -187,7 +189,7 @@ int aeron_udp_transport_poller_poll(
 {
     int work_count = 0;
 
-    if (poller->transports.length <= AERON_UDP_TRANSPORT_POLLER_ITERATION_THRESHOLD)
+    if (poller->transports.length <= poller->iteration_threshold)
     {
         for (size_t i = 0, length = poller->transports.length; i < length; i++)
         {

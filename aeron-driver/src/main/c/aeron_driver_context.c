@@ -248,6 +248,7 @@ static void aeron_driver_untethered_subscription_state_change_null(
 #define AERON_DRIVER_CONNECT_DEFAULT (true)
 #define AERON_ENABLE_EXPERIMENTAL_FEATURES_DEFAULT (false)
 #define AERON_DRIVER_STREAM_SESSION_LIMIT_DEFAULT (INT32_MAX)
+#define AERON_UDP_CHANNEL_TRANSPORT_POLLER_ITERATION_THRESHOLD_DEFAULT (5)
 
 
 int aeron_driver_context_init(aeron_driver_context_t **context)
@@ -535,6 +536,7 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
     _context->cpuset_warnings_as_errors = AERON_DRIVER_CPUSET_WARNINGS_AS_ERRORS_DEFAULT;
     _context->enable_experimental_features = AERON_ENABLE_EXPERIMENTAL_FEATURES_DEFAULT;
     _context->stream_session_limit = AERON_DRIVER_STREAM_SESSION_LIMIT_DEFAULT;
+    _context->udp_channel_transport_poller_iteration_threshold = AERON_UDP_CHANNEL_TRANSPORT_POLLER_ITERATION_THRESHOLD_DEFAULT;
 
     char *value = NULL;
 
@@ -1304,6 +1306,13 @@ int aeron_driver_context_init(aeron_driver_context_t **context)
             goto error;
         }
     }
+
+    _context->udp_channel_transport_poller_iteration_threshold = (size_t)aeron_config_parse_uint64(
+        AERON_UDP_CHANNEL_TRANSPORT_POLLER_ITERATION_THRESHOLD_ENV_VAR,
+        getenv(AERON_UDP_CHANNEL_TRANSPORT_POLLER_ITERATION_THRESHOLD_ENV_VAR),
+        _context->udp_channel_transport_poller_iteration_threshold,
+        0,
+        SIZE_MAX);
 
 #ifdef HAVE_UUID_GENERATE
     uuid_t id;
@@ -3323,6 +3332,19 @@ int32_t aeron_driver_context_get_stream_session_limit(aeron_driver_context_t *co
     return NULL != context ? context->stream_session_limit : AERON_DRIVER_STREAM_SESSION_LIMIT_DEFAULT;
 }
 
+
+int aeron_driver_context_set_udp_channel_transport_poller_iteration_threshold(aeron_driver_context_t *context, size_t value)
+{
+    AERON_DRIVER_CONTEXT_SET_CHECK_ARG_AND_RETURN(-1, context);
+
+    context->udp_channel_transport_poller_iteration_threshold = value;
+    return 0;
+}
+
+size_t aeron_driver_context_get_udp_channel_transport_poller_iteration_threshold(aeron_driver_context_t *context)
+{
+    return NULL != context ? context->udp_channel_transport_poller_iteration_threshold : AERON_UDP_CHANNEL_TRANSPORT_POLLER_ITERATION_THRESHOLD_DEFAULT;
+}
 
 int aeron_driver_context_bindings_clientd_find_first_free_index(aeron_driver_context_t *context)
 {

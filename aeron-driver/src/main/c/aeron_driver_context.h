@@ -368,6 +368,7 @@ typedef struct aeron_driver_context_stct
     aeron_udp_channel_transport_bindings_t *conductor_udp_channel_transport_bindings;
     aeron_udp_channel_interceptor_bindings_t *udp_channel_outgoing_interceptor_bindings;
     aeron_udp_channel_interceptor_bindings_t *udp_channel_incoming_interceptor_bindings;
+    size_t udp_channel_transport_poller_iteration_threshold; /* aeron.udp.channel.transport.poller.iteration.threshold = 5 */
 
     int64_t next_receiver_id;
 

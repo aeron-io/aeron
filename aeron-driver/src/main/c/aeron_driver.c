@@ -732,6 +732,7 @@ void aeron_driver_context_print_configuration(aeron_driver_context_t *context)
         interceptor_bindings = interceptor_bindings->meta_info.next_interceptor_bindings;
     }
 
+    AERON_FPRINTF(fpout, "\n    udp_channel_transport_poller_iteration_threshold=%zu", context->udp_channel_transport_poller_iteration_threshold);
     AERON_FPRINTF(fpout, "\n}\n");
     fflush(fpout);
 }

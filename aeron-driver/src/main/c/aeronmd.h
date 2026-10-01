@@ -750,6 +750,14 @@ int aeron_driver_context_set_udp_channel_transport_bindings(
 aeron_udp_channel_transport_bindings_t *aeron_driver_context_get_udp_channel_transport_bindings(
     aeron_driver_context_t *context);
 
+/**
+ * The threshold beyond which individual channel/socket polling will swap to using selectors
+ */
+#define AERON_UDP_CHANNEL_TRANSPORT_POLLER_ITERATION_THRESHOLD_ENV_VAR "AERON_UDP_CHANNEL_TRANSPORT_POLLER_ITERATION_THRESHOLD"
+
+int aeron_driver_context_set_udp_channel_transport_poller_iteration_threshold(aeron_driver_context_t *context, size_t value);
+size_t aeron_driver_context_get_udp_channel_transport_poller_iteration_threshold(aeron_driver_context_t *context);
+
 #define AERON_UDP_CHANNEL_OUTGOING_INTERCEPTORS_ENV_VAR "AERON_UDP_CHANNEL_OUTGOING_INTERCEPTORS"
 #define AERON_UDP_CHANNEL_INCOMING_INTERCEPTORS_ENV_VAR "AERON_UDP_CHANNEL_INCOMING_INTERCEPTORS"
 
