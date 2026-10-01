@@ -1210,7 +1210,8 @@ public final class Configuration
         "aeron.driver.resolver.bootstrap.neighbor.resolution.interval";
 
     /**
-     * Property name for the CPU core id the conductor agent thread is pinned to. Defaults to
+     * CPU the conductor agent thread is pinned to. An index into the effective cgroup cpuset when
+     * {@link #DRIVER_CPUSET_AFFINITY_PROP_NAME} is set. Defaults to
      * {@link ThreadAffinity#NO_AFFINITY}.
      * <p>
      * Also used for the shared and shared-network agent threads when using those threading modes.
@@ -1219,21 +1220,24 @@ public final class Configuration
     public static final String CONDUCTOR_CPU_AFFINITY_PROP_NAME = "aeron.conductor.cpu.affinity";
 
     /**
-     * Property name for the CPU core id the receiver agent thread is pinned to. Defaults to
+     * CPU the receiver agent thread is pinned to. An index into the effective cgroup cpuset when
+     * {@link #DRIVER_CPUSET_AFFINITY_PROP_NAME} is set. Defaults to
      * {@link ThreadAffinity#NO_AFFINITY}.
      */
     @Config(defaultType = DefaultType.INT, defaultInt = ThreadAffinity.NO_AFFINITY)
     public static final String RECEIVER_CPU_AFFINITY_PROP_NAME = "aeron.receiver.cpu.affinity";
 
     /**
-     * Property name for the CPU core id the sender agent thread is pinned to. Defaults to
+     * CPU the sender agent thread is pinned to. An index into the effective cgroup cpuset when
+     * {@link #DRIVER_CPUSET_AFFINITY_PROP_NAME} is set. Defaults to
      * {@link ThreadAffinity#NO_AFFINITY}.
      */
     @Config(defaultType = DefaultType.INT, defaultInt = ThreadAffinity.NO_AFFINITY)
     public static final String SENDER_CPU_AFFINITY_PROP_NAME = "aeron.sender.cpu.affinity";
 
     /**
-     * Property name for the CPU core id the native resource agent thread is pinned to. Defaults to
+     * CPU the native resource agent thread is pinned to. An index into the effective cgroup cpuset when
+     * {@link #DRIVER_CPUSET_AFFINITY_PROP_NAME} is set. Defaults to
      * {@link ThreadAffinity#NO_AFFINITY}.
      */
     @Config(defaultType = DefaultType.INT, defaultInt = ThreadAffinity.NO_AFFINITY)
@@ -1254,50 +1258,47 @@ public final class Configuration
     public static final String DRIVER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME = "aeron.driver.cpuset.warnings.as.errors";
 
     /**
-     * CPU core id the conductor thread should be pinned to.
+     * CPU the conductor thread is pinned to.
      *
-     * @return CPU core id or {@link ThreadAffinity#NO_AFFINITY}.
+     * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
      * @see #CONDUCTOR_CPU_AFFINITY_PROP_NAME
      */
     public static int conductorCpuAffinity()
     {
-        return Integer.parseInt(getProperty(
-            CONDUCTOR_CPU_AFFINITY_PROP_NAME, String.valueOf(ThreadAffinity.NO_AFFINITY)));
+        return getInteger(CONDUCTOR_CPU_AFFINITY_PROP_NAME, ThreadAffinity.NO_AFFINITY);
     }
 
     /**
-     * CPU core id the sender thread should be pinned to.
+     * CPU the sender thread is pinned to.
      *
-     * @return CPU core id or {@link ThreadAffinity#NO_AFFINITY}.
+     * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
      * @see #SENDER_CPU_AFFINITY_PROP_NAME
      */
     public static int senderCpuAffinity()
     {
-        return Integer.parseInt(getProperty(SENDER_CPU_AFFINITY_PROP_NAME, String.valueOf(ThreadAffinity.NO_AFFINITY)));
+        return getInteger(SENDER_CPU_AFFINITY_PROP_NAME, ThreadAffinity.NO_AFFINITY);
     }
 
     /**
-     * CPU core id the receiver thread should be pinned to.
+     * CPU the receiver thread is pinned to.
      *
-     * @return CPU core id or {@link ThreadAffinity#NO_AFFINITY}.
+     * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
      * @see #RECEIVER_CPU_AFFINITY_PROP_NAME
      */
     public static int receiverCpuAffinity()
     {
-        return Integer.parseInt(getProperty(
-            RECEIVER_CPU_AFFINITY_PROP_NAME, String.valueOf(ThreadAffinity.NO_AFFINITY)));
+        return getInteger(RECEIVER_CPU_AFFINITY_PROP_NAME, ThreadAffinity.NO_AFFINITY);
     }
 
     /**
-     * CPU core id the native resource agent thread should be pinned to.
+     * CPU the native resource agent thread is pinned to.
      *
-     * @return CPU core id or {@link ThreadAffinity#NO_AFFINITY}.
+     * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
      * @see #NATIVE_RESOURCE_AGENT_CPU_AFFINITY_PROP_NAME
      */
     public static int nativeResourceAgentCpuAffinity()
     {
-        return Integer.parseInt(getProperty(
-            NATIVE_RESOURCE_AGENT_CPU_AFFINITY_PROP_NAME, String.valueOf(ThreadAffinity.NO_AFFINITY)));
+        return getInteger(NATIVE_RESOURCE_AGENT_CPU_AFFINITY_PROP_NAME, ThreadAffinity.NO_AFFINITY);
     }
 
     /**

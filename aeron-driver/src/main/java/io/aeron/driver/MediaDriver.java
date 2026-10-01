@@ -4073,10 +4073,11 @@ public final class MediaDriver implements AutoCloseable
         }
 
         /**
-         * CPU core id the conductor agent thread is pinned to. Also applies to the shared and shared-network
-         * agent threads.
+         * Get the CPU the conductor agent thread is pinned to. Also applies to the shared and shared-network
+         * agent threads. An index into the effective cgroup cpuset when
+         * {@link #driverCpusetAffinity()} is set.
          *
-         * @return CPU core id or {@link ThreadAffinity#NO_AFFINITY}.
+         * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
          * @see Configuration#CONDUCTOR_CPU_AFFINITY_PROP_NAME
          */
         @Config
@@ -4086,10 +4087,11 @@ public final class MediaDriver implements AutoCloseable
         }
 
         /**
-         * CPU core id the conductor agent thread is pinned to. Also applies to the shared and shared-network
-         * agent threads.
+         * Set the CPU the conductor agent thread is pinned to. Also applies to the shared and shared-network
+         * agent threads. An index into the effective cgroup cpuset when
+         * {@link #driverCpusetAffinity()} is set.
          *
-         * @param conductorCpuAffinity CPU core id or {@link ThreadAffinity#NO_AFFINITY}.
+         * @param conductorCpuAffinity CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
          * @return this for a fluent API.
          * @see Configuration#CONDUCTOR_CPU_AFFINITY_PROP_NAME
          */
@@ -4100,9 +4102,10 @@ public final class MediaDriver implements AutoCloseable
         }
 
         /**
-         * CPU core id the sender agent thread is pinned to.
+         * Get the CPU the sender agent thread is pinned to. An index into the effective cgroup cpuset when
+         * {@link #driverCpusetAffinity()} is set.
          *
-         * @return CPU core id or {@link ThreadAffinity#NO_AFFINITY}.
+         * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
          * @see Configuration#SENDER_CPU_AFFINITY_PROP_NAME
          */
         @Config
@@ -4112,9 +4115,10 @@ public final class MediaDriver implements AutoCloseable
         }
 
         /**
-         * CPU core id the sender agent thread is pinned to.
+         * Set the CPU the sender agent thread is pinned to. An index into the effective cgroup cpuset when
+         * {@link #driverCpusetAffinity()} is set.
          *
-         * @param senderCpuAffinity CPU core id or {@link ThreadAffinity#NO_AFFINITY}.
+         * @param senderCpuAffinity CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
          * @return this for a fluent API.
          * @see Configuration#SENDER_CPU_AFFINITY_PROP_NAME
          */
@@ -4125,9 +4129,10 @@ public final class MediaDriver implements AutoCloseable
         }
 
         /**
-         * CPU core id the receiver agent thread is pinned to.
+         * Get the CPU the receiver agent thread is pinned to. An index into the effective cgroup cpuset when
+         * {@link #driverCpusetAffinity()} is set.
          *
-         * @return CPU core id or {@link ThreadAffinity#NO_AFFINITY}.
+         * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
          * @see Configuration#RECEIVER_CPU_AFFINITY_PROP_NAME
          */
         @Config
@@ -4137,9 +4142,10 @@ public final class MediaDriver implements AutoCloseable
         }
 
         /**
-         * CPU core id the receiver agent thread is pinned to.
+         * Set the CPU the receiver agent thread is pinned to. An index into the effective cgroup cpuset when
+         * {@link #driverCpusetAffinity()} is set.
          *
-         * @param receiverCpuAffinity CPU core id or {@link ThreadAffinity#NO_AFFINITY}.
+         * @param receiverCpuAffinity CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
          * @return this for a fluent API.
          * @see Configuration#RECEIVER_CPU_AFFINITY_PROP_NAME
          */
@@ -4150,9 +4156,10 @@ public final class MediaDriver implements AutoCloseable
         }
 
         /**
-         * CPU core id the native resource agent agent thread is pinned to.
+         * Get the CPU the native resource agent thread is pinned to. An index into the effective cgroup cpuset when
+         * {@link #driverCpusetAffinity()} is set.
          *
-         * @return CPU core id or {@link ThreadAffinity#NO_AFFINITY}.
+         * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
          * @see Configuration#NATIVE_RESOURCE_AGENT_CPU_AFFINITY_PROP_NAME
          */
         @Config
@@ -4162,9 +4169,10 @@ public final class MediaDriver implements AutoCloseable
         }
 
         /**
-         * CPU core id the native resource agent agent thread is pinned to.
+         * Set the CPU the native resource agent thread is pinned to. An index into the effective cgroup cpuset when
+         * {@link #driverCpusetAffinity()} is set.
          *
-         * @param nativeResourceAgentCpuAffinity CPU core id or {@link ThreadAffinity#NO_AFFINITY}.
+         * @param nativeResourceAgentCpuAffinity CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
          * @return this for a fluent API.
          * @see Configuration#NATIVE_RESOURCE_AGENT_CPU_AFFINITY_PROP_NAME
          */
