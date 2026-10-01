@@ -286,15 +286,7 @@ public final class AffinityRegistry implements AutoCloseable
 
     private boolean hasPinnedAffinity()
     {
-        for (final int affinity : requestedAffinityByName.values())
-        {
-            if (NO_AFFINITY != affinity)
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return requestedAffinityByName.values().stream().anyMatch(index -> index != NO_AFFINITY);
     }
 
     private void validateRawAgainstCpuset(final Cpuset cpuset)
