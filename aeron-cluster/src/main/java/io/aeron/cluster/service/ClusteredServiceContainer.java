@@ -782,7 +782,6 @@ public final class ClusteredServiceContainer implements AutoCloseable
         private boolean cpusetAffinity = AffinityRegistry.cpusetAffinity();
         private boolean cpusetWarningsAsErrors = AffinityRegistry.cpusetWarningsAsErrors();
         private AffinityRegistry affinityRegistry;
-        private AffinityRegistry.AffinityClaims affinityClaims;
         private String replayChannel = Configuration.replayChannel();
         private int replayStreamId = Configuration.replayStreamId();
         private String controlChannel = Configuration.controlChannel();
@@ -995,8 +994,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
             }
 
             affinityRegistry = new AffinityRegistry().addAffinity(serviceName, cpuAffinity);
-            affinityClaims = affinityRegistry.conclude(
-                cpusetAffinity, cpusetWarningsAsErrors, aeron.countersReader(), aeron::addCounter);
+            affinityRegistry.conclude(cpusetAffinity, cpusetWarningsAsErrors);
 
             if (null == dutyCycleTracker)
             {
@@ -2177,7 +2175,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
         public void close()
         {
             final ErrorHandler errorHandler = countedErrorHandler();
-            CloseHelper.close(errorHandler, affinityClaims);
+            CloseHelper.close(errorHandler, affinityRegistry);
             if (ownsAeronClient)
             {
                 CloseHelper.close(errorHandler, aeron);

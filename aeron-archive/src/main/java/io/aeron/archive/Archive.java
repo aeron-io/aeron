@@ -1194,7 +1194,6 @@ public final class Archive implements AutoCloseable
         private boolean cpusetAffinity = AffinityRegistry.cpusetAffinity();
         private boolean cpusetWarningsAsErrors = AffinityRegistry.cpusetWarningsAsErrors();
         private AffinityRegistry affinityRegistry;
-        private AffinityRegistry.AffinityClaims affinityClaims;
         private ThreadFactory threadFactory;
         private ThreadFactory recorderThreadFactory;
         private ThreadFactory replayerThreadFactory;
@@ -2949,8 +2948,7 @@ public final class Archive implements AutoCloseable
                     break;
             }
 
-            affinityClaims = affinityRegistry.conclude(
-                cpusetAffinity, cpusetWarningsAsErrors, aeron.countersReader(), aeron::addCounter);
+            affinityRegistry.conclude(cpusetAffinity, cpusetWarningsAsErrors);
         }
 
         /**
@@ -3984,7 +3982,7 @@ public final class Archive implements AutoCloseable
          */
         public void close()
         {
-            CloseHelper.close(countedErrorHandler, affinityClaims);
+            CloseHelper.close(countedErrorHandler, affinityRegistry);
             CloseHelper.close(countedErrorHandler, catalog);
             CloseHelper.close(countedErrorHandler, archiveDirChannel);
 

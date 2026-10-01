@@ -16,12 +16,11 @@
 
 package io.aeron.topology;
 
-import io.aeron.AeronCounters;
 import io.aeron.exceptions.ConfigurationException;
 import io.aeron.test.CapturingPrintStream;
 import io.aeron.topology.TopologyTestUtils.Pair;
-import org.agrona.concurrent.UnsafeBuffer;
-import org.agrona.concurrent.status.CountersManager;
+import org.agrona.CloseHelper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -32,8 +31,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.nio.ByteBuffer;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,8 +44,6 @@ import static io.aeron.topology.TopologyTestUtils.setupDieLocality;
 import static io.aeron.topology.TopologyTestUtils.setupL3Peers;
 import static io.aeron.topology.TopologyTestUtils.setupSiblingThreads;
 import static org.agrona.concurrent.affinity.ThreadAffinity.NO_AFFINITY;
-import static org.agrona.concurrent.status.CountersReader.METADATA_LENGTH;
-import static org.agrona.concurrent.status.CountersReader.COUNTER_LENGTH;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -74,9 +71,7 @@ class AffinityRegistryTest
     private Path testCgroupPath;
 
     private final CapturingPrintStream out = new CapturingPrintStream();
-    private final CountersManager countersManager = new CountersManager(
-        new UnsafeBuffer(ByteBuffer.allocateDirect(64 * METADATA_LENGTH)),
-        new UnsafeBuffer(ByteBuffer.allocateDirect(64 * COUNTER_LENGTH)));
+    private final List<AffinityRegistry> registries = new ArrayList<>();
 
     @BeforeEach
     void setUp() throws IOException
@@ -84,6 +79,13 @@ class AffinityRegistryTest
         setupSiblingThreads(sysfsTestDir, ALIGNED_SIBLINGS);
         setupDieLocality(sysfsTestDir, SINGLE_DIE);
         setupCpuSet(testProcPath, testCgroupPath, 0, "0-7");
+    }
+
+    @AfterEach
+    void tearDown()
+    {
+        CloseHelper.closeAll(registries);
+        assertEquals(List.of(), AffinityRegistry.claimedCpus());
     }
 
     @ParameterizedTest
@@ -98,23 +100,25 @@ class AffinityRegistryTest
         setupL3Peers(sysfsTestDir, l3Peers);
         setupCpuSet(testProcPath, testCgroupPath, 0, cpuset);
 
-        final AffinityRegistry registry = newRegistry(indices);
-        registry.conclude(true, false, countersManager, null, out.resetAndGetPrintStream());
+        try (AffinityRegistry registry = newRegistry(indices))
+        {
+            registry.conclude(true, false, out.resetAndGetPrintStream());
 
-        expectedCpus.forEach((name, cpu) -> assertEquals(cpu, registry.mappedAffinityValue(name), name));
-        final String output = out.flushAndGetContent();
-        assertEquals(expectedWarningCount, countWarnings(output), output);
+            expectedCpus.forEach((name, cpu) -> assertEquals(cpu, registry.mappedAffinityValue(name), name));
+            final String output = out.flushAndGetContent();
+            assertEquals(expectedWarningCount, countWarnings(output), output);
+        }
 
         if (0 < expectedWarningCount)
         {
             final ConfigurationException ex = assertThrows(
                 ConfigurationException.class,
-                () -> newRegistry(indices).conclude(true, true, countersManager, null, discard()));
+                () -> newRegistry(indices).conclude(true, true, discard()));
             assertTrue(ex.getMessage().contains(expectedWarningCount + " warnings"), ex.getMessage());
         }
         else
         {
-            assertDoesNotThrow(() -> newRegistry(indices).conclude(true, true, countersManager, null, discard()));
+            assertDoesNotThrow(() -> newRegistry(indices).conclude(true, true, discard()));
         }
     }
 
@@ -124,7 +128,7 @@ class AffinityRegistryTest
         setupL3Peers(sysfsTestDir, SHARED_L3);
 
         final AffinityRegistry registry = newRegistry(Map.of("aaa", 6, "bbb", 7, "ccc", NO_AFFINITY));
-        registry.conclude(false, true, countersManager, null, discard());
+        registry.conclude(false, true, discard());
 
         assertEquals(6, registry.mappedAffinityValue("aaa"));
         assertEquals(7, registry.mappedAffinityValue("bbb"));
@@ -139,7 +143,7 @@ class AffinityRegistryTest
 
         final AffinityRegistry registry = newRegistry(Map.of("aaa", 4));
         final ConfigurationException ex = assertThrows(
-            ConfigurationException.class, () -> registry.conclude(true, false, countersManager, null, discard()));
+            ConfigurationException.class, () -> registry.conclude(true, false, discard()));
 
         assertTrue(ex.getMessage().contains("aaa affinity 4 must be less than cpuset count 4"), ex.getMessage());
     }
@@ -152,11 +156,11 @@ class AffinityRegistryTest
 
         final AffinityRegistry registry = newRegistry(Map.of("aaa", 6));
         final ConfigurationException ex = assertThrows(
-            ConfigurationException.class, () -> registry.conclude(false, false, countersManager, null, discard()));
+            ConfigurationException.class, () -> registry.conclude(false, false, discard()));
 
         assertTrue(ex.getMessage().contains("aaa affinity 6 is not in cpuset: 2-5"), ex.getMessage());
         assertDoesNotThrow(() -> newRegistry(Map.of("aaa", 3))
-            .conclude(false, false, countersManager, null, discard()));
+            .conclude(false, false, discard()));
     }
 
     @Test
@@ -165,14 +169,14 @@ class AffinityRegistryTest
         setupL3Peers(sysfsTestDir, SHARED_L3);
 
         final AffinityRegistry registry = newRegistry(Map.of("aaa", 2, "bbb", 2));
-        registry.conclude(false, false, countersManager, null, out.resetAndGetPrintStream());
+        registry.conclude(false, false, out.resetAndGetPrintStream());
 
         final String output = out.flushAndGetContent();
         assertEquals(1, countWarnings(output), output);
         assertTrue(output.contains("sharing cpu affinity=2"), output);
         assertThrows(
             ConfigurationException.class,
-            () -> newRegistry(Map.of("aaa", 2, "bbb", 2)).conclude(false, true, countersManager, null, discard()));
+            () -> newRegistry(Map.of("aaa", 2, "bbb", 2)).conclude(false, true, discard()));
     }
 
     @Test
@@ -180,20 +184,19 @@ class AffinityRegistryTest
     {
         setupL3Peers(sysfsTestDir, SHARED_L3);
 
-        final AffinityRegistry first = newRegistry(Map.of("aaa", 2));
-        try (AffinityRegistry.AffinityClaims ignore =
-            first.conclude(false, true, countersManager, countersManager::newCounter, discard()))
+        try (AffinityRegistry first = newRegistry(Map.of("aaa", 2));
+            AffinityRegistry second = newRegistry(Map.of("bbb", 2, "ccc", 3)))
         {
-            final AffinityRegistry second = newRegistry(Map.of("bbb", 2, "ccc", 3));
-            second.conclude(false, false, countersManager, null, out.resetAndGetPrintStream());
+            first.conclude(false, true, discard());
+            second.conclude(false, false, out.resetAndGetPrintStream());
 
             final String output = out.flushAndGetContent();
             assertEquals(1, countWarnings(output), output);
-            assertTrue(output.contains("bbb and cpu-affinity: aaa cpu=2"), output);
+            assertTrue(output.contains("bbb and aaa are sharing cpu=2"), output);
         }
 
         assertDoesNotThrow(
-            () -> newRegistry(Map.of("bbb", 2)).conclude(false, true, countersManager, null, discard()),
+            () -> newRegistry(Map.of("bbb", 2)).conclude(false, true, discard()),
             "claims are released when the publishing component closes");
     }
 
@@ -202,21 +205,17 @@ class AffinityRegistryTest
     {
         setupL3Peers(sysfsTestDir, SHARED_L3);
 
-        final AffinityRegistry first = newRegistry(Map.of("aaa", 2, "bbb", 3));
-        try (AffinityRegistry.AffinityClaims ignore1 =
-            first.conclude(false, true, countersManager, countersManager::newCounter, out.resetAndGetPrintStream()))
+        try (AffinityRegistry first = newRegistry(Map.of("aaa", 2, "bbb", 3));
+            AffinityRegistry second = newRegistry(Map.of("ccc", 2)))
         {
+            first.conclude(false, true, out.resetAndGetPrintStream());
             assertEquals(0, countWarnings(out.flushAndGetContent()));
 
-            final AffinityRegistry second = newRegistry(Map.of("ccc", 2));
-            try (AffinityRegistry.AffinityClaims ignore2 = second.conclude(
-                false, false, countersManager, countersManager::newCounter, out.resetAndGetPrintStream()))
-            {
-                final String output = out.flushAndGetContent();
-                assertEquals(1, countWarnings(output), output);
-                assertTrue(output.contains("ccc and cpu-affinity: aaa cpu=2"), output);
-                assertEquals(3, AffinityRegistry.readClaims(countersManager).size());
-            }
+            second.conclude(false, false, out.resetAndGetPrintStream());
+            final String output = out.flushAndGetContent();
+            assertEquals(1, countWarnings(output), output);
+            assertTrue(output.contains("ccc and aaa are sharing cpu=2"), output);
+            assertEquals(3, AffinityRegistry.claimedCpus().size());
         }
     }
 
@@ -225,16 +224,14 @@ class AffinityRegistryTest
     {
         setupL3Peers(sysfsTestDir, SHARED_L3);
 
-        final AffinityRegistry first = newRegistry(Map.of("aaa", 2));
-        try (AffinityRegistry.AffinityClaims ignore =
-            first.conclude(false, true, countersManager, countersManager::newCounter, discard()))
+        try (AffinityRegistry first = newRegistry(Map.of("aaa", 2)))
         {
+            first.conclude(false, true, discard());
             assertThrows(
                 ConfigurationException.class,
-                () -> newRegistry(Map.of("bbb", 2))
-                    .conclude(false, true, countersManager, countersManager::newCounter, discard()));
+                () -> newRegistry(Map.of("bbb", 2)).conclude(false, true, discard()));
 
-            assertEquals(1, AffinityRegistry.readClaims(countersManager).size());
+            assertEquals(List.of(Map.entry("aaa", 2)), AffinityRegistry.claimedCpus());
         }
     }
 
@@ -243,12 +240,11 @@ class AffinityRegistryTest
     {
         setupL3Peers(sysfsTestDir, SPLIT_L3);
 
-        final AffinityRegistry first = newRegistry(Map.of("aaa", 1));
-        try (AffinityRegistry.AffinityClaims ignore =
-            first.conclude(false, true, countersManager, countersManager::newCounter, discard()))
+        try (AffinityRegistry first = newRegistry(Map.of("aaa", 1));
+            AffinityRegistry second = newRegistry(Map.of("bbb", 5)))
         {
-            final AffinityRegistry second = newRegistry(Map.of("bbb", 5));
-            second.conclude(false, false, countersManager, null, out.resetAndGetPrintStream());
+            first.conclude(false, true, discard());
+            second.conclude(false, false, out.resetAndGetPrintStream());
 
             final String output = out.flushAndGetContent();
             assertEquals(1, countWarnings(output), output);
@@ -257,44 +253,31 @@ class AffinityRegistryTest
     }
 
     @Test
-    void shouldPublishCounterPerPinnedThread() throws IOException
+    void shouldClaimPinnedThreadsUntilClosed() throws IOException
     {
         setupL3Peers(sysfsTestDir, SHARED_L3);
         setupCpuSet(testProcPath, testCgroupPath, 0, "4-7");
 
-        final AffinityRegistry registry = newRegistry(Map.of("aaa", 1, "bbb", NO_AFFINITY));
-        try (AffinityRegistry.AffinityClaims ignore =
-            registry.conclude(true, true, countersManager, countersManager::newCounter, discard()))
+        try (AffinityRegistry registry = newRegistry(Map.of("aaa", 1, "bbb", NO_AFFINITY)))
         {
-            final Map<String, Integer> claims = AffinityRegistry.readClaims(countersManager);
-            final long pid = ProcessHandle.current().pid();
-            assertEquals(Map.of("cpu-affinity: aaa cpu=5 requested=1 pid=" + pid, 5), claims);
-
-            countersManager.forEach((counterId, typeId, keyBuffer, label) ->
-            {
-                if (AeronCounters.CPU_AFFINITY_TYPE_ID == typeId)
-                {
-                    assertEquals(1, keyBuffer.getInt(AffinityRegistry.REQUESTED_AFFINITY_OFFSET));
-                    assertEquals(pid, keyBuffer.getLong(AffinityRegistry.PID_OFFSET));
-                    assertEquals(5, countersManager.getCounterValue(counterId));
-                }
-            });
+            registry.conclude(true, true, discard());
+            assertEquals(List.of(Map.entry("aaa", 5)), AffinityRegistry.claimedCpus());
         }
 
-        assertEquals(Map.of(), AffinityRegistry.readClaims(countersManager));
+        assertEquals(List.of(), AffinityRegistry.claimedCpus());
     }
 
     @Test
-    void shouldNotPublishWhenWarningsAreErrors() throws IOException
+    void shouldNotClaimWhenWarningsAreErrors() throws IOException
     {
         setupL3Peers(sysfsTestDir, SHARED_L3);
 
         final AffinityRegistry registry = newRegistry(Map.of("aaa", 2, "bbb", 2));
         assertThrows(
             ConfigurationException.class,
-            () -> registry.conclude(false, true, countersManager, countersManager::newCounter, discard()));
+            () -> registry.conclude(false, true, discard()));
 
-        assertEquals(Map.of(), AffinityRegistry.readClaims(countersManager));
+        assertEquals(List.of(), AffinityRegistry.claimedCpus());
     }
 
     @Test
@@ -306,7 +289,7 @@ class AffinityRegistryTest
             .addAffinity("aaa", NO_AFFINITY)
             .addAffinity("bbb", NO_AFFINITY);
 
-        assertDoesNotThrow(() -> registry.conclude(false, true, countersManager, null, discard()));
+        assertDoesNotThrow(() -> registry.conclude(false, true, discard()));
         assertEquals(NO_AFFINITY, registry.mappedAffinityValue("aaa"));
         assertEquals(NO_AFFINITY, registry.mappedAffinityValue("bbb"));
     }
@@ -317,11 +300,11 @@ class AffinityRegistryTest
         final AffinityRegistry registry = newRegistry(Map.of());
         assertThrows(IllegalStateException.class, () -> registry.mappedAffinityValue("aaa"));
 
-        registry.conclude(false, false, null, null, discard());
+        registry.conclude(false, false, discard());
 
         assertThrows(IllegalArgumentException.class, () -> registry.mappedAffinityValue("aaa"));
         assertThrows(IllegalStateException.class, () -> registry.addAffinity("aaa", 1));
-        assertThrows(IllegalStateException.class, () -> registry.conclude(false, false, null, null, discard()));
+        assertThrows(IllegalStateException.class, () -> registry.conclude(false, false, discard()));
     }
 
     private AffinityRegistry newRegistry(final Map<String, Integer> affinities)
@@ -329,6 +312,7 @@ class AffinityRegistryTest
         final AffinityRegistry registry = new AffinityRegistry(
             sysfsTestDir, new CpusetV2Reader(testProcPath, testCgroupPath), true);
         new LinkedHashMap<>(affinities).forEach(registry::addAffinity);
+        registries.add(registry);
         return registry;
     }
 

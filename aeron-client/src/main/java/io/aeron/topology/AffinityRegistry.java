@@ -16,17 +16,10 @@
 
 package io.aeron.topology;
 
-import io.aeron.AeronCounters;
 import io.aeron.exceptions.ConfigurationException;
-import org.agrona.CloseHelper;
-import org.agrona.DirectBuffer;
 import org.agrona.SystemUtil;
 import org.agrona.collections.IntArrayList;
-import org.agrona.collections.IntHashSet;
-import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.affinity.ThreadAffinity;
-import org.agrona.concurrent.status.AtomicCounter;
-import org.agrona.concurrent.status.CountersReader;
 
 import java.io.PrintStream;
 import java.nio.file.Path;
@@ -36,14 +29,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.agrona.BitUtil.SIZE_OF_INT;
 import static org.agrona.concurrent.affinity.ThreadAffinity.NO_AFFINITY;
-import static org.agrona.concurrent.status.CountersReader.MAX_LABEL_LENGTH;
 
 /**
  * Registry mapping named thread affinities onto the CPUs of the process's effective cgroup cpuset.
  */
-public final class AffinityRegistry
+public final class AffinityRegistry implements AutoCloseable
 {
     /**
      * Name of the system property to treat the requested CPU affinities of the Archive and Cluster threads as
@@ -61,76 +52,26 @@ public final class AffinityRegistry
      */
     public static final Path DEFAULT_SYSFS_ROOT = Path.of("/sys/devices/system/cpu");
 
-    static final int CPU_OFFSET = 0;
-    static final int REQUESTED_AFFINITY_OFFSET = CPU_OFFSET + SIZE_OF_INT;
-    static final int PID_OFFSET = REQUESTED_AFFINITY_OFFSET + SIZE_OF_INT;
-    static final int KEY_LENGTH = PID_OFFSET + Long.BYTES;
+    // Necessary global state to cross-check across threads
+    private static final List<CoreClaim> GLOBAL_CORE_CLAIMS = new ArrayList<>();
 
     private final Map<String, Integer> requestedAffinityByName = new LinkedHashMap<>();
     private final Map<String, Integer> resolvedAffinityByName = new LinkedHashMap<>();
     private final Path sysfsRoot;
     private final CpusetV2Reader cpusetV2Reader;
     private final boolean topologyAvailable;
+    private final List<CoreClaim> ownedCoreClaims = new ArrayList<>();
     private boolean isConcluded = false;
 
-    /**
-     * Allocates a counter, e.g. {@code Aeron::addCounter} or {@code CountersManager::newCounter}.
-     */
-    @FunctionalInterface
-    public interface CounterAllocator
+    private static final class CoreClaim
     {
-        /**
-         * Allocate a counter.
-         *
-         * @param typeId      of the counter.
-         * @param keyBuffer   containing the key.
-         * @param keyOffset   of the key in the buffer.
-         * @param keyLength   of the key.
-         * @param labelBuffer containing the label.
-         * @param labelOffset of the label in the buffer.
-         * @param labelLength of the label.
-         * @return the allocated counter.
-         */
-        AtomicCounter allocate(
-            int typeId,
-            DirectBuffer keyBuffer,
-            int keyOffset,
-            int keyLength,
-            DirectBuffer labelBuffer,
-            int labelOffset,
-            int labelLength);
-    }
+        final String name;
+        final int cpu;
 
-    /**
-     * The counters published for the pinned threads of a component, closing them releases the claimed CPUs.
-     */
-    public static final class AffinityClaims implements AutoCloseable
-    {
-        private final List<AtomicCounter> counters;
-
-        AffinityClaims(final List<AtomicCounter> counters)
+        CoreClaim(final String name, final int cpu)
         {
-            this.counters = counters;
-        }
-
-        IntHashSet counterIds()
-        {
-            final IntHashSet counterIds = new IntHashSet();
-            for (final AtomicCounter counter : counters)
-            {
-                counterIds.add(counter.id());
-            }
-
-            return counterIds;
-        }
-
-        /**
-         * {@inheritDoc}
-         */
-        @Override
-        public void close()
-        {
-            CloseHelper.closeAll(counters);
+            this.name = name;
+            this.cpu = cpu;
         }
     }
 
@@ -214,35 +155,23 @@ public final class AffinityRegistry
     }
 
     /**
-     * Resolves the registered affinities and validates them, writing warnings to {@link System#err}, then publishes
-     * a counter for each pinned thread so other components can validate against the claimed CPUs.
+     * Resolves the registered affinities and validates them, including against the CPUs claimed by other components
+     * within the process, writing warnings to {@link System#err}, then claims the CPUs of the pinned threads.
      *
      * @param cpusetAffinity   if true, requested values are indices into the effective cgroup cpuset which is also
      *                         validated, otherwise they are raw CPU ids.
      * @param warningsAsErrors if true, throw a {@link ConfigurationException} instead of warning.
-     * @param countersReader   to read the CPUs claimed by other components from, may be null.
-     * @param allocator        to allocate the claim counters with, may be null to skip publishing.
-     * @return the claims which are to be closed when the component closes.
      * @throws IllegalStateException  if already concluded.
      * @throws ConfigurationException if an index, or a raw CPU id when {@code cpusetAffinity} is not set, is
      *                                outside the cpuset, or a warning is found and
      *                                {@code warningsAsErrors} is set.
      */
-    public AffinityClaims conclude(
-        final boolean cpusetAffinity,
-        final boolean warningsAsErrors,
-        final CountersReader countersReader,
-        final CounterAllocator allocator)
+    public void conclude(final boolean cpusetAffinity, final boolean warningsAsErrors)
     {
-        return conclude(cpusetAffinity, warningsAsErrors, countersReader, allocator, System.err);
+        conclude(cpusetAffinity, warningsAsErrors, System.err);
     }
 
-    AffinityClaims conclude(
-        final boolean cpusetAffinity,
-        final boolean warningsAsErrors,
-        final CountersReader countersReader,
-        final CounterAllocator allocator,
-        final PrintStream out)
+    void conclude(final boolean cpusetAffinity, final boolean warningsAsErrors, final PrintStream out)
     {
         if (isConcluded)
         {
@@ -268,70 +197,43 @@ public final class AffinityRegistry
 
         isConcluded = true;
 
-        final AffinityClaims claims = publish(allocator);
-        try
+        synchronized (GLOBAL_CORE_CLAIMS)
         {
             if (topologyAvailable)
             {
-                warnings += validate(countersReader, claims.counterIds(), out);
+                warnings += validate(GLOBAL_CORE_CLAIMS, out);
             }
 
             if (warningsAsErrors && 0 < warnings)
             {
                 throw new ConfigurationException("cpuset warnings as errors, " + warnings + " warnings");
             }
-        }
-        catch (final RuntimeException ex)
-        {
-            claims.close();
-            throw ex;
-        }
 
-        return claims;
-    }
-
-    private AffinityClaims publish(final CounterAllocator allocator)
-    {
-        final List<AtomicCounter> counters = new ArrayList<>();
-        if (null == allocator)
-        {
-            return new AffinityClaims(counters);
-        }
-
-        final UnsafeBuffer keyBuffer = new UnsafeBuffer(new byte[KEY_LENGTH]);
-        final UnsafeBuffer labelBuffer = new UnsafeBuffer(new byte[MAX_LABEL_LENGTH]);
-        final long pid = ProcessHandle.current().pid();
-
-        try
-        {
             resolvedAffinityByName.forEach((name, cpu) ->
             {
                 if (NO_AFFINITY != cpu)
                 {
-                    final int requested = requestedAffinityByName.get(name);
-                    keyBuffer.putInt(CPU_OFFSET, cpu);
-                    keyBuffer.putInt(REQUESTED_AFFINITY_OFFSET, requested);
-                    keyBuffer.putLong(PID_OFFSET, pid);
-
-                    final String label =
-                        "cpu-affinity: " + name + " cpu=" + cpu + " requested=" + requested + " pid=" + pid;
-                    final int labelLength = labelBuffer.putStringWithoutLengthAscii(
-                        0, label, 0, MAX_LABEL_LENGTH);
-
-                    final AtomicCounter counter = allocator.allocate(
-                        AeronCounters.CPU_AFFINITY_TYPE_ID, keyBuffer, 0, KEY_LENGTH, labelBuffer, 0, labelLength);
-                    counter.setRelease(cpu);
-                    counters.add(counter);
+                    ownedCoreClaims.add(new CoreClaim(name, cpu));
                 }
             });
+            GLOBAL_CORE_CLAIMS.addAll(ownedCoreClaims);
         }
-        catch (final RuntimeException ex)
-        {
-            CloseHelper.closeAll(counters);
-            throw ex;
-        }
+    }
 
-        return new AffinityClaims(counters);
+    /**
+     * Releases the CPUs claimed by this registry.
+     */
+    @Override
+    public void close()
+    {
+        synchronized (GLOBAL_CORE_CLAIMS)
+        {
+            for (final CoreClaim coreClaim : ownedCoreClaims)
+            {
+                GLOBAL_CORE_CLAIMS.remove(coreClaim);
+            }
+            ownedCoreClaims.clear();
+        }
     }
 
     private int validateUnshared(final PrintStream out)
@@ -405,7 +307,7 @@ public final class AffinityRegistry
         });
     }
 
-    private int validate(final CountersReader countersReader, final IntHashSet ownCounterIds, final PrintStream out)
+    private int validate(final List<CoreClaim> coreClaims, final PrintStream out)
     {
         final Map<String, Integer> pinned = new LinkedHashMap<>();
         resolvedAffinityByName.forEach((name, cpu) ->
@@ -421,28 +323,27 @@ public final class AffinityRegistry
             return 0;
         }
 
-        final Map<String, Integer> claimedCpus = readClaims(countersReader, ownCounterIds);
         int warnings = 0;
         for (final Map.Entry<String, Integer> own : pinned.entrySet())
         {
-            for (final Map.Entry<String, Integer> claim : claimedCpus.entrySet())
+            for (final CoreClaim coreClaim : coreClaims)
             {
-                if (own.getValue().equals(claim.getValue()))
+                if (own.getValue() == coreClaim.cpu)
                 {
-                    out.printf("WARNING: %s and %s are sharing cpu=%d%n", own.getKey(), claim.getKey(), own.getValue());
+                    out.printf("WARNING: %s and %s are sharing cpu=%d%n", own.getKey(), coreClaim.name, coreClaim.cpu);
                     warnings++;
                 }
             }
         }
 
-        final Map<String, Integer> union = new LinkedHashMap<>(claimedCpus);
-        union.putAll(pinned);
-        if (1 < union.size())
+        final List<CoreClaim> coreClaimUnion = new ArrayList<>(coreClaims);
+        pinned.forEach((name, cpu) -> coreClaimUnion.add(new CoreClaim(name, cpu)));
+        if (1 < coreClaimUnion.size())
         {
             final IntArrayList cpus = new IntArrayList();
-            union.values().forEach(cpus::addInt);
-            final String formattedCpuset = "affinity " + union.entrySet().stream()
-                .map((e) -> e.getKey() + "=" + e.getValue())
+            coreClaimUnion.forEach((coreClaim) -> cpus.addInt(coreClaim.cpu));
+            final String formattedCpuset = "affinity " + coreClaimUnion.stream()
+                .map((coreClaim) -> coreClaim.name + "=" + coreClaim.cpu)
                 .collect(Collectors.joining(", ", "[", "]"));
             final Cpuset affinitySet = new Cpuset(cpus, formattedCpuset);
 
@@ -453,25 +354,13 @@ public final class AffinityRegistry
         return warnings;
     }
 
-    static Map<String, Integer> readClaims(final CountersReader countersReader)
+    static List<Map.Entry<String, Integer>> claimedCpus()
     {
-        return readClaims(countersReader, new IntHashSet());
-    }
-
-    static Map<String, Integer> readClaims(final CountersReader countersReader, final IntHashSet excludedCounterIds)
-    {
-        final Map<String, Integer> claimedCpus = new LinkedHashMap<>();
-        if (null != countersReader)
+        synchronized (GLOBAL_CORE_CLAIMS)
         {
-            countersReader.forEach((counterId, typeId, keyBuffer, label) ->
-            {
-                if (AeronCounters.CPU_AFFINITY_TYPE_ID == typeId && !excludedCounterIds.contains(counterId))
-                {
-                    claimedCpus.put(label, keyBuffer.getInt(CPU_OFFSET));
-                }
-            });
+            return GLOBAL_CORE_CLAIMS.stream()
+                .map((coreClaim) -> Map.entry(coreClaim.name, coreClaim.cpu))
+                .collect(Collectors.toList());
         }
-
-        return claimedCpus;
     }
 }
