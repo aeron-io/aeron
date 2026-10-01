@@ -19,7 +19,8 @@
 
 #include "aeron_driver_conductor.h"
 
-#define AERON_UDP_TRANSPORT_POLLER_ITERATION_THRESHOLD (5)
+#define AERON_UDP_TRANSPORT_POLLER_ITERATION_THRESHOLD_ENV_VAR "AERON_UDP_TRANSPORT_POLLER_ITERATION_THRESHOLD"
+#define AERON_UDP_TRANSPORT_POLLER_ITERATION_THRESHOLD_DEFAULT (5)
 
 typedef struct aeron_udp_channel_transport_entry_stct
 {
@@ -37,6 +38,7 @@ typedef struct aeron_udp_transport_poller_stct
     }
     transports;
 
+    size_t iteration_threshold;
     int fd;
     void *bindings_clientd;
 }

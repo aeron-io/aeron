@@ -29,6 +29,7 @@
 #endif
 
 #include "util/aeron_arrayutil.h"
+#include "util/aeron_parse_util.h"
 #include "aeron_alloc.h"
 #include "media/aeron_udp_transport_poller.h"
 
@@ -40,6 +41,13 @@ int aeron_udp_transport_poller_init(
     poller->transports.array = NULL;
     poller->transports.length = 0;
     poller->transports.capacity = 0;
+
+    poller->iteration_threshold = (size_t)aeron_config_parse_uint64(
+        AERON_UDP_TRANSPORT_POLLER_ITERATION_THRESHOLD_ENV_VAR,
+        getenv(AERON_UDP_TRANSPORT_POLLER_ITERATION_THRESHOLD_ENV_VAR),
+        AERON_UDP_TRANSPORT_POLLER_ITERATION_THRESHOLD_DEFAULT,
+        0,
+        SIZE_MAX);
 
 #if defined(HAVE_EPOLL)
     if ((poller->fd = epoll_create1(0)) < 0)
@@ -187,7 +195,7 @@ int aeron_udp_transport_poller_poll(
 {
     int work_count = 0;
 
-    if (poller->transports.length <= AERON_UDP_TRANSPORT_POLLER_ITERATION_THRESHOLD)
+    if (poller->transports.length <= poller->iteration_threshold)
     {
         for (size_t i = 0, length = poller->transports.length; i < length; i++)
         {
