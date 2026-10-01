@@ -469,13 +469,6 @@ public final class AeronCounters
     @AeronCounter
     public static final int NAME_RESOLVER_BOOTSTRAP_NEIGHBOR_COUNTER_TYPE_ID = 21;
 
-    /**
-     * CPU a component's agent thread is pinned to, allocated so all components sharing an Aeron directory can
-     * validate against each other's CPU affinity.
-     */
-    @AeronCounter(existsInC = false)
-    public static final int CPU_AFFINITY_TYPE_ID = 22;
-
     // EF_VI counters
     /**
      * EF_VI_PORT_INFO_TYPE_ID.

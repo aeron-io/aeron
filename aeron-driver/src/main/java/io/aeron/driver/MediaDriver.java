@@ -208,6 +208,7 @@ public final class MediaDriver implements AutoCloseable
         ensureDirectoryIsRecreated(ctx);
         validateSocketBufferLengths(ctx);
 
+        affinityRegistry = new AffinityRegistry();
         try
         {
             ctx.conclude();
@@ -227,7 +228,6 @@ public final class MediaDriver implements AutoCloseable
             ctx.receiverProxy().receiver(receiver);
             ctx.senderProxy().sender(sender);
 
-            affinityRegistry = new AffinityRegistry();
 
             switch (ctx.threadingMode())
             {
@@ -252,12 +252,7 @@ public final class MediaDriver implements AutoCloseable
                     affinityRegistry.addAffinity(conductor.roleName(), ctx.conductorCpuAffinity());
                     break;
             }
-            final CountersManager countersManager = ctx.countersManager();
-            affinityRegistry.conclude(
-                ctx.driverCpusetAffinity(),
-                ctx.driverCpusetWarningsAsErrors(),
-                countersManager,
-                countersManager::newCounter);
+            affinityRegistry.conclude(ctx.driverCpusetAffinity(), ctx.driverCpusetWarningsAsErrors());
 
             switch (ctx.threadingMode())
             {
@@ -365,6 +360,7 @@ public final class MediaDriver implements AutoCloseable
         }
         catch (final Exception ex)
         {
+            CloseHelper.quietClose(affinityRegistry);
             CloseHelper.quietClose(ctx::close);
             throw ex;
         }
@@ -506,7 +502,8 @@ public final class MediaDriver implements AutoCloseable
                 senderRunner,
                 receiverRunner,
                 nativeResourceAgentRunner,
-                conductorRunner);
+                conductorRunner,
+                affinityRegistry);
         }
         finally
         {
