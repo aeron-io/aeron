@@ -1214,9 +1214,12 @@ public final class Configuration
      * {@link #DRIVER_CPUSET_AFFINITY_PROP_NAME} is set. Defaults to
      * {@link ThreadAffinity#NO_AFFINITY}.
      * <p>
-     * Also used for the shared and shared-network agent threads when using those threading modes.
+     * Also used for the shared agent thread when using {@link ThreadingMode#SHARED}.
      */
-    @Config(defaultType = DefaultType.INT, defaultInt = ThreadAffinity.NO_AFFINITY)
+    @Config(
+        defaultType = DefaultType.INT,
+        defaultInt = ThreadAffinity.NO_AFFINITY,
+        expectedCDefaultFieldName = "AERON_CPU_AFFINITY_DEFAULT")
     public static final String CONDUCTOR_CPU_AFFINITY_PROP_NAME = "aeron.conductor.cpu.affinity";
 
     /**
@@ -1224,15 +1227,23 @@ public final class Configuration
      * {@link #DRIVER_CPUSET_AFFINITY_PROP_NAME} is set. Defaults to
      * {@link ThreadAffinity#NO_AFFINITY}.
      */
-    @Config(defaultType = DefaultType.INT, defaultInt = ThreadAffinity.NO_AFFINITY)
+    @Config(
+        defaultType = DefaultType.INT,
+        defaultInt = ThreadAffinity.NO_AFFINITY,
+        expectedCDefaultFieldName = "AERON_CPU_AFFINITY_DEFAULT")
     public static final String RECEIVER_CPU_AFFINITY_PROP_NAME = "aeron.receiver.cpu.affinity";
 
     /**
      * CPU the sender agent thread is pinned to. An index into the effective cgroup cpuset when
      * {@link #DRIVER_CPUSET_AFFINITY_PROP_NAME} is set. Defaults to
      * {@link ThreadAffinity#NO_AFFINITY}.
+     * <p>
+     * Also used for the shared-network agent thread when using {@link ThreadingMode#SHARED_NETWORK}.
      */
-    @Config(defaultType = DefaultType.INT, defaultInt = ThreadAffinity.NO_AFFINITY)
+    @Config(
+        defaultType = DefaultType.INT,
+        defaultInt = ThreadAffinity.NO_AFFINITY,
+        expectedCDefaultFieldName = "AERON_CPU_AFFINITY_DEFAULT")
     public static final String SENDER_CPU_AFFINITY_PROP_NAME = "aeron.sender.cpu.affinity";
 
     /**
@@ -1240,9 +1251,12 @@ public final class Configuration
      * {@link #DRIVER_CPUSET_AFFINITY_PROP_NAME} is set. Defaults to
      * {@link ThreadAffinity#NO_AFFINITY}.
      */
-    @Config(defaultType = DefaultType.INT, defaultInt = ThreadAffinity.NO_AFFINITY)
+    @Config(
+        defaultType = DefaultType.INT,
+        defaultInt = ThreadAffinity.NO_AFFINITY,
+        expectedCDefaultFieldName = "AERON_CPU_AFFINITY_DEFAULT")
     public static final String NATIVE_RESOURCE_AGENT_CPU_AFFINITY_PROP_NAME =
-        "aeron.native.resource.agent.cpu.affinity";
+        "aeron.driver.native.resource.agent.cpu.affinity";
 
     /**
      * Name of the system property to enable cgroup/cpuset-derived CPU affinity for the Media Driver's threads.

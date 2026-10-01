@@ -28,10 +28,8 @@ import java.util.List;
  */
 public class CGroupValidator
 {
-    /**
-     * The standard sys directory for CPU topology information.
-     */
-    public static final Path DEFAULT_SYSFS_ROOT = AffinityRegistry.DEFAULT_SYSFS_ROOT;
+    // TODO: Move this somewhere more general
+    static final Path DEFAULT_SYSFS_ROOT = Path.of("/sys/devices/system/cpu");
     private final List<TopologyValidator> topologyValidators;
     private final CpusetV2Reader cpusetV2Reader;
 
@@ -65,12 +63,6 @@ public class CGroupValidator
             new L3TopologyValidator(sysfsRoot),
             new ThreadAlignmentValidator(sysfsRoot)
         );
-    }
-
-    CGroupValidator(final List<TopologyValidator> topologyValidators, final CpusetV2Reader cpusetV2Reader)
-    {
-        this.cpusetV2Reader = cpusetV2Reader;
-        this.topologyValidators = topologyValidators;
     }
 
     /**

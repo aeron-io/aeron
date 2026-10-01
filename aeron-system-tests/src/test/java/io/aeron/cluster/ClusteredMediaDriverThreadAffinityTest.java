@@ -20,6 +20,9 @@ import io.aeron.archive.ArchiveThreadingMode;
 import io.aeron.cluster.service.ClusteredServiceContainer;
 import io.aeron.driver.MediaDriver;
 import io.aeron.driver.ThreadingMode;
+import io.aeron.test.InterruptAfter;
+import io.aeron.test.InterruptingTestCallback;
+import io.aeron.test.SlowTest;
 import io.aeron.test.TestContexts;
 import io.aeron.test.ThreadAffinityRecording;
 import io.aeron.test.cluster.StubClusteredService;
@@ -28,6 +31,7 @@ import org.agrona.collections.IntArrayList;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
@@ -36,6 +40,8 @@ import static io.aeron.cluster.ConsensusModule.AERON_CLUSTER_CONSENSUS_THREAD_NA
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 @EnabledOnOs(OS.LINUX)
+@ExtendWith(InterruptingTestCallback.class)
+@SlowTest
 class ClusteredMediaDriverThreadAffinityTest
 {
     // Thread names with the "new" naming, see MediaDriver, Archive and ClusteredServiceContainer thread names.
@@ -49,6 +55,7 @@ class ClusteredMediaDriverThreadAffinityTest
     private Path baseDir;
 
     @Test
+    @InterruptAfter(10)
     @SuppressWarnings("try")
     void shouldPinEveryComponentToItsCpusetIndex()
     {

@@ -228,7 +228,6 @@ public final class MediaDriver implements AutoCloseable
             ctx.receiverProxy().receiver(receiver);
             ctx.senderProxy().sender(sender);
 
-
             switch (ctx.threadingMode())
             {
                 case INVOKER:
@@ -4073,8 +4072,8 @@ public final class MediaDriver implements AutoCloseable
         }
 
         /**
-         * Get the CPU the conductor agent thread is pinned to. Also applies to the shared and shared-network
-         * agent threads. An index into the effective cgroup cpuset when
+         * Get the CPU the conductor agent thread is pinned to. Also applies to the shared agent thread in
+         * {@link ThreadingMode#SHARED}. An index into the effective cgroup cpuset when
          * {@link #driverCpusetAffinity()} is set.
          *
          * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
@@ -4087,8 +4086,8 @@ public final class MediaDriver implements AutoCloseable
         }
 
         /**
-         * Set the CPU the conductor agent thread is pinned to. Also applies to the shared and shared-network
-         * agent threads. An index into the effective cgroup cpuset when
+         * Set the CPU the conductor agent thread is pinned to. Also applies to the shared agent thread in
+         * {@link ThreadingMode#SHARED}. An index into the effective cgroup cpuset when
          * {@link #driverCpusetAffinity()} is set.
          *
          * @param conductorCpuAffinity CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
@@ -4102,7 +4101,8 @@ public final class MediaDriver implements AutoCloseable
         }
 
         /**
-         * Get the CPU the sender agent thread is pinned to. An index into the effective cgroup cpuset when
+         * Get the CPU the sender agent thread is pinned to. Also applies to the shared-network agent thread in
+         * {@link ThreadingMode#SHARED_NETWORK}. An index into the effective cgroup cpuset when
          * {@link #driverCpusetAffinity()} is set.
          *
          * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
@@ -4115,7 +4115,8 @@ public final class MediaDriver implements AutoCloseable
         }
 
         /**
-         * Set the CPU the sender agent thread is pinned to. An index into the effective cgroup cpuset when
+         * Set the CPU the sender agent thread is pinned to. Also applies to the shared-network agent thread in
+         * {@link ThreadingMode#SHARED_NETWORK}. An index into the effective cgroup cpuset when
          * {@link #driverCpusetAffinity()} is set.
          *
          * @param senderCpuAffinity CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.

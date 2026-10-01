@@ -29,7 +29,6 @@ import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.client.ArchiveException;
 import io.aeron.config.Config;
 import io.aeron.config.DefaultType;
-import io.aeron.topology.AffinityRegistry;
 import io.aeron.driver.DutyCycleTracker;
 import io.aeron.driver.status.DutyCycleStallTracker;
 import io.aeron.exceptions.AeronException;
@@ -39,6 +38,7 @@ import io.aeron.security.Authenticator;
 import io.aeron.security.AuthenticatorSupplier;
 import io.aeron.security.AuthorisationService;
 import io.aeron.security.AuthorisationServiceSupplier;
+import io.aeron.topology.AffinityRegistry;
 import io.aeron.version.Versioned;
 import org.agrona.AsciiEncoding;
 import org.agrona.BitUtil;
@@ -53,7 +53,6 @@ import org.agrona.SystemUtil;
 import org.agrona.concurrent.Agent;
 import org.agrona.concurrent.AgentInvoker;
 import org.agrona.concurrent.AgentRunner;
-import org.agrona.concurrent.affinity.ThreadAffinity;
 import org.agrona.concurrent.AgentTerminationException;
 import org.agrona.concurrent.CountedErrorHandler;
 import org.agrona.concurrent.EpochClock;
@@ -65,6 +64,7 @@ import org.agrona.concurrent.SystemEpochClock;
 import org.agrona.concurrent.SystemNanoClock;
 import org.agrona.concurrent.UnsafeBuffer;
 import org.agrona.concurrent.YieldingIdleStrategy;
+import org.agrona.concurrent.affinity.ThreadAffinity;
 import org.agrona.concurrent.errors.DistinctErrorLog;
 import org.agrona.concurrent.status.AtomicCounter;
 import org.agrona.concurrent.status.StatusIndicator;
@@ -403,24 +403,25 @@ public final class Archive implements AutoCloseable
         /**
          * CPU the conductor thread is pinned to, also used for the shared thread in
          * {@link ArchiveThreadingMode#SHARED}. An index into the effective cgroup cpuset when
-         * {@link AffinityRegistry#CPUSET_AFFINITY_PROP_NAME} is set.
+         * {@link CommonContext#CPUSET_AFFINITY_PROP_NAME} is set.
          */
         @Config(defaultType = DefaultType.INT, defaultInt = ThreadAffinity.NO_AFFINITY)
         public static final String CONDUCTOR_CPU_AFFINITY_PROP_NAME = "aeron.archive.conductor.cpu.affinity";
 
         /**
          * CPU the recorder thread is pinned to in {@link ArchiveThreadingMode#DEDICATED}. An index into the
-         * effective cgroup cpuset when {@link AffinityRegistry#CPUSET_AFFINITY_PROP_NAME} is set.
+         * effective cgroup cpuset when {@link CommonContext#CPUSET_AFFINITY_PROP_NAME} is set.
          */
         @Config(defaultType = DefaultType.INT, defaultInt = ThreadAffinity.NO_AFFINITY)
         public static final String RECORDER_CPU_AFFINITY_PROP_NAME = "aeron.archive.recorder.cpu.affinity";
 
         /**
          * CPU the replayer thread is pinned to in {@link ArchiveThreadingMode#DEDICATED}. An index into the
-         * effective cgroup cpuset when {@link AffinityRegistry#CPUSET_AFFINITY_PROP_NAME} is set.
+         * effective cgroup cpuset when {@link CommonContext#CPUSET_AFFINITY_PROP_NAME} is set.
          */
         @Config(defaultType = DefaultType.INT, defaultInt = ThreadAffinity.NO_AFFINITY)
         public static final String REPLAYER_CPU_AFFINITY_PROP_NAME = "aeron.archive.replayer.cpu.affinity";
+
 
         /**
          * Default {@link IdleStrategy} to be used for the archive {@link Agent}s when not busy.
@@ -1191,8 +1192,8 @@ public final class Archive implements AutoCloseable
         private int conductorCpuAffinity = Configuration.conductorCpuAffinity();
         private int recorderCpuAffinity = Configuration.recorderCpuAffinity();
         private int replayerCpuAffinity = Configuration.replayerCpuAffinity();
-        private boolean cpusetAffinity = AffinityRegistry.cpusetAffinity();
-        private boolean cpusetWarningsAsErrors = AffinityRegistry.cpusetWarningsAsErrors();
+        private boolean cpusetAffinity = CommonContext.cpusetAffinityEnabled();
+        private boolean cpusetWarningsAsErrors = CommonContext.cpusetWarningsAsErrorsEnabled();
         private AffinityRegistry affinityRegistry;
         private ThreadFactory threadFactory;
         private ThreadFactory recorderThreadFactory;
@@ -2878,7 +2879,7 @@ public final class Archive implements AutoCloseable
          * Are the CPU affinities indices into the effective cgroup cpuset, which is then also validated.
          *
          * @return true if the CPU affinities are indices into the effective cgroup cpuset.
-         * @see AffinityRegistry#CPUSET_AFFINITY_PROP_NAME
+         * @see CommonContext#CPUSET_AFFINITY_PROP_NAME
          */
         public boolean cpusetAffinity()
         {
@@ -2890,7 +2891,7 @@ public final class Archive implements AutoCloseable
          *
          * @param cpusetAffinity true if the CPU affinities are indices into the effective cgroup cpuset.
          * @return this for a fluent API.
-         * @see AffinityRegistry#CPUSET_AFFINITY_PROP_NAME
+         * @see CommonContext#CPUSET_AFFINITY_PROP_NAME
          */
         public Context cpusetAffinity(final boolean cpusetAffinity)
         {
@@ -2902,7 +2903,7 @@ public final class Archive implements AutoCloseable
          * Are CPU affinity and topology warnings treated as errors.
          *
          * @return true if CPU affinity and topology warnings are treated as errors.
-         * @see AffinityRegistry#CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
+         * @see CommonContext#CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
          */
         public boolean cpusetWarningsAsErrors()
         {
@@ -2914,7 +2915,7 @@ public final class Archive implements AutoCloseable
          *
          * @param cpusetWarningsAsErrors true if CPU affinity and topology warnings are treated as errors.
          * @return this for a fluent API.
-         * @see AffinityRegistry#CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
+         * @see CommonContext#CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
          */
         public Context cpusetWarningsAsErrors(final boolean cpusetWarningsAsErrors)
         {
