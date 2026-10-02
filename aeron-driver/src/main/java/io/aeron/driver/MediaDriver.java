@@ -38,7 +38,7 @@ import io.aeron.exceptions.ConcurrentConcludeException;
 import io.aeron.exceptions.ConfigurationException;
 import io.aeron.logbuffer.BufferClaim;
 import io.aeron.logbuffer.LogBufferDescriptor;
-import io.aeron.topology.CGroupValidator;
+import io.aeron.topology.AffinityRegistry;
 import io.aeron.version.Versioned;
 import org.agrona.BitUtil;
 import org.agrona.BufferUtil;
@@ -69,6 +69,7 @@ import org.agrona.concurrent.SystemEpochClock;
 import org.agrona.concurrent.SystemEpochNanoClock;
 import org.agrona.concurrent.SystemNanoClock;
 import org.agrona.concurrent.UnsafeBuffer;
+import org.agrona.concurrent.affinity.ThreadAffinity;
 import org.agrona.concurrent.broadcast.BroadcastTransmitter;
 import org.agrona.concurrent.errors.DistinctErrorLog;
 import org.agrona.concurrent.ringbuffer.ManyToOneRingBuffer;
@@ -174,6 +175,7 @@ public final class MediaDriver implements AutoCloseable
     private final AgentRunner conductorRunner;
     private final AgentRunner receiverRunner;
     private final AgentRunner senderRunner;
+    private final AffinityRegistry affinityRegistry;
     private final Context ctx;
 
     /**
@@ -206,6 +208,7 @@ public final class MediaDriver implements AutoCloseable
         ensureDirectoryIsRecreated(ctx);
         validateSocketBufferLengths(ctx);
 
+        affinityRegistry = new AffinityRegistry();
         try
         {
             ctx.conclude();
@@ -225,10 +228,30 @@ public final class MediaDriver implements AutoCloseable
             ctx.receiverProxy().receiver(receiver);
             ctx.senderProxy().sender(sender);
 
-            if (SystemUtil.isLinux() && ctx.driverCpusetAffinity())
+            switch (ctx.threadingMode())
             {
-                new CGroupValidator().validate(ctx.driverCpusetWarningsAsErrors());
+                case INVOKER:
+                    break;
+
+                case SHARED:
+                    affinityRegistry.addAffinity(AERON_DRIVER_SHARED_THREAD_NAME, ctx.conductorCpuAffinity());
+                    break;
+
+                case SHARED_NETWORK:
+                    affinityRegistry.addAffinity(AERON_DRIVER_SHARED_NETWORK_THREAD_NAME, ctx.senderCpuAffinity());
+                    affinityRegistry.addAffinity(conductor.roleName(), ctx.conductorCpuAffinity());
+                    affinityRegistry.addAffinity(nativeResourceAgent.roleName(), ctx.nativeResourceAgentCpuAffinity());
+                    break;
+
+                case DEDICATED:
+                default:
+                    affinityRegistry.addAffinity(nativeResourceAgent.roleName(), ctx.nativeResourceAgentCpuAffinity());
+                    affinityRegistry.addAffinity(sender.roleName(), ctx.senderCpuAffinity());
+                    affinityRegistry.addAffinity(receiver.roleName(), ctx.receiverCpuAffinity());
+                    affinityRegistry.addAffinity(conductor.roleName(), ctx.conductorCpuAffinity());
+                    break;
             }
+            affinityRegistry.conclude(ctx.driverCpusetAffinity(), ctx.driverCpusetWarningsAsErrors());
 
             switch (ctx.threadingMode())
             {
@@ -256,7 +279,8 @@ public final class MediaDriver implements AutoCloseable
                         errorCounter,
                         new FixedNameCompositeAgent(
                             AERON_DRIVER_SHARED_THREAD_NAME,
-                            ctx.aeronDirectoryName(), sender, receiver, nativeResourceAgent, conductor));
+                            ctx.aeronDirectoryName(), sender, receiver, nativeResourceAgent, conductor),
+                        affinityRegistry.mappedAffinityValue(AERON_DRIVER_SHARED_THREAD_NAME));
                     sharedInvoker = null;
                     sharedNetworkRunner = null;
                     conductorRunner = null;
@@ -274,14 +298,20 @@ public final class MediaDriver implements AutoCloseable
                         errorCounter,
                         new FixedNameCompositeAgent(
                             AERON_DRIVER_SHARED_NETWORK_THREAD_NAME,
-                            ctx.aeronDirectoryName(), sender, receiver));
+                            ctx.aeronDirectoryName(), sender, receiver),
+                        affinityRegistry.mappedAffinityValue(AERON_DRIVER_SHARED_NETWORK_THREAD_NAME));
                     conductorRunner = new AgentRunner(
-                        ctx.conductorIdleStrategy(), errorHandler, errorCounter, conductor);
+                        ctx.conductorIdleStrategy(),
+                        errorHandler,
+                        errorCounter,
+                        conductor,
+                        affinityRegistry.mappedAffinityValue(conductor.roleName()));
                     nativeResourceAgentRunner = new AgentRunner(
                         ctx.nativeResourceAgentIdleStrategy(),
                         errorHandler,
                         errorCounter,
-                        nativeResourceAgent);
+                        nativeResourceAgent,
+                        affinityRegistry.mappedAffinityValue(nativeResourceAgent.roleName()));
                     sharedInvoker = null;
                     sharedRunner = null;
                     senderRunner = null;
@@ -292,15 +322,30 @@ public final class MediaDriver implements AutoCloseable
                 case DEDICATED:
                 default:
                 {
-                    senderRunner = new AgentRunner(ctx.senderIdleStrategy(), errorHandler, errorCounter, sender);
-                    receiverRunner = new AgentRunner(ctx.receiverIdleStrategy(), errorHandler, errorCounter, receiver);
+                    senderRunner = new AgentRunner(
+                        ctx.senderIdleStrategy(),
+                        errorHandler,
+                        errorCounter,
+                        sender,
+                        affinityRegistry.mappedAffinityValue(sender.roleName()));
+                    receiverRunner = new AgentRunner(
+                        ctx.receiverIdleStrategy(),
+                        errorHandler,
+                        errorCounter,
+                        receiver,
+                        affinityRegistry.mappedAffinityValue(receiver.roleName()));
                     conductorRunner = new AgentRunner(
-                        ctx.conductorIdleStrategy(), errorHandler, errorCounter, conductor);
+                        ctx.conductorIdleStrategy(),
+                        errorHandler,
+                        errorCounter,
+                        conductor,
+                        affinityRegistry.mappedAffinityValue(conductor.roleName()));
                     nativeResourceAgentRunner = new AgentRunner(
                         ctx.nativeResourceAgentIdleStrategy(),
                         errorHandler,
                         errorCounter,
-                        nativeResourceAgent);
+                        nativeResourceAgent,
+                        affinityRegistry.mappedAffinityValue(nativeResourceAgent.roleName()));
                     sharedRunner = null;
                     sharedInvoker = null;
                     sharedNetworkRunner = null;
@@ -314,6 +359,7 @@ public final class MediaDriver implements AutoCloseable
         }
         catch (final Exception ex)
         {
+            CloseHelper.quietClose(affinityRegistry);
             CloseHelper.quietClose(ctx::close);
             throw ex;
         }
@@ -455,7 +501,8 @@ public final class MediaDriver implements AutoCloseable
                 senderRunner,
                 receiverRunner,
                 nativeResourceAgentRunner,
-                conductorRunner);
+                conductorRunner,
+                affinityRegistry);
         }
         finally
         {
@@ -702,6 +749,10 @@ public final class MediaDriver implements AutoCloseable
         private long resolverNeighborResolutionIntervalNs = Configuration.resolverNeighborResolutionIntervalNs();
         private long resolverBootstrapNeighborResolutionIntervalNs =
             Configuration.resolverBootstrapNeighborResolutionIntervalNs();
+        private int conductorCpuAffinity = Configuration.conductorCpuAffinity();
+        private int senderCpuAffinity = Configuration.senderCpuAffinity();
+        private int receiverCpuAffinity = Configuration.receiverCpuAffinity();
+        private int nativeResourceAgentCpuAffinity = Configuration.nativeResourceAgentCpuAffinity();
 
         /**
          * Construct a Context using default values and loading from system properties.
@@ -4048,6 +4099,118 @@ public final class MediaDriver implements AutoCloseable
         }
 
         /**
+         * Get the CPU the conductor agent thread is pinned to. Also applies to the shared agent thread in
+         * {@link ThreadingMode#SHARED}. An index into the effective cgroup cpuset when
+         * {@link #driverCpusetAffinity()} is set.
+         *
+         * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
+         * @see Configuration#CONDUCTOR_CPU_AFFINITY_PROP_NAME
+         */
+        @Config
+        public int conductorCpuAffinity()
+        {
+            return this.conductorCpuAffinity;
+        }
+
+        /**
+         * Set the CPU the conductor agent thread is pinned to. Also applies to the shared agent thread in
+         * {@link ThreadingMode#SHARED}. An index into the effective cgroup cpuset when
+         * {@link #driverCpusetAffinity()} is set.
+         *
+         * @param conductorCpuAffinity CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
+         * @return this for a fluent API.
+         * @see Configuration#CONDUCTOR_CPU_AFFINITY_PROP_NAME
+         */
+        public Context conductorCpuAffinity(final int conductorCpuAffinity)
+        {
+            this.conductorCpuAffinity = conductorCpuAffinity;
+            return this;
+        }
+
+        /**
+         * Get the CPU the sender agent thread is pinned to. Also applies to the shared-network agent thread in
+         * {@link ThreadingMode#SHARED_NETWORK}. An index into the effective cgroup cpuset when
+         * {@link #driverCpusetAffinity()} is set.
+         *
+         * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
+         * @see Configuration#SENDER_CPU_AFFINITY_PROP_NAME
+         */
+        @Config
+        public int senderCpuAffinity()
+        {
+            return this.senderCpuAffinity;
+        }
+
+        /**
+         * Set the CPU the sender agent thread is pinned to. Also applies to the shared-network agent thread in
+         * {@link ThreadingMode#SHARED_NETWORK}. An index into the effective cgroup cpuset when
+         * {@link #driverCpusetAffinity()} is set.
+         *
+         * @param senderCpuAffinity CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
+         * @return this for a fluent API.
+         * @see Configuration#SENDER_CPU_AFFINITY_PROP_NAME
+         */
+        public Context senderCpuAffinity(final int senderCpuAffinity)
+        {
+            this.senderCpuAffinity = senderCpuAffinity;
+            return this;
+        }
+
+        /**
+         * Get the CPU the receiver agent thread is pinned to. An index into the effective cgroup cpuset when
+         * {@link #driverCpusetAffinity()} is set.
+         *
+         * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
+         * @see Configuration#RECEIVER_CPU_AFFINITY_PROP_NAME
+         */
+        @Config
+        public int receiverCpuAffinity()
+        {
+            return this.receiverCpuAffinity;
+        }
+
+        /**
+         * Set the CPU the receiver agent thread is pinned to. An index into the effective cgroup cpuset when
+         * {@link #driverCpusetAffinity()} is set.
+         *
+         * @param receiverCpuAffinity CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
+         * @return this for a fluent API.
+         * @see Configuration#RECEIVER_CPU_AFFINITY_PROP_NAME
+         */
+        public Context receiverCpuAffinity(final int receiverCpuAffinity)
+        {
+            this.receiverCpuAffinity = receiverCpuAffinity;
+            return this;
+        }
+
+        /**
+         * Get the CPU the native resource agent thread is pinned to. An index into the effective cgroup cpuset when
+         * {@link #driverCpusetAffinity()} is set.
+         *
+         * @return CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
+         * @see Configuration#NATIVE_RESOURCE_AGENT_CPU_AFFINITY_PROP_NAME
+         */
+        @Config
+        public int nativeResourceAgentCpuAffinity()
+        {
+            return this.nativeResourceAgentCpuAffinity;
+        }
+
+        /**
+         * Set the CPU the native resource agent thread is pinned to. An index into the effective cgroup cpuset when
+         * {@link #driverCpusetAffinity()} is set.
+         *
+         * @param nativeResourceAgentCpuAffinity CPU, or cpuset index, or {@link ThreadAffinity#NO_AFFINITY}.
+         * @return this for a fluent API.
+         * @see Configuration#NATIVE_RESOURCE_AGENT_CPU_AFFINITY_PROP_NAME
+         */
+        public Context nativeResourceAgentCpuAffinity(final int nativeResourceAgentCpuAffinity)
+        {
+            this.nativeResourceAgentCpuAffinity = nativeResourceAgentCpuAffinity;
+            return this;
+        }
+
+        /**
          * Should cgroup/cpuset-derived CPU affinity be applied to the Media Driver's threads.
          *
          * @return true if cgroup/cpuset-derived CPU affinity should be applied.
@@ -4057,6 +4220,19 @@ public final class MediaDriver implements AutoCloseable
         public boolean driverCpusetAffinity()
         {
             return this.cpusetAffinity;
+        }
+
+        /**
+         * Should cgroup/cpuset-derived CPU affinity be applied to the Media Driver's threads.
+         *
+         * @param cpusetAffinity true if cgroup/cpuset-derived CPU affinity should be applied.
+         * @return this for a fluent API.
+         * @see Configuration#DRIVER_CPUSET_AFFINITY_PROP_NAME
+         */
+        public Context driverCpusetAffinity(final boolean cpusetAffinity)
+        {
+            this.cpusetAffinity = cpusetAffinity;
+            return this;
         }
 
         /**
@@ -4756,6 +4932,10 @@ public final class MediaDriver implements AutoCloseable
                 "\n    warnIfDirectoryExists=" + warnIfDirectoryExists +
                 "\n    dirDeleteOnStart=" + dirDeleteOnStart +
                 "\n    cpusetAffinity=" + cpusetAffinity +
+                "\n    conductorCpuAffinity=" + conductorCpuAffinity +
+                "\n    senderCpuAffinity=" + senderCpuAffinity +
+                "\n    receiverCpuAffinity=" + receiverCpuAffinity +
+                "\n    nativeResourceAgentCpuAffinity=" + nativeResourceAgentCpuAffinity +
                 "\n    cpusetWarningsAsErrors=" + cpusetWarningsAsErrors +
                 "\n    dirDeleteOnShutdown=" + dirDeleteOnShutdown +
                 "\n    termBufferSparseFile=" + termBufferSparseFile +

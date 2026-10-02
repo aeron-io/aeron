@@ -553,6 +553,21 @@ public class CommonContext implements Cloneable
      */
     public static final String THREAD_NAMING_DEFAULT = THREAD_NAMING_CLASSIC;
 
+    /**
+     * Property name to treat the requested CPU affinities of the Archive and Cluster threads as indices into the
+     * effective cgroup cpuset, and to validate that cpuset. The Media Driver uses
+     * {@code aeron.driver.cpuset.affinity} instead.
+     */
+    @Config(defaultType = DefaultType.BOOLEAN, defaultBoolean = false, existsInC = false)
+    public static final String CPUSET_AFFINITY_PROP_NAME = "aeron.cpuset.affinity";
+
+    /**
+     * Property name to treat CPU affinity and topology warnings of the Archive and Cluster as errors. The Media
+     * Driver uses {@code aeron.driver.cpuset.warnings.as.errors} instead.
+     */
+    @Config(defaultType = DefaultType.BOOLEAN, defaultBoolean = false, existsInC = false)
+    public static final String CPUSET_WARNINGS_AS_ERRORS_PROP_NAME = "aeron.cpuset.warnings.as.errors";
+
     static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss.SSSSSSZ");
 
     static final DateTimeFormatter FILE_NAME_FORMATTER = DateTimeFormatter.ofPattern("uuuu-MM-dd-HH-mm-ss-SSSSSSZ");
@@ -572,6 +587,29 @@ public class CommonContext implements Cloneable
             case THREAD_NAMING_NEW -> newName;
             default -> throw new IllegalArgumentException("Unknown thread naming mode: " + mode);
         };
+    }
+
+    /**
+     * Should the requested CPU affinities of the Archive and Cluster threads be treated as indices into the effective
+     * cgroup cpuset.
+     *
+     * @return true if cpuset affinity is enabled.
+     * @see #CPUSET_AFFINITY_PROP_NAME
+     */
+    public static boolean cpusetAffinityEnabled()
+    {
+        return Boolean.parseBoolean(System.getProperty(CPUSET_AFFINITY_PROP_NAME));
+    }
+
+    /**
+     * Should CPU affinity and topology warnings of the Archive and Cluster be treated as errors.
+     *
+     * @return true if warnings should be treated as errors.
+     * @see #CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
+     */
+    public static boolean cpusetWarningsAsErrorsEnabled()
+    {
+        return Boolean.parseBoolean(System.getProperty(CPUSET_WARNINGS_AS_ERRORS_PROP_NAME));
     }
 
     /**

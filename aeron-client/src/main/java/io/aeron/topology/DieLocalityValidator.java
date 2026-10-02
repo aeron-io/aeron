@@ -22,7 +22,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Path;
 
-import static io.aeron.topology.CGroupValidator.DEFAULT_SYSFS_ROOT;
+import static io.aeron.topology.TopologyChecker.DEFAULT_SYSFS_ROOT;
 
 class DieLocalityValidator implements TopologyValidator
 {
@@ -47,11 +47,11 @@ class DieLocalityValidator implements TopologyValidator
         this.perCpuIdReader = new PerCpuIdReader(sysfsRoot, DIE_ID_DIRECTORY);
     }
 
-    public int validate(final Cpuset cpuset, final PrintStream warningStream)
+    public int validate(final CpuSelection selection, final PrintStream warningStream)
     {
         try
         {
-            final IntArrayList cpuList = cpuset.cpus();
+            final IntArrayList cpuList = selection.cpus();
             final int expectedDieId = this.perCpuIdReader.loadId(cpuList.get(0));
             for (int i = 0; i < cpuList.size(); i++)
             {
@@ -60,7 +60,7 @@ class DieLocalityValidator implements TopologyValidator
                 {
                     warningStream.printf(
                         "WARNING: %s spans multiple CPU dies, configuration: %s%n",
-                        "cpuset", cpuset.formattedCpus());
+                        selection.kind(), selection.configuration());
                     return 1;
                 }
             }

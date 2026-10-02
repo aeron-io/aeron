@@ -23,10 +23,11 @@ import java.nio.file.Path;
 import java.util.List;
 
 /**
- * Validates that a process's effective cgroup cpuset is optimal based on a number of conditions.
- * Violations are reported as warnings, or as a thrown {@link ConfigurationException} depending on the configuration.
+ * Checks that a selection of CPUs is optimal for the CPU topology using a configurable set of validators, by default
+ * the process's effective cgroup cpuset. Violations are reported as warnings, or as a thrown
+ * {@link ConfigurationException} depending on the configuration.
  */
-public class CGroupValidator
+public class TopologyChecker
 {
     // TODO: Move this somewhere more general
     static final Path DEFAULT_SYSFS_ROOT = Path.of("/sys/devices/system/cpu");
@@ -36,33 +37,41 @@ public class CGroupValidator
     /**
      * Default constructor.
      */
-    public CGroupValidator()
+    public TopologyChecker()
     {
         this(DEFAULT_SYSFS_ROOT);
     }
 
     /**
-     * Creates a validator that reads CPU topology information from the given {@code sysfs} root.
+     * Creates a checker that reads CPU topology information from the given {@code sysfs} root.
      *
      * @param sysfsRoot the root {@code sysfs} CPU topology directory.
      */
-    public CGroupValidator(final Path sysfsRoot)
+    public TopologyChecker(final Path sysfsRoot)
     {
         this(sysfsRoot, new CpusetV2Reader());
     }
 
-    CGroupValidator(final Path sysfsRoot, final CpusetV2Reader cpusetV2Reader)
+    TopologyChecker(final Path sysfsRoot, final CpusetV2Reader cpusetV2Reader)
     {
-        this.cpusetV2Reader = cpusetV2Reader;
         // TODO: Reconsider using ServiceLoader.
         //  However, this would require a sysfsRoot set method in the interface level
-        //  This should also be dependency injected into the class eventually,
-        //  as they have internal caching that can be used for the affinity checks eventually.
-        this.topologyValidators = List.of(
+        this(cpusetV2Reader, List.of(
             new DieLocalityValidator(sysfsRoot),
             new L3TopologyValidator(sysfsRoot),
-            new ThreadAlignmentValidator(sysfsRoot)
-        );
+            new ThreadAlignmentValidator(sysfsRoot)));
+    }
+
+    /**
+     * Creates a checker that applies the given validators.
+     *
+     * @param cpusetV2Reader     to read the process's effective cgroup cpuset with.
+     * @param topologyValidators to apply to a selection of CPUs.
+     */
+    public TopologyChecker(final CpusetV2Reader cpusetV2Reader, final List<TopologyValidator> topologyValidators)
+    {
+        this.cpusetV2Reader = cpusetV2Reader;
+        this.topologyValidators = List.copyOf(topologyValidators);
     }
 
     /**
@@ -73,25 +82,31 @@ public class CGroupValidator
      */
     public void validate(final boolean warningsAsErrors)
     {
-        validate(cpusetV2Reader.readCpuSet(), warningsAsErrors, System.err);
+        validate(new CpuSelection.CpusetSelection(cpusetV2Reader.readCpuSet()), warningsAsErrors, System.err);
     }
 
-    void validate(final Cpuset cpuset, final boolean warningsAsErrors, final PrintStream out)
+    void validate(final CpuSelection selection, final boolean warningsAsErrors, final PrintStream out)
     {
-        if (cpuset.cpus().size() < 2)
+        final int warnings = check(selection, out);
+        if (warningsAsErrors && 0 < warnings)
         {
-            return;
+            throw new ConfigurationException("cpuset warnings as errors, %d warnings".formatted(warnings));
+        }
+    }
+
+    int check(final CpuSelection selection, final PrintStream out)
+    {
+        if (selection.cpus().size() < 2)
+        {
+            return 0;
         }
 
         int warnings = 0;
         for (final TopologyValidator validator : topologyValidators)
         {
-            warnings += validator.validate(cpuset, out);
+            warnings += validator.validate(selection, out);
         }
 
-        if (warningsAsErrors && 0 < warnings)
-        {
-            throw new ConfigurationException("cpuset warnings as errors, %d warnings".formatted(warnings));
-        }
+        return warnings;
     }
 }
