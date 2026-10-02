@@ -174,7 +174,7 @@ class AffinityRegistryTest
 
         final String output = out.flushAndGetContent();
         assertEquals(1, countWarnings(output), output);
-        assertTrue(output.contains("sharing cpu affinity=2"), output);
+        assertTrue(output.contains("sharing cpu=2"), output);
         assertThrows(
             ConfigurationException.class,
             () -> newRegistry(Map.of("aaa", 2, "bbb", 2)).conclude(false, true, discard()));

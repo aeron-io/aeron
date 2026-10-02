@@ -17,6 +17,7 @@
 package io.aeron.topology;
 
 import io.aeron.test.CapturingPrintStream;
+import io.aeron.topology.CpuSelection.CpusetSelection;
 import org.agrona.collections.IntArrayList;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -51,7 +52,7 @@ class DieLocalityValidationTest
 
         final DieLocalityValidator dieLocalityValidator = new DieLocalityValidator(sysfsTestDir);
         final int actualWarningCount = dieLocalityValidator.validate(
-            new Cpuset(cpuList, cpuList.toString()), out.resetAndGetPrintStream());
+            new CpusetSelection(new Cpuset(cpuList, cpuList.toString())), out.resetAndGetPrintStream());
         assertEquals(expectedWarningCount, actualWarningCount);
         assertEquals(expectedWarningCount, countWarnings(out.flushAndGetContent()));
     }
@@ -74,7 +75,8 @@ class DieLocalityValidationTest
 
         final CapturingPrintStream out = new CapturingPrintStream();
         final DieLocalityValidator dieLocalityValidator = new DieLocalityValidator(sysfsTestDir);
-        final int actualWarningCount = dieLocalityValidator.validate(resultCpuset, out.resetAndGetPrintStream());
+        final int actualWarningCount = dieLocalityValidator.validate(
+            new CpusetSelection(resultCpuset), out.resetAndGetPrintStream());
         assertEquals(expectedWarningCount, actualWarningCount);
         assertEquals(expectedWarningCount, countWarnings(out.flushAndGetContent()));
     }

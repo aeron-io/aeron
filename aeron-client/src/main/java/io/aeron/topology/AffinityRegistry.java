@@ -26,8 +26,6 @@ import java.io.PrintStream;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.StringJoiner;
 
 import static org.agrona.concurrent.affinity.ThreadAffinity.NO_AFFINITY;
 
@@ -40,8 +38,9 @@ public final class AffinityRegistry implements AutoCloseable
 
     private final Object2IntHashMap<String> requestedAffinityByName = new Object2IntHashMap<>(Integer.MIN_VALUE);
     private final Object2IntHashMap<String> resolvedAffinityByName = new Object2IntHashMap<>(Integer.MIN_VALUE);
-    private final Path sysfsRoot;
     private final CpusetV2Reader cpusetV2Reader;
+    private final TopologyChecker cpusetChecker;
+    private final TopologyChecker affinityChecker;
     private final boolean topologyAvailable;
     private final List<CoreClaim> ownedCoreClaims = new ArrayList<>();
     private boolean isConcluded = false;
@@ -55,14 +54,19 @@ public final class AffinityRegistry implements AutoCloseable
      */
     public AffinityRegistry()
     {
-        this(CGroupValidator.DEFAULT_SYSFS_ROOT, new CpusetV2Reader(), SystemUtil.isLinux());
+        this(TopologyChecker.DEFAULT_SYSFS_ROOT, new CpusetV2Reader(), SystemUtil.isLinux());
     }
 
     AffinityRegistry(final Path sysfsRoot, final CpusetV2Reader cpusetV2Reader, final boolean topologyAvailable)
     {
-        this.sysfsRoot = sysfsRoot;
         this.cpusetV2Reader = cpusetV2Reader;
         this.topologyAvailable = topologyAvailable;
+        this.cpusetChecker = new TopologyChecker(sysfsRoot, cpusetV2Reader);
+        // Thread alignment is excluded as pinned threads intentionally leave out their siblings.
+        this.affinityChecker = new TopologyChecker(cpusetV2Reader, List.of(
+            new SharedCpuValidator(),
+            new DieLocalityValidator(sysfsRoot),
+            new L3TopologyValidator(sysfsRoot)));
     }
 
     /**
@@ -136,12 +140,12 @@ public final class AffinityRegistry implements AutoCloseable
                 "thread affinity is only supported on Linux, requested: " + requestedAffinityByName);
         }
 
-        int warnings = validateUnshared(out);
+        int warnings = 0;
 
         if (cpusetAffinity && topologyAvailable)
         {
             final Cpuset cpuset = cpusetV2Reader.readCpuSet();
-            warnings += new CGroupValidator(sysfsRoot, cpusetV2Reader).check(cpuset, out);
+            warnings += cpusetChecker.check(new CpuSelection.CpusetSelection(cpuset), out);
             resolveFromCpuset(cpuset);
         }
         else
@@ -194,29 +198,6 @@ public final class AffinityRegistry implements AutoCloseable
         }
     }
 
-    private int validateUnshared(final PrintStream out)
-    {
-        // This is a specific affinity-only validation and does not apply to cpuset validation.
-        int warnings = 0;
-        final List<Map.Entry<String, Integer>> entries = new ArrayList<>(requestedAffinityByName.entrySet());
-        for (int i = 0; i < entries.size(); i++)
-        {
-            for (int j = i + 1; j < entries.size(); j++)
-            {
-                final int a = entries.get(i).getValue();
-                final int b = entries.get(j).getValue();
-                if (NO_AFFINITY != a && a == b)
-                {
-                    out.printf("WARNING: %s and %s are sharing cpu affinity=%d%n",
-                        entries.get(i).getKey(), entries.get(j).getKey(), a);
-                    warnings++;
-                }
-            }
-        }
-
-        return warnings;
-    }
-
     private void resolveFromCpuset(final Cpuset cpuset)
     {
         final IntArrayList cpus = cpuset.cpus();
@@ -264,37 +245,11 @@ public final class AffinityRegistry implements AutoCloseable
             return 0;
         }
 
-        int warnings = 0;
-        for (final CoreClaim own : pinned)
-        {
-            for (final CoreClaim coreClaim : GLOBAL_CORE_CLAIMS)
-            {
-                if (own.cpu() == coreClaim.cpu())
-                {
-                    out.printf("WARNING: %s and %s are sharing cpu=%d%n", own.name(), coreClaim.name(), own.cpu());
-                    warnings++;
-                }
-            }
-        }
+        // Own claims first so that warnings name this registry's threads before those of other registries.
+        final List<CoreClaim> coreClaimUnion = new ArrayList<>(pinned);
+        coreClaimUnion.addAll(GLOBAL_CORE_CLAIMS);
 
-        final List<CoreClaim> coreClaimUnion = new ArrayList<>(GLOBAL_CORE_CLAIMS);
-        coreClaimUnion.addAll(pinned);
-        if (1 < coreClaimUnion.size())
-        {
-            final IntArrayList cpus = new IntArrayList();
-            final StringJoiner formattedCpuset = new StringJoiner(", ", "affinity [", "]");
-            for (final CoreClaim coreClaim : coreClaimUnion)
-            {
-                cpus.addInt(coreClaim.cpu());
-                formattedCpuset.add(coreClaim.name() + "=" + coreClaim.cpu());
-            }
-            final Cpuset affinitySet = new Cpuset(cpus, formattedCpuset.toString());
-
-            warnings += new L3TopologyValidator(sysfsRoot).validate(affinitySet, out);
-            warnings += new DieLocalityValidator(sysfsRoot).validate(affinitySet, out);
-        }
-
-        return warnings;
+        return affinityChecker.check(new CpuSelection.AffinitySelection(coreClaimUnion), out);
     }
 
     static List<CoreClaim> claimedCpus()

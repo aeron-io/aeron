@@ -17,6 +17,7 @@
 package io.aeron.topology;
 
 import io.aeron.test.CapturingPrintStream;
+import io.aeron.topology.CpuSelection.CpusetSelection;
 import io.aeron.topology.TopologyTestUtils.Pair;
 import org.agrona.collections.IntArrayList;
 import org.junit.jupiter.api.io.TempDir;
@@ -51,7 +52,7 @@ class L3ValidationTest
 
         final CapturingPrintStream out = new CapturingPrintStream();
         final int actualWarningCount = l3TopologyValidator.validate(
-            new Cpuset(cpuList, cpuList.toString()), out.resetAndGetPrintStream());
+            new CpusetSelection(new Cpuset(cpuList, cpuList.toString())), out.resetAndGetPrintStream());
         assertEquals(expectedWarningCount, actualWarningCount);
         assertEquals(expectedWarningCount, countWarnings(out.flushAndGetContent()));
     }
@@ -75,7 +76,8 @@ class L3ValidationTest
         final L3TopologyValidator l3TopologyValidator = new L3TopologyValidator(sysfsTestDir);
 
         final CapturingPrintStream out = new CapturingPrintStream();
-        final int actualWarningCount = l3TopologyValidator.validate(resultCpuset, out.resetAndGetPrintStream());
+        final int actualWarningCount = l3TopologyValidator.validate(
+            new CpusetSelection(resultCpuset), out.resetAndGetPrintStream());
         assertEquals(expectedWarningCount, actualWarningCount);
         assertEquals(expectedWarningCount, countWarnings(out.flushAndGetContent()));
     }

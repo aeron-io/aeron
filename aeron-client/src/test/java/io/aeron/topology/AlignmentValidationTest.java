@@ -17,6 +17,7 @@
 package io.aeron.topology;
 
 import io.aeron.test.CapturingPrintStream;
+import io.aeron.topology.CpuSelection.CpusetSelection;
 import io.aeron.topology.TopologyTestUtils.Pair;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -86,7 +87,8 @@ public class AlignmentValidationTest
             missingSiblingCpus[i] = missingSiblings.get(i).siblingCpu();
         }
         assertArrayEquals(expectedMissingThreads, missingSiblingCpus);
-        final int actualWarningCount = validator.validate(resultCpuset, out.resetAndGetPrintStream());
+        final int actualWarningCount = validator.validate(
+            new CpusetSelection(resultCpuset), out.resetAndGetPrintStream());
         assertEquals(expectedMissingThreads.length, actualWarningCount);
         assertEquals(expectedMissingThreads.length, countWarnings(out.flushAndGetContent()));
     }

@@ -18,6 +18,7 @@ package io.aeron.topology;
 
 import io.aeron.exceptions.ConfigurationException;
 import io.aeron.test.CapturingPrintStream;
+import io.aeron.topology.CpuSelection.CpusetSelection;
 import io.aeron.topology.TopologyTestUtils.Pair;
 import org.agrona.collections.IntArrayList;
 import org.junit.jupiter.api.io.TempDir;
@@ -41,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class CGroupValidatorTest
+class TopologyCheckerTest
 {
     @ParameterizedTest
     @MethodSource("validationScenarios")
@@ -60,23 +61,23 @@ class CGroupValidatorTest
         final IntArrayList cpuList = new IntArrayList();
         cpuList.wrap(cpus, cpus.length);
 
+        final CpusetSelection selection = new CpusetSelection(new Cpuset(cpuList, cpuList.toString()));
         final CapturingPrintStream out = new CapturingPrintStream();
-        new CGroupValidator(sysfsTestDir).validate(
-            new Cpuset(cpuList, cpuList.toString()), false, out.resetAndGetPrintStream());
+        new TopologyChecker(sysfsTestDir).validate(selection, false, out.resetAndGetPrintStream());
         assertEquals(expectedWarningCount, countWarnings(out.flushAndGetContent()));
 
         if (0 < expectedWarningCount)
         {
             final ConfigurationException ex = assertThrows(
                 ConfigurationException.class,
-                () -> new CGroupValidator(sysfsTestDir).validate(
-                    new Cpuset(cpuList, cpuList.toString()), true, new PrintStream(new ByteArrayOutputStream())));
+                () -> new TopologyChecker(sysfsTestDir).validate(
+                    selection, true, new PrintStream(new ByteArrayOutputStream())));
             assertTrue(ex.getMessage().contains(expectedWarningCount + " warnings"));
         }
         else
         {
-            assertDoesNotThrow(() -> new CGroupValidator(sysfsTestDir).validate(
-                new Cpuset(cpuList, cpuList.toString()), true, new PrintStream(new ByteArrayOutputStream())));
+            assertDoesNotThrow(() -> new TopologyChecker(sysfsTestDir).validate(
+                selection, true, new PrintStream(new ByteArrayOutputStream())));
         }
     }
 
