@@ -55,6 +55,12 @@ public:
     {
     }
 
+    ~Counter()
+    {
+        // close before m_aeronRef is released, as the Aeron instance owns the underlying C counter
+        close();
+    }
+
     inline std::int64_t registrationId() const
     {
         return m_registrationId;

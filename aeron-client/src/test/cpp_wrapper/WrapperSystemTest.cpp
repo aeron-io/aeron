@@ -611,3 +611,19 @@ TEST_F(WrapperSystemTest, nonPolledPendingAsyncDestinationsAreAutomaticallyFreed
     WAIT_FOR(publication->findDestinationResponse(addDest2RegistrationId));
     WAIT_FOR(publication->findDestinationResponse(removeDest3RegistrationId));
 }
+
+TEST_F(WrapperSystemTest, shouldDeleteAeronInstanceLastWhenCounterHoldsLastReference)
+{
+    Context ctx;
+    ctx.useConductorAgentInvoker(false);
+
+    std::shared_ptr<Aeron> aeron = Aeron::connect(ctx);
+
+    int64_t counter_registration_id = aeron->addCounter(1000, nullptr, 0, "test");
+    WAIT_FOR_NON_NULL(counter, aeron->findCounter(counter_registration_id));
+
+    aeron.reset();
+
+    EXPECT_EQ(counter_registration_id, counter->registrationId());
+    counter.reset();
+}
