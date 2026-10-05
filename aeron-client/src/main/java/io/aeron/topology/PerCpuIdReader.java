@@ -39,7 +39,7 @@ class PerCpuIdReader
     private int loadIdFile(final int cpu) throws IOException
     {
         final Path idPath = sysfsRoot.resolve("cpu%d".formatted(cpu)).resolve(idFileDirectory);
-        final String id = Files.readString(idPath);
+        final String id = Files.readString(idPath).strip();
         return parseIntAscii(id, 0, id.length());
     }
 

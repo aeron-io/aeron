@@ -35,7 +35,7 @@ class TopologyTestUtils
             final Pair siblingPair = siblings.get(cpu);
             final Path threadSiblingListPath = sysfsPath.resolve("cpu%d".formatted(cpu)).resolve(THREAD_SIBLING_LIST);
             Files.createDirectories(threadSiblingListPath.getParent());
-            Files.writeString(threadSiblingListPath, "%d-%d".formatted(siblingPair.first, siblingPair.second));
+            Files.writeString(threadSiblingListPath, "%d-%d\n".formatted(siblingPair.first, siblingPair.second));
         }
     }
 
@@ -46,7 +46,7 @@ class TopologyTestUtils
             final Pair peer = peers.get(cpu);
             final Path sharedCpuPath = sysfsPath.resolve("cpu%d".formatted(cpu)).resolve(SHARED_CPU_LIST_DIRECTORY);
             Files.createDirectories(sharedCpuPath.getParent());
-            Files.writeString(sharedCpuPath, "%d-%d".formatted(peer.first, peer.second));
+            Files.writeString(sharedCpuPath, "%d-%d\n".formatted(peer.first, peer.second));
         }
     }
 
@@ -57,7 +57,7 @@ class TopologyTestUtils
             final int dieId = dieIds.get(cpu);
             final Path sharedCpuPath = sysfsPath.resolve("cpu%d".formatted(cpu)).resolve(DIE_ID_DIRECTORY);
             Files.createDirectories(sharedCpuPath.getParent());
-            Files.writeString(sharedCpuPath, Integer.toString(dieId));
+            Files.writeString(sharedCpuPath, dieId + "\n");
         }
     }
 
@@ -81,7 +81,7 @@ class TopologyTestUtils
 
         final Path effectiveCgroupFilePath = testCgroupPath.resolve("user.slice/cpuset.cpus.effective");
         Files.createDirectories(effectiveCgroupFilePath.getParent());
-        Files.writeString(effectiveCgroupFilePath, cpuset);
+        Files.writeString(effectiveCgroupFilePath, cpuset + "\n");
     }
 
     static long countWarnings(final ByteArrayOutputStream byteStream)
