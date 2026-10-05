@@ -16,6 +16,7 @@ env:
 jobs:
   release-java:
     name: Release java snapshot artifacts
+    if: github.repository == 'aeron-io/aeron'
     permissions:
       contents: read
       packages: write
