@@ -457,7 +457,9 @@ public:
 #if !defined(DISABLE_BOUNDS_CHECKS)
     inline void boundsCheck(util::index_t index, std::uint64_t length) const
     {
-        if (AERON_COND_EXPECT(index < 0 || (static_cast<std::uint64_t>(m_length) - index) < length, false))
+        // a negative index sign-extends to a value greater than any capacity, so one comparison rejects both cases
+        const std::uint64_t position = static_cast<std::uint64_t>(static_cast<std::int64_t>(index));
+        if (AERON_COND_EXPECT(position > m_length || (m_length - position) < length, false))
         {
             throw aeron::util::OutOfBoundsException(
                 aeron::util::strPrintf(
