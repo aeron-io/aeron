@@ -317,7 +317,10 @@ public:
      *
      * @return status code for this channel
      */
-    std::int64_t channelStatus() const;
+    std::int64_t channelStatus() const
+    {
+        return aeron_exclusive_publication_channel_status(m_publication);
+    }
 
     /**
      * Fetches the local socket addresses for this publication. If the channel is not
