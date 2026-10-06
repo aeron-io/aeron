@@ -132,6 +132,26 @@ TEST_F(UriTest, shouldRejectWithInvalidParams)
     EXPECT_EQ(AERON_URI_PARSE("aeron:udp?add|ress=224.10.9.8", &m_uri), -1);
 }
 
+TEST_F(UriTest, shouldRejectEmptyParamValue)
+{
+    const char *uris[] =
+        {
+            "aeron:ipc?tags=|alias=x",
+            "aeron:ipc?tags=",
+            "aeron:ipc?alias=",
+            "aeron:udp?endpoint=localhost:4652|tags=",
+            "aeron:udp?endpoint=",
+            "aeron:udp?endpoint=localhost:4652|alias="
+        };
+
+    for (const char *uri : uris)
+    {
+        EXPECT_EQ(AERON_URI_PARSE(uri, &m_uri), -1) << uri;
+        EXPECT_NE(std::string::npos, std::string(aeron_errmsg()).find("empty value not allowed")) << uri;
+        aeron_uri_close(&m_uri);
+    }
+}
+
 TEST_F(UriTest, shouldParseKnownUriTransportWithoutParamsIpcNoSeparator)
 {
     EXPECT_EQ(AERON_URI_PARSE("aeron:ipc", &m_uri), 0);

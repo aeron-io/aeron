@@ -101,6 +101,12 @@ int aeron_uri_parse_params(char *uri, aeron_uri_parse_callback_t param_func, voi
 
     if (state == PARAM_VALUE)
     {
+        if (NULL == param_value)
+        {
+            AERON_SET_ERR(-AERON_ERROR_CODE_INVALID_CHANNEL, "%s", "empty value not allowed");
+            return -1;
+        }
+
         if (param_func(clientd, param_key, param_value) < 0)
         {
             return -1;
