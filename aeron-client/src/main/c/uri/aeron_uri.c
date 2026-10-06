@@ -341,13 +341,11 @@ uint8_t aeron_uri_multicast_ttl(aeron_uri_t *uri)
 
 const char *aeron_uri_find_param_value(const aeron_uri_params_t *uri_params, const char *key)
 {
-    size_t key_len = strlen(key);
-
     for (size_t i = 0, length = uri_params->length; i < length; i++)
     {
         aeron_uri_param_t *param = &uri_params->array[i];
 
-        if (strncmp(key, param->key, key_len) == 0)
+        if (strcmp(key, param->key) == 0)
         {
             return param->value;
         }

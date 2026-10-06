@@ -200,6 +200,22 @@ TEST_F(UriTest, shouldParseWithMultipleParams)
     EXPECT_EQ(std::string(m_uri.params.udp.additional_params.array[0].value), "4567");
 }
 
+TEST_F(UriTest, shouldFindParamValueByExactKeyOnly)
+{
+    EXPECT_EQ(AERON_URI_PARSE("aeron:ipc?term-length-typo=65536|mtu=8k", &m_uri), 0);
+    ASSERT_EQ(m_uri.type, AERON_URI_IPC);
+    aeron_uri_params_t *params = &m_uri.params.ipc.additional_params;
+
+    EXPECT_EQ(nullptr, aeron_uri_find_param_value(params, AERON_URI_TERM_LENGTH_KEY));
+    EXPECT_STREQ("65536", aeron_uri_find_param_value(params, "term-length-typo"));
+    EXPECT_STREQ("8k", aeron_uri_find_param_value(params, AERON_URI_MTU_LENGTH_KEY));
+    aeron_uri_close(&m_uri);
+
+    EXPECT_EQ(AERON_URI_PARSE("aeron:ipc?term-length-typo=65536|term-length=131072", &m_uri), 0);
+    EXPECT_STREQ(
+        "131072", aeron_uri_find_param_value(&m_uri.params.ipc.additional_params, AERON_URI_TERM_LENGTH_KEY));
+}
+
 TEST_F(UriTest, shouldRejectsUriIfLengthExceedsMaxUriLength)
 {
     EXPECT_EQ(aeron_uri_parse(1000000, "aeron:ipc", &m_uri), -1);
