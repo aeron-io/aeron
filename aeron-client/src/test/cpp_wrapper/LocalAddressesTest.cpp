@@ -104,12 +104,22 @@ TEST_F(LocalAddressesTest, shouldGetLocalAddressesForIpc)
 
     AgentInvoker<ClientConductor> &invoker = aeron->conductorAgentInvoker();
     std::int64_t subId = aeron->addSubscription(channel, streamId);
+    std::int64_t pubId = aeron->addPublication(channel, streamId);
+    std::int64_t exclusivePubId = aeron->addExclusivePublication(channel, streamId);
 
     {
         POLL_FOR_NON_NULL(sub, aeron->findSubscription(subId), invoker);
         auto subAddresses = sub->localSocketAddresses();
         ASSERT_EQ(0U, subAddresses.size()) << join(subAddresses);
         ASSERT_EQ(channel, sub->tryResolveChannelEndpointPort());
+
+        POLL_FOR_NON_NULL(pub, aeron->findPublication(pubId), invoker);
+        auto pubAddresses = pub->localSocketAddresses();
+        ASSERT_EQ(0U, pubAddresses.size()) << join(pubAddresses);
+
+        POLL_FOR_NON_NULL(exclusivePub, aeron->findExclusivePublication(exclusivePubId), invoker);
+        auto exclusivePubAddresses = exclusivePub->localSocketAddresses();
+        ASSERT_EQ(0U, exclusivePubAddresses.size()) << join(exclusivePubAddresses);
     }
 
     invoker.invoke();

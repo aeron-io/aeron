@@ -349,12 +349,16 @@ public:
         iov.iov_base = buffer;
         iov.iov_len = sizeof(buffer);
 
-        if (aeron_exclusive_publication_local_sockaddrs(m_publication, &iov, 1) < 0)
+        const int addressCount = aeron_exclusive_publication_local_sockaddrs(m_publication, &iov, 1);
+        if (addressCount < 0)
         {
             AERON_MAP_ERRNO_TO_SOURCED_EXCEPTION_AND_THROW;
         }
 
-        localAddresses.push_back(std::string(reinterpret_cast<char *>(buffer)));
+        if (addressCount > 0)
+        {
+            localAddresses.push_back(std::string(reinterpret_cast<char *>(buffer)));
+        }
 
         return localAddresses;
     }
