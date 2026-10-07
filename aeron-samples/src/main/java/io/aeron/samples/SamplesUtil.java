@@ -23,7 +23,7 @@ import io.aeron.archive.client.AeronArchive;
 import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.protocol.HeaderFlyweight;
 import org.agrona.DirectBuffer;
-import org.agrona.LangUtil;
+import org.agrona.IoUtil;
 import org.agrona.collections.MutableInteger;
 import org.agrona.concurrent.IdleStrategy;
 import org.agrona.concurrent.status.CountersReader;
@@ -31,10 +31,7 @@ import org.agrona.concurrent.status.CountersReader;
 import io.aeron.samples.archive.RecordingDescriptor;
 import io.aeron.samples.archive.RecordingDescriptorCollector;
 import java.io.File;
-import java.io.IOException;
-import java.io.RandomAccessFile;
 import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
@@ -191,24 +188,7 @@ public class SamplesUtil
      */
     public static MappedByteBuffer mapExistingFileReadOnly(final File location)
     {
-        if (!location.exists())
-        {
-            final String msg = "file not found: " + location.getAbsolutePath();
-            throw new IllegalStateException(msg);
-        }
-
-        MappedByteBuffer mappedByteBuffer = null;
-        try (RandomAccessFile file = new RandomAccessFile(location, "r");
-            FileChannel channel = file.getChannel())
-        {
-            mappedByteBuffer = channel.map(READ_ONLY, 0, channel.size());
-        }
-        catch (final IOException ex)
-        {
-            LangUtil.rethrowUnchecked(ex);
-        }
-
-        return mappedByteBuffer;
+        return IoUtil.mapExistingFile(location, READ_ONLY, location.getName());
     }
 
     /**
