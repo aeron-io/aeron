@@ -29,6 +29,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
@@ -117,6 +118,7 @@ final class Catalog implements AutoCloseable
     static final long MAX_CATALOG_LENGTH = Integer.MAX_VALUE;
     static final long DEFAULT_CAPACITY = 1024 * 1024;
     static final long MIN_CAPACITY = CatalogHeaderDecoder.BLOCK_LENGTH;
+    private static final int MAX_CLOSE_FSYNC_ATTEMPTS = 3;
 
     private final CatalogHeaderDecoder catalogHeaderDecoder = new CatalogHeaderDecoder();
     private final CatalogHeaderEncoder catalogHeaderEncoder = new CatalogHeaderEncoder();
@@ -1252,10 +1254,79 @@ final class Catalog implements AutoCloseable
     private void unmapAndCloseChannel()
     {
         final MappedByteBuffer buffer = this.catalogByteBuffer;
-        BufferUtil.free(buffer);
-        this.catalogByteBuffer = null;
-        fsync(catalogChannel, true, true);
-        CloseHelper.close(catalogChannel);
+        final FileChannel channel = this.catalogChannel;
+        try
+        {
+            if (null != buffer)
+            {
+                buffer.force();
+            }
+        }
+        finally
+        {
+            BufferUtil.free(buffer);
+            this.catalogByteBuffer = null;
+            try
+            {
+                fsyncInterruptSafe(channel);
+            }
+            finally
+            {
+                CloseHelper.close(channel);
+            }
+        }
+    }
+
+    private void fsyncInterruptSafe(final FileChannel channel)
+    {
+        if (null == channel)
+        {
+            return;
+        }
+
+        boolean interrupted = Thread.interrupted();
+        FileChannel syncChannel = channel;
+        try
+        {
+            for (int attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    syncChannel.force(true);
+                    return;
+                }
+                catch (final ClosedChannelException ex)
+                {
+                    interrupted |= Thread.interrupted();
+                    if (attempt >= MAX_CLOSE_FSYNC_ATTEMPTS)
+                    {
+                        throw ex;
+                    }
+
+                    if (syncChannel != channel)
+                    {
+                        CloseHelper.quietClose(syncChannel);
+                    }
+                    syncChannel = FileChannel.open(catalogFile.toPath(), WRITE);
+                }
+            }
+        }
+        catch (final IOException ex)
+        {
+            LangUtil.rethrowUnchecked(ex);
+        }
+        finally
+        {
+            if (syncChannel != channel)
+            {
+                CloseHelper.quietClose(syncChannel);
+            }
+
+            if (interrupted)
+            {
+                Thread.currentThread().interrupt();
+            }
+        }
     }
 
     private static int recoverStopOffset(

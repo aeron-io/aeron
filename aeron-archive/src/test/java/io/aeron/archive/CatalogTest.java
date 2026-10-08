@@ -39,6 +39,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
+import java.nio.channels.ClosedByInterruptException;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.util.stream.Stream;
@@ -109,6 +110,56 @@ class CatalogTest
     void after()
     {
         IoUtil.delete(archiveDir, false);
+    }
+
+    @Test
+    void shouldCloseAndRemainReadableWhenTheClosingThreadIsInterrupted()
+    {
+        final Catalog catalog = new Catalog(archiveDir, null, 0, CAPACITY, clock, null, segmentFileBuffer);
+        try
+        {
+            Thread.currentThread().interrupt();
+
+            assertDoesNotThrow(catalog::close);
+            assertTrue(Thread.currentThread().isInterrupted());
+        }
+        finally
+        {
+            Thread.interrupted();
+            catalog.close();
+        }
+
+        try (Catalog reopened = new Catalog(archiveDir, clock))
+        {
+            assertEquals(3, reopened.entryCount());
+            assertTrue(reopened.wrapDescriptor(recordingThreeId, new UnsafeBuffer()));
+        }
+    }
+
+    @Test
+    void shouldCloseAfterAnInterruptClosedTheChannelDuringAnEarlierWrite()
+    {
+        final Catalog catalog = new Catalog(archiveDir, null, 1, CAPACITY, clock, null, segmentFileBuffer);
+        try
+        {
+            Thread.currentThread().interrupt();
+            assertThrows(
+                ClosedByInterruptException.class, () -> catalog.recordingStopped(recordingTwoId, 4096, 42));
+            Thread.interrupted();
+
+            assertDoesNotThrow(catalog::close);
+            assertFalse(Thread.currentThread().isInterrupted());
+        }
+        finally
+        {
+            Thread.interrupted();
+            catalog.close();
+        }
+
+        try (Catalog reopened = new Catalog(archiveDir, clock))
+        {
+            assertEquals(4096, reopened.stopPosition(recordingTwoId));
+        }
     }
 
     @Test
