@@ -22,7 +22,6 @@ import io.aeron.ChannelUriStringBuilder;
 import io.aeron.CommonContext;
 import io.aeron.Counter;
 import io.aeron.ErrorCode;
-import io.aeron.ExclusivePublication;
 import io.aeron.Image;
 import io.aeron.Subscription;
 import io.aeron.UnavailableCounterHandler;
@@ -71,6 +70,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.Random;
@@ -136,13 +136,12 @@ abstract class ArchiveConductor
     private long nextSessionId = ThreadLocalRandom.current().nextInt(Integer.MAX_VALUE);
     private long markFileUpdateDeadlineMs = 0;
     private int replayId = 1;
-    private int numActiveReplays;
     private volatile boolean isAbort;
 
     private final RecordingSummary recordingSummary = new RecordingSummary();
     private final ControlRequestDecoders decoders = new ControlRequestDecoders();
     private final ArrayDeque<Runnable> taskQueue = new ArrayDeque<>();
-    private final Long2ObjectHashMap<ReplaySession> replaySessionByIdMap = new Long2ObjectHashMap<>();
+    private final ArrayList<ReplaySession> replaySessions = new ArrayList<>();
     private final Long2ObjectHashMap<RecordingSession> recordingSessionByIdMap = new Long2ObjectHashMap<>();
     private final Long2ObjectHashMap<ReplicationSession> replicationSessionByIdMap = new Long2ObjectHashMap<>();
     private final Long2ObjectHashMap<DeleteSegmentsSession> deleteSegmentsSessionByIdMap = new Long2ObjectHashMap<>();
@@ -771,7 +770,7 @@ abstract class ArchiveConductor
         final Counter limitPositionCounter,
         final ControlSession controlSession)
     {
-        if (numActiveReplays == ctx.maxConcurrentReplays())
+        if (replaySessions.size() == ctx.maxConcurrentReplays())
         {
             final String msg = "max concurrent replays reached " + ctx.maxConcurrentReplays();
             controlSession.sendErrorResponse(correlationId, MAX_REPLAYS, msg);
@@ -900,7 +899,17 @@ abstract class ArchiveConductor
             final String lingerValue = channelUri.get(CommonContext.LINGER_PARAM_NAME);
             channelBuilder.linger(null != lingerValue ? Long.parseLong(lingerValue) : ctx.replayLingerTimeoutNs());
 
-            addSession(new CreateReplayPublicationSession(
+            final UnsafeBuffer replayBuffer;
+            if (0 < fileIoMaxLength && fileIoMaxLength < ctx.replayBuffer().capacity())
+            {
+                replayBuffer = new UnsafeBuffer(ctx.replayBuffer(), 0, fileIoMaxLength);
+            }
+            else
+            {
+                replayBuffer = ctx.replayBuffer();
+            }
+
+            final ReplaySession replaySession = new ReplaySession(
                 correlationId,
                 recordingId,
                 replayPosition,
@@ -910,15 +919,24 @@ abstract class ArchiveConductor
                 recordingSummary.segmentFileLength,
                 recordingSummary.termBufferLength,
                 recordingSummary.streamId,
+                connectTimeoutMs,
                 channelBuilder.build(),
                 replayStreamId,
-                fileIoMaxLength,
-                replayLimitPositionCounter,
                 aeron,
                 controlSession,
-                this));
+                this,
+                replayBuffer,
+                archiveDir,
+                cachedEpochClock,
+                nanoClock,
+                aeron.countersReader(),
+                replayLimitPositionCounter,
+                ctx.replayChecksum(),
+                replayer);
 
-            onReplayStart();
+            replaySessions.add(replaySession);
+            replayer.addSession(replaySession);
+            ctx.replaySessionCounter().incrementRelease();
         }
         catch (final Exception ex)
         {
@@ -928,69 +946,9 @@ abstract class ArchiveConductor
         }
     }
 
-    void onReplayStart()
+    int nextReplayId()
     {
-        numActiveReplays++;
-    }
-
-    void onReplayEnd()
-    {
-        numActiveReplays--;
-    }
-
-    void newReplaySession(
-        final long correlationId,
-        final long recordingId,
-        final long replayPosition,
-        final long replayLength,
-        final long startPosition,
-        final long stopPosition,
-        final int segmentFileLength,
-        final int termBufferLength,
-        final int streamId,
-        final int fileIoMaxLength,
-        final ControlSession controlSession,
-        final Counter replayLimitPosition,
-        final ExclusivePublication replayPublication)
-    {
-        final long replaySessionId = ((long)(replayId++) << 32) | (replayPublication.sessionId() & 0xFFFF_FFFFL);
-
-        final UnsafeBuffer replayBuffer;
-        if (0 < fileIoMaxLength && fileIoMaxLength < ctx.replayBuffer().capacity())
-        {
-            replayBuffer = new UnsafeBuffer(ctx.replayBuffer(), 0, fileIoMaxLength);
-        }
-        else
-        {
-            replayBuffer = ctx.replayBuffer();
-        }
-
-        final ReplaySession replaySession = new ReplaySession(
-            correlationId,
-            recordingId,
-            replayPosition,
-            replayLength,
-            startPosition,
-            stopPosition,
-            segmentFileLength,
-            termBufferLength,
-            streamId,
-            replaySessionId,
-            connectTimeoutMs,
-            controlSession,
-            replayBuffer,
-            archiveDir,
-            cachedEpochClock,
-            nanoClock,
-            replayPublication,
-            aeron.countersReader(),
-            replayLimitPosition,
-            ctx.replayChecksum(),
-            replayer);
-
-        replaySessionByIdMap.put(replaySessionId, replaySession);
-        replayer.addSession(replaySession);
-        ctx.replaySessionCounter().incrementRelease();
+        return replayId++;
     }
 
     void startBoundedReplay(
@@ -1036,10 +994,13 @@ abstract class ArchiveConductor
 
     void stopReplay(final long correlationId, final long replaySessionId, final ControlSession controlSession)
     {
-        final ReplaySession replaySession = replaySessionByIdMap.get(replaySessionId);
-        if (null != replaySession)
+        for (final ReplaySession replaySession : replaySessions)
         {
-            replaySession.abort("stop replay");
+            if (replaySession.sessionId() == replaySessionId)
+            {
+                replaySession.abort("stop replay");
+                break;
+            }
         }
 
         controlSession.sendOkResponse(correlationId);
@@ -1054,7 +1015,7 @@ abstract class ArchiveConductor
 
     private void stopAllReplays(final long recordingId)
     {
-        for (final ReplaySession replaySession : replaySessionByIdMap.values())
+        for (final ReplaySession replaySession : replaySessions)
         {
             if (NULL_VALUE == recordingId || replaySession.recordingId() == recordingId)
             {
@@ -1375,8 +1336,7 @@ abstract class ArchiveConductor
             }
         }
 
-        replaySessionByIdMap.remove(session.sessionId());
-        onReplayEnd();
+        replaySessions.remove(session);
         closeSession(session);
         ctx.replaySessionCounter().decrementRelease();
     }
@@ -2222,7 +2182,7 @@ abstract class ArchiveConductor
 
     boolean hasInProgressReplays(final long recordingId)
     {
-        for (final ReplaySession replaySession : replaySessionByIdMap.values())
+        for (final ReplaySession replaySession : replaySessions)
         {
             if (replaySession.recordingId() == recordingId)
             {
@@ -2352,7 +2312,7 @@ abstract class ArchiveConductor
         }
 
         ReplaySession minReplaySession = null;
-        for (final ReplaySession replaySession : replaySessionByIdMap.values())
+        for (final ReplaySession replaySession : replaySessions)
         {
             final long replayPos = replaySession.segmentFileBasePosition();
             if (recordingId == replaySession.recordingId() && position > replayPos &&
