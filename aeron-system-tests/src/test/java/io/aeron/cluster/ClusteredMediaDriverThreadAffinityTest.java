@@ -26,7 +26,6 @@ import io.aeron.test.SlowTest;
 import io.aeron.test.TestContexts;
 import io.aeron.test.ThreadAffinityRecording;
 import io.aeron.test.cluster.StubClusteredService;
-import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.collections.IntArrayList;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
@@ -59,7 +58,6 @@ class ClusteredMediaDriverThreadAffinityTest
     @SuppressWarnings("try")
     void shouldPinEveryComponentToItsCpusetIndex()
     {
-        TestMediaDriver.notSupportedOnCMediaDriver("ClusteredMediaDriver uses the Java Media Driver");
         final IntArrayList cpus = ThreadAffinityRecording.effectiveCpus();
         assumeTrue(cpus.size() >= 6, "requires at least 6 CPUs in the effective cpuset");
 

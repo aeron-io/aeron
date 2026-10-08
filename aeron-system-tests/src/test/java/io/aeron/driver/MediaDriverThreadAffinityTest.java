@@ -20,7 +20,6 @@ import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
 import io.aeron.test.SlowTest;
 import io.aeron.test.ThreadAffinityRecording;
-import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.collections.IntArrayList;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -73,8 +72,6 @@ class MediaDriverThreadAffinityTest
     void shouldPinAgentThreadsToConfiguredCpus(
         final ThreadingMode threadingMode, final Map<String, Integer> expectedCpuIndexByThreadName)
     {
-        TestMediaDriver.notSupportedOnCMediaDriver("CPU affinity configuration is for the Java Media Driver only");
-
         final IntArrayList cpus = ThreadAffinityRecording.effectiveCpus();
         assumeTrue(cpus.size() > NATIVE_RESOURCE_AGENT_INDEX, "requires at least 5 CPUs in the effective cpuset");
 
@@ -89,7 +86,7 @@ class MediaDriverThreadAffinityTest
             .nativeResourceAgentCpuAffinity(cpus.getInt(NATIVE_RESOURCE_AGENT_INDEX));
 
         try (ThreadAffinityRecording recording = new ThreadAffinityRecording();
-            TestMediaDriver ignore = TestMediaDriver.launch(context, null))
+            MediaDriver ignore = MediaDriver.launch(context))
         {
             expectedCpuIndexByThreadName.forEach(
                 (threadName, cpuIndex) -> recording.awaitAffinity(threadName, cpus.getInt(cpuIndex)));

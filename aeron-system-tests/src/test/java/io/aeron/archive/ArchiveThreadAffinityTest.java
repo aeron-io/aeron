@@ -96,7 +96,6 @@ class ArchiveThreadAffinityTest
     @SuppressWarnings("try")
     void shouldPinDriverAndArchiveInArchivingMediaDriver()
     {
-        TestMediaDriver.notSupportedOnCMediaDriver("ArchivingMediaDriver uses the Java Media Driver");
         final IntArrayList cpus = requireCpus(4);
         try (ThreadAffinityRecording recording = new ThreadAffinityRecording();
             ArchivingMediaDriver ignore = ArchivingMediaDriver.launch(
@@ -120,10 +119,9 @@ class ArchiveThreadAffinityTest
     @SuppressWarnings("try")
     void shouldRejectCpuClaimedByDriverWhenWarningsAreErrors()
     {
-        TestMediaDriver.notSupportedOnCMediaDriver("CPU claims of an out of process driver are not visible");
         requireCpus(1);
-        try (TestMediaDriver ignore = TestMediaDriver.launch(
-            driverContext().driverCpusetAffinity(true).conductorCpuAffinity(0), null))
+        try (MediaDriver ignore = MediaDriver.launch(
+            driverContext().driverCpusetAffinity(true).conductorCpuAffinity(0)))
         {
             final ConfigurationException ex = assertThrows(
                 ConfigurationException.class,
