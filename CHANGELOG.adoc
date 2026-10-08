@@ -5,10 +5,20 @@
 === New & Noteworthy
 
 * **[Java/C]** Add UDP socket traffic class configuration. (https://github.com/aeron-io/aeron/pull/2152[#2152])
+
 * **[Driver/C]** Allow poller transport iteration threshold to be configured from driver context.
 
 === Changelog
 
+* **[Archive]** Fsync the catalog on close even when the closing thread is interrupted. (https://github.com/aeron-io/aeron/pull/2166[#2166])
+* **[Samples/Java]** Delegate `SamplesUtil#mapExistingFileReadOnly` to `IOUtil#mapExistingFile`.
+* **[Client/C]** Match channel URI parameter keys exactly in aeron_uri_find_param_value. (https://github.com/aeron-io/aeron/pull/2168[#2168])
+* **[Client/C]** Reject an empty value for the last parameter of a channel URI. (https://github.com/aeron-io/aeron/pull/2167[#2167])
+* **[Client/C{plus}{plus} Wrapper]** Reject an index beyond the capacity in AtomicBuffer::boundsCheck. (https://github.com/aeron-io/aeron/pull/2169[#2169])
+* **[C{plus}{plus} Wrapper]** Return the observed value from `cmpxchg` on ARM and PPC64. (https://github.com/aeron-io/aeron/pull/2164[#2164])
+* **[Client/C{plus}{plus} Wrapper]** Close the C counter before releasing the `Aeron` instance in `Counter`. (https://github.com/aeron-io/aeron/pull/2163[#2163])
+* **[Client/C{plus}{plus} Wrapper]** Return an empty list from `Publication::localSocketAddresses()` when there is no local address. (https://github.com/aeron-io/aeron/pull/2162[#2162])
+* **[Client/C{plus}{plus} Wrapper]** Add missing definition for `ExclusivePublication::channelStatus()`. (https://github.com/aeron-io/aeron/pull/2161[#2161])
 * **[Archive]** Fix max concurrent recordings checks for `create/extenRecording`.
 * **[Archive]** Return after rejecting a replay of an empty recording. (https://github.com/aeron-io/aeron/pull/2157[#2157])
 * **[C]** Handle buffer builder append failures in the fragment assembler. (https://github.com/aeron-io/aeron/pull/2159[#2159])
