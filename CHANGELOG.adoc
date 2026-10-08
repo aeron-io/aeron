@@ -10,7 +10,6 @@
 
 === Changelog
 
-* **[Archive]** Fix a racy check while purging recording when there are concurrent replays.
 * **[Archive]** Fsync the catalog on close even when the closing thread is interrupted. (https://github.com/aeron-io/aeron/pull/2166[#2166])
 * **[Samples/Java]** Delegate `SamplesUtil#mapExistingFileReadOnly` to `IOUtil#mapExistingFile`.
 * **[Client/C]** Match channel URI parameter keys exactly in aeron_uri_find_param_value. (https://github.com/aeron-io/aeron/pull/2168[#2168])
