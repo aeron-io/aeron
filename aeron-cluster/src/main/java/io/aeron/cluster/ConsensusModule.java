@@ -4134,7 +4134,7 @@ public final class ConsensusModule implements AutoCloseable
          * @return CPU, or cpuset index if {@link #cpusetAffinity()}, or {@link ThreadAffinity#NO_AFFINITY}.
          * @see Configuration#CLUSTER_CPU_AFFINITY_PROP_NAME
          */
-        @Config(id = "CLUSTER_CPU_AFFINITY")
+        @Config
         public int cpuAffinity()
         {
             return cpuAffinity;
