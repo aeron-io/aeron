@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-package io.aeron.topology;
+package io.aeron.cpu.topology;
 
 import io.aeron.test.CapturingPrintStream;
-import io.aeron.topology.CpuSelection.CpusetSelection;
-import io.aeron.topology.TopologyTestUtils.Pair;
+import io.aeron.cpu.topology.CpuSelection.CpusetSelection;
+import io.aeron.cpu.topology.TopologyTestUtils.Pair;
 import org.agrona.collections.IntArrayList;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -30,9 +30,9 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.stream.Stream;
 
-import static io.aeron.topology.TopologyTestUtils.countWarnings;
-import static io.aeron.topology.TopologyTestUtils.setupCpuSet;
-import static io.aeron.topology.TopologyTestUtils.setupL3Peers;
+import static io.aeron.cpu.topology.TopologyTestUtils.countWarnings;
+import static io.aeron.cpu.topology.TopologyTestUtils.setupCpuSet;
+import static io.aeron.cpu.topology.TopologyTestUtils.setupL3Peers;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class L3ValidationTest

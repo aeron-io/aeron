@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.aeron.topology;
+package io.aeron.cpu.topology;
 
 import org.agrona.collections.Int2IntHashMap;
 

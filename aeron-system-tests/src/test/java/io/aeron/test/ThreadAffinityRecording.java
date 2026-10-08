@@ -16,7 +16,7 @@
 
 package io.aeron.test;
 
-import io.aeron.topology.CpusetV2Reader;
+import io.aeron.cpu.topology.CpusetV2Reader;
 import jdk.jfr.consumer.RecordedThread;
 import jdk.jfr.consumer.RecordingStream;
 import org.agrona.collections.IntArrayList;

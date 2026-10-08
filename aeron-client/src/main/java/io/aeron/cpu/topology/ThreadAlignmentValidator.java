@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.aeron.topology;
+package io.aeron.cpu.topology;
 
 import org.agrona.collections.IntArrayList;
 import org.agrona.collections.IntHashSet;
@@ -25,7 +25,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-import static io.aeron.topology.TopologyChecker.DEFAULT_SYSFS_ROOT;
+import static io.aeron.cpu.topology.TopologyChecker.DEFAULT_SYSFS_ROOT;
 
 class ThreadAlignmentValidator implements TopologyValidator
 {

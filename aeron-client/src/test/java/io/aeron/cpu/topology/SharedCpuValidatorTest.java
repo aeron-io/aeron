@@ -14,16 +14,16 @@
  * limitations under the License.
  */
 
-package io.aeron.topology;
+package io.aeron.cpu.topology;
 
 import io.aeron.test.CapturingPrintStream;
-import io.aeron.topology.AffinityRegistry.CoreClaim;
-import io.aeron.topology.CpuSelection.AffinitySelection;
+import io.aeron.cpu.topology.AffinityRegistry.CoreClaim;
+import io.aeron.cpu.topology.CpuSelection.AffinitySelection;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
-import static io.aeron.topology.TopologyTestUtils.countWarnings;
+import static io.aeron.cpu.topology.TopologyTestUtils.countWarnings;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 

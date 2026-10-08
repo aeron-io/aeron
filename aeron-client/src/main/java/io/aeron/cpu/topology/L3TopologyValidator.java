@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.aeron.topology;
+package io.aeron.cpu.topology;
 
 import org.agrona.collections.IntArrayList;
 import org.agrona.collections.IntHashSet;
@@ -23,7 +23,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Path;
 
-import static io.aeron.topology.TopologyChecker.DEFAULT_SYSFS_ROOT;
+import static io.aeron.cpu.topology.TopologyChecker.DEFAULT_SYSFS_ROOT;
 
 class L3TopologyValidator implements TopologyValidator
 {

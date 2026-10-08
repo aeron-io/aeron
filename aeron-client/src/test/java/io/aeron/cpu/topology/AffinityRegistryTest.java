@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package io.aeron.topology;
+package io.aeron.cpu.topology;
 
 import io.aeron.exceptions.ConcurrentConcludeException;
 import io.aeron.exceptions.ConfigurationException;
 import io.aeron.test.CapturingPrintStream;
-import io.aeron.topology.AffinityRegistry.CoreClaim;
-import io.aeron.topology.TopologyTestUtils.Pair;
+import io.aeron.cpu.topology.AffinityRegistry.CoreClaim;
+import io.aeron.cpu.topology.TopologyTestUtils.Pair;
 import org.agrona.CloseHelper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,11 +40,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
-import static io.aeron.topology.TopologyTestUtils.countWarnings;
-import static io.aeron.topology.TopologyTestUtils.setupCpuSet;
-import static io.aeron.topology.TopologyTestUtils.setupDieLocality;
-import static io.aeron.topology.TopologyTestUtils.setupL3Peers;
-import static io.aeron.topology.TopologyTestUtils.setupSiblingThreads;
+import static io.aeron.cpu.topology.TopologyTestUtils.countWarnings;
+import static io.aeron.cpu.topology.TopologyTestUtils.setupCpuSet;
+import static io.aeron.cpu.topology.TopologyTestUtils.setupDieLocality;
+import static io.aeron.cpu.topology.TopologyTestUtils.setupL3Peers;
+import static io.aeron.cpu.topology.TopologyTestUtils.setupSiblingThreads;
 import static org.agrona.concurrent.affinity.ThreadAffinity.NO_AFFINITY;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;

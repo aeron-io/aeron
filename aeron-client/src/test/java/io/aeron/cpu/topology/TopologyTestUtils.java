@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.aeron.topology;
+package io.aeron.cpu.topology;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -22,9 +22,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
-import static io.aeron.topology.DieLocalityValidator.DIE_ID_DIRECTORY;
-import static io.aeron.topology.L3TopologyValidator.SHARED_CPU_LIST_DIRECTORY;
-import static io.aeron.topology.ThreadAlignmentValidator.THREAD_SIBLING_LIST;
+import static io.aeron.cpu.topology.DieLocalityValidator.DIE_ID_DIRECTORY;
+import static io.aeron.cpu.topology.L3TopologyValidator.SHARED_CPU_LIST_DIRECTORY;
+import static io.aeron.cpu.topology.ThreadAlignmentValidator.THREAD_SIBLING_LIST;
 
 class TopologyTestUtils
 {

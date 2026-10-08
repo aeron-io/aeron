@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package io.aeron.topology;
+package io.aeron.cpu.topology;
 
-import io.aeron.topology.AffinityRegistry.CoreClaim;
+import io.aeron.cpu.topology.AffinityRegistry.CoreClaim;
 import org.agrona.collections.IntArrayList;
 
 import java.util.List;
