@@ -2086,12 +2086,12 @@ public final class ConsensusModule implements AutoCloseable
                 threadFactory = Thread::new;
             }
 
-            affinityRegistry = new AffinityRegistry();
+            affinityRegistry = new AffinityRegistry(cpusetAffinity, cpusetWarningsAsErrors);
             if (!useAgentInvoker)
             {
                 affinityRegistry.addAffinity(agentRoleName, cpuAffinity);
             }
-            affinityRegistry.conclude(cpusetAffinity, cpusetWarningsAsErrors);
+            affinityRegistry.conclude();
 
             if (null == idleStrategySupplier)
             {

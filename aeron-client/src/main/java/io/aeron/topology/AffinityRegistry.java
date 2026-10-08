@@ -17,6 +17,7 @@
 package io.aeron.topology;
 
 import io.aeron.CommonContext;
+import io.aeron.exceptions.ConcurrentConcludeException;
 import io.aeron.exceptions.ConfigurationException;
 import org.agrona.SystemUtil;
 import org.agrona.collections.IntArrayList;
@@ -24,6 +25,8 @@ import org.agrona.collections.Object2IntHashMap;
 import org.agrona.concurrent.affinity.ThreadAffinity;
 
 import java.io.PrintStream;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -36,6 +39,20 @@ import static org.agrona.concurrent.affinity.ThreadAffinity.NO_AFFINITY;
 public final class AffinityRegistry implements AutoCloseable
 {
     private static final List<CoreClaim> GLOBAL_CORE_CLAIMS = new ArrayList<>();
+    private static final VarHandle IS_CONCLUDED_VH;
+
+    static
+    {
+        try
+        {
+            IS_CONCLUDED_VH = MethodHandles.lookup()
+                .findVarHandle(AffinityRegistry.class, "isConcluded", boolean.class);
+        }
+        catch (final ReflectiveOperationException ex)
+        {
+            throw new ExceptionInInitializerError(ex);
+        }
+    }
 
     private final Object2IntHashMap<String> requestedAffinityByName = new Object2IntHashMap<>(Integer.MIN_VALUE);
     private final Object2IntHashMap<String> resolvedAffinityByName = new Object2IntHashMap<>(Integer.MIN_VALUE);
@@ -43,9 +60,11 @@ public final class AffinityRegistry implements AutoCloseable
     private final TopologyChecker cpusetChecker;
     private final TopologyChecker affinityChecker;
     private final boolean topologyAvailable;
+    private final boolean cpusetAffinity;
+    private final boolean warningsAsErrors;
     private final PrintStream warningStream;
     private final List<CoreClaim> ownedCoreClaims = new ArrayList<>();
-    private boolean isConcluded = false;
+    private volatile boolean isConcluded;
 
     record CoreClaim(String name, int cpu)
     {
@@ -54,13 +73,20 @@ public final class AffinityRegistry implements AutoCloseable
     /**
      * Creates a registry for the process's effective cgroup cpuset and CPU topology which writes warnings to
      * {@link CommonContext#fallbackLogger()}.
+     *
+     * @param cpusetAffinity   if true, requested values are indices into the effective cgroup cpuset which is also
+     *                         validated, otherwise they are raw CPU ids.
+     * @param warningsAsErrors if true, throw a {@link ConfigurationException} on {@link #conclude()} instead of
+     *                         warning.
      */
-    public AffinityRegistry()
+    public AffinityRegistry(final boolean cpusetAffinity, final boolean warningsAsErrors)
     {
         this(
             TopologyChecker.DEFAULT_SYSFS_ROOT,
             new CpusetV2Reader(),
             SystemUtil.isLinux(),
+            cpusetAffinity,
+            warningsAsErrors,
             CommonContext.fallbackLogger());
     }
 
@@ -68,10 +94,14 @@ public final class AffinityRegistry implements AutoCloseable
         final Path sysfsRoot,
         final CpusetV2Reader cpusetV2Reader,
         final boolean topologyAvailable,
+        final boolean cpusetAffinity,
+        final boolean warningsAsErrors,
         final PrintStream warningStream)
     {
         this.cpusetV2Reader = cpusetV2Reader;
         this.topologyAvailable = topologyAvailable;
+        this.cpusetAffinity = cpusetAffinity;
+        this.warningsAsErrors = warningsAsErrors;
         this.warningStream = warningStream;
         this.cpusetChecker = new TopologyChecker(sysfsRoot, cpusetV2Reader);
         // Thread alignment is excluded as pinned threads intentionally leave out their siblings.
@@ -126,19 +156,17 @@ public final class AffinityRegistry implements AutoCloseable
      * Resolves the registered affinities and validates them, including against the CPUs claimed by other registries
      * within the JVM, writing warnings to the registry's warning stream, then claims the CPUs of the pinned threads.
      *
-     * @param cpusetAffinity   if true, requested values are indices into the effective cgroup cpuset which is also
-     *                         validated, otherwise they are raw CPU ids.
-     * @param warningsAsErrors if true, throw a {@link ConfigurationException} instead of warning.
-     * @throws IllegalStateException  if already concluded.
-     * @throws ConfigurationException if a thread is pinned on a platform which does not support thread affinity,
-     *                                an index, or a raw CPU id when {@code cpusetAffinity} is not set, is outside
-     *                                the cpuset, or a warning is found and {@code warningsAsErrors} is set.
+     * @throws ConcurrentConcludeException if already concluded.
+     * @throws ConfigurationException      if a thread is pinned on a platform which does not support thread
+     *                                     affinity, an index, or a raw CPU id when {@code cpusetAffinity} is not
+     *                                     set, is outside the cpuset, or a warning is found and
+     *                                     {@code warningsAsErrors} is set.
      */
-    public void conclude(final boolean cpusetAffinity, final boolean warningsAsErrors)
+    public void conclude()
     {
-        if (isConcluded)
+        if ((boolean)IS_CONCLUDED_VH.getAndSet(this, true))
         {
-            throw new IllegalStateException("already concluded");
+            throw new ConcurrentConcludeException();
         }
 
         if (!topologyAvailable && hasPinnedAffinity())
@@ -163,8 +191,6 @@ public final class AffinityRegistry implements AutoCloseable
             }
             resolvedAffinityByName.putAll(requestedAffinityByName);
         }
-
-        isConcluded = true;
 
         final List<CoreClaim> pinned = new ArrayList<>();
         resolvedAffinityByName.forEach((name, cpu) ->
@@ -201,7 +227,6 @@ public final class AffinityRegistry implements AutoCloseable
             {
                 GLOBAL_CORE_CLAIMS.remove(coreClaim);
             }
-            ownedCoreClaims.clear();
         }
     }
 

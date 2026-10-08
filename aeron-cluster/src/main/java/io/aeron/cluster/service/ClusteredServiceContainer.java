@@ -960,8 +960,9 @@ public final class ClusteredServiceContainer implements AutoCloseable
                     "clustered-service-" + clusterId + "-" + serviceId);
             }
 
-            affinityRegistry = new AffinityRegistry().addAffinity(serviceName, cpuAffinity);
-            affinityRegistry.conclude(cpusetAffinity, cpusetWarningsAsErrors);
+            affinityRegistry = new AffinityRegistry(cpusetAffinity, cpusetWarningsAsErrors)
+                .addAffinity(serviceName, cpuAffinity);
+            affinityRegistry.conclude();
 
             if (null == aeron)
             {

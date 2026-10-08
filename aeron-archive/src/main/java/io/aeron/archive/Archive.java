@@ -2930,7 +2930,7 @@ public final class Archive implements AutoCloseable
 
         private void concludeAffinity()
         {
-            affinityRegistry = new AffinityRegistry();
+            affinityRegistry = new AffinityRegistry(cpusetAffinity, cpusetWarningsAsErrors);
             switch (threadingMode)
             {
                 case INVOKER:
@@ -2949,7 +2949,7 @@ public final class Archive implements AutoCloseable
                     break;
             }
 
-            affinityRegistry.conclude(cpusetAffinity, cpusetWarningsAsErrors);
+            affinityRegistry.conclude();
         }
 
         /**
