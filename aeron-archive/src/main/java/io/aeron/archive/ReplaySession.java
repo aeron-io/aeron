@@ -15,16 +15,13 @@
  */
 package io.aeron.archive;
 
-import io.aeron.Aeron;
 import io.aeron.Counter;
-import io.aeron.ErrorCode;
 import io.aeron.ExclusivePublication;
 import io.aeron.Publication;
 import io.aeron.archive.checksum.Checksum;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.client.ArchiveException;
 import io.aeron.archive.logging.ArchiveTracing;
-import io.aeron.exceptions.RegistrationException;
 import io.aeron.logbuffer.LogBufferDescriptor;
 import org.agrona.CloseHelper;
 import org.agrona.concurrent.CachedEpochClock;
@@ -83,9 +80,17 @@ class ReplaySession implements Session, AutoCloseable
 
     private static final EnumSet<StandardOpenOption> FILE_OPTIONS = EnumSet.of(READ);
 
+    private final long connectDeadlineMs;
     private final long correlationId;
+    private final long sessionId;
     private final long recordingId;
     private final long startPosition;
+    private long replayPosition;
+    private long stopPosition;
+    private long replayLimit;
+    private long segmentFileBasePosition;
+    private int termBaseSegmentOffset;
+    private int termOffset;
     private final int streamId;
     private final int termLength;
     private final int segmentLength;
@@ -93,12 +98,8 @@ class ReplaySession implements Session, AutoCloseable
     private final long replayBufferAddress;
     private final Checksum checksum;
 
-    private final long connectTimeoutMs;
-    private final String replayChannel;
-    private final int replayStreamId;
-    private final Aeron aeron;
+    private final ExclusivePublication publication;
     private final ControlSession controlSession;
-    private final ArchiveConductor conductor;
     private final CachedEpochClock epochClock;
 
     private final NanoClock nanoClock;
@@ -107,16 +108,6 @@ class ReplaySession implements Session, AutoCloseable
     private final CountersReader countersReader;
     private final Counter limitPosition;
     private final UnsafeBuffer replayBuffer;
-    private long publicationRegistrationId = Aeron.NULL_VALUE;
-    private long sessionId = Aeron.NULL_VALUE;
-    private long connectDeadlineMs;
-    private long replayPosition;
-    private long stopPosition;
-    private long replayLimit;
-    private long segmentFileBasePosition;
-    private int termBaseSegmentOffset;
-    private int termOffset;
-    private ExclusivePublication publication;
     private FileChannel fileChannel;
     private File segmentFile;
     private State state = State.INIT;
@@ -135,35 +126,30 @@ class ReplaySession implements Session, AutoCloseable
         final int segmentFileLength,
         final int termBufferLength,
         final int streamId,
+        final long replaySessionId,
         final long connectTimeoutMs,
-        final String replayChannel,
-        final int replayStreamId,
-        final Aeron aeron,
         final ControlSession controlSession,
-        final ArchiveConductor conductor,
         final UnsafeBuffer replayBuffer,
         final File archiveDir,
         final CachedEpochClock epochClock,
         final NanoClock nanoClock,
+        final ExclusivePublication publication,
         final CountersReader countersReader,
         final Counter replayLimitPosition,
         final Checksum checksum,
         final ArchiveConductor.Replayer replayer)
     {
-        this.connectTimeoutMs = connectTimeoutMs;
-        this.replayChannel = replayChannel;
-        this.replayStreamId = replayStreamId;
-        this.aeron = aeron;
         this.controlSession = controlSession;
+        this.sessionId = replaySessionId;
         this.correlationId = correlationId;
         this.recordingId = recordingId;
         this.segmentLength = segmentFileLength;
         this.termLength = termBufferLength;
         this.streamId = streamId;
-        this.conductor = conductor;
         this.epochClock = epochClock;
         this.nanoClock = nanoClock;
         this.archiveDir = archiveDir;
+        this.publication = publication;
         this.countersReader = countersReader;
         this.limitPosition = replayLimitPosition;
         this.replayBuffer = replayBuffer;
@@ -179,6 +165,7 @@ class ReplaySession implements Session, AutoCloseable
         replayLimit = replayPosition + replayLength;
 
         segmentFile = new File(archiveDir, segmentFileName(recordingId, segmentFileBasePosition));
+        connectDeadlineMs = epochClock.time() + connectTimeoutMs;
     }
 
     /**
@@ -192,14 +179,7 @@ class ReplaySession implements Session, AutoCloseable
         {
             try
             {
-                if (null != publication)
-                {
-                    publication.revoke();
-                }
-                else if (Aeron.NULL_VALUE != publicationRegistrationId)
-                {
-                    aeron.asyncRemovePublication(publicationRegistrationId);
-                }
+                publication.revoke();
             }
             catch (final Exception ex)
             {
@@ -209,10 +189,6 @@ class ReplaySession implements Session, AutoCloseable
         else
         {
             CloseHelper.close(errorHandler, publication);
-            if (Aeron.NULL_VALUE != publicationRegistrationId)
-            {
-                aeron.asyncRemovePublication(publicationRegistrationId);
-            }
         }
         CloseHelper.close(errorHandler, fileChannel);
     }
@@ -296,12 +272,12 @@ class ReplaySession implements Session, AutoCloseable
 
     String replayChannel()
     {
-        return replayChannel;
+        return publication.channel();
     }
 
     int replayStreamId()
     {
-        return replayStreamId;
+        return publication.streamId();
     }
 
     long segmentFileBasePosition()
@@ -326,45 +302,6 @@ class ReplaySession implements Session, AutoCloseable
 
     private int init() throws IOException
     {
-        int workCount = 0;
-
-        if (null == publication)
-        {
-            if (Aeron.NULL_VALUE == publicationRegistrationId)
-            {
-                publicationRegistrationId = aeron.asyncAddExclusivePublication(replayChannel, replayStreamId);
-                workCount++;
-            }
-
-            try
-            {
-                publication = aeron.getExclusivePublication(publicationRegistrationId);
-            }
-            catch (final Exception ex)
-            {
-                publicationRegistrationId = Aeron.NULL_VALUE;
-                if (ex instanceof RegistrationException rex &&
-                    ErrorCode.RESOURCE_TEMPORARILY_UNAVAILABLE == rex.errorCode())
-                {
-                    return 0; // retry publication creation after idle
-                }
-
-                raiseError("failed to create replay publication", ArchiveException.GENERIC, ex);
-            }
-
-            if (null != publication)
-            {
-                publicationRegistrationId = Aeron.NULL_VALUE;
-                connectDeadlineMs = epochClock.time() + connectTimeoutMs;
-                sessionId = ((long)conductor.nextReplayId() << 32) | (publication.sessionId() & 0xFFFF_FFFFL);
-                workCount++;
-            }
-            else
-            {
-                return workCount;
-            }
-        }
-
         if (null == fileChannel)
         {
             if (!segmentFile.exists())
@@ -374,7 +311,7 @@ class ReplaySession implements Session, AutoCloseable
                     raiseError("recording segment file not created", ArchiveException.GENERIC, null);
                 }
 
-                return workCount;
+                return 0;
             }
             else
             {
@@ -394,7 +331,7 @@ class ReplaySession implements Session, AutoCloseable
                     {
                         raiseError("replayPosition=" + framePosition(0) +
                             " does not point to a valid frame", ArchiveException.INVALID_POSITION, null);
-                        return workCount;
+                        return 0;
                     }
                 }
 
@@ -410,13 +347,12 @@ class ReplaySession implements Session, AutoCloseable
                     ", replayStreamId=" + publication.streamId(), ArchiveException.GENERIC, null);
             }
 
-            return workCount;
+            return 0;
         }
 
         state(State.REPLAY, "");
-        workCount++;
 
-        return workCount;
+        return 1;
     }
 
     @SuppressWarnings("methodlength")

@@ -15,7 +15,6 @@
  */
 package io.aeron.archive;
 
-import io.aeron.Aeron;
 import io.aeron.Counter;
 import io.aeron.ExclusivePublication;
 import io.aeron.Image;
@@ -86,6 +85,7 @@ class ReplaySessionTest
     private static final int SEGMENT_LENGTH = TERM_BUFFER_LENGTH;
     private static final int INITIAL_TERM_ID = 8231773;
     private static final int INITIAL_TERM_OFFSET = 1024;
+    private static final long REPLAY_ID = 1;
     private static final long START_POSITION = INITIAL_TERM_OFFSET;
     private static final long JOIN_POSITION = START_POSITION;
     private static final long RECORDING_POSITION = INITIAL_TERM_OFFSET;
@@ -95,12 +95,7 @@ class ReplaySessionTest
     private static final int FRAME_LENGTH = 1024;
     private static final int SESSION_ID = 1;
     private static final int STREAM_ID = 1001;
-    private static final int REPLAY_ID = 42;
-    private static final String REPLAY_CHANNEL = "aeron:udp?endpoint=localhost:5555";
-    private static final int REPLAY_STREAM_ID = 876;
-    private static final int REPLAY_PUB_SESSION_ID = 555;
 
-    private final Aeron aeron = mock(Aeron.class);
     private final Image mockImage = mock(Image.class);
     private final ExclusivePublication mockReplayPub = mock(ExclusivePublication.class);
     private final ControlSession mockControlSession = mock(ControlSession.class);
@@ -141,9 +136,6 @@ class ReplaySessionTest
             .nanoClock(nanoClock)
             .countedErrorHandler(countedErrorHandler);
 
-        when(aeron.asyncAddExclusivePublication(REPLAY_CHANNEL, REPLAY_STREAM_ID)).thenReturn(Long.MAX_VALUE);
-        when(aeron.getExclusivePublication(Long.MAX_VALUE)).thenReturn(mockReplayPub);
-
         when(recordingPositionCounter.get()).then((invocation) -> recordingPosition);
         when(mockControlSession.archiveConductor()).thenReturn(mockArchiveConductor);
         when(mockControlSession.controlPublication()).thenReturn(mockPublication);
@@ -154,13 +146,8 @@ class ReplaySessionTest
             .thenReturn(LogBufferDescriptor.positionBitsToShift(TERM_BUFFER_LENGTH));
         when(mockReplayPub.initialTermId()).thenReturn(INITIAL_TERM_ID);
         when(mockReplayPub.availableWindow()).thenReturn((long)TERM_BUFFER_LENGTH / 2);
-        when(mockReplayPub.channel()).thenReturn(REPLAY_CHANNEL);
-        when(mockReplayPub.streamId()).thenReturn(REPLAY_STREAM_ID);
-        when(mockReplayPub.sessionId()).thenReturn(REPLAY_PUB_SESSION_ID);
         when(mockImage.termBufferLength()).thenReturn(TERM_BUFFER_LENGTH);
         when(mockImage.joinPosition()).thenReturn(JOIN_POSITION);
-
-        when(mockArchiveConductor.nextReplayId()).thenReturn(REPLAY_ID);
 
         recordingSummary.recordingId = RECORDING_ID;
         recordingSummary.startPosition = START_POSITION;
@@ -277,6 +264,7 @@ class ReplaySessionTest
             RECORDING_POSITION,
             FRAME_LENGTH,
             correlationId,
+            mockReplayPub,
             mockControlSession,
             recordingPositionCounter,
             null))
@@ -310,6 +298,7 @@ class ReplaySessionTest
             RECORDING_POSITION + 1,
             FRAME_LENGTH,
             correlationId,
+            mockReplayPub,
             mockControlSession,
             recordingPositionCounter,
             null);
@@ -319,7 +308,7 @@ class ReplaySessionTest
         assertEquals(ArchiveException.INVALID_POSITION, exception.errorCode());
         assertEquals("ERROR - replayPosition=1025 (segmentFilePosition=0, segmentOffset=0, termOffset=1025, " +
             "frameOffset=0) does not point to a valid frame, recordingId=0," +
-            " replaySessionId=180388626987, segmentFile=0-0.rec", exception.getMessage());
+            " replaySessionId=1, segmentFile=0-0.rec", exception.getMessage());
         assertEquals(ReplaySession.State.INACTIVE, replaySession.state());
 
         replaySession.sendPendingError();
@@ -336,6 +325,7 @@ class ReplaySessionTest
             RECORDING_POSITION,
             length,
             correlationId,
+            mockReplayPub,
             mockControlSession,
             null,
             null))
@@ -354,12 +344,9 @@ class ReplaySessionTest
             assertNotEquals(0, replaySession.doWork());
             assertThat(messageCounter, is(2));
 
-            validateFrame(
-                termBuffer, 0, FRAME_LENGTH, 0, UNFRAGMENTED, REPLAY_PUB_SESSION_ID, REPLAY_STREAM_ID);
-            validateFrame(
-                termBuffer, FRAME_LENGTH, FRAME_LENGTH, 1, BEGIN_FRAG_FLAG, REPLAY_PUB_SESSION_ID, REPLAY_STREAM_ID);
-            validateFrame(
-                termBuffer, 2 * FRAME_LENGTH, FRAME_LENGTH, 2, END_FRAG_FLAG, REPLAY_PUB_SESSION_ID, REPLAY_STREAM_ID);
+            validateFrame(termBuffer, 0, FRAME_LENGTH, 0, UNFRAGMENTED, 0, 0);
+            validateFrame(termBuffer, FRAME_LENGTH, FRAME_LENGTH, 1, BEGIN_FRAG_FLAG, 0, 0);
+            validateFrame(termBuffer, 2 * FRAME_LENGTH, FRAME_LENGTH, 2, END_FRAG_FLAG, 0, 0);
 
             verify(mockReplayPub).appendPadding(FRAME_LENGTH - HEADER_LENGTH);
             assertTrue(replaySession.isDone());
@@ -371,14 +358,19 @@ class ReplaySessionTest
     {
         final long length = 1024L;
         final long correlationId = 1L;
+        final String replayChannel = "aeron:udp?endpoint=localhost:5555";
+        final int replayStreamId = 876;
         try (ReplaySession replaySession = replaySession(
             RECORDING_POSITION,
             length,
             correlationId,
+            mockReplayPub,
             mockControlSession,
             recordingPositionCounter,
             null))
         {
+            when(mockReplayPub.channel()).thenReturn(replayChannel);
+            when(mockReplayPub.streamId()).thenReturn(replayStreamId);
             when(mockReplayPub.isClosed()).thenReturn(false);
             when(mockReplayPub.isConnected()).thenReturn(false);
 
@@ -390,10 +382,10 @@ class ReplaySessionTest
             assertEquals(AeronException.Category.ERROR, exception.category());
             assertEquals(ArchiveException.GENERIC, exception.errorCode());
             assertEquals("ERROR - no connection established for" +
-                " replayChannel=" + REPLAY_CHANNEL +
-                ", replayStreamId=" + REPLAY_STREAM_ID +
+                " replayChannel=" + replayChannel +
+                ", replayStreamId=" + replayStreamId +
                 ", recordingId=0" +
-                ", replaySessionId=180388626987" +
+                ", replaySessionId=1" +
                 ", segmentFile=0-0.rec", exception.getMessage());
             assertEquals(ReplaySession.State.INACTIVE, replaySession.state());
         }
@@ -441,6 +433,7 @@ class ReplaySessionTest
             RECORDING_POSITION,
             length,
             correlationId,
+            mockReplayPub,
             mockControlSession,
             recordingPositionCounter,
             null))
@@ -494,6 +487,7 @@ class ReplaySessionTest
             RECORDING_POSITION + 2 * FRAME_LENGTH,
             length,
             correlationId,
+            mockReplayPub,
             mockControlSession,
             null,
             checksum))
@@ -556,6 +550,7 @@ class ReplaySessionTest
             RECORDING_POSITION,
             length,
             correlationId,
+            mockReplayPub,
             mockControlSession,
             null,
             context.recordChecksum()))
@@ -592,6 +587,7 @@ class ReplaySessionTest
             RECORDING_POSITION,
             4 * FRAME_LENGTH,
             1L,
+            mockReplayPub,
             mockControlSession,
             null,
             null))
@@ -600,7 +596,7 @@ class ReplaySessionTest
             when(mockReplayPub.offerBlock(any(MutableDirectBuffer.class), anyInt(), anyInt()))
                 .thenReturn(BACK_PRESSURED);
 
-            assertEquals(3, replaySession.doWork());
+            assertEquals(1, replaySession.doWork());
 
             verify(mockReplayPub).offerBlock(any(MutableDirectBuffer.class), anyInt(), anyInt());
             verify(mockReplayPub, never()).appendPadding(anyInt());
@@ -614,6 +610,7 @@ class ReplaySessionTest
             RECORDING_POSITION,
             1500,
             1L,
+            mockReplayPub,
             mockControlSession,
             null,
             null))
@@ -622,14 +619,11 @@ class ReplaySessionTest
             final UnsafeBuffer termBuffer = new UnsafeBuffer(ByteBuffer.allocateDirect(4096));
             mockPublication(mockReplayPub, termBuffer);
 
-            assertEquals(4, replaySession.doWork());
+            assertEquals(2, replaySession.doWork());
 
-            validateFrame(
-                termBuffer, 0, FRAME_LENGTH, 0, UNFRAGMENTED, REPLAY_PUB_SESSION_ID, REPLAY_STREAM_ID);
-            validateFrame(
-                termBuffer, FRAME_LENGTH, FRAME_LENGTH, 1, BEGIN_FRAG_FLAG, REPLAY_PUB_SESSION_ID, REPLAY_STREAM_ID);
-            validateFrame(
-                termBuffer, FRAME_LENGTH * 2, 0, 0, (byte)0, 0, 0);
+            validateFrame(termBuffer, 0, FRAME_LENGTH, 0, UNFRAGMENTED, 0, 0);
+            validateFrame(termBuffer, FRAME_LENGTH, FRAME_LENGTH, 1, BEGIN_FRAG_FLAG, 0, 0);
+            validateFrame(termBuffer, FRAME_LENGTH * 2, 0, 0, (byte)0, 0, 0);
             verify(mockReplayPub).offerBlock(any(MutableDirectBuffer.class), eq(0), eq(2 * FRAME_LENGTH));
             verify(mockReplayPub, never()).appendPadding(anyInt());
             assertTrue(replaySession.isDone());
@@ -671,6 +665,7 @@ class ReplaySessionTest
             RECORDING_POSITION,
             1_000_000,
             -1,
+            mockReplayPub,
             mockControlSession,
             null,
             null))
@@ -764,6 +759,7 @@ class ReplaySessionTest
         final long position,
         final long length,
         final long correlationId,
+        final ExclusivePublication replay,
         final ControlSession controlSession,
         final Counter recordingPositionCounter,
         final Checksum checksum)
@@ -778,16 +774,14 @@ class ReplaySessionTest
             recordingSummary.segmentFileLength,
             recordingSummary.termBufferLength,
             recordingSummary.streamId,
+            REPLAY_ID,
             CONNECT_TIMEOUT_MS,
-            REPLAY_CHANNEL,
-            REPLAY_STREAM_ID,
-            aeron,
             controlSession,
-            mockArchiveConductor,
             replayBuffer,
             archiveDir,
             epochClock,
             nanoClock,
+            replay,
             mockCountersReader,
             recordingPositionCounter,
             checksum,

@@ -26,10 +26,8 @@ import io.aeron.Publication;
 import io.aeron.Subscription;
 import io.aeron.archive.client.AeronArchive;
 import io.aeron.archive.client.ArchiveException;
-import io.aeron.archive.client.ControlResponsePoller;
 import io.aeron.archive.client.RecordingDescriptorConsumer;
 import io.aeron.archive.client.ReplayParams;
-import io.aeron.archive.codecs.ControlResponseCode;
 import io.aeron.archive.codecs.RecordingSignal;
 import io.aeron.archive.status.RecordingPos;
 import io.aeron.driver.MediaDriver;
@@ -60,8 +58,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -80,7 +76,6 @@ import static io.aeron.archive.ArchiveSystemTests.awaitSignal;
 import static io.aeron.archive.ArchiveSystemTests.consume;
 import static io.aeron.archive.ArchiveSystemTests.injectRecordingSignalConsumer;
 import static io.aeron.archive.ArchiveSystemTests.offer;
-import static io.aeron.archive.ArchiveSystemTests.offerToPosition;
 import static io.aeron.archive.ArchiveSystemTests.recordData;
 import static io.aeron.archive.client.AeronArchive.NULL_POSITION;
 import static io.aeron.archive.client.AeronArchive.REPLAY_ALL_AND_FOLLOW;
@@ -441,20 +436,21 @@ class BasicArchiveTest
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = { true, false })
+    @Test
     @InterruptAfter(10)
     @SuppressWarnings("try")
-    void purgeRecordingFailsIfThereAreActiveReplays(final boolean awaitReplayStart)
+    void purgeRecordingFailsIfThereAreActiveReplays()
     {
-        final String messagePrefix = "this is a test msg";
+        final String messagePrefix = "Message-Prefix-";
+        final int messageCount = 100;
         final long stopPosition;
 
+        final long subscriptionId = aeronArchive.startRecording(RECORDED_CHANNEL, RECORDED_STREAM_ID, LOCAL);
         final long recordingId;
         final int sessionId;
 
-        try (Publication publication =
-            aeronArchive.addRecordedExclusivePublication(RECORDED_CHANNEL + "|ssc=true", RECORDED_STREAM_ID))
+        try (Subscription subscription = aeron.addSubscription(RECORDED_CHANNEL, RECORDED_STREAM_ID);
+            Publication publication = aeron.addPublication(RECORDED_CHANNEL, RECORDED_STREAM_ID))
         {
             sessionId = publication.sessionId();
 
@@ -464,57 +460,42 @@ class BasicArchiveTest
 
             assertEquals(CommonContext.IPC_CHANNEL, RecordingPos.getSourceIdentity(counters, counterId));
 
-            offerToPosition(publication, messagePrefix, (TERM_LENGTH >> 1) + 32);
+            offer(publication, messageCount, messagePrefix);
+            consume(subscription, messageCount, messagePrefix);
 
             stopPosition = publication.position();
             Tests.awaitPosition(counters, counterId, stopPosition);
+
+            final long joinPosition = subscription.imageBySessionId(sessionId).joinPosition();
+            assertEquals(joinPosition, aeronArchive.getStartPosition(recordingId));
+            assertEquals(stopPosition, aeronArchive.getRecordingPosition(recordingId));
+            assertEquals(NULL_VALUE, aeronArchive.getStopPosition(recordingId));
+            assertEquals(stopPosition, aeronArchive.getMaxRecordedPosition(recordingId));
         }
 
+        aeronArchive.stopRecording(subscriptionId);
         Tests.await(() -> stopPosition == aeronArchive.getStopPosition(recordingId));
 
-        final long replayRequestCorrelationId = aeronArchive.context().aeron().nextCorrelationId();
-        assertTrue(aeronArchive.archiveProxy().replay(
-            recordingId,
-            0,
-            REPLAY_ALL_AND_FOLLOW,
-            REPLAY_CHANNEL,
-            REPLAY_STREAM_ID,
-            replayRequestCorrelationId,
-            aeronArchive.controlSessionId()),
-            "failed to send replay request");
+        assertEquals(recordingId, aeronArchive.findLastMatchingRecording(
+            0, "alias=" + RECORDED_CHANNEL_ALIAS, RECORDED_STREAM_ID, sessionId));
 
-        if (awaitReplayStart)
+        final long position = 0L;
+
+        try (Subscription ignore = aeronArchive.replay(
+            recordingId, position, REPLAY_ALL_AND_FOLLOW, REPLAY_CHANNEL, REPLAY_STREAM_ID))
         {
-            final ControlResponsePoller poller = aeronArchive.controlResponsePoller();
-            while (true)
+            final ArchiveException exception = assertThrows(
+                ArchiveException.class, () -> aeronArchive.purgeRecording(recordingId));
+            assertThat(exception.getMessage(),
+                endsWith("error: cannot purge recording with active replay " + recordingId));
+
+            final ArrayList<String> segmentFiles = Catalog.listSegmentFiles(archiveDir, recordingId);
+            assertNotEquals(0, segmentFiles.size());
+
+            for (final String segmentFile : segmentFiles)
             {
-                if (poller.poll() != 0 && poller.isPollComplete() &&
-                    poller.controlSessionId() == aeronArchive.controlSessionId())
-                {
-                    if (poller.code() != ControlResponseCode.OK)
-                    {
-                        fail(poller.code() + " " + poller.errorMessage());
-                    }
-
-                    if (poller.correlationId() == replayRequestCorrelationId)
-                    {
-                        break;
-                    }
-                }
+                assertTrue(new File(archiveDir, segmentFile).exists());
             }
-        }
-
-        final ArchiveException exception = assertThrows(
-            ArchiveException.class, () -> aeronArchive.purgeRecording(recordingId));
-        assertThat(exception.getMessage(),
-            endsWith("error: cannot purge recording with active replay " + recordingId));
-
-        final ArrayList<String> segmentFiles = Catalog.listSegmentFiles(archiveDir, recordingId);
-        assertNotEquals(0, segmentFiles.size());
-
-        for (final String segmentFile : segmentFiles)
-        {
-            assertTrue(new File(archiveDir, segmentFile).exists());
         }
     }
 
