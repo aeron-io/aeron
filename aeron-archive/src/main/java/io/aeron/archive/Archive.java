@@ -1191,8 +1191,8 @@ public final class Archive implements AutoCloseable
         private int conductorCpuAffinity = Configuration.conductorCpuAffinity();
         private int recorderCpuAffinity = Configuration.recorderCpuAffinity();
         private int replayerCpuAffinity = Configuration.replayerCpuAffinity();
-        private boolean cpusetAffinity = CommonContext.cpusetAffinityEnabled();
-        private boolean cpusetWarningsAsErrors = CommonContext.cpusetWarningsAsErrorsEnabled();
+        private boolean cpusetAffinity = CommonContext.cpusetAffinity();
+        private boolean cpusetWarningsAsErrors = CommonContext.cpusetWarningsAsErrors();
         private AffinityRegistry affinityRegistry;
         private ThreadFactory threadFactory;
         private ThreadFactory recorderThreadFactory;

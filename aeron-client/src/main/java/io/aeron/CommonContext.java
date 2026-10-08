@@ -596,9 +596,9 @@ public class CommonContext implements Cloneable
      * @return true if cpuset affinity is enabled.
      * @see #CPUSET_AFFINITY_PROP_NAME
      */
-    public static boolean cpusetAffinityEnabled()
+    public static boolean cpusetAffinity()
     {
-        return Boolean.parseBoolean(System.getProperty(CPUSET_AFFINITY_PROP_NAME));
+        return Boolean.getBoolean(CPUSET_AFFINITY_PROP_NAME);
     }
 
     /**
@@ -607,9 +607,9 @@ public class CommonContext implements Cloneable
      * @return true if warnings should be treated as errors.
      * @see #CPUSET_WARNINGS_AS_ERRORS_PROP_NAME
      */
-    public static boolean cpusetWarningsAsErrorsEnabled()
+    public static boolean cpusetWarningsAsErrors()
     {
-        return Boolean.parseBoolean(System.getProperty(CPUSET_WARNINGS_AS_ERRORS_PROP_NAME));
+        return Boolean.getBoolean(CPUSET_WARNINGS_AS_ERRORS_PROP_NAME);
     }
 
     /**

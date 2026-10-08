@@ -781,8 +781,8 @@ public final class ClusteredServiceContainer implements AutoCloseable
         private int serviceId = Configuration.serviceId();
         private String serviceName = System.getProperty(SERVICE_NAME_PROP_NAME);
         private int cpuAffinity = Configuration.cpuAffinity();
-        private boolean cpusetAffinity = CommonContext.cpusetAffinityEnabled();
-        private boolean cpusetWarningsAsErrors = CommonContext.cpusetWarningsAsErrorsEnabled();
+        private boolean cpusetAffinity = CommonContext.cpusetAffinity();
+        private boolean cpusetWarningsAsErrors = CommonContext.cpusetWarningsAsErrors();
         private AffinityRegistry affinityRegistry;
         private String replayChannel = Configuration.replayChannel();
         private int replayStreamId = Configuration.replayStreamId();

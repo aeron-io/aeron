@@ -641,7 +641,7 @@ public final class MediaDriver implements AutoCloseable
         private String senderWildcardPortRange = Configuration.senderWildcardPortRange();
         private String receiverWildcardPortRange = Configuration.receiverWildcardPortRange();
 
-        private boolean cpusetAffinity = Configuration.driverCpusetAffinityEnabled();
+        private boolean cpusetAffinity = Configuration.driverCpusetAffinity();
         private boolean cpusetWarningsAsErrors = Configuration.driverCpusetWarningsAsErrors();
         private AffinityRegistry affinityRegistry;
 

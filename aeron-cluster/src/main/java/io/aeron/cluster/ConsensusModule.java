@@ -1715,8 +1715,8 @@ public final class ConsensusModule implements AutoCloseable
         private boolean isLogMdc;
         private boolean useAgentInvoker = false;
         private int cpuAffinity = Configuration.cpuAffinity();
-        private boolean cpusetAffinity = CommonContext.cpusetAffinityEnabled();
-        private boolean cpusetWarningsAsErrors = CommonContext.cpusetWarningsAsErrorsEnabled();
+        private boolean cpusetAffinity = CommonContext.cpusetAffinity();
+        private boolean cpusetWarningsAsErrors = CommonContext.cpusetWarningsAsErrors();
         private AffinityRegistry affinityRegistry;
         private ConsensusModuleStateExport bootstrapState = null;
         private boolean acceptStandbySnapshots = Configuration.acceptStandbySnapshots();

@@ -1333,9 +1333,9 @@ public final class Configuration
      * @return true if cgroup/cpuset-derived CPU affinity should be applied.
      * @see #DRIVER_CPUSET_AFFINITY_PROP_NAME
      */
-    public static boolean driverCpusetAffinityEnabled()
+    public static boolean driverCpusetAffinity()
     {
-        return Boolean.parseBoolean(getProperty(DRIVER_CPUSET_AFFINITY_PROP_NAME));
+        return Boolean.getBoolean(DRIVER_CPUSET_AFFINITY_PROP_NAME);
     }
 
     /**
@@ -1346,7 +1346,7 @@ public final class Configuration
      */
     public static boolean driverCpusetWarningsAsErrors()
     {
-        return Boolean.parseBoolean(getProperty(DRIVER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME));
+        return Boolean.getBoolean(DRIVER_CPUSET_WARNINGS_AS_ERRORS_PROP_NAME);
     }
 
     /**
