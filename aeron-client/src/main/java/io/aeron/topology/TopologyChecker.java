@@ -27,7 +27,7 @@ import java.util.List;
  * the process's effective cgroup cpuset. Violations are reported as warnings, or as a thrown
  * {@link ConfigurationException} depending on the configuration.
  */
-public class TopologyChecker
+public final class TopologyChecker
 {
     // TODO: Move this somewhere more general
     static final Path DEFAULT_SYSFS_ROOT = Path.of("/sys/devices/system/cpu");
