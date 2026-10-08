@@ -65,11 +65,11 @@ channel (e.g. replay channel for Archive). (https://github.com/aeron-io/aeron/is
 (https://github.com/aeron-io/aeron/pull/2134[#2134])
 * **[Java]** Upgrade to https://github.com/aeron-io/agrona/releases/tag/2.6.1[Agrona 2.6.1].
 * **[Java]** Upgrade to https://github.com/aeron-io/simple-binary-encoding/releases/tag/1.40.2[SBE 1.40.2].
-* **[Java]** Upgrade to `Gradle` 9.8.0.
+* **[Java]** Upgrade to `Gradle` 9.8.1.
 * **[Java]** Upgrade to `Mockito` 5.24.0.
 * **[Java]** Upgrade to `ByteBuddy` 1.18.14.
 * **[Java]** Upgrade to `Versions` 0.65.0.
-* **[Java]** Upgrade to `Jackson-CBOR` 3.2.3.
+* **[Java]** Upgrade to `jackson-dataformat-cbor` 3.2.3.
 * **[C]** Upgrade to `CMake` 4.4.3.
 
 == 1.53.3 (2026-09-25)
