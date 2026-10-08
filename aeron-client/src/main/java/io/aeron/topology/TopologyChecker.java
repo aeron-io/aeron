@@ -16,6 +16,7 @@
 
 package io.aeron.topology;
 
+import io.aeron.CommonContext;
 import io.aeron.exceptions.ConfigurationException;
 
 import java.io.PrintStream;
@@ -75,14 +76,18 @@ public final class TopologyChecker
     }
 
     /**
-     * Validates the current process's effective cgroup cpuset for various conditions.
+     * Validates the current process's effective cgroup cpuset for various conditions, writing warnings to
+     * {@link CommonContext#fallbackLogger()}.
      *
      * @param warningsAsErrors if true, throw a {@link ConfigurationException} instead of warning when any
      *                         violation is found.
      */
     public void validate(final boolean warningsAsErrors)
     {
-        validate(new CpuSelection.CpusetSelection(cpusetV2Reader.readCpuSet()), warningsAsErrors, System.err);
+        validate(
+            new CpuSelection.CpusetSelection(cpusetV2Reader.readCpuSet()),
+            warningsAsErrors,
+            CommonContext.fallbackLogger());
     }
 
     void validate(final CpuSelection selection, final boolean warningsAsErrors, final PrintStream out)

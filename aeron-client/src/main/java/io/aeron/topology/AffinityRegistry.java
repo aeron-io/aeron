@@ -16,6 +16,7 @@
 
 package io.aeron.topology;
 
+import io.aeron.CommonContext;
 import io.aeron.exceptions.ConfigurationException;
 import org.agrona.SystemUtil;
 import org.agrona.collections.IntArrayList;
@@ -42,6 +43,7 @@ public final class AffinityRegistry implements AutoCloseable
     private final TopologyChecker cpusetChecker;
     private final TopologyChecker affinityChecker;
     private final boolean topologyAvailable;
+    private final PrintStream warningStream;
     private final List<CoreClaim> ownedCoreClaims = new ArrayList<>();
     private boolean isConcluded = false;
 
@@ -50,17 +52,27 @@ public final class AffinityRegistry implements AutoCloseable
     }
 
     /**
-     * Creates a registry for the process's effective cgroup cpuset and CPU topology.
+     * Creates a registry for the process's effective cgroup cpuset and CPU topology which writes warnings to
+     * {@link CommonContext#fallbackLogger()}.
      */
     public AffinityRegistry()
     {
-        this(TopologyChecker.DEFAULT_SYSFS_ROOT, new CpusetV2Reader(), SystemUtil.isLinux());
+        this(
+            TopologyChecker.DEFAULT_SYSFS_ROOT,
+            new CpusetV2Reader(),
+            SystemUtil.isLinux(),
+            CommonContext.fallbackLogger());
     }
 
-    AffinityRegistry(final Path sysfsRoot, final CpusetV2Reader cpusetV2Reader, final boolean topologyAvailable)
+    AffinityRegistry(
+        final Path sysfsRoot,
+        final CpusetV2Reader cpusetV2Reader,
+        final boolean topologyAvailable,
+        final PrintStream warningStream)
     {
         this.cpusetV2Reader = cpusetV2Reader;
         this.topologyAvailable = topologyAvailable;
+        this.warningStream = warningStream;
         this.cpusetChecker = new TopologyChecker(sysfsRoot, cpusetV2Reader);
         // Thread alignment is excluded as pinned threads intentionally leave out their siblings.
         this.affinityChecker = new TopologyChecker(cpusetV2Reader, List.of(
@@ -112,7 +124,7 @@ public final class AffinityRegistry implements AutoCloseable
 
     /**
      * Resolves the registered affinities and validates them, including against the CPUs claimed by other registries
-     * within the JVM, writing warnings to {@link System#err}, then claims the CPUs of the pinned threads.
+     * within the JVM, writing warnings to the registry's warning stream, then claims the CPUs of the pinned threads.
      *
      * @param cpusetAffinity   if true, requested values are indices into the effective cgroup cpuset which is also
      *                         validated, otherwise they are raw CPU ids.
@@ -123,11 +135,6 @@ public final class AffinityRegistry implements AutoCloseable
      *                                the cpuset, or a warning is found and {@code warningsAsErrors} is set.
      */
     public void conclude(final boolean cpusetAffinity, final boolean warningsAsErrors)
-    {
-        conclude(cpusetAffinity, warningsAsErrors, System.err);
-    }
-
-    void conclude(final boolean cpusetAffinity, final boolean warningsAsErrors, final PrintStream out)
     {
         if (isConcluded)
         {
@@ -145,7 +152,7 @@ public final class AffinityRegistry implements AutoCloseable
         if (cpusetAffinity && topologyAvailable)
         {
             final Cpuset cpuset = cpusetV2Reader.readCpuSet();
-            warnings += cpusetChecker.check(new CpuSelection.CpusetSelection(cpuset), out);
+            warnings += cpusetChecker.check(new CpuSelection.CpusetSelection(cpuset), warningStream);
             resolveFromCpuset(cpuset);
         }
         else
@@ -170,7 +177,7 @@ public final class AffinityRegistry implements AutoCloseable
 
         synchronized (GLOBAL_CORE_CLAIMS)
         {
-            warnings += validateAgainstClaims(pinned, out);
+            warnings += validateAgainstClaims(pinned);
 
             if (warningsAsErrors && 0 < warnings)
             {
@@ -238,7 +245,7 @@ public final class AffinityRegistry implements AutoCloseable
         });
     }
 
-    private int validateAgainstClaims(final List<CoreClaim> pinned, final PrintStream out)
+    private int validateAgainstClaims(final List<CoreClaim> pinned)
     {
         if (pinned.isEmpty())
         {
@@ -249,7 +256,7 @@ public final class AffinityRegistry implements AutoCloseable
         final List<CoreClaim> coreClaimUnion = new ArrayList<>(pinned);
         coreClaimUnion.addAll(GLOBAL_CORE_CLAIMS);
 
-        return affinityChecker.check(new CpuSelection.AffinitySelection(coreClaimUnion), out);
+        return affinityChecker.check(new CpuSelection.AffinitySelection(coreClaimUnion), warningStream);
     }
 
     static List<CoreClaim> claimedCpus()
