@@ -102,11 +102,15 @@ import static io.aeron.CncFileDescriptor.createToClientsBuffer;
 import static io.aeron.CncFileDescriptor.createToDriverBuffer;
 import static io.aeron.driver.Configuration.CMD_QUEUE_CAPACITY;
 import static io.aeron.driver.Configuration.CONDUCTOR_BUFFER_LENGTH_DEFAULT;
+import static io.aeron.driver.Configuration.CONDUCTOR_CPU_AFFINITY_PROP_NAME;
 import static io.aeron.driver.Configuration.COUNTERS_VALUES_BUFFER_LENGTH_MAX;
 import static io.aeron.driver.Configuration.COUNTERS_VALUES_BUFFER_LENGTH_MIN;
 import static io.aeron.driver.Configuration.ERROR_BUFFER_LENGTH_DEFAULT;
 import static io.aeron.driver.Configuration.LOSS_REPORT_BUFFER_LENGTH_DEFAULT;
 import static io.aeron.driver.Configuration.NAK_UNICAST_DELAY_MIN_VALUE_NS;
+import static io.aeron.driver.Configuration.NATIVE_RESOURCE_AGENT_CPU_AFFINITY_PROP_NAME;
+import static io.aeron.driver.Configuration.RECEIVER_CPU_AFFINITY_PROP_NAME;
+import static io.aeron.driver.Configuration.SENDER_CPU_AFFINITY_PROP_NAME;
 import static io.aeron.driver.Configuration.TO_CLIENTS_BUFFER_LENGTH_DEFAULT;
 import static io.aeron.driver.Configuration.countersMetadataBufferLength;
 import static io.aeron.driver.Configuration.validateInitialWindowLength;
@@ -253,7 +257,7 @@ public final class MediaDriver implements AutoCloseable
                         new FixedNameCompositeAgent(
                             AERON_DRIVER_SHARED_THREAD_NAME,
                             ctx.aeronDirectoryName(), sender, receiver, nativeResourceAgent, conductor),
-                        ctx.affinityRegistry().mappedAffinityValue(AERON_DRIVER_SHARED_THREAD_NAME));
+                        ctx.affinityRegistry().mappedAffinityValue(CONDUCTOR_CPU_AFFINITY_PROP_NAME));
                     sharedInvoker = null;
                     sharedNetworkRunner = null;
                     conductorRunner = null;
@@ -272,19 +276,19 @@ public final class MediaDriver implements AutoCloseable
                         new FixedNameCompositeAgent(
                             AERON_DRIVER_SHARED_NETWORK_THREAD_NAME,
                             ctx.aeronDirectoryName(), sender, receiver),
-                        ctx.affinityRegistry().mappedAffinityValue(AERON_DRIVER_SHARED_NETWORK_THREAD_NAME));
+                        ctx.affinityRegistry().mappedAffinityValue(SENDER_CPU_AFFINITY_PROP_NAME));
                     conductorRunner = new AgentRunner(
                         ctx.conductorIdleStrategy(),
                         errorHandler,
                         errorCounter,
                         conductor,
-                        ctx.affinityRegistry().mappedAffinityValue(conductor.roleName()));
+                        ctx.affinityRegistry().mappedAffinityValue(CONDUCTOR_CPU_AFFINITY_PROP_NAME));
                     nativeResourceAgentRunner = new AgentRunner(
                         ctx.nativeResourceAgentIdleStrategy(),
                         errorHandler,
                         errorCounter,
                         nativeResourceAgent,
-                        ctx.affinityRegistry().mappedAffinityValue(nativeResourceAgent.roleName()));
+                        ctx.affinityRegistry().mappedAffinityValue(NATIVE_RESOURCE_AGENT_CPU_AFFINITY_PROP_NAME));
                     sharedInvoker = null;
                     sharedRunner = null;
                     senderRunner = null;
@@ -300,25 +304,25 @@ public final class MediaDriver implements AutoCloseable
                         errorHandler,
                         errorCounter,
                         sender,
-                        ctx.affinityRegistry().mappedAffinityValue(sender.roleName()));
+                        ctx.affinityRegistry().mappedAffinityValue(SENDER_CPU_AFFINITY_PROP_NAME));
                     receiverRunner = new AgentRunner(
                         ctx.receiverIdleStrategy(),
                         errorHandler,
                         errorCounter,
                         receiver,
-                        ctx.affinityRegistry().mappedAffinityValue(receiver.roleName()));
+                        ctx.affinityRegistry().mappedAffinityValue(RECEIVER_CPU_AFFINITY_PROP_NAME));
                     conductorRunner = new AgentRunner(
                         ctx.conductorIdleStrategy(),
                         errorHandler,
                         errorCounter,
                         conductor,
-                        ctx.affinityRegistry().mappedAffinityValue(conductor.roleName()));
+                        ctx.affinityRegistry().mappedAffinityValue(CONDUCTOR_CPU_AFFINITY_PROP_NAME));
                     nativeResourceAgentRunner = new AgentRunner(
                         ctx.nativeResourceAgentIdleStrategy(),
                         errorHandler,
                         errorCounter,
                         nativeResourceAgent,
-                        ctx.affinityRegistry().mappedAffinityValue(nativeResourceAgent.roleName()));
+                        ctx.affinityRegistry().mappedAffinityValue(NATIVE_RESOURCE_AGENT_CPU_AFFINITY_PROP_NAME));
                     sharedRunner = null;
                     sharedInvoker = null;
                     sharedNetworkRunner = null;
@@ -4642,31 +4646,23 @@ public final class MediaDriver implements AutoCloseable
                     break;
 
                 case SHARED:
-                    affinityRegistry.addAffinity(AERON_DRIVER_SHARED_THREAD_NAME, conductorCpuAffinity);
+                    affinityRegistry.addAffinity(CONDUCTOR_CPU_AFFINITY_PROP_NAME, conductorCpuAffinity);
                     break;
 
                 case SHARED_NETWORK:
                     affinityRegistry
-                        .addAffinity(AERON_DRIVER_SHARED_NETWORK_THREAD_NAME, senderCpuAffinity)
-                        .addAffinity(
-                            threadName(AERON_DRIVER_CONDUCTOR_THREAD_NAME, AERON_DRIVER_CONDUCTOR_THREAD_NAME_CLASSIC),
-                            conductorCpuAffinity)
-                        .addAffinity(AERON_DRIVER_NATIVE_RESOURCE_THREAD_NAME, nativeResourceAgentCpuAffinity);
+                        .addAffinity(SENDER_CPU_AFFINITY_PROP_NAME, senderCpuAffinity)
+                        .addAffinity(CONDUCTOR_CPU_AFFINITY_PROP_NAME, conductorCpuAffinity)
+                        .addAffinity(NATIVE_RESOURCE_AGENT_CPU_AFFINITY_PROP_NAME, nativeResourceAgentCpuAffinity);
                     break;
 
                 case DEDICATED:
                 default:
                     affinityRegistry
-                        .addAffinity(AERON_DRIVER_NATIVE_RESOURCE_THREAD_NAME, nativeResourceAgentCpuAffinity)
-                        .addAffinity(
-                            threadName(AERON_DRIVER_SENDER_THREAD_NAME, AERON_DRIVER_SENDER_THREAD_NAME_CLASSIC),
-                            senderCpuAffinity)
-                        .addAffinity(
-                            threadName(AERON_DRIVER_RECEIVER_THREAD_NAME, AERON_DRIVER_RECEIVER_THREAD_NAME_CLASSIC),
-                            receiverCpuAffinity)
-                        .addAffinity(
-                            threadName(AERON_DRIVER_CONDUCTOR_THREAD_NAME, AERON_DRIVER_CONDUCTOR_THREAD_NAME_CLASSIC),
-                            conductorCpuAffinity);
+                        .addAffinity(NATIVE_RESOURCE_AGENT_CPU_AFFINITY_PROP_NAME, nativeResourceAgentCpuAffinity)
+                        .addAffinity(SENDER_CPU_AFFINITY_PROP_NAME, senderCpuAffinity)
+                        .addAffinity(RECEIVER_CPU_AFFINITY_PROP_NAME, receiverCpuAffinity)
+                        .addAffinity(CONDUCTOR_CPU_AFFINITY_PROP_NAME, conductorCpuAffinity);
                     break;
             }
 

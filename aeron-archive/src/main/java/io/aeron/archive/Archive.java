@@ -161,8 +161,7 @@ public final class Archive implements AutoCloseable
                     ctx.errorHandler(),
                     ctx.errorCounter(),
                     conductor,
-                    ctx.affinityRegistry().mappedAffinityValue(DEDICATED == ctx.threadingMode() ?
-                        AERON_ARCHIVE_CONDUCTOR_THREAD_NAME : AERON_ARCHIVE_SHARED_THREAD_NAME));
+                    ctx.affinityRegistry().mappedAffinityValue(Configuration.CONDUCTOR_CPU_AFFINITY_PROP_NAME));
             }
         }
         catch (final ConcurrentConcludeException ex)
@@ -2937,15 +2936,15 @@ public final class Archive implements AutoCloseable
                     break;
 
                 case SHARED:
-                    affinityRegistry.addAffinity(AERON_ARCHIVE_SHARED_THREAD_NAME, conductorCpuAffinity);
+                    affinityRegistry.addAffinity(Configuration.CONDUCTOR_CPU_AFFINITY_PROP_NAME, conductorCpuAffinity);
                     break;
 
                 case DEDICATED:
                 default:
                     affinityRegistry
-                        .addAffinity(AERON_ARCHIVE_CONDUCTOR_THREAD_NAME, conductorCpuAffinity)
-                        .addAffinity(AERON_ARCHIVE_RECORDER_THREAD_NAME, recorderCpuAffinity)
-                        .addAffinity(AERON_ARCHIVE_REPLAYER_THREAD_NAME, replayerCpuAffinity);
+                        .addAffinity(Configuration.CONDUCTOR_CPU_AFFINITY_PROP_NAME, conductorCpuAffinity)
+                        .addAffinity(Configuration.RECORDER_CPU_AFFINITY_PROP_NAME, recorderCpuAffinity)
+                        .addAffinity(Configuration.REPLAYER_CPU_AFFINITY_PROP_NAME, replayerCpuAffinity);
                     break;
             }
 

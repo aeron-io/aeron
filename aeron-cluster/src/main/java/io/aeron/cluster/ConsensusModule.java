@@ -106,6 +106,7 @@ import static io.aeron.CommonContext.fallbackLogger;
 import static io.aeron.CommonContext.threadName;
 import static io.aeron.cluster.ConsensusModule.Configuration.CLUSTER_CLIENT_TIMEOUT_COUNT_TYPE_ID;
 import static io.aeron.cluster.ConsensusModule.Configuration.CLUSTER_CLOCK_PROP_NAME;
+import static io.aeron.cluster.ConsensusModule.Configuration.CLUSTER_CPU_AFFINITY_PROP_NAME;
 import static io.aeron.cluster.ConsensusModule.Configuration.CLUSTER_NODE_ROLE_TYPE_ID;
 import static io.aeron.cluster.ConsensusModule.Configuration.COMMIT_POSITION_TYPE_ID;
 import static io.aeron.cluster.ConsensusModule.Configuration.CONSENSUS_MODULE_ERROR_COUNT_TYPE_ID;
@@ -303,7 +304,7 @@ public final class ConsensusModule implements AutoCloseable
                     ctx.errorHandler(),
                     ctx.errorCounter(),
                     conductor,
-                    ctx.affinityRegistry.mappedAffinityValue(ctx.agentRoleName()));
+                    ctx.affinityRegistry.mappedAffinityValue(CLUSTER_CPU_AFFINITY_PROP_NAME));
                 conductorInvoker = null;
             }
         }
@@ -2089,7 +2090,7 @@ public final class ConsensusModule implements AutoCloseable
             affinityRegistry = new AffinityRegistry(cpusetAffinity, cpusetWarningsAsErrors);
             if (!useAgentInvoker)
             {
-                affinityRegistry.addAffinity(agentRoleName, cpuAffinity);
+                affinityRegistry.addAffinity(CLUSTER_CPU_AFFINITY_PROP_NAME, cpuAffinity);
             }
             affinityRegistry.conclude();
 

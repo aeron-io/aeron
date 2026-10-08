@@ -74,6 +74,7 @@ import java.util.function.Supplier;
 import static io.aeron.ChannelUri.addAliasIfAbsent;
 import static io.aeron.CommonContext.driverFilePageSize;
 import static io.aeron.CommonContext.threadName;
+import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.CLUSTER_SERVICE_CPU_AFFINITY_PROP_NAME;
 import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.LIVENESS_TIMEOUT_MS;
 import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.MAX_SERVICE_COUNT;
 import static io.aeron.cluster.service.ClusteredServiceContainer.Configuration.SERVICE_NAME_PROP_NAME;
@@ -140,7 +141,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
             ctx.errorHandler(),
             ctx.errorCounter(),
             agent,
-            ctx.affinityRegistry.mappedAffinityValue(ctx.serviceName()));
+            ctx.affinityRegistry.mappedAffinityValue(CLUSTER_SERVICE_CPU_AFFINITY_PROP_NAME));
     }
 
     /**
@@ -961,7 +962,7 @@ public final class ClusteredServiceContainer implements AutoCloseable
             }
 
             affinityRegistry = new AffinityRegistry(cpusetAffinity, cpusetWarningsAsErrors)
-                .addAffinity(serviceName, cpuAffinity);
+                .addAffinity(CLUSTER_SERVICE_CPU_AFFINITY_PROP_NAME, cpuAffinity);
             affinityRegistry.conclude();
 
             if (null == aeron)

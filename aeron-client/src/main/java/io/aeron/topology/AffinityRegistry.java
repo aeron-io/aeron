@@ -112,9 +112,9 @@ public final class AffinityRegistry implements AutoCloseable
     }
 
     /**
-     * Registers the requested affinity for a named thread.
+     * Registers the requested affinity for a thread.
      *
-     * @param name     the name of the thread.
+     * @param name     identifying the thread's affinity, such as its CPU affinity property name.
      * @param affinity the CPU, or index into the cpuset, requested for the thread, or
      *                 {@link ThreadAffinity#NO_AFFINITY} to leave the thread unpinned.
      * @return this for a fluent API.
@@ -131,9 +131,9 @@ public final class AffinityRegistry implements AutoCloseable
     }
 
     /**
-     * Gets the resolved affinity for a named thread.
+     * Gets the resolved affinity for a thread.
      *
-     * @param name the name of the thread.
+     * @param name identifying the thread's affinity
      * @return the CPU the thread is to be pinned to, or {@link ThreadAffinity#NO_AFFINITY}.
      * @throws IllegalStateException    if called before conclude.
      * @throws IllegalArgumentException if no affinity was registered for the name.
