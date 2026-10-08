@@ -68,7 +68,7 @@ channel (e.g. replay channel for Archive). (https://github.com/aeron-io/aeron/is
 * **[Java]** Upgrade to `Gradle` 9.8.0.
 * **[Java]** Upgrade to `Mockito` 5.24.0.
 * **[Java]** Upgrade to `ByteBuddy` 1.18.14.
-* **[Java]** Upgrade to `Versions` 0.64.0.
+* **[Java]** Upgrade to `Versions` 0.65.0.
 * **[Java]** Upgrade to `Jackson-CBOR` 3.2.3.
 * **[C]** Upgrade to `CMake` 4.4.3.
 
