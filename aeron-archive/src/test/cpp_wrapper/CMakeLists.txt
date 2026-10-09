@@ -53,6 +53,7 @@ endfunction()
 
 if (AERON_UNIT_TESTS)
     aeron_archive_wrapper_unit_test(persistentSubscriptionContextTest PersistentSubscriptionContextWrapperTest.cpp)
+    aeron_archive_wrapper_unit_test(archiveContextTest ArchiveContextWrapperTest.cpp)
 endif ()
 
 if (AERON_SYSTEM_TESTS)

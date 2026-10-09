@@ -125,7 +125,8 @@ public:
 
     inline std::string controlRequestChannel() const
     {
-        return aeron_archive_context_get_control_request_channel(m_aeron_archive_ctx_t);
+        const char *channel = aeron_archive_context_get_control_request_channel(m_aeron_archive_ctx_t);
+        return nullptr == channel ? std::string() : std::string(channel);
     }
 
     inline Context &controlRequestStreamId(const std::int32_t streamId)
@@ -147,7 +148,8 @@ public:
 
     inline std::string controlResponseChannel() const
     {
-        return aeron_archive_context_get_control_response_channel(m_aeron_archive_ctx_t);
+        const char *channel = aeron_archive_context_get_control_response_channel(m_aeron_archive_ctx_t);
+        return nullptr == channel ? std::string() : std::string(channel);
     }
 
     inline Context &controlResponseStreamId(const std::int32_t streamId)
@@ -169,7 +171,8 @@ public:
 
     inline std::string recordingEventsChannel() const
     {
-        return aeron_archive_context_get_recording_events_channel(m_aeron_archive_ctx_t);
+        const char *channel = aeron_archive_context_get_recording_events_channel(m_aeron_archive_ctx_t);
+        return nullptr == channel ? std::string() : std::string(channel);
     }
 
     inline Context &messageTimeoutNs(const std::uint64_t messageTimeoutNs)
